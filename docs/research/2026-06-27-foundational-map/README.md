@@ -2,6 +2,8 @@
 
 _Generated 2026-06-27 by a 10-reader parallel workflow over `chocofarm` and `omega`, run `wf_64eb31fd-6c9`._
 
+> **Vocabulary:** coined terms (Pillar, intent SSOT, Mechanization Discipline, …) are defined in the root **[GLOSSARY.md](../../../GLOSSARY.md)** and linked on first use; you should never have to grep to learn a term.
+
 This directory is the **evidence base** for the harness design: a high-fidelity map of
 the maintainer's existing ADR disciplines, the SQL/lint mechanisms already in use, the
 benchmark-attribution gap, and the tool/intent surface — read so the harness grows *out of*
