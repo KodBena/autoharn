@@ -2,7 +2,7 @@
 
 _2026-06-27. A 27-formal-system survey at **life-critical seriousness**, organized by **obligation** (not by logic): each formal system is *assigned* to the responsibilities whose failure modes its semantics match, with a concrete **automation / encoding path**. Run `wf_2b657cd5-b06`; 38 agents._
 
-> **New here?** Read **[KEY.md](KEY.md)** first — it defines every obligation code (INV, DEGRADE, …), the guarantee/cost tiers (5–1, T0–T3), and every tool name. Codes are linked to it throughout. Coined terms are in the root **[GLOSSARY.md](../../../GLOSSARY.md)**.
+> **New here?** Read **[KEY.md](KEY.md)** first — it defines every obligation code (INV, DEGRADE, …), the guarantee/cost tiers (5–1, T0–T3), and every tool name. Codes are linked to it throughout. Coined terms are in the root **[GLOSSARY.md](../../../GLOSSARY.md)**. Stray acronyms (MC-DC, WCET, DvP, …) are defined in the doc-legibility glossary **[tools/doc-legibility/terms.md](../../../tools/doc-legibility/terms.md)**, mechanically enforced by its gate.
 
 ## Read in this order
 
