@@ -1,6 +1,22 @@
 # 22 — Default Logic, Circumscription & Autoepistemic Logic
 
-> Part of the autoharn **obligations×formalisms survey** (the obligation-organized pass). Coined terms → root **[GLOSSARY.md](../../../../GLOSSARY.md)**. See the [index](../README.md).
+> Part of the autoharn **obligations×formalisms survey** (the obligation-organized pass). Abbreviations & tiers → **[KEY](../KEY.md)**; coined terms → root **[GLOSSARY.md](../../../../GLOSSARY.md)**; index → [README](../README.md).
+
+**Key for this document.** Full reference → [KEY.md](../KEY.md).  Guarantee-strength **5** deductive (kernel-checked) · **4** exhaustive-over-model · **3** bounded · **2** calibrated-CI · **1** defeasible.  Cost **T0** present locally · **T1** pip/jar · **T2** compile-from-source · **T3** encode into an existing host.
+
+| code | meaning |
+|---|---|
+| [INV](../KEY.md#inv) | Safety-Invariant Maintenance — an "always"/barrier property holds in every reachable state; no silent excursion |
+| [PROG](../KEY.md#prog) | Liveness & Real-Time Progress — required events eventually occur within deadline; no deadlock or correct-but-late action |
+| [TRIG](../KEY.md#trig) | Conditional Activation — a triggered duty fires exactly when (and only when) its precondition holds |
+| [AUTH](../KEY.md#auth) | Action Authorization & Norm Precedence — every effect is gated by an explicit permission; closure + norm priority resolve deterministically |
+| [COMMIT](../KEY.md#commit) | Directed Commitment & Handoff — an owed obligation has a tracked lifecycle; completes atomically or is unwound; no orphan/double handoff |
+| [PROV](../KEY.md#prov) | Claim Provenance & Groundedness — every claim resolves via a finite replayable chain to primary evidence; no free-floating fact |
+| [REVISE](../KEY.md#revise) | Belief Revision & Retraction — retracting a premise revisits every dependent conclusion; corrections append-only, AGM-rational |
+| [CONSIST](../KEY.md#consist) | Consistency & Contradiction Containment — contradictions are quarantined; no ex-falso, no silent side-picking |
+| [CALIB](../KEY.md#calib) | Substantiated & Calibrated Claims — each claim backed by a reproducible artifact at strength matched to its kind; honest confidence |
+| [CLASS](../KEY.md#class) | Honest Sharp Classification — a value lands in exactly one cell of a MECE partition (or explicit "unknown"); misfit surfaced |
+| [INDEP](../KEY.md#indep) | Independent Adjudication & Tool Qualification — load-bearing checks discharged by a mechanism that does NOT share the producer's bias (no LLM-judging-LLM) |
 
 Three formalisms for **nonmonotonic** reasoning — concluding by default and *retracting* when the world objects. They are the native logic of "permitted unless forbidden," "normal unless flagged abnormal," and "duty detaches unless an exception is known." For autoharn they discharge the *closure* and *defeasible-detachment* obligations: what is true of the **unmentioned**, and how a conclusion dies when its ground is withdrawn.
 
@@ -16,21 +32,21 @@ The crisp invariant all three share — and the one that matters most for audit 
 
 ## Obligations it discharges
 
-- **AUTH — Action Authorization, Permission Closure & Norm Precedence** (primary). The *closure rule for the unmentioned* is literally circumscription: minimize `permitted`, and an act unnamed by any grant is forbidden — closed-world by construction, killing "permitted because no rule named it." Norm precedence (durable standing norm vs transient override) is **prioritized defaults**: the override is a higher-priority default that derogates the standing one *only while its justification holds*, so a bypass that outlives its window silently reverts to forbidden. **Guarantee strength:** for a finite, stratified rule base, the answer set is *unique and decidable* — the permission verdict is a total function of the logged state, mechanically recomputable.
+- **[AUTH](../KEY.md#auth) — Action Authorization, Permission Closure & Norm Precedence** (primary). The *closure rule for the unmentioned* is literally circumscription: minimize `permitted`, and an act unnamed by any grant is forbidden — closed-world by construction, killing "permitted because no rule named it." Norm precedence (durable standing norm vs transient override) is **prioritized defaults**: the override is a higher-priority default that derogates the standing one *only while its justification holds*, so a bypass that outlives its window silently reverts to forbidden. **Guarantee strength:** for a finite, stratified rule base, the answer set is *unique and decidable* — the permission verdict is a total function of the logged state, mechanically recomputable.
 
-- **TRIG — Conditional Activation** (primary). A triggered duty is a normal default `trigger : duty / duty` whose justification encodes "no defeater known." Degraded sensing is modeled as the justification failing *open* (duty still detaches under uncertainty) rather than failing silent. This is the deontic-detachment locus done as defeasible detachment. **Strength:** skeptical (in-every-extension) entailment gives a conservative "fire unless proven safe to suppress."
+- **[TRIG](../KEY.md#trig) — Conditional Activation** (primary). A triggered duty is a normal default `trigger : duty / duty` whose justification encodes "no defeater known." Degraded sensing is modeled as the justification failing *open* (duty still detaches under uncertainty) rather than failing silent. This is the deontic-detachment locus done as defeasible detachment. **Strength:** skeptical (in-every-extension) entailment gives a conservative "fire unless proven safe to suppress."
 
-- **CLASS — Honest Sharp Classification** (primary). Default classification into a closed vocabulary with an explicit **`Ab`** escape: minimize abnormality, and any entity not minimally classifiable lands in a *loud* `unknown` rather than the nearest-wrong bucket. Order-dependent dispatch is exposed as **multiple extensions** — if two rules both match, the theory yields two stable models, and a non-unique answer set is the alarm.
+- **[CLASS](../KEY.md#class) — Honest Sharp Classification** (primary). Default classification into a closed vocabulary with an explicit **`Ab`** escape: minimize abnormality, and any entity not minimally classifiable lands in a *loud* `unknown` rather than the nearest-wrong bucket. Order-dependent dispatch is exposed as **multiple extensions** — if two rules both match, the theory yields two stable models, and a non-unique answer set is the alarm.
 
-- **REVISE — Belief Revision & Retraction Propagation** (strong secondary). Nonmonotonicity *is* retraction propagation: withdraw a premise and every default that leaned on it loses its justification; recomputation withdraws the dependent conclusions automatically. This is the classical Reiter-default ↔ justification-based truth-maintenance correspondence — the "spillway safe" verdict cannot outlive the reading it stood on.
+- **[REVISE](../KEY.md#revise) — Belief Revision & Retraction Propagation** (strong secondary). Nonmonotonicity *is* retraction propagation: withdraw a premise and every default that leaned on it loses its justification; recomputation withdraws the dependent conclusions automatically. This is the classical Reiter-default ↔ justification-based truth-maintenance correspondence — the "spillway safe" verdict cannot outlive the reading it stood on.
 
-- **PROV — Claim Provenance & Groundedness** (secondary). Stable-model semantics *requires* well-founded support: no fact floats without a grounded derivation, and self-supporting loops are excluded by definition — directly the failure mode (an assertion true in the store but unexplainable).
+- **[PROV](../KEY.md#prov) — Claim Provenance & Groundedness** (secondary). Stable-model semantics *requires* well-founded support: no fact floats without a grounded derivation, and self-supporting loops are excluded by definition — directly the failure mode (an assertion true in the store but unexplainable).
 
-**Does NOT serve:** **PROG** (no time/deadlines — needs temporal logic), **INV** over execution traces (needs model checking), **CALIB** (no numeric confidence), **COMMIT** (no directed-obligation lifecycle). And — importantly — it does **not** discharge **CONSIST**: nonmonotonic ≠ paraconsistent. A flatly contradictory default theory has *no* extension (or detonates classically inside an extension); contradiction *containment* belongs to paraconsistent logic, not here. Use defaults for *exceptions*, not for *conflict quarantine*.
+**Does NOT serve:** **[PROG](../KEY.md#prog)** (no time/deadlines — needs temporal logic), **[INV](../KEY.md#inv)** over execution traces (needs model checking), **[CALIB](../KEY.md#calib)** (no numeric confidence), **[COMMIT](../KEY.md#commit)** (no directed-obligation lifecycle). And — importantly — it does **not** discharge **[CONSIST](../KEY.md#consist)**: nonmonotonic ≠ paraconsistent. A flatly contradictory default theory has *no* extension (or detonates classically inside an extension); contradiction *containment* belongs to paraconsistent logic, not here. Use defaults for *exceptions*, not for *conflict quarantine*.
 
 ## A worked encoding
 
-AUTH for the dam spillway: the optimizer agent may always *propose* but may *deploy* only inside a logged, time-boxed override window; anything unnamed is blocked (closed-world). Real clingo, run locally (clingo 5.8.0):
+[AUTH](../KEY.md#auth) for the dam spillway: the optimizer agent may always *propose* but may *deploy* only inside a logged, time-boxed override window; anything unnamed is blocked (closed-world). Real clingo, run locally (clingo 5.8.0):
 
 ```prolog
 agent(optimizer). agent(operator).
@@ -63,15 +79,15 @@ Verified output — two stable models: window **closed** ⇒ `blocked(optimizer,
 
 So: defaults/autoepistemic = clingo directly; circumscription = `circ2dlp`→clingo, or `Ab`-minimization in clingo/Z3. No shrug required.
 
-**Qualification (INDEP).** The LLM-authored encoding is on trial: gate it with **golden fixtures** (the closed/open-window models above as a pinned oracle), **mutation tests** (delete the closure rule → an unnamed act must flip from `blocked` to leaked; flip a justification → retraction must propagate), and a **differential** `circ2dlp`-vs-`Ab`-minimization cross-check so the two routes must agree.
+**Qualification ([INDEP](../KEY.md#indep)).** The LLM-authored encoding is on trial: gate it with **golden fixtures** (the closed/open-window models above as a pinned oracle), **mutation tests** (delete the closure rule → an unnamed act must flip from `blocked` to leaked; flip a justification → retraction must propagate), and a **differential** `circ2dlp`-vs-`Ab`-minimization cross-check so the two routes must agree.
 
 ## Honest leverage & kill-condition
 
-**Load-bearing** where the obligation is *what holds of the unmentioned* and *how a duty detaches and dies*: AUTH permission closure, TRIG detachment, CLASS default-with-`unknown`, REVISE retraction. Here the unique answer set is a decidable, replayable verdict — genuine industrial leverage.
+**Load-bearing** where the obligation is *what holds of the unmentioned* and *how a duty detaches and dies*: [AUTH](../KEY.md#auth) permission closure, [TRIG](../KEY.md#trig) detachment, [CLASS](../KEY.md#class) default-with-`unknown`, [REVISE](../KEY.md#revise) retraction. Here the unique answer set is a decidable, replayable verdict — genuine industrial leverage.
 
-**Ash** where stakes demand *temporal* or *conflict* guarantees: do not stretch defaults to cover INV-over-traces, PROG deadlines, or CONSIST. The seductive failure is encoding a true contradiction as a "default exception" and getting a vacuous or empty extension that *looks* like a clean answer.
+**Ash** where stakes demand *temporal* or *conflict* guarantees: do not stretch defaults to cover INV-over-traces, [PROG](../KEY.md#prog) deadlines, or [CONSIST](../KEY.md#consist). The seductive failure is encoding a true contradiction as a "default exception" and getting a vacuous or empty extension that *looks* like a clean answer.
 
-**Falsifiable experiment / KILL CONDITION.** Take 50 real AUTH/CLASS policies with hand-labeled correct verdicts (including adversarial unmentioned acts and order-ambiguous classifications). Encode each; require clingo to (a) block every unnamed act, (b) emit *multiple* answer sets exactly when the policy is genuinely ambiguous, and (c) propagate every premise retraction. **Kill if** the encoded theory grants an unmentioned act, *or* silently returns one model where the policy is ambiguous (masking the conflict), in ≥1 case — that is the closed-world/groundedness guarantee failing, and the assignment is refuted for this obligation class.
+**Falsifiable experiment / KILL CONDITION.** Take 50 real [AUTH](../KEY.md#auth)/CLASS policies with hand-labeled correct verdicts (including adversarial unmentioned acts and order-ambiguous classifications). Encode each; require clingo to (a) block every unnamed act, (b) emit *multiple* answer sets exactly when the policy is genuinely ambiguous, and (c) propagate every premise retraction. **Kill if** the encoded theory grants an unmentioned act, *or* silently returns one model where the policy is ambiguous (masking the conflict), in ≥1 case — that is the closed-world/groundedness guarantee failing, and the assignment is refuted for this obligation class.
 
 ## References (edification)
 

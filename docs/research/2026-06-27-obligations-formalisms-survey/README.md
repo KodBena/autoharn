@@ -1,21 +1,20 @@
 # Obligations × formalisms — the survey
 
-_2026-06-27. A 27-formal-system survey at **life-critical seriousness**, organized by **obligation** (not by logic): each formal system is *assigned* to the responsibilities whose failure modes its semantics match, with a concrete **automation / encoding path** so the toolless ones are still runnable. Run `wf_2b657cd5-b06`; 38 agents._
+_2026-06-27. A 27-formal-system survey at **life-critical seriousness**, organized by **obligation** (not by logic): each formal system is *assigned* to the responsibilities whose failure modes its semantics match, with a concrete **automation / encoding path**. Run `wf_2b657cd5-b06`; 38 agents._
 
-> **Vocabulary:** coined terms are defined in the root **[GLOSSARY.md](../../../GLOSSARY.md)**.
+> **New here?** Read **[KEY.md](KEY.md)** first — it defines every obligation code (INV, DEGRADE, …), the guarantee/cost tiers (5–1, T0–T3), and every tool name. Codes are linked to it throughout. Coined terms are in the root **[GLOSSARY.md](../../../GLOSSARY.md)**.
 
 ## Read in this order
 
-- **[00-synthesis.md](00-synthesis.md)** — the obligation→formalism assignment, the runnable tooling reality, the composition sketch, a learning path, honest verdicts. **Start here.**
-- **[01-obligation-taxonomy.md](01-obligation-taxonomy.md)** — the responsibility classes (the spine).
-- **[A-automation-and-encoding.md](A-automation-and-encoding.md)** — dedicated tool vs encode-into-host, per system; the *toolless ≠ unleverageable* plan.
-- **[B-composition-architecture.md](B-composition-architecture.md)** — how the subsystems compose into one ledger.
-- **[C-encoding-qualification.md](C-encoding-qualification.md)** — making an LLM-authored encoding qualifiable (DO-178C-style).
-- **[D-coverage-and-completeness.md](D-coverage-and-completeness.md)** — coverage matrix + what the roster missed.
+- **[KEY.md](KEY.md)** — the abbreviations/tiers/tools legend. **Read first.**
+- **[00-synthesis.md](00-synthesis.md)** — the obligation→formalism assignment, runnable tooling reality, composition sketch, learning path, honest verdicts.
+- **[01-obligation-taxonomy.md](01-obligation-taxonomy.md)** — the responsibility classes, fully defined.
+- **[A-automation-and-encoding.md](A-automation-and-encoding.md)** · dedicated tool vs encode-into-host per system.
+- **[B-composition-architecture.md](B-composition-architecture.md)** · how the subsystems compose into one ledger.
+- **[C-encoding-qualification.md](C-encoding-qualification.md)** · qualifying an LLM-authored encoding (the QUAL gates).
+- **[D-coverage-and-completeness.md](D-coverage-and-completeness.md)** · coverage matrix + what the roster missed.
 
-## The 27 formal systems
-
-_Solver-mature and deep-philosophical, each a primer + obligations-discharged + worked encoding + automation path + honest verdict. In **[formal-systems/](formal-systems/)**:_
+## The 27 formal systems  (in [formal-systems/](formal-systems/))
 
 - [Datalog & Deductive Databases](formal-systems/01-datalog.md)
 - [Prolog, CLP & Prolog-as-Encoding-Host](formal-systems/02-prolog-clp.md)
@@ -47,12 +46,6 @@ _Solver-mature and deep-philosophical, each a primer + obligations-discharged + 
 
 ## Provenance, supersession & honest caveats
 
-- This survey is the **obligation-organized Correction** to two earlier bake-off-framed passes, both kept
-  intact as **Witnesses**: [logic-investigation](../2026-06-27-logic-investigation/) (install-cost framing)
-  and [logic-fair-trials](../2026-06-27-logic-fair-trials/) (frontier creed, still logic-vs-logic). The
-  frame here — *assign formalisms to obligations, calibrated to stakes* — is the corrected one.
-- **Verdicts are agent-reasoned, not experimentally settled** (the agents can design experiments, not run
-  month-scale trials). Engine versions/licenses are agent-reported, web-checked where noted — confirm
-  before install. The cross-cut **[C](C-encoding-qualification.md)** is the discipline that turns these
-  from claims into qualified guarantees.
-- 27/27 formal-system sections produced; 38 agents across taxonomy → survey → cross-cut → synthesis.
+- This survey is the **obligation-organized Correction** to two earlier bake-off-framed passes, kept intact as **Witnesses**: [logic-investigation](../2026-06-27-logic-investigation/) and [logic-fair-trials](../2026-06-27-logic-fair-trials/).
+- **Verdicts are agent-reasoned, not experimentally settled**; engine versions/licenses are agent-reported, web-checked where noted — confirm before install. Cross-cut **[C](C-encoding-qualification.md)** is the discipline that turns claims into qualified guarantees.
+- 27/27 formal-system sections; 38 agents across taxonomy → survey → cross-cut → synthesis.

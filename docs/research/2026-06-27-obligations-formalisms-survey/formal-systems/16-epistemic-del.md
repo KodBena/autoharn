@@ -1,6 +1,22 @@
 # 16 — Epistemic & Dynamic Epistemic Logic (S5n, common knowledge, DEL/PAL/action models)
 
-> Part of the autoharn **obligations×formalisms survey** (the obligation-organized pass). Coined terms → root **[GLOSSARY.md](../../../../GLOSSARY.md)**. See the [index](../README.md).
+> Part of the autoharn **obligations×formalisms survey** (the obligation-organized pass). Abbreviations & tiers → **[KEY](../KEY.md)**; coined terms → root **[GLOSSARY.md](../../../../GLOSSARY.md)**; index → [README](../README.md).
+
+**Key for this document.** Full reference → [KEY.md](../KEY.md).  Guarantee-strength **5** deductive (kernel-checked) · **4** exhaustive-over-model · **3** bounded · **2** calibrated-CI · **1** defeasible.  Cost **T0** present locally · **T1** pip/jar · **T2** compile-from-source · **T3** encode into an existing host.
+
+| code | meaning |
+|---|---|
+| [INV](../KEY.md#inv) | Safety-Invariant Maintenance — an "always"/barrier property holds in every reachable state; no silent excursion |
+| [PROG](../KEY.md#prog) | Liveness & Real-Time Progress — required events eventually occur within deadline; no deadlock or correct-but-late action |
+| [AUTH](../KEY.md#auth) | Action Authorization & Norm Precedence — every effect is gated by an explicit permission; closure + norm priority resolve deterministically |
+| [ATTR](../KEY.md#attr) | Agency Attribution — every change bound to an identified agent who saw-to-it and could-have-done-otherwise |
+| [COMMIT](../KEY.md#commit) | Directed Commitment & Handoff — an owed obligation has a tracked lifecycle; completes atomically or is unwound; no orphan/double handoff |
+| [PROV](../KEY.md#prov) | Claim Provenance & Groundedness — every claim resolves via a finite replayable chain to primary evidence; no free-floating fact |
+| [REVISE](../KEY.md#revise) | Belief Revision & Retraction — retracting a premise revisits every dependent conclusion; corrections append-only, AGM-rational |
+| [CONSIST](../KEY.md#consist) | Consistency & Contradiction Containment — contradictions are quarantined; no ex-falso, no silent side-picking |
+| [CALIB](../KEY.md#calib) | Substantiated & Calibrated Claims — each claim backed by a reproducible artifact at strength matched to its kind; honest confidence |
+| [COHERE](../KEY.md#cohere) | Single-Authority / Single-Writer Coherence — one authoritative definition per fact; one owner per mutable state; references resolve to one correct target |
+| [RECORD](../KEY.md#record) | Auditable Decision Record & Ordering — a tamper-evident trail authored at decision time; happens-before enforces criterion-before-result, approval-before-action |
 
 Logics of *who knows what* — and, crucially, how knowledge *changes* when information events fire — giving autoharn a calculus for the knowledge-distribution failure modes that single-agent state tracking cannot even express: handoffs that drop a duty between two parties, decisions audited against what an agent knew *at the time*, and coordination that silently never reaches the agreement it assumes.
 
@@ -10,16 +26,16 @@ The static core is **S5n**: n agents, each with an *indistinguishability* equiva
 
 ## Obligations it discharges
 
-- **COMMIT — Directed Commitment & Handoff Integrity (primary fit).** A handoff is exactly an information event transferring an obligation between agents. DEL's product update *computes the receiver's post-handoff epistemic state*; the Coordinated Attack theorem turns the failure mode "a pending action falls between two clinicians" into a **provable** statement: if the protocol requires `C_{giver,receiver}(duty active)` over an unreliable channel, no finite acknowledgment discipline attains it — so the *correct* design target is bounded mutual knowledge to depth k, with the residual gap named, not assumed away. Guarantee strength: a decidable validity/model-checking verdict that a specific handoff protocol does or does not establish the required epistemic level.
-- **ATTR / RECORD — Agency Attribution & Decision Record.** "Bound to an agent who *saw to it* and could have done otherwise" and "reconstruct what was known at the moment of decision" are epistemic-snapshot claims: `K_a φ` evaluated at the decision world, with "could have done otherwise" as the existence of an accessible alternative. DEL pins *when* a fact entered an agent's knowledge (which announcement). Strength: model-checkable knowledge preconditions; pair with STIT for the agency half (assign, don't absorb).
-- **AUTH — Knowledge-gated permission.** Many authorizations are epistemic: "may act only if it *knows* the interlock cleared." Action-model preconditions encode `K_a clear` as the gate, distinguishing genuine knowledge from mere truth.
-- **PROV — partial.** S5 factivity gives knowledge a *grounded* (truth-entailing) flavor versus defeasible belief, useful for separating "known" from "assumed." But provenance *chains* belong to justification logic (Artemov); use epistemic logic only for the know/believe boundary.
+- **[COMMIT](../KEY.md#commit) — Directed Commitment & Handoff Integrity (primary fit).** A handoff is exactly an information event transferring an obligation between agents. DEL's product update *computes the receiver's post-handoff epistemic state*; the Coordinated Attack theorem turns the failure mode "a pending action falls between two clinicians" into a **provable** statement: if the protocol requires `C_{giver,receiver}(duty active)` over an unreliable channel, no finite acknowledgment discipline attains it — so the *correct* design target is bounded mutual knowledge to depth k, with the residual gap named, not assumed away. Guarantee strength: a decidable validity/model-checking verdict that a specific handoff protocol does or does not establish the required epistemic level.
+- **[ATTR](../KEY.md#attr) / [RECORD](../KEY.md#record) — Agency Attribution & Decision Record.** "Bound to an agent who *saw to it* and could have done otherwise" and "reconstruct what was known at the moment of decision" are epistemic-snapshot claims: `K_a φ` evaluated at the decision world, with "could have done otherwise" as the existence of an accessible alternative. DEL pins *when* a fact entered an agent's knowledge (which announcement). Strength: model-checkable knowledge preconditions; pair with STIT for the agency half (assign, don't absorb).
+- **[AUTH](../KEY.md#auth) — Knowledge-gated permission.** Many authorizations are epistemic: "may act only if it *knows* the interlock cleared." Action-model preconditions encode `K_a clear` as the gate, distinguishing genuine knowledge from mere truth.
+- **[PROV](../KEY.md#prov) — partial.** S5 factivity gives knowledge a *grounded* (truth-entailing) flavor versus defeasible belief, useful for separating "known" from "assumed." But provenance *chains* belong to justification logic (Artemov); use epistemic logic only for the know/believe boundary.
 
-Does **not** serve: **INV** (temporal "always" — LTL/CTL territory), **PROG** (real-time/liveness), **CALIB/STRUCT/CLASS** (numeric/type/partition obligations), **CONSIST** (paraconsistency), and **REVISE** (defeasible belief change — that is AGM / plausibility-model dynamic *doxastic* logic, an adjacent but distinct assignment). Epistemic logic is for *knowledge-state distribution*, not invariants, timing, or numerics.
+Does **not** serve: **[INV](../KEY.md#inv)** (temporal "always" — LTL/CTL territory), **[PROG](../KEY.md#prog)** (real-time/liveness), **[CALIB](../KEY.md#calib)/STRUCT/CLASS** (numeric/type/partition obligations), **[CONSIST](../KEY.md#consist)** (paraconsistency), and **[REVISE](../KEY.md#revise)** (defeasible belief change — that is AGM / plausibility-model dynamic *doxastic* logic, an adjacent but distinct assignment). Epistemic logic is for *knowledge-state distribution*, not invariants, timing, or numerics.
 
 ## A worked encoding
 
-ICU shift handoff (COMMIT): clinician `a` knows a pending antibiotic order `p`; after handing off to `b`, must `b` know it, and is it common knowledge? Real SMCDEL input:
+ICU shift handoff ([COMMIT](../KEY.md#commit)): clinician `a` knows a pending antibiotic order `p`; after handing off to `b`, must `b` know it, and is it common knowledge? Real SMCDEL input:
 
 ```
 -- handoff.smcdel
@@ -43,9 +59,9 @@ Local: neither ships in this environment, but the **encoding fallback is direct 
 
 ## Honest leverage & kill-condition
 
-**Load-bearing** precisely where autoharn obligations are genuinely *multi-agent and information-asymmetric*: ICU/DvP handoffs (COMMIT), Fed/NYSE decisions audited on "what was known when" (ATTR/RECORD), knowledge-gated authorization (AUTH). The unique, non-decorative payoff is the Coordinated-Attack class of bug: protocols that *assume* common knowledge an unreliable channel cannot deliver — invisible to a state machine plus an access-control list.
+**Load-bearing** precisely where autoharn obligations are genuinely *multi-agent and information-asymmetric*: ICU/DvP handoffs ([COMMIT](../KEY.md#commit)), Fed/NYSE decisions audited on "what was known when" ([ATTR](../KEY.md#attr)/RECORD), knowledge-gated authorization ([AUTH](../KEY.md#auth)). The unique, non-decorative payoff is the Coordinated-Attack class of bug: protocols that *assume* common knowledge an unreliable channel cannot deliver — invisible to a state machine plus an access-control list.
 
-**Where it is ash:** single-agent invariants, timing, numerics — and, more sharply, any "handoff" that is really a single source of truth one party reads. There, S5 over one writer is ceremony already covered by COHERE/RECORD.
+**Where it is ash:** single-agent invariants, timing, numerics — and, more sharply, any "handoff" that is really a single source of truth one party reads. There, S5 over one writer is ceremony already covered by [COHERE](../KEY.md#cohere)/RECORD.
 
 **Falsifiable experiment:** take a corpus of real handoff/authorization incidents; for each, model the required epistemic level and run SMCDEL. **KILL CONDITION:** if every incident reduces to a single-writer state fact already caught by an ordinary invariant — i.e., none exhibits a genuine "A does not know that B knows" / lost-acknowledgment structure — then epistemic logic earns no place in autoharn beyond notation. It *lives* iff the corpus contains incidents whose root cause is missing mutual-knowledge depth that no single-agent gate flags.
 

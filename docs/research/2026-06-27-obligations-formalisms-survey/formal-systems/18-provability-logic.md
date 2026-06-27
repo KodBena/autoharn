@@ -1,6 +1,20 @@
 # 18 — Provability Logic (GL, Löb) — self-reference & the anti-self-certification guardrail
 
-> Part of the autoharn **obligations×formalisms survey** (the obligation-organized pass). Coined terms → root **[GLOSSARY.md](../../../../GLOSSARY.md)**. See the [index](../README.md).
+> Part of the autoharn **obligations×formalisms survey** (the obligation-organized pass). Abbreviations & tiers → **[KEY](../KEY.md)**; coined terms → root **[GLOSSARY.md](../../../../GLOSSARY.md)**; index → [README](../README.md).
+
+**Key for this document.** Full reference → [KEY.md](../KEY.md).  Guarantee-strength **5** deductive (kernel-checked) · **4** exhaustive-over-model · **3** bounded · **2** calibrated-CI · **1** defeasible.  Cost **T0** present locally · **T1** pip/jar · **T2** compile-from-source · **T3** encode into an existing host.
+
+| code | meaning |
+|---|---|
+| [INV](../KEY.md#inv) | Safety-Invariant Maintenance — an "always"/barrier property holds in every reachable state; no silent excursion |
+| [PROG](../KEY.md#prog) | Liveness & Real-Time Progress — required events eventually occur within deadline; no deadlock or correct-but-late action |
+| [TRIG](../KEY.md#trig) | Conditional Activation — a triggered duty fires exactly when (and only when) its precondition holds |
+| [DEGRADE](../KEY.md#degrade) | Contrary-to-Duty Reparation — once already violated/faulted, enter a DEFINED safe regime — not undefined behaviour |
+| [PROV](../KEY.md#prov) | Claim Provenance & Groundedness — every claim resolves via a finite replayable chain to primary evidence; no free-floating fact |
+| [CONSIST](../KEY.md#consist) | Consistency & Contradiction Containment — contradictions are quarantined; no ex-falso, no silent side-picking |
+| [CALIB](../KEY.md#calib) | Substantiated & Calibrated Claims — each claim backed by a reproducible artifact at strength matched to its kind; honest confidence |
+| [INDEP](../KEY.md#indep) | Independent Adjudication & Tool Qualification — load-bearing checks discharged by a mechanism that does NOT share the producer's bias (no LLM-judging-LLM) |
+| [RECORD](../KEY.md#record) | Auditable Decision Record & Ordering — a tamper-evident trail authored at decision time; happens-before enforces criterion-before-result, approval-before-action |
 
 GL is the modal logic of "is provable," and its central theorem (Löb) is the exact mathematical statement of why a system cannot ground its own trustworthiness from the inside — making it the formal backbone of autoharn's rule that no producer may certify itself.
 
@@ -10,13 +24,13 @@ Read `□A` as "A is provable in the system" (Solovay: the provability predicate
 
 ## Obligations it discharges
 
-**INDEP — Independent Adjudication (primary).** The mission's own wound — "the deflation-detector that deflated," an LLM judging LLM output — is *literally* the move `□A → A`: "I derived it, therefore it holds." Löb's theorem says this inference is sound only when `A` is *independently* provable; the self-certifying step adds nothing. GL's converse-well-founded frames are the semantic image of INDEP's requirement: every chain of justification must terminate at a source the producer did not author. **Guarantee strength:** a *structural impossibility* result — not "we tried to keep the verifier independent" but "a verdict whose support resolves to itself is provably worthless." This is the strongest kind of guarantee: it forbids an entire class of assurance topologies.
+**[INDEP](../KEY.md#indep) — Independent Adjudication (primary).** The mission's own wound — "the deflation-detector that deflated," an LLM judging LLM output — is *literally* the move `□A → A`: "I derived it, therefore it holds." Löb's theorem says this inference is sound only when `A` is *independently* provable; the self-certifying step adds nothing. GL's converse-well-founded frames are the semantic image of [INDEP](../KEY.md#indep)'s requirement: every chain of justification must terminate at a source the producer did not author. **Guarantee strength:** a *structural impossibility* result — not "we tried to keep the verifier independent" but "a verdict whose support resolves to itself is provably worthless." This is the strongest kind of guarantee: it forbids an entire class of assurance topologies.
 
-**CALIB — Substantiated & Calibrated Claims.** A claim "wearing a proof's costume but never discharged by an independent oracle" (a fake Z3 certificate) is exactly `□A` asserted while `A` is ungrounded. GL formalizes why the costume is not the proof: internal `□A` does not license `A`. **Strength:** detection of the failure topology, not the numeric content.
+**[CALIB](../KEY.md#calib) — Substantiated & Calibrated Claims.** A claim "wearing a proof's costume but never discharged by an independent oracle" (a fake Z3 certificate) is exactly `□A` asserted while `A` is ungrounded. GL formalizes why the costume is not the proof: internal `□A` does not license `A`. **Strength:** detection of the failure topology, not the numeric content.
 
-**CONSIST / RECORD (secondary).** `¬□⊥` underwrites consistency-self-doubt (CONSIST): a sound store must not certify its own freedom from contradiction. For RECORD, the converse-well-foundedness condition forbids an assurance argument that closes a gap by citing its own conclusion.
+**[CONSIST](../KEY.md#consist) / [RECORD](../KEY.md#record) (secondary).** `¬□⊥` underwrites consistency-self-doubt ([CONSIST](../KEY.md#consist)): a sound store must not certify its own freedom from contradiction. For [RECORD](../KEY.md#record), the converse-well-foundedness condition forbids an assurance argument that closes a gap by citing its own conclusion.
 
-**Does NOT serve:** GL is silent on *first-order* safety content — it does not check INV barriers, PROG deadlines, TRIG detachment, or DEGRADE reparation. It governs the *shape of the trust graph over* those checks, never their substance. Assigning GL to discharge an invariant is a category error; assign it to govern *who is allowed to vouch for* the invariant's discharge.
+**Does NOT serve:** GL is silent on *first-order* safety content — it does not check [INV](../KEY.md#inv) barriers, [PROG](../KEY.md#prog) deadlines, [TRIG](../KEY.md#trig) detachment, or [DEGRADE](../KEY.md#degrade) reparation. It governs the *shape of the trust graph over* those checks, never their substance. Assigning GL to discharge an invariant is a category error; assign it to govern *who is allowed to vouch for* the invariant's discharge.
 
 ## A worked encoding
 
@@ -56,7 +70,7 @@ Running it (`clingo loeb.lp`) yields `self_certifying(dose_safe) self_certifying
 
 **Ash boundary:** GL contributes *nothing* to whether a given check is correct — it cannot tell a real Z3 certificate from a forged one; it only insists *some* external oracle terminate the chain. If autoharn's "external" tagging is itself gameable, GL's guarantee is hollow. It is meta-discipline, not content verification.
 
-**Falsifiable experiment + KILL CONDITION:** Build a corpus of 200 assurance graphs, half seeded with self-certifying cycles (direct, length-2 mutual, and length-5 laundered). Run the clingo guardrail. **KILL** the GL-guardrail claim if it fails to flag any seeded cycle, OR if its `external` predicate can be satisfied by a node the producer authored (i.e., the independence tag is not mechanically enforced upstream) — in that case GL is decorative and INDEP must be discharged by provenance (PROV), not by topology. **Survive** only if every laundered cycle is caught and `external` is bound to a cryptographically independent source.
+**Falsifiable experiment + KILL CONDITION:** Build a corpus of 200 assurance graphs, half seeded with self-certifying cycles (direct, length-2 mutual, and length-5 laundered). Run the clingo guardrail. **KILL** the GL-guardrail claim if it fails to flag any seeded cycle, OR if its `external` predicate can be satisfied by a node the producer authored (i.e., the independence tag is not mechanically enforced upstream) — in that case GL is decorative and [INDEP](../KEY.md#indep) must be discharged by provenance ([PROV](../KEY.md#prov)), not by topology. **Survive** only if every laundered cycle is caught and `external` is bound to a cryptographically independent source.
 
 ## References (edification)
 

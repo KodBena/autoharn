@@ -1,6 +1,24 @@
 # 13 — Probabilistic Programming & Bayesian Inference (PyMC/Stan/NumPyro)
 
-> Part of the autoharn **obligations×formalisms survey** (the obligation-organized pass). Coined terms → root **[GLOSSARY.md](../../../../GLOSSARY.md)**. See the [index](../README.md).
+> Part of the autoharn **obligations×formalisms survey** (the obligation-organized pass). Abbreviations & tiers → **[KEY](../KEY.md)**; coined terms → root **[GLOSSARY.md](../../../../GLOSSARY.md)**; index → [README](../README.md).
+
+**Key for this document.** Full reference → [KEY.md](../KEY.md).  Guarantee-strength **5** deductive (kernel-checked) · **4** exhaustive-over-model · **3** bounded · **2** calibrated-CI · **1** defeasible.  Cost **T0** present locally · **T1** pip/jar · **T2** compile-from-source · **T3** encode into an existing host.
+
+| code | meaning |
+|---|---|
+| [INV](../KEY.md#inv) | Safety-Invariant Maintenance — an "always"/barrier property holds in every reachable state; no silent excursion |
+| [PROG](../KEY.md#prog) | Liveness & Real-Time Progress — required events eventually occur within deadline; no deadlock or correct-but-late action |
+| [AUTH](../KEY.md#auth) | Action Authorization & Norm Precedence — every effect is gated by an explicit permission; closure + norm priority resolve deterministically |
+| [ATTR](../KEY.md#attr) | Agency Attribution — every change bound to an identified agent who saw-to-it and could-have-done-otherwise |
+| [COMMIT](../KEY.md#commit) | Directed Commitment & Handoff — an owed obligation has a tracked lifecycle; completes atomically or is unwound; no orphan/double handoff |
+| [REVISE](../KEY.md#revise) | Belief Revision & Retraction — retracting a premise revisits every dependent conclusion; corrections append-only, AGM-rational |
+| [CONSIST](../KEY.md#consist) | Consistency & Contradiction Containment — contradictions are quarantined; no ex-falso, no silent side-picking |
+| [CALIB](../KEY.md#calib) | Substantiated & Calibrated Claims — each claim backed by a reproducible artifact at strength matched to its kind; honest confidence |
+| [CLASS](../KEY.md#class) | Honest Sharp Classification — a value lands in exactly one cell of a MECE partition (or explicit "unknown"); misfit surfaced |
+| [COHERE](../KEY.md#cohere) | Single-Authority / Single-Writer Coherence — one authoritative definition per fact; one owner per mutable state; references resolve to one correct target |
+| [TRACE](../KEY.md#trace) | Traceability, Coverage & Change-Impact — hazard→req→design→code→test links total & navigable; coverage measured; change-impact closed on the artifact |
+| [INDEP](../KEY.md#indep) | Independent Adjudication & Tool Qualification — load-bearing checks discharged by a mechanism that does NOT share the producer's bias (no LLM-judging-LLM) |
+| [RECORD](../KEY.md#record) | Auditable Decision Record & Ordering — a tamper-evident trail authored at decision time; happens-before enforces criterion-before-result, approval-before-action |
 
 A probabilistic program declares a generative model and a "condition on observed data" operation; an inference engine returns the *posterior* — a full distribution over unknowns, not a point estimate. Its job in autoharn is to make the empirical, float-valued, irreducibly-uncertain claims carry a **calibrated** guarantee instead of a fabricated one.
 
@@ -10,17 +28,17 @@ The core idea is Bayes' rule run as a compiler target: you write `p(data | θ)` 
 
 ## Obligations it discharges
 
-**CALIB — Substantiated & Calibrated Claims (primary assignment).** CALIB's failure mode is "false authority": a claim wearing a proof's costume, or confidence uncorrelated with evidence, or the *wrong bar* (bit-pinning a float-sensitive numeric). A Bayesian posterior matches this exactly because its native output *is* a calibrated probabilistic statement with a stated interval — the guarantee strength is "credible interval at level α, with calibration testable by construction." For any load-bearing quantity that is a measurement, a risk, a sensor-fusion estimate, or a tail probability, this is the guarantee whose *kind* matches the quantity's kind. Where a logic invariant must be asserted exactly, you do not use this; where a float-sensitive numeric must meet a tolerance/CI, this is the discharge.
+**[CALIB](../KEY.md#calib) — Substantiated & Calibrated Claims (primary assignment).** [CALIB](../KEY.md#calib)'s failure mode is "false authority": a claim wearing a proof's costume, or confidence uncorrelated with evidence, or the *wrong bar* (bit-pinning a float-sensitive numeric). A Bayesian posterior matches this exactly because its native output *is* a calibrated probabilistic statement with a stated interval — the guarantee strength is "credible interval at level α, with calibration testable by construction." For any load-bearing quantity that is a measurement, a risk, a sensor-fusion estimate, or a tail probability, this is the guarantee whose *kind* matches the quantity's kind. Where a logic invariant must be asserted exactly, you do not use this; where a float-sensitive numeric must meet a tolerance/CI, this is the discharge.
 
-**CLASS — Honest Sharp Classification (secondary).** A Bayesian classifier returns a posterior over the closed vocabulary plus mass on "none of these," giving a principled **reject-to-unknown** rule (route to `unknown` when no class clears a posterior-probability threshold) and a loud misfit signal (low max-posterior, high entropy) — directly countering "silent mis-sortation into the closest-but-wrong bucket." Guarantee strength: probabilistic, decision-theoretic.
+**[CLASS](../KEY.md#class) — Honest Sharp Classification (secondary).** A Bayesian classifier returns a posterior over the closed vocabulary plus mass on "none of these," giving a principled **reject-to-unknown** rule (route to `unknown` when no class clears a posterior-probability threshold) and a loud misfit signal (low max-posterior, high entropy) — directly countering "silent mis-sortation into the closest-but-wrong bucket." Guarantee strength: probabilistic, decision-theoretic.
 
-**INDEP (supporting role only).** A posterior can serve as an *independent numeric oracle* against a producer's point estimate — the diversity is real because the inference path shares no code with the producer. But it qualifies only if its own diagnostics pass.
+**[INDEP](../KEY.md#indep) (supporting role only).** A posterior can serve as an *independent numeric oracle* against a producer's point estimate — the diversity is real because the inference path shares no code with the producer. But it qualifies only if its own diagnostics pass.
 
-**Obligations it does NOT serve.** INV ("always," every reachable state) and PROG (deadline, WCET) demand exact/temporal guarantees; a posterior gives "P(violation) is small," never "violation is impossible," and must not masquerade as a barrier certificate. AUTH, ATTR, COMMIT, REVISE, CONSIST, COHERE, TRACE, RECORD are logical/structural and outside its remit. Assign it to the *empirical* layer; never let it pretend to be the invariant layer.
+**Obligations it does NOT serve.** [INV](../KEY.md#inv) ("always," every reachable state) and [PROG](../KEY.md#prog) (deadline, WCET) demand exact/temporal guarantees; a posterior gives "P(violation) is small," never "violation is impossible," and must not masquerade as a barrier certificate. [AUTH](../KEY.md#auth), [ATTR](../KEY.md#attr), [COMMIT](../KEY.md#commit), [REVISE](../KEY.md#revise), [CONSIST](../KEY.md#consist), [COHERE](../KEY.md#cohere), [TRACE](../KEY.md#trace), [RECORD](../KEY.md#record) are logical/structural and outside its remit. Assign it to the *empirical* layer; never let it pretend to be the invariant layer.
 
 ## A worked encoding
 
-Obligation: **CALIB** on a dam safety margin. Requirement: from noisy redundant piezometer readings, the probability that true pore pressure exceeds the design limit must be provably small *and* the claim must carry a calibrated interval — not a single coerced reading.
+Obligation: **[CALIB](../KEY.md#calib)** on a dam safety margin. Requirement: from noisy redundant piezometer readings, the probability that true pore pressure exceeds the design limit must be provably small *and* the claim must carry a calibrated interval — not a single coerced reading.
 
 ```python
 import jax.numpy as jnp, numpyro, numpyro.distributions as dist
@@ -49,7 +67,7 @@ assert rhat < 1.01, "non-convergence: claim VOID"
 verdict = (p_exceed < 1e-3) and (hi < DESIGN_LIMIT)
 ```
 
-The heavy-tailed likelihood prevents the drifting fourth sensor from dragging the estimate (a built-in CONSIST-adjacent robustness), and the `assert rhat < 1.01` is the qualification gate: a number that printed without convergence is disqualified, mirroring CALIB's "proof costume" failure.
+The heavy-tailed likelihood prevents the drifting fourth sensor from dragging the estimate (a built-in CONSIST-adjacent robustness), and the `assert rhat < 1.01` is the qualification gate: a number that printed without convergence is disqualified, mirroring [CALIB](../KEY.md#calib)'s "proof costume" failure.
 
 ## Automation & tooling (the git-clone-runnable question)
 
@@ -66,9 +84,9 @@ No encoding-into-a-host is required — these *are* the dedicated tools. The aut
 
 **Load-bearing where:** every empirical/float-sensitive claim that today ships as a bare scalar with implied certainty — risk limits, sensor fusion, exceedance probabilities, dose-adjustment factors, WCET *distributions*. Here the leverage is real: the tool converts "confident wrong number" into "interval with a calibration you can test."
 
-**Ash where:** the model is misspecified. A posterior is only as honest as its likelihood; a confidently wrong model yields confidently wrong *but calibrated-looking* intervals — CALIB's failure mode reborn one level up. And it never delivers INV/PROG hard guarantees.
+**Ash where:** the model is misspecified. A posterior is only as honest as its likelihood; a confidently wrong model yields confidently wrong *but calibrated-looking* intervals — [CALIB](../KEY.md#calib)'s failure mode reborn one level up. And it never delivers [INV](../KEY.md#inv)/PROG hard guarantees.
 
-**Falsifiable experiment + KILL CONDITION.** Run **Simulation-Based Calibration** (Talts et al.): draw θ* from the prior, simulate data, re-infer, compute the rank of θ* in its posterior; over many replicates the ranks must be uniform. **Kill condition:** if SBC rank histograms deviate from uniform beyond the χ² band, *or* if the same model passes its own gate while R̂ < 1.01 yet SBC fails, the encoding is disqualified for CALIB and must not gate a safety claim — the "calibrated" label is then false advertising, exactly the thing it was assigned to prevent.
+**Falsifiable experiment + KILL CONDITION.** Run **Simulation-Based Calibration** (Talts et al.): draw θ* from the prior, simulate data, re-infer, compute the rank of θ* in its posterior; over many replicates the ranks must be uniform. **Kill condition:** if SBC rank histograms deviate from uniform beyond the χ² band, *or* if the same model passes its own gate while R̂ < 1.01 yet SBC fails, the encoding is disqualified for [CALIB](../KEY.md#calib) and must not gate a safety claim — the "calibrated" label is then false advertising, exactly the thing it was assigned to prevent.
 
 ## References (edification)
 

@@ -1,6 +1,27 @@
 # 14 — Inductive Logic Programming (Popper/Aleph)
 
-> Part of the autoharn **obligations×formalisms survey** (the obligation-organized pass). Coined terms → root **[GLOSSARY.md](../../../../GLOSSARY.md)**. See the [index](../README.md).
+> Part of the autoharn **obligations×formalisms survey** (the obligation-organized pass). Abbreviations & tiers → **[KEY](../KEY.md)**; coined terms → root **[GLOSSARY.md](../../../../GLOSSARY.md)**; index → [README](../README.md).
+
+**Key for this document.** Full reference → [KEY.md](../KEY.md).  Guarantee-strength **5** deductive (kernel-checked) · **4** exhaustive-over-model · **3** bounded · **2** calibrated-CI · **1** defeasible.  Cost **T0** present locally · **T1** pip/jar · **T2** compile-from-source · **T3** encode into an existing host.
+
+| code | meaning |
+|---|---|
+| [INV](../KEY.md#inv) | Safety-Invariant Maintenance — an "always"/barrier property holds in every reachable state; no silent excursion |
+| [PROG](../KEY.md#prog) | Liveness & Real-Time Progress — required events eventually occur within deadline; no deadlock or correct-but-late action |
+| [TRIG](../KEY.md#trig) | Conditional Activation — a triggered duty fires exactly when (and only when) its precondition holds |
+| [DEGRADE](../KEY.md#degrade) | Contrary-to-Duty Reparation — once already violated/faulted, enter a DEFINED safe regime — not undefined behaviour |
+| [AUTH](../KEY.md#auth) | Action Authorization & Norm Precedence — every effect is gated by an explicit permission; closure + norm priority resolve deterministically |
+| [ATTR](../KEY.md#attr) | Agency Attribution — every change bound to an identified agent who saw-to-it and could-have-done-otherwise |
+| [COMMIT](../KEY.md#commit) | Directed Commitment & Handoff — an owed obligation has a tracked lifecycle; completes atomically or is unwound; no orphan/double handoff |
+| [PROV](../KEY.md#prov) | Claim Provenance & Groundedness — every claim resolves via a finite replayable chain to primary evidence; no free-floating fact |
+| [REVISE](../KEY.md#revise) | Belief Revision & Retraction — retracting a premise revisits every dependent conclusion; corrections append-only, AGM-rational |
+| [CONSIST](../KEY.md#consist) | Consistency & Contradiction Containment — contradictions are quarantined; no ex-falso, no silent side-picking |
+| [CALIB](../KEY.md#calib) | Substantiated & Calibrated Claims — each claim backed by a reproducible artifact at strength matched to its kind; honest confidence |
+| [CLASS](../KEY.md#class) | Honest Sharp Classification — a value lands in exactly one cell of a MECE partition (or explicit "unknown"); misfit surfaced |
+| [COHERE](../KEY.md#cohere) | Single-Authority / Single-Writer Coherence — one authoritative definition per fact; one owner per mutable state; references resolve to one correct target |
+| [TRACE](../KEY.md#trace) | Traceability, Coverage & Change-Impact — hazard→req→design→code→test links total & navigable; coverage measured; change-impact closed on the artifact |
+| [INDEP](../KEY.md#indep) | Independent Adjudication & Tool Qualification — load-bearing checks discharged by a mechanism that does NOT share the producer's bias (no LLM-judging-LLM) |
+| [RECORD](../KEY.md#record) | Auditable Decision Record & Ordering — a tamper-evident trail authored at decision time; happens-before enforces criterion-before-result, approval-before-action |
 
 ILP synthesizes human-readable, first-order logic *programs* (definite clauses) from positive/negative examples plus background knowledge — making it autoharn's *specification-recovery* engine: it reconstructs the rule a corpus actually obeys, so you can diff de-facto behavior against the ratified mandate.
 
@@ -10,19 +31,19 @@ ILP sits at the intersection of logic programming and machine learning: given ba
 
 ## Obligations it discharges
 
-**TRACE — Traceability & change-impact closure (primary).** ILP's semantics match TRACE's failure mode of *silent scope-narrowing*: feed it the audit corpus (logged decisions, the test suite's input/output pairs, exercised branches) and it returns the *actual* rule the artifact implements. Diff that against the written requirement and an unimplemented requirement or an off-screen behavior surfaces mechanically — the de-facto spec is now an object, not a narration. Guarantee strength: **defeasible-but-explicit** — the recovered rule is exact over the corpus, conjectural beyond it.
+**[TRACE](../KEY.md#trace) — Traceability & change-impact closure (primary).** ILP's semantics match [TRACE](../KEY.md#trace)'s failure mode of *silent scope-narrowing*: feed it the audit corpus (logged decisions, the test suite's input/output pairs, exercised branches) and it returns the *actual* rule the artifact implements. Diff that against the written requirement and an unimplemented requirement or an off-screen behavior surfaces mechanically — the de-facto spec is now an object, not a narration. Guarantee strength: **defeasible-but-explicit** — the recovered rule is exact over the corpus, conjectural beyond it.
 
-**PROV — Claim provenance & groundedness.** Every learned clause resolves to a finite, replayable chain: the examples it covers and the negatives it excludes. Unlike a neural classifier, there is no free-floating fact — the hypothesis *is* the inspectable warrant. Matches PROV's confabulation failure mode: a clause that covers no positive cannot be emitted.
+**[PROV](../KEY.md#prov) — Claim provenance & groundedness.** Every learned clause resolves to a finite, replayable chain: the examples it covers and the negatives it excludes. Unlike a neural classifier, there is no free-floating fact — the hypothesis *is* the inspectable warrant. Matches [PROV](../KEY.md#prov)'s confabulation failure mode: a clause that covers no positive cannot be emitted.
 
-**CLASS — Honest sharp classification.** ILP yields a symbolic, MECE rule set *plus genuine abstention*: when no clause covers an instance, it is loudly "uncovered," not coerced into the nearest bucket. This is exactly CLASS's defense against silent mis-sortation.
+**[CLASS](../KEY.md#class) — Honest sharp classification.** ILP yields a symbolic, MECE rule set *plus genuine abstention*: when no clause covers an instance, it is loudly "uncovered," not coerced into the nearest bucket. This is exactly [CLASS](../KEY.md#class)'s defense against silent mis-sortation.
 
-**INDEP — Independent adjudication (conditional).** An ILP-recovered rule is a *differential oracle*: re-derived from data by a mechanism with no access to the developer's source. It catches the developer's blind spot **only if example provenance is independent of the artifact under test** (see kill-condition).
+**[INDEP](../KEY.md#indep) — Independent adjudication (conditional).** An ILP-recovered rule is a *differential oracle*: re-derived from data by a mechanism with no access to the developer's source. It catches the developer's blind spot **only if example provenance is independent of the artifact under test** (see kill-condition).
 
-**Does NOT serve:** INV, PROG, TRIG, DEGRADE, AUTH-enforcement, ATTR, COMMIT, REVISE, CONSIST, COHERE, RECORD. ILP is *offline hypothesis generation*, not a runtime or proof guarantee. Its output is always a **candidate** that must be discharged by a verifier (Z3/TLC/ASP) before it is load-bearing — induction is sound over the sample, conjectural over the domain.
+**Does NOT serve:** [INV](../KEY.md#inv), [PROG](../KEY.md#prog), [TRIG](../KEY.md#trig), [DEGRADE](../KEY.md#degrade), AUTH-enforcement, [ATTR](../KEY.md#attr), [COMMIT](../KEY.md#commit), [REVISE](../KEY.md#revise), [CONSIST](../KEY.md#consist), [COHERE](../KEY.md#cohere), [RECORD](../KEY.md#record). ILP is *offline hypothesis generation*, not a runtime or proof guarantee. Its output is always a **candidate** that must be discharged by a verifier (Z3/TLC/ASP) before it is load-bearing — induction is sound over the sample, conjectural over the domain.
 
 ## A worked encoding
 
-Recover the sanctioned deploy-gate from an audit corpus (autoharn AUTH/TRACE): does the log obey "deploy permitted iff a human approved and we are not in a freeze window," and is any logged deploy *unexplainable* by that grammar?
+Recover the sanctioned deploy-gate from an audit corpus (autoharn [AUTH](../KEY.md#auth)/TRACE): does the log obey "deploy permitted iff a human approved and we are not in a freeze window," and is any logged deploy *unexplainable* by that grammar?
 
 `bias.pl`
 ```prolog
@@ -50,7 +71,7 @@ Run: `python popper.py corpus/` →
 ```prolog
 deploy_ok(E):- approved(E), human_actor(E).
 ```
-Popper learns the gate the corpus *actually* enforces. The TRACE/AUTH gate is the **unsatisfiable case**: add `pos(deploy_ok(e9))` with only `approved(e9)` in `bk.pl` (deployed without a human, no freeze info). No hypothesis in the bias covers all positives without covering the negative; Popper returns **"no solution."** That mechanical failure *is* the finding — a logged deployment that the sanctioned permission vocabulary cannot explain = authority leak. Aleph expresses the same with `:- modeh(1,deploy_ok(+event))`, `modeb(*,approved(+event))`, `induce/0`, and reports per-clause coverage statistics (a CALIB hook).
+Popper learns the gate the corpus *actually* enforces. The [TRACE](../KEY.md#trace)/AUTH gate is the **unsatisfiable case**: add `pos(deploy_ok(e9))` with only `approved(e9)` in `bk.pl` (deployed without a human, no freeze info). No hypothesis in the bias covers all positives without covering the negative; Popper returns **"no solution."** That mechanical failure *is* the finding — a logged deployment that the sanctioned permission vocabulary cannot explain = authority leak. Aleph expresses the same with `:- modeh(1,deploy_ok(+event))`, `modeb(*,approved(+event))`, `induce/0`, and reports per-clause coverage statistics (a [CALIB](../KEY.md#calib) hook).
 
 ## Automation & tooling (git-clone-runnable)
 
@@ -63,11 +84,11 @@ Because Popper *compiles to ASP*, its verdicts are themselves re-checkable on th
 
 ## Honest leverage & kill-condition
 
-**Load-bearing:** as a *generator-of-candidates and differential-diff oracle* for TRACE/PROV/CLASS — recovering the latent rule from autoharn's own audit logs and test corpus, then diffing it against the ratified requirement to surface scope-narrowing and unexplainable behaviors a same-frame review ratifies. **Ash:** anywhere a *guarantee* is required (INV/PROG/AUTH-enforcement) — an induced rule is conjectural and must be handed to Z3/TLC, never trusted as a proof.
+**Load-bearing:** as a *generator-of-candidates and differential-diff oracle* for [TRACE](../KEY.md#trace)/PROV/CLASS — recovering the latent rule from autoharn's own audit logs and test corpus, then diffing it against the ratified requirement to surface scope-narrowing and unexplainable behaviors a same-frame review ratifies. **Ash:** anywhere a *guarantee* is required ([INV](../KEY.md#inv)/PROG/AUTH-enforcement) — an induced rule is conjectural and must be handed to Z3/TLC, never trusted as a proof.
 
 **Falsifiable experiment:** build a golden corpus with a known target gate-rule and seeded violations (deploys without approval, freeze-window breaches). Measure: (a) does Popper/Aleph recover the target rule from clean examples at realistic predicate arity (≤ minutes), and (b) does recovered-rule-plus-abstention/no-solution flag the injected anomalies **above a trivial frequency-count baseline**?
 
-**KILL CONDITION:** if either (a) recovery fails or explodes combinatorially at the arities real autoharn obligations need, or (b) anomaly detection does not beat the frequency baseline — then ILP is ash here and the job reduces to a plain ASP integrity constraint. **Separately, INDEP is killed by common-cause:** if the examples are produced by the same artifact under test, the recovered rule inherits its bug and the "independent" oracle is theater — an explicit example-provenance audit (provenance ≠ artifact-under-test) is mandatory before any ILP verdict counts as independent.
+**KILL CONDITION:** if either (a) recovery fails or explodes combinatorially at the arities real autoharn obligations need, or (b) anomaly detection does not beat the frequency baseline — then ILP is ash here and the job reduces to a plain ASP integrity constraint. **Separately, [INDEP](../KEY.md#indep) is killed by common-cause:** if the examples are produced by the same artifact under test, the recovered rule inherits its bug and the "independent" oracle is theater — an explicit example-provenance audit (provenance ≠ artifact-under-test) is mandatory before any ILP verdict counts as independent.
 
 ## References (edification)
 

@@ -1,6 +1,22 @@
 # 17 — Justification Logic / Logic of Proofs (Artemov) — proof-carrying belief
 
-> Part of the autoharn **obligations×formalisms survey** (the obligation-organized pass). Coined terms → root **[GLOSSARY.md](../../../../GLOSSARY.md)**. See the [index](../README.md).
+> Part of the autoharn **obligations×formalisms survey** (the obligation-organized pass). Abbreviations & tiers → **[KEY](../KEY.md)**; coined terms → root **[GLOSSARY.md](../../../../GLOSSARY.md)**; index → [README](../README.md).
+
+**Key for this document.** Full reference → [KEY.md](../KEY.md).  Guarantee-strength **5** deductive (kernel-checked) · **4** exhaustive-over-model · **3** bounded · **2** calibrated-CI · **1** defeasible.  Cost **T0** present locally · **T1** pip/jar · **T2** compile-from-source · **T3** encode into an existing host.
+
+| code | meaning |
+|---|---|
+| [INV](../KEY.md#inv) | Safety-Invariant Maintenance — an "always"/barrier property holds in every reachable state; no silent excursion |
+| [TRIG](../KEY.md#trig) | Conditional Activation — a triggered duty fires exactly when (and only when) its precondition holds |
+| [ATTR](../KEY.md#attr) | Agency Attribution — every change bound to an identified agent who saw-to-it and could-have-done-otherwise |
+| [PROV](../KEY.md#prov) | Claim Provenance & Groundedness — every claim resolves via a finite replayable chain to primary evidence; no free-floating fact |
+| [REVISE](../KEY.md#revise) | Belief Revision & Retraction — retracting a premise revisits every dependent conclusion; corrections append-only, AGM-rational |
+| [CONSIST](../KEY.md#consist) | Consistency & Contradiction Containment — contradictions are quarantined; no ex-falso, no silent side-picking |
+| [CALIB](../KEY.md#calib) | Substantiated & Calibrated Claims — each claim backed by a reproducible artifact at strength matched to its kind; honest confidence |
+| [CLASS](../KEY.md#class) | Honest Sharp Classification — a value lands in exactly one cell of a MECE partition (or explicit "unknown"); misfit surfaced |
+| [STRUCT](../KEY.md#struct) | Structural Soundness by Construction — defect classes made unrepresentable (typed absence, honest signatures, fault isolation), not patched |
+| [INDEP](../KEY.md#indep) | Independent Adjudication & Tool Qualification — load-bearing checks discharged by a mechanism that does NOT share the producer's bias (no LLM-judging-LLM) |
+| [RECORD](../KEY.md#record) | Auditable Decision Record & Ordering — a tamper-evident trail authored at decision time; happens-before enforces criterion-before-result, approval-before-action |
 
 Justification Logic replaces the opaque modal "□F" ("F is known/provable") with an explicit witness term: `t:F`, read "`t` is a checkable justification for `F`." Belief stops being a bare bit in a store and becomes a structured, replayable object you can inspect, compose, and retract.
 
@@ -12,19 +28,19 @@ Two load-bearing results: the **Internalization Theorem** (every theorem `F` has
 
 ## Obligations it discharges
 
-**PROV — Claim Provenance & Groundedness (primary, exact fit).** PROV's failure mode is the ungrounded-but-true assertion and the confabulated-but-plausible chain. JL is the direct anti-pattern: a claim is not admissible as `F` alone but as `t:F`, where `t` *is* the finite, inspectable derivation down to constant-specification roots (signed inputs, cited authorities, admitted axioms). The application operator forces every detachment step to carry a sub-witness; you cannot assert `dose_reduce` without exhibiting the term that built it from a measurement and a guideline. Guarantee strength: a **checkable certificate** — `t:F` is decidably verifiable against the store independent of how it was produced, so a confabulated chain fails checking rather than passing inspection.
+**[PROV](../KEY.md#prov) — Claim Provenance & Groundedness (primary, exact fit).** [PROV](../KEY.md#prov)'s failure mode is the ungrounded-but-true assertion and the confabulated-but-plausible chain. JL is the direct anti-pattern: a claim is not admissible as `F` alone but as `t:F`, where `t` *is* the finite, inspectable derivation down to constant-specification roots (signed inputs, cited authorities, admitted axioms). The application operator forces every detachment step to carry a sub-witness; you cannot assert `dose_reduce` without exhibiting the term that built it from a measurement and a guideline. Guarantee strength: a **checkable certificate** — `t:F` is decidably verifiable against the store independent of how it was produced, so a confabulated chain fails checking rather than passing inspection.
 
-**RECORD — Auditable Decision Record (strong).** The witness term is exactly the "independently reconstructable rationale": replay `t` and you re-derive `F` or you don't. `!t:(t:F)` records *that the check was performed*, a tamper-evident "criterion-before-result" artifact.
+**[RECORD](../KEY.md#record) — Auditable Decision Record (strong).** The witness term is exactly the "independently reconstructable rationale": replay `t` and you re-derive `F` or you don't. `!t:(t:F)` records *that the check was performed*, a tamper-evident "criterion-before-result" artifact.
 
-**CALIB — Substantiated Claims (strong on the "proof costume" failure).** CALIB's lethal case is a claim "wearing a proof's costume but never discharged by an independent oracle." JL makes the costume *be* the proof: there is no `t:F` without a `t` that mechanically composes, so a bound that was never actually established has no constructible term.
+**[CALIB](../KEY.md#calib) — Substantiated Claims (strong on the "proof costume" failure).** [CALIB](../KEY.md#calib)'s lethal case is a claim "wearing a proof's costume but never discharged by an independent oracle." JL makes the costume *be* the proof: there is no `t:F` without a `t` that mechanically composes, so a bound that was never actually established has no constructible term.
 
-**INDEP / ATTR (partial).** Sum lets you demand *distinct* terms from distinct channels (`s+t` where `s`, `t` trace to non-common-cause sources), and constants can name the *agent* who admitted an axiom, giving "who saw to it."
+**[INDEP](../KEY.md#indep) / [ATTR](../KEY.md#attr) (partial).** Sum lets you demand *distinct* terms from distinct channels (`s+t` where `s`, `t` trace to non-common-cause sources), and constants can name the *agent* who admitted an axiom, giving "who saw to it."
 
-**Not its job:** temporal "always/eventually" (INV/PROG — JL has no time), deontic detachment and contrary-to-duty (TRIG/DEGRADE — JL justifies truth, not obligation), consistency containment (CONSIST), classification (CLASS), structural typing (STRUCT). Assign those elsewhere; JL owns the *evidence-for-a-claim* axis.
+**Not its job:** temporal "always/eventually" ([INV](../KEY.md#inv)/PROG — JL has no time), deontic detachment and contrary-to-duty ([TRIG](../KEY.md#trig)/DEGRADE — JL justifies truth, not obligation), consistency containment ([CONSIST](../KEY.md#consist)), classification ([CLASS](../KEY.md#class)), structural typing ([STRUCT](../KEY.md#struct)). Assign those elsewhere; JL owns the *evidence-for-a-claim* axis.
 
 ## A worked encoding
 
-PROV obligation: an oncology recommender may emit `dose_reduce40` only carrying a witness resolving to a primary creatinine/eGFR value (the autoharn failure: a 40% reduction "for renal impairment" inherited from a superseded encounter with no supporting value). LP proof-checking is Horn-shaped, so SWI-Prolog hosts it directly:
+[PROV](../KEY.md#prov) obligation: an oncology recommender may emit `dose_reduce40` only carrying a witness resolving to a primary creatinine/eGFR value (the autoharn failure: a 40% reduction "for renal impairment" inherited from a superseded encounter with no supporting value). LP proof-checking is Horn-shaped, so SWI-Prolog hosts it directly:
 
 ```prolog
 % justifies(Term, Claim) — an LP proof-checker over the current evidence store.
@@ -49,7 +65,7 @@ justifies(check(T), just(T,F)) :- justifies(T, F).
 W = app(cs(guideline_g7), meas(egfr_28, enc_4471)).   % the replayable witness
 ```
 
-The claim ships *with* `W`. Now exercise the failure modes. Retract the measurement (superseded encounter): `?- justifies(_, dose_reduce40)` fails — the claim loses its witness the instant its ground does (this is the REVISE hook: no term, no conclusion). Try to forge a citation — assert the *string* `app(cs(guideline_g7), meas(egfr_28, enc_9999))` where `enc_9999` is not in the store: re-checking `justifies(app(...),dose_reduce40)` fails because the sub-term `meas(egfr_28,enc_9999)` has no justification. The term cannot lie; checking is the gate. A golden/mutation fixture set (drop each leaf; perturb each constant) qualifies the checker itself (INDEP).
+The claim ships *with* `W`. Now exercise the failure modes. Retract the measurement (superseded encounter): `?- justifies(_, dose_reduce40)` fails — the claim loses its witness the instant its ground does (this is the [REVISE](../KEY.md#revise) hook: no term, no conclusion). Try to forge a citation — assert the *string* `app(cs(guideline_g7), meas(egfr_28, enc_9999))` where `enc_9999` is not in the store: re-checking `justifies(app(...),dose_reduce40)` fails because the sub-term `meas(egfr_28,enc_9999)` has no justification. The term cannot lie; checking is the gate. A golden/mutation fixture set (drop each leaf; perturb each constant) qualifies the checker itself ([INDEP](../KEY.md#indep)).
 
 ## Automation & tooling (the git-clone-runnable question)
 
@@ -63,7 +79,7 @@ The claim ships *with* `W`. Now exercise the failure modes. Retract the measurem
 
 **Where it is ash:** for plain flat provenance, ordinary Datalog **why-provenance** (the SLD proof tree, or semiring provenance) already yields a checkable, replayable derivation chain — the `app/cs` term above *is* essentially that proof tree. The `+`/`·`/`!` algebra and constant-specification discipline add nothing a provenance-annotated Datalog engine lacks.
 
-**Falsifiable experiment / KILL CONDITION:** Take autoharn's real PROV corpus. Implement each claim's provenance twice — (i) the JL checker above, (ii) Datalog why-provenance (e.g., recursive Postgres or clingo with proof extraction). **JL is killed for autoharn if every PROV/RECORD/CALIB case is discharged by (ii) with equal forgery-resistance and equal retraction behavior, and no case requires reasoning *about* justification terms inside the logic** (evidence-of-evidence, justification quantification, or `+`-corroboration that Datalog cannot express). Survival requires exhibiting ≥1 production case where first-class, composable, introspectable witnesses are *necessary* — e.g., an INDEP cross-channel rule that must assert "two *distinct, separately-checking* justifications exist" as an object-level fact. Absent that case, assign PROV to Datalog provenance and retire JL to the realization-compiler role.
+**Falsifiable experiment / KILL CONDITION:** Take autoharn's real [PROV](../KEY.md#prov) corpus. Implement each claim's provenance twice — (i) the JL checker above, (ii) Datalog why-provenance (e.g., recursive Postgres or clingo with proof extraction). **JL is killed for autoharn if every [PROV](../KEY.md#prov)/RECORD/CALIB case is discharged by (ii) with equal forgery-resistance and equal retraction behavior, and no case requires reasoning *about* justification terms inside the logic** (evidence-of-evidence, justification quantification, or `+`-corroboration that Datalog cannot express). Survival requires exhibiting ≥1 production case where first-class, composable, introspectable witnesses are *necessary* — e.g., an [INDEP](../KEY.md#indep) cross-channel rule that must assert "two *distinct, separately-checking* justifications exist" as an object-level fact. Absent that case, assign [PROV](../KEY.md#prov) to Datalog provenance and retire JL to the realization-compiler role.
 
 ## References (edification)
 

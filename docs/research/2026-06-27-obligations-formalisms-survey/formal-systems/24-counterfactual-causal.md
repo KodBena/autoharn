@@ -1,6 +1,22 @@
 # 24 — Counterfactual/Conditional Logic (Lewis/Stalnaker) & Causal Models (Pearl, Halpern–Pearl actual causation)
 
-> Part of the autoharn **obligations×formalisms survey** (the obligation-organized pass). Coined terms → root **[GLOSSARY.md](../../../../GLOSSARY.md)**. See the [index](../README.md).
+> Part of the autoharn **obligations×formalisms survey** (the obligation-organized pass). Abbreviations & tiers → **[KEY](../KEY.md)**; coined terms → root **[GLOSSARY.md](../../../../GLOSSARY.md)**; index → [README](../README.md).
+
+**Key for this document.** Full reference → [KEY.md](../KEY.md).  Guarantee-strength **5** deductive (kernel-checked) · **4** exhaustive-over-model · **3** bounded · **2** calibrated-CI · **1** defeasible.  Cost **T0** present locally · **T1** pip/jar · **T2** compile-from-source · **T3** encode into an existing host.
+
+| code | meaning |
+|---|---|
+| [INV](../KEY.md#inv) | Safety-Invariant Maintenance — an "always"/barrier property holds in every reachable state; no silent excursion |
+| [TRIG](../KEY.md#trig) | Conditional Activation — a triggered duty fires exactly when (and only when) its precondition holds |
+| [ATTR](../KEY.md#attr) | Agency Attribution — every change bound to an identified agent who saw-to-it and could-have-done-otherwise |
+| [COMMIT](../KEY.md#commit) | Directed Commitment & Handoff — an owed obligation has a tracked lifecycle; completes atomically or is unwound; no orphan/double handoff |
+| [PROV](../KEY.md#prov) | Claim Provenance & Groundedness — every claim resolves via a finite replayable chain to primary evidence; no free-floating fact |
+| [REVISE](../KEY.md#revise) | Belief Revision & Retraction — retracting a premise revisits every dependent conclusion; corrections append-only, AGM-rational |
+| [CALIB](../KEY.md#calib) | Substantiated & Calibrated Claims — each claim backed by a reproducible artifact at strength matched to its kind; honest confidence |
+| [CLASS](../KEY.md#class) | Honest Sharp Classification — a value lands in exactly one cell of a MECE partition (or explicit "unknown"); misfit surfaced |
+| [STRUCT](../KEY.md#struct) | Structural Soundness by Construction — defect classes made unrepresentable (typed absence, honest signatures, fault isolation), not patched |
+| [COHERE](../KEY.md#cohere) | Single-Authority / Single-Writer Coherence — one authoritative definition per fact; one owner per mutable state; references resolve to one correct target |
+| [INDEP](../KEY.md#indep) | Independent Adjudication & Tool Qualification — load-bearing checks discharged by a mechanism that does NOT share the producer's bias (no LLM-judging-LLM) |
 
 The machinery for "had X not happened, Y would not have" — and for the harder question of which of several actual antecedents *actually caused* an outcome under preemption, overdetermination, and many-hands. This is the formal heart of attributing a change to an agent who *could have done otherwise*.
 
@@ -12,17 +28,17 @@ A counterfactual `A □→ C` ("if A had held, C would have held") cannot be mat
 
 ## Obligations it discharges
 
-**ATTR — Agency Attribution & Non-Repudiable Change (primary, strong fit).** ATTR's deep requirement is the *could-have-done-otherwise* test and the *saw-to-it* binding, and its failure mode is accountability assigned to an agent with no exercisable alternative, or responsibility voids under many-hands. This is *exactly* what Halpern–Pearl actual causation formalizes. Naive logging records co-presence ("the account was active"); HP-causation records difference-making under an explicit witness setting — it is the only formalism in this taxonomy that distinguishes a rubber-stamp (no contingency under which the agent's act changes the outcome) from genuine supervision (a contingency exists). Guarantee strength: a **constructive certificate** — for each putative cause, either a concrete witness partition + intervention that flips the outcome (cause confirmed) or a proof no such witness exists (cause refuted), decidable over a finite Boolean model.
+**[ATTR](../KEY.md#attr) — Agency Attribution & Non-Repudiable Change (primary, strong fit).** [ATTR](../KEY.md#attr)'s deep requirement is the *could-have-done-otherwise* test and the *saw-to-it* binding, and its failure mode is accountability assigned to an agent with no exercisable alternative, or responsibility voids under many-hands. This is *exactly* what Halpern–Pearl actual causation formalizes. Naive logging records co-presence ("the account was active"); HP-causation records difference-making under an explicit witness setting — it is the only formalism in this taxonomy that distinguishes a rubber-stamp (no contingency under which the agent's act changes the outcome) from genuine supervision (a contingency exists). Guarantee strength: a **constructive certificate** — for each putative cause, either a concrete witness partition + intervention that flips the outcome (cause confirmed) or a proof no such witness exists (cause refuted), decidable over a finite Boolean model.
 
-**PROV — Claim Provenance & Groundedness (secondary).** The do-calculus turns "why did the system conclude C?" into a replayable structural chain: C resolves to the equations and exogenous inputs that actually determined it. This catches the confabulated-chain failure (a derivation edge with no warrant) when the warrant is *causal* rather than merely logical.
+**[PROV](../KEY.md#prov) — Claim Provenance & Groundedness (secondary).** The do-calculus turns "why did the system conclude C?" into a replayable structural chain: C resolves to the equations and exogenous inputs that actually determined it. This catches the confabulated-chain failure (a derivation edge with no warrant) when the warrant is *causal* rather than merely logical.
 
-**REVISE — Belief Revision (partial, via the Ramsey/Stalnaker test).** The Ramsey test links conditionals to belief change: accepting `A □→ C` is accepting C after minimally revising to admit A. This is the conceptual bridge to AGM, useful for "what would we have concluded under the corrected reading?"
+**[REVISE](../KEY.md#revise) — Belief Revision (partial, via the Ramsey/Stalnaker test).** The Ramsey test links conditionals to belief change: accepting `A □→ C` is accepting C after minimally revising to admit A. This is the conceptual bridge to AGM, useful for "what would we have concluded under the corrected reading?"
 
-**Does NOT serve:** **INV/PROG** (always/eventually properties are temporal, not causal — use temporal logic), **CLASS, STRUCT, COHERE, CALIB, COMMIT, TRIG** (deontic detachment is a conditional *obligation*, not a *counterfactual* — a different conditional). Forcing causal semantics onto an invariant buys nothing.
+**Does NOT serve:** **[INV](../KEY.md#inv)/PROG** (always/eventually properties are temporal, not causal — use temporal logic), **[CLASS](../KEY.md#class), [STRUCT](../KEY.md#struct), [COHERE](../KEY.md#cohere), [CALIB](../KEY.md#calib), [COMMIT](../KEY.md#commit), [TRIG](../KEY.md#trig)** (deontic detachment is a conditional *obligation*, not a *counterfactual* — a different conditional). Forcing causal semantics onto an invariant buys nothing.
 
 ## A worked encoding
 
-ATTR example: an overnight loosening of a Fed risk limit, approved through a shared service account where **two** approvers' tokens were both present (overdetermination). Naive but-for exonerates *both* ("removing approver A alone, B still approves → no difference"). HP-causation, with a witness that holds B fixed at *not-approving*, correctly identifies each as an actual cause. Z3 (Python) checks AC2:
+[ATTR](../KEY.md#attr) example: an overnight loosening of a Fed risk limit, approved through a shared service account where **two** approvers' tokens were both present (overdetermination). Naive but-for exonerates *both* ("removing approver A alone, B still approves → no difference"). HP-causation, with a witness that holds B fixed at *not-approving*, correctly identifies each as an actual cause. Z3 (Python) checks AC2:
 
 ```python
 from z3 import *
@@ -50,20 +66,20 @@ The witness `aB:=False` is the auditable certificate that approver A *could have
 
 **Dedicated tool for actual causation: HP2SAT** — Java, **MIT license**, latest tagged release **1.0** (the canonical reference implementation of the *modified* Halpern–Pearl definition; Ibrahim & Pretschner, *Efficiently Checking Actual Causality with SAT Solving*, 2019). It reduces AC2/AC3 to SAT via the LogicNG/MiniSat stack and is the industrial-grade choice for Boolean structural models; verified at github.com/amjadKhalifah/HP2SAT1.0. Maturity: research-grade but published, cited, MIT — bundleable. **chirho** (Basis Research, Pyro-based) implements modified-HP actual causation for *probabilistic/continuous* SCMs — pull it in when models are stochastic. For statistical/interventional causal inference (do-calculus identification, not actual causation): **DoWhy** — MIT, **v0.14 (Nov 2025)**, verified on PyPI.
 
-**Encoding path (host already installed, no Java needed):** the AC2 witness search is naturally an ASP problem. In **clingo 5.8** (local), encode structural equations as rules, `#external` the interventions, and search over witness partitions: guess a subset W of variables to fix and a counterfactual value for the candidate cause, then constrain that the outcome predicate flips — `:- not flipped.` AC3 minimality falls out of clingo's `#minimize`. For larger Boolean models, mirror HP2SAT directly into **Z3** (local, 4.16): assert the structural equations as a circuit, existentially quantify the witness assignment, and use `check()`/`get-model` to return the certificate — exactly the snippet above generalized with a Bool per variable and a quantified witness mask. Both give the constructive witness ATTR needs.
+**Encoding path (host already installed, no Java needed):** the AC2 witness search is naturally an ASP problem. In **clingo 5.8** (local), encode structural equations as rules, `#external` the interventions, and search over witness partitions: guess a subset W of variables to fix and a counterfactual value for the candidate cause, then constrain that the outcome predicate flips — `:- not flipped.` AC3 minimality falls out of clingo's `#minimize`. For larger Boolean models, mirror HP2SAT directly into **Z3** (local, 4.16): assert the structural equations as a circuit, existentially quantify the witness assignment, and use `check()`/`get-model` to return the certificate — exactly the snippet above generalized with a Bool per variable and a quantified witness mask. Both give the constructive witness [ATTR](../KEY.md#attr) needs.
 
 ## Honest leverage & kill-condition
 
 **Load-bearing where** the obligation is genuinely *attributive* and the structural model is honest and finite: Fed limit changes, NYSE order gating, ICU order authorship — many-hands, preemption, and rubber-stamp detection. Here HP-causation is not a heuristic; it is the definition, and HP2SAT/clingo discharge it mechanically.
 
-**Ash where** the failure mode is temporal-invariant (INV/PROG) or where the causal model is *fabricated to order* — the LLM that authors the structural equations can launder the very bias the certificate is meant to expose (omit a confounding edge and any cause can be exonerated). The model is the attack surface, not the solver.
+**Ash where** the failure mode is temporal-invariant ([INV](../KEY.md#inv)/PROG) or where the causal model is *fabricated to order* — the LLM that authors the structural equations can launder the very bias the certificate is meant to expose (omit a confounding edge and any cause can be exonerated). The model is the attack surface, not the solver.
 
-**Falsifiable experiment:** assemble a benchmark of 50 attribution scenarios with adjudicated ground-truth causes (overdetermination, late/early preemption, switch cases — the standard HP literature set). Have the LLM author SCMs from incident narratives; run HP2SAT/clingo; score against ground truth. **KILL CONDITION:** if LLM-authored models yield the correct actual-cause set on **< 90%** of scenarios — *or* if a held-out mutation suite (silently deleting one structural edge) is not flagged by an INDEP differential check on **≥ 95%** of mutants — then the encoding tax is not paid: the solver is sound but the modeling step is the unqualified link, and autoharn must demote causal attribution from "certificate" to "advisory" pending a qualified model-authoring oracle.
+**Falsifiable experiment:** assemble a benchmark of 50 attribution scenarios with adjudicated ground-truth causes (overdetermination, late/early preemption, switch cases — the standard HP literature set). Have the LLM author SCMs from incident narratives; run HP2SAT/clingo; score against ground truth. **KILL CONDITION:** if LLM-authored models yield the correct actual-cause set on **< 90%** of scenarios — *or* if a held-out mutation suite (silently deleting one structural edge) is not flagged by an [INDEP](../KEY.md#indep) differential check on **≥ 95%** of mutants — then the encoding tax is not paid: the solver is sound but the modeling step is the unqualified link, and autoharn must demote causal attribution from "certificate" to "advisory" pending a qualified model-authoring oracle.
 
 ## References (edification)
 
 - **Lewis, *Counterfactuals* (1973).** Teaches the sphere semantics and why counterfactuals are non-monotonic — the conceptual foundation.
-- **Halpern, *Actual Causality* (MIT Press, 2016).** The definitive, example-driven treatment of the modified HP definition (AC1–AC3), preemption, and responsibility/blame — the maintainer's primary text for ATTR.
+- **Halpern, *Actual Causality* (MIT Press, 2016).** The definitive, example-driven treatment of the modified HP definition (AC1–AC3), preemption, and responsibility/blame — the maintainer's primary text for [ATTR](../KEY.md#attr).
 - **Pearl, *Causality* (2nd ed., 2009).** Structural causal models, the do-operator, and the three-level ladder (association/intervention/counterfactual) — the computational engine.
 - **Ibrahim & Pretschner, *Efficiently Checking Actual Causality with SAT Solving* (2019).** Teaches the SAT reduction behind HP2SAT — the bridge from definition to runnable solver.
 

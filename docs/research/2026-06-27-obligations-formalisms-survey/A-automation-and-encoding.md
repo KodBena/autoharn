@@ -1,6 +1,16 @@
 # A — Automation & encoding-host strategy (the git-clone-runnable path)
 
-> Part of the autoharn **obligations×formalisms survey** (the obligation-organized pass). Coined terms → root **[GLOSSARY.md](../../../GLOSSARY.md)**. See the [index](README.md).
+> Part of the autoharn **obligations×formalisms survey** (the obligation-organized pass). Abbreviations & tiers → **[KEY](KEY.md)**; coined terms → root **[GLOSSARY.md](../../../GLOSSARY.md)**; index → [README](README.md).
+
+**Key for this document.** Full reference → [KEY.md](KEY.md).  Guarantee-strength **5** deductive (kernel-checked) · **4** exhaustive-over-model · **3** bounded · **2** calibrated-CI · **1** defeasible.  Cost **T0** present locally · **T1** pip/jar · **T2** compile-from-source · **T3** encode into an existing host.
+
+| code | meaning |
+|---|---|
+| [INV](KEY.md#inv) | Safety-Invariant Maintenance — an "always"/barrier property holds in every reachable state; no silent excursion |
+| [PROV](KEY.md#prov) | Claim Provenance & Groundedness — every claim resolves via a finite replayable chain to primary evidence; no free-floating fact |
+| [REVISE](KEY.md#revise) | Belief Revision & Retraction — retracting a premise revisits every dependent conclusion; corrections append-only, AGM-rational |
+| [TRACE](KEY.md#trace) | Traceability, Coverage & Change-Impact — hazard→req→design→code→test links total & navigable; coverage measured; change-impact closed on the artifact |
+| [INDEP](KEY.md#indep) | Independent Adjudication & Tool Qualification — load-bearing checks discharged by a mechanism that does NOT share the producer's bias (no LLM-judging-LLM) |
 
 Verification complete. All load-bearing tools confirmed current. Below is the consolidated AUTOMATION & ENCODING-HOST STRATEGY.
 
@@ -36,7 +46,7 @@ Verification complete. All load-bearing tools confirmed current. Below is the co
 |20|STIT / agency|**none mature** (Deolingo MIT, pip)|—|**clingo choice-cells** (local); Z3 bounded validity|T3 (T0 core)|Yes — `.lp`|
 |21|Belief revision (AGM/Spohn)|TweetyProject (LGPL,1.28, JVM)|JVM yes|**AGM→clingo `#minimize`** (local); Equibel; Z3 ranked|T1 (T0 encode)|Yes+gate — `.lp`|
 |22|Default / circumscription / autoepistemic|**clingo** (defaults/AEL direct); circ2dlp (GPL)|**yes**|circumscription: circ2dlp→clingo or `Ab`-`#minimize`|T0 / T1|Yes — `.lp`|
-|23|Defeasible / argumentation (Dung/ASPIC+/DeLP)|µ-toksia (MIT,SAT); PyArg; py-aspic; Tweety/DeLP|no (clingo yes)|**AF→clingo** (local); µ-toksia as INDEP channel|T1 (T0 core)|Yes+mutation-gate|
+|23|Defeasible / argumentation (Dung/ASPIC+/DeLP)|µ-toksia (MIT,SAT); PyArg; py-aspic; Tweety/DeLP|no (clingo yes)|**AF→clingo** (local); µ-toksia as [INDEP](KEY.md#indep) channel|T1 (T0 core)|Yes+mutation-gate|
 |24|Counterfactual / causal (Lewis/HP)|HP2SAT (MIT,JVM); chirho; DoWhy (MIT,0.14)|JVM yes|**HP AC2/AC3→clingo / Z3** (local)|T1 (T0 encode)|Yes+gate — SCM|
 |25|Paraconsistent / many-valued / fuzzy (FDE/LP/t-norm)|none everyday (MULTLOG gen; mNiBLoS)|—|**FDE/LP two-bit→Z3; t-norm→Z3 LRA/NRA; clingo conflict atoms** (local)|T3|Yes — SMT/`.lp`|
 |26|Substructural / linear / separation / BI|**VeriFast (MIT, 25.11)**; Iris/coq-iris (BSD,4.4.0); Viper|no|linear resource arith→Z3/clingo (proof needs VeriFast)|T2|**Assisted** — annot.-gate|
@@ -57,14 +67,14 @@ Verification complete. All load-bearing tools confirmed current. Below is the co
 ## (3) ENCODING-HOST META-TOOLS — standardize on seven
 
 1. **clingo (ASP)** — universal finite-domain / nonmonotonic / stable-model host. Carries 11+ toolless or not-local logics: Datalog, default/circumscription/autoepistemic, Dung/ASPIC+ argumentation, STIT choice-cells, AGM revision, DEL S5n, μ-calculus parity games, dependence logic, HP-causation, MLN MAP (weak constraints), GL well-foundedness guardrail, paraconsistent conflict atoms.
-2. **Z3 (SMT)** — rich-theory exact oracle + countermodel generator. Carries INV/STRUCT/COHERE/CLASS, modal ST→FOL, bounded MTL/STL + Allen intervals (LIA), FDE two-bit + t-norm fuzzy (LRA/NRA), HP-causation, ranked belief revision, GL finite frames, linear-logic frame conditions, proof-assistant `hammer` backend. **Pair with cvc5 as the no-common-cause second checker (INDEP).**
-3. **SWI-Prolog (+CHR, +s(CASP), +tabling)** — meta-interpreter / labelled-deduction / justification-tree host. Carries Justification Logic, defeasible-deontic labelled interpreters, TMS for REVISE, Datalog via tabling, CHR paraconsistent quarantine, Aleph ILP, and s(CASP)'s natural-language justification trees (PROV/RECORD primitive).
-4. **Postgres recursive CTE** — when the EDB already lives in the audit DB: linear-recursive Datalog, TRACE reachability, grounding/acyclicity checks.
-5. **OR-Tools CP-SAT + MiniZinc** — finite-domain certificate engine plus the portable cross-solver diversity layer (one `.mzn`, retarget Chuffed/Gecode/CP-SAT for INDEP).
+2. **Z3 (SMT)** — rich-theory exact oracle + countermodel generator. Carries [INV](KEY.md#inv)/STRUCT/COHERE/CLASS, modal ST→FOL, bounded MTL/STL + Allen intervals (LIA), FDE two-bit + t-norm fuzzy (LRA/NRA), HP-causation, ranked belief revision, GL finite frames, linear-logic frame conditions, proof-assistant `hammer` backend. **Pair with cvc5 as the no-common-cause second checker ([INDEP](KEY.md#indep)).**
+3. **SWI-Prolog (+CHR, +s(CASP), +tabling)** — meta-interpreter / labelled-deduction / justification-tree host. Carries Justification Logic, defeasible-deontic labelled interpreters, TMS for [REVISE](KEY.md#revise), Datalog via tabling, CHR paraconsistent quarantine, Aleph ILP, and s(CASP)'s natural-language justification trees ([PROV](KEY.md#prov)/RECORD primitive).
+4. **Postgres recursive CTE** — when the EDB already lives in the audit DB: linear-recursive Datalog, [TRACE](KEY.md#trace) reachability, grounding/acyclicity checks.
+5. **OR-Tools CP-SAT + MiniZinc** — finite-domain certificate engine plus the portable cross-solver diversity layer (one `.mzn`, retarget Chuffed/Gecode/CP-SAT for [INDEP](KEY.md#indep)).
 6. **JVM (OpenJDK 25) as vendored-jar host** — one runtime, many qualified jars: TLA+/TLC + Apalache, ROBOT (OWL), TweetyProject (belief revision/argumentation/DeLP), HP2SAT (causation), SPINdle (deontic). No per-tool toolchain.
 7. **JAX/NumPyro + ArviZ** — the calibrated-numeric channel with mechanical convergence gates (R̂, ESS, divergences, SBC) as DO-178C-style tool-qualification evidence.
 
-**Cross-cutting qualification rule (INDEP, mandatory):** every LLM-authored encoding is discharged by a mechanical second channel from a *different* host family — clingo↔Z3, Z3↔cvc5, NuSMV↔Spot, mCRL2↔(clingo parity + Z3 k-induction), clingo↔µ-toksia, Popper↔clingo-replay, TweetyProject↔clingo — gated by golden fixtures + mutation score, **never by an LLM judge** (the deflation-detector that deflated). Disagreement disqualifies the encoding, not the obligation.
+**Cross-cutting qualification rule ([INDEP](KEY.md#indep), mandatory):** every LLM-authored encoding is discharged by a mechanical second channel from a *different* host family — clingo↔Z3, Z3↔cvc5, NuSMV↔Spot, mCRL2↔(clingo parity + Z3 k-induction), clingo↔µ-toksia, Popper↔clingo-replay, TweetyProject↔clingo — gated by golden fixtures + mutation score, **never by an LLM judge** (the deflation-detector that deflated). Disagreement disqualifies the encoding, not the obligation.
 
 **Redistribution exclusions for the `git clone autoharn` deliverable:** nuXmv (non-commercial binary), CADP (academic license) — usable only as offline cross-checkers, never in the shipped gate. Archived/dead, route around: DDlog (archived → Nemo), pracmln/Tuffy (unmaintained → encode MLN into clingo/ProbLog).
 
