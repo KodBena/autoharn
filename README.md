@@ -10,6 +10,10 @@ for concrete projects — including ones not yet conceived. Two real projects (a
 operations-research package and a Go-study web app) serve as the worked examples it is
 derived from, not as its scope.
 
+> **Want the whole machine in one read?** **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** is the
+> through-line — what the system *is*, end to end, and how an LLM + human use it to manage life-critical
+> code. Start there; the [research/](docs/research/) tree is the evidence behind it.
+
 > **New to the vocabulary?** Coined terms — [Pillar](GLOSSARY.md#pillar),
 > [intent SSOT](GLOSSARY.md#intent-ssot), [Mechanization Discipline](GLOSSARY.md#mechanization-discipline), … —
 > are defined in **[GLOSSARY.md](GLOSSARY.md)** and linked on first use throughout the docs, so you

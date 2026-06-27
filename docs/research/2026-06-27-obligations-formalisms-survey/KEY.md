@@ -84,6 +84,7 @@ The discipline that makes an LLM-authored encoding trustworthy enough to gate at
 | **ProbLog** | probabilistic logic programming (Python; ≤3.12) | T1 |
 | **NumPyro / Stan / PyMC** | probabilistic programming / Bayesian inference | T0/T1 |
 | **ArviZ** | Bayesian diagnostics — calibration (SBC), LOO/WAIC | T1 |
+| **SBC (simulation-based calibration)** | mechanical test that a Bayesian posterior is calibrated — true-param ranks must be uniform over replications; the CALIB gate (in ArviZ) | — |
 | **HermiT / ELK / Pellet** | OWL description-logic reasoners | T1 |
 | **ROBOT** | OWL ontology tooling / automation | T1 |
 | **Coq / Lean / Isabelle** | interactive proof assistants (HOL / dependent types) | T2 |
