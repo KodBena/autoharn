@@ -1,0 +1,58 @@
+# Obligations × formalisms — the survey
+
+_2026-06-27. A 27-formal-system survey at **life-critical seriousness**, organized by **obligation** (not by logic): each formal system is *assigned* to the responsibilities whose failure modes its semantics match, with a concrete **automation / encoding path** so the toolless ones are still runnable. Run `wf_2b657cd5-b06`; 38 agents._
+
+> **Vocabulary:** coined terms are defined in the root **[GLOSSARY.md](../../../GLOSSARY.md)**.
+
+## Read in this order
+
+- **[00-synthesis.md](00-synthesis.md)** — the obligation→formalism assignment, the runnable tooling reality, the composition sketch, a learning path, honest verdicts. **Start here.**
+- **[01-obligation-taxonomy.md](01-obligation-taxonomy.md)** — the responsibility classes (the spine).
+- **[A-automation-and-encoding.md](A-automation-and-encoding.md)** — dedicated tool vs encode-into-host, per system; the *toolless ≠ unleverageable* plan.
+- **[B-composition-architecture.md](B-composition-architecture.md)** — how the subsystems compose into one ledger.
+- **[C-encoding-qualification.md](C-encoding-qualification.md)** — making an LLM-authored encoding qualifiable (DO-178C-style).
+- **[D-coverage-and-completeness.md](D-coverage-and-completeness.md)** — coverage matrix + what the roster missed.
+
+## The 27 formal systems
+
+_Solver-mature and deep-philosophical, each a primer + obligations-discharged + worked encoding + automation path + honest verdict. In **[formal-systems/](formal-systems/)**:_
+
+- [Datalog & Deductive Databases](formal-systems/01-datalog.md)
+- [Prolog, CLP & Prolog-as-Encoding-Host](formal-systems/02-prolog-clp.md)
+- [Answer Set Programming (clingo)](formal-systems/03-asp.md)
+- [SMT & Classical First-order Logic (Z3 / cvc5)](formal-systems/04-smt-fol.md)
+- [SAT, CP & Finite-domain Constraint Solving](formal-systems/05-sat-cp.md)
+- [Linear & Branching Temporal Logic + Model Checking (LTL/CTL, NuSMV/Spot)](formal-systems/06-ltl-ctl-modelchecking.md)
+- [TLA+ / TLC — Specification & Refinement](formal-systems/07-tla-refinement.md)
+- [Metric, Real-time & Interval Temporal Logic (MTL/STL, Allen/HS)](formal-systems/08-metric-interval-temporal.md)
+- [Modal μ-calculus, Coinduction & Process Logics (maintenance over infinite behaviour)](formal-systems/09-mu-calculus-coalgebra.md)
+- [Description Logic & OWL (+ temporal/probabilistic DL)](formal-systems/10-description-logic.md)
+- [Higher-order Logic, Dependent Types & Proof Assistants (Coq/Lean/Isabelle)](formal-systems/11-hol-proof-assistants.md)
+- [Probabilistic Logic & Statistical-relational AI (ProbLog/PSL/MLN)](formal-systems/12-probabilistic-logic-srl.md)
+- [Probabilistic Programming & Bayesian Inference (PyMC/Stan/NumPyro)](formal-systems/13-probabilistic-programming.md)
+- [Inductive Logic Programming (Popper/Aleph)](formal-systems/14-ilp.md)
+- [Modal Logic — the substrate (K–S5, frames, tableaux) & general modal provers](formal-systems/15-modal-substrate.md)
+- [Epistemic & Dynamic Epistemic Logic (S5n, common knowledge, DEL/PAL/action models)](formal-systems/16-epistemic-del.md)
+- [Justification Logic / Logic of Proofs (Artemov) — proof-carrying belief](formal-systems/17-justification-logic.md)
+- [Provability Logic (GL, Löb) — self-reference & the anti-self-certification guardrail](formal-systems/18-provability-logic.md)
+- [Deontic & Normative Logic (SDL, dyadic, defeasible, I/O logic, norm-change)](formal-systems/19-deontic.md)
+- [STIT & Logics of Agency / Responsibility attribution](formal-systems/20-stit-agency.md)
+- [Belief Revision (AGM, contraction/revision/update, ranking/Spohn, DDL)](formal-systems/21-belief-revision.md)
+- [Default Logic, Circumscription & Autoepistemic Logic](formal-systems/22-nonmonotonic-classics.md)
+- [Defeasible Logic & Formal Argumentation (Dung AF, ASPIC+, DeLP)](formal-systems/23-argumentation.md)
+- [Counterfactual/Conditional Logic (Lewis/Stalnaker) & Causal Models (Pearl, Halpern–Pearl actual causation)](formal-systems/24-counterfactual-causal.md)
+- [Paraconsistent, Many-valued, Dialetheic & Fuzzy Logic (LP, FDE/Belnap, t-norm)](formal-systems/25-paraconsistent-manyvalued.md)
+- [Substructural Logic: Linear, Affine, Relevant & BI/Separation (resource, the borrow-checker lineage)](formal-systems/26-substructural.md)
+- [Hyperintensional Frontier: Truthmaker Semantics, Grounding, Dependence Logic, Free Logic (flag the speculative ones)](formal-systems/27-hyperintensional.md)
+
+## Provenance, supersession & honest caveats
+
+- This survey is the **obligation-organized Correction** to two earlier bake-off-framed passes, both kept
+  intact as **Witnesses**: [logic-investigation](../2026-06-27-logic-investigation/) (install-cost framing)
+  and [logic-fair-trials](../2026-06-27-logic-fair-trials/) (frontier creed, still logic-vs-logic). The
+  frame here — *assign formalisms to obligations, calibrated to stakes* — is the corrected one.
+- **Verdicts are agent-reasoned, not experimentally settled** (the agents can design experiments, not run
+  month-scale trials). Engine versions/licenses are agent-reported, web-checked where noted — confirm
+  before install. The cross-cut **[C](C-encoding-qualification.md)** is the discipline that turns these
+  from claims into qualified guarantees.
+- 27/27 formal-system sections produced; 38 agents across taxonomy → survey → cross-cut → synthesis.
