@@ -20,15 +20,16 @@ the existing conventions instead of imposing foreign ones.
 - [07-omega-existing-lint-gates.md](07-omega-existing-lint-gates.md) — omega/existing-lint-gates
 - [08-cross-benchmark-attribution-today.md](08-cross-benchmark-attribution-today.md) — cross/benchmark-attribution-today (Pillar 2 — provenance/accountability ledger)
 - [09-cross-memories-and-resource-facts.md](09-cross-memories-and-resource-facts.md) — cross/memories-and-resource-facts — Claude memory dirs vs. queryable resource registry (motivating Pillar 1 "pull not push")
+- [10-choco-tool-venv-surface.md](10-choco-tool-venv-surface.md) — choco/tool-venv-surface — chocofarm's tool / venv / capability surface (Pillar 1; authored directly after the structured-output reader hit its retry cap twice)
 
 ## Provenance & integrity
 
 - Source: structured output of the `claude-harness-understand` workflow (model claude-opus-4-8[1m]), 2026-06-27.
-- Reader findings are verbatim structured agent output; anchors cite `file:line/section` in the source projects.
-- **9 of 10** readers represented. `choco/tool-venv-surface` (Z3/OR-Tools/venv inventory for Pillar 1)
-  failed on a structured-output retry cap; a backfill run is in progress and will land as the next report.
-  Until then its key facts survive in `00-synthesis.md` (Z3 4.16.0 + OR-Tools 9.15 CP-SAT in
-  `~/w/vdc/venvs/generic`; CP-SAT already used at `chocofarm/hp/backends/cpsat.py`).
+- Reports 01–09 are verbatim structured agent output; anchors cite `file:line/section` in the source projects.
+- **Report 10 is hand-authored**, not workflow output: the `choco/tool-venv-surface` reader (Z3/OR-Tools/
+  venv inventory for Pillar 1) exceeded its structured-output retry cap on BOTH the original run and a
+  dedicated backfill run (`wf_ead2d79d-647`). The inventory was gathered directly (verified venv imports +
+  a grep use-site census, 2026-06-27) and written in the same schema; its footer says so.
 
 ## On machine-local detail
 
