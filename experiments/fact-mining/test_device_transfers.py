@@ -51,15 +51,26 @@ import os
 HERE = os.path.dirname(os.path.abspath(__file__))
 MARKER = "# host-device-boundary:"       # inline opt-in, same convention as chocofarm
 
-# Each device framework's edge has exactly ONE home file. A device-edge op is
-# sanctioned iff it appears in its framework's home AND carries MARKER.
+# Each device framework's edge has a SET of declared home files — a device-edge op
+# is sanctioned iff it appears in one of its framework's homes AND carries MARKER.
+# Single-homing is kept per-EDGE: each home is the one authoritative file for its
+# OWN concern, not a license to scatter the edge. The jax framework now has two
+# such edges:
+#   * coref_host_shell.py    — the decode PIPELINE's internal host<->device edge
+#                              (pulls device results, lifts index/mask lists back).
+#   * coref_decode_server.py — the WIRE seam: lifts the decode-tail weights and the
+#                              wire-delivered last_hidden_state bytes onto the device
+#                              (the ZMQ daemon boundary). A genuinely distinct edge,
+#                              declared and marked here, NOT scattered.
 HOMES = {
-    "torch": "nlp_server.py",            # torch / spaCy / maverick GPU placement+casts
-    "jax": "coref_host_shell.py",        # jax host<->device pulls & lifts (ADR-0012 P7 shell)
+    "torch": frozenset({"nlp_server.py"}),        # torch / spaCy / maverick GPU placement+casts
+    "jax": frozenset({"coref_host_shell.py",      # decode-pipeline host<->device edge (ADR-0012 P7)
+                      "coref_decode_server.py"}),  # the ZMQ wire<->device seam
 }
 SCANNED = ["extract.py", "load_facts.py", "nlp_cache.py",
            "nlp_client.py", "nlp_server.py", "resolve.py",
-           "jax_decode.py", "coref_host_shell.py", "maverick_load.py"]
+           "jax_decode.py", "coref_host_shell.py", "maverick_load.py",
+           "coref_decode_server.py", "coref_decode_client.py"]
 
 # Closed token sets — the device-edge ops actually reachable in this code.
 # Deliberately name-based and conservative; no device-signal heuristic.
@@ -113,9 +124,10 @@ def find_device_ops(src: str, relpath: str) -> list[tuple[str, int, str, str]]:
 
 
 def is_sanctioned(hit: tuple[str, int, str, str], src_lines: list[str]) -> bool:
-    """A device op is allowed iff it is in ITS FRAMEWORK's home and carries MARKER."""
+    """A device op is allowed iff it is in ONE of its framework's homes and carries
+    MARKER."""
     relpath, lineno, _, framework = hit
-    if relpath != HOMES.get(framework):
+    if relpath not in HOMES.get(framework, frozenset()):
         return False
     return MARKER in src_lines[lineno - 1]
 
@@ -131,8 +143,9 @@ def _scan_real_tree() -> list[str]:
         for hit in find_device_ops(src, name):
             if not is_sanctioned(hit, lines):
                 relpath, lineno, token, framework = hit
-                home = HOMES.get(framework, "?")
-                why = (f"not in {framework} home ({home})" if relpath != home
+                homes = HOMES.get(framework, frozenset())
+                why = (f"not in {framework} home(s) {sorted(homes)}"
+                       if relpath not in homes
                        else "missing inline `# host-device-boundary:` marker")
                 violations.append(f"{relpath}:{lineno} {token} [{framework}] — {why}")
     return violations
@@ -152,7 +165,7 @@ def test_device_ops_are_single_homed_and_marked():
 def test_unmarked_device_op_is_caught():
     """NEGATIVE proof: an unmarked `.cuda()` even in its home is NOT sanctioned."""
     src = "def f(x):\n    return x.cuda()\n"
-    hit = find_device_ops(src, HOMES["torch"])[0]
+    hit = find_device_ops(src, "nlp_server.py")[0]
     assert not is_sanctioned(hit, src.splitlines())
 
 
@@ -160,7 +173,7 @@ def test_marked_device_op_passes_only_in_single_home():
     """The marker sanctions a hit in the framework home; the SAME line elsewhere does not."""
     line = "    y = x.to('cuda')  # host-device-boundary: the one staging point\n"
     src = "def f(x):\n" + line
-    hit = find_device_ops(src, HOMES["torch"])[0]
+    hit = find_device_ops(src, "nlp_server.py")[0]
     assert is_sanctioned(hit, src.splitlines()), "marker in nlp_server.py must pass"
     other = find_device_ops(src, "resolve.py")[0]
     assert not is_sanctioned(other, src.splitlines()), "device op outside the home must fail"
@@ -171,18 +184,40 @@ def test_jax_transfer_is_recognized_and_homed():
     sanctioned only in the jax home (coref_host_shell.py) AND only when marked."""
     pull = "    r = jax.device_get(x)  # host-device-boundary: device->host pull\n"
     src = "def f(x):\n" + pull
-    hit = find_device_ops(src, HOMES["jax"])[0]
+    hit = find_device_ops(src, "coref_host_shell.py")[0]
     assert hit[3] == "jax" and hit[2] == ".device_get()"
     assert is_sanctioned(hit, src.splitlines()), "marked jax pull in the jax home must pass"
     # unmarked jax pull in the home -> caught
-    bare = find_device_ops("def f(x):\n    return jax.device_get(x)\n", HOMES["jax"])[0]
+    bare = find_device_ops("def f(x):\n    return jax.device_get(x)\n", "coref_host_shell.py")[0]
     assert not is_sanctioned(bare, "def f(x):\n    return jax.device_get(x)\n".splitlines())
     # a jax pull in the TORCH home (or any non-jax file) is not sanctioned
     lift = "    a = jnp.asarray(p)  # host-device-boundary: lift host list\n"
-    nshome = find_device_ops("def f(p):\n" + lift, HOMES["torch"])[0]
+    nshome = find_device_ops("def f(p):\n" + lift, "nlp_server.py")[0]
     assert nshome[3] == "jax"
     assert not is_sanctioned(nshome, ("def f(p):\n" + lift).splitlines()), \
         "jax transfer in the torch home is not its home -> must fail"
+
+
+def test_jax_has_two_homes_wire_seam_and_pipeline():
+    """The jax framework now has TWO declared homes — the decode-pipeline shell AND
+    the ZMQ wire seam. A marked jax lift is sanctioned in EITHER; an unmarked one in
+    a home is still caught; and a jax lift in a NON-home (extract.py) is never
+    sanctioned (no scatter)."""
+    lift = "    a = jnp.asarray(p)  # host-device-boundary: lift the wire lhs\n"
+    src = "def f(p):\n" + lift
+    seam_hit = find_device_ops(src, "coref_decode_server.py")[0]
+    assert seam_hit[3] == "jax" and seam_hit[2] == ".asarray()"
+    assert is_sanctioned(seam_hit, src.splitlines()), "marked jax lift in the wire seam must pass"
+    # both jax homes accept it
+    shell_hit = find_device_ops(src, "coref_host_shell.py")[0]
+    assert is_sanctioned(shell_hit, src.splitlines())
+    # a non-home jax file is still rejected (the edge is not scattered)
+    stray = find_device_ops(src, "extract.py")[0]
+    assert not is_sanctioned(stray, src.splitlines()), "jax lift outside any home must fail"
+    # unmarked in the seam -> caught
+    bare = "def f(p):\n    return jnp.asarray(p)\n"
+    bhit = find_device_ops(bare, "coref_decode_server.py")[0]
+    assert not is_sanctioned(bhit, bare.splitlines())
 
 
 def test_bare_builtin_float_is_not_a_device_op():

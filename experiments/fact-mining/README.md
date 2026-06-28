@@ -166,6 +166,76 @@ then run the fidelity proof:
 > host. Not yet wired into `nlp_server.py` — Stage 1a is the verified core, the
 > production swap is the next step.
 
+### Stage 1b-i — the pure-JAX decode tail behind a ZMQ daemon (over the wire)
+
+Stage 1a proved the JAX decode tail *in process*. Stage 1b-i puts that **same,
+unmodified** core behind a ZMQ REP daemon so the production encoder can ship one
+document's decode-tail intermediates over the wire and get cluster offsets back —
+without re-implementing one line of decode math (ADR-0012 P9 / P1: a thin shell
+that **calls** `coref_host_shell.decode_document`, nothing else).
+
+* **`coref_decode_server.py`** — the daemon and the **wire↔device boundary**. It
+  loads the decode-tail weights into jax arrays **once** at startup, and per
+  request lifts the wire `last_hidden_state` onto the device and calls the proven
+  shell. It is a *second, distinct* jax host↔device edge (the wire seam — the
+  pipeline edge stays in `coref_host_shell.py`), declared in **both** gates
+  (`test_import_xor.BOUNDARY_FILES` and `test_device_transfers.HOMES["jax"]`); both
+  `jnp.asarray` lifts carry an inline `# host-device-boundary:` marker. Its name is
+  neutral (not `jax_*`), so the honest-filename rule lets it hold the numpy↔jax mix.
+* **`coref_decode_client.py`** — **host-only** (numpy, no device lib). Packs `lhs`
+  as **raw little-endian float32 bytes** (`'<f4'`) and coerces the structural maps
+  to JSON-native types, so a real tokenizer's `numpy.int64`/`None` maps serialize
+  cleanly.
+
+**Why raw float32 bytes (the bit-exactness claim).** JSON-decimal floats route
+every value through a float64 decimal round-trip and can flip the last mantissa
+bit — exactly the kind of perturbation that can flip a `sigmoid>0.5` / `argmax`
+decision near a boundary (ADR-0009's residual risk). So `last_hidden_state` rides
+the wire as raw IEEE-754 `'<f4'` bytes (one JSON meta frame + one binary frame),
+**bit-identical** end to end; structural inputs are integers/strings (JSON-exact)
+and the returned offsets are integers (JSON-exact). **No `send_pyobj`/pickle** —
+data only, mirroring `nlp_server.py`/`nlp_client.py`.
+
+**Over-the-wire fidelity (ADR-0013).** `test_decode_daemon_fidelity.py` starts the
+real daemon as a subprocess and decodes every fixture **through ZMQ**, asserting
+the cluster sets equal maverick's captured `clusters_token_offsets` (for both
+`singletons` flags, with the same non-vacuity guards as Stage 1a). Two pure units
+back it without a daemon: `test_lhs_wire_roundtrip_is_bit_exact` (pack→unpack is
+byte-identical) and `test_unpack_lhs_fails_loud_on_bad_wire` (a truncated / wrong-
+dtype / non-2D blob raises, never silently coerces — ADR-0002).
+
+**Guest-runnable gates (pure `ast`, no jax/maverick):**
+
+    python test_device_transfers.py    # both jax homes (pipeline + wire seam) single-homed + marked
+    python test_import_xor.py          # coref_decode_server.py is the one declared host↔device boundary
+    # or: pytest test_device_transfers.py test_import_xor.py
+
+**HOST steps (where jax + maverick + CUDA live).** Capture the Stage-1a fixtures
+once (they double as the daemon's inputs + `weights.npz`), start the daemon, then
+run the over-the-wire proof. Use **`python -m pytest`**, never bare `pytest` — on
+this host the `pytest` console script dispatches to an interpreter without jax and
+would falsely "skip":
+
+    . ~/w/vdc/venvs/generic/bin/activate     # + a host env with jax/maverick/CUDA
+
+    # 1. capture fixtures (if not already done for Stage 1a):
+    python capture_fixtures.py               # writes ./fixtures/para_*.{npz,json} + weights.npz
+
+    # 2. start the decode daemon (cap XLA's arena so it co-resides politely with torch):
+    XLA_PYTHON_CLIENT_MEM_FRACTION=0.3 \
+        python coref_decode_server.py --addr tcp://0.0.0.0:5600 --weights ./fixtures/weights.npz
+
+    # 3. in another shell, run the over-the-wire fidelity test (it starts its OWN
+    #    daemon subprocess on a loopback port, so step 2 is only for manual smoke-testing):
+    python -m pytest test_decode_daemon_fidelity.py
+    # smoke-test a running daemon by hand:
+    python coref_decode_client.py --addr tcp://192.168.122.1:5600   # ping / info
+
+> Cannot be exercised on this guest (no jax/maverick/CUDA). The pure-`ast` gates
+> and the two pure wire units are green here; the daemon fidelity test self-skips
+> until fixtures + jax exist on the host. Not yet wired into `nlp_server.py` — the
+> production encoder→daemon hand-off is the next step.
+
 ## Caching (redis)
 
 Parsing is the expensive step; the result for a given `(model, config, text)` is

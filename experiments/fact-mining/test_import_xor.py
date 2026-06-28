@@ -45,7 +45,8 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 # scanned — it is the fixture-I/O boundary, not part of the device pipeline.
 SCANNED = ["extract.py", "load_facts.py", "nlp_cache.py",
            "nlp_client.py", "nlp_server.py", "resolve.py",
-           "jax_decode.py", "coref_host_shell.py", "maverick_load.py"]
+           "jax_decode.py", "coref_host_shell.py", "maverick_load.py",
+           "coref_decode_server.py", "coref_decode_client.py"]
 
 HOST = {"numpy"}
 DEVICE = {"torch", "jax", "jaxlib", "cupy", "tensorflow"}
@@ -54,9 +55,19 @@ DEVICE = {"torch", "jax", "jaxlib", "cupy", "tensorflow"}
 DEVICE_NAME_TOKENS = ("jax", "torch", "cupy", "tensorflow", "cuda", "gpu")
 
 # Declared host↔device boundary shells: {relpath: reason}. The ONLY files allowed
-# to be both host and device. Empty today — add a file here only when it IS the
-# typed seam (e.g. a numpy<->jax conversion module), with a one-line reason.
-BOUNDARY_FILES: dict[str, str] = {}
+# to be both host and device. Add a file here only when it IS the typed seam
+# (e.g. a numpy<->jax conversion module), with a one-line reason justifying the mix
+# on perf AND structural grounds — and only if its NAME is honest (neutral, not
+# jax_*/torch_*): a device-named file can never be laundered by this whitelist.
+BOUNDARY_FILES: dict[str, str] = {
+    # The jax decode daemon's wire<->device seam. It MUST import numpy to unpack the
+    # raw float32 `last_hidden_state` bytes off the wire (numpy.frombuffer -> typed,
+    # shaped, C-contiguous host array) and jax to lift that onto the accelerator.
+    # Justification: (perf+correctness) raw IEEE-754 bytes are the only BIT-EXACT
+    # float32 wire encoding — JSON decimals can flip a mantissa bit and a decision;
+    # (structural) this is the single authoritative wire seam, name is neutral.
+    "coref_decode_server.py": "wire float32 unpack at the host<->device seam",
+}
 
 
 def imported_top_modules(src: str) -> set[str]:
