@@ -42,6 +42,18 @@ from maverick_load import safe_maverick_load  # SSOT safe checkpoint load (ADR-0
 
 SAMPLE_TXT = "/home/bork/pg/pg78966.txt"
 
+
+def _json_default(o):
+    """maverick's cluster offsets come back as numpy int64; coerce numpy scalars/
+    arrays to native python so json.dump can serialize the structured fixtures."""
+    if isinstance(o, np.integer):
+        return int(o)
+    if isinstance(o, np.floating):
+        return float(o)
+    if isinstance(o, np.ndarray):
+        return o.tolist()
+    raise TypeError(f"Object of type {type(o).__name__} is not JSON serializable")
+
 # decode-tail FC RepresentationLayers (module attr on Maverick_mes) to dump.
 FC_LAYERS = [
     "start_token_classifier",
@@ -190,7 +202,7 @@ def main() -> None:
         stem = os.path.join(outdir, f"para_{i:03d}")
         np.savez(stem + ".npz", **arrays)
         with open(stem + ".json", "w", encoding="utf-8") as fh:
-            json.dump(structured, fh)
+            json.dump(structured, fh, default=_json_default)
         s = arrays["last_hidden_state"].shape
         nc = len(structured["clusters_token_offsets"])
         ncs = len(structured["clusters_token_offsets_singletons"])
