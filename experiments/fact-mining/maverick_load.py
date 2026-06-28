@@ -25,31 +25,32 @@ import importlib
 
 
 def _maverick_safe_globals():
-    """The specific, audited PURE-DATA classes maverick's omegaconf/Lightning
-    checkpoint pickles. Allowlisting exactly these keeps `weights_only=True` — no
-    arbitrary-code path.
+    """FROZEN, audited allowlist — NOT discovered by host whack-a-mole (the ADR-0013
+    grind the ADR-0014 review rejected). Source of truth: `enumerate_ckpt_globals.py`
+    run on weights.ckpt (snapshot 087a90f0...) statically reported EXACTLY these 10
+    globals, with zero execution. Each was audited per that file's rule — all are
+    pure-data types or torch's own tensor-rebuild primitives; NONE is a
+    callable-with-side-effects — so the set is safe under `weights_only=True`.
 
-    The complete set is NOT discovered by host whack-a-mole (that is the ADR-0013
-    grind the ADR-0014 review rejected). Run `enumerate_ckpt_globals.py` ONCE on the
-    host: it statically reads every global the checkpoint references, with zero
-    execution. Audit its "MUST allowlist" bucket per the rule in that file's header
-    (pure data → allow; callable-with-side-effects → REFUSE, the file is hostile),
-    and freeze that set here. A future `Unsupported global: X` is then not a thing
-    to append blindly — it means the file changed: re-run the enumerator, re-audit.
+    A future `Unsupported global: X` is NOT a thing to append blindly: it means the
+    file changed — re-run the enumerator and re-audit the delta (pure-data → allow;
+    callable-with-side-effects → REFUSE, the file is hostile). Resolved tolerantly so
+    a version skew can't crash the helper.
 
-    The builtins below are pure-data callables omegaconf names as rebuild functions
-    (`dict(...)`, `tuple(...)`); they cannot execute attacker code regardless of
-    args. omegaconf classes are resolved tolerantly against version skew.
+    Audited (10): builtins.dict (the ckpt names it __builtin__.dict; torch's compat
+    mapping resolves it), collections.OrderedDict/defaultdict, typing.Any, omegaconf
+    {DictConfig, base.ContainerMetadata, base.Metadata, nodes.AnyNode}, torch
+    {FloatStorage, _utils._rebuild_tensor_v2}.
     """
     import collections
     import typing
 
-    allow = [typing.Any, collections.defaultdict, collections.OrderedDict,
-             dict, list, tuple, set, frozenset]
+    allow = [dict, typing.Any, collections.OrderedDict, collections.defaultdict]
+    # omegaconf config nodes (pure data; resolution is lazy → inert at unpickle)
     wanted = {
-        "omegaconf": ["DictConfig", "ListConfig"],
+        "omegaconf": ["DictConfig", "ListConfig"],   # ListConfig: defensive, pure-data
         "omegaconf.base": ["ContainerMetadata", "Metadata"],
-        "omegaconf.nodes": ["AnyNode", "ValueNode", "InterpolationResultNode"],
+        "omegaconf.nodes": ["AnyNode"],
     }
     for mod_name, names in wanted.items():
         try:
@@ -60,6 +61,20 @@ def _maverick_safe_globals():
             obj = getattr(mod, n, None)
             if obj is not None:
                 allow.append(obj)
+    # torch's own rebuild primitives — torch trusts these (usually already in its
+    # default weights_only set; added explicitly so the load is provably one-shot).
+    try:
+        import torch
+        for dotted in ("FloatStorage", "_utils._rebuild_tensor_v2"):
+            obj = torch
+            for part in dotted.split("."):
+                obj = getattr(obj, part, None)
+                if obj is None:
+                    break
+            if obj is not None:
+                allow.append(obj)
+    except ImportError:
+        pass
     return allow
 
 
