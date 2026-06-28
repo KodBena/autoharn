@@ -46,7 +46,8 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 SCANNED = ["extract.py", "load_facts.py", "nlp_cache.py",
            "nlp_client.py", "nlp_server.py", "resolve.py",
            "jax_decode.py", "coref_host_shell.py", "maverick_load.py",
-           "coref_decode_server.py", "coref_decode_client.py"]
+           "coref_decode_server.py", "coref_decode_client.py",
+           "coref_decode_inputs.py"]
 
 HOST = {"numpy"}
 DEVICE = {"torch", "jax", "jaxlib", "cupy", "tensorflow"}

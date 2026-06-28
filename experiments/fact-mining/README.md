@@ -233,8 +233,93 @@ would falsely "skip":
 
 > Cannot be exercised on this guest (no jax/maverick/CUDA). The pure-`ast` gates
 > and the two pure wire units are green here; the daemon fidelity test self-skips
-> until fixtures + jax exist on the host. Not yet wired into `nlp_server.py` — the
-> production encoder→daemon hand-off is the next step.
+> until fixtures + jax exist on the host. The production encoder→daemon hand-off is
+> wired in **Stage 1b-ii** below.
+
+### Stage 1b-ii — the live encoder→daemon hand-off (`--coref-backend jax-daemon`)
+
+Stage 1b-i proved the daemon's decode equals maverick's **captured** clusters when
+*replaying fixtures*. Stage 1b-ii wires the daemon into the **live** path: the
+production torch encoder in `nlp_server.py` ships each paragraph's decode-tail
+intermediates to the daemon and gets cluster offsets back — maverick's decode tail
+**retired from the live path**, no fixtures involved.
+
+* **`coref_decode_inputs.py`** — the **single source (ADR-0012 P1)** for maverick's
+  FRONT-half prep. `prepare_decode_inputs(mav, text)` runs `preprocess` + `tokenize`
+  (the deberta sub-word ids, `eos_mask`, `subtoken_map`, `new_token_map`, **and** the
+  per-token `char_offsets`); `clusters_token_to_char_offsets(...)` is a verbatim
+  mirror of maverick.predict's `clusters_char_offsets` (`char_offsets[start][0] ..
+  char_offsets[end][1]`, inclusive end). It is **framework-free** (no torch/jax/numpy),
+  so it trips neither gate. **All three** producers of that prep now call it — the
+  fixture capture (`capture_fixtures.capture_one`), the live jax-daemon path, and the
+  batched maverick path (`coref_clusters_batched`, which reads just `input_ids`/
+  `attention_mask` off the result) — so the extraction cannot drift between them.
+* **`nlp_server.encode_last_hidden_state(model, input_ids, attention_mask)`** — the
+  **one torch device op** of this backend, kept in the torch home (markers + the
+  device-transfer gate). Its encoder call is byte-identical to maverick's own forward,
+  so on the same inputs `lhs` equals what `predict` computes internally. `nlp_server`
+  authors **no** jax op: the decode is shipped to the daemon via the host-only
+  `coref_decode_client.RemoteDecode`.
+* **`Server.coref_clusters_jax_daemon(texts, decode_addr)`** — per paragraph:
+  `prepare_decode_inputs` → `encode_last_hidden_state` → `RemoteDecode.decode(...,
+  singletons=False)` → `clusters_token_to_char_offsets`. Serial (per-paragraph),
+  matching the maverick reference; the point is to exercise the jax decode tail
+  bit-for-bit, not to be fast.
+
+**Routing.** `load_facts --coref-backend jax-daemon --decode-addr ...` → `RemoteNLP`
+sets the request's `coref_backend`/`decode_addr` fields → `nlp_server.handle` overrides
+its defaults per call → `_run_coref` dispatches to `coref_clusters_jax_daemon` →
+`RemoteDecode.decode`. The default backend stays **`maverick`** (the reference, its own
+decode tail); `--coref-mode verify` runs the trusted serial maverick reference too and
+reports a pass/fail fidelity diff against whichever backend is selected.
+
+**Live-wire fidelity (`test_livewire_fidelity.py`).** Drives the FULL live path on
+freshly-loaded maverick and asserts both the token- and char-offset cluster **sets**
+equal maverick's own `predict(text)`, bit-for-bit (ADR-0009). The char clusters are
+produced by driving the **actual** `Server._run_coref(..., "jax-daemon", ...)` →
+`coref_clusters_jax_daemon` (wired to the test's maverick + daemon via `Server.__new__`
++ preset `_coref`/`_decoders`), so the live orchestration and backend dispatch are
+certified, not a parallel copy; the token offsets are decoded once more at the leaf for
+the most sensitive bit-exact probe (the server surfaces only char spans). Daemon weights
+are extracted from the very model we encode with (no fixture dependency). The same
+non-vacuity guard as the other fidelity proofs (≥1 cluster, ≥1 with ≥2 mentions).
+
+**Guest-runnable gates (pure `ast`, no jax/maverick):**
+
+    python test_device_transfers.py    # encode_last_hidden_state's torch ops single-homed + marked
+    python test_import_xor.py          # coref_decode_inputs.py is framework-free (host=[] device=[])
+
+**HOST steps (where jax + maverick + CUDA live).** Use **`python -m pytest`**, never
+bare `pytest` — on this host the `pytest` console script dispatches to an interpreter
+without jax and would falsely "skip":
+
+    . ~/w/vdc/venvs/generic/bin/activate     # + a host env with jax/maverick/CUDA
+
+    # 1. start the JAX decode daemon (cap XLA's arena so it co-resides politely with
+    #    torch on the same card). Weights come from the Stage-1a fixture capture:
+    XLA_PYTHON_CLIENT_MEM_FRACTION=0.3 \
+        python coref_decode_server.py --addr tcp://0.0.0.0:5600 --weights ./fixtures/weights.npz
+
+    # 2. run the live-wire fidelity test (it starts its OWN daemon subprocess on a
+    #    loopback port with weights from the live model, so step 1 is only for the
+    #    load_facts run below / manual smoke-testing). On a small card, set
+    #    MAVERICK_DEVICE=cpu to encode on CPU and leave the GPU to the daemon:
+    python -m pytest test_livewire_fidelity.py
+
+    # 3. run the normal extraction selecting the jax-daemon backend (the live
+    #    encoder→daemon hand-off). The spaCy/maverick daemon must be running too
+    #    (`python nlp_server.py --addr tcp://0.0.0.0:5599 --model en_core_web_trf
+    #    --gpu`, from the "GPU daemon" section). --remote is that spaCy daemon;
+    #    --decode-addr is the JAX decode daemon from step 1 (passed through to it):
+    python load_facts.py ./book.txt \
+        --remote tcp://192.168.122.1:5599 \
+        --coref --coref-backend jax-daemon --decode-addr tcp://192.168.122.1:5600
+    #    add --coref-verify to also run the serial maverick reference and emit a
+    #    pass/fail fidelity diff against the jax-daemon clusters.
+
+> Cannot be exercised on this guest (no jax/maverick/CUDA). The pure-`ast` gates are
+> green here; `test_livewire_fidelity.py` self-skips (ModuleNotFoundError) until
+> maverick/torch/jax exist on the host.
 
 ## Caching (redis)
 

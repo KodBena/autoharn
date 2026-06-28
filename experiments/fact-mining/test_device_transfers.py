@@ -63,7 +63,8 @@ HOMES = {
 SCANNED = ["extract.py", "load_facts.py", "nlp_cache.py",
            "nlp_client.py", "nlp_server.py", "resolve.py",
            "jax_decode.py", "coref_host_shell.py", "maverick_load.py",
-           "coref_decode_server.py", "coref_decode_client.py"]
+           "coref_decode_server.py", "coref_decode_client.py",
+           "coref_decode_inputs.py"]
 
 # Closed token sets — the device-edge ops actually reachable in this code.
 # Deliberately name-based and conservative; no device-signal heuristic.

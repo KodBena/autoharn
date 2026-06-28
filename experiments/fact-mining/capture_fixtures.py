@@ -38,6 +38,7 @@ import torch
 from maverick import Maverick
 from maverick.common.util import original_token_offsets
 
+from coref_decode_inputs import prepare_decode_inputs  # SSOT decode-input prep (ADR-0012 P1)
 from maverick_load import safe_maverick_load  # SSOT safe checkpoint load (ADR-0012 P1)
 
 SAMPLE_TXT = "/home/bork/pg/pg78966.txt"
@@ -113,8 +114,15 @@ def capture_one(mav: Maverick, text: str) -> tuple[dict, dict]:
     model = mav.model
     device = mav.device
 
-    tokens, eos_indices, speakers, _ = mav.preprocess(text)
-    tok = mav.tokenize(tokens, eos_indices, speakers)
+    # SSOT decode-input prep (ADR-0012 P1): the exact preprocess+tokenize the live
+    # coref path also uses. last_hidden_state is still captured below via the encoder
+    # forward hook (the device op stays in the producer), keeping fixtures identical.
+    di = prepare_decode_inputs(mav, text)
+    tok = {
+        "tokens": di.tokens, "input_ids": di.input_ids,
+        "attention_mask": di.attention_mask, "eos_mask": di.eos_mask,
+        "subtoken_map": di.subtoken_map, "new_token_map": di.new_token_map,
+    }
 
     input_ids = torch.tensor(tok["input_ids"]).unsqueeze(0).to(device)        # host-device-boundary
     attention_mask = torch.tensor(tok["attention_mask"]).unsqueeze(0).to(device)  # host-device-boundary

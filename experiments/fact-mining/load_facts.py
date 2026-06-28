@@ -44,6 +44,16 @@ def main() -> int:
                     help="(remote coref only) run BOTH serial and batched coref and "
                          "report a fidelity pass/fail. Run this ONCE before trusting "
                          "the batched path; the trusted serial clusters are loaded.")
+    ap.add_argument("--coref-backend", default="maverick",
+                    choices=["maverick", "jax-daemon"],
+                    help="(remote coref only) decode backend on the daemon: 'maverick' "
+                         "(reference, default — its own decode tail) or 'jax-daemon' "
+                         "(retire the decode tail from the live path: the daemon's torch "
+                         "encodes, the JAX decode daemon decodes).")
+    ap.add_argument("--decode-addr", default=None,
+                    help="(remote coref, jax-daemon backend) ZMQ address of the JAX "
+                         "decode daemon (coref_decode_server.py). Passed through to the "
+                         "spaCy daemon; defaults to its own --decode-addr if unset.")
     ap.add_argument("--body-start-line", type=int, default=834)
     ap.add_argument("--max-paras", type=int, default=200)
     ap.add_argument("--max-sents", type=int, default=400)
@@ -63,12 +73,16 @@ def main() -> int:
 
     cache = None
     if args.coref and args.remote:
-        # coref on the host daemon (maverick); clusters ride back with the DocBin
+        # coref on the host daemon; clusters ride back with the DocBin. backend =
+        # "maverick" (reference decode tail) or "jax-daemon" (torch encodes on the
+        # daemon, the JAX decode daemon decodes — the decode tail retired).
         from nlp_client import RemoteNLP
         m = None if args.model == "en_core_web_sm" else args.model
-        nlp = RemoteNLP(args.remote, model=m, coref=True, coref_mode=coref_mode)
-        model_label = f"{m or nlp.info().get('default', 'remote')}+coref(maverick/{coref_mode})"
-        print(f"=== remote coref daemon: {args.remote} | mode={coref_mode} | {nlp.info()} ===")
+        nlp = RemoteNLP(args.remote, model=m, coref=True, coref_mode=coref_mode,
+                        coref_backend=args.coref_backend, decode_addr=args.decode_addr)
+        model_label = f"{m or nlp.info().get('default', 'remote')}+coref({args.coref_backend}/{coref_mode})"
+        print(f"=== remote coref daemon: {args.remote} | backend={args.coref_backend} | "
+              f"mode={coref_mode} | {nlp.info()} ===")
     elif args.coref:
         # local fastcoref pipeline (guest-only; no remote/cache)
         nlp = resolve.build_coref_nlp(args.model)

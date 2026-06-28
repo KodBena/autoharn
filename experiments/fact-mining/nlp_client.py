@@ -31,7 +31,8 @@ class RemoteError(RuntimeError):
 class RemoteNLP:
     def __init__(self, addr: str = "tcp://192.168.122.1:5599",
                  model: str | None = None, timeout_ms: int = 600_000,
-                 coref: bool = False, coref_mode: str = "batched"):
+                 coref: bool = False, coref_mode: str = "batched",
+                 coref_backend: str = "maverick", decode_addr: str | None = None):
         self.addr = addr
         self.model = model
         self.timeout_ms = timeout_ms
@@ -39,6 +40,11 @@ class RemoteNLP:
         # how the daemon runs coref: "batched" (fast, default) | "serial"
         # (reference) | "verify" (run both, report fidelity). See nlp_server.py.
         self.coref_mode = coref_mode
+        # which decode backend the daemon uses: "maverick" (reference, its own decode
+        # tail) | "jax-daemon" (torch encodes on the daemon, the JAX decode daemon
+        # decodes). decode_addr, when set, tells the daemon where that JAX daemon is.
+        self.coref_backend = coref_backend
+        self.decode_addr = decode_addr
         # filled from the daemon reply when coref_mode == "verify"; else None
         self.last_coref_verify: dict | None = None
         # a blank vocab is enough to rehydrate a DocBin: all strings travel in it
@@ -71,11 +77,14 @@ class RemoteNLP:
 
     # --- parsing -------------------------------------------------------------
     def pipe(self, texts, disable=()):
-        frames = self._roundtrip({
+        req = {
             "op": "parse", "texts": list(texts), "model": self.model,
             "format": "docbin", "disable": list(disable), "coref": self.coref,
-            "coref_mode": self.coref_mode,
-        })
+            "coref_mode": self.coref_mode, "coref_backend": self.coref_backend,
+        }
+        if self.decode_addr is not None:
+            req["decode_addr"] = self.decode_addr
+        frames = self._roundtrip(req)
         meta = json.loads(frames[0])
         if not meta.get("ok"):
             raise RemoteError(meta.get("error", "server error"))

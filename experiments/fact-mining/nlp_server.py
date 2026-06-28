@@ -73,6 +73,34 @@ def doc_to_json(doc):
     }
 
 
+def encode_last_hidden_state(model, input_ids, attention_mask):
+    """Run maverick's deberta encoder for ONE document and return its
+    `last_hidden_state` as a HOST tensor [S, TH] (batch axis removed).
+
+    This is the maverick FRONT-HALF encode for the jax-daemon coref backend (and the
+    livewire fidelity test reuses it, so the encode path is single-sourced). It is the
+    ONE torch host<->device crossing of that backend, kept in nlp_server.py — the torch
+    device home — per the device-transfer single-home mandate. nlp_server authors the
+    torch op; it authors NO jax op (the decode is shipped to the jax daemon).
+
+    The encoder call is identical to maverick's own forward
+    (`self.encoder(input_ids=..., attention_mask=...)["last_hidden_state"]`), so on the
+    same inputs it is bit-identical to what maverick.predict would compute internally.
+    fp32 throughout (the model is forced fp32 at load), matching the daemon's contract.
+    """
+    import torch
+
+    dev = next(model.encoder.parameters()).device
+    ids_t = torch.tensor([input_ids], dtype=torch.long).to(dev)        # host-device-boundary: stage coref input_ids onto the GPU
+    mask_t = torch.tensor([attention_mask], dtype=torch.long).to(dev)  # host-device-boundary: stage coref attention_mask onto the GPU
+    with torch.no_grad():
+        hidden = model.encoder(input_ids=ids_t, attention_mask=mask_t)["last_hidden_state"]  # 1×S×TH, fp32
+    # [S, TH] on the host: the wire client packs it to raw float32 bytes. Pulling to
+    # the host HERE keeps the device->host pull in the torch home (the client is
+    # host-only numpy and never touches the device).
+    return hidden[0].detach().cpu()  # host-device-boundary: pull lhs device->host for the wire
+
+
 class _PrecomputedEncoder:
     """Temporary stand-in for maverick's deberta encoder during batched coref.
 
@@ -117,7 +145,9 @@ class _PrecomputedEncoder:
 
 
 class Server:
-    def __init__(self, default_model: str, gpu: bool):
+    def __init__(self, default_model: str, gpu: bool,
+                 coref_backend: str = "maverick",
+                 decode_addr: str = "tcp://192.168.122.1:5600"):
         self.gpu = gpu
         if gpu:
             # routes thinc ops to cupy and (for trf) torch to CUDA
@@ -126,6 +156,13 @@ class Server:
         self.models: dict[str, "spacy.Language"] = {}
         self.get(default_model)  # preload — the slow part, done once
         self._coref = None       # maverick-coref, loaded lazily on first coref request
+        # coref decode backend: "maverick" (reference, default — its own decode tail)
+        # or "jax-daemon" (retire the decode tail from the live path: torch encodes
+        # here, the JAX decode daemon at decode_addr decodes). A request may override
+        # both per call (coref_backend / decode_addr fields).
+        self.coref_backend = coref_backend
+        self.decode_addr = decode_addr
+        self._decoders: dict[str, object] = {}  # addr -> RemoteDecode (lazy, reused)
 
     def get(self, name: str | None):
         name = name or self.default_model
@@ -210,6 +247,13 @@ class Server:
         """
         import torch
 
+        # SSOT decode-input prep (ADR-0012 P1): the SAME preprocess+tokenize the
+        # jax-daemon path and capture_fixtures use. This path only consumes
+        # input_ids / attention_mask; tokenize computes the discarded maps either
+        # way, so routing through the single source costs nothing and removes the
+        # last hand-rolled copy of the extraction in this module.
+        from coref_decode_inputs import prepare_decode_inputs
+
         if not texts:
             return []
 
@@ -221,10 +265,9 @@ class Server:
         per_item_ids: list[list[int]] = []
         per_item_mask: list[list[int]] = []
         for text in texts:
-            tokens, eos_indices, speakers, _char_offsets = c.preprocess(text)
-            tok = c.tokenize(tokens, eos_indices, speakers)
-            per_item_ids.append(list(tok["input_ids"]))
-            per_item_mask.append(list(tok["attention_mask"]))
+            di = prepare_decode_inputs(c, text)
+            per_item_ids.append(list(di.input_ids))
+            per_item_mask.append(list(di.attention_mask))
 
         lengths = [len(ids) for ids in per_item_ids]
         s_max = max(lengths)
@@ -258,6 +301,68 @@ class Server:
         finally:
             model._modules["encoder"] = real
 
+    # -------------------------------------------------------------- jax-daemon
+    def _decoder(self, addr: str):
+        """Lazily create + reuse a RemoteDecode client per decode-daemon address.
+
+        coref_decode_client is HOST-ONLY (numpy wire-pack + zmq, no device framework),
+        so importing it here does NOT make nlp_server author a jax op — the JAX decode
+        runs in the daemon. One client per addr, reused across requests."""
+        from coref_decode_client import RemoteDecode  # host-only wire client
+
+        if addr not in self._decoders:
+            self._decoders[addr] = RemoteDecode(addr)
+        return self._decoders[addr]
+
+    def coref_clusters_jax_daemon(self, texts: list[str], decode_addr: str):
+        """Char-offset clusters via the JAX decode DAEMON — maverick's decode tail
+        retired from the live path.
+
+        Per paragraph: (1) run maverick's FRONT half — the shared SSOT prep
+        (preprocess + tokenize) and the torch deberta encoder
+        (`encode_last_hidden_state`, the one torch device op, in this home) — to get
+        `last_hidden_state` + the structural maps + char_offsets; (2) SHIP those
+        decode inputs to the jax decode daemon (`RemoteDecode.decode`), which returns
+        `clusters_token_offsets`; (3) map token offsets -> CHAR offsets with the shared
+        SSOT mapper (maverick's `clusters_char_offsets` replica), so the result matches
+        `coref_clusters`' contract exactly.
+
+        nlp_server authors NO jax op here: the decode is the daemon's. Per-paragraph
+        (serial), like the maverick reference path — the encoder is not batched here,
+        the point is to exercise the jax decode tail bit-for-bit, not to be fast.
+        """
+        # SSOT helpers (framework-free host prep + token->char mapping; ADR-0012 P1)
+        from coref_decode_inputs import (clusters_token_to_char_offsets,
+                                         prepare_decode_inputs)
+
+        if not texts:
+            return []
+
+        c = self.coref()
+        model = c.model
+        client = self._decoder(decode_addr)
+
+        out = []
+        for text in texts:
+            di = prepare_decode_inputs(c, text)
+            # the ONE torch device op of this backend, single-homed in nlp_server:
+            lhs = encode_last_hidden_state(model, di.input_ids, di.attention_mask)  # [S, TH] host tensor
+            # ship decode inputs to the jax daemon; it returns token-offset clusters.
+            # singletons=False to match coref_clusters (maverick.predict's default).
+            clusters_tok = client.decode(
+                lhs=lhs,
+                attention_mask=di.attention_mask,
+                eos_mask=di.eos_mask,
+                tokens=di.tokens,
+                subtoken_map=di.subtoken_map,
+                new_token_map=di.new_token_map,
+                singletons=False,
+            )
+            # token offsets -> char offsets (maverick clusters_char_offsets replica)
+            char_clusters = clusters_token_to_char_offsets(clusters_tok, di.char_offsets)
+            out.append(char_clusters or [])
+        return out
+
     # ------------------------------------------------------------ fidelity check
     @staticmethod
     def _clusters_as_set(clusters):
@@ -270,21 +375,37 @@ class Server:
         """
         return {frozenset(tuple(span) for span in cluster) for cluster in clusters}
 
-    def _coref_fidelity(self, serial, batched) -> dict:
-        """Compare serial vs batched clusters per text; return a pass/fail diff."""
+    def _coref_fidelity(self, serial, candidate, cand_label: str = "batched") -> dict:
+        """Compare the SERIAL reference vs a candidate path per text; pass/fail diff.
+        `cand_label` names the candidate in the mismatch records ("batched" for the
+        maverick encoder-batch path, "jax_daemon" for the jax decode backend)."""
         mismatches = []
-        for i, (s, b) in enumerate(zip(serial, batched)):
+        for i, (s, b) in enumerate(zip(serial, candidate)):
             if self._clusters_as_set(s) != self._clusters_as_set(b):
-                mismatches.append({"index": i, "serial": s, "batched": b})
+                mismatches.append({"index": i, "serial": s, cand_label: b})
         return {
-            "ok": (not mismatches) and len(serial) == len(batched),
+            "ok": (not mismatches) and len(serial) == len(candidate),
+            "candidate": cand_label,
             "n": len(serial),
             "n_mismatch": len(mismatches),
             "mismatches": mismatches,
         }
 
-    def _run_coref(self, texts, mode):
-        """Dispatch a coref request. Returns (clusters_aligned_to_texts, verify|None)."""
+    def _run_coref(self, texts, mode, backend, decode_addr):
+        """Dispatch a coref request. Returns (clusters_aligned_to_texts, verify|None).
+
+        backend = "maverick" (reference: its own decode tail, batched/serial/verify)
+                | "jax-daemon" (torch encodes here, the JAX daemon decodes).
+        For either backend, mode == "verify" runs the trusted SERIAL maverick
+        reference too and reports a pass/fail fidelity diff against it.
+        """
+        if backend == "jax-daemon":
+            jaxd = self.coref_clusters_jax_daemon(texts, decode_addr)
+            if mode == "verify":
+                serial = [self.coref_clusters(t) for t in texts]
+                return serial, self._coref_fidelity(serial, jaxd, "jax_daemon")
+            return jaxd, None
+        # backend == "maverick" (reference)
         if mode == "serial":
             return [self.coref_clusters(t) for t in texts], None
         if mode == "verify":
@@ -292,7 +413,7 @@ class Server:
             # a --coref-verify run is also a safe run even if the fast path drifts.
             serial = [self.coref_clusters(t) for t in texts]
             batched = self.coref_clusters_batched(texts)
-            return serial, self._coref_fidelity(serial, batched)
+            return serial, self._coref_fidelity(serial, batched, "batched")
         # default: the fast batched path
         return self.coref_clusters_batched(texts), None
 
@@ -308,6 +429,8 @@ class Server:
                 "ok": True, "gpu": self.gpu,
                 "loaded": list(self.models),
                 "default": self.default_model,
+                "coref_backend": self.coref_backend,
+                "decode_addr": self.decode_addr,
             }).encode()]
         if op != "parse":
             return [json.dumps({"ok": False, "error": f"unknown op {op!r}"}).encode()]
@@ -325,8 +448,11 @@ class Server:
         coref = coref_verify = None
         if req.get("coref"):
             mode = req.get("coref_mode", "batched")
-            coref, coref_verify = self._run_coref(texts, mode)
-            note = f" [{mode}]" + (
+            # per-request backend / decode-addr override the server defaults
+            backend = req.get("coref_backend") or self.coref_backend
+            decode_addr = req.get("decode_addr") or self.decode_addr
+            coref, coref_verify = self._run_coref(texts, mode, backend, decode_addr)
+            note = f" [{backend}/{mode}]" + (
                 ("" if coref_verify is None
                  else f" verify={'PASS' if coref_verify['ok'] else 'FAIL'}"
                       f"({coref_verify['n_mismatch']}/{coref_verify['n']})"))
@@ -377,8 +503,19 @@ def main() -> int:
     ap.add_argument("--model", default="en_core_web_trf",
                     help="default pipeline to preload (default %(default)s)")
     ap.add_argument("--gpu", action="store_true", help="use the GPU (require_gpu)")
+    ap.add_argument("--coref-backend", default="maverick",
+                    choices=["maverick", "jax-daemon"],
+                    help="default coref decode backend: 'maverick' (reference, its own "
+                         "decode tail) or 'jax-daemon' (torch encodes here, the JAX "
+                         "decode daemon decodes). A request may override per call. "
+                         "(default %(default)s)")
+    ap.add_argument("--decode-addr", default="tcp://192.168.122.1:5600",
+                    help="ZMQ address of the JAX decode daemon (coref_decode_server.py), "
+                         "used by the jax-daemon backend (default %(default)s)")
     args = ap.parse_args()
-    Server(args.model, args.gpu).serve(args.addr)
+    Server(args.model, args.gpu,
+           coref_backend=args.coref_backend,
+           decode_addr=args.decode_addr).serve(args.addr)
     return 0
 
 
