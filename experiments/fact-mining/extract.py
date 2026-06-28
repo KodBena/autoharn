@@ -168,6 +168,38 @@ def extract_triples(doc):
     return triples
 
 
+def build_nlp(model: str, remote: str | None, cache_url: str | None, verbose: bool = False):
+    """Construct the parsing interface shared by extract.py and load_facts.py.
+
+    Returns (nlp, model_label, cache). `nlp` exposes .pipe()/__call__ whether it
+    is a local Language, a RemoteNLP daemon client, or either wrapped in a cache.
+    `model_label` is the effective pipeline name (used for cache keys / provenance).
+    """
+    if remote:
+        from nlp_client import RemoteNLP
+        # pass model only if the user overrode the default, else let the daemon decide
+        m = None if model == "en_core_web_sm" else model
+        nlp = RemoteNLP(remote, model=m)
+        model_label = m or nlp.info().get("default", "remote")
+        if verbose:
+            print(f"=== remote daemon: {remote} | info: {nlp.info()} ===")
+    else:
+        nlp = load_model(model)
+        model_label = model
+        if verbose:
+            print(f"=== model: {nlp.meta['lang']}_{nlp.meta['name']} {nlp.meta['version']} "
+                  f"| pipes: {nlp.pipe_names} ===")
+
+    cache = None
+    if cache_url:
+        from nlp_cache import DocCache, CachingNLP
+        cache = DocCache(model_label, url=cache_url)
+        nlp = CachingNLP(nlp, cache)
+        if verbose:
+            print(f"=== cache: {cache_url} (model_label={model_label!r}) ===")
+    return nlp, model_label, cache
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -193,25 +225,7 @@ def main() -> int:
 
     body = normalise(load_body(args.path, args.body_start_line))
 
-    if args.remote:
-        from nlp_client import RemoteNLP
-        # pass model only if the user overrode the default, else let the daemon decide
-        model = None if args.model == "en_core_web_sm" else args.model
-        nlp = RemoteNLP(args.remote, model=model)
-        model_label = model or nlp.info().get("default", "remote")
-        print(f"=== remote daemon: {args.remote} | info: {nlp.info()} ===")
-    else:
-        nlp = load_model(args.model)
-        model_label = args.model
-        print(f"=== model: {nlp.meta['lang']}_{nlp.meta['name']} {nlp.meta['version']} "
-              f"| pipes: {nlp.pipe_names} ===")
-
-    cache = None
-    if args.cache:
-        from nlp_cache import DocCache, CachingNLP
-        cache = DocCache(model_label, url=args.cache)
-        nlp = CachingNLP(nlp, cache)
-        print(f"=== cache: {args.cache} (model_label={model_label!r}) ===")
+    nlp, model_label, cache = build_nlp(args.model, args.remote, args.cache, verbose=True)
 
     # parse per-paragraph: bounds work for a sample and gives the cache a
     # reusable granularity (one key per paragraph, not one per whole book).

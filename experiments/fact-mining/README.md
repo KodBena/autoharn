@@ -71,3 +71,37 @@ and rehydrated-from-cache facts are byte-identical to a fresh parse.
 **Latency note.** First trf request includes CUDA warm-up (the ~6 s you saw).
 For genuinely-new text the lever is batching: `extract.py` sends all cache-miss
 paragraphs in one `pipe()` call → one wire round-trip, GPU batches internally.
+
+## Storing facts (psql) — one base, several logics
+
+`schema.sql` creates an **ephemeral** `mining` schema in the harness DB
+(`psql -h 192.168.122.1 -d harness`). Wipe it any time with one statement:
+
+    DROP SCHEMA mining CASCADE;
+
+The base tables (`document` / `sentence` / `assertion` / `entity` / `temporal`)
+are **logic-agnostic** — they record what was extracted and where from. Each
+logic is then a view/query over that base:
+
+| view / query                | logic                  | idea |
+|-----------------------------|------------------------|------|
+| `mining.fact_classical`     | classical/relational   | `pred(subj,obj)`, positive only |
+| `WITH RECURSIVE` over edges | classical (inference)  | transitive closure → *derived* facts |
+| `mining.assertion.negated`  | defeasible             | seam for overridable / negated claims |
+| `mining.contradiction`      | paraconsistent         | same `(s,p,o)` asserted both ways |
+| `mining.fact_temporal`      | temporal (valid-time)  | a fact + the time expression in its sentence |
+
+Apply + load:
+
+    psql -h 192.168.122.1 -d harness -f schema.sql
+    python load_facts.py /home/bork/pg/pg78966.txt --cache --max-sents 200
+    # or against the GPU daemon: ... --remote tcp://192.168.122.1:5599 --cache
+
+**Honest limits (what the recursive chains expose).** Closure produces noisy
+paths like `we -> which -> the accident` because of three unfixed gaps, in
+priority order: (1) **no coreference** — pronouns (`we`, `which`, `it`) are never
+resolved to their referents; (2) **no entity normalization** — `the Greeks` /
+`Greek` / `Greeks` are distinct constants; (3) **shallow SVO** — copulas,
+coordination, and clauses are only partly handled. These cap the quality of
+*every* downstream logic and are the next work, not a plumbing problem. Better
+parses (trf via the daemon) help (2)/(3); (1) needs a coref component.
