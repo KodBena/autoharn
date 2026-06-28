@@ -40,22 +40,22 @@ class RemoteNLP:
         self._sock.setsockopt(zmq.LINGER, 0)
         self._sock.connect(self.addr)
 
-    def _roundtrip(self, req: dict) -> list[bytes]:
+    def _roundtrip(self, req: dict, timeout_ms: int | None = None) -> list[bytes]:
+        to = self.timeout_ms if timeout_ms is None else timeout_ms
         self._sock.send_json(req)
-        try:
-            return self._sock.recv_multipart()
-        except zmq.Again:
-            # a REQ socket that timed out is wedged; reset it before raising
+        if self._sock.poll(to, zmq.POLLIN) == 0:
+            # a REQ socket with an outstanding reply is wedged; reset before raising
             self._sock.close(0)
             self._connect()
-            raise RemoteError(f"no reply within {self.timeout_ms} ms")
+            raise RemoteError(f"no reply within {to} ms")
+        return self._sock.recv_multipart()
 
-    # --- control ops ---------------------------------------------------------
-    def ping(self) -> dict:
-        return json.loads(self._roundtrip({"op": "ping"})[0])
+    # --- control ops (fail fast: a down daemon shouldn't block for minutes) ---
+    def ping(self, timeout_ms: int = 5_000) -> dict:
+        return json.loads(self._roundtrip({"op": "ping"}, timeout_ms)[0])
 
-    def info(self) -> dict:
-        return json.loads(self._roundtrip({"op": "info"})[0])
+    def info(self, timeout_ms: int = 5_000) -> dict:
+        return json.loads(self._roundtrip({"op": "info"}, timeout_ms)[0])
 
     # --- parsing -------------------------------------------------------------
     def pipe(self, texts, disable=()):

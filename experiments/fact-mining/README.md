@@ -45,3 +45,29 @@ From the guest, either use the client directly or point the extractor at it:
 `RemoteNLP` in `nlp_client.py` is a near-drop-in for a loaded `nlp`:
 `.pipe(texts)` / `nlp(text)` return real `Doc` objects rehydrated from DocBin,
 so guest-side extraction code is unchanged whether the model is local or remote.
+
+## Caching (redis)
+
+Parsing is the expensive step; the result for a given `(model, config, text)` is
+deterministic, so we cache it. `nlp_cache.py` stores DocBin bytes in redis,
+keyed by a content hash. The cache lives on the **guest**, in front of the
+daemon — a hit avoids the GPU round-trip entirely.
+
+    python extract.py /home/bork/pg/pg78966.txt --remote tcp://192.168.122.1:5599 --cache
+
+**Which redis instance (both on the guest, 127.0.0.1):**
+
+| port | role        | policy              | use for the cache? |
+|------|-------------|---------------------|--------------------|
+| 6380 | `memcache`  | `allkeys-lru`, no persistence | **yes** — regenerable, evictable |
+| 6379 | `qeubo`     | `noeviction`, disk-persisted  | **no** — durable system of record |
+
+`--cache` defaults to `redis://127.0.0.1:6380/0`. Keys are namespaced
+`autoharn:spacy:doc:*` (shared redis — avoid cross-project collisions).
+
+Verified: cold run = all misses, warm run = all hits with **zero** daemon calls,
+and rehydrated-from-cache facts are byte-identical to a fresh parse.
+
+**Latency note.** First trf request includes CUDA warm-up (the ~6 s you saw).
+For genuinely-new text the lever is batching: `extract.py` sends all cache-miss
+paragraphs in one `pipe()` call → one wire round-trip, GPU batches internally.

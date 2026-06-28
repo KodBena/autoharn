@@ -183,6 +183,12 @@ def main() -> int:
                     help="1-based line where narrative prose begins (skips front matter)")
     ap.add_argument("--max-sents", type=int, default=120,
                     help="cap sentences processed, for a fast first look")
+    ap.add_argument("--max-paras", type=int, default=40,
+                    help="cap paragraphs fed to the parser (bounds work for a sample)")
+    ap.add_argument("--cache", metavar="URL", nargs="?", const="redis://127.0.0.1:6380/0",
+                    default=None,
+                    help="cache parses in redis (default URL: the volatile 6380 instance). "
+                         "On a hit, no parse/wire call is made.")
     args = ap.parse_args()
 
     body = normalise(load_body(args.path, args.body_start_line))
@@ -192,27 +198,45 @@ def main() -> int:
         # pass model only if the user overrode the default, else let the daemon decide
         model = None if args.model == "en_core_web_sm" else args.model
         nlp = RemoteNLP(args.remote, model=model)
+        model_label = model or nlp.info().get("default", "remote")
         print(f"=== remote daemon: {args.remote} | info: {nlp.info()} ===")
     else:
         nlp = load_model(args.model)
-        nlp.max_length = max(nlp.max_length, len(body) + 1000)
+        model_label = args.model
         print(f"=== model: {nlp.meta['lang']}_{nlp.meta['name']} {nlp.meta['version']} "
               f"| pipes: {nlp.pipe_names} ===")
 
-    doc = nlp(body)
+    cache = None
+    if args.cache:
+        from nlp_cache import DocCache, CachingNLP
+        cache = DocCache(model_label, url=args.cache)
+        nlp = CachingNLP(nlp, cache)
+        print(f"=== cache: {args.cache} (model_label={model_label!r}) ===")
 
-    # take the first N sentences as our sample window
-    sents = list(doc.sents)[: args.max_sents]
-    if not sents:
-        print("no sentences parsed", file=sys.stderr)
-        return 1
-    window = doc[sents[0].start : sents[-1].end].as_doc()
+    # parse per-paragraph: bounds work for a sample and gives the cache a
+    # reusable granularity (one key per paragraph, not one per whole book).
+    paragraphs = [p.strip() for p in body.split("\n\n") if p.strip()][: args.max_paras]
+    docs = nlp.pipe(paragraphs)
 
-    triples = extract_triples(window)
-    ents = [(e.text, e.label_) for e in window.ents]
-    dates = [e for e in window.ents if e.label_ in ("DATE", "TIME")]
+    # collect sentences across paragraphs up to the sample budget
+    triples, ents, dates = [], [], []
+    n_sents = 0
+    for doc in docs:
+        for sent in doc.sents:
+            if n_sents >= args.max_sents:
+                break
+            span = sent.as_doc()
+            triples.extend(extract_triples(span))
+            ents.extend((e.text, e.label_) for e in span.ents)
+            dates.extend(e for e in span.ents if e.label_ in ("DATE", "TIME"))
+            n_sents += 1
+        if n_sents >= args.max_sents:
+            break
 
-    print(f"=== sample: {len(sents)} sentences, {len(window)} tokens ===\n")
+    print(f"=== sample: {n_sents} sentences from {len(paragraphs)} paragraphs ===")
+    if cache:
+        print(f"=== cache stats: {cache.stats()} ===")
+    print()
 
     print(f"--- SVO candidate triples ({len(triples)}) -> classical fact base ---")
     for t in triples[:25]:
