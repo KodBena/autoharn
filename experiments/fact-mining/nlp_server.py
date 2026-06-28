@@ -31,8 +31,15 @@ Run (on the host):
 
 from __future__ import annotations
 
+import os
+# The HF Xet backend stalls at 0% behind some networks (observed on this host).
+# Force classic HTTPS LFS for every download this daemon triggers (maverick's
+# encoder, nltk data, etc.). Must be set before any huggingface_hub import.
+os.environ.setdefault("HF_HUB_DISABLE_XET", "1")
+
 import argparse
 import json
+import traceback
 
 import spacy
 import zmq
@@ -156,6 +163,7 @@ class Server:
             try:
                 frames = self.handle(raw)
             except Exception as e:  # never crash the daemon on a bad request
+                traceback.print_exc()  # full traceback to host console for diagnosis
                 frames = [json.dumps({"ok": False, "error": repr(e)}).encode()]
             sock.send_multipart(frames)  # exactly one reply per request
 
