@@ -45,10 +45,17 @@ def main() -> int:
     sha = hashlib.sha256(body.encode("utf-8")).hexdigest()
 
     cache = None
-    if args.coref:
-        # coref changes the pipeline; run a dedicated local pipeline (no remote/cache)
+    if args.coref and args.remote:
+        # coref on the host daemon (maverick); clusters ride back with the DocBin
+        from nlp_client import RemoteNLP
+        m = None if args.model == "en_core_web_sm" else args.model
+        nlp = RemoteNLP(args.remote, model=m, coref=True)
+        model_label = f"{m or nlp.info().get('default', 'remote')}+coref(maverick)"
+        print(f"=== remote coref daemon: {args.remote} | {nlp.info()} ===")
+    elif args.coref:
+        # local fastcoref pipeline (guest-only; no remote/cache)
         nlp = resolve.build_coref_nlp(args.model)
-        model_label = f"{args.model}+coref"
+        model_label = f"{args.model}+coref(fastcoref)"
         print(f"=== local coref pipeline: {args.model}+fastcoref ===")
     else:
         nlp, model_label, cache = build_nlp(args.model, args.remote, args.cache, verbose=True)

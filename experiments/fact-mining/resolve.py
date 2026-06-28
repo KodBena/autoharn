@@ -54,6 +54,16 @@ def _clusters(doc):
         return []  # extension not registered → no coref available
 
 
+def _char_span(doc, s, e):
+    """Tolerant char->Span: handles exclusive vs inclusive end offsets.
+
+    fastcoref gives exclusive ends (slice-style); maverick may give inclusive.
+    Try as-is, then end+1, so the same code consumes either engine's clusters.
+    """
+    return (doc.char_span(s, e, alignment_mode="expand")
+            or doc.char_span(s, e + 1, alignment_mode="expand"))
+
+
 def _pick_representative(spans):
     """Best mention to stand for a cluster — the most constant-like one.
 
@@ -72,7 +82,7 @@ def build_resolution_map(doc) -> dict[int, str]:
     """token index -> canonical key, for tokens inside a non-representative mention."""
     resmap: dict[int, str] = {}
     for cluster in _clusters(doc):
-        spans = [doc.char_span(s, e, alignment_mode="expand") for s, e in cluster]
+        spans = [_char_span(doc, s, e) for s, e in cluster]
         spans = [sp for sp in spans if sp is not None]
         if len(spans) < 2:
             continue

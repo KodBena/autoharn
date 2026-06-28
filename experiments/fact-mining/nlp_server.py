@@ -67,12 +67,28 @@ class Server:
         self.default_model = default_model
         self.models: dict[str, "spacy.Language"] = {}
         self.get(default_model)  # preload — the slow part, done once
+        self._coref = None       # maverick-coref, loaded lazily on first coref request
 
     def get(self, name: str | None):
         name = name or self.default_model
         if name not in self.models:
             self.models[name] = spacy.load(name)
         return self.models[name]
+
+    def coref(self):
+        """Lazily load maverick-coref (host-only dependency, GPU if available)."""
+        if self._coref is None:
+            from maverick import Maverick  # host-only; imported on demand
+            # NOTE: verify the device kwarg/name against the installed maverick
+            # version on the host; adjust here if it raises.
+            self._coref = Maverick(device="cuda" if self.gpu else "cpu")
+        return self._coref
+
+    def coref_clusters(self, text: str):
+        """Return char-offset clusters [[[start,end],...],...] for one text."""
+        pred = self.coref().predict(text)
+        # maverick returns char offsets under this key; keep as plain lists (JSON)
+        return pred.get("clusters_char_offsets", [])
 
     def handle(self, raw: bytes) -> list[bytes]:
         """Map one request frame to the reply frames. Pure data in/out."""
@@ -95,8 +111,14 @@ class Server:
         disable = [p for p in (req.get("disable") or []) if p in nlp.pipe_names]
         docs = list(nlp.pipe(texts, disable=disable))
 
+        # optional coreference: per-text char-offset clusters, aligned to `docs`.
+        coref = [self.coref_clusters(t) for t in texts] if req.get("coref") else None
+
         if req.get("format") == "json":
-            return [json.dumps({"ok": True, "docs": [doc_to_json(d) for d in docs]}).encode()]
+            out = {"ok": True, "docs": [doc_to_json(d) for d in docs]}
+            if coref is not None:
+                out["coref"] = coref
+            return [json.dumps(out).encode()]
 
         db = DocBin(store_user_data=True)
         for d in docs:
@@ -105,6 +127,8 @@ class Server:
             "ok": True, "format": "docbin", "n": len(docs),
             "model": nlp.meta["name"], "lang": nlp.meta["lang"],
         }
+        if coref is not None:
+            meta["coref"] = coref  # list aligned with docs; clusters of [start,end] char spans
         return [json.dumps(meta).encode(), db.to_bytes()]
 
     def serve(self, addr: str):

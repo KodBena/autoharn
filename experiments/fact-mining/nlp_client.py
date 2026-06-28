@@ -16,7 +16,12 @@ import json
 
 import spacy
 import zmq
-from spacy.tokens import DocBin
+from spacy.tokens import Doc, DocBin
+
+# Same attribute fastcoref used, so resolve.py consumes daemon coref unchanged.
+# Value: list of clusters, each a list of (start_char, end_char) spans.
+if not Doc.has_extension("coref_clusters"):
+    Doc.set_extension("coref_clusters", default=None)
 
 
 class RemoteError(RuntimeError):
@@ -25,10 +30,12 @@ class RemoteError(RuntimeError):
 
 class RemoteNLP:
     def __init__(self, addr: str = "tcp://192.168.122.1:5599",
-                 model: str | None = None, timeout_ms: int = 600_000):
+                 model: str | None = None, timeout_ms: int = 600_000,
+                 coref: bool = False):
         self.addr = addr
         self.model = model
         self.timeout_ms = timeout_ms
+        self.coref = coref  # ask the daemon to run maverick-coref and return clusters
         # a blank vocab is enough to rehydrate a DocBin: all strings travel in it
         self._vocab = spacy.blank("en").vocab
         self._ctx = zmq.Context.instance()
@@ -61,13 +68,18 @@ class RemoteNLP:
     def pipe(self, texts, disable=()):
         frames = self._roundtrip({
             "op": "parse", "texts": list(texts), "model": self.model,
-            "format": "docbin", "disable": list(disable),
+            "format": "docbin", "disable": list(disable), "coref": self.coref,
         })
         meta = json.loads(frames[0])
         if not meta.get("ok"):
             raise RemoteError(meta.get("error", "server error"))
-        db = DocBin().from_bytes(frames[1])
-        return list(db.get_docs(self._vocab))
+        docs = list(DocBin().from_bytes(frames[1]).get_docs(self._vocab))
+        # attach coref clusters (if any) under the fastcoref-compatible attribute
+        clusters = meta.get("coref")
+        if clusters is not None:
+            for doc, cl in zip(docs, clusters):
+                doc._.coref_clusters = [[tuple(span) for span in cluster] for cluster in cl]
+        return docs
 
     def __call__(self, text: str, **kw):
         return self.pipe([text], **kw)[0]

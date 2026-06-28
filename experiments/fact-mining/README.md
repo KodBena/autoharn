@@ -42,6 +42,22 @@ From the guest, either use the client directly or point the extractor at it:
     python nlp_client.py --addr tcp://192.168.122.1:5599        # smoke test (ping/info/parse)
     python extract.py /home/bork/pg/pg78966.txt --remote tcp://192.168.122.1:5599
 
+### Coreference on the daemon (maverick-coref, host-only)
+
+The daemon answers `{"coref": true}` by running **maverick-coref** and returning
+char-offset clusters in the reply meta; the client attaches them to each `Doc` as
+`doc._.coref_clusters` (the SAME attribute fastcoref used), so `resolve.py`
+consumes host coref with no change. Load with daemon coref:
+
+    python load_facts.py /home/bork/pg/pg78966.txt --remote tcp://192.168.122.1:5599 --coref
+
+The full guest-side wire path is verified (client attach → resolve → pronoun
+resolves). Two host-side assumptions to confirm against your maverick version
+(both isolated, easy to adjust):
+  * `nlp_server.coref()` constructs `Maverick(device=...)` — fix the kwarg if it raises;
+  * `coref_clusters()` reads `pred["clusters_char_offsets"]`; `resolve._char_span`
+    already tolerates inclusive-vs-exclusive end offsets (tries `e` then `e+1`).
+
 `RemoteNLP` in `nlp_client.py` is a near-drop-in for a loaded `nlp`:
 `.pipe(texts)` / `nlp(text)` return real `Doc` objects rehydrated from DocBin,
 so guest-side extraction code is unchanged whether the model is local or remote.
