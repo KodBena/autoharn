@@ -95,13 +95,28 @@ Apply + load:
 
     psql -h 192.168.122.1 -d harness -f schema.sql
     python load_facts.py /home/bork/pg/pg78966.txt --cache --max-sents 200
+    # with coreference (local fastcoref pipeline; entity-norm always on):
+    python load_facts.py /home/bork/pg/pg78966.txt --coref --max-sents 600
     # or against the GPU daemon: ... --remote tcp://192.168.122.1:5599 --cache
 
-**Honest limits (what the recursive chains expose).** Closure produces noisy
-paths like `we -> which -> the accident` because of three unfixed gaps, in
-priority order: (1) **no coreference** — pronouns (`we`, `which`, `it`) are never
-resolved to their referents; (2) **no entity normalization** — `the Greeks` /
-`Greek` / `Greeks` are distinct constants; (3) **shallow SVO** — copulas,
-coordination, and clauses are only partly handled. These cap the quality of
-*every* downstream logic and are the next work, not a plumbing problem. Better
-parses (trf via the daemon) help (2)/(3); (1) needs a coref component.
+## Resolution layer (`resolve.py`) — surfaces → constants
+
+`resolve.resolver_for(doc)` turns a subject/object head token into the canonical
+constant the logics join on, in three steps: **(1) coreference** (fastcoref) maps
+a pronoun to its referent; **(2) entity normalization** clusters `the Greeks` /
+`Greek` / `Greeks` → `greek` (determiner-strip, singularize, NER-aware); **(3)** an
+unresolved pronoun yields *no* constant (the authorial `we` is not an entity).
+`assertion.subj_key/obj_key` store the result; the views join on it.
+
+This visibly cleaned the fact base (`start(greek, medicine)`, `deify(greek,
+aesculapius)`) and the `WITH RECURSIVE` closure now traverses real constants
+(`aristotle -[be]-> greek -[start]-> medicine`). It also exposed that the
+*earlier* noisy chains were **spurious** — routed through an unresolved `we` hub
+that step (3) now removes.
+
+**Honest limits (remaining).** (1) **SVO depth** — copulas, coordination, and
+relative clauses are only partly handled, so `have`/`be` are overloaded edges;
+(2) **predicate sense** — no word-sense disambiguation, so distinct `have`
+meanings collapse; (3) **representative choice** — the coref cluster head is a
+heuristic (shortest entity-bearing mention), occasionally wrong. (1)/(2) are the
+next frontier; trf parses (via the daemon) help (1).

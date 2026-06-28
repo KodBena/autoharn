@@ -40,21 +40,24 @@ CREATE TABLE mining.sentence (
 CREATE TABLE mining.assertion (
   assertion_id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   sent_id    bigint NOT NULL REFERENCES mining.sentence ON DELETE CASCADE,
-  subj       text NOT NULL,
+  subj       text NOT NULL,           -- human-readable phrase (subtree)
   pred       text NOT NULL,           -- verb lemma
   obj        text NOT NULL,
+  subj_key   text NOT NULL,           -- canonical constant: coref- + entity-resolved (what joins)
+  obj_key    text NOT NULL,
   negated    boolean NOT NULL DEFAULT false,  -- seam to defeasible / paraconsistent
   subj_label text,                    -- NER label of the subject head, if any (a sort)
   obj_label  text,
   extra      jsonb NOT NULL DEFAULT '{}'::jsonb
 );
-CREATE INDEX assertion_spo ON mining.assertion (pred, subj, obj);
+CREATE INDEX assertion_spo ON mining.assertion (pred, subj_key, obj_key);
 
 -- ===== constants / sorts: named entities =====
 CREATE TABLE mining.entity (
   entity_id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   sent_id   bigint NOT NULL REFERENCES mining.sentence ON DELETE CASCADE,
-  text      text NOT NULL,
+  text      text NOT NULL,            -- surface form as it appeared
+  canonical text NOT NULL,            -- normalized constant (clusters Greek/Greeks/the Greeks)
   label     text NOT NULL,            -- PERSON | GPE | ORG | DATE | ...
   extra     jsonb NOT NULL DEFAULT '{}'::jsonb
 );
@@ -70,27 +73,28 @@ CREATE TABLE mining.temporal (
 
 -- ===== per-logic projections over the one base =====
 
--- CLASSICAL: the positive fact base. pred(subj, obj), no negation, no conflict.
+-- CLASSICAL: the positive fact base, over canonical constants. pred(subj_key, obj_key).
+-- Empty keys (unresolved pronouns, punctuation) are not usable constants -> excluded.
 CREATE VIEW mining.fact_classical AS
-  SELECT assertion_id, subj, pred, obj
+  SELECT assertion_id, subj_key, pred, obj_key, subj, obj
   FROM mining.assertion
-  WHERE NOT negated;
+  WHERE NOT negated AND subj_key <> '' AND obj_key <> '';
 
--- PARACONSISTENT / DEFEASIBLE: the same (subj,pred,obj) asserted both ways.
+-- PARACONSISTENT / DEFEASIBLE: the same canonical (subj,pred,obj) asserted both ways.
 -- Classical logic explodes on this (ex falso quodlibet); a paraconsistent or
 -- defeasible logic is exactly what you reach for to hold it without trivialising.
 CREATE VIEW mining.contradiction AS
-  SELECT p.subj, p.pred, p.obj,
+  SELECT p.subj_key, p.pred, p.obj_key,
          p.assertion_id AS pos_id, n.assertion_id AS neg_id
   FROM mining.assertion p
   JOIN mining.assertion n
-    ON  p.subj = n.subj AND p.pred = n.pred AND p.obj = n.obj
+    ON  p.subj_key = n.subj_key AND p.pred = n.pred AND p.obj_key = n.obj_key
    AND  p.negated = false AND n.negated = true;
 
 -- TEMPORAL: assertions co-occurring with a time expression in the same sentence.
 -- The seed of valid-time facts: holds(fact) DURING <when>.
 CREATE VIEW mining.fact_temporal AS
-  SELECT a.assertion_id, a.subj, a.pred, a.obj, t.text AS when_text, t.label AS when_label
+  SELECT a.assertion_id, a.subj_key, a.pred, a.obj_key, t.text AS when_text, t.label AS when_label
   FROM mining.assertion a
   JOIN mining.temporal t USING (sent_id);
 

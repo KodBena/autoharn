@@ -119,11 +119,14 @@ def normalise(text: str) -> str:
 
 @dataclass
 class Triple:
-    subj: str
+    subj: str           # human-readable phrase (subtree)
     pred: str
     obj: str
     negated: bool
     sent: str
+    subj_key: str = ""  # canonical constant the logics join on (coref/entity-resolved)
+    obj_key: str = ""
+    sent_i: int = 0     # sentence index within the doc (for provenance grouping)
 
 
 def subtree_span(token):
@@ -132,15 +135,24 @@ def subtree_span(token):
     return " ".join(w.text for w in words)
 
 
-def extract_triples(doc):
+def _default_key(token):
+    return token.lemma_.lower()
+
+
+def extract_triples(doc, key_fn=None):
     """Very simple SVO extraction off the dependency parse.
 
     For each verb, pair its nominal subject(s) with its direct object / attribute
     / prepositional complement. This is intentionally shallow — it misses a lot —
     but it shows the relational atoms spaCy makes available.
+
+    `key_fn(token) -> str` maps a subject/object head token to its canonical
+    constant (coref- and entity-resolved); defaults to the head lemma. Pass the
+    resolver from resolve.py to get joinable constants.
     """
+    key_fn = key_fn or _default_key
     triples = []
-    for sent in doc.sents:
+    for si, sent in enumerate(doc.sents):
         for tok in sent:
             if tok.pos_ not in ("VERB", "AUX"):
                 continue
@@ -163,6 +175,9 @@ def extract_triples(doc):
                             obj=subtree_span(o),
                             negated=negated,
                             sent=sent.text.strip(),
+                            subj_key=key_fn(s),
+                            obj_key=key_fn(o),
+                            sent_i=si,
                         )
                     )
     return triples
