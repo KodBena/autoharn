@@ -39,6 +39,7 @@ os.environ.setdefault("HF_HUB_DISABLE_XET", "1")
 
 import argparse
 import json
+import time
 import traceback
 
 import spacy
@@ -118,6 +119,15 @@ class Server:
                 print(f"[coref] encoder dtype {before} -> {after} (forced fp32)", flush=True)
             except Exception as e:
                 print(f"[coref] fp32 cast skipped: {e!r}", flush=True)
+
+            # maverick reloads spaCy (spacy.load 'en_core_web_sm') on EVERY
+            # predict() via download_load_spacy() — ~one CPU model-load per
+            # paragraph, which is what makes it glacial with the GPU idle. Cache it
+            # so spaCy loads once and is reused across all predicts.
+            import functools
+            import maverick.models.maverick_model as mmm
+            mmm.download_load_spacy = functools.lru_cache(maxsize=1)(mmm.download_load_spacy)
+            print("[coref] cached download_load_spacy (spaCy loads once, not per call)", flush=True)
         return self._coref
 
     def coref_clusters(self, text: str):
@@ -145,10 +155,15 @@ class Server:
         texts = req.get("texts") or []
         nlp = self.get(req.get("model"))
         disable = [p for p in (req.get("disable") or []) if p in nlp.pipe_names]
+        t0 = time.perf_counter()
         docs = list(nlp.pipe(texts, disable=disable))
+        t1 = time.perf_counter()
 
         # optional coreference: per-text char-offset clusters, aligned to `docs`.
         coref = [self.coref_clusters(t) for t in texts] if req.get("coref") else None
+        if req.get("coref"):
+            print(f"[timing] {len(texts)} texts: parse {t1 - t0:.1f}s, "
+                  f"coref {time.perf_counter() - t1:.1f}s", flush=True)
 
         if req.get("format") == "json":
             out = {"ok": True, "docs": [doc_to_json(d) for d in docs]}
