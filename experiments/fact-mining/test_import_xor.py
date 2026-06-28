@@ -37,8 +37,15 @@ import ast
 import os
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+# The composed daemon/pipeline modules. jax_decode.py is device-NAMED: the gate
+# enforces it is numpy-free regardless of BOUNDARY_FILES (honest filenames).
+# coref_host_shell.py is the neutrally-named host shell; it is kept pure-python +
+# jax (numpy-free) by design, so it needs no BOUNDARY_FILES entry. The host-only
+# fixture scaffolding (capture_fixtures.py, test_jax_decode_fidelity.py) is NOT
+# scanned — it is the fixture-I/O boundary, not part of the device pipeline.
 SCANNED = ["extract.py", "load_facts.py", "nlp_cache.py",
-           "nlp_client.py", "nlp_server.py", "resolve.py"]
+           "nlp_client.py", "nlp_server.py", "resolve.py",
+           "jax_decode.py", "coref_host_shell.py"]
 
 HOST = {"numpy"}
 DEVICE = {"torch", "jax", "jaxlib", "cupy", "tensorflow"}

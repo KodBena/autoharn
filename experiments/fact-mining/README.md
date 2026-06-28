@@ -114,6 +114,58 @@ resolves). Host-side notes:
 `.pipe(texts)` / `nlp(text)` return real `Doc` objects rehydrated from DocBin,
 so guest-side extraction code is unchanged whether the model is local or remote.
 
+### Stage 1a — maverick's decode tail as a pure-JAX core (host-verified)
+
+The batched path above still runs maverick's *torch* mention-extraction +
+clustering tail per document. Stage 1a ports **that tail** to JAX, split the way
+ADR-0012 P9 prescribes:
+
+* **`jax_decode.py`** — the pure, total **device core**: three `@jax.jit` stages
+  (start keep-mask, span keep-mask, coref-logits→no_ant→argmax) that mirror
+  maverick `model_mes.py` line-for-line (the load-bearing start/end SWAP, the
+  4-term bilinear, `tril().fill_diagonal_(0)`, and the `sigmoid(x)>0.5 ⇔ x>0`
+  identity). It imports **jax + stdlib only** — never numpy.
+* **`coref_host_shell.py`** — the thin imperative **host shell** for the
+  irreducibly data-dependent glue jax can't trace inside a `jit` (the
+  `torch.nonzero`-shaped index extraction, the O(K²) category-mask set logic, the
+  sequential union-find, the bpe→token offset map). It is the **single jax
+  host↔device home**: every `jax.device_get` (pull) and `jnp.asarray(host_data)`
+  (lift) carries an inline `# host-device-boundary:` marker, enforced by
+  `test_device_transfers.py`.
+
+**Two-tier fidelity (ADR-0009).** Float logits are *not* required to match torch
+bit-for-bit (different matmul / GELU / LayerNorm kernels); the **discrete cluster
+set** is the invariant that must match exactly. `test_jax_decode_fidelity.py` is
+the falsifier: it replays captured maverick fixtures through the JAX core and
+asserts order-independent cluster-set equality — for **both** `singletons=False`
+and the `singletons=True` decode branch — with non-vacuity guards (it fails, not
+silently passes, if the fixtures yield no clusters / no ≥2-mention cluster / no
+singleton).
+
+**Guest-runnable gates (no jax/maverick needed), pure `ast`:**
+
+    python test_device_transfers.py    # device-edge ops are single-homed + marked
+    python test_import_xor.py          # no file imports both host (numpy) and device libs
+    # or: pytest test_device_transfers.py test_import_xor.py
+
+**HOST steps (where maverick + torch + CUDA live).** Capture the fixtures once,
+then run the fidelity proof:
+
+    . ~/w/vdc/venvs/generic/bin/activate     # + a host env with jax/maverick/CUDA
+
+    # 1. capture decode-tail fixtures from maverick (defaults: N=6 paragraphs,
+    #    OUTDIR=./fixtures). Dumps lhs/eos_mask/weights + maverick's clusters for
+    #    BOTH singletons=False and singletons=True.
+    python capture_fixtures.py            # or: python capture_fixtures.py 8 ./fixtures
+
+    # 2. prove the pure-JAX tail == maverick on the captured cluster sets.
+    pytest test_jax_decode_fidelity.py    # or: python test_jax_decode_fidelity.py
+
+> Cannot be exercised on this guest (no jax/maverick/CUDA). The pure-`ast` gates
+> above are green here; the fidelity test self-skips until fixtures exist on the
+> host. Not yet wired into `nlp_server.py` — Stage 1a is the verified core, the
+> production swap is the next step.
+
 ## Caching (redis)
 
 Parsing is the expensive step; the result for a given `(model, config, text)` is

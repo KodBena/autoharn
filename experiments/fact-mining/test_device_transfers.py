@@ -3,22 +3,38 @@
 
 Discipline ported from chocofarm's tests/test_no_gratuitous_transfers.py — but
 SCALED DOWN deliberately (see "Proportionality" below). The property: every
-CPU<->GPU boundary op (torch device placement / dtype casts, spaCy GPU enable,
-maverick GPU placement) lives in ONE auditable home — `nlp_server.py` — and
-carries an inline `# host-device-boundary: <reason>` marker. A device op that
-appears in any other module, or in nlp_server.py without the marker, reds here.
+CPU<->GPU boundary op lives in a DECLARED home and carries an inline
+`# host-device-boundary: <reason>` marker. A device op that appears in any other
+module, or in a home without the marker, reds here.
+
+TWO framework edges, ONE home EACH (not one global home). The codebase now has
+two distinct device edges and the gate single-homes each to its own file:
+
+  * torch / spaCy / maverick GPU placement+casts -> `nlp_server.py`
+  * jax host<->device pulls & lifts            -> `coref_host_shell.py`
+
+`coref_host_shell.py` is the ADR-0012 P7 imperative boundary for the jax decode
+pipeline: it legitimately pulls device results to the host (`jax.device_get`) and
+lifts host index/mask lists back onto the device (`jnp.asarray(<host data>)`).
+Those crossings are SANCTIONED, but only here and only when marked — exactly the
+same contract the torch edge has in nlp_server.py. (History: an earlier version of
+this gate recognized only the torch/spaCy vocabulary, so every jax crossing in the
+shell was INVISIBLE to it — a vacuous "ok". The jax transfer ops below close that
+gap so the "every CPU<->GPU op lives in an auditable home" invariant holds for the
+jax half too.)
 
 Why this matters: scattered/unannotated device transfers are how redundant
-host<->device crossings creep in unnoticed. Single-homing them makes the whole
-device edge reviewable in one file and one grep.
+host<->device crossings creep in unnoticed. Single-homing them makes each device
+edge reviewable in one file and one grep — and makes a `jax.device_get` migrating
+out of the shell into extract.py/resolve.py a RED, not a silent escape.
 
 Proportionality (the chocofarm ratchet was NOT ported, on purpose): chocofarm
 guards a measured hot path across many modules with a ~500-line checker + a
-monotonic JSON baseline + a device-signal heuristic. Here the entire torch
-device boundary is THREE sites in ONE function (`Server.coref` / `__init__`), so
-a baseline ratchet and a false-positive heuristic would be ceremony. Falsifiable
-kill-condition for that choice: if device ops ever legitimately spread beyond
-nlp_server.py, replace this positive assertion with chocofarm's baseline ratchet.
+monotonic JSON baseline + a device-signal heuristic. Here each edge is a handful
+of sites in ONE function, so a baseline ratchet and a false-positive heuristic
+would be ceremony. Falsifiable kill-condition for that choice: if device ops ever
+legitimately spread beyond these homes, replace this positive assertion with
+chocofarm's baseline ratchet.
 
 Vendored third-party code (maverick, spaCy) is OUT OF SCOPE — its internal
 `.to(device)` / `.cpu()` transfers are ones we can neither annotate nor fix, and
@@ -33,33 +49,54 @@ import ast
 import os
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-SINGLE_HOME = "nlp_server.py"            # the only module allowed device ops
 MARKER = "# host-device-boundary:"       # inline opt-in, same convention as chocofarm
-SCANNED = ["extract.py", "load_facts.py", "nlp_cache.py",
-           "nlp_client.py", "nlp_server.py", "resolve.py"]
 
-# Closed token set — the torch/spaCy device-edge ops actually reachable in this
-# code. Method calls (`x.to(...)`, `m.float()`, ...) and the bare GPU-enable
-# calls. Deliberately name-based and conservative; no device-signal heuristic.
-DEVICE_METHODS = {"to", "cuda", "cpu", "half", "float", "autocast"}
-DEVICE_FUNCS = {"require_gpu", "prefer_gpu"}
+# Each device framework's edge has exactly ONE home file. A device-edge op is
+# sanctioned iff it appears in its framework's home AND carries MARKER.
+HOMES = {
+    "torch": "nlp_server.py",            # torch / spaCy / maverick GPU placement+casts
+    "jax": "coref_host_shell.py",        # jax host<->device pulls & lifts (ADR-0012 P7 shell)
+}
+SCANNED = ["extract.py", "load_facts.py", "nlp_cache.py",
+           "nlp_client.py", "nlp_server.py", "resolve.py",
+           "jax_decode.py", "coref_host_shell.py"]
+
+# Closed token sets — the device-edge ops actually reachable in this code.
+# Deliberately name-based and conservative; no device-signal heuristic.
+# torch / spaCy: method calls (`x.to(...)`, `m.float()`, ...) + bare GPU-enable.
+TORCH_METHODS = {"to", "cuda", "cpu", "half", "float", "autocast"}
+TORCH_FUNCS = {"require_gpu", "prefer_gpu"}
+# jax host<->device transfers. device_get/device_put/block_until_ready cross the
+# edge unconditionally; asarray/array/from_dlpack cross it when lifting HOST data
+# (the only way they appear in our shell). A `jnp.asarray` on an already-device
+# array would be a harmless false positive — in our tree every one is a real
+# host->device lift, so flagging+marking it is correct.
+JAX_TRANSFERS = {"device_get", "device_put", "block_until_ready",
+                 "asarray", "array", "from_dlpack"}
+
+# (relpath, lineno, token, framework)
+Hit = "tuple[str, int, str, str]"
 
 
 class _DeviceVisitor(ast.NodeVisitor):
     def __init__(self, relpath: str):
         self.relpath = relpath
-        self.found: list[tuple[str, int, str]] = []  # (relpath, lineno, token)
+        self.found: list[tuple[str, int, str, str]] = []
 
     def visit_Call(self, node: ast.Call):
         f = node.func
-        # `x.to(...)`, `m.float()`, AND `spacy.require_gpu()` are all attribute calls
-        if isinstance(f, ast.Attribute) and f.attr in (DEVICE_METHODS | DEVICE_FUNCS):
-            self.found.append((self.relpath, node.lineno, f".{f.attr}()"))
-        # bare `require_gpu()` (e.g. `from spacy import require_gpu`)
-        elif isinstance(f, ast.Name) and f.id in DEVICE_FUNCS:
-            self.found.append((self.relpath, node.lineno, f"{f.id}()"))
+        if isinstance(f, ast.Attribute):
+            # `x.to(...)`, `m.float()`, `spacy.require_gpu()`  -> torch/spaCy edge
+            if f.attr in (TORCH_METHODS | TORCH_FUNCS):
+                self.found.append((self.relpath, node.lineno, f".{f.attr}()", "torch"))
+            # `jax.device_get(...)`, `jnp.asarray(<host>)`, ...  -> jax edge
+            elif f.attr in JAX_TRANSFERS:
+                self.found.append((self.relpath, node.lineno, f".{f.attr}()", "jax"))
+        elif isinstance(f, ast.Name) and f.id in TORCH_FUNCS:
+            # bare `require_gpu()` (e.g. `from spacy import require_gpu`)
+            self.found.append((self.relpath, node.lineno, f"{f.id}()", "torch"))
         elif _is_maverick_device_ctor(node):
-            self.found.append((self.relpath, node.lineno, "Maverick(device=...)"))
+            self.found.append((self.relpath, node.lineno, "Maverick(device=...)", "torch"))
         self.generic_visit(node)
 
 
@@ -69,16 +106,16 @@ def _is_maverick_device_ctor(node: ast.Call) -> bool:
     return name == "Maverick" and any(k.arg == "device" for k in node.keywords)
 
 
-def find_device_ops(src: str, relpath: str) -> list[tuple[str, int, str]]:
+def find_device_ops(src: str, relpath: str) -> list[tuple[str, int, str, str]]:
     v = _DeviceVisitor(relpath)
     v.visit(ast.parse(src))
     return v.found
 
 
-def is_sanctioned(hit: tuple[str, int, str], src_lines: list[str]) -> bool:
-    """A device op is allowed iff it is in SINGLE_HOME and its line carries MARKER."""
-    relpath, lineno, _ = hit
-    if relpath != SINGLE_HOME:
+def is_sanctioned(hit: tuple[str, int, str, str], src_lines: list[str]) -> bool:
+    """A device op is allowed iff it is in ITS FRAMEWORK's home and carries MARKER."""
+    relpath, lineno, _, framework = hit
+    if relpath != HOMES.get(framework):
         return False
     return MARKER in src_lines[lineno - 1]
 
@@ -93,38 +130,59 @@ def _scan_real_tree() -> list[str]:
         lines = src.splitlines()
         for hit in find_device_ops(src, name):
             if not is_sanctioned(hit, lines):
-                relpath, lineno, token = hit
-                why = ("not in nlp_server.py" if relpath != SINGLE_HOME
+                relpath, lineno, token, framework = hit
+                home = HOMES.get(framework, "?")
+                why = (f"not in {framework} home ({home})" if relpath != home
                        else "missing inline `# host-device-boundary:` marker")
-                violations.append(f"{relpath}:{lineno} {token} — {why}")
+                violations.append(f"{relpath}:{lineno} {token} [{framework}] — {why}")
     return violations
 
 
 # ===================================================================== the gate
 def test_device_ops_are_single_homed_and_marked():
-    """Every device-edge op in our code is in nlp_server.py with a boundary marker."""
+    """Every device-edge op in our code is in its framework's home with a marker."""
     violations = _scan_real_tree()
     assert not violations, (
-        "un-single-homed / unmarked device transfer(s) — move to nlp_server.py and "
-        "add an inline `# host-device-boundary: <reason>`:\n  " + "\n  ".join(violations))
+        "un-single-homed / unmarked device transfer(s) — move to the framework's "
+        "home (torch->nlp_server.py, jax->coref_host_shell.py) and add an inline "
+        "`# host-device-boundary: <reason>`:\n  " + "\n  ".join(violations))
 
 
 # ============================================================ mutation self-checks
 def test_unmarked_device_op_is_caught():
-    """NEGATIVE proof: an unmarked `.cuda()` even in nlp_server.py is NOT sanctioned."""
+    """NEGATIVE proof: an unmarked `.cuda()` even in its home is NOT sanctioned."""
     src = "def f(x):\n    return x.cuda()\n"
-    hit = find_device_ops(src, SINGLE_HOME)[0]
+    hit = find_device_ops(src, HOMES["torch"])[0]
     assert not is_sanctioned(hit, src.splitlines())
 
 
 def test_marked_device_op_passes_only_in_single_home():
-    """The marker sanctions a hit in nlp_server.py; the SAME line elsewhere does not."""
+    """The marker sanctions a hit in the framework home; the SAME line elsewhere does not."""
     line = "    y = x.to('cuda')  # host-device-boundary: the one staging point\n"
     src = "def f(x):\n" + line
-    hit = find_device_ops(src, SINGLE_HOME)[0]
+    hit = find_device_ops(src, HOMES["torch"])[0]
     assert is_sanctioned(hit, src.splitlines()), "marker in nlp_server.py must pass"
     other = find_device_ops(src, "resolve.py")[0]
     assert not is_sanctioned(other, src.splitlines()), "device op outside the home must fail"
+
+
+def test_jax_transfer_is_recognized_and_homed():
+    """The jax edge is NOT invisible: `jax.device_get` / `jnp.asarray` are device ops,
+    sanctioned only in the jax home (coref_host_shell.py) AND only when marked."""
+    pull = "    r = jax.device_get(x)  # host-device-boundary: device->host pull\n"
+    src = "def f(x):\n" + pull
+    hit = find_device_ops(src, HOMES["jax"])[0]
+    assert hit[3] == "jax" and hit[2] == ".device_get()"
+    assert is_sanctioned(hit, src.splitlines()), "marked jax pull in the jax home must pass"
+    # unmarked jax pull in the home -> caught
+    bare = find_device_ops("def f(x):\n    return jax.device_get(x)\n", HOMES["jax"])[0]
+    assert not is_sanctioned(bare, "def f(x):\n    return jax.device_get(x)\n".splitlines())
+    # a jax pull in the TORCH home (or any non-jax file) is not sanctioned
+    lift = "    a = jnp.asarray(p)  # host-device-boundary: lift host list\n"
+    nshome = find_device_ops("def f(p):\n" + lift, HOMES["torch"])[0]
+    assert nshome[3] == "jax"
+    assert not is_sanctioned(nshome, ("def f(p):\n" + lift).splitlines()), \
+        "jax transfer in the torch home is not its home -> must fail"
 
 
 def test_bare_builtin_float_is_not_a_device_op():
@@ -144,4 +202,5 @@ if __name__ == "__main__":
         if os.path.exists(p):
             s = open(p, encoding="utf-8").read()
             for h in find_device_ops(s, n):
-                print(f"  {h[0]}:{h[1]} {h[2]}  [{'ok' if is_sanctioned(h, s.splitlines()) else 'VIOLATION'}]")
+                print(f"  {h[0]}:{h[1]} {h[2]} [{h[3]}]  "
+                      f"[{'ok' if is_sanctioned(h, s.splitlines()) else 'VIOLATION'}]")
