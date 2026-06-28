@@ -71,7 +71,7 @@ class Server:
         self.gpu = gpu
         if gpu:
             # routes thinc ops to cupy and (for trf) torch to CUDA
-            spacy.require_gpu()
+            spacy.require_gpu()  # host-device-boundary: enable GPU for spaCy-trf
         self.default_model = default_model
         self.models: dict[str, "spacy.Language"] = {}
         self.get(default_model)  # preload — the slow part, done once
@@ -102,23 +102,24 @@ class Server:
 
             torch.load = _trusting_load
             try:
-                self._coref = Maverick(device="cuda" if self.gpu else "cpu")
+                self._coref = Maverick(device="cuda" if self.gpu else "cpu")  # host-device-boundary: place maverick on GPU
             finally:
                 torch.load = _orig_load
 
             # In this process (alongside spaCy-trf on the GPU) maverick's deberta
             # encoder comes back fp16 while its classifier heads are fp32 -> the
             # "mat1 and mat2 must have the same dtype, Half and Float" matmul error.
-            # Force the whole model to a consistent fp32. Log the observed dtype so
-            # the fix is verified, not assumed.
+            # Force the whole model to a consistent fp32 (kept fp32 deliberately:
+            # maverick's mention/antecedent decisions are sigmoid>0.5 / argmax, and
+            # fp16 rounding near those thresholds can flip a fact in the base; VRAM
+            # is not a constraint here). Log the observed dtype to verify the fix.
+            # A failed cast is FATAL on purpose: silently continuing would make every
+            # later coref request throw the Half/Float matmul error instead.
             m = self._coref.model
-            try:
-                before = next(m.encoder.parameters()).dtype
-                m.float()
-                after = next(m.encoder.parameters()).dtype
-                print(f"[coref] encoder dtype {before} -> {after} (forced fp32)", flush=True)
-            except Exception as e:
-                print(f"[coref] fp32 cast skipped: {e!r}", flush=True)
+            before = next(m.encoder.parameters()).dtype
+            m.float()  # host-device-boundary: cast maverick to fp32 for dtype consistency
+            print(f"[coref] encoder dtype {before} -> "
+                  f"{next(m.encoder.parameters()).dtype} (forced fp32)", flush=True)
 
             # maverick reloads spaCy (spacy.load 'en_core_web_sm') on EVERY
             # predict() via download_load_spacy() — ~one CPU model-load per
