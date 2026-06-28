@@ -104,18 +104,25 @@ class Server:
                 self._coref = Maverick(device="cuda" if self.gpu else "cpu")
             finally:
                 torch.load = _orig_load
+
+            # In this process (alongside spaCy-trf on the GPU) maverick's deberta
+            # encoder comes back fp16 while its classifier heads are fp32 -> the
+            # "mat1 and mat2 must have the same dtype, Half and Float" matmul error.
+            # Force the whole model to a consistent fp32. Log the observed dtype so
+            # the fix is verified, not assumed.
+            m = self._coref.model
+            try:
+                before = next(m.encoder.parameters()).dtype
+                m.float()
+                after = next(m.encoder.parameters()).dtype
+                print(f"[coref] encoder dtype {before} -> {after} (forced fp32)", flush=True)
+            except Exception as e:
+                print(f"[coref] fp32 cast skipped: {e!r}", flush=True)
         return self._coref
 
     def coref_clusters(self, text: str):
         """Return char-offset clusters [[[start,end],...],...] for one text."""
-        import torch
-        # spaCy-trf runs the transformer under torch autocast (fp16) on the GPU.
-        # maverick is a separate, purely-fp32 model in the same process; if autocast
-        # is active when it runs, its encoder emits fp16 activations while its fp32
-        # heads expect fp32 -> "mat1 and mat2 must have the same dtype, Half and
-        # Float". Force autocast OFF for maverick's forward so it stays fp32.
-        with torch.autocast(device_type="cuda" if self.gpu else "cpu", enabled=False):
-            pred = self.coref().predict(text)
+        pred = self.coref().predict(text)
         # maverick returns char offsets under this key; keep as plain lists (JSON)
         return pred.get("clusters_char_offsets", [])
 
