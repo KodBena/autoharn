@@ -14,7 +14,15 @@ quantifying over the CLASS, not the instance (ADR-0011 Rule 4).
 The escape hatch is a declared boundary: a file whose JOB is the host↔device seam
 (a conversion shell) is whitelisted with a reason in `BOUNDARY_FILES` — the one
 authoritative place the two meet (ADR-0012 P7), exactly as the device-transfer
-gate single-homes `.to()/.cuda()`. Everything else is host xor device.
+gate single-homes `.to()/.cuda()`. numpy is legitimate for the irreducible
+pre/post-transfer host work, but a BOUNDARY_FILES entry is a *conscious, audited*
+decision: its reason must justify the mix on perf AND structural grounds, not
+"convenience". Everything else is host xor device.
+
+FILENAMES ARE HONEST. A file whose name advertises a device framework
+(`jax_decode.py`, `torch_*`, …) promises to be device-only; importing numpy into
+it is a lie the whitelist cannot launder. Such a file is a violation REGARDLESS
+of BOUNDARY_FILES — rename it to an honest seam name, or take numpy out.
 
 Scope: OUR files only. A vendored hot-path dep (e.g. maverick) is NOT scanned
 here — per the (b)-mechanization it must instead be held to this gate or wrapped
@@ -34,6 +42,9 @@ SCANNED = ["extract.py", "load_facts.py", "nlp_cache.py",
 
 HOST = {"numpy"}
 DEVICE = {"torch", "jax", "jaxlib", "cupy", "tensorflow"}
+# filename tokens that ADVERTISE a device framework — such a file promises
+# device-only and may not import numpy, not even via BOUNDARY_FILES.
+DEVICE_NAME_TOKENS = ("jax", "torch", "cupy", "tensorflow", "cuda", "gpu")
 
 # Declared host↔device boundary shells: {relpath: reason}. The ONLY files allowed
 # to be both host and device. Empty today — add a file here only when it IS the
@@ -59,11 +70,22 @@ def classify(src: str) -> tuple[set[str], set[str]]:
     return mods & HOST, mods & DEVICE
 
 
+def _device_named(relpath: str) -> bool:
+    base = os.path.basename(relpath).lower()
+    return any(tok in base for tok in DEVICE_NAME_TOKENS)
+
+
 def violates(src: str, relpath: str) -> tuple[set[str], set[str]] | None:
-    """Return (host_libs, device_libs) if `relpath` is both and not a declared
-    boundary; else None."""
+    """Return (host_libs, device_libs) if `relpath` mixes host+device illegitimately,
+    else None. A device-NAMED file mixing is always a violation (honest filenames —
+    the whitelist can't launder a lying name); any other file may opt out via
+    BOUNDARY_FILES."""
     host, device = classify(src)
-    if host and device and relpath not in BOUNDARY_FILES:
+    if not (host and device):
+        return None
+    if _device_named(relpath):           # honest filenames: name promises device-only
+        return host, device
+    if relpath not in BOUNDARY_FILES:
         return host, device
     return None
 
@@ -110,6 +132,23 @@ def test_declared_boundary_passes_only_when_listed():
         assert violates(src, "_probe_boundary.py") is None
     finally:
         del BOUNDARY_FILES["_probe_boundary.py"]
+
+
+def test_device_named_file_cannot_be_whitelisted():
+    """Honest filenames: a device-named file (jax_decode.py) importing numpy is a
+    violation even if someone lists it in BOUNDARY_FILES; a neutrally-named seam
+    is not."""
+    src = "import numpy as np\nimport jax\n"
+    BOUNDARY_FILES["jax_decode.py"] = "trying to launder a dishonest name"
+    try:
+        assert violates(src, "jax_decode.py") is not None, "device-named file must not whitelist numpy"
+    finally:
+        del BOUNDARY_FILES["jax_decode.py"]
+    BOUNDARY_FILES["coref_host_shell.py"] = "the one numpy<->jax seam (perf: vectorised pre-transfer pack)"
+    try:
+        assert violates(src, "coref_host_shell.py") is None
+    finally:
+        del BOUNDARY_FILES["coref_host_shell.py"]
 
 
 if __name__ == "__main__":
