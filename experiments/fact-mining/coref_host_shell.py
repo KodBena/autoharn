@@ -47,6 +47,11 @@ import jax.numpy as jnp
 
 import jax_decode
 
+# The decode tail is pinned fp32 (jax_decode.py + decode_document both contract
+# float32). The single jax home owns the jax config, so the wire seam
+# (coref_decode_server.py) need not import jax to set it.
+jax.config.update("jax_enable_x64", False)
+
 # ---- maverick constants, inlined verbatim from maverick/common/constants.py.
 # These are immutable lookup tables, not behaviour; inlining keeps the shell free
 # of the torch-laden maverick package while remaining a faithful mirror.
@@ -316,3 +321,22 @@ def decode_document(params, lhs, attention_mask, eos_mask,
 
     clusters_bpe = create_clusters(m2a, sing_spans)
     return original_token_offsets(clusters_bpe, subtoken_map, new_token_map)
+
+
+# ------------------------------------ wire/host entry points (the single jax home)
+# coref_decode_server.py (the ZMQ wire seam) delegates ALL its device lifts here so
+# it can stay host-only — single-homing the jax host<->device edge (mandate).
+def lift_params(host_params):
+    """Lift the decode-tail weights (host arrays) onto the device — the one place
+    the weights cross host->device."""
+    return {k: jnp.asarray(v, dtype=jnp.float32)  # host-device-boundary: lift decode-tail weights host->device
+            for k, v in host_params.items()}
+
+
+def decode_document_host(params, lhs_host, attention_mask, eos_mask,
+                         tokens, subtoken_map, new_token_map, singletons: bool = False):
+    """Wire entry point: lift the host last_hidden_state onto the device HERE, then
+    run the (untouched) decode. Keeps coref_decode_server.py free of any jax op."""
+    lhs = jnp.asarray(lhs_host, dtype=jnp.float32)  # host-device-boundary: lift wire last_hidden_state host->device
+    return decode_document(params, lhs, attention_mask, eos_mask,
+                           tokens, subtoken_map, new_token_map, singletons)

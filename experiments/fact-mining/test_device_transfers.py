@@ -51,21 +51,14 @@ import os
 HERE = os.path.dirname(os.path.abspath(__file__))
 MARKER = "# host-device-boundary:"       # inline opt-in, same convention as chocofarm
 
-# Each device framework's edge has a SET of declared home files — a device-edge op
-# is sanctioned iff it appears in one of its framework's homes AND carries MARKER.
-# Single-homing is kept per-EDGE: each home is the one authoritative file for its
-# OWN concern, not a license to scatter the edge. The jax framework now has two
-# such edges:
-#   * coref_host_shell.py    — the decode PIPELINE's internal host<->device edge
-#                              (pulls device results, lifts index/mask lists back).
-#   * coref_decode_server.py — the WIRE seam: lifts the decode-tail weights and the
-#                              wire-delivered last_hidden_state bytes onto the device
-#                              (the ZMQ daemon boundary). A genuinely distinct edge,
-#                              declared and marked here, NOT scattered.
+# Each framework's device edge is sanctioned iff it appears in its framework's home
+# AND carries MARKER. MANDATE: ONE jax home — two is a drift hazard. coref_host_shell.py
+# is the single jax host<->device home; the ZMQ wire seam (coref_decode_server.py)
+# delegates its lifts here (coref_host_shell.lift_params / decode_document_host) and
+# stays host-only, so it authors no jax device op and needs no home of its own.
 HOMES = {
-    "torch": frozenset({"nlp_server.py"}),        # torch / spaCy / maverick GPU placement+casts
-    "jax": frozenset({"coref_host_shell.py",      # decode-pipeline host<->device edge (ADR-0012 P7)
-                      "coref_decode_server.py"}),  # the ZMQ wire<->device seam
+    "torch": frozenset({"nlp_server.py"}),         # torch / spaCy / maverick GPU placement+casts
+    "jax": frozenset({"coref_host_shell.py"}),     # the SINGLE jax host<->device home (ADR-0012 P7)
 }
 SCANNED = ["extract.py", "load_facts.py", "nlp_cache.py",
            "nlp_client.py", "nlp_server.py", "resolve.py",
@@ -198,25 +191,27 @@ def test_jax_transfer_is_recognized_and_homed():
         "jax transfer in the torch home is not its home -> must fail"
 
 
-def test_jax_has_two_homes_wire_seam_and_pipeline():
-    """The jax framework now has TWO declared homes — the decode-pipeline shell AND
-    the ZMQ wire seam. A marked jax lift is sanctioned in EITHER; an unmarked one in
-    a home is still caught; and a jax lift in a NON-home (extract.py) is never
-    sanctioned (no scatter)."""
-    lift = "    a = jnp.asarray(p)  # host-device-boundary: lift the wire lhs\n"
+def test_jax_has_a_single_home_and_wire_seam_is_not_one():
+    """MANDATE: ONE jax home (coref_host_shell.py) — two is a drift hazard. A marked
+    jax lift is sanctioned in the home; the SAME marked lift in the ZMQ wire seam
+    (coref_decode_server.py) is NOT — the seam must DELEGATE its lifts to the shell,
+    not become a second home. Any other non-home file is likewise rejected."""
+    lift = "    a = jnp.asarray(p)  # host-device-boundary: lift host array\n"
     src = "def f(p):\n" + lift
-    seam_hit = find_device_ops(src, "coref_decode_server.py")[0]
-    assert seam_hit[3] == "jax" and seam_hit[2] == ".asarray()"
-    assert is_sanctioned(seam_hit, src.splitlines()), "marked jax lift in the wire seam must pass"
-    # both jax homes accept it
+    # the single jax home accepts a marked lift
     shell_hit = find_device_ops(src, "coref_host_shell.py")[0]
-    assert is_sanctioned(shell_hit, src.splitlines())
-    # a non-home jax file is still rejected (the edge is not scattered)
+    assert shell_hit[3] == "jax" and shell_hit[2] == ".asarray()"
+    assert is_sanctioned(shell_hit, src.splitlines()), "marked jax lift in the jax home must pass"
+    # the wire seam is NOT a jax home -> the same lift there must FAIL (delegate instead)
+    seam_hit = find_device_ops(src, "coref_decode_server.py")[0]
+    assert not is_sanctioned(seam_hit, src.splitlines()), \
+        "a jax lift in the wire seam must fail — single home; delegate to the shell"
+    # any other non-home file likewise (no scatter)
     stray = find_device_ops(src, "extract.py")[0]
-    assert not is_sanctioned(stray, src.splitlines()), "jax lift outside any home must fail"
-    # unmarked in the seam -> caught
+    assert not is_sanctioned(stray, src.splitlines())
+    # unmarked in the home -> still caught
     bare = "def f(p):\n    return jnp.asarray(p)\n"
-    bhit = find_device_ops(bare, "coref_decode_server.py")[0]
+    bhit = find_device_ops(bare, "coref_host_shell.py")[0]
     assert not is_sanctioned(bhit, bare.splitlines())
 
 

@@ -1,47 +1,38 @@
 #!/usr/bin/env python
 """JAX coref DECODE daemon — a ZMQ REP server (Stage 1b-i of the JAX migration).
 
-This is the WIRE<->DEVICE BOUNDARY for the already-proven pure-JAX decode tail.
-It is NOT a pure `jax_*` core file: it is the honestly-named imperative seam that
+The HOST-SIDE wire seam for the already-proven pure-JAX decode tail. It owns the
+transport (ZMQ + a raw-float32 wire) and delegates EVERY device op to the single
+jax home, `coref_host_shell.py`:
 
-  1. loads the decode-tail weights ONCE into jax arrays (`--weights`), and
-  2. per request, lifts the encoder `last_hidden_state` off the wire onto the
-     device, runs `coref_host_shell.decode_document` (the single proven jax
-     host<->device home for the decode PIPELINE), and returns the cluster
-     token-offset tuples.
+  1. at startup, loads the decode-tail weights as HOST arrays and hands them to
+     `coref_host_shell.lift_params` (the device lift lives THERE, not here), and
+  2. per request, unpacks the encoder `last_hidden_state` off the wire into a HOST
+     numpy array and calls `coref_host_shell.decode_document_host`, which lifts it
+     onto the device and runs the decode, returning cluster token-offset tuples.
 
-Relationship to the proven core (DO NOT modify those):
-  * jax_decode.py          — pure jax device core (3 jit stages).  bit-exact.
-  * coref_host_shell.py    — decode_document orchestrator; the pipeline's jax home.
-This file is a SECOND, distinct jax host<->device edge — the WIRE seam — declared
-as such in BOTH guard gates (test_import_xor.BOUNDARY_FILES and
-test_device_transfers.HOMES["jax"]). Single-homing is kept intact at per-EDGE
-granularity: the pipeline edge lives in coref_host_shell.py; the wire edge lives
-here, and nowhere else.
+SINGLE HOME (mandate — two homes is a drift hazard). There is exactly ONE jax
+host<->device home: coref_host_shell.py. This file authors NO jax device op; it
+imports numpy (wire unpack) + zmq + the shell, and is host-only by the import-XOR
+gate (no jax import, no BOUNDARY_FILES entry). The jax runtime still initialises in
+THIS process because it imports the shell, so the XLA memory guard below applies.
 
-NUMPY POLICY (why this file is a declared host<->device boundary, unlike the
-deliberately numpy-free shell): the ONLY honest, bit-exact way to carry a float32
-`last_hidden_state` over the wire is as RAW IEEE-754 little-endian bytes — JSON
-decimal floats route every value through a float64 decimal round-trip and can flip
-the last mantissa bit, which is exactly the kind of perturbation that can flip a
-`sigmoid>0.5`/argmax decision near a boundary (ADR-0009's residual risk). Unpacking
-those raw bytes back into a typed, shaped, C-contiguous array is `numpy.frombuffer`
-— a host-side structural concern. So this file legitimately imports BOTH numpy
-(host: wire unpack) and jax (device: the lift onto the accelerator). That mix is
-sanctioned by a BOUNDARY_FILES entry, and the file name is NEUTRAL (not jax_*) so
-it does not lie about being a device-only core.
+NUMPY POLICY: the only honest, bit-exact way to carry a float32 last_hidden_state
+over the wire is RAW IEEE-754 little-endian bytes — JSON decimal floats route every
+value through a float64 decimal round-trip and can flip the last mantissa bit
+(ADR-0009's residual risk). Unpacking those bytes into a typed, shaped array is
+`numpy.frombuffer` — a host-side structural concern. This file touches numpy only
+on the HOST side; it never authors a device lift.
 
-SAFETY — no code on the wire (mirrors nlp_server.py). The protocol carries DATA
-only: a JSON metadata frame + a RAW float32 bytes frame. We NEVER use
-send_pyobj/recv_pyobj (those pickle == arbitrary code execution on deserialize).
+SAFETY — no code on the wire (mirrors nlp_server.py): a JSON metadata frame + a RAW
+float32 bytes frame. We NEVER use send_pyobj/recv_pyobj (pickle == arbitrary code
+execution on deserialize).
 
-MEMORY (GPU co-residency). One document per request — the jax stages recompile per
-document shape, never an unbounded B*S batch (see jax_decode.py's "per-document
-MEMORY BUDGET"). When this daemon shares a GPU with the torch encoder, cap XLA's
-arena so it does not pre-grab the whole card: export
-`XLA_PYTHON_CLIENT_MEM_FRACTION=0.3` (or `XLA_PYTHON_CLIENT_PREALLOCATE=false`)
-BEFORE launching. We set a conservative default below if neither is set, so a
-naive launch alongside torch does not OOM the encoder.
+MEMORY (GPU co-residency). One document per request (the jax stages recompile per
+document shape, never an unbounded B*S batch). jax initialises in this process via
+the shell import, so cap XLA's arena when sharing a GPU with the torch encoder:
+export `XLA_PYTHON_CLIENT_MEM_FRACTION=0.3` (or `XLA_PYTHON_CLIENT_PREALLOCATE=false`)
+BEFORE launching; we set a conservative default below if neither is set.
 
 Protocol
 --------
@@ -54,7 +45,7 @@ Request: ZMQ multipart.
       frame 1 = lhs as C-contiguous little-endian float32, len == S*TH*4 bytes.
   info / ping -> [ <json meta> ]   (single frame, no binary frame)
 
-Reply: ZMQ multipart (always a single JSON frame for this daemon).
+Reply: ZMQ multipart (always a single JSON frame).
   decode ok  -> [ {"ok": true, "clusters": [[[s,e],...],...], "singletons": bool} ]
   info/ping  -> [ {"ok": true, ...} ]
   error      -> [ {"ok": false, "error": "..."} ]
@@ -68,9 +59,10 @@ from __future__ import annotations
 
 import os
 
-# GPU co-residency guard: if the operator has not chosen an XLA memory policy,
-# default to a fraction so this decode daemon does not pre-allocate the whole card
-# out from under a co-resident torch encoder. Must be set before jax initialises.
+# GPU co-residency guard: jax initialises in THIS process via the coref_host_shell
+# import below; if the operator chose no XLA memory policy, default to a fraction so
+# this daemon does not pre-grab the whole card from a co-resident torch encoder.
+# Must be set before jax initialises (i.e. before importing the shell).
 if ("XLA_PYTHON_CLIENT_MEM_FRACTION" not in os.environ
         and "XLA_PYTHON_CLIENT_PREALLOCATE" not in os.environ):
     os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"] = "0.3"
@@ -82,14 +74,7 @@ import traceback
 import numpy as np
 import zmq
 
-import jax
-import jax.numpy as jnp
-
-import coref_host_shell
-
-# Match torch float32 exactly — the decode tail is pinned fp32 (jax_decode.py and
-# decode_document both assert/contract float32). Never let x64 widen a matmul.
-jax.config.update("jax_enable_x64", False)
+import coref_host_shell  # the single jax home: it owns the device lifts + the jax config
 
 # The one wire dtype. Pinned little-endian float32: both the client pack and this
 # unpack agree on '<f4' so the raw bytes are bit-identical regardless of host
@@ -98,20 +83,22 @@ WIRE_DTYPE = np.dtype("<f4")
 
 
 def load_params(path: str) -> dict:
-    """weights.npz -> dict[str, jax.Array] float32. The single np->jax conversion
-    seam for the LEARNED params; done ONCE at startup, not per request."""
+    """weights.npz -> dict[str, np.ndarray] float32 (HOST). The device lift is the
+    shell's job (coref_host_shell.lift_params — the single jax home), so this wire
+    seam stays host-only."""
+    # use .astype (not np.asarray): the device gate flags the bare token `.asarray()`
+    # by name (can't tell np from jnp), and this file authors NO device op.
     with np.load(path) as z:
-        return {k: jnp.asarray(z[k], dtype=jnp.float32)  # host-device-boundary: lift decode-tail weights numpy->jax once at startup
-                for k in z.files}
+        return {k: z[k].astype(np.float32) for k in z.files}
 
 
-def unpack_lhs(meta: dict, blob: bytes) -> jax.Array:
-    """RAW wire bytes -> device float32 [S, TH], BIT-EXACT.
+def unpack_lhs(meta: dict, blob: bytes) -> np.ndarray:
+    """RAW wire bytes -> HOST float32 [S, TH], BIT-EXACT.
 
     numpy.frombuffer reinterprets the bytes as little-endian float32 with NO value
-    conversion (unlike a JSON decimal parse), reshapes to the declared [S, TH], and
-    we lift that onto the device. FAIL LOUD on any wire/shape mismatch — a wrong
-    byte length or dtype is a real protocol bug, never silently coerced.
+    conversion (unlike a JSON decimal parse) and reshapes to the declared [S, TH].
+    The device lift is the shell's job. FAIL LOUD on any wire/shape mismatch — a
+    wrong byte length or dtype is a real protocol bug, never silently coerced.
     """
     if meta.get("dtype") != "float32":
         raise ValueError(f"lhs dtype must be 'float32', got {meta.get('dtype')!r}")
@@ -122,15 +109,15 @@ def unpack_lhs(meta: dict, blob: bytes) -> jax.Array:
     if len(blob) != expected:
         raise ValueError(
             f"lhs byte length {len(blob)} != expected {expected} for shape {shape}")
-    host = np.frombuffer(blob, dtype=WIRE_DTYPE).reshape(shape)
-    return jnp.asarray(host, dtype=jnp.float32)  # host-device-boundary: lift the wire last_hidden_state numpy->jax (the wire seam)
+    return np.frombuffer(blob, dtype=WIRE_DTYPE).reshape(shape)  # HOST array; the shell lifts it
 
 
 class DecodeServer:
     def __init__(self, weights_path: str):
         self.weights_path = weights_path
-        self.params = load_params(weights_path)
-        # how many distinct weight tensors we loaded (info/diagnostics)
+        # the device lift happens in the shell (single jax home); we hold the
+        # resulting device arrays opaquely and pass them straight back to the shell.
+        self.params = coref_host_shell.lift_params(load_params(weights_path))
         self.n_params = len(self.params)
 
     # ----------------------------------------------------------- request handler
@@ -145,7 +132,6 @@ class DecodeServer:
             return [json.dumps({
                 "ok": True, "weights": os.path.basename(self.weights_path),
                 "n_params": self.n_params, "wire_dtype": "float32",
-                "x64": bool(jax.config.read("jax_enable_x64")),
             }).encode()]
         if op != "decode":
             return [json.dumps({"ok": False, "error": f"unknown op {op!r}"}).encode()]
@@ -153,12 +139,12 @@ class DecodeServer:
         if len(frames) < 2:
             raise ValueError("decode request needs a second frame: raw float32 lhs bytes")
 
-        lhs = unpack_lhs(meta, frames[1])
+        lhs_host = unpack_lhs(meta, frames[1])
         singletons = bool(meta.get("singletons", False))
 
-        clusters = coref_host_shell.decode_document(
+        clusters = coref_host_shell.decode_document_host(
             params=self.params,
-            lhs=lhs,
+            lhs_host=lhs_host,
             attention_mask=meta["attention_mask"],
             eos_mask=meta["eos_mask"],
             tokens=meta["tokens"],

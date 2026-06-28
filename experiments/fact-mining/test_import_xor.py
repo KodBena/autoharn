@@ -59,15 +59,11 @@ DEVICE_NAME_TOKENS = ("jax", "torch", "cupy", "tensorflow", "cuda", "gpu")
 # (e.g. a numpy<->jax conversion module), with a one-line reason justifying the mix
 # on perf AND structural grounds — and only if its NAME is honest (neutral, not
 # jax_*/torch_*): a device-named file can never be laundered by this whitelist.
-BOUNDARY_FILES: dict[str, str] = {
-    # The jax decode daemon's wire<->device seam. It MUST import numpy to unpack the
-    # raw float32 `last_hidden_state` bytes off the wire (numpy.frombuffer -> typed,
-    # shaped, C-contiguous host array) and jax to lift that onto the accelerator.
-    # Justification: (perf+correctness) raw IEEE-754 bytes are the only BIT-EXACT
-    # float32 wire encoding — JSON decimals can flip a mantissa bit and a decision;
-    # (structural) this is the single authoritative wire seam, name is neutral.
-    "coref_decode_server.py": "wire float32 unpack at the host<->device seam",
-}
+# Empty today: coref_decode_server.py was a candidate (it numpy-unpacks the float32
+# wire), but it DELEGATES every device lift to coref_host_shell.py (the single jax
+# home) and imports no jax — so it is host-only and needs no entry. Preferred
+# resolution: route the device op to the home, don't whitelist a new mixing file.
+BOUNDARY_FILES: dict[str, str] = {}
 
 
 def imported_top_modules(src: str) -> set[str]:
