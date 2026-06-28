@@ -25,18 +25,27 @@ import importlib
 
 
 def _maverick_safe_globals():
-    """The specific classes maverick's omegaconf/Lightning checkpoint pickles.
+    """The specific, audited PURE-DATA classes maverick's omegaconf/Lightning
+    checkpoint pickles. Allowlisting exactly these keeps `weights_only=True` — no
+    arbitrary-code path.
 
-    Allowlisting exactly these keeps `weights_only=True` (no arbitrary-code path).
-    If the host load fails with `Unsupported global: X`, X is a new known-safe data
-    class the checkpoint added — add it HERE, with intent; never fall back to
-    trusting the whole file. Resolved tolerantly so an omegaconf version skew can't
-    crash the helper itself.
+    The complete set is NOT discovered by host whack-a-mole (that is the ADR-0013
+    grind the ADR-0014 review rejected). Run `enumerate_ckpt_globals.py` ONCE on the
+    host: it statically reads every global the checkpoint references, with zero
+    execution. Audit its "MUST allowlist" bucket per the rule in that file's header
+    (pure data → allow; callable-with-side-effects → REFUSE, the file is hostile),
+    and freeze that set here. A future `Unsupported global: X` is then not a thing
+    to append blindly — it means the file changed: re-run the enumerator, re-audit.
+
+    The builtins below are pure-data callables omegaconf names as rebuild functions
+    (`dict(...)`, `tuple(...)`); they cannot execute attacker code regardless of
+    args. omegaconf classes are resolved tolerantly against version skew.
     """
     import collections
     import typing
 
-    allow = [typing.Any, collections.defaultdict, collections.OrderedDict]
+    allow = [typing.Any, collections.defaultdict, collections.OrderedDict,
+             dict, list, tuple, set, frozenset]
     wanted = {
         "omegaconf": ["DictConfig", "ListConfig"],
         "omegaconf.base": ["ContainerMetadata", "Metadata"],
@@ -57,10 +66,32 @@ def _maverick_safe_globals():
 @contextlib.contextmanager
 def safe_maverick_load():
     """Construct `Maverick(...)` inside this block. Loads the trusted checkpoint
-    under `weights_only=True` with an explicit allowlist of its omegaconf/stdlib
+    under `weights_only=True` with an explicit allowlist of its audited pure-data
     globals — NO arbitrary-code-execution exposure. Fails loud on any global not in
-    the allowlist (extend `_maverick_safe_globals` when that happens)."""
+    the allowlist.
+
+    Belt-and-suspenders (the ADR-0014 review's caveat): the allowlist only protects
+    a load that actually runs `weights_only=True`. A PyTorch-Lightning version that
+    passed `weights_only=False` to its internal `torch.load` would silently disable
+    all protection. So we also guard `torch.load` for the duration: an attempt to
+    load with `weights_only=False` RAISES rather than silently opening the
+    arbitrary-exec path."""
     import torch
 
-    with torch.serialization.safe_globals(_maverick_safe_globals()):
-        yield
+    orig_load = torch.load
+
+    def _guarded_load(*a, **k):
+        if k.get("weights_only") is False:
+            raise RuntimeError(
+                "maverick checkpoint load attempted weights_only=False (the "
+                "arbitrary-code-execution path) — refusing. The safe path is "
+                "weights_only=True + the audited safe_globals allowlist.")
+        k.setdefault("weights_only", True)
+        return orig_load(*a, **k)
+
+    torch.load = _guarded_load
+    try:
+        with torch.serialization.safe_globals(_maverick_safe_globals()):
+            yield
+    finally:
+        torch.load = orig_load
