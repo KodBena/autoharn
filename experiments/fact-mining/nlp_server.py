@@ -108,7 +108,14 @@ class Server:
 
     def coref_clusters(self, text: str):
         """Return char-offset clusters [[[start,end],...],...] for one text."""
-        pred = self.coref().predict(text)
+        import torch
+        # spaCy-trf runs the transformer under torch autocast (fp16) on the GPU.
+        # maverick is a separate, purely-fp32 model in the same process; if autocast
+        # is active when it runs, its encoder emits fp16 activations while its fp32
+        # heads expect fp32 -> "mat1 and mat2 must have the same dtype, Half and
+        # Float". Force autocast OFF for maverick's forward so it stays fp32.
+        with torch.autocast(device_type="cuda" if self.gpu else "cpu", enabled=False):
+            pred = self.coref().predict(text)
         # maverick returns char offsets under this key; keep as plain lists (JSON)
         return pred.get("clusters_char_offsets", [])
 
