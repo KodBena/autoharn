@@ -24,18 +24,28 @@ from __future__ import annotations
 import glob
 import json
 import os
+import sys
 
 import numpy as np
 
+# Make the port importable however this file is invoked (pytest / python / other
+# cwd) — pytest's sys.path handling differs from `python file.py` and was the
+# real cause of the "skip".
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
 try:
     import jax
-    jax.config.update("jax_enable_x64", False)  # match torch float32 exactly
     import jax.numpy as jnp
-    import coref_host_shell
-    _HAVE_JAX = True
-except Exception as exc:  # pragma: no cover - guest has no jax
+except ModuleNotFoundError as exc:   # genuinely no jax (e.g. the guest) -> legit skip
     _HAVE_JAX = False
     _IMPORT_ERR = exc
+else:
+    _HAVE_JAX = True
+    jax.config.update("jax_enable_x64", False)  # match torch float32 exactly
+    # NOT guarded: a failure importing the port is a REAL bug, not a benign skip.
+    # The old broad `except Exception: skip` masked exactly this (ADR-0002) and
+    # turned a pytest import failure into a silent "host-only, skipped".
+    import coref_host_shell
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 FIXTURES = os.path.join(HERE, "fixtures")
