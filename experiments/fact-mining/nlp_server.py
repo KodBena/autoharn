@@ -78,10 +78,25 @@ class Server:
     def coref(self):
         """Lazily load maverick-coref (host-only dependency, GPU if available)."""
         if self._coref is None:
+            import torch
             from maverick import Maverick  # host-only; imported on demand
-            # NOTE: verify the device kwarg/name against the installed maverick
-            # version on the host; adjust here if it raises.
-            self._coref = Maverick(device="cuda" if self.gpu else "cpu")
+
+            # maverick's official checkpoint is a PyTorch-Lightning/OmegaConf file
+            # whose pickle contains omegaconf.DictConfig globals. PyTorch >=2.6
+            # defaults torch.load(weights_only=True) and refuses those. The file is
+            # the trusted sapienzanlp release, so force full unpickling — but ONLY
+            # for the duration of model construction, then restore the default.
+            _orig_load = torch.load
+
+            def _trusting_load(*a, **k):
+                k["weights_only"] = False
+                return _orig_load(*a, **k)
+
+            torch.load = _trusting_load
+            try:
+                self._coref = Maverick(device="cuda" if self.gpu else "cpu")
+            finally:
+                torch.load = _orig_load
         return self._coref
 
     def coref_clusters(self, text: str):

@@ -52,11 +52,15 @@ consumes host coref with no change. Load with daemon coref:
     python load_facts.py /home/bork/pg/pg78966.txt --remote tcp://192.168.122.1:5599 --coref
 
 The full guest-side wire path is verified (client attach → resolve → pronoun
-resolves). Two host-side assumptions to confirm against your maverick version
-(both isolated, easy to adjust):
-  * `nlp_server.coref()` constructs `Maverick(device=...)` — fix the kwarg if it raises;
+resolves). Host-side notes:
+  * `Maverick(device="cuda"|"cpu")` — confirmed on the host.
+  * PyTorch ≥2.6 defaults `torch.load(weights_only=True)`, which rejects the
+    checkpoint's omegaconf globals; `coref()` forces `weights_only=False` (trusted
+    official checkpoint) only during model construction.
+  * download stalls at 0% are the HF Xet backend — fetch with `HF_HUB_DISABLE_XET=1`.
   * `coref_clusters()` reads `pred["clusters_char_offsets"]`; `resolve._char_span`
-    already tolerates inclusive-vs-exclusive end offsets (tries `e` then `e+1`).
+    tolerates inclusive-vs-exclusive end offsets (tries `e` then `e+1`) — still to
+    confirm once a parse returns real clusters.
 
 `RemoteNLP` in `nlp_client.py` is a near-drop-in for a loaded `nlp`:
 `.pipe(texts)` / `nlp(text)` return real `Doc` objects rehydrated from DocBin,
