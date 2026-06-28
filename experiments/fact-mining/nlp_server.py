@@ -136,25 +136,15 @@ class Server:
     def coref(self):
         """Lazily load maverick-coref (host-only dependency, GPU if available)."""
         if self._coref is None:
-            import torch
             from maverick import Maverick  # host-only; imported on demand
 
-            # maverick's official checkpoint is a PyTorch-Lightning/OmegaConf file
-            # whose pickle contains omegaconf.DictConfig globals. PyTorch >=2.6
-            # defaults torch.load(weights_only=True) and refuses those. The file is
-            # the trusted sapienzanlp release, so force full unpickling — but ONLY
-            # for the duration of model construction, then restore the default.
-            _orig_load = torch.load
-
-            def _trusting_load(*a, **k):
-                k["weights_only"] = False
-                return _orig_load(*a, **k)
-
-            torch.load = _trusting_load
-            try:
+            # The checkpoint is a PyTorch-Lightning/OmegaConf pickle PyTorch >=2.6
+            # refuses under weights_only=True; the SSOT loader allowlists its
+            # specific omegaconf globals (no arbitrary-execution exposure; one home
+            # so no site forgets it — ADR-0012 P1).
+            from maverick_load import safe_maverick_load
+            with safe_maverick_load():
                 self._coref = Maverick(device="cuda" if self.gpu else "cpu")  # host-device-boundary: place maverick on GPU
-            finally:
-                torch.load = _orig_load
 
             # In this process (alongside spaCy-trf on the GPU) maverick's deberta
             # encoder comes back fp16 while its classifier heads are fp32 -> the

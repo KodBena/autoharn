@@ -38,6 +38,8 @@ import torch
 from maverick import Maverick
 from maverick.common.util import original_token_offsets
 
+from maverick_load import safe_maverick_load  # SSOT safe checkpoint load (ADR-0012 P1)
+
 SAMPLE_TXT = "/home/bork/pg/pg78966.txt"
 
 # decode-tail FC RepresentationLayers (module attr on Maverick_mes) to dump.
@@ -173,7 +175,11 @@ def main() -> None:
     )
     os.makedirs(outdir, exist_ok=True)
 
-    mav = Maverick(device="cuda")  # host-device-boundary: maverick on GPU
+    with safe_maverick_load():
+        mav = Maverick(device="cuda")  # host-device-boundary: maverick on GPU
+    # match the daemon: force fp32 so captured hidden states satisfy jax_decode's
+    # fp32 contract (the encoder loads fp16 natively alongside fp32 heads).
+    mav.model.float()  # host-device-boundary: cast maverick to fp32
     model = mav.model
 
     np.savez(os.path.join(outdir, "weights.npz"), **extract_weights(model))
