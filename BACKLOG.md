@@ -149,3 +149,12 @@ later entities — study/experiment grouping, analysis/transformation, dataset.
   this project address it? Directly germane to the real goal: interrogating an AI collaborator's
   *epistemic state* is reasoning over its attitudes toward propositions (what it believes, hedges,
   intends, defers). Map it against the obligations-formalisms survey. [maintainer request, 2026-06-29]
+
+## fact-mining (JAX decode migration)
+
+- **Close the `coref_decode_server.handle()` JSON-seam coverage gap.** The Stage-1b-ii live-wire
+  fidelity test drives `Server._run_coref(..., "jax-daemon", ...)` directly — one layer ABOVE the
+  daemon's `handle()` frame parse — so a future drift in `handle()`'s field routing
+  (`req.get("coref_backend")`/`decode_addr` → `_run_coref`) would go uncaught. (Flagged by the
+  implementer's own hack-rationalization audit, 2026-06-29; concrete cost of the gap: a `handle()`
+  test needs a loaded spaCy pipeline.) Fix = a thin `handle()` round-trip test with a stub spaCy.
