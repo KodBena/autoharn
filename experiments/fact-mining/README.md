@@ -51,6 +51,54 @@ consumes host coref with no change. Load with daemon coref:
 
     python load_facts.py /home/bork/pg/pg78966.txt --remote tcp://192.168.122.1:5599 --coref
 
+#### Two coref paths: serial (reference) vs batched (default, fast)
+
+maverick runs `predict()` once per paragraph (~200 sequential GPU calls, power-
+cycling the PCIe GPU each time). Its *clustering* tail genuinely cannot tensor-
+batch (`model_mes.py` does per-document `mention_idxs = mention_idxs[0]`), but its
+**deberta encoder is fully batchable**. So the daemon has two coref code paths,
+selected by `coref_mode` on the request (and by load_facts flags):
+
+| path | `coref_mode` | how |
+|------|--------------|-----|
+| **serial** (reference) | `"serial"` | `Server.coref_clusters` — one `predict()` per text. Untouched ground truth. |
+| **batched** (default)  | `"batched"`| `Server.coref_clusters_batched` — pad all paragraphs, run `model.encoder` **once** over B×S, then serve each item's precomputed hidden-state slice into maverick's **unchanged** per-doc clustering tail (the encoder is temporarily swapped for a stand-in; restored in `finally`). |
+| **verify** | `"verify"` | run BOTH, load the trusted serial clusters, and return a pass/fail `coref_verify` diff. |
+
+The batched path keeps everything fp32 (no `.half()` — that is a separate
+decision) and only the deberta encoder is shared; the mention-extraction and
+clustering math is maverick's own code on per-document hidden states, so outputs
+stay faithful to serial.
+
+**Fidelity story — run `--coref-verify` once before trusting batched.**
+
+    # one-time check: runs serial AND batched, asserts clusters match, loads serial
+    python load_facts.py /home/bork/pg/pg78966.txt --remote tcp://192.168.122.1:5599 \
+        --coref --coref-verify
+
+    # normal fast run (batched encoder, the default under --coref):
+    python load_facts.py /home/bork/pg/pg78966.txt --remote tcp://192.168.122.1:5599 --coref
+
+    # force the serial reference path (slow):
+    python load_facts.py /home/bork/pg/pg78966.txt --remote tcp://192.168.122.1:5599 \
+        --coref --coref-serial
+
+Comparison is **exact set equality** of clusters per paragraph (cluster order,
+within-cluster mention order, and list-vs-tuple are all normalised away). Cluster
+endpoints are integer *char* offsets, so there is no float slack to absorb at this
+layer. The one fidelity caveat is upstream: batched matmul + right-padding can
+make the encoder's hidden states differ from the serial run at the ~1e-5 level. In
+principle a value sitting within ~1e-5 of a `sigmoid>0.5` mention threshold or an
+antecedent `argmax` tie could flip, which *would* change the cluster set — and
+that is exactly the event exact-set verify surfaces as a `FAIL` with a per-
+paragraph `serial=… batched=…` diff. (padding is masked out by the attention mask,
+so in practice the rows match and verify passes; the verify gate is the proof, not
+an assumption.) `--coref-verify` loads the **serial** clusters either way, so a
+verify run is also a safe run.
+
+> Cannot be exercised on this guest (no maverick/CUDA). Implemented and AST/device-
+> gate-clean here; **ready for host verification** via the commands above.
+
 The full guest-side wire path is verified (client attach → resolve → pronoun
 resolves). Host-side notes:
   * `Maverick(device="cuda"|"cpu")` — confirmed on the host.

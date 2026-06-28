@@ -31,11 +31,16 @@ class RemoteError(RuntimeError):
 class RemoteNLP:
     def __init__(self, addr: str = "tcp://192.168.122.1:5599",
                  model: str | None = None, timeout_ms: int = 600_000,
-                 coref: bool = False):
+                 coref: bool = False, coref_mode: str = "batched"):
         self.addr = addr
         self.model = model
         self.timeout_ms = timeout_ms
         self.coref = coref  # ask the daemon to run maverick-coref and return clusters
+        # how the daemon runs coref: "batched" (fast, default) | "serial"
+        # (reference) | "verify" (run both, report fidelity). See nlp_server.py.
+        self.coref_mode = coref_mode
+        # filled from the daemon reply when coref_mode == "verify"; else None
+        self.last_coref_verify: dict | None = None
         # a blank vocab is enough to rehydrate a DocBin: all strings travel in it
         self._vocab = spacy.blank("en").vocab
         self._ctx = zmq.Context.instance()
@@ -69,10 +74,12 @@ class RemoteNLP:
         frames = self._roundtrip({
             "op": "parse", "texts": list(texts), "model": self.model,
             "format": "docbin", "disable": list(disable), "coref": self.coref,
+            "coref_mode": self.coref_mode,
         })
         meta = json.loads(frames[0])
         if not meta.get("ok"):
             raise RemoteError(meta.get("error", "server error"))
+        self.last_coref_verify = meta.get("coref_verify")  # set only in verify mode
         docs = list(DocBin().from_bytes(frames[1]).get_docs(self._vocab))
         # attach coref clusters (if any) under the fastcoref-compatible attribute
         clusters = meta.get("coref")

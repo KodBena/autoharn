@@ -33,8 +33,17 @@ def main() -> int:
     ap.add_argument("--remote", default=None)
     ap.add_argument("--cache", nargs="?", const="redis://127.0.0.1:6380/0", default=None)
     ap.add_argument("--coref", action="store_true",
-                    help="resolve pronouns with fastcoref (local pipeline; entity "
-                         "normalization is always applied either way)")
+                    help="resolve pronouns with coref (entity normalization is "
+                         "always applied either way). With --remote this uses the "
+                         "daemon's maverick BATCHED encoder path by default (fast); "
+                         "without --remote it uses the local fastcoref pipeline.")
+    ap.add_argument("--coref-serial", action="store_true",
+                    help="(remote coref only) force the SERIAL reference path on the "
+                         "daemon instead of the batched encoder")
+    ap.add_argument("--coref-verify", action="store_true",
+                    help="(remote coref only) run BOTH serial and batched coref and "
+                         "report a fidelity pass/fail. Run this ONCE before trusting "
+                         "the batched path; the trusted serial clusters are loaded.")
     ap.add_argument("--body-start-line", type=int, default=834)
     ap.add_argument("--max-paras", type=int, default=200)
     ap.add_argument("--max-sents", type=int, default=400)
@@ -44,14 +53,22 @@ def main() -> int:
     body = normalise(load_body(args.path, args.body_start_line))
     sha = hashlib.sha256(body.encode("utf-8")).hexdigest()
 
+    # coref path/mode on the daemon: batched (fast, default), serial (reference),
+    # or verify (run both, report fidelity). --coref-verify wins over --coref-serial.
+    coref_mode = ("verify" if args.coref_verify
+                  else "serial" if args.coref_serial else "batched")
+    if (args.coref_serial or args.coref_verify) and not (args.coref and args.remote):
+        print("note: --coref-serial / --coref-verify apply only to remote coref "
+              "(--coref --remote ...); ignoring here.")
+
     cache = None
     if args.coref and args.remote:
         # coref on the host daemon (maverick); clusters ride back with the DocBin
         from nlp_client import RemoteNLP
         m = None if args.model == "en_core_web_sm" else args.model
-        nlp = RemoteNLP(args.remote, model=m, coref=True)
-        model_label = f"{m or nlp.info().get('default', 'remote')}+coref(maverick)"
-        print(f"=== remote coref daemon: {args.remote} | {nlp.info()} ===")
+        nlp = RemoteNLP(args.remote, model=m, coref=True, coref_mode=coref_mode)
+        model_label = f"{m or nlp.info().get('default', 'remote')}+coref(maverick/{coref_mode})"
+        print(f"=== remote coref daemon: {args.remote} | mode={coref_mode} | {nlp.info()} ===")
     elif args.coref:
         # local fastcoref pipeline (guest-only; no remote/cache)
         nlp = resolve.build_coref_nlp(args.model)
@@ -62,6 +79,18 @@ def main() -> int:
 
     paragraphs = [p.strip() for p in body.split("\n\n") if p.strip()][: args.max_paras]
     docs = nlp.pipe(paragraphs)
+
+    # surface batched-vs-serial coref fidelity when --coref-verify was requested
+    verify = getattr(nlp, "last_coref_verify", None)
+    if verify is not None:
+        status = "PASS" if verify.get("ok") else "FAIL"
+        print(f"=== coref fidelity [{status}]: {verify.get('n')} paragraphs, "
+              f"{verify.get('n_mismatch')} mismatch(es) — batched vs serial ===")
+        for mm in verify.get("mismatches", []):
+            print(f"  para {mm['index']}: serial={mm['serial']} batched={mm['batched']}")
+        if status == "FAIL":
+            print("  WARNING: batched coref diverged from serial. The trusted SERIAL "
+                  "clusters were loaded; do NOT use --coref (batched) until resolved.")
 
     n_assert = n_ent = n_temp = n_sent = 0
     with psycopg.connect(args.dsn) as conn, conn.cursor() as cur:
