@@ -16,7 +16,9 @@ This file is the fixture-I/O boundary (numpy `np.load` of host fixtures -> jax
 arrays); like capture_fixtures.py it is host-only test scaffolding and is not in
 the device-pipeline gates' SCANNED set.
 
-Run: pytest test_jax_decode_fidelity.py    (or: python test_jax_decode_fidelity.py)
+Run: python -m pytest test_jax_decode_fidelity.py   (use `python -m pytest`, NOT
+bare `pytest` — on this host the `pytest` console script dispatches via python-exec
+to an interpreter without jax, so it falsely "skips". Or: python test_jax_decode_fidelity.py)
 """
 
 from __future__ import annotations
