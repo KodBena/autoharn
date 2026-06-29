@@ -14,3 +14,8 @@ venv/
 
 # JAX persistent compilation cache (regenerable build artifact)
 .jax_cache/
+
+# rendered diagram outputs (regenerable from .dot)
+experiments/fact-mining/docs/*.svg
+experiments/fact-mining/docs/*.png
+experiments/fact-mining/docs/*.pdf

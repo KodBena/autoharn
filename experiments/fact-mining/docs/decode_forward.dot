@@ -1,0 +1,102 @@
+// maverick-coref DECODE TAIL — forward pass as a linear-algebra data-flow graph.
+// Mirrors jax_decode.py (the proven pure-JAX core). Render:
+//     dot -Tsvg decode_forward.dot -o decode_forward.svg   # or -Tpng
+//
+// Legend:
+//   box (solid)   = a tensor (its [shape] is on the node)
+//   ellipse       = a dense / linear-algebra op
+//   dashed        = HOST-side glue (data-dependent `nonzero`, gather, union-find) —
+//                   the irreducibly dynamic-shape steps that live in coref_host_shell.py,
+//                   NOT in the jit'd math. Shapes that the shell *creates* are dashed.
+//   S = #subtokens   TH = encoder hidden (1024)   P = #candidate (start,end) pairs
+//   K = #kept mentions   C = NUM_CATS = 7   f = per-category coref feature dim
+//   FC(·) = dense1 → GELU(erf) → LayerNorm → dense   (maverick FullyConnectedLayer, eval)
+
+digraph decode {
+    rankdir=TB;
+    graph [fontname="Helvetica", fontsize=11, labelloc=t,
+           label="maverick-coref decode tail — forward pass (linear algebra)"];
+    node  [fontname="Helvetica", fontsize=10];
+    edge  [fontname="Helvetica", fontsize=9];
+
+    H [label="H = last_hidden_state\n[S, TH]", shape=box, style="filled", fillcolor="#dde7f7"];
+
+    // ---------------------------------------------------------------- STAGE 1
+    subgraph cluster_s1 {
+        label="STAGE 1  mention_start_keep  (which subtokens can START a mention)";
+        style=rounded; color="#3a6ea5"; fontcolor="#3a6ea5";
+        fc1   [label="FC_start", shape=ellipse];
+        sl    [label="start_logits\n[S]", shape=box];
+        kp1   [label="> 0   (≡ σ>0.5)", shape=ellipse, style="filled", fillcolor="#fff0c8"];
+        kstart[label="keep_start (bool)\n[S]", shape=box];
+    }
+    nz1 [label="nonzero", shape=ellipse, style=dashed];
+    sidx[label="start_idxs\n[m]", shape=box, style=dashed];
+
+    H   -> fc1 [label="[S,TH]"];
+    fc1 -> sl  -> kp1 -> kstart -> nz1 -> sidx;
+
+    // candidate pair enumeration (host: eos_mask upper-tri over starts)
+    eos [label="enumerate (start,end)\nover eos_mask", shape=ellipse, style=dashed];
+    pse [label="possible_start_idxs,\npossible_end_idxs   [P]", shape=box, style=dashed];
+    sidx -> eos -> pse;
+
+    // ---------------------------------------------------------------- STAGE 2
+    subgraph cluster_s2 {
+        label="STAGE 2  span_mention_keep  (which (start,end) PAIRS are real mentions)";
+        style=rounded; color="#3a6ea5"; fontcolor="#3a6ea5";
+        swap [label="THE SWAP\nstarts_h = H[end_idxs]\nends_h   = H[start_idxs]",
+              shape=ellipse, style="filled", fillcolor="#ffe0e0"];
+        fcsr [label="FC_start_rep", shape=ellipse];
+        fcer [label="FC_end_rep",   shape=ellipse];
+        cat2 [label="concat", shape=ellipse];
+        s2e  [label="s2e\n[P, 2d]", shape=box];
+        fcse [label="FC_s2e_classifier", shape=ellipse];
+        sl2  [label="s2e_logits\n[P]", shape=box];
+        kp2  [label="> 0", shape=ellipse, style="filled", fillcolor="#fff0c8"];
+        kspan[label="keep_span (bool)\n[P]", shape=box];
+    }
+    H   -> swap [label="gather [P,TH]"];
+    pse -> swap;
+    swap -> fcsr -> cat2;
+    swap -> fcer -> cat2;
+    cat2 -> s2e -> fcse -> sl2 -> kp2 -> kspan;
+
+    nz2  [label="nonzero", shape=ellipse, style=dashed];
+    gath [label="gather start/end reps", shape=ellipse, style=dashed];
+    reps [label="start_reps, end_reps\n[K, TH]", shape=box, style=dashed];
+    kspan -> nz2 -> gath -> reps;
+    H -> gath [style=dashed, label="[K,TH]"];
+
+    // ---------------------------------------------------------------- STAGE 3
+    subgraph cluster_s3 {
+        label="STAGE 3  coref_decode  (the biaffine antecedent scorer + clustering)";
+        style=rounded; color="#a53a3a"; fontcolor="#a53a3a";
+        fccs [label="FC_coref_start", shape=ellipse];
+        fcce [label="FC_coref_end",   shape=ellipse];
+        tS   [label="S = transpose_for_scores(·)\n[C, K, f]", shape=box];
+        tE   [label="E = transpose_for_scores(·)\n[C, K, f]", shape=box];
+        bil  [label="4-term BIAFFINE bilinear\nL[n,i,j] = SᵀWˢˢS + EᵀWᵉᵉE\n + SᵀWˢᵉE + EᵀWᵉˢS  (+biases)",
+              shape=ellipse, style="filled", fillcolor="#ffd9b3"];
+        L    [label="coref logits\n[C, K, K]", shape=box];
+        gate [label="× categories_masks\n(per-pair-type gate)", shape=ellipse];
+        tril [label="× tril(k=-1)\n(antecedent j<i only)", shape=ellipse];
+        summ [label="Σ over categories", shape=ellipse];
+        L2   [label="[K, K]", shape=box];
+        noa  [label="no_ant = 1 − any(·>0)\nappend as col K", shape=ellipse, style="filled", fillcolor="#fff0c8"];
+        amax [label="argmax over K+1 cols", shape=ellipse, style="filled", fillcolor="#fff0c8"];
+        ant  [label="max_antecedents\n[K]  (j<i, or K = none)", shape=box, style="filled", fillcolor="#dde7f7"];
+    }
+    reps -> fccs [label="start_reps [K,TH]"];
+    reps -> fcce [label="end_reps [K,TH]"];
+    fccs -> tS;  fcce -> tE;
+    tS -> bil;  tE -> bil;
+    bil -> L -> gate -> tril -> summ -> L2 -> noa -> amax -> ant;
+    cmask [label="categories_masks\n[C, K, K]", shape=box, style=dashed];
+    cmask -> gate [style=dashed];
+
+    // ---------------------------------------------------------------- clustering
+    uf  [label="union-find\n(antecedent chains → sets)", shape=ellipse, style=dashed];
+    cl  [label="clusters\n(coref chains)", shape=box, style=dashed];
+    ant -> uf -> cl;
+}

@@ -1,0 +1,111 @@
+% maverick-coref decode tail — the forward pass as linear algebra.
+% Mirrors jax_decode.py (the proven pure-JAX core), maverick 1.0.7 model_mes.py.
+% Build (amsmath only, no TikZ):  pdflatex decode_math.tex
+\documentclass[11pt]{article}
+\usepackage[margin=2.2cm]{geometry}
+\usepackage{amsmath, amssymb}
+\usepackage{xcolor}
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\FC}[1]{\operatorname{FC}_{#1}}
+\newcommand{\LN}{\operatorname{LayerNorm}}
+\newcommand{\GELU}{\operatorname{GELU}}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{6pt}
+
+\begin{document}
+\begin{center}\large\textbf{maverick-coref decode tail — forward pass}\\
+\small the post-encoder linear algebra (the encoder is a standard deberta transformer, out of scope)\end{center}
+
+\textbf{Symbols.} $S$ = \#subtokens, $\mathit{TH}$ = encoder hidden ($1024$), $P$ = \#candidate
+$(\text{start},\text{end})$ pairs, $K$ = \#kept mentions, $C=7$ categories, $f$ = per-category
+coref feature dim. The encoder output is $H \in \R^{S\times \mathit{TH}}$.
+
+\hrulefill
+
+\textbf{The shared sub-layer.} Every learned block is the same
+\emph{FullyConnectedLayer} (eval mode, dropout $=$ identity); $W_1\!\in\!\R^{d_h\times d_{\text{in}}}$,
+$W_2\!\in\!\R^{d_{\text{out}}\times d_h}$ (torch stores $[\text{out},\text{in}]$, hence $W^\top$):
+\[
+\FC{}(x) \;=\; \LN\!\big(\GELU_{\mathrm{erf}}(x W_1^\top + b_1)\big)\,W_2^\top + b_2,
+\qquad
+\LN(z)=\frac{z-\mu}{\sqrt{\sigma^2+\varepsilon}}\odot\gamma+\beta
+\]
+with $\mu,\sigma^2$ the population mean/variance over the last axis ($\varepsilon=10^{-5}$), and
+$\GELU_{\mathrm{erf}}(u)=u\,\Phi(u)$ the \emph{exact} (erf) GELU, not the tanh approximation.
+
+\textbf{The threshold identity.} maverick keeps a unit when $\sigma(\ell)>\tfrac12$. Since $\sigma$ is
+strictly increasing with $\sigma(0)=\tfrac12$, this is \emph{exactly} $\ell>0$ — used everywhere, with
+no reconstruction of $\sigma$. (The load-bearing \emph{discrete} decision; ADR-0009 two-tier bar.)
+
+\hrulefill
+
+\textbf{Stage 1 — mention-start detection.} A per-subtoken binary classifier:
+\[
+\ell^{\text{start}} = \FC{\text{start}}(H)_{:,0}\in\R^{S},
+\qquad
+\text{keep}^{\text{start}}_t = \big[\ell^{\text{start}}_t > 0\big].
+\]
+The host takes $\operatorname{nonzero}$ of the keep-mask $\to$ start indices, and enumerates
+candidate $(\text{start},\text{end})$ pairs over the upper-triangular \texttt{eos\_mask} ($\to P$ pairs).
+
+\textbf{Stage 2 — span (mention) detection.} For each candidate pair, note the
+\textcolor{red}{\textbf{swap}} (trained-in behaviour, \emph{not} a bug): the START repr layer is fed the
+\emph{end} hidden state and vice-versa.
+\[
+s2e_p = \Big[\ \FC{\text{sr}}\big(H[\text{end}_p]\big)\ ;\ \FC{\text{er}}\big(H[\text{start}_p]\big)\ \Big]\in\R^{2d},
+\qquad
+\text{keep}^{\text{span}}_p = \big[\FC{\text{s2e}}(s2e_p)>0\big].
+\]
+Host: $\operatorname{nonzero}\to K$ kept mentions; gather their start/end hidden states
+$R_s, R_e \in \R^{K\times \mathit{TH}}$.
+
+\textbf{Stage 3 — the biaffine antecedent scorer (the ``magic'').}
+Project each mention into a per-category start/end space and reshape to $[C,K,f]$:
+\[
+\mathbf{S} = \operatorname{tfs}\!\big(\FC{\text{cs}}(R_s)\big),\quad
+\mathbf{E} = \operatorname{tfs}\!\big(\FC{\text{ce}}(R_e)\big)\ \in\ \R^{C\times K\times f}.
+\]
+The score of mention $i$ taking $j$ as antecedent, in category $n$, is a sum of four
+\textbf{bilinear forms} — a learned biaffine similarity $x^\top W y$ (Dozat--Manning), one for each
+cross of the \{start,end\} representations, plus linear bias terms:
+\[
+\boxed{\;
+L_{n,i,j} =
+\underbrace{\mathbf{S}_{n,i}^\top W^{ss}_n \mathbf{S}_{n,j}}_{\texttt{nkf,nfg,nlg->nkl}}
++ \mathbf{E}_{n,i}^\top W^{ee}_n \mathbf{E}_{n,j}
++ \mathbf{S}_{n,i}^\top W^{se}_n \mathbf{E}_{n,j}
++ \mathbf{E}_{n,i}^\top W^{es}_n \mathbf{S}_{n,j}
+\;+\; b_{n,i}\;}
+\]
+\[
+\text{with}\quad
+b_{n,i} = \mathbf{S}_{n,i}^\top \beta^{ss}_n + \mathbf{E}_{n,i}^\top \beta^{ee}_n
+        + \mathbf{E}_{n,i}^\top \beta^{se}_n + \mathbf{S}_{n,i}^\top \beta^{es}_n
+\quad(\text{broadcast over } j).
+\]
+Each $W^{\bullet}_n\in\R^{f\times f}$ is a full matrix: unlike a dot product $x^\top y$, the bilinear
+$x^\top W y$ lets the model learn \emph{which} antecedent dimensions interact with \emph{which}
+mention dimensions, separately per mention-pair \emph{type} (the $C$ categories: pron--pron,
+pron--ent, head-match, containment, \ldots).
+
+\textbf{Gate, mask, reduce, decide.}
+\begin{align*}
+L &\leftarrow L \odot M_{\text{cat}} && \text{(per-pair-type gate; }M_{\text{cat}}\in\{0,1\}^{C\times K\times K}\text{)}\\
+L &\leftarrow L \odot \operatorname{tril}_{-1} && \text{(antecedent } j<i \text{ only: no self, no future)}\\
+\tilde L &= \textstyle\sum_{n=1}^{C} L_n \ \in\ \R^{K\times K} && \text{(sum over categories)}\\
+\text{noant}_i &= 1 - \big[\,\exists j:\ \tilde L_{i,j}>0\,\big] && \text{(does row }i\text{ have any antecedent?)}\\
+a_i &= \operatorname*{arg\,max}_{c\in\{1..K{+}1\}} \big[\,\tilde L \,\Vert\, \text{noant}\,\big]_{i,c}
+   && a_i\in[1,K]\!:\ \text{antecedent } j{<}i;\quad a_i{=}K{+}1\!:\ \text{none}.
+\end{align*}
+After the strict-lower mask, columns $j\ge i$ are structural zeros, so the argmax is either a
+column with a \emph{strictly positive} antecedent logit or the \texttt{no\_ant} column — never a
+structural zero. The host then runs union-find over $a$ to merge antecedent chains into clusters.
+
+\hrulefill
+
+{\small Shapes through Stage 3: $R_{s},R_e\,[K,\mathit{TH}] \to \mathbf{S},\mathbf{E}\,[C,K,f]
+\to L\,[C,K,K] \to \tilde L\,[K,K] \to a\,[K]$. The only data-dependent (host) shapes are
+$m$ (kept starts), $P$ (pairs), $K$ (mentions) — which is why those steps are the imperative shell,
+not the jit'd core.}
+
+\end{document}
