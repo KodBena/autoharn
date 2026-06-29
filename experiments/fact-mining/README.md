@@ -411,6 +411,117 @@ without jax and would falsely "skip":
 > green here; `test_livewire_fidelity.py` self-skips (ModuleNotFoundError) until
 > maverick/torch/jax exist on the host.
 
+### Stage 1b-iii — the unified jax-only daemon (`--coref-backend jax-unified`)
+
+Stage 1b-ii still has **both** torch (the `nlp_server` deberta encode) and jax (the
+decode daemon) live, with the dense `eos_mask [S,S]` + `lhs` shipped over the wire
+(profiled ~67ms: serialize 37ms + parse 14ms + lhs transfer 16ms). Stage 1b-iii moves
+the **encode into the jax daemon** so the WHOLE coref forward is **one jax-only process**:
+the daemon receives TEXT, then in-process does tokenize → build `eos_mask`/maps (the
+SSOT torch-free preprocess) → `jax_deberta.encode` (maverick's fine-tuned deberta,
+converted) → the proven jax decode → clusters. `nlp_server` ships only TEXT (tiny) and
+gets clusters back; **the dense `eos_mask` + `lhs` never cross a wire**.
+
+**The headline (device hygiene): no process imports both torch and jax.** `nlp_server`
+stays torch-only (spaCy-trf, relaying text); the unified daemon is **jax-only**. The trap
+is that the daemon's torch-free-*looking* deps (`transformers`, `spaCy`) drag torch in
+transitively — a static scan can't see it. `jax_only_guard.install()` (a runtime
+MetaPathFinder that poisons `import torch` + stubs the torch-dragging spaCy-trf plugins)
+runs at daemon startup BEFORE the preprocess imports them, and `assert_torch_free()`
+backstops it. Proven on the guest: one process loads `spaCy + transformers + jax` and
+`torch in sys.modules` is **False** (`transformers` even logs "None of PyTorch… found").
+The coexistence is **eliminated, not relocated**.
+
+* **`export_deberta_maverick.py`** (HOST, torch) — exports maverick's fine-tuned deberta
+  encoder to a torch-free `fixtures/deberta_maverick.npz`: every weight under its original
+  torch key + one `__cfg__<field>` per `DebertaCfg` field **+ a `__tokenizer__` entry**
+  (maverick's `encoder_hf_model_name`). The cfg AND the tokenizer identity travel **with
+  the weights** (ADR-0012 P1) — neither is a constant retyped in the daemon. Reuses the
+  keyset-guarded `deberta_weights` conversion (`set(converted) == jax_deberta.param_keys(cfg)`).
+* **`StandalonePreprocessor`** (`coref_decode_inputs.py`) — a **torch-free, maverick-free**
+  verbatim transcription of maverick's `preprocess`/`tokenize`/`eos_mask` front half, so
+  `prepare_decode_inputs` runs inside the jax-only daemon. It is the SSOT shared by every
+  path (the maverick reference, the batched path, the unified daemon). The copy is held
+  honest by `test_preprocess_bit_identity.py` (GUEST: bit-identical input_ids/eos_mask/
+  maps/char_offsets vs maverick's **actual source bytes**) and the HOST `--coref-verify`.
+* **`coref_decode_server.py`** — adds the **`coref` op** (`{texts}` → per-text CHAR-offset
+  clusters) alongside the kept `decode` op (for the A/B + fidelity tests). Pass
+  `--deberta-weights` to enable it. The daemon authors **no** jax op; it delegates every
+  device lift + the encode to the single jax home `coref_host_shell.py`.
+
+**What changed in this review pass (the certified findings folded in):**
+
+* **Tokenizer identity travels with the weights (was a decoupled 2nd SSOT).** The export
+  now writes `__tokenizer__ = encoder_hf_model_name` into the npz, and the daemon builds
+  its preprocessor from THAT. `--coref-model` is now an **optional override that must
+  agree** with the recorded identity, else the daemon **fails loud at startup**. Previously
+  the tokenizer was a hardcoded `deberta-v3-large` default in three places, wired
+  independently of `--deberta-weights` — a maverick variant on a different encoder vocab
+  (e.g. mDeBERTa) would have loaded the right weights but tokenized with the wrong vocab →
+  silently different `input_ids → lhs → clusters`, with no load-time failure.
+* **Load-time keyset gate (the export's bijection now re-asserts on the loaded npz).**
+  `coref_host_shell.validate_deberta_load(host_w, cfg)` runs at daemon **construction** and
+  asserts `set(host_w) == jax_deberta.param_keys(cfg)` exhaustively. A dropped tensor (was a
+  per-request `KeyError` deep in `encode`) and an extra/unread tensor (was **silent**) now
+  both fail at startup — ADR-0002's loudness hierarchy (construction-raise > per-request)
+  for a startup artifact. It lives in the jax home (it needs `param_keys`), keeping the
+  daemon file jax-free.
+* **The drift falsifier can no longer no-op green.** `test_preprocess_bit_identity.py` skips
+  when maverick source is absent **only** when `COREF_REQUIRE_BIT_IDENTITY` is unset; on a
+  daemon-bearing host/CI set it to `1` and a missing source is a **hard fail**, not a silent
+  skip that proves nothing about transcription drift.
+* **Doc-drift fix.** The `test_import_xor.py` comment on `jax_only_guard.py` now matches the
+  gate's own output (`device=['torch']` via its `__main__` self-test, host-free → XOR-clean),
+  instead of claiming "no device lib".
+
+> **Known residual (recorded, accepted as designed).** The `DebertaCfg` **scalar** fields
+> (`scale_factor`/`has_c2p`/`has_p2c`/`layer_norm_eps`) drive the forward but **not** the key
+> set, so the load-time keyset gate cannot catch a corrupted scalar; their only backstop is
+> the HOST `--coref-verify` end-to-end (a wrong scalar → wrong encode → wrong cluster set).
+> For a weight *load* there is no construction-time contract on the scalars — acceptable
+> because they are derived-from-HF at export and round-trip-tested on vanilla deberta.
+
+**Guest-runnable gates (no jax/maverick weights needed):**
+
+    python test_import_xor.py            # daemon + guard host-XOR-device; guard is device=['torch']-only
+    python test_device_transfers.py      # single jax home (coref_host_shell.py); encode homed there
+    COREF_REQUIRE_BIT_IDENTITY=1 MAVERICK_SRC=.../maverick_model.py \
+        python -m pytest test_preprocess_bit_identity.py   # transcription bit-identity (hard-required)
+    python -m pytest test_torch_free_daemon.py   # daemon-import torch-free + guard fails loud
+    #   (test_unified_forward_is_torch_free needs a ~GB vanilla npz — skips on a quota-bound /tmp)
+
+**HOST command sequence (where maverick + the fine-tuned deberta + CUDA live):**
+
+    . ~/w/vdc/venvs/generic/bin/activate
+
+    # (a) export maverick's fine-tuned deberta encoder (+ cfg + tokenizer identity) to npz:
+    HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 \
+        python export_deberta_maverick.py --out ./fixtures/deberta_maverick.npz
+
+    # (b) launch the UNIFIED jax-only daemon (the deberta export enables the `coref` op;
+    #     the tokenizer identity comes FROM the npz — no --coref-model needed):
+    XLA_PYTHON_CLIENT_MEM_FRACTION=0.3 \
+        python coref_decode_server.py --addr tcp://0.0.0.0:5600 \
+            --weights ./fixtures/weights.npz --deberta-weights ./fixtures/deberta_maverick.npz
+
+    # (c) --coref-verify the jax-unified backend against maverick.predict (0 mismatch = done):
+    python load_facts.py ./book.txt --remote tcp://192.168.122.1:5599 \
+        --coref --coref-backend jax-unified --decode-addr tcp://192.168.122.1:5600 \
+        --coref-verify          # expect n_mismatch == 0 across all paragraphs
+
+    # (d) a WARM --trace proving the eos_mask/lhs wire is GONE: the only coref wire span is
+    #     a tiny TEXT request to the daemon — no nlp_server.encode, no raw-f32 lhs frame,
+    #     no [S,S] eos_mask serialize/parse (run-28's ~67ms wire cost is structurally absent):
+    python load_facts.py ./book.txt --remote tcp://192.168.122.1:5599 \
+        --coref --coref-backend jax-unified --decode-addr tcp://192.168.122.1:5600 \
+        --max-paras 5 --trace
+
+> **Only the host confirms:** the real `deberta_maverick.npz` export + its keyset bijection
+> against maverick's actual fine-tuned config; the tokenizer-vs-weights consistency for the
+> exported checkpoint; and the **end-to-end cluster bit-exactness** (`--coref-verify` unified
+> vs `maverick.predict`, the ADR-0009 discrete-set falsifier). The guest proves only the
+> preprocess transcription, the npz round-trip plumbing, and the torch-free property.
+
 ## Caching (redis)
 
 Parsing is the expensive step; the result for a given `(model, config, text)` is

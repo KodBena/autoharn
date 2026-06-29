@@ -467,6 +467,27 @@ class Server:
             out.append(clusters_token_to_char_offsets(clusters_tok, di.char_offsets) or [])
         return out
 
+    # ------------------------------------------------------------- jax-unified
+    def coref_clusters_jax_unified(self, texts: list[str], decode_addr: str):
+        """Char-offset clusters via the UNIFIED jax-only daemon — the torch encode is
+        OFF the path entirely.
+
+        nlp_server ships only TEXT (tiny) and gets CHAR-offset clusters back. The whole
+        coref forward (tokenize+mask -> deberta encode -> decode -> token->char offsets)
+        runs IN the jax-only daemon, in ONE process that imports jax and never torch. So
+        unlike the `jax-daemon` backend, this path does NOT encode here (no
+        `_encode_docs`, no torch deberta forward) and ships NO dense lhs / eos_mask over
+        the wire — nlp_server is a pure TEXT relay for coref. nlp_server stays torch-only
+        (spaCy-trf for the OTHER nlp ops); it authors no jax op (the client is host-only
+        zmq+json). singletons=False to match `coref_clusters` (maverick.predict default).
+        """
+        if not texts:
+            return []
+        client = self._decoder(decode_addr)
+        _T = get_tracer()
+        with _T.span("nlp_server.zmq_wait.coref", n_texts=len(texts)):
+            return client.coref(texts, singletons=False)
+
     # ------------------------------------------------------------ fidelity check
     @staticmethod
     def _clusters_as_set(clusters):
@@ -499,10 +520,18 @@ class Server:
         """Dispatch a coref request. Returns (clusters_aligned_to_texts, verify|None).
 
         backend = "maverick" (reference: its own decode tail, batched/serial/verify)
-                | "jax-daemon" (torch encodes here, the JAX daemon decodes).
-        For either backend, mode == "verify" runs the trusted SERIAL maverick
-        reference too and reports a pass/fail fidelity diff against it.
+                | "jax-daemon"  (torch encodes here, the JAX daemon decodes)
+                | "jax-unified" (the JAX daemon does EVERYTHING: text -> encode ->
+                                 decode -> clusters; torch encode off the path).
+        For any backend, mode == "verify" runs the trusted SERIAL maverick reference
+        too and reports a pass/fail fidelity diff against it.
         """
+        if backend == "jax-unified":
+            jaxu = self.coref_clusters_jax_unified(texts, decode_addr)
+            if mode == "verify":
+                serial = [self.coref_clusters(t) for t in texts]
+                return serial, self._coref_fidelity(serial, jaxu, "jax_unified")
+            return jaxu, None
         if backend == "jax-daemon":
             jaxd = self.coref_clusters_jax_daemon(texts, decode_addr)
             if mode == "verify":
@@ -679,14 +708,16 @@ def main() -> int:
                     help="default pipeline to preload (default %(default)s)")
     ap.add_argument("--gpu", action="store_true", help="use the GPU (require_gpu)")
     ap.add_argument("--coref-backend", default="maverick",
-                    choices=["maverick", "jax-daemon"],
+                    choices=["maverick", "jax-daemon", "jax-unified"],
                     help="default coref decode backend: 'maverick' (reference, its own "
-                         "decode tail) or 'jax-daemon' (torch encodes here, the JAX "
-                         "decode daemon decodes). A request may override per call. "
-                         "(default %(default)s)")
+                         "decode tail), 'jax-daemon' (torch encodes here, the JAX decode "
+                         "daemon decodes), or 'jax-unified' (the JAX daemon does the WHOLE "
+                         "forward: text -> encode -> decode; torch encode off the path). A "
+                         "request may override per call. (default %(default)s)")
     ap.add_argument("--decode-addr", default="tcp://192.168.122.1:5600",
-                    help="ZMQ address of the JAX decode daemon (coref_decode_server.py), "
-                         "used by the jax-daemon backend (default %(default)s)")
+                    help="ZMQ address of the JAX coref daemon (coref_decode_server.py), "
+                         "used by the jax-daemon and jax-unified backends "
+                         "(default %(default)s)")
     ap.add_argument("--no-warmup", action="store_true",
                     help="skip the boot-time pipeline warmup; the first real request "
                          "then pays the ~12s cold CUDA/cuDNN/first-forward cost")

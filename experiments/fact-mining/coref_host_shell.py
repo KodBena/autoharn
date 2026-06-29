@@ -47,6 +47,7 @@ import jax
 import jax.numpy as jnp
 
 import jax_decode
+import jax_deberta  # the pure-JAX DeBERTa-v3 encoder core (device-named, numpy-free)
 from spans import get_tracer  # SSOT tracer; imports no numpy/device lib, authors no device op
 
 # The decode tail is pinned fp32 (jax_decode.py + decode_document both contract
@@ -370,4 +371,95 @@ def decode_document_host(params, lhs_host, attention_mask, eos_mask,
     with get_tracer().span("host_shell.lift_lhs", s=len(lhs_host)):
         lhs = jnp.asarray(lhs_host, dtype=jnp.float32)  # host-device-boundary: lift wire last_hidden_state host->device
     return decode_document(params, lhs, attention_mask, eos_mask,
+                           tokens, subtoken_map, new_token_map, singletons)
+
+
+# ============================== the UNIFIED encode+decode (the architectural prize)
+# The unified daemon runs the WHOLE coref forward in ONE jax-only process. The encode
+# is the SECOND device op (after the decode), so it joins the decode in THIS single jax
+# home — there is no separate "jax encode home". The deberta last_hidden_state is
+# produced on the device and fed straight into the decode WITHOUT crossing a wire (the
+# whole point: the dense lhs + eos_mask never serialise). nlp_server's torch encode is
+# off the path entirely for the jax-unified backend.
+def lift_deberta_params(host_params):
+    """Lift the FINE-TUNED deberta encoder weights (host arrays from the exported
+    fixtures/deberta_maverick.npz) onto the device — the one place these weights cross
+    host->device, mirroring `lift_params` for the decode tail. The daemon does the
+    numpy `np.load` (host) and hands the host dict here; the lift is the jax home's."""
+    return {k: jnp.asarray(v, dtype=jnp.float32)  # host-device-boundary: lift deberta encoder weights host->device
+            for k, v in host_params.items()}
+
+
+def validate_deberta_load(host_params: dict, cfg: "jax_deberta.DebertaCfg") -> None:
+    """CONSTRUCTION-TIME keyset bijection on the npz the daemon ACTUALLY loads (R3/F1).
+
+    The export asserted `set(converted) == jax_deberta.param_keys(cfg)`, but that ran on
+    the host at export time — the daemon loads a frozen npz that could be stale, truncated,
+    or built by mismatched code. The deberta weights are a STARTUP artifact, so per ADR-0002's
+    loudness hierarchy (construction-time raise > per-request exception, ADR-0012 P5) this
+    bijection must be RE-ASSERTED here, at daemon construction, BEFORE serving:
+
+      * a DROPPED tensor would otherwise surface only as a per-request `KeyError` deep inside
+        `jax_deberta.encode` (the daemon would serve `{ok:false}` forever, never fail at start);
+      * an EXTRA/unread tensor would load SILENTLY — exactly the "converted-but-unread → silent
+        wrong forward" class param_keys exists to kill — reintroduced at load.
+
+    Lives in the jax home (not the host-only daemon file) because it needs the device core's
+    read-set `jax_deberta.param_keys(cfg)`; this keeps coref_decode_server.py jax-free
+    (import-XOR) while restoring the bijection guard on the loaded artifact. Set-equality is
+    EXHAUSTIVE (both directions) — the same SSOT the export reconciles against."""
+    expected = jax_deberta.param_keys(cfg)
+    got = set(host_params)
+    if got != expected:
+        missing = sorted(expected - got)
+        extra = sorted(got - expected)
+        raise ValueError(
+            "deberta npz keyset != jax_deberta.param_keys(cfg) — the loaded encoder "
+            "weights do not bijectively match the forward's read-set, so the encode would "
+            "be silently wrong (dropped weight) or carry unread tensors (wrong export). "
+            f"missing {len(missing)}: {missing[:8]}{'…' if len(missing) > 8 else ''} | "
+            f"extra {len(extra)}: {extra[:8]}{'…' if len(extra) > 8 else ''}. "
+            "Re-export with export_deberta_maverick.py against the matching code/config.")
+
+
+def build_deberta_cfg(cfg_fields: dict) -> "jax_deberta.DebertaCfg":
+    """Reconstruct the jit-static DebertaCfg from the plain python scalars the daemon
+    read out of the npz (the `__cfg__*` entries). DebertaCfg lives in the device-named
+    jax_deberta module, so it is built HERE (the jax home), never in the host-only wire
+    seam — keeping the daemon file free of any jax import. The scalar set is the SSOT
+    the export wrote from `deberta_weights.cfg_from_hf`; we cast each to its declared
+    python type so the NamedTuple stays hashable (jit-static)."""
+    return jax_deberta.DebertaCfg(
+        num_layers=int(cfg_fields["num_layers"]),
+        num_heads=int(cfg_fields["num_heads"]),
+        head_size=int(cfg_fields["head_size"]),
+        position_buckets=int(cfg_fields["position_buckets"]),
+        max_relative_positions=int(cfg_fields["max_relative_positions"]),
+        pos_ebd_size=int(cfg_fields["pos_ebd_size"]),
+        scale_factor=int(cfg_fields["scale_factor"]),
+        has_c2p=bool(cfg_fields["has_c2p"]),
+        has_p2c=bool(cfg_fields["has_p2c"]),
+        layer_norm_eps=float(cfg_fields["layer_norm_eps"]),
+    )
+
+
+def coref_document_host(deberta_params, deberta_cfg, decode_params,
+                        input_ids, attention_mask, eos_mask,
+                        tokens, subtoken_map, new_token_map, singletons: bool = False):
+    """ONE document, the full jax-only coref forward: tokenised inputs -> deberta
+    encode (fine-tuned weights) -> the proven decode tail -> cluster token offsets.
+
+    The encode's `last_hidden_state` stays a DEVICE array and is fed straight into
+    `decode_document` — it NEVER crosses a wire, the architectural win over the
+    jax-daemon backend (whose ~67ms cost was shipping the dense lhs + eos_mask as JSON).
+    `input_ids`/`attention_mask` are the only new host->device crossings (lists from the
+    torch-free preprocess), lifted here in the single jax home with a batch axis for the
+    encoder's [B,S] contract; the encoder output's batch axis is dropped for the decode's
+    [S,TH] contract. The decode is the EXISTING `decode_document`, untouched."""
+    _T = get_tracer()
+    with _T.span("host_shell.coref_encode", s=len(input_ids)):
+        ids = jnp.asarray([input_ids])             # host-device-boundary: lift coref input_ids host->device [1,S]
+        mask = jnp.asarray([attention_mask])       # host-device-boundary: lift coref attention_mask host->device [1,S]
+        lhs = jax_deberta.encode(deberta_params, ids, mask, deberta_cfg)[0]  # [S, TH] device, fp32
+    return decode_document(decode_params, lhs, attention_mask, eos_mask,
                            tokens, subtoken_map, new_token_map, singletons)

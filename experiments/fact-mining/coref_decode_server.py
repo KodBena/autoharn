@@ -50,11 +50,25 @@ Request: ZMQ multipart. ONE meta frame + ONE raw float32 lhs frame PER document.
       bytes; there are exactly len(docs) lhs frames. n==1 is the batch-of-1 case.
   info / ping -> [ <json meta> ]   (single frame, no binary frame)
 
+  coref -> [ <json meta> ]  (single frame, no binary)   [UNIFIED jax-only op]
+      meta = {"op": "coref", "texts": [str, ...], "singletons": bool}
+      The daemon does tokenize+mask -> deberta encode -> decode IN-PROCESS; only TEXT
+      crosses the wire (the dense lhs + eos_mask never serialise). Requires the daemon
+      to be started with --deberta-weights (the fine-tuned deberta export).
+
 Reply: ZMQ multipart (always a single JSON frame).
   decode ok  -> [ {"ok": true, "clusters": [[[[s,e],...],...], ...], "singletons": bool} ]
-                (clusters[i] is doc i's clusters, aligned to the request's docs)
+                (clusters[i] is doc i's clusters in TOKEN offsets, aligned to the docs)
+  coref ok   -> [ {"ok": true, "clusters": [[[[s,e],...],...], ...], "singletons": bool} ]
+                (clusters[i] is text i's clusters in CHAR offsets — this daemon owns the
+                 preprocess, so it returns maverick's clusters_char_offsets contract)
   info/ping  -> [ {"ok": true, ...} ]
   error      -> [ {"ok": false, "error": "..."} ]
+
+TWO MODES (one daemon). Decode-only (the A/B `jax-daemon` backend: nlp_server encodes,
+ships lhs, this daemon decodes) is the default. Pass --deberta-weights to ALSO serve the
+UNIFIED `coref` op, which is JAX-ONLY (torch-free, enforced by jax_only_guard) and runs
+the WHOLE forward here. The existing `decode` op is kept for the A/B + fidelity tests.
 
 Run (on the host, in the jax env):
   XLA_PYTHON_CLIENT_MEM_FRACTION=0.3 \
@@ -82,6 +96,8 @@ import numpy as np
 import zmq
 
 import coref_host_shell  # the single jax home: it owns the device lifts + the jax config
+from coref_decode_inputs import (  # SSOT preprocess orchestration (framework-free)
+    StandalonePreprocessor, clusters_token_to_char_offsets, prepare_decode_inputs)
 from spans import get_tracer  # SSOT tracer (host-only; no jax import here)
 
 # The one wire dtype. Pinned little-endian float32: both the client pack and this
@@ -98,6 +114,39 @@ def load_params(path: str) -> dict:
     # by name (can't tell np from jnp), and this file authors NO device op.
     with np.load(path) as z:
         return {k: z[k].astype(np.float32) for k in z.files}
+
+
+# the reserved npz key carrying the encoder's tokenizer identity (mirrors
+# export_deberta_maverick.TOKENIZER_KEY — the daemon must not retype it; P1).
+DEBERTA_TOKENIZER_KEY = "__tokenizer__"
+
+
+def load_deberta_npz(path: str) -> tuple[dict, dict, str]:
+    """fixtures/deberta_maverick.npz -> (weights host-dict, cfg-fields dict,
+    encoder_hf_model_name). HOST-only: `np.load` + scalar `.item()`; the device lift
+    (lift_deberta_params) and the DebertaCfg build (build_deberta_cfg) are the jax home's,
+    so this wire seam authors NO jax op. Weight entries are the dotted torch keys;
+    `__cfg__<field>` entries are the DebertaCfg scalars and `__tokenizer__` is the HF
+    tokenizer identity the export wrote alongside them (config AND tokenizer travel with
+    the weights — P1, never retyped in the daemon; see R2/F1)."""
+    weights: dict = {}
+    cfg_fields: dict = {}
+    tokenizer_name: str | None = None
+    with np.load(path) as z:
+        for k in z.files:
+            if k == DEBERTA_TOKENIZER_KEY:
+                tokenizer_name = str(z[k].item())
+            elif k.startswith("__cfg__"):
+                cfg_fields[k[len("__cfg__"):]] = z[k].item()
+            else:
+                weights[k] = z[k].astype(np.float32)
+    if not weights or not cfg_fields or not tokenizer_name:
+        raise ValueError(
+            f"{path} is not a valid deberta export: {len(weights)} weights, "
+            f"{len(cfg_fields)} cfg fields, tokenizer={tokenizer_name!r} "
+            f"(expected weights + cfg non-empty and a {DEBERTA_TOKENIZER_KEY} identity). "
+            f"Re-export with export_deberta_maverick.py (it now writes the tokenizer).")
+    return weights, cfg_fields, tokenizer_name
 
 
 def unpack_lhs(meta: dict, blob: bytes) -> np.ndarray:
@@ -121,12 +170,61 @@ def unpack_lhs(meta: dict, blob: bytes) -> np.ndarray:
 
 
 class DecodeServer:
-    def __init__(self, weights_path: str):
+    def __init__(self, weights_path: str, deberta_weights_path: str | None = None,
+                 coref_model: str | None = None):
         self.weights_path = weights_path
         # the device lift happens in the shell (single jax home); we hold the
         # resulting device arrays opaquely and pass them straight back to the shell.
         self.params = coref_host_shell.lift_params(load_params(weights_path))
         self.n_params = len(self.params)
+
+        # UNIFIED ("coref") op: optional. When the fine-tuned deberta encoder export is
+        # provided, this daemon runs the WHOLE coref forward (tokenize -> encode ->
+        # decode) in-process and is JAX-ONLY (no torch). The torch-free preprocess and
+        # the deberta-weight lift are set up here.
+        self.deberta_params = None
+        self.deberta_cfg = None
+        self.preprocessor = None
+        self.coref_model = coref_model
+        self.deberta_weights_path = deberta_weights_path
+        if deberta_weights_path is not None:
+            # Make this process STRUCTURALLY torch-free BEFORE the preprocess imports
+            # transformers/spaCy (both of which drag torch in transitively otherwise).
+            # This is the headline device-hygiene seam — see jax_only_guard.py.
+            import jax_only_guard
+            jax_only_guard.install()
+            host_w, cfg_fields, npz_tok_name = load_deberta_npz(deberta_weights_path)
+            self.deberta_cfg = coref_host_shell.build_deberta_cfg(cfg_fields)
+            # FAIL LOUD AT CONSTRUCTION (ADR-0002 loudness hierarchy; ADR-0012 P5): the
+            # weights are a STARTUP artifact, so the keyset bijection that the export
+            # asserted (set(converted) == param_keys(cfg)) must be RE-ASSERTED on the npz
+            # the daemon actually loads — a dropped tensor would otherwise surface only as
+            # a per-request KeyError deep in encode, and an extra/unread tensor would load
+            # SILENTLY (the exact "converted-but-unread → silent wrong forward" class the
+            # export guard exists to kill). The check lives in the jax home (it needs
+            # param_keys(cfg)), keeping this file jax-free. (R3/F1.)
+            coref_host_shell.validate_deberta_load(host_w, self.deberta_cfg)
+            self.deberta_params = coref_host_shell.lift_deberta_params(host_w)
+            self.n_deberta_params = len(self.deberta_params)
+            # The TOKENIZER IDENTITY travels WITH the weights (R2/F1): the export wrote
+            # maverick's encoder_hf_model_name into the npz, so the preprocess tokenizes
+            # with the SAME vocab the weights expect — never a daemon-side constant. An
+            # explicit --coref-model is an OVERRIDE that must AGREE, else fail loud (a
+            # disagreement means tokenizing with a vocab the fine-tuned weights were not
+            # trained on → silently different input_ids → clusters, no shape/keyset error).
+            if coref_model is not None and coref_model != npz_tok_name:
+                raise ValueError(
+                    f"--coref-model {coref_model!r} disagrees with the tokenizer identity "
+                    f"recorded in {os.path.basename(deberta_weights_path)} "
+                    f"({npz_tok_name!r}). The tokenizer that produced the fine-tuned "
+                    f"weights' input_ids travels WITH the weights; omit --coref-model to "
+                    f"use it, or pass the matching name. (R2/F1)")
+            self.coref_model = npz_tok_name
+            # the SSOT torch-free preprocess (spaCy en_core_web_sm + deberta-v3 fast tok)
+            self.preprocessor = StandalonePreprocessor.from_pretrained(self.coref_model)
+            # FAIL LOUD (ADR-0002): prove no dependency dragged torch into this jax
+            # process. The coexistence-elimination is the whole point; assert it.
+            jax_only_guard.assert_torch_free()
         # cache_hit proxy: the decode jits recompile per lhs shape (variable S). A
         # shape decoded before in this process has WARM compiled graphs; the first is
         # a COLD compile. This per-process set is a documented, honest proxy for that
@@ -156,7 +254,12 @@ class DecodeServer:
             return [json.dumps({
                 "ok": True, "weights": os.path.basename(self.weights_path),
                 "n_params": self.n_params, "wire_dtype": "float32",
+                "coref": self.preprocessor is not None,  # is the unified op available?
+                "deberta_weights": (os.path.basename(self.deberta_weights_path)
+                                    if self.deberta_weights_path else None),
             }).encode()]
+        if op == "coref":
+            return self._handle_coref(meta, _T)
         if op != "decode":
             return [json.dumps({"ok": False, "error": f"unknown op {op!r}"}).encode()]
 
@@ -208,11 +311,68 @@ class DecodeServer:
         return [json.dumps({"ok": True, "clusters": clusters_per_doc,
                             "singletons": singletons}).encode()]
 
+    # ---------------------------------------------- the UNIFIED jax-only coref op
+    def _handle_coref(self, meta: dict, _T) -> list[bytes]:
+        """{texts:[...]} -> per-text CHAR-offset clusters, the WHOLE coref forward in
+        this one jax-only process: torch-free preprocess (tokenize+mask) -> deberta
+        encode (fine-tuned weights) -> the proven decode -> token offsets -> char
+        offsets. nlp_server ships only TEXT (tiny); the dense lhs + eos_mask NEVER cross
+        a wire. The decode COMPUTE stays per-document (per text), exactly like `decode`.
+
+        Reply mirrors `decode`'s shape: clusters[i] is text i's clusters, but the spans
+        are CHAR offsets [start,end] (maverick's `clusters_char_offsets` contract), since
+        this daemon owns the preprocess and thus the char_offsets — nlp_server just relays.
+        """
+        if self.preprocessor is None:
+            return [json.dumps({
+                "ok": False,
+                "error": "coref op unavailable: daemon was not started with "
+                         "--deberta-weights (the fine-tuned deberta export)",
+            }).encode()]
+        texts = meta.get("texts")
+        if texts is None:
+            raise ValueError("coref request needs meta['texts']: a list of strings")
+        singletons = bool(meta.get("singletons", False))
+
+        clusters_per_text = []
+        with _T.span("decode_server.coref", n_texts=len(texts)):
+            for text in texts:
+                # (a) torch-free SSOT preprocess (the SAME prepare_decode_inputs the
+                #     maverick paths use; here driven by StandalonePreprocessor).
+                di = prepare_decode_inputs(self.preprocessor, text)
+                # (b)+(c) deberta encode -> decode, ALL on device in the jax home; the
+                #     last_hidden_state never crosses a wire.
+                with _T.span("decode_server.coref_doc", s=len(di.input_ids)):
+                    clusters_tok = coref_host_shell.coref_document_host(
+                        deberta_params=self.deberta_params,
+                        deberta_cfg=self.deberta_cfg,
+                        decode_params=self.params,
+                        input_ids=di.input_ids,
+                        attention_mask=di.attention_mask,
+                        eos_mask=di.eos_mask,
+                        tokens=di.tokens,
+                        subtoken_map=di.subtoken_map,
+                        new_token_map=di.new_token_map,
+                        singletons=singletons,
+                    )
+                # (d) token offsets -> CHAR offsets (the shared SSOT mapper). Char offsets
+                #     are INTEGERS -> JSON is bit-exact for the result.
+                char_clusters = clusters_token_to_char_offsets(
+                    clusters_tok, di.char_offsets) or []
+                clusters_per_text.append(
+                    [[[int(s), int(e)] for (s, e) in cluster] for cluster in char_clusters])
+        return [json.dumps({"ok": True, "clusters": clusters_per_text,
+                            "singletons": singletons}).encode()]
+
     def serve(self, addr: str):
         sock = zmq.Context.instance().socket(zmq.REP)
         sock.bind(addr)
-        print(f"jax decode daemon listening on {addr} | weights="
-              f"{os.path.basename(self.weights_path)} ({self.n_params} tensors) | "
+        mode = ("UNIFIED encode+decode (jax-only; torch-free)"
+                if self.preprocessor is not None else "decode-only")
+        deberta = (f" | deberta={os.path.basename(self.deberta_weights_path)} "
+                   f"({self.n_deberta_params} tensors)" if self.preprocessor else "")
+        print(f"jax coref daemon [{mode}] listening on {addr} | decode-weights="
+              f"{os.path.basename(self.weights_path)} ({self.n_params} tensors){deberta} | "
               f"mem_fraction={os.environ.get('XLA_PYTHON_CLIENT_MEM_FRACTION')}",
               flush=True)
         while True:
@@ -234,8 +394,20 @@ def main() -> int:
                     help="ZMQ bind address (default %(default)s)")
     ap.add_argument("--weights", default=os.path.join(here, "fixtures", "weights.npz"),
                     help="decode-tail weights .npz (default %(default)s)")
+    ap.add_argument("--deberta-weights", default=None,
+                    help="fine-tuned deberta encoder export (export_deberta_maverick.py). "
+                         "When given, the daemon serves the UNIFIED 'coref' op (jax-only, "
+                         "torch-free: text -> encode -> decode -> clusters) in addition to "
+                         "'decode'. Omit for a decode-only daemon (the A/B jax-daemon path).")
+    ap.add_argument("--coref-model", default=None,
+                    help="OPTIONAL override of the HF tokenizer for the torch-free "
+                         "preprocess. By default the daemon uses the tokenizer identity "
+                         "recorded IN the --deberta-weights npz (it travels with the "
+                         "weights). If given, it must AGREE with that identity or the "
+                         "daemon fails loud at startup (R2/F1).")
     args = ap.parse_args()
-    DecodeServer(args.weights).serve(args.addr)
+    DecodeServer(args.weights, deberta_weights_path=args.deberta_weights,
+                 coref_model=args.coref_model).serve(args.addr)
     return 0
 
 

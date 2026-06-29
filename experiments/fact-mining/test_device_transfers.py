@@ -64,7 +64,10 @@ SCANNED = ["extract.py", "load_facts.py", "nlp_cache.py",
            "nlp_client.py", "nlp_server.py", "resolve.py",
            "jax_decode.py", "jax_deberta.py", "coref_host_shell.py",
            "maverick_load.py", "coref_decode_server.py", "coref_decode_client.py",
-           "coref_decode_inputs.py", "spans.py"]
+           "coref_decode_inputs.py", "spans.py", "jax_only_guard.py"]
+# jax_only_guard.py (the daemon's torch-isolation seam) authors no device-edge op — it
+# manages sys.modules/meta_path only; scanned to prove the jax host<->device edge stays
+# single-homed in coref_host_shell.py and did not leak into the guard.
 # spans.py (the SSOT tracer) is scanned to PROVE it authors no device-edge op — it is
 # imported into coref_host_shell.py (the jax home), so it must itself stay device-free.
 # jax_deberta.py (the pure-JAX encoder core) is scanned for PARITY with jax_decode.py:

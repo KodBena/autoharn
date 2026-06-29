@@ -47,7 +47,16 @@ SCANNED = ["extract.py", "load_facts.py", "nlp_cache.py",
            "nlp_client.py", "nlp_server.py", "resolve.py",
            "jax_decode.py", "jax_deberta.py", "coref_host_shell.py",
            "maverick_load.py", "coref_decode_server.py", "coref_decode_client.py",
-           "coref_decode_inputs.py", "spans.py"]
+           "coref_decode_inputs.py", "spans.py", "jax_only_guard.py"]
+# jax_only_guard.py makes the unified daemon torch-free (poison torch + stub the
+# torch-dragging spaCy trf plugins). On module import it is stdlib-only, so it authors
+# NO host array lib — but the gate's AST sees the literal `import torch` inside its
+# `if __name__ == "__main__":` self-test (jax_only_guard.py), so it classifies as
+# host=[] device=['torch']. That is XOR-clean (a single side: device only, host-free),
+# and that torch import NEVER runs on module import (the daemon-import sys.modules check
+# confirms torch absent); even run as __main__ it self-blocks. So it is safe to import
+# into the daemon process before jax/transformers/spaCy — scanned to PROVE it stays
+# host-free (device=['torch'] only via its __main__ self-test → XOR-clean).
 # jax_deberta.py is the pure-JAX DeBERTa-v3 ENCODER core: device-NAMED, so the gate
 # enforces it is numpy-free regardless of BOUNDARY_FILES (honest filenames). Its
 # torch->jax weight+config conversion lives in the neutrally-named BOUNDARY file

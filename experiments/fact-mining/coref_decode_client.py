@@ -168,6 +168,36 @@ class RemoteDecode:
             return [[[tuple(span) for span in cluster] for cluster in doc_clusters]
                     for doc_clusters in clusters]
 
+    def coref(self, texts, singletons: bool = False, timeout_ms: int | None = None):
+        """UNIFIED jax-only path: ship only TEXT (tiny) to the unified daemon and get
+        per-text CHAR-offset clusters back. The daemon does tokenize+mask -> deberta
+        encode -> decode entirely in-process, so the dense lhs + eos_mask NEVER cross
+        this wire (the whole architectural win over `decode_batch`). The request is a
+        SINGLE JSON frame (no raw float32 frame); the reply is one JSON frame.
+
+        `texts` is a list[str]; returns a list aligned to `texts`, each entry that
+        text's clusters — a list of clusters, each a list of (start_char, end_char)
+        tuples (maverick `clusters_char_offsets` shape). No pickle, no code on the wire.
+        """
+        _T = get_tracer()
+        meta = {"op": "coref", "texts": [str(t) for t in texts],
+                "singletons": bool(singletons)}
+        get_tracer().inject(meta)  # WIRE 2: daemon spans parent under this request
+        with _T.span("coref_client.roundtrip", n_texts=len(texts)):
+            frames = self._roundtrip([json.dumps(meta).encode()], timeout_ms)
+        reply = json.loads(frames[0])
+        if not reply.get("ok"):
+            raise RemoteError(reply.get("error", "server error"))
+        clusters = reply["clusters"]
+        # FAIL LOUD (ADR-0002/P5): one cluster-list per text. The caller zips with texts,
+        # which would SILENTLY TRUNCATE on a short reply — check the reply direction.
+        if len(clusters) != len(texts):
+            raise RemoteError(
+                f"coref reply has {len(clusters)} text-cluster list(s) for "
+                f"{len(texts)} text(s) sent")
+        return [[[tuple(span) for span in cluster] for cluster in text_clusters]
+                for text_clusters in clusters]
+
     def decode(self, lhs, attention_mask, eos_mask, tokens,
                subtoken_map, new_token_map, singletons: bool = False):
         """Single-document decode = the batch-of-1 case of `decode_batch` (ONE wire
