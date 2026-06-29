@@ -35,10 +35,21 @@ THE ARCHIVE (`fixtures/deberta_maverick.npz`):
     (R2/F1 — a maverick variant on a different encoder vocab would otherwise load the
     right weights but tokenize wrong → silently different clusters, no load-time failure).
 
+THE VENDORED SENTENCEPIECE MODEL (`fixtures/deberta_maverick.spm`, sibling of the npz).
+The unified daemon tokenises with RAW sentencepiece (no `transformers`/`huggingface_hub`
+at runtime — that surface transitively force-imports torch, which jax_only_guard blocks),
+so it needs the deberta-v3 `spm.model` as a LOCAL file, not an HF-cache lookup. This
+export copies maverick's OWN spm.model (the exact sub-word model its encoder was trained
+with) to `spm_sibling_path(<out>)` — a self-describing, vendored artifact (ADR-0012 P7)
+the daemon loads with `StandalonePreprocessor.from_spm`. The npz + the .spm are the two
+runtime tokenizer/weight artifacts; both must ship together (the daemon fails loud if the
+sibling .spm is missing).
+
 Run on the HOST (maverick + the fine-tuned checkpoint are host-only; no GPU needed):
 
     HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 python export_deberta_maverick.py
         [--out fixtures/deberta_maverick.npz]
+        # writes BOTH fixtures/deberta_maverick.npz AND fixtures/deberta_maverick.spm
 
 WHAT ONLY THE HOST CONFIRMS: this export. The guest proves the npz round-trip plumbing
 with VANILLA deberta (export->reload->encode bit-identical), but maverick's FINE-TUNED
@@ -50,6 +61,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import shutil
 
 import numpy as np
 
@@ -65,6 +77,42 @@ from jax_deberta import DebertaCfg
 # input_ids->lhs->clusters with NO shape/keyset failure. Per ADR-0012 P1/P7 this identity
 # must TRAVEL WITH THE WEIGHTS (like the cfg), never be a constant retyped in the daemon.
 TOKENIZER_KEY = "__tokenizer__"
+
+
+def spm_sibling_path(npz_path: str) -> str:
+    """The ONE definition of the vendored-spm naming convention (ADR-0012 P1): the
+    daemon's `spm.model` is the npz's sibling with a `.spm` extension
+    (`fixtures/deberta_maverick.npz` -> `fixtures/deberta_maverick.spm`). Both the
+    export (writer) and coref_decode_server (reader) import THIS, so the convention has
+    a single home and cannot drift into two hand-typed paths."""
+    return os.path.splitext(npz_path)[0] + ".spm"
+
+
+def vendor_spm(npz_path: str, spm_src: str) -> str:
+    """Copy the deberta-v3 `spm.model` to the npz's `.spm` sibling so the daemon loads it
+    as a LOCAL file (no HF cache at runtime). Returns the destination path. FAIL LOUD
+    (ADR-0002) if the source spm.model is absent — without it the daemon cannot tokenise."""
+    if not os.path.isfile(spm_src):
+        raise FileNotFoundError(
+            f"source spm.model not found at {spm_src!r}; cannot vendor the tokenizer. "
+            f"It is maverick's encoder sub-word model (the deberta-v3 spm.model).")
+    dst = spm_sibling_path(npz_path)
+    os.makedirs(os.path.dirname(os.path.abspath(dst)), exist_ok=True)
+    shutil.copyfile(spm_src, dst)
+    return dst
+
+
+def resolve_maverick_spm(mav, tok_name: str) -> str:
+    """The on-disk `spm.model` maverick's encoder tokenizer was built from — the
+    authoritative source to vendor. Prefer the tokenizer's own `vocab_file` (the exact
+    file maverick loaded); fall back to the local HF hub cache resolver the guest
+    preprocessor uses (one spm-cache resolver, P1) when the attribute is unavailable."""
+    tok = getattr(getattr(mav, "model", None), "tokenizer", None)
+    vocab_file = getattr(tok, "vocab_file", None)
+    if vocab_file and os.path.isfile(vocab_file):
+        return os.path.realpath(vocab_file)
+    from coref_decode_inputs import StandalonePreprocessor
+    return StandalonePreprocessor._resolve_cached_spm(tok_name)
 
 
 def save_npz(out_path: str, params: dict, cfg: DebertaCfg,
@@ -124,8 +172,17 @@ def export(out_path: str, hf_name_or_path: str | None = None) -> int:
           f"cfg fields + tokenizer={tok_name!r}. Keyset bijection held "
           f"(deberta_weights asserted it).", flush=True)
     print(f"cfg = {cfg}", flush=True)
-    print("The unified jax-only daemon loads THIS (no torch, no maverick at runtime).",
-          flush=True)
+
+    # VENDOR the sentencepiece model next to the weights so the daemon tokenises with a
+    # LOCAL spm.model — no transformers/huggingface_hub at runtime (P7 self-describing
+    # artifact). The .spm is maverick's OWN encoder sub-word model (the same vocab the
+    # fine-tuned weights expect), shipped as the npz's sibling.
+    spm_src = resolve_maverick_spm(mav, tok_name)
+    spm_dst = vendor_spm(out_path, spm_src)
+    print(f"PASS — vendored spm.model: {spm_src} -> {spm_dst} "
+          f"({os.path.getsize(spm_dst)} bytes).", flush=True)
+    print("The unified jax-only daemon loads THESE TWO (npz + .spm): no torch, no "
+          "maverick, no transformers/huggingface_hub at runtime.", flush=True)
     return 0
 
 

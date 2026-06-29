@@ -3,24 +3,25 @@
 
 THE HEADLINE. This whole workflow exists to ELIMINATE the torch/jax coexistence, not
 relocate it. The unified daemon must run the WHOLE coref forward — tokenize+mask
-(spaCy + HF tokenizer) -> jax_deberta.encode -> jax decode — in ONE process that
-imports jax and NEVER torch. The trap (verified on the guest, 2026-06-29): two of the
-daemon's torch-free-LOOKING dependencies drag torch in transitively —
+(spaCy + RAW sentencepiece) -> jax_deberta.encode -> jax decode — in ONE process that
+imports jax and NEVER torch. The daemon no longer imports `transformers` AT ALL (the
+sentencepiece tokenizer replaced the HF fast tokenizer precisely to drop that surface),
+so the live torch-drag vector is now spaCy:
 
-  * `from transformers import AutoTokenizer` imports torch at module load (the fast
-    deberta tokenizer is framework-agnostic, but `transformers`'s package __init__
-    eagerly imports the torch integration unless USE_TORCH=0);
   * `import spacy` autoloads its registered entry-point plugins, and the installed
     `spacy_curated_transformers` / `spacy_transformers` factories HARD-import torch
     (no try/except) the moment spaCy enumerates `registry._entry_point_factories`.
 
-Either one silently re-introduces torch into the jax-only process — the exact
-"coexistence relocated, not eliminated" failure ADR-0012 P9 / the host-XOR-device
-discipline forbids. The import-XOR AST gate (test_import_xor.py) CANNOT catch this: it
-scans OUR files' import statements, and `transformers`/`spacy` are neither host nor
-device tokens, so a torch import reached THROUGH them is invisible to a static scan.
-The mechanism therefore has to be a RUN-TIME one (ADR-0011 Rule 1: the strongest
-feasible surface for a failure a static gate cannot see).
+That silently re-introduces torch into the jax-only process — the exact "coexistence
+relocated, not eliminated" failure ADR-0012 P9 / the host-XOR-device discipline forbids.
+(`transformers` was a SECOND such vector — its package __init__ eagerly imports the torch
+integration unless USE_TORCH=0 — which is why `install()` still sets USE_TORCH=0 as a
+DEFENSIVE belt-and-suspenders: the daemon does not import transformers, but the flag
+keeps that vector closed against any future transitive import.) The import-XOR AST gate
+(test_import_xor.py) CANNOT catch this: it scans OUR files' import statements, and
+`spacy` is neither a host nor a device token, so a torch import reached THROUGH it is
+invisible to a static scan. The mechanism therefore has to be a RUN-TIME one (ADR-0011
+Rule 1: the strongest feasible surface for a failure a static gate cannot see).
 
 THE MECHANISM (`install()`), set up ONCE before any of transformers/spacy/jax import.
 A single `MetaPathFinder` at the FRONT of sys.meta_path, plus the framework env flags:

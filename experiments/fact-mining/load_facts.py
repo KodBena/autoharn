@@ -55,11 +55,15 @@ def main() -> int:
                          "report a fidelity pass/fail. Run this ONCE before trusting "
                          "the batched path; the trusted serial clusters are loaded.")
     ap.add_argument("--coref-backend", default="maverick",
-                    choices=["maverick", "jax-daemon"],
+                    choices=["maverick", "jax-daemon", "jax-unified"],
                     help="(remote coref only) decode backend on the daemon: 'maverick' "
-                         "(reference, default — its own decode tail) or 'jax-daemon' "
+                         "(reference, default — its own decode tail), 'jax-daemon' "
                          "(retire the decode tail from the live path: the daemon's torch "
-                         "encodes, the JAX decode daemon decodes).")
+                         "encodes, the JAX decode daemon decodes), or 'jax-unified' (the "
+                         "JAX daemon does the WHOLE forward: text -> encode -> decode, "
+                         "torch-free — needs the daemon started with --deberta-weights). "
+                         "nlp_server forwards the choice; jax-daemon/jax-unified also need "
+                         "--decode-addr (the JAX daemon's address).")
     ap.add_argument("--decode-addr", default=None,
                     help="(remote coref, jax-daemon backend) ZMQ address of the JAX "
                          "decode daemon (coref_decode_server.py). Passed through to the "

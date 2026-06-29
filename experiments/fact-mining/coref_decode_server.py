@@ -220,8 +220,20 @@ class DecodeServer:
                     f"weights' input_ids travels WITH the weights; omit --coref-model to "
                     f"use it, or pass the matching name. (R2/F1)")
             self.coref_model = npz_tok_name
-            # the SSOT torch-free preprocess (spaCy en_core_web_sm + deberta-v3 fast tok)
-            self.preprocessor = StandalonePreprocessor.from_pretrained(self.coref_model)
+            # the SSOT torch-free preprocess: spaCy en_core_web_sm + RAW sentencepiece
+            # loaded from the VENDORED spm.model (the npz's `.spm` sibling the export
+            # wrote — no transformers/huggingface_hub, no HF cache at runtime). The
+            # sibling path has ONE definition (export_deberta_maverick.spm_sibling_path),
+            # imported here so the convention cannot drift into two hand-typed paths (P1).
+            from export_deberta_maverick import spm_sibling_path
+            spm_path = spm_sibling_path(deberta_weights_path)
+            if not os.path.isfile(spm_path):
+                raise FileNotFoundError(  # FAIL LOUD (ADR-0002): the vendored tokenizer
+                    f"vendored spm.model not found at {spm_path!r} (the `.spm` sibling of "
+                    f"{os.path.basename(deberta_weights_path)}). Re-run "
+                    f"export_deberta_maverick.py — it vendors the spm.model next to the "
+                    f"weights; the daemon needs it as a local file (no HF cache at runtime).")
+            self.preprocessor = StandalonePreprocessor.from_spm(spm_path)
             # FAIL LOUD (ADR-0002): prove no dependency dragged torch into this jax
             # process. The coexistence-elimination is the whole point; assert it.
             jax_only_guard.assert_torch_free()
