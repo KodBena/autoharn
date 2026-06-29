@@ -84,11 +84,15 @@ def encode_last_hidden_state(model, input_ids, attention_mask):
     """Run maverick's deberta encoder for ONE document and return its
     `last_hidden_state` as a HOST tensor [S, TH] (batch axis removed).
 
-    This is the maverick FRONT-HALF encode for the jax-daemon coref backend (and the
-    livewire fidelity test reuses it, so the encode path is single-sourced). It is the
-    ONE torch host<->device crossing of that backend, kept in nlp_server.py — the torch
-    device home — per the device-transfer single-home mandate. nlp_server authors the
-    torch op; it authors NO jax op (the decode is shipped to the jax daemon).
+    The single-document encode PRIMITIVE (one unpadded forward over [1, S, TH]). The
+    LIVE coref backends no longer call this — they both go through the SSOT batched
+    encode `Server._encode_docs` (ONE padded forward over all texts). This is retained
+    as the leaf bit-exact probe for `test_livewire_fidelity.py`, which encodes a single
+    text and compares the over-the-wire token offsets to maverick's own `predict` (at
+    n==1 the batched path pads nothing, so the two encodes are bit-identical — that is
+    why the livewire probe stays a valid single-doc oracle). It is a torch host<->device
+    crossing, kept in nlp_server.py — the torch device home — per the device-transfer
+    single-home mandate. nlp_server authors the torch op; it authors NO jax op.
 
     The encoder call is identical to maverick's own forward
     (`self.encoder(input_ids=..., attention_mask=...)["last_hidden_state"]`), so on the
@@ -108,14 +112,65 @@ def encode_last_hidden_state(model, input_ids, attention_mask):
     return hidden[0].detach().cpu()  # host-device-boundary: pull lhs device->host for the wire
 
 
+# ---------------------------------------------------------------- OOM bound
+# The batched deberta encode (Server._encode_docs) runs ONE padded forward over a
+# [N, max_S, TH] tensor. Unbounded N over a whole book OOMs the card (the deferred
+# concern from the earlier book-scale run, now OWNED here — ADR-0000 Specimen 3/4:
+# the bound has one home and is derived from what actually exhausts memory, not a
+# bare magic count). The dimension BATCHING introduces is the linear N * max_S padded
+# footprint, so that is exactly what we cap: a PADDED-TOKEN budget N * max_S (TH is
+# fixed per model) AND a hard per-chunk doc count, whichever binds first. Book-scale
+# is then chunks-of-K (one padded forward per chunk), never one giant pad.
+#
+# SCOPE (honest): the per-layer attention activation is O(N * max_S^2); the budget
+# bounds the linear N * max_S term batching added, NOT that quadratic term. For a lone
+# long doc the max_S^2 cost is INHERENT to encoding it at all (the serial reference
+# pays it too) and is floored at one-doc-per-chunk + capped by deberta's max position
+# length — it is not something batching can shrink, so the linear proxy is the right
+# bound for the new risk. The defaults below are a CONSERVATIVE operator-tunable guess
+# (chosen to keep a typical 5-paragraph request in ONE forward), NOT a budget derived
+# from the card's VRAM bytes / TH; tune COREF_ENCODE_MAX_* per card. Both env-overridable.
+ENCODE_MAX_PADDED_TOKENS = int(os.environ.get("COREF_ENCODE_MAX_PADDED_TOKENS", "8192"))
+ENCODE_MAX_DOCS = int(os.environ.get("COREF_ENCODE_MAX_DOCS", "64"))
+
+
+def chunk_by_token_budget(lengths, max_padded_tokens: int, max_docs: int):
+    """Greedily split doc indices [0..N) into CONTIGUOUS chunks (text order preserved)
+    so each chunk's padded-cell count (len(chunk) * max(length in chunk)) stays within
+    `max_padded_tokens`, and no chunk exceeds `max_docs` docs — whichever binds first.
+
+    A single doc longer than the budget forms its OWN chunk (we never drop a doc — the
+    bound degrades to one doc per forward, the safe floor). Pure python (framework-free),
+    so the OOM bound is unit-testable on the guest without torch. Returns list[list[int]]
+    of original indices; concatenating chunk outputs in order rebuilds text alignment.
+    """
+    chunks: list[list[int]] = []
+    cur: list[int] = []
+    cur_max = 0
+    for i, n in enumerate(lengths):
+        cand_max = cur_max if n <= cur_max else n
+        cand_cells = cand_max * (len(cur) + 1)
+        if cur and (len(cur) >= max_docs or cand_cells > max_padded_tokens):
+            chunks.append(cur)
+            cur, cur_max = [i], n
+        else:
+            cur.append(i)
+            cur_max = cand_max
+    if cur:
+        chunks.append(cur)
+    return chunks
+
+
 class _PrecomputedEncoder:
     """Temporary stand-in for maverick's deberta encoder during batched coref.
 
     Installed into `model._modules['encoder']` only for the span of the per-item
     `predict()` calls in `Server.coref_clusters_batched`. Each call returns the
-    precomputed batched hidden-state row for the NEXT item (predict() runs items
-    in order), sliced to that item's true unpadded length, so maverick's
-    forward/clustering tail runs unchanged on a per-document hidden state.
+    precomputed per-document hidden-state slice for the NEXT item (predict() runs
+    items in order), already sliced to that item's true unpadded length by the SSOT
+    batched encode, so maverick's forward/clustering tail runs unchanged on a
+    per-document hidden state. It holds the per-doc slices (not the padded batch +
+    lengths), so it is agnostic to how `_encode_docs` chunked the padded forwards.
 
     It is a plain object (not an nn.Module) and is stuck into `_modules`
     deliberately: `self.encoder(...)` then resolves here, and `self.encoder.device`
@@ -124,11 +179,11 @@ class _PrecomputedEncoder:
     is safe for that window.
     """
 
-    def __init__(self, real, hidden, lengths):
+    def __init__(self, real, slices, lengths):
         # `real` first so __getattr__ (which proxies to it) never recurses.
         self.real = real
         self.device = real.device  # forward reads self.encoder.device in several spots
-        self.hidden = hidden       # B×S×H, fp32, on device
+        self.slices = slices       # list of per-doc [S_i, TH] device tensors (unpadded)
         self.lengths = lengths
         self.i = 0
 
@@ -144,7 +199,7 @@ class _PrecomputedEncoder:
         if got != n:
             raise RuntimeError(
                 f"batched-coref desync: item {i} requested len {got} != precomputed {n}")
-        return {"last_hidden_state": self.hidden[i:i + 1, :n, :]}
+        return {"last_hidden_state": self.slices[i][None]}  # add batch axis -> 1×S_i×TH
 
     def __getattr__(self, name):
         # proxy anything else (e.g. .config) to the wrapped encoder
@@ -228,77 +283,104 @@ class Server:
         # maverick returns char offsets under this key; keep as plain lists (JSON)
         return pred.get("clusters_char_offsets", [])
 
-    # ------------------------------------------------------------------ batched
-    def coref_clusters_batched(self, texts: list[str]):
-        """Char-offset clusters for many texts, batching ONLY the deberta encoder.
+    # ------------------------------------------------------- SSOT batched encode
+    def _encode_docs(self, texts: list[str]):
+        """THE one home for the batched deberta encode (ADR-0012 P1) — shared by BOTH
+        coref backends (`coref_clusters_batched` and `coref_clusters_jax_daemon`).
 
-        maverick's clustering tail cannot tensor-batch (model_mes.py does
-        `mention_idxs = mention_idxs[0]` — per-document), but its deberta encoder
-        is fully batchable. So we:
+        maverick's clustering/decode tail cannot tensor-batch (model_mes.py does
+        `mention_idxs = mention_idxs[0]` — per-document), but its deberta encoder is
+        fully batchable. So, ONCE here:
 
-          1. replicate predict()'s preprocessing (preprocess + tokenize) per text
-             to obtain each item's input_ids / true length — EXACTLY as predict
-             does, so the per-item tokenisation is identical;
-          2. pad to the batch max and run `model.encoder(...)` ONCE over B×S on the
-             GPU (one pass instead of ~B sequential ones), fp32;
-          3. temporarily swap `model.encoder` for a stand-in that hands back the
-             precomputed hidden-state slice for item i (to that item's true,
-             unpadded length), then call maverick's UNCHANGED `predict(text)` per
-             item in order — its tokenize + clustering tail + char-offset mapping
-             all run verbatim, only the encoder is served from the batch.
+          1. run the SSOT preprocess+tokenize (`prepare_decode_inputs`) per text — the
+             SAME prep capture_fixtures and the decode tail consume — to obtain each
+             doc's `DecodeInputs` (input_ids / true length / structural maps / char
+             offsets), EXACTLY as predict does, so the per-item tokenisation is identical;
+          2. pad to the (chunk) max and run `model.encoder(...)` ONCE per chunk over
+             [N, max_S, TH] on the GPU (one pass instead of N sequential ones), fp32 —
+             chunked by `chunk_by_token_budget` so the padded forward is OOM-bounded
+             (never one giant pad over a book);
+          3. slice each doc's UNPADDED hidden state `[S_i, TH]` back out of its chunk.
 
-        Because the clustering tail is maverick's own code on per-item hidden
-        states, cluster outputs stay faithful to the serial path (modulo the
-        ~1e-5 batched-matmul/padding noise discussed in the README; verify mode
-        and `coref_clusters` are how that is policed). fp32 throughout — no
-        `.half()`.
+        Returns, in TEXT ORDER, a list of `(DecodeInputs, lhs_slice)`:
+          * `coref_clusters_batched` feeds each device slice back through maverick's
+            own clustering tail (via the `_PrecomputedEncoder` stand-in);
+          * `coref_clusters_jax_daemon` pulls each slice to the host and ships it to the
+            JAX decode daemon.
+        There is exactly ONE writer of the padded-forward logic (this method) — the
+        padded encode is NOT hand-duplicated into a second backend (audit cancer B,
+        ADR-0012 P1). Padding is masked out by the attention_mask, so each row's real
+        positions match the unbatched encoder up to batched-matmul noise (~1e-5); the
+        discrete cluster SETS must still equal the serial reference (ADR-0009 discrete
+        tier), which `coref_mode='verify'` confirms. fp32 throughout — no `.half()`.
         """
         import torch
 
-        # SSOT decode-input prep (ADR-0012 P1): the SAME preprocess+tokenize the
-        # jax-daemon path and capture_fixtures use. This path only consumes
-        # input_ids / attention_mask; tokenize computes the discarded maps either
-        # way, so routing through the single source costs nothing and removes the
-        # last hand-rolled copy of the extraction in this module.
         from coref_decode_inputs import prepare_decode_inputs
-
-        if not texts:
-            return []
 
         c = self.coref()
         model = c.model
         tokenizer = c.tokenizer
 
-        # (1) replicate predict()'s preprocessing for every text, in order.
-        per_item_ids: list[list[int]] = []
-        per_item_mask: list[list[int]] = []
-        for text in texts:
-            di = prepare_decode_inputs(c, text)
-            per_item_ids.append(list(di.input_ids))
-            per_item_mask.append(list(di.attention_mask))
-
-        lengths = [len(ids) for ids in per_item_ids]
-        s_max = max(lengths)
+        # (1) SSOT preprocess+tokenize for every text, in order.
+        dis = [prepare_decode_inputs(c, text) for text in texts]
+        lengths = [len(di.input_ids) for di in dis]
         pad_id = tokenizer.pad_token_id if tokenizer.pad_token_id is not None else 0
-        padded_ids = [ids + [pad_id] * (s_max - n) for ids, n in zip(per_item_ids, lengths)]
-        padded_mask = [m + [0] * (s_max - n) for m, n in zip(per_item_mask, lengths)]
-
-        # (2) one batched encoder pass on the GPU. Padding is masked out by the
-        #     attention_mask, so each row's real positions match the unbatched
-        #     encoder up to batched-matmul noise (~1e-5). Build the B×S tensors on
-        #     the host then stage them onto the device — the ONLY new device legs.
         dev = next(model.encoder.parameters()).device
-        ids_t = torch.tensor(padded_ids, dtype=torch.long).to(dev)      # host-device-boundary: stage batched coref input_ids onto the GPU
-        mask_t = torch.tensor(padded_mask, dtype=torch.long).to(dev)    # host-device-boundary: stage batched coref attention_mask onto the GPU
-        with torch.no_grad():
-            hidden = model.encoder(input_ids=ids_t, attention_mask=mask_t)["last_hidden_state"]  # B×S×H, fp32
 
-        # (3) serve precomputed slices through a temporary encoder stand-in, then
-        #     run maverick's own predict() per item. Assign into `_modules`
-        #     directly: nn.Module.__setattr__ refuses a non-Module under an
-        #     existing module name. Restore unconditionally.
+        # (2)+(3) one padded forward per OOM-bounded chunk; slice unpadded lhs per doc.
+        slices: list[object] = [None] * len(texts)
+        for chunk in chunk_by_token_budget(lengths, ENCODE_MAX_PADDED_TOKENS, ENCODE_MAX_DOCS):
+            s_max = max(lengths[i] for i in chunk)
+            padded_ids = [list(dis[i].input_ids) + [pad_id] * (s_max - lengths[i]) for i in chunk]
+            padded_mask = [list(dis[i].attention_mask) + [0] * (s_max - lengths[i]) for i in chunk]
+            ids_t = torch.tensor(padded_ids, dtype=torch.long).to(dev)    # host-device-boundary: stage batched coref input_ids onto the GPU
+            mask_t = torch.tensor(padded_mask, dtype=torch.long).to(dev)  # host-device-boundary: stage batched coref attention_mask onto the GPU
+            with torch.no_grad():
+                hidden = model.encoder(input_ids=ids_t, attention_mask=mask_t)["last_hidden_state"]  # [chunk, s_max, TH] fp32
+            for row, i in enumerate(chunk):
+                # CLONE (not a bare view): hidden[row, :S_i, :] is a prefix slice of the
+                # contiguous [chunk, s_max, TH] base, so it shares — and PINS RESIDENT —
+                # the WHOLE padded chunk (every row + every padding column) until drained.
+                # `.contiguous()` would be a no-op here (a prefix slice is already
+                # contiguous), so it would NOT free the padding; `.clone()` gives each doc
+                # its own [S_i, TH] buffer and lets the padded base free at chunk end, so
+                # co-resident memory is sum-of-unpadded-slices, not sum-of-padded-chunks.
+                slices[i] = hidden[row, :lengths[i], :].clone()  # [S_i, TH] unpadded device slice
+            del hidden  # drop the padded chunk now that every doc owns its own slice
+        return list(zip(dis, slices))
+
+    # ------------------------------------------------------------------ batched
+    def coref_clusters_batched(self, texts: list[str]):
+        """Char-offset clusters for many texts, batching ONLY the deberta encoder.
+
+        The encode is the SSOT `_encode_docs` (one OOM-bounded padded forward, shared
+        with the jax-daemon backend). Here we temporarily swap `model.encoder` for a
+        stand-in that hands back each doc's precomputed hidden-state slice (to its true,
+        unpadded length), then call maverick's UNCHANGED `predict(text)` per item in
+        order — its tokenize + clustering tail + char-offset mapping all run verbatim,
+        only the encoder is served from the batch.
+
+        Because the clustering tail is maverick's own code on per-item hidden states,
+        cluster outputs stay faithful to the serial path (modulo the ~1e-5 batched-
+        matmul/padding noise discussed in the README; verify mode and `coref_clusters`
+        are how that is policed).
+        """
+        if not texts:
+            return []
+
+        c = self.coref()
+        model = c.model
+        encoded = self._encode_docs(texts)  # SSOT batched encode (ONE home)
+        slices = [lhs for (_di, lhs) in encoded]
+        lengths = [len(di.input_ids) for (di, _lhs) in encoded]
+
+        # serve precomputed slices through a temporary encoder stand-in, then run
+        # maverick's own predict() per item. Assign into `_modules` directly:
+        # nn.Module.__setattr__ refuses a non-Module under an existing module name.
+        # Restore unconditionally.
         real = model.encoder
-        stand_in = _PrecomputedEncoder(real, hidden, lengths)
+        stand_in = _PrecomputedEncoder(real, slices, lengths)
         model._modules["encoder"] = stand_in
         try:
             out = []
@@ -326,55 +408,58 @@ class Server:
         """Char-offset clusters via the JAX decode DAEMON — maverick's decode tail
         retired from the live path.
 
-        Per paragraph: (1) run maverick's FRONT half — the shared SSOT prep
-        (preprocess + tokenize) and the torch deberta encoder
-        (`encode_last_hidden_state`, the one torch device op, in this home) — to get
-        `last_hidden_state` + the structural maps + char_offsets; (2) SHIP those
-        decode inputs to the jax decode daemon (`RemoteDecode.decode`), which returns
-        `clusters_token_offsets`; (3) map token offsets -> CHAR offsets with the shared
-        SSOT mapper (maverick's `clusters_char_offsets` replica), so the result matches
-        `coref_clusters`' contract exactly.
+        Two collapsed steps over ALL paragraphs (no per-paragraph round-trips):
+        (1) ONE batched deberta encode via the SSOT `_encode_docs` (the SAME OOM-bounded
+            padded forward `coref_clusters_batched` uses), then pull each doc's
+            `last_hidden_state` slice [S_i, TH] to the host for the wire;
+        (2) ship ALL docs' decode inputs in ONE multi-doc request to the jax decode
+            daemon (`RemoteDecode.decode_batch`), which loops `decode_document_host`
+            per doc (the decode compute stays per-doc/ragged — only the WIRE batches)
+            and returns every doc's `clusters_token_offsets` in one reply;
+        (3) map each doc's token offsets -> CHAR offsets with the shared SSOT mapper
+            (maverick's `clusters_char_offsets` replica), so the result matches
+            `coref_clusters`' contract exactly.
 
-        nlp_server authors NO jax op here: the decode is the daemon's. Per-paragraph
-        (serial), like the maverick reference path — the encoder is not batched here,
-        the point is to exercise the jax decode tail bit-for-bit, not to be fast.
+        nlp_server authors NO jax op here: the decode is the daemon's. The encode is
+        ONE padded forward (was N sequential) and the decode is ONE wire round-trip
+        (was N) — the two cuts the run-28 trace flagged. singletons=False to match
+        `coref_clusters` (maverick.predict's default).
         """
-        # SSOT helpers (framework-free host prep + token->char mapping; ADR-0012 P1)
-        from coref_decode_inputs import (clusters_token_to_char_offsets,
-                                         prepare_decode_inputs)
+        # SSOT token->char mapper (framework-free; ADR-0012 P1)
+        from coref_decode_inputs import clusters_token_to_char_offsets
 
         if not texts:
             return []
 
-        c = self.coref()
-        model = c.model
         client = self._decoder(decode_addr)
-
         _T = get_tracer()
+
+        # (1) ONE batched encode for every paragraph (SSOT home), then host-pull per doc.
+        with _T.span("nlp_server.encode", n_texts=len(texts)):
+            encoded = self._encode_docs(texts)
+            docs = []
+            for di, lhs in encoded:
+                host_lhs = lhs.detach().cpu()  # host-device-boundary: pull per-doc lhs device->host for the wire
+                docs.append({
+                    "lhs": host_lhs,
+                    "attention_mask": di.attention_mask,
+                    "eos_mask": di.eos_mask,
+                    "tokens": di.tokens,
+                    "subtoken_map": di.subtoken_map,
+                    "new_token_map": di.new_token_map,
+                })
+
+        # (2) ONE multi-doc decode request (collapses N round-trips to 1).
+        # WIRE 2 (nlp_server<->decode daemon): this span IS the daemon's blocked time on
+        # decode; coref_decode_client.decode_batch injects the context INSIDE it so the
+        # decode daemon's spans parent under this single wait.
+        with _T.span("nlp_server.zmq_wait.decode", n_texts=len(texts)):
+            clusters_tok_per_doc = client.decode_batch(docs, singletons=False)
+
+        # (3) token offsets -> char offsets per doc (maverick clusters_char_offsets replica)
         out = []
-        for i, text in enumerate(texts):
-            di = prepare_decode_inputs(c, text)
-            # the ONE torch device op of this backend, single-homed in nlp_server:
-            with _T.span("nlp_server.encode", para=i):
-                lhs = encode_last_hidden_state(model, di.input_ids, di.attention_mask)  # [S, TH] host tensor
-            # ship decode inputs to the jax daemon; it returns token-offset clusters.
-            # singletons=False to match coref_clusters (maverick.predict's default).
-            # WIRE 2 (nlp_server<->decode daemon): this span IS the daemon's blocked
-            # time on decode; coref_decode_client.decode injects the context INSIDE it
-            # so the decode daemon's spans parent under this wait.
-            with _T.span("nlp_server.zmq_wait.decode", para=i):
-                clusters_tok = client.decode(
-                    lhs=lhs,
-                    attention_mask=di.attention_mask,
-                    eos_mask=di.eos_mask,
-                    tokens=di.tokens,
-                    subtoken_map=di.subtoken_map,
-                    new_token_map=di.new_token_map,
-                    singletons=False,
-                )
-            # token offsets -> char offsets (maverick clusters_char_offsets replica)
-            char_clusters = clusters_token_to_char_offsets(clusters_tok, di.char_offsets)
-            out.append(char_clusters or [])
+        for (di, _lhs), clusters_tok in zip(encoded, clusters_tok_per_doc):
+            out.append(clusters_token_to_char_offsets(clusters_tok, di.char_offsets) or [])
         return out
 
     # ------------------------------------------------------------ fidelity check

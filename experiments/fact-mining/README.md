@@ -279,9 +279,11 @@ would falsely "skip":
 
 Stage 1b-i proved the daemon's decode equals maverick's **captured** clusters when
 *replaying fixtures*. Stage 1b-ii wires the daemon into the **live** path: the
-production torch encoder in `nlp_server.py` ships each paragraph's decode-tail
-intermediates to the daemon and gets cluster offsets back — maverick's decode tail
-**retired from the live path**, no fixtures involved.
+production torch encoder in `nlp_server.py` runs ONE batched deberta forward over all
+paragraphs, then ships all docs' decode-tail intermediates to the daemon in ONE request
+and gets every doc's cluster offsets back — maverick's decode tail **retired from the
+live path**, no fixtures involved. (Run-28's per-paragraph encode + per-paragraph decode
+round-trip — the two warm-trace hotspots — are both collapsed; see THE CUT below.)
 
 * **`coref_decode_inputs.py`** — the **single source (ADR-0012 P1)** for maverick's
   FRONT-half prep. `prepare_decode_inputs(mav, text)` runs `preprocess` + `tokenize`
@@ -293,17 +295,47 @@ intermediates to the daemon and gets cluster offsets back — maverick's decode 
   fixture capture (`capture_fixtures.capture_one`), the live jax-daemon path, and the
   batched maverick path (`coref_clusters_batched`, which reads just `input_ids`/
   `attention_mask` off the result) — so the extraction cannot drift between them.
+* **`Server._encode_docs(texts)`** — the **ONE home (ADR-0012 P1)** of the batched
+  deberta encode, shared by **both** backends (`coref_clusters_batched` and
+  `coref_clusters_jax_daemon`). It runs the SSOT `prepare_decode_inputs` per text, pads
+  to the chunk max, runs `model.encoder(...)` **once per OOM-bounded chunk** over a
+  `[N, max_S, TH]` tensor (the attention mask excludes the pad columns), and slices each
+  doc's unpadded `[S_i, TH]` hidden state back out — **cloned** so the padded chunk frees
+  and co-resident memory is sum-of-unpadded-slices, not sum-of-padded-chunks. There is
+  exactly one writer of the padded-forward logic (no split-brain second `_PrecomputedEncoder`).
 * **`nlp_server.encode_last_hidden_state(model, input_ids, attention_mask)`** — the
-  **one torch device op** of this backend, kept in the torch home (markers + the
-  device-transfer gate). Its encoder call is byte-identical to maverick's own forward,
-  so on the same inputs `lhs` equals what `predict` computes internally. `nlp_server`
-  authors **no** jax op: the decode is shipped to the daemon via the host-only
-  `coref_decode_client.RemoteDecode`.
-* **`Server.coref_clusters_jax_daemon(texts, decode_addr)`** — per paragraph:
-  `prepare_decode_inputs` → `encode_last_hidden_state` → `RemoteDecode.decode(...,
-  singletons=False)` → `clusters_token_to_char_offsets`. Serial (per-paragraph),
-  matching the maverick reference; the point is to exercise the jax decode tail
-  bit-for-bit, not to be fast.
+  retained **unpadded single-doc** encode primitive, now off the live char path: its sole
+  caller is `test_livewire_fidelity.py` as the **n==1 bit-exact oracle** (at n==1 `_encode_docs`
+  pads nothing, so the batched forward and this single forward are byte-identical). The
+  device op stays in the torch home (markers + the device-transfer gate); `nlp_server`
+  authors **no** jax op — the decode ships to the daemon via the host-only `RemoteDecode`.
+* **`Server.coref_clusters_jax_daemon(texts, decode_addr)`** — **THE CUT (run-28 trace):
+  the per-paragraph encode + per-paragraph decode round-trip are both collapsed.**
+  (1) ONE batched encode via `_encode_docs` (was N sequential ~38ms deberta forwards),
+  then host-pull each doc's `lhs`; (2) ONE multi-doc `RemoteDecode.decode_batch(docs)`
+  request (was N round-trips) — the daemon loops `decode_document_host` per doc (decode
+  COMPUTE stays per-doc/ragged; only the WIRE batches) and returns every doc's clusters
+  in one reply; (3) `clusters_token_to_char_offsets` per doc. n==1 is the batch-of-1 case,
+  so the fidelity oracles still pass.
+
+**OOM bound (owned, not deferred).** The padded forward is `[N, max_S, TH]`; unbounded
+N over a book OOMs the card. `nlp_server.chunk_by_token_budget` caps each forward by a
+**padded-token budget** `COREF_ENCODE_MAX_PADDED_TOKENS` (default 8192, the proxy for the
+linear `N * max_S` footprint batching introduces) **and** a per-chunk doc count
+`COREF_ENCODE_MAX_DOCS` (default 64) — whichever binds first, env-overridable. Book-scale
+is chunks-of-K (one padded forward per chunk), never one giant pad; a doc larger than the
+budget forms its own chunk (the safe floor — never dropped). The budget bounds the linear
+term batching added, not the `O(max_S²)` per-doc attention (inherent to encoding a long doc
+at all, floored at one-doc-per-chunk); the 8192/64 defaults are a conservative tunable
+guess, not a card-byte-derived budget.
+
+**One authoritative multi-doc wire codec (ADR-0012 P7).** `RemoteDecode.decode_batch`
+ships one JSON meta frame (a `docs` list) + one raw-`<f4` lhs frame per doc; the server
+returns one JSON reply with one cluster-list per doc. `decode()` is `decode_batch([doc])[0]`
+— no second hand-written single-doc codec. Fails LOUD both directions (ADR-0002/P5): the
+server raises on a docs-vs-lhs frame-count mismatch (request side), and `decode_batch`
+raises on a reply that is not one-cluster-list-per-doc (reply side — guarding the
+`zip(docs, …)` consumer from silent truncation).
 
 **Routing.** `load_facts --coref-backend jax-daemon --decode-addr ...` → `RemoteNLP`
 sets the request's `coref_backend`/`decode_addr` fields → `nlp_server.handle` overrides
@@ -323,10 +355,14 @@ the most sensitive bit-exact probe (the server surfaces only char spans). Daemon
 are extracted from the very model we encode with (no fixture dependency). The same
 non-vacuity guard as the other fidelity proofs (≥1 cluster, ≥1 with ≥2 mentions).
 
-**Guest-runnable gates (pure `ast`, no jax/maverick):**
+**Guest-runnable gates (no jax/maverick — pure `ast` + numpy wire fixtures):**
 
     python test_device_transfers.py    # encode_last_hidden_state's torch ops single-homed + marked
     python test_import_xor.py          # coref_decode_inputs.py is framework-free (host=[] device=[])
+    python -m pytest test_batched_encode_and_multidoc_wire.py   # THE CUT, guest-provable surface:
+    #   the OOM bound (chunk_by_token_budget: order preserved, never drops a doc, both bounds,
+    #   lone-oversize-doc floor), the multi-doc wire BIT-EXACT per doc (pack→unpack incl. float32
+    #   subnormal/near-max corners), n==1 = batch-of-1, and fail-loud both wire directions.
 
 **HOST steps (where jax + maverick + CUDA live).** Use **`python -m pytest`**, never
 bare `pytest` — on this host the `pytest` console script dispatches to an interpreter
@@ -354,7 +390,22 @@ without jax and would falsely "skip":
         --remote tcp://192.168.122.1:5599 \
         --coref --coref-backend jax-daemon --decode-addr tcp://192.168.122.1:5600
     #    add --coref-verify to also run the serial maverick reference and emit a
-    #    pass/fail fidelity diff against the jax-daemon clusters.
+    #    pass/fail fidelity diff against the jax-daemon clusters. THIS is what confirms
+    #    the BATCHED-encode cluster fidelity (the ~1e-5 padding lhs perturbation never
+    #    flips a sigmoid>0.5/argmax → batched cluster SETS == serial); it is HOST-only
+    #    (the guest cannot run the GPU encode), so run it before trusting the batched encode:
+    python load_facts.py ./book.txt --remote tcp://192.168.122.1:5599 \
+        --coref --coref-backend jax-daemon --decode-addr tcp://192.168.122.1:5600 \
+        --coref-verify          # expect n_mismatch == 0 across all paragraphs
+
+    # 4. capture a WARM --trace showing ONE batched encode span + ONE decode round-trip
+    #    (run twice; the second request is warm — XLA graphs + the spaCy/maverick load
+    #    are cached). Look for a single nlp_server.encode (n_texts=5) and a single
+    #    nlp_server.zmq_wait.decode (n_texts=5), replacing run-28's 5 sequential encodes
+    #    and 5 decode round-trips:
+    python load_facts.py ./book.txt --remote tcp://192.168.122.1:5599 \
+        --coref --coref-backend jax-daemon --decode-addr tcp://192.168.122.1:5600 \
+        --max-paras 5 --trace
 
 > Cannot be exercised on this guest (no jax/maverick/CUDA). The pure-`ast` gates are
 > green here; `test_livewire_fidelity.py` self-skips (ModuleNotFoundError) until

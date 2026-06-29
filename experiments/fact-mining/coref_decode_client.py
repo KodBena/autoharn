@@ -1,13 +1,16 @@
 #!/usr/bin/env python
 """Client for the JAX coref decode daemon (coref_decode_server.py).
 
-`RemoteDecode.decode(...)` ships ONE document's decode-tail intermediates — the
-encoder `last_hidden_state` plus the structural maps — and returns the cluster
-token-offset tuples the daemon's pure-JAX tail produced.
+`RemoteDecode.decode_batch(...)` ships MANY documents' decode-tail intermediates —
+each document's encoder `last_hidden_state` plus its structural maps — in ONE request
+and returns the per-document cluster token-offset tuples the daemon's pure-JAX tail
+produced. `RemoteDecode.decode(...)` is the single-document convenience: the batch-of-1
+case of `decode_batch`, so there is exactly ONE multi-doc wire codec (ADR-0012 P7),
+never a second hand-written single-doc one beside it.
 
-Wire safety (mirrors nlp_client.py): the request is a JSON metadata frame + a RAW
-float32 bytes frame for `last_hidden_state`; the reply is a single JSON frame. No
-pickle, no send_pyobj, no code on the wire.
+Wire safety (mirrors nlp_client.py): the request is a JSON metadata frame (describing
+every doc) + ONE RAW float32 bytes frame per document's `last_hidden_state`; the reply
+is a single JSON frame. No pickle, no send_pyobj, no code on the wire.
 
 HOST-ONLY POLICY: this client imports numpy (to pack the float32 lhs into raw,
 C-contiguous, little-endian bytes) and NO device framework — it is host-side. It
@@ -101,35 +104,69 @@ class RemoteDecode:
             [json.dumps({"op": "info"}).encode()], timeout_ms)[0])
 
     # --- decode --------------------------------------------------------------
-    def decode(self, lhs, attention_mask, eos_mask, tokens,
-               subtoken_map, new_token_map, singletons: bool = False):
-        """Ship one document's intermediates; return clusters as a list of clusters,
-        each a list of (start_token, end_token) tuples (maverick
-        `clusters_token_offsets` shape)."""
-        shape, blob = pack_lhs(lhs)
+    @staticmethod
+    def _doc_meta(doc) -> tuple[dict, bytes]:
+        """One document's (json meta, raw lhs blob). The PER-DOC half of the wire
+        codec, composed N times by `decode_batch`. `pack_lhs` pins the lhs to raw
+        '<f4' bytes (bit-exact); the structural maps are coerced to JSON-native
+        ints/strings (never decimals) so the round-trip cannot perturb a discrete
+        cluster decision."""
+        shape, blob = pack_lhs(doc["lhs"])
         meta = {
-            "op": "decode",
             "shape": shape,
             "dtype": "float32",
-            # Coerce every structural map to JSON-native types so a numpy/torch
-            # producer (numpy.int64 elements) cannot make json.dumps raise. These
-            # are integers/strings only — never decimals — so the round-trip is
-            # value-exact and cannot perturb a discrete cluster decision.
-            "attention_mask": _ints(attention_mask),
-            "eos_mask": [_ints(row) for row in eos_mask],
-            "tokens": [str(t) for t in tokens],
-            "subtoken_map": _opt_ints(subtoken_map),
-            "new_token_map": _opt_ints(new_token_map),
+            "attention_mask": _ints(doc["attention_mask"]),
+            "eos_mask": [_ints(row) for row in doc["eos_mask"]],
+            "tokens": [str(t) for t in doc["tokens"]],
+            "subtoken_map": _opt_ints(doc["subtoken_map"]),
+            "new_token_map": _opt_ints(doc["new_token_map"]),
+        }
+        return meta, blob
+
+    def decode_batch(self, docs, singletons: bool = False):
+        """Ship MANY documents' intermediates in ONE request; return a list aligned to
+        `docs`, each entry that doc's clusters (a list of clusters, each a list of
+        (start_token, end_token) tuples — maverick `clusters_token_offsets` shape).
+
+        `docs` is a list of dicts: {lhs, attention_mask, eos_mask, tokens,
+        subtoken_map, new_token_map}. The wire is ONE JSON meta frame with a `docs`
+        list + ONE raw-float32 lhs frame per doc, in order. This is the ONE
+        authoritative multi-doc codec (ADR-0012 P7). n==1 is just the batch-of-1 case.
+        """
+        per_doc = [self._doc_meta(d) for d in docs]
+        meta = {
+            "op": "decode",
             "singletons": bool(singletons),
+            "docs": [m for (m, _b) in per_doc],
         }
         # WIRE 2: stamp the trace context into the decode meta. The current span is the
         # nlp_server "zmq_wait.decode" wait, so the decode daemon parents under it.
         get_tracer().inject(meta)
-        frames = self._roundtrip([json.dumps(meta).encode(), blob])
+        frames = self._roundtrip([json.dumps(meta).encode(), *[b for (_m, b) in per_doc]])
         reply = json.loads(frames[0])
         if not reply.get("ok"):
             raise RemoteError(reply.get("error", "server error"))
-        return [[tuple(span) for span in cluster] for cluster in reply["clusters"]]
+        # FAIL LOUD on a reply that is not one-cluster-list-per-doc (ADR-0002/P5).
+        # The server guarantees this by construction (one append per doc), but the
+        # caller (`coref_clusters_jax_daemon`) consumes the result with `zip(docs, ...)`,
+        # which would SILENTLY TRUNCATE if the daemon ever returned fewer doc-cluster
+        # lists than docs sent. Check the reply direction too, not just the request.
+        clusters = reply["clusters"]
+        if len(clusters) != len(docs):
+            raise RemoteError(
+                f"decode reply has {len(clusters)} doc-cluster list(s) for "
+                f"{len(docs)} doc(s) sent")
+        return [[[tuple(span) for span in cluster] for cluster in doc_clusters]
+                for doc_clusters in clusters]
+
+    def decode(self, lhs, attention_mask, eos_mask, tokens,
+               subtoken_map, new_token_map, singletons: bool = False):
+        """Single-document decode = the batch-of-1 case of `decode_batch` (ONE wire
+        codec; no second hand-written single-doc codec). Returns the one document's
+        clusters as a list of clusters, each a list of (start_token, end_token) tuples."""
+        doc = {"lhs": lhs, "attention_mask": attention_mask, "eos_mask": eos_mask,
+               "tokens": tokens, "subtoken_map": subtoken_map, "new_token_map": new_token_map}
+        return self.decode_batch([doc], singletons=singletons)[0]
 
 
 if __name__ == "__main__":

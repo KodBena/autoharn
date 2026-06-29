@@ -28,25 +28,31 @@ SAFETY — no code on the wire (mirrors nlp_server.py): a JSON metadata frame + 
 float32 bytes frame. We NEVER use send_pyobj/recv_pyobj (pickle == arbitrary code
 execution on deserialize).
 
-MEMORY (GPU co-residency). One document per request (the jax stages recompile per
-document shape, never an unbounded B*S batch). jax initialises in this process via
-the shell import, so cap XLA's arena when sharing a GPU with the torch encoder:
+MEMORY (GPU co-residency). The WIRE batches many docs per request, but the decode
+COMPUTE stays per-document: this daemon loops `decode_document_host` per doc, and the
+jax stages recompile per document SHAPE, never an unbounded B*S padded batch. So the
+per-doc memory budget is exactly what it was when the wire carried one doc — collapsing
+the round-trips did not enlarge the decode footprint. jax initialises in this process
+via the shell import, so cap XLA's arena when sharing a GPU with the torch encoder:
 export `XLA_PYTHON_CLIENT_MEM_FRACTION=0.3` (or `XLA_PYTHON_CLIENT_PREALLOCATE=false`)
 BEFORE launching; we set a conservative default below if neither is set.
 
 Protocol
 --------
-Request: ZMQ multipart.
-  decode -> [ <json meta>, <raw float32 lhs bytes> ]
-      meta = {"op": "decode", "shape": [S, TH], "dtype": "float32",
-              "attention_mask": [int,...], "eos_mask": [[int,...],...],
-              "tokens": [str,...], "subtoken_map": [int|null,...],
-              "new_token_map": [int|null,...], "singletons": bool}
-      frame 1 = lhs as C-contiguous little-endian float32, len == S*TH*4 bytes.
+Request: ZMQ multipart. ONE meta frame + ONE raw float32 lhs frame PER document.
+  decode -> [ <json meta>, <raw f32 lhs doc 0>, <raw f32 lhs doc 1>, ... ]
+      meta = {"op": "decode", "singletons": bool,
+              "docs": [ {"shape": [S, TH], "dtype": "float32",
+                         "attention_mask": [int,...], "eos_mask": [[int,...],...],
+                         "tokens": [str,...], "subtoken_map": [int|null,...],
+                         "new_token_map": [int|null,...]}, ... ]}
+      frame 1+i = doc i's lhs as C-contiguous little-endian float32, len == Sᵢ*TH*4
+      bytes; there are exactly len(docs) lhs frames. n==1 is the batch-of-1 case.
   info / ping -> [ <json meta> ]   (single frame, no binary frame)
 
 Reply: ZMQ multipart (always a single JSON frame).
-  decode ok  -> [ {"ok": true, "clusters": [[[s,e],...],...], "singletons": bool} ]
+  decode ok  -> [ {"ok": true, "clusters": [[[[s,e],...],...], ...], "singletons": bool} ]
+                (clusters[i] is doc i's clusters, aligned to the request's docs)
   info/ping  -> [ {"ok": true, ...} ]
   error      -> [ {"ok": false, "error": "..."} ]
 
@@ -147,37 +153,51 @@ class DecodeServer:
         if op != "decode":
             return [json.dumps({"ok": False, "error": f"unknown op {op!r}"}).encode()]
 
-        if len(frames) < 2:
-            raise ValueError("decode request needs a second frame: raw float32 lhs bytes")
+        # MULTI-DOC decode: meta["docs"] is a list of per-doc metas; frames[1:] are the
+        # per-doc raw-float32 lhs blobs, one per doc, in order. n==1 is the batch-of-1
+        # case (the single-doc client `decode` ships exactly one doc here). The decode
+        # COMPUTE stays per-doc/ragged (decode_document_host per doc, never a padded
+        # B*S batch) — only the WIRE batches, so the per-doc memory budget is unchanged.
+        docs_meta = meta.get("docs")
+        if docs_meta is None:
+            raise ValueError(
+                "decode request needs meta['docs']: a list of per-doc metas "
+                "(one raw float32 lhs frame follows per doc)")
+        if len(frames) != 1 + len(docs_meta):
+            raise ValueError(
+                f"decode expects {len(docs_meta)} lhs frame(s) after meta, "
+                f"got {len(frames) - 1}")
+        singletons = bool(meta.get("singletons", False))
 
-        with _T.span("decode_server.handle", op=op):
-            lhs_host = unpack_lhs(meta, frames[1])
-            singletons = bool(meta.get("singletons", False))
-
-            shape_key = tuple(meta["shape"])
-            # cache_hit/_seen_shapes is TRACING-ONLY state (the warm/cold-compile
-            # proxy attr). Keep it off the OFF-by-default path: when tracing is
-            # disabled this is a dead attr, so don't even touch the set.
-            cache_hit = False
-            if _T.enabled:
-                cache_hit = shape_key in self._seen_shapes
-                self._seen_shapes.add(shape_key)
-            with _T.span("decode_server.jax_decode", cache_hit=cache_hit,
-                         s=shape_key[0], th=shape_key[1]):
-                clusters = coref_host_shell.decode_document_host(
-                    params=self.params,
-                    lhs_host=lhs_host,
-                    attention_mask=meta["attention_mask"],
-                    eos_mask=meta["eos_mask"],
-                    tokens=meta["tokens"],
-                    subtoken_map=meta["subtoken_map"],
-                    new_token_map=meta["new_token_map"],
-                    singletons=singletons,
-                )
-        # token-offset tuples -> plain [[ [s,e], ... ], ...] for JSON. Offsets are
-        # INTEGERS (no float slack), so JSON is bit-exact for the RESULT.
-        out = [[[int(s), int(e)] for (s, e) in cluster] for cluster in clusters]
-        return [json.dumps({"ok": True, "clusters": out,
+        with _T.span("decode_server.handle", op=op, n_docs=len(docs_meta)):
+            clusters_per_doc = []
+            for i, dm in enumerate(docs_meta):
+                lhs_host = unpack_lhs(dm, frames[1 + i])
+                shape_key = tuple(dm["shape"])
+                # cache_hit/_seen_shapes is TRACING-ONLY state (the warm/cold-compile
+                # proxy attr). Keep it off the OFF-by-default path: when tracing is
+                # disabled this is a dead attr, so don't even touch the set.
+                cache_hit = False
+                if _T.enabled:
+                    cache_hit = shape_key in self._seen_shapes
+                    self._seen_shapes.add(shape_key)
+                with _T.span("decode_server.jax_decode", cache_hit=cache_hit,
+                             s=shape_key[0], th=shape_key[1]):
+                    clusters = coref_host_shell.decode_document_host(
+                        params=self.params,
+                        lhs_host=lhs_host,
+                        attention_mask=dm["attention_mask"],
+                        eos_mask=dm["eos_mask"],
+                        tokens=dm["tokens"],
+                        subtoken_map=dm["subtoken_map"],
+                        new_token_map=dm["new_token_map"],
+                        singletons=singletons,
+                    )
+                # token-offset tuples -> plain [[ [s,e], ... ], ...] for JSON. Offsets
+                # are INTEGERS (no float slack), so JSON is bit-exact for the RESULT.
+                clusters_per_doc.append(
+                    [[[int(s), int(e)] for (s, e) in cluster] for cluster in clusters])
+        return [json.dumps({"ok": True, "clusters": clusters_per_doc,
                             "singletons": singletons}).encode()]
 
     def serve(self, addr: str):
