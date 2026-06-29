@@ -11,3 +11,6 @@ venv/
 # local scratch (never tracked)
 /scratchpad/
 *.local
+
+# JAX persistent compilation cache (regenerable build artifact)
+.jax_cache/

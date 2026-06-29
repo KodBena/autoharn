@@ -40,6 +40,7 @@ coerced; there is no sentinel/None-instead-of-raise path.
 
 from __future__ import annotations
 
+import os
 from typing import Optional
 
 import jax
@@ -51,6 +52,24 @@ import jax_decode
 # float32). The single jax home owns the jax config, so the wire seam
 # (coref_decode_server.py) need not import jax to set it.
 jax.config.update("jax_enable_x64", False)
+
+# Persistent XLA compilation cache. The decode jits recompile per document shape
+# (variable S/K); each compiled graph is tiny (~KB), so persist them to disk to
+# amortize compile time across the many runs this project will do — the first run
+# compiles a shape, every later run reuses it from disk. Overridable via
+# JAX_COMPILATION_CACHE_DIR (default: a gitignored dir beside this file). We drop
+# the size/time thresholds so the small, fast decode graphs are actually cached
+# (jax's defaults only persist compiles >1s / above a size heuristic). Best-effort:
+# a missing flag on a different jax version disables the cache, never breaks the
+# daemon (correctness does not depend on it; only speed).
+try:
+    _JAX_CACHE_DIR = os.environ.get("JAX_COMPILATION_CACHE_DIR") or os.path.join(
+        os.path.dirname(os.path.abspath(__file__)), ".jax_cache")
+    jax.config.update("jax_compilation_cache_dir", _JAX_CACHE_DIR)
+    jax.config.update("jax_persistent_cache_min_compile_time_secs", 0.0)
+    jax.config.update("jax_persistent_cache_min_entry_size_bytes", 0)
+except Exception as e:  # the cache is a perf optimization, not correctness
+    print(f"[jax] persistent compilation cache not enabled: {e!r}", flush=True)
 
 # ---- maverick constants, inlined verbatim from maverick/common/constants.py.
 # These are immutable lookup tables, not behaviour; inlining keeps the shell free
