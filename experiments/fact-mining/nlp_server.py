@@ -529,11 +529,46 @@ class Server:
                 meta["coref_verify"] = coref_verify
             return [json.dumps(meta).encode(), db.to_bytes()]
 
-    def serve(self, addr: str):
+    def warmup(self):
+        """Pre-pay the one-time lazy GPU init at BOOT so the FIRST real request is warm.
+
+        The first request otherwise eats ~12s (measured, run 27): CUDA-context init +
+        cuDNN autotune + model->GPU + the first deberta/roberta forward (and, on the
+        jax-daemon backend, the decode daemon's first XLA compile). After warmup the
+        first request matches steady state (~0.45s/5-para, run 28). We run ONE dummy
+        paragraph through the SAME path a real request takes — parse + the configured
+        coref backend + the SSOT extractor — so every lazy init fires here, not on a
+        user's first call. Launch with the --coref-backend you will actually request so
+        warmup covers that exact path (the deberta encode is shared by both backends;
+        only the jax-daemon decode round-trip is backend-specific).
+
+        Best-effort (ADR-0002 genuinely-right fallback): a warmup failure is logged
+        LOUDLY but does NOT stop the daemon serving — a cold first request is slow, not
+        broken (e.g. the decode daemon may not be up yet for the jax-daemon path)."""
+        # a 2-sentence paragraph WITH a coreference, so coref (encode + decode tail)
+        # actually runs and the cluster path is exercised, not just the parse.
+        text = "Alice met Bob in Paris. She greeted him warmly there."
+        t0 = time.perf_counter()
+        try:
+            docs = list(self.get(None).pipe([text]))      # warms the spaCy-trf GPU forward
+            coref, _ = self._run_coref([text], "batched", self.coref_backend, self.decode_addr)
+            for i, d in enumerate(docs):                   # warms the SSOT extractor path
+                doc_to_facts(d, coref_clusters=(coref[i] if coref is not None else None))
+            print(f"[warmup] pipeline warm in {time.perf_counter() - t0:.1f}s "
+                  f"(coref_backend={self.coref_backend}) — first request will be warm",
+                  flush=True)
+        except Exception as e:  # cold-but-serving beats refusing to boot
+            traceback.print_exc()
+            print(f"[warmup] FAILED after {time.perf_counter() - t0:.1f}s ({e!r}) — the "
+                  f"first real request will pay the cold cost", flush=True)
+
+    def serve(self, addr: str, warmup: bool = True):
         sock = zmq.Context.instance().socket(zmq.REP)
         sock.bind(addr)
         print(f"spaCy daemon listening on {addr} | default={self.default_model} "
               f"| gpu={self.gpu} | pipes={self.get(None).pipe_names}", flush=True)
+        if warmup:
+            self.warmup()  # pre-pay the ~12s cold-start before accepting any request
         while True:
             raw = sock.recv()  # exactly one frame per request (REP state machine)
             try:
@@ -562,10 +597,13 @@ def main() -> int:
     ap.add_argument("--decode-addr", default="tcp://192.168.122.1:5600",
                     help="ZMQ address of the JAX decode daemon (coref_decode_server.py), "
                          "used by the jax-daemon backend (default %(default)s)")
+    ap.add_argument("--no-warmup", action="store_true",
+                    help="skip the boot-time pipeline warmup; the first real request "
+                         "then pays the ~12s cold CUDA/cuDNN/first-forward cost")
     args = ap.parse_args()
     Server(args.model, args.gpu,
            coref_backend=args.coref_backend,
-           decode_addr=args.decode_addr).serve(args.addr)
+           decode_addr=args.decode_addr).serve(args.addr, warmup=not args.no_warmup)
     return 0
 
 
