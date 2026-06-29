@@ -1,29 +1,39 @@
 #!/usr/bin/env python
 """Client for the GPU spaCy daemon (nlp_server.py).
 
-RemoteNLP is a near-drop-in for a loaded spaCy `nlp`: `.pipe(texts)` and
-`nlp(text)` return real `Doc` objects, rehydrated from the DocBin the server
-sends. Guest-side code (e.g. extract.py) then works on Docs exactly as if the
-model were local — only the heavy GPU inference happens on the host.
+RemoteNLP has TWO surfaces:
+  * `.pipe_facts(texts)` -> list of JSON fact dicts (the LEAN, default --remote
+    path). The daemon runs the SSOT extractor (extract.doc_to_facts) host-side and
+    sends finished facts, so this client imports only json + zmq + psycopg — NEVER
+    spaCy/torch/transformers. This is the whole point of the cut.
+  * `.pipe(texts)` / `nlp(text)` -> real `Doc` objects, rehydrated from a DocBin
+    (the demonstration path used by extract.py). spaCy is imported LAZILY inside
+    .pipe(), so merely constructing a RemoteNLP and using the facts wire stays
+    import-light. Only a caller that actually wants Docs pays for spaCy.
 
-Wire safety: requests are JSON, replies are DocBin bytes (msgpack). No pickle,
-no code execution on either side.
+IMPORT DISCIPLINE (foreclosed by test_lean_remote_client.py): spaCy is NOT imported
+at module scope. `import spacy` drags thinc->torch (~1.06s) + transformers; the lean
+client must never pay that just to talk to the daemon. The DocBin rehydration in
+.pipe() lazy-imports it; the facts wire does not touch it.
+
+Wire safety: requests are JSON, replies are JSON (facts path) or DocBin bytes
+(msgpack, Docs path). No pickle, no code execution on either side.
 """
 
 from __future__ import annotations
 
 import json
+from typing import TYPE_CHECKING
 
-import spacy
 import zmq
-from spacy.tokens import Doc, DocBin
 
 from spans import get_tracer  # SSOT tracer; no-op unless the run enabled it
 
-# Same attribute fastcoref used, so resolve.py consumes daemon coref unchanged.
-# Value: list of clusters, each a list of (start_char, end_char) spans.
-if not Doc.has_extension("coref_clusters"):
-    Doc.set_extension("coref_clusters", default=None)
+if TYPE_CHECKING:
+    # type-only: the facts wire shape lives in extract.FactBundle (ADR-0012 P7/P8). This
+    # import is NEVER executed at runtime (TYPE_CHECKING is False), so the lean client
+    # stays spaCy-free — the gate (test_lean_remote_client.py) still sees no ML stack.
+    from extract import FactBundle
 
 
 class RemoteError(RuntimeError):
@@ -49,8 +59,10 @@ class RemoteNLP:
         self.decode_addr = decode_addr
         # filled from the daemon reply when coref_mode == "verify"; else None
         self.last_coref_verify: dict | None = None
-        # a blank vocab is enough to rehydrate a DocBin: all strings travel in it
-        self._vocab = spacy.blank("en").vocab
+        # the DocBin-rehydration vocab is built lazily on first .pipe() call (it needs
+        # spaCy); the lean .pipe_facts() path never touches it, so constructing a
+        # RemoteNLP imports no spaCy.
+        self._vocab = None
         self._ctx = zmq.Context.instance()
         self._connect()
 
@@ -77,15 +89,25 @@ class RemoteNLP:
     def info(self, timeout_ms: int = 5_000) -> dict:
         return json.loads(self._roundtrip({"op": "info"}, timeout_ms)[0])
 
-    # --- parsing -------------------------------------------------------------
-    def pipe(self, texts, disable=()):
+    def _req(self, texts, fmt: str, disable=()) -> dict:
+        """Build the parse request shared by both wire formats (ONE home, ADR-0012
+        P1): only the `format` field differs between the facts and DocBin paths."""
         req = {
             "op": "parse", "texts": list(texts), "model": self.model,
-            "format": "docbin", "disable": list(disable), "coref": self.coref,
+            "format": fmt, "disable": list(disable), "coref": self.coref,
             "coref_mode": self.coref_mode, "coref_backend": self.coref_backend,
         }
         if self.decode_addr is not None:
             req["decode_addr"] = self.decode_addr
+        return req
+
+    # --- the LEAN facts wire (default --remote path) -------------------------
+    def pipe_facts(self, texts, disable=()) -> list[FactBundle]:
+        """Return the daemon's JSON facts: a list of extract.doc_to_facts dicts, one
+        per input text. The daemon ran the SSOT extractor host-side, so this client
+        deserializes JSON only — no spaCy, no Doc rehydration. The data-only,
+        no-code-on-the-wire rule holds: JSON meta + JSON facts, never pickle."""
+        req = self._req(texts, "facts", disable)
         # WIRE 1 (client<->nlp_server): the zmq_wait span IS the client's blocked time
         # on the daemon; inject the trace context into the JSON meta inside it so the
         # daemon's spans parent under this wait (ADR-0012 P2).
@@ -96,12 +118,37 @@ class RemoteNLP:
         if not meta.get("ok"):
             raise RemoteError(meta.get("error", "server error"))
         self.last_coref_verify = meta.get("coref_verify")  # set only in verify mode
+        return meta["facts"]
+
+    # --- the DocBin wire (Docs path, used by extract.py's demo) --------------
+    def pipe(self, texts, disable=()):
+        # LAZY spaCy: only the DocBin-rehydration path needs it. Keeping it here (not at
+        # module scope) is what makes `import nlp_client` + the facts wire import-light.
+        import spacy
+        from spacy.tokens import DocBin
+
+        import resolve
+        if self._vocab is None:
+            # a blank vocab is enough to rehydrate a DocBin: all strings travel in it
+            self._vocab = spacy.blank("en").vocab
+
+        req = self._req(texts, "docbin", disable)
+        with get_tracer().span("client.zmq_wait.nlp_server", n_texts=len(req["texts"])):
+            get_tracer().inject(req)
+            frames = self._roundtrip(req)
+        meta = json.loads(frames[0])
+        if not meta.get("ok"):
+            raise RemoteError(meta.get("error", "server error"))
+        self.last_coref_verify = meta.get("coref_verify")  # set only in verify mode
         docs = list(DocBin().from_bytes(frames[1]).get_docs(self._vocab))
-        # attach coref clusters (if any) under the fastcoref-compatible attribute
+        # attach coref clusters (if any) via the ONE wire decoder (ADR-0012 P1/P7):
+        # resolve.attach_coref_clusters — the SAME decoder extract.doc_to_facts uses, so
+        # the DocBin path and the facts path cannot drift on the cluster encoding. It
+        # also registers the extension (folds in ensure_coref_extension).
         clusters = meta.get("coref")
         if clusters is not None:
             for doc, cl in zip(docs, clusters):
-                doc._.coref_clusters = [[tuple(span) for span in cluster] for cluster in cl]
+                resolve.attach_coref_clusters(doc, cl)
         return docs
 
     def __call__(self, text: str, **kw):

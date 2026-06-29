@@ -47,6 +47,34 @@ def canonical_key(text: str) -> str:
     return " ".join(words)
 
 
+def ensure_coref_extension():
+    """Register the `coref_clusters` Doc extension idempotently (ONE home, ADR-0012
+    P1/P3). Any process that ATTACHES clusters to a Doc — the GPU daemon before it
+    runs doc_to_facts, the local fastcoref path — calls this. spaCy is lazy-imported
+    here so `import resolve` stays import-light (resolve is pulled by the lean client
+    path; it must not drag the ML stack). Value contract (unchanged, fastcoref-
+    compatible): a list of clusters, each a list of (start_char, end_char) spans."""
+    from spacy.tokens import Doc  # lazy: only where a Doc actually exists
+    if not Doc.has_extension("coref_clusters"):
+        Doc.set_extension("coref_clusters", default=None)
+
+
+def attach_coref_clusters(doc, clusters):
+    """THE ONE decoder (ADR-0012 P1/P7) of the wire coref payload -> the Doc extension.
+
+    The daemon's `coref` payload is a list of clusters, each a list of [start_char,
+    end_char] spans (JSON arrays). Decode them to the fastcoref-compatible extension
+    value — a list of clusters, each a list of (start, end) TUPLES — and register the
+    extension first (folds in ensure_coref_extension). BOTH wire consumers call this:
+    extract.doc_to_facts (the facts path, host-side on the daemon) and
+    nlp_client.RemoteNLP.pipe (the DocBin path). The wire encoding therefore has ONE
+    decoder: if it ever changes (a 3-tuple span, a mention id, a dict), exactly one
+    site updates and both paths stay in agreement — closing the coref-seam split-brain
+    (two hand-written decoders that had to agree but could silently diverge)."""
+    ensure_coref_extension()
+    doc._.coref_clusters = [[tuple(span) for span in cluster] for cluster in clusters]
+
+
 def _clusters(doc):
     try:
         return doc._.coref_clusters or []

@@ -24,8 +24,40 @@ Installed there: `spacy` 3.8, `en_core_web_sm`, `en_core_web_trf`,
 ## GPU daemon (host) + remote client (guest)
 
 The transformer model is slow on CPU. Run it on the VM **host** (GPU) as a
-daemon; the guest talks to it over ZMQ. The wire carries **data only** —
-JSON requests, spaCy `DocBin` (msgpack) replies — never pickle/code.
+daemon; the guest talks to it over ZMQ. The wire carries **data only** — JSON
+requests and JSON or `DocBin`(msgpack) replies — never pickle/code.
+
+### Wire protocol (request `format` picks the reply shape)
+
+The request is always JSON (`{"op":"parse","texts":[...],"format":..., "coref":...}`).
+The `format` field selects what comes back — and, decisively, **what the client must
+import**:
+
+| `format` | reply | client imports | used by |
+|----------|-------|----------------|---------|
+| **`facts`** (the lean default for `load_facts --remote`) | one JSON frame: `{ok, format:"facts", n, model, lang, facts:[<FactBundle>, ...]}` | **json + zmq + psycopg only** — never torch/spaCy/transformers | `RemoteNLP.pipe_facts` → `load_facts` |
+| `docbin` | JSON meta frame + a `DocBin`(msgpack) binary frame of real `Doc`s | spaCy (lazy, in `.pipe()`) to rehydrate | `RemoteNLP.pipe` → `extract.py` demo |
+| `json` | one JSON frame of token-level `doc_to_json` dicts | json only | diagnostics |
+
+**The lean-client win (ADR-0011 — foreclosed, not just done).** The old `--remote`
+client deserialized a `DocBin` and walked the `Doc` on the **guest**, so every
+invocation paid a cold ML-stack import — `import spacy` drags `thinc → torch`
+(+`transformers`) — *~1.77s on the guest (and it pulls torch), ~4.4s cold on the host
+stack* — purely to read a reply the GPU had already finished. There is **no** lean
+spaCy import (`from spacy.tokens import DocBin` alone still pulls torch
+unconditionally), so the only fix is structural: on the `facts` path the **daemon**
+runs the SSOT extractor (`extract.doc_to_facts`) host-side and ships finished JSON
+`FactBundle` records; the client imports **only json + zmq + psycopg** (**~0.21s**,
+torch never loaded). The facts are discrete records (strings + int offsets), so JSON
+is **bit-exact** for them (ADR-0009 discrete-invariant) — `test_doc_to_facts_equivalence.py`
+pins OLD-inline == `doc_to_facts` + JSON round-trip set-for-set. The lard is held out
+by the foreclosing gate `test_lean_remote_client.py`: a fresh-subprocess probe drives
+`import load_facts` + `RemoteNLP` + a facts request + the `--remote --cache` wrapper
+(`FactCache`/`CachingFacts`) and **fails** if any of torch/spaCy/transformers/thinc
+lands in `sys.modules` (with a prepended-`import spacy` self-check proving it has
+teeth). `doc_to_facts` is the **single home** for "what a fact is" (ADR-0012 P1): the
+daemon and the local non-remote path are its two callers; the `FactBundle` /
+`*Record` `TypedDict`s in `extract.py` are the wire's one typed authority (P7/P8).
 
 Host install (pick `cuda12x`/`cuda11x` to match the driver):
 
@@ -44,10 +76,14 @@ From the guest, either use the client directly or point the extractor at it:
 
 ### Coreference on the daemon (maverick-coref, host-only)
 
-The daemon answers `{"coref": true}` by running **maverick-coref** and returning
-char-offset clusters in the reply meta; the client attaches them to each `Doc` as
-`doc._.coref_clusters` (the SAME attribute fastcoref used), so `resolve.py`
-consumes host coref with no change. Load with daemon coref:
+The daemon answers `{"coref": true}` by running **maverick-coref** and producing
+char-offset clusters. On the **`facts`** path the daemon attaches them **host-side**
+(right before `doc_to_facts`) so the lean client never touches a `Doc`; on the
+`docbin` path they ride the reply meta and the client attaches them. Either way the
+wire payload is decoded by the **one** decoder `resolve.attach_coref_clusters(doc,
+clusters)` — the same function on both sides — onto `doc._.coref_clusters` (the SAME
+attribute fastcoref used), so `resolve.py` consumes host coref with no change and the
+two paths cannot drift on the cluster encoding. Load with daemon coref:
 
     python load_facts.py /home/bork/pg/pg78966.txt --remote tcp://192.168.122.1:5599 --coref
 
@@ -110,9 +146,12 @@ resolves). Host-side notes:
     tolerates inclusive-vs-exclusive end offsets (tries `e` then `e+1`) — still to
     confirm once a parse returns real clusters.
 
-`RemoteNLP` in `nlp_client.py` is a near-drop-in for a loaded `nlp`:
-`.pipe(texts)` / `nlp(text)` return real `Doc` objects rehydrated from DocBin,
-so guest-side extraction code is unchanged whether the model is local or remote.
+`RemoteNLP` in `nlp_client.py` has two surfaces. `.pipe_facts(texts)` is the lean
+default — finished JSON `FactBundle`s, no spaCy on the client (the `facts` wire
+above). `.pipe(texts)` / `nlp(text)` return real `Doc` objects rehydrated from a
+`DocBin` (spaCy lazy-imported only there), so the demo extraction code in `extract.py`
+is unchanged whether the model is local or remote — but importing `nlp_client` and
+using the facts wire stays torch/spaCy-free.
 
 ### Stage 1a — maverick's decode tail as a pure-JAX core (host-verified)
 

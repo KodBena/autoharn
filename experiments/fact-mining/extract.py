@@ -28,8 +28,18 @@ import argparse
 import re
 import sys
 from dataclasses import dataclass
+from typing import TypedDict
 
-import spacy
+import resolve
+
+# NOTE (the lard, foreclosed): spaCy is NOT imported at module scope. `import spacy`
+# transitively pulls thinc -> torch (~1.06s) + transformers, and a client that only
+# needs the pure-text helpers (load_body/normalise) or the JSON facts wire must not
+# pay it. spaCy is lazy-imported strictly inside load_model() — the one place that
+# actually loads a local pipeline. So `import extract` stays import-light, and the
+# remote (--remote) path of load_facts never drags the ML stack (proven by the gate
+# test_lean_remote_client.py). doc_to_facts below operates on an ALREADY-parsed Doc,
+# so it needs no spaCy import of its own.
 
 # --- model catalogue ----------------------------------------------------------
 # Pipelines we know how to fetch. `trf` requires the `spacy-transformers` extra
@@ -51,6 +61,7 @@ def model_help() -> str:
 
 
 def load_model(name: str):
+    import spacy  # lazy: the ONLY module-local spaCy import (keeps `import extract` light)
     try:
         return spacy.load(name)
     except OSError:
@@ -183,6 +194,109 @@ def extract_triples(doc, key_fn=None):
     return triples
 
 
+# --- the facts wire schema, as ONE typed authority (ADR-0012 P7/P8) ----------
+# The daemon->client wire and the load_facts consumer share these record shapes.
+# Previously the only authority was the doc_to_facts docstring (prose the code could
+# not check, restated at each of three sites); the TypedDicts make the wire shape a
+# single checkable home. `sent`/`index` are the DOC-LOCAL sentence index; every value
+# is a str/int/bool, so JSON is bit-exact for them (ADR-0009 discrete-invariant).
+class SentRecord(TypedDict):
+    index: int
+    text: str
+
+
+class EntityRecord(TypedDict):
+    sent: int
+    text: str
+    canonical: str
+    label: str
+
+
+class TemporalRecord(TypedDict):
+    sent: int
+    text: str
+    label: str
+
+
+class TripleRecord(TypedDict):
+    sent: int
+    subj: str
+    pred: str
+    obj: str
+    subj_key: str
+    obj_key: str
+    negated: bool
+
+
+class FactBundle(TypedDict):
+    sents: list[SentRecord]
+    entities: list[EntityRecord]
+    temporal: list[TemporalRecord]
+    triples: list[TripleRecord]
+
+
+def doc_to_facts(doc, coref_clusters=None) -> FactBundle:
+    """THE SSOT per-document fact extractor (ADR-0012 P1: one home, two callers).
+
+    Given a parsed spaCy `Doc` (and, optionally, the daemon's coref clusters to
+    attach first), return a JSON-serializable dict of the discrete fact records the
+    `mining` schema stores — the SAME records load_facts.py used to extract inline.
+    There is exactly ONE home for this logic now; both callers use it:
+
+      * the GPU daemon (nlp_server.handle, format="facts") runs it host-side so the
+        --remote client receives finished JSON facts and never imports spaCy;
+      * load_facts.py runs it locally (non-remote path) on each Doc it parses.
+
+    The records are all strings + int offsets, so JSON is EXACT for them (no float
+    coercion possible) — the discrete-invariant bit-exact bar of ADR-0009 applies:
+    a round-tripped fact must be identical, never reordered-into-loss or coerced.
+
+    Shape (the wire's one authority, ADR-0012 P7):
+      {
+        "sents":    [{"index": int, "text": str}, ...],          # doc-local order
+        "entities": [{"sent": int, "text": str, "canonical": str, "label": str}, ...],
+        "temporal": [{"sent": int, "text": str, "label": str}, ...],
+        "triples":  [{"sent": int, "subj": str, "pred": str, "obj": str,
+                      "subj_key": str, "obj_key": str, "negated": bool}, ...],
+      }
+    `index`/`sent` are the DOC-LOCAL sentence index (enumerate(doc.sents)); the
+    caller maps that to its running sentence budget + DB sent_id. doc_to_facts owns
+    *what a fact is*; the caller owns *which facts survive the budget* and *their DB
+    identity* (the functional-core / imperative-shell split, ADR-0012 P9).
+    """
+    if coref_clusters is not None:
+        # daemon path: attach the host-computed clusters so resolve.resolver_for sees
+        # them. Exactly what the OLD remote client did before walking the Doc — the
+        # resolution is therefore identical, only its HOME moved host-side. The wire
+        # payload is decoded by the ONE decoder (resolve.attach_coref_clusters), shared
+        # with nlp_client.pipe, so the two paths cannot drift on the cluster encoding.
+        resolve.attach_coref_clusters(doc, coref_clusters)
+
+    key_fn = resolve.resolver_for(doc)  # coref- + entity-resolved canonical constants
+    sents: list[SentRecord] = []
+    entities: list[EntityRecord] = []
+    temporal: list[TemporalRecord] = []
+    for si, sent in enumerate(doc.sents):
+        sents.append({"index": si, "text": sent.text.strip()})
+        for e in sent.ents:
+            entities.append({
+                "sent": si, "text": e.text,
+                "canonical": resolve.canonical_key(e.text), "label": e.label_,
+            })
+            if e.label_ in ("DATE", "TIME"):
+                temporal.append({"sent": si, "text": e.text, "label": e.label_})
+
+    triples: list[TripleRecord] = []
+    for t in extract_triples(doc, key_fn):
+        triples.append({
+            "sent": t.sent_i, "subj": t.subj, "pred": t.pred, "obj": t.obj,
+            "subj_key": t.subj_key, "obj_key": t.obj_key, "negated": t.negated,
+        })
+
+    return {"sents": sents, "entities": entities,
+            "temporal": temporal, "triples": triples}
+
+
 def build_nlp(model: str, remote: str | None, cache_url: str | None, verbose: bool = False):
     """Construct the parsing interface shared by extract.py and load_facts.py.
 
@@ -207,9 +321,20 @@ def build_nlp(model: str, remote: str | None, cache_url: str | None, verbose: bo
 
     cache = None
     if cache_url:
-        from nlp_cache import DocCache, CachingNLP
-        cache = DocCache(model_label, url=cache_url)
-        nlp = CachingNLP(nlp, cache)
+        # The cache caches WHAT TRAVELS THE WIRE (ADR-0012 P7: derive from the wire's
+        # one authority). On the remote path the wire is now JSON facts, so the cache
+        # is the LEAN FactCache (json+redis, no spaCy) wrapping RemoteNLP.pipe_facts —
+        # keeping --remote --cache import-light. Locally the wire is still a DocBin, so
+        # it stays the DocCache. nlp_cache is lazy-imported here only, so a no-cache run
+        # never touches it.
+        if remote:
+            from nlp_cache import CachingFacts, FactCache
+            cache = FactCache(model_label, url=cache_url)
+            nlp = CachingFacts(nlp, cache)
+        else:
+            from nlp_cache import CachingNLP, DocCache
+            cache = DocCache(model_label, url=cache_url)
+            nlp = CachingNLP(nlp, cache)
         if verbose:
             print(f"=== cache: {cache_url} (model_label={model_label!r}) ===")
     return nlp, model_label, cache
@@ -247,18 +372,25 @@ def main() -> int:
     paragraphs = [p.strip() for p in body.split("\n\n") if p.strip()][: args.max_paras]
     docs = nlp.pipe(paragraphs)
 
-    # collect sentences across paragraphs up to the sample budget
+    # collect sentences across paragraphs up to the sample budget. This consumes the
+    # SSOT extractor (doc_to_facts) rather than re-walking doc.sents / re-deriving the
+    # ("DATE","TIME") temporal classification inline — so "what an entity/temporal/SVO
+    # fact is" has exactly ONE home (ADR-0012 P1), shared with load_facts.
     triples, ents, dates = [], [], []
     n_sents = 0
     for doc in docs:
-        for sent in doc.sents:
+        facts = doc_to_facts(doc)
+        sent_text = {s["index"]: s["text"] for s in facts["sents"]}
+        budget = set()  # doc-local sentence indices that survive the sample budget
+        for s in facts["sents"]:
             if n_sents >= args.max_sents:
                 break
-            span = sent.as_doc()
-            triples.extend(extract_triples(span))
-            ents.extend((e.text, e.label_) for e in span.ents)
-            dates.extend(e for e in span.ents if e.label_ in ("DATE", "TIME"))
+            budget.add(s["index"])
             n_sents += 1
+        triples.extend(t for t in facts["triples"] if t["sent"] in budget)
+        ents.extend((e["text"], e["label"]) for e in facts["entities"] if e["sent"] in budget)
+        dates.extend((tm["text"], sent_text[tm["sent"]])
+                     for tm in facts["temporal"] if tm["sent"] in budget)
         if n_sents >= args.max_sents:
             break
 
@@ -269,8 +401,8 @@ def main() -> int:
 
     print(f"--- SVO candidate triples ({len(triples)}) -> classical fact base ---")
     for t in triples[:25]:
-        neg = "NOT " if t.negated else ""
-        print(f"  ({t.subj!r}, {neg}{t.pred!r}, {t.obj!r})")
+        neg = "NOT " if t["negated"] else ""
+        print(f"  ({t['subj']!r}, {neg}{t['pred']!r}, {t['obj']!r})")
     if len(triples) > 25:
         print(f"  ... +{len(triples) - 25} more")
 
@@ -282,8 +414,8 @@ def main() -> int:
         print(f"  {lbl:8} x{n:<3} e.g. {examples}")
 
     print(f"\n--- temporal cues ({len(dates)}) -> temporal logic (valid-time) ---")
-    for e in dates[:15]:
-        print(f"  [{e.text!r}] in: {e.sent.text.strip()[:90]}...")
+    for txt, sent in dates[:15]:
+        print(f"  [{txt!r}] in: {sent[:90]}...")
 
     return 0
 

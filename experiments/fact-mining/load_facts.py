@@ -19,8 +19,14 @@ import hashlib
 
 import psycopg
 
-import resolve
-from extract import build_nlp, extract_triples, load_body, normalise
+# extract is now IMPORT-LIGHT (it lazy-imports spaCy only inside load_model), so these
+# pure-text helpers + the SSOT extractor cost nothing on the remote path. The lard —
+# `import spacy` -> thinc -> torch -> transformers — is never paid by `import load_facts`
+# nor by the --remote codepath; the gate test_lean_remote_client.py forecloses its
+# return. spaCy is pulled ONLY when a LOCAL model is actually loaded (build_nlp /
+# load_model) or the local-coref pipeline is built (resolve.build_coref_nlp) — both
+# strictly inside the non-remote branch below.
+from extract import FactBundle, build_nlp, doc_to_facts, load_body, normalise
 from spans import DEFAULT_DSN, get_tracer
 
 # ONE home for "which harness DB" (ADR-0012 P1): the tracer's DEFAULT_DSN (itself
@@ -88,10 +94,11 @@ def main() -> int:
               "(--coref --remote ...); ignoring here.")
 
     cache = None
+    remote_mode = bool(args.remote)
     if args.coref and args.remote:
-        # coref on the host daemon; clusters ride back with the DocBin. backend =
-        # "maverick" (reference decode tail) or "jax-daemon" (torch encodes on the
-        # daemon, the JAX decode daemon decodes — the decode tail retired).
+        # coref on the host daemon; clusters are attached host-side and folded into the
+        # JSON facts. backend = "maverick" (reference decode tail) or "jax-daemon" (torch
+        # encodes on the daemon, the JAX decode daemon decodes — the decode tail retired).
         from nlp_client import RemoteNLP
         m = None if args.model == "en_core_web_sm" else args.model
         nlp = RemoteNLP(args.remote, model=m, coref=True, coref_mode=coref_mode,
@@ -100,7 +107,9 @@ def main() -> int:
         print(f"=== remote coref daemon: {args.remote} | backend={args.coref_backend} | "
               f"mode={coref_mode} | {nlp.info()} ===")
     elif args.coref:
-        # local fastcoref pipeline (guest-only; no remote/cache)
+        # local fastcoref pipeline (guest-only; no remote/cache). resolve is lazy-imported
+        # HERE — strictly inside the local branch — so the remote path never pulls it.
+        import resolve
         nlp = resolve.build_coref_nlp(args.model)
         model_label = f"{args.model}+coref(fastcoref)"
         print(f"=== local coref pipeline: {args.model}+fastcoref ===")
@@ -114,7 +123,16 @@ def main() -> int:
     # tracing is off, so __enter__/__exit__ are safe either way.
     run_span = tracer.span("client.run", n_paras=len(paragraphs), model=model_label)
     run_span.__enter__()
-    docs = nlp.pipe(paragraphs)
+
+    # BOTH paths converge on `all_facts`: a list of per-paragraph fact dicts (the
+    # extract.doc_to_facts shape). On --remote the DAEMON runs doc_to_facts and ships
+    # JSON (lean client); locally we parse to Docs and run doc_to_facts here. ONE
+    # extractor, two callers (ADR-0012 P1); ONE DB-load loop consumes the result below.
+    all_facts: list[FactBundle]
+    if remote_mode:
+        all_facts = nlp.pipe_facts(paragraphs)
+    else:
+        all_facts = [doc_to_facts(doc) for doc in nlp.pipe(paragraphs)]
 
     # surface batched-vs-serial coref fidelity when --coref-verify was requested
     verify = getattr(nlp, "last_coref_verify", None)
@@ -141,46 +159,54 @@ def main() -> int:
         )
         doc_id = cur.fetchone()[0]
 
-        for doc in docs:
-            # resolver is paragraph-scoped: coref clusters span the whole paragraph
-            key_fn = resolve.resolver_for(doc)
-
-            # insert this paragraph's sentences, remember their ids by doc-local index
+        # ONE DB-load loop over the SSOT fact dicts. doc_to_facts owns *what a fact is*;
+        # this loop owns the running sentence budget and the DB identity — applying the
+        # SAME budget the old inline loop did (a sentence past --max-sents is dropped,
+        # and any entity/temporal/triple anchored to a dropped sentence is skipped via
+        # `sent in sent_ids`). The extraction is identical pre/post (proven bit-for-bit
+        # by test_doc_to_facts_equivalence.py); only its HOME moved.
+        for facts in all_facts:
+            # insert this paragraph's sentences; map doc-local index -> DB sent_id
             sent_ids: dict[int, int] = {}
-            for si, sent in enumerate(doc.sents):
+            for s in facts["sents"]:
                 if n_sent >= args.max_sents:
                     break
                 cur.execute(
                     "INSERT INTO mining.sentence (doc_id, sent_index, text) "
                     "VALUES (%s,%s,%s) RETURNING sent_id",
-                    (doc_id, n_sent, sent.text.strip()),
+                    (doc_id, n_sent, s["text"]),
                 )
-                sent_ids[si] = cur.fetchone()[0]
-                for e in sent.ents:
-                    cur.execute(
-                        "INSERT INTO mining.entity (sent_id, text, canonical, label) "
-                        "VALUES (%s,%s,%s,%s)",
-                        (sent_ids[si], e.text, resolve.canonical_key(e.text), e.label_),
-                    )
-                    n_ent += 1
-                    if e.label_ in ("DATE", "TIME"):
-                        cur.execute(
-                            "INSERT INTO mining.temporal (sent_id, text, label) VALUES (%s,%s,%s)",
-                            (sent_ids[si], e.text, e.label_),
-                        )
-                        n_temp += 1
+                sent_ids[s["index"]] = cur.fetchone()[0]
                 n_sent += 1
 
-            # extract over the whole paragraph (coref needs context), attach by sentence
-            for t in extract_triples(doc, key_fn):
-                if t.sent_i not in sent_ids:
+            for e in facts["entities"]:
+                if e["sent"] not in sent_ids:
+                    continue  # sentence past the budget
+                cur.execute(
+                    "INSERT INTO mining.entity (sent_id, text, canonical, label) "
+                    "VALUES (%s,%s,%s,%s)",
+                    (sent_ids[e["sent"]], e["text"], e["canonical"], e["label"]),
+                )
+                n_ent += 1
+
+            for tm in facts["temporal"]:
+                if tm["sent"] not in sent_ids:
+                    continue
+                cur.execute(
+                    "INSERT INTO mining.temporal (sent_id, text, label) VALUES (%s,%s,%s)",
+                    (sent_ids[tm["sent"]], tm["text"], tm["label"]),
+                )
+                n_temp += 1
+
+            for t in facts["triples"]:
+                if t["sent"] not in sent_ids:
                     continue  # sentence past the budget
                 cur.execute(
                     "INSERT INTO mining.assertion "
                     "(sent_id, subj, pred, obj, subj_key, obj_key, negated) "
                     "VALUES (%s,%s,%s,%s,%s,%s,%s)",
-                    (sent_ids[t.sent_i], t.subj, t.pred, t.obj,
-                     t.subj_key, t.obj_key, t.negated),
+                    (sent_ids[t["sent"]], t["subj"], t["pred"], t["obj"],
+                     t["subj_key"], t["obj_key"], t["negated"]),
                 )
                 n_assert += 1
 

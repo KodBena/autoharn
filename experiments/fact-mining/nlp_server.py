@@ -16,8 +16,11 @@ Protocol
 --------
 Request: one JSON frame.
   {"op": "parse", "texts": [str, ...], "model": "en_core_web_trf",
-   "format": "docbin" | "json", "disable": ["lemmatizer", ...],
+   "format": "facts" | "docbin" | "json", "disable": ["lemmatizer", ...],
    "coref": bool, "coref_mode": "batched" | "serial" | "verify"}
+     format="facts" (the LEAN default for load_facts --remote) — run the SSOT
+       extractor (extract.doc_to_facts) host-side and return finished JSON facts,
+       so the client deserializes JSON only and never imports spaCy/torch.
      coref_mode (only when coref=true):
        "batched" (default) — one batched deberta-encoder pass over all texts,
                   then maverick's per-doc clustering tail. Fast.
@@ -28,6 +31,7 @@ Request: one JSON frame.
   {"op": "ping"}                      -> liveness
 
 Reply: ZMQ multipart frames.
+  parse + format=facts  -> [ <json {ok, format:"facts", n, model, lang, facts:[...]}> ]
   parse + format=docbin -> [ <json meta>, <docbin bytes> ]
   parse + format=json   -> [ <json {ok, docs:[...]}> ]
   info / ping / error   -> [ <json> ]
@@ -53,6 +57,7 @@ import spacy
 import zmq
 from spacy.tokens import DocBin
 
+from extract import doc_to_facts  # SSOT per-doc fact extractor (ADR-0012 P1)
 from spans import get_tracer  # SSOT tracer (no jax/numpy import; host-only psycopg, lazy)
 
 
@@ -481,6 +486,24 @@ class Server:
                           f"({coref_verify['n_mismatch']}/{coref_verify['n']})"))
                 print(f"[timing] {len(texts)} texts: parse {t1 - t0:.1f}s, "
                       f"coref {time.perf_counter() - t1:.1f}s{note}", flush=True)
+
+            if req.get("format") == "facts":
+                # THE FACTS WIRE (ADR-0012 P7): run the SSOT extractor host-side so the
+                # --remote client receives finished JSON facts and never imports spaCy.
+                # Coref clusters (if computed) are attached PER DOC here, exactly where
+                # the OLD remote client used to attach them — the resolution is
+                # identical, only its home moved host-side. Discrete records (strings +
+                # int offsets) -> JSON is exact (ADR-0009 bit-invariant).
+                with _T.span("nlp_server.facts", n_docs=len(docs)):
+                    facts = [doc_to_facts(d, coref_clusters=(coref[i] if coref is not None else None))
+                             for i, d in enumerate(docs)]
+                out = {
+                    "ok": True, "format": "facts", "n": len(docs),
+                    "model": nlp.meta["name"], "lang": nlp.meta["lang"], "facts": facts,
+                }
+                if coref_verify is not None:
+                    out["coref_verify"] = coref_verify
+                return [json.dumps(out).encode()]
 
             if req.get("format") == "json":
                 out = {"ok": True, "docs": [doc_to_json(d) for d in docs]}
