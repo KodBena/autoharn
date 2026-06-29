@@ -41,6 +41,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from spans import get_tracer  # SSOT tracer; host-only (psycopg, lazy) — no numpy/jax/torch import
+
 
 @dataclass(frozen=True)
 class DecodeInputs:
@@ -85,8 +87,11 @@ def prepare_decode_inputs(src, text: str) -> DecodeInputs:
     Byte-identical to the inlined version it replaces: same `src.preprocess(text)`
     (speakers default None) feeding the same `src.tokenize(tokens, eos, speakers)`.
     """
-    tokens, eos_indices, speakers, char_offsets = src.preprocess(text)
-    tok = src.tokenize(tokens, eos_indices, speakers)
+    _T = get_tracer()
+    with _T.span("preproc.preprocess", n_chars=len(text)):
+        tokens, eos_indices, speakers, char_offsets = src.preprocess(text)
+    with _T.span("preproc.tokenize", n_tokens=len(tokens)):
+        tok = src.tokenize(tokens, eos_indices, speakers)
     return DecodeInputs(
         tokens=tok["tokens"],
         input_ids=tok["input_ids"],
@@ -421,13 +426,19 @@ class StandalonePreprocessor:
             if start is not None:
                 eos_out.append(start)
 
+        # SPLIT OUT for instrumentation: the dense [S,S] mask is a pure-python triple loop
+        # (eos_mask, above), O(S^2) at bucket lengths up to 2048 — the structural numba/numpy
+        # candidate. Span it to confirm (or refute) it dominates `preproc.tokenize` BEFORE
+        # paying the framework-free->numpy cost (ADR-0012 P9: name the perf reason with data).
+        with get_tracer().span("preproc.eos_mask", s=len(input_ids)):
+            eos_mask_val = self.eos_mask(len(input_ids), eos_out)
         return {
             "tokens": tokens,
             "input_ids": input_ids,
             "attention_mask": attention_mask,
             "subtoken_map": subtoken_map,
             "new_token_map": new_token_map,
-            "eos_mask": self.eos_mask(len(input_ids), eos_out),
+            "eos_mask": eos_mask_val,
             "gold_mentions": None,
             "added": None,
         }
