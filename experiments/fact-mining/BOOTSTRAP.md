@@ -119,7 +119,23 @@ divergence. (HOST-only: maverick + torch.)
 
 ---
 
-## 3. Launch — the unified jax-only daemon + nlp_server
+## 3. Launch — one command (recommended), or both daemons by hand
+
+The stack is two daemons (the host-XOR-device split): the jax-only unified daemon (`:5600`)
+and the torch/spaCy `nlp_server` (`:5599`). The **supervisor** brings up both in the right
+order and stops both on `^C`:
+
+```
+python run_coref_stack.py --gpu
+# defaults: ./fixtures/{weights,deberta_maverick}.npz ; host-ip 192.168.122.1 ; mem-fraction 0.3
+```
+
+It starts the decode daemon, **waits until it answers a ping** (so `nlp_server`'s warmup never
+relays into a not-yet-listening socket), then starts `nlp_server` pointed at it
+(`--coref-backend jax-unified --decode-addr …`), prefixes both logs (`[decode]`/`[nlp]`) onto
+one console, and `^C` tears both down cleanly, in order. Knobs: `python run_coref_stack.py --help`.
+
+**Or, by hand** — two terminals, for debugging one daemon in isolation:
 
 ```
 # (1) the JAX daemon — jax-only, torch-free; --deberta-weights enables the unified `coref` op.
@@ -155,8 +171,9 @@ the whole document means the unified torch-free forward reproduces maverick bit-
 ```
 python load_facts.py ./book.txt \
     --remote tcp://192.168.122.1:5599 \
-    --coref --coref-backend jax-unified --decode-addr tcp://192.168.122.1:5600 \
-    --coref-verify                     # expect verify=PASS (0/N mismatches)
+    --coref --coref-backend jax-unified \
+    --coref-verify                     # ONE url — --decode-addr is optional (nlp_server's default).
+                                       # expect verify=PASS (0/N mismatches)
 ```
 
 `nlp_server` runs `maverick.predict` (its own torch decode) and the jax-unified daemon for

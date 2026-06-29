@@ -413,6 +413,13 @@ without jax and would falsely "skip":
 
 ### Stage 1b-iii — the unified jax-only daemon (`--coref-backend jax-unified`)
 
+> **For normal use, don't launch the daemons by hand.** `python run_coref_stack.py --gpu`
+> brings the whole stack up in one command (decode daemon + `nlp_server`, in order; `^C` stops
+> both), and the client then needs **one URL** (`--remote …:5599`; `--decode-addr` is optional).
+> The deployment runbook — every runtime file, how it's built, and launch + `--coref-verify` —
+> is **`BOOTSTRAP.md`** (the SSOT for running it). The stage descriptions below are the dev-path
+> record (ADR-0005 Rule 8), not the current instructions.
+
 Stage 1b-ii still has **both** torch (the `nlp_server` deberta encode) and jax (the
 decode daemon) live, with the dense `eos_mask [S,S]` + `lhs` shipped over the wire
 (profiled ~67ms: serialize 37ms + parse 14ms + lhs transfer 16ms). Stage 1b-iii moves
