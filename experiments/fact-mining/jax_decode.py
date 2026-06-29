@@ -161,46 +161,53 @@ def span_mention_keep(
 
 
 # --------------------------------------------------- bilinear antecedent score
+def _bilinear_coref(
+    S: jax.Array, E: jax.Array,
+    Wss: jax.Array, Wse: jax.Array, Wes: jax.Array, Wee: jax.Array,
+    Bss: jax.Array, Bse: jax.Array, Bes: jax.Array, Bee: jax.Array,
+) -> jax.Array:
+    """The 4-term biaffine antecedent score, CONSOLIDATED to one einsum (+ one bias).
+
+    The literal maverick form is four bilinear einsums and four bias einsums:
+        S·Wss·S + E·Wee·E + S·Wse·E + E·Wes·S
+        (+ S·Bss + E·Bee + E·Bse + S·Bes,  each broadcast over the antecedent column)
+    Stack X = [S ; E] on the feature axis and the 2x2 weight block
+        Wblock = [[Wss, Wse], [Wes, Wee]]
+    and X·Wblock·X expands to EXACTLY those four terms, so the four matmul-einsums become
+    ONE over [n, K, 2f]; likewise the four biases become X·[Bss+Bes ; Bee+Bse]. Fewer GPU
+    kernels -> less XLA dispatch (the decode is dispatch-bound at these sizes). This is a
+    MATHEMATICAL IDENTITY — test_bilinear_consolidation.py is its guest falsifier; the float
+    reduction order differs from the literal-4 form by ~1e-6, within the cluster-decision-
+    robust tier (ADR-0009 two-tier), and the host --coref-verify confirms the discrete
+    cluster SETS are unchanged end to end.
+    """
+    X = jnp.concatenate((S, E), axis=-1)                          # [n, K, 2f]
+    Wblock = jnp.concatenate(
+        (jnp.concatenate((Wss, Wse), axis=-1),                   # [n, f, 2f]  (the S row of the block)
+         jnp.concatenate((Wes, Wee), axis=-1)),                  # [n, f, 2f]  (the E row of the block)
+        axis=-2,
+    )                                                            # [n, 2f, 2f]
+    logits = jnp.einsum("nkf, nfg, nlg -> nkl", X, Wblock, X)    # the 4 bilinear terms, one einsum
+    Bstack = jnp.concatenate((Bss + Bes, Bee + Bse), axis=-1)    # [n, 2f]
+    biases = jnp.einsum("nkf, nf -> nk", X, Bstack)[:, None, :]  # the 4 bias terms, one einsum
+    return logits + biases                                       # [n, K, K]
+
+
 def _calc_coref_logits(
     params: dict, start_reps: jax.Array, end_reps: jax.Array
 ) -> jax.Array:
-    """maverick._calc_coref_logits (4-term bilinear), batch dim dropped.
-
-    The 4->2 contraction identity is OPTIONAL (and secondary to correctness); we
-    keep the literal 4 einsums so this is obviously the same computation. Note
-    the bias terms' tensor pairing is asymmetric in maverick and reproduced as-is:
-        s2s-bias <- starts,  e2e-bias <- ends,  s2e-bias <- ends,  e2s-bias <- starts
-    and each bias is unsqueezed at dim -2 ([n,1,K]) so it broadcasts over the
-    mention axis and is added per (category, antecedent-column).
-    """
+    """maverick._calc_coref_logits (4-term biaffine), batch dim dropped, consolidated via
+    `_bilinear_coref`. The bias tensor pairing is maverick's, reproduced as-is
+    (s2s-bias <- starts, e2e-bias <- ends, s2e-bias <- ends, e2s-bias <- starts)."""
     S = _transpose_for_scores(_fc(params, "coref_start_all_mlps", start_reps))  # [n,K,f]
     E = _transpose_for_scores(_fc(params, "coref_end_all_mlps", end_reps))      # [n,K,f]
-
-    Wss = params["antecedent_s2s_all_weights"]
-    Wee = params["antecedent_e2e_all_weights"]
-    Wse = params["antecedent_s2e_all_weights"]
-    Wes = params["antecedent_e2s_all_weights"]
-
-    logits = (
-        jnp.einsum("nkf, nfg, nlg -> nkl", S, Wss, S)
-        + jnp.einsum("nkf, nfg, nlg -> nkl", E, Wee, E)
-        + jnp.einsum("nkf, nfg, nlg -> nkl", S, Wse, E)
-        + jnp.einsum("nkf, nfg, nlg -> nkl", E, Wes, S)
+    return _bilinear_coref(
+        S, E,
+        params["antecedent_s2s_all_weights"], params["antecedent_s2e_all_weights"],
+        params["antecedent_e2s_all_weights"], params["antecedent_e2e_all_weights"],
+        params["antecedent_s2s_all_biases"], params["antecedent_s2e_all_biases"],
+        params["antecedent_e2s_all_biases"], params["antecedent_e2e_all_biases"],
     )
-
-    Bss = params["antecedent_s2s_all_biases"]
-    Bee = params["antecedent_e2e_all_biases"]
-    Bse = params["antecedent_s2e_all_biases"]
-    Bes = params["antecedent_e2s_all_biases"]
-
-    biases = (
-        jnp.einsum("nkf, nf -> nk", S, Bss)[:, None, :]
-        + jnp.einsum("nkf, nf -> nk", E, Bee)[:, None, :]
-        + jnp.einsum("nkf, nf -> nk", E, Bse)[:, None, :]
-        + jnp.einsum("nkf, nf -> nk", S, Bes)[:, None, :]
-    )
-
-    return logits + biases  # [NUM_CATS, K, K]
 
 
 # ------------------------------------------------------------- jit STAGE 3
