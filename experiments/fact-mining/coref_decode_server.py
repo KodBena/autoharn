@@ -75,6 +75,7 @@ if ("XLA_PYTHON_CLIENT_MEM_FRACTION" not in os.environ
 
 import argparse
 import json
+import time
 import traceback
 
 import numpy as np
@@ -136,7 +137,13 @@ class DecodeServer:
     # ----------------------------------------------------------- request handler
     def handle(self, frames: list[bytes]) -> list[bytes]:
         """Map request frames -> reply frames. Pure data in/out, one doc/request."""
+        # Time the meta parse explicitly: it happens BEFORE the trace context is
+        # extracted (the context rides inside this very JSON), so it cannot be a span —
+        # we stamp it onto the handle span as `parse_request_ms`. This is the server half
+        # of the dense eos_mask [S,S] JSON cost (the client half is serialize_request).
+        _t_parse = time.perf_counter()
         meta = json.loads(frames[0])
+        parse_request_ms = (time.perf_counter() - _t_parse) * 1000.0
         op = meta.get("op", "decode")
         # WIRE 2 receipt: adopt nlp_server's trace context (enables iff sent). The
         # host shell's device/long-op spans then nest under this request's spans.
@@ -169,7 +176,8 @@ class DecodeServer:
                 f"got {len(frames) - 1}")
         singletons = bool(meta.get("singletons", False))
 
-        with _T.span("decode_server.handle", op=op, n_docs=len(docs_meta)):
+        with _T.span("decode_server.handle", op=op, n_docs=len(docs_meta),
+                     parse_request_ms=round(parse_request_ms, 3)):
             clusters_per_doc = []
             for i, dm in enumerate(docs_meta):
                 lhs_host = unpack_lhs(dm, frames[1 + i])

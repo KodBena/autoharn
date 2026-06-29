@@ -318,36 +318,41 @@ class Server:
 
         from coref_decode_inputs import prepare_decode_inputs
 
+        _T = get_tracer()
         c = self.coref()
         model = c.model
         tokenizer = c.tokenizer
 
-        # (1) SSOT preprocess+tokenize for every text, in order.
-        dis = [prepare_decode_inputs(c, text) for text in texts]
+        # (1) SSOT preprocess+tokenize for every text, in order. Spanned separately from
+        # the GPU forward so the trace says whether the encode cost is CPU tokenisation or
+        # the deberta forward (and thus whether length-bucketing the batch would help).
+        with _T.span("encode.tokenize_prep", n_texts=len(texts)):
+            dis = [prepare_decode_inputs(c, text) for text in texts]
         lengths = [len(di.input_ids) for di in dis]
         pad_id = tokenizer.pad_token_id if tokenizer.pad_token_id is not None else 0
         dev = next(model.encoder.parameters()).device
 
         # (2)+(3) one padded forward per OOM-bounded chunk; slice unpadded lhs per doc.
-        slices: list[object] = [None] * len(texts)
-        for chunk in chunk_by_token_budget(lengths, ENCODE_MAX_PADDED_TOKENS, ENCODE_MAX_DOCS):
-            s_max = max(lengths[i] for i in chunk)
-            padded_ids = [list(dis[i].input_ids) + [pad_id] * (s_max - lengths[i]) for i in chunk]
-            padded_mask = [list(dis[i].attention_mask) + [0] * (s_max - lengths[i]) for i in chunk]
-            ids_t = torch.tensor(padded_ids, dtype=torch.long).to(dev)    # host-device-boundary: stage batched coref input_ids onto the GPU
-            mask_t = torch.tensor(padded_mask, dtype=torch.long).to(dev)  # host-device-boundary: stage batched coref attention_mask onto the GPU
-            with torch.no_grad():
-                hidden = model.encoder(input_ids=ids_t, attention_mask=mask_t)["last_hidden_state"]  # [chunk, s_max, TH] fp32
-            for row, i in enumerate(chunk):
-                # CLONE (not a bare view): hidden[row, :S_i, :] is a prefix slice of the
-                # contiguous [chunk, s_max, TH] base, so it shares — and PINS RESIDENT —
-                # the WHOLE padded chunk (every row + every padding column) until drained.
-                # `.contiguous()` would be a no-op here (a prefix slice is already
-                # contiguous), so it would NOT free the padding; `.clone()` gives each doc
-                # its own [S_i, TH] buffer and lets the padded base free at chunk end, so
-                # co-resident memory is sum-of-unpadded-slices, not sum-of-padded-chunks.
-                slices[i] = hidden[row, :lengths[i], :].clone()  # [S_i, TH] unpadded device slice
-            del hidden  # drop the padded chunk now that every doc owns its own slice
+        with _T.span("encode.forward", n_texts=len(texts), max_len=max(lengths) if lengths else 0):
+            slices: list[object] = [None] * len(texts)
+            for chunk in chunk_by_token_budget(lengths, ENCODE_MAX_PADDED_TOKENS, ENCODE_MAX_DOCS):
+                s_max = max(lengths[i] for i in chunk)
+                padded_ids = [list(dis[i].input_ids) + [pad_id] * (s_max - lengths[i]) for i in chunk]
+                padded_mask = [list(dis[i].attention_mask) + [0] * (s_max - lengths[i]) for i in chunk]
+                ids_t = torch.tensor(padded_ids, dtype=torch.long).to(dev)    # host-device-boundary: stage batched coref input_ids onto the GPU
+                mask_t = torch.tensor(padded_mask, dtype=torch.long).to(dev)  # host-device-boundary: stage batched coref attention_mask onto the GPU
+                with torch.no_grad():
+                    hidden = model.encoder(input_ids=ids_t, attention_mask=mask_t)["last_hidden_state"]  # [chunk, s_max, TH] fp32
+                for row, i in enumerate(chunk):
+                    # CLONE (not a bare view): hidden[row, :S_i, :] is a prefix slice of the
+                    # contiguous [chunk, s_max, TH] base, so it shares — and PINS RESIDENT —
+                    # the WHOLE padded chunk (every row + every padding column) until drained.
+                    # `.contiguous()` would be a no-op here (a prefix slice is already
+                    # contiguous), so it would NOT free the padding; `.clone()` gives each doc
+                    # its own [S_i, TH] buffer and lets the padded base free at chunk end, so
+                    # co-resident memory is sum-of-unpadded-slices, not sum-of-padded-chunks.
+                    slices[i] = hidden[row, :lengths[i], :].clone()  # [S_i, TH] unpadded device slice
+                del hidden  # drop the padded chunk now that every doc owns its own slice
         return list(zip(dis, slices))
 
     # ------------------------------------------------------------------ batched

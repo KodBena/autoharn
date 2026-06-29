@@ -133,31 +133,40 @@ class RemoteDecode:
         list + ONE raw-float32 lhs frame per doc, in order. This is the ONE
         authoritative multi-doc codec (ADR-0012 P7). n==1 is just the batch-of-1 case.
         """
-        per_doc = [self._doc_meta(d) for d in docs]
-        meta = {
-            "op": "decode",
-            "singletons": bool(singletons),
-            "docs": [m for (m, _b) in per_doc],
-        }
-        # WIRE 2: stamp the trace context into the decode meta. The current span is the
-        # nlp_server "zmq_wait.decode" wait, so the decode daemon parents under it.
-        get_tracer().inject(meta)
-        frames = self._roundtrip([json.dumps(meta).encode(), *[b for (_m, b) in per_doc]])
-        reply = json.loads(frames[0])
-        if not reply.get("ok"):
-            raise RemoteError(reply.get("error", "server error"))
-        # FAIL LOUD on a reply that is not one-cluster-list-per-doc (ADR-0002/P5).
-        # The server guarantees this by construction (one append per doc), but the
-        # caller (`coref_clusters_jax_daemon`) consumes the result with `zip(docs, ...)`,
-        # which would SILENTLY TRUNCATE if the daemon ever returned fewer doc-cluster
-        # lists than docs sent. Check the reply direction too, not just the request.
-        clusters = reply["clusters"]
-        if len(clusters) != len(docs):
-            raise RemoteError(
-                f"decode reply has {len(clusters)} doc-cluster list(s) for "
-                f"{len(docs)} doc(s) sent")
-        return [[[tuple(span) for span in cluster] for cluster in doc_clusters]
-                for doc_clusters in clusters]
+        _T = get_tracer()
+        # Split the round-trip into serialize / wire+decode / parse so the trace can say
+        # whether the wire cost is the dense eos_mask [S,S] JSON (serialize here +
+        # parse_request on the server) or the lhs byte transfer. These spans cost a little
+        # now; the breakdown they yield is what tells us which lever to pull.
+        with _T.span("decode_client.serialize_request", n_docs=len(docs)):
+            per_doc = [self._doc_meta(d) for d in docs]
+            meta = {
+                "op": "decode",
+                "singletons": bool(singletons),
+                "docs": [m for (m, _b) in per_doc],
+            }
+            # WIRE 2: stamp the trace context into the decode meta. The decode daemon
+            # parents under this request's spans.
+            get_tracer().inject(meta)
+            out_frames = [json.dumps(meta).encode(), *[b for (_m, b) in per_doc]]
+        with _T.span("decode_client.roundtrip", n_docs=len(docs)):
+            frames = self._roundtrip(out_frames)
+        with _T.span("decode_client.parse_reply"):
+            reply = json.loads(frames[0])
+            if not reply.get("ok"):
+                raise RemoteError(reply.get("error", "server error"))
+            # FAIL LOUD on a reply that is not one-cluster-list-per-doc (ADR-0002/P5).
+            # The server guarantees this by construction (one append per doc), but the
+            # caller (`coref_clusters_jax_daemon`) consumes the result with
+            # `zip(docs, ...)`, which would SILENTLY TRUNCATE if the daemon ever returned
+            # fewer doc-cluster lists than docs sent. Check the reply direction too.
+            clusters = reply["clusters"]
+            if len(clusters) != len(docs):
+                raise RemoteError(
+                    f"decode reply has {len(clusters)} doc-cluster list(s) for "
+                    f"{len(docs)} doc(s) sent")
+            return [[[tuple(span) for span in cluster] for cluster in doc_clusters]
+                    for doc_clusters in clusters]
 
     def decode(self, lhs, attention_mask, eos_mask, tokens,
                subtoken_map, new_token_map, singletons: bool = False):
