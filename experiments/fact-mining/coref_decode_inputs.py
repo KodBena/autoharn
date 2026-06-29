@@ -250,15 +250,31 @@ class StandalonePreprocessor:
                 f"spm.model not found at {spm_path!r}. The unified daemon needs the VENDORED "
                 f"sentencepiece model; run export_deberta_maverick.py (it copies maverick's "
                 f"spm.model next to the deberta weights).")
-        # nltk punkt (sentence splitter) — maverick.common.util.download_load_spacy
+        # nltk punkt (sentence splitter) — maverick's preprocess uses nltk.sent_tokenize,
+        # so it is REQUIRED for cluster fidelity (not optional). nltk.data.find raises
+        # LookupError when the resource is truly absent, but OSError when a PARTIAL/corrupt
+        # punkt dir exists (the host hit this) — catch BOTH, then attempt a one-time
+        # download, then VERIFY the splitter works and FAIL LOUD with the exact fix if not
+        # (an offline host cannot auto-download).
         for res in ("punkt", "punkt_tab"):  # punkt_tab: newer nltk split
             try:
                 nltk.data.find(f"tokenizers/{res}")
-            except LookupError:
+            except (LookupError, OSError):
                 try:
+                    print(f"[preproc] nltk '{res}' missing — downloading once...", flush=True)
                     nltk.download(res, quiet=True)
                 except Exception:  # punkt_tab absent on older nltk -> punkt suffices
                     pass
+        try:
+            from nltk import sent_tokenize
+            sent_tokenize("A sentence. Another one.")  # prove it actually works now
+        except Exception as e:
+            raise RuntimeError(
+                "nltk punkt (sentence splitter) is unavailable and could not be downloaded "
+                "— the unified daemon's maverick-faithful preprocess needs it. Fix on a "
+                "networked host: python -c \"import nltk; nltk.download('punkt'); "
+                "nltk.download('punkt_tab')\"  (offline: copy ~/nltk_data/tokenizers/punkt* "
+                "from a host that has it).") from e
         nlp = spacy.load(
             "en_core_web_sm",
             exclude=["tagger", "parser", "lemmatizer", "ner", "textcat"],
