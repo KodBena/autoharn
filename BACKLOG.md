@@ -199,3 +199,15 @@ later entities — study/experiment grouping, analysis/transformation, dataset.
     the LRU is the second-order HARD CAP for the genuinely-unbounded decode K/P tail + arbitrary-text uptime.
     ~30 lines once bucketing lands. (Redis WOULD earn its keep for a DIFFERENT goal: sharing the compile
     cache across daemon processes/machines — a shared blob store for serialized executables.)
+
+- **Encode-batching by bucket-group (book-scale throughput lever, encode-only).** GATED ON the same
+  signoff as the LRU cap (bucketing landed + host --coref-verify clean). Now that same-bucket texts share
+  a padded shape, batch them into ONE `[B, bucket_S, TH]` deberta forward per bucket-group instead of N
+  per-text forwards — bounded padding waste (same bucket = similar length, unlike padding to the global
+  max, which is why batching barely helped pre-bucketing). ENCODE-ONLY: the decode stays per-doc (ragged
+  clustering, maverick `mention_idxs[0]`). CRITICAL: batching adds batch size `B` as a shape axis — to keep
+  the compile cache bounded (the leak we just fixed), FIX/bucket `B` too (compile per `(fixed_B, bucket_S)`),
+  else batching re-leaks via per-`B` shapes; the compile-bound test (test_shape_bucket_compile_bound.py) is
+  the gate that catches it. Reuse the existing OOM bound (chunk_by_token_budget). Fidelity bar unchanged
+  (the masked padding already proven inert). Win is book-scale (200 paras -> ~#buckets forwards); marginal
+  for the small-text hook use case — a scale lever, not a PoC need.
