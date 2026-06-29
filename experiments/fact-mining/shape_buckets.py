@@ -26,18 +26,21 @@ is `bucket_len`'s output, so the ladder (the truth) still has exactly one home.
 
 TWO BOUNDED-SET LADDERS, TWO DISTINCT CONCERNS, ONE HOME (this file). `bucket_len` over
 `ENCODE_LEN_BUCKETS` rounds ONE sequence's length S to bound the per-SHAPE COMPILE set
-(the JAX cache-leak concern). `chunk_by_token_budget` (relocated HERE from nlp_server so
-the OOM bound has ONE home — both the torch batcher and the jax batcher import it, never
-copy it) groups multiple docs into OOM-bounded CHUNKS, bounding the linear N*max_S padded
-footprint of one batched forward (the memory concern). `encode_batch_chunks` +
-`ENCODE_BATCH_BUCKETS` round the BATCH axis B to a finite ladder rung (the SAME ADR-0000
-move applied to B: a bucket-group batched encode that compiled per VARIABLE group size
-would re-leak the cache `bucket_len` just bounded, so B is drawn from a fixed ladder ->
-the (B, s_bucket) compile grid is bounded, not O(requests)). Chunking groups docs;
-length-laddering rounds a length; batch-laddering rounds the batch count. Three orthogonal
-operations, each its own function, kept on single-ownership grounds (P3) — but the OOM
-inequality itself is authored exactly ONCE (chunk_by_token_budget): `encode_batch_chunks`
-DERIVES its per-chunk capacity FROM that function, it does not re-derive `b*S<=budget`.
+(the JAX cache-leak concern). `chunk_by_vram` (relocated HERE from nlp_server so the OOM
+bound has ONE home — both the torch batcher and the jax batcher import it, never copy it)
+groups multiple docs into OOM-bounded CHUNKS, bounding the QUADRATIC-DOMINATED activation
+PEAK of one batched forward IN BYTES against the free device arena (the memory concern) —
+NOT a linear token proxy (see `peak_variable_bytes` for why the proxy was blind to the OOM).
+`encode_batch_chunks` + `ENCODE_BATCH_BUCKETS` round the BATCH axis B to a finite ladder
+rung (the SAME ADR-0000 move applied to B: a bucket-group batched encode that compiled per
+VARIABLE group size would re-leak the cache `bucket_len` just bounded, so B is drawn from a
+fixed ladder -> the (B, s_bucket) compile grid is bounded, not O(requests)). Chunking groups
+docs; length-laddering rounds a length; batch-laddering rounds the batch count. Three
+orthogonal operations, each its own function, kept on single-ownership grounds (P3) — but the
+OOM inequality itself (`peak_variable_bytes(B, max_S) <= available`) is authored exactly ONCE
+(`peak_variable_bytes`): `chunk_by_vram` (variable lengths, torch) and `max_batch_for_length`
+-> `encode_batch_chunks` (uniform s_bucket, jax B-ladder) BOTH consume that one inequality;
+neither re-derives it. There is NO second budget.
 
 MASKED-PADDING IS INERT (the contract this rests on, already proven). Padding a
 sequence up to a bucket and extending the attention_mask with zeros leaves every REAL
@@ -59,6 +62,7 @@ length raises, never silently falls back to an unbucketed (cache-leaking) shape.
 from __future__ import annotations
 
 import os
+from typing import NamedTuple
 
 
 def _ladder_from_env(name: str, default: tuple[int, ...]) -> tuple[int, ...]:
@@ -133,46 +137,263 @@ def pad_to(seq, target: int, pad_value: int) -> list[int]:
 
 
 # ============================================================ the ONE OOM bound
-# Relocated HERE from nlp_server (it was nlp_server's, but the jax bucket-group batcher
-# now needs the SAME bound — so per the do-not-copy mandate it moves to this SSOT home and
-# nlp_server imports it). A batched deberta encode runs ONE padded forward over a
-# [N, max_S, TH] tensor; unbounded N over a whole book OOMs the card (ADR-0000 Specimen
-# 3/4: the bound has one home and is DERIVED from what actually exhausts memory — the
-# linear N*max_S padded footprint — not a bare magic count). We cap a PADDED-TOKEN budget
-# N*max_S (TH fixed per model) AND a hard per-chunk doc count, whichever binds first.
-# SCOPE (honest): the per-layer attention activation is O(N*max_S^2); the budget bounds the
-# linear N*max_S term batching ADDED, not that quadratic term (inherent to encoding a long
-# doc at all, floored at one-doc-per-chunk + capped by deberta's max position length). The
-# defaults are a CONSERVATIVE operator-tunable guess (keep a typical 5-paragraph request in
-# ONE forward), not a VRAM-bytes-derived budget; tune COREF_ENCODE_MAX_* per card.
-ENCODE_MAX_PADDED_TOKENS: int = int(os.environ.get("COREF_ENCODE_MAX_PADDED_TOKENS", "8192"))
+# A CONSERVATIVE MEMORY MODEL of the forward's variable peak + a chunker that PROVABLY keeps
+# every chunk within the free device arena. Relocated HERE from nlp_server (the jax
+# bucket-group batcher needs the SAME bound — do-not-copy mandate -> this SSOT home; both
+# nlp_server and coref_host_shell import it).
+#
+# WHY THIS REPLACED A LINEAR TOKEN BUDGET (ADR-0000: foreclose the OOM CLASS, not an
+# instance). The previous bound capped the LINEAR padded footprint B*max_S against a GUESSED
+# constant (8192 "padded tokens"). But a batched deberta-v3 encode's peak is DOMINATED by the
+# QUADRATIC disentangled-attention scores [B, num_heads, S, S] (plus the c2p/p2c position
+# terms, all O(B*num_heads*S^2)). A chunk with a large max_S and B>1 blew past the ~30%-arena
+# while SATISFYING the linear budget -> jax RESOURCE_EXHAUSTED. A linear bound CANNOT see a
+# quadratic peak, so it could only ever fix the instance that happened to fail, never the
+# class. The TYPE answer (ADR-0000 Specimen 3 — the byte-budgeted high-water-mark): derive the
+# bound from what ACTUALLY exhausts memory — a CONSERVATIVE upper-bound memory model of the
+# forward's variable (activation) peak IN BYTES — and chunk so EVERY chunk provably fits the
+# free arena. Over-estimation is SAFE (smaller, slower chunks); the invariant forbids only
+# UNDER-estimation (an OOM). The never-OOM property is unit-tested in test_oom_invariant.py
+# and FAILS on the old linear chunker (which packs a quadratic over-budget chunk).
 ENCODE_MAX_DOCS: int = int(os.environ.get("COREF_ENCODE_MAX_DOCS", "64"))
 
 
-def chunk_by_token_budget(lengths, max_padded_tokens: int, max_docs: int):
-    """Greedily split doc indices [0..N) into CONTIGUOUS chunks (input order preserved) so
-    each chunk's padded-cell count (len(chunk) * max(length in chunk)) stays within
-    `max_padded_tokens`, and no chunk exceeds `max_docs` docs — whichever binds first.
+def _int_env(name: str, default: int, minimum: int = 1) -> int:
+    """An operator-tunable positive int (fail-loud on malformed/too-small), mirroring
+    `_ladder_from_env` for the scalar memory-model knobs."""
+    raw = os.environ.get(name)
+    if raw is None or not raw.strip():
+        return default
+    try:
+        v = int(raw)
+    except ValueError as e:
+        raise ValueError(f"{name} must be an int, got {raw!r}: {e}") from e
+    if v < minimum:
+        raise ValueError(f"{name}={v} must be >= {minimum}")
+    return v
 
-    A single doc longer than the budget forms its OWN chunk (we never drop a doc — the
-    bound degrades to one doc per forward, the safe floor). Pure python (framework-free),
-    so the OOM bound is unit-testable on the guest without torch/jax. Returns list[list[int]]
-    of original indices; concatenating chunk outputs in order rebuilds alignment.
 
-    THE single author of the `padded-cells <= budget` OOM inequality (P1). The torch
-    batched encode (nlp_server._encode_docs) and the jax bucket-group batched encode
-    (coref_host_shell.encode_lhs_batched, via `encode_batch_chunks`) BOTH consume this one
-    function; neither re-derives the inequality. Distinct from `bucket_len` (which rounds a
-    LENGTH to bound the compile set) and from `encode_batch_chunks` (which rounds the BATCH
-    count to a ladder for the compile bound and takes its OOM capacity FROM here).
-    """
+# CONSERVATIVE co-residency multiples for the memory model (operator-tunable per ADR-0009
+# once a host profile tightens them; the DEFAULTS are reasoned UPPER bounds — see
+# `peak_variable_bytes`). Each must be >= 1; a larger value only makes chunks SMALLER/safer.
+_K_QUAD: int = _int_env("COREF_MEM_K_QUAD", 8)       # co-resident [B,H,S,S] score buffers
+_K_DISENT: int = _int_env("COREF_MEM_K_DISENT", 4)   # co-resident [B*H,S,2*span] pos buffers
+_A_HIDDEN: int = _int_env("COREF_MEM_A_HIDDEN", 8)   # co-resident [B,S,hidden] activations
+_A_INTER: int = _int_env("COREF_MEM_A_INTER", 3)     # co-resident [B,S,intermediate] FFN bufs
+_BYTES_PER_ELEM: int = 4                             # fp32 throughout (the encode is pinned fp32)
+
+# Headroom carved off the arena before the budget: a fraction (allocator fragmentation, XLA
+# scratch, the per-doc decode tail's transient) with a fixed floor. Conservative; tunable.
+_VRAM_HEADROOM_FRAC: float = float(os.environ.get("COREF_VRAM_HEADROOM_FRAC", "0.15"))
+_VRAM_HEADROOM_FLOOR: int = _int_env(
+    "COREF_VRAM_HEADROOM_FLOOR_BYTES", 256 << 20, minimum=0)  # 256 MiB
+
+
+def headroom_bytes(arena_or_total: int) -> int:
+    """The ONE headroom rule (P1): the bytes reserved off an arena/total before the activation
+    budget. Used by BOTH framework derivations (jax memory_stats in coref_host_shell, torch
+    mem_get_info in nlp_server) so the safety margin has one home, not two."""
+    return max(int(arena_or_total * _VRAM_HEADROOM_FRAC), _VRAM_HEADROOM_FLOOR)
+
+
+def cpu_fallback_available_bytes() -> int:
+    """The available-bytes fallback for a NON-GPU run (no device arena to exhaust): an
+    operator-overridable generous default so a CPU daemon still CHUNKS rather than packing a
+    whole book into one forward. ONE home (P1) for BOTH framework derivations' CPU branch
+    (jax in coref_host_shell, torch in nlp_server) — the env name + the default literal are not
+    re-typed at each site (the very two-writers-of-one-literal shape this file's bound replaced,
+    kept from re-forming here at small scale)."""
+    return _int_env("COREF_AVAILABLE_VRAM_BYTES", 8 << 30)
+
+
+class MemModel(NamedTuple):
+    """The architecture-derived inputs to the forward's memory model — a CONSERVATIVE upper
+    bound on the VARIABLE (non-weight) peak of ONE batched deberta-v3 encode at (B, S).
+    Framework-free (plain ints): the caller DERIVES every field from the SSOT (DebertaCfg +
+    the ACTUAL weight shapes), so nothing here is hand-guessed (P1). The `k_*`/`a_*`
+    co-residency multiples are CONSERVATIVE over-estimates (reasoned upper bounds; ADR-0009-
+    tunable), captured on the model so a test can pin them and so a DocTooLargeError can quote
+    them."""
+    num_heads: int
+    hidden: int          # num_heads * head_size (the model's hidden width)
+    intermediate: int    # FFN inner width (intermediate.dense out-features) — derived from weights
+    pos_ebd_size: int    # att_span; the disentangled position tables are width 2*pos_ebd_size
+    bytes_per_elem: int = _BYTES_PER_ELEM
+    k_quad: int = _K_QUAD
+    k_disent: int = _K_DISENT
+    a_hidden: int = _A_HIDDEN
+    a_inter: int = _A_INTER
+
+
+def peak_variable_bytes(mm: MemModel, B: int, S: int) -> int:
+    """A CONSERVATIVE UPPER BOUND, in bytes, on the VARIABLE (non-weight) peak of one batched
+    deberta-v3 encoder forward at batch B, padded length S. THE single author of the OOM
+    inequality `peak <= available` (P1): the variable-length chunker (`chunk_by_vram`, torch)
+    and the uniform-length B cap (`max_batch_for_length` -> `encode_batch_chunks`, jax) BOTH
+    consume it; neither re-derives it.
+
+    WHY IT IS AN UPPER BOUND (reasoned — only the host run profiles the exact constants, but
+    the FORM and the co-residency counts are over-estimates by construction; ADR-0009):
+
+      * QUADRATIC term — the dominant one, and the one the old linear budget was blind to.
+        Disentangled self-attention (jax_deberta._self_attention + _disentangled_bias)
+        materialises several [B, num_heads, S, S] float32 tensors that are LIVE within one
+        layer: the content->content scores (matmul q·kᵀ), the c2p scores (post take_along_axis),
+        the p2c scores (post take_along_axis AND its transpose), the score accumulator, the
+        masked-fill, and the softmax probs — ~6-8 distinct [B,H,S,S] buffers. `k_quad`
+        (default 8) is a conservative count of how many XLA may hold co-resident. Only ONE
+        layer's attention is live at a time (layers run sequentially; each layer's S^2 buffers
+        free before the next), so this is NOT multiplied by num_layers.
+      * DISENTANGLED-POSITION term — before the gather, c2p/p2c hold [B*H, S, 2*pos_ebd_size]
+        intermediates; `k_disent` (default 4) bounds those.
+      * LINEAR term — per-(b,s) activations: embeddings, q/k/v, context, the residual stream
+        ([B,S,hidden], `a_hidden` of them) and the FFN expansion ([B,S,intermediate],
+        `a_inter` of them; intermediate ~= 4*hidden for v3-large).
+
+    Every term is LINEAR in B (a batched matmul/elementwise scales the batch axis exactly), so
+    peak_variable_bytes(mm, B, S) == B * peak_variable_bytes(mm, 1, S) EXACTLY — the property
+    `max_batch_for_length` relies on to solve for B in O(1) (proven in test_oom_invariant)."""
+    H = mm.num_heads
+    quad = mm.k_quad * B * H * S * S
+    disent = mm.k_disent * B * H * S * (2 * mm.pos_ebd_size)
+    lin = B * S * (mm.a_hidden * mm.hidden + mm.a_inter * mm.intermediate)
+    return (quad + disent + lin) * mm.bytes_per_elem
+
+
+def max_batch_for_length(mm: MemModel, S: int, available_bytes: int) -> int:
+    """The largest batch B whose forward at padded length S provably fits `available_bytes`
+    (the ONE inequality `peak_variable_bytes(B, S) <= available`, solved for B). Since the peak
+    is exactly linear in B, this is `available // peak_variable_bytes(1, S)`. Returns 0 when
+    even B=1 overflows — the single-doc-too-big condition the caller must handle LOUDLY (a
+    bounded DocTooLargeError), NEVER a raw RESOURCE_EXHAUSTED."""
+    per_row = peak_variable_bytes(mm, 1, S)
+    if per_row <= 0:
+        raise ValueError(f"degenerate memory model: per-row peak {per_row} bytes at S={S}")
+    return available_bytes // per_row
+
+
+class DocTooLargeError(RuntimeError):
+    """A single document does not fit the device arena even alone (B=1). Raised with a CLEAR,
+    BOUNDED diagnosis (tokens, GiB needed, GiB free, the exact knob) INSTEAD of letting XLA
+    raise a raw RESOURCE_EXHAUSTED (ADR-0002 fail-loud at the strongest surface; ADR-0000 — the
+    OOM class is foreclosed: an unfittable input is a NAMED, actionable condition, not a crash,
+    and not a silently dropped doc)."""
+
+    def __init__(self, seq_len: int, needed_bytes: int, available_bytes: int, mm: MemModel):
+        self.seq_len = seq_len
+        self.needed_bytes = needed_bytes
+        self.available_bytes = available_bytes
+        gib = float(1 << 30)
+        super().__init__(
+            f"single document of {seq_len} padded tokens needs ~{needed_bytes / gib:.2f} GiB "
+            f"for one deberta forward at B=1, but only ~{available_bytes / gib:.2f} GiB of "
+            f"device arena is free (after weights + headroom). This is a hard hardware limit, "
+            f"not a defect: raise XLA_PYTHON_CLIENT_MEM_FRACTION (the daemon's --mem-fraction), "
+            f"split the paragraph upstream so each unit is shorter, or run on a larger card. "
+            f"(conservative model: k_quad={mm.k_quad}, k_disent={mm.k_disent}, "
+            f"a_hidden={mm.a_hidden}, a_inter={mm.a_inter}.)")
+
+
+# =============================================== the RETAINED-OUTPUT co-residency (FINDING 1)
+# THE SECOND OOM class the per-FORWARD budget alone does not cover (ADR-0000 — one level up
+# from the quadratic-forward fix). The batched encode hands each doc back an UNPADDED
+# [S_i, hidden] fp32 lhs slice, and a consumer that decodes only AFTER encoding every doc
+# keeps ALL of them co-resident on the SAME arena the next forward competes for. The forward
+# budget proves `forward_peak(chunk) <= available`, but the TRUE co-resident high-water mark is
+# `forward_peak(chunk) + Σ(retained slices still live)`. That Σ is O(total docs): a book's
+# worth of slices (thousands of paragraphs * S * hidden * 4B) can be MULTIPLE GiB — far past
+# the flat headroom — so a later, individually-in-budget forward raw-OOMs. The invariant: at
+# the instant ANY forward runs, the arena must hold that forward PLUS every slice still retained.
+#
+# TWO forced tactics for ONE invariant (the two consumers have different decode structures):
+#   * jax (coref_documents_host): decode is IN-PROCESS and interleavable -> STREAM
+#     decode-after-encode, freeing each lhs once its (host-side) clusters are produced, so
+#     co-resident retained never exceeds ONE chunk and the per-forward budget stays sufficient.
+#     This is the capacity-preserving general fix (the full book still processes).
+#   * torch (nlp_server._encode_docs): decode is maverick's per-item predict() served by a
+#     stand-in that holds ALL slices by construction (the reference path's bit-faithfulness),
+#     so it RESERVES the full retained sum up front (forward_budget_after_retained) — never a
+#     raw OOM, a bounded RetainedTooLargeError instead, pointing at the streaming jax path.
+def retained_lhs_bytes(mm: MemModel, lengths) -> int:
+    """Total device bytes the batched encode RETAINS co-resident when EVERY doc's lhs is held
+    at once (decode-after-encode-all): each doc's UNPADDED [S_i, hidden] fp32 last-hidden-state
+    slice. This is the O(total docs) accumulation term the per-forward budget omits — exact for
+    the unpadded slice (S_i * hidden elements, fp32), derived from the SAME MemModel (no second
+    literal)."""
+    return sum(int(s) for s in lengths) * mm.hidden * mm.bytes_per_elem
+
+
+class RetainedTooLargeError(RuntimeError):
+    """The batched encode's RETAINED lhs slices (every doc's [S_i, hidden] held co-resident
+    until decode drains them) do not leave room in the arena for even one forward — an
+    O(total docs) ACCUMULATION across the call, NOT a single oversized doc (that is
+    DocTooLargeError). Raised LOUD and BOUNDED (ADR-0000/ADR-0002) on the path that retains all
+    slices, INSTEAD of letting a later in-budget forward hit a raw RESOURCE_EXHAUSTED. The
+    remediation is concrete: use the streaming jax-unified path (which frees each slice after
+    its decode and processes an unbounded corpus), send fewer docs per request, raise
+    --mem-fraction, shorten the docs, or use a larger card."""
+
+    def __init__(self, n_docs: int, retained_bytes: int, available_bytes: int):
+        self.n_docs = n_docs
+        self.retained_bytes = retained_bytes
+        self.available_bytes = available_bytes
+        gib = float(1 << 30)
+        super().__init__(
+            f"{n_docs} documents retain ~{retained_bytes / gib:.2f} GiB of [S_i, hidden] encode "
+            f"slices co-resident (held until decode), but only ~{available_bytes / gib:.2f} GiB "
+            f"of device arena is free (after weights + headroom) — leaving no room for even one "
+            f"forward. This is the retained-output accumulation OOM class, not a single huge doc: "
+            f"use the STREAMING jax-unified coref path (frees each slice after its decode, so an "
+            f"unbounded corpus fits), send fewer documents per request, raise "
+            f"XLA_PYTHON_CLIENT_MEM_FRACTION (--mem-fraction), shorten the documents, or run on a "
+            f"larger card.")
+
+
+def forward_budget_after_retained(available_bytes: int, mm: MemModel, lengths) -> int:
+    """The arena left for ANY ONE forward's variable peak after RESERVING every doc's retained
+    lhs slice (`retained_lhs_bytes`) — the budget the chunker must use on a path that holds ALL
+    slices co-resident (the torch reference path). Reserving the FULL retained sum UP FRONT,
+    before chunking, conservatively foreclosees the retained-accumulation OOM class: the chunker
+    that consumes this reduced budget can never schedule a forward that, together with the slices
+    already on-arena, exceeds `available_bytes`. It over-reserves by the current chunk's own
+    not-yet-produced slice (the forward runs before its outputs materialise) — SAFE; the
+    invariant forbids only UNDER-estimation. If the retained set alone leaves no room for a
+    forward, raises RetainedTooLargeError (loud, bounded) rather than handing the chunker a
+    non-positive budget that would mis-report as a per-doc DocTooLargeError."""
+    lengths = list(lengths)  # materialise once (a generator would be drained by retained_lhs_bytes)
+    retained = retained_lhs_bytes(mm, lengths)
+    reserved = available_bytes - retained
+    if reserved <= 0:
+        raise RetainedTooLargeError(len(lengths), retained, available_bytes)
+    return reserved
+
+
+def chunk_by_vram(lengths, mm: MemModel, available_bytes: int, max_docs: int):
+    """Greedily split doc indices [0..N) into CONTIGUOUS chunks (input order preserved) so that
+    EVERY chunk's forward provably fits `available_bytes` — i.e.
+    `peak_variable_bytes(mm, len(chunk), max(length in chunk)) <= available_bytes` — and no
+    chunk exceeds `max_docs`. The variable-length chunker for the TORCH batched encode
+    (nlp_server._encode_docs): a large max_S forces a small B (down to 1), a small max_S admits
+    a large B — the OOM CLASS is unrepresentable because the bound IS the quadratic peak itself,
+    not a linear proxy. Returns list[list[int]] of original indices; concatenating chunk outputs
+    in order rebuilds alignment.
+
+    A single doc that does not fit even alone (peak at B=1 > available) raises DocTooLargeError —
+    a clear, bounded error, NEVER a silent drop and NEVER a raw RESOURCE_EXHAUSTED. (The greedy
+    loop never PACKS an overflow: a doc only joins a chunk when the candidate peak still fits, so
+    the ONLY way a chunk can exceed `available` is a LONE doc too big at B=1 — exactly the raise
+    below.)
+
+    THE single author of the `peak <= available` decision is `peak_variable_bytes` (P1); this
+    function only sequences the greedy grouping. Pure python (framework-free) -> the never-OOM
+    invariant is unit-testable on the guest without torch/jax."""
     chunks: list[list[int]] = []
     cur: list[int] = []
     cur_max = 0
     for i, n in enumerate(lengths):
-        cand_max = cur_max if n <= cur_max else n
-        cand_cells = cand_max * (len(cur) + 1)
-        if cur and (len(cur) >= max_docs or cand_cells > max_padded_tokens):
+        cand_max = n if n > cur_max else cur_max
+        cand_peak = peak_variable_bytes(mm, len(cur) + 1, cand_max)
+        if cur and (len(cur) >= max_docs or cand_peak > available_bytes):
             chunks.append(cur)
             cur, cur_max = [i], n
         else:
@@ -180,6 +401,17 @@ def chunk_by_token_budget(lengths, max_padded_tokens: int, max_docs: int):
             cur_max = cand_max
     if cur:
         chunks.append(cur)
+    # PROVABLE never-OOM invariant + the single-huge-doc raise. By construction every MULTI-doc
+    # chunk already fits (the greedy test gated each admission); the only chunk that can fail
+    # this check is a LONE doc too big at B=1 -> fail LOUD, bounded (never a raw OOM).
+    for ch in chunks:
+        s_max = max(lengths[j] for j in ch)
+        peak = peak_variable_bytes(mm, len(ch), s_max)
+        if peak > available_bytes:
+            assert len(ch) == 1, (  # a packed-overflow would be an invariant violation (a bug)
+                f"chunk_by_vram packed an over-budget multi-doc chunk {ch} "
+                f"(peak {peak} > available {available_bytes}) — greedy admission is broken")
+            raise DocTooLargeError(s_max, peak, available_bytes, mm)
     return chunks
 
 
@@ -218,32 +450,39 @@ def batch_bucket_floor(n: int, ladder: tuple[int, ...]) -> int:
     return chosen
 
 
-def encode_batch_chunks(group_indices, s_bucket: int,
-                        max_padded_tokens: int = ENCODE_MAX_PADDED_TOKENS,
+def encode_batch_chunks(group_indices, s_bucket: int, mm: MemModel, available_bytes: int,
                         max_docs: int = ENCODE_MAX_DOCS,
                         batch_ladder: tuple[int, ...] = ENCODE_BATCH_BUCKETS):
     """Split a SAME-s_bucket group of doc indices into FIXED-batch-size chunks for the
     bucket-group batched jax encode, returning (chunks, B) where every chunk has <= B docs
-    and B is a single B-ladder rung (the last chunk is padded UP to B with masked dummy
-    rows by the caller — that is what makes the forward shape a constant [B, s_bucket]).
+    and B is a single B-ladder rung (the last chunk is padded UP to B with masked dummy rows
+    by the caller — that is what makes the forward shape a constant [B, s_bucket]).
 
-    B is the largest B-ladder rung that fits the OOM bound at this s_bucket. The OOM
-    capacity is taken FROM `chunk_by_token_budget` (the ONE author of the b*S<=budget
-    inequality) on the uniform-length group, then floored to a ladder rung — this file does
-    NOT re-derive the inequality. B is NOT a pure function of s_bucket: oom_cap == n for a
-    group below the OOM ceiling, so B = batch_bucket_floor(min(n, floor(budget/s), max_docs))
-    TRACKS the per-request group size n and, across a request stream at a fixed s_bucket,
+    B is the largest B-ladder rung that PROVABLY fits the VRAM bound at this s_bucket. The OOM
+    capacity comes FROM `max_batch_for_length(mm, s_bucket, available_bytes)` — the ONE
+    inequality `peak_variable_bytes(B, S) <= available` solved for B at the uniform group
+    length — then min'd with the group size and max_docs and floored to a ladder rung. This
+    file does NOT re-derive the inequality (P1). Because batch_bucket_floor rounds DOWN to a
+    rung <= the VRAM cap, peak_variable_bytes(B, s_bucket) <= available for EVERY emitted chunk
+    (the never-OOM invariant, on the jax path).
+
+    B is NOT a pure function of s_bucket: the VRAM cap == the group size n whenever n is below
+    the per-s_bucket ceiling, so B TRACKS n and, across a request stream at a fixed s_bucket,
     sweeps the whole B-ladder. The (B, s_bucket) compile grid is therefore bounded by
     len(ENCODE_BATCH_BUCKETS) * len(ENCODE_LEN_BUCKETS) — still a CONSTANT (no O(requests)
     re-leak — the leak fix holds), but LOOSER than the per-text (B=1) path by up to
     len(ENCODE_BATCH_BUCKETS): the honest cost batching trades for the dispatch collapse.
-    FAIL LOUD via the helpers on a malformed ladder/length."""
+
+    A doc whose s_bucket cannot fit even at B=1 (VRAM cap == 0) raises DocTooLargeError — the
+    SAME loud, bounded handling as chunk_by_vram, never a raw RESOURCE_EXHAUSTED."""
     if not group_indices:
         return [], batch_ladder[0]
     n = len(group_indices)
-    # OOM capacity for THIS s_bucket from the ONE bound (uniform lengths -> the first/full
-    # chunk's size is the per-chunk doc capacity that keeps cap*s_bucket <= budget).
-    oom_cap = max(len(c) for c in chunk_by_token_budget([s_bucket] * n, max_padded_tokens, max_docs))
+    vram_cap = max_batch_for_length(mm, s_bucket, available_bytes)  # largest B that fits at s_bucket
+    if vram_cap < 1:
+        raise DocTooLargeError(
+            s_bucket, peak_variable_bytes(mm, 1, s_bucket), available_bytes, mm)
+    oom_cap = min(vram_cap, max_docs, n)
     b = batch_bucket_floor(oom_cap, batch_ladder)  # round the capacity DOWN to a fixed B-rung
     chunks = [group_indices[i:i + b] for i in range(0, n, b)]
     return chunks, b

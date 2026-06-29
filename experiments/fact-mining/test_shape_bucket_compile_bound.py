@@ -47,6 +47,15 @@ import jax_deberta as JD
 import jax_decode as DEC
 import shape_buckets as SB
 
+# Explicit VRAM budgets for the tiny-model batched-encode gates (the guest is CPU, so the
+# encode chunker's `available_bytes` is INJECTED rather than queried from a device arena). The
+# SMALL budget forces small per-bucket B (multiple chunks + remainders — the inertness/grid
+# regime); the LARGE budget lets B track the group size across a request stream. Derived to be
+# comparable to the old linear `max_padded_tokens=256` behaviour under the tiny mm
+# (peak_variable_bytes(B,S) = 64*B*S^2 + 1920*B*S for the _tiny_cfg): B≈{64:8,128:2,256:1}.
+_TEST_AVAIL_SMALL = 5_000_000
+_TEST_AVAIL_LARGE = 100_000_000
+
 
 # ----------------------------------------------------------------- tiny models
 def _tiny_cfg() -> JD.DebertaCfg:
@@ -344,10 +353,11 @@ def test_encode_batched_equals_per_text():
     # mixed S across rungs {64,128,256}; sizes chosen so groups have remainders under B.
     Ss = [30, 31, 32, 100, 101, 102, 103, 200, 250, 33, 34, 99]
     docs = [_Doc(S, seed=400 + i) for i, S in enumerate(Ss)]
-    # small budget -> small B per bucket -> multiple chunks + remainders exercised.
+    mm = H.mem_model_from(cfg, params)
+    # small VRAM budget -> small B per bucket -> multiple chunks + remainders exercised.
     batched = H.encode_lhs_batched(
         params, cfg, [d.input_ids for d in docs], [d.attention_mask for d in docs],
-        max_padded_tokens=256, max_docs=64)
+        mm=mm, available_bytes=_TEST_AVAIL_SMALL, max_docs=64)
     worst = 0.0
     for d, lhs_b in zip(docs, batched):
         per_text = np.asarray(H.encode_lhs(params, cfg, d.input_ids, d.attention_mask))
@@ -366,15 +376,16 @@ def test_encode_batch_compile_bound():
     First measure that variable-B leak, then the bounded batched path, and assert the bound is
     non-vacuous (bucketed < leak).
 
-    SCOPE of this gate: ONE call at a SATURATING budget (max_padded_tokens=256), where each
-    s_bucket appears as exactly one group and the small budget pins B at the OOM cap, so the
+    SCOPE of this gate: ONE call at a SATURATING VRAM budget (_TEST_AVAIL_SMALL), where each
+    s_bucket appears as exactly one group and the small budget pins B at the VRAM cap, so the
     per-call grid == #s-buckets touched. B is NOT a pure function of s_bucket in general — it
     tracks the request's group size — so the LIFETIME grid across a request stream is looser
     (up to len(BATCH)*len(LEN)); that regime is the separate
-    test_encode_batch_compile_bound_across_requests gate at the default budget. Do not read
+    test_encode_batch_compile_bound_across_requests gate at a larger budget. Do not read
     this per-call `== #s-buckets` as the daemon's lifetime bound."""
     cfg = _tiny_cfg()
     params = _tiny_deberta_params(cfg)
+    mm = H.mem_model_from(cfg, params)
     # group sizes per bucket chosen to produce remainder chunks of DIFFERENT real sizes
     # (a variable-B encode would compile one executable per distinct real size).
     Ss = ([40] * 7 + [90] * 5 + [200] * 6 + [40] * 3 + [90] * 2)  # rungs {64,128,256}
@@ -392,7 +403,7 @@ def test_encode_batch_compile_bound():
         groups.setdefault(SB.bucket_len(len(x), SB.ENCODE_LEN_BUCKETS), []).append(i)
     leak_shapes = set()
     for s_bucket, group in groups.items():
-        chunks, _b = SB.encode_batch_chunks(group, s_bucket, 256, 64)
+        chunks, _b = SB.encode_batch_chunks(group, s_bucket, mm, _TEST_AVAIL_SMALL, 64)
         for ch in chunks:
             r = len(ch)  # REAL chunk size (no dummy-row padding to a fixed B)
             rows_ids = [SB.pad_to(ids[j], s_bucket, SB.ENCODE_PAD_ID) for j in ch]
@@ -405,7 +416,8 @@ def test_encode_batch_compile_bound():
 
     # --- bounded batched path: B from the ladder, fixed per s_bucket -> grid == #s-buckets.
     JD._encode_core.clear_cache()
-    out = H.encode_lhs_batched(params, cfg, ids, mask, max_padded_tokens=256, max_docs=64)
+    out = H.encode_lhs_batched(params, cfg, ids, mask, mm=mm,
+                               available_bytes=_TEST_AVAIL_SMALL, max_docs=64)
     bounded = JD._encode_core._cache_size()
     assert len(out) == len(docs) and all(o is not None for o in out)
     assert bounded == len(s_buckets), (
@@ -415,7 +427,7 @@ def test_encode_batch_compile_bound():
     assert bounded < leak, f"bound is vacuous: bucketed {bounded} !< variable-B leak {leak}"
     # every B used is a ladder rung (the structural bounded-set invariant)
     for s_bucket in s_buckets:
-        _ch, b = SB.encode_batch_chunks(groups[s_bucket], s_bucket, 256, 64)
+        _ch, b = SB.encode_batch_chunks(groups[s_bucket], s_bucket, mm, _TEST_AVAIL_SMALL, 64)
         assert b in SB.ENCODE_BATCH_BUCKETS, f"B={b} for s={s_bucket} not on the B-ladder"
     print(f"\n[encode batch compile bound] variable-B leak={leak}, batched={bounded}, "
           f"#s-buckets={len(s_buckets)}")
@@ -424,10 +436,11 @@ def test_encode_batch_compile_bound():
 def test_encode_batch_compile_bound_across_requests():
     """(b') THE LIFETIME LEAK GATE at the DEFAULT (non-saturating) budget. JAX's compile
     cache persists ACROSS daemon requests, so the daemon's real bound is the (B, s_bucket)
-    grid accumulated over a request STREAM, not within one call. At the default budget B is
-    NOT single-valued per s_bucket: B = batch_bucket_floor(min(n, floor(budget/s), max_docs)),
-    and for a group below the OOM ceiling oom_cap == n, so B sweeps the ENCODE_BATCH_BUCKETS
-    ladder as the per-bucket group size varies request to request. The grid is therefore
+    grid accumulated over a request STREAM, not within one call. At a non-saturating budget B is
+    NOT single-valued per s_bucket: B = batch_bucket_floor(min(n, vram_cap, max_docs)), and for a
+    group below the per-s_bucket VRAM ceiling vram_cap >= n, so oom_cap == n and B sweeps the
+    ENCODE_BATCH_BUCKETS ladder as the per-bucket group size varies request to request. The grid
+    is therefore
     bounded by len(ENCODE_BATCH_BUCKETS) * len(ENCODE_LEN_BUCKETS) — a CONSTANT (the
     O(requests) leak is NOT back), but LOOSER than the per-text (B=1) path by up to
     len(ENCODE_BATCH_BUCKETS). This gate accumulates the persistent cache over a stream that
@@ -437,10 +450,11 @@ def test_encode_batch_compile_bound_across_requests():
     denied)."""
     cfg = _tiny_cfg()
     params = _tiny_deberta_params(cfg)
+    mm = H.mem_model_from(cfg, params)
     JD._encode_core.clear_cache()
     # a STREAM of requests, every one touching ONLY s_bucket=64 (S~40), with DIFFERENT
-    # per-bucket group sizes so B walks the ladder. DEFAULT budget (no max_padded_tokens
-    # override): floor(8192/64)=128 >= max_docs=64 -> oom_cap = min(n, 64) -> B tracks n.
+    # per-bucket group sizes so B walks the ladder. LARGE budget (_TEST_AVAIL_LARGE): the
+    # per-s_bucket VRAM cap >> max_docs=64 -> oom_cap = min(n, 64) -> B tracks n.
     seen_b = set()
     seed = 700
     for n in (1, 3, 5, 10, 20, 40):
@@ -448,8 +462,8 @@ def test_encode_batch_compile_bound_across_requests():
         seed += n
         ids = [d.input_ids for d in docs]
         mask = [d.attention_mask for d in docs]
-        H.encode_lhs_batched(params, cfg, ids, mask)  # DEFAULT budget — the daemon's regime
-        _ch, b = SB.encode_batch_chunks(list(range(n)), 64)
+        H.encode_lhs_batched(params, cfg, ids, mask, mm=mm, available_bytes=_TEST_AVAIL_LARGE)
+        _ch, b = SB.encode_batch_chunks(list(range(n)), 64, mm, _TEST_AVAIL_LARGE)
         seen_b.add(b)
     grid = JD._encode_core._cache_size()
     # (b) NON-vacuous: one s_bucket ALONE minted >1 compile -> B is NOT single-valued per
@@ -466,30 +480,101 @@ def test_encode_batch_compile_bound_across_requests():
           f"compiles, B spread={sorted(seen_b)} (bound len(BATCH)*len(LEN)={ceiling})")
 
 
-def test_coref_documents_batched_equals_per_text():
+# VRAM budgets that drive the SAME 8 docs (all rung 64) into THREE distinct chunkings, so the
+# discrete cluster gate runs over genuinely different batch groupings (Reviewer Gate 1). Under
+# the tiny mm peak(B,64)=64*B*64^2+1920*B*64=385024*B: tight->B=1 (8 chunks of 1), mid->B=4
+# (2 chunks of 4), wide->B=8 (one chunk). available_vram_bytes is monkeypatched to each.
+_CHUNKING_BUDGETS = {
+    "tight": 500_000,     # < peak(2,64)=770048 -> B=1, every doc its own chunk
+    "mid": 2_000_000,     # >= peak(4,64)=1_540_096, < peak(8,64) -> B=4
+    "wide": 10_000_000,   # >= peak(8,64)=3_080_192 -> B=8, one chunk (capped by group size)
+}
+
+
+@pytest.mark.parametrize("budget_id", list(_CHUNKING_BUDGETS))
+def test_coref_documents_batched_equals_per_text(budget_id, monkeypatch):
     """(c) The DISCRETE invariant end-to-end (ADR-0009 tier-1): the cluster SETS through the
     FULL coref forward (encode -> decode) are IDENTICAL whether the encode is batched by
-    bucket-group (coref_documents_host) or run per-text (coref_document_host, B=1). The
-    decode tail is the unchanged per-doc path; only the encode grouping differs."""
+    bucket-group (coref_documents_host) or run per-text (coref_document_host, B=1) — and
+    INVARIANT across VRAM-DISTINCT chunkings (Gate 1): the SAME docs are forced into B=1/B=4/B=8
+    groupings by injecting tight/mid/wide budgets, and every grouping must yield the identical
+    cluster sets (chunk membership is inert). The decode tail is the unchanged per-doc path;
+    only the encode grouping differs. Streaming decode-after-encode (FINDING 1) does not perturb
+    it — encode is inert to order, so the streamed clusters equal the per-text reference."""
     cfg = _tiny_cfg()
     dparams = _tiny_deberta_params(cfg)
     decode_params = _tiny_decode_params()
-    Ss = [18, 27, 33, 41, 55, 70, 19, 28]  # varied S incl. cross-bucket K/P, same rung 64
+    Ss = [18, 27, 33, 41, 55, 63, 19, 28]  # varied S, cross-bucket decode K/P, all <=64 (one rung)
     docs = [_Doc(S, seed=600 + i) for i, S in enumerate(Ss)]
+    # inject the budget coref_documents_host derives (CPU guest has no device arena); this is
+    # what makes the chunking VRAM-distinct across the parametrize ids.
+    monkeypatch.setattr(H, "available_vram_bytes", lambda: _CHUNKING_BUDGETS[budget_id])
+    # confirm the budget really produces the intended grouping (the gate is non-vacuous: the
+    # three ids are genuinely different chunkings, not the same one relabelled).
+    mm = H.mem_model_from(cfg, dparams)
+    _chunks, b = SB.encode_batch_chunks(list(range(len(docs))), 64, mm,
+                                        _CHUNKING_BUDGETS[budget_id], SB.ENCODE_MAX_DOCS)
+    assert b == {"tight": 1, "mid": 4, "wide": 8}[budget_id], f"{budget_id} grouping drifted: B={b}"
 
     for singletons in (False, True):
         # per-text reference (B=1): the existing coref_document_host, one doc at a time
         ref = [_cluster_sets(H.coref_document_host(
             dparams, cfg, decode_params, d.input_ids, d.attention_mask, d.eos_mask,
             d.tokens, d.subtoken_map, d.new_token_map, singletons=singletons)) for d in docs]
-        # batched path (small budget -> real multi-doc batches with remainders)
+        # batched/streamed path at this budget's chunking
         got_tok = H.coref_documents_host(dparams, cfg, decode_params, docs, singletons=singletons)
         got = [_cluster_sets(c) for c in got_tok]
         for S, r, g in zip(Ss, ref, got):
-            assert r == g, f"cluster sets differ batched vs per-text at S={S}, singletons={singletons}"
+            assert r == g, (
+                f"cluster sets differ batched({budget_id},B={b}) vs per-text at S={S}, "
+                f"singletons={singletons}")
     # non-vacuity: at least one >=2-mention cluster exercised
     any_multi = any(len(c) >= 2 for cs in got for c in cs)
     assert any_multi, "VACUOUS: no >=2-mention cluster — strengthen the fixture"
+
+
+def test_coref_documents_streams_decode_after_encode(monkeypatch):
+    """FINDING 1 (the jax-path foreclosure, guest-proven): coref_documents_host must INTERLEAVE
+    encode and decode — decode each chunk's docs and FREE their lhs BEFORE the next chunk's
+    forward — so co-resident retained lhs never exceeds one chunk and an unbounded corpus fits.
+    Probe the control flow: count encode-forward calls; at each decode record how many forwards
+    have run so far. STREAMING => the first decode runs after only the FIRST forward (count==1),
+    and the counts step 1,2,3,... in lockstep with decode; the OLD encode-ALL-then-decode-ALL
+    shape would show every decode seeing the FULL forward count. Independent of float values, so
+    it is a pure structural gate."""
+    cfg = _tiny_cfg()
+    dparams = _tiny_deberta_params(cfg)
+    decode_params = _tiny_decode_params()
+    docs = [_Doc(20, seed=900 + i) for i in range(6)]  # all rung 64
+    monkeypatch.setattr(H, "available_vram_bytes", lambda: 500_000)  # B=1 -> 6 single-doc chunks
+
+    forwards = [0]
+    real_encode = JD.encode
+
+    def counting_encode(*a, **k):
+        forwards[0] += 1
+        return real_encode(*a, **k)
+
+    monkeypatch.setattr(H.jax_deberta, "encode", counting_encode)
+    seen_at_decode: list[int] = []
+    real_decode = H.decode_document
+
+    def recording_decode(*a, **k):
+        seen_at_decode.append(forwards[0])
+        return real_decode(*a, **k)
+
+    monkeypatch.setattr(H, "decode_document", recording_decode)
+    H.coref_documents_host(dparams, cfg, decode_params, docs)
+
+    n_forwards = forwards[0]
+    assert n_forwards >= 2, "fixture too weak: need >=2 chunks to distinguish streaming from batch"
+    assert seen_at_decode[0] == 1, (
+        f"first decode saw {seen_at_decode[0]} forwards, not 1 -> NOT streaming "
+        f"(encode-all-then-decode-all would have all {n_forwards} forwards done before any decode)")
+    assert seen_at_decode == sorted(seen_at_decode), "decode/encode interleave is not monotone"
+    assert seen_at_decode == list(range(1, len(docs) + 1)), (
+        f"expected 1:1 interleave 1..{len(docs)}, got {seen_at_decode} (retention not bounded to "
+        f"one chunk)")
 
 
 if __name__ == "__main__":

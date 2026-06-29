@@ -4,9 +4,11 @@
 These run WITHOUT maverick/GPU (the encode cluster-fidelity is host-only, confirmed by
 `load_facts --coref-verify`). What they DO prove here, on the guest:
 
-  1. the OOM bound exists and is correct — `nlp_server.chunk_by_token_budget` caps each
-     padded forward by a padded-token budget AND a doc count, preserves text order,
-     never drops a doc, and degrades to one-doc-per-chunk for an oversize doc;
+  1. the OOM bound exists and is correct — `shape_buckets.chunk_by_vram` caps each padded
+     forward by the DERIVED quadratic-aware VRAM peak AND a doc count, preserves text order,
+     never drops a doc, degrades to one-doc-per-chunk, and raises a bounded DocTooLargeError
+     (never a raw OOM) for a doc too big even at B=1 (the never-OOM property itself, over
+     pathological distributions, is the headline gate in test_oom_invariant.py);
   2. the multi-doc decode WIRE round-trips BIT-EXACT per doc — N docs' float32 lhs ->
      `_doc_meta`/`pack_lhs` -> raw bytes -> `unpack_lhs` == the original array, per doc;
   3. the multi-doc decode plumbing is correct end-to-end THROUGH THE REAL CLIENT AND
@@ -32,50 +34,56 @@ import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-import nlp_server
+import nlp_server  # noqa: F401  (kept: confirms the import surface still resolves after the rename)
+import shape_buckets as SB
 import coref_decode_client as C
 import coref_decode_server as S
 
 
-# ============================================================ (1) the OOM bound
-def test_chunk_token_budget_splits_and_preserves_order():
-    chunk = nlp_server.chunk_by_token_budget
-    # budget binds: pad-to-max cells (len*max) must stay <= budget. [10,10,10,10] @ 20
-    # -> [10,10]=20 ok, adding a 3rd =>3*10=30>20 -> split.
-    assert chunk([10, 10, 10, 10], 20, 64) == [[0, 1], [2, 3]]
-    # the doc-count cap binds first when the budget is huge.
-    assert chunk([1, 1, 1, 1, 1], 10**9, 2) == [[0, 1], [2, 3], [4]]
+# ============================================================ (1) the OOM bound (VRAM-derived)
+# A toy memory model with peak_variable_bytes(B, S) == B*S^2 (num_heads=k_quad=1, every other
+# term zeroed, 1 byte/elem), so the chunk boundaries are hand-checkable. The REAL never-OOM
+# property over pathological distributions — and that the OLD linear budget FAILS it — is the
+# headline gate in test_oom_invariant.py; here we pin the chunker's contract (order, coverage,
+# never-drop, degrade-to-one, and the loud single-huge-doc raise).
+def _toy_mm():
+    return SB.MemModel(num_heads=1, hidden=0, intermediate=0, pos_ebd_size=0,
+                       bytes_per_elem=1, k_quad=1, k_disent=0, a_hidden=0, a_inter=0)
 
 
-def test_chunk_oversize_doc_forms_own_chunk_never_dropped():
-    chunk = nlp_server.chunk_by_token_budget
-    # a single doc bigger than the budget cannot share a chunk and is NEVER dropped:
-    # it forms its own chunk (the safe floor — one doc per forward).
-    out = chunk([100, 5, 5], 50, 64)
-    assert out == [[0], [1, 2]]
-    # exhaustive invariants over a random workload: order preserved, every index once,
-    # and every chunk within BOTH bounds (except a lone oversize doc, allowed alone).
-    rng = np.random.default_rng(0)
-    for _ in range(200):
-        lengths = [int(x) for x in rng.integers(1, 40, size=int(rng.integers(0, 12)))]
-        budget = int(rng.integers(20, 200))
-        maxd = int(rng.integers(1, 6))
-        chunks = chunk(lengths, budget, maxd)
-        flat = [i for ch in chunks for i in ch]
-        assert flat == list(range(len(lengths))), "order/coverage broken"
-        for ch in chunks:
-            assert len(ch) <= maxd
-            cells = len(ch) * max(lengths[i] for i in ch)
-            assert cells <= budget or len(ch) == 1, "over budget without being a lone doc"
+def test_chunk_by_vram_splits_and_preserves_order():
+    mm = _toy_mm()
+    # peak = B*S^2. available=250: [10,10]=2*100=200 ok; adding a 3rd =>3*100=300>250 -> split.
+    assert SB.chunk_by_vram([10, 10, 10, 10], mm, 250, 64) == [[0, 1], [2, 3]]
+    # the doc-count cap binds first when the arena is huge.
+    assert SB.chunk_by_vram([1, 1, 1, 1, 1], mm, 10**18, 2) == [[0, 1], [2, 3], [4]]
+
+
+def test_chunk_big_doc_fitting_alone_forms_own_chunk_never_dropped():
+    mm = _toy_mm()
+    # doc0 (S=100, peak@B=1 = 10000) fits ALONE at available=10000 but cannot SHARE
+    # (peak@B=2,S=100 = 20000 > 10000), so it forms its own chunk and is NEVER dropped; the
+    # two short docs (S=5) batch together. The safe floor: one doc per forward.
+    assert SB.chunk_by_vram([100, 5, 5], mm, 10000, 64) == [[0], [1, 2]]
+
+
+def test_chunk_single_huge_doc_raises_bounded_not_oom():
+    mm = _toy_mm()
+    # doc0 cannot fit even at B=1 (peak@B=1 = 10000 > available 5000): a LOUD, bounded
+    # DocTooLargeError, NEVER a silent drop and NEVER a raw RESOURCE_EXHAUSTED.
+    import pytest
+    with pytest.raises(SB.DocTooLargeError) as ei:
+        SB.chunk_by_vram([100, 5, 5], mm, 5000, 64)
+    assert ei.value.seq_len == 100 and ei.value.available_bytes == 5000
 
 
 def test_chunk_edge_cases():
-    chunk = nlp_server.chunk_by_token_budget
-    assert chunk([], 8192, 64) == []
-    assert chunk([7], 8192, 64) == [[0]]            # n==1
-    # the live defaults keep a typical 5-paragraph request in ONE forward.
-    assert chunk([120] * 5, nlp_server.ENCODE_MAX_PADDED_TOKENS,
-                 nlp_server.ENCODE_MAX_DOCS) == [[0, 1, 2, 3, 4]]
+    mm = _toy_mm()
+    assert SB.chunk_by_vram([], mm, 8192, 64) == []
+    assert SB.chunk_by_vram([7], mm, 8192, 64) == [[0]]            # n==1 fits (49 <= 8192)
+    # a typical 5-paragraph request (S=120) stays in ONE forward when the arena is ample:
+    # peak(5,120) = 5*120^2 = 72000 <= 80000.
+    assert SB.chunk_by_vram([120] * 5, mm, 80000, SB.ENCODE_MAX_DOCS) == [[0, 1, 2, 3, 4]]
 
 
 # ===================================================== (2) multi-doc wire bit-exact

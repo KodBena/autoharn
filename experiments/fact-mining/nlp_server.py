@@ -59,13 +59,15 @@ from spacy.tokens import DocBin
 
 from extract import doc_to_facts  # SSOT per-doc fact extractor (ADR-0012 P1)
 # SSOT shape-policy primitives (ONE home; never copied): the masked-padding primitive and
-# the OOM bound (chunk_by_token_budget + its ENCODE_MAX_* budget). The OOM bound was
-# relocated to shape_buckets so the jax bucket-group batched encode shares it (the
-# do-not-copy mandate); imported here so `nlp_server.chunk_by_token_budget` etc. still
-# resolve for callers/tests while the definition keeps one home. See the OOM-bound comment
-# below for the derive-from-what-exhausts-memory rationale (ADR-0000 Specimen 3/4; P1).
+# the OOM bound (the conservative memory model `MemModel`/`peak_variable_bytes` + the
+# VRAM-derived `chunk_by_vram` + the shared `headroom_bytes` rule). The OOM bound lives in
+# shape_buckets so the jax bucket-group batched encode shares the SAME inequality (the
+# do-not-copy mandate); imported here so the torch batched encode consumes it, never forking
+# a second budget. See the OOM-bound comment below + shape_buckets for the
+# derive-from-what-actually-exhausts-memory (quadratic peak) rationale (ADR-0000 Specimen 3; P1).
 from shape_buckets import (  # the ONE padder + the ONE OOM bound (P1)
-    ENCODE_MAX_DOCS, ENCODE_MAX_PADDED_TOKENS, chunk_by_token_budget, pad_to)
+    ENCODE_MAX_DOCS, MemModel, chunk_by_vram, cpu_fallback_available_bytes,
+    forward_budget_after_retained, headroom_bytes, pad_to)
 from spans import get_tracer  # SSOT tracer (no jax/numpy import; host-only psycopg, lazy)
 
 
@@ -121,12 +123,14 @@ def encode_last_hidden_state(model, input_ids, attention_mask):
 
 
 # ---------------------------------------------------------------- OOM bound
-# chunk_by_token_budget + ENCODE_MAX_* are imported at the top (the ONE home is
-# shape_buckets; the jax bucket-group batched encode shares the same bound). A batched
-# deberta encode runs ONE padded forward over [N, max_S, TH]; unbounded N over a whole book
-# OOMs the card, so the bound caps the linear N*max_S padded footprint batching adds
-# (derived from what exhausts memory, not a magic count — ADR-0000 Specimen 3/4). Full
-# rationale + the function live in shape_buckets.py.
+# The memory model (MemModel/peak_variable_bytes), the VRAM chunker (chunk_by_vram) and the
+# headroom rule are imported at the top (the ONE home is shape_buckets; the jax bucket-group
+# batched encode shares the SAME inequality). A batched deberta encode runs ONE padded forward
+# over [N, max_S, TH]; its peak is QUADRATIC in max_S (the disentangled-attention [N,H,S,S]
+# scores), so the chunker bounds that derived BYTES peak against the free CUDA memory — not a
+# linear token proxy that was blind to it (ADR-0000 Specimen 3; the full rationale + the
+# functions live in shape_buckets.py). _encode_docs derives `mm` from the encoder's HF config +
+# the actual FFN weight and `available` from torch.cuda.mem_get_info, mirroring the jax path.
 
 
 class _PrecomputedEncoder:
@@ -266,7 +270,7 @@ class Server:
              offsets), EXACTLY as predict does, so the per-item tokenisation is identical;
           2. pad to the (chunk) max and run `model.encoder(...)` ONCE per chunk over
              [N, max_S, TH] on the GPU (one pass instead of N sequential ones), fp32 —
-             chunked by `chunk_by_token_budget` so the padded forward is OOM-bounded
+             chunked by `chunk_by_vram` so the padded forward is OOM-bounded
              (never one giant pad over a book);
           3. slice each doc's UNPADDED hidden state `[S_i, TH]` back out of its chunk.
 
@@ -300,10 +304,44 @@ class Server:
         pad_id = tokenizer.pad_token_id if tokenizer.pad_token_id is not None else 0
         dev = next(model.encoder.parameters()).device
 
-        # (2)+(3) one padded forward per OOM-bounded chunk; slice unpadded lhs per doc.
+        # OOM bound inputs — the SAME memory model + headroom rule as the jax path; only the
+        # free-memory QUERY differs by framework (here torch/CUDA). `mm` from the encoder's HF
+        # config (num_heads/hidden/pos_ebd_size) + its real FFN width (intermediate_size);
+        # `available` from torch's driver-level free (the maverick weights are already resident,
+        # so free already excludes them) minus the shared headroom.
+        enc_cfg = model.encoder.config
+        _max_rel = getattr(enc_cfg, "max_relative_positions", -1)
+        if _max_rel < 1:
+            _max_rel = enc_cfg.max_position_embeddings
+        _pos_buckets = getattr(enc_cfg, "position_buckets", -1)
+        mm = MemModel(
+            num_heads=enc_cfg.num_attention_heads,
+            hidden=enc_cfg.hidden_size,
+            intermediate=enc_cfg.intermediate_size,
+            pos_ebd_size=_pos_buckets if _pos_buckets > 0 else _max_rel,
+        )
+        if dev.type == "cuda":
+            free, total = torch.cuda.mem_get_info(dev)  # driver free already excludes resident weights
+            available = max(0, free - headroom_bytes(total))
+        else:
+            available = cpu_fallback_available_bytes()  # ONE home (P1), shared with the jax path
+
+        # FINDING 1 — the RETAINED-OUTPUT OOM class (one level up from the per-forward bound).
+        # This method RETURNS every doc's [S_i, TH] slice (its consumers — coref_clusters_batched
+        # via the _PrecomputedEncoder, coref_clusters_jax_daemon via the wire — hold ALL of them
+        # co-resident, by construction of maverick's per-item predict()). So the chunker's budget
+        # must RESERVE that O(total docs) accumulation up front, not just one forward's peak. The
+        # jax-unified path STREAMS instead (frees each slice after decode); this torch reference
+        # path cannot without re-architecting the predict() stand-in, so it reserves and fails
+        # LOUD (RetainedTooLargeError, pointing at the streaming path) rather than raw CUDA-OOM.
+        available = forward_budget_after_retained(available, mm, lengths)
+
+        # (2)+(3) one padded forward per VRAM-bounded chunk; slice unpadded lhs per doc. A doc
+        # too big even at B=1 raises shape_buckets.DocTooLargeError (loud, bounded), never a raw
+        # CUDA OOM.
         with _T.span("encode.forward", n_texts=len(texts), max_len=max(lengths) if lengths else 0):
             slices: list[object] = [None] * len(texts)
-            for chunk in chunk_by_token_budget(lengths, ENCODE_MAX_PADDED_TOKENS, ENCODE_MAX_DOCS):
+            for chunk in chunk_by_vram(lengths, mm, available, ENCODE_MAX_DOCS):
                 s_max = max(lengths[i] for i in chunk)
                 # ONE padder (P1): the SSOT `pad_to` — the SAME primitive the jax-unified
                 # encode/decode use (shape_buckets.pad_to). No hand-rolled second padder.

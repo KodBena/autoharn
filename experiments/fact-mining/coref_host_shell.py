@@ -536,8 +536,63 @@ def coref_document_host(deberta_params, deberta_cfg, decode_params,
                            tokens, subtoken_map, new_token_map, singletons)
 
 
+def mem_model_from(deberta_cfg, deberta_params) -> "shape_buckets.MemModel":
+    """Build the framework-free memory model (shape_buckets.MemModel) from the SSOT: the
+    DebertaCfg (num_heads, hidden=num_heads*head_size, pos_ebd_size) + the ACTUAL FFN weight
+    shape (intermediate width). `intermediate` is read off the live
+    `encoder.layer.0.intermediate.dense.weight` out-features rather than added to DebertaCfg,
+    so it is DERIVED from the loaded weights — no second hand-authored architecture constant
+    (ADR-0012 P1/P7). The conservative k_*/a_* multiples stay the MemModel defaults (one home,
+    shape_buckets)."""
+    inter_w = deberta_params["encoder.layer.0.intermediate.dense.weight"]
+    return shape_buckets.MemModel(
+        num_heads=deberta_cfg.num_heads,
+        hidden=deberta_cfg.num_heads * deberta_cfg.head_size,
+        intermediate=int(inter_w.shape[0]),
+        pos_ebd_size=deberta_cfg.pos_ebd_size,
+    )
+
+
+def available_vram_bytes() -> int:
+    """Free device arena for the batched encode's activation budget, DERIVED from jax — not
+    a hardcoded card (ADR-0000 Specimen 3: the bound's inputs come from the one source that
+    makes them meaningful). `available = arena.bytes_limit - arena.bytes_in_use - headroom`,
+    where bytes_limit is the XLA_PYTHON_CLIENT_MEM_FRACTION * device-total arena and
+    bytes_in_use already accounts for the resident weights (deberta + decode). The headroom
+    rule has ONE home (shape_buckets.headroom_bytes), shared with the torch path.
+
+    FAIL LOUD (ADR-0002) on a GPU device that exposes no arena stat rather than guess a bound
+    that could OOM. On CPU jax (the guest; no device arena to exhaust) fall back to an
+    operator-overridable generous default so a non-production CPU daemon still chunks."""
+    dev = jax.local_devices()[0]
+    stats = dev.memory_stats() if hasattr(dev, "memory_stats") else None
+    if not stats or "bytes_limit" not in stats:
+        if dev.platform == "cpu":
+            return shape_buckets.cpu_fallback_available_bytes()  # ONE home (P1), not a re-typed literal
+        raise RuntimeError(
+            f"cannot derive free VRAM: device {dev} (platform={dev.platform}) exposes no "
+            f"memory_stats()['bytes_limit'] — refusing to guess a bound that could OOM. Set "
+            f"COREF_AVAILABLE_VRAM_BYTES explicitly if this device truly lacks the stat.")
+    limit = int(stats["bytes_limit"])
+    in_use = int(stats.get("bytes_in_use", 0))
+    # Headroom BASE differs by framework (Reviewer note): here it is `limit` (the XLA
+    # mem_fraction arena, the only pool jax can allocate from); the torch path uses the whole
+    # card `total` (its mem_get_info `free` is already net of resident weights). Both OVER-
+    # reserve relative to their respective free-memory query, so NEITHER under-estimates — the
+    # one rule (headroom_bytes), two conservative bases. jax's base is the SMALLER arena, so its
+    # margin is the tighter of the two; that is intentional (the arena is all jax can touch).
+    free = limit - in_use - shape_buckets.headroom_bytes(limit)
+    if free <= 0:
+        raise RuntimeError(
+            f"no free VRAM for the encode: arena bytes_limit={limit}, bytes_in_use={in_use}, "
+            f"headroom={shape_buckets.headroom_bytes(limit)} -> {free} <= 0. Weights + headroom "
+            f"already exceed the arena; raise XLA_PYTHON_CLIENT_MEM_FRACTION.")
+    return free
+
+
 def encode_lhs_batched(deberta_params, deberta_cfg, docs_input_ids, docs_attention_mask,
-                       max_padded_tokens: int = shape_buckets.ENCODE_MAX_PADDED_TOKENS,
+                       mm: "shape_buckets.MemModel | None" = None,
+                       available_bytes: "int | None" = None,
                        max_docs: int = shape_buckets.ENCODE_MAX_DOCS):
     """BUCKET-GROUP batched encode: encode many docs in ONE [B, s_bucket] forward per
     (length-bucket, fixed-B) chunk, returning each doc's UNPADDED [S_i, TH] device lhs in
@@ -556,7 +611,9 @@ def encode_lhs_batched(deberta_params, deberta_cfg, docs_input_ids, docs_attenti
         per-text encode + the leak fix use (rounds each S up to its rung);
       * the per-(length-bucket) FIXED batch size B and the chunking come from
         `shape_buckets.encode_batch_chunks`, which draws B from the `ENCODE_BATCH_BUCKETS`
-        ladder and takes its OOM capacity FROM the ONE `chunk_by_token_budget` bound;
+        ladder and takes its OOM capacity FROM the ONE `peak_variable_bytes` memory model
+        (via `max_batch_for_length`), so every emitted [B, s_bucket] forward PROVABLY fits the
+        free arena (`mm` + `available_bytes`, derived once below from the cfg/weights + jax);
       * every row is padded by the ONE `shape_buckets.pad_to` (cols) to s_bucket; the last
         chunk is padded UP to B with masked DUMMY rows so the forward shape is the constant
         [B, s_bucket] (the compile-bound — B/S both from finite ladders).
@@ -570,9 +627,42 @@ def encode_lhs_batched(deberta_params, deberta_cfg, docs_input_ids, docs_attenti
     batched-matmul float noise (~1e-5, the ADR-0009 numeric tier) — proven on the guest by
     test_shape_bucket_compile_bound (batched-then-sliced == per-text, clusters bit-identical)
     and end-to-end by the host --coref-verify on maverick's weights. Text-order alignment is
-    preserved (out[idx] indexed by the original doc index)."""
+    preserved (out[idx] indexed by the original doc index).
+
+    RETENTION (FINDING 1). This list form holds EVERY doc's lhs co-resident at once — an
+    O(total docs) arena consumer ON TOP OF the per-forward peak (shape_buckets retained-output
+    note). It is kept for the FIDELITY tests + B=1 convenience; the STREAMING consumer
+    `coref_documents_host` does NOT build this list — it drives `iter_encode_lhs_batched`
+    directly and frees each lhs after decode, so co-resident retained stays bounded to one
+    chunk and an unbounded corpus fits the arena."""
     n = len(docs_input_ids)
     out: list = [None] * n
+    for di_idx, lhs in iter_encode_lhs_batched(
+            deberta_params, deberta_cfg, docs_input_ids, docs_attention_mask,
+            mm=mm, available_bytes=available_bytes, max_docs=max_docs):
+        out[di_idx] = lhs
+    return out
+
+
+def iter_encode_lhs_batched(deberta_params, deberta_cfg, docs_input_ids, docs_attention_mask,
+                            mm: "shape_buckets.MemModel | None" = None,
+                            available_bytes: "int | None" = None,
+                            max_docs: int = shape_buckets.ENCODE_MAX_DOCS):
+    """STREAMING core of `encode_lhs_batched`: yields `(doc_index, lhs)` for each doc AS its
+    chunk's forward completes, in chunk order (== input order, chunks are contiguous). The
+    streaming form is what foreclosees the RETAINED-OUTPUT accumulation OOM class (FINDING 1):
+    a consumer that decodes each lhs and DROPS it before pulling the next chunk keeps at most
+    ONE chunk's slices co-resident, so the per-forward VRAM budget (which already proves every
+    [B, s_bucket] forward fits) stays sufficient no matter how many docs the call spans — an
+    unbounded corpus processes without OOM. `encode_lhs_batched` is the materialise-all-into-a-
+    list adaptor over this generator (kept for fidelity tests + B=1 convenience)."""
+    # The OOM bound's two runtime inputs, DERIVED ONCE (not per group): the conservative
+    # memory model (from the cfg + the actual FFN weight shape) and the free device arena
+    # (from jax). Callers may inject both (the guest tests pin them); otherwise derive.
+    if mm is None:
+        mm = mem_model_from(deberta_cfg, deberta_params)
+    if available_bytes is None:
+        available_bytes = available_vram_bytes()
     # GROUP doc indices by their length bucket (the SSOT ladder — same rounding the
     # per-text encode + the leak fix use). All docs in a group share one s_bucket.
     groups: dict[int, list[int]] = {}
@@ -582,13 +672,15 @@ def encode_lhs_batched(deberta_params, deberta_cfg, docs_input_ids, docs_attenti
 
     _T = get_tracer()
     for s_bucket, group in groups.items():
-        # FIXED-B chunking from the SSOT (B-ladder rung that fits the OOM bound at this
-        # s_bucket; OOM capacity derived from the ONE chunk_by_token_budget). B TRACKS the
-        # group size (it is NOT a pure function of s_bucket: oom_cap == n below the OOM
-        # ceiling) but is drawn from the finite B-ladder -> the (B, s_bucket) compile grid is
-        # bounded by len(BATCH)*len(LEN), a CONSTANT, not O(requests).
+        # FIXED-B chunking from the SSOT (B-ladder rung that PROVABLY fits the VRAM bound at
+        # this s_bucket; OOM capacity derived from the ONE peak_variable_bytes via
+        # max_batch_for_length). B TRACKS the group size (it is NOT a pure function of
+        # s_bucket: the VRAM cap == n below the per-s_bucket ceiling) but is drawn from the
+        # finite B-ladder -> the (B, s_bucket) compile grid is bounded by len(BATCH)*len(LEN),
+        # a CONSTANT, not O(requests). Raises DocTooLargeError (loud, bounded) if even B=1
+        # cannot fit s_bucket — never a raw RESOURCE_EXHAUSTED.
         chunks, b = shape_buckets.encode_batch_chunks(
-            group, s_bucket, max_padded_tokens, max_docs)
+            group, s_bucket, mm, available_bytes, max_docs)
         for chunk in chunks:
             ids_rows: list = []
             mask_rows: list = []
@@ -611,8 +703,10 @@ def encode_lhs_batched(deberta_params, deberta_cfg, docs_input_ids, docs_attenti
                     s_i = len(docs_input_ids[di_idx])
                     # slice this doc's REAL rows+cols [S_i, TH] back out (device op, no
                     # transfer; a JAX slice is a fresh array, so the padded [B,*] base frees).
-                    out[di_idx] = lhs_batch[row, :s_i, :]
-    return out
+                    yield di_idx, lhs_batch[row, :s_i, :]
+                # drop the padded [B, s_bucket, TH] base for THIS chunk before the next chunk's
+                # forward; only the per-doc slices the consumer still holds stay resident.
+                del lhs_batch
 
 
 def coref_documents_host(deberta_params, deberta_cfg, decode_params, docs,
@@ -623,20 +717,31 @@ def coref_documents_host(deberta_params, deberta_cfg, decode_params, docs,
     exposing `.input_ids/.attention_mask/.eos_mask/.tokens/.subtoken_map/.new_token_map`.
     Returns clusters (token-offset tuples) per doc, in INPUT ORDER.
 
-    The encode is ONE `jax_deberta.encode` per (length-bucket, fixed-B) chunk
-    (`encode_lhs_batched`); each doc's [S_i, TH] lhs stays a DEVICE array and is fed
-    straight into the EXISTING `decode_document` (itself shape-bucketed, unchanged) — the
-    lhs never crosses a wire. Splitting encode (batched) from decode (per-doc) mirrors
-    maverick's own structure: the deberta encoder batches, the mes clustering tail does
-    not (model_mes.py is per-document)."""
+    The encode is ONE `jax_deberta.encode` per (length-bucket, fixed-B) chunk; each doc's
+    [S_i, TH] lhs stays a DEVICE array and is fed straight into the EXISTING `decode_document`
+    (itself shape-bucketed, unchanged) — the lhs never crosses a wire. Splitting encode
+    (batched) from decode (per-doc) mirrors maverick's own structure: the deberta encoder
+    batches, the mes clustering tail does not (model_mes.py is per-document).
+
+    STREAMING (FINDING 1 — the retained-output OOM class, foreclosed). This does NOT
+    encode-ALL-then-decode-ALL: it drives `iter_encode_lhs_batched` and decodes each doc's lhs
+    THE MOMENT its chunk emits it, then DROPS the lhs (decode_document returns small host-side
+    token-offset tuples, so once it returns the device slice has no consumer and frees). So the
+    co-resident retained lhs never exceeds ONE chunk's slices — the per-forward VRAM budget,
+    already proven sufficient for every [B, s_bucket] forward, stays sufficient for a corpus of
+    ANY length (a full book processes without the O(total docs) accumulation OOM). Encode is
+    INERT to chunking/order (Reviewer-verified), so streaming yields clusters bit-identical to
+    the encode-all-then-decode-all and to the per-text (B=1) reference. Results are assembled in
+    INPUT ORDER via the doc index the generator carries."""
     _T = get_tracer()
-    with _T.span("host_shell.coref_encode_batched", n_docs=len(docs)):
-        lhs_list = encode_lhs_batched(
-            deberta_params, deberta_cfg,
-            [d.input_ids for d in docs], [d.attention_mask for d in docs])
-    clusters_per_doc = []
-    for d, lhs in zip(docs, lhs_list):
-        clusters_per_doc.append(decode_document(
-            decode_params, lhs, d.attention_mask, d.eos_mask,
-            d.tokens, d.subtoken_map, d.new_token_map, singletons))
+    clusters_per_doc: list = [None] * len(docs)
+    with _T.span("host_shell.coref_stream_encode_decode", n_docs=len(docs)):
+        for di_idx, lhs in iter_encode_lhs_batched(
+                deberta_params, deberta_cfg,
+                [d.input_ids for d in docs], [d.attention_mask for d in docs]):
+            d = docs[di_idx]
+            clusters_per_doc[di_idx] = decode_document(
+                decode_params, lhs, d.attention_mask, d.eos_mask,
+                d.tokens, d.subtoken_map, d.new_token_map, singletons)
+            del lhs  # free this doc's device slice now its (host) clusters exist -> bounded retention
     return clusters_per_doc

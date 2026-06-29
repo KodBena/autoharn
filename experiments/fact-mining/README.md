@@ -318,16 +318,46 @@ round-trip — the two warm-trace hotspots — are both collapsed; see THE CUT b
   in one reply; (3) `clusters_token_to_char_offsets` per doc. n==1 is the batch-of-1 case,
   so the fidelity oracles still pass.
 
-**OOM bound (owned, not deferred).** The padded forward is `[N, max_S, TH]`; unbounded
-N over a book OOMs the card. `nlp_server.chunk_by_token_budget` caps each forward by a
-**padded-token budget** `COREF_ENCODE_MAX_PADDED_TOKENS` (default 8192, the proxy for the
-linear `N * max_S` footprint batching introduces) **and** a per-chunk doc count
-`COREF_ENCODE_MAX_DOCS` (default 64) — whichever binds first, env-overridable. Book-scale
-is chunks-of-K (one padded forward per chunk), never one giant pad; a doc larger than the
-budget forms its own chunk (the safe floor — never dropped). The budget bounds the linear
-term batching added, not the `O(max_S²)` per-doc attention (inherent to encoding a long doc
-at all, floored at one-doc-per-chunk); the 8192/64 defaults are a conservative tunable
-guess, not a card-byte-derived budget.
+**OOM bound (owned, not deferred — the never-OOM invariant).** The padded forward is
+`[N, max_S, TH]`; unbounded N over a book OOMs the card. The bound is now a **conservative
+BYTES memory model** of the forward's variable peak — `shape_buckets.peak_variable_bytes(B, S)`
+— whose **quadratic** term `k_quad·B·num_heads·S²` is the dominant disentangled-attention
+`[B,H,S,S]` score footprint the OLD linear `N·max_S` budget was BLIND to (the reproduced OOM:
+the linear budget packed 64×128-token docs → ~2.3 GiB, past the ~1 GiB free arena, while
+satisfying `N·max_S ≤ 8192`). `shape_buckets.chunk_by_vram` (torch) and
+`encode_batch_chunks`→`max_batch_for_length` (jax) BOTH consume that one inequality
+`peak_variable_bytes(B, max_S) ≤ available`, so EVERY chunk provably fits — a large `max_S`
+forces a small B down to 1, a small `max_S` admits a large B (then floored to the B-ladder).
+`available` is DERIVED, not guessed: the jax path reads the live arena
+(`memory_stats()['bytes_limit'] − bytes_in_use − headroom`); the torch path reads
+`torch.cuda.mem_get_info`; both share `shape_buckets.headroom_bytes`. `num_heads/hidden/
+intermediate/pos_ebd_size` come from `DebertaCfg` + the actual FFN weight (P1), never
+hardcoded; the conservative `k_*`/`a_*` multiples (env-tunable, ADR-0009) over-estimate
+co-residency — over-estimation is SAFE (smaller chunks), only under-estimation OOMs. A doc too
+big even at B=1 raises a **bounded `DocTooLargeError`** (tokens, GiB needed, GiB free, the
+`--mem-fraction` knob) — NEVER a raw `RESOURCE_EXHAUSTED`, never a silent drop. On the 2080Ti
+at `mem_fraction=0.3` the model admits rungs up to 1024 at B=1 and fails-loud at the 2048 rung
+(`test_oom_invariant.test_card_fit_profile_2080ti`). `COREF_ENCODE_MAX_DOCS` (default 64) stays
+a secondary hard cap.
+
+**The retained-output OOM class (one level up — ADR-0000, folded review FINDING 1).** The
+per-forward bound proves each `[B, max_S]` forward fits, but the encode hands back every doc's
+unpadded `[S_i, hidden]` lhs slice, and a consumer that decodes only AFTER encoding all docs
+holds ALL of them co-resident — an `O(total docs)` arena consumer the per-forward budget omits
+(a book's slices are multiple GiB, past the headroom, so a later in-budget forward raw-OOMs).
+The invariant: at the instant any forward runs, the arena must hold that forward PLUS every slice
+still retained. ONE invariant, two forced tactics for the two decode structures: (a) the
+**jax-unified** path (`coref_host_shell.coref_documents_host`, the host-gated path) **STREAMS** —
+`iter_encode_lhs_batched` yields per chunk and decode runs+frees each lhs before the next forward,
+so co-resident retained never exceeds one chunk and an **unbounded corpus (a full book) fits**;
+(b) the **torch reference** path (`nlp_server._encode_docs`, whose maverick `predict()` stand-in
+holds all slices by construction) **RESERVES** the retained sum up front
+(`shape_buckets.forward_budget_after_retained` over the SSOT `retained_lhs_bytes`) and fails-loud
+with a bounded `RetainedTooLargeError` (pointing at the streaming path) rather than a raw OOM.
+Guest-proven: `test_oom_invariant` (the unreserved budget under-counts the accumulation; the
+reserved budget holds forward+Σretained; the raise is bounded) + `test_shape_bucket_compile_bound`
+(`coref_documents_streams_decode_after_encode` — decode interleaves 1:1 with encode; the discrete
+cluster sets are identical across VRAM-distinct B=1/B=4/B=8 chunkings).
 
 **One authoritative multi-doc wire codec (ADR-0012 P7).** `RemoteDecode.decode_batch`
 ships one JSON meta frame (a `docs` list) + one raw-`<f4` lhs frame per doc; the server
@@ -359,10 +389,14 @@ non-vacuity guard as the other fidelity proofs (≥1 cluster, ≥1 with ≥2 men
 
     python test_device_transfers.py    # encode_last_hidden_state's torch ops single-homed + marked
     python test_import_xor.py          # coref_decode_inputs.py is framework-free (host=[] device=[])
+    python -m pytest test_oom_invariant.py        # THE NEVER-OOM INVARIANT: every chunk's derived
+    #   quadratic-aware peak ≤ free arena over pathological distributions; the model is a
+    #   conservative UPPER bound; the OLD linear budget FAILS the invariant; single-huge-doc raises
+    #   a bounded DocTooLargeError (not a raw OOM); the 2080Ti fit profile is pinned.
     python -m pytest test_batched_encode_and_multidoc_wire.py   # THE CUT, guest-provable surface:
-    #   the OOM bound (chunk_by_token_budget: order preserved, never drops a doc, both bounds,
-    #   lone-oversize-doc floor), the multi-doc wire BIT-EXACT per doc (pack→unpack incl. float32
-    #   subnormal/near-max corners), n==1 = batch-of-1, and fail-loud both wire directions.
+    #   the OOM chunker (chunk_by_vram: order preserved, never drops a doc, VRAM+doc bounds,
+    #   lone-fitting-doc floor, lone-too-big-doc loud raise), the multi-doc wire BIT-EXACT per doc
+    #   (pack→unpack incl. float32 subnormal/near-max corners), n==1 = batch-of-1, fail-loud wire.
 
 **HOST steps (where jax + maverick + CUDA live).** Use **`python -m pytest`**, never
 bare `pytest` — on this host the `pytest` console script dispatches to an interpreter
