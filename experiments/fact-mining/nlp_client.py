@@ -89,6 +89,41 @@ class RemoteNLP:
     def info(self, timeout_ms: int = 5_000) -> dict:
         return json.loads(self._roundtrip({"op": "info"}, timeout_ms)[0])
 
+    def await_ready(self, total_timeout_s: float = 300.0, poll_s: float = 2.0) -> dict:
+        """Block until the daemon answers info(), returning that dict.
+
+        info()/ping() fail fast (5s) on the assumption a non-answering daemon is DOWN.
+        But the unified daemon can be UP yet mid-WARMUP for far longer — loading the
+        deberta npz (~GB) + a cold XLA compile of the 24-layer encode outlasts any
+        control-op timeout. So poll with progress feedback up to total_timeout_s, then
+        fail loud. ZMQ buffers the request across the warmup; each attempt waits a slice
+        and (on timeout) resets the REQ socket, so a long warmup is waited through, not
+        crashed on. This is the readiness check the 'run it twice' workaround was groping
+        for — deterministic, not a race against the warmup."""
+        import sys
+        import time
+
+        t0 = time.monotonic()
+        waited = False
+        while True:
+            try:
+                info = self.info(timeout_ms=int(poll_s * 1000) + 500)
+                if waited:
+                    print(" ready.", file=sys.stderr, flush=True)
+                return info
+            except RemoteError:
+                elapsed = time.monotonic() - t0
+                if elapsed >= total_timeout_s:
+                    if waited:
+                        print(file=sys.stderr)
+                    raise RemoteError(
+                        f"daemon at {self.addr} not ready after {int(elapsed)}s "
+                        f"(still warming up, or down)")
+                waited = True
+                print(f"\r[waiting for daemon {self.addr} to warm up... {int(elapsed)}s]",
+                      end="", file=sys.stderr, flush=True)
+                time.sleep(poll_s)
+
     def _req(self, texts, fmt: str, disable=()) -> dict:
         """Build the parse request shared by both wire formats (ONE home, ADR-0012
         P1): only the `format` field differs between the facts and DocBin paths."""

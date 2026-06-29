@@ -107,9 +107,12 @@ def main() -> int:
         m = None if args.model == "en_core_web_sm" else args.model
         nlp = RemoteNLP(args.remote, model=m, coref=True, coref_mode=coref_mode,
                         coref_backend=args.coref_backend, decode_addr=args.decode_addr)
-        model_label = f"{m or nlp.info().get('default', 'remote')}+coref({args.coref_backend}/{coref_mode})"
+        # patient readiness: the unified daemon may be mid-warmup (deberta load + cold
+        # XLA compile) well past the 5s control-op timeout — wait, don't crash.
+        info = nlp.await_ready()
+        model_label = f"{m or info.get('default', 'remote')}+coref({args.coref_backend}/{coref_mode})"
         print(f"=== remote coref daemon: {args.remote} | backend={args.coref_backend} | "
-              f"mode={coref_mode} | {nlp.info()} ===")
+              f"mode={coref_mode} | {info} ===")
     elif args.coref:
         # local fastcoref pipeline (guest-only; no remote/cache). resolve is lazy-imported
         # HERE — strictly inside the local branch — so the remote path never pulls it.

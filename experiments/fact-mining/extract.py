@@ -309,9 +309,10 @@ def build_nlp(model: str, remote: str | None, cache_url: str | None, verbose: bo
         # pass model only if the user overrode the default, else let the daemon decide
         m = None if model == "en_core_web_sm" else model
         nlp = RemoteNLP(remote, model=m)
-        model_label = m or nlp.info().get("default", "remote")
+        info = nlp.await_ready()  # patient: wait through the daemon's warmup, don't 5s-crash
+        model_label = m or info.get("default", "remote")
         if verbose:
-            print(f"=== remote daemon: {remote} | info: {nlp.info()} ===")
+            print(f"=== remote daemon: {remote} | info: {info} ===")
     else:
         nlp = load_model(model)
         model_label = model
