@@ -70,6 +70,14 @@ def main() -> int:
                          "spaCy daemon; defaults to its own --decode-addr if unset.")
     ap.add_argument("--body-start-line", type=int, default=834)
     ap.add_argument("--max-paras", type=int, default=200)
+    ap.add_argument("--batch-size", type=int, default=128,
+                    help="paragraphs per daemon request — the KNOWABLE host-memory cap. "
+                         "The corpus is processed in batches of this size and each batch "
+                         "is written to the DB and freed before the next is fetched, so "
+                         "neither the daemon (per-request parses/clusters/facts) nor this "
+                         "client (held facts) ever holds the whole book in RAM. Lower it "
+                         "if host RSS is tight; raise it for fewer round-trips. Results "
+                         "are identical to one-shot (per-paragraph coref). default %(default)s")
     ap.add_argument("--max-sents", type=int, default=400)
     ap.add_argument("--dsn", default=DSN)
     ap.add_argument("--trace", action="store_true",
@@ -131,29 +139,25 @@ def main() -> int:
     run_span = tracer.span("client.run", n_paras=len(paragraphs), model=model_label)
     run_span.__enter__()
 
-    # BOTH paths converge on `all_facts`: a list of per-paragraph fact dicts (the
-    # extract.doc_to_facts shape). On --remote the DAEMON runs doc_to_facts and ships
-    # JSON (lean client); locally we parse to Docs and run doc_to_facts here. ONE
-    # extractor, two callers (ADR-0012 P1); ONE DB-load loop consumes the result below.
-    all_facts: list[FactBundle]
-    if remote_mode:
-        all_facts = nlp.pipe_facts(paragraphs)
-    else:
-        all_facts = [doc_to_facts(doc) for doc in nlp.pipe(paragraphs)]
-
-    # surface batched-vs-serial coref fidelity when --coref-verify was requested
-    verify = getattr(nlp, "last_coref_verify", None)
-    if verify is not None:
-        status = "PASS" if verify.get("ok") else "FAIL"
-        print(f"=== coref fidelity [{status}]: {verify.get('n')} paragraphs, "
-              f"{verify.get('n_mismatch')} mismatch(es) — batched vs serial ===")
-        for mm in verify.get("mismatches", []):
-            print(f"  para {mm['index']}: serial={mm['serial']} batched={mm['batched']}")
-        if status == "FAIL":
-            print("  WARNING: batched coref diverged from serial. The trusted SERIAL "
-                  "clusters were loaded; do NOT use --coref (batched) until resolved.")
+    # The KNOWABLE host-memory cap: process the corpus in batches of --batch-size so
+    # neither the daemon (per-request parses/clusters/facts) nor this client (held facts)
+    # ever holds the whole book. Each batch is fetched, written to the DB, and FREED
+    # before the next — bounding host RSS to ONE batch instead of O(corpus). Fidelity is
+    # unaffected: every paragraph is an independent coref document, so its facts are
+    # identical however the requests are grouped (per-doc cluster identity, proven in the
+    # batched-encode work); the DB write sequence below is byte-identical to one-shot.
+    # ONE extractor, two callers (ADR-0012 P1): on --remote the DAEMON runs doc_to_facts
+    # and ships JSON (lean client); locally we parse to Docs and run it here.
+    batch_size = max(1, args.batch_size)
+    n_batches = (len(paragraphs) + batch_size - 1) // batch_size
+    if n_batches > 1:
+        print(f"=== memory cap: {len(paragraphs)} paragraphs in {n_batches} batch(es) "
+              f"of <= {batch_size} (--batch-size); each written + freed before the next ===")
 
     n_assert = n_ent = n_temp = n_sent = 0
+    # aggregate --coref-verify fidelity across batches (each request reports its own)
+    verify_seen = False
+    vtot = {"n": 0, "n_mismatch": 0, "mismatches": []}
     db_span = tracer.span("client.db_load")
     db_span.__enter__()
     with psycopg.connect(args.dsn) as conn, conn.cursor() as cur:
@@ -166,60 +170,96 @@ def main() -> int:
         )
         doc_id = cur.fetchone()[0]
 
-        # ONE DB-load loop over the SSOT fact dicts. doc_to_facts owns *what a fact is*;
-        # this loop owns the running sentence budget and the DB identity — applying the
-        # SAME budget the old inline loop did (a sentence past --max-sents is dropped,
-        # and any entity/temporal/triple anchored to a dropped sentence is skipped via
-        # `sent in sent_ids`). The extraction is identical pre/post (proven bit-for-bit
-        # by test_doc_to_facts_equivalence.py); only its HOME moved.
-        for facts in all_facts:
-            # insert this paragraph's sentences; map doc-local index -> DB sent_id
-            sent_ids: dict[int, int] = {}
-            for s in facts["sents"]:
-                if n_sent >= args.max_sents:
-                    break
-                cur.execute(
-                    "INSERT INTO mining.sentence (doc_id, sent_index, text) "
-                    "VALUES (%s,%s,%s) RETURNING sent_id",
-                    (doc_id, n_sent, s["text"]),
-                )
-                sent_ids[s["index"]] = cur.fetchone()[0]
-                n_sent += 1
-
-            for e in facts["entities"]:
-                if e["sent"] not in sent_ids:
-                    continue  # sentence past the budget
-                cur.execute(
-                    "INSERT INTO mining.entity (sent_id, text, canonical, label) "
-                    "VALUES (%s,%s,%s,%s)",
-                    (sent_ids[e["sent"]], e["text"], e["canonical"], e["label"]),
-                )
-                n_ent += 1
-
-            for tm in facts["temporal"]:
-                if tm["sent"] not in sent_ids:
-                    continue
-                cur.execute(
-                    "INSERT INTO mining.temporal (sent_id, text, label) VALUES (%s,%s,%s)",
-                    (sent_ids[tm["sent"]], tm["text"], tm["label"]),
-                )
-                n_temp += 1
-
-            for t in facts["triples"]:
-                if t["sent"] not in sent_ids:
-                    continue  # sentence past the budget
-                cur.execute(
-                    "INSERT INTO mining.assertion "
-                    "(sent_id, subj, pred, obj, subj_key, obj_key, negated) "
-                    "VALUES (%s,%s,%s,%s,%s,%s,%s)",
-                    (sent_ids[t["sent"]], t["subj"], t["pred"], t["obj"],
-                     t["subj_key"], t["obj_key"], t["negated"]),
-                )
-                n_assert += 1
-
+        # ONE DB-load loop over the SSOT fact dicts, fed batch-by-batch. doc_to_facts owns
+        # *what a fact is*; this loop owns the running sentence budget and the DB identity
+        # — applying the SAME budget the inline loop always did (a sentence past
+        # --max-sents is dropped, and any entity/temporal/triple anchored to a dropped
+        # sentence is skipped via `sent in sent_ids`). Extraction is identical pre/post
+        # (test_doc_to_facts_equivalence.py); only WHEN each paragraph's facts are fetched
+        # changed — per batch, not all up front (test_load_facts_batching.py proves the DB
+        # write sequence is identical to one-shot).
+        for b0 in range(0, len(paragraphs), batch_size):
             if n_sent >= args.max_sents:
                 break
+            batch = paragraphs[b0:b0 + batch_size]
+            # WIRE: fetch THIS batch's facts only — the daemon parses/corefs `batch` alone.
+            with tracer.span("client.batch", i=b0 // batch_size, n=len(batch)):
+                if remote_mode:
+                    batch_facts = nlp.pipe_facts(batch)
+                else:
+                    batch_facts = [doc_to_facts(doc) for doc in nlp.pipe(batch)]
+
+            # accumulate this batch's coref-verify fidelity, re-basing indices to global
+            v = getattr(nlp, "last_coref_verify", None)
+            if v is not None:
+                verify_seen = True
+                vtot["n"] += v.get("n", 0)
+                vtot["n_mismatch"] += v.get("n_mismatch", 0)
+                for mm in v.get("mismatches", []):
+                    g = dict(mm)
+                    g["index"] = mm.get("index", 0) + b0
+                    vtot["mismatches"].append(g)
+
+            for facts in batch_facts:
+                # insert this paragraph's sentences; map doc-local index -> DB sent_id
+                sent_ids: dict[int, int] = {}
+                for s in facts["sents"]:
+                    if n_sent >= args.max_sents:
+                        break
+                    cur.execute(
+                        "INSERT INTO mining.sentence (doc_id, sent_index, text) "
+                        "VALUES (%s,%s,%s) RETURNING sent_id",
+                        (doc_id, n_sent, s["text"]),
+                    )
+                    sent_ids[s["index"]] = cur.fetchone()[0]
+                    n_sent += 1
+
+                for e in facts["entities"]:
+                    if e["sent"] not in sent_ids:
+                        continue  # sentence past the budget
+                    cur.execute(
+                        "INSERT INTO mining.entity (sent_id, text, canonical, label) "
+                        "VALUES (%s,%s,%s,%s)",
+                        (sent_ids[e["sent"]], e["text"], e["canonical"], e["label"]),
+                    )
+                    n_ent += 1
+
+                for tm in facts["temporal"]:
+                    if tm["sent"] not in sent_ids:
+                        continue
+                    cur.execute(
+                        "INSERT INTO mining.temporal (sent_id, text, label) VALUES (%s,%s,%s)",
+                        (sent_ids[tm["sent"]], tm["text"], tm["label"]),
+                    )
+                    n_temp += 1
+
+                for t in facts["triples"]:
+                    if t["sent"] not in sent_ids:
+                        continue  # sentence past the budget
+                    cur.execute(
+                        "INSERT INTO mining.assertion "
+                        "(sent_id, subj, pred, obj, subj_key, obj_key, negated) "
+                        "VALUES (%s,%s,%s,%s,%s,%s,%s)",
+                        (sent_ids[t["sent"]], t["subj"], t["pred"], t["obj"],
+                         t["subj_key"], t["obj_key"], t["negated"]),
+                    )
+                    n_assert += 1
+
+                if n_sent >= args.max_sents:
+                    break
+            # batch_facts drops out of scope here -> this batch's parses/facts are freed
     db_span.__exit__(None, None, None)
+
+    # surface batched-vs-serial coref fidelity (aggregated across ALL batches)
+    if verify_seen:
+        status = "PASS" if vtot["n_mismatch"] == 0 else "FAIL"
+        print(f"=== coref fidelity [{status}]: {vtot['n']} paragraphs, "
+              f"{vtot['n_mismatch']} mismatch(es) — batched vs serial ===")
+        for mm in vtot["mismatches"]:
+            print(f"  para {mm['index']}: serial={mm['serial']} batched={mm['batched']}")
+        if status == "FAIL":
+            print("  WARNING: batched coref diverged from serial. The trusted SERIAL "
+                  "clusters were loaded; do NOT use --coref (batched) until resolved.")
     run_span.__exit__(None, None, None)
     # persist this process's buffered spans (best-effort; ADR-0002)
     written = tracer.flush()
