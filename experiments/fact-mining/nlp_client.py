@@ -120,8 +120,11 @@ class RemoteNLP:
                         f"daemon at {self.addr} not ready after {int(elapsed)}s "
                         f"(still warming up, or down)")
                 waited = True
-                print(f"\r[waiting for daemon {self.addr} to warm up... {int(elapsed)}s]",
-                      end="", file=sys.stderr, flush=True)
+                # honest message: over ZMQ a not-yet-started daemon and a warming one both
+                # look like "no reply", so name both — this is the bit that would have said
+                # "is nlp_server even running?" instead of implying it was merely warming.
+                print(f"\r[waiting for daemon {self.addr} — warming up, or NOT STARTED? "
+                      f"{int(elapsed)}s]", end="", file=sys.stderr, flush=True)
                 time.sleep(poll_s)
 
     def _req(self, texts, fmt: str, disable=()) -> dict:

@@ -177,3 +177,25 @@ later entities — study/experiment grouping, analysis/transformation, dataset.
   fail loud if maverick's config diverges on share_att_key/hidden_act or carries unread tensors).
 - **Pending host tick:** the 4->1 bilinear consolidation (5661428) — confirm discrete clusters
   unchanged via --coref-verify (guest-proved the algebra; host confirms end-to-end).
+
+## fact-mining — LRU cap on the compiled-shape cache (deferred behind bound-coref-compile-cache)
+
+- **In-process LRU bound on the AOT-compiled executables — the belt to bucketing's suspenders.**
+  GATED ON: the `bound-coref-compile-cache` workflow landing AND host/GPU-backend fidelity validated
+  (`--coref-verify` 0 mismatch on the now-bucketed unified daemon). Then add an LRU cap so a
+  long-uptime daemon on arbitrary text can't grow the compiled-executable set without bound.
+  - NOT redis: an XLA executable is a LIVE in-process object (compiled GPU code + buffer assignments
+    bound to this process/device), not a serializable cache value — redis (`:6380` volatile-lru) is for
+    JSON-shaped caches (the doc cache), not this. The analog is an in-process LRU.
+  - Mechanism: JAX's default jit cache is UNBOUNDED (that is the leak). Use the AOT API —
+    `jax_deberta.encode.lower(args).compile()` returns a `Compiled` we hold in an `OrderedDict`
+    (`maxsize=N`, evict LRU); dropping the reference frees the executable + its buffers. (`jax.clear_caches()`
+    is all-or-nothing; not LRU.)
+  - Cheap eviction: the persistent DISK compile cache (`coref_host_shell.py:68-73`, already on) makes an
+    evicted-then-recurring shape RELOAD from disk (~ms) instead of a full recompile (~s). So LRU bounds RAM,
+    the disk cache makes re-materialization cheap — "do the right thing per the shape distribution under a
+    dearth of memory," redis-free.
+  - Ordering: bucketing (first-order, shrinks the distinct-shape set to O(buckets)) makes this rarely bite;
+    the LRU is the second-order HARD CAP for the genuinely-unbounded decode K/P tail + arbitrary-text uptime.
+    ~30 lines once bucketing lands. (Redis WOULD earn its keep for a DIFFERENT goal: sharing the compile
+    cache across daemon processes/machines — a shared blob store for serialized executables.)

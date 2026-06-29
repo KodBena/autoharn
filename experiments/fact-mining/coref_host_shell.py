@@ -48,6 +48,7 @@ import jax.numpy as jnp
 
 import jax_decode
 import jax_deberta  # the pure-JAX DeBERTa-v3 encoder core (device-named, numpy-free)
+import shape_buckets  # SSOT shape-bucket ladders + the one masked-padding primitive (framework-free)
 from spans import get_tracer  # SSOT tracer; imports no numpy/device lib, authors no device op
 
 # The decode tail is pinned fp32 (jax_decode.py + decode_document both contract
@@ -278,10 +279,34 @@ def decode_document(params, lhs, attention_mask, eos_mask,
 
     _T = get_tracer()  # records spans only when the decode_server adopted a trace context
 
+    # ---- DECODE SHAPE-BUCKETING (the perpetual-tail bound, ADR-0000). The decode jits
+    # compiled per data-dependent S / P / K (nearly unique per request -> a perpetual
+    # compile tail, tiny each but unbounded over time). We round each shape axis UP to its
+    # SSOT ladder rung and pad the per-axis array to the bucket, MASKED so the padding is
+    # inert, then SLICE the stage output back to the real size. The jits (jax_decode.py)
+    # stay pure and UNCHANGED — bucketing lives entirely in this shell. Fidelity is
+    # bit-identical (proven by test_shape_bucket_compile_bound's cluster-set equivalence):
+    #   * stages 1 & 2 are ROW-WISE FCs over the S / P axis, so padded rows cannot perturb
+    #     real rows; we slice the padded tail off the boolean keep-mask;
+    #   * stage 3's [k_b,k_b]: the DISCRETE invariant is bit-exact, NOT the float block
+    #     (ADR-0009 two-tier — asserting the logits bit-exactly would be a category error).
+    #     tril (i>j) zeros every padded column j>=K for every real row i<K and the
+    #     per-category masks are zero there too, so a padded column's coref value is a
+    #     structural 0 that can never win an argmax (a real antecedent wins with a
+    #     strictly-positive logit, else the no_ant column wins). So the argmax DECISION /
+    #     cluster set is bit-identical; the real [K,K] logit BLOCK is only within the
+    #     ADR-0009 numeric tier (~6e-5: XLA re-tiles the feature-contracting einsum at the
+    #     larger k_b shape), the same float tier as the bilinear-consolidation/encode
+    #     deltas this file documents. The ONLY discrete consequence is the no_ant sentinel
+    #     index moving from K to k_b — handled below by reading "no antecedent" as
+    #     `argmax >= k`.
+    s_bucket = shape_buckets.bucket_len(seq_len, shape_buckets.ENCODE_LEN_BUCKETS)
+    lhs_b = jnp.pad(lhs, ((0, s_bucket - seq_len), (0, 0)))  # pad rows; device op, no transfer
+
     # ---- STAGE 1 (device): start keep-mask ; (host): nonzero -> start indices
-    with _T.span("host_shell.stage1_start_keep", seq_len=seq_len):
+    with _T.span("host_shell.stage1_start_keep", seq_len=seq_len, s_bucket=s_bucket):
         start_keep = jax.device_get(  # host-device-boundary: pull start keep-mask device->host
-            jax_decode.mention_start_keep(params, lhs)).tolist()
+            jax_decode.mention_start_keep(params, lhs_b)).tolist()[:seq_len]  # slice padded tail
     start_idxs = [i for i, keep in enumerate(start_keep) if keep]
 
     if len(start_idxs) == 0:
@@ -293,14 +318,20 @@ def decode_document(params, lhs, attention_mask, eos_mask,
         return []
 
     # ---- STAGE 2 (device): span keep-mask ; (host): select mention pairs
-    with _T.span("host_shell.stage2_span_keep", n_pairs=len(p_start)):
+    n_pairs = len(p_start)
+    p_bucket = shape_buckets.bucket_len(n_pairs, shape_buckets.DECODE_P_BUCKETS)
+    # pad the candidate-pair index lists to the P bucket with a valid index (0); the FC is
+    # row-wise over P, so padded pairs cannot perturb real pairs, and we slice them off.
+    p_start_b = shape_buckets.pad_to(p_start, p_bucket, 0)
+    p_end_b = shape_buckets.pad_to(p_end, p_bucket, 0)
+    with _T.span("host_shell.stage2_span_keep", n_pairs=n_pairs, p_bucket=p_bucket):
         span_keep = jax.device_get(  # host-device-boundary: pull span keep-mask device->host
             jax_decode.span_mention_keep(
-                params, lhs,
-                jnp.asarray(p_start),  # host-device-boundary: lift candidate start idxs
-                jnp.asarray(p_end),    # host-device-boundary: lift candidate end idxs
+                params, lhs_b,
+                jnp.asarray(p_start_b),  # host-device-boundary: lift bucketed candidate start idxs
+                jnp.asarray(p_end_b),    # host-device-boundary: lift bucketed candidate end idxs
             )
-        ).tolist()
+        ).tolist()[:n_pairs]  # slice the padded-pair tail
     mention_start_idxs = [p_start[i] for i, keep in enumerate(span_keep) if keep]
     mention_end_idxs = [p_end[i] for i, keep in enumerate(span_keep) if keep]
 
@@ -313,19 +344,31 @@ def decode_document(params, lhs, attention_mask, eos_mask,
         masks = build_categories_masks(
             mention_start_idxs, mention_end_idxs, tokens, subtoken_map, new_token_map
         )
-    # ---- gather per-mention start/end reps on device
-    with _T.span("host_shell.gather_reps", k=k):
+    # K-BUCKET: coref_decode compiles per K (the unbounded tail). Round K up to its ladder
+    # rung and pad the per-mention reps to [k_bucket,TH] and the masks to
+    # [NUM_CATS,k_bucket,k_bucket], all with ZEROS — so for every real row i<K the padded
+    # antecedent columns j>=K carry a structural-zero coref value (tril already zeros them,
+    # the zero masks too), which can never win the argmax. This bounds the DISCRETE
+    # decision, not the float logits: the real [K,K] block is only within the ADR-0009
+    # numeric tier (~6e-5) at the larger k_bucket shape, but the argmax / cluster set is
+    # bit-exact. The no_ant column then sits at index k_bucket (not K), so "no antecedent"
+    # is read as `argmax >= k` below.
+    k_bucket = shape_buckets.bucket_len(k, shape_buckets.DECODE_K_BUCKETS)
+    # ---- gather per-mention start/end reps on device (real K rows), then pad to k_bucket
+    with _T.span("host_shell.gather_reps", k=k, k_bucket=k_bucket):
         start_reps = lhs[jnp.asarray(mention_start_idxs)]  # host-device-boundary: lift start idxs [K,TH]
         end_reps = lhs[jnp.asarray(mention_end_idxs)]      # host-device-boundary: lift end idxs [K,TH]
+        start_reps_b = jnp.pad(start_reps, ((0, k_bucket - k), (0, 0)))  # device op, no transfer
+        end_reps_b = jnp.pad(end_reps, ((0, k_bucket - k), (0, 0)))      # device op, no transfer
+        masks_b = jnp.pad(
+            jnp.asarray(masks, dtype=jnp.float32),  # host-device-boundary: lift category masks
+            ((0, 0), (0, k_bucket - k), (0, k_bucket - k)))  # device op, no transfer
 
     # ---- STAGE 3 (device): coref logits + no_ant + argmax antecedent decode
-    with _T.span("host_shell.stage3_coref_decode", k=k):
+    with _T.span("host_shell.stage3_coref_decode", k=k, k_bucket=k_bucket):
         max_ant = jax.device_get(  # host-device-boundary: pull argmax antecedents device->host
-            jax_decode.coref_decode(
-                params, start_reps, end_reps,
-                jnp.asarray(masks, dtype=jnp.float32),  # host-device-boundary: lift category masks
-            )
-        ).tolist()
+            jax_decode.coref_decode(params, start_reps_b, end_reps_b, masks_b)
+        ).tolist()[:k]  # slice the padded-mention tail
 
     # ---- (host): mention->antecedent edges + singletons (BUG-FIXED) + union-find
     span_indices = list(zip(mention_start_idxs, mention_end_idxs))
@@ -343,8 +386,10 @@ def decode_document(params, lhs, attention_mask, eos_mask,
         # setdiff1d(non_mentions, antecedent_indices) sorts+uniques. The maverick
         # line `np.zeros_like(len(...))` produces a SCALAR 0 used as the (always-0)
         # batch index — harmless at B=1 but a latent trap. We compute the CORRECT
-        # singleton spans directly: each singleton's own (start,end).
-        non_mentions = [i for i in range(k) if max_ant[i] == k]
+        # singleton spans directly: each singleton's own (start,end). The no_ant column
+        # is at index k_bucket under K-bucketing (== k when unpadded), so "hit the no_ant
+        # column" is `max_ant[i] >= k` — a real antecedent is always a column j<i<K.
+        non_mentions = [i for i in range(k) if max_ant[i] >= k]
         singleton_idxs = sorted(set(non_mentions) - antecedent_set)
         sing_spans = [span_indices[s] for s in singleton_idxs]
 
@@ -443,23 +488,49 @@ def build_deberta_cfg(cfg_fields: dict) -> "jax_deberta.DebertaCfg":
     )
 
 
+def encode_lhs(deberta_params, deberta_cfg, input_ids, attention_mask):
+    """LENGTH-BUCKETED encode: tokenised inputs -> last_hidden_state [S, TH] (real S).
+
+    THE 7GB FIX (ADR-0000 the-bounded-bucket-set). The un-bucketed encode compiled the
+    24-layer DeBERTa per RAW length S — ~200 paragraph lengths -> ~200 large executables
+    retained forever -> >7GB host RAM -> OOM-kill. Here the length is rounded UP to the
+    next `shape_buckets.ENCODE_LEN_BUCKETS` rung (the SSOT ladder), the input_ids are
+    padded to that bucket via the SSOT `pad_to` (the ONE padder — same primitive the
+    torch batched encode uses; no second padder), the attention_mask is extended with
+    zeros, the encoder runs at the BUCKET length, and the output is SLICED back to the
+    real S. So `jax_deberta._encode_core` only ever sees ladder-sized shapes: the distinct
+    compile count is bounded by the ladder size, not the request count (the measured leak
+    gate). The padding is masked-INERT (jax_deberta zeros padded embeddings AND padded
+    attention columns), so every real position's lhs is bit-identical to the unpadded
+    forward — proven by test_shape_bucket_compile_bound (bucketed-then-sliced == unpadded)
+    and end-to-end by the host --coref-verify. The pad value is `ENCODE_PAD_ID` (masked,
+    so value-irrelevant; only needs to be a valid embedding index)."""
+    s = len(input_ids)
+    s_bucket = shape_buckets.bucket_len(s, shape_buckets.ENCODE_LEN_BUCKETS)
+    ids_padded = shape_buckets.pad_to(input_ids, s_bucket, shape_buckets.ENCODE_PAD_ID)
+    mask_padded = shape_buckets.pad_to(attention_mask, s_bucket, 0)
+    ids = jnp.asarray([ids_padded])        # host-device-boundary: lift bucketed coref input_ids host->device [1,S_bucket]
+    mask = jnp.asarray([mask_padded])      # host-device-boundary: lift bucketed coref attention_mask host->device [1,S_bucket]
+    lhs_bucketed = jax_deberta.encode(deberta_params, ids, mask, deberta_cfg)[0]  # [S_bucket, TH] device, fp32
+    return lhs_bucketed[:s]                 # slice back to the real length for the decode (device op, no transfer)
+
+
 def coref_document_host(deberta_params, deberta_cfg, decode_params,
                         input_ids, attention_mask, eos_mask,
                         tokens, subtoken_map, new_token_map, singletons: bool = False):
     """ONE document, the full jax-only coref forward: tokenised inputs -> deberta
-    encode (fine-tuned weights) -> the proven decode tail -> cluster token offsets.
+    encode (fine-tuned weights, LENGTH-BUCKETED) -> the proven decode tail -> cluster
+    token offsets.
 
     The encode's `last_hidden_state` stays a DEVICE array and is fed straight into
     `decode_document` — it NEVER crosses a wire, the architectural win over the
     jax-daemon backend (whose ~67ms cost was shipping the dense lhs + eos_mask as JSON).
     `input_ids`/`attention_mask` are the only new host->device crossings (lists from the
-    torch-free preprocess), lifted here in the single jax home with a batch axis for the
-    encoder's [B,S] contract; the encoder output's batch axis is dropped for the decode's
-    [S,TH] contract. The decode is the EXISTING `decode_document`, untouched."""
+    torch-free preprocess), lifted inside `encode_lhs` (the single jax home) at the
+    BUCKET length and the output sliced to the real [S,TH] for the decode's contract. The
+    decode is the EXISTING `decode_document`, now itself shape-bucketed (see there)."""
     _T = get_tracer()
     with _T.span("host_shell.coref_encode", s=len(input_ids)):
-        ids = jnp.asarray([input_ids])             # host-device-boundary: lift coref input_ids host->device [1,S]
-        mask = jnp.asarray([attention_mask])       # host-device-boundary: lift coref attention_mask host->device [1,S]
-        lhs = jax_deberta.encode(deberta_params, ids, mask, deberta_cfg)[0]  # [S, TH] device, fp32
+        lhs = encode_lhs(deberta_params, deberta_cfg, input_ids, attention_mask)  # [S, TH] device, fp32
     return decode_document(decode_params, lhs, attention_mask, eos_mask,
                            tokens, subtoken_map, new_token_map, singletons)

@@ -58,6 +58,7 @@ import zmq
 from spacy.tokens import DocBin
 
 from extract import doc_to_facts  # SSOT per-doc fact extractor (ADR-0012 P1)
+from shape_buckets import pad_to  # SSOT masked-padding primitive (the ONE padder; P1)
 from spans import get_tracer  # SSOT tracer (no jax/numpy import; host-only psycopg, lazy)
 
 
@@ -143,6 +144,13 @@ def chunk_by_token_budget(lengths, max_padded_tokens: int, max_docs: int):
     bound degrades to one doc per forward, the safe floor). Pure python (framework-free),
     so the OOM bound is unit-testable on the guest without torch. Returns list[list[int]]
     of original indices; concatenating chunk outputs in order rebuilds text alignment.
+
+    NOT a second bucketer of `shape_buckets`' truth (P1): this GROUPS docs into chunks to
+    bound the linear N*max_S padded footprint of one batched torch forward (an OOM
+    concern); `shape_buckets.bucket_len` ROUNDS one sequence's length to a fixed ladder to
+    bound the per-shape JAX COMPILE set (a cache-leak concern). Orthogonal operations —
+    chunking groups, laddering rounds — kept in separate homes on single-ownership grounds
+    (P3). They share only the ONE padder, `shape_buckets.pad_to`.
     """
     chunks: list[list[int]] = []
     cur: list[int] = []
@@ -337,8 +345,13 @@ class Server:
             slices: list[object] = [None] * len(texts)
             for chunk in chunk_by_token_budget(lengths, ENCODE_MAX_PADDED_TOKENS, ENCODE_MAX_DOCS):
                 s_max = max(lengths[i] for i in chunk)
-                padded_ids = [list(dis[i].input_ids) + [pad_id] * (s_max - lengths[i]) for i in chunk]
-                padded_mask = [list(dis[i].attention_mask) + [0] * (s_max - lengths[i]) for i in chunk]
+                # ONE padder (P1): the SSOT `pad_to` — the SAME primitive the jax-unified
+                # encode/decode use (shape_buckets.pad_to). No hand-rolled second padder.
+                # Here the target is the chunk-max (OOM-bounding the batched forward); the
+                # jax encode targets a ladder bucket (compile-bounding). Different targets,
+                # one padder.
+                padded_ids = [pad_to(dis[i].input_ids, s_max, pad_id) for i in chunk]
+                padded_mask = [pad_to(dis[i].attention_mask, s_max, 0) for i in chunk]
                 ids_t = torch.tensor(padded_ids, dtype=torch.long).to(dev)    # host-device-boundary: stage batched coref input_ids onto the GPU
                 mask_t = torch.tensor(padded_mask, dtype=torch.long).to(dev)  # host-device-boundary: stage batched coref attention_mask onto the GPU
                 with torch.no_grad():
@@ -686,8 +699,17 @@ class Server:
         sock.bind(addr)
         print(f"spaCy daemon listening on {addr} | default={self.default_model} "
               f"| gpu={self.gpu} | pipes={self.get(None).pipe_names}", flush=True)
-        if warmup:
-            self.warmup()  # pre-pay the ~12s cold-start before accepting any request
+        # LIVENESS INVARIANT (ADR-0014 second-opinion fix): NEVER block before the recv
+        # loop. A synchronous warmup() here bound the socket but left it UNSERVABLE — the
+        # daemon could not answer ping/info while warming, so (a) the client's await_ready
+        # could never tell "warming" from "down", and (b) a stalled warmup (maverick's
+        # first-load HF read on this host, or warming the WRONG hardcoded backend) wedged
+        # the daemon forever with idle CPU and no error. We now serve IMMEDIATELY: the
+        # first real request compiles lazily (one-time; the persistent XLA cache makes it
+        # fast thereafter) and warms the REQUEST's backend, not a hardcoded default. The
+        # `warmup` flag and warmup() are retained for an OPTIONAL explicit pre-warm but are
+        # never auto-run before serving (that is the bug). `_ = warmup` keeps the CLI flag.
+        _ = warmup
         while True:
             raw = sock.recv()  # exactly one frame per request (REP state machine)
             try:

@@ -300,16 +300,30 @@ def _get_attention_mask(attention_mask: jax.Array) -> jax.Array:
     return ext * jnp.transpose(ext, (0, 1, 3, 2))           # [B,1,S,S] = am[b,i]*am[b,j]
 
 
-def forward(params: dict, input_ids: jax.Array, attention_mask: jax.Array, cfg: DebertaCfg) -> jax.Array:
+def forward(params: dict, input_ids: jax.Array, attention_mask: jax.Array,
+            rel_pos: jax.Array, cfg: DebertaCfg) -> jax.Array:
     """Pure encoder forward -> last_hidden_state [B, S, hidden].
 
     Mirrors DebertaV2Model.forward for deberta-v3-large config: no absolute
     position embedding (position_biased_input=False), no token-type embedding
     (type_vocab_size=0), no embed_proj (embedding_size==hidden_size), no conv,
     z_steps==0.
-    """
+
+    REL-POSITION HOIST (frugality, fidelity-NEUTRAL — MEASURED). `rel_pos` (the
+    int32[S,S] log-bucketed relative-position table) is a RUNTIME ARGUMENT, not
+    computed inside this jitted core. Computing it inside folded an [S,S] int32 array
+    into EVERY compiled executable as a baked compile-time constant (24 layers read it);
+    as an argument it is a runtime input, so the executable no longer carries the table
+    (smaller executables) and it is computed ONCE per bucket by the public `encode`
+    wrapper. This is fidelity-NEUTRAL by construction: the core consumes `rel_pos` only
+    through integer clip + take_along_axis (pure gather, no float arithmetic on it), so a
+    bit-identical `rel_pos` array yields bit-identical attention. And the array IS
+    bit-identical whether `build_relative_position` runs eager or jitted, across the whole
+    ladder incl. the float-log-path (S>128) and clip (S>512) regimes — proven by
+    test_shape_bucket_compile_bound.test_relpos_hoist_bit_identical (the ADR-0009 measured
+    gate that licenses the hoist). cfg stays the only static arg, so `rel_pos`'s [S,S]
+    shape still keys the compile per S — which BUCKETING bounds."""
     eps = cfg.layer_norm_eps
-    s = input_ids.shape[1]
 
     # --- embeddings (DebertaV2Embeddings.forward) ---
     inputs_embeds = params["embeddings.word_embeddings.weight"][input_ids]   # [B,S,hidden]
@@ -320,7 +334,6 @@ def forward(params: dict, input_ids: jax.Array, attention_mask: jax.Array, cfg: 
 
     # --- encoder setup ---
     att_mask = _get_attention_mask(attention_mask)
-    rel_pos = build_relative_position(s, cfg.position_buckets, cfg.max_relative_positions)
     rel_emb = _get_rel_embedding(params, cfg)
 
     hidden = emb
@@ -329,5 +342,20 @@ def forward(params: dict, input_ids: jax.Array, attention_mask: jax.Array, cfg: 
     return hidden
 
 
-# jit wrapper: cfg is a NamedTuple of python scalars -> hashable -> jit-static.
-encode = jax.jit(forward, static_argnums=(3,))
+# jit core: cfg is a NamedTuple of python scalars -> hashable -> jit-static (argnum 4).
+# rel_pos is a TRACED runtime arg (argnum 3) — the hoist that keeps the [S,S] table out
+# of the baked per-executable constant. The unified daemon measures THIS object's
+# `_cache_size()` for the compile-count bound; bucketing keeps it <= the ladder size.
+_encode_core = jax.jit(forward, static_argnums=(4,))
+
+
+def encode(params: dict, input_ids: jax.Array, attention_mask: jax.Array,
+           cfg: DebertaCfg) -> jax.Array:
+    """Public encoder entry (signature UNCHANGED — every existing caller/test still calls
+    `encode(params, input_ids, attention_mask, cfg)`). Computes the hoisted `rel_pos`
+    table once (eager — small, and bit-identical to the jitted form, see `forward`), then
+    runs the jitted `_encode_core`. The eager `build_relative_position` adds negligible
+    dispatch next to the 24-layer forward and, under bucketing, recurs only per bucket."""
+    s = input_ids.shape[1]
+    rel_pos = build_relative_position(s, cfg.position_buckets, cfg.max_relative_positions)
+    return _encode_core(params, input_ids, attention_mask, rel_pos, cfg)
