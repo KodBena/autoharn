@@ -534,3 +534,109 @@ def coref_document_host(deberta_params, deberta_cfg, decode_params,
         lhs = encode_lhs(deberta_params, deberta_cfg, input_ids, attention_mask)  # [S, TH] device, fp32
     return decode_document(decode_params, lhs, attention_mask, eos_mask,
                            tokens, subtoken_map, new_token_map, singletons)
+
+
+def encode_lhs_batched(deberta_params, deberta_cfg, docs_input_ids, docs_attention_mask,
+                       max_padded_tokens: int = shape_buckets.ENCODE_MAX_PADDED_TOKENS,
+                       max_docs: int = shape_buckets.ENCODE_MAX_DOCS):
+    """BUCKET-GROUP batched encode: encode many docs in ONE [B, s_bucket] forward per
+    (length-bucket, fixed-B) chunk, returning each doc's UNPADDED [S_i, TH] device lhs in
+    INPUT ORDER. The batched analog of `encode_lhs` (B=1) and the JAX twin of
+    nlp_server._encode_docs (which batches the TORCH encode) — same SHAPE policy, different
+    framework call.
+
+    WHY (the ~190ms per-text encode -> batched). The per-text path calls
+    `jax_deberta.encode` once PER doc at B=1; at paragraph scale (S~30) each forward is
+    dispatch/underutilization-bound (~38ms is mostly launch overhead, not compute), so
+    same-shape docs collapse into ONE [B, s_bucket] forward. The encoder already carries a
+    batch axis and rel_pos is [S,S] (B-independent), so the only change is stacking B rows.
+
+    SSOT REUSE (P1) — no second batcher/padder/bound:
+      * GROUP by `shape_buckets.bucket_len` over the SAME `ENCODE_LEN_BUCKETS` ladder the
+        per-text encode + the leak fix use (rounds each S up to its rung);
+      * the per-(length-bucket) FIXED batch size B and the chunking come from
+        `shape_buckets.encode_batch_chunks`, which draws B from the `ENCODE_BATCH_BUCKETS`
+        ladder and takes its OOM capacity FROM the ONE `chunk_by_token_budget` bound;
+      * every row is padded by the ONE `shape_buckets.pad_to` (cols) to s_bucket; the last
+        chunk is padded UP to B with masked DUMMY rows so the forward shape is the constant
+        [B, s_bucket] (the compile-bound — B/S both from finite ladders).
+
+    INERTNESS (the fidelity bar). Transformer batch rows are INDEPENDENT: attention is
+    within-sequence (the [B,H,S,S] scores and [B*H,S,hs] context never mix batch index b),
+    LayerNorm/embeddings/FCs are per-(b,s). So a masked DUMMY row cannot perturb any REAL
+    row's lhs — and a fully-masked dummy row is non-pathological (its all-`finfo.min`
+    attention softmaxes to a finite uniform row, no NaN, and is sliced off regardless). Thus
+    every real position's lhs is bit-identical to the per-text (B=1) encode up to XLA's
+    batched-matmul float noise (~1e-5, the ADR-0009 numeric tier) — proven on the guest by
+    test_shape_bucket_compile_bound (batched-then-sliced == per-text, clusters bit-identical)
+    and end-to-end by the host --coref-verify on maverick's weights. Text-order alignment is
+    preserved (out[idx] indexed by the original doc index)."""
+    n = len(docs_input_ids)
+    out: list = [None] * n
+    # GROUP doc indices by their length bucket (the SSOT ladder — same rounding the
+    # per-text encode + the leak fix use). All docs in a group share one s_bucket.
+    groups: dict[int, list[int]] = {}
+    for idx, ids in enumerate(docs_input_ids):
+        s_bucket = shape_buckets.bucket_len(len(ids), shape_buckets.ENCODE_LEN_BUCKETS)
+        groups.setdefault(s_bucket, []).append(idx)
+
+    _T = get_tracer()
+    for s_bucket, group in groups.items():
+        # FIXED-B chunking from the SSOT (B-ladder rung that fits the OOM bound at this
+        # s_bucket; OOM capacity derived from the ONE chunk_by_token_budget). B TRACKS the
+        # group size (it is NOT a pure function of s_bucket: oom_cap == n below the OOM
+        # ceiling) but is drawn from the finite B-ladder -> the (B, s_bucket) compile grid is
+        # bounded by len(BATCH)*len(LEN), a CONSTANT, not O(requests).
+        chunks, b = shape_buckets.encode_batch_chunks(
+            group, s_bucket, max_padded_tokens, max_docs)
+        for chunk in chunks:
+            ids_rows: list = []
+            mask_rows: list = []
+            for di_idx in chunk:  # real rows: cols padded to s_bucket by the ONE padder
+                ids_rows.append(shape_buckets.pad_to(
+                    docs_input_ids[di_idx], s_bucket, shape_buckets.ENCODE_PAD_ID))
+                mask_rows.append(shape_buckets.pad_to(
+                    docs_attention_mask[di_idx], s_bucket, 0))
+            for _ in range(b - len(chunk)):  # masked DUMMY rows -> constant [B, s_bucket]
+                # route the dummy row through the ONE padder too (no hand-rolled
+                # `[pad]*(n)` second author — keeps shape_buckets' "one padder" claim true).
+                ids_rows.append(shape_buckets.pad_to([], s_bucket, shape_buckets.ENCODE_PAD_ID))
+                mask_rows.append(shape_buckets.pad_to([], s_bucket, 0))
+            with _T.span("host_shell.encode_batch_forward", b=b, s_bucket=s_bucket,
+                         n_real=len(chunk)):
+                ids = jnp.asarray(ids_rows)    # host-device-boundary: lift bucketed batch input_ids host->device [B,S]
+                mask = jnp.asarray(mask_rows)  # host-device-boundary: lift bucketed batch attention_mask host->device [B,S]
+                lhs_batch = jax_deberta.encode(deberta_params, ids, mask, deberta_cfg)  # [B, s_bucket, TH] device, fp32
+                for row, di_idx in enumerate(chunk):
+                    s_i = len(docs_input_ids[di_idx])
+                    # slice this doc's REAL rows+cols [S_i, TH] back out (device op, no
+                    # transfer; a JAX slice is a fresh array, so the padded [B,*] base frees).
+                    out[di_idx] = lhs_batch[row, :s_i, :]
+    return out
+
+
+def coref_documents_host(deberta_params, deberta_cfg, decode_params, docs,
+                         singletons: bool = False):
+    """MANY documents, the full jax-only coref forward with the ENCODE BATCHED by
+    bucket-group and the DECODE unchanged per-doc — the batched twin of
+    `coref_document_host` (B=1). `docs` is a list of per-doc inputs (DecodeInputs), each
+    exposing `.input_ids/.attention_mask/.eos_mask/.tokens/.subtoken_map/.new_token_map`.
+    Returns clusters (token-offset tuples) per doc, in INPUT ORDER.
+
+    The encode is ONE `jax_deberta.encode` per (length-bucket, fixed-B) chunk
+    (`encode_lhs_batched`); each doc's [S_i, TH] lhs stays a DEVICE array and is fed
+    straight into the EXISTING `decode_document` (itself shape-bucketed, unchanged) — the
+    lhs never crosses a wire. Splitting encode (batched) from decode (per-doc) mirrors
+    maverick's own structure: the deberta encoder batches, the mes clustering tail does
+    not (model_mes.py is per-document)."""
+    _T = get_tracer()
+    with _T.span("host_shell.coref_encode_batched", n_docs=len(docs)):
+        lhs_list = encode_lhs_batched(
+            deberta_params, deberta_cfg,
+            [d.input_ids for d in docs], [d.attention_mask for d in docs])
+    clusters_per_doc = []
+    for d, lhs in zip(docs, lhs_list):
+        clusters_per_doc.append(decode_document(
+            decode_params, lhs, d.attention_mask, d.eos_mask,
+            d.tokens, d.subtoken_map, d.new_token_map, singletons))
+    return clusters_per_doc

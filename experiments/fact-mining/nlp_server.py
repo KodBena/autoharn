@@ -58,7 +58,14 @@ import zmq
 from spacy.tokens import DocBin
 
 from extract import doc_to_facts  # SSOT per-doc fact extractor (ADR-0012 P1)
-from shape_buckets import pad_to  # SSOT masked-padding primitive (the ONE padder; P1)
+# SSOT shape-policy primitives (ONE home; never copied): the masked-padding primitive and
+# the OOM bound (chunk_by_token_budget + its ENCODE_MAX_* budget). The OOM bound was
+# relocated to shape_buckets so the jax bucket-group batched encode shares it (the
+# do-not-copy mandate); imported here so `nlp_server.chunk_by_token_budget` etc. still
+# resolve for callers/tests while the definition keeps one home. See the OOM-bound comment
+# below for the derive-from-what-exhausts-memory rationale (ADR-0000 Specimen 3/4; P1).
+from shape_buckets import (  # the ONE padder + the ONE OOM bound (P1)
+    ENCODE_MAX_DOCS, ENCODE_MAX_PADDED_TOKENS, chunk_by_token_budget, pad_to)
 from spans import get_tracer  # SSOT tracer (no jax/numpy import; host-only psycopg, lazy)
 
 
@@ -114,59 +121,12 @@ def encode_last_hidden_state(model, input_ids, attention_mask):
 
 
 # ---------------------------------------------------------------- OOM bound
-# The batched deberta encode (Server._encode_docs) runs ONE padded forward over a
-# [N, max_S, TH] tensor. Unbounded N over a whole book OOMs the card (the deferred
-# concern from the earlier book-scale run, now OWNED here — ADR-0000 Specimen 3/4:
-# the bound has one home and is derived from what actually exhausts memory, not a
-# bare magic count). The dimension BATCHING introduces is the linear N * max_S padded
-# footprint, so that is exactly what we cap: a PADDED-TOKEN budget N * max_S (TH is
-# fixed per model) AND a hard per-chunk doc count, whichever binds first. Book-scale
-# is then chunks-of-K (one padded forward per chunk), never one giant pad.
-#
-# SCOPE (honest): the per-layer attention activation is O(N * max_S^2); the budget
-# bounds the linear N * max_S term batching added, NOT that quadratic term. For a lone
-# long doc the max_S^2 cost is INHERENT to encoding it at all (the serial reference
-# pays it too) and is floored at one-doc-per-chunk + capped by deberta's max position
-# length — it is not something batching can shrink, so the linear proxy is the right
-# bound for the new risk. The defaults below are a CONSERVATIVE operator-tunable guess
-# (chosen to keep a typical 5-paragraph request in ONE forward), NOT a budget derived
-# from the card's VRAM bytes / TH; tune COREF_ENCODE_MAX_* per card. Both env-overridable.
-ENCODE_MAX_PADDED_TOKENS = int(os.environ.get("COREF_ENCODE_MAX_PADDED_TOKENS", "8192"))
-ENCODE_MAX_DOCS = int(os.environ.get("COREF_ENCODE_MAX_DOCS", "64"))
-
-
-def chunk_by_token_budget(lengths, max_padded_tokens: int, max_docs: int):
-    """Greedily split doc indices [0..N) into CONTIGUOUS chunks (text order preserved)
-    so each chunk's padded-cell count (len(chunk) * max(length in chunk)) stays within
-    `max_padded_tokens`, and no chunk exceeds `max_docs` docs — whichever binds first.
-
-    A single doc longer than the budget forms its OWN chunk (we never drop a doc — the
-    bound degrades to one doc per forward, the safe floor). Pure python (framework-free),
-    so the OOM bound is unit-testable on the guest without torch. Returns list[list[int]]
-    of original indices; concatenating chunk outputs in order rebuilds text alignment.
-
-    NOT a second bucketer of `shape_buckets`' truth (P1): this GROUPS docs into chunks to
-    bound the linear N*max_S padded footprint of one batched torch forward (an OOM
-    concern); `shape_buckets.bucket_len` ROUNDS one sequence's length to a fixed ladder to
-    bound the per-shape JAX COMPILE set (a cache-leak concern). Orthogonal operations —
-    chunking groups, laddering rounds — kept in separate homes on single-ownership grounds
-    (P3). They share only the ONE padder, `shape_buckets.pad_to`.
-    """
-    chunks: list[list[int]] = []
-    cur: list[int] = []
-    cur_max = 0
-    for i, n in enumerate(lengths):
-        cand_max = cur_max if n <= cur_max else n
-        cand_cells = cand_max * (len(cur) + 1)
-        if cur and (len(cur) >= max_docs or cand_cells > max_padded_tokens):
-            chunks.append(cur)
-            cur, cur_max = [i], n
-        else:
-            cur.append(i)
-            cur_max = cand_max
-    if cur:
-        chunks.append(cur)
-    return chunks
+# chunk_by_token_budget + ENCODE_MAX_* are imported at the top (the ONE home is
+# shape_buckets; the jax bucket-group batched encode shares the same bound). A batched
+# deberta encode runs ONE padded forward over [N, max_S, TH]; unbounded N over a whole book
+# OOMs the card, so the bound caps the linear N*max_S padded footprint batching adds
+# (derived from what exhausts memory, not a magic count — ADR-0000 Specimen 3/4). Full
+# rationale + the function live in shape_buckets.py.
 
 
 class _PrecomputedEncoder:

@@ -327,9 +327,12 @@ class DecodeServer:
     def _handle_coref(self, meta: dict, _T) -> list[bytes]:
         """{texts:[...]} -> per-text CHAR-offset clusters, the WHOLE coref forward in
         this one jax-only process: torch-free preprocess (tokenize+mask) -> deberta
-        encode (fine-tuned weights) -> the proven decode -> token offsets -> char
-        offsets. nlp_server ships only TEXT (tiny); the dense lhs + eos_mask NEVER cross
-        a wire. The decode COMPUTE stays per-document (per text), exactly like `decode`.
+        encode (fine-tuned weights, BATCHED by bucket-group) -> the proven decode -> token
+        offsets -> char offsets. nlp_server ships only TEXT (tiny); the dense lhs + eos_mask
+        NEVER cross a wire. The ENCODE is grouped/batched (one [B, s_bucket] forward per
+        length-bucket, B from a fixed ladder — coref_host_shell.coref_documents_host),
+        which collapses the per-text dispatch overhead; the decode COMPUTE stays
+        per-document, exactly like `decode`.
 
         Reply mirrors `decode`'s shape: clusters[i] is text i's clusters, but the spans
         are CHAR offsets [start,end] (maverick's `clusters_char_offsets` contract), since
@@ -348,27 +351,25 @@ class DecodeServer:
 
         clusters_per_text = []
         with _T.span("decode_server.coref", n_texts=len(texts)):
-            for text in texts:
-                # (a) torch-free SSOT preprocess (the SAME prepare_decode_inputs the
-                #     maverick paths use; here driven by StandalonePreprocessor).
-                di = prepare_decode_inputs(self.preprocessor, text)
-                # (b)+(c) deberta encode -> decode, ALL on device in the jax home; the
-                #     last_hidden_state never crosses a wire.
-                with _T.span("decode_server.coref_doc", s=len(di.input_ids)):
-                    clusters_tok = coref_host_shell.coref_document_host(
-                        deberta_params=self.deberta_params,
-                        deberta_cfg=self.deberta_cfg,
-                        decode_params=self.params,
-                        input_ids=di.input_ids,
-                        attention_mask=di.attention_mask,
-                        eos_mask=di.eos_mask,
-                        tokens=di.tokens,
-                        subtoken_map=di.subtoken_map,
-                        new_token_map=di.new_token_map,
-                        singletons=singletons,
-                    )
-                # (d) token offsets -> CHAR offsets (the shared SSOT mapper). Char offsets
-                #     are INTEGERS -> JSON is bit-exact for the result.
+            # (a) torch-free SSOT preprocess (the SAME prepare_decode_inputs the maverick
+            #     paths use; here driven by StandalonePreprocessor) — per-text (the ~35ms
+            #     NLTK+spaCy is NOT the batched target; the deberta ENCODE is).
+            with _T.span("decode_server.coref_preprocess", n_texts=len(texts)):
+                dis = [prepare_decode_inputs(self.preprocessor, text) for text in texts]
+            # (b)+(c) BATCHED deberta encode (one [B, s_bucket] forward per bucket-group)
+            #     -> per-doc decode, ALL on device in the jax home; the last_hidden_state
+            #     never crosses a wire. The decode COMPUTE stays per-document; only the
+            #     ENCODE is grouped/batched. Text-order alignment preserved by the shell.
+            clusters_tok_per_doc = coref_host_shell.coref_documents_host(
+                deberta_params=self.deberta_params,
+                deberta_cfg=self.deberta_cfg,
+                decode_params=self.params,
+                docs=dis,
+                singletons=singletons,
+            )
+            # (d) token offsets -> CHAR offsets (the shared SSOT mapper). Char offsets are
+            #     INTEGERS -> JSON is bit-exact for the result.
+            for di, clusters_tok in zip(dis, clusters_tok_per_doc):
                 char_clusters = clusters_token_to_char_offsets(
                     clusters_tok, di.char_offsets) or []
                 clusters_per_text.append(
