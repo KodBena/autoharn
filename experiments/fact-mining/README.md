@@ -374,6 +374,81 @@ Apply + load:
     python load_facts.py /home/bork/pg/pg78966.txt --coref --max-sents 600
     # or against the GPU daemon: ... --remote tcp://192.168.122.1:5599 --cache
 
+## Tracing the pipeline (`--trace`) — where the ~22s goes, who blocks on whom
+
+A distributed-span tracer (`spans.py`, SSOT) stitches all **three** processes —
+the guest client (`load_facts`), the host spaCy daemon (`nlp_server`), and the host
+JAX decode daemon (`coref_decode_server`) — into **one** trace. It is **OFF by
+default**: untraced, `span()` returns a shared no-op (no DB, no allocation) and the
+wire is untouched, so tracing never distorts the time it measures. The trace context
+rides *inside* the existing ZMQ JSON meta on both wires, so each receiver parents its
+spans under the sender's blocked (`zmq_wait`) span.
+
+Spans land in an **ephemeral** `trace` schema (separate from `mining`), wiped with
+one statement: `DROP SCHEMA trace CASCADE;`. Apply it once:
+
+    psql -h 192.168.122.1 -d harness -f trace_schema.sql
+
+**Capture a traced pass** (host: both daemons in the jax env; guest: the client).
+Add `--trace` to any normal `load_facts` invocation; it mints a code-stamped
+`trace.run` (git commit/tree incl. uncommitted edits + exact cmd + config) and turns
+tracing on across both wires:
+
+    # host — spaCy daemon (GPU) routing coref to the JAX decode daemon
+    python nlp_server.py --addr tcp://0.0.0.0:5599 --gpu \
+        --coref-backend jax-daemon --decode-addr tcp://127.0.0.1:5600
+    # host — JAX decode daemon
+    XLA_PYTHON_CLIENT_MEM_FRACTION=0.3 \
+        python coref_decode_server.py --addr tcp://0.0.0.0:5600 --weights ./fixtures/weights.npz
+
+    # guest — traced load through both wires
+    python load_facts.py /home/bork/pg/pg78966.txt \
+        --remote tcp://192.168.122.1:5599 --coref --coref-backend jax-daemon \
+        --max-paras 5 --trace
+    # prints: === trace: run_id=N | K client span(s) flushed to the `trace` schema ===
+
+Clock note: `dur_ms` is a **monotonic, per-process** duration (skew-immune — use it
+for "how long did X take"); `t_start`/`t_end` are **wall-clock** and exist only for
+**cross-process ordering** (guest↔host clocks may be skewed). Never subtract a wall
+time in one process from one in another.
+
+**Read the timeline** (the latest run, indented by depth — the cross-process tree
+`client.run → client.zmq_wait → nlp_server.handle → {parse, coref} → nlp_server.zmq_wait.decode → decode_server.handle → jax_decode`):
+
+    psql -h 192.168.122.1 -d harness -c "
+    WITH RECURSIVE t AS (
+      SELECT span_id, process, name, dur_ms, t_start, 0 AS depth
+      FROM trace.span
+      WHERE run_id=(SELECT max(run_id) FROM trace.run) AND parent_span_id IS NULL
+      UNION ALL
+      SELECT s.span_id, s.process, s.name, s.dur_ms, s.t_start, t.depth+1
+      FROM trace.span s JOIN t ON s.parent_span_id=t.span_id
+      WHERE s.run_id=(SELECT max(run_id) FROM trace.run))
+    SELECT lpad('', depth*2) || process || '.' || name AS span,
+           round(dur_ms::numeric,1) AS dur_ms
+    FROM t ORDER BY t_start;"
+
+**Who waits for whom** (the cross-process wait edges; `overhead_ms` = wait −
+SUM(children) = transport/queue, both monotonic-derived so skew-immune. `n_children`
+is 1 by construction — each daemon wraps its handler in one root span — and `>1`
+would flag a fan-out):
+
+    psql -h 192.168.122.1 -d harness -c "
+    SELECT waiter, wait_span, blocked_on, work_spans, n_children,
+           round(waited_ms::numeric,1) AS waited_ms,
+           round(work_ms::numeric,1)   AS work_ms,
+           round(overhead_ms::numeric,1) AS overhead_ms
+    FROM trace.blocking
+    WHERE run_id=(SELECT max(run_id) FROM trace.run);"
+
+**Aggregate, don't eyeball** — median/IQR per span (a perf claim cites this, never a
+single `dur_ms`); record an overturnable interpretation in `trace.finding`:
+
+    psql -h 192.168.122.1 -d harness -c "
+    SELECT process, name, n, round(median_ms::numeric,1) AS median_ms,
+           round((q3_ms-q1_ms)::numeric,1) AS iqr_ms, round(total_ms::numeric,1) AS total_ms
+    FROM trace.span_stats WHERE run_id=(SELECT max(run_id) FROM trace.run);"
+
 ## Resolution layer (`resolve.py`) — surfaces → constants
 
 `resolve.resolver_for(doc)` turns a subject/object head token into the canonical

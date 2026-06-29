@@ -75,6 +75,7 @@ import numpy as np
 import zmq
 
 import coref_host_shell  # the single jax home: it owns the device lifts + the jax config
+from spans import get_tracer  # SSOT tracer (host-only; no jax import here)
 
 # The one wire dtype. Pinned little-endian float32: both the client pack and this
 # unpack agree on '<f4' so the raw bytes are bit-identical regardless of host
@@ -119,12 +120,22 @@ class DecodeServer:
         # resulting device arrays opaquely and pass them straight back to the shell.
         self.params = coref_host_shell.lift_params(load_params(weights_path))
         self.n_params = len(self.params)
+        # cache_hit proxy: the decode jits recompile per lhs shape (variable S). A
+        # shape decoded before in this process has WARM compiled graphs; the first is
+        # a COLD compile. This per-process set is a documented, honest proxy for that
+        # warm/cold distinction — the host run confirms its correlation with dur_ms.
+        self._seen_shapes: set[tuple[int, ...]] = set()
+        get_tracer().configure(process="decode_server")  # OFF until a request carries a context
 
     # ----------------------------------------------------------- request handler
     def handle(self, frames: list[bytes]) -> list[bytes]:
         """Map request frames -> reply frames. Pure data in/out, one doc/request."""
         meta = json.loads(frames[0])
         op = meta.get("op", "decode")
+        # WIRE 2 receipt: adopt nlp_server's trace context (enables iff sent). The
+        # host shell's device/long-op spans then nest under this request's spans.
+        _T = get_tracer()
+        _T.extract(meta)
 
         if op == "ping":
             return [json.dumps({"ok": True, "pong": True}).encode()]
@@ -139,19 +150,30 @@ class DecodeServer:
         if len(frames) < 2:
             raise ValueError("decode request needs a second frame: raw float32 lhs bytes")
 
-        lhs_host = unpack_lhs(meta, frames[1])
-        singletons = bool(meta.get("singletons", False))
+        with _T.span("decode_server.handle", op=op):
+            lhs_host = unpack_lhs(meta, frames[1])
+            singletons = bool(meta.get("singletons", False))
 
-        clusters = coref_host_shell.decode_document_host(
-            params=self.params,
-            lhs_host=lhs_host,
-            attention_mask=meta["attention_mask"],
-            eos_mask=meta["eos_mask"],
-            tokens=meta["tokens"],
-            subtoken_map=meta["subtoken_map"],
-            new_token_map=meta["new_token_map"],
-            singletons=singletons,
-        )
+            shape_key = tuple(meta["shape"])
+            # cache_hit/_seen_shapes is TRACING-ONLY state (the warm/cold-compile
+            # proxy attr). Keep it off the OFF-by-default path: when tracing is
+            # disabled this is a dead attr, so don't even touch the set.
+            cache_hit = False
+            if _T.enabled:
+                cache_hit = shape_key in self._seen_shapes
+                self._seen_shapes.add(shape_key)
+            with _T.span("decode_server.jax_decode", cache_hit=cache_hit,
+                         s=shape_key[0], th=shape_key[1]):
+                clusters = coref_host_shell.decode_document_host(
+                    params=self.params,
+                    lhs_host=lhs_host,
+                    attention_mask=meta["attention_mask"],
+                    eos_mask=meta["eos_mask"],
+                    tokens=meta["tokens"],
+                    subtoken_map=meta["subtoken_map"],
+                    new_token_map=meta["new_token_map"],
+                    singletons=singletons,
+                )
         # token-offset tuples -> plain [[ [s,e], ... ], ...] for JSON. Offsets are
         # INTEGERS (no float slack), so JSON is bit-exact for the RESULT.
         out = [[[int(s), int(e)] for (s, e) in cluster] for cluster in clusters]
@@ -173,6 +195,7 @@ class DecodeServer:
                 traceback.print_exc()  # full traceback to host console for diagnosis
                 reply = [json.dumps({"ok": False, "error": repr(e)}).encode()]
             sock.send_multipart(reply)  # exactly one reply per request
+            get_tracer().flush()  # persist this request's spans (no-op when untraced)
 
 
 def main() -> int:

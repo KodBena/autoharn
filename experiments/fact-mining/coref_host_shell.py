@@ -47,6 +47,7 @@ import jax
 import jax.numpy as jnp
 
 import jax_decode
+from spans import get_tracer  # SSOT tracer; imports no numpy/device lib, authors no device op
 
 # The decode tail is pinned fp32 (jax_decode.py + decode_document both contract
 # float32). The single jax home owns the jax config, so the wire seam
@@ -274,9 +275,12 @@ def decode_document(params, lhs, attention_mask, eos_mask,
     # here instead of silently widening every matmul. (review watch-item)
     assert lhs.dtype == jnp.float32, f"lhs must be float32, got {lhs.dtype}"
 
+    _T = get_tracer()  # records spans only when the decode_server adopted a trace context
+
     # ---- STAGE 1 (device): start keep-mask ; (host): nonzero -> start indices
-    start_keep = jax.device_get(  # host-device-boundary: pull start keep-mask device->host
-        jax_decode.mention_start_keep(params, lhs)).tolist()
+    with _T.span("host_shell.stage1_start_keep", seq_len=seq_len):
+        start_keep = jax.device_get(  # host-device-boundary: pull start keep-mask device->host
+            jax_decode.mention_start_keep(params, lhs)).tolist()
     start_idxs = [i for i, keep in enumerate(start_keep) if keep]
 
     if len(start_idxs) == 0:
@@ -288,13 +292,14 @@ def decode_document(params, lhs, attention_mask, eos_mask,
         return []
 
     # ---- STAGE 2 (device): span keep-mask ; (host): select mention pairs
-    span_keep = jax.device_get(  # host-device-boundary: pull span keep-mask device->host
-        jax_decode.span_mention_keep(
-            params, lhs,
-            jnp.asarray(p_start),  # host-device-boundary: lift candidate start idxs
-            jnp.asarray(p_end),    # host-device-boundary: lift candidate end idxs
-        )
-    ).tolist()
+    with _T.span("host_shell.stage2_span_keep", n_pairs=len(p_start)):
+        span_keep = jax.device_get(  # host-device-boundary: pull span keep-mask device->host
+            jax_decode.span_mention_keep(
+                params, lhs,
+                jnp.asarray(p_start),  # host-device-boundary: lift candidate start idxs
+                jnp.asarray(p_end),    # host-device-boundary: lift candidate end idxs
+            )
+        ).tolist()
     mention_start_idxs = [p_start[i] for i, keep in enumerate(span_keep) if keep]
     mention_end_idxs = [p_end[i] for i, keep in enumerate(span_keep) if keep]
 
@@ -302,20 +307,24 @@ def decode_document(params, lhs, attention_mask, eos_mask,
     if k == 0:
         return []  # mes_span_clustering early-returns [] on zero mentions
 
-    # ---- (host): category masks ; gather per-mention start/end reps on device
-    masks = build_categories_masks(
-        mention_start_idxs, mention_end_idxs, tokens, subtoken_map, new_token_map
-    )
-    start_reps = lhs[jnp.asarray(mention_start_idxs)]  # host-device-boundary: lift start idxs [K,TH]
-    end_reps = lhs[jnp.asarray(mention_end_idxs)]      # host-device-boundary: lift end idxs [K,TH]
+    # ---- (host): category masks (O(K^2) set logic — a genuinely-long python op)
+    with _T.span("host_shell.build_categories_masks", k=k):
+        masks = build_categories_masks(
+            mention_start_idxs, mention_end_idxs, tokens, subtoken_map, new_token_map
+        )
+    # ---- gather per-mention start/end reps on device
+    with _T.span("host_shell.gather_reps", k=k):
+        start_reps = lhs[jnp.asarray(mention_start_idxs)]  # host-device-boundary: lift start idxs [K,TH]
+        end_reps = lhs[jnp.asarray(mention_end_idxs)]      # host-device-boundary: lift end idxs [K,TH]
 
     # ---- STAGE 3 (device): coref logits + no_ant + argmax antecedent decode
-    max_ant = jax.device_get(  # host-device-boundary: pull argmax antecedents device->host
-        jax_decode.coref_decode(
-            params, start_reps, end_reps,
-            jnp.asarray(masks, dtype=jnp.float32),  # host-device-boundary: lift category masks
-        )
-    ).tolist()
+    with _T.span("host_shell.stage3_coref_decode", k=k):
+        max_ant = jax.device_get(  # host-device-boundary: pull argmax antecedents device->host
+            jax_decode.coref_decode(
+                params, start_reps, end_reps,
+                jnp.asarray(masks, dtype=jnp.float32),  # host-device-boundary: lift category masks
+            )
+        ).tolist()
 
     # ---- (host): mention->antecedent edges + singletons (BUG-FIXED) + union-find
     span_indices = list(zip(mention_start_idxs, mention_end_idxs))
@@ -338,7 +347,9 @@ def decode_document(params, lhs, attention_mask, eos_mask,
         singleton_idxs = sorted(set(non_mentions) - antecedent_set)
         sing_spans = [span_indices[s] for s in singleton_idxs]
 
-    clusters_bpe = create_clusters(m2a, sing_spans)
+    # ---- (host): sequential cluster union-find (a genuinely-long python op)
+    with _T.span("host_shell.union_find", k=k, n_edges=len(m2a)):
+        clusters_bpe = create_clusters(m2a, sing_spans)
     return original_token_offsets(clusters_bpe, subtoken_map, new_token_map)
 
 
@@ -356,6 +367,7 @@ def decode_document_host(params, lhs_host, attention_mask, eos_mask,
                          tokens, subtoken_map, new_token_map, singletons: bool = False):
     """Wire entry point: lift the host last_hidden_state onto the device HERE, then
     run the (untouched) decode. Keeps coref_decode_server.py free of any jax op."""
-    lhs = jnp.asarray(lhs_host, dtype=jnp.float32)  # host-device-boundary: lift wire last_hidden_state host->device
+    with get_tracer().span("host_shell.lift_lhs", s=len(lhs_host)):
+        lhs = jnp.asarray(lhs_host, dtype=jnp.float32)  # host-device-boundary: lift wire last_hidden_state host->device
     return decode_document(params, lhs, attention_mask, eos_mask,
                            tokens, subtoken_map, new_token_map, singletons)

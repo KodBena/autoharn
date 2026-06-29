@@ -28,6 +28,8 @@ import json
 import numpy as np
 import zmq
 
+from spans import get_tracer  # SSOT tracer; host-only (no device import), no-op when off
+
 WIRE_DTYPE = np.dtype("<f4")  # pinned little-endian float32; must match the server
 
 
@@ -120,6 +122,9 @@ class RemoteDecode:
             "new_token_map": _opt_ints(new_token_map),
             "singletons": bool(singletons),
         }
+        # WIRE 2: stamp the trace context into the decode meta. The current span is the
+        # nlp_server "zmq_wait.decode" wait, so the decode daemon parents under it.
+        get_tracer().inject(meta)
         frames = self._roundtrip([json.dumps(meta).encode(), blob])
         reply = json.loads(frames[0])
         if not reply.get("ok"):

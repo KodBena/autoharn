@@ -53,6 +53,8 @@ import spacy
 import zmq
 from spacy.tokens import DocBin
 
+from spans import get_tracer  # SSOT tracer (no jax/numpy import; host-only psycopg, lazy)
+
 
 def doc_to_json(doc):
     return {
@@ -163,6 +165,7 @@ class Server:
         self.coref_backend = coref_backend
         self.decode_addr = decode_addr
         self._decoders: dict[str, object] = {}  # addr -> RemoteDecode (lazy, reused)
+        get_tracer().configure(process="nlp_server")  # tracing stays OFF until a request carries a context
 
     def get(self, name: str | None):
         name = name or self.default_model
@@ -342,22 +345,28 @@ class Server:
         model = c.model
         client = self._decoder(decode_addr)
 
+        _T = get_tracer()
         out = []
-        for text in texts:
+        for i, text in enumerate(texts):
             di = prepare_decode_inputs(c, text)
             # the ONE torch device op of this backend, single-homed in nlp_server:
-            lhs = encode_last_hidden_state(model, di.input_ids, di.attention_mask)  # [S, TH] host tensor
+            with _T.span("nlp_server.encode", para=i):
+                lhs = encode_last_hidden_state(model, di.input_ids, di.attention_mask)  # [S, TH] host tensor
             # ship decode inputs to the jax daemon; it returns token-offset clusters.
             # singletons=False to match coref_clusters (maverick.predict's default).
-            clusters_tok = client.decode(
-                lhs=lhs,
-                attention_mask=di.attention_mask,
-                eos_mask=di.eos_mask,
-                tokens=di.tokens,
-                subtoken_map=di.subtoken_map,
-                new_token_map=di.new_token_map,
-                singletons=False,
-            )
+            # WIRE 2 (nlp_server<->decode daemon): this span IS the daemon's blocked
+            # time on decode; coref_decode_client.decode injects the context INSIDE it
+            # so the decode daemon's spans parent under this wait.
+            with _T.span("nlp_server.zmq_wait.decode", para=i):
+                clusters_tok = client.decode(
+                    lhs=lhs,
+                    attention_mask=di.attention_mask,
+                    eos_mask=di.eos_mask,
+                    tokens=di.tokens,
+                    subtoken_map=di.subtoken_map,
+                    new_token_map=di.new_token_map,
+                    singletons=False,
+                )
             # token offsets -> char offsets (maverick clusters_char_offsets replica)
             char_clusters = clusters_token_to_char_offsets(clusters_tok, di.char_offsets)
             out.append(char_clusters or [])
@@ -421,6 +430,11 @@ class Server:
         """Map one request frame to the reply frames. Pure data in/out."""
         req = json.loads(raw)
         op = req.get("op", "parse")
+        # WIRE 1 receipt: adopt the client's trace context (enables tracing for this
+        # request iff the client sent one; disables it otherwise). Subsequent spans
+        # parent under the client's zmq_wait span (ADR-0012 P2).
+        _T = get_tracer()
+        _T.extract(req)
 
         if op == "ping":
             return [json.dumps({"ok": True, "pong": True}).encode()]
@@ -435,50 +449,62 @@ class Server:
         if op != "parse":
             return [json.dumps({"ok": False, "error": f"unknown op {op!r}"}).encode()]
 
-        texts = req.get("texts") or []
-        nlp = self.get(req.get("model"))
-        disable = [p for p in (req.get("disable") or []) if p in nlp.pipe_names]
-        t0 = time.perf_counter()
-        docs = list(nlp.pipe(texts, disable=disable))
-        t1 = time.perf_counter()
+        # ONE per-request root span (mirrors decode_server.handle): parse, coref AND
+        # the reply serialization below all nest UNDER it. This makes the client's
+        # client.zmq_wait.nlp_server have EXACTLY ONE peer-process child by
+        # construction, so trace.blocking's overhead_ms = wait - handle is the real
+        # transport/queue cost — not wait - parse with coref+serialize mis-attributed
+        # to "transport" (the adversarial-review WIRE-1 fan-out finding).
+        with _T.span("nlp_server.handle", op=op, n_texts=len(req.get("texts") or [])):
+            texts = req.get("texts") or []
+            nlp = self.get(req.get("model"))
+            disable = [p for p in (req.get("disable") or []) if p in nlp.pipe_names]
+            t0 = time.perf_counter()
+            with _T.span("nlp_server.parse", n_texts=len(texts)):
+                docs = list(nlp.pipe(texts, disable=disable))
+            t1 = time.perf_counter()
 
-        # optional coreference: per-text char-offset clusters, aligned to `docs`.
-        # mode = "batched" (default, fast: one encoder pass) | "serial" (reference)
-        # | "verify" (run both, report fidelity, return the serial reference).
-        coref = coref_verify = None
-        if req.get("coref"):
-            mode = req.get("coref_mode", "batched")
-            # per-request backend / decode-addr override the server defaults
-            backend = req.get("coref_backend") or self.coref_backend
-            decode_addr = req.get("decode_addr") or self.decode_addr
-            coref, coref_verify = self._run_coref(texts, mode, backend, decode_addr)
-            note = f" [{backend}/{mode}]" + (
-                ("" if coref_verify is None
-                 else f" verify={'PASS' if coref_verify['ok'] else 'FAIL'}"
-                      f"({coref_verify['n_mismatch']}/{coref_verify['n']})"))
-            print(f"[timing] {len(texts)} texts: parse {t1 - t0:.1f}s, "
-                  f"coref {time.perf_counter() - t1:.1f}s{note}", flush=True)
+            # optional coreference: per-text char-offset clusters, aligned to `docs`.
+            # mode = "batched" (default, fast: one encoder pass) | "serial" (reference)
+            # | "verify" (run both, report fidelity, return the serial reference).
+            coref = coref_verify = None
+            if req.get("coref"):
+                mode = req.get("coref_mode", "batched")
+                # per-request backend / decode-addr override the server defaults
+                backend = req.get("coref_backend") or self.coref_backend
+                decode_addr = req.get("decode_addr") or self.decode_addr
+                with _T.span("nlp_server.coref", backend=backend, mode=mode, n_texts=len(texts)):
+                    coref, coref_verify = self._run_coref(texts, mode, backend, decode_addr)
+                note = f" [{backend}/{mode}]" + (
+                    ("" if coref_verify is None
+                     else f" verify={'PASS' if coref_verify['ok'] else 'FAIL'}"
+                          f"({coref_verify['n_mismatch']}/{coref_verify['n']})"))
+                print(f"[timing] {len(texts)} texts: parse {t1 - t0:.1f}s, "
+                      f"coref {time.perf_counter() - t1:.1f}s{note}", flush=True)
 
-        if req.get("format") == "json":
-            out = {"ok": True, "docs": [doc_to_json(d) for d in docs]}
+            if req.get("format") == "json":
+                out = {"ok": True, "docs": [doc_to_json(d) for d in docs]}
+                if coref is not None:
+                    out["coref"] = coref
+                if coref_verify is not None:
+                    out["coref_verify"] = coref_verify
+                return [json.dumps(out).encode()]
+
+            # DocBin serialization + meta build are SERVER work inside the client's
+            # blocked window, so they belong INSIDE the handle span (not stranded
+            # out-of-span and silently mis-attributed to transport overhead).
+            db = DocBin(store_user_data=True)
+            for d in docs:
+                db.add(d)
+            meta = {
+                "ok": True, "format": "docbin", "n": len(docs),
+                "model": nlp.meta["name"], "lang": nlp.meta["lang"],
+            }
             if coref is not None:
-                out["coref"] = coref
+                meta["coref"] = coref  # list aligned with docs; clusters of [start,end] char spans
             if coref_verify is not None:
-                out["coref_verify"] = coref_verify
-            return [json.dumps(out).encode()]
-
-        db = DocBin(store_user_data=True)
-        for d in docs:
-            db.add(d)
-        meta = {
-            "ok": True, "format": "docbin", "n": len(docs),
-            "model": nlp.meta["name"], "lang": nlp.meta["lang"],
-        }
-        if coref is not None:
-            meta["coref"] = coref  # list aligned with docs; clusters of [start,end] char spans
-        if coref_verify is not None:
-            meta["coref_verify"] = coref_verify
-        return [json.dumps(meta).encode(), db.to_bytes()]
+                meta["coref_verify"] = coref_verify
+            return [json.dumps(meta).encode(), db.to_bytes()]
 
     def serve(self, addr: str):
         sock = zmq.Context.instance().socket(zmq.REP)
@@ -493,6 +519,7 @@ class Server:
                 traceback.print_exc()  # full traceback to host console for diagnosis
                 frames = [json.dumps({"ok": False, "error": repr(e)}).encode()]
             sock.send_multipart(frames)  # exactly one reply per request
+            get_tracer().flush()  # persist this request's spans (no-op when untraced)
 
 
 def main() -> int:

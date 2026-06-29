@@ -21,8 +21,12 @@ import psycopg
 
 import resolve
 from extract import build_nlp, extract_triples, load_body, normalise
+from spans import DEFAULT_DSN, get_tracer
 
-DSN = "host=192.168.122.1 dbname=harness"
+# ONE home for "which harness DB" (ADR-0012 P1): the tracer's DEFAULT_DSN (itself
+# HARNESS_DSN-overridable). The mining load and the trace store reach the same DB,
+# so the DSN literal lives in exactly one place — spans.DEFAULT_DSN — not re-typed.
+DSN = DEFAULT_DSN
 
 
 def main() -> int:
@@ -58,7 +62,19 @@ def main() -> int:
     ap.add_argument("--max-paras", type=int, default=200)
     ap.add_argument("--max-sents", type=int, default=400)
     ap.add_argument("--dsn", default=DSN)
+    ap.add_argument("--trace", action="store_true",
+                    help="mint a trace.run row and turn distributed-span tracing ON "
+                         "across BOTH wires (client->nlp_server->decode daemon). Spans "
+                         "land in the ephemeral `trace` schema (trace_schema.sql). "
+                         "Off by default; orthogonal to the facts that get loaded.")
     args = ap.parse_args()
+
+    # --trace mints the run_id (code-stamped) and enables tracing; the run context
+    # then rides the ZMQ meta on each wire so the host daemons join this one trace.
+    # Best-effort: a failed mint leaves tracing OFF and the load proceeds untraced.
+    tracer = get_tracer()
+    if args.trace:
+        tracer.begin_run(process="client", dsn=args.dsn, config=vars(args))
 
     body = normalise(load_body(args.path, args.body_start_line))
     sha = hashlib.sha256(body.encode("utf-8")).hexdigest()
@@ -92,6 +108,12 @@ def main() -> int:
         nlp, model_label, cache = build_nlp(args.model, args.remote, args.cache, verbose=True)
 
     paragraphs = [p.strip() for p in body.split("\n\n") if p.strip()][: args.max_paras]
+
+    # whole-run span: opened explicitly (not a `with`) so it wraps the pipe AND the
+    # DB load below without reindenting the function; _NULL is a real nullcontext when
+    # tracing is off, so __enter__/__exit__ are safe either way.
+    run_span = tracer.span("client.run", n_paras=len(paragraphs), model=model_label)
+    run_span.__enter__()
     docs = nlp.pipe(paragraphs)
 
     # surface batched-vs-serial coref fidelity when --coref-verify was requested
@@ -107,6 +129,8 @@ def main() -> int:
                   "clusters were loaded; do NOT use --coref (batched) until resolved.")
 
     n_assert = n_ent = n_temp = n_sent = 0
+    db_span = tracer.span("client.db_load")
+    db_span.__enter__()
     with psycopg.connect(args.dsn) as conn, conn.cursor() as cur:
         # re-load = replace: drop any prior facts for this (text, model), cascade
         cur.execute("DELETE FROM mining.document WHERE sha256=%s AND model=%s", (sha, model_label))
@@ -162,6 +186,13 @@ def main() -> int:
 
             if n_sent >= args.max_sents:
                 break
+    db_span.__exit__(None, None, None)
+    run_span.__exit__(None, None, None)
+    # persist this process's buffered spans (best-effort; ADR-0002)
+    written = tracer.flush()
+    if args.trace:
+        print(f"=== trace: run_id={tracer.run_id} | {written} client span(s) flushed "
+              f"to the `trace` schema ===")
 
     cstat = f" | cache {cache.stats()}" if cache else ""
     print(f"loaded doc_id={doc_id} ({model_label}): {n_sent} sentences, {n_assert} assertions, "

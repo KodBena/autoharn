@@ -18,6 +18,8 @@ import spacy
 import zmq
 from spacy.tokens import Doc, DocBin
 
+from spans import get_tracer  # SSOT tracer; no-op unless the run enabled it
+
 # Same attribute fastcoref used, so resolve.py consumes daemon coref unchanged.
 # Value: list of clusters, each a list of (start_char, end_char) spans.
 if not Doc.has_extension("coref_clusters"):
@@ -84,7 +86,12 @@ class RemoteNLP:
         }
         if self.decode_addr is not None:
             req["decode_addr"] = self.decode_addr
-        frames = self._roundtrip(req)
+        # WIRE 1 (client<->nlp_server): the zmq_wait span IS the client's blocked time
+        # on the daemon; inject the trace context into the JSON meta inside it so the
+        # daemon's spans parent under this wait (ADR-0012 P2).
+        with get_tracer().span("client.zmq_wait.nlp_server", n_texts=len(req["texts"])):
+            get_tracer().inject(req)
+            frames = self._roundtrip(req)
         meta = json.loads(frames[0])
         if not meta.get("ok"):
             raise RemoteError(meta.get("error", "server error"))

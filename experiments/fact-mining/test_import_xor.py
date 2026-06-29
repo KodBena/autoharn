@@ -47,7 +47,10 @@ SCANNED = ["extract.py", "load_facts.py", "nlp_cache.py",
            "nlp_client.py", "nlp_server.py", "resolve.py",
            "jax_decode.py", "coref_host_shell.py", "maverick_load.py",
            "coref_decode_server.py", "coref_decode_client.py",
-           "coref_decode_inputs.py"]
+           "coref_decode_inputs.py", "spans.py"]
+# spans.py (the SSOT tracer) is imported by BOTH host processes and the device-side
+# host shell, so it is scanned here to PROVE it imports neither numpy nor a device
+# lib (psycopg is neither) — host-XOR-device clean, safe to import anywhere.
 
 HOST = {"numpy"}
 DEVICE = {"torch", "jax", "jaxlib", "cupy", "tensorflow"}
