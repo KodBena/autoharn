@@ -158,3 +158,22 @@ later entities — study/experiment grouping, analysis/transformation, dataset.
   (`req.get("coref_backend")`/`decode_addr` → `_run_coref`) would go uncaught. (Flagged by the
   implementer's own hack-rationalization audit, 2026-06-29; concrete cost of the gap: a `handle()`
   test needs a loaded spaCy pipeline.) Fix = a thin `handle()` round-trip test with a stub spaCy.
+
+## fact-mining — JAX consolidation
+
+- **Flax/Equinox: bare-JAX now, reconsider only if training enters scope.** jax_deberta.py is
+  bare-JAX functional to match jax_decode.py's core (ADR-0012 P9), because there is no ready-made
+  Flax DeBERTa and this is inference-only (weights converted from torch). Flax's init/variables/
+  apply machinery earns its keep for TRAINING; revisit Flax — or Equinox (the functional-style
+  alternative that fits this codebase's grain) — only if we want to train/fine-tune the encoder.
+  The bare-JAX param tree can be wrapped in Flax/nnx then; nothing is locked in.
+- **Unified JAX encode+decode coref daemon (the architectural prize, next step).** jax_deberta is
+  fidelity-proven (worst max|Δ|=3.05e-5 vs torch deberta-v3, guest CPU, long-doc + padded-batch
+  covered). Next: in coref_host_shell.py (the single jax home), load maverick's FINE-TUNED weights
+  via deberta_weights.params_from_state_dict (keyset-guarded) + jax_deberta.encode, feeding the
+  already-pure-JAX decode tail IN-PROCESS — retiring the torch encode, the ~54ms encode->decode ZMQ
+  wire, AND the torch/jax GPU-coexistence dance (XLA_MEM_FRACTION, fp32-forcing). End-to-end gate is
+  HOST-only: --coref-verify against maverick's torch reference (same deberta-v2 arch; the new asserts
+  fail loud if maverick's config diverges on share_att_key/hidden_act or carries unread tensors).
+- **Pending host tick:** the 4->1 bilinear consolidation (5661428) — confirm discrete clusters
+  unchanged via --coref-verify (guest-proved the algebra; host confirms end-to-end).
