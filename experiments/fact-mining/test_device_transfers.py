@@ -62,11 +62,15 @@ HOMES = {
 }
 SCANNED = ["extract.py", "load_facts.py", "nlp_cache.py",
            "nlp_client.py", "nlp_server.py", "resolve.py",
-           "jax_decode.py", "coref_host_shell.py", "maverick_load.py",
-           "coref_decode_server.py", "coref_decode_client.py",
+           "jax_decode.py", "jax_deberta.py", "coref_host_shell.py",
+           "maverick_load.py", "coref_decode_server.py", "coref_decode_client.py",
            "coref_decode_inputs.py", "spans.py"]
 # spans.py (the SSOT tracer) is scanned to PROVE it authors no device-edge op — it is
 # imported into coref_host_shell.py (the jax home), so it must itself stay device-free.
+# jax_deberta.py (the pure-JAX encoder core) is scanned for PARITY with jax_decode.py:
+# both are device-NAMED pure-jax cores that must author NO host<->device transfer
+# (no device_get/asarray/array) — the encoder's static sqrt scales are python floats,
+# not jnp.array lifts, so every host<->device crossing stays in coref_host_shell.py.
 
 # Closed token sets — the device-edge ops actually reachable in this code.
 # Deliberately name-based and conservative; no device-signal heuristic.

@@ -45,9 +45,14 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 # scanned — it is the fixture-I/O boundary, not part of the device pipeline.
 SCANNED = ["extract.py", "load_facts.py", "nlp_cache.py",
            "nlp_client.py", "nlp_server.py", "resolve.py",
-           "jax_decode.py", "coref_host_shell.py", "maverick_load.py",
-           "coref_decode_server.py", "coref_decode_client.py",
+           "jax_decode.py", "jax_deberta.py", "coref_host_shell.py",
+           "maverick_load.py", "coref_decode_server.py", "coref_decode_client.py",
            "coref_decode_inputs.py", "spans.py"]
+# jax_deberta.py is the pure-JAX DeBERTa-v3 ENCODER core: device-NAMED, so the gate
+# enforces it is numpy-free regardless of BOUNDARY_FILES (honest filenames). Its
+# torch->jax weight+config conversion lives in the neutrally-named BOUNDARY file
+# deberta_weights.py (imports torch+numpy+jax), which is NOT scanned — the declared
+# fixture/conversion seam, exactly like capture_fixtures.py.
 # spans.py (the SSOT tracer) is imported by BOTH host processes and the device-side
 # host shell, so it is scanned here to PROVE it imports neither numpy nor a device
 # lib (psycopg is neither) — host-XOR-device clean, safe to import anywhere.
