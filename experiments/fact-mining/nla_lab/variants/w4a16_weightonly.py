@@ -9,6 +9,12 @@ projection — int4 weights, fp16 activations. The win is the BANDWIDTH term: fe
 weight bytes to move, which is exactly what pays on our dispatch/launch-bound
 small-batch encode (NLA-OPTIMIZATION-PORTFOLIO.md §1, §10). Hence regime=latency,
 distinct from W8A8 (throughput).
+
+MEMORY (R-MEM — override mandate). fp16 activations are 2 bytes/elem (vs the dense fp32 4), so
+this technique CHANGES the variable-memory profile. The follow-on implementer MUST OVERRIDE
+`est_peak_device_bytes` with a re-parameterised `shape_buckets.MemModel` (smaller
+`bytes_per_elem`) fed to `peak_variable_bytes` — NOT a hand-rolled second model — so the
+recorded estimate is not silently the dense fp32 bound. The stub keeps the default for now.
 """
 
 from __future__ import annotations

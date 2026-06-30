@@ -10,6 +10,14 @@ positions every layer. EXACT (a pure memoization of an existing computation). It
 read `s_bucket = input_ids.shape[1]` as the cache key (the legitimate use of the
 bucket as a key — it does not re-bucket). Touches the memory model
 (NLA-OPTIMIZATION-PORTFOLIO.md §6a, §1) — the most natural first NLA-phase action.
+
+MEMORY (R-MEM — override mandate). Memoizing the disentangled bias keeps a per-`(cfg, s_bucket)`
+position-logit buffer RESIDENT across layers/requests rather than recomputing-and-freeing it,
+so this technique CHANGES the variable-memory profile (it trades recompute for a retained
+buffer). The follow-on implementer MUST OVERRIDE `est_peak_device_bytes` to reflect the retained
+cache (a re-parameterised `shape_buckets.MemModel`/`peak_variable_bytes`, NOT a hand-rolled
+second model), so the recorded estimate is not silently the dense bound. The stub keeps the
+default for now.
 """
 
 from __future__ import annotations

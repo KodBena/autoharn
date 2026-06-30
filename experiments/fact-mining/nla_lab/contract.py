@@ -139,6 +139,23 @@ class EncodeVariant(ABC):
     #: shipping their math does not red the shared self-test for the other seven.
     IMPLEMENTED: bool = False
 
+    #: whether INPUT PARTITIONING (the `--batch-size` request split + the device chunker that
+    #: groups paragraphs into OOM-bounded forwards) is FIDELITY-INERT for this variant — i.e.
+    #: splitting the input set into independently-encoded sub-batches yields per-paragraph
+    #: outputs bit-identical to encoding them together. TRUE for this whole stack: coref is
+    #: PER-PARAGRAPH independent (each paragraph's clusters are computed from its OWN encode;
+    #: there is no cross-paragraph attention), and masked padding is inert (shape_buckets module
+    #: docstring), so the partition the host chooses for memory/throughput reasons cannot move a
+    #: real token's encoder output. That inertness is the BASIS for the client's `--batch-size`
+    #: knob and `shape_buckets.chunk_by_vram`/`encode_batch_chunks` being safe to apply at all.
+    #: The contract CARRIES the distinction so a future CROSS-CHUNK-DEPENDENT model (a sliding-
+    #: window / cross-paragraph-attention encode, where a partition boundary WOULD change a
+    #: token's context) declares FALSE and the host refuses to silently re-partition it.
+    #: This is DECLARED metadata, but it has a SAFE DEFAULT (True) — so, unlike
+    #: {name, regime, fidelity_tier}, it is deliberately NOT in the `__init_subclass__` by-TYPE
+    #: required set: a defaulted flag must never make an existing variant unimportable.
+    partition_is_fidelity_preserving: bool = True
+
     #: registry key (each concrete variant sets it as a class attribute; the meta-
     #: wrapper `Decorated` mirrors the inner variant's at instance level — so these are
     #: plain attributes, not ClassVar, to keep both forms type-legal under mypy --strict).
@@ -228,6 +245,48 @@ class EncodeVariant(ABC):
         stated structural mismatch)."""
         return FitVerdict(ok=True, reason="no fit precondition declared")
 
+    def est_peak_device_bytes(
+        self, bucket: EncodeBucket, cfg: jax_deberta.DebertaCfg
+    ) -> int:
+        """A CONSERVATIVE UPPER BOUND, in bytes, on this forward's peak VARIABLE (non-weight)
+        DEVICE memory at `bucket` — the FOURTH benchmark dimension (alongside latency /
+        throughput / fidelity), DECLARED by the variant and recorded by the bench. The same
+        over-estimation discipline as the OOM model: it must NEVER under-estimate (an
+        under-estimate is the OOM-class failure `shape_buckets` exists to foreclose); a larger
+        figure is merely a looser-but-safe bound.
+
+        SCOPE — DEVICE bytes only, NOT host RSS (ratified). Host RSS (parse + Python + GC) is a
+        REQUEST-level cost, not a per-variant property, and stays the client's `--batch-size`
+        knob; this dimension is the per-variant DEVICE-activation cost the technique actually
+        moves.
+
+        THE DEFAULT IS THE DENSE-REFERENCE COST, and it REUSES THE ONE MEMORY MODEL (ADR-0012
+        P1: there is exactly ONE memory model and it lives in `shape_buckets` — this does NOT
+        re-derive a second). It builds the dense deberta MemModel from `cfg` via
+        `shape_buckets.dense_deberta_mem_model` (the cfg-only twin of
+        `coref_host_shell.mem_model_from`) and returns
+        `shape_buckets.peak_variable_bytes(mm, bucket.batch, bucket.seq_bucket)` — the very
+        quadratic-dominated `[B,H,S,S]` activation bound the OOM chunker uses.
+
+        OVERRIDE MANDATE (R-MEM). A variant whose technique CHANGES the variable-memory profile
+        MUST OVERRIDE this so the estimate is NOT silently the dense bound: FlashAttention (no
+        `[B,H,S,S]` materialization -> drop the quadratic term), the linear-attention variants
+        (Nyström / Performer -> drop the quadratic content scores), W8A8 / W4A16 (smaller
+        bytes-per-element activations), a structured/low-rank FFN (smaller `[B,S,intermediate]`
+        term). The override stays a CONSERVATIVE UPPER BOUND and stays a function of
+        `shape_buckets.peak_variable_bytes` / `MemModel` (a re-parameterised MemModel — fewer
+        co-resident `[B,H,S,S]` buffers, a smaller `bytes_per_elem`, a smaller `intermediate`),
+        NEVER a hand-rolled second memory model.
+
+        ADDITIVE: this does NOT touch the frozen `encode` call boundary — a follow-on fills its
+        `encode` math and (if profile-changing) overrides THIS, with no interface change."""
+        mm = shape_buckets.dense_deberta_mem_model(
+            cfg.num_heads, cfg.head_size, cfg.pos_ebd_size)
+        # shape_buckets is a declared mypy stub-gap (mypy.ini skip); its int result is returned
+        # as the contract's int (named relaxation, ADR-0012 P8 — mirrors exact_reference.encode).
+        return shape_buckets.peak_variable_bytes(  # type: ignore[no-any-return]
+            mm, bucket.batch, bucket.seq_bucket)
+
 
 class Decorated(EncodeVariant):
     """A composable meta-wrapper that wraps ANY `EncodeVariant` uniformly — same
@@ -249,6 +308,9 @@ class Decorated(EncodeVariant):
         self.regime = inner.regime
         self.fidelity_tier = inner.fidelity_tier
         self.IMPLEMENTED = inner.IMPLEMENTED   # mirror the wrapped variant's stub/real state
+        # mirror the wrapped variant's declared memory profile (so a decorator over a
+        # profile-changing variant reports the INNER's override, not the dense default).
+        self.partition_is_fidelity_preserving = inner.partition_is_fidelity_preserving
 
     def encode(
         self,
@@ -261,3 +323,8 @@ class Decorated(EncodeVariant):
 
     def fit(self, bucket: EncodeBucket) -> FitVerdict:
         return self.inner.fit(bucket)
+
+    def est_peak_device_bytes(
+        self, bucket: EncodeBucket, cfg: jax_deberta.DebertaCfg
+    ) -> int:
+        return self.inner.est_peak_device_bytes(bucket, cfg)

@@ -225,6 +225,39 @@ class MemModel(NamedTuple):
     a_inter: int = _A_INTER
 
 
+# The DENSE deberta-v2/v3 FFN expansion ratio (intermediate_size / hidden_size). The whole
+# deberta-v2 family fixes this 4x block — v3-large is exactly 4x (hidden 1024 -> intermediate
+# 4096). The WEIGHT-derived path (coref_host_shell.mem_model_from) reads the EXACT intermediate
+# off the loaded FFN weight and NEVER consults this ratio; this constant feeds ONLY the
+# CFG-ONLY path (`dense_deberta_mem_model` below) — when a caller holds a DebertaCfg but NOT the
+# weights (the nla_lab EncodeVariant.est_peak_device_bytes contract), so `intermediate` cannot be
+# read off a weight. A CONSERVATIVE upper bound for the dense profile: over-estimating the FFN
+# width only inflates the byte bound (smaller/safer chunks; the invariant forbids only
+# UNDER-estimation). Operator-tunable (raise it for a wider-than-4x FFN).
+_DENSE_FFN_RATIO: int = _int_env("COREF_DENSE_FFN_RATIO", 4)
+
+
+def dense_deberta_mem_model(num_heads: int, head_size: int, pos_ebd_size: int) -> MemModel:
+    """The dense deberta-v2/v3 MemModel derived from ARCHITECTURE FIELDS ALONE (num_heads,
+    head_size, pos_ebd_size) — the CFG-ONLY twin of `coref_host_shell.mem_model_from`, which
+    derives the EXACT FFN inner width off the loaded `intermediate.dense` weight. SAME single
+    memory model (this builds a `MemModel`, consumed by `peak_variable_bytes`) — NOT a second
+    one (P1): only the SOURCE of `intermediate` differs. When the weights are in hand, use
+    `mem_model_from` (exact). When ONLY a DebertaCfg is known (no params — the nla_lab
+    `EncodeVariant.est_peak_device_bytes` contract, which is host-XOR-device neutral and never
+    touches device arrays), the FFN inner width is the canonical dense ratio `_DENSE_FFN_RATIO *
+    hidden` — a CONSERVATIVE upper bound for the dense profile (v3-large is exactly 4x). The
+    conservative k_*/a_* co-residency multiples stay the MemModel defaults (one home), exactly
+    as `mem_model_from`."""
+    hidden = num_heads * head_size
+    return MemModel(
+        num_heads=num_heads,
+        hidden=hidden,
+        intermediate=_DENSE_FFN_RATIO * hidden,
+        pos_ebd_size=pos_ebd_size,
+    )
+
+
 def peak_variable_bytes(mm: MemModel, B: int, S: int) -> int:
     """A CONSERVATIVE UPPER BOUND, in bytes, on the VARIABLE (non-weight) peak of one batched
     deberta-v3 encoder forward at batch B, padded length S. THE single author of the OOM

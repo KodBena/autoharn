@@ -10,6 +10,13 @@ intermediate `dense` (hidden->4·hidden, gelu) and the output `dense` (4·hidden
 NOT attention, NOT the projections. The fourth orthogonal seam, completing the proof
 that the whole-encode unit accommodates attention / linear / FFN / position-cache
 candidates uniformly (NLA-OPTIMIZATION-PORTFOLIO.md §10; the butterfly lineage of §0).
+
+MEMORY (R-MEM — override mandate). A structured (Monarch block-diagonal) / low-rank `UVᵀ` FFN
+shrinks the `[B,S,intermediate]` activation term, so this technique CHANGES the variable-memory
+profile. The follow-on implementer MUST OVERRIDE `est_peak_device_bytes` with a re-parameterised
+`shape_buckets.MemModel` (smaller effective `intermediate`) fed to `peak_variable_bytes` — NOT a
+hand-rolled second model — so the recorded estimate is not silently the dense bound. The stub
+keeps the default for now.
 """
 
 from __future__ import annotations

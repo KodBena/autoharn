@@ -15,6 +15,12 @@ at short S — its constants lose to exact Flash, and matrix-concentration does 
 on a small [S,S] (NLA-OPTIMIZATION-PORTFOLIO.md §1, §3). So `fit` retires this variant
 below a crossover seq length, RECORDED as a portfolio decision (not run as a bad
 number).
+
+MEMORY (R-MEM — override mandate). The landmark/low-rank content approx never materializes the
+full `[B,H,S,S]` content scores, so this technique CHANGES the variable-memory profile. The
+follow-on implementer MUST OVERRIDE `est_peak_device_bytes` to drop the quadratic content term
+(a re-parameterised `shape_buckets.MemModel`/`peak_variable_bytes`, NOT a second model), so the
+recorded estimate is not silently the dense bound. The stub keeps the default for now.
 """
 
 from __future__ import annotations

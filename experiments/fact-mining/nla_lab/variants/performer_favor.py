@@ -13,6 +13,12 @@ FIT PRECONDITION: random-feature concentration needs matrices large enough for t
 estimator to concentrate; at short S the variance dominates and exact Flash wins
 (portfolio §1, §3). `fit` retires below the crossover, RECORDED as a portfolio
 decision.
+
+MEMORY (R-MEM — override mandate). The random-feature / low-rank kernel never materializes the
+full `[B,H,S,S]` content scores, so this technique CHANGES the variable-memory profile. The
+follow-on implementer MUST OVERRIDE `est_peak_device_bytes` to drop the quadratic content term
+(a re-parameterised `shape_buckets.MemModel`/`peak_variable_bytes`, NOT a second model), so the
+recorded estimate is not silently the dense bound. The stub keeps the default for now.
 """
 
 from __future__ import annotations

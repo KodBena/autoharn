@@ -10,6 +10,12 @@ SEAM IT REPLACES: `_linear` (jax_deberta.py:115-117) at EVERY projection
 the whole-encode unit exists for: a "single attention op" type could not represent
 this variant at all (NLA-OPTIMIZATION-PORTFOLIO.md §10). Compute-bound large-batch
 win (int8 matmul throughput).
+
+MEMORY (R-MEM — override mandate). int8 activations are 1 byte/elem (vs the dense fp32 4), so
+this technique CHANGES the variable-memory profile. The follow-on implementer MUST OVERRIDE
+`est_peak_device_bytes` with a re-parameterised `shape_buckets.MemModel` (smaller
+`bytes_per_elem`) fed to `peak_variable_bytes` — NOT a hand-rolled second model — so the
+recorded estimate is not silently the dense fp32 bound. The stub keeps the default for now.
 """
 
 from __future__ import annotations

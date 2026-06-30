@@ -9,6 +9,13 @@ SEAM IT REPLACES: the score-materialize + softmax + context in `_self_attention`
 FOLD `rel_att` from `_disentangled_bias` (jax_deberta.py:250) into the kernel bias so
 the disentangled c2p/p2c terms stay exact (NLA-OPTIMIZATION-PORTFOLIO.md §5, §10.2).
 Exact, and it deletes the `B·H·S²` materialization that the OOM memory model bounds.
+
+MEMORY (R-MEM — override mandate). This technique CHANGES the variable-memory profile: it
+never materializes `[B,H,S,S]`, so its peak is FAR below the dense default. The follow-on
+implementer MUST OVERRIDE `est_peak_device_bytes` to DROP the quadratic term (a
+re-parameterised `shape_buckets.MemModel`/`peak_variable_bytes`, NOT a hand-rolled second
+model), so the recorded estimate is not silently the dense bound. The stub keeps the default
+for now.
 """
 
 from __future__ import annotations

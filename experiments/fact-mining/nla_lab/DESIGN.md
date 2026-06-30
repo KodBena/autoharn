@@ -55,16 +55,27 @@ class EncodeVariant(ABC):
     regime: Regime               # LATENCY | THROUGHPUT | BOTH      (declared)
     fidelity_tier: FidelityTier  # EXACT | AGGREGATE_BEHAVIORAL     (declared)
     IMPLEMENTED: bool = False    # flip True in your file when encode is filled (R3-F5)
+    partition_is_fidelity_preserving: bool = True  # input-partition inertness (declared, DEFAULTED)
 
     def __init_subclass__(cls, **kw):  # by-TYPE metadata guard (R1-G / ADR-0000):
         ...                            # a concrete subclass missing/mis-typing the three
-                                       # above is UNIMPORTABLE (TypeError at class-creation)
+                                       # REQUIRED above (name/regime/fidelity_tier) is
+                                       # UNIMPORTABLE (TypeError at class-creation). The
+                                       # DEFAULTED flags (IMPLEMENTED, partition_*) are NOT in
+                                       # the required set — a default must not make a variant
+                                       # unimportable.
 
     @abstractmethod
     def encode(self, params: dict[str, jax.Array], input_ids: jax.Array,
                attention_mask: jax.Array, cfg: jax_deberta.DebertaCfg) -> jax.Array: ...
 
     def fit(self, bucket: EncodeBucket) -> FitVerdict: ...   # a-priori retire gate
+
+    def est_peak_device_bytes(self, bucket: EncodeBucket,            # the MEMORY dimension —
+                              cfg: jax_deberta.DebertaCfg) -> int: ... # conservative DEVICE-byte
+                                       # upper bound; DEFAULT reuses shape_buckets' ONE OOM model;
+                                       # a profile-changing variant OVERRIDES (additive — does NOT
+                                       # touch the frozen encode boundary)
 ```
 
 - **Why an ABC + mypy `--strict`, not a `runtime_checkable` Protocol (B3).** A
@@ -100,6 +111,38 @@ class EncodeVariant(ABC):
   reason)` lets a variant retire itself below a crossover (Nyström/Performer `S >=
   512`) — recorded as a portfolio decision, not run as a bad number (the frontier creed:
   retire only by a failed experiment OR a stated structural mismatch).
+- **`est_peak_device_bytes(bucket, cfg) -> int` — the MEMORY dimension (R-MEM).** The fourth
+  benchmark axis alongside latency / throughput / fidelity: a CONSERVATIVE UPPER BOUND (never
+  under — the same discipline as the OOM model) on the forward's peak VARIABLE (non-weight)
+  **DEVICE** bytes at `bucket`. **DEVICE bytes only, NOT host RSS** (ratified): host RSS (parse
+  + Python + GC) is a REQUEST-level cost, not a per-variant property, and stays the client's
+  `--batch-size` knob; this axis is the per-variant device-activation cost the technique moves.
+  The **DEFAULT reuses the ONE memory model** (ADR-0012 P1 — there is exactly one, in
+  `shape_buckets`; this does NOT mint a second): it builds the dense deberta MemModel from `cfg`
+  via `shape_buckets.dense_deberta_mem_model` (the cfg-only twin of
+  `coref_host_shell.mem_model_from`, differing ONLY in the source of `intermediate` — the
+  weight-derived exact width when params are in hand vs the canonical dense 4× ratio when only
+  the cfg is known) and returns `shape_buckets.peak_variable_bytes(mm, B, S)`. **OVERRIDE
+  MANDATE:** a variant whose technique CHANGES the variable-memory profile MUST OVERRIDE this so
+  the estimate is not silently the dense bound — FlashAttention / Nyström / Performer drop the
+  quadratic `[B,H,S,S]` term, W8A8 / W4A16 shrink `bytes_per_elem`, a structured/low-rank FFN
+  shrinks `[B,S,intermediate]`, cached-positions reflects the retained position-logit buffer.
+  Each profile-changing stub's docstring carries this mandate; the override stays a
+  re-parameterised `MemModel` fed to `peak_variable_bytes`, NEVER a hand-rolled second model.
+  **Additive**: it does not alter the frozen `encode` call boundary. **GATE: ADR-0012 P1 (one
+  memory model) / ADR-0000 (conservative upper bound, never under).**
+- **`partition_is_fidelity_preserving: bool = True` — input-partition inertness (declared).**
+  TRUE for this whole stack: coref is **per-paragraph independent** (no cross-paragraph
+  attention; each paragraph's clusters come from its own encode) and masked padding is inert, so
+  the partition the host chooses for memory/throughput reasons cannot move a real token's
+  encoder output — this inertness is the BASIS for the client's `--batch-size` knob and
+  `shape_buckets.chunk_by_vram` / `encode_batch_chunks` being safe to apply at all. The contract
+  CARRIES the distinction so a future **cross-chunk-dependent** model (a sliding-window /
+  cross-paragraph-attention encode, where a partition boundary WOULD change a token's context)
+  declares `False` and the host refuses to silently re-partition it. It is DECLARED metadata but
+  DEFAULTED (safe), so — unlike `{name, regime, fidelity_tier}` — it is deliberately NOT in the
+  `__init_subclass__` by-TYPE required set (a defaulted flag must never make an existing variant
+  unimportable; the R1-G guard's required set is unchanged). **GATE: ADR-0000.**
 - **`EncodeBucket(batch, seq_bucket)` validated against the `shape_buckets` ladders.**
   Its `__post_init__` asserts `seq_bucket ∈ ENCODE_LEN_BUCKETS` and `batch ∈
   ENCODE_BATCH_BUCKETS` — an off-ladder shape is **unconstructable** (ADR-0000), sourced
@@ -159,10 +202,19 @@ pays compile+warmup forwards first (discarded), then times `repeats` run-only fo
 each ended by `block_until_ready` so the wall window encloses real device work — warm,
 compile excluded by construction. **GATE: ADR-0009.**
 
-**Two distinct lanes, never collapsed (B10).** `lab_report.BenchRecord` carries BOTH:
+**Three distinct lanes, never collapsed (B10).** `lab_report.BenchRecord` carries all of:
 - **latency lane** — `lat_p50_ms / p95 / min / mean` over the warm sample (the hook
   workload, small B);
-- **throughput lane** — `rows_per_s` = real-rows / warm-median (compute-bound, large B).
+- **throughput lane** — `rows_per_s` = real-rows / warm-median (compute-bound, large B);
+- **memory lane** — `est_peak_device_bytes` (the `devMiB` column), the variant's DECLARED
+  conservative upper bound on the forward's peak VARIABLE (non-weight) device bytes at `(B,
+  s_bucket)` (`EncodeVariant.est_peak_device_bytes`, §2). It is the **declared estimate** (the
+  contract dimension the portfolio compares on), not a live device measurement — recorded on
+  EVERY record, including non-ok (fit_retired / not_implemented / failed) rows, since it is an
+  a-priori quantity. It is the dense-reference bound (`shape_buckets.peak_variable_bytes`) unless
+  a profile-changing variant overrides it. A live `jax memory_stats` measured-vs-estimate column
+  is a possible future add (`lab_measure` already touches device memory), but the estimate is
+  what the portfolio ranks on. **GATE: ADR-0009 (measured/declared dimensions) / ADR-0012 P1.**
 
 Robust stats (`agg` → p50/p95/min/mean/n), never one eyeballed number (A7 /
 robust-benchmark-statistics).
@@ -274,18 +326,21 @@ perf claim is a supersedable finding authored elsewhere). **GATE: ADR-0012 P1.**
 **Proven self-test output** (synthetic fixture, CPU jax — the harness self-proof):
 
 ```
-variant            regime       B  Sbkt     p50ms     p95ms     rows/s     max|Δ|           status
-exact_reference    both         1    64     1.144     1.233      873.8   0.00e+00               ok
-exact_reference    both         2   128     1.958     2.074     1021.3   0.00e+00               ok
-flash_attention    both         1    64         —         —          —          —  not_implemented
-nystrom_attention  throughput   1    64         —         —          —          —      fit_retired
-_smoke_broken      both         1    64         —         —          —          —     failed_shape
+variant            regime       B  Sbkt     p50ms     p95ms     rows/s     max|Δ|     devMiB           status
+exact_reference    both         1    64     1.088     1.094      919.4   0.00e+00       0.39               ok
+exact_reference    both         2   128     1.891     1.960     1057.7   0.00e+00       2.56               ok
+flash_attention    both         1    64         —         —          —          —       0.39  not_implemented
+nystrom_attention  throughput   1    64         —         —          —          —       0.39      fit_retired
+_smoke_broken      both         1    64         —         —          —          —       0.39     failed_shape
 ...
 
 status legend:
   fit_retired      an a-priori portfolio decision (e.g. Nyström/Performer below S>=512),
                    NOT a broken impl — raise --seq-buckets to exercise it.
   not_implemented  a stub: the EXPECTED pre-fill state until the agent fills the math.
+devMiB:            the variant's DECLARED conservative UPPER BOUND on the forward's peak
+                   VARIABLE (non-weight) DEVICE bytes (the memory lane) — dense bound by
+                   default; a profile-changing variant overrides it. Recorded even for non-ok.
 regime coverage: the default (batch 1-2 x seq 64-128) is the CPU self-test geometry
   (LATENCY lane). The THROUGHPUT lane + the S>=512 fit window need a larger sweep, e.g.
   --batches 16 32 --seq-buckets 512 1024.

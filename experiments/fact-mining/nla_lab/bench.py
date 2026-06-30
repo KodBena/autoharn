@@ -75,11 +75,24 @@ def run_one(variant_name: str, params: dict[str, object], cfg: object, vocab: in
     for s_bucket in seq_buckets:
         for batch in batches:
             bucket = EncodeBucket(batch=batch, seq_bucket=s_bucket)  # validates the ladder
+            # the DECLARED memory dimension (contract estimate, not a live measurement) — an
+            # a-priori quantity, derived once per (variant, bucket) and recorded on EVERY record
+            # regardless of run outcome. A pure host-side int computation (shape_buckets, no
+            # device op), computed OFF the device path. The memory lane is INDEPENDENT and
+            # RESILIENT like the others (A10): a broken `est_peak_device_bytes` OVERRIDE blanks
+            # ONLY this variant's devMiB cell (recorded None -> "—"), it does NOT tear down the
+            # sweep — so one follow-on agent's bad memory override cannot red the bench for the
+            # other seven (the same parallel-safety invariant as the per-variant IMPLEMENTED flag).
+            try:
+                est: int | None = variant.est_peak_device_bytes(bucket, cfg)
+            except Exception:
+                est = None
             verdict = variant.fit(bucket)
             if not verdict.ok:
                 records.append(BenchRecord.non_ok(
                     **meta, batch=batch, seq_bucket=s_bucket,
-                    status=STATUS_FIT_RETIRED, detail=verdict.reason))
+                    status=STATUS_FIT_RETIRED, detail=verdict.reason,
+                    est_peak_device_bytes=est))
                 continue
             ids_rows, mask_rows = lab_corpus.make_batch(batch, s_bucket, vocab, seed)
             ids, mask = lab_measure.lift_batch(ids_rows, mask_rows)
@@ -90,17 +103,20 @@ def run_one(variant_name: str, params: dict[str, object], cfg: object, vocab: in
             except NotImplementedError as e:
                 records.append(BenchRecord.non_ok(
                     **meta, batch=batch, seq_bucket=s_bucket,
-                    status=STATUS_NOT_IMPLEMENTED, detail=str(e).split("\n")[0]))
+                    status=STATUS_NOT_IMPLEMENTED, detail=str(e).split("\n")[0],
+                    est_peak_device_bytes=est))
                 continue
             except Exception as e:                       # any other variant failure
                 records.append(BenchRecord.non_ok(
                     **meta, batch=batch, seq_bucket=s_bucket,
-                    status=STATUS_FAILED_ERROR, detail=f"{type(e).__name__}: {e}"))
+                    status=STATUS_FAILED_ERROR, detail=f"{type(e).__name__}: {e}",
+                    est_peak_device_bytes=est))
                 continue
             status, detail = lab_measure.guard_output(lhs, expected)
             if status == STATUS_FAILED_SHAPE or status == STATUS_FAILED_NONFINITE:
                 records.append(BenchRecord.non_ok(
-                    **meta, batch=batch, seq_bucket=s_bucket, status=status, detail=detail))
+                    **meta, batch=batch, seq_bucket=s_bucket, status=status, detail=detail,
+                    est_peak_device_bytes=est))
                 continue
             # fidelity vs the exact reference (0.0 for the reference itself)
             if ref_lhs is None:
@@ -114,7 +130,7 @@ def run_one(variant_name: str, params: dict[str, object], cfg: object, vocab: in
             records.append(BenchRecord.latency_throughput(
                 **meta, batch=batch, seq_bucket=s_bucket, stat=stat,
                 n_real_rows=_real_rows(mask_rows), fidelity_max_abs=fmax,
-                fidelity_mean_abs=fmean))
+                fidelity_mean_abs=fmean, est_peak_device_bytes=est))
     return records
 
 

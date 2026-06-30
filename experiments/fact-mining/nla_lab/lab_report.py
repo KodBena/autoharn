@@ -85,15 +85,21 @@ class BenchRecord:
     rows_per_s: float | None
     fidelity_max_abs: float | None
     fidelity_mean_abs: float | None
+    #: the FOURTH dimension: the variant's DECLARED conservative upper bound on the forward's
+    #: peak VARIABLE (non-weight) DEVICE bytes at this (batch, seq_bucket) — the contract estimate
+    #: (`EncodeVariant.est_peak_device_bytes`), NOT a live measurement. It is an a-priori DECLARED
+    #: quantity, so it is recorded even for non-ok (fit_retired/not_implemented/failed) trials.
+    est_peak_device_bytes: int | None
     detail: str
 
     @classmethod
     def latency_throughput(cls, *, variant: str, regime: str, fidelity_tier: str,
                            batch: int, seq_bucket: int, stat: Stat, n_real_rows: int,
-                           fidelity_max_abs: float | None, fidelity_mean_abs: float | None
-                           ) -> "BenchRecord":
+                           fidelity_max_abs: float | None, fidelity_mean_abs: float | None,
+                           est_peak_device_bytes: int | None) -> "BenchRecord":
         """An OK record: derive rows/s from the warm median per-call time over the real
-        (non-dummy) rows in the batch (throughput lane), keep p50/p95 (latency lane)."""
+        (non-dummy) rows in the batch (throughput lane), keep p50/p95 (latency lane), carry the
+        declared peak-device-bytes estimate (memory lane)."""
         med_s = stat.p50_ms / 1000.0
         rows_per_s = (n_real_rows / med_s) if med_s > 0 else None
         return cls(variant=variant, regime=regime, fidelity_tier=fidelity_tier,
@@ -101,16 +107,17 @@ class BenchRecord:
                    lat_p50_ms=stat.p50_ms, lat_p95_ms=stat.p95_ms, lat_min_ms=stat.min_ms,
                    lat_mean_ms=stat.mean_ms, lat_n=stat.n, rows_per_s=rows_per_s,
                    fidelity_max_abs=fidelity_max_abs, fidelity_mean_abs=fidelity_mean_abs,
-                   detail="")
+                   est_peak_device_bytes=est_peak_device_bytes, detail="")
 
     @classmethod
     def non_ok(cls, *, variant: str, regime: str, fidelity_tier: str, batch: int,
-               seq_bucket: int, status: str, detail: str) -> "BenchRecord":
+               seq_bucket: int, status: str, detail: str,
+               est_peak_device_bytes: int | None) -> "BenchRecord":
         return cls(variant=variant, regime=regime, fidelity_tier=fidelity_tier,
                    batch=batch, seq_bucket=seq_bucket, status=status,
                    lat_p50_ms=None, lat_p95_ms=None, lat_min_ms=None, lat_mean_ms=None,
                    lat_n=0, rows_per_s=None, fidelity_max_abs=None, fidelity_mean_abs=None,
-                   detail=detail)
+                   est_peak_device_bytes=est_peak_device_bytes, detail=detail)
 
 
 def record_span(rec: BenchRecord) -> None:
@@ -135,6 +142,13 @@ def _fmt(x: float | None, spec: str) -> str:
     return "—".rjust(len(format(0.0, spec))) if x is None else format(x, spec)
 
 
+def _fmt_mib(nbytes: int | None, spec: str) -> str:
+    """The declared peak DEVICE bytes -> MiB for the table (the memory lane). `None` only if a
+    variant's estimate could not be derived (a contract bug — never expected on the dense
+    default)."""
+    return "—".rjust(len(format(0.0, spec))) if nbytes is None else format(nbytes / (1 << 20), spec)
+
+
 def status_legend() -> str:
     """A legend disambiguating the status column — so a persistent `fit_retired` /
     `not_implemented` row is read as an EXPECTED portfolio/skeleton state, not a broken
@@ -154,6 +168,11 @@ def status_legend() -> str:
         f"  {'':16} pre-fill state until the follow-on agent fills the math.\n"
         f"  {STATUS_FAILED_SHAPE:16} / {STATUS_FAILED_NONFINITE} / {STATUS_FAILED_ERROR}: a real failure the "
         "watchdog flagged (loud, never coerced).\n"
+        "devMiB: the variant's DECLARED conservative UPPER BOUND on the forward's peak VARIABLE\n"
+        "  (non-weight) DEVICE bytes at (B, Sbkt), in MiB — the 4th dimension alongside\n"
+        "  latency/throughput/fidelity (EncodeVariant.est_peak_device_bytes; DEVICE bytes only,\n"
+        "  NOT host RSS). It is the dense-reference bound (shape_buckets.peak_variable_bytes)\n"
+        "  unless a profile-changing variant overrides it; recorded even for non-ok rows.\n"
         "regime coverage: the default (batch 1-2 x seq 64-128) is the CPU self-test geometry\n"
         "  (latency lane). The THROUGHPUT lane (large-batch, compute-bound) and the S>=512\n"
         "  window where the linear-attention variants fit need a larger sweep, e.g.\n"
@@ -163,12 +182,12 @@ def status_legend() -> str:
 def format_table(records: list[BenchRecord]) -> str:
     """The comparison table: variant × bucket, both lanes + fidelity + status."""
     head = (f"{'variant':18} {'regime':10} {'B':>3} {'Sbkt':>5} {'p50ms':>9} "
-            f"{'p95ms':>9} {'rows/s':>10} {'max|Δ|':>10} {'status':>16}")
+            f"{'p95ms':>9} {'rows/s':>10} {'max|Δ|':>10} {'devMiB':>10} {'status':>16}")
     lines = [head, "-" * len(head)]
     for r in records:
         lines.append(
             f"{r.variant:18} {r.regime:10} {r.batch:>3} {r.seq_bucket:>5} "
             f"{_fmt(r.lat_p50_ms, '9.3f')} {_fmt(r.lat_p95_ms, '9.3f')} "
             f"{_fmt(r.rows_per_s, '10.1f')} {_fmt(r.fidelity_max_abs, '10.2e')} "
-            f"{r.status:>16}")
+            f"{_fmt_mib(r.est_peak_device_bytes, '10.2f')} {r.status:>16}")
     return "\n".join(lines)
