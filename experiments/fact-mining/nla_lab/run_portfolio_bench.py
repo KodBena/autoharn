@@ -86,6 +86,22 @@ def _child_cmd(variant: str, run_tag: str, args: argparse.Namespace) -> list[str
     return cmd
 
 
+def _child_env(mem_fraction: float | None) -> dict[str, str]:
+    """The subprocess env with the XLA arena sized to USE the free VRAM. jax PREALLOCATES only
+    0.75 of TOTAL device memory by default, so a large shape can OOM (RESOURCE_EXHAUSTED) while
+    VRAM is physically free — the arena, not the card, is the limit. By default we turn
+    preallocation OFF so the bench grows on demand into whatever is free; --mem-fraction sets a
+    fixed preallocated arena instead (e.g. 0.3 to share the card with a running daemon)."""
+    env = dict(os.environ)
+    if mem_fraction is None:
+        env["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
+        env.pop("XLA_PYTHON_CLIENT_MEM_FRACTION", None)
+    else:
+        env["XLA_PYTHON_CLIENT_PREALLOCATE"] = "true"
+        env["XLA_PYTHON_CLIENT_MEM_FRACTION"] = repr(float(mem_fraction))
+    return env
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(
         description="process-per-variant portfolio sweep (real-weight safe; psql sink)")
@@ -108,6 +124,13 @@ def main(argv: list[str] | None = None) -> int:
                     help="harness DB DSN (default: spans.DEFAULT_DSN, HARNESS_DSN-overridable)")
     ap.add_argument("--label", default=None,
                     help="optional sweep label folded into the shared run_tag")
+    ap.add_argument("--mem-fraction", type=float, default=None,
+                    help="XLA_PYTHON_CLIENT_MEM_FRACTION per bench subprocess (fraction of "
+                         "TOTAL device memory to PREALLOCATE). DEFAULT (unset): preallocation "
+                         "OFF (XLA_PYTHON_CLIENT_PREALLOCATE=false) so the bench grows into the "
+                         "FREE VRAM on demand — uses all that's free, not jax's 0.75-of-total "
+                         "default arena (which OOMs a large shape while VRAM is physically "
+                         "free). Set e.g. 0.3 to cap the arena and share the card with a daemon.")
     args = ap.parse_args(argv)
 
     if args.model is not None and args.weights_npz is not None:
@@ -128,7 +151,9 @@ def main(argv: list[str] | None = None) -> int:
     mtag = model_tag(args.model, args.weights_npz)
     print(f"=== portfolio sweep: {len(variants)} variant(s), one FRESH subprocess each "
           f"(OS reclaims GPU arena + XLA cache + RSS between variants) ===")
-    print(f"=== model={mtag!r} | run_tag={run_tag!r} | dsn={args.dsn!r} ===")
+    arena = ("preallocate=OFF (grow into free VRAM)" if args.mem_fraction is None
+             else f"mem_fraction={args.mem_fraction} (fixed preallocated arena)")
+    print(f"=== model={mtag!r} | run_tag={run_tag!r} | dsn={args.dsn!r} | arena: {arena} ===")
     print(f"=== variants: {', '.join(variants)} ===\n")
 
     failed: list[str] = []
@@ -140,7 +165,7 @@ def main(argv: list[str] | None = None) -> int:
         # host memory on exit, before the next variant starts. stdout/stderr INHERIT the
         # parent's streams so the child's progress streams live to the maintainer. We do
         # NOT check=True: a nonzero child must NOT abort the sweep.
-        proc = subprocess.run(cmd, cwd=REPO_ROOT)  # noqa: S603 — fixed argv, no shell
+        proc = subprocess.run(cmd, cwd=REPO_ROOT, env=_child_env(args.mem_fraction))  # noqa: S603 — fixed argv, no shell
         if proc.returncode != 0:
             failed.append(variant)
             print(f"!!! variant {variant} exited nonzero (code {proc.returncode}) — it "

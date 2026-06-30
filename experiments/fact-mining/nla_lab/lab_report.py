@@ -37,6 +37,7 @@ STATUS_NOT_IMPLEMENTED = "not_implemented"  # a stub (NotImplementedError) — e
 STATUS_FAILED_SHAPE = "failed_shape"        # wrong output shape (watchdog caught)
 STATUS_FAILED_NONFINITE = "failed_nonfinite"  # NaN/Inf (watchdog caught)
 STATUS_FAILED_ERROR = "failed_error"        # any other exception in the variant
+STATUS_OOM = "oom"                          # device RESOURCE_EXHAUSTED at this (B,Sbkt): too big to fit
 
 
 @dataclass(frozen=True)
@@ -244,6 +245,11 @@ def status_legend() -> str:
         f"  {'':16} pre-fill state until the follow-on agent fills the math.\n"
         f"  {STATUS_FAILED_SHAPE:16} / {STATUS_FAILED_NONFINITE} / {STATUS_FAILED_ERROR}: a real failure the "
         "watchdog flagged (loud, never coerced).\n"
+        f"  {STATUS_OOM:16} the forward did NOT FIT the device arena at (B, Sbkt) "
+        "(RESOURCE_EXHAUSTED) —\n"
+        f"  {'':16} a recorded CAPACITY outcome, not a bug. A variant that fits where the\n"
+        f"  {'':16} dense reference OOMs is exactly the win we want to see. (Raise the bench\n"
+        f"  {'':16} arena — see run_portfolio_bench --mem-fraction / preallocate — if free VRAM allows.)\n"
         "devMiB: the variant's DECLARED conservative UPPER BOUND on the forward's peak VARIABLE\n"
         "  (non-weight) DEVICE bytes at (B, Sbkt), in MiB — the 4th dimension alongside\n"
         "  latency/throughput/fidelity (EncodeVariant.est_peak_device_bytes; DEVICE bytes only,\n"

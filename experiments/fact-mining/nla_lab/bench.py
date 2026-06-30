@@ -36,7 +36,7 @@ from spans import DEFAULT_DSN
 from nla_lab.contract import EncodeBucket
 from nla_lab.lab_report import (STATUS_FAILED_ERROR, STATUS_FAILED_NONFINITE,
                                 STATUS_FAILED_SHAPE, STATUS_FIT_RETIRED,
-                                STATUS_NOT_IMPLEMENTED, STATUS_OK, BenchRecord, agg,
+                                STATUS_NOT_IMPLEMENTED, STATUS_OK, STATUS_OOM, BenchRecord, agg,
                                 format_table, record_span, status_legend, write_jsonl,
                                 write_psql)
 from nla_lab.registry import load_all, make, portfolio_names
@@ -122,9 +122,16 @@ def run_one(variant_name: str, params: dict[str, object], cfg: object, vocab: in
                     est_peak_device_bytes=est))
                 continue
             except Exception as e:                       # any other variant failure
+                # a device OOM at this (B, Sbkt) is a CAPACITY outcome, not a bug — record it
+                # DISTINCTLY (oom) and keep sweeping: a variant that fits where the dense ref
+                # OOMs is exactly the result we want. Detected by message so this host file
+                # needs no jax import (host-XOR-device). est is still reported (the predicted
+                # peak that didn't fit). Anything else is a real failure (loud).
+                oom = "RESOURCE_EXHAUSTED" in str(e)
                 records.append(BenchRecord.non_ok(
                     **meta, batch=batch, seq_bucket=s_bucket,
-                    status=STATUS_FAILED_ERROR, detail=f"{type(e).__name__}: {e}",
+                    status=STATUS_OOM if oom else STATUS_FAILED_ERROR,
+                    detail=f"{type(e).__name__}: {e}".split("\n")[0],
                     est_peak_device_bytes=est))
                 continue
             status, detail = lab_measure.guard_output(lhs, expected)
@@ -161,7 +168,17 @@ def build_reference_cache(params: dict[str, object], cfg: object, vocab: int,
         for batch in batches:
             ids_rows, mask_rows = lab_corpus.make_batch(batch, s_bucket, vocab, seed)
             ids, mask = lab_measure.lift_batch(ids_rows, mask_rows)
-            cache[(batch, s_bucket)] = lab_measure.run_lhs(ref, params, ids, mask, cfg)  # type: ignore[arg-type]
+            try:
+                cache[(batch, s_bucket)] = lab_measure.run_lhs(ref, params, ids, mask, cfg)  # type: ignore[arg-type]
+            except Exception as e:
+                # the dense reference itself does not FIT the device arena at this shape (large
+                # B x S): cache None so every variant at this shape records fidelity=None
+                # (unavailable) but STILL runs + reports latency/memory — the reference OOMing
+                # is data, not a crash, and a variant that fits here is the headline. A non-OOM
+                # reference failure is a real bug and propagates (fail-loud, P5).
+                if "RESOURCE_EXHAUSTED" not in str(e):
+                    raise
+                cache[(batch, s_bucket)] = None
     return cache
 
 
