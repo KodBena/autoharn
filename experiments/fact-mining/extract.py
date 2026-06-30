@@ -31,6 +31,8 @@ from dataclasses import dataclass
 from typing import TypedDict
 
 import resolve
+from parse_seam import ParsedDoc, SpacyParser
+from parse_seam import resolver_for as parsed_resolver_for
 
 # NOTE (the lard, foreclosed): spaCy is NOT imported at module scope. `import spacy`
 # transitively pulls thinc -> torch (~1.06s) + transformers, and a client that only
@@ -194,6 +196,58 @@ def extract_triples(doc, key_fn=None):
     return triples
 
 
+# --- the SAME SVO extraction, over the NEUTRAL ParsedDoc (the unwelded parse seam) ----
+# extract_triples (above) is the spaCy-native form, kept untouched as the behavior
+# reference. The two functions below are its line-for-line twin over `ParsedDoc`: they
+# name only neutral fields (tok.pos/dep/lemma, pdoc.children/subtree) — no spaCy attribute
+# — so ANY backend that fills a ParsedDoc gets SVO extraction for free. The production
+# path (doc_to_facts) now runs THIS form; byte-identity with the spaCy-native form is
+# pinned by test_doc_to_facts_equivalence + test_parse_seam_byte_identical.
+
+
+def subtree_span_parsed(pdoc: ParsedDoc, i: int) -> str:
+    """Compact text for token `i`'s subtree — the neutral `subtree_span` (subtree tokens,
+    ascending by index, joined by spaces)."""
+    return " ".join(w.text for w in pdoc.subtree(i))
+
+
+def extract_triples_parsed(pdoc, key_fn=None):
+    """Neutral SVO extraction off a `ParsedDoc` — byte-identical to `extract_triples` on a
+    spaCy-derived ParsedDoc. Same dependency labels, same nesting order, same Triple."""
+    key_fn = key_fn or (lambda t: t.lemma.lower())
+    triples = []
+    for si, sent in enumerate(pdoc.sents):
+        for tok in pdoc.tokens[sent.start_token:sent.end_token]:
+            if tok.pos not in ("VERB", "AUX"):
+                continue
+            children = pdoc.children(tok.i)
+            subjs = [c for c in children if c.dep in ("nsubj", "nsubjpass")]
+            objs = [c for c in children if c.dep in ("dobj", "attr", "oprd", "dative")]
+            # prepositional objects: verb -> prep -> pobj
+            for prep in (c for c in children if c.dep == "prep"):
+                for pobj in (g for g in pdoc.children(prep.i) if g.dep == "pobj"):
+                    objs.append(pobj)
+            if not subjs or not objs:
+                continue
+            negated = any(c.dep == "neg" for c in children)
+            pred = tok.lemma
+            for s in subjs:
+                for o in objs:
+                    triples.append(
+                        Triple(
+                            subj=subtree_span_parsed(pdoc, s.i),
+                            pred=pred,
+                            obj=subtree_span_parsed(pdoc, o.i),
+                            negated=negated,
+                            sent=sent.text.strip(),
+                            subj_key=key_fn(s),
+                            obj_key=key_fn(o),
+                            sent_i=si,
+                        )
+                    )
+    return triples
+
+
 # --- the facts wire schema, as ONE typed authority (ADR-0012 P7/P8) ----------
 # The daemon->client wire and the load_facts consumer share these record shapes.
 # Previously the only authority was the doc_to_facts docstring (prose the code could
@@ -263,31 +317,54 @@ def doc_to_facts(doc, coref_clusters=None) -> FactBundle:
     caller maps that to its running sentence budget + DB sent_id. doc_to_facts owns
     *what a fact is*; the caller owns *which facts survive the budget* and *their DB
     identity* (the functional-core / imperative-shell split, ADR-0012 P9).
-    """
-    if coref_clusters is not None:
-        # daemon path: attach the host-computed clusters so resolve.resolver_for sees
-        # them. Exactly what the OLD remote client did before walking the Doc — the
-        # resolution is therefore identical, only its HOME moved host-side. The wire
-        # payload is decoded by the ONE decoder (resolve.attach_coref_clusters), shared
-        # with nlp_client.pipe, so the two paths cannot drift on the cluster encoding.
-        resolve.attach_coref_clusters(doc, coref_clusters)
 
-    key_fn = resolve.resolver_for(doc)  # coref- + entity-resolved canonical constants
+    PARSE SEAM (additive, behavior-preserving): the extractor now consumes the NEUTRAL
+    `parse_seam.ParsedDoc` (so the parse backend is polymorphic — add one = one adapter).
+    `doc` may be a `ParsedDoc` OR a spaCy `Doc`; a spaCy Doc is decoded by the spaCy
+    adapter (`SpacyParser.adapt`) at this boundary, BYTE-FOR-BYTE preserving the existing
+    callers' behavior (nlp_server / contra_app / load_facts pass spaCy Docs, unchanged).
+    `doc_to_facts_from_spacy` is the explicit spaCy entry; see it + `_facts_from_parsed`.
+    """
+    parsed = doc if isinstance(doc, ParsedDoc) else SpacyParser.adapt(doc, coref_clusters)
+    if isinstance(doc, ParsedDoc) and coref_clusters is not None:
+        # a ParsedDoc handed clusters explicitly (the daemon-style call on a neutral doc):
+        # fold them in via the one normalizer, matching the spaCy-Doc precedence rule.
+        from dataclasses import replace
+
+        from parse_seam.spacy_parser import _normalize_clusters
+        parsed = replace(parsed, coref_clusters=_normalize_clusters(coref_clusters))
+    return _facts_from_parsed(parsed)
+
+
+def doc_to_facts_from_spacy(doc, coref_clusters=None) -> FactBundle:
+    """Behavior-preserving spaCy entry: `doc_to_facts(SpacyParser.adapt(doc))`. The named
+    seam call for a caller that holds a spaCy `Doc` and wants the decode to be explicit.
+    Equivalent to `doc_to_facts(doc, coref_clusters)` (which auto-decodes a spaCy Doc)."""
+    return doc_to_facts(SpacyParser.adapt(doc, coref_clusters))
+
+
+def _facts_from_parsed(parsed: ParsedDoc) -> FactBundle:
+    """THE per-document fact extractor over the neutral `ParsedDoc` — the body
+    `doc_to_facts` runs once its input is decoded. Reads ONLY neutral fields, so it is
+    backend-agnostic; byte-identical to the old spaCy-native body on a spaCy-derived
+    ParsedDoc (pinned by test_doc_to_facts_equivalence + test_parse_seam_byte_identical)."""
+    key_fn = parsed_resolver_for(parsed)  # coref- + entity-resolved canonical constants
     sents: list[SentRecord] = []
     entities: list[EntityRecord] = []
     temporal: list[TemporalRecord] = []
-    for si, sent in enumerate(doc.sents):
+    for si, sent in enumerate(parsed.sents):
         sents.append({"index": si, "text": sent.text.strip()})
-        for e in sent.ents:
+        for e in (en for en in parsed.ents
+                  if sent.start_token <= en.start_token < sent.end_token):
             entities.append({
                 "sent": si, "text": e.text,
-                "canonical": resolve.canonical_key(e.text), "label": e.label_,
+                "canonical": resolve.canonical_key(e.text), "label": e.label,
             })
-            if e.label_ in ("DATE", "TIME"):
-                temporal.append({"sent": si, "text": e.text, "label": e.label_})
+            if e.label in ("DATE", "TIME"):
+                temporal.append({"sent": si, "text": e.text, "label": e.label})
 
     triples: list[TripleRecord] = []
-    for t in extract_triples(doc, key_fn):
+    for t in extract_triples_parsed(parsed, key_fn):
         triples.append({
             "sent": t.sent_i, "subj": t.subj, "pred": t.pred, "obj": t.obj,
             "subj_key": t.subj_key, "obj_key": t.obj_key, "negated": t.negated,
