@@ -582,3 +582,42 @@ foreclosing a *class*, and these four classes are the ones that reached the host
 
 Each of the three residuals has a named disposition (a brand-raise test, an interpret-check, a
 runtime gate) — none is narrated-and-left (ADR-0013 Rule 4).
+
+---
+
+## 8. Revision — 2026-06-30: device-model closure + the `JaxLower` bridge entry (post-critique)
+
+*(Dated append per ADR-0005 Rule 8 / ADR-0000 Rule 2 — an adversarial critique identified two
+representable-illegal-state classes the first implementation left open; the foreclosing TYPES were
+applied in full rather than disclosed as residue. The §3.1 Protocol sketch and §2.2 device prose
+above describe the pre-revision shape; this section records the implemented closure.)*
+
+**(D1) The device MODEL is closed, not just device co-residence.** §3.1's `LibAdapter` took its
+`to_device`/`brand` target as an unbounded `type[_Dev2]`, so a torch tensor could be *typed* onto a
+JAX device (`torch.to_device(x, JaxGPU)` built clean) — the residence tag was forgeable, exactly the
+representable-illegal-state ADR-0000 forbids. **Fix:** the seam Protocol gains a third parameter,
+`LibAdapter(Protocol[Lib, HDev, DevBase])`, and `to_device`/`brand` accept `type[DevBase]`; each
+concrete adapter narrows the family to its own base via a bounded method var (`_TDev = TypeVar(bound=
+TorchDevice)`, etc.), which still **structurally conforms** to the standardized Protocol (verified).
+A foreign device tag is now a mypy `[type-var]` at both the in-flow transfer and the entry brand —
+the device crossing is *unconstructable*, regressioned as `demo/mismatches.py` (f)/(g). The §2.2
+honest-residual paragraph ("`to_device` keeps its target unbounded") is **superseded**: only the
+*runtime fact* of a raw object's residence is construction-raise; the residence *tag* is type-closed.
+
+**(D2) The `JaxLower` centerpiece composes through the bridge (`as_pow2`).** The lowerable adapter's
+capabilities are `Pow2`-only, but `import_host`/`brand` necessarily yield `Dyn` (a host buffer
+carries no static pow2 proof), so external data could not *enter* it — the adapter was bridge-
+isolated and absent from the demo. **Fix:** a checked `as_pow2(x: …Dyn) -> …Pow2` shape-kind entry —
+the honest construction-raise **dual of `pow2()`** (it reads the runtime shape and brands `Pow2`
+only if every dim is a power of two, else raises). External host data now enters via
+`jax_lower.as_pow2(bridge(host, jax_lower, nh))`, and **the demo routes a real
+torch→host→scipy→jax_lower→jax line through it** (five libraries), proving uniform composition.
+Tested: promotion admits a `[4,4]` buffer and a `Pow2`-only op runs on it; a `[3,4]` buffer raises.
+
+**(D3/D5/D6/D7) honest scope-limits, stated plainly in README §"What it does not give"** rather than
+left for the maintainer to rediscover: shape closure is KIND (Dyn/Pow2/non-pow2-dim), not full
+rank/extent (§2.4, the named stop); the dtype/shape-kind vocabularies are core enums, so a genuinely
+new *element type* or *shape model* is a one-line core edit (parametric cleanly over lib/device/
+capability); the host spine forbids a direct device→device bridge by signature (a deliberate O(1)
+choice; dlpack zero-copy lives behind the two-op interface); and `_wrap`/`numpy.to_device` are
+ADR-0009-disclosed reflection/relabel residue scoping the guarantee to "no *accidental* impedance."

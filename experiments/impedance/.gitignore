@@ -1,0 +1,8 @@
+# caches / build artifacts (this package is designed for extraction to its own repo)
+__pycache__/
+*.py[cod]
+.mypy_cache/
+.pytest_cache/
+*.egg-info/
+build/
+dist/
