@@ -20,7 +20,7 @@ from bus import InProcessBus
 from frontend_headless import HeadlessFrontend, RulePolicy
 from loaders import RfcLoader, UnTeiLoader
 from protocols import Frontend
-from schema import Schema, Task
+from schema import Adjudication, Schema, Task
 from store import SqlStore
 
 
@@ -42,7 +42,7 @@ def _frontend(kind: str) -> Frontend:
     raise ValueError(f"unknown frontend {kind!r} (expected headless|textual)")
 
 
-def run(corpus: str, limit: int, frontend_kind: str, db_url: str) -> Sequence[object]:
+def run(corpus: str, limit: int, frontend_kind: str, db_url: str) -> Sequence[Adjudication]:
     schema = inst.doc_selection_schema()
     bus = InProcessBus()
     store = SqlStore(db_url)
