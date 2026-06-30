@@ -13,7 +13,7 @@ The difference is WHERE the tiling lives:
   * THIS variant moves the tile loop INTO a `pallas_call` kernel
     (`_pallas_disent_attention.disent_flash_kernel`). A Pallas kernel STAYS fused: the
     `[block_q, block_k]` score tile lives in SRAM inside one grid cell and is NEVER written
-    to HBM as part of a `[B,H,S,S]` array. So the quadratic materialization is gone by
+    to global memory as part of a `[B,H,S,S]` array. So the quadratic materialization is gone by
     CONSTRUCTION (ADR-0000), not by an optimizer's goodwill — this is the realization path
     NLA-OPTIMIZATION-PORTFOLIO.md §9 names.
 
@@ -60,13 +60,19 @@ from nla_lab.variants._pallas_disent_attention import pallas_disentangled_attent
 # since every ENCODE_LEN_BUCKETS rung is a power of two, `block` divides S exactly (no ragged
 # tile on the ladder). Flash is EXACT for any tile width (online softmax is algebraically
 # identical regardless of block); block trades loop count against tile size, fidelity-NEUTRAL.
-_TILE_TARGET: int = 128
+#
+# CHOSEN 32 for Turing sm_75: `_pallas_disent_attention.smem_bytes(32, 32, d=64) == 45312`
+# bytes (44.25 KB) <= the conservative 48 KiB SMEM default — block 64 (115200) and 64x32
+# (74240) overflow even the 64 KiB carveout, PROVEN by the smem_bytes gate (the host's
+# `Mosaic GPU kernel exceeds available shared memory` made a CAUGHT arithmetic error). The
+# fidelity is block-NEUTRAL, so this is a pure tiling/residence change (ADR-0012 P1).
+_TILE_TARGET: int = 32
 
-# The kernel adds exactly TWO O(B·H·S·2span) HBM inputs beyond the linear stream:
+# The kernel adds exactly TWO O(B·H·S·2span) global memory inputs beyond the linear stream:
 # `c2p_full` and `p2c_full` (the disentangled-position intermediates). Their count folds into
 # the `k_disent` term of the ONE memory model (see est_peak_device_bytes). The per-tile SRAM
 # `c2p_blk/p2c_blk` are bounded by one such buffer -> already covered. The `[B,H,S,S]` score
-# is NOT an HBM array (it is SRAM-only inside one grid cell) -> `k_quad -> 0`.
+# is NOT an global memory array (it is SRAM-only inside one grid cell) -> `k_quad -> 0`.
 _N_DISENT_POSITION_BUFFERS: int = 2
 
 
@@ -234,7 +240,7 @@ class PallasFlashAttention(EncodeVariant):
     ) -> int:
         """R-MEM override. The Pallas kernel NEVER materializes `[B,H,S,S]` (the score tile is
         SRAM-only inside one grid cell), so the dense quadratic term is DROPPED (`k_quad -> 0`)
-        — the TRUE O(S) per-batch peak (ADR-0000), not a fiction. What remains in HBM is the
+        — the TRUE O(S) per-batch peak (ADR-0000), not a fiction. What remains in global memory is the
         linear stream (embeddings/q/k/v/acc/FFN, unchanged) + the TWO O(B·H·S·2span)
         disentangled-position buffers `c2p_full`/`p2c_full`, folded into `k_disent`; plus the
         single O(S) `idx1d` table (`(2S-1)*4` bytes, B/H-free, negligible — does NOT reintroduce

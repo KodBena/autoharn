@@ -27,14 +27,14 @@ each tile's `q @ k_tileᵀ` and the online update, but it does not promise to ke
 hint XLA is free to ignore, and it does.
 
 A **Pallas kernel stays fused**: the `[block_q, block_k]` score tile lives in SRAM
-inside one `pallas_call` grid cell and is *never* written to HBM as part of an
-`[B,H,S,S]` array. The HBM traffic is the O(B·H·S·d) q/k/v/out activations plus the
+inside one `pallas_call` grid cell and is *never* written to global memory as part of an
+`[B,H,S,S]` array. The global memory traffic is the O(B·H·S·d) q/k/v/out activations plus the
 O(B·H·S·2·span) disentangled-position intermediates — never the quadratic scores.
 
 The payoff is the **feasibility frontier**, not a small-S latency win (a small
 `[S,S]` is not IO-bound — be honest). The win is: (a) large-S **memory/feasibility**
 — the OOM cells run; and (b) the IO **wall-clock** win at long S (the score tile
-never round-trips HBM). This is the avenue being **exhausted**: if Pallas-on-Turing
+never round-trips global memory). This is the avenue being **exhausted**: if Pallas-on-Turing
 genuinely cannot deliver, §1 states the fallback ladder and the conditions under
 which that becomes a *measured* feasibility verdict, not a hand-wave.
 
@@ -62,7 +62,7 @@ hardware-tiered:
 - DeBERTa encode is **pinned fp32** (`shape_buckets._BYTES_PER_ELEM=4`, "the encode
   is pinned fp32"). An fp32 `pl.dot` on Turing therefore lowers to the **FMA
   (CUDA-core) path** — *correct and EXACT, but not tensor-core-accelerated.* The
-  IO-fusion win (no `[B,H,S,S]` HBM round-trip) **still holds and is the point**;
+  IO-fusion win (no `[B,H,S,S]` global memory round-trip) **still holds and is the point**;
   the compute is FMA-bound, modestly slower than a tensor-core matmul but exact.
 - Casting the matmul inputs to fp16 with fp32 accumulation
   (`preferred_element_type=jnp.float32`) *would* engage Turing tensor cores, but
@@ -159,7 +159,7 @@ variant instance so the warmup forward amortizes it out of the timed window:
   B/H-free) is the trivially-correct interpret-mode debug equivalent.
 
 These arrays (`q`, `k_scaled`, `v`, `c2p_full`, `p2c_full`, `idx1d`, `am`) are the
-kernel's HBM inputs.
+kernel's global memory inputs.
 
 ### 2.3 Grid and BlockSpec
 
@@ -183,7 +183,7 @@ handled by `pl.dslice`+masking, exactly as `mha_forward_kernel` does for `head_d
 The inner key loop is a `lax.fori_loop` **inside** the kernel (like the reference),
 so `k/v/p2c_full/am_k` are passed whole-S-per-`bh` and sliced with
 `pl.dslice(kt*block_k, block_k)`; the quadratic axis is never a grid dim and never an
-HBM array.
+global memory array.
 
 ### 2.4 The kernel body (online softmax with the 3-term fold)
 
@@ -254,7 +254,7 @@ Notes that make this **exact**, not approximate:
   already-~1e-5-MEASURED `flash_attention.py`.
 - `take_along_axis` along the in-SRAM `2span` axis is the primary gather. **If it
   does not lower on Pallas-Triton** (a host-gate risk — Triton in-register gather is
-  `tl.gather`, recent), the drop-in is an **HBM-offset load**: `plgpu.load` of
+  `tl.gather`, recent), the drop-in is an **global-memory-offset load**: `plgpu.load` of
   `c2p_full[bh]` at offsets `(qi0+a)*2span + pos[a,b]` (and `p2c_full[bh]` at
   `(kj0+b)*2span + pos[a,b]`) — a standard Triton pointer-gather of
   `block_q·block_k` elements, exact, no re-materialization. Both are recorded; the
@@ -307,10 +307,10 @@ second one. The dense profile is `peak_variable_bytes(mm, B, S)` with
 
 - **`k_quad → 0`.** The `[B,H,S,S]` content/c2p/p2c/probs buffers are gone — they
   exist only as `[block_q, block_k]` **SRAM** tiles inside one grid cell, never as an
-  HBM array. This is the term the kernel is built to delete (8 co-resident buffers ·
+  global memory array. This is the term the kernel is built to delete (8 co-resident buffers ·
   `B·H·S²·4` = **8.6 GB** at `B=16,S=1024`, MEASURED-from-the-model → **0**).
 - **`k_disent` covers the position intermediates.** `c2p_full`, `p2c_full`
-  (`[B*H,S,2span]`, 2 buffers) are real HBM inputs — fold their count into
+  (`[B*H,S,2span]`, 2 buffers) are real global memory inputs — fold their count into
   `k_disent` (`mm.k_disent + 2`), the existing O(B·H·S·span) term. The per-tile SRAM
   `c2p_blk/p2c_blk` are bounded by one such buffer → already covered.
 - **Linear term unchanged.** Embeddings, q/k/v, `acc`/out (`[B,H,S,d]`), the FFN
@@ -391,3 +391,263 @@ The guest exhausts correctness and the memory *model*; the host gate is the
 feasibility verdict. If the host gate fails, §1's ladder turns it into a recorded,
 evidenced "Pallas cannot deliver on Turing" — not a hand-wave, and not an
 abandonment of the complexity drop without a real attempt.
+
+## sm_75 SMEM/backend fix
+
+Status: design + a guest-provable arithmetic gate. The HOST run on the 2080Ti
+(sm_75) compile-FAILED with `ValueError: Mosaic GPU kernel exceeds available
+shared memory: smem_bytes`. This section owns ONLY the tiling/backend/residence
+fix (ADR-0012 P1): the index-collapse `idx1d` and the exact disentangled fold of
+§2 are UNCHANGED — fidelity stays the EXACT ~1e-5 tier, re-MEASURED in interpret
+mode after the retiling. Two root causes, both diagnosed at the jax-0.10.1 source
+level (not inferred), and both turned into CAUGHT errors per ADR-0000 (the SMEM
+budget is a derived/arithmetic claim the guest CAN check, so a "tiles exceed
+SMEM" condition is a gate, not a host surprise).
+
+### A. Root cause 1 — the Mosaic-GPU default backend (sm_90), not Triton (sm_75)
+
+`pallas_disentangled_attention` calls `pl.pallas_call(...)` with **no**
+`compiler_params`. VERIFIED in the guest venv (`jax/jaxlib 0.10.1`), the GPU
+lowering dispatch (`jax/_src/pallas/pallas_call.py::gpu_lowering`) selects the
+backend by the *type* of `compiler_params`, and when it is `None` it falls back
+to the flag `_PALLAS_USE_MOSAIC_GPU`:
+
+```python
+# jax/_src/pallas/pallas_call.py  (0.10.1, verbatim slice)
+if mosaic_gpu_backend is not None:
+    if (isinstance(compiler_params, mgpu_core.CompilerParams)
+        or (compiler_params is None and _PALLAS_USE_MOSAIC_GPU.value)):
+        backend = mosaic_gpu_backend
+if triton_backend is not None:
+    if (isinstance(compiler_params, triton_core.CompilerParams)
+        or (compiler_params is None and not _PALLAS_USE_MOSAIC_GPU.value)):
+        backend = triton_backend
+```
+
+and the flag **defaults to `True`** (VERIFIED: `_PALLAS_USE_MOSAIC_GPU.value is
+True`; `config.bool_env("JAX_PALLAS_USE_MOSAIC_GPU", True)`). So the current
+no-`compiler_params` call lands on **Mosaic-GPU**, which is Hopper (sm_90)
+oriented and emits the `Mosaic GPU kernel exceeds available shared memory` error
+on Turing. This is the measured root cause #1, confirmed line-by-line.
+
+**The fix — pin Triton by passing a `triton.CompilerParams`** (the `isinstance`
+branch above selects `triton_backend` deterministically, regardless of the flag).
+The EXACT verified jax-0.10.1 API (the design's earlier `TritonCompilerParams`
+guess is WRONG for this version — the class was renamed to `CompilerParams`):
+
+```python
+from jax.experimental.pallas import triton as plgpu   # VERIFIED import (plgpu.__file__ resolves)
+
+# plgpu.CompilerParams IS jax._src.pallas.triton.core.CompilerParams (VERIFIED identity),
+# so isinstance(cp, triton_core.CompilerParams) is True -> Triton backend selected.
+cp = plgpu.CompilerParams(num_warps=4, num_stages=1)   # frozen dataclass; fields VERIFIED
+ctx = pl.pallas_call(
+    kernel, grid=(bh, n_qt), in_specs=in_specs, out_specs=out_specs,
+    out_shape=jax.ShapeDtypeStruct((bh, S, d), q.dtype),
+    compiler_params=cp,            # <-- the one new argument that pins Triton
+    interpret=interpret,
+)(...)
+```
+
+VERIFICATION RECORD (run in the guest venv, all PASS):
+- `from jax.experimental.pallas import triton as plgpu` imports (the `plgpu`
+  alias the reference `pallas.ops.gpu.attention` itself uses).
+- `plgpu.CompilerParams` is a frozen dataclass with fields
+  `num_warps: int|None = None`, `num_stages: int|None = None`.
+- `plgpu.CompilerParams is jax._src.pallas.triton.core.CompilerParams` → `True`,
+  so the dispatch `isinstance` check fires Triton.
+- `inspect.signature(pl.pallas_call)` lists `compiler_params` as a kwarg
+  (`pallas_core.CompilerParams | None = None`).
+- the bundled reference kernel `jax.experimental.pallas.ops.gpu.attention` pins
+  Triton the SAME way: `compiler_params=plgpu.CompilerParams(num_warps=...,
+  num_stages=...)` — so this is the sanctioned path, not a novel incantation.
+
+The guest is CPU jax: it CANNOT compile the Triton kernel (no CUDA jaxlib), so
+"Triton actually lowers the fp32 kernel on sm_75" stays the HOST gate. What the
+guest PROVES is the API selection is correct (the symbols exist, the type drives
+the backend) and the interpret-mode math is unchanged.
+
+`interpret=True` ignores the backend entirely (CPU reference executor), so the
+guest's fidelity gate is unaffected; `compiler_params` only bites when
+`interpret=False` on the host. One flag, no forked path (§2.5 unchanged).
+
+### B. Root cause 2 — the `[block, 2span]` position buffers staged in SRAM
+
+The current kernel stages, per grid cell, the disentangled-position source rows
+as full `2span`-wide tiles:
+
+- `c2p_full_ref` BlockSpec `(1, block_q, span2)` → `c2p_blk = c2p_full_ref[0]` is
+  `[block_q, 2span]` resident (line 73).
+- `p2c_full_ref` sliced per k-tile → `p2c_blk = p2c_full_ref[0, ks, :]` is
+  `[block_k, 2span]` (line 93).
+
+At `block_q=block_k=128`, `span=256` (`2span=512`, DeBERTa-v3 head_size `d=64`),
+**one** such buffer is `128·512·4 = 256 KB` — 4× Turing's whole 64 KB SMEM by
+itself, and there are two. Even the core `q/k/v/score/acc` tiles at block 128
+(`5·128·128·4 ≈ 320 KB` on the conservative co-resident count) blow the budget.
+The `[block, 2span]` position buffers MUST NOT be SMEM-resident.
+
+**The fix — gather the position terms per score-tile element, never stage the
+`2span` axis.** The `2span` axis is the thing that makes the buffer fat, and the
+kernel only ever reads ONE column per `(i,j)` element (`pos[i,j] =
+idx1d[(i-j)+(S-1)]`, the §2.2 measured-equal collapse). So keep `c2p_full` and
+`p2c_full` **global-memory-resident** (BlockSpec `memory_space=pl.ANY` — the whole
+`[B*H, S, 2span]` stays in global memory, NOT tiled into SMEM) and gather only the
+`[block_q, block_k]` entries the tile needs:
+
+```python
+# inside body(kt, carry), pos = idx1d[d_ij + (S-1)]  # [block_q, block_k] int32, as today
+# PRIMARY: per-element global memory pointer-gather (no 2span axis ever in SRAM)
+i_idx = (qi0 + jnp.arange(block_q))[:, None]            # [block_q, 1] global query rows
+j_idx = (kj0 + jnp.arange(block_k))[None, :]            # [1, block_k] global key rows
+c2p = plgpu.load(c2p_full_ref, (bh, i_idx, pos))        # [block_q, block_k]  row i, col pos[i,j]
+p2c = plgpu.load(p2c_full_ref, (bh, j_idx, pos))        # [block_q, block_k]  row j, col pos[i,j]
+s   = content + (c2p + p2c) / scale                      # fold UNCHANGED (§2.4)
+```
+
+`plgpu.load` is VERIFIED present in `jax.experimental.pallas.triton` (the dir
+listing shows `load`, `store`). The gather pulls `block_q·block_k` fp32 elements
+from global memory into the tile — the SAME footprint as the `score` tile — so the
+position SRAM cost drops from `2·block·2span` to `2·block_q·block_k`. The c2p/p2c
+**values** and their fold into `s` are bit-for-bit the same as §2.4; only the
+RESIDENCE of the source buffer changes (global memory vs SMEM), so the EXACT ~1e-5
+fidelity is untouched (re-MEASURED in interpret mode as Gate 1).
+
+**Alternative (BANDED slice), if the per-element global memory gather does not lower on
+Triton.** Within a `[block_q, block_k]` tile, `i-j` ranges over only
+`block_q+block_k-1` distinct offsets, and `idx1d` is monotonic in `i-j`, so
+`pos[i,j]` spans a contiguous **band** of at most `block_q+block_k-1` buckets
+`[pos_lo, pos_hi]` of the `2span` axis (computed from the tile's `(qi0, kj0)`
+corner). Load only that band — `c2p_full_ref[0, :, pl.dslice(pos_lo, band)]`
+shaped `[block_q, band]` with `band = block_q+block_k-1` (e.g. `63` at block 32
+vs `512` for full `2span`) — and gather within it (`pos - pos_lo`). SRAM cost
+`block·band` ≈ `block·(2·block)`, still O(block²)-class, an 8× shrink vs the full
+`2span` at block 32. The band bounds are a small in-kernel computation
+(`idx1d[d_lo+(S-1)]`, `idx1d[d_hi+(S-1)]`). The HOST gate picks whichever lowers;
+both are recorded, both remove the `[block, 2span]` SMEM cost, neither touches the
+fold math. Primary = global memory gather (smallest SRAM, simplest); fallback = banded
+slice.
+
+### C. Chosen tiles + autotune knobs, with the SMEM byte budget
+
+DeBERTa-v3 dims: `d = head_size = 64`, `span = pos_ebd_size = 256`
+(`2span = 512`), `dtype_bytes = 4` (encode pinned fp32). The block size affects
+ONLY the loop count / occupancy — online softmax is exact for ANY block (§2.3),
+so we pick the largest square block that PROVABLY fits Turing's SMEM.
+
+The conservative co-resident SRAM working set per grid cell (the budget the gate
+counts — `q + k + v + score + acc + m + l + position scratch`), after the §B
+redesign (position scratch = `2·block_q·block_k`, the c2p+p2c gather results, NOT
+`block·2span`), with `num_stages` double-buffering the per-k-tile loaded
+operands:
+
+| block_q×block_k | num_stages | smem_bytes | vs 48 KiB (49152) | vs 64 KiB (65536) |
+|—|—|—|—|—|
+| 128×128 (broken, `2span` resident) | 1 | 721920 (705 KB) | **FAIL** | **FAIL** (the host error) |
+| 64×64 | 1 | 115200 (112.5 KB) | **FAIL** | **FAIL** |
+| 64×32 | 1 | 74240 (72.5 KB) | **FAIL** | **FAIL** |
+| **32×32** | **1** | **45312 (44.25 KB)** | **PASS** | **PASS** |
+| 32×32 | 2 | 73984 (72.25 KB) | FAIL | FAIL (so num_stages=2 is CAUGHT, not shipped) |
+
+**CHOSEN: `block_q = block_k = 32`, `num_warps = 4`, `num_stages = 1`.**
+
+- `45312 ≤ 49152` (the conservative **48 KiB** static-default cap — no opt-in
+  carveout needed) with ~3.8 KB headroom, and ≤ `65536` (the **64 KiB** Turing
+  opt-in carveout) with ~20 KB headroom.
+- `num_warps = 4` (128 threads): a `[32,32]` tile is 1024 elements → 8
+  elems/lane, a comfortable register budget; matches the reference kernel's
+  `num_warps=4` for `head_dim ≤ 64`.
+- `num_stages = 1` (no software pipelining): the conservative double-buffer model
+  shows `num_stages=2` at block 32 is `73984 > 65536` — it would re-overflow even
+  the 64 KiB carveout, so the gate FLAGS it as an arithmetic error rather than
+  letting the host rediscover it (the ADR-0000 win: "tiles exceed SMEM" caught
+  here). `num_stages=2` is admissible ONLY if a host profile both confirms the
+  64 KiB carveout AND that the gathers are register- (not SMEM-) resident, which
+  shrinks the pipelined set; until then `num_stages=1` is the guaranteed-fit
+  default. This is the autotune knob, fenced by the gate.
+- `block 64` (square OR `64×32`) overflows even 64 KiB → NOT shipped; the gate
+  proves it. `block 32` is the Turing answer.
+
+Because every `ENCODE_LEN_BUCKETS` rung is a power of two, `block=32` divides
+`S` exactly (no ragged tile on the ladder; a sub-32 `S` uses `block=min(32,S)`).
+
+### D. The guest-provable gate — `smem_bytes()` and the Turing limit constant
+
+The budget is a DERIVED arithmetic claim the guest CAN check (ADR-0009: the SMEM
+overflow becomes a CAUGHT arithmetic error, not a host `ValueError`; ADR-0000:
+"tiles exceed SMEM" is unrepresentable past this gate). Pure-Python int
+arithmetic — no jax, no numpy — so it lives in the device kernel module
+(`_pallas_disent_attention.py`, host-XOR-device clean: it imports nothing
+numpy-side) and is asserted by a guest test.
+
+```python
+# Turing (sm_75) shared-memory-per-block budget, bytes.
+# 49152 = 48 KiB: the static-default cap a kernel gets with NO opt-in carveout (the
+# conservative default this design targets). 65536 = 64 KiB: the sm_75 MAXIMUM, only
+# via the dynamic-SMEM carveout opt-in. The gate asserts against the 48 KiB default.
+TURING_SMEM_BUDGET_BYTES: int = 49152          # 48 KiB, conservative default
+TURING_SMEM_CARVEOUT_MAX_BYTES: int = 65536    # 64 KiB, opt-in maximum (sm_75)
+
+def smem_bytes(
+    block_q: int,
+    block_k: int,
+    d: int,
+    *,
+    dtype_bytes: int = 4,
+    num_stages: int = 1,
+    pos_resident_2span: int = 0,   # 0 = the FIX (gather, [block,block]); >0 = span, the BROKEN [block,2span]
+) -> int:
+    """Conservative peak SMEM-resident bytes for ONE disent_flash_kernel grid cell.
+
+    Counts q + k + v + score + acc + m + l + position-scratch as co-resident (an
+    UPPER bound: when this passes, the tiles provably fit). `pos_resident_2span`
+    selects the residence model — 0 is the shipped per-tile gather (position
+    scratch = 2*block_q*block_k, the c2p+p2c results), a positive `span` reproduces
+    the BROKEN [block,2span] staging for the regression assertion. `num_stages`
+    double-buffers the per-k-tile loaded operands (k, v, score, position scratch)."""
+    persistent = block_q * d + block_q * d + 2 * block_q          # q, acc, m+l
+    if pos_resident_2span > 0:
+        pos = 2 * block_q * (2 * pos_resident_2span)              # broken: [block,2span] x2
+    else:
+        pos = 2 * block_q * block_k                               # fix: [block_q,block_k] gathers
+    pipelined = block_k * d + block_k * d + block_q * block_k + pos   # k, v, score, position
+    return (persistent + num_stages * pipelined) * dtype_bytes
+```
+
+The TEST (guest, `nla_lab/test_pallas_smem_budget.py` or appended to
+`test_nla_lab.py`) asserts the chosen tiles fit and the broken ones do NOT — so a
+future block-size change that overflows fails CI here, never on the host:
+
+```python
+def test_chosen_tiles_fit_turing_default():
+    # shipped config: block 32, num_stages 1, gather residence -> 45312 bytes
+    assert smem_bytes(32, 32, d=64, num_stages=1) == 45312
+    assert smem_bytes(32, 32, d=64, num_stages=1) <= TURING_SMEM_BUDGET_BYTES   # 48 KiB
+
+def test_num_stages_2_is_caught():
+    # the knob the gate fences: would re-overflow even the 64 KiB carveout
+    assert smem_bytes(32, 32, d=64, num_stages=2) > TURING_SMEM_CARVEOUT_MAX_BYTES
+
+def test_block64_is_caught():
+    assert smem_bytes(64, 64, d=64, num_stages=1) > TURING_SMEM_CARVEOUT_MAX_BYTES
+
+def test_broken_2span_residence_is_caught():
+    # the host's actual failure mode, reproduced as arithmetic (block 128, span 256)
+    assert smem_bytes(128, 128, d=64, pos_resident_2span=256) > TURING_SMEM_CARVEOUT_MAX_BYTES
+```
+
+### E. Guest vs host split for THIS fix (ADR-0009, honest)
+
+The guest is CPU jax and CANNOT compile the Triton kernel. The split:
+
+| claim | tier | where proven |
+|—|—|—|
+| `triton.CompilerParams` is the correct 0.10.1 symbol + `compiler_params` selects Triton | API/structural | **guest** — VERIFIED by import + isinstance + dispatch-source read (§A) |
+| `smem_bytes(32,32,64) ≤ 48 KiB`; block 64 / num_stages 2 / `2span`-resident are CAUGHT | derived arithmetic | **guest** — the gate test (§D) |
+| the retiling preserves the EXACT ~1e-5 fold (math unchanged, only residence/backend) | EXACT, MEASURED | **guest**, interpret mode (§3 Gate 1, re-run after retiling) |
+| Pallas-Triton COMPILES + RUNS the fp32 kernel on sm_75 with these tiles | feasibility | **host** only (2080Ti) — NOT claimed here |
+| the previously-OOM cell now lights up `ok`; real device SMEM/peak | MEASURED | **host** only — NOT claimed here |
+
+The guest proves the SMEM arithmetic fits, the backend API is right, and the
+math is unchanged; the HOST re-run is the gate that it now compiles, runs, and the
+OOM cells go green. No GPU compile is claimed here.
