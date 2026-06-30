@@ -76,32 +76,9 @@ _TILE_TARGET: int = 32
 _N_DISENT_POSITION_BUFFERS: int = 2
 
 
-def _build_idx1d(s: int, cfg: "jax_deberta.DebertaCfg") -> jax.Array:
-    """The ONE strict-O(S) bucket table `idx1d[d] = clip(make_log_bucket_position(d)+span)`
-    for `d in [-(s-1), s-1]` (length `2s-1`), int32. Reuses the UN-FORKED
-    `jax_deberta.make_log_bucket_position` on the 1-D relative-offset arange (SSOT, not a
-    re-author), mirroring `build_relative_position`'s bucketing predicate. Indexed in-kernel
-    at `(i-j)+(s-1)`, it reproduces BOTH the dense c2p column index `clip(bucket(i-j)+span)`
-    AND the dense p2c column index `clip(-bucket(j-i)+span)` — MEASURED bit-equal over all S²
-    elements (antisymmetry of make_log_bucket_position). Hoisted as a runtime arg (like
-    `jax_deberta.encode`'s rel_pos) so it never bakes into the per-S executable constant."""
-    span = cfg.pos_ebd_size
-    # [2s], NOT [2s-1]: the table is d in [-(s-1), s-1] (length 2s-1), but the Pallas TRITON
-    # lowering requires every array shape be a power of 2. 2s-1 is one short, so we extend by
-    # one (d=s, a valid-but-UNUSED bucket — the kernel only ever gathers indices [0, 2s-2]) to
-    # length 2s, which IS a power of 2 since s is. The pad slot is inert (never gathered).
-    d = jnp.arange(-(s - 1), s + 1)                                  # [2s] = (2s-1)+1 pad, pow2
-    if cfg.position_buckets > 0 and cfg.max_relative_positions > 0:   # build_relative_position predicate
-        rel1d = jax_deberta.make_log_bucket_position(
-            d, cfg.position_buckets, cfg.max_relative_positions)
-    else:
-        rel1d = d
-    return jnp.clip(rel1d.astype(jnp.int32) + span, 0, span * 2 - 1).astype(jnp.int32)
-
-
 def _pallas_attention(
     p: dict[str, jax.Array], i: int, hidden: jax.Array, am_bh: jax.Array,
-    idx1d: jax.Array, rel_emb: jax.Array, cfg: "jax_deberta.DebertaCfg", interpret: bool,
+    rel_emb: jax.Array, cfg: "jax_deberta.DebertaCfg", interpret: bool,
 ) -> jax.Array:
     """The EXACT flash reformulation of `jax_deberta._self_attention`, computed by the Pallas
     kernel (no `[B,H,S,S]` materialize). The precomputes below — q/k/v, the pos projections,
@@ -152,8 +129,10 @@ def _pallas_attention(
     # would raise at this boundary, on the guest, not as a cryptic Triton error on the host.
     block = pow2(min(_TILE_TARGET, s))
     ctx_bh = pallas_disentangled_attention(
-        q, k_scaled, v, c2p_full, p2c_full, idx1d, am_bh,
-        scale=scale, block_q=block, block_k=block, interpret=interpret)   # [B*H, S, hs]
+        q, k_scaled, v, c2p_full, p2c_full, am_bh,
+        scale=scale, block_q=block, block_k=block,
+        position_buckets=cfg.position_buckets, max_relative_positions=cfg.max_relative_positions,
+        span=cfg.pos_ebd_size, interpret=interpret)   # [B*H, S, hs]
 
     context = ctx_bh.reshape(b, h, s, hs)
     context = jnp.transpose(context, (0, 2, 1, 3)).reshape(b, s, -1)    # [B, S, hidden]
@@ -162,13 +141,13 @@ def _pallas_attention(
 
 def _pallas_layer(
     p: dict[str, jax.Array], i: int, hidden: jax.Array, am_bh: jax.Array,
-    idx1d: jax.Array, rel_emb: jax.Array, cfg: "jax_deberta.DebertaCfg", interpret: bool,
+    rel_emb: jax.Array, cfg: "jax_deberta.DebertaCfg", interpret: bool,
 ) -> jax.Array:
     """Mirror of `jax_deberta._layer` with the attention call swapped for the Pallas kernel;
     the SelfOutput / Intermediate / Output residual+LayerNorm block reuses the un-forked
     jax_deberta leaf helpers verbatim (ADR-0012 P1 — own only the attention seam)."""
     eps = cfg.layer_norm_eps
-    ctx = _pallas_attention(p, i, hidden, am_bh, idx1d, rel_emb, cfg, interpret)
+    ctx = _pallas_attention(p, i, hidden, am_bh, rel_emb, cfg, interpret)
     ao = jax_deberta._linear(ctx, p[f"encoder.layer.{i}.attention.output.dense.weight"],
                              p[f"encoder.layer.{i}.attention.output.dense.bias"])
     ao = jax_deberta._layer_norm(ao + hidden, p[f"encoder.layer.{i}.attention.output.LayerNorm.weight"],
@@ -184,13 +163,14 @@ def _pallas_layer(
 
 def _pallas_forward(
     params: dict[str, jax.Array], input_ids: jax.Array, attention_mask: jax.Array,
-    idx1d: jax.Array, cfg: "jax_deberta.DebertaCfg", interpret: bool,
+    cfg: "jax_deberta.DebertaCfg", interpret: bool,
 ) -> jax.Array:
     """Encoder forward -> last_hidden_state `[B, S, hidden]`, mirroring `jax_deberta.forward`
     with the per-layer attention swapped for the Pallas flash kernel. Embeddings + rel-emb are
-    the reference's, un-forked. `idx1d` (the O(S) bucket table) is threaded as a runtime arg
-    (hoist, like jax_deberta's rel_pos). `attention_mask [B,S]` factorizes the reference's
-    `[B,1,S,S]` mask -> the `[B*H, S]` `am_bh` the kernel consumes per (query,key) tile."""
+    the reference's, un-forked. The disentangled bucket column is computed in-kernel by pure
+    arithmetic (`_bucket_index`) from the static `cfg` log-bucket params — no runtime table.
+    `attention_mask [B,S]` factorizes the reference's `[B,1,S,S]` mask -> the `[B*H, S]` `am_bh`
+    the kernel consumes per (query,key) tile."""
     eps = cfg.layer_norm_eps
     inputs_embeds = params["embeddings.word_embeddings.weight"][input_ids]   # [B,S,hidden]
     emb = jax_deberta._layer_norm(inputs_embeds, params["embeddings.LayerNorm.weight"],
@@ -206,15 +186,15 @@ def _pallas_forward(
 
     hidden = emb
     for i in range(cfg.num_layers):
-        hidden = _pallas_layer(params, i, hidden, am_bh, idx1d, rel_emb, cfg, interpret)
+        hidden = _pallas_layer(params, i, hidden, am_bh, rel_emb, cfg, interpret)
     return hidden  # type: ignore[no-any-return]
 
 
-# jit core: cfg (NamedTuple of python scalars, argnum 4) and `interpret` (python bool, argnum
-# 5) are static; `idx1d` is a TRACED runtime arg (argnum 3) — the same hoist jax_deberta uses
-# for rel_pos, keeping the O(S) table out of the baked per-S constant. `interpret` is static so
-# the SINGLE backend choice (CPU interpret vs GPU Triton) bakes per executable without forking.
-_pallas_core = jax.jit(_pallas_forward, static_argnums=(4, 5))
+# jit core: cfg (NamedTuple of python scalars, argnum 3) and `interpret` (python bool, argnum 4)
+# are static — the disentangled bucket column is now pure in-kernel arithmetic from cfg's static
+# log-bucket params, so there is no traced O(S) table arg to hoist. `interpret` is static so the
+# SINGLE backend choice (CPU interpret vs GPU Triton) bakes per executable without forking.
+_pallas_core = jax.jit(_pallas_forward, static_argnums=(3, 4))
 
 
 @register
@@ -231,16 +211,14 @@ class PallasFlashAttention(EncodeVariant):
         attention_mask: jax.Array,
         cfg: jax_deberta.DebertaCfg,
     ) -> jax.Array:
-        s = input_ids.shape[1]
-        # The O(S) bucket table, computed once per bucket (eager, like jax_deberta.encode's
-        # rel_pos hoist). interpret=True on CPU guest (correctness); =False only on a real GPU
-        # backend (Triton) — the ADR-0009 guest/host switch, one flag, no forked path.
-        idx1d = _build_idx1d(s, cfg)
+        # interpret=True on CPU guest (correctness); =False only on a real GPU backend (Triton) —
+        # the ADR-0009 guest/host switch, one flag, no forked path. The disentangled bucket column
+        # is computed in-kernel (pure arithmetic from cfg), so there is no precompute to hoist.
         interpret = jax.default_backend() != "gpu"
         # jax_deberta is a declared mypy stub-gap (mypy.ini skip); its Array result is returned
         # as the contract's jax.Array (named relaxation, ADR-0012 P8 — mirrors exact_reference).
         return _pallas_core(  # type: ignore[no-any-return]
-            params, input_ids, attention_mask, idx1d, cfg, interpret)
+            params, input_ids, attention_mask, cfg, interpret)
 
     def est_peak_device_bytes(
         self, bucket: EncodeBucket, cfg: jax_deberta.DebertaCfg
@@ -249,15 +227,14 @@ class PallasFlashAttention(EncodeVariant):
         SRAM-only inside one grid cell), so the dense quadratic term is DROPPED (`k_quad -> 0`)
         — the TRUE O(S) per-batch peak (ADR-0000), not a fiction. What remains in global memory is the
         linear stream (embeddings/q/k/v/acc/FFN, unchanged) + the TWO O(B·H·S·2span)
-        disentangled-position buffers `c2p_full`/`p2c_full`, folded into `k_disent`; plus the
-        single O(S) `idx1d` table (`(2S-1)*4` bytes, B/H-free, negligible — does NOT reintroduce
-        the quadratic). This is a RE-PARAMETERISED `shape_buckets.MemModel` fed to the ONE
-        `peak_variable_bytes` (ADR-0012 P1 — no hand-rolled second model); CONSERVATIVE UPPER
-        BOUND (never under). At B=16/S=1024 the model drops 12.08 GB -> 4.56 GB; the actual
-        device peak is the HOST gate (ADR-0009)."""
+        disentangled-position buffers `c2p_full`/`p2c_full`, folded into `k_disent`. The bucket
+        column is now pure in-kernel arithmetic (no `idx1d` table is allocated at all), so there is
+        no O(S) table term to add — the prior `(2S-1)*4` byte line is GONE with the table. This is
+        a RE-PARAMETERISED `shape_buckets.MemModel` fed to the ONE `peak_variable_bytes` (ADR-0012
+        P1 — no hand-rolled second model); CONSERVATIVE UPPER BOUND (never under). At B=16/S=1024
+        the model drops 12.08 GB -> 4.56 GB; the actual device peak is the HOST gate (ADR-0009)."""
         mm = shape_buckets.dense_deberta_mem_model(
             cfg.num_heads, cfg.head_size, cfg.pos_ebd_size)
         mm_flash = mm._replace(k_quad=0, k_disent=mm.k_disent + _N_DISENT_POSITION_BUFFERS)
         base = shape_buckets.peak_variable_bytes(mm_flash, bucket.batch, bucket.seq_bucket)
-        idx = (2 * bucket.seq_bucket - 1) * 4                          # O(S) bucket table, B/H-free
-        return base + idx  # type: ignore[no-any-return]
+        return base  # type: ignore[no-any-return]

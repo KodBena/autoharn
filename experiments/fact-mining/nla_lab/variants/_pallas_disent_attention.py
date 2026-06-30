@@ -25,13 +25,16 @@ kernel re-adds those two terms into each `[block_q, block_k]` content tile befor
 online-softmax update, so the per-element score is identical to the dense reference and
 only the softmax REDUCTION ORDER differs (online vs one-shot) — the EXACT ~1e-5 tier.
 
-THE ONE O(S) BUCKET TABLE (MEASURED collapse). Because `make_log_bucket_position` is
-antisymmetric, the dense c2p column index `clip(bucket(i-j)+span)` and the dense p2c
+THE ONE BUCKET INDEX, ARITHMETIC (MEASURED collapse, NO TABLE). Because `make_log_bucket_position`
+is antisymmetric, the dense c2p column index `clip(bucket(i-j)+span)` and the dense p2c
 column index `clip(-bucket(j-i)+span)` are PROVABLY EQUAL — verified bit-equal over all
-S² elements (S up to 1024) on the guest. So the kernel carries a SINGLE strict-O(S) index
-array `idx1d[d] = clip(bucket(d)+span)` for `d in [-(S-1), S-1]`, gathered in-tile at
-`idx1d[(i-j)+(S-1)]`; c2p and p2c differ ONLY in which buffer/row they gather (c2p_full
-row i vs p2c_full row j), not in the column index. No `[S,S]` table, no two tables.
+S² elements (S up to 1024) on the guest. So the kernel computes a SINGLE collapsed column
+index `clip(bucket(i-j)+span)` IN-KERNEL by pure arithmetic (`_bucket_index`, which reuses the
+un-forked `jax_deberta.make_log_bucket_position` — ADR-0012 P1, derive-don't-duplicate); c2p
+and p2c differ ONLY in which buffer/row they select (c2p_full row i vs p2c_full row j), not in
+the column index. There is NO `idx1d` lookup table (it was a precompute, now derived) and so no
+`gather` and no scalar table read — the index is `sign/abs/where/log/ceil/clip`, all
+Triton-lowerable. No `[S,S]` table, no `[2S]` table, no two tables.
 
 GUEST vs HOST (ADR-0009 honest split). The guest is CPU jax (no GPU); `pallas_call(...,
 interpret=True)` runs the kernel logic on CPU for CORRECTNESS only. Whether Pallas-Triton
@@ -47,8 +50,8 @@ collapse are UNCHANGED, EXACT ~1e-5 preserved). (1) The Triton backend is PINNED
 (2) The `c2p_full`/`p2c_full` position buffers are global-memory-resident (`BlockSpec
 memory_space=pl.ANY`) and the kernel selects only the `[block_q, block_k]` entries each
 score-tile needs via a BANDED slice + one-hot comparison-sum — NO `gather` primitive (the
-sm_75 wall was `Unimplemented primitive in Pallas Triton lowering: gather`). Because `idx1d`
-is monotonic, the bucket columns a (qt,kt) tile references are a contiguous `[base, base+W)`
+sm_75 wall was `Unimplemented primitive in Pallas Triton lowering: gather`). Because the bucket
+map `clip(BUCKET(d)+span)` is monotonic, the bucket columns a (qt,kt) tile references are a contiguous `[base, base+W)`
 range, loaded by one `pl.ds(base, W)` band slice (`W = next_pow2(block_q+block_k-1) = 64`)
 and selected by `arange(W)==sel` (`sel = pos - base`), values BIT-IDENTICAL to the gather
 (smoke_equiv `== 0.0`); so the broken `[block, 2span]` SRAM staging (256 KB/buffer at block
@@ -72,6 +75,8 @@ import jax
 import jax.numpy as jnp
 from jax.experimental import pallas as pl
 from jax.experimental.pallas import triton as plgpu
+
+import jax_deberta  # SSOT of the log-bucket arithmetic (make_log_bucket_position); device-only (no numpy)
 
 
 # ===================================================================== SMEM budget
@@ -115,7 +120,7 @@ def pow2(n: int) -> Pow2:
         raise ValueError(
             f"kernel dimension {n} is not a power of 2 — Pallas-Triton requires every array shape "
             f"be a power of 2. The classic trap is the relative-offset count 2S-1 (one below the "
-            f"power of 2 2S): pad to 2S BEFORE the kernel (see _build_idx1d).")
+            f"power of 2 2S): every kernel array dim (block_q/block_k/S/d/W) must be a true pow2.")
     return Pow2(n)
 
 
@@ -126,6 +131,30 @@ def next_pow2(n: int) -> int:
     `pl.ds(base, W)` slice once `W` is rounded UP to a power of two (Triton's shape rule —
     branded `Pow2` at the kernel boundary, never raw)."""
     return 1 << (n - 1).bit_length()
+
+
+def _bucket_index(
+    rel: jax.Array, position_buckets: int, max_relative_positions: int, span: int, two_span: int,
+) -> jax.Array:
+    """The disentangled bucket COLUMN INDEX `clip(BUCKET(rel) + span, 0, two_span - 1)` as pure
+    arithmetic — the IN-KERNEL replacement for the precomputed `idx1d` gather table.
+
+    ADR-0012 P1 (derive-don't-duplicate): the bucket has exactly ONE home,
+    `jax_deberta.make_log_bucket_position`, computed at the point of use — not re-encoded as a
+    hand-built O(S) lookup that is then GATHERED (the `gather` was the sm_75 Pallas-Triton wall).
+    `BUCKET = make_log_bucket_position(rel, position_buckets, max_relative_positions)` when both
+    are > 0 (the `build_relative_position` predicate, mirrored from `_build_idx1d`), else identity.
+    This is BYTE-FOR-BYTE the formula `_build_idx1d` baked into `idx1d`, so reading it at
+    `idx1d[rel + (S-1)]` and evaluating `_bucket_index(rel, …)` are the SAME integer (max|Δ| == 0).
+
+    Elementwise on any shape: the `[block_q, block_k]` offset tile `d_ij` (the per-element `pos`)
+    AND a scalar offset `off_min` (the band base `b_lo`) both flow through unchanged. Every op is
+    sign / abs / where / log / ceil / clip — primitives the Triton Pallas backend lowers (the
+    `jnp.log`/`jnp.ceil` lowering on sm_75 is the HOST gate, ADR-0009; interpret mode cannot
+    discriminate it, exactly as it could not the prior gather)."""
+    if position_buckets > 0 and max_relative_positions > 0:
+        rel = jax_deberta.make_log_bucket_position(rel, position_buckets, max_relative_positions)
+    return jnp.clip(rel.astype(jnp.int32) + span, 0, two_span - 1).astype(jnp.int32)
 
 
 def smem_bytes(
@@ -169,10 +198,11 @@ def smem_bytes(
 # jax 0.10.1's pallas exports no public `Ref` type, so they are annotated `jax.Array` — a NAMED
 # relaxation (the ref indexes/assigns exactly as an array does here), not a precision loss.
 def disent_flash_kernel(
-    q_ref: jax.Array, c2p_full_ref: jax.Array, am_q_ref: jax.Array, idx1d_ref: jax.Array,  # c2p_full global-memory-resident (pl.ANY); q/am resident over the query tile
+    q_ref: jax.Array, c2p_full_ref: jax.Array, am_q_ref: jax.Array,  # c2p_full global-memory-resident (pl.ANY); q/am resident over the query tile
     k_ref: jax.Array, v_ref: jax.Array, p2c_full_ref: jax.Array, am_k_ref: jax.Array,      # p2c_full global-memory-resident (pl.ANY); k/v/am whole key axis (sliced per k-tile)
     o_ref: jax.Array,                                 # output context tile
     *, scale: float, S: Pow2, block_q: Pow2, block_k: Pow2, W: Pow2, neg: float,
+    position_buckets: int, max_relative_positions: int, span: int,
 ) -> None:
     """Online-softmax disentangled attention for ONE (bh, query-tile) grid cell.
 
@@ -183,22 +213,25 @@ def disent_flash_kernel(
     per-element score, only the softmax reduction order differs.
 
     `W` is the BAND WIDTH (a `Pow2`, 64 at block 32 / 2span>=64): the (i-j) offsets a
-    (query-tile, key-tile) pair spans are a contiguous range, and `idx1d` is monotonic, so
-    the bucket columns the tile references form a contiguous `[base, base+W)` slice of the
-    `2span` axis. The c2p/p2c terms are selected by a `pl.ds(base, W)` BAND slice + a one-hot
-    comparison-sum (no `gather` primitive — the sm_75 Triton-lowering wall the gather hit)."""
+    (query-tile, key-tile) pair spans are a contiguous range, and the bucket map
+    `clip(BUCKET(d)+span)` is monotonic, so the bucket columns the tile references form a
+    contiguous `[base, base+W)` slice of the `2span` axis. The c2p/p2c terms are selected by a
+    `pl.ds(base, W)` BAND slice + a one-hot comparison-sum (no `gather` primitive — the sm_75
+    Triton-lowering wall the gather hit). The column index itself is `_bucket_index(...)`, pure
+    arithmetic computed in-kernel (no `idx1d` table, no scalar table read)."""
     bh = pl.program_id(0)              # batch*head index, to address the global-memory-resident position buffers
     qt = pl.program_id(1)
     qi0 = qt * block_q
+    two_span = 2 * span                # == c2p_full_ref.shape[-1]; the disentangled column axis (2*pos_ebd_size)
 
     q = q_ref[0]                       # [block_q, d]  (content query rows)
     am_i = am_q_ref[0]                 # [block_q]  (query mask)
-    idx1d = idx1d_ref[...]             # [2S-1]  the ONE O(S) bucket table (c2p & p2c)
     arows = qi0 + jnp.arange(block_q)  # global query ids for this tile
     d = q.shape[-1]
     # c2p_full_ref / p2c_full_ref are NOT staged into SRAM (BlockSpec memory_space=pl.ANY):
-    # the whole [B*H, S, 2span] stays global-memory-resident and is GATHERED per score-tile element
-    # in `body`, so no [block, 2span] buffer ever lives in Turing's 64 KB SMEM (root cause #2).
+    # the whole [B*H, S, 2span] stays global-memory-resident and only a [block, W] BAND is sliced
+    # per score-tile in `body`, so no [block, 2span] buffer ever lives in Turing's 64 KB SMEM
+    # (root cause #2). The bucket column itself is `_bucket_index(...)` arithmetic — no idx1d table.
 
     m = jnp.full((block_q,), -jnp.inf, dtype=jnp.float32)     # running max
     l = jnp.zeros((block_q,), dtype=jnp.float32)              # running denom
@@ -222,18 +255,17 @@ def disent_flash_kernel(
 
         # --- ONE bucket-index tile, used for BOTH terms (MEASURED-equal collapse) ---
         d_ij = arows[:, None] - bcols[None, :]      # [block_q, block_k] = i - j
-        pos = idx1d[d_ij + (S - 1)]                 # [block_q, block_k] int = clip(bucket(i-j)+span)
+        pos = _bucket_index(d_ij, position_buckets, max_relative_positions, span, two_span)  # [block_q,block_k] int = clip(bucket(i-j)+span)
 
         # --- BANDED select (gather-free): replace the c2p/p2c advanced-index gather (the sm_75
         # Triton wall `Unimplemented primitive ... gather`) with a band SLICE + one-hot sum,
         # using only primitives Triton's Pallas backend lowers (dynamic_slice, arange, ==, *,
         # sum). Bit-identical to the gather (smoke_equiv == 0.0 over deberta-large dims), so the
         # EXACT ~1e-5 fold is untouched — ONLY the selection mechanism changed (ADR-0012 P1). ---
-        two_span = c2p_full_ref.shape[-1]
         # off_min for this (query-tile, key-tile): ARITHMETIC of grid (qi0) + loop (kj0) scalars.
-        # idx1d monotonic => the band's bucket columns are [b_lo, b_lo + width) with width <= W.
+        # clip(BUCKET(d)+span) monotonic => the band's bucket columns are [b_lo, b_lo+width), width <= W.
         off_min = qi0 - (kj0 + block_k - 1)                   # min (i-j) offset in the tile
-        b_lo = idx1d[off_min + (S - 1)]                       # SCALAR idx1d read at a computed index
+        b_lo = _bucket_index(off_min, position_buckets, max_relative_positions, span, two_span)  # SCALAR bucket col, arithmetic (no table)
         # pl.ds/dynamic_slice SILENTLY CLAMPS its start to keep the window in-bounds; compute
         # that clamp EXPLICITLY as `base` and derive `sel` from the SAME `base`, so the slice and
         # the one-hot can never disagree at the high edge (ADR-0000: mismatch unrepresentable).
@@ -265,27 +297,29 @@ def disent_flash_kernel(
 
 def pallas_disentangled_attention(
     q: jax.Array, k_scaled: jax.Array, v: jax.Array,
-    c2p_full: jax.Array, p2c_full: jax.Array, idx1d: jax.Array, am_bh: jax.Array,
-    *, scale: float, block_q: Pow2, block_k: Pow2, interpret: bool,
+    c2p_full: jax.Array, p2c_full: jax.Array, am_bh: jax.Array,
+    *, scale: float, block_q: Pow2, block_k: Pow2,
+    position_buckets: int, max_relative_positions: int, span: int, interpret: bool,
 ) -> jax.Array:
     """Fused disentangled FlashAttention over `[B*H, S, d]` activations -> context
     `[B*H, S, d]`. Builds the `BlockSpec`s and calls `pl.pallas_call`. All global memory inputs are
     O(B·H·S··): the quadratic score is never an array. `am_bh` is the `[B*H, S]` float
     attention mask (the reference's `[B,1,S,S]` mask factorizes as `am[b,i]·am[b,j]`).
 
-    `idx1d` is the single O(S) bucket table (length `2S`, padded from the natural `2S-1` to a
-    power of 2 — Triton requires it; the pad slot is inert, see _build_idx1d); it gives BOTH
-    c2p and p2c their ONE collapsed column index (the MEASURED index collapse) and the band base
-    `b_lo = idx1d[off_min+(S-1)]`. The c2p/p2c values are then selected from a `pl.ds(base, W)`
-    band by one-hot comparison-sum — no `gather` (the sm_75 Triton wall). `interpret=True` runs
-    the kernel on CPU (guest correctness); `interpret=False` is the real Triton path (host)."""
+    `position_buckets`/`max_relative_positions`/`span` (= `cfg.pos_ebd_size`) are the STATIC
+    log-bucket parameters threaded to the kernel: it computes BOTH c2p and p2c's ONE collapsed
+    column index `clip(BUCKET(i-j)+span)` and the band base `clip(BUCKET(off_min)+span)` by pure
+    arithmetic (`_bucket_index`), so there is NO `idx1d` table and NO `gather`/scalar table read.
+    The c2p/p2c values are then selected from a `pl.ds(base, W)` band by one-hot comparison-sum —
+    no `gather` (the sm_75 Triton wall). `interpret=True` runs the kernel on CPU (guest
+    correctness); `interpret=False` is the real Triton path (host)."""
     bh, S, d = q.shape
     # Pow2 BOUNDARY (ADR-0000): block_q/block_k arrive `Pow2` (the caller branded them). The
-    # array-derived dims must ALSO be powers of 2, so brand them HERE — a non-pow2 head_dim, seq,
-    # or idx1d length (the 2S-1 trap) raises a clear guest error at the boundary, never a cryptic
-    # Triton failure on the host. The branded dims flow into every BlockSpec shape below, so the
-    # kernel cannot even be BUILT from a non-pow2 dimension.
-    Sp, dp, idx_len = pow2(S), pow2(d), pow2(idx1d.shape[0])
+    # array-derived dims must ALSO be powers of 2, so brand them HERE — a non-pow2 head_dim or seq
+    # raises a clear guest error at the boundary, never a cryptic Triton failure on the host. The
+    # branded dims flow into every BlockSpec shape below, so the kernel cannot even be BUILT from a
+    # non-pow2 dimension.
+    Sp, dp = pow2(S), pow2(d)
     # Band width (ADR-0000 Pow2 boundary): the contiguous (i-j)-offset range a tile spans has
     # width block_q+block_k-1; round UP to a power of two, but never exceed `2span` (pl.ds needs
     # W <= the sliced axis). two_span = 2*pos_ebd_size is pow2, next_pow2(...) is pow2, so the
@@ -303,18 +337,18 @@ def pallas_disentangled_attention(
     # block 128, 4x Turing's whole 64 KB SMEM. The score tile is never a global-memory array (k_quad=0).
     in_specs = [
         bspec((1, block_q, dp), lambda bh_, qt: (bh_, qt, 0)),      # q (query tile)
-        bspec(memory_space=pl.ANY),                                 # c2p_full (global-memory-resident, gathered)
+        bspec(memory_space=pl.ANY),                                 # c2p_full (global-memory-resident, band-sliced)
         bspec((1, block_q), lambda bh_, qt: (bh_, qt)),             # am_q (query mask tile)
-        bspec((idx_len,), lambda bh_, qt: (0,)),                    # idx1d (whole, O(S); idx_len = 2S, pow2)
         bspec((1, Sp, dp), lambda bh_, qt: (bh_, 0, 0)),            # k_scaled (whole key axis)
         bspec((1, Sp, dp), lambda bh_, qt: (bh_, 0, 0)),            # v (whole key axis)
-        bspec(memory_space=pl.ANY),                                 # p2c_full (global-memory-resident, gathered)
+        bspec(memory_space=pl.ANY),                                 # p2c_full (global-memory-resident, band-sliced)
         bspec((1, Sp), lambda bh_, qt: (bh_, 0)),                   # am_k (whole key mask)
     ]
     out_specs = bspec((1, block_q, dp), lambda bh_, qt: (bh_, qt, 0))
 
     kernel = functools.partial(
-        disent_flash_kernel, scale=scale, S=Sp, block_q=block_q, block_k=block_k, W=W, neg=neg)
+        disent_flash_kernel, scale=scale, S=Sp, block_q=block_q, block_k=block_k, W=W, neg=neg,
+        position_buckets=position_buckets, max_relative_positions=max_relative_positions, span=span)
     # Pin the TRITON backend (root cause #1 fix): a `triton.CompilerParams` makes the
     # gpu_lowering dispatch `isinstance(cp, triton_core.CompilerParams)` fire Triton
     # deterministically — without it, compiler_params=None falls back to _PALLAS_USE_MOSAIC_GPU
@@ -332,4 +366,4 @@ def pallas_disentangled_attention(
         out_shape=jax.ShapeDtypeStruct((bh, Sp, dp), q.dtype),  # type: ignore[no-untyped-call]
         compiler_params=cp,
         interpret=interpret,
-    )(q, c2p_full, am_bh, idx1d, k_scaled, v, p2c_full, am_bh)
+    )(q, c2p_full, am_bh, k_scaled, v, p2c_full, am_bh)

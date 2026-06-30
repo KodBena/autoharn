@@ -30,6 +30,7 @@ Run:  python -m pytest -q nla_lab/test_pallas_smem_budget.py   (from fact-mining
 from __future__ import annotations
 
 import jax
+import jax.numpy as jnp
 import pytest
 
 import jax_deberta
@@ -39,6 +40,7 @@ from nla_lab.variants._pallas_disent_attention import (
     TURING_SMEM_BUDGET_BYTES,
     TURING_SMEM_CARVEOUT_MAX_BYTES,
     Pow2,
+    _bucket_index,
     pow2,
     smem_bytes,
 )
@@ -163,17 +165,42 @@ def test_pow2_brands_and_rejects_the_2s_minus_1_trap() -> None:
             pow2(bad)
 
 
-def test_idx1d_length_is_a_power_of_two_per_S() -> None:
-    """The fix: `_build_idx1d` returns length 2S (the natural 2S-1 padded by one inert slot), a
-    power of two for every S on the ladder — so it constructs a `Pow2` at the kernel boundary
-    instead of detonating Triton. The OLD natural length 2S-1 is exactly what `pow2` rejects."""
-    from nla_lab.variants.pallas_flash_attention import _build_idx1d
+# ===================== root cause #1: the bucket column is ARITHMETIC, BIT-EXACT vs the old table
+def _retired_idx1d_table(
+    s: int, position_buckets: int, max_relative_positions: int, span: int
+) -> jax.Array:
+    """Rebuild the RETIRED `idx1d` lookup table the OLD way — the exact formula `_build_idx1d`
+    baked: `clip(make_log_bucket_position(d)+span, 0, 2span-1)` for `d in [-(s-1), s+1]` (the
+    2s pow2-padded length). This is the INDEPENDENT ORACLE the in-kernel arithmetic is checked
+    bit-exactly against; the gather into it (`table[d_ij+(s-1)]`) is the removed sm_75 wall."""
+    d = jnp.arange(-(s - 1), s + 1)
+    if position_buckets > 0 and max_relative_positions > 0:
+        rel = jax_deberta.make_log_bucket_position(d, position_buckets, max_relative_positions)
+    else:
+        rel = d
+    return jnp.clip(rel.astype(jnp.int32) + span, 0, span * 2 - 1).astype(jnp.int32)
+
+
+def test_bucket_index_arithmetic_is_bit_exact_vs_retired_table() -> None:
+    """The gather-removal correctness proof (ADR-0009 MEASURED, ADR-0012 P1). `_bucket_index`
+    computes `clip(BUCKET(i-j)+span)` by pure arithmetic — the SAME formula `_build_idx1d` baked
+    into the now-deleted `idx1d` table — so over the FULL S² offset range it must equal the old
+    `idx1d[d_ij+(S-1)]` gather EXACTLY (max|Δ| == 0, not ~1e-7 — it is the identical integer map).
+    Checked on the deberta-v3-large dims (position_buckets=256, max_rel=512, span=256 -> 2span=512,
+    the log-bucket path heavily engaged) AND the synthetic cfg dims (16/64/16)."""
     cfg = lab_measure.synthetic_cfg()
-    for s in (64, 128, 256, 512):
-        n = int(_build_idx1d(s, cfg).shape[0])
-        assert n == 2 * s and pow2(n) == n                # the padded length IS a Pow2
-        with pytest.raises(ValueError):                   # the natural 2S-1 would NOT be
-            pow2(2 * s - 1)
+    cases = [
+        (128, cfg.position_buckets, cfg.max_relative_positions, cfg.pos_ebd_size),  # synthetic (16,64,16)
+        (512, 256, 512, 256),                                                       # deberta-v3-large, 2span=512
+    ]
+    for s, pb, mrp, span in cases:
+        table = _retired_idx1d_table(s, pb, mrp, span)
+        ids = jnp.arange(s)
+        d_ij = ids[:, None] - ids[None, :]                     # [S,S] = i - j, the full offset range
+        gathered = table[d_ij + (s - 1)]                       # the OLD gather (the removed wall)
+        arithmetic = _bucket_index(d_ij, pb, mrp, span, 2 * span)
+        max_abs = int(jnp.max(jnp.abs(gathered - arithmetic)))
+        assert max_abs == 0, f"(S={s},2span={2 * span}) bucket arithmetic != table, max|Δ|={max_abs}"
 
 
 if __name__ == "__main__":
