@@ -55,7 +55,7 @@ SCANNED = ["extract.py", "load_facts.py", "nlp_cache.py",
            # (the documented "device code in a host file" failure GATE).
            "nla_lab/__init__.py", "nla_lab/contract.py", "nla_lab/registry.py",
            "nla_lab/lab_measure.py", "nla_lab/lab_corpus.py", "nla_lab/lab_report.py",
-           "nla_lab/bench.py", "nla_lab/variants/__init__.py",
+           "nla_lab/bench.py", "nla_lab/run_portfolio_bench.py", "nla_lab/variants/__init__.py",
            "nla_lab/variants/exact_reference.py", "nla_lab/variants/flash_attention.py",
            "nla_lab/variants/cached_positions.py", "nla_lab/variants/nystrom_attention.py",
            "nla_lab/variants/performer_favor.py", "nla_lab/variants/w8a8_int8.py",

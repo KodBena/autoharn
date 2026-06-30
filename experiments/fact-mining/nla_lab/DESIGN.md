@@ -261,6 +261,110 @@ perf claim is a supersedable finding authored elsewhere). **GATE: ADR-0012 P1.**
 
 ---
 
+## 5a. The PSQL results sink (`lab_report.write_psql` + `bench --psql`)
+
+The bench has THREE sinks, all optional and composable: the table (stdout), the JSONL
+belt-and-suspenders (`--jsonl`), and the **queryable PostgreSQL sink** (`--psql`). The
+sink lands rows in **`nla.bench_result`** in the harness DB — the SAME DB the tracer
+writes spans to, reached through the SAME **`spans.DEFAULT_DSN`** (HARNESS_DSN-overridable;
+the ONE DSN home, never a re-typed literal — ADR-0012 P1). This is what makes a
+real-weight sweep queryable **from the guest with no JSONL hand-off**: a subprocess
+writes its rows and exits; the maintainer reads the assembled table.
+
+- **`write_psql(records, dsn, *, run_tag, model)`** (next to `write_jsonl`). It
+  idempotently `CREATE SCHEMA / TABLE IF NOT EXISTS` (so any subprocess may be the first
+  to create the table — no separate migration step) and **APPENDS** the records tagged
+  with `run_tag` (one sweep = one queryable group) and `model` (the weight source). Prior
+  runs are **never deleted** — history is preserved. The row map
+  (`psql_row(rec, run_tag, model)`) is a **pure, DB-free** function (unit-tested offline):
+  a `None` field STAYS `None` → psycopg binds SQL `NULL` (a non-ok row's lat/rows/fidelity,
+  an underivable est_peak). psycopg is the repo's existing host dependency (load_facts.py /
+  spans.py) — neither numpy nor a device lib, so the sink stays **host-XOR clean**.
+- **`nla.bench_result` columns.** `id bigserial PK, run_ts timestamptz default now(),
+  run_tag text, model text, variant text, regime text, fidelity_tier text, batch int,
+  seq_bucket int, status text, lat_p50_ms / lat_p95_ms / rows_per_s / fidelity_max_abs /
+  fidelity_mean_abs float8, est_peak_device_bytes bigint, detail text` — the BenchRecord's
+  four lanes (latency / throughput / fidelity / memory) plus the run identity.
+- **`bench` flags.** `--psql` (write to the sink), `--run-tag <str>` (the run group label;
+  **PASSABLE** so the runner gives every variant the SAME tag — defaults to the weight-source
+  model tag), `--dsn` (defaults to `spans.DEFAULT_DSN`). `--jsonl` still works (both sinks
+  allowed). **GATE: ADR-0012 P1 (one DSN / one DB home).**
+
+## 5b. Real maverick weights — the actual deployed encoder (`bench --weights-npz`)
+
+The portfolio's POINT is the REAL fine-tuned **maverick deberta encoder**, not just HF
+vanilla. `load_fixture` has three mutually-exclusive weight sources with precedence
+**npz > HF > synthetic**:
+
+- **`--weights-npz <path>`** (priority) — the real maverick export
+  (`fixtures/deberta_maverick.npz`). It **REUSES the daemon's EXACT load path** (no
+  re-authored npz read): `coref_decode_server.load_deberta_npz` (the host numpy wire seam)
+  → `coref_host_shell.build_deberta_cfg` / `validate_deberta_load` (the keyset-bijection
+  fail-loud guard) / `lift_deberta_params` (the jax home, host→device). The `.spm`
+  tokenizer sibling is **not** needed — the bench runs only the encode forward. `vocab =
+  params["embeddings.word_embeddings.weight"].shape[0]` exactly as the HF path.
+- **`--model <hf-id>`** — HF vanilla via the `deberta_weights.load_jax_deberta` boundary.
+- **neither** — the synthetic seeded CPU fixture (self-test).
+- **Mutual exclusion, fail loud:** passing both `--model` and `--weights-npz` is an
+  argparse error (a run has ONE weight source). The chosen source is recorded in the psql
+  `model` column as `maverick-npz:<basename>` / the HF id / `synthetic`, so a query sorts
+  real-weight runs apart. **HOST-XOR-DEVICE:** the npz branch imports only module NAMES
+  (`coref_decode_server`, `coref_host_shell`) — the numpy/jax lives behind those declared
+  seams, identical posture to the existing `--model` branch; bench.py's AST adds no device
+  import. **GATE: ADR-0012 P1 (reuse the one npz loader) / ADR-0000 (fail-loud, one source).**
+
+## 5c. The process-per-variant runner (`run_portfolio_bench.py`) — why a real sweep does NOT OOM
+
+The in-process bench runs ALL variants in **one** Python process. On real weights that
+OOMs, for two compounding reasons, so a real-weight portfolio sweep MUST isolate each
+variant in its own OS process:
+
+1. **~5 GB / variant of real deberta-v3-large weights** — the in-process bench loads the
+   warm fixture once and every variant's prepped/packed params stay live in one address
+   space; eight variants stack to tens of GB resident.
+2. **The XLA compiled-executable cache is process-global and UNBOUNDED** — every distinct
+   `(variant, batch, seq_bucket)` compiles its own executable and they **accumulate** for
+   the process lifetime (the SAME unbounded-cache accumulation we already fixed by
+   **bucketing** in `coref_host_shell`). Across the portfolio × the sweep, the retained
+   executables alone exhaust device memory.
+
+**The fix is OS-level isolation.** `run_portfolio_bench.py` runs **each variant in a FRESH
+subprocess** — `subprocess.run([sys.executable, "-m", "nla_lab.bench", "--variants",
+<one>, "--psql", "--run-tag", <shared>, "--dsn", <dsn>, ...])` — so on each child's exit
+the OS reclaims **everything** (GPU arena + XLA executable cache + host RSS) fully and
+unconditionally before the next variant starts. **This MUST be a separate process per
+variant, never an in-process loop** — process exit IS the teardown; no in-process cleanup
+is trusted to be complete. The **psql sink is what makes this clean**: each child writes
+its rows under the SHARED `run_tag` and exits; the assembled run is one queryable table
+group, no inter-process JSONL hand-off.
+
+- **One run_tag for the whole sweep.** Generated **ONCE in the parent**
+  (`model_tag : label : single-parent-timestamp`) and passed identically to every child —
+  never re-derived per subprocess (a per-process timestamp would split one sweep into N
+  ungroupable singletons).
+- **Resilience.** A child that exits nonzero (e.g. it alone OOMs at a huge bucket) does
+  **not** abort the sweep — it contributes no rows, a clear `variant X exited nonzero`
+  line is printed, and the runner continues (the in-process per-trial safety envelope,
+  lifted to the process boundary). The child's stdout/stderr **inherit** the parent's
+  streams, so progress streams live to the maintainer.
+- **Read the assembled run.** After the sweep the runner prints the exact `psql … WHERE
+  run_tag='<tag>' ORDER BY variant,seq_bucket,batch` read query.
+- **`--weights-npz` is threaded to every child**, so each isolated process loads the real
+  maverick weights. **GATE: the OOM invariant (bounded device memory) / ADR-0012 P1
+  (the psql sink is the one assembled home).**
+
+**The maintainer's real-weight command:**
+
+```
+python nla_lab/run_portfolio_bench.py --weights-npz fixtures/deberta_maverick.npz \
+    --batches 1 2 16 32 --seq-buckets 64 128 512 1024 --repeats 20 --warmup 3
+```
+
+(process-per-variant, real maverick weights, results appended to `nla.bench_result`),
+then read with the `psql` query the runner prints.
+
+---
+
 ## 6. Host-XOR-device file layout (`test_import_xor.py` + `test_device_transfers.py`)
 
 | File | Side | Imports | Role |

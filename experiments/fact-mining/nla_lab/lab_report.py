@@ -27,7 +27,7 @@ import json
 import statistics
 from dataclasses import asdict, dataclass
 
-from spans import get_tracer
+from spans import DEFAULT_DSN, get_tracer
 
 #: the closed status vocabulary for one (variant, bucket) trial. An out-of-vocab
 #: status is unrepresentable.
@@ -136,6 +136,82 @@ def write_jsonl(records: list[BenchRecord], path: str) -> None:
     with open(path, "w", encoding="utf-8") as f:
         for r in records:
             f.write(json.dumps(asdict(r)) + "\n")
+
+
+# --------------------------------------------------------------- the PSQL results sink
+# ONE queryable home for assembled bench rows (ADR-0012 P1): the SAME harness DB the
+# tracer writes spans to (spans.DEFAULT_DSN, HARNESS_DSN-overridable — never a re-typed
+# literal). This is what lets the process-per-variant runner (run_portfolio_bench.py)
+# have each isolated subprocess write its rows and EXIT — the maintainer queries the
+# assembled `nla.bench_result` table from the guest, no JSONL hand-off. Rows are
+# APPENDED (never deleted): each sweep is one `run_tag` group, so history is preserved.
+#
+# It is idempotent (CREATE SCHEMA / TABLE IF NOT EXISTS), so any subprocess can be the
+# first to create the table — no separate migration step before a fresh portfolio run.
+#: the bench_result schema/table — the run-grouped, append-only readings store.
+_PSQL_SCHEMA_DDL = "CREATE SCHEMA IF NOT EXISTS nla"
+_PSQL_TABLE_DDL = """\
+CREATE TABLE IF NOT EXISTS nla.bench_result (
+    id                    bigserial PRIMARY KEY,
+    run_ts                timestamptz NOT NULL DEFAULT now(),
+    run_tag               text,
+    model                 text,
+    variant               text,
+    regime                text,
+    fidelity_tier         text,
+    batch                 int,
+    seq_bucket            int,
+    status                text,
+    lat_p50_ms            float8,
+    lat_p95_ms            float8,
+    rows_per_s            float8,
+    fidelity_max_abs      float8,
+    fidelity_mean_abs     float8,
+    est_peak_device_bytes bigint,
+    detail                text
+)"""
+
+#: the INSERT column order — the SSOT both the DDL and `psql_row` mirror (one list, so a
+#: column added in one place must be added here, never silently skewed).
+_PSQL_COLUMNS = ("run_tag", "model", "variant", "regime", "fidelity_tier", "batch",
+                 "seq_bucket", "status", "lat_p50_ms", "lat_p95_ms", "rows_per_s",
+                 "fidelity_max_abs", "fidelity_mean_abs", "est_peak_device_bytes",
+                 "detail")
+
+
+def psql_row(rec: BenchRecord, run_tag: str, model: str | None) -> tuple[object, ...]:
+    """Map one BenchRecord -> the `nla.bench_result` value tuple (in `_PSQL_COLUMNS`
+    order), stamped with the run's `run_tag` and `model`. A None field STAYS None ->
+    psycopg binds it as SQL NULL (a non-ok row's lat/rows/fidelity, an underivable
+    est_peak). PURE + DB-free, so the row mapping is unit-testable offline (no DB)."""
+    return (run_tag, model, rec.variant, rec.regime, rec.fidelity_tier, rec.batch,
+            rec.seq_bucket, rec.status, rec.lat_p50_ms, rec.lat_p95_ms, rec.rows_per_s,
+            rec.fidelity_max_abs, rec.fidelity_mean_abs, rec.est_peak_device_bytes,
+            rec.detail)
+
+
+def write_psql(records: list[BenchRecord], dsn: str = DEFAULT_DSN, *,
+               run_tag: str, model: str | None) -> int:
+    """APPEND the records to `nla.bench_result` in the harness DB, returning the count
+    written. Idempotently creates the schema+table first, then inserts every record
+    tagged with `run_tag` (one queryable group) and `model` (so real-weight runs sort
+    apart from synthetic). PRIOR runs are NOT touched — history is preserved.
+
+    psycopg is the repo's existing host dependency (load_facts.py / spans.py show the
+    pattern); it is neither numpy nor a device lib, so this stays host-XOR clean."""
+    if not records:
+        return 0
+    import psycopg
+    cols = ", ".join(_PSQL_COLUMNS)
+    placeholders = ", ".join(["%s"] * len(_PSQL_COLUMNS))
+    with psycopg.connect(dsn) as conn, conn.cursor() as cur:
+        cur.execute(_PSQL_SCHEMA_DDL)
+        cur.execute(_PSQL_TABLE_DDL)
+        cur.executemany(
+            f"INSERT INTO nla.bench_result ({cols}) VALUES ({placeholders})",
+            [psql_row(r, run_tag, model) for r in records])
+        conn.commit()
+    return len(records)
 
 
 def _fmt(x: float | None, spec: str) -> str:

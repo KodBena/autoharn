@@ -27,21 +27,36 @@ neutral-named, so the import-XOR gate stays green.
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from typing import cast
 
 import shape_buckets
+from spans import DEFAULT_DSN
 from nla_lab.contract import EncodeBucket
 from nla_lab.lab_report import (STATUS_FAILED_ERROR, STATUS_FAILED_NONFINITE,
                                 STATUS_FAILED_SHAPE, STATUS_FIT_RETIRED,
                                 STATUS_NOT_IMPLEMENTED, STATUS_OK, BenchRecord, agg,
-                                format_table, record_span, status_legend, write_jsonl)
+                                format_table, record_span, status_legend, write_jsonl,
+                                write_psql)
 from nla_lab.registry import load_all, make, portfolio_names
 
 from nla_lab import lab_corpus
 from nla_lab import lab_measure
 
 REFERENCE_NAME = "exact_reference"   # the baseline every fidelity is measured against
+
+
+def model_tag(model: str | None, weights_npz: str | None) -> str:
+    """The `model` column value identifying THIS run's weight source, so a psql query
+    tells real-weight runs from HF-vanilla from synthetic apart:
+      * `maverick-npz:<basename>` — the REAL fine-tuned deberta encoder export;
+      * the HF model id (e.g. microsoft/deberta-v3-large) — HF vanilla weights;
+      * `synthetic` — the seeded self-test fixture (no download).
+    Mirrors load_fixture's precedence (npz > model > synthetic)."""
+    if weights_npz is not None:
+        return f"maverick-npz:{os.path.basename(weights_npz)}"
+    return model if model else "synthetic"
 
 # default self-test geometry: the two cheapest length rungs × batch {1,2} — the fast
 # CPU self-test geometry, exercising the LATENCY lane in milliseconds. NOTE (regime
@@ -150,10 +165,33 @@ def build_reference_cache(params: dict[str, object], cfg: object, vocab: int,
     return cache
 
 
-def load_fixture(model: str | None, seed: int) -> tuple[dict[str, object], object, int]:
-    """Return `(params, cfg, vocab)`. `model=None` -> the synthetic self-test fixture
-    (no HF download; CPU jax). Otherwise the boundary loader `deberta_weights.load_jax_deberta`
-    (imports torch+numpy+jax — the declared conversion seam, not scanned)."""
+def load_fixture(model: str | None, weights_npz: str | None,
+                 seed: int) -> tuple[dict[str, object], object, int]:
+    """Return `(params, cfg, vocab)`. Three sources, mutually exclusive (precedence
+    enforced by the caller, not here):
+      * `weights_npz` set -> the REAL maverick fine-tuned deberta encoder export
+        (fixtures/deberta_maverick.npz) — the deployed encoder the portfolio is meant to
+        be measured against. REUSES the daemon's EXACT load path (no re-authored npz read):
+        `coref_decode_server.load_deberta_npz` (host numpy wire seam) ->
+        `coref_host_shell.build_deberta_cfg` / `validate_deberta_load` / `lift_deberta_params`
+        (the jax home). The .spm tokenizer sibling is NOT needed — the bench only runs the
+        encode forward, never tokenises.
+      * `model` set -> the boundary loader `deberta_weights.load_jax_deberta` (HF vanilla
+        weights; imports torch+numpy+jax — the declared conversion seam, not scanned).
+      * neither -> the synthetic self-test fixture (no HF download; CPU jax).
+    HOST-XOR-DEVICE: this file imports only MODULE NAMES (coref_decode_server,
+    coref_host_shell, deberta_weights) — none is numpy/jax/torch in this file's AST, so the
+    npz branch keeps the same boundary posture as the existing --model branch (the numpy/jax
+    lives behind those modules' declared seams)."""
+    if weights_npz is not None:
+        import coref_decode_server
+        import coref_host_shell
+        host_w, cfg_fields, _tok = coref_decode_server.load_deberta_npz(weights_npz)
+        cfg = coref_host_shell.build_deberta_cfg(cfg_fields)
+        coref_host_shell.validate_deberta_load(host_w, cfg)  # keyset bijection, fail-loud
+        params = coref_host_shell.lift_deberta_params(host_w)  # host->device, the jax home
+        vocab = int(params["embeddings.word_embeddings.weight"].shape[0])
+        return cast("dict[str, object]", params), cfg, vocab
     if model is None:
         cfg = lab_measure.synthetic_cfg()
         vocab, intermediate = 100, 64
@@ -169,10 +207,10 @@ def load_fixture(model: str | None, seed: int) -> tuple[dict[str, object], objec
 
 def run_bench(variant_names: list[str], model: str | None, batches: tuple[int, ...],
               seq_buckets: tuple[int, ...], repeats: int, warmup: int, seed: int,
-              jsonl: str | None) -> list[BenchRecord]:
+              jsonl: str | None, weights_npz: str | None = None) -> list[BenchRecord]:
     """The full sweep: load the warm fixture ONCE, build the reference cache, bench each
     variant, emit table + spans + JSONL."""
-    params, cfg, vocab = load_fixture(model, seed)
+    params, cfg, vocab = load_fixture(model, weights_npz, seed)
     ref_cache = build_reference_cache(params, cfg, vocab, batches, seq_buckets, seed)
     all_records: list[BenchRecord] = []
     for name in variant_names:
@@ -251,7 +289,13 @@ def main(argv: list[str] | None = None) -> int:
                     help="variant names (default: the full portfolio)")
     ap.add_argument("--model", default=None,
                     help="HF model id for REAL weights (e.g. microsoft/deberta-v3-large); "
-                         "default: the synthetic self-test fixture (no download)")
+                         "default: the synthetic self-test fixture (no download). Mutually "
+                         "exclusive with --weights-npz.")
+    ap.add_argument("--weights-npz", default=None,
+                    help="path to the REAL maverick fine-tuned deberta encoder export "
+                         "(fixtures/deberta_maverick.npz) — the deployed encoder. Takes "
+                         "PRIORITY over --model (mutually exclusive); reuses the daemon's "
+                         "exact npz load path. This is the real-weight portfolio target.")
     ap.add_argument("--batches", type=int, nargs="*", default=list(_DEFAULT_BATCHES),
                     help=f"batch rungs from {shape_buckets.ENCODE_BATCH_BUCKETS}")
     ap.add_argument("--seq-buckets", type=int, nargs="*", default=list(_DEFAULT_SEQ_BUCKETS),
@@ -260,9 +304,25 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--warmup", type=int, default=2, help="compile+warmup forwards (discarded)")
     ap.add_argument("--seed", type=int, default=0, help="corpus/fixture seed (reproducible)")
     ap.add_argument("--jsonl", default=None, help="optional local JSONL sink path")
+    ap.add_argument("--psql", action="store_true",
+                    help="APPEND the records to the harness DB sink (nla.bench_result), "
+                         "tagged with --run-tag — queryable from the guest, no JSONL "
+                         "hand-off. The process-per-variant runner uses this.")
+    ap.add_argument("--run-tag", default=None,
+                    help="the run group label stamped on every psql row (default: the "
+                         "weight-source model tag). PASS the same value to every variant "
+                         "subprocess so one sweep is one queryable group.")
+    ap.add_argument("--dsn", default=DEFAULT_DSN,
+                    help="harness DB DSN for --psql (default: spans.DEFAULT_DSN, "
+                         "HARNESS_DSN-overridable — the ONE DSN home)")
     ap.add_argument("--self-test", action="store_true",
                     help="run the end-to-end harness self-proof and exit nonzero on failure")
     args = ap.parse_args(argv)
+
+    # mutual exclusion (fail loud, ADR-0002): a run has exactly one weight source.
+    if args.model is not None and args.weights_npz is not None:
+        ap.error("--model and --weights-npz are mutually exclusive (a run has ONE weight "
+                 "source: HF vanilla XOR the real maverick npz). Pass only one.")
 
     if args.self_test:
         recs = self_test()
@@ -276,9 +336,16 @@ def main(argv: list[str] | None = None) -> int:
     names = args.variants if args.variants else portfolio_names()
     recs = run_bench(names, model=args.model, batches=tuple(args.batches),
                      seq_buckets=tuple(args.seq_buckets), repeats=args.repeats,
-                     warmup=args.warmup, seed=args.seed, jsonl=args.jsonl)
+                     warmup=args.warmup, seed=args.seed, jsonl=args.jsonl,
+                     weights_npz=args.weights_npz)
     print(format_table(recs))
     print("\n" + status_legend())
+    if args.psql:
+        mtag = model_tag(args.model, args.weights_npz)
+        run_tag = args.run_tag if args.run_tag else mtag
+        n = write_psql(recs, args.dsn, run_tag=run_tag, model=mtag)
+        print(f"\n=== psql sink: {n} row(s) appended to nla.bench_result "
+              f"(run_tag={run_tag!r}, model={mtag!r}) ===")
     return 0
 
 
