@@ -133,15 +133,32 @@ def test_metadata_by_type_guard_is_non_vacuous() -> None:
 
 def test_implemented_flag_marks_stub_vs_real() -> None:
     """R3-F5: the per-variant `IMPLEMENTED` flag (default False = stub) is what the
-    self-proof keys off — NOT a global all-stub assumption. exact_reference is IMPLEMENTED;
-    the seven portfolio stubs are not, until each agent flips the flag in their OWN file. So
-    one agent's impl cannot red the shared self-test for the others."""
+    self-proof keys off — NOT a global all-stub assumption, so one agent's fill cannot
+    red the shared self-test for the others.
+
+    POST-BAKE-OFF STATE. The portfolio is now FILLED: each variant flipped `IMPLEMENTED`
+    TRUE in its OWN file (contract: "a real implementation flips it TRUE in its own
+    variant file"). The protective invariant therefore inverts from the build-phase
+    "still stubs" to the completion invariant asserted here — every registered portfolio
+    variant is IMPLEMENTED (a variant that silently reverted to a `NotImplementedError`
+    stub, or never flipped its flag, fails). The fill-state-INDEPENDENT half of the
+    mechanism — that `IMPLEMENTED` is a real per-variant OPT-IN that DEFAULTS to False,
+    never vacuously true — is proven directly on a fresh subclass below."""
     load_all()
     assert make("exact_reference").IMPLEMENTED is True
-    stubs = [n for n in REGISTRY if not n.startswith("_") and n != "exact_reference"]
-    assert stubs, "expected the portfolio stubs to be registered"
-    for n in stubs:
-        assert make(n).IMPLEMENTED is False, f"{n} unexpectedly marked IMPLEMENTED"
+    portfolio = [n for n in REGISTRY if not n.startswith("_")]
+    assert portfolio, "expected the portfolio variants to be registered"
+    for n in portfolio:
+        assert make(n).IMPLEMENTED is True, f"{n} is registered but not IMPLEMENTED (stub?)"
+
+    # MECHANISM (fill-state independent): a concrete variant that does NOT declare
+    # IMPLEMENTED inherits the contract's False default — the flag is a real opt-in
+    # signal, never globally/vacuously true. The deliberately-broken `_smoke_broken`
+    # fixture stays underscore-excluded from the portfolio sweep above.
+    fresh = type("FreshStub", (EncodeVariant,),
+                 {"name": "x_fresh_stub", "regime": Regime.BOTH,
+                  "fidelity_tier": FidelityTier.EXACT, "encode": _stub_encode})
+    assert fresh().IMPLEMENTED is False, "IMPLEMENTED must default to False (opt-in marker)"
 
 
 def test_default_est_peak_device_bytes_reuses_the_oom_model() -> None:
