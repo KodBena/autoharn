@@ -34,10 +34,11 @@ from pathlib import Path
 from typing import Iterator
 
 import instances as inst
+from docsource import TEI_ROOT as TEI_ROOT  # re-exported: callers import the root here
+from docsource import parse_tei_meta, parse_tei_paragraphs, tei_doc_id
 from schema import Schema, Task
 
 RFC_ROOT = Path("/home/bork/distill/rfc")
-TEI_ROOT = Path("/home/bork/distill/UNv1.0-TEI")
 
 _CATEGORY = re.compile(r"^\s*Category:\s*(.+?)\s*$", re.MULTILINE)
 _CATEGORY_SLUG = {
@@ -107,24 +108,13 @@ class RfcLoader:
 # ------------------------------------------------------------------ UN-TEI loader
 @dataclass
 class UnTeiLoader:
-    """Parse UNv1.0-TEI ``TEI.2`` XML into doc-selection tasks."""
+    """Parse UNv1.0-TEI ``TEI.2`` XML into doc-selection tasks. The body + domain come
+    from the SAME ``docsource`` TEI parse the ``read`` command uses (ADR-0012 P1: one
+    TEI parse, not a second copy here) — the loader joins the structured paragraphs
+    into the flat body the doc-selection payload/preview wants."""
 
     root: Path = TEI_ROOT
     limit: int | None = None
-
-    def _body_and_domain(self, path: Path) -> tuple[str, str]:
-        tree = ET.parse(path)
-        root = tree.getroot()
-        sentences = [s.text for s in root.iter("s") if s.text]
-        body = " ".join(sentences)
-        # domain: first keyword <term>, else the idno symbol prefix, else generic
-        term = root.find(".//term")
-        if term is not None and term.text:
-            return body, term.text.strip().lower().replace(" ", "-")[:64]
-        for idno in root.iter("idno"):
-            if idno.get("type") == "symbol" and idno.text:
-                return body, idno.text.split("/")[0].strip().lower()
-        return body, "un-document"
 
     def tasks(self, schema: Schema) -> Iterator[Task]:
         n = 0
@@ -132,13 +122,15 @@ class UnTeiLoader:
             if self.limit is not None and n >= self.limit:
                 return
             try:
-                body, domain = self._body_and_domain(p)
+                root = ET.parse(p).getroot()
             except ET.ParseError:
                 continue
-            if not body:
+            paras = parse_tei_paragraphs(root)
+            if not paras:
                 continue
-            rel = p.relative_to(self.root).with_suffix("")
-            yield _doc_task(schema, "tei:" + str(rel).replace("/", ":"), "un-tei", domain, body)
+            body = " ".join(par.text() for par in paras)
+            domain = parse_tei_meta(root)["domain"]
+            yield _doc_task(schema, tei_doc_id(self.root, p), "un-tei", domain, body)
             n += 1
 
 

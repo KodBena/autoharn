@@ -8,11 +8,13 @@ nothing about the surface, the wire, or the DDL is restated.
 
   python -m app --corpus rfc --limit 20 --frontend headless --db sqlite+pysqlite:///adj.db
   python -m app --corpus tei --limit 10 --frontend textual
+  python -m app read --corpus un-tei --doc tei:1990:trans:wp_29:1999:14:add_1
 """
 
 from __future__ import annotations
 
 import argparse
+import sys
 from typing import Sequence
 
 import instances as inst
@@ -65,6 +67,14 @@ def run(corpus: str, limit: int, frontend_kind: str, db_url: str) -> Sequence[Ad
 
 
 def main() -> None:
+    # ``read`` is a sibling surface over the SAME corpora (read a document as plain
+    # paragraphs rather than adjudicate it); dispatch to it before the adjudication
+    # argument parser so ``python -m app --corpus ...`` keeps its exact meaning.
+    argv = sys.argv[1:]
+    if argv and argv[0] == "read":
+        from read import main as read_main
+        raise SystemExit(read_main(argv[1:]))
+
     ap = argparse.ArgumentParser(description="doc-selection adjudication end-to-end")
     ap.add_argument("--corpus", choices=["rfc", "tei"], default="rfc")
     ap.add_argument("--limit", type=int, default=20)

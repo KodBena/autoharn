@@ -17,7 +17,7 @@ first-class and generic even though this subproject needs little data).
   `fact-mining/`, depended on by this subproject **and** the parent coref hook.
 - Status: **doc-selection LIVE end-to-end**; **coref-adjudication DEFINED** (types +
   a schema instance + a stub grounding source), not wired to the unbuilt hook.
-- Gates: `mypy --strict` clean (14 files, `mypy.ini`), `pytest` green (24 tests).
+- Gates: `mypy --strict` clean (19 files, `mypy.ini`), `pytest` green (43 tests).
 - Env: `~/w/vdc/venvs/generic` + `textual` 8.2.8 + `sqlalchemy` 2.0.51 (pure-Python;
   `jax`/`jaxlib` verified **unchanged** at 0.10.1 after install).
 
@@ -253,6 +253,8 @@ Verified live: `python -m app --corpus rfc --limit 5 --frontend headless` and
 | `frontend_textual.py` | `TextualFrontend` (pilot human surface) |
 | `instances.py` | `doc_selection_schema()` (singleton), `coref_schema()` (batch) |
 | `loaders.py` | `RfcLoader`, `UnTeiLoader`, `coref_stub_tasks`; the field-extraction plan |
-| `app.py` | end-to-end doc-selection runner / CLI |
+| `docsource.py` | the `DocumentSource[T]` FUNCTOR (`map` = structure-preserving content transform); `UnTeiSource`; the one TEI body/meta parse (shared with `loaders`) |
+| `read.py` | `render_paragraphs` (the readable-text content-transform) + the `read` CLI — read a UN-TEI doc as plain paragraphs (see `USAGE.md`) |
+| `app.py` | end-to-end doc-selection runner / CLI (+ the `read` subcommand) |
 | `mypy.ini` | the `mypy --strict` gate |
 | `tests/` | coherence, render-SSOT, headless-drives-frontend, store+bus, loaders+instances |
