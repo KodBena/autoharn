@@ -34,7 +34,7 @@ from typing import cast
 import shape_buckets
 from spans import DEFAULT_DSN
 from nla_lab.contract import EncodeBucket
-from nla_lab.lab_report import (STATUS_FAILED_ERROR, STATUS_FAILED_NONFINITE,
+from nla_lab.lab_report import (STATUS_E2E_SKIP, STATUS_FAILED_ERROR, STATUS_FAILED_NONFINITE,
                                 STATUS_FAILED_SHAPE, STATUS_FIT_RETIRED,
                                 STATUS_NOT_IMPLEMENTED, STATUS_OK, STATUS_OOM, BenchRecord, agg,
                                 format_table, record_span, status_legend, write_jsonl,
@@ -58,6 +58,49 @@ def model_tag(model: str | None, weights_npz: str | None) -> str:
         return f"maverick-npz:{os.path.basename(weights_npz)}"
     return model if model else "synthetic"
 
+def e2e_budget_bytes(budget_bytes: int | None) -> int:
+    """The device-VRAM budget the e2e-feasibility gate measures cells against — DERIVED THE
+    SAME WAY THE DAEMON DERIVES IT, so the bench's feasible region is exactly what the daemon's
+    chunker would actually run (ADR-0012 P1: one budget derivation, no second). `--budget-bytes`
+    OVERRIDES it for OFFLINE reasoning (no device present); otherwise reuse the daemon's
+    `coref_host_shell.available_vram_bytes` (jax memory_stats arena bytes_limit − bytes_in_use −
+    `shape_buckets.headroom_bytes`; CPU jax falls back to `shape_buckets.cpu_fallback_
+    available_bytes`). HOST-XOR-DEVICE: imports the module NAME only — the jax lives behind that
+    declared seam, identical posture to `load_fixture`'s npz branch (bench.py's AST adds no
+    device import)."""
+    if budget_bytes is not None:
+        return budget_bytes
+    import coref_host_shell
+    # coref_host_shell is a declared mypy stub-gap (mypy.ini follow_imports=skip — the jax home
+    # behind the seam); its int result is returned as this function's int (named relaxation,
+    # ADR-0012 P8 — same posture as load_fixture's reuse of that module).
+    return coref_host_shell.available_vram_bytes()  # type: ignore[no-any-return]
+
+
+def e2e_skip_cells(cfg: object, batches: tuple[int, ...], seq_buckets: tuple[int, ...],
+                   available_bytes: int) -> dict[tuple[int, int], str]:
+    """The (batch, seq_bucket) cells the END-TO-END coref pipeline could NOT run, mapped to a
+    LOUD human reason (kept in the e2e_skip record's `detail` + logged). The decision is the
+    DENSE reference encode's footprint (the daemon deploys the dense maverick encode, not a
+    variant), computed by REUSING the ONE memory model: `shape_buckets.dense_deberta_mem_model`
+    → `shape_buckets.e2e_fits` (== the daemon's `max_batch_for_length` cap). NO second model and
+    NO second inequality are authored here. A cell is skipped iff `e2e_fits` is False."""
+    mm = shape_buckets.dense_deberta_mem_model(
+        cfg.num_heads, cfg.head_size, cfg.pos_ebd_size)  # type: ignore[attr-defined]
+    gib = float(1 << 30)
+    skips: dict[tuple[int, int], str] = {}
+    for s_bucket in seq_buckets:
+        for batch in batches:
+            if not shape_buckets.e2e_fits(mm, batch, s_bucket, available_bytes=available_bytes):
+                est = shape_buckets.peak_variable_bytes(mm, batch, s_bucket)
+                skips[(batch, s_bucket)] = (
+                    f"e2e-infeasible: the dense coref encode forward at B={batch},S={s_bucket} "
+                    f"needs ~{est / gib:.2f} GiB but only ~{available_bytes / gib:.2f} GiB is in "
+                    f"the daemon's VRAM budget — never run (no point benchmarking the encoder "
+                    f"where the e2e pipeline OOMs). Pass --no-e2e-feasible-only to bench anyway.")
+    return skips
+
+
 # default self-test geometry: the two cheapest length rungs × batch {1,2} — the fast
 # CPU self-test geometry, exercising the LATENCY lane in milliseconds. NOTE (regime
 # coverage): this default does NOT reach the throughput (large-batch, compute-bound)
@@ -79,9 +122,14 @@ def _real_rows(mask_rows: list[list[int]]) -> int:
 def run_one(variant_name: str, params: dict[str, object], cfg: object, vocab: int,
             batches: tuple[int, ...], seq_buckets: tuple[int, ...],
             repeats: int, warmup: int, seed: int,
-            ref_cache: dict[tuple[int, int], object]) -> list[BenchRecord]:
+            ref_cache: dict[tuple[int, int], object],
+            e2e_skips: dict[tuple[int, int], str] | None = None) -> list[BenchRecord]:
     """Bench ONE variant across the (batch × seq_bucket) sweep, returning its records.
-    `ref_cache[(B,Sbkt)]` holds the exact-reference lhs for fidelity reuse."""
+    `ref_cache[(B,Sbkt)]` holds the exact-reference lhs for fidelity reuse. `e2e_skips` maps the
+    (B,Sbkt) cells the END-TO-END pipeline could not run to a reason — those are recorded
+    `e2e_skip` (the declared est is still kept) and NEVER run, so the bench only measures the
+    encoder at e2e-runnable shapes (the maintainer's no-OOM-region rule)."""
+    e2e_skips = e2e_skips or {}
     variant = make(variant_name)
     hidden = cfg.num_heads * cfg.head_size   # type: ignore[attr-defined]
     records: list[BenchRecord] = []
@@ -102,6 +150,17 @@ def run_one(variant_name: str, params: dict[str, object], cfg: object, vocab: in
                 est: int | None = variant.est_peak_device_bytes(bucket, cfg)
             except Exception:
                 est = None
+            # E2E-FEASIBILITY GATE (BEFORE fit/run). A cell the END-TO-END coref pipeline could
+            # not run is recorded as a DISTINCT, queryable DECISION (e2e_skip) — NOT an `oom`
+            # (which means a forward was RUN and RESOURCE_EXHAUSTED) — and is NEVER run here. The
+            # declared est is still carried (the predicted peak that drove the decision). The cell
+            # was already logged once, loudly, in run_bench (no silent truncation).
+            if (batch, s_bucket) in e2e_skips:
+                records.append(BenchRecord.non_ok(
+                    **meta, batch=batch, seq_bucket=s_bucket,
+                    status=STATUS_E2E_SKIP, detail=e2e_skips[(batch, s_bucket)],
+                    est_peak_device_bytes=est))
+                continue
             verdict = variant.fit(bucket)
             if not verdict.ok:
                 records.append(BenchRecord.non_ok(
@@ -158,14 +217,20 @@ def run_one(variant_name: str, params: dict[str, object], cfg: object, vocab: in
 
 def build_reference_cache(params: dict[str, object], cfg: object, vocab: int,
                           batches: tuple[int, ...], seq_buckets: tuple[int, ...],
-                          seed: int) -> dict[tuple[int, int], object]:
+                          seed: int,
+                          e2e_skips: dict[tuple[int, int], str] | None = None
+                          ) -> dict[tuple[int, int], object]:
     """Run the exact reference once per (batch, seq_bucket) and cache its lhs, so every
     variant's fidelity is measured against the SAME reference array (and the reference's
-    own fidelity-vs-itself is exactly 0)."""
+    own fidelity-vs-itself is exactly 0). e2e-infeasible cells (`e2e_skips`) are NOT run
+    here either — they get no cache entry (run_one records them `e2e_skip`, never reads it)."""
+    e2e_skips = e2e_skips or {}
     ref = make(REFERENCE_NAME)
     cache: dict[tuple[int, int], object] = {}
     for s_bucket in seq_buckets:
         for batch in batches:
+            if (batch, s_bucket) in e2e_skips:
+                continue  # the e2e pipeline can't run this dense forward — don't run the reference
             ids_rows, mask_rows = lab_corpus.make_batch(batch, s_bucket, vocab, seed)
             ids, mask = lab_measure.lift_batch(ids_rows, mask_rows)
             try:
@@ -224,15 +289,32 @@ def load_fixture(model: str | None, weights_npz: str | None,
 
 def run_bench(variant_names: list[str], model: str | None, batches: tuple[int, ...],
               seq_buckets: tuple[int, ...], repeats: int, warmup: int, seed: int,
-              jsonl: str | None, weights_npz: str | None = None) -> list[BenchRecord]:
+              jsonl: str | None, weights_npz: str | None = None,
+              e2e_feasible_only: bool = True,
+              budget_bytes: int | None = None) -> list[BenchRecord]:
     """The full sweep: load the warm fixture ONCE, build the reference cache, bench each
-    variant, emit table + spans + JSONL."""
+    variant, emit table + spans + JSONL.
+
+    E2E-FEASIBLE-ONLY (default ON). The sweep measures the ENCODER only at (B,Sbkt) shapes the
+    END-TO-END coref pipeline could actually run — there is no point benchmarking the encode in
+    regions that OOM during e2e. Infeasible cells are computed ONCE (the dense reference's
+    footprint, via `shape_buckets.e2e_fits` against the daemon-derived budget), LOGGED LOUDLY
+    here (no silent truncation), then recorded `e2e_skip` (never run) for every variant. Pass
+    `e2e_feasible_only=False` (CLI `--no-e2e-feasible-only`) to restore the full sweep for
+    encode-isolation research (which may OOM)."""
     params, cfg, vocab = load_fixture(model, weights_npz, seed)
-    ref_cache = build_reference_cache(params, cfg, vocab, batches, seq_buckets, seed)
+    e2e_skips: dict[tuple[int, int], str] = {}
+    if e2e_feasible_only:
+        available = e2e_budget_bytes(budget_bytes)
+        e2e_skips = e2e_skip_cells(cfg, batches, seq_buckets, available)
+        for (b, s), reason in e2e_skips.items():
+            # LOUD, once per cell (not once per variant): a dropped config must be VISIBLE.
+            print(f"[e2e-skip] B={b},S={s}: {reason}", flush=True)
+    ref_cache = build_reference_cache(params, cfg, vocab, batches, seq_buckets, seed, e2e_skips)
     all_records: list[BenchRecord] = []
     for name in variant_names:
         all_records.extend(run_one(name, params, cfg, vocab, batches, seq_buckets,
-                                   repeats, warmup, seed, ref_cache))
+                                   repeats, warmup, seed, ref_cache, e2e_skips))
     for rec in all_records:
         record_span(rec)                       # one home: trace.span via the SSOT tracer
     if jsonl:
@@ -332,6 +414,16 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--dsn", default=DEFAULT_DSN,
                     help="harness DB DSN for --psql (default: spans.DEFAULT_DSN, "
                          "HARNESS_DSN-overridable — the ONE DSN home)")
+    ap.add_argument("--e2e-feasible-only", action=argparse.BooleanOptionalAction, default=True,
+                    help="ON by default: only sweep (batch, seq_bucket) cells the END-TO-END "
+                         "coref pipeline could actually run (the dense encode fits the daemon's "
+                         "VRAM budget — shape_buckets.e2e_fits). Infeasible cells are LOGGED and "
+                         "recorded 'e2e_skip' (never run). --no-e2e-feasible-only restores the "
+                         "FULL sweep for encode-isolation research (may OOM).")
+    ap.add_argument("--budget-bytes", type=int, default=None,
+                    help="OVERRIDE the device-VRAM budget the e2e-feasibility gate uses (bytes), "
+                         "for OFFLINE reasoning. Default: derive it the SAME way the daemon does "
+                         "(coref_host_shell.available_vram_bytes — jax arena minus headroom).")
     ap.add_argument("--self-test", action="store_true",
                     help="run the end-to-end harness self-proof and exit nonzero on failure")
     args = ap.parse_args(argv)
@@ -354,7 +446,8 @@ def main(argv: list[str] | None = None) -> int:
     recs = run_bench(names, model=args.model, batches=tuple(args.batches),
                      seq_buckets=tuple(args.seq_buckets), repeats=args.repeats,
                      warmup=args.warmup, seed=args.seed, jsonl=args.jsonl,
-                     weights_npz=args.weights_npz)
+                     weights_npz=args.weights_npz,
+                     e2e_feasible_only=args.e2e_feasible_only, budget_bytes=args.budget_bytes)
     print(format_table(recs))
     print("\n" + status_legend())
     if args.psql:

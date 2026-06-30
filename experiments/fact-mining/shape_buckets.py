@@ -305,6 +305,50 @@ def max_batch_for_length(mm: MemModel, S: int, available_bytes: int) -> int:
     return available_bytes // per_row
 
 
+def e2e_fits(mm: MemModel, batch: int, seq_bucket: int, *, available_bytes: int) -> bool:
+    """Is a `[batch, seq_bucket]` DENSE-encode forward one the END-TO-END coref daemon could
+    ACTUALLY run? — the e2e-feasibility predicate (one home, beside `peak_variable_bytes`).
+    Returns True iff the daemon's OWN chunker would emit this forward; False iff it would
+    refuse it (cap B below `batch`, or raise DocTooLargeError at this s_bucket).
+
+    THE BOUND IS THE ENCODE FORWARD PEAK — REUSED, NOT RE-DERIVED (the investigation finding).
+    A naive reading is "e2e holds encode + decode + retained co-resident, so it OOMs EARLIER
+    than encode-alone, so the bench must reserve an extra decode/retained term." On the path
+    the daemon ACTUALLY deploys (the jax-unified `coref` op -> `coref_host_shell.
+    coref_documents_host` -> `iter_encode_lhs_batched` -> `encode_batch_chunks`) that extra
+    term is ALREADY accounted for, in two ways, so the encode-forward inequality
+    `peak_variable_bytes(mm, B, S) <= available_bytes` IS the honest e2e predicate:
+
+      1. DECODE runs at a STRICTLY-LOWER high-water mark than the encode forward, AFTER it.
+         The encode's quadratic `[B,H,S,S]` attention buffers (the dominant peak) FREE when
+         `jax_deberta.encode` returns the `[B,s_bucket,TH]` lhs; the decode tail then runs on
+         that lhs (stage1 over `[s_bucket,TH]`, stage3 over `[k_bucket,TH]` — all small vs the
+         encode's `S^2` term). So at no instant is "encode peak + decode peak" co-resident: the
+         forward peak is the true high-water mark and the decode is a lower watermark beneath it.
+      2. RETENTION is STREAM-BOUNDED to ONE chunk, and the daemon's budget ALREADY carves
+         headroom for it. `coref_documents_host` decodes each doc's lhs THE MOMENT its chunk
+         emits it and `del`s it, so co-resident retained never exceeds one chunk's slices
+         (<= the `[B,s_bucket,TH]` forward output the `a_hidden` term already over-counts). And
+         `coref_host_shell.available_vram_bytes()` subtracts `headroom_bytes` whose stated
+         charter (see `_VRAM_HEADROOM_*`) INCLUDES "the per-doc decode tail's transient". The
+         O(total docs) `retained_lhs_bytes` / `forward_budget_after_retained` reservation is the
+         TORCH NON-streaming reference path's concern (nlp_server holds ALL slices at once) — it
+         is NOT the jax e2e daemon's, which streams; reserving it here would make this predicate
+         STRICTER than the daemon and wrongly skip cells the daemon WOULD run (a P1 disagreement).
+
+    So `e2e_fits` is EXACTLY the daemon's emit test: it delegates to `max_batch_for_length`
+    (which consumes the ONE `peak_variable_bytes` inequality — no second author), the same
+    function `encode_batch_chunks` uses to cap B. A cell is feasible iff `batch` is within that
+    cap; `available_bytes` must be derived the SAME way the daemon derives it (arena - in_use -
+    headroom). `mm` is the DENSE reference model (`dense_deberta_mem_model`) — the daemon deploys
+    the dense maverick encode, so the e2e-feasible region is the dense footprint's, not a
+    variant's. Empirically corroborated: the streaming daemon processed a full book without OOM,
+    so the per-doc decode demonstrably fits within this envelope."""
+    if batch < 1:
+        raise ValueError(f"e2e_fits: batch {batch} < 1")
+    return batch <= max_batch_for_length(mm, seq_bucket, available_bytes)
+
+
 class DocTooLargeError(RuntimeError):
     """A single document does not fit the device arena even alone (B=1). Raised with a CLEAR,
     BOUNDED diagnosis (tokens, GiB needed, GiB free, the exact knob) INSTEAD of letting XLA

@@ -38,6 +38,10 @@ STATUS_FAILED_SHAPE = "failed_shape"        # wrong output shape (watchdog caugh
 STATUS_FAILED_NONFINITE = "failed_nonfinite"  # NaN/Inf (watchdog caught)
 STATUS_FAILED_ERROR = "failed_error"        # any other exception in the variant
 STATUS_OOM = "oom"                          # device RESOURCE_EXHAUSTED at this (B,Sbkt): too big to fit
+STATUS_E2E_SKIP = "e2e_skip"                # NOT RUN: the e2e coref pipeline could not run this
+#                                             (B,Sbkt) — a recorded, queryable DECISION (the dense
+#                                             encode+decode+retained envelope would OOM), distinct
+#                                             from `oom` (which is a forward that WAS run and failed)
 
 
 @dataclass(frozen=True)
@@ -250,6 +254,13 @@ def status_legend() -> str:
         f"  {'':16} a recorded CAPACITY outcome, not a bug. A variant that fits where the\n"
         f"  {'':16} dense reference OOMs is exactly the win we want to see. (Raise the bench\n"
         f"  {'':16} arena — see run_portfolio_bench --mem-fraction / preallocate — if free VRAM allows.)\n"
+        f"  {STATUS_E2E_SKIP:16} NOT RUN: the END-TO-END coref pipeline could not run this (B, Sbkt) —\n"
+        f"  {'':16} the dense encode forward would not fit the daemon's own VRAM budget\n"
+        f"  {'':16} (shape_buckets.e2e_fits == the daemon's max_batch_for_length cap). A\n"
+        f"  {'':16} RECORDED, queryable DECISION (the est is kept), distinct from `oom`: this\n"
+        f"  {'':16} cell was NEVER RUN (no point benchmarking the encoder where e2e can't run),\n"
+        f"  {'':16} whereas `oom` is a forward that WAS run and RESOURCE_EXHAUSTED. Pass\n"
+        f"  {'':16} --no-e2e-feasible-only to bench these anyway (encode-isolation research).\n"
         "devMiB: the variant's DECLARED conservative UPPER BOUND on the forward's peak VARIABLE\n"
         "  (non-weight) DEVICE bytes at (B, Sbkt), in MiB — the 4th dimension alongside\n"
         "  latency/throughput/fidelity (EncodeVariant.est_peak_device_bytes; DEVICE bytes only,\n"

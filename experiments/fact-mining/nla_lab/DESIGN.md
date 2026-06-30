@@ -363,6 +363,88 @@ python nla_lab/run_portfolio_bench.py --weights-npz fixtures/deberta_maverick.np
 (process-per-variant, real maverick weights, results appended to `nla.bench_result`),
 then read with the `psql` query the runner prints.
 
+## 5d. E2E-FEASIBLE-ONLY config selection — bench only where the pipeline can run
+
+**The rule.** There is no point benchmarking the encoder in `(B, S)` regions that would OOM
+during the END-TO-END coref run. So the sweep, by default (`--e2e-feasible-only`, ON), only
+measures `(batch, seq_bucket)` cells the e2e pipeline could **actually run**; the rest are
+**recorded** as a decision, never run.
+
+**The predicate REUSES the daemon's ONE memory model — no second model
+(`shape_buckets.e2e_fits`).** A cell is feasible iff `e2e_fits(mm, batch, seq_bucket,
+available_bytes=…)` — which delegates to `max_batch_for_length` (the SAME function
+`encode_batch_chunks` uses to cap B), i.e. iff `peak_variable_bytes(mm, batch, seq_bucket) <=
+available_bytes`. `mm` is the **dense** deberta MemModel (`dense_deberta_mem_model` from the
+cfg) — the daemon deploys the dense maverick encode, so the feasible region is the dense
+footprint's, not a variant's. `available_bytes` is derived the SAME way the daemon derives it
+(`coref_host_shell.available_vram_bytes` = jax arena `bytes_limit − bytes_in_use −
+headroom_bytes`), with `--budget-bytes` overriding for offline reasoning.
+
+**The investigation finding — encode-forward+streamed-retained IS the e2e bound; NO separate
+decode term.** The naive worry is "e2e holds encode + decode + retained co-resident, so it
+OOMs EARLIER than encode-alone." On the path the daemon actually deploys (the jax-unified
+`coref` op → `coref_documents_host` → `iter_encode_lhs_batched`) that extra term is already
+covered, so the encode-forward inequality is the honest e2e predicate, for two reasons read
+straight off the daemon code:
+1. **Decode runs at a strictly-LOWER watermark, AFTER the encode.** The encode's dominant
+   quadratic `[B,H,S,S]` buffers FREE when `jax_deberta.encode` returns the `[B,s_bucket,TH]`
+   lhs; the decode tail then runs on that lhs (stage1 over `[s_bucket,TH]`, stage3 over
+   `[k_bucket,TH]` — all `≪` the `S²` term). Encode-peak and decode-peak are never co-resident.
+2. **Retention is STREAM-bounded to one chunk, and the budget already reserves it.**
+   `coref_documents_host` decodes each lhs the moment its chunk emits it and `del`s it, so
+   co-resident retained never exceeds one chunk (≤ the `[B,s_bucket,TH]` output the `a_hidden`
+   term over-counts), and `available_vram_bytes` already subtracts `headroom_bytes` whose
+   charter explicitly **includes "the per-doc decode tail's transient"**. The O(total docs)
+   `retained_lhs_bytes`/`forward_budget_after_retained` reservation is the **torch
+   NON-streaming** reference path's concern (it holds ALL slices) — NOT the jax e2e daemon's,
+   which streams; charging it here would make the bench STRICTER than the daemon and wrongly
+   skip cells the daemon WOULD run (a P1 disagreement, asserted against in
+   `test_e2e_feasible`). Empirically corroborated: the streaming daemon processed a full book
+   without OOM after the retained-output fix. So `e2e_fits` **reuses** the encode-forward bound
+   directly; it adds no hand-rolled second term.
+
+**No silent caps.** Every skipped cell is **LOGGED loudly** (`[e2e-skip] B=…,S=…: needs ~X GiB
+> ~Y GiB budget`) once per cell, and recorded with a **distinct, queryable status `e2e_skip`**
+(the declared est is kept) — so a psql query tells "we chose not to run this, e2e-infeasible"
+(`e2e_skip`, never run) apart from "it actually OOM'd" (`oom`, a forward that ran and
+RESOURCE_EXHAUSTED). `--no-e2e-feasible-only` restores the full sweep for encode-isolation
+research (which may OOM). **GATE: ADR-0012 P1 (one memory model, reused) / ADR-0000
+(no-silent-cap; a dropped config is visible) / the OOM invariant.**
+
+## 5e. The two measurement surfaces — bench ENCODE vs the daemon's E2E `trace`
+
+This config-selection ties together two **distinct, complementary** measurement surfaces that
+share weights + shapes:
+
+- **(a) `nla_lab.bench` — the ENCODE in isolation.** Against `--weights-npz` (the maverick
+  deberta weights) it times ONLY the encoder forward `(params, ids, mask, cfg) → lhs` at each
+  `(B, s_bucket)`, warm, compile-excluded — the latency/throughput/fidelity/memory lanes of
+  §5. It does not run the preprocess or the decode.
+- **(b) the daemon's `trace` schema spans — the E2E stage breakdown.** A live `coref` request
+  emits `decode_server.coref` → {`decode_server.coref_preprocess` (parse/tokenize) ;
+  `host_shell.coref_stream_encode_decode` → {`host_shell.encode_batch_forward` (the ENCODE) ;
+  `host_shell.{stage1_start_keep, stage2_span_keep, build_categories_masks, gather_reps,
+  stage3_coref_decode, union_find}` (the DECODE)}}.
+
+They are **comparable** because both run the **same** `jax_deberta.encode` on the **same**
+fine-tuned weights at the **same** shape-bucket ladders: the bench's encode latency at
+`(B, s_bucket)` is the apples-to-apples model for the trace's `host_shell.encode_batch_forward`
+span at that same `(B, s_bucket)`. This config-selection is what ties them: the bench now
+measures the encode **only at e2e-runnable shapes**, so its encode readings characterise
+exactly the `(B, S)` region the e2e trace can occupy — no measurement spent on shapes the
+pipeline can never reach.
+
+**GAP (noted precisely, NOT fixed here — next phase).** The e2e trace does **not** currently
+emit a single clean per-stage encode-vs-decode *split*: `host_shell.encode_batch_forward`
+(per-chunk, B docs) and the decode-stage spans (per-doc) are **interleaved siblings** under
+`host_shell.coref_stream_encode_decode` (the streaming consumer alternates encode-chunk and
+per-doc decode), and there is no parent span that sums "total encode" vs "total decode" for a
+request. Recovering the encode-vs-decode split today requires SUMMING the
+`encode_batch_forward` span durations against the decode-stage span durations across the
+request — a query-time aggregation, not a recorded field. Emitting an explicit per-request
+encode-total / decode-total split (so the bench's encode lane lines up against a single
+recorded e2e-encode number) is the **next phase**, deliberately out of scope here.
+
 ---
 
 ## 6. Host-XOR-device file layout (`test_import_xor.py` + `test_device_transfers.py`)
