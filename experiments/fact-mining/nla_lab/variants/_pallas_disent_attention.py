@@ -60,6 +60,7 @@ NEVER numpy (`jnp.finfo`, not `np.finfo`). The XOR-gate stays green.
 from __future__ import annotations
 
 import functools
+from typing import NewType
 
 import jax
 import jax.numpy as jnp
@@ -88,10 +89,34 @@ _NUM_WARPS: int = 4
 _NUM_STAGES: int = 1
 
 
+# ----------------------------------------------------- the power-of-2 invariant, by TYPE (ADR-0000)
+# The Pallas-Triton lowering REJECTS any array shape that is not a power of 2 ("requires that all
+# operations have array arguments and results whose size is a power of 2"). The bug that shipped:
+# the relative-offset count 2S-1 — exactly ONE below the power of 2 2S — flowed unguarded into the
+# kernel, and interpret mode (CPU) does not enforce the rule, so it only detonated on the host.
+# Rather than CHECK the invariant at runtime, we make a non-pow2 kernel dimension UNCONSTRUCTABLE:
+# `Pow2` is a NewType whose ONLY source is `pow2()`, which validates. So (a) mypy rejects a raw int
+# where a kernel signature wants a `Pow2`, and (b) `pow2()` rejects a non-pow2 VALUE at the kernel
+# boundary with a clear guest-side error. 2S-1 cannot become a `Pow2`; it cannot reach Triton.
+Pow2 = NewType("Pow2", int)
+
+
+def pow2(n: int) -> Pow2:
+    """The single source of `Pow2` values — brand `n` as a power of two, or raise. A `Pow2`
+    carries the proof; downstream code uses it as a plain int (NewType), but a non-pow2 (e.g.
+    2S-1 = 127) cannot get past this constructor."""
+    if n <= 0 or (n & (n - 1)) != 0:
+        raise ValueError(
+            f"kernel dimension {n} is not a power of 2 — Pallas-Triton requires every array shape "
+            f"be a power of 2. The classic trap is the relative-offset count 2S-1 (one below the "
+            f"power of 2 2S): pad to 2S BEFORE the kernel (see _build_idx1d).")
+    return Pow2(n)
+
+
 def smem_bytes(
-    block_q: int,
-    block_k: int,
-    d: int,
+    block_q: Pow2,
+    block_k: Pow2,
+    d: Pow2,
     *,
     dtype_bytes: int = 4,
     num_stages: int = 1,
@@ -124,7 +149,7 @@ def disent_flash_kernel(
     q_ref: jax.Array, c2p_full_ref: jax.Array, am_q_ref: jax.Array, idx1d_ref: jax.Array,  # c2p_full global-memory-resident (pl.ANY); q/am resident over the query tile
     k_ref: jax.Array, v_ref: jax.Array, p2c_full_ref: jax.Array, am_k_ref: jax.Array,      # p2c_full global-memory-resident (pl.ANY); k/v/am whole key axis (sliced per k-tile)
     o_ref: jax.Array,                                 # output context tile
-    *, scale: float, S: int, block_q: int, block_k: int, neg: float,
+    *, scale: float, S: Pow2, block_q: Pow2, block_k: Pow2, neg: float,
 ) -> None:
     """Online-softmax disentangled attention for ONE (bh, query-tile) grid cell.
 
@@ -201,40 +226,47 @@ def disent_flash_kernel(
 def pallas_disentangled_attention(
     q: jax.Array, k_scaled: jax.Array, v: jax.Array,
     c2p_full: jax.Array, p2c_full: jax.Array, idx1d: jax.Array, am_bh: jax.Array,
-    *, scale: float, block_q: int, block_k: int, interpret: bool,
+    *, scale: float, block_q: Pow2, block_k: Pow2, interpret: bool,
 ) -> jax.Array:
     """Fused disentangled FlashAttention over `[B*H, S, d]` activations -> context
     `[B*H, S, d]`. Builds the `BlockSpec`s and calls `pl.pallas_call`. All global memory inputs are
     O(B·H·S··): the quadratic score is never an array. `am_bh` is the `[B*H, S]` float
     attention mask (the reference's `[B,1,S,S]` mask factorizes as `am[b,i]·am[b,j]`).
 
-    `idx1d` is the single O(S) bucket table (length `2S-1`); it is passed once and gathered
-    in-kernel for BOTH c2p and p2c (the MEASURED index collapse). `interpret=True` runs the
+    `idx1d` is the single O(S) bucket table (length `2S`, padded from the natural `2S-1` to a
+    power of 2 — Triton requires it; the pad slot is inert, see _build_idx1d); it is passed once
+    and gathered in-kernel for BOTH c2p and p2c (the MEASURED index collapse). `interpret=True` runs the
     kernel on CPU (guest correctness); `interpret=False` is the real Triton path (host)."""
     bh, S, d = q.shape
+    # Pow2 BOUNDARY (ADR-0000): block_q/block_k arrive `Pow2` (the caller branded them). The
+    # array-derived dims must ALSO be powers of 2, so brand them HERE — a non-pow2 head_dim, seq,
+    # or idx1d length (the 2S-1 trap) raises a clear guest error at the boundary, never a cryptic
+    # Triton failure on the host. The branded dims flow into every BlockSpec shape below, so the
+    # kernel cannot even be BUILT from a non-pow2 dimension.
+    Sp, dp, idx_len = pow2(S), pow2(d), pow2(idx1d.shape[0])
     # jnp.finfo is untyped in jax 0.10.1's stubs (named relaxation, ADR-0012 P8).
     neg = float(jnp.finfo(jnp.float32).min)          # type: ignore[no-untyped-call]  # the reference's masked_fill value
-    n_qt = pl.cdiv(S, block_q)
+    n_qt = pl.cdiv(Sp, block_q)
 
     bspec = pl.BlockSpec
     # c2p_full / p2c_full are global-memory-resident (memory_space=pl.ANY): the whole [B*H, S, 2span]
     # stays in global memory and the kernel gathers only the [block_q, block_k] entries per score-tile
     # (root cause #2 fix) — staging them as [block, 2span] SRAM tiles was 256 KB/buffer at
-    # block 128, 4x Turing's whole 64 KB SMEM. The score tile is never an global memory array (k_quad=0).
+    # block 128, 4x Turing's whole 64 KB SMEM. The score tile is never a global-memory array (k_quad=0).
     in_specs = [
-        bspec((1, block_q, d), lambda bh_, qt: (bh_, qt, 0)),       # q (query tile)
+        bspec((1, block_q, dp), lambda bh_, qt: (bh_, qt, 0)),      # q (query tile)
         bspec(memory_space=pl.ANY),                                 # c2p_full (global-memory-resident, gathered)
         bspec((1, block_q), lambda bh_, qt: (bh_, qt)),             # am_q (query mask tile)
-        bspec((2 * S - 1,), lambda bh_, qt: (0,)),                  # idx1d (whole, O(S))
-        bspec((1, S, d), lambda bh_, qt: (bh_, 0, 0)),              # k_scaled (whole key axis)
-        bspec((1, S, d), lambda bh_, qt: (bh_, 0, 0)),              # v (whole key axis)
+        bspec((idx_len,), lambda bh_, qt: (0,)),                    # idx1d (whole, O(S); idx_len = 2S, pow2)
+        bspec((1, Sp, dp), lambda bh_, qt: (bh_, 0, 0)),            # k_scaled (whole key axis)
+        bspec((1, Sp, dp), lambda bh_, qt: (bh_, 0, 0)),            # v (whole key axis)
         bspec(memory_space=pl.ANY),                                 # p2c_full (global-memory-resident, gathered)
-        bspec((1, S), lambda bh_, qt: (bh_, 0)),                    # am_k (whole key mask)
+        bspec((1, Sp), lambda bh_, qt: (bh_, 0)),                   # am_k (whole key mask)
     ]
-    out_specs = bspec((1, block_q, d), lambda bh_, qt: (bh_, qt, 0))
+    out_specs = bspec((1, block_q, dp), lambda bh_, qt: (bh_, qt, 0))
 
     kernel = functools.partial(
-        disent_flash_kernel, scale=scale, S=S, block_q=block_q, block_k=block_k, neg=neg)
+        disent_flash_kernel, scale=scale, S=Sp, block_q=block_q, block_k=block_k, neg=neg)
     # Pin the TRITON backend (root cause #1 fix): a `triton.CompilerParams` makes the
     # gpu_lowering dispatch `isinstance(cp, triton_core.CompilerParams)` fire Triton
     # deterministically — without it, compiler_params=None falls back to _PALLAS_USE_MOSAIC_GPU
@@ -249,7 +281,7 @@ def pallas_disentangled_attention(
         grid=(bh, n_qt),
         in_specs=in_specs,
         out_specs=out_specs,
-        out_shape=jax.ShapeDtypeStruct((bh, S, d), q.dtype),  # type: ignore[no-untyped-call]
+        out_shape=jax.ShapeDtypeStruct((bh, Sp, dp), q.dtype),  # type: ignore[no-untyped-call]
         compiler_params=cp,
         interpret=interpret,
     )(q, c2p_full, am_bh, idx1d, k_scaled, v, p2c_full, am_bh)

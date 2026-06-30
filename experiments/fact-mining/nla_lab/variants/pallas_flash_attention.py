@@ -54,7 +54,7 @@ import jax_deberta
 import shape_buckets
 from nla_lab.contract import EncodeBucket, EncodeVariant, FidelityTier, Regime
 from nla_lab.registry import register
-from nla_lab.variants._pallas_disent_attention import pallas_disentangled_attention
+from nla_lab.variants._pallas_disent_attention import pallas_disentangled_attention, pow2
 
 # Square tile width target (a power of two). The kernel uses `block = min(_TILE_TARGET, S)`;
 # since every ENCODE_LEN_BUCKETS rung is a power of two, `block` divides S exactly (no ragged
@@ -86,7 +86,11 @@ def _build_idx1d(s: int, cfg: "jax_deberta.DebertaCfg") -> jax.Array:
     elements (antisymmetry of make_log_bucket_position). Hoisted as a runtime arg (like
     `jax_deberta.encode`'s rel_pos) so it never bakes into the per-S executable constant."""
     span = cfg.pos_ebd_size
-    d = jnp.arange(-(s - 1), s)                                       # [2s-1]
+    # [2s], NOT [2s-1]: the table is d in [-(s-1), s-1] (length 2s-1), but the Pallas TRITON
+    # lowering requires every array shape be a power of 2. 2s-1 is one short, so we extend by
+    # one (d=s, a valid-but-UNUSED bucket — the kernel only ever gathers indices [0, 2s-2]) to
+    # length 2s, which IS a power of 2 since s is. The pad slot is inert (never gathered).
+    d = jnp.arange(-(s - 1), s + 1)                                  # [2s] = (2s-1)+1 pad, pow2
     if cfg.position_buckets > 0 and cfg.max_relative_positions > 0:   # build_relative_position predicate
         rel1d = jax_deberta.make_log_bucket_position(
             d, cfg.position_buckets, cfg.max_relative_positions)
@@ -143,7 +147,10 @@ def _pallas_attention(
     # content divides k by scale (the reference's kt = k.T/scale); c2p/p2c divide in-kernel.
     k_scaled = k / scale
 
-    block = min(_TILE_TARGET, s)
+    # Pow2 (ADR-0000): brand the tile width for the kernel's typed signature. min(_TILE_TARGET, s)
+    # is a power of 2 (both 32 and the seq_bucket s are), so this always succeeds here; a non-pow2
+    # would raise at this boundary, on the guest, not as a cryptic Triton error on the host.
+    block = pow2(min(_TILE_TARGET, s))
     ctx_bh = pallas_disentangled_attention(
         q, k_scaled, v, c2p_full, p2c_full, idx1d, am_bh,
         scale=scale, block_q=block, block_k=block, interpret=interpret)   # [B*H, S, hs]
