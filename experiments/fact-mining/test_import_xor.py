@@ -57,10 +57,18 @@ SCANNED = ["extract.py", "load_facts.py", "nlp_cache.py",
            "nla_lab/lab_measure.py", "nla_lab/lab_corpus.py", "nla_lab/lab_report.py",
            "nla_lab/bench.py", "nla_lab/run_portfolio_bench.py", "nla_lab/variants/__init__.py",
            "nla_lab/variants/exact_reference.py", "nla_lab/variants/flash_attention.py",
+           "nla_lab/variants/_pallas_disent_attention.py", "nla_lab/variants/pallas_flash_attention.py",
            "nla_lab/variants/cached_positions.py", "nla_lab/variants/nystrom_attention.py",
            "nla_lab/variants/performer_favor.py", "nla_lab/variants/w8a8_int8.py",
            "nla_lab/variants/w4a16_weightonly.py", "nla_lab/variants/monarch_ffn.py",
-           "nla_lab/variants/_smoke_broken.py"]
+           "nla_lab/variants/_smoke_broken.py",
+           # nla_lab/distill: QAT feature-distillation (distill/DESIGN.md). DEVICE math
+           # (jax-only, numpy-free): ste (STE fake-quant + student forward + loss),
+           # optim (optax AdamW). HOST orchestration (numpy-free, jax-free in AST):
+           # train (loop driver/CLI), data (text->spm->bucket plan), __init__ (marker).
+           "nla_lab/distill/__init__.py", "nla_lab/distill/ste.py",
+           "nla_lab/distill/optim.py", "nla_lab/distill/train.py",
+           "nla_lab/distill/data.py"]
 # jax_only_guard.py makes the unified daemon torch-free (poison torch + stub the
 # torch-dragging spaCy trf plugins). On module import it is stdlib-only, so it authors
 # NO host array lib — but the gate's AST sees the literal `import torch` inside its
