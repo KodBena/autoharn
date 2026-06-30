@@ -104,6 +104,35 @@ def test_rogue_verdict_is_unrepresentable() -> None:
         Adjudication.make(s, task, Verdict("maybe", "rogue"), row_index=0)
 
 
+def test_duplicate_payload_field_name_is_unrepresentable() -> None:
+    # same-name, DIFFERENT kind: distinct Field objects a set/identity check would miss,
+    # but they collide on the derived store column ``payload_dup`` (silently de-duped by
+    # SQLAlchemy if it slipped through — ADR-0002). Foreclosed at the namespace owner.
+    dup_text = Field.text("dup")
+    dup_int = Field.integer("dup")
+    with pytest.raises(ValueError, match="payload_fields.*duplicate field name"):
+        _schema(payload_fields=(dup_text, dup_int), prompt=PromptTemplate.build("a=", A),
+                preview=TextFieldPreview(dup_text, title="p"))
+
+
+def test_duplicate_column_name_is_unrepresentable() -> None:
+    # same-name, SAME kind in the classification columns: two identical column titles ->
+    # an ambiguous table and a colliding ``cls_score`` DDL column.
+    with pytest.raises(ValueError, match="columns.*duplicate field name"):
+        _schema(columns=(Field.number("score"), Field.number("score")))
+
+
+def test_cross_namespace_name_reuse_is_coherent_and_allowed() -> None:
+    # payload "x" and a column "x" do NOT collide — distinct store columns (payload_x vs
+    # cls_x) on distinct surfaces (prompt/preview vs table) — so the coherence-gate must
+    # NOT reject it. Pins the fix to the real defect class, guarding against over-rejection.
+    px = Field.text("x")
+    cx = Field.text("x")
+    s = _schema(payload_fields=(A, px), preview=TextFieldPreview(A, title="p"), columns=(cx,))
+    store_cols = {name for name, _kind in s.store_columns()}
+    assert "payload_x" in store_cols and "cls_x" in store_cols
+
+
 def test_task_classification_shape_mismatch_is_unrepresentable() -> None:
     s = _schema()
     # a classification over the wrong field set (payload fields, not columns)

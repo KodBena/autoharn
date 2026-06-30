@@ -42,6 +42,7 @@ classification, adjudication-mode, verdict-vocabulary, render-model).
 
 from __future__ import annotations
 
+from collections import Counter
 from dataclasses import dataclass
 from enum import Enum
 from typing import Generic, Mapping, Sequence, TypeVar, assert_never, cast
@@ -339,6 +340,19 @@ class Schema:
         if not self.columns:
             raise ValueError(f"schema {self.key!r}: columns is empty — the classification-table "
                              "has no columns (ADR-0000: incoherent surface).")
+        # A field's NAME is its handle on every derived surface: the prompt interpolation,
+        # the classification-table column title, the JSON wire key, and the store column
+        # (``payload_<name>`` / ``cls_<name>``). Two fields sharing a name WITHIN a namespace
+        # therefore render an ambiguous table (two identical column titles) and a COLLIDING
+        # store DDL — which SQLAlchemy silently de-dups, dropping one typed column (an
+        # ADR-0002 silent fail). Distinct ``Field`` objects with the same name (e.g.
+        # text "x" and float "x") are NOT caught by set/identity, so the class is foreclosed
+        # on the name itself, here at the namespace owner — construction-time raise (ADR-0000
+        # Rule 2(a)), not three layers downstream in the store. Cross-namespace name reuse
+        # (payload "x" + column "x") stays coherent — the prefixes keep their store columns and
+        # their distinct surfaces (prompt/preview vs table) disjoint — so it is left legal.
+        self._reject_duplicate_names("payload_fields", self.payload_fields)
+        self._reject_duplicate_names("columns", self.columns)
         payload_set = frozenset(self.payload_fields)
         dangling = self.prompt.referenced_fields() - payload_set
         if dangling:
@@ -355,6 +369,21 @@ class Schema:
             raise ValueError(
                 f"schema {self.key!r}: preview field {self.preview.field.name!r} is "
                 f"{self.preview.field.kind.value}, not text — the less-style pager renders text.")
+
+    @staticmethod
+    def _reject_duplicate_names(namespace: str, fields: tuple[Field[object], ...]) -> None:
+        """Refuse a field namespace with a repeated NAME (the BoundedBatch move at the
+        schema boundary). Checked on names, not field identity, so a same-name/different-
+        kind pair is caught too."""
+        counts = Counter(f.name for f in fields)
+        dupes = sorted(name for name, n in counts.items() if n > 1)
+        if dupes:
+            raise ValueError(
+                f"schema field namespace {namespace!r} has duplicate field name(s) {dupes} — "
+                "a name is the handle on every derived surface (table column, store column, "
+                "wire key), so a repeat renders an ambiguous table and a colliding store DDL "
+                "(ADR-0000: an incoherent namespace is unrepresentable; ADR-0002: refused at "
+                "construction, never silently de-duped downstream).")
 
     # ---- factories that produce ONLY coherent tasks/adjudications for THIS schema ----
     def payload(self, cells: Mapping[Field[object], object]) -> Record:
