@@ -76,6 +76,13 @@ def test_record_wrongtype_cell_is_unrepresentable() -> None:
         Record.of((A, B), {A: "x", B: "not-an-int"})
 
 
+def test_record_bool_in_int_field_is_unrepresentable() -> None:
+    # bool is a subclass of int, so a naive isinstance check would smuggle True into
+    # an INT field — the coherence-gate must foreclose it (ADR-0000 Rule 2(a)).
+    with pytest.raises(TypeError, match="requires int"):
+        Record.of((A, B), {A: "x", B: True})
+
+
 def test_singleton_adjudication_without_row_index_is_unrepresentable() -> None:
     s = _schema()
     task = s.task("t1", s.payload({A: "x", B: 1}), [s.classification({A: "x"})])

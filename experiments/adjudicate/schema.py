@@ -146,7 +146,14 @@ class Record:
         for f in declared:
             v = cells[f]
             expected = f.kind.py_type()
-            if not isinstance(v, expected):
+            # ``bool`` is a SUBCLASS of ``int``, so a bare ``isinstance(True, int)`` is
+            # True and would smuggle a bool into an INT field — a lying record the kind
+            # vocabulary has no slot for (no FieldKind maps to bool). Reject bool unless
+            # the field's own py_type IS bool (no current kind, but the guard forecloses
+            # the class rather than the instance — ADR-0000 Rule 2(a)).
+            wrong_type = not isinstance(v, expected)
+            bool_smuggled = isinstance(v, bool) and expected is not bool
+            if wrong_type or bool_smuggled:
                 raise TypeError(
                     f"field {f.name!r} (kind {f.kind.value}) requires {expected.__name__}, "
                     f"got {type(v).__name__}={v!r} — a wrong-typed cell is a lying record "
