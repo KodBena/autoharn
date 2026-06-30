@@ -168,6 +168,15 @@ render-model's prompt/preview/rows, and the Textual app (driven via Textual's he
 `tests/test_headless_drives_frontend.py` asserts the LLM policy sees the *same*
 transcript the human surface renders.
 
+`tests/test_frontend_parity.py` discharges the load-bearing proof: for the **same
+schema+input**, the human `TextualFrontend` and the headless `HeadlessFrontend` (both
+typed as `protocols.Frontend`) produce the **same adjudication contract** —
+`(schema_key, task_id, verdict, row_index)` per `Adjudication`, the `note` excluded as
+provenance — across **both** modes (SINGLETON doc-selection incl. a row-by-row two-row
+case, BATCH coref) and **both** drivers (`RulePolicy`, `LLMPolicy`). It drives the
+headless surface first and presses exactly the verdict the policy chose, so the claim is
+*interchangeability for any decision*, not a fixed answer that happens to coincide.
+
 ---
 
 ## 4. The two concrete schema instances (the abstraction covers both)
