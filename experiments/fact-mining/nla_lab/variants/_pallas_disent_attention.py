@@ -45,13 +45,19 @@ collapse are UNCHANGED, EXACT ~1e-5 preserved). (1) The Triton backend is PINNED
 `compiler_params=plgpu.CompilerParams(...)`; without it jax 0.10.1 defaults to Mosaic-GPU
 (sm_90), the host's `Mosaic GPU kernel exceeds available shared memory` error on Turing.
 (2) The `c2p_full`/`p2c_full` position buffers are global-memory-resident (`BlockSpec
-memory_space=pl.ANY`) and the kernel GATHERS only the `[block_q, block_k]` entries each
-score-tile needs (`c2p_full[bh, i, pos]`, `p2c_full[bh, j, pos]`) — so the broken
-`[block, 2span]` SRAM staging (256 KB/buffer at block 128) is gone. (3) `smem_bytes()` is
-the guest-provable budget gate: it makes "tiles exceed SMEM" a CAUGHT arithmetic error
-(chosen tiles block 32 -> 45312 B <= 48 KiB), not a host `ValueError`. The global memory gather is the
-shipped primary; the banded-`2span`-slice is the recorded host-gate fallback if the
-per-element gather does not lower on Triton.
+memory_space=pl.ANY`) and the kernel selects only the `[block_q, block_k]` entries each
+score-tile needs via a BANDED slice + one-hot comparison-sum — NO `gather` primitive (the
+sm_75 wall was `Unimplemented primitive in Pallas Triton lowering: gather`). Because `idx1d`
+is monotonic, the bucket columns a (qt,kt) tile references are a contiguous `[base, base+W)`
+range, loaded by one `pl.ds(base, W)` band slice (`W = next_pow2(block_q+block_k-1) = 64`)
+and selected by `arange(W)==sel` (`sel = pos - base`), values BIT-IDENTICAL to the gather
+(smoke_equiv `== 0.0`); so the broken `[block, 2span]` SRAM staging (256 KB/buffer at block
+128) is gone AND the gather is gone. (3) `smem_bytes()` is the guest-provable budget gate:
+it makes "tiles exceed SMEM" a CAUGHT arithmetic error (band block 32 / W 64 -> 53504 B,
+PAST the 48 KiB static default but inside the <=64 KiB sm_75 carveout), not a host
+`ValueError`. `pl.ds(base, W)` is the SAME `dynamic_slice` the k-loop already lowers with
+`pl.dslice(kj0, block_k)`; whether Triton on sm_75 grants the 52 KiB carveout is the HOST
+gate (ADR-0009), not claimed here.
 
 HOST-XOR-DEVICE. Neutrally named (no device token) and DEVICE-ONLY: imports jax + pallas,
 NEVER numpy (`jnp.finfo`, not `np.finfo`). The XOR-gate stays green.
@@ -113,6 +119,15 @@ def pow2(n: int) -> Pow2:
     return Pow2(n)
 
 
+def next_pow2(n: int) -> int:
+    """Smallest power of two `>= n` (for `n >= 1`). Used to size the band width `W` from the
+    offset-range width `block_q + block_k - 1`: the (i-j) offsets a (qt,kt) tile spans are a
+    contiguous range of that width, so the bucket-column range it can reference fits a single
+    `pl.ds(base, W)` slice once `W` is rounded UP to a power of two (Triton's shape rule —
+    branded `Pow2` at the kernel boundary, never raw)."""
+    return 1 << (n - 1).bit_length()
+
+
 def smem_bytes(
     block_q: Pow2,
     block_k: Pow2,
@@ -121,6 +136,7 @@ def smem_bytes(
     dtype_bytes: int = 4,
     num_stages: int = 1,
     pos_resident_2span: int = 0,
+    band_w: int = 0,
 ) -> int:
     """Conservative peak SMEM-resident bytes for ONE `disent_flash_kernel` grid cell.
 
@@ -128,16 +144,23 @@ def smem_bytes(
     guest can ASSERT it. Counts `q + k + v + score + acc + m + l + position-scratch` as
     co-resident — an UPPER bound: when this passes, the tiles provably fit Turing's SMEM.
 
-    `pos_resident_2span` selects the residence model: 0 (the SHIPPED fix) is the per-tile
-    global memory gather, whose position scratch is the `2*block_q*block_k` c2p+p2c gather RESULTS
-    (the source `[B*H,S,2span]` buffers stay in global memory, never staged); a positive `span`
-    reproduces the BROKEN `[block, 2span]` SRAM staging for the regression assertion.
+    Three position-residence models, selected by the keyword args (UPPER bound each):
+    * `pos_resident_2span > 0` — the BROKEN `[block, 2span]` SRAM staging at the named span,
+      kept ONLY so the regression assertion reproduces the host's actual OOM as arithmetic.
+    * `band_w > 0` — the BANDED-select fix (the shipped seam now): two `[block, W]` band
+      slices (`c2p_band` query rows, `p2c_band` key rows) replace the gather scratch. At
+      block 32 / W 64 this is `2*32*64 = 4096` words, +8 KiB over the gather, pushing the
+      total PAST the 48 KiB static default INTO the <=64 KiB sm_75 carveout (intended).
+    * neither (both 0) — the prior per-tile gather residence, whose scratch is the
+      `2*block_q*block_k` c2p+p2c gather RESULTS (source `[B*H,S,2span]` stays global memory).
     `num_stages` double-buffers the per-k-tile loaded operands (k, v, score, position)."""
     persistent = block_q * d + block_q * d + 2 * block_q          # q, acc, m + l
     if pos_resident_2span > 0:
         pos = 2 * block_q * (2 * pos_resident_2span)              # broken: [block, 2span] x2
+    elif band_w > 0:
+        pos = block_q * band_w + block_k * band_w                # fix: c2p_band[bq,W] + p2c_band[bk,W]
     else:
-        pos = 2 * block_q * block_k                               # fix: [block_q, block_k] gathers
+        pos = 2 * block_q * block_k                               # prior: [block_q, block_k] gather results
     pipelined = block_k * d + block_k * d + block_q * block_k + pos   # k, v, score, position
     return (persistent + num_stages * pipelined) * dtype_bytes
 
@@ -149,7 +172,7 @@ def disent_flash_kernel(
     q_ref: jax.Array, c2p_full_ref: jax.Array, am_q_ref: jax.Array, idx1d_ref: jax.Array,  # c2p_full global-memory-resident (pl.ANY); q/am resident over the query tile
     k_ref: jax.Array, v_ref: jax.Array, p2c_full_ref: jax.Array, am_k_ref: jax.Array,      # p2c_full global-memory-resident (pl.ANY); k/v/am whole key axis (sliced per k-tile)
     o_ref: jax.Array,                                 # output context tile
-    *, scale: float, S: Pow2, block_q: Pow2, block_k: Pow2, neg: float,
+    *, scale: float, S: Pow2, block_q: Pow2, block_k: Pow2, W: Pow2, neg: float,
 ) -> None:
     """Online-softmax disentangled attention for ONE (bh, query-tile) grid cell.
 
@@ -157,7 +180,13 @@ def disent_flash_kernel(
     `fori_loop` walks key tiles, recomputing each `[block_q, block_k]` score tile (content
     + c2p + p2c) in SRAM and folding it into the running (max, denom, numerator) — the
     `[B,H,S,S]` score is never formed. EXACT vs `jax_deberta._self_attention`: same
-    per-element score, only the softmax reduction order differs."""
+    per-element score, only the softmax reduction order differs.
+
+    `W` is the BAND WIDTH (a `Pow2`, 64 at block 32 / 2span>=64): the (i-j) offsets a
+    (query-tile, key-tile) pair spans are a contiguous range, and `idx1d` is monotonic, so
+    the bucket columns the tile references form a contiguous `[base, base+W)` slice of the
+    `2span` axis. The c2p/p2c terms are selected by a `pl.ds(base, W)` BAND slice + a one-hot
+    comparison-sum (no `gather` primitive — the sm_75 Triton-lowering wall the gather hit)."""
     bh = pl.program_id(0)              # batch*head index, to address the global-memory-resident position buffers
     qt = pl.program_id(1)
     qi0 = qt * block_q
@@ -195,16 +224,27 @@ def disent_flash_kernel(
         d_ij = arows[:, None] - bcols[None, :]      # [block_q, block_k] = i - j
         pos = idx1d[d_ij + (S - 1)]                 # [block_q, block_k] int = clip(bucket(i-j)+span)
 
-        # global-memory-resident position gather (no [block, 2span] in SRAM): pull only the
-        # [block_q, block_k] entries this tile needs from the pl.ANY buffers — row = the
-        # global query/key id, col = the ONE collapsed bucket index `pos`. The gathered
-        # VALUES and their fold are bit-identical to the staged `take_along_axis`; ONLY the
-        # source residence (global memory vs SMEM) changes, so the EXACT ~1e-5 fold is untouched.
-        # (p2c needs NO transpose here: indexing row j directly yields [block_q, block_k].)
-        i_idx = arows[:, None] + jnp.zeros_like(pos)          # [block_q, block_k] query rows i
-        j_idx = bcols[None, :] + jnp.zeros_like(pos)          # [block_q, block_k] key rows j
-        c2p = c2p_full_ref[bh, i_idx, pos]                    # c2p_full[bh, i, pos[i,j]]
-        p2c = p2c_full_ref[bh, j_idx, pos]                    # p2c_full[bh, j, pos[i,j]]
+        # --- BANDED select (gather-free): replace the c2p/p2c advanced-index gather (the sm_75
+        # Triton wall `Unimplemented primitive ... gather`) with a band SLICE + one-hot sum,
+        # using only primitives Triton's Pallas backend lowers (dynamic_slice, arange, ==, *,
+        # sum). Bit-identical to the gather (smoke_equiv == 0.0 over deberta-large dims), so the
+        # EXACT ~1e-5 fold is untouched — ONLY the selection mechanism changed (ADR-0012 P1). ---
+        two_span = c2p_full_ref.shape[-1]
+        # off_min for this (query-tile, key-tile): ARITHMETIC of grid (qi0) + loop (kj0) scalars.
+        # idx1d monotonic => the band's bucket columns are [b_lo, b_lo + width) with width <= W.
+        off_min = qi0 - (kj0 + block_k - 1)                   # min (i-j) offset in the tile
+        b_lo = idx1d[off_min + (S - 1)]                       # SCALAR idx1d read at a computed index
+        # pl.ds/dynamic_slice SILENTLY CLAMPS its start to keep the window in-bounds; compute
+        # that clamp EXPLICITLY as `base` and derive `sel` from the SAME `base`, so the slice and
+        # the one-hot can never disagree at the high edge (ADR-0000: mismatch unrepresentable).
+        base = jnp.clip(b_lo, 0, two_span - W)               # the CLAMPED band base
+        c2p_band = c2p_full_ref[bh, pl.ds(qi0, block_q), pl.ds(base, W)]   # [block_q, W] query rows
+        p2c_band = p2c_full_ref[bh, pl.ds(kj0, block_k), pl.ds(base, W)]   # [block_k, W] key rows
+        # gather(band[row, sel]) as a one-hot contraction over the band's W axis (Triton-safe).
+        sel = pos - base                                      # [block_q, block_k], provably in [0, W)
+        onehot = (jnp.arange(W)[None, None, :] == sel[:, :, None]).astype(jnp.float32)  # [bq,bk,W]
+        c2p = jnp.einsum("iw,ijw->ij", c2p_band, onehot)      # c2p_band rows = query i
+        p2c = jnp.einsum("jw,ijw->ij", p2c_band, onehot)      # p2c_band rows = key   j
 
         # --- combined score / scale, then mask (content already /scale via k_scaled) ---
         s = content + (c2p + p2c) / scale
@@ -234,9 +274,11 @@ def pallas_disentangled_attention(
     attention mask (the reference's `[B,1,S,S]` mask factorizes as `am[b,i]·am[b,j]`).
 
     `idx1d` is the single O(S) bucket table (length `2S`, padded from the natural `2S-1` to a
-    power of 2 — Triton requires it; the pad slot is inert, see _build_idx1d); it is passed once
-    and gathered in-kernel for BOTH c2p and p2c (the MEASURED index collapse). `interpret=True` runs the
-    kernel on CPU (guest correctness); `interpret=False` is the real Triton path (host)."""
+    power of 2 — Triton requires it; the pad slot is inert, see _build_idx1d); it gives BOTH
+    c2p and p2c their ONE collapsed column index (the MEASURED index collapse) and the band base
+    `b_lo = idx1d[off_min+(S-1)]`. The c2p/p2c values are then selected from a `pl.ds(base, W)`
+    band by one-hot comparison-sum — no `gather` (the sm_75 Triton wall). `interpret=True` runs
+    the kernel on CPU (guest correctness); `interpret=False` is the real Triton path (host)."""
     bh, S, d = q.shape
     # Pow2 BOUNDARY (ADR-0000): block_q/block_k arrive `Pow2` (the caller branded them). The
     # array-derived dims must ALSO be powers of 2, so brand them HERE — a non-pow2 head_dim, seq,
@@ -244,6 +286,12 @@ def pallas_disentangled_attention(
     # Triton failure on the host. The branded dims flow into every BlockSpec shape below, so the
     # kernel cannot even be BUILT from a non-pow2 dimension.
     Sp, dp, idx_len = pow2(S), pow2(d), pow2(idx1d.shape[0])
+    # Band width (ADR-0000 Pow2 boundary): the contiguous (i-j)-offset range a tile spans has
+    # width block_q+block_k-1; round UP to a power of two, but never exceed `2span` (pl.ds needs
+    # W <= the sliced axis). two_span = 2*pos_ebd_size is pow2, next_pow2(...) is pow2, so the
+    # min is pow2 — branded here; a non-pow2 W is unconstructable, never a cryptic Triton error.
+    two_span = int(c2p_full.shape[-1])
+    W = pow2(min(next_pow2(int(block_q) + int(block_k) - 1), two_span))
     # jnp.finfo is untyped in jax 0.10.1's stubs (named relaxation, ADR-0012 P8).
     neg = float(jnp.finfo(jnp.float32).min)          # type: ignore[no-untyped-call]  # the reference's masked_fill value
     n_qt = pl.cdiv(Sp, block_q)
@@ -266,7 +314,7 @@ def pallas_disentangled_attention(
     out_specs = bspec((1, block_q, dp), lambda bh_, qt: (bh_, qt, 0))
 
     kernel = functools.partial(
-        disent_flash_kernel, scale=scale, S=Sp, block_q=block_q, block_k=block_k, neg=neg)
+        disent_flash_kernel, scale=scale, S=Sp, block_q=block_q, block_k=block_k, W=W, neg=neg)
     # Pin the TRITON backend (root cause #1 fix): a `triton.CompilerParams` makes the
     # gpu_lowering dispatch `isinstance(cp, triton_core.CompilerParams)` fire Triton
     # deterministically — without it, compiler_params=None falls back to _PALLAS_USE_MOSAIC_GPU

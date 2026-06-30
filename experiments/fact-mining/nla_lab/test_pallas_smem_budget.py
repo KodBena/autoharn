@@ -7,18 +7,22 @@ the CPU guest CAN prove (ADR-0009 guest/host split; ADR-0000 "tiles exceed SMEM"
 CAUGHT arithmetic error, not a host surprise):
 
   1. The SMEM BUDGET is a DERIVED arithmetic claim (`_pallas_disent_attention.smem_bytes`):
-     the chosen tiles (block 32) fit Turing's 48 KiB default; block 64 / num_stages 2 /
-     the broken `[block, 2span]` residence are CAUGHT here, never on the host.
-  2. The RETILING is fidelity-NEUTRAL: moving the position buffers from `[block, 2span]`
-     SRAM staging to an global-memory-resident per-tile gather, and pinning the Triton backend, do
-     NOT change the math — the EXACT ~1e-5 fold of §2 is preserved, RE-MEASURED in
-     interpret mode vs `exact_reference` at several (B, S) including multi-tile.
+     the band-select residence (block 32, W 64) is 53504 B — PAST the 48 KiB default but
+     inside the <=64 KiB sm_75 carveout; block 64 / num_stages 2 / the broken `[block, 2span]`
+     residence are CAUGHT here, never on the host.
+  2. The SELECTION RE-EXPRESSION is fidelity-NEUTRAL: replacing the c2p/p2c advanced-index
+     gather (the sm_75 `Unimplemented primitive ... gather` wall) with a `pl.ds(base,W)` band
+     slice + one-hot comparison-sum is BIT-IDENTICAL to the gather (smoke_equiv `== 0.0`), so
+     the EXACT ~1e-5 fold of §2 is preserved, RE-MEASURED in interpret mode vs `exact_reference`
+     at several (B, S) including multi-tile.
 
 What the guest CANNOT prove (HOST gate, NOT asserted here): that Pallas-Triton actually
-COMPILES + RUNS the fp32 kernel on sm_75 with these tiles and the OOM cell goes green.
-The guest is CPU jax with no CUDA jaxlib — interpret mode exercises the kernel LOGIC, not
-the Triton lowering of the global memory gather (honest: the gather's lowering is host-gate-selected;
-the banded-`2span`-slice fallback is recorded in the kernel module if it does not lower).
+COMPILES + RUNS the fp32 kernel on sm_75 with these tiles and the OOM cell goes green, and
+that the band's `pl.ds(base,W)` lowers where the `gather` did not. The guest is CPU jax with
+no CUDA jaxlib — interpret mode exercises the kernel LOGIC and lowers BOTH gather and band
+(non-discriminating for the host wall). The structural argument: `pl.ds(base,W)` is the SAME
+`dynamic_slice` the k-loop already lowers with `pl.dslice(kj0, block_k)`, fed a traced int32
+Triton cannot tell from `kj0`; the host re-run on the 2080Ti settles it.
 
 Run:  python -m pytest -q nla_lab/test_pallas_smem_budget.py   (from fact-mining/, CPU jax)
 """
@@ -47,14 +51,35 @@ _D: Pow2 = pow2(64)
 
 
 # ============================================================ root cause #2: SMEM budget
-def test_chosen_tiles_fit_turing_default() -> None:
-    """SHIPPED config (block 32, num_stages 1, global-memory-gather residence) -> 45312 bytes
-    (44.25 KB) <= the conservative 48 KiB static-default SMEM cap, with ~3.8 KB headroom.
-    This is the arithmetic that makes the host's `exceeds available shared memory` a CAUGHT
-    error: when this passes, the tiles PROVABLY fit (smem_bytes is a conservative upper bound)."""
+def test_gather_residence_baseline_fits_default() -> None:
+    """The PRIOR per-tile gather residence (block 32, num_stages 1) -> 45312 bytes (44.25 KB)
+    <= the conservative 48 KiB static-default SMEM cap. This is no longer the SHIPPED seam (the
+    band-select below is — `gather` does not lower on sm_75 Triton), but its arithmetic stays
+    the BASELINE the band's +8 KiB cost is measured against, and a conservative upper bound."""
     assert smem_bytes(pow2(32), pow2(32), d=_D, num_stages=1) == 45312
     assert smem_bytes(pow2(32), pow2(32), d=_D, num_stages=1) <= TURING_SMEM_BUDGET_BYTES   # 48 KiB
     assert smem_bytes(pow2(32), pow2(32), d=_D, num_stages=1) <= TURING_SMEM_CARVEOUT_MAX_BYTES  # 64 KiB
+
+
+def test_band_select_fits_carveout_not_default() -> None:
+    """SHIPPED seam: the banded-select residence (block 32, W 64, num_stages 1) -> 53504 bytes
+    (52.25 KB). It pushes PAST the 48 KiB static default INTO the <=64 KiB sm_75 dynamic-SMEM
+    carveout (intended — the band replaces the un-lowerable `gather` with a `pl.ds(base,W)`
+    slice + one-hot sum). The +8192 B over the gather baseline is exactly the two `[block,W]`
+    bands (`c2p_band` + `p2c_band`). Whether the sm_75 driver GRANTS 52.25 KiB is a HOST gate."""
+    band = smem_bytes(pow2(32), pow2(32), d=_D, num_stages=1, band_w=pow2(64))
+    assert band == 53504
+    assert band > TURING_SMEM_BUDGET_BYTES                     # past the 48 KiB static default
+    assert band <= TURING_SMEM_CARVEOUT_MAX_BYTES              # inside the 64 KiB carveout
+    assert band - smem_bytes(pow2(32), pow2(32), d=_D, num_stages=1) == 8192   # +8 KiB = 2 bands
+
+
+def test_band_num_stages_2_is_caught() -> None:
+    """The autotune knob the band gate FENCES: num_stages=2 with the band at block 32 / W 64 is
+    90368 bytes, which re-overflows even the 64 KiB carveout -> admissible ONLY behind a host
+    profile, never the guaranteed-fit default. Caught here, not rediscovered on the host."""
+    assert smem_bytes(pow2(32), pow2(32), d=_D, num_stages=2, band_w=pow2(64)) == 90368
+    assert smem_bytes(pow2(32), pow2(32), d=_D, num_stages=2, band_w=pow2(64)) > TURING_SMEM_CARVEOUT_MAX_BYTES
 
 
 def test_num_stages_2_is_caught() -> None:
@@ -102,10 +127,11 @@ def _fidelity_at(batch: int, seq: int) -> tuple[float, float]:
 
 
 def test_retiling_preserves_exact_fidelity() -> None:
-    """The EXACT-tier (~1e-5) claim, RE-MEASURED after the retiling (ADR-0009 MEASURED).
+    """The EXACT-tier (~1e-5) claim, RE-MEASURED after the band-select (ADR-0009 MEASURED).
     The Pallas kernel computes the same per-element disentangled score as the dense
     reference, differing only in softmax REDUCTION ORDER (online vs one-shot) — the backend
-    pin and the global-memory-gather residence change NOTHING about the math, so the fold stays exact.
+    pin and the gather->band-slice+one-hot selection change NOTHING about the math (the band
+    is bit-identical to the gather, smoke_equiv `== 0.0`), so the fold stays exact.
     Covered at single-tile (seq<=32) AND multi-tile (seq=64, 128 -> 2 and 4 block-32 tiles). NB:
     seq must be a POWER OF 2 (the kernel's k/v/idx1d shapes are pow2 — the Pow2 boundary enforces
     it; the prior `seq=96` here was a latent bug interpret mode tolerated but Triton would reject)."""

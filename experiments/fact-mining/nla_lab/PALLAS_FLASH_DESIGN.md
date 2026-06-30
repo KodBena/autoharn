@@ -651,3 +651,267 @@ The guest is CPU jax and CANNOT compile the Triton kernel. The split:
 The guest proves the SMEM arithmetic fits, the backend API is right, and the
 math is unchanged; the HOST re-run is the gate that it now compiles, runs, and the
 OOM cells go green. No GPU compile is claimed here.
+
+## banded-select (gather-free)
+
+This section designs the LAST in-Pallas rung: replacing the per-element advanced-index
+**gather** of the c2p/p2c terms with a **band-slice + comparison-sum select** that uses no
+`gather` primitive. It is anchored by a design-first interpret-mode proof of the load
+primitives, run BEFORE any kernel edit (ADR-0000: prove the type/primitive exists before
+building on it). It changes ONLY the c2p/p2c selection mechanism inside `body` (ADR-0012
+P1): the fold, `idx1d`, the `Pow2` boundary, the online-softmax recurrence, and every
+precompute (`c2p_full`/`p2c_full`/`k_scaled`) are UNCHANGED.
+
+### The wall (host-measured), restated
+
+On the 2080Ti (sm_75) the shipped kernel's `c2p = c2p_full_ref[bh, i_idx, pos]` /
+`p2c = p2c_full_ref[bh, j_idx, pos]` advanced indexing fails at lowering:
+`Unimplemented primitive in Pallas Triton lowering: gather`. The raw-Triton escape
+(`jax_triton`) is DEAD (0.3.1 vs jax 0.10.1: `get_compute_capability` gone; abandoned).
+So the only in-Pallas route is to express the same selection with primitives Triton's
+Pallas lowering DOES implement: `dynamic_slice` (`pl.ds`), `iota`/`arange`, `==`, `where`,
+and `sum`.
+
+### The idea — a contiguous band, because `idx1d` is monotonic
+
+For a (query-tile `qt`, key-tile `kt`) pair the relative offset `off = i - j` spans the
+CONTIGUOUS range `[off_min, off_max]`, `off_min = qt*block_q - (kt*block_k + block_k - 1)`,
+of width `block_q + block_k - 1`. `idx1d[off + (S-1)] = clip(bucket(off) + span)` is
+MONOTONIC NON-DECREASING in `off` (`make_log_bucket_position` is monotonic; `clip` keeps it
+so). Therefore the bucket COLUMN indices the tile needs form a CONTIGUOUS range of
+`c2p_full`'s `2span` axis — so a single `pl.ds(base, W)` band slice (no gather) loads every
+column the tile can reference. `W` is the next power of two of `block_q + block_k - 1`
+(63 -> 64 at block 32), so the band fully covers the offset range and is itself `Pow2`.
+
+### Design-first primitive proof (interpret mode) — does the load lower?
+
+Two tiny `pallas_call`s, interpret mode, CPU jax 0.10.1 (`scratchpad/smoke_band.py`):
+
+```python
+# T1: (a) scalar read of idx_ref at a COMPUTED (program-id-arithmetic) index,
+#     (b) pl.ds-slice src_ref by that idx-derived scalar start.
+def k1(idx_ref, src_ref, o_ref, *, off_min_const):
+    computed = off_min_const + pl.program_id(0)   # data-dependent (traced) index
+    b_lo = idx_ref[computed]                       # SCALAR read at a computed index
+    o_ref[...] = src_ref[pl.ds(b_lo, W)]           # dynamic-slice by the idx-derived start
+# T2: the realistic [block_q, 2span] shape: src_ref[:, pl.ds(b_lo, W)] -> [block_q, W],
+#     then the one-hot comparison-sum select (arange==sel -> *band -> sum).
+# T3 CONTROL: the advanced-index gather that fails on host Triton.
+```
+
+OUTCOME (the literal run):
+
+```
+[PASS] T1 idx-read + pl.ds(b_lo,W): lowered+ran. out[:8]=[ 5. 6. 7. 8. 9. 10. 11. 12.]
+[PASS] T2 [block,2span] band + onehot-sum select: lowered+ran.
+[PASS] T3 CONTROL advanced-index gather: lowered+ran.
+```
+
+**The data-dependent `pl.ds(b_lo, W)` LOWERS in interpret mode** — and, crucially, T1/T2 use
+a band start `b_lo` read from a ref at a traced index, NOT loop arithmetic: the jax/pallas
+frontend and abstract-eval impose **no "the slice start must be a loop index" guard**; an
+arbitrary traced `int32` scalar (here an `idx1d` read) is an accepted `pl.ds` start. Had
+such a guard existed it would have fired at trace time in interpret mode (frontend guards
+are backend-independent) — it did not. **This forecloses the "band-start is the wall"
+hypothesis at the level the guest CAN measure**: the start is not rejected; the
+arithmetic-band fallback is NOT needed.
+
+**HONEST caveat (ADR-0009, the measured wall vs the structural argument).** T3 — the gather
+— ALSO lowers in interpret mode. Interpret is the lax CPU executor; it does NOT reproduce
+the Triton lowering, so **interpret-mode lowering is NON-DISCRIMINATING for the host wall**:
+it cannot, on the guest, prove the band-slice lowers on Triton WHERE the gather does not.
+What the guest establishes is two things, stated precisely:
+
+1. **(measured, guest)** the band-select is a valid jax/pallas program — no frontend or
+   abstract-eval rejection of the data-dependent `pl.ds` start, and it runs.
+2. **(structural argument, host-confirmable)** `pl.ds` is `lax.dynamic_slice`, which Triton's
+   Pallas backend lowers to a block pointer (`tl.make_block_ptr`/`tl.advance`) with a
+   **runtime base offset** — the SAME primitive the existing k-tile loop already lowers
+   successfully with `pl.dslice(kj0, block_k)` where `kj0 = kt*block_k` is a traced loop
+   scalar. From Triton's view `b_lo` (an `idx1d` read) and `kj0` (loop arithmetic) are
+   indistinguishable: both are runtime SSA `int32` values feeding the slice base. The band
+   introduces NO new primitive class beyond what the shipped kernel already lowers. The
+   `gather`, by contrast, lowers to an element-wise `tl.gather`/scatter the backend does not
+   implement. So the band-slice is *expected* to lower where the gather does not — but that
+   is a **HOST claim** (2080Ti), flagged, not a guest measurement. If a future host run
+   reports `Unimplemented primitive ... dynamic_slice` (it should not, given the existing
+   `kj0` dslice already lowers), THAT is the precise measured wall to report, and the
+   arithmetic-band fallback (below) is the next rung.
+
+### Numerical exactness — band-select == gather, bit-for-bit (the strong guest result)
+
+The decisive guest proof is not "it lowers" but "it computes the SAME values." A second
+interpret-mode kernel (`scratchpad/smoke_equiv.py`) computes BOTH the gather and the
+band-select in one body and writes their difference:
+
+```
+S=32  span=16  2span=32  bq=16 W=32:  max|c2pΔ|=0.00e+00  max|p2cΔ|=0.00e+00  PASS
+S=64  span=16  2span=32  bq=32 W=32:  max|c2pΔ|=0.00e+00  max|p2cΔ|=0.00e+00  PASS  (degenerate W==2span)
+S=16  span=16  2span=32  bq=8  W=16:  max|c2pΔ|=0.00e+00  max|p2cΔ|=0.00e+00  PASS  (true narrowing, bh=2,3)
+S=128 span=256 2span=512 bq=32 W=64:  max|c2pΔ|=0.00e+00  max|p2cΔ|=0.00e+00  PASS  (deberta-large, 512->64)
+S=256 span=256 2span=512 bq=32 W=64:  max|c2pΔ|=0.00e+00  max|p2cΔ|=0.00e+00  PASS  (8x8 multi-tile grid)
+```
+
+**BIT-EXACT (`== 0.0`)** across the synthetic-cfg regime (`pos_ebd_size=16 -> 2span=32`),
+the true-narrowing regime, and the deberta-v3-large regime (`2span=512 -> W=64`, an 8x
+narrowing), single- and multi-tile, multi-batch. Because the selection is the ONLY changed
+seam (ADR-0012 P1) and it is bit-identical to the gather it replaces, the WHOLE-kernel
+fidelity vs `exact_reference` is UNCHANGED from the shipped gather kernel's measured ~1e-5
+EXACT tier — proved compositionally, not re-asserted. (The `== 0.0` is the right bar here:
+this is a pure-integer index/selection identity, a LOGIC invariant, asserted bit-exactly per
+ADR-0009/ADR-0012 P6 — not a float-sensitive quantity that would warrant a tolerance.)
+
+### The band geometry (and a real bug the proof caught — ADR-0000)
+
+```python
+W        = pow2(min(_next_pow2(block_q + block_k - 1), two_span))   # Pow2, and <= 2span
+off_min  = qt*block_q - (kt*block_k + block_k - 1)   # arithmetic of grid (qt) + loop (kt) indices
+b_lo     = idx1d[off_min + (S - 1)]                  # SCALAR idx1d read at the computed index
+base     = clip(b_lo, 0, two_span - W)               # the CLAMPED band base (see below)
+c2p_band = c2p_full_ref[bh, pl.ds(qi0,    block_q), pl.ds(base, W)]   # [block_q, W]
+p2c_band = p2c_full_ref[bh, pl.ds(kj0,    block_k), pl.ds(base, W)]   # [block_k, W]
+```
+
+**The bug the design-first proof caught (this is why proving-first matters).** The naive
+`base = b_lo`, `sel = pos - b_lo` gave a NONZERO residual (`max|Δ| ≈ 5.2`). Cause:
+`lax.dynamic_slice` (= `pl.ds`) **silently clamps** its start to keep the window in-bounds,
+so when `b_lo > two_span - W` the band Triton actually loads starts at `two_span - W`, not
+`b_lo` — but `sel` was computed against the unclamped `b_lo`, so the one-hot picked the
+wrong column at the high edge. ADR-0000 fix (make the mismatch unrepresentable): compute the
+clamp EXPLICITLY as `base` and derive `sel` from the SAME `base` the slice uses, so the two
+can never disagree. With `base = clip(b_lo, 0, two_span - W)` the residual is `0.0`. The
+band's needed bucket range (width `<= block_q+block_k-1 <= W`, by `idx1d` monotonicity/
+compression) is then always inside `[base, base+W)`, so `sel = pos - base` is provably in
+`[0, W)` — confirmed by the `0.0` residual (an out-of-range `sel` would zero a one-hot row
+and show as nonzero Δ).
+
+**W vs 2span.** `pl.ds(base, W)` requires `W <= two_span`, so `W = min(next_pow2(block_q+
+block_k-1), two_span)`. Both operands are powers of two (`two_span = 2*pos_ebd_size`,
+`pos_ebd_size` pow2), so the `min` is `Pow2` — branded by `pow2()` at the kernel boundary
+(ADR-0000), like every other kernel dim. For deberta-large `W=64` (`2span=512`, real
+8x narrowing); for the tiny synthetic cfg `W` clamps to `2span=32` (the band degenerates to
+the whole axis — still gather-free, just not narrowing). `base` is then always `0` and
+`sel = pos`, correct by the same argument.
+
+### The comparison-sum select (c2p AND p2c) — no gather
+
+`sel[i,j] = idx1d[(i-j)+(S-1)] - base` (in `[0, W)`). The gather `band[row, sel]` is
+expressed as a one-hot contraction over the band's `W` axis (`arange`/`==`/`*`/`sum` — all
+Triton-supported):
+
+```python
+sel    = pos - base                                          # [block_q, block_k], in [0, W)
+onehot = (jnp.arange(W)[None,None,:] == sel[:,:,None])        # [block_q, block_k, W], bool
+c2p    = jnp.einsum("iw,ijw->ij", c2p_band, onehot.astype(f32))   # c2p_band rows = query i
+p2c    = jnp.einsum("jw,ijw->ij", p2c_band, onehot.astype(f32))   # p2c_band rows = key   j
+```
+
+c2p contracts the band's QUERY-indexed rows (`iw`), p2c the KEY-indexed rows (`jw`), against
+the SAME `onehot` (both terms reuse the one collapsed `pos`/`sel` — the MEASURED c2p==p2c
+column-index collapse, UNCHANGED). The result feeds the existing fold verbatim:
+`s = content + (c2p + p2c)/scale`, then mask, then the online-softmax update.
+
+The one-hot intermediate is `[block_q, block_k, W]` (= 32x32x64 fp32 = 256 KB) — a
+TRANSIENT consumed immediately by the `sum`, NOT an SRAM-resident buffer (it is budgeted
+like the existing `content`/`p = exp(...)` transients, which `smem_bytes` also does not
+count as co-resident). Its `W=64` reduction depth is a HOST register-pressure consideration
+(ADR-0009 host gate — does Triton keep it in registers or spill to local memory), not a
+guest SMEM-resident overflow.
+
+### SMEM budget with the `[block, W]` bands (<= 64 KiB carveout)
+
+`smem_bytes` gains a band-residence model (the design extends the SHIPPED gate, ADR-0012
+P1 — no second model):
+
+```python
+def smem_bytes(block_q, block_k, d, *, dtype_bytes=4, num_stages=1,
+               pos_resident_2span=0, band_w=0):           # band_w: the [block,W] band residence
+    persistent = block_q*d + block_q*d + 2*block_q        # q, acc, m+l
+    if pos_resident_2span > 0:
+        pos = 2*block_q*(2*pos_resident_2span)            # broken [block,2span] (regression)
+    elif band_w > 0:
+        pos = block_q*band_w + block_k*band_w             # FIX: c2p_band[bq,W] + p2c_band[bk,W]
+    else:
+        pos = 2*block_q*block_k                           # prior gather-result residence
+    pipelined = block_k*d + block_k*d + block_q*block_k + pos   # k, v, score, position
+    return (persistent + num_stages*pipelined)*dtype_bytes
+```
+
+Computed budget (block 32, d 64, fp32, num_stages 1):
+
+| residence | pos scratch | total bytes | 48 KiB default | 64 KiB carveout |
+|—|—|—|—|—|
+| gather (shipped) | 2*32*32 = 2048 | **45312** | OK (3.8 KB headroom) | OK |
+| **band W=64 (the fix)** | 32*64 + 32*64 = 4096 | **53504** | **OVER by 4352 B** | **OK (12 KB headroom)** |
+| band W=64, num_stages=2 | — | 90368 | OVER | OVER (CAUGHT) |
+| band W=64, block 64 | — | 115200 | OVER | OVER (CAUGHT) |
+| band W=32 (synthetic cfg) | 32*32 + 32*32 = 2048 | 45312 | OK | OK |
+
+The band costs **+8192 B (+8 KiB)** over the gather at block 32 / W 64 — exactly two
+`[32,64]` bands (8 KB each) replacing the `2x[32,32]` gather scratch (8 KB total). At
+**53504 B (52.25 KiB) the band pushes PAST the 48 KiB static default INTO the dynamic-SMEM
+carveout** — this is FINE (sm_75's max is 64 KiB) and is the documented intent: the shipped
+gather fit the conservative default; the band requires the carveout opt-in. `num_stages=2`
+(90368) and block 64 (115200) overflow even the carveout and stay CAUGHT by the gate.
+
+**Carveout-opt-in HONESTY (host gate).** `plgpu.CompilerParams` in jax 0.10.1 exposes only
+`num_warps`/`num_stages` — there is NO explicit `shared_memory`/carveout knob. Triton
+requests the >48 KiB dynamic-SMEM carveout IMPLICITLY from the kernel's computed footprint
+(it emits `cudaFuncAttributeMaxDynamicSharedMemorySize`). The guest can ASSERT only
+`band_smem <= TURING_SMEM_CARVEOUT_MAX_BYTES` (the arithmetic); whether the sm_75 driver
+GRANTS 52.25 KiB is a HOST gate (ADR-0009), not claimed here.
+
+Gate test (extends `test_pallas_smem_budget.py`):
+
+```python
+def test_band_select_fits_carveout_not_default():
+    # the band residence at block 32 / W 64 is the deberta-large shipped config
+    assert smem_bytes(pow2(32), pow2(32), d=_D, num_stages=1, band_w=pow2(64)) == 53504
+    assert smem_bytes(pow2(32), pow2(32), d=_D, num_stages=1, band_w=pow2(64)) >  TURING_SMEM_BUDGET_BYTES        # past 48 KiB
+    assert smem_bytes(pow2(32), pow2(32), d=_D, num_stages=1, band_w=pow2(64)) <= TURING_SMEM_CARVEOUT_MAX_BYTES  # within 64 KiB
+    # +8 KiB vs the gather residence is the whole cost of the two [block,W] bands
+    assert smem_bytes(pow2(32), pow2(32), d=_D, num_stages=1, band_w=pow2(64)) \
+         - smem_bytes(pow2(32), pow2(32), d=_D, num_stages=1) == 8192
+
+def test_band_num_stages_2_is_caught():
+    assert smem_bytes(pow2(32), pow2(32), d=_D, num_stages=2, band_w=pow2(64)) == 90368
+    assert smem_bytes(pow2(32), pow2(32), d=_D, num_stages=2, band_w=pow2(64)) > TURING_SMEM_CARVEOUT_MAX_BYTES
+```
+
+### Invariants preserved (ADR-0000 / ADR-0012 P1)
+
+- **Pow2.** `W = pow2(min(next_pow2(block_q+block_k-1), two_span))` is branded at the kernel
+  boundary; a non-pow2 `W` is unconstructable. The existing `block_q`/`block_k`/`S`/`d`/
+  `idx1d`-length `Pow2` boundary is untouched.
+- **idx1d.** The ONE strict-O(S) bucket table is UNCHANGED — still length `2S` (padded),
+  still `clip(bucket(d)+span)`, still the MEASURED c2p==p2c column collapse. It is now read
+  in TWO ways: the per-element `pos = idx1d[d_ij+(S-1)]` (as before) AND one extra SCALAR
+  `b_lo = idx1d[off_min+(S-1)]` for the band base. No new table, no `[S,S]` matrix.
+- **The fold.** `s = content + (c2p + p2c)/scale`, the mask, and the online-softmax
+  recurrence (`m`/`l`/`acc` rescale) are byte-for-byte the shipped body; only how `c2p`/`p2c`
+  are produced changed, and that production is bit-identical to the gather (`== 0.0`).
+- **Precomputes.** `c2p_full`/`p2c_full`/`k_scaled`/`pos_query`/`pos_key` and every
+  `jax_deberta` helper are reused un-forked (ADR-0012 P1). `c2p_full`/`p2c_full` stay
+  `memory_space=pl.ANY` (global-memory-resident); the band reads `[block,W]` slices from
+  them, never staging the full `[block,2span]`.
+
+### Guest vs host split for the band-select (ADR-0009, honest)
+
+| claim | tier | where proven |
+|—|—|—|
+| data-dependent `pl.ds(b_lo, W)` start is not rejected by the frontend/abstract-eval; the band program runs | structural | **guest** — interpret smoke T1/T2 (`smoke_band.py`) |
+| band-select == gather BIT-EXACTLY (`==0.0`), incl. the clamp fix, multi-tile, deberta-large dims | LOGIC invariant, MEASURED | **guest** — `smoke_equiv.py` (0.0 over 5 regimes) |
+| whole-kernel fidelity vs `exact_reference` unchanged from the shipped ~1e-5 | EXACT, compositional | **guest** — selection is the only change and it is bit-identical |
+| `smem_bytes(band) = 53504 <= 64 KiB`; num_stages 2 / block 64 CAUGHT | derived arithmetic | **guest** — the gate test |
+| interpret-mode lowering DISCRIMINATES band from gather | — | **NOT provable on guest** — interpret lowers gather too (T3); the discriminator is host-only |
+| Triton on sm_75 lowers `pl.ds(b_lo,W)` (where `gather` failed); driver grants the 52 KiB carveout; OOM cell goes green | feasibility | **host** only (2080Ti) — NOT claimed; structural argument: same `dynamic_slice` the `kj0` k-loop already lowers |
+
+The guest proves the band-select is a valid program, computes the gather's values
+bit-for-bit, and fits the carveout arithmetic; it CANNOT prove the Triton lowering
+discriminates band from gather (interpret is non-discriminating). The structural argument —
+`pl.ds` is the `dynamic_slice` the existing k-loop already lowers, fed a traced scalar that
+Triton cannot tell apart from `kj0` — is why the band-start is not expected to be the wall,
+but the host re-run on the 2080Ti is the gate that settles it, and if it reports
+`Unimplemented primitive ... dynamic_slice` THAT is the next measured wall (with the
+arithmetic-band fallback — a static over-wide offset-space band mapped through a static
+`idx1d` slice — the following rung).
