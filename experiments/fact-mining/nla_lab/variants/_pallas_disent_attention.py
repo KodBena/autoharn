@@ -69,7 +69,7 @@ NEVER numpy (`jnp.finfo`, not `np.finfo`). The XOR-gate stays green.
 from __future__ import annotations
 
 import functools
-from typing import NewType
+from typing import Callable
 
 import jax
 import jax.numpy as jnp
@@ -77,6 +77,18 @@ from jax.experimental import pallas as pl
 from jax.experimental.pallas import triton as plgpu
 
 import jax_deberta  # SSOT of the log-bucket arithmetic (make_log_bucket_position); device-only (no numpy)
+
+# The lowerable kernel algebra (nla_lab/lower/DESIGN.md): the opaque carrier `Tile`, the
+# combinator surface `ops`, and the shape SSOT `Pow2`/`pow2`/`next_pow2` (P1 relocation —
+# they MOVED to lower.shape and are re-exported here for the existing call sites).
+from nla_lab.lower import ops
+from nla_lab.lower.dtype import F32, I32
+# explicit re-export (mypy --strict no-implicit-reexport): the existing call sites
+# (pallas_flash_attention, test_pallas_smem_budget) import these names from THIS module.
+from nla_lab.lower.shape import Pow2 as Pow2
+from nla_lab.lower.shape import next_pow2 as next_pow2
+from nla_lab.lower.shape import pow2 as pow2
+from nla_lab.lower.tile import Tile
 
 
 # ===================================================================== SMEM budget
@@ -101,36 +113,13 @@ _NUM_STAGES: int = 1
 
 
 # ----------------------------------------------------- the power-of-2 invariant, by TYPE (ADR-0000)
-# The Pallas-Triton lowering REJECTS any array shape that is not a power of 2 ("requires that all
-# operations have array arguments and results whose size is a power of 2"). The bug that shipped:
-# the relative-offset count 2S-1 — exactly ONE below the power of 2 2S — flowed unguarded into the
-# kernel, and interpret mode (CPU) does not enforce the rule, so it only detonated on the host.
-# Rather than CHECK the invariant at runtime, we make a non-pow2 kernel dimension UNCONSTRUCTABLE:
-# `Pow2` is a NewType whose ONLY source is `pow2()`, which validates. So (a) mypy rejects a raw int
-# where a kernel signature wants a `Pow2`, and (b) `pow2()` rejects a non-pow2 VALUE at the kernel
-# boundary with a clear guest-side error. 2S-1 cannot become a `Pow2`; it cannot reach Triton.
-Pow2 = NewType("Pow2", int)
-
-
-def pow2(n: int) -> Pow2:
-    """The single source of `Pow2` values — brand `n` as a power of two, or raise. A `Pow2`
-    carries the proof; downstream code uses it as a plain int (NewType), but a non-pow2 (e.g.
-    2S-1 = 127) cannot get past this constructor."""
-    if n <= 0 or (n & (n - 1)) != 0:
-        raise ValueError(
-            f"kernel dimension {n} is not a power of 2 — Pallas-Triton requires every array shape "
-            f"be a power of 2. The classic trap is the relative-offset count 2S-1 (one below the "
-            f"power of 2 2S): every kernel array dim (block_q/block_k/S/d/W) must be a true pow2.")
-    return Pow2(n)
-
-
-def next_pow2(n: int) -> int:
-    """Smallest power of two `>= n` (for `n >= 1`). Used to size the band width `W` from the
-    offset-range width `block_q + block_k - 1`: the (i-j) offsets a (qt,kt) tile spans are a
-    contiguous range of that width, so the bucket-column range it can reference fits a single
-    `pl.ds(base, W)` slice once `W` is rounded UP to a power of two (Triton's shape rule —
-    branded `Pow2` at the kernel boundary, never raw)."""
-    return 1 << (n - 1).bit_length()
+# `Pow2` / `pow2()` / `next_pow2()` are the shape SSOT of the lowerable kernel algebra; they MOVED
+# to `nla_lab.lower.shape` (P1: one home) and are imported above (re-exported here so the existing
+# call sites — `pallas_flash_attention`, `test_pallas_smem_budget` — keep importing them from this
+# module). Pallas-Triton rejects any non-pow2 array shape (the 2S-1 trap); `Pow2` makes a non-pow2
+# kernel dimension UNCONSTRUCTABLE (a mypy error for a raw int, a `pow2()` raise for a runtime value).
+# The algebra GENERALIZES them from "block dims only" to EVERY shape-fixing combinator param (see
+# lower/ops.py). The names `Pow2`/`pow2`/`next_pow2` are re-bound by the import above.
 
 
 def _bucket_index(
@@ -201,7 +190,7 @@ def disent_flash_kernel(
     q_ref: jax.Array, c2p_full_ref: jax.Array, am_q_ref: jax.Array,  # c2p_full global-memory-resident (pl.ANY); q/am resident over the query tile
     k_ref: jax.Array, v_ref: jax.Array, p2c_full_ref: jax.Array, am_k_ref: jax.Array,      # p2c_full global-memory-resident (pl.ANY); k/v/am whole key axis (sliced per k-tile)
     o_ref: jax.Array,                                 # output context tile
-    *, scale: float, S: Pow2, block_q: Pow2, block_k: Pow2, W: Pow2, neg: float,
+    *, scale: float, S: Pow2, block_q: Pow2, block_k: Pow2, d: Pow2, W: Pow2, neg: float,
     position_buckets: int, max_relative_positions: int, span: int,
 ) -> None:
     """Online-softmax disentangled attention for ONE (bh, query-tile) grid cell.
@@ -227,7 +216,9 @@ def disent_flash_kernel(
     q = q_ref[0]                       # [block_q, d]  (content query rows)
     am_i = am_q_ref[0]                 # [block_q]  (query mask)
     arows = qi0 + jnp.arange(block_q)  # global query ids for this tile
-    d = q.shape[-1]
+    # `d` (head_size) is a `Pow2` kernel param (was `q.shape[-1]`; identical value — the
+    # BlockSpec query tile is `(1, block_q, d)`). Threading it lets the ONE pallas builder
+    # serve both this oracle kernel and the algebra port, whose `Tile` q has no `.shape`.
     # c2p_full_ref / p2c_full_ref are NOT staged into SRAM (BlockSpec memory_space=pl.ANY):
     # the whole [B*H, S, 2span] stays global-memory-resident and only a [block, W] BAND is sliced
     # per score-tile in `body`, so no [block, 2span] buffer ever lives in Turing's 64 KB SMEM
@@ -299,11 +290,99 @@ def disent_flash_kernel(
     o_ref[0] = (acc / l[:, None]).astype(o_ref.dtype)
 
 
+def disent_flash_kernel_algebra(
+    q_ref: jax.Array, c2p_full_ref: jax.Array, am_q_ref: jax.Array,
+    k_ref: jax.Array, v_ref: jax.Array, p2c_full_ref: jax.Array, am_k_ref: jax.Array,
+    o_ref: jax.Array,
+    *, scale: float, S: Pow2, block_q: Pow2, block_k: Pow2, d: Pow2, W: Pow2, neg: float,
+    position_buckets: int, max_relative_positions: int, span: int,
+) -> None:
+    """The lowerable-kernel-ALGEBRA port of `disent_flash_kernel` (DESIGN.md §7): each line of
+    the oracle's body is one `nla_lab.lower.ops` combinator call, so the kernel is the SAME
+    computation (bit-identical under interpret, proven in test_pallas_lower_algebra.py) but is
+    now UNCONSTRUCTABLE in any of the four impedance modes — a gather/batched-einsum is not in
+    the surface, host vs device is `Tile` vs host scalar, the `log/ceil` float->int is an
+    explicit `to_i32` inside `ops.bucket_index`, and every dim is a `Pow2`.
+
+    The carrier is non-coercible, so feeding any `Tile` to a raw `jnp`/`lax` primitive (the
+    construction backstop, e.g. `jnp.einsum`) raises at trace. The refs are branded `Ref` once
+    at the boundary (`ops.ref`, the device-seam crossing); the `Tile` running state is carried
+    across key tiles by `ops.fold_kt` (NOT a pytree — the wrap/unwrap lives inside lower/, so a
+    `Tile` is an opaque leaf and `tree_map` cannot rewrap it; see lower/tile.py)."""
+    neg_inf = float("-inf")
+    q_r = ops.ref(q_ref); am_q_r = ops.ref(am_q_ref)          # device-ref brands (the device seam)
+    k_r = ops.ref(k_ref); v_r = ops.ref(v_ref); am_k_r = ops.ref(am_k_ref)
+    c2p_r = ops.ref(c2p_full_ref); p2c_r = ops.ref(p2c_full_ref); o_r = ops.ref(o_ref)
+
+    bh = ops.pid(0)                                   # batch*head index (0-d Idx)
+    qt = ops.pid(1)                                   # query-tile index (0-d Idx)
+    qi0 = ops.imul_scalar(qt, block_q)                # qi0 = qt * block_q
+    two_span = 2 * span
+
+    q = ops.load(q_r, block_q, d)                     # [block_q, d]
+    am_i = ops.load(am_q_r, block_q)                  # [block_q] query mask
+    arows = ops.add(ops.iota(block_q), qi0)           # qi0 + arange(block_q)
+
+    m0 = ops.full(block_q, neg_inf)                   # running max
+    l0 = ops.full(block_q, 0.0)                       # running denom
+    acc0 = ops.zeros(block_q, d, F32)                 # running numerator
+
+    n_kt = pl.cdiv(S, block_k)
+
+    def body(
+        kt: Tile[I32], m: Tile[F32], l: Tile[F32], acc: Tile[F32],
+    ) -> tuple[Tile[F32], Tile[F32], Tile[F32]]:
+        kj0 = ops.imul_scalar(kt, block_k)            # kj0 = kt * block_k
+        k = ops.load_block(k_r, kj0, block_k)         # [block_k, d]  (already /scale)
+        v = ops.load_block(v_r, kj0, block_k)         # [block_k, d]
+        am_j = ops.load_block_1d(am_k_r, kj0, block_k)     # [block_k] key mask
+        bcols = ops.add(ops.iota(block_k), kj0)       # kj0 + arange(block_k)
+
+        # --- content term q · k_scaledᵀ (the ONLY contraction; 2-D pl.dot, no batch) ---
+        content = ops.dot(q, ops.transpose(k))        # [block_q, block_k]
+
+        # --- ONE bucket-index tile, used for BOTH c2p/p2c (the measured-equal collapse) ---
+        d_ij = ops.sub(ops.bcast_row(arows), ops.bcast_col(bcols))   # [bq,bk] = i - j
+        pos = ops.bucket_index(d_ij, position_buckets=position_buckets,
+                               max_relative_positions=max_relative_positions, span=span, two_span=two_span)
+
+        # --- BANDED select (gather-free): pl.ds band slice + one-hot comparison-sum ---
+        off_min = ops.sub(qi0, ops.iadd_scalar(kj0, block_k - 1))    # qi0 - (kj0 + block_k - 1)
+        b_lo = ops.bucket_index(off_min, position_buckets=position_buckets,
+                                max_relative_positions=max_relative_positions, span=span, two_span=two_span)
+        base = ops.clip(b_lo, 0, two_span - int(W))   # the CLAMPED band base
+        c2p_band = ops.band(c2p_r, bh, qi0, block_q, base, W)   # [block_q, W] query rows
+        p2c_band = ops.band(p2c_r, bh, kj0, block_k, base, W)   # [block_k, W] key rows
+        sel = ops.sub(pos, base)                      # [bq,bk], provably in [0, W)
+        oh = ops.onehot(sel, W)                       # [bq,bk,W] one-hot, no gather
+        c2p = ops.select(c2p_band, oh, row_axis=0)    # [bq,bk] broadcast-mul + sum, NOT einsum
+        p2c = ops.select(p2c_band, oh, row_axis=1)    # [bq,bk]
+
+        # --- combined score / scale, then mask ---
+        s = ops.add(content, ops.div_scalar(ops.add(c2p, p2c), scale))
+        mask2d = ops.mul(ops.bcast_row(am_i), ops.bcast_col(am_j))    # [bq,bk]
+        s = ops.where(ops.gt(mask2d, ops.zeros(block_q, block_k, F32)),
+                      s, ops.full2(block_q, block_k, neg))
+
+        # --- online-softmax update (running max + rescale) ---
+        m_tile = ops.rmax(s, axis=-1)
+        m_new = ops.where(ops.gt(m, m_tile), m, m_tile)   # maximum(m, m_tile)
+        corr = ops.exp(ops.sub(m, m_new))                 # first tile: exp(-inf - ·) = 0
+        p = ops.exp(ops.sub(s, ops.bcast_row(m_new)))
+        l = ops.add(ops.mul(l, corr), ops.rsum(p, axis=-1))
+        acc = ops.add(ops.mul(acc, ops.bcast_row(corr)), ops.dot(p, v))
+        return m_new, l, acc
+
+    m, l, acc = ops.fold_kt(n_kt, (m0, l0, acc0), body)   # online-softmax fold over key tiles
+    ops.store(o_r, ops.div(acc, ops.bcast_row(l)))        # o_ref[0] = acc / l[:, None]
+
+
 def pallas_disentangled_attention(
     q: jax.Array, k_scaled: jax.Array, v: jax.Array,
     c2p_full: jax.Array, p2c_full: jax.Array, am_bh: jax.Array,
     *, scale: float, block_q: Pow2, block_k: Pow2,
     position_buckets: int, max_relative_positions: int, span: int, interpret: bool,
+    kernel: Callable[..., None] = disent_flash_kernel_algebra,
 ) -> jax.Array:
     """Fused disentangled FlashAttention over `[B*H, S, d]` activations -> context
     `[B*H, S, d]`. Builds the `BlockSpec`s and calls `pl.pallas_call`. All global memory inputs are
@@ -316,7 +395,12 @@ def pallas_disentangled_attention(
     arithmetic (`_bucket_index`), so there is NO `idx1d` table and NO `gather`/scalar table read.
     The c2p/p2c values are then selected from a `pl.ds(base, W)` band by one-hot comparison-sum —
     no `gather` (the sm_75 Triton wall). `interpret=True` runs the kernel on CPU (guest
-    correctness); `interpret=False` is the real Triton path (host)."""
+    correctness); `interpret=False` is the real Triton path (host).
+
+    `kernel` selects the kernel body: the default `disent_flash_kernel_algebra` is the
+    lowerable-kernel-algebra port (every op a `nla_lab.lower.ops` combinator, the four
+    impedances unconstructable); `disent_flash_kernel` is the pristine oracle the algebra
+    port is proven bit-identical to (test_pallas_lower_algebra.py)."""
     bh, S, d = q.shape
     # Pow2 BOUNDARY (ADR-0000): block_q/block_k arrive `Pow2` (the caller branded them). The
     # array-derived dims must ALSO be powers of 2, so brand them HERE — a non-pow2 head_dim or seq
@@ -350,8 +434,11 @@ def pallas_disentangled_attention(
     ]
     out_specs = bspec((1, block_q, dp), lambda bh_, qt: (bh_, qt, 0))
 
-    kernel = functools.partial(
-        disent_flash_kernel, scale=scale, S=Sp, block_q=block_q, block_k=block_k, W=W, neg=neg,
+    # `kernel` defaults to the lowerable-algebra port (disent_flash_kernel_algebra); the oracle
+    # `disent_flash_kernel` is selectable for the bit-identity regression. Both have the same
+    # signature, so the ONE partial/BlockSpec build serves either (DESIGN.md §7: same kernel).
+    kfn = functools.partial(
+        kernel, scale=scale, S=Sp, block_q=block_q, block_k=block_k, d=dp, W=W, neg=neg,
         position_buckets=position_buckets, max_relative_positions=max_relative_positions, span=span)
     # Pin the TRITON backend (root cause #1 fix): a `triton.CompilerParams` makes the
     # gpu_lowering dispatch `isinstance(cp, triton_core.CompilerParams)` fire Triton
@@ -363,7 +450,7 @@ def pallas_disentangled_attention(
     # pl.pallas_call returns an untyped callable -> Any result (named relaxation, mirrors
     # exact_reference.encode's no-any-return); jax.ShapeDtypeStruct is untyped in jax 0.10.1.
     return pl.pallas_call(  # type: ignore[no-any-return]
-        kernel,
+        kfn,
         grid=(bh, n_qt),
         in_specs=in_specs,
         out_specs=out_specs,

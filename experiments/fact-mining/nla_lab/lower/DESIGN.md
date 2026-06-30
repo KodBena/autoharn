@@ -1,8 +1,21 @@
 # `nla_lab/lower` — the lowerable kernel algebra (settled design)
 
-Status: **SETTLED.** This document is an adjudication, not an options menu. It was
-commissioned as a fresh, decisive ruling after the collaborators went back and forth
-on the vehicle. It decides ONE design and is implemented verbatim next.
+Status: **SETTLED + FOUNDATION-HARDENED.** This document is an adjudication, not an
+options menu. It was commissioned as a fresh, decisive ruling after the collaborators
+went back and forth on the vehicle. It decides ONE design and is implemented verbatim.
+
+> **Revision (post-implementation adversarial critique, ADR-0009 honesty).** The first
+> implementation shipped a *holed foundation*: (CRITICAL-1) the carrier's construction
+> token `_PRIV` was an importable module global, so `from …tile import _PRIV` minted a
+> dtype-LYING `Tile` mypy-clean — defeating lib+dtype+the einsum backstop in one line;
+> (HIGH-2) registering `Tile` as a jax pytree let `tree_map` rewrap an arbitrary op's
+> result back into a valid `Tile`; (HIGH-3) the device seam was only operand-checking
+> relabeled, with the genuine host↔device residence never in the types. All three are now
+> fixed in the carrier itself: the carrier is **non-constructable** (raising `__init__`,
+> mint only via package-private `object.__new__`, **no importable token**); it is **not a
+> pytree** (an opaque leaf; the `fori_loop` carry moved into `ops.fold_kt`, wrap/unwrap
+> inside `lower/`); and the device boundary takes a **`Ref` brand** (§4.device). §4 below
+> carries the honest per-axis closure split (type-closed / construction-time / host-only).
 
 Authored against ADR-0000 (illegal states unrepresentable — the four impedances must be
 *unconstructable*, not lint-detected), ADR-0012 P1/P8 (one SSOT; the typed signature is
@@ -21,8 +34,10 @@ so a mismatch is **unconstructable** — a mypy error or a non-existent construc
 
 - **lib** — a non-Pallas/Triton-lowerable op in a kernel (`gather`; a batched
   `dot_general` from a shared-index einsum) → measured host wall.
-- **device** — host code touching device data or vice versa → today only a file-level
-  AST lint; must live in the types.
+- **device** — host code touching device data or vice versa → must live in the types, not
+  only a file-level AST lint. Closed in TWO type sub-axes (value-flow: `Tile` vs host
+  scalar; residence boundary: a `Ref` brand on every kernel load/store) + the file gate
+  for the import-graph class (§4.device).
 - **dtype** — a silent `float→int` coercion (from `log`/`ceil`) fine on CPU jax, wrong on
   Triton → must be explicit/typed, never silent.
 - **shape** — a non-power-of-2 kernel dim (the 2S−1 trap) → `Pow2` already closes *some*
@@ -106,15 +121,13 @@ class BoolT(DType): ...
 ### 2.2 The opaque carrier (`tile.py`)
 
 ```python
-from typing import Generic, TypeVar, final
+from typing import Any, Generic, NewType, TypeVar, final
 import jax
 from nla_lab.lower.dtype import DType, F32, I32
 
 D = TypeVar("D", bound=DType)
 
-class _Priv:                      # an unexported construction token
-    __slots__ = ()
-_PRIV = _Priv()
+Ref = NewType("Ref", jax.Array)          # a device memory ref (the device-seam boundary brand)
 
 @final
 class Tile(Generic[D]):
@@ -122,23 +135,38 @@ class Tile(Generic[D]):
 
     DELIBERATELY non-ArrayLike and NON-COERCIBLE: it defines NO __array__,
     NO __jax_array__, NO __array_namespace__, NO arithmetic dunders, and NO
-    __getitem__. There is therefore NO way to do anything to a Tile except pass
-    it to a combinator in ops.py. Two consequences, which are the whole design:
+    __getitem__. Two consequences, which are the whole design:
 
       (a) mypy rejects a Tile anywhere an ArrayLike/array is expected (it is not
           ArrayLike), so a raw fancy-index a[idx] (the gather) or jnp.sum(tile)
           does not type-check; and
       (b) at TRACE/construction time, feeding a Tile to ANY un-wrapped jnp/lax
           primitive raises (jax cannot convert a non-coercible object to an
-          array) — this is the construction-time backstop that closes the ONE
-          residual mypy cannot (jnp.einsum's Any-typed *operands; see §4.lib).
+          array) — the construction-time backstop that closes the ONE residual
+          mypy cannot (jnp.einsum's Any-typed *operands; see §4.lib).
 
-    The only constructor takes the unexported _PRIV token, so a Tile can be born
-    ONLY inside this package (ops.py / the load boundary), never by a caller."""
+    NON-CONSTRUCTABLE (hardened, CRITICAL-1). There is NO public constructor and
+    NO importable construction token: __init__ unconditionally RAISES, so Tile(...)
+    is a runtime error AND a mypy [call-arg] error (no value params). The package
+    mints a Tile ONLY through _wrap (below), via object.__new__, which bypasses
+    __init__ — a path a caller cannot name. (The earlier _PRIV single-underscore
+    module token was importable, which let a caller mint a dtype-LYING Tile
+    mypy-clean; that token is GONE.)
+
+    NOT A PYTREE (hardened, HIGH-2). Tile is deliberately NOT registered as a jax
+    pytree: registration made tree_map(f, tile) reach the backing array and REWRAP
+    an arbitrary (gather/coerced) result into a valid Tile — a mypy-invisible
+    re-entry vector. Unregistered, a Tile is an opaque LEAF; the running (m,l,acc)
+    state crosses fori_loop via ops.fold_kt, which keeps wrap/unwrap inside lower/."""
     __slots__ = ("_arr",)
-    def __init__(self, arr: jax.Array, _token: _Priv) -> None:
-        assert _token is _PRIV          # construction is package-private
-        self._arr = arr
+    _arr: jax.Array
+    def __init__(self) -> None:
+        raise TypeError("Tile is package-private and NON-CONSTRUCTABLE outside lower/.")
+
+def _wrap(arr: jax.Array) -> "Tile[Any]":   # the ONE mint path; package-private, no token
+    t: Tile[Any] = object.__new__(Tile)
+    t._arr = arr
+    return t
 
 Idx = Tile[I32]                          # an integer index/position tile
 ```
@@ -164,14 +192,15 @@ exact lowerable `jnp`/`pl` expression already proven in `disent_flash_kernel`.**
 surface is *closed*: it contains every Triton-lowerable op the disentangled-flash kernel
 needs, and **nothing else** — no `gather`, no `take`, no `einsum`, no `dot_general` with
 batch dims, no `astype`. Signatures (bodies elided; each is one line of the existing
-kernel, wrapped `unwrap → jnp/pl call → Tile(_, _PRIV)`):
+kernel, wrapped `unwrap → jnp/pl call → _wrap(_)`):
 
 ```python
 # ---- constructors (every shape-fixing dim is Pow2 — the shape seam) -----------
 def zeros(rows: Pow2, cols: Pow2, dtype: type[D]) -> Tile[D]: ...
 def full(rows: Pow2, value: float) -> Tile[F32]: ...          # e.g. running max = -inf
 def iota(n: Pow2) -> Idx: ...                                  # jnp.arange(n)
-def load(ref: jax.Array, *dims: Pow2) -> Tile[F32]: ...        # ref[...] at the kernel boundary
+def ref(x: jax.Array) -> Ref: ...                             # the ONE host-array -> device-ref brand
+def load(r: Ref, *dims: Pow2) -> Tile[F32]: ...               # r[...] at the kernel boundary (Ref, not raw Array)
 
 # ---- elementwise arithmetic (lowerable) ---------------------------------------
 def add(a: Tile[D], b: Tile[D]) -> Tile[D]: ...
@@ -263,20 +292,31 @@ type-closed (mypy), construction-raise-closed (trace-time), or host-only (un-clo
   not the discipline. (ADR-0000 escape-hatch posture: the type is the law, the walk is a
   belt over the suspenders.)
 
-### device — host code touching device data → **type-closed at the kernel boundary**
+### device — host code touching device data → **two type-closed sub-axes + the file gate**
 
-The carrier *is* the device brand. A combinator that needs a host static takes `int`/
-`float`/`Pow2`; one that needs a device value takes `Tile`. mypy rejects a `Tile` passed
-where an `int` is wanted, and an `int`/`np.ndarray` passed where a `Tile` is wanted
-(`Tile` is unrelated to `int`/`ndarray`). The only host→device crossing *inside* the
-algebra is the explicit `full`/`iota`/`load` constructors and `*_scalar(s: float)`
-combinators — each a named, greppable lift. **Type-closed for the kernel composition.**
-The existing file-level import-XOR gate (`test_import_xor.py`) is **kept** as the coarse
-outer net for a *different, larger* class — a whole module importing both `numpy` and a
-device lib — which the carrier does not address and does not claim to. Honest split: the
-carrier closes host↔device *within a kernel's value flow* (type-level, fine-grained); the
-import gate closes host↔device *at the module-import graph* (AST, coarse). Neither
-subsumes the other; both are owed (`lower/*` is added to `SCANNED`).
+Split into three genuinely different claims, stated separately so none is overclaimed
+(this is the HIGH-2/HIGH-3 reconciliation — the earlier draft conflated only the first
+sub-axis with "the device seam"):
+
+- **value-flow (type-closed).** The carrier is the device brand. A combinator that needs a
+  host static takes `int`/`float`/`Pow2`; one that needs a device value takes `Tile`. mypy
+  rejects a host `int`/`ndarray` where a `Tile` is wanted (`add(t, 1)` is `[arg-type]`) and a
+  `Tile` where a host static is wanted. The only host→device value crossings are the explicit
+  `full`/`iota`/`*_scalar(s: float)` lifts — each named and greppable.
+- **residence boundary (type-closed, boundary brand).** The kernel-boundary loaders/stores
+  (`load`/`band`/`store`/`load_block*`) take a `Ref` (a `NewType` over `jax.Array`), NOT a raw
+  `jax.Array`. So a host array cannot slide into a kernel load un-branded: that is a mypy
+  `[arg-type]` error. The single host-array→device-ref crossing is the explicit `ops.ref(...)`
+  brand (the device-seam analog of `to_i32`). HONEST: this is a boundary *assertion* ("this
+  array is a device kernel ref"), not a residence *proof* — stock `jax.Array` carries no
+  host/device residence tag to type, so a `Ref` brand is the strongest a type can make; the
+  brand being explicit and single-home is what puts the seam *in the carrier SSOT* rather than
+  purely in a file lint.
+- **import graph (file gate, AST).** The file-level import-XOR gate (`test_import_xor.py`)
+  is **kept** for the *larger* class the types cannot reach — a whole module importing both
+  `numpy` and a device lib. The carrier+`Ref` close host↔device *within a kernel's value flow
+  and at its load boundary* (type-level); the import gate closes it *at the module-import
+  graph* (AST, coarse). Neither subsumes the other; both are owed (`lower/*` in `SCANNED`).
 
 ### dtype — silent `float→int` coercion → **type-closed (the coercion); host-only (the lowering)**
 

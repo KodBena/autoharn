@@ -61,7 +61,12 @@ SCANNED = ["extract.py", "load_facts.py", "nlp_cache.py",
            "nla_lab/variants/cached_positions.py", "nla_lab/variants/nystrom_attention.py",
            "nla_lab/variants/performer_favor.py", "nla_lab/variants/w8a8_int8.py",
            "nla_lab/variants/w4a16_weightonly.py", "nla_lab/variants/monarch_ffn.py",
-           "nla_lab/variants/_smoke_broken.py",
+           "nla_lab/variants/_smoke_broken.py", "nla_lab/variants/_triton_acl.py",
+           # nla_lab/lower: the lowerable kernel algebra (lower/DESIGN.md). shape/dtype are
+           # pure-python tags (host=[], device=[]); tile/ops/__init__ are DEVICE-only (jax +
+           # jax_deberta, numpy-free) — neutrally named, so the gate proves they stay host-free.
+           "nla_lab/lower/__init__.py", "nla_lab/lower/shape.py", "nla_lab/lower/dtype.py",
+           "nla_lab/lower/tile.py", "nla_lab/lower/ops.py",
            # nla_lab/distill: QAT feature-distillation (distill/DESIGN.md). DEVICE math
            # (jax-only, numpy-free): ste (STE fake-quant + student forward + loss),
            # optim (optax AdamW). HOST orchestration (numpy-free, jax-free in AST):

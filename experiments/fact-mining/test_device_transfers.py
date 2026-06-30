@@ -84,7 +84,12 @@ SCANNED = ["extract.py", "load_facts.py", "nlp_cache.py",
            "nla_lab/variants/cached_positions.py", "nla_lab/variants/nystrom_attention.py",
            "nla_lab/variants/performer_favor.py", "nla_lab/variants/w8a8_int8.py",
            "nla_lab/variants/w4a16_weightonly.py", "nla_lab/variants/monarch_ffn.py",
-           "nla_lab/variants/_smoke_broken.py"]
+           "nla_lab/variants/_smoke_broken.py",
+           # nla_lab/lower math (the carrier + the combinator surface): device-only (jax), and
+           # they author NO host<->device transfer — every constructor is jnp.zeros/full/arange,
+           # never asarray/array/device_get. Scanned to prove the edge stays single-homed in
+           # lab_measure and did not leak into the algebra.
+           "nla_lab/lower/tile.py", "nla_lab/lower/ops.py"]
 # jax_only_guard.py (the daemon's torch-isolation seam) authors no device-edge op — it
 # manages sys.modules/meta_path only; scanned to prove the jax host<->device edge stays
 # single-homed in coref_host_shell.py and did not leak into the guard.
