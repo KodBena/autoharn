@@ -83,3 +83,47 @@ def coref_schema() -> Schema:
         mode=AdjudicationMode.BATCH,
         table="adj_coref",
     )
+
+
+# ------------------------------------------------------ contradiction-adjudication
+# A third instance — the contradiction-detection demo's decision surface. The
+# fact-mining detector's transparent rules (R-NEG / R-FUNC / R-NUM) find candidate
+# contradictory claim-pairs; each pair is surfaced here for a rule/human/LLM verdict.
+#
+# Honest-confidence posture, made TYPE-DRIVEN (ADR-0000 / ADR-0002 / ADR-0009): an
+# epistemic-state interrogator must not invent the numbers it reports. So — unlike
+# COREF_CONFIDENCE above, which held a REAL NLP-model score — this schema declares NO
+# Field.number ANYWHERE. A fabricated probability is therefore UNREPRESENTABLE: the
+# type has no slot for one. The confidence is the rule-id + the grounding, full stop.
+#
+# payload fields (the finding's intrinsic, interpolated/previewed context)
+CONTRA_SOURCE = Field.text("source_doc")
+CONTRA_SUBJECT = Field.text("subject")          # the shared canonical subj_key
+CONTRA_PREDICATE = Field.text("predicate")      # the shared pred lemma
+CONTRA_EXPLANATION = Field.text("explanation")  # previewed: both sentences/spans + the rule's evidence
+# classification columns (the evidence row the verdict adjudicates) — ALL TEXT (no float)
+CONTRA_CLAIM_A = Field.text("claim_a")
+CONTRA_CLAIM_B = Field.text("claim_b")
+CONTRA_RULE = Field.text("rule")                # R-NEG | R-FUNC | R-NUM
+CONTRA_GROUNDING = Field.text("grounding")      # the rule-specific evidence (allowlist entry / numbers / polarity)
+CONTRA_SUGGESTED = Field.text("suggested")      # a verdict name — what RulePolicy reads
+
+CONTRA_YES = Verdict("contradiction", "the two claims genuinely contradict")
+CONTRA_NO = Verdict("not-contradiction", "the rule fired but the claims are compatible")
+CONTRA_UNSURE = Verdict("uncertain", "insufficient evidence to decide")
+
+
+def contradiction_schema() -> Schema:
+    return Schema(
+        key="contradiction-adjudication",
+        title="Contradiction adjudication",
+        prompt=PromptTemplate.build(
+            "Are these two claims contradictory?  subject=", CONTRA_SUBJECT,
+            "  predicate=", CONTRA_PREDICATE),
+        payload_fields=(CONTRA_SOURCE, CONTRA_SUBJECT, CONTRA_PREDICATE, CONTRA_EXPLANATION),
+        preview=TextFieldPreview(CONTRA_EXPLANATION, title="contradiction grounding"),
+        columns=(CONTRA_CLAIM_A, CONTRA_CLAIM_B, CONTRA_RULE, CONTRA_GROUNDING, CONTRA_SUGGESTED),
+        verdicts=VerdictVocabulary((CONTRA_YES, CONTRA_NO, CONTRA_UNSURE)),
+        mode=AdjudicationMode.BATCH,
+        table="contra_adjudication",   # logical key; ContraStore writes the fixed contra.* DDL
+    )

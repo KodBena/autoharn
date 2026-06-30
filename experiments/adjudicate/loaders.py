@@ -31,7 +31,7 @@ import re
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterator
+from typing import Any, Iterator, Protocol
 
 import instances as inst
 from docsource import TEI_ROOT as TEI_ROOT  # re-exported: callers import the root here
@@ -155,3 +155,47 @@ def coref_stub_tasks(schema: Schema) -> list[Task]:
             inst.COREF_GROUNDING: "semantic-role:reviewed-obj", inst.COREF_CONFIDENCE: 0.52}),
     ]
     return [schema.task("coref-stub-1", payload, rows)]
+
+
+# ----------------------------------------------- contra.finding rows -> BATCH Tasks
+class FindingReader(Protocol):
+    """The seam the contra loader reads through — ``ContraStore.findings`` satisfies it
+    structurally, so the loader does NOT import the psql store (the doc-selection path
+    stays psycopg-free; the coupling is the row shape, not a Python import)."""
+
+    def findings(self, source_doc: str) -> list[dict[str, Any]]:
+        ...
+
+
+def contra_finding_tasks(schema: Schema, store: FindingReader, source_doc: str) -> list[Task]:
+    """Read ``contra.finding`` rows for ``source_doc`` and build one BATCH ``Task`` per
+    finding (mirrors ``coref_stub_tasks``/``RfcLoader``). ``task_id = str(finding_id)``
+    is the verdict's reference back to the finding; the payload carries the previewed
+    explanation; the one classification row carries (claim_a, claim_b, rule, grounding)
+    + ``suggested`` always "contradiction" (the rule fired, so the autonomous provisional
+    verdict is candidate-contradiction, honestly labelled — a human/LLM overrides through
+    the same surface). ``Record.of``/``Task.create`` validate the shapes at construction:
+    a malformed finding row cannot become a Task."""
+    tasks: list[Task] = []
+    for r in store.findings(source_doc):
+        explanation = (
+            f"Rule {r['rule']} fired on shared (subject={r['subj_key']!r}, "
+            f"predicate={r['pred']!r}).\n"
+            f"Claim A: {r['claim_a']}\n    span: {r['span_a']}\n"
+            f"Claim B: {r['claim_b']}\n    span: {r['span_b']}\n"
+            f"Grounding: {r['grounding']}")
+        payload = schema.payload({
+            inst.CONTRA_SOURCE: str(r["source_doc"]),
+            inst.CONTRA_SUBJECT: str(r["subj_key"]),
+            inst.CONTRA_PREDICATE: str(r["pred"]),
+            inst.CONTRA_EXPLANATION: explanation,
+        })
+        classification = schema.classification({
+            inst.CONTRA_CLAIM_A: str(r["claim_a"]),
+            inst.CONTRA_CLAIM_B: str(r["claim_b"]),
+            inst.CONTRA_RULE: str(r["rule"]),
+            inst.CONTRA_GROUNDING: str(r["grounding"]),
+            inst.CONTRA_SUGGESTED: "contradiction",
+        })
+        tasks.append(schema.task(str(r["finding_id"]), payload, [classification]))
+    return tasks
