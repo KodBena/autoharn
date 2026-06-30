@@ -272,11 +272,15 @@ def disent_flash_kernel(
         base = jnp.clip(b_lo, 0, two_span - W)               # the CLAMPED band base
         c2p_band = c2p_full_ref[bh, pl.ds(qi0, block_q), pl.ds(base, W)]   # [block_q, W] query rows
         p2c_band = p2c_full_ref[bh, pl.ds(kj0, block_k), pl.ds(base, W)]   # [block_k, W] key rows
-        # gather(band[row, sel]) as a one-hot contraction over the band's W axis (Triton-safe).
+        # gather(band[row, sel]) as a one-hot select over the band's W axis, reduced by a
+        # BROADCAST-MULTIPLY + sum — NOT jnp.einsum. The einsum form "iw,ijw->ij" shares index i
+        # across both operands + the output, so jax lowers it to a BATCHED dot_general, and
+        # Pallas-Triton asserts batch_dims==((),()) (no batched matmul). Broadcasting the band
+        # against the one-hot and summing the W axis is the same value with zero dot_general.
         sel = pos - base                                      # [block_q, block_k], provably in [0, W)
         onehot = (jnp.arange(W)[None, None, :] == sel[:, :, None]).astype(jnp.float32)  # [bq,bk,W]
-        c2p = jnp.einsum("iw,ijw->ij", c2p_band, onehot)      # c2p_band rows = query i
-        p2c = jnp.einsum("jw,ijw->ij", p2c_band, onehot)      # p2c_band rows = key   j
+        c2p = jnp.sum(c2p_band[:, None, :] * onehot, axis=-1)  # [bq,1,W]*[bq,bk,W] -> sum_W -> [bq,bk]
+        p2c = jnp.sum(p2c_band[None, :, :] * onehot, axis=-1)  # [1,bk,W]*[bq,bk,W] -> sum_W -> [bq,bk]
 
         # --- combined score / scale, then mask (content already /scale via k_scaled) ---
         s = content + (c2p + p2c) / scale
