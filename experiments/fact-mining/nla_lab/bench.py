@@ -187,10 +187,23 @@ def run_one(variant_name: str, params: dict[str, object], cfg: object, vocab: in
                 # needs no jax import (host-XOR-device). est is still reported (the predicted
                 # peak that didn't fit). Anything else is a real failure (loud).
                 oom = "RESOURCE_EXHAUSTED" in str(e)
+                # A message-less exception (e.g. a bare `assert` inside the Pallas/Triton
+                # lowering) is ILLEGIBLE as just "AssertionError:" — the location is in the
+                # traceback, which str(e) drops. For non-OOM failures keep the traceback TAIL so
+                # the failure is diagnosable straight from the psql sink, no host re-run needed
+                # (ADR-0009: a measured error must be legible). OOM stays a one-liner (capacity,
+                # self-explanatory). Host-XOR-device safe: traceback is stdlib, no device import.
+                if oom:
+                    detail = f"{type(e).__name__}: {e}".split("\n")[0]
+                else:
+                    import traceback
+                    tb_tail = " <- ".join(
+                        ln.strip() for ln in traceback.format_exc().strip().splitlines()[-7:])
+                    detail = f"{type(e).__name__}: {e} || {tb_tail}"[:1200]
                 records.append(BenchRecord.non_ok(
                     **meta, batch=batch, seq_bucket=s_bucket,
                     status=STATUS_OOM if oom else STATUS_FAILED_ERROR,
-                    detail=f"{type(e).__name__}: {e}".split("\n")[0],
+                    detail=detail,
                     est_peak_device_bytes=est))
                 continue
             status, detail = lab_measure.guard_output(lhs, expected)
