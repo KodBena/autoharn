@@ -7,11 +7,14 @@ CPU<->GPU boundary op lives in a DECLARED home and carries an inline
 `# host-device-boundary: <reason>` marker. A device op that appears in any other
 module, or in a home without the marker, reds here.
 
-TWO framework edges, ONE home EACH (not one global home). The codebase now has
-two distinct device edges and the gate single-homes each to its own file:
+TWO framework edges, ONE home PER SUBSYSTEM (not one global home). The codebase now has
+two distinct device edges and the gate single-homes each to a file — and where one
+framework spans two subsystems (jax: the coref daemon AND the nla_lab bench) it gets ONE
+home per subsystem, never two within a subsystem:
 
   * torch / spaCy / maverick GPU placement+casts -> `nlp_server.py`
-  * jax host<->device pulls & lifts            -> `coref_host_shell.py`
+  * jax host<->device pulls & lifts (coref daemon) -> `coref_host_shell.py`
+  * jax host<->device lift + barriers (nla_lab bench) -> `nla_lab/lab_measure.py`
 
 `coref_host_shell.py` is the ADR-0012 P7 imperative boundary for the jax decode
 pipeline: it legitimately pulls device results to the host (`jax.device_get`) and
@@ -51,20 +54,37 @@ import os
 HERE = os.path.dirname(os.path.abspath(__file__))
 MARKER = "# host-device-boundary:"       # inline opt-in, same convention as chocofarm
 
-# Each framework's device edge is sanctioned iff it appears in its framework's home
-# AND carries MARKER. MANDATE: ONE jax home — two is a drift hazard. coref_host_shell.py
-# is the single jax host<->device home; the ZMQ wire seam (coref_decode_server.py)
-# delegates its lifts here (coref_host_shell.lift_params / decode_document_host) and
-# stays host-only, so it authors no jax device op and needs no home of its own.
+# Each framework's device edge is sanctioned iff it appears in one of its framework's
+# home(s) AND carries MARKER. MANDATE: ONE jax home PER SUBSYSTEM — two WITHIN one
+# subsystem is the drift hazard. coref_host_shell.py is the coref daemon's single jax
+# host<->device home; nla_lab/lab_measure.py is the nla_lab bench's single jax home (its
+# device shell). The ZMQ wire seam (coref_decode_server.py) delegates its lifts to
+# coref_host_shell.py (coref_host_shell.lift_params / decode_document_host) and stays
+# host-only; the nla_lab variant files + contract author NO transfer and delegate to
+# lab_measure.py — so each non-home authors no jax device op and needs no home of its own.
 HOMES = {
     "torch": frozenset({"nlp_server.py"}),         # torch / spaCy / maverick GPU placement+casts
-    "jax": frozenset({"coref_host_shell.py"}),     # the SINGLE jax host<->device home (ADR-0012 P7)
+    # ONE jax host<->device home PER SUBSYSTEM (two within one subsystem is the drift
+    # hazard). coref_host_shell.py is the coref-daemon's single home; nla_lab/lab_measure.py
+    # is the nla_lab bench's single home (its device shell — see nla_lab/DESIGN.md). The
+    # nla_lab variant files + contract author NO transfer (scanned below to prove the edge
+    # stays single-homed in lab_measure and did not leak into a variant).
+    "jax": frozenset({"coref_host_shell.py", "nla_lab/lab_measure.py"}),
 }
 SCANNED = ["extract.py", "load_facts.py", "nlp_cache.py",
            "nlp_client.py", "nlp_server.py", "resolve.py",
            "jax_decode.py", "jax_deberta.py", "coref_host_shell.py",
            "maverick_load.py", "coref_decode_server.py", "coref_decode_client.py",
-           "coref_decode_inputs.py", "spans.py", "jax_only_guard.py"]
+           "coref_decode_inputs.py", "spans.py", "jax_only_guard.py",
+           # nla_lab: lab_measure.py is the bench's single jax home (authors the
+           # host->device lift + block_until_ready, MARKER-tagged); the variant files +
+           # contract import jax but author no device-edge op — scanned to prove it.
+           "nla_lab/lab_measure.py", "nla_lab/contract.py",
+           "nla_lab/variants/exact_reference.py", "nla_lab/variants/flash_attention.py",
+           "nla_lab/variants/cached_positions.py", "nla_lab/variants/nystrom_attention.py",
+           "nla_lab/variants/performer_favor.py", "nla_lab/variants/w8a8_int8.py",
+           "nla_lab/variants/w4a16_weightonly.py", "nla_lab/variants/monarch_ffn.py",
+           "nla_lab/variants/_smoke_broken.py"]
 # jax_only_guard.py (the daemon's torch-isolation seam) authors no device-edge op — it
 # manages sys.modules/meta_path only; scanned to prove the jax host<->device edge stays
 # single-homed in coref_host_shell.py and did not leak into the guard.
@@ -201,28 +221,37 @@ def test_jax_transfer_is_recognized_and_homed():
         "jax transfer in the torch home is not its home -> must fail"
 
 
-def test_jax_has_a_single_home_and_wire_seam_is_not_one():
-    """MANDATE: ONE jax home (coref_host_shell.py) — two is a drift hazard. A marked
-    jax lift is sanctioned in the home; the SAME marked lift in the ZMQ wire seam
-    (coref_decode_server.py) is NOT — the seam must DELEGATE its lifts to the shell,
-    not become a second home. Any other non-home file is likewise rejected."""
+def test_jax_home_is_one_per_subsystem_and_seams_are_not():
+    """MANDATE: ONE jax home PER SUBSYSTEM — coref_host_shell.py for the coref daemon,
+    nla_lab/lab_measure.py for the nla_lab bench — never two WITHIN a subsystem. A marked
+    jax lift is sanctioned in EITHER home; the SAME marked lift in a non-home (the ZMQ wire
+    seam, a nla_lab VARIANT file, or any other module) is NOT — the seam/variant must
+    DELEGATE its lifts to its subsystem's home, not become a second one. This pins both
+    homes: lab_measure.py is genuinely recognized (R2), and the variants are genuinely
+    excluded (the edge cannot leak out of lab_measure into a variant)."""
     lift = "    a = jnp.asarray(p)  # host-device-boundary: lift host array\n"
     src = "def f(p):\n" + lift
-    # the single jax home accepts a marked lift
-    shell_hit = find_device_ops(src, "coref_host_shell.py")[0]
-    assert shell_hit[3] == "jax" and shell_hit[2] == ".asarray()"
-    assert is_sanctioned(shell_hit, src.splitlines()), "marked jax lift in the jax home must pass"
-    # the wire seam is NOT a jax home -> the same lift there must FAIL (delegate instead)
-    seam_hit = find_device_ops(src, "coref_decode_server.py")[0]
-    assert not is_sanctioned(seam_hit, src.splitlines()), \
-        "a jax lift in the wire seam must fail — single home; delegate to the shell"
-    # any other non-home file likewise (no scatter)
-    stray = find_device_ops(src, "extract.py")[0]
-    assert not is_sanctioned(stray, src.splitlines())
-    # unmarked in the home -> still caught
+    # each subsystem's single home accepts a marked lift
+    for home in ("coref_host_shell.py", "nla_lab/lab_measure.py"):
+        hit = find_device_ops(src, home)[0]
+        assert hit[3] == "jax" and hit[2] == ".asarray()"
+        assert is_sanctioned(hit, src.splitlines()), f"marked jax lift in the jax home {home} must pass"
+    # a non-home must FAIL (delegate instead): the wire seam, a nla_lab variant, any stray
+    for nonhome in ("coref_decode_server.py", "nla_lab/variants/exact_reference.py", "extract.py"):
+        hit = find_device_ops(src, nonhome)[0]
+        assert not is_sanctioned(hit, src.splitlines()), \
+            f"a jax lift in non-home {nonhome} must fail — delegate to the subsystem's home"
+    # unmarked in EITHER home -> still caught
     bare = "def f(p):\n    return jnp.asarray(p)\n"
-    bhit = find_device_ops(bare, "coref_host_shell.py")[0]
-    assert not is_sanctioned(bhit, bare.splitlines())
+    for home in ("coref_host_shell.py", "nla_lab/lab_measure.py"):
+        bhit = find_device_ops(bare, home)[0]
+        assert not is_sanctioned(bhit, bare.splitlines()), f"unmarked lift in {home} must be caught"
+    # the jax-home SET is CLOSED and PINNED here: "per subsystem" is not a self-certifiable
+    # word — adding a THIRD jax home is a deliberate, diff-visible edit to BOTH HOMES and
+    # this assertion (a reviewer must see it), so the gate cannot silently accrete homes.
+    assert HOMES["jax"] == frozenset({"coref_host_shell.py", "nla_lab/lab_measure.py"}), (
+        "the jax home set drifted: a new home must be added deliberately AND reflected in "
+        "this pinned set (one home per subsystem — coref daemon + nla_lab bench).")
 
 
 def test_bare_builtin_float_is_not_a_device_op():

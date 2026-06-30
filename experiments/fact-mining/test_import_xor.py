@@ -47,7 +47,20 @@ SCANNED = ["extract.py", "load_facts.py", "nlp_cache.py",
            "nlp_client.py", "nlp_server.py", "resolve.py",
            "jax_decode.py", "jax_deberta.py", "coref_host_shell.py",
            "maverick_load.py", "coref_decode_server.py", "coref_decode_client.py",
-           "coref_decode_inputs.py", "spans.py", "jax_only_guard.py"]
+           "coref_decode_inputs.py", "spans.py", "jax_only_guard.py",
+           # nla_lab: the NLA encode-variant interface + auto-bench (nla_lab/DESIGN.md).
+           # HOST orchestration (numpy-free, jax-free in AST): registry/runner/report/
+           # corpus. DEVICE math (jax-only, numpy-free): lab_measure + every variant.
+           # Added here so the gate covers them — else it goes blind to the new module
+           # (the documented "device code in a host file" failure GATE).
+           "nla_lab/__init__.py", "nla_lab/contract.py", "nla_lab/registry.py",
+           "nla_lab/lab_measure.py", "nla_lab/lab_corpus.py", "nla_lab/lab_report.py",
+           "nla_lab/bench.py", "nla_lab/variants/__init__.py",
+           "nla_lab/variants/exact_reference.py", "nla_lab/variants/flash_attention.py",
+           "nla_lab/variants/cached_positions.py", "nla_lab/variants/nystrom_attention.py",
+           "nla_lab/variants/performer_favor.py", "nla_lab/variants/w8a8_int8.py",
+           "nla_lab/variants/w4a16_weightonly.py", "nla_lab/variants/monarch_ffn.py",
+           "nla_lab/variants/_smoke_broken.py"]
 # jax_only_guard.py makes the unified daemon torch-free (poison torch + stub the
 # torch-dragging spaCy trf plugins). On module import it is stdlib-only, so it authors
 # NO host array lib — but the gate's AST sees the literal `import torch` inside its
