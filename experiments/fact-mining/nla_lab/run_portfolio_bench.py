@@ -131,6 +131,10 @@ def main(argv: list[str] | None = None) -> int:
                          "FREE VRAM on demand — uses all that's free, not jax's 0.75-of-total "
                          "default arena (which OOMs a large shape while VRAM is physically "
                          "free). Set e.g. 0.3 to cap the arena and share the card with a daemon.")
+    ap.add_argument("--timeout", type=float, default=None,
+                    help="max wall-seconds per variant subprocess; on timeout the variant is "
+                         "KILLED (contributes no rows) and the sweep continues. Default: no "
+                         "timeout. A safety net against a pathologically slow variant.")
     args = ap.parse_args(argv)
 
     if args.model is not None and args.weights_npz is not None:
@@ -165,10 +169,19 @@ def main(argv: list[str] | None = None) -> int:
         # host memory on exit, before the next variant starts. stdout/stderr INHERIT the
         # parent's streams so the child's progress streams live to the maintainer. We do
         # NOT check=True: a nonzero child must NOT abort the sweep.
-        proc = subprocess.run(cmd, cwd=REPO_ROOT, env=_child_env(args.mem_fraction))  # noqa: S603 — fixed argv, no shell
-        if proc.returncode != 0:
+        try:
+            proc = subprocess.run(cmd, cwd=REPO_ROOT, env=_child_env(args.mem_fraction),
+                                  timeout=args.timeout)  # noqa: S603 — fixed argv, no shell
+            rc: int | None = proc.returncode
+        except subprocess.TimeoutExpired:
+            rc = None                              # killed at the --timeout deadline
+        if rc is None:
             failed.append(variant)
-            print(f"!!! variant {variant} exited nonzero (code {proc.returncode}) — it "
+            print(f"!!! variant {variant} exceeded --timeout {args.timeout}s — KILLED; it "
+                  f"contributes no rows; continuing to the next variant.\n", flush=True)
+        elif rc != 0:
+            failed.append(variant)
+            print(f"!!! variant {variant} exited nonzero (code {rc}) — it "
                   f"contributes no rows; continuing to the next variant.\n", flush=True)
         else:
             print(f"--- variant {variant} done ---\n", flush=True)

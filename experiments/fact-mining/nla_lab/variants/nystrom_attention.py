@@ -135,6 +135,33 @@ def _disent_bias_block(
     return (c2p + p2c) / scale
 
 
+#: Newton-Schulz iterations for the landmark-core pseudo-inverse (Nyströmformer cubic). 6 is
+#: the paper default — cubic convergence, so the [m,m] core pinv is accurate WITHOUT a batched
+#: SVD. jnp.linalg.pinv lowers to a batched SVD (512 tiny 64x64 matrices x num_layers) that is
+#: both slow to compile AND grinds on the GPU (GPUs are poor at many-small-SVD); the all-matmul
+#: iteration is fast on both. Annex II anticipated this swap. ONE home.
+PINV_ITERS: int = 6
+
+
+def _iterative_pinv(a: jax.Array, n_iter: int = PINV_ITERS) -> jax.Array:
+    """Moore-Penrose pseudo-inverse of the `[bh,m,m]` landmark softmax core via the Nyströmformer
+    cubic Newton-Schulz iteration (Xiong et al. 2021) — ALL matmuls, NO SVD. Init
+    `V0 = Aᵀ/(max-col-1-norm · max-row-1-norm)` (guarantees ‖I−AV0‖<1), then
+    `V ← ¼V(13I − AV(15I − AV(7I − AV)))` (cubic). Same role in `F·pinv(A)·(B·V)`; the
+    iteration's residual is far below the Nyström landmark approximation it sits inside, and it
+    replaces the SVD that made this variant pathologically slow to compile + run on the GPU."""
+    m = a.shape[-1]
+    eye = jnp.eye(m, dtype=a.dtype)
+    abs_a = jnp.abs(a)
+    col = jnp.max(jnp.sum(abs_a, axis=-2), axis=-1)[..., None, None]        # max abs col-sum
+    row = jnp.max(jnp.sum(abs_a, axis=-1), axis=-1)[..., None, None]        # max abs row-sum
+    v = jnp.swapaxes(a, -1, -2) / (col * row)
+    for _ in range(n_iter):
+        kv = jnp.matmul(a, v)
+        v = jnp.matmul(0.25 * v, 13 * eye - jnp.matmul(kv, 15 * eye - jnp.matmul(kv, 7 * eye - kv)))
+    return v
+
+
 def _nystrom_attention(
     p: dict[str, jax.Array], i: int, hidden: jax.Array, am: jax.Array,
     rel_emb: jax.Array, cfg: "jax_deberta.DebertaCfg",
@@ -200,7 +227,7 @@ def _nystrom_attention(
     a_score = ac + _disent_bias_block(p, i, ql, kl, land_pos, land_pos, pos_query, pos_key, cfg, scale)
     a_score = jnp.where(land_col[:, None, :], a_score, neg)
     a = jax.nn.softmax(a_score, axis=-1)                                  # [bh,m,m]
-    a_pinv = jnp.linalg.pinv(a)                                           # [bh,m,m]
+    a_pinv = _iterative_pinv(a)                                           # [bh,m,m] (matmul, no SVD)
 
     # B: landmark query (pos land_pos, content ql) × real key (pos j, content k)
     bc = jnp.matmul(ql, jnp.transpose(k, (0, 2, 1))) / scale              # [bh,m,S]
