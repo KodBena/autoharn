@@ -37,6 +37,7 @@ from typing import Iterable
 
 import contra_detect as cd
 import extract
+from logic_backend import LogicFinding
 
 HERE = Path(__file__).resolve().parent
 LOGIC_LP = HERE / "logic_layer.lp"
@@ -217,6 +218,42 @@ def minimal_repair(
         if atom.startswith("retract("):
             ids.append(int(atom[len("retract("):-1]))
     return sorted(ids)
+
+
+# --------------------------------------------------- the LogicBackend adapter --
+class AspBackend:
+    """The FIRST adapter on the standardized `logic_backend.LogicBackend` seam: the
+    clingo/ASP engine, plugged onto the `Claim` NLP substrate. It is a THIN wrapper --
+    all the encoding (`logic_layer.lp`), the EDB export, and the clingo subprocess
+    driver are the existing, differential-gated `contra_asp` functions, UNCHANGED; this
+    class only re-shapes `asp_findings` into the engine-neutral `LogicFinding`.
+
+    It covers ALL THREE rules. The defeasible-R-FUNC and numeric knobs the ASP engine
+    owns (the `functional/1` allowlist-as-data, the `multi_valued/2` defeater seam) are
+    CONSTRUCTOR state here -- engine-specific configuration deliberately kept off the
+    standardized Protocol, exactly as impedance keeps a library's capability surface off
+    `LibAdapter`. Conforms to `LogicBackend` structurally (by shape, not inheritance)."""
+
+    name = "asp-clingo"
+    rules = frozenset({"R-NEG", "R-FUNC", "R-NUM"})
+
+    def __init__(
+        self,
+        functional_preds: Iterable[str] = cd.FUNCTIONAL_PREDS,
+        extra_facts: str = "",
+    ) -> None:
+        self.functional_preds = functional_preds
+        self.extra_facts = extra_facts
+
+    def analyze(self, claims: list[cd.Claim]) -> list[LogicFinding]:
+        out: list[LogicFinding] = []
+        for f in asp_findings(claims, self.functional_preds, self.extra_facts):
+            # R-NEG is the FDE/LP glut -- expose the contained value on the seam so a
+            # downstream consumer sees `both`, not an explosion. R-FUNC/R-NUM are
+            # classical disequality findings (no derived many-valued value).
+            value = "both" if f.rule == "R-NEG" else None
+            out.append(LogicFinding.from_claims(f.rule, f.a, f.b, value=value, backend=self.name))
+        return out
 
 
 # ------------------------------------------------------------- claim helpers --
