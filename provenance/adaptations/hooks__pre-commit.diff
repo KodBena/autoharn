@@ -1,0 +1,79 @@
+--- CH:tools/hooks/pre-commit@87e1bcc3e03b
++++ autoharn/hooks/pre-commit
+@@ -1,59 +1,35 @@
+ #!/bin/sh
+-# pre-commit: the lazy-import gate runs mechanically on EVERY commit.
++# autoharn pre-commit — the mechanical refusals, invoked by REPO-RELATIVE path.
+ #
+-# Why a hook and not a brief: four agents in one day (2026-07-02) claimed a clean
+-# no_lazy_imports gate from a stale run and committed violations — twice AFTER the
+-# brief was amended to say "gates run last, after your final edit". ADR-0011: a
+-# recurrence never converted to a mechanism is a guard the executive did not build.
+-# This hook is that mechanism — a commit with a lazy import cannot land, whoever
+-# (or whatever) is committing.
++# Adapted from claude_harness/tools/hooks/pre-commit [C18]: the old hook reached
++# into a sibling repo by absolute path (the two-repo coupling the fresh home must
++# not inherit) and ran the ADR-0016 standing-service umbrella gate — which has NO
++# services to gate here (the NLP lane stays in the attic, C14). Running it here
++# would be a silent vacuous pass (F49). It is therefore NOT wired; it rejoins
++# autoharn only when autoharn's first standing service does.
+ #
+-# Install (once per clone; .git/hooks is unversioned):
+-#   git config core.hooksPath tools/hooks
+-# The provenance stamper (stamp_provenance.py) is a Claude-harness hook, not a git
+-# hook, and is unaffected.
++# INTERIM WIRING (BUILD-BRIEF Step 2): staging guard -> no_lazy_imports. The two
++# census gates (fixture_census, layout_census) and the doc-legibility gate join
++# this chain at Step 9, once they are minted. Every migration commit runs under
++# this hook — the migration is the gates' first live exercise.
++#
++# Install (once per clone; .git/hooks is unversioned): git config core.hooksPath hooks
+ set -u
+ REPO_ROOT="$(git rev-parse --show-toplevel)"
+ PY="$HOME/w/vdc/venvs/generic/bin/python"
+ [ -x "$PY" ] || PY="$(command -v python3)"
+ 
+-# staging_guard: explicit-paths commit guard (finding 33 foreclosure). Runs FIRST — a swept-in path is a
+-# scope defect the committer must resolve before any content gate matters. The guard lives in
+-# claude_harness (its one home, P1); epistemic-operator's hook invokes this same script by absolute path.
+-GUARD="$HOME/w/vdc/1/claude_harness/tools/staging_guard.py"
+-[ -f "$GUARD" ] || GUARD="$REPO_ROOT/tools/staging_guard.py"
+-"$PY" "$GUARD" || {
++# staging_guard FIRST — a swept-in path is a scope defect to resolve before any
++# content gate matters (finding 33 foreclosure). Repo-local, its one home (P1).
++"$PY" "$REPO_ROOT/gates/staging_guard.py" || {
+     echo "" >&2
+     echo "pre-commit: staging guard FAILED — commit refused (finding 33, commit-scope-sweep)." >&2
+     exit 1
+ }
+ 
+-"$PY" "$REPO_ROOT/tools/no_lazy_imports.py" || {
++"$PY" "$REPO_ROOT/gates/no_lazy_imports.py" || {
+     echo "" >&2
+     echo "pre-commit: lazy-import gate FAILED — commit refused (CLAUDE.md edict 2026-07-02)." >&2
+     echo "Hoist the imports to module top, then commit again." >&2
+     exit 1
+ }
+-
+-# ADR-0016 Rule 2 — the standing-service umbrella gate (ratified 2026-07-03).
+-#
+-# Rule 2 prescribes "a single CI job"; this repo has no CI, so its mechanical
+-# surface is this hook. The full net is ~35s / ~3.25GB (it imports torch/spaCy),
+-# too heavy to run on EVERY commit — and a 3.25GB spike on every commit is itself
+-# a substrate hazard on this host (OOM-TMPFS-INCIDENT-2026-07-02.md, ADR-0015).
+-# So it is PATH-GATED: it fires only when the commit touches the standing-service
+-# surface, which is the literal mechanization of ADR-0016's scope clause ("no
+-# retroactive sweep, ADR-0004; a service gains these gates on touch"). When it
+-# fires it runs the WHOLE net over every declared service (the "one net" spirit),
+-# so a new service or ingress cannot land without its adversarial coverage green.
+-STAGED="$(git diff --cached --name-only --diff-filter=ACMR)"
+-if printf '%s\n' "$STAGED" | grep -qE '^(experiments/fact-mining/|tools/standing_service_gate\.py$)'; then
+-    echo "pre-commit: standing-service surface touched — running ADR-0016 Rule 2 umbrella gate..." >&2
+-    "$PY" "$REPO_ROOT/tools/standing_service_gate.py" || {
+-        echo "" >&2
+-        echo "pre-commit: standing-service gate FAILED — commit refused (ADR-0016 Rule 2)." >&2
+-        echo "A SILENT coverage gap or a red property suite blocks the commit. Cover the axis," >&2
+-        echo "file it as a declared gap (BACKLOG pointer), or fix the failing suite, then retry." >&2
+-        exit 1
+-    }
+-fi

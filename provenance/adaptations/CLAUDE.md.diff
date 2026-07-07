@@ -1,0 +1,30 @@
+--- CH:CLAUDE.md@87e1bcc3e03b
++++ autoharn/CLAUDE.md
+@@ -14,10 +14,10 @@
+ - **Read the LAW first, and read it for its spirit.** When work requires the ADRs, read the actual files in full *before* you diagnose, design, or touch code — the fix is shaped by the law from its first line, not retrofitted to it at the end. And the spirit of an ADR governs as much as its letter, often more: these are principles written by a colleague to be extrapolated from and interpreted judiciously, not rules to satisfy literally. Meeting the letter while violating the intent is a failure, not a pass; where letter and spirit appear to diverge, the spirit wins and you surface the divergence.
+ 
+ {"Project LAW, extrapolate from and interpret judiciously like a professional colleague": [
+-    "docs/adr/0000-the-alpha-and-the-omega-type-driven-design.md",
+-    "docs/adr/0012-compositional-and-structural-hygiene.md",
+-    "docs/adr/0013-execution-stamina-and-structural-completeness.md",
+-    "docs/adr/0014-executor-second-opinion.md"]}
++    "law/adr/0000-the-alpha-and-the-omega-type-driven-design.md",
++    "law/adr/0012-compositional-and-structural-hygiene.md",
++    "law/adr/0013-execution-stamina-and-structural-completeness.md",
++    "law/adr/0014-executor-second-opinion.md"]}
+ 
+ ## Lazy imports are BANNED (maintainer edict, 2026-07-02)
+ 
+@@ -28,10 +28,10 @@
+   footprint (a lying signature at module scale). If a module's importers should not pay
+   one of its dependencies, the module is mis-factored: split it so each file's top-of-file
+   imports are its honest, complete footprint. `if TYPE_CHECKING:` imports are exempt
+-  (zero runtime cost by construction). Enforced mechanically: `tools/no_lazy_imports.py`
++  (zero runtime cost by construction). Enforced mechanically: `gates/no_lazy_imports.py`
+   must report zero violations.
+ 
+ ## Auditability — persist the ephemera
+ 
+-- **Every ephemeral artifact Claude Code produces around a run is captured into the repo, committed, and checksummed — auditability is held above convenience.** Workflow scripts, run records, workflow journals, every sub-agent transcript, and background-task outputs live upstream under `~/.claude/…` and `/tmp/…` — prunable, volatile, unversioned. That is not an acceptable home for evidence an audit or a study reasons about. After any workflow or background-agent activity, snapshot it with `tools/persist_claude_ephemera.py` into `docs/claude-ephemera/session-<id>/` and commit it. The snapshot is whole-session, never cherry-picked — deciding what is "worth keeping" is how audit trails get holes. Never assert that a piece of this data is lost until you have searched every project-slug dir the session used (Claude Code makes one per working directory); the persisted script/journal almost always exists.
++- **Every ephemeral artifact Claude Code produces around a run is captured into the repo, committed, and checksummed — auditability is held above convenience.** Workflow scripts, run records, workflow journals, every sub-agent transcript, and background-task outputs live upstream under `~/.claude/…` and `/tmp/…` — prunable, volatile, unversioned. That is not an acceptable home for evidence an audit or a study reasons about. After any workflow or background-agent activity, snapshot it with `filing/persist_claude_ephemera.py` into `ephemera/session-<id>/` and commit it. The snapshot is whole-session, never cherry-picked — deciding what is "worth keeping" is how audit trails get holes. Never assert that a piece of this data is lost until you have searched every project-slug dir the session used (Claude Code makes one per working directory); the persisted script/journal almost always exists.
+ 

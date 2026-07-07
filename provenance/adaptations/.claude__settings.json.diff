@@ -1,0 +1,11 @@
+--- CH:.claude/settings.json@87e1bcc3e03b
++++ autoharn/.claude/settings.json
+@@ -6,7 +6,7 @@
+         "hooks": [
+           {
+             "type": "command",
+-            "command": "python3 /home/bork/w/vdc/1/claude_harness/tools/hooks/stamp_provenance.py"
++            "command": "python3 /home/bork/w/vdc/1/autoharn/hooks/stamp_provenance.py"
+           }
+         ]
+       }

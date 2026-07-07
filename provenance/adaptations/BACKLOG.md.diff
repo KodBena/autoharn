@@ -1,0 +1,41 @@
+--- CH:BACKLOG.md@87e1bcc3e03b
++++ autoharn/BACKLOG.md
+@@ -3,6 +3,38 @@
+ Provisional and informal. This file exists because the structured work-log store (#3 — the SQL SSOT for
+ work status) does not exist yet. When it does, these items migrate there and this file retires. Until then:
+ a plain, append-friendly list of live threads, so nothing is lost to memory.
++
++> **MIGRATION STATUS (2026-07-07, autoharn consolidation).** This file is carried
++> **verbatim** from `claude_harness/BACKLOG.md` (source commit `87e1bcc`). The manifest
++> (A1/[C4]) envisioned carrying only *live* entries and leaving *closed* ones in the
++> archive history — but that content-curation is not on BUILD-BRIEF §0's closed
++> adaptation list, so per §0 (edits outside the list are renegotiated, not self-taken)
++> and the ADR-0008/ADR-0012 ARCHITECTURE precedent ([C12]: content work is deferred, not
++> done inside a migration), the curation is **deferred**, filed here as its own item:
++> *prune the closed fact-mining-lane churn below to live autoharn threads only.* The one
++> sanctioned edit at migration time is the maintainer reservation immediately below.
++
++---
++
++## Maintainer reservation — the no-`/docs` top-level decision (revisit-when marker)
++
++**Filed 2026-07-07 at the maintainer's ruling on the consolidation design (acts.ruling
++121 GO).** The maintainer ratified the whole layout as committed (all 24 CONS-DECIDED
++calls stand) with ONE recorded reservation: he **defers** on the decision to have **no
++top-level `/docs` directory** (LAYOUT §4: "docs is not a currency … each former docs
++resident lands in the directory named for what it IS"). His words: he has *"never
++encountered a rigorous code base where documentation is not single-homed into /docs."*
++
++- **Disposition:** deferred, not overruled — the layout ships as designed (law/design/
++  research/judgment each home their own currency; no `/docs`).
++- **Revisit-when:** the maintainer chooses to reconsider. This is flagged as **the
++  easiest thing to change later** — re-homing the doc-bearing directories under a `/docs`
++  parent is a pure move, mechanical, with the layout-census gate updated to match.
++- **The design's counter-argument, for the record (LAYOUT §4):** "docs" bundled three
++  distinct currencies (law, design, evidence) into indistinguishability in both old
++  repos; the split makes authority level legible from the path. This reservation records
++  that the maintainer's single-home-into-/docs intuition is a live, unresolved tension,
++  not a settled question.
+ 
+ ---
+ 
