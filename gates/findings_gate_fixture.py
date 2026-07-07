@@ -26,9 +26,9 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parent.parent
 PGHOST = os.environ.get("HARNESS_PGHOST", os.environ.get("EPISTEMIC_PGHOST", "192.168.122.1"))
 SCHEMA = "findings_fixture"
-WITNESS = REPO / "docs" / "work-units" / "findings-ledger-fixture.witness.txt"
-FF = [sys.executable, str(REPO / "tools" / "file_finding.py"), "--schema", SCHEMA]
-GATE = [sys.executable, str(REPO / "tools" / "findings_gate.py")]
+WITNESS = REPO / "runs" / "findings-gate-fixture" / "witness.txt"   # autoharn: runs/ (no docs/; old work-units witness is archive evidence)
+FF = [sys.executable, str(REPO / "filing" / "file_finding.py"), "--schema", SCHEMA]   # autoharn: filing/
+GATE = [sys.executable, str(REPO / "gates" / "findings_gate.py")]   # autoharn: gates/
 
 
 def psql(sql: str, *, want_fail: bool = False) -> tuple[int, str]:
@@ -60,7 +60,7 @@ def main() -> int:
     # fresh throwaway schema
     psql(f"DROP TABLE IF EXISTS {SCHEMA}.finding_disposition CASCADE; DROP TABLE IF EXISTS {SCHEMA}.finding CASCADE; DROP SCHEMA IF EXISTS {SCHEMA} CASCADE;")  # declared-drop: {SCHEMA} (declared scratch/test reset; blast radius = this schema only)
     subprocess.run(["psql", "-h", PGHOST, "-d", "harness", "-v", "ON_ERROR_STOP=1", "-v", f"schema={SCHEMA}",
-                    "-f", str(REPO / "db" / "harness" / "005_findings_ledger.sql")], check=True, capture_output=True)
+                    "-f", str(REPO / "stores" / "005_findings_ledger.sql")], check=True, capture_output=True)
 
     # 4 + 5: file with ONLY a provenance_claim -> OPEN (provenance is not disposition)
     log.append("## provenance ≠ disposition (the governing move)")

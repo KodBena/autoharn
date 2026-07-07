@@ -24,7 +24,7 @@ CH	db/harness/007_ruling_delivers_fk.sql	stores/007_ruling_delivers_fk.sql	0
 CH	experiments/fact-mining/test_rationalization_ledger.py	stores/test_rationalization_ledger.py	1
 CH	tools/no_destructive_ddl.py	gates/no_destructive_ddl.py	0
 CH	tools/no_lazy_imports.py	gates/no_lazy_imports.py	0
-CH	tools/findings_gate_fixture.py	gates/findings_gate_fixture.py	0
+CH	tools/findings_gate_fixture.py	gates/findings_gate_fixture.py	1
 CH	tools/findings_gate.py	gates/findings_gate.py	0
 CH	tools/append_only_integrity.py	gates/append_only_integrity.py	0
 CH	tools/staging_guard.py	gates/staging_guard.py	0
@@ -60,7 +60,7 @@ CH	docs/adr-evidence/seen-red/04-consumer-no-vacuous-pass/red-specimen.py	seen-r
 CH	docs/adr-evidence/seen-red/04-consumer-no-vacuous-pass/red.txt	seen-red/04-consumer-no-vacuous-pass/red.txt	0
 CH	docs/adr-evidence/seen-red/05-verify-adapter/red-specimen.py	seen-red/05-verify-adapter/red-specimen.py	0
 CH	docs/adr-evidence/seen-red/05-verify-adapter/red.txt	seen-red/05-verify-adapter/red.txt	0
-CH	docs/adr-evidence/seen-red/06-append-only-integrity/red-specimen.py	seen-red/06-append-only-integrity/red-specimen.py	0
+CH	docs/adr-evidence/seen-red/06-append-only-integrity/red-specimen.py	seen-red/06-append-only-integrity/red-specimen.py	1
 CH	docs/adr-evidence/seen-red/06-append-only-integrity/red.txt	seen-red/06-append-only-integrity/red.txt	0
 CH	docs/adr-evidence/seen-red/09-relevant-act-classification/red-specimen.py	seen-red/09-relevant-act-classification/red-specimen.py	0
 CH	docs/adr-evidence/seen-red/09-relevant-act-classification/red.txt	seen-red/09-relevant-act-classification/red.txt	0

@@ -16,7 +16,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "tools"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "gates"))   # autoharn: gates/ (was tools/, shallower)
 from append_only_integrity import missing_guards  # noqa: E402
 
 HOST, DB, SCHEMA = "192.168.122.1", "harness", "ao_redspec"

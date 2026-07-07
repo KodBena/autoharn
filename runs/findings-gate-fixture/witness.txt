@@ -1,0 +1,20 @@
+# findings-ledger fixture GREEN — all acceptance points pass
+# findings-ledger acceptance fixture (THROWAWAY schema; never the real store)
+
+## provenance ≠ disposition (the governing move)
+  [OK ] a provenance_claim alone leaves the finding OPEN — open=1
+## close-gate direction
+  [OK ] gate RED on an open finding (exit 1) — # findings-gate RED — 1 OPEN finding(s) (GLOBAL (every increment)); an increment cannot report complete with undischarged findings. Dispose (fix/file/explain/waive) each, then re-run:
+## per-kind ref requirement (a disposition without its witness is nothing)
+  [OK ] filed WITHOUT ref REFUSED — refused
+  [OK ] waived WITHOUT ref REFUSED — refused
+  [OK ] a disposition act closes the finding — open=0
+  [OK ] gate GREEN after disposition (exit 0) — # findings-gate GREEN — no OPEN findings (GLOBAL (every increment)); every finding carries a disposition act (F28).
+## append-only triggers (a finding/disposition is an audit fact)
+  [OK ] UPDATE on finding REFUSED — refused
+  [OK ] DELETE on finding REFUSED — refused
+  [OK ] UPDATE on finding_disposition REFUSED — refused
+  [OK ] DELETE on finding_disposition REFUSED — refused
+## duplicate-of adjudication (identity is an ACT, never auto-computed — F28)
+  [OK ] duplicate-of a NON-existent finding REFUSED — refused
+  [OK ] duplicate-of an EXISTING finding accepted — accepted

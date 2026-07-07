@@ -25,7 +25,7 @@ CH	db/harness/007_ruling_delivers_fk.sql	stores/007_ruling_delivers_fk.sql	87e1b
 CH	experiments/fact-mining/test_rationalization_ledger.py	stores/test_rationalization_ledger.py	87e1bcc3e03bdc3fed1924219c8e181dcf8646e7	1fc3a06351990890df778f3a99b0fd7d7fb2350bee8e8ba5f24ac7b40899b586	1	yes
 CH	tools/no_destructive_ddl.py	gates/no_destructive_ddl.py	87e1bcc3e03bdc3fed1924219c8e181dcf8646e7	8373cec7629b18c478b522a9464c9a6f409f631e4e45ee87d0b9e34bd03b0b9e	0	no
 CH	tools/no_lazy_imports.py	gates/no_lazy_imports.py	87e1bcc3e03bdc3fed1924219c8e181dcf8646e7	32a663a6ac8ad7c651fe6d513a638e0064a313a7e97e2739471526f835dc69a1	0	no
-CH	tools/findings_gate_fixture.py	gates/findings_gate_fixture.py	87e1bcc3e03bdc3fed1924219c8e181dcf8646e7	77ab1626465ec5e51984c7fff8274f208fefd65a72c964802ee2b1ea12d20591	0	no
+CH	tools/findings_gate_fixture.py	gates/findings_gate_fixture.py	87e1bcc3e03bdc3fed1924219c8e181dcf8646e7	77ab1626465ec5e51984c7fff8274f208fefd65a72c964802ee2b1ea12d20591	1	yes
 CH	tools/findings_gate.py	gates/findings_gate.py	87e1bcc3e03bdc3fed1924219c8e181dcf8646e7	520f9d24f4d048894f6e10d0e17493aa2c12e1020a54808d8a16378efb28adc7	0	no
 CH	tools/append_only_integrity.py	gates/append_only_integrity.py	87e1bcc3e03bdc3fed1924219c8e181dcf8646e7	672ae80f55121cf4ef8f0a4e20007484126082b80a7854d61794a91fc79f39d9	0	no
 CH	tools/staging_guard.py	gates/staging_guard.py	87e1bcc3e03bdc3fed1924219c8e181dcf8646e7	22b96b030c714052a064bb9ec660c04592a5a25504605b9dc2d8fe88678507bb	0	no
@@ -61,7 +61,7 @@ CH	docs/adr-evidence/seen-red/04-consumer-no-vacuous-pass/red-specimen.py	seen-r
 CH	docs/adr-evidence/seen-red/04-consumer-no-vacuous-pass/red.txt	seen-red/04-consumer-no-vacuous-pass/red.txt	87e1bcc3e03bdc3fed1924219c8e181dcf8646e7	da28d711969bad1250511c7573fc3951aae8f4dc954c05441c1b48155d13073e	0	no
 CH	docs/adr-evidence/seen-red/05-verify-adapter/red-specimen.py	seen-red/05-verify-adapter/red-specimen.py	87e1bcc3e03bdc3fed1924219c8e181dcf8646e7	e0102b4fb583cf14e454301dc714477450e06b74f37b1de2bb3a93ddd7d9e151	0	no
 CH	docs/adr-evidence/seen-red/05-verify-adapter/red.txt	seen-red/05-verify-adapter/red.txt	87e1bcc3e03bdc3fed1924219c8e181dcf8646e7	d8ee7ffa372182540295925a12a24a03b52fa9d61a2c6a2a919f88b88301f015	0	no
-CH	docs/adr-evidence/seen-red/06-append-only-integrity/red-specimen.py	seen-red/06-append-only-integrity/red-specimen.py	87e1bcc3e03bdc3fed1924219c8e181dcf8646e7	4fbb30780198425d0c0fb54e5a322ae2898b0f0cbbb5fd4fdb757701abdcc651	0	no
+CH	docs/adr-evidence/seen-red/06-append-only-integrity/red-specimen.py	seen-red/06-append-only-integrity/red-specimen.py	87e1bcc3e03bdc3fed1924219c8e181dcf8646e7	4fbb30780198425d0c0fb54e5a322ae2898b0f0cbbb5fd4fdb757701abdcc651	1	yes
 CH	docs/adr-evidence/seen-red/06-append-only-integrity/red.txt	seen-red/06-append-only-integrity/red.txt	87e1bcc3e03bdc3fed1924219c8e181dcf8646e7	76f86812ad447b27443f20154c276d6f24f10cb5d6fc83d3e363511b2d3f6a34	0	no
 CH	docs/adr-evidence/seen-red/09-relevant-act-classification/red-specimen.py	seen-red/09-relevant-act-classification/red-specimen.py	87e1bcc3e03bdc3fed1924219c8e181dcf8646e7	3905e17a9ed08d7282e18849d0c9c5ddd36bd4ad1b8c0f4a5339385bcf36a3bc	0	no
 CH	docs/adr-evidence/seen-red/09-relevant-act-classification/red.txt	seen-red/09-relevant-act-classification/red.txt	87e1bcc3e03bdc3fed1924219c8e181dcf8646e7	e953c3a51961c86e05870a2a09cd84600522d205c0180b71e6ceff77d28751b3	0	no
