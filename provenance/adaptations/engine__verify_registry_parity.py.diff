@@ -1,0 +1,57 @@
+--- CH:experiments/fact-mining/verify_registry_parity.py@87e1bcc3e03b
++++ autoharn/engine/verify_registry_parity.py
+@@ -42,20 +42,31 @@
+ import re
+ import sys
+ 
+-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+-sys.path.insert(0, os.path.expanduser("~/w/vdc/1/epistemic-operator/instruments"))
+-
+-import close_manifest  # noqa: E402  (cross-repo import IS the anti-hand-sync move)
++HERE = os.path.dirname(os.path.abspath(__file__))
++REPO_ROOT = os.path.dirname(HERE)   # autoharn root
++sys.path.insert(0, HERE)
++sys.path.insert(0, os.path.join(REPO_ROOT, "instruments"))   # autoharn: repo-local instruments/ (was the cross-repo reach)
++
++import close_manifest  # noqa: E402  (autoharn: repo-local; parity verifies THIS home's surface)
+ from judgment_registry import DECLARED_EXCLUSIONS, IMPL_INDEX, SPECS  # noqa: E402
+ 
+-HERE = os.path.dirname(os.path.abspath(__file__))
+-INSTR = os.path.expanduser("~/w/vdc/1/epistemic-operator/instruments")
++INSTR = os.path.join(REPO_ROOT, "instruments")
+ DDL_FILES = [
+-    os.path.expanduser("~/w/vdc/1/epistemic-operator/harness/e15-build/s15-schema.sql"),
+-    os.path.expanduser("~/w/vdc/1/epistemic-operator/harness/e17-build/s17-stamp-mechanism.sql"),
+-    os.path.expanduser("~/w/vdc/1/epistemic-operator/harness/e17-build/s17-independence-vocabulary.sql"),
++    os.path.join(REPO_ROOT, "kernel", "lineage", "s15-schema.sql"),
++    os.path.join(REPO_ROOT, "kernel", "lineage", "s17-stamp-mechanism.sql"),
++    os.path.join(REPO_ROOT, "kernel", "lineage", "s17-independence-vocabulary.sql"),
+ ]
+ BASELINE = os.path.join(HERE, "registry_baseline.json")
++
++# The judgment_registry SPECS carry APPEND-ONLY tool identifiers baked into each row's content_hash
++# (D2); they name the OLD-repo paths and MUST NOT change (a hash edit is forbidden). autoharn dissolves
++# the cross-repo reach (C18) by TRANSLATING those historical identifiers to their autoharn locations for
++# the existence check — the spec identifier is immutable, the resolution adapts.
++_TOOL_TRANSLATE = {
++    "claude_harness/tools/findings_gate.py": "gates/findings_gate.py",
++    "claude_harness/experiments/fact-mining/row_performed_by.py": "instruments/row_performed_by.py",
++    "claude_harness/experiments/fact-mining/ledger_differential.py": "engine/ledger_differential.py",
++}
+ 
+ _SHOW_RE = re.compile(r"^\s*#show\s+([a-z_][A-Za-z0-9_]*/\d+)\s*\.", re.M)
+ _TRIGGER_RE = re.compile(r"^CREATE (?:CONSTRAINT )?TRIGGER\s+(\w+)", re.M)
+@@ -127,10 +138,10 @@
+     for k in sorted(enumerable):
+         if k not in surface and not excl_by_id.get(IMPL_INDEX[k]):
+             d2.append(k)
+-    for k in sorted(set(IMPL_INDEX) - enumerable):  # tool: keys — repo-relative from ~/w/vdc/1
++    for k in sorted(set(IMPL_INDEX) - enumerable):  # tool: keys — resolved repo-locally in autoharn
+         path = k.split(":", 1)[1]
+-        roots = (os.path.expanduser("~/w/vdc/1"),
+-                 os.path.expanduser("~/w/vdc/1/epistemic-operator"))  # bare instruments/ paths
++        path = _TOOL_TRANSLATE.get(path, path)   # translate historical old-repo identifiers -> autoharn (C18)
++        roots = (REPO_ROOT,)                     # autoharn only — no cross-repo archive reach
+         if not any(os.path.exists(os.path.join(r, path)) for r in roots):
+             if not excl_by_id.get(IMPL_INDEX[k]):
+                 d2.append(k)

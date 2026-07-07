@@ -29,8 +29,8 @@ CH	tools/findings_gate.py	gates/findings_gate.py	0
 CH	tools/append_only_integrity.py	gates/append_only_integrity.py	0
 CH	tools/staging_guard.py	gates/staging_guard.py	0
 CH	tools/file_foreclosure.py	filing/file_foreclosure.py	0
-CH	tools/file_rationalization.py	filing/file_rationalization.py	0
-CH	tools/file_finding.py	filing/file_finding.py	0
+CH	tools/file_rationalization.py	filing/file_rationalization.py	1
+CH	tools/file_finding.py	filing/file_finding.py	1
 CH	tools/persist_claude_ephemera.py	filing/persist_claude_ephemera.py	1
 CH	tools/file_resolution.py	filing/file_resolution.py	0
 CH	tools/doc-legibility/README.md	gates/doc-legibility/README.md	0
@@ -260,7 +260,7 @@ EO	BRIEF-CONFORMANCE-MAP.md	law/briefs/BRIEF-CONFORMANCE-MAP.md	0
 EO	FINDINGS.md	FINDINGS.md	0
 EO	instruments/README.md	instruments/README.md	0
 EO	instruments/cite_check.py	instruments/cite_check.py	0
-EO	instruments/close_manifest.py	instruments/close_manifest.py	0
+EO	instruments/close_manifest.py	instruments/close_manifest.py	1
 EO	instruments/close_sweep.py	instruments/close_sweep.py	0
 EO	instruments/contemporaneity.py	instruments/contemporaneity.py	0
 EO	instruments/core_a.lp	instruments/core_a.lp	0
@@ -291,14 +291,14 @@ EO	tools/act_stream/claude_code_adapter.py	instruments/act_stream/claude_code_ad
 EO	tools/act_stream/contract.py	instruments/act_stream/contract.py	0
 EO	tools/act_stream/fixtures/syn_session/subagents/syn-sub.jsonl	instruments/act_stream/fixtures/syn_session/subagents/syn-sub.jsonl	0
 EO	tools/act_stream/fixtures/syn_session/syn-main.jsonl	instruments/act_stream/fixtures/syn_session/syn-main.jsonl	0
-EO	tools/act_stream/verify_adapter.py	instruments/act_stream/verify_adapter.py	0
+EO	tools/act_stream/verify_adapter.py	instruments/act_stream/verify_adapter.py	1
 EO	tools/act_stream/verify_bash_write.py	instruments/act_stream/verify_bash_write.py	0
 EO	harness/launch_subject.sh	drive/launch_subject.sh	0
 EO	harness/e18-build/arm_e18.sh	drive/arm.sh	1
 EO	harness/e18-build/freeze_manifest.sh	drive/freeze_manifest.sh	0
 EO	harness/e17-build/launch.conf	drive/launch.conf.template	1
 EO	harness/e14-build/delivery_drill.py	drive/delivery_drill.py	0
-EO	harness/e14-build/gate_probe.py	drive/gate_probe.py	0
+EO	harness/e14-build/gate_probe.py	drive/gate_probe.py	1
 EO	harness/e18-build/adjudicate_repro.py	drive/adjudicate_repro.py	0
 EO	harness/e15-build/rehearsal/anchor_pre_registration.py	drive/rehearsal/anchor_pre_registration.py	0
 EO	harness/e15-build/rehearsal/make_mock_session.py	drive/rehearsal/make_mock_session.py	0

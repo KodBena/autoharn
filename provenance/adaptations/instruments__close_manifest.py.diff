@@ -1,0 +1,54 @@
+--- EO:instruments/close_manifest.py@e34759885879
++++ autoharn/instruments/close_manifest.py
+@@ -45,6 +45,7 @@
+ from review_without_detail import atoms_for as _review_without_detail_atoms
+ 
+ HERE = os.path.dirname(os.path.abspath(__file__))
++REPO_ROOT = os.path.dirname(HERE)   # autoharn: consumers are now repo-local (engine/, gates/), not cross-repo
+ DEFAULT_LOG_GLOB = "/home/bork/pg_log/tee.log"
+ DEFAULT_JOURNAL = os.path.expanduser("~/w/vdc/1/epistemic-audit/logs/change_gate.journal.jsonl")
+ 
+@@ -71,8 +72,7 @@
+ # impossible (ADR-0015 Rule 3/4); it just does not turn the close red until promoted. The runner
+ # lives cross-repo (fact-mining side, read-only); it is NEVER hand-synced — a kernel/operator change
+ # lands as a red parity test there (design §10).
+-MARRIAGE_DIFFERENTIAL = os.path.expanduser(
+-    "~/w/vdc/1/claude_harness/experiments/fact-mining/ledger_differential.py")
++MARRIAGE_DIFFERENTIAL = os.path.join(REPO_ROOT, "engine", "ledger_differential.py")  # autoharn: repo-local engine/
+ # soundness_twin is the OPERATOR-side immune-system differential (soundness.lp ASP vs soundness.py
+ # live-psql core) — the analog of the marriage differential for the operator twins. It exists so a
+ # keying divergence between the two soundness encodings (the F-D hazard, 2026-07-06) can never again
+@@ -99,12 +99,12 @@
+ # name is ever hardcoded into the instrument). One home for the acts.act<->s15 deriver (cross-repo, the
+ # marriage-differential idiom): a kernel/operator change lands as a red run there, never a hand-sync.
+ ACTS_CONSUMER_TARGETS = {"e15", "e16", "e17", "e18"} | {t for t in os.environ.get("ACTS_CONSUMER_EXTRA", "").split(",") if t}
+-ACTS_JOIN = os.path.expanduser("~/w/vdc/1/claude_harness/experiments/fact-mining/acts_join.py")
++ACTS_JOIN = os.path.join(REPO_ROOT, "engine", "acts_join.py")  # autoharn: repo-local engine/
+ # The row_performed_by consumer (finding 28, Increment 7): claimed-vs-performed over the subject session's
+ # ledger-INSERT acts. A registered close line on a consumer-bearing target; needs the SESSION DIR (the
+ # INSERT acts' full commands live in the transcript, not the truncated acts contract). DESCRIPTIVE atoms
+ # do NOT gate; a Python<->SQL DIVERGE or a crash QUARANTINES (F49).
+-ROW_PERFORMED = os.path.expanduser("~/w/vdc/1/claude_harness/experiments/fact-mining/row_performed_by.py")
++ROW_PERFORMED = os.path.join(HERE, "row_performed_by.py")  # autoharn: repo-local instruments/
+ 
+ 
+ # ---- CONSUMER SUBSTRATE resolution (finding 36) -----------------------------------------------------
+@@ -142,7 +142,7 @@
+ # RED if ANY finding is OPEN (no disposition act — F28: prose never closes a finding). An increment
+ # cannot report complete with undischarged findings; a real hazard debt (the TRUNCATE-CASCADE hole,
+ # finding 6a) is SEEN RED before anything disposes it. GLOBAL by default; FINDINGS_INCREMENT scopes it.
+-FINDINGS_GATE = os.path.expanduser("~/w/vdc/1/claude_harness/tools/findings_gate.py")
++FINDINGS_GATE = os.path.join(REPO_ROOT, "gates", "findings_gate.py")  # autoharn: repo-local gates/
+ 
+ 
+ def _journal_substrate(journal: str) -> tuple[str, list[str], tuple[str, str] | None]:
+@@ -638,8 +638,7 @@
+ # declared on the line, never silently omitted. The flag->family map comes from the ONE authority
+ # (judgment_registry.py, fact-mining side) via subprocess — the marriage-differential idiom, never
+ # a hand-synced copy.
+-JUDGMENT_REGISTRY = os.path.expanduser(
+-    "~/w/vdc/1/claude_harness/experiments/fact-mining/judgment_registry.py")
++JUDGMENT_REGISTRY = os.path.join(REPO_ROOT, "engine", "judgment_registry.py")  # autoharn: repo-local engine/
+ 
+ 
+ def run_review_queue_debt(target: str, journal: str,

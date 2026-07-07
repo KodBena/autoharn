@@ -1,0 +1,11 @@
+--- CH:experiments/fact-mining/verify_operator_turns.py@87e1bcc3e03b
++++ autoharn/instruments/verify_operator_turns.py
+@@ -22,7 +22,7 @@
+ import tempfile
+ from pathlib import Path
+ 
+-sys.path.insert(0, str(Path("/home/bork/w/vdc/1/epistemic-operator/harness/e14-build")))
++sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "drive"))   # autoharn: delivery_drill now in drive/
+ from delivery_drill import _operator_turns, splices  # noqa: E402
+ 
+ # a synthetic transcript: (1) an assistant turn (ignored), (2) a real operator splice `! cat …`,

@@ -40,7 +40,7 @@ PGHOST = os.environ.get("HARNESS_PGHOST", os.environ.get("EPISTEMIC_PGHOST", "19
 DB = os.environ.get("HARNESS_DB", "harness")
 DEFAULT_SCHEMA = os.environ.get("HARNESS_SCHEMA", "harness")
 REPO_ROOT = Path(__file__).resolve().parent.parent
-DDL = REPO_ROOT / "db" / "harness" / "002_rationalization_ledger.sql"
+DDL = REPO_ROOT / "stores" / "002_rationalization_ledger.sql"   # autoharn: stores/ (was db/harness/)
 # The skill's few-shot lives outside the repo (the skill bundle is installed under ~/.claude); the
 # generator writes there. Overridable with --out (used by the smoke test to write a scratch copy).
 DEFAULT_KNOWN_CASES = Path(

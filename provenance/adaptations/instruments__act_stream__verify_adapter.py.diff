@@ -1,0 +1,13 @@
+--- EO:tools/act_stream/verify_adapter.py@e34759885879
++++ autoharn/instruments/act_stream/verify_adapter.py
+@@ -137,8 +137,8 @@
+     subprocess.run(["psql", "-h", "192.168.122.1", "-d", "harness", "-c",
+                     f"DROP SCHEMA IF EXISTS {schema} CASCADE;"], capture_output=True, text=True)
+     subprocess.run(["psql", "-h", "192.168.122.1", "-d", "harness", "-v", "ON_ERROR_STOP=1",
+-                    "-v", f"schema={schema}", "-f", str(HERE.parent.parent.parent /
+-                    "claude_harness/db/harness/003_acts_stream.sql")], capture_output=True, text=True)
++                    "-v", f"schema={schema}", "-f", str(HERE.parent.parent /
++                    "stores" / "003_acts_stream.sql")], capture_output=True, text=True)   # autoharn: stores/
+     sid = persist(syn, schema=schema)
+     back = subprocess.run(["psql", "-h", "192.168.122.1", "-d", "harness", "-tA", "-F", "|",
+                            "-c", f"SELECT id, actor, kind, coalesce(name,''), coalesce(target,'') "

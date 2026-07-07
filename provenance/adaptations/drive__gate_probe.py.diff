@@ -1,0 +1,11 @@
+--- EO:harness/e14-build/gate_probe.py@e34759885879
++++ autoharn/drive/gate_probe.py
+@@ -26,7 +26,7 @@
+ import tempfile
+ 
+ HERE = os.path.dirname(os.path.abspath(__file__))
+-GATE = os.path.join(HERE, "pretooluse_change_policy.py")
++GATE = os.path.join(os.path.dirname(HERE), "hooks", "pretooluse_change_gate.py")  # autoharn: hooks/ (renamed [C13])
+ # The subject ledger lives in the isolated `nla` database; the gate + this probe target it. Fixtures
+ # run on the `probe` scratch mirror in `nla` (append-only stripped), never the durable ledger.
+ PGHOST, PGDB = "192.168.122.1", "nla"
