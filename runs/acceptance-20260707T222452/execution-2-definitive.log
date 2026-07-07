@@ -1,0 +1,188 @@
+
+===== (a) bootstrap.sh runs green from the fresh clone =====
+== autoharn bootstrap ==
+-- environment --
+  [OK ] python: Python 3.13.13 (/home/bork/w/vdc/venvs/generic/bin/python)
+  [OK ] psql present (psql (PostgreSQL) 18.3)
+  [OK ] clingo present (clingo version 5.8.0)
+-- git hook (the pre-commit gate chain) --
+  [OK ] core.hooksPath=hooks installed; pre-commit executable
+-- gates runnable (import smoke: any module with NO test coverage is checked here) --
+  [OK ] parses: gates/no_lazy_imports.py
+  [OK ] parses: gates/staging_guard.py
+  [OK ] parses: gates/fixture_census.py
+  [OK ] parses: gates/layout_census.py
+  [OK ] parses: gates/doc-legibility/check.py
+  [OK ] layout-census GREEN
+  [OK ] fixture-census GREEN
+-- DB reachability (the ledger/kernel substrate) --
+  [OK ] harness DB reachable at 192.168.122.1/harness
+-- result --
+bootstrap GREEN. Next: read bootstrap/QUICKSTART.md and run the mini-collaboration.
+CRITERION-a bootstrap exit=0
+
+===== (b) REAL MINI-COLLABORATION =====
+--- (b1) stand up a scratch kernel: s15 + s17-stamp + s17-independence + s18 + s19 ---
+kernel stood up OK (5-file stack incl. s19)
+--- (b2) the decision ledger EXERCISED: actor-omitted INSERT resolves via s19 on a NON-default schema ---
+SET
+SET
+1
+INSERT 0 1
+ledger row 1 kind=decision actor=author
+--- (b3) REFUSE-AND-TEACH proven LIVE: the change gate denies an unticketed edit and TEACHES ---
+Ledger policy: a change to a source file must be preceded by a ledger entry naming the file it changes. Insert the entry (one INSERT, as usual), then re-issue the change.
+{"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "deny", "permissionDecisionReason": "Ledger policy: a change to a source file must be preceded by a ledger entry naming the file it changes. Insert the entry (one INSERT, as usual), then re-issue the change."}}
+gate exit on UNTICKETED edit = 2 (expect 2: DENY + the teaching message above)
+--- (b3b) the taught path COMPLIED WITH: ledger the change, re-issue, gate ALLOWS ---
+SET
+SET
+2
+INSERT 0 1
+gate exit on LEDGERED edit = 0 (expect 0: allowed — the refuse-and-teach arc closed)
+gate journal:
+{"ts": "2026-07-07T22:53:49.029", "outcome": "denied", "deny_kind": "needs_entry", "target": "/tmp/claude-1000/-home-bork-w-vdc-1-claude-harness/7be3443d-4c2d-4097-947c-580e8aabe5d4/scratchpad/acc-scratch/subject/module.py"}
+{"ts": "2026-07-07T22:53:49.118", "outcome": "allowed", "file": "/tmp/claude-1000/-home-bork-w-vdc-1-claude-harness/7be3443d-4c2d-4097-947c-580e8aabe5d4/scratchpad/acc-scratch/subject/module.py", "unlocked_by_entry": 2, "entry_ts": "2026-07-07 22:53:49.052072+02", "tool": "Edit", "reused_ticket": false, "ticket_flags": []}
+--- (b4) the kernel STAMP path exercised (forgery/staleness refused; proxy self-review caught) ---
+# S17 STAMP FIXTURE GREEN — negative-control, HMAC agreement, forgery+stale refused, unstamped recorded, proxy self-review caught (same_invocation).
+stamp fixture exit=0
+
+===== (c) A CLOSE runs against the new layout's instruments (close_manifest from the clone) =====
+--- readiness mode on the scratch target (empty substrate must DEFER loudly, not silently pass) ---
+# close-manifest — target 'acc_demo' -> harness.acc_demo.ledger
+#   substrate (ADR-0015 Rule 4): db=harness schema=acc_demo actor-model=(SELECT id FROM kernel.principal WHERE name='subject') login-role=led_acc_demo
+#   consumer substrate (finding 36): acts-fenced=(none registered) [UNREGISTERED]  perf-session-dir=(none registered) [UNREGISTERED]
+#   MODE: readiness  (oracle §9 — readiness DEFERS on an empty acts stream; close REQUIRES it: absence at close is RED. Default close; --mode readiness is the declared pre-run opt-in.)
+#   gate journal: /home/bork/w/vdc/1/epistemic-audit/logs/change_gate.journal.jsonl
+#   journal window: (no timestamps)
+#   tee.log(s): ['/home/bork/pg_log/tee.log']
+
+  [OK ] soundness                OK           12 lines
+  [OK ] observed_currency        OK           11 lines
+  [N/A] contemporaneity          N/A          session acc_demo: UNREGISTERED — no gate-journal/audit-session config; contemporaneity N/A for this target (declared, ADR-0015 R4; NOT clean, NOT a crash — exit 3 so a manifest renders N/A, never OK)
+  [!! ] close_sweep              QUARANTINED  exit 1: subprocess.CalledProcessError: Command '['psql', '-h', '192.168.122.1', '-d', 'harness', '-tA', '-F', '\x1f', '-R', '\x1e', '-c', "SELECT a.id, a.amends, coalesce(a.amends_scope,'') FROM acc_demo.ledger a WHERE a.amends IS NOT NULL AND a.actor = (SELECT id FROM kernel.principal WHERE name='subject') AND NOT EXISTS (SELECT 1 FROM acc_demo.ledger s WHERE s.supersedes = a.id) AND NOT EXISTS (SELECT 1 FROM acc_demo.ledger s WHERE s.supersedes = a.amends);"]' returned non-zero exit status 1.
+  [OK ] stale_enactment_debt     OK           3 lines
+  [obs] marriage_differential    AGREE        # DIFFERENTIAL GREEN -- every target bit-identical to the SQL floor (declared observer — not gating this close; promotes to mandatory after one e15 close, M-2)
+  [obs] soundness_twin           DIVERGE      # TWIN DIVERGED — soundness.lp and soundness.py disagree on a shared judgment (a keying divergence; DEFECT). (declared observer — not gating this close; promotes to mandatory after one e15 close, M-2)
+  [con] acts:stale_attestation   N/A          target carries no acts stream by design (e15 / a declared rehearsal target)
+  [con] acts:claimed_without_act N/A          target carries no acts stream by design (e15 / a declared rehearsal target)
+  [con] acts:unledgered_span     N/A          target carries no acts stream by design (e15 / a declared rehearsal target)
+  [con] perf:proxy_written       N/A          target carries no subject session by design
+  [con] perf:self_performed      N/A          target carries no subject session by design
+  [con] perf:unbound_row         N/A          target carries no subject session by design
+  [con] review_without_detail    OK           0 finding(s): (none) [DESCRIPTIVE — adjudication disposes; does not gate]
+  [!! ] findings_gate            RED          # findings-gate RED — 6 OPEN finding(s) (GLOBAL (every increment)); an increment cannot report complete with undischarged findings. Dispose (fix/file/explain/waive) each, then re-run: (+6 open)
+  [OK ] review_queue_debt        OK           open flags by family: D:6; named: open_finding=6; age=NOT-AVAILABLE (OQ9); RED threshold: unruled (visibility line)
+  [OK ] foreclosure_debt         GREEN        every fixed finding carries a class_foreclosure row (ADR-0000 answered)
+  [OK ] foreclosure_integrity    GREEN        all 22 non-waived foreclosures intact (line registered + seen-red matches)
+  [OK ] append_only_integrity    GREEN        append-only-integrity PASS — all 5 required audit-spine tables (+ present acts.*) refuse UPDATE and DELETE.
+  [OK ] delivery_freight_integrity GREEN        1 delivery row(s) checked, each byte-matches an earlier binding freight (sha256 + verbatim): ['ruling 26=FK=>freight 25']
+
+# CLOSE RED — 2 mandatory line(s) not OK (quarantined / required-absent / open-findings): ['close_sweep', 'findings_gate:RED']. A red line is NO RESULT or an undischarged requirement (ADR-0015 Rule 3; oracle §9), never a clean close.
+close(readiness) exit=1
+--- close mode (honest gating: REQUIRED-ABSENT/RED where substrate or findings demand it) ---
+# close-manifest — target 'acc_demo' -> harness.acc_demo.ledger
+#   substrate (ADR-0015 Rule 4): db=harness schema=acc_demo actor-model=(SELECT id FROM kernel.principal WHERE name='subject') login-role=led_acc_demo
+#   consumer substrate (finding 36): acts-fenced=(none registered) [UNREGISTERED]  perf-session-dir=(none registered) [UNREGISTERED]
+#   MODE: close  (oracle §9 — readiness DEFERS on an empty acts stream; close REQUIRES it: absence at close is RED. Default close; --mode readiness is the declared pre-run opt-in.)
+#   gate journal: /home/bork/w/vdc/1/epistemic-audit/logs/change_gate.journal.jsonl
+#   journal window: (no timestamps)
+#   tee.log(s): ['/home/bork/pg_log/tee.log']
+
+  [OK ] soundness                OK           12 lines
+  [OK ] observed_currency        OK           11 lines
+  [N/A] contemporaneity          N/A          session acc_demo: UNREGISTERED — no gate-journal/audit-session config; contemporaneity N/A for this target (declared, ADR-0015 R4; NOT clean, NOT a crash — exit 3 so a manifest renders N/A, never OK)
+  [!! ] close_sweep              QUARANTINED  exit 1: subprocess.CalledProcessError: Command '['psql', '-h', '192.168.122.1', '-d', 'harness', '-tA', '-F', '\x1f', '-R', '\x1e', '-c', "SELECT a.id, a.amends, coalesce(a.amends_scope,'') FROM acc_demo.ledger a WHERE a.amends IS NOT NULL AND a.actor = (SELECT id FROM kernel.principal WHERE name='subject') AND NOT EXISTS (SELECT 1 FROM acc_demo.ledger s WHERE s.supersedes = a.id) AND NOT EXISTS (SELECT 1 FROM acc_demo.ledger s WHERE s.supersedes = a.amends);"]' returned non-zero exit status 1.
+  [OK ] stale_enactment_debt     OK           3 lines
+  [obs] marriage_differential    AGREE        # DIFFERENTIAL GREEN -- every target bit-identical to the SQL floor (declared observer — not gating this close; promotes to mandatory after one e15 close, M-2)
+  [obs] soundness_twin           DIVERGE      # TWIN DIVERGED — soundness.lp and soundness.py disagree on a shared judgment (a keying divergence; DEFECT). (declared observer — not gating this close; promotes to mandatory after one e15 close, M-2)
+  [con] acts:stale_attestation   N/A          target carries no acts stream by design (e15 / a declared rehearsal target)
+  [con] acts:claimed_without_act N/A          target carries no acts stream by design (e15 / a declared rehearsal target)
+  [con] acts:unledgered_span     N/A          target carries no acts stream by design (e15 / a declared rehearsal target)
+  [con] perf:proxy_written       N/A          target carries no subject session by design
+  [con] perf:self_performed      N/A          target carries no subject session by design
+  [con] perf:unbound_row         N/A          target carries no subject session by design
+  [con] review_without_detail    OK           0 finding(s): (none) [DESCRIPTIVE — adjudication disposes; does not gate]
+  [!! ] findings_gate            RED          # findings-gate RED — 6 OPEN finding(s) (GLOBAL (every increment)); an increment cannot report complete with undischarged findings. Dispose (fix/file/explain/waive) each, then re-run: (+6 open)
+  [OK ] review_queue_debt        OK           open flags by family: D:6; named: open_finding=6; age=NOT-AVAILABLE (OQ9); RED threshold: unruled (visibility line)
+  [OK ] foreclosure_debt         GREEN        every fixed finding carries a class_foreclosure row (ADR-0000 answered)
+  [OK ] foreclosure_integrity    GREEN        all 22 non-waived foreclosures intact (line registered + seen-red matches)
+  [OK ] append_only_integrity    GREEN        append-only-integrity PASS — all 5 required audit-spine tables (+ present acts.*) refuse UPDATE and DELETE.
+  [OK ] delivery_freight_integrity GREEN        1 delivery row(s) checked, each byte-matches an earlier binding freight (sha256 + verbatim): ['ruling 26=FK=>freight 25']
+
+# CLOSE RED — 2 mandatory line(s) not OK (quarantined / required-absent / open-findings): ['close_sweep', 'findings_gate:RED']. A red line is NO RESULT or an undischarged requirement (ADR-0015 Rule 3; oracle §9), never a clean close.
+close(close) exit=1
+
+===== (d) the gates run from the clone's OWN pre-commit on a REAL commit =====
+--- (d1) NEGATIVE first: an UNDECLARED commit is REFUSED by the clone's staging guard (live red) ---
+  Agents: export CLAUDE_COMMIT_PATHS='<the paths you git add-ed>' before committing.
+  Humans committing interactively: export STAGING_GUARD_SKIP=1 (once, in your shell rc).
+
+pre-commit: staging guard FAILED — commit refused (finding 33, commit-scope-sweep).
+undeclared commit exit=0 (expect 1)
+--- (d2) the DECLARED commit passes the full gate chain ---
+  SHA256           ×1   judgment/engine/engine-panel/refute-architecture.md:23
+  SIL3             ×1   law/briefs/safety-critical-logging/intermediate/sweep-functional-safety-standards.md:6
+  SIL4             ×1   law/briefs/safety-critical-logging/intermediate/critique.md:34
+  TCL1             ×1   law/briefs/safety-critical-logging/intermediate/sweep-functional-safety-standards.md:27
+pre-commit: doc-legibility reported undefined acronyms (REPORT-ONLY — not blocking; see BACKLOG finding 48).
+[master 3c4ecb2] acceptance: clone-side witness commit (gates live)
+ 1 file changed, 1 insertion(+)
+ create mode 100644 runs/acceptance-clone-witness/witness.txt
+declared commit exit=0
+3c4ecb2 acceptance: clone-side witness commit (gates live)
+
+===== (e) fixture census green + ONE LIVE RED PER MIGRATED GATE CLASS, re-executed from the clone =====
+fixture-census: clean ✓  (22 seen-red gates, each with banked red evidence and a registered runnable fixture). Live red-re-execution is the acceptance gate (§6).
+fixture_census exit=0
+layout-census: clean ✓  (18 registered dirs, 6 root docs; per-directory currency patterns hold). Single-currency judgment for new files is review-only.
+layout_census exit=0
+--- live red: kernel s19 class (pre-fix set_actor refusal reproduced) ---
+CONTEXT:  PL/pgSQL function set_actor() line 4 at SQL statement
+# RED CONFIRMED — the actor-omitted write was REFUSED (findings 16/37/45 reproduced); s19 forecloses this. GREEN half: kernel/fixtures/s19_search_path_fixture.py.
+exit=0
+--- live red: layout-census (emptied registry) ---
+exit=0 (expect 0 = red proven)
+--- live red: fixture-census (emptied registry) ---
+exit=0 (expect 0 = red proven)
+--- live red: no_lazy_imports (a lazy import planted in a temp tree) ---
+Traceback (most recent call last):
+  File "/tmp/claude-1000/-home-bork-w-vdc-1-claude-harness/7be3443d-4c2d-4097-947c-580e8aabe5d4/scratchpad/acceptance-clone/gates/no_lazy_imports.py", line 92, in <module>
+    raise SystemExit(main())
+                     ~~~~^^
+  File "/tmp/claude-1000/-home-bork-w-vdc-1-claude-harness/7be3443d-4c2d-4097-947c-580e8aabe5d4/scratchpad/acceptance-clone/gates/no_lazy_imports.py", line 83, in main
+    bad.extend(violations_in(f))
+               ~~~~~~~~~~~~~^^^
+  File "/tmp/claude-1000/-home-bork-w-vdc-1-claude-harness/7be3443d-4c2d-4097-947c-580e8aabe5d4/scratchpad/acceptance-clone/gates/no_lazy_imports.py", line 64, in violations_in
+    walk(tree, ())
+    ~~~~^^^^^^^^^^
+  File "/tmp/claude-1000/-home-bork-w-vdc-1-claude-harness/7be3443d-4c2d-4097-947c-580e8aabe5d4/scratchpad/acceptance-clone/gates/no_lazy_imports.py", line 57, in walk
+    walk(child, func_stack + (child.name,))
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/claude-1000/-home-bork-w-vdc-1-claude-harness/7be3443d-4c2d-4097-947c-580e8aabe5d4/scratchpad/acceptance-clone/gates/no_lazy_imports.py", line 59, in walk
+    out.append(f"{path.relative_to(REPO)}:{child.lineno}: {_names(child)}"
+                  ~~~~~~~~~~~~~~~~^^^^^^
+  File "/usr/lib64/python3.13/pathlib/_local.py", line 385, in relative_to
+    raise ValueError(f"{str(self)!r} is not in the subpath of {str(other)!r}")
+ValueError: '/tmp/claude-1000/-home-bork-w-vdc-1-claude-harness/7be3443d-4c2d-4097-947c-580e8aabe5d4/scratchpad/acc-scratch/lazyrepo/lazy.py' is not in the subpath of '/tmp/claude-1000/-home-bork-w-vdc-1-claude-harness/7be3443d-4c2d-4097-947c-580e8aabe5d4/scratchpad/acceptance-clone'
+no_lazy on planted violation exit=1 (expect 1)
+--- live red: staging guard — proven at (d1) above (undeclared commit refused) ---
+--- live red: destructive-DDL class (seen-red 24 specimen) ---
+exit=0 (expect 0 = red proven)
+--- live red: append-only class (seen-red 06 specimen) ---
+exit=0 (expect 0 = red proven)
+--- live red+green: findings gate (both polarities via its fixture) ---
+  [OK ] duplicate-of an EXISTING finding accepted — accepted
+# witness: /tmp/claude-1000/-home-bork-w-vdc-1-claude-harness/7be3443d-4c2d-4097-947c-580e8aabe5d4/scratchpad/acceptance-clone/runs/findings-gate-fixture/witness.txt
+exit=0
+--- live red: doc-legibility (currently RED-reporting over the corpus — a live red by construction) ---
+exit=1 (expect 1 = live red; wired report-only)
+--- live red: instrument/close-line classes (mutation flips inside each verifier; + core-a negative control) ---
+# ADAPTER GREEN — both fixtures agree with the pre-registered oracle; both mutations flip RED
+# consumer-substrate-required PASS — an unregistered consumer substrate is REQUIRED-ABSENT (RED) at CLOSE and DEFERRED at readiness; no consumer greens a wrong/absent substrate (finding 36).
+# consumer-no-vacuous-pass PASS — empty stream: CLOSE is REQUIRED-ABSENT (RED), READINESS DEFERS; no consumer greens a no-op.
+run-core-a GREEN exit=0 (expect 0)
+run-core-a --negative-control exit=0 (expect 0 = its convention: 0 means the broken fixture FAILED LOUDLY, the red proven)
+--- live red: stamp class (s17 fixture includes forgery/stale REFUSALS — proven at b4) ---
+
+===== ACCEPTANCE SCRIPT DONE =====
