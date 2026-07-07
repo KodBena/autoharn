@@ -21,7 +21,7 @@ CH	db/harness/006_foreclosure_debt.sql	stores/006_foreclosure_debt.sql	0
 CH	db/harness/006_foreclosure_debt_fixture.py	stores/006_foreclosure_debt_fixture.py	0
 CH	db/harness/007_ruling_delivers_fixture.py	stores/007_ruling_delivers_fixture.py	0
 CH	db/harness/007_ruling_delivers_fk.sql	stores/007_ruling_delivers_fk.sql	0
-CH	experiments/fact-mining/test_rationalization_ledger.py	stores/test_rationalization_ledger.py	0
+CH	experiments/fact-mining/test_rationalization_ledger.py	stores/test_rationalization_ledger.py	1
 CH	tools/no_destructive_ddl.py	gates/no_destructive_ddl.py	0
 CH	tools/no_lazy_imports.py	gates/no_lazy_imports.py	0
 CH	tools/findings_gate_fixture.py	gates/findings_gate_fixture.py	0
@@ -316,8 +316,8 @@ EO	harness/e15-build/s13-review_detail-truncate-guard-remediation.sql	kernel/lin
 EO	harness/e17-build/s17-stamp-mechanism.sql	kernel/lineage/s17-stamp-mechanism.sql	0
 EO	harness/e17-build/s17-independence-vocabulary.sql	kernel/lineage/s17-independence-vocabulary.sql	0
 EO	harness/e18-build/s18-criterion-principals.sql	kernel/lineage/s18-criterion-principals.sql	0
-EO	harness/e17-build/s17_stamp_fixture.py	kernel/fixtures/s17_stamp_fixture.py	0
-EO	harness/e17-build/s17_independence_fixture.py	kernel/fixtures/s17_independence_fixture.py	0
+EO	harness/e17-build/s17_stamp_fixture.py	kernel/fixtures/s17_stamp_fixture.py	1
+EO	harness/e17-build/s17_independence_fixture.py	kernel/fixtures/s17_independence_fixture.py	1
 EO	harness/e15-build/readiness_vs_close_fixture.py	kernel/fixtures/readiness_vs_close_fixture.py	0
 EO	harness/e16-build/FINDINGS-RATIFICATION-PACKAGE.md	judgment/e-series/e16-FINDINGS-RATIFICATION-PACKAGE.md	0
 EO	harness/e17-build/FINDINGS-RATIFICATION-PACKAGE.md	judgment/e-series/e17-FINDINGS-RATIFICATION-PACKAGE.md	0
