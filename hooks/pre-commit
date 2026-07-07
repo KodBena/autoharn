@@ -1,0 +1,35 @@
+#!/bin/sh
+# autoharn pre-commit — the mechanical refusals, invoked by REPO-RELATIVE path.
+#
+# Adapted from claude_harness/tools/hooks/pre-commit [C18]: the old hook reached
+# into a sibling repo by absolute path (the two-repo coupling the fresh home must
+# not inherit) and ran the ADR-0016 standing-service umbrella gate — which has NO
+# services to gate here (the NLP lane stays in the attic, C14). Running it here
+# would be a silent vacuous pass (F49). It is therefore NOT wired; it rejoins
+# autoharn only when autoharn's first standing service does.
+#
+# INTERIM WIRING (BUILD-BRIEF Step 2): staging guard -> no_lazy_imports. The two
+# census gates (fixture_census, layout_census) and the doc-legibility gate join
+# this chain at Step 9, once they are minted. Every migration commit runs under
+# this hook — the migration is the gates' first live exercise.
+#
+# Install (once per clone; .git/hooks is unversioned): git config core.hooksPath hooks
+set -u
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+PY="$HOME/w/vdc/venvs/generic/bin/python"
+[ -x "$PY" ] || PY="$(command -v python3)"
+
+# staging_guard FIRST — a swept-in path is a scope defect to resolve before any
+# content gate matters (finding 33 foreclosure). Repo-local, its one home (P1).
+"$PY" "$REPO_ROOT/gates/staging_guard.py" || {
+    echo "" >&2
+    echo "pre-commit: staging guard FAILED — commit refused (finding 33, commit-scope-sweep)." >&2
+    exit 1
+}
+
+"$PY" "$REPO_ROOT/gates/no_lazy_imports.py" || {
+    echo "" >&2
+    echo "pre-commit: lazy-import gate FAILED — commit refused (CLAUDE.md edict 2026-07-02)." >&2
+    echo "Hoist the imports to module top, then commit again." >&2
+    exit 1
+}
