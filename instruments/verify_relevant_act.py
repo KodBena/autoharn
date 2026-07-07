@@ -19,6 +19,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "engine"))  # autoharn: acts_join lives in engine/
 from acts_join import ActRow, LedgerRow, derive  # noqa: E402
 
 FENCED = "/fenced/"

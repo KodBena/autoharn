@@ -1,12 +1,14 @@
 --- CH:.gitignore@87e1bcc3e03b
 +++ autoharn/.gitignore
-@@ -12,12 +12,7 @@
+@@ -12,12 +12,10 @@
  /scratchpad/
  *.local
  
 -# JAX persistent compilation cache (regenerable build artifact)
 -.jax_cache/
--
++# runtime outputs written by drive/ tooling (delivery_drill --check writes its own transcript)
++/drive/delivery-drill-transcript.txt
+ 
 -# rendered diagram outputs (regenerable from .dot)
 -experiments/fact-mining/docs/*.svg
 -experiments/fact-mining/docs/*.png

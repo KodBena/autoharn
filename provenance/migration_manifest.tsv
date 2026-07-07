@@ -221,10 +221,10 @@ CH	experiments/fact-mining/test_ledger_acts.py	engine/tests/test_ledger_acts.py	
 CH	experiments/fact-mining/test_ledger_marriage.py	engine/tests/test_ledger_marriage.py	1
 CH	experiments/fact-mining/test_ledger_support.py	engine/tests/test_ledger_support.py	1
 CH	experiments/fact-mining/test_acts_join.py	engine/tests/test_acts_join.py	1
-CH	experiments/fact-mining/row_performed_by.py	instruments/row_performed_by.py	0
+CH	experiments/fact-mining/row_performed_by.py	instruments/row_performed_by.py	1
 CH	experiments/fact-mining/verify_binder.py	instruments/verify_binder.py	0
 CH	experiments/fact-mining/verify_operator_turns.py	instruments/verify_operator_turns.py	1
-CH	experiments/fact-mining/verify_relevant_act.py	instruments/verify_relevant_act.py	0
+CH	experiments/fact-mining/verify_relevant_act.py	instruments/verify_relevant_act.py	1
 CH	experiments/fact-mining/docs/LEDGER-LOGIC-MARRIAGE.md	design/LEDGER-LOGIC-MARRIAGE.md	0
 CH	experiments/fact-mining/docs/LOGIC-LAYER-ASP.md	design/LOGIC-LAYER-ASP.md	0
 CH	experiments/fact-mining/docs/LOGIC-LAYER-SEAM.md	design/LOGIC-LAYER-SEAM.md	0

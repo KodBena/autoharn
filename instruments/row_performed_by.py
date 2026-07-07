@@ -63,7 +63,8 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-from ledger_edb import resolve as resolve_ledger
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "engine"))  # autoharn: ledger_edb lives in engine/
+from ledger_edb import resolve as resolve_ledger  # noqa: E402
 
 HARNESS_PGHOST = os.environ.get("HARNESS_PGHOST", os.environ.get("EPISTEMIC_PGHOST", "192.168.122.1"))
 EPISTEMIC_PGHOST = os.environ.get("EPISTEMIC_PGHOST", "192.168.122.1")

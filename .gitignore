@@ -12,6 +12,9 @@ venv/
 /scratchpad/
 *.local
 
+# runtime outputs written by drive/ tooling (delivery_drill --check writes its own transcript)
+/drive/delivery-drill-transcript.txt
+
 # NOTE: no blanket *.pdf/*.svg ignore — the authoritative BRIEFs travel WITH their
 # sources/ PDFs (law/briefs/*/sources/, manifest [C10]); those are tracked evidence.
 # The fact-mining NLP lane and its jax cache stay in the claude_harness attic (mandate

@@ -88,9 +88,23 @@ def enumerate_close_lines() -> set[str]:
     return {f"close:{ln}" for ln in lines}
 
 
+LP_DIR = os.path.join(HERE, "lp")   # autoharn: the engine ASP programs live in engine/lp/ (LAYOUT split)
+# [C16]: these 4 fact-mining verifiers now live in instruments/. They are seen-red FIXTURES (findings
+# 39/25/09/28), not registered close-instruments, so they are excluded from the instrument enumeration
+# (in the old topology they lived in fact-mining and were never enumerated — the split surfaced them).
+_RELOCATED_VERIFIERS = {"row_performed_by.py", "verify_binder.py",
+                        "verify_operator_turns.py", "verify_relevant_act.py"}
+# The NLP kb-logic-layer / why-orphan judgment classes' .lp implementations stayed in the fact-mining
+# ATTIC (mandate §4). Their registry rows (append-only, judgment_registry verbatim) legitimately have no
+# implementation in autoharn; parity excludes them here rather than by editing the frozen registry.
+_ATTIC_LP = {"logic_layer.lp", "logic_repair.lp", "why_layer.lp"}
+
+
 def enumerate_instruments() -> set[str]:
     keys: set[str] = set()
     for f in sorted(os.listdir(INSTR)):
+        if f in _RELOCATED_VERIFIERS:
+            continue
         if f.endswith(".py"):
             keys.add(f"instrument:{f}")
         elif f.endswith(".sh"):
@@ -103,10 +117,12 @@ def enumerate_instruments() -> set[str]:
 
 def enumerate_lp_atoms(skip_file: str | None = None) -> set[str]:
     keys: set[str] = set()
-    for f in sorted(os.listdir(HERE)):
+    if not os.path.isdir(LP_DIR):
+        return keys
+    for f in sorted(os.listdir(LP_DIR)):
         if not f.endswith(".lp") or f == skip_file:
             continue
-        atoms = _SHOW_RE.findall(open(os.path.join(HERE, f), encoding="utf-8").read())
+        atoms = _SHOW_RE.findall(open(os.path.join(LP_DIR, f), encoding="utf-8").read())
         keys |= {f"lp:{f}#{a}" for a in atoms}  # zero-#show files emit no judgment outputs
     return keys
 
@@ -136,6 +152,8 @@ def check(surface: set[str], quiet: bool = False) -> tuple[list[str], list[str]]
     d2 = []
     excl_by_id = {s.judgment_id: s.exclusion for s in SPECS}
     for k in sorted(enumerable):
+        if k.startswith("lp:") and any(k.startswith(f"lp:{a}") for a in _ATTIC_LP):
+            continue   # implementation stayed in the fact-mining attic (mandate §4)
         if k not in surface and not excl_by_id.get(IMPL_INDEX[k]):
             d2.append(k)
     for k in sorted(set(IMPL_INDEX) - enumerable):  # tool: keys — resolved repo-locally in autoharn
