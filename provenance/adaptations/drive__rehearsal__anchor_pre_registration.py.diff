@@ -1,0 +1,16 @@
+--- EO:harness/e15-build/rehearsal/anchor_pre_registration.py@e34759885879
++++ autoharn/drive/rehearsal/anchor_pre_registration.py
+@@ -26,7 +26,12 @@
+ 
+ PGHOST = "192.168.122.1"
+ DB = "harness"
+-OPERATOR = Path(__file__).resolve().parents[3]   # …/epistemic-operator
++# Archive-pinned (like ledger_target's e15-e18 entries): the five DOCS below are e15 EVIDENCE that
++# stays in the epistemic-operator archive — never migrated into autoharn. The old layout put this file
++# at harness/e15-build/rehearsal/<file>, so parents[3] landed on the operator root; in autoharn this
++# file lives at drive/rehearsal/, three levels shallower, so the same parents[3] now overshoots past
++# the archive entirely. Point straight at the archive instead of trying to re-derive it by ancestry.
++OPERATOR = Path("/home/bork/w/vdc/1/epistemic-operator")
+ ACTOR = "apparatus:engineer"
+ 
+ # The five documents to anchor (path relative to the operator repo). The pre-registration file anchors

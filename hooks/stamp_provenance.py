@@ -39,7 +39,14 @@ import sys
 import time
 from pathlib import Path
 
-REPO = Path(__file__).resolve().parents[2]  # tools/hooks/ -> repo root
+# Migration note: this file used to live at tools/hooks/ (2 levels below the repo root, hence
+# parents[2]); in autoharn it lives at the shallower top-level hooks/ (1 level below repo root),
+# so parents[2] silently overshot to the PARENT of autoharn (/home/bork/w/vdc/1 — the directory
+# holding claude_harness/ and epistemic-operator/ too). That widened this hook's own stated
+# safety invariant ("touches a file only if inside the repo") to cover sibling repos as well —
+# found and fixed while fixing the identical parents[N] migration-depth class elsewhere in
+# drive/rehearsal/ (same bug shape, discovered in passing; CLAUDE.md: fixed, not routed around).
+REPO = Path(__file__).resolve().parents[1]  # hooks/ -> repo root
 
 # A live workflow streams sub-agent transcripts into its run dir continuously (observed
 # inter-write gaps are seconds while any agent is running); a run that has written nothing

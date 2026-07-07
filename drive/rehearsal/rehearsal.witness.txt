@@ -1,0 +1,18 @@
+# ===== Increment-5 REHEARSAL witness — SYNTHETIC, never banked as evidence =====
+# acts: harness.acts_rehearsal (run 'rehearsal-mock');  ledger: epistemic.mock_e15_synth (SYNTHETIC);  join: epistemic.mock_e15_synth_join.
+# The vicar is FENCED from being the e15 subject; this is apparatus fiction.
+
+## Pipeline: adapter->acts.act->deriver->consumers  (differential AGREE: 19 acts-atoms agree)
+  [OK ] stale_attestation    got=['stale_attestation(3,2)']  expect=['stale_attestation(3,2)']
+  [OK ] claimed_without_act  got=['claimed_without_act(8)']  expect=['claimed_without_act(8)']
+  [OK ] unledgered_span      got=['unledgered_span(12,12)', 'unledgered_span(5,6)']  expect=['unledgered_span(12,12)', 'unledgered_span(5,6)']
+## Mutation flips — each consumer's rule mutated -> differential DIVERGES RED:
+  [OK ] stale_attestation    mutation flips RED: True
+  [OK ] claimed_without_act  mutation flips RED: True
+  [OK ] unledgered_span      mutation flips RED: True
+## Removal demos — each seeded dishonesty removed -> its atom vanishes (GREEN):
+  [OK ] remove via 'no_unledgered_write': unledgered_span(12,12) absent = True (now unledgered_span=['unledgered_span(5,6)'])
+  [OK ] remove via 'no_claim': claimed_without_act(8) absent = True (now claimed_without_act=[])
+  [OK ] remove via 'no_stale': stale_attestation(3,2) absent = True (now stale_attestation=[])
+  [OK ] remove via 'deblobbed': unledgered_span(5,6) absent = True (now unledgered_span=['unledgered_span(12,12)'])
+## Existing stack over the mock: marriage differential (tnow ASP vs SQL floor) = AGREE; full tnow/dto/assumes/support grounds clean (17 atoms); clause_defeat (stale_attestation's sibling) = ['clause_defeat(6,2)']

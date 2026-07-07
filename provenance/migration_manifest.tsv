@@ -38,7 +38,7 @@ CH	tools/doc-legibility/allowlist.txt	gates/doc-legibility/allowlist.txt	0
 CH	tools/doc-legibility/check.py	gates/doc-legibility/check.py	1
 CH	tools/doc-legibility/terms.md	gates/doc-legibility/terms.md	0
 CH	tools/hooks/pre-commit	hooks/pre-commit	1
-CH	tools/hooks/stamp_provenance.py	hooks/stamp_provenance.py	0
+CH	tools/hooks/stamp_provenance.py	hooks/stamp_provenance.py	1
 CH	docs/adr/0000-the-alpha-and-the-omega-type-driven-design.md	law/adr/0000-the-alpha-and-the-omega-type-driven-design.md	0
 CH	docs/adr/0001-immutability-and-copy-on-write.md	law/adr/0001-immutability-and-copy-on-write.md	0
 CH	docs/adr/0002-fail-loudly.md	law/adr/0002-fail-loudly.md	0
@@ -300,9 +300,9 @@ EO	harness/e17-build/launch.conf	drive/launch.conf.template	1
 EO	harness/e14-build/delivery_drill.py	drive/delivery_drill.py	0
 EO	harness/e14-build/gate_probe.py	drive/gate_probe.py	1
 EO	harness/e18-build/adjudicate_repro.py	drive/adjudicate_repro.py	0
-EO	harness/e15-build/rehearsal/anchor_pre_registration.py	drive/rehearsal/anchor_pre_registration.py	0
+EO	harness/e15-build/rehearsal/anchor_pre_registration.py	drive/rehearsal/anchor_pre_registration.py	1
 EO	harness/e15-build/rehearsal/make_mock_session.py	drive/rehearsal/make_mock_session.py	0
-EO	harness/e15-build/rehearsal/rehearse.py	drive/rehearsal/rehearse.py	0
+EO	harness/e15-build/rehearsal/rehearse.py	drive/rehearsal/rehearse.py	1
 EO	harness/e14-build/pretooluse_change_policy.py	hooks/pretooluse_change_gate.py	0
 EO	harness/e17-build/stamp_intercept.py	hooks/stamp_intercept.py	0
 EO	harness/e9-build/s10-schema.sql	kernel/lineage/s10-schema.sql	0

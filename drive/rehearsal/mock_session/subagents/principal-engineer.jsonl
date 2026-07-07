@@ -1,0 +1,2 @@
+{"type": "assistant", "uuid": "synthetic-mock-0019", "timestamp": "2026-07-06T20:00:19.000Z", "message": {"role": "assistant", "content": [{"type": "tool_use", "id": "su-r1", "name": "Read", "input": {"file_path": "/synthetic/nk4-mock/report_lint.py"}}]}, "isSidechain": false}
+{"type": "user", "uuid": "synthetic-mock-0020", "timestamp": "2026-07-06T20:00:20.000Z", "message": {"role": "user", "content": [{"type": "tool_result", "tool_use_id": "su-r1", "content": "file contents"}]}, "isSidechain": false}
