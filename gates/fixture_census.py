@@ -1,0 +1,111 @@
+#!/usr/bin/env python3
+"""fixture_census — mechanizes mandate §6's "every migrated gate's seen-red still proves it
+can fail" (manifest [C20]). A gate never seen red is a claim (ADR-0011); this gate makes the
+SEEN-RED corpus a checked property so a gate cannot be added, or a seen-red silently orphaned,
+without its both-polarity proof.
+
+It holds a REGISTRY mapping every seen-red/<dir> to its runnable fixture (the live artifact that
+both-polarity-proves the gate/close-line). It goes RED on:
+
+  1. a seen-red/<dir> with NO banked red evidence (no red-shaped .txt) — a gate not seen red;
+  2. an ORPHANED seen-red/<dir> not in the registry — evidence with no owning gate;
+  3. a registry entry whose FIXTURE file does not exist — a claim whose proof cannot be run.
+
+SCOPE (declared, ADR-0011 Rule 1): this gate checks red-evidence PRESENCE + fixture EXISTENCE
+statically — cheap enough for every commit. Actually RE-EXECUTING each fixture to a live red is
+the ACCEPTANCE-time re-verification (mandate §6 / BUILD-BRIEF Step 10e), not run on every commit
+(many fixtures touch the DB; a 3s-per-fixture commit tax is its own hazard). The static census is
+the standing net; the live red-re-execution is the acceptance gate.
+
+Exit 0 clean; exit 1 listing every breach. Run from repo root: python3 gates/fixture_census.py
+Lazy imports banned.
+"""
+from __future__ import annotations
+
+import os
+import sys
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+SEEN_RED = os.path.join(ROOT, "seen-red")
+
+# The registry: seen-red dir -> the runnable fixture that both-polarity-proves it. The fixture is the
+# LIVE artifact (a verify_*.py / *_fixture.py / a gate / the arm script / the banked reproduction) — the
+# thing the acceptance re-executes to a live red. Every seen-red dir MUST appear here (orphan check).
+REGISTRY: dict[str, str] = {
+    "04-consumer-no-vacuous-pass":    "instruments/verify_consumer_no_vacuous.py",
+    "05-verify-adapter":              "instruments/act_stream/verify_adapter.py",
+    "06-append-only-integrity":       "seen-red/06-append-only-integrity/red-specimen.py",
+    "09-relevant-act-classification": "instruments/verify_relevant_act.py",
+    "12-contemporaneity-degrade":     "instruments/verify_contemporaneity_degrade.py",
+    "18-bash-write-classification":   "instruments/act_stream/verify_bash_write.py",
+    "24-destructive-ddl-guard":       "seen-red/24-destructive-ddl-guard/red-specimen.py",
+    "25-operator-turn-extraction":    "instruments/verify_operator_turns.py",
+    "31-interception-stamp":          "kernel/fixtures/s17_stamp_fixture.py",
+    "33-staging-guard":               "seen-red/33-staging-guard/red-specimen.py",
+    "35-delivery-freight-integrity":  "instruments/verify_delivery_freight.py",
+    "36-consumer-substrate-required": "instruments/verify_substrate_required.py",
+    "38-review-without-detail":       "instruments/verify_review_without_detail.py",
+    "39-binder-bind-many":            "instruments/verify_binder.py",
+    "42-gate-journal-registered":     "instruments/verify_gate_journal_registered.py",
+    "43-arming-delivery-set":         "drive/arm.sh",
+    "45-criterion-reviewer-grants":   "drive/arm.sh",
+    "engine-inc1-controls":           "engine/tests",
+    "review-fixpoint":                "instruments/verify_review_fixpoint.py",
+    "s19-trigger-search-path":        "kernel/fixtures/s19_search_path_fixture.py",
+    # the two census gates minted in this build carry their own seen-red (a census gate never seen
+    # red is the joke that writes itself); their fixture is the gate itself, red-specimen mutates its
+    # registry in memory to force the breach.
+    "layout-census":                  "gates/layout_census.py",
+    "fixture-census":                 "gates/fixture_census.py",
+}
+
+
+def _has_red_evidence(d: str) -> bool:
+    """A seen-red dir proves failure iff it banks a red-shaped artifact (red.txt, *-red.txt,
+    red-specimen.py) — the captured or reproducible red the gate produced."""
+    for name in os.listdir(d):
+        low = name.lower()
+        if low == "red.txt" or low.endswith("-red.txt") or low.startswith("red-specimen"):
+            return True
+    return False
+
+
+def main() -> int:
+    breaches: list[str] = []
+    present = sorted(e for e in os.listdir(SEEN_RED)
+                     if os.path.isdir(os.path.join(SEEN_RED, e)))
+
+    # (2) orphan check — every seen-red dir must be registered
+    for d in present:
+        if d not in REGISTRY:
+            breaches.append(f"ORPHANED seen-red dir: seen-red/{d}/ has no registry entry "
+                            f"(a gate's proof with no owning gate — register it or remove it)")
+    # registry entries for dirs that vanished
+    for d in REGISTRY:
+        if d not in present:
+            breaches.append(f"MISSING seen-red dir: registry names seen-red/{d}/ but it does not exist")
+
+    for d in present:
+        path = os.path.join(SEEN_RED, d)
+        # (1) red evidence present
+        if not _has_red_evidence(path):
+            breaches.append(f"NO RED EVIDENCE: seen-red/{d}/ banks no red-shaped artifact "
+                            f"(a gate never seen red is a claim, ADR-0011)")
+        # (3) fixture exists
+        fx = REGISTRY.get(d)
+        if fx and not os.path.exists(os.path.join(ROOT, fx)):
+            breaches.append(f"FIXTURE MISSING: seen-red/{d}/ -> {fx} does not exist "
+                            f"(a proof whose fixture cannot run)")
+
+    if breaches:
+        print(f"fixture-census: {len(breaches)} breach(es) — the seen-red corpus is not intact:\n")
+        for b in breaches:
+            print(f"  !! {b}")
+        return 1
+    print(f"fixture-census: clean ✓  ({len(present)} seen-red gates, each with banked red evidence and a "
+          f"registered runnable fixture). Live red-re-execution is the acceptance gate (§6).")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

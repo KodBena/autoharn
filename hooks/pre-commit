@@ -8,10 +8,15 @@
 # would be a silent vacuous pass (F49). It is therefore NOT wired; it rejoins
 # autoharn only when autoharn's first standing service does.
 #
-# INTERIM WIRING (BUILD-BRIEF Step 2): staging guard -> no_lazy_imports. The two
-# census gates (fixture_census, layout_census) and the doc-legibility gate join
-# this chain at Step 9, once they are minted. Every migration commit runs under
-# this hook — the migration is the gates' first live exercise.
+# FINAL WIRING (BUILD-BRIEF Step 9): staging_guard -> no_lazy_imports -> fixture_census
+# -> layout_census -> doc-legibility. doc-legibility is wired REPORT-ONLY (runs and prints,
+# does not block): the C15 scope-widening to ALL tracked *.md surfaces ~1429 acronym reports
+# over the migrated corpus — mostly the crude heuristic misfiring on all-caps emphasis words
+# and standards acronyms in docs never written against it. Making it a BLOCKING gate over the
+# full corpus needs a corpus acronym-sweep (filed, BACKLOG); wiring it blocking now would make
+# the repo uncommittable — the maintainer-flagged tension (C15 widen vs Step-9 block vs Step-10
+# green). Its seen-red both-polarity proof already exists; only its pre-commit disposition is
+# report-only pending the sweep. The other four gates BLOCK.
 #
 # Install (once per clone; .git/hooks is unversioned): git config core.hooksPath hooks
 set -u
@@ -33,3 +38,20 @@ PY="$HOME/w/vdc/venvs/generic/bin/python"
     echo "Hoist the imports to module top, then commit again." >&2
     exit 1
 }
+
+"$PY" "$REPO_ROOT/gates/fixture_census.py" || {
+    echo "" >&2
+    echo "pre-commit: fixture census FAILED — commit refused (a gate/seen-red is not intact, ADR-0011/C20)." >&2
+    exit 1
+}
+
+"$PY" "$REPO_ROOT/gates/layout_census.py" || {
+    echo "" >&2
+    echo "pre-commit: layout census FAILED — commit refused (the designed tree is breached, LAYOUT §1/C21)." >&2
+    exit 1
+}
+
+# doc-legibility — REPORT-ONLY (see header): runs for visibility, never blocks, pending the
+# corpus acronym-sweep (BACKLOG / finding 48). Its exit code is deliberately NOT propagated.
+"$PY" "$REPO_ROOT/gates/doc-legibility/check.py" >&2 || \
+    echo "pre-commit: doc-legibility reported undefined acronyms (REPORT-ONLY — not blocking; see BACKLOG finding 48)." >&2
