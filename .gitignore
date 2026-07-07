@@ -23,3 +23,6 @@ venv/
 # copyright sources are LOCAL ONLY (incident 2026-07-07)
 law/briefs/*/sources/*
 !law/briefs/*/sources/README.md
+
+# session ephemera are LOCAL ONLY (privacy; incident 2 same night)
+ephemera/session-*

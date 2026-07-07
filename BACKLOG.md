@@ -1366,3 +1366,14 @@ the OLD repo's process and did not migrate as a MECHANICAL gate — the class fi
 pre-push hook refusing PDF/binary blobs without an allowlist entry, riding the next
 increment. MIGRATION.tsv retains the PDFs' origin rows (true historical record; their
 dest is now local-sources, noted here).
+
+## INCIDENT 2 (same night): session ephemera pushed publicly — privacy class
+
+The consolidation's whole-session ephemera snapshot (288 files incl. maintainer
+conversations) rode the first push. Expunged same hour: saved to
+~/w/vdc/1/local-sources/autoharn-ephemera/ (and restorable to ephemera/session-*/
+untracked), history rewritten (9352cf3 -> 4acb23d tip), forced update, .gitignore +
+README foreclosure. Same residuals and GitHub-Support-purge recommendation as incident 1.
+Class fix folded into the pre-push gate item: the gate's default posture is ALLOWLIST
+(nothing binary, nothing under ephemera/, nothing under */sources/), because both
+incidents were default-open publishing of classes the old process excluded by prose.

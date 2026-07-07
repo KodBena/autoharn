@@ -1,8 +1,10 @@
-# ephemera/
+# Ephemera — LOCAL ONLY (privacy)
 
-Whole-session Claude Code ephemera snapshots — the auditability law's home in autoharn
-([C13]). `filing/persist_claude_ephemera.py` targets this directory. Snapshots are
-whole-session, never cherry-picked (deciding what is "worth keeping" is how audit trails
-get holes). Claude Code keys ephemera by working-directory slug, so sessions run from
-autoharn write a new slug; never assert a piece is lost until every slug the session used
-has been searched.
+Whole-session transcripts and agent ephemera are PRIVATE: they contain the
+maintainer's working conversations. They are never committed or pushed; the
+audit-grade copies live locally (this machine: ephemera/session-*/ kept
+untracked, plus ~/w/vdc/1/local-sources/autoharn-ephemera/ and the archived
+old repos). Pushed briefly 2026-07-07 and expunged by history rewrite the
+same hour (second incident, same drill as the sources PDFs — see BACKLOG.md).
+The referential-integrity intent (finding 34) binds citations to LOCAL
+ephemera presence, not to the public remote.
