@@ -19,3 +19,7 @@ venv/
 # sources/ PDFs (law/briefs/*/sources/, manifest [C10]); those are tracked evidence.
 # The fact-mining NLP lane and its jax cache stay in the claude_harness attic (mandate
 # §4); autoharn has no such artifacts to ignore.
+
+# copyright sources are LOCAL ONLY (incident 2026-07-07)
+law/briefs/*/sources/*
+!law/briefs/*/sources/README.md

@@ -1352,3 +1352,17 @@ bootstrap proof + manifest integrity + fixture census + honesty-sheet-current; a
 that breaks shippability goes RED), kernel-generation versioning, the e17 tutorial, v0
 exclusions (engine, multi-vendor, hosted, crypto-hardening). Execution = Opus-grade
 increments (i)-(v) per §7; the definition is stable, execution iterates.
+
+## INCIDENT + foreclosure: copyrighted source PDFs pushed publicly (2026-07-07 ~23:2x)
+
+The consolidation migrated law/briefs/*/sources PDFs (design C10) and the first push
+published them. Response same hour: PDFs saved to ~/w/vdc/1/local-sources/ (outside any
+repo), full history rewrite (filter-repo --invert-paths, HEAD 0e04e39 → f432c10), forced
+update, README stubs + .gitignore foreclosure. RESIDUAL (honest): anyone who cloned in
+the exposure window holds the objects; GitHub may cache unreachable objects until their
+gc — a GitHub Support purge request is the thorough close (maintainer's call). Root
+cause: the publish gates (PUBLISHING.md: "copyright PDFs permanent exclusion") lived in
+the OLD repo's process and did not migrate as a MECHANICAL gate — the class fix is a
+pre-push hook refusing PDF/binary blobs without an allowlist entry, riding the next
+increment. MIGRATION.tsv retains the PDFs' origin rows (true historical record; their
+dest is now local-sources, noted here).
