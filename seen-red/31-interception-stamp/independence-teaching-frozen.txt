@@ -1,0 +1,8 @@
+# e17 refuse-and-teach — FROZEN independence teaching templates (finding 31; anchored into acts.ruling at e17 arm)
+
+--- template 1 ---
+Ledger policy: a review claiming independence (%) must carry a VERIFIED interception stamp — an unstamped review cannot establish it was a distinct invocation. Record independence='self-review' if you reviewed your own work, or write the review through a genuinely distinct stamped invocation (a separate agent).
+
+--- template 2 ---
+Ledger policy: this review claims independence (%) but the SAME invocation (%) wrote both it and the row it regards — one context cannot countersign its own work as independent (finding 31). Record independence='self-review' if you reviewed your own work, or have a genuinely distinct invocation (a separate agent, whose stamp differs) write the review.
+

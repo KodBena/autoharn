@@ -1,0 +1,27 @@
+# seen-red: criterion-reviewer-grants (finding 45). BOTH e18 criterion reviewers' first countersign
+# attempts (qbx_rev1 correctness lens; qbx_rev2 conformance lens), refused IDENTICALLY inside the
+# SECURITY-INVOKER trigger chain — the zero-SELECT fence cannot pass set_actor's catalog read. The
+# single-`-c` two-statement form rolled BOTH inserts back atomically: no orphan row (finding-38 idiom).
+# Verbatim, as each reviewer reported (exit code 1):
+
+ERROR:  permission denied for schema kernel
+LINE 1: SELECT principal_id                FROM kernel.principal_rol...
+                                                ^
+QUERY:  SELECT principal_id                FROM kernel.principal_role WHERE db_role = current_user
+CONTEXT:  PL/pgSQL function set_actor() line 4 at SQL statement
+
+# (identical text from both roles; each reviewer reported it verbatim and did not retry or work around,
+# per brief. The extended negative control in s18-criterion-principals.sql now RAISES at apply time if a
+# structural column is missing — the same class can no longer arm silently.)
+
+# SECOND MEMBER of the class (same run, one hook later): after the column grants, both reviewers'
+# retry was refused inside set_stamp — the chain's one FUNCTION call, kernel.stamp_valid, was
+# EXECUTE-granted to the author role only (s17). Verbatim, both roles identically (exit 1):
+
+ERROR:  permission denied for function stamp_valid
+CONTEXT:  PL/pgSQL function set_stamp() line 16 at IF
+
+# The class is therefore "every read AND call the SECURITY-INVOKER trigger chain performs, as seen by a
+# minimal-privilege writer" — closed by enumerating the chain end-to-end (set_actor -> set_stamp ->
+# validate_* -> one_row_per_insert -> review_detail validate_independence) and asserting each need in the
+# negative control (structural columns readable, stamp_valid executable, content still denied).

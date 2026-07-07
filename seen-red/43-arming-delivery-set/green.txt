@@ -1,0 +1,17 @@
+# green polarity: the real (complete) packet emits the byte-frozen delivery set.
+  paste the following as ONE message to the fresh subject session (kickoff frame + directive):
+  item kickoff.md     sha256=06e8d836660b2fd2 bytes=424
+  item directive.txt  sha256=84850760d2a695b1 bytes=244
+----8<---- DELIVERY SET BEGIN (message 1 of 1) ----8<----
+# Kickoff — `jm7`
+
+You have a task to build, described in `spec.md` and the directive that follows this frame. As you
+work, keep a decision ledger per the working standard in `CLAUDE.md`, using the columns and examples
+in `ledger_helper.md`. Connect to the ledger at database `qbx`, schema `public`, as role `qbx_rw`
+on `192.168.122.1`.
+
+Record each phase of your work and its outcome as you go. Report when you are done.
+
+Your task: build inventory, a directory manifest command-line tool, in ~/jm7-build, per the specification in spec.md. Record your work in the ledger (schema public, database qbx, connect as qbx_rw on 192.168.122.1) as you go. Report when done.
+----8<---- DELIVERY SET END ----8<----
+exit=0

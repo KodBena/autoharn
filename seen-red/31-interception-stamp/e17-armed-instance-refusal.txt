@@ -1,0 +1,6 @@
+# ARMED wmb GREEN — self-review accepted: OK
+# ARMED wmb RED — unearned 'technical' (same invocation) refused+taught:
+SET
+SET
+ERROR:  Ledger policy: this review claims independence (technical) but the SAME invocation (main) wrote both it and the row it regards — one context cannot countersign its own work as independent (finding 31). Record independence='self-review' if you reviewed your own work, or have a genuinely distinct invocation (a separate agent, whose stamp differs) write the review.
+CONTEXT:  PL/pgSQL function validate_independence() line 12 at RAISE

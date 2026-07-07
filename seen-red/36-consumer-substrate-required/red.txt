@@ -1,0 +1,4 @@
+SUBSTRATE VACUOUS-PASS: CLOSE on an UNREGISTERED-substrate target did not go REQUIRED-ABSENT (acts=['OK', 'OK', 'OK'] perf=['OK', 'OK', 'OK']) — a silent vacuous pass would re-launder finding 36 (an e15 default read against another run's ledger)
+SUBSTRATE VACUOUS-PASS: READINESS on an UNREGISTERED-substrate target did not DEFER (acts=['OK', 'OK', 'OK'] perf=['OK', 'OK', 'OK'])
+SUBSTRATE VACUOUS-PASS: a consumer reported OK on an UNREGISTERED substrate — the exact finding-36 silent wrong-substrate vacuous pass
+# consumer-substrate-required FAIL — 3 defect(s): a consumer measured an unregistered substrate instead of refusing it.

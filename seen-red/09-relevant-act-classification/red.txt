@@ -1,0 +1,2 @@
+RELEVANCE MISCLASSIFIED: act 1 (message_in): relevant=True, oracle=False
+# relevant-act-classification FAIL — 1 act(s) diverge from oracle §4 (a message_in receipt re-included, or a fenced write dropped).

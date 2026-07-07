@@ -1,0 +1,12 @@
+# green polarity (finding 45): after the enumerated-chain grants (structural columns + stamp_valid
+# EXECUTE), both reviewers' THIRD attempt — the identical SQL, unmodified across all three — landed:
+#   qbx_rev1 (correctness): INSERT 0 1 / INSERT 0 1, exit 0 -> ledger row 14 + review_detail
+#   qbx_rev2 (conformance): INSERT 0 1 / INSERT 0 1, exit 0 -> ledger row 15 + review_detail
+# Owner-side verification: both rows stamp_verified=t, stamps a492683c3bde9669b / a1f86884d359b3fb5
+# (distinct from author 'main', from each other, and from the in-run reviewer a98d8fc5b34db3036),
+# first-contact (each stamp's first appearance is its own review row), verdict=attest,
+# independence=technical, actor 7/8 (criterion-rev-1/-2 via principal_role, set_actor-derived).
+# Ledger id gaps 10-13 = the four refused attempts (2 members x 2 roles), sequence-consumed, zero
+# orphan rows (single-transaction two-statement form rolled back atomically every time).
+# The extended negative control (both polarities: content DENIED + chain needs PRESENT) is the
+# apply-time check that forecloses the class.

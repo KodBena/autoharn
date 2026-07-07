@@ -1,0 +1,15 @@
+--- CH:docs/ARCHITECTURE.md@87e1bcc3e03b
++++ autoharn/design/ARCHITECTURE.md
+@@ -1,4 +1,12 @@
+ # autoharn — Architecture & the through-line
++
++> **⚠ STALE (2026-06-27; migrated 2026-07-07, not rewritten).** This through-line predates
++> the consolidation. Its internal path citations (`research/2026-06-27-*`, `../GLOSSARY.md`)
++> point at the OLD `claude_harness` layout, not autoharn's tree (`research/<renamed-corpus>/`,
++> root `GLOSSARY.md`). It is carried as a design witness, not authority; a full rewrite
++> against the new layout is owed and filed in `BACKLOG.md`. Read it for the through-line
++> narrative, not for current paths or current state. (ADR-0008 deliberately-imprecise tag;
++> rewriting is content work outside a migration increment — [C12].)
+ 
+ > The connective account the bottom-up research never states: *what the machine is, end to end, and
+ > where each piece sits inside it.* Vocabulary: obligation codes (`INV`, `PROV`, …) are defined in the

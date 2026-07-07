@@ -1,0 +1,4 @@
+SET
+ERROR:  permission denied for schema kernel
+LINE 1: SET ROLE wmb_rw; SELECT secret FROM kernel.stamp_secret;
+                                            ^

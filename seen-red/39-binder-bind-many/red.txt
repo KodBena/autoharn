@@ -1,0 +1,2 @@
+BINDER WRONG: batch rows [2, 3] UNBOUND under the one-act-one-row rule (only row 1 bound to act 10; the other batch members have no act left to bind).
+# binder-bind-many FAIL — a batch act did not bind all its rows (the finding-39 artifact).

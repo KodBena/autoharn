@@ -1,0 +1,2 @@
+GATE-JOURNAL UNREGISTERED: target 'e17' is absent from: ['contemporaneity.SESSIONS (relation + audit-session id)', 'contemporaneity.GATE_JOURNALS (journal path + label)']
+# gate-journal-registered FAIL — arming 'e17' would leave contemporaneity N/A at close (finding 42). Register it in contemporaneity's SESSIONS + GATE_JOURNALS before arming.

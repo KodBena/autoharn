@@ -1,0 +1,1 @@
+# contemporaneity-degrade FAIL — pre-fix exit rule: N/A target exits 0, clean exits 0 — INDISTINGUISHABLE. A manifest reads could-not-test as tested-clean (finding 12). (The fixed rule exits N/A=3 vs clean=0.)

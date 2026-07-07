@@ -1,0 +1,35 @@
+# engine INC-1 seen-red controls (ADR-0011: a gate never seen red is a claim) — each control below FIRED
+
+== (1) registry parity F49 negative control (re-runnable: verify_registry_parity.py --negative-control) ==
+# negative control (a): drop ledger_acts.lp atoms from the surface -> direction-2 must fire
+  FIRED (8 rows RED-undischarged)
+# negative control (b): inject an unregistered close line -> direction-1 must fire
+  FIRED
+# negative-control PASS — both polarities caught
+
+== (2) D2 append-only control: banked-row hash mutated -> refused ==
+banked row 'tnow-derived-validity' hash CHANGED without a superseding row — a spec change is a NEW row with supersedes set, never an edit (D2)
+
+== (3) census coverage control: synthetic uncensused F54 -> RED ==
+# law-census RED — 1 uncovered/unresolved
+FIRED
+
+== (4) review_queue_debt QUARANTINE polarities ==
+unregistered flag -> QUARANTINED
+authority unreachable -> QUARANTINED
+
+== (5) run-core-a broken-program fixture (re-runnable: run-core-a.sh --negative-control) ==
+# negative control: the broken-program fixture must FAIL LOUDLY (never a silent empty)
+  broken fixture         -> ERROR — no exact SATISFIABLE/UNSATISFIABLE verdict line (stderr follows)
+      ! ./fixtures/core-a-broken.lp:7:1-12: error: syntax error, unexpected <IDENTIFIER>, expecting ) or ;
+      ! 
+      ! *** ERROR: (clingo): parsing failed
+      | clingo version 5.8.0
+      | Reading from ./fixtures/core-a-broken.lp
+      | UNKNOWN
+      | 
+      | Models       : 0+
+      | Calls        : 1
+      | Time         : 0.000s (Solving: 0.00s 1st Model: 0.00s Unsat: 0.00s)
+      | CPU Time     : 0.000s
+# negative-control PASS — the broken program failed loudly (stderr surfaced, sweep red)
