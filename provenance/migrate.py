@@ -24,6 +24,14 @@ import os
 import subprocess
 import sys
 
+if "--execute" not in sys.argv:
+    sys.stderr.write(
+        "migrate.py: REFUSED — the migration is DONE (HOME-FLIP era); bare invocation re-migrates\n"
+        "from the archived repos and clobbers recorded adaptations (live specimen 2026-07-07 ~23:10,\n"
+        "session 7be3443d, fired twice during the flip gate). Pass --execute only if you truly\n"
+        "intend a re-migration against the frozen archives.\n")
+    sys.exit(2)
+
 AUTOHARN = "/home/bork/w/vdc/1/autoharn"
 REPOS = {
     "CH": ("/home/bork/w/vdc/1/claude_harness",
