@@ -47,7 +47,7 @@ from ledger_edb import PGHOST, export, resolve
 from ledger_floor import floor_atoms
 
 HERE = Path(__file__).resolve().parent
-TNOW_LP = HERE / "ledger_tnow.lp"
+TNOW_LP = HERE / "lp" / "ledger_tnow.lp"
 RETENTION = HERE / "docs" / "ledger-marriage" / "derivations"
 
 # The closed verdict vocabulary -- a frozen set, so a stray string can never masquerade

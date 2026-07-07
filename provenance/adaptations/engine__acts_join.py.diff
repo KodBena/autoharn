@@ -1,0 +1,13 @@
+--- CH:experiments/fact-mining/acts_join.py@87e1bcc3e03b
++++ autoharn/engine/acts_join.py
+@@ -78,8 +78,8 @@
+ from ledger_edb import resolve as resolve_ledger
+ 
+ HERE = Path(__file__).resolve().parent
+-TNOW_LP = HERE / "ledger_tnow.lp"
+-ACTS_LP = HERE / "ledger_acts.lp"
++TNOW_LP = HERE / "lp" / "ledger_tnow.lp"
++ACTS_LP = HERE / "lp" / "ledger_acts.lp"
+ 
+ HARNESS_PGHOST = os.environ.get("HARNESS_PGHOST", os.environ.get("EPISTEMIC_PGHOST", "192.168.122.1"))
+ HARNESS_DB = os.environ.get("HARNESS_DB", "harness")

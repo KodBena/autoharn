@@ -39,9 +39,9 @@ from ledger_floor import SUPPORT_PREDS, support_floor_atoms, support_manifest
 HERE = Path(__file__).resolve().parent
 DB = "epistemic"
 SCHEMA = "marriage_support_scratch"
-TNOW_LP = HERE / "ledger_tnow.lp"
-ASSUMES_LP = HERE / "ledger_assumes.lp"
-SUPPORT_LP = HERE / "ledger_support.lp"
+TNOW_LP = HERE / "lp" / "ledger_tnow.lp"
+ASSUMES_LP = HERE / "lp" / "ledger_assumes.lp"
+SUPPORT_LP = HERE / "lp" / "ledger_support.lp"
 WITNESS = HERE / "docs" / "ledger-marriage" / "support-scratch.witness.txt"
 
 # The single-home wall-clock cursor: injected into the ASP EDB as now/1 AND passed to the SQL

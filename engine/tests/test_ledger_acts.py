@@ -70,7 +70,9 @@ def test_dishonest_mutation_flips_red():
 def test_banked_derivations_byte_identical():
     """§1.6: adding ledger_acts.lp changes NO banked s10-s13/nla atom (it is a separate program,
     never loaded for the banked targets' differential)."""
-    d = HERE / "docs" / "ledger-marriage" / "derivations"
+    # autoharn: the banked s10-s13/nla derivations are EVIDENCE-STAYS [A11] — read from the
+    # claude_harness archive (read-only forever after the flip), like ledger_target's archive pins.
+    d = Path("/home/bork/w/vdc/1/claude_harness/experiments/fact-mining/docs/ledger-marriage/derivations")
     for t in ("s10", "s11", "s12", "s13", "nla"):
         edb = export(t).edb_text()
         assert run_asp(t, edb).atoms == set((d / t / "asp_atoms.txt").read_text().split())

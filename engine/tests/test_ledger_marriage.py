@@ -36,7 +36,8 @@ from clingo_run import run_clingo
 from ledger_edb import CapabilityError, PGHOST, export, resolve
 
 HERE = Path(__file__).resolve().parent
-OPERATOR_INSTRUMENTS = Path("/home/bork/w/vdc/1/epistemic-operator/instruments")
+# autoharn: repo-local instruments/ (was the cross-repo epistemic-operator/instruments reach)
+OPERATOR_INSTRUMENTS = HERE.parent.parent / "instruments"
 BANKED = ["s10", "s11", "s12", "s13", "nla"]
 
 

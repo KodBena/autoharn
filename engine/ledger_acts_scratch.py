@@ -39,8 +39,8 @@ from ledger_edb import PGHOST
 HERE = Path(__file__).resolve().parent
 DB = "epistemic"
 SCHEMA = "marriage_acts_scratch"
-TNOW_LP = HERE / "ledger_tnow.lp"
-ACTS_LP = HERE / "ledger_acts.lp"
+TNOW_LP = HERE / "lp" / "ledger_tnow.lp"
+ACTS_LP = HERE / "lp" / "ledger_acts.lp"
 WITNESS = HERE / "docs" / "ledger-marriage" / "acts-scratch.witness.txt"
 
 

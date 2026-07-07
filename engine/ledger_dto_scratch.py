@@ -55,9 +55,9 @@ from ledger_edb import PGHOST, export
 HERE = Path(__file__).resolve().parent
 SCHEMA = "marriage_dto_scratch"
 DB = "epistemic"  # a scratch SCHEMA in the apparatus db, outside every s*/nla evidence lineage
-TNOW_LP = HERE / "ledger_tnow.lp"
-DTO_LP = HERE / "ledger_dto.lp"
-ASSUMES_LP = HERE / "ledger_assumes.lp"
+TNOW_LP = HERE / "lp" / "ledger_tnow.lp"
+DTO_LP = HERE / "lp" / "ledger_dto.lp"
+ASSUMES_LP = HERE / "lp" / "ledger_assumes.lp"
 WITNESS = HERE / "docs" / "ledger-marriage" / "dto-scratch.witness.txt"
 
 # Principals, LABELED. The `synthetic:` / `authentic:` prefix is carried verbatim into
