@@ -1,0 +1,34 @@
+seen-red/change-gate-subject-root — banked RED evidence (both-polarity proof, fixture-census)
+
+BACKLOG "Run-2 integrity finding" (2026-07-09): run 2's `.claude/settings.json` baked an absolute
+GATE_SUBJECT_ROOT/E13_SUBJECT_ROOT env var pointing at the project's PRE-MOVE path. Because
+`is_governed()` matches by STRING PREFIX only (never checks the directory actually exists), a
+dangling SUBJECT_ROOT made it return False for every real edit under the (different, post-move)
+project path — silently governing nothing for the session's entire life.
+
+BEFORE the fix (git show HEAD:hooks/pretooluse_change_gate.py — this fix's own edits are still an
+uncommitted working-tree change, so HEAD is the byte-held pre-fix version — run standalone as a
+scratch copy, real output, 2026-07-09):
+  echo '{"tool_name":"Edit","tool_input":{"file_path":"/tmp/seenred-real-project-after-move/foo.py"},"cwd":"/tmp"}' \
+    | GATE_SUBJECT_ROOT=/nonexistent-seenred-fixture-root python3 <pre-fix hooks/pretooluse_change_gate.py>
+  exit: 0
+  stdout: (nothing)
+This is the exact silent-defeat shape the BACKLOG entry describes: the edited file's real path does
+not start with the stale SUBJECT_ROOT string, so `is_governed()` returns False and the gate governs
+nothing, with zero signal to the operator.
+
+AFTER the fix (case a, real output, 2026-07-09):
+  echo '{"tool_name":"Edit","tool_input":{"file_path":"/tmp/seenred-real-project-after-move/foo.py"},"cwd":"/tmp"}' \
+    | GATE_SUBJECT_ROOT=/nonexistent-seenred-fixture-root python3 hooks/pretooluse_change_gate.py
+
+  Ledger policy: SUBJECT_ROOT is configured as '/nonexistent-seenred-fixture-root' but that path
+  does not exist on disk, so this gate cannot determine which files it governs — refusing rather
+  than silently governing nothing (the run-2 integrity finding: a moved project directory left a
+  stale absolute path baked into a hook command). Fix: repoint .claude/settings.json's
+  GATE_SUBJECT_ROOT (or its deprecated alias E13_SUBJECT_ROOT) at the real project root, then retry.
+  {"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "deny", ...}}
+  exit: 2
+
+Full five-case run (red + healthy-subject-root + unwired-unset + deprecated-alias + Bash-path-scope
+check, all asserted programmatically):
+  python3 seen-red/change-gate-subject-root/run_fixtures.py

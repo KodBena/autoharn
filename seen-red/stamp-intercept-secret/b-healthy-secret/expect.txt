@@ -1,0 +1,3 @@
++"permissionDecision": "allow"
++app.vendor_hmac=
+-STAMP_SECRET is configured

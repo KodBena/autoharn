@@ -1,0 +1,44 @@
+seen-red/stamp-intercept-secret — banked RED evidence (both-polarity proof, fixture-census)
+
+BACKLOG "Run-2 integrity finding" (2026-07-09): the interceptor's STAMP_SECRET path pointed at a
+file that no longer existed (run 1 and run 2, both witnessed). The hook's SAFETY contract ("any
+error -> allow the command unchanged") meant a matched ledger write (a `psql`/`led` call) passed
+through UNSTAMPED, silently, despite the env var being explicitly configured -- twice witnessed.
+
+BEFORE the fix (git show HEAD:hooks/stamp_intercept.py -- this fix's own edits are still an
+uncommitted working-tree change, so HEAD is the byte-held pre-fix version -- run standalone as a
+scratch copy, real output, 2026-07-09):
+  echo '{"tool_name":"Bash","tool_input":{"command":"psql -h 192.168.122.1 -d toy -c \"select 1\""},"cwd":"/tmp","session_id":"seenred-s1"}' \
+    | LEDGER_DB=toy STAMP_SECRET=/nonexistent-seenred-secret/stamp_secret.hex python3 <pre-fix hooks/stamp_intercept.py>
+  exit: 0
+  stdout: (nothing) -- the command would proceed UNSTAMPED, silently.
+
+AFTER the fix (case a, real output, 2026-07-09):
+  echo '{"tool_name":"Bash","tool_input":{"command":"psql -h 192.168.122.1 -d toy -c \"select 1\""},"cwd":"/tmp","session_id":"seenred-s1"}' \
+    | LEDGER_DB=toy STAMP_SECRET=seen-red/stamp-intercept-secret/a-dangling-secret/nope/stamp_secret.hex \
+      python3 hooks/stamp_intercept.py
+
+  Ledger policy: STAMP_SECRET is configured ('.../nope/stamp_secret.hex') but that file is missing,
+  unreadable, or empty -- this write would otherwise pass through UNSTAMPED (the run-1/run-2
+  silent-unstamped class, BACKLOG 2026-07-09 'Run-2 integrity finding'). Refusing instead of
+  silently landing an unstamped ledger write. Fix: seed the secret once (this project's HOOKS.md,
+  'Stamp interceptor' section) --
+    HEX=$(openssl rand -hex 32)
+    psql -h <host> -d <db> -q -v ON_ERROR_STOP=1 \
+      -c "TRUNCATE <kern>.stamp_secret;" \
+      -c "INSERT INTO <kern>.stamp_secret (secret) VALUES (decode('$HEX','hex'));"
+    psql -h <host> -d <db> -tAc "SELECT encode(secret,'hex') FROM <kern>.stamp_secret" > <path>
+    chmod 600 <path>
+  Do NOT re-run this if the secret was already seeded once -- re-seeding ROTATES it and invalidates
+  every stamp already written under the old value.
+  {"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "deny", ...}}
+  exit: 2
+
+EXTRA (case e): an existing-but-EMPTY secret file previously produced a silently-accepted
+zero-length HMAC key (`bytes.fromhex("")` raises nothing) -- a WRONG stamp landed rather than an
+honest unstamped write, worse than the documented fail-open. Closed as part of this same fix: an
+empty file is now treated identically to a missing one (deny, same teach-text).
+
+Full five-case run (red + healthy-secret + unset-secret + non-matching-command + empty-secret,
+all asserted programmatically; scratch secret files are generated and cleaned up per run):
+  python3 seen-red/stamp-intercept-secret/run_fixtures.py

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-09T12:38:35Z
-#   last-change: 2026-07-09T12:38:35Z
+#   last-change: 2026-07-09T13:51:49Z
 #   contributors: be693afb/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -63,6 +63,14 @@ every other mis-provisioning this hook tolerates.
 SAFETY: this hook must NEVER break a tool call. Any error, any non-matching command -> allow the command
 UNCHANGED (exit 0, no output). It only ever ADDS a stamp to a genuine ledger-bound psql call or led
 invocation. Lazy imports banned.
+
+FAIL-CLOSED ON A DANGLING STAMP_SECRET (BACKLOG "Run-2 integrity finding", 2026-07-09): the one
+exception to "any error -> unchanged" above is an EXPLICITLY-configured STAMP_SECRET (the env var
+itself, not a not-yet-armed deployment.json-derived default) whose file is missing, unreadable, or
+empty -- twice witnessed (runs 1 and 2) silently passing a matched ledger write through UNSTAMPED.
+That specific, identified case now DENIES the command instead, with teach-text naming the configured
+path and the seed step. An unset STAMP_SECRET, a non-matching command, or a healthy secret file are
+all unaffected.
 """
 from __future__ import annotations
 
@@ -116,21 +124,39 @@ def _load_deployment_quiet(data: dict) -> deployment_record.DeploymentRecord | N
         return None
 
 
-def _secret(dep: deployment_record.DeploymentRecord | None, dep_path: str | None) -> bytes | None:
-    path = os.environ.get("STAMP_SECRET", "")
-    if not path and dep_path:
+def _resolve_secret_path(dep_path: str | None) -> tuple[str, bool]:
+    """Resolve the secret-file path for this invocation, and whether it was EXPLICITLY configured
+    via the STAMP_SECRET env var -- as opposed to a deployment.json-derived default that simply has
+    not been armed yet (bootstrap/templates/HOOKS.md.tmpl's own "one manual step remains" state,
+    which is normal and must stay fail-open, not the run-2 misconfiguration this fix targets).
+    Returns (path, explicit); path is "" when neither an env var nor a deployment record resolves."""
+    explicit_path = os.environ.get("STAMP_SECRET", "")
+    if explicit_path:
+        return explicit_path, True
+    if dep_path:
         # Derive the project-convention default from the deployment record's own directory (the
         # project root, next to .claude/) -- see bootstrap/new-project.sh / toy-project's own layout.
-        path = os.path.join(os.path.dirname(dep_path), ".claude", "secrets", "stamp_secret.hex")
+        return os.path.join(os.path.dirname(dep_path), ".claude", "secrets", "stamp_secret.hex"), False
+    return "", False
+
+
+def _load_secret(path: str) -> bytes | None:
+    """Best-effort secret load: None for ANY invalid condition -- missing, unreadable, empty, or
+    non-hex content -- never raises. An empty-but-present file is treated the SAME as missing (never
+    silently accepted as a valid zero-length HMAC key, which would otherwise produce a wrong-but-
+    present stamp instead of an honest unstamped write). Whether a None here is fail-open
+    (unconfigured / not-yet-armed) or fail-closed (explicitly configured but broken) is the CALLER's
+    decision (main(), via `_resolve_secret_path`'s `explicit` flag) -- this loader only reports what
+    the file contains."""
     if not path or not Path(path).is_file():
         return None
     try:
-        return bytes.fromhex(Path(path).read_text().strip())
+        text = Path(path).read_text().strip()
+        if not text:
+            return None
+        return bytes.fromhex(text)
     except (ValueError, OSError):
-        # OSError: an existing-but-unreadable secret file (perms, I/O). FAIL OPEN like every other
-        # mis-provisioning: the hook must never break a tool call (rider 1, Inc-14 hook ruling) — the
-        # trigger fail-closes on the DB side instead (an unprovisioned/unreadable secret -> unstamped
-        # write -> stamp_verified=false; a required stamp then refuses THERE, never here).
+        # OSError: an existing-but-unreadable secret file (perms, I/O). ValueError: malformed hex.
         return None
 
 
@@ -167,6 +193,39 @@ def _is_led_invocation(command: str) -> bool:
     return token == "led" or token == "./led" or token.endswith("/led")
 
 
+def _deny(msg: str) -> int:
+    """Deny the command (BACKLOG "Run-2 integrity finding" fail-closed path). Emits the modern
+    permissionDecision JSON plus a non-zero exit, mirroring hooks/pretooluse_change_gate.py's own
+    dual convention for cross-version reliability."""
+    print(json.dumps({"hookSpecificOutput": {
+        "hookEventName": "PreToolUse", "permissionDecision": "deny",
+        "permissionDecisionReason": msg}}))
+    print(msg, file=sys.stderr)
+    return 2
+
+
+def _deny_secret_missing(path: str) -> str:
+    """Teach-text for an explicitly-configured-but-broken STAMP_SECRET. Quotes the real seed
+    sequence from bootstrap/templates/HOOKS.md.tmpl's "Stamp interceptor" section (the one this
+    project's own scaffolded HOOKS.md carries, with host/db/kern/role filled in for the instance)."""
+    return (
+        f"Ledger policy: STAMP_SECRET is configured ('{path}') but that file is missing, unreadable, "
+        "or empty -- this write would otherwise pass through UNSTAMPED (the run-1/run-2 silent-"
+        "unstamped class, BACKLOG 2026-07-09 'Run-2 integrity finding'). Refusing instead of "
+        "silently landing an unstamped ledger write. Fix: seed the secret once (this project's "
+        "HOOKS.md, 'Stamp interceptor' section) --\n"
+        "  HEX=$(openssl rand -hex 32)\n"
+        "  psql -h <host> -d <db> -q -v ON_ERROR_STOP=1 \\\n"
+        "    -c \"TRUNCATE <kern>.stamp_secret;\" \\\n"
+        "    -c \"INSERT INTO <kern>.stamp_secret (secret) VALUES (decode('$HEX','hex'));\"\n"
+        f"  psql -h <host> -d <db> -tAc \"SELECT encode(secret,'hex') FROM <kern>.stamp_secret\" "
+        f"> {path}\n"
+        f"  chmod 600 {path}\n"
+        "Do NOT re-run this if the secret was already seeded once -- re-seeding ROTATES it and "
+        "invalidates every stamp already written under the old value."
+    )
+
+
 def main() -> int:
     try:
         raw = sys.stdin.read()
@@ -184,9 +243,16 @@ def main() -> int:
     matched = _is_ledger_psql(command, db) or _is_led_invocation(command)
     if not matched:
         return _passthrough()
-    secret = _secret(dep, dep_path)
+    secret_path, explicit = _resolve_secret_path(dep_path)
+    secret = _load_secret(secret_path)
     if secret is None:
-        return _passthrough()  # unprovisioned: the trigger fail-closes; do not block here
+        if explicit:
+            # Run-2 integrity finding: an OPERATOR explicitly pointed STAMP_SECRET somewhere broken
+            # -- this identified, matched ledger write must not land unstamped. A deployment-derived
+            # default that simply has not been armed yet (explicit=False) stays fail-open below,
+            # unchanged (the normal "one manual step remains" scaffold state).
+            return _deny(_deny_secret_missing(secret_path))
+        return _passthrough()  # unconfigured, or a not-yet-armed deployment default: unchanged
     session = str(data.get("session_id", "unknown"))
     agent = str(data.get("agent_id") or "main")   # ABSENT in main thread (shakedown); a subagent's UUID otherwise
     ts = int(time.time())

@@ -1,0 +1,2 @@
++shell writes into these files are disabled
+-SUBJECT_ROOT is configured

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-09T08:07:02Z
-#   last-change: 2026-07-09T12:42:13Z
+#   last-change: 2026-07-09T13:50:32Z
 #   contributors: 9bcc0113/main, be693afb/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -69,6 +69,14 @@ Qualification posture (link 6): for an IDENTIFIED governed mutation the hook fai
 Unidentifiable input is passed through (the audit hook still records it; a slipped mutation
 is recoverable post-hoc via the mtime × statement-log join). Emits both the modern
 permissionDecision JSON and a non-zero exit for cross-version reliability.
+
+FAIL-CLOSED ON A DANGLING SUBJECT_ROOT (BACKLOG "Run-2 integrity finding", 2026-07-09): if
+GATE_SUBJECT_ROOT (or its deprecated alias E13_SUBJECT_ROOT) is explicitly set but does not
+exist on disk — the exact run-2 shape, a moved project directory leaving a stale env var baked
+into `.claude/settings.json` — every Write/Edit/NotebookEdit call is DENIED with teach-text
+naming the configured path and the settings.json fix, instead of `is_governed()` silently
+matching nothing and governing zero files; an unset SUBJECT_ROOT (unwired sessions) or one that
+resolves to a real directory is completely unaffected.
 """
 import fnmatch
 import json
@@ -155,6 +163,13 @@ LEDGER = _DEFAULT_LEDGER
 SUBJECT_ROOT = _DEFAULT_SUBJECT_ROOT
 STATE = _DEFAULT_STATE
 JOURNAL = _DEFAULT_JOURNAL
+# True iff GATE_SUBJECT_ROOT (or its deprecated alias E13_SUBJECT_ROOT) was EXPLICITLY set for
+# this invocation and the resolved SUBJECT_ROOT does not exist on disk (run-2 integrity finding,
+# BACKLOG 2026-07-09: a moved project directory left a stale absolute path baked into
+# `.claude/settings.json`, so `is_governed()` matched no real file and silently governed nothing
+# for the session's entire life). Set by `_configure()`; deliberately false when SUBJECT_ROOT was
+# never configured via env at all (an unwired session stays untouched) or resolves to a real dir.
+SUBJECT_ROOT_MISCONFIGURED = False
 EPOCH = "1970-01-01 00:00:00"
 WINDOW_S = 600.0  # a ticket, once consumed, stays open on its file for this long …
 # … or until the next test-run / commit boundary, whichever comes first.
@@ -185,6 +200,23 @@ DENY_BASH_WRITE = (
     "to its ledger entry — shell writes into these files are disabled."
     + (f"\n{DENY_HINT}" if DENY_HINT else "")
 )
+
+
+def _deny_subject_root_missing() -> str:
+    """Teach-text for the run-2 integrity finding (BACKLOG 2026-07-09): SUBJECT_ROOT was
+    explicitly configured but does not resolve to a real directory, so this gate cannot tell
+    which files it governs. Built as a function (not a module-level constant) because it must
+    report THIS invocation's resolved SUBJECT_ROOT, computed by `_configure()` from the hook
+    input's own `cwd` — not a value known at import time."""
+    return (
+        f"Ledger policy: SUBJECT_ROOT is configured as '{SUBJECT_ROOT}' but that path does not "
+        "exist on disk, so this gate cannot determine which files it governs — refusing rather "
+        "than silently governing nothing (the run-2 integrity finding: a moved project directory "
+        "left a stale absolute path baked into a hook command). Fix: repoint .claude/settings.json's "
+        "GATE_SUBJECT_ROOT (or its deprecated alias E13_SUBJECT_ROOT) at the real project root, "
+        "then retry."
+        + (f"\n{DENY_HINT}" if DENY_HINT else "")
+    )
 
 # GOVERNED-SET CONFIG (maintainer ruling, 2026-07-09): which files this gate protects is a
 # per-project, trivially-editable choice — a small config file the PROJECT'S USER selects
@@ -247,6 +279,7 @@ def _configure(data: dict) -> None:
     after stdin is parsed -- the deployment.json lookup needs the hook input's own `cwd`, which is
     only available once stdin has been read."""
     global PGHOST, PGDB, LEDGER, SUBJECT_ROOT, STATE, JOURNAL, GOVERNED_CONFIG, GOVERNED_PATTERNS
+    global SUBJECT_ROOT_MISCONFIGURED
     dep_path = _find_deployment_path(data)
     dep = _load_deployment_quiet(dep_path) if dep_path else None
 
@@ -259,8 +292,14 @@ def _configure(data: dict) -> None:
 
     using_deployment = bool(dep_path and dep)
     default_root = os.path.dirname(dep_path) if using_deployment else _DEFAULT_SUBJECT_ROOT
-    SUBJECT_ROOT = os.path.abspath(
-        os.environ.get("GATE_SUBJECT_ROOT") or os.environ.get("E13_SUBJECT_ROOT") or default_root)
+    env_subject_root = os.environ.get("GATE_SUBJECT_ROOT") or os.environ.get("E13_SUBJECT_ROOT")
+    SUBJECT_ROOT = os.path.abspath(env_subject_root or default_root)
+    # Run-2 integrity finding (BACKLOG 2026-07-09): SUBJECT_ROOT is "configured" for this check
+    # only when an operator explicitly set the env var -- a deployment.json-/hardcoded-derived
+    # default that happens not to exist is a DIFFERENT, unwired-session shape this fix must leave
+    # alone (see module docstring). An explicit-but-dangling path is the exact defect: a moved
+    # project directory leaves a stale absolute path in `.claude/settings.json`.
+    SUBJECT_ROOT_MISCONFIGURED = bool(env_subject_root) and not os.path.isdir(SUBJECT_ROOT)
     default_state = (os.path.join(SUBJECT_ROOT, ".claude", "change_gate_state.json")
                       if using_deployment else _DEFAULT_STATE)
     default_journal = (os.path.join(SUBJECT_ROOT, ".claude", "logs", "change_gate.journal.jsonl")
@@ -550,6 +589,11 @@ def main() -> int:
 
     if tool in ("Write", "Edit", "NotebookEdit"):
         path = _first(inp, "file_path", "filePath", "path", "notebook_path", default="")
+        if SUBJECT_ROOT_MISCONFIGURED:
+            # Run-2 integrity finding: `is_governed()` below can only ever match a real path
+            # under SUBJECT_ROOT, so a dangling SUBJECT_ROOT would otherwise make it return
+            # False for every edit — silently governing nothing. Deny loudly instead.
+            return _deny(_deny_subject_root_missing(), "subject_root_missing", path)
         if not is_governed(path):
             return 0
         # identified governed mutation → gate; fail CLOSED on any error

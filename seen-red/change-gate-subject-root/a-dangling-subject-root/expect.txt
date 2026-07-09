@@ -1,0 +1,6 @@
++SUBJECT_ROOT is configured as '/nonexistent-seenred-fixture-root'
++does not exist on disk
++GATE_SUBJECT_ROOT
++E13_SUBJECT_ROOT
++settings.json
++"permissionDecision": "deny"

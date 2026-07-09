@@ -1,0 +1,5 @@
++STAMP_SECRET is configured
++missing, unreadable, or empty
++openssl rand -hex 32
++TRUNCATE <kern>.stamp_secret
++"permissionDecision": "deny"
