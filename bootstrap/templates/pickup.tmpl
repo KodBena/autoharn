@@ -23,10 +23,13 @@ Sections emitted, each under a machine-parseable `### SECTION: <NAME>` header (g
                         10) if `--since` is omitted.
   GIT-STATE           — this project's own git repo: uncommitted changes and (if it has an
                         upstream) unpushed commits.
-  IN-FLIGHT           — always prints `UNAVAILABLE (no work-item layer)`, honestly. "What was
-                        mid-flight" (task state, not decision state) needs a work-item layer this
-                        project does not have yet (AUTOMATION-ENVELOPE gap 2); v1 says so instead
-                        of faking it from the sections above.
+  IN-FLIGHT           — derived live from the `work_item_current` view (open items: slug, title,
+                        claimant) plus a violations line from `work_item_violations` (count + kinds
+                        if non-empty; the explicit "violations: none" if empty -- a silent absence
+                        must be distinguishable from not-run, house rule). UNAVAILABLE, with the
+                        reason, if this world's kernel predates the work-item layer
+                        (kernel/lineage/s22-work-item-ledger.sql not applied here yet) -- the
+                        honest fallback, not a crash and not the old stale text.
 
 Deployment resolution: reads `deployment.json` next to this script (override with
 `PICKUP_DEPLOYMENT=/path/to/deployment.json`), via autoharn's `filing/deployment_record.py` (the
@@ -76,6 +79,16 @@ def _psql(dep, sql: str) -> subprocess.CompletedProcess:
     full = f"SET ROLE {dep.role};\n{sql}"
     return subprocess.run(
         ["psql", "-h", dep.host, "-d", dep.db, "-v", "ON_ERROR_STOP=1", "-c", full],
+        capture_output=True, text=True, timeout=15)
+
+
+def _psql_tuples(dep, sql: str) -> subprocess.CompletedProcess:
+    """Like `_psql` but with `-t -A` (tuples-only, unaligned) -- for the one query this script's
+    own logic branches on (the IN-FLIGHT violations line's count-vs-none house rule) rather than
+    a query it merely displays verbatim to the operator."""
+    full = f"SET ROLE {dep.role};\n{sql}"
+    return subprocess.run(
+        ["psql", "-h", dep.host, "-d", dep.db, "-t", "-A", "-v", "ON_ERROR_STOP=1", "-c", full],
         capture_output=True, text=True, timeout=15)
 
 
@@ -154,11 +167,33 @@ def git_state(repo_root: Path) -> None:
         print(f"unpushed: {n_ahead} commit(s) ahead of {upstream.stdout.strip()}")
 
 
-def in_flight() -> None:
+def in_flight(dep) -> None:
     _section("IN-FLIGHT")
-    print("UNAVAILABLE (no work-item layer -- design/OPUS-READINESS.md move 3 v1 ships without "
-          "it; task/mid-flight state is a distinct axis from the decision-ledger sections above, "
-          "and v2 adds this section honestly once a work-item layer exists, not before)")
+    r = _psql(dep, f"SELECT w.slug, w.title, p.name AS claimant "
+                    f"FROM {dep.schema}.work_item_current w "
+                    f"LEFT JOIN {dep.kern}.principal p ON p.id = w.claimant "
+                    f"WHERE w.state = 'open' ORDER BY w.slug;")
+    if r.returncode != 0:
+        if "does not exist" in r.stderr:
+            print("UNAVAILABLE (no work-item layer -- this world's applied kernel predates "
+                  "kernel/lineage/s22-work-item-ledger.sql, so work_item_current/"
+                  "work_item_violations do not exist here yet; apply is a maintainer act)")
+        else:
+            print(f"ERROR: {r.stderr.strip()}")
+        return
+    print(r.stdout.strip() or "(no open work items)")
+
+    v = _psql_tuples(dep, f"SELECT count(*), coalesce(string_agg(DISTINCT violation, ', '), '') "
+                           f"FROM {dep.schema}.work_item_violations;")
+    if v.returncode != 0:
+        print(f"ERROR: {v.stderr.strip()}")
+        return
+    # -t -A still echoes one output line per statement (the preceding `SET ROLE` included) --
+    # the query's own result is always the LAST line, never the first.
+    last_line = v.stdout.strip().splitlines()[-1]
+    count_str, _, kinds = last_line.partition("|")
+    count = int(count_str)
+    print("violations: none" if count == 0 else f"violations: {count} ({kinds})")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -173,7 +208,7 @@ def main(argv: list[str] | None = None) -> int:
     review_debt(dep)
     recent_changes(dep, args.since, args.limit)
     git_state(HERE)
-    in_flight()
+    in_flight(dep)
     print()
     return 0
 
