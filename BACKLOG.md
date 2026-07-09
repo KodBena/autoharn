@@ -1563,3 +1563,32 @@ backward compatibility) that composes `[TNOW_LP, ASSUMES_LP, SUPPORT_LP]` and ca
 `support_floor_atoms` instead of `floor_atoms`/`run_asp`'s single-program path when
 `support` is selected, with its own `retain()`-shaped banking — a maintainer decision on
 whether the two families share one `DifferentialResult` shape or get siblings.
+
+## `hooks/pretooluse_change_gate.py`'s `PGHOST` is a hardcoded module constant — a scaffolded instance on a different host silently mis-targets (2026-07-09, OPUS-READINESS move 1/2)
+
+Found in passing while building `filing/deployment_record.py` / `bootstrap/new-project.sh` (a
+deployment record's whole point is to name db+host+schema+kern+role in ONE place a scaffolded
+project's tooling reads). `hooks/pretooluse_change_gate.py` line ~82 reads:
+`PGHOST = "192.168.122.1"` — a bare literal, with NO env override (every other connection
+parameter in the same file — `E13_GATE_DB`, `E13_GATE_LEDGER`, `E13_GATE_STATE`,
+`E13_GATE_JOURNAL`, `SUBJECT_ROOT`, `DENY_HINT` — is `os.environ.get(...)`-overridable; `PGHOST`
+alone is not). A scaffolded instance whose postgres lives on a host other than
+`192.168.122.1` (a deployment record's `host` field exists precisely to name this) would have
+its change gate silently querying the WRONG HOST — either connecting to an unrelated database
+that happens to share a name/schema on that host (worse: a false ALLOW or a false DENY that
+looks like a normal refusal, never surfaced as "wrong host"), or timing out/refusing with a
+connection error that gives no hint the fix is a host mismatch, not a missing ledger entry.
+This is the exact "silent wrong database" defect class `engine/targets.py`'s own docstring
+names and forecloses for itself — the same class, one hop over, in the ONE live hook a
+governed edit passes through on every tool call.
+
+NOT fixed in this session: `hooks/` is explicitly out of scope this increment (a live session
+reads `hooks/pretooluse_change_gate.py` per-event right now; OPUS-READINESS move 1 names the
+hook rewiring to read a deployment record as deferred future work, not this pass). Filed per
+CLAUDE.md's engineering-responsibility clause (a hazard within reach, not routed around) and
+ADR-0013 Rule 4 (fixed or filed, never narrated-and-left). Fix shape: `PGHOST =
+os.environ.get("E13_GATE_HOST", "192.168.122.1")`, one line, byte-held default for every
+existing deployment (autoharn's own + toy's, both on `192.168.122.1` today) — land it in the
+SAME pass that rewires the hook to read a project's `deployment.json` (the natural home for
+`E13_GATE_HOST` to be set FROM, via the scaffold's settings.json template, exactly as
+`E13_GATE_DB`/`E13_SUBJECT_ROOT`/etc. already are).
