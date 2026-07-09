@@ -1644,3 +1644,23 @@ match led invocations; the existing `export PGOPTIONS` mechanism inherits into t
 psql with zero led changes. After the fix, independence='technical' is witnessable in ONE
 toy session (main-thread author vs subagent reviewer = distinct agent ids per hook context).
 Separate-process reviewer remains the stronger optional form, not a requirement.
+
+## Independence investigation verdict + s21 candidate (Fable agent, 2026-07-09)
+
+VERDICT: stamp-verified independence='technical' WAS witnessed passing in prior work — wmb
+(e17) reviews 17/18 and qbx (e18) reviews 8/14/15, all both_stamped=t/same_invocation=f, gate
+live at insert (pg_trigger confirmed); refusal path witnessed alongside (wmb 12, qbx 6/7).
+e17's passing reviewer was a SAME-SESSION Task subagent — parent launched in the hook-wired
+dir, reviews via direct psql (the matcher's one interceptable shape; arm.sh check (d) verified
+the idiom pre-run). Toy's gap = launch topology + the led wrapper (pre-registered in s17
+LIMITS as the script-evasion class). Mechanism difference, NOT a regression. Residual
+uncertainty: agent_id presence in hook input on Claude Code 2.1.205 not re-probed (e-series
+ran on a version two days older); 2-minute shakedown filed as part of the matcher-fix batch.
+
+**s21 candidate — distinctness keys on stamp_agent ALONE**: validate_independence and
+review_stamp_distinctness never consult stamp_session, so two different sessions' main
+threads (both agent='main') are indistinguishable — a genuinely independent second-session
+main-thread review claiming technical is FALSELY REFUSED as same-invocation. Fails safe, but
+forecloses the "separate interactive reviewer session" idiom as the DDL stands (e18's
+reviewers passed only as subagents). Fix shape: key distinctness on the (stamp_session,
+stamp_agent) PAIR in both the trigger and the view; future sNN delta, needs maintainer ruling.
