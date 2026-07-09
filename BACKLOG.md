@@ -1466,6 +1466,40 @@ s19 validate_* search_path residue (above), pending its own ruling. Delta author
 mechanical; APPLYING it to a deployment is the operator's/maintainer's act with explicit -v
 vars, per standing rule. Filed for ruling.
 
+**STATUS (2026-07-09, this commit): AUTHORED + SCRATCH-WITNESSED; pending maintainer assent
+for the live apply.** `kernel/lineage/s20-obligation-grants-and-view-refresh.sql` written in
+house style with a full ADR-0000 closure statement (invariant / quantification universe —
+every table and view s15+s17+s17b+s19 exposes, enumerated; only countersign_obligation and
+the two `l.*` views are members of either defect class / denomination). On the append-only
+question the task itself raised: answered NO from the record —
+`s13-remediation-review-detail-truncate-guard.sql` (2026-07-07) already rules
+"countersign_obligation is mutable config in both, correctly unguarded"; this delta grants
+SELECT/INSERT only and does not reverse that ruling.
+
+Witnessed on a scratch schema pair in the live `toy` database (chosen so the witness runs
+against the same DB the eventual live apply targets, without touching `toycolors` itself):
+schema `s20probe`, kernel schema `s20probe_kernel`, role `s20probe_rw` — built fresh via
+`high_watermark_1.sql` then this delta, both with every `-v` var pointed at the scratch names.
+Left in place as evidence. Verdicts, all as the scratch role:
+- cross-principal obligation INSERT (alice→bob) succeeded; self-assigned INSERT refused by
+  `obligation_not_self_assigned` (`ERROR: new row ... violates check constraint`).
+- `review_gap` readable by the role; showed the open debt (`id=1, actor=3, scope=scope-1,
+  assigned_by=2`) before countersign; the row it named as the author's own row was still
+  gap-visible; a cross-principal `review`+`attest` countersign made the gap row disappear
+  (0 rows after).
+- `ledger_current` and `countersigned_in_force`, re-`\d`'d after the delta, both carry all
+  five `stamp_session/stamp_agent/stamp_ts/stamp_hmac/stamp_verified` columns.
+- Negative controls held: ledger UPDATE/DELETE both `permission denied for table ledger`
+  (append-only privilege posture, unchanged); `countersign_obligation` UPDATE/DELETE both
+  `permission denied` (no such grant was added — the mutable-config ruling stands: privilege-
+  gated, not trigger-gated); SoD held — the row's own author attempting to countersign it
+  raised `"a row's author may not countersign it (segregation of duties)"`.
+
+**Live-apply one-liner (toycolors; NOT run — the operator's/maintainer's act):**
+```
+psql -h 192.168.122.1 -d toy -v schema=toycolors -v kern=toycolors_kernel -v role=toycolors_rw -f kernel/lineage/s20-obligation-grants-and-view-refresh.sql
+```
+
 ## engine/acts_join.py `_read_ledger` still leans on the pre-registry epistemic fallthrough (2026-07-09, USE-MODE-ENGINE-WIRING items 1-3)
 
 Class (ADR-0000 2(a) form): a caller that resolves a ledger target by name, but was written
