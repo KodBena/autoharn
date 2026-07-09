@@ -1785,3 +1785,18 @@ construction; (c) cross-run comparison is the analyst layer's job, from outside,
 engine over any named world; (d) run 2 is RECORDED as contaminated by run-1 visibility —
 results read with that caveat; run 3 starts in a fresh world. Never flush: worlds are opened,
 not emptied.
+
+## Assent batch outcomes (maintainer, 2026-07-09, verbatim "All as recommended" + specifics)
+
+1-2. s20 apply + hooks-before-run-2: executed under standing authority, now ratified.
+3. OPUS-READINESS: RATIFIED as written.
+4. s21: RATIFIED (spec design/S21-SESSION-AWARE-DISTINCTNESS.md; delta+witness in flight).
+   Under delegated driving, s21 will be APPLIED to toycolors and the run3 world once its
+   scratch witness lands green — ratified content, mechanical apply, departure imminent.
+5. Succession rule: option (b) RATIFIED — codified in CLAUDE.md ORCHESTRATION.
+6. Ephemera: local-only, none committed — CLAUDE.md auditability section amended; salvage
+   dir stays gitignored; nothing deleted (still local evidence).
+7. NO PUSH until the project is usable by a non-expert operator without consulting a
+   frontier model ("even an idiot like me... without the brightest LLM on the planet") —
+   that bar is the OPUS-READINESS/pickup/brief work's acceptance criterion, decided by the
+   maintainer trying it.

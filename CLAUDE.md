@@ -28,6 +28,14 @@
 - **Nobody edits kernel/lineage (frozen records), law/, or engine/lp/ semantics without a
   Fable-authored, maintainer-ratified spec.** Applying a lineage delta to a deployment is the
   operator's/maintainer's act, always with every -v var explicit.
+- **Succession rule (maintainer-ratified 2026-07-09):** if Fable is unavailable, the
+  constitutional layer does NOT freeze — the maintainer + Opus may author kernel/law/engine
+  specs under MAXIMUM ceremony: the commission/conformance instrument on the commission, an
+  adversarial fresh-context review of the spec (a second model instance that has never seen
+  the working context, prompted to refute), a mandatory scratch-schema witness of any delta
+  before the maintainer applies it, and the spec's closure statement checked against the
+  enumerated universe by a third instance. Sonnet executes; Opus authors only here, and only
+  with this full ceremony. Degraded-but-possible beats frozen — that is the ratified choice.
 - **The operator surface is the four verbs** (led, judge, pickup, scaffold) plus refusals
   that teach. Operational truth lives in CAPABILITIES.md + those verbs; judgment/ and
   design/ archives are history unless a current spec cites them.
@@ -48,7 +56,15 @@
   (zero runtime cost by construction). Enforced mechanically: `gates/no_lazy_imports.py`
   must report zero violations.
 
-## Auditability — persist the ephemera
+## Auditability — the ledger is the trail; ephemera stay local (amended 2026-07-09)
 
-- **Every ephemeral artifact Claude Code produces around a run is captured into the repo, committed, and checksummed — auditability is held above convenience.** Workflow scripts, run records, workflow journals, every sub-agent transcript, and background-task outputs live upstream under `~/.claude/…` and `/tmp/…` — prunable, volatile, unversioned. That is not an acceptable home for evidence an audit or a study reasons about. After any workflow or background-agent activity, snapshot it with `filing/persist_claude_ephemera.py` into `ephemera/session-<id>/` and commit it. The snapshot is whole-session, never cherry-picked — deciding what is "worth keeping" is how audit trails get holes. Never assert that a piece of this data is lost until you have searched every project-slug dir the session used (Claude Code makes one per working directory); the persisted script/journal almost always exists.
+- **Maintainer ruling 2026-07-09 (supersedes the commit mandate that stood here):** session
+  ephemera are NOT committed — upstream is public and transcripts are private (the 2026-07-07
+  privacy incidents stand). The audit trail an outside reader may rely on is the LEDGER plus
+  committed artifacts (specs, deltas, derivation records, witnessed docs). Ephemera snapshots
+  (`filing/persist_claude_ephemera.py` → `ephemera/session-<id>/`, gitignored) remain
+  available as local evidence when a study needs them — whole-session when taken, never
+  cherry-picked — but taking one is a per-study choice, not a standing duty. Never assert a
+  piece of upstream data is lost until every project-slug dir the session used has been
+  searched (Claude Code makes one per working directory).
 
