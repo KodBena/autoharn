@@ -1624,8 +1624,13 @@ frozen under a running experiment. Sequence ruled: run 1 completes → s20 appli
 2. **Run 1's deliverables were never committed and were wiped from disk** (untracked docs/,
    index.html, scripts/ deleted at run-2 start) while five "task N complete" decisions assert
    finished work. Contents survive in the session transcript, salvaged to
-   ephemera/toy-run1-salvage/ (local, gitignored). Fix shape for run prompts + eventually a
-   gate: a completion claim on a file-producing task requires the file to be committed.
+   ephemera/toy-run1-salvage/ — UNTRACKED at the time of this finding, contrary to the "local,
+   gitignored" claim this line originally made (`.gitignore` covered only `ephemera/session-*`,
+   which does not match this path; corrected 2026-07-09). Interim protection added:
+   `ephemera/toy-run1-salvage/` is now `.gitignore`d (survives `git clean -fd` without `-x`,
+   unlike a plain untracked dir), pending the maintainer's disposition ruling (commit vs
+   local-only). Fix shape for run prompts + eventually a gate: a completion claim on a
+   file-producing task requires the file to be committed.
 3. **Stamp-verified independence is architecturally unreachable from same-session subagents**
    (launch-dir-scoped hooks; Task-tool subagents share the dir). validate_independence's
    refusal taught correctly; the run honestly fell back to self-review every time, disclosed

@@ -26,3 +26,7 @@ law/briefs/*/sources/*
 
 # session ephemera are LOCAL ONLY (privacy; incident 2 same night)
 ephemera/session-*
+
+# toy run 1 salvage (transcript-recovered deliverables) -- interim, pending the
+# maintainer's disposition ruling (commit vs local-only), see assent batch 2026-07-09
+ephemera/toy-run1-salvage/
