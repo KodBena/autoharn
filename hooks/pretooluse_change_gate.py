@@ -1,4 +1,10 @@
 #!/usr/bin/env python3
+# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
+#   first-seen : 2026-07-09T08:07:02Z
+#   last-change: 2026-07-09T08:07:31Z
+#   contributors: 9bcc0113/main
+# <<< PROVENANCE-STAMP <<<
+
 """PreToolUse change-policy gate (e13 / s13) — the act-gate, fully label-indifferent.
 
 DELTA FROM THE e11/e12 GATE (F45, consult 17 §6 item 5 — the event-61 repair): ticket matching is
@@ -64,6 +70,7 @@ Unidentifiable input is passed through (the audit hook still records it; a slipp
 is recoverable post-hoc via the mtime × statement-log join). Emits both the modern
 permissionDecision JSON and a non-zero exit for cross-version reliability.
 """
+import fnmatch
 import json
 import os
 import re
@@ -113,22 +120,66 @@ LONG_LAG_S = 3600.0  # a FRESH unlock whose ticket is older than this is flagged
 FS = "\x1f"
 RS = "\x1e"
 
+# Project-specific, concrete "what to run" appended to every deny message (fix-point ergonomics,
+# maintainer requirement 2026-07-09): the gate's own refusal is the loop's only feedback channel,
+# so it must name the exact next command, not just the policy. Empty by default (byte-held
+# behavior for existing deployments); a project's settings.json sets DENY_HINT to its own
+# ledger-insert one-liner (see toy-project's `led` helper).
+DENY_HINT = os.environ.get("DENY_HINT", "")
+
 DENY_NEEDS_ENTRY = (
     "Ledger policy: a change to a source file must be preceded by a ledger entry naming the "
-    "file it changes. Insert the entry (one INSERT, as usual), then re-issue the change."
+    "file it changes. Insert the entry (one INSERT, as usual), then RE-ISSUE THE SAME EDIT — "
+    "the gate re-checks on every attempt, so retrying after the insert is the whole fix."
+    + (f"\n{DENY_HINT}" if DENY_HINT else "")
 )
 DENY_BASH_WRITE = (
     "Ledger policy: source files are modified via the Write/Edit tools, so each change is tied "
     "to its ledger entry — shell writes into these files are disabled."
+    + (f"\n{DENY_HINT}" if DENY_HINT else "")
 )
 
-# INVARIANT governed set (F33): a Python source file under the subject repo. No package name is
-# named; the match is on the file's NATURE (.py) plus containment in the operator-fixed root.
+# GOVERNED-SET CONFIG (maintainer ruling, 2026-07-09): which files this gate protects is a
+# per-project, trivially-editable choice — a small config file the PROJECT'S USER selects
+# patterns in, never a set hardcoded here. Read once at import (this process is a fresh
+# short-lived hook invocation per tool call, so "once at import" and "once per call" are the
+# same thing — no P4 staleness). Format: {"patterns": ["*.py", ...]}, fnmatch'd against the
+# path relative to SUBJECT_ROOT (fnmatch's "*" matches "/" too, so "*.py" alone reaches nested
+# files — no "**" needed). Missing/unreadable/malformed config -> the F33 invariant default:
+# every *.py file, class-keyed, exactly the old hardcoded behavior, so a project that has not
+# yet configured governance is not silently ungoverned.
+GOVERNED_CONFIG = os.environ.get(
+    "GOVERNED_CONFIG", os.path.join(SUBJECT_ROOT, ".claude", "governed_files.json"))
+_DEFAULT_GOVERNED_PATTERNS = ["*.py"]
+
+
+def _load_governed_patterns(cfg_path: str) -> list[str]:
+    try:
+        with open(cfg_path, encoding="utf-8") as f:
+            cfg = json.load(f)
+        patterns = cfg.get("patterns")
+        if isinstance(patterns, list) and patterns and all(isinstance(p, str) for p in patterns):
+            return patterns
+    except Exception:
+        pass
+    return _DEFAULT_GOVERNED_PATTERNS
+
+
+GOVERNED_PATTERNS = _load_governed_patterns(GOVERNED_CONFIG)
+
+
+# Governance is CLASS-keyed (F33): match by pattern/nature, never by an enumerated file list.
+# Containment in the operator-fixed SUBJECT_ROOT is still absolute — no pattern can govern
+# outside it, and no pattern choice can exit governance for a file the config's patterns cover.
 def is_governed(path: str) -> bool:
-    if not path or not path.endswith(".py"):
+    if not path:
         return False
     ap = os.path.abspath(path)
-    return ap == SUBJECT_ROOT or ap.startswith(SUBJECT_ROOT + os.sep)
+    if not (ap == SUBJECT_ROOT or ap.startswith(SUBJECT_ROOT + os.sep)):
+        return False
+    rel = os.path.relpath(ap, SUBJECT_ROOT)
+    return any(fnmatch.fnmatch(rel, pat) or fnmatch.fnmatch(os.path.basename(ap), pat)
+               for pat in GOVERNED_PATTERNS)
 
 
 # bash writes INTO a governed path: redirection, sed -i, tee, patch, git checkout/apply, py
