@@ -1564,6 +1564,23 @@ backward compatibility) that composes `[TNOW_LP, ASSUMES_LP, SUPPORT_LP]` and ca
 `support` is selected, with its own `retain()`-shaped banking — a maintainer decision on
 whether the two families share one `DifferentialResult` shape or get siblings.
 
+## FIXED: `ledger_differential.retain()`'s single mutable slot clobbered the first-AGREE evidence (2026-07-09)
+
+`retain()` wrote every `--retain` run of a target to the SAME path (`RETENTION / target`), a
+single mutable slot; a later run against `toy` silently overwrote the first-run banked
+DerivationRecord pair with the second-run's (bit-for-bit clobber, uncommitted-but-in-place —
+found as a hazard in passing, not part of this session's assigned task, and fixed per
+CLAUDE.md's engineering-responsibility clause). Fixed: `retain()` now writes to a RUN-UNIQUE
+subdir `<target>/<UTC-ts>_<input_hash[:12]>/` (`_run_unique_dir`, `engine/ledger_differential.py`),
+`mkdir(..., exist_ok=False)` so a same-second/same-EDB collision fails loudly rather than
+silently reusing a path. Both banked toy records were rescued from git history (`814bd79`) and
+the working tree and now live side by side: `engine/docs/ledger-marriage/derivations/toy/
+20260709T104914Z_8e3c0edcaa8a/` (first run, restored verbatim from `814bd79`) and
+`.../20260709T112043Z_f6816fb75951/` (the second, previously-uncommitted run). No test
+depended on the old flat layout (`engine/tests/` has no reference to `RETENTION`/`retain(`);
+full suite re-run clean modulo two pre-existing, unrelated `test_ledger_acts.py` date-fixture
+failures (reproduced identically before this change, via `git stash`).
+
 ## `hooks/pretooluse_change_gate.py`'s `PGHOST` is a hardcoded module constant — a scaffolded instance on a different host silently mis-targets (2026-07-09, OPUS-READINESS move 1/2)
 
 Found in passing while building `filing/deployment_record.py` / `bootstrap/new-project.sh` (a

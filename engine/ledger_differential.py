@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-06T05:37:25Z
-#   last-change: 2026-07-06T06:06:28Z
-#   contributors: 37017f46/main
+#   last-change: 2026-07-09T12:34:09Z
+#   contributors: 37017f46/main, be693afb/main
 # <<< PROVENANCE-STAMP <<<
 
 """ledger_differential -- the marriage's load-bearing gate: the ASP `T_now` program
@@ -210,11 +210,24 @@ def run_differential(name: str, *, edb_text: str | None = None,
     return res
 
 
+def _run_unique_dir(target: str, edb_text: str) -> Path:
+    """The run-unique retention subdir: <target>/<UTC-ts>_<input_hash[:12]>/. Never a single
+    mutable slot per target -- a bare `RETENTION / target` was clobbered wholesale by a later
+    --retain run reusing the same path, silently overwriting the FIRST run's banked
+    DerivationRecord pair with the second's (the exact single-mutable-slot defect this
+    directory scheme forecloses; see BACKLOG.md). `edb_text`'s hash disambiguates two runs
+    that land in the same UTC second; the timestamp disambiguates two runs over the same EDB."""
+    ts = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    return RETENTION / target / f"{ts}_{_sha(edb_text)[:12]}"
+
+
 def retain(res: DifferentialResult, edb_text: str) -> Path:
     """Bank the proof artifacts (F16): the EDB, the derivation records, the atom outputs,
-    under versioned storage so the derivation is re-runnable, not merely asserted."""
-    d = RETENTION / res.target
-    d.mkdir(parents=True, exist_ok=True)
+    under a RUN-UNIQUE subdirectory of versioned storage, so the derivation is re-runnable
+    AND every prior run's evidence stays on disk rather than being overwritten in place."""
+    d = _run_unique_dir(res.target, edb_text)
+    d.mkdir(parents=True, exist_ok=False)  # exist_ok=False: a same-second, same-EDB collision
+                                            # fails loudly (ADR-0002) rather than silently reusing
     (d / "edb.lp").write_text(edb_text, encoding="utf-8")
     (d / "asp_atoms.txt").write_text("\n".join(sorted(res.asp.atoms)) + "\n", encoding="utf-8")
     (d / "sql_atoms.txt").write_text("\n".join(sorted(res.sql.atoms)) + "\n", encoding="utf-8")
