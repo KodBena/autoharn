@@ -19,6 +19,23 @@
     "law/adr/0013-execution-stamina-and-structural-completeness.md",
     "law/adr/0014-executor-second-opinion.md"]}
 
+## ORCHESTRATION — the standing delegation contract (2026-07-09)
+
+- **Sonnet executes by default.** Opus only when BOTH hold: the spec is unambiguous AND the
+  work spans multiple boundaries at once (e.g. SQL schema + the Python consuming it) — and
+  never where its overconfidence can hurt. Escalate on TYPED events (gate-refusal streaks,
+  DIVERGE_DEFECT/QUARANTINED, non-converging review loops), never on self-assessment.
+- **Nobody edits kernel/lineage (frozen records), law/, or engine/lp/ semantics without a
+  Fable-authored, maintainer-ratified spec.** Applying a lineage delta to a deployment is the
+  operator's/maintainer's act, always with every -v var explicit.
+- **The operator surface is the four verbs** (led, judge, pickup, scaffold) plus refusals
+  that teach. Operational truth lives in CAPABILITIES.md + those verbs; judgment/ and
+  design/ archives are history unless a current spec cites them.
+- **Claims carry witnesses.** A report states, per item: WITNESSED (with observed output),
+  REFUSED-AS-EXPECTED, or UNEXERCISED with the concrete blocker. Docs follow the same rule
+  (an example carries real output or an UNWITNESSED mark). No umbrella claims.
+- **Never modify hooks/ or a user project while a live session runs there.**
+
 ## Lazy imports are BANNED (maintainer edict, 2026-07-02)
 
 - Every `import` in this project executes at module import time. Function-body,
