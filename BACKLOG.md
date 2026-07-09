@@ -1800,3 +1800,71 @@ not emptied.
    frontier model ("even an idiot like me... without the brightest LLM on the planet") —
    that bar is the OPUS-READINESS/pickup/brief work's acceptance criterion, decided by the
    maintainer trying it.
+
+## Integrated hooks+deployment batch: landed (2026-07-09, under the standing run1→s20→run2 sequencing + delegated driving authority)
+
+All seven items of this batch witnessed against live systems (autoharn `next`, toy-project
+`master`); details/verbatim output live in the session record, summarized here per-item:
+
+1. **Stamp matcher fix** (`hooks/stamp_intercept.py`): the matcher now ALSO recognizes a
+   command whose first word (after optional `VAR=value` prefixes) is `./led`, bare `led`, or a
+   path ending `/led`, alongside the existing raw-psql shape — closing the "Correction to
+   finding 3" gap (every `led`-mediated write in run 1 was silently unstamped). Hook-I/O
+   simulations witnessed both matches, both negative controls (`echo led is a word`;
+   `ledger-tool --status`), and the existing raw-psql path unaffected.
+2-3. **PGHOST env override + deployment.json consumption** (`hooks/pretooluse_change_gate.py`,
+   `hooks/stamp_intercept.py`): both hooks now resolve db/host/schema-derived-ledger from a
+   project's `deployment.json` (located via the hook input's own `cwd`, falling back to
+   `os.getcwd()`, mirroring `stamp_provenance.py`'s existing convention), with a neutral env-var
+   family (`LEDGER_DB`/`LEDGER_HOST`/`GATE_LEDGER`/`GATE_SUBJECT_ROOT`/`GATE_STATE`/
+   `GATE_JOURNAL`) overriding it, and the old `E13_GATE_*`/`E13_SUBJECT_ROOT`/`STAMP_DB` names
+   kept working as silent deprecated aliases. Re-ran the change-gate hook-I/O simulations
+   (allow / window-reuse / boundary-close-then-deny / fail-closed-on-DB-error) against a scratch
+   project dir with only a `deployment.json` and NO env vars at all — all four paths reproduced
+   byte-identically to the pre-existing env-var-driven behavior, and a bad `LEDGER_HOST`
+   produced the expected fail-CLOSED `gate_error` deny, proving the host override is genuinely
+   live. `toy-project/.claude/settings.json` updated to the neutral env names.
+4. **s20 applied to `toycolors`** (the live one-liner, idempotent — grants/views were already
+   present, confirming a prior pass had reached this db; re-run produced a clean
+   `GRANT`/`CREATE VIEW`/`CREATE VIEW`). Post-conditions witnessed: `review_gap` readable by
+   `toycolors_rw` with no permission error; `ledger_current`/`countersigned_in_force` both carry
+   all five `stamp_*` columns; a full cross-principal obligate → review-gap-shows-debt →
+   countersign → debt-cleared round trip (ledger rows 71-73, prefixed "exercise: s20 apply
+   witness"); the `obligation_not_self_assigned` CHECK now genuinely reachable (self-assigned
+   obligate refuses on the CHECK, not a grant wall).
+5. **toy-project wiring**: `deployment.json` written; `pickup` instantiated from
+   `bootstrap/templates/pickup.tmpl`; `governed_files.json` widened to `["*.py","*.html"]`
+   (BACKLOG "toy run 1 findings" item 4); `./pickup` run FOR REAL post-s20 — REVIEW-DEBT
+   returned real rows, not `BLOCKED: pre-s20 grants`. `.claude/HOOKS.md` updated: pickup
+   section (real output), stamp-matcher-fix note, governed-set-change note, s20-resolution note
+   superseding the old grants-gap finding, doc-witness convention header, and an explicit
+   "what remains UNWITNESSED" closing section.
+6. **Stamped-led witness**: simulated `stamp_intercept.py`'s stdin JSON for
+   `./led decision "exercise: stamped-led witness"` with a fake `session_id`/`agent_id`,
+   executed the REWRITTEN command, read the row back — `stamp_session='fable-batch-sim'`,
+   `stamp_agent='fake-agent-xyz-001'`, `stamp_verified=t` (row 74) — the first `led`-mediated
+   row in this project's history to carry a genuinely verified stamp. UNWITNESSED, named
+   explicitly: Claude Code itself populating `agent_id`/`cwd` in a REAL toy-launched session
+   (needs run 2's first minutes, not a hand-built JSON).
+7. **`bootstrap/new-project.sh --new-world <world>`**: derives `--schema`/`--kern`/`--role`
+   from one world name (explicit override still honored), applies
+   `high_watermark_1.sql` + s20 with every `-v` var spelled out, seeds the stamp secret
+   idempotently (mirrors `drive/arm.sh` ruling 43's own guarded pattern), and writes
+   `deployment.json` — automating the operator step HOOKS.md otherwise documents as manual.
+   Witnessed end-to-end against `toy` as world `run3` (schema `run3`/`run3_kernel`/`run3_rw`):
+   kernel+s20 applied clean, `author` principal auto-seeded by `s15-schema.sql`, secret
+   provisioned (`.claude/secrets/stamp_secret.hex`, 65 bytes), `./led decision`/`./judge`/
+   `./pickup` all run clean against the fresh, empty ledger (row id starts at 1 — genuine
+   world isolation). Scaffold left at `/home/bork/w/vdc/1/run3` (moved off `/tmp` for
+   persistence) — **run3 IS run 3's clean room**, per the one-world-per-run ruling above; s21
+   (once its own scratch witness lands, per "Assent batch outcomes" item 4) applies here too,
+   not re-scaffolded.
+
+Friction/notes: `led obligate`'s error message for the self-assigned refusal is the raw
+Postgres CHECK-violation text (`ERROR:  new row for relation "countersign_obligation" violates
+check constraint "obligation_not_self_assigned"`), not the friendlier trigger-raised message
+the pre-s20 HOOKS.md excerpt implied — cosmetic, the refusal itself is correct and was the
+whole point of the CHECK. The harness's own auto-mode classifier refused a literal
+`SELECT secret FROM stamp_secret` negative-control read (credential-materialization guard) —
+respected rather than routed around; the item-6 stamped round trip is strictly stronger
+evidence the secret is correctly wired anyway (a bit-exact HMAC match end to end).
