@@ -95,6 +95,43 @@ diet), and let the stamp layer prove it — `review_stamp_distinctness` distingu
 same-invocation from distinct-invocation review mechanically (view witnessed today). "Fresh
 eyes" stops being a figure of speech and becomes a checkable property of the review row.
 
+## 11. Ephemeral principals (durable roles, disposable instances) — DESIGN, kernel-anticipated
+The org-shaped idea (maintainer, 2026-07-09): per-subtask-orchestrator "CLAUDE.md"s — standing
+roles with responsibilities and recommendations — under the constraint that agents restart
+rather than run (kv-cache reality). The kernel already draws the load-bearing distinction:
+**the principal is durable, the invocation is ephemeral.** `kernel.principal` carries the role
+(registered once, witnessed today); stamps carry the instance (session/agent per invocation);
+`actor` on every row binds work to the ROLE, not the process. So a role survives restarts as a
+QUERY, not a memory: everything this actor decided, what of it is in force, what it is obliged
+to review, what questions address its concerns.
+
+Assembly (the pieces exist; the wiring doesn't):
+- **Charter** = a static per-role preamble (responsibilities, scope, constraints) — versioned
+  as a ledger-referenced artifact (supersession applies; charters get amended with verbatim
+  quotes like anything else), never a drifting loose file.
+- **Brief** = the dynamic half, DERIVED per instantiation: `judge --bootstrap` (pattern 6)
+  filtered to the role — its in-force decisions, its open obligations (`review_gap` WHERE
+  obliged_actor = role), open questions in its concerns. The instance context is charter +
+  brief, nothing else.
+- **Responsibilities** = `countersign_obligation` rows literally assign review duty to a
+  principal, self-assignment refused by CHECK; a role's "inbox" is a view (blocked on s20 —
+  a third consumer for that delta).
+- **Percolation** = no mailboxes. A role communicates by writing typed rows (recommendation =
+  a `note`/`decision` naming its concern; objection = a `review` regards the target); the
+  receiving role's next bootstrap query picks it up. Information flow is a derived view over
+  shared history — the epistemic layer as the org's nervous system, exactly the leverage the
+  maintainer suspected.
+- **Economics**: restart-not-resume becomes an advantage — every instantiation is fresh-eyes
+  (pattern 10) with a minimal derived context, and the stable charter prefix is kv-cache
+  friendly ACROSS instantiations of the same role (same preamble → warm cache).
+
+Honest risks: role proliferation (each principal is charter+audit surface — keep the org
+small, grow it on demonstrated need); the `concern` vocabulary is coarse for addressing
+(design/enactment/process/other) — the work-item layer (AUTOMATION-ENVELOPE gap 2) is the
+natural fix; conflicting in-force decisions between roles need an adjudicator — which is
+precisely the engine's defeat/T_now machinery, giving the deductive layer a THIRD operational
+job (after judge and bootstrap).
+
 ## What the harness adds, summarized
 Across all ten: (a) **termination decided by views, not vibes** (question_status, review_gap,
 loop-until-dry over regards-rows); (b) **identity and independence as data** (principals, SoD
