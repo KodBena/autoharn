@@ -26,6 +26,11 @@ time this lineage is `ls`-legible AS a lineage (in the old repos it was scattere
 - **Side entries.** `nla-schema.sql` is a catalog-isolated `nla` re-instantiation (a
   parallel domain profile, not a generation in the s-line). `s13-remediation-review-detail-
   truncate-guard.sql` is a targeted remediation delta on the s13 generation.
+- **`high_watermark_1.sql` — the derived one-shot apply for the current USER-FACING kernel**
+  (s15 → s17-stamp → s17-independence → s19). A convenience `\ir` chain that owns no DDL;
+  it deliberately EXCLUDES `s18-criterion-principals.sql`, which is the project's own
+  experiment apparatus (the study harness applies s18 explicitly on top). A future kernel
+  delta lands as a new sNN file plus a new `high_watermark_N.sql`.
 
 ## Never retro-edit an `sNN` record (ADR-0005 Rule 8)
 
