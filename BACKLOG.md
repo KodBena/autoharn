@@ -1425,3 +1425,22 @@ the observed output of a real run (or an explicit UNWITNESSED stamp); a walkthro
 containing an unstamped, unwitnessed step is the loud failure. Candidate surface: the
 doc-legibility gate family, or the walkthrough-verification instrument. For the refactor
 spec; not maintainer-ratified; filed for ruling.
+
+## Proposed: mechanize the ADR-0013 Rule 3 demurral-detector as a Claude hook (maintainer, 2026-07-09)
+
+Maintainer proposal, anticipated verbatim by ADR-0000 Revisit #3 ("an out-of-frame
+rationalization-detector run on the fix's justification... tighten Rule 2's surface from
+review-only toward the gate"). Shape ruled by ADR-0011 Rule 4 (enumeration fails open):
+NOT a phrase blocklist — the attrition reflex is a paraphrase engine. Two parts:
+(1) OFFLINE: fix-point a Haiku adversarially (loop-until-dry) to build the eval corpus —
+cop-out variations ("YAGNI", "gold-plating", "doesn't apply here", ...) PLUS hard negatives
+(legitimate neutral scope questions, fair-dealing renegotiations) — the seen-red fixture
+set that proves the detector fires. (2) RUNTIME: a live small-model classifier hook carrying
+Rule 3's discriminators (work already mandated? conclusion pre-drawn? who decides?),
+regression-tested against the corpus. Attachment points: Stop hook on completion claims;
+PreToolUse on AskUserQuestion (Specimen 2's canonical artifact: the skip pre-recommended).
+Known risks to design against: false positives on honest renegotiation (2026-06-24
+amendment, fair dealing both ways); Goodharting (re-run the adversarial loop against each
+deployed version). Existing manual counterpart: the hack-rationalization-detector skill.
+When minted, record by dated amendment at ADR-0000 Revisit #3 / ADR-0013 Revisit #2
+(maintainer ratifies). Filed; not yet commissioned.
