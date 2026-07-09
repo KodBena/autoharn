@@ -1931,3 +1931,47 @@ mentions of `--new-world`, and an operator could not open world 4 without readin
    tripping over it) and **`bootstrap/QUICKSTART.md`** gained a one-paragraph pointer to it.
 
 Not touched: `toycolors`/`toy-project` (per scope); s21 was not applied anywhere by this pass.
+
+## Run-2 integrity finding: world born with dead hooks; kernel fail-safe held; one rule breach filed (2026-07-09)
+
+Timeline (all 2026-07-09 local time, pid/mtime-witnessed):
+- ~14:53 — run3 scaffolded at `/tmp/run3_dest` and `mv`'d to its final path (reconstruction in
+  the entry above); both hook commands in `.claude/settings.json` baked the pre-move path.
+- 15:15:02 — the maintainer launched run 2 in run3 (pid 694135, `/proc` cwd-witnessed). Claude
+  Code snapshots hook config at session start, so this session runs its ENTIRE life with the
+  change gate FAIL-OPEN (stale `SUBJECT_ROOT` matches no real file — verified both polarities by
+  the doc pass above) and the stamp interceptor inert (secret path nonexistent → writes pass
+  unstamped).
+- In-run conduct (run3.ledger rows 16–20, maintainer-pasted): the kernel layer held exactly as
+  designed — `validate_independence` refused every technical claim on unverified stamps; the
+  subject agent fell back to MARKED self-review, flagged the misconfiguration as a ledger
+  decision (row 20), and did not fix governance infra outside its scope. Defense in depth
+  witnessed in the wild: hook layer dead, kernel layer fail-safe, agent conduct correct.
+- 15:27–15:28 — the documentation pass repaired `run3/.claude/settings.json` + `HOOKS.md` in
+  place, 12 minutes AFTER the live session launched. That is a breach of the standing rule
+  (never modify a user project while a live session runs there), filed here against THIS
+  session's commissioning: the constraint list named toy-project but not run3, because run 2 had
+  not started at commission time and nobody re-checked liveness at edit time. Functional damage
+  assessed nil (snapshot semantics: the live session's captured config was unchanged by the
+  edit; the fix takes effect next session). Standing lesson: LIVENESS IS CHECKED BY THE EDITOR
+  AT EDIT TIME (`pgrep` + `/proc/<pid>/cwd`), never assumed from the commission.
+
+Standing caveat on run 2's evidence: every run3.ledger row from this session is unstamped and
+ungated; independence was never attainable. The run remains valid evidence for decomposition /
+prereg / self-review-fallback conduct and for the kernel fail-safe; it is NOT the working-stamps
+witness run 2 was commissioned to be — that objective moves to a fresh world (one-world ruling;
+the scaffold now self-documents, and with hook fix 1 below a moved instance becomes loudly
+taught instead of silently defeated).
+
+Hook fixes filed (Sonnet-executable; do NOT edit `hooks/` until no wired session anywhere is
+live — every wired project re-executes these scripts from this repo on each hook invocation):
+1. `pretooluse_change_gate.py` — if `SUBJECT_ROOT` does not exist on disk, DENY loudly with
+   teach-text instead of governing nothing (fail-open → fail-closed). Seen-red fixture required.
+2. `stamp_intercept.py` — if `STAMP_SECRET` is configured but the file is missing/unreadable,
+   DENY ledger writes with the seed-command teach-text instead of passing them unstamped (the
+   silent-unstamped class, now twice witnessed: run 1, run 2).
+
+For the record, resolving the doc pass's two flagged anomalies: `design/WORK-ITEM-DECISION-MEMO.md`
+is Fable-authored this session (the parent session's own write landing mid-pass — no anomaly);
+the empty `/home/bork/w/vdc/1/run_3/` (underscore) dir looks like a typo artifact of run3's
+creation — maintainer may `rmdir` it.
