@@ -1,7 +1,7 @@
 #!/bin/sh
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-09T11:15:53Z
-#   last-change: 2026-07-09T11:16:13Z
+#   last-change: 2026-07-09T12:52:28Z
 #   contributors: be693afb/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -29,14 +29,38 @@
 #                (^s\d+[a-z]*$, *_scratch), or `judge` will resolve to the WRONG target.
 #   --force      overwrite an existing deployment.json/scaffold at <dest-dir> (default: refuse).
 #
+# --new-world <world> mode (BACKLOG "Ruling: one world per run", 2026-07-09; this session's
+# batch item 7): a run's subject must not see a sibling run's ledger history (the many-worlds
+# argument -- branches share only the branch point, never each other's ledgers). This mode
+# stands up exactly that branch point in an EXISTING db, in one call: applies
+# kernel/lineage/high_watermark_1.sql THEN kernel/lineage/s20-obligation-grants-and-view-
+# refresh.sql (so every new world is born on the current kernel, s20 included, never the
+# pre-s20 grants-gap shape the toy pilot found the hard way) into fresh schemas derived from
+# <world> (e.g. --new-world run3 -> schema=run3, kern=run3_kernel, role=run3_rw -- override any
+# of the three with an explicit --schema/--kern/--role if the naming convention does not fit),
+# seeds the stamp secret (openssl rand -hex 32, mirroring drive/arm.sh ruling 43's own idempotent
+# pattern -- skipped if a secret already exists, never silently rotated), and writes the matching
+# deployment.json -- the operator step HOOKS.md documents as a manual "one manual step remains"
+# for a HAND-scaffolded project is fully automated here for a probe/run world. EVERY -v var is
+# still spelled out explicitly to psql (standing rule: never apply bare against a deployment that
+# matters) -- --new-world does not relax that, it only derives the VALUES from one name instead
+# of requiring the caller to keep schema/kern/role in agreement by hand (ADR-0012 P1). The
+# 'author' principal is seeded automatically by s15-schema.sql itself (INSERT ... ON CONFLICT DO
+# NOTHING, mapped to the connecting role) -- no separate registration step is needed here; it
+# mirrors the toy WALKTHROUGH's own kernel-apply step exactly, nothing new to invoke.
+#
 # What this does NOT do (deliberately, per design/OPUS-READINESS.md's scope for this pass):
-# rewire hooks/pretooluse_change_gate.py or led to READ deployment.json live (deferred; a live
-# session reads those per-event), provision the stamp secret (a maintainer/operator act, per
-# HOOKS.md's own convention), or apply any kernel DDL (a separate, explicit -v-vars act).
+# rewire `led` to READ deployment.json live (deferred; a live session reads it per-event; the two
+# PreToolUse hooks in hooks/ already do, per this same session's items 2-3), or apply any kernel
+# DDL to a deployment that is NOT a --new-world target (a separate, explicit -v-vars operator act).
 set -eu
 
 usage() {
     echo "usage: $0 <dest-dir> --db <db> --host <host> --schema <schema> --kern <kern> --role <role> [--name <name>] [--force]" >&2
+    echo "       $0 <dest-dir> --new-world <world> --db <db> --host <host> [--name <name>] [--force]" >&2
+    echo "         (--new-world derives --schema/--kern/--role from <world> unless given explicitly;" >&2
+    echo "          also applies high_watermark_1.sql + s20 and seeds the stamp secret -- see the" >&2
+    echo "          --new-world block in this script's own header comment)" >&2
     exit 2
 }
 
@@ -44,6 +68,7 @@ usage() {
 DEST="$1"; shift
 NAME=""
 FORCE=0
+NEW_WORLD=""
 DB=""; HOST=""; SCHEMA=""; KERN=""; ROLE=""
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -53,10 +78,19 @@ while [ $# -gt 0 ]; do
         --kern) KERN="$2"; shift 2 ;;
         --role) ROLE="$2"; shift 2 ;;
         --name) NAME="$2"; shift 2 ;;
+        --new-world) NEW_WORLD="$2"; shift 2 ;;
         --force) FORCE=1; shift ;;
         *) echo "unrecognized argument: $1" >&2; usage ;;
     esac
 done
+if [ -n "$NEW_WORLD" ]; then
+    # Derive, never require, the three names that must agree (P1: one source -- the world name --
+    # not three hand-typed strings the caller must keep in sync). An explicit --schema/--kern/--role
+    # still wins if the caller passed one (e.g. the world name collides with an existing schema).
+    [ -n "$SCHEMA" ] || SCHEMA="$NEW_WORLD"
+    [ -n "$KERN" ] || KERN="${NEW_WORLD}_kernel"
+    [ -n "$ROLE" ] || ROLE="${NEW_WORLD}_rw"
+fi
 [ -n "$DB" ] && [ -n "$HOST" ] && [ -n "$SCHEMA" ] && [ -n "$KERN" ] && [ -n "$ROLE" ] || usage
 
 AUTOHARN_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -75,6 +109,34 @@ if [ -f "$DEPLOYMENT" ] && [ "$FORCE" -ne 1 ]; then
 fi
 
 echo "== stamping instance at $PROJECT_ROOT (name=$NAME) =="
+
+if [ -n "$NEW_WORLD" ]; then
+    echo "-- new-world '$NEW_WORLD': applying high_watermark_1.sql + s20 to $DB (schema=$SCHEMA kern=$KERN role=$ROLE) --"
+    psql -h "$HOST" -d "$DB" -v ON_ERROR_STOP=1 \
+        -v schema="$SCHEMA" -v kern="$KERN" -v role="$ROLE" \
+        -f "$AUTOHARN_ROOT/kernel/lineage/high_watermark_1.sql" \
+        -f "$AUTOHARN_ROOT/kernel/lineage/s20-obligation-grants-and-view-refresh.sql"
+    echo "   kernel applied (schema $SCHEMA + kernel schema $KERN + role $ROLE, s20 included)"
+
+    echo "-- new-world '$NEW_WORLD': seeding the stamp secret (idempotent, mirrors drive/arm.sh ruling 43) --"
+    mkdir -p "$PROJECT_ROOT/.claude/secrets"
+    chmod 700 "$PROJECT_ROOT/.claude/secrets"
+    SECRET_FILE="$PROJECT_ROOT/.claude/secrets/stamp_secret.hex"
+    HAVE=$(psql -h "$HOST" -d "$DB" -tAc "SELECT count(*) FROM ${KERN}.stamp_secret;")
+    if [ "$HAVE" = "1" ]; then
+        echo "   a secret is already provisioned for ${KERN}.stamp_secret (1 row); not rotating"
+    else
+        ( umask 077; openssl rand -hex 32 > "$SECRET_FILE" )
+        chmod 600 "$SECRET_FILE"
+        HEX=$(cat "$SECRET_FILE")
+        # psql -c does NOT interpolate -v vars; the hex is [0-9a-f] so it inlines safely (no
+        # injection surface) -- same posture as drive/arm.sh's identical seeding block.
+        psql -h "$HOST" -d "$DB" -q -v ON_ERROR_STOP=1 \
+            -c "TRUNCATE ${KERN}.stamp_secret;" \
+            -c "INSERT INTO ${KERN}.stamp_secret (secret) VALUES (decode('$HEX','hex'));"
+        echo "   one fresh secret provisioned ($SECRET_FILE [chmod 600]; DB ${KERN}.stamp_secret)"
+    fi
+fi
 
 echo "-- deployment.json --"
 "$PY" - "$DEPLOYMENT" "$DB" "$HOST" "$SCHEMA" "$KERN" "$ROLE" <<PYEOF
@@ -121,7 +183,13 @@ done
 
 echo "== done =="
 echo "Next steps:"
-echo "  1. Apply a kernel lineage to $DB/$SCHEMA/$KERN/$ROLE if not already applied (kernel/lineage/, autoharn)."
-echo "  2. Provision the stamp secret -- see $PROJECT_ROOT/.claude/HOOKS.md (marked UNWITNESSED until you run it)."
-echo "  3. cd $PROJECT_ROOT && ./led decision \"...\"  /  ./judge  /  ./pickup"
-echo "  4. Read $PROJECT_ROOT/.claude/HOOKS.md and replace its UNWITNESSED marks as you exercise each command."
+if [ -n "$NEW_WORLD" ]; then
+    echo "  1. Kernel + s20 already applied and the stamp secret already provisioned above (new-world '$NEW_WORLD')."
+    echo "  2. cd $PROJECT_ROOT && ./led decision \"...\"  /  ./judge  /  ./pickup"
+    echo "  3. Read $PROJECT_ROOT/.claude/HOOKS.md and replace its UNWITNESSED marks as you exercise each command."
+else
+    echo "  1. Apply a kernel lineage to $DB/$SCHEMA/$KERN/$ROLE if not already applied (kernel/lineage/, autoharn)."
+    echo "  2. Provision the stamp secret -- see $PROJECT_ROOT/.claude/HOOKS.md (marked UNWITNESSED until you run it)."
+    echo "  3. cd $PROJECT_ROOT && ./led decision \"...\"  /  ./judge  /  ./pickup"
+    echo "  4. Read $PROJECT_ROOT/.claude/HOOKS.md and replace its UNWITNESSED marks as you exercise each command."
+fi

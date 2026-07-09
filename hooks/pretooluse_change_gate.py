@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-09T08:07:02Z
-#   last-change: 2026-07-09T08:07:31Z
-#   contributors: 9bcc0113/main
+#   last-change: 2026-07-09T12:42:13Z
+#   contributors: 9bcc0113/main, be693afb/main
 # <<< PROVENANCE-STAMP <<<
 
 """PreToolUse change-policy gate (e13 / s13) — the act-gate, fully label-indifferent.
@@ -79,35 +79,82 @@ import sys
 import time
 from datetime import datetime
 
-PGHOST = "192.168.122.1"
-# The subject ledger now lives in the ISOLATED database `nla` (catalog-isolated from the apparatus
-# in `epistemic`, so the subject role cannot read apparatus vocabulary through the shared catalog).
-# The gate is re-pointed at `nla`; env-overridable only so the build-time probe can target its own
-# scratch mirror in that same database. Deployment leaves the env unset -> the durable `nla` ledger.
-PGDB = os.environ.get("E13_GATE_DB", "nla")
-# The ledger the gate reads. Deployment leaves the env unset -> the durable ledger. The override
-# exists for exactly one reason (a DISCLOSED deviation from the e11 posture "the ledger the gate
-# reads is NOT overridable"): the durable ledger is append-only and untruncatable at the write
-# boundary, so the build-time gate probe CANNOT seed or reset fixtures there -- it points the gate at
-# a scratch mirror (probe.ledger) instead. The e11 posture's intent (a probe must never write to or
-# delete live evidence) is thereby STRENGTHENED, not weakened: the live ledger refuses fixture writes
-# structurally, whatever env a caller sets.
-LEDGER = os.environ.get("E13_GATE_LEDGER", "public.ledger")
-# State + journal default to the deployment paths; a build-time verifier overrides them via
-# env so it can never write to or delete the live run's evidence. Deployment leaves them
-# unset → the production paths. (The ledger the gate reads is NOT overridable.)
-STATE = os.environ.get(
-    "E13_GATE_STATE", os.path.expanduser("~/w/vdc/1/epistemic-audit/change_gate_state.json"))
-JOURNAL = os.environ.get(
-    "E13_GATE_JOURNAL", os.path.expanduser("~/w/vdc/1/epistemic-audit/logs/change_gate.journal.jsonl"))
-# The subject repo root. INVARIANT keying (F33): governance is `*.py` UNDER THIS ROOT — the
-# root is the operator-fixed arm directory (same disclosure class as LEDGER / the deploy paths),
-# NOT a subject-emergent package name. No package the subject invents can escape. Env-overridable
-# so the build-time probe can point at its own subject base. Deployment leaves it unset → the
-# e11 arm dir. "Under the repo" is honored precisely; a stray `.py` outside the repo (e.g. in the
-# shared venv) is not governed, so the footprint is exactly the subject's own code.
-SUBJECT_ROOT = os.path.abspath(os.environ.get(
-    "E13_SUBJECT_ROOT", os.path.expanduser("~/w/vdc/1/epistemic-e14")))
+# Eager, top-of-file sys.path insert + import (lazy imports banned; the same pattern
+# engine/targets.py and hooks/stamp_intercept.py already use to reach a sibling module):
+# filing/deployment_record.py is the ONE home for the deployment.json shape (ADR-0012 P1), reached
+# via a file-relative sys.path insert since this hook lives in the SAME autoharn checkout as filing/.
+_HERE = os.path.dirname(os.path.abspath(__file__))
+_REPO_ROOT = os.path.dirname(_HERE)  # hooks/ -> autoharn root
+sys.path.insert(0, os.path.join(_REPO_ROOT, "filing"))
+import deployment_record  # noqa: E402  (filing/deployment_record.py, the ONE home for the deployment.json shape)
+
+# ---------------------------------------------------------------------------------------------
+# CONNECTION/CONFIG RESOLUTION (design/OPUS-READINESS.md move 1; BACKLOG "PGHOST hardcoded" +
+# "E13 retirement", both 2026-07-09) — two defects fixed together because they share one root
+# cause: a connection/config value with no live per-project source, so it either had no override
+# at all, or an override vocabulary tied to one dead experiment's name.
+#   (1) PGHOST used to be a bare literal with NO env override — every sibling parameter
+#       (E13_GATE_DB, E13_GATE_LEDGER, ...) was already os.environ.get(...)-overridable; PGHOST
+#       alone was not. A scaffolded instance whose postgres lives on a different host would have
+#       had this gate silently querying the WRONG HOST — the exact "silent wrong database" class
+#       engine/targets.py's own docstring names and forecloses for itself, one hop over.
+#   (2) The E13_GATE_*/E13_SUBJECT_ROOT env-var family carries a dead experiment's name (e13) as
+#       its whole vocabulary and has no relationship to a project's own deployment.json (the ONE
+#       home for db/host/schema/kern/role, filing/deployment_record.py) — a scaffolded project
+#       had to re-author these names a second time in its own settings.json, the exact
+#       N-places-re-authored friction OPUS-READINESS move 1 names.
+#
+# THE FIX: this hook is a fresh short-lived process per tool call with no persistent config of
+# its own; its only per-call context is the hook-input JSON on stdin, which Claude Code populates
+# with `cwd` (the session's working directory when the tool call fired — the same field
+# hooks/stamp_provenance.py and hooks/stamp_intercept.py already read). That locates a project's
+# deployment.json (repo root, next to .claude/) with zero new plumbing a project's settings.json
+# would otherwise have to carry. PRECEDENCE per value, stated once: an env var (neutral name, or
+# its deprecated alias) OVERRIDES the deployment record; the deployment record is used when no
+# env var is set; the byte-held hardcoded default is used when NEITHER resolves — so autoharn's
+# own long-lived gate usage against `nla` (no deployment.json anywhere in that flow) is completely
+# unaffected. Neutral names replace the dead e13-prefixed family (OPUS-READINESS: "the E13_*
+# experiment prefix dies"); LEDGER_DB/LEDGER_HOST mirror engine/targets.py's own
+# LEDGER_DB/LEDGER_SCHEMA/LEDGER_KERN env-var convention (ADR-0012 P1 — one vocabulary, not
+# reinvented). The old E13_*/STAMP_* names are kept working as deprecated aliases (accepted
+# silently, nothing logged) so no existing deployment breaks mid-transition.
+#
+#   value        | neutral env       | deprecated alias   | deployment.json field (when no env set)
+#   PGHOST       | LEDGER_HOST       | E13_GATE_HOST       | host
+#   PGDB         | LEDGER_DB         | E13_GATE_DB          | db
+#   LEDGER       | GATE_LEDGER       | E13_GATE_LEDGER      | f"{schema}.ledger"
+#   SUBJECT_ROOT | GATE_SUBJECT_ROOT | E13_SUBJECT_ROOT     | the deployment.json's own directory
+#   STATE        | GATE_STATE        | E13_GATE_STATE       | f"{SUBJECT_ROOT}/.claude/change_gate_state.json"
+#   JOURNAL      | GATE_JOURNAL      | E13_GATE_JOURNAL     | f"{SUBJECT_ROOT}/.claude/logs/change_gate.journal.jsonl"
+#
+# (STATE/JOURNAL's deployment-relative defaults only apply when a deployment record was actually
+# found — else they fall back to the byte-held absolute epistemic-audit paths, exactly as before
+# this pass, so autoharn's own e13/e14 flow — whose state/journal never lived under SUBJECT_ROOT —
+# is unaffected.)
+#
+# Config is resolved once per invocation, inside `_configure()`, called at the top of `main()`
+# right after stdin is parsed — the deployment.json lookup needs the hook input's own `cwd`, only
+# available once stdin has been read. This is still "once per call" (a fresh short-lived process
+# per tool call, per the GOVERNED-SET CONFIG comment below): only WHEN the resolution happens
+# moved, not how often, so there is no new P4 staleness.
+# ---------------------------------------------------------------------------------------------
+_DEFAULT_PGHOST = "192.168.122.1"
+_DEFAULT_PGDB = "nla"
+_DEFAULT_LEDGER = "public.ledger"
+_DEFAULT_SUBJECT_ROOT = os.path.expanduser("~/w/vdc/1/epistemic-e14")
+_DEFAULT_STATE = os.path.expanduser("~/w/vdc/1/epistemic-audit/change_gate_state.json")
+_DEFAULT_JOURNAL = os.path.expanduser("~/w/vdc/1/epistemic-audit/logs/change_gate.journal.jsonl")
+
+# Module globals every function below reads as plain globals, populated by `_configure()` at the
+# start of every `main()` call. Declared here at their byte-held defaults so the module still
+# imports cleanly (e.g. under a test harness that imports functions directly without calling
+# `main()`/`_configure()` first) — only WHEN they are computed moved by this pass, not their names.
+PGHOST = _DEFAULT_PGHOST
+PGDB = _DEFAULT_PGDB
+LEDGER = _DEFAULT_LEDGER
+SUBJECT_ROOT = _DEFAULT_SUBJECT_ROOT
+STATE = _DEFAULT_STATE
+JOURNAL = _DEFAULT_JOURNAL
 EPOCH = "1970-01-01 00:00:00"
 WINDOW_S = 600.0  # a ticket, once consumed, stays open on its file for this long …
 # … or until the next test-run / commit boundary, whichever comes first.
@@ -141,15 +188,16 @@ DENY_BASH_WRITE = (
 
 # GOVERNED-SET CONFIG (maintainer ruling, 2026-07-09): which files this gate protects is a
 # per-project, trivially-editable choice — a small config file the PROJECT'S USER selects
-# patterns in, never a set hardcoded here. Read once at import (this process is a fresh
-# short-lived hook invocation per tool call, so "once at import" and "once per call" are the
-# same thing — no P4 staleness). Format: {"patterns": ["*.py", ...]}, fnmatch'd against the
-# path relative to SUBJECT_ROOT (fnmatch's "*" matches "/" too, so "*.py" alone reaches nested
-# files — no "**" needed). Missing/unreadable/malformed config -> the F33 invariant default:
-# every *.py file, class-keyed, exactly the old hardcoded behavior, so a project that has not
-# yet configured governance is not silently ungoverned.
-GOVERNED_CONFIG = os.environ.get(
-    "GOVERNED_CONFIG", os.path.join(SUBJECT_ROOT, ".claude", "governed_files.json"))
+# patterns in, never a set hardcoded here. Resolved once per invocation, inside `_configure()`
+# (this process is a fresh short-lived hook invocation per tool call, so "once per call" is the
+# relevant unit — no P4 staleness; only WHEN this is computed moved with this pass, from import
+# time to inside main(), because its default now depends on SUBJECT_ROOT which itself can depend
+# on the hook input's `cwd`). Format: {"patterns": ["*.py", ...]}, fnmatch'd against the path
+# relative to SUBJECT_ROOT (fnmatch's "*" matches "/" too, so "*.py" alone reaches nested files —
+# no "**" needed). Missing/unreadable/malformed config -> the F33 invariant default: every *.py
+# file, class-keyed, exactly the old hardcoded behavior, so a project that has not yet configured
+# governance is not silently ungoverned.
+GOVERNED_CONFIG = os.path.join(SUBJECT_ROOT, ".claude", "governed_files.json")
 _DEFAULT_GOVERNED_PATTERNS = ["*.py"]
 
 
@@ -166,6 +214,63 @@ def _load_governed_patterns(cfg_path: str) -> list[str]:
 
 
 GOVERNED_PATTERNS = _load_governed_patterns(GOVERNED_CONFIG)
+
+
+def _find_deployment_path(data: dict) -> str | None:
+    """Locate this project's deployment.json: an explicit LEDGER_DEPLOYMENT override first, else
+    `<cwd>/deployment.json` using the hook input's own `cwd` field (falling back to this process's
+    os.getcwd(), mirroring stamp_provenance.py's/stamp_intercept.py's identical convention).
+    Returns None -- never raises -- when neither resolves to an existing file (a missing record
+    degrades quietly to the env-var/hardcoded path, same posture as every other config value
+    here)."""
+    explicit = os.environ.get("LEDGER_DEPLOYMENT", "")
+    if explicit:
+        return explicit
+    cwd = data.get("cwd") or os.getcwd()
+    candidate = os.path.join(cwd, "deployment.json")
+    return candidate if os.path.isfile(candidate) else None
+
+
+def _load_deployment_quiet(path: str) -> deployment_record.DeploymentRecord | None:
+    """Best-effort deployment.json load. Never raises -- a missing/malformed record degrades to
+    the env-var/hardcoded path exactly like any other mis-provisioning this hook tolerates."""
+    try:
+        return deployment_record.load_deployment(path)
+    except deployment_record.DeploymentError:
+        return None
+
+
+def _configure(data: dict) -> None:
+    """Resolve every connection/config value for THIS invocation and set the module globals every
+    function below reads (see the module-docstring precedence table above: env override >
+    deployment.json > byte-held hardcoded default). Called once, at the top of `main()`, right
+    after stdin is parsed -- the deployment.json lookup needs the hook input's own `cwd`, which is
+    only available once stdin has been read."""
+    global PGHOST, PGDB, LEDGER, SUBJECT_ROOT, STATE, JOURNAL, GOVERNED_CONFIG, GOVERNED_PATTERNS
+    dep_path = _find_deployment_path(data)
+    dep = _load_deployment_quiet(dep_path) if dep_path else None
+
+    PGHOST = (os.environ.get("LEDGER_HOST") or os.environ.get("E13_GATE_HOST")
+              or (dep.host if dep else None) or _DEFAULT_PGHOST)
+    PGDB = (os.environ.get("LEDGER_DB") or os.environ.get("E13_GATE_DB")
+            or (dep.db if dep else None) or _DEFAULT_PGDB)
+    LEDGER = (os.environ.get("GATE_LEDGER") or os.environ.get("E13_GATE_LEDGER")
+              or (f"{dep.schema}.ledger" if dep else None) or _DEFAULT_LEDGER)
+
+    using_deployment = bool(dep_path and dep)
+    default_root = os.path.dirname(dep_path) if using_deployment else _DEFAULT_SUBJECT_ROOT
+    SUBJECT_ROOT = os.path.abspath(
+        os.environ.get("GATE_SUBJECT_ROOT") or os.environ.get("E13_SUBJECT_ROOT") or default_root)
+    default_state = (os.path.join(SUBJECT_ROOT, ".claude", "change_gate_state.json")
+                      if using_deployment else _DEFAULT_STATE)
+    default_journal = (os.path.join(SUBJECT_ROOT, ".claude", "logs", "change_gate.journal.jsonl")
+                        if using_deployment else _DEFAULT_JOURNAL)
+    STATE = os.environ.get("GATE_STATE") or os.environ.get("E13_GATE_STATE") or default_state
+    JOURNAL = os.environ.get("GATE_JOURNAL") or os.environ.get("E13_GATE_JOURNAL") or default_journal
+
+    GOVERNED_CONFIG = os.environ.get(
+        "GOVERNED_CONFIG", os.path.join(SUBJECT_ROOT, ".claude", "governed_files.json"))
+    GOVERNED_PATTERNS = _load_governed_patterns(GOVERNED_CONFIG)
 
 
 # Governance is CLASS-keyed (F33): match by pattern/nature, never by an enumerated file list.
@@ -432,6 +537,11 @@ def main() -> int:
         p = json.loads(raw) if raw.strip() else {}
     except Exception:
         return 0  # unparseable → cannot identify a governed mutation; pass through (audit logs it)
+
+    try:
+        _configure(p)
+    except Exception:  # noqa: BLE001 — a config-resolution bug must never break a tool call;
+        pass            # the module-level byte-held defaults (set above) are still in effect.
 
     tool = _first(p, "tool_name", "toolName", "name", default="")
     inp = _first(p, "tool_input", "toolInput", "input", default={})
