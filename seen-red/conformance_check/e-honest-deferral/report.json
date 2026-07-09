@@ -1,0 +1,17 @@
+{
+  "commission_id": "seen-red-e",
+  "verdicts": [
+    {
+      "item_id": "item-1",
+      "verdict": "WITNESSED",
+      "witness": "CLAUDE.md"
+    },
+    {
+      "item_id": "item-2",
+      "verdict": "UNEXERCISED",
+      "blocker": "blocked on a maintainer-ratified gate-wiring decision; filed in BACKLOG.md under 'conformance_check gate promotion'"
+    }
+  ],
+  "extras": [],
+  "renegotiations": []
+}

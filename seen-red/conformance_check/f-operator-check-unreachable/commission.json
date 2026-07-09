@@ -1,0 +1,17 @@
+{
+  "commission_id": "seen-red-f",
+  "date": "2026-07-09",
+  "ratifier": "test-fixture",
+  "executor": "Sonnet",
+  "scope": [
+    {
+      "item_id": "item-1",
+      "mandate": "Write the ledger row recording the decision.",
+      "witness_type": "ledger_row",
+      "witness_hint": "decisions"
+    }
+  ],
+  "out_of_scope": [],
+  "constraints": [],
+  "escalation": []
+}

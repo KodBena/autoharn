@@ -1,0 +1,23 @@
+{
+  "commission_id": "seen-red-e",
+  "date": "2026-07-09",
+  "ratifier": "test-fixture",
+  "executor": "Sonnet",
+  "scope": [
+    {
+      "item_id": "item-1",
+      "mandate": "Ship the file artifact.",
+      "witness_type": "file",
+      "witness_hint": "CLAUDE.md"
+    },
+    {
+      "item_id": "item-2",
+      "mandate": "Wire the item into the live gate chain.",
+      "witness_type": "gate_output",
+      "witness_hint": "gates/no_lazy_imports.py"
+    }
+  ],
+  "out_of_scope": [],
+  "constraints": [],
+  "escalation": []
+}

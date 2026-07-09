@@ -1,0 +1,48 @@
+{
+  "_how_to_use_this_template": [
+    "Copy this file, rename it to <your-commission-id>.commission.json, and edit.",
+    "Write it BEFORE work starts. It is the ratified scope — commit it.",
+    "One scope item per independently-claimable piece of work. Do not lump N",
+    "deliverables into one item_id: the checker's coverage rule (design/",
+    "CONFORMANCE-INSTRUMENT.md rule 1) treats one item_id as one claim, and an",
+    "umbrella item makes N claims unverifiable as one.",
+    "witness_type is the KIND of evidence the item is owed, not the evidence",
+    "itself (that comes later, in the report, at completion) — pick from:",
+    "commit | file | ledger_row | gate_output | db_state | doc_excerpt.",
+    "witness_hint says WHERE that evidence must appear (a repo path, a table",
+    "name, a gate script) so the eventual verdict has somewhere concrete to point.",
+    "Run: python3 instruments/conformance_check.py <this file> <report.json>"
+  ],
+
+  "commission_id": "example-2026-07-09",
+  "date": "2026-07-09",
+  "ratifier": "<who approved this scope — a name, not a role>",
+  "executor": "<model/agent tier commissioned, e.g. Sonnet, Opus>",
+
+  "scope": [
+    {
+      "item_id": "example-item-1",
+      "mandate": "<one sentence, imperative — what must be true when this item is done>",
+      "witness_type": "commit",
+      "witness_hint": "this repo — the commit that lands the deliverable"
+    },
+    {
+      "item_id": "example-item-2",
+      "mandate": "<a second, independently-claimable deliverable>",
+      "witness_type": "file",
+      "witness_hint": "path/to/the/expected/artifact"
+    }
+  ],
+
+  "out_of_scope": [
+    "<name what this commission explicitly excludes — silence is not exclusion>"
+  ],
+
+  "constraints": [
+    "<hard rules the executor must not cross, e.g. 'no push', 'no kernel/ edits'>"
+  ],
+
+  "escalation": [
+    "<typed events that end execution and route upward, e.g. 'a gate refuses twice on the same item'>"
+  ]
+}

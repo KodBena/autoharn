@@ -1,0 +1,12 @@
+{
+  "commission_id": "seen-red-a",
+  "verdicts": [
+    {
+      "item_id": "deliverable-1",
+      "verdict": "WITNESSED",
+      "witness": "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
+    }
+  ],
+  "extras": [],
+  "renegotiations": []
+}

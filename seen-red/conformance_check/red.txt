@@ -1,0 +1,21 @@
+seen-red/conformance_check — banked RED evidence (both-polarity proof, fixture-census)
+
+Command:
+  python3 instruments/conformance_check.py \
+      seen-red/conformance_check/a-witnessed-uncommitted/commission.json \
+      seen-red/conformance_check/a-witnessed-uncommitted/report.json --repo .
+
+Captured output (real, 2026-07-09):
+  NONCONFORMANT (1 reason(s)):
+    !! item_id=deliverable-1: witness commit 'deadbeefdeadbeefdeadbeefdeadbeefdeadbeef' does not exist in /home/bork/w/vdc/1/autoharn — a verdict whose witness fails verification is treated as no claim
+       fix: commit the deliverable and cite the real commit hash, or file the honest gap
+  exit: 2
+
+This is the run-1 drift shape (design/CONFORMANCE-INSTRUMENT.md acceptance case (a)):
+a scope item claiming WITNESSED with a witness commit hash that does not exist —
+the uncommitted-deliverable case. The checker refuses it as NONCONFORMANT rather
+than silently passing, which is the whole reason this instrument exists (ADR-0013
+Rule 1). Cases (b) and (c) also produce real NONCONFORMANT reds; see
+run_fixtures.py for the full six-case run (a-f), all captured together.
+
+Full six-case run: python3 seen-red/conformance_check/run_fixtures.py

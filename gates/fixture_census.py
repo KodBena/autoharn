@@ -1,4 +1,10 @@
 #!/usr/bin/env python3
+# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
+#   first-seen : 2026-07-09T13:36:11Z
+#   last-change: 2026-07-09T13:36:11Z
+#   contributors: be693afb/main
+# <<< PROVENANCE-STAMP <<<
+
 """fixture_census — mechanizes mandate §6's "every migrated gate's seen-red still proves it
 can fail" (manifest [C20]). A gate never seen red is a claim (ADR-0011); this gate makes the
 SEEN-RED corpus a checked property so a gate cannot be added, or a seen-red silently orphaned,
@@ -52,6 +58,7 @@ REGISTRY: dict[str, str] = {
     "engine-inc1-controls":           "engine/tests",
     "review-fixpoint":                "instruments/verify_review_fixpoint.py",
     "s19-trigger-search-path":        "kernel/fixtures/s19_search_path_fixture.py",
+    "conformance_check":              "seen-red/conformance_check/run_fixtures.py",
     # the two census gates minted in this build carry their own seen-red (a census gate never seen
     # red is the joke that writes itself); their fixture is the gate itself, red-specimen mutates its
     # registry in memory to force the breach.
