@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-07T17:13:48Z
-#   last-change: 2026-07-07T18:06:06Z
-#   contributors: 37017f46/main
+#   last-change: 2026-07-09T14:32:28Z
+#   contributors: 37017f46/main, be693afb/main
 # <<< PROVENANCE-STAMP <<<
 
 """judgment_registry — THE one authority module for engine judgments (engine INC 1; ruling 110 D1/D2).
@@ -748,6 +748,32 @@ SPECS: tuple[JudgmentSpec, ...] = (
         second_producer=None,
         second_producer_none_reason="a router emits no verdict to reconcile (family H by law)",
         complexity_class="B",
+        promotion_stage="P1",
+    ),
+    # ---- s22 work-item ledger (design/S22-WORK-ITEM-LEDGER.md, session be693afb, 2026-07-09) ---
+    JudgmentSpec(
+        judgment_id="work-item-violations",
+        family="D",
+        title="Work-item ledger violations: duplicate-open / shipped-without-witness (both "
+              "defense-in-depth, refused at construction by s22's DDL) / dangling depends_on / "
+              "dependency cycles (the omega port)",
+        verdict_enum=("CLEAN", "VIOLATION(kind)"),
+        subject_ref_type="edge",
+        law_citations=("ADR:0000",),
+        engine="ASP",
+        implementations=(
+            "lp:work_items.lp#work_dep_edge/2", "lp:work_items.lp#work_dep_star/2",
+            "lp:work_items.lp#work_duplicate_open/1",
+            "lp:work_items.lp#work_shipped_without_witness/2",
+            "lp:work_items.lp#work_depends_on_unknown/2",
+            "lp:work_items.lp#work_dependency_cycle/1",
+        ),
+        second_producer="SQL floor (work_item_floor_atoms, engine/ledger_floor.py; reconciled by "
+                        "kernel/fixtures/s22_work_item_fixture.py item 5)",
+        complexity_class="C",
+        fixtures=("kernel/fixtures/s22_work_item_fixture.py (toy db, schema s22probe): open/claim/"
+                  "close round trip, shipped-without-witness refusal, duplicate-open refusal, "
+                  "acyclic-vs-cyclic deps, dangling depends_on, SQL/ASP AGREE",),
         promotion_stage="P1",
     ),
 )

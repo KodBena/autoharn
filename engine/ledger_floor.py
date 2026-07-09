@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-06T05:35:36Z
-#   last-change: 2026-07-06T14:58:09Z
-#   contributors: 37017f46/main
+#   last-change: 2026-07-09T14:33:49Z
+#   contributors: 37017f46/main, be693afb/main
 # <<< PROVENANCE-STAMP <<<
 
 """ledger_floor -- the SQL FLOOR of the T_now judgments: producer ONE of the
@@ -245,6 +245,93 @@ def support_floor_atoms(name: str, now_epoch: int) -> set[str]:
     UNION ALL SELECT 'affirmed('||dep||','||ant||')' FROM affirmed
     UNION ALL SELECT 'exposure_undischarged('||f||','||d||')' FROM undischarged
     UNION ALL SELECT 'affirm_sod_violation('||r||')' FROM sod
+    ;"""
+    out = t.run(sql).stdout
+    return {line.strip() for line in out.splitlines() if line.strip()}
+
+
+# ===========================================================================
+# Increment 3 (s22) -- the WORK-ITEM LEDGER floor: producer ONE of the work-item differential
+# (design/S22-WORK-ITEM-LEDGER.md; engine/lp/work_items.lp is producer two, reconciled by
+# engine/work_item_scratch.py / kernel/fixtures/s22_work_item_fixture.py). Computes the SAME base
+# relations + four judgments engine/lp/work_items.lp #shows (work_dep_edge/2, work_dep_star/2,
+# work_duplicate_open/1, work_shipped_without_witness/2, work_depends_on_unknown/2,
+# work_dependency_cycle/1), as clingo-shaped atom strings, via a Postgres `WITH RECURSIVE` --
+# SQL's home turf for the transitive-closure half, matching floor_atoms/support_floor_atoms above.
+#
+# INDEPENDENCE (I6, ADR-0000 INDEP) PRESERVED: this module's whole reason to exist is sharing NO
+# code path with clingo. `_wi_quote` below is a LOCAL, standalone string-escape helper -- NOT
+# imported from `clingo_run.quote_term` (which would thread a clingo-side module into the SQL
+# producer) -- deliberately duplicated in the SAME spirit `clingo_run.quote_term`'s own docstring
+# names ("contra_asp keeps its own spaCy-side `_quote`; this is kb_why's"): a trivial string-escape
+# helper is NOT the logic under test, so two independent copies cost nothing and keep the
+# producers genuinely separate. Its escaping matches `quote_term` byte-for-byte (backslash then
+# quote, in that order) so both producers' quoted-string atoms compare bit-identically.
+def _wi_quote(col: str) -> str:
+    """A SQL expression quoting `col` (text) as a clingo double-quoted string term -- the SQL-side
+    mirror of `clingo_run.quote_term`, not a call to it (see the independence note above)."""
+    return "('\"' || replace(replace(" + col + ", '\\', '\\\\'), '\"', '\\\"') || '\"')"
+
+
+WORK_ITEM_PREDS = ("work_dep_edge", "work_dep_star", "work_duplicate_open",
+                   "work_shipped_without_witness", "work_depends_on_unknown",
+                   "work_dependency_cycle")
+
+
+def work_item_floor_atoms(name: str) -> set[str]:
+    """The set of work-item atoms the SQL floor derives for `name` (read-only), reading the s22
+    work_* columns directly off `<schema>.ledger`. `duplicate_open` and `shipped_without_witness`
+    are provably vacuous under normal operation (s22's write-boundary trigger + CHECK constraint
+    refuse both at construction -- see s22-work-item-ledger.sql's header); this floor still emits
+    them (defense in depth, matching engine/lp/work_items.lp's identical stance) so a scratch
+    fixture that bypasses the live trigger (an apparatus-authored negative-control row, never a
+    real write path) still differentials correctly against the ASP producer.
+
+    CORRELATED-AUTHORSHIP CAVEAT (named, per the ledger_support_scratch.py precedent): this floor
+    and the s22 DDL view (`work_item_violations`) share an author and the same base facts, so
+    bit-identity between THIS floor and `work_items.lp` proves ENCODING agreement between the SQL
+    and ASP producers, not independent fidelity to the spec -- the same caveat every `*_scratch.py`
+    differential in this file already carries."""
+    t = resolve(name)
+    rel = t.rel()
+    q_dependent, q_antecedent = _wi_quote("dependent"), _wi_quote("antecedent")
+    q_start, q_cur = _wi_quote("start_slug"), _wi_quote("cur")
+    q_slug = _wi_quote("slug")
+    sql = f"""
+    WITH RECURSIVE
+      opens AS (
+        SELECT work_slug AS slug FROM {rel} WHERE kind = 'work_opened'
+      ),
+      dup_open AS (
+        SELECT slug FROM opens GROUP BY slug HAVING count(*) > 1
+      ),
+      shipped_no_witness AS (
+        SELECT work_slug AS slug, id FROM {rel}
+        WHERE kind = 'work_closed' AND work_resolution = 'shipped'
+          AND (work_witness IS NULL OR btrim(work_witness) = '')
+      ),
+      deps AS (
+        SELECT work_slug AS dependent, work_depends_on AS antecedent FROM {rel}
+        WHERE kind = 'work_depends_on'
+      ),
+      dangling_dep AS (
+        SELECT d.dependent AS slug, d.antecedent FROM deps d
+        WHERE NOT EXISTS (SELECT 1 FROM opens o WHERE o.slug = d.antecedent)
+      ),
+      reach(start_slug, cur) AS (
+        SELECT dependent, antecedent FROM deps
+        UNION
+        SELECT r.start_slug, d.antecedent FROM reach r JOIN deps d ON d.dependent = r.cur
+      ),
+      dep_cycle AS (
+        SELECT DISTINCT start_slug AS slug FROM reach WHERE cur = start_slug
+      )
+    SELECT 'work_dep_edge(' || {q_dependent} || ',' || {q_antecedent} || ')' FROM deps
+    UNION ALL SELECT 'work_dep_star(' || {q_start} || ',' || {q_cur} || ')' FROM reach
+    UNION ALL SELECT 'work_duplicate_open(' || {q_slug} || ')' FROM dup_open
+    UNION ALL SELECT 'work_shipped_without_witness(' || {q_slug} || ',' || id || ')' FROM shipped_no_witness
+    UNION ALL SELECT 'work_depends_on_unknown(' || {q_slug} || ',' || {q_antecedent} || ')' FROM dangling_dep
+    UNION ALL SELECT 'work_dependency_cycle(' || {q_slug} || ')' FROM dep_cycle
     ;"""
     out = t.run(sql).stdout
     return {line.strip() for line in out.splitlines() if line.strip()}
