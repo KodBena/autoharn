@@ -1967,11 +1967,88 @@ Hook fixes filed (Sonnet-executable; do NOT edit `hooks/` until no wired session
 live — every wired project re-executes these scripts from this repo on each hook invocation):
 1. `pretooluse_change_gate.py` — if `SUBJECT_ROOT` does not exist on disk, DENY loudly with
    teach-text instead of governing nothing (fail-open → fail-closed). Seen-red fixture required.
+   STATUS: built, commit 296ce6d (seen-red/change-gate-subject-root/, 5 cases, real captured
+   output both polarities).
 2. `stamp_intercept.py` — if `STAMP_SECRET` is configured but the file is missing/unreadable,
    DENY ledger writes with the seed-command teach-text instead of passing them unstamped (the
    silent-unstamped class, now twice witnessed: run 1, run 2).
+   STATUS: built, commit 296ce6d (seen-red/stamp-intercept-secret/, 5 cases, real captured output
+   both polarities; also closed a related hazard found in-flight — a present-but-EMPTY secret file
+   used to silently produce a valid zero-length HMAC key rather than an honest missing-secret
+   disposition).
 
 For the record, resolving the doc pass's two flagged anomalies: `design/WORK-ITEM-DECISION-MEMO.md`
 is Fable-authored this session (the parent session's own write landing mid-pass — no anomaly);
 the empty `/home/bork/w/vdc/1/run_3/` (underscore) dir looks like a typo artifact of run3's
 creation — maintainer may `rmdir` it.
+
+## Maintainer ruling: self-application — the harness's own ops must meet the harness's bar (2026-07-09)
+
+Ruling, issued after run 2 and codified in CLAUDE.md ORCHESTRATION: the run-2 world (dir
+"run3") was broken from the start by manual munging that should have been scripted from the
+start; operator procedures of the form "do 1. [pages of SQL], do 2. [pages of bash]" are
+condemned as unprofessional. Two parts, binding on every orchestrator including Fable:
+(1) no operator step ships as prose + hand-paste where a scripted, witnessed verb is possible —
+"why is this not a verb?" is now the first question every walkthrough must answer;
+(2) every orchestrator choice or judgment is explained on the record at the moment it is made.
+
+Honest self-assessment attached to the filing: the scripted replacements in flight today
+(apply-delta, s21-in-birth-chain, fail-closed hooks, self-documenting scaffold) were each
+commissioned REACTIVELY, after its manual counterpart had already bitten. The ruling makes
+proactive scripting the default stance, not the post-incident remedy.
+
+Newly filed consequence (Sonnet-executable once the in-flight bootstrap changes land):
+**starting a run becomes a verb** — today it is still a walkthrough (hand-register a reviewer
+principal, hand-paste a six-point governance prompt). Target shape: the scaffold (or a
+`new-run` helper) registers the standard principals and emits/queues the governance prompt, so
+opening AND starting a run is one witnessed command each, or one total.
+
+State note: the maintainer removed `/home/bork/w/vdc/1/run3/` (and `run_3/`). The run-2
+EVIDENCE is unaffected — the ledger lives in db `toy`, schema `run3`, not in the deleted
+directory. Full outside-inspection of run 2 is DEFERRED (decision + reason: its primary
+objective, working stamps, was structurally unmet from birth, and the conduct findings are
+already extracted and filed above — a full pass would spend turns on a known-degraded run).
+
+## apply-delta + s21-in-birth-chain: landed (2026-07-09, closing the two "in-flight" items above)
+
+Both scripted replacements the ruling above names as in-flight are now landed and witnessed.
+
+1. **`bootstrap/apply-delta.sh <world-dir> <delta.sql>`** (new) — the scripted, confirmed apply
+   step the ruling demands in place of "do 1. [pages of SQL]". Resolves db/host/schema/kern from
+   `<world-dir>/deployment.json` (`filing/deployment_record.py`, refuses loudly with its own
+   teach-text on a missing file/key — never guesses), prints the fully-resolved `psql -v ...`
+   command before doing anything, requires the operator to type the schema name back (a mismatch
+   aborts, no `--yes`), runs with `ON_ERROR_STOP=1`, and on success appends a dated `APPLIED`
+   line to the world's `.claude/HOOKS.md` PROVENANCE section (never creating one if absent) plus
+   a BACKLOG-note reminder. On `psql` failure it prints the output verbatim and states plainly
+   that the delta is NOT transaction-wrapped (a mid-file error can leave a partial apply) —
+   instructing not to re-run blind. Witnessed on a throwaway probe (`deltaprobe`/
+   `deltaprobe_kernel`/`deltaprobe_rw`, `toy` db, scaffolded classic-mode on s15/s17/s19/s20 only
+   — a genuine pre-s21 world): wrong-confirmation abort (no db change, verified by column
+   absence before/after), missing-`deployment.json` refusal, a deliberately-broken delta's
+   psql-failure path, and the real positive apply (CREATE FUNCTION/TRIGGER/VIEW, no ERROR;
+   `review_stamp_distinctness` gained `review_stamp_session`/`regards_stamp_session`; HOOKS.md
+   PROVENANCE got the APPLIED line). Torn down after (`DROP SCHEMA ... CASCADE` both schemas +
+   `DROP OWNED BY`/`DROP ROLE`). **Not** applied to `toycolors`/`run3` by this pass — those two
+   one-liners in the "s21 apply status" entry above remain the maintainer's own act.
+2. **`bootstrap/new-project.sh --new-world` now applies s21 automatically**, after s20, in the
+   same call (high_watermark_1.sql → s20-obligation-grants-and-view-refresh.sql →
+   s21-session-aware-distinctness.sql) — s21 was RATIFIED (see "s21 apply status" above), so
+   folding it into every new world's birth lineage is no longer a lineage-authoring act, only a
+   scaffold-wiring one. The scaffold-written `.claude/HOOKS.md` records this in its PROVENANCE
+   header (`__LINEAGE_CHAIN__` now names s21; the former static "NOT applied by any scaffold
+   mode" bullet is now a mode-aware `__S21_STATUS__` computed per invocation, and also points at
+   `apply-delta.sh` for any future delta). Classic (`--schema/--kern/--role`) scaffold mode is
+   unchanged — it applies no kernel lineage at all, s21 included. Witnessed end to end on a
+   second throwaway probe (`deltaprobe2`, `toy` db): clean apply (no `psql` errors), the
+   PROVENANCE header naming `s21-session-aware-distinctness` in the lineage chain, `\df
+   deltaprobe2.validate_independence` showing the function, `review_stamp_distinctness`'s
+   columns carrying `review_stamp_session`/`regards_stamp_session` from birth, and a live
+   `./led decision` → `./led --recent 1` → `./judge` (AGREE) → `./pickup` round trip against the
+   fresh world. Torn down after, same as above.
+
+`WALKTHROUGH.md`'s "Opening a new world" section and `bootstrap/templates/HOOKS.md.tmpl` updated
+to match (real captured output, not the stale `docprobe`/pre-s21 capture); `bootstrap/
+QUICKSTART.md` left untouched — it neither states the `--new-world` lineage chain nor the s21
+status (its own scratch-kernel demo is a separate, already-accurate s15-through-s19 hand walk),
+so there was nothing stale to fix there.
