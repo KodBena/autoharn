@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+# judge — engine differential verdict for this project's ledger.
+#
+# Usage:
+#   ./judge [extra ledger_differential.py flags...]
+#     ./judge                  # the ordinary run: retain DerivationRecords, print the verdict
+#     ./judge --drop-record    # negative control: drop the ASP witness, see the consumer refuse
+#
+# Invokes autoharn's engine/ledger_differential.py against target "__PROJECT_NAME__" with
+# --retain, so every run banks a DerivationRecord pair under autoharn's own
+# engine/docs/ledger-marriage/derivations/__PROJECT_NAME__/ (the auditability clause —
+# design/USE-MODE-ENGINE-WIRING.md item 6). Prints the closed verdict vocabulary per judgment
+# family:
+#   AGREE | DIVERGE_BY_DESIGN | DIVERGE_DEFECT | QUARANTINED
+# and exits non-zero (turns a run red) iff any family verdicts DIVERGE_DEFECT or QUARANTINED —
+# ledger_differential.py's own exit code, passed straight through, never re-derived here.
+#
+# Observer-first (design/USE-MODE-ENGINE-WIRING.md item 4): NOT wired into any gate here or in
+# autoharn; whether it ever becomes gating is a maintainer decision, filed when the first real
+# divergence is seen.
+#
+# TARGET RESOLUTION (design/OPUS-READINESS.md move 1): "__PROJECT_NAME__" is very unlikely to be
+# one of autoharn engine/targets.py's curated registry names (toy, nla, e15-e18) or match its
+# scratch-naming conventions -- so this script points LEDGER_DEPLOYMENT at this project's own
+# deployment.json (repo root, next to .claude/), autoharn's targets.resolve() THIRD resolution
+# source. If this project's name later gets its own curated registry entry in autoharn (a
+# maintainer act), the registry wins over this deployment file automatically (targets.py's
+# documented precedence) -- nothing here needs to change.
+#
+# Path resolution: the sibling checkout ../autoharn relative to THIS script's own location (not
+# the caller's cwd), overridable with AUTOHARN=/path/to/autoharn for a differently-laid-out tree.
+set -euo pipefail
+
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+AUTOHARN="${AUTOHARN:-$HERE/../autoharn}"
+DIFFERENTIAL="$AUTOHARN/engine/ledger_differential.py"
+DEPLOYMENT="${PICKUP_DEPLOYMENT:-$HERE/deployment.json}"
+
+if [ ! -f "$DIFFERENTIAL" ]; then
+  echo "judge: cannot find engine/ledger_differential.py under AUTOHARN=$AUTOHARN" >&2
+  echo "       set AUTOHARN=/path/to/autoharn, or place a sibling checkout at ../autoharn" >&2
+  exit 2
+fi
+
+exec env LEDGER_DEPLOYMENT="$DEPLOYMENT" python3 "$DIFFERENTIAL" __PROJECT_NAME__ --retain "$@"

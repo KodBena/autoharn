@@ -1,0 +1,269 @@
+#!/usr/bin/env bash
+# led — one-liner decision-ledger entries for this project.
+#
+# Usage:
+#   led [flags] <kind> <statement...>          e.g. led decision "perceptual distance = CIEDE2000"
+#
+#   flags (any order, any subset, all optional, consumed before <kind>):
+#     -f a.py,b.py           declares files: a.py,b.py in the entry's rationale, so the
+#                            PreToolUse change gate (autoharn hooks/pretooluse_change_gate.py)
+#                            recognizes this entry as authorizing an edit to those files
+#     -e id1,id2             enacts: this entry carries the named EARLIER own-session row(s)
+#                            into a file (s15 validate_enacts; each id must resolve to an
+#                            earlier row in the same session or the trigger refuses)
+#     --supersedes id        this entry supersedes an earlier row; the superseded row drops out
+#                            of ledger_current and is marked SUPERSEDED in `led --recent`/`led current`
+#     --amends id --amends-scope "<verbatim clause>"
+#                            clause-level revision: id's clause named by amends-scope is
+#                            defeated while the rest of id stands (id itself is NOT superseded).
+#                            amends-scope must be an EXACT, unambiguous (occurs-once) 10+ char
+#                            substring of id's own statement or rationale (s15 validate_amends)
+#                            — both-or-neither; a mismatched/ambiguous quote is refused
+#     --answers id           this entry (any kind) resolves an earlier kind=question row id
+#                            (s15 validate_answers); shows up in `led question-status`
+#     --refs "<text>"        free-text cross-reference (ledger.refs)
+#     --concern design|enactment|process|other
+#     --evidence "<text>"
+#     --confidence low|medium|high
+#
+#   led --recent [N]                          last N ledger rows (default 10), newest first;
+#                                              marks a row SUPERSEDED when a later row's
+#                                              `supersedes` names it (never displays a
+#                                              superseded row as if it were still current)
+#   led current [N]                           last N rows of ledger_current (supersedes-filtered
+#                                              read) — the view a consumer should read by default
+#   led question-status                       question_status view: every open/answered question
+#   led review-gap                            review_gap view: obliged-actor rows with no
+#                                              distinct-actor attest countersign yet
+#   led stamp-distinctness                    review_stamp_distinctness view: for each review,
+#                                              whether the SAME invocation wrote it and its target
+#
+#   led register-principal <name> <class>     register a principal (class: human|model|subagent|tool)
+#                                              so a countersign can be attributed to it — the
+#                                              writer registers its own principals, the kernel
+#                                              pre-seeds none but the one connection principal
+#
+#   led review <entry-id> <verdict> <independence> [--antecedent id] <statement...>
+#                                              countersign an earlier row. verdict:
+#                                              attest|attest_with_reservations|refuse. independence:
+#                                              self-review|technical|managerial|financial (technical/
+#                                              managerial/financial REQUIRE a stamp-distinct invocation
+#                                              — else the trigger refuses and teaches self-review).
+#                                              --antecedent id names the EARLIER defeated row this
+#                                              review affirms <entry-id> survives (review_detail.antecedent,
+#                                              NULL for a plain countersign). `statement` doubles as
+#                                              review_detail's `basis`. Set LED_ACTOR=<principal-name> to
+#                                              countersign as a registered principal other than the default
+#                                              connection principal (`author`) — WITHOUT it, every write
+#                                              resolves to the same principal and a review is refused as
+#                                              self-review (validate_review keys on the actor/principal,
+#                                              never on the stamped invocation identity).
+#
+#   led obligate <scope> <assigned-by-principal> <obliged-actor-principal>
+#                                              register a countersign_obligation: <assigned-by-principal>
+#                                              (must NOT be a self-registration — assigned-by must differ
+#                                              from the obliged actor) requires <obliged-actor-principal>'s
+#                                              current rows to carry a distinct-actor attest countersign
+#                                              (surfaced by `led review-gap` until one lands)
+#
+# Connection defaults are sourced from this project's deployment.json (repo root, next to
+# .claude/) and stamped in here by bootstrap/new-project.sh at scaffold time — NOT read live at
+# run time (that rewiring is deferred; see design/OPUS-READINESS.md move 1). This instance's
+# stamped defaults: db __DB__, host __HOST__, schema __SCHEMA__, kernel __KERN__, role __ROLE__.
+# Override via LED_PGHOST/LED_PGDB/LED_SCHEMA/LED_KERNEL/LED_ROLE if this project's kernel is
+# re-applied under different names.
+set -euo pipefail
+
+PGHOST="${LED_PGHOST:-__HOST__}"
+PGDB="${LED_PGDB:-__DB__}"
+SCHEMA="${LED_SCHEMA:-__SCHEMA__}"
+KERNEL="${LED_KERNEL:-__KERN__}"
+ROLE="${LED_ROLE:-__ROLE__}"
+
+# --- flags (any order, any subset), consumed up front so the verb dispatch below and the
+# generic <kind> <statement...> path both see a clean $@ -------------------------------------
+files=""
+enacts=""
+supersedes=""
+amends=""
+amends_scope=""
+answers=""
+refs=""
+concern=""
+evidence=""
+confidence=""
+while true; do
+  case "${1:-}" in
+    -f) files="${2:-}"; shift 2 ;;
+    -e) enacts="${2:-}"; shift 2 ;;
+    --supersedes) supersedes="${2:-}"; shift 2 ;;
+    --amends) amends="${2:-}"; shift 2 ;;
+    --amends-scope) amends_scope="${2:-}"; shift 2 ;;
+    --answers) answers="${2:-}"; shift 2 ;;
+    --refs) refs="${2:-}"; shift 2 ;;
+    --concern) concern="${2:-}"; shift 2 ;;
+    --evidence) evidence="${2:-}"; shift 2 ;;
+    --confidence) confidence="${2:-}"; shift 2 ;;
+    *) break ;;
+  esac
+done
+
+if [ "${1:-}" = "--recent" ] || [ "${1:-}" = "current" ]; then
+  # `current` reads ledger_current (supersedes already filtered server-side, the ledger's own view).
+  # `--recent` reads the raw table but MARKS a superseded row visibly instead of silently
+  # showing it as current -- stamp_agent: the invocation identity that actually WROTE the row --
+  # "main" for the top-level context, a subagent's own agent_id otherwise, NULL when unstamped
+  # (a non-intercepted write path). Shown alongside the writer-supplied actor principal so a
+  # reader can see WHO (principal) and, independently, WHICH INVOCATION wrote each row.
+  if [ "${1:-}" = "current" ]; then
+    n="${2:-10}"
+    exec psql -h "$PGHOST" -d "$PGDB" -tAc "
+      SELECT l.id, l.kind, l.statement, p.name
+      FROM ${SCHEMA}.ledger_current l JOIN ${KERNEL}.principal p ON p.id = l.actor
+      ORDER BY l.id DESC LIMIT ${n};"
+  fi
+  n="${2:-10}"
+  exec psql -h "$PGHOST" -d "$PGDB" -tAc "
+    SELECT l.id, l.kind, l.statement, p.name, l.stamp_agent, l.stamp_verified,
+           CASE WHEN EXISTS (SELECT 1 FROM ${SCHEMA}.ledger s WHERE s.supersedes = l.id)
+                THEN 'SUPERSEDED' ELSE 'current' END AS status_now
+    FROM ${SCHEMA}.ledger l JOIN ${KERNEL}.principal p ON p.id = l.actor
+    ORDER BY l.id DESC LIMIT ${n};"
+fi
+
+if [ "${1:-}" = "question-status" ]; then
+  exec psql -h "$PGHOST" -d "$PGDB" -c "SELECT * FROM ${SCHEMA}.question_status ORDER BY question_id;"
+fi
+
+if [ "${1:-}" = "review-gap" ]; then
+  exec psql -h "$PGHOST" -d "$PGDB" -c "SELECT * FROM ${SCHEMA}.review_gap ORDER BY id;"
+fi
+
+if [ "${1:-}" = "stamp-distinctness" ]; then
+  exec psql -h "$PGHOST" -d "$PGDB" -c "SELECT * FROM ${SCHEMA}.review_stamp_distinctness ORDER BY review_id;"
+fi
+
+if [ "${1:-}" = "register-principal" ]; then
+  name="${2:-}"; class="${3:-}"
+  if [ -z "$name" ] || [ -z "$class" ]; then
+    echo "usage: led register-principal <name> <human|model|subagent|tool>" >&2
+    exit 1
+  fi
+  exec psql -h "$PGHOST" -d "$PGDB" -v ON_ERROR_STOP=1 -v name="$name" -v class="$class" <<SQL
+    SET ROLE ${ROLE};
+    SET search_path = ${SCHEMA}, ${KERNEL};
+    INSERT INTO principal (name, agent_class) VALUES (:'name', :'class')
+    ON CONFLICT (name) DO NOTHING;
+SQL
+fi
+
+if [ "${1:-}" = "obligate" ]; then
+  shift
+  if [ $# -lt 3 ]; then
+    echo "usage: led obligate <scope> <assigned-by-principal> <obliged-actor-principal>" >&2
+    echo "       assigned-by must be a DIFFERENT registered principal than the obliged actor" >&2
+    echo "       (obligation_not_self_assigned CHECK refuses a self-assigned obligation)" >&2
+    exit 1
+  fi
+  scope="$1"; assigned_by_name="$2"; obliges_actor_name="$3"
+  exec psql -h "$PGHOST" -d "$PGDB" -v ON_ERROR_STOP=1 \
+    -v scope="$scope" -v assigned_by_name="$assigned_by_name" -v obliges_actor_name="$obliges_actor_name" <<SQL
+    SET ROLE ${ROLE};
+    SET search_path = ${SCHEMA}, ${KERNEL};
+    INSERT INTO ${SCHEMA}.countersign_obligation (scope, assigned_by, obliges_actor)
+    VALUES (:'scope',
+            (SELECT id FROM principal WHERE name = :'assigned_by_name'),
+            (SELECT id FROM principal WHERE name = :'obliges_actor_name'));
+SQL
+fi
+
+if [ "${1:-}" = "review" ]; then
+  shift
+  antecedent=""
+  args=()
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --antecedent) antecedent="${2:-}"; shift 2 ;;
+      *) args+=("$1"); shift ;;
+    esac
+  done
+  set -- "${args[@]}"
+  if [ $# -lt 4 ]; then
+    echo "usage: led review <entry-id> <verdict> <independence> [--antecedent id] <statement...>" >&2
+    echo "       verdict: attest|attest_with_reservations|refuse" >&2
+    echo "       independence: self-review|technical|managerial|financial" >&2
+    echo "       set LED_ACTOR=<principal-name> to countersign as a registered principal" >&2
+    exit 1
+  fi
+  regards="$1"; verdict="$2"; independence="$3"; shift 3
+  statement="$*"
+  actor_name="${LED_ACTOR:-}"
+  # actor resolves via a subquery bind, NOT string-spliced: NULLIF(:'actor_name','') is NULL when
+  # LED_ACTOR is unset, so the ledger's actor column stays NULL and the kernel's set_actor trigger
+  # fills the default connection principal -- the same principal every other led write uses, so an
+  # un-set LED_ACTOR against one's own earlier row is refused as self-review (the honest, intended
+  # outcome).
+  psql -h "$PGHOST" -d "$PGDB" -v ON_ERROR_STOP=1 \
+    -v regards="$regards" -v verdict="$verdict" -v independence="$independence" \
+    -v statement="$statement" -v actor_name="$actor_name" -v antecedent="$antecedent" <<SQL
+    SET ROLE ${ROLE};
+    SET search_path = ${SCHEMA}, ${KERNEL};
+    BEGIN;
+    INSERT INTO ${SCHEMA}.ledger (kind, statement, regards, actor)
+    VALUES ('review', :'statement', :'regards'::bigint,
+            (SELECT id FROM principal WHERE name = NULLIF(:'actor_name', '')))
+    RETURNING id \gset r_
+    INSERT INTO ${SCHEMA}.review_detail (ledger_id, verdict, independence, basis, antecedent)
+    VALUES (:r_id, :'verdict', :'independence', :'statement', NULLIF(:'antecedent', '')::bigint);
+    COMMIT;
+SQL
+  exit $?
+fi
+
+if [ $# -lt 2 ]; then
+  echo "usage: led [flags] <kind> <statement...>   (see top-of-file comment for the full flag list:" >&2
+  echo "       -f -e --supersedes --amends --amends-scope --answers --refs --concern --evidence --confidence)" >&2
+  echo "       led --recent [N] | led current [N] | led question-status | led review-gap | led stamp-distinctness" >&2
+  echo "       led register-principal <name> <class>" >&2
+  echo "       led obligate <scope> <assigned-by-principal> <obliged-actor-principal>" >&2
+  echo "       led review <entry-id> <verdict> <independence> [--antecedent id] <statement...>" >&2
+  exit 1
+fi
+
+kind="$1"; shift
+statement="$*"
+rationale=""
+if [ -n "$files" ]; then
+  rationale="files: ${files}"
+fi
+enacts_lit=""
+if [ -n "$enacts" ]; then
+  enacts_lit="{${enacts}}"
+fi
+
+# Bound via psql -v (a psql bind, not string concatenation) so `statement`/`rationale` can
+# contain quotes, semicolons, or anything else without escaping into SQL (P2: a boundary
+# translates-and-validates untrusted text; it does not hand-splice it into a query). NOTE: psql's
+# :'var' interpolation is only applied to a script read from stdin/-f, NOT to a -c argument -- so
+# the script is fed via stdin, not -c.
+psql -h "$PGHOST" -d "$PGDB" -v ON_ERROR_STOP=1 \
+  -v kind="$kind" -v statement="$statement" -v rationale="$rationale" \
+  -v supersedes="$supersedes" -v amends="$amends" -v amends_scope="$amends_scope" \
+  -v answers="$answers" -v refs="$refs" -v concern="$concern" \
+  -v evidence="$evidence" -v confidence="$confidence" -v enacts="$enacts_lit" <<SQL
+    SET ROLE ${ROLE};
+    SET search_path = ${SCHEMA}, ${KERNEL};
+    INSERT INTO ${SCHEMA}.ledger
+        (kind, statement, rationale, supersedes, amends, amends_scope, answers,
+         refs, concern, evidence, confidence, enacts)
+    VALUES (:'kind', :'statement', NULLIF(:'rationale', ''),
+            NULLIF(:'supersedes', '')::bigint,
+            NULLIF(:'amends', '')::bigint,
+            NULLIF(:'amends_scope', ''),
+            NULLIF(:'answers', '')::bigint,
+            NULLIF(:'refs', ''),
+            NULLIF(:'concern', ''),
+            NULLIF(:'evidence', ''),
+            NULLIF(:'confidence', ''),
+            NULLIF(:'enacts', '')::bigint[]);
+SQL

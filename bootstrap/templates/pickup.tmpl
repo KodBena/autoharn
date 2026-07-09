@@ -1,0 +1,182 @@
+#!/usr/bin/env python3
+"""pickup — the resume verb (design/OPUS-READINESS.md move 3; the fourth verb alongside
+led/judge/the scaffold). The operator's cold-start problem: "with a complex project I never
+know how to restart." The rule this script exists to honor: the brief is DERIVED AT PICKUP
+TIME, never stored — a stored handoff decays from the moment of writing. Every section below
+reads a LIVE source and prints it; nothing here is cached or written back.
+
+Sections emitted, each under a machine-parseable `### SECTION: <NAME>` header (grep
+`^### SECTION: ` to split this script's own output programmatically):
+
+  IN-FORCE-DECISIONS  — the SQL floor `ledger_current` view (supersedes-filtered). v1 ships the
+                        SQL floor only; a future pass may also print the ASP T_now verdict via
+                        `judge`, once the engine wiring is the routine path here too.
+  OPEN-QUESTIONS      — the `question_status` view: every open/answered question.
+  REVIEW-DEBT         — the `review_gap` view: obliged-actor rows with no distinct-actor attest
+                        countersign yet. Queried under `SET ROLE <this project's granted role>`
+                        (not the operator identity `led`'s own display verbs use) because this
+                        section's honest job is "what can the OPERATING AGENT see" — and a known
+                        kernel grants gap (autoharn BACKLOG, 2026-07-09, "pre-s20") means this can
+                        legitimately come back `permission denied`; that is caught and reported as
+                        `BLOCKED: pre-s20 grants`, not papered over as an empty result.
+  RECENT-CHANGES      — ledger rows since `--since <timestamptz>`, or the last `-n` rows (default
+                        10) if `--since` is omitted.
+  GIT-STATE           — this project's own git repo: uncommitted changes and (if it has an
+                        upstream) unpushed commits.
+  IN-FLIGHT           — always prints `UNAVAILABLE (no work-item layer)`, honestly. "What was
+                        mid-flight" (task state, not decision state) needs a work-item layer this
+                        project does not have yet (AUTOMATION-ENVELOPE gap 2); v1 says so instead
+                        of faking it from the sections above.
+
+Deployment resolution: reads `deployment.json` next to this script (override with
+`PICKUP_DEPLOYMENT=/path/to/deployment.json`), via autoharn's `filing/deployment_record.py` (the
+ONE home for that JSON shape — this script derives from it rather than growing a second parser).
+autoharn's location: the sibling checkout `../autoharn` relative to this script's own location,
+overridable with `AUTOHARN=/path/to/autoharn` (same convention as `judge`).
+
+Read-only throughout: every query here is a SELECT; this script issues no INSERT/UPDATE/DELETE.
+Lazy imports banned (top-of-file only, per this project's inherited convention).
+"""
+from __future__ import annotations
+
+import argparse
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+AUTOHARN = Path(os.environ.get("AUTOHARN", str(HERE / ".." / "autoharn"))).resolve()
+DEPLOYMENT_PATH = Path(os.environ.get("PICKUP_DEPLOYMENT", str(HERE / "deployment.json")))
+
+# eager, top-of-file (lazy imports banned): AUTOHARN is resolved above from env/the sibling-
+# checkout convention BEFORE this insert+import runs, exactly the pattern
+# instruments/ledger_target.py and engine/targets.py already use to reach a sibling module.
+sys.path.insert(0, str(AUTOHARN / "filing"))
+try:
+    import deployment_record  # noqa: E402  (filing/deployment_record.py, the ONE home for the shape)
+except ImportError as _e:
+    print(f"pickup: cannot import autoharn's filing/deployment_record.py under "
+          f"AUTOHARN={AUTOHARN} ({_e.__class__.__name__}: {_e})", file=sys.stderr)
+    print("        set AUTOHARN=/path/to/autoharn, or place a sibling checkout at ../autoharn", file=sys.stderr)
+    sys.exit(2)
+
+
+def _load_deployment():
+    try:
+        return deployment_record.load_deployment(DEPLOYMENT_PATH)
+    except deployment_record.DeploymentError as e:
+        print(f"pickup: {e}", file=sys.stderr)
+        sys.exit(2)
+
+
+def _psql(dep, sql: str) -> subprocess.CompletedProcess:
+    """Run `sql` as the project's granted subject role (SET ROLE dep.role) -- see module
+    docstring on why REVIEW-DEBT deliberately queries under the constrained role."""
+    full = f"SET ROLE {dep.role};\n{sql}"
+    return subprocess.run(
+        ["psql", "-h", dep.host, "-d", dep.db, "-v", "ON_ERROR_STOP=1", "-c", full],
+        capture_output=True, text=True, timeout=15)
+
+
+def _section(name: str) -> None:
+    print(f"\n### SECTION: {name}\n")
+
+
+def in_force_decisions(dep, n: int) -> None:
+    _section("IN-FORCE-DECISIONS")
+    r = _psql(dep, f"SELECT id, kind, statement FROM {dep.schema}.ledger_current "
+                    f"ORDER BY id DESC LIMIT {int(n)};")
+    if r.returncode != 0:
+        print(f"ERROR: {r.stderr.strip()}")
+    else:
+        print(r.stdout.strip() or "(no rows)")
+
+
+def open_questions(dep) -> None:
+    _section("OPEN-QUESTIONS")
+    r = _psql(dep, f"SELECT * FROM {dep.schema}.question_status ORDER BY question_id;")
+    if r.returncode != 0:
+        print(f"ERROR: {r.stderr.strip()}")
+    else:
+        print(r.stdout.strip() or "(no questions on record)")
+
+
+def review_debt(dep) -> None:
+    _section("REVIEW-DEBT")
+    r = _psql(dep, f"SELECT * FROM {dep.schema}.review_gap ORDER BY id;")
+    if r.returncode != 0:
+        if "permission denied" in r.stderr:
+            print("BLOCKED: pre-s20 grants -- the granted role has no SELECT on "
+                  "countersign_obligation in the applied kernel lineage (autoharn BACKLOG.md, "
+                  "2026-07-09; a kernel/lineage/s20 delta exists to fix this, apply is a "
+                  "maintainer act). review_gap is security_invoker, so this is the constrained "
+                  "role's own honest view, not a bug in this script.")
+        else:
+            print(f"ERROR: {r.stderr.strip()}")
+    else:
+        print(r.stdout.strip() or "(no review debt outstanding)")
+
+
+def recent_changes(dep, since: str | None, n: int) -> None:
+    _section("RECENT-CHANGES")
+    if since:
+        sql = (f"SELECT id, ts, kind, statement FROM {dep.schema}.ledger "
+               f"WHERE ts > '{since}'::timestamptz ORDER BY id DESC;")
+    else:
+        sql = (f"SELECT id, ts, kind, statement FROM {dep.schema}.ledger "
+               f"ORDER BY id DESC LIMIT {int(n)};")
+    r = _psql(dep, sql)
+    if r.returncode != 0:
+        print(f"ERROR: {r.stderr.strip()}")
+    else:
+        print(r.stdout.strip() or "(no rows)")
+
+
+def git_state(repo_root: Path) -> None:
+    _section("GIT-STATE")
+    if not (repo_root / ".git").exists():
+        print(f"(no git repo found at {repo_root})")
+        return
+    status = subprocess.run(["git", "-C", str(repo_root), "status", "--porcelain"],
+                             capture_output=True, text=True)
+    dirty = [ln for ln in status.stdout.splitlines() if ln.strip()]
+    print(f"uncommitted: {len(dirty)} path(s)" + (f" -- {dirty[:10]}" if dirty else ""))
+    upstream = subprocess.run(
+        ["git", "-C", str(repo_root), "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"],
+        capture_output=True, text=True)
+    if upstream.returncode != 0:
+        print("unpushed: no upstream configured for the current branch")
+    else:
+        ahead = subprocess.run(["git", "-C", str(repo_root), "rev-list", "--count", "@{u}..HEAD"],
+                                capture_output=True, text=True)
+        n_ahead = ahead.stdout.strip() if ahead.returncode == 0 else "?"
+        print(f"unpushed: {n_ahead} commit(s) ahead of {upstream.stdout.strip()}")
+
+
+def in_flight() -> None:
+    _section("IN-FLIGHT")
+    print("UNAVAILABLE (no work-item layer -- design/OPUS-READINESS.md move 3 v1 ships without "
+          "it; task/mid-flight state is a distinct axis from the decision-ledger sections above, "
+          "and v2 adds this section honestly once a work-item layer exists, not before)")
+
+
+def main(argv: list[str] | None = None) -> int:
+    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    ap.add_argument("--since", default=None, help="timestamptz: only ledger rows newer than this")
+    ap.add_argument("-n", "--limit", type=int, default=10, help="row limit where --since is not given (default 10)")
+    args = ap.parse_args(argv)
+
+    dep = _load_deployment()
+    in_force_decisions(dep, args.limit)
+    open_questions(dep)
+    review_debt(dep)
+    recent_changes(dep, args.since, args.limit)
+    git_state(HERE)
+    in_flight()
+    print()
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

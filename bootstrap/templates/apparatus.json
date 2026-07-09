@@ -1,0 +1,7 @@
+{
+  "deny_hint": "Run:  ./led -f <basename-of-the-file-you-are-editing> decision \"<why this change>\"   then re-issue the SAME edit -- the gate re-checks on every attempt, so retrying is the whole fix.",
+  "assurance": {
+    "change_gate": "enforce",
+    "stamp_intercept": "enforce"
+  }
+}

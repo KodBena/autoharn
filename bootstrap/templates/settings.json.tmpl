@@ -1,0 +1,21 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "env E13_GATE_DB=__DB__ E13_GATE_LEDGER=__SCHEMA__.ledger E13_SUBJECT_ROOT=__PROJECT_ROOT__ E13_GATE_STATE=__PROJECT_ROOT__/.claude/change_gate_state.json E13_GATE_JOURNAL=__PROJECT_ROOT__/.claude/logs/change_gate.journal.jsonl GOVERNED_CONFIG=__PROJECT_ROOT__/.claude/governed_files.json 'DENY_HINT=Run:  ./led -f <basename-of-the-file-you-are-editing> decision \"<why this change>\"   then re-issue the SAME edit -- the gate re-checks on every attempt, so retrying is the whole fix.' python3 __AUTOHARN_ROOT__/hooks/pretooluse_change_gate.py",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "env STAMP_DB=__DB__ STAMP_SECRET=__PROJECT_ROOT__/.claude/secrets/stamp_secret.hex python3 __AUTOHARN_ROOT__/hooks/stamp_intercept.py",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}

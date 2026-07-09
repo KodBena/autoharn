@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-09T11:06:10Z
-#   last-change: 2026-07-09T11:06:10Z
+#   last-change: 2026-07-09T11:17:31Z
 #   contributors: be693afb/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -88,7 +88,8 @@ def load_deployment(path: str | Path) -> DeploymentRecord:
         raise DeploymentError(
             f"deployment record not found at {p} -- a project with no deployment record is refused, "
             f"never silently un-resolved. Write one (deployment_record.write_deployment) or point "
-            f"LEDGER_DEPLOYMENT at the right path.")
+            f"this caller's deployment-path setting at the right path (e.g. engine/targets.py's "
+            f"LEDGER_DEPLOYMENT, or pickup's PICKUP_DEPLOYMENT).")
     try:
         text = p.read_text(encoding="utf-8")
     except OSError as e:
