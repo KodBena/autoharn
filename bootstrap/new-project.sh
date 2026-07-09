@@ -1,7 +1,7 @@
 #!/bin/sh
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-09T11:15:53Z
-#   last-change: 2026-07-09T12:52:28Z
+#   last-change: 2026-07-09T13:28:03Z
 #   contributors: be693afb/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -55,6 +55,21 @@
 # DDL to a deployment that is NOT a --new-world target (a separate, explicit -v-vars operator act).
 set -eu
 
+# Captured BEFORE any argument parsing consumes "$@", so the PROVENANCE header this script writes
+# into .claude/HOOKS.md (below) records the operator's ACTUAL invocation, not a reconstruction —
+# closing exactly the gap the maintainer flagged for run3 ("an operator cannot create world N
+# without reading script source" / "how was run3 created? that of course needs to be documented",
+# 2026-07-09): no future world should be born without this line writing itself (ADR-0012 P1 --
+# one source, the real argv, not a hand-typed guess reconstructed after the fact).
+CREATE_CMD="$0"
+for _a in "$@"; do
+    case "$_a" in
+        *[\ \	]*) CREATE_CMD="$CREATE_CMD '$_a'" ;;
+        *) CREATE_CMD="$CREATE_CMD $_a" ;;
+    esac
+done
+CREATED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
 usage() {
     echo "usage: $0 <dest-dir> --db <db> --host <host> --schema <schema> --kern <kern> --role <role> [--name <name>] [--force]" >&2
     echo "       $0 <dest-dir> --new-world <world> --db <db> --host <host> [--name <name>] [--force]" >&2
@@ -92,6 +107,22 @@ if [ -n "$NEW_WORLD" ]; then
     [ -n "$ROLE" ] || ROLE="${NEW_WORLD}_rw"
 fi
 [ -n "$DB" ] && [ -n "$HOST" ] && [ -n "$SCHEMA" ] && [ -n "$KERN" ] && [ -n "$ROLE" ] || usage
+
+# LINEAGE_CHAIN: what kernel DDL THIS scaffold run applied (or didn't), for the PROVENANCE header
+# below -- the honest record of which sNN deltas this world was born on, so a future reader never
+# has to reconstruct it from source the way run3's own history had to be reconstructed.
+if [ -n "$NEW_WORLD" ]; then
+    LINEAGE_CHAIN="s15 -> s17-stamp-mechanism -> s17-independence-vocabulary -> s19 -> s20 (via kernel/lineage/high_watermark_1.sql + kernel/lineage/s20-obligation-grants-and-view-refresh.sql), applied automatically by this --new-world run"
+    # --new-world ALSO auto-seeds the stamp secret (below) -- HOOKS.md must say so, not repeat the
+    # generic "one manual step remains" text verbatim: an operator who trusted that stale claim and
+    # re-ran the seeding block would TRUNCATE + re-INSERT an already-provisioned secret, ROTATING it
+    # and invalidating every stamp already written under it (the exact hazard the block's own
+    # comment warns against). Fixed here rather than left for the next reader to trip over.
+    STAMP_SECRET_STATUS="**Already provisioned automatically by this --new-world scaffold run (see PROVENANCE above) — do NOT re-run the block below; re-seeding ROTATES the secret and invalidates every stamp already written under it. Shown for reference/recovery only.**"
+else
+    LINEAGE_CHAIN="NOT applied by this scaffold run -- apply a kernel lineage to $SCHEMA/$KERN/$ROLE manually (kernel/lineage/, see kernel/lineage/README.md) before first use"
+    STAMP_SECRET_STATUS="**One manual step remains: provision the stamp secret. UNWITNESSED — the block below has not been run in this instance.**"
+fi
 
 AUTOHARN_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 TEMPLATES="$AUTOHARN_ROOT/bootstrap/templates"
@@ -162,7 +193,11 @@ sedsubst() {
         -e "s|__ROLE__|$ROLE|g" \
         -e "s|__PROJECT_ROOT__|$PROJECT_ROOT|g" \
         -e "s|__PROJECT_NAME__|$NAME|g" \
-        -e "s|__AUTOHARN_ROOT__|$AUTOHARN_ROOT|g"
+        -e "s|__AUTOHARN_ROOT__|$AUTOHARN_ROOT|g" \
+        -e "s|__CREATED_AT__|$CREATED_AT|g" \
+        -e "s|__CREATE_CMD__|$CREATE_CMD|g" \
+        -e "s|__LINEAGE_CHAIN__|$LINEAGE_CHAIN|g" \
+        -e "s|__STAMP_SECRET_STATUS__|$STAMP_SECRET_STATUS|g"
 }
 
 echo "-- .claude/ wiring --"

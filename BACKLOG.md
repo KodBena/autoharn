@@ -1880,3 +1880,54 @@ below; each expects CREATE FUNCTION/TRIGGER/VIEW lines, no ERROR. Optional befor
   psql -h 192.168.122.1 -d toy -v ON_ERROR_STOP=1 -v schema=toycolors -v kern=toycolors_kernel -f kernel/lineage/s21-session-aware-distinctness.sql
   psql -h 192.168.122.1 -d toy -v ON_ERROR_STOP=1 -v schema=run3 -v kern=run3_kernel -f kernel/lineage/s21-session-aware-distinctness.sql
 After applying, a one-line BACKLOG note "s21 APPLIED <date>" keeps the record true.
+
+## Doc-witness fix: "how was run3 created?" + a hazard the reconstruction turned up (2026-07-09)
+
+Maintainer finding: run3 carried no provenance of its own creation, `WALKTHROUGH.md` had zero
+mentions of `--new-world`, and an operator could not open world 4 without reading script source
+(the "Operator-doc steps must carry their witness" class, above). Fixed:
+
+1. **Reconstructed run3's exact creation command** from `bootstrap/new-project.sh` source +
+   `deployment.json` + this file's own item-7 entry above (confirms "moved off `/tmp`"):
+   `bootstrap/new-project.sh /tmp/run3_dest --new-world run3 --db toy --host 192.168.122.1 --name
+   run3`, then `mv /tmp/run3_dest /home/bork/w/vdc/1/run3` (evidence: every templated file under
+   run3's `.claude/` still baked in `/tmp/run3_dest`; the directory's own SELinux context is
+   `user_tmp_t`, `/tmp`'s label, not `/home`'s). Recorded, honestly marked RECONSTRUCTED (not a
+   captured transcript), in `run3/.claude/HOOKS.md`'s new PROVENANCE header.
+2. **A real hazard fell out of that reconstruction, in reach of the same file, fixed rather than
+   routed around**: because `.claude/settings.json`'s two hook commands and `.claude/HOOKS.md`
+   bake `<dest-dir>`'s absolute path in at scaffold time, the post-move run3 had every one of
+   them still pointing at `/tmp/run3_dest`. Consequence, verified by direct invocation of
+   `hooks/pretooluse_change_gate.py` both ways: with the stale `SUBJECT_ROOT`, an edit to a
+   governed `.py` path under the REAL run3 directory returned exit 0 with no output — the change
+   gate was silently defeated, matching no file under the real project at all — and the stamp
+   interceptor's `STAMP_SECRET` path pointed at a file that no longer existed, so writes would
+   have passed through unstamped despite a secret genuinely being provisioned (at the new,
+   correct path). Fixed in place: `run3/.claude/settings.json` and `.claude/HOOKS.md` now say
+   `/home/bork/w/vdc/1/run3`; re-verified the gate now correctly denies the same edit
+   (`permission denied` / `needs_entry`, not a silent pass). `led`/`judge`/`pickup` themselves
+   were never affected — each resolves its own directory at runtime, not a baked one.
+3. **A second, smaller doc/reality mismatch in the same template**: `HOOKS.md.tmpl`'s stamp-secret
+   section always said "one manual step remains ... UNWITNESSED", even for `--new-world` scaffolds
+   that had ALREADY auto-provisioned the secret — an operator trusting that stale claim and
+   re-running the seeding block would have ROTATED an already-live secret, invalidating every
+   stamp written under it. Fixed: the scaffold now writes a mode-appropriate status line
+   (`__STAMP_SECRET_STATUS__`, computed in `new-project.sh` from whether `--new-world` fired).
+4. **Scaffold now self-documents provenance** (checked feasibility, was trivial — templating is
+   already the pattern `led`/`judge`/`pickup` use): `bootstrap/new-project.sh` captures its own
+   real argv + UTC timestamp BEFORE argument parsing consumes `"$@"`, computes which kernel
+   lineage it applied (or didn't), and writes all three into a new PROVENANCE header at the top
+   of every scaffolded `.claude/HOOKS.md` — created-at, exact command, world schema/kern/role,
+   lineage chain, an s21-status pointer to this file, and a `./pickup` orientation pointer. No
+   future world should need script-source reconstruction the way run3 did. Witnessed both modes
+   (`--new-world` and classic `--schema/--kern/--role`) on throwaway probe worlds
+   (`docprobe2`/`docprobe3`/`docprobe4`, torn down after — `DROP SCHEMA ... CASCADE` +
+   `DROP OWNED BY`/`DROP ROLE`, mirroring the s21probe teardown pattern).
+5. **`WALKTHROUGH.md`** gained a "4. Opening a new world (one world per run)" section (the
+   one-world-per-run why, the exact `--new-world` command with every flag, a real witnessed
+   capture from a throwaway `docprobe` world torn down after, what success looks like, the s21/
+   future-delta-is-an-explicit-operator-act reminder, a pointer to `./pickup` for orienting in
+   any world, and the directory-move hazard above called out so the next operator sees it before
+   tripping over it) and **`bootstrap/QUICKSTART.md`** gained a one-paragraph pointer to it.
+
+Not touched: `toycolors`/`toy-project` (per scope); s21 was not applied anywhere by this pass.

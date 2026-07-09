@@ -1,5 +1,25 @@
 # Use-mode hooks wired to this project
 
+## PROVENANCE
+
+- **Created:** __CREATED_AT__ (UTC), by:
+  ```
+  __CREATE_CMD__
+  ```
+  Written by `bootstrap/new-project.sh` itself, from its own real argv, at scaffold time — no
+  future world should have to be reconstructed from script source the way an earlier one did
+  (autoharn BACKLOG, "how was run3 created? that of course needs to be documented", 2026-07-09).
+- **World:** ledger schema `__SCHEMA__`, kernel schema `__KERN__`, role `__ROLE__` (db `__DB__` @
+  host `__HOST__`).
+- **Kernel lineage applied by this scaffold run:** __LINEAGE_CHAIN__
+- **s21 (session-aware distinctness):** NOT applied by any scaffold mode as of this writing.
+  Ratified but pending operator apply — status, witness, and the exact apply one-liner live in
+  autoharn's `BACKLOG.md` (search "s21"). Applying it to an existing world is a separate,
+  explicit operator act with every `-v` var spelled out by hand (never bare), same standing rule
+  as every kernel lineage delta.
+- **Orienting in this world:** run `./pickup` (below) any time you need a live resume brief —
+  in-force decisions, open questions, review debt, recent changes — derived fresh, never stale.
+
 **Doc-witness convention (this file is a scaffold-generated TEMPLATE):** every example below is
 marked **UNWITNESSED** — it has not been run against this instance's own ledger. A template
 cannot honestly claim another project's witnessed output as its own (ADR-0005's documentation
@@ -39,8 +59,7 @@ pointed at this project's ledger:
    what makes review-independence checks real: a self-review carries the same agent id as
    its authoring, visibly.
 
-**One manual step remains: provision the stamp secret. UNWITNESSED — the block below has not
-been run in this instance.** The hook reads the apparatus secret from
+__STAMP_SECRET_STATUS__ The hook reads the apparatus secret from
 `.claude/secrets/stamp_secret.hex` (chmod 600, gitignored). The kernel DDL creates
 `stamp_secret` EMPTY on purpose — seed it once, and do NOT re-run later (re-seeding rotates the
 secret and invalidates stamps on rows written under the old one):

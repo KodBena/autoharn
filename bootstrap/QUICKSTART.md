@@ -77,5 +77,12 @@ LEDGER_DB=harness LEDGER_SCHEMA=$S python3 instruments/close_manifest.py <target
 Stuck, or unsure a fix is a fix? See `bootstrap/AUDITOR.md` — the out-of-frame second-opinion
 affordance (ADR-0014), which is how this project gets unstuck without ego-locking.
 
+## Starting an actual run, not a demo
+
+Everything above is a scratch/demo kernel by hand. To open a real, isolated world for a run — its
+own schema, its own ledger history, never mixed with a sibling run's — use
+`bootstrap/new-project.sh --new-world`; see WALKTHROUGH.md's "Opening a new world (one world per
+run)" section for the exact command, witnessed output, and what to watch for.
+
 ---
 Teardown a scratch kernel: `psql -h 192.168.122.1 -d harness -c "DROP SCHEMA IF EXISTS $S CASCADE; DROP SCHEMA IF EXISTS $K CASCADE; DROP OWNED BY $R; DROP ROLE IF EXISTS $R;"`
