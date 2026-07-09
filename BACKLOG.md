@@ -1687,6 +1687,90 @@ forecloses the "separate interactive reviewer session" idiom as the DDL stands (
 reviewers passed only as subagents). Fix shape: key distinctness on the (stamp_session,
 stamp_agent) PAIR in both the trigger and the view; future sNN delta, needs maintainer ruling.
 
+### s21 — AUTHORED + SCRATCH-WITNESSED (Sonnet, 2026-07-09); APPLY PENDING MAINTAINER RATIFICATION
+
+DDL: `kernel/lineage/s21-session-aware-distinctness.sql`, authored from
+`design/S21-SESSION-AWARE-DISTINCTNESS.md` in the s20 house style (header/closure-statement/
+parameterization, additive-on-s15/s17/s19/s20, per-function `SET search_path`). Covers BOTH
+defects the spec names: (1) `validate_independence` + `review_stamp_distinctness.same_invocation`
+recomputed on the `(stamp_session, stamp_agent)` PAIR, NULL-half = not distinct, fail-safe; (2)
+the s19 residue fold-in — `validate_enacts/review/amends/answers` each gain
+`SET search_path = :"schema", pg_temp`. Universe grep (whole tree, not just kernel/lineage/) found
+ONE additional stamp_agent-alone consumer NOT coverable by this DDL: `instruments/
+review_fixpoint.py`'s `FpRow`/`review_fixpoint_verdict` (+ its caller `review_fixpoint_close.py`)
+carries `stamp_agent` only, no `stamp_session` — the identical session-blind shape, in a Python
+instrument reading the ledger directly rather than a SQL trigger/view. Filed as its own entry below
+(fix or file, ADR-0013 Rule 4); not fixed here (out of a DDL-only touch's scope, per ADR-0004).
+
+SCRATCH-WITNESSED in the TOY db (never toycolors/live; schema `s21probe`/`s21probe_kernel`, role
+`s21probe_rw`, dropped after each run). `kernel/fixtures/s21_session_aware_fixture.py` runs the
+spec's witness protocol items (1)-(5) as one automated, rerunnable script; observed GREEN, one run,
+both polarities where applicable:
+
+```
+ITEM 5 RED  (pre-s21, no SET search_path): ok=False
+    CONTEXT:  PL/pgSQL function s21probe.validate_review() line 8 at SQL statement
+    [full message: ERROR:  relation "ledger" does not exist — the s19 residue, reproduced]
+ITEM 5 GREEN (post-s21, no SET search_path): ok=True
+    INSERT 0 1
+ITEM 1 (same-session s1/main vs s1/sub-xyz): insert ok=True, same_invocation='f'
+ITEM 2 (cross-session s1/main vs s2/main): insert ok=True, same_invocation='f'
+    [the retired false refusal: agent='main' both sides, session differs -> DISTINCT]
+ITEM 3 (same pair s1/main vs s1/main): insert ok=False
+    CONTEXT:  PL/pgSQL function validate_independence() line 20 at RAISE
+    [ERROR: "...the SAME invocation (session=s1, agent=main) wrote both it and the row it regards..."]
+ITEM 4a (unstamped reviewing row): insert ok=False
+    CONTEXT:  PL/pgSQL function validate_independence() line 11 at RAISE
+    [ERROR: "...must carry a VERIFIED interception stamp..."]
+ITEM 4b (verified reviewer, NULL-stamp target): insert ok=False
+    CONTEXT:  PL/pgSQL function validate_independence() line 20 at RAISE
+    [ERROR: "...the SAME invocation (session=s3, agent=distinct-agent)..." -- NULL-half on the
+     TARGET forces not-distinct even though the reviewing row is itself verified+stamp-distinct
+     in the ordinary sense; fail-safe, never fail-open]
+# S21 FIXTURE GREEN -- (session,agent)-pair distinctness (items 1-4) and the s19 residue cure
+# (item 5) all witnessed, both polarities where applicable.
+```
+
+APPLY ONE-LINER (pending maintainer assent; NOT run against toycolors or any live schema by this
+pass — spell out every `-v` var explicitly, never bare, per the lineage's standing rule):
+
+```
+psql -h 192.168.122.1 -d toy -v schema=toycolors -v kern=toycolors_kernel \
+  -f kernel/lineage/s21-session-aware-distinctness.sql
+```
+
+Engine tests unaffected (s21 touches only `kernel/lineage/`, no engine code); `engine/tests` re-run
+clean modulo the two pre-existing, unrelated `test_ledger_acts.py` date-fixture failures noted above.
+
+## `instruments/review_fixpoint.py` reads `stamp_agent` alone — the SAME session-blind distinctness defect s21 fixes, one register up (found in passing, 2026-07-09)
+
+Class: identical to s21 defect 1 (BACKLOG "s21 candidate" above), one level up the stack. Found
+while grepping the full tree for other `stamp_agent`/`same_invocation` consumers per
+`design/S21-SESSION-AWARE-DISTINCTNESS.md`'s closure-statement universe clause — not part of this
+session's assigned DDL task, filed per CLAUDE.md's engineering-responsibility clause (a hazard
+within reach, named loudly, not routed around) and ADR-0013 Rule 4 (fixed or filed, never
+narrated-and-left). `instruments/review_fixpoint.py`'s `FpRow` dataclass carries `stamp_agent: str`
+with NO `stamp_session` field; `review_fixpoint_verdict`'s two joins — the stamp-distinct check
+(`r.stamp_agent != author_stamp`) and the first-contact check
+(`o.stamp_agent == rev.stamp_agent and o.id < rev.id`) — both decide distinctness from `stamp_agent`
+ALONE. A genuinely fresh, cross-session criterion-reviewer whose invocation also stamps
+`agent='main'` (the common case for any interactive main-thread session) would be mis-scored: NOT
+stamp-distinct from a `main`-authored artifact, and/or NOT first-contact if any earlier `main`-agent
+row exists in the unit — exactly the false-refusal-of-an-honest-reviewer shape s21 fixes for
+`validate_independence`/`review_stamp_distinctness`, here silently accepting the WRONG verdict
+(RED where GREEN is owed) rather than refusing loudly, because this is Python arithmetic, not a
+DB-side refusal — arguably a worse failure mode (silent miscategorization vs. a loud REFUSE).
+`instruments/review_fixpoint_close.py`'s `_SQL` is the root: `SELECT l.id, l.kind, l.regards,
+rd.verdict, l.stamp_agent, ...` never selects `l.stamp_session`. NOT fixed here: this is a Python
+instrument change (thread `stamp_session` through `FpRow`, the SELECT, and both joins in
+`review_fixpoint.py`, mirroring s21's pair rule), not a `kernel/lineage/` DDL touch, and this
+session's mandate was specifically the DDL file — a genuine type whose blast radius (two files,
+FpRow's shape, both call sites) is deferred per ADR-0000's Exceptions clause, filed rather than
+silently left. Fix shape: add `stamp_session: str` to `FpRow`, select `l.stamp_session` in
+`review_fixpoint_close.py`'s `_SQL`, and recompute both joins on the `(stamp_session, stamp_agent)`
+pair (NULL-half = not distinct, same fail-safe rule s21 states) — the exact `_run_unique_dir`-style
+type-driven fix, one register up from the DDL.
+
 ## Ruling: one world per run (maintainer, 2026-07-09, "many-worlds" argument)
 
 A run's subject must not see sibling runs' history — branches share only the branch point
