@@ -1597,3 +1597,29 @@ SAME pass that rewires the hook to read a project's `deployment.json` (the natur
 NOT YET: toy run 1 (all-Sonnet, countersign prompt) is mid-flight — the deployment stays
 frozen under a running experiment. Sequence ruled: run 1 completes → s20 applied to toycolors
 (one-liner above) → run 2 starts fresh on the upgraded kernel. Two clean runs, deliberately.
+
+## Toy run 1 findings (all-Sonnet session, 2026-07-09, inspector report + salvage)
+
+1. **Claim/artifact drift, caught live**: the QEUBO smoke script was edited 16→3 dims AFTER
+   its 16-dim evidence doc was written (mtime 13:45 vs 13:04), no ledger row/BACKLOG disclosure
+   — the artifact in the tree no longer reproduced the recorded evidence. Canonical instance
+   for the commission/conformance instrument (ADR-0013 R5); becomes its first fixture.
+2. **Run 1's deliverables were never committed and were wiped from disk** (untracked docs/,
+   index.html, scripts/ deleted at run-2 start) while five "task N complete" decisions assert
+   finished work. Contents survive in the session transcript, salvaged to
+   ephemera/toy-run1-salvage/ (local, gitignored). Fix shape for run prompts + eventually a
+   gate: a completion claim on a file-producing task requires the file to be committed.
+3. **Stamp-verified independence is architecturally unreachable from same-session subagents**
+   (launch-dir-scoped hooks; Task-tool subagents share the dir). validate_independence's
+   refusal taught correctly; the run honestly fell back to self-review every time, disclosed
+   in-line, but never escalated the limitation (ADR-0014 gap worth noting). Design fix, cheap:
+   the reviewer runs as a SEPARATE Claude Code process in toy-project (second terminal or
+   claude -p), which fires the interceptor → distinct verified stamp → technical independence
+   witnessed. The ephemeral-principals pattern (AGENTIC-PATTERNS 11) makes this the norm.
+4. **Governed-set hole**: only *.py governed; index.html (the actual product wiring) and all
+   docs bypassed the ledger discipline entirely. Instance decision: widen toy's
+   governed_files.json (*.html at minimum) between runs.
+5. **evidence column unused**: all evidence narrated in statement/rationale prose; the typed
+   field NULL everywhere. led ergonomics candidate (--evidence exists; prompts should demand it).
+6. Fix-point loop: 11 denies/11 allows/4 boundary closes in run 1's journal; zero
+   teaching-failures (every unretried deny was a deliberate negative-control probe).
