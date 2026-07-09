@@ -1408,3 +1408,20 @@ block was removed from the enforced chain (staging_guard -> no_lazy_imports -> f
 -> doc-legibility now runs); `gates/layout_census.py` itself is untouched and remains shipped
 tooling — a downstream instance re-adds the block to get the guarantee in its own repo. See
 `hooks/pre-commit` for the exact wiring and this note's cross-reference.
+
+## Operator-doc steps must carry their witness (2026-07-09, toy-pilot stamp-secret incident)
+
+Class (ADR-0000 2(a) form): a documented operator step whose precondition was never
+established or exercised is representable and indistinguishable from a witnessed one.
+Instance: toy-project/.claude/HOOKS.md's "one manual step" exported the stamp secret from
+`stamp_secret` — a table the kernel deliberately creates EMPTY (s17: provisioned at arm;
+the pilot has no arm step). The authoring agent correctly reported that path unexercised,
+but the DOC carried no such mark, and the orchestrator relayed the command as a walkthrough:
+the maintainer ran it and got a silent zero-byte secret file (psql: zero rows is success).
+The unverified claim was laundered at the doc/relay boundary, not at the report. Lapse is
+the executive's (ADR-0000 2(b)): no mechanism requires an operator step to carry evidence.
+Fix shape: an operator step in shipped docs is an artifact with two parts — the command AND
+the observed output of a real run (or an explicit UNWITNESSED stamp); a walkthrough
+containing an unstamped, unwitnessed step is the loud failure. Candidate surface: the
+doc-legibility gate family, or the walkthrough-verification instrument. For the refactor
+spec; not maintainer-ratified; filed for ruling.
