@@ -54,14 +54,31 @@ Opus impact: "point the apparatus at a project" stops requiring five undocumente
   template/instance separation that dissolves the dev-vs-use branch confusion structurally.
   toy-project's .claude/ is the worked prototype; the scaffold generalizes it.
 
-### 3. The operator/orchestrator surface is exactly three verbs
+### 3. The operator/orchestrator surface is exactly four verbs
 `led` (speak to the ledger — full kernel vocabulary, landed today), `judge` (run the deductive
-engine, observer-first — landing per USE-MODE-ENGINE-WIRING.md), and the scaffold. Everything
-else is hooks (automatic) or gates (refusals). An Opus orchestrating a user project needs to
-know: edits to governed files need a led entry; judge tells you what the ledger's logic says;
-refusals teach the fix. That is the WHOLE required model. Docs follow the doc-witness
-discipline (every example carries observed output or UNWITNESSED — BACKLOG-filed, exercised
-in HOOKS.md today), so the docs Opus reads cannot silently lie about what was never run.
+engine, observer-first — landing per USE-MODE-ENGINE-WIRING.md), `pickup`, and the scaffold.
+Everything else is hooks (automatic) or gates (refusals). An Opus orchestrating a user project
+needs to know: edits to governed files need a led entry; judge tells you what the ledger's
+logic says; pickup tells you where you are; refusals teach the fix. That is the WHOLE required
+model. Docs follow the doc-witness discipline (every example carries observed output or
+UNWITNESSED — BACKLOG-filed, exercised in HOOKS.md today), so the docs Opus reads cannot
+silently lie about what was never run.
+
+**`pickup` — the resume verb (maintainer-requested 2026-07-09; the minimal service).** The
+operator's cold-start problem: "with complex projects I never know how to restart; a handoff
+is so-so." The rule: the pick-up brief is DERIVED at pick-up time, never stored — a stored
+handoff decays from the moment of writing (HANDOFF.md's known failure). `pickup` emits
+STRUCTURED sections, each from a live source: in-force decisions (T_now via judge; SQL-floor
+`ledger_current` fallback until the engine is wired), open questions (`question_status`),
+review debt (`review_gap`, post-s20), recent supersessions/amendments (what changed since ts),
+git state (uncommitted/unpushed, both repos), and UNWITNESSED doc marks outstanding. The
+project CLAUDE.md instructs: on "please pick up", run `./pickup` and summarize section-by-
+section — the structured output is the contract, the prose is regenerated every time. Honest
+gap, named: "what was mid-flight" (task state, not decision state) needs the work-item layer
+(AUTOMATION-ENVELOPE gap 2, the omega work-ledger shape) — pickup v1 ships without it and
+says so in its output rather than faking it; v2 adds the in-flight section when work items
+land. This verb is also pattern 11's instantiation path: a role's charter+brief bootstrap and
+the operator's pickup are the same derivation with different filters.
 
 ### 4. The law gets a mechanical enforcement companion
 The ADR corpus is the part Opus demonstrably cannot hold (it is subtle, long, and
