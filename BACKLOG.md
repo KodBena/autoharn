@@ -1623,3 +1623,10 @@ frozen under a running experiment. Sequence ruled: run 1 completes → s20 appli
    field NULL everywhere. led ergonomics candidate (--evidence exists; prompts should demand it).
 6. Fix-point loop: 11 denies/11 allows/4 boundary closes in run 1's journal; zero
    teaching-failures (every unretried deny was a deliberate negative-control probe).
+
+### Correction to finding 1 above (maintainer, 2026-07-09)
+The 16→3 dims edit was the MAINTAINER's own manual test (verify the mechanism works where it
+should, d=3 — it does; d=16 non-convergence unsurprising), not agent drift. Finding 1's
+conduct claim is withdrawn. The residual, smaller lesson: a human's manual edit is invisible
+to the ledger by construction (hooks see agent tool-calls only), so evidence docs can go stale
+against human edits with no record — a known, acceptable bound worth one line in HOOKS.md.
