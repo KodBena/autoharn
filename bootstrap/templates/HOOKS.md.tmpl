@@ -12,11 +12,11 @@
 - **World:** ledger schema `__SCHEMA__`, kernel schema `__KERN__`, role `__ROLE__` (db `__DB__` @
   host `__HOST__`).
 - **Kernel lineage applied by this scaffold run:** __LINEAGE_CHAIN__
-- **s21 (session-aware distinctness):** NOT applied by any scaffold mode as of this writing.
-  Ratified but pending operator apply — status, witness, and the exact apply one-liner live in
-  autoharn's `BACKLOG.md` (search "s21"). Applying it to an existing world is a separate,
-  explicit operator act with every `-v` var spelled out by hand (never bare), same standing rule
-  as every kernel lineage delta.
+- **s21 (session-aware distinctness) status:** __S21_STATUS__ A future delta beyond s21 is,
+  same as always, a separate, explicit operator act — `bootstrap/apply-delta.sh <world-dir>
+  kernel/lineage/sNN-....sql` resolves this world's db/host/schema/kern from its own
+  `deployment.json`, prints the fully-resolved `psql` command, and requires a typed schema-name
+  confirmation before touching anything; it never applies bare and never guesses.
 - **Orienting in this world:** run `./pickup` (below) any time you need a live resume brief —
   in-force decisions, open questions, review debt, recent changes — derived fresh, never stale.
 

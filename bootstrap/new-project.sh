@@ -1,7 +1,7 @@
 #!/bin/sh
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-09T11:15:53Z
-#   last-change: 2026-07-09T13:28:03Z
+#   last-change: 2026-07-09T13:50:03Z
 #   contributors: be693afb/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -34,9 +34,11 @@
 # argument -- branches share only the branch point, never each other's ledgers). This mode
 # stands up exactly that branch point in an EXISTING db, in one call: applies
 # kernel/lineage/high_watermark_1.sql THEN kernel/lineage/s20-obligation-grants-and-view-
-# refresh.sql (so every new world is born on the current kernel, s20 included, never the
-# pre-s20 grants-gap shape the toy pilot found the hard way) into fresh schemas derived from
-# <world> (e.g. --new-world run3 -> schema=run3, kern=run3_kernel, role=run3_rw -- override any
+# refresh.sql THEN kernel/lineage/s21-session-aware-distinctness.sql (RATIFIED, BACKLOG.md
+# 2026-07-09 -- so every new world is born on the current kernel, s20 AND s21 included, never
+# the pre-s20 grants-gap shape the toy pilot found the hard way, and never the session-blind
+# distinctness s21 fixes) into fresh schemas derived from <world> (e.g. --new-world run3 ->
+# schema=run3, kern=run3_kernel, role=run3_rw -- override any
 # of the three with an explicit --schema/--kern/--role if the naming convention does not fit),
 # seeds the stamp secret (openssl rand -hex 32, mirroring drive/arm.sh ruling 43's own idempotent
 # pattern -- skipped if a secret already exists, never silently rotated), and writes the matching
@@ -74,8 +76,8 @@ usage() {
     echo "usage: $0 <dest-dir> --db <db> --host <host> --schema <schema> --kern <kern> --role <role> [--name <name>] [--force]" >&2
     echo "       $0 <dest-dir> --new-world <world> --db <db> --host <host> [--name <name>] [--force]" >&2
     echo "         (--new-world derives --schema/--kern/--role from <world> unless given explicitly;" >&2
-    echo "          also applies high_watermark_1.sql + s20 and seeds the stamp secret -- see the" >&2
-    echo "          --new-world block in this script's own header comment)" >&2
+    echo "          also applies high_watermark_1.sql + s20 + s21 and seeds the stamp secret -- see" >&2
+    echo "          the --new-world block in this script's own header comment)" >&2
     exit 2
 }
 
@@ -112,16 +114,21 @@ fi
 # below -- the honest record of which sNN deltas this world was born on, so a future reader never
 # has to reconstruct it from source the way run3's own history had to be reconstructed.
 if [ -n "$NEW_WORLD" ]; then
-    LINEAGE_CHAIN="s15 -> s17-stamp-mechanism -> s17-independence-vocabulary -> s19 -> s20 (via kernel/lineage/high_watermark_1.sql + kernel/lineage/s20-obligation-grants-and-view-refresh.sql), applied automatically by this --new-world run"
+    LINEAGE_CHAIN="s15 -> s17-stamp-mechanism -> s17-independence-vocabulary -> s19 -> s20 -> s21-session-aware-distinctness (via kernel/lineage/high_watermark_1.sql + kernel/lineage/s20-obligation-grants-and-view-refresh.sql + kernel/lineage/s21-session-aware-distinctness.sql), applied automatically by this --new-world run"
     # --new-world ALSO auto-seeds the stamp secret (below) -- HOOKS.md must say so, not repeat the
     # generic "one manual step remains" text verbatim: an operator who trusted that stale claim and
     # re-ran the seeding block would TRUNCATE + re-INSERT an already-provisioned secret, ROTATING it
     # and invalidating every stamp already written under it (the exact hazard the block's own
     # comment warns against). Fixed here rather than left for the next reader to trip over.
     STAMP_SECRET_STATUS="**Already provisioned automatically by this --new-world scaffold run (see PROVENANCE above) — do NOT re-run the block below; re-seeding ROTATES the secret and invalidates every stamp already written under it. Shown for reference/recovery only.**"
+    # s21 is now part of THIS world's birth lineage (line above) -- the template's own s21 status
+    # bullet must say so, not the stale "NOT applied by any scaffold mode" claim (BACKLOG 2026-07-09,
+    # "make the s21-and-future-delta apply step scriptable" mandate, piece 2).
+    S21_STATUS="Applied automatically by this --new-world scaffold run (see the lineage chain above) -- this world's kernel already carries s21's (stamp_session, stamp_agent) pair-keyed distinctness and the s19 residue fix. No separate apply is needed."
 else
     LINEAGE_CHAIN="NOT applied by this scaffold run -- apply a kernel lineage to $SCHEMA/$KERN/$ROLE manually (kernel/lineage/, see kernel/lineage/README.md) before first use"
     STAMP_SECRET_STATUS="**One manual step remains: provision the stamp secret. UNWITNESSED — the block below has not been run in this instance.**"
+    S21_STATUS="NOT applied by this scaffold run (classic --schema/--kern/--role mode applies no kernel lineage at all -- see item 1 above). If this world's kernel predates s21, apply it as a separate, explicit operator act from autoharn's own checkout: \`bootstrap/apply-delta.sh <this-project's-directory> kernel/lineage/s21-session-aware-distinctness.sql\` (prints the resolved command, requires a typed schema confirmation, never applies bare) -- status/witness live in autoharn's BACKLOG.md (search \"s21\")."
 fi
 
 AUTOHARN_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -142,12 +149,13 @@ fi
 echo "== stamping instance at $PROJECT_ROOT (name=$NAME) =="
 
 if [ -n "$NEW_WORLD" ]; then
-    echo "-- new-world '$NEW_WORLD': applying high_watermark_1.sql + s20 to $DB (schema=$SCHEMA kern=$KERN role=$ROLE) --"
+    echo "-- new-world '$NEW_WORLD': applying high_watermark_1.sql + s20 + s21 to $DB (schema=$SCHEMA kern=$KERN role=$ROLE) --"
     psql -h "$HOST" -d "$DB" -v ON_ERROR_STOP=1 \
         -v schema="$SCHEMA" -v kern="$KERN" -v role="$ROLE" \
         -f "$AUTOHARN_ROOT/kernel/lineage/high_watermark_1.sql" \
-        -f "$AUTOHARN_ROOT/kernel/lineage/s20-obligation-grants-and-view-refresh.sql"
-    echo "   kernel applied (schema $SCHEMA + kernel schema $KERN + role $ROLE, s20 included)"
+        -f "$AUTOHARN_ROOT/kernel/lineage/s20-obligation-grants-and-view-refresh.sql" \
+        -f "$AUTOHARN_ROOT/kernel/lineage/s21-session-aware-distinctness.sql"
+    echo "   kernel applied (schema $SCHEMA + kernel schema $KERN + role $ROLE, s20 + s21 included)"
 
     echo "-- new-world '$NEW_WORLD': seeding the stamp secret (idempotent, mirrors drive/arm.sh ruling 43) --"
     mkdir -p "$PROJECT_ROOT/.claude/secrets"
@@ -197,7 +205,8 @@ sedsubst() {
         -e "s|__CREATED_AT__|$CREATED_AT|g" \
         -e "s|__CREATE_CMD__|$CREATE_CMD|g" \
         -e "s|__LINEAGE_CHAIN__|$LINEAGE_CHAIN|g" \
-        -e "s|__STAMP_SECRET_STATUS__|$STAMP_SECRET_STATUS|g"
+        -e "s|__STAMP_SECRET_STATUS__|$STAMP_SECRET_STATUS|g" \
+        -e "s|__S21_STATUS__|$S21_STATUS|g"
 }
 
 echo "-- .claude/ wiring --"
@@ -219,7 +228,7 @@ done
 echo "== done =="
 echo "Next steps:"
 if [ -n "$NEW_WORLD" ]; then
-    echo "  1. Kernel + s20 already applied and the stamp secret already provisioned above (new-world '$NEW_WORLD')."
+    echo "  1. Kernel + s20 + s21 already applied and the stamp secret already provisioned above (new-world '$NEW_WORLD')."
     echo "  2. cd $PROJECT_ROOT && ./led decision \"...\"  /  ./judge  /  ./pickup"
     echo "  3. Read $PROJECT_ROOT/.claude/HOOKS.md and replace its UNWITNESSED marks as you exercise each command."
 else
