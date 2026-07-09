@@ -1495,3 +1495,37 @@ and update its callers' names to the registry's closed vocabulary. Either is a s
 mechanical change; it needs a live run (or a new test) to verify, which is why it is filed
 rather than guessed at. Sibling of the `.*_scratch$`/`^s\d+[a-z]*$` widenings recorded in
 `engine/targets.py`'s own docstring.
+
+## `ledger_differential.py`'s CLI covers only the T_now family — the support differential has no operator-facing entry point (2026-07-09, USE-MODE-ENGINE-WIRING items 4/6/7)
+
+Class (ADR-0000 2(a) form; a declared-in-scope capability with no reachable surface is the
+same F49 shape the design doc's own §1 defect class names, one register up: not a silent
+WRONG answer, but a silent WRONG REACHABILITY). `design/USE-MODE-ENGINE-WIRING.md` item 5
+declares TWO judgment families "in scope now": `ledger_tnow` (+ SQL-floor differential) and
+`ledger_support` (+ floor) — read as a scope statement, both should be operator/agent-
+invokable the same way. But `engine/ledger_differential.py`'s CLI (the exact command `toy-
+project/judge` is spec'd to invoke, item 4: `ledger_differential.py toy --retain`) hardcodes
+`asp_program: Path = TNOW_LP` in `run_asp`/`main` with no `--program`/family-selection flag —
+it can only ever run the T_now-vs-floor family. The support-layer differential mechanism
+(`ledger_floor.support_floor_atoms`, generic over any `name`; the ASP side composing
+`[ledger_tnow.lp, ledger_assumes.lp, ledger_support.lp]`) exists and IS generic, but its only
+committed caller is `engine/ledger_support_scratch.py`, which hardcodes
+`SCHEMA="marriage_support_scratch"` / `DB="epistemic"` — it cannot target an arbitrary named
+ledger like `toy` without a code change. Witnessing the support differential against `toy`
+for this increment's item 7 required an ad hoc, uncommitted Python snippet built directly
+from the generic library functions (`ledger_floor.support_floor_atoms("toy", now_epoch)` +
+`clingo_run.run_clingo([TNOW_LP, ASSUMES_LP, SUPPORT_LP], edb_text)`, filtered to
+`ledger_floor.SUPPORT_PREDS`) — not through any judge/CLI-shaped entry point, and its result
+(AGREE, 4 atoms) is reported in this session's record but was never banked as a
+`--retain`-shaped DerivationRecord because no committed tool produces one for this family
+against a non-scratch target. Quantification universe: same gap for `ledger_assumes`
+(declared engine-only/no-floor by item 5, and genuinely un-invokable generically for the
+same reason: no CLI takes a target + program-family pair). Not fixed here per this
+increment's explicit constraint (engine/instruments code is DONE, not to be modified) and
+per ADR-0004 scope discipline (a CLI-shape change is its own increment, not a doc/witness
+task's silent scope creep). Fix shape: extend `ledger_differential.py`'s CLI with a family
+selector (e.g. `--program {tnow,support}`, defaulting to `tnow` for byte-identical
+backward compatibility) that composes `[TNOW_LP, ASSUMES_LP, SUPPORT_LP]` and calls
+`support_floor_atoms` instead of `floor_atoms`/`run_asp`'s single-program path when
+`support` is selected, with its own `retain()`-shaped banking — a maintainer decision on
+whether the two families share one `DifferentialResult` shape or get siblings.
