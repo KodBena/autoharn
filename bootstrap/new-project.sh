@@ -1,7 +1,7 @@
 #!/bin/sh
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-09T11:15:53Z
-#   last-change: 2026-07-09T13:50:03Z
+#   last-change: 2026-07-09T14:30:45Z
 #   contributors: be693afb/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -50,6 +50,15 @@
 # 'author' principal is seeded automatically by s15-schema.sql itself (INSERT ... ON CONFLICT DO
 # NOTHING, mapped to the connecting role) -- no separate registration step is needed here; it
 # mirrors the toy WALKTHROUGH's own kernel-apply step exactly, nothing new to invoke.
+#
+# --new-world ALSO registers the 'reviewer' principal (subagent class, ON CONFLICT DO NOTHING)
+# and writes the world's root CLAUDE.md (the templated governance preamble, auto-loaded by
+# Claude Code at session start -- no separate read-me-first or paste step) -- BACKLOG
+# "Maintainer ruling: self-application" (2026-07-09) named BOTH the hand-registered reviewer
+# principal and the hand-pasted six-point governance prompt as the ceremony "starting a run
+# becomes a verb" is meant to close; this closes it, so a --new-world scaffold is run-ready at
+# birth instead of needing two more hand steps before the first real session (ratifier's
+# acceptance bar, same date: at most one scaffold command, one `cd`, one `claude`, no paste).
 #
 # What this does NOT do (deliberately, per design/OPUS-READINESS.md's scope for this pass):
 # rewire `led` to READ deployment.json live (deferred; a live session reads it per-event; the two
@@ -125,10 +134,17 @@ if [ -n "$NEW_WORLD" ]; then
     # bullet must say so, not the stale "NOT applied by any scaffold mode" claim (BACKLOG 2026-07-09,
     # "make the s21-and-future-delta apply step scriptable" mandate, piece 2).
     S21_STATUS="Applied automatically by this --new-world scaffold run (see the lineage chain above) -- this world's kernel already carries s21's (stamp_session, stamp_agent) pair-keyed distinctness and the s19 residue fix. No separate apply is needed."
+    # REVIEWER_STATUS: mirrors the STAMP_SECRET_STATUS/S21_STATUS pattern above -- the honest,
+    # mode-aware record of whether the `reviewer` principal this world's root CLAUDE.md.tmpl talks
+    # about ("a reviewer principal exists") is actually true yet (BACKLOG "Maintainer ruling:
+    # self-application", 2026-07-09 -- "starting a run becomes a verb": the operator no longer
+    # hand-registers this principal for a --new-world scaffold).
+    REVIEWER_STATUS="Registered automatically by this --new-world scaffold run (principal 'reviewer', class subagent; see the registration step in this same run, right after the stamp secret above) -- do NOT re-register; \`ON CONFLICT (name) DO NOTHING\` makes a repeat call harmless if you do anyway."
 else
     LINEAGE_CHAIN="NOT applied by this scaffold run -- apply a kernel lineage to $SCHEMA/$KERN/$ROLE manually (kernel/lineage/, see kernel/lineage/README.md) before first use"
     STAMP_SECRET_STATUS="**One manual step remains: provision the stamp secret. UNWITNESSED — the block below has not been run in this instance.**"
     S21_STATUS="NOT applied by this scaffold run (classic --schema/--kern/--role mode applies no kernel lineage at all -- see item 1 above). If this world's kernel predates s21, apply it as a separate, explicit operator act from autoharn's own checkout: \`bootstrap/apply-delta.sh <this-project's-directory> kernel/lineage/s21-session-aware-distinctness.sql\` (prints the resolved command, requires a typed schema confirmation, never applies bare) -- status/witness live in autoharn's BACKLOG.md (search \"s21\")."
+    REVIEWER_STATUS="NOT registered by this scaffold run (classic --schema/--kern/--role mode applies no kernel lineage at all -- see item 1 above, so there is no \`principal\` table yet to register into). Once a kernel lineage is applied, register one explicitly: \`./led register-principal reviewer subagent\`."
 fi
 
 AUTOHARN_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -175,6 +191,25 @@ if [ -n "$NEW_WORLD" ]; then
             -c "INSERT INTO ${KERN}.stamp_secret (secret) VALUES (decode('$HEX','hex'));"
         echo "   one fresh secret provisioned ($SECRET_FILE [chmod 600]; DB ${KERN}.stamp_secret)"
     fi
+
+    # Register the standard principals this world is born with: `author` is already seeded by
+    # s15-schema.sql itself (mapped to the connecting role, ON CONFLICT DO NOTHING -- see this
+    # script's own header comment); `reviewer` is the one BACKLOG's "Maintainer ruling:
+    # self-application" (2026-07-09) names as still hand-registered today ("do 1. register a
+    # reviewer principal ... do 2. paste a six-point governance prompt"). Folding it in here
+    # closes exactly that gap: a new world is born with both principals a run needs, not just
+    # one. Same connection posture as the kernel apply above (SET ROLE, not a superuser bypass --
+    # ADR-0012 P1, one mechanism) and the same INSERT `led register-principal` itself would run
+    # (kept in lockstep with bootstrap/templates/led.tmpl's own SQL by inspection, not by sharing
+    # code across a shell/psql boundary that has none to share).
+    echo "-- new-world '$NEW_WORLD': registering standard principals (reviewer) --"
+    psql -h "$HOST" -d "$DB" -v ON_ERROR_STOP=1 <<SQL
+        SET ROLE ${ROLE};
+        SET search_path = ${SCHEMA}, ${KERN};
+        INSERT INTO principal (name, agent_class) VALUES ('reviewer', 'subagent')
+        ON CONFLICT (name) DO NOTHING;
+SQL
+    echo "   'reviewer' principal registered (class subagent; 'author' was already seeded by s15-schema.sql)"
 fi
 
 echo "-- deployment.json --"
@@ -206,7 +241,8 @@ sedsubst() {
         -e "s|__CREATE_CMD__|$CREATE_CMD|g" \
         -e "s|__LINEAGE_CHAIN__|$LINEAGE_CHAIN|g" \
         -e "s|__STAMP_SECRET_STATUS__|$STAMP_SECRET_STATUS|g" \
-        -e "s|__S21_STATUS__|$S21_STATUS|g"
+        -e "s|__S21_STATUS__|$S21_STATUS|g" \
+        -e "s|__REVIEWER_STATUS__|$REVIEWER_STATUS|g"
 }
 
 echo "-- .claude/ wiring --"
@@ -218,6 +254,21 @@ cp "$TEMPLATES/APPARATUS.md" "$PROJECT_ROOT/.claude/APPARATUS.md"
 sedsubst < "$TEMPLATES/HOOKS.md.tmpl" > "$PROJECT_ROOT/.claude/HOOKS.md"
 echo "wrote .claude/settings.json, governed_files.json, GOVERNED_FILES.md, apparatus.json, APPARATUS.md, HOOKS.md"
 
+if [ -n "$NEW_WORLD" ]; then
+    # CLAUDE.md's preamble states "a reviewer principal exists" as fact -- only true once the
+    # reviewer-registration step above has actually run, so this file is written ONLY for
+    # --new-world mode (classic mode has no principal table yet at all -- see REVIEWER_STATUS
+    # above). This is the second half of the same BACKLOG ruling the reviewer registration
+    # closes: "starting a run becomes a verb" names BOTH the hand-registered reviewer principal
+    # AND the hand-pasted six-point governance prompt as the ceremony to fold into the scaffold.
+    # Lands at the WORLD ROOT (not .claude/) and named exactly `CLAUDE.md` -- ratifier's
+    # acceptance bar (2026-07-09): at most one scaffold command, one `cd`, one `claude`, and NO
+    # paste step. A file named anything else, or living anywhere else, is not auto-loaded by
+    # Claude Code at session start and would put the paste step right back.
+    sedsubst < "$TEMPLATES/CLAUDE.md.tmpl" > "$PROJECT_ROOT/CLAUDE.md"
+    echo "wrote CLAUDE.md (governance preamble, auto-loaded at session start)"
+fi
+
 echo "-- the three verbs (led, judge, pickup) --"
 for verb in led judge pickup; do
     sedsubst < "$TEMPLATES/$verb.tmpl" > "$PROJECT_ROOT/$verb"
@@ -228,9 +279,18 @@ done
 echo "== done =="
 echo "Next steps:"
 if [ -n "$NEW_WORLD" ]; then
-    echo "  1. Kernel + s20 + s21 already applied and the stamp secret already provisioned above (new-world '$NEW_WORLD')."
-    echo "  2. cd $PROJECT_ROOT && ./led decision \"...\"  /  ./judge  /  ./pickup"
-    echo "  3. Read $PROJECT_ROOT/.claude/HOOKS.md and replace its UNWITNESSED marks as you exercise each command."
+    # Ratifier's acceptance bar (2026-07-09): starting a run is at most one scaffold command, one
+    # `cd`, one `claude`, and NO paste step. This world already got there above (kernel + s20 +
+    # s21 applied, stamp secret provisioned, 'reviewer' principal registered, CLAUDE.md written)
+    # -- the footer below is the whole remaining ceremony, not an abbreviation of a longer one.
+    echo "  $CREATE_CMD"
+    echo "  cd $PROJECT_ROOT"
+    echo "  claude   # then type your task as your first message -- CLAUDE.md auto-loads the"
+    echo "           # governance preamble (author + reviewer principals, both already"
+    echo "           # registered above); nothing to paste."
+    echo ""
+    echo "(./led, ./judge, ./pickup are ready to use from inside that session; read"
+    echo " $PROJECT_ROOT/.claude/HOOKS.md and replace its UNWITNESSED marks as you exercise each command.)"
 else
     echo "  1. Apply a kernel lineage to $DB/$SCHEMA/$KERN/$ROLE if not already applied (kernel/lineage/, autoharn)."
     echo "  2. Provision the stamp secret -- see $PROJECT_ROOT/.claude/HOOKS.md (marked UNWITNESSED until you run it)."

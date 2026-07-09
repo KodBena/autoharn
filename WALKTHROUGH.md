@@ -109,24 +109,32 @@ bootstrap/new-project.sh <dest-dir> --new-world <world-name> --db <db> --host <h
   (`^s\d+[a-z]*$`, `*_scratch`).
 
 **What you should see** (abbreviated real capture, witnessed against a throwaway world
-`deltaprobe2`/`deltaprobe2_kernel`/`deltaprobe2_rw` on the same `toy` db, then torn down (`DROP
-SCHEMA ... CASCADE` + `DROP OWNED BY`/`DROP ROLE`) — the mechanism witnessed here is identical to
-what a real run gets; only the schema name differs. This capture post-dates s21 landing in the
-chain — BACKLOG.md, "make the s21-and-future-delta apply step scriptable", 2026-07-09):
+`runverbprobe`/`runverbprobe_kernel`/`runverbprobe_rw` on the same `toy` db, then torn down
+(`DROP SCHEMA ... CASCADE` ×2 + `DROP OWNED BY`/`DROP ROLE` + `rm -rf`) — the mechanism witnessed
+here is identical to what a real run gets; only the schema name differs. This capture post-dates
+the scaffold folding in reviewer-principal registration and the `CLAUDE.md` governance
+preamble — BACKLOG.md, "Maintainer ruling: self-application", 2026-07-09, "starting a run
+becomes a verb"):
 
 ```
-== stamping instance at /home/bork/w/vdc/1/.deltaprobe2 (name=deltaprobe2) ==
--- new-world 'deltaprobe2': applying high_watermark_1.sql + s20 + s21 to toy (schema=deltaprobe2 kern=deltaprobe2_kernel role=deltaprobe2_rw) --
+== stamping instance at /home/bork/w/vdc/1/.runverbprobe (name=runverbprobe) ==
+-- new-world 'runverbprobe': applying high_watermark_1.sql + s20 + s21 to toy (schema=runverbprobe kern=runverbprobe_kernel role=runverbprobe_rw) --
 CREATE SCHEMA
 CREATE TABLE
 ...
-   kernel applied (schema deltaprobe2 + kernel schema deltaprobe2_kernel + role deltaprobe2_rw, s20 + s21 included)
--- new-world 'deltaprobe2': seeding the stamp secret (idempotent, mirrors drive/arm.sh ruling 43) --
-   one fresh secret provisioned (.../.claude/secrets/stamp_secret.hex [chmod 600]; DB deltaprobe2_kernel.stamp_secret)
+   kernel applied (schema runverbprobe + kernel schema runverbprobe_kernel + role runverbprobe_rw, s20 + s21 included)
+-- new-world 'runverbprobe': seeding the stamp secret (idempotent, mirrors drive/arm.sh ruling 43) --
+   one fresh secret provisioned (.../.claude/secrets/stamp_secret.hex [chmod 600]; DB runverbprobe_kernel.stamp_secret)
+-- new-world 'runverbprobe': registering standard principals (reviewer) --
+SET
+SET
+INSERT 0 1
+   'reviewer' principal registered (class subagent; 'author' was already seeded by s15-schema.sql)
 -- deployment.json --
-wrote /home/bork/w/vdc/1/.deltaprobe2/deployment.json
+wrote /home/bork/w/vdc/1/.runverbprobe/deployment.json
 -- .claude/ wiring --
 wrote .claude/settings.json, governed_files.json, GOVERNED_FILES.md, apparatus.json, APPARATUS.md, HOOKS.md
+wrote CLAUDE.md (governance preamble, auto-loaded at session start)
 -- the three verbs (led, judge, pickup) --
 wrote led (executable)
 wrote judge (executable)
@@ -135,15 +143,20 @@ wrote pickup (executable)
 ```
 
 A quick live check that the pair-keyed distinctness objects genuinely landed (also witnessed,
-real output): `psql -h <host> -d toy -c '\df deltaprobe2.validate_independence'` shows the
+real output): `psql -h <host> -d toy -c '\df runverbprobe.validate_independence'` shows the
 function present, and `SELECT column_name FROM information_schema.columns WHERE
-table_schema='deltaprobe2' AND table_name='review_stamp_distinctness'` lists
+table_schema='runverbprobe' AND table_name='review_stamp_distinctness'` lists
 `review_stamp_session`/`regards_stamp_session` alongside the original `stamp_agent` columns —
-the s21 pair-keyed distinctness columns, present from birth.
+the s21 pair-keyed distinctness columns, present from birth. A second live check that the
+principals genuinely landed (also witnessed, real output): `SELECT id, name, agent_class FROM
+runverbprobe_kernel.principal ORDER BY id` returns exactly `(1, author, model)` and
+`(2, reviewer, subagent)` — the world is born with both the principals a run needs, not just
+the connection principal.
 
 **Success looks like:** the block above ending in `== done ==` with no `psql` error lines
-(a `NOTICE: ... does not exist, skipping` is normal — see section 1), `deployment.json` present at
-the dest root, and `./led`/`./judge`/`./pickup` all executable there. A quick sanity check:
+(a `NOTICE: ... does not exist, skipping` is normal — see section 1), `deployment.json` and a
+rendered `CLAUDE.md` present at the dest root, and `./led`/`./judge`/`./pickup` all executable
+there. A quick sanity check:
 
 ```sh
 cd <dest-dir> && ./led decision "world opened" && ./led --recent 1 && ./judge && ./pickup
@@ -153,6 +166,35 @@ cd <dest-dir> && ./led decision "world opened" && ./led --recent 1 && ./judge &&
 ledger); `./pickup` prints a live resume brief in five sections (in-force decisions, open
 questions, review debt, recent changes, git state) — this IS the "orienting in any world" verb;
 run it any time, in any world, to get your bearings without trusting a stale stored handoff.
+Both were witnessed clean against `runverbprobe`: `judge` printed `AGREE`; `pickup` printed all
+five sections, including `REVIEW-DEBT` and `OPEN-QUESTIONS` both empty (the "done" state the
+governance preamble below names).
+
+**Starting the run — no more hand-register, no more hand-paste.** Until this session, opening a
+world left two things for the operator to do by hand before the first real session: register a
+`reviewer` principal (`./led register-principal reviewer subagent`), and paste a six-point
+governance prompt into the Claude session. Both are now done AT SCAFFOLD TIME — the transcript
+above already shows the `reviewer` registration; the `.claude/` wiring step now also writes a
+`CLAUDE.md` at the world's root carrying that six-point prompt verbatim (rendered with this
+world's own paths — see `bootstrap/templates/CLAUDE.md.tmpl`). Claude Code auto-loads a
+project's `CLAUDE.md` at session start, so the ceremony for actually starting a governed run is
+now exactly the three lines the scaffold itself prints at the end (real witnessed capture,
+`runverbprobe`):
+
+```
+  bootstrap/new-project.sh /home/bork/w/vdc/1/.runverbprobe --new-world runverbprobe --db toy --host 192.168.122.1 --name runverbprobe
+  cd /home/bork/w/vdc/1/.runverbprobe
+  claude   # then type your task as your first message -- CLAUDE.md auto-loads the
+           # governance preamble (author + reviewer principals, both already
+           # registered above); nothing to paste.
+```
+
+One scaffold command, one `cd`, one `claude` — then type the task. No file to paste, no prompt
+to retype from memory (ratifier's acceptance bar, 2026-07-09). This is gated to `--new-world`
+mode only: classic `--schema/--kern/--role` mode applies no kernel lineage at all (see item 1
+above), so it has no principal table to register into yet and writes no `CLAUDE.md` — a file
+claiming "a reviewer principal exists" would be false there until the operator applies a kernel
+lineage by hand.
 
 **Beyond the chain — a future delta is an operator act, not automatic.** `--new-world` applies
 the lineage current AS OF the scaffold's own header comment (s15 through s21 today); a lineage

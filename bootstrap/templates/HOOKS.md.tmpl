@@ -17,6 +17,9 @@
   kernel/lineage/sNN-....sql` resolves this world's db/host/schema/kern from its own
   `deployment.json`, prints the fully-resolved `psql` command, and requires a typed schema-name
   confirmation before touching anything; it never applies bare and never guesses.
+- **`reviewer` principal status:** __REVIEWER_STATUS__ See this world's root `CLAUDE.md` (if
+  present) for the governance preamble that assumes this principal already exists — it is
+  auto-loaded by Claude Code at session start, so there is nothing to paste.
 - **Orienting in this world:** run `./pickup` (below) any time you need a live resume brief —
   in-force decisions, open questions, review debt, recent changes — derived fresh, never stale.
 
@@ -96,7 +99,9 @@ mis-provisioned secret fails loudly on the first ledger write, not silently.
 ./led -f palette.py decision "palette.py: ..."   # authorizes editing palette.py
 ./led --recent [N]           # last N rows (default 10)
 ./led current [N]            # last N rows of ledger_current (supersedes filtered)
-./led register-principal reviewer subagent
+./led register-principal reviewer subagent   # already done for you in --new-world mode --
+                                              # see the "reviewer principal status" bullet above;
+                                              # this form registers any FURTHER principal you need
 ./led review 12 attest technical "independent read: ... checks out"
 ```
 
