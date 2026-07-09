@@ -66,6 +66,39 @@
 #                                              current rows to carry a distinct-actor attest countersign
 #                                              (surfaced by `led review-gap` until one lands)
 #
+#   led work open <slug> <title...>           open a work item (kernel/lineage/s22-work-item-ledger.sql's
+#                                              validate_work_item(): one opening act per slug — a
+#                                              duplicate open is REFUSED at insert, never silently
+#                                              accepted; the Q5 defect made unrepresentable)
+#   led work claim <slug>                     claim an already-opened item as the acting principal
+#                                              (refused if <slug> has no opening act). Set
+#                                              LED_ACTOR=<principal-name> to claim as a registered
+#                                              principal other than the default connection principal
+#                                              (else the claim lands under that default principal)
+#   led work depends <slug> <on-slug>         record that <slug> (must already be opened) depends on
+#                                              <on-slug>. <on-slug> itself is NOT required to be
+#                                              opened — a dangling antecedent is deliberately NOT
+#                                              refused (spec invariant 4); it is surfaced instead by
+#                                              `led work violations` (depends_on_unknown_slug)
+#   led work close <slug> <resolution> [--witness <ref>]
+#                                              close a work item. resolution:
+#                                              shipped|superseded|dropped|deferred. resolution=shipped
+#                                              REQUIRES --witness — refused at construction time
+#                                              (work_shipped_requires_witness CHECK), never a
+#                                              tolerated-but-flagged row
+#   led work list                             work_item_current: one row per slug — state (open/
+#                                              closed), title, resolution, witness, claimant
+#   led work violations                       work_item_violations: duplicate_open and
+#                                              shipped_without_witness (both provably vacuous under
+#                                              normal operation — refused at insert above, listed as
+#                                              defense in depth) plus the two genuinely-reachable,
+#                                              deliberately-unrefused members depends_on_unknown_slug
+#                                              and dependency_cycle
+#                                              (these six verbs require kernel/lineage/s22-work-item-
+#                                              ledger.sql applied to this project's schema — s22 is
+#                                              an additive delta on top of the s15/s17/s19/s20/s21
+#                                              birth chain, not yet part of it as of this writing)
+#
 # Connection defaults are sourced from this project's deployment.json (repo root, next to
 # .claude/) and stamped in here by bootstrap/new-project.sh at scaffold time — NOT read live at
 # run time (that rewiring is deferred; see design/OPUS-READINESS.md move 1). This instance's
@@ -220,6 +253,121 @@ SQL
   exit $?
 fi
 
+if [ "${1:-}" = "work" ]; then
+  shift
+  sub="${1:-}"
+  case "$sub" in
+    open)
+      shift
+      if [ $# -lt 2 ]; then
+        echo "usage: led work open <slug> <title...>" >&2
+        echo "       refused if <slug> already has an opening act (validate_work_item(): one" >&2
+        echo "       opening act per slug -- the Q5 defect made unrepresentable, never a silent" >&2
+        echo "       duplicate)" >&2
+        exit 1
+      fi
+      slug="$1"; shift
+      title="$*"
+      exec psql -h "$PGHOST" -d "$PGDB" -v ON_ERROR_STOP=1 \
+        -v slug="$slug" -v title="$title" -v statement="work_opened: ${slug} -- ${title}" <<SQL
+        SET ROLE ${ROLE};
+        SET search_path = ${SCHEMA}, ${KERNEL};
+        INSERT INTO ${SCHEMA}.ledger (kind, work_slug, work_title, statement)
+        VALUES ('work_opened', :'slug', :'title', :'statement');
+SQL
+      ;;
+    claim)
+      shift
+      if [ $# -lt 1 ]; then
+        echo "usage: led work claim <slug>" >&2
+        echo "       refused if <slug> has no opening act (validate_work_item(): every later" >&2
+        echo "       event on an item must reference an item that has been opened)" >&2
+        echo "       set LED_ACTOR=<principal-name> to claim as a registered principal other" >&2
+        echo "       than the default connection principal" >&2
+        exit 1
+      fi
+      slug="$1"
+      actor_name="${LED_ACTOR:-}"
+      # actor resolves via a subquery bind exactly as `led review` does above: NULLIF(:'actor_name','')
+      # is NULL when LED_ACTOR is unset, so the claim lands under the default connection principal.
+      exec psql -h "$PGHOST" -d "$PGDB" -v ON_ERROR_STOP=1 \
+        -v slug="$slug" -v actor_name="$actor_name" -v statement="work_claimed: ${slug}" <<SQL
+        SET ROLE ${ROLE};
+        SET search_path = ${SCHEMA}, ${KERNEL};
+        INSERT INTO ${SCHEMA}.ledger (kind, work_slug, statement, actor)
+        VALUES ('work_claimed', :'slug', :'statement',
+                (SELECT id FROM principal WHERE name = NULLIF(:'actor_name', '')));
+SQL
+      ;;
+    depends)
+      shift
+      if [ $# -lt 2 ]; then
+        echo "usage: led work depends <slug> <on-slug>" >&2
+        echo "       <slug> must already be opened (refused otherwise); <on-slug> (the" >&2
+        echo "       antecedent) is NOT required to be opened -- a dangling antecedent is" >&2
+        echo "       deliberately NOT refused (spec invariant 4), it is surfaced instead by" >&2
+        echo "       'led work violations' (depends_on_unknown_slug)" >&2
+        exit 1
+      fi
+      slug="$1"; on="$2"
+      exec psql -h "$PGHOST" -d "$PGDB" -v ON_ERROR_STOP=1 \
+        -v slug="$slug" -v on="$on" -v statement="work_depends_on: ${slug} depends on ${on}" <<SQL
+        SET ROLE ${ROLE};
+        SET search_path = ${SCHEMA}, ${KERNEL};
+        INSERT INTO ${SCHEMA}.ledger (kind, work_slug, work_depends_on, statement)
+        VALUES ('work_depends_on', :'slug', :'on', :'statement');
+SQL
+      ;;
+    close)
+      shift
+      witness=""
+      args=()
+      while [ $# -gt 0 ]; do
+        case "$1" in
+          --witness) witness="${2:-}"; shift 2 ;;
+          *) args+=("$1"); shift ;;
+        esac
+      done
+      set -- "${args[@]}"
+      if [ $# -lt 2 ]; then
+        echo "usage: led work close <slug> <resolution> [--witness <ref>]" >&2
+        echo "       resolution: shipped|superseded|dropped|deferred" >&2
+        echo "       resolution=shipped REQUIRES --witness -- refused at construction time" >&2
+        echo "       (work_shipped_requires_witness CHECK), never a tolerated-but-flagged row" >&2
+        exit 1
+      fi
+      slug="$1"; resolution="$2"
+      exec psql -h "$PGHOST" -d "$PGDB" -v ON_ERROR_STOP=1 \
+        -v slug="$slug" -v resolution="$resolution" -v witness="$witness" \
+        -v statement="work_closed: ${slug} (${resolution})" <<SQL
+        SET ROLE ${ROLE};
+        SET search_path = ${SCHEMA}, ${KERNEL};
+        INSERT INTO ${SCHEMA}.ledger (kind, work_slug, work_resolution, work_witness, statement)
+        VALUES ('work_closed', :'slug', :'resolution', NULLIF(:'witness', ''), :'statement');
+SQL
+      ;;
+    list)
+      exec psql -h "$PGHOST" -d "$PGDB" -c "
+        SELECT w.slug, w.title, w.state, w.resolution, w.witness, p.name AS claimant
+        FROM ${SCHEMA}.work_item_current w LEFT JOIN ${KERNEL}.principal p ON p.id = w.claimant
+        ORDER BY w.slug;"
+      ;;
+    violations)
+      exec psql -h "$PGHOST" -d "$PGDB" -c "
+        SELECT violation, slug, detail FROM ${SCHEMA}.work_item_violations ORDER BY violation, slug;"
+      ;;
+    *)
+      echo "usage: led work open <slug> <title...>" >&2
+      echo "       led work claim <slug>" >&2
+      echo "       led work depends <slug> <on-slug>" >&2
+      echo "       led work close <slug> <resolution> [--witness <ref>]" >&2
+      echo "       led work list          (work_item_current)" >&2
+      echo "       led work violations    (work_item_violations)" >&2
+      exit 1
+      ;;
+  esac
+fi
+
 if [ $# -lt 2 ]; then
   echo "usage: led [flags] <kind> <statement...>   (see top-of-file comment for the full flag list:" >&2
   echo "       -f -e --supersedes --amends --amends-scope --answers --refs --concern --evidence --confidence)" >&2
@@ -227,6 +375,7 @@ if [ $# -lt 2 ]; then
   echo "       led register-principal <name> <class>" >&2
   echo "       led obligate <scope> <assigned-by-principal> <obliged-actor-principal>" >&2
   echo "       led review <entry-id> <verdict> <independence> [--antecedent id] <statement...>" >&2
+  echo "       led work open|claim|depends|close|list|violations  (see top-of-file comment)" >&2
   exit 1
 fi
 
