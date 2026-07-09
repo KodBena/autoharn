@@ -1630,3 +1630,17 @@ should, d=3 — it does; d=16 non-convergence unsurprising), not agent drift. Fi
 conduct claim is withdrawn. The residual, smaller lesson: a human's manual edit is invisible
 to the ledger by construction (hooks see agent tool-calls only), so evidence docs can go stale
 against human edits with no record — a known, acceptable bound worth one line in HOOKS.md.
+
+### Correction to finding 3 above (Fable re-derivation from source, 2026-07-09)
+"Architecturally unreachable" was WRONG — overstated by conflating two causes. True mechanism:
+(a) cross-repo delegated agents miss the interceptor entirely (hook config is launch-dir-scoped
+— real, but irrelevant to real use); (b) THE ACTUAL BUG: stamp_intercept.py's matcher
+(_is_ledger_psql) requires the literal token `psql` naming the db — `./led ...` hides psql
+inside the script, so every led-mediated write is passed through UNSTAMPED even in
+toy-launched sessions. Evidence: rows 10-14 (raw psql, run 0) are stamp_verified=t/'main';
+every led-written row unstamped. led is an accidental instance of the docstring's own
+"script-evasion tripwire". Fix (post-run-2, hooks frozen meanwhile): extend the matcher to
+match led invocations; the existing `export PGOPTIONS` mechanism inherits into the script's
+psql with zero led changes. After the fix, independence='technical' is witnessable in ONE
+toy session (main-thread author vs subagent reviewer = distinct agent ids per hook context).
+Separate-process reviewer remains the stronger optional form, not a requirement.
