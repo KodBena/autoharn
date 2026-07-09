@@ -1377,3 +1377,22 @@ README foreclosure. Same residuals and GitHub-Support-purge recommendation as in
 Class fix folded into the pre-push gate item: the gate's default posture is ALLOWLIST
 (nothing binary, nothing under ephemera/, nothing under */sources/), because both
 incidents were default-open publishing of classes the old process excluded by prose.
+
+## s19 residue: validate_* triggers resolve the ledger via SESSION search_path, and SET ROLE voids the login-default premise (2026-07-09, toy-kernel walkthrough)
+
+s19's closure statement scoped `validate_enacts/review/amends/answers` OUT of the
+search-path class with the justification "resolved by the role's login search_path"
+(s19-trigger-search-path.sql §QUANTIFICATION, bullet 3). That premise holds only when the
+writer LOGS IN as the ledger role. The documented usage pattern — QUICKSTART and the
+WALKTHROUGH both connect as the owner and `SET ROLE` — does NOT apply the target role's
+`ALTER ROLE … SET search_path` (a Postgres semantics fact: per-role settings apply at
+session start, not at SET ROLE). Today this is masked because both docs also issue an
+explicit `SET search_path`; drop that line and every LINKED insert (enacts/amends/answers/
+review) fails `relation "ledger" does not exist`, while plain decisions still work — a
+half-broken state discovered only when the user first exercises the linking vocabulary,
+i.e. exactly when they try the interesting features. Fix shape (the s19 denomination, one
+more application of the same mechanism): a future sNN delta gives the four validate_*
+functions the same per-function `SET search_path = :"schema", pg_temp` carried by
+set_actor/set_stamp, closing the whole in-chain family instead of leaving a
+prose-guarded residue. Until then the SET line is documented as REQUIRED in the
+WALKTHROUGH (done 2026-07-09). Not maintainer-ratified; filed for ruling.
