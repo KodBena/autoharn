@@ -1592,3 +1592,8 @@ existing deployment (autoharn's own + toy's, both on `192.168.122.1` today) — 
 SAME pass that rewires the hook to read a project's `deployment.json` (the natural home for
 `E13_GATE_HOST` to be set FROM, via the scaffold's settings.json template, exactly as
 `E13_GATE_DB`/`E13_SUBJECT_ROOT`/etc. already are).
+
+### s20 apply sequencing (maintainer, 2026-07-09, verbal)
+NOT YET: toy run 1 (all-Sonnet, countersign prompt) is mid-flight — the deployment stays
+frozen under a running experiment. Sequence ruled: run 1 completes → s20 applied to toycolors
+(one-liner above) → run 2 starts fresh on the upgraded kernel. Two clean runs, deliberately.
