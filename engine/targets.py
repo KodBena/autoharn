@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-09T09:53:09Z
-#   last-change: 2026-07-09T10:10:56Z
+#   last-change: 2026-07-09T11:07:26Z
 #   contributors: be693afb/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -27,17 +27,45 @@ registry (nla, e15-e18, toy) + the `^s\\d+[a-z]*$` scratch pattern (the banked l
 their probe/mirror kin -- s13probe, s14probe -- any future kernel-lineage session or derived mirror)
 + the `.*_scratch$` scratch pattern (the apparatus-authored throwaway schemas engine/*_scratch.py and
 engine/tests/*.py hand-author in `epistemic` -- marriage_acts_scratch, marriage_support_scratch,
-marriage_dto_scratch, marriage_diff_scratch, marriage_dto_exercise_scratch) + the
-LEDGER_DB/LEDGER_SCHEMA/LEDGER_KERN env override (a one-off target, e.g. a scratch mirror). Named as
-NOT covered here (filed, not silent): the apply/arm step emitting a machine-readable deployment
-record (future arm work, BACKLOG.md); finding 51's `name='subject'` principal-actor assumption
-(instruments/ledger_target.py's own remediation, this module does not import it); toy-side env
-defaults in toy-project/led + .claude/settings.json (already one home per file, out of this diff);
-a handful of ad hoc historical `epistemic` schemas (e15_acts_join, lab_join_a, mock_e15_synth,
-perf_join_e15, `ref`, and kin) that exist on disk but are NOT resolved by name anywhere in the
-current engine/instruments/tests surface (verified empirically against `pg_namespace` and every
-`resolve`/`export`/`*_manifest`/`*_edb` call site in the tree) -- engine/acts_join.py's
-`_read_ledger` is the one live, untested exception (BACKLOG.md).
+marriage_dto_scratch, marriage_diff_scratch, marriage_dto_exercise_scratch) + a deployment-record
+file (LEDGER_DEPLOYMENT=path, design/OPUS-READINESS.md move 1 -- see "THIRD RESOLUTION SOURCE"
+below) + the LEDGER_DB/LEDGER_SCHEMA/LEDGER_KERN env override (a one-off target, e.g. a scratch
+mirror). Named as NOT covered here (filed, not silent): the apply/arm step AUTO-EMITTING a
+deployment record at kernel-apply time (future arm work, BACKLOG.md -- `bootstrap/new-project.sh`
+emits one at SCAFFOLD time, a distinct, already-covered act); finding 51's `name='subject'`
+principal-actor assumption (instruments/ledger_target.py's own remediation, this module does not
+import it); toy-side env defaults in toy-project/led + .claude/settings.json (deliberately
+UNTOUCHED this increment -- a live session reads `led`/the hooks per-event right now, so rewiring
+either to read a deployment record is deferred, not forgotten); a handful of ad hoc historical
+`epistemic` schemas (e15_acts_join, lab_join_a, mock_e15_synth, perf_join_e15, `ref`, and kin) that
+exist on disk but are NOT resolved by name anywhere in the current engine/instruments/tests surface
+(verified empirically against `pg_namespace` and every `resolve`/`export`/`*_manifest`/`*_edb` call
+site in the tree) -- engine/acts_join.py's `_read_ledger` is the one live, untested exception
+(BACKLOG.md).
+
+THIRD RESOLUTION SOURCE (design/OPUS-READINESS.md move 1): `LEDGER_DEPLOYMENT=/path/to/deployment.json`
+names a deployment record (shape owned by `filing/deployment_record.py`, the ONE home for that JSON
+shape -- this module imports it rather than growing a second parser, per ADR-0012 P1/P7 applied
+within one language). PRECEDENCE, stated once and justified: **explicit registry > deployment file >
+LEDGER_DB/LEDGER_SCHEMA/LEDGER_KERN env vars.** The registry wins over BOTH because it is the
+curated, reviewed set this module exists to protect -- letting an ambient env var or a stray file
+silently redirect a KNOWN name (`toy`, `nla`, ...) to a different database is exactly the "silent
+wrong database" defect class this module was built to foreclose (see the module's opening defect
+class, first bullet); the registry must out-rank anything an operator's shell or a copied deployment
+file could set by accident. The deployment file outranks the bare env vars because it is a
+CHECKED-IN, reviewable artifact naming one project's own ledger end-to-end (db+host+schema+kern+role,
+`filing/deployment_record.py`'s `DeploymentRecord`), where the three bare env vars are an
+undocumented-by-construction, easily-mistyped one-off (no file, no review, three independent strings
+that must agree) -- kept only for back-compatibility with a scratch-mirror workflow that predates the
+deployment-record shape. This is a DELIBERATE PRECEDENCE FLIP from this module's pre-move-1 behavior
+(env vars used to be checked FIRST, silently overriding even a known registry name) -- the flip
+strengthens the invariant rather than weakening it, for the reason above; no caller in this tree relies
+on the old ordering (verified: LEDGER_DB/LEDGER_SCHEMA/LEDGER_KERN are set nowhere in this repo outside
+this module's own docstring-documented one-off use). Only `db`/`schema`/`kern` cross into the returned
+`TargetInfo`; `host`/`role` are this module's honest declared exclusion -- they are real fields of a
+deployment record but not part of `TargetInfo`'s contract (host/role are instrument-local concerns,
+mirroring `instruments/ledger_target.py`'s own `subject_role` field, which `TargetInfo` has never
+carried either).
 
 Sibling axis found mid-execution (ADR-0000 2026-07-02 amendment: "the class as first named is
 presumed too narrow" -- checked outward before shipping, not after, and re-checked twice more after
@@ -56,12 +84,22 @@ patterns and still refuses loudly, so the defect class this module forecloses is
 Denomination: names are opaque strings owned by this registry; no consumer re-types them, no schema
 name is a literal in engine/instrument code.
 
-Stdlib-only, top-of-file imports (the lazy-import gate, gates/no_lazy_imports.py, applies)."""
+Stdlib imports plus one repo-local module (`filing/deployment_record.py`, reached via a
+file-relative `sys.path` insert -- the same pattern `instruments/ledger_target.py` already uses to
+reach this module) -- all top-of-file (the lazy-import gate, gates/no_lazy_imports.py, applies to
+function/method-body imports; a module-level sys.path insert + import is eager, not lazy)."""
 from __future__ import annotations
 
 import os
 import re
+import sys
 from dataclasses import dataclass
+
+_HERE = os.path.dirname(os.path.abspath(__file__))
+_REPO_ROOT = os.path.dirname(_HERE)  # autoharn root
+sys.path.insert(0, os.path.join(_REPO_ROOT, "filing"))
+
+import deployment_record  # noqa: E402  (filing/deployment_record.py, the ONE home for the deployment.json shape)
 
 _SCRATCH_RE = re.compile(r"^s\d+[a-z]*$")  # s10-s14 AND their probe/mirror kin (s13probe, s14probe)
 # the apparatus-authored throwaway-schema convention (discovered mid-execution -- see module
@@ -106,22 +144,39 @@ _KNOWN_TARGETS_MSG = (
     "known targets: " + ", ".join(sorted(_REGISTRY)) +
     "; or a scratch name matching ^s\\d+[a-z]*$ (e.g. 's10', 's13probe') or ending `_scratch` "
     "(an apparatus-authored fixture schema, e.g. 'marriage_acts_scratch'); "
+    "or set LEDGER_DEPLOYMENT=/path/to/deployment.json (a project's own deployment record); "
     "or set LEDGER_DB/LEDGER_SCHEMA/LEDGER_KERN for a one-off target")
 
 
 def resolve(name: str) -> TargetInfo:
-    """Resolve a target NAME to its (db, schema, kern). Env `LEDGER_DB`/`LEDGER_SCHEMA`/`LEDGER_KERN`
-    fully override for a one-off target (e.g. a scratch mirror) -- same precedence as before this
-    module existed. An unrecognized name is refused LOUDLY (ADR-0002): it is neither silently mapped
-    into `epistemic` nor to any other database."""
+    """Resolve a target NAME to its (db, schema, kern), in PRECEDENCE ORDER (module docstring's
+    "THIRD RESOLUTION SOURCE" section states and justifies this order):
+
+      1. the explicit `_REGISTRY` -- a known name (`toy`, `nla`, ...) ALWAYS wins here, regardless
+         of any env var or deployment file, so a curated name can never be silently redirected.
+      2. `LEDGER_DEPLOYMENT=/path/to/deployment.json` -- a project's own deployment record
+         (`filing/deployment_record.py`'s `DeploymentRecord`), read for its `db`/`schema`/`kern`
+         fields (its `host`/`role` fields are outside `TargetInfo`'s contract -- see module
+         docstring). A malformed/missing file named by `LEDGER_DEPLOYMENT` is refused LOUDLY via
+         `deployment_record.DeploymentError`, never silently skipped to the next source.
+      3. `LEDGER_DB`/`LEDGER_SCHEMA`/`LEDGER_KERN` env vars -- fully override, for a one-off target
+         (e.g. a scratch mirror); the weakest source, kept for back-compatibility.
+      4. the `^s\\d+[a-z]*$` / `.*_scratch$` scratch-naming conventions.
+
+    An unrecognized name that matches none of the above is refused LOUDLY (ADR-0002): it is
+    neither silently mapped into `epistemic` nor to any other database."""
+    if name in _REGISTRY:
+        return _REGISTRY[name]
+    dep_path = os.environ.get("LEDGER_DEPLOYMENT")
+    if dep_path:
+        dep = deployment_record.load_deployment(dep_path)  # raises DeploymentError loudly on bad input
+        return TargetInfo(db=dep.db, schema=dep.schema, kern=dep.kern)
     if os.environ.get("LEDGER_DB") or os.environ.get("LEDGER_SCHEMA") or os.environ.get("LEDGER_KERN"):
         return TargetInfo(
             db=os.environ.get("LEDGER_DB", "epistemic"),
             schema=os.environ.get("LEDGER_SCHEMA", name),
             kern=os.environ.get("LEDGER_KERN", "kernel"),
         )
-    if name in _REGISTRY:
-        return _REGISTRY[name]
     if _SCRATCH_RE.match(name):
         # the banked per-session lineages (s10-s13, and any future one): closed-evidence scratch
         # schemas in the historical apparatus database `epistemic`, kernel schema literally "kernel".
