@@ -1444,3 +1444,24 @@ amendment, fair dealing both ways); Goodharting (re-run the adversarial loop aga
 deployed version). Existing manual counterpart: the hack-rationalization-detector skill.
 When minted, record by dated amendment at ADR-0000 Revisit #3 / ADR-0013 Revisit #2
 (maintainer ratifies). Filed; not yet commissioned.
+
+## Kernel defects found by full-surface exercise on toy (2026-07-09) — proposed s20 delta
+
+Witnessed by the toy-pilot exercise run (toy-project commit 9bf80c4, ledger rows 15-30):
+(1) **countersign_obligation grants gap**: s15's GRANTS block grants SELECT on the review_gap
+VIEW but nothing (no SELECT, no INSERT) on the countersign_obligation TABLE; review_gap is
+security_invoker, so the subject role gets "permission denied" on both writing an obligation
+AND reading the gap view. The obligation→gap→countersign fix-point — s15's own preamble says
+the subject "is meant to reach for it" — is unreachable under the documented role. Letter
+of the GRANTS vs spirit of the preamble: the spirit loses at the grant layer.
+(2) **Stale views missing stamp columns**: ledger_current and countersigned_in_force are
+`SELECT l.*` views created in s15; Postgres froze the expansion before s17's ALTER TABLE added
+stamp_session/agent/ts/hmac/verified, so both views silently lack all five stamp columns
+(verified via \d). Consumers needing stamps must hit the base table.
+Fix shape: ONE new lineage delta (s20) — GRANT SELECT, INSERT ON countersign_obligation TO
+:role (mirroring the ledger's own grant posture; the not-self-assigned CHECK and append-only
+posture still govern), plus CREATE OR REPLACE of the two views with explicit column lists
+(never `l.*` again — that idiom is how this class formed). Candidate to fold in: the filed
+s19 validate_* search_path residue (above), pending its own ruling. Delta authoring is
+mechanical; APPLYING it to a deployment is the operator's/maintainer's act with explicit -v
+vars, per standing rule. Filed for ruling.
