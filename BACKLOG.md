@@ -1868,3 +1868,15 @@ whole point of the CHECK. The harness's own auto-mode classifier refused a liter
 `SELECT secret FROM stamp_secret` negative-control read (credential-materialization guard) —
 respected rather than routed around; the item-6 stamped round trip is strictly stronger
 evidence the secret is correctly wired anyway (a bit-exact HMAC match end to end).
+
+### s21 apply status (2026-07-09, end of Fable session)
+Authored, scratch-witnessed green, RATIFIED. Apply to toycolors/run3 NOT yet run: the
+executing agent's permission layer refused (its dispatch predated ratification; it correctly
+declined to treat an agent message as consent — the refusal honors "applying stays the
+maintainer's act"). The two apply one-liners are in the run-2 walkthrough (transcript) and
+below; each expects CREATE FUNCTION/TRIGGER/VIEW lines, no ERROR. Optional before run 2
+(same-session technical independence passes without s21; s21 adds cross-session correctness
++ the s19 residue cure):
+  psql -h 192.168.122.1 -d toy -v ON_ERROR_STOP=1 -v schema=toycolors -v kern=toycolors_kernel -f kernel/lineage/s21-session-aware-distinctness.sql
+  psql -h 192.168.122.1 -d toy -v ON_ERROR_STOP=1 -v schema=run3 -v kern=run3_kernel -f kernel/lineage/s21-session-aware-distinctness.sql
+After applying, a one-line BACKLOG note "s21 APPLIED <date>" keeps the record true.
