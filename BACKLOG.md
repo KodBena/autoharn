@@ -1396,3 +1396,15 @@ functions the same per-function `SET search_path = :"schema", pg_temp` carried b
 set_actor/set_stamp, closing the whole in-chain family instead of leaving a
 prose-guarded residue. Until then the SET line is documented as REQUIRED in the
 WALKTHROUGH (done 2026-07-09). Not maintainer-ratified; filed for ruling.
+
+## Ruling: layout-census gate not enforced in this repo (maintainer, 2026-07-09)
+
+`gates/layout_census.py` (LAYOUT §3.4/[C21]) is a guarantee for **downstream** template
+consumers who want their own repo's top-level tree mechanically checked against their
+LAYOUT.md — it is not a guarantee this (research) repo needs enforced on itself. Maintainer
+ruling: disable its enforcement here until further notice; this is a deliberate policy
+decision, not a workaround for an unresolved breach. `hooks/pre-commit`'s layout_census
+block was removed from the enforced chain (staging_guard -> no_lazy_imports -> fixture_census
+-> doc-legibility now runs); `gates/layout_census.py` itself is untouched and remains shipped
+tooling — a downstream instance re-adds the block to get the guarantee in its own repo. See
+`hooks/pre-commit` for the exact wiring and this note's cross-reference.

@@ -9,7 +9,9 @@
 # autoharn only when autoharn's first standing service does.
 #
 # FINAL WIRING (BUILD-BRIEF Step 9): staging_guard -> no_lazy_imports -> fixture_census
-# -> layout_census -> doc-legibility. doc-legibility is wired REPORT-ONLY (runs and prints,
+# -> layout_census -> doc-legibility. layout_census is DISABLED here as of the maintainer
+# ruling below (2026-07-09); it still appears in this history note as the Step-9 design.
+# doc-legibility is wired REPORT-ONLY (runs and prints,
 # does not block): the C15 scope-widening to ALL tracked *.md surfaces ~1429 acronym reports
 # over the migrated corpus — mostly the crude heuristic misfiring on all-caps emphasis words
 # and standards acronyms in docs never written against it. Making it a BLOCKING gate over the
@@ -45,11 +47,11 @@ PY="$HOME/w/vdc/venvs/generic/bin/python"
     exit 1
 }
 
-"$PY" "$REPO_ROOT/gates/layout_census.py" || {
-    echo "" >&2
-    echo "pre-commit: layout census FAILED — commit refused (the designed tree is breached, LAYOUT §1/C21)." >&2
-    exit 1
-}
+# layout_census — DISABLED here (maintainer ruling, 2026-07-09): research repo, census is for
+# downstream instances; disabled until further notice. gates/layout_census.py is untouched and
+# remains shipped tooling — a downstream template consumer re-enables this block to get the
+# ls-legibility guarantee in their own repo. Not removed from gates/, only from this hook's
+# enforced set.
 
 # doc-legibility — REPORT-ONLY (see header): runs for visibility, never blocks, pending the
 # corpus acronym-sweep (BACKLOG / finding 48). Its exit code is deliberately NOT propagated.
