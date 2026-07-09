@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-06T16:54:20Z
-#   last-change: 2026-07-06T23:12:26Z
-#   contributors: 37017f46/main
+#   last-change: 2026-07-09T09:59:20Z
+#   contributors: 37017f46/main, be693afb/main
 # <<< PROVENANCE-STAMP <<<
 
 """acts_edb -- the ACTS EDB + SQL floor for the ledger_acts.lp consumers (consult 25 §2.3).
@@ -48,7 +48,7 @@ import os
 import sys
 
 from clingo_run import quote_term
-from ledger_edb import PGHOST, Target, export, resolve
+from ledger_edb import PGHOST, Target, export
 
 # The shown vocabulary of ledger_acts.lp -- the differential compares both producers on exactly these.
 ACTS_PREDS = ("act_ledgered", "unledgered_lr", "claim_matched",
@@ -56,10 +56,20 @@ ACTS_PREDS = ("act_ledgered", "unledgered_lr", "claim_matched",
               "claimed_without_act", "unledgered_span")
 
 
+def _epistemic_target(schema: str) -> Target:
+    """This module ALWAYS reasons over an apparatus-authored scratch schema in `epistemic`
+    (`marriage_acts_scratch` and kin) -- never a registered deployment target (nla/e15-e18/toy), so
+    it constructs its `Target` directly rather than through `ledger_edb.resolve()` / `targets.resolve()`
+    (engine/targets.py, design/USE-MODE-ENGINE-WIRING.md item 1): those now refuse LOUDLY on a name
+    outside the registry (the toy-collision defect they were built to foreclose), and an apparatus
+    scratch schema name was never meant to pass through that registry at all."""
+    return Target(schema, db="epistemic", schema=schema, kern="kernel")
+
+
 def acts_manifest(schema: str) -> dict[str, str]:
     """Capability manifest for the acts layer (§5, F49). Every family PRODUCED or DEFERRED with its
     basis -- a scratch lineage lacking the acts side tables gets the consumers DEFERRED, never silent."""
-    t = resolve(schema)
+    t = _epistemic_target(schema)
     has_acts = t.has_relation(f"{schema}.acts")
     m: dict[str, str] = {}
     for fam in ("act_ledgered", "unledgered_lr", "unledgered_span"):
@@ -84,7 +94,7 @@ def acts_edb(schema: str) -> str:
         base = export(schema).edb_text()
     finally:
         del os.environ["LEDGER_DB"], os.environ["LEDGER_SCHEMA"]
-    t = resolve(schema)
+    t = _epistemic_target(schema)
     lines = [base, "% ---- acts EDB (scratch-only; oracle §4 relevance baked into `relevant`) ----"]
     for row in t.rows(f"SELECT id, coalesce(target,'') , relevant::text FROM {schema}.acts ORDER BY id;"):
         aid, tgt, rel = row
@@ -111,7 +121,7 @@ def acts_edb(schema: str) -> str:
 def acts_floor_atoms(schema: str) -> set[str]:
     """The SQL floor's acts-consumer atoms for `schema` (read-only). Reuses the id-ordered
     supersession closure (P1: one home for in_force/superseded). Gaps-and-islands for the spans."""
-    t = resolve(schema)
+    t = _epistemic_target(schema)
     rel = t.rel()
     # verdict-aware staleness (finding 29): split `stale` by review_detail.verdict, but ONLY where the
     # relation exists (matching the ASP, which emits stale_attest/nonattest only where review_verdict is

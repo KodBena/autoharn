@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-06T05:33:12Z
-#   last-change: 2026-07-07T15:28:15Z
-#   contributors: 37017f46/main
+#   last-change: 2026-07-09T09:59:53Z
+#   contributors: 37017f46/main, be693afb/main
 # <<< PROVENANCE-STAMP <<<
 
 """ledger_edb -- the single home for "what the ledger looks like to a logic engine"
@@ -21,10 +21,12 @@ each with its reason (a missing column, a text-actor model, an absent apparatus
 relation). A capability a caller REQUESTS that the target lacks is refused LOUDLY
 (ADR-0015 Rule 4), never a silent empty.
 
-TARGET RESOLUTION mirrors the operator SSOT `instruments/ledger_target.py` (by name
--> {db, schema}); the cross-repo fact is PINNED BY A PARITY TEST (test_ledger_edb.py
-:: test_target_parity_against_operator_ssot), never imported and never hand-synced
-silently -- a kernel/operator change lands as a red parity test (design §10 posture).
+TARGET RESOLUTION derives from the ONE home `engine/targets.py` (design/USE-MODE-ENGINE-WIRING.md
+item 1; ADR-0012 P1) -- the same home `instruments/ledger_target.py` derives from, so the two are
+never hand-synced duplicate copies. The db/schema agreement with the operator SSOT is still PINNED
+BY A PARITY TEST (engine/tests/test_ledger_marriage.py :: test_target_parity_against_operator_ssot),
+run by subprocess against a fresh interpreter that only has `instruments/` on sys.path -- a kernel/
+operator change, or a drift in either consumer's own derivation, lands as a red parity test.
 
 IDS ARE THE INTERCHANGE; TEXT STAYS HOME (design §3 rule 1): no statement/rationale
 text crosses into the EDB (`amends_scope` crosses as its length only). Every ordering
@@ -50,6 +52,8 @@ import subprocess
 import sys
 from dataclasses import dataclass, field
 
+import targets
+
 PGHOST = os.environ.get("EPISTEMIC_PGHOST", "192.168.122.1")
 FS, RS = "\x1f", "\x1e"
 
@@ -60,20 +64,24 @@ FS, RS = "\x1f", "\x1e"
 # targets rather than silently omitted.)
 ALWAYS = ("entry", "supersedes", "enacts")
 COLUMN_GATED = {"amends": "amends", "answers": "answers"}
-# kernel-shape families: present only where the actor column is a kernel.principal id and
-# a `regards` attestation column exists. Declared-excluded (with reason) everywhere else.
+# kernel-shape families: present only where this target's KERNEL schema (`kern`) carries a
+# `principal` relation and the ledger has a `regards` attestation column. Declared-excluded
+# (with reason) everywhere else.
 KERNEL_SHAPE = ("regards", "review_verdict", "review_independence",
                 "obliged", "acts_for", "agent_class")
 
 
 @dataclass(frozen=True)
 class Target:
-    """Where a ledger lives (name -> {db, schema}) and its actor model. Mirrors
-    instruments/ledger_target.py; pinned by a parity test, never imported."""
+    """Where a ledger lives (name -> {db, schema, kern}). Constructed from `targets.resolve()`
+    (engine/targets.py, the ONE home -- ADR-0012 P1); the same home `instruments/ledger_target.py`
+    derives from, so the two are never hand-synced duplicate copies. The db/schema agreement with
+    the operator SSOT is pinned by a parity test (test_ledger_marriage.py ::
+    test_target_parity_against_operator_ssot), never by a shared import."""
     name: str
     db: str
     schema: str
-    actor_is_principal: bool  # True on the kernel lineage; False on nla (text role)
+    kern: str  # this target's KERNEL schema name (e.g. "kernel", or toy's "toycolors_kernel")
 
     def rel(self, table: str = "ledger") -> str:
         return f"{self.schema}.{table}"
@@ -101,40 +109,12 @@ class Target:
         return self.scalar(f"SELECT to_regclass('{qualified}') IS NOT NULL;") == "t"
 
 
-# The ONE home mapping a target NAME to where it lives (the ledger_target.py SSOT,
-# mirrored -- parity-pinned). Special targets explicit; any other name is a schema in
-# the historical apparatus database `epistemic` (the closed per-session lineages).
-_SPECIAL: dict[str, tuple[str, str, bool]] = {
-    # the live, isolated e14 record: its own database, schema public, a single TEXT-role
-    # actor (nla_rw) -- NO kernel.principal, NO regards.
-    "nla": ("nla", "public", False),
-    # e15: the s15 subject kernel in the fresh isolated opaque db `vsr` (consult 25 §2.3 / A.3).
-    # KERNEL-SHAPE (actor is a kernel.principal id, regards present) -- unlike nla's text actor. Mirrors
-    # instruments/ledger_target.py; the marriage differential resolves the s15 export from here.
-    "e15": ("vsr", "public", True),
-    # e16: the s16 subject kernel in the fresh isolated opaque db `hvn` (s15 byte-identical). Mirrors
-    # instruments/ledger_target.py; the marriage/perf differentials resolve the s16 export from here.
-    "e16": ("hvn", "public", True),
-    # e17: the s17 subject kernel (s15 + stamps + independence vocabulary) in the fresh isolated opaque db
-    # `wmb` (label kt3, role wmb_rw). Mirrors instruments/ledger_target.py.
-    "e17": ("wmb", "public", True),
-    # e18: the s18 subject kernel (s18 = s17 byte-identical, Addendum A) in the fresh isolated opaque db
-    # `qbx` (label jm7, role qbx_rw; reviewer roles qbx_rev1/qbx_rev2). Mirrors instruments/ledger_target.py.
-    "e18": ("qbx", "public", True),
-}
-
-
 def resolve(name: str) -> Target:
-    """Resolve a target NAME to its Target. Env LEDGER_DB/LEDGER_SCHEMA override for a
-    one-off (e.g. the DTO scratch mirror). A non-special name is a schema in `epistemic`."""
-    if os.environ.get("LEDGER_DB") or os.environ.get("LEDGER_SCHEMA"):
-        db = os.environ.get("LEDGER_DB", "epistemic")
-        schema = os.environ.get("LEDGER_SCHEMA", name)
-        return Target(name, db=db, schema=schema, actor_is_principal=(db != "nla"))
-    if name in _SPECIAL:
-        db, schema, actor_principal = _SPECIAL[name]
-        return Target(name, db=db, schema=schema, actor_is_principal=actor_principal)
-    return Target(name, db="epistemic", schema=name, actor_is_principal=True)
+    """Resolve a target NAME to its Target, via the ONE home `targets.resolve()`
+    (engine/targets.py). An unrecognized name is refused loudly there (ADR-0002) --
+    never silently mapped to `epistemic` or any other database."""
+    ti = targets.resolve(name)
+    return Target(name, db=ti.db, schema=ti.schema, kern=ti.kern)
 
 
 @dataclass(frozen=True)
@@ -224,8 +204,8 @@ def export(name: str) -> EdbExport:
     has_amends = t.has_col("amends")
     has_answers = t.has_col("answers")
     has_regards = t.has_col("regards")
-    kernel_principal = t.has_relation("kernel.principal")
-    kernel_shape = has_regards and t.actor_is_principal and kernel_principal
+    kernel_principal = t.has_relation(f"{t.kern}.principal")
+    kernel_shape = has_regards and kernel_principal
 
     for fam in ALWAYS:
         exp.capabilities.append(Capability(fam, produced=True, capable=True,
@@ -250,9 +230,8 @@ def export(name: str) -> EdbExport:
                        "family, but it is NOT emitted this increment (no T_now consumer yet) -- "
                        "emission DEFERRED; require() refuses, never a silent empty"))
         else:
-            why = ("actor is a text role, not a kernel.principal" if not t.actor_is_principal
-                   else "no `regards` column on this schema"
-                   if not has_regards else "kernel.principal relation absent")
+            why = ("no `regards` column on this schema" if not has_regards
+                   else f"no `{t.kern}.principal` relation on this schema")
             exp.capabilities.append(Capability(
                 fam, produced=False, capable=False, reason=f"kernel-shape only -- {why}"))
 

@@ -1,4 +1,10 @@
 #!/usr/bin/env python3
+# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
+#   first-seen : 2026-07-09T10:05:47Z
+#   last-change: 2026-07-09T10:05:47Z
+#   contributors: be693afb/main
+# <<< PROVENANCE-STAMP <<<
+
 """verify_substrate_required — the standing fixture for the consumer-substrate-required guard (forecloses
 finding 36: close_manifest.py hardcoded e15-pinned module-global defaults for the acts `--fenced` dir and
 the row_performed_by `--session-dir`, so a bare `close_manifest.py e16 --mode close` measured e15's fence +
@@ -20,9 +26,13 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import close_manifest as cm  # noqa: E402
 
-# A consumer-bearing target with NO registered substrate: not in ledger_target._SPECIAL, so resolve()
-# returns fenced_dir=None + subject_session_dir=None. We add it to the consumer-target set for the check.
-FAKE_TARGET = "unregistered_substrate_demo"
+# A consumer-bearing target with NO registered substrate: not in ledger_target's per-target extras, so
+# resolve() returns fenced_dir=None + subject_session_dir=None. We add it to the consumer-target set for
+# the check. The name is scratch-shaped (`_scratch` suffix, design/USE-MODE-ENGINE-WIRING.md item 1 /
+# engine/targets.py) so it still resolves a valid (db, schema) via the apparatus-scratch pattern -- only
+# db/schema/kern are registry-derived now; the SUBSTRATE fields (fenced_dir/subject_session_dir) stay
+# instrument-local and this name is deliberately absent from that extras registry.
+FAKE_TARGET = "unregistered_substrate_demo_scratch"
 
 
 def check() -> list[str]:
