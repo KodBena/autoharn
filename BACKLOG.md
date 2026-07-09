@@ -1465,3 +1465,33 @@ posture still govern), plus CREATE OR REPLACE of the two views with explicit col
 s19 validate_* search_path residue (above), pending its own ruling. Delta authoring is
 mechanical; APPLYING it to a deployment is the operator's/maintainer's act with explicit -v
 vars, per standing rule. Filed for ruling.
+
+## engine/acts_join.py `_read_ledger` still leans on the pre-registry epistemic fallthrough (2026-07-09, USE-MODE-ENGINE-WIRING items 1-3)
+
+Class (ADR-0000 2(a) form): a caller that resolves a ledger target by name, but was written
+against the OLD "any unrecognized name defaults to a schema in `epistemic`" convention, is
+representable — and, unlike its siblings, was not fixed in this increment because it is
+UNTESTED and off-mandate. Discovered while wiring `engine/targets.py` as the one home for
+(db, schema, kern) resolution (design/USE-MODE-ENGINE-WIRING.md items 1-3): `engine/
+ledger_edb.py` and `instruments/ledger_target.py` now refuse an unrecognized target name
+loudly (the toy-collision defect the spec forecloses), with the registry widened during this
+same increment to also accept the apparatus-scratch (`.*_scratch$`) and lineage-mirror
+(`^s\d+[a-z]*$`, e.g. `s13probe`) naming conventions that the live test/instrument surface
+already depends on (verified against every `resolve`/`export`/`*_manifest` call site under
+`engine/`, `engine/tests/`, and `instruments/`, plus the `pg_namespace` schema list on
+`epistemic`). `engine/acts_join.py`'s `_read_ledger(source_name)` (and `resolve_ledger =
+ledger_edb.resolve`) is the one remaining call site whose OWN docstring documents the exact
+pre-registry convention ("special targets: e15->vsr; a plain name is a schema in
+`epistemic`") for an arbitrary `source_name` — e.g. `drive/rehearsal/rehearse.py`'s
+`mock_e15_synth`, which matches none of the widened patterns. No test in `engine/tests/`
+exercises `build_join`/`run_close`/`_read_ledger` (confirmed by grep), so this increment's
+"everything else must pass" bar does not require touching it, and a live-DB-dependent fix
+here cannot be verified without a real run — hence filed, not patched speculatively.
+Fix shape: either (a) give `_read_ledger` its own explicit fallback (catch `targets.py`'s
+`ValueError` and construct an `epistemic`-schema `Target` directly, mirroring the
+`engine/acts_edb.py` fix this increment DID make for its three analogous call sites), or
+(b) decide the acts-join/rehearsal surface should also refuse an unrecognized name loudly
+and update its callers' names to the registry's closed vocabulary. Either is a small,
+mechanical change; it needs a live run (or a new test) to verify, which is why it is filed
+rather than guessed at. Sibling of the `.*_scratch$`/`^s\d+[a-z]*$` widenings recorded in
+`engine/targets.py`'s own docstring.
