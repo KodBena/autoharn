@@ -1664,3 +1664,18 @@ main-thread review claiming technical is FALSELY REFUSED as same-invocation. Fai
 forecloses the "separate interactive reviewer session" idiom as the DDL stands (e18's
 reviewers passed only as subagents). Fix shape: key distinctness on the (stamp_session,
 stamp_agent) PAIR in both the trigger and the view; future sNN delta, needs maintainer ruling.
+
+## Ruling: one world per run (maintainer, 2026-07-09, "many-worlds" argument)
+
+A run's subject must not see sibling runs' history — branches share only the branch point
+(the kernel apply: schema/triggers/secret/roles), never each other's ledgers. ledger_current/
+T_now over a mixed ledger computes "in force" ACROSS universes — epistemically wrong for the
+in-world agent (cribbing, bias, cross-world in-force leakage). Precedent: the e-series already
+practiced this (one db per experiment: vsr/hvn/wmb/qbx); toy deviated by reusing toycolors
+across runs 0-2. Consequences: (a) per-run schema becomes the DEFAULT for experiment runs —
+scaffold/new-project.sh grows a new-world mode (apply watermark chain + s20 into runNN
+schemas, fresh deployment.json); (b) pickup/bootstrap queries are branch-local by
+construction; (c) cross-run comparison is the analyst layer's job, from outside, via the
+engine over any named world; (d) run 2 is RECORDED as contaminated by run-1 visibility —
+results read with that caveat; run 3 starts in a fresh world. Never flush: worlds are opened,
+not emptied.
