@@ -42,6 +42,12 @@
 - **Claims carry witnesses.** A report states, per item: WITNESSED (with observed output),
   REFUSED-AS-EXPECTED, or UNEXERCISED with the concrete blocker. Docs follow the same rule
   (an example carries real output or an UNWITNESSED mark). No umbrella claims.
+- **Self-application (maintainer ruling 2026-07-09).** The harness's own operations meet the
+  harness's bar. No operator procedure ships as prose steps + hand-pasted SQL/bash where a
+  scripted, witnessed verb is possible — run 2's world was broken at birth by exactly that
+  gap (unscripted scaffold-to-/tmp + hand-mv). And every orchestrator choice or judgment is
+  explained on the record at the moment it is made; an unexplained decision has the same
+  standing as an unwitnessed claim.
 - **Never modify hooks/ or a user project while a live session runs there.**
 
 ## Lazy imports are BANNED (maintainer edict, 2026-07-02)
