@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "autoharn/design/refgraph/schema.json",
+  "title": "autoharn reference-graph instance",
+  "description": "SSOT for the reference graph. Nodes are directories or files (never sub-file). Edges are typed directed references. See SCHEMA.md for the vocabulary's meaning.",
+  "type": "object",
+  "required": ["version", "nodes", "edges"],
+  "additionalProperties": false,
+  "properties": {
+    "version": { "type": "string" },
+    "generator": { "type": "string", "description": "what produced this instance (e.g. 'deterministic-pass v1' or 'sonnet-enrichment v1')" },
+    "nodes": { "type": "array", "items": { "$ref": "#/$defs/node" } },
+    "edges": { "type": "array", "items": { "$ref": "#/$defs/edge" } }
+  },
+  "$defs": {
+    "node": {
+      "type": "object",
+      "required": ["id", "label", "granularity", "kind"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "description": "repo-relative path; stable identity" },
+        "label": { "type": "string" },
+        "granularity": { "enum": ["directory", "file"] },
+        "kind": { "enum": ["doc", "python", "sql", "shell", "config", "dir", "other"] },
+        "parent": { "type": "string", "description": "containing directory node id; omit for top-level" },
+        "dirclass": { "enum": ["CORE", "DOC", "RESEARCH", "OTHER"] },
+        "mode": { "enum": ["use", "study", "shared"] },
+        "vestigial": { "type": "boolean" },
+        "vestigial_reason": { "type": "string" }
+      }
+    },
+    "edge": {
+      "type": "object",
+      "required": ["source", "target", "type"],
+      "additionalProperties": false,
+      "properties": {
+        "source": { "type": "string", "description": "node id" },
+        "target": { "type": "string", "description": "node id" },
+        "type": { "enum": ["imports", "applies", "invokes", "wires", "cites", "enforces", "tests", "supersedes"] },
+        "evidence": { "type": "string", "description": "path:line, or a note for interpretive edges" },
+        "note": { "type": "string" }
+      }
+    }
+  }
+}
