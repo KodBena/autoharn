@@ -2123,3 +2123,46 @@ Ledger/git/transcript verification (Sonnet, read-only) of run 7's completion cla
   budgets). No existing gate can see this. This is the artifact-vs-requirements detector class
   (run-5 implementer's analysis), now witnessed as a real blind spot: the next mechanization
   frontier, deliberately NOT rushed — it needs a design pass, not a regex.
+
+## Session 2026-07-11: Opus-readiness pass + HANDOFF items 1-2 discharged to their honest depth
+
+Orchestrator: Fable (this entry written at the moment of the acts, per the
+self-application ruling). Four acts, each with its artifact:
+
+1. **Opus fresh-context probe (the readiness test run as an experiment, not asserted).**
+   An Opus-model agent with zero working context read the committed entry docs and
+   reported comprehension gaps. BLOCKING findings: the two-cwd model (verbs live in
+   worlds, not in autoharn) stated nowhere; GLOSSARY.md carried ZERO occurrences of
+   "world"/"run"/"birth chain" (its own Stand-Alone Principle violated); the four ADRs'
+   chocofarm-native scope/paths freeze-or-bluff a newcomer. FRICTION: run-8 resume
+   command written nowhere; "s15→s22" compresses a chain with no s16 and s18 excluded;
+   judge verdicts detectable but not diagnosable from the operating set. FIXES LANDED
+   same session: OPERATING-CARD.md (≤200-line orientation: two-cwd model, vocabulary,
+   verbs, start/RESUME commands, delta decision tree, hooks×kernel map, verification
+   checklist, ADR-foreign-substrate note), GLOSSARY operating-era section (9 terms),
+   HANDOFF reading-order item 0. The probe's full report is session ephemera
+   (local-only, per ruling); its load-bearing claims were re-verified at source before
+   any fix landed (GLOSSARY grep, lineage README, new-project.sh chain).
+2. **HANDOFF item 1 discharged as designed:** design/ARTIFACT-VS-REQUIREMENTS-DETECTOR.md
+   (memo, not spec — deliberately). Key verified fact: run7 was scaffolded 21:18:32Z,
+   AFTER the assumption discipline landed (a9e7f52, 18:02 UTC), so run-7 finding 2 is a
+   RECURRENCE of an in-force written discipline — the ADR-0011 Rule 2 warrant. Design:
+   totality move (explicit assumption-disposition per increment; silence stops being a
+   legal state) as free Register 1 on the stop-gate/pickup chassis; out-of-frame
+   classifier (demurral chassis, default OFF) as costed Register 2, built only on
+   witnessed Register-1 residue. One open design question (disposition→increment
+   attachment) deliberately parked for run-8 evidence.
+3. **HANDOFF item 2 discharged as drafted:** design/REVIEW-GAP-SCOPE-SEMANTICS-RULING.md
+   — one prepared yes/no (recommend ratifying principal-wide semantics; scope = label).
+   Root cause of both paid episodes was DIRECTION, not scope. Related Sonnet-sized fix
+   LANDED: led.tmpl obligate teach-text now spells out direction/worker-not-reviewer/
+   label-not-filter/over-catch + worked example (Sonnet-executed, Fable-reviewed; the
+   agent also caught actively-wrong text conflating self-ASSIGNMENT with
+   self-REGISTRATION). NOTE: run5/run6/run7/toy-project carry materialized led copies
+   that predate this teach-text — templates reach only future worlds; existing worlds
+   keep their birth copy (accepted: led is world-frozen by design, same as the kernel).
+4. **Run 8 prepared, not started:** live claude session observed in run7 (pid checked at
+   /proc/<pid>/cwd, started 23:18 local 2026-07-10 — run 7's own terminal still open),
+   so run7 remains hands-off; resumption walkthrough delivered to the maintainer in the
+   session reply; resume commands also now in OPERATING-CARD (marked UNWITNESSED until
+   run 8 banks the witness).
