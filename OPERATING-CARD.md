@@ -115,6 +115,7 @@ history — the ceremony it guarded has no legitimate scenario).
 | stamp_intercept.py | PreToolUse Bash | injects HMAC stamp as PGOPTIONS, unconditionally | enforce |
 | clean_exit (stop_clean_exit.py) | Stop | review_gap / question_status / open work / violations; blocks dirty stop (3-strike breaker) | enforce |
 | mutation_observer (posttooluse_mutation_observer.py) | Post Bash | find -newer sweep; warns on mutation with no work item | observe (enforce impossible) |
+| delegation_observer (pretooluse_delegation_observer.py) | PreToolUse Task/Agent | journals every subagent dispatch; warns when no open+claimed work item | observe |
 | demurral_detect.py | AskUserQuestion, Stop | out-of-frame Rule-3 classifier; warns only | **OFF (costs money)** |
 
 Before ANY hooks/ edit: verify no wired session is live — `pgrep -a claude` then
