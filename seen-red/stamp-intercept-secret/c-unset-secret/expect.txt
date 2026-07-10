@@ -1,3 +1,4 @@
 -STAMP_SECRET is configured
 -permissionDecision
 -PGOPTIONS
+-app.vendor_invocation=

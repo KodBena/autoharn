@@ -1,0 +1,47 @@
+seen-red/stamp-intercept-invocation-token — banked RED evidence (both-polarity proof, fixture-census)
+
+design/CONTEMPORANEITY-AUDIT.md Part 1 (BACKLOG "Contemporaneity indictment", 2026-07-11): a ledger
+row's `ts` is INSERT time and nothing binds a row to the tool INVOCATION that wrote it, so honest
+simultaneity and run-5-style backfill are the same row shape. The fix mints a per-Bash-invocation UUID
+in hooks/stamp_intercept.py, exports it as a sixth GUC (app.vendor_invocation) captured by the s23
+kernel column stamp_invocation, and journals (token, wall-clock, session_id, command sha256, head) to
+.claude/logs/invocations.jsonl so a later `audit` verb can join the two machine-recorded sides.
+
+BEFORE the change (the PRE-feature hook = HEAD; this feature's edits are an uncommitted working-tree
+change, so `git show HEAD:hooks/stamp_intercept.py` is the byte-held pre-feature version — run
+standalone as a scratch copy against a healthy wired world, real output, 2026-07-11):
+
+  echo '{"tool_name":"Bash","tool_input":{"command":"psql -d toy -c '\''select 1'\''"},"cwd":"<world>","session_id":"red-sess"}' \
+    | STAMP_SECRET=<world>/.claude/secrets/stamp_secret.hex python3 <HEAD hooks/stamp_intercept.py>
+
+  injected: export PGOPTIONS='-c app.vendor_session=red-sess -c app.vendor_agent=main \
+              -c app.vendor_ts=1783726858 -c app.vendor_hmac=be0374871ec731533d213ef68522939520353dafe575feb0a16575cfc4a01560'; \
+              psql -d toy -c 'select 1'
+  has app.vendor_invocation: False           <-- the sixth GUC does not exist yet
+  invocations.jsonl exists after HEAD hook: NO   <-- no correlation journal is written
+
+  So before this change there is NOTHING binding a ledger row to the command that wrote it: the four
+  HMAC GUCs identify session+agent, never the individual invocation, and no journal records the
+  actual wall-clock/command of each Bash call. That absence IS the contemporaneity defect.
+
+AFTER the change (run_fixtures.py, real output, 2026-07-11):
+
+  a-healthy-injects-and-journals (POSITIVE): the injected command carries
+    `app.vendor_invocation=272bae78-3f32-40a3-8435-4206e7de88d4` AND invocations.jsonl gains exactly
+    one line whose `token` EQUALS that uuid, carrying wall_clock/session_id/command_sha256/
+    command_head (+ tool_use_id when the payload has one) — the token in PGOPTIONS and the token in
+    the journal MATCH (the correlation, not a substring).
+  b-off-mode-no-token-no-journal (NEGATIVE): apparatus mode="off" -> command untouched, no token,
+    no journal (an off-mode world is an UNJOURNALED ERA to the audit verb, never "no findings").
+  c-unwired-no-token-no-journal (NEGATIVE): no deployment.json, STAMP_SECRET unset -> byte-held
+    passthrough, no token, no journal.
+
+The DB side (the s23 column captures the token; a write WITH the GUC lands stamp_invocation=<token>,
+a write WITHOUT lands NULL; both views carry the column; stamp_verified is byte-identical before and
+after) is witnessed separately on the scratch schema pair invprobe/invprobe_kernel — see the
+commission report and kernel/lineage/s23-per-invocation-stamp-token.sql's header.
+
+NAMED RESIDUE: the journal is BEST-EFFORT (a full disk silently drops the journal line while the row
+still stamps — an UNJOURNALED row, distinct from an UNJOURNALED ERA); and the token is UNAUTHENTICATED
+(no HMAC over it) — a same-OS-user subject can self-SET app.vendor_invocation, a correlation tripwire,
+not authentication (s17's standing framing).

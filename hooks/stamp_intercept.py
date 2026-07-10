@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-09T12:38:35Z
-#   last-change: 2026-07-10T20:46:20Z
-#   contributors: be693afb/main
+#   last-change: 2026-07-10T23:34:40Z
+#   contributors: be693afb/main, e4410ef6/main
 # <<< PROVENANCE-STAMP <<<
 
 """stamp_intercept — the WRITE-TIME interception hook (BACKLOG ffafa59). A PreToolUse hook on Bash:
@@ -77,6 +77,24 @@ behavior before this pass, including the dangling-secret deny. Missing file/key 
 An unrecognized mode string never widens permissions (rule d) -- falls back to `"enforce"`, already
 the strictest state this mechanism has, with a loud stderr warning naming the bad value.
 
+PER-INVOCATION CONTEMPORANEITY TOKEN (design/CONTEMPORANEITY-AUDIT.md Part 1; BACKLOG "Contemporaneity
+indictment", 2026-07-11): on the SAME injection path that carries the HMAC stamp (a wired world, a
+healthy secret, mode observe/enforce), this hook additionally mints a per-Bash-invocation UUID and
+exports it as a SIXTH GUC `app.vendor_invocation` alongside the four HMAC GUCs. The kernel's set_stamp
+trigger (s23 delta) captures it into a nullable `stamp_invocation` ledger column, one register below
+stamp_session -- CAPTURE-ONLY, never part of the HMAC or any refusal. It is ALSO journaled, one JSON
+line per injection, to `<cwd>/.claude/logs/invocations.jsonl`: {token, wall-clock ISO-8601 UTC at
+injection, session_id, tool_use_id iff the hook payload carries one, sha256 of the command text, first
+120 chars of the command}. The journal is the "actual event" side; the ledger column is the "recorded
+event" side; a later `audit` verb (Part 2, NOT here) joins them to make honest simultaneity and
+retroactive backfill stop being the same row shape. The token is minted ONLY where a stamp is actually
+injected (a token no ledger row can carry would be a dangling journal line) -- so an "off"-mode, an
+unwired, or a dangling-secret (unstamped) invocation mints NO token and writes NO invocation journal
+line. Journaling is BEST-EFFORT and degrades SILENTLY (a full disk loses the journal line while the
+row still stamps): the token export must never depend on the journal write, and neither may ever break
+a tool call. The token is UNAUTHENTICATED (no HMAC over it) -- a same-OS-user subject can self-SET
+app.vendor_invocation; a correlation tripwire, not authentication, matching s17's standing framing.
+
 FAIL-CLOSED ON A DANGLING STAMP_SECRET (BACKLOG "Run-2 integrity finding", 2026-07-09; SEVERITY RAISED
 BACKLOG "Run-5 forensics", 2026-07-10 — NAMED CHOICE): the one exception to "wired -> stamp every
 command" above is an EXPLICITLY-configured STAMP_SECRET (the env var itself, not a not-yet-armed
@@ -101,6 +119,7 @@ import re
 import shlex
 import sys
 import time
+import uuid
 from pathlib import Path
 
 
@@ -285,6 +304,35 @@ def _journal(cwd, rec: dict) -> None:
         pass
 
 
+def _invocation_journal_path(cwd) -> Path | None:
+    """The per-invocation contemporaneity journal (design/CONTEMPORANEITY-AUDIT.md Part 1) -- a
+    SEPARATE file from the stamp_intercept.journal above (that one records secret-health outcomes;
+    this one is the token<->command<->wall-clock correlation Part 2's audit verb joins against the
+    ledger's stamp_invocation column). Same "no cwd, no journal, never invents a path" posture as
+    `_journal_path` / hooks/demurral_detect.py."""
+    if not cwd or not isinstance(cwd, str):
+        return None
+    return Path(cwd) / ".claude" / "logs" / "invocations.jsonl"
+
+
+def _journal_invocation(cwd, rec: dict) -> None:
+    """Append one JSON line to invocations.jsonl. BEST-EFFORT: any failure (no cwd, unwritable dir,
+    a full disk) is swallowed silently -- the token has ALREADY been exported into PGOPTIONS by the
+    caller before this runs, so a lost journal line never un-stamps a row and never breaks the tool
+    call. Named residue: on a full disk the row still carries stamp_invocation while its journal
+    line is silently dropped, so the audit verb sees a ledger token with no matching journal entry
+    (an UNJOURNALED row, distinguishable from an UNJOURNALED ERA where hooks were off entirely)."""
+    path = _invocation_journal_path(cwd)
+    if path is None:
+        return
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with open(path, "a", encoding="utf-8") as f:
+            f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+    except Exception:  # noqa: BLE001
+        pass
+
+
 def _observe_unstamped(data: dict, secret_path: str) -> int:
     """`"observe"` mode's version of the dangling-secret case (module docstring): never deny --
     this command genuinely cannot be stamped (no healthy secret to compute the HMAC with), so it
@@ -367,8 +415,32 @@ def main() -> int:
     agent = str(data.get("agent_id") or "main")   # ABSENT in main thread (shakedown); a subagent's UUID otherwise
     ts = int(time.time())
     mac = hmac.new(secret, f"{session}|{agent}|{ts}".encode(), hashlib.sha256).hexdigest()
+    # PER-INVOCATION CONTEMPORANEITY TOKEN (design/CONTEMPORANEITY-AUDIT.md Part 1; module docstring
+    # "PER-INVOCATION CONTEMPORANEITY TOKEN"). A fresh uuid4 minted per Bash call, exported as a sixth
+    # GUC (app.vendor_invocation) on the SAME injection this stamp rides. It is NOT part of the HMAC --
+    # it is a plain correlation token the s23 kernel column captures verification-inert. Minted ONLY
+    # here, on the healthy-secret injection path, so a token is never orphaned from the ledger rows
+    # that can carry it (an off/unwired/dangling invocation reaches neither this line nor the journal).
+    invocation = str(uuid.uuid4())
     pgopts = (f"-c app.vendor_session={session} -c app.vendor_agent={agent} "
-              f"-c app.vendor_ts={ts} -c app.vendor_hmac={mac}")
+              f"-c app.vendor_ts={ts} -c app.vendor_hmac={mac} "
+              f"-c app.vendor_invocation={invocation}")
+    # BEST-EFFORT journal (the "actual event" side of the correlation) -- written BEFORE the token is
+    # returned but AFTER it is fixed, so a journal failure (silent) never affects what gets exported.
+    # tool_use_id is included ONLY when the payload actually carries it (the parsed stdin contract has
+    # never carried one; read defensively and omit honestly when absent, rather than emit a null key).
+    command_bytes = command.encode("utf-8", "surrogatepass")
+    inv_rec = {
+        "token": invocation,
+        "wall_clock": time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime()) + "Z",
+        "session_id": session,
+        "command_sha256": hashlib.sha256(command_bytes).hexdigest(),
+        "command_head": command[:120],
+    }
+    tool_use_id = data.get("tool_use_id")
+    if tool_use_id:
+        inv_rec["tool_use_id"] = str(tool_use_id)
+    _journal_invocation(data.get("cwd"), inv_rec)
     # EXPORT (not a one-command prefix): a Bash command may chain several psql calls; a bare
     # `PGOPTIONS=.. cmd1; cmd2` would stamp only cmd1. export makes every psql in the command
     # inherit it -- including one hidden inside a generated script or a wrapper's own body, and
