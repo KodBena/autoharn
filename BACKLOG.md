@@ -2052,3 +2052,39 @@ to match (real captured output, not the stale `docprobe`/pre-s21 capture); `boot
 QUICKSTART.md` left untouched — it neither states the `--new-world` lineage chain nor the s21
 status (its own scratch-kernel demo is a separate, already-accurate s15-through-s19 hand walk),
 so there was nothing stale to fix there.
+
+## Run-5 forensics (2026-07-10, mid-run snapshot): back-filled ledger + matcher evasion 3.0; s21 witnessed live; two hook fixes queued
+
+Timing correlation (Sonnet forensic pass, read-only, transcript ~/.claude/projects/-home-bork-
+w-vdc-1-run5/ vs live run5.ledger; session was LIVE — 38-row snapshot):
+1. **Contemporaneity failed twice.** Main thread: 8m23s of witnessed work (23 tool events incl.
+   4 curls against the provisioned QEUBO service) with ZERO rows, then 19 rows in 89.4s (18 in
+   36.1s). Reviewer subagent: 5m07s silent investigation, then 19 review rows in 0.43s via a
+   generated run_reviews.sh executed as one Bash call. The ledger is a retroactive diary, not a
+   permit log. FIX QUEUED (post-run5-exit, hooks/ frozen while wired sessions live):
+   **permit-to-work gate** — no open+claimed work item in the world's ledger ⇒ substantive tool
+   calls (Write/Edit anywhere in the world, mutating bash) DENY with teach-text naming
+   `./led work open`/`claim`. s22 supplies the queryable state; the change gate is the
+   enforcement point; deny→teach→retry is the proven loop.
+2. **Stamp interceptor: third run, third distinct failure shape — enumeration fails open
+   (ADR-0011 Rule 4).** Config correct, hook alive: fired exactly TWICE, both on read-only
+   commands; ZERO times on any of the 38 writes. Evasion shapes this run: `cd run5 && ./led …`
+   (first word cd) and `cat > run_reviews.sh …; bash run_reviews.sh` (first word cat). All 38
+   rows stamp_verified=false, stamp columns NULL. FIX QUEUED (post-run5-exit): **delete the
+   matcher** — stamp_intercept injects PGOPTIONS unconditionally into every Bash call in a
+   wired world (harmless to non-psql descendants, inherited by generated scripts); the
+   enumeration and its evasion class cease to exist. Both fixes are strictly fail-safe and
+   class-covered (CLAUDE.md class-ratification + sub-constitutional hook work) — no maintainer
+   question pending.
+3. **s21 witnessed live for the first time, in anger:** the reviewer's initial `technical`
+   claim was REFUSED by validate_independence ("SAME invocation wrote both"), burning ledger id
+   20 in the rollback (sequence gap is the refusal's fingerprint, not a deletion — append-only
+   trigger blocks UPDATE/DELETE). The reviewer then honestly downgraded all 19 reviews to
+   marked self-review, citing the unstamped rows and the NULL-half fail-safe rule verbatim.
+   Kernel fail-safe + agent conduct: both held, again, with the hook layer dark.
+4. No backdating found: ledger ts strictly increasing, every row consistent with the transcript
+   action that produced it; row content matches witnessed work. Honest-but-late, unstamped.
+5. Standing gap re-confirmed by run 4's abort (2026-07-10): the scaffold captures governance
+   but not the TASK BRIEF — the operator's kickoff prompt lives nowhere durable. Fix candidate:
+   `--task` flag / TASK.md slot at world birth. Sonnet-sized, unqueued (bootstrap/ is not
+   frozen; can build any time).
