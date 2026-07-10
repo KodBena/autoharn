@@ -24,12 +24,15 @@ which is why hooks/ is never edited while any wired session is live.
   `.claude/apparatus.json`, and an auto-loaded CLAUDE.md governance preamble. One world
   per run; a run's subject never sees a sibling's ledger.
 - **run** — one governed Claude Code session (or resumed chain of sessions) executing a
-  task inside one world. Runs 1–7 are on record; run 8 = resumption test.
+  task inside one world. Runs are strictly LINEAR: run M > N settles run N as dust —
+  older worlds are read-only evidence, never patched or refreshed (maintainer ruling,
+  2026-07-11).
 - **birth chain** — the SQL applied at world creation: `high_watermark_1.sql` (bundling
   s15 → s17-stamp → s17-independence → s19) → s20 → s21 → s22. There is no s16; s18 is
   deliberately excluded (experiment apparatus, not kernel). See kernel/lineage/README.md.
-- **delta** — one additive lineage step applied to an existing world, only ever via
-  `bootstrap/apply-delta.sh` (typed confirmation, provenance line written).
+- **delta** — one additive lineage step. It reaches reality by entering the birth chain;
+  the next world's scaffold carries it. Never applied to an existing world (see the
+  decision tree below).
 - **scratch schema** — a throwaway schema pair in the toy db used to witness a delta or
   fixture, torn down to zero residue after.
 - **stamp** — an HMAC binding a ledger row to the actual Claude session/agent that wrote
@@ -87,18 +90,21 @@ a new world cannot see the old ledger by design.
 
 ## Kernel deltas — the decision tree (CLAUDE.md ORCHESTRATION is the SSOT)
 
+Runs are strictly linear (maintainer ruling, 2026-07-11): run M > N means run N's world
+is dust and settled — read-only evidence, never patched, never "refreshed". A delta
+reaches reality by entering the birth chain; the next scaffold carries it. There is NO
+apply-to-existing-world step, for anyone (`bootstrap/apply-delta.sh` is demoted to
+history — the ceremony it guarded has no legitimate scenario).
+
 1. Delta only ADDS refusals, vocabulary, or derived views — nothing existing relaxed, no
    existing semantics changed — AND arrives scratch-witnessed both polarities AND
-   differential AGREE? → **class-ratified**: it may enter the birth chain without a
+   differential AGREE? → **class-ratified**: it enters the birth chain without a
    per-delta maintainer question.
-2. Applying ANY delta to an existing live world is ALWAYS the operator's scripted act:
-   `bootstrap/apply-delta.sh <world-dir> <delta.sql>` (typed schema-name confirmation).
-   Pre-ratification removes the question, never the act.
-3. Delta loosens a refusal, alters existing semantics, or touches law/? → maintainer,
+2. Delta loosens a refusal, alters existing semantics, or touches law/? → maintainer,
    full ceremony (Fable-authored spec, or the succession ceremony in CLAUDE.md).
-4. **Any doubt about which side it falls on IS the routing: ask.**
+3. **Any doubt about which side it falls on IS the routing: ask.**
    Worked examples: s21/s22 sail through as class 1; review_gap scope filtering (option
-   B in design/REVIEW-GAP-SCOPE-SEMANTICS-RULING.md) routes as class 3 — it would make
+   B in design/REVIEW-GAP-SCOPE-SEMANTICS-RULING.md) routes as class 2 — it would make
    the view catch FEWER rows.
 
 ## Hooks × kernel map (mode read live from `<world>/.claude/apparatus.json`)
@@ -129,8 +135,7 @@ build-new-then-swap beats wait-and-block.
 
 ## What routes to the maintainer, always
 
-Applying any lineage delta to a live deployment (his command); ratifying rulings,
-dispositions, law amendments; waivers of any gate; pushes (standing bar: NO PUSH until a
+Ratifying rulings, dispositions, law amendments; waivers of any gate; pushes (standing bar: NO PUSH until a
 non-expert can use this without a frontier model); credentials/pg_hba/hosts; evidence
 ledger contents; budgets. When in doubt whether a thing is a ruling: it is. Draft for
 him — prepared yes/no, ONE recommendation, costs named — never file as made.

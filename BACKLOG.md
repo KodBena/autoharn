@@ -2316,3 +2316,38 @@ all seven claims WITNESSED, none refuted:
 CAPABILITIES item 20's "BLOCK path and circuit breaker remain fixture-witnessed only"
 is now half-stale: BLOCK is live-witnessed; the circuit breaker (3/3) remains
 fixture-only. Update owed with the next CAPABILITIES pass.
+
+## Maintainer ruling (2026-07-11): runs are strictly linear; "live world" does not exist; delta-application ceremony is dead paperwork
+
+His words, near-verbatim: if M > N then run M automatically means run N is dust and
+settled. "Live world" doesn't apply in our setting, at all — it never has. The only thing
+it has caused is rigamarole: a non-expert told to "run a delta" did the ceremony and then
+realized it does nothing at all. Paperwork's real purpose is safety/RCA (NIST stuff);
+requiring a non-programmer to do cargo-cult sysadmin acts has the OPPOSITE effect in a
+high-assurance project.
+
+Dispositions, effective now:
+1. **The only present-tense world is the current run's.** Older worlds are settled
+   evidence: read-only archaeology, never patched, never "refreshed", never delta'd.
+   Fixes reach reality via the birth chain / templates at the NEXT world's scaffold.
+2. **bootstrap/apply-delta.sh is demoted to history.** No operator scenario exists for
+   applying a delta to an existing world. The script stays on disk as record; it leaves
+   the operator surface (CAPABILITIES item 14 and the OPERATING-CARD delta tree amended
+   this pass). The typed-confirmation ceremony dies with it.
+3. **"s22 not applied to toycolors" (CAPABILITIES 'Not yet enforced') is DEAD**, not
+   pending — toycolors is dust; there is nothing to apply anything to.
+4. **The orchestrator's run7-led-refresh suggestion (earlier tonight) is WITHDRAWN** on
+   the same grounds; the fixed led reaches the next scaffold automatically.
+5. **CLAUDE.md ORCHESTRATION still carries the dead clause** ("Applying such a delta to
+   an EXISTING live deployment remains the operator's scripted act...") — ratified text,
+   so amending it is the maintainer's word: one yes/no put to him this session (transcribe
+   the ruling into ORCHESTRATION, dated and attributed). Operational docs updated now
+   regardless; on divergence the SSOT rule already sends readers here.
+6. **Candidate filed (one maintainer nod to build): live verbs.** Hooks already execute
+   from autoharn per invocation in every world; the verbs are frozen birth copies — the
+   asymmetry is why five worlds carry tonight's led defect forever. Proposal: scaffolded
+   verbs become thin shims exec'ing autoharn's current templates (deployment.json stays
+   the only per-world fact), so a template fix reaches every world instantly and
+   "refresh" stops being a concept. The self-contained-world objection collapses under
+   this ruling (old worlds are dust; the LEDGER is the evidence, per the audit-trail
+   ruling). Sonnet-sized.

@@ -197,9 +197,11 @@ s18 is deliberately excluded (experiment apparatus, not kernel). SSOT:
 `kernel/lineage/README.md` + `bootstrap/new-project.sh`.
 
 ### delta (kernel lineage delta)
-One additive lineage step applied to an EXISTING world, only ever via
-`bootstrap/apply-delta.sh` (typed confirmation, provenance line). Authoring may be
-class-ratified (strictly fail-safe additions); applying is always the operator's act.
+One additive lineage step. Authoring may be class-ratified (strictly fail-safe
+additions); it reaches reality by entering the birth chain, carried by the NEXT world's
+scaffold. Never applied to an existing world — runs are strictly linear and older worlds
+are settled evidence (maintainer ruling 2026-07-11; `bootstrap/apply-delta.sh` is
+demoted to history).
 
 ### scratch schema
 A throwaway schema pair in the toy db used to witness a delta or fixture both polarities,

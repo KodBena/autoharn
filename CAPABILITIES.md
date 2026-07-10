@@ -201,8 +201,14 @@ written), followed by the full `led`/`judge`/`pickup` round trip above, then tor
 residue (`DROP SCHEMA ... CASCADE` both schemas, `DROP OWNED BY`/`DROP ROLE`, confirmed by an
 empty post-drop `information_schema.schemata` query and directory removal).
 
-**14. `bootstrap/apply-delta.sh` — applying one kernel delta to an existing world is one scripted
-command, not "pages of SQL."**
+**14. `bootstrap/apply-delta.sh` — DEMOTED TO HISTORY (maintainer ruling 2026-07-11).**
+Runs are strictly linear: run M > N settles run N's world as dust — there is no operator
+scenario for applying a delta to an existing world, and the ceremony this script guarded
+(typed confirmation, provenance line) was witnessed producing exactly the cargo-cult
+paperwork a high-assurance project must not impose on a non-expert operator ("I was told
+to run a delta ... until I realized it does nothing at all"). Deltas reach reality via
+the birth chain at the next scaffold. The script and its witness record below stay as
+history; it is no longer part of the operator surface. Original entry, retained:
 Resolves db/host/schema/kern/role from `<world-dir>/deployment.json` alone (refuses loudly on a
 missing/malformed file, never guesses), prints the fully-resolved `psql -v ...` command before
 doing anything, requires the operator to **type the schema name back** (a mismatch aborts, no
@@ -426,10 +432,10 @@ permanently (`change_gate` full three-way, `stamp_intercept` spot-check), regist
   design or a queued date. Referenced in passing across `HANDOFF.md`,
   `POST-FABLE-OPERATING-BRIEF.md`, `WALKTHROUGH.md`, and `design/human-side-fragility.md` (the
   "pg_hba ordering slip" fragility mode), never as a scheduled increment.
-- **s22 (work-item ledger) is not applied to the live `toycolors` deployment.** Confirmed live
-  this pass (`validate_work_item` absent from `toycolors`'s functions). It ships in every fresh
-  `--new-world` birth chain; applying it to a pre-existing world is the scripted, explicit
-  `bootstrap/apply-delta.sh` act, not yet taken there.
+- **s22 (work-item ledger) is not applied to the `toycolors` deployment — DEAD, not pending
+  (2026-07-11).** Under the runs-are-linear ruling `toycolors` is settled evidence; there is
+  nothing to apply anything to, ever. Retained here only so the earlier "not yet taken" framing
+  is visibly superseded rather than silently deleted.
 - **`instruments/conformance_check.py` is observer-only** (item 17 above) — no gate consumes its
   verdict yet.
 - **Review-fixpoint's session-blind residue** (see "Built, unexercised" above) — filed, fix shape
