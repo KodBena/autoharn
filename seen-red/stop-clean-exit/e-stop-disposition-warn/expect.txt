@@ -1,0 +1,6 @@
++STOP-DISPOSITION WARNING
++no `decision` row beginning 'stopping:' is stamped to this session
++./led decision "stopping:
+-"decision": "block"
+-CIRCUIT BREAKER FIRED
+-OPEN WORK ITEMS

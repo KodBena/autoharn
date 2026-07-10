@@ -35,6 +35,16 @@
             "timeout": 5
           }
         ]
+      },
+      {
+        "matcher": "Task|Agent",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "env LEDGER_HOST=__HOST__ LEDGER_DB=__DB__ GATE_LEDGER=__SCHEMA__.ledger GATE_SUBJECT_ROOT=__PROJECT_ROOT__ python3 __AUTOHARN_ROOT__/hooks/pretooluse_delegation_observer.py",
+            "timeout": 10
+          }
+        ]
       }
     ],
     "PostToolUse": [

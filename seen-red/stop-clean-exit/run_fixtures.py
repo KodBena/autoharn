@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-10T19:43:05Z
-#   last-change: 2026-07-10T19:43:05Z
-#   contributors: be693afb/main
+#   last-change: 2026-07-10T23:35:01Z
+#   contributors: be693afb/main, e4410ef6/main
 # <<< PROVENANCE-STAMP <<<
 
 """run_fixtures.py — both-polarity proof for hooks/stop_clean_exit.py (the clean-exit Stop-hook
@@ -25,9 +25,20 @@ db, torn down before AND after):
   2. [setup] bootstrap/new-project.sh --new-world stopprobe --db toy --host 192.168.122.1
              --name stopprobe  -> a fresh, CLEAN world (s22 applied automatically, per
              new-project.sh's own --new-world lineage chain).
+  2.5 [seed] a REAL stamped `decision` row ("stopping: fixture baseline ...") for the shared
+             `seenred` session every OTHER case's stdin.json carries -- pre-seeded so the four
+             ORIGINAL debt-focused cases below stay exactly as green as they were before the
+             STOP-DISPOSITION WARNING (Part 1, BACKLOG "Run-8 mid-run forensics", 2026-07-11) was
+             added: those cases test DEBT COLLECTION, not disposition, and must not regress just
+             because a NEW, orthogonal check was added to the same hook. Stamped via a real
+             HMAC computed the same way hooks/stamp_intercept.py computes it (session|agent|ts
+             over the world's own provisioned secret) -- not a raw unstamped INSERT -- because the
+             new check keys on `stamp_session`, the interception-injected column, never a
+             writer-supplied one.
   3. b-clean-world        -- the freshly-scaffolded world has open review_gap/question_status/
-                             work_item_current/work_item_violations rows: none. Expect allow,
-                             silently.
+                             work_item_current/work_item_violations rows: none, AND (since step
+                             2.5) a stamped stop-disposition row for THIS session. Expect allow,
+                             silently -- unchanged from before this pass.
   4. [debt] ./led work open probe-item-1 "..."  -- an open, UNCLAIMED work item, never closed
              (the exact run-5 shape: a never-closed work item left in the ledger).
   5. c-dirty-world        -- call #1 against that debt: expect BLOCK (exit 2), the debt
@@ -41,7 +52,16 @@ db, torn down before AND after):
   8. [cleanup] ./led work claim + ./led work close the debt item; verify one more call returns a
              silent allow AND the state file is gone (progress resets the breaker / clean clears
              it) -- a fifth, bonus sanity check, reported but not one of the four named cases.
-  9. [teardown] drop the probe schemas/role/directory.
+  9. e-stop-disposition-warn -- STOP-DISPOSITION WARNING, both-polarity case 1 (Part 1): a
+             DIFFERENT session, never stamped with a 'stopping:' row -- an otherwise-clean world
+             (no debt at all) still gets a loud, non-blocking warning (exit 0) teaching
+             `./led decision "stopping: ..."`. Proves the check fires on its own, independent of
+             the debt-collection machinery above.
+  10. [seed] a REAL stamped 'stopping:' row for a THIRD, distinct session.
+  11. f-stop-disposition-silent -- both-polarity case 2: the identical shape as case 9, but THIS
+             session now carries a stamped disposition row -- SILENT (no warning), proving the
+             check is keyed on presence/absence, not a blanket always-warn.
+  12. [teardown] drop the probe schemas/role/directory.
 
 Usage: python3 seen-red/stop-clean-exit/run_fixtures.py
 Exit 0 if every case matches (including the unasserted/bonus inline checks); 1 otherwise.
@@ -49,11 +69,14 @@ Lazy imports banned.
 """
 from __future__ import annotations
 
+import hashlib
+import hmac
 import json
 import os
 import shutil
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -65,10 +88,41 @@ PROBE_DIR = Path("/home/bork/w/vdc/1/.stopprobe")
 PGHOST, PGDB = "192.168.122.1", "toy"
 SCHEMA, KERN, ROLE = "stopprobe", "stopprobe_kernel", "stopprobe_rw"
 SLUG = "probe-item-1"
+SEENRED_SESSION = "seenred"           # the session id every ORIGINAL case's stdin.json carries
+E_SESSION = "stopdisp-warn-session"   # case 9: deliberately never stamped
+F_SESSION = "stopdisp-silent-session" # case 11: stamped in step 10, right before the case runs
 
 
 def sh(args: list[str], **kw) -> subprocess.CompletedProcess[str]:
     return subprocess.run(args, capture_output=True, text=True, **kw)
+
+
+def _stamped_env(session: str, agent: str = "main") -> dict[str, str]:
+    """A real interception stamp for ONE psql call, computed the same way
+    hooks/stamp_intercept.py computes it (HMAC-SHA256 over `session|agent|ts`, keyed on the
+    world's own provisioned apparatus secret) -- carried via PGOPTIONS exactly like the hook's
+    own `export PGOPTIONS=...` rewrite, so `led`'s own psql call inherits it and the kernel's
+    set_stamp trigger lands `stamp_session=<session>` on the row it produces. Computed directly
+    here (stdlib hmac, the secret `--new-world` already provisioned at
+    PROBE_DIR/.claude/secrets/stamp_secret.hex) rather than shelling out to the hook itself --
+    this fixture needs exactly one stamped row per call, not the hook's full matcherless-rewrite
+    machinery."""
+    secret = bytes.fromhex(
+        (PROBE_DIR / ".claude" / "secrets" / "stamp_secret.hex").read_text(encoding="utf-8").strip())
+    ts = int(time.time())
+    mac = hmac.new(secret, f"{session}|{agent}|{ts}".encode(), hashlib.sha256).hexdigest()
+    pgopts = (f"-c app.vendor_session={session} -c app.vendor_agent={agent} "
+              f"-c app.vendor_ts={ts} -c app.vendor_hmac={mac}")
+    env = dict(os.environ)
+    env["PGOPTIONS"] = pgopts
+    return env
+
+
+def led_stamped(session: str, *args: str) -> subprocess.CompletedProcess[str]:
+    """Like `led()` below, but the psql call it shells out to carries a REAL interception stamp
+    for `session` (see `_stamped_env`) -- the only way to land a `stamp_session`-bearing row
+    outside a live Claude Code session, which is exactly what the stop-disposition check keys on."""
+    return sh([str(PROBE_DIR / "led"), *args], cwd=str(PROBE_DIR), env=_stamped_env(session))
 
 
 def teardown_probe() -> None:
@@ -165,6 +219,17 @@ def main() -> int:
         return 1
 
     try:
+        # 2.5. seed a REAL stamped stop-disposition row for the SHARED 'seenred' session every
+        # original case's stdin.json carries -- so those cases stay exactly as green as they were
+        # before the stop-disposition check was added (see module docstring step 2.5).
+        print("-- seeding a stamped 'stopping:' decision row for the shared 'seenred' session --")
+        r = led_stamped(SEENRED_SESSION, "decision",
+                         "stopping: fixture baseline -- pre-seeded so the debt-focused cases stay "
+                         "silent under the stop-disposition check; stands: nothing; remains: nothing")
+        print(r.stdout.strip(), r.stderr.strip())
+        if r.returncode != 0:
+            failures.append("stop_disposition_baseline_seed")
+
         # 3. clean-world: freshly scaffolded, nothing open yet.
         run_named_case("b-clean-world", failures)
 
@@ -205,6 +270,23 @@ def main() -> int:
         print()
         if not ok3:
             failures.append("post-cleanup-clean-and-reset")
+
+        # 9. STOP-DISPOSITION WARNING, polarity 1 (Part 1, BACKLOG "Run-8 mid-run forensics",
+        # 2026-07-11): a DIFFERENT session, never stamped with a 'stopping:' row, against this
+        # SAME now-clean world (no debt at all) -- expect ALLOW (exit 0) with a loud warning.
+        run_named_case("e-stop-disposition-warn", failures)
+
+        # 10. seed a REAL stamped 'stopping:' row for a THIRD, distinct session.
+        print("-- seeding a stamped 'stopping:' decision row for the disposition-silent case --")
+        r = led_stamped(F_SESSION, "decision",
+                         "stopping: fixture disposition test; stands: nothing; remains: nothing")
+        print(r.stdout.strip(), r.stderr.strip())
+        if r.returncode != 0:
+            failures.append("stop_disposition_silent_seed")
+
+        # 11. STOP-DISPOSITION WARNING, polarity 2: the identical shape as case 9, but THIS
+        # session now carries a stamped disposition row -- SILENT (exit 0, no warning).
+        run_named_case("f-stop-disposition-silent", failures)
     finally:
         print("-- teardown (post) --")
         teardown_probe()
@@ -212,7 +294,7 @@ def main() -> int:
     if failures:
         print(f"run_fixtures: {len(failures)} FAILURE(S): {', '.join(failures)}")
         return 1
-    print("run_fixtures: all cases passed (4 named + 2 inline sanity checks).")
+    print("run_fixtures: all cases passed (6 named + 2 inline sanity checks).")
     return 0
 
 
