@@ -5,13 +5,20 @@ Read .claude/HOOKS.md first. You are the author principal; a reviewer principal 
    implementing; close each one with ./led work close <slug> <resolution> --witness <ref>
    once delivered.
 2. Assign the decomposition's countersign obligation to reviewer; reviewer countersigns
-   via LED_ACTOR=reviewer claiming technical independence.
+   via LED_ACTOR=reviewer claiming technical independence, AND runs an antecedent audit:
+   enumerate design facts the artifacts encode with no antecedent in task text, ledger
+   rows, or assumption rows; file each one found as its own `./led assumption "<fact>"
+   --refs <artifact>` (assumption, not finding — it's the same unledgered-design-fact
+   defect as point 6, just caught by the other principal instead of self-reported).
 3. Pre-register acceptance criteria as their own ledger entry BEFORE implementing;
    record results with --evidence AND --refs row:<criteria-row-id> against that entry
    (refs is the sanctioned channel for a non-review kind to cite an antecedent row,
    so the criteria->result link is queryable, not prose).
 4. A task that produces files is complete only when they are committed to git.
 5. Done means ./led review-gap, question-status, and ./led work violations are all clean.
+6. Any design fact you commit to that has no antecedent in the task or an existing ledger
+   row gets recorded FIRST via `./led assumption "<the fact and why it was assumed>"` —
+   an unledgered load-bearing assumption is a defect, not a convenience.
 
 ---
 Written by `bootstrap/new-project.sh --new-world` at scaffold time (BACKLOG "Maintainer ruling:
