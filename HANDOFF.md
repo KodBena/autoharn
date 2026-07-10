@@ -7,6 +7,10 @@ nothing from here without re-checking (verification checklist: POST-FABLE-OPERAT
 
 ## Read in this order
 
+0. OPERATING-CARD.md — orientation in one page (the two-cwd model, vocabulary, the four
+   verbs, start/resume, the delta decision tree, the verification checklist). Added
+   2026-07-11 after an Opus fresh-context probe stalled on exactly these gaps; it
+   condenses, never supersedes — the SSOTs below outrank it.
 1. CLAUDE.md — law pointers + ORCHESTRATION (delegation, class-ratified fail-safe deltas,
    self-application ruling, succession). Read the four ADRs it names IN FULL before any work
    that invokes them.

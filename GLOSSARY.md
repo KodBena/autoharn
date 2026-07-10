@@ -172,3 +172,59 @@ omega's `work-status` Postgres store, which replaced a hand-edited `work-status.
 A logic that does **not** explode (derive everything) from a contradiction, letting conflicting
 records coexist. Underwrites the [suspect](#suspect) third value and "conflicting advisories
 coexist without the gate failing."
+
+## Operating-era terms (worlds and runs, added 2026-07-11)
+
+The terms below entered the vocabulary with the world/run operating model (2026-07-09
+onward) and were previously defined nowhere — an Opus fresh-context probe (2026-07-11)
+found this file's own Stand-Alone Principle violated by their absence. Operational detail
+lives in [OPERATING-CARD.md](OPERATING-CARD.md); these are the definitions.
+
+### world
+One isolated experiment habitat: a subject schema + kernel schema pair in Postgres plus a
+project directory carrying the operator verbs, `deployment.json`, `.claude/apparatus.json`,
+and an auto-loaded governance preamble. One world per run; a run's subject never sees a
+sibling world's ledger (maintainer ruling, 2026-07-09).
+
+### run
+One governed Claude Code session (or resumed chain of sessions) executing a task inside one
+world. Runs are numbered; their worlds are named for them (`run5`, `run7`).
+
+### birth chain
+The ordered kernel SQL a new world receives at scaffold time: `high_watermark_1.sql`
+(bundling s15 → s17-stamp → s17-independence → s19) → s20 → s21 → s22. There is no s16;
+s18 is deliberately excluded (experiment apparatus, not kernel). SSOT:
+`kernel/lineage/README.md` + `bootstrap/new-project.sh`.
+
+### delta (kernel lineage delta)
+One additive lineage step applied to an EXISTING world, only ever via
+`bootstrap/apply-delta.sh` (typed confirmation, provenance line). Authoring may be
+class-ratified (strictly fail-safe additions); applying is always the operator's act.
+
+### scratch schema
+A throwaway schema pair in the toy db used to witness a delta or fixture both polarities,
+torn down to zero residue afterward (empty `information_schema.schemata` check).
+
+### stamp
+The HMAC binding a ledger row to the actual Claude session/agent that wrote it, injected
+into every Bash command in a wired world by `hooks/stamp_intercept.py`. Unforgeable without
+a secret the writer's role cannot read; a bypass write lands visibly unstamped. A tripwire,
+not authentication (see CAPABILITIES "Honest limits").
+
+### principal
+A registered identity (`author`, `reviewer`) that ledger rows are attributed to;
+`LED_ACTOR=reviewer` selects one for a command. **SoD** (separation of duties) is the
+requirement that review comes from a provably different invocation than the work.
+
+### permit-to-work
+The rule that a Write/Edit to a governed file is refused unless the world's ledger shows an
+open AND claimed s22 work item — a ledger entry is not a permit; an open+claimed work item
+is (CAPABILITIES item 18).
+
+### seen-red
+Banked evidence that a gate has actually REFUSED at least once (a dated fixture directory
+under `seen-red/`). A gate never seen red is a claim, not a guarantee.
+
+### ephemera
+Local session transcripts and snapshots (`ephemera/session-<id>/`, gitignored). Never
+committed — upstream is public, transcripts are private (maintainer ruling 2026-07-09).
