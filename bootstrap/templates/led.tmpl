@@ -37,6 +37,15 @@
 #     --evidence "<text>"
 #     --confidence low|medium|high
 #
+#   LED_ACTOR=<principal-name>   (env var, not a flag) resolves the actor/principal for EVERY
+#                            ledger-writing verb -- the generic <kind> <statement> path below,
+#                            `led review`, and `led work claim` alike (ONE resolution point,
+#                            resolve_actor(), defined once and shared by all three). Unset, a
+#                            write lands under the default connection principal (`author`). Set to
+#                            an unregistered name, the write is REFUSED with teach-text (register
+#                            it first: `led register-principal <name> <class>`) rather than
+#                            silently falling back to the default principal.
+#
 #   led --recent [N]                          last N ledger rows (default 10), newest first;
 #                                              marks a row SUPERSEDED when a later row's
 #                                              `supersedes` names it (never displays a
@@ -192,6 +201,38 @@ while true; do
   esac
 done
 
+# --- LED_ACTOR resolution (ONE point, used by every ledger-writing path below: `led review`,
+# `led work claim`, and the generic <kind> <statement> path) -----------------------------------
+# Sets $actor_name to LED_ACTOR (may be empty). Downstream, NULLIF(:'actor_name','') still turns
+# an empty value into NULL so the kernel's set_actor trigger fills the default connection
+# principal, unchanged from before. What's new here: an explicit, up-front existence check. A
+# NAMED but unregistered LED_ACTOR used to fall through that same NULL path too -- the subquery
+# `SELECT id FROM principal WHERE name = ...` matches no row and also returns NULL -- so it landed
+# attributed to the default principal exactly like an unset LED_ACTOR, indistinguishable
+# misattribution, never surfaced. This function forecloses that as a CLASS (ADR-0000: one fact,
+# one writer) instead of leaving it as three separately-patchable instances: it used to be
+# duplicated inline in the review/work-claim paths and OMITTED entirely from the generic path --
+# the generic path never read LED_ACTOR at all, so every `led <kind> ...` write landed under the
+# default principal regardless of LED_ACTOR (BACKLOG run-7 forensics, ledger row 63:
+# LED_ACTOR=reviewer landed as actor='author').
+resolve_actor() {
+  actor_name="${LED_ACTOR:-}"
+  if [ -n "$actor_name" ]; then
+    local registered
+    registered=$(psql -h "$PGHOST" -d "$PGDB" -tAq -v actor_name="$actor_name" <<SQL
+      SET ROLE ${ROLE};
+      SET search_path = ${SCHEMA}, ${KERNEL};
+      SELECT EXISTS (SELECT 1 FROM principal WHERE name = :'actor_name');
+SQL
+    )
+    if [ "$registered" != "t" ]; then
+      echo "led: REFUSED -- LED_ACTOR='${actor_name}' is not a registered principal." >&2
+      echo "  Register it first: ./led register-principal ${actor_name} <human|model|subagent|tool>" >&2
+      exit 1
+    fi
+  fi
+}
+
 if [ "${1:-}" = "--recent" ] || [ "${1:-}" = "current" ]; then
   # `current` reads ledger_current (supersedes already filtered server-side, the ledger's own view).
   # `--recent` reads the raw table but MARKS a superseded row visibly instead of silently
@@ -327,12 +368,14 @@ if [ "${1:-}" = "review" ]; then
   fi
   regards="$1"; verdict="$2"; independence="$3"; shift 3
   statement="$*"
-  actor_name="${LED_ACTOR:-}"
-  # actor resolves via a subquery bind, NOT string-spliced: NULLIF(:'actor_name','') is NULL when
-  # LED_ACTOR is unset, so the ledger's actor column stays NULL and the kernel's set_actor trigger
-  # fills the default connection principal -- the same principal every other led write uses, so an
-  # un-set LED_ACTOR against one's own earlier row is refused as self-review (the honest, intended
-  # outcome).
+  resolve_actor
+  # actor resolves via a subquery bind below, NOT string-spliced: NULLIF(:'actor_name','') is NULL
+  # when LED_ACTOR is unset, so the ledger's actor column stays NULL and the kernel's set_actor
+  # trigger fills the default connection principal -- the same principal every other led write
+  # uses, so an un-set LED_ACTOR against one's own earlier row is refused as self-review (the
+  # honest, intended outcome). resolve_actor (defined near the top of this file) is the ONE place
+  # LED_ACTOR is read and validated, shared with `led work claim` and the generic
+  # <kind> <statement> path.
   psql -h "$PGHOST" -d "$PGDB" -v ON_ERROR_STOP=1 \
     -v regards="$regards" -v verdict="$verdict" -v independence="$independence" \
     -v statement="$statement" -v actor_name="$actor_name" -v antecedent="$antecedent" <<SQL
@@ -384,9 +427,11 @@ SQL
         exit 1
       fi
       slug="$1"
-      actor_name="${LED_ACTOR:-}"
+      resolve_actor
       # actor resolves via a subquery bind exactly as `led review` does above: NULLIF(:'actor_name','')
       # is NULL when LED_ACTOR is unset, so the claim lands under the default connection principal.
+      # resolve_actor (defined near the top of this file) is the ONE place LED_ACTOR is read/
+      # validated, shared with `led review` and the generic <kind> <statement> path.
       exec psql -h "$PGHOST" -d "$PGDB" -v ON_ERROR_STOP=1 \
         -v slug="$slug" -v actor_name="$actor_name" -v statement="work_claimed: ${slug}" <<SQL
         SET ROLE ${ROLE};
@@ -507,6 +552,14 @@ enacts_lit=""
 if [ -n "$enacts" ]; then
   enacts_lit="{${enacts}}"
 fi
+resolve_actor
+# actor resolves via a subquery bind below exactly as `led review`/`led work claim` do above:
+# NULLIF(:'actor_name','') is NULL when LED_ACTOR is unset, so the ledger's actor column stays
+# NULL and the kernel's set_actor trigger fills the default connection principal. THIS was the
+# witnessed defect (BACKLOG run-7 forensics, ledger row 63): this generic path never read
+# LED_ACTOR at all, so every `led <kind> ...` write landed under the default principal regardless
+# of LED_ACTOR. resolve_actor (defined near the top of this file) is now the ONE place LED_ACTOR
+# is read and validated, shared with `led review` and `led work claim`.
 
 # Bound via psql -v (a psql bind, not string concatenation) so `statement`/`rationale` can
 # contain quotes, semicolons, or anything else without escaping into SQL (P2: a boundary
@@ -517,12 +570,13 @@ psql -h "$PGHOST" -d "$PGDB" -v ON_ERROR_STOP=1 \
   -v kind="$kind" -v statement="$statement" -v rationale="$rationale" \
   -v supersedes="$supersedes" -v amends="$amends" -v amends_scope="$amends_scope" \
   -v answers="$answers" -v refs="$refs" -v concern="$concern" \
-  -v evidence="$evidence" -v confidence="$confidence" -v enacts="$enacts_lit" <<SQL
+  -v evidence="$evidence" -v confidence="$confidence" -v enacts="$enacts_lit" \
+  -v actor_name="$actor_name" <<SQL
     SET ROLE ${ROLE};
     SET search_path = ${SCHEMA}, ${KERNEL};
     INSERT INTO ${SCHEMA}.ledger
         (kind, statement, rationale, supersedes, amends, amends_scope, answers,
-         refs, concern, evidence, confidence, enacts)
+         refs, concern, evidence, confidence, enacts, actor)
     VALUES (:'kind', :'statement', NULLIF(:'rationale', ''),
             NULLIF(:'supersedes', '')::bigint,
             NULLIF(:'amends', '')::bigint,
@@ -532,5 +586,6 @@ psql -h "$PGHOST" -d "$PGDB" -v ON_ERROR_STOP=1 \
             NULLIF(:'concern', ''),
             NULLIF(:'evidence', ''),
             NULLIF(:'confidence', ''),
-            NULLIF(:'enacts', '')::bigint[]);
+            NULLIF(:'enacts', '')::bigint[],
+            (SELECT id FROM principal WHERE name = NULLIF(:'actor_name', '')));
 SQL
