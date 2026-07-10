@@ -2088,3 +2088,7 @@ w-vdc-1-run5/ vs live run5.ledger; session was LIVE — 38-row snapshot):
    but not the TASK BRIEF — the operator's kickoff prompt lives nowhere durable. Fix candidate:
    `--task` flag / TASK.md slot at world birth. Sonnet-sized, unqueued (bootstrap/ is not
    frozen; can build any time).
+   **DISPOSED same day, maintainer ruling: the task is the USER'S work to specify at startup —
+   it does not belong in CLAUDE.md or any scaffold-baked file. No TASK.md, no --task flag; the
+   task-brief candidate above is withdrawn. (The agent's first ledgered act naturally quotes
+   the task via its opening question/decision rows, which is durable enough for the record.)**
