@@ -2351,3 +2351,30 @@ Dispositions, effective now:
    "refresh" stops being a concept. The self-contained-world objection collapses under
    this ruling (old worlds are dust; the LEDGER is the evidence, per the audit-trail
    ruling). Sonnet-sized.
+
+## Omega work-tracking disposition (2026-07-11, night shift): s22 vs the documented omega store
+
+Maintainer asked "where do we stand" on omega's work tracking. Analysis grounded in the
+in-project record (research/foundational-map/06-omega-work-status-sql-anti-corruption-
+layer.md, design/WORK-ITEM-DECISION-MEMO.md, design/S22-WORK-ITEM-LEDGER.md), spot-verified
+against ~/w/omega source. Verdict: s22 adopted or strengthened most of what mattered
+(construction-time CHECK/trigger where omega had view-level detection; a claim verb omega
+never had; append-only-ledger-as-audit-trail replacing omega's bolted-on audit_log — a
+strictly better answer, per the decision memo's own reasoning). Correctly-dead weight:
+hierarchy (evidenced-away by flat run decompositions), disposition sub-states (33/33 omega
+items never left 'open'), the extra-jsonb junk drawer.
+
+Genuinely missing, ranked (the silently-dropped set):
+1. **work_item_violations wired into a gate** — cycles/dangling deps sit silent until
+   someone runs `led work violations` by hand; the s22 SQL header itself names the gap.
+   Sonnet-sized, NO kernel touch (judge.tmpl or gate script). TOP pickup; queued behind
+   the live-verbs refactor (same template files).
+2. **`led work asof <ts>`** — point-in-time backlog reconstruction; the append-only ledger
+   already carries everything, only the read verb is missing. Sonnet-sized, no kernel
+   touch. Queued with (1).
+3. **superseded_by (what superseded a closed item)** and **priority/tier** — both need a
+   kernel column ⇒ Fable-authored spec by rule; both class-shaped (additive). NO witnessed
+   need yet (runs 1-8 never exceeded 4 items); filed as candidates per the prudential
+   rule — build on witnessed need, not omega nostalgia.
+4. **Scope tagging + JSON Schema contract** — need design (what is "scope" for a generic
+   project? generated-from-DDL vs hand-authored?); not urgent absent external tooling.
