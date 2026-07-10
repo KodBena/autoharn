@@ -24,12 +24,17 @@ Sections emitted, each under a machine-parseable `### SECTION: <NAME>` header (g
   GIT-STATE           — this project's own git repo: uncommitted changes and (if it has an
                         upstream) unpushed commits.
   IN-FLIGHT           — derived live from the `work_item_current` view (open items: slug, title,
-                        claimant) plus a violations line from `work_item_violations` (count + kinds
-                        if non-empty; the explicit "violations: none" if empty -- a silent absence
-                        must be distinguishable from not-run, house rule). UNAVAILABLE, with the
-                        reason, if this world's kernel predates the work-item layer
-                        (kernel/lineage/s22-work-item-ledger.sql not applied here yet) -- the
-                        honest fallback, not a crash and not the old stale text.
+                        claimant), then -- for each open item -- the FULL statement text of its
+                        `work_opened` ledger row, printed in full between `--- SPEC: <slug> ---`
+                        / `--- END SPEC: <slug> ---` markers (BACKLOG "Run-8 mid-run forensics",
+                        2026-07-11: slug/title/claimant alone left a resumed agent with no spec to
+                        rebuild the task from -- the statement IS the spec). Then a violations line
+                        from `work_item_violations` (count + kinds if non-empty; the explicit
+                        "violations: none" if empty -- a silent absence must be distinguishable
+                        from not-run, house rule). UNAVAILABLE, with the reason, if this world's
+                        kernel predates the work-item layer (kernel/lineage/s22-work-item-
+                        ledger.sql not applied here yet) -- the honest fallback, not a crash and
+                        not the old stale text.
 
 Deployment resolution: reads `deployment.json` next to this script (override with
 `PICKUP_DEPLOYMENT=/path/to/deployment.json`), via autoharn's `filing/deployment_record.py` (the
@@ -83,9 +88,11 @@ def _psql(dep, sql: str) -> subprocess.CompletedProcess:
 
 
 def _psql_tuples(dep, sql: str) -> subprocess.CompletedProcess:
-    """Like `_psql` but with `-t -A` (tuples-only, unaligned) -- for the one query this script's
-    own logic branches on (the IN-FLIGHT violations line's count-vs-none house rule) rather than
-    a query it merely displays verbatim to the operator."""
+    """Like `_psql` but with `-t -A` (tuples-only, unaligned) -- for a query this script's own
+    logic branches on (the IN-FLIGHT violations line's count-vs-none house rule) or reproduces
+    close to verbatim (the IN-FLIGHT spec block, which needs the exact statement text with no
+    table borders/wrapping in the way) rather than a query merely displayed as psql's own
+    formatted table."""
     full = f"SET ROLE {dep.role};\n{sql}"
     return subprocess.run(
         ["psql", "-h", dep.host, "-d", dep.db, "-t", "-A", "-v", "ON_ERROR_STOP=1", "-c", full],
@@ -181,7 +188,33 @@ def in_flight(dep) -> None:
         else:
             print(f"ERROR: {r.stderr.strip()}")
         return
-    print(r.stdout.strip() or "(no open work items)")
+    open_rows = r.stdout.strip()
+    print(open_rows or "(no open work items)")
+
+    if open_rows:
+        # The full statement text of each open item's OPENING act -- the actual spec a fresh
+        # session has to build the task from (BACKLOG "Run-8 mid-run forensics", 2026-07-11: run
+        # 8 proved slug/title/claimant alone is not enough to resume from). Live SELECT, printed
+        # in FULL -- never truncated, truncating the spec would recreate the defect this exists
+        # to fix. The `--- SPEC ---` / `--- END SPEC ---` markers are baked into the SQL result
+        # text itself, not reconstructed from row boundaries in Python: in `-t -A` output a
+        # multi-line statement's own embedded newlines are indistinguishable from a row
+        # separator, so only a marker INSIDE the printed text can delimit one item's spec from
+        # the next reliably. One opening act per slug is trigger-enforced (validate_work_item,
+        # s22), so a plain JOIN is safe -- no open item can lack one.
+        spec = _psql_tuples(dep,
+            f"SELECT '--- SPEC: ' || w.slug || E' ---\\n' || o.statement || "
+            f"E'\\n--- END SPEC: ' || w.slug || E' ---' "
+            f"FROM {dep.schema}.work_item_current w "
+            f"JOIN {dep.schema}.ledger o ON o.kind = 'work_opened' AND o.work_slug = w.slug "
+            f"WHERE w.state = 'open' ORDER BY w.slug;")
+        if spec.returncode != 0:
+            print(f"ERROR: {spec.stderr.strip()}")
+        else:
+            # -t -A still echoes one leading line for the preceding `SET ROLE` statement (see
+            # _psql_tuples docstring) -- drop exactly that one line, print the rest verbatim.
+            lines = spec.stdout.strip("\n").splitlines()
+            print("\n".join(lines[1:]))
 
     v = _psql_tuples(dep, f"SELECT count(*), coalesce(string_agg(DISTINCT violation, ', '), '') "
                            f"FROM {dep.schema}.work_item_violations;")
