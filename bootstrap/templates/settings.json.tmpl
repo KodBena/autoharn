@@ -15,6 +15,16 @@
             "timeout": 5
           }
         ]
+      },
+      {
+        "matcher": "AskUserQuestion",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 __AUTOHARN_ROOT__/hooks/demurral_detect.py",
+            "timeout": 15
+          }
+        ]
       }
     ],
     "Stop": [
@@ -24,6 +34,11 @@
             "type": "command",
             "command": "env LEDGER_HOST=__HOST__ LEDGER_DB=__DB__ GATE_LEDGER=__SCHEMA__.ledger GATE_SUBJECT_ROOT=__PROJECT_ROOT__ STOP_CLEAN_EXIT_STATE=__PROJECT_ROOT__/.claude/stop_clean_exit_state.json python3 __AUTOHARN_ROOT__/hooks/stop_clean_exit.py",
             "timeout": 30
+          },
+          {
+            "type": "command",
+            "command": "python3 __AUTOHARN_ROOT__/hooks/demurral_detect.py",
+            "timeout": 15
           }
         ]
       }
