@@ -56,7 +56,7 @@ which is why hooks/ is never edited while any wired session is live.
   `DIVERGE_BY_DESIGN` | `DIVERGE_DEFECT` | `QUARANTINED`; non-zero exit iff defect or
   quarantine — both are TYPED escalation events: stop and route upward, with the banked
   DerivationRecord pair under engine/docs/ledger-marriage/derivations/ as the artifact.
-  Witness: CAPABILITIES item 12.
+  Diagnosis walkthrough: engine/docs/JUDGE-READING.md. Witness: CAPABILITIES item 12.
 - `./pickup` — live-derived resume brief (six sections incl. IN-FLIGHT work items),
   recomputed from the ledger every time, never stored. Witness: CAPABILITIES item 11.
 - the scaffold — see next section. Witness: CAPABILITIES item 13.
