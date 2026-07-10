@@ -7,7 +7,9 @@ Read .claude/HOOKS.md first. You are the author principal; a reviewer principal 
 2. Assign the decomposition's countersign obligation to reviewer; reviewer countersigns
    via LED_ACTOR=reviewer claiming technical independence.
 3. Pre-register acceptance criteria as their own ledger entry BEFORE implementing;
-   record results with --evidence against that entry.
+   record results with --evidence AND --refs row:<criteria-row-id> against that entry
+   (refs is the sanctioned channel for a non-review kind to cite an antecedent row,
+   so the criteria->result link is queryable, not prose).
 4. A task that produces files is complete only when they are committed to git.
 5. Done means ./led review-gap, question-status, and ./led work violations are all clean.
 

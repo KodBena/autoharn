@@ -21,23 +21,21 @@
 #                            — both-or-neither; a mismatched/ambiguous quote is refused
 #     --answers id           this entry (any kind) resolves an earlier kind=question row id
 #                            (s15 validate_answers); shows up in `led question-status`
-#     --refs "<text>"        free-text cross-reference (ledger.refs)
+#     --refs "<text>"        free-text cross-reference (ledger.refs). CONVENTION for citing an
+#                            antecedent ledger row from ANY kind: `--refs row:<id>` (e.g. a
+#                            verification result citing its pre-registered criteria row:
+#                            `led --refs row:12 --evidence "..." verification "criteria met"`).
+#                            This is the kernel's own sanctioned channel for a bare row
+#                            reference on a non-review kind — s15's enacts column comment says
+#                            it outright: "a bare reference uses refs". The TYPED regards edge
+#                            stays reserved for kind=review (s15 validate_review, unchanged
+#                            through s21: "regards is reserved for kind=review") and is written
+#                            only by `led review`'s own <entry-id> positional arg; a --regards
+#                            flag on a generic kind would be refused by the kernel every time,
+#                            so none is offered.
 #     --concern design|enactment|process|other
 #     --evidence "<text>"
 #     --confidence low|medium|high
-#     --regards id           populates ledger.regards on THIS write (the same column `led review`
-#                             populates from its own <entry-id> positional arg). NOTE the s15
-#                             validate_review trigger (unchanged through s21) refuses a non-NULL
-#                             regards on any kind OTHER than 'review' ("regards is reserved for
-#                             kind=review") -- a deliberate, repeatedly-reaffirmed kernel invariant,
-#                             not a gap this flag closes. On a non-review kind (decision,
-#                             verification, ...) this flag will be REFUSED by the kernel, loudly,
-#                             every time -- it exists so that refusal is immediate and explicit
-#                             rather than the flag being silently unavailable. A structured
-#                             criteria->result edge for a non-review kind is NOT achievable from
-#                             this template alone; it would require a kernel delta relaxing
-#                             validate_review's kind-gate (out of scope here — kernel/ is frozen
-#                             without a Fable-authored, maintainer-ratified spec).
 #
 #   led --recent [N]                          last N ledger rows (default 10), newest first;
 #                                              marks a row SUPERSEDED when a later row's
@@ -154,7 +152,6 @@ refs=""
 concern=""
 evidence=""
 confidence=""
-regards_flag=""
 while true; do
   case "${1:-}" in
     -f) files="${2:-}"; shift 2 ;;
@@ -167,7 +164,6 @@ while true; do
     --concern) concern="${2:-}"; shift 2 ;;
     --evidence) evidence="${2:-}"; shift 2 ;;
     --confidence) confidence="${2:-}"; shift 2 ;;
-    --regards) regards_flag="${2:-}"; shift 2 ;;
     *) break ;;
   esac
 done
@@ -457,7 +453,7 @@ fi
 if [ $# -lt 2 ]; then
   echo "usage: led [flags] <kind> <statement...>   (see top-of-file comment for the full flag list:" >&2
   echo "       -f -e --supersedes --amends --amends-scope --answers --refs --concern --evidence" >&2
-  echo "       --confidence --regards)" >&2
+  echo "       --confidence; cite an antecedent row from any kind via --refs row:<id>)" >&2
   echo "       led --recent [N] | led current [N] | led question-status | led review-gap | led stamp-distinctness" >&2
   echo "       led register-principal <name> <class>" >&2
   echo "       led obligate <scope> <assigned-by-principal> <obliged-actor-principal>" >&2
@@ -487,13 +483,12 @@ psql -h "$PGHOST" -d "$PGDB" -v ON_ERROR_STOP=1 \
   -v kind="$kind" -v statement="$statement" -v rationale="$rationale" \
   -v supersedes="$supersedes" -v amends="$amends" -v amends_scope="$amends_scope" \
   -v answers="$answers" -v refs="$refs" -v concern="$concern" \
-  -v evidence="$evidence" -v confidence="$confidence" -v enacts="$enacts_lit" \
-  -v regards_flag="$regards_flag" <<SQL
+  -v evidence="$evidence" -v confidence="$confidence" -v enacts="$enacts_lit" <<SQL
     SET ROLE ${ROLE};
     SET search_path = ${SCHEMA}, ${KERNEL};
     INSERT INTO ${SCHEMA}.ledger
         (kind, statement, rationale, supersedes, amends, amends_scope, answers,
-         refs, concern, evidence, confidence, enacts, regards)
+         refs, concern, evidence, confidence, enacts)
     VALUES (:'kind', :'statement', NULLIF(:'rationale', ''),
             NULLIF(:'supersedes', '')::bigint,
             NULLIF(:'amends', '')::bigint,
@@ -503,6 +498,5 @@ psql -h "$PGHOST" -d "$PGDB" -v ON_ERROR_STOP=1 \
             NULLIF(:'concern', ''),
             NULLIF(:'evidence', ''),
             NULLIF(:'confidence', ''),
-            NULLIF(:'enacts', '')::bigint[],
-            NULLIF(:'regards_flag', '')::bigint);
+            NULLIF(:'enacts', '')::bigint[]);
 SQL
