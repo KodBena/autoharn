@@ -25,6 +25,19 @@
 #     --concern design|enactment|process|other
 #     --evidence "<text>"
 #     --confidence low|medium|high
+#     --regards id           populates ledger.regards on THIS write (the same column `led review`
+#                             populates from its own <entry-id> positional arg). NOTE the s15
+#                             validate_review trigger (unchanged through s21) refuses a non-NULL
+#                             regards on any kind OTHER than 'review' ("regards is reserved for
+#                             kind=review") -- a deliberate, repeatedly-reaffirmed kernel invariant,
+#                             not a gap this flag closes. On a non-review kind (decision,
+#                             verification, ...) this flag will be REFUSED by the kernel, loudly,
+#                             every time -- it exists so that refusal is immediate and explicit
+#                             rather than the flag being silently unavailable. A structured
+#                             criteria->result edge for a non-review kind is NOT achievable from
+#                             this template alone; it would require a kernel delta relaxing
+#                             validate_review's kind-gate (out of scope here — kernel/ is frozen
+#                             without a Fable-authored, maintainer-ratified spec).
 #
 #   led --recent [N]                          last N ledger rows (default 10), newest first;
 #                                              marks a row SUPERSEDED when a later row's
@@ -65,6 +78,17 @@
 #                                              from the obliged actor) requires <obliged-actor-principal>'s
 #                                              current rows to carry a distinct-actor attest countersign
 #                                              (surfaced by `led review-gap` until one lands)
+#   led obligate revoke <scope>               delete a countersign_obligation row by scope (its PK).
+#                                              Whether this succeeds or is REFUSED depends on the
+#                                              connecting role's LIVE grants on countersign_obligation,
+#                                              checked here via has_table_privilege (never assumed,
+#                                              never hardcoded) — s20 granted this role SELECT,INSERT
+#                                              ONLY on countersign_obligation, by deliberate ruling (an
+#                                              obligation is standing OPERATOR-owned policy config, not
+#                                              a role self-service capability), so under an unmodified
+#                                              kernel this REFUSES every time, with teach-text naming
+#                                              the maintainer act that does revoke it. `led` never
+#                                              widens its own grants to bypass this.
 #
 #   led work open <slug> <title...>           open a work item (kernel/lineage/s22-work-item-ledger.sql's
 #                                              validate_work_item(): one opening act per slug — a
@@ -81,11 +105,16 @@
 #                                              refused (spec invariant 4); it is surfaced instead by
 #                                              `led work violations` (depends_on_unknown_slug)
 #   led work close <slug> <resolution> [--witness <ref>]
-#                                              close a work item. resolution:
-#                                              shipped|superseded|dropped|deferred. resolution=shipped
-#                                              REQUIRES --witness — refused at construction time
-#                                              (work_shipped_requires_witness CHECK), never a
-#                                              tolerated-but-flagged row
+#                                              close a work item. REFUSED if <slug> has no
+#                                              work_claimed row yet (led-side gate, mirroring the
+#                                              existing duplicate-open/unopened refusals — run-5
+#                                              forensics: two work items were closed with no claim
+#                                              ever landing, unflagged, until an outside review
+#                                              caught it) — claim it first: `./led work claim <slug>`.
+#                                              resolution: shipped|superseded|dropped|deferred.
+#                                              resolution=shipped REQUIRES --witness — refused at
+#                                              construction time (work_shipped_requires_witness
+#                                              CHECK), never a tolerated-but-flagged row
 #   led work list                             work_item_current: one row per slug — state (open/
 #                                              closed), title, resolution, witness, claimant
 #   led work violations                       work_item_violations: duplicate_open and
@@ -125,6 +154,7 @@ refs=""
 concern=""
 evidence=""
 confidence=""
+regards_flag=""
 while true; do
   case "${1:-}" in
     -f) files="${2:-}"; shift 2 ;;
@@ -137,6 +167,7 @@ while true; do
     --concern) concern="${2:-}"; shift 2 ;;
     --evidence) evidence="${2:-}"; shift 2 ;;
     --confidence) confidence="${2:-}"; shift 2 ;;
+    --regards) regards_flag="${2:-}"; shift 2 ;;
     *) break ;;
   esac
 done
@@ -192,10 +223,46 @@ fi
 
 if [ "${1:-}" = "obligate" ]; then
   shift
+  if [ "${1:-}" = "revoke" ]; then
+    shift
+    if [ $# -lt 1 ]; then
+      echo "usage: led obligate revoke <scope>" >&2
+      echo "       deletes a countersign_obligation row (scope is its PK). Whether this succeeds" >&2
+      echo "       or is refused depends on the connecting role's LIVE grants on" >&2
+      echo "       countersign_obligation -- checked here via has_table_privilege, never assumed" >&2
+      echo "       (s20 granted this role SELECT,INSERT only, by deliberate ruling: an obligation" >&2
+      echo "       is standing OPERATOR-owned policy config, never a role self-service capability)" >&2
+      exit 1
+    fi
+    scope="$1"
+    # LIVE check, not a hardcoded assumption: if a future kernel delta ever grants DELETE, this
+    # verb starts working with no code change here -- the grant state has one home (pg_catalog),
+    # never a second hand-copied boolean in this script (ADR-0012 P1).
+    can_delete=$(psql -h "$PGHOST" -d "$PGDB" -tAc \
+      "SELECT has_table_privilege('${ROLE}', '${SCHEMA}.countersign_obligation', 'DELETE');")
+    if [ "$can_delete" != "t" ]; then
+      echo "led obligate revoke: REFUSED -- role '${ROLE}' has no DELETE grant on" >&2
+      echo "  ${SCHEMA}.countersign_obligation (checked live via has_table_privilege, not" >&2
+      echo "  hardcoded). This is s20's deliberate ruling, not an oversight: an obligation is" >&2
+      echo "  standing operator-owned policy config, never a role-level self-service capability" >&2
+      echo "  -- widening the grant would be a kernel delta and is out of scope for this verb to" >&2
+      echo "  take on itself. To revoke scope '${scope}', a maintainer runs, AS THE SCHEMA OWNER" >&2
+      echo "  (never as ${ROLE}, never by widening ${ROLE}'s grants):" >&2
+      echo "    psql -h ${PGHOST} -d ${PGDB} -v ON_ERROR_STOP=1 -c \\" >&2
+      echo "      \"DELETE FROM ${SCHEMA}.countersign_obligation WHERE scope = '${scope}';\"" >&2
+      exit 1
+    fi
+    exec psql -h "$PGHOST" -d "$PGDB" -v ON_ERROR_STOP=1 -v scope="$scope" <<SQL
+      SET ROLE ${ROLE};
+      SET search_path = ${SCHEMA}, ${KERNEL};
+      DELETE FROM ${SCHEMA}.countersign_obligation WHERE scope = :'scope';
+SQL
+  fi
   if [ $# -lt 3 ]; then
     echo "usage: led obligate <scope> <assigned-by-principal> <obliged-actor-principal>" >&2
     echo "       assigned-by must be a DIFFERENT registered principal than the obliged actor" >&2
     echo "       (obligation_not_self_assigned CHECK refuses a self-assigned obligation)" >&2
+    echo "       led obligate revoke <scope>" >&2
     exit 1
   fi
   scope="$1"; assigned_by_name="$2"; obliges_actor_name="$3"
@@ -334,9 +401,28 @@ SQL
         echo "       resolution: shipped|superseded|dropped|deferred" >&2
         echo "       resolution=shipped REQUIRES --witness -- refused at construction time" >&2
         echo "       (work_shipped_requires_witness CHECK), never a tolerated-but-flagged row" >&2
+        echo "       refused if <slug> has no work_claimed row yet -- claim it first:" >&2
+        echo "       ./led work claim <slug>" >&2
         exit 1
       fi
       slug="$1"; resolution="$2"
+      # claim-before-close gate (led-side; s22's own trigger checks only that <slug> was OPENED,
+      # not that anyone claimed it) -- run-5 forensics: two work items were closed with no claim
+      # ever landing, unflagged. Mirrors the existing duplicate-open/unopened refusal style: a
+      # named usage message on stderr, exit 1, no silent acceptance.
+      claimed=$(psql -h "$PGHOST" -d "$PGDB" -tAq -v slug="$slug" <<SQL
+        SET ROLE ${ROLE};
+        SET search_path = ${SCHEMA}, ${KERNEL};
+        SELECT EXISTS (SELECT 1 FROM ledger WHERE kind = 'work_claimed' AND work_slug = :'slug');
+SQL
+      )
+      if [ "$claimed" != "t" ]; then
+        echo "led work close: REFUSED -- slug '${slug}' has no work_claimed row (claim it first):" >&2
+        echo "  ./led work claim ${slug}" >&2
+        echo "  (a close with no claim ever landing is the run-5 finding: two work items were" >&2
+        echo "  closed this way, unflagged, until an outside review caught it)" >&2
+        exit 1
+      fi
       exec psql -h "$PGHOST" -d "$PGDB" -v ON_ERROR_STOP=1 \
         -v slug="$slug" -v resolution="$resolution" -v witness="$witness" \
         -v statement="work_closed: ${slug} (${resolution})" <<SQL
@@ -370,10 +456,12 @@ fi
 
 if [ $# -lt 2 ]; then
   echo "usage: led [flags] <kind> <statement...>   (see top-of-file comment for the full flag list:" >&2
-  echo "       -f -e --supersedes --amends --amends-scope --answers --refs --concern --evidence --confidence)" >&2
+  echo "       -f -e --supersedes --amends --amends-scope --answers --refs --concern --evidence" >&2
+  echo "       --confidence --regards)" >&2
   echo "       led --recent [N] | led current [N] | led question-status | led review-gap | led stamp-distinctness" >&2
   echo "       led register-principal <name> <class>" >&2
   echo "       led obligate <scope> <assigned-by-principal> <obliged-actor-principal>" >&2
+  echo "       led obligate revoke <scope>" >&2
   echo "       led review <entry-id> <verdict> <independence> [--antecedent id] <statement...>" >&2
   echo "       led work open|claim|depends|close|list|violations  (see top-of-file comment)" >&2
   exit 1
@@ -399,12 +487,13 @@ psql -h "$PGHOST" -d "$PGDB" -v ON_ERROR_STOP=1 \
   -v kind="$kind" -v statement="$statement" -v rationale="$rationale" \
   -v supersedes="$supersedes" -v amends="$amends" -v amends_scope="$amends_scope" \
   -v answers="$answers" -v refs="$refs" -v concern="$concern" \
-  -v evidence="$evidence" -v confidence="$confidence" -v enacts="$enacts_lit" <<SQL
+  -v evidence="$evidence" -v confidence="$confidence" -v enacts="$enacts_lit" \
+  -v regards_flag="$regards_flag" <<SQL
     SET ROLE ${ROLE};
     SET search_path = ${SCHEMA}, ${KERNEL};
     INSERT INTO ${SCHEMA}.ledger
         (kind, statement, rationale, supersedes, amends, amends_scope, answers,
-         refs, concern, evidence, confidence, enacts)
+         refs, concern, evidence, confidence, enacts, regards)
     VALUES (:'kind', :'statement', NULLIF(:'rationale', ''),
             NULLIF(:'supersedes', '')::bigint,
             NULLIF(:'amends', '')::bigint,
@@ -414,5 +503,6 @@ psql -h "$PGHOST" -d "$PGDB" -v ON_ERROR_STOP=1 \
             NULLIF(:'concern', ''),
             NULLIF(:'evidence', ''),
             NULLIF(:'confidence', ''),
-            NULLIF(:'enacts', '')::bigint[]);
+            NULLIF(:'enacts', '')::bigint[],
+            NULLIF(:'regards_flag', '')::bigint);
 SQL
