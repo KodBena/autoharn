@@ -26,8 +26,9 @@
   never where its overconfidence can hurt. Escalate on TYPED events (gate-refusal streaks,
   DIVERGE_DEFECT/QUARANTINED, non-converging review loops), never on self-assessment.
 - **Nobody edits kernel/lineage (frozen records), law/, or engine/lp/ semantics without a
-  Fable-authored, maintainer-ratified spec.** Applying a lineage delta to a deployment is the
-  operator's/maintainer's act, always with every -v var explicit.
+  Fable-authored, maintainer-ratified spec.** A delta reaches reality by entering the birth
+  chain, carried by the next world's scaffold — deltas are never applied to an existing
+  world (runs-are-linear ruling below, 2026-07-11).
 - **Succession rule (maintainer-ratified 2026-07-09):** if Fable is unavailable, the
   constitutional layer does NOT freeze — the maintainer + Opus may author kernel/law/engine
   specs under MAXIMUM ceremony: the commission/conformance instrument on the commission, an
@@ -46,13 +47,21 @@
   that only ADDS refusals, vocabulary, or derived views — strictly fail-safe: nothing existing
   relaxed, no existing semantics changed — and that arrives scratch-witnessed on both
   polarities with the SQL/ASP differential in AGREE, is pre-ratified as a class: it enters
-  the birth chain without a per-delta maintainer question. Applying such a delta to an
-  EXISTING live deployment remains the operator's scripted act (bootstrap/apply-delta.sh,
-  typed confirmation) — pre-ratification removes the question, never the act. A delta that loosens
+  the birth chain without a per-delta maintainer question. A delta that loosens
   any refusal, alters existing semantics, or touches law/ routes to the maintainer as before.
   Doubt about which side a delta falls on IS the routing: ask. (Ratified after s21/s22, both
   of which would have sailed through; the maintainer's ratification bandwidth is reserved for
   what the system may PERMIT, not what it may additionally refuse.)
+- **Runs are strictly linear (maintainer-ratified 2026-07-11).** Run M > N means run N's
+  world is dust and settled: read-only evidence, never patched, never refreshed, never
+  delta'd — "live world" is not a concept here and never was. The apply-to-existing-world
+  clause that stood in the bullet above, and bootstrap/apply-delta.sh with its typed-
+  confirmation ceremony, are retired: the ceremony was witnessed producing cargo-cult
+  sysadmin work for a non-expert operator, the opposite of assurance. Paperwork exists for
+  safety/RCA; an operator step that is ritual rather than load-bearing is deleted, not
+  documented. (Same ruling's note on vocabulary: "ratified" in this project's record has
+  mostly meant "instructed by the operator and therefore implemented" — read it plainly,
+  not ceremonially.)
 - **Self-application (maintainer ruling 2026-07-09).** The harness's own operations meet the
   harness's bar. No operator procedure ships as prose steps + hand-pasted SQL/bash where a
   scripted, witnessed verb is possible — run 2's world was broken at birth by exactly that
