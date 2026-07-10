@@ -44,8 +44,9 @@
 #   led current [N]                           last N rows of ledger_current (supersedes-filtered
 #                                              read) — the view a consumer should read by default
 #   led question-status                       question_status view: every open/answered question
-#   led review-gap                            review_gap view: obliged-actor rows with no
-#                                              distinct-actor attest countersign yet
+#   led review-gap                            review_gap view: EVERY row (any kind) by an obliged
+#                                              actor with no distinct-actor attest countersign yet —
+#                                              not scope-filtered (see `led obligate` below)
 #   led stamp-distinctness                    review_stamp_distinctness view: for each review,
 #                                              whether the SAME invocation wrote it and its target
 #
@@ -71,11 +72,34 @@
 #                                              never on the stamped invocation identity).
 #
 #   led obligate <scope> <assigned-by-principal> <obliged-actor-principal>
-#                                              register a countersign_obligation: <assigned-by-principal>
-#                                              (must NOT be a self-registration — assigned-by must differ
-#                                              from the obliged actor) requires <obliged-actor-principal>'s
-#                                              current rows to carry a distinct-actor attest countersign
-#                                              (surfaced by `led review-gap` until one lands)
+#                                              register a countersign_obligation. DIRECTION, spelled
+#                                              out because getting it backwards is the recurring
+#                                              obligate mistake (BACKLOG run-5 AND run-7 forensics,
+#                                              two consecutive runs, each cost a workaround round):
+#                                              <obliged-actor-principal> is the WORKER — the principal
+#                                              whose rows need outside eyes. It must NEVER be the
+#                                              reviewer/countersigner. <assigned-by-principal> is
+#                                              whoever is imposing the obligation (must differ from
+#                                              the obliged actor — the obligation_not_self_assigned
+#                                              CHECK refuses a self-ASSIGNED obligation; distinct from
+#                                              `led register-principal`'s unrelated self-registration).
+#                                              <scope> is a free-text LABEL naming this obligation row
+#                                              (its PK) — it is NOT a filter key: `review_gap` joins on
+#                                              actor identity alone (o.obliges_actor = l.actor), and
+#                                              the ledger table carries no scope column to narrow it
+#                                              against. KNOWN OVER-CATCH (fail-safe direction, no
+#                                              maintainer ruling yet — kernel/lineage s13/s14 review_gap):
+#                                              once a principal is obliged, `led review-gap` counts
+#                                              EVERY uncountersigned row that principal ever writes —
+#                                              any kind, including that principal's OWN later review/
+#                                              attest rows — not only rows "in scope". Obliging the
+#                                              REVIEWER by mistake makes the reviewer's own countersigns
+#                                              show up as debt, forcing an author counter-countersign
+#                                              round (this already happened twice — see BACKLOG).
+#                                              Worked example: `led obligate decomposition-review
+#                                              orchestrator author` — after this, someone other than
+#                                              'author' must countersign every one of author's ledger
+#                                              rows (any kind) or `led review-gap` shows debt for each.
 #   led obligate revoke <scope>               delete a countersign_obligation row by scope (its PK).
 #                                              Whether this succeeds or is REFUSED depends on the
 #                                              connecting role's LIVE grants on countersign_obligation,
@@ -256,8 +280,18 @@ SQL
   fi
   if [ $# -lt 3 ]; then
     echo "usage: led obligate <scope> <assigned-by-principal> <obliged-actor-principal>" >&2
-    echo "       assigned-by must be a DIFFERENT registered principal than the obliged actor" >&2
-    echo "       (obligation_not_self_assigned CHECK refuses a self-assigned obligation)" >&2
+    echo "  DIRECTION MATTERS -- this is the mistake that has cost a workaround two runs" >&2
+    echo "  running (BACKLOG run-5, run-7): <obliged-actor-principal> is the WORKER whose" >&2
+    echo "  rows need outside eyes -- never the reviewer. <assigned-by-principal> is whoever" >&2
+    echo "  imposes the obligation and must be a DIFFERENT registered principal than the" >&2
+    echo "  obliged actor (obligation_not_self_assigned CHECK refuses a self-ASSIGNED" >&2
+    echo "  obligation -- distinct from register-principal's self-REGISTRATION). <scope> is" >&2
+    echo "  a free-text label, not a filter: review_gap joins on actor identity alone, so" >&2
+    echo "  it counts EVERY row (any kind) the obliged actor writes, not just this scope's" >&2
+    echo "  rows -- obliging the reviewer by mistake catches the reviewer's own countersigns." >&2
+    echo "  example: led obligate decomposition-review orchestrator author" >&2
+    echo "    -> after this, someone other than 'author' must countersign every one of" >&2
+    echo "       author's ledger rows or \`led review-gap\` shows debt for each." >&2
     echo "       led obligate revoke <scope>" >&2
     exit 1
   fi
