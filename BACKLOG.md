@@ -2166,3 +2166,15 @@ self-application ruling). Four acts, each with its artifact:
    so run7 remains hands-off; resumption walkthrough delivered to the maintainer in the
    session reply; resume commands also now in OPERATING-CARD (marked UNWITNESSED until
    run 8 banks the witness).
+
+### Addendum, same day: resumption doctrine sharpened (maintainer, 2026-07-11)
+
+Governed resumption = a FRESH session hydrated from the ledger via ./pickup — never
+`claude --continue`. His words, near-verbatim: if the harness works it should NEVER be
+necessary to resume with full context; otherwise it's pointless — especially for
+Fable/Mythos, whose O(N^2) context cost is literally why HANDOFF.md exists. Card + HANDOFF
+corrected (they had described --continue as the path); --continue demoted to a diagnostic
+comparison variant. Run 8's witness bar accordingly: the resumed agent must reconstruct
+the open work FROM LEDGER ROWS (citing them), not from replayed conversation. An agent
+that has to ask the user what the work was is a hydration FAILURE — and a valuable
+finding, not a broken run.

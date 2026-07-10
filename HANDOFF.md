@@ -45,7 +45,11 @@ cd /home/bork/w/vdc/1/runN && claude    # then type the task; nothing is pasted
 
 Run 8 will test RESUMPTION: stopping a governed session and picking the work back up (the
 world-level mechanism is `./pickup` — derived fresh from the ledger, never stored — plus
-Claude Code's own session resume). Nobody has witnessed a governed mid-task resume yet. Note:
+Claude Code's own session resume). Nobody has witnessed a governed mid-task resume yet.
+**Sharpened by maintainer, 2026-07-11: the resume is a FRESH session hydrated from the
+ledger via `./pickup` — NOT `claude --continue`. If resumption needs the old conversation
+reloaded, the harness has failed its point; context replay is the O(N²) cost the ledger
+exists to replace (the same cost that made this HANDOFF necessary).** Note:
 run 7's phase 2 (HTML terminal renderer + 16-swatch editor + wiring the 16-color experiment)
 is still open in the run7 world and is a natural resumption subject.
 

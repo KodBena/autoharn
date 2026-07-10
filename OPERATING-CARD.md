@@ -70,14 +70,18 @@ bootstrap/new-project.sh /home/bork/w/vdc/1/runN --new-world runN --db toy --hos
 cd /home/bork/w/vdc/1/runN && claude    # type the task as the first message; nothing is pasted
 ```
 
-Resume (the run-8 subject; UNWITNESSED in a governed world until run 8 banks it):
+Resume (the run-8 subject; UNWITNESSED until run 8 banks it. Maintainer ruling
+2026-07-11: governed resumption is a FRESH session hydrated from the ledger — never a
+reloaded conversation):
 ```
 cd /home/bork/w/vdc/1/<world>
-./pickup                 # re-derives where the work stands, from the ledger, live
-claude --continue        # reopen the most recent session in this directory
-# (or `claude --resume` to pick a specific session from a list;
-#  or just type in the still-open terminal if the session never exited)
+claude                   # FRESH session — no --continue, no --resume
+# first message: "Run ./pickup and continue the open work it shows."
 ```
+The ledger IS the resumable state; `./pickup` re-derives it live. If resumption only
+works when the old conversation is reloaded (`claude --continue`), the harness has
+failed its point — context replay is the O(N²)-cost path the ledger exists to replace.
+`--continue` is a diagnostic comparison variant at most, never the mechanism.
 Resumption re-enters the SAME world — do not scaffold a new world to continue old work;
 a new world cannot see the old ledger by design.
 
