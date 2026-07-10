@@ -42,6 +42,17 @@
 - **Claims carry witnesses.** A report states, per item: WITNESSED (with observed output),
   REFUSED-AS-EXPECTED, or UNEXERCISED with the concrete blocker. Docs follow the same rule
   (an example carries real output or an UNWITNESSED mark). No umbrella claims.
+- **Class-ratified fail-safe deltas (maintainer ruling 2026-07-09).** A kernel lineage delta
+  that only ADDS refusals, vocabulary, or derived views — strictly fail-safe: nothing existing
+  relaxed, no existing semantics changed — and that arrives scratch-witnessed on both
+  polarities with the SQL/ASP differential in AGREE, is pre-ratified as a class: it enters
+  the birth chain without a per-delta maintainer question. Applying such a delta to an
+  EXISTING live deployment remains the operator's scripted act (bootstrap/apply-delta.sh,
+  typed confirmation) — pre-ratification removes the question, never the act. A delta that loosens
+  any refusal, alters existing semantics, or touches law/ routes to the maintainer as before.
+  Doubt about which side a delta falls on IS the routing: ask. (Ratified after s21/s22, both
+  of which would have sailed through; the maintainer's ratification bandwidth is reserved for
+  what the system may PERMIT, not what it may additionally refuse.)
 - **Self-application (maintainer ruling 2026-07-09).** The harness's own operations meet the
   harness's bar. No operator procedure ships as prose steps + hand-pasted SQL/bash where a
   scripted, witnessed verb is possible — run 2's world was broken at birth by exactly that
