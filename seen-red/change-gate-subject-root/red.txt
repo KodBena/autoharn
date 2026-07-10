@@ -29,6 +29,38 @@ AFTER the fix (case a, real output, 2026-07-09):
   {"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "deny", ...}}
   exit: 2
 
-Full five-case run (red + healthy-subject-root + unwired-unset + deprecated-alias + Bash-path-scope
-check, all asserted programmatically):
+BACKLOG "Run-5 forensics" (2026-07-10): the ledger is a retroactive diary, not a permit log — 8m23s
+of witnessed work landed as 19 ledger rows in 89.4s, after the fact, in a session the gate had
+otherwise governed correctly. The fix (permit-to-work): a wired subject root whose ledger schema
+carries the s22 work-item layer denies a Write/Edit unless a work item is currently OPEN and
+CLAIMED, composing IN FRONT of the ticket/window logic above (both mechanisms hold at once).
+
+AFTER the fix (case f, real output witnessed via `python3 seen-red/change-gate-subject-root/
+run_fixtures.py`, 2026-07-10 — case f's own setup.sh applies high_watermark_1.sql + s20 + s21 +
+s22 to a scratch schema first, so the bare command below only reproduces this once that schema
+exists; the fixture harness is the reproducible entry point, not the standalone one-liner):
+  echo '{"tool_name":"Write","tool_input":{"file_path":"/tmp/fixture_target_ptw_f.py"},"cwd":"/tmp"}' \
+    | GATE_SUBJECT_ROOT=/tmp GATE_LEDGER=hookprobe_ptw_f.ledger LEDGER_DB=toy \
+      GATE_STATE=/tmp/ptw_f_state.json GATE_JOURNAL=/tmp/ptw_f_journal.jsonl \
+      python3 hooks/pretooluse_change_gate.py
+
+  Ledger policy (s22 permit-to-work): this world's ledger carries the work-item layer and no
+  work item is currently OPEN and CLAIMED — a ledger entry written after the fact is not a
+  permit to work (BACKLOG 'Run-5 forensics', 2026-07-10: 8m23s of witnessed work landed as 19
+  ledger rows 89.4s later — honest, but late). Open and claim a work item, THEN retry the same
+  edit:
+    ./led work open <slug> "<title>"
+    ./led work claim <slug>
+  {"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "deny", ...}}
+  exit: 2
+
+Case g (same setup, PLUS an open+claimed work item and a matching ticket entry) proves the OPPOSITE
+polarity: exit 0, no deny text at all — permit-to-work satisfied AND the pre-existing ticket
+requirement satisfied. Case h proves the NAMED fail-open choice: a pre-s22 world (no
+work_item_current view; the byte-held nla/public default) skips this check entirely and falls
+through to the old "needs a ledger entry" deny, unchanged.
+
+Full eight-case run (red + healthy-subject-root + unwired-unset + deprecated-alias + Bash-path-
+scope + permit-to-work no-open-claimed/open-claimed-allowed/pre-s22, all asserted programmatically;
+f/g apply-and-drop a scratch s22 schema in the toy db per run, zero DB residue):
   python3 seen-red/change-gate-subject-root/run_fixtures.py

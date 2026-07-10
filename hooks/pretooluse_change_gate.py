@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-09T08:07:02Z
-#   last-change: 2026-07-09T13:50:32Z
+#   last-change: 2026-07-10T20:01:34Z
 #   contributors: 9bcc0113/main, be693afb/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -77,6 +77,33 @@ into `.claude/settings.json` — every Write/Edit/NotebookEdit call is DENIED wi
 naming the configured path and the settings.json fix, instead of `is_governed()` silently
 matching nothing and governing zero files; an unset SUBJECT_ROOT (unwired sessions) or one that
 resolves to a real directory is completely unaffected.
+
+PERMIT-TO-WORK (BACKLOG "Run-5 forensics", 2026-07-10): run 5's forensic pass found the ledger is
+a retroactive diary, not a permit log — 8m23s of witnessed work landed as 19 rows in 89.4s, after
+the fact, in a session the gate had otherwise governed correctly all along (every ticket it saw was
+honest). A ledger ENTRY naming a file is necessary but not sufficient: it proves the file was
+declared, never that work on it was authorized to START. The fix composes a SECOND, PRIOR gate in
+front of the existing ticket/window logic (which is otherwise untouched): when this gate is WIRED
+(SUBJECT_ROOT explicitly configured via env or a located deployment.json, and resolving to a real
+directory — see `SUBJECT_ROOT_WIRED`) AND this world's ledger schema carries the s22 work-item
+layer (the `work_item_current` view exists — see `has_work_item_layer()`), a Write/Edit/NotebookEdit
+under SUBJECT_ROOT is DENIED unless `work_item_current` shows at least one row with state='open'
+AND a non-NULL claimant (`has_open_claimed_work_item()`) — with teach-text naming the exact
+`./led work open`/`./led work claim` commands. This is deliberately ORTHOGONAL to the ticket/window
+mechanism: even a currently-open consumption WINDOW (a reused ticket) still requires a live
+open+claimed work item, since permit-to-work sits IN FRONT of that reuse check, not behind it.
+The SAME check is also consulted in the Bash branch's already-denied bash-mutation-into-governed-
+file class below (`bash_mutates_governed()`) — PRECISELY stated, that class denies unconditionally
+either way (byte-held), so consulting the check there changes only WHICH teach-text is shown
+(the more actionable permit-to-work message when it applies), never whether the call is allowed;
+it is not a second enforcement point, only a better-informed message on an existing one.
+
+NAMED CHOICE — pre-s22 fail-OPEN (deliberate, not an oversight): a world whose ledger schema does
+NOT carry `work_item_current` (any pre-s22 world) SKIPS this check entirely and keeps EXACTLY
+today's ticket-only behavior. `to_regclass` reporting "no such view" is not an error — only a
+genuine DB-unreachable failure fails closed (propagated into the existing fail-closed except
+below, same posture as every other check here). This keeps older, already-deployed worlds working
+unchanged; it does not retroactively demand a work-item layer they were never given.
 """
 import fnmatch
 import json
@@ -170,6 +197,15 @@ JOURNAL = _DEFAULT_JOURNAL
 # for the session's entire life). Set by `_configure()`; deliberately false when SUBJECT_ROOT was
 # never configured via env at all (an unwired session stays untouched) or resolves to a real dir.
 SUBJECT_ROOT_MISCONFIGURED = False
+# True iff this invocation's SUBJECT_ROOT is "configured" (an explicit GATE_SUBJECT_ROOT/
+# E13_SUBJECT_ROOT env var, OR a located+loaded deployment.json) AND resolves to a real directory
+# (permit-to-work, BACKLOG "Run-5 forensics", 2026-07-10). Deliberately the disjunction of BOTH
+# wiring paths — unlike SUBJECT_ROOT_MISCONFIGURED above (which only ever fires for the explicit-
+# env-var shape, since a not-yet-existing deployment-derived root is a different, normal state) —
+# because permit-to-work must also apply to a scaffolded project driven purely by deployment.json,
+# not only one pinned via env var. Set by `_configure()`; false for autoharn's own bare hardcoded-
+# default usage (no deployment.json, no env override) so that flow is completely unaffected.
+SUBJECT_ROOT_WIRED = False
 EPOCH = "1970-01-01 00:00:00"
 WINDOW_S = 600.0  # a ticket, once consumed, stays open on its file for this long …
 # … or until the next test-run / commit boundary, whichever comes first.
@@ -198,6 +234,16 @@ DENY_NEEDS_ENTRY = (
 DENY_BASH_WRITE = (
     "Ledger policy: source files are modified via the Write/Edit tools, so each change is tied "
     "to its ledger entry — shell writes into these files are disabled."
+    + (f"\n{DENY_HINT}" if DENY_HINT else "")
+)
+DENY_NO_OPEN_WORK_ITEM = (
+    "Ledger policy (s22 permit-to-work): this world's ledger carries the work-item layer and no "
+    "work item is currently OPEN and CLAIMED — a ledger entry written after the fact is not a "
+    "permit to work (BACKLOG 'Run-5 forensics', 2026-07-10: 8m23s of witnessed work landed as 19 "
+    "ledger rows 89.4s later — honest, but late). Open and claim a work item, THEN retry the "
+    "same edit:\n"
+    "  ./led work open <slug> \"<title>\"\n"
+    "  ./led work claim <slug>"
     + (f"\n{DENY_HINT}" if DENY_HINT else "")
 )
 
@@ -279,7 +325,7 @@ def _configure(data: dict) -> None:
     after stdin is parsed -- the deployment.json lookup needs the hook input's own `cwd`, which is
     only available once stdin has been read."""
     global PGHOST, PGDB, LEDGER, SUBJECT_ROOT, STATE, JOURNAL, GOVERNED_CONFIG, GOVERNED_PATTERNS
-    global SUBJECT_ROOT_MISCONFIGURED
+    global SUBJECT_ROOT_MISCONFIGURED, SUBJECT_ROOT_WIRED
     dep_path = _find_deployment_path(data)
     dep = _load_deployment_quiet(dep_path) if dep_path else None
 
@@ -300,6 +346,11 @@ def _configure(data: dict) -> None:
     # alone (see module docstring). An explicit-but-dangling path is the exact defect: a moved
     # project directory leaves a stale absolute path in `.claude/settings.json`.
     SUBJECT_ROOT_MISCONFIGURED = bool(env_subject_root) and not os.path.isdir(SUBJECT_ROOT)
+    # Permit-to-work (BACKLOG "Run-5 forensics", 2026-07-10): "wired" is broader than the
+    # misconfiguration check above — EITHER wiring path (explicit env var OR a located deployment
+    # record) counts, since a scaffolded project driven purely by deployment.json must still get
+    # permit-to-work, not only one pinned via an explicit env var.
+    SUBJECT_ROOT_WIRED = bool(env_subject_root or using_deployment) and os.path.isdir(SUBJECT_ROOT)
     default_state = (os.path.join(SUBJECT_ROOT, ".claude", "change_gate_state.json")
                       if using_deployment else _DEFAULT_STATE)
     default_journal = (os.path.join(SUBJECT_ROOT, ".claude", "logs", "change_gate.journal.jsonl")
@@ -495,6 +546,48 @@ def current_entry(basename: str, clock_iso: str):
     return None
 
 
+def _ledger_schema() -> str:
+    """The schema-name portion of LEDGER (e.g. 'public' from 'public.ledger'), used only by the
+    permit-to-work checks below to reach `work_item_current`/`work_item_violations` in the SAME
+    schema the ticket queries above already use."""
+    return LEDGER.rsplit(".", 1)[0] if "." in LEDGER else "public"
+
+
+def has_work_item_layer() -> bool:
+    """Permit-to-work (BACKLOG "Run-5 forensics", 2026-07-10): True iff THIS world's ledger schema
+    carries the s22 work-item layer (the `work_item_current` view exists) — a catalog-only
+    `to_regclass` lookup, cheap and lock-free, never touching the table itself. Raises on DB error
+    so the caller (inside main()'s existing fail-closed try/except for an identified governed
+    mutation) denies the same way every other check here does on an unreachable DB.
+
+    NAMED CHOICE: a pre-s22 world — the view genuinely absent, `to_regclass` returning NULL with NO
+    error — is NOT a failure. It is the deliberate fail-OPEN branch (see module docstring): only a
+    real DB-reachability failure fails closed here; "the view does not exist" is an ordinary,
+    expected, silently-skip-the-check answer."""
+    schema = _ledger_schema()
+    ident = f"{schema}.work_item_current".replace("'", "''")
+    out = subprocess.run(
+        ["psql", "-h", PGHOST, "-d", PGDB, "-tA", "-c",
+         f"SELECT to_regclass('{ident}') IS NOT NULL;"],
+        capture_output=True, text=True, timeout=8, check=True,
+    )
+    return out.stdout.strip() == "t"
+
+
+def has_open_claimed_work_item() -> bool:
+    """Permit-to-work: True iff `work_item_current` (s22) has at least one row with state='open'
+    AND a non-NULL claimant — the permit itself. Only ever called after `has_work_item_layer()` has
+    confirmed the view exists. Raises on DB error (fail-closed, same posture as every query here)."""
+    schema = _ledger_schema()
+    sql = (f"SELECT EXISTS (SELECT 1 FROM {schema}.work_item_current "
+           f"WHERE state = 'open' AND claimant IS NOT NULL);")
+    out = subprocess.run(
+        ["psql", "-h", PGHOST, "-d", PGDB, "-tA", "-c", sql],
+        capture_output=True, text=True, timeout=8, check=True,
+    )
+    return out.stdout.strip() == "t"
+
+
 def entry_flags(entry_id: int) -> list[str]:
     """The ledger-derived ticket_flags for the unlocking entry (all but window_redundant_entry,
     which is gate-state-derived). Computed from one focused query on the winning entry. Raises
@@ -599,6 +692,12 @@ def main() -> int:
         # identified governed mutation → gate; fail CLOSED on any error
         now = time.time()
         try:
+            # PERMIT-TO-WORK (BACKLOG "Run-5 forensics", 2026-07-10) — composes IN FRONT of the
+            # ticket/window logic below: even a currently-open consumption window still requires a
+            # live open+claimed work item. Pre-s22 worlds (no work_item_current) skip this and fall
+            # straight through to today's ticket-only behavior — see module docstring NAMED CHOICE.
+            if SUBJECT_ROOT_WIRED and has_work_item_layer() and not has_open_claimed_work_item():
+                return _deny(DENY_NO_OPEN_WORK_ITEM, "no_open_claimed_work_item", path)
             st = _load_state()
             key = os.path.abspath(path)
             prev = st.get(key)
@@ -642,6 +741,16 @@ def main() -> int:
             if is_boundary(cmd):
                 _close_windows(_load_state(), "test-run/commit", cmd[:80])
             if bash_mutates_governed(cmd):
+                # Permit-to-work covers this already-denied class too (module docstring): the
+                # more actionable teach-text wins over the generic bash-write message when it
+                # applies, but a DB error here never blocks the mutation deny that already holds.
+                if SUBJECT_ROOT_WIRED:
+                    try:
+                        if has_work_item_layer() and not has_open_claimed_work_item():
+                            return _deny(DENY_NO_OPEN_WORK_ITEM, "no_open_claimed_work_item",
+                                         cmd[:80])
+                    except Exception:  # noqa: BLE001
+                        pass
                 return _deny(DENY_BASH_WRITE, "bash_write", cmd[:80])
 
     return 0

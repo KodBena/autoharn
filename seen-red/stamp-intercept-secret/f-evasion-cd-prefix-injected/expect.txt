@@ -1,0 +1,5 @@
++"permissionDecision": "allow"
++export PGOPTIONS=
++app.vendor_hmac=
++cd /tmp/run5 && ./led work list
+-STAMP_SECRET is configured

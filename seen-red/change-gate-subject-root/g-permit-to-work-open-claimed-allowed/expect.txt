@@ -1,0 +1,2 @@
+-"permissionDecision": "deny"
+-no work item is currently OPEN and CLAIMED

@@ -39,6 +39,41 @@ zero-length HMAC key (`bytes.fromhex("")` raises nothing) -- a WRONG stamp lande
 honest unstamped write, worse than the documented fail-open. Closed as part of this same fix: an
 empty file is now treated identically to a missing one (deny, same teach-text).
 
-Full five-case run (red + healthy-secret + unset-secret + non-matching-command + empty-secret,
-all asserted programmatically; scratch secret files are generated and cleaned up per run):
+BACKLOG "Run-5 forensics" (2026-07-10): three separate runs found three distinct evasion shapes
+for the command-shape MATCHER this hook used to gate on — a raw psql call (run 1), `./led`'s own
+psql call hidden inside its script body (run 2), and run 5's `cd run5 && ./led …` (led not the
+first word) plus a GENERATED script (`cat > run_reviews.sh …; bash run_reviews.sh`, no psql/led
+token in the triggering command at all). Fired exactly TWICE in run 5, both on read-only commands;
+zero of 38 writes. The fix: DELETE the matcher. A wired session now stamps EVERY Bash command,
+unconditionally — the enumeration and its evasion class cease to exist.
+
+AFTER the fix (case f, real output, 2026-07-10 — the exact run-5 cd-prefix evasion shape, which the
+matcher used to pass through UNSTAMPED since "cd" and not "led" was the first word):
+  echo '{"tool_name":"Bash","tool_input":{"command":"cd /tmp/run5 && ./led work list"},"cwd":"/tmp","session_id":"seenred-s1"}' \
+    | STAMP_SECRET=<healthy-secret-path> python3 hooks/stamp_intercept.py
+
+  {"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "allow",
+   "updatedInput": {"command": "export PGOPTIONS='-c app.vendor_session=seenred-s1 -c
+   app.vendor_agent=main -c app.vendor_ts=<ts> -c app.vendor_hmac=<mac>'; cd /tmp/run5 &&
+   ./led work list"}}}
+  exit: 0
+
+Case g reproduces the SECOND named evasion shape (a generated script, `cat > run_reviews.sh
+<<'EOF' ... EOF; bash run_reviews.sh`) with the identical outcome: stamped, allowed. Case h proves
+"your injection must win" (a command that already sets its own PGOPTIONS, e.g.
+`PGOPTIONS='-c statement_timeout=5000' psql ...`): the subject's own PGOPTIONS assignment is
+neutralized before this hook's export is prepended, so only this hook's app.vendor_* GUCs survive
+in the rewritten command — `statement_timeout` does not appear in the output.
+
+NAMED SEVERITY CHOICE (case d, renamed from "non-matching-command" — its old assumption that an
+unmatched command shape stays untouched no longer holds with the matcher gone): a command that
+would previously have passed through unstamped because it did not LOOK like psql/led (`ls -la`)
+now hits the SAME dangling-secret deny as every other Bash command in a broken-secret world —
+severity raised on purpose, named in the module docstring: a world with a broken stamp secret
+refuses ALL shell commands loudly rather than letting any of them run unstamped.
+
+Full eight-case run (red + healthy-secret + unset-secret + broken-secret-arbitrary-shape +
+empty-secret + two named evasion shapes (cd-prefix, generated-script) + preexisting-PGOPTIONS-
+override, all asserted programmatically; scratch secret files are generated and cleaned up per
+run):
   python3 seen-red/stamp-intercept-secret/run_fixtures.py

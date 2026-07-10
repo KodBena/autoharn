@@ -1,0 +1,1 @@
+{"tool_name":"Bash","tool_input":{"command":"PGOPTIONS=x;echo hello-world;echo second-command"},"cwd":"/tmp","session_id":"seenred-s1"}
