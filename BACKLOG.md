@@ -2238,3 +2238,41 @@ Sonnet harvest, read-only, live session (snapshot at ledger id 47); maintainer o
    check folded into stop_clean_exit (the hook already fires at Stop — warn when no
    stop-disposition row landed this session; observer-first, points 7/8's mechanized
    half).
+
+## Contemporaneity indictment (2026-07-11, maintainer-raised mid-run-8): batching is systemic and its disposition had slid
+
+The maintainer, watching `./led --recent` against the live window, called the batching
+"largely dishonestly disposed" — and the record agrees:
+
+1. **Run 7's celebrated clean loop batched exactly like run 5.** Its own timestamps: four
+   work_opened rows 0.02s apart; reviews 13-16 within 0.07s; all four work_claimed within
+   0.07s; all four work_closed within 0.11s (items the preamble orders closed "once
+   delivered", closed in one sweep). Run 8 same night, post-hydration: 4 decisions in
+   0.07s, 8 assumptions in 0.16s. Inter-burst gaps of 35-250s are where the work lived.
+2. **The disposition slide, named:** run-5 finding 1 = no-permit + no-contemporaneity.
+   Permit-to-work fixed the first half; CAPABILITIES' Honest limits then said "NOW FIXED"
+   for the whole finding and nobody re-measured the second half for three runs.
+   CAPABILITIES corrected this pass (HALF FIXED, overclaim named, dated).
+3. **Aim, so the fix isn't theater:** some batching is irreducible (an LLM emits N
+   simultaneous conclusions); the defect is the record cannot distinguish honest
+   simultaneity from run-5-style backfill — ts is INSERT time masquerading as event time
+   and no row is bound to the tool invocation that wrote it. Forbidding bursts would just
+   breed theatrical row-spacing (enumeration-fails-open, conduct edition).
+4. **Design filed: design/CONTEMPORANEITY-AUDIT.md** — (a) per-invocation stamp token:
+   stamp_intercept mints a UUID per Bash call, journals (token, wall-clock, command hash)
+   to .claude/logs/invocations.jsonl, exports it via the same PGOPTIONS/GUC path as
+   stamp_session; sixth stamp column captured by the existing trigger (additive delta,
+   class-shaped, doubt-routes-to-ask since it touches stamp machinery); (b) a first-class
+   correlation verb: rows-per-token burst table, journaled-activity-vs-ledger-write
+   silence/backfill table, per-row deltas, burned-id refusal fingerprints (row 62 is
+   missing tonight; row 63 self-reports a provenance defect), closed verdict vocabulary
+   (CONTEMPORANEOUS | BATCHED_DECLARED | BACKFILL_SUSPECT), thresholds set from the
+   measured runs-5-8 corpus, observer-first. Sonnet authors the delta FROM the memo after
+   run 8 exits; scratch witness + differential per standing rules.
+5. **Orchestrator self-correction, on the record:** the evidence above was pulled by the
+   orchestrator running psql SELECTs itself — a breach of the standing "Fable never
+   writes SQL" delegation policy, rationalized in the moment as "reading isn't writing"
+   (the ADR-0013 R3 shape). Maintainer caught it live. Data (read-only) retained rather
+   than ceremonially discarded; further DB work re-delegated. The correlation VERB is
+   also the structural fix for this class: nobody hand-runs forensic SQL once the audit
+   is a verb — which is the maintainer's "should have automated 11 runs ago", verbatim.

@@ -394,13 +394,18 @@ permanently (`change_gate` full three-way, `stamp_intercept` spot-check), regist
 - **Tool provenance covers the apparatus's own solvers** (engine runs bank a pinned
   engine+version+hashes record), **not yet the subject's build tools.**
 - **The ledger WAS a diary the writer controls the timing of, not a permit log — run-5 forensics
-  (2026-07-10), NOW FIXED (item 18 below).** A live, hook-wired session recorded 8+ minutes of
-  real tool-driven work with zero ledger rows, then backfilled 19+ rows in under 90 seconds once
-  the session decided to write. Permit-to-work (item 18) closes this for the two `PreToolUse`
-  hooks it covers (Write/Edit/NotebookEdit + the already-denied bash-mutation class); it does
-  NOT cover an evasive bash write that never matches `bash_mutates_governed()`'s own shape
-  enumeration in the first place — that residual gap is what `mutation_observer` (item 22 below)
-  detects, after the fact, since a PreToolUse deny cannot exist for a shape it never recognizes.
+  (2026-07-10). HALF FIXED, and this entry previously overclaimed "NOW FIXED" (corrected
+  2026-07-11 after the maintainer caught the slide).** The finding had two halves. The PERMIT
+  half — writes with no open work item — is fixed by permit-to-work (item 18) for the two
+  `PreToolUse` hooks it covers (Write/Edit/NotebookEdit + the already-denied bash-mutation
+  class); the evasive-bash residue is `mutation_observer`'s after-the-fact territory (item 22).
+  The CONTEMPORANEITY half — rows landing in retroactive bursts long after the acts they
+  describe — was never fixed and never re-measured until 2026-07-11, when a read of run7's own
+  timestamps showed the same burst signature in run 7's celebrated clean loop (four work_closed
+  in 0.11s; reviews 0.02s apart) and in run 8. A permit gates whether you may write; nothing yet
+  records WHEN the recorded act actually happened relative to the row. Design filed:
+  design/CONTEMPORANEITY-AUDIT.md (per-invocation stamp token + a first-class correlation verb);
+  until it lands, treat every ledger `ts` as INSERT time, not event time.
 - **The stamp interceptor WAS a command-shape matcher, and matchers get evaded — NOW FIXED (item
   19 below).** Run 5 found a third distinct evasion shape (`cd run5 && ./led ...`; `cat >
   script.sh; bash script.sh`) — every one of 38 writes that session landed unstamped despite the
