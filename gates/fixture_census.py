@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-09T13:36:11Z
-#   last-change: 2026-07-10T19:53:11Z
+#   last-change: 2026-07-10T21:02:57Z
 #   contributors: be693afb/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -63,6 +63,8 @@ REGISTRY: dict[str, str] = {
     "conformance_check":              "seen-red/conformance_check/run_fixtures.py",
     "stop-clean-exit":                "seen-red/stop-clean-exit/run_fixtures.py",
     "demurral-detector":              "seen-red/demurral-detector/red-specimen.py",
+    "mutation-observer":              "seen-red/mutation-observer/run_fixtures.py",
+    "apparatus-config":               "seen-red/apparatus-config/run_fixtures.py",
     # the two census gates minted in this build carry their own seen-red (a census gate never seen
     # red is the joke that writes itself); their fixture is the gate itself, red-specimen mutates its
     # registry in memory to force the breach.

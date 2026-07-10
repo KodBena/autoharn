@@ -1,0 +1,42 @@
+seen-red/mutation-observer — banked RED evidence (both-polarity proof, fixture-census)
+
+Part 2, maintainer mandate 2026-07-10: the bash-mutation OBSERVER that closes the epistemic half
+of the gap hooks/pretooluse_change_gate.py's `bash_mutates_governed()` command-shape enumeration
+cannot close on its own -- a `python3 -c "open('x.py','w').write(...)"` write never spells any of
+that matcher's recognized shell redirections (`>`, `sed -i`, `tee`, `patch`, `git checkout --`,
+`open(...,'w')` as a LITERAL command-line token), so a PreToolUse deny for it never fires at all.
+`hooks/posttooluse_mutation_observer.py` DETECTS this after the fact via `find -newer` against a
+per-invocation marker, instead of trying to predict every write-shape (structurally unfixable, the
+same "enumeration fails open" class matcherless stamping already retired for psql-stamping).
+
+BEFORE this hook exists, that exact python-driven write lands with NO signal anywhere -- no deny
+(the matcher never recognized it), no warning, nothing. This IS the red: an evasive write with no
+open work item is silently invisible. Reproduced live below against a real throwaway scratch
+schema in the toy db (192.168.122.1, s15+s20+s21+s22 lineage applied, torn down after).
+
+RED (real output, 2026-07-10) -- a python-driven write to `redred.py` with NO open+claimed work
+item in the ledger:
+
+  echo '<PreToolUse Bash payload>' | env GATE_SUBJECT_ROOT=<probe> GATE_LEDGER=redcap_mo.ledger \
+    LEDGER_DB=toy LEDGER_HOST=192.168.122.1 python3 hooks/posttooluse_mutation_observer.py
+  # (marker touched; the write happens for real; then:)
+  echo '<PostToolUse Bash payload for the same command>' | env <same vars> \
+    python3 hooks/posttooluse_mutation_observer.py
+
+  exit: 0
+  stdout: {"hookSpecificOutput": {"hookEventName": "PostToolUse", "additionalContext":
+    "[mutation-observer WARNING, observer-mode -- never blocks] the bash command below mutated
+    file(s) in this world with NO open+claimed work item in the ledger (permit-to-work's own
+    check, run here AFTER the fact since a PostToolUse observation cannot deny --
+    hooks/posttooluse_mutation_observer.py):\ncommand: python3 -c \"open('redred.py','w').write
+    ('x')\"\nmutated file(s):\n  - redred.py\nopen + claim a work item to cover this work:\n
+    ./led work open <slug> \"<title>\"\n  ./led work claim <slug>"}}
+
+GREEN / full five-case run (no-open-item warns, open-claimed is silent, pre-s22 world is silent
+[NAMED CHOICE -- nothing to compare against], mode="off" is genuinely zero-cost [marker never
+touched], and an EXCLUDED path stays silent even with no open item -- all asserted
+programmatically, live, against two real throwaway scratch schemas, setup+teardown included):
+
+  python3 seen-red/mutation-observer/run_fixtures.py
+
+WITNESSED 2026-07-10: `run_fixtures: all 5 cases passed.`

@@ -1,6 +1,6 @@
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-10T19:37:18Z
-#   last-change: 2026-07-10T20:27:25Z
+#   last-change: 2026-07-10T20:49:17Z
 #   contributors: be693afb/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -81,6 +81,27 @@ the classifier is unavailable, for a rule ADR-0013 itself already declares "revi
 the hook and `instruments/demurral_eval.py` share the exact classifier machinery below (same
 prompt-builder, same subprocess invocation), so the eval numbers reported by the eval harness
 ARE this hook's honest strength claim — not a separately-tuned proxy.
+
+APPARATUS.JSON SWITCHBOARD (maintainer mandate, 2026-07-10) -- THE CASE IN POINT for "anything
+that spends money per invocation defaults to OFF": this mechanism's mode
+(`mechanisms.demurral_detect.mode`) lives at `<root>/.claude/apparatus.json` (`root` = an explicit
+GATE_SUBJECT_ROOT env var, else this session's own `cwd` -- this hook has never had a separate
+SUBJECT_ROOT/deployment.json notion, only `cwd`, the same field `_journal_path` already keys off).
+Missing file/key resolves to `"off"` -- NOT `"enforce"` and not even `"observe"` -- because the
+classifier this mechanism gates is a real `claude -p` subprocess call, billed per invocation, and
+"no world may silently bill its operator" (maintainer mandate, verbatim) overrides the "defaults
+to current strength" rule every OTHER mechanism in this project gets. `"off"` -- exit before any
+subprocess is even considered; `"observe"` -- exactly this file's behavior before this pass (the
+ONLY behavior this file has ever had: it never blocked to begin with, so `"observe"` is simply
+"on"). `"enforce"` is NOT implemented for this mechanism (module docstring above: promotion to
+enforcing is a maintainer act, never unilaterally adopted here) -- if apparatus.json names it
+anyway, this hook warns loudly and behaves as `"observe"`, the strongest real behavior it has,
+rather than either silently doing nothing or inventing an enforcement surface nobody designed.
+Per-mechanism SETTINGS (not just mode) live alongside it: `classifier_command` (a JSON list of
+argv strings overriding the default `["claude", "-p", "--model", CLASSIFIER_MODEL]`),
+`timeout_s` (overriding `CLASSIFIER_TIMEOUT_S`), and `cost_note` (free text, read but never
+acted on by code -- "the cost_note sits next to the switch" for a human reading the file, per the
+mandate's own wording).
 
 GOODHARTING (BACKLOG's own caveat, restated here where the running prompt lives): a fixed
 classifier prompt is a target the same attrition reflex can eventually learn to slip past
@@ -183,17 +204,22 @@ class ClassifyResult:
 
 
 def classify_text(text: str, *, timeout: float = CLASSIFIER_TIMEOUT_S,
-                   model: str = CLASSIFIER_MODEL) -> ClassifyResult:
-    """Invoke the classifier headlessly (`claude -p --model <model>`), hard-timed. Never
-    raises: any subprocess failure, timeout, or unparsed reply comes back as verdict=ERROR —
+                   model: str = CLASSIFIER_MODEL,
+                   command: list[str] | None = None) -> ClassifyResult:
+    """Invoke the classifier headlessly (`claude -p --model <model>` by default, or `command` if
+    given -- the apparatus.json `classifier_command` override, module docstring), hard-timed.
+    Never raises: any subprocess failure, timeout, or unparsed reply comes back as verdict=ERROR —
     the caller's job (both here and in the eval harness) is to treat ERROR as fail-open, i.e.
     exactly like NEGATIVE for the purpose of "never surface a warning", but distinct in the
-    eval report's own accounting (an ERROR is a detector unavailability, not a classification)."""
+    eval report's own accounting (an ERROR is a detector unavailability, not a classification).
+    `command` defaults to None (not a mutable default) so the byte-held argv is rebuilt fresh
+    from `model` every call -- unaffected callers (the eval harness) never pass it."""
     prompt = build_classifier_prompt(text)
+    argv = command if command else ["claude", "-p", "--model", model]
     t0 = time.monotonic()
     try:
         cp = subprocess.run(
-            ["claude", "-p", "--model", model],
+            argv,
             input=prompt, capture_output=True, text=True, timeout=timeout,
         )
     except subprocess.TimeoutExpired:
@@ -283,6 +309,67 @@ def _journal(payload: dict, record: dict) -> None:
         pass
 
 
+# ---------------------------------------------------------------------------------------
+# APPARATUS.JSON MECHANISM SWITCHBOARD (module docstring, maintainer mandate 2026-07-10). Self-
+# contained (no cross-file import, same posture every other hook in this pass states).
+# ---------------------------------------------------------------------------------------
+_VALID_MODES = ("off", "observe", "enforce")
+
+
+def _apparatus_root(payload: dict) -> Optional[str]:
+    """Where this invocation's apparatus.json would live: an explicit GATE_SUBJECT_ROOT env var
+    (the neutral name every sibling hook already uses) wins; else this session's own `cwd` — this
+    hook has never had a separate SUBJECT_ROOT/deployment.json notion, only `cwd` (the same field
+    `_journal_path` above already keys off)."""
+    env_root = os.environ.get("GATE_SUBJECT_ROOT")
+    if env_root:
+        return env_root
+    cwd = _first(payload, "cwd", default="")
+    return cwd if cwd and isinstance(cwd, str) else None
+
+
+def _load_apparatus_quiet(root: Optional[str]) -> dict:
+    if not root:
+        return {}
+    path = os.path.join(root, ".claude", "apparatus.json")
+    try:
+        with open(path, encoding="utf-8") as f:
+            cfg = json.load(f)
+        return cfg if isinstance(cfg, dict) else {}
+    except Exception:
+        return {}
+
+
+def _mechanism_entry(apparatus: dict) -> dict:
+    mechs = apparatus.get("mechanisms")
+    entry = mechs.get("demurral_detect") if isinstance(mechs, dict) else None
+    return entry if isinstance(entry, dict) else {}
+
+
+def _resolve_mode(entry: dict, root: Optional[str]) -> str:
+    """apparatus["mechanisms"]["demurral_detect"]["mode"], defaulted/validated per the
+    maintainer's 2026-07-10 switchboard mandate. Default is `"off"` (rule c: THE case in point --
+    a real `claude -p` subprocess is billed per invocation; no world may silently bill its
+    operator). `"enforce"` is not implemented for this mechanism (module docstring) -- named,
+    warned, and degraded to `"observe"` rather than silently ignored or silently invented."""
+    default = "off"
+    raw = entry.get("mode")
+    if raw is None:
+        return default
+    if raw == "enforce":
+        print("[apparatus] WARNING: mechanisms.demurral_detect.mode='enforce' is not implemented "
+              "(this detector is observer-only by design -- see hooks/demurral_detect.py module "
+              "docstring); behaving as 'observe'.", file=sys.stderr)
+        return "observe"
+    if raw in _VALID_MODES:
+        return raw
+    print(f"[apparatus] WARNING: mechanisms.demurral_detect.mode={raw!r} in "
+          f"{root}/.claude/apparatus.json is unrecognized (must be one of {_VALID_MODES}) -- "
+          f"never widening permissions (this mechanism spends money per invocation when enabled); "
+          f"falling back to {default!r}.", file=sys.stderr)
+    return default
+
+
 RULE3_REMINDER = (
     "ADR-0013 Rule 3: a 'lower-ROI / invasive / over-engineering / YAGNI / gold-plating' "
     "demurral against ALREADY-MANDATED work is presumptively the attrition of will "
@@ -326,6 +413,16 @@ def main() -> int:
     if not isinstance(payload, dict):
         return 0
 
+    # APPARATUS.JSON SWITCHBOARD (module docstring): resolved before ANYTHING else costs work --
+    # "off" (the default) must exit before even inspecting the event/tool shape, let alone
+    # spending a classifier call.
+    root = _apparatus_root(payload)
+    apparatus = _load_apparatus_quiet(root)
+    entry = _mechanism_entry(apparatus)
+    mode = _resolve_mode(entry, root)
+    if mode == "off":
+        return 0
+
     event = _first(payload, "hook_event_name", "hookEventName", default="")
     text = ""
     if event == "PreToolUse":
@@ -344,8 +441,20 @@ def main() -> int:
     if not text:
         return 0
 
+    # Per-mechanism SETTINGS (module docstring): classifier_command / timeout_s override the
+    # byte-held defaults when present and well-shaped; malformed values degrade quietly to the
+    # default rather than erroring (same posture as every other config value in this project).
+    timeout_raw = entry.get("timeout_s")
     try:
-        result = classify_text(text)
+        timeout_s = float(timeout_raw) if timeout_raw is not None else CLASSIFIER_TIMEOUT_S
+    except (TypeError, ValueError):
+        timeout_s = CLASSIFIER_TIMEOUT_S
+    cmd_raw = entry.get("classifier_command")
+    command = (cmd_raw if isinstance(cmd_raw, list) and cmd_raw
+               and all(isinstance(c, str) for c in cmd_raw) else None)
+
+    try:
+        result = classify_text(text, timeout=timeout_s, command=command)
     except Exception:  # noqa: BLE001 — belt-and-suspenders; classify_text already fail-opens
         return 0
 

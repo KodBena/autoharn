@@ -18,6 +18,21 @@ schemas + `DROP OWNED BY`/`DROP ROLE`, zero residue verified by an empty
 that probe's own captured output; older items keep their original citation and were re-verified
 against the current source rather than re-run.
 
+A FOLLOW-UP consolidation pass (same date, 2026-07-10) added the per-world `apparatus.json`
+mechanism switchboard (items 18–23 below) — every hook now reads its own `mode` live — and the
+new `mutation_observer` hook (item 22). Method: re-read the four just-landed/changed hooks in
+full, wire the config layer, add `seen-red/mutation-observer/` + `seen-red/apparatus-config/`
+(registered in `gates/fixture_census.py`), then re-witness the operator-facing round trip on a
+SECOND throwaway probe world (`bootstrap/new-project.sh /home/bork/w/vdc/1/.consolprobe
+--new-world consolprobe --db toy --host 192.168.122.1`): the birth `apparatus.json` carried every
+default (confirmed byte-for-byte); `change_gate`'s full three-way (`off` let a previously-denied
+edit through untouched, `observe` produced a warning instead of a denial, `enforce` denied) and a
+`stamp_intercept` spot-check (`enforce` injected, `off` produced no output at all) were driven
+against the real wired hooks in this world; the mutation observer's two legs, driven against a
+real python-driven write, warned when no work item was open+claimed and fell silent once one was
+— torn down after with the identical zero-residue verification. Items marked *(this pass, config
+layer)* carry this second probe's own captured output.
+
 ## Witnessed
 
 **1. Decisions that cannot be quietly rewritten.**
@@ -237,6 +252,111 @@ hook, gate, or pre-commit chain; promotion to an enforcing gate is a maintainer 
 `seen-red/conformance_check/` carries its own both-polarity proof (built, per BACKLOG/commit
 history); not re-exercised this pass.*
 
+**18. Permit-to-work — a ledger entry is not a permit; an open+claimed work item is (s22).**
+`hooks/pretooluse_change_gate.py` composes a SECOND, PRIOR gate in front of the existing ticket/
+window logic: when the gate is WIRED and the world's ledger carries the s22 work-item layer, a
+Write/Edit/NotebookEdit on a governed file (and the already-denied bash-mutation-into-governed-
+file class) is DENIED unless `work_item_current` shows at least one row with `state='open'` AND a
+non-NULL claimant, teaching the exact `./led work open`/`./led work claim` commands. Landed commit
+`495e088` (BACKLOG "Run-5 forensics", 2026-07-10). *Witnessed: `seen-red/change-gate-subject-root/`
+cases `f-permit-to-work-no-open-claimed` (DENY, no open item), `g-permit-to-work-open-claimed-
+allowed` (ALLOW, a claimed item exists), and `h-permit-to-work-pre-s22` (skipped entirely — a
+pre-s22 world has no work-item layer to check) — all three against a real scratch schema in the
+toy db, both-polarity, run via `seen-red/change-gate-subject-root/run_fixtures.py`.*
+
+**19. Matcherless stamping — the command-shape matcher is DELETED, not grown a fourth shape.**
+`hooks/stamp_intercept.py` no longer tests whether a Bash command LOOKS like a psql call; when
+the hook is wired (a deployment record located, or `STAMP_SECRET` explicitly set), every Bash
+command is rewritten unconditionally to export the HMAC stamp as `PGOPTIONS`, inherited by any
+descendant process — a generated script, a `cd`-prefixed chain, an evasion shape nobody has
+thought of yet — because the export happens before any of the subject's own command text runs,
+never conditional on recognizing it. Landed commit `495e088` alongside item 18 (same pass, same
+BACKLOG). *Witnessed: `seen-red/stamp-intercept-secret/` cases `f-evasion-cd-prefix-injected` and
+`g-evasion-generated-script-injected` (the exact two evasion shapes run 5's forensics found) both
+now get stamped, plus `h-preexisting-pgoptions-overridden`/`i-preexisting-pgoptions-no-space-
+metachar` (the subject's own competing `PGOPTIONS` assignment is neutralized so this hook's export
+wins) — all via `seen-red/stamp-intercept-secret/run_fixtures.py`.*
+
+**20. Clean-exit gate — "done means clean" mechanized as a Stop hook, not left as CLAUDE.md
+advice.** `hooks/stop_clean_exit.py` reads the world's own ledger (read-only) on every Stop event
+and refuses to let the turn end while `review_gap`/`question_status`/`work_item_current`
+(state=open)/`work_item_violations` show anything outstanding — enumerating each item by id/slug
+with the exact closing command. A circuit breaker allows the stop (with a loud warning) after the
+IDENTICAL debt set has blocked three consecutive attempts, so unclosable debt (obligated to a
+different principal, a dependency cycle) cannot wedge a session forever. Landed commit `58ce4e4`.
+*Witnessed: `seen-red/stop-clean-exit/run_fixtures.py` drives a real, freshly-scaffolded throwaway
+world (`.stopprobe`, toy db) through the full stateful sequence — unwired passthrough, a clean
+world (silent allow), a dirty world (BLOCK, debt named), the circuit breaker firing on the third
+identical block (ALLOW-with-warning), then cleanup back to a clean, silent allow with the state
+file cleared. **UNWITNESSED-LIVE**: this hook has fired only via a scripted stdin harness
+simulating the Stop hook contract, never yet during a genuine live Claude Code session's own Stop
+event — see "Built, unexercised" below.*
+
+**21. Demurral detector — the ADR-0013 Rule 3 out-of-frame backstop (observer, classifier OFF by
+default).** `hooks/demurral_detect.py` sends a candidate text (a drafted `AskUserQuestion`, or a
+Stop-event completion claim) to a SEPARATE, context-free classifier and asks Rule 3's own three
+discriminators (mandated? pre-drawn conclusion? who decides?) — never the executor's own
+self-assessment. Observer mode only: it never blocks, denies, or asks; a positive verdict injects
+an `additionalContext` warning plus a journal record. Landed commit `460c90e`. *Witnessed:
+`seen-red/demurral-detector/red-specimen.py` fires the detector on ADR-0013's own canonical
+Specimen 2 (a drafted question with the skip pre-recommended) on both attachment points, and
+stays silent on a genuine hard negative (a neutral scope question) — a LIVE fixture, real
+`claude -p --model claude-haiku-4-5-20251001` classifier calls, `seen-red/demurral-detector/
+eval-witness.txt` banks the corpus-level precision/recall numbers. **The classifier defaults to
+OFF** (this pass's apparatus.json switchboard, item 23) — no world pays for a classifier call it
+did not opt into.*
+
+**22. Mutation observer — detecting an evasive bash mutation after the fact, since predicting
+every write-shape is impossible (this pass, 2026-07-10).** `hooks/posttooluse_mutation_observer.py`
+closes the epistemic half of the bash-evasion gap `bash_mutates_governed()`'s own command-shape
+enumeration cannot close (a `python3`-driven write, or any descendant process that writes bytes
+without spelling a recognized shell redirection, evades that matcher — the same "enumeration
+fails open" class matcherless stamping (item 19) retired for psql-stamping, structurally
+unfixable here too since PreToolUse only ever sees command TEXT). Two legs: `PreToolUse(Bash)`
+touches a marker file under the world's `.claude/`; `PostToolUse(Bash)` runs `find SUBJECT_ROOT
+-newer <marker> -type f` (excluding `.claude/logs/`, a short list of named hook state files, and
+`.git/`) and, reusing permit-to-work's own `has_work_item_layer()`/`has_open_claimed_work_item()`
+query shape, journals + injects a non-blocking warning naming the mutated files and the
+`./led work open`/`claim` teach-text whenever a mutation lands with no live open+claimed work
+item — silent when one exists. **OBSERVER ONLY, by construction, not by degree**: `mode:
+"enforce"` is not merely unimplemented, it is IMPOSSIBLE for this attachment point (the mutation
+has already happened by the time PostToolUse fires) — apparatus.json naming it anyway is warned
+and downgraded to `observe`. **Named residues, stated honestly**: deletions are invisible to
+`find -newer` (a removed file never "changed"); mtime-preserving writes (`touch -r`,
+`cp --preserve=timestamps`) defeat the whole detection method; the marker is one shared file per
+world, not per invocation, so two genuinely concurrent Bash calls in the same session could
+cross-attribute a mutation to the wrong command. *Witnessed: a direct stdin-harness run against a
+real scratch schema in the toy db (this pass) — a python-driven write with no open work item
+produced the warning naming the file and command; the identical write with an open+claimed item
+was silent — plus `seen-red/mutation-observer/run_fixtures.py`'s own banked both-polarity proof.
+**UNWITNESSED-LIVE**: this hook has fired only via a direct stdin harness, never yet during a
+genuine live Claude Code session's own PreToolUse/PostToolUse Bash events — see "Built,
+unexercised" below.*
+
+**23. The apparatus.json mechanism switchboard — per-world configurability for all six mechanisms
+(maintainer mandate, 2026-07-10).** Every mechanism above (`change_gate`, `permit_to_work`,
+`stamp_intercept`, `clean_exit`, `demurral_detect`, `mutation_observer`) now reads its OWN mode —
+`"off"` / `"observe"` / `"enforce"` — from `<world>/.claude/apparatus.json`'s `mechanisms.<name>
+.mode`, LIVE, at every invocation (no re-scaffold needed to change behavior). `"off"` skips the
+mechanism entirely (no journal, no state); `"observe"` runs the same checks but turns a
+would-have-denied outcome into an ALLOW carrying a loud `additionalContext` warning plus a journal
+record, never a block; `"enforce"` is byte-identical to each hook's behavior before this pass. An
+unrecognized mode string never widens permissions — every hook falls back to its own default
+(named per-mechanism in `bootstrap/templates/APPARATUS.md`) with a loud stderr warning. The one
+mechanism that spends real money per invocation (`demurral_detect`'s classifier) defaults to
+**OFF**, inverting the "free mechanisms default to their current strength" rule on purpose — "no
+world may silently bill its operator" (maintainer mandate, verbatim); its `cost_note` field sits
+next to the switch. *Witnessed (this pass)*: a throwaway probe world
+(`bootstrap/new-project.sh --new-world consolprobe --db toy --host 192.168.122.1` into
+`/home/bork/w/vdc/1/.consolprobe`) confirmed the birth `apparatus.json` carries every default
+(demurral_detect OFF) with no hand-editing; on `change_gate`, `mode=off` let a previously-denied
+edit through untouched, `mode=observe` produced a warning instead of a denial, and `mode=enforce`
+denied — the same three-way spot-checked on `stamp_intercept` (off = no injection; observe =
+inject-but-warn-on-broken-secret instead of deny; enforce = deny). Torn down after, zero residue.
+`seen-red/apparatus-config/run_fixtures.py` banks the same three-way both-polarity proof
+permanently (`change_gate` full three-way, `stamp_intercept` spot-check), registered in
+`gates/fixture_census.py`.
+
 ## Built, unexercised (exists; has not yet fired in anger)
 
 - **Assumption validity bounds** — an assumption can carry "valid until / valid within" and an
@@ -250,6 +370,14 @@ history); not re-exercised this pass.*
   joins, mirroring s21's pair rule), not yet built.
 - **Class-ratified fail-safe deltas (item 15 above)** — the rule stands; no delta has yet been
   authored and landed under it by name.
+- **The Stop-hook wiring (`clean_exit`, item 20; `demurral_detect`'s Stop leg, item 21) and the
+  mutation observer (item 22)** — every one of these has been driven, both-polarity, through a
+  scripted stdin harness that hand-assembles the exact JSON Claude Code's hook contract
+  documents and feeds it to the hook script directly (this project's standing seen-red
+  convention, the same method `kernel/fixtures/s17_stamp_fixture.py` and every other DB-touching
+  fixture here already uses). NONE of the three have yet fired during a genuine LIVE Claude Code
+  session's own Stop/PreToolUse/PostToolUse event — that first real firing is still owed, named
+  here rather than left for a reader to assume "seen-red" means "seen live."
 
 ## Honest limits (so the guarantees aren't oversold)
 
@@ -263,33 +391,28 @@ history); not re-exercised this pass.*
   catches things.
 - **Tool provenance covers the apparatus's own solvers** (engine runs bank a pinned
   engine+version+hashes record), **not yet the subject's build tools.**
-- **The ledger is a diary the writer controls the timing of, not a permit log — run-5 forensics
-  (2026-07-10).** A live, hook-wired session recorded 8+ minutes of real tool-driven work with
-  zero ledger rows, then backfilled 19+ rows in under 90 seconds once the session decided to
-  write. Nothing here refuses *late* writes; the fix (permit-to-work, below) is designed, not
-  built.
-- **The stamp interceptor is a command-shape matcher, and matchers get evaded.** Run 5 found a
-  third distinct evasion shape (`cd run5 && ./led ...`; `cat > script.sh; bash script.sh`) —
-  every one of 38 writes that session landed unstamped despite the hook firing correctly on two
-  unrelated read-only commands. The enumeration approach (raw-psql shape, `led`-wrapper shape,
-  and whatever shape comes next) is structurally a cat-and-mouse game; the fix (below) removes
-  the game rather than adding a fourth shape.
+- **The ledger WAS a diary the writer controls the timing of, not a permit log — run-5 forensics
+  (2026-07-10), NOW FIXED (item 18 below).** A live, hook-wired session recorded 8+ minutes of
+  real tool-driven work with zero ledger rows, then backfilled 19+ rows in under 90 seconds once
+  the session decided to write. Permit-to-work (item 18) closes this for the two `PreToolUse`
+  hooks it covers (Write/Edit/NotebookEdit + the already-denied bash-mutation class); it does
+  NOT cover an evasive bash write that never matches `bash_mutates_governed()`'s own shape
+  enumeration in the first place — that residual gap is what `mutation_observer` (item 22 below)
+  detects, after the fact, since a PreToolUse deny cannot exist for a shape it never recognizes.
+- **The stamp interceptor WAS a command-shape matcher, and matchers get evaded — NOW FIXED (item
+  19 below).** Run 5 found a third distinct evasion shape (`cd run5 && ./led ...`; `cat >
+  script.sh; bash script.sh`) — every one of 38 writes that session landed unstamped despite the
+  hook firing correctly on two unrelated read-only commands. The matcher is deleted; every Bash
+  command in a wired world is now stamped unconditionally (item 19).
+- **Bash-driven mutation is still only OBSERVED, never denied (`mutation_observer`, item 22
+  below).** Detecting a mutation after the fact via `find -newer` is not the same guarantee as a
+  PreToolUse deny — deletions and mtime-preserving writes are invisible to this detector (named
+  residues, item 22), and there is no enforce mode for this mechanism at all: a PostToolUse
+  observation fires after the mutation already happened, so "deny" is not a state this attachment
+  point can ever reach.
 
 ## Not yet enforced — designed but unbuilt, or scheduled but not scheduled (load-bearing honesty)
 
-- **Permit-to-work gate.** Queued (BACKLOG, run-5 forensics, 2026-07-10; hooks/ frozen while any
-  wired session is live, so this cannot land until every such session exits): the change gate
-  would DENY substantive tool calls (Write/Edit anywhere in the world, mutating Bash) unless an
-  open+claimed work item exists in that world's ledger (s22 supplies the queryable state),
-  teaching `./led work open`/`claim`. Confirmed *this pass*: `hooks/pretooluse_change_gate.py`
-  carries no such check today — read, not present.
-- **Matcherless stamping.** Queued alongside the above, same freeze condition: delete the
-  command-shape matcher entirely and have `stamp_intercept.py` inject its `PGOPTIONS` unconditionally
-  into every Bash call in a wired world (harmless to non-psql descendants, inherited by any
-  generated script), so the enumeration-and-evasion class ceases to exist rather than growing a
-  fourth recognized shape. Confirmed *this pass*: `stamp_intercept.py` still matches on command
-  shape (`_is_led_invocation` and the raw-psql-with-ledger-db check) — the matcher has not yet
-  been deleted.
 - **`pg_hba` superuser hardening.** A maintainer act, unscheduled — the host's `pg_hba.conf`
   currently governs auth by admitting only registered databases from the operator's host; no
   further hardening (e.g. narrowing superuser reach, per-role `pg_hba` entries) has a committed

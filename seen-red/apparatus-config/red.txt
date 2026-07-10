@@ -1,0 +1,38 @@
+seen-red/apparatus-config — banked RED evidence (both-polarity proof, fixture-census)
+
+Part 1, maintainer mandate 2026-07-10: the world's `.claude/apparatus.json` becomes the per-world
+switchboard for all six mechanisms -- each hook now reads its own `mechanisms.<name>.mode`
+(`"off"` / `"observe"` / `"enforce"`) LIVE, at invocation time, rather than a hardcoded posture.
+This is the both-polarity proof that the switch actually switches: `"enforce"` still refuses
+exactly as before this pass (RED below); `"off"`/`"observe"` do NOT refuse the identical shape
+(the GREEN half, in `run_fixtures.py`) -- proving apparatus.json's `mode` value is load-bearing,
+not read-and-ignored the way the OLD `assurance` block always was (bootstrap/templates/
+APPARATUS.md's own prior honest-limit: "neither hook reads this file").
+
+RED (real output, 2026-07-10) -- `hooks/pretooluse_change_gate.py`, `mechanisms.change_gate.mode`
+absent from apparatus.json (defaults to `"enforce"`, rule c: free mechanisms default to their
+current strength), an edit to a file with NO ledger entry naming it, against a real throwaway
+scratch schema in the toy db (192.168.122.1, s15 lineage only):
+
+  echo '<Write tool_input payload>' | env GATE_SUBJECT_ROOT=<probe> GATE_LEDGER=apparatusred.ledger \
+    LEDGER_DB=toy LEDGER_HOST=192.168.122.1 GATE_STATE=<probe>/state.json \
+    GATE_JOURNAL=<probe>/journal.jsonl python3 hooks/pretooluse_change_gate.py
+
+  exit: 2
+  stdout: {"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "deny",
+    "permissionDecisionReason": "Ledger policy: a change to a source file must be preceded by a
+    ledger entry naming the file it changes. Insert the entry (one INSERT, as usual), then
+    RE-ISSUE THE SAME EDIT — the gate re-checks on every attempt, so retrying after the
+    insert is the whole fix."}}
+
+GREEN / full six-case run (change_gate's own three-way -- off allows untouched, observe allows
+with a loud `additionalContext` warning naming exactly what enforce would have denied plus a
+journal record, enforce denies -- spot-checked against a SECOND mechanism, stamp_intercept's own
+three-way with a broken/missing STAMP_SECRET: off passes through untouched, observe passes
+through unstamped with a warning, enforce denies -- all six asserted programmatically, live,
+against the same throwaway scratch schema, setup+teardown included):
+
+  python3 seen-red/apparatus-config/run_fixtures.py
+
+WITNESSED 2026-07-10: `run_fixtures: all 6 cases passed (change_gate three-way + stamp_intercept
+spot-check three-way).`

@@ -1,7 +1,16 @@
 {
   "deny_hint": "Run:  ./led -f <basename-of-the-file-you-are-editing> decision \"<why this change>\"   then re-issue the SAME edit -- the gate re-checks on every attempt, so retrying is the whole fix.",
-  "assurance": {
-    "change_gate": "enforce",
-    "stamp_intercept": "enforce"
+  "mechanisms": {
+    "change_gate": {"mode": "enforce"},
+    "permit_to_work": {"mode": "enforce"},
+    "stamp_intercept": {"mode": "enforce"},
+    "clean_exit": {"mode": "enforce"},
+    "demurral_detect": {
+      "mode": "off",
+      "cost_note": "Spends a real 'claude -p' classifier call per AskUserQuestion/Stop event when enabled -- billed to whoever pays for this world's Claude usage. OFF by default so no world silently bills its operator (maintainer mandate, 2026-07-10); flip to 'observe' only with that cost accepted.",
+      "classifier_command": ["claude", "-p", "--model", "claude-haiku-4-5-20251001"],
+      "timeout_s": 10
+    },
+    "mutation_observer": {"mode": "observe"}
   }
 }

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-09T12:38:35Z
-#   last-change: 2026-07-10T20:00:21Z
+#   last-change: 2026-07-10T20:46:20Z
 #   contributors: be693afb/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -60,6 +60,22 @@ no STAMP_SECRET env var set is exactly today's autoharn-dev-flow shape, zero int
 For a WIRED session (a deployment record found, or STAMP_SECRET explicitly set) every Bash command is
 now rewritten unconditionally (MATCHERLESS STAMPING above); the one exception remains the dangling-
 secret case immediately below. Lazy imports banned.
+
+APPARATUS.JSON SWITCHBOARD (maintainer mandate, 2026-07-10): this mechanism's own mode lives at
+`<root>/.claude/apparatus.json`'s `mechanisms.stamp_intercept.mode` (`root` = an explicit
+GATE_SUBJECT_ROOT env var, else the located deployment.json's own directory, else no apparatus.json
+to read -- see `_apparatus_root()`), resolved once per invocation. Three modes, WITH A NAMED NUANCE
+for this hook specifically (injection is free and harmless, unlike a deny): `"off"` -- no injection
+at all, the command passes through completely untouched, exactly as an unwired session already does;
+`"observe"` -- STILL INJECTS the stamp on a healthy secret (identical to `"enforce"` -- there is no
+reason to withhold a free, harmless write-time stamp just because the world is in a lighter assurance
+posture), but the one thing this mode never does is DENY: the explicit-but-broken-secret case that
+`"enforce"` refuses outright instead passes the command through UNSTAMPED with a loud
+`additionalContext` warning plus a journal record; `"enforce"` -- byte-identical to this file's
+behavior before this pass, including the dangling-secret deny. Missing file/key resolves to
+`"enforce"` (rule c: stamping costs nothing per invocation, so it defaults to its current strength).
+An unrecognized mode string never widens permissions (rule d) -- falls back to `"enforce"`, already
+the strictest state this mechanism has, with a loud stderr warning naming the bad value.
 
 FAIL-CLOSED ON A DANGLING STAMP_SECRET (BACKLOG "Run-2 integrity finding", 2026-07-09; SEVERITY RAISED
 BACKLOG "Run-5 forensics", 2026-07-10 — NAMED CHOICE): the one exception to "wired -> stamp every
@@ -199,6 +215,95 @@ def _deny(msg: str) -> int:
     return 2
 
 
+# ---------------------------------------------------------------------------------------------
+# APPARATUS.JSON MECHANISM SWITCHBOARD (module docstring, maintainer mandate 2026-07-10). Self-
+# contained (no import of hooks/pretooluse_change_gate.py's near-identical helpers -- same "no
+# cross-file coupling" posture hooks/stop_clean_exit.py's own docstring already states).
+# ---------------------------------------------------------------------------------------------
+_VALID_MODES = ("off", "observe", "enforce")
+
+
+def _apparatus_root(dep_path: str | None) -> str | None:
+    """Where this invocation's apparatus.json would live, if anywhere: an explicit
+    GATE_SUBJECT_ROOT env var (the neutral name pretooluse_change_gate.py/stop_clean_exit.py
+    already use) wins; else the located deployment.json's own directory; else None -- no project
+    root to look under, so the mode reader below falls to this mechanism's own default, the same
+    degrade-quietly posture every other mis-provisioning this hook tolerates."""
+    env_root = os.environ.get("GATE_SUBJECT_ROOT")
+    if env_root:
+        return env_root
+    return os.path.dirname(dep_path) if dep_path else None
+
+
+def _load_apparatus_quiet(root: str | None) -> dict:
+    if not root:
+        return {}
+    path = os.path.join(root, ".claude", "apparatus.json")
+    try:
+        with open(path, encoding="utf-8") as f:
+            cfg = json.load(f)
+        return cfg if isinstance(cfg, dict) else {}
+    except Exception:
+        return {}
+
+
+def _resolve_mode(apparatus: dict, root: str | None) -> str:
+    """apparatus["mechanisms"]["stamp_intercept"]["mode"], defaulted/validated per the maintainer's
+    2026-07-10 switchboard mandate (rules b/d -- see module docstring's APPARATUS.JSON section)."""
+    default = "enforce"
+    mechs = apparatus.get("mechanisms")
+    entry = mechs.get("stamp_intercept") if isinstance(mechs, dict) else None
+    raw = entry.get("mode") if isinstance(entry, dict) else None
+    if raw is None:
+        return default
+    if raw in _VALID_MODES:
+        return raw
+    print(f"[apparatus] WARNING: mechanisms.stamp_intercept.mode={raw!r} in "
+          f"{root}/.claude/apparatus.json is unrecognized (must be one of {_VALID_MODES}) -- "
+          f"never widening permissions; falling back to {default!r}.", file=sys.stderr)
+    return default
+
+
+def _journal_path(cwd) -> Path | None:
+    """Same unwired-sessions posture as hooks/demurral_detect.py's own `_journal_path`: only write
+    a journal when the hook input actually carries a `cwd` -- no cwd, no journal, never invents a
+    path."""
+    if not cwd or not isinstance(cwd, str):
+        return None
+    return Path(cwd) / ".claude" / "logs" / "stamp_intercept.journal.jsonl"
+
+
+def _journal(cwd, rec: dict) -> None:
+    path = _journal_path(cwd)
+    if path is None:
+        return
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with open(path, "a", encoding="utf-8") as f:
+            f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+    except Exception:  # noqa: BLE001
+        pass
+
+
+def _observe_unstamped(data: dict, secret_path: str) -> int:
+    """`"observe"` mode's version of the dangling-secret case (module docstring): never deny --
+    this command genuinely cannot be stamped (no healthy secret to compute the HMAC with), so it
+    passes through UNSTAMPED, but loudly flagged via `additionalContext` (mirrors
+    hooks/pretooluse_change_gate.py's own `_observe_allow`) plus a journal record, instead of the
+    silent unstamped pass-through an unconfigured/not-yet-armed world already gets."""
+    warning = (
+        f"[apparatus observe-mode WARNING] STAMP_SECRET ('{secret_path}') is missing, unreadable, "
+        f"or empty -- this Bash command is passing through UNSTAMPED (would be DENIED under "
+        f"stamp_intercept mode=enforce). " + _deny_secret_missing(secret_path))
+    _journal(data.get("cwd"), {
+        "ts": time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime()) + "Z",
+        "outcome": "observed_unstamped", "secret_path": secret_path})
+    print(json.dumps({"hookSpecificOutput": {
+        "hookEventName": "PreToolUse", "permissionDecision": "allow",
+        "additionalContext": warning}}))
+    return 0
+
+
 def _deny_secret_missing(path: str) -> str:
     """Teach-text for an explicitly-configured-but-broken STAMP_SECRET. Quotes the real seed
     sequence from bootstrap/templates/HOOKS.md.tmpl's "Stamp interceptor" section (the one this
@@ -233,6 +338,15 @@ def main() -> int:
 
     dep_path = _find_deployment_path(data)
 
+    # APPARATUS.JSON SWITCHBOARD (module docstring, maintainer mandate 2026-07-10): resolved once,
+    # before any secret work -- "off" short-circuits the whole hook, exactly like an unwired
+    # session, with no secret lookup at all.
+    root = _apparatus_root(dep_path)
+    apparatus = _load_apparatus_quiet(root)
+    mode = _resolve_mode(apparatus, root)
+    if mode == "off":
+        return _passthrough()
+
     # MATCHERLESS (BACKLOG "Run-5 forensics", 2026-07-10): no command-shape test gates this any
     # more -- see module docstring. Whether THIS command gets stamped depends only on whether the
     # hook is WIRED (a deployment record resolves, or STAMP_SECRET is explicitly set) and whether
@@ -243,10 +357,11 @@ def main() -> int:
         if explicit:
             # Run-2 integrity finding, severity raised by the matcherless pass (module docstring):
             # an OPERATOR explicitly pointed STAMP_SECRET somewhere broken -- with no matcher left
-            # to narrow this, EVERY Bash command in this world now hits this deny. A deployment-
-            # derived default that simply has not been armed yet (explicit=False) stays fail-open
-            # below, unchanged (the normal "one manual step remains" scaffold state).
-            return _deny(_deny_secret_missing(secret_path))
+            # to narrow this, EVERY Bash command in this world now hits this deny (enforce), or the
+            # observe-mode warning-and-passthrough below.
+            if mode == "enforce":
+                return _deny(_deny_secret_missing(secret_path))
+            return _observe_unstamped(data, secret_path)
         return _passthrough()  # unconfigured (unwired), or a not-yet-armed deployment default
     session = str(data.get("session_id", "unknown"))
     agent = str(data.get("agent_id") or "main")   # ABSENT in main thread (shakedown); a subagent's UUID otherwise

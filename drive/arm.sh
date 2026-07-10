@@ -1,4 +1,10 @@
 #!/bin/sh
+# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
+#   first-seen : 2026-07-10T20:56:17Z
+#   last-change: 2026-07-10T20:56:29Z
+#   contributors: be693afb/main
+# <<< PROVENANCE-STAMP <<<
+
 # arm.sh — the run arming checklist (consult 37 §4), RENDERED CHECKABLE, PARAMETERIZED FOR REUSE
 # [manifest C13 / BUILD-BRIEF Step 8]. This is the generic instrument: it was a verbatim copy of
 # arm_e18.sh (the one-off e18 script, hardcoded to db qbx / role qbx_rw / label jm7 / harness/e18-build)
@@ -93,12 +99,25 @@ verify() {
                   || no "negative control FAILED (got '$NC') — first-contact fence not enforced by privilege"
   psql -h $PGHOST -d harness -q -c "DROP SCHEMA IF EXISTS $S CASCADE; DROP SCHEMA IF EXISTS $K CASCADE; DROP OWNED BY $R1; DROP ROLE IF EXISTS $R1; DROP OWNED BY $R2; DROP ROLE IF EXISTS $R2;" >/dev/null 2>&1
 
-  echo "(d) hook-coverage: the helper's documented psql idiom is interceptable AS WRITTEN (author + reviewers):"
-  "$PY" - <<PYEOF && ok "helper idiom hook-interceptable (STAMP_DB=$DB)" || no "helper idiom EVADES the hook — fix before freeze (§4d)"
-import sys; sys.path.insert(0,"$HOOKS_DIR")
-import stamp_intercept as si
-sys.exit(0 if si._is_ledger_psql("psql -h $PGHOST -U $RUN_ROLE -d $DB -c \"INSERT INTO ledger...\"", "$DB") else 1)
+  echo "(d) hook-coverage: stamp_intercept injects UNCONDITIONALLY when wired (MATCHERLESS contract, BACKLOG"
+  echo "    'Run-5 forensics' 2026-07-10 -- the old _is_ledger_psql/_is_led_invocation matchers are DELETED,"
+  echo "    so this check no longer imports a private matcher function; it drives the real hook end-to-end"
+  echo "    and asserts an ARBITRARY, non-psql-shaped command still gets stamped when a secret is wired):"
+  ARMCHECK_SECRET=$(mktemp)
+  ( umask 077; openssl rand -hex 32 > "$ARMCHECK_SECRET" )
+  "$PY" - <<PYEOF && ok "stamp_intercept injects PGOPTIONS unconditionally for an arbitrary command (matcherless, wired)" \
+                  || no "stamp_intercept did NOT inject -- matcherless contract broken, fix before freeze (§4d)"
+import json, os, subprocess, sys
+env = dict(os.environ); env["STAMP_SECRET"] = "$ARMCHECK_SECRET"
+payload = json.dumps({"tool_name": "Bash", "tool_input": {"command": "echo not-a-psql-call"},
+                       "session_id": "armcheck", "cwd": "/tmp"})
+cp = subprocess.run(["python3", "$HOOKS_DIR/stamp_intercept.py"], input=payload,
+                     capture_output=True, text=True, env=env, timeout=10)
+out = json.loads(cp.stdout) if cp.stdout.strip() else {}
+cmd = out.get("hookSpecificOutput", {}).get("updatedInput", {}).get("command", "")
+sys.exit(0 if "PGOPTIONS" in cmd and "app.vendor_hmac" in cmd else 1)
 PYEOF
+  rm -f "$ARMCHECK_SECRET"
 
   echo "(e) MANDATORY ambiguity pre-test banked, TWO CONSECUTIVE empty rounds (finding 41):"
   if [ -d "$PRETEST" ]; then
@@ -264,7 +283,7 @@ arm() {
     "PreToolUse": [
       { "matcher": "Bash",
         "hooks": [ { "type": "command",
-          "command": "STAMP_DB=$DB STAMP_SECRET=$SECRET_FILE python3 $HOOKS_DIR/stamp_intercept.py" } ] }
+          "command": "STAMP_SECRET=$SECRET_FILE python3 $HOOKS_DIR/stamp_intercept.py" } ] }
     ]
   }
 }

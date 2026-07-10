@@ -25,6 +25,28 @@
             "timeout": 15
           }
         ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "env LEDGER_HOST=__HOST__ LEDGER_DB=__DB__ GATE_LEDGER=__SCHEMA__.ledger GATE_SUBJECT_ROOT=__PROJECT_ROOT__ python3 __AUTOHARN_ROOT__/hooks/posttooluse_mutation_observer.py",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "env LEDGER_HOST=__HOST__ LEDGER_DB=__DB__ GATE_LEDGER=__SCHEMA__.ledger GATE_SUBJECT_ROOT=__PROJECT_ROOT__ python3 __AUTOHARN_ROOT__/hooks/posttooluse_mutation_observer.py",
+            "timeout": 20
+          }
+        ]
       }
     ],
     "Stop": [

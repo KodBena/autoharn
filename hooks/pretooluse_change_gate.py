@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-09T08:07:02Z
-#   last-change: 2026-07-10T20:01:34Z
+#   last-change: 2026-07-10T20:51:48Z
 #   contributors: 9bcc0113/main, be693afb/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -104,6 +104,31 @@ today's ticket-only behavior. `to_regclass` reporting "no such view" is not an e
 genuine DB-unreachable failure fails closed (propagated into the existing fail-closed except
 below, same posture as every other check here). This keeps older, already-deployed worlds working
 unchanged; it does not retroactively demand a work-item layer they were never given.
+
+APPARATUS.JSON MECHANISM SWITCHBOARD (maintainer mandate, 2026-07-10 — "the configuration layer"):
+this file implements TWO separately-switchable mechanisms out of the project's six —
+`change_gate` (the SUBJECT_ROOT-integrity check plus the ticket/window logic, everything above
+this note) and `permit_to_work` (the s22 open+claimed-work-item check, immediately above) — each
+reads its OWN mode from `<SUBJECT_ROOT>/.claude/apparatus.json`'s `mechanisms.<name>.mode`, once
+per invocation, inside `_configure()`. Three modes, binding for every mechanism project-wide
+(rule a): `"off"` — the mechanism's own deny paths are skipped entirely, no journal, no state
+touched, exactly as if that code did not exist; `"observe"` — the SAME checks run (so the ticket/
+work-item logic is exercised and its state is kept current), but a would-have-denied outcome is
+turned into an ALLOW carrying a loud `additionalContext` warning plus a journal record, never a
+block; `"enforce"` — byte-identical to this file's behavior before this pass. Missing file/key
+(rule b) resolves to the mechanism's OWN stated default — `"enforce"` for BOTH `change_gate` and
+`permit_to_work` (rule c: both are free — no per-invocation spend — so they default to their
+current strength, unchanged for every world that predates this pass and never edits
+apparatus.json). An unrecognized mode string (rule d) NEVER widens permissions: since `"enforce"`
+is already the strictest state either mechanism has, falling back to the mechanism's own default
+IS falling back to the strictest available option for both of these — `_resolve_mode()` below
+prints a loud stderr warning naming the exact bad value and the file it came from, then uses that
+default. NOTE the load-bearing asymmetry: `change_gate` being `"off"` does NOT turn
+`permit_to_work` off too — they are independent switches (a world could disable ticket-checking
+while still requiring an open work item, or vice versa); the one thing `change_gate=off` DOES
+still leave standing is `is_governed()` itself (which mechanism/pattern a path matches is shared
+infrastructure both mechanisms consult, never itself a mode-gated decision — see the code below
+for exactly where each mode is read).
 """
 import fnmatch
 import json
@@ -293,6 +318,52 @@ def _load_governed_patterns(cfg_path: str) -> list[str]:
 
 GOVERNED_PATTERNS = _load_governed_patterns(GOVERNED_CONFIG)
 
+# APPARATUS.JSON MECHANISM SWITCHBOARD (module docstring, maintainer mandate 2026-07-10). Two
+# mechanisms live in this file; each gets its own module-global mode, resolved once per invocation
+# inside `_configure()` (same "fresh short-lived process, resolve once" posture as every other
+# config value here).
+_VALID_MODES = ("off", "observe", "enforce")
+CHANGE_GATE_MODE = "enforce"
+PERMIT_TO_WORK_MODE = "enforce"
+
+
+def _load_apparatus_quiet(root: str) -> dict:
+    """Best-effort apparatus.json load for THIS invocation's SUBJECT_ROOT. Missing file, unreadable
+    bytes, invalid JSON, or a non-object JSON value all degrade to {} (rule b: every mechanism
+    reader below then falls to ITS OWN stated default) -- never an error, mirroring
+    `_load_governed_patterns`'s identical missing-file posture."""
+    if not root:
+        return {}
+    path = os.path.join(root, ".claude", "apparatus.json")
+    try:
+        with open(path, encoding="utf-8") as f:
+            cfg = json.load(f)
+        return cfg if isinstance(cfg, dict) else {}
+    except Exception:
+        return {}
+
+
+def _resolve_mode(apparatus: dict, mechanism: str, default: str, root: str) -> str:
+    """apparatus["mechanisms"][mechanism]["mode"], defaulted/validated per the maintainer's
+    2026-07-10 switchboard mandate: (b) a missing apparatus.json, missing "mechanisms" key, or
+    missing per-mechanism entry -> `default` (the CALLER's job to pass this mechanism's own
+    stated default -- NOT the same value for every mechanism, see module docstring); (d) an
+    unrecognized mode string (anything but off/observe/enforce) must NEVER WIDEN permissions --
+    falls back to `default` with a loud stderr warning naming the exact bad value and the file it
+    came from, so a typo in apparatus.json is never silently read as a wider grant than intended."""
+    mechs = apparatus.get("mechanisms")
+    entry = mechs.get(mechanism) if isinstance(mechs, dict) else None
+    raw = entry.get("mode") if isinstance(entry, dict) else None
+    if raw is None:
+        return default
+    if raw in _VALID_MODES:
+        return raw
+    print(f"[apparatus] WARNING: mechanisms.{mechanism}.mode={raw!r} in "
+          f"{root}/.claude/apparatus.json is unrecognized (must be one of {_VALID_MODES}) -- "
+          f"never widening permissions on a bad config value; falling back to {mechanism}'s own "
+          f"default {default!r}.", file=sys.stderr)
+    return default
+
 
 def _find_deployment_path(data: dict) -> str | None:
     """Locate this project's deployment.json: an explicit LEDGER_DEPLOYMENT override first, else
@@ -325,7 +396,7 @@ def _configure(data: dict) -> None:
     after stdin is parsed -- the deployment.json lookup needs the hook input's own `cwd`, which is
     only available once stdin has been read."""
     global PGHOST, PGDB, LEDGER, SUBJECT_ROOT, STATE, JOURNAL, GOVERNED_CONFIG, GOVERNED_PATTERNS
-    global SUBJECT_ROOT_MISCONFIGURED, SUBJECT_ROOT_WIRED
+    global SUBJECT_ROOT_MISCONFIGURED, SUBJECT_ROOT_WIRED, CHANGE_GATE_MODE, PERMIT_TO_WORK_MODE
     dep_path = _find_deployment_path(data)
     dep = _load_deployment_quiet(dep_path) if dep_path else None
 
@@ -361,6 +432,10 @@ def _configure(data: dict) -> None:
     GOVERNED_CONFIG = os.environ.get(
         "GOVERNED_CONFIG", os.path.join(SUBJECT_ROOT, ".claude", "governed_files.json"))
     GOVERNED_PATTERNS = _load_governed_patterns(GOVERNED_CONFIG)
+
+    apparatus = _load_apparatus_quiet(SUBJECT_ROOT)
+    CHANGE_GATE_MODE = _resolve_mode(apparatus, "change_gate", "enforce", SUBJECT_ROOT)
+    PERMIT_TO_WORK_MODE = _resolve_mode(apparatus, "permit_to_work", "enforce", SUBJECT_ROOT)
 
 
 # Governance is CLASS-keyed (F33): match by pattern/nature, never by an enumerated file list.
@@ -646,6 +721,20 @@ def _deny(msg: str, kind: str = "?", target: str = "") -> int:
     return 2
 
 
+def _observe_allow(kind: str, msg: str, target: str) -> int:
+    """Rule (a) `"observe"` mode: never deny — ALLOW, but carry the same message that would have
+    denied under `"enforce"` as a loud, non-blocking `additionalContext` warning (the agent sees
+    it on its own next turn, mirroring hooks/demurral_detect.py's own warning shape) plus a
+    journal record (`outcome: "observed_would_deny"`, distinct from a real `"denied"` row so the
+    two are never confused when the journal is read later)."""
+    _journal({"ts": datetime.now().isoformat(timespec="milliseconds"),
+              "outcome": "observed_would_deny", "deny_kind": kind, "target": target})
+    print(json.dumps({"hookSpecificOutput": {
+        "hookEventName": "PreToolUse", "permissionDecision": "allow",
+        "additionalContext": f"[apparatus observe-mode WARNING — would DENY under enforce] {msg}"}}))
+    return 0
+
+
 def _window_open(entry: dict, now: float) -> bool:
     return bool(entry.get("open")) and (now - entry.get("opened", 0.0)) <= WINDOW_S
 
@@ -682,22 +771,49 @@ def main() -> int:
 
     if tool in ("Write", "Edit", "NotebookEdit"):
         path = _first(inp, "file_path", "filePath", "path", "notebook_path", default="")
-        if SUBJECT_ROOT_MISCONFIGURED:
+
+        # change_gate mechanism (SUBJECT_ROOT-integrity half): "off" skips this check entirely
+        # (module docstring rule a) -- falls through as if SUBJECT_ROOT were healthy; is_governed()
+        # below then resolves normally against whatever SUBJECT_ROOT happens to be.
+        if SUBJECT_ROOT_MISCONFIGURED and CHANGE_GATE_MODE != "off":
             # Run-2 integrity finding: `is_governed()` below can only ever match a real path
             # under SUBJECT_ROOT, so a dangling SUBJECT_ROOT would otherwise make it return
-            # False for every edit — silently governing nothing. Deny loudly instead.
-            return _deny(_deny_subject_root_missing(), "subject_root_missing", path)
+            # False for every edit — silently governing nothing.
+            if CHANGE_GATE_MODE == "enforce":
+                return _deny(_deny_subject_root_missing(), "subject_root_missing", path)
+            return _observe_allow("subject_root_missing", _deny_subject_root_missing(), path)
+
         if not is_governed(path):
             return 0
-        # identified governed mutation → gate; fail CLOSED on any error
+        # identified governed mutation → gate; fail CLOSED on any error (enforce only — see below)
         now = time.time()
+
+        # PERMIT-TO-WORK (its own mechanism, its own mode — independent of CHANGE_GATE_MODE;
+        # BACKLOG "Run-5 forensics", 2026-07-10) — composes IN FRONT of the ticket/window logic
+        # below: even a currently-open consumption window still requires a live open+claimed work
+        # item. Pre-s22 worlds (no work_item_current) skip this and fall straight through to
+        # today's ticket-only behavior — see module docstring NAMED CHOICE. mode="off" skips this
+        # mechanism's check entirely, same posture.
+        if PERMIT_TO_WORK_MODE != "off":
+            try:
+                if SUBJECT_ROOT_WIRED and has_work_item_layer() and not has_open_claimed_work_item():
+                    if PERMIT_TO_WORK_MODE == "enforce":
+                        return _deny(DENY_NO_OPEN_WORK_ITEM, "no_open_claimed_work_item", path)
+                    return _observe_allow("no_open_claimed_work_item", DENY_NO_OPEN_WORK_ITEM, path)
+            except Exception as e:  # noqa: BLE001
+                if PERMIT_TO_WORK_MODE == "enforce":
+                    return _deny(DENY_NEEDS_ENTRY + f"  [permit-to-work check unavailable: "
+                                 f"{type(e).__name__}]", "gate_error", path)
+                return _observe_allow(
+                    "permit_to_work_check_unavailable",
+                    f"permit-to-work check unavailable ({type(e).__name__}: {e}) -- would have "
+                    f"denied under enforce if the check itself had run clean.", path)
+
+        # CHANGE_GATE proper: ticket/window logic. "off" allows unconditionally, no state/journal.
+        if CHANGE_GATE_MODE == "off":
+            return 0
+
         try:
-            # PERMIT-TO-WORK (BACKLOG "Run-5 forensics", 2026-07-10) — composes IN FRONT of the
-            # ticket/window logic below: even a currently-open consumption window still requires a
-            # live open+claimed work item. Pre-s22 worlds (no work_item_current) skip this and fall
-            # straight through to today's ticket-only behavior — see module docstring NAMED CHOICE.
-            if SUBJECT_ROOT_WIRED and has_work_item_layer() and not has_open_claimed_work_item():
-                return _deny(DENY_NO_OPEN_WORK_ITEM, "no_open_claimed_work_item", path)
             st = _load_state()
             key = os.path.abspath(path)
             prev = st.get(key)
@@ -712,7 +828,9 @@ def main() -> int:
             clock = prev.get("entry_ts", EPOCH) if isinstance(prev, dict) else EPOCH
             hit = current_entry(os.path.basename(path), clock)
             if hit is None:
-                return _deny(DENY_NEEDS_ENTRY, "needs_entry", path)
+                if CHANGE_GATE_MODE == "enforce":
+                    return _deny(DENY_NEEDS_ENTRY, "needs_entry", path)
+                return _observe_allow("needs_entry", DENY_NEEDS_ENTRY, path)
             entry_id, entry_ts = hit
             flags = entry_flags(entry_id)
             if _window_redundant(prev, entry_id, entry_ts):
@@ -726,8 +844,13 @@ def main() -> int:
             except Exception:  # noqa: BLE001
                 pass
         except Exception as e:  # noqa: BLE001
-            return _deny(DENY_NEEDS_ENTRY + f"  [gate check unavailable: {type(e).__name__}]",
-                         "gate_error", path)
+            if CHANGE_GATE_MODE == "enforce":
+                return _deny(DENY_NEEDS_ENTRY + f"  [gate check unavailable: {type(e).__name__}]",
+                             "gate_error", path)
+            return _observe_allow(
+                "gate_check_unavailable",
+                f"change-gate ticket check unavailable ({type(e).__name__}: {e}) -- would have "
+                f"denied under enforce if the check itself had run clean.", path)
         st[key] = {"entry_id": entry_id, "entry_ts": entry_ts, "opened": now, "open": True}
         _save_state(st)
         _journal({"ts": datetime.now().isoformat(timespec="milliseconds"), "outcome": "allowed",
@@ -738,20 +861,25 @@ def main() -> int:
     if tool == "Bash":
         cmd = _first(inp, "command", default="")
         if isinstance(cmd, str):
-            if is_boundary(cmd):
+            if CHANGE_GATE_MODE != "off" and is_boundary(cmd):
                 _close_windows(_load_state(), "test-run/commit", cmd[:80])
-            if bash_mutates_governed(cmd):
+            if CHANGE_GATE_MODE != "off" and bash_mutates_governed(cmd):
                 # Permit-to-work covers this already-denied class too (module docstring): the
                 # more actionable teach-text wins over the generic bash-write message when it
                 # applies, but a DB error here never blocks the mutation deny that already holds.
-                if SUBJECT_ROOT_WIRED:
+                if PERMIT_TO_WORK_MODE != "off" and SUBJECT_ROOT_WIRED:
                     try:
                         if has_work_item_layer() and not has_open_claimed_work_item():
-                            return _deny(DENY_NO_OPEN_WORK_ITEM, "no_open_claimed_work_item",
-                                         cmd[:80])
+                            if PERMIT_TO_WORK_MODE == "enforce":
+                                return _deny(DENY_NO_OPEN_WORK_ITEM, "no_open_claimed_work_item",
+                                             cmd[:80])
+                            return _observe_allow("no_open_claimed_work_item",
+                                                  DENY_NO_OPEN_WORK_ITEM, cmd[:80])
                     except Exception:  # noqa: BLE001
                         pass
-                return _deny(DENY_BASH_WRITE, "bash_write", cmd[:80])
+                if CHANGE_GATE_MODE == "enforce":
+                    return _deny(DENY_BASH_WRITE, "bash_write", cmd[:80])
+                return _observe_allow("bash_write", DENY_BASH_WRITE, cmd[:80])
 
     return 0
 

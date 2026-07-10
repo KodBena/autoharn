@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-10T19:38:38Z
-#   last-change: 2026-07-10T19:39:05Z
+#   last-change: 2026-07-10T20:47:58Z
 #   contributors: be693afb/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -91,6 +91,21 @@ something, even if new debt appeared) resets the counter to 1 -- the breaker onl
 genuinely repeated, unchanged debt, never on ordinary multi-step progress. A clean stop also
 clears the state file, so an old fingerprint never leaks into an unrelated future debt episode.
 
+APPARATUS.JSON SWITCHBOARD (maintainer mandate, 2026-07-10): this mechanism's mode
+(`mechanisms.clean_exit.mode`) lives at `<SUBJECT_ROOT>/.claude/apparatus.json`, read once inside
+`_configure()` -- but only when WIRED (an unwired session never had a debt-check notion at all;
+apparatus.json is irrelevant to it). `"off"` -- return 0 before any debt collection, even though
+the session IS wired (an explicit "I don't want this check" distinct from "not wired"); `"observe"`
+-- runs the SAME `_collect_debt()` as `"enforce"` (so the debt enumeration is real, not guessed),
+but a non-empty debt set never BLOCKS the stop: it allows (exit 0) with the identical debt text
+carried as a loud `additionalContext` warning (mirrors hooks/demurral_detect.py's own Stop-leg
+warning shape) plus a journal record -- no circuit breaker is needed here (unlike enforce's
+DEBT_REPEAT_LIMIT), since this mode never blocks in the first place; `"enforce"` -- byte-identical
+to this file's behavior before this pass, circuit breaker included. Missing file/key resolves to
+`"enforce"` (rule c: this mechanism spends nothing per invocation, so it defaults to its current
+strength). An unrecognized mode string never widens permissions (rule d) -- falls back to
+`"enforce"`, already the strictest state, with a loud stderr warning naming the bad value.
+
 WHY A SEPARATE RESOLUTION, NOT A SHARED IMPORT OF pretooluse_change_gate.py's `_configure()`: this
 file is deliberately self-contained (no import of, or dependency on, hooks/pretooluse_change_gate.py
 or hooks/stamp_intercept.py -- both are under concurrent edit by another pass; this hook must not
@@ -111,6 +126,7 @@ import json
 import os
 import subprocess
 import sys
+from datetime import datetime
 
 # Eager, top-of-file sys.path insert + import (lazy imports banned) -- the identical pattern
 # hooks/pretooluse_change_gate.py itself uses to reach filing/deployment_record.py, the ONE home
@@ -135,11 +151,15 @@ PGDB = _DEFAULT_PGDB
 LEDGER = _DEFAULT_LEDGER
 SUBJECT_ROOT = ""
 STATE = ""
+JOURNAL = ""
 # True iff this invocation is WIRED: SUBJECT_ROOT is "configured" (explicit GATE_SUBJECT_ROOT env
 # var, OR a located+loaded deployment.json) AND resolves to a real directory. False for autoharn's
 # own bare checkout (no deployment.json, no env override) and for any pre-existing world this pass
 # deliberately does not retroactively wire -- see module docstring.
 WIRED = False
+# APPARATUS.JSON SWITCHBOARD (module docstring, maintainer mandate 2026-07-10).
+_VALID_MODES = ("off", "observe", "enforce")
+CLEAN_EXIT_MODE = "enforce"
 
 DEBT_REPEAT_LIMIT = 3  # N: the circuit breaker's threshold (see module docstring).
 
@@ -172,11 +192,40 @@ def _load_deployment_quiet(path: str) -> deployment_record.DeploymentRecord | No
         return None
 
 
+def _load_apparatus_quiet(root: str) -> dict:
+    if not root:
+        return {}
+    path = os.path.join(root, ".claude", "apparatus.json")
+    try:
+        with open(path, encoding="utf-8") as f:
+            cfg = json.load(f)
+        return cfg if isinstance(cfg, dict) else {}
+    except Exception:
+        return {}
+
+
+def _resolve_mode(apparatus: dict, root: str) -> str:
+    """apparatus["mechanisms"]["clean_exit"]["mode"], defaulted/validated per the maintainer's
+    2026-07-10 switchboard mandate (rules b/d -- see module docstring's APPARATUS.JSON section)."""
+    default = "enforce"
+    mechs = apparatus.get("mechanisms")
+    entry = mechs.get("clean_exit") if isinstance(mechs, dict) else None
+    raw = entry.get("mode") if isinstance(entry, dict) else None
+    if raw is None:
+        return default
+    if raw in _VALID_MODES:
+        return raw
+    print(f"[apparatus] WARNING: mechanisms.clean_exit.mode={raw!r} in "
+          f"{root}/.claude/apparatus.json is unrecognized (must be one of {_VALID_MODES}) -- "
+          f"never widening permissions; falling back to {default!r}.", file=sys.stderr)
+    return default
+
+
 def _configure(data: dict) -> None:
     """Resolve every connection/config value for THIS invocation. Called once, at the top of
     `main()`, right after stdin is parsed (the deployment.json lookup needs the hook input's own
     `cwd`, only available once stdin has been read)."""
-    global PGHOST, PGDB, LEDGER, SUBJECT_ROOT, STATE, WIRED
+    global PGHOST, PGDB, LEDGER, SUBJECT_ROOT, STATE, JOURNAL, WIRED, CLEAN_EXIT_MODE
     dep_path = _find_deployment_path(data)
     dep = _load_deployment_quiet(dep_path) if dep_path else None
     using_deployment = bool(dep_path and dep)
@@ -193,6 +242,10 @@ def _configure(data: dict) -> None:
 
     default_state = os.path.join(SUBJECT_ROOT, ".claude", "stop_clean_exit_state.json") if WIRED else ""
     STATE = os.environ.get("STOP_CLEAN_EXIT_STATE") or default_state
+    default_journal = os.path.join(SUBJECT_ROOT, ".claude", "logs", "stop_clean_exit.journal.jsonl") if WIRED else ""
+    JOURNAL = os.environ.get("STOP_CLEAN_EXIT_JOURNAL") or default_journal
+
+    CLEAN_EXIT_MODE = _resolve_mode(_load_apparatus_quiet(SUBJECT_ROOT) if WIRED else {}, SUBJECT_ROOT)
 
 
 def _ledger_schema() -> str:
@@ -367,6 +420,31 @@ def _allow_with_warning(reason: str) -> int:
     return 0
 
 
+def _journal(rec: dict) -> None:
+    if not JOURNAL:
+        return
+    try:
+        os.makedirs(os.path.dirname(JOURNAL), exist_ok=True)
+        with open(JOURNAL, "a", encoding="utf-8") as f:
+            f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+    except Exception:  # noqa: BLE001
+        pass
+
+
+def _allow_with_observe_warning(reason: str, entries: list[str]) -> int:
+    """`"observe"` mode (module docstring): never blocks the stop -- always allow (exit 0), but
+    surface the SAME debt enumeration as a loud, non-blocking `additionalContext` warning (mirrors
+    hooks/demurral_detect.py's own Stop-leg warning shape) plus a journal record. No circuit
+    breaker here: this mode never blocks in the first place, so there is nothing for a breaker to
+    eventually let through."""
+    warning = ("[apparatus observe-mode WARNING] this world's ledger shows unfinished governance "
+               "state -- would BLOCK this stop under clean_exit mode=enforce:\n\n" + reason)
+    _journal({"ts": datetime.now().isoformat(timespec="milliseconds"),
+              "outcome": "observed_would_block", "entries": entries})
+    print(json.dumps({"hookSpecificOutput": {"hookEventName": "Stop", "additionalContext": warning}}))
+    return 0
+
+
 def main() -> int:
     raw = sys.stdin.read()
     try:
@@ -381,6 +459,10 @@ def main() -> int:
 
     if not WIRED:
         return 0  # unwired session: zero interference, by design (module docstring)
+
+    if CLEAN_EXIT_MODE == "off":
+        return 0  # apparatus.json switchboard: explicitly disabled even though this session IS
+                  # wired -- distinct from "unwired" above, same zero-interference effect
 
     try:
         debt_lines, entries = _collect_debt()
@@ -406,6 +488,9 @@ def main() -> int:
         f"(this identical debt set has now been seen {count}/{DEBT_REPEAT_LIMIT} times at stop)\n\n"
         + "\n".join(debt_lines)
     )
+
+    if CLEAN_EXIT_MODE == "observe":
+        return _allow_with_observe_warning(reason, entries)
 
     if count >= DEBT_REPEAT_LIMIT:
         _save_state({"debt_hash": debt_hash, "count": count})
