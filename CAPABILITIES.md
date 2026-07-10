@@ -288,9 +288,11 @@ different principal, a dependency cycle) cannot wedge a session forever. Landed 
 world (`.stopprobe`, toy db) through the full stateful sequence — unwired passthrough, a clean
 world (silent allow), a dirty world (BLOCK, debt named), the circuit breaker firing on the third
 identical block (ALLOW-with-warning), then cleanup back to a clean, silent allow with the state
-file cleared. **UNWITNESSED-LIVE**: this hook has fired only via a scripted stdin harness
-simulating the Stop hook contract, never yet during a genuine live Claude Code session's own Stop
-event — see "Built, unexercised" below.*
+file cleared. **LIVE-WITNESSED 2026-07-10 (run 7, partial)**: fired on a genuine session's Stop
+event (transcript `stop_hook_summary` 21:26:59Z, 200ms, silent-allow — the world's debt views
+were already empty). The BLOCK path and circuit breaker remain fixture-witnessed only: run 7's
+agent closed its debt before stopping, so the gate never had to refuse. See the run-7
+verification entry in BACKLOG.md (2026-07-10).*
 
 **21. Demurral detector — the ADR-0013 Rule 3 out-of-frame backstop (observer, classifier OFF by
 default).** `hooks/demurral_detect.py` sends a candidate text (a drafted `AskUserQuestion`, or a

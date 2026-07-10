@@ -2092,3 +2092,34 @@ w-vdc-1-run5/ vs live run5.ledger; session was LIVE — 38-row snapshot):
    it does not belong in CLAUDE.md or any scaffold-baked file. No TASK.md, no --task flag; the
    task-brief candidate above is withdrawn. (The agent's first ledgered act naturally quotes
    the task via its opening question/decision rows, which is durable enough for the record.)**
+
+## Run-7 phase-1 verification (2026-07-10): full mechanized loop closed live; two findings; one self-correction
+
+Ledger/git/transcript verification (Sonnet, read-only) of run 7's completion claims:
+- **27/27 rows stamp_verified (run 5: 0%)**; technical independence attested both directions on
+  distinct (session, agent) pairs (s21 e17-shape: same session, distinct stamped subagent —
+  cross-session independence remains live-unwitnessed). Work items: opened→claimed→closed in
+  order, commit witnesses exist and match (`7adaf2b`); the one raw-psql call in the transcript
+  was a read-only introspection — every mutation went through led, so the s23
+  claim-before-close-in-kernel candidate keeps prudential status only, no witnessed need.
+- Acceptance criteria pre-registered (row 21) 18s before the first Write; result row 23 cites
+  it via the queryable `refs` edge (row 22 left refs empty — minor citation inconsistency).
+- **Stop gate fired live for the first time** (silent-allow; block path still fixture-only).
+  Mutation observer silent (consistent with clean conduct; warn path still fixture-only).
+  Demurral hook exited in 78ms with classifier off — the costed-off default works; no billing.
+- **Self-correction (citation currency, checklist item 6, violated by the orchestrator):** the
+  "first-ever live stamped independence" framing was WRONG — run 6's ledger shows the same
+  shape ~2h earlier (hooks execute from autoharn per invocation, so matcherless stamping
+  reached every wired world the moment it was committed). Run 7's real novelty: first run with
+  the FULL mechanism set active and the loop closed by committed deliverables.
+- **Finding 1 — review_gap over-catch:** the gap view caught the reviewer's own countersign
+  rows under an obligation scoped to the decomposition, forcing an author counter-countersign
+  round (SoD held; pairs distinct; `led obligate revoke` existed and went unused). Fail-safe
+  direction, but the semantics — does an obligation cover the principal's every row or the
+  obligated scope? — deserve a deliberate ruling. Second consecutive run where obligate
+  direction/scope cost a workaround; obligate teach-text rewrite also owed.
+- **Finding 2 — written-only governance is invisibly skippable:** zero `assumption` rows and no
+  antecedent-audit trace despite row 21 baking in unstated numeric choices (tolerance, timebox,
+  budgets). No existing gate can see this. This is the artifact-vs-requirements detector class
+  (run-5 implementer's analysis), now witnessed as a real blind spot: the next mechanization
+  frontier, deliberately NOT rushed — it needs a design pass, not a regex.
