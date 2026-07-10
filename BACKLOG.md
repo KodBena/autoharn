@@ -2178,3 +2178,63 @@ comparison variant. Run 8's witness bar accordingly: the resumed agent must reco
 the open work FROM LEDGER ROWS (citing them), not from replayed conversation. An agent
 that has to ask the user what the work was is a hydration FAILURE — and a valuable
 finding, not a broken run.
+
+## Run-8 mid-run forensics (2026-07-11): the commission never entered the record — hydration failed for a reason upstream of pickup
+
+Sonnet harvest, read-only, live session (snapshot at ledger id 47); maintainer observed
+"archaeology" and asked what is wrong with the harness. Evidence-confirmed answer:
+
+1. **FINDING (root cause): phase 2 was never ledgered — by anyone, ever.** Rows 1-27
+   (all of run 7) contain zero mentions of phase-2/swatch/render/16-color; the four
+   opening decompose-decisions covered phase 1 only. The spec existed solely in the
+   maintainer's first chat message (raw run-7 transcript — ephemera-class) and in
+   autoharn/HANDOFF.md's gloss (outside the world). ./pickup honestly showed IN-FLIGHT:
+   0 rows — the empty brief is the PROXIMATE cause of the archaeology; the ABSENT
+   COMMISSION is the root cause. **This falsifies the premise of the 2026-07-10
+   task-brief disposition** ("the agent's first ledgered act naturally quotes the task
+   via its opening rows") at the first real resumption: the agent decomposed what it was
+   about to DO, not what it was ASKED — the class named at the scope of the work in
+   hand, ADR-0000's amendment shape, at the commission boundary.
+2. **COROLLARY, the sharpest consequence: run 7's clean Stop was vacuously green.** The
+   stop gate's live-witnessed silent-allow (BACKLOG run-7 entry) was true over the
+   ledger it could see — and the ledger was missing half the commission, so "done means
+   clean" passed over undone work it had no row for. An unledgered increment makes every
+   downstream gate green by omission. Enumeration fails open at intake.
+3. **FINDING: investigation is ungoverned.** 5m12s and 13 tool calls between pickup's
+   empty answer and the first ./led call — six Bash reads, a 100-second Explore subagent
+   ("Find run7 phase-2 task spec", which recovered the spec by grepping the raw run-7
+   transcript), more reads, 7 private TaskCreate calls — zero ledger rows for any of it;
+   no question row was filed for "the spec is missing" (kind='question' count across the
+   ENTIRE ledger, all runs: 0). Permit-to-work gates the writing hand; the investigating
+   hand is still run 5's diary problem. The subagent dispatch is a machine-observable
+   tool event, so a permit/observer at PreToolUse(Task/Agent) IS mechanizable — filed as
+   designed-unbuilt (observer-first, permit-to-work chassis); hooks/ frozen while run 8
+   lives.
+4. **What WORKED (credit where due):** rows 28-47 all stamp_verified under run-8's own
+   distinct stamp_session (cross-session stamping now live-witnessed — the prudential
+   item arrives half-free; the cross-session independence ATTESTATION is still owed);
+   after self-recovering the spec the agent ran the full discipline unprompted — 4 work
+   items opened, claims, 8 assumption rows (the run-7-finding-2 discipline FIRING this
+   run), obligate, review-gap check. Conduct held; the record's intake boundary did not.
+5. **FIX LANDED (sub-constitutional, template text; judged consistent with the
+   task-brief ruling's intent — it makes that ruling's stated premise true by
+   instruction instead of assumed; maintainer veto welcome):** preamble point 1
+   sharpened to decompose the ENTIRE commission at intake (open every increment the
+   task names, claim only what you start — an unledgered increment is invisible to
+   resumption and vacuously green at Stop); new point 7: ledger investigation and
+   delegation BEFORE doing them, and — maintainer refinement, mid-run-8, near-verbatim —
+   "I lack the spec" has more than one honest kind (ADR-0008: classify, don't default):
+   question when the operator should answer, decision when resolving to excavate/author
+   the spec from context at hand, assumption when proceeding on an inferred reading;
+   new point 8 (maintainer, same exchange): STOPPING IS A LEDGERED ACT — workers leave
+   their work resumable for successors; a stop-disposition row (why stopping / what
+   stands / what remains) is owed before any stop. Note the composition: point 8 would
+   have caught run 7's gap at its own exit — "stopping: phase 2 remains" cannot be
+   written without ledgering phase 2. Points 1 and 8 close the intake hole from both
+   ends. Reaches future worlds; run7's copy is birth-frozen as designed.
+6. **QUEUED, Sonnet-sized, unblocked after run 8 exits:** pickup IN-FLIGHT surfaces each
+   open item's statement text (the spec a fresh session builds from), not just
+   slug/title/claimant; the PreToolUse delegation observer per (3); the stop-disposition
+   check folded into stop_clean_exit (the hook already fires at Stop — warn when no
+   stop-disposition row landed this session; observer-first, points 7/8's mechanized
+   half).

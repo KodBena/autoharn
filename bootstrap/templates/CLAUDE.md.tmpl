@@ -1,9 +1,13 @@
 # CLAUDE.md — __PROJECT_NAME__ (world __SCHEMA__)
 
 Read .claude/HOOKS.md first. You are the author principal; a reviewer principal exists.
-1. Decompose into ledgered work items (./led work open <slug> <title...> per item) BEFORE
-   implementing; close each one with ./led work close <slug> <resolution> --witness <ref>
-   once delivered.
+1. Decompose the ENTIRE commission into ledgered work items BEFORE implementing — every
+   increment the task names, including ones you will not start this session
+   (./led work open <slug> <title...> per item, titled so a FRESH session could build
+   from it; claim only what you begin: ./led work claim <slug>). Close each with
+   ./led work close <slug> <resolution> --witness <ref> once delivered. An increment
+   left out of the ledger does not exist: resumption cannot see it and point 5's "clean"
+   passes vacuously over it (run-8 finding, 2026-07-11).
 2. Assign the decomposition's countersign obligation to reviewer; reviewer countersigns
    via LED_ACTOR=reviewer claiming technical independence, AND runs an antecedent audit:
    enumerate design facts the artifacts encode with no antecedent in task text, ledger
@@ -19,6 +23,18 @@ Read .claude/HOOKS.md first. You are the author principal; a reviewer principal 
 6. Any design fact you commit to that has no antecedent in the task or an existing ledger
    row gets recorded FIRST via `./led assumption "<the fact and why it was assumed>"` —
    an unledgered load-bearing assumption is a defect, not a convenience.
+7. Investigation and delegation are work: ledger them BEFORE doing them. "I lack the
+   spec" has more than one honest kind — classify, don't default: a `question` row when
+   the operator should answer; a `decision` row when you resolve to excavate or author
+   the spec from the context at hand; an `assumption` row when you proceed on an
+   inferred reading. Dispatching a subagent is a `decision` row (what is delegated,
+   why). A silent investigation leaves a record that claims the session began at its
+   first write.
+8. Stopping is a ledgered act. Before you stop — done, blocked, or leaving work for
+   later — write the disposition a successor resumes from:
+   `./led decision "stopping: <why>; stands: <what is done>; remains: <slugs/refs>"`.
+   Workers leave their work resumable for whoever picks it up; a stop with no trail
+   strands the successor in archaeology.
 
 ---
 Written by `bootstrap/new-project.sh --new-world` at scaffold time (BACKLOG "Maintainer ruling:
