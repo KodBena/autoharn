@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-09T13:36:11Z
-#   last-change: 2026-07-10T21:02:57Z
-#   contributors: be693afb/main
+#   last-change: 2026-07-10T23:42:52Z
+#   contributors: be693afb/main, e4410ef6/main
 # <<< PROVENANCE-STAMP <<<
 
 """fixture_census — mechanizes mandate §6's "every migrated gate's seen-red still proves it
@@ -40,6 +40,7 @@ SEEN_RED = os.path.join(ROOT, "seen-red")
 REGISTRY: dict[str, str] = {
     "change-gate-subject-root":       "seen-red/change-gate-subject-root/run_fixtures.py",
     "stamp-intercept-secret":         "seen-red/stamp-intercept-secret/run_fixtures.py",
+    "stamp-intercept-invocation-token": "seen-red/stamp-intercept-invocation-token/run_fixtures.py",
     "04-consumer-no-vacuous-pass":    "instruments/verify_consumer_no_vacuous.py",
     "05-verify-adapter":              "instruments/act_stream/verify_adapter.py",
     "06-append-only-integrity":       "seen-red/06-append-only-integrity/red-specimen.py",
