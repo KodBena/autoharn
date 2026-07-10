@@ -2276,3 +2276,43 @@ The maintainer, watching `./led --recent` against the live window, called the ba
    than ceremonially discarded; further DB work re-delegated. The correlation VERB is
    also the structural fix for this class: nobody hand-runs forensic SQL once the audit
    is a verb — which is the maintainer's "should have automated 11 runs ago", verbatim.
+
+## Run-8 phase-2 verification (2026-07-11): all trailer claims witnessed; Stop-gate BLOCK path live-witnessed (first time)
+
+Ledger/git/transcript verification (Sonnet, read-only) of run 8's completion trailer —
+all seven claims WITNESSED, none refuted:
+
+- **Commit 166a341 real** in run7's own git: terminal_palette.html (338 lines) +
+  verify_phase2_backend.py (131), tracked at HEAD, tree clean. All four phase-2 work
+  items closed shipped with non-empty witnesses (incl. commit:166a341).
+- **Views clean and non-vacuously so** for review_gap/work_item_violations;
+  question_status vacuous honestly (zero question rows this run — the preamble point-7
+  gap, already filed, stands).
+- **Independence mechanical, both directions:** reviewer rows 50-55 stamped
+  (session, agent=a609c686...) against author rows stamped main; author countersigns
+  64-70 the reverse; review_detail independence='technical' throughout, confirmed by
+  countersigned_in_force, not self-report.
+- **The antecedent audit CAUGHT A REAL DEFECT:** reviewer row 55 independently computed
+  tolerance 0.5657 vs the author's wrongly-stated 1.0 in row:48; correction row 71
+  supersedes the numeric parts with the derivation shown. The reviewer discipline added
+  after run-5 (a9e7f52) is now witnessed working end-to-end.
+- **LED_ACTOR defect confirmed at source:** rows 56-61 carry actor=1 (author) but
+  stamp_agent = the reviewer's hash — the exact provenance mismatch row 63 self-reports;
+  row 63 honestly marked self-review/attest_with_reservations; row 70 (author)
+  independently reproduced the defect. Row 62 confirmed the only burned id in 50-80
+  (refusal fingerprint). Fix commissioned (led.tmpl generic-path, in flight this
+  session).
+- **Non-convergence FAIL genuinely pre-registered:** row 48 (pre-implementation) names
+  non-convergence/TIMEOUT as valid recorded outcomes per row:21's phase-1 convention;
+  verification row 78's "FAIL by tolerance, distance 0.7688 vs 0.5657" is the
+  pre-registered outcome, not a reframe.
+- **STOP-GATE BLOCK PATH LIVE-WITNESSED (first time; prudential item discharged free):**
+  at 23:12:16Z the gate BLOCKED the exit ("work item 'swatch-verify-commit' is open and
+  claimed ... seen 1/3 times at stop"); the agent closed the item, committed, and the
+  23:14:04Z retry was a clean silent-allow. deny→teach→comply→allow, live, at the Stop
+  surface. The trailer omitted the block episode (no dishonesty — it wasn't asked for
+  gate telemetry; noted so the witness is banked HERE).
+
+CAPABILITIES item 20's "BLOCK path and circuit breaker remain fixture-witnessed only"
+is now half-stale: BLOCK is live-witnessed; the circuit breaker (3/3) remains
+fixture-only. Update owed with the next CAPABILITIES pass.
