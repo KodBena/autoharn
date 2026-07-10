@@ -1,0 +1,36 @@
+seen-red/stop-clean-exit — banked RED evidence (both-polarity proof, fixture-census)
+
+BACKLOG "Run-5 forensics" family (2026-07-10): run 5 handed off with two open review_gap rows
+and one never-closed work item, despite CLAUDE.md's own point 5 ("Done means ./led review-gap,
+question-status, and ./led work violations are all clean") -- ADVICE inside a context window
+drifts under load. hooks/stop_clean_exit.py mechanizes point 5 as a Claude Code Stop hook.
+
+BEFORE this hook exists, no mechanism refuses a Stop with open governance debt -- a Stop event
+just ends the turn, silently, with review_gap/question_status/work_item_current/
+work_item_violations however dirty they are. This IS the red: an unmechanized "done means
+clean" is exactly the run-5 shape, reproduced live below against a real throwaway probe world
+(bootstrap/new-project.sh --new-world stopprobe --db toy --host 192.168.122.1, torn down after).
+
+RED (real output, 2026-07-10) — an open, unclaimed work item (`./led work open probe-item-1
+"..."`, never claimed or closed) against the freshly-scaffolded, otherwise-clean probe world:
+
+  echo '{"cwd":"/home/bork/w/vdc/1/.stopprobe"}' \
+    | env LEDGER_HOST=192.168.122.1 LEDGER_DB=toy GATE_LEDGER=stopprobe.ledger \
+          GATE_SUBJECT_ROOT=/home/bork/w/vdc/1/.stopprobe \
+      python3 hooks/stop_clean_exit.py
+  exit: 2
+  stdout: {"decision": "block", "reason": "Ledger policy (clean-exit gate, hooks/stop_clean_exit.py):
+    this world's ledger shows unfinished governance state -- the turn cannot end until it is clean
+    (CLAUDE.md point 5: \"Done means ./led review-gap, question-status, and ./led work violations
+    are all clean.\"). ... OPEN WORK ITEMS (stopprobe.work_item_current, state=open) -- 1 item(s):
+      - work item 'probe-item-1' is open and UNCLAIMED ->
+          ./led work claim probe-item-1   (then ./led work close probe-item-1 <resolution>
+          [--witness <ref>]) ..."}
+
+GREEN / full four-case run (clean-world allow, unwired allow-untouched, dirty-world block,
+circuit-breaker third-repeat allow-with-loud-warning — all asserted programmatically, live,
+against the same throwaway probe world, setup+teardown included):
+
+  python3 seen-red/stop-clean-exit/run_fixtures.py
+
+WITNESSED 2026-07-10: `run_fixtures: all cases passed (4 named + 2 inline sanity checks).`

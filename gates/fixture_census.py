@@ -61,6 +61,7 @@ REGISTRY: dict[str, str] = {
     "review-fixpoint":                "instruments/verify_review_fixpoint.py",
     "s19-trigger-search-path":        "kernel/fixtures/s19_search_path_fixture.py",
     "conformance_check":              "seen-red/conformance_check/run_fixtures.py",
+    "stop-clean-exit":                "seen-red/stop-clean-exit/run_fixtures.py",
     # the two census gates minted in this build carry their own seen-red (a census gate never seen
     # red is the joke that writes itself); their fixture is the gate itself, red-specimen mutates its
     # registry in memory to force the breach.
