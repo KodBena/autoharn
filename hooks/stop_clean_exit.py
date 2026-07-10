@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-10T19:38:38Z
-#   last-change: 2026-07-10T20:47:58Z
-#   contributors: be693afb/main
+#   last-change: 2026-07-10T23:31:26Z
+#   contributors: be693afb/main, e4410ef6/main
 # <<< PROVENANCE-STAMP <<<
 
 """stop_clean_exit — the clean-exit gate (Claude Code Stop hook).
@@ -105,6 +105,31 @@ to this file's behavior before this pass, circuit breaker included. Missing file
 `"enforce"` (rule c: this mechanism spends nothing per invocation, so it defaults to its current
 strength). An unrecognized mode string never widens permissions (rule d) -- falls back to
 `"enforce"`, already the strictest state, with a loud stderr warning naming the bad value.
+
+STOP-DISPOSITION WARNING (BACKLOG "Run-8 mid-run forensics", 2026-07-11 -- preamble point 8,
+mechanized): "stopping is a ledgered act" -- a worker leaves its work resumable for whoever picks
+it up next by writing `./led decision "stopping: <why>; stands: <done>; remains: <slugs>"` before
+it stops. Point 8's own composition note names the class this catches: it would have caught run
+7's gap AT ITS OWN EXIT ("stopping: phase 2 remains" cannot be written without ledgering phase 2
+first). This hook is the natural mechanization site -- it already fires at every Stop event and
+already reads this world's ledger read-only. WHAT IT CHECKS, additively (never in place of the
+existing debt collection above): a `kind='decision'` row whose `statement` begins `stopping:`,
+STAMPED to the stopping session's own id (`stamp_session` = the hook input's own `session_id`
+field -- the interception stamp, not a writer-supplied value, so this cannot be satisfied by
+typing the word "stopping:" into an unrelated row). Missing -> a WARNING is appended to the
+hook's output; this NEVER blocks and NEVER introduces a new deny reason (unlike the debt checks
+above, which really do block in `"enforce"` mode) -- it rides the SAME `CLEAN_EXIT_MODE` this
+mechanism already reads (`"off"` skips the check entirely; `"observe"`/`"enforce"` both run it,
+both only ever warn), so there is no new apparatus.json switchboard entry for it. It is only ever
+consulted on an ALLOW path (silent-clean, the observe-mode allow, or the circuit-breaker's
+loud-allow) -- never on a `"enforce"`-mode BLOCK, since the turn is not actually ending there; the
+successor gets another chance to write the disposition row before the stop that does succeed.
+DEGRADES SILENT (module-wide convention, same posture as every other best-effort probe in this
+file) on: no `session_id` on stdin, a pre-stamp world (the `stamp_session` column itself does not
+exist -- s17 introduced it; a world older than that never carries the column), or a genuinely
+unreachable ledger (the query fails the same way `_collect_debt()`'s queries do) -- none of these
+are treated as "missing disposition", since none of them can distinguish a real gap from a world
+this check simply cannot evaluate.
 
 WHY A SEPARATE RESOLUTION, NOT A SHARED IMPORT OF pretooluse_change_gate.py's `_configure()`: this
 file is deliberately self-contained (no import of, or dependency on, hooks/pretooluse_change_gate.py
@@ -266,6 +291,78 @@ def _view_exists(schema: str, view: str) -> bool:
         capture_output=True, text=True, timeout=8, check=True,
     )
     return out.stdout.strip() == "t"
+
+
+def _column_exists(schema: str, table: str, column: str) -> bool:
+    """Cheap, lock-free, catalog-only existence probe -- the STOP-DISPOSITION WARNING's own
+    pre-stamp-world check (module docstring): `stamp_session` was introduced by s17, so a world
+    that predates it never carries the column. Raises on a genuine DB error, same posture as
+    `_view_exists()` -- the caller (the stop-disposition check only) treats any error as
+    "degrade silent", never as debt."""
+    sch, tab, col = (schema.replace("'", "''"), table.replace("'", "''"), column.replace("'", "''"))
+    out = subprocess.run(
+        ["psql", "-h", PGHOST, "-d", PGDB, "-tA", "-c",
+         f"SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = '{sch}' "
+         f"AND table_name = '{tab}' AND column_name = '{col}');"],
+        capture_output=True, text=True, timeout=8, check=True,
+    )
+    return out.stdout.strip() == "t"
+
+
+def _stop_disposition_reason(session_id: str) -> str | None:
+    """STOP-DISPOSITION WARNING (module docstring, BACKLOG "Run-8 mid-run forensics",
+    2026-07-11): returns teach-text iff no `kind='decision'` row whose `statement` begins
+    `stopping:` is stamped (`stamp_session`) to THIS session. Returns None -- the check simply
+    does not apply, never "disposition present" -- when: no `session_id` on stdin, a pre-stamp
+    world (no `stamp_session` column), a genuine DB error, OR the row really is present. Never
+    raises; this function alone decides nothing about block/allow -- callers only ever use it to
+    decide whether to print an ADDITIONAL warning on a path that was already going to allow."""
+    if not session_id:
+        return None
+    try:
+        schema = _ledger_schema()
+        if not _column_exists(schema, "ledger", "stamp_session"):
+            return None  # pre-stamp world (s17 introduced the column) -- nothing to check
+        sid = session_id.replace("'", "''")
+        out = subprocess.run(
+            ["psql", "-h", PGHOST, "-d", PGDB, "-tA", "-c",
+             f"SELECT EXISTS (SELECT 1 FROM {schema}.ledger WHERE kind = 'decision' "
+             f"AND statement LIKE 'stopping:%' AND stamp_session = '{sid}');"],
+            capture_output=True, text=True, timeout=8, check=True,
+        )
+        if out.stdout.strip() == "t":
+            return None  # disposition row present -- nothing to warn about
+    except Exception:  # noqa: BLE001 -- an unreadable ledger degrades silent for THIS check
+        return None     # (module docstring); the primary debt collection already covers the
+                         # "ledger unreachable" category as its own blocking debt line.
+    return (
+        "Ledger policy (stop-disposition, CLAUDE.md point 8 / hooks/stop_clean_exit.py): no "
+        "`decision` row beginning 'stopping:' is stamped to this session -- stopping is a "
+        "ledgered act (BACKLOG 'Run-8 mid-run forensics', 2026-07-11: a stop with no trail "
+        "strands the successor in archaeology). Before you stop, write the disposition a "
+        "successor resumes from:\n"
+        "  ./led decision \"stopping: <why>; stands: <what is done>; remains: <slugs/refs>\""
+    )
+
+
+def _warn_stop_disposition(session_id: str) -> None:
+    """Prints the stop-disposition warning (module docstring) as a side effect ONLY -- never
+    changes the caller's return code. Called only from `main()`'s ALLOW paths (never from
+    `_block()`'s path -- the turn is not ending there, so there is nothing yet to warn about).
+    Mirrors `_allow_with_warning()`'s own loud stderr-banner shape exactly ("exactly like the
+    circuit-breaker's loud-allow path" -- the build mandate's own words) so this warning is
+    visually identical to the mechanism's existing loud-allow convention, in EVERY mode
+    (`"observe"` and `"enforce"` alike -- this check itself never distinguishes between them,
+    since it never blocks either way)."""
+    reason = _stop_disposition_reason(session_id)
+    if reason is None:
+        return
+    banner = (
+        "\n" + "!" * 78 + "\n"
+        "STOP-DISPOSITION WARNING -- allowing this stop, but no stop-disposition row was found "
+        "for this session:\n" + reason + "\n" + "!" * 78 + "\n"
+    )
+    print(banner, file=sys.stderr)
 
 
 def _query(sql: str) -> list[tuple[str, ...]]:
@@ -464,6 +561,11 @@ def main() -> int:
         return 0  # apparatus.json switchboard: explicitly disabled even though this session IS
                   # wired -- distinct from "unwired" above, same zero-interference effect
 
+    # STOP-DISPOSITION WARNING (module docstring): the hook input's own session id, the same
+    # field hooks/stamp_intercept.py/hooks/stamp_provenance.py already read as `session_id`.
+    # Resolved once here, consulted only on the ALLOW paths below -- never on `_block()`'s path.
+    session_id = str(p.get("session_id") or "")
+
     try:
         debt_lines, entries = _collect_debt()
     except Exception as e:  # noqa: BLE001 -- DB-unreachable posture (module docstring)
@@ -473,7 +575,9 @@ def main() -> int:
 
     if not debt_lines:
         _clear_state()
-        return 0  # all clean -- allow, silently, zero interference for a clean world
+        _warn_stop_disposition(session_id)  # side effect only -- never changes this allow
+        return 0  # all clean -- allow, zero interference for a clean world UNLESS the
+                  # stop-disposition warning above just fired
 
     debt_hash = _debt_hash(entries)
     st = _load_state()
@@ -490,14 +594,19 @@ def main() -> int:
     )
 
     if CLEAN_EXIT_MODE == "observe":
-        return _allow_with_observe_warning(reason, entries)
+        rc = _allow_with_observe_warning(reason, entries)
+        _warn_stop_disposition(session_id)  # side effect only -- observe mode already never blocks
+        return rc
 
     if count >= DEBT_REPEAT_LIMIT:
         _save_state({"debt_hash": debt_hash, "count": count})
-        return _allow_with_warning(reason)
+        rc = _allow_with_warning(reason)
+        _warn_stop_disposition(session_id)  # side effect only -- breaker already fired to allow
+        return rc
 
     _save_state({"debt_hash": debt_hash, "count": count})
-    return _block(reason)
+    return _block(reason)  # turn is NOT ending here -- stop-disposition is not yet consulted;
+                            # the successor attempt (once this debt clears) re-enters an ALLOW path
 
 
 if __name__ == "__main__":

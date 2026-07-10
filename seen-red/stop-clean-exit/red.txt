@@ -34,3 +34,41 @@ against the same throwaway probe world, setup+teardown included):
   python3 seen-red/stop-clean-exit/run_fixtures.py
 
 WITNESSED 2026-07-10: `run_fixtures: all cases passed (4 named + 2 inline sanity checks).`
+
+---
+
+STOP-DISPOSITION WARNING (Part 1, BACKLOG "Run-8 mid-run forensics", 2026-07-11): preamble
+point 8 ("stopping is a ledgered act") is mechanized as an ADDITIONAL, non-blocking check on
+this same hook -- a `decision` row beginning `stopping:`, stamped to the stopping session,
+should exist before the turn ends. RED, BEFORE this pass (real output, 2026-07-11): the
+PRE-PATCH hook (git rev 4e21fae, `hooks/stop_clean_exit.py`), run against a FRESHLY-scaffolded,
+otherwise-clean probe world (same `--new-world stopprobe` setup as above) with a session that
+never wrote a `stopping:` row, produces ZERO output and exit 0 -- indistinguishable from a
+session that DID leave a clean disposition trail. This is the run-8 gap named live: a stop can
+be silently "clean" by the OLD debt-only definition while the disposition obligation itself
+went unrecorded -- exactly the "vacuously green Stop" corollary the BACKLOG entry names.
+
+  cat seen-red/stop-clean-exit/e-stop-disposition-warn/stdin.json \
+    | env LEDGER_HOST=192.168.122.1 LEDGER_DB=toy GATE_LEDGER=stopprobe.ledger \
+          GATE_SUBJECT_ROOT=/home/bork/w/vdc/1/.stopprobe \
+          STOP_CLEAN_EXIT_STATE=/home/bork/w/vdc/1/.stopprobe/.claude/stop_clean_exit_state.json \
+      python3 <pre-patch hooks/stop_clean_exit.py, git rev 4e21fae>
+  exit: 0
+  stdout: (empty)
+  stderr: (empty)
+
+GREEN / both-polarity, POST-patch (real output, 2026-07-11, same probe world, setup+teardown
+included, torn down zero-residue both before and after):
+
+  python3 seen-red/stop-clean-exit/run_fixtures.py
+
+WITNESSED 2026-07-11: `run_fixtures: all cases passed (6 named + 2 inline sanity checks).`
+Case `e-stop-disposition-warn` (session never stamped a `stopping:` row): exit 0, stderr carries
+`STOP-DISPOSITION WARNING ... no \`decision\` row beginning 'stopping:' is stamped to this
+session ... ./led decision "stopping: ...`. Case `f-stop-disposition-silent` (a REAL stamped
+`stopping:` row exists for that session, via a genuine HMAC-stamped write -- not a raw unstamped
+INSERT): exit 0, stdout AND stderr both empty -- silent, exactly like the pre-existing
+`b-clean-world` case. The four ORIGINAL debt-focused cases (a/b/c/d) and the post-cleanup bonus
+check were re-verified unaffected by this addition (a stamped baseline `stopping:` row is seeded
+for their shared `seenred` session in step 2.5, so they test debt collection in isolation from
+the new, orthogonal disposition check).

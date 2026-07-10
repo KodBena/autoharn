@@ -17,7 +17,8 @@ needed. Format:
     "stamp_intercept":  {"mode": "enforce"},
     "clean_exit":       {"mode": "enforce"},
     "demurral_detect":  {"mode": "off", "cost_note": "...", "classifier_command": [...], "timeout_s": 10},
-    "mutation_observer":{"mode": "observe"}
+    "mutation_observer":{"mode": "observe"},
+    "delegation_observer":{"mode": "observe"}
   }
 }
 ```
@@ -41,7 +42,7 @@ every hook falls back to its own default with a loud stderr warning naming the e
 and the file it came from. A typo in this file can only make a mechanism MORE conservative than
 intended, never less.
 
-## The six mechanisms and their defaults
+## The seven mechanisms and their defaults
 
 | mechanism            | hook                                          | default   | why |
 |----------------------|------------------------------------------------|-----------|-----|
@@ -51,6 +52,7 @@ intended, never less.
 | `clean_exit`           | `hooks/stop_clean_exit.py`                      | `enforce` | free per call |
 | `demurral_detect`      | `hooks/demurral_detect.py`                      | **`off`** | **spends a real `claude -p` classifier call per invocation** — "no world may silently bill its operator" (maintainer mandate, verbatim); the `cost_note` field sits next to this switch on purpose |
 | `mutation_observer`    | `hooks/posttooluse_mutation_observer.py`        | `observe` | `enforce` is **impossible** for this mechanism (a PostToolUse observation fires after the mutation already happened — there is no "deny" available); if apparatus.json ever names `enforce` here, the hook warns loudly and behaves as `observe` |
+| `delegation_observer`  | `hooks/pretooluse_delegation_observer.py`       | `observe` | `enforce` is **not yet sanctioned** for this mechanism (a PreToolUse deny on a subagent dispatch is possible in principle, unlike `mutation_observer`'s genuine PostToolUse impossibility, but has not been maintainer-ratified — BACKLOG "Run-8 mid-run forensics", 2026-07-11); if apparatus.json ever names `enforce` here, the hook warns loudly and behaves as `observe` |
 
 Named nuances:
 
@@ -65,6 +67,12 @@ Named nuances:
   reading this file — never acted on by code).
 - **`mutation_observer`** has no enforce state at all (see table) — it can only warn, never deny,
   by the nature of its PostToolUse attachment point.
+- **`delegation_observer`** watches `PreToolUse(Task/Agent)` — every subagent dispatch is
+  journaled unconditionally (session id, the dispatch's `description`, and its `prompt` reduced
+  to a sha256 + 200-char excerpt); a loud, non-blocking warning fires only when this world carries
+  the s22 work-item layer and no work item is currently open+claimed, teaching the operator to
+  ledger the delegation itself as a `decision` row (CLAUDE.md preamble point 7) — an `enforce`
+  deny path here is architecturally possible but deliberately unbuilt (see the table entry above).
 
 ## Honest limit (ADR-0011 Rule 1's declared-enforcement-surface obligation)
 
