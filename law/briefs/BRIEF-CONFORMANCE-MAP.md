@@ -20,7 +20,7 @@ and the mother's-life clause. Rows below marked **(J)** carry this caveat.
 
 | Inv | Property | Status | Where / basis |
 |---|---|---|---|
-| I1 | Contemporaneity | **mechanized** | write-boundary `ts` NOT NULL + the change-gate contemporaneity instrument; gap-detection scoped to M triggers (F23/F38) |
+| I1 | Contemporaneity | **DOWNGRADED 2026-07-11: mechanized at the write boundary only; VIOLATED in witnessed practice** | `ts` NOT NULL is INSERT time, not event time — runs 5, 7, and 8 all show systematic burst-backfill (rows 0.02s apart describing minutes of prior work; BACKLOG "Contemporaneity indictment", 2026-07-11). The prior "mechanized" here was the same half-fixed overclaim CAPABILITIES carried. Substrate for real detection landed same day (s23 per-invocation stamp token + hook invocation journal); the correlation/audit instrument (design/CONTEMPORANEITY-AUDIT.md Part 2) is **open**. Until it lands, I1 conformance is claimed at the write boundary and explicitly NOT at the conduct level. |
 | I2 | Attributability — humans *and tools* | **mechanized (subject rows: actor + write-time stamp, e17-live) · mechanized (apparatus tools)** | subject: NOT NULL `actor` PLUS the interception stamp (e17) — a PreToolUse hook binds every ledger row to its ACTUAL invocation identity (session_id+agent_id, HMAC-verified against an apparatus-owned secret the subject role cannot read), injected at write time, not typed by the writer; so `actor` is no longer a value the writer alone controls (finding 31 closed). Apparatus tools: every marriage solver run banks a DerivationRecord {engine+version, config, EDB/program/output hashes} (F6/I8). Subject-side BUILD-tool provenance (the tools the subject uses to construct its artifact, distinct from the ledger-write identity) remains a **declared exclusion — reason:** no hook intercepts the subject's build commands, only its ledger writes; I8 subject-tool qualification is unbuilt. |
 | I3 | Immutability / non-destructive correction | **mechanized + EXERCISED (subject, e17)** | append-only ledger; `supersedes`/`amends` are new linked rows. Now backed by the **append_only_integrity** close line (a standing check that every audit-spine table refuses UPDATE/DELETE every close) and, on the rulings spine, acts.ruling's append-only trigger. **e17 exercised both correction tracks organically:** `supersedes` (17→12, replacing the refused stub) and `amends` (14→2, one clause of the parse decision) — both id-is-order-clean, unprompted |
 | I4 | Completeness incl. negatives | **mechanized + EXERCISED (subject, e17)** | the closed verdict vocabulary: a non-run is QUARANTINED and turns the run red, never dropped; `close_manifest` accounting. **e17 negatives visible:** the two refused inserts are id-is-order gaps (row 15 and the refused-detail stub row 12), not silent drops; the refuse-and-teach event landed a visibly-defective stub rather than nothing; on the rulings spine, **delivery_freight_integrity** + the **delivers-FK** (Inc8) make a freight-less or byte-mismatched delivery a visible RED |
@@ -70,5 +70,32 @@ mechanism, not a distribution.
 - **(J) G10 noticed-hazard · F2 recognized-assumption · G15 HMI · F11 waiver branch** — **J-boundary**:
   judgment-triggered, no oracle that the trigger fired; backstopped by G7 (now exercised) and the
   mother's-life clause, per the J-boundary note above.
+
+## Increment note, 2026-07-11 (worlds/runs era — post s20/s21/s22/s23, runs 5-8)
+
+Movements since the e17-era rows above, stated compactly; the rows above are edited only
+where they had become overclaims (I1):
+
+- **I1** downgraded as marked in its row — the material correction of this increment.
+- **I2/I6 strengthened and re-witnessed:** s21 (session,agent)-pair distinctness live-refused
+  an inflated claim (run 5) and attested genuine independence both directions (runs 7/8);
+  cross-session stamping live-witnessed (run 8, distinct stamp_session on resumed rows).
+- **I4 at the exit boundary:** the clean-exit Stop gate BLOCK path live-witnessed (run 8) —
+  an open work item cannot be silently walked away from. CAVEAT, witnessed same night: the
+  gate is only as complete as the ledger — run 7's un-ledgered phase 2 made its clean Stop
+  vacuously green (BACKLOG run-8 forensics). Intake totality (preamble point 1, full-
+  commission decomposition) is the counterpart discipline; its mechanized half is open.
+- **I7 subject-side:** run 8 authored 14 plain assumption rows organically (8 author-side,
+  6 reviewer-filed via the antecedent audit, which caught a real arithmetic error) —
+  the KIND is now well-exercised; validity BOUNDS remain built-unexercised, unchanged.
+- **G7:** second live exercise (run 8's reviewer, mechanically-distinct stamps).
+- **New M-trigger coverage since the map was written:** permit-to-work (write ⇒ open+claimed
+  work item), delegation observer (subagent dispatch journaled + warned), stop-disposition
+  warning (a stop without its `stopping:` row is taught), mutation observer (post-hoc bash
+  writes), matcherless stamping (every Bash invocation). Each observer-grade item warns and
+  journals rather than refuses; each has banked seen-red both polarities.
+- **J-boundary motion:** design/ARTIFACT-VS-REQUIREMENTS-DETECTOR.md proposes converting the
+  J-entries' silent-absence into an explicit total disposition (Register 1) plus an
+  out-of-frame classifier (Register 2, costed, default off) — design filed, unbuilt.
 
 This map states its own boundary rather than letting a partial read as whole.

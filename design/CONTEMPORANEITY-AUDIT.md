@@ -101,6 +101,35 @@ ever feeds the Stop gate is a later maintainer question, asked with measurements
   (apparatus mode) produces no journal — the verb must report that absence loudly
   (UNJOURNALED ERA), never as "no findings".
 
+## Part 2 implementation directive — the verdict logic is ASP, not SQL (added 2026-07-11)
+
+The maintainer's standing framing binds here: this is a research project about deductive
+engines and how they can be leveraged (design/possibly-addressable-concerns.md, including
+its explicit warning against bending every problem into SQL). The audit verb is the best
+showcase this repo has yet had, because its logic is genuinely deductive, not relational:
+
+- The event stream becomes an EDB: `invocation(Token, T)` (from the journal),
+  `row(Id, Token, Kind, T)` (from the ledger), `tool_event(Kind, T)` (from the hook
+  journals — change-gate, mutation-observer marker, delegation journal).
+- Verdicts are DERIVED: `batch(Token) :- N rows share Token` (one command wrote N rows —
+  stated from structure); `silence(T1,T2) :- tool activity in [T1,T2], no row in [T1,T2],
+  T2-T1 > threshold`; `backfill_suspect(S) :- silence(...) followed by burst(...)` —
+  thresholds as facts, swappable per the measured runs-5-8 corpus, defeasible by declared
+  exceptions rather than hardcoded branches.
+- This slots into the existing marriage discipline: the ASP derivation banks a
+  DerivationRecord like every engine run, and where a SQL floor for the same verdict is
+  cheap, the differential's AGREE vocabulary applies to the auditor itself.
+
+**Part 3 sketch (research direction, filed not committed):** with s23 tokens the whole
+governance preamble's ORDERING obligations become one deontic/temporal ASP program over
+the event stream — decompose-before-implement, criteria-before-first-write,
+assumption-before-commitment, disposition-before-stop — each a violation atom derived
+from the same EDB, replacing N bespoke hook checks with one auditable logic program.
+That is possibly-addressable-concerns items 1 (ordering) and 4 (deontic) made concrete,
+and it is the shape in which the deductive engine stops being an observer of the harness
+and becomes its auditor. Needs its own design pass; named here so Part 2's author builds
+the EDB with this consumer in mind.
+
 ## Sequencing
 
 1. This memo: filed. 2. Sonnet authors the s-delta + hook change from it AFTER run 8
