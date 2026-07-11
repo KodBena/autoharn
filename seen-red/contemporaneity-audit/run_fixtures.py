@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-11T14:44:01Z
-#   last-change: 2026-07-11T17:27:24Z
+#   last-change: 2026-07-11T17:35:31Z
 #   contributors: e4410ef6/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -122,10 +122,12 @@ THIRTEEN CASES:
 
   m-led-kind-refusal-teach-success-unaffected (GREEN, the byte-identical-to-before proof): a
      VALID kind (`decision`) written through TWO shims -- one pointing at led.tmpl as it stood at
-     this commit's OWN PARENT (`git show HEAD:bootstrap/templates/led.tmpl`, the pre-fix file),
-     one at the just-edited current file -- proving the fix touches ONLY the failure path: both
-     writes succeed (exit 0) and their stdout is compared BYTE-FOR-BYTE, not merely asserted
-     equal to a hardcoded string.
+     PRE_KIND_TEACH_FIX_SHA, a PINNED historical commit fixed to immediately before the fix
+     landed (`git show <sha>:bootstrap/templates/led.tmpl`, the pre-fix file; pinned rather than
+     `HEAD` on purpose -- `HEAD` walks forward past this fix's own commit the moment it lands,
+     which would silently turn this into a self-comparison), one at the just-edited current file
+     -- proving the fix touches ONLY the failure path: both writes succeed (exit 0) and their
+     stdout is compared BYTE-FOR-BYTE, not merely asserted equal to a hardcoded string.
 
 RED (pre-instrument, disclosed rather than re-captured): before this suite existed there was no
 Part 2 instrument at all -- ad-hoc SQL run by hand, once per crisis (BACKLOG's own indictment).
@@ -164,6 +166,15 @@ LINEAGE = REPO / "kernel" / "lineage"
 ENGINE = REPO / "engine"
 LED_TMPL = REPO / "bootstrap" / "templates" / "led.tmpl"
 RUN7_ROOT = Path("/home/bork/w/vdc/1/run7")
+# case (m)'s "old" comparison target: the commit immediately BEFORE the kind-refusal-teach fix
+# (BACKLOG "Run-10 closure audit ... both class-b fixes landed") landed -- pinned to this fixed,
+# immutable SHA rather than a moving `HEAD` on purpose. `HEAD` was correct only in the single
+# window between editing led.tmpl and committing the fix; once that commit lands, `HEAD` walks
+# forward past it and a `HEAD`-relative comparison degrades into comparing the current file
+# against itself -- a silently vacuous pass forever after (exactly the class hooks/pre-commit's
+# own header warns against, "F49"), never erroring, just no longer proving anything. A fixed
+# historical SHA stays a genuine pre-fix specimen indefinitely.
+PRE_KIND_TEACH_FIX_SHA = "95622f3"
 
 BASE = 2000000000  # a synthetic epoch-seconds anchor (year 2033) -- never collides with a real
                     # historical ledger row, and is instantly recognizable as fixture data in
@@ -623,15 +634,20 @@ def main() -> int:
 
         # ---- CASE m: a VALID kind's success path is BYTE-IDENTICAL to the pre-fix script -------
         # The fix above only ever runs AFTER a failed insert (case l); this proves the success
-        # path (the overwhelmingly common case) was not touched at all -- one shim points at this
-        # commit's OWN PARENT led.tmpl (`git show HEAD:...`, the file as it stood before item 1's
-        # fix), one at the just-edited current file (root_i, reused). A plain psql INSERT with no
-        # -q/-t flags always emits "SET\nSET\nINSERT 0 1" regardless of the row's own content, so
-        # this is a real byte-for-byte comparison of the two SCRIPTS, not an assertion pinned to a
-        # hardcoded expected string.
+        # path (the overwhelmingly common case) was not touched at all -- one shim points at
+        # PRE_KIND_TEACH_FIX_SHA's own led.tmpl (`git show <fixed SHA>:...`, the file as it stood
+        # immediately before item 1's fix landed -- a pinned historical commit, NOT `HEAD`, so
+        # this stays a genuine two-script diff forever rather than degrading into a self-
+        # comparison the moment this fix's own commit becomes an ancestor of HEAD; see that
+        # constant's own comment), one at the just-edited current file (root_i, reused). Verified
+        # self-checking: the pinned SHA's content is asserted to genuinely PREDATE the fix (no
+        # _led_kind_refusal_teach function) before it's trusted as the "old" specimen.
         old_tmpl_src = subprocess.run(
-            ["git", "-C", str(REPO), "show", "HEAD:bootstrap/templates/led.tmpl"],
+            ["git", "-C", str(REPO), "show", f"{PRE_KIND_TEACH_FIX_SHA}:bootstrap/templates/led.tmpl"],
             capture_output=True, text=True, check=True).stdout
+        ck("_led_kind_refusal_teach" not in old_tmpl_src,
+           f"CASE m: PRE_KIND_TEACH_FIX_SHA ({PRE_KIND_TEACH_FIX_SHA}) must genuinely PREDATE the "
+           f"fix -- it already contains _led_kind_refusal_teach, so it is not a pre-fix specimen")
         root_m_old = Path(tempfile.mkdtemp(prefix="contemp-led-fixture-oldtmpl-"))
         old_tmpl_path = root_m_old / "led.tmpl.old"
         old_tmpl_path.write_text(old_tmpl_src, encoding="utf-8")
@@ -647,8 +663,9 @@ def main() -> int:
         ck(out_m_old == out_m_new,
            f"CASE m: a valid kind's success output must be BYTE-IDENTICAL old vs new: "
            f"old={out_m_old!r} new={out_m_new!r}")
-        log.append(f"CASE m (success path, OLD vs NEW led.tmpl): exit_old={code_m_old}, "
-                   f"exit_new={code_m_new}, stdout byte-identical ({out_m_new!r})")
+        log.append(f"CASE m (success path, OLD @{PRE_KIND_TEACH_FIX_SHA} vs NEW led.tmpl): "
+                   f"exit_old={code_m_old}, exit_new={code_m_new}, stdout byte-identical "
+                   f"({out_m_new!r})")
 
     finally:
         for w in worlds:
