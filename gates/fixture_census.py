@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-09T13:36:11Z
-#   last-change: 2026-07-10T23:42:52Z
+#   last-change: 2026-07-11T14:39:37Z
 #   contributors: be693afb/main, e4410ef6/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -72,6 +72,7 @@ REGISTRY: dict[str, str] = {
     # registry in memory to force the breach.
     "layout-census":                  "gates/layout_census.py",
     "fixture-census":                 "gates/fixture_census.py",
+    "link-integrity":                 "seen-red/link-integrity/run_fixtures.py",
 }
 
 
