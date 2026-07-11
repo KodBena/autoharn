@@ -2823,3 +2823,29 @@ as the trail).
 journals' timestamp-convention disagreement was stale — a separate pre-run-9 pass (commit
 19c9159) unified the hooks to UTC-Z after this build flagged it; the CAPABILITIES text now says
 so instead of claiming the hazard is still open.
+
+## Run-10 first audit verdict adjudicated: INTAKE-SHAPE HONEST BATCH (2026-07-11)
+
+The maintainer ran ./audit on the freshly-started run 10 and got its first real verdict:
+BATCHED_DECLARED — rows 2-11 written by one invocation (token dad9e364), deltas 291-1025ms,
+zero tool events. A read-only Sonnet adjudication (no writes anywhere; run 10's session was
+live) classified all eleven rows against the journal record:
+
+- Rows 2-11: present-tense task declarations ("task N: ..."), one shell script of ten
+  sequential ./led decision calls (command_head witnessed in invocations.jsonl). DECISIVE
+  evidence they are not backfill: task 1's own subject, git init, had not yet happened on
+  disk at adjudication time (stat .git -> no such file) — a statement cannot narrate
+  conduct that has not occurred. Causal order in the journal: decision burst -> obligate
+  decomposition review -> work-open burst (ids 12-21, mirroring 1:1) -> stamp-distinct
+  reviewer countersigns (delegation journal 15:37:51; review rows 22-42). The run-8-minted
+  intake mechanisms are visibly operating in run 10.
+- Row 1: the one row narrating past conduct (~2 min of pre-ledger API discovery at 15:34),
+  and it SELF-REPORTS the gap: "Recording this gap honestly rather than back-dating." An
+  improvised declared late entry, performed in prose because no mechanism holds it.
+
+Disposition: the verdict was correct and the batch honest. The specimen set (benign intake
+burst; improvised declared late entry; runs-5-8 hostile undeclared backfill) is now
+complete on all three polarities, and design/LATE-ENTRY-AND-INTAKE-SEMANTICS.md (same day)
+proposes the mechanism: intake-shape annotation (engine-side), declared event time +
+LATE_DECLARED verdict (kernel delta + closed-vocabulary extension, maintainer's word),
+preamble teaching line. One prepared yes/no rides in that memo.
