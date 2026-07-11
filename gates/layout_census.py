@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-09T07:54:37Z
-#   last-change: 2026-07-11T00:06:37Z
+#   last-change: 2026-07-11T21:08:11Z
 #   contributors: 9bcc0113/main, be693afb/main, e4410ef6/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -44,11 +44,24 @@ ROOT_FILES = {
     "DIRCLASS.md", "CAPABILITIES.md", "HANDOFF.md", "WALKTHROUGH.md",
     "POST-FABLE-OPERATING-BRIEF.md",  # succession handoff, root doc (2026-07-09)
     "OPERATING-CARD.md",  # Opus-readiness operating-era quick reference, root doc (2026-07-11)
+    # bootstrap/track-work.sh's own STANDING deployment on autoharn itself (design/
+    # WORK-STATUS-OFFERING.md, deliverable 2, 2026-07-11): deployment.json + the five verb
+    # shims (led/judge/pickup/audit/distance-to-clean), landing at the repo root because that
+    # IS this deployment's project-dir. No hooks are wired for it (a standing project is not a
+    # governed world — track-work.sh's own header comment) so these are inert outside a
+    # deliberate `./led`/`./pickup`/etc invocation; registered here so an unregistered-top-level
+    # breach does not fire on the offering's own first, self-hosted consumer.
+    "deployment.json", "led", "judge", "pickup", "audit", "distance-to-clean",
 }
 ROOT_DIRS = {
     ".claude", "bootstrap", "law", "judgment", "kernel", "stores", "instruments", "engine",
     "gates", "filing", "hooks", "drive", "seen-red", "design", "research", "runs", "ephemera",
     "provenance",
+    # attestations/ — ADR-0017's A:B:C fresh-context audit-loop ledger
+    # (attestations/doc-legibility-attestations.jsonl, gates/doc_attestation_presence.py),
+    # landed 2026-07-11 but never added here; caught in passing while registering
+    # design/WORK-STATUS-OFFERING.md's own two attestations (CLAUDE.md hazard-flagging duty).
+    "attestations",
 }
 
 # (2) per-directory currency patterns: a directory -> the regex(es) its basenames MUST match.
