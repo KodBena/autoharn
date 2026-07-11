@@ -12,6 +12,13 @@
       "timeout_s": 10
     },
     "mutation_observer": {"mode": "observe"},
-    "delegation_observer": {"mode": "observe"}
+    "delegation_observer": {"mode": "observe"},
+    "doc_shapes_gate": {"mode": "observe"},
+    "doc_legibility_critic": {
+      "mode": "off",
+      "cost_note": "Spends a real 'claude -p' classifier call per Write/Edit of a .md file when enabled -- billed to whoever pays for this world's Claude usage. OFF by default so no world silently bills its operator (maintainer mandate, 2026-07-10); flip to 'observe' only with that cost accepted. 'enforce' is not implemented (degrades to 'observe' with a warning) -- see hooks/doc_legibility_critic.py.",
+      "classifier_command": ["claude", "-p", "--model", "claude-haiku-4-5-20251001"],
+      "timeout_s": 10
+    }
   }
 }

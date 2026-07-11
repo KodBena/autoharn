@@ -45,6 +45,16 @@
             "timeout": 10
           }
         ]
+      },
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "env GATE_SUBJECT_ROOT=__PROJECT_ROOT__ python3 __AUTOHARN_ROOT__/hooks/pretooluse_doc_shapes_gate.py",
+            "timeout": 10
+          }
+        ]
       }
     ],
     "PostToolUse": [
