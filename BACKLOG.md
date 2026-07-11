@@ -2601,3 +2601,21 @@ lands") that scoped the FIRST landing to a minimal end-to-end core; the SQL-floo
 
 Every claim above is either WITNESSED (with the observed output quoted in the commit/report
 this entry accompanies) or explicitly filed as UNEXERCISED/deferred — no umbrella claim.
+
+## Hook-journal timestamp convention unified (2026-07-11, pre-run-9 window)
+
+The contemporaneity-audit commission flagged (its BACKLOG entry, same day) that the hook
+journals disagreed on timestamp convention: stamp_intercept and the mutation observer wrote
+UTC-Z; the change gate and the delegation observer wrote naive-local with no timezone suffix.
+The EDB builder parses both shapes explicitly, so audit deltas were correct on this
+one-operator, one-host setup — but naive-local timestamps under a time-delta auditor are
+correct by accident of same-host reading, and go wrong for an hour at every DST transition.
+That is a nail pointing up in the audit's own floor.
+
+Fixed at the source in the only cheap window (no wired session live — pgrep + /proc cwd
+checked, WITNESSED: three claude processes, cwds autoharn/parent/home, no run* world):
+both naive-local hooks now write UTC-Z `datetime.now(timezone.utc)` like their siblings.
+contemp_edb.py's naive-local parse branch is KEPT for pre-fix journal lines on disk; its
+NAMED HAZARD docstring now records the resolution. The internal naive-vs-naive lag
+comparison in the change gate (both operands naive local, no journal surface) is untouched
+and internally consistent.

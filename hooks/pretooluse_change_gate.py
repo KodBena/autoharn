@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-09T08:07:02Z
-#   last-change: 2026-07-10T20:51:48Z
-#   contributors: 9bcc0113/main, be693afb/main
+#   last-change: 2026-07-11T14:58:56Z
+#   contributors: 9bcc0113/main, be693afb/main, e4410ef6/main
 # <<< PROVENANCE-STAMP <<<
 
 """PreToolUse change-policy gate (e13 / s13) — the act-gate, fully label-indifferent.
@@ -137,7 +137,7 @@ import re
 import subprocess
 import sys
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 
 # Eager, top-of-file sys.path insert + import (lazy imports banned; the same pattern
 # engine/targets.py and hooks/stamp_intercept.py already use to reach a sibling module):
@@ -712,7 +712,7 @@ def _window_redundant(prev: dict | None, entry_id: int, entry_ts: str) -> bool:
 
 
 def _deny(msg: str, kind: str = "?", target: str = "") -> int:
-    _journal({"ts": datetime.now().isoformat(timespec="milliseconds"),
+    _journal({"ts": datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z"),
               "outcome": "denied", "deny_kind": kind, "target": target})
     print(json.dumps({"hookSpecificOutput": {
         "hookEventName": "PreToolUse", "permissionDecision": "deny",
@@ -727,7 +727,7 @@ def _observe_allow(kind: str, msg: str, target: str) -> int:
     it on its own next turn, mirroring hooks/demurral_detect.py's own warning shape) plus a
     journal record (`outcome: "observed_would_deny"`, distinct from a real `"denied"` row so the
     two are never confused when the journal is read later)."""
-    _journal({"ts": datetime.now().isoformat(timespec="milliseconds"),
+    _journal({"ts": datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z"),
               "outcome": "observed_would_deny", "deny_kind": kind, "target": target})
     print(json.dumps({"hookSpecificOutput": {
         "hookEventName": "PreToolUse", "permissionDecision": "allow",
@@ -747,7 +747,7 @@ def _close_windows(st: dict, reason: str, cmd_head: str) -> None:
     for k in closed:
         st[k]["open"] = False
     _save_state(st)
-    _journal({"ts": datetime.now().isoformat(timespec="milliseconds"),
+    _journal({"ts": datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z"),
               "outcome": "boundary", "reason": reason, "closed": len(closed),
               "cmd_head": cmd_head})
 
@@ -819,7 +819,7 @@ def main() -> int:
             prev = st.get(key)
             if isinstance(prev, dict) and _window_open(prev, now):
                 # repair 2: still inside this file's consumption window — reuse the ticket
-                _journal({"ts": datetime.now().isoformat(timespec="milliseconds"),
+                _journal({"ts": datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z"),
                           "outcome": "allowed", "file": path, "tool": tool,
                           "unlocked_by_entry": prev.get("entry_id"),
                           "entry_ts": prev.get("entry_ts"), "reused_ticket": True,
@@ -853,7 +853,7 @@ def main() -> int:
                 f"denied under enforce if the check itself had run clean.", path)
         st[key] = {"entry_id": entry_id, "entry_ts": entry_ts, "opened": now, "open": True}
         _save_state(st)
-        _journal({"ts": datetime.now().isoformat(timespec="milliseconds"), "outcome": "allowed",
+        _journal({"ts": datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z"), "outcome": "allowed",
                   "file": path, "unlocked_by_entry": entry_id, "entry_ts": entry_ts,
                   "tool": tool, "reused_ticket": False, "ticket_flags": flags})
         return 0

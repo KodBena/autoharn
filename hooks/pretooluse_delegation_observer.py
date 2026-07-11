@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-10T23:38:38Z
-#   last-change: 2026-07-10T23:38:38Z
+#   last-change: 2026-07-11T14:58:59Z
 #   contributors: e4410ef6/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -81,7 +81,7 @@ import json
 import os
 import subprocess
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _REPO_ROOT = os.path.dirname(_HERE)  # hooks/ -> autoharn root
@@ -295,7 +295,7 @@ def main() -> int:
     # 1. JOURNAL every dispatch, unconditionally (module docstring) -- before any DB work, so a
     # DB hiccup below never costs the journal record.
     _journal({
-        "ts": datetime.now().isoformat(timespec="milliseconds"),
+        "ts": datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z"),
         "session_id": session_id,
         "tool": tool,
         "description": description,

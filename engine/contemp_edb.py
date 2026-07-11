@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-11T14:40:08Z
-#   last-change: 2026-07-11T14:50:29Z
+#   last-change: 2026-07-11T14:59:47Z
 #   contributors: e4410ef6/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -59,9 +59,11 @@ UTC with a trailing "Z" (`time.strftime(...) + "Z"`); `pretooluse_change_gate.py
 timezone suffix at all. This module parses both shapes explicitly (see `_parse_ts_ms`) rather
 than silently mis-reading one as the other, but the naive-local shape is only correct when read
 on the SAME host/timezone that wrote it (true for this project's one-operator, one-host use
-today, false in general) -- filed in BACKLOG.md as a found inconsistency across the three hooks'
-own journaling, not fixed here (fixing it means editing two more hooks/ files, outside this
-commission's touch-list, and the hooks-live-session freeze rule applies to any such edit).
+today, false in general) -- filed in BACKLOG.md by the commission that built this module.
+RESOLVED AT THE SOURCE 2026-07-11, same day, in the pre-run-9 liveness window: both naive-local
+hooks now write UTC-Z like their siblings. The naive-local parse branch below is KEPT
+deliberately -- journal lines written before the fix remain on disk and must stay readable;
+same-host reading remains the correct assumption for exactly those historical lines.
 
 Read-only. Lazy imports banned (top-of-file only)."""
 from __future__ import annotations
