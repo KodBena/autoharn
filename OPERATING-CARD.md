@@ -1,7 +1,11 @@
 # OPERATING CARD — read this first, operate from here
 
-Written 2026-07-11 after an Opus-model fresh-context probe of this repo reported its
-orientation gaps; this card is the fix. It condenses; it does not supersede. The
+Written 2026-07-11 after an Opus-model fresh-context probe — a second model instance
+handed only this repository's files, no session memory, no author context, deliberately
+run to surface what a genuinely new reader would trip on (the same method
+[ADR-0017](law/adr/0017-the-zero-context-reader.md) later codified as a required loop) —
+of this repo reported its orientation gaps; this card is the fix. It condenses; it does
+not supersede. The
 [SSOTs](GLOSSARY.md#ssot) (single sources of truth — the one authoritative home for each
 kind of fact): CLAUDE.md (law + orchestration), CAPABILITIES.md (what is witnessed),
 BACKLOG.md dated tail (live findings), HANDOFF.md (session entry point). When this card
@@ -169,16 +173,29 @@ history — the ceremony it guarded has no legitimate scenario).
 
 ## Hooks × kernel map (mode read live from `<world>/.claude/apparatus.json`)
 
+The table below is reconciled against the one place this project derives the mechanism set
+mechanically rather than by hand-typed list:
+[`filing/apparatus_registry.py`](filing/apparatus_registry.py) statically extracts every
+`MECHANISM_KEY`/`mechs.get(...)`/`_resolve_mode(apparatus, "...")` literal out of `hooks/*.py`'s
+own source, which is how a prior drift was caught: this table, the shipped
+[`bootstrap/templates/apparatus.json`](bootstrap/templates/apparatus.json) (the per-mechanism
+mode config every scaffolded world starts from), and its companion
+[`bootstrap/templates/APPARATUS.md`](bootstrap/templates/APPARATUS.md) (the prose walkthrough of
+that same config) were all three stuck at ten mechanisms while an eleventh, `bash_completion`,
+had already shipped in `hooks/`. There are eleven mechanisms today; every row below names one.
+
 | mechanism (hooks/) | fires on | reads / does | default |
 |---|---|---|---|
-| change_gate + permit_to_work (pretooluse_change_gate.py) | PreToolUse Write/Edit | ledger declaration + `work_item_current` open+claimed | enforce |
+| change_gate + permit_to_work (pretooluse_change_gate.py) | PreToolUse Write/Edit | ledger declaration + `work_item_current` open+claimed; also sweeps `apparatus.json`'s `mechanisms` object for unrecognized keys against `filing/apparatus_registry.py`'s known set | enforce |
 | stamp_intercept.py | PreToolUse Bash | injects HMAC stamp as PGOPTIONS, unconditionally | enforce |
 | clean_exit (stop_clean_exit.py) | Stop | review_gap / question_status / open work / violations; blocks dirty stop (3-strike breaker) | enforce |
-| mutation_observer (posttooluse_mutation_observer.py) | Post Bash | find -newer sweep; warns on mutation with no work item | observe (enforce impossible) |
-| delegation_observer (pretooluse_delegation_observer.py) | PreToolUse Task/Agent | journals every subagent dispatch; warns when no open+claimed work item | observe |
-| demurral_detect.py | AskUserQuestion, Stop | out-of-frame Rule-3 classifier; warns only | **OFF (costs money)** |
-| doc_shapes_gate (pretooluse_doc_shapes_gate.py) | PreToolUse Write/Edit on *.md | runs gates/doc_shapes.py checks in-world; refuse-and-teach in enforce | observe |
-| read_observer (pretooluse_read_observer.py) | PreToolUse Read | journals ts/session/path (evidence for reviewer independence — invariant I6 of law/briefs/BRIEF-CONFORMANCE-MAP.md) | observe |
+| mutation_observer (posttooluse_mutation_observer.py) | Pre+Post Bash (the filename keeps its original "posttooluse_" prefix even though it now also attaches PreToolUse — same naming precedent delegation_observer follows below, an added leg on an existing file rather than a rename) | find -newer sweep; warns on mutation with no work item | observe (enforce impossible) |
+| delegation_observer (pretooluse_delegation_observer.py) | Pre+Post Task/Agent (one file, two legs added by the "small follow-ups" work item closed 2026-07-11 — tracker slug `small-follow-ups-commission`, `./led show` its row for the full record: PreToolUse journals the dispatch, PostToolUse journals the return, FIFO-paired by session_id + prompt sha256) | journals every subagent dispatch and its return; warns when no open+claimed work item | observe |
+| demurral_detect.py | AskUserQuestion, Stop | out-of-frame classifier for ADR-0013 Rule 3's "lower-ROI/invasive demurral is a tell, not an argument" pattern; warns only | **OFF (costs money)** |
+| doc_shapes_gate (pretooluse_doc_shapes_gate.py) | PreToolUse Write/Edit on *.md | runs [`gates/doc_shapes.py`](gates/doc_shapes.py) checks in-world; refuse-and-teach in enforce | observe |
+| read_observer (pretooluse_read_observer.py) | PreToolUse Read | journals ts/session/path — the evidence trail that lets a reviewer confirm they read a file themselves rather than trusting another agent's summary of it (invariant I6, [law/briefs/BRIEF-CONFORMANCE-MAP.md](law/briefs/BRIEF-CONFORMANCE-MAP.md): distinct-reviewer independence recorded separately from the author's own read) | observe |
+| bash_completion (posttooluse_bash_completion.py) | PostToolUse Bash | journals a completion timestamp, FIFO-paired to stamp_intercept's dispatch token by command-text sha256 (the non-null duration tail: builds, test suites, long subprocesses) | observe (enforce impossible — PostToolUse fires after the command already ran, so no "deny" exists) |
+| doc_legibility_critic.py | PostToolUse Write/Edit on *.md | headless `claude -p` call applying [ADR-0017](law/adr/0017-the-zero-context-reader.md)'s "zero-context reader" legibility test (can someone with none of the author's context parse this document?) to the edited doc; non-blocking `additionalContext` + journal only, never denies | **OFF (costs money); UNWIRED — ships in no world's `.claude/settings.json` yet, a maintainer/orchestrator drop-in per the hook's own module docstring** |
 
 Before ANY hooks/ edit: verify no wired session is live — `pgrep -a claude` then
 `readlink /proc/<pid>/cwd` for each; any cwd in a wired world = do not edit;
