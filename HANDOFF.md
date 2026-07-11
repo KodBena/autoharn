@@ -41,63 +41,69 @@ bootstrap/new-project.sh /home/bork/w/vdc/1/runN --new-world runN --db toy --hos
 cd /home/bork/w/vdc/1/runN && claude    # then type the task; nothing is pasted
 ```
 
-## Run 8 (maintainer-declared intent, 2026-07-11)
+## Run 8 — DONE and verified (2026-07-11); the night-shift record is BACKLOG's dated tail
 
-Run 8 will test RESUMPTION: stopping a governed session and picking the work back up (the
-world-level mechanism is `./pickup` — derived fresh from the ledger, never stored — plus
-Claude Code's own session resume). Nobody has witnessed a governed mid-task resume yet.
-**Sharpened by maintainer, 2026-07-11: the resume is a FRESH session hydrated from the
-ledger via `./pickup` — NOT `claude --continue`. If resumption needs the old conversation
-reloaded, the harness has failed its point; context replay is the O(N²) cost the ledger
-exists to replace (the same cost that made this HANDOFF necessary).** Note:
+Run 8 tested resumption (fresh session, ledger hydration — never `--continue`; maintainer
+doctrine). Result: hydration FAILED for a reason upstream of pickup — the commission was
+never ledgered (run 7 decomposed only what it was about to do), the agent did unledgered
+archaeology, recovered the spec, then ran the full discipline cleanly (all claims
+verified; Stop-gate BLOCK path live-witnessed; cross-session stamping live-witnessed).
+Every finding is filed in BACKLOG 2026-07-11 entries and each got its mechanism the same
+night: full-commission intake + investigation/stop-disposition preamble points (1/7/8),
+their observer hooks, pickup SPEC blocks, the LED_ACTOR fix, s23 invocation tokens, live
+verbs, judge-red-on-violations, `led work asof`, the flag-in-statement tripwire. Also
+that night: runs-are-linear ruling (no live worlds, apply-delta demoted), the
+contemporaneity indictment (batching systemic; I1 downgraded in the conformance map),
+OPERATING-CARD + glossary operating vocabulary, research/LOGIC-COVERAGE-STATUS.md. Note:
 run 7's phase 2 (HTML terminal renderer + 16-swatch editor + wiring the 16-color experiment)
 is still open in the run7 world and is a natural resumption subject.
 
-## Open work, ranked, with owners
+## Open work, ranked, with owners (rewritten 2026-07-11 night shift)
 
-1. **Artifact-vs-requirements detector — design memo (Fable-tier judgment; do NOT delegate the
-   design).** The one witnessed blind spot: written-only governance steps (assumption filing,
-   the reviewer's antecedent audit) were skipped in run 7 with zero trace, and no gate can
-   see it (BACKLOG run-7 entry, finding 2; the run-5 implementer's own analysis of the class
-   is quoted in the "unflagged assumption" exchange, 2026-07-10). Needs a design pass, not a
-   regex. Nothing blocks runs meanwhile.
-2. **review_gap scope semantics — draft ruling for the maintainer.** The gap view catches
-   every row by the obliged principal, not just the obligated scope; two consecutive runs paid
-   a workaround (fail-safe direction, so no urgency). Draft the worked proposal from the two
-   witnessed episodes (runs 5 and 7), then a prepared yes/no. Related small fix, Sonnet-sized:
-   `led obligate` teach-text so the direction mistake becomes hard to make.
-3. **pg_hba superuser hardening — maintainer's five minutes, fully prepared.** The cluster's
-   only superuser (`bork`) has NO password and trust rules admit any role from both hosts;
-   run 5 witnessed a live superuser bypass. Walkthrough: design/PG-HBA-HARDENING.md
-   (PREPARED-UNAPPLIED, lockout guard included). Until applied, role discipline is
-   voluntary-but-observed.
-4. **Two ADR amendments AWAITING the maintainer's "ratified"** (drafted 2026-07-10, not yet in
-   law/ — law is never edited without his word). On his ratification, append verbatim, dated,
-   with "maintainer-ratified" attribution:
-   - ADR-0000 Revisit #3: "The out-of-frame rationalization-detector named here was minted as
-     a mechanism: hooks/demurral_detect.py (observer; PreToolUse on AskUserQuestion + Stop),
-     regression-tested against the adversarial corpus instruments/demurral_corpus.jsonl
-     (n=121; precision 0.981, recall 0.929 raw / 0.852 at shipped timeout; witness banked in
-     seen-red/demurral-detector/). Its costed classifier defaults off per world. Promotion to
-     enforcing remains a maintainer act."
-   - ADR-0013 Revisit #2: "Rule 3's enforcement surface tightened from review-only toward the
-     gate: the justification-as-suspect check now runs mechanically at the two canonical sites
-     (the pre-loaded question; the completion claim). It warns; it does not refuse. The Rule's
-     admission stands — the faculty it guards is still the faculty that acts — but the
-     demurral now leaves a trace the executor did not choose to leave."
-5. **Prudential, unwitnessed-need, filed only:** s23 (claim-before-close sunk into the kernel —
-   run 7 showed agents using led faithfully, so wrapper-level held; class-ratified when/if
-   built), cross-session independence live witness, Stop-gate BLOCK path live witness, and the
-   mutation observer's warn path live — all arrive free from future runs; build nothing for
-   them.
+1. **Maintainer's morning batch (all prepared, one sitting):** (a) review_gap ruling —
+   design/REVIEW-GAP-SCOPE-SEMANTICS-RULING.md, one yes/no, recommend YES on option A;
+   (b) the two ADR amendments drafted 2026-07-10; on "ratified", append verbatim, dated,
+   maintainer-attributed:
+   - ADR-0000 Revisit #3: "The out-of-frame rationalization-detector named here was minted
+     as a mechanism: hooks/demurral_detect.py (observer; PreToolUse on AskUserQuestion +
+     Stop), regression-tested against the adversarial corpus
+     instruments/demurral_corpus.jsonl (n=121; precision 0.981, recall 0.929 raw / 0.852
+     at shipped timeout; witness banked in seen-red/demurral-detector/). Its costed
+     classifier defaults off per world. Promotion to enforcing remains a maintainer act."
+   - ADR-0013 Revisit #2: "Rule 3's enforcement surface tightened from review-only toward
+     the gate: the justification-as-suspect check now runs mechanically at the two
+     canonical sites (the pre-loaded question; the completion claim). It warns; it does
+     not refuse. The Rule's admission stands — the faculty it guards is still the faculty
+     that acts — but the demurral now leaves a trace the executor did not choose to
+     leave."; (c) ADR-0009 is an UNADAPTED chocofarm copy
+   (Scope still binds chocofarm/) — re-instance for autoharn's experiment domain? yes/no,
+   amendment drafts on yes; (d) research-ledger apply — one scripted command, armed
+   (BACKLOG chocofarm disposition); (e) pg_hba superuser hardening — five minutes,
+   design/PG-HBA-HARDENING.md, PREPARED-UNAPPLIED, unchanged.
+2. **Audit verb (contemporaneity Part 2)** — design/CONTEMPORANEITY-AUDIT.md, spec'd
+   including the binding ASP-first directive; s23 tokens + invocation journal landed and
+   inert until this consumes them. Thresholds from the measured runs-5-8 corpus, never
+   guessed. The deductive-engine showcase; Part 3 (preamble ordering obligations as one
+   deontic/temporal ASP program) sketched behind it.
+3. **Artifact-vs-requirements detector Register 1** — design/ARTIFACT-VS-REQUIREMENTS-
+   DETECTOR.md; the parked attachment question can now be decided on run-8 evidence
+   (14 organic assumption rows, statement-prefix practice, refs edges underused).
+4. **Run 9 intent — unset (maintainer's call).** Natural shape: first run under the full
+   night-shift mechanism set (live verbs, SPEC-carrying pickup, stop-disposition +
+   delegation observers, s23 tokens) with its experiment banked in the research ledger if
+   (1d) is applied.
+5. **Prudential, filed only:** kernel-column candidates superseded_by + tier (omega
+   disposition — await witnessed need); scope tagging + JSON schema (need design); s23-as-
+   claim-before-close (unchanged); circuit-breaker 3/3 live witness (arrives free).
 
 ## Standing cautions (the ones this session paid for; details in POST-FABLE brief + BACKLOG)
 
 - Verify artifacts, never reports — including your own prior claims (this session's "first
   stamped independence" claim was refuted by run 6's ledger: cite-from-memory fails).
-- Hooks execute from THIS repo per invocation in every wired world: never edit hooks/ while
-  any wired session is live (`pgrep` + `/proc/<pid>/cwd`, checked at edit time, by the
-  editor); build-new-then-swap beats wait-and-block.
+- Hooks AND the operator verbs execute from THIS repo per invocation in every wired world
+  (live-verbs refactor, 2026-07-11: worlds carry 3-line shims): never edit hooks/ OR
+  bootstrap/templates/ while any wired session is live (`pgrep` + `/proc/<pid>/cwd`,
+  checked at edit time, by the editor); build-new-then-swap beats wait-and-block.
 - Enumeration fails open (three witnessed stamp evasions; one bash-mutation gap): prefer
   unconditional mechanisms and after-the-fact observers over shape-matching.
 - Agents park: a "still running / waiting" stop is the known failure — resume with a directive,
