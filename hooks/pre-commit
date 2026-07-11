@@ -47,6 +47,16 @@ PY="$HOME/w/vdc/venvs/generic/bin/python"
     exit 1
 }
 
+# no_conflict_markers EARLY — an unresolved merge in the staged additions makes every
+# later content gate's verdict meaningless (witnessed: merge b25272f landed raw markers
+# in BACKLOG.md past the whole chain; gate added 2026-07-12, same day, seen-red both
+# polarities).
+"$PY" "$REPO_ROOT/gates/no_conflict_markers.py" || {
+    echo "" >&2
+    echo "pre-commit: conflict-marker gate FAILED — commit refused (unresolved merge in staged additions)." >&2
+    exit 1
+}
+
 "$PY" "$REPO_ROOT/gates/no_lazy_imports.py" || {
     echo "" >&2
     echo "pre-commit: lazy-import gate FAILED — commit refused (CLAUDE.md edict 2026-07-02)." >&2

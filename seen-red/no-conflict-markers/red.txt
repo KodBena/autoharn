@@ -1,0 +1,3 @@
+RED  ok: raw marker in staged addition refused, file named
+GREEN ok: indented quote + bare ======= pass clean
+ALL CASES OK -- no-conflict-markers both polarities, zero residue
