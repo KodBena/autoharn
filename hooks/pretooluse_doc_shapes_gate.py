@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-11T17:02:12Z
-#   last-change: 2026-07-11T17:02:12Z
+#   last-change: 2026-07-11T21:33:23Z
 #   contributors: e4410ef6/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -81,6 +81,21 @@ change-gate or stamp-intercept failure fails CLOSED. Every except path returns a
 Journal: `<world>/.claude/logs/doc_shapes_gate.journal.jsonl`, one line per DENY or
 OBSERVED-WOULD-DENY outcome (a clean pass is not journaled, matching
 hooks/doc_legibility_critic.py's own convention of only recording the interesting case).
+
+LIVENESS COUNTER (small-follow-ups commission item 2; BACKLOG "Run-11 first-shift forensics",
+item 2's own change proposal): a SECOND, separate journal,
+`<world>/.claude/logs/doc_shapes_gate.exercised.jsonl`, gets one line per COMPLETED evaluation
+-- clean, denied, or observed-would-deny alike -- so a later forensic pass can count real
+evaluations against the world's own .md Write/Edit tool calls and distinguish "the gate ran and
+found nothing" from "the gate always raised and silently fail-opened" (run11's own named
+epistemic limit: a clean pass and a silently-broken gate are byte-identical from the DENY-only
+journal alone). The line is written ONLY after `_check()` returns successfully -- if the
+try/except above catches an exception first (an import failure, an unreadable file, anything),
+NO exercised line is written, so an elevated .md-write-count vs. exercised-count gap is itself
+the signal that the gate is fail-opening rather than passing clean. Observer-grade: this journal
+is never read by this hook's own decision logic, so writing it changes no verdict, and its own
+write failures are swallowed exactly like every other journal in this project (best-effort,
+never blocks the tool call).
 
 Lazy imports are banned (CLAUDE.md, 2026-07-02): everything below imports at module load.
 """
@@ -214,6 +229,31 @@ def _journal(payload: dict, record: dict) -> None:
         pass
 
 
+def _journal_exercised(payload: dict, file_path: str, mode: str, outcome: str) -> None:
+    """LIVENESS COUNTER (module docstring): one line per COMPLETED evaluation, regardless of
+    outcome -- called ONLY from the success path of main() (see there), never from the
+    fail-open except branch, so a gap between .md Write/Edit calls and exercised lines is
+    itself the "silently fail-opened" signal this counter exists to make visible. A SEPARATE
+    file from `_journal` above (that one records only the interesting DENY/OBSERVED-WOULD-DENY
+    case, per hooks/doc_legibility_critic.py's own convention) -- this one records every
+    evaluation including the common clean case, on purpose (a liveness counter that only
+    counted the interesting case could not distinguish zero-clean-passes from zero-evaluations
+    either)."""
+    cwd = _first(payload, "cwd", default="")
+    root = os.environ.get("GATE_SUBJECT_ROOT") or (cwd if isinstance(cwd, str) else "")
+    if not root:
+        return
+    path = Path(root) / ".claude" / "logs" / "doc_shapes_gate.exercised.jsonl"
+    rec = {"ts": time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime()) + "Z",
+           "file": file_path, "mode": mode, "outcome": outcome}
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with open(path, "a", encoding="utf-8") as f:
+            f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+    except Exception:  # noqa: BLE001 -- journaling failure must never affect the decision
+        pass
+
+
 def _deny(payload: dict, file_path: str, violations: list[str]) -> int:
     msg = (f"doc-shapes gate: {len(violations)} zero-context-reader finding(s) in {file_path} "
            f"(ADR-0017 Rules 2-3) — " + " | ".join(violations))
@@ -261,8 +301,14 @@ def main() -> int:
     except Exception:  # noqa: BLE001 -- fail-open: a legibility check must never block a write
         return 0
 
+    # LIVENESS COUNTER (module docstring): written here, ONLY on the try block's success path
+    # above (never from its except branch) -- reaching this line proves _check() actually ran
+    # to completion, which is exactly the fact the counter exists to make countable.
+    outcome = "clean" if not violations else ("denied" if mode == "enforce" else "observed_would_deny")
+    _journal_exercised(payload, file_path, mode, outcome)
+
     if not violations:
-        return 0  # clean -- silent allow, no journal noise for the common case
+        return 0  # clean -- silent allow, no journal noise for the common case (DENY journal above)
 
     if mode == "enforce":
         return _deny(payload, file_path, violations)

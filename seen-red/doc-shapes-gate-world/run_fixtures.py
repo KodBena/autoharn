@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-11T17:04:11Z
-#   last-change: 2026-07-11T17:04:11Z
+#   last-change: 2026-07-11T21:34:09Z
 #   contributors: e4410ef6/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -26,6 +26,14 @@ fixture document never trips this repo's own gates):
                      context-sensitive FRAGMENT check sees the whole file, not an isolated
                      snippet, and that violations name the REAL target path, never the temp
                      file used internally.
+  EXERCISED-LIVENESS-- small-follow-ups commission item 2 (BACKLOG "Run-11 first-shift
+                     forensics", item 2's own change proposal): every evaluation above that
+                     actually ran (ENFORCE-RED, ENFORCE-GREEN, OBSERVE-WARN, DEFAULT-OBSERVE,
+                     EDIT-RECONSTRUCT -- five calls) appends one line to
+                     doc_shapes_gate.exercised.jsonl with the right outcome
+                     (denied/clean/observed_would_deny), while OFF-SILENT -- mode="off",
+                     which returns before the check ever runs -- appends NOTHING: proving the
+                     counter tracks real evaluations, not merely Write/Edit tool calls.
 
 No network, no DB, no cost: pure-stdlib hook + pure-stdlib gate, throwaway temp world only.
 Usage: python3 seen-red/doc-shapes-gate-world/run_fixtures.py
@@ -57,6 +65,13 @@ def _write_payload(world: Path, doc_name: str, content: str) -> dict:
     return {"tool_name": "Write",
             "tool_input": {"file_path": str(world / doc_name), "content": content},
             "cwd": str(world)}
+
+
+def _exercised_lines(world: Path) -> list[dict]:
+    path = world / ".claude" / "logs" / "doc_shapes_gate.exercised.jsonl"
+    if not path.exists():
+        return []
+    return [json.loads(ln) for ln in path.read_text(encoding="utf-8").splitlines() if ln.strip()]
 
 
 def _set_mode(world: Path, mode: str | None) -> None:
@@ -141,17 +156,36 @@ def main() -> int:
         if "/tmp" in reason.replace(str(target), "") and "seenred" in reason:
             failures.append("deny reason leaked the internal temp file path")
 
+        # --- EXERCISED-LIVENESS ------------------------------------------------------------
+        # Five of the six calls above actually ran the check (ENFORCE-RED, ENFORCE-GREEN,
+        # OBSERVE-WARN, DEFAULT-OBSERVE, EDIT-RECONSTRUCT); OFF-SILENT returned before the
+        # check ever ran, so it must contribute NOTHING -- the discriminator this counter
+        # exists to make visible (a Write/Edit count of 6 against an exercised count of 5).
+        exercised = _exercised_lines(world)
+        expected_outcomes = ["denied", "clean", "observed_would_deny", "observed_would_deny",
+                             "denied"]
+        got_outcomes = [ln.get("outcome") for ln in exercised]
+        print(f"CASE EXERCISED-LIVENESS: {len(exercised)} exercised line(s), outcomes={got_outcomes}")
+        if got_outcomes != expected_outcomes:
+            failures.append(f"expected exercised outcomes {expected_outcomes} (5 lines, one per "
+                            f"real evaluation, OFF-SILENT contributing none), got {got_outcomes}")
+        if len(exercised) == 5 and exercised[4].get("file") != str(target):
+            failures.append(f"expected the EDIT-RECONSTRUCT exercised line to name the real "
+                            f"target path {str(target)!r}, got {exercised[4].get('file')!r}")
+
     finally:
         shutil.rmtree(world, ignore_errors=True)
 
     if failures:
         print("doc-shapes-gate-world red-specimen: FAILED —", "; ".join(failures))
         return 1
-    print("doc-shapes-gate-world red-specimen: all six cases behaved as designed — enforce "
+    print("doc-shapes-gate-world red-specimen: all seven cases behaved as designed — enforce "
           "denies a defective write naming both checks, enforce allows a clean write silently, "
           "observe warns without blocking, off is silent regardless, a missing apparatus.json "
-          "defaults to observe (never off, never enforce), and an Edit is checked against its "
-          "full reconstructed content with the real path named in the teach-text.")
+          "defaults to observe (never off, never enforce), an Edit is checked against its "
+          "full reconstructed content with the real path named in the teach-text, and the "
+          "exercised-liveness counter records exactly the five real evaluations (never "
+          "OFF-SILENT's skipped one) in order, each naming the real target path.")
     return 0
 
 
