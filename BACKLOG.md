@@ -4212,3 +4212,24 @@ the record can witness that review HAPPENED and READ the files but not that it R
 review's load-bearingness turns UNDECIDABLE precisely in the run where review found no product
 defect — an instrument for the DEPTH of an independent read, not only its occurrence, is the
 named gap.
+
+## Maintainer principle: the action stream is the evidentiary basis; session internals are diagnostics (2026-07-11)
+
+Stated while clarifying the deliberation-vs-execution timing gap, near-verbatim: "the end
+goal of the project should require no low-level access into ~/.claude just on principle
+(it should be robust in working by what claude does); the fact that we use it is for
+diagnostics/debugging."
+
+Standing consequences: (1) every harness guarantee rests on the sanctioned hook surface —
+the action stream — never on reading session transcripts or other ~/.claude internals;
+transcript archaeology remains legitimate as diagnostics only, per-study, never
+load-bearing. (2) The deliberation-vs-execution timing gap (retrospectives run-10/11) is
+therefore split: the TIMING half is solvable inside the principle — journal a PostToolUse
+completion timestamp beside the existing PreToolUse stamp; tool runtime and model
+deliberation then separate arithmetically — queued into the small-follow-ups commission.
+The TOKEN/COST half requires session internals and is by this principle permanently
+diagnostic-grade: buildable as a local opt-in instrument at most, never part of the audit
+trail, and the previously-pending "privacy call on committing aggregates" is DISSOLVED —
+nothing load-bearing depends on it. (3) The retrospectives' could-not-answer lists are
+re-scored accordingly: "cost efficiency" moves from awaiting-decision to
+out-of-scope-by-principle.
