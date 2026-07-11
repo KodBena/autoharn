@@ -3702,3 +3702,14 @@ existing relaxed); item 2 wires two already-authored, already-ratified gates (`d
 registered days ago; `doc_attestation_presence.py` "authored ENFORCE... ratified" per its own
 docstring and ADR-0017) into an existing chain, softening neither. Both scratch-witnessed on
 both polarities as shown above.
+
+**Self-caught hazard, fixed same session:** while wrapping up item 1's witness, case (m) of
+`run_fixtures.py` was found comparing led.tmpl's success-path output against `git show
+HEAD:bootstrap/templates/led.tmpl` — correct only in the window between editing the file and
+committing the fix; the instant that commit (`e1059ef`) landed, `HEAD` walked past it and every
+future run would silently diff the fixed file against itself, a vacuous pass that never errors
+and stops proving what its own comment claims. Pinned to a fixed historical SHA
+(`PRE_KIND_TEACH_FIX_SHA = 95622f3`, `e1059ef`'s own parent) instead, with a `ck()` that asserts
+the pinned commit genuinely predates the fix (no `_led_kind_refusal_teach` in its content)
+rather than trusting the SHA by convention — commit `485e463`. Full suite re-verified clean,
+exit 0, scratch schema torn down to zero residue.
