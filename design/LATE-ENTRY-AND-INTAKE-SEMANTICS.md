@@ -1,8 +1,21 @@
 # Late entries and intake bursts — DRAFT design for the maintainer
 
-STATUS: DRAFT — AWAITING MAINTAINER'S WORD (2026-07-11). Drafted from run 10's first live
+STATUS: RATIFIED (2026-07-11, maintainer: "you had three points on the contemporaneity
+question, and I agree with all of them"). Drafted the same day from run 10's first live
 audit verdict and its adjudication (BACKLOG, "Run-10 first audit verdict adjudicated",
-2026-07-11). An agent may draft a design; it may never file one as made.
+2026-07-11); implementation commissioned at ratification.
+
+RATIFICATION NOTE — the "own up" reading (maintainer, at ratification): the author of
+batched ledger rows must own up to the batching, "at least in spirit if not mechanized,"
+with the caveat that "a mechanization could be brittle if not done right." Confirmed, and
+here is where each half already lives: the MECHANIZED owning-up is the s23 invocation token
+itself — it is injected by hook, involuntarily, so a batch declares itself in a way the
+writer can neither omit nor fake (this is exactly why the verdict is named
+BATCHED_**DECLARED**), and it is non-brittle for that same reason. The SPIRIT-level duty is
+Proposal 3's preamble line plus the declared event time of Proposal 2 for the late case.
+What this design deliberately does NOT do — agreeing with the brittleness instinct — is
+mandate prose "I am batching" rows: a voluntary confession requirement would be enumerable,
+fakeable, and noise; the involuntary token already tells the truth.
 
 ## The question in plain words (read this first)
 

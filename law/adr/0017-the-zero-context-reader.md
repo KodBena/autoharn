@@ -1,22 +1,23 @@
 # ADR-0017: The Zero-Context Reader — Documentation Legibility Discipline
 
-> **DRAFT — Fable-authored 2026-07-11, awaiting maintainer ratification.** Nothing in this
-> file is law until the maintainer's word. Its intended final home is
-> `law/adr/0017-the-zero-context-reader.md` (0017 is the next free number; the corpus ends at
-> [ADR-0016](../law/adr/0016-the-service-contract-is-an-enforcement-surface.md)). Relative
-> links below are written from `design/`; re-root them one level shallower if the file moves
-> into `law/adr/`. The ratification question rides in the BACKLOG entry filed with this draft.
+> **ACCEPTED — maintainer-ratified 2026-07-11, with one proviso amending Rule 4.** Ratified
+> from the same-day Fable-authored draft (`design/ADR-DRAFT-documentation-discipline.md`,
+> commit `c65cd4d`; moved here with links re-rooted at ratification). The proviso, in the
+> maintainer's words: Rule 4 must not prohibit "large sweeps (which I intend to do, when the
+> time is right)" — the draft's "*never* migrated" emphasis was "undue and inflexible
+> discipline for, to me anyways, no discernible purpose." Rule 4 below carries the amended
+> text; everything else stands as drafted.
 
-- **Status:** Proposed (draft; see banner above).
+- **Status:** Accepted (maintainer-ratified 2026-07-11; Rule 4 amended at ratification).
 - **Genre:** Tenet (cross-cutting authoring discipline) — the *legibility* register of the
-  documentation family. [ADR-0005](../law/adr/0005-documentation-discipline.md) owns where a
+  documentation family. [ADR-0005](0005-documentation-discipline.md) owns where a
   document lives and how its **facts** stay true (one source of truth per handle, filing
   homes, lifecycle, amend-by-append). This tenet owns something ADR-0005 presumes and never
   states: whether a reader who was not present when the document was written **can read it at
   all**. The two compose; neither restates the other.
 - **Date:** 2026-07-11.
 - **Provenance:** Native to autoharn — a response to a named, dated maintainer indictment,
-  filed the same morning in [BACKLOG.md](../BACKLOG.md) ("Documentation legibility indictment
+  filed the same morning in [BACKLOG.md](../../BACKLOG.md) ("Documentation legibility indictment
   (maintainer, 2026-07-11 morning)"). The maintainer, reading the morning batch cold, hit
   three navigation-breaking defects in ten minutes and named the class: *"you shouldn't have
   to navigate the doc graph like a squirrel just to figure out what the insane staccato — a
@@ -29,7 +30,7 @@
   requirement that figures be 'self-explanatory'… something similar should appear here."* The
   worked specimens are all in this repository: the three morning defects (fixed in commit
   `48dce0c`, so both polarities survive in git) and the
-  [safety-critical-logging BRIEF](../law/briefs/safety-critical-logging/BRIEF.md), a
+  [safety-critical-logging BRIEF](../../law/briefs/safety-critical-logging/BRIEF.md), a
   document produced by a Fable-class model — the same class authoring this draft — and named
   by the maintainer as the specimen of the failure. The disease is not one contributor's
   habit; it is the default output register of the tool this project is built around.
@@ -79,7 +80,7 @@ a sentence; it was never complete for anyone. Second, and consequently, the soun
 cannot be cause-side (a rule about how the author works) or shape-side (a list of banned
 patterns — this project has paid three times to learn that enumerated shape-matching fails
 open at the next instance, per [ADR-0011's class-not-instance
-rule](../GLOSSARY.md#class-not-instance-net)). It must be **reader-side, tested on the
+rule](../../GLOSSARY.md#class-not-instance-net)). It must be **reader-side, tested on the
 artifact**: does the text work for a reader who has none of the author's context? That single
 test catches both mechanisms, and every mechanism not yet named, because it does not care why
 the text is skeletal — only whether it is.
@@ -90,14 +91,14 @@ understood by a reader who skipped the body text. The maintainer named that rule
 model, and the project already uses its operational form: the **fresh-context probe** — a
 second model instance given the artifact and nothing else — is how this repository already
 audits its own documents (an Opus fresh-context probe on 2026-07-11 caught
-[GLOSSARY.md](../GLOSSARY.md) violating its own Stand-Alone Principle; the operating-era
+[GLOSSARY.md](../../GLOSSARY.md) violating its own Stand-Alone Principle; the operating-era
 terms section records it). This tenet makes that probe's standard the authoring bar, not
 just the audit instrument.
 
 ### The specimens
 
 **The named specimen — the safety-critical-logging BRIEF.** The
-[BRIEF](../law/briefs/safety-critical-logging/BRIEF.md) is a genuinely substantive research
+[BRIEF](../../law/briefs/safety-critical-logging/BRIEF.md) is a genuinely substantive research
 document, which is exactly why it serves as the specimen: the failure is not thin content but
 content rendered illegible. Three passages, diagnosed:
 
@@ -137,7 +138,7 @@ resolving, and openings that assume the author's context.
 **The in-house fragments.** The class is not confined to imports: `FINDINGS.md:107` carries
 the standalone paragraph *"Block-and-ask + witness-integrity mandate."*, and even the law
 corpus has *"Four rules."* as a complete paragraph
-([ADR-0015](../law/adr/0015-verification-substrate-discipline.md), line 50). Both were found
+([ADR-0015](0015-verification-substrate-discipline.md), line 50). Both were found
 by a five-line scan during this draft's own measurement pass — the malady is ambient,
 exactly as the maintainer said.
 
@@ -170,7 +171,7 @@ is that test's enforcement, its honestly-measured mechanization, and its migrati
 Robustness over completeness, per the commissioning ruling: the mechanisms below aim to
 reliably catch the worst offenses and to say plainly what they do not catch; edge cases are
 patched as discovered, not pre-enumerated. Each rule names its
-[enforcement surface](../GLOSSARY.md#enforcement-surface) honestly.
+[enforcement surface](../../GLOSSARY.md#enforcement-surface) honestly.
 
 ### Rule 1 — Write for the zero-context reader (the mandate)
 
@@ -195,12 +196,12 @@ Before a document ships, it passes the test a fresh-context probe would apply:
 The author cannot self-certify this test, and the reason is structural, not moral: the test
 asks what the text does *without* the author's context, and the author is the one reader who
 cannot unknow that context. This is the same faculty-that-corrupts admission ADR-0013 Rule 3
-and [ADR-0014](../law/adr/0014-executor-second-opinion.md) already make — and the same
+and [ADR-0014](0014-executor-second-opinion.md) already make — and the same
 remedy: the honest checker is out-of-frame (a fresh-context probe, an independent critic, a
 cold human read), never the author's own re-read.
 
 *Enforcement surface: review-only at authoring — declared presumptively decaying, exactly as
-the [meta-sweep](../GLOSSARY.md#meta-sweep) vocabulary requires — backed by two out-of-frame
+the [meta-sweep](../../GLOSSARY.md#meta-sweep) vocabulary requires — backed by two out-of-frame
 transports of the same judgment: the fresh-context audit loop (the maintainer-proposed
 A:B:C workflow, the section after Rule 4) as the primary instrument, and a headless LLM
 critic at observer grade (costed, default OFF; instance bindings) as the lightweight one.
@@ -216,7 +217,7 @@ chase every pointer and land somewhere*:
 - **(a) Coined terms link to their definition on first use, and the definition lands in the
   same change as the coinage.** This subsumes, and elevates from convention to law, the
   Stand-Alone Principle already stated at the top of the project glossary
-  ([GLOSSARY.md](../GLOSSARY.md), "Wiki posture") — that statement remains the operational
+  ([GLOSSARY.md](../../GLOSSARY.md), "Wiki posture") — that statement remains the operational
   home of the practice; this rule is why it binds. A portable adopter substitutes its own
   glossary; the obligation is the same.
 - **(b) A path is a link that resolves.** A repository artifact is cited as a relative
@@ -270,21 +271,28 @@ over.
 as such. ADR-0011 Rule 2 governs growth: a shape that recurs after this record converts to a
 measured check, not to more prose here.*
 
-### Rule 4 — Binds on touch; the back-catalog migrates opportunistically
+### Rule 4 — Binds on touch; the back-catalog migrates on touch, opportunistically, or by maintainer-initiated sweep
 
 The discipline binds a document **at the moment it is authored or edited**: a new document
 meets Rules 1–3 before it ships; an edit to an existing document brings *at minimum the
 edited sections and the document's opening* to standard in the same change — the plank-nail
-reflex applied to prose, sized to the touch. The ~200-document back-catalog is **never**
-migrated as a big-bang rewrite: robustness over completeness, and
-[ADR-0004](../law/adr/0004-minimal-touch-edits-to-partially-visible-files.md)'s
-no-retroactive-sweep posture, both point the same way — a wholesale rewrite pass would
-churn every document at once, destroy the git-blame trail that lets defects be dated, and
-trade a bounded standing cost for an unbounded one-time one. Two hard limits on migration
-zeal: **point-in-time records are never retro-edited to comply** (ADR-0005 Rule 8 outranks
-this tenet; a frozen commission, audit, or dated BACKLOG entry stays verbatim), and
-**quoting a defective passage as evidence is not a violation** (this document quotes several;
-so will the critic's findings and the corpus).
+reflex applied to prose, sized to the touch. The ~200-document back-catalog migrates by
+three legitimate routes: **on touch** (the mechanized default above), **opportunistically**
+(an agent brings a document it relied on up to standard in passing), and **by
+maintainer-initiated sweep** — a deliberate large migration pass when the maintainer judges
+the time right. *(Amended at ratification, 2026-07-11: the draft flatly prohibited big-bang
+migration; the maintainer struck that as "undue and inflexible discipline for … no
+discernible purpose" and reserves the sweep decision for himself. What survives of the
+draft's rationale is advice to a sweep's initiator, not prohibition: churning many documents
+at once dilutes the git-blame trail that lets defects be dated, so a sweep is worth batching
+into reviewable units — and
+[ADR-0004](0004-minimal-touch-edits-to-partially-visible-files.md)'s minimal-touch posture
+governs unbidden agent edits; it was never a bar on a deliberate, maintainer-ordered pass.)*
+Two hard limits on migration zeal stand unchanged by the amendment: **point-in-time records
+are never retro-edited to comply** (ADR-0005 Rule 8 outranks this tenet; a frozen
+commission, audit, or dated BACKLOG entry stays verbatim), and **quoting a defective passage
+as evidence is not a violation** (this document quotes several; so will the critic's
+findings and the corpus).
 
 *Enforcement surface: the binding point is where the mechanisms attach — the gate and critic
 run against touched documents at write/commit time, which makes "binds on touch" the
@@ -396,11 +404,11 @@ own machinery, and an adopting project replaces it wholesale with its own.
   prompt version, and a stale number is treated as no number (the demurral harness's
   Goodharting caveat applies verbatim); the mediocrity of the headless transport is itself
   recorded evidence for the A:B:C transport above.
-- **The glossary:** [GLOSSARY.md](../GLOSSARY.md) is Rule 2(a)'s definition home; its "Wiki
+- **The glossary:** [GLOSSARY.md](../../GLOSSARY.md) is Rule 2(a)'s definition home; its "Wiki
   posture" preamble remains the practice's operational statement and now cites this tenet as
   its law once ratified.
 - **The meta-sweep:** this tenet's own rules declare their surfaces above, so the
-  [meta-sweep](../GLOSSARY.md#meta-sweep) can hold it to the same standard it holds the rest
+  [meta-sweep](../../GLOSSARY.md#meta-sweep) can hold it to the same standard it holds the rest
   of the law.
 
 ## Consequences
@@ -418,7 +426,7 @@ own machinery, and an adopting project replaces it wholesale with its own.
   the measure-first rule this tenet imposes on its own mechanization.
 - **The discipline is a product.** Because the core is project-neutral and the bindings are
   quarantined in one section, the tenet can be served to other LLM-collaborator projects as
-  designed — the metaproject doing what the [metaproject](../GLOSSARY.md#metaproject) is for.
+  designed — the metaproject doing what the [metaproject](../../GLOSSARY.md#metaproject) is for.
 
 ### Negative
 
@@ -496,33 +504,33 @@ own machinery, and an adopting project replaces it wholesale with its own.
 
 ## Related
 
-- **[ADR-0005 (documentation discipline)](../law/adr/0005-documentation-discipline.md).**
+- **[ADR-0005 (documentation discipline)](0005-documentation-discipline.md).**
   The sibling. It governs the *facts and lifecycle* of documentation (SSOT per handle,
   filing homes, amend-by-append, verbatim commissioned artifacts); this tenet governs the
   *reader*. Rule 2(d) imports its Rule 3; Rule 4's migration limits defer to its Rule 8; its
   Revisit-when #2 (a cross-reference-resolution checker, named in 2026 as "the easiest
   candidate… not soft") is discharged by Rule 2(b)'s gate.
-- **[ADR-0011 (mechanization discipline)](../law/adr/0011-mechanization-discipline.md).**
+- **[ADR-0011 (mechanization discipline)](0011-mechanization-discipline.md).**
   The enforcement-surface vocabulary, the class-not-instance rule that keeps Rule 3 from
   becoming a shape list, and the recurrence→mechanism trigger that grows the gate.
-- **[ADR-0012 (compositional and structural hygiene)](../law/adr/0012-compositional-and-structural-hygiene.md),
+- **[ADR-0012 (compositional and structural hygiene)](0012-compositional-and-structural-hygiene.md),
   cancer G.** "Load-bearing knowledge offloaded to unenforceable prose" is this tenet's
   structural cousin: G forbids prose as a *substitute for mechanism*; this tenet governs the
   prose that legitimately remains.
-- **[ADR-0013 (execution integrity)](../law/adr/0013-execution-stamina-and-structural-completeness.md)
-  and [ADR-0014 (second opinion)](../law/adr/0014-executor-second-opinion.md).** The
+- **[ADR-0013 (execution integrity)](0013-execution-stamina-and-structural-completeness.md)
+  and [ADR-0014 (second opinion)](0014-executor-second-opinion.md).** The
   faculty-that-corrupts admission and the out-of-frame remedy, which Rule 1 inherits: the
   author cannot run the zero-context test on their own text, so the honest checker is
   independent — the critic is to legibility what the hack-rationalization detector is to
   scope.
-- **[The safety-critical-logging BRIEF](../law/briefs/safety-critical-logging/BRIEF.md) and
-  [its conformance map](../law/briefs/BRIEF-CONFORMANCE-MAP.md).** The named specimen and —
+- **[The safety-critical-logging BRIEF](../../law/briefs/safety-critical-logging/BRIEF.md) and
+  [its conformance map](../../law/briefs/BRIEF-CONFORMANCE-MAP.md).** The named specimen and —
   in the map's J-boundary paragraph — the model this tenet follows for scoping a guarantee
   honestly: say which absences the machine can detect and which it cannot.
-- **[GLOSSARY.md](../GLOSSARY.md).** The Stand-Alone Principle this tenet subsumes into Rule
+- **[GLOSSARY.md](../../GLOSSARY.md).** The Stand-Alone Principle this tenet subsumes into Rule
   2(a), and the definition home the rule binds to.
 - **The BACKLOG indictment entry** ("Documentation legibility indictment (maintainer,
-  2026-07-11 morning)", [BACKLOG.md](../BACKLOG.md)) — the dated substrate, with the four
+  2026-07-11 morning)", [BACKLOG.md](../../BACKLOG.md)) — the dated substrate, with the four
   defect shapes as first filed.
 
 ## What this tenet does NOT mean

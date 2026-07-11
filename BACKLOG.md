@@ -2947,3 +2947,24 @@ back-catalog's first known migration candidates.
 
 Every claim above is WITNESSED (output banked at the named seen-red paths or quoted in this
 entry), or explicitly UNBUILT/UNEXERCISED with its blocker named. No umbrella claims.
+
+## Two ratifications (maintainer, 2026-07-11 evening)
+
+1. **ADR-0017 ACCEPTED with one proviso.** Moved to law/adr/0017-the-zero-context-reader.md
+   (links re-rooted; added to CLAUDE.md's binding law list). The proviso, his words: Rule 4
+   must not prohibit "large sweeps (which I intend to do, when the time is right)" — the
+   draft's "*never* migrated" emphasis was "undue and inflexible discipline for, to me
+   anyways, no discernible purpose." Rule 4 amended at ratification: three legitimate
+   migration routes (on touch / opportunistic / maintainer-initiated sweep); the draft's
+   rationale survives as advice to a sweep's initiator, never prohibition; the two hard
+   limits (no retro-editing point-in-time records; quoting defects is not violating) stand.
+   Ratification question 1's YES arms the A:B:C loop — the attestation-presence commit gate
+   (DESIGNED-UNBUILT in the packet) is commissioned same evening. Sub-question 2 (may an
+   LLM verdict ever block): unanswered explicitly; the packet's recommendation NO is also
+   the default state, so nothing blocks on LLM judgment absent a future word.
+2. **Late-entry design RATIFIED, all three proposals** (design/LATE-ENTRY-AND-INTAKE-
+   SEMANTICS.md status flipped, implementation commissioned same evening). His "own up"
+   reading recorded in the memo's ratification note: the mechanized owning-up is the
+   involuntary s23 token (why the verdict is BATCHED_DECLARED); the spirit-level duty is
+   the preamble line + declared event time; no prose confession mandate — his brittleness
+   instinct is agreed with and the reasoning is in the note.

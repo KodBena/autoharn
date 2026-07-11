@@ -17,7 +17,8 @@
     "law/adr/0000-the-alpha-and-the-omega-type-driven-design.md",
     "law/adr/0012-compositional-and-structural-hygiene.md",
     "law/adr/0013-execution-stamina-and-structural-completeness.md",
-    "law/adr/0014-executor-second-opinion.md"]}
+    "law/adr/0014-executor-second-opinion.md",
+    "law/adr/0017-the-zero-context-reader.md"]}
 
 ## ORCHESTRATION — the standing delegation contract (2026-07-09)
 
