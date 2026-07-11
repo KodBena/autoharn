@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-11T14:44:01Z
-#   last-change: 2026-07-11T21:32:32Z
+#   last-change: 2026-07-11T22:39:56Z
 #   contributors: e4410ef6/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -33,7 +33,21 @@ pattern for BACKLOG "Run-10 closure audit (2026-07-11)" item 1 / change proposal
 ledger_kind_check refusal now teaches its own live valid-kind list rather than leaving the agent
 to self-diagnose via a hand-run pg_get_constraintdef query (run-10 row 67's own specimen).
 
-FIFTEEN CASES:
+Cases (p)/(q) close the SQL-floor differential deferral design/CONTEMPORANEITY-AUDIT.md's Status
+section names ("this verb ships ONE producer today, not the marriage discipline's cross-validated
+pair"): engine/contemp_floor.py (the SQL floor) + engine/contemp_differential.py (the differential
+runner, matching engine/ledger_differential.py's own AGREE/DIVERGE_BY_DESIGN/DIVERGE_DEFECT/
+QUARANTINED vocabulary and DerivationRecord banking exactly, by import, never a re-derived copy).
+Case (p) is the AGREE polarity on real-shaped data (case (h)'s own run-10 intake-shape burst AND
+case (f)'s own manufactured LATE_DECLARED silence-then-burst, combined in one world), run through
+the REAL `./audit --differential` subprocess path via engine/contemp_differential.py --retain.
+Case (q) is the manufactured DIVERGE_DEFECT negative control, using the SAME override seam
+engine/tests/test_ledger_marriage.py::test_single_producer_mutation_is_diverge_defect already
+precedents for the ledger marriage (a forged atom substituted into ONE producer's RETURNED atom
+set, in an isolated subprocess) -- never touching engine/contemp_floor.py's or
+engine/lp/contemporaneity.lp's own source to fake the divergence.
+
+SEVENTEEN CASES:
 
   a-clean-batched-declared (GREEN): a scratch ledger with a genuine multi-row token burst but
      dense tool-activity (no gap exceeds silence_threshold_ms) -> VERDICT=batched_declared,
@@ -141,12 +155,35 @@ FIFTEEN CASES:
      ledger_kind_check, burning a sequence id). Also proves NO row of kind='show' was ever
      written (the phantom-burn class this fix forecloses, not merely a refusal that still writes).
 
+  p-differential-agree (GREEN, the SQL-floor marriage differential, real-shaped data): a scratch
+     world combining case (h)'s own run-10 intake-shape burst AND case (f)'s own manufactured
+     LATE_DECLARED silence-then-burst (at a disjoint offset range from every other case in this
+     file's cumulative scratch ledger), differentialed via a REAL `engine/contemp_differential.py
+     --retain` subprocess (the SAME invocation `./audit --differential` makes) -> AGREE, exit 0,
+     both producers' DerivationRecord pair banked under engine/docs/ledger-marriage/derivations/
+     contemporaneity/. Proves the SQL floor (engine/contemp_floor.py) is bit-identical to the ASP
+     verdict program on a world exercising BOTH the intake-shape annotation and the late-entry
+     discipline in the same pass, through the real CLI path, not just a Python-level atom
+     comparison.
+
+  q-differential-diverge-defect (RED, manufactured, the negative control): reuses case (p)'s own
+     world; the SAME override seam engine/tests/test_ledger_marriage.py::
+     test_single_producer_mutation_is_diverge_defect already precedents for the ledger marriage
+     (`run_differential(..., sql_atoms_override=...)`) substitutes a single forged atom into the
+     SQL floor's RETURNED atom set, in an isolated subprocess -> VERDICT=DIVERGE_DEFECT, naming
+     the forged atom in `only_sql`. Proves the differential actually catches a real single-
+     producer divergence -- never touching engine/contemp_floor.py's or
+     engine/lp/contemporaneity.lp's own source to fake it (this commission's own witness mandate).
+
 RED (pre-instrument, disclosed rather than re-captured): before this suite existed there was no
 Part 2 instrument at all -- ad-hoc SQL run by hand, once per crisis (BACKLOG's own indictment).
 red.txt captures case (b)'s actual backfill_suspect output as the banked red evidence (the
 fixture_census.py convention: a *-red.txt or red.txt file is what proves a gate "has been seen
 red"); late-declared-red.txt captures case (g)'s output the same way, and late-declared-
 green.txt captures case (f)'s LATE_DECLARED output as the declared-polarity twin.
+differential-agree.txt captures case (p)'s real `engine/contemp_differential.py --retain` output
+(AGREE) as the differential's own GREEN evidence; differential-diverge-defect.txt captures case
+(q)'s manufactured DIVERGE_DEFECT output the same way.
 
 Scratch-only: schema contempprobe / contempprobe_kernel, role contempprobe_rw (cases a/b/e-j,l,m)
 AND contempprobe_pre24 / contempprobe_pre24_kernel / contempprobe_pre24_rw (case k only, s23-only,
@@ -298,6 +335,53 @@ def run_audit(root: Path) -> tuple[int, str]:
     return cp.returncode, cp.stdout + cp.stderr
 
 
+def run_differential(root: Path, retain: bool = False) -> tuple[int, str]:
+    """Case (p)'s own real subprocess invocation of engine/contemp_differential.py -- the SAME
+    CLI `./audit --differential` execs (bootstrap/templates/audit.tmpl), never a Python-level
+    function call, so this case proves the CLI path end-to-end like `run_audit`/`run_led` above."""
+    env = dict(os.environ)
+    env.pop("LEDGER_DEPLOYMENT", None)
+    args = [sys.executable, str(ENGINE / "contemp_differential.py"), "--root", str(root)]
+    if retain:
+        args.append("--retain")
+    cp = subprocess.run(args, capture_output=True, text=True, env=env, cwd=str(ENGINE))
+    return cp.returncode, cp.stdout + cp.stderr
+
+
+def run_differential_diverge_defect(root: Path) -> tuple[int, str]:
+    """Case (q)'s negative control: the SAME `sql_atoms_override` seam
+    engine/tests/test_ledger_marriage.py::test_single_producer_mutation_is_diverge_defect already
+    precedents for the ledger marriage, exercised here for the contemporaneity marriage -- run in
+    an ISOLATED subprocess (a standalone script, never imported into THIS process) so the forged
+    atom can never leak into any other case's own state, and so this fixture proves the override
+    seam works through a real python3 invocation, not just an in-process function call. The
+    script is written to a throwaway tempfile (avoids shell-quoting a Python literal containing
+    both single and double quotes) and removed immediately after running, regardless of outcome."""
+    script = f'''\
+import sys
+from pathlib import Path
+sys.path.insert(0, {str(ENGINE)!r})
+import contemp_differential as cd
+res = cd.run_differential("contempprobe", Path({str(root)!r}),
+                          sql_atoms_override={{'token_burst("forged-token-not-real")'}})
+print("VERDICT:", res.verdict())
+print("ONLY_ASP:", sorted(res.only_asp))
+print("ONLY_SQL:", sorted(res.only_sql))
+sys.exit(0 if res.verdict() == cd.DIVERGE_DEFECT else 9)
+'''
+    fd, path = tempfile.mkstemp(suffix=".py", prefix="contemp-diverge-probe-")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(script)
+        env = dict(os.environ)
+        env["LEDGER_DEPLOYMENT"] = str(root / "deployment.json")
+        cp = subprocess.run([sys.executable, path], capture_output=True, text=True,
+                            env=env, cwd=str(ENGINE))
+        return cp.returncode, cp.stdout + cp.stderr
+    finally:
+        os.unlink(path)
+
+
 def main() -> int:
     fails: list[str] = []
     ck = lambda cond, msg: fails.append(msg) if not cond else None  # noqa: E731
@@ -306,6 +390,8 @@ def main() -> int:
     case_b_out = ""
     case_f_out = ""
     case_g_out = ""
+    case_p_out = ""
+    case_q_out = ""
 
     teardown()
     for f in ("high_watermark_1.sql", "s20-obligation-grants-and-view-refresh.sql",
@@ -577,6 +663,81 @@ def main() -> int:
         log.append(f"CASE h (intake-shape benign, run-10 shape): exit={code_h}, "
                    f"verdict=BATCHED_DECLARED, token {tok_h} annotated intake-shape, as expected")
 
+        # ---- CASE p: SQL-floor marriage differential -- AGREE on real-shaped data (GREEN) ------
+        # design/CONTEMPORANEITY-AUDIT.md Status's own deferral, closed: engine/contemp_floor.py
+        # (the SQL floor) vs engine/lp/contemporaneity.lp (the ASP producer), via
+        # engine/contemp_differential.py --retain -- the SAME subprocess `./audit --differential`
+        # execs. Combines case (h)'s own run-10 intake-shape burst AND case (f)'s own manufactured
+        # LATE_DECLARED silence-then-burst in ONE world, at a disjoint BASE+5000 offset range so
+        # these rows never collide with cases a-o's own rows in this same cumulative scratch
+        # ledger. DELIBERATELY POSITIONED HERE, BEFORE cases (i)-(o): those cases write rows via
+        # a REAL `led` shim, whose `ts` defaults to actual wall-clock NOW() (~2026) -- combined
+        # with this fixture's own synthetic BASE (epoch ~2000000000s, ~2033) in the SAME
+        # accumulated scratch ledger, that produces a ~7-YEAR audited window, which overflows
+        # engine/contemp_edb.py's anchor-relative encoding (found LIVE authoring this exact case:
+        # engine/contemp_differential.py's own `_max_abs_relative_ms` guard now QUARANTINEs that
+        # shape rather than silently mis-comparing it -- see that module's NAMED HAZARD comment
+        # and BACKLOG.md's dated entry). Running here, before any real-`ts` row exists in this
+        # schema, keeps this case's own window honestly narrow and lets it demonstrate a genuine
+        # AGREE rather than a manufactured QUARANTINE of its own making.
+        tok_p_intake = "fixture-token-intake-p"
+        okp1, o1p = ins_row("decision", tok_p_intake, BASE + 5000.000)
+        okp2, o2p = ins_row("decision", tok_p_intake, BASE + 5000.010)
+        okp3, o3p = ins_row("decision", tok_p_intake, BASE + 5000.020)
+        tok_p_late = "fixture-token-declared-late-p"
+        t1_p = BASE + 5100
+        t2_p = t1_p + 305
+        okp4, o4p = ins_row("finding", "fixture-token-pre-p", BASE + 5095.0)
+        okp5, o5p = ins_row("finding", tok_p_late, t2_p + 0.050, declared_epoch_s=t1_p)
+        okp6, o6p = ins_row("finding", tok_p_late, t2_p + 0.080)
+        ck(okp1 and okp2 and okp3 and okp4 and okp5 and okp6,
+           f"CASE p inserts must succeed: {o1p[-150:]} {o4p[-150:]} {o6p[-150:]}")
+        root_p = _make_world({
+            "invocations.jsonl": [
+                {"token": tok_p_intake, "wall_clock": _iso(BASE + 4999.990), "session_id": "fx-p"},
+                {"token": "fixture-token-pre-p", "wall_clock": _iso(t1_p - 5.010), "session_id": "fx-p"},
+                {"token": tok_p_late, "wall_clock": _iso(t2_p + 0.040), "session_id": "fx-p"},
+            ],
+            "mutation_observer.journal.jsonl": [
+                {"ts": _iso_z(BASE + 5010), "outcome": "warned"},   # AFTER the intake burst
+                {"ts": _iso_z(BASE + 5020), "outcome": "warned"},
+                {"ts": _iso_z(BASE + 5090), "outcome": "warned"},   # last activity before silence
+                {"ts": _iso_z(t1_p), "outcome": "warned"},
+                {"ts": _iso_z(t2_p), "outcome": "warned"},          # 305s later, zero rows between
+                {"ts": _iso_z(t2_p + 5), "outcome": "warned"},
+            ],
+        })
+        (root_p / "deployment.json").write_text(json.dumps(
+            {"db": DB, "host": PGHOST, "schema": SCHEMA, "kern": KERN, "role": ROLE, "name": "contempprobe"}))
+        worlds.append(root_p)
+        code_p, out_p = run_differential(root_p, retain=True)
+        case_p_out = out_p
+        ck(code_p == 0, f"CASE p: expected exit 0 (AGREE), got {code_p}: {out_p[-1500:]}")
+        ck("AGREE" in out_p, f"CASE p: expected AGREE: {out_p[-1500:]}")
+        ck("DIFFERENTIAL GREEN" in out_p, f"CASE p: expected DIFFERENTIAL GREEN: {out_p[-1500:]}")
+        ck("Δasp=[]" in out_p and "Δsql=[]" in out_p,
+           f"CASE p: expected an EMPTY symmetric difference on both sides: {out_p[-1500:]}")
+        log.append(f"CASE p (differential AGREE, run-10 intake-shape + late-declared combined): "
+                   f"exit={code_p}, AGREE, DerivationRecord pair retained, as expected")
+
+        # ---- CASE q: SQL-floor marriage differential -- a MANUFACTURED DIVERGE_DEFECT (RED) ----
+        # reuses case (p)'s own world (root_p); the negative-control override seam
+        # (sql_atoms_override) forges ONE atom into the SQL floor's returned set, in an isolated
+        # subprocess -- never touching engine/contemp_floor.py's or
+        # engine/lp/contemporaneity.lp's own source.
+        code_q, out_q = run_differential_diverge_defect(root_p)
+        case_q_out = out_q
+        ck(code_q == 0, f"CASE q: the negative-control subprocess itself must exit 0 (it asserts "
+                        f"DIVERGE_DEFECT internally and maps that to its OWN exit 0; a non-zero "
+                        f"exit here means the ASSERTION failed, not the differential): "
+                        f"got {code_q}: {out_q[-1200:]}")
+        ck("VERDICT: DIVERGE_DEFECT" in out_q, f"CASE q: expected DIVERGE_DEFECT: {out_q[-1200:]}")
+        ck('forged-token-not-real' in out_q,
+           f"CASE q: the forged atom must be NAMED in only_sql: {out_q[-1200:]}")
+        log.append(f"CASE q (differential MANUFACTURED DIVERGE_DEFECT): the forged atom "
+                   f"'token_burst(\"forged-token-not-real\")' was correctly caught and named in "
+                   f"only_sql, as expected -- neither real producer's source was touched")
+
         # ---- CASE i: led.tmpl's --event-time CLI, generic path SUCCESS (GREEN) ----------------
         # A REAL `led` shim invocation (subprocess, not a hand-built SQL INSERT) against the
         # s24-capable schema -- closes the CLI-path coverage gap an out-of-frame audit of this
@@ -764,6 +925,14 @@ def main() -> int:
     (HERE / "late-declared-red.txt").write_text(
         "# banked RED evidence -- CASE g (manufactured backfill, UNDECLARED twin, re-asserted "
         "post-s24), engine/contemp_audit.py real output:\n" + case_g_out, encoding="utf-8")
+    (HERE / "differential-agree.txt").write_text(
+        "# banked GREEN evidence -- CASE p (SQL-floor marriage differential, run-10 intake-shape "
+        "+ late-declared combined), engine/contemp_differential.py --retain real output:\n"
+        + case_p_out, encoding="utf-8")
+    (HERE / "differential-diverge-defect.txt").write_text(
+        "# banked RED evidence -- CASE q (manufactured DIVERGE_DEFECT negative control, "
+        "sql_atoms_override forging one atom into the SQL floor's returned set), "
+        "engine/contemp_differential.py real output:\n" + case_q_out, encoding="utf-8")
     teardown()
     teardown(SCHEMA_PRE24, KERN_PRE24, ROLE_PRE24)
     print("\n# CONTEMPORANEITY-AUDIT FIXTURE PASS -- both polarities proven (clean batch does NOT "
@@ -776,7 +945,12 @@ def main() -> int:
           "--event-time CLI flag proven end-to-end through a real shim (generic-path success, "
           "non-generic-verb coverage refusal, pre-s24-schema capability refusal); the "
           "ledger_kind_check refusal now teaches its live valid-kind list (run-10 row-67 "
-          "specimen) while the success path stays byte-identical to the pre-fix script.")
+          "specimen) while the success path stays byte-identical to the pre-fix script; the "
+          "SQL-floor marriage differential (engine/contemp_floor.py + "
+          "engine/contemp_differential.py) closes the Part-2 deferral -- AGREE on real-shaped "
+          "data (run-10 intake-shape + late-declared combined, DerivationRecord pair retained) "
+          "and a manufactured DIVERGE_DEFECT correctly caught, naming the forged atom, without "
+          "touching either real producer's source.")
     return 0
 
 
