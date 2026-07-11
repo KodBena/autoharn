@@ -1,7 +1,7 @@
 #!/bin/sh
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-09T11:15:53Z
-#   last-change: 2026-07-11T18:10:31Z
+#   last-change: 2026-07-11T20:51:27Z
 #   contributors: be693afb/main, e4410ef6/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -128,7 +128,7 @@ fi
 # below -- the honest record of which sNN deltas this world was born on, so a future reader never
 # has to reconstruct it from source the way run3's own history had to be reconstructed.
 if [ -n "$NEW_WORLD" ]; then
-    LINEAGE_CHAIN="s15 -> s17-stamp-mechanism -> s17-independence-vocabulary -> s19 -> s20 -> s21-session-aware-distinctness -> s22-work-item-ledger -> s23-per-invocation-stamp-token -> s24-declared-event-time -> s25-commission-kind (via kernel/lineage/high_watermark_1.sql + kernel/lineage/s20-obligation-grants-and-view-refresh.sql + kernel/lineage/s21-session-aware-distinctness.sql + kernel/lineage/s22-work-item-ledger.sql + kernel/lineage/s23-per-invocation-stamp-token.sql + kernel/lineage/s24-declared-event-time.sql + kernel/lineage/s25-commission-kind.sql), applied automatically by this --new-world run"
+    LINEAGE_CHAIN="s15 -> s17-stamp-mechanism -> s17-independence-vocabulary -> s19 -> s20 -> s21-session-aware-distinctness -> s22-work-item-ledger -> s23-per-invocation-stamp-token -> s24-declared-event-time -> s25-commission-kind -> s26-row-hash-chain (via kernel/lineage/high_watermark_1.sql + kernel/lineage/s20-obligation-grants-and-view-refresh.sql + kernel/lineage/s21-session-aware-distinctness.sql + kernel/lineage/s22-work-item-ledger.sql + kernel/lineage/s23-per-invocation-stamp-token.sql + kernel/lineage/s24-declared-event-time.sql + kernel/lineage/s25-commission-kind.sql + kernel/lineage/s26-row-hash-chain.sql), applied automatically by this --new-world run"
     # --new-world ALSO auto-seeds the stamp secret (below) -- HOOKS.md must say so, not repeat the
     # generic "one manual step remains" text verbatim: an operator who trusted that stale claim and
     # re-ran the seeding block would TRUNCATE + re-INSERT an already-provisioned secret, ROTATING it
@@ -187,8 +187,9 @@ if [ -n "$NEW_WORLD" ]; then
         -f "$AUTOHARN_ROOT/kernel/lineage/s22-work-item-ledger.sql" \
         -f "$AUTOHARN_ROOT/kernel/lineage/s23-per-invocation-stamp-token.sql" \
         -f "$AUTOHARN_ROOT/kernel/lineage/s24-declared-event-time.sql" \
-        -f "$AUTOHARN_ROOT/kernel/lineage/s25-commission-kind.sql"
-    echo "   kernel applied (schema $SCHEMA + kernel schema $KERN + role $ROLE, s20 + s21 + s22 + s23 + s24 + s25 included)"
+        -f "$AUTOHARN_ROOT/kernel/lineage/s25-commission-kind.sql" \
+        -f "$AUTOHARN_ROOT/kernel/lineage/s26-row-hash-chain.sql"
+    echo "   kernel applied (schema $SCHEMA + kernel schema $KERN + role $ROLE, s20 + s21 + s22 + s23 + s24 + s25 + s26 included)"
 
     echo "-- new-world '$NEW_WORLD': seeding the stamp secret (idempotent, mirrors drive/arm.sh ruling 43) --"
     mkdir -p "$PROJECT_ROOT/.claude/secrets"
@@ -207,6 +208,28 @@ if [ -n "$NEW_WORLD" ]; then
             -c "TRUNCATE ${KERN}.stamp_secret;" \
             -c "INSERT INTO ${KERN}.stamp_secret (secret) VALUES (decode('$HEX','hex'));"
         echo "   one fresh secret provisioned ($SECRET_FILE [chmod 600]; DB ${KERN}.stamp_secret)"
+    fi
+
+    # GENESIS SEED (design/GPG-TRUST-LAYER.md Rung 3; kernel/lineage/s26-row-hash-chain.sql):
+    # the row_hash chain's zz_set_row_hash trigger REFUSES the first ledger INSERT loudly if no
+    # seed is provisioned (see that delta's own header) -- this MUST run before the first write,
+    # same ordering constraint as the stamp secret above. Idempotent (INSERT ... ON CONFLICT DO
+    # NOTHING via the only_one PK, mirroring stamp_secret's own one-row-table shape) -- but unlike
+    # the stamp secret, this is NOT a secret (kernel/lineage/s26-row-hash-chain.sql's GENESIS SEED
+    # section explains why: its only job is making two worlds' row-1 hashes differ, not
+    # confidentiality), so it is generated and inserted directly, with no on-disk file mirroring
+    # the stamp-secret pattern's chmod-600 ceremony -- there is nothing here that needs hiding.
+    echo "-- new-world '$NEW_WORLD': seeding the row_hash chain's genesis seed (idempotent) --"
+    HAVE_GENESIS=$(psql -h "$HOST" -d "$DB" -tAc "SELECT count(*) FROM ${KERN}.chain_genesis;" 2>/dev/null || echo "0")
+    if [ "$HAVE_GENESIS" = "1" ]; then
+        echo "   a genesis seed is already provisioned for ${KERN}.chain_genesis (1 row); not rotating"
+    elif [ "$HAVE_GENESIS" = "0" ]; then
+        GENESIS_HEX=$(openssl rand -hex 32)
+        psql -h "$HOST" -d "$DB" -q -v ON_ERROR_STOP=1 \
+            -c "INSERT INTO ${KERN}.chain_genesis (seed) VALUES ('$GENESIS_HEX') ON CONFLICT (only_one) DO NOTHING;"
+        echo "   one fresh genesis seed provisioned (DB ${KERN}.chain_genesis)"
+    else
+        echo "   ${KERN}.chain_genesis does not exist -- this world's kernel predates s26-row-hash-chain.sql; skipping (not an error, an older lineage)"
     fi
 
     # Register the standard principals this world is born with: `author` is already seeded by
@@ -293,11 +316,14 @@ if [ -n "$NEW_WORLD" ]; then
     echo "wrote CLAUDE.md (governance preamble, auto-loaded at session start)"
 fi
 
-# the five verbs (led, judge, pickup, audit, distance-to-clean): thin shims, not frozen
-# sed-substituted copies (BACKLOG maintainer ruling 2026-07-11, "runs are strictly linear"
-# disposition 6, "live verbs"; audit and distance-to-clean joined the same way later, each a new
-# template file rather than an edit to an existing live one -- see their own commissions). Baking
-# was the asymmetry: hooks already execute live from this autoharn checkout per invocation
+# the seven verbs (led, judge, pickup, audit, distance-to-clean, verify-commission, verify-chain): thin shims,
+# not frozen sed-substituted copies (BACKLOG maintainer ruling 2026-07-11, "runs are strictly
+# linear" disposition 6, "live verbs"; audit and distance-to-clean joined the same way later,
+# each a new template file rather than an edit to an existing live one -- see their own
+# commissions; verify-commission (design/GPG-TRUST-LAYER.md Rung 2) follows the SAME
+# distance-to-clean precedent one verb later -- a brand-new template file carries none of
+# led.tmpl's freeze risk, so it is safe to add regardless of any live wired session elsewhere).
+# Baking was the asymmetry: hooks already execute live from this autoharn checkout per invocation
 # (settings.json's __AUTOHARN_ROOT__ above), but led/judge/pickup were frozen copies -- a
 # just-fixed led defect stayed live in every already-scaffolded world forever, reachable only by
 # the NEXT scaffold. A shim closes that: it `exec`s bootstrap/templates/<verb>.tmpl straight out
@@ -308,8 +334,8 @@ fi
 # env var `pickup`'s own live-resolution already used, extended to all three rather than growing
 # three near-identical mechanisms, ADR-0012 P1). deployment.json itself stays scaffold-written
 # per-world config (unchanged) -- only the VERBS stopped being copies.
-echo "-- the five verbs (led, judge, pickup, audit, distance-to-clean): thin shims exec'ing autoharn's live templates --"
-for verb in led judge pickup audit distance-to-clean; do
+echo "-- the seven verbs (led, judge, pickup, audit, distance-to-clean, verify-commission, verify-chain): thin shims exec'ing autoharn's live templates --"
+for verb in led judge pickup audit distance-to-clean verify-commission verify-chain; do
     cat > "$PROJECT_ROOT/$verb" <<SHIM
 #!/bin/sh
 HERE="\$(cd "\$(dirname "\$0")" && pwd)"
@@ -332,9 +358,10 @@ if [ -n "$NEW_WORLD" ]; then
     echo "           # governance preamble (author + reviewer + commissioner principals, all"
     echo "           # already registered above); nothing to paste."
     echo ""
-    echo "(./led, ./judge, ./pickup, ./audit, ./distance-to-clean are ready to use from inside"
-    echo " that session; read $PROJECT_ROOT/.claude/HOOKS.md and replace its UNWITNESSED marks"
-    echo " as you exercise each command.)"
+    echo "(./led, ./judge, ./pickup, ./audit, ./distance-to-clean, ./verify-commission,"
+    echo " ./verify-chain are ready to use from inside that session; read"
+    echo " $PROJECT_ROOT/.claude/HOOKS.md and replace its UNWITNESSED marks as you exercise each"
+    echo " command.)"
     echo ""
     echo "To SIGN this run's commission yourself (FULL mode -- kernel/lineage/s25-commission-"
     echo "kind.sql; the ask carries the commissioner's own guarantee, not a vicarious one), type"
@@ -345,6 +372,44 @@ if [ -n "$NEW_WORLD" ]; then
     echo "stamp_agent as NULL, actor as 'commissioner'): stamp state + actor together are what"
     echo "make FULL mode mechanically distinguishable from LAZY mode (the implementer's own"
     echo "vicarious transcription, CLAUDE.md preamble point 10), never prose claims alone."
+    echo ""
+    echo "SIGNED mode (design/GPG-TRUST-LAYER.md Rung 2 -- FULL, plus a detached GPG signature"
+    echo "over the ask): do THIS INSTEAD of the plain FULL-mode line above, not after it --"
+    echo "reading the ask from a file ONCE and reusing that same value for both the ledger write"
+    echo "and the signature is what keeps the two byte-for-byte identical (typing the ask inline"
+    echo "for FULL mode, then separately re-reading a file for the signature, is itself a"
+    echo "byte-fidelity hazard -- see verify-commission.tmpl's own module docstring). With the ask"
+    echo "in a file (say ~/aa), from YOUR OWN terminal, inside $PROJECT_ROOT:"
+    echo "  STATEMENT=\"\$(cat ~/aa)\"                          # exactly what the ledger stores"
+    echo "  LED_ACTOR=commissioner ./led commission \"\$STATEMENT\""
+    echo "  printf '%s' \"\$STATEMENT\" | gpg --detach-sign --armor -o ~/aa.asc -"
+    echo "  mkdir -p $PROJECT_ROOT/.claude"
+    echo "  cp ~/aa.asc $PROJECT_ROOT/.claude/commission-<id>.asc   # <id> from the commission's own output"
+    echo "  cd $PROJECT_ROOT && ./verify-commission --id <id>"
+    echo "Signing 'printf %s \"\$STATEMENT\"' (never the raw file \"~/aa\") is deliberate: it signs"
+    echo "byte-for-byte what \"\$(cat ~/aa)\" actually inserted into the ledger (command"
+    echo "substitution strips trailing newlines; a raw-file signature would not, and would verify"
+    echo "as FORGED-OR-CORRUPT despite being perfectly honest -- see verify-commission.tmpl's own"
+    echo "module docstring for the full account of this hazard and its fix). Expect VERIFIED once"
+    echo "a real key is committed at law/keys/maintainer.asc; until then every signature refuses"
+    echo "as NO-COMMITTED-KEY, exit 3 (there is nothing to check it against yet -- distinct from"
+    echo "FORGED-OR-CORRUPT, per design/GPG-TRUST-LAYER-FAQ.md) -- exercise the ceremony with a"
+    echo "throwaway test key first if you want to see VERIFIED before the real key exists."
+    echo ""
+    echo "The SIGNED HEAD (design/GPG-TRUST-LAYER.md Rung 3 -- the run-close ritual, one line):"
+    echo "at the end of a session, from YOUR OWN terminal, inside $PROJECT_ROOT:"
+    echo "  cd $PROJECT_ROOT"
+    echo "  ./verify-chain --head > /tmp/head.json    # refuses (exit 1, empty stdout) if the"
+    echo "                                             # chain is not INTACT -- verifies first"
+    echo "  gpg --detach-sign --armor /tmp/head.json"
+    echo "  mkdir -p $PROJECT_ROOT/.claude"
+    echo "  cp /tmp/head.json /tmp/head.json.asc $PROJECT_ROOT/.claude/"
+    echo "  git -C $PROJECT_ROOT add .claude/head.json .claude/head.json.asc"
+    echo "Both files bank as committed evidence. From that moment, ANY retroactive alteration of"
+    echo "this world's ledger -- including by the database superuser -- breaks the chain against a"
+    echo "head your key vouches for: \"append-only by trigger\" becomes \"append-only or provably"
+    echo "broken\" (design/GPG-TRUST-LAYER.md §4). Full walkthrough, including WHY --head verifies"
+    echo "before it will print anything: design/GPG-TRUST-LAYER-FAQ.md."
 else
     echo "  1. Apply a kernel lineage to $DB/$SCHEMA/$KERN/$ROLE if not already applied (kernel/lineage/, autoharn)."
     echo "  2. Provision the stamp secret -- see $PROJECT_ROOT/.claude/HOOKS.md (marked UNWITNESSED until you run it)."

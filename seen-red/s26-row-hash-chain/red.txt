@@ -1,0 +1,35 @@
+== a: applying s26 birth chain to s26fxnogenesis, WITHOUT seeding genesis ==
+=== a-genesis-refusal ===
+  [ok] exit=1 stderr="ex 32) before the first ledger write; see kernel/lineage/s26-row-hash-chain.sql and bootstrap/new-project.sh's --new-world seeding block.\nCONTEXT:  PL/pgSQL function zz_set_row_hash() line 11 at RAISE"
+
+== scaffolding throwaway --new-world s26fxprobe (provisions genesis automatically) ==
+  scaffold OK (genesis auto-provisioned: True).
+
+=== b-chain-builds-and-verifies ===
+  [ok] verify-chain: INTACT -- 3 row(s) walked, head id=3 hash=3de15d49808498723bdca309caf8e737864b1d2f155ad7e508e64f993c093471
+
+=== c-head-json-shape ===
+  [ok] stdout='{"world": "s26fxprobe", "max_id": 3, "head_hash": "3de15d49808498723bdca309caf8e737864b1d2f155ad7e508e64f993c093471", "utc": "2026-07-11T20:57:42Z"}'
+
+=== g-differential-agree ===
+  [ok] diff_ok=True
+
+=== h-null-vs-empty-string-collision-closed ===
+  [ok] rationale_was_null=True stored_hash_now_matches_altered_content=f (expect 'f' -- the tamper must be DETECTABLE)
+
+=== d-tamper-stale-hash-breaks-at-altered-row ===
+  [ok] verify-chain: BROKEN -- first break at row id 1:
+    stored:   5aac4b8c8c7ce5c132cfabb385725b4afd31b4d1ce688e092db4becbfcb720b8
+    expected: 0be8103cf9b2afd88f79de38f69ea91da1213dd98f8de27107a0098bf380c166
+  (1 of 3 row(s) mismatch total. The FIRST break is where alteration is provably detectable: either the altered row's own content no longer matches its OWN stored hash (tamper left the stored row_hash stale, the common case), or -- if the tamperer also rewrote that row's row_hash to match its new content -- the NEXT row breaks instead, because its predecessor-hash reference was computed against the row's OLD, honest hash. Either way, the break can be no later than immediately after the true alteration point; it is never silently absorbed further downstream than that.)
+
+=== f-head-refuses-on-broken-chain ===
+  [ok] exit=1 stdout='' stderr_excerpt="verify-chain --head: REFUSED -- chain is not INTACT (status=BROKEN, {'first_break_id': 1, 'stored': '5aac4b8c8c7ce5c132c"
+
+=== e-tamper-fixed-hash-breaks-downstream ===
+  [ok] verify-chain: BROKEN -- first break at row id 2:
+    stored:   0ea71d3a1f68d066fa38d283ffc8c32233aec41ae0e65eb94c729aece63d355c
+    expected: 473cb0d1256871463529e88d1fae3e52e4294027329db9bcbb3ba0163eb87cb6
+  (1 of 3 row(s) mismatch total. The FIRST break is where alteration is provably detectable: either the altered row's own content no longer matches its OWN stored hash (tamper left the stored row_hash stale, the common case), or -- if the tamperer also rewrote that row's row_hash to match its new content -- the NEXT row breaks instead, because its predecessor-hash reference was computed against the row's OLD, honest hash. Either way, the break can be no later than immediately after the true alteration point; it is never silently absorbed further downstream than that.)
+
+ALL CASES OK -- s26 row_hash chain both-polarity proof (genesis refusal / builds+verifies / --head shape / differential AGREE / NULL-vs-empty-string collision closed / breaks-at-altered-row / breaks-downstream-if-hash-also-faked / --head refuses-on-broken), zero residue.

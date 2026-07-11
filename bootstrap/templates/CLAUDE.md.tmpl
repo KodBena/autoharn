@@ -66,7 +66,11 @@ principals exist (see point 10 for the commissioner's role).
     same ask under two rows. On a world scaffolded before kernel/lineage/
     s25-commission-kind.sql landed, `commission` is refused by the kind vocabulary check
     (the refusal itself names the valid list, live) — record the ask in a `decision` row
-    instead and say so in its text, same as any other pre-s25 world.
+    instead and say so in its text, same as any other pre-s25 world. Immediately after the
+    commission row exists (either mode), run `./verify-commission` and carry its verdict
+    (VERIFIED / UNSIGNED / FORGED-OR-CORRUPT) into the FIRST row of point 1's decomposition —
+    a FORGED-OR-CORRUPT verdict is a stop-and-escalate event, never a silently-proceeded-past
+    detail (design/GPG-TRUST-LAYER.md §3).
 11. A load-bearing decision names what was rejected and why, IN THE STATEMENT — not a
     separate row, not left implicit. `./led decision "<the choice>; rejected: <the
     alternative(s)> because <why>"`. Convention only (no kernel column enforces this —

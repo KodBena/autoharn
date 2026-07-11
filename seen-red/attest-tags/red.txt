@@ -1,0 +1,20 @@
+== generating throwaway test key (Ed25519, test-only, never a real maintainer key) ==
+  test key: F98ACFEEB0D13E0D5623746654A4EE67BF30DDAE
+  forger key (never committed to law/keys/): 5DD27C7B30F578C6672CA7C2240DD103372F6980
+
+=== a-no-tags-uncovered-claim ===
+  [ok] exit=1 commit=40e2352a5f6a in_output=True
+
+=== b0-unverifiable-tag-exists-no-committed-key ===
+  [ok] tag_exit=0 attest_exit=1
+
+=== b-good-signed-tag-verifies ===
+  [ok] tag_exit=0 attest_exit=0
+
+=== c-unsigned-tag-refused ===
+  [ok] exit=1
+
+=== d-forged-tag-refused ===
+  [ok] tag_exit=0 attest_exit=1
+
+ALL CASES OK -- attest-tags both-polarity proof (GOOD / UNVERIFIABLE / unsigned-BAD / forged-BAD / uncovered-claim), zero residue (tmp dir removed).
