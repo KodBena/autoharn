@@ -4563,3 +4563,58 @@ immediate mandate's scope, and a full README refresh across seven un-narrated de
 separate, larger piece of work than this commission's remit. A real maintainer keypair
 (`law/keys/maintainer.asc`) does not exist — every ceremony above is witnessed on a THROWAWAY
 test key, clearly marked as such throughout; nothing here fabricates or assumes a real key.
+
+## Regulator-adoption assessment delivered: four institutional lenses, all not-yet, convergent (Fable, commissioned, 2026-07-12)
+
+Discharges the maintainer's commission "what would NRC, NIST, FAA, ICJ have to say about the
+state of the system — would they be able to adopt it for software development with Claude,
+and if not, why not?" plus its frame question "are there features missing from
+BRIEF-CONFORMANCE-MAP.md?" (read as: gaps in the map's own frame, not unfilled rows).
+Deliverable: design/REGULATOR-ADOPTION-ASSESSMENT.md — the honesty constraint is stated in
+its opening and binds it throughout: the four lens verdicts are Sonnet analyst outputs used
+as gap-finding lenses, never certifications, legal opinions, or compliance determinations.
+
+Method, per the delegation contract: four self-contained Sonnet lens agents (NRC / NIST /
+FAA-DO-178C / ICJ-evidentiary), each reading the real artifacts and citing them; the
+synthesis re-verified every load-bearing live claim directly before publishing (verify
+artifacts, never reports). Witnessed 2026-07-12 by this session's own re-observation:
+`git tag -l` empty (zero ratified/* tags); law/keys/ holds only README.md (AWAITING-KEY);
+run11.ledger has no row_hash column (s26 postdates every settled world); pg_authid shows
+role bork passwordless + rolsuper with SHOW ssl = off (PG-HBA-HARDENING.md still
+prepared-unapplied); no requirements.txt/pyproject.toml anywhere at the top two levels.
+
+All four lenses verdict not-yet and CONVERGE on the same blockers — the convergence is the
+planning signal: (1) the GPG trust layer is built+witnessed but inert, covering zero bytes
+of the existing evidence corpus; (2) open perimeter + no backup/retention story for the one
+Postgres instance under everything; (3) no configuration index — the live-verbs model leaves
+the audit instruments unpinned against the evidence they produce and read; (4) independence
+is invocation-distinctness inside one host/vendor/human trust domain, with the run-11
+depth-of-review gap on top; (5) the verifier itself is unverified (hooks/gates have no test
+suite; the contemporaneity audit is a single producer with N≈1-2 thresholds). Map-frame gaps
+(what the BRIEF/map never ask): substrate durability and perimeter, the apparatus as its own
+subject (who verifies the verifier; instrument pinning; model-version drift as a tool-qual
+event), the institution around the record (custodianship, key-person continuity, incident
+response, data classification of ledger content, git-substrate spoliation posture,
+key-custody gradient), proportionality/DAL-grading and subject product depth, cross-world
+common cause. Proceed-plan in the deliverable: Tier 1 arms what exists (real key, pg_hba,
+first s26 world + signed head, scaffold-time commit-hash anchor, apparatus unknown-key
+sweep); Tier 2 closes named halves (backup verb, audit second producer, commission-orphan
+view, hook unit tests, finding-disposition vocabulary, signed commits); Tier 3 routes
+decisions to the maintainer (trust-domain acceptance-or-second-channel, independence for
+the apparatus's own change process, tool-qualification package, corpus accretion). Out of
+scope on principle, named in the deliverable: no ephemera committing, no LLM verdict in
+any blocking path, no patching settled worlds, no token accounting in the audit trail.
+
+ADR-0017 A:B:C loop, B spawned SYNCHRONOUSLY per the twice-witnessed orphaning friction:
+round 1 DEFECT (6 findings — DO-330/s23/DAL-SIL/class-ratifiable/succession-rule referents,
+fragment lead-ins), repaired; round 2 DEFECT (4 NEW findings — one fragment, I<n> shorthand
+unglossed, DerivationRecords unexplained, one subject-less opener), two-round cap hit,
+non-converging-review-loop escalation adjudicated by the loop-runner applying B's repairs
+verbatim (the banked GPG/work-status precedent); attestation recorded escalated:true,
+content_sha256 5d534cfbfc2b..., in attestations/doc-legibility-attestations.jsonl.
+Self-application notes: this session's worktree was found 156 commits behind next and
+fast-forwarded before any work (the GPG worktree's own precedent, named per the same rule);
+the tracker item regulator-adoption-assessment was already open+claimed, so the permit
+existed without a new opening act; the four lens reports are session working input, not
+banked — every claim carried into the deliverable points at a repo artifact or a named
+re-observation instead.
