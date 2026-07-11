@@ -4563,3 +4563,133 @@ immediate mandate's scope, and a full README refresh across seven un-narrated de
 separate, larger piece of work than this commission's remit. A real maintainer keypair
 (`law/keys/maintainer.asc`) does not exist — every ceremony above is witnessed on a THROWAWAY
 test key, clearly marked as such throughout; nothing here fabricates or assumes a real key.
+
+## Small-follow-ups commission: seven items shipped (Sonnet, 2026-07-12)
+
+Executes the `small-follow-ups-commission` work-tracker item (`./led work` slug, this repo's
+own self-hosted tracker per BACKLOG "autoharn deployed on itself"), whose seven items were
+specced across "Run-11 first-shift forensics", "Maintainer principle: the action stream is the
+evidentiary basis; session internals are diagnostics", "Follow-ups commission scope extended",
+and "A:B:C recipe friction, twice-witnessed" (all above, 2026-07-11). Liveness checked before
+every hooks/ and bootstrap/templates/ edit (`pgrep -a claude` + `readlink /proc/<pid>/cwd`
+against every candidate PID) — no cwd ever resolved under `/home/bork/w/vdc/1/run*` across the
+session, so no template/hook edit was frozen.
+
+**1. `led show <id>`** (`bootstrap/templates/led.tmpl`) — a real, read-only subcommand: one
+ledger row, every column, in full (`psql -x`), refusing loudly with teach-text on a missing id
+instead of the prior silent fall-through into the generic write path (kind="show", refused by
+`ledger_kind_check`, burning a sequence id every time — the run-11 class-b finding). The gotcha
+this codebase already names for itself (`led work asof`'s own comment) bit here too and was
+caught before shipping: `psql -c "... :id ..."` does NOT interpolate bind variables — only a
+script fed via heredoc/stdin does — so the `-x` display query is a heredoc, matching every other
+bound query in this file. *Witnessed*, both polarities, extending
+`seen-red/contemporaneity-audit/run_fixtures.py` with cases n (show success, full statement
+printed, id column matches) and o (missing id: REFUSED, no `ledger_kind_check` fall-through
+text, and the ledger id sequence's own `last_value` PROVABLY unchanged across the refused
+attempt — the phantom-burn class itself foreclosed, not merely the visible symptom).
+
+**2. Doc-shapes gate exercised-liveness counter** (`hooks/pretooluse_doc_shapes_gate.py`) — a
+second, separate journal (`doc_shapes_gate.exercised.jsonl`, distinct from the existing
+DENY-only journal) gets one line per COMPLETED evaluation — clean, denied, or
+observed-would-deny alike — written only after the check runs to completion, never from the
+fail-open except branch. A gap between a world's `.md` Write/Edit count and its exercised-line
+count is therefore the run-11-named epistemic limit's own detector: "a clean pass and a
+silently-broken gate are byte-identical from the DENY-only journal alone" no longer holds once
+this second journal exists. Observer-grade, no verdict change. *Witnessed*, both polarities,
+extending `seen-red/doc-shapes-gate-world/run_fixtures.py` with an EXERCISED-LIVENESS case: five
+real evaluations (enforce-deny, enforce-clean, observe-warn, default-observe-warn,
+edit-reconstruct-deny) produce five lines in order; the sixth call (mode="off", which returns
+before the check ever runs) produces none.
+
+**3. `distance-to-clean` preamble sentence** (`bootstrap/templates/CLAUDE.md.tmpl` point 5) —
+one added sentence naming `./distance-to-clean` as available for a one-command closure check;
+the three disaggregated views (`review-gap`/`question-status`/`work violations`) remain the
+sentence's own stated default, per the maintainer's standing condition. `.tmpl` files are not
+`.md` files (`gates/doc_attestation_presence.py` globs `*.md` only), so this edit and item 6's
+below carry no ADR-0017 attestation obligation.
+
+**4. PostToolUse Bash completion timestamps** (`hooks/posttooluse_bash_completion.py`, new hook)
+— a sibling journal, `bash_completions.jsonl`, banks each Bash call's completion time (UTC-Z)
+beside `hooks/stamp_intercept.py`'s existing PreToolUse dispatch token. Deliberately a SIBLING
+file, not a new line shape inside `invocations.jsonl` itself: `engine/contemp_edb.py`'s own
+`export()` reads every line there as an unconditional `token`+`wall_clock` dispatch record, so
+injecting a differently-shaped completion line would either inflate its `skipped_lines` count or
+risk a wrong-shape misread — the existing contemporaneity EDB stays byte-untouched (ADR-0004).
+Pairing is the maintainer's own named design, "invocation token if recoverable, else
+ts-pairing": a FIFO match against unpaired `invocations.jsonl` dispatch records sharing the same
+`command_sha256`, yielding `pairing: "token"` plus `dispatch_wall_clock`, or the honest
+`pairing: "ts-only"` fallback when no dispatch record matches — a named residual gap (two truly
+concurrent Bash calls with byte-identical command text can pair to the wrong dispatch),
+disclosed rather than silently risked. Wired into `bootstrap/templates/settings.json.tmpl`'s
+PostToolUse `Bash` matcher, alongside the existing `mutation_observer` entry. *Witnessed*, both
+polarities plus the FIFO-double-dispatch case, new `seen-red/bash-completion/run_fixtures.py`
+(pure filesystem, no DB), registered in `gates/fixture_census.py`.
+
+**5. Delegation observer return leg** (`hooks/pretooluse_delegation_observer.py`, extended) —
+this file now attaches at BOTH `PreToolUse` (the original dispatch leg, byte-unchanged) and
+`PostToolUse` on `Task|Agent`, mirroring `hooks/posttooluse_mutation_observer.py`'s own
+established one-file-two-legs shape (and that file's own basename precedent: staying
+"pretooluse_..." even though it now also handles PostToolUse, matching the sibling's
+"posttooluse_..." staying that even though it handles a PreToolUse leg too). The return leg
+journals a strictly additive `kind: "return"` line into the SAME journal, FIFO-paired against
+its own dispatch line by `session_id` + `prompt` sha256 (recomputed from the PostToolUse
+payload's own `tool_input.prompt`) — carrying `dispatch_ts`/`duration_ms` on a match, honestly
+`pairing: "unresolved"` on none. Closes the reviewer-execution-window inference gap
+RETROSPECTIVE-RUN11 named as still blocked ("the record can witness that review HAPPENED and
+READ the files but not that it REASONED HARD"). Wired into `bootstrap/templates/
+settings.json.tmpl`'s new PostToolUse `Task|Agent` matcher entry (same edit as item 4's Bash
+wiring). *Witnessed*, both polarities plus the FIFO-double-dispatch case, extending
+`seen-red/delegation-observer/run_fixtures.py`'s existing stateful sequence with three new
+return-leg cases (g/h/i), the pre-existing dispatch-leg cases (a-f) unbroken.
+
+**6. Token self-report convention** (`bootstrap/templates/CLAUDE.md.tmpl`, new preamble point
+12) — the maintainer's own design, near-verbatim: when a dispatched subagent returns, the
+orchestrating agent SEES its reported token/usage numbers in the tool result; if ledgered at
+all, the statement carries an explicit "(self-reported by the subagent; no harness guarantee)"
+marker, the same trust class as point 10's LAZY-mode commission transcription. Convention only —
+no kernel column, no gate; diagnostic-grade forever per BACKLOG "Maintainer principle: the
+action stream is the evidentiary basis; session internals are diagnostics".
+
+**7. ABC recipe amendment: B spawned synchronously, always** (`design/ABC-AUDIT-LOOP-RECIPE.md`
+step 2) — a hard requirement, not a preference, added with the exact failure mechanism named:
+a background-spawned B's completion routes to the ORCHESTRATOR session, not to whichever
+subagent spawned it, so a loop run *inside* a dispatched subagent (a common shape) never
+receives its own B's verdict when B runs in the background — the two live instances BACKLOG
+"A:B:C recipe friction, twice-witnessed" already banked. Fix: `run_in_background: false` on
+every B dispatch, always, regardless of which session runs the loop. This edit is in-scope
+`.md`, so it ran its own A:B:C loop, with a synchronous B throughout (dogfooding the very fix
+being made): round 1 (fresh Agent, briefed by a hand-excerpted copy of ADR-0017 pasted inline)
+returned two findings later found to be ARTIFACTS of that excerpt's own incompleteness (it
+trimmed exactly the clauses the findings cited) — discarded, and a corrected protocol adopted:
+round 1 proper re-ran with B instructed to Read the two real files directly rather than trust a
+pasted excerpt, returning 4 genuine referent-resolution findings (BACKLOG unlinked/
+inconsistently named, `apparatus.json` undefined, two gates unlinked, `judgment/**` unglossed),
+all fixed; round 2 (the cap) found one further genuine ambiguity (a dangling "its own module
+docstring" pronoun between two just-named files), fixed by the orchestrator directly per
+ADR-0017's non-converging-review-loop disposition (no third B round) — `escalated: true`
+recorded, both real rounds' findings preserved verbatim in
+`attestations/doc-legibility-attestations.jsonl`.
+
+**CAPABILITIES.md item 31** bundles items 1/2/4/5's built mechanisms into one minimal entry
+(items 3/6 are convention-only preamble sentences in a non-`.md` template, noted in the entry's
+closing paragraph rather than each earning their own item). Ran its own two-round A:B:C loop
+(synchronous B throughout, scoped explicitly to item 31 alone — the rest of the 30-item, ~850-line
+document is out of that pass's remit): round 1 found 9 findings (unresolved run-11/gate/commission
+referents, and four noun-phrase-fragment sentences the entry's own new prose introduced — B noted
+this fragment shape recurs throughout items 1-30 too, flagged as pre-existing and out of this
+pass's scope, not fixed here), all fixed; round 2 found 2 further small referent gaps (an
+unglossed `HANDOFF.md`, an unexplained quoted docstring-section name), fixed by the orchestrator
+directly at the two-round cap, `escalated: true` recorded alongside item 7's above in the same
+attestations ledger append.
+
+**Not done, named**: `OPERATING-CARD.md`'s hooks × kernel map table was NOT updated with the two
+new mechanisms (`bash_completion`; the delegation observer's new PostToolUse leg) — a real,
+named gap (the map is now one row short of the live wiring) filed here rather than silently
+left, deferred because each additional `.md` touch under ADR-0017 costs its own full A:B:C loop
+(2-3x token cost per the ADR's own disclosed price) and this commission's seven items were
+already sized without it. `kernel/lineage/README.md`'s stale apply-order prose (noted un-fixed
+in the entry immediately above this one) remains untouched, unrelated to this pass.
+
+Tracker item closed: `./led work close small-follow-ups-commission shipped --witness
+"ea55214..937cfa7"` (six commits: `ea55214` item 1, `c8dc2ea` item 2, `1e8a3f8` items 3+6,
+`1e51181` item 4, `3c3b6f9` item 5, `937cfa7` item 7 + CAPABILITIES item 31).
