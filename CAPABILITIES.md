@@ -2,8 +2,9 @@
 
 The harness is autoharn's governance apparatus: the append-only Postgres decision ledger,
 the refuse-and-teach Claude Code hooks, and the operator verbs this repository builds so
-that AI-collaborator work leaves an auditable trail. This document lists what that
-apparatus verifiably does today.
+that AI-collaborator work leaves an auditable trail. This document is for a maintainer or
+operator deciding what the apparatus can already be trusted to do versus what is still
+aspiration, and it lists what that apparatus verifiably does today.
 
 Each item: what you get, how it is enforced, and how we know it works — **witnessed** means it
 has fired for real at least once (the evidence is banked); **built, unexercised** means the
@@ -637,9 +638,23 @@ Implements the closed vocabulary `VERIFIED | UNSIGNED | FORGED-OR-CORRUPT` (exit
 the third) PLUS two typed refusals distinct from all three verdicts (`GPG-UNAVAILABLE`, exit 2;
 `NO-COMMITTED-KEY`, exit 3 — neither precondition leaves any of the three verdicts decidable),
 reading a commission row's CURRENT statement bytes and any banked `.claude/commission-<id>.asc`,
-checked against `law/keys/*.asc` via the same shared scratch-keyring mechanism as item 28
-(`filing/gpg_trust.py` — ADR-0012's Principle 1, "single source of truth / derive-don't-duplicate":
-one home). Closed, and fixed in the course of building it,
+checked against THIS DEPLOYMENT's own `keys/*.asc` (a sibling of its `deployment.json`, never
+autoharn's `law/keys/` — see the key-residence note below) via the same shared scratch-keyring
+mechanism as item 28 (`filing/gpg_trust.py` — `law/adr/0012-compositional-and-structural-hygiene.md`'s
+Principle 1, "single source of truth / derive-don't-duplicate": one home, two callers now
+pointed at two different directories by design). **Key-residence revision (2026-07-11/12, "key-residence refactor" commission):** this
+verb originally resolved `AUTOHARN / "law" / "keys"` — a maintainer finding the same evening
+("THIS repository should not have anything to do with end user's keys... any end-user would find
+[it] counter-intuitive") named this as a conflation of autoharn's own law-signing with every
+deployment's commission-signing. Fixed by resolving the deployment's own `keys/` instead (see
+`bootstrap/templates/keys-README.md.tmpl`, `bootstrap/track-work.sh`, and
+design/GPG-TRUST-LAYER.md §7 / design/GPG-TRUST-LAYER-FAQ.md §3 for the full split); wired into
+`bootstrap/track-work.sh`'s standing-deployment scaffold same-commission. `bootstrap/new-project.sh`'s
+matching `keys/` scaffolding for WORLDS is the one piece FROZEN this pass (a live session was
+running in the shared checkout when this landed — CLAUDE.md's liveness rule); the mechanism does
+not depend on it (`filing/gpg_trust.py`'s `committed_keys()` degrades an absent directory to
+"zero keys," the same honest AWAITING-KEY shape either way), only the friendly `keys/README.md`
+stub a `--new-world` scaffold does not yet write. Closed, and fixed in the course of building it,
 TWO real defects, neither merely flagged: (a) a byte-fidelity hazard in the ceremony's own naive
 form (`gpg --detach-sign --armor ~/aa` signs a trailing newline that `$(cat ~/aa)` strips before
 insertion — an honest commission would otherwise verify as forged; the fix, `printf '%s'
@@ -648,23 +663,26 @@ insertion — an honest commission would otherwise verify as forged; the fix, `p
 this shipped as "done" (CLAUDE.md's own standing rubric), caught an earlier version folding the
 "no committed key exists to check a claimed signature against" case into `FORGED-OR-CORRUPT`,
 reasoning the spec's vocabulary was "closed to three members" — a reason the SAME file's own
-missing-gpg handling already contradicted, and the wrong structural choice relative to the very
-`attest-tags` precedent it cited (which uses a distinct `UNVERIFIABLE` label, never a relabeled
+missing-gpg handling already contradicted, and the wrong structural choice relative to item 28's
+own `attest-tags` precedent (which uses a distinct `UNVERIFIABLE` label, never a relabeled
 `BAD`). Fixed by giving that precondition its own verdict string and exit code
 (`NO-COMMITTED-KEY`, 3), so a fresh, keyless repository's commissions (this repository's own real
 state today) are never indistinguishable, by verdict string alone, from an actual forgery.
-Wired into `bootstrap/new-project.sh`'s six-verb shim loop (the `distance-to-clean` precedent for
-adding a verb without touching a live-executed template) and one sentence in
-`bootstrap/templates/CLAUDE.md.tmpl` point 10 (run it at intake, carry the verdict into the
-first row of the session's own task breakdown — its ledgered decomposition of the commission
-into work items, per that same preamble's point 1). *Witnessed*, all five outcomes, `seen-red/verify-commission/
+Wired into `bootstrap/new-project.sh`'s six-verb shim loop (item 25's `distance-to-clean`
+precedent for adding a verb without touching a live-executed template) and one sentence in
+`bootstrap/templates/CLAUDE.md.tmpl`'s governance-preamble point about commission verification
+(run it at intake, carry the verdict into the first row of the session's own task breakdown —
+its ledgered decomposition of the commission into work items, per that same preamble's own
+first point). *Witnessed*, all five outcomes, `seen-red/verify-commission/
 run_fixtures.py` (a real throwaway `--new-world` scaffold, a real FULL-mode commission via `led`,
 a fresh Ed25519 test key): no `.asc` banked yields `UNSIGNED`, exit 0; signing with the
 byte-fidelity-fixed ceremony against a committed test key yields `VERIFIED`, exit 0; the same
 `.asc` path re-signed over different bytes, checked against a committed key, yields a genuine
-cryptographic mismatch, `FORGED-OR-CORRUPT`, exit 1; a good signature checked against an EMPTY
-`law/keys/` (this repo's real, current state) yields the distinct refusal `NO-COMMITTED-KEY`,
-exit 3; `gpg` absent from `PATH` yields the other distinct refusal, `GPG-UNAVAILABLE`, exit 2.
+cryptographic mismatch, `FORGED-OR-CORRUPT`, exit 1; a good signature checked against the
+DEPLOYMENT's own `keys/` with the committed test key TEMPORARILY moved out (the honest
+AWAITING-KEY state a fresh scaffold starts in — never autoharn's `law/keys/`, per the
+key-residence revision above) yields the distinct refusal `NO-COMMITTED-KEY`, exit 3; `gpg`
+absent from `PATH` yields the other distinct refusal, `GPG-UNAVAILABLE`, exit 2.
 
 **30. `row_hash` chain + `verify-chain` — the anchored ledger, kernel delta s26 + the signed head
 (`kernel/lineage/s26-row-hash-chain.sql`; `bootstrap/templates/verify-chain.tmpl`;
@@ -683,7 +701,8 @@ allocates before a `BEFORE INSERT` trigger runs), closed with a per-schema
 as "done," found that an EARLIER version of `compute_row_hash()` coalesced `NULL` and `''` to the
 IDENTICAL serialized token — a genuine hash COLLISION (not merely an adversarial-hardening gap:
 `rationale IS NULL` and `rationale = ''` are different, SQL-observable facts), which would have
-let a schema-owner tamper (`rationale IS NULL` → `''`, bypassing `append_only_row`) produce ZERO
+let a schema-owner tamper (`rationale IS NULL` → `''`, bypassing `append_only_row`, the trigger
+that otherwise enforces the ledger's append-only invariant) produce ZERO
 change to the stored hash anywhere in the chain — defeating not just the chain walk but the
 signed-head backstop below, for free. Closed by replacing the delimiter-join with a
 length-prefixed, presence-tagged encoding (`hashfield()`: `'N:'` for NULL, `'V<len>:<value>'` for
@@ -712,7 +731,16 @@ throwaway test key: `gpg --verify` reports `Good signature` on the banked `.clau
 `.claude/head.json.asc` pair. Key rotation (revoke → generate → commit → re-sign) was also
 exercised on the same test key, witnessed in `design/GPG-TRUST-LAYER-FAQ.md` §8, including the
 genuine finding that a revoked key becomes immediately unusable for new signing (`gpg` refuses
-outright, "Unusable secret key" — stronger than a mere warning).
+outright, "Unusable secret key" — stronger than a mere warning). **Note on key residence
+(2026-07-11/12 audit, filed alongside item 29's revision):** `verify-chain.tmpl` reads NO
+committed-keys directory at all, in either domain — the signed-head ceremony above is a direct
+`gpg --detach-sign` / `gpg --verify` pair run by the operator against their own ambient
+`~/.gnupg` keyring, never `filing/gpg_trust.py`'s scratch-keyring mechanism items 28/29 share.
+An earlier draft of `filing/gpg_trust.py`'s own module docstring and of
+design/GPG-TRUST-LAYER-FAQ.md §3 claimed otherwise (listing this verb as a third caller of that
+mechanism); corrected in both places this same pass — a documentation inaccuracy caught and
+fixed in passing, not a code change, since there was no committed-key resolution here to
+relocate.
 
 ## Built, unexercised (exists; has not yet fired in anger)
 
