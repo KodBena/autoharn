@@ -9,9 +9,11 @@
 # autoharn only when autoharn's first standing service does.
 #
 # FINAL WIRING (BUILD-BRIEF Step 9, extended 2026-07-11 doc-legibility-indictment commission,
-# further extended 2026-07-11 run-10-closure-audit commission):
-# staging_guard -> no_lazy_imports -> fixture_census -> link_integrity -> doc_shapes ->
-# doc-attestation-presence -> layout_census -> doc-legibility. layout_census is DISABLED here
+# further extended 2026-07-11 run-10-closure-audit commission, further extended 2026-07-12
+# configuration-surface-survey commission):
+# staging_guard -> no_lazy_imports -> fixture_census -> link_integrity ->
+# apparatus_unknown_keys (gated only when bootstrap/templates/apparatus.json is touched) ->
+# doc_shapes -> doc-attestation-presence -> layout_census -> doc-legibility. layout_census is DISABLED here
 # as of the maintainer ruling below (2026-07-09); it still appears in this history note as the
 # Step-9 design.
 # doc-legibility is wired REPORT-ONLY (runs and prints,
@@ -78,6 +80,20 @@ PY="$HOME/w/vdc/venvs/generic/bin/python"
     echo "pre-commit: link-integrity gate FAILED — commit refused (a doc links somewhere that does not exist)." >&2
     exit 1
 }
+
+# apparatus_unknown_keys — the shipped apparatus.json default this repo owns must itself carry
+# no unrecognized mechanism key (BACKLOG "Configuration-surface survey, adopter's eyes",
+# 2026-07-11, gap 1). Gated ONLY when the template is part of this commit (most commits don't
+# touch it); report mode (its own default target) is the same file, so this call is redundant
+# with the module's own default but explicit here for the blocking case.
+if git diff --cached --name-only --diff-filter=ACMR | grep -qx "bootstrap/templates/apparatus.json"; then
+    "$PY" "$REPO_ROOT/gates/apparatus_unknown_keys.py" "$REPO_ROOT/bootstrap/templates/apparatus.json" || {
+        echo "" >&2
+        echo "pre-commit: apparatus-unknown-keys gate FAILED — the shipped apparatus.json" >&2
+        echo "default carries a mechanism key no hook reads (see gates/apparatus_unknown_keys.py)." >&2
+        exit 1
+    }
+fi
 
 # TOUCHED_MD computed once, shared by doc_shapes and doc-attestation-presence below (both are
 # gate-mode, touched-file-scoped checks over the same staged *.md set — one git diff, not two).
