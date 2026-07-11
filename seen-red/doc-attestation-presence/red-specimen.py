@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-11T16:35:50Z
-#   last-change: 2026-07-11T16:36:22Z
+#   last-change: 2026-07-11T22:38:01Z
 #   contributors: e4410ef6/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -25,6 +25,14 @@ exists to protect):
                           bug this gate's own build hit (design/ABC-AUDIT-LOOP-RECIPE.md's own
                           worked-example prose false-triggered a raw substring check) and the
                           regression this case pins.
+  V2-ADJUDICATION     -- doc-attestation/2 (design/SPEC-DOC-ATTESTATION-2.md) binds the escalation
+                          recipient's adjudication as a typed field: an escalated /2 record with a
+                          well-shaped adjudication validates; one with NO adjudication (the seam),
+                          or a malformed one, or a NON-escalated /2 record carrying an adjudication
+                          (the lying record), is refused; a /1 record still validates
+                          (compatibility); an unknown schema is refused fail-closed; and --record
+                          refuses an escalated-without-adjudication body AT WRITE TIME (exit 2,
+                          nothing appended) while accepting and writing a /2 record with one.
   REPORT-NEVER-FAILS  -- report mode (no args) always exits 0, mirroring gates/doc_shapes.py.
 
 No network, no DB, no cost: pure-stdlib gate, temp files + a monkeypatched REPO_ROOT/LEDGER_PATH
@@ -159,6 +167,107 @@ def main() -> int:
         print(f"CASE WAIVER-NOT-PROSE (token inside a real HTML comment): exit={rc}")
         if rc != 0:
             failures.append("a doc with the token inside an HTML comment should be waived")
+
+        # --- SCHEMA /2 ADJUDICATION (design/SPEC-DOC-ATTESTATION-2.md) --------------------
+        # The escalated-loop adjudication is a typed field in doc-attestation/2. Both illegal
+        # states (escalated-without-adjudication; adjudication-without-escalation) are refused;
+        # /1 records still validate (compatibility); an unknown schema is refused fail-closed.
+        v2_doc = tmp / "v2sample.md"
+        v2_doc.write_text("# V2 sample\n\nA clean paragraph for the /2 cases.\n", encoding="utf-8")
+        v2_hash = mod._sha256_of(v2_doc)
+        adj_ok = {"adjudicated_by": "orchestrator (seen-red)", "disposition": "applied verbatim",
+                  "adjudicated_at": "2026-07-12T00:00:00Z"}
+        esc_rounds = [
+            {"round": 1, "verdict": "DEFECT",
+             "findings": [{"file": "v2sample.md", "line": 1, "quote": "q", "repair": "r"}],
+             "clauses_checked": []},
+            {"round": 2, "verdict": "DEFECT",
+             "findings": [{"file": "v2sample.md", "line": 2, "quote": "q2", "repair": "r2"}],
+             "clauses_checked": []},
+        ]
+        clean_round = [{"round": 1, "verdict": "CLEAN", "findings": [],
+                        "clauses_checked": ["1a", "1b", "1c", "1d"]}]
+
+        def _v2(escalated, rounds, adjudication=None, schema="doc-attestation/2"):
+            r = {"schema": schema, "doc": "v2sample.md", "content_sha256": v2_hash,
+                 "b_id": "seen-red-v2-B", "rounds": rounds, "escalated": escalated,
+                 "attested_at": "2026-07-12T00:00:00Z"}
+            if adjudication is not None:
+                r["adjudication"] = adjudication
+            return r
+
+        v2_cases = [
+            ("V2 non-escalated, no adjudication",           _v2(False, clean_round),                       True),
+            ("V2 escalated, well-shaped adjudication",      _v2(True, esc_rounds, adj_ok),                 True),
+            ("V2 escalated, NO adjudication (the seam)",    _v2(True, esc_rounds),                         False),
+            ("V2 escalated, adjudication missing a field",  _v2(True, esc_rounds, {"adjudicated_by": "x", "disposition": "y"}), False),
+            ("V2 escalated, adjudication empty disposition", _v2(True, esc_rounds, {**adj_ok, "disposition": "  "}), False),
+            ("V2 escalated, adjudication with extra key",    _v2(True, esc_rounds, {**adj_ok, "note": "smuggled"}), False),
+            ("V2 non-escalated WITH adjudication (lie)",    _v2(False, clean_round, adj_ok),               False),
+            ("V1 legacy record still validates",            _v2(False, clean_round, schema="doc-attestation/1"), True),
+            ("unknown schema refused fail-closed",          _v2(False, clean_round, schema="doc-attestation/9"), False),
+            # Robustness (fail-closed, not a crash): a caller-supplied unhashable schema / clause
+            # entry must REFUSE cleanly, never raise TypeError. If validate_record raised, this
+            # fixture would abort with a non-zero exit -- so these cases pin the type-guards.
+            ("non-string schema (a list) refused, not crash", _v2(False, clean_round, schema=["doc-attestation/2"]), False),
+            ("CLEAN round with unhashable clause entries refused, not crash",
+             _v2(False, [{"round": 1, "verdict": "CLEAN", "findings": [],
+                          "clauses_checked": [["1a"], ["1b"]]}]), False),
+        ]
+        for label, record, want_clean in v2_cases:
+            issues = mod.validate_record(record)
+            ok = (not issues) if want_clean else bool(issues)
+            print(f"CASE {label}: {'clean' if not issues else str(len(issues)) + ' issue(s)'}"
+                  f" -> {'OK' if ok else 'WRONG'}")
+            if not ok:
+                failures.append(f"{label}: expected {'clean' if want_clean else 'refused'}, got {issues}")
+
+        # A JSON null adjudication is treated as ABSENT (asserts nothing, so not a lie): admitted on
+        # a non-escalated record, refused on an escalated one (the seam) just like a missing field.
+        null_nonesc = {"schema": "doc-attestation/2", "doc": "v2sample.md", "content_sha256": v2_hash,
+                       "b_id": "seen-red-v2-B", "rounds": clean_round, "escalated": False,
+                       "adjudication": None, "attested_at": "2026-07-12T00:00:00Z"}
+        issues = mod.validate_record(null_nonesc)
+        print(f"CASE V2 null adjudication, non-escalated (treated absent -> clean): "
+              f"{'clean' if not issues else str(len(issues)) + ' issue(s)'} -> "
+              f"{'OK' if not issues else 'WRONG'}")
+        if issues:
+            failures.append(f"null adjudication on a non-escalated record should be treated as absent (clean): {issues}")
+        null_esc = {**null_nonesc, "rounds": esc_rounds, "escalated": True}
+        issues = mod.validate_record(null_esc)
+        print(f"CASE V2 null adjudication, escalated (treated absent -> refused seam): "
+              f"{'clean' if not issues else str(len(issues)) + ' issue(s)'} -> "
+              f"{'OK' if issues else 'WRONG'}")
+        if not issues:
+            failures.append("null adjudication on an escalated record should be refused (the seam)")
+
+        # --record writes /2 and refuses an escalated record with no adjudication AT WRITE TIME.
+        v2_ledger = tmp / "attestations" / "v2ledger.jsonl"
+        mod.LEDGER_PATH = v2_ledger
+        esc_body = tmp / "esc_body.json"
+        esc_body.write_text(json.dumps({"doc": "v2sample.md", "b_id": "wB", "rounds": esc_rounds,
+                                        "escalated": True}), encoding="utf-8")  # no adjudication
+        rc = mod.main(["--record", str(esc_body)])
+        print(f"CASE V2 --record escalated-without-adjudication: exit={rc} (want 2, nothing appended)")
+        if rc != 2:
+            failures.append("--record must refuse (exit 2) an escalated record with no adjudication")
+        if v2_ledger.exists() and v2_ledger.read_text(encoding="utf-8").strip():
+            failures.append("--record appended a refused record to the ledger")
+
+        ok_body = tmp / "ok_body.json"
+        ok_body.write_text(json.dumps({"doc": "v2sample.md", "b_id": "wB", "rounds": esc_rounds,
+                                       "escalated": True, "adjudication": adj_ok}), encoding="utf-8")
+        rc = mod.main(["--record", str(ok_body)])
+        print(f"CASE V2 --record escalated-with-adjudication: exit={rc} (want 0, appended as /2)")
+        if rc != 0:
+            failures.append("--record must accept (exit 0) an escalated record carrying adjudication")
+        else:
+            appended = json.loads(v2_ledger.read_text(encoding="utf-8").splitlines()[-1])
+            if appended.get("schema") != "doc-attestation/2":
+                failures.append(f"--record wrote schema {appended.get('schema')!r}, expected doc-attestation/2")
+            if appended.get("adjudication") != adj_ok:
+                failures.append("--record dropped or altered the adjudication object")
+        mod.LEDGER_PATH = ledger  # restore for any later cases
 
         # --- REPORT-NEVER-FAILS -----------------------------------------------------------
         # The temp fixture tree is not a git repo, so _tracked_md()'s `git ls-files` would

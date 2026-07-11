@@ -4919,3 +4919,108 @@ the tracker item regulator-adoption-assessment was already open+claimed, so the 
 existed without a new opening act; the four lens reports are session working input, not
 banked — every claim carried into the deliverable points at a repo artifact or a named
 re-observation instead.
+
+## SUCCESSION DRILL — doc-attestation/2 authored under MAXIMUM ceremony (Opus, 2026-07-12)
+
+First exercise of CLAUDE.md's **succession rule** (the "if Fable is unavailable, maintainer +
+Opus may author kernel/law/engine specs under MAXIMUM ceremony" bullet). Run AS A DRILL: Fable
+was in fact still available and will grade the product — the point was to witness the four-part
+ceremony end-to-end while a grader existed, not to cut it because it was practice. Executed in an
+isolated worktree (`worktree-agent-a33e4aa81fcb85f80`), fast-forwarded to the live `next` tip
+before work per the GPG-worktree precedent (zero unique commits, clean, HEAD an ancestor of
+`next` — recorded here per the self-application rule).
+
+**The product.** `doc-attestation/2`: the attestation record format's next version, giving the
+escalation recipient's adjudication (who / what was applied / when) a first-class `adjudication`
+object instead of the `b_id` free-text convention the seam named (this file's "First live
+enforcement of ADR-0017's loop", where seven escalated records stuffed the adjudication into
+`b_id`). Spec: `design/SPEC-DOC-ATTESTATION-2.md`. Gate: `gates/doc_attestation_presence.py`
+(schema dispatch; `adjudication` bound to `escalated` — required-and-exactly-three-fields when
+escalated, forbidden otherwise; `--record` writes `/2`; unknown schema refused fail-closed).
+Migration is additive and non-destructive: the ~20 existing `/1` records stay valid, unchanged,
+never rewritten (ADR-0017 Exceptions; ADR-0013); the gate accepts both versions. Scope held
+small: `law/` and ADR-0017 untouched (a future ADR-0017 Revisit-#2 amendment routes to the
+maintainer); the frozen set was not entered — the gate lives in `gates/`, so routine delegation
+would in fact have sufficed, and MAXIMUM ceremony was applied deliberately to exercise it.
+
+**Ceremony 1 — the conformance instrument on the commission itself.** `instruments/conformance_check.py`
+(the project's commission↔result differ, CAPABILITIES item 17) fits this commission's shape, so
+it was applied, not declared inapplicable. The drill's seven deliverables were structured as
+`design/SPEC-DOC-ATTESTATION-2.commission.json` + `.report.json` and checked: **CONFORMANT**
+(exit 0), four `file` witnesses verified mechanically (spec, gate, seen-red red.txt, BACKLOG.md),
+three `doc_excerpt` witnesses printed as loud OPERATOR-CHECK lines (the checker cannot reach a
+ledger/BACKLOG excerpt and must not silently pass it — the F49 lesson). Banked verbatim at
+`design/SPEC-DOC-ATTESTATION-2.conformance.txt`.
+
+**Ceremony 2 — adversarial fresh-context review, charged to refute.** A second instance saw only
+the spec + the `/1` format + the seam entry (never the gate, never this context) and was told to
+find the design error, the migration hole, the fail-open. It did real work — this block IS the
+on-the-record disposition the conformance report points at:
+adversarial reviewer agentId a79b4256e2576200d found 5 findings; 1 gate fix (extra-key refusal), 3 spec-honesty repairs, 1 design-by-intent clarified -- all dispositioned in the BACKLOG entry.
+Per finding:
+  - F1 (fail-open/overclaim): the `/1` tag lets an escalated record dodge the `/2` adjudication
+    requirement, so "unrepresentable" was too strong. DISPOSITION: valid overclaim — but a
+    dodging `/1` record is the SAME evasion class as a fabricated CLEAN verdict, which ADR-0017
+    never promised to catch (identity/authorship unpoliced) and no shape-check closes; a gate
+    tightening here is theater since the fake-CLEAN dodge stays open. Fixed by scoping the spec's
+    claim to HONEST records (matching the gate's standing artifact-not-identity posture), not a
+    false gate change.
+  - F2 (design-error): `content_sha256` ("bytes B read") vs a `disposition` that applied a change;
+    the example's "no content change" read as contradictory. DISPOSITION: valid clarity defect —
+    mechanism was already correct (`--record` hashes the final on-disk bytes, matching record 5's
+    "post-adjudication bytes" convention); clarified the spec prose and fixed the example wording.
+  - F3 (fail-open/closure-gap): the `adjudication` object tolerated EXTRA keys, reopening the
+    overload it exists to kill, and contradicting the closure's "exactly three / no ninth shape".
+    DISPOSITION: valid — **gate fixed** to refuse any key beyond the three; closure made true.
+  - F4 (overclaim): `b_id` stays a second unpoliced home. DISPOSITION: valid — softened the claim
+    to "provides the typed home so adjudication no longer NEEDS to ride `b_id`", not "closes it".
+  - F5 (design-by-intent): no representable "escalated, adjudication pending" state. DISPOSITION:
+    by design — the record is written after full disposition; a pending escalation is an
+    uncommitted working state the commit gate holds back, not a ledger row. Stated in the spec.
+
+**Ceremony 3 — scratch witness, both polarities, before any real application.** The `/2` support
+was witnessed on the real gate via the extended seen-red fixture
+(`seen-red/doc-attestation-presence/red-specimen.py`, banked `red.txt`), against throwaway temp
+files only — zero residue (the fixture tears its tmpdir down). Witnessed: a valid `/2` escalated
+record with a well-shaped adjudication passes; escalated-without-adjudication (the seam),
+adjudication-missing-a-field, empty-field, extra-key, and non-escalated-with-adjudication (the
+lie) are all REFUSED; a `/1` record still validates (compatibility); an unknown schema is refused
+fail-closed; `--record` refuses an escalated-without-adjudication body AT WRITE TIME (exit 2,
+nothing appended) and writes a `/2` record when the adjudication is present. Two robustness cases
+(non-string schema, unhashable clause entries) clean-REFUSE without crashing.
+
+**Ceremony 4 — closure statement checked by a third fresh instance.** A third instance checked the
+spec's closure enumeration against the actual gate code (`validate_record` / `_validate_adjudication`),
+charged to find a record shape the enumeration neither admits nor refuses, or an admit/refuse the
+code disagrees with. Verdict banked:
+closure-check instance agentId aadd87ee96d7ef5c3 verdict CLOSURE SOUND; two robustness hazards it flagged both fixed.
+It ruled the enumeration total and faithful over its axes (every shape fail-closed), and flagged,
+per the mother's-life bar, two crash-instead-of-clean-refuse hazards: a non-string `schema` and
+unhashable `clauses_checked` entries hit `x in set` / `set(...)` and raised `TypeError`. Same
+defect class (caller JSON in a hash context, no type guard); both fixed to clean-refuse (ADR-0000
+Rule 2(a): close the class, not the instance), fixture cases added. One wording nuance ("adjudication": null
+== absent, not a lie) fixed in the spec's closure item 6.
+
+**Spec attestation (the routine ADR-0017 loop the spec needs as a maintainer-facing doc).** Two
+synchronous fresh Agent B forks (round1 agentId ae026a53fbafbef6c CLEAN + three sub-threshold
+polish notes, applied as C; round2 agentId a676e7961f3095cad CLEAN on the final bytes). Recorded
+as the first real `/2` record — verifiable in the ledger:
+a doc-attestation/2 record for design/SPEC-DOC-ATTESTATION-2.md, content_sha256
+19ad34d9e71a6d7921b15df8eb2ee53da732aecdc54a3c2bb5775f148f4c7f3b, escalated=false, two CLEAN
+rounds. All B spawns were SYNCHRONOUS (`run_in_background: false`) — mandatory here because the
+loop ran inside a dispatched subagent, exactly the orphan-verdict failure this file's "A:B:C
+recipe friction" entry twice-witnessed.
+
+**Gates green on the touched surface:** `gates/no_lazy_imports.py` 0 violations; `py_compile` on
+gate + fixture; `gates/doc_shapes.py` + `gates/link_integrity.py` clean on the spec;
+`gates/fixture_census.py` clean (44 seen-red gates); `gates/doc_attestation_presence.py` gate mode
+clean on the spec (its own new machinery certifying its own spec).
+
+**Filed follow-up, not fixed in-pass (ADR-0013 Rule 4 disposition, named not buried):**
+`design/ABC-AUDIT-LOOP-RECIPE.md` step 5's escalation prose does not yet mention the `/2`
+adjudication field. It is not WRONG (step 6 delegates the exact schema to the gate docstring, which
+is updated), and `--record` now TEACHES the requirement on refusal (names the missing field,
+points at the spec), so the staleness is a loud self-correcting signpost, not a silent hazard —
+touching the recipe would pull in its own A:B:C loop for marginal value, so it is filed here for a
+future touch rather than done, keeping this drill small. A one-to-two-sentence recipe addition in
+step 5/6 naming the adjudication field is the actionable follow-up.
