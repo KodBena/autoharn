@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-09T08:07:02Z
-#   last-change: 2026-07-11T14:58:56Z
+#   last-change: 2026-07-11T22:25:27Z
 #   contributors: 9bcc0113/main, be693afb/main, e4410ef6/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -147,6 +147,12 @@ _HERE = os.path.dirname(os.path.abspath(__file__))
 _REPO_ROOT = os.path.dirname(_HERE)  # hooks/ -> autoharn root
 sys.path.insert(0, os.path.join(_REPO_ROOT, "filing"))
 import deployment_record  # noqa: E402  (filing/deployment_record.py, the ONE home for the deployment.json shape)
+import apparatus_registry  # noqa: E402  (filing/apparatus_registry.py, the derived known-mechanism set --
+# BACKLOG "Configuration-surface survey, adopter's eyes", 2026-07-11, gap 1: an unrecognized KEY under
+# apparatus["mechanisms"] was silently ignored everywhere -- only MODE values were validated. This hook
+# fires on virtually every governed Write/Edit, so it is the loudest, most-immediate place to sweep the
+# WHOLE mechanisms dict it already loads for its own two keys (change_gate/permit_to_work) against every
+# OTHER key too -- see _warn_unknown_mechanisms below, called once from _configure().
 
 # ---------------------------------------------------------------------------------------------
 # CONNECTION/CONFIG RESOLUTION (design/OPUS-READINESS.md move 1; BACKLOG "PGHOST hardcoded" +
@@ -365,6 +371,23 @@ def _resolve_mode(apparatus: dict, mechanism: str, default: str, root: str) -> s
     return default
 
 
+def _warn_unknown_mechanisms(apparatus: dict, root: str) -> None:
+    """Sweeps the WHOLE `apparatus["mechanisms"]` dict (not just this hook's own two keys) for
+    unrecognized mechanism NAMES -- distinct from `_resolve_mode`'s validation of a known
+    mechanism's mode VALUE. BACKLOG "Configuration-surface survey, adopter's eyes" (2026-07-11)
+    gap 1: a typo'd key like `"doc_shapse_gate"` configures nothing and, before this check,
+    warned no one -- fail-open. This hook is chosen as the live-warn site (rather than, or in
+    addition to, a standalone sweep -- see gates/apparatus_unknown_keys.py for that on-demand
+    form) because it fires on virtually every governed Write/Edit in a wired world, so a typo
+    surfaces on the very next tool call, not only when someone remembers to run a separate gate.
+    `filing/apparatus_registry.py` is the derived source of truth (never a hand list here) --
+    this function is a thin call-and-print, never a second copy of that logic."""
+    unknown = apparatus_registry.unknown_mechanism_keys(apparatus)
+    if unknown:
+        print(apparatus_registry.teach_text(unknown, source=f"{root}/.claude/apparatus.json"),
+              file=sys.stderr)
+
+
 def _find_deployment_path(data: dict) -> str | None:
     """Locate this project's deployment.json: an explicit LEDGER_DEPLOYMENT override first, else
     `<cwd>/deployment.json` using the hook input's own `cwd` field (falling back to this process's
@@ -436,6 +459,7 @@ def _configure(data: dict) -> None:
     apparatus = _load_apparatus_quiet(SUBJECT_ROOT)
     CHANGE_GATE_MODE = _resolve_mode(apparatus, "change_gate", "enforce", SUBJECT_ROOT)
     PERMIT_TO_WORK_MODE = _resolve_mode(apparatus, "permit_to_work", "enforce", SUBJECT_ROOT)
+    _warn_unknown_mechanisms(apparatus, SUBJECT_ROOT)
 
 
 # Governance is CLASS-keyed (F33): match by pattern/nature, never by an enumerated file list.

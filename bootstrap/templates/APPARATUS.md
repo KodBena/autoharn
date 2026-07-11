@@ -23,7 +23,8 @@ tool call, no re-scaffold needed. Format:
     "delegation_observer":{"mode": "observe"},
     "doc_shapes_gate":  {"mode": "observe"},
     "doc_legibility_critic":{"mode": "off", "cost_note": "...", "classifier_command": [...], "timeout_s": 10},
-    "read_observer":    {"mode": "observe"}
+    "read_observer":    {"mode": "observe"},
+    "bash_completion":  {"mode": "observe"}
   }
 }
 ```
@@ -37,7 +38,7 @@ tool call, no re-scaffold needed. Format:
   outcome is turned into an **ALLOW** carrying a loud, non-blocking `additionalContext` warning
   (the agent sees it on its own next turn) plus a journal record. Observe mode **never** denies,
   blocks, or asks.
-- **`"enforce"`** — the mechanism's full, original behavior (a refusal really refuses).
+- **`"enforce"`** — the mechanism runs its full, original behavior: a refusal really refuses.
 
 **Missing file, missing `mechanisms` key, or a missing per-mechanism entry** resolves to that
 mechanism's own **stated default** (next section) — never an error.
@@ -47,7 +48,23 @@ every hook falls back to its own default with a loud stderr warning naming the e
 and the file it came from. A typo in this file can only make a mechanism MORE conservative than
 intended, never less.
 
-## The ten mechanisms and their defaults
+**An unrecognized mechanism NAME** — a typo'd key under `mechanisms` itself, e.g.
+`"doc_shapse_gate"` — is a DIFFERENT defect from a bad mode value, caught a different way
+([BACKLOG.md](../../BACKLOG.md) "Configuration-surface survey, adopter's eyes", 2026-07-11, gap 1: mode values were
+always validated loudly; nothing swept the keys, so a typo'd mechanism name configured nothing
+and warned no one). `hooks/pretooluse_change_gate.py` sweeps the WHOLE `mechanisms` object — not
+only its own two keys — against `filing/apparatus_registry.py`'s known-mechanism set (derived
+live from `hooks/*.py`'s own source, never a hand-typed list) on every invocation, so it fires on
+virtually the next governed `Write`/`Edit`; `gates/apparatus_unknown_keys.py` runs the identical
+check on demand against any named `apparatus.json` or world directory. Same never-widens posture
+as a bad mode value: an unrecognized key is never treated as configuring anything, and the
+warning names both the bad key and the full valid set.
+
+## The eleven mechanisms and their defaults
+
+The table below lists every mechanism this project ships, the hook file that implements it, its
+shipped default mode, and why that default was chosen — the per-mechanism detail behind the
+switchboard example above.
 
 | mechanism            | hook                                          | default   | why |
 |----------------------|------------------------------------------------|-----------|-----|
@@ -57,10 +74,11 @@ intended, never less.
 | `clean_exit`           | `hooks/stop_clean_exit.py`                      | `enforce` | free per call |
 | `demurral_detect`      | `hooks/demurral_detect.py`                      | **`off`** | **spends a real `claude -p` classifier call per invocation** — "no world may silently bill its operator" (maintainer mandate, verbatim); the `cost_note` field sits next to this switch on purpose |
 | `mutation_observer`    | `hooks/posttooluse_mutation_observer.py`        | `observe` | `enforce` is **impossible** for this mechanism (a PostToolUse observation fires after the mutation already happened — there is no "deny" available); if apparatus.json ever names `enforce` here, the hook warns loudly and behaves as `observe` |
-| `delegation_observer`  | `hooks/pretooluse_delegation_observer.py`       | `observe` | `enforce` is **not yet sanctioned** for this mechanism (a PreToolUse deny on a subagent dispatch is possible in principle, unlike `mutation_observer`'s genuine PostToolUse impossibility, but has not been maintainer-ratified — BACKLOG "Run-8 mid-run forensics", 2026-07-11); if apparatus.json ever names `enforce` here, the hook warns loudly and behaves as `observe` |
+| `delegation_observer`  | `hooks/pretooluse_delegation_observer.py`       | `observe` | `enforce` is **not yet sanctioned** for this mechanism (a PreToolUse deny on a subagent dispatch is possible in principle, unlike `mutation_observer`'s genuine PostToolUse impossibility, but has not been maintainer-ratified — [BACKLOG.md](../../BACKLOG.md) "Run-8 mid-run forensics", 2026-07-11); if apparatus.json ever names `enforce` here, the hook warns loudly and behaves as `observe` |
 | `doc_shapes_gate`      | `hooks/pretooluse_doc_shapes_gate.py`           | `observe` | **free per call** (pure text scanning, no subprocess) — `observe`, not `enforce`, because this is the FIRST live deployment of this check as a write-time blocking gate anywhere in this project (see the hook's own module docstring for the full reasoning); **the one-line flip to `enforce` for a given scaffolded project** is `"doc_shapes_gate": {"mode": "enforce"}` in that project's own `.claude/apparatus.json` — no code change, live on the next `Write`/`Edit` |
 | `doc_legibility_critic`| `hooks/doc_legibility_critic.py`                | **`off`** | **spends a real `claude -p` classifier call per `.md` Write/Edit** — same "no world may silently bill its operator" mandate as `demurral_detect`; the zero-context-reader documentation discipline's (`law/adr/0017-the-zero-context-reader.md`) lightweight, portable transport, delivered UNWIRED into any hook chain — this entry only takes effect once a project wires the PostToolUse attachment documented in the hook's own module docstring |
 | `read_observer`        | `hooks/pretooluse_read_observer.py`             | `observe` | **free per call** (one journal line, no subprocess, no LLM call) — defaults `observe` like `mutation_observer`/`delegation_observer`, the house convention that a costless observer starts ON rather than OFF; `enforce` is **not sanctioned** (reading a file is not a refusable act under this project's law) — if apparatus.json ever names `enforce` here, the hook warns loudly and behaves as `observe` |
+| `bash_completion`      | `hooks/posttooluse_bash_completion.py`          | `observe` | **free per call** (one journal line, no subprocess, no LLM call) — same costless-observer convention as `mutation_observer`/`read_observer`; journals a Bash call's completion timestamp beside `stamp_intercept`'s existing pre-call token, correlated by command-text hash (module docstring: "the non-null tail — builds, test suites, dispatches"). `enforce` is **impossible** (a PostToolUse leg fires after the command already finished — no "deny" available), same shape as `mutation_observer`; the hook warns loudly and behaves as `observe` if apparatus.json ever names it. Added 2026-07-12 ("Small-follow-ups commission") — this row and the shipped `apparatus.json` default were briefly out of sync with the mechanism actually shipping in `hooks/`, found and fixed by the configuration-surface-survey commission's own unknown-key sweep work ([BACKLOG.md](../../BACKLOG.md) "Configuration-surface survey, adopter's eyes", 2026-07-11 entry, gap 1) — the worked example of exactly the drift `filing/apparatus_registry.py`'s derive-don't-hand-list design exists to foreclose |
 
 Named nuances:
 
@@ -80,7 +98,8 @@ Named nuances:
   to a sha256 + 200-char excerpt); a loud, non-blocking warning fires only when this world carries
   the s22 work-item layer (a per-project work-item ledger some scaffolded worlds carry and
   others don't) and no work item is currently open+claimed, teaching the operator to
-  ledger the delegation itself as a `decision` row (CLAUDE.md preamble point 7) — an `enforce`
+  ledger the delegation itself as a `decision` row (CLAUDE.md's governance preamble, the rule
+  "investigation and delegation are work: ledger them BEFORE doing them") — an `enforce`
   deny path here is architecturally possible but deliberately unbuilt (see the table entry above).
 - **`doc_shapes_gate`** is the PreToolUse, write-time cousin of `gates/doc_shapes.py` (this
   project's own repo-side, deterministic pre-commit check for two measured zero-context-reader
@@ -114,6 +133,11 @@ Named nuances:
   trace at all. This mechanism has no warning and no deny path (unlike `delegation_observer`,
   it has nothing to teach): reading a file is never itself a policy violation under this
   project's law, so there is no enforce state to sanction.
+- **`bash_completion`** watches `PostToolUse(Bash)` and journals a completion record
+  (`.claude/logs/bash_completions.jsonl`) FIFO-paired by command-text hash to
+  `stamp_intercept`'s own dispatch journal — the value is the pairing's duration for a
+  non-trivial call (a build, a test suite), not the common ~0s call. No deny path, same
+  reasoning as `read_observer`.
 
 ## Honest limit (`law/adr/0011-mechanization-discipline.md` Rule 1's declared-enforcement-surface obligation)
 

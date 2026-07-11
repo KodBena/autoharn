@@ -4693,6 +4693,7 @@ in the entry immediately above this one) remains untouched, unrelated to this pa
 Tracker item closed: `./led work close small-follow-ups-commission shipped --witness
 "ea55214..937cfa7"` (six commits: `ea55214` item 1, `c8dc2ea` item 2, `1e8a3f8` items 3+6,
 `1e51181` item 4, `3c3b6f9` item 5, `937cfa7` item 7 + CAPABILITIES item 31).
+
 ## Key-residence refactor: `law/keys/` scoped to autoharn's own law; every deployment gets its own `keys/` (Sonnet, 2026-07-11/12)
 
 Refines the GPG trust layer's key residence per the maintainer finding recorded above (`led`
@@ -5162,3 +5163,125 @@ differential-agree.txt` + `differential-diverge-defect.txt` (new, banked evidenc
 `engine/docs/ledger-marriage/derivations/contemporaneity/contempprobe/<ts>_<hash>/` (new, banked
 DerivationRecord pair), `design/CONTEMPORANEITY-AUDIT.md` (Status section extended),
 `CAPABILITIES.md` item 24b (new, minimal), this entry.
+
+## Configuration-surface survey: four deliverables shipped (Sonnet, 2026-07-12, isolated worktree)
+
+Closes the "Configuration-surface survey, adopter's eyes" entry above (2026-07-11): four items
+— the adopter-facing `CONFIGURATION.md`, the apparatus unknown-key sweep (gap 1), the
+era-coded-env-name disposition (gap 5), and a pg_hba FAQ folded into `CONFIGURATION.md` (per the
+"Maintainer dispositions: adoption bar 4, run11 doc gate" entry's gap-4 downgrade). Worked from
+the isolated worktree at `.claude/worktrees/agent-a283a99b3c0dac24c`: found 160 commits behind
+`next`'s live tip with zero unique commits of its own — `git merge --ff-only next` was safe and
+used before any edit began (self-application rule; a clean fast-forward, not a discard).
+
+**1. `CONFIGURATION.md`** (repo root, new). The adopter-facing page: the library framing (clone
+autoharn, one scaffold command writes project-owned state into *your* directory, nothing of
+yours lands in autoharn), a "what state lands where" table, every configurable surface
+(apparatus.json's now-eleven mechanisms with cost notes, both scaffold commands' full flag
+reference, the env-var override table, `governed_files.json`), the install-path contract stated
+plainly (`AUTOHARN_ROOT` is baked in at scaffold time; moving the checkout breaks every wired
+project; the honest contract is "pick a path and keep it," with `--force` re-scaffold as the
+remedy), and the pg_hba FAQ (item 4 below). ADR-0017 two-round A:B:C loop run twice for this
+document: **the first spawn was a process error** (the B prompt accidentally carried a paste
+placeholder instead of the document's real text) — named here rather than quietly discarded,
+per the standing "claims carry witnesses" rule; B still returned real findings by reading the
+file with its own tool access, which is NOT the isolated-fresh-context shape ADR-0017 requires,
+so that round was treated as an informal pre-check (its findings — two broken same-document
+anchor links from em-dash slug math, a leaked literal username in the pg_hba example, and an
+undefined "kernel lineage" term — were independently re-verified by hand and fixed) rather than
+part of the recorded attestation. The **recorded** loop: round 1 (agent `a41c9a99f87d479fc`, 0
+tool uses) found 2 defects (undefined "FULL-mode" and "derivation-banking subdirectory"), fixed;
+round 2 (agent `aac8ac863795b729e`, 0 tool uses) returned CLEAN on all four Rule-1 clauses,
+including a full anchor-link re-verification. Recorded in
+`attestations/doc-legibility-attestations.jsonl` (`content_sha256` `5aae31b0fdab...`).
+
+**2. The apparatus unknown-key sweep** (survey gap 1, "the shape this project distrusts most").
+`filing/apparatus_registry.py` (new): derives the known-mechanism set by static extraction over
+`hooks/*.py`'s own source (three regex shapes covering every mechanism-key-naming convention in
+use) — never a hand-typed list, because a hand list had *already* drifted once, silently, before
+this module existed (see finding below). `gates/apparatus_unknown_keys.py` (new): report mode
+sweeps this repo's own shipped `bootstrap/templates/apparatus.json`; gate mode checks any named
+`apparatus.json` file or world directory, exit 1 on any unrecognized key, teach-text naming the
+bad key and the full valid set. Wired live into `hooks/pretooluse_change_gate.py` (fires on
+virtually every governed `Write`/`Edit`, so a typo'd key surfaces on the very next tool call —
+witnessed end-to-end via a real hook invocation against a scratch world with a typo'd key,
+producing the loud stderr warning) and into `hooks/pre-commit` (blocks a commit that touches the
+shipped `apparatus.json` template with an unrecognized key). Both-polarity seen-red:
+`seen-red/apparatus-unknown-keys/run_fixtures.py`, 6 cases (report-mode-default, gate-clean,
+gate-unknown-key, gate-unresolvable-target, world-dir-resolution, multiple-targets-mixed), all
+PASS; `red.txt` banks the live red specimen. Registered in `gates/fixture_census.py`'s REGISTRY
+(`apparatus-unknown-keys` → the fixture above); `fixture_census.py` re-run clean (45 gates).
+**Hazard found in passing and fixed** (CLAUDE.md engineering-responsibility clause): building the
+derived registry surfaced that `hooks/posttooluse_bash_completion.py`'s `bash_completion`
+mechanism (added 2026-07-12, "Small-follow-ups commission") was absent from BOTH
+`bootstrap/templates/apparatus.json`'s shipped default AND `bootstrap/templates/APPARATUS.md`'s
+own "the ten mechanisms" table — a hand-list drift the derived-registry design is built
+specifically to foreclose next time. Fixed: `apparatus.json` gained the missing entry;
+`APPARATUS.md` gained the eleventh table row, an unknown-key-sweep paragraph, and (per its own
+A:B:C round 1) six further legibility fixes (a bare-noun-phrase mode bullet, three unlinked
+`BACKLOG` prose citations, a positional `CLAUDE.md preamble point 7` reference replaced with a
+verbatim quote, and a table missing its grounding sentence) — round 2 (agent
+`a8bb02aeea61dca21`, 0 tool uses) returned CLEAN. Recorded in the same attestations ledger
+(`content_sha256` `df89287ed8d6...`).
+
+**3. Era-coded env names (survey gap 5) — done, not deferred.** Investigation found the
+backward-compatible aliasing the survey hoped for already landed in the HOOK code on 2026-07-09
+(`hooks/pretooluse_change_gate.py`'s own module docstring: neutral names `LEDGER_HOST`/
+`LEDGER_DB`/`GATE_LEDGER`/`GATE_SUBJECT_ROOT`/`GATE_STATE`/`GATE_JOURNAL` are read FIRST, the old
+`E13_GATE_*`/`E13_SUBJECT_ROOT` family is kept working as silent deprecated aliases) — what never
+landed is the SCAFFOLD TEMPLATE actually *emitting* the neutral names: every world scaffolded
+before this pass, including the live `run11` (read-only checked, confirms the gap), still gets
+`E13_GATE_*` baked into its `.claude/settings.json`. Liveness-checked before touching
+`bootstrap/templates/` (`pgrep -a claude` + `readlink /proc/<pid>/cwd` for each live process: no
+cwd inside any wired world directory — `run3`/`run4`/`run5`/`run6`/`run7`/`run9`/`run10`/`run11`
+all clear) — safe to proceed, so this shipped rather than deferring. Fixed:
+`bootstrap/templates/settings.json.tmpl`'s `change_gate` hook line renamed
+`E13_GATE_DB`/`E13_GATE_LEDGER`/`E13_SUBJECT_ROOT`/`E13_GATE_STATE`/`E13_GATE_JOURNAL` to their
+documented neutral counterparts (one-for-one, no new variables introduced); the `stamp_intercept`
+hook line's `STAMP_DB` was found genuinely dead (grep-verified: no `os.environ` read in
+`hooks/stamp_intercept.py` ever names it) and removed rather than renamed. Old, already-scaffolded
+worlds are completely unaffected — their settings.json keeps the old names, which the hook still
+reads via the alias path; only NEW scaffolds get the plain names. Witnessed end-to-end: the exact
+`sedsubst` output was fed to a real `pretooluse_change_gate.py` invocation (a genuine subprocess,
+the same shape Claude Code's own hook dispatch uses) and produced the correct fail-closed DENY
+for an unledgered edit — the neutral-name resolution path is live-proven, not merely read from
+source. `seen-red/change-gate-subject-root/run_fixtures.py` re-run clean (all 8 pre-existing
+cases still pass) after the hook's own unrelated unknown-key-sweep addition (item 2 above).
+
+**4. The pg_hba/setup FAQ** — folded into `CONFIGURATION.md` as two FAQ sections (Postgres
+provisioning; the pg_hba superuser-trust hardening step), copy-paste steps with "what you should
+see," condensed from `design/PG-HBA-HARDENING.md`'s full investigation. Explicitly documents
+only — no `pg_hba.conf` on any real host was touched by this pass; the maintainer's own apply
+decision is untouched and unactioned, per his disposition ("that help can be FAQ'd").
+
+**Not done, named.** `OPERATING-CARD.md`'s hooks × kernel map table (the gap the immediately
+preceding BACKLOG entry already names and defers) remains one row short of the live wiring —
+seen again during this pass, left alone: it is a separately-filed, deliberately-sized gap, not
+one this commission's four deliverables asked for, and touching it costs its own full A:B:C
+loop.
+
+**Correction, mid-pass.** `design/GPG-TRUST-LAYER-FAQ.md`'s key-residence framing was first read
+for context only (per this task's own instruction), since at that point the "Key-residence
+refactor" commission was still sitting unmerged in a sibling worktree and asserting its mechanism
+as shipped fact would have been an unwitnessed claim — `CONFIGURATION.md`'s first draft therefore
+described the OLD, `law/keys/`-based SIGNED-mode verification as current. Mid-pass, resolving
+`gates/no_conflict_markers.py` (a new gate a concurrent commission landed on shared
+`hooks/pre-commit`, discovered only when it blocked this pass's own first commit attempt) required
+a second `git merge --ff-only` onto `next`'s new tip, which brought the key-residence refactor's
+own commits (`a972884`, `fc6f985`, `0ea95d2`, `041ed3c`) into this branch for real — verified live
+(`bootstrap/templates/verify-commission.tmpl`'s `keys_dir = world_root / "keys"`, no longer
+`AUTOHARN / "law" / "keys"`) rather than assumed from the sibling worktree's own claims.
+`CONFIGURATION.md` was corrected in place to describe the NOW-current per-deployment `keys/`
+directory (added to the "what state lands where" table and the library-framing paragraph), and
+re-attested (a third A:B:C round: one further DEFECT — an unglossed "AWAITING-KEY" term — fixed,
+then CLEAN; `attestations/doc-legibility-attestations.jsonl` carries both the pre-merge and
+post-merge attestation records for the two different content hashes, per the recipe's own
+"accumulates a full attestation history across edits" design).
+
+Witness commands, all re-run clean in this session: `python3 gates/doc_shapes.py
+CONFIGURATION.md bootstrap/templates/APPARATUS.md` (0 findings); `python3
+gates/doc_attestation_presence.py CONFIGURATION.md bootstrap/templates/APPARATUS.md` (clean, 2
+docs in scope); `python3 gates/link_integrity.py` (clean, full repo); `python3
+gates/fixture_census.py` (clean, 45 gates); `python3 gates/no_lazy_imports.py` (exit 0); `python3
+seen-red/apparatus-unknown-keys/run_fixtures.py` (6/6 PASS); `python3
+seen-red/change-gate-subject-root/run_fixtures.py` (8/8 PASS).
