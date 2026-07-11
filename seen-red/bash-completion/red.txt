@@ -1,0 +1,22 @@
+=== a-token-pairing ===
+  [ok] exit=0 rec={'ts': '2026-07-11T21:37:01.737Z', 'session_id': 'sess-a', 'command_sha256': 'acdef6d0afbb148cdc1d86cbec1359ff83452d3b0c3801501cdef537c8646755', 'command_head': 'echo hello-a', 'token': 'tok-a', 'pairing': 'token', 'dispatch_wall_clock': '2026-07-11T10:00:00.000Z'}
+
+=== b-ts-only-fallback ===
+  [ok] exit=0 rec={'ts': '2026-07-11T21:37:01.771Z', 'session_id': 'sess-b', 'command_sha256': '8359cf16152cd45ca227772ad61c146e4e779f4a0b0f561adbb80818ee9a7356', 'command_head': 'echo no-dispatch-for-this', 'token': None, 'pairing': 'ts-only'}
+
+=== c-fifo-double-dispatch ===
+  [ok] lines[2].token=tok-c1 lines[3].token=tok-c2 (expect tok-c1 then tok-c2, never the same dispatch reused)
+
+=== d-mode-off ===
+  [ok] exit=0 before=4 after=4
+
+=== e-mode-enforce-downgrade ===
+  [ok] exit=0 stderr_has_impossible_warning=True before=4 after=5
+
+=== f-non-bash-tool ===
+  [ok] exit=0 stdout='' before=5 after=5
+
+=== g-unwired ===
+  [ok] exit=0 before=5 after=5
+
+ALL CASES OK -- bash_completion both-polarity proof clean (token-pairing, ts-only fallback, FIFO double-dispatch, off/enforce-downgrade/non-bash/unwired all behave as designed), zero residue.
