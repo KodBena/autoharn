@@ -3754,3 +3754,24 @@ and stops proving what its own comment claims. Pinned to a fixed historical SHA
 the pinned commit genuinely predates the fix (no `_led_kind_refusal_teach` in its content)
 rather than trusting the SHA by convention — commit `485e463`. Full suite re-verified clean,
 exit 0, scratch schema torn down to zero residue.
+
+## First live enforcement of ADR-0017's loop — on the orchestrator's own merge (2026-07-11)
+
+The run10-window merge train (landed 33f6a9d) was REFUSED by the just-wired
+doc_attestation_presence gate: two edited docs (CAPABILITIES.md,
+design/CONTEMPORANEITY-AUDIT.md) carried no fresh-context attestation. The compliant path
+was followed, not waived: two fresh-fork B reviewers (Rule 4 remit: edited sections +
+opening), 13 findings total round 1 — including "the harness" undefined in CAPABILITIES'
+first line, the purest author-context-blindness specimen yet — all repaired; the
+contemporaneity memo closed CLEAN round 2; CAPABILITIES' round 2 found ONE new defect
+INTRODUCED BY a round-1 repair (crossed parenthetical referents), hit the two-round cap,
+and ESCALATED per the recipe — the orchestrator, as escalation recipient, adjudicated by
+applying B's own suggested one-clause reorder verbatim. Both attestations recorded
+(CAPABILITIES' with escalated=true); the merge then passed every gate on earned evidence.
+
+SEAM FOUND by this first live escalation, for the ADR's next revisit: the attestation
+record format has no field for the escalation recipient's adjudication — it lives in b_id
+free text today. Also committed alongside: the run10 ./judge DerivationRecord pair from
+the closure audit (engine/docs/ledger-marriage/derivations/run10/), the audit's own banked
+evidence. HANDOFF.md is now materially stale (pre-dates this entire day) — refresh queued
+as the next standing task before any session handoff.
