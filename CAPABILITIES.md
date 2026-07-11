@@ -605,6 +605,115 @@ invocation (no `GATE_SUBJECT_ROOT`, no real cwd) is silent; two further real rea
 same wired probe append two more lines, in order — proving accumulation, not overwrite. All six
 green, zero probe-directory residue after the fixture's own teardown.
 
+**28. `attest-tags` — signed ratification tags, verified against a committed key
+(`attest-tags`, repo root; `filing/gpg_trust.py`; design/GPG-TRUST-LAYER.md §2, Rung 1 of 3 —
+design/GPG-TRUST-LAYER.md's own name for each of the three signing mechanisms it specifies, in
+build order; items 28/29/30 here are Rungs 1/2/3 respectively).**
+Enumerates every `ratified/*` git tag, verifies each against `law/keys/*.asc` using a throwaway
+GNUPGHOME built per invocation (never the operator's ambient keyring), and reports any commit
+whose message claims ratification with no verifying tag. Three verdicts, all loud except the
+first: `GOOD` (a tag's signature verifies against a committed key), `BAD` (a tag exists but does
+not verify — unsigned, tampered, or signed by a key never committed), and `UNVERIFIABLE` (no
+public key is committed at all — `law/keys/` is empty — so no tag's signature can be checked
+against anything; a distinct label from `BAD`, never a relabeled worst case, because "cannot
+check" and "checked and failed" are different facts). *Witnessed*, both polarities,
+`seen-red/attest-tags/run_fixtures.py` (real GPG, a scratch git repo, a fresh Ed25519 test key
+generated per run, all torn down after): a tag signed with a committed key verifies `GOOD`, exit
+0; an unsigned (lightweight) tag is refused `BAD` with git's own "cannot verify a non-tag object"
+detail, exit 1; a tag signed by a key deliberately never committed to the scratch `law/keys/`
+(the forger case) is refused `BAD` identically, exit 1; a commit whose message contains "RATIFIED"
+with no covering tag is listed as an uncovered claim. Run against THIS repository's own real
+history (no `ratified/*` tags exist yet, `law/keys/` is genuinely AWAITING-KEY — see
+`law/keys/README.md`): reports "0 keys committed (AWAITING-KEY)", "0 `ratified/*` tags", and
+every RATIFIED-marked commit as uncovered — the honest, expected report for a keyless,
+unratified-by-tag repo, never a false clean. (`UNVERIFIABLE` itself fires per-TAG, so it prints
+only once at least one `ratified/*` tag exists to check — witnessed in the seen-red fixture's own
+scratch repo, which has tags; this repository's own real history currently has none.)
+
+**29. `verify-commission` — SIGNED-mode commissions, the third of three commission-signing
+strengths (LAZY < FULL < SIGNED — `design/GPG-TRUST-LAYER-FAQ.md` §5 walks all three;
+`bootstrap/templates/verify-commission.tmpl`; design/GPG-TRUST-LAYER.md §3, Rung 2 of 3).**
+Implements the closed vocabulary `VERIFIED | UNSIGNED | FORGED-OR-CORRUPT` (exit non-zero only on
+the third) PLUS two typed refusals distinct from all three verdicts (`GPG-UNAVAILABLE`, exit 2;
+`NO-COMMITTED-KEY`, exit 3 — neither precondition leaves any of the three verdicts decidable),
+reading a commission row's CURRENT statement bytes and any banked `.claude/commission-<id>.asc`,
+checked against `law/keys/*.asc` via the same shared scratch-keyring mechanism as item 28
+(`filing/gpg_trust.py` — ADR-0012's Principle 1, "single source of truth / derive-don't-duplicate":
+one home). Closed, and fixed in the course of building it,
+TWO real defects, neither merely flagged: (a) a byte-fidelity hazard in the ceremony's own naive
+form (`gpg --detach-sign --armor ~/aa` signs a trailing newline that `$(cat ~/aa)` strips before
+insertion — an honest commission would otherwise verify as forged; the fix, `printf '%s'
+"$STATEMENT" | gpg --detach-sign`, ships in both the scaffold's printed ceremony and
+`design/GPG-TRUST-LAYER-FAQ.md` §5); (b) an out-of-frame hack-rationalization audit, run before
+this shipped as "done" (CLAUDE.md's own standing rubric), caught an earlier version folding the
+"no committed key exists to check a claimed signature against" case into `FORGED-OR-CORRUPT`,
+reasoning the spec's vocabulary was "closed to three members" — a reason the SAME file's own
+missing-gpg handling already contradicted, and the wrong structural choice relative to the very
+`attest-tags` precedent it cited (which uses a distinct `UNVERIFIABLE` label, never a relabeled
+`BAD`). Fixed by giving that precondition its own verdict string and exit code
+(`NO-COMMITTED-KEY`, 3), so a fresh, keyless repository's commissions (this repository's own real
+state today) are never indistinguishable, by verdict string alone, from an actual forgery.
+Wired into `bootstrap/new-project.sh`'s six-verb shim loop (the `distance-to-clean` precedent for
+adding a verb without touching a live-executed template) and one sentence in
+`bootstrap/templates/CLAUDE.md.tmpl` point 10 (run it at intake, carry the verdict into the
+first row of the session's own task breakdown — its ledgered decomposition of the commission
+into work items, per that same preamble's point 1). *Witnessed*, all five outcomes, `seen-red/verify-commission/
+run_fixtures.py` (a real throwaway `--new-world` scaffold, a real FULL-mode commission via `led`,
+a fresh Ed25519 test key): no `.asc` banked yields `UNSIGNED`, exit 0; signing with the
+byte-fidelity-fixed ceremony against a committed test key yields `VERIFIED`, exit 0; the same
+`.asc` path re-signed over different bytes, checked against a committed key, yields a genuine
+cryptographic mismatch, `FORGED-OR-CORRUPT`, exit 1; a good signature checked against an EMPTY
+`law/keys/` (this repo's real, current state) yields the distinct refusal `NO-COMMITTED-KEY`,
+exit 3; `gpg` absent from `PATH` yields the other distinct refusal, `GPG-UNAVAILABLE`, exit 2.
+
+**30. `row_hash` chain + `verify-chain` — the anchored ledger, kernel delta s26 + the signed head
+(`kernel/lineage/s26-row-hash-chain.sql`; `bootstrap/templates/verify-chain.tmpl`;
+design/GPG-TRUST-LAYER.md §4, Rung 3 of 3).** Every ledger row gains a SHA-256 `row_hash` (hex text)
+of a canonical, INJECTIVE, timezone-safe serialization of every OTHER column, concatenated
+with the predecessor row's `row_hash` (or a per-world genesis seed, `kernel.chain_genesis`,
+auto-provisioned by `bootstrap/new-project.sh --new-world`, not a secret — its only job is making
+two worlds' row-1 hashes differ). Computed by ONE shared SQL function
+(`compute_row_hash()`, called identically by the insert trigger and by `./verify-chain`'s
+read-only walk — ADR-0012's Principle 1 (see item 29 above), no second re-derivation of "what a
+row means" to drift). TWO real
+defects were found and closed, neither merely flagged: (a) a concurrency race (two concurrent
+inserts could interleave their predecessor reads and fork the chain, given how `bigserial`
+allocates before a `BEFORE INSERT` trigger runs), closed with a per-schema
+`pg_advisory_xact_lock`; (b) an out-of-frame hack-rationalization audit, run before this shipped
+as "done," found that an EARLIER version of `compute_row_hash()` coalesced `NULL` and `''` to the
+IDENTICAL serialized token — a genuine hash COLLISION (not merely an adversarial-hardening gap:
+`rationale IS NULL` and `rationale = ''` are different, SQL-observable facts), which would have
+let a schema-owner tamper (`rationale IS NULL` → `''`, bypassing `append_only_row`) produce ZERO
+change to the stored hash anywhere in the chain — defeating not just the chain walk but the
+signed-head backstop below, for free. Closed by replacing the delimiter-join with a
+length-prefixed, presence-tagged encoding (`hashfield()`: `'N:'` for NULL, `'V<len>:<value>'` for
+present, self-delimiting so no two column-value tuples can serialize identically) — see
+`compute_row_hash()`'s own header for the full account. Class-ratified (strictly
+additive: one column, one genesis table, two functions, one trigger that fires last and writes
+only the new column — nothing existing relaxed) and entered `bootstrap/new-project.sh`'s
+`LINEAGE_CHAIN` (that script's record of which kernel deltas a freshly `--new-world`-scaffolded
+world is born with, applied automatically). *Witnessed*, both polarities plus the differential plus the collision closure,
+`seen-red/s26-row-hash-chain/run_fixtures.py` (a real throwaway `--new-world` scaffold): an
+INSERT attempted before the genesis seed exists is refused loudly; three real rows via `led`
+build a chain `./verify-chain` reports `INTACT`; `--head` emits exactly `{world, max_id,
+head_hash, utc}` and nothing else; the EXISTING SQL/ASP marriage differential
+(`engine/ledger_differential.py`) still verdicts `AGREE` on an s26 world, proving the delta does
+not perturb existing T_now facts; tampering `rationale` from `NULL` to `''` (the specific
+collision found by the audit) now IS detected (a direct recomputation shows the stored hash no
+longer matches, `stored_hash_now_matches_altered_content=f`); a historical row's content
+surgically altered (trigger bypassed, mirroring a schema-owner-level tamper) while its own
+`row_hash` is left stale breaks the chain AT the altered row (the spec's own words, verified
+literally); the sophisticated variant — the tamperer also rewrites that row's own hash to match
+its new content — moves the detected break to the very next row instead, never later; `--head`
+against a broken chain refuses with EMPTY stdout, exit 1 (never signs a head it has not
+verified). The full signed-head ceremony (§6 of `design/
+GPG-TRUST-LAYER-FAQ.md`) was additionally exercised end to end on a real scaffolded world with a
+throwaway test key: `gpg --verify` reports `Good signature` on the banked `.claude/head.json` +
+`.claude/head.json.asc` pair. Key rotation (revoke → generate → commit → re-sign) was also
+exercised on the same test key, witnessed in `design/GPG-TRUST-LAYER-FAQ.md` §8, including the
+genuine finding that a revoked key becomes immediately unusable for new signing (`gpg` refuses
+outright, "Unusable secret key" — stronger than a mere warning).
+
 ## Built, unexercised (exists; has not yet fired in anger)
 
 - **Assumption validity bounds** — an assumption can carry "valid until / valid within" and an
