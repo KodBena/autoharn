@@ -2761,3 +2761,65 @@ two named corpora, or a narrower blocking SCOPE (the same "narrow enough to arm 
 surfaced while reading the registry for this work, not introduced by it. Building its
 both-polarity fixture harness is a distinctly-sized task, named here rather than silently
 left for the next reader to assume already covered.
+
+## Contemporaneity audit: run9 false refusal — capability-vs-corpus conflation fixed; witness record reconciled (2026-07-11, Sonnet, same commission)
+
+**The live specimen (maintainer-stopped run):** run9 — the FIRST s23-capable world, correctly
+wired end to end (settings.json wires all journaling hooks; apparatus modes on; 12
+invocations.jsonl lines) — ran `./audit` and got `NO_VERDICT` exit 3, "Missing/excluded:
+['tool_event']". The maintainer stopped the run over it. Verified at source: the world was
+healthy and merely YOUNG — the session had run only orientation commands, so zero tool events
+and zero ledger rows were the TRUE state, not a capability absence.
+
+**The defect (engine/contemp_edb.py, first landing):** every journal family's capability was
+keyed on corpus non-emptiness (`produced = len(events) > 0`), conflating "observers unwired /
+pre-journal era" with "observers wired, nothing journal-worthy has happened yet". The refusal
+message then asserted "observer hooks off/unwired" about a world whose hooks were demonstrably
+wired — a false claim in exactly the message the commission's honest-refusal constraint exists
+to keep true.
+
+**The fix (both halves, this pass):**
+1. **Capability means CAPABILITY.** `contemp_edb.Capability` now carries the
+   `produced`-vs-`capable` two-axis split `engine/ledger_edb.py` already uses: `capable` is
+   read from the world's OWN wiring (`_wired_journaling_mechanisms`: the hook script referenced
+   in `.claude/settings.json`, not explicitly `"off"` in `.claude/apparatus.json`), `produced`
+   stays "facts actually emitted". The verdict gate (`contemp_audit.py::run_audit`) and the
+   refusal's "Missing/excluded" list both key on `capable`. All four families audited for the
+   same conflation: `invocation_journal` had it too (fixed identically);
+   `s23_capable`/`stamp_invocation_column` are schema facts, no conflation. A wired-but-empty
+   journal now prints "EMPTY (capable, zero events yet)", structurally distinct from
+   "EXCLUDED".
+2. **The empty-corpus verdict path.** A fully-capable world with ZERO ledger rows now gets an
+   explicit `VACUOUSLY_CLEAN` (exit 0): "0 ledger rows — nothing to audit yet ... NOT evidence
+   of conduct and NOT a capability refusal." Refusal (exit 3) is reserved for genuinely missing
+   capabilities; the third state — rows present but ALL untokened in a wired world — keeps its
+   own distinct NO_VERDICT (that one IS a finding to investigate: writes escaped interception).
+
+**Re-witnessed, live, run9's real world (read-only):** post-fix `./audit` output banked
+verbatim as seen-red/contemporaneity-audit/run9-vacuous-clean-witness.txt — capabilities
+(family, capable, produced): tool_event (True, False) tagged "EMPTY (capable, zero events
+yet)", VACUOUSLY_CLEAN, exit 0. Fixture suite extended (CASE e reproduces the run9 shape
+synthetically: wired-but-empty world → exit 0 vacuous; CASE d re-scoped to the honest refusal
+case: UNWIRED empty world → exit 3; CASE c's assertion sharpened: run7's refusal must name its
+REAL blocker, s23_capable, since run7's settings.json does wire stamping and its invocation
+journal now correctly reads capable-but-empty). All five cases pass; contempprobe torn down
+clean; no wired session was live during the engine/ edits (pgrep/cwd checked; run9's session
+confirmed stopped).
+
+**Witness-record reconciliation (owed per the correction commission):** the first landing's
+report described the auditprobe fresh-world run as clean, and its committed record blessed the
+observed exit-3 refusal as "the correct N/A refusal". The observation REPRODUCED exactly —
+auditprobe (fresh, empty, scaffolded, hence wired) exited 3 with NO_VERDICT, precisely as run9
+later did; there was no witness divergence between the two worlds. The two real defects were:
+(a) the report message's wording ("ran it clean") misdescribed an exit-3 refusal as a clean
+run — the committed BACKLOG/CAPABILITIES text said "N/A refusal" accurately, but the summary
+message did not match the banked artifact; and (b) the deeper design defect that the refusal
+itself — the behavior the record blessed as "correct" — was wrong for a wired world. Under the
+fix, the auditprobe shape and run9 both verdict VACUOUSLY_CLEAN exit 0. CAPABILITIES item 24
+amended accordingly (the stale "correct N/A refusal" claim corrected in place, with this entry
+as the trail).
+
+**Also reconciled while here:** item 24's "named hazard, flagged not fixed" paragraph on the
+journals' timestamp-convention disagreement was stale — a separate pre-run-9 pass (commit
+19c9159) unified the hooks to UTC-Z after this build flagged it; the CAPABILITIES text now says
+so instead of claiming the hazard is still open.

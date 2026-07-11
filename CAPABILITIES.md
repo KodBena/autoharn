@@ -387,20 +387,35 @@ same-command bursts vs. 1141ms for the smallest genuine distinct-moment gap; sil
 threshold_ms=180000, reasoned below the two hand-forensic true positives on record, 503s and
 312s). HONEST HISTORICAL LIMIT, ENFORCED: runs 5-8 (and any pre-s23 world) get an EXPLICIT
 typed refusal (`NO_VERDICT`, exit 3) naming the missing capability, never a guessed verdict —
-*Witnessed live* against run7's own real, unmodified schema (read-only): `s23_capable=False`,
-`invocation_journal` EXCLUDED, exit 3, plus a degraded ts-cluster burst table (explicitly marked
+*Witnessed live* against run7's own real, unmodified schema (read-only): `s23_capable=False`
+named as the refusal's reason, exit 3, plus a degraded ts-cluster burst table (explicitly marked
 INFERRED, never conflated with a STATED token burst) that reproduces the exact burst shape
 BACKLOG's own hand forensics found (rows 5-8, 13-16, 17-20, ...) and the exact burned-id
-refusal fingerprint (id 62) BACKLOG's forensic pass found by hand. *Witnessed on a scratch
-world (full s23+journal capability, apparatus-authored, both polarities)*:
-`seen-red/contemporaneity-audit/run_fixtures.py` — a clean multi-row token burst with dense
-tool activity verdicts `BATCHED_DECLARED` (exit 0, zero backfill_suspect tokens); a manufactured
->300s tool-activity silence with zero ledger rows immediately followed by a 2-row burst verdicts
-`BACKFILL_SUSPECT` (exit 1), naming the offending token; an empty ledger verdicts N/A (exit 3),
-never a guessed CONTEMPORANEOUS. *Witnessed live, the operator verb itself*: a throwaway
-`bootstrap/new-project.sh --new-world auditprobe` scaffold wrote `./audit` alongside the other
-three shims, and running it from inside the freshly-born (empty) world produced the correct N/A
-refusal against the real scratch schema, torn down after. **Second-producer status, declared
+refusal fingerprint (id 62) BACKLOG's forensic pass found by hand. **CAPABILITY IS WIREDNESS,
+NOT CORPUS NON-EMPTINESS (run9 amendment, same day, 2026-07-11)**: the first landing keyed
+capability on whether any events had been journaled yet, so run9 — the first s23-capable world,
+fully and correctly wired, fresh enough that only orientation commands had run — was falsely
+refused (`NO_VERDICT` exit 3, "Missing/excluded: ['tool_event']") and the maintainer stopped
+the run over it. Fixed same day: `engine/contemp_edb.py` now reads each journal family's
+capability from the world's OWN wiring (settings.json hook references + apparatus.json
+off-switches — the `produced`-vs-`capable` two-axis split `engine/ledger_edb.py` already
+carries), and a fully-capable world with ZERO ledger rows gets an explicit `VACUOUSLY_CLEAN`
+(exit 0: "0 ledger rows, nothing to audit yet — NOT evidence of conduct"), never a refusal.
+*Witnessed live* against run9's real world, read-only, post-fix: capability-present
+(`tool_event` reported "EMPTY (capable, zero events yet)", not EXCLUDED), `VACUOUSLY_CLEAN`,
+exit 0 — banked verbatim as `seen-red/contemporaneity-audit/run9-vacuous-clean-witness.txt`.
+*Witnessed on a scratch world (full s23+journal capability, apparatus-authored, both
+polarities)*: `seen-red/contemporaneity-audit/run_fixtures.py` — a clean multi-row token burst
+with dense tool activity verdicts `BATCHED_DECLARED` (exit 0, zero backfill_suspect tokens); a
+manufactured >300s tool-activity silence with zero ledger rows immediately followed by a 2-row
+burst verdicts `BACKFILL_SUSPECT` (exit 1), naming the offending token; an UNWIRED empty world
+verdicts N/A (exit 3, no wiring evidence at all); a WIRED-but-empty world (the run9 shape,
+reproduced synthetically) verdicts `VACUOUSLY_CLEAN` (exit 0) — never a guessed
+CONTEMPORANEOUS, never a false refusal. *Witness-record correction (the auditprobe claim)*: the
+first landing's record here read "produced the correct N/A refusal" for a freshly-scaffolded
+empty world — accurate as an observation (auditprobe DID exit 3, exactly as run9 later did; the
+witness reproduced), but the behavior it blessed as "correct" was the design defect the run9
+specimen exposed. Under the fix a scaffolded fresh world is vacuously clean, not refused. **Second-producer status, declared
 honestly**: this ships ONE producer (the ASP derivation) — the marriage discipline's SQL-floor
 differential (this domain's sibling to `engine/ledger_floor.py`) is FILED in BACKLOG.md, not
 built, this pass (a maintainer critical-path resequencing scoped the first landing to the
@@ -409,12 +424,12 @@ in-pass, not deferred**: clingo/clasp's integer terms are 32-bit signed C ints a
 on an absolute 2026-era epoch-millisecond value (found live, in this module's own first test
 against real run7 data, before an anchor-relative encoding closed it — every T this module
 emits is now relative to a per-export minimum-timestamp anchor, never absolute). **Named hazard,
-flagged not fixed**: the three hook journals `contemp_edb.py` reads do not agree on a timestamp
-convention (`mutation_observer.journal.jsonl`/`invocations.jsonl` write UTC with a trailing
-`Z`; `change_gate.journal.jsonl`/`delegation_observer.journal.jsonl` write a naive-local
-`datetime.now().isoformat()`) — parsed correctly for both shapes today, but only correct when
-read on the same host/timezone that wrote them; filed in BACKLOG.md rather than fixed (fixing it
-means editing two more `hooks/` files, outside this commission's touch-list).
+flagged then FIXED (same day, separate pass)**: the hook journals `contemp_edb.py` reads
+originally disagreed on a timestamp convention (UTC-Z vs naive-local `datetime.now()`); flagged
+in BACKLOG.md by this build, then unified to UTC-Z at the hooks themselves in the pre-run-9
+window (commit 19c9159). `contemp_edb.py::_parse_ts_ms` deliberately keeps both parse branches
+so journal lines written before that fix stay readable (same-host reading remains the correct
+assumption for exactly those historical lines).
 
 ## Built, unexercised (exists; has not yet fired in anger)
 

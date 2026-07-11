@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-11T14:44:01Z
-#   last-change: 2026-07-11T14:54:22Z
+#   last-change: 2026-07-11T15:15:03Z
 #   contributors: e4410ef6/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -9,15 +9,14 @@
 (engine/contemp_edb.py + engine/lp/contemporaneity.lp + engine/contemp_audit.py; BACKLOG
 "Contemporaneity indictment", 2026-07-11).
 
-No real run has produced a FULL-capability (s23 + invocation journal + tool-event journal)
-corpus yet (run 9 has not started) -- BACKFILL_SUSPECT and BATCHED_DECLARED can therefore only
-be witnessed on an apparatus-authored SCRATCH world today (the same posture the s22 work-item
-fixture and the marriage engine's own scratch differentials take: correlated-authorship,
-disclosed, not a claim of independent-source proof). Real-world evidence IS exercised
-separately, live, against run7's actual (pre-s23) schema -- see case (c) below, the one case
-this suite runs against genuine historical data rather than synthetic fixture rows.
+BACKFILL_SUSPECT and BATCHED_DECLARED are witnessed on an apparatus-authored SCRATCH world
+(the same posture the s22 work-item fixture and the marriage engine's own scratch differentials
+take: correlated-authorship, disclosed, not a claim of independent-source proof). Real-world
+evidence IS exercised separately, live: case (c) against run7's actual (pre-s23) schema, and --
+banked beside this file, run9-vacuous-clean-witness.txt -- the run9 re-witness the wired-but-
+empty case (e) reproduces synthetically.
 
-FOUR CASES:
+FIVE CASES:
 
   a-clean-batched-declared (GREEN): a scratch ledger with a genuine multi-row token burst but
      dense tool-activity (no gap exceeds silence_threshold_ms) -> VERDICT=batched_declared,
@@ -32,15 +31,26 @@ FOUR CASES:
      numbers: 503s / 312s silence-then-burst).
 
   c-real-pretoken-world (WITNESSED, live data): run7's own schema (192.168.122.1/toy/run7,
-     read-only, no fixture rows written) -- predates s23 (no stamp_invocation column) and
-     carries no invocations.jsonl. Proves the HONEST HISTORICAL LIMIT live: exit 3 (N/A), the
-     typed refusal naming the missing capability, the degraded ts-cluster table populated
-     (INFERRED, never presented as a verdict), and the refusal-fingerprint at id 62 -- the
-     exact burned-id BACKLOG's own forensic pass already found by hand.
+     read-only, no fixture rows written) -- predates s23 (no stamp_invocation column). Proves
+     the HONEST HISTORICAL LIMIT live: exit 3 (N/A), the typed refusal naming the REAL missing
+     capability (s23_capable -- run7's settings.json does wire stamping, so under the
+     capability-vs-corpus fix its invocation journal reads capable-but-empty, not missing), the
+     degraded ts-cluster table populated (INFERRED, never presented as a verdict), and the
+     refusal-fingerprint at id 62 -- the exact burned-id BACKLOG's own forensic pass already
+     found by hand.
 
-  d-empty-ledger (edge case, degrade contract): a freshly-scaffolded scratch schema with ZERO
-     ledger rows -> N/A (no tokens at all to verdict over), never a crash, never a guessed
-     CONTEMPORANEOUS.
+  d-empty-ledger-UNWIRED (edge case, degrade contract): a world with no settings.json and no
+     journals at all pointing at a zero-row schema -> N/A exit 3 (no wiring evidence means
+     capability is honestly absent), never a crash, never a guessed CONTEMPORANEOUS.
+
+  e-empty-ledger-WIRED (the run9 false-refusal specimen, 2026-07-11): a world whose
+     settings.json wires all four journaling hooks (apparatus modes on) with an invocation
+     journal but zero tool events and ZERO ledger rows -- run9's exact shape, which the
+     first-landed instrument wrongly refused (NO_VERDICT exit 3, 'Missing/excluded:
+     [tool_event]'; the maintainer stopped the run over it). Expected: exit 0, an EXPLICIT
+     VACUOUSLY_CLEAN result ("0 ledger rows, nothing to audit yet -- NOT evidence of
+     conduct"), tool_event reported capable-but-empty, never unwired. The real-data twin is
+     run9-vacuous-clean-witness.txt (the actual run9 re-run, banked beside this file).
 
 RED (pre-instrument, disclosed rather than re-captured): before this suite existed there was no
 Part 2 instrument at all -- ad-hoc SQL run by hand, once per crisis (BACKLOG's own indictment).
@@ -146,15 +156,56 @@ def main() -> int:
     log.append(f"setup: full lineage through s23 applied clean to {DB}.{SCHEMA}/{KERN} (role {ROLE})")
 
     try:
-        # ---- CASE d: empty ledger (before any rows land) --------------------------------
+        # ---- CASE d: empty ledger, UNWIRED world (no settings.json, no journals) ----------
+        # Genuinely no wiring evidence at all -> capability honestly absent -> typed refusal.
         root_d = _make_world({})
         (root_d / "deployment.json").write_text(json.dumps(
             {"db": DB, "host": PGHOST, "schema": SCHEMA, "kern": KERN, "role": ROLE, "name": "contempprobe-empty"}))
         worlds.append(root_d)
         code_d, out_d = run_audit(root_d)
-        ck(code_d == 3, f"CASE d (empty ledger): expected exit 3 (N/A), got {code_d}: {out_d[-600:]}")
+        ck(code_d == 3, f"CASE d (empty ledger, unwired): expected exit 3 (N/A), got {code_d}: {out_d[-600:]}")
         ck("NO_VERDICT" in out_d, "CASE d: refusal must be visible, not silent")
-        log.append(f"CASE d (empty ledger): exit={code_d} (expected 3)")
+        log.append(f"CASE d (empty ledger, unwired world): exit={code_d} (expected 3)")
+
+        # ---- CASE e: empty ledger, FULLY-WIRED world (the run9 false-refusal shape) --------
+        # The live specimen (2026-07-11): run9, the first s23-capable world, correctly wired
+        # (settings.json wires all journaling hooks, apparatus modes on), invocations journaled,
+        # but zero ledger rows and zero tool events because the session had only run orientation
+        # commands -- the TRUE state, not a capability absence. The first-landed instrument
+        # refused it (NO_VERDICT exit 3, 'Missing/excluded: [tool_event]') and the maintainer
+        # stopped the run over it. Expected AFTER the fix: capability PRESENT (tool_event
+        # capable-but-empty), VACUOUSLY_CLEAN, exit 0 -- never a refusal, never a conduct claim.
+        root_e = _make_world({
+            "invocations.jsonl": [
+                {"token": "fixture-token-orient", "wall_clock": _iso(BASE - 100), "session_id": "fx-e"},
+            ],
+        })
+        (root_e / "deployment.json").write_text(json.dumps(
+            {"db": DB, "host": PGHOST, "schema": SCHEMA, "kern": KERN, "role": ROLE, "name": "contempprobe-wired-empty"}))
+        # the wiredness signal contemp_edb._wired_journaling_mechanisms reads: a settings.json
+        # whose hook command strings reference the journaling hook scripts (the scaffold's own
+        # shape, minimized), plus the scaffold's default apparatus.json modes (all on).
+        (root_e / ".claude" / "settings.json").write_text(json.dumps({"hooks": {
+            "PreToolUse": [{"matcher": "*", "hooks": [
+                {"type": "command", "command": "python3 /x/hooks/pretooluse_change_gate.py"},
+                {"type": "command", "command": "python3 /x/hooks/stamp_intercept.py"},
+                {"type": "command", "command": "python3 /x/hooks/pretooluse_delegation_observer.py"}]}],
+            "PostToolUse": [{"matcher": "Bash", "hooks": [
+                {"type": "command", "command": "python3 /x/hooks/posttooluse_mutation_observer.py"}]}],
+        }}))
+        (root_e / ".claude" / "apparatus.json").write_text(json.dumps({"mechanisms": {
+            "change_gate": {"mode": "enforce"}, "stamp_intercept": {"mode": "enforce"},
+            "mutation_observer": {"mode": "observe"}, "delegation_observer": {"mode": "observe"}}}))
+        worlds.append(root_e)
+        code_e, out_e = run_audit(root_e)
+        ck(code_e == 0, f"CASE e (wired-but-empty, run9 shape): expected exit 0 (vacuous clean), "
+                        f"got {code_e}: {out_e[-800:]}")
+        ck("VACUOUSLY_CLEAN" in out_e, f"CASE e: the vacuous result must be EXPLICIT: {out_e[-800:]}")
+        ck("NO_VERDICT" not in out_e, f"CASE e: a wired world must NOT be refused: {out_e[-800:]}")
+        ck("EMPTY (capable, zero events yet)" in out_e,
+           f"CASE e: tool_event must read capable-but-empty, never unwired: {out_e[-800:]}")
+        log.append(f"CASE e (wired-but-empty, the run9 shape): exit={code_e} (expected 0), "
+                   f"VACUOUSLY_CLEAN explicit, tool_event capable-but-empty")
 
         # ---- CASE a: clean batched-declared (GREEN) --------------------------------------
         tok_a = "fixture-token-aaaa"
@@ -220,13 +271,20 @@ def main() -> int:
                    f"token {tok_c} named, as expected")
 
         # ---- CASE c: real pre-token world (run7, live, read-only) --------------------------
+        # Under the capability-vs-corpus fix, run7's refusal is named by its REAL blocker: the
+        # pre-s23 schema (`s23_capable`). Its settings.json DOES wire stamp_intercept (the hooks
+        # execute live from autoharn, so the CURRENT hook would journal if the dust world ever
+        # ran again), so invocation_journal reads capable-but-empty rather than missing -- the
+        # honest refinement the run9 fix introduced.
         if RUN7_ROOT.is_dir():
             code_c, out_c = run_audit(RUN7_ROOT)
             ck(code_c == 3, f"CASE c (run7 live): expected exit 3 (N/A), got {code_c}: {out_c[-600:]}")
-            ck("invocation_journal" in out_c, "CASE c: the missing capability must be NAMED")
+            ck("'s23_capable'" in out_c.split("NO_VERDICT", 1)[-1],
+               f"CASE c: the refusal must NAME the real missing capability (s23_capable): {out_c[-600:]}")
             ck("62" in out_c, "CASE c: run7's own refusal fingerprint (id 62) must surface")
-            log.append(f"CASE c (run7 live, pre-s23): exit={code_c} (expected 3), refusal-fingerprint "
-                       f"62 confirmed live against real historical data")
+            log.append(f"CASE c (run7 live, pre-s23): exit={code_c} (expected 3), refusal names "
+                       f"s23_capable, refusal-fingerprint 62 confirmed live against real "
+                       f"historical data")
         else:
             log.append("CASE c SKIPPED: /home/bork/w/vdc/1/run7 not present on this host "
                        "(UNEXERCISED, concrete blocker: no run7 checkout here)")

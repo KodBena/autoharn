@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-11T14:41:23Z
-#   last-change: 2026-07-11T14:50:36Z
+#   last-change: 2026-07-11T15:12:34Z
 #   contributors: e4410ef6/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -38,11 +38,16 @@ upgraded to "AGREE").
 
 EXIT CODES (a closed, checkable vocabulary -- mirrors instruments/verify_contemporaneity_degrade.py's
 existing N/A-is-distinct-from-clean convention, extended here):
-  0  a verdict was computed and is CONTEMPORANEOUS or BATCHED_DECLARED (clean-ish, no suspect burst).
+  0  a verdict was computed and is CONTEMPORANEOUS or BATCHED_DECLARED (clean-ish, no suspect
+     burst) -- OR the world is fully capable but its ledger carries ZERO rows, reported as
+     VACUOUSLY_CLEAN in the output ("nothing to audit yet", explicitly NOT evidence of conduct;
+     the run9 fix, 2026-07-11 -- a fresh, correctly-wired world is not refused for being young).
   1  a verdict was computed and is BACKFILL_SUSPECT (loud, per the judge-verdict precedent).
   2  a tool/DB/clingo error -- NOT a finding (ADR-0015 Rule 3: no result is not a clean result).
-  3  N/A: the world lacks a capability the full verdict needs (pre-s23, hooks off/unwired, or no
-     journaled tool activity yet) -- the explicit typed refusal, never conflated with 0 or 1.
+  3  N/A: the world's WIRING lacks a capability the full verdict needs (pre-s23 schema, or the
+     journaling hooks genuinely off/unwired per its own settings.json/apparatus.json) -- the
+     explicit typed refusal, never conflated with 0 or 1. A wired-but-still-empty journal is
+     NOT this case (that is capability present with zero events -- see contemp_edb.Capability).
 
 Lazy imports banned (top-of-file only)."""
 from __future__ import annotations
@@ -142,11 +147,15 @@ def run_audit(target_name: str, root: Path) -> dict:
     exp = export(target_name, root)
     edb_text = exp.edb_text()
 
-    produced = exp.produced_families()
+    # THE RUN9 FIX (2026-07-11; see contemp_edb.Capability's docstring for the live specimen):
+    # the verdict gate keys on the CAPABLE axis (the world's own wiring), never on whether any
+    # events have been journaled yet -- a fully-wired, freshly-born world with empty journals is
+    # capable (and, with zero ledger rows, vacuously clean below), not refused.
+    capable = exp.capable_families()
     full_capable = (
-        "s23_capable" in produced
-        and "invocation_journal" in produced
-        and "tool_event" in produced
+        "s23_capable" in capable
+        and "invocation_journal" in capable
+        and "tool_event" in capable
     )
 
     program_text = CONTEMP_LP.read_text(encoding="utf-8") + THRESHOLDS_LP.read_text(encoding="utf-8")
@@ -166,8 +175,8 @@ def run_audit(target_name: str, root: Path) -> dict:
         "root": str(root),
         "anchor_ms": exp.anchor_ms,  # every *_ms value below is relative to this absolute
                                      # epoch-ms (engine/contemp_edb.py's overflow-safety note)
-        "capabilities": [{"family": c.family, "produced": c.produced, "reason": c.reason}
-                         for c in exp.capabilities],
+        "capabilities": [{"family": c.family, "produced": c.produced, "capable": c.capable,
+                          "reason": c.reason} for c in exp.capabilities],
         "counts": exp.counts,
         "skipped_lines": exp.skipped_lines,
         "full_capable": full_capable,
@@ -186,37 +195,50 @@ def run_audit(target_name: str, root: Path) -> dict:
             (int(a[0]), int(a[1])) for a in parsed.get("preceding_activity_age_ms", [])),
         "verdict": None,
         "refusal": None,
+        "vacuous": False,
         "edb_sha256": exp.edb_hash(),
         "program_sha256": _sha(program_text),
         "ts": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"),
     }
 
     verdict_atoms = parsed.get("verdict", [])
+    n_rows = exp.counts.get("row_tokened", 0) + exp.counts.get("row_untokened", 0)
     if not full_capable:
-        missing = [c.family for c in exp.capabilities if not c.produced]
+        # missing keys on the CAPABLE axis (the run9 fix): a wired-but-empty journal is NOT
+        # missing -- only a family the world's own wiring cannot record belongs in this list.
+        missing = [c.family for c in exp.capabilities if not c.capable]
         report["refusal"] = (
             f"NO_VERDICT (capability-gated refusal, never a guessed verdict): this world cannot "
             f"support the full CONTEMPORANEOUS|BATCHED_DECLARED|BACKFILL_SUSPECT vocabulary. "
             f"Missing/excluded: {missing}. "
             + ("Degraded ts-cluster burst report available below (INFERRED, not STATED)."
                if report["ts_clusters"] else "No degraded signal available either."))
+    elif n_rows == 0:
+        # THE VACUOUS-CLEAN PATH (the run9 fix's second half): a fully-capable world with ZERO
+        # ledger rows has nothing to correlate -- the honest outcome is an explicit vacuous
+        # result, never a refusal (the capability is present; the corpus is empty) and never a
+        # conduct verdict (there is no conduct on record to judge).
+        report["vacuous"] = True
     elif verdict_atoms:
         report["verdict"] = verdict_atoms[0][0]
     else:
         report["refusal"] = (
-            "NO_VERDICT: this world IS fully capable (s23 + invocation journal + tool-event "
-            "journal all present) but the ASP derivation produced no verdict atom at all -- "
-            "most likely zero tokened rows exist in the audited window. Not a vacuous pass: "
-            "named explicitly.")
+            "NO_VERDICT: this world IS fully capable (s23 schema + invocation journaling + "
+            "tool-event observers all wired) and carries ledger rows, but the ASP derivation "
+            "produced no verdict atom -- every row is untokened (written outside the "
+            "intercepted path) in a world whose interception is wired. That is itself a "
+            "finding to investigate, not a vacuous pass: named explicitly.")
     return report
 
 
 def _print_report(r: dict) -> None:
     print(f"# contemporaneity audit -- target={r['target']!r} root={r['root']}")
-    print(f"#   capabilities: {[(c['family'], c['produced']) for c in r['capabilities']]}")
+    print("#   capabilities (family, capable, produced): "
+          f"{[(c['family'], c['capable'], c['produced']) for c in r['capabilities']]}")
     for c in r["capabilities"]:
         if not c["produced"]:
-            print(f"#   EXCLUDED {c['family']}: {c['reason']}")
+            tag = "EMPTY (capable, zero events yet)" if c["capable"] else "EXCLUDED"
+            print(f"#   {tag} {c['family']}: {c['reason']}")
     for name, n in sorted(r["skipped_lines"].items()):
         if n:
             print(f"#   WARNING: {n} malformed line(s) skipped in {name}")
@@ -249,6 +271,11 @@ def _print_report(r: dict) -> None:
     print()
     if r["verdict"]:
         print(f"VERDICT: {r['verdict'].upper()}")
+    elif r["vacuous"]:
+        print("VACUOUSLY_CLEAN: 0 ledger rows -- nothing to audit yet. This world's recording "
+              "apparatus is fully wired (s23 schema + invocation journaling + tool-event "
+              "observers), so this is an honest empty corpus, NOT evidence of conduct and NOT "
+              "a capability refusal. Re-run once the session has written ledger rows.")
     else:
         print(r["refusal"])
 
@@ -298,6 +325,9 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     if r["verdict"] in ("contemporaneous", "batched_declared"):
         return 0
+    if r["vacuous"]:
+        return 0  # fully capable, zero ledger rows: honestly nothing to audit (the run9 fix) --
+                  # clean by vacuity, stated in the output as such, never a refusal
     return 3  # N/A: capability-gated refusal (never conflated with 0/1)
 
 
