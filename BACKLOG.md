@@ -4180,3 +4180,35 @@ Every claim above is WITNESSED with the row id / journal line / quote / independ
 command output cited in place, or explicitly marked UNDECIDABLE with the concrete evidence gap
 named (the `led show` burn-to-attempt arithmetic; the doc-gate exercised-vs-idle question). No
 umbrella claims.
+
+---
+
+## RETROSPECTIVE-RUN11 — second iteration of the record-sufficiency experiment (2026-07-11)
+
+Filed alongside the mechanism-forensics entry above; the two are complementary passes on the same
+run11 world (this one is the six-questions-re-asked / process-lenses retrospective, that one the
+per-mechanism first-shift forensics). Deliverable:
+[design/RETROSPECTIVE-RUN11.md](design/RETROSPECTIVE-RUN11.md), attested through the ADR-0017
+A:B:C fresh-context loop (round 1 DEFECT — one unglossed coinage "flat-20" — repaired, round 2
+CLEAN; record in `attestations/doc-legibility-attestations.jsonl`).
+
+Headline verdicts on run10's six could-not-answer questions, re-asked against run11's richer
+record: Q1 (alternatives-considered) NOW ANSWERABLE — preamble point 11's convention was honored
+across every load-bearing decision (rows 4/7/27/46/56) and even invoked under a live operator
+directive (row 6), though no design defect occurred to test its oversight-vs-bad-bet
+discriminator; Q3 (independent reviewer reads) PARTIALLY — the read-observer positively places the
+implementation-review dispatch (rows 63–83) reading all shipped webapp files during its exclusive
+window, but attribution rests on dispatch-window exclusivity, not a per-read stamp; Q4 (verbatim
+commission) NOW ANSWERABLE — row 1 is the maintainer's FULL-signed ask, and diffing shipped
+artifacts against it newly shows the agent tracing design choices to his stated motivation (the
+low-contrast complaint), not just his nouns; Q6 (granularity vs mental model) NOW ANSWERABLE — the
+four work items track the maintainer's own text structure, and run10-derived preamble point 1
+visibly reshaped the grain from run10's over-carved ten; Q2 (deliberation/execution split) and Q5
+(cost) STILL BLOCKED, unchanged — no turn-timing or token accounting was added, exactly the two
+questions no new record-kind targeted. Flow headline: closure (~10 min) ran about half the build
+(~19 min), inverting run10's closure-dominated tail. The one finding this iteration most wants
+run12 to close is new and could-not-have-been-raised-before: with the product shipping clean,
+the record can witness that review HAPPENED and READ the files but not that it REASONED HARD, so
+review's load-bearingness turns UNDECIDABLE precisely in the run where review found no product
+defect — an instrument for the DEPTH of an independent read, not only its occurrence, is the
+named gap.
