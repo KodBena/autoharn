@@ -18,12 +18,62 @@
   (numpy/JAX/numba), so the tool surface, the metric vocabulary, and the
   equivalence bar are re-instanced around chocofarm's real discipline. The
   tenet survives the substitution; only the tooling changes.
+  **[This bracket records a re-instancing, done a second time, 2026-07-12,
+  maintainer YES, a dated bracketed-edit per ADR-0005 Rule 8. In plain words
+  first: this document's
+  rule is that a "this got faster" or "these two things behave the same"
+  claim is only honest when the evidence for it is written down somewhere
+  reproducible — this bracket says which project's evidence-capturing tools
+  that rule now points at. This document arrived in autoharn as an unadapted
+  copy of the chocofarm original above — this is a dated append per ADR-0005
+  Rule 8, so the original sentence stands untouched above this bracket, and
+  what follows is the correction. The same failure this Provenance sentence
+  already describes surviving once (LengYue's browser tooling → chocofarm's
+  ML tooling) survives it again here (chocofarm's ML tooling →
+  autoharn's own tooling): autoharn does not have a machine-learning hot
+  path to benchmark; instead it has (1) a "kernel" — this project's
+  append-only governance ledger and its Postgres schema, extended over time
+  by dated, versioned changes called a "lineage," each change a "delta,"
+  each delta's application to a fresh copy of the schema an "apply" — whose
+  apply time is a measurable perf quantity; and (2) `./judge`, a check that
+  computes the same verdict two independent ways (once via the clingo/ASP
+  logic engine — ASP is Answer Set Programming, the declarative logic
+  language the `clingo` tool solves — once via a plain SQL query) and
+  compares them — an
+  equivalence claim in the sense this ADR already disciplines. See the dated
+  Amendment at the foot of this document for the full tool-surface and
+  metric-vocabulary mapping onto these two things. The entire chocofarm-era
+  body of this document below this header — Context, Decision (Triggers,
+  Tools, Metric vocabulary, Acceptance criteria), Calibration, Consequences,
+  Exceptions, Revisit-when, Related, and the pre-existing 2026-06-24
+  Amendment — is retained exactly as authored, as the point-in-time record
+  of the discipline this tenet transferred with (ADR-0005 Rule 8; the same
+  never-retro-edit posture ADR-0000's and ADR-0013's own dated amendments at
+  the foot of those documents apply to their own frozen substrates). It is
+  illustrative history now, not this project's binding surface — the binding
+  surface is the rewritten Scope immediately below and the new
+  2026-07-12 Amendment at the foot of this document.]**
 - **Scope:** All authoring work that asserts a performance or
   equivalence property — a speedup, a regression, a null result, or "the
-  optimized path matches the baseline" — across the `chocofarm/` package.
-  Applies to the perf write-ups (`docs/results/az-perf.md`,
+  optimized path matches the baseline" — across autoharn's own
+  experiment/investigation surface: the kernel/engine differential and
+  equivalence machinery (`engine/contemp_edb.py`, `engine/contemp_floor.py`,
+  `engine/contemp_differential.py`, and `./judge`'s ASP-vs-SQL marriage —
+  every ledger verdict derived independently in ASP and in SQL and compared),
+  kernel-lineage/delta-apply timing (see the Provenance bracket above for
+  what those two words mean), and any perf or equivalence claim recorded via
+  the research ledger (`stores/001_research_ledger.sql`,
+  `filing/record_reading.py`). Applies to any commit, BACKLOG.md entry, or PR
+  that lands a change to that surface and asserts it is faster, regressed,
+  unchanged, or behaviorally/logically equivalent.
+  **[This bracket records a re-instancing, 2026-07-12, for autoharn, a
+  dated bracketed-edit per ADR-0005 Rule 8. The original Scope sentence this
+  replaces bound "the `chocofarm/`
+  package. Applies to the perf write-ups (`docs/results/az-perf.md`,
   `az-jax-perf.md`), the bench harnesses, and any PR or note that lands a
-  hot-path change.
+  hot-path change." — preserved verbatim here, not deleted, exactly as
+  ADR-0005 Rule 8 requires for a point-in-time record; the sentence above
+  this bracket is what now governs.]**
 
 ## Context
 
@@ -303,6 +353,112 @@ captured throughput number is no longer prose. **`throughput-lab/harness/exp_db.
 the measured-vs-interpreted separation this tenet's honesty depends on, made
 structural so an overturned claim is auditable, not lost. (The belief-layer mechanism
 is recorded in ADR-0011's 2026-06-24 amendment; this is its perf-register face.)
+
+### 2026-07-12 — Re-instanced for autoharn (maintainer YES; Scope + Provenance bracket-edited above; tool surface + metric vocabulary extended here)
+
+*(This is a dated append per ADR-0005 Rule 8. Provenance: BACKLOG.md flagged this document
+2026-07-11 as an unadapted chocofarm copy — Scope still bound "the `chocofarm/`
+package," the tool list still named chocofarm's harness, byte-identical to the
+transferred original. Tracked as maintainer decision `adr0009-reinstance`
+(`design/MAINTAINER-DECISION-BRIEF.md` §3). Maintainer ruling, 2026-07-12,
+near-verbatim: "obviously... it's trivia" — a mild yes, at his convenience,
+recorded here as the act: someone rewrites the document's scope and tool
+references for autoharn.)*
+
+The Provenance and Scope header fields above are bracket-edited in place
+(struck original preserved, per ADR-0005 Rule 8's in-situ-dated-strike
+convention) to bind autoharn's own experiment/investigation surface rather
+than chocofarm's tree. This amendment supplies the tool-surface and
+metric-vocabulary mapping the 2026-06-24 amendment's own precedent already
+established the shape of (extend §Tools / §Metric vocabulary by dated
+amendment, rather than rewriting the chocofarm-era prose in place) — the same
+move, applied a second time, to a second substrate.
+
+**Tool surface, autoharn register (extending §Tools):**
+
+- **Equivalence tool — `./judge` (the ASP/SQL differential).** This is
+  autoharn's `bench_equivalence.py` analog and its two-tier bar reborn: every
+  ledger verdict is derived independently via ASP (clingo) *and* SQL, and the
+  two must agree. `AGREE` is the bit-exact tier (a discrete/symbolic
+  verdict — no floating-point noise to tolerate, so agreement is exact or it
+  is a defect, exactly §Calibration's "logic invariant" case).
+  `DIVERGE_BY_DESIGN` is a documented, expected divergence (the closed-form
+  analog of chocofarm's tolerance-banded behavioral case: named and
+  substantiated, not silently accepted). `DIVERGE_DEFECT` / `QUARANTINED` are
+  escalation events of a kind this project calls "typed" — meaning the
+  event carries a fixed, named category rather than free-text prose, so
+  "which failure happened" is a fact a script can read, not a sentence a
+  human has to parse — and here they mean a real bug or an unsafe input,
+  either way never silently patched around (composes with
+  `engine/contemp_differential.py`'s QUARANTINE guard and, per this ADR's
+  own §Calibration, never relaxed to a tolerance). Diagnosis walkthrough:
+  `engine/docs/JUDGE-READING.md`.
+- **Investigation-capture tool — `filing/record_reading.py` writing to
+  `stores/001_research_ledger.sql`.** This is autoharn's captured-
+  investigation-DB analog, direct structural sibling of chocofarm's
+  `exp_db.py` / `throughput_research` store the 2026-06-24 amendment above
+  already names: a measurement (`research.reading`, immutable, frozen at
+  write) is distinct from an interpretation drawn from it (`research.finding`,
+  supersedable, `status ∈ {provisional, retracted}`) — the same
+  measured-vs-interpreted separation, same author, same rationale, second
+  project. `research.finding_confirmed` derives confirmation from three
+  conditions at once: a clean git tree, a qualified instrument (one whose
+  `research.instrument.qualification` column reads `'qualified'` rather
+  than `'provisional'`, `'suspect'`, or `'retracted'` — a status a human
+  sets, not a default), and a real session — never a writable field, so
+  "confirmed" cannot be asserted, only earned.
+- **No `bench_hotpath.py` analog is built for autoharn's own hot paths**
+  (kernel-lineage delta-apply time, `./audit` wall time, a world scaffold's
+  cost) as of this writing. A per-component before/after timing harness for
+  those paths does not yet exist. Per this ADR's own §Exceptions
+  ("Exploratory observations") and §Acceptance-criteria ("the absence of
+  substantiation does not block a change... but states the absence
+  explicitly"), a perf claim about autoharn's own hot paths is honest today
+  only as an explicitly-marked exploratory observation, not an authoritative
+  claim — and per this project's own standing prudential posture (a ledger
+  work-item named `prudential-filed-candidates`, listed by running
+  `./led work list` from this repository's root and read in full with
+  `./led show <its id>`, whose own text says "build on witnessed need... not
+  speculatively"), a dedicated bench harness is built when a real perf claim
+  first needs one, not spun up now on spec.
+
+**Metric vocabulary, autoharn register (extending §Metric vocabulary):**
+
+- **Verdict counts** — `AGREE` / `DIVERGE_BY_DESIGN` / `DIVERGE_DEFECT` /
+  `QUARANTINED` tallies from `./judge` — the equivalence comparable.
+- **Contemporaneity verdict counts** — the four verdicts `./audit` (this
+  project's separate check that a ledger row was recorded close in time to
+  the act it describes, rather than backfilled later) can assign to a row:
+  `CONTEMPORANEOUS` (recorded close enough in time to trust), `BATCHED_DECLARED`
+  (recorded late but the lateness was itself declared honestly),
+  `LATE_DECLARED` (recorded later still, again declared), and
+  `BACKFILL_SUSPECT` (recorded late with no honest declaration — the one
+  verdict that fails the check) — a timeliness comparable specific to this
+  project's kernel, with no chocofarm analog.
+- **`value` / `stderr` / `n`** recorded via `research.reading` — the
+  behavioral comparable, for the (currently rare) autoharn claim that
+  involves a repeated, noisy measurement rather than a discrete verdict.
+
+**What is unchanged.** The tenet's spine — a perf or equivalence claim is
+honest only when its investigation is captured and reproducible — is
+untouched; §Calibration's bit-vs-behavioral distinction is untouched and
+still the correct discriminator (`./judge`'s `AGREE` is the bit case;
+`research.reading`'s noisy measurements are the behavioral case); the whole
+chocofarm-era body of this document (every section between this document's
+header and this 2026-07-12 Amendment, as the Provenance bracket above
+enumerates in full — including its worked examples such as
+`bench_hotpath.py`/`bench_equivalence.py` and `netvalue_ismcts.py:54`) is
+left as-authored, a point-in-time record of the discipline as it read on
+the substrate it was adapted to before this one — not deleted, not
+asserted current for autoharn. This is the same never-retro-edit posture
+ADR-0000 and ADR-0013 use for their own dated, first-person failure
+records: both documents keep their original context sections intact and
+add their corrections as separate, clearly dated "Amendment"/"Revisit"
+sections at the foot, exactly as this document now does.
+
+*Enforcement surface: review-only, same as the rest of this tenet — this
+amendment maps vocabulary and tools, it mints no new mechanism (ADR-0011
+Rule 1).*
 
 ## License
 
