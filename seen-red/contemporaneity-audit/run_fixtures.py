@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-11T14:44:01Z
-#   last-change: 2026-07-11T17:35:31Z
+#   last-change: 2026-07-11T21:32:32Z
 #   contributors: e4410ef6/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -33,7 +33,7 @@ pattern for BACKLOG "Run-10 closure audit (2026-07-11)" item 1 / change proposal
 ledger_kind_check refusal now teaches its own live valid-kind list rather than leaving the agent
 to self-diagnose via a hand-run pg_get_constraintdef query (run-10 row 67's own specimen).
 
-THIRTEEN CASES:
+FIFTEEN CASES:
 
   a-clean-batched-declared (GREEN): a scratch ledger with a genuine multi-row token burst but
      dense tool-activity (no gap exceeds silence_threshold_ms) -> VERDICT=batched_declared,
@@ -129,6 +129,18 @@ THIRTEEN CASES:
      -- proving the fix touches ONLY the failure path: both writes succeed (exit 0) and their
      stdout is compared BYTE-FOR-BYTE, not merely asserted equal to a hardcoded string.
 
+  n-led-show-cli-success (GREEN, small-follow-ups commission item 1): a real `led show <id>`
+     shim invocation against a KNOWN-existing row (case i's own inserted row, looked up by its
+     unique statement text) -> exit 0, the full untruncated statement text printed (the `-x`
+     expanded-display proof: one row, every column, in full).
+
+  o-led-show-cli-missing (RED, the run-11 class-b finding's own fix): the SAME shim invoked as
+     `led show 999999999` (an id that certainly does not exist in this scratch schema) -> exit 1,
+     REFUSED with teach-text naming the missing id -- proving `show` no longer falls through to
+     the generic write path (before the fix: silently absorbed as kind="show", refused by
+     ledger_kind_check, burning a sequence id). Also proves NO row of kind='show' was ever
+     written (the phantom-burn class this fix forecloses, not merely a refusal that still writes).
+
 RED (pre-instrument, disclosed rather than re-captured): before this suite existed there was no
 Part 2 instrument at all -- ad-hoc SQL run by hand, once per crisis (BACKLOG's own indictment).
 red.txt captures case (b)'s actual backfill_suspect output as the banked red evidence (the
@@ -147,6 +159,7 @@ from __future__ import annotations
 import datetime
 import json
 import os
+import re
 import secrets
 import shutil
 import subprocess
@@ -666,6 +679,66 @@ def main() -> int:
         log.append(f"CASE m (success path, OLD @{PRE_KIND_TEACH_FIX_SHA} vs NEW led.tmpl): "
                    f"exit_old={code_m_old}, exit_new={code_m_new}, stdout byte-identical "
                    f"({out_m_new!r})")
+
+        # ---- CASE n: led.tmpl's `show <id>` CLI, SUCCESS (GREEN) -----------------------------
+        # A real `led show <id>` shim invocation (root_i, already s24-capable from case i) against
+        # a KNOWN row -- case i's own inserted row, looked up by its unique statement text via a
+        # direct -tAc SELECT (bypassing the module's own psql() helper, which returns psql's
+        # human-formatted table, not a bare value).
+        id_lookup = subprocess.run(
+            ["psql", "-h", PGHOST, "-d", DB, "-tAc",
+             f"SELECT id FROM {SCHEMA}.ledger WHERE statement = "
+             f"'cli --event-time success, case i';"],
+            capture_output=True, text=True)
+        row_id_n = id_lookup.stdout.strip()
+        ck(id_lookup.returncode == 0 and row_id_n.isdigit(),
+           f"CASE n setup: could not find case-i's own row id: rc={id_lookup.returncode} "
+           f"stdout={id_lookup.stdout!r} stderr={id_lookup.stderr!r}")
+        code_n, out_n = run_led(root_i, ["show", row_id_n])
+        ck(code_n == 0, f"CASE n: expected exit 0 (show success), got {code_n}: {out_n[-800:]}")
+        ck("cli --event-time success, case i" in out_n,
+           f"CASE n: the full, untruncated statement must be printed: {out_n[-800:]}")
+        ck(bool(re.search(rf"^id\s*\|\s*{row_id_n}\s*$", out_n, re.MULTILINE)),
+           f"CASE n: expanded (-x) display must show the id column matching the looked-up row "
+           f"id ({row_id_n}), not just the statement text anywhere: {out_n[-800:]}")
+        log.append(f"CASE n (led show CLI, success): exit={code_n}, row id={row_id_n}, full "
+                   f"untruncated statement text printed, as expected")
+
+        # ---- CASE o: led.tmpl's `show <id>` CLI, MISSING id REFUSAL (RED, run-11 class-b fix) ---
+        # An id that certainly does not exist in this scratch schema -> REFUSED, never a silent
+        # fall-through into the generic write path (the run-11 finding: before this fix, `show`
+        # cleared the arg-count guard and was absorbed as kind='show', refused by
+        # ledger_kind_check, burning a SEQUENCE id even though no row landed -- bigserial's
+        # nextval() is non-transactional, so a rolled-back INSERT attempt still advances the
+        # sequence). The discriminating proof is therefore the SEQUENCE's own last_value, read
+        # directly (-tAc, a bare value) before/after: unchanged means the write path was never
+        # even attempted, not merely that no row happened to land.
+        def _seq_last_value() -> str:
+            r = subprocess.run(
+                ["psql", "-h", PGHOST, "-d", DB, "-tAc",
+                 f"SELECT last_value FROM {SCHEMA}.ledger_id_seq;"],
+                capture_output=True, text=True)
+            return r.stdout.strip()
+
+        seq_before_o = _seq_last_value()
+        code_o, out_o = run_led(root_i, ["show", "999999999"])
+        seq_after_o = _seq_last_value()
+        ck(code_o != 0, f"CASE o: a missing id must be REFUSED (non-zero exit), got {code_o}: "
+                        f"{out_o[-800:]}")
+        ck("REFUSED" in out_o and "no ledger row with id=999999999" in out_o,
+           f"CASE o: the refusal must be visible and name the missing id: {out_o[-800:]}")
+        ck("ledger_kind_check" not in out_o,
+           f"CASE o: the OLD fall-through symptom (a bare kernel CHECK-constraint violation on "
+           f"kind='show') must never appear -- `show` is dispatched before the write path is "
+           f"even reached: {out_o[-800:]}")
+        ck(seq_before_o != "" and seq_before_o == seq_after_o,
+           f"CASE o: the ledger id sequence's last_value must be UNCHANGED across a missing-id "
+           f"`show` (before={seq_before_o!r}, after={seq_after_o!r}) -- a changed value would "
+           f"mean an INSERT was attempted (and its id burned) even though it refused, the exact "
+           f"run-11 phantom-burn class this fix forecloses")
+        log.append(f"CASE o (led show CLI, missing id): exit={code_o}, REFUSED with teach-text "
+                   f"naming the missing id, no kernel CHECK-constraint fall-through text, ledger "
+                   f"id sequence last_value unchanged ({seq_before_o}), as expected")
 
     finally:
         for w in worlds:

@@ -66,6 +66,17 @@
 #                                              superseded row as if it were still current)
 #   led current [N]                           last N rows of ledger_current (supersedes-filtered
 #                                              read) — the view a consumer should read by default
+#   led show <id>                             ONE ledger row, every column, in full (`psql -x`
+#                                              expanded display — statement/rationale never
+#                                              truncated). READ-ONLY: refuses loudly, teach-text,
+#                                              on a missing <id> rather than falling through to
+#                                              the generic <kind> <statement...> write path below
+#                                              (run-11 class-b finding: `show` is not a member of
+#                                              ledger_kind_check's vocabulary, so an un-dispatched
+#                                              `led show <id>` used to be silently accepted by the
+#                                              arg-count guard as kind="show", burning a sequence
+#                                              id on the kernel's refusal — BACKLOG "Run-11
+#                                              first-shift forensics", item 7 / change proposal 1)
 #   led question-status                       question_status view: every open/answered question
 #   led review-gap                            review_gap view: EVERY row (any kind) by an obliged
 #                                              actor with no distinct-actor attest countersign yet —
@@ -362,6 +373,43 @@ if [ "${1:-}" = "--recent" ] || [ "${1:-}" = "current" ]; then
                 THEN 'SUPERSEDED' ELSE 'current' END AS status_now
     FROM ${SCHEMA}.ledger l JOIN ${KERNEL}.principal p ON p.id = l.actor
     ORDER BY l.id DESC LIMIT ${n};"
+fi
+
+if [ "${1:-}" = "show" ]; then
+  # led show <id> — a real, read-only subcommand (run-11 class-b finding, BACKLOG "Run-11
+  # first-shift forensics" item 7 / change proposal 1): before this, `led show <id>` cleared
+  # the generic path's `$# -lt 2` usage guard and fell through to the generic <kind>
+  # <statement...> INSERT with kind="show", refused by ledger_kind_check -- a phantom sequence
+  # burn on what reads as an intuitive read-only verb (mirroring `git show`/`docker inspect`).
+  # This block sits BEFORE the generic dispatch below, so `show` never reaches the write path.
+  id="${2:-}"
+  case "$id" in
+    ''|*[!0-9]*)
+      echo "usage: led show <id>" >&2
+      echo "       <id> must be a positive integer ledger row id (see 'led --recent' or" >&2
+      echo "       'led current' to find one) -- prints EVERY column of that one row, in" >&2
+      echo "       full (psql -x expanded display; statement/rationale never truncated)." >&2
+      exit 1
+      ;;
+  esac
+  found=$(psql -h "$PGHOST" -d "$PGDB" -tAq -v id="$id" <<SQL
+    SELECT EXISTS (SELECT 1 FROM ${SCHEMA}.ledger WHERE id = :id::bigint);
+SQL
+  )
+  if [ "$found" != "t" ]; then
+    echo "led show: REFUSED -- no ledger row with id=${id}." >&2
+    echo "  This is a READ-ONLY refusal: nothing was written, no sequence id was burned." >&2
+    echo "  See 'led --recent [N]' or 'led current [N]' for ids that actually exist." >&2
+    exit 1
+  fi
+  # NOTE (this file's own established gotcha, see `led work asof` below): psql's :'var'/:var
+  # interpolation is only applied to a script read from stdin/-f, NOT to a -c argument -- so
+  # this is fed via heredoc, not -c, exactly like every other bound query in this file.
+  exec psql -h "$PGHOST" -d "$PGDB" -x -v id="$id" <<SQL
+    SELECT l.*, p.name AS actor_name
+    FROM ${SCHEMA}.ledger l LEFT JOIN ${KERNEL}.principal p ON p.id = l.actor
+    WHERE l.id = :id::bigint;
+SQL
 fi
 
 if [ "${1:-}" = "question-status" ]; then
@@ -698,7 +746,7 @@ if [ $# -lt 2 ]; then
   echo "usage: led [flags] <kind> <statement...>   (see top-of-file comment for the full flag list:" >&2
   echo "       -f -e --supersedes --amends --amends-scope --answers --refs --concern --evidence" >&2
   echo "       --confidence; cite an antecedent row from any kind via --refs row:<id>)" >&2
-  echo "       led --recent [N] | led current [N] | led question-status | led review-gap | led stamp-distinctness" >&2
+  echo "       led --recent [N] | led current [N] | led show <id> | led question-status | led review-gap | led stamp-distinctness" >&2
   echo "       led register-principal <name> <class>" >&2
   echo "       led obligate <scope> <assigned-by-principal> <obliged-actor-principal>" >&2
   echo "       led obligate revoke <scope>" >&2
