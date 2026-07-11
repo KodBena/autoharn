@@ -22,34 +22,42 @@ ever edited while any wired session is live.
 
 ## Vocabulary (the words the docs assume)
 
-- **world** — one isolated experiment habitat: a subject schema + kernel schema pair in
-  Postgres, plus a project directory carrying the verbs, `deployment.json`,
-  `.claude/apparatus.json`, and an auto-loaded CLAUDE.md governance preamble. One world
-  per run; a run's subject never sees a sibling's ledger.
-- **run** — one governed Claude Code session (or resumed chain of sessions) executing a
-  task inside one world. Runs are strictly LINEAR: run M > N settles run N as dust —
-  older worlds are read-only evidence, never patched or refreshed (maintainer ruling,
-  2026-07-11).
-- **birth chain** — the SQL applied at world creation: `high_watermark_1.sql` (bundling
-  s15 → s17-stamp → s17-independence → s19) → s20 → s21 → s22 → s23. There is no s16; s18 is
-  deliberately excluded (experiment apparatus, not kernel). See kernel/lineage/README.md.
-- **delta** — one additive lineage step. It reaches reality by entering the birth chain;
-  the next world's scaffold carries it. Never applied to an existing world (see the
-  decision tree below).
-- **scratch schema** — a throwaway schema pair in the toy db used to witness a delta or
-  fixture, torn down to zero residue after.
-- **stamp** — an HMAC binding a ledger row to the actual Claude session/agent that wrote
-  it, injected into every Bash command by hook; unstamped rows are visible, not hidden.
-- **principal** — a registered identity (`author`, `reviewer`) rows are attributed to;
-  `LED_ACTOR=reviewer` selects one. **SoD** = separation of duties between them.
-- **obligation** — a `countersign_obligation` row: the obliged principal's EVERY row
-  (any kind) shows in `review_gap` until a distinct actor attests it. Scope is a label,
-  not a filter. Oblige the WORKER, never the reviewer (see `led obligate` teach-text).
-- **permit-to-work** — no writes to governed files unless an open+claimed s22 work item
-  exists.
-- **seen-red** — banked proof a gate has actually refused at least once; a gate never
-  seen red is a claim.
-- **ephemera** — local session transcripts/snapshots; never committed (privacy ruling).
+Condensed for quick reference; full definitions (the SSOT) live in
+[GLOSSARY.md](GLOSSARY.md) per its wiki posture — each term below links to its entry there.
+
+- **[world](GLOSSARY.md#world)** — one isolated experiment habitat: a subject schema +
+  kernel schema pair in Postgres, plus a project directory carrying the verbs,
+  `deployment.json`, `.claude/apparatus.json`, and an auto-loaded CLAUDE.md governance
+  preamble. One world per run; a run's subject never sees a sibling's ledger.
+- **[run](GLOSSARY.md#run)** — one governed Claude Code session (or resumed chain of
+  sessions) executing a task inside one world. Runs are strictly LINEAR: run M > N settles
+  run N as dust — older worlds are read-only evidence, never patched or refreshed
+  (maintainer ruling, 2026-07-11).
+- **[birth chain](GLOSSARY.md#birth-chain)** — the SQL applied at world creation:
+  `high_watermark_1.sql` (bundling s15 → s17-stamp → s17-independence → s19) → s20 → s21 →
+  s22 → s23. There is no s16; s18 is deliberately excluded (experiment apparatus, not
+  kernel). See kernel/lineage/README.md.
+- **[delta](GLOSSARY.md#delta-kernel-lineage-delta)** — one additive lineage step. It
+  reaches reality by entering the birth chain; the next world's scaffold carries it. Never
+  applied to an existing world (see the decision tree below).
+- **[scratch schema](GLOSSARY.md#scratch-schema)** — a throwaway schema pair in the toy db
+  used to witness a delta or fixture, torn down to zero residue after.
+- **[stamp](GLOSSARY.md#stamp)** — an HMAC binding a ledger row to the actual Claude
+  session/agent that wrote it, injected into every Bash command by hook; unstamped rows
+  are visible, not hidden.
+- **[principal](GLOSSARY.md#principal)** — a registered identity (`author`, `reviewer`)
+  rows are attributed to; `LED_ACTOR=reviewer` selects one. **SoD** = separation of duties
+  between them.
+- **[obligation](GLOSSARY.md#obligation)** — a `countersign_obligation` row: the obliged
+  principal's EVERY row (any kind) shows in `review_gap` until a distinct actor attests it.
+  Scope is a label, not a filter. Oblige the WORKER, never the reviewer (see `led obligate`
+  teach-text).
+- **[permit-to-work](GLOSSARY.md#permit-to-work)** — no writes to governed files unless an
+  open+claimed s22 work item exists.
+- **[seen-red](GLOSSARY.md#seen-red)** — banked proof a gate has actually refused at least
+  once; a gate never seen red is a claim.
+- **[ephemera](GLOSSARY.md#ephemera)** — local session transcripts/snapshots; never
+  committed (privacy ruling).
 
 ## The four verbs (run inside a world directory)
 

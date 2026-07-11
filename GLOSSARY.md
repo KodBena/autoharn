@@ -218,6 +218,13 @@ A registered identity (`author`, `reviewer`) that ledger rows are attributed to;
 `LED_ACTOR=reviewer` selects one for a command. **SoD** (separation of duties) is the
 requirement that review comes from a provably different invocation than the work.
 
+### obligation
+A `countersign_obligation` row: the obliged [principal](#principal)'s EVERY row (any kind)
+shows in `review_gap` until a distinct actor attests it. Scope is a label, not a filter.
+Oblige the WORKER, never the reviewer (see `led obligate` teach-text) — an obligation is
+standing operator-owned policy config, not a role self-service capability (`led obligate
+revoke` refuses a role's own attempt to lift it).
+
 ### permit-to-work
 The rule that a Write/Edit to a governed file is refused unless the world's ledger shows an
 open AND claimed s22 work item — a ledger entry is not a permit; an open+claimed work item

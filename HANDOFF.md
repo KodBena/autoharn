@@ -22,17 +22,19 @@ nothing from here without re-checking (verification checklist: POST-FABLE-OPERAT
 
 ## Where the project stands
 
-The core loop is CLOSED and witnessed: run 7 (world `run7`, db `toy` @ 192.168.122.1) ran end
-to end under the full mechanism set — permit-to-work (no writes without an open+claimed s22
-work item), matcherless stamping (27/27 rows stamp_verified), kernel-verified technical
-independence on distinct (session, agent) pairs, the clean-exit Stop gate (first live firing,
-silent-allow path), and deliverables committed where the ledger says (`7adaf2b` in run7's own
-git). Verification record: BACKLOG "Run-7 phase-1 verification (2026-07-10)" + commit cd7fbe2.
-Worlds are born complete: `bootstrap/new-project.sh --new-world` applies kernel s15→s22, seeds
-the stamp secret, registers author+reviewer principals, writes the governance preamble into
-the world's auto-loaded CLAUDE.md, and writes the `.claude/apparatus.json` switchboard
-(per-mechanism off/observe/enforce; anything that spends money per invocation defaults OFF —
-maintainer ruling; the demurral classifier is the case in point).
+The core loop is CLOSED and witnessed: run 7 ([world](GLOSSARY.md#world) `run7`, db `toy` @
+192.168.122.1) ran end to end under the full mechanism set —
+[permit-to-work](GLOSSARY.md#permit-to-work) (no writes without an open+claimed s22
+work item), matcherless [stamping](GLOSSARY.md#stamp) (27/27 rows stamp_verified),
+kernel-verified technical independence on distinct (session, agent) pairs, the clean-exit
+Stop gate (first live firing, silent-allow path), and deliverables committed where the
+ledger says (`7adaf2b` in run7's own git). Verification record: BACKLOG "Run-7 phase-1
+verification (2026-07-10)" + commit cd7fbe2. Worlds are born complete:
+`bootstrap/new-project.sh --new-world` applies kernel s15→s22, seeds the stamp secret,
+registers author+reviewer [principals](GLOSSARY.md#principal), writes the governance
+preamble into the world's auto-loaded CLAUDE.md, and writes the `.claude/apparatus.json`
+switchboard (per-mechanism off/observe/enforce; anything that spends money per invocation
+defaults OFF — maintainer ruling; the demurral classifier is the case in point).
 
 Starting a run is exactly:
 ```
