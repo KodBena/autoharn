@@ -3218,3 +3218,44 @@ past — not because the harness is hard to operate. Two small, purely-additive 
 are proposed (kind-refusal teach-text; unconditional stop-gate journaling); neither loosens
 anything, matching the maintainer's standing bar that ergonomics improvements are welcome only
 when they hold auditability constant.
+
+## Run-10 process-improvement retrospective, reconstructed from the record (2026-07-11)
+
+A maintainer-commissioned experiment: retrospect run10 from its governed record alone (ledger,
+invocation log, delegation journal, git repo), and record separately what the record turns out
+UNABLE to answer — each unanswerable question being itself a harness finding. Written up as a
+standing document at [design/RETROSPECTIVE-RUN10.md](design/RETROSPECTIVE-RUN10.md) (ADR-0017
+compliant; passes gates/doc_shapes.py and gates/link_integrity.py). Read-only pass; no writes to
+run10's world. It does NOT re-cover run10's closure fingerprints (refused ids 67/112/113, stop
+discipline, countersign rounds) — that is the concurrent Sonnet forensic pass's territory and is
+referenced, not duplicated.
+
+Headline findings, each with a run11 or harness recommendation:
+- FLOW: build ~22 min, governed closure tail ~25 min; 190 of 299 invocations fall in the second
+  half and 47 (~16%) merely poll `./led review-gap`. Proposed: a single "distance-to-clean" verb
+  (reads existing debt views only — auditability constant) to replace the piecemeal polling.
+- DECISION QUALITY: all ten intake tasks closed 1:1, none split/merged; two decomposition rows
+  (5, 9) over-specified downstream design and were amended (rows 43/44 → 50/51); one design
+  decision (row 80 flat num_init_queries) passed its first review and was reversed by later
+  passes (fix commit ee44487). Tasks 6/7/8 decomposed finer than the delivery unit (one file, one
+  commit a77786c). Proposed intake conventions: state deliverable + acceptance handle, defer
+  mechanism to the owning task; decompose to the unit of independent resumption.
+- ASSUMPTIONS: three filed by the reviewer's antecedent audit; two discharged before code, one
+  (row 144 device-local identity) left standing. None violated into rework. Keep the audit.
+- DELEGATION: five reviewer subagent dispatches; review was load-bearing (changed the shipped
+  product three times — commits a60d993, ee44487, and the rewritten stop row 156). Review
+  load-bearingness and closure friction are the same phenomenon from two sides.
+- DELIVERABLE vs COMMISSION: every task shipped witnessed, nothing silently dropped, no
+  gold-plating; one disclosed narrowing (the smoke test covers the QEUBO machinery, not the
+  16-color product). But the commission itself is UNLEDGERED — the diff runs against the agent's
+  decomposition, not the ask.
+
+The could-not-answer list (the experiment's second half — direct harness inputs): (1) why the two
+app defects arose (oversight vs bad bet) — need an alternatives-considered decision field; (2) the
+deliberation-vs-execution wall-clock split — need turn-level timing / token accounting; (3)
+whether reviewer subagents read independently — the invocation log captures only Bash, so Read-tool
+reads leave no trace; need per-subagent tool-call attribution; (4) the verbatim commission — absent
+from the whole record, survives only as reviewer paraphrase; need it ledgered at intake; (5) cost
+efficiency — no token/dollar accounting exists; (6) whether the ten-task granularity matched the
+user's mental model — undecidable without the user's own breakdown. The single most consequential
+gap: the harness ledgers the decomposition but never the source it decomposes.
