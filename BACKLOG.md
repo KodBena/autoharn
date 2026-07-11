@@ -4233,3 +4233,22 @@ trail, and the previously-pending "privacy call on committing aggregates" is DIS
 nothing load-bearing depends on it. (3) The retrospectives' could-not-answer lists are
 re-scored accordingly: "cost efficiency" moves from awaiting-decision to
 out-of-scope-by-principle.
+
+## Follow-ups commission scope extended (maintainer, 2026-07-11): timing tail + token self-reports
+
+Three additions to the queued small-follow-ups commission (behind the GPG merge), all
+maintainer-directed the same evening and all inside the action-stream principle:
+1. PostToolUse completion timestamps beside the existing PreToolUse stamps — the value is
+   the non-null tail (builds, test suites, dispatches), per the maintainer's own reading
+   that most calls are ~0s; nearly free since the hook surface exists.
+2. The delegation observer gains a return leg (PostToolUse on Task) — dispatch-to-return
+   duration per subagent, closing the reviewer-execution-window inference gap by
+   measurement.
+3. Token-usage self-reports, the maintainer's design near-verbatim: the orchestrating
+   agent SEES usage numbers when a subagent returns, so the preamble exhorts ledgering
+   them — "with no harness guarantee, just a 'hope it's being honest' sort of thing."
+   Implemented as an explicitly-unverified self-report convention (the marking is the
+   guarantee: same trust class as a LAZY commission — attributable claim, no witness);
+   diagnostic-grade forever per the action-stream principle.
+Previously queued in the same commission: the led show read verb (run-11 class-b), the
+doc-gate liveness counter, the distance-to-clean preamble sentence.
