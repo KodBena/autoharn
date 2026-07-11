@@ -4564,7 +4564,6 @@ separate, larger piece of work than this commission's remit. A real maintainer k
 (`law/keys/maintainer.asc`) does not exist — every ceremony above is witnessed on a THROWAWAY
 test key, clearly marked as such throughout; nothing here fabricates or assumes a real key.
 
-<<<<<<< HEAD
 ## Small-follow-ups commission: seven items shipped (Sonnet, 2026-07-12)
 
 Executes the `small-follow-ups-commission` work-tracker item (`./led work` slug, this repo's
@@ -4823,7 +4822,7 @@ mirroring the precedent this same BACKLOG already set for the GPG trust layer's 
 mode over all four afterward reports clean (0 findings) — the record's content hash matches the
 FINAL, post-repair bytes in every case, since the record is written after the last repair, not
 before.
-=======
+
 ## Contemporaneity Part 3 — the preamble's ordering obligations SPEC authored (Fable, 2026-07-12)
 
 `design/CONTEMPORANEITY-PART3-SPEC.md` discharges the Part 3 sketch that
@@ -4854,4 +4853,3 @@ the attestation records round 2 DEFECT with `escalated: true` (content_sha256
 non-converging-review-loop typed event, routed upward by this entry and the authoring
 session's report rather than laundered into a CLEAN. Deterministic gates
 (link_integrity, doc_shapes, doc_attestation_presence) all clean on the committed text.
->>>>>>> worktree-agent-a59bffa2456682457
