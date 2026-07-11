@@ -2513,3 +2513,146 @@ mechanizes any of it. Commissioned same morning (Sonnet): a repo-wide sweep for 
 shapes plus a class-not-instance gate for the mechanizable core — every relative markdown
 link in maintainer-facing docs must resolve on disk. Disposition of the sweep lands as its
 own entry.
+
+## Documentation legibility indictment — disposition (Sonnet, 2026-07-11)
+
+Three deliverables against the commission above. Every number below is a live re-run captured
+the same session; no figure is carried from memory.
+
+**1. The gate: `gates/link_integrity.py`.** Every relative markdown link `[text](target)` in
+every tracked `*.md` file must resolve on disk (v1: `#anchor` fragments are flagged, never
+failed — a separate, non-blocking report section). Modeled on `gates/fixture_census.py` /
+`gates/layout_census.py` (same `git ls-files '*.md'` scope, same closure-statement docstring
+shape, same `ROOT`-relative resolution) and registered the same way: `link-integrity` ->
+`seen-red/link-integrity/run_fixtures.py` in `gates/fixture_census.py`'s REGISTRY (WITNESSED:
+`fixture-census: clean ✓ (32 seen-red gates...)`), wired as a fifth BLOCKING step in
+`hooks/pre-commit` (after `fixture_census`, before the disabled `layout_census` /
+report-only `doc-legibility`).
+Two principled exclusions, both PRINTED in the gate's own output every run, never silent:
+`judgment/**` (OPERATING-CARD.md's own words: "predecessor era — history unless a current
+spec cites it") and `design/ARCHITECTURE.md` (carries its own `⚠ STALE` banner declaring its
+paths point at the old pre-consolidation layout and that its rewrite is separately filed —
+patching its links piecemeal would manufacture false current-ness the banner itself disclaims).
+WITNESSED, both polarities, `seen-red/link-integrity/run_fixtures.py`:
+```
+RED:   fixture.md -> ./nonexistent-target.md   =>  exit 1, "!! <tmp>/fixture.md:3  ./nonexistent-target.md"
+GREEN: fixture.md -> ./sibling.md (exists)     =>  exit 0, "link-integrity: clean ✓"
+```
+(banked verbatim in `seen-red/link-integrity/red.txt` / `green.txt`). WITNESSED live over the
+full corpus: `link-integrity: 180 docs in scope (209 tracked *.md, 29 excluded), 1537 relative
+link(s) checked. ... link-integrity: clean ✓` (exit 0).
+
+**2. The sweep.** Building the gate required first making the corpus pass it — 96 broken links
+turned up on the first full-corpus run, almost all in `research/**` and
+`gates/doc-legibility/{README.md,terms.md}`: an off-by-one path depth left over from the
+chocofarm→autoharn consolidation (old paths assumed a `docs/research/2026-06-27-<name>/`
+layout; the renamed tree is `research/<name>/`, one level shallower, no date prefix). This
+is the exact hazard class the commission names, found in reach of the work — fixed
+mechanically (80 links auto-fixed by a depth/prefix-correcting script, verified resolving
+before writing; 6 more needing individual judgment fixed by hand: 3 `tools/doc-legibility/`
+→ `gates/doc-legibility/` renames, 2 genuine sibling-chocofarm citations in
+`design/LOGIC-LAYER-SEAM.md` de-linked to plain non-clickable citations — consistent with how
+this repo already treats chocofarm-native ADR paths — rather than faked into a local link,
+1 `tools/` → `gates/` rename). `design/ARCHITECTURE.md`'s 10 broken links were left standing
+and the file excluded from the gate (see above) rather than patched — its own banner calls
+for a full rewrite, not a path graft. `gates/doc-legibility/README.md`'s "Scope" section also
+described the gate's OLD (pre-finding-48) scope; corrected to state the actual scope and the
+report-only pre-commit disposition honestly.
+
+Named-surface fixes (HANDOFF.md, OPERATING-CARD.md, CAPABILITIES.md, GLOSSARY.md, the four
+active design docs, law/briefs/*.md):
+- `design/REVIEW-GAP-SCOPE-SEMANTICS-RULING.md` — a LIVE RECURRENCE of the exact defect this
+  file documents having fixed: it still cited "HANDOFF 'Open work' item 1" positionally.
+  Fixed: cites the entry by name ("Maintainer's morning batch").
+- `design/ARTIFACT-VS-REQUIREMENTS-DETECTOR.md` — "This is HANDOFF open-work item 1" was now
+  FALSE (HANDOFF's current list has it at item 3). Fixed: cites by name, with a one-line note
+  on why a positional cite is the wrong pointer to leave standing.
+- `GLOSSARY.md` — `obligation` is used throughout OPERATING-CARD.md and CAPABILITIES.md but
+  had no entry here at all (a genuine Stand-Alone Principle gap, not a link omission). Added
+  `### obligation`, placed after `### principal`.
+- `OPERATING-CARD.md` — its "Vocabulary" section restates 11 GLOSSARY.md terms locally with
+  ZERO links (the exact anti-pattern the wiki posture exists to prevent — a second,
+  divergence-prone copy). Fixed: every term now links to its GLOSSARY.md anchor (verified by
+  slugifying every `### heading` and checking the anchor matches, not assumed).
+- `HANDOFF.md` — linked `world`/`permit-to-work`/`stamp`/`principal` on first use in its
+  opening "Where the project stands" paragraph (the doc's own designated entry point).
+
+Checked and left alone, with reasons: `design/PG-HBA-HARDENING.md`'s `step N` and
+`law/briefs/*`'s `item N`/`point N` are self-referential within their own numbered list (not
+a cross-doc pointer — no hazard). `design/ARTIFACT-VS-REQUIREMENTS-DETECTOR.md`'s "world
+preamble point 6/2" cites `bootstrap/templates/CLAUDE.md.tmpl`, explicitly out of this
+commission's touch-scope, and is a versioned template rather than a nightly-rewritten
+narrative doc (lower drift risk) — left as prose. `CAPABILITIES.md`'s many internal `item N`
+self-references are stable (append-only numbering to date) but not name-anchored; flagged as
+residue below rather than mass-edited.
+
+**Honest residue (not silently closed):** before this pass, ZERO of the 10 named-surface
+files linked to `GLOSSARY.md` at all, despite heavy, page-one use of coined terms (`world`,
+`run`, `stamp`, `delta`, `principal`, `obligation`, `seen-red`...) — systemic under-linking,
+not isolated instances. This entry fixed the highest-leverage subset (the orientation card's
+own vocabulary section, the entry-point doc's first paragraph, the one missing GLOSSARY
+definition found in-flight) rather than claim a full first-use sweep of `CAPABILITIES.md`, the
+other three active design docs, and `law/briefs/*.md` that this pass did not do — that is a
+separately-sized follow-up (most paragraphs of roughly 1600 lines of prose), not something
+"surgical edits" discharges honestly in one sitting. Filed here so the gap is visible, not
+inferred clean because the gate is green (the gate checks link RESOLUTION, not link
+PRESENCE — a term with no link at all never fails it).
+
+**3. The `doc-legibility` gate assessment.** This morning's report — "1614 undefined
+acronym(s) across 206 docs," blocking nothing — is real: `hooks/pre-commit`'s own header
+already says why (report-only pending a corpus sweep, finding 48). It is not "advisory by
+design" as a chosen posture so much as "blocked from arming by an unmanaged corpus" per that
+same header's own honest words.
+
+The heuristic IS partly salvageable, cheaply: seeded `gates/doc-legibility/allowlist.txt`
+with two mechanical, low-risk categories, spot-checked against real usage before listing
+(never guessed) — (a) ALL-CAPS common-English/emphasis words, several of which the project's
+OWN commentary already names verbatim as this exact noise class (`BACKLOG.md:623-624`,
+`hooks/pre-commit`: "RED/NEG/NUM/ONE/NO/IS/IN", "INSERT/NULL/FK",
+"MIGRATE/STAYS/DECIDED/INC" — a mechanical transcription of an already-made call, not a fresh
+judgment) plus verdict/ledger-state vocabulary (AGREE/DIVERGE/DEFECT/QUARANTINED/
+WITNESSED/REFUSED/RATIFIED/...); (b) this project's own SSOT document names used bare
+(ADR, BACKLOG, CLAUDE, BRIEF, FINDINGS, HANDOFF, CAPABILITIES, GLOSSARY, PROVENANCE,
+ORCHESTRATION, DESIGN, LAW — the "acronym" IS the filename, not jargon needing a definition);
+plus verified proper nouns (ISO, IEC, NRC) and common terms (JSON, URL, ID, GB, NLP, GPU,
+HMAC, PR, FK) and Claude Code's own event-name vocabulary (`PreToolUse`, `PostToolUse`).
+Separately, excluded `judgment/**` from `SCOPE` — the same declared-history rationale as
+`link_integrity.py`'s exclusion (a structural scope fix, not acronym classification).
+
+WITNESSED, before -> after (`python3 gates/doc-legibility/check.py`, live re-runs):
+```
+BEFORE (this morning, unmodified):        1614 undefined acronym(s) across 206 docs  (10750 flagged occurrence-locations)
+AFTER allowlist seeding only:             1524 undefined acronym(s) across 206 docs  ( 6145 flagged occurrence-locations)
+AFTER + judgment/ exclusion:              1319 undefined acronym(s) across 178 docs  ( 4865 flagged occurrence-locations)
+FINAL (incl. this very BACKLOG entry's
+own prose, re-observed after writing it): 1328 undefined acronym(s) across 178 docs  ( 4910 flagged occurrence-locations)
+```
+The last line is CITATION CURRENCY, not a regression: writing this entry itself added ~9 new
+ALL-CAPS tokens (REGISTRY, CONFORMANCE, BLOCKING, ...) to the corpus the gate scans, so the
+honest final figure is the one re-run AFTER this text existed, not the number measured
+mid-edit. Net vs. this morning: unique undefined tokens -17.7%, flagged occurrence-locations
+-54.3% (the seeded tokens were disproportionately high-frequency — `ADR` alone was 1410 of
+the original 10750).
+
+**Recommendation: KEEP-ADVISORY-WITH-SEEDED-ALLOWLIST** (not fix-and-arm, not
+demote-to-removed). Costs of the alternatives: FIX-AND-ARM needs the remaining ~1328 unique
+tokens correctly defined — dominated by two genuine jargon corpora
+(`law/briefs/safety-critical-logging/BRIEF.md`'s cross-domain safety-standards survey — SIL,
+DAL, ASIL, GSN, ALCOA, MHRA, FDA, CFR, PVS, WODES, CIF, ESCET, FINRA, ISA, and more — and
+`research/`'s formal-systems corpus) that need researched, correct expansions, not casual
+allow-listing (allow-listing real jargon to pass the gate is the exact false-authority failure
+this gate exists to catch, per its own README) — a dedicated multi-hour authoring session,
+explicitly outside this commission's "do not hand-classify" bound. DEMOTE-TO-REMOVED throws
+away a gate that already caught two real maintainer-hit defects (SBC, then MC/DC) and, after
+this seeding pass, runs at under half its original noise floor — removing a working detector
+because its tail is unmanaged is the wrong trade. KEEP-ADVISORY is the honest middle: it still
+prints on every commit (visible, not hidden), the seeding measurably improved its
+signal-to-noise, and arming should wait on either a dedicated terms.md authoring pass over the
+two named corpora, or a narrower blocking SCOPE (the same "narrow enough to arm today" move
+`link_integrity.py` made instead of gating the full corpus at all).
+
+**Flagged, not fixed (out of this commission's scope):** `doc-legibility` itself carries no
+`seen-red/` directory and no `gates/fixture_census.py` registration — a pre-existing gap
+surfaced while reading the registry for this work, not introduced by it. Building its
+both-polarity fixture harness is a distinctly-sized task, named here rather than silently
+left for the next reader to assume already covered.
