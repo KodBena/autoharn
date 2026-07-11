@@ -68,6 +68,28 @@ The loop has three roles, each a distinct invocation, never the same context twi
    (`Agent` tool's own description: "A new Agent call starts a fresh agent with no memory of
    prior runs, so the prompt must be self-contained").
 
+   **Spawn B synchronously (`run_in_background: false`), always.** This is a hard requirement,
+   not a preference: whoever is *running the loop* (A, in the ordinary case) needs B's verdict
+   back in the same turn to act on it in step 3 — a background-spawned B completes into a
+   message addressed to the ORCHESTRATOR session, not to the subagent that spawned it, because
+   completion routing in this harness follows the spawn's own top-level session, not the
+   spawning subagent. That routing is sound only when the loop-runner IS the top-level
+   (main/orchestrator) session; the moment the A:B:C loop itself runs *inside* a dispatched
+   subagent (a common shape — the orchestrator delegates a documentation task to a Sonnet
+   executor, and that executor runs its own A:B:C loop before reporting back), a background B's
+   completion never reaches the subagent that is waiting on it. Two live instances of exactly
+   this ([BACKLOG.md](../BACKLOG.md), entry "A:B:C recipe friction, twice-witnessed",
+   2026-07-11): a subagent-run loop's
+   background-spawned B tried to `SendMessage` back to `"general-purpose"` — an agent *type*,
+   not an address — and failed; both B's recovered only because they happened to also report
+   their verdict in their own final output, which the orchestrator (not the spawning subagent)
+   picked up and relayed. That recovery is not a mechanism to depend on. The fix is procedural,
+   not architectural: run B with `run_in_background: false` so its verdict returns in-band as
+   the `Agent` tool's own synchronous result, every time, regardless of which session is
+   running the loop.
+
+
+
 3. **B returns a verdict.** If CLEAN across all four clauses, skip to step 6. If B lists
    findings, each finding must carry a file:line specimen, a verbatim quote, and a suggested
    repair — ADR-0017's own words: "B's attestation carries per-finding file:line specimens
@@ -108,10 +130,11 @@ The loop has three roles, each a distinct invocation, never the same context twi
 
 7. **Commit.** `attestations/doc-legibility-attestations.jsonl` (the ledger the record was
    appended to) and the document both go into the same commit. Once
-   `gates/doc_attestation_presence.py` is wired into `hooks/pre-commit` (its own module
-   docstring carries the exact stanza, prepared but not yet applied — see that file's "ARMING
-   MODE" section for why), a commit touching an in-scope `.md` file with no matching attestation
-   record is refused there; until then, running the gate by hand
+   `gates/doc_attestation_presence.py` is wired into `hooks/pre-commit` (`gates/
+   doc_attestation_presence.py`'s own module docstring carries the exact stanza to insert,
+   prepared but not yet applied — see that file's "ARMING MODE" section for why), a commit
+   touching an in-scope `.md` file with no matching attestation record is refused there; until
+   then, running the gate by hand
    (`python3 gates/doc_attestation_presence.py <the changed files>`) before committing is the
    manual form of the same check.
 
@@ -121,23 +144,27 @@ ADR-0017 names the price rather than letting it arrive as a surprise, in its "Co
 section: "roughly two to three times the tokens per documentation change, on session billing."
 B's fresh-context read and, when needed, a second B round are real, billed invocations
 — the same class of cost as any other `Agent` dispatch, not a hidden background job. There is no
-`apparatus.json` switch for this cost the way there is for the headless critic
-(`hooks/doc_legibility_critic.py`): the A:B:C loop is a **workflow** run by choice each time a
-document changes, not a hook that fires automatically and could silently bill an operator who
-forgot it was on.
+`.claude/apparatus.json` mode switch (each scaffolded world's per-mechanism on/off/observe/enforce
+config file, [templated here](../bootstrap/templates/apparatus.json)) for this cost the way there
+is for the headless critic (`hooks/doc_legibility_critic.py`): the A:B:C loop is a **workflow** run
+by choice each time a document changes, not a hook that fires automatically and could silently
+bill an operator who forgot it was on.
 
 ## What the loop does not do
 
-- It does not replace `gates/doc_shapes.py` or `gates/link_integrity.py` — those are
+- It does not replace [`gates/doc_shapes.py`](../gates/doc_shapes.py) or
+  [`gates/link_integrity.py`](../gates/link_integrity.py) — those are
   deterministic, narrow, and free; they run on every commit regardless of whether A:B:C ran.
 - It does not make any LLM verdict block a commit. `gates/doc_attestation_presence.py` checks
   only that a structurally valid record exists for the document's exact current content — never
-  whether B's content judgment was CLEAN or DEFECT (`BACKLOG.md`, entry "Two ratifications
-  (maintainer, 2026-07-11 evening)", ratification 1's sub-question 2: "may any LLM verdict
-  ever sit in a BLOCKING path for this discipline? ... NO").
-- It is not required for excluded documents: point-in-time records (`BACKLOG.md`'s dated
-  entries), `judgment/**` (declared history), or a document carrying an inline
-  `doc-attest-exempt: <reason>` marker for a case the other two exclusions do not cover.
+  whether B's content judgment was CLEAN or DEFECT ([BACKLOG.md](../BACKLOG.md), entry "Two
+  ratifications (maintainer, 2026-07-11 evening)", ratification 1's sub-question 2: "may any LLM
+  verdict ever sit in a BLOCKING path for this discipline? ... NO").
+- It is not required for excluded documents: point-in-time records ([BACKLOG.md](../BACKLOG.md)'s
+  dated entries), [`judgment/**`](../OPERATING-CARD.md) (declared history — a predecessor era's
+  archive, kept for the record but not binding unless a current spec cites it), or a document
+  carrying an inline `doc-attest-exempt: <reason>` marker for a case the other two exclusions do
+  not cover.
 
 ## Related
 

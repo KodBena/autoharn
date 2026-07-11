@@ -714,6 +714,72 @@ exercised on the same test key, witnessed in `design/GPG-TRUST-LAYER-FAQ.md` §8
 genuine finding that a revoked key becomes immediately unusable for new signing (`gpg` refuses
 outright, "Unusable secret key" — stronger than a mere warning).
 
+**31. Small follow-ups batch — a read-only ledger verb, two timing journals, and a gate liveness
+counter (BACKLOG "Follow-ups commission scope extended (maintainer, 2026-07-11)" and the
+run-11-forensics change proposals it queues; the small-follow-ups commission executed the same
+day).** Four small, additive mechanisms are bundled into one entry because each is small on its
+own:
+
+- **`led show <id>` is a real, read-only subcommand** (`bootstrap/templates/led.tmpl`): it
+  prints one ledger row, every column, in full (`psql -x` expanded display, statement never
+  truncated). Before this it silently fell through to the generic write path with kind="show",
+  refused by the kernel's `ledger_kind_check`, burning a sequence id on every attempt — the
+  run-11 first-shift-forensics pass's own finding (BACKLOG "Run-11 first-shift forensics
+  (2026-07-11)", item 7: `led show <id>` was reached as an intuitive read-only verb but absorbed
+  into the write path instead). It now refuses loudly, with teach-text, on a missing id, and
+  never reaches the write path at all — proven by the ledger id sequence's own `last_value`
+  staying unchanged across a missing-id `show`. *Witnessed*, both polarities,
+  `seen-red/contemporaneity-audit/run_fixtures.py` cases n/o (a real `led` shim against a real
+  scaffolded schema).
+- **The doc-shapes gate now counts its own liveness.** `gates/doc_shapes.py`'s two checks
+  (standalone-fragment paragraphs; positional references into `HANDOFF.md`, the wholesale-
+  rewritten status document, where a bare position like "item 2" can dangle after a rewrite —
+  ADR-0017's deterministic core) run at write time in a scaffolded world via
+  `hooks/pretooluse_doc_shapes_gate.py`. That
+  hook now also writes a second, separate journal, `doc_shapes_gate.exercised.jsonl`: it gets
+  one line per COMPLETED evaluation (clean, denied, or observed-would-deny alike), written only
+  after the check actually runs to completion. A gap between a world's `.md` Write/Edit count
+  and its exercised-line count is therefore itself the signal that the gate is silently
+  fail-opening — closing the exact epistemic limit the run-11 forensics pass named: "a clean
+  pass and a silently-broken gate are byte-identical from the DENY-only journal alone"
+  (BACKLOG "Run-11 first-shift forensics (2026-07-11)", item 2). *Witnessed*, both polarities,
+  `seen-red/doc-shapes-gate-world/run_fixtures.py`'s EXERCISED-LIVENESS case: five real
+  evaluations produce five lines in order; the sixth call (mode="off", which returns before the
+  check runs) produces none.
+- **PostToolUse Bash completion timestamps land in a new sibling journal.**
+  `hooks/posttooluse_bash_completion.py` (new) writes `bash_completions.jsonl`, banking each Bash
+  call's completion time (UTC-Z) beside `hooks/stamp_intercept.py`'s existing PreToolUse dispatch
+  token. It FIFO-pairs each completion against that dispatch by a shared `command_sha256` where a
+  match exists (`pairing: "token"`, `duration_ms` included) and honestly marks
+  `pairing: "ts-only"` when none does — the maintainer's own design, named verbatim in the
+  commission as "invocation token if recoverable, else ts-pairing," stated here as a disclosed
+  heuristic: a named residual gap is that two truly concurrent Bash calls with byte-identical
+  command text can pair to the wrong dispatch. It is a sibling file, not a new line shape inside
+  `invocations.jsonl` itself, so the existing contemporaneity EDB (`engine/contemp_edb.py`) is
+  untouched. *Witnessed*, both polarities plus the FIFO-double-dispatch case,
+  `seen-red/bash-completion/run_fixtures.py`.
+- **The delegation observer gained a return leg.** `hooks/pretooluse_delegation_observer.py`
+  (extended) now also attaches at PostToolUse on `Task|Agent`. It journals a `kind: "return"`
+  line FIFO-paired against its own dispatch line (the hook's existing per-dispatch journaling
+  contract is unchanged; the return leg is a strictly additive new line kind in the SAME
+  journal), giving dispatch-to-return duration per subagent — the reviewer-execution-window
+  inference gap the run-11 retrospective named as still blocked (BACKLOG "RETROSPECTIVE-RUN11
+  ... second iteration of the record-sufficiency experiment (2026-07-11)": "with the product
+  shipping clean, the record can witness that review HAPPENED and READ the files but not that it
+  REASONED HARD"). A match carries `dispatch_ts` and `duration_ms`; no match is honestly
+  `pairing: "unresolved"`. *Witnessed*, both polarities plus the FIFO-double-dispatch case,
+  `seen-red/delegation-observer/run_fixtures.py`'s three new return-leg cases (g/h/i), extending
+  the file's existing dispatch-leg cases (a-f) unbroken.
+
+Two convention-only additions add no new mechanism (`bootstrap/templates/CLAUDE.md.tmpl`): a
+preamble sentence on point 5 names `./distance-to-clean` as available for a one-command closure
+check (the disaggregated `review-gap`/`question-status`/`work violations` views remain the
+documented default); and a new preamble point 12 exhorts the orchestrating agent to ledger a
+returning subagent's self-reported token/usage numbers, if ledgered at all, explicitly marked as
+an unverified self-report ("no harness guarantee") — the same trust class as a LAZY commission
+transcription, diagnostic-grade by design (BACKLOG "Maintainer principle: the action stream is
+the evidentiary basis; session internals are diagnostics (2026-07-11)").
+
 ## Built, unexercised (exists; has not yet fired in anger)
 
 - **Assumption validity bounds** — an assumption can carry "valid until / valid within" and an
