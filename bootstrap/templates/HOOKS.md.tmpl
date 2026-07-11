@@ -12,11 +12,13 @@
 - **World:** ledger schema `__SCHEMA__`, kernel schema `__KERN__`, role `__ROLE__` (db `__DB__` @
   host `__HOST__`).
 - **Kernel lineage applied by this scaffold run:** __LINEAGE_CHAIN__
-- **s21 (session-aware distinctness) status:** __S21_STATUS__ A future delta beyond s21 is,
-  same as always, a separate, explicit operator act — `bootstrap/apply-delta.sh <world-dir>
-  kernel/lineage/sNN-....sql` resolves this world's db/host/schema/kern from its own
-  `deployment.json`, prints the fully-resolved `psql` command, and requires a typed schema-name
-  confirmation before touching anything; it never applies bare and never guesses.
+- **s21 (session-aware distinctness) status:** __S21_STATUS__ A future delta beyond this world's
+  birth chain (above) is NOT applied here (maintainer ruling 2026-07-11, "runs are strictly
+  linear": this world is the only present-tense one; older/current worlds are never patched or
+  refreshed in place — `bootstrap/apply-delta.sh` is demoted to history, no operator scenario
+  applies it to an existing world). A delta reaches reality by entering the birth chain, carried
+  automatically into the NEXT world's `--new-world` scaffold — see autoharn's OPERATING-CARD.md
+  "Kernel deltas" decision tree for the current, authoritative shape.
 - **`reviewer` principal status:** __REVIEWER_STATUS__ See this world's root `CLAUDE.md` (if
   present) for the governance preamble that assumes this principal already exists — it is
   auto-loaded by Claude Code at session start, so there is nothing to paste.

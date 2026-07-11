@@ -31,7 +31,7 @@ ever edited while any wired session is live.
   older worlds are read-only evidence, never patched or refreshed (maintainer ruling,
   2026-07-11).
 - **birth chain** — the SQL applied at world creation: `high_watermark_1.sql` (bundling
-  s15 → s17-stamp → s17-independence → s19) → s20 → s21 → s22. There is no s16; s18 is
+  s15 → s17-stamp → s17-independence → s19) → s20 → s21 → s22 → s23. There is no s16; s18 is
   deliberately excluded (experiment apparatus, not kernel). See kernel/lineage/README.md.
 - **delta** — one additive lineage step. It reaches reality by entering the birth chain;
   the next world's scaffold carries it. Never applied to an existing world (see the
@@ -106,7 +106,7 @@ history — the ceremony it guarded has no legitimate scenario).
 2. Delta loosens a refusal, alters existing semantics, or touches law/? → maintainer,
    full ceremony (Fable-authored spec, or the succession ceremony in CLAUDE.md).
 3. **Any doubt about which side it falls on IS the routing: ask.**
-   Worked examples: s21/s22 sail through as class 1; review_gap scope filtering (option
+   Worked examples: s21/s22/s23 sail through as class 1; review_gap scope filtering (option
    B in design/REVIEW-GAP-SCOPE-SEMANTICS-RULING.md) routes as class 2 — it would make
    the view catch FEWER rows.
 

@@ -183,8 +183,8 @@ CAPABILITIES.md scope, and specific to the torn-down `capsprobe` world).
 **13. `bootstrap/new-project.sh --new-world` — opening an isolated world is one scripted command.**
 Per the "one world per run" ruling (maintainer, 2026-07-09: a run's subject must not see a
 sibling run's ledger history), `--new-world <name>` derives `--schema`/`--kern`/`--role` from one
-name, applies the FULL current birth chain in order — `high_watermark_1.sql` → s20 → s21 → s22 —
-with every `-v` var spelled out, seeds the stamp secret idempotently (never rotates an existing
+name, applies the FULL current birth chain in order — `high_watermark_1.sql` → s20 → s21 → s22 →
+s23 — with every `-v` var spelled out, seeds the stamp secret idempotently (never rotates an existing
 one), registers the `reviewer` principal (`author` is auto-seeded by `s15-schema.sql`), writes
 `deployment.json`, and (new-world only) writes the world-root `CLAUDE.md` governance preamble —
 so opening a run is one scaffold command, one `cd`, one `claude`, no hand-paste (the ratifier's
@@ -199,7 +199,11 @@ lines from idempotent `DROP CONSTRAINT IF EXISTS`/`DROP TRIGGER IF EXISTS` — n
 provisioned; `reviewer` principal registered; `deployment.json` + `CLAUDE.md` + the three verbs
 written), followed by the full `led`/`judge`/`pickup` round trip above, then torn down with zero
 residue (`DROP SCHEMA ... CASCADE` both schemas, `DROP OWNED BY`/`DROP ROLE`, confirmed by an
-empty post-drop `information_schema.schemata` query and directory removal).
+empty post-drop `information_schema.schemata` query and directory removal). *Re-witnessed
+2026-07-11 (s23 fold, BACKLOG dated entry) on `batchprobe`*: birth chain now reaches s23 —
+`information_schema.columns` confirmed `stamp_invocation` present on `ledger`/`ledger_current`/
+`countersigned_in_force` post-scaffold, no errors beyond the same cosmetic idempotent-DROP
+NOTICEs; torn down zero-residue the same way.
 
 **14. `bootstrap/apply-delta.sh` — DEMOTED TO HISTORY (maintainer ruling 2026-07-11).**
 Runs are strictly linear: run M > N settles run N's world as dust — there is no operator

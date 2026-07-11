@@ -154,10 +154,17 @@
 #                                              defense in depth) plus the two genuinely-reachable,
 #                                              deliberately-unrefused members depends_on_unknown_slug
 #                                              and dependency_cycle
-#                                              (these six verbs require kernel/lineage/s22-work-item-
+#   led work asof <timestamp>                 READ-ONLY point-in-time reconstruction: work-item
+#                                              states (open/claimed/closed) AS OF <timestamp>,
+#                                              derived by filtering the append-only work_* ledger
+#                                              rows to ts <= <timestamp> before picking each item's
+#                                              latest opened/claimed/closed row — no kernel change,
+#                                              a pure SELECT over existing columns (BACKLOG "Omega
+#                                              work-tracking disposition" 2026-07-11, item 2)
+#                                              (these seven verbs require kernel/lineage/s22-work-item-
 #                                              ledger.sql applied to this project's schema — s22 is
-#                                              an additive delta on top of the s15/s17/s19/s20/s21
-#                                              birth chain, not yet part of it as of this writing)
+#                                              an additive delta on the s15/s17/s19/s20/s21 birth
+#                                              chain, part of it from s22 onward — see OPERATING-CARD.md)
 #
 # Connection defaults are sourced LIVE from this project's deployment.json at RUN TIME (BACKLOG
 # maintainer ruling 2026-07-11, "runs are strictly linear" disposition 6, "live verbs"). This file
@@ -264,6 +271,34 @@ SQL
       exit 1
     fi
   fi
+}
+
+# --- flag-in-statement tripwire (BACKLOG "Chocofarm experiment-ledger disposition" 2026-07-11
+# night shift, finding 2, run7 row 71): a flag typed INSIDE the quoted statement text is invisible
+# ceremony -- by the time the top-of-file flag loop runs, that text is already part of the
+# statement word(s), so the flag never reaches the parser and the typed FK column it names
+# (supersedes/refs/regards/amends/answers/evidence/confidence) lands NULL, silently (run7 row 71:
+# statement text ended `--supersedes 48 --refs row:57,row:58,row:59`; both columns were NULL --
+# across all 79 run7 rows, supersedes/amends/answers were used zero times despite the vocabulary
+# existing). WARN-ONLY, never refuses: a statement can legitimately QUOTE one of these tokens in
+# prose (e.g. reporting someone else's command verbatim), so a false positive here is a harmless
+# notice, not a blocked write -- a tripwire, not a gate (mirrors demurral_detect.py's own
+# observer-only posture). led's OWN flag vocabulary is spelled out once, here, so a future flag
+# added to the top-of-file parser is not silently invisible to this check (ADR-0012 P1: one list).
+LED_FLAG_VOCAB="--supersedes --refs --regards --amends --answers --evidence --confidence"
+warn_flag_in_statement() {
+  local text="$1" flag
+  for flag in $LED_FLAG_VOCAB; do
+    case "$text" in
+      *"$flag"*)
+        echo "led: WARNING -- the statement text contains '${flag}', which looks like one of" >&2
+        echo "  led's own flags. Flags inside the quoted statement are NOT parsed -- if you meant" >&2
+        echo "  to set the typed column, re-issue the command with ${flag} OUTSIDE the quotes." >&2
+        echo "  (warn-only tripwire, not a refusal -- a statement that legitimately quotes" >&2
+        echo "  '${flag}' in prose just sees this notice; the write proceeds either way)" >&2
+        ;;
+    esac
+  done
 }
 
 if [ "${1:-}" = "--recent" ] || [ "${1:-}" = "current" ]; then
@@ -401,6 +436,7 @@ if [ "${1:-}" = "review" ]; then
   fi
   regards="$1"; verdict="$2"; independence="$3"; shift 3
   statement="$*"
+  warn_flag_in_statement "$statement"
   resolve_actor
   # actor resolves via a subquery bind below, NOT string-spliced: NULLIF(:'actor_name','') is NULL
   # when LED_ACTOR is unset, so the ledger's actor column stays NULL and the kernel's set_actor
@@ -550,6 +586,61 @@ SQL
       exec psql -h "$PGHOST" -d "$PGDB" -c "
         SELECT violation, slug, detail FROM ${SCHEMA}.work_item_violations ORDER BY violation, slug;"
       ;;
+    asof)
+      shift
+      if [ $# -lt 1 ]; then
+        echo "usage: led work asof <timestamp>" >&2
+        echo "       point-in-time backlog reconstruction -- work-item states AS OF <timestamp>," >&2
+        echo "       derived purely by filtering the append-only work_* ledger rows to ts <=" >&2
+        echo "       <timestamp> (read-only; no kernel change, no new table -- BACKLOG 'Omega" >&2
+        echo "       work-tracking disposition' 2026-07-11, item 2). <timestamp> is anything" >&2
+        echo "       postgres's timestamptz cast accepts, e.g. '2026-07-11 10:23:00' or an ISO" >&2
+        echo "       8601 string; quote it if it contains a space." >&2
+        exit 1
+      fi
+      asof="$1"
+      # Three states (open/claimed/closed), NOT work_item_current's two (open/closed +
+      # claimant column) -- the omega-disposition ask was explicitly "open/claimed/closed as of
+      # T", so this mirrors work_item_current's own opened/claimed/closed CTE shape (s22) with
+      # ONE addition: every CTE is filtered to ts <= :asof before the DISTINCT ON latest-row
+      # pick, so "latest as of T" replaces "latest ever". An item whose opening act is itself
+      # after T does not exist yet as of T and is correctly absent (INNER JOIN on opened).
+      # Bound via psql -v/heredoc (a psql bind, not string concatenation or -c), same convention
+      # this file's own generic <kind> <statement> path documents below: psql's :'var'
+      # interpolation is only applied to a script read from stdin/-f, NOT to a -c argument -- so
+      # this is fed via stdin like every OTHER work verb above, not -c like the parameter-free
+      # list/violations reads.
+      exec psql -h "$PGHOST" -d "$PGDB" -v ON_ERROR_STOP=1 -v asof="$asof" <<SQL
+        WITH opened AS (
+          SELECT work_slug AS slug, work_title AS title, id AS opened_id
+          FROM ${SCHEMA}.ledger
+          WHERE kind = 'work_opened' AND ts <= :'asof'::timestamptz
+        ),
+        claimed AS (
+          SELECT DISTINCT ON (work_slug) work_slug AS slug, actor AS claimant, id AS claimed_id
+          FROM ${SCHEMA}.ledger
+          WHERE kind = 'work_claimed' AND ts <= :'asof'::timestamptz
+          ORDER BY work_slug, id DESC
+        ),
+        closed AS (
+          SELECT DISTINCT ON (work_slug) work_slug AS slug, work_resolution AS resolution,
+                 work_witness AS witness, id AS closed_id
+          FROM ${SCHEMA}.ledger
+          WHERE kind = 'work_closed' AND ts <= :'asof'::timestamptz
+          ORDER BY work_slug, id DESC
+        )
+        SELECT o.slug, o.title,
+               CASE WHEN c.slug IS NOT NULL THEN 'closed'
+                    WHEN cl.slug IS NOT NULL THEN 'claimed'
+                    ELSE 'open' END AS state_asof,
+               c.resolution, c.witness, p.name AS claimant
+        FROM opened o
+        LEFT JOIN claimed cl ON cl.slug = o.slug
+        LEFT JOIN closed  c  ON c.slug  = o.slug
+        LEFT JOIN ${KERNEL}.principal p ON p.id = cl.claimant
+        ORDER BY o.slug;
+SQL
+      ;;
     *)
       echo "usage: led work open <slug> <title...>" >&2
       echo "       led work claim <slug>" >&2
@@ -557,6 +648,7 @@ SQL
       echo "       led work close <slug> <resolution> [--witness <ref>]" >&2
       echo "       led work list          (work_item_current)" >&2
       echo "       led work violations    (work_item_violations)" >&2
+      echo "       led work asof <timestamp>  (point-in-time reconstruction, read-only)" >&2
       exit 1
       ;;
   esac
@@ -571,12 +663,13 @@ if [ $# -lt 2 ]; then
   echo "       led obligate <scope> <assigned-by-principal> <obliged-actor-principal>" >&2
   echo "       led obligate revoke <scope>" >&2
   echo "       led review <entry-id> <verdict> <independence> [--antecedent id] <statement...>" >&2
-  echo "       led work open|claim|depends|close|list|violations  (see top-of-file comment)" >&2
+  echo "       led work open|claim|depends|close|list|violations|asof  (see top-of-file comment)" >&2
   exit 1
 fi
 
 kind="$1"; shift
 statement="$*"
+warn_flag_in_statement "$statement"
 rationale=""
 if [ -n "$files" ]; then
   rationale="files: ${files}"

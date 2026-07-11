@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-09T07:54:37Z
-#   last-change: 2026-07-09T12:53:16Z
-#   contributors: 9bcc0113/main, be693afb/main
+#   last-change: 2026-07-11T00:06:37Z
+#   contributors: 9bcc0113/main, be693afb/main, e4410ef6/main
 # <<< PROVENANCE-STAMP <<<
 
 """layout_census — LAYOUT.md's designed tree as a MECHANICAL registry (manifest [C21]).
@@ -43,6 +43,7 @@ ROOT_FILES = {
     # LAYOUT.md's tree/table are not yet amended to match; flagged for maintainer review.
     "DIRCLASS.md", "CAPABILITIES.md", "HANDOFF.md", "WALKTHROUGH.md",
     "POST-FABLE-OPERATING-BRIEF.md",  # succession handoff, root doc (2026-07-09)
+    "OPERATING-CARD.md",  # Opus-readiness operating-era quick reference, root doc (2026-07-11)
 }
 ROOT_DIRS = {
     ".claude", "bootstrap", "law", "judgment", "kernel", "stores", "instruments", "engine",

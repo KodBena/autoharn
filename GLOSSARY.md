@@ -192,8 +192,8 @@ world. Runs are numbered; their worlds are named for them (`run5`, `run7`).
 
 ### birth chain
 The ordered kernel SQL a new world receives at scaffold time: `high_watermark_1.sql`
-(bundling s15 → s17-stamp → s17-independence → s19) → s20 → s21 → s22. There is no s16;
-s18 is deliberately excluded (experiment apparatus, not kernel). SSOT:
+(bundling s15 → s17-stamp → s17-independence → s19) → s20 → s21 → s22 → s23. There is no
+s16; s18 is deliberately excluded (experiment apparatus, not kernel). SSOT:
 `kernel/lineage/README.md` + `bootstrap/new-project.sh`.
 
 ### delta (kernel lineage delta)
