@@ -26,11 +26,11 @@ and that takes precedence. Ordinary lowercase/Title-Case words never trip the ga
 
 ### Scope
 
-- `docs/ARCHITECTURE.md`
-- the obligations×formalisms survey (`docs/research/2026-06-27-obligations-formalisms-survey/**.md`),
-  minus its own definition surfaces (`KEY.md`, `GLOSSARY.md`).
+Every tracked `*.md` in the repo (maintainer ruling 2026-07-07, finding 48), minus the definition
+surfaces themselves (`terms.md`, the survey's `KEY.md`, root `GLOSSARY.md`). This is wider than the
+gate's own blocking posture — see the pre-commit wiring note below.
 
-Adjust `SCOPE` in [`check.py`](check.py) to widen coverage.
+Adjust `SCOPE` in [`check.py`](check.py) to narrow or widen coverage.
 
 ## Where definitions live
 
@@ -39,7 +39,7 @@ Three definition surfaces, all read by the gate (`DEF_FILES` in `check.py`):
 | surface | role |
 |---|---|
 | [`terms.md`](terms.md) | the persistent, hand-authored acronym glossary (this directory) — the home for stray jargon |
-| survey [`KEY.md`](../../docs/research/2026-06-27-obligations-formalisms-survey/KEY.md) | the survey's own legend (obligation codes, tiers, tool index) |
+| survey [`KEY.md`](../../research/obligations-formalisms-survey/KEY.md) | the survey's own legend (obligation codes, tiers, tool index) |
 | root [`GLOSSARY.md`](../../GLOSSARY.md) | autoharn's coined vocabulary |
 
 A token is "defined" if it is bolded `**TOKEN**` on any of these. (`GLOSSARY.md` headings use `###`,
@@ -48,7 +48,7 @@ not bold, so terms only reachable there — e.g. `SSOT` — are mirrored into `t
 ## How to run
 
 ```sh
-python3 tools/doc-legibility/check.py     # from the repo root; exit 0 = clean, 1 = violations
+python3 gates/doc-legibility/check.py     # from the repo root; exit 0 = clean, 1 = violations
 ```
 
 No dependencies (Python 3 stdlib only).
@@ -72,11 +72,13 @@ When the gate flags a new token, make exactly one honest choice:
 
 ## Wire it into CI / pre-commit (recommended)
 
-The gate is only a *class*-fix if it cannot silently regress. Run it on every change:
+The gate is only a *class*-fix if it cannot silently regress. It IS wired into
+[`hooks/pre-commit`](../../hooks/pre-commit) today, but **report-only**: it runs and prints on every
+commit, but its exit code is not propagated (the widened ALL-`*.md` scope surfaces ~1600 undefined
+acronyms over corpora — chiefly the survey and BACKLOG/CLAUDE/ADR headers — never written against
+this heuristic; see the disposition entry in `BACKLOG.md`, "doc-legibility gate disposition"). Making
+it blocking needs either a corpus acronym-sweep or a narrower blocking scope; until then, treat its
+report as an advisory, not a gate.
 
-- **pre-commit hook** — `.git/hooks/pre-commit` (or a `pre-commit` framework hook) that runs
-  `python3 tools/doc-legibility/check.py` and blocks the commit on non-zero exit.
-- **CI** — a job step `python3 tools/doc-legibility/check.py`; a failed step fails the build, with
-  the grouped violation list in the log telling the author exactly what to define or allow-list.
-
-Either way the contract is the same: a new undefined acronym cannot land in the scoped docs.
+Either way the contract for a fully-armed instance is the same: a new undefined acronym cannot land
+in the scoped docs.

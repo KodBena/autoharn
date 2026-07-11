@@ -1,9 +1,15 @@
 #!/usr/bin/env python3
+# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
+#   first-seen : 2026-07-11T14:35:32Z
+#   last-change: 2026-07-11T14:49:43Z
+#   contributors: e4410ef6/main
+# <<< PROVENANCE-STAMP <<<
+
 """doc-legibility gate — the incident-born `*_violations` check for stranded acronyms.
 
 Class, not instance (ADR-0011 Rule 4): instead of defining acronyms one at a time, this FAILS the
 build if ANY acronym-like token in the scoped docs is neither (a) defined — bolded `**TOK**` in a
-definition surface (the persistent tools/doc-legibility/terms.md, the survey KEY.md, or the root
+definition surface (the persistent gates/doc-legibility/terms.md, the survey KEY.md, or the root
 GLOSSARY.md) — nor (b) explicitly allow-listed as common knowledge. The allowlist makes the
 "this one is obvious" judgement itself reviewable.
 
@@ -39,8 +45,14 @@ def _tracked_md():
     return [os.path.join(ROOT, ln) for ln in r.stdout.splitlines() if ln.strip()]
 
 
-# Scope: every tracked *.md whose acronyms must all be defined, minus the definition surfaces.
-SCOPE = [f for f in _tracked_md() if os.path.basename(f) not in _DEF_BASENAMES]
+# Scope: every tracked *.md whose acronyms must all be defined, minus the definition surfaces,
+# minus judgment/** — declared HISTORY (OPERATING-CARD.md: "predecessor era — history unless a
+# current spec cites it"), the same principled exclusion gates/link_integrity.py uses, applied
+# here consistently (2026-07-11 doc-legibility-indictment assessment, BACKLOG disposition).
+_EXCLUDE_DIR_PREFIXES = ("judgment/",)
+SCOPE = [f for f in _tracked_md()
+         if os.path.basename(f) not in _DEF_BASENAMES
+         and not any(os.path.relpath(f, ROOT).startswith(p) for p in _EXCLUDE_DIR_PREFIXES)]
 ALLOW = os.path.join(ROOT, "gates/doc-legibility/allowlist.txt")
 
 TOKEN = re.compile(r'[A-Za-z0-9]+(?:[-/][A-Za-z0-9]+)*\+?')
@@ -127,9 +139,11 @@ def main():
                 violations.setdefault(part, []).append((rel, ln))
     if not violations:
         print(f"doc-legibility: clean ✓  ({len(SCOPE)} docs, {len(defined)} defined/allowlisted tokens)")
+        print(f"  excluded: judgment/** — declared history (OPERATING-CARD.md)")
         return 0
     print(f"doc-legibility: {len(violations)} undefined acronym(s) across {len(SCOPE)} docs — define in "
-          f"gates/doc-legibility/terms.md or add to gates/doc-legibility/allowlist.txt\n")
+          f"gates/doc-legibility/terms.md or add to gates/doc-legibility/allowlist.txt")
+    print(f"  excluded: judgment/** — declared history (OPERATING-CARD.md)\n")
     for tok in sorted(violations, key=lambda t: (-len(violations[t]), t)):
         locs = violations[tok]
         where = ", ".join(f"{r}:{l}" for r, l in locs[:3]) + (" …" if len(locs) > 3 else "")

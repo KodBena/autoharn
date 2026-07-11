@@ -222,3 +222,102 @@ README
 SATISFIABLE
 UNSATISFIABLE
 ASH            # "HONEST ASH FLAGS" header — read as English "ash" (burnt-out residue); see README note
+
+# --- Common computing terms (extension) ---
+JSON          # JavaScript Object Notation
+URL           # uniform resource locator
+ID            # identifier
+GB            # gigabyte
+NLP           # natural-language processing
+GPU           # graphics processing unit
+FK            # foreign key (SQL) — named explicitly as SQL-keyword noise, BACKLOG.md:624
+HMAC          # hash-based message authentication code (this project's own stamp mechanism)
+PR            # pull request
+
+# --- Proper nouns: organizations, standards bodies (extension) ---
+ISO           # International Organization for Standardization
+IEC           # International Electrotechnical Commission
+NRC           # (US) Nuclear Regulatory Commission — this project's own "NRC-grade" quality-bar framing (README.md:64)
+
+# --- Claude Code's own API vocabulary (proper nouns of the tool this harness is built on) ---
+PreToolUse    # Claude Code hook event name
+PostToolUse   # Claude Code hook event name
+
+# --- This project's own SSOT document/directory names, used bare in prose (not acronyms —
+# the expansion is the file itself: BACKLOG.md, CLAUDE.md, law/adr/*.md, law/briefs/*.md,
+# FINDINGS.md, HANDOFF.md, CAPABILITIES.md, GLOSSARY.md, provenance/*.md, the design/ and
+# law/ directories, CLAUDE.md's ORCHESTRATION section) ---
+ADR           # law/adr/NNNN-*.md — Architecture Decision Record, this repo's own convention
+BACKLOG       # BACKLOG.md
+CLAUDE        # CLAUDE.md
+BRIEF         # law/briefs/*/BRIEF.md, also plain English "a brief"
+FINDINGS      # FINDINGS.md
+HANDOFF       # HANDOFF.md
+CAPABILITIES  # CAPABILITIES.md
+GLOSSARY      # GLOSSARY.md
+PROVENANCE    # provenance/*.md, also plain English "provenance"
+ORCHESTRATION # CLAUDE.md's ORCHESTRATION section
+DESIGN        # design/*.md, also plain English "design"
+LAW           # law/, also plain English "law"
+
+# --- ALL-CAPS English words used for emphasis in the CORE repo's own prose (BACKLOG.md,
+# CLAUDE.md, CAPABILITIES.md, ...) — the same shouting style as the frozen-survey section
+# above, applied to this repo's own terse register. RED/NEG/NUM/ONE/NO/IS/IN and
+# INSERT/NULL/MIGRATE/STAYS/DECIDED/INC are named VERBATIM as this exact noise class by the
+# project's own commentary (BACKLOG.md:623-624, hooks/pre-commit) — not a fresh judgment call,
+# a mechanical transcription of an already-made one. The rest are the same category, spot-
+# checked against their actual doc context before listing (never guessed) ---
+RED
+NEG
+NUM
+ONE
+NO
+IS
+IN
+INSERT
+NULL
+MIGRATE
+STAYS
+DECIDED
+INC
+BOTH
+BEFORE
+NEW
+WHY
+OPEN
+CLOSED
+EXCLUDED
+NEVER
+MUST
+SAME
+AS
+AT
+HIGH
+GREEN
+STALE
+EVIDENCE
+SEED
+RATIFIED
+REFUSED
+WITNESSED
+DERIVED
+RULING
+SERVED
+POST
+ORDER
+VIEW
+HOOK
+FRAME
+FIND
+ERA
+MODEL
+SPEC
+CONS
+CHECK
+DEFECT
+DIVERGE
+AGREE
+AUDIT
+QUARANTINED
+BUILD
+ONLY
