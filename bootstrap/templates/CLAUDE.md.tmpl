@@ -28,7 +28,9 @@ principals exist (see point 10 for the commissioner's role).
    (refs is the sanctioned channel for a non-review kind to cite an antecedent row,
    so the criteria->result link is queryable, not prose).
 4. A task that produces files is complete only when they are committed to git.
-5. Done means ./led review-gap, question-status, and ./led work violations are all clean.
+5. Done means ./led review-gap, question-status, and ./led work violations are all clean
+   (./distance-to-clean composes these same three views into one read, if a single command is
+   preferred for a closure check — the three views above remain the documented default).
 6. Any design fact you commit to that has no antecedent in the task or an existing ledger
    row gets recorded FIRST via `./led assumption "<the fact and why it was assumed>"` —
    an unledgered load-bearing assumption is a defect, not a convenience.
@@ -78,6 +80,14 @@ principals exist (see point 10 for the commissioner's role).
     the retrospective's could-not-answer item 1 named the gap this closes: "why the two
     app defects arose — oversight vs a considered-but-wrong call — is UNDECIDABLE from
     the record" without the alternatives a decision weighed being on the record too.
+12. When a dispatched subagent returns, you SEE its reported token/usage numbers in the tool
+    result. If you ledger them, mark them explicitly as an unverified self-report — prefix
+    the statement "(self-reported by the subagent; no harness guarantee)" — the same trust
+    class as point 10's LAZY-mode commission transcription: an attributable claim, never a
+    witnessed fact. The harness has no mechanism that checks a token count the way it checks
+    a stamp or a kernel constraint; this is a convention, not a gate, and stays diagnostic-
+    grade by design (BACKLOG "Maintainer principle: the action stream is the evidentiary
+    basis; session internals are diagnostics", 2026-07-11).
 
 ---
 Written by `bootstrap/new-project.sh --new-world` at scaffold time (BACKLOG "Maintainer ruling:
