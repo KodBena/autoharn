@@ -3930,3 +3930,253 @@ not overclaimed; a real governed session will produce the complete signal the fi
 
 Every claim above is WITNESSED with the artifact quoted, or explicitly named as a limited/partial
 witness with the reason stated. No umbrella claims.
+
+## Run-11 first-shift forensics (2026-07-11)
+
+Read-only forensic pass over run11 (`/home/bork/w/vdc/1/run11`, ledger `run11`/`run11_kernel` on
+`toy`@192.168.122.1) — the first run under the FULL current mechanism set (change_gate,
+stamp_intercept, clean_exit all "enforce"; doc_shapes_gate "enforce" for the first time anywhere;
+mutation_observer/delegation_observer/read_observer "observe"; demurral_detect/doc_legibility_critic
+"off"). Session closed CLEAN, independently re-confirmed live during this pass (not just trusted
+from the prompt): `./judge` → `AGREE asp=199 sql=199 atoms; Δasp=[] Δsql=[]`, `work_item_violations:
+none`; `./distance-to-clean` → `TOTAL debt: 0`; `./audit` → `VERDICT: BATCHED_DECLARED`. Evidence:
+97 ledger rows (ids 1–100, 3 burned: 62, 97, 98 — matches `./audit`'s own `REFUSAL FINGERPRINTS:
+[62, 97, 98]`), `.claude/logs/invocations.jsonl` (246 rows, Bash-only), `read_observer.journal.jsonl`
+(16 rows), `delegation_observer.journal.jsonl` (6 rows), `change_gate.journal.jsonl` (8 rows),
+`stop_clean_exit.journal.jsonl` (1 row), the world's git repo (5 commits), and `run11/CLAUDE.md`'s
+governance preamble. Classification rubric per "Maintainer priority ruling" above: (a) AGENT DEFECT,
+(b) MECHANISM-REFUSES-WITHOUT-TEACHING, (c) LEGITIMATE-REQUIREMENT-BEING-FELT — only (b) produces
+change proposals.
+
+**1. SIGNED-COMMISSION INTAKE (first ever).** Row 1 (`kind=commission, actor=3/commissioner,
+stamp_verified=f, ts=2026-07-11 20:37:40.23+02`) predates the Claude session's first invocation
+(`18:43:01Z` = `20:43:01+02`, `invocations.jsonl` line 1) by ~5.3 minutes — the maintainer typed
+`LED_ACTOR=commissioner ./led commission "<ask>"` in his own terminal before starting Claude Code
+(FULL mode; `stamp_verified=f` is exactly the expected signature of a write that never passed
+through Claude Code's own PreToolUse `stamp_intercept` hook, not a defect). The agent's FIRST
+invocation of the whole session was `./led --recent 5` (`18:43:05Z`), confirming CLAUDE.md point
+10's "check before writing your own" discipline; `grep -c "commission" invocations.jsonl` for any
+agent-issued `./led commission` call returns zero matches for the whole 246-row log — the agent
+never double-recorded the ask. Every decomposition row from 3 onward carries `--refs row:1`
+(rows 3, 4, 5, 6, 26, 27, 37, 48, 49, 53, 54, 55, 59, 61, 87, 95, 96 all cite `row:1`, confirmed by
+direct query). **No confusion is visible around the unstamped commissioner row** — but also no
+explicit narration of *why* row 1 needed no vicarious re-transcription; the agent silently
+complied with point 10 rather than stating "row 1 is already FULL-mode signed, skipping my own."
+Benign, not a finding. **Classification: (c)**, textbook compliance.
+
+**2. DOC GATE, ENFORCE MODE (first ever live-blocking deployment anywhere).** Wired
+(`.claude/settings.json`, `Write|Edit` matcher → `pretooluse_doc_shapes_gate.py`,
+`GATE_SUBJECT_ROOT=/home/bork/w/vdc/1/run11`), mode read live as `"enforce"` from
+`.claude/apparatus.json`. `docs/qeubo-interface.md` was written/edited across 3 commits
+(`6d9d450` 93 lines, `ef8ccad` +28, `ac22f7b` +3/-1) plus `webapp/README.md`, `.claude/APPARATUS.md`,
+`.claude/GOVERNED_FILES.md`, `.claude/HOOKS.md`, `CLAUDE.md` — no `doc_shapes_gate.journal.jsonl`
+file exists in `.claude/logs/` at all (by the gate's own documented convention, a clean pass is
+never journaled — only DENY/OBSERVED-WOULD-DENY are). Re-running `gates/doc_shapes.check_file()`
+directly against each of the three committed snapshots of `docs/qeubo-interface.md` (git-show'd
+into scratch files, checked read-only from autoharn, never written back to run11) returns `CLEAN`
+for all three — consistent with "the gate ran and found nothing," not merely "the gate never ran."
+**No refusals, no retry cycles, no flailing.** **Classification: (c)** — the first live enforce-mode
+deployment of ADR-0017's checks passed with zero friction on real, freshly-written prose.
+**Epistemic limit, named plainly per the task's instruction:** the gate fail-opens silently on ANY
+internal exception (its own documented posture — "a legibility check must never block a write"),
+and a clean pass and a silently-broken gate are BYTE-IDENTICAL from world-side evidence alone (both
+produce zero journal lines and zero visible refusals). This pass cannot distinguish "gate ran,
+found nothing" from "gate always raised and always fail-opened" using only run11's own record — the
+`check_file()` replay above raises confidence (the content really is clean by the same logic the
+gate would apply) but does not prove the LIVE hook process executed without error on each call. No
+dedicated unit/integration test for `pretooluse_doc_shapes_gate.py` was found in this repo.
+
+**3. READ-OBSERVER (first ever, 16 read events).** All 16 events share ONE `session_id`
+(`b188580a-2d70-4990-949c-49205c4ca8b3` — the run's sole top-level Claude Code session; every
+`Agent`-dispatched reviewer subagent runs INSIDE that same session_id, same as run10's s21
+finding). The mechanically-enforced independence signal for reviewer countersigns is real but
+lives elsewhere: `run11.review_detail` shows all 49 reviews claim `independence=technical`, none
+refused, because `kernel/lineage/s21-session-aware-distinctness.sql`'s `validate_independence()`
+keys on the PAIR `(stamp_session, stamp_agent)`, not session alone — reviewer rows carry a
+per-dispatch `stamp_agent` (e.g. `a8b1c1d45dee78cce` for the first dispatch, `a5c80ae88e23a75c9`
+for a later one) distinct from the author's `stamp_agent='main'`, so technical independence holds
+STRUCTURALLY (kernel-enforced) even though `read_observer` cannot see that distinction (its schema
+carries only `ts, session_id, file_path` — no agent/actor/tool_use_id field). Time-correlation,
+not structural proof, is what read_observer offers: the reviewer's 4th dispatch ("Final reviewer
+pass over implementation rows", `delegation_observer` ts `19:19:21.326Z`) is followed within 8s by
+Read events on exactly the four work items' shipped artifacts — `docs/qeubo-interface.md`
+(19:19:29.174Z), `webapp/palette.js` (19:19:29.311Z), `webapp/qeubo-client.js` (19:19:35.539Z),
+`webapp/README.md`/`index.html`/`compare.html` (19:21:21.1–1.8Z) — and `invocations.jsonl` in the
+same window shows `git show --stat 6d9d450/ef8ccad/ec817aa` (19:19:28Z) alongside them. The review
+rows citing these artifacts as "verified" land 1–2 minutes LATER (row 66, 19:22:33Z: *"verified
+against git log: commit 6d9d450... exists and its diff includes docs/qeubo-interface.md (93
+lines)"*; row 79, 19:23:20Z: *"verified: commit ec817aa... exists, diff adds webapp/index.html,
+webapp/palette.js, webapp/README.md as described... webapp/README.md and index.html both
+accurately describe the shipped renderer"*; row 82: *"Read compare.html and qeubo-client.js in
+full: the auth flow, pair/preference/best wiring, and index.html hand-off link all match"*) — a
+temporally coherent trace (dispatch → reads of the named artifacts → verification claims quoting
+their content) that a lazy "verified" without reading would not produce this shape of specific,
+content-accurate claims. **What the traces DO prove:** the exact files a review row claims to have
+checked were in fact Read (by the Read tool, PreToolUse-observed) in the same session, in a tight
+window immediately preceding the claim, and the claims' content-specificity (e.g. quoting
+`compare.html`'s auth/hand-off wiring correctly) is consistent with an actual read having occurred.
+**What they do NOT prove:** WHICH agent (main thread vs. the dispatched reviewer subagent)
+performed a given read — `read_observer`'s schema has no field to attribute a read to a specific
+dispatch, only to the shared session_id, so the correlation above is temporal/circumstantial, not
+structural. Independence of the WRITE (kernel-enforced, `(stamp_session, stamp_agent)` pair) and
+independence of the READ (unenforced, unattributed) are two different invariants — I6 read-trace
+evidence answers "was something read before this was attested," not "did the SAME entity that
+signs as reviewer do its own reading, independent of the author's."
+
+**4. STOP GATE JOURNAL (first durable record; class-b fix from the run-10 audit confirmed live).**
+`stop_clean_exit.journal.jsonl` carries exactly ONE line: `{"ts": "2026-07-11T19:29:58.648Z",
+"outcome": "clean_allow"}`. This matches the run-10 audit's own change proposal ("journal every
+`stop_clean_exit` outcome, not just observe-mode allows") — the `"clean_allow"` outcome kind did
+not exist in run10's observe-mode-only journaling scheme, so its presence here is live evidence the
+fix landed and fired correctly on its first exercise. The outcome matches the session's actual
+ending: the last ledger act before stop is row 95 (`21:28:36.08+02` = `19:28:36Z`, decision,
+*"stopping: commission fulfilled — all four decomposed work items shipped and committed..."*),
+naming what stands (all four artifacts, live-verified) and what remains (*"nothing decomposed is
+left unclaimed... a fresh session resuming this world would start from a clean slate"* — plus two
+disclosed non-blocking residues: a hardcoded demo credential, and the QEUBO demo backend left
+un-seeded between runs). CLAUDE.md point 8's "stopping is a ledgered act" is satisfied by row 95
+precisely. Row 95 was itself countersigned (dispatch 6, `19:28:56.653Z`, landing as reviewer rows
+99/100, `19:29:31–35Z`) BEFORE the Stop hook fired clean at `19:29:58.648Z` — the full sequence
+(stop-disposition row → countersign dispatch → countersign lands → clean Stop) is intact and in
+the right order.
+
+**5. CLOSURE — sequence, shape, and composed-verb usage.** Reconstructed timeline: session start
+`18:43:01Z`; four work items shipped by `19:18:36Z` (commits `6d9d450` 19:03:41Z, `ef8ccad`
+19:08:16Z, `ec817aa` 19:14:15Z, `6d50e64` 19:18:36Z) — a **~35.6-minute build phase**; final
+reviewer pass dispatched `19:19:21Z` catches a real citation defect (rows 70–72, *"Broken
+antecedent citation: this row's own refs field is row:19 and its prose calls the first... but row
+19 is..."*), fixed as commit `ac22f7b` (19:25:59Z) with corrected re-review (rows 88–94,
+19:27:33–48Z), stopping disposition row 95 (19:28:36Z), final countersign (19:29:31–35Z), clean
+Stop (19:29:58.648Z) — a **~11.4-minute closure tail**. Total session ≈46:57, 246 invocations.
+Compared to run10 (build ~22 min, closure tail ~25 min, 190/299 invocations in the closure half, 47
+review-gap polls, per `design/RETROSPECTIVE-RUN10.md`): run11's TOTAL wall-clock is comparable
+(~47 min both), but the SPLIT inverted — more of the budget went to building (35.6 vs 22 min) and
+much less to closure firefighting (11.4 vs 25 min, **less than half**). Disaggregated-view polling:
+`review-gap` 20×, `question-status` 10×, `work violations` 4× (34 total) vs run10's 47
+`review-gap`-alone polls — also roughly halved. **The composed `distance-to-clean` verb was NOT
+invoked even once as a command** — it was `cat`'d for inspection (18:43:10Z) and `git add`'d
+(19:03:37Z) but never executed; the agent used only the disaggregated `review-gap` /
+`question-status` / `work violations` views throughout, confirming the "disaggregated-default is BY
+DESIGN, usage is data not defect" framing — here the data says: even with a one-shot composed verb
+available, an agent reaching for the individually-documented, individually-taught verbs it already
+knows is the more natural path. Not a finding requiring a fix; worth noting for anyone tuning
+`pickup`/`HOOKS.md` toward foregrounding the composed verb more, should the maintainer want that
+usage pattern to shift.
+
+**6. LATE ENTRIES — `--event-time` live for the first time, and it worked.** Two rows use s24's
+declared-event-time mechanism: row 26 (`event_declared_ts=20:52:00+02`, written `20:55:07+02`,
+*"LATE-DECLARED: this row is written after the dispatch actually happened (delegation-observer
+hook caught the missing before-the-fact ledger row) — event-time above marks the actual dispatch
+moment, not this write"*) and row 37 (same pattern, `event_declared_ts=20:56:00+02`, written
+`20:58:39+02`). Both are DECLARED, not silent — this is `./audit`'s own
+`honestly-declared-late row id(s): [26, 37]` line, independently reproduced live during this pass.
+Mechanistically: `delegation_observer` (mode `"observe"`, never blocks) emitted its non-blocking
+`additionalContext` warning ("dispatching a subagent is work: ledger it BEFORE doing them") when
+the agent dispatched an `Agent` Task without a preceding ledger row (CLAUDE.md point 7) — TWICE —
+and BOTH times the agent responded not by ignoring the warning but by writing a compliant
+LATE-DECLARED row with the true dispatch time, exactly the discipline `design/LATE-ENTRY-AND-
+INTAKE-SEMANTICS.md` was built to produce. This is a genuine, positive first-live-fire result for
+two mechanisms at once: the s24 declared-event-time column (previously only scratch-witnessed,
+BACKLOG "Late-entry discipline implemented") and observe-mode `delegation_observer`'s power to
+shape conduct despite never blocking. `./audit`'s overall verdict — `BATCHED_DECLARED` — is
+consistent with the ledger: no row narrates past conduct WITHOUT declaration (the run-10 row-1
+pattern this mechanism exists to catch did not recur). No undeclared silence-table gaps: `./audit`'s
+own SILENCE TABLE section is empty of entries beyond the two intake-shape bursts (both `--refs
+row:1`-chained decomposition bursts preceding any tool activity, annotated `intake-shape (precedes
+all tool activity)` exactly as the run-10 audit's Proposal 1 intended, and correctly NOT flagged as
+undeclared since they are the intake decomposition itself, permitted batched-and-declared by
+CLAUDE.md point 9).
+
+**7. STRUGGLE INVENTORY — one item found beyond the six questions above, self-discovered while
+reconciling `./audit`'s `REFUSAL FINGERPRINTS: [62, 97, 98]` against the session transcript.**
+`led.tmpl` defines no `show` subcommand (`grep -n "show" bootstrap/templates/led.tmpl` returns only
+comment/help-text hits, never a `case` arm) — `./led show <id>` (2 positional args, so it clears the
+generic path's `$# -lt 2` usage guard) falls through to the generic `<kind> <statement...>` INSERT
+path with `kind="show"`, which `ledger_kind_check`'s CHECK constraint refuses (confirmed live:
+`SELECT pg_get_constraintdef(...)` on `run11.ledger` lists `assumption, decision, question,
+verification, finding, snag, revision, note, review, work_opened, work_claimed, work_depends_on,
+work_closed, commission` — no `show`), burning the attempted row's identity value (standard
+Postgres sequence-non-transactionality). `invocations.jsonl` shows the agent reached for this
+naturally-guessed verb (mirroring `git show`) twice: `./led show 19|20|27` (three chained calls,
+`19:19:45Z`, immediately preceded by a `review-gap`/`--recent 30` orientation pass and followed at
+`19:22:21–24Z` by the agent grepping `led.tmpl` itself for the REAL `review` syntax before its
+first successful countersign at `19:22:33Z`, landing as row 63) and `./led show 47|48`
+(`19:29:17Z`, mid-final-review, immediately preceding rows 99/100). Both windows land exactly one
+burned id apiece in `62` and the pair `97, 98` respectively — the mapping between five individual
+`show N` calls and three total burns does not fully arithmetically reconcile from Bash-level
+evidence alone (`invocations.jsonl` logs command_head, not exit codes or stdout; **marked
+UNDECIDABLE**: whether every `show` call reached the INSERT, or some failed earlier for an
+unlogged reason, cannot be settled without either a transcript replay or a live reproduction this
+pass declined to run against run11's own database to honor "write nothing there"). The run-10
+fix (`_led_kind_refusal_teach`, landed and confirmed present in the CURRENTLY-EXECUTING
+`led.tmpl` — `run11/led` is a thin `exec` wrapper to the live autoharn template, not a scaffold-time
+frozen copy) DOES fire on this refusal and names the valid kind vocabulary — but both observed
+invocations piped output through `2>&1 | head -30`/`head -5`, which may or may not have preserved
+the teach-text lines depending on exact psql error line-count (not independently verified).
+**Classification: (b), low-to-moderate severity.** Unlike run10's item-1 (an invented kind reached
+via the WRITE path, refused and taught), `led show` is reached via what reads as a READ-shaped verb
+(mirroring `--recent`/`current`, and the universal `git show`/`docker inspect` convention) but is
+silently absorbed into the WRITE path instead of erroring "unknown command, see usage" — the
+failure mode is a phantom ledger-sequence burn plus a possibly-clipped teach-text, not a clean
+usage refusal. The mechanism partially teaches (once triggered, if not piped away) but nothing
+teaches the agent that `show` was never a real verb in the first place; `led --help`'s own usage
+block (which the agent DID consult minutes later, `19:19:54Z`/`19:20:15Z`) does not list `show`
+either way it could have self-corrected from that alone had it read closely, but the fall-through
+insert fires before any such check.
+
+CHANGE PROPOSALS (class-b items only)
+
+- **Item 7 fix — give `led show <id>` a real, read-only implementation (or refuse it cleanly).**
+  Smallest sound fix: add a `show <id>` case to `led.tmpl`'s dispatch (alongside `--recent`/
+  `current`) that runs a single read-only `SELECT * FROM ledger WHERE id = <id>` (matching the
+  `\x` display `led --recent` already uses) — this is what an agent reaching for `led show N`
+  evidently expects, and it is a natural, useful verb to actually have. If the maintainer prefers
+  NOT to add the verb, the smaller alternative is to make the generic path's arg-count guard (or
+  `resolve_actor`) reject when `$1` is not a recognized subcommand AND the write-path is about to
+  attempt an insert with an unrecognized-looking kind heuristically shaped like a lookup — but this
+  is more fragile than just implementing the read the agent visibly wants. Either shape is
+  fail-safe and additive-only (adds a verb or tightens a usage message; loosens no refusal, changes
+  no INSERT-path semantics for any currently-valid kind) — qualifies as a class-ratified fail-safe
+  delta once scratch-witnessed.
+- **Item 2 observation — give the doc-shapes gate a minimal "exercised" signal.** Not a defect (no
+  friction was observed — this is a hardening proposal against the specific epistemic limit named
+  in item 2 above). Smallest sound fix: on a clean pass in `enforce`/`observe` mode, increment a
+  tiny per-session counter file (or emit one low-volume journal line per N clean passes, not per
+  call) so a future forensic pass can distinguish "the gate ran zero times" / "ran and found
+  nothing" / "silently fail-opened every time" without replaying `gates/doc_shapes.py` by hand
+  against git history. Purely additive (a presence/count signal, never file content or violation
+  detail); does not change the "clean pass is silent" design intent for the interesting-case
+  journal, just adds a cheap liveness counter alongside it.
+
+DISPOSITION — Every new mechanism's first live shift is accounted for with row ids / journal lines
+/ quotes above, and the picture is a strong, evidence-backed "the arc paid off": the signed-
+commission intake worked cleanly on its actual first live occurrence (FULL mode, no double-record,
+no confusion); the first-ever enforce-mode doc gate produced zero friction on real freshly-authored
+prose (though this pass is honest that "zero friction" and "silently broken" are indistinguishable
+from world-side evidence alone — a small hardening proposal, not a defect, follows from that
+limit); the read-observer's 16 events give real, if circumstantial, corroboration of reviewer
+countersign behavior, while the kernel's OWN `(stamp_session, stamp_agent)` pair-keyed
+`validate_independence()` is what actually makes technical independence structurally true here (49
+reviews, 49 legitimate `technical` claims, zero refused) — a cleaner outcome than run10's rows
+112/113, because every review this run genuinely came from a freshly-dispatched subagent, never a
+subagent re-reviewing its own prior review; the stop-gate journal fix proposed by the run-10 audit
+is confirmed landed and firing correctly on its very first exercise; closure, by the numbers, is
+where the arc shows up most concretely — total session wall-clock held roughly flat versus run10
+(~47 min both) but the SHAPE inverted, with the closure tail cut from ~25 minutes to ~11.4 (more
+than 50% reduction) and disaggregated-view polling roughly halved (34 vs 47), even though this
+run's build phase itself ran longer; late-entry declaration (s24, plus observe-mode
+`delegation_observer`'s non-blocking nudge) fired live for the first time and worked exactly as
+designed, twice, with zero undeclared-narration gaps for `./audit` to catch. The one real new
+finding — `led show`'s silent fall-through into the write path, burning ledger ids on what reads
+as an intuitive read-only verb — is class (b) and gets a proposed fix above; it is minor (never
+blocked real work, self-recovered within seconds each time) but is exactly the kind of "mechanism
+invites a mistake instead of teaching against one" gap the maintainer's rubric exists to catch and
+fix regardless of severity. Net: five of six named mechanisms performed at or above the bar their
+run-10-era design work aimed for on their actual first live exercise; the sixth (doc gate) cannot
+be fully distinguished from silent failure by this evidence alone, which is itself the honest
+finding, not a claim of success.
+
+Every claim above is WITNESSED with the row id / journal line / quote / independently-reproduced
+command output cited in place, or explicitly marked UNDECIDABLE with the concrete evidence gap
+named (the `led show` burn-to-attempt arithmetic; the doc-gate exercised-vs-idle question). No
+umbrella claims.
