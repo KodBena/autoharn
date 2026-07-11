@@ -1,8 +1,27 @@
 # review_gap scope semantics — DRAFT ruling for the maintainer
 
-STATUS: DRAFT — AWAITING MAINTAINER'S WORD (2026-07-11). Drafted per HANDOFF open-work
-item 2 from the two witnessed episodes. An agent may draft a ruling; it may never file
-one as made. Nothing changes until the maintainer answers the one question at the end.
+STATUS: DRAFT — AWAITING MAINTAINER'S WORD (2026-07-11). Queued as item (a) of the
+maintainer's batch in HANDOFF "Open work" item 1. (An earlier revision cited "HANDOFF
+open-work item 2" — a reference into a superseded HANDOFF; this ruling has nothing to do
+with the audit verb that now occupies that slot.) An agent may draft a ruling; it may
+never file one as made. Nothing changes until the maintainer answers the one question at
+the end.
+
+## The question in plain words (read this first)
+
+The kernel lets you place a principal under a countersign obligation
+(`./led obligate <scope> <principal>`): from then on, every ledger row that principal
+writes counts as unreviewed debt — listed by `./led review-gap` — until a DIFFERENT
+actor attests it. When you create the obligation you type a scope word (e.g.
+"decomposition"). Twice now an agent assumed that word FILTERS — that only rows about
+the decomposition would need countersign. It does not, and cannot: ledger rows carry no
+scope, so the kernel ignores the word except as a human-readable label, and the
+obligation catches EVERYTHING the principal writes. The question below asks you to make
+that behavior official (option A: scope is a label, the obligation binds the whole
+person) or to commission real filtering (option B: kernel surgery that would make the
+safety net catch fewer rows). Recommendation: A — both witnessed incidents were actually
+caused by obliging the wrong person (the reviewer instead of the worker), not by the
+missing filter, and over-catching errs toward more review, never less.
 
 ## What the kernel actually does today (re-verified 2026-07-11 at source)
 

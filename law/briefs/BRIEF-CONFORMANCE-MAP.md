@@ -2,19 +2,27 @@
 
 **Standing document (AC9, link-24 marriage increment 1). Updated by increments.** Maps the
 apparatus's honest status against the invariants (I1–I12) and register (G/F items) of
-`experiments/fact-mining/docs/safety-critical-logging-standards/BRIEF.md`. This is the I12
-self-disclosure the NRC hand-off needs, and the spine that later increments extend.
+[the safety-critical-logging BRIEF](safety-critical-logging/BRIEF.md) (its §2 defines
+I1–I12; §3 defines the G/F register). This is the I12 self-disclosure the NRC hand-off
+needs, and the spine that later increments extend. (Path corrected 2026-07-11: the map was
+written against the source project's tree and carried its `experiments/fact-mining/...`
+path; the BRIEF lives here, one directory down.)
 
 Status vocabulary (closed): **mechanized** (a gate fires on the machine-observable trigger) ·
 **instrumented-retrospective** (an instrument computes it at close, validated against known
 facts) · **built-unexercised** (the mechanism exists but has never fired in anger) ·
 **review-only** (enforced by human/consult judgment, no oracle) · **open** (not modeled).
 
-**J-boundary (BRIEF §3, §4).** The "detectable gap" guarantee holds only for machine-observable
-(M) triggers. Judgment-triggered (J) entries — a noticed hazard (G10), a recognized assumption
-(F2), an HMI decision (G15), the waiver branch of F11 — have no oracle that the trigger fired;
-absence there is *not* mechanically detectable and is backstopped by the independent check (G7)
-and the mother's-life clause. Rows below marked **(J)** carry this caveat.
+**The J-boundary — the limit of what gap-detection can promise.** The
+[BRIEF](safety-critical-logging/BRIEF.md) (§3 preamble) sorts every logging trigger into two
+kinds. **M — machine-observable**: a tool call, a file write, a status change; the harness can
+see these fire, so "trigger fired but no entry exists" is a mechanically detectable defect.
+**J — judgment-triggered**: the obliging event happens only in an agent's head — noticing a
+hazard (G10), recognizing an assumption (F2), an HMI decision (G15), the waiver branch of F11.
+For J entries there is no oracle that the trigger fired at all, so a missing entry is invisible
+to gap-detection; they are backstopped by the independent check (G7) and the mother's-life
+clause instead. "J-boundary" names that line between the absences a machine can detect and the
+ones it cannot. Rows below marked **(J)** carry this caveat.
 
 ## The invariants (BRIEF §2)
 

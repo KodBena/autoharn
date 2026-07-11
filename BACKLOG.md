@@ -2486,3 +2486,30 @@ bootstrap/apply-research-ledger.sh
 (or `RL_PGHOST=... RL_DB=... bootstrap/apply-research-ledger.sh` to target something other
 than the default `192.168.122.1`/`research`). It prints its plan and asks for the db name
 back before touching anything.
+
+## Documentation legibility indictment (maintainer, 2026-07-11 morning)
+
+The maintainer, reading the morning batch cold, hit three defects in ten minutes and named
+the class: "you shouldn't have to navigate the doc graph like a squirrel just to figure out
+what the insane staccato — a consistent malady of our documentation — is supposed to mean."
+
+The three instances, all confirmed at source and fixed same morning:
+1. design/REVIEW-GAP-SCOPE-SEMANTICS-RULING.md cited "HANDOFF open-work item 2" — a pointer
+   into a SUPERSEDED HANDOFF revision (the slot now holds the audit verb). A cross-reference
+   by position into a mutable document is a dangling pointer waiting to happen. Fixed: cites
+   the item by name; a plain-words statement of the question now leads the file.
+2. Same file assumed the reader knew what review_gap/countersign_obligation are — a ruling
+   prepared for a non-expert opened with a SQL quote. Fixed (plain-words lead).
+3. law/briefs/BRIEF-CONFORMANCE-MAP.md used "J-boundary" with no definition a reader could
+   reach — the BRIEF path it cited was the source project's tree
+   (experiments/fact-mining/...), not a link, and wrong for this repo. Fixed: relative link,
+   self-standing M/J definitions in the map itself.
+
+CLASS, not instances: (a) positional cross-references into mutable docs; (b) coined terms
+used without the GLOSSARY.md wiki-posture link; (c) paths cited as prose instead of
+resolvable relative links; (d) maintainer-facing docs that open in apparatus jargon instead
+of a plain-words statement. The GLOSSARY Stand-Alone Principle already legislates (b); nothing
+mechanizes any of it. Commissioned same morning (Sonnet): a repo-wide sweep for the four
+shapes plus a class-not-instance gate for the mechanizable core — every relative markdown
+link in maintainer-facing docs must resolve on disk. Disposition of the sweep lands as its
+own entry.
