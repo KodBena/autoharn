@@ -2823,3 +2823,101 @@ as the trail).
 journals' timestamp-convention disagreement was stale — a separate pre-run-9 pass (commit
 19c9159) unified the hooks to UTC-Z after this build flagged it; the CAPABILITIES text now says
 so instead of claiming the hazard is still open.
+## Zero-context-reader documentation discipline — ADR-0017 DRAFT + measured enforcement (2026-07-11, Fable, commissioned; RATIFICATION PACKET)
+
+The maintainer's morning legibility indictment (the entry above, "Documentation legibility
+indictment") commissioned a law-track discipline by name. This entry is its ratification
+packet. The draft is design/ADR-DRAFT-documentation-discipline.md — intended home
+law/adr/0017-the-zero-context-reader.md (0016 is the last occupied number); nothing binds
+until the maintainer's word.
+
+**The one question (yes/no, single recommendation):** Ratify ADR-0017 into law/adr/, and arm
+the A:B:C fresh-context audit loop (your own 2026-07-11 proposal, adopted in the draft's
+"fresh-context audit loop" section) as the discipline's primary transport for
+maintainer-facing doc work — accepting its honest cost, roughly 2–3x tokens per
+documentation change, on session billing? **Recommendation: YES.** The loop's reviewer B is
+the zero-context reader by construction — the only instrument that attacks the root cause
+(the author's live context silently completing skeletal text) rather than approximating it —
+and the measured alternative is mediocre (below).
+
+**The separate sub-question (explicitly not folded into the yes):** may any LLM verdict ever
+sit in a BLOCKING path for this discipline? **Recommendation: NO.** Blocking surfaces stay
+deterministic: gates/doc_shapes.py on touched files, and — once built — the
+attestation-presence gate, which checks that a fresh-context read HAPPENED and has the
+required per-finding shape, never what it concluded. B's and the critic's content judgment
+stays advisory; the promotion question returns only with measured LIVE precision (draft
+Revisit #2), never before.
+
+**Delivered, witnessed:**
+1. design/ADR-DRAFT-documentation-discipline.md — the draft tenet: root cause named
+   (documentation written against a context window that dies with the session — the
+   maintainer's "life-time of about 2 hours" made precise), the mandate as the zero-context
+   reader test (the academic self-explanatory-figure rule generalized), the banned shapes as
+   quoted specimens (BRIEF staccato + the 48dce0c morning defects), GLOSSARY's Stand-Alone
+   Principle subsumed, per-rule enforcement surfaces declared, binds-on-touch migration
+   (never big-bang), portable core with autoharn bindings quarantined in one section.
+   WITNESSED self-application: the draft passes gates/doc_shapes.py (gate mode, 0 findings)
+   and every relative link in it resolves on disk.
+2. gates/doc_shapes.py — the deterministic core, measure-first (the acronym gate's 1619-
+   violation cry-wolf failure is the design's named cautionary tale; witnessed live this
+   pass, exit 1, 1410 of the 1619 being the token "ADR"). Ships the two checks that measured
+   sound on the 208-doc corpus: standalone fragments (18 hits, 16 = the license line,
+   exempted; 2 genuine) and bare positional refs into HANDOFF (1 live flag, 0 false
+   positives; the quoted-named-anchor form the 48dce0c fix uses is exempt). Gate mode
+   (named files, blocking) for the touched set; report mode (repo-wide) never fails.
+   Declined with measurements, in the gate's own header: grounding-before-table (602 hits =
+   house style), slash-soup density, coinage-linking, jargon-openings (no sound predicate;
+   critic/review). WITNESSED both polarities: seen-red/doc-shapes/red.txt; registered in
+   gates/fixture_census.py (census re-run clean, 34 gates).
+3. hooks/doc_legibility_critic.py — the headless critic on the demurral-detector chassis
+   exactly: observer-only, fail-open, apparatus.json switch `doc_legibility_critic`,
+   DEFAULT OFF (costed — a real `claude -p` haiku call per .md Write/Edit), structured
+   findings (shape, verbatim quote, suggested repair; an umbrella DEFECT with no per-finding
+   line is treated as no verdict), journal under .claude/logs/. Delivered UNWIRED (no
+   hooks-wiring or template edits this pass, per the standing rule); the PostToolUse block
+   to drop in is in its docstring. Its prompt is the SSOT of B's briefing in the A:B:C loop.
+   WITNESSED live, three polarities: warning fired on the BRIEF-shaped defective write,
+   silent on clean, instant no-cost exit with no apparatus.json
+   (seen-red/doc-legibility-critic/red.txt).
+4. instruments/doc_legibility_corpus.jsonl (n=24, 12 DEFECT / 12 CLEAN, every row a real
+   in-repo passage incl. the 48dce0c before/after pairs and hard negatives) +
+   instruments/doc_critic_eval.py. MEASURED, both prompt versions banked in
+   seen-red/doc-legibility-critic/eval-witness.txt: v1 RAW precision 0.524 / recall 1.000
+   (punished excerpts for document-scope cross-references — the measurement is why v2
+   exists); shipped v2 RAW precision 0.692 / recall 0.750 / F1 0.720 (EFFECTIVE, fail-open
+   folded: 0.692/0.750). Caveat stated in the witness: v2 calibrated in-sample against these
+   same 24 rows, one iteration, same loop the demurral build ran; out-of-sample unknown
+   until live findings grow the corpus. The design conclusion travels with the number: a
+   passage-scoped headless haiku is a mediocre transport for this judgment — evidence FOR
+   the A:B:C whole-document fresh reviewer as primary.
+
+**Designed, UNBUILT (named, not smuggled):** the commit-time attestation-presence gate for
+the A:B:C loop (record format + pre-commit wiring are one decision; blocked on the main
+question's answer — building the gate before the loop is armed would gate on a record
+nothing produces). Kernel note, verified against the pending review_gap scope-semantics
+ruling: countersign_obligation/review_gap already model "writes are debt until a
+stamp-distinct attest," so a wired world can carry doc attestation with zero kernel change,
+at the ruling-pending coarseness that an obligation binds the whole principal.
+
+**Coordination:** this pass was authored against next @ 5a0bbbe, where the concurrent Sonnet
+sweep + link gate had not yet merged; the merge (b5f9180) landed MID-PASS and this branch
+was fast-forwarded onto it before committing, so the two compose as merged fact, not as
+design intent. Division of labor as landed: gates/link_integrity.py owns link RESOLUTION
+(blocking, pre-commit, its exclusions printed); gates/doc_shapes.py owns the disjoint
+prose shapes (fragments; bare positional HANDOFF refs); no overlap. Two of this pass's
+authored-time findings were independently confirmed and fixed by that sweep before merge —
+the ARTIFACT-VS-REQUIREMENTS-DETECTOR.md:4 bare positional ref, and the acronym README's
+stale tools/ path — a small live instance of two independent producers converging on the
+same defects. doc_shapes gained a quoted-mention exemption (odd-quote-parity) post-merge,
+because the sweep's own fix of REVIEW-GAP left a QUOTED historical mention of the defect
+that the gate must not flag; the draft's Rule 2(b) text and the acronym-gate cautionary
+tale were updated to cite the sweep's landed disposition (KEEP-ADVISORY, allowlist seeded).
+
+**Standing findings, flagged not fixed:** doc_shapes report mode (post-merge re-run) leaves
+2 findings — FINDINGS.md:107 ("Block-and-ask + witness-integrity mandate.") and
+law/adr/0015:50 ("Four rules."), both genuine fragments — left in place per the draft's own
+Rule 4 (binds on touch; law/ is not edited without a ratified spec) and filed here as the
+back-catalog's first known migration candidates.
+
+Every claim above is WITNESSED (output banked at the named seen-red paths or quoted in this
+entry), or explicitly UNBUILT/UNEXERCISED with its blocker named. No umbrella claims.
