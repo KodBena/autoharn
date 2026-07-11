@@ -75,6 +75,9 @@ REGISTRY: dict[str, str] = {
     "read-observer":                  "seen-red/read-observer/run_fixtures.py",
     "s25-commission-kind":            "seen-red/s25-commission-kind/run_fixtures.py",
     "track-work":                     "seen-red/track-work/run_fixtures.py",
+    "attest-tags":                    "seen-red/attest-tags/run_fixtures.py",
+    "verify-commission":              "seen-red/verify-commission/run_fixtures.py",
+    "s26-row-hash-chain":             "seen-red/s26-row-hash-chain/run_fixtures.py",
     # the two census gates minted in this build carry their own seen-red (a census gate never seen
     # red is the joke that writes itself); their fixture is the gate itself, red-specimen mutates its
     # registry in memory to force the breach.

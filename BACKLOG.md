@@ -4370,3 +4370,196 @@ attestation loop applies): B must be spawned SYNCHRONOUSLY by whoever runs the l
 the verdict returns in-band as the Agent tool result; a background B is only sound when
 the loop-runner is the main session. Queued into the tracker as part of the follow-ups
 item rather than a new thread.
+## GPG trust layer — all three rungs built and witnessed (Sonnet, 2026-07-11/12)
+
+Implements `design/GPG-TRUST-LAYER.md` in full — signed ratification tags (Rung 1), SIGNED-mode
+commissions (Rung 2), and the anchored ledger (Rung 3, kernel delta s26 + the signed head) —
+commissioned per the standing delegation contract. Worked from the isolated worktree at
+`.claude/worktrees/agent-a44608a4cd12fb911`, discovered 143 commits behind `next`'s live tip
+partway through (the worktree branch carried zero unique commits, so `git reset --hard next`
+was safe and used before any implementation work began — named here per the self-application
+rule, an orchestrator-facing fact worth recording even though it cost no rework).
+
+**Rung 1 — `attest-tags`** (repo root, autoharn-side, never scaffolded into a world — mirrors
+the per-world verb naming without being one). Enumerates `ratified/*` git tags, verifies each
+against `law/keys/*.asc` via a throwaway per-invocation GNUPGHOME (`filing/gpg_trust.py`, the
+one shared home for this mechanic across all three rungs — ADR-0012 P1), and reports any commit
+whose message claims ratification with no covering tag. **WITNESSED**, both polarities,
+`seen-red/attest-tags/run_fixtures.py` (real GPG, a fresh Ed25519 test key generated per run, a
+scratch git repo, zero residue after): GOOD (signed with a committed key), BAD-unsigned
+(lightweight tag, git's own "cannot verify a non-tag object" detail), BAD-forged (signed by a
+key deliberately never committed), and the uncovered-ratification-claim detector, all exit-coded
+correctly. Run against this repository's OWN real history: zero `ratified/*` tags exist and
+`law/keys/` is genuinely AWAITING-KEY, so it honestly reports every commit whose message says
+"RATIFIED" as uncovered — an expected finding, not a defect, given no key has landed yet.
+
+**Rung 2 — `verify-commission`** (`bootstrap/templates/verify-commission.tmpl`, wired into
+`bootstrap/new-project.sh`'s shim loop, the `distance-to-clean` precedent for adding a verb
+without touching a live-executed template). Implements `VERIFIED | UNSIGNED | FORGED-OR-CORRUPT`
+(exit non-zero only on the third), recomputing a commission's digest from the ledger row's OWN
+current bytes and checking any banked `.claude/commission-<id>.asc` against `law/keys/*.asc`.
+**A real byte-fidelity hazard in the spec's own illustrative ceremony was found and fixed, not
+merely flagged** (CLAUDE.md's engineering-responsibility corollary): `gpg --detach-sign --armor
+~/aa` signs the raw file's trailing newline, but `$(cat ~/aa)` — what actually lands in the
+ledger — strips it, so an honest, unaltered commission would verify as FORGED-OR-CORRUPT under
+the spec's own example. Fixed by signing `printf '%s' "$STATEMENT"` instead (byte-identical to
+what the ledger stores); the corrected ceremony ships in both `bootstrap/new-project.sh`'s
+printed SIGNED-mode block and `design/GPG-TRUST-LAYER-FAQ.md` §5, with the hazard explained in
+full in `verify-commission.tmpl`'s own module docstring. **WITNESSED**, all five outcomes,
+`seen-red/verify-commission/run_fixtures.py` (a real throwaway `--new-world` scaffold, a real
+FULL-mode commission via `led`, a fresh Ed25519 test key, zero residue): UNSIGNED (no `.asc`),
+VERIFIED (byte-fidelity-fixed signature against a committed key), FORGED-OR-CORRUPT (signature
+over different bytes), FORGED-OR-CORRUPT-via-no-committed-key (a deliberate judgment call,
+explained in the module docstring: an unverifiable claim of a signature is loud, never folded
+into the weaker UNSIGNED bucket), and the absent-`gpg`-binary typed refusal (exit 2, a FOURTH,
+distinct outcome from the three verdicts). One preamble sentence added to
+`bootstrap/templates/CLAUDE.md.tmpl` point 10: run `verify-commission` at intake, carry the
+verdict into the decomposition's first row.
+
+**Rung 3 — kernel delta s26 + `verify-chain`** (`kernel/lineage/s26-row-hash-chain.sql`,
+`bootstrap/templates/verify-chain.tmpl`). Every ledger row gains a SHA-256 `row_hash` (hex text)
+of a canonical, NULL-coalesced, TIMEZONE-SAFE (a hazard caught before it could bite — `ts::text`
+renders in the connection's session timezone, so the canonicalization uses
+`extract(epoch FROM ts)` instead, a numeric instant immune to TZ-rendering drift between the
+insert-time connection and a later `verify-chain` connection) serialization of every OTHER
+column, concatenated with the predecessor row's `row_hash` (or a per-world genesis seed,
+`kernel.chain_genesis` — NOT a secret, contrast `stamp_secret`; its only job is making two
+worlds' row-1 hashes differ). Computed by ONE shared SQL function, `compute_row_hash()`, called
+identically by the insert trigger AND by `verify-chain`'s read-only walk — no second
+re-derivation of "what a row means" to drift (ADR-0012 P1/P7). **A genuine concurrency race was
+found and CLOSED, not merely named**: `bigserial` allocates `NEW.id` before a `BEFORE INSERT`
+trigger runs, so two truly concurrent inserts could interleave their predecessor-hash reads and
+fork the chain; closed with `pg_advisory_xact_lock(hashtext(TG_TABLE_SCHEMA ||
+'.row_hash_chain')::bigint)` at the top of the trigger — schema-scoped, so concurrent writers in
+DIFFERENT worlds never contend, and negligible cost given the ledger's already-low-concurrency
+"one row at a time" operating mode. Postgres 18.4's BUILT-IN `sha256()` (core, PG11+, verified
+live against this toy db before assuming) is used, not `pgcrypto`'s `digest()` — one fewer
+extension dependency where the built-in is strictly sufficient. Class-ratified (strictly
+additive: one column, one genesis table, one function, one trigger that fires LAST — by
+alphabetical trigger-name ordering, `zz_set_row_hash`, a mechanism not a convention — and writes
+only the new column) and entered `bootstrap/new-project.sh`'s `LINEAGE_CHAIN`, with automatic
+genesis-seed provisioning added right alongside the existing stamp-secret seeding block.
+**WITNESSED, both polarities plus the differential**, `seen-red/s26-row-hash-chain/
+run_fixtures.py` (a real throwaway `--new-world` scaffold, zero residue): an INSERT before the
+genesis seed exists is refused loudly; three real `led`-written rows build a chain
+`verify-chain` reports INTACT; `--head` emits exactly `{world, max_id, head_hash, utc}` and
+NOTHING else on stdout; a historical row's content surgically altered (trigger disabled, then
+re-enabled — a real schema-owner-level tamper, on a scratch schema) while its own `row_hash` is
+left stale BREAKS THE CHAIN AT THE ALTERED ROW, the spec's own words, verified literally; the
+more sophisticated variant — the tamperer ALSO rewrites that row's own hash to match its new
+content — moves the detected break to the immediately NEXT row instead (never later, proven both
+ways); `--head` against a broken chain REFUSES with empty stdout, exit 1 (never signs a head it
+has not verified); the EXISTING SQL/ASP marriage differential (`engine/ledger_differential.py`)
+still verdicts AGREE on an s26 world, proving the delta does not perturb existing T_now facts
+(`[OK ] s26fxprobe AGREE asp=4 sql=4 atoms; Δasp=[] Δsql=[]`).
+
+**The signed-head ceremony and key rotation were both exercised end to end on the throwaway test
+key**, live, not just in the scratch-schema fixtures: a real `--new-world` scaffold's
+`verify-chain --head` output was piped to `gpg --detach-sign --armor`, banked as
+`.claude/head.json` + `.claude/head.json.asc`, and `gpg --verify` reported `Good signature`.
+Rotation (revoke → generate → commit → re-sign) was exercised on the same key: applying the
+auto-generated revocation certificate (note for future exercisers: it ships with a colon before
+`-----BEGIN` deliberately, to prevent accidental import — strip it first) made the OLD key
+IMMEDIATELY UNUSABLE for new signing (`gpg: skipped "...": Unusable secret key` — stronger than
+a mere warning, a genuine finding of this pass, not assumed in advance); a freshly generated
+replacement key then signed and verified cleanly, including re-signing a chain-head-shaped
+document. Full transcripts of both ceremonies are quoted in `design/GPG-TRUST-LAYER-FAQ.md` §§6
+and 8.
+
+**Docs.** `design/GPG-TRUST-LAYER-FAQ.md` (new, the operator FAQ: key generation, hardware-token
+recommendation, revocation, all three ceremonies, rotation — all witnessed, none aspirational).
+`law/keys/README.md` (new, the AWAITING-KEY stub — explains what belongs in the directory,
+explicitly does NOT fabricate a maintainer key). `CAPABILITIES.md` items 28/29/30. Both new docs
+plus the CAPABILITIES.md addition ran the ADR-0017 A:B:C fresh-context loop (a genuinely separate
+`Agent` dispatch as B, briefed with ADR-0017's full text and nothing else — see the loop's own
+recipe, `design/ABC-AUDIT-LOOP-RECIPE.md`): round 1 found 4 findings in the FAQ (two lead
+fragments matching the ADR's own named specimen shape; "detached signature" and `GNUPGHOME` used
+ungrossed against a stated first-time-GPG-user audience), 1 in `law/keys/README.md` (FULL/LAZY
+cited with no definition or link), and 4 in the CAPABILITIES excerpt ("Rung" undefined; "the
+third signing strength" naming an unlinked ladder; an arrow-chain list violating Rule 1a's own
+named anti-pattern; a missing relative pronoun producing a garden-path sentence) — all repaired.
+Round 2: the FAQ and CAPABILITIES verdicted CLEAN (all four Rule-1 clauses enumerated);
+`law/keys/README.md` hit ONE surviving finding — introduced by the round-1 repair itself, a
+compound sentence dropped mid-predicate across three em-dashes — at the two-round cap. Per
+ADR-0017 this routed as a non-converging-review-loop; the orchestrator (the escalation
+recipient) adjudicated by applying B's own suggested mechanical sentence-split verbatim.
+This FIRST loop's attestations recorded FAQ/CAPABILITIES `escalated: false`,
+`law/keys/README.md` `escalated: true` with the orchestrator's adjudication noted — but all
+three documents were edited AGAIN immediately after, to reflect the hack-rationalization fixes
+below (a new exit code and verdict-label scheme), which invalidated those attestations against
+the new content (the gate keys on exact content hash; a superseded version's attestation is
+just history, never a pass for new bytes). A SECOND A:B:C loop ran against the post-fix content:
+round 1 found 2 more findings in the FAQ (`./led` and "commission" used undefined/unlinked in
+§5) — repaired; round 2 found 3 more findings across all three documents (the ADR-0012 P1
+expansion applied to only one of its two occurrences; a repair-introduced "absent stamp" phrase
+left unglossed in the FAQ; `law/keys/README.md` overgeneralizing a verdict label — `UNVERIFIABLE`
+— across three tools that do not all actually emit it) — again at the two-round cap, again a
+non-converging-review-loop, again adjudicated by the orchestrator applying B's own suggested
+repairs verbatim. FINAL recorded state in `attestations/doc-legibility-attestations.jsonl`
+(matching the actual committed bytes): all three documents `escalated: true`, each `b_id` noting
+the second loop and the orchestrator's adjudication. Two escalations on one small documentation
+set, both from the SAME root cause — fixing a real code defect (the hack-rationalization audit's
+findings) forced a second documentation pass, and that pass itself needed the loop's full two
+rounds — recorded honestly rather than smoothed into a single clean pass that did not happen.
+
+**Out-of-frame hack-rationalization audit, before reporting this commission done (CLAUDE.md's
+own standing rubric — run EVEN THOUGH every seen-red fixture was already green).** A fresh,
+independent subagent (no memory of this session, briefed to treat the implementer's own
+reasoning as suspect, per the skill's own anti-self-audit rule) reviewed five judgment calls.
+Verdict: 2 of 5 `UNDISCHARGED-HACK`, 1 `narrower-but-justified`, 2 `general`. Both hacks were
+FIXED before this commission closed, not merely noted:
+
+1. **`verify-commission`'s `FORGED-OR-CORRUPT` overload (fixed).** An earlier version folded "a
+   `.asc` is banked but `law/keys/` carries zero committed keys" into `FORGED-OR-CORRUPT`,
+   reasoning the spec's vocabulary was "closed to three members" — a reason the SAME file's own
+   missing-`gpg` handling already contradicted (it already used a distinct exit code for an
+   analogous precondition), and the wrong structural choice relative to the very `attest-tags`
+   precedent it cited (which uses a DISTINCT `UNVERIFIABLE` label, never a relabeled `BAD`).
+   Fixed: a new, distinct outcome, `NO-COMMITTED-KEY` (exit 3), separate from all three verdicts
+   — a fresh, keyless repository's commissions (this repository's own real state today) are no
+   longer indistinguishable, by verdict string alone, from an actual forgery. Every doc, the
+   scaffold's printed ceremony, and the seen-red fixture updated to match; re-witnessed green.
+2. **`compute_row_hash()`'s NULL-vs-empty-string collision (fixed, the more serious finding).**
+   The audit constructed a concrete counter-example: `coalesce(rationale, '')` mapped BOTH
+   `rationale IS NULL` and `rationale = ''` — different, SQL-observable facts — to the identical
+   serialized token, a genuine hash COLLISION (not merely "an adversary who already has stronger
+   attacks", the framing an earlier version of this file used to wave it off). A schema-owner
+   tamper exploiting this would produce ZERO change to the stored hash anywhere in the chain —
+   defeating not just the chain walk but the §4 SIGNED HEAD backstop the spec names as the actual
+   closing move, for free. Fixed by replacing the delimiter-join with a length-prefixed,
+   presence-tagged encoding (`hashfield()`, `kernel/lineage/s26-row-hash-chain.sql`) — a standard
+   self-delimiting code, injective by construction. Re-witnessed on a fresh scratch schema
+   (`s26val2`) via direct SQL recomputation before touching the automated suite, then added as
+   its own seen-red case (`h-null-vs-empty-string-collision-closed`,
+   `seen-red/s26-row-hash-chain/run_fixtures.py`) proving the specific collision the audit found
+   is now detected; full suite re-run green, zero residue.
+   Both fixes are also documented as REVISION NOTEs in the affected source files themselves
+   (`verify-commission.tmpl`, `s26-row-hash-chain.sql`'s own header), not just here — a future
+   reader opening the code directly sees the same account.
+
+The audit's smaller, undischarged residual findings (not fixed, named honestly): (a) the spec
+document `design/GPG-TRUST-LAYER.md` §3 itself still shows the original, byte-fidelity-buggy
+signing example verbatim, with no errata pointer to the FAQ's correction — left untouched
+deliberately, since the document is concurrently in its own ADR-0017 attestation loop and its
+technical content is ratified; the correction is instead prominent everywhere a reader is likely
+to actually land (FAQ, CAPABILITIES, BACKLOG, the two affected scripts' own docstrings). (b) the
+SIGNED-mode ceremony's Step 1 (typing the ask inline for FULL mode) and Step 2 (re-reading a file
+for the signature) were two independent renderings of "the same" text — fixed in both
+`bootstrap/new-project.sh`'s printed ceremony and the FAQ: Step 1 now reads the ask from the SAME
+file into `$STATEMENT` first, used for both the `led commission` call and the signature, closing
+the adjacent hazard the audit named. (c) the advisory-lock fix's correctness is stated
+unconditionally in the SQL comment where it is actually conditional on READ COMMITTED isolation
+(true of every writer in this codebase today, named but not enforced) — filed as a residual note,
+not fixed, since no current writer uses a stronger isolation level. (d) the `zz_` trigger-naming
+convention that guarantees firing order has no enforcement mechanism for a FUTURE ninth trigger —
+inherent to how PostgreSQL's own same-timing-trigger ordering works, filed as a note for whoever
+adds trigger #9, not a defect this delta could close differently.
+
+**Not done, named**: `kernel/lineage/README.md` was NOT updated to document s20 through s26 in
+its own apply-order prose — it was already stale before this pass (it stops narrating at s19),
+so this is a PRE-EXISTING gap this pass did not create, not one it is filing new; named here
+because CLAUDE.md's hazard-flagging duty applies to gaps met in passing even when out of the
+immediate mandate's scope, and a full README refresh across seven un-narrated deltas is a
+separate, larger piece of work than this commission's remit. A real maintainer keypair
+(`law/keys/maintainer.asc`) does not exist — every ceremony above is witnessed on a THROWAWAY
+test key, clearly marked as such throughout; nothing here fabricates or assumes a real key.

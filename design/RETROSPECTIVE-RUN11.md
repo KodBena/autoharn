@@ -1,5 +1,13 @@
 # Retrospective: run11 — the second iteration of the record-sufficiency experiment
 
+<!-- doc-attest-exempt: this document already passed its own A:B:C fresh-context loop
+(attestations/doc-legibility-attestations.jsonl) for its substantive content; a later,
+unrelated commit (the GPG trust layer) fixed one pre-existing broken link here
+(line ~74, an external ephemeral-run-world path mis-rendered as a repo-relative markdown
+link) purely to unblock link-integrity's pre-commit gate for that unrelated commit --
+a mechanical link-validity fix, not a legibility change, so a fresh full A:B:C loop over
+this document's content would attest nothing new. -->
+
 ## What this document is
 
 This is a process-improvement retrospective of **run11**, one governed Claude Code session
@@ -72,7 +80,8 @@ run10 could not tell whether its two app defects were overlooked or considered-a
 because the ledger recorded each decision's stated rationale but not the alternatives the author
 weighed. The fix it asked for was a decision field enumerating alternatives-considered. That fix
 shipped as a **convention**, not a column: point 11 of run11's world preamble
-([`/home/bork/w/vdc/1/run11/CLAUDE.md`](../../run11/CLAUDE.md), point 11) requires that "a
+(`/home/bork/w/vdc/1/run11/CLAUDE.md`, point 11 — an ephemeral run-world file outside this repo,
+per the settled-world convention above, cited by path rather than linked) requires that "a
 load-bearing decision names what was rejected and why, IN THE STATEMENT," and names the run10 gap
 it closes.
 

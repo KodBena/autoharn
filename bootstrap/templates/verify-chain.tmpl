@@ -1,0 +1,177 @@
+#!/usr/bin/env python3
+"""verify-chain — Rung 3 of design/GPG-TRUST-LAYER.md §4 ("the anchored ledger: kernel delta s26
++ the signed head"). Walks THIS world's `row_hash` chain (kernel/lineage/s26-row-hash-chain.sql)
+end to end and reports the FIRST row, if any, whose stored `row_hash` disagrees with a fresh
+recomputation — proof that no row between the world's genesis seed and that point was
+retroactively altered.
+
+NO CANONICALIZATION LOGIC LIVES HERE (ADR-0012 P1/P7). The recomputation is done by Postgres
+itself, via the SAME `compute_row_hash()` SQL function the s26 insert trigger calls — this script
+issues one read-only query and reports what it returns; it never re-implements "what a row's
+content means" a second time in Python. Two independent implementations of one canonicalization
+is exactly the "two writers of one truth" cancer s26's own header names and forecloses; this
+script honors that by construction, not by discipline.
+
+MODES:
+  ./verify-chain             — walk the whole chain, report the first break (if any). Exit 0 if
+                               intact, 1 if broken (the first break's row id, stored vs expected
+                               hash, and total break count are all printed — never an umbrella
+                               "chain broken" with no specifics).
+  ./verify-chain --head      — print {world, max_id, head_hash, utc} as JSON on stdout (spec §4's
+                               exact shape) and NOTHING else — this is the input to the signed-head
+                               ceremony (`./verify-chain --head > /tmp/head.json; gpg --detach-sign
+                               --armor /tmp/head.json`), so its stdout must be exactly the JSON, no
+                               banner lines, or a naive `cat | gpg` would sign banner text too.
+                               Exit 1 (with a diagnostic on STDERR, stdout left EMPTY) if the chain
+                               is broken — signing a head over a broken chain would be worse than
+                               refusing to produce one; VERIFIES the whole chain first, always.
+
+A pre-s26 world (no `row_hash` column) degrades honestly to UNAVAILABLE (not a crash, not a false
+"intact") — mirrors distance-to-clean.tmpl's own pre-s22 fallback for `work_item_violations`.
+
+Deployment resolution, connection posture, and path resolution mirror pickup.tmpl /
+distance-to-clean.tmpl exactly (PICKUP_DEPLOYMENT, AUTOHARN, `SET ROLE <dep.role>`) — this file
+executes IN PLACE out of the autoharn checkout (the "live verbs" ruling); ADR-0012 P1, one
+resolution mechanism, not a fifth hand-copy.
+
+Read-only throughout: every query here is a SELECT; this script issues no INSERT/UPDATE/DELETE.
+Lazy imports banned.
+"""
+from __future__ import annotations
+
+import json
+import os
+import subprocess
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+AUTOHARN = Path(os.environ.get("AUTOHARN", str(HERE / ".." / ".."))).resolve()
+DEPLOYMENT_PATH = Path(os.environ.get("PICKUP_DEPLOYMENT", str(HERE / "deployment.json")))
+
+sys.path.insert(0, str(AUTOHARN / "filing"))
+try:
+    import deployment_record  # noqa: E402  (filing/deployment_record.py, the ONE home for the shape)
+except ImportError as _e:
+    print(f"verify-chain: cannot import autoharn's filing/deployment_record.py under "
+          f"AUTOHARN={AUTOHARN} ({_e.__class__.__name__}: {_e})", file=sys.stderr)
+    print("        set AUTOHARN=/path/to/autoharn, or place a sibling checkout at ../autoharn", file=sys.stderr)
+    sys.exit(2)
+
+
+def _load_deployment():
+    try:
+        return deployment_record.load_deployment(DEPLOYMENT_PATH)
+    except deployment_record.DeploymentError as e:
+        print(f"verify-chain: {e}", file=sys.stderr)
+        sys.exit(2)
+
+
+def _psql_json_rows(dep, sql: str) -> tuple[list[dict] | None, str]:
+    """Returns (rows, error). rows is None on a query error (error carries psql's stderr);
+    rows is [] for an empty result. Uses `jsonb_agg` (not `json_agg`): `json_agg` preserves
+    `ROW(...)`'s original whitespace, which Postgres renders with a newline between array
+    elements -- exactly the kind of multi-line-output-mistaken-for-one-line bug pickup.tmpl's
+    own `_last_stmt_rows` quirk warns about one level up. `jsonb_agg` normalizes to compact,
+    single-line JSON, so the "drop the leading SET-ROLE echo line, the rest is the payload"
+    convention this project's other verbs already use (distance-to-clean.tmpl's
+    `_last_stmt_rows`) holds here without a second-line-only bug."""
+    full = (f"SET ROLE {dep.role};\n"
+            f"SELECT coalesce(jsonb_agg(t), '[]'::jsonb) FROM ({sql}) t;")
+    r = subprocess.run(["psql", "-h", dep.host, "-d", dep.db, "-t", "-A", "-v", "ON_ERROR_STOP=1",
+                        "-c", full], capture_output=True, text=True, timeout=30)
+    if r.returncode != 0:
+        return None, r.stderr.strip()
+    lines = [ln for ln in r.stdout.strip("\n").splitlines() if ln.strip()]
+    body = lines[1] if len(lines) > 1 else (lines[0] if lines else "[]")
+    return json.loads(body), ""
+
+
+def has_row_hash_layer(dep) -> bool:
+    """An EXPLICIT capability check (information_schema), never a fuzzy match on error text --
+    a real query bug (a typo, a missing schema qualification) must surface as ERROR, not be
+    silently miscategorized as the honest pre-s26 UNAVAILABLE case just because its error
+    message happens to contain the word "does not exist" too."""
+    sql = (f"SELECT count(*) FROM information_schema.columns WHERE table_schema = '{dep.schema}' "
+           f"AND table_name = 'ledger' AND column_name = 'row_hash'")
+    rows, err = _psql_json_rows(dep, f"SELECT ({sql}) > 0 AS present")
+    return bool(rows) and rows[0].get("present") is True
+
+
+def walk_chain(dep) -> tuple[list[dict] | None, str]:
+    sql = (f"SELECT l.id, l.row_hash AS stored, "
+           f"{dep.schema}.compute_row_hash(l, COALESCE("
+           f"(SELECT p.row_hash FROM {dep.schema}.ledger p WHERE p.id < l.id ORDER BY p.id DESC LIMIT 1), "
+           f"(SELECT seed FROM {dep.kern}.chain_genesis LIMIT 1))) AS expected "
+           f"FROM {dep.schema}.ledger l ORDER BY l.id")
+    return _psql_json_rows(dep, sql)
+
+
+def verify(dep) -> tuple[str, dict]:
+    """Returns (status, detail). status in {INTACT, BROKEN, UNAVAILABLE, ERROR, EMPTY}."""
+    if not has_row_hash_layer(dep):
+        return "UNAVAILABLE", {"reason": ("pre-s26 kernel -- no row_hash chain in schema "
+                                           f"{dep.schema} (kernel/lineage/s26-row-hash-chain.sql "
+                                           "not applied here)")}
+    rows, err = walk_chain(dep)
+    if rows is None:
+        return "ERROR", {"reason": err}
+    if not rows:
+        return "EMPTY", {"reason": "no ledger rows yet"}
+    breaks = [r for r in rows if r["stored"] != r["expected"]]
+    if breaks:
+        first = breaks[0]
+        return "BROKEN", {"first_break_id": first["id"], "stored": first["stored"],
+                           "expected": first["expected"], "total_breaks": len(breaks),
+                           "rows_walked": len(rows)}
+    return "INTACT", {"rows_walked": len(rows), "head_id": rows[-1]["id"], "head_hash": rows[-1]["stored"]}
+
+
+def main(argv: list[str]) -> int:
+    head_mode = "--head" in argv
+    dep = _load_deployment()
+    status, detail = verify(dep)
+
+    if head_mode:
+        if status != "INTACT":
+            print(f"verify-chain --head: REFUSED -- chain is not INTACT (status={status}, "
+                  f"{detail}); signing a head over a non-verified chain is refused, not attempted.",
+                  file=sys.stderr)
+            return 1
+        head = {"world": dep.name or dep.schema, "max_id": detail["head_id"],
+                "head_hash": detail["head_hash"],
+                "utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")}
+        print(json.dumps(head))  # ONLY the JSON on stdout -- see module docstring
+        return 0
+
+    if status == "INTACT":
+        print(f"verify-chain: INTACT -- {detail['rows_walked']} row(s) walked, head id="
+              f"{detail['head_id']} hash={detail['head_hash']}")
+        return 0
+    if status == "EMPTY":
+        print(f"verify-chain: EMPTY -- {detail['reason']} (an empty chain is trivially intact; "
+              f"nothing to walk)")
+        return 0
+    if status == "UNAVAILABLE":
+        print(f"verify-chain: UNAVAILABLE -- {detail['reason']}")
+        return 0
+    if status == "BROKEN":
+        print(f"verify-chain: BROKEN -- first break at row id {detail['first_break_id']}:")
+        print(f"    stored:   {detail['stored']}")
+        print(f"    expected: {detail['expected']}")
+        print(f"  ({detail['total_breaks']} of {detail['rows_walked']} row(s) mismatch total. "
+              f"The FIRST break is where alteration is provably detectable: either the altered "
+              f"row's own content no longer matches its OWN stored hash (tamper left the stored "
+              f"row_hash stale, the common case), or -- if the tamperer also rewrote that row's "
+              f"row_hash to match its new content -- the NEXT row breaks instead, because its "
+              f"predecessor-hash reference was computed against the row's OLD, honest hash. "
+              f"Either way, the break can be no later than immediately after the true alteration "
+              f"point; it is never silently absorbed further downstream than that.)")
+        return 1
+    print(f"verify-chain: ERROR -- {detail['reason']}", file=sys.stderr)
+    return 2
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

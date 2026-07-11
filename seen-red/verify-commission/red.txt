@@ -1,0 +1,22 @@
+== generating throwaway test key (Ed25519, test-only, never a real maintainer key) ==
+  test key: 84480DF1C7239EC0B4F079F076330F57AA00C76A
+
+== scaffolding throwaway --new-world vcfxprobe ==
+  scaffold OK.
+
+=== a-unsigned ===
+  [ok] exit=0 verdict=UNSIGNED
+
+=== b-verified ===
+  [ok] sign_exit=0 verify_exit=0 verdict=VERIFIED
+
+=== c-forged-tampered-bytes ===
+  [ok] exit=1 verdict=FORGED-OR-CORRUPT
+
+=== d-no-committed-key-distinct-refusal ===
+  [ok] exit=3 refusal=NO-COMMITTED-KEY
+
+=== e-gpg-absent-typed-refusal ===
+  [ok] exit=2 stderr='{\n  "id": 1,\n  "actor": "commissioner",\n  "signing_mode": "FULL",\n  "refusal": "GPG-UNAVAILABLE",\n  "detail": "the \'gpg\' binary is not on PATH -- GPG trust layer verbs need GnuPG installed (see design'
+
+ALL CASES OK -- verify-commission both-polarity proof (UNSIGNED / VERIFIED / FORGED-OR-CORRUPT / NO-COMMITTED-KEY-refusal / GPG-UNAVAILABLE-refusal), zero residue.

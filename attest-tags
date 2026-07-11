@@ -1,0 +1,194 @@
+#!/usr/bin/env python3
+"""attest-tags — Rung 1 of design/GPG-TRUST-LAYER.md ("signed ratification tags, git-native, no
+new code" — §2). An autoharn-side operator verb, not a per-world verb: it verifies THIS repo's
+own `ratified/*` git tags, so it lives at the repo root (mirrors the per-world verb naming — led/
+judge/pickup/audit/distance-to-clean — but is never scaffolded into a world; a world's own
+ratifications, if any, are a future extension of this same idea, filed in the FAQ, not built
+here).
+
+WHAT THIS DOES (spec §2, verbatim obligations):
+  1. Enumerates every `ratified/*` git tag.
+  2. Verifies each one with `git verify-tag` against the COMMITTED public key(s) in
+     law/keys/*.asc — never the operator's ambient default keyring, so verification is
+     self-contained and reproducible from any fresh clone (spec §7: "the PUBLIC key is committed
+     ... so verification is self-contained for any repo clone"). This is done by building a
+     throwaway GNUPGHOME per invocation and importing only the committed keys into it, then
+     shelling `git verify-tag` under that GNUPGHOME.
+  3. Reports any commit whose message CLAIMS ratification (matches the project's own dated
+     convention, a standalone "RATIFIED" marker — grep the corpus: BACKLOG.md / CLAUDE.md /
+     commit subjects already use this word this way) but is not the exact target of any
+     `ratified/*` tag that verified GOOD in step 2. This is the "commit claiming ratification
+     without a verifying tag" defect the spec names.
+
+REFUSALS ARE LOUD (spec §2: "an unverifiable signature is reported as a defect, never skipped").
+Three per-tag outcomes, each printed, none silent:
+  GOOD         — `git verify-tag` succeeded against a committed key.
+  BAD          — the tag exists but the signature does not verify (unsigned, tampered, or signed
+                 by a key not in law/keys/*.asc) — a forgery/corruption finding.
+  UNVERIFIABLE — no public key is committed in --keys-dir at all (today's honest state: law/keys/
+                 carries only law/keys/README.md, an AWAITING-KEY stub — see that file). This is
+                 NOT treated as a pass; a ratified/* tag nobody can check is exactly as loud as a
+                 bad signature, just a different cause.
+
+EXIT CODE: 0 iff every enumerated `ratified/*` tag verified GOOD and every RATIFIED-marked commit
+is covered by a GOOD tag; 1 otherwise (BAD/UNVERIFIABLE tags, or an uncovered ratification claim,
+each printed individually — never an umbrella "some tags failed").
+
+USAGE:
+  ./attest-tags                              # this repo, law/keys/ as the key source
+  ./attest-tags --repo PATH --keys-dir PATH  # point at a different repo / key directory
+                                              # (the witness harness's own use: a scratch repo +
+                                              # a scratch keys dir carrying a THROWAWAY test key)
+  ./attest-tags --json                       # machine-readable report on stdout, same verdicts
+
+Key-import mechanics (build a throwaway GNUPGHOME from law/keys/*.asc, never the operator's
+ambient keyring) are NOT re-authored here — filing/gpg_trust.py is their one home, shared with
+bootstrap/templates/verify-commission.tmpl and verify-chain.tmpl (ADR-0012 P1).
+
+Lazy imports are banned (CLAUDE.md, 2026-07-02): everything below imports at module load.
+"""
+from __future__ import annotations
+
+import json
+import re
+import subprocess
+import sys
+from pathlib import Path
+
+_REPO_ROOT = Path(__file__).resolve().parent
+sys.path.insert(0, str(_REPO_ROOT / "filing"))
+import gpg_trust  # noqa: E402  (filing/gpg_trust.py, the ONE home for the scratch-keyring mechanics)
+
+RATIFICATION_CLAIM_RE = re.compile(r"\bRATIFIED\b", re.IGNORECASE)
+
+
+def _run(args: list[str], **kw) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(args, capture_output=True, text=True, **kw)
+
+
+def _repo_root_guess() -> Path:
+    return Path(__file__).resolve().parent
+
+
+def list_ratified_tags(repo: Path) -> list[str]:
+    r = _run(["git", "-C", str(repo), "tag", "-l", "ratified/*"])
+    if r.returncode != 0:
+        print(f"attest-tags: 'git tag -l' failed in {repo}: {r.stderr.strip()}", file=sys.stderr)
+        sys.exit(2)
+    return [ln for ln in r.stdout.splitlines() if ln.strip()]
+
+
+def tag_target_commit(repo: Path, tag: str) -> str | None:
+    """The commit a tag ultimately points at (peels an annotated tag). None if unresolvable."""
+    r = _run(["git", "-C", str(repo), "rev-parse", f"{tag}^{{commit}}"])
+    return r.stdout.strip() if r.returncode == 0 else None
+
+
+def verify_tag(repo: Path, tag: str, gnupghome: Path | None) -> tuple[str, str]:
+    """Returns (verdict, detail). verdict in {GOOD, BAD, UNVERIFIABLE}."""
+    if gnupghome is None:
+        return "UNVERIFIABLE", "no public key committed — nothing to verify against"
+    env = {"GNUPGHOME": str(gnupghome), "PATH": "/usr/bin:/bin:/usr/local/bin"}
+    r = _run(["git", "-C", str(repo), "verify-tag", tag], env=env)
+    detail = (r.stdout + r.stderr).strip()
+    if r.returncode == 0 and "Good signature" in detail:
+        return "GOOD", detail
+    return "BAD", detail or "git verify-tag exited nonzero with no output (unsigned tag?)"
+
+
+def claiming_commits(repo: Path) -> list[tuple[str, str]]:
+    """(sha, subject) for every commit whose message contains a standalone RATIFIED marker,
+    across all branches — the project's own dated-ratification convention (BACKLOG.md /
+    CLAUDE.md / commit subjects already use the word this way, grep-verified)."""
+    r = _run(["git", "-C", str(repo), "log", "--all", "--format=%H%x01%s"])
+    if r.returncode != 0:
+        return []
+    out = []
+    for line in r.stdout.splitlines():
+        if "\x01" not in line:
+            continue
+        sha, _, subject = line.partition("\x01")
+        if RATIFICATION_CLAIM_RE.search(subject):
+            out.append((sha, subject))
+    return out
+
+
+def main(argv: list[str]) -> int:
+    repo = _repo_root_guess()
+    keys_dir = repo / "law" / "keys"
+    as_json = False
+    args = list(argv)
+    i = 0
+    while i < len(args):
+        a = args[i]
+        if a == "--repo":
+            repo = Path(args[i + 1]).resolve()
+            i += 2
+        elif a == "--keys-dir":
+            keys_dir = Path(args[i + 1]).resolve()
+            i += 2
+        elif a == "--json":
+            as_json = True
+            i += 1
+        else:
+            print(f"attest-tags: unrecognized argument: {a}", file=sys.stderr)
+            return 2
+
+    tags = list_ratified_tags(repo)
+    keys = gpg_trust.committed_keys(keys_dir)
+    try:
+        gnupghome = gpg_trust.build_scratch_keyring(keys) if keys else None
+    except gpg_trust.GpgUnavailable as e:
+        print(f"attest-tags: REFUSED — {e}", file=sys.stderr)
+        return 2
+
+    tag_results: list[dict] = []
+    good_targets: set[str] = set()
+    try:
+        for tag in tags:
+            target = tag_target_commit(repo, tag)
+            verdict, detail = verify_tag(repo, tag, gnupghome)
+            if verdict == "GOOD" and target:
+                good_targets.add(target)
+            tag_results.append({"tag": tag, "target": target, "verdict": verdict, "detail": detail})
+
+        claims = claiming_commits(repo)
+        uncovered = [{"sha": sha, "subject": subject}
+                     for sha, subject in claims if sha not in good_targets]
+    finally:
+        gpg_trust.teardown_scratch_keyring(gnupghome)
+
+    bad_or_unverifiable = [t for t in tag_results if t["verdict"] != "GOOD"]
+    ok = not bad_or_unverifiable and not uncovered
+
+    if as_json:
+        print(json.dumps({
+            "repo": str(repo), "keys_dir": str(keys_dir), "keys_committed": len(keys),
+            "tags": tag_results, "uncovered_ratification_claims": uncovered, "ok": ok,
+        }, indent=2))
+        return 0 if ok else 1
+
+    print(f"attest-tags: {repo}")
+    print(f"  keys committed in {keys_dir}: {len(keys)}"
+          + ("" if keys else "  (AWAITING-KEY — see law/keys/README.md; every tag below is "
+                              "UNVERIFIABLE until a key lands)"))
+    print(f"  ratified/* tags: {len(tags)}")
+    for t in tag_results:
+        marker = {"GOOD": "OK", "BAD": "!!", "UNVERIFIABLE": "!!"}[t["verdict"]]
+        print(f"  [{marker}] {t['tag']} -> {t['target'] or '(unresolvable)'}: {t['verdict']}")
+        if t["verdict"] != "GOOD":
+            print(f"        {t['detail'].splitlines()[0] if t['detail'] else '(no detail)'}")
+    print()
+    if uncovered:
+        print(f"  {len(uncovered)} commit(s) claim ratification with no verifying ratified/* tag:")
+        for c in uncovered:
+            print(f"    !! {c['sha'][:12]} {c['subject']}")
+    else:
+        print("  every RATIFIED-marked commit is covered by a GOOD tag (or none exist to claim).")
+    print()
+    print("attest-tags: " + ("clean" if ok else "FINDINGS ABOVE — see marks") + f" (exit {0 if ok else 1})")
+    return 0 if ok else 1
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
