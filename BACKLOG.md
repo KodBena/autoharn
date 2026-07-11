@@ -2968,3 +2968,37 @@ entry), or explicitly UNBUILT/UNEXERCISED with its blocker named. No umbrella cl
    involuntary s23 token (why the verdict is BATCHED_DECLARED); the spirit-level duty is
    the preamble line + declared event time; no prose confession mandate — his brittleness
    instinct is agreed with and the reasoning is in the note.
+
+## Configuration-surface survey, adopter's eyes (2026-07-11, maintainer question)
+
+The maintainer asked whether the configuration surface is legible and easy for adopters.
+Surveyed at source (new-project.sh usage block; run10's real config files; the hooks'
+apparatus-reading code). Genuinely good in the small: one switchboard per world
+(apparatus.json) with a closed mode vocabulary VALIDATED with teach-text on bad values;
+cost_note travels IN the config with each costed mechanism (billing consent where the
+decision is made); every world carries self-describing companion docs (APPARATUS.md,
+HOOKS.md, GOVERNED_FILES.md); deployment.json is the single source for world facts; the
+scaffold documents its flags and refuses overwrite without --force.
+
+Not yet adopter-grade in the large — five gaps, in severity order:
+1. A typo'd mechanism NAME in apparatus.json is silently ignored (mode VALUES are
+   validated; nothing sweeps unknown keys — each hook reads only its own entry). Fail-open,
+   the shape this project distrusts most. Cheap fix: unknown-key sweep -> loud warn/refuse.
+2. Absolute autoharn paths are baked into every world's settings.json and verb shims —
+   deliberate (live verbs) but it means autoharn has a fixed, unstated install-path
+   contract; relocating it breaks every wired world with no teach-text anywhere.
+3. No single adopter-facing CONFIGURATION document: the surface is legible in pieces but
+   scattered across scaffold flags, per-world JSON files, and per-world docs;
+   OPERATING-CARD is orchestrator-facing. "What can I configure, what are the defaults,
+   what costs money, what needs Postgres set up first" exists nowhere as one page.
+4. The Postgres prerequisite (host, db, role grants, pg_hba) is assumed, not offered — the
+   hardest step of adoption has the least surface.
+5. Era-coded env names (E13_GATE_*) leak internal archaeology into the surface an adopter
+   reads first.
+
+This list is the concrete content of the standing NO-PUSH bar ("until a non-expert can use
+this without a frontier model"). Queued as one commission (CONFIGURATION.md meeting
+ADR-0017 + unknown-key validation + install-path contract statement) AFTER the two in-
+flight worktree agents land, to avoid same-file collisions. The "offered in configuration"
+half for the doc discipline itself was added to the A:B:C arming agent's commission the
+same hour (apparatus entry per the demurral precedent, scaffold-time).
