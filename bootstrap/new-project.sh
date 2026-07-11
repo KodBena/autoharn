@@ -1,7 +1,7 @@
 #!/bin/sh
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-09T11:15:53Z
-#   last-change: 2026-07-11T20:51:27Z
+#   last-change: 2026-07-11T22:38:33Z
 #   contributors: be693afb/main, e4410ef6/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -334,6 +334,15 @@ fi
 # env var `pickup`'s own live-resolution already used, extended to all three rather than growing
 # three near-identical mechanisms, ADR-0012 P1). deployment.json itself stays scaffold-written
 # per-world config (unchanged) -- only the VERBS stopped being copies.
+# keys/ -- this deployment's OWN GPG keyring (SIGNED commissions, design/GPG-TRUST-LAYER.md §3),
+# deliberately separate from autoharn's law/keys/ (scoped exclusively to autoharn's own
+# ratified/* tags). Mirrors bootstrap/track-work.sh's identical block; applied at the merge
+# window per the key-residence refactor's documented frozen-remainder diff (BACKLOG 2026-07-12).
+echo "-- keys/ (this deployment's OWN GPG keyring; never autoharn's law/keys/) --"
+mkdir -p "$PROJECT_ROOT/keys"
+sedsubst < "$TEMPLATES/keys-README.md.tmpl" > "$PROJECT_ROOT/keys/README.md"
+echo "wrote keys/README.md (AWAITING-KEY stub; commit THIS deployment's own signing key here)"
+
 echo "-- the seven verbs (led, judge, pickup, audit, distance-to-clean, verify-commission, verify-chain): thin shims exec'ing autoharn's live templates --"
 for verb in led judge pickup audit distance-to-clean verify-commission verify-chain; do
     cat > "$PROJECT_ROOT/$verb" <<SHIM
@@ -391,7 +400,8 @@ if [ -n "$NEW_WORLD" ]; then
     echo "substitution strips trailing newlines; a raw-file signature would not, and would verify"
     echo "as FORGED-OR-CORRUPT despite being perfectly honest -- see verify-commission.tmpl's own"
     echo "module docstring for the full account of this hazard and its fix). Expect VERIFIED once"
-    echo "a real key is committed at law/keys/maintainer.asc; until then every signature refuses"
+    echo "a real key is committed at THIS deployment's keys/ directory (never autoharn's"
+    echo "law/keys/ -- that one is scoped to autoharn's own law); until then every signature refuses"
     echo "as NO-COMMITTED-KEY, exit 3 (there is nothing to check it against yet -- distinct from"
     echo "FORGED-OR-CORRUPT, per design/GPG-TRUST-LAYER-FAQ.md) -- exercise the ceremony with a"
     echo "throwaway test key first if you want to see VERIFIED before the real key exists."
