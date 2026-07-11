@@ -1,7 +1,7 @@
 #!/bin/sh
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-09T11:15:53Z
-#   last-change: 2026-07-11T00:07:00Z
+#   last-change: 2026-07-11T14:49:27Z
 #   contributors: be693afb/main, e4410ef6/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -289,8 +289,8 @@ fi
 # env var `pickup`'s own live-resolution already used, extended to all three rather than growing
 # three near-identical mechanisms, ADR-0012 P1). deployment.json itself stays scaffold-written
 # per-world config (unchanged) -- only the VERBS stopped being copies.
-echo "-- the three verbs (led, judge, pickup): thin shims exec'ing autoharn's live templates --"
-for verb in led judge pickup; do
+echo "-- the four verbs (led, judge, pickup, audit): thin shims exec'ing autoharn's live templates --"
+for verb in led judge pickup audit; do
     cat > "$PROJECT_ROOT/$verb" <<SHIM
 #!/bin/sh
 HERE="\$(cd "\$(dirname "\$0")" && pwd)"

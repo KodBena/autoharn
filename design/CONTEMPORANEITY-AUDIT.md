@@ -139,3 +139,26 @@ with seen-red fixtures — including a synthetic backfill corpus replayed from r
 real timings. 4. First measured report over runs 5-8 sets the verdict thresholds; the
 numbers go to the maintainer with the first prepared question this design actually
 needs.
+
+## Status (appended, dated per ADR-0005 Rule 8 — the original memo above stands unedited)
+
+**Part 1: LANDED** (kernel/lineage/s23-per-invocation-stamp-token.sql;
+hooks/stamp_intercept.py mints the token + journals `.claude/logs/invocations.jsonl`; both in
+the birth chain since `bootstrap/new-project.sh --new-world`).
+
+**Part 2: CORE LANDED, 2026-07-11 (Sonnet, commissioned build) — see BACKLOG.md's
+"Contemporaneity audit, Part 2 — CORE LANDED" entry for the full disposition.** Sequencing
+steps 1-4 above are done: the ASP verdict program + EDB builder + `./audit` verb + seen-red
+fixtures all landed and witnessed (live against run7's real pre-s23 schema AND on an
+apparatus-authored scratch world exercising the full CONTEMPORANEOUS|BATCHED_DECLARED|
+BACKFILL_SUSPECT vocabulary both polarities); the thresholds were measured from the runs 5-8
+corpus, not guessed (`engine/contemp_thresholds.lp`'s own derivation comments). **Filed, not
+built, this pass** (a maintainer critical-path resequencing scoped the first landing to this
+core): the SQL-floor differential (this verb ships ONE producer today, not the marriage
+discipline's cross-validated AGREE pair), `--retain`-by-default wiring in the `./audit` shim
+itself, session-level (vs whole-ledger-window) verdict granularity, and Part 3 (untouched, as
+scoped above). Two hazards surfaced live during the build: a clingo/clasp 32-bit integer
+overflow on absolute epoch-ms values (FIXED in-pass — every emitted timestamp is now
+anchor-relative) and a timestamp-convention disagreement across the three existing hook
+journals (FLAGGED, not fixed — outside this commission's touch-list). Both named in
+BACKLOG.md and in `engine/contemp_edb.py`'s own docstring, not silently routed around.

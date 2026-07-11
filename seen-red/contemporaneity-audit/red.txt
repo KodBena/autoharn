@@ -1,0 +1,21 @@
+# banked RED evidence -- CASE b (manufactured backfill), engine/contemp_audit.py real output:
+# contemporaneity audit -- target='contempprobe' root=/tmp/contemp-fixture-p8dbb17w
+#   capabilities: [('stamp_invocation_column', True), ('s23_capable', True), ('invocation_journal', True), ('tool_event', True)]
+#   counts: {'row_tokened': 6, 'row_untokened': 0, 'invocation': 2, 'tool_event': 4}
+
+BURST TABLE (STATED -- rows per invocation token):
+  token=fixture-token-aaaa rows=2
+  token=fixture-token-cccc rows=2
+SILENCE TABLE (tool activity, zero ledger rows, gap > threshold):
+  [2033-05-18T03:50:10.000+00:00 .. 2033-05-18T03:55:15.000+00:00]  gap_ms=305000
+BACKFILL_SUSPECT tokens: ['fixture-token-cccc']
+PER-ROW DELTAS (row ts minus its own invocation's journaled wall-clock, ms):
+  row 4: delta_ms=1000
+  row 5: delta_ms=50
+  row 6: delta_ms=80
+PRECEDING-ACTIVITY AGE (ms since the nearest earlier tool_event, per row):
+  row 4: age_ms=5000
+  row 5: age_ms=50
+  row 6: age_ms=80
+
+VERDICT: BACKFILL_SUSPECT

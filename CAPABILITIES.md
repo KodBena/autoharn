@@ -369,6 +369,53 @@ inject-but-warn-on-broken-secret instead of deny; enforce = deny). Torn down aft
 permanently (`change_gate` full three-way, `stamp_intercept` spot-check), registered in
 `gates/fixture_census.py`.
 
+**24. The contemporaneity correlation verb (`./audit`) — Part 2 of
+design/CONTEMPORANEITY-AUDIT.md (BACKLOG "Contemporaneity indictment", 2026-07-11).** A fifth
+operator verb (`bootstrap/templates/audit.tmpl`, scaffolded alongside `led`/`judge`/`pickup` by
+`bootstrap/new-project.sh --new-world`) that joins a world's ledger rows against its
+`.claude/logs/invocations.jsonl` token journal (s23) and the three existing hook-journaled
+tool-activity logs, and reports the closed verdict vocabulary
+`CONTEMPORANEOUS | BATCHED_DECLARED | BACKFILL_SUSPECT` — ASP-FIRST per the maintainer's
+directive: the verdict logic lives in `engine/lp/contemporaneity.lp` (batch/silence/
+backfill_suspect derived from an EDB of `invocation/2`, `row_tokened/4`/`row_untokened/3`,
+`tool_event/2`, with `burst_threshold_ms`/`silence_threshold_ms` entering as FACTS in
+`engine/contemp_thresholds.lp`, never hardcoded in a rule), run via the shared `clingo_run.py`.
+Thresholds are MEASURED, not guessed: derived from the runs 5-8 corpus (db `toy`,
+192.168.122.1) — see `engine/contemp_thresholds.lp`'s own derivation comments for the exact
+query and numbers (burst_threshold_ms=1000, from a measured gap of [21ms,40ms] for genuine
+same-command bursts vs. 1141ms for the smallest genuine distinct-moment gap; silence_
+threshold_ms=180000, reasoned below the two hand-forensic true positives on record, 503s and
+312s). HONEST HISTORICAL LIMIT, ENFORCED: runs 5-8 (and any pre-s23 world) get an EXPLICIT
+typed refusal (`NO_VERDICT`, exit 3) naming the missing capability, never a guessed verdict —
+*Witnessed live* against run7's own real, unmodified schema (read-only): `s23_capable=False`,
+`invocation_journal` EXCLUDED, exit 3, plus a degraded ts-cluster burst table (explicitly marked
+INFERRED, never conflated with a STATED token burst) that reproduces the exact burst shape
+BACKLOG's own hand forensics found (rows 5-8, 13-16, 17-20, ...) and the exact burned-id
+refusal fingerprint (id 62) BACKLOG's forensic pass found by hand. *Witnessed on a scratch
+world (full s23+journal capability, apparatus-authored, both polarities)*:
+`seen-red/contemporaneity-audit/run_fixtures.py` — a clean multi-row token burst with dense
+tool activity verdicts `BATCHED_DECLARED` (exit 0, zero backfill_suspect tokens); a manufactured
+>300s tool-activity silence with zero ledger rows immediately followed by a 2-row burst verdicts
+`BACKFILL_SUSPECT` (exit 1), naming the offending token; an empty ledger verdicts N/A (exit 3),
+never a guessed CONTEMPORANEOUS. *Witnessed live, the operator verb itself*: a throwaway
+`bootstrap/new-project.sh --new-world auditprobe` scaffold wrote `./audit` alongside the other
+three shims, and running it from inside the freshly-born (empty) world produced the correct N/A
+refusal against the real scratch schema, torn down after. **Second-producer status, declared
+honestly**: this ships ONE producer (the ASP derivation) — the marriage discipline's SQL-floor
+differential (this domain's sibling to `engine/ledger_floor.py`) is FILED in BACKLOG.md, not
+built, this pass (a maintainer critical-path resequencing scoped the first landing to the
+ASP-derived core); a verdict here is not yet cross-validated AGREE-style. **Named hazard, fixed
+in-pass, not deferred**: clingo/clasp's integer terms are 32-bit signed C ints and silently wrap
+on an absolute 2026-era epoch-millisecond value (found live, in this module's own first test
+against real run7 data, before an anchor-relative encoding closed it — every T this module
+emits is now relative to a per-export minimum-timestamp anchor, never absolute). **Named hazard,
+flagged not fixed**: the three hook journals `contemp_edb.py` reads do not agree on a timestamp
+convention (`mutation_observer.journal.jsonl`/`invocations.jsonl` write UTC with a trailing
+`Z`; `change_gate.journal.jsonl`/`delegation_observer.journal.jsonl` write a naive-local
+`datetime.now().isoformat()`) — parsed correctly for both shapes today, but only correct when
+read on the same host/timezone that wrote them; filed in BACKLOG.md rather than fixed (fixing it
+means editing two more `hooks/` files, outside this commission's touch-list).
+
 ## Built, unexercised (exists; has not yet fired in anger)
 
 - **Assumption validity bounds** — an assumption can carry "valid until / valid within" and an

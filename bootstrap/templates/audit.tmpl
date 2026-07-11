@@ -1,0 +1,60 @@
+#!/usr/bin/env bash
+# audit — Part 2 of design/CONTEMPORANEITY-AUDIT.md: the first-class correlation verb the
+# maintainer commissioned mid-run-8 ("we want a tool that can automatically run this
+# correlation, in a first-class way ... time deltas between actual events and recorded
+# events" -- BACKLOG "Contemporaneity indictment", 2026-07-11), instead of the ad-hoc SQL an
+# orchestrator kept re-deriving by hand every crisis (runs 5, 7, 8).
+#
+# Usage:
+#   ./audit [--retain] [extra engine/contemp_audit.py flags...]
+#     ./audit             # report burst/silence/backfill + per-row deltas + the closed verdict
+#     ./audit --retain    # additionally bank the EDB + report under autoharn's own
+#                         # engine/docs/contemporaneity-audit/runs/<target>/
+#
+# Joins THIS world's ledger (via engine/contemp_edb.py, Postgres) against its own
+# `.claude/logs/*.jsonl` hook journals (the invocation token journal, s23-era; the three
+# existing tool-activity observer journals) and runs the ASP verdict logic
+# (engine/lp/contemporaneity.lp + engine/contemp_thresholds.lp) via clingo. Prints the closed
+# verdict vocabulary:
+#   CONTEMPORANEOUS | BATCHED_DECLARED | BACKFILL_SUSPECT
+# — OR an explicit typed refusal (never a guessed verdict, never a vacuous pass) when this
+# world lacks a capability the full verdict needs: predates s23 (no stamp_invocation column),
+# hooks off/unwired (no invocations.jsonl), or no journaled tool activity yet.
+#
+# EXIT CODES: 0 clean (CONTEMPORANEOUS/BATCHED_DECLARED) | 1 BACKFILL_SUSPECT (loud) |
+# 2 tool error | 3 N/A (capability-gated refusal — read the printed reason, never silence).
+#
+# OBSERVER-FIRST (design memo): this verb reports; it gates nothing; it is not invoked from
+# any PreToolUse/Stop hook. Whether a BACKFILL_SUSPECT verdict ever feeds a gate is a later
+# maintainer question, per the same observer-first posture `judge` (the differential verb)
+# already carries.
+#
+# SECOND-PRODUCER STATUS (declared): this ships ONE producer (the ASP derivation over
+# engine/contemp_edb.py's EDB). The SQL-floor differential (the marriage discipline's
+# AGREE bar, engine/ledger_floor.py's sibling for this domain) is FILED, not built —
+# see BACKLOG.md's dated "Contemporaneity indictment" entry for the disposition.
+#
+# Path resolution: this file executes IN PLACE out of the autoharn checkout (the "live verbs"
+# ruling, 2026-07-11 — the scaffolded ./audit is a 3-line shim that execs THIS file directly,
+# exactly like led/judge/pickup), so AUTOHARN defaults to two directories up from THIS file's
+# own on-disk location — overridable with AUTOHARN=/path/to/autoharn. This world's own root
+# directory (carrying deployment.json + .claude/logs/) is derived from PICKUP_DEPLOYMENT (set
+# by the shim to "$HERE/deployment.json" — the SAME env var led/judge/pickup already use;
+# reusing it rather than growing a fourth near-identical mechanism, ADR-0012 P1), falling back
+# to this file's own directory when run by hand outside a scaffolded shim.
+set -euo pipefail
+
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+AUTOHARN="${AUTOHARN:-$(cd "$HERE/../.." && pwd)}"
+CONTEMP_AUDIT="$AUTOHARN/engine/contemp_audit.py"
+DEPLOYMENT="${PICKUP_DEPLOYMENT:-$HERE/deployment.json}"
+WORLD_ROOT="$(cd "$(dirname "$DEPLOYMENT")" && pwd)"
+
+if [ ! -f "$CONTEMP_AUDIT" ]; then
+  echo "audit: cannot find engine/contemp_audit.py under AUTOHARN=$AUTOHARN" >&2
+  echo "       set AUTOHARN=/path/to/autoharn (this file executes in place out of the autoharn" >&2
+  echo "       checkout itself now -- see the scaffolded ./audit shim's own comment)" >&2
+  exit 2
+fi
+
+exec python3 "$CONTEMP_AUDIT" --root "$WORLD_ROOT" "$@"

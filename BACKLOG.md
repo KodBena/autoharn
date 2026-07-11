@@ -2513,3 +2513,91 @@ mechanizes any of it. Commissioned same morning (Sonnet): a repo-wide sweep for 
 shapes plus a class-not-instance gate for the mechanizable core — every relative markdown
 link in maintainer-facing docs must resolve on disk. Disposition of the sweep lands as its
 own entry.
+
+## Contemporaneity audit, Part 2 — CORE LANDED (2026-07-11, Sonnet, commissioned build)
+
+Part 2 of design/CONTEMPORANEITY-AUDIT.md (the correlation verb) built and witnessed, per a
+maintainer critical-path resequencing mid-build ("run 9 will not start until this instrument
+lands") that scoped the FIRST landing to a minimal end-to-end core; the SQL-floor differential
+(item 2 below) is filed here, not built, as that resequencing's own deferral.
+
+**Landed, this pass:**
+1. `engine/contemp_thresholds.lp` — the two measured thresholds (`burst_threshold_ms(1000)`,
+   `silence_threshold_ms(180000)`) as FACTS, with their full derivation from the runs 5-8
+   corpus (db `toy`, 192.168.122.1) in the file's own comments — the query, the raw gap
+   numbers, and the two hand-forensic true positives (run5's 503s / run8's 312s silence-then-
+   burst) the silence threshold sits below.
+2. `engine/lp/contemporaneity.lp` — the ASP verdict program: EDB
+   (`invocation/2`, `row_tokened/4`, `row_untokened/3`, `tool_event/2`), derived predicates
+   (`token_burst`, `ts_cluster` — degraded/inferred, kept structurally distinct from the stated
+   token burst — `silence`, `backfill_suspect`, `refusal_fingerprint`, `row_delta_ms`,
+   `preceding_activity_age_ms`), and the closed session verdict (`contemporaneous` |
+   `batched_declared` | `backfill_suspect`), mutually exclusive by stratified negation.
+3. `engine/contemp_edb.py` — the EDB builder, joining Postgres (the ledger) against a world's
+   `.claude/logs/*.jsonl` (the s23 invocation-token journal + the three existing tool-activity
+   observer journals), with a capability manifest (mirrors `engine/ledger_edb.py`'s
+   produced/declared-exclusion idiom) so a world missing a capability is named, never silent.
+4. `engine/contemp_audit.py` — the CLI/report layer: runs clingo, parses atoms, prints the
+   burst/silence/backfill tables, the per-row deltas (ts minus the row's own invocation's
+   journaled wall-clock; the age of the preceding tool-activity window — the maintainer's own
+   asked-for number), refusal fingerprints, and the verdict. Exit codes: 0 clean, 1
+   BACKFILL_SUSPECT (loud), 2 tool error, 3 N/A (capability-gated refusal — mirrors the
+   existing `contemporaneity-degrade` exit-3 convention in `instruments/`).
+5. `bootstrap/templates/audit.tmpl` — a fifth operator verb (`./audit`), wired into
+   `bootstrap/new-project.sh --new-world`'s shim loop alongside `led`/`judge`/`pickup`
+   (live-verbs convention: execs straight out of this checkout, no scaffold-time copy).
+   Witnessed live: a throwaway `--new-world auditprobe` scaffold wrote the shim; `./audit` run
+   from inside the fresh (empty) world produced the correct N/A refusal against the real
+   scratch schema; torn down clean.
+6. `seen-red/contemporaneity-audit/run_fixtures.py`, registered in `gates/fixture_census.py`.
+   Four cases: an empty ledger (N/A, never a guessed verdict); a clean multi-row token burst
+   with dense tool activity (BATCHED_DECLARED, zero backfill_suspect); a manufactured >300s
+   tool-activity silence with zero rows immediately followed by a burst (BACKFILL_SUSPECT,
+   naming the token — the banked `red.txt`); and — the one case run against REAL data, not a
+   fixture — run7's own live (read-only) pre-s23 schema, confirming the N/A refusal, the
+   missing-capability name, and the exact burned-id refusal fingerprint (id 62) BACKLOG's own
+   hand forensics already found.
+
+**Two hazards found live during this build, one fixed in-pass, one flagged:**
+- **FIXED**: clingo/clasp's integer terms are 32-bit signed C ints; an absolute 2026-era
+  epoch-millisecond value silently wraps (verified: `echo 'a(2000001010000).' | clingo -
+  --outf=2` prints `a(-1453749936)`, no error). `contemp_edb.py` now emits every T relative to
+  a per-export minimum-timestamp anchor, never absolute — closed before this landed, not
+  deferred (found in this module's own first test against real run7 data).
+- **FLAGGED, not fixed**: the three hook journals `contemp_edb.py` reads disagree on a
+  timestamp convention — `mutation_observer.journal.jsonl`/`invocations.jsonl` write UTC with
+  a trailing `Z`; `change_gate.journal.jsonl`/`delegation_observer.journal.jsonl` write a
+  naive-local `datetime.now().isoformat()` with no tz suffix. Parsed correctly for both shapes
+  today (`contemp_edb.py::_parse_ts_ms`), but the naive-local reading is only correct on the
+  same host/timezone that wrote it. Fixing the two hooks' own convention is outside this
+  commission's touch-list (and a hooks/ edit is gated on no wired session being live); named
+  here as a genuine, if currently harmless (one-operator, one-host), inconsistency for a
+  future pass.
+
+**Filed, not built, this pass (the maintainer resequencing's own deferral):**
+1. **The SQL-floor differential** (this domain's sibling to `engine/ledger_floor.py` /
+   `engine/ledger_differential.py`) — a second, independent producer over the same EDB so a
+   verdict here earns the marriage discipline's AGREE bar. Today's verdict is single-producer
+   (ASP only); `contemp_audit.py`'s own report and `engine/lp/contemporaneity.lp`'s header say
+   so on every run, never silently upgraded to "AGREE". Candidate shape: stage the
+   invocation/tool_event JSONL data into a scratch Postgres table (or a `VALUES(...)` literal
+   built from the same parsed tuples) and re-derive batch/silence/backfill_suspect via
+   recursive CTEs / window functions, independently coded from the ASP rules — the established
+   `ledger_floor.py` idiom, extended across a file-plus-DB input rather than a DB-only one.
+2. **Scaffold wiring for the DerivationRecord retention convention** (`--retain`'s banked
+   artifacts under `engine/docs/contemporaneity-audit/runs/`) exists (`contemp_audit.py
+   --retain`) but `./audit`'s own shim does not default to `--retain` the way `judge.tmpl`
+   does for the marriage differential — left as an explicit flag pending the maintainer's
+   preference on whether every `./audit` run should bank evidence by default (a disk-growth
+   question `judge`'s own precedent answered "yes" for; not re-litigated here).
+3. **Part 3** (the deontic/temporal ASP program over the whole governance preamble's ordering
+   obligations, design/CONTEMPORANEITY-AUDIT.md's own "sketch, research direction, filed not
+   committed") — untouched, as the design memo itself scoped it.
+4. **Session-level verdict granularity**: today's verdict is computed over the WHOLE exported
+   ledger window (all rows in the schema), not sub-divided by the ledger's own `session`
+   column — a coarser grain than "per session" as the design memo's item 5 literally reads.
+   Defensible for a single-session scratch/small world; a multi-session world would want the
+   `session` column folded into the EDB and the verdict computed per-session. Named, not built.
+
+Every claim above is either WITNESSED (with the observed output quoted in the commit/report
+this entry accompanies) or explicitly filed as UNEXERCISED/deferred — no umbrella claim.
