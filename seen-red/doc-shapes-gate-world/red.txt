@@ -1,0 +1,7 @@
+CASE ENFORCE-RED: exit=2
+CASE ENFORCE-GREEN: exit=0, stdout=''
+CASE OBSERVE-WARN: exit=0
+CASE OFF-SILENT: exit=0, stdout=''
+CASE DEFAULT-OBSERVE: exit=0
+CASE EDIT-RECONSTRUCT: exit=2
+doc-shapes-gate-world red-specimen: all six cases behaved as designed — enforce denies a defective write naming both checks, enforce allows a clean write silently, observe warns without blocking, off is silent regardless, a missing apparatus.json defaults to observe (never off, never enforce), and an Edit is checked against its full reconstructed content with the real path named in the teach-text.
