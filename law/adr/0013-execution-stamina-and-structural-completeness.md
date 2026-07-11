@@ -585,6 +585,25 @@ claim schema requires class + witness fields and stamps post-verification
 claims unverified), and review-only elsewhere, declared as such per ADR-0011
 Rule 1.*
 
+## Amendment — 2026-07-12: Rule 3's justification-as-suspect check now runs mechanically (warn-only)
+
+*(Dated append per ADR-0005 Rule 8; maintainer-ratified 2026-07-12 from a 2026-07-10
+draft, transcribed by Fable — the project's senior AI authoring model, per CLAUDE.md's
+ORCHESTRATION section. The amendment text below is the drafted wording, ratified
+verbatim; the proviso following it is the maintainer's own condition at ratification.)*
+
+Rule 3's enforcement surface tightened from review-only toward the gate: the
+justification-as-suspect check now runs mechanically at the two canonical sites (the
+pre-loaded question; the completion claim). It warns; it does not refuse. The Rule's
+admission stands — the faculty it guards is still the faculty that acts — but the
+demurral now leaves a trace the executor did not choose to leave.
+
+*Ratification proviso (maintainer, 2026-07-12, near-verbatim): the mechanization is not
+"provably covering all bases." The existence of a mechanized net never licenses an agent
+to ignore this tenet's text and hope a possibly-incomplete net catches the violation —
+especially since ADRs are by their nature somewhat fuzzy. The text binds; the mechanism
+assists.*
+
 ## License
 
 Public Domain (The Unlicense).

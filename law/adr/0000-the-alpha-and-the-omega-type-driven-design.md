@@ -1,5 +1,11 @@
 # ADR-0000: The Alpha and the Omega — Type-Driven Design as the Foundational Law
 
+*(Plain-words preface, appended 2026-07-12 under ADR-0017 Rule 4 — non-normative, it
+changes no rule: this document's law is that when a defect is found, the first move is
+never "how do I fix it" but two prior questions — what TYPE, meaning what shape of data,
+would make this whole class of defect impossible to even express, and what operational
+lapse let it recur — and only then the fix. Everything below elaborates that.)*
+
 - **Status:** **Provisional (emergency).** Filed under thin executive bandwidth.
   This ADR is numbered `0000` because it is the **root** the corrective trio
   ADR-0011 / ADR-0012 / ADR-0013 descend from — the **Alpha** (the first
@@ -487,6 +493,34 @@ axes real? is any sibling missing?), and where a workflow instrument carries
 a claim schema, the closure statement's three parts are required fields, not
 prose. The asking remains review-only, exactly as Rule 2 already declares;
 the claim stops being self-certifying, which is the point.*
+
+## Revisit #3 — 2026-07-12 (maintainer-ratified; drafted 2026-07-10, transcribed by Fable)
+
+*(Dated append per ADR-0005 Rule 8; Fable is the project's senior AI authoring model,
+per CLAUDE.md's ORCHESTRATION section. The amendment text below is the drafted wording,
+ratified verbatim; the proviso following it is the maintainer's own condition at
+ratification. Because the quotation is frozen, its referents are resolved here instead:
+a "world" is one isolated project habitat the harness scaffolds — see
+[GLOSSARY.md](../../GLOSSARY.md#world); the cited artifacts are repository paths —
+[hooks/demurral_detect.py](../../hooks/demurral_detect.py),
+[instruments/demurral_corpus.jsonl](../../instruments/demurral_corpus.jsonl), and the
+banked evidence under [seen-red/demurral-detector/](../../seen-red/demurral-detector/);
+and "PreToolUse on AskUserQuestion + Stop" names the Claude Code hook events the
+detector attaches to — the moments the harness intercepts just before a question is
+posed to the human and just before a session ends.)*
+
+The out-of-frame rationalization-detector named here was minted as a mechanism:
+hooks/demurral_detect.py (observer; PreToolUse on AskUserQuestion + Stop),
+regression-tested against the adversarial corpus instruments/demurral_corpus.jsonl
+(n=121; precision 0.981, recall 0.929 raw / 0.852 at shipped timeout; witness banked in
+seen-red/demurral-detector/). Its costed classifier defaults off per world. Promotion to
+enforcing remains a maintainer act.
+
+*Ratification proviso (maintainer, 2026-07-12, near-verbatim): the mechanization is not
+"provably covering all bases." The existence of a mechanized net never licenses an agent
+to ignore this tenet's text and hope a possibly-incomplete net catches the violation —
+especially since ADRs are by their nature somewhat fuzzy. The text binds; the mechanism
+assists.*
 
 ## License
 
