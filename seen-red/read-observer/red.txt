@@ -1,0 +1,19 @@
+=== a-observe-default ===
+  [ok] exit=0 journal_lines=1 rec={'ts': '2026-07-11T18:04:24.701Z', 'session_id': 'sess-a', 'file_path': '/etc/hostname'}
+
+=== b-mode-off ===
+  [ok] exit=0 before=1 after=1 (expect equal)
+
+=== c-mode-enforce-downgrade ===
+  [ok] exit=0 stderr_has_downgrade_warning=True before=1 after=2
+
+=== d-non-read-tool ===
+  [ok] exit=0 stdout='' before=2 after=2
+
+=== e-unwired ===
+  [ok] exit=0 before=2 after=2
+
+=== f-multiple-reads-append ===
+  [ok] before=2 after=4 last_two=['/tmp/file1.txt', '/tmp/file2.txt']
+
+ALL CASES OK -- read_observer both-polarity proof clean, zero residue.

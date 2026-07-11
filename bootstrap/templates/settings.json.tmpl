@@ -55,6 +55,16 @@
             "timeout": 10
           }
         ]
+      },
+      {
+        "matcher": "Read",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "env GATE_SUBJECT_ROOT=__PROJECT_ROOT__ python3 __AUTOHARN_ROOT__/hooks/pretooluse_read_observer.py",
+            "timeout": 5
+          }
+        ]
       }
     ],
     "PostToolUse": [
