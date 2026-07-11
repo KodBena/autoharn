@@ -4853,3 +4853,15 @@ the attestation records round 2 DEFECT with `escalated: true` (content_sha256
 non-converging-review-loop typed event, routed upward by this entry and the authoring
 session's report rather than laundered into a CLEAN. Deterministic gates
 (link_integrity, doc_shapes, doc_attestation_presence) all clean on the committed text.
+
+## Maintainer decision brief published: the six open maintainer-only decisions in plain language (Sonnet, 2026-07-12)
+
+`design/MAINTAINER-DECISION-BRIEF.md` — the review-gap ruling, the two ADR amendment texts,
+ADR-0009 re-instancing, the research-ledger apply, pg_hba hardening, and the maintainer's own
+key-generation act, each reduced to a plain-words question, a yes/no cost, and an exact
+copy-paste act, per ADR-0017's zero-context-reader standard for the maintainer's own
+non-technical read; ran its own two-round A:B:C loop (synchronous B both rounds), round 1 five
+findings (undefined "terminal"/"fingerprint" jargon, an unresolved git-revision citation, a
+bare Related list, noun-phrase bylines) all repaired, round 2 two further findings ("ratified"
+used before its gloss, a stray "the orchestrator" breaking the document's own plain-English
+convention) fixed by the orchestrator at the two-round cap, `escalated: true` recorded.
