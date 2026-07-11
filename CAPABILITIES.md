@@ -11,8 +11,9 @@ mechanism exists but has never fired in anger. Nothing here is aspiration; the a
 layer lives in `law/briefs/`. Source of record: `law/briefs/BRIEF-CONFORMANCE-MAP.md`.
 
 This pass (2026-07-10) refreshes the doc past s20 (obligation grants + view refresh), s21
-(pair-keyed session-aware distinctness), s22 (work-item ledger), the four operator verbs'
-current shape (`led`/`judge`/`pickup`/the scaffold), `bootstrap/apply-delta.sh`, the
+(pair-keyed session-aware distinctness), s22 (work-item ledger), the operator verbs' shape as
+of that date (four then: `led`/`judge`/`pickup`/the scaffold; `audit` and `distance-to-clean`
+joined later — item 25 below carries the current, canonical list), `bootstrap/apply-delta.sh`, the
 self-documenting `--new-world` scaffold, the conformance checker instrument, the fail-closed
 hook changes, and the class-ratification + self-application rules in CLAUDE.md ORCHESTRATION.
 Method: re-read the source files below, then re-witnessed the operator-facing round trip on a
@@ -519,6 +520,90 @@ apply-delta.sh is retired" as settled fact; the script is in fact still present,
 functionally capable of applying a delta to an existing world — corrected in the SQL file's own
 prose and flagged loudly in BACKLOG.md's dated entry (deleting/neutering the script is a
 separate, larger decision, not taken here).
+
+**25. `distance-to-clean` — the composed closure-debt verb (BACKLOG "Five-item batch,
+maintainer-approved 2026-07-11 evening", item 1; design/RETROSPECTIVE-RUN10.md Finding 1).** A
+sixth operator verb (`bootstrap/templates/distance-to-clean.tmpl`, scaffolded alongside
+`led`/`judge`/`pickup`/the scaffold verb/`audit` by `bootstrap/new-project.sh --new-world`) that reads the SAME
+three existing debt views `led review-gap`/`question-status`/`work violations` already expose
+and prints their counts and ids in one pass — computing nothing new, no new join, no derived
+predicate. The three disaggregated commands remain the documented default, unchanged (the
+maintainer's own condition on this item). Built to kill the run10 pattern the retrospective
+named: 47 of run10's 299 invocations (about 16%) were bare polls of `./led review-gap` alone,
+because one call could not answer "how far am I from a clean stop." *Witnessed live* on a
+throwaway `--new-world` probe (`batch5probe`, torn down after): a clean world reports `TOTAL
+debt: 0`, exit 0; after registering a real obligation, writing an unreviewed row, an open
+question, and a work item with a dangling dependency, the SAME probe reports `review-gap: 6
+row(s) -- ids: [2, 3, 4, 5, 6, 7]`, `question-status: 1 open of 1 total -- open ids: [6]`,
+`work-violations: 1 violation(s) -- slugs: [widget-x]`, `TOTAL debt: 8`, exit 1 — cross-checked
+id-for-id against the disaggregated `led review-gap`/`question-status`/`work violations` output
+on the same probe (identical rows, identical counts), proving this verb reads the same views
+rather than a second, driftable copy of their logic.
+
+**26. `commission` ledger kind, two signing modes — capturing the ask itself
+(`kernel/lineage/s25-commission-kind.sql`; BACKLOG "Five-item batch, maintainer-approved
+2026-07-11 evening", item 2; design/RETROSPECTIVE-RUN10.md Finding 5 and could-not-answer item
+4).** The retrospective's harness recommendation, closed: "capture the commission at intake as
+a frozen ledger row ... so that 'deliverable versus commission' can be checked mechanically
+against the source, not only against the agent's restatement of it." `commission` joins the
+`ledger_kind_check` vocabulary — a pure set union (every prior kind stays legal, unchanged),
+class-ratified per the kernel-delta decision tree (OPERATING-CARD.md's "Kernel deltas" section,
+sourced from CLAUDE.md ORCHESTRATION). Two signing modes, mechanically distinguishable by
+actor identity + stamp state, never prose claims alone: **FULL mode** — the maintainer signs the
+ask himself, in his own terminal, via the exact line `bootstrap/new-project.sh --new-world`
+prints at scaffold time: `LED_ACTOR=commissioner ./led commission "<the ask verbatim>"` (the
+`commissioner` principal, class `human`, is registered automatically at scaffold time alongside
+`author`/`reviewer` — no separate registration step). **LAZY mode** — the implementer's own
+FIRST ledger act on receiving a commission (`bootstrap/templates/CLAUDE.md.tmpl` point 10),
+transcribing the ask verbatim under their own `author` actor, statement prefixed "(vicarious
+transcription by the implementer; carries no commissioner guarantee)" — the agent's own stamped
+invocation already proves the transcription vicarious by construction; the prose marker is
+required IN ADDITION, per the maintainer's own words. Decomposition rows cite the commission via
+the pre-existing `--refs row:<id>` channel, no new edge type. **Pre-s25 worlds refuse
+`commission` loudly**, and the refusal's teach-text (the run-10 closure-audit fix,
+`_led_kind_refusal_teach()`) correctly names that world's OWN live (shorter) valid-kind list,
+never a stale or hardcoded one — verified, not assumed: `led.tmpl` requires zero code change for
+this interaction to work, because the teach-text already re-queries `pg_get_constraintdef` live
+per invocation. *Witnessed live*, two ways: (1) a real `--new-world` scaffold (`batch5probe`) —
+`LED_ACTOR=commissioner ./led commission "..."` landed `actor='commissioner'`, unstamped
+(typed from a bare shell, no live Claude session to inject a stamp — the honest "unstamped-but-
+attributed" case the design names); a second, default-actor `./led commission "(vicarious
+transcription ...) ..."` landed `actor='author'`; a `--refs row:2` decision row round-tripped
+correctly; a separate pre-s25 schema (`s15`..`s24` only, no s25) refused `commission` with the
+live teach-text naming its own 13-member list (no `commission`), exit 3. (2) scratch-witnessed
+both polarities plus the SQL/ASP differential, `seen-red/s25-commission-kind/run_fixtures.py`
+(7 cases — legality, `--refs`, existing-kinds-unchanged as a union not a replacement,
+invalid-kind-still-refused, actor-distinguishes-the-two-modes, prior s23/s24 columns untouched,
+pre-s25 refusal-with-teach — all green) plus `engine/ledger_differential.py` reporting **AGREE**
+(`asp=10 sql=10 atoms; Δasp=[] Δsql=[]`), zero schema/role residue after teardown, re-verified.
+**Named limit:** no new ASP/SQL derived view consumes `commission` rows yet (e.g. "every
+`work_opened` traceable to a commission via `--refs`") — a plausible follow-on, filed as a
+possibility in the delta's own header, not built or claimed built this pass.
+
+**27. Read observer — closing the "did the reviewer actually read it" gap
+(`hooks/pretooluse_read_observer.py`; BACKLOG "Five-item batch, maintainer-approved 2026-07-11
+evening", item 3; design/RETROSPECTIVE-RUN10.md could-not-answer item 3).** The retrospective
+named this UNDECIDABLE from the existing record: "the invocation log captures only Bash ... a
+reviewer that inspects files via the Read tool leaves no trace ... review rows that claim
+'independently read app/index.html' are trusted, not witnessed." A new `PreToolUse(Read)` hook,
+wired into every freshly scaffolded world's `.claude/settings.json` and switched by
+`mechanisms.read_observer` in `.claude/apparatus.json` (default `"observe"`, mirroring
+`mutation_observer`/`delegation_observer` (item 22's after-the-fact bash-mutation watcher and
+the subagent-dispatch watcher on `hooks/pretooluse_delegation_observer.py`, respectively) —
+their own house convention that a costless observer defaults ON), journals every `Read` call's
+UTC-Z timestamp, session id, and file path to
+`.claude/logs/read_observer.journal.jsonl` — nothing else (no content, no excerpt). No warning,
+no deny path: reading a file is never itself a policy violation under this project's law, so
+`"enforce"` in config is a NAMED-NOT-YET-SANCTIONED case (warns loudly, behaves as `"observe"`),
+distinct from `mutation_observer`'s genuine PostToolUse impossibility. *Witnessed*, both
+polarities, `seen-red/read-observer/run_fixtures.py` (six cases, pure filesystem, no database):
+a real `Read` call against a wired, `"observe"`-mode (and missing-key-default) probe lands
+exactly one journal line with the right ts/session/path; `"off"` writes nothing at all even
+though a real `Read` just happened; `"enforce"` warns on stderr and downgrades to `"observe"`
+behavior; a non-`Read` tool call (`Write`) produces no output and no journal line; an unwired
+invocation (no `GATE_SUBJECT_ROOT`, no real cwd) is silent; two further real reads against the
+same wired probe append two more lines, in order — proving accumulation, not overwrite. All six
+green, zero probe-directory residue after the fixture's own teardown.
 
 ## Built, unexercised (exists; has not yet fired in anger)
 
