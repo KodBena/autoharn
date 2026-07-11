@@ -1,3 +1,5 @@
+doc_attestation_presence --record: REFUSED — malformed record for v2sample.md:
+  escalated record carries no 'adjudication' object — doc-attestation/2 requires the escalation recipient's disposition (adjudicated_by / disposition / adjudicated_at) as a first-class field, not b_id free text (design/SPEC-DOC-ATTESTATION-2.md; the seam BACKLOG 'First live enforcement')
 doc_attestation_presence: 1 doc(s) in scope, 0 excluded, 0 waived.
   excluded (principled, printed per ADR-0017 Rule 2(b) convention):
     BACKLOG.md  — point-in-time dated entries (ADR-0017 Exceptions)
@@ -30,6 +32,22 @@ doc_attestation_presence: 1 doc(s) in scope, 0 excluded, 1 waived.
     real_waiver.md
 doc_attestation_presence (gate mode): clean — 1 doc(s) in scope, 0 findings
 CASE WAIVER-NOT-PROSE (token inside a real HTML comment): exit=0
+CASE V2 non-escalated, no adjudication: clean -> OK
+CASE V2 escalated, well-shaped adjudication: clean -> OK
+CASE V2 escalated, NO adjudication (the seam): 1 issue(s) -> OK
+CASE V2 escalated, adjudication missing a field: 1 issue(s) -> OK
+CASE V2 escalated, adjudication empty disposition: 1 issue(s) -> OK
+CASE V2 escalated, adjudication with extra key: 1 issue(s) -> OK
+CASE V2 non-escalated WITH adjudication (lie): 1 issue(s) -> OK
+CASE V1 legacy record still validates: clean -> OK
+CASE unknown schema refused fail-closed: 1 issue(s) -> OK
+CASE non-string schema (a list) refused, not crash: 1 issue(s) -> OK
+CASE CLEAN round with unhashable clause entries refused, not crash: 1 issue(s) -> OK
+CASE V2 null adjudication, non-escalated (treated absent -> clean): clean -> OK
+CASE V2 null adjudication, escalated (treated absent -> refused seam): 1 issue(s) -> OK
+CASE V2 --record escalated-without-adjudication: exit=2 (want 2, nothing appended)
+doc_attestation_presence --record: appended attestation for v2sample.md (schema doc-attestation/2, content_sha256 db09db3a39e7..., 2 round(s), escalated=True, adjudicated)
+CASE V2 --record escalated-with-adjudication: exit=0 (want 0, appended as /2)
 doc_attestation_presence: 3 doc(s) in scope, 0 excluded, 1 waived.
   excluded (principled, printed per ADR-0017 Rule 2(b) convention):
     BACKLOG.md  — point-in-time dated entries (ADR-0017 Exceptions)

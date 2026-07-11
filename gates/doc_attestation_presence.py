@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-11T16:14:47Z
-#   last-change: 2026-07-11T16:35:04Z
+#   last-change: 2026-07-11T22:37:22Z
 #   contributors: e4410ef6/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -25,7 +25,9 @@ two things only:
      is no verdict" rule demands: a DEFECT round carries per-finding `file`/`line`/`quote`/
      `repair`; a CLEAN round enumerates all four Rule-1 clauses; the round count is within the
      ADR's two-round cap; a still-DEFECT final round is marked `escalated: true` (the
-     non-converging-review-loop typed event, not a silent third round).
+     non-converging-review-loop typed event, not a silent third round). Under doc-attestation/2
+     the shape additionally binds the escalation recipient's `adjudication` (SCHEMA VERSIONS
+     below): required-and-well-shaped when `escalated: true`, forbidden otherwise.
 
 It NEVER reads what B concluded to decide pass/fail — a DEFECT-with-escalated-true record is
 just as "present and well-shaped" as a CLEAN one, and the gate is satisfied by either. This is
@@ -64,6 +66,42 @@ interceptors evaded." `b_id` is a self-declared free-text field the gate require
 but does NOT verify (no sound mechanical test separates a genuinely fresh fork from a claimed
 one, same reasoning ADR-0017 gives for declining coinage-detection in Rule 2). Distinctness is
 asserted in the record and reviewed like any other claim, never policed here.
+
+SCHEMA VERSIONS — doc-attestation/1 and /2 (the full rationale is design/SPEC-DOC-ATTESTATION-2.md).
+The gate accepts BOTH; an unknown `schema` string is refused (fail-closed — a version whose rules
+this gate does not know cannot be shape-checked). The evolution closes ONE seam the first live
+escalations exposed (BACKLOG "First live enforcement of ADR-0017's loop"): when a loop escalated,
+"who adjudicated it, what they applied, and when" had no field and was written into `b_id` free
+text. /2 gives it a first-class home:
+
+    {
+      "schema": "doc-attestation/2",
+      ... every /1 field unchanged (doc, content_sha256, b_id, rounds, attested_at) ...
+      "escalated": true,
+      "adjudication": {
+        "adjudicated_by": "<the escalation recipient — e.g. 'orchestrator (Fable)'>",
+        "disposition":    "<what was applied — e.g. 'applied B round-2 repairs verbatim, no content change'>",
+        "adjudicated_at": "<ISO-8601 timestamp of the adjudication>"
+      }
+    }
+
+The invariant is typed, so both illegal shapes are refused for an honest /2 record (ADR-0000
+Rule 1): a /2 record with `escalated: true` MUST carry a well-shaped `adjudication` (EXACTLY the
+three fields, each a non-empty string — extra keys are refused so the object cannot itself become a
+second overload home), and a /2 record with `escalated: false` MUST NOT carry one (a converged
+loop had no escalation to adjudicate — an adjudication with nothing escalated is a lying record,
+ADR-0002/ADR-0012 P8). Like every other field here this binds HONEST records: a record that lies
+about its `schema`/`escalated` to dodge is the same evasion class as a fabricated CLEAN verdict,
+which ADR-0017 never promised to catch (identity/authorship is not policed) — no shape-check closes
+it, so the claim is scoped to honest records, not asserted as adversarially unrepresentable.
+`adjudication` is self-declared free text the gate checks for PRESENCE and SHAPE only, never for
+whether the disposition was RIGHT — identical posture to `b_id` and to B's own verdict.
+
+MIGRATION, honestly (ADR-0017 Exceptions; ADR-0013): the ~20 existing /1 records are valid history
+and are NEVER rewritten — they remain point-in-time records of loops that ran under /1, and the
+gate validates them under /1's rules unchanged. New records are written at /2 (`--record` emits
+it); a new escalated loop records its adjudication in the typed field instead of b_id prose. There
+is no back-sweep and no /1-to-/2 rewrite: a /1 record is not "wrong", it is older.
 
 SMALLEST SOUND THING, where the ADR is silent (named per this commission's own instruction):
   - The ledger is ONE shared append-only JSONL file, not one sidecar file per document, to
@@ -110,10 +148,12 @@ MODES (mirrors gates/doc_shapes.py exactly, the discipline's own binds-on-touch 
     ALWAYS exits 0 — the back-catalog migrates on touch (ADR-0017 Rule 4), never by sweep.
   - `python3 gates/doc_attestation_presence.py --record FILE.json` — write a new record: reads
     a JSON body from FILE (or stdin if FILE is "-") carrying `doc`, `b_id`, `rounds`,
-    `escalated`, and an optional `attested_at` (filled with now() if absent); computes
-    `content_sha256` itself from the CURRENT bytes of `doc`; validates the shape; appends one
-    line to the ledger. Exit 0 on a valid append, exit 2 on a malformed input (nothing is ever
-    appended to the ledger unvalidated).
+    `escalated`, an optional `attested_at` (filled with now() if absent), and — for an escalated
+    loop under doc-attestation/2 — the `adjudication` object (SCHEMA VERSIONS above); computes
+    `content_sha256` itself from the CURRENT bytes of `doc`; writes at `schema` = doc-attestation/2;
+    validates the shape; appends one line to the ledger. Exit 0 on a valid append, exit 2 on a
+    malformed input (nothing is ever appended to the ledger unvalidated) — so an escalated record
+    missing its adjudication, or a non-escalated one carrying one, is refused HERE, not at commit.
 
 ARMING MODE — ANSWERED FROM THE ADR TEXT, NOT ASSUMED (this commission's Critical Arming
 Question). ADR-0017's "fresh-context audit loop" section states the attestation-presence
@@ -179,6 +219,17 @@ WAIVER_TOKEN = "doc-attest-exempt:"
 
 RULE1_CLAUSES = {"1a", "1b", "1c", "1d"}
 MAX_ROUNDS = 2  # ADR-0017's two-round B->C cap before the non-converging-review-loop escalation.
+
+# doc-attestation SCHEMA VERSIONS (design/SPEC-DOC-ATTESTATION-2.md). /2 adds a first-class
+# `adjudication` object for escalated records, replacing the b_id free-text convention the seam
+# (BACKLOG "First live enforcement of ADR-0017's loop") named. /1 records stay valid history,
+# unchanged and never rewritten; the gate accepts BOTH versions. --record writes SCHEMA_LATEST.
+SCHEMA_V1 = "doc-attestation/1"
+SCHEMA_V2 = "doc-attestation/2"
+SCHEMA_LATEST = SCHEMA_V2
+KNOWN_SCHEMAS = {SCHEMA_V1, SCHEMA_V2}
+# The escalation recipient's disposition, /2 only: who adjudicated, what was applied, when.
+ADJUDICATION_FIELDS = ("adjudicated_by", "disposition", "adjudicated_at")
 
 
 def _tracked_md() -> list[str]:
@@ -301,15 +352,64 @@ def _validate_round(rnd: Any, idx: int) -> list[str]:
                 issues.extend(_validate_finding(f, f"{where}.findings[{j}]"))
     else:  # CLEAN
         clauses = rnd.get("clauses_checked")
-        if not isinstance(clauses, list) or not RULE1_CLAUSES.issubset(set(clauses)):
+        # Build the set only from hashable string entries — a caller-supplied list with unhashable
+        # elements ([["1a"]], [{"1a": true}]) must clean-REFUSE (the four clauses are then not all
+        # present), never crash set() with a TypeError.
+        if not isinstance(clauses, list) or not RULE1_CLAUSES.issubset(
+                {c for c in clauses if isinstance(c, str)}):
             issues.append(f"{where}: CLEAN verdict must enumerate all four Rule 1 clauses "
                            f"(1a,1b,1c,1d) in 'clauses_checked', got {clauses!r}")
     return issues
 
 
+def _validate_adjudication(adj: Any, escalated: bool) -> list[str]:
+    """doc-attestation/2 only (design/SPEC-DOC-ATTESTATION-2.md). Structural, never a judgment on
+    whether the adjudication was RIGHT — same posture as the rest of the gate. Two typed states,
+    and the two illegal ones this field exists to make unrepresentable (ADR-0000 Rule 1):
+
+      escalated=true  -> `adjudication` is REQUIRED and carries three non-empty strings
+                         (adjudicated_by / disposition / adjudicated_at). Its absence is the seam
+                         closed: an escalated record with no first-class adjudication is refused,
+                         where /1 let it hide in b_id free text.
+      escalated=false -> `adjudication` is FORBIDDEN. A loop that converged CLEAN had no escalation
+                         recipient to adjudicate, so an adjudication with nothing escalated is a
+                         lying record (ADR-0002 / ADR-0012 P8), refused here.
+    """
+    if escalated:
+        if adj is None:
+            return ["escalated record carries no 'adjudication' object — doc-attestation/2 requires "
+                    "the escalation recipient's disposition (adjudicated_by / disposition / "
+                    "adjudicated_at) as a first-class field, not b_id free text "
+                    "(design/SPEC-DOC-ATTESTATION-2.md; the seam BACKLOG 'First live enforcement')"]
+        if not isinstance(adj, dict):
+            return ["'adjudication' is not an object"]
+        issues = []
+        for key in ADJUDICATION_FIELDS:
+            if key not in adj:
+                issues.append(f"'adjudication' missing '{key}'")
+            elif not isinstance(adj[key], str) or not adj[key].strip():
+                issues.append(f"'adjudication.{key}' is not a non-empty string")
+        # The object is EXACTLY the three fields — extra keys are refused so `adjudication` cannot
+        # itself become a second free-text overload home, the very defect /2 exists to end
+        # (design/SPEC-DOC-ATTESTATION-2.md, closure statement).
+        unknown = sorted(k for k in adj if k not in ADJUDICATION_FIELDS)
+        if unknown:
+            issues.append(f"'adjudication' has unexpected field(s) {unknown} — the object is exactly "
+                          f"{list(ADJUDICATION_FIELDS)}, no more")
+        return issues
+    if adj is not None:
+        return ["'adjudication' present on a non-escalated record — an adjudication with nothing "
+                "escalated is unrepresentable (ADR-0000): a loop that converged CLEAN had no "
+                "escalation recipient to adjudicate. Drop the field, or set escalated=true if the "
+                "loop genuinely did not converge"]
+    return []
+
+
 def validate_record(rec: dict) -> list[str]:
     """Structural issues only — never a check on whether B's judgment was RIGHT. Empty list
-    means the record is well-shaped (regardless of whether its content says CLEAN or DEFECT)."""
+    means the record is well-shaped (regardless of whether its content says CLEAN or DEFECT).
+    Dispatches on `schema`: /1 rules are unchanged; /2 additionally binds the adjudication field
+    (design/SPEC-DOC-ATTESTATION-2.md)."""
     if "_parse_error" in rec:
         return [rec["_parse_error"]]
     issues: list[str] = []
@@ -318,6 +418,12 @@ def validate_record(rec: dict) -> list[str]:
             issues.append(f"record missing required field '{key}'")
     if issues:
         return issues  # a record missing top-level fields isn't worth field-by-field checking
+    if not isinstance(rec["schema"], str) or rec["schema"] not in KNOWN_SCHEMAS:
+        # isinstance guard first: a non-string schema (a JSON list/dict) must clean-REFUSE, never
+        # crash `x in set` with an unhashable-type TypeError.
+        return [f"unknown schema {rec['schema']!r} — this gate validates only "
+                f"{sorted(KNOWN_SCHEMAS)}; an unrecognized version cannot be shape-checked, so it "
+                f"is refused (fail-closed, not fail-open)"]
     if not isinstance(rec["b_id"], str) or not rec["b_id"].strip():
         issues.append("'b_id' must be a non-empty string identifying B's invocation")
     if not re.fullmatch(r"[0-9a-f]{64}", str(rec["content_sha256"])):
@@ -340,6 +446,8 @@ def validate_record(rec: dict) -> list[str]:
                        f"is false — ADR-0017: 'B↔C non-convergence is a typed event, not a "
                        f"loop' (route it as the non-converging-review-loop escalation, don't "
                        f"grind a third round)")
+    if rec["schema"] == SCHEMA_V2 and isinstance(escalated, bool):
+        issues.extend(_validate_adjudication(rec.get("adjudication"), escalated))
     return issues
 
 
@@ -450,7 +558,7 @@ def _cmd_record(argv: list[str]) -> int:
               file=sys.stderr)
         return 2
     record = {
-        "schema": "doc-attestation/1",
+        "schema": SCHEMA_LATEST,  # new records are written at the latest version (doc-attestation/2)
         "doc": doc,
         "content_sha256": _sha256_of(doc_path),  # computed here, never trusted from input
         "b_id": body.get("b_id"),
@@ -458,6 +566,11 @@ def _cmd_record(argv: list[str]) -> int:
         "escalated": body.get("escalated"),
         "attested_at": body.get("attested_at") or time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime()) + "Z",
     }
+    # /2 adjudication: carried through only when supplied. validate_record enforces the
+    # escalated<->adjudication invariant below, so an escalated record with no adjudication (or a
+    # non-escalated one carrying one) is REFUSED at write time, never appended.
+    if "adjudication" in body:
+        record["adjudication"] = body["adjudication"]
     issues = validate_record(record)
     if issues:
         print(f"doc_attestation_presence --record: REFUSED — malformed record for {doc}:",
@@ -469,8 +582,9 @@ def _cmd_record(argv: list[str]) -> int:
     with open(LEDGER_PATH, "a", encoding="utf-8") as f:
         f.write(json.dumps(record, ensure_ascii=False) + "\n")
     print(f"doc_attestation_presence --record: appended attestation for {doc} "
-          f"(content_sha256 {record['content_sha256'][:12]}..., "
-          f"{len(record['rounds'])} round(s), escalated={record['escalated']})")
+          f"(schema {record['schema']}, content_sha256 {record['content_sha256'][:12]}..., "
+          f"{len(record['rounds'])} round(s), escalated={record['escalated']}"
+          f"{', adjudicated' if 'adjudication' in record else ''})")
     return 0
 
 
