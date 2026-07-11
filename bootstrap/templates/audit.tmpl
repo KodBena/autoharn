@@ -6,33 +6,53 @@
 # orchestrator kept re-deriving by hand every crisis (runs 5, 7, 8).
 #
 # Usage:
-#   ./audit [--retain] [extra engine/contemp_audit.py flags...]
-#     ./audit             # report burst/silence/backfill + per-row deltas + the closed verdict
-#     ./audit --retain    # additionally bank the EDB + report under autoharn's own
-#                         # engine/docs/contemporaneity-audit/runs/<target>/
+#   ./audit [--retain] [--differential] [extra engine/contemp_audit.py flags...]
+#     ./audit                 # report burst/silence/backfill + per-row deltas + the closed verdict
+#     ./audit --retain        # additionally bank the EDB + report under autoharn's own
+#                             # engine/docs/contemporaneity-audit/runs/<target>/
+#     ./audit --differential  # ADDITIONALLY run the SQL-floor marriage differential
+#                             # (engine/contemp_differential.py --retain) and print its own
+#                             # AGREE/DIVERGE_BY_DESIGN/DIVERGE_DEFECT/QUARANTINED verdict
 #
 # Joins THIS world's ledger (via engine/contemp_edb.py, Postgres) against its own
 # `.claude/logs/*.jsonl` hook journals (the invocation token journal, s23-era; the three
 # existing tool-activity observer journals) and runs the ASP verdict logic
 # (engine/lp/contemporaneity.lp + engine/contemp_thresholds.lp) via clingo. Prints the closed
 # verdict vocabulary:
-#   CONTEMPORANEOUS | BATCHED_DECLARED | BACKFILL_SUSPECT
+#   CONTEMPORANEOUS | BATCHED_DECLARED | LATE_DECLARED | BACKFILL_SUSPECT
 # — OR an explicit typed refusal (never a guessed verdict, never a vacuous pass) when this
 # world lacks a capability the full verdict needs: predates s23 (no stamp_invocation column),
 # hooks off/unwired (no invocations.jsonl), or no journaled tool activity yet.
 #
-# EXIT CODES: 0 clean (CONTEMPORANEOUS/BATCHED_DECLARED) | 1 BACKFILL_SUSPECT (loud) |
-# 2 tool error | 3 N/A (capability-gated refusal — read the printed reason, never silence).
+# EXIT CODES: 0 clean (CONTEMPORANEOUS/BATCHED_DECLARED/LATE_DECLARED, or a fully-capable world
+# with zero rows -- VACUOUSLY_CLEAN) | 1 BACKFILL_SUSPECT (loud) | 2 tool error | 3 N/A
+# (capability-gated refusal — read the printed reason, never silence) | 4 ONLY reachable with
+# --differential: contemp_audit's own verdict was clean (exit 0) but the SQL-floor marriage
+# differential verdicted DIVERGE_DEFECT or QUARANTINED — a second-producer disagreement the
+# operator must see, never silently folded into the clean exit 0 (ADR-0015 "no result is not a
+# clean result", applied to the differential axis, not just the verdict axis). A non-zero
+# contemp_audit exit (1/2/3) is NEVER overwritten by the differential's own code — the first
+# problem found stays the reported one; the differential's own [OK]/[!!] line is still printed
+# either way, so a reader always sees both axes even when only one moves the exit code.
 #
 # OBSERVER-FIRST (design memo): this verb reports; it gates nothing; it is not invoked from
 # any PreToolUse/Stop hook. Whether a BACKFILL_SUSPECT verdict ever feeds a gate is a later
 # maintainer question, per the same observer-first posture `judge` (the differential verb)
 # already carries.
 #
-# SECOND-PRODUCER STATUS (declared): this ships ONE producer (the ASP derivation over
-# engine/contemp_edb.py's EDB). The SQL-floor differential (the marriage discipline's
-# AGREE bar, engine/ledger_floor.py's sibling for this domain) is FILED, not built —
-# see BACKLOG.md's dated "Contemporaneity indictment" entry for the disposition.
+# SECOND-PRODUCER STATUS: CLOSED this pass. engine/contemp_floor.py (the SQL floor,
+# engine/ledger_floor.py's sibling for this domain) + engine/contemp_differential.py (the
+# marriage differential, engine/ledger_differential.py's sibling) now exist. --differential is
+# OPT-IN, default OFF (a deliberate choice, not the always-on shape `judge` takes for the ledger
+# marriage): unlike `judge`, which IS the differential (there is no cheaper single-producer mode
+# to fall back to), `audit`'s primary job — the human-readable burst/silence/delta report — is
+# useful and CHEAP on its own, and --differential roughly doubles the work (a second live-DB
+# read, a second independent re-parse of every journal file, a second clingo invocation) for a
+# check most invocations of this observer verb do not need turn-by-turn. An operator who wants
+# marriage-grade cross-validated trust in a given session's verdict opts in explicitly, exactly
+# as `judge --drop-record`'s own negative control is opt-in. The default is documented, not
+# silently assumed: plain `./audit` still reports the SAME single-producer verdict it always
+# has, honestly labeled as ONE producer in the report text below.
 #
 # Path resolution: this file executes IN PLACE out of the autoharn checkout (the "live verbs"
 # ruling, 2026-07-11 — the scaffolded ./audit is a 3-line shim that execs THIS file directly,
@@ -47,6 +67,7 @@ set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 AUTOHARN="${AUTOHARN:-$(cd "$HERE/../.." && pwd)}"
 CONTEMP_AUDIT="$AUTOHARN/engine/contemp_audit.py"
+CONTEMP_DIFFERENTIAL="$AUTOHARN/engine/contemp_differential.py"
 DEPLOYMENT="${PICKUP_DEPLOYMENT:-$HERE/deployment.json}"
 WORLD_ROOT="$(cd "$(dirname "$DEPLOYMENT")" && pwd)"
 
@@ -57,4 +78,33 @@ if [ ! -f "$CONTEMP_AUDIT" ]; then
   exit 2
 fi
 
-exec python3 "$CONTEMP_AUDIT" --root "$WORLD_ROOT" "$@"
+# Strip --differential out of "$@" before it reaches engine/contemp_audit.py (which does not
+# know that flag) -- everything else passes through unchanged, exactly as it always has.
+DIFFERENTIAL=0
+ARGS=()
+for a in "$@"; do
+  if [ "$a" = "--differential" ]; then
+    DIFFERENTIAL=1
+  else
+    ARGS+=("$a")
+  fi
+done
+
+AUDIT_EXIT=0
+python3 "$CONTEMP_AUDIT" --root "$WORLD_ROOT" "${ARGS[@]}" || AUDIT_EXIT=$?
+
+if [ "$DIFFERENTIAL" -eq 1 ]; then
+  if [ ! -f "$CONTEMP_DIFFERENTIAL" ]; then
+    echo "audit: --differential requested but cannot find engine/contemp_differential.py under AUTOHARN=$AUTOHARN" >&2
+    exit 2
+  fi
+  echo ""
+  echo "-- SQL-floor marriage differential (--differential) --"
+  DIFF_EXIT=0
+  python3 "$CONTEMP_DIFFERENTIAL" --root "$WORLD_ROOT" --retain || DIFF_EXIT=$?
+  if [ "$AUDIT_EXIT" -eq 0 ] && [ "$DIFF_EXIT" -ne 0 ]; then
+    exit 4
+  fi
+fi
+
+exit "$AUDIT_EXIT"

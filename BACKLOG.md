@@ -5024,3 +5024,141 @@ points at the spec), so the staleness is a loud self-correcting signpost, not a 
 touching the recipe would pull in its own A:B:C loop for marginal value, so it is filed here for a
 future touch rather than done, keeping this drill small. A one-to-two-sentence recipe addition in
 step 5/6 naming the adjudication field is the actionable follow-up.
+---
+
+## Contemporaneity audit, Part 2 — the SQL-floor marriage differential CLOSED (2026-07-12, Sonnet, commissioned build)
+
+Closes the deferral `design/CONTEMPORANEITY-AUDIT.md`'s own Status section named ("this verb
+ships ONE producer today, not the marriage discipline's cross-validated pair") and
+CAPABILITIES.md item 24's own "Second-producer status, declared honestly" note — the
+marriage-grade half of the audit-verb-completions work item (`--retain`-by-default wiring and
+session-granularity questions stay filed, unchanged by this pass; Part 3, which landed as an
+authoring-only Fable spec — `design/CONTEMPORANEITY-PART3-SPEC.md` — during this same window per
+`next`'s own history, is also untouched by this pass — a spec, not yet built).
+
+**Built**: `engine/contemp_floor.py` (the SQL floor, `engine/ledger_floor.py`'s sibling for this
+domain) and `engine/contemp_differential.py` (the differential runner, `engine/ledger_differential
+.py`'s sibling). `./audit --differential` (opt-in, default OFF) wires both into the operator verb.
+
+**INDEPENDENCE DECISION, ARGUED (the honest choice the commission asked for by name):** the SQL
+floor RE-DERIVES FROM SOURCE rather than consuming `engine/contemp_edb.py`'s own staged EDB text.
+Reasoning, stated in `contemp_floor.py`'s own docstring and re-derived here: `engine/
+ledger_floor.py`'s own precedent already settles this question for the ledger marriage (its SQL
+floor reads live DB rows directly, never `ledger_edb.py`'s exported text) — consuming the OTHER
+producer's own staging/parsing code would let a bug IN THAT SHARED LAYER (a mis-parsed timestamp,
+a mis-read column) show up identically in both producers, and the differential would silently
+AGREE on a wrong answer, defeating the entire reason a differential exists. So `contemp_floor.py`
+(a) queries `ledger` directly via its own SQL text, never calling `contemp_edb.export()`, and
+(b) re-reads and re-parses the raw `.claude/logs/*.jsonl` journal bytes with its own small parser
+(`_floor_read_jsonl`/`_floor_parse_ts_ms`), never importing `contemp_edb.py`'s `_read_jsonl`/
+`_parse_ts_ms` — mirroring the established `_wi_quote`-not-`quote_term` precedent already in
+`ledger_floor.py`'s own `work_item_floor_atoms`. The shared INPUT is the real bytes on disk (the
+live ledger table; the raw journal files) — exactly the "one ledger, read-only" shared-input
+posture `ledger_floor.py`'s own docstring already states, extended here to the second real source
+(the journals) this domain also has. Thresholds are read from the SAME text file
+(`engine/contemp_thresholds.lp`) the ASP side loads as a program, parsed here as DATA (regex over
+the fact lines) — one textual source of truth, never a hand-copied duplicate literal.
+
+**DENOMINATION NORMALIZATION**, the one place this marriage differs mechanically from the ledger
+marriage (the commission's own mandate: "mind the 32-bit clingo anchor convention ... the
+COMPARISON must normalize to one denomination before diffing, stated explicitly"). The SQL floor
+emits every timestamp as its true ABSOLUTE epoch-ms (Postgres `bigint`, no ceiling); the ASP
+producer emits every timestamp anchor-relative (`contemp_edb.py`'s own documented dodge of
+clingo/clasp's 32-bit signed-int wraparound on an absolute 2026-era epoch-ms value). Exactly three
+`#show` predicates carry an absolute-ts argument — `token_min_ts/2`, `token_max_ts/2`, `silence/2`
+— found by reading every predicate `contemporaneity.lp` shows and classifying each as Id/Tok-only
+(no normalization needed), already-a-difference (`row_delta_ms/2`, `preceding_activity_age_ms/2`
+— anchor-invariant by construction, since subtracting a constant from both operands of a
+subtraction leaves the result unchanged), or absolute-ts-bearing (these three). The differential
+normalizes those three UP to absolute (adding the SAME `anchor_ms` the EDB export computed for
+that exact EDB) before the set-comparison runs — a closed, named list in
+`contemp_differential.py`'s own `_TS_SINGLE_PREDS`/`_TS_PAIR_PREDS`, not a heuristic regex over
+every predicate, so a future predicate defaults to "no normalization" (correct for the common
+case) rather than being silently mis-normalized by an over-eager pattern.
+
+**A SECOND, PREVIOUSLY-LATENT 32-BIT HAZARD, FOUND LIVE authoring this commission's own seen-red
+fixture (not fixed at the source; flagged, and guarded against in-scope) — the actual finding this
+build's own two failed-then-fixed test runs surfaced, named honestly rather than smoothed over.**
+The first version of case (p) (the AGREE demonstration) manufactured a scratch world combining
+case (h)'s intake-shape burst and case (f)'s late-declared shape, positioned in the fixture's
+execution order AFTER cases (i)-(o) — which write rows via a REAL `led` shim, whose `ts` defaults
+to actual wall-clock `NOW()` (~2026). Combined with the fixture's own synthetic `BASE` constant
+(epoch ~2000000000s, ~2033) in the SAME accumulated scratch ledger (`contemp_edb.py` and
+`contemp_floor.py` both read the WHOLE `ledger` table unconditionally, no windowing), that
+produced a ~7-YEAR audited window — about 100x past clingo/clasp's signed-32-bit ceiling
+(`2**31-1` ms, ~24.8 days). `contemp_edb.py`'s own docstring claims its anchor-relative encoding
+is "safely under the 2^31 ceiling" for "even a full week" — true for a bounded window, but nothing
+enforces that bound, and this fixture accidentally built an unbounded one. The relative DELTA
+itself wrapped silently inside clingo (no error, no warning — exactly the class of hazard
+`contemp_edb.py`'s own docstring already documents for the ABSOLUTE-value case, now shown to also
+apply to the anchor-relative encoding once the window is wide enough): the first test run reported
+a spurious `DIVERGE_DEFECT` with 25 mismatched atoms, all differing by exactly a clean multiple of
+`2**31` ms — the wraparound's own signature, not a real encoding bug in either producer. **Fixed
+two ways, both in-scope, neither touching `engine/contemp_edb.py`'s own semantics** (out of this
+commission's touch-list — its normal ASP-producer role, single-producer contract, and everything
+else about it stand untouched): (1) `contemp_differential.py` gained `_max_abs_relative_ms`, a
+defensive pre-flight scan of the EDB text's own fact lines that QUARANTINEs loudly (NO RESULT,
+ADR-0015 Rule 3) whenever a world's audited window exceeds the safe 32-bit bound, rather than
+silently comparing two producers where the ASP side's numeric encoding may already be corrupted —
+a genuine, durable hardening any REAL long-lived project ledger could eventually need too, not
+just this fixture's own artifact (a project's ledger naturally widens as months/years of real
+rows accumulate, and nothing today windows the export). (2) the seen-red fixture's case (p)/(q)
+block was moved to run BEFORE cases (i)-(o) (documented inline, in the fixture file itself, with
+the full diagnosis) so it demonstrates a genuine AGREE on a still-honestly-narrow window, not a
+QUARANTINE of its own fixture's making. A SEPARATE bug was found and fixed in the SAME debugging
+pass: case (q)'s negative-control subprocess script passed `root` as a bare Python `str` instead
+of a `Path` into `contemp_differential.run_differential()`, which raised
+`TypeError: unsupported operand type(s) for /: 'str' and 'str'` the moment either producer tried
+`root / ".claude" / "logs"` — caught by the SAME live re-run, fixed by wrapping the interpolated
+path in `Path(...)` inside the generated script.
+
+**WITNESSED, both polarities, live.** `seen-red/contemporaneity-audit/run_fixtures.py` now carries
+SEVENTEEN cases (was fifteen). Case (p) (GREEN): the combined intake-shape + late-declared world,
+differentialed via a REAL `python3 engine/contemp_differential.py --root <world> --retain`
+subprocess (the exact invocation `./audit --differential` makes) →
+**AGREE, `asp=63 sql=63 atoms; Δasp=[] Δsql=[]`**, exit 0, DerivationRecord pair retained under
+`engine/docs/ledger-marriage/derivations/contemporaneity/contempprobe/<ts>_<hash>/` (committed;
+banked verbatim as `seen-red/contemporaneity-audit/differential-agree.txt`). Case (q) (RED,
+manufactured): the SAME override seam `engine/tests/test_ledger_marriage.py::
+test_single_producer_mutation_is_diverge_defect` already precedents for the ledger marriage
+(`run_differential(..., sql_atoms_override=...)`) substitutes a single forged atom
+(`token_burst("forged-token-not-real")`) for the SQL floor's ENTIRE returned set, in an isolated
+subprocess (a throwaway tempfile script, never imported into the fixture's own process) — never
+touching `engine/contemp_floor.py`'s or `engine/lp/contemporaneity.lp`'s own source to fake it →
+**DIVERGE_DEFECT**, `only_sql` naming exactly the one forged atom, `only_asp` naming the 63
+legitimate atoms the forgery discarded (banked verbatim as
+`seen-red/contemporaneity-audit/differential-diverge-defect.txt`). Full 17-case suite re-run
+clean end to end after both fixes, exit 0, zero scratch residue confirmed directly (`information_
+schema.schemata` query for `contempprobe%`/`cfloorprobe%` returns empty; every world tempdir
+removed). `gates/fixture_census.py` and `gates/no_lazy_imports.py` both re-run clean (44 seen-red
+gates registered, zero lazy-import violations across the two new modules).
+
+**`./audit --differential` exit-code wiring**: a new exit code 4 is reserved, reachable ONLY when
+`--differential` is passed AND `contemp_audit`'s own verdict was clean (exit 0) but the
+differential verdicted DIVERGE_DEFECT/QUARANTINED — never silently folded into a clean exit 0
+(ADR-0015's "no result is not a clean result", applied to the differential axis, not just the
+verdict axis). A non-zero `contemp_audit` exit (1/2/3) is never overwritten by the differential's
+own code — the first problem found stays the reported one, and the differential's own `[OK]`/`[!!]`
+line still prints either way. Smoke-tested live (a fresh scratch world, `./audit --differential`
+via the real bash script, both the AGREE path — exit 0, both report sections printed — and the
+exit-4 bash-arithmetic path in isolation).
+
+**Default OFF, reasoned (not silently assumed):** unlike `judge` (which IS the differential — no
+cheaper single-producer fallback exists), `audit`'s primary report is useful and cheap standalone,
+and `--differential` roughly doubles the work per invocation (a second live-DB read, a second
+independent journal re-parse, a second clingo invocation) for a check most turns of this observer
+verb do not need. `audit.tmpl`'s own header states this reasoning inline, not just here.
+
+**Deferrals, unchanged, named again for this pass's own record:** `contemp_audit.py`'s own
+`--retain` still defaults OFF; the verdict is still computed over the WHOLE ledger window, never
+per-session; Part 3 (the deontic/temporal ordering-obligations ASP program) is untouched, as
+scoped — a separate, Fable-authored spec in progress.
+
+**Files**: `engine/contemp_floor.py` (new), `engine/contemp_differential.py` (new),
+`bootstrap/templates/audit.tmpl` (edited — `--differential` flag + exit-4 wiring + updated header),
+`seen-red/contemporaneity-audit/run_fixtures.py` (edited — cases (p)/(q), `run_differential`/
+`run_differential_diverge_defect` helpers, updated docstring), `seen-red/contemporaneity-audit/
+differential-agree.txt` + `differential-diverge-defect.txt` (new, banked evidence),
+`engine/docs/ledger-marriage/derivations/contemporaneity/contempprobe/<ts>_<hash>/` (new, banked
+DerivationRecord pair), `design/CONTEMPORANEITY-AUDIT.md` (Status section extended),
+`CAPABILITIES.md` item 24b (new, minimal), this entry.
