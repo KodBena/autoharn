@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-11T14:40:08Z
-#   last-change: 2026-07-11T15:10:28Z
+#   last-change: 2026-07-11T16:16:33Z
 #   contributors: e4410ef6/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -13,13 +13,28 @@ analog `engine/ledger_edb.py` is for `ledger_tnow.lp`, mirrored here for the sam
 manifest discipline (I12: a not-produced family is a DECLARED EXCLUSION with its reason,
 never silent -- the F49 vacuous-pass class ADR-0000/ADR-0015 forbid).
 
-THREE INPUT STREAMS, ONE WORLD:
-  1. the LEDGER (Postgres, via engine/ledger_edb.Target/resolve) -- row_tokened/row_untokened.
+THREE INPUT STREAMS, ONE WORLD (a fourth family, `row_declared/2`, rides the SAME ledger stream
+as #1 -- see "DECLARED EVENT TIME" below):
+  1. the LEDGER (Postgres, via engine/ledger_edb.Target/resolve) -- row_tokened/row_untokened,
+     and (s24-era schemas only) row_declared.
   2. `<root>/.claude/logs/invocations.jsonl` (hooks/stamp_intercept.py, s23-era) -- invocation/2.
   3. the three hook-journaled tool-activity logs already on disk for OTHER purposes
      (mutation_observer.journal.jsonl, change_gate.journal.jsonl,
      delegation_observer.journal.jsonl) -- tool_event/2, re-purposed as the design memo's Part 2
      directive names them ("the hook-journaled tool activity that already exists").
+
+DECLARED EVENT TIME (design/LATE-ENTRY-AND-INTAKE-SEMANTICS.md Proposal 2; kernel/lineage/
+s24-declared-event-time.sql, this same commission). A row may optionally carry
+`event_declared_ts` (`led --event-time <iso-ts> ...`) -- the writer's own claim of WHEN the
+recorded event occurred, distinct from `ts` (INSERT time). CAPABILITY-GATED exactly like
+`stamp_invocation` (s23): `has_col("event_declared_ts")` determines whether `row_declared/2`
+facts are emitted at all. A pre-s24 world emits NONE -- never guessed, never backfilled -- so
+`engine/lp/contemporaneity.lp`'s LATE_DECLARED verdict member can never fire there, and the
+identical-gap-UNDECLARED BACKFILL_SUSPECT path is unchanged (the wiredness-not-corpus-emptiness
+discipline, this module's own Capability idiom, applied one delta later). UNAUTHENTICATED, named
+plainly (s24's own header carries the same disclosure): a writer can declare anything; this
+module reads the claim as-is and lets the ASP layer's threshold decide whether it counts as a
+genuine late entry -- it neither verifies nor doubts the declaration itself.
 
 CAPABILITY-GATED, HONESTLY (mirrors ledger_edb.py's Capability/EdbExport/require() idiom --
 including its produced-vs-capable TWO-AXIS split, adopted here after the run9 live specimen,
@@ -284,6 +299,20 @@ def export(target_name: str, root: Path) -> ContempEdbExport:
         "stamp_invocation_column", produced=True, capable=True,  # ALWAYS: row_tokened/row_untokened
         reason="ledger.kind/id/ts always readable regardless of s23; token split is per-row"))
 
+    # ---- capability 2: event_declared_ts column (s24) -- see module docstring "DECLARED EVENT
+    # TIME". `capable` == `produced` here (there is no "wired but nothing declared yet" axis for
+    # a plain writer-supplied column the way there is for a hook-journaled mechanism): the column
+    # either exists on this schema or it does not, and row_declared facts are emitted 1:1 with
+    # non-NULL values when it does. A pre-s24 schema is EXCLUDED (not EMPTY-capable-but-zero),
+    # named honestly rather than silently read as "zero late entries this session".
+    has_declared_col = t.has_col("event_declared_ts")
+    exp.capabilities.append(Capability(
+        "event_declared_ts_column", produced=has_declared_col, capable=has_declared_col,
+        reason="event_declared_ts column present (s24-era schema) -- late-entry declarations, "
+               "if any, are readable" if has_declared_col
+        else "no event_declared_ts column on this schema (predates s24) -- LATE_DECLARED can "
+             "never fire here; the identical-gap-undeclared BACKFILL_SUSPECT path is unaffected"))
+
     # ---- the WIRING signal (the run9 fix): which journal-writing mechanisms this world's own
     # settings.json + apparatus.json declare live -- capability keys on THIS, never on whether
     # anything has been journaled yet (see Capability's docstring for the live specimen).
@@ -291,14 +320,17 @@ def export(target_name: str, root: Path) -> ContempEdbExport:
 
     # ---- PASS 1: read every raw stream, absolute epoch-ms, no facts emitted yet -------------
     rel = t.rel()
-    if has_invocation_col:
-        raw_rows = t.rows(f"SELECT id, kind, coalesce(stamp_invocation,''), "
-                          f"round(extract(epoch FROM ts)*1000)::bigint FROM {rel} ORDER BY id;")
-        row_tuples = [(int(rid), kind, token or None, int(tms)) for rid, kind, token, tms in raw_rows]
-    else:
-        raw_rows = t.rows(f"SELECT id, kind, round(extract(epoch FROM ts)*1000)::bigint "
-                          f"FROM {rel} ORDER BY id;")
-        row_tuples = [(int(rid), kind, None, int(tms)) for rid, kind, tms in raw_rows]
+    cols = ["id", "kind"]
+    cols.append("coalesce(stamp_invocation,'')" if has_invocation_col else "NULL")
+    cols.append("round(extract(epoch FROM ts)*1000)::bigint")
+    cols.append("round(extract(epoch FROM event_declared_ts)*1000)::bigint" if has_declared_col
+                else "NULL")
+    raw_rows = t.rows(f"SELECT {', '.join(cols)} FROM {rel} ORDER BY id;")
+    row_tuples: list[tuple[int, str, str | None, int, int | None]] = []
+    for rid, kind, token, tms, declared_ms in raw_rows:
+        row_tuples.append((
+            int(rid), kind, token or None, int(tms),
+            int(declared_ms) if declared_ms not in (None, "") else None))
 
     inv_path = root / ".claude" / "logs" / _INVOCATION_JOURNAL
     inv_recs, inv_skip = _read_jsonl(inv_path)
@@ -333,13 +365,17 @@ def export(target_name: str, root: Path) -> ContempEdbExport:
             te_tuples.append((kind, ms))
 
     # ---- THE ANCHOR: the minimum absolute epoch-ms across every stream in this export --------
-    all_abs = ([tms for _, _, _, tms in row_tuples] + [ms for _, ms in inv_tuples]
-              + [ms for _, ms in te_tuples])
+    # (declared-ts values ride the SAME anchor as everything else -- s24's own header names this
+    # explicitly: a declared-event-time value must go through this same relative-anchor path,
+    # never absolute epoch-ms into clingo, per this module's own 32-bit-overflow hazard note.)
+    all_abs = ([tms for _, _, _, tms, _ in row_tuples] + [ms for _, ms in inv_tuples]
+              + [ms for _, ms in te_tuples]
+              + [dms for _, _, _, _, dms in row_tuples if dms is not None])
     exp.anchor_ms = min(all_abs) if all_abs else 0
 
     # ---- PASS 2: emit facts, T relative to the anchor ----------------------------------------
-    n_tok, n_untok = 0, 0
-    for rid, kind, token, tms in row_tuples:
+    n_tok, n_untok, n_declared = 0, 0, 0
+    for rid, kind, token, tms, declared_ms in row_tuples:
         rel_t = tms - exp.anchor_ms
         if token:
             exp.facts.append(f"row_tokened({rid},{quote_term(token)},{quote_term(kind)},{rel_t}).")
@@ -347,8 +383,12 @@ def export(target_name: str, root: Path) -> ContempEdbExport:
         else:
             exp.facts.append(f"row_untokened({rid},{quote_term(kind)},{rel_t}).")
             n_untok += 1
+        if declared_ms is not None:
+            exp.facts.append(f"row_declared({rid},{declared_ms - exp.anchor_ms}).")
+            n_declared += 1
     exp.counts["row_tokened"] = n_tok
     exp.counts["row_untokened"] = n_untok
+    exp.counts["row_declared"] = n_declared
     # NAMED CONSISTENTLY WITH EVERY OTHER CAPABILITY HERE (found live, in this module's own
     # first end-to-end shim test): produced=True means "the capability is present", uniformly --
     # an earlier draft named this family `pre_token_era` with produced=(NOT has_invocation_col),

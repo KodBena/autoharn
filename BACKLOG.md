@@ -3218,3 +3218,157 @@ past — not because the harness is hard to operate. Two small, purely-additive 
 are proposed (kind-refusal teach-text; unconditional stop-gate journaling); neither loosens
 anything, matching the maintainer's standing bar that ergonomics improvements are welcome only
 when they hold auditability constant.
+## Late-entry discipline implemented (2026-07-11 evening, Sonnet, commissioned build from
+## design/LATE-ENTRY-AND-INTAKE-SEMANTICS.md, ratified this same evening — see the
+## "Two ratifications" entry above)
+
+All three ratified proposals delivered in one worktree pass. Per-claim witness status below;
+"scratch" means an apparatus-authored throwaway schema pair, torn down to zero residue after
+(verified via `information_schema`/`pg_roles` re-query, empty both times).
+
+**Proposal 1 — intake-shape annotation (engine-side, no vocabulary change).**
+`engine/lp/contemporaneity.lp` gains `intake_shape/1`: a `token_burst` is annotated when its
+latest row precedes this world's own earliest `tool_event` (or when no `tool_event` exists at
+all yet). `engine/contemp_audit.py` prints `intake-shape (precedes all tool activity)` on the
+burst-table line. WITNESSED: `seen-red/contemporaneity-audit/run_fixtures.py` case (h)
+reproduces run-10's own rows-2-11 shape (a 3-row burst before any tool activity) on a scratch
+world — `VERDICT: BATCHED_DECLARED`, exit 0, the burst line carrying the annotation. The live
+run-10 world itself was never touched (runs are strictly linear; a settled world is read-only
+evidence, never a fixture substrate).
+
+**Proposal 2 — declared late entries.**
+
+- `kernel/lineage/s24-declared-event-time.sql`: a nullable `event_declared_ts` (timestamptz)
+  column on `ledger`, writer-supplied (no trigger, no GUC, no HMAC — the opposite shape from
+  s23's capture-only `stamp_invocation`, disclosed as such in the delta's own header).
+  `ledger_current`/`countersigned_in_force` re-issued with the column appended (the s20/s23
+  view-reissue discipline, re-applied); `review_gap`/`question_status`/`work_item_current`/
+  `work_item_violations`/`review_stamp_distinctness` checked and confirmed NOT members of that
+  class (named, not assumed) — mirrors s23's own enumeration exactly, one column later.
+  WITNESSED, scratch schema `s24val`/`s24val_kernel`/`s24val_rw` (TOY db, full s15…s23 chain
+  applied first): both polarities (a row with no declared time reads NULL; a row with one
+  round-trips exactly); the existing HMAC/stamp machinery is BYTE-IDENTICAL before/after (a
+  forged HMAC against a real provisioned secret still raises the exact same refusal; a valid
+  stamp still verifies true and coexists cleanly with a declared time on the same row) — no
+  trigger touched, grep-verified. `engine/ledger_differential.py s24val` (via
+  `LEDGER_DEPLOYMENT`) reports **AGREE**: `asp=10 sql=10 atoms; Δasp=[] Δsql=[]` — re-run after
+  real `led --event-time` writes landed through the shim, still AGREE. Class-ratified per
+  CLAUDE.md's decision tree (additive only, both polarities scratch-witnessed, differential
+  AGREE) — enters `bootstrap/new-project.sh`'s `--new-world` birth chain (LINEAGE_CHAIN updated,
+  DDL apply list updated); NEVER applied to any existing world (runs are linear — no
+  apply-to-existing-world step exists for anyone).
+- `bootstrap/templates/led.tmpl`: `--event-time <iso-ts>` flag on the generic `<kind>
+  <statement...>` path, writing `event_declared_ts`. Teach-text in the top-of-file comment
+  (verbatim intent, not the spec's exact sentence): "recording an act after the fact? declare
+  its event time — never narrate the past as if live." **Hazard caught and closed, unprompted**
+  (CLAUDE.md's engineering-responsibility corollary): `led.tmpl` executes LIVE for every
+  already-scaffolded world regardless of when it was born (the "live verbs" ruling) — hardcoding
+  `event_declared_ts` into the generic INSERT's column list would have broken `./led` on every
+  pre-s24 world the instant this template merges (a silent-breakage class this project exists to
+  foreclose). Fixed with a LIVE `information_schema.columns` capability check, paid only when
+  `--event-time` is actually passed (the common no-flag path is byte-identical to before, zero
+  extra query): an s24-capable world writes the column; a pre-s24 world REFUSES loudly (exit 1,
+  teach-text naming the fix), never a silent drop of a value the operator explicitly asked to be
+  recorded. WITNESSED live on two fresh scratch worlds built end-to-end (schema, secret, `./led`
+  shim): world A (s24-capable) — `--event-time` succeeds and round-trips
+  (`event_declared_ts=2026-07-11 12:00:00+02`), no-flag path unaffected (NULL); world B
+  (deliberately pre-s24, s15…s23 only) — `--event-time` REFUSED with the exact teach-text above,
+  exit 1; world B's no-flag path unaffected (exit 0). Both worlds torn down after, zero residue.
+- The verdict: `engine/lp/contemporaneity.lp` gains **LATE_DECLARED**. A burst's
+  silence-breaking row (the one that would otherwise make its token BACKFILL_SUSPECT) is
+  reclassified LATE_DECLARED when it carries a declared event time whose gap from its own write
+  time exceeds `late_threshold_ms` (60000ms, `engine/contemp_thresholds.lp` — reasoned below the
+  one real specimen on record, run-10 row 1's self-reported ~120s gap, same
+  below-the-smallest-true-positive method `silence_threshold_ms` already uses).
+  BACKFILL_SUSPECT now means precisely the UNDECLARED case; verdict priority is
+  BACKFILL_SUSPECT > LATE_DECLARED > BATCHED_DECLARED > CONTEMPORANEOUS (loudest wins). A
+  pre-s24 world emits no `row_declared/2` facts at all, so LATE_DECLARED can never fire there and
+  BACKFILL_SUSPECT's pre-existing behavior is provably unchanged (the wiredness-not-corpus-
+  emptiness lesson from the run9 fix, applied one delta later — `event_declared_ts_column` is a
+  named capability in `engine/contemp_edb.py`'s manifest, EXCLUDED not EMPTY on a pre-s24 world).
+  **SEEN-RED, BOTH POLARITIES** (`seen-red/contemporaneity-audit/run_fixtures.py`, extended,
+  cases f/g — the IDENTICAL silence-then-burst gap shape, disjoint offset ranges so the shared
+  scratch ledger's earlier fixture rows never bleed into a later case's own silence/backfill
+  computation): case (f) declares the silence-breaking row's event time near the start of the
+  ~305s silence window → `VERDICT: LATE_DECLARED`, exit 0, token named, banked verbatim as
+  `late-declared-green.txt`; case (g) re-runs the identical shape with no declaration → `VERDICT:
+  BACKFILL_SUSPECT`, exit 1, token named, banked verbatim as `late-declared-red.txt` — proving
+  case (b)'s own pre-extension behavior is byte-identical post-s24, not merely asserted. Full
+  8-case suite (`python3 seen-red/contemporaneity-audit/run_fixtures.py`, `PYTHONPATH=engine`)
+  passes clean, exit 0, including case (c) live against run7's real pre-s23 schema.
+
+**Proposal 3 — preamble line.** `bootstrap/templates/CLAUDE.md.tmpl` gains point 9, verbatim
+from the ratified memo: "Record as you go — one row at the moment of the act. Batching
+declarations you are making right now (an intake decomposition) is fine; the token declares it.
+If you must record an act after the fact, declare its event time — never narrate the past as if
+live." WITNESSED: reads correctly in the templated file; not yet exercised inside a live governed
+session (UNEXERCISED, concrete blocker: no new `--new-world` scaffold was stood up by this pass
+to carry it into a real session — the next scaffolded world inherits it automatically).
+
+**Docs updated honestly:** CAPABILITIES.md item 24a (this addendum, in place, matching item 24's
+own existing "same day" amendment pattern); design/CONTEMPORANEITY-AUDIT.md's own appended
+Status section gains a new dated paragraph (ADR-0005 Rule 8 — the original memo and the Part
+1/Part 2 status entries stand unedited). design/LATE-ENTRY-AND-INTAKE-SEMANTICS.md itself (the
+frozen ratified record) was deliberately left untouched — not in this task's named scope, and
+ADR-0005 Rule 8 governs against retro-editing a point-in-time decision record.
+
+**Gates run clean on the touched surface:** `gates/no_lazy_imports.py` (zero violations);
+`py_compile` on every touched `.py` file; `sh -n` on `bootstrap/new-project.sh`; the extended
+seen-red fixture suite (11/11 cases, see the audit-driven extension below). `gates/link_
+integrity.py`/`gates/doc_shapes.py` were run over the touched docs before commit (see this
+session's commit for the exact invocation).
+
+**Out-of-frame hack-rationalization audit run on this diff before commit (required by the
+skill's own FRAME CHECK — the implementer cannot self-audit), verdict UNDISCHARGED-HACK on the
+first pass, closed same session.** A separate subagent, given only the diff and this repo (no
+implementer reasoning), found: (1) `--event-time` was parsed by `led.tmpl`'s shared top-level
+flag loop but silently did nothing on `led review`/`led work *` — the flag's own comment called
+this "a no-op today" instead of a refusal, an inconsistency with this same file's own idiom
+(missing-column case two hunks above gets a loud REFUSE) and with `warn_flag_in_statement`'s
+never-silently-drop posture; (2) no fixture or script exercised `led.tmpl`'s actual `--event-time`
+CLI path end-to-end — every claim of it working was unscripted prose, weaker than this project's
+own "Self-application" bar; (3) `kernel/lineage/s24-declared-event-time.sql`'s own header
+asserted "bootstrap/apply-delta.sh is retired" as if the script no longer existed, when it is in
+fact still present, executable, and functionally capable of applying a delta to an existing world
+today — a pre-existing repo state (CAPABILITIES.md item 14 already documents it as "demoted to
+history" by POLICY, not deletion) that this delta's own prose stated more strongly than true.
+Disposition, same session: (1) fixed — `led.tmpl` gains a coverage guard (right after the shared
+flag loop) that REFUSES loudly, exit 1, naming the reason, when `--event-time` is passed to
+`--recent`/`current`/`question-status`/`review-gap`/`stamp-distinctness`/`register-principal`/
+`obligate`/`review`/`work`; witnessed live on a fresh scratch world before being folded into the
+scripted fixture. (2) fixed — `seen-red/contemporaneity-audit/run_fixtures.py` gains a SECOND
+scratch schema (`contempprobe_pre24`, s23-only, no s24) and three new cases (i/j/k) that invoke
+the REAL `led` shim (the same 3-line exec-wrapper `bootstrap/new-project.sh` writes) as a
+subprocess: case (i) generic-path `--event-time` success + round-trip read-back; case (j) the new
+coverage-refusal on `work open`; case (k) the pre-s24-schema capability refusal, against the real
+second schema. All three witnessed, exit codes as expected, both schemas torn down to zero
+residue after. (3) fixed — the SQL header's claim corrected to name the discrepancy explicitly
+(quoted below) rather than asserting the script's absence; deleting/neutering
+`bootstrap/apply-delta.sh` itself is named as a separate, larger decision, not taken here (out of
+this commission's scope; routes to the maintainer like any other destructive/ambiguous act).
+
+**Hazard flagged, not fixed this pass (CLAUDE.md engineering-responsibility corollary — met in
+passing while touching apply-delta.sh's retirement status in prose, not this commission's own
+assigned task):** `bootstrap/apply-delta.sh` is still present, executable, and end-to-end
+functional (`ls -la` shows `-rwxr-xr-x`, last touched by an unrelated prior commit `cba2f0c`), and
+its body still resolves a world's `deployment.json`, prompts a typed confirmation, and applies an
+arbitrary `kernel/lineage/sNN-*.sql` — including, as of this pass, `s24-declared-event-time.sql` —
+to a LIVE, EXISTING world via `psql -f`. This directly contradicts CLAUDE.md's own "runs are
+strictly linear" ruling ("there is NO apply-to-existing-world step, for anyone... bootstrap/
+apply-delta.sh is retired... an operator step that is ritual rather than load-bearing is deleted,
+not documented") and is stronger than CAPABILITIES.md item 14's older framing ("no operator
+scenario... demoted to history... stays as history"). An operator who runs `bootstrap/apply-
+delta.sh <existing-world-dir> kernel/lineage/s24-declared-event-time.sql` today would succeed,
+silently violating the newer, more categorical ruling. Not fixed here: deleting or neutering a
+script that other maintainer-facing docs (WALKTHROUGH.md, design/S22-WORK-ITEM-LEDGER.md) still
+cite as an operator-facing act is a decision with its own blast radius, deserving its own
+commission rather than a rushed side-fix inside this one — named loudly instead, per the
+corollary's "fix or flag" bar.
+
+**Deferred, named, not silently dropped:** the SQL-floor differential for the contemp_audit
+verb itself (Part 2's own second-producer gap, filed since the original core landing — untouched
+by this pass, still ONE producer, the ASP derivation); session-level (vs whole-ledger-window)
+verdict granularity (same pre-existing filed gap); Part 3 of the ORIGINAL contemporaneity design
+(the deontic/temporal ordering research direction — unrelated to this late-entry commission,
+still just filed); widening `--event-time` to `led review`/`led work *` (named in the audit
+disposition above as a future increment, refused loudly rather than silently today).

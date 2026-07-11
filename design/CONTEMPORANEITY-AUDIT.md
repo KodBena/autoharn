@@ -162,3 +162,26 @@ overflow on absolute epoch-ms values (FIXED in-pass — every emitted timestamp 
 anchor-relative) and a timestamp-convention disagreement across the three existing hook
 journals (FLAGGED, not fixed — outside this commission's touch-list). Both named in
 BACKLOG.md and in `engine/contemp_edb.py`'s own docstring, not silently routed around.
+
+**Part 1½/late-entry extension: LANDED, 2026-07-11 evening (Sonnet, commissioned build from
+design/LATE-ENTRY-AND-INTAKE-SEMANTICS.md, the ratified spec).** The maintainer's own
+adjudication of Part 2's first live verdict (BACKLOG "Run-10 first audit verdict adjudicated")
+surfaced the gap this design's Part 2 core left standing: the closed vocabulary could not
+distinguish an honest intake burst from a suspect one by eye, and had no way for a writer to
+DECLARE a late entry the way a paper log legitimately can. The late-entry design closes both,
+additively: **Proposal 1** annotates a `token_burst` `intake-shape (precedes all tool activity)`
+when every row in it predates this world's first `tool_event` (engine-side only, no vocabulary
+change) — witnessed on a scratch world reproducing run-10's own rows-2-11 shape, never against
+the live run-10 world (runs are linear). **Proposal 2** adds `kernel/lineage/
+s24-declared-event-time.sql` (a nullable `event_declared_ts` column, `led --event-time <iso-ts>`)
+and one new closed-vocabulary verdict, **LATE_DECLARED** (exit 0): the identical
+silence-then-burst gap that would otherwise verdict BACKFILL_SUSPECT verdicts LATE_DECLARED
+instead when the silence-breaking row carries a declared event time exceeding
+`late_threshold_ms` — BACKFILL_SUSPECT now means precisely the UNDECLARED case. Scratch-witnessed
+both polarities, SQL/ASP differential AGREE (`asp=10 sql=10 atoms; Δasp=[] Δsql=[]`), zero
+residue; seen-red both polarities banked (`seen-red/contemporaneity-audit/run_fixtures.py` cases
+f/g, `late-declared-green.txt`/`late-declared-red.txt`). **Proposal 3** adds the preamble
+teaching line to `bootstrap/templates/CLAUDE.md.tmpl` (point 9), verbatim from the ratified
+memo. Full disposition, per-claim witness status, and the scratch-witness/differential
+transcripts: BACKLOG.md's dated entry beside this one. See CAPABILITIES.md item 24a for the
+operator-facing summary.

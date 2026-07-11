@@ -1,0 +1,23 @@
+# banked GREEN evidence -- CASE f (manufactured late-declared, DECLARED twin of case b), engine/contemp_audit.py real output:
+# contemporaneity audit -- target='contempprobe' root=/tmp/contemp-fixture-kirush76
+#   capabilities (family, capable, produced): [('stamp_invocation_column', True, True), ('event_declared_ts_column', True, True), ('s23_capable', True, True), ('invocation_journal', True, True), ('tool_event', True, True)]
+#   counts: {'row_tokened': 9, 'row_untokened': 0, 'row_declared': 1, 'invocation': 2, 'tool_event': 4}
+
+BURST TABLE (STATED -- rows per invocation token):
+  token=fixture-token-aaaa rows=2  intake-shape (precedes all tool activity)
+  token=fixture-token-cccc rows=2  intake-shape (precedes all tool activity)
+  token=fixture-token-declared-late-f rows=2
+SILENCE TABLE (tool activity, zero ledger rows, gap > threshold):
+  [2033-05-18T04:06:50.000+00:00 .. 2033-05-18T04:11:55.000+00:00]  gap_ms=305000
+LATE_DECLARED tokens (DECLARED gap, mandate satisfied): ['fixture-token-declared-late-f']
+  honestly-declared-late row id(s): [8]
+PER-ROW DELTAS (row ts minus its own invocation's journaled wall-clock, ms):
+  row 7: delta_ms=1000
+  row 8: delta_ms=50
+  row 9: delta_ms=80
+PRECEDING-ACTIVITY AGE (ms since the nearest earlier tool_event, per row):
+  row 7: age_ms=5000
+  row 8: age_ms=50
+  row 9: age_ms=80
+
+VERDICT: LATE_DECLARED
