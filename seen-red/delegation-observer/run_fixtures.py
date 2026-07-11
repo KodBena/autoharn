@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-10T23:41:09Z
-#   last-change: 2026-07-10T23:41:40Z
+#   last-change: 2026-07-11T21:40:06Z
 #   contributors: e4410ef6/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -43,6 +43,22 @@ work-item-open/closed state is load-bearing across cases, so case ORDER matters 
                          (a, b, c, e -- not d) produced exactly one line each, in order, each
                          carrying the right session id and a prompt_sha256 that matches a fresh
                          local hash of the same prompt text (the wire-format cross-check).
+
+THE RETURN LEG (small-follow-ups commission item 5), three more cases, same stateful sequence:
+
+  g-return-paired      -- a PostToolUse event for tool="Agent", session_id="sess-a", the SAME
+                         prompt text case (a) dispatched -> journals a `kind: "return"` line
+                         FIFO-paired to case (a)'s own dispatch line: `pairing:
+                         "fifo_prompt_sha256"`, `dispatch_ts` equal to that dispatch's own `ts`,
+                         `duration_ms` present and non-negative.
+  h-return-unresolved  -- a PostToolUse event for a session/prompt combination with NO matching
+                         dispatch anywhere in the journal -> `pairing: "unresolved"`, no
+                         `dispatch_ts`/`duration_ms` keys at all -- the honest fallback, not a
+                         guessed pairing.
+  i-return-fifo-double -- TWO fresh dispatches sharing byte-identical session_id+prompt text,
+                         then TWO returns for that same pair -> the first return claims the
+                         EARLIER dispatch, the second claims the LATER one, never the same
+                         dispatch line twice (proves FIFO, not "always pick the first match").
 
 Usage: python3 seen-red/delegation-observer/run_fixtures.py
 Exit 0 if every case matches; 1 otherwise. Lazy imports banned.
@@ -105,6 +121,19 @@ def run_hook_leg(tool_name: str, description: str, prompt: str, session_id: str,
         "hook_event_name": "PreToolUse", "tool_name": tool_name,
         "tool_input": {"description": description, "prompt": prompt,
                        "subagent_type": "general-purpose"},
+        "session_id": session_id, "cwd": str(PROBE_DIR),
+    })
+    env = dict(os.environ)
+    env.update(env_extra)
+    return subprocess.run([sys.executable, str(HOOK)], input=payload,
+                          capture_output=True, text=True, env=env)
+
+
+def run_return_leg(tool_name: str, prompt: str, session_id: str,
+                    env_extra: dict[str, str]) -> subprocess.CompletedProcess[str]:
+    payload = json.dumps({
+        "hook_event_name": "PostToolUse", "tool_name": tool_name,
+        "tool_input": {"prompt": prompt, "subagent_type": "general-purpose"},
         "session_id": session_id, "cwd": str(PROBE_DIR),
     })
     env = dict(os.environ)
@@ -279,6 +308,64 @@ def main() -> int:
         print()
         if not ok_f:
             failures.append("f-journal-unconditional")
+
+        # g) THE RETURN LEG: a PostToolUse event for case (a)'s own tool/session/prompt -> FIFO-
+        # pairs against case (a)'s dispatch line (all_lines[0]), duration_ms present.
+        r = run_return_leg("Agent", prompt_a, "sess-a", env)
+        print("=== g-return-paired ===")
+        lines_after_g = journal_lines()
+        ok_g = (r.returncode == 0 and len(lines_after_g) == 5
+                and lines_after_g[4].get("kind") == "return"
+                and lines_after_g[4].get("pairing") == "fifo_prompt_sha256"
+                and lines_after_g[4].get("dispatch_ts") == all_lines[0].get("ts")
+                and isinstance(lines_after_g[4].get("duration_ms"), int)
+                and lines_after_g[4]["duration_ms"] >= 0)
+        print(f"  [{'ok' if ok_g else 'FAIL'}] exit={r.returncode} return line: "
+              f"{lines_after_g[4] if len(lines_after_g) == 5 else None}")
+        print()
+        if not ok_g:
+            failures.append("g-return-paired")
+
+        # h) THE RETURN LEG, UNRESOLVED: no dispatch anywhere shares this session+prompt.
+        r = run_return_leg("Agent", "no dispatch anywhere shares this exact prompt text",
+                          "sess-unresolved", env)
+        print("=== h-return-unresolved ===")
+        lines_after_h = journal_lines()
+        ok_h = (r.returncode == 0 and len(lines_after_h) == 6
+                and lines_after_h[5].get("kind") == "return"
+                and lines_after_h[5].get("pairing") == "unresolved"
+                and "dispatch_ts" not in lines_after_h[5]
+                and "duration_ms" not in lines_after_h[5])
+        print(f"  [{'ok' if ok_h else 'FAIL'}] exit={r.returncode} return line: "
+              f"{lines_after_h[5] if len(lines_after_h) == 6 else None}")
+        print()
+        if not ok_h:
+            failures.append("h-return-unresolved")
+
+        # i) THE RETURN LEG, FIFO DOUBLE DISPATCH: two fresh dispatches sharing byte-identical
+        # session_id+prompt, then two returns -> first return claims the EARLIER dispatch,
+        # second claims the LATER one, never the same dispatch line twice.
+        prompt_i = "fifo double dispatch test, case i"
+        run_hook_leg("Agent", "fifo double i, dispatch 1", prompt_i, "sess-i", env)
+        run_hook_leg("Agent", "fifo double i, dispatch 2", prompt_i, "sess-i", env)
+        lines_after_dispatches = journal_lines()
+        dispatch_i1_ts = lines_after_dispatches[6].get("ts")   # index 6: 1st new dispatch
+        dispatch_i2_ts = lines_after_dispatches[7].get("ts")   # index 7: 2nd new dispatch
+        r1 = run_return_leg("Agent", prompt_i, "sess-i", env)
+        r2 = run_return_leg("Agent", prompt_i, "sess-i", env)
+        lines_after_i = journal_lines()
+        print("=== i-return-fifo-double ===")
+        ok_i = (r1.returncode == 0 and r2.returncode == 0 and len(lines_after_i) == 10
+                and lines_after_i[8].get("dispatch_ts") == dispatch_i1_ts
+                and lines_after_i[9].get("dispatch_ts") == dispatch_i2_ts
+                and dispatch_i1_ts != dispatch_i2_ts)
+        print(f"  [{'ok' if ok_i else 'FAIL'}] return1.dispatch_ts={lines_after_i[8].get('dispatch_ts') if len(lines_after_i) == 10 else None} "
+              f"(expect {dispatch_i1_ts}); return2.dispatch_ts="
+              f"{lines_after_i[9].get('dispatch_ts') if len(lines_after_i) == 10 else None} "
+              f"(expect {dispatch_i2_ts}, never the same dispatch reused)")
+        print()
+        if not ok_i:
+            failures.append("i-return-fifo-double")
     finally:
         print("-- teardown (post) --")
         teardown()
@@ -286,7 +373,8 @@ def main() -> int:
     if failures:
         print(f"run_fixtures: {len(failures)} FAILURE(S): {', '.join(failures)}")
         return 1
-    print("run_fixtures: all 5 named cases + 1 bonus cross-check passed.")
+    print("run_fixtures: all 5 dispatch-leg cases + 1 bonus cross-check + 3 return-leg cases "
+          "(paired, unresolved, FIFO double-dispatch) passed.")
     return 0
 
 

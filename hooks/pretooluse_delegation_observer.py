@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-10T23:38:38Z
-#   last-change: 2026-07-11T14:58:59Z
+#   last-change: 2026-07-11T21:39:04Z
 #   contributors: e4410ef6/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -71,6 +71,38 @@ hooks/posttooluse_mutation_observer.py's own docstrings already state, for the i
 -- re-derived here, byte-similar, on purpose, matching this project's own established convention
 for this exact function pair (now mirrored a third time; an import would couple this hook's
 correctness to pretooluse_change_gate.py's unrelated internals surviving unchanged).
+
+THE RETURN LEG (small-follow-ups commission item 5; BACKLOG "Follow-ups commission scope
+extended" item 2: "the delegation observer gains a return leg (PostToolUse on Task) --
+dispatch-to-return duration per subagent, closing the reviewer-execution-window inference gap
+by measurement"). This file now handles BOTH `hook_event_name` values on the SAME `Task|Agent`
+matcher, dispatched on `hook_event_name` exactly as `hooks/posttooluse_mutation_observer.py`
+already does for its own two legs (one file, two attachment points, PreToolUse touches/journals
+dispatch, PostToolUse journals the return) -- the module BASENAME staying "pretooluse_..." even
+though it now also handles PostToolUse mirrors that same sibling file's own precedent (its own
+basename is "posttooluse_..." despite ALSO handling a PreToolUse leg): this project's convention
+is to name a dual-leg observer file for whichever leg it was first built for, not to rename on
+extension. THE EXISTING DISPATCH LINE'S SHAPE IS UNCHANGED (module docstring's own "TWO THINGS,
+EVERY DISPATCH" section, byte-identical) -- the return leg is a strictly ADDITIVE new line kind,
+appended to the SAME journal file, never a rewrite of an existing line.
+
+CORRELATION FIELD, STATED HONESTLY (mirrors hooks/posttooluse_bash_completion.py's own PAIRING
+RULE section verbatim in spirit): there is no side-channel this hook can use to tag a Task/Agent
+dispatch so its own return unambiguously echoes a minted id back (unlike Bash, where
+stamp_intercept injects a token into the command TEXT that the subject's own execution carries
+forward) -- Claude Code's hook-input contract has never been observed to carry a `tool_use_id`
+this project could rely on either (the same absence `hooks/stamp_intercept.py`'s own module
+docstring names for Bash). So the return leg does the next best thing: FIFO-pair against the
+dispatch journal's own unpaired lines sharing this session's `session_id` AND an identical
+`prompt` sha256 (recomputed from THIS event's own `tool_input.prompt` -- PostToolUse's payload
+is assumed to echo the same prompt text the PreToolUse leg saw, since this hook never mutates
+Task/Agent's tool_input). A match yields `pairing: "fifo_prompt_sha256"`, `dispatch_ts` (the
+matched dispatch line's own `ts`), and `duration_ms` (this return's ts minus the dispatch's ts).
+No match yields `pairing: "unresolved"`, `duration_ms: null` -- the honest fallback, never a
+guessed pairing. NAMED RESIDUAL GAP: two dispatches of the SAME tool with byte-identical prompt
+text truly concurrent in the same session can pair to the wrong dispatch (FIFO is a heuristic,
+not a guarantee) -- disclosed here rather than silently mismatched, matching
+hooks/posttooluse_bash_completion.py's own identical disclosure for the identical shape of gap.
 
 Stdlib only, top-of-file imports (the lazy-import gate, gates/no_lazy_imports.py, applies).
 """
@@ -241,6 +273,100 @@ def _journal(rec: dict) -> None:
         pass
 
 
+def _read_journal_lines() -> list[dict]:
+    """Every well-formed JSON object line in the journal, in file order -- the return leg's own
+    read of the SAME file the dispatch leg writes (module docstring, CORRELATION FIELD).
+    Malformed lines are skipped, never raised (best-effort, matching `_journal`'s own posture)."""
+    if not JOURNAL or not os.path.isfile(JOURNAL):
+        return []
+    out: list[dict] = []
+    try:
+        with open(JOURNAL, encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    rec = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if isinstance(rec, dict):
+                    out.append(rec)
+    except OSError:
+        pass
+    return out
+
+
+def _pair_return(session_id: str, prompt_sha256: str) -> dict | None:
+    """FIFO-pair this return against an unpaired dispatch line sharing the same session_id and
+    prompt_sha256 (module docstring, CORRELATION FIELD). A dispatch line carries no `kind` field
+    at all (module docstring: the existing dispatch shape is unchanged); a return line carries
+    `kind: "return"`. 'Already paired' is tracked by collecting every prior return's own
+    `dispatch_ts` -- the ts of the dispatch line it claimed -- so a repeated identical
+    session+prompt (the same subagent prompt dispatched twice) never double-pairs one dispatch
+    to two returns. Returns None (never raises past its own read) when no candidate remains."""
+    lines = _read_journal_lines()
+    already_paired_dispatch_ts = {
+        rec.get("dispatch_ts") for rec in lines
+        if rec.get("kind") == "return" and rec.get("dispatch_ts")
+    }
+    candidates = [
+        rec for rec in lines
+        if rec.get("kind") != "return"
+        and rec.get("session_id") == session_id
+        and rec.get("prompt_sha256") == prompt_sha256
+        and rec.get("ts") not in already_paired_dispatch_ts
+    ]
+    if not candidates:
+        return None
+    candidates.sort(key=lambda r: str(r.get("ts", "")))  # FIFO: earliest unpaired dispatch first
+    return candidates[0]
+
+
+def _duration_ms(start_iso: str, end_iso: str) -> int | None:
+    """Millisecond delta between two UTC-Z ISO-8601 timestamps (this file's own convention).
+    Returns None (never raises) on any malformed input -- a duration that cannot be computed is
+    omitted from the return record entirely, never a guessed or zero value."""
+    try:
+        start = datetime.fromisoformat(start_iso.replace("Z", "+00:00"))
+        end = datetime.fromisoformat(end_iso.replace("Z", "+00:00"))
+        return int((end - start).total_seconds() * 1000)
+    except (ValueError, TypeError):
+        return None
+
+
+def _handle_return(data: dict, tool: str) -> int:
+    """THE RETURN LEG (module docstring). Journals one `kind: "return"` line per Task/Agent
+    PostToolUse event, FIFO-paired against its own dispatch line where possible. Never raises --
+    every failure inside the pairing attempt degrades to `pairing: "unresolved"`, the honest
+    fallback, not a broken tool call."""
+    inp = _first(data, "tool_input", "toolInput", "input", default={})
+    if not isinstance(inp, dict):
+        inp = {}
+    prompt = str(inp.get("prompt", ""))
+    session_id = str(data.get("session_id") or "")
+    prompt_sha256 = hashlib.sha256(prompt.encode("utf-8")).hexdigest()
+    now = datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+
+    try:
+        matched = _pair_return(session_id, prompt_sha256)
+    except Exception:  # noqa: BLE001 -- an observer must never break a tool call over a read hiccup
+        matched = None
+
+    rec: dict = {"ts": now, "session_id": session_id, "tool": tool, "kind": "return"}
+    if matched is not None:
+        dispatch_ts = str(matched.get("ts", ""))
+        rec["pairing"] = "fifo_prompt_sha256"
+        rec["dispatch_ts"] = dispatch_ts
+        duration = _duration_ms(dispatch_ts, now)
+        if duration is not None:
+            rec["duration_ms"] = duration
+    else:
+        rec["pairing"] = "unresolved"
+    _journal(rec)
+    return 0
+
+
 DENY_HINT = ("./led decision \"<what is delegated, why>\"\n"
              "  ./led work open <slug> \"<title>\"\n"
              "  ./led work claim <slug>")
@@ -282,6 +408,20 @@ def main() -> int:
 
     tool = _first(data, "tool_name", "toolName", "name", default="")
     if tool not in _DELEGATION_TOOLS:
+        return 0
+
+    # DISPATCH on hook_event_name (module docstring, THE RETURN LEG) -- this file now attaches
+    # to BOTH PreToolUse (the original dispatch leg, unchanged below) and PostToolUse (the new
+    # return leg), mirroring hooks/posttooluse_mutation_observer.py's own two-leg-one-file shape.
+    # Missing/unrecognized hook_event_name defaults to the ORIGINAL PreToolUse behavior (byte-
+    # held prior behavior for any caller that never sent the field at all).
+    event = _first(data, "hook_event_name", "hookEventName", default="PreToolUse")
+    if event == "PostToolUse":
+        try:
+            return _handle_return(data, tool)
+        except Exception:  # noqa: BLE001 -- an observer must never break a tool call
+            return 0
+    if event != "PreToolUse":
         return 0
 
     inp = _first(data, "tool_input", "toolInput", "input", default={})
