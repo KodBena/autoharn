@@ -2378,3 +2378,33 @@ Genuinely missing, ranked (the silently-dropped set):
    rule — build on witnessed need, not omega nostalgia.
 4. **Scope tagging + JSON Schema contract** — need design (what is "scope" for a generic
    project? generated-from-DDL vs hand-authored?); not urgent absent external tooling.
+
+## Chocofarm experiment-ledger disposition (2026-07-11, night shift): designed, reviewed, SHELVED — plus two new findings
+
+Maintainer asked whether chocofarm's performance/experiment ledger is implemented here.
+Answer: **its adaptation already exists as stores/001_research_ledger.sql** (chocofarm's
+measurement-⊥-interpretation discipline: typed value/unit/n/stderr readings, git_commit +
+git_tree code stamp, instrument qualification, a DERIVED non-writable finding_confirmed
+view — stricter than chocofarm's own writable status), taken through an ADR-0014
+second-opinion pass 2026-06-28 with real fixes — and then never executed: header still
+says PROPOSAL v0.1, the research db is empty, and no operator-surface doc cites it, so by
+this repo's own archive rule it vanished. Run 7's QEUBO rows prove the cost: evidence is
+prose text (distance=0.7688 unqueryable, no GROUP BY, no replicate structure, no code
+stamp on ledger rows, a screenshot "saved for visual record" with no path or hash).
+Honest counterweight: the ledger BEATS chocofarm on attribution (HMAC stamp vs a commit
+trailer) and on live independent review (rows 57-59 caught row 48's arithmetic before the
+run) — the typed store complements the narrative ledger, never replaces it. Sonnet-sized
+execution gap; prep commissioned tonight (scratch witness + thin recording writer +
+scripted apply), the standing-db apply armed for one maintainer word.
+
+Two findings from the same pass:
+1. **ADR-0009 in law/adr/ is an UNADAPTED chocofarm copy** (byte-identical diff; Scope
+   still binds "the chocofarm/ package", tool list still chocofarm's harness). Law edits
+   need the maintainer's word: morning question — re-instance its Scope for autoharn's
+   experiment domain (governed runs), amendment drafted on his yes.
+2. **Typed edges silently degrade to prose (run7 row 71):** the statement text ends
+   "--supersedes 48 --refs row:57,row:58,row:59" but the supersedes/refs COLUMNS are
+   NULL — the flags landed inside the quoted statement on a usage slip, and nothing
+   caught it. Across all 79 run7 rows: supersedes/amends/answers used 0 times; the FK
+   vocabulary exists and practice bypasses it. Sonnet-sized teach-fix commissioned: led
+   warns when a statement's text contains what looks like its own flag vocabulary.
