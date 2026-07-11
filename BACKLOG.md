@@ -3775,3 +3775,158 @@ free text today. Also committed alongside: the run10 ./judge DerivationRecord pa
 the closure audit (engine/docs/ledger-marriage/derivations/run10/), the audit's own banked
 evidence. HANDOFF.md is now materially stale (pre-dates this entire day) — refresh queued
 as the next standing task before any session handoff.
+
+## Five-item batch, maintainer-approved 2026-07-11 evening (Sonnet, executed same window)
+
+Delivers all five items the maintainer approved in one commission: (1) a composed
+distance-to-clean verb, (2) the `commission` ledger kind with two signing modes, (3) a
+read-observer journal hook, (4) intake-granularity teach-text, (5) an alternatives-considered
+decision convention. No `run11` session ever appeared under `/home/bork/w/vdc/1/run*` during
+this work (`pgrep -a claude` + `readlink /proc/<pid>/cwd` re-checked before every
+`bootstrap/templates/`/`bootstrap/new-project.sh` edit; only this checkout's own sessions and
+the operator's parent-dir/daemon processes were ever live) — nothing was frozen mid-work.
+
+**Item 1 — `distance-to-clean` composed closure-debt verb
+(`bootstrap/templates/distance-to-clean.tmpl`; design/RETROSPECTIVE-RUN10.md Finding 1).** The
+maintainer's condition, honored literally: `led review-gap`/`question-status`/`work violations`
+stay untouched and remain the documented, disaggregated default. This is a sixth operator verb,
+wired into `bootstrap/new-project.sh`'s shim loop, reading the SAME three existing views in one
+pass, computing nothing new. **WITNESSED live** on a throwaway `--new-world` probe
+(`batch5probe`, torn down after, zero residue re-verified): a clean world reports `TOTAL debt: 0`
+exit 0; after registering a real obligation and writing an unreviewed row, an open question, and
+a work item with a dangling dependency, it reports `review-gap: 6 row(s) -- ids: [2, 3, 4, 5, 6,
+7]`, `question-status: 1 open of 1 total -- open ids: [6]`, `work-violations: 1 violation(s) --
+slugs: [widget-x]`, `TOTAL debt: 8`, exit 1 — cross-checked id-for-id against
+`led review-gap`/`question-status`/`work violations` run separately on the same probe (identical
+rows). CAPABILITIES.md item 25.
+
+**Item 2 — `commission` ledger kind, two signing modes (`kernel/lineage/s25-commission-
+kind.sql`; design/RETROSPECTIVE-RUN10.md Finding 5 + could-not-answer item 4).** A pure
+vocabulary UNION on `ledger_kind_check` (s22's own re-issue point, one member later) — every
+prior kind stays legal, unchanged; no new column, no new table, no new view, no trigger touched.
+Class-ratified per CLAUDE.md's decision tree (additive vocabulary only). Closure statement
+(ADR-0000 2026-07-02 amendment) in the delta's own header: quantification universe grepped
+across kernel/lineage/*.sql (frozen, untouched), engine/lp/*.lp (zero kind-literal hits — kind is
+an opaque atom there), engine/*.py (zero closed-set hits), and led.tmpl's own
+`_led_kind_refusal_teach()` (re-queries the live constraint, never a hand-copy — needs zero
+led.tmpl change to pick up the new member).
+
+SCRATCH-WITNESSED, both polarities, differential AGREE:
+```
+=== a-commission-legal-post-s25 === [ok] exit=0 id=1
+=== b-refs-commission === [ok] refs=row:1
+=== c-existing-kinds-unchanged === [ok] decision_ok=True work_opened_refused_by=work_slug_kind_shape
+=== d-invalid-kind-still-refused === [ok] refused=True live_def_has_commission=True
+=== e-full-mode-actor-distinct === [ok] full_actor='commissioner' lazy_actor='author'
+=== f-prior-columns-untouched === [ok] columns=event_declared_ts,stamp_hmac,stamp_verified
+=== g-pre-s25-refused-with-teach === [ok] exit=3, teach names the pre-s25 world's OWN 13-member list (no 'commission')
+
+# marriage differential -- ASP T_now (ledger_tnow.lp) vs SQL floor (ledger_floor.py)
+  [OK ] s25fxprobe AGREE              asp=10 sql=10 atoms; Δasp=[] Δsql=[]
+# DIFFERENTIAL GREEN
+[ok] zero residue: schemas='' roles=''
+```
+Full suite: `seen-red/s25-commission-kind/run_fixtures.py`, banked at `red.txt`, registered in
+`gates/fixture_census.py` (39 seen-red gates, clean). Entered `bootstrap/new-project.sh`'s
+`LINEAGE_CHAIN` and DDL apply list; **NEVER applied to any existing world** (runs are linear).
+
+**FULL mode**: `bootstrap/new-project.sh --new-world` now registers a `commissioner` principal
+(class `human`) alongside `author`/`reviewer`, and prints this exact copy-paste line at the end
+of every scaffold run (WITNESSED verbatim, `batch5probe`'s real stdout):
+```
+To SIGN this run's commission yourself (FULL mode -- kernel/lineage/s25-commission-
+kind.sql; the ask carries the commissioner's own guarantee, not a vicarious one), type
+this in YOUR OWN terminal, inside <PROJECT_ROOT> (not inside the agent's session):
+  LED_ACTOR=commissioner ./led commission "<the ask verbatim>"
+```
+**WITNESSED live** on `batch5probe`: `LED_ACTOR=commissioner ./led commission "Build a widget
+that does X..."` landed `id=1, kind=commission, actor=commissioner, stamp_agent=NULL,
+stamp_verified=f` — the honest "unstamped-but-attributed" row the design names (typed from a
+bare shell, no live Claude session to inject a stamp). A second write under the default actor
+with the vicarious-transcription prefix landed `id=2, actor=author` — the two rows are
+mechanically distinguishable by actor alone here; in a REAL governed session LAZY mode's row
+would additionally carry a live `stamp_agent`/`stamp_verified=t` (this probe was a bare-shell
+test, not a live Claude Code session, so only the actor half of the two-signal distinction was
+exercised for LAZY mode — named honestly, not overclaimed).
+
+**LAZY mode**: `bootstrap/templates/CLAUDE.md.tmpl` point 10 — the FIRST ledger act on receiving
+a commission is `./led commission "<ask verbatim>"`, prefixed "(vicarious transcription by the
+implementer; carries no commissioner guarantee)" IN ADDITION to the stamp already proving it
+vicarious by construction. Decomposition rows `--refs row:<commission-id>`.
+
+**Pre-s25 interaction VERIFIED, not assumed**: a `commission` write against a genuinely pre-s25
+world (schema applied through s24 only) is refused by `ledger_kind_check`, exit 3, and the
+run-10 closure-audit fix's live teach-text names that world's own 13-member list — no
+`commission` — proving the interaction works with zero `led.tmpl` change, exactly as designed.
+CAPABILITIES.md item 26.
+
+**Item 3 — Read-observer journal (`hooks/pretooluse_read_observer.py`;
+design/RETROSPECTIVE-RUN10.md could-not-answer item 3: "a reviewer that inspects files via the
+Read tool leaves no trace").** New `PreToolUse(Read)` hook, mirrors `hooks/
+pretooluse_delegation_observer.py`'s shape/switchboard/UTC-Z convention exactly: journals ts
+(UTC-Z), session_id, file_path to `.claude/logs/read_observer.journal.jsonl`. No warning, no
+deny path — reading is never a policy violation, so `enforce` is a NAMED-NOT-YET-SANCTIONED
+downgrade, not an impossibility. Default `mechanisms.read_observer.mode = "observe"` (costless
+observer, house convention: defaults ON like `mutation_observer`/`delegation_observer`). Wired
+into `bootstrap/templates/settings.json.tmpl` (`PreToolUse` matcher `Read`) and `bootstrap/
+templates/apparatus.json`. **WITNESSED, both polarities**, `seen-red/read-observer/
+run_fixtures.py` (6 cases, pure filesystem, no DB): observe-default journals one line;
+mode=off writes nothing even though a real Read happened; mode=enforce downgrades with a
+loud stderr warning and still journals; a non-Read tool call produces nothing; an unwired
+invocation is silent; two further real reads append two more lines in order (accumulation, not
+overwrite) — all green, registered in `gates/fixture_census.py`. **Re-witnessed live** on the
+final `finalprobe` scaffold (torn down after): the real hook, invoked through the real wiring
+path, journaled `{"ts": "...Z", "session_id": "final-check", "file_path": "/etc/hostname"}`.
+CAPABILITIES.md item 27.
+
+**Item 4 — Intake-granularity teach-text (`bootstrap/templates/CLAUDE.md.tmpl` point 1,
+amended).** Judgment guidance, no numeric rule, per the maintainer's explicit warning against a
+cargo-cultable count: "decompose to the UNIT OF INDEPENDENT RESUMPTION ... state each item's
+deliverable and its acceptance handle, and leave the mechanism/HOW to the task chartered to own
+it," with the one-question test ("could a fresh session pick up this slug alone and know what
+to build and how to tell it's done?") and both failure directions named (too fine: run10's three
+items that collapsed to one file/one commit; too coarse: a hidden resumable seam).
+
+**Item 5 — Alternatives-considered convention (`bootstrap/templates/CLAUDE.md.tmpl` point 11,
+new).** "A load-bearing decision names what was rejected and why, IN THE STATEMENT."
+Convention only — explicitly filed as awaiting a witnessed need before any kernel column is
+built, stated as such in the preamble text itself, not silently implied.
+
+**A:B:C fresh-context attestation loop, both edited maintainer-facing `.md` files.**
+`bootstrap/templates/APPARATUS.md` (new `read_observer` row + Named-nuances bullet, "nine" ->
+"ten" mechanisms): round 1 DEFECT (1 finding — the illustrative JSON example was missing the
+new mechanism's entry, inconsistent with the table it sits beside), fixed, round 2 CLEAN
+(all four Rule-1 clauses enumerated). Attestation recorded, `escalated: false`.
+`CAPABILITIES.md` (items 25-27 added): round 1 DEFECT (2 findings — a stale "four operator
+verbs" claim in the opening, and item 25's own "sixth verb" enumeration silently missing the
+scaffold as the fourth prior verb), fixed; round 2 DEFECT (2 NEW findings — a dangling
+"CLAUDE.md's decision tree" cross-reference that actually lives in OPERATING-CARD.md, and an
+unglossed first-and-only use of `delegation_observer`), hit the two-round cap per ADR-0017 (no
+third round). **Non-converging-review-loop escalation, adjudicated by the orchestrator**
+(the same disposition the "First live enforcement" entry above set as precedent): both round-2
+findings fixed by applying B's own suggested repairs verbatim, no third B round spawned.
+Attestation recorded, `escalated: true`, `rounds` carrying both real B verdicts as they
+happened. `gates/doc_shapes.py`/`gates/link_integrity.py` clean on both files throughout;
+`gates/doc_attestation_presence.py` gate mode: clean, 2/2 docs in scope.
+
+**Gates run clean on the touched surface:** `gates/no_lazy_imports.py` (0 violations, whole
+repo); `py_compile` on every touched `.py` file; `sh -n` on `bootstrap/new-project.sh` and
+`bootstrap/templates/led.tmpl` (verified UNCHANGED — the generic `<kind> <statement...>` path
+already supports `commission` with zero code change, confirmed by direct exercise, not
+assumed); `gates/fixture_census.py` clean at 39 seen-red gates (two new: `read-observer`,
+`s25-commission-kind`).
+
+**`bootstrap/templates/led.tmpl` — VERIFIED, not touched.** The generic path's INSERT has no
+kind-specific gating; `commission` flows through it exactly as any other prose kind. Confirmed
+by direct exercise on both a post-s25 and a pre-s25 schema (item 2 above), not asserted.
+
+**Deferred, named, not silently dropped:** no new ASP/SQL derived view consumes `commission`
+rows yet (e.g. "every `work_opened` traceable to its commission via `--refs`") — filed as a
+possibility in `s25-commission-kind.sql`'s own header, not built or claimed built. LAZY mode's
+full two-signal distinction (actor + live stamp) was only partially exercised in this pass's own
+witness (a bare-shell probe cannot produce a real Claude-session stamp) — named honestly above,
+not overclaimed; a real governed session will produce the complete signal the first time point
+10 fires in anger.
+
+Every claim above is WITNESSED with the artifact quoted, or explicitly named as a limited/partial
+witness with the reason stated. No umbrella claims.
