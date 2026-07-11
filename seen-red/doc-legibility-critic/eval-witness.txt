@@ -1,0 +1,67 @@
+# Witness: python3 instruments/doc_critic_eval.py --concurrency 4 --timeout 90  (run 2026-07-11, full corpus)
+# Two runs banked ON PURPOSE — v1's number is the reason v2 exists (measure, don't assert):
+#   v1 (first measurement): RAW precision=0.524 recall=1.000 f1=0.688 — the critic punished
+#     EXCERPTS for cross-references that resolve at document scope (10 of 12 CLEAN rows flagged,
+#     mostly UNRESOLVED-REFERENT). Diagnosis: the unit of judgment is a passage, resolution
+#     happens at document scope; v2 distinguishes 'no road to resolution' from 'a road the
+#     excerpt cannot follow'.
+#   v2 (shipped): numbers below. CAVEAT, stated plainly: v2 was calibrated against this same
+#     24-row corpus (in-sample, one iteration — the same loop the demurral build ran to its
+#     own v2). The out-of-sample number is unknown until the corpus grows from adjudicated
+#     live findings. Per-row note: 2 of v2's 4 false positives are defensible borderlines
+#     (walkthrough-opening's bare 'the e-series'; adr00-register's 'the trio it parents').
+# Design conclusion carried to the ratification packet: passage-scoped headless haiku is a
+# mediocre transport for this judgment (P=0.69) — evidence FOR the maintainer's A:B:C
+# fresh-context reviewer (whole document, session-billed, larger model) as the primary
+# transport, with this hook as the lightweight/portable option. Observer-only either way.
+
+=== v1 run (pre-calibration, banked verbatim) ===
+doc_critic_eval — corpus n=24, prompt_version=v1, model=claude-haiku-4-5-20251001
+  answered=23  classifier errors/timeouts=1
+
+RAW (classifier-only, excludes ERROR rows):
+  confusion: TP=11 FN=0 FP=10 TN=2
+  DEFECT class: precision=0.524 recall=1.000 f1=0.688
+
+EFFECTIVE (ERROR folded in as fail-open — the hook's real production behavior):
+  confusion: TP=11 FN=1 FP=10 TN=2
+  DEFECT class: precision=0.524 recall=0.917 f1=0.667
+
+Shape agreement on caught defects (informational): 8/11
+
+Misclassified rows (10):
+  gold=CLEAN got=DEFECT id=adr13-register shapes=['UNRESOLVED-REFERENT']
+  gold=CLEAN got=DEFECT id=confmap-after-jboundary shapes=['UNRESOLVED-REFERENT', 'UNRESOLVED-REFERENT', 'UNRESOLVED-REFERENT']
+  gold=CLEAN got=DEFECT id=reviewgap-after-lead shapes=['JARGON-OPENING']
+  gold=CLEAN got=DEFECT id=adr05-rule6 shapes=['UNRESOLVED-REFERENT', 'UNRESOLVED-REFERENT']
+  gold=CLEAN got=DEFECT id=glossary-birth-chain shapes=['UNRESOLVED-REFERENT', 'UNRESOLVED-REFERENT', 'UNRESOLVED-REFERENT']
+  gold=CLEAN got=DEFECT id=walkthrough-opening shapes=['FRAGMENT', 'UNRESOLVED-REFERENT', 'UNRESOLVED-REFERENT']
+  gold=CLEAN got=DEFECT id=capabilities-opening shapes=['FRAGMENT', 'FRAGMENT']
+  gold=CLEAN got=DEFECT id=confmap-status-vocab shapes=['STARVATION', 'UNRESOLVED-REFERENT', 'UNRESOLVED-REFERENT']
+  gold=CLEAN got=DEFECT id=adr00-register shapes=['UNRESOLVED-REFERENT', 'UNRESOLVED-REFERENT', 'UNRESOLVED-REFERENT', 'UNRESOLVED-REFERENT']
+  gold=CLEAN got=DEFECT id=confmap-after-header shapes=['UNRESOLVED-REFERENT', 'UNRESOLVED-REFERENT']
+ERROR rows (1): brief-pilot
+
+=== v2 run (shipped prompt) ===
+doc_critic_eval — corpus n=24, prompt_version=v2, model=claude-haiku-4-5-20251001
+  answered=23  classifier errors/timeouts=1
+
+RAW (classifier-only, excludes ERROR rows):
+  confusion: TP=9 FN=3 FP=4 TN=7
+  DEFECT class: precision=0.692 recall=0.750 f1=0.720
+
+EFFECTIVE (ERROR folded in as fail-open — the hook's real production behavior):
+  confusion: TP=9 FN=3 FP=4 TN=8
+  DEFECT class: precision=0.692 recall=0.750 f1=0.720
+
+Shape agreement on caught defects (informational): 7/9
+
+Misclassified rows (7):
+  gold=DEFECT got=CLEAN id=brief-preamble shapes=[]
+  gold=DEFECT got=CLEAN id=brief-pilot shapes=[]
+  gold=DEFECT got=CLEAN id=reviewgap-before-opening shapes=[]
+  gold=CLEAN got=DEFECT id=adr13-register shapes=['POSITIONAL-REF']
+  gold=CLEAN got=DEFECT id=walkthrough-opening shapes=['UNRESOLVED-REFERENT']
+  gold=CLEAN got=DEFECT id=confmap-status-vocab shapes=['OTHER']
+  gold=CLEAN got=DEFECT id=adr00-register shapes=['FRAGMENT', 'UNRESOLVED-REFERENT', 'UNRESOLVED-REFERENT']
+ERROR rows (1): confmap-after-jboundary

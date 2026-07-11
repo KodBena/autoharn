@@ -1,0 +1,10 @@
+doc-legibility-critic seen red — 2026-07-11, live run of red-specimen.py (real hook -> real `claude -p --model claude-haiku-4-5-20251001` classifier, prompt v2, DOC_CRITIC_TIMEOUT_S=90).
+Banked per the seen-red convention; the measured strength claim lives in eval-witness.txt beside this file.
+
+CASE 1 (defective write, observe mode): exit=0 warned=True journaled_positive=True
+--- the emitted warning (the critic's red, verbatim) ---
+{"hookSpecificOutput": {"hookEventName": "PostToolUse", "additionalContext": "[doc-legibility-critic] 2 finding(s) in /tmp/tmpfyx9mclv/probe.md (observer-mode, non-blocking):\n  - shape=FRAGMENT | quote='\"The core deliverable.\"' | repair: \"Integrate into a complete sentence, e.g., 'The core deliverable is a row-based structure where each row is an entry the AI collaborator MUST write.'\"\n  - shape=UNRESOLVED-REFERENT | quote='\"Per the harness DB claim-ledger and the WHY-ledger / R-WHY / R-QTY work\"' | repair: \"Add links or stable identifiers for these artifacts, or provide inline definitions of what the claim-ledger and WHY-ledger are.\"\nZero-context-reader discipline (design/ADR-DRAFT-documentation-discipline.md, Rule 1): a document is finished only when a reader with none of this session's context can parse every sentence, resolve every referent, and know what every section is 
+--- end warning ---
+CASE 2 (clean write, observe mode): exit=0 silent=True
+CASE 3 (no apparatus.json -> default OFF): exit=0 silent=True elapsed=0.06s
+doc-legibility-critic red-specimen: all three cases behaved as designed — a structured observer-grade warning on the defective write, silence on the clean write, and a no-cost instant exit when the switchboard is absent (default OFF).
