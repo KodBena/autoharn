@@ -4330,8 +4330,28 @@ disposition, all seven fixed verbatim from B's repairs. Both attestations record
 `escalated: true`, `rounds` carrying both real B verdicts as they happened (per
 `gates/doc_attestation_presence.py`'s own honest-record design — a DEFECT-with-escalated-true
 round is exactly as valid a record as a CLEAN one; the gate checks presence+shape, never the
-verdict). `gates/doc_shapes.py` / `gates/doc_attestation_presence.py` gate mode: clean, 2/2
-docs in scope. `gates/link_integrity.py`: clean (1220 unchecked-but-non-failing anchor notes,
+verdict).
+
+**The self-admitted-unresolved "GPG merge" referent turned out to be resolvable**, caught while
+checking `git log`: `e9fe589` ("design: GPG trust layer spec...") names `design/
+GPG-TRUST-LAYER.md`, whose implementation is visibly in progress in a concurrent worktree
+(`.claude/worktrees/agent-a44608a4cd12fb911/`, untouched by this session per its own collision
+constraint). Per ADR-0013 Rule 5 ("verify the artifact"), HANDOFF.md's text was corrected to
+link the resolved referent rather than ship a known-fixable "cannot identify" claim — a small
+follow-up edit, which the content-hash-keyed attestation gate correctly treated as a NEW
+document state needing its own fresh read (not a continuation of the already-recorded,
+already-escalated loop above). A fresh two-round mini-loop ran on that one edit alone: round 1
+DEFECT (3 findings — two unlinked sibling paths, CONFIGURATION.md and BACKLOG.md, plus the
+same item-count reconciliation ambiguity recurring in slightly different form after the edit
+disturbed the surrounding prose), fixed by renumbering the enumeration explicitly (1)-(10)
+with the 3 closed items stated as outside that count; round 2 CLEAN, all four Rule-1 clauses
+enumerated, `escalated: false`. HANDOFF.md now carries TWO attestation records (the escalated
+one for its first migrated state, the clean one for its current, GPG-referent-corrected state)
+— both true, both kept, per the ledger's own append-only, latest-content-wins design.
+
+`gates/doc_shapes.py` / `gates/doc_attestation_presence.py` gate mode: clean, 2/2
+docs in scope (both design/WORK-STATUS-OFFERING.md and HANDOFF.md, checked against their
+FINAL content). `gates/link_integrity.py`: clean (1220 unchecked-but-non-failing anchor notes,
 0 broken paths).
 
 Both B rounds for each document were genuinely fresh `Agent` dispatches (no shared context with

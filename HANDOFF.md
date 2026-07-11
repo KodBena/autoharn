@@ -1,8 +1,10 @@
 # HANDOFF (rewritten 2026-07-11 late evening, session e4410ef6 — fresh-context entry point)
 
-This file orients the next orchestrating session (Fable-class if available; otherwise
-CLAUDE.md's ORCHESTRATION rules govern who may do what). It condenses and points; it does
-not duplicate. The SSOTs it names outrank any summary in it, and every claim below is
+This file orients the next orchestrating session (Fable-class — a session run by Fable, the
+maintainer's senior AI collaborator persona named throughout this project's law — if
+available; otherwise [CLAUDE.md](CLAUDE.md)'s ORCHESTRATION rules govern who may do what). It condenses and
+points; it does not duplicate. The [SSOTs](GLOSSARY.md#ssot) (single sources of truth) it
+names outrank any summary in it, and every claim below is
 re-observable — cite nothing from here without re-checking at the source it names. It
 supersedes the prior HANDOFF wholesale (that revision predated this entire day; it
 survives in git as commit 9ecc23a).
@@ -68,42 +70,48 @@ What this day added, each witnessed (BACKLOG's dated tail carries every disposit
   toolchain** (link-integrity gate, doc_shapes gate, seeded acronym advisory, per-world
   doc gate via apparatus) landed from the morning's legibility indictment.
 
-## Open work, ranked, with owners
+## Open work
 
-1. **Maintainer decisions, all prepared, none blocking run 11:** (a) review_gap ruling —
-   design/REVIEW-GAP-SCOPE-SEMANTICS-RULING.md, one yes/no, recommend YES on option A;
-   (b) the two ADR amendment texts drafted 2026-07-10 — held VERBATIM in the previous
-   HANDOFF revision (git commit 9ecc23a, open-work item 1(b)); on "ratified", restore
-   from there and append, dated, maintainer-attributed; (c) ADR-0009 re-instancing
-   yes/no — law/adr/0009-performance-investigation-discipline.md is an unadapted copy
-   whose Scope clause still binds the source project's tree; the question is whether to
-   re-instance it for autoharn's experiment domain (finding filed in BACKLOG,
-   2026-07-10); (d) research-ledger apply — bootstrap/apply-research-ledger.sh, armed, one
-   word; (e) pg_hba hardening — design/PG-HBA-HARDENING.md, unchanged; (f) cost/timing
-   accounting — designed-unbuilt, waits on his privacy call (ephemera aggregates only);
-   (g) OPTIONAL: PGP-signed commissions — stance given 2026-07-11 (narrow yes, at the
-   commission seam only), design memo on request.
-2. **Run-11 watch duties (live now):** the signed-commission intake is a first — verify
-   the agent decomposed FROM row 1, each decomposition row citing it through `--refs`
-   (the ledger's typed row-to-row citation field); run `./audit` and
-   `./distance-to-clean` against it mid/post-run; classify any closure struggles under
-   the standing three-class rubric (BACKLOG "Maintainer priority ruling", 2026-07-11)
-   before proposing anything.
-3. **Configuration commission (queued behind run-11 quiet time):** CONFIGURATION.md
-   (adopter-facing, one page, ADR-0017-compliant), the apparatus unknown-key sweep
-   (typo'd mechanism names are silently ignored today — fail-open), the autoharn
-   install-path contract statement, and the pg_hba/setup FAQ (maintainer disposed
-   provisioning as FAQ-scope, 2026-07-11).
-4. **Audit verb completions, filed:** the SQL-floor differential for `./audit` (single
-   ASP producer today — not marriage-grade), the `--retain` default question,
-   session-level granularity, Part 3 (deontic/temporal preamble program).
-   design/CONTEMPORANEITY-AUDIT.md's Status section is the ledger of what is and is not
-   built.
-5. **Prudential, filed only:** attestation-record adjudication field (seam found at the
-   first live escalation); detector Register 1 (design/ARTIFACT-VS-REQUIREMENTS-
-   DETECTOR.md); kernel-column candidates (superseded_by, tier, alternatives) all
-   awaiting witnessed need; an ASP/SQL consumer for commission rows (named in s25's own
-   header).
+Open work for the autoharn project itself is no longer tracked in this file — it lives in a
+standing, Postgres-backed work tracker deployed at the repository root by
+[`bootstrap/track-work.sh`](bootstrap/track-work.sh); see
+[design/WORK-STATUS-OFFERING.md](design/WORK-STATUS-OFFERING.md) for what that tracker is and
+what question it closes (the omega work-status question — this repo's own repeated,
+never-shipped attempt to answer "how does a project track its own open work", named and closed
+in that document's own opening section). From the autoharn checkout root, run `./pickup` for
+the live resume brief (every open item's full spec text) or `./distance-to-clean` for one
+command reporting how many review/question/work-item obligations are outstanding; `./led work
+list` / `./led work violations` give the disaggregated per-item views.
+
+Each tracked unit is one `work_opened` row — the tracker's append-only ledger event that opens
+a work item under a stable slug, per `led work open <slug> <title>`; a "commission" below is
+one such item whose title bundles several related sub-tasks (a maintainer-approved unit of
+work, not a separate ledger concept) — counted here as ONE item regardless of how many
+sub-tasks its title names. By this count, verified live against `./led work list`, the
+migrated inventory (as of 2026-07-11) has exactly 10 items in the OPEN state, numbered 1-10
+below; a further 3 items were migrated already CLOSED (not counted in the 10) and are listed
+separately afterward.
+
+The 10 open items: (1-6) six maintainer decisions each awaiting a yes/no — review_gap scope
+ruling (which countersign-obligation semantics apply, see `design/REVIEW-GAP-SCOPE-SEMANTICS-
+RULING.md`), two ADR amendment texts (drafted 2026-07-10, awaiting ratification), ADR-0009
+re-instancing (whether to adapt `law/adr/0009-performance-investigation-discipline.md` for this
+project), research-ledger apply (running `bootstrap/apply-research-ledger.sh`), pg_hba
+hardening (per `design/PG-HBA-HARDENING.md`), and PGP-signed commissions (an optional design
+memo, stance already given); (7) the configuration commission, bundling `CONFIGURATION.md`
+plus three related follow-ups, still queued; (8) the audit-verb completions, bundling the
+SQL-floor differential for `./audit` plus three related follow-ups, still queued; (9) the
+small-follow-ups commission, bundling six queued items, described in its own `work_opened`
+statement as blocked behind "the GPG merge" — the implementation of
+[design/GPG-TRUST-LAYER.md](design/GPG-TRUST-LAYER.md), in progress in a concurrent worktree
+as of this revision; (10) this offering's own build, currently claimed by this session.
+
+Separately, 3 items were migrated already CLOSED, outside the count above: a 7th
+maintainer-decision item, cost/timing accounting, resolution dropped; two others, resolution
+superseded and resolution deferred respectively. Each closed item carries its disposition and
+its citing `BACKLOG.md` entry in the statement text of its own `work_opened` row, readable via
+`./led work list`. This file's "Open work" section is retired
+as of this revision; do not repopulate it here — update the tracker instead.
 
 ## Standing cautions (paid for; details in BACKLOG's tail)
 
