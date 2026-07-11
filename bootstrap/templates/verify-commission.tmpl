@@ -14,9 +14,20 @@ kernel/lineage/s25's own closure statement), and SIGNED (FULL, plus a detached G
 banked alongside the world at `.claude/commission-<id>.asc`). This verb recomputes the
 statement's digest from the ledger row's OWN current bytes (never trusting a caller-supplied
 digest — the same posture gates/doc_attestation_presence.py already takes for its content hash)
-and checks any banked `.asc` against it, using ONLY the committed public keys in
-`law/keys/*.asc` (autoharn's own — see filing/gpg_trust.py, shared with `attest-tags` and
-`verify-chain`) — never the operator's ambient GPG keyring.
+and checks any banked `.asc` against it, using ONLY the committed public keys in THIS
+DEPLOYMENT's own `keys/` directory (a sibling of its `deployment.json`, resolved the same way
+`.claude/commission-<id>.asc` already is — see `_world_root()` below) — never the operator's
+ambient GPG keyring, and never autoharn's own `law/keys/` (see filing/gpg_trust.py, shared with
+`attest-tags`, for the scratch-keyring mechanics both callers share; `attest-tags` and this verb
+now point that shared mechanism at TWO DIFFERENT directories, deliberately — autoharn's own
+`law/keys/` verifies only autoharn's own `ratified/*` tags, this deployment's `keys/` verifies
+only this deployment's own commissions; design/GPG-TRUST-LAYER.md §7 and
+design/GPG-TRUST-LAYER-FAQ.md §3 name the split. KEY-RESIDENCE REVISION, 2026-07-11 evening: an
+earlier version of this file resolved `AUTOHARN / "law" / "keys"` here — a maintainer finding
+the same day ("THIS repository should not have anything to do with end user's keys") named this
+as a conflation of autoharn's own law-signing with every deployment's commission-signing; fixed
+by resolving the deployment's own `keys/` instead, the same residence `.claude/commission-<id>.asc`
+already uses).
 
 VERDICTS (exit code in parentheses) — exactly the three the spec names, nothing folded in:
   VERIFIED         (0) — a `.claude/commission-<id>.asc` exists and its signature verifies
@@ -33,7 +44,8 @@ TWO TYPED REFUSALS (exit code in parentheses) — distinct from all three verdic
 neither precondition leaves any of the three actually decidable:
   gpg missing       (2) — none of the three verdicts can be computed without gpg itself.
   NO-COMMITTED-KEY  (3) — a `.claude/commission-<id>.asc` EXISTS (a claim of SIGNED-mode
-                         strength) but `law/keys/*.asc` is empty (AWAITING-KEY) — there is
+                         strength) but this deployment's OWN `keys/*.asc` is empty
+                         (AWAITING-KEY — see `keys/README.md`) — there is
                          nothing to check the claimed signature AGAINST, which is not the same
                          fact as "the signature does not match" (FORGED-OR-CORRUPT) or "no
                          signature was claimed" (UNSIGNED). Mirrors `attest-tags`' own
@@ -80,8 +92,9 @@ distance-to-clean.tmpl exactly (PICKUP_DEPLOYMENT, AUTOHARN, `SET ROLE <dep.role
 executes IN PLACE out of the autoharn checkout (the "live verbs" ruling); ADR-0012 P1, one
 resolution mechanism, not a fourth hand-copy.
 
-Read-only against the ledger throughout (a single SELECT); the only filesystem read is the
-world's own `.claude/commission-<id>.asc`, if present. Lazy imports banned.
+Read-only against the ledger throughout (a single SELECT); the only filesystem reads are the
+world's own `.claude/commission-<id>.asc` (if present) and its own `keys/*.asc` (if any — see
+KEY-RESIDENCE REVISION above). Lazy imports banned.
 """
 from __future__ import annotations
 
@@ -158,17 +171,21 @@ def signing_mode(row: dict) -> str:
 
 
 class NoCommittedKey(Exception):
-    """A `.asc` is banked (a claim of SIGNED-mode strength) but law/keys/*.asc is empty — there
-    is nothing to check the claim against. Distinct from GpgUnavailable (gpg itself missing) and
-    from a genuine FORGED-OR-CORRUPT (a committed key exists and the signature fails against
-    it). See this module's REVISION NOTE for why this is not folded into FORGED-OR-CORRUPT."""
+    """A `.asc` is banked (a claim of SIGNED-mode strength) but THIS DEPLOYMENT's own
+    `keys/*.asc` is empty — there is nothing to check the claim against. Distinct from
+    GpgUnavailable (gpg itself missing) and from a genuine FORGED-OR-CORRUPT (a committed key
+    exists and the signature fails against it). See this module's REVISION NOTE for why this is
+    not folded into FORGED-OR-CORRUPT, and this module's KEY-RESIDENCE REVISION note (module
+    docstring) for why the keys directory checked is this deployment's own, never autoharn's
+    `law/keys/`."""
 
 
 def verify(dep, row: dict, world_root: Path) -> tuple[str, str]:
     """Returns (verdict, detail). verdict in {VERIFIED, UNSIGNED, FORGED-OR-CORRUPT}. Raises
     gpg_trust.GpgUnavailable if a .asc exists but gpg itself is not on PATH, or NoCommittedKey if
-    a .asc exists but law/keys/ is empty — both are the caller's problem to report as typed
-    refusals, distinct from all three verdicts."""
+    a .asc exists but THIS DEPLOYMENT's own keys/ (world_root / "keys", never autoharn's own
+    law/keys/) is empty — both are the caller's problem to report as typed refusals, distinct
+    from all three verdicts."""
     asc_path = world_root / ".claude" / f"commission-{row['id']}.asc"
     if not asc_path.exists():
         mode = signing_mode(row)
@@ -176,7 +193,12 @@ def verify(dep, row: dict, world_root: Path) -> tuple[str, str]:
                              f"commission, not a defect (spec §3: UNSIGNED is a weaker claim, "
                              f"never a failure)")
 
-    keys_dir = AUTOHARN / "law" / "keys"
+    # THIS DEPLOYMENT's own keyring — a sibling of deployment.json, never autoharn's law/keys/
+    # (see this module's KEY-RESIDENCE REVISION note above for why). `gpg_trust.committed_keys`
+    # already degrades honestly (returns []) if `keys/` does not exist at all -- a deployment
+    # scaffolded before this directory was introduced behaves identically to one whose keys/ is
+    # simply empty, no special-casing needed here.
+    keys_dir = world_root / "keys"
     keys = gpg_trust.committed_keys(keys_dir)
     if not keys:
         raise NoCommittedKey(

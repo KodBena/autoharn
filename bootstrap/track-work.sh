@@ -1,7 +1,7 @@
 #!/bin/sh
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-11T20:34:46Z
-#   last-change: 2026-07-11T20:38:55Z
+#   last-change: 2026-07-11T22:27:11Z
 #   contributors: e4410ef6/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -11,9 +11,11 @@
 # WORK-STATUS-OFFERING.md is the closure record and the item-by-item mapping table).
 #
 # WHAT THIS IS, IN ONE SENTENCE: applies this repo's kernel lineage to a fresh schema pair
-# named for the target project, writes deployment.json + the five read/write verbs (led,
-# pickup, distance-to-clean, judge, audit) as live shims into <project-dir>, and registers the
-# three standard principals — nothing else. It is deliberately NOT `bootstrap/new-project.sh`:
+# named for the target project, writes deployment.json + this deployment's OWN keys/ directory
+# (design/GPG-TRUST-LAYER.md §7's key-residence split — never autoharn's own law/keys/) + the
+# seven read/write verbs (led, pickup, distance-to-clean, judge, audit, verify-commission,
+# verify-chain) as live shims into <project-dir>, and registers the three standard principals —
+# nothing else. It is deliberately NOT `bootstrap/new-project.sh`:
 # that script stands up a GOVERNED WORLD (hooks wired, CLAUDE.md preamble, a stamp secret, the
 # runs-are-strictly-linear regime). This script stands up a WORK TRACKER — a standing,
 # indefinite-lifetime Postgres-backed replacement for a hand-edited BACKLOG/TODO file, usable by
@@ -55,7 +57,7 @@
 #     number, NO "settles into dust" event, and NO defined end — it is a perpetual work-tracking
 #     store for a project's whole lifetime, the same way a project's issue tracker or TODO.md
 #     never "expires". It is applied ONCE and then simply used, indefinitely, by `./led work
-#     open/claim/close`, `./pickup`, `./distance-to-clean` — the same five verbs a world uses,
+#     open/claim/close`, `./pickup`, `./distance-to-clean` — the same seven verbs a world uses,
 #     wielded here as a persistent tool rather than a per-run habitat.
 #
 # WHY NO HOOKS ARE WIRED (deliberate, not an oversight — say this loudly, in the output too): a
@@ -239,15 +241,23 @@ sedsubst() {
         -e "s|__CREATED_AT__|$CREATED_AT|g" \
         -e "s|__CREATE_CMD__|$CREATE_CMD|g"
 }
-# (sedsubst is defined for parity with new-project.sh's convention and future template growth;
-# none of the five verb shims below currently contain a __TOKEN__ — they are pure `exec` shims,
-# same as new-project.sh's own — so it is unused today. Kept rather than omitted: the day a verb
-# template needs a substituted value, this script does not need a second mechanism invented.)
+# (sedsubst is used below by keys/README.md.tmpl -- the deployment-local keys directory stub --
+# and remains available for future template growth; none of the verb shims below currently
+# contain a __TOKEN__ -- they are pure `exec` shims, same as new-project.sh's own.)
 
-echo "-- the five verbs (led, judge, pickup, audit, distance-to-clean): thin shims exec'ing"
-echo "   autoharn's live templates, identical mechanism to new-project.sh's own (a template fix"
-echo "   in bootstrap/templates/ reaches this deployment instantly, same as every governed world) --"
-for verb in led judge pickup audit distance-to-clean; do
+echo "-- keys/ (this deployment's OWN GPG keyring -- SIGNED commissions, design/GPG-TRUST-LAYER.md"
+echo "   §3 -- deliberately separate from autoharn's own law/keys/, which is scoped exclusively to"
+echo "   autoharn's own ratified/* tags and has no bearing on this deployment) --"
+mkdir -p "$PROJECT_ROOT/keys"
+sedsubst < "$TEMPLATES/keys-README.md.tmpl" > "$PROJECT_ROOT/keys/README.md"
+echo "wrote keys/README.md (AWAITING-KEY stub; commit THIS deployment's own signing key here --"
+echo "see design/GPG-TRUST-LAYER-FAQ.md §3 for the ceremony -- never to autoharn's law/keys/)"
+
+echo "-- the seven verbs (led, judge, pickup, audit, distance-to-clean, verify-commission,"
+echo "   verify-chain): thin shims exec'ing autoharn's live templates, identical mechanism to"
+echo "   new-project.sh's own (a template fix in bootstrap/templates/ reaches this deployment"
+echo "   instantly, same as every governed world) --"
+for verb in led judge pickup audit distance-to-clean verify-commission verify-chain; do
     cat > "$PROJECT_ROOT/$verb" <<SHIM
 #!/bin/sh
 HERE="\$(cd "\$(dirname "\$0")" && pwd)"
@@ -277,3 +287,7 @@ echo "  ./led work close <slug> shipped --witness \"<ref>\"   # close it, witnes
 echo "  ./pickup                             # live resume brief incl. IN-FLIGHT work items"
 echo "  ./distance-to-clean                  # composed closure-debt read"
 echo "  ./led work violations                # cycles / dangling deps / duplicate opens"
+echo ""
+echo "keys/README.md (AWAITING-KEY) explains this deployment's OWN GPG keyring: commit a public"
+echo "key there (never to autoharn's law/keys/) to move SIGNED commissions from NO-COMMITTED-KEY"
+echo "to VERIFIED -- ./verify-commission --id <id>; see design/GPG-TRUST-LAYER-FAQ.md §3."

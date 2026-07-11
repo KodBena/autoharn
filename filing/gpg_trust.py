@@ -1,26 +1,37 @@
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-11T19:56:25Z
-#   last-change: 2026-07-11T19:56:25Z
+#   last-change: 2026-07-11T21:56:54Z
 #   contributors: e4410ef6/main
 # <<< PROVENANCE-STAMP <<<
 
-"""gpg_trust -- the ONE home for "build a throwaway GNUPGHOME from this repo's committed
-public keys" (design/GPG-TRUST-LAYER.md; ADR-0012 P1). Three callers need exactly this
-operation and none else: `attest-tags` (Rung 1, verifies `ratified/*` git tags),
-`bootstrap/templates/verify-commission.tmpl` (Rung 2, verifies a signed commission's detached
-signature), and `bootstrap/templates/verify-chain.tmpl` (Rung 3, verifies a signed chain-head).
-Before this module each would have re-authored "import law/keys/*.asc into a scratch keyring,
-never the operator's ambient one" independently -- a second/third hand-copy of the same fact
-(ADR-0012 P1's B cancer: SSOT dissolved). This module is the one definition; every caller reads
-it, none re-derives it.
+"""gpg_trust -- the ONE home for "build a throwaway GNUPGHOME from a set of committed public
+keys" (design/GPG-TRUST-LAYER.md; ADR-0012 P1). Two callers need exactly this operation and
+none else: `attest-tags` (Rung 1, verifies THIS repository's own `ratified/*` git tags, against
+`law/keys/*.asc`) and `bootstrap/templates/verify-commission.tmpl` (Rung 2, verifies a signed
+commission's detached signature, against a DEPLOYMENT's own `keys/*.asc` -- a sibling of that
+deployment's `deployment.json`, never `law/keys/`). Before this module each would have
+re-authored "import a set of committed keys into a scratch keyring, never the operator's ambient
+one" independently -- a second hand-copy of the same fact (ADR-0012 P1's B cancer: SSOT
+dissolved). This module is the one definition; every caller reads it, none re-derives it --
+callers differ in WHICH directory they pass to `committed_keys()`/`build_scratch_keyring()`,
+never in HOW a scratch keyring gets built from whatever directory that is (design/
+GPG-TRUST-LAYER.md §7's key-residence split: two trust domains, one shared mechanism).
+
+`bootstrap/templates/verify-chain.tmpl` (Rung 3) is NOT a caller of this module today, despite
+earlier drafts of this docstring and design/GPG-TRUST-LAYER-FAQ.md claiming otherwise -- its
+signed-head ceremony is an ad hoc `gpg --detach-sign` / `gpg --verify` pair run by the operator
+directly against their own ambient keyring (design/GPG-TRUST-LAYER-FAQ.md §6), not a
+committed-key lookup through this module. Corrected here rather than left to perpetuate the
+same conflation a maintainer finding already caught once in the FAQ (2026-07-11, "key-residence
+refactor").
 
 WHY A SCRATCH KEYRING, ALWAYS (design/GPG-TRUST-LAYER.md §7): "the PUBLIC key is committed ...
 so verification is self-contained for any repo clone." Verifying against the operator's default
 `~/.gnupg` keyring would make a verdict depend on whatever keys happen to be imported on THIS
 machine -- not reproducible from a fresh clone, and silently permissive if the operator's own
 keyring happens to contain the forger's key too (imported for some unrelated reason). A scratch
-GNUPGHOME containing exactly the committed `law/keys/*.asc` files closes that: the verdict
-depends only on what this repository itself vouches for.
+GNUPGHOME containing exactly the committed keys closes that: the verdict depends only on what
+the relevant trust domain (autoharn's own law, or one specific deployment) itself vouches for.
 
 Lazy imports are banned (CLAUDE.md, 2026-07-02): everything below imports at module load.
 """

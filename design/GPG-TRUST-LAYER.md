@@ -5,11 +5,14 @@ is applied to this project: what gets signed, by whom, what each signature prove
 what is deliberately left unsigned. It is written for the maintainer who will hold the
 key and for the executor who builds from it.
 
-STATUS: Fable-authored spec, 2026-07-11. The direction is maintainer-ratified same day
-("let's do it, all of it, not just the easy part"); the session sign-off concept in §5
-is the maintainer's own contribution, recorded near-verbatim. Implementation is
-commissioned from this document per the delegation contract (CLAUDE.md's ORCHESTRATION
-section: a Sonnet-class executor builds, this document is its spec). The s26 kernel
+STATUS: this spec was authored by Fable (this project's name for its senior, Opus-class
+authoring model, distinct from the Sonnet-class model that executes most day-to-day work —
+see [CLAUDE.md's ORCHESTRATION section](../CLAUDE.md#orchestration--the-standing-delegation-contract-2026-07-09))
+on 2026-07-11. The direction is maintainer-ratified
+same day ("let's do it, all of it, not just the easy part"); the session sign-off concept in
+§5 is the maintainer's own contribution, recorded near-verbatim. Implementation is
+commissioned from this document per the delegation contract ([CLAUDE.md's ORCHESTRATION
+section](../CLAUDE.md#orchestration--the-standing-delegation-contract-2026-07-09): a Sonnet-class executor builds, this document is its spec). The s26 kernel
 delta below is class-ratified in shape — the pre-ratified class of strictly additive
 kernel changes, defined in the same ORCHESTRATION section — and is proven before
 landing on a throwaway [scratch schema](../GLOSSARY.md#scratch-schema), both polarities.
@@ -141,21 +144,40 @@ revocation, quorum questions) deserves its own ratification when a second human 
 
 ## 7. Key management (the real cost, kept FAQ-sized)
 
-The maintainer generates one keypair, once (`gpg --full-generate-key`, Ed25519 type).
-Strongly preferred:
-hardware-backed (a YubiKey-class token) — the private key physically cannot leave the
-token and each signature requires a touch, which makes every signature evidence of a
-deliberate human act. Print the revocation certificate and store it offline. The PUBLIC
-key is committed at `law/keys/maintainer.asc` with its fingerprint stated in the law,
-so verification is self-contained for any repo clone. Rotation: revoke, generate,
-commit the new public key, re-sign the current chain heads — a documented one-page
-procedure, exercised once on the test key so it is witnessed, not aspirational.
+The maintainer generates one keypair, once (`gpg --full-generate-key`, Ed25519 type). A
+hardware-backed keypair (a YubiKey-class token) is strongly preferred: the private key
+physically cannot leave the token and each signature requires a touch, which makes every
+signature evidence of a deliberate human act. Print the revocation certificate and store it
+offline.
+
+#### Key residence — two trust domains, kept apart
+
+(Refined 2026-07-11, after a maintainer finding that this section's original wording
+conflated them — "THIS repository should not have anything to do with end user's keys.")
+The same physical keypair may sign in both domains, but the PUBLIC key is committed to a
+DIFFERENT place depending on what it is signing, and a verifying verb reads only its own
+domain's directory, never the other's: **autoharn's own law** — Rung 1's signed
+`ratified/*` tags on THIS repository — is verified by `./attest-tags` against
+`law/keys/*.asc`, fingerprint stated in `law/keys/README.md`; that directory is scoped
+exclusively to autoharn's own law-signing and knows nothing of any downstream deployment.
+**Every scaffolded deployment** — a world (`new-project.sh --new-world`) or a standing
+project (`track-work.sh`) — carries its OWN `keys/` directory next to its own
+`deployment.json`, and `verify-commission` (Rung 2) and any future signed-head verification
+path (Rung 3) resolve only THAT deployment's `keys/`, never autoharn's `law/keys/` — an end
+user standing up a deployment commits their signing key to their own project, never to this
+repository. Rotation, in either domain, follows the same four steps: revoke the old key,
+generate a new one, commit the new public key at that domain's own path, and re-sign the
+current chain heads — a documented one-page procedure, exercised once on a script-generated
+THROWAWAY test key (defined in the next paragraph) so it is witnessed, not aspirational.
 
 Every verification step above ships as a scripted verb (self-application ruling: no
-prose-plus-hand-gpg procedures). Witness strategy: fixtures use an apparatus-generated
-THROWAWAY key, clearly marked test-only, so both polarities are witnessed end-to-end
-without waiting on the maintainer's real key; the real key slots in purely via
-`law/keys/` and configuration.
+prose-plus-hand-gpg procedures). Witness strategy: fixtures use a script-generated (this
+project's word for its own tooling is "apparatus" — CAPABILITIES.md's own opening line calls
+it "autoharn's governance apparatus"; a script-generated key is one the fixture harness itself
+creates via a batch `gpg --generate-key`, no human involved) THROWAWAY key, clearly marked
+test-only, so both polarities are witnessed end-to-end without waiting on the maintainer's
+real key; the real key slots in purely via each domain's own keys directory and
+configuration.
 
 ## 8. Adoption order and status
 

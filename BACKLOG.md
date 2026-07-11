@@ -4693,3 +4693,132 @@ in the entry immediately above this one) remains untouched, unrelated to this pa
 Tracker item closed: `./led work close small-follow-ups-commission shipped --witness
 "ea55214..937cfa7"` (six commits: `ea55214` item 1, `c8dc2ea` item 2, `1e8a3f8` items 3+6,
 `1e51181` item 4, `3c3b6f9` item 5, `937cfa7` item 7 + CAPABILITIES item 31).
+## Key-residence refactor: `law/keys/` scoped to autoharn's own law; every deployment gets its own `keys/` (Sonnet, 2026-07-11/12)
+
+Refines the GPG trust layer's key residence per the maintainer finding recorded above (`led`
+row 28, "Key-residence conflation... THIS repository should not have anything to do with end
+user's keys"): the FAQ had directed every end user to commit their signing key to autoharn's
+own `law/keys/`, conflating autoharn's own law-signing domain (Rung 1, `ratified/*` tags) with
+every downstream deployment's commission-signing domain (Rung 2/3). Worked from the isolated
+worktree at `.claude/worktrees/agent-a75f5048475925f82`; discovered, same as the prior GPG
+commission, that the worktree branch was 154 commits behind `next`'s live tip with zero unique
+commits of its own — `git merge --ff-only next` was safe and used before any edit began (named
+per the self-application rule; a clean fast-forward, not a `reset --hard`, since the worktree
+had no divergent history to discard).
+
+**New layout, in two sentences.** `law/keys/` remains, but is now scoped EXPLICITLY to
+autoharn's own law-signing — `./attest-tags` is the only verb that reads it, and nothing else
+does. Every scaffolded deployment (a world via `bootstrap/new-project.sh --new-world`, or a
+standing project via `bootstrap/track-work.sh`) now carries its OWN `keys/` directory next to
+its `deployment.json`, and `verify-commission` resolves ONLY that directory — never autoharn's
+`law/keys/` — with the `NO-COMMITTED-KEY` refusal's teach-text naming the deployment-local path.
+
+**Per-file changes.**
+- `design/GPG-TRUST-LAYER.md` §7 — the key-residence sentence refined to name the two domains
+  explicitly; the spec's technical content (keygen, hardware token, revocation cert, rotation)
+  otherwise stands, per the commission's own scope.
+- `design/GPG-TRUST-LAYER-FAQ.md` — §3 split into 3a (autoharn's own law) / 3b (every
+  deployment), each with its own commit ceremony; a new fingerprint-vs-public-key-vs-revocation-
+  certificate passage appended to §1 (the maintainer's own live confusion, named as FAQ-worthy
+  in the commission); §5's closing NO-COMMITTED-KEY paragraph, §6 (a clarifying note that the
+  signed-head ceremony reads no committed-keys directory at all), §7 (throwaway-key export
+  guidance corrected — `verify-commission` has no `AUTOHARN`/`--keys-dir` override for keys any
+  more), §8 Step 3, §9's trust-boundary bullet, and Related all updated to match.
+- `law/keys/README.md` — rewritten to state the autoharn-only scope plainly, with an explicit
+  "this directory has nothing to do with any deployment's own signing" section and a pointer to
+  the FAQ's two-domain split; the old "what tools do" section's `verify-commission`/`verify-chain`
+  entries removed since neither reads this directory (verify-chain never did — see below).
+- `bootstrap/templates/keys-README.md.tmpl` (NEW) — the deployment-local `keys/README.md` stub
+  every scaffold writes, AWAITING-KEY state stated honestly, sedsubst-driven (`__PROJECT_NAME__`,
+  `__CREATED_AT__`).
+- `bootstrap/track-work.sh` — now creates `<project-dir>/keys/` + writes the stub from the new
+  template, and extends its verb-shim loop from five verbs to seven (`verify-commission`,
+  `verify-chain` added — `verify-chain` degrades honestly to `UNAVAILABLE` on a standing
+  deployment's pre-s26 kernel, no s26 apply added here, out of this commission's scope).
+- `bootstrap/templates/verify-commission.tmpl` — `keys_dir` changed from `AUTOHARN / "law" /
+  "keys"` to `world_root / "keys"` (the same residence `.claude/commission-<id>.asc` already
+  uses); module docstring, `NoCommittedKey`, and `verify()`'s own comments updated to match, with
+  a REVISION NOTE naming the finding and the fix.
+- `filing/gpg_trust.py` — module docstring corrected: `verify-chain.tmpl` was claimed as a third
+  caller of the shared scratch-keyring mechanism, but it has never actually imported this module
+  (grep-verified) — a pre-existing doc inaccuracy, flagged and fixed in passing per CLAUDE.md's
+  engineering-responsibility corollary, not a code change (there was nothing to relocate).
+- `CAPABILITIES.md` items 29/30 — item 29 records the key-residence revision and the frozen
+  `new-project.sh` remainder; item 30 adds a note correcting the same `gpg_trust.py` inaccuracy
+  for `verify-chain` (it reads no committed-keys directory in either domain — its signed-head
+  ceremony is a direct `gpg --verify` against the operator's own ambient keyring).
+
+**Frozen, and why.** `bootstrap/new-project.sh` was left untouched: `pgrep -a claude` at commission
+start showed multiple live sessions with cwd `/home/bork/w/vdc/1/autoharn` (the shared checkout,
+not this worktree), so per the commission's own liveness rule this script was read-only this
+pass. The mechanism does not depend on the change (`gpg_trust.committed_keys()` already degrades
+an absent `keys/` directory to "zero committed keys," identical in effect to an empty one — the
+`NO-COMMITTED-KEY` refusal fires correctly on a world scaffolded by today's unmodified
+`new-project.sh`, witnessed live in the re-run fixture below); only the friendly `keys/README.md`
+stub is missing until this diff lands. The exact pending diff, to apply once no live session
+is running there:
+1. In the `--new-world` branch's `sedsubst` table (already carries `__PROJECT_NAME__`/
+   `__CREATED_AT__`), add, right after the `.claude/` wiring block and before the seven-verb
+   shim loop: `mkdir -p "$PROJECT_ROOT/keys"` then
+   `sedsubst < "$TEMPLATES/keys-README.md.tmpl" > "$PROJECT_ROOT/keys/README.md"` (mirrors
+   `track-work.sh`'s own new block verbatim — same template, same two lines).
+2. In the closing `--new-world` echo block's SIGNED-mode paragraph, replace
+   `"a real key is committed at law/keys/maintainer.asc"` (line ~394) and the two adjacent lines
+   with the deployment-local path (`$PROJECT_ROOT/keys/`), matching the FAQ §3b wording.
+3. No other line in `new-project.sh` names `law/keys` in a way that needs to change (the seven-
+   verb shim loop and `verify-commission`/`verify-chain` shim wiring are already residence-
+   agnostic — they just `exec` the templates, which now resolve `keys/` themselves).
+
+**WITNESSED.** `seen-red/verify-commission/run_fixtures.py` rewritten to vary
+`world_dir/keys/` (writing the test key in for VERIFIED/FORGED-OR-CORRUPT, temporarily moving
+it out — never deleting — for NO-COMMITTED-KEY) instead of an `AUTOHARN` override; re-run clean,
+all five cases, zero residue (schema/role check after teardown: empty). Quoted output, the
+NO-COMMITTED-KEY case (the one the commission called out by name):
+```
+=== d-no-committed-key-distinct-refusal ===
+  [ok] exit=3 refusal=NO-COMMITTED-KEY
+```
+and the full run: `a-unsigned` exit=0 UNSIGNED; `b-verified` exit=0 VERIFIED; `c-forged-tampered-
+bytes` exit=1 FORGED-OR-CORRUPT; `d-no-committed-key-distinct-refusal` exit=3 NO-COMMITTED-KEY;
+`e-gpg-absent-typed-refusal` exit=2 GPG-UNAVAILABLE. `seen-red/attest-tags/run_fixtures.py` and
+`seen-red/s26-row-hash-chain/run_fixtures.py` re-run UNMODIFIED as regression confirmation (both
+unaffected by this refactor — attest-tags stays on autoharn's own domain by design;
+`verify-chain.tmpl` never read a committed-keys directory at all, confirmed by grep before
+touching anything): both green, zero residue. Gates re-run clean: `gates/no_lazy_imports.py`
+(exit 0), `gates/fixture_census.py` (43 seen-red dirs, clean — no new dirs added, so no registry
+change needed), `gates/link_integrity.py` and `gates/doc_shapes.py` against every edited `.md`
+(clean, 0 findings).
+
+**BOUNDARY-HYGIENE CLASS, second instance.** Filed per the finding's own framing: upstream/
+downstream trust-domain conflation — a mechanism built for THIS repository's own governance
+(autoharn's law-signing) documented as if every consumer of the mechanism (a scaffolded
+deployment) should reach back INTO this repository rather than owning its own instance. First
+instance was the baked install path (an earlier finding, same class, different mechanism); this
+is the second. Same acceptance test both times: "usable as a library" — would an end user
+standing up a deployment ever need write access to, or knowledge of, autoharn's own repository
+internals? Here the answer was accidentally yes (commit your key to `law/keys/`) until this
+pass; the fix is the general shape any future instance of this class should match — a
+deployment-local directory, scaffold-written, resolved by the deployment's own verbs, with the
+upstream-only directory's README stating its scope in the first paragraph rather than leaving it
+to infer from usage.
+
+**Attestation loop.** `design/GPG-TRUST-LAYER.md` (opening + §7), `design/GPG-TRUST-LAYER-FAQ.md`
+(full document, this pass's own rewrite), `law/keys/README.md` (full document, a fresh rewrite),
+and `CAPABILITIES.md` (opening + items 29/30) each ran the A:B:C fresh-context loop
+(`design/ABC-AUDIT-LOOP-RECIPE.md`) before this entry closed, B spawned synchronously
+(`run_in_background: false`, per that recipe's own hard requirement) both rounds, four B
+instances per document (round 1 + round 2), eight total. Round 1: DEFECT on all four (7, 5, 4,
+and 5 findings respectively — link-on-first-use gaps, undefined jargon, a dropped gloss, bare
+noun-phrase bullets); every finding repaired by C (this session) before round 2. Round 2:
+`CAPABILITIES.md` came back CLEAN (all four Rule 1 clauses enumerated); the other three still
+found small residual defects (a wrong section cross-reference, "apparatus"/"HMAC"/"Ed25519" used
+before being glossed, two bare re-stated filenames breaking the document's own link convention,
+a doubled-preposition sentence) — 2, 4, and 3 findings respectively. Per ADR-0017's own two-round
+cap, none of the three got a third B round: each is recorded `escalated: true` and the orchestrator
+(this session) applied round 2's suggested repairs verbatim before recording the attestation,
+mirroring the precedent this same BACKLOG already set for the GPG trust layer's own first pass
+(entry above, "Two escalations on one small documentation set"). All four records appended to
+`attestations/doc-legibility-attestations.jsonl`; `gates/doc_attestation_presence.py` run in gate
+mode over all four afterward reports clean (0 findings) — the record's content hash matches the
+FINAL, post-repair bytes in every case, since the record is written after the last repair, not
+before.

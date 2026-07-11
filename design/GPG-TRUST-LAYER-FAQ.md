@@ -9,11 +9,16 @@ walkthrough for each ceremony, plus key management (generation, revocation, rota
 GPG (GNU Privacy Guard, the standard OpenPGP signing tool) basics an operator who has never used
 it needs.
 
-Every command below was exercised, for real, against a THROWAWAY Ed25519 test key generated
-specifically for this witness pass — never a real maintainer key. Output quoted in this page is
-real command output from that pass, not a hypothetical. Where a step needs the maintainer's real
-key (which does not exist yet — see [law/keys/README.md](../law/keys/README.md), currently
-AWAITING-KEY), that is stated explicitly rather than silently assumed.
+Every command below was exercised, for real, against a THROWAWAY Ed25519 (a modern, fast,
+small elliptic-curve signing algorithm — §1 below says more) test key generated specifically
+for this witness pass — never a real maintainer key. Output quoted in this page is
+real command output from that pass, not a hypothetical. Where a step needs a real key (which
+does not exist yet in either trust domain this page covers — see
+[law/keys/README.md](../law/keys/README.md) for autoharn's own, currently AWAITING-KEY, and §3
+below for the other domain, a deployment's own `keys/README.md`, also AWAITING-KEY until you
+commit one), that is stated explicitly rather than silently assumed. **Two different trust
+domains appear throughout this page, and §3 is where they first diverge** — read that section's
+opening even if you skip ahead, so "the public key" never reads as one undifferentiated step.
 
 ## 1. Key generation
 
@@ -58,6 +63,30 @@ Find your key's fingerprint (the 40-hex-character identifier every later step ne
 gpg --list-secret-keys --keyid-format=long
 ```
 
+### 1a. Three different things, three different names
+
+This confusion tripped up this FAQ's own live witness pass, so it earns its own paragraph
+before you go further. Key generation produces (or points at) all three at once, and every
+later step in this page names exactly one of them, never interchangeably:
+
+- **The FINGERPRINT is** the 40-hex-character string `gpg --list-secret-keys` just printed. It
+  *identifies* a key; it proves nothing by itself and is safe to paste anywhere (chat, a commit
+  message, this FAQ). Every `<FINGERPRINT>` placeholder in this page means this string.
+- **The PUBLIC key is** the output of `gpg --armor --export <FINGERPRINT>`, an ASCII-armored
+  block starting `-----BEGIN PGP PUBLIC KEY BLOCK-----`. This is the one artifact in this whole
+  layer that gets **committed** (§3 below) — it is what a verifier checks a signature against,
+  and committing it is safe: it contains nothing that lets anyone sign as you.
+- **The REVOCATION CERTIFICATE is** a separate file GPG writes automatically at key-creation
+  time (§2, next), starting (once its safety colon is removed) `-----BEGIN PGP PUBLIC KEY
+  BLOCK-----` too, which is exactly why it is easy to confuse with the public key above despite
+  being a completely different artifact with an opposite handling rule: it is **never
+  committed, ever, to either trust domain this page covers** — printed and stored offline
+  instead (§2's own instructions). The reason for the opposite rule: importing a revocation
+  certificate immediately and permanently revokes the key it names (§8's rotation ceremony
+  demonstrates this live) — a public key committed to a repository lets people verify your
+  signatures; a revocation certificate committed to a repository lets ANYONE invalidate your
+  key at will. Same-looking armor block, opposite consequence.
+
 ## 2. The revocation certificate — print it and store it offline, NOW
 
 `gpg --full-generate-key` (and the batch form above) **automatically writes a revocation
@@ -74,26 +103,63 @@ this before anything else, while the key is fresh:**
 **A revocation certificate has a colon before its `-----BEGIN` line**, deliberately — GPG prints a
 warning in the file itself: *"To avoid an accidental use of this file, a colon has been inserted
 before the 5 dashes below. Remove this colon with a text editor before importing."* This tripped
-up this very FAQ's own witness pass (§5 below) until noticed; if `gpg --batch --import
+up this very FAQ's own witness pass (§8 below, the rotation ceremony's own revocation step)
+until noticed; if `gpg --batch --import
 your.rev` reports `no valid OpenPGP data found`, this is why — `sed 's/^:-----BEGIN/-----BEGIN/'`
 the file first (into a COPY, never edit the original in place).
 
-## 3. Committing the public key (only step that touches this repository)
+## 3. Committing the public key — two different places, depending on what you're signing
+
+**This is the step an earlier draft of this FAQ got wrong**, and a maintainer finding named it
+plainly (2026-07-11): *"THIS repository should not have anything to do with end user's
+keys... it seems like the entire usage is convoluted in a way that any end-user would find
+counter-intuitive."* There are two trust domains below, and the public key from §1 is committed
+to a DIFFERENT place for each. The same physical keypair may sign in both, but never commit its
+public key to both places for the same reason a house key and a car key are not the same key
+just because one person carries both.
+
+**3a. Signing autoharn's OWN law** (Rung 1 — `ratified/*` tags on autoharn itself, §4 below).
+Only someone maintaining THIS repository (autoharn) does this:
 
 ```sh
 gpg --armor --export <FINGERPRINT> > law/keys/maintainer.asc
 ```
 
-Commit `law/keys/maintainer.asc`, and record its fingerprint in `law/keys/README.md` (replacing
-that file's "AWAITING-KEY" section with the fingerprint and generation date) — so any later
-verification is self-contained: a fresh clone never has to trust a fingerprint pasted into chat.
-The **private** key and the revocation certificate never appear in this repository, ever.
+Commit `law/keys/maintainer.asc` to the autoharn repository, and record its fingerprint in
+[`law/keys/README.md`](../law/keys/README.md) (replacing that file's "AWAITING-KEY" section
+with the fingerprint and generation date) — so any later verification is self-contained: a
+fresh clone never has to trust a fingerprint pasted into chat. `./attest-tags` is the only
+verb that reads this directory, ever.
 
-Once committed, every verb below finds it automatically — `attest-tags`,
-`bootstrap/templates/verify-commission.tmpl`, and `bootstrap/templates/verify-chain.tmpl` all
-read `law/keys/*.asc` at the moment they run (`filing/gpg_trust.py`, their one shared home for
-"build a scratch keyring from the committed keys" — see that module's own docstring for why a
-scratch keyring, never the operator's ambient one).
+**3b. Signing a DEPLOYMENT's own commissions and chain heads** (Rung 2 and Rung 3 — SIGNED
+commissions, §5 below, and the signed chain head, §6 below). Anyone who scaffolds a
+deployment — a world (`bootstrap/new-project.sh --new-world`) or a standing project
+(`bootstrap/track-work.sh`) — does this **in that deployment**, never in autoharn itself:
+
+```sh
+gpg --armor --export <FINGERPRINT> > <deployment-dir>/keys/maintainer.asc
+```
+
+Commit (or otherwise keep, if the deployment is not itself version-controlled)
+`<deployment-dir>/keys/maintainer.asc` alongside that deployment's own `deployment.json` — the
+scaffold already wrote `<deployment-dir>/keys/README.md` there (an AWAITING-KEY stub explaining
+exactly this). `verify-commission` reads ONLY this directory for that deployment, never
+autoharn's `law/keys/` — an end user standing up their own deployment commits their signing key
+to their OWN project, not to this repository.
+
+In both cases, the **private** key and the revocation certificate (§2) never appear in either
+repository, ever.
+
+Once committed, the relevant verb finds it automatically: `attest-tags` reads autoharn's own
+`law/keys/*.asc`; `bootstrap/templates/verify-commission.tmpl` reads the deployment's own
+`keys/*.asc` — two different directories, resolved by `filing/gpg_trust.py`'s one shared "build
+a scratch keyring from a set of committed keys" mechanism (see that module's own docstring),
+never the operator's ambient keyring in either case.
+`bootstrap/templates/verify-chain.tmpl`'s signed-head ceremony (§6) is the one ceremony on this
+page that does **not** read a committed-keys directory at all: it is a direct `gpg
+--detach-sign` / `gpg --verify` pair run by you, against your own ambient `~/.gnupg` keyring —
+the same key that made the signature verifies it back, with nothing to commit anywhere for
+that step alone.
 
 ## 4. Ceremony 1 — signing a ratification tag
 
@@ -132,12 +198,16 @@ LAZY < FULL < SIGNED — three increasing strengths of guarantee about who actua
 LAZY (an implementing agent transcribes the ask it was given, no commissioner guarantee), FULL
 (the commissioner types the `led commission` line himself, from his own terminal — proven by two
 signals together: the row's actor, and the ABSENCE of a "stamp," this project's term for the
-HMAC a Claude Code session's tool interception injects into every ledger write it makes; a row
+HMAC (hash-based message authentication code — a cryptographic checksum keyed by a secret only
+the host holds) a Claude Code session's tool interception injects into every ledger write it
+makes; a row
 typed from a bare shell with no live session carries no stamp at all, which is exactly what
 proves a human typed it directly rather than an agent transcribing it), SIGNED (FULL, plus the
 detached GPG signature this section walks through).
-`bootstrap/templates/CLAUDE.md.tmpl` point 10 teaches LAZY/FULL to every agent at intake; SIGNED
-is the operator's own act, below.
+[`bootstrap/templates/CLAUDE.md.tmpl`](../bootstrap/templates/CLAUDE.md.tmpl)'s governance-preamble
+point about commission verification (search that file for "LAZY" if the point is renumbered by a
+later edit — a positional "point 10" would dangle, so it is named by content here, not position)
+teaches LAZY/FULL to every agent at intake; SIGNED is the operator's own act, below.
 
 **Step 1 — put the ask in a file and FULL-sign it**, from your own terminal, inside the scaffolded
 world. Read it into `$STATEMENT` FIRST, and use that SAME variable for the `led commission` call —
@@ -189,7 +259,7 @@ throwaway `--new-world` scaffold with a throwaway test key):
 | FULL-signed only, no `.asc` banked | `UNSIGNED` — "legitimate FULL-mode commission, not a defect" | 0 |
 | Signed with `printf '%s'` per above, key committed | `VERIFIED` | 0 |
 | The `.asc` covers a DIFFERENT statement (tampered), a committed key exists to check it against | `FORGED-OR-CORRUPT` — a real cryptographic mismatch | 1 |
-| A signature is banked but `law/keys/` is empty (AWAITING-KEY, today's real state) | the DISTINCT typed refusal `NO-COMMITTED-KEY` — "nothing exists to check the claimed signature against," never confused with an actual forgery | 3 |
+| A signature is banked but the deployment's OWN `keys/` is empty (AWAITING-KEY, a fresh scaffold's honest starting state) | the DISTINCT typed refusal `NO-COMMITTED-KEY` — "nothing exists to check the claimed signature against," never confused with an actual forgery | 3 |
 | `gpg` itself is not installed | the OTHER typed refusal, `GPG-UNAVAILABLE` (`"the 'gpg' binary is not on PATH"`), never folded into any of the three verdicts above | 2 |
 
 The `NO-COMMITTED-KEY` and `GPG-UNAVAILABLE` refusals are deliberately NOT `FORGED-OR-CORRUPT`,
@@ -197,13 +267,16 @@ even though both are loud: `FORGED-OR-CORRUPT` means "a committed key exists and
 does not match against it" — real, checkable evidence of tampering — while a refusal means
 "nothing here is decidable at all," a different fact an operator or an automated gate should
 never confuse with an actual forged commission. (An earlier pass folded the no-committed-key case
-into `FORGED-OR-CORRUPT`; an out-of-frame review caught it before this shipped, because doing so
+into `FORGED-OR-CORRUPT`; a fresh, independent reviewer — deliberately without the implementer's
+own reasoning in view, this project's standing practice for catching self-rationalized shortcuts
+before they ship (CLAUDE.md's engineering-responsibility corollary) — caught it before this
+shipped, because doing so
 would make every commission in a fresh, keyless repository — this repository's own real state
 today — indistinguishable from an actual forgery by verdict string alone. See
 `verify-commission.tmpl`'s own module docstring for the full account.)
 
-Real quoted output from the witness pass (the VERIFIED case, test key committed at a scratch
-`law/keys/`):
+Real quoted output from the witness pass (the VERIFIED case, test key committed at the
+scaffolded world's own scratch `keys/` — never autoharn's `law/keys/`, per §3b above):
 
 ```
 verify-commission: row 1 (actor=commissioner, signing_mode=FULL)
@@ -213,11 +286,12 @@ verify-commission: row 1 (actor=commissioner, signing_mode=FULL)
 gpg: Good signature from "AUTOHARN TEST KEY -- THROWAWAY -- NEVER A REAL MAINTAINER KEY <test-throwaway@example.invalid>" [unknown]
 ```
 
-**Until a real key is committed at `law/keys/maintainer.asc`, every genuinely SIGNED commission in
-this repository will refuse as `NO-COMMITTED-KEY` (exit 3)** — this is correct, honest behavior
-(there is nothing to check the signature against, which is not the same fact as a forged one), not
-a defect to route around. Exercise the ceremony with a throwaway test key first (§7 below) if you
-want to see `VERIFIED` before the real key exists.
+**Until a real key is committed at that deployment's own `keys/<name>.asc` (never autoharn's
+`law/keys/maintainer.asc` — §3b above), every genuinely SIGNED commission in that deployment
+will refuse as `NO-COMMITTED-KEY` (exit 3)** — this is correct, honest behavior (there is
+nothing to check the signature against, which is not the same fact as a forged one), not a
+defect to route around. Exercise the ceremony with a throwaway test key first (§7 below) if you
+want to see `VERIFIED` before a real key exists.
 
 ## 6. Ceremony 3 — the signed chain head (the run-close ritual)
 
@@ -239,6 +313,12 @@ a banner line along with the JSON. It **verifies the whole chain first**: if the
 head over a chain it has not confirmed — signing a broken chain would manufacture false assurance,
 worse than refusing.
 
+Unlike §5's `verify-commission`, this ceremony reads no committed-keys directory at all — the
+`gpg --verify` step below checks the signature against YOUR OWN ambient `~/.gnupg` keyring,
+the same key you just signed with. There is nothing to commit to either `law/keys/` or a
+deployment's `keys/` for this specific step; §3b's deployment `keys/` directory exists for
+`verify-commission`, not this ceremony.
+
 **Witnessed, both polarities** (`seen-red/s26-row-hash-chain/red.txt`; also exercised live on a
 real `--new-world` scaffold with the throwaway test key, real quoted output):
 
@@ -250,8 +330,8 @@ $ gpg --verify .claude/head.json.asc .claude/head.json
 gpg: Good signature from "AUTOHARN TEST KEY -- THROWAWAY -- NEVER A REAL MAINTAINER KEY <test-throwaway@example.invalid>" [ultimate]
 ```
 
-And, on a chain a historical row was surgically altered on (a scratch schema, real tamper, real
-detection):
+And, on a chain where a historical row was surgically altered (a scratch schema, real tamper,
+real detection):
 
 ```
 $ ./verify-chain
@@ -290,11 +370,13 @@ EOF
 )
 ```
 
-Export the public half to wherever a verb's `--keys-dir` / `AUTOHARN` override points (never to
-the real `law/keys/` in this repository — a throwaway key committed there, even briefly, is
-exactly the kind of accidental-trust hazard this whole layer exists to prevent). `attest-tags
---keys-dir <path>` and `AUTOHARN=<a scratch tree with its own law/keys/> ./verify-commission` both
-accept overrides for exactly this purpose — see their own `--help`-equivalent module docstrings.
+Export the public half to wherever the relevant verb resolves keys from for the domain you're
+testing (§3 above names both): `attest-tags --keys-dir <path>` accepts an override for
+autoharn's own domain — never point it at the real `law/keys/` in this repository, a throwaway
+key committed there, even briefly, is exactly the kind of accidental-trust hazard this whole
+layer exists to prevent. For `verify-commission`, export to a THROWAWAY deployment's own
+`<deployment-dir>/keys/` (a scratch `--new-world` scaffold, torn down after — never a real
+deployment's `keys/`, for the identical reason).
 
 ## 8. Rotation — witnessed, not aspirational
 
@@ -336,10 +418,12 @@ trusting the old key going forward.)
 gpg --full-generate-key    # or the batch form
 ```
 
-**Step 3 — commit the new public key**, exactly as in §3 — `law/keys/maintainer.asc` is
-overwritten with the new key's export, and `law/keys/README.md`'s recorded fingerprint updates to
-match. (For a real rotation, also distribute the revocation certificate itself somewhere reachable
-— a keyserver, or simply noting in the commit message that the prior fingerprint is revoked — so
+**Step 3 — commit the new public key**, exactly as in §3, at whichever domain's path the OLD key
+lived at (§3a's `law/keys/maintainer.asc` for autoharn's own law, or §3b's
+`<deployment-dir>/keys/<name>.asc` for a deployment) — the file there is overwritten with the
+new key's export, and that domain's own `README.md`-recorded fingerprint updates to match. (For
+a real rotation, also distribute the revocation certificate itself somewhere reachable — a
+keyserver, or simply noting in the commit message that the prior fingerprint is revoked — so
 verifiers who cached the old key learn not to trust it either.)
 
 **Step 4 — re-sign the current chain heads.** For every world whose head was signed under the old
@@ -368,9 +452,12 @@ That is the whole procedure: four steps, each already exercised above, none of i
   says this plainly. What the row-hash chain adds is DETECTABILITY: the alteration becomes visible
   the moment anyone re-walks the chain, and a SIGNED head (§6) makes that detection independent of
   trusting the database at all — the signature lives outside it entirely.
-- Every verb in this layer trusts only `law/keys/*.asc` — never the operator's ambient `~/.gnupg`
-  keyring. If you `gpg --import` a stray key into your own keyring for an unrelated reason, it has
-  no effect on what `attest-tags`, `verify-commission`, or `verify-chain` accept.
+- Every verb in this layer trusts only its own domain's committed-keys directory — `attest-tags`
+  reads autoharn's own `law/keys/*.asc`; `verify-commission` reads a deployment's own
+  `keys/*.asc` — never the operator's ambient `~/.gnupg` keyring, and never each other's
+  directory (§3 above). If you `gpg --import` a stray key into your own keyring for an unrelated
+  reason, it has no effect on what either verb accepts. `verify-chain`'s signed-head ceremony
+  (§6) is the one exception, by design: it uses the ambient keyring directly.
 - None of this replaces the existing HMAC stamp (`kernel/lineage/s17-stamp-mechanism.sql`) — the
   stamp still proves which live invocation wrote a row; the signature layer proves a HUMAN, outside
   the host entirely, vouched for something at a point in time. They answer different questions.
@@ -378,9 +465,13 @@ That is the whole procedure: four steps, each already exercised above, none of i
 ## Related
 
 - [design/GPG-TRUST-LAYER.md](GPG-TRUST-LAYER.md) — the spec this FAQ operationalizes; read it
-  first for the reasoning.
-- [law/keys/README.md](../law/keys/README.md) — what belongs in the committed-keys directory, and
-  today's honest AWAITING-KEY state.
+  first for the reasoning, especially §7's key-residence split (the same two domains §3 above
+  walks as a ceremony).
+- [law/keys/README.md](../law/keys/README.md) — autoharn's OWN committed-keys directory (§3a),
+  scoped exclusively to autoharn's own law-signing, and today's honest AWAITING-KEY state.
+- A deployment's own `keys/README.md` (§3b) — written by the scaffold at
+  `bootstrap/templates/keys-README.md.tmpl`; not a repo-relative link here because it lives
+  inside each scaffolded deployment, not in this repository.
 - [`attest-tags`](../attest-tags), [`bootstrap/templates/verify-commission.tmpl`](../bootstrap/templates/verify-commission.tmpl),
   [`bootstrap/templates/verify-chain.tmpl`](../bootstrap/templates/verify-chain.tmpl),
   [`filing/gpg_trust.py`](../filing/gpg_trust.py) — the implementation each ceremony above drives.
