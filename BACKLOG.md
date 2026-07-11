@@ -4252,3 +4252,101 @@ maintainer-directed the same evening and all inside the action-stream principle:
    diagnostic-grade forever per the action-stream principle.
 Previously queued in the same commission: the led show read verb (run-11 class-b), the
 doc-gate liveness counter, the distance-to-clean preamble sentence.
+
+## Omega work-status question CLOSED as a product: bootstrap/track-work.sh + design/WORK-STATUS-OFFERING.md (2026-07-11, Sonnet, commissioned build)
+
+Delivers the commission that ends the 3x-litigated omega work-status question (see this
+file's own "Omega work-tracking disposition (2026-07-11, night shift)" entry above for the
+most recent prior pass): a new, project-agnostic scaffold entry point, `bootstrap/
+track-work.sh`, that gives ANY directory a standing, unwired, Postgres-backed work tracker
+in one command — applying the full current kernel lineage (identical chain to `new-project.sh
+--new-world`, through s25) to a fresh schema pair, writing `deployment.json` + the five verb
+shims (`led`/`pickup`/`distance-to-clean`/`judge`/`audit`), and registering the three standard
+principals. Deliberately NOT `new-project.sh` (collision constraint honored: neither that file
+nor any existing `bootstrap/templates/*.tmpl` was touched — this offering gets its own entry
+point, only new template-adjacent files). NO hooks wired — a standing project is not a
+governed world; hook wiring is named as a separate, deliberate act. Full design + the
+omega-capability mapping table (the actual closure of the litigation): [design/
+WORK-STATUS-OFFERING.md](design/WORK-STATUS-OFFERING.md).
+
+**A hazard found and fixed in passing** (CLAUDE.md's hazard-flagging duty): the birth chain's
+individual files are each idempotent, but re-applying the FULL high_watermark_1.sql -> ... ->
+s25 sequence against a schema that already carries it is NOT safe — intermediate deltas grow a
+view's column list monotonically, so an earlier file's own (shorter) view definition collides
+with Postgres's "cannot drop columns from a view" rule under `CREATE OR REPLACE VIEW`. This is
+a general property of the chain — `new-project.sh --new-world --force` against an
+already-migrated schema would hit the identical failure — flagged here since fixing that file
+is out of this session's scope (the collision constraint forbids editing it; the kernel SQL
+itself is frozen, maintainer-ratified-spec-only). Fixed within `track-work.sh`'s own scope:
+`--force` now skips the DDL re-apply entirely when the target kernel schema already exists,
+touching only deployment.json/the verb shims/the principals — never re-running kernel DDL a
+second time. Live proof both polarities: `seen-red/track-work/run_fixtures.py` (RED-USAGE,
+GREEN-ADOPT + live `led work open/claim` + `pickup` IN-FLIGHT + `distance-to-clean` clean,
+RED-EXISTING with ledger rows provably unchanged, GREEN-FORCE with the hazard closed), banked
+`seen-red/track-work/red.txt`, registered in `gates/fixture_census.py` (40 seen-red gates,
+clean). `gates/layout_census.py` extended with the six new root-level entries this
+self-hosted deployment introduces (`deployment.json`, `led`, `judge`, `pickup`, `audit`,
+`distance-to-clean`) plus one pre-existing, unrelated gap caught in passing: `attestations/`
+(ADR-0017's own attestation ledger dir, landed 2026-07-11, never previously registered here).
+
+**Consumer #1: autoharn deployed on itself.** `bootstrap/track-work.sh /home/bork/w/vdc/1/
+autoharn --name autoharn --db toy --host 192.168.122.1` (schema `autoharn`, kern
+`autoharn_kernel`, role `autoharn_rw`) — WITNESSED live, kernel applied clean, `deployment.json`
++ the five verb shims written at the repo root. Open work migrated from HANDOFF.md's "Open
+work" section and this file's own queued-commission entries (the small-follow-ups commission,
+the configuration commission, the maintainer decision queue, the run-11 watch duties) into 13
+real `led work open` items: one genesis `decision` row (row 1) stating this store's charter —
+BACKLOG.md is henceforth the findings JOURNAL, this store is the work TRACKER — plus one
+`--refs row:1` `assumption` row citing every migrated slug's HANDOFF/BACKLOG provenance. 10
+items open (6 maintainer decisions, the configuration commission, the audit-verb completions,
+the small-follow-ups commission, this build itself — claimed); 3 closed on migration, each
+correcting stale HANDOFF text rather than blindly carrying it forward: cost-timing-accounting
+(dropped — DISSOLVED by the same-day "action stream is the evidentiary basis" ruling), run11-
+watch-duties (superseded — run11 finished and was forensically audited after HANDOFF's text
+was written), prudential-filed-candidates (deferred, per the prudential rule). WITNESSED:
+`./led work violations` (0 rows), `./pickup` (IN-FLIGHT shows all 10 open items with full spec
+text), `./distance-to-clean` (`TOTAL debt: 0`) — all run live against the real deployment, not
+a scratch probe.
+
+**HANDOFF.md's "Open work" section replaced** with a one-paragraph pointer at the tracker
+(`./pickup` at the autoharn root), per the commission's instruction; the prior itemized list
+(items 1-5, HANDOFF's own numbering) is retired there, superseded by the ledger's live state.
+
+**ADR-0017 A:B:C loop, both edited/new maintainer-facing docs.** `design/
+WORK-STATUS-OFFERING.md`: round 1 DEFECT (5 findings — an ungrounded code block, three
+unglossed/unlinked artifacts, one non-stable-handle BACKLOG link), fixed; round 2 DEFECT (4
+NEW findings — the `audit` verb never explained in-document, two near-duplicate section
+headings causing a navigational ambiguity, two more unlinked artifacts), hit the two-round cap
+per ADR-0017 (no third round) — **non-converging-review-loop escalation, adjudicated by the
+orchestrator** (same disposition precedent as this file's "First live enforcement of ADR-0017's
+loop" entry): all four round-2 findings fixed by applying B's own suggested repairs, no third B
+round spawned. `HANDOFF.md` (opening + the edited "Open work" section, Rule 4 remit): round 1
+DEFECT (7 findings — two unglossed opening terms, a verbless colon-list, two dangling named
+commissions, a broken clause, an unlinked coined term), fixed; round 2 DEFECT (7 NEW findings —
+"commission" itself ungrossed as a category, a self-admitted-unresolved "GPG merge" referent, a
+still-unglossed `work_opened`, an ambiguous item-count reconciliation, a malformed clause, a
+dangling fragment, one unlinked CLAUDE.md mention), hit the two-round cap, same escalation
+disposition, all seven fixed verbatim from B's repairs. Both attestations recorded with
+`escalated: true`, `rounds` carrying both real B verdicts as they happened (per
+`gates/doc_attestation_presence.py`'s own honest-record design — a DEFECT-with-escalated-true
+round is exactly as valid a record as a CLEAN one; the gate checks presence+shape, never the
+verdict). `gates/doc_shapes.py` / `gates/doc_attestation_presence.py` gate mode: clean, 2/2
+docs in scope. `gates/link_integrity.py`: clean (1220 unchecked-but-non-failing anchor notes,
+0 broken paths).
+
+Both B rounds for each document were genuinely fresh `Agent` dispatches (no shared context with
+the authoring session or with each other) — the ADR's own "provably distinct from A" property
+by construction, not merely asserted.
+
+## A:B:C recipe friction, twice-witnessed: background-spawned B verdicts orphan (2026-07-11)
+
+When a SUBAGENT runs the ADR-0017 loop and spawns its fresh-context B as a background
+agent, B's completion routes to the main orchestrator session, not to the spawning
+subagent — and B's attempt to SendMessage "general-purpose" fails (that is an agent type,
+not an address). Witnessed twice tonight during the GPG implementation's doc loops; both
+B's correctly fell back to reporting in their final output, and the orchestrator relayed
++ adjudicated. Fix for the recipe (design/ABC-AUDIT-LOOP-RECIPE.md, next natural touch,
+attestation loop applies): B must be spawned SYNCHRONOUSLY by whoever runs the loop so
+the verdict returns in-band as the Agent tool result; a background B is only sound when
+the loop-runner is the main session. Queued into the tracker as part of the follow-ups
+item rather than a new thread.
