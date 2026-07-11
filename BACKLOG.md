@@ -3029,3 +3029,15 @@ every legitimate scenario the law had abolished is a loaded ritual waiting for a
 operator. Deleted now; CAPABILITIES item 14 records the deletion, and item 15's stale
 "remains the apply act" clause (written before the linearity ruling) is corrected in place
 with a dated note. The delta path is unchanged and single: birth chain, next scaffold.
+
+## Maintainer dispositions: adoption bar 4, run11 doc gate (2026-07-11)
+
+- Configuration-survey gap 4 (Postgres provisioning surface) DISPOSED as a non-issue by the
+  maintainer: "provisioning a postgres db is something even I can do (though I needed some
+  help for the pg_hba, and that help can be FAQ'd so to speak)." Consequence: the queued
+  CONFIGURATION.md commission drops the provisioning-surface ambition and gains a short
+  pg_hba/setup FAQ section instead.
+- Run 11 intent (maintainer): recent runs' commissions carry a mandatory documentation step;
+  leverage it — run 11's world should carry the ADR-0017 doc gate applied to world-produced
+  documents. Commissioned same hour as an extension to the A:B:C arming agent (world-native
+  hook surface reading apparatus.json, since worlds are not git repos at scaffold time).
