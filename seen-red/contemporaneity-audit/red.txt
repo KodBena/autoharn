@@ -1,5 +1,5 @@
 # banked RED evidence -- CASE b (manufactured backfill), engine/contemp_audit.py real output:
-# contemporaneity audit -- target='contempprobe' root=/tmp/contemp-fixture-rmrufvmd
+# contemporaneity audit -- target='contempprobe' root=/tmp/contemp-fixture-bsqq26wy
 #   capabilities (family, capable, produced): [('stamp_invocation_column', True, True), ('event_declared_ts_column', True, True), ('s23_capable', True, True), ('invocation_journal', True, True), ('tool_event', True, True)]
 #   counts: {'row_tokened': 6, 'row_untokened': 0, 'row_declared': 0, 'invocation': 2, 'tool_event': 4}
 

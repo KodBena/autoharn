@@ -749,15 +749,52 @@ if [ -n "$event_time" ]; then
   fi
 fi
 
+# _led_kind_refusal_teach -- run-10 closure audit, item 1 (BACKLOG "Run-10 closure audit
+# (2026-07-11)", change proposal 1): row 67 was an invented kind ('acceptance-criteria'),
+# refused by the kernel's ledger_kind_check CHECK constraint -- correctly -- but the bare
+# "violates check constraint ledger_kind_check" error names the constraint, not its vocabulary,
+# so the agent had to separately run `SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE
+# conname='ledger_kind_check'` by hand (17s, one extra command) to learn what this file's own
+# header comment already lists. Called ONLY from the two INSERT shapes below, ONLY after their
+# own psql invocation has already failed -- it never touches or redirects that invocation's
+# stdout/stderr, so a successful write is completely untouched (byte-identical to before this
+# fix) and a NON-kind failure's original error stands alone, unrewrapped and unswallowed.
+# Detection is an INDEPENDENT client-side re-check against the LIVE constraint (never a guess at
+# psql's error TEXT, which could read differently across postgres versions, and never a second
+# hand-maintained kind enumeration in this script to drift out of sync with s22's kernel-side
+# one -- enumerations drift; s22 already extended s15's original list once): if $kind is not a
+# member of the vocabulary `pg_get_constraintdef` reports RIGHT NOW for ledger_kind_check on
+# THIS schema's ledger table, this failure certainly was that refusal, and the valid-kind list
+# is printed; if $kind IS a live member, the failure was for some other reason (a bad
+# --supersedes id, an unknown --answers id, etc.) and this function prints nothing.
+_led_kind_refusal_teach() {
+  local valid_kinds valid_kinds_csv
+  valid_kinds=$(psql -h "$PGHOST" -d "$PGDB" -tAc \
+    "SELECT string_agg(t.k, ', ') FROM (SELECT (regexp_matches(pg_get_constraintdef(con.oid), '''([a-z_]+)''::text', 'g'))[1] AS k FROM pg_catalog.pg_constraint con JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid JOIN pg_catalog.pg_namespace ns ON ns.oid = rel.relnamespace WHERE con.conname = 'ledger_kind_check' AND ns.nspname = '${SCHEMA}' AND rel.relname = 'ledger') t;" 2>/dev/null)
+  if [ -z "$valid_kinds" ]; then
+    return 0   # could not re-query the live constraint -- say nothing extra, the raw error above stands alone
+  fi
+  valid_kinds_csv=$(printf '%s' "$valid_kinds" | tr -d ' ')
+  case ",${valid_kinds_csv}," in
+    *",${kind},"*) return 0 ;;   # $kind IS valid -- this failure was something else, stay silent
+  esac
+  echo "" >&2
+  echo "led: '${kind}' is not a member of ledger_kind_check's vocabulary (the refusal above)." >&2
+  echo "  valid kinds (live, queried from the kernel's own constraint definition -- never" >&2
+  echo "  hardcoded here): ${valid_kinds}" >&2
+}
+
 # Bound via psql -v (a psql bind, not string concatenation) so `statement`/`rationale` can
 # contain quotes, semicolons, or anything else without escaping into SQL (P2: a boundary
 # translates-and-validates untrusted text; it does not hand-splice it into a query). NOTE: psql's
 # :'var' interpolation is only applied to a script read from stdin/-f, NOT to a -c argument -- so
 # the script is fed via stdin, not -c. TWO INSERT SHAPES (event_declared_ts column present or
 # not -- see the live check above): the column list itself must differ, not merely the bound
-# value, on a schema that lacks the column entirely.
+# value, on a schema that lacks the column entirely. Both shapes get the SAME refusal-teaching
+# treatment (factored into _led_kind_refusal_teach above, called identically from each `else`
+# below) rather than duplicating that logic per shape.
 if [ -n "$event_time" ]; then
-  psql -h "$PGHOST" -d "$PGDB" -v ON_ERROR_STOP=1 \
+  if psql -h "$PGHOST" -d "$PGDB" -v ON_ERROR_STOP=1 \
     -v kind="$kind" -v statement="$statement" -v rationale="$rationale" \
     -v supersedes="$supersedes" -v amends="$amends" -v amends_scope="$amends_scope" \
     -v answers="$answers" -v refs="$refs" -v concern="$concern" \
@@ -781,8 +818,15 @@ if [ -n "$event_time" ]; then
               (SELECT id FROM principal WHERE name = NULLIF(:'actor_name', '')),
               NULLIF(:'event_time', '')::timestamptz);
 SQL
+  then
+    :
+  else
+    status=$?
+    _led_kind_refusal_teach
+    exit "$status"
+  fi
 else
-  psql -h "$PGHOST" -d "$PGDB" -v ON_ERROR_STOP=1 \
+  if psql -h "$PGHOST" -d "$PGDB" -v ON_ERROR_STOP=1 \
     -v kind="$kind" -v statement="$statement" -v rationale="$rationale" \
     -v supersedes="$supersedes" -v amends="$amends" -v amends_scope="$amends_scope" \
     -v answers="$answers" -v refs="$refs" -v concern="$concern" \
@@ -805,4 +849,11 @@ else
               NULLIF(:'enacts', '')::bigint[],
               (SELECT id FROM principal WHERE name = NULLIF(:'actor_name', '')));
 SQL
+  then
+    :
+  else
+    status=$?
+    _led_kind_refusal_teach
+    exit "$status"
+  fi
 fi

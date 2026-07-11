@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-11T14:44:01Z
-#   last-change: 2026-07-11T16:41:53Z
+#   last-change: 2026-07-11T17:27:24Z
 #   contributors: e4410ef6/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -28,9 +28,12 @@ world is read-only evidence, never touched for a fixture). Cases (i)/(j)/(k) exe
 audit of this same commission found: every OTHER case in this file proves the ENGINE layer
 (contemp_edb/contemporaneity.lp/contemp_audit) against hand-built fixture rows, but nothing
 before these three cases had exercised the CLI path (the live capability check, the two-INSERT-
-shape branch, the coverage-guard refusal) end-to-end.
+shape branch, the coverage-guard refusal) end-to-end. Cases (l)/(m) EXTEND that same real-shim
+pattern for BACKLOG "Run-10 closure audit (2026-07-11)" item 1 / change proposal 1: the
+ledger_kind_check refusal now teaches its own live valid-kind list rather than leaving the agent
+to self-diagnose via a hand-run pg_get_constraintdef query (run-10 row 67's own specimen).
 
-ELEVEN CASES:
+THIRTEEN CASES:
 
   a-clean-batched-declared (GREEN): a scratch ledger with a genuine multi-row token burst but
      dense tool-activity (no gap exceeds silence_threshold_ms) -> VERDICT=batched_declared,
@@ -107,6 +110,23 @@ ELEVEN CASES:
      actually fires against a real pre-s24 schema, not merely asserted from the SQL delta's own
      prose.
 
+  l-led-kind-refusal-teach (RED, run-10 row 67's own specimen): the SAME real `led` shim invoked
+     as `./led acceptance-criteria "QEUBO smoke-test acceptance criterion..."` -- an invented
+     kind, refused by the kernel's ledger_kind_check CHECK constraint exactly as run-10 row 67
+     was. Before BACKLOG "Run-10 closure audit (2026-07-11)" item 1's fix, the agent saw only the
+     bare "violates check constraint ledger_kind_check" text and had to separately query
+     pg_get_constraintdef by hand to learn the valid vocabulary. Expected AFTER the fix: exit 1
+     (unchanged -- the refusal itself is correct and stays a refusal), the ORIGINAL kernel error
+     still visible unrewrapped, PLUS a live-queried valid-kind list naming decision/assumption/
+     work_opened/review (and the invented kind conspicuously absent from that list).
+
+  m-led-kind-refusal-teach-success-unaffected (GREEN, the byte-identical-to-before proof): a
+     VALID kind (`decision`) written through TWO shims -- one pointing at led.tmpl as it stood at
+     this commit's OWN PARENT (`git show HEAD:bootstrap/templates/led.tmpl`, the pre-fix file),
+     one at the just-edited current file -- proving the fix touches ONLY the failure path: both
+     writes succeed (exit 0) and their stdout is compared BYTE-FOR-BYTE, not merely asserted
+     equal to a hardcoded string.
+
 RED (pre-instrument, disclosed rather than re-captured): before this suite existed there was no
 Part 2 instrument at all -- ad-hoc SQL run by hand, once per crisis (BACKLOG's own indictment).
 red.txt captures case (b)'s actual backfill_suspect output as the banked red evidence (the
@@ -114,10 +134,12 @@ fixture_census.py convention: a *-red.txt or red.txt file is what proves a gate 
 red"); late-declared-red.txt captures case (g)'s output the same way, and late-declared-
 green.txt captures case (f)'s LATE_DECLARED output as the declared-polarity twin.
 
-Scratch-only: schema contempprobe / contempprobe_kernel, role contempprobe_rw (cases a/b/e-j) AND
-contempprobe_pre24 / contempprobe_pre24_kernel / contempprobe_pre24_rw (case k only, s23-only, no
-s24), TOY db (192.168.122.1) -- both torn down after a clean run, left standing (never applied to
-any live schema) on a failure, per the standing probe pattern. Lazy imports banned."""
+Scratch-only: schema contempprobe / contempprobe_kernel, role contempprobe_rw (cases a/b/e-j,l,m)
+AND contempprobe_pre24 / contempprobe_pre24_kernel / contempprobe_pre24_rw (case k only, s23-only,
+no s24), TOY db (192.168.122.1) -- both torn down after a clean run, left standing (never applied
+to any live schema) on a failure, per the standing probe pattern. Case (m) also writes one throwaway
+temp file holding the pre-fix led.tmpl's own text (read via `git show`, never modified) -- torn
+down with its tempdir like every other fixture world. Lazy imports banned."""
 from __future__ import annotations
 
 import datetime
@@ -182,15 +204,28 @@ def provision_stamp_secret(kern: str) -> None:
                    capture_output=True, text=True, check=True)
 
 
-def _make_led_shim(root: Path) -> None:
+def _make_led_shim(root: Path, tmpl_path: Path | None = None,
+                    extra_env: dict[str, str] | None = None) -> None:
     """Write the SAME 3-line exec-wrapper bootstrap/new-project.sh writes into every scaffolded
-    world's `./led` (BACKLOG maintainer ruling 2026-07-11, "live verbs") -- so cases (i)/(j)/(k)
-    exercise the REAL led.tmpl through the REAL shim mechanism, not a hand-rolled substitute."""
+    world's `./led` (BACKLOG maintainer ruling 2026-07-11, "live verbs") -- so cases (i)/(j)/(k)/
+    (l)/(m) exercise the REAL led.tmpl through the REAL shim mechanism, not a hand-rolled
+    substitute. `tmpl_path` overrides the real, current led.tmpl -- case (m) alone uses this, to
+    point one shim at this commit's PARENT led.tmpl (the pre-fix file, read via `git show`) for a
+    genuine old-vs-new comparison; every other case leaves this at the default (the real file).
+    `extra_env` -- case (m)'s OLD shim also passes AUTOHARN explicitly: the production shim
+    (bootstrap/new-project.sh) always execs led.tmpl straight out of the real checkout, so
+    led.tmpl's own `AUTOHARN_ROOT="${AUTOHARN:-$(cd "$HERE/../.." && pwd)}"` dirname-relative
+    fallback always resolves correctly in production; case (m)'s old script is deliberately a
+    COPY living outside that tree (so it stays a proof against `git show HEAD:...`'s exact
+    bytes, not a second checkout), so the fallback would resolve to the wrong place -- AUTOHARN
+    is supplied via led.tmpl's own already-documented override, not a new mechanism."""
     shim = root / "led"
+    target = tmpl_path if tmpl_path is not None else LED_TMPL
+    env_prefix = "".join(f'{k}="{v}" ' for k, v in (extra_env or {}).items())
     shim.write_text(
         '#!/bin/sh\n'
         'HERE="$(cd "$(dirname "$0")" && pwd)"\n'
-        f'exec env PICKUP_DEPLOYMENT="$HERE/deployment.json" {LED_TMPL} "$@"\n',
+        f'exec env PICKUP_DEPLOYMENT="$HERE/deployment.json" {env_prefix}{target} "$@"\n',
         encoding="utf-8")
     shim.chmod(0o755)
 
@@ -563,6 +598,58 @@ def main() -> int:
         log.append(f"CASE k (led --event-time CLI, pre-s24 schema): exit={code_k}, REFUSED naming "
                    f"the missing event_declared_ts column, as expected")
 
+        # ---- CASE l: led.tmpl's ledger_kind_check refusal now TEACHES the valid-kind list -----
+        # (BACKLOG "Run-10 closure audit (2026-07-11)", item 1 / change proposal 1). run-10 row
+        # 67's own specimen, verbatim: an invented kind ('acceptance-criteria'), refused by the
+        # kernel's ledger_kind_check CHECK constraint. Before this fix the agent saw only the
+        # bare "violates check constraint ledger_kind_check" text and had to separately query
+        # pg_get_constraintdef by hand (17s, one extra command) to learn what led.tmpl's own
+        # header already lists. Real `led` shim (root_i, already s24-capable from case i above),
+        # real refusal, real LIVE re-query -- never a hardcoded second copy of the vocabulary.
+        code_l, out_l = run_led(root_i, ["acceptance-criteria",
+                                         "QEUBO smoke-test acceptance criterion (run-10 row-67 specimen)"])
+        ck(code_l != 0, f"CASE l: an invented kind must still be REFUSED (non-zero exit), got {code_l}: {out_l[-800:]}")
+        ck("ledger_kind_check" in out_l,
+           f"CASE l: the original kernel refusal must still be visible, unrewrapped: {out_l[-800:]}")
+        ck("valid kinds (live" in out_l,
+           f"CASE l: the refusal must now TEACH the live valid-kind list: {out_l[-800:]}")
+        for known_kind in ("decision", "assumption", "work_opened", "review"):
+            ck(known_kind in out_l, f"CASE l: valid-kind list must name '{known_kind}': {out_l[-800:]}")
+        ck("acceptance-criteria" not in out_l.split("valid kinds", 1)[-1],
+           f"CASE l: the invented kind itself must NOT appear in the live vocabulary list: {out_l[-800:]}")
+        log.append(f"CASE l (led kind-refusal teach, run-10 row-67 specimen): exit={code_l}, "
+                   f"REFUSED, original ledger_kind_check error preserved, live valid-kind list "
+                   f"now taught (decision/assumption/work_opened/review confirmed present)")
+
+        # ---- CASE m: a VALID kind's success path is BYTE-IDENTICAL to the pre-fix script -------
+        # The fix above only ever runs AFTER a failed insert (case l); this proves the success
+        # path (the overwhelmingly common case) was not touched at all -- one shim points at this
+        # commit's OWN PARENT led.tmpl (`git show HEAD:...`, the file as it stood before item 1's
+        # fix), one at the just-edited current file (root_i, reused). A plain psql INSERT with no
+        # -q/-t flags always emits "SET\nSET\nINSERT 0 1" regardless of the row's own content, so
+        # this is a real byte-for-byte comparison of the two SCRIPTS, not an assertion pinned to a
+        # hardcoded expected string.
+        old_tmpl_src = subprocess.run(
+            ["git", "-C", str(REPO), "show", "HEAD:bootstrap/templates/led.tmpl"],
+            capture_output=True, text=True, check=True).stdout
+        root_m_old = Path(tempfile.mkdtemp(prefix="contemp-led-fixture-oldtmpl-"))
+        old_tmpl_path = root_m_old / "led.tmpl.old"
+        old_tmpl_path.write_text(old_tmpl_src, encoding="utf-8")
+        old_tmpl_path.chmod(0o755)
+        (root_m_old / "deployment.json").write_text(json.dumps(
+            {"db": DB, "host": PGHOST, "schema": SCHEMA, "kern": KERN, "role": ROLE, "name": "contempprobe"}))
+        _make_led_shim(root_m_old, tmpl_path=old_tmpl_path, extra_env={"AUTOHARN": str(REPO)})
+        worlds.append(root_m_old)
+        code_m_old, out_m_old = run_led(root_m_old, ["decision", "byte-identical probe, case m, OLD led.tmpl"])
+        code_m_new, out_m_new = run_led(root_i, ["decision", "byte-identical probe, case m, NEW led.tmpl"])
+        ck(code_m_old == 0 and code_m_new == 0,
+           f"CASE m: both OLD and NEW writes must succeed: old={code_m_old} new={code_m_new}")
+        ck(out_m_old == out_m_new,
+           f"CASE m: a valid kind's success output must be BYTE-IDENTICAL old vs new: "
+           f"old={out_m_old!r} new={out_m_new!r}")
+        log.append(f"CASE m (success path, OLD vs NEW led.tmpl): exit_old={code_m_old}, "
+                   f"exit_new={code_m_new}, stdout byte-identical ({out_m_new!r})")
+
     finally:
         for w in worlds:
             shutil.rmtree(w, ignore_errors=True)
@@ -597,7 +684,9 @@ def main() -> int:
           "still verdicts BACKFILL_SUSPECT/exit 1); the intake-shape annotation proven on the "
           "run-10 burst shape (BATCHED_DECLARED, annotated, no vocabulary change); led.tmpl's own "
           "--event-time CLI flag proven end-to-end through a real shim (generic-path success, "
-          "non-generic-verb coverage refusal, pre-s24-schema capability refusal).")
+          "non-generic-verb coverage refusal, pre-s24-schema capability refusal); the "
+          "ledger_kind_check refusal now teaches its live valid-kind list (run-10 row-67 "
+          "specimen) while the success path stays byte-identical to the pre-fix script.")
     return 0
 
 
