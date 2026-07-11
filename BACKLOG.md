@@ -3002,3 +3002,19 @@ ADR-0017 + unknown-key validation + install-path contract statement) AFTER the t
 flight worktree agents land, to avoid same-file collisions. The "offered in configuration"
 half for the doc discipline itself was added to the A:B:C arming agent's commission the
 same hour (apparatus entry per the demurral precedent, scaffold-time).
+
+## Maintainer priority ruling: auditability outranks agent ergonomics (2026-07-11)
+
+Stated while run10 was live and its agent visibly struggling with compliant closure, near-
+verbatim: "Although we want compliance, on a lower priority, we *also* want compliance to
+be easy on the agents, but not at the cost of auditability -- in that case, it's preferred
+to see the agents struggle if it's a choice between two bad things."
+
+Standing consequence for every mechanism decision: ergonomics improvements are welcome ONLY
+when they hold auditability constant (better teach-text, clearer refusal paths, tooling
+that makes the compliant path the short path); any proposal that eases agents by weakening
+what the record can prove is rejected at the door. An agent seen struggling is not by
+itself evidence a mechanism is wrong — the run10 audit pass (queued for when the run
+closes; maintainer will give the word) classifies each struggle as agent defect vs
+mechanism-that-refuses-without-teaching vs legitimate-requirement-being-felt, and only the
+middle class produces changes.
