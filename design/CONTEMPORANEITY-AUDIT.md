@@ -198,3 +198,89 @@ teaching line to `bootstrap/templates/CLAUDE.md.tmpl` (point 9), verbatim from t
 memo. Full disposition, per-claim witness status, and the scratch-witness/differential
 transcripts: BACKLOG.md's dated entry beside this one. See CAPABILITIES.md item 24a for the
 operator-facing summary.
+
+**SQL-floor differential: LANDED, 2026-07-12 (Sonnet, commissioned build — the marriage-grade
+half of the audit-verb-completions work item).** This closes the deferral item 24/24a and this
+memo's own Part 2 status both named: "this verb ships ONE producer today, not the marriage
+discipline's cross-validated pair." `engine/contemp_floor.py` is the SQL floor (`engine/ledger_floor.py`'s
+sibling for this domain) — RE-DERIVES FROM SOURCE rather than consuming `engine/contemp_edb.py`'s
+own staged EDB text (the honest choice, argued in that module's own docstring: consuming the
+sibling producer's staging code would let a bug there show up identically in both producers and
+the differential would silently agree on a wrong answer). It independently re-reads the live
+ledger via its own SQL query and independently re-parses the raw `.claude/logs/*.jsonl` journal
+bytes with its own small parser (never importing `contemp_edb.py`'s `_read_jsonl`/`_parse_ts_ms`),
+computing burst/silence/intake_shape/backfill_suspect/late_declared/the per-row deltas, plus a
+degraded `ts_cluster` signal (a row-adjacency burst GUESS for a pre-s23 world that carries no
+invocation tokens at all — INFERRED from row timing alone, never presented as the same thing as a
+STATED, token-backed burst), and the closed verdict, in Postgres window functions + set logic (no
+recursion needed, unlike the ledger floor's transitive closures). `engine/contemp_differential.py`
+is the differential runner, matching `engine/ledger_differential.py`'s conventions EXACTLY BY
+IMPORT (never a re-derived copy): the closed verdict vocabulary (AGREE / DIVERGE_BY_DESIGN /
+DIVERGE_DEFECT / QUARANTINED), the `DerivationRecord` dataclass, and the override-one-producer
+negative-control seam. Both producers' DerivationRecord pairs bank under
+`engine/docs/ledger-marriage/derivations/contemporaneity/<target>/<ts>_<hash>/` — one level
+deeper than the ledger marriage's own tree, so a contemporaneity world's own (arbitrary,
+per-project) name can never collide with a curated ledger target. **DENOMINATION NORMALIZATION**
+(the one place this marriage differs mechanically from the ledger marriage, per this commission's
+own mandate): the SQL floor emits every timestamp as its true ABSOLUTE epoch-ms value natively
+(Postgres `bigint` has no 32-bit ceiling); the ASP producer emits every timestamp anchor-relative
+(`engine/contemp_edb.py`'s own documented 32-bit clasp-wraparound dodge). Exactly three of the
+ASP program's declared output facts (a clingo `#show` directive names which derived facts an ASP
+program actually emits, out of everything it internally derives) carry an absolute-ts argument
+(`token_min_ts/2`, `token_max_ts/2`, `silence/2`); the
+differential normalizes those three UP to absolute (adding the same `anchor_ms` the EDB export
+computed) before the set-comparison runs — stated explicitly in `contemp_differential.py`'s own
+docstring, not silently assumed. **A SECOND, PREVIOUSLY-LATENT 32-BIT HAZARD WAS FOUND LIVE
+AUTHORING THIS COMMISSION'S OWN SEEN-RED FIXTURE, FLAGGED AND GUARDED (not fixed at the source):**
+`contemp_edb.py`'s anchor-relative encoding only protects a BOUNDED audited window (its own
+docstring: "even a full week is ~6e8, safely under the 2^31 ceiling") — nothing enforces that
+bound, and a scratch fixture mixing a synthetic far-future BASE (~2033) with real rows written
+through `led` (`bootstrap/templates/led.tmpl`, this harness's own row-writing operator verb —
+its `ts` column defaults to actual wall-clock now, ~2026) in the same accumulated ledger produced
+a ~7-year window, ~100x past the ceiling, silently wrapping. `contemp_differential.py`'s own
+`_max_abs_relative_ms` guard now refuses loudly (QUARANTINED) rather than comparing a
+possibly-corrupted ASP producer whenever a world's audited window is unsafe — a real, in-scope
+hardening (this file is the one that owns the anchor normalization step), not a fix to
+`contemp_edb.py`'s own semantics (out of this commission's touch-list; named in BACKLOG.md's
+dated entry). The seen-red fixture's own case (p) is positioned BEFORE the fixture cases that
+write through `led` for exactly this reason (documented inline), so it demonstrates a genuine
+AGREE rather than a QUARANTINE of its own fixture's making.
+
+**`./audit --differential` (opt-in, default OFF)** wires the differential into the operator verb
+(`bootstrap/templates/audit.tmpl`): plain `./audit` is unchanged (the same single-producer report
+it has always printed); `./audit --differential` additionally runs
+`engine/contemp_differential.py --retain` and prints its own AGREE/DIVERGE line beneath the normal
+report. Default is OFF, not always-on like `judge` — reasoned in `audit.tmpl`'s own header: unlike
+`judge` (which IS the differential; there is no cheaper single-producer fallback), `audit`'s
+primary report is useful and cheap on its own, and `--differential` roughly doubles the work (a
+second live-DB read, a second independent journal re-parse, a second clingo invocation) for a
+check most invocations do not need turn-by-turn. Exit code 4 is newly reserved: reachable only
+when `--differential` is passed AND `engine/contemp_audit.py`'s own verdict was clean (exit 0)
+but the differential verdicted DIVERGE_DEFECT/QUARANTINED — a second-producer disagreement is
+never silently folded into a clean exit 0 (ADR-0015 "no result is not a clean result", applied to
+the differential axis). A non-zero `engine/contemp_audit.py` exit (1/2/3) is never overwritten by
+the differential's own code.
+
+**WITNESSED, both polarities, live**: `seen-red/contemporaneity-audit/run_fixtures.py` now carries
+SEVENTEEN cases, adding (p) and (q). Case (p) builds a scratch world combining case (h)'s own
+run-10 intake-shape burst and case (f)'s own manufactured LATE_DECLARED silence-then-burst, and
+runs it through a REAL `engine/contemp_differential.py --retain` subprocess (the same invocation
+`./audit --differential` makes): the differential returns **AGREE** (`asp=63 sql=63 atoms;
+Δasp=[] Δsql=[]`), exits 0, and retains the DerivationRecord pair (banked
+`differential-agree.txt`). Case (q) uses the SAME override seam
+`engine/tests/test_ledger_marriage.py::test_single_producer_mutation_is_diverge_defect` already
+precedents for the ledger marriage (`sql_atoms_override`) to forge one atom
+(`token_burst("forged-token-not-real")`) into the SQL floor's returned set, in an isolated
+subprocess — never touching `engine/contemp_floor.py`'s or `engine/lp/contemporaneity.lp`'s own
+source — and the differential correctly returns **DIVERGE_DEFECT**, with `only_sql` naming
+exactly the forged atom and `only_asp` naming the 63 legitimate atoms the forgery discarded
+(banked `differential-diverge-defect.txt`). The full suite (17 cases) re-runs clean end to end,
+exit 0, with zero scratch residue (both `contempprobe`/
+`contempprobe_pre24` schema pairs dropped, every world tempdir removed).
+
+**Deferrals still standing, unchanged by this pass** (named in the marriage-grade commission's own
+scope: "the `--retain` default and session-granularity questions stay filed"):
+`engine/contemp_audit.py` (Part 2's own single-producer report script, the one `./audit` execs)
+still defaults its own `--retain` flag OFF, untouched by this pass; the verdict is still computed
+over the WHOLE ledger window, not per-session (still filed); Part 3 (the deontic/temporal
+ordering-obligations program) remains untouched, as scoped.

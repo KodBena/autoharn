@@ -46,8 +46,10 @@ layer)* carry this second probe's own captured output.
 Every decision/assumption/finding is an append-only row. UPDATE, DELETE, TRUNCATE are refused by
 database trigger — not by convention. Changing your mind is a *new* row linked to the old one
 (`supersedes` for replacement, `amends` for one clause), so the record shows what was believed and
-when, forever. *Witnessed: e17 exercised both correction tracks organically; refused mutations are
-banked in `seen-red/06`.*
+when, forever. *Witnessed: e17 (increment 17 of this project's predecessor build sequence)
+exercised both correction tracks organically; refused mutations are banked in `seen-red/06` (this
+repository's own convention: a directory under `seen-red/` holds the runnable proof that a refusal
+actually fired, per item 6 below).*
 
 **2. Authorship you didn't type, so it can't be faked by typing.**
 Every row is attributed. The `actor` is resolved from the database connection; on top of that, rows
@@ -71,8 +73,10 @@ verification had passed (pre-s21, still valid — same-session distinctness is u
 s21 itself fired in anger for the first time during run 5 (2026-07-10, mid-run forensics): a
 reviewer's `technical` claim was REFUSED by `validate_independence` ("SAME invocation wrote
 both"), the reviewer then honestly downgraded to `self-review` citing the NULL-half fail-safe
-rule verbatim — kernel fail-safe held with the hook layer dark. Applied live to `toycolors`
-(confirmed *this pass*: `review_stamp_distinctness` there carries `review_stamp_session`/
+rule verbatim — kernel fail-safe held with the hook layer dark. Applied live to `toycolors` (an
+existing, pre-s20 project deployment this document cites repeatedly as a real-world test
+substrate, distinct from the throwaway `--new-world` probes named elsewhere here) (confirmed
+*this pass*: `review_stamp_distinctness` there carries `review_stamp_session`/
 `regards_stamp_session`) and to every `--new-world` scaffold's birth chain since.*
 
 **4. Edits gated on declared intent (refuse-and-teach).**
@@ -521,6 +525,30 @@ apply-delta.sh is retired" as settled fact; the script is in fact still present,
 functionally capable of applying a delta to an existing world — corrected in the SQL file's own
 prose and flagged loudly in BACKLOG.md's dated entry (deleting/neutering the script is a
 separate, larger decision, not taken here).
+
+**24b. SQL-floor marriage differential — item 24's own deferral CLOSED (2026-07-12, Sonnet,
+commissioned build).** `engine/contemp_floor.py` (the SQL floor) + `engine/contemp_differential.py`
+(the differential runner, matching `engine/ledger_differential.py`'s AGREE/DIVERGE_BY_DESIGN/
+DIVERGE_DEFECT/QUARANTINED vocabulary + DerivationRecord banking by import, never re-derived) give
+this verb the same marriage-grade cross-validated pair the ledger's `T_now` judgments already have
+(`T_now` is this project's name for the record-time facts `engine/lp/ledger_tnow.lp` derives — see
+item 30 below for its own full gloss; it is cited here only to say this verb now gets the SAME
+two-producer treatment). `./audit --differential` (opt-in, default OFF — reasoned in `audit.tmpl`'s
+own header) runs both producers and prints AGREE/DIVERGE beneath the normal report; a new exit code
+4 marks "audit was clean but the differential disagreed," never silently folded into exit 0.
+**Witnessed live**: seen-red case (p) — AGREE, `asp=63 sql=63 atoms`, DerivationRecord pair
+retained; case (q) — a manufactured DIVERGE_DEFECT (a forged atom substituted into the SQL floor's
+own output, never touching either real producer's source), correctly caught and named. **A second,
+previously-latent 32-bit clingo-wraparound hazard was found live authoring this pass's own
+fixture** (a window spanning ~7 years, ~100x past the documented safe bound) — flagged, and
+guarded against with a loud QUARANTINE refusal in `contemp_differential.py` (in-scope: this module
+owns the anchor normalization step), rather than fixed at `contemp_edb.py`'s own source (out of
+this commission's touch-list). The full account, the denomination-normalization design, and the
+fixture reordering this hazard required all live in `design/CONTEMPORANEITY-AUDIT.md`'s Status
+section and in BACKLOG.md's dated entry. Deferrals stay unchanged: `engine/contemp_audit.py` (item
+24's own single-producer report script, the one `./audit` execs) still defaults its own `--retain`
+flag OFF, the verdict is still computed over the whole ledger window rather than per-session, and
+Part 3 stays filed.
 
 **25. `distance-to-clean` — the composed closure-debt verb (BACKLOG "Five-item batch,
 maintainer-approved 2026-07-11 evening", item 1; design/RETROSPECTIVE-RUN10.md Finding 1).** A
