@@ -1,0 +1,65 @@
+seen-red/track-work — banked RED evidence (both-polarity proof, fixture-census)
+
+bootstrap/track-work.sh (design/WORK-STATUS-OFFERING.md) is the standing work-tracking
+scaffold: a new, project-agnostic entry point (deliberately NOT new-project.sh, and NOT
+editing any existing bootstrap/templates/*.tmpl — this offering gets its own entry point,
+per the collision constraint this build session was given). Both polarities below are from a
+LIVE run of seen-red/track-work/run_fixtures.py against the real toy@192.168.122.1 db, using
+a throwaway schema (twfixture/twfixture_kernel/twfixture_rw), torn down after.
+
+CASE RED-USAGE (a required flag omitted — --name — refuses at argument-parsing time, before
+any DB is touched):
+
+  usage: bootstrap/track-work.sh <project-dir> --name <name> --db <db> --host <host> [--schema <schema>]
+             [--kern <kern>] [--role <role>] [--force]
+         (--name derives --schema/--kern/--role unless given explicitly: schema=<name>,
+          kern=<name>_kernel, role=<name>_rw — mirrors new-project.sh --new-world's own
+          derivation from a world name. --name is REQUIRED here, unlike new-project.sh,
+          because it is this script's one derivation input.)
+  exit code: 2
+  no schema was created (verified live: `SELECT to_regclass('twfixture.ledger')` returns NULL)
+
+CASE RED-EXISTING (a second invocation against a directory that already carries a
+deployment.json — refused before any DDL runs, ledger rows provably untouched):
+
+  track-work.sh: /tmp/track-work-fixture-XXXXXXXX/project/deployment.json already exists -- refusing to overwrite (pass --force to replace it).
+    (a standing deployment is meant to persist indefinitely; re-running this script against
+    an existing one is presumptively a mistake, not a routine 'refresh' -- there is no such
+    concept here, mirroring the runs-are-strictly-linear ruling's own posture on worlds.)
+  exit code: 1
+  ledger row count before and after the refused re-run: 2 -> 2 (unchanged; verified live)
+
+A HAZARD FOUND AND FIXED DURING THIS BUILD (worth banking alongside the two refusals above,
+since the fix IS what makes GREEN-FORCE below safe): the first version of this script applied
+the full birth-chain DDL unconditionally under --force, including against a schema that
+ALREADY carried the complete chain. Postgres refused with "cannot drop columns from view" —
+CREATE OR REPLACE VIEW cannot shrink a view's column list, and re-running an EARLIER
+kernel/lineage file's own (shorter) view definition against a view that later files had
+already grown (s20/s21/s22's own "column-complete" re-issue idiom) hits exactly that wall.
+This is a general property of the birth chain, not specific to this script — `new-project.sh
+--new-world --force` against an already-migrated schema would hit the identical failure — and
+it is flagged in track-work.sh's own comments as a hazard out of THIS offering's scope to fix
+upstream (new-project.sh is under this session's own collision constraint; kernel/lineage/*.sql
+is frozen, maintainer-ratified-spec-only). The fix taken here, in this script's own scope: skip
+the DDL re-apply entirely when the kernel schema already exists — --force re-derives
+deployment.json + the verb shims + the principals only, never re-runs kernel DDL a second time.
+
+CASE GREEN-FORCE (the same command, WITH --force, against the schema the DDL-skip above now
+protects — succeeds, ledger rows still exactly the 2 written by the initial adopt, unchanged):
+
+  exit code: 0
+  ledger row count before and after --force: 2 -> 2 (unchanged; verified live)
+
+Full fixture transcript (seen-red/track-work/run_fixtures.py, live run against toy@192.168.122.1,
+2026-07-11):
+
+RED-USAGE: exit=2 (expect 2, no DB touch) -- PASS
+GREEN-ADOPT: exit=0 deployment.json=True verb shims present+executable=True -- PASS
+GREEN-ADOPT: led work open+claim exit=0/0 -- PASS
+GREEN-ADOPT: pickup shows IN-FLIGHT smoke item -- PASS
+GREEN-ADOPT: distance-to-clean TOTAL debt: 0 -- PASS
+RED-EXISTING: exit=1 (expect 1, 'already exists') rows unchanged (2->2) -- PASS
+GREEN-FORCE: exit=0 ledger rows unchanged (2->2) -- PASS
+
+track-work fixture: all cases PASS, scratch substrate torn down to zero residue (tempdir removed,
+schema twfixture/twfixture_kernel/role twfixture_rw dropped).
