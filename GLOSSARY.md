@@ -6,8 +6,8 @@ defined in this file under a short `###` heading and **linked on first use** in 
 as `[term](GLOSSARY.md#anchor)` (adjust the relative path by the doc's depth). A reader — human
 or agent — should never have to `grep` the repo to learn what a term means. When a doc
 introduces a new coined term, it adds the definition here in the **same change** (the term and
-its home land together). This is the chocofarm `leaf_eval_bound/GLOSSARY.md` *Stand-Alone
-Principle*, applied repo-wide.
+its home land together). This is the *Stand-Alone Principle*, coined in the maintainer's
+prior source project chocofarm (its `leaf_eval_bound/GLOSSARY.md`), applied repo-wide.
 
 **Coinages are provisional.** Several terms below (notably [Pillar](#pillar)) were coined by an
 AI collaborator during design, not by the maintainer. This file is the **one place** to rename
@@ -192,8 +192,8 @@ world. Runs are numbered; their worlds are named for them (`run5`, `run7`).
 
 ### birth chain
 The ordered kernel SQL a new world receives at scaffold time: `high_watermark_1.sql`
-(bundling s15 → s17-stamp → s17-independence → s19) → s20 → s21 → s22 → s23. There is no
-s16; s18 is deliberately excluded (experiment apparatus, not kernel). SSOT:
+(bundling s15 → s17-stamp → s17-independence → s19) → s20 → s21 → s22 → s23 → s24 → s25.
+There is no s16; s18 is deliberately excluded (experiment apparatus, not kernel). SSOT:
 `kernel/lineage/README.md` + `bootstrap/new-project.sh`.
 
 ### delta (kernel lineage delta)

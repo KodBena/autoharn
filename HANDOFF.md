@@ -1,118 +1,124 @@
-# HANDOFF (written 2026-07-11, session be693afb — fresh-context entry point)
+# HANDOFF (rewritten 2026-07-11 late evening, session e4410ef6 — fresh-context entry point)
 
-Audience: the next orchestrating session (Fable-class if available; otherwise the CLAUDE.md
-ORCHESTRATION rules govern who may do what). This file orients; it does not duplicate. The
-SSOTs it points at outrank any summary in it, and every claim below is re-observable — cite
-nothing from here without re-checking (verification checklist: POST-FABLE-OPERATING-BRIEF.md).
+This file orients the next orchestrating session (Fable-class if available; otherwise
+CLAUDE.md's ORCHESTRATION rules govern who may do what). It condenses and points; it does
+not duplicate. The SSOTs it names outrank any summary in it, and every claim below is
+re-observable — cite nothing from here without re-checking at the source it names. It
+supersedes the prior HANDOFF wholesale (that revision predated this entire day; it
+survives in git as commit 9ecc23a).
 
 ## Read in this order
 
-0. OPERATING-CARD.md — orientation in one page (the two-cwd model, vocabulary, the four
-   verbs, start/resume, the delta decision tree, the verification checklist). Added
-   2026-07-11 after an Opus fresh-context probe stalled on exactly these gaps; it
-   condenses, never supersedes — the SSOTs below outrank it.
-1. CLAUDE.md — law pointers + ORCHESTRATION (delegation, class-ratified fail-safe deltas,
-   self-application ruling, succession). Read the four ADRs it names IN FULL before any work
-   that invokes them.
-2. CAPABILITIES.md — the operational truth: 23 witnessed capability items, each with its
-   witness or honest UNWITNESSED mark, plus "Not yet enforced" and "Honest limits".
-3. BACKLOG.md, dated tail from "Run-5 forensics (2026-07-10)" onward — the live findings and
-   the run-7 verification entry.
-4. `git log --oneline -40` — the build record of 2026-07-09/10 is legible commit by commit.
+0. OPERATING-CARD.md — orientation in one page: the two-cwd model, vocabulary, the six
+   operator verbs, start/resume including the signed-commission start, the delta decision
+   tree, the hooks map, the verification checklist.
+1. CLAUDE.md — law pointers (now five ADRs, including 0017) + ORCHESTRATION. Read the
+   named ADRs IN FULL before any work that invokes them.
+2. CAPABILITIES.md — the operational truth: 25 witnessed capability items, each with its
+   witness or honest UNWITNESSED mark.
+3. BACKLOG.md, dated tail from "Run-10 first audit verdict adjudicated (2026-07-11)"
+   onward — the live findings, rulings, and dispositions of this day.
+4. `git log --oneline -40` — the day's build record is legible commit by commit.
 
-## Where the project stands
+## Where the project stands (2026-07-11, end of day)
 
-The core loop is CLOSED and witnessed: run 7 ([world](GLOSSARY.md#world) `run7`, db `toy` @
-192.168.122.1) ran end to end under the full mechanism set —
-[permit-to-work](GLOSSARY.md#permit-to-work) (no writes without an open+claimed s22
-work item), matcherless [stamping](GLOSSARY.md#stamp) (27/27 rows stamp_verified),
-kernel-verified technical independence on distinct (session, agent) pairs, the clean-exit
-Stop gate (first live firing, silent-allow path), and deliverables committed where the
-ledger says (`7adaf2b` in run7's own git). Verification record: BACKLOG "Run-7 phase-1
-verification (2026-07-10)" + commit cd7fbe2. Worlds are born complete:
-`bootstrap/new-project.sh --new-world` applies kernel s15→s22, seeds the stamp secret,
-registers author+reviewer [principals](GLOSSARY.md#principal), writes the governance
-preamble into the world's auto-loaded CLAUDE.md, and writes the `.claude/apparatus.json`
-switchboard (per-mechanism off/observe/enforce; anything that spends money per invocation
-defaults OFF — maintainer ruling; the demurral classifier is the case in point).
+Run 11 is LIVE (world `run11`, db `toy` @ 192.168.122.1) and is the first run whose task
+entered through the ledger rather than chat: the maintainer signed the commission himself
+(`LED_ACTOR=commissioner ./led commission "$(cat ~/aa)"` — row 1, actor=commissioner,
+unstamped-but-attributed, which is what FULL signing mode looks like mechanically). Its
+world was born on the full current stack: the [birth chain](GLOSSARY.md#birth-chain)
+through s25 (the sN tokens number the kernel's schema lineage steps — SSOT
+kernel/lineage/README.md; s25 is the latest), six verbs, the ADR-0017 doc gate flipped
+to enforce by maintainer instruction.
 
-Starting a run is exactly:
-```
-cd /home/bork/w/vdc/1/autoharn
-bootstrap/new-project.sh /home/bork/w/vdc/1/runN --new-world runN --db toy --host 192.168.122.1
-cd /home/bork/w/vdc/1/runN && claude    # then type the task; nothing is pasted
-```
+What this day added, each witnessed (BACKLOG's dated tail carries every disposition):
 
-## Run 8 — DONE and verified (2026-07-11); the night-shift record is BACKLOG's dated tail
+- **The contemporaneity audit is a live verb with a complete vocabulary.** `./audit`
+  joins every ledger row to the invocation that wrote it (via the token lineage step
+  s23 stamps onto each row) plus the wall-clock journals, reports per-row
+  event-vs-record deltas, and verdicts CONTEMPORANEOUS | BATCHED_DECLARED |
+  LATE_DECLARED | BACKFILL_SUSPECT. Lineage step s24 gives writers a declared
+  event time (`led --event-time`) so a late entry can be honest the way a paper log's
+  marked late entry is; BACKFILL_SUSPECT now means precisely the UNDECLARED gap. Its
+  first two live verdicts (run 9's false refusal, run 10's honest intake batch) each
+  produced same-day fixes; the run-10 adjudication is the specimen record.
+- **ADR-0017 ("The Zero-Context Reader") is ratified law and its enforcement is armed.**
+  The maintainer ratified with one proviso (Rule 4 must not prohibit maintainer-initiated
+  sweeps — amended at ratification). The A:B:C fresh-context audit loop is the primary
+  transport (design/ABC-AUDIT-LOOP-RECIPE.md); the attestation-presence gate blocks
+  commits of in-scope .md without a recorded fresh-context read. It has enforced LIVE
+  three times, twice escalating at the two-round cap and adjudicated per the recipe.
+  BUDGET FOR THIS: editing any maintainer-facing .md now costs a B-fork review cycle.
+- **Run 10 closed clean and was audited twice over.** The closure-struggle forensics
+  (BACKLOG "Run-10 closure audit") classified five struggles under the maintainer's
+  auditability-outranks-ergonomics ruling — the costliest was governance CATCHING a
+  premature "done" claim, and only two class-b mechanism gaps produced fixes (both
+  landed: `led` kind refusals teach the live vocabulary; the Stop gate journals all four
+  outcomes). The Opus retrospective (design/RETROSPECTIVE-RUN10.md) turned the record
+  into five process lessons plus six missing record-kinds; the maintainer approved five
+  resulting improvements the same evening, all landed: the `./distance-to-clean`
+  composed debt view (disaggregated views stay the default — maintainer condition), the
+  s25 commission kind with its two signing modes (FULL: the commissioner signs the row
+  from his own terminal; LAZY: the implementing agent transcribes the ask verbatim,
+  marked as carrying no commissioner guarantee), the read-observer journal (reviewer
+  reads now leave traces), intake-granularity judgment guidance, and the
+  alternatives-considered convention (no kernel column — filed awaiting witnessed need).
+- **Runs are strictly linear** (ruling transcribed in CLAUDE.md; apply-delta.sh is
+  deleted, not just demoted). **Hook journals all write UTC-Z.** **The doc-legibility
+  toolchain** (link-integrity gate, doc_shapes gate, seeded acronym advisory, per-world
+  doc gate via apparatus) landed from the morning's legibility indictment.
 
-Run 8 tested resumption (fresh session, ledger hydration — never `--continue`; maintainer
-doctrine). Result: hydration FAILED for a reason upstream of pickup — the commission was
-never ledgered (run 7 decomposed only what it was about to do), the agent did unledgered
-archaeology, recovered the spec, then ran the full discipline cleanly (all claims
-verified; Stop-gate BLOCK path live-witnessed; cross-session stamping live-witnessed).
-Every finding is filed in BACKLOG 2026-07-11 entries and each got its mechanism the same
-night: full-commission intake + investigation/stop-disposition preamble points (1/7/8),
-their observer hooks, pickup SPEC blocks, the LED_ACTOR fix, s23 invocation tokens, live
-verbs, judge-red-on-violations, `led work asof`, the flag-in-statement tripwire. Also
-that night: runs-are-linear ruling (no live worlds, apply-delta demoted), the
-contemporaneity indictment (batching systemic; I1 downgraded in the conformance map),
-OPERATING-CARD + glossary operating vocabulary, research/LOGIC-COVERAGE-STATUS.md. Note:
-run 7's phase 2 (HTML terminal renderer + 16-swatch editor + wiring the 16-color experiment)
-is still open in the run7 world and is a natural resumption subject.
+## Open work, ranked, with owners
 
-## Open work, ranked, with owners (rewritten 2026-07-11 night shift)
-
-1. **Maintainer's morning batch (all prepared, one sitting):** (a) review_gap ruling —
+1. **Maintainer decisions, all prepared, none blocking run 11:** (a) review_gap ruling —
    design/REVIEW-GAP-SCOPE-SEMANTICS-RULING.md, one yes/no, recommend YES on option A;
-   (b) the two ADR amendments drafted 2026-07-10; on "ratified", append verbatim, dated,
-   maintainer-attributed:
-   - ADR-0000 Revisit #3: "The out-of-frame rationalization-detector named here was minted
-     as a mechanism: hooks/demurral_detect.py (observer; PreToolUse on AskUserQuestion +
-     Stop), regression-tested against the adversarial corpus
-     instruments/demurral_corpus.jsonl (n=121; precision 0.981, recall 0.929 raw / 0.852
-     at shipped timeout; witness banked in seen-red/demurral-detector/). Its costed
-     classifier defaults off per world. Promotion to enforcing remains a maintainer act."
-   - ADR-0013 Revisit #2: "Rule 3's enforcement surface tightened from review-only toward
-     the gate: the justification-as-suspect check now runs mechanically at the two
-     canonical sites (the pre-loaded question; the completion claim). It warns; it does
-     not refuse. The Rule's admission stands — the faculty it guards is still the faculty
-     that acts — but the demurral now leaves a trace the executor did not choose to
-     leave."; (c) ADR-0009 is an UNADAPTED chocofarm copy
-   (Scope still binds chocofarm/) — re-instance for autoharn's experiment domain? yes/no,
-   amendment drafts on yes; (d) research-ledger apply — one scripted command, armed
-   (BACKLOG chocofarm disposition); (e) pg_hba superuser hardening — five minutes,
-   design/PG-HBA-HARDENING.md, PREPARED-UNAPPLIED, unchanged.
-2. **Audit verb (contemporaneity Part 2)** — design/CONTEMPORANEITY-AUDIT.md, spec'd
-   including the binding ASP-first directive; s23 tokens + invocation journal landed and
-   inert until this consumes them. Thresholds from the measured runs-5-8 corpus, never
-   guessed. The deductive-engine showcase; Part 3 (preamble ordering obligations as one
-   deontic/temporal ASP program) sketched behind it.
-3. **Artifact-vs-requirements detector Register 1** — design/ARTIFACT-VS-REQUIREMENTS-
-   DETECTOR.md; the parked attachment question can now be decided on run-8 evidence
-   (14 organic assumption rows, statement-prefix practice, refs edges underused).
-4. **Run 9 intent — unset (maintainer's call).** Natural shape: first run under the full
-   night-shift mechanism set (live verbs, SPEC-carrying pickup, stop-disposition +
-   delegation observers, s23 tokens) with its experiment banked in the research ledger if
-   (1d) is applied.
-5. **Prudential, filed only:** kernel-column candidates superseded_by + tier (omega
-   disposition — await witnessed need); scope tagging + JSON schema (need design); s23-as-
-   claim-before-close (unchanged); circuit-breaker 3/3 live witness (arrives free).
+   (b) the two ADR amendment texts drafted 2026-07-10 — held VERBATIM in the previous
+   HANDOFF revision (git commit 9ecc23a, open-work item 1(b)); on "ratified", restore
+   from there and append, dated, maintainer-attributed; (c) ADR-0009 re-instancing
+   yes/no — law/adr/0009-performance-investigation-discipline.md is an unadapted copy
+   whose Scope clause still binds the source project's tree; the question is whether to
+   re-instance it for autoharn's experiment domain (finding filed in BACKLOG,
+   2026-07-10); (d) research-ledger apply — bootstrap/apply-research-ledger.sh, armed, one
+   word; (e) pg_hba hardening — design/PG-HBA-HARDENING.md, unchanged; (f) cost/timing
+   accounting — designed-unbuilt, waits on his privacy call (ephemera aggregates only);
+   (g) OPTIONAL: PGP-signed commissions — stance given 2026-07-11 (narrow yes, at the
+   commission seam only), design memo on request.
+2. **Run-11 watch duties (live now):** the signed-commission intake is a first — verify
+   the agent decomposed FROM row 1, each decomposition row citing it through `--refs`
+   (the ledger's typed row-to-row citation field); run `./audit` and
+   `./distance-to-clean` against it mid/post-run; classify any closure struggles under
+   the standing three-class rubric (BACKLOG "Maintainer priority ruling", 2026-07-11)
+   before proposing anything.
+3. **Configuration commission (queued behind run-11 quiet time):** CONFIGURATION.md
+   (adopter-facing, one page, ADR-0017-compliant), the apparatus unknown-key sweep
+   (typo'd mechanism names are silently ignored today — fail-open), the autoharn
+   install-path contract statement, and the pg_hba/setup FAQ (maintainer disposed
+   provisioning as FAQ-scope, 2026-07-11).
+4. **Audit verb completions, filed:** the SQL-floor differential for `./audit` (single
+   ASP producer today — not marriage-grade), the `--retain` default question,
+   session-level granularity, Part 3 (deontic/temporal preamble program).
+   design/CONTEMPORANEITY-AUDIT.md's Status section is the ledger of what is and is not
+   built.
+5. **Prudential, filed only:** attestation-record adjudication field (seam found at the
+   first live escalation); detector Register 1 (design/ARTIFACT-VS-REQUIREMENTS-
+   DETECTOR.md); kernel-column candidates (superseded_by, tier, alternatives) all
+   awaiting witnessed need; an ASP/SQL consumer for commission rows (named in s25's own
+   header).
 
-## Standing cautions (the ones this session paid for; details in POST-FABLE brief + BACKLOG)
+## Standing cautions (paid for; details in BACKLOG's tail)
 
-- Verify artifacts, never reports — including your own prior claims (this session's "first
-  stamped independence" claim was refuted by run 6's ledger: cite-from-memory fails).
-- Hooks AND the operator verbs execute from THIS repo per invocation in every wired world
-  (live-verbs refactor, 2026-07-11: worlds carry 3-line shims): never edit hooks/ OR
-  bootstrap/templates/ while any wired session is live (`pgrep` + `/proc/<pid>/cwd`,
-  checked at edit time, by the editor); build-new-then-swap beats wait-and-block.
-- Enumeration fails open (three witnessed stamp evasions; one bash-mutation gap): prefer
-  unconditional mechanisms and after-the-fact observers over shape-matching.
-- Agents park: a "still running / waiting" stop is the known failure — resume with a directive,
-  not a question. Concurrent agents race the shared git index: explicit pathspecs +
-  CLAUDE_COMMIT_PATHS, never unstage foreign work (one authorship blemish stands in the
-  record from exactly this).
-- The maintainer is an executive-level non-expert who reads refusals, not source: every
-  operator step is a verb or it is a defect (self-application ruling); questions to him are
-  prepared yes/no with one recommendation, and never vacuous — check the class-ratification
-  rule before asking anything about deltas.
+- The freeze rule covers hooks/, bootstrap/templates/, AND live-executed engine/ code in
+  spirit: a wired session in any run* world means build-new-then-swap, never edit-live.
+  Check `pgrep -a claude` + `readlink /proc/<pid>/cwd` at edit time, every time.
+- Concurrent agents race the shared git index. The proven pattern: agents work in
+  isolated worktrees; the orchestrator integrates in its OWN scratch worktree and lands
+  main as one short merge. BACKLOG append-append conflicts resolve keep-both.
+- Verify artifacts, never reports — including your own prior claims and your agents'
+  summary messages (one witnessed case this day: an agent's message said "ran clean"
+  while its banked artifact honestly said "refused"; the artifact was right).
+- The maintainer is an executive-level non-expert who reads refusals, not source. Every
+  operator step is a verb or it is a defect. Questions to him: prepared, yes/no, ONE
+  recommendation, costs named. His standing priority: auditability outranks agent
+  ergonomics — ergonomics improvements only with auditability held constant.
+- Fable never writes SQL; Sonnet executes; Opus needs firm rails and evidence-pointer
+  duties (both Opus engagements this day ran clean under those rails).

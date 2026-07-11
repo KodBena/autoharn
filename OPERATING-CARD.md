@@ -1,10 +1,11 @@
 # OPERATING CARD — read this first, operate from here
 
 Written 2026-07-11 after an Opus-model fresh-context probe of this repo reported its
-orientation gaps; this card is the fix. It condenses; it does not supersede. SSOTs:
-CLAUDE.md (law + orchestration), CAPABILITIES.md (what is witnessed), BACKLOG.md dated
-tail (live findings), HANDOFF.md (session entry point). When this card and an SSOT
-disagree, the SSOT wins and the divergence is a defect to file.
+orientation gaps; this card is the fix. It condenses; it does not supersede. The
+[SSOTs](GLOSSARY.md#ssot) (single sources of truth — the one authoritative home for each
+kind of fact): CLAUDE.md (law + orchestration), CAPABILITIES.md (what is witnessed),
+BACKLOG.md dated tail (live findings), HANDOFF.md (session entry point). When this card
+and an SSOT disagree, the SSOT wins and the divergence is a defect to file.
 
 ## What this is, and where you stand
 
@@ -16,9 +17,11 @@ the operator verbs (`led`, `judge`, `pickup`) do not have their own copies here 
 world's `./led`/`./judge`/`./pickup` is a 3-line shim that `exec`s
 `bootstrap/templates/*.tmpl` straight out of THIS checkout, every invocation (maintainer
 ruling 2026-07-11, "live verbs" — no longer sed-substituted frozen copies).** Hooks and
-the verbs alike execute FROM this repo on every invocation in every wired world: an edit
-to hooks/ OR bootstrap/templates/ goes live everywhere instantly, which is why neither is
-ever edited while any wired session is live.
+the verbs alike execute FROM this repo on every invocation in every wired world ("wired"
+= scaffolded with this repo's hooks in its `.claude/settings.json`, so a Claude session
+there runs under the governance apparatus): an edit to hooks/ OR bootstrap/templates/
+goes live everywhere instantly, which is why neither is ever edited while any wired
+session (a live Claude session inside a wired world) is running.
 
 ## Vocabulary (the words the docs assume)
 
@@ -35,8 +38,8 @@ Condensed for quick reference; full definitions (the SSOT) live in
   (maintainer ruling, 2026-07-11).
 - **[birth chain](GLOSSARY.md#birth-chain)** — the SQL applied at world creation:
   `high_watermark_1.sql` (bundling s15 → s17-stamp → s17-independence → s19) → s20 → s21 →
-  s22 → s23. There is no s16; s18 is deliberately excluded (experiment apparatus, not
-  kernel). See kernel/lineage/README.md.
+  s22 → s23 → s24 → s25. There is no s16; s18 is deliberately excluded (experiment
+  apparatus, not kernel). See kernel/lineage/README.md.
 - **[delta](GLOSSARY.md#delta-kernel-lineage-delta)** — one additive lineage step. It
   reaches reality by entering the birth chain; the next world's scaffold carries it. Never
   applied to an existing world (see the decision tree below).
@@ -59,34 +62,80 @@ Condensed for quick reference; full definitions (the SSOT) live in
 - **[ephemera](GLOSSARY.md#ephemera)** — local session transcripts/snapshots; never
   committed (privacy ruling).
 
-## The four verbs (run inside a world directory)
+## The verbs (run inside a world directory; six since 2026-07-11)
 
 - `./led <kind> "<statement>"` — write a ledger row (kinds incl. decision, assumption,
-  finding, question, verification). `./led --refs row:<id> ...` cites an antecedent.
-  `./led work open <slug> <title>` / `work claim <slug>` / `work close <slug> shipped
-  --witness "<ref>"` — the work-item loop. `./led review-gap`, `question-status`,
-  `work list`, `work violations` — the debt views. Witness: CAPABILITIES items 7–11.
-- `./judge` — the ASP/SQL differential. Closed verdicts: `AGREE` (green) |
+  finding, question, verification, and — since s25 — commission). `./led --refs row:<id> ...`
+  cites an antecedent. `./led --event-time <iso-ts> ...` declares a late entry (s24: an act
+  recorded after it happened, declared rather than disguised). `./led work open <slug>
+  <title>` / `work claim <slug>` / `work close <slug> shipped --witness "<ref>"` — the
+  work-item loop. `./led review-gap`, `question-status`, `work list`, `work violations` —
+  the debt views, each usable alone (the disaggregated views are the default; maintainer
+  condition, 2026-07-11). Witness: CAPABILITIES items 7–11.
+- `./judge` — the ASP/SQL differential (ASP = Answer Set Programming, the clingo logic
+  engine; every verdict is derived independently in ASP and in SQL and the two must
+  agree). Closed verdicts: `AGREE` (green) |
   `DIVERGE_BY_DESIGN` | `DIVERGE_DEFECT` | `QUARANTINED`; non-zero exit iff defect or
   quarantine — both are TYPED escalation events: stop and route upward, with the banked
   DerivationRecord pair under engine/docs/ledger-marriage/derivations/ as the artifact.
   Diagnosis walkthrough: engine/docs/JUDGE-READING.md. Witness: CAPABILITIES item 12.
 - `./pickup` — live-derived resume brief (six sections incl. IN-FLIGHT work items),
   recomputed from the ledger every time, never stored. Witness: CAPABILITIES item 11.
-- the scaffold — see next section. Witness: CAPABILITIES item 13.
+- `./audit` — the contemporaneity audit: joins every ledger row to the invocation that
+  wrote it and the wall-clock journals, reports per-row event-vs-record deltas, closed
+  verdicts CONTEMPORANEOUS | BATCHED_DECLARED | LATE_DECLARED | BACKFILL_SUSPECT (exit 1
+  only on the last). Read-only; run it mid-run or after. Witness: CAPABILITIES item 24.
+- `./distance-to-clean` — one composed read of all closure-debt dimensions with counts;
+  additive convenience over the debt views above, which remain the default surface.
+  Witness: CAPABILITIES item 25.
+- the scaffold — `bootstrap/new-project.sh`, run from the autoharn checkout: creates a
+  fresh world directory plus its Postgres schema pair, applies the birth chain, wires
+  hooks and verbs, registers the principals (invocation in the next section). Witness:
+  CAPABILITIES item 13.
 
 ## Start a run / resume a run
 
-Fresh world (witnessed, runs 5–7):
+Fresh world (witnessed, runs 5–11):
 ```
 cd /home/bork/w/vdc/1/autoharn
 bootstrap/new-project.sh /home/bork/w/vdc/1/runN --new-world runN --db toy --host 192.168.122.1
 cd /home/bork/w/vdc/1/runN && claude    # type the task as the first message; nothing is pasted
 ```
 
-Resume (the run-8 subject; UNWITNESSED until run 8 banks it. Maintainer ruling
-2026-07-11: governed resumption is a FRESH session hydrated from the ledger — never a
-reloaded conversation):
+**Signed-commission start (FAQ; first witnessed at run 11).** To put the task itself on
+the record before any agent exists — the commission enters through the ledger, not chat:
+
+1. Scaffold as above. The scaffold registers a `commissioner` principal automatically.
+2. Optional: set any apparatus modes for this world (e.g. flip the doc gate to enforce:
+   edit `mechanisms.doc_shapes_gate.mode` in `<world>/.claude/apparatus.json`).
+3. Sign the commission from YOUR terminal, inside the world directory — with the ask in a
+   file (say `~/aa`), quoting is handled for you:
+   ```
+   LED_ACTOR=commissioner ./led commission "$(cat ~/aa)"
+   ```
+   The row lands `actor=commissioner`, unstamped-but-attributed — your bare shell has no
+   Claude session to stamp it, and that absence plus the actor is what mechanically
+   proves what this project calls FULL signing mode (the commissioner signed the ask
+   himself). Skipping this step is also legitimate: the agent then transcribes your
+   first chat message as a vicarious commission, marked as carrying no commissioner
+   guarantee — LAZY signing mode, taught by the world's own auto-loaded `CLAUDE.md`
+   governance preamble (the commission-intake point).
+4. Start `claude` and make the FIRST message point at the signed row rather than restating
+   the task — otherwise the agent may dutifully re-transcribe your directive as a second,
+   vicarious commission:
+   ```
+   Your commission is already on this world's ledger, signed by the commissioner
+   (row 1, kind=commission). Run ./pickup, read that row in full, and execute it
+   per this project's CLAUDE.md preamble. Do not re-transcribe the commission —
+   decompose from the signed row, citing it with --refs row:1.
+   ```
+   Expect: the agent runs `./pickup`, reads row 1, and writes its decomposition as
+   decision rows each carrying `refs row:1` — the decomposition citing its source.
+
+Resume (exercised at run 8: the fresh-session mechanics are witnessed, though that run
+also exposed — and got mechanized — the gap that its predecessor had never ledgered the
+commission. Maintainer ruling 2026-07-11: governed resumption is a FRESH session
+hydrated from the ledger — never a reloaded conversation):
 ```
 cd /home/bork/w/vdc/1/<world>
 claude                   # FRESH session — no --continue, no --resume
@@ -128,6 +177,8 @@ history — the ceremony it guarded has no legitimate scenario).
 | mutation_observer (posttooluse_mutation_observer.py) | Post Bash | find -newer sweep; warns on mutation with no work item | observe (enforce impossible) |
 | delegation_observer (pretooluse_delegation_observer.py) | PreToolUse Task/Agent | journals every subagent dispatch; warns when no open+claimed work item | observe |
 | demurral_detect.py | AskUserQuestion, Stop | out-of-frame Rule-3 classifier; warns only | **OFF (costs money)** |
+| doc_shapes_gate (pretooluse_doc_shapes_gate.py) | PreToolUse Write/Edit on *.md | runs gates/doc_shapes.py checks in-world; refuse-and-teach in enforce | observe |
+| read_observer (pretooluse_read_observer.py) | PreToolUse Read | journals ts/session/path (evidence for reviewer independence — invariant I6 of law/briefs/BRIEF-CONFORMANCE-MAP.md) | observe |
 
 Before ANY hooks/ edit: verify no wired session is live — `pgrep -a claude` then
 `readlink /proc/<pid>/cwd` for each; any cwd in a wired world = do not edit;
