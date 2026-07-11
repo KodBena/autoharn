@@ -3018,3 +3018,14 @@ itself evidence a mechanism is wrong — the run10 audit pass (queued for when t
 closes; maintainer will give the word) classifies each struggle as agent defect vs
 mechanism-that-refuses-without-teaching vs legitimate-requirement-being-felt, and only the
 middle class produces changes.
+
+## bootstrap/apply-delta.sh deleted, executing the linearity ruling (2026-07-11)
+
+The s24 commission's adversarial reviewer flagged that the script was still present and
+executable although the runs-are-linear ruling (2026-07-11, transcribed in CLAUDE.md)
+retired it with the explicit vocabulary "deleted, not documented." The transcription
+session (this one) had updated every doc but never removed the file — an executable whose
+every legitimate scenario the law had abolished is a loaded ritual waiting for a confused
+operator. Deleted now; CAPABILITIES item 14 records the deletion, and item 15's stale
+"remains the apply act" clause (written before the linearity ruling) is corrected in place
+with a dated note. The delta path is unchanged and single: birth chain, next scaffold.

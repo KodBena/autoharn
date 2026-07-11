@@ -205,7 +205,12 @@ empty post-drop `information_schema.schemata` query and directory removal). *Re-
 `countersigned_in_force` post-scaffold, no errors beyond the same cosmetic idempotent-DROP
 NOTICEs; torn down zero-residue the same way.
 
-**14. `bootstrap/apply-delta.sh` — DEMOTED TO HISTORY (maintainer ruling 2026-07-11).**
+**14. `bootstrap/apply-delta.sh` — DEMOTED TO HISTORY (maintainer ruling 2026-07-11), file
+DELETED same day.** The ruling's own vocabulary was "deleted, not documented"; the file's
+continued presence was flagged as a live hazard by the s24 commission's adversarial review
+(an executable script whose every legitimate scenario the law had abolished), and it was
+`git rm`'d executing the already-ratified instruction. The witness record below stays as
+history of what the script was.
 Runs are strictly linear: run M > N settles run N's world as dust — there is no operator
 scenario for applying a delta to an existing world, and the ceremony this script guarded
 (typed confirmation, provenance line) was witnessed producing exactly the cargo-cult
@@ -230,10 +235,12 @@ question.**
 CLAUDE.md ORCHESTRATION (2026-07-09 ruling): a kernel lineage delta that only ADDS refusals,
 vocabulary, or derived views — strictly fail-safe, nothing existing relaxed — and that arrives
 scratch-witnessed on both polarities with the SQL/ASP differential in AGREE, is pre-ratified as a
-**class**: it enters the birth chain without individual sign-off. *Applying* such a delta to an
-EXISTING live deployment remains the scripted, typed-confirmation operator act
-(`bootstrap/apply-delta.sh`) — the ruling removes the authoring question, never the apply act.
-Named retroactively as the shape s21 and s22 both already satisfied. *UNWITNESSED as its own
+**class**: it enters the birth chain without individual sign-off. *(Clause corrected
+2026-07-11: this entry originally kept apply-to-existing as "the scripted, typed-confirmation
+operator act" — the runs-are-linear ruling later abolished apply-to-existing entirely; a
+class-ratified delta reaches reality only via the birth chain at the next scaffold, and the
+apply script is deleted, see item 14.)* Named retroactively as the shape s21 and s22 both
+already satisfied. *UNWITNESSED as its own
 mechanism this pass*: no delta has yet been authored and landed *citing* this class explicitly
 (it is a standing rule, not (yet) an exercised gate) — the honest state is "ratified rule, no
 instance run under it yet."
