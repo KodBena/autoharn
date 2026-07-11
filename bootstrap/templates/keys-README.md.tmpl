@@ -1,0 +1,38 @@
+# keys/ — this deployment's own GPG public keys
+
+This directory holds the GPG (GNU Privacy Guard) **public** keys that THIS deployment
+(`__PROJECT_NAME__`, scaffolded __CREATED_AT__) trusts for its own SIGNED commissions
+(`./verify-commission`, design/GPG-TRUST-LAYER.md §3 in the autoharn checkout this
+deployment was scaffolded from) and any future signed chain-head verification
+(`./verify-chain`, §4). It is deliberately separate from autoharn's own `law/keys/`, which
+verifies only autoharn's own `ratified/*` git tags on the autoharn repository itself and has
+no bearing on this deployment — commit YOUR OWN signing key here, never there. See
+design/GPG-TRUST-LAYER-FAQ.md §3 (in the autoharn checkout) for the full two-domain split
+and the exact commit ceremony for each.
+
+## Current state: AWAITING-KEY
+
+No public key has been committed to this directory yet. This is the honest empty state, not
+an error: `verify-commission` reports the distinct refusal `NO-COMMITTED-KEY` (exit 3) for
+any commission that carries a banked `.claude/commission-<id>.asc` signature but finds this
+directory empty — loud, never a silent pass, and never confused with an actual forged
+signature (`FORGED-OR-CORRUPT`, a different, checkable fact: a committed key exists here and
+the signature does not match it).
+
+## What lands here once a key exists
+
+- `<name>.asc` — the public half of a keypair generated with `gpg --full-generate-key`
+  (Ed25519 recommended, matching every throwaway test key this layer was witnessed with),
+  exported with `gpg --armor --export <fingerprint> > keys/<name>.asc` and committed
+  alongside `deployment.json` (or otherwise kept next to it, if this deployment is not
+  itself version-controlled).
+- The **private** key and any **revocation certificate** never belong here — print the
+  revocation certificate and store it offline, away from both this deployment and the
+  signing key itself; see design/GPG-TRUST-LAYER-FAQ.md §2 for why.
+
+## Related
+
+- design/GPG-TRUST-LAYER.md — the spec (§3 SIGNED commissions, §7 key residence).
+- design/GPG-TRUST-LAYER-FAQ.md — the operator walkthrough, §3 for the commit ceremony.
+- `../law/keys/README.md` (in the autoharn checkout) — the OTHER trust domain, scoped
+  exclusively to autoharn's own law-signing; not this deployment's concern.
