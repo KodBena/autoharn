@@ -1,9 +1,13 @@
 # Artifact-vs-requirements detector — design memo
 
 STATUS: DESIGN MEMO (pre-spec, deliberately). Authored by Fable, session of 2026-07-11,
-after reading ADR-0000/0012/0013/0014 in full. This is HANDOFF open-work item 1. It is a
-memo and not a spec for the same reason the work-item layer started as a memo: the shape
-must be validated against run evidence before anything freezes. Nothing here blocks runs.
+after reading ADR-0000/0012/0013/0014 in full. This is HANDOFF.md's "Artifact-vs-
+requirements detector Register 1" open-work entry (cited by name, not position — HANDOFF's
+open-work list is rewritten and re-ranked each session; this memo was originally its item 1,
+now item 3, which is exactly why a positional cite is the wrong pointer to leave standing).
+It is a memo and not a spec for the same reason the work-item layer started as a memo: the
+shape must be validated against run evidence before anything freezes. Nothing here blocks
+runs.
 
 ## The witnessed problem
 

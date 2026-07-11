@@ -1,6 +1,6 @@
 # 11 — SMT & Classical First-order Logic (Z3 / cvc5)
 
-> Part of the autoharn **logics & automated-deduction investigation** — see the [index](README.md); coined terms (Pillar, *_violations gate, supersession, …) are defined in the root **[GLOSSARY.md](../../../GLOSSARY.md)**.
+> Part of the autoharn **logics & automated-deduction investigation** — see the [index](README.md); coined terms (Pillar, *_violations gate, supersession, …) are defined in the root **[GLOSSARY.md](../../GLOSSARY.md)**.
 
 SMT (Satisfiability Modulo Theories) solvers decide quantifier-rich formulas in classical first-order logic enriched with background *theories* (linear arithmetic, arrays, strings, datatypes, bitvectors) — answering SAT (here is a model) or UNSAT (no model exists, optionally with a proof/unsat-core). Z3 and cvc5 are the two production engines.
 

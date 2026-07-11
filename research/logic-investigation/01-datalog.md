@@ -1,6 +1,6 @@
 # 01 — Datalog & Deductive Databases
 
-> Part of the autoharn **logics & automated-deduction investigation** — see the [index](README.md); coined terms (Pillar, *_violations gate, supersession, …) are defined in the root **[GLOSSARY.md](../../../GLOSSARY.md)**.
+> Part of the autoharn **logics & automated-deduction investigation** — see the [index](README.md); coined terms (Pillar, *_violations gate, supersession, …) are defined in the root **[GLOSSARY.md](../../GLOSSARY.md)**.
 
 A deductive database stores explicit facts and **Horn-clause rules** (`head :- body`) and computes the least fixpoint — every consequence the rules force — automatically and to termination. It is SQL's recursion done right: declarative, set-at-a-time, with transitive closure as a first-class citizen.
 

@@ -1,6 +1,6 @@
 # 05 — Modal & Epistemic Logic
 
-> Part of the autoharn **logics & automated-deduction investigation** — see the [index](README.md); coined terms (Pillar, *_violations gate, supersession, …) are defined in the root **[GLOSSARY.md](../../../GLOSSARY.md)**.
+> Part of the autoharn **logics & automated-deduction investigation** — see the [index](README.md); coined terms (Pillar, *_violations gate, supersession, …) are defined in the root **[GLOSSARY.md](../../GLOSSARY.md)**.
 
 Modal logic adds operators that qualify *the mode* of a truth — "necessarily", "possibly", "is known", "is believed", "after this happens" — interpreted over Kripke frames (worlds + accessibility relations). Epistemic logic is the agent-indexed instance: `K_a φ` ("agent *a* knows φ") and `B_a φ` ("believes"), with the doxastic/temporal variants autoharn actually needs.
 

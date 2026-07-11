@@ -1,6 +1,6 @@
 # A — Software landscape & install plan
 
-> Part of the autoharn **logics & automated-deduction investigation** — see the [index](README.md); coined terms (Pillar, *_violations gate, supersession, …) are defined in the root **[GLOSSARY.md](../../../GLOSSARY.md)**.
+> Part of the autoharn **logics & automated-deduction investigation** — see the [index](README.md); coined terms (Pillar, *_violations gate, supersession, …) are defined in the root **[GLOSSARY.md](../../GLOSSARY.md)**.
 
 *Consolidator's note: dedupe across all 13 family sections. Rows marked **✓** were independently web-verified (version/license/bindings) in June 2026; see "Web verification" at the end. Local probes confirmed: `swipl 9.3.31`, `clingo 5.8.0` + `gringo`, `java OpenJDK 25.0.2`, venv `python 3.13.13` with `z3-solver 4.16.0.0`, `networkx 3.6.1`, `sympy 1.14.0`, `scipy 1.17.1`, `cvxpy 1.9.1`, `ortools 9.15.6755`. The venv has **no** `clingo`/`cvc5`/`problog`/`owlready2` Python packages yet; `souffle`/`spot`/`tlc`/`maude` binaries absent.*
 

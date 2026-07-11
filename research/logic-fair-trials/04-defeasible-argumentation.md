@@ -1,6 +1,6 @@
 # 04 — Defeasible / Non-monotonic Reasoning & Formal Argumentation — Fair Trial (first pass)
 
-> Part of the autoharn **logic fair-trials** (the corrected, frontier-creed pass). Coined terms → root **[GLOSSARY.md](../../../GLOSSARY.md)**. The honest status of every verdict here is **undecided-until-the-experiment-runs** — see [README](README.md) and [AUDIT.md](AUDIT.md).
+> Part of the autoharn **logic fair-trials** (the corrected, frontier-creed pass). Coined terms → root **[GLOSSARY.md](../../GLOSSARY.md)**. The honest status of every verdict here is **undecided-until-the-experiment-runs** — see [README](README.md) and [AUDIT.md](AUDIT.md).
 
 > **Audit verdict:** `deflated = False` · 0 defect(s) noted · **not rewritten** (the hardening pass was a no-op).
 

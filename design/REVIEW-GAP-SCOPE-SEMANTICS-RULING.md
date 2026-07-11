@@ -1,11 +1,12 @@
 # review_gap scope semantics — DRAFT ruling for the maintainer
 
-STATUS: DRAFT — AWAITING MAINTAINER'S WORD (2026-07-11). Queued as item (a) of the
-maintainer's batch in HANDOFF "Open work" item 1. (An earlier revision cited "HANDOFF
-open-work item 2" — a reference into a superseded HANDOFF; this ruling has nothing to do
-with the audit verb that now occupies that slot.) An agent may draft a ruling; it may
-never file one as made. Nothing changes until the maintainer answers the one question at
-the end.
+STATUS: DRAFT — AWAITING MAINTAINER'S WORD (2026-07-11). Queued as item (a) of
+HANDOFF.md's "Maintainer's morning batch" open-work entry (cited by name, not position —
+an earlier revision of this line cited "HANDOFF open-work item 2," a pointer into a
+superseded HANDOFF revision that by the time it was read pointed at unrelated work; a
+positional cite into a doc that gets rewritten each session is a dangling pointer waiting
+to happen, so this one is by name). An agent may draft a ruling; it may never file one as
+made. Nothing changes until the maintainer answers the one question at the end.
 
 ## The question in plain words (read this first)
 

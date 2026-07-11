@@ -1,6 +1,6 @@
 # 06 — Temporal Logic & Runtime Verification (LTL/CTL/MTL, TLA+)
 
-> Part of the autoharn **logics & automated-deduction investigation** — see the [index](README.md); coined terms (Pillar, *_violations gate, supersession, …) are defined in the root **[GLOSSARY.md](../../../GLOSSARY.md)**.
+> Part of the autoharn **logics & automated-deduction investigation** — see the [index](README.md); coined terms (Pillar, *_violations gate, supersession, …) are defined in the root **[GLOSSARY.md](../../GLOSSARY.md)**.
 
 Formalisms for stating and checking properties about how a system's state evolves *over time* — "always", "eventually", "until", "before" — either by exhaustively model-checking a spec (TLA+/TLC, NuSMV) or by monitoring an event stream against a temporal formula at runtime (Spot, MTL monitors).
 

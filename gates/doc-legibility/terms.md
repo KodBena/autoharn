@@ -2,7 +2,7 @@
 
 Persistent, hand-authored definitions for the acronyms and jargon-codes used in the scoped docs
 (the obligations×formalisms survey + `docs/ARCHITECTURE.md`). This file is a **definition surface**
-for [`tools/doc-legibility/check.py`](check.py): a token bolded `**LIKE-THIS**` on any line below
+for [`gates/doc-legibility/check.py`](check.py): a token bolded `**LIKE-THIS**` on any line below
 counts as *defined everywhere in scope*. One token, one line, `**TOKEN** — one-line definition.`
 
 An entry here is a **claim that the term is real jargon and this is its correct meaning** — so the
@@ -10,7 +10,7 @@ definitions are checked, not guessed. A token that is genuinely common knowledge
 (a tool, conference, journal, org, license) does **not** belong here; it goes in
 [`allowlist.txt`](allowlist.txt). See [`README.md`](README.md) for the define-vs-allowlist rule.
 
-> Sibling surfaces (also authoritative): the survey's **[KEY.md](../../docs/research/2026-06-27-obligations-formalisms-survey/KEY.md)**
+> Sibling surfaces (also authoritative): the survey's **[KEY.md](../../research/obligations-formalisms-survey/KEY.md)**
 > (obligation codes, tiers, tool index) and the root **[GLOSSARY.md](../../GLOSSARY.md)** (autoharn's coined vocabulary).
 
 ---
@@ -161,7 +161,7 @@ definitions are checked, not guessed. A token that is genuinely common knowledge
 
 ## Project & tooling terms
 
-**QUAL** — a qualification gate (QUAL-1 … QUAL-7), the discipline that makes an LLM-authored encoding trustworthy at life-critical stakes (see [C-encoding-qualification.md](../../docs/research/2026-06-27-obligations-formalisms-survey/C-encoding-qualification.md)).
+**QUAL** — a qualification gate (QUAL-1 … QUAL-7), the discipline that makes an LLM-authored encoding trustworthy at life-critical stakes (see [C-encoding-qualification.md](../../research/obligations-formalisms-survey/C-encoding-qualification.md)).
 **SSOT** — Single Source Of Truth: the one authoritative home for a fact (also in the root [GLOSSARY.md](../../GLOSSARY.md)).
 **SMT-LIB** — the standard textual input/exchange format for SMT solvers.
 **CTE** — Common Table Expression (a `WITH`-clause subquery in SQL; recursive CTEs ≈ Datalog).

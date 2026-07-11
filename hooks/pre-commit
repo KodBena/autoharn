@@ -8,9 +8,10 @@
 # would be a silent vacuous pass (F49). It is therefore NOT wired; it rejoins
 # autoharn only when autoharn's first standing service does.
 #
-# FINAL WIRING (BUILD-BRIEF Step 9): staging_guard -> no_lazy_imports -> fixture_census
-# -> layout_census -> doc-legibility. layout_census is DISABLED here as of the maintainer
-# ruling below (2026-07-09); it still appears in this history note as the Step-9 design.
+# FINAL WIRING (BUILD-BRIEF Step 9, extended 2026-07-11 doc-legibility-indictment commission):
+# staging_guard -> no_lazy_imports -> fixture_census -> link_integrity -> layout_census ->
+# doc-legibility. layout_census is DISABLED here as of the maintainer ruling below
+# (2026-07-09); it still appears in this history note as the Step-9 design.
 # doc-legibility is wired REPORT-ONLY (runs and prints,
 # does not block): the C15 scope-widening to ALL tracked *.md surfaces ~1429 acronym reports
 # over the migrated corpus — mostly the crude heuristic misfiring on all-caps emphasis words
@@ -18,7 +19,10 @@
 # full corpus needs a corpus acronym-sweep (filed, BACKLOG); wiring it blocking now would make
 # the repo uncommittable — the maintainer-flagged tension (C15 widen vs Step-9 block vs Step-10
 # green). Its seen-red both-polarity proof already exists; only its pre-commit disposition is
-# report-only pending the sweep. The other four gates BLOCK.
+# report-only pending the sweep. link_integrity (2026-07-11) checks a DIFFERENT, cheaper
+# invariant than doc-legibility (link resolution, not acronym definition) and runs clean over
+# the full tracked-*.md corpus today (two principled, documented exclusions — see its own
+# docstring) — it BLOCKS. The other four non-disabled gates BLOCK too.
 #
 # Install (once per clone; .git/hooks is unversioned): git config core.hooksPath hooks
 set -u
@@ -44,6 +48,15 @@ PY="$HOME/w/vdc/venvs/generic/bin/python"
 "$PY" "$REPO_ROOT/gates/fixture_census.py" || {
     echo "" >&2
     echo "pre-commit: fixture census FAILED — commit refused (a gate/seen-red is not intact, ADR-0011/C20)." >&2
+    exit 1
+}
+
+# link_integrity — every relative markdown link in tracked *.md must resolve on disk
+# (2026-07-11 doc-legibility-indictment commission). Two documented exclusions (judgment/,
+# design/ARCHITECTURE.md) printed in its own output every run — never silent.
+"$PY" "$REPO_ROOT/gates/link_integrity.py" || {
+    echo "" >&2
+    echo "pre-commit: link-integrity gate FAILED — commit refused (a doc links somewhere that does not exist)." >&2
     exit 1
 }
 

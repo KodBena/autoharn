@@ -73,6 +73,7 @@ REGISTRY: dict[str, str] = {
     # registry in memory to force the breach.
     "layout-census":                  "gates/layout_census.py",
     "fixture-census":                 "gates/fixture_census.py",
+    "link-integrity":                 "seen-red/link-integrity/run_fixtures.py",
 }
 
 
