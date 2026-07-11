@@ -1,0 +1,10 @@
+doc-shapes seen red — 2026-07-11, live run of red-specimen.py (real gates/doc_shapes.py subprocess, pure stdlib, no cost).
+Banked per the seen-red convention (fixture_census: "a gate never seen red is a claim").
+
+CASE 1 (defective doc, gate mode): exit=1
+doc_shapes (gate mode): 2 finding(s) across 1 file(s)
+  /tmp/tmp2l7trqq9/bad.md:3: FRAGMENT standalone 3-word paragraph ('The core deliverable.') — a noun phrase is not a paragraph; write the sentence (or waive with 'doc-shapes-allow: <reason>')
+  /tmp/tmp2l7trqq9/bad.md:5: HANDOFF-POSITIONAL bare positional reference ('HANDOFF open-work item 2') into a wholesale-rewritten document — cite a quoted named item/anchor instead (HANDOFF "Open work" item N is fine), or waive with 'doc-shapes-allow: <reason>'
+CASE 2 (clean doc incl. quoted-handle form + waiver, gate mode): exit=0
+CASE 3 (repo-wide report mode): exit=0 (findings are informational; exit must be 0)
+doc-shapes red-specimen: all three cases behaved as designed — red on the defective doc naming both checks, green on the clean doc, report mode never failing.
