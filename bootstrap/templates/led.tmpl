@@ -36,6 +36,20 @@
 #     --concern design|enactment|process|other
 #     --evidence "<text>"
 #     --confidence low|medium|high
+#     --event-time <iso-ts>  declares WHEN the recorded event actually occurred, distinct from
+#                            this row's write time (kernel/lineage/s24-declared-event-time.sql's
+#                            nullable event_declared_ts column; design/LATE-ENTRY-AND-INTAKE-
+#                            SEMANTICS.md Proposal 2). Recording an act after the fact? Declare
+#                            its event time -- never narrate the past as if live. Omitting this
+#                            flag means "this row records a present act" (today's semantics,
+#                            unchanged); a declared time far enough before the write time is what
+#                            `./audit` reads as an honest LATE_DECLARED entry rather than an
+#                            undeclared, suspect one. NOT a stamp: writer-supplied, unverified,
+#                            trusted exactly as far as the writer is honest. Supported ONLY on the
+#                            generic <kind> <statement...> path today -- `led review`/`led work
+#                            *`/etc. each have their own INSERT that does not carry the column, so
+#                            this flag is REFUSED loudly on those verbs (never a silent drop; see
+#                            the coverage guard near the top of this file's own logic).
 #
 #   LED_ACTOR=<principal-name>   (env var, not a flag) resolves the actor/principal for EVERY
 #                            ledger-writing verb -- the generic <kind> <statement> path below,
@@ -225,6 +239,7 @@ refs=""
 concern=""
 evidence=""
 confidence=""
+event_time=""
 while true; do
   case "${1:-}" in
     -f) files="${2:-}"; shift 2 ;;
@@ -237,9 +252,34 @@ while true; do
     --concern) concern="${2:-}"; shift 2 ;;
     --evidence) evidence="${2:-}"; shift 2 ;;
     --confidence) confidence="${2:-}"; shift 2 ;;
+    --event-time) event_time="${2:-}"; shift 2 ;;
     *) break ;;
   esac
 done
+
+# --event-time COVERAGE GUARD -- --event-time is parsed by the SHARED top-of-file loop above
+# (same convention as every other flag here), but only the generic <kind> <statement...> path's
+# INSERT at the bottom of this file actually writes event_declared_ts (kernel/lineage/
+# s24-declared-event-time.sql). Every OTHER dispatched verb below (--recent/current/question-
+# status/review-gap/stamp-distinctness/register-principal/obligate/review/work) has its OWN
+# INSERT INTO ledger that does not carry the column. REFUSE loudly here rather than silently
+# dropping a value the operator explicitly asked to be recorded (the class this file's own
+# `warn_flag_in_statement`/missing-column-refusal idioms both exist to foreclose) -- the flag is
+# scoped to the generic path today (design/LATE-ENTRY-AND-INTAKE-SEMANTICS.md Proposal 2's own
+# worked example is exactly that path); widening it to `review`/`work` is a future increment,
+# not a silent gap.
+if [ -n "$event_time" ]; then
+  case "${1:-}" in
+    --recent|current|question-status|review-gap|stamp-distinctness|register-principal|obligate|review|work)
+      echo "led: REFUSED -- --event-time is only supported on the generic <kind> <statement...>" >&2
+      echo "  path today (e.g. './led --event-time <ts> finding \"...\"'); '${1:-}' has its own" >&2
+      echo "  INSERT that does not carry event_declared_ts, so the value would otherwise be" >&2
+      echo "  silently dropped. Omit --event-time for this verb, or route the declaration" >&2
+      echo "  through the generic path instead." >&2
+      exit 1
+      ;;
+  esac
+fi
 
 # --- LED_ACTOR resolution (ONE point, used by every ledger-writing path below: `led review`,
 # `led work claim`, and the generic <kind> <statement> path) -----------------------------------
@@ -285,7 +325,7 @@ SQL
 # notice, not a blocked write -- a tripwire, not a gate (mirrors demurral_detect.py's own
 # observer-only posture). led's OWN flag vocabulary is spelled out once, here, so a future flag
 # added to the top-of-file parser is not silently invisible to this check (ADR-0012 P1: one list).
-LED_FLAG_VOCAB="--supersedes --refs --regards --amends --answers --evidence --confidence"
+LED_FLAG_VOCAB="--supersedes --refs --regards --amends --answers --evidence --confidence --event-time"
 warn_flag_in_statement() {
   local text="$1" flag
   for flag in $LED_FLAG_VOCAB; do
@@ -687,31 +727,82 @@ resolve_actor
 # of LED_ACTOR. resolve_actor (defined near the top of this file) is now the ONE place LED_ACTOR
 # is read and validated, shared with `led review` and `led work claim`.
 
+# event_declared_ts (s24) is a WRITER-SUPPLIED column, unlike stamp_invocation (s23, trigger-
+# captured from a GUC -- it needs no mention here at all). This SAME led.tmpl executes LIVE for
+# EVERY wired world regardless of when it was scaffolded (BACKLOG maintainer ruling 2026-07-11,
+# "live verbs") -- an OLDER world's schema may predate s24 and simply lack the column, so this
+# generic path cannot hardcode it into the INSERT's column list (that would break `led` on every
+# pre-s24 world the instant this template lands, an ADR-0000 silent-breakage class this project
+# exists to foreclose). A LIVE check, mirroring `led obligate revoke`'s own has_table_privilege
+# pattern above: only paid when --event-time was actually passed (the common no-flag path is
+# byte-identical to before this delta, zero extra query, zero behavior change).
+if [ -n "$event_time" ]; then
+  has_event_declared_ts=$(psql -h "$PGHOST" -d "$PGDB" -tAc \
+    "SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = '${SCHEMA}' AND table_name = 'ledger' AND column_name = 'event_declared_ts');")
+  if [ "$has_event_declared_ts" != "t" ]; then
+    echo "led: REFUSED -- --event-time was given, but this world's kernel predates s24 (no" >&2
+    echo "  event_declared_ts column on ${SCHEMA}.ledger) -- the declaration cannot be recorded" >&2
+    echo "  in a typed column here. Either omit --event-time, or note the late-entry event time" >&2
+    echo "  in the statement's own prose instead (the improvised disclosure this flag mechanizes" >&2
+    echo "  -- see design/LATE-ENTRY-AND-INTAKE-SEMANTICS.md's run-10 row-1 specimen)." >&2
+    exit 1
+  fi
+fi
+
 # Bound via psql -v (a psql bind, not string concatenation) so `statement`/`rationale` can
 # contain quotes, semicolons, or anything else without escaping into SQL (P2: a boundary
 # translates-and-validates untrusted text; it does not hand-splice it into a query). NOTE: psql's
 # :'var' interpolation is only applied to a script read from stdin/-f, NOT to a -c argument -- so
-# the script is fed via stdin, not -c.
-psql -h "$PGHOST" -d "$PGDB" -v ON_ERROR_STOP=1 \
-  -v kind="$kind" -v statement="$statement" -v rationale="$rationale" \
-  -v supersedes="$supersedes" -v amends="$amends" -v amends_scope="$amends_scope" \
-  -v answers="$answers" -v refs="$refs" -v concern="$concern" \
-  -v evidence="$evidence" -v confidence="$confidence" -v enacts="$enacts_lit" \
-  -v actor_name="$actor_name" <<SQL
-    SET ROLE ${ROLE};
-    SET search_path = ${SCHEMA}, ${KERNEL};
-    INSERT INTO ${SCHEMA}.ledger
-        (kind, statement, rationale, supersedes, amends, amends_scope, answers,
-         refs, concern, evidence, confidence, enacts, actor)
-    VALUES (:'kind', :'statement', NULLIF(:'rationale', ''),
-            NULLIF(:'supersedes', '')::bigint,
-            NULLIF(:'amends', '')::bigint,
-            NULLIF(:'amends_scope', ''),
-            NULLIF(:'answers', '')::bigint,
-            NULLIF(:'refs', ''),
-            NULLIF(:'concern', ''),
-            NULLIF(:'evidence', ''),
-            NULLIF(:'confidence', ''),
-            NULLIF(:'enacts', '')::bigint[],
-            (SELECT id FROM principal WHERE name = NULLIF(:'actor_name', '')));
+# the script is fed via stdin, not -c. TWO INSERT SHAPES (event_declared_ts column present or
+# not -- see the live check above): the column list itself must differ, not merely the bound
+# value, on a schema that lacks the column entirely.
+if [ -n "$event_time" ]; then
+  psql -h "$PGHOST" -d "$PGDB" -v ON_ERROR_STOP=1 \
+    -v kind="$kind" -v statement="$statement" -v rationale="$rationale" \
+    -v supersedes="$supersedes" -v amends="$amends" -v amends_scope="$amends_scope" \
+    -v answers="$answers" -v refs="$refs" -v concern="$concern" \
+    -v evidence="$evidence" -v confidence="$confidence" -v enacts="$enacts_lit" \
+    -v actor_name="$actor_name" -v event_time="$event_time" <<SQL
+      SET ROLE ${ROLE};
+      SET search_path = ${SCHEMA}, ${KERNEL};
+      INSERT INTO ${SCHEMA}.ledger
+          (kind, statement, rationale, supersedes, amends, amends_scope, answers,
+           refs, concern, evidence, confidence, enacts, actor, event_declared_ts)
+      VALUES (:'kind', :'statement', NULLIF(:'rationale', ''),
+              NULLIF(:'supersedes', '')::bigint,
+              NULLIF(:'amends', '')::bigint,
+              NULLIF(:'amends_scope', ''),
+              NULLIF(:'answers', '')::bigint,
+              NULLIF(:'refs', ''),
+              NULLIF(:'concern', ''),
+              NULLIF(:'evidence', ''),
+              NULLIF(:'confidence', ''),
+              NULLIF(:'enacts', '')::bigint[],
+              (SELECT id FROM principal WHERE name = NULLIF(:'actor_name', '')),
+              NULLIF(:'event_time', '')::timestamptz);
 SQL
+else
+  psql -h "$PGHOST" -d "$PGDB" -v ON_ERROR_STOP=1 \
+    -v kind="$kind" -v statement="$statement" -v rationale="$rationale" \
+    -v supersedes="$supersedes" -v amends="$amends" -v amends_scope="$amends_scope" \
+    -v answers="$answers" -v refs="$refs" -v concern="$concern" \
+    -v evidence="$evidence" -v confidence="$confidence" -v enacts="$enacts_lit" \
+    -v actor_name="$actor_name" <<SQL
+      SET ROLE ${ROLE};
+      SET search_path = ${SCHEMA}, ${KERNEL};
+      INSERT INTO ${SCHEMA}.ledger
+          (kind, statement, rationale, supersedes, amends, amends_scope, answers,
+           refs, concern, evidence, confidence, enacts, actor)
+      VALUES (:'kind', :'statement', NULLIF(:'rationale', ''),
+              NULLIF(:'supersedes', '')::bigint,
+              NULLIF(:'amends', '')::bigint,
+              NULLIF(:'amends_scope', ''),
+              NULLIF(:'answers', '')::bigint,
+              NULLIF(:'refs', ''),
+              NULLIF(:'concern', ''),
+              NULLIF(:'evidence', ''),
+              NULLIF(:'confidence', ''),
+              NULLIF(:'enacts', '')::bigint[],
+              (SELECT id FROM principal WHERE name = NULLIF(:'actor_name', '')));
+SQL
+fi
