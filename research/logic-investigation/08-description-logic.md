@@ -1,6 +1,6 @@
 # 08 — Description Logic & Ontologies (OWL)
 
-> Part of the autoharn **logics & automated-deduction investigation** — see the [index](README.md); coined terms (Pillar, *_violations gate, supersession, …) are defined in the root **[GLOSSARY.md](../../../GLOSSARY.md)**.
+> Part of the autoharn **logics & automated-deduction investigation** — see the [index](README.md); coined terms (Pillar, *_violations gate, supersession, …) are defined in the root **[GLOSSARY.md](../../GLOSSARY.md)**.
 
 Description Logics (DLs) are decidable fragments of first-order logic for modeling a domain as **concepts** (classes), **roles** (binary relations), and **individuals**, with a reasoner that computes logical entailments (subsumption, classification, consistency). OWL 2 is the W3C-standardized, web-serialized DL family.
 

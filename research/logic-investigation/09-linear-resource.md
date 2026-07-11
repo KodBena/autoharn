@@ -1,6 +1,6 @@
 # 09 — Linear & Resource-aware Logic
 
-> Part of the autoharn **logics & automated-deduction investigation** — see the [index](README.md); coined terms (Pillar, *_violations gate, supersession, …) are defined in the root **[GLOSSARY.md](../../../GLOSSARY.md)**.
+> Part of the autoharn **logics & automated-deduction investigation** — see the [index](README.md); coined terms (Pillar, *_violations gate, supersession, …) are defined in the root **[GLOSSARY.md](../../GLOSSARY.md)**.
 
 Linear logic (Girard, 1987) is a logic where propositions are *consumed* when used: a hypothesis is a finite resource, not a reusable fact. "Resource-aware" relatives — Concurrent LF, rewriting logic, Constraint Handling Rules, Petri nets — track *multisets of facts that are produced and spent*, making them the natural fit for state, ledgers, and lifecycle transitions.
 

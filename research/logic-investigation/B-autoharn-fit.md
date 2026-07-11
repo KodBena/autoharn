@@ -1,6 +1,6 @@
 # B — autoharn-fit & completeness critic
 
-> Part of the autoharn **logics & automated-deduction investigation** — see the [index](README.md); coined terms (Pillar, *_violations gate, supersession, …) are defined in the root **[GLOSSARY.md](../../../GLOSSARY.md)**.
+> Part of the autoharn **logics & automated-deduction investigation** — see the [index](README.md); coined terms (Pillar, *_violations gate, supersession, …) are defined in the root **[GLOSSARY.md](../../GLOSSARY.md)**.
 
 *Adversarial review of 13 logic families against autoharn's concrete needs. Local availability re-verified, not taken from the section text (corrections noted inline). Verified: `swipl 9.3.31`, `clingo 5.8.0` (CLI), `java` OpenJDK 25, `z3-solver 4.16.0`, `cvxpy 1.9.1`, `ortools 9.15`, `networkx 3.6.1`, `sympy 1.14`, `scipy 1.17` all present; **Soufflé absent**, **cvc5/problog/owlready2 absent**, and critically the **Python `clingo` binding is NOT in the 3.13 venv** (only the system CLI is — every "drives straight from Python, zero install" claim across the ASP/abduction/paraconsistency sections is overstated; it is subprocess-from-Python today, or `pip install clingo`). The generic venv is **Python 3.13.13**, which structurally excludes ProbLog (≤3.12) and PyReason (3.7–3.10) — a real integration gap, below.*
 

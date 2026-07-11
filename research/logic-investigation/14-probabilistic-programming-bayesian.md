@@ -1,6 +1,6 @@
 # 14 — Probabilistic Programming & Formal Bayesian Frameworks
 
-> Part of the autoharn **logics & automated-deduction investigation** — see the [index](README.md); coined terms (Pillar, *_violations gate, supersession, …) are defined in the root **[GLOSSARY.md](../../../GLOSSARY.md)**.
+> Part of the autoharn **logics & automated-deduction investigation** — see the [index](README.md); coined terms (Pillar, *_violations gate, supersession, …) are defined in the root **[GLOSSARY.md](../../GLOSSARY.md)**.
 
 Probabilistic programming languages (PPLs) let you write a generative model as code and hand it to an inference engine that returns a full *posterior distribution* over the unknowns — the machinery autoharn needs to turn "12x" into a defensible, uncertainty-quantified claim rather than a point estimate masquerading as fact.
 

@@ -1,12 +1,12 @@
 # Logics & automated deduction — applicability to autoharn
 
-> ⚠️ **Superseded / corrected.** This pass optimized install-cost and used a dismissive "tourism" frame (an ADR-0013 violation). It is kept intact as the **Witness**; the **Correction** — the frontier-creed re-run, plus the cascade finding where the deflation-detector itself deflated — is in **[../2026-06-27-logic-fair-trials/](../2026-06-27-logic-fair-trials/)**. Read that first.
+> ⚠️ **Superseded / corrected.** This pass optimized install-cost and used a dismissive "tourism" frame (an ADR-0013 violation). It is kept intact as the **Witness**; the **Correction** — the frontier-creed re-run, plus the cascade finding where the deflation-detector itself deflated — is in **[../2026-06-27-logic-fair-trials/](../logic-fair-trials/)**. Read that first.
 
 _Generated 2026-06-27 by a 13-family parallel investigation (13/13 families + a software
 catalog, an adversarial fit-critic, and a synthesis), run `wf_6be06f87-68d`._
 
 > **Vocabulary:** coined terms (Pillar, intent SSOT, *_violations gate, supersession, …) are defined in
-> the root **[GLOSSARY.md](../../../GLOSSARY.md)** and linked on first use; never grep to learn a term.
+> the root **[GLOSSARY.md](../../GLOSSARY.md)** and linked on first use; never grep to learn a term.
 
 Investigation into (1) the **applicability** of classical & non-classical logics + automated deduction
 to autoharn, grounded in its concrete needs, and (2) the open-source **software** to leverage — each

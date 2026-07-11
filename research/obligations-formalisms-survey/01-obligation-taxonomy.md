@@ -1,6 +1,6 @@
 # 01 — The obligation taxonomy (the spine)
 
-> Part of the autoharn **obligations×formalisms survey** (the obligation-organized pass). Abbreviations & tiers → **[KEY](KEY.md)**; coined terms → root **[GLOSSARY.md](../../../GLOSSARY.md)**; index → [README](README.md).
+> Part of the autoharn **obligations×formalisms survey** (the obligation-organized pass). Abbreviations & tiers → **[KEY](KEY.md)**; coined terms → root **[GLOSSARY.md](../../GLOSSARY.md)**; index → [README](README.md).
 
 
 > The responsibility classes a life-critical, AI-assisted software process must guarantee. Every formal-system section maps to these by name. (Anchors per code; the at-a-glance table is in [KEY.md](KEY.md).)

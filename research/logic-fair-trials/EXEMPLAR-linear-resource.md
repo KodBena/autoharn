@@ -1,6 +1,6 @@
 # Gold exemplar — Linear & Resource-aware Logic (non-deflated)
 
-> Part of the autoharn **logic fair-trials** (the corrected, frontier-creed pass). Coined terms → root **[GLOSSARY.md](../../../GLOSSARY.md)**. The honest status of every verdict here is **undecided-until-the-experiment-runs** — see [README](README.md) and [AUDIT.md](AUDIT.md).
+> Part of the autoharn **logic fair-trials** (the corrected, frontier-creed pass). Coined terms → root **[GLOSSARY.md](../../GLOSSARY.md)**. The honest status of every verdict here is **undecided-until-the-experiment-runs** — see [README](README.md) and [AUDIT.md](AUDIT.md).
 
 ## Linear & Resource-aware Logic — Fair Trial (GOLD EXEMPLAR, hand-authored)
 
@@ -8,7 +8,7 @@
 > first-pass `09-linear-resource` trial *deflated* — it conceded the discipline to a `UNIQUE(reading_id)`
 > ("elegant, but Postgres does it with a constraint — I will not pretend otherwise") and the audit pass let
 > it through. This is the same question answered **without** the retreat, as the reference for what a
-> non-deflated trial looks like. Coined terms → root [GLOSSARY.md](../../../GLOSSARY.md).
+> non-deflated trial looks like. Coined terms → root [GLOSSARY.md](../../GLOSSARY.md).
 
 **The bet:** ledger discharge is a *resource* protocol — readings are consumed to discharge claims — and an
 affine/linear discipline captures the whole protocol *as one rule-set*, where SQL needs a new constraint per
@@ -46,7 +46,7 @@ Single-spend (one reading → one claim) is the toy; it reduces to `UNIQUE`. The
 4. **Concurrent commit.** Two sessions race to discharge against the same reading. Linearity makes the
    double-spend **structurally impossible** — the resource is in the context once. SQL needs `SERIALIZABLE`
    isolation *or* advisory locks *or* a unique partial index, **and** the right one differs per shape — an
-   enumeration of instances, i.e. the [Rule 4](../../../GLOSSARY.md#class-not-instance-net) violation the
+   enumeration of instances, i.e. the [Rule 4](../../GLOSSARY.md#class-not-instance-net) violation the
    project forbids.
 
 The decisive point is **trajectory, not snapshot** (the maintainer's ResNet-in-assembler argument): at one

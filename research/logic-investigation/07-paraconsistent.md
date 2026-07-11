@@ -1,6 +1,6 @@
 # 07 — Paraconsistent & Many-valued Logic
 
-> Part of the autoharn **logics & automated-deduction investigation** — see the [index](README.md); coined terms (Pillar, *_violations gate, supersession, …) are defined in the root **[GLOSSARY.md](../../../GLOSSARY.md)**.
+> Part of the autoharn **logics & automated-deduction investigation** — see the [index](README.md); coined terms (Pillar, *_violations gate, supersession, …) are defined in the root **[GLOSSARY.md](../../GLOSSARY.md)**.
 
 Logics that admit more than two truth values (e.g. Kleene's *unknown*, Belnap's *both*) and that **tolerate contradiction without exploding** — from `A ∧ ¬A` a classical engine derives *everything*; a paraconsistent one derives nothing extra. It lets contradictory facts coexist as data.
 

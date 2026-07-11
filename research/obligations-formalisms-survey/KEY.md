@@ -1,6 +1,6 @@
 # KEY — abbreviations, tiers & tools for the survey
 
-> Part of the autoharn **obligations×formalisms survey** (the obligation-organized pass). Abbreviations & tiers → **[KEY](KEY.md)**; coined terms → root **[GLOSSARY.md](../../../GLOSSARY.md)**; index → [README](README.md).
+> Part of the autoharn **obligations×formalisms survey** (the obligation-organized pass). Abbreviations & tiers → **[KEY](KEY.md)**; coined terms → root **[GLOSSARY.md](../../GLOSSARY.md)**; index → [README](README.md).
 
 Every obligation code, guarantee/cost tier, and tool name used across this survey, defined in one place. Obligation codes are linked at every occurrence in the documents; this is the destination.
 

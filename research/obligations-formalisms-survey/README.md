@@ -2,7 +2,7 @@
 
 _2026-06-27. A 27-formal-system survey at **life-critical seriousness**, organized by **obligation** (not by logic): each formal system is *assigned* to the responsibilities whose failure modes its semantics match, with a concrete **automation / encoding path**. Run `wf_2b657cd5-b06`; 38 agents._
 
-> **New here?** Read **[KEY.md](KEY.md)** first — it defines every obligation code (INV, DEGRADE, …), the guarantee/cost tiers (5–1, T0–T3), and every tool name. Codes are linked to it throughout. Coined terms are in the root **[GLOSSARY.md](../../../GLOSSARY.md)**. Stray acronyms (MC-DC, WCET, DvP, …) are defined in the doc-legibility glossary **[tools/doc-legibility/terms.md](../../../tools/doc-legibility/terms.md)**, mechanically enforced by its gate.
+> **New here?** Read **[KEY.md](KEY.md)** first — it defines every obligation code (INV, DEGRADE, …), the guarantee/cost tiers (5–1, T0–T3), and every tool name. Codes are linked to it throughout. Coined terms are in the root **[GLOSSARY.md](../../GLOSSARY.md)**. Stray acronyms (MC-DC, WCET, DvP, …) are defined in the doc-legibility glossary **[gates/doc-legibility/terms.md](../../gates/doc-legibility/terms.md)**, mechanically enforced by its gate.
 
 ## Read in this order
 
@@ -46,6 +46,6 @@ _2026-06-27. A 27-formal-system survey at **life-critical seriousness**, organiz
 
 ## Provenance, supersession & honest caveats
 
-- This survey is the **obligation-organized Correction** to two earlier bake-off-framed passes, kept intact as **Witnesses**: [logic-investigation](../2026-06-27-logic-investigation/) and [logic-fair-trials](../2026-06-27-logic-fair-trials/).
+- This survey is the **obligation-organized Correction** to two earlier bake-off-framed passes, kept intact as **Witnesses**: [logic-investigation](../logic-investigation/) and [logic-fair-trials](../logic-fair-trials/).
 - **Verdicts are agent-reasoned, not experimentally settled**; engine versions/licenses are agent-reported, web-checked where noted — confirm before install. Cross-cut **[C](C-encoding-qualification.md)** is the discipline that turns claims into qualified guarantees.
 - 27/27 formal-system sections; 38 agents across taxonomy → survey → cross-cut → synthesis.

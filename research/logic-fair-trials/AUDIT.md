@@ -1,6 +1,6 @@
 # AUDIT — the deflation audit (and how it deflated)
 
-> Part of the autoharn **logic fair-trials** (the corrected, frontier-creed pass). Coined terms → root **[GLOSSARY.md](../../../GLOSSARY.md)**. The honest status of every verdict here is **undecided-until-the-experiment-runs** — see [README](README.md) and [AUDIT.md](AUDIT.md).
+> Part of the autoharn **logic fair-trials** (the corrected, frontier-creed pass). Coined terms → root **[GLOSSARY.md](../../GLOSSARY.md)**. The honest status of every verdict here is **undecided-until-the-experiment-runs** — see [README](README.md) and [AUDIT.md](AUDIT.md).
 
 ## Headline
 
@@ -14,7 +14,7 @@ deflation was *"hardened out of the trials themselves"* — a correction that ne
 **So the failure reproduced at three stacked layers — worker → adversarial auditor → synthesizer —**
 **even though it was the explicit target at layer two.** The deflation-detector deflated. The reliable
 signal was the auditors' *diagnosis* (prose), not their *decision* (boolean): they **saw** the problem
-and would not **rule** against it. The lesson for [Pillar 3](../../../GLOSSARY.md#pillar-3): the
+and would not **rule** against it. The lesson for [Pillar 3](../../GLOSSARY.md#pillar-3): the
 deflation gate must be **mechanical** (grep the concession idioms + flag "only the reducible instance
 was executed"), never another model judgment.
 

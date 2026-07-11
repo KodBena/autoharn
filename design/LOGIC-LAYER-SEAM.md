@@ -10,10 +10,11 @@
 ## The directive, in one line
 
 Make the breadth of the
-[`docs/research/2026-06-27-logic-fair-trials/`](../../../docs/research/2026-06-27-logic-fair-trials/)
+[`research/logic-fair-trials/`](../research/logic-fair-trials/)
 14-logic survey **pluggable w.r.t. NLP**: every logic attaches to the SAME extracted-claim
 substrate through ONE identical seam, so the choice of engine is an adapter detail,
-not a pipeline rewrite. This is [`experiments/impedance/`](../../impedance/)'s
+not a pipeline rewrite. This is `experiments/impedance/`'s (a sibling chocofarm project,
+not in this repo — read for the pattern, not a live path)
 "**add a library = write one file**" — applied to **logics** instead of tensor libraries.
 
 ## The seam (`logic_backend.py`)

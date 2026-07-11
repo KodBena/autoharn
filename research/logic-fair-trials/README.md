@@ -1,10 +1,10 @@
 # Logic fair-trials — the corrected pass (and the cascade it exposed)
 
-> ⚠️ **Superseded by a better frame.** This pass still treated logics as competitors (a bake-off). The obligation-organized **Correction** — assign formalisms to responsibilities at life-critical stakes — is in **[../2026-06-27-obligations-formalisms-survey/](../2026-06-27-obligations-formalisms-survey/)**. Kept intact as a Witness.
+> ⚠️ **Superseded by a better frame.** This pass still treated logics as competitors (a bake-off). The obligation-organized **Correction** — assign formalisms to responsibilities at life-critical stakes — is in **[../2026-06-27-obligations-formalisms-survey/](../obligations-formalisms-survey/)**. Kept intact as a Witness.
 
 _2026-06-27. The frontier-creed re-run of the logic investigation: every logic gets a fair trial (maximal ambition · expressiveness gap · falsifiable experiment **with a kill-condition** · false-authority scaffolding), then an anti-deflation audit, then a re-synthesis._
 
-> **Vocabulary:** coined terms are defined in the root **[GLOSSARY.md](../../../GLOSSARY.md)**.
+> **Vocabulary:** coined terms are defined in the root **[GLOSSARY.md](../../GLOSSARY.md)**.
 
 ## The headline finding (read this first)
 
@@ -57,7 +57,7 @@ experiment designs with kill-conditions, the scaffolding — and the cascade fin
 
 ## Provenance / supersession
 
-- This directory is the **Correction** to the prior [logic-investigation](../2026-06-27-logic-investigation/)
+- This directory is the **Correction** to the prior [logic-investigation](../logic-investigation/)
   (the **Witness**, retracted for optimizing install-cost + the "tourism" frame). The Witness is kept intact.
 - Within this directory the synthesis is *itself* corrected (the no-op claim), and the deflated `09` trial is
   superseded by the gold exemplar — all append-only, nothing rewritten.

@@ -1,6 +1,6 @@
 # 00 — Synthesis (with editorial correction)
 
-> Part of the autoharn **logic fair-trials** (the corrected, frontier-creed pass). Coined terms → root **[GLOSSARY.md](../../../GLOSSARY.md)**. The honest status of every verdict here is **undecided-until-the-experiment-runs** — see [README](README.md) and [AUDIT.md](AUDIT.md).
+> Part of the autoharn **logic fair-trials** (the corrected, frontier-creed pass). Coined terms → root **[GLOSSARY.md](../../GLOSSARY.md)**. The honest status of every verdict here is **undecided-until-the-experiment-runs** — see [README](README.md) and [AUDIT.md](AUDIT.md).
 
 > ## ⚠️ EDITORIAL CORRECTION (appended, not silently edited — the project's own Witness→Correction rule)
 > This synthesis was produced by the hardening workflow and **opens by claiming the deflation defect was**
