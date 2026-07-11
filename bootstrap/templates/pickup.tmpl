@@ -39,8 +39,15 @@ Sections emitted, each under a machine-parseable `### SECTION: <NAME>` header (g
 Deployment resolution: reads `deployment.json` next to this script (override with
 `PICKUP_DEPLOYMENT=/path/to/deployment.json`), via autoharn's `filing/deployment_record.py` (the
 ONE home for that JSON shape — this script derives from it rather than growing a second parser).
-autoharn's location: the sibling checkout `../autoharn` relative to this script's own location,
-overridable with `AUTOHARN=/path/to/autoharn` (same convention as `judge`).
+As of BACKLOG maintainer ruling 2026-07-11 ("live verbs"), this file executes IN PLACE out of the
+autoharn checkout — the scaffolded `./pickup` is a 3-line shim that `exec`s THIS file directly,
+never a copy — so `PICKUP_DEPLOYMENT` is ALWAYS set by that shim (to the shim's own directory,
+i.e. the world root, `/deployment.json`); the `HERE`-relative default below only fires on a direct
+invocation of this file with no shim (e.g. manual testing). GIT-STATE (below) reports on the
+directory the deployment record was found in — the world root, not wherever this file itself
+happens to live — for exactly this reason. autoharn's own location: two directories up from this
+file's own on-disk path (it lives at `bootstrap/templates/pickup.tmpl` inside the real checkout
+now), overridable with `AUTOHARN=/path/to/autoharn` (same convention as `judge`).
 
 Read-only throughout: every query here is a SELECT; this script issues no INSERT/UPDATE/DELETE.
 Lazy imports banned (top-of-file only, per this project's inherited convention).
@@ -54,7 +61,7 @@ import sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-AUTOHARN = Path(os.environ.get("AUTOHARN", str(HERE / ".." / "autoharn"))).resolve()
+AUTOHARN = Path(os.environ.get("AUTOHARN", str(HERE / ".." / ".."))).resolve()
 DEPLOYMENT_PATH = Path(os.environ.get("PICKUP_DEPLOYMENT", str(HERE / "deployment.json")))
 
 # eager, top-of-file (lazy imports banned): AUTOHARN is resolved above from env/the sibling-
@@ -240,7 +247,12 @@ def main(argv: list[str] | None = None) -> int:
     open_questions(dep)
     review_debt(dep)
     recent_changes(dep, args.since, args.limit)
-    git_state(HERE)
+    # World root == the directory deployment.json was actually found in, NOT this script's own
+    # on-disk location -- since this file now executes in place out of the autoharn checkout
+    # (BACKLOG maintainer ruling 2026-07-11, "live verbs"), `HERE` is autoharn's own
+    # bootstrap/templates/, and this project's git repo lives at the world root instead (where the
+    # scaffolded ./pickup shim -- and deployment.json itself -- actually sit).
+    git_state(DEPLOYMENT_PATH.parent)
     in_flight(dep)
     print()
     return 0

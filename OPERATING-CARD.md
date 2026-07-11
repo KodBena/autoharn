@@ -12,10 +12,13 @@ autoharn is a governance harness for AI-collaborator work: agents' decisions go 
 an append-only Postgres ledger (the kernel) that refuses forgery, self-review, silent
 mutation, and unwitnessed "done", enforced by Claude Code hooks that refuse-and-teach.
 **The two-cwd model, stated flatly: you orchestrate from `/home/bork/w/vdc/1/autoharn`;
-the operator verbs (`led`, `judge`, `pickup`) do NOT exist here — they are materialized
-into each world directory at scaffold time.** Hooks, however, execute FROM this repo on
-every invocation in every wired world: an edit to hooks/ goes live everywhere instantly,
-which is why hooks/ is never edited while any wired session is live.
+the operator verbs (`led`, `judge`, `pickup`) do not have their own copies here — each
+world's `./led`/`./judge`/`./pickup` is a 3-line shim that `exec`s
+`bootstrap/templates/*.tmpl` straight out of THIS checkout, every invocation (maintainer
+ruling 2026-07-11, "live verbs" — no longer sed-substituted frozen copies).** Hooks and
+the verbs alike execute FROM this repo on every invocation in every wired world: an edit
+to hooks/ OR bootstrap/templates/ goes live everywhere instantly, which is why neither is
+ever edited while any wired session is live.
 
 ## Vocabulary (the words the docs assume)
 

@@ -1,15 +1,18 @@
 #!/bin/sh
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-09T11:15:53Z
-#   last-change: 2026-07-09T14:41:30Z
-#   contributors: be693afb/main
+#   last-change: 2026-07-10T23:53:57Z
+#   contributors: be693afb/main, e4410ef6/main
 # <<< PROVENANCE-STAMP <<<
 
 # new-project.sh — stamp a new instance directory: deployment.json, .claude/ wiring
-# (settings.json, governed_files.json, apparatus.json, HOOKS.md), and the three portable verbs
-# (led, judge, pickup) — instantiated from bootstrap/templates/ with this project's deployment
-# values substituted in (design/OPUS-READINESS.md move 2: scaffold, not clone — the
-# template/instance split made physical).
+# (settings.json, governed_files.json, apparatus.json, HOOKS.md), and the three verbs (led, judge,
+# pickup) as thin shims exec'ing bootstrap/templates/*.tmpl LIVE out of this autoharn checkout
+# (design/OPUS-READINESS.md move 2's template/instance split, then BACKLOG maintainer ruling
+# 2026-07-11 "runs are strictly linear" disposition 6 "live verbs": the verbs stopped being
+# sed-substituted frozen copies — a template fix here now reaches every already-scaffolded world
+# instantly, matching how the two PreToolUse hooks already execute live per invocation). Only
+# deployment.json and the .claude/ wiring stay scaffold-written, per-world config.
 #
 # Usage:
 #   bootstrap/new-project.sh <dest-dir> --db <db> --host <host> --schema <schema> \
@@ -21,10 +24,11 @@
 #   --schema     the ledger schema (e.g. "toycolors").
 #   --kern       the kernel schema (e.g. "toycolors_kernel").
 #   --role       the granted subject role led/judge/pickup connect as (e.g. "toycolors_rw").
-#   --name       this project's own identifier, used ONLY as the target-name argument `judge`
-#                passes to autoharn's engine/ledger_differential.py (and hence the derivations/
-#                banking subdirectory under autoharn's own tree) — default: <dest-dir>'s basename.
-#                Pick something that will NOT collide with autoharn engine/targets.py's curated
+#   --name       this project's own identifier, written into deployment.json's `name` field and
+#                read live from there by the scaffolded `./judge` shim as the target-name argument
+#                to autoharn's engine/ledger_differential.py (and hence the derivations/ banking
+#                subdirectory under autoharn's own tree) — default: <dest-dir>'s basename. Pick
+#                something that will NOT collide with autoharn engine/targets.py's curated
 #                registry names (toy, nla, e15-e18) or its scratch-naming conventions
 #                (^s\d+[a-z]*$, *_scratch), or `judge` will resolve to the WRONG target.
 #   --force      overwrite an existing deployment.json/scaffold at <dest-dir> (default: refuse).
@@ -60,10 +64,11 @@
 # birth instead of needing two more hand steps before the first real session (ratifier's
 # acceptance bar, same date: at most one scaffold command, one `cd`, one `claude`, no paste).
 #
-# What this does NOT do (deliberately, per design/OPUS-READINESS.md's scope for this pass):
-# rewire `led` to READ deployment.json live (deferred; a live session reads it per-event; the two
-# PreToolUse hooks in hooks/ already do, per this same session's items 2-3), or apply any kernel
-# DDL to a deployment that is NOT a --new-world target (a separate, explicit -v-vars operator act).
+# What this does NOT do: apply any kernel DDL to a deployment that is NOT a --new-world target (a
+# separate, explicit -v-vars operator act). (Historical note: an earlier version of this comment
+# named "rewire led to read deployment.json live" as future work — that landed 2026-07-11, "live
+# verbs" above; led/judge/pickup all read deployment.json live now, same as the PreToolUse hooks
+# always have.)
 set -eu
 
 # Captured BEFORE any argument parsing consumes "$@", so the PROVENANCE header this script writes
@@ -214,13 +219,13 @@ SQL
 fi
 
 echo "-- deployment.json --"
-"$PY" - "$DEPLOYMENT" "$DB" "$HOST" "$SCHEMA" "$KERN" "$ROLE" <<PYEOF
+"$PY" - "$DEPLOYMENT" "$DB" "$HOST" "$SCHEMA" "$KERN" "$ROLE" "$NAME" <<PYEOF
 import sys
 sys.path.insert(0, "$AUTOHARN_ROOT/filing")
 from deployment_record import DeploymentRecord, write_deployment
 
-path, db, host, schema, kern, role = sys.argv[1:7]
-write_deployment(path, DeploymentRecord(db=db, host=host, schema=schema, kern=kern, role=role))
+path, db, host, schema, kern, role, name = sys.argv[1:8]
+write_deployment(path, DeploymentRecord(db=db, host=host, schema=schema, kern=kern, role=role, name=name))
 print(f"wrote {path}")
 PYEOF
 
@@ -270,11 +275,28 @@ if [ -n "$NEW_WORLD" ]; then
     echo "wrote CLAUDE.md (governance preamble, auto-loaded at session start)"
 fi
 
-echo "-- the three verbs (led, judge, pickup) --"
+# the three verbs (led, judge, pickup): thin shims, not frozen sed-substituted copies (BACKLOG
+# maintainer ruling 2026-07-11, "runs are strictly linear" disposition 6, "live verbs"). Baking
+# was the asymmetry: hooks already execute live from this autoharn checkout per invocation
+# (settings.json's __AUTOHARN_ROOT__ above), but led/judge/pickup were frozen copies -- a
+# just-fixed led defect stayed live in every already-scaffolded world forever, reachable only by
+# the NEXT scaffold. A shim closes that: it `exec`s bootstrap/templates/<verb>.tmpl straight out
+# of THIS checkout, every invocation, so a template fix here reaches every existing world
+# instantly. World-specific facts (db/host/schema/kern/role/name) are no longer sed-substituted
+# either -- the .tmpl itself now resolves them LIVE from deployment.json, found next to the shim
+# (the shim computes its own directory and passes it through via PICKUP_DEPLOYMENT -- the same
+# env var `pickup`'s own live-resolution already used, extended to all three rather than growing
+# three near-identical mechanisms, ADR-0012 P1). deployment.json itself stays scaffold-written
+# per-world config (unchanged) -- only the VERBS stopped being copies.
+echo "-- the three verbs (led, judge, pickup): thin shims exec'ing autoharn's live templates --"
 for verb in led judge pickup; do
-    sedsubst < "$TEMPLATES/$verb.tmpl" > "$PROJECT_ROOT/$verb"
+    cat > "$PROJECT_ROOT/$verb" <<SHIM
+#!/bin/sh
+HERE="\$(cd "\$(dirname "\$0")" && pwd)"
+exec env PICKUP_DEPLOYMENT="\$HERE/deployment.json" $AUTOHARN_ROOT/bootstrap/templates/$verb.tmpl "\$@"
+SHIM
     chmod +x "$PROJECT_ROOT/$verb"
-    echo "wrote $verb (executable)"
+    echo "wrote $verb (shim -> $AUTOHARN_ROOT/bootstrap/templates/$verb.tmpl)"
 done
 
 echo "== done =="

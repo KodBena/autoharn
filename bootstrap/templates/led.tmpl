@@ -159,19 +159,52 @@
 #                                              an additive delta on top of the s15/s17/s19/s20/s21
 #                                              birth chain, not yet part of it as of this writing)
 #
-# Connection defaults are sourced from this project's deployment.json (repo root, next to
-# .claude/) and stamped in here by bootstrap/new-project.sh at scaffold time — NOT read live at
-# run time (that rewiring is deferred; see design/OPUS-READINESS.md move 1). This instance's
-# stamped defaults: db __DB__, host __HOST__, schema __SCHEMA__, kernel __KERN__, role __ROLE__.
-# Override via LED_PGHOST/LED_PGDB/LED_SCHEMA/LED_KERNEL/LED_ROLE if this project's kernel is
-# re-applied under different names.
+# Connection defaults are sourced LIVE from this project's deployment.json at RUN TIME (BACKLOG
+# maintainer ruling 2026-07-11, "runs are strictly linear" disposition 6, "live verbs"). This file
+# is no longer copied into a project and sed-substituted at scaffold time -- the scaffolded ./led
+# is a 3-line shim that `exec`s THIS file directly out of the autoharn checkout, every invocation,
+# so a template fix (this file) reaches every already-scaffolded world instantly, not just the
+# next scaffold (the asymmetry that let one just-fixed defect live on in five worlds forever).
+# deployment.json is found next to the shim -- the shim passes its own directory through via the
+# PICKUP_DEPLOYMENT env var (the same mechanism `judge`/`pickup` already used for this; the name
+# predates `led` joining the convention, kept as ONE shared mechanism rather than three
+# near-identical env vars, ADR-0012 P1) -- loaded via autoharn's filing/deployment_record.py (the
+# ONE home for that JSON shape). autoharn's own location is resolved from THIS file's own on-disk
+# path (it executes in place now, never copied), overridable with AUTOHARN=/path/to/autoharn for a
+# differently-laid-out checkout (same convention `judge`/`pickup` use).
+# Override the resolved values via LED_PGHOST/LED_PGDB/LED_SCHEMA/LED_KERNEL/LED_ROLE if this
+# project's kernel is re-applied under different names -- unchanged from before.
 set -euo pipefail
 
-PGHOST="${LED_PGHOST:-__HOST__}"
-PGDB="${LED_PGDB:-__DB__}"
-SCHEMA="${LED_SCHEMA:-__SCHEMA__}"
-KERNEL="${LED_KERNEL:-__KERN__}"
-ROLE="${LED_ROLE:-__ROLE__}"
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+AUTOHARN_ROOT="${AUTOHARN:-$(cd "$HERE/../.." && pwd)}"
+DEPLOYMENT="${PICKUP_DEPLOYMENT:-$HERE/deployment.json}"
+
+# One live read of deployment.json, via autoharn's filing/deployment_record.py (the ONE home for
+# that shape -- this script does not grow a second JSON parser). Prints shell-quoted DEP_* bindings
+# for `eval` below; refuses loudly (teach-text on stderr, exit 2) on a missing/malformed record,
+# never a guessed default (ADR-0002).
+_dep_vars="$(python3 - "$AUTOHARN_ROOT" "$DEPLOYMENT" <<'PYEOF'
+import sys, shlex
+autoharn_root, dep_path = sys.argv[1:3]
+sys.path.insert(0, autoharn_root + "/filing")
+import deployment_record as dr
+try:
+    d = dr.load_deployment(dep_path)
+except dr.DeploymentError as e:
+    print(f"led: {e}", file=sys.stderr)
+    sys.exit(2)
+for k in ("db", "host", "schema", "kern", "role"):
+    print(f"DEP_{k.upper()}={shlex.quote(getattr(d, k))}")
+PYEOF
+)" || exit 2
+eval "$_dep_vars"
+
+PGHOST="${LED_PGHOST:-$DEP_HOST}"
+PGDB="${LED_PGDB:-$DEP_DB}"
+SCHEMA="${LED_SCHEMA:-$DEP_SCHEMA}"
+KERNEL="${LED_KERNEL:-$DEP_KERN}"
+ROLE="${LED_ROLE:-$DEP_ROLE}"
 
 # --- flags (any order, any subset), consumed up front so the verb dispatch below and the
 # generic <kind> <statement...> path both see a clean $@ -------------------------------------

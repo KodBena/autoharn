@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-09T11:06:10Z
-#   last-change: 2026-07-09T11:17:31Z
-#   contributors: be693afb/main
+#   last-change: 2026-07-10T23:52:04Z
+#   contributors: be693afb/main, e4410ef6/main
 # <<< PROVENANCE-STAMP <<<
 
 """deployment_record -- the ONE home for a project instance's `deployment.json` SHAPE
@@ -57,6 +57,17 @@ from pathlib import Path
 # carry (see module docstring).
 _REQUIRED_FIELDS: tuple[str, ...] = ("db", "host", "schema", "kern", "role")
 
+# `name` is OPTIONAL and NOT part of "where the ledger lives" -- it is this project's own label
+# (bootstrap/new-project.sh's --name, default the dest-dir basename), used live by the scaffolded
+# `judge` shim as the target-name argument to autoharn's engine/ledger_differential.py (and hence
+# the derivations/<name>/ banking subdirectory under autoharn's own tree -- see judge.tmpl).
+# Extending the record with it (BACKLOG maintainer ruling 2026-07-11, "live verbs") is the fix this
+# module's own docstring anticipates ("extra keys ... a future consumer adds a field to does not
+# break this loader"): still ONE home for the shape, `_REQUIRED_FIELDS` unchanged (name is not
+# required -- a record predating this field, e.g. an already-settled world's deployment.json,
+# stays valid; a consumer that NEEDS `name` -- `judge` -- refuses loudly itself when it is absent,
+# same posture as every other missing-fact refusal in this module).
+
 
 class DeploymentError(Exception):
     """A deployment.json is missing, unreadable, unparseable, or missing/malformed a required
@@ -75,6 +86,8 @@ class DeploymentRecord:
     schema: str
     kern: str
     role: str
+    name: str | None = None  # OPTIONAL -- see the comment above _REQUIRED_FIELDS for why this
+                              # field exists and why it is not one of the five required ones.
 
 
 def load_deployment(path: str | Path) -> DeploymentRecord:
@@ -82,14 +95,16 @@ def load_deployment(path: str | Path) -> DeploymentRecord:
     guessed record) on: a missing file, unreadable/non-UTF-8 bytes, invalid JSON, a JSON value that
     is not an object, a missing required field, or a required field that is not a non-empty string.
     Extra keys beyond the five required ones are accepted and ignored (a forward-compatible record
-    a future consumer adds a field to does not break this loader)."""
+    a future consumer adds a field to does not break this loader) -- EXCEPT `name`, which this
+    loader knows about and validates IF PRESENT (must be a non-empty string; a record predating
+    this field simply has no `name` attribute set, `None`, not an error)."""
     p = Path(path)
     if not p.is_file():
         raise DeploymentError(
             f"deployment record not found at {p} -- a project with no deployment record is refused, "
             f"never silently un-resolved. Write one (deployment_record.write_deployment) or point "
             f"this caller's deployment-path setting at the right path (e.g. engine/targets.py's "
-            f"LEDGER_DEPLOYMENT, or pickup's PICKUP_DEPLOYMENT).")
+            f"LEDGER_DEPLOYMENT, or PICKUP_DEPLOYMENT -- used by pickup, judge, and led alike).")
     try:
         text = p.read_text(encoding="utf-8")
     except OSError as e:
@@ -112,14 +127,24 @@ def load_deployment(path: str | Path) -> DeploymentRecord:
         raise DeploymentError(
             f"deployment record at {p} has non-string or empty value(s) for: {', '.join(bad)} "
             f"(every field must be a non-empty string)")
+    name = raw.get("name")
+    if name is not None and (not isinstance(name, str) or not name):
+        raise DeploymentError(
+            f"deployment record at {p} has a non-string or empty value for optional field 'name' "
+            f"(omit the key entirely for 'not set', or give it a non-empty string)")
     return DeploymentRecord(db=raw["db"], host=raw["host"], schema=raw["schema"],
-                             kern=raw["kern"], role=raw["role"])
+                             kern=raw["kern"], role=raw["role"], name=name)
 
 
 def write_deployment(path: str | Path, record: DeploymentRecord) -> None:
     """Emit a deployment.json for `record` (the scaffold's emission side, move 2). Writes exactly
-    the five required fields, pretty-printed, newline-terminated -- the same shape `load_deployment`
-    requires, so a record this function writes always round-trips through `load_deployment`
-    unchanged (the property a hand-authored second writer could not guarantee)."""
+    the five required fields plus `name` (if `record.name` is set -- omitted entirely otherwise, so
+    a caller not using `name` gets the exact same five-key shape as before), pretty-printed,
+    newline-terminated -- the same shape `load_deployment` requires, so a record this function
+    writes always round-trips through `load_deployment` unchanged (the property a hand-authored
+    second writer could not guarantee)."""
     p = Path(path)
-    p.write_text(json.dumps(asdict(record), indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    data = asdict(record)
+    if data.get("name") is None:
+        data.pop("name", None)
+    p.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n", encoding="utf-8")

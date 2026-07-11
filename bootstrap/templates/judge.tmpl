@@ -6,11 +6,12 @@
 #     ./judge                  # the ordinary run: retain DerivationRecords, print the verdict
 #     ./judge --drop-record    # negative control: drop the ASP witness, see the consumer refuse
 #
-# Invokes autoharn's engine/ledger_differential.py against target "__PROJECT_NAME__" with
-# --retain, so every run banks a DerivationRecord pair under autoharn's own
-# engine/docs/ledger-marriage/derivations/__PROJECT_NAME__/ (the auditability clause —
-# design/USE-MODE-ENGINE-WIRING.md item 6). Prints the closed verdict vocabulary per judgment
-# family:
+# Invokes autoharn's engine/ledger_differential.py against this project's own target name (read
+# LIVE from deployment.json's `name` field -- BACKLOG maintainer ruling 2026-07-11, "live verbs";
+# no longer sed-substituted at scaffold time) with --retain, so every run banks a DerivationRecord
+# pair under autoharn's own engine/docs/ledger-marriage/derivations/<name>/ (the auditability
+# clause — design/USE-MODE-ENGINE-WIRING.md item 6). Prints the closed verdict vocabulary per
+# judgment family:
 #   AGREE | DIVERGE_BY_DESIGN | DIVERGE_DEFECT | QUARANTINED
 # and exits non-zero (turns a run red) iff any family verdicts DIVERGE_DEFECT or QUARANTINED —
 # ledger_differential.py's own exit code, passed straight through, never re-derived here.
@@ -19,27 +20,60 @@
 # autoharn; whether it ever becomes gating is a maintainer decision, filed when the first real
 # divergence is seen.
 #
-# TARGET RESOLUTION (design/OPUS-READINESS.md move 1): "__PROJECT_NAME__" is very unlikely to be
-# one of autoharn engine/targets.py's curated registry names (toy, nla, e15-e18) or match its
-# scratch-naming conventions -- so this script points LEDGER_DEPLOYMENT at this project's own
-# deployment.json (repo root, next to .claude/), autoharn's targets.resolve() THIRD resolution
-# source. If this project's name later gets its own curated registry entry in autoharn (a
-# maintainer act), the registry wins over this deployment file automatically (targets.py's
-# documented precedence) -- nothing here needs to change.
+# TARGET RESOLUTION (design/OPUS-READINESS.md move 1): this project's own target name (read live
+# from deployment.json's `name` field below) is very unlikely to be one of autoharn
+# engine/targets.py's curated registry names (toy, nla, e15-e18) or match its scratch-naming
+# conventions -- so this script points LEDGER_DEPLOYMENT at this project's own deployment.json
+# (repo root, next to .claude/), autoharn's targets.resolve() THIRD resolution source. If this
+# project's name later gets its own curated registry entry in autoharn (a maintainer act), the
+# registry wins over this deployment file automatically (targets.py's documented precedence) --
+# nothing here needs to change.
 #
-# Path resolution: the sibling checkout ../autoharn relative to THIS script's own location (not
-# the caller's cwd), overridable with AUTOHARN=/path/to/autoharn for a differently-laid-out tree.
+# Path resolution: this file executes IN PLACE out of the autoharn checkout now (BACKLOG
+# maintainer ruling 2026-07-11, "live verbs" -- the scaffolded ./judge is a 3-line shim that execs
+# THIS file directly, never a copy), so AUTOHARN defaults to two directories up from THIS file's
+# own on-disk location -- overridable with AUTOHARN=/path/to/autoharn for a differently-laid-out
+# checkout. deployment.json is found next to the shim, passed through via PICKUP_DEPLOYMENT (set
+# by the shim; same mechanism `pickup` already used).
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-AUTOHARN="${AUTOHARN:-$HERE/../autoharn}"
+AUTOHARN="${AUTOHARN:-$(cd "$HERE/../.." && pwd)}"
 DIFFERENTIAL="$AUTOHARN/engine/ledger_differential.py"
 DEPLOYMENT="${PICKUP_DEPLOYMENT:-$HERE/deployment.json}"
 
 if [ ! -f "$DIFFERENTIAL" ]; then
   echo "judge: cannot find engine/ledger_differential.py under AUTOHARN=$AUTOHARN" >&2
-  echo "       set AUTOHARN=/path/to/autoharn, or place a sibling checkout at ../autoharn" >&2
+  echo "       set AUTOHARN=/path/to/autoharn (this file executes in place out of the autoharn" >&2
+  echo "       checkout itself now -- see the scaffolded ./judge shim's own comment)" >&2
   exit 2
 fi
 
-exec env LEDGER_DEPLOYMENT="$DEPLOYMENT" python3 "$DIFFERENTIAL" __PROJECT_NAME__ --retain "$@"
+# TARGET NAME -- read live from deployment.json's own `name` field (BACKLOG maintainer ruling
+# 2026-07-11, "live verbs": no longer sed-substituted at scaffold time). Any string satisfies
+# engine/targets.py's resolve() here (LEDGER_DEPLOYMENT below wins for a name unknown to its
+# curated registry -- see targets.py's own precedence docstring); this is ALSO the banking
+# subdirectory name under autoharn's own engine/docs/ledger-marriage/derivations/
+# (design/USE-MODE-ENGINE-WIRING.md item 6), so it should stay stable across one project's runs --
+# deployment.json is exactly that stable, per-world, scaffold-written home
+# (filing/deployment_record.py).
+TARGET_NAME="$(python3 - "$AUTOHARN" "$DEPLOYMENT" <<'PYEOF'
+import sys
+autoharn, dep_path = sys.argv[1:3]
+sys.path.insert(0, autoharn + "/filing")
+import deployment_record as dr
+try:
+    d = dr.load_deployment(dep_path)
+except dr.DeploymentError as e:
+    print(f"judge: {e}", file=sys.stderr)
+    sys.exit(2)
+if not d.name:
+    print(f"judge: deployment record at {dep_path!r} has no 'name' field -- scaffold this world "
+          f"with a current bootstrap/new-project.sh (writes it automatically), or add one by hand "
+          f"(filing/deployment_record.py's DeploymentRecord.name).", file=sys.stderr)
+    sys.exit(2)
+print(d.name)
+PYEOF
+)" || exit 2
+
+exec env LEDGER_DEPLOYMENT="$DEPLOYMENT" python3 "$DIFFERENTIAL" "$TARGET_NAME" --retain "$@"
