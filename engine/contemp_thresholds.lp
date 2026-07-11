@@ -2,7 +2,7 @@
 % contemp_thresholds.lp -- the MEASURED thresholds for engine/lp/contemporaneity.lp, as FACTS
 % (ADR-0012 P1 / the 2026-07-02 ADR-0000 amendment's denomination check: a bound is denominated
 % in, and DERIVED FROM, the resource that actually detonates -- never a round guessed literal).
-% Swappable per corpus (design memo item 5): re-measure and replace this file's two facts; the
+% Swappable per corpus (design memo item 5): re-measure and replace this file's facts; the
 % rules in contemporaneity.lp never change.
 %
 % MEASUREMENT (WITNESSED, 2026-07-11): the only real ledger data in existence at measurement
@@ -56,3 +56,26 @@ burst_threshold_ms(1000).
 %   two known positives, not a full ROC measurement over labeled negatives -- that measurement
 %   needs the run 9+ tool-event corpus and is filed, not built, this pass; see BACKLOG.md).
 silence_threshold_ms(180000).
+
+% LATE_THRESHOLD_MS -- "the min gap between a row's DECLARED event time and its own write time
+%   that counts as a genuine late entry, not ordinary recording latency" (design/LATE-ENTRY-AND-
+%   INTAKE-SEMANTICS.md Proposal 2, s24-era schemas only). NOT independently corpus-measurable
+%   yet, honestly: `event_declared_ts` postdates every run in existence at authoring time (s24
+%   lands same day as this fact), so there is no tokened, DECLARED-late-entry corpus to run the
+%   burst_threshold_ms/silence_threshold_ms style gap analysis against -- the same "no run has
+%   produced that data yet" limit silence_threshold_ms's own derivation names for a different
+%   axis. The ONE real specimen on record of a genuinely late, HONESTLY-reported entry is run
+%   10's row 1 (BACKLOG "Run-10 first audit verdict adjudicated", 2026-07-11): ~2 minutes
+%   (measured ~120s) of pre-ledger investigation, self-reported in prose ("Recording this gap
+%   honestly rather than back-dating") because s24's mechanism did not exist yet to hold it.
+%   Mirroring silence_threshold_ms's own method -- set BELOW the one confirmed true positive, by
+%   a margin comparable to that value's own 42% -- gives 60000ms (60s): half of the 120s
+%   specimen (a 2x margin below it, so a future declared-late entry no larger than the one
+%   real case on record still trips the threshold), while staying an order of magnitude above
+%   ordinary single-call recording latency (the seconds a writer spends composing the `led`
+%   invocation itself, single-digit-to-tens of seconds) -- the same two-sided bracket
+%   silence_threshold_ms's own reasoning uses, applied to the one real number this axis has.
+%   REASONED LOWER BOUND FROM ONE KNOWN POSITIVE, not a full ROC measurement over labeled
+%   negatives (named honestly, same disclosure silence_threshold_ms's own header carries) --
+%   re-measure once a run 24+ (s24-capable) corpus of genuinely declared late entries exists.
+late_threshold_ms(60000).

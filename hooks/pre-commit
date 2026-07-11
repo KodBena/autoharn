@@ -8,10 +8,12 @@
 # would be a silent vacuous pass (F49). It is therefore NOT wired; it rejoins
 # autoharn only when autoharn's first standing service does.
 #
-# FINAL WIRING (BUILD-BRIEF Step 9, extended 2026-07-11 doc-legibility-indictment commission):
-# staging_guard -> no_lazy_imports -> fixture_census -> link_integrity -> layout_census ->
-# doc-legibility. layout_census is DISABLED here as of the maintainer ruling below
-# (2026-07-09); it still appears in this history note as the Step-9 design.
+# FINAL WIRING (BUILD-BRIEF Step 9, extended 2026-07-11 doc-legibility-indictment commission,
+# further extended 2026-07-11 run-10-closure-audit commission):
+# staging_guard -> no_lazy_imports -> fixture_census -> link_integrity -> doc_shapes ->
+# doc-attestation-presence -> layout_census -> doc-legibility. layout_census is DISABLED here
+# as of the maintainer ruling below (2026-07-09); it still appears in this history note as the
+# Step-9 design.
 # doc-legibility is wired REPORT-ONLY (runs and prints,
 # does not block): the C15 scope-widening to ALL tracked *.md surfaces ~1429 acronym reports
 # over the migrated corpus — mostly the crude heuristic misfiring on all-caps emphasis words
@@ -22,7 +24,14 @@
 # report-only pending the sweep. link_integrity (2026-07-11) checks a DIFFERENT, cheaper
 # invariant than doc-legibility (link resolution, not acronym definition) and runs clean over
 # the full tracked-*.md corpus today (two principled, documented exclusions — see its own
-# docstring) — it BLOCKS. The other four non-disabled gates BLOCK too.
+# docstring) — it BLOCKS. doc_shapes (design/ADR-DRAFT-documentation-discipline.md Rule 3) was
+# built, seen-red, and registered days before this wiring but never actually invoked from here
+# until now (a gap this same commission's hazard-flagging duty caught and closed alongside its
+# own assigned task, not routed around). doc-attestation-presence (ADR-0017, ratified
+# 2026-07-11) is authored ENFORCE with no observe/off mode — its own module docstring carries
+# the exact WIRING STANZA applied verbatim below, deferred at authoring time only because a
+# governed session was live and hooks/ may not be touched while one runs; none is live now. The
+# other five non-disabled gates BLOCK too.
 #
 # Install (once per clone; .git/hooks is unversioned): git config core.hooksPath hooks
 set -u
@@ -59,6 +68,41 @@ PY="$HOME/w/vdc/venvs/generic/bin/python"
     echo "pre-commit: link-integrity gate FAILED — commit refused (a doc links somewhere that does not exist)." >&2
     exit 1
 }
+
+# TOUCHED_MD computed once, shared by doc_shapes and doc-attestation-presence below (both are
+# gate-mode, touched-file-scoped checks over the same staged *.md set — one git diff, not two).
+TOUCHED_MD=$(git diff --cached --name-only --diff-filter=ACMR -- '*.md')
+
+# doc_shapes — the deterministic zero-context-reader legibility gate (design/ADR-DRAFT-
+# documentation-discipline.md Rule 3; BACKLOG "Documentation legibility indictment", 2026-07-11)
+# binds ON TOUCH: every changed *.md in this commit must clear FRAGMENT/HANDOFF-POSITIONAL.
+# gates/doc_shapes.py's own header names this exact gate-mode invocation shape — built and
+# seen-red days before this wiring, never actually invoked from here until the run-10-closure-
+# audit commission caught the gap (BACKLOG "Run-10 closure audit (2026-07-11)").
+if [ -n "$TOUCHED_MD" ]; then
+    # shellcheck disable=SC2086
+    "$PY" "$REPO_ROOT/gates/doc_shapes.py" $TOUCHED_MD || {
+        echo "" >&2
+        echo "pre-commit: doc-shapes gate FAILED — a changed doc has a legibility shape defect" >&2
+        echo "(FRAGMENT or HANDOFF-POSITIONAL; see gates/doc_shapes.py's own header)." >&2
+        exit 1
+    }
+fi
+
+# doc-attestation-presence — every touched maintainer-facing *.md must carry a fresh-context
+# (A:B:C) attestation record for its exact content (ADR-0017, "The fresh-context audit loop";
+# ratified 2026-07-11). Checks PRESENCE+SHAPE only, never the attestation's conclusions — nothing
+# here blocks on LLM judgment. This IS gates/doc_attestation_presence.py's own WIRING STANZA,
+# applied verbatim (only its target file list generalized to the shared $TOUCHED_MD above).
+if [ -n "$TOUCHED_MD" ]; then
+    # shellcheck disable=SC2086
+    "$PY" "$REPO_ROOT/gates/doc_attestation_presence.py" $TOUCHED_MD || {
+        echo "" >&2
+        echo "pre-commit: doc-attestation-presence FAILED — a changed doc carries no" >&2
+        echo "fresh-context attestation record for its current content (ADR-0017)." >&2
+        exit 1
+    }
+fi
 
 # layout_census — DISABLED here (maintainer ruling, 2026-07-09): research repo, census is for
 # downstream instances; disabled until further notice. gates/layout_census.py is untouched and

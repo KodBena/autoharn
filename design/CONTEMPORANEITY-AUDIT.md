@@ -1,12 +1,19 @@
 # Contemporaneity audit — per-invocation stamp token + a first-class correlation verb
 
+This memo proposes a way to tell, mechanically, whether a ledger row's timestamp
+reflects when the recorded event actually happened or whether the row was written later
+in a batch — and a tool that reports the difference per row. It is written for the
+maintainer and for the executor who builds from it.
+
 STATUS: DESIGN MEMO (Fable-authored, 2026-07-11; the eventual kernel delta is
 Sonnet-authored FROM this memo per the delegation contract, then scratch-witnessed).
-Commissioned by the maintainer mid-run-8, near-verbatim: the ledger-vs-window batching
-"seems largely dishonestly disposed"; we want a tool that runs the correlation
-first-class — "the DB actually records a token specifically for this purpose" — not
-"Sonnet, please do the dirty work we should have automated 11 runs ago". Of particular
-interest: time deltas between actual events and recorded events.
+Commissioned by the maintainer mid-run-8 (a [run](../GLOSSARY.md#run) is one governed
+Claude Code session executing a task inside one [world](../GLOSSARY.md#world)),
+near-verbatim: the ledger-vs-window batching "seems largely dishonestly disposed"; we
+want a tool that runs the correlation first-class — "the DB actually records a token
+specifically for this purpose" — not "Sonnet, please do the dirty work we should have
+automated 11 runs ago". Of particular interest: time deltas between actual events and
+recorded events.
 
 ## The evidence (read from run7's ledger, 2026-07-11; full row dump in the session record)
 
@@ -22,9 +29,10 @@ interest: time deltas between actual events and recorded events.
   63's own statement reports "Provenance defect found while filing this" — refusals and
   self-reported provenance defects are ALSO contemporaneity data an auditor should see.
 - **The dishonest disposition, named:** run-5 finding 1 had two halves — no-permit and
-  no-contemporaneity. Permit-to-work (item 18) fixed the first. CAPABILITIES' Honest
-  limits then said "NOW FIXED" for the whole finding, and no run since has re-measured
-  the second half. Amended same day as this memo.
+  no-contemporaneity. [Permit-to-work](../GLOSSARY.md#permit-to-work) (item 18 of
+  [CAPABILITIES.md](../CAPABILITIES.md)) fixed the first. That same document's "Honest
+  limits" section then said "NOW FIXED" for the whole finding, and no run since has
+  re-measured the second half. Amended same day as this memo.
 
 ## What the defect actually is (aim before building)
 
@@ -39,7 +47,9 @@ is that the record CANNOT DISTINGUISH that from run 5's 19-rows-backfilled-in-0.
    ad-hoc agent passes (runs 5, 7, 8), i.e. not done at all between crises.
 
 The fix is therefore NOT "forbid batching" (that demand would produce theatrical row
-spacing — conduct faked to satisfy a shape-matcher, the enumeration-fails-open class).
+spacing — conduct faked to satisfy a shape-matcher; this repo's witnessed failure class
+where a gate that pattern-matches known shapes is defeated by the next unknown one, see
+[class-not-instance net](../GLOSSARY.md#class-not-instance-net)).
 The fix is to make the batching structure VISIBLE, measured, and queryable, so honest
 simultaneity and retroactive backfill stop being the same row shape.
 
@@ -140,11 +150,12 @@ real timings. 4. First measured report over runs 5-8 sets the verdict thresholds
 numbers go to the maintainer with the first prepared question this design actually
 needs.
 
-## Status (appended, dated per ADR-0005 Rule 8 — the original memo above stands unedited)
+## Status (appended, dated per [ADR-0005](../law/adr/0005-documentation-discipline.md) Rule 8 — the original memo above stands unedited)
 
 **Part 1: LANDED** (kernel/lineage/s23-per-invocation-stamp-token.sql;
 hooks/stamp_intercept.py mints the token + journals `.claude/logs/invocations.jsonl`; both in
-the birth chain since `bootstrap/new-project.sh --new-world`).
+the [birth chain](../GLOSSARY.md#birth-chain) — the kernel SQL every new world receives at
+scaffold time — since `bootstrap/new-project.sh --new-world`).
 
 **Part 2: CORE LANDED, 2026-07-11 (Sonnet, commissioned build) — see BACKLOG.md's
 "Contemporaneity audit, Part 2 — CORE LANDED" entry for the full disposition.** Sequencing
@@ -155,10 +166,35 @@ BACKFILL_SUSPECT vocabulary both polarities); the thresholds were measured from 
 corpus, not guessed (`engine/contemp_thresholds.lp`'s own derivation comments). **Filed, not
 built, this pass** (a maintainer critical-path resequencing scoped the first landing to this
 core): the SQL-floor differential (this verb ships ONE producer today, not the marriage
-discipline's cross-validated AGREE pair), `--retain`-by-default wiring in the `./audit` shim
+discipline's cross-validated pair — "marriage" is this repo's name for deriving every
+verdict independently in ASP and SQL and requiring the two to AGREE byte-identically,
+the `./judge` verb's own standard), `--retain`-by-default wiring in the `./audit` shim
 itself, session-level (vs whole-ledger-window) verdict granularity, and Part 3 (untouched, as
 scoped above). Two hazards surfaced live during the build: a clingo/clasp 32-bit integer
 overflow on absolute epoch-ms values (FIXED in-pass — every emitted timestamp is now
 anchor-relative) and a timestamp-convention disagreement across the three existing hook
 journals (FLAGGED, not fixed — outside this commission's touch-list). Both named in
 BACKLOG.md and in `engine/contemp_edb.py`'s own docstring, not silently routed around.
+
+**Part 1½/late-entry extension: LANDED, 2026-07-11 evening (Sonnet, commissioned build from
+design/LATE-ENTRY-AND-INTAKE-SEMANTICS.md, the ratified spec).** The maintainer's own
+adjudication of Part 2's first live verdict (BACKLOG "Run-10 first audit verdict adjudicated")
+surfaced the gap this design's Part 2 core left standing: the closed vocabulary could not
+distinguish an honest intake burst from a suspect one by eye, and had no way for a writer to
+DECLARE a late entry the way a paper log legitimately can. The late-entry design closes both,
+additively: **Proposal 1** annotates a `token_burst` `intake-shape (precedes all tool activity)`
+when every row in it predates this world's first `tool_event` (engine-side only, no vocabulary
+change) — witnessed on a scratch world reproducing run-10's own rows-2-11 shape, never against
+the live run-10 world (runs are linear). **Proposal 2** adds `kernel/lineage/
+s24-declared-event-time.sql` (a nullable `event_declared_ts` column, `led --event-time <iso-ts>`)
+and one new closed-vocabulary verdict, **LATE_DECLARED** (exit 0): the identical
+silence-then-burst gap that would otherwise verdict BACKFILL_SUSPECT now verdicts
+LATE_DECLARED instead, when the silence-breaking row carries a declared event time
+exceeding `late_threshold_ms` — BACKFILL_SUSPECT now means precisely the UNDECLARED case. Scratch-witnessed
+both polarities, SQL/ASP differential AGREE (`asp=10 sql=10 atoms; Δasp=[] Δsql=[]`), zero
+residue; seen-red both polarities banked (`seen-red/contemporaneity-audit/run_fixtures.py` cases
+f/g, `late-declared-green.txt`/`late-declared-red.txt`). **Proposal 3** adds the preamble
+teaching line to `bootstrap/templates/CLAUDE.md.tmpl` (point 9), verbatim from the ratified
+memo. Full disposition, per-claim witness status, and the scratch-witness/differential
+transcripts: BACKLOG.md's dated entry beside this one. See CAPABILITIES.md item 24a for the
+operator-facing summary.

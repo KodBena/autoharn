@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-11T14:41:23Z
-#   last-change: 2026-07-11T15:12:34Z
+#   last-change: 2026-07-11T16:19:54Z
 #   contributors: e4410ef6/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -16,14 +16,20 @@ hook-journaled tool-activity streams (engine/contemp_edb.py), runs the ASP verdi
   1. per-row event-vs-record time deltas (row_delta_ms: ts minus the row's OWN invocation's
      journaled wall-clock -- the maintainer's own asked-for number) and the age of the preceding
      journaled tool-activity window at the moment each row landed.
-  2. the burst table (STATED, token-keyed) or, degraded, the ts-cluster table (INFERRED,
-     pre-token era only -- never presented as the same thing).
-  3. the silence/backfill table and BACKFILL_SUSPECT tokens.
+  2. the burst table (STATED, token-keyed) -- each burst annotated `intake-shape (precedes all
+     tool activity)` when EVERY row in it predates this world's first tool_event
+     (design/LATE-ENTRY-AND-INTAKE-SEMANTICS.md Proposal 1: benign by construction, no vocabulary
+     change) -- or, degraded, the ts-cluster table (INFERRED, pre-token era only -- never
+     presented as the same thing).
+  3. the silence/backfill table, BACKFILL_SUSPECT tokens, and LATE_DECLARED tokens (Proposal 2:
+     the identical silence-breaking-burst shape, but the row that breaks the silence carries a
+     writer-declared event time predating its own write time beyond threshold -- the declared,
+     legal form of a late entry; BACKFILL_SUSPECT is now precisely the UNDECLARED case).
   4. refusal fingerprints (burned ledger ids).
-  5. the closed session verdict: CONTEMPORANEOUS | BATCHED_DECLARED | BACKFILL_SUSPECT -- OR an
-     EXPLICIT TYPED REFUSAL naming the missing capability, per the spec's binding "HONEST
-     HISTORICAL LIMIT": a token-less/journal-less world NEVER gets a vacuous pass and NEVER a
-     guessed verdict.
+  5. the closed session verdict: CONTEMPORANEOUS | BATCHED_DECLARED | LATE_DECLARED |
+     BACKFILL_SUSPECT -- OR an EXPLICIT TYPED REFUSAL naming the missing capability, per the
+     spec's binding "HONEST HISTORICAL LIMIT": a token-less/journal-less world NEVER gets a
+     vacuous pass and NEVER a guessed verdict.
 
 OBSERVER-FIRST (design memo, "Whether a BACKFILL_SUSPECT verdict ever feeds the Stop gate is a
 later maintainer question"): this verb reports; it gates nothing; it is not invoked from any
@@ -38,11 +44,14 @@ upgraded to "AGREE").
 
 EXIT CODES (a closed, checkable vocabulary -- mirrors instruments/verify_contemporaneity_degrade.py's
 existing N/A-is-distinct-from-clean convention, extended here):
-  0  a verdict was computed and is CONTEMPORANEOUS or BATCHED_DECLARED (clean-ish, no suspect
-     burst) -- OR the world is fully capable but its ledger carries ZERO rows, reported as
-     VACUOUSLY_CLEAN in the output ("nothing to audit yet", explicitly NOT evidence of conduct;
-     the run9 fix, 2026-07-11 -- a fresh, correctly-wired world is not refused for being young).
-  1  a verdict was computed and is BACKFILL_SUSPECT (loud, per the judge-verdict precedent).
+  0  a verdict was computed and is CONTEMPORANEOUS, BATCHED_DECLARED, or LATE_DECLARED
+     (clean-ish, no UNDECLARED suspect burst -- design/LATE-ENTRY-AND-INTAKE-SEMANTICS.md
+     Proposal 2: a declared late entry satisfies the mandate) -- OR the world is fully capable
+     but its ledger carries ZERO rows, reported as VACUOUSLY_CLEAN in the output ("nothing to
+     audit yet", explicitly NOT evidence of conduct; the run9 fix, 2026-07-11 -- a fresh,
+     correctly-wired world is not refused for being young).
+  1  a verdict was computed and is BACKFILL_SUSPECT (loud, per the judge-verdict precedent) --
+     precisely the UNDECLARED case now that LATE_DECLARED exists to carry the declared one.
   2  a tool/DB/clingo error -- NOT a finding (ADR-0015 Rule 3: no result is not a clean result).
   3  N/A: the world's WIRING lacks a capability the full verdict needs (pre-s23 schema, or the
      journaling hooks genuinely off/unwired per its own settings.json/apparatus.json) -- the
@@ -69,7 +78,7 @@ CONTEMP_LP = HERE / "lp" / "contemporaneity.lp"
 THRESHOLDS_LP = HERE / "contemp_thresholds.lp"
 RETENTION = HERE / "docs" / "contemporaneity-audit" / "runs"
 
-VERDICTS = ("contemporaneous", "batched_declared", "backfill_suspect")
+VERDICTS = ("contemporaneous", "batched_declared", "late_declared", "backfill_suspect")
 
 
 def _sha(s: str) -> str:
@@ -181,6 +190,7 @@ def run_audit(target_name: str, root: Path) -> dict:
         "skipped_lines": exp.skipped_lines,
         "full_capable": full_capable,
         "refusal_fingerprints": sorted(int(a[0]) for a in parsed.get("refusal_fingerprint", [])),
+        "intake_shape_tokens": sorted(a[0] for a in parsed.get("intake_shape", [])),
         "token_bursts": sorted(
             [{"token": a[0], "row_count": int(next(
                 (b[1] for b in parsed.get("token_row_count", []) if b[0] == a[0]), 0))}
@@ -189,6 +199,8 @@ def run_audit(target_name: str, root: Path) -> dict:
         "ts_clusters": sorted((int(a[0]), int(a[1])) for a in parsed.get("ts_cluster", [])),
         "silences": sorted((int(a[0]), int(a[1])) for a in parsed.get("silence", [])),
         "backfill_suspect_tokens": sorted(a[0] for a in parsed.get("backfill_suspect", [])),
+        "late_declared_tokens": sorted(a[0] for a in parsed.get("late_declared", [])),
+        "honestly_late_rows": sorted(int(a[0]) for a in parsed.get("row_honest_late", [])),
         "row_deltas_ms": sorted(
             (int(a[0]), int(a[1])) for a in parsed.get("row_delta_ms", [])),
         "preceding_activity_age_ms": sorted(
@@ -209,8 +221,8 @@ def run_audit(target_name: str, root: Path) -> dict:
         missing = [c.family for c in exp.capabilities if not c.capable]
         report["refusal"] = (
             f"NO_VERDICT (capability-gated refusal, never a guessed verdict): this world cannot "
-            f"support the full CONTEMPORANEOUS|BATCHED_DECLARED|BACKFILL_SUSPECT vocabulary. "
-            f"Missing/excluded: {missing}. "
+            f"support the full CONTEMPORANEOUS|BATCHED_DECLARED|LATE_DECLARED|BACKFILL_SUSPECT "
+            f"vocabulary. Missing/excluded: {missing}. "
             + ("Degraded ts-cluster burst report available below (INFERRED, not STATED)."
                if report["ts_clusters"] else "No degraded signal available either."))
     elif n_rows == 0:
@@ -249,14 +261,21 @@ def _print_report(r: dict) -> None:
     if r["full_capable"]:
         print("BURST TABLE (STATED -- rows per invocation token):")
         for b in r["token_bursts"]:
-            print(f"  token={b['token']} rows={b['row_count']}")
+            note = ("  intake-shape (precedes all tool activity)"
+                    if b["token"] in r["intake_shape_tokens"] else "")
+            print(f"  token={b['token']} rows={b['row_count']}{note}")
         print("SILENCE TABLE (tool activity, zero ledger rows, gap > threshold):")
         for t1, t2 in r["silences"]:
             iso1 = _abs_iso(r["anchor_ms"], t1)
             iso2 = _abs_iso(r["anchor_ms"], t2)
             print(f"  [{iso1} .. {iso2}]  gap_ms={t2 - t1}")
         if r["backfill_suspect_tokens"]:
-            print(f"BACKFILL_SUSPECT tokens: {r['backfill_suspect_tokens']}")
+            print(f"BACKFILL_SUSPECT tokens (UNDECLARED gap): {r['backfill_suspect_tokens']}")
+        if r["late_declared_tokens"]:
+            print(f"LATE_DECLARED tokens (DECLARED gap, mandate satisfied): "
+                  f"{r['late_declared_tokens']}")
+        if r["honestly_late_rows"]:
+            print(f"  honestly-declared-late row id(s): {r['honestly_late_rows']}")
         print("PER-ROW DELTAS (row ts minus its own invocation's journaled wall-clock, ms):")
         for rid, d in r["row_deltas_ms"]:
             print(f"  row {rid}: delta_ms={d}")
@@ -323,7 +342,7 @@ def main(argv: list[str] | None = None) -> int:
 
     if r["verdict"] == "backfill_suspect":
         return 1
-    if r["verdict"] in ("contemporaneous", "batched_declared"):
+    if r["verdict"] in ("contemporaneous", "batched_declared", "late_declared"):
         return 0
     if r["vacuous"]:
         return 0  # fully capable, zero ledger rows: honestly nothing to audit (the run9 fix) --

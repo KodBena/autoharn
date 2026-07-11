@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-10T19:38:38Z
-#   last-change: 2026-07-10T23:31:26Z
+#   last-change: 2026-07-11T17:15:28Z
 #   contributors: be693afb/main, e4410ef6/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -151,7 +151,7 @@ import json
 import os
 import subprocess
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 
 # Eager, top-of-file sys.path insert + import (lazy imports banned) -- the identical pattern
 # hooks/pretooluse_change_gate.py itself uses to reach filing/deployment_record.py, the ONE home
@@ -518,6 +518,11 @@ def _allow_with_warning(reason: str) -> int:
 
 
 def _journal(rec: dict) -> None:
+    """Journaling is unconditional across ALL FOUR outcome paths (clean allow, observe
+    would-block, enforce block, breaker fail-open) as of 2026-07-11 — the run-10 closure
+    audit's class-b finding: enforce mode previously left NO durable trace of a block or a
+    circuit-breaker event, an auditability gap under the maintainer's auditability-outranks-
+    ergonomics ruling. Timestamps are UTC-Z per the unified hook-journal convention."""
     if not JOURNAL:
         return
     try:
@@ -528,6 +533,10 @@ def _journal(rec: dict) -> None:
         pass
 
 
+def _ts() -> str:
+    return datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+
+
 def _allow_with_observe_warning(reason: str, entries: list[str]) -> int:
     """`"observe"` mode (module docstring): never blocks the stop -- always allow (exit 0), but
     surface the SAME debt enumeration as a loud, non-blocking `additionalContext` warning (mirrors
@@ -536,8 +545,7 @@ def _allow_with_observe_warning(reason: str, entries: list[str]) -> int:
     eventually let through."""
     warning = ("[apparatus observe-mode WARNING] this world's ledger shows unfinished governance "
                "state -- would BLOCK this stop under clean_exit mode=enforce:\n\n" + reason)
-    _journal({"ts": datetime.now().isoformat(timespec="milliseconds"),
-              "outcome": "observed_would_block", "entries": entries})
+    _journal({"ts": _ts(), "outcome": "observed_would_block", "entries": entries})
     print(json.dumps({"hookSpecificOutput": {"hookEventName": "Stop", "additionalContext": warning}}))
     return 0
 
@@ -575,6 +583,7 @@ def main() -> int:
 
     if not debt_lines:
         _clear_state()
+        _journal({"ts": _ts(), "outcome": "clean_allow"})
         _warn_stop_disposition(session_id)  # side effect only -- never changes this allow
         return 0  # all clean -- allow, zero interference for a clean world UNLESS the
                   # stop-disposition warning above just fired
@@ -600,11 +609,13 @@ def main() -> int:
 
     if count >= DEBT_REPEAT_LIMIT:
         _save_state({"debt_hash": debt_hash, "count": count})
+        _journal({"ts": _ts(), "outcome": "breaker_fail_open", "count": count, "entries": entries})
         rc = _allow_with_warning(reason)
         _warn_stop_disposition(session_id)  # side effect only -- breaker already fired to allow
         return rc
 
     _save_state({"debt_hash": debt_hash, "count": count})
+    _journal({"ts": _ts(), "outcome": "blocked", "count": count, "entries": entries})
     return _block(reason)  # turn is NOT ending here -- stop-disposition is not yet consulted;
                             # the successor attempt (once this debt clears) re-enters an ALLOW path
 

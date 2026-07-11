@@ -1,0 +1,24 @@
+# banked RED evidence -- CASE g (manufactured backfill, UNDECLARED twin, re-asserted post-s24), engine/contemp_audit.py real output:
+# contemporaneity audit -- target='contempprobe' root=/tmp/contemp-fixture-bo6uri7_
+#   capabilities (family, capable, produced): [('stamp_invocation_column', True, True), ('event_declared_ts_column', True, True), ('s23_capable', True, True), ('invocation_journal', True, True), ('tool_event', True, True)]
+#   counts: {'row_tokened': 12, 'row_untokened': 0, 'row_declared': 1, 'invocation': 2, 'tool_event': 4}
+
+BURST TABLE (STATED -- rows per invocation token):
+  token=fixture-token-aaaa rows=2  intake-shape (precedes all tool activity)
+  token=fixture-token-cccc rows=2  intake-shape (precedes all tool activity)
+  token=fixture-token-declared-late-f rows=2  intake-shape (precedes all tool activity)
+  token=fixture-token-undeclared-g rows=2
+SILENCE TABLE (tool activity, zero ledger rows, gap > threshold):
+  [2033-05-18T04:23:30.000+00:00 .. 2033-05-18T04:28:35.000+00:00]  gap_ms=305000
+BACKFILL_SUSPECT tokens (UNDECLARED gap): ['fixture-token-undeclared-g']
+  honestly-declared-late row id(s): [8]
+PER-ROW DELTAS (row ts minus its own invocation's journaled wall-clock, ms):
+  row 10: delta_ms=1000
+  row 11: delta_ms=50
+  row 12: delta_ms=80
+PRECEDING-ACTIVITY AGE (ms since the nearest earlier tool_event, per row):
+  row 10: age_ms=5000
+  row 11: age_ms=50
+  row 12: age_ms=80
+
+VERDICT: BACKFILL_SUSPECT

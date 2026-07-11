@@ -1,7 +1,7 @@
 #!/bin/sh
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-09T11:15:53Z
-#   last-change: 2026-07-11T14:49:27Z
+#   last-change: 2026-07-11T16:27:03Z
 #   contributors: be693afb/main, e4410ef6/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -128,7 +128,7 @@ fi
 # below -- the honest record of which sNN deltas this world was born on, so a future reader never
 # has to reconstruct it from source the way run3's own history had to be reconstructed.
 if [ -n "$NEW_WORLD" ]; then
-    LINEAGE_CHAIN="s15 -> s17-stamp-mechanism -> s17-independence-vocabulary -> s19 -> s20 -> s21-session-aware-distinctness -> s22-work-item-ledger -> s23-per-invocation-stamp-token (via kernel/lineage/high_watermark_1.sql + kernel/lineage/s20-obligation-grants-and-view-refresh.sql + kernel/lineage/s21-session-aware-distinctness.sql + kernel/lineage/s22-work-item-ledger.sql + kernel/lineage/s23-per-invocation-stamp-token.sql), applied automatically by this --new-world run"
+    LINEAGE_CHAIN="s15 -> s17-stamp-mechanism -> s17-independence-vocabulary -> s19 -> s20 -> s21-session-aware-distinctness -> s22-work-item-ledger -> s23-per-invocation-stamp-token -> s24-declared-event-time (via kernel/lineage/high_watermark_1.sql + kernel/lineage/s20-obligation-grants-and-view-refresh.sql + kernel/lineage/s21-session-aware-distinctness.sql + kernel/lineage/s22-work-item-ledger.sql + kernel/lineage/s23-per-invocation-stamp-token.sql + kernel/lineage/s24-declared-event-time.sql), applied automatically by this --new-world run"
     # --new-world ALSO auto-seeds the stamp secret (below) -- HOOKS.md must say so, not repeat the
     # generic "one manual step remains" text verbatim: an operator who trusted that stale claim and
     # re-ran the seeding block would TRUNCATE + re-INSERT an already-provisioned secret, ROTATING it
@@ -170,15 +170,16 @@ fi
 echo "== stamping instance at $PROJECT_ROOT (name=$NAME) =="
 
 if [ -n "$NEW_WORLD" ]; then
-    echo "-- new-world '$NEW_WORLD': applying high_watermark_1.sql + s20 + s21 + s22 + s23 to $DB (schema=$SCHEMA kern=$KERN role=$ROLE) --"
+    echo "-- new-world '$NEW_WORLD': applying high_watermark_1.sql + s20 + s21 + s22 + s23 + s24 to $DB (schema=$SCHEMA kern=$KERN role=$ROLE) --"
     psql -h "$HOST" -d "$DB" -v ON_ERROR_STOP=1 \
         -v schema="$SCHEMA" -v kern="$KERN" -v role="$ROLE" \
         -f "$AUTOHARN_ROOT/kernel/lineage/high_watermark_1.sql" \
         -f "$AUTOHARN_ROOT/kernel/lineage/s20-obligation-grants-and-view-refresh.sql" \
         -f "$AUTOHARN_ROOT/kernel/lineage/s21-session-aware-distinctness.sql" \
         -f "$AUTOHARN_ROOT/kernel/lineage/s22-work-item-ledger.sql" \
-        -f "$AUTOHARN_ROOT/kernel/lineage/s23-per-invocation-stamp-token.sql"
-    echo "   kernel applied (schema $SCHEMA + kernel schema $KERN + role $ROLE, s20 + s21 + s22 + s23 included)"
+        -f "$AUTOHARN_ROOT/kernel/lineage/s23-per-invocation-stamp-token.sql" \
+        -f "$AUTOHARN_ROOT/kernel/lineage/s24-declared-event-time.sql"
+    echo "   kernel applied (schema $SCHEMA + kernel schema $KERN + role $ROLE, s20 + s21 + s22 + s23 + s24 included)"
 
     echo "-- new-world '$NEW_WORLD': seeding the stamp secret (idempotent, mirrors drive/arm.sh ruling 43) --"
     mkdir -p "$PROJECT_ROOT/.claude/secrets"

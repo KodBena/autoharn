@@ -1,5 +1,10 @@
 # CAPABILITIES — what the harness can already do, in plain words
 
+The harness is autoharn's governance apparatus: the append-only Postgres decision ledger,
+the refuse-and-teach Claude Code hooks, and the operator verbs this repository builds so
+that AI-collaborator work leaves an auditable trail. This document lists what that
+apparatus verifiably does today.
+
 Each item: what you get, how it is enforced, and how we know it works — **witnessed** means it
 has fired for real at least once (the evidence is banked); **built, unexercised** means the
 mechanism exists but has never fired in anger. Nothing here is aspiration; the aspirational
@@ -207,8 +212,10 @@ NOTICEs; torn down zero-residue the same way.
 
 **14. `bootstrap/apply-delta.sh` — DEMOTED TO HISTORY (maintainer ruling 2026-07-11), file
 DELETED same day.** The ruling's own vocabulary was "deleted, not documented"; the file's
-continued presence was flagged as a live hazard by the s24 commission's adversarial review
-(an executable script whose every legitimate scenario the law had abolished), and it was
+continued presence was flagged as a live hazard (an executable script whose every
+legitimate scenario the law had abolished) by the s24 commission's adversarial review
+(the s24 commission: the delegated build that produced kernel-lineage delta
+`s24-declared-event-time.sql`, item 24a below), and it was
 `git rm`'d executing the already-ratified instruction. The witness record below stays as
 history of what the script was.
 Runs are strictly linear: run M > N settles run N's world as dust — there is no operator
@@ -239,8 +246,8 @@ scratch-witnessed on both polarities with the SQL/ASP differential in AGREE, is 
 2026-07-11: this entry originally kept apply-to-existing as "the scripted, typed-confirmation
 operator act" — the runs-are-linear ruling later abolished apply-to-existing entirely; a
 class-ratified delta reaches reality only via the birth chain at the next scaffold, and the
-apply script is deleted, see item 14.)* Named retroactively as the shape s21 and s22 both
-already satisfied. *UNWITNESSED as its own
+apply script is deleted, see item 14.)* This class was named retroactively as the shape
+s21 and s22 both already satisfied. *UNWITNESSED as its own
 mechanism this pass*: no delta has yet been authored and landed *citing* this class explicitly
 (it is a standing rule, not (yet) an exercised gate) — the honest state is "ratified rule, no
 instance run under it yet."
@@ -382,9 +389,11 @@ operator verb (`bootstrap/templates/audit.tmpl`, scaffolded alongside `led`/`jud
 `bootstrap/new-project.sh --new-world`) that joins a world's ledger rows against its
 `.claude/logs/invocations.jsonl` token journal (s23) and the three existing hook-journaled
 tool-activity logs, and reports the closed verdict vocabulary
-`CONTEMPORANEOUS | BATCHED_DECLARED | BACKFILL_SUSPECT` — ASP-FIRST per the maintainer's
+`CONTEMPORANEOUS | BATCHED_DECLARED | LATE_DECLARED | BACKFILL_SUSPECT` (LATE_DECLARED added
+2026-07-11 evening, see the dated addendum below) — ASP-FIRST per the maintainer's
 directive: the verdict logic lives in `engine/lp/contemporaneity.lp` (batch/silence/
-backfill_suspect derived from an EDB of `invocation/2`, `row_tokened/4`/`row_untokened/3`,
+backfill_suspect derived from an EDB — extensional database, the fact set an ASP program
+reasons over — of `invocation/2`, `row_tokened/4`/`row_untokened/3`,
 `tool_event/2`, with `burst_threshold_ms`/`silence_threshold_ms` entering as FACTS in
 `engine/contemp_thresholds.lp`, never hardcoded in a rule), run via the shared `clingo_run.py`.
 Thresholds are MEASURED, not guessed: derived from the runs 5-8 corpus (db `toy`,
@@ -437,6 +446,79 @@ in BACKLOG.md by this build, then unified to UTC-Z at the hooks themselves in th
 window (commit 19c9159). `contemp_edb.py::_parse_ts_ms` deliberately keeps both parse branches
 so journal lines written before that fix stay readable (same-host reading remains the correct
 assumption for exactly those historical lines).
+
+**24a. Late-entry discipline (2026-07-11 evening addendum) — design/LATE-ENTRY-AND-INTAKE-
+SEMANTICS.md, all three ratified proposals, implemented same evening.** Item 24's own vocabulary
+gains one member and one annotation, both additive; nothing above this addendum is relaxed.
+**Proposal 1 (intake-shape annotation, engine-side only, no vocabulary change):** a
+`token_burst` whose every row precedes this world's own first `tool_event` is now annotated
+`intake-shape (precedes all tool activity)` on the burst-table line
+(`engine/lp/contemporaneity.lp`'s `intake_shape/1`) — the run-10 first-audit specimen's own
+shape (BACKLOG "Run-10 first audit verdict adjudicated": rows 2-11, one invocation token,
+present-tense task declarations written before any tool activity existed). *Witnessed on a
+scratch world reproducing that shape* (case h, `seen-red/contemporaneity-audit/run_fixtures.py`):
+`VERDICT: BATCHED_DECLARED`, exit 0, the burst line carrying the annotation — never touching the
+live run-10 world itself (runs are linear; a settled world is read-only evidence, never a fixture
+substrate). **Proposal 2 (declared late entries — kernel/lineage/s24-declared-event-time.sql +
+one new verdict):** `led` gains an optional `--event-time <iso-ts>` flag
+(`bootstrap/templates/led.tmpl`) writing a nullable `event_declared_ts` column, distinct from
+`ts` (write time) and from s23's `stamp_invocation` (a capture-only, trigger-derived stamp;
+`event_declared_ts` is the OPPOSITE shape — a plain writer-supplied, unauthenticated declaration,
+disclosed as such in the kernel delta's own header). Omitting the flag is byte-identical to
+today's semantics. The audit gains **LATE_DECLARED**: the silence-breaking row of a burst that
+would otherwise verdict BACKFILL_SUSPECT instead verdicts LATE_DECLARED (exit 0) when that row
+carries a declared event time whose gap from its own write time exceeds `late_threshold_ms`
+(60000ms, `engine/contemp_thresholds.lp` — reasoned below the one real specimen on record,
+run-10 row 1's self-reported ~120s gap, the same below-the-smallest-true-positive method
+`silence_threshold_ms`'s own derivation uses). BACKFILL_SUSPECT now means precisely the
+UNDECLARED case — sharpened, not relaxed. **s24 SCRATCH-WITNESSED, both polarities, differential
+AGREE**: applied clean on a throwaway schema (`s24val`/`s24val_kernel`/`s24val_rw`, TOY db) atop
+the full s15…s23 chain; a row written with no `event_declared_ts` reads NULL (today's semantics
+unchanged) and a row written WITH one round-trips correctly; the existing HMAC/stamp machinery
+(forged stamp refused, valid stamp verifies true, event_declared_ts coexisting with a valid
+stamp) is byte-identical before and after — no trigger touched, grep-verified; `engine/
+ledger_differential.py s24val` (via `LEDGER_DEPLOYMENT`) reports **AGREE** (`asp=10 sql=10
+atoms; Δasp=[] Δsql=[]`) both on the raw scratch schema and after real `led --event-time` writes
+through the shim. `led.tmpl`'s own backward-compatibility hazard — this template executes LIVE
+for every already-scaffolded world, old and new alike (the "live verbs" ruling) — is closed by a
+LIVE `information_schema.columns` capability check, paid only when `--event-time` is actually
+passed: an s24-capable world writes the column; a pre-s24 world REFUSES loudly (never a silent
+drop of a value the operator explicitly asked to be recorded), naming the fix (omit the flag, or
+note the late entry in prose as run-10 row 1 did). **COVERAGE GUARD (added after an out-of-frame
+hack-rationalization audit of this same commission found the gap, same session):** `--event-time`
+is parsed by `led.tmpl`'s ONE shared top-level flag loop but only the generic `<kind>
+<statement...>` path's INSERT carries `event_declared_ts` — `led review`/`led work *` each have
+their own INSERT that does not. Rather than silently no-op on those verbs (the audit's finding),
+`led.tmpl` now REFUSES loudly, exit 1, naming the reason, when `--event-time` is passed to
+`--recent`/`current`/`question-status`/`review-gap`/`stamp-distinctness`/`register-principal`/
+`obligate`/`review`/`work` — widening the flag to those verbs is a named future increment, not a
+silent gap. **Witnessed, SCRIPTED (not merely prose)**: `seen-red/contemporaneity-audit/
+run_fixtures.py` cases (i)/(j)/(k) invoke a REAL `led` shim (the same exec-wrapper `bootstrap/
+new-project.sh` writes) as a subprocess against two real schemas — case (i): generic-path
+`--event-time` succeeds and round-trips (exit 0, read back via SELECT); case (j): the coverage
+guard refuses on `work open` (exit 1, teach-text visible); case (k): a SECOND scratch schema
+(`contempprobe_pre24`, applied through s23 only) proves the missing-column refusal against a real
+pre-s24 schema, not merely the s24val schema case (i)/(j) share. Both schemas torn down to zero
+residue after a clean run. `bootstrap/new-project.sh --new-world`'s birth chain now applies s24
+automatically (never applied to any *existing* world — runs are linear). **Proposal 3 (preamble
+line):** `bootstrap/templates/CLAUDE.md.tmpl` gains point 9, verbatim from the ratified memo:
+"Record as you go — one row at the moment of the act. Batching declarations you are making right
+now (an intake decomposition) is fine; the token declares it. If you must record an act after
+the fact, declare its event time — never narrate the past as if live." **Seen-red, both
+polarities, banked**: `seen-red/contemporaneity-audit/run_fixtures.py` cases (f)/(g) — the
+IDENTICAL silence-then-burst gap shape, declared verdicts LATE_DECLARED/exit 0
+(`late-declared-green.txt`), undeclared verdicts BACKFILL_SUSPECT/exit 1
+(`late-declared-red.txt`), the latter re-asserting case (b)'s own pre-extension behavior is
+unaffected. **Honest limit, named:** `late_threshold_ms` is a REASONED lower bound from the one
+real declared-late specimen on record (run-10 row 1, itself an improvised prose disclosure that
+predates s24), not a full corpus measurement — re-measure once a run born after s24 produces
+real `--event-time` data (the same disclosure `silence_threshold_ms`'s own header already
+carries for its axis). **Hazard found and flagged, not fixed this pass (same audit):**
+`kernel/lineage/s24-declared-event-time.sql`'s own header originally asserted "bootstrap/
+apply-delta.sh is retired" as settled fact; the script is in fact still present, executable, and
+functionally capable of applying a delta to an existing world — corrected in the SQL file's own
+prose and flagged loudly in BACKLOG.md's dated entry (deleting/neutering the script is a
+separate, larger decision, not taken here).
 
 ## Built, unexercised (exists; has not yet fired in anger)
 

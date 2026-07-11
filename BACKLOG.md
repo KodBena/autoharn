@@ -3259,3 +3259,498 @@ from the whole record, survives only as reviewer paraphrase; need it ledgered at
 efficiency — no token/dollar accounting exists; (6) whether the ten-task granularity matched the
 user's mental model — undecidable without the user's own breakdown. The single most consequential
 gap: the harness ledgers the decomposition but never the source it decomposes.
+## Late-entry discipline implemented (2026-07-11 evening, Sonnet, commissioned build from
+## design/LATE-ENTRY-AND-INTAKE-SEMANTICS.md, ratified this same evening — see the
+## "Two ratifications" entry above)
+
+All three ratified proposals delivered in one worktree pass. Per-claim witness status below;
+"scratch" means an apparatus-authored throwaway schema pair, torn down to zero residue after
+(verified via `information_schema`/`pg_roles` re-query, empty both times).
+
+**Proposal 1 — intake-shape annotation (engine-side, no vocabulary change).**
+`engine/lp/contemporaneity.lp` gains `intake_shape/1`: a `token_burst` is annotated when its
+latest row precedes this world's own earliest `tool_event` (or when no `tool_event` exists at
+all yet). `engine/contemp_audit.py` prints `intake-shape (precedes all tool activity)` on the
+burst-table line. WITNESSED: `seen-red/contemporaneity-audit/run_fixtures.py` case (h)
+reproduces run-10's own rows-2-11 shape (a 3-row burst before any tool activity) on a scratch
+world — `VERDICT: BATCHED_DECLARED`, exit 0, the burst line carrying the annotation. The live
+run-10 world itself was never touched (runs are strictly linear; a settled world is read-only
+evidence, never a fixture substrate).
+
+**Proposal 2 — declared late entries.**
+
+- `kernel/lineage/s24-declared-event-time.sql`: a nullable `event_declared_ts` (timestamptz)
+  column on `ledger`, writer-supplied (no trigger, no GUC, no HMAC — the opposite shape from
+  s23's capture-only `stamp_invocation`, disclosed as such in the delta's own header).
+  `ledger_current`/`countersigned_in_force` re-issued with the column appended (the s20/s23
+  view-reissue discipline, re-applied); `review_gap`/`question_status`/`work_item_current`/
+  `work_item_violations`/`review_stamp_distinctness` checked and confirmed NOT members of that
+  class (named, not assumed) — mirrors s23's own enumeration exactly, one column later.
+  WITNESSED, scratch schema `s24val`/`s24val_kernel`/`s24val_rw` (TOY db, full s15…s23 chain
+  applied first): both polarities (a row with no declared time reads NULL; a row with one
+  round-trips exactly); the existing HMAC/stamp machinery is BYTE-IDENTICAL before/after (a
+  forged HMAC against a real provisioned secret still raises the exact same refusal; a valid
+  stamp still verifies true and coexists cleanly with a declared time on the same row) — no
+  trigger touched, grep-verified. `engine/ledger_differential.py s24val` (via
+  `LEDGER_DEPLOYMENT`) reports **AGREE**: `asp=10 sql=10 atoms; Δasp=[] Δsql=[]` — re-run after
+  real `led --event-time` writes landed through the shim, still AGREE. Class-ratified per
+  CLAUDE.md's decision tree (additive only, both polarities scratch-witnessed, differential
+  AGREE) — enters `bootstrap/new-project.sh`'s `--new-world` birth chain (LINEAGE_CHAIN updated,
+  DDL apply list updated); NEVER applied to any existing world (runs are linear — no
+  apply-to-existing-world step exists for anyone).
+- `bootstrap/templates/led.tmpl`: `--event-time <iso-ts>` flag on the generic `<kind>
+  <statement...>` path, writing `event_declared_ts`. Teach-text in the top-of-file comment
+  (verbatim intent, not the spec's exact sentence): "recording an act after the fact? declare
+  its event time — never narrate the past as if live." **Hazard caught and closed, unprompted**
+  (CLAUDE.md's engineering-responsibility corollary): `led.tmpl` executes LIVE for every
+  already-scaffolded world regardless of when it was born (the "live verbs" ruling) — hardcoding
+  `event_declared_ts` into the generic INSERT's column list would have broken `./led` on every
+  pre-s24 world the instant this template merges (a silent-breakage class this project exists to
+  foreclose). Fixed with a LIVE `information_schema.columns` capability check, paid only when
+  `--event-time` is actually passed (the common no-flag path is byte-identical to before, zero
+  extra query): an s24-capable world writes the column; a pre-s24 world REFUSES loudly (exit 1,
+  teach-text naming the fix), never a silent drop of a value the operator explicitly asked to be
+  recorded. WITNESSED live on two fresh scratch worlds built end-to-end (schema, secret, `./led`
+  shim): world A (s24-capable) — `--event-time` succeeds and round-trips
+  (`event_declared_ts=2026-07-11 12:00:00+02`), no-flag path unaffected (NULL); world B
+  (deliberately pre-s24, s15…s23 only) — `--event-time` REFUSED with the exact teach-text above,
+  exit 1; world B's no-flag path unaffected (exit 0). Both worlds torn down after, zero residue.
+- The verdict: `engine/lp/contemporaneity.lp` gains **LATE_DECLARED**. A burst's
+  silence-breaking row (the one that would otherwise make its token BACKFILL_SUSPECT) is
+  reclassified LATE_DECLARED when it carries a declared event time whose gap from its own write
+  time exceeds `late_threshold_ms` (60000ms, `engine/contemp_thresholds.lp` — reasoned below the
+  one real specimen on record, run-10 row 1's self-reported ~120s gap, same
+  below-the-smallest-true-positive method `silence_threshold_ms` already uses).
+  BACKFILL_SUSPECT now means precisely the UNDECLARED case; verdict priority is
+  BACKFILL_SUSPECT > LATE_DECLARED > BATCHED_DECLARED > CONTEMPORANEOUS (loudest wins). A
+  pre-s24 world emits no `row_declared/2` facts at all, so LATE_DECLARED can never fire there and
+  BACKFILL_SUSPECT's pre-existing behavior is provably unchanged (the wiredness-not-corpus-
+  emptiness lesson from the run9 fix, applied one delta later — `event_declared_ts_column` is a
+  named capability in `engine/contemp_edb.py`'s manifest, EXCLUDED not EMPTY on a pre-s24 world).
+  **SEEN-RED, BOTH POLARITIES** (`seen-red/contemporaneity-audit/run_fixtures.py`, extended,
+  cases f/g — the IDENTICAL silence-then-burst gap shape, disjoint offset ranges so the shared
+  scratch ledger's earlier fixture rows never bleed into a later case's own silence/backfill
+  computation): case (f) declares the silence-breaking row's event time near the start of the
+  ~305s silence window → `VERDICT: LATE_DECLARED`, exit 0, token named, banked verbatim as
+  `late-declared-green.txt`; case (g) re-runs the identical shape with no declaration → `VERDICT:
+  BACKFILL_SUSPECT`, exit 1, token named, banked verbatim as `late-declared-red.txt` — proving
+  case (b)'s own pre-extension behavior is byte-identical post-s24, not merely asserted. Full
+  8-case suite (`python3 seen-red/contemporaneity-audit/run_fixtures.py`, `PYTHONPATH=engine`)
+  passes clean, exit 0, including case (c) live against run7's real pre-s23 schema.
+
+**Proposal 3 — preamble line.** `bootstrap/templates/CLAUDE.md.tmpl` gains point 9, verbatim
+from the ratified memo: "Record as you go — one row at the moment of the act. Batching
+declarations you are making right now (an intake decomposition) is fine; the token declares it.
+If you must record an act after the fact, declare its event time — never narrate the past as if
+live." WITNESSED: reads correctly in the templated file; not yet exercised inside a live governed
+session (UNEXERCISED, concrete blocker: no new `--new-world` scaffold was stood up by this pass
+to carry it into a real session — the next scaffolded world inherits it automatically).
+
+**Docs updated honestly:** CAPABILITIES.md item 24a (this addendum, in place, matching item 24's
+own existing "same day" amendment pattern); design/CONTEMPORANEITY-AUDIT.md's own appended
+Status section gains a new dated paragraph (ADR-0005 Rule 8 — the original memo and the Part
+1/Part 2 status entries stand unedited). design/LATE-ENTRY-AND-INTAKE-SEMANTICS.md itself (the
+frozen ratified record) was deliberately left untouched — not in this task's named scope, and
+ADR-0005 Rule 8 governs against retro-editing a point-in-time decision record.
+
+**Gates run clean on the touched surface:** `gates/no_lazy_imports.py` (zero violations);
+`py_compile` on every touched `.py` file; `sh -n` on `bootstrap/new-project.sh`; the extended
+seen-red fixture suite (11/11 cases, see the audit-driven extension below). `gates/link_
+integrity.py`/`gates/doc_shapes.py` were run over the touched docs before commit (see this
+session's commit for the exact invocation).
+
+**Out-of-frame hack-rationalization audit run on this diff before commit (required by the
+skill's own FRAME CHECK — the implementer cannot self-audit), verdict UNDISCHARGED-HACK on the
+first pass, closed same session.** A separate subagent, given only the diff and this repo (no
+implementer reasoning), found: (1) `--event-time` was parsed by `led.tmpl`'s shared top-level
+flag loop but silently did nothing on `led review`/`led work *` — the flag's own comment called
+this "a no-op today" instead of a refusal, an inconsistency with this same file's own idiom
+(missing-column case two hunks above gets a loud REFUSE) and with `warn_flag_in_statement`'s
+never-silently-drop posture; (2) no fixture or script exercised `led.tmpl`'s actual `--event-time`
+CLI path end-to-end — every claim of it working was unscripted prose, weaker than this project's
+own "Self-application" bar; (3) `kernel/lineage/s24-declared-event-time.sql`'s own header
+asserted "bootstrap/apply-delta.sh is retired" as if the script no longer existed, when it is in
+fact still present, executable, and functionally capable of applying a delta to an existing world
+today — a pre-existing repo state (CAPABILITIES.md item 14 already documents it as "demoted to
+history" by POLICY, not deletion) that this delta's own prose stated more strongly than true.
+Disposition, same session: (1) fixed — `led.tmpl` gains a coverage guard (right after the shared
+flag loop) that REFUSES loudly, exit 1, naming the reason, when `--event-time` is passed to
+`--recent`/`current`/`question-status`/`review-gap`/`stamp-distinctness`/`register-principal`/
+`obligate`/`review`/`work`; witnessed live on a fresh scratch world before being folded into the
+scripted fixture. (2) fixed — `seen-red/contemporaneity-audit/run_fixtures.py` gains a SECOND
+scratch schema (`contempprobe_pre24`, s23-only, no s24) and three new cases (i/j/k) that invoke
+the REAL `led` shim (the same 3-line exec-wrapper `bootstrap/new-project.sh` writes) as a
+subprocess: case (i) generic-path `--event-time` success + round-trip read-back; case (j) the new
+coverage-refusal on `work open`; case (k) the pre-s24-schema capability refusal, against the real
+second schema. All three witnessed, exit codes as expected, both schemas torn down to zero
+residue after. (3) fixed — the SQL header's claim corrected to name the discrepancy explicitly
+(quoted below) rather than asserting the script's absence; deleting/neutering
+`bootstrap/apply-delta.sh` itself is named as a separate, larger decision, not taken here (out of
+this commission's scope; routes to the maintainer like any other destructive/ambiguous act).
+
+**Hazard flagged, not fixed this pass (CLAUDE.md engineering-responsibility corollary — met in
+passing while touching apply-delta.sh's retirement status in prose, not this commission's own
+assigned task):** `bootstrap/apply-delta.sh` is still present, executable, and end-to-end
+functional (`ls -la` shows `-rwxr-xr-x`, last touched by an unrelated prior commit `cba2f0c`), and
+its body still resolves a world's `deployment.json`, prompts a typed confirmation, and applies an
+arbitrary `kernel/lineage/sNN-*.sql` — including, as of this pass, `s24-declared-event-time.sql` —
+to a LIVE, EXISTING world via `psql -f`. This directly contradicts CLAUDE.md's own "runs are
+strictly linear" ruling ("there is NO apply-to-existing-world step, for anyone... bootstrap/
+apply-delta.sh is retired... an operator step that is ritual rather than load-bearing is deleted,
+not documented") and is stronger than CAPABILITIES.md item 14's older framing ("no operator
+scenario... demoted to history... stays as history"). An operator who runs `bootstrap/apply-
+delta.sh <existing-world-dir> kernel/lineage/s24-declared-event-time.sql` today would succeed,
+silently violating the newer, more categorical ruling. Not fixed here: deleting or neutering a
+script that other maintainer-facing docs (WALKTHROUGH.md, design/S22-WORK-ITEM-LEDGER.md) still
+cite as an operator-facing act is a decision with its own blast radius, deserving its own
+commission rather than a rushed side-fix inside this one — named loudly instead, per the
+corollary's "fix or flag" bar.
+
+**Deferred, named, not silently dropped:** the SQL-floor differential for the contemp_audit
+verb itself (Part 2's own second-producer gap, filed since the original core landing — untouched
+by this pass, still ONE producer, the ASP derivation); session-level (vs whole-ledger-window)
+verdict granularity (same pre-existing filed gap); Part 3 of the ORIGINAL contemporaneity design
+(the deontic/temporal ordering research direction — unrelated to this late-entry commission,
+still just filed); widening `--event-time` to `led review`/`led work *` (named in the audit
+disposition above as a future increment, refused loudly rather than silently today).
+## ADR-0017 A:B:C attestation loop — the enforcement floor built and armed (Sonnet, 2026-07-11)
+
+The ratification packet ("Zero-context-reader documentation discipline — ADR-0017 DRAFT +
+measured enforcement", above) left the A:B:C fresh-context audit loop's commit-time
+attestation-presence gate DESIGNED-UNBUILT, gated on the maintainer's word. "Two
+ratifications (maintainer, 2026-07-11 evening)" gave that word: ratify ADR-0017, arm the
+A:B:C loop as the discipline's primary transport, and never let any LLM verdict sit in a
+blocking path (sub-question 2, answered NO). This entry is that word carried into code.
+
+**Delivered, witnessed:**
+
+1. **The attestation record format**, defined in
+   [`gates/doc_attestation_presence.py`](gates/doc_attestation_presence.py)'s own module
+   docstring (the ADR names no filename for this decision, so the format lives where the
+   gate that reads it lives — the smallest sound place, said plainly there). One JSON object
+   per line in the git-tracked, append-only `attestations/doc-legibility-attestations.jsonl`:
+   which document and content-hash a fresh-context B read, B's self-declared identifying
+   string, one object per B→C round (verdict, and either per-finding `file`/`line`/`quote`/
+   `repair` specimens or the four checked Rule-1 clauses), and an `escalated` flag. Chosen
+   over agent-identity checks per the ADR's own instruction ("the enforced surface is the
+   attestation, not the agent's identity... identity enumeration fails open"). The ADR's
+   instance-bindings note that a wired kernel world could ride
+   `countersign_obligation`/`review_gap` for this relation is real but does not apply here:
+   autoharn's own repo carries no world ledger, so the record lives in-repo, per the
+   commission's own instruction not to touch kernel/.
+
+2. **The attestation-presence commit gate**,
+   [`gates/doc_attestation_presence.py`](gates/doc_attestation_presence.py): checks PRESENCE
+   (a record exists whose content hash matches the doc's current bytes) and SHAPE (per-round
+   validity, the two-round cap, an unescalated still-DEFECT final round refused) — never the
+   attestation's conclusions, mechanizing the ratified sub-question-2 answer literally in
+   code, not just in prose. **Armed ENFORCE, not observe-first**, because the ADR's own text
+   says so, not by this pass's assumption: "The fresh-context audit loop" section states the
+   gate's enforcement surface as "deterministic and commit-time-blockable once built," and
+   Revisit-when #2 names it the one exception to the tenet's unmeasured-promotion bar ("may
+   be built and armed on the packet's word") — the packet's word already said yes. Unlike the
+   costed critic hook, this gate spends nothing (a hash lookup and a JSON shape check), the
+   same free-per-commit class as `gates/doc_shapes.py` and `gates/link_integrity.py`, neither
+   of which carries an apparatus.json switch — so this gate carries none either.
+   Scope/exclusions (every one printed by the gate itself, per the ADR's own printed-
+   exclusion convention): `BACKLOG.md` wholesale (point-in-time dated entries — this entry
+   included), `judgment/**` wholesale (declared history, matching `gates/link_integrity.py`'s
+   own exclusion), and an inline `<!-- doc-attest-exempt: <reason> -->` waiver.
+   WITNESSED both polarities: `seen-red/doc-attestation-presence/red.txt` (RED on a missing
+   attestation; three malformed-record shapes refused at write time and never appended to the
+   ledger; GREEN once a well-shaped record is recorded; report mode never fails); registered
+   in `gates/fixture_census.py` REGISTRY, census re-run clean at 36 seen-red gates.
+   **A live hazard the build caught in itself, fixed before shipping:** the waiver check was
+   first written as a bare substring match, and it self-triggered — the recipe document
+   below explains the waiver token in worked-example prose, and that explanation alone
+   produced a false wholesale exemption. Fixed by requiring the token inside an HTML comment
+   (`<!-- doc-attest-exempt: reason -->`), the same device `gates/link_integrity.py` already
+   uses to keep a code-fenced example from being mistaken for a real link; the fixture pins
+   the regression (`WAIVER-NOT-PROSE` case).
+   **Not wired into `hooks/pre-commit`** — this commission's own constraint forbids editing
+   hooks/ existing files while a governed session (run10) is live. The exact stanza to drop
+   in (mirroring the `link_integrity.py` block already there) is printed in the gate's module
+   docstring under "WIRING STANZA," ready for the orchestrator once the freeze lifts.
+   **Flagged in passing, not fixed (same frozen file):** `gates/doc_shapes.py`, though built
+   and seen-red days earlier, is *also* not actually invoked from `hooks/pre-commit`'s body
+   despite the header comment's "FINAL WIRING" note listing it — a pre-existing gap this pass
+   noticed but did not cause and cannot touch.
+
+3. **The workflow recipe**, [`design/ABC-AUDIT-LOOP-RECIPE.md`](design/ABC-AUDIT-LOOP-RECIPE.md)
+   (the ADR names no companion-doc location for this, so a new `design/` note, per the
+   commission's own fallback instruction): step-by-step, self-contained instructions for
+   spawning B as a genuinely fresh `Agent`-tool invocation, the two-round cap, the
+   non-converging-review-loop escalation, and recording the result.
+   **This recipe was itself run through a real A:B:C loop while being written**, not merely
+   asserted compliant: a fresh `Agent`-tool invocation (`general-purpose`, no parent
+   conversation context, prompt carrying only ADR-0017's complete verbatim text and the
+   recipe's text — nothing else) served as B. Round 1 found two genuine defects (a cost
+   figure mis-cited to the wrong ADR-0017 section; a bare unlinked `BACKLOG` citation
+   inconsistent with the document's own convention); both were fixed; a second fresh B
+   invocation returned CLEAN across all four Rule-1 clauses, explicitly checking every
+   ADR-0017-attributed quotation in the document against the ADR's real text. Two rounds,
+   converged, not escalated. The attestation is recorded in
+   `attestations/doc-legibility-attestations.jsonl` with both rounds' findings and verdicts.
+   (A methodological note for whoever runs this loop next: an earlier, discarded attempt fed
+   B an abridged paraphrase of ADR-0017 instead of its literal text, and B correctly flagged
+   two accurate quotations as unresolvable — an artifact of the abridgement, not a real
+   defect. The recipe's own step 2 says "paste in the full text" for exactly this reason; the
+   discarded attempt is why that line is there, not a hypothetical.)
+
+4. **The "offered in configuration" half** (orchestrator-added mid-commission, closing the
+   half of ADR-0017's portability intent that "arm it for autoharn" alone does not reach):
+   `bootstrap/templates/apparatus.json` and `bootstrap/templates/APPARATUS.md` now carry a
+   `doc_legibility_critic` mechanism entry, shaped exactly like `demurral_detect`'s (`mode:
+   "off"`, `cost_note`, `classifier_command`, `timeout_s`) — the one ADR-0017 mechanism a
+   freshly scaffolded world's own hook actually reads (`hooks/doc_legibility_critic.py`'s
+   `MECHANISM_KEY`). No apparatus.json key was added for the attestation-presence gate: it
+   is autoharn-repo-side only (its ledger and its git-history assumptions are this repo's,
+   not a fresh scaffold's), and per this file's own convention a free deterministic gate
+   (`doc_shapes.py`, `link_integrity.py`, now this one) is not switchboard-gated at all — a
+   dead key nothing reads would have been the exact defect the commission warned against.
+   `bootstrap/new-project.sh` was not edited (it only `cp`s the templates); editing the
+   templates was verified safe against a live session before doing it — they are copied
+   once at scaffold time, never re-read from a running world, unlike hooks/ files. This
+   closes the "offered in the configuration" half of ADR-0017's portability intent, alongside
+   the arming above.
+
+**How the two just-ratified pieces compose:** the A:B:C primary-transport decision (ADR-0017's
+"fresh-context audit loop" section) names *who* does the reading (a fresh fork) and *what*
+shape the verdict must have; this pass's attestation-presence gate is the *commit-time floor*
+under that transport — it does not care whether the record came from a real A:B:C run, a
+human doing the same thing by hand, or (structurally, if someone chose to) a fabricated
+claim, because the ADR's own design explicitly declines to police that ("the gate checks the
+record, indifferent to how the file was written"). The two are deliberately decoupled at that
+seam: the workflow produces evidence, the gate demands evidence exists and parses, and never
+the twain audit each other's honesty — that gap is named, not hidden, and is exactly the gap
+Revisit-when #2 leaves open for a future promotion question once live attestations exist to
+measure.
+
+**Deferred, with blockers:**
+- Wiring `gates/doc_attestation_presence.py` into `hooks/pre-commit` — blocked on the
+  standing "never modify hooks/ while a governed session is live" rule (run10); stanza
+  prepared in the gate's own docstring.
+- The pre-existing `gates/doc_shapes.py` pre-commit non-wiring, noticed in passing — same
+  blocker, not this pass's defect to fix.
+- Back-catalog attestation debt: `python3 gates/doc_attestation_presence.py` (report mode,
+  no args) currently lists every tracked `.md` file outside `BACKLOG.md`/`judgment/**` as
+  unattested (report mode, never fails) — expected and correct per Rule 4's binds-on-touch
+  posture; not a gap to close by sweep.
+
+Every claim above is WITNESSED (fixture output banked at the named seen-red path, or the
+live Agent-tool transcript this entry describes), or explicitly deferred with its blocker
+named. No umbrella claims.
+
+## ADR-0017 world-side doc_shapes gate — offered for run11 (Sonnet, 2026-07-11)
+
+Second orchestrator extension of the same commission (maintainer instruction, near-verbatim):
+"One nice side-effect of the task that our recent runs have, is a mandatory documentation
+step; we should leverage that opportunistically for run11 and apply the doc gate there, if
+possible." This entry makes `gates/doc_shapes.py`'s two measured-sound checks (standalone
+fragment paragraphs; bare positional HANDOFF references) reachable INSIDE a scaffolded world,
+not only against this repo's own tree.
+
+**Delivered, witnessed:**
+
+1. **`hooks/pretooluse_doc_shapes_gate.py`** — a new hook (safe to add per this commission's
+   own constraint: new files in `hooks/` are inert until wired). PreToolUse on `Write`/`Edit`
+   of a `.md` file, not PostToolUse: a scaffolded world is not a git repository at scaffold
+   time (`run10`'s task 1 was `git init`), so a pre-commit surface has nothing to attach to —
+   the sound surface is the write itself, refusing a defective document before it lands, the
+   same PreToolUse-deny contract `hooks/pretooluse_change_gate.py` already uses (identical
+   `permissionDecision`/`permissionDecisionReason` JSON shape, identical exit codes) rather
+   than inventing a second refusal vocabulary. It imports `gates/doc_shapes.py` directly by
+   path (sibling directory, same checkout every scaffolded world already references
+   absolutely for every other hook) — one judgment, one home, ADR-0012 P1. For a `Write`, the
+   full proposed content is checked directly; for an `Edit`, the current on-disk file is read
+   and `old_string`→`new_string` applied to reconstruct the FULL post-edit content before
+   checking — necessary because the FRAGMENT check is context-sensitive (it looks at the
+   blank-or-not lines around a candidate paragraph), so checking an isolated `new_string`
+   snippet would misjudge its edges as the whole file's edges. WITNESSED both polarities plus
+   four more cases: `seen-red/doc-shapes-gate-world/red.txt` — ENFORCE denies a defective
+   `Write` naming both checks (exit 2); ENFORCE silently allows a clean `Write` (exit 0);
+   OBSERVE allows the identical defective `Write` with a loud `additionalContext` warning;
+   OFF is silent regardless of content; a MISSING `apparatus.json` resolves to observe
+   behavior (never off, never enforce); an `Edit`'s reconstructed content is checked and the
+   deny names the REAL target path, never the internal temp file. Registered in
+   `gates/fixture_census.py` REGISTRY as `doc-shapes-gate-world`; census re-run clean at 37
+   seen-red gates.
+
+2. **Default mode: `observe`, not `off` and not `enforce` — the arming-mode question answered
+   from first principles, not by copying the critic's or the repo-side gate's defaults.** Not
+   `"off"`: this check spends nothing (pure text scanning, no `claude -p` call), so the "no
+   world may silently bill its operator" reason that keeps `demurral_detect`/
+   `doc_legibility_critic` off by default does not apply — a free check with nothing to hide
+   costs nothing to expose. Not `"enforce"`: this is the FIRST time `gates/doc_shapes.py`'s
+   two checks run as a LIVE, interactive, write-time blocking gate anywhere — even this
+   repo's own pre-commit chain does not yet invoke it (the pre-existing gap flagged in the
+   entry above) — so its measured false-positive rate (18 fragment hits / 208 docs, 1
+   HANDOFF-positional hit, both near-zero after exemptions) is measured against this repo's
+   OWN static corpus, not against the different shape of documents a fresh world's agents
+   write in real time. `"observe"` matches this project's own precedent for a newly
+   introduced observation point (`mutation_observer`, `delegation_observer` both defaulted to
+   `"observe"`, never `"enforce"`, on first introduction). **The one-line flip to enforce for
+   run11 specifically**, if the maintainer wants it live-blocking from birth: set
+   `"doc_shapes_gate": {"mode": "enforce"}` in run11's `.claude/apparatus.json` under
+   `mechanisms` — no code change, no re-scaffold, live on the very next `Write`/`Edit` of a
+   `.md` file inside that world. This is the orchestrator's one-line offer to the maintainer
+   at scaffold time, named per this project's self-application standard (every orchestrator
+   choice explained on the record).
+
+3. **Offered in the switchboard, not just built.** `bootstrap/templates/apparatus.json` now
+   carries `"doc_shapes_gate": {"mode": "observe"}` (a bare entry, no `cost_note` — nothing
+   costed to disclose); `bootstrap/templates/APPARATUS.md`'s table grew from eight to nine
+   mechanisms and its "Named nuances" list grew a matching bullet, both WITNESSED against a
+   real A:B:C loop on the added text (two rounds: round 1 found undefined "world" jargon and
+   an awkward forward-pointing "for that reason," both repaired; round 2 CLEAN), recorded in
+   `attestations/doc-legibility-attestations.jsonl`. **`bootstrap/templates/settings.json.tmpl`**
+   grew a new `PreToolUse` block, matcher `Write|Edit`, wiring
+   `hooks/pretooluse_doc_shapes_gate.py` with `GATE_SUBJECT_ROOT=__PROJECT_ROOT__` — the same
+   two placeholders (`__PROJECT_ROOT__`, `__AUTOHARN_ROOT__`) every other entry in that file
+   already uses, substituted the same way by `bootstrap/new-project.sh`'s existing `sedsubst`
+   (no new placeholder needed). Editing these three template files was verified safe against
+   the live run10 session before doing it, same reasoning as the apparatus-offering entry
+   above: `bootstrap/new-project.sh` only `cp`/`sed`s them once at scaffold time into a new
+   world's `.claude/`; they are never re-read by an already-running session.
+
+**Composition with the earlier extension in this same session:** the two apparatus.json
+entries this commission added (`doc_legibility_critic`, `doc_shapes_gate`) sit side by side in
+one switchboard, as instructed — the costed LLM critic (off by default, per-`.md`-write
+`claude -p` cost) and the free deterministic write-time gate (observe by default, first live
+deployment) are visibly distinct choices an operator scaffolding a new world can see and set
+independently, never a single conflated "doc discipline" toggle.
+
+**Deferred, with blockers:** none new. The same `hooks/pre-commit` freeze named in the entry
+above does not apply here — this hook is wired via the SCAFFOLD templates, not the live
+`hooks/pre-commit` file, and is therefore live for the very next world scaffolded after this
+commit merges (run11, if scaffolded after).
+
+Every claim above is WITNESSED (fixture output at the named seen-red path, the live A:B:C
+transcript this entry describes, or a direct subprocess run quoted in this session's own
+tool-call record) or explicitly named as a deferred/no-blocker case. No umbrella claims.
+
+## Run-10 closure audit — both class-b fixes landed (2026-07-11, integration-merge-window
+## worktree)
+
+Delivers both change proposals filed in "Run-10 closure audit (2026-07-11)" above, plus a
+second hazard caught in passing per CLAUDE.md's engineering-responsibility corollary
+(`gates/doc_shapes.py` was built and seen-red but never actually wired into `hooks/pre-commit`,
+flagged by name in `gates/doc_attestation_presence.py`'s own docstring — fixed here alongside
+its sibling rather than left for a future pass).
+
+**Item 1 — `bootstrap/templates/led.tmpl` names the valid-kind list on a `ledger_kind_check`
+refusal.** A new `_led_kind_refusal_teach()` function, called identically from both INSERT
+shapes (event-time column present or not — factored once, not duplicated per shape) ONLY after
+their own `psql` invocation has already failed. Detection is deliberately NOT a grep of psql's
+error TEXT (which could read differently across postgres versions): it independently re-queries
+`pg_get_constraintdef` for `ledger_kind_check` scoped to this schema's own `ledger` table (never
+a second hand-maintained kind enumeration to drift out of sync with s22's kernel-side one — the
+vocabulary already drifted once), and only prints the extra teach block if `$kind` is genuinely
+absent from that live list — so a non-kind INSERT failure (a bad `--supersedes` id, etc.) is
+untouched, unrewrapped, unswallowed, same exit code as before. The success path is not
+wrapped at all in a way that changes its output — `if psql ...; then :; else ...; fi` mirrors
+this file's own `set -euo pipefail`-safe idiom (a command tested as an `if` condition does not
+trigger `set -e`), so a valid write's stdout/stderr are exactly what `psql` itself produces,
+untouched.
+
+WITNESSED, both polarities, extending `seen-red/contemporaneity-audit/run_fixtures.py` (cases
+l/m, THIRTEEN cases total now) — real `led` shim, real scratch schema (`contempprobe`/
+`contempprobe_kernel`/`contempprobe_rw`, TOY db), full suite exit 0:
+
+```
+# CASE l (led kind-refusal teach, run-10 row-67 specimen): exit=3, REFUSED, original ledger_kind_check error preserved, live valid-kind list now taught (decision/assumption/work_opened/review confirmed present)
+# CASE m (success path, OLD vs NEW led.tmpl): exit_old=0, exit_new=0, stdout byte-identical ('SET\nSET\nINSERT 0 1\n')
+```
+
+Case (m) is a REAL old-vs-new diff, not an assertion pinned to a hardcoded string: one shim
+execs this commit's own PARENT `led.tmpl` (`git show HEAD:bootstrap/templates/led.tmpl`, read
+into a throwaway temp file, AUTOHARN passed explicitly via led.tmpl's own already-documented
+override since the copy lives outside the checkout tree), the other execs the just-edited file;
+both writes' stdout compared byte-for-byte and found identical.
+
+The run-10 row-67 specimen itself, reproduced live outside the fixture suite for the literal
+transcript (`./led acceptance-criteria "QEUBO smoke-test acceptance criterion..."` against a
+fresh scratch schema, s24-capable, torn down after):
+
+```
+ERROR:  new row for relation "ledger" violates check constraint "ledger_kind_check"
+DETAIL:  Failing row contains (1, 2026-07-11 19:27:52.535863+02, main, acceptance-criteria, ...).
+
+led: 'acceptance-criteria' is not a member of ledger_kind_check's vocabulary (the refusal above).
+  valid kinds (live, queried from the kernel's own constraint definition -- never
+  hardcoded here): assumption, decision, question, verification, finding, snag, revision, note, review, work_opened, work_claimed, work_depends_on, work_closed
+```
+
+The same schema's valid-kind write (`./led decision "..."`) landed exit 0 with stdout
+`SET\nSET\nINSERT 0 1\n` — unchanged. Scratch schema torn down to zero residue, re-verified
+directly: `SELECT nspname FROM pg_namespace WHERE nspname LIKE 'contempprobe%'` and `SELECT
+rolname FROM pg_roles WHERE rolname LIKE 'contempprobe%'` both returned empty after teardown.
+
+**Item 2 — `gates/doc_shapes.py` and `gates/doc_attestation_presence.py` wired into
+`hooks/pre-commit`.** Both ordered after the existing `link_integrity` block (staging_guard ->
+no_lazy_imports -> fixture_census -> link_integrity -> doc_shapes -> doc-attestation-presence ->
+layout_census (disabled) -> doc-legibility (report-only)), sharing one `git diff --cached
+--name-only --diff-filter=ACMR -- '*.md'` computation rather than running it twice. The
+doc-attestation-presence stanza is the gate's own docstring WIRING STANZA applied verbatim
+(only generalized to the shared touched-file variable); doc_shapes gets the analogous shape,
+matching the chain's existing invocation style (a `"$PY" gate.py ARGS || { teach-text; exit 1;
+}` block per gate). Neither gate is softened — doc-attestation-presence stays authored ENFORCE
+per ADR-0017, no observe/off mode added.
+
+WITNESSED, both refusals AND a clean pass, via a scratch commit cycle in this worktree (using
+`git -c core.hooksPath=hooks commit ...` to point at THIS worktree's own `hooks/pre-commit`
+rather than the shared `.git/config`'s `core.hooksPath`, which — a pre-existing worktree
+config quirk, unrelated to this commission and left untouched — currently resolves to the main
+checkout's `hooks/` for a bare `git commit`; the override is a single-invocation flag, no
+lasting config change). A scratch file `design/_scratch_gate_witness.md` (created, exercised,
+then fully removed — never landed in a real commit) carrying a deliberate FRAGMENT violation:
+
+```
+doc_shapes (gate mode): 1 finding(s) across 1 file(s)
+  design/_scratch_gate_witness.md:7: FRAGMENT standalone 1-word paragraph ('Nope.') — a noun phrase is not a paragraph; write the sentence (or waive with 'doc-shapes-allow: <reason>')
+
+pre-commit: doc-shapes gate FAILED — a changed doc has a legibility shape defect
+(FRAGMENT or HANDOFF-POSITIONAL; see gates/doc_shapes.py's own header).
+```
+
+Same file, fragment fixed (clean prose) but carrying no attestation record — the SAME commit
+attempt now clears doc_shapes and is refused one gate later:
+
+```
+doc_attestation_presence (gate mode): 1 finding(s):
+  design/_scratch_gate_witness.md: NO-ATTESTATION no fresh-context attestation record in attestations/doc-legibility-attestations.jsonl matches this file's current content (sha256 426008abd73e...) — run the A:B:C loop (design/ABC-AUDIT-LOOP-RECIPE.md) and record it with 'gates/doc_attestation_presence.py --record', or waive with '<!-- doc-attest-exempt: <reason> -->' if this is a point-in-time record or quoted-defect specimen the wholesale exclusions do not already cover
+
+pre-commit: doc-attestation-presence FAILED — a changed doc carries no
+fresh-context attestation record for its current content (ADR-0017).
+```
+
+The scratch file was then unstaged and deleted (`git reset HEAD --`, `rm`) before any real
+commit — it never landed. "A clean commit passes" is witnessed by this commission's own real
+commits below: this very BACKLOG append touches `BACKLOG.md`, which both gates exempt by name
+(doc-attestation-presence's `EXCLUDE_FILES_WHOLESALE`, ADR-0017's own "point-in-time dated
+entries" exception) — a real, non-scratch commit that touches a real in-scope `.md` and clears
+the whole chain, printed live: `doc_shapes (gate mode): clean` / `doc_attestation_presence
+(gate mode): ... excluded ... BACKLOG.md — point-in-time dated entries (ADR-0017 Exceptions)`.
+No attestation was authored for this entry (none needed — the exclusion is the intended path
+ADR-0017 names for exactly this document class), matching the task's own instruction that a
+touched doc tripping the gate is the discipline working as designed, not a bug to route around.
+
+**Deferred, with blockers:** none. Neither item touches `kernel/lineage`, `law/`, or
+`engine/lp/` semantics, so neither is a kernel-lineage delta requiring birth-chain ratification
+— item 1 is a purely additive teach-text change to a live template (already class-ratified
+fail-safe per BACKLOG's own proposal above: adds teach-text, changes no exit code, nothing
+existing relaxed); item 2 wires two already-authored, already-ratified gates (`doc_shapes.py`
+registered days ago; `doc_attestation_presence.py` "authored ENFORCE... ratified" per its own
+docstring and ADR-0017) into an existing chain, softening neither. Both scratch-witnessed on
+both polarities as shown above.
+
+**Self-caught hazard, fixed same session:** while wrapping up item 1's witness, case (m) of
+`run_fixtures.py` was found comparing led.tmpl's success-path output against `git show
+HEAD:bootstrap/templates/led.tmpl` — correct only in the window between editing the file and
+committing the fix; the instant that commit (`e1059ef`) landed, `HEAD` walked past it and every
+future run would silently diff the fixed file against itself, a vacuous pass that never errors
+and stops proving what its own comment claims. Pinned to a fixed historical SHA
+(`PRE_KIND_TEACH_FIX_SHA = 95622f3`, `e1059ef`'s own parent) instead, with a `ck()` that asserts
+the pinned commit genuinely predates the fix (no `_led_kind_refusal_teach` in its content)
+rather than trusting the SHA by convention — commit `485e463`. Full suite re-verified clean,
+exit 0, scratch schema torn down to zero residue.
