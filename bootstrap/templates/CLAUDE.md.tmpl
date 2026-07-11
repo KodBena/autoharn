@@ -1,13 +1,22 @@
 # CLAUDE.md — __PROJECT_NAME__ (world __SCHEMA__)
 
-Read .claude/HOOKS.md first. You are the author principal; a reviewer principal exists.
+Read .claude/HOOKS.md first. You are the author principal; reviewer and commissioner
+principals exist (see point 10 for the commissioner's role).
 1. Decompose the ENTIRE commission into ledgered work items BEFORE implementing — every
    increment the task names, including ones you will not start this session
    (./led work open <slug> <title...> per item, titled so a FRESH session could build
    from it; claim only what you begin: ./led work claim <slug>). Close each with
    ./led work close <slug> <resolution> --witness <ref> once delivered. An increment
    left out of the ledger does not exist: resumption cannot see it and point 5's "clean"
-   passes vacuously over it (run-8 finding, 2026-07-11).
+   passes vacuously over it (run-8 finding, 2026-07-11). Decompose to the UNIT OF
+   INDEPENDENT RESUMPTION, not below it and not above it — no numeric rule (a fixed
+   item-count or file-count target is cargo-cultable and wrong as often as right): state
+   each item's deliverable and its acceptance handle, and leave the mechanism/HOW to the
+   task chartered to own it. Judge granularity by one question — "could a fresh session
+   pick up this slug alone and know what to build and how to tell it's done?" — too fine
+   adds ledger ceremony with no resumability gain (run10: three items that collapsed to
+   one file and one commit); too coarse hides a seam a successor could have picked up
+   separately (design/RETROSPECTIVE-RUN10.md, Finding 2).
 2. Assign the decomposition's countersign obligation to reviewer; reviewer countersigns
    via LED_ACTOR=reviewer claiming technical independence, AND runs an antecedent audit:
    enumerate design facts the artifacts encode with no antecedent in task text, ledger
@@ -39,6 +48,32 @@ Read .claude/HOOKS.md first. You are the author principal; a reviewer principal 
    making right now (an intake decomposition) is fine; the token declares it. If you
    must record an act after the fact, declare its event time — never narrate the past
    as if live.
+10. On RECEIVING a commission (the ask this session was given), your FIRST ledger act —
+    before point 1's decomposition — is to record it verbatim as its own row:
+    `./led commission "<ask verbatim as received>"`. This is LAZY-mode signing: you are
+    the implementer transcribing the ask vicariously, not the commissioner attesting it
+    yourself, so the statement carries the prefix "(vicarious transcription by the
+    implementer; carries no commissioner guarantee)" IN ADDITION to your own stamped
+    invocation already proving the transcription vicarious by construction (a live
+    session's stamp is not the commissioner's own signature — say so in the prose too,
+    not stamp state alone). Every decomposition row from point 1 onward `--refs
+    row:<commission-id>` this row, so the whole session's work traces to the ask that
+    started it (design/RETROSPECTIVE-RUN10.md, could-not-answer item 4: "the commission
+    itself is not in the governed record" — this closes that gap). If the maintainer
+    instead signs the commission himself, FULL mode, in his own terminal
+    (`LED_ACTOR=commissioner ./led commission "<ask>"`), that row already exists when you
+    start — check `./led --recent` before writing your own; do not double-record the
+    same ask under two rows. On a world scaffolded before kernel/lineage/
+    s25-commission-kind.sql landed, `commission` is refused by the kind vocabulary check
+    (the refusal itself names the valid list, live) — record the ask in a `decision` row
+    instead and say so in its text, same as any other pre-s25 world.
+11. A load-bearing decision names what was rejected and why, IN THE STATEMENT — not a
+    separate row, not left implicit. `./led decision "<the choice>; rejected: <the
+    alternative(s)> because <why>"`. Convention only (no kernel column enforces this —
+    filed, not built, awaiting a witnessed need before a schema change is warranted);
+    the retrospective's could-not-answer item 1 named the gap this closes: "why the two
+    app defects arose — oversight vs a considered-but-wrong call — is UNDECIDABLE from
+    the record" without the alternatives a decision weighed being on the record too.
 
 ---
 Written by `bootstrap/new-project.sh --new-world` at scaffold time (BACKLOG "Maintainer ruling:
@@ -52,6 +87,6 @@ claude
 ```
 
 then typing the task as the first message — the governance preamble above is already in
-context, nothing to paste. The `reviewer` principal this preamble refers to was registered
-automatically by this same scaffold run; see `.claude/HOOKS.md`'s PROVENANCE section for the
-exact command that did it.
+context, nothing to paste. The `reviewer` and `commissioner` principals this preamble refers
+to were registered automatically by this same scaffold run; see `.claude/HOOKS.md`'s
+PROVENANCE section for the exact commands that did it.

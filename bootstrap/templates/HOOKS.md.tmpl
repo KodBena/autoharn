@@ -22,6 +22,14 @@
 - **`reviewer` principal status:** __REVIEWER_STATUS__ See this world's root `CLAUDE.md` (if
   present) for the governance preamble that assumes this principal already exists — it is
   auto-loaded by Claude Code at session start, so there is nothing to paste.
+- **`commissioner` principal status:** __COMMISSIONER_STATUS__ Two signing modes exist for the
+  commission that opened this world (kernel/lineage/s25-commission-kind.sql): FULL mode is the
+  maintainer typing the copy-paste line above himself, in his own terminal; LAZY mode is the
+  implementer's first ledger act on receiving the ask, transcribing it vicariously (marked as
+  such in the statement text — see this world's root `CLAUDE.md`). The two are mechanically
+  distinguishable by reading the row's actor (which principal signed it) together with its
+  stamp state (whether a live Claude session invocation stamped it), never by prose claims
+  alone.
 - **Orienting in this world:** run `./pickup` (below) any time you need a live resume brief —
   in-force decisions, open questions, review debt, recent changes — derived fresh, never stale.
 

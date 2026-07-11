@@ -1,0 +1,36 @@
+== applying birth chain through s25 (post) and through s24 only (pre) ==
+both schemas applied clean.
+
+=== a-commission-legal-post-s25 ===
+  [ok] exit=0 id=1
+
+=== b-refs-commission ===
+  [ok] refs=row:1
+
+=== c-existing-kinds-unchanged ===
+  [ok] decision_ok=True work_opened_refused_by=work_slug_kind_shape
+
+=== d-invalid-kind-still-refused ===
+  [ok] refused=True live_def_has_commission=True
+
+=== e-full-mode-actor-distinct ===
+  [ok] full_actor='commissioner' lazy_actor='author'
+
+=== f-prior-columns-untouched ===
+  [ok] columns=event_declared_ts,stamp_hmac,stamp_verified
+
+=== g-pre-s25-refused-with-teach ===
+  [ok] exit=3 teach_excerpt="ber of ledger_kind_check's vocabulary (the refusal above).\n  valid kinds (live, queried from the kernel's own constraint definition -- never\n  hardcoded here): assumption, decision, question, verification, finding, snag, revision, note, review, work_opened, work_claimed, work_depends_on, work_closed"
+
+
+== SQL/ASP differential (post-s25 schema) ==
+# marriage differential -- ASP T_now (ledger_tnow.lp) vs SQL floor (ledger_floor.py)
+#   closed verdict vocabulary: ['AGREE', 'DIVERGE_BY_DESIGN', 'DIVERGE_DEFECT', 'QUARANTINED']; RED = ['DIVERGE_DEFECT', 'QUARANTINED']
+
+  [OK ] s25fxprobe AGREE              asp=10 sql=10 atoms; Δasp=[] Δsql=[]
+
+# DIFFERENTIAL GREEN -- every target bit-identical to the SQL floor
+
+[ok] zero residue: schemas='' roles=''
+
+ALL CASES OK -- s25 both-polarity proof + differential AGREE, zero residue.

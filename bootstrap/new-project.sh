@@ -1,7 +1,7 @@
 #!/bin/sh
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-09T11:15:53Z
-#   last-change: 2026-07-11T16:27:03Z
+#   last-change: 2026-07-11T18:10:31Z
 #   contributors: be693afb/main, e4410ef6/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -128,7 +128,7 @@ fi
 # below -- the honest record of which sNN deltas this world was born on, so a future reader never
 # has to reconstruct it from source the way run3's own history had to be reconstructed.
 if [ -n "$NEW_WORLD" ]; then
-    LINEAGE_CHAIN="s15 -> s17-stamp-mechanism -> s17-independence-vocabulary -> s19 -> s20 -> s21-session-aware-distinctness -> s22-work-item-ledger -> s23-per-invocation-stamp-token -> s24-declared-event-time (via kernel/lineage/high_watermark_1.sql + kernel/lineage/s20-obligation-grants-and-view-refresh.sql + kernel/lineage/s21-session-aware-distinctness.sql + kernel/lineage/s22-work-item-ledger.sql + kernel/lineage/s23-per-invocation-stamp-token.sql + kernel/lineage/s24-declared-event-time.sql), applied automatically by this --new-world run"
+    LINEAGE_CHAIN="s15 -> s17-stamp-mechanism -> s17-independence-vocabulary -> s19 -> s20 -> s21-session-aware-distinctness -> s22-work-item-ledger -> s23-per-invocation-stamp-token -> s24-declared-event-time -> s25-commission-kind (via kernel/lineage/high_watermark_1.sql + kernel/lineage/s20-obligation-grants-and-view-refresh.sql + kernel/lineage/s21-session-aware-distinctness.sql + kernel/lineage/s22-work-item-ledger.sql + kernel/lineage/s23-per-invocation-stamp-token.sql + kernel/lineage/s24-declared-event-time.sql + kernel/lineage/s25-commission-kind.sql), applied automatically by this --new-world run"
     # --new-world ALSO auto-seeds the stamp secret (below) -- HOOKS.md must say so, not repeat the
     # generic "one manual step remains" text verbatim: an operator who trusted that stale claim and
     # re-ran the seeding block would TRUNCATE + re-INSERT an already-provisioned secret, ROTATING it
@@ -145,11 +145,19 @@ if [ -n "$NEW_WORLD" ]; then
     # self-application", 2026-07-09 -- "starting a run becomes a verb": the operator no longer
     # hand-registers this principal for a --new-world scaffold).
     REVIEWER_STATUS="Registered automatically by this --new-world scaffold run (principal 'reviewer', class subagent; see the registration step in this same run, right after the stamp secret above) -- do NOT re-register; \`ON CONFLICT (name) DO NOTHING\` makes a repeat call harmless if you do anyway."
+    # COMMISSIONER_STATUS: mirrors REVIEWER_STATUS exactly -- the honest, mode-aware record of
+    # whether the 'commissioner' principal (kernel/lineage/s25-commission-kind.sql's FULL signing
+    # mode; BACKLOG "Five-item batch, maintainer-approved 2026-07-11 evening", item 2) exists yet.
+    # Registering it here, alongside 'reviewer', means the maintainer's OWN signing act (see the
+    # printed copy-paste line at the end of this script) never has to register its own principal
+    # first -- the same "starting a run becomes a verb" closure REVIEWER_STATUS already documents.
+    COMMISSIONER_STATUS="Registered automatically by this --new-world scaffold run (principal 'commissioner', class human; see the registration step in this same run, right after 'reviewer' above) -- do NOT re-register; \`ON CONFLICT (name) DO NOTHING\` makes a repeat call harmless if you do anyway. FULL-mode signing (the maintainer signs the ask himself): \`LED_ACTOR=commissioner ./led commission \"<the ask verbatim>\"\` -- typed by the maintainer in his OWN terminal, inside this world. LAZY-mode (the implementer vicariously transcribes the ask on receiving it, first ledger act, no commissioner guarantee): see this world's CLAUDE.md preamble."
 else
     LINEAGE_CHAIN="NOT applied by this scaffold run -- apply a kernel lineage to $SCHEMA/$KERN/$ROLE manually (kernel/lineage/, see kernel/lineage/README.md) before first use"
     STAMP_SECRET_STATUS="**One manual step remains: provision the stamp secret. UNWITNESSED — the block below has not been run in this instance.**"
     S21_STATUS="NOT applied by this scaffold run (classic --schema/--kern/--role mode applies no kernel lineage at all -- see item 1 above). If this world's kernel predates s21, apply it as a separate, explicit operator act from autoharn's own checkout: \`bootstrap/apply-delta.sh <this-project's-directory> kernel/lineage/s21-session-aware-distinctness.sql\` (prints the resolved command, requires a typed schema confirmation, never applies bare) -- status/witness live in autoharn's BACKLOG.md (search \"s21\")."
     REVIEWER_STATUS="NOT registered by this scaffold run (classic --schema/--kern/--role mode applies no kernel lineage at all -- see item 1 above, so there is no \`principal\` table yet to register into). Once a kernel lineage is applied, register one explicitly: \`./led register-principal reviewer subagent\`."
+    COMMISSIONER_STATUS="NOT registered by this scaffold run (classic --schema/--kern/--role mode applies no kernel lineage at all -- see item 1 above). Once a kernel lineage carrying kernel/lineage/s25-commission-kind.sql is applied, register one explicitly: \`./led register-principal commissioner human\`."
 fi
 
 AUTOHARN_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -170,7 +178,7 @@ fi
 echo "== stamping instance at $PROJECT_ROOT (name=$NAME) =="
 
 if [ -n "$NEW_WORLD" ]; then
-    echo "-- new-world '$NEW_WORLD': applying high_watermark_1.sql + s20 + s21 + s22 + s23 + s24 to $DB (schema=$SCHEMA kern=$KERN role=$ROLE) --"
+    echo "-- new-world '$NEW_WORLD': applying high_watermark_1.sql + s20 + s21 + s22 + s23 + s24 + s25 to $DB (schema=$SCHEMA kern=$KERN role=$ROLE) --"
     psql -h "$HOST" -d "$DB" -v ON_ERROR_STOP=1 \
         -v schema="$SCHEMA" -v kern="$KERN" -v role="$ROLE" \
         -f "$AUTOHARN_ROOT/kernel/lineage/high_watermark_1.sql" \
@@ -178,8 +186,9 @@ if [ -n "$NEW_WORLD" ]; then
         -f "$AUTOHARN_ROOT/kernel/lineage/s21-session-aware-distinctness.sql" \
         -f "$AUTOHARN_ROOT/kernel/lineage/s22-work-item-ledger.sql" \
         -f "$AUTOHARN_ROOT/kernel/lineage/s23-per-invocation-stamp-token.sql" \
-        -f "$AUTOHARN_ROOT/kernel/lineage/s24-declared-event-time.sql"
-    echo "   kernel applied (schema $SCHEMA + kernel schema $KERN + role $ROLE, s20 + s21 + s22 + s23 + s24 included)"
+        -f "$AUTOHARN_ROOT/kernel/lineage/s24-declared-event-time.sql" \
+        -f "$AUTOHARN_ROOT/kernel/lineage/s25-commission-kind.sql"
+    echo "   kernel applied (schema $SCHEMA + kernel schema $KERN + role $ROLE, s20 + s21 + s22 + s23 + s24 + s25 included)"
 
     echo "-- new-world '$NEW_WORLD': seeding the stamp secret (idempotent, mirrors drive/arm.sh ruling 43) --"
     mkdir -p "$PROJECT_ROOT/.claude/secrets"
@@ -209,15 +218,21 @@ if [ -n "$NEW_WORLD" ]; then
     # one. Same connection posture as the kernel apply above (SET ROLE, not a superuser bypass --
     # ADR-0012 P1, one mechanism) and the same INSERT `led register-principal` itself would run
     # (kept in lockstep with bootstrap/templates/led.tmpl's own SQL by inspection, not by sharing
-    # code across a shell/psql boundary that has none to share).
-    echo "-- new-world '$NEW_WORLD': registering standard principals (reviewer) --"
+    # code across a shell/psql boundary that has none to share). `commissioner` (class human) is
+    # the THIRD standard principal (BACKLOG "Five-item batch, maintainer-approved 2026-07-11
+    # evening", item 2's FULL signing mode): the maintainer's own registered identity, so that
+    # `LED_ACTOR=commissioner ./led commission "<ask>"` (printed at the end of this script) never
+    # has to register a principal first, the same closure REVIEWER_STATUS already gives 'reviewer'.
+    echo "-- new-world '$NEW_WORLD': registering standard principals (reviewer, commissioner) --"
     psql -h "$HOST" -d "$DB" -v ON_ERROR_STOP=1 <<SQL
         SET ROLE ${ROLE};
         SET search_path = ${SCHEMA}, ${KERN};
         INSERT INTO principal (name, agent_class) VALUES ('reviewer', 'subagent')
         ON CONFLICT (name) DO NOTHING;
+        INSERT INTO principal (name, agent_class) VALUES ('commissioner', 'human')
+        ON CONFLICT (name) DO NOTHING;
 SQL
-    echo "   'reviewer' principal registered (class subagent; 'author' was already seeded by s15-schema.sql)"
+    echo "   'reviewer' + 'commissioner' principals registered ('author' was already seeded by s15-schema.sql)"
 fi
 
 echo "-- deployment.json --"
@@ -250,7 +265,8 @@ sedsubst() {
         -e "s|__LINEAGE_CHAIN__|$LINEAGE_CHAIN|g" \
         -e "s|__STAMP_SECRET_STATUS__|$STAMP_SECRET_STATUS|g" \
         -e "s|__S21_STATUS__|$S21_STATUS|g" \
-        -e "s|__REVIEWER_STATUS__|$REVIEWER_STATUS|g"
+        -e "s|__REVIEWER_STATUS__|$REVIEWER_STATUS|g" \
+        -e "s|__COMMISSIONER_STATUS__|$COMMISSIONER_STATUS|g"
 }
 
 echo "-- .claude/ wiring --"
@@ -277,8 +293,10 @@ if [ -n "$NEW_WORLD" ]; then
     echo "wrote CLAUDE.md (governance preamble, auto-loaded at session start)"
 fi
 
-# the three verbs (led, judge, pickup): thin shims, not frozen sed-substituted copies (BACKLOG
-# maintainer ruling 2026-07-11, "runs are strictly linear" disposition 6, "live verbs"). Baking
+# the five verbs (led, judge, pickup, audit, distance-to-clean): thin shims, not frozen
+# sed-substituted copies (BACKLOG maintainer ruling 2026-07-11, "runs are strictly linear"
+# disposition 6, "live verbs"; audit and distance-to-clean joined the same way later, each a new
+# template file rather than an edit to an existing live one -- see their own commissions). Baking
 # was the asymmetry: hooks already execute live from this autoharn checkout per invocation
 # (settings.json's __AUTOHARN_ROOT__ above), but led/judge/pickup were frozen copies -- a
 # just-fixed led defect stayed live in every already-scaffolded world forever, reachable only by
@@ -290,8 +308,8 @@ fi
 # env var `pickup`'s own live-resolution already used, extended to all three rather than growing
 # three near-identical mechanisms, ADR-0012 P1). deployment.json itself stays scaffold-written
 # per-world config (unchanged) -- only the VERBS stopped being copies.
-echo "-- the four verbs (led, judge, pickup, audit): thin shims exec'ing autoharn's live templates --"
-for verb in led judge pickup audit; do
+echo "-- the five verbs (led, judge, pickup, audit, distance-to-clean): thin shims exec'ing autoharn's live templates --"
+for verb in led judge pickup audit distance-to-clean; do
     cat > "$PROJECT_ROOT/$verb" <<SHIM
 #!/bin/sh
 HERE="\$(cd "\$(dirname "\$0")" && pwd)"
@@ -311,11 +329,22 @@ if [ -n "$NEW_WORLD" ]; then
     echo "  $CREATE_CMD"
     echo "  cd $PROJECT_ROOT"
     echo "  claude   # then type your task as your first message -- CLAUDE.md auto-loads the"
-    echo "           # governance preamble (author + reviewer principals, both already"
-    echo "           # registered above); nothing to paste."
+    echo "           # governance preamble (author + reviewer + commissioner principals, all"
+    echo "           # already registered above); nothing to paste."
     echo ""
-    echo "(./led, ./judge, ./pickup are ready to use from inside that session; read"
-    echo " $PROJECT_ROOT/.claude/HOOKS.md and replace its UNWITNESSED marks as you exercise each command.)"
+    echo "(./led, ./judge, ./pickup, ./audit, ./distance-to-clean are ready to use from inside"
+    echo " that session; read $PROJECT_ROOT/.claude/HOOKS.md and replace its UNWITNESSED marks"
+    echo " as you exercise each command.)"
+    echo ""
+    echo "To SIGN this run's commission yourself (FULL mode -- kernel/lineage/s25-commission-"
+    echo "kind.sql; the ask carries the commissioner's own guarantee, not a vicarious one), type"
+    echo "this in YOUR OWN terminal, inside $PROJECT_ROOT (not inside the agent's session):"
+    echo "  LED_ACTOR=commissioner ./led commission \"<the ask verbatim>\""
+    echo "The record then shows a commissioner-actor row, and -- typed from a bare shell with no"
+    echo "claude session running -- an unstamped-but-attributed row (\`led --recent\` shows"
+    echo "stamp_agent as NULL, actor as 'commissioner'): stamp state + actor together are what"
+    echo "make FULL mode mechanically distinguishable from LAZY mode (the implementer's own"
+    echo "vicarious transcription, CLAUDE.md preamble point 10), never prose claims alone."
 else
     echo "  1. Apply a kernel lineage to $DB/$SCHEMA/$KERN/$ROLE if not already applied (kernel/lineage/, autoharn)."
     echo "  2. Provision the stamp secret -- see $PROJECT_ROOT/.claude/HOOKS.md (marked UNWITNESSED until you run it)."
