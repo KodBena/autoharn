@@ -1,4 +1,4 @@
--- db/harness/001_research_ledger.sql
+-- stores/001_research_ledger.sql
 -- autoharn operational store #1 — a PROJECT-AGNOSTIC measurement-provenance / evidence ledger.
 --
 -- SCOPE (honest, per the ADR-0014 second opinion of 2026-06-28): this records MEASUREMENTS and the
@@ -9,7 +9,8 @@
 -- chocofarm's throughput_lab and omega's perf work are consumers that write here tagged `project_id`;
 -- this is not their schema (no `tlab_`).
 --
--- STATUS: PROPOSAL v0.1. Not executed, not applied to `harness`, not committed. First increment plus the
+-- STATUS: PROPOSAL v0.1, scratch-validated 2026-07-11 (see BACKLOG "Chocofarm experiment-ledger
+-- disposition"). Not yet applied to the standing `research` db, not committed. First increment plus the
 -- second-opinion fixes (honest scope; observation-time, which is lossy-if-deferred; cheap additive seams).
 --
 -- Creed kept where load-bearing:
@@ -53,7 +54,18 @@ CREATE TABLE research.instrument (
                 CHECK (qualification IN ('provisional','qualified','suspect','retracted')),
   qualification_note text,
   supersedes    bigint REFERENCES research.instrument,
-  created_at    timestamptz NOT NULL DEFAULT now()
+  created_at    timestamptz NOT NULL DEFAULT now(),
+  -- dedupe seam (2026-07-11 scratch-validation fix; mirrors chocofarm exp_db's tlab_config
+  -- ON CONFLICT(config_key) DO NOTHING): `source_hash` was already carrying content identity in
+  -- its own name and comment intent but no constraint enforced it — a re-run writer that
+  -- re-registers the SAME built apparatus every call (the natural harness-flush shape) would
+  -- otherwise flood this table with duplicate rows for one unchanged build, each needing its own
+  -- qualification bookkeeping. UNIQUE(project_id, source_hash) makes "same apparatus, one row"
+  -- structural; a genuinely NEW build (different source_hash) still gets its own row, optionally
+  -- linked via `supersedes`. Requalifying an EXISTING row is a plain UPDATE of `qualification`
+  -- (this table carries no immutability trigger, unlike research.reading — only the measurement
+  -- is frozen; the apparatus record is mutable metadata by design).
+  UNIQUE (project_id, source_hash)
 );
 
 -- ===== measurement (immutable) =====
@@ -134,4 +146,7 @@ COMMIT;
 --   observed_at was NOT deferred (it would have been lossy) — added now, writer-supplied.
 -- NOT YET — labelled: increment 2 reproduction (INDEP) + prereg (RECORD); AUTH (write-authority);
 --   store #2 registry; store #3 work-log. OUT OF SCOPE (consumer concern): empirical study-design machinery.
--- STATUS: NOT executed — first gated step is to validate against a SCRATCH Postgres, not `harness`.
+-- STATUS: scratch-validated 2026-07-11 against a throwaway schema pair in the `toy` db (both polarities
+--   witnessed: well-formed rows insert; every declared CHECK/trigger/view-write refusal refuses). Zero-residue
+--   torn down. Next gated step is the operator's/maintainer's own APPLY to the standing `research` db, via
+--   bootstrap/apply-research-ledger.sh (armed, not run).

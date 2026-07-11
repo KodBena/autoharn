@@ -2408,3 +2408,81 @@ Two findings from the same pass:
    caught it. Across all 79 run7 rows: supersedes/amends/answers used 0 times; the FK
    vocabulary exists and practice bypasses it. Sonnet-sized teach-fix commissioned: led
    warns when a statement's text contains what looks like its own flag vocabulary.
+
+### Chocofarm experiment-ledger disposition — APPLY-READY (2026-07-11, this commit)
+
+The prep commissioned above is done: `stores/001_research_ledger.sql` is scratch-witnessed
+both polarities and APPLY-READY; the standing `research` db is untouched (armed, not run).
+
+**Fixes to 001, each with reason** (2 weeks' drift since the 2026-06-28 second opinion):
+1. Header path comment (`-- db/harness/001_research_ledger.sql`) was chocofarm's OLD path
+   convention — this repo renamed `db/harness/` → `stores/` (filing/file_finding.py's own
+   comment documents the rename); fixed to `-- stores/001_research_ledger.sql`.
+2. Two STATUS lines said "not applied to `harness`" / "validate ... not `harness`" —
+   `harness` is a DIFFERENT, existing store (filing/file_finding.py's), unrelated to this
+   ledger; the real target, confirmed live, is the standing `research` db (empty, per the
+   entry above). Left uncorrected this could point an operator's `psql -d harness` at the
+   wrong database. Fixed to name `research`.
+3. **`research.instrument` had no dedupe constraint** despite `source_hash` visibly being
+   intended as a content-identity column (name + comment) — a re-run writer that
+   re-registers the same built apparatus every call would flood the table with duplicate
+   rows, each needing its own qualification bookkeeping (the exact class exp_db's
+   `tlab_config` UNIQUE(config_key) + ON CONFLICT exists to foreclose). Added
+   `UNIQUE (project_id, source_hash)`, scratch-witnessed (a second registration of the same
+   apparatus converges on the existing row, not a duplicate).
+
+**Scratch validation** (throwaway schema pair `rlprobe_core`/`rlprobe_research` in the `toy`
+db, torn down zero-residue, confirmed by `\dn` before/after): both polarities witnessed.
+POSITIVE — project/session/instrument/two-readings/finding insert; `finding_confirmed`
+correctly derives the finding (clean tree + qualified instrument + attributed + not
+superseded). NEGATIVE, all real refusals with real output — value+value_text both NULL
+(`reading_check`); `finding.status='confirmed'` (`finding_status_check` — confirmation
+cannot be asserted, only derived); `INSERT INTO finding_confirmed` (`cannot insert into
+view`); `UPDATE`/`DELETE` on `research.reading` (the immutability trigger); a bad
+`git_tree='DIRTY'` (uppercase — 001's own CHECK is lowercase, unlike exp_db's); a bad
+`instrument.kind`.
+
+**The thin writer**: `filing/record_reading.py` (psql-subprocess, matching
+`filing/file_finding.py`'s house convention — this repo has no psycopg dependency).
+Inherits exp_db's load-bearing choices: content-hash instrument dedupe
+(`upsert_instrument`, mirrors `upsert_config`'s `ON CONFLICT`), and a construction-time
+derived-value consistency refusal (`Reading.derived_from`, generalized from exp_db's fixed
+rate columns to 001's metric-name-agnostic shape, raw operands riding in `config` jsonb) —
+foreclosing chocofarm's finding-12 class before any SQL is built. Deliberately diverges on
+transport (psql, not psycopg3), git_tree vocabulary (001's own lowercase), and status
+enum ('confirmed' is not writable, matching 001's stricter CHECK). No `ensure-schema` verb
+here on purpose — `bootstrap/apply-research-ledger.sh` is the one owner of that DDL apply
+(ADR-0012 P1). Gate-clean: `gates/no_lazy_imports.py` exit 0 across the repo including this
+file.
+
+**Witnessed live** (real re-record of run7 ledger row 78, via the writer's own CLI, against
+the scratch schema pair): `record-reading` banked `distance=0.7688` and `tolerance=0.5657`
+(both n=1, git_commit=166a341e73fd2e906599ecc42559c763a2823121, tree=clean, instrument
+`verify_phase2_backend.py`/kind=script/source_hash=6b5452d... — the actual git blob hash at
+that commit); instrument dedupe confirmed (2 readings, 1 instrument row); `record-finding`
+appended the FAIL-by-tolerance interpretation citing the distance reading;
+`finding_confirmed` derived it correctly. Negative polarity witnessed at BOTH the writer
+layer (argparse `choices` rejects `--status confirmed` before any connection; `Reading`'s
+`__post_init__` rejects a missing outcome and a derived-value inconsistency, e.g. a claimed
+rate 999.0 against operands 100/4.2=23.8095) and the DB layer directly (bypassing the
+writer, same six refusals as the scratch validation pass). Zero-residue teardown confirmed
+(`\dn` before/after).
+
+**The scripted apply**: `bootstrap/apply-research-ledger.sh` — resolves host/db from
+`RL_PGHOST`/`RL_DB` (default `192.168.122.1`/`research`, matching the writer's own env
+vars), prints the exact `psql ... -f stores/001_research_ledger.sql` command before doing
+anything, preflights for "already applied" and refuses loudly rather than hitting a
+mid-transaction `already exists` (001's DDL is `CREATE TABLE`, not `IF NOT EXISTS` —
+idempotent-or-refusing per the commission, achieved by the refusing half), and requires the
+operator to type the db name back to confirm — same posture as `bootstrap/apply-delta.sh`.
+Test-driven end to end against `toy` (never `research`): abort path, real apply (schemas
+landed, verified via `\dt`), preflight-refusal on a second run, zero-residue teardown — all
+witnessed live, `research` confirmed untouched throughout (`\dn` shows only `public`).
+
+**Apply one-liner for the maintainer's morning word** (NOT run):
+```
+bootstrap/apply-research-ledger.sh
+```
+(or `RL_PGHOST=... RL_DB=... bootstrap/apply-research-ledger.sh` to target something other
+than the default `192.168.122.1`/`research`). It prints its plan and asks for the db name
+back before touching anything.
