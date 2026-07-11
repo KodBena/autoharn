@@ -3041,3 +3041,180 @@ with a dated note. The delta path is unchanged and single: birth chain, next sca
   leverage it — run 11's world should carry the ADR-0017 doc gate applied to world-produced
   documents. Commissioned same hour as an extension to the A:B:C arming agent (world-native
   hook surface reading apparatus.json, since worlds are not git repos at scaffold time).
+
+## Run-10 closure audit (2026-07-11)
+
+Read-only forensic pass over run10 (`/home/bork/w/vdc/1/run10`, ledger `run10`/`run10_kernel`
+on `toy`@192.168.122.1) per the maintainer's queued directive (BACKLOG "Maintainer priority
+ruling: auditability outranks agent ergonomics", 2026-07-11) and the observation "the agent
+implementing run10 seems to have problems actually executing compliant closure." End-state
+was already CLEAN before this pass (judge AGREE asp=323/sql=323, work_item_violations empty,
+audit BATCHED_DECLARED 162/162 stamped+tokened, no silence-table entries) — this audit is
+about the STRUGGLE en route, not the outcome. Evidence: ledger rows 1–165 (162 landed, 3
+burned — 67, 112, 113, confirmed by sequence gaps and cross-referenced against
+`.claude/logs/invocations.jsonl`, 299 rows), `.claude/logs/change_gate.journal.jsonl` (2
+lines), `.claude/logs/delegation_observer.journal.jsonl` (5 lines), `git log`/`git show` in
+the run10 repo, and `hooks/stop_clean_exit.py` read against the run10 `.claude/apparatus.json`
+(`clean_exit.mode: "enforce"`). Classification rubric is the BACKLOG entry named above,
+binding: (a) AGENT DEFECT, (b) MECHANISM-REFUSES-WITHOUT-TEACHING, (c)
+LEGITIMATE-REQUIREMENT-BEING-FELT — only (b) produces change proposals.
+
+STRUGGLE INVENTORY
+
+1. **Row 67 (burned) — invented ledger kind.** Invocation `883c071d` (15:48:16Z) ran
+   `./led acceptance-criteria "QEUBO smoke-test acceptance criterion..."` — `acceptance-criteria`
+   is not a member of `ledger_kind_check`'s vocabulary (`decision, assumption, question,
+   verification, finding, snag, revision, note, review, work_opened, work_claimed,
+   work_depends_on, work_closed`); the kernel refused the INSERT and burned sequence id 67.
+   4 seconds later (`911ff8fd`, 15:48:20Z) the agent ran
+   `psql ... "SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conname='ledger_kind_check'"`
+   to self-diagnose, then 13 seconds after that (`66b3d9c0`, 15:48:33Z) retried as
+   `./led --refs "row:5,row:6,docs/QEUBO.md" decision "QEUBO smoke-test acceptance criterion..."`,
+   landing clean as row 68 (ts 17:48:33.782 local). Total refusal-to-compliant-retry: 17s, one
+   extra diagnostic command. **Classification: (b), low severity.** `bootstrap/templates/led.tmpl`'s
+   generic `<kind> <statement>` path (lines 690–717) does a raw `INSERT` with no client-side
+   kind validation and no custom catch on the CHECK-constraint refusal; Postgres's bare
+   "violates check constraint ledger_kind_check" error names the constraint, not the valid
+   kind vocabulary, so the agent had to separately query `pg_get_constraintdef` to learn what
+   `led` itself already documents in its own header comment. The refusal was correct; its
+   teach-text did not name the compliant path — the agent supplied that step itself.
+
+2. **Rows 112–113 (burned) — self-review-as-technical-independence.** Invocation `a26b78cd`
+   (16:10:51Z) ran `LED_ACTOR=reviewer ./led review 110 attest technical "..."` (and a second
+   review of row 111 in the same invocation) — refused by `validate_independence()`
+   (kernel/lineage/s21-session-aware-distinctness.sql:137–161): rows 110/111 (the
+   `reviewer-dispatch` work-item bookkeeping) and this review shared the same
+   `stamp_session` (the reviewer was a Task-dispatched subagent within the SAME top-level
+   Claude session, not a separate session), so "technical" independence is structurally
+   impossible regardless of the differing `actor`. The exception text names the fix verbatim:
+   *"Record independence='self-review' if you reviewed your own work, or have a genuinely
+   distinct invocation... write the review."* 6 seconds later (`6abf45ba`, 16:10:57Z) the
+   agent retried both reviews with `independence=self-review`, landing clean as rows 114/115
+   — both of which quote the refusal's own reasoning verbatim in their statement text
+   ("technical independence refused by the kernel: same session/agent wrote both..., per
+   finding 31/s21"). **Classification: (c).** The refusal is structurally correct (a
+   Task-dispatched subagent can never be session-distinct from its parent) and the teach-text
+   named the compliant path explicitly; the agent complied on the very next attempt. This is
+   NOT the same class as the historical LED_ACTOR defect (the run-7 generic-path bug where
+   `LED_ACTOR` was silently ignored, already fixed — led.tmpl:685–688) — that was b-class;
+   this is the mechanism teaching correctly.
+
+3. **Rows 48–49 — misplaced `--amends`/`--amends-scope` flags.** At 17:42:01 local the agent
+   issued two `led decision` amendments with `--amends`/`--amends-scope` positioned AFTER the
+   statement text; `led.tmpl`'s own header documents flags as "consumed before `<kind>`" —
+   placed after, they are silently absorbed into the statement string instead of erroring
+   (no refusal fires; only the pre-existing warn-only tripwire `warn_flag_in_statement`,
+   led.tmpl:289–302, prints a stderr notice: *"the statement text contains '--amends', which
+   looks like one of led's own flags... NOT parsed... re-issue OUTSIDE the quotes."*). Rows
+   48/49 landed malformed. 10 seconds later (17:42:11 local) the agent re-issued corrected
+   versions with the flags properly positioned, landing as rows 50/51 and explicitly
+   superseding 48/49 ("row 48 malformed the --amends/--amends-scope flags by placing them
+   after the statement text, where led does not parse them"). **Classification: (a).** A
+   documented convention (flag-before-kind ordering, stated in led.tmpl's own usage header)
+   was misread on first attempt. Recovery was fast specifically because the warn-only
+   tripwire caught and explained the exact mistake — the teach-text worked once triggered.
+   Worth naming as a standing risk (a less attentive agent could have left 48/49 uncorrected,
+   since nothing BLOCKS a misordered-flag write, it only warns) but the observed event is an
+   agent misread of an existing teachable convention, not a mechanism gap.
+
+4. **Repeated reviewer-dispatch + review-gap polling.** 5 `Agent`/Task dispatches of the
+   `reviewer` principal across the session (`delegation_observer.journal.jsonl`), with
+   escalating self-description in the LAST four: "Fast reviewer countersign to clear stop
+   gate" (18:08:07 local) → "Countersign final ledger row 143" (18:15:35) → "Truly final
+   countersign pass" (18:22:40, review-gap expected to show 6 rows: 151–156) → "Countersign
+   the last row, 164" (18:28:14). Alongside these, 21 separate `./led review-gap` invocations
+   span the whole session (17:42:35–18:31:07 local), clustering around two windows: two
+   `sleep 20 && ./led review-gap` polls at 18:12:08/18:12:52 while waiting on a dispatched
+   subagent, and six checks in the final four minutes (18:27:12–18:31:07) confirming the
+   truly-clean state before the last stop. **Classification: (c).** Every `review-gap`
+   invocation truthfully reported the live debt (1 row, then 6, then 1) — the mechanism never
+   claimed anything was final; the orchestrator's own "truly final"/"last row" language was
+   self-assessment optimism, repeatedly corrected by genuinely NEW debt each round (real
+   defects surfaced by the antecedent audit, requiring their own fix→verify→close→review
+   cycle). This is the two-principal SoD loop iterating until actually done, which is what
+   the maintainer's ruling explicitly accepts as non-findable struggle.
+
+5. **Row 143 — premature "stopping: commission complete", superseded by row 156.** At
+   18:12:41 local the author wrote a `stopping:` disposition claiming "remains: nothing
+   ledgered as outstanding" while review-gap/question-status/work-violations were
+   mechanically 0 at that instant. But six EARLIER review rows (80, 83, 136, 139, 141, 142)
+   had already attested `attest_with_reservations` on two substantive, real defects
+   (`num_init_queries` regressing the vendor default below 5 controlled colors; `connect()`
+   silently discarding accumulated preference progress on reload) — `attest_with_reservations`
+   closes `review_gap` exactly like a clean `attest`, so the mechanized "clean" bar does not
+   distinguish "reviewed, no issues" from "reviewed, real issues disclosed and left open."
+   Reviewer's own countersign of row 143 (rows 146–147, 18:14:21–18:14:47) caught the
+   mismatch: *"this row's 'remains: nothing ledgered as outstanding' framing overstates the
+   state of the substantive open reservations."* This forced a second work item
+   (`fix-reload-and-init-scaling`, rows 151–155), a real code fix (commit `ee44487`: `Math.min
+   (20, 4*dim)` for the init-query regression; persisted fixed-swatch/controlled-set state so
+   an unchanged reload resumes instead of wiping), independent re-verification (rows 157–162),
+   and a corrected stopping row (156, 18:22:17 local) that names row 143's error explicitly
+   and supersedes it. Total added time: ~15.5 minutes (18:12:41→18:28:11), 22 more ledger
+   rows, one more subagent dispatch. **Classification: (a)**, with a caveat: the reservations
+   that later drove the second closure round were ALREADY independently ledgered before row
+   143 was written — a teachable signal (the agent's own prior review-mediated reservations)
+   existed and was not synthesized when the stopping disposition was drafted. The CATCH itself
+   (CLAUDE.md point 2's antecedent audit + reviewer SoD, which is what actually found and
+   fixed this) is (c)-quality governance working as designed; the root cause of the extra
+   ~15 minutes is the agent's own premature synthesis, not a mechanism gap.
+
+MECHANISM OBSERVATION (checked in passing, per the task) — `.claude/stop_clean_exit_state.json`
+existed mid-run and is absent post-run. `hooks/stop_clean_exit.py`'s `main()` calls
+`_clear_state()` on every fully-clean allow (line 577) — DESIGNED, documented behavior ("A
+clean stop also clears the state file, so an old fingerprint never leaks into an unrelated
+future debt episode"), not an accidental deletion. Assessed against the auditability-outranks-
+ergonomics ruling: the deleted file only ever held one `{debt_hash, count}` pair (the
+3-strike circuit breaker's own fingerprint cache), never a history — its loss does not erase
+the substantive struggle record, which lives durably in the ledger's own row timestamps and
+in `delegation_observer.journal.jsonl` (both used above to reconstruct the whole closure
+struggle with no gaps). However, a REAL and separate gap exists alongside it: `_journal()` is
+only ever called from the OBSERVE-mode allow path (`_allow_with_observe_warning`) — never
+from `_block()` (enforce-mode block) nor from `_allow_with_warning` (the circuit-breaker
+fail-open path). Run10's `apparatus.json` sets `clean_exit.mode: "enforce"`, so for THIS run,
+neither a blocked stop nor a circuit-breaker fail-open (had one occurred — none did; the
+ledger shows no repeated-identical-debt streak reaching 3) would ever have been durably
+journaled; only the now-cleared state file and an ephemeral stderr banner (session-transcript
+only) would have recorded it. Nothing was actually lost for run10 specifically (the ledger +
+delegation log fully reconstruct the struggle), but the design leaves a durable-audit gap for
+any future enforce-mode session where the breaker actually fires or where blocked-stop counts
+matter and don't happen to be reconstructable another way. This is a genuine, minor
+audit-trail gap under the maintainer's own ruling — see change proposal below.
+
+CHANGE PROPOSALS (class-b items only)
+
+- **Item 1 fix — name the valid kind vocabulary on a `ledger_kind_check` refusal.** Smallest
+  sound fix: in `bootstrap/templates/led.tmpl`'s generic `<kind> <statement>` path (around
+  line 695), detect the psql exit code from the `INSERT`, and on failure append one stderr
+  line naming the valid kind list (already hand-maintained in this same file's header comment
+  at the `led [flags] <kind> <statement...>` usage block — no new source of truth, just
+  surfaced at the point of refusal instead of only in a static comment the agent has to
+  already know to re-read). Fail-safe, additive-only (adds teach-text, changes no refusal) —
+  qualifies as a class-ratified fail-safe delta once scratch-witnessed per OPERATING-CARD's
+  decision tree.
+- **Mechanism-observation fix — journal every `stop_clean_exit` outcome, not just observe-mode
+  allows.** Smallest sound fix: call `_journal()` unconditionally from all four outcome paths
+  in `main()` (`_block`, `_allow_with_warning`, `_allow_with_observe_warning`, and the
+  all-clean return) — mirroring the pattern `_journal()` already implements for observe mode,
+  just no longer gated on `CLEAN_EXIT_MODE == "observe"`. This only ADDS a durable record of
+  every Stop-gate decision (block/allow/breaker-fired/clean); it relaxes no refusal, changes
+  no gate behavior, and the existing 3-strike breaker logic is untouched. Qualifies as a
+  class-ratified fail-safe delta (adds a derived audit trail, nothing existing relaxed) per
+  BACKLOG's own fail-safe-delta ruling — pending the scratch-witness protocol before it enters
+  the birth chain.
+
+DISPOSITION — The maintainer's impression of struggle is borne out, but not as mechanism
+failure: of five identified struggle episodes, one was legitimate friction the ruling already
+accepts (item 2, textbook-correct refusal with named compliant path), one was genuinely
+working governance catching a real gap (item 4, the review-gap draining loop), one was a
+minor, fast-recovered agent misread of a documented convention (item 3), one was a genuine
+but narrow mechanism-teaching gap of low severity (item 1), and the costliest one — the
+~15.5-minute, 22-row second closure round — was the agent's own premature "done" claim
+overriding reservations already on its own ledger (item 5, agent defect), caught and fixed by
+the SoD/antecedent-audit design working exactly as intended. Net: run10's closure took longer
+than a single pass because the governance loop is doing real work — surfacing and forcing
+fixes for two substantive product defects the agent would otherwise have shipped-and-stopped
+past — not because the harness is hard to operate. Two small, purely-additive mechanism fixes
+are proposed (kind-refusal teach-text; unconditional stop-gate journaling); neither loosens
+anything, matching the maintainer's standing bar that ergonomics improvements are welcome only
+when they hold auditability constant.
