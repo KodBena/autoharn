@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-11T14:44:01Z
-#   last-change: 2026-07-11T22:39:56Z
+#   last-change: 2026-07-12T00:02:56Z
 #   contributors: e4410ef6/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -47,7 +47,7 @@ precedents for the ledger marriage (a forged atom substituted into ONE producer'
 set, in an isolated subprocess) -- never touching engine/contemp_floor.py's or
 engine/lp/contemporaneity.lp's own source to fake the divergence.
 
-SEVENTEEN CASES:
+EIGHTEEN CASES:
 
   a-clean-batched-declared (GREEN): a scratch ledger with a genuine multi-row token burst but
      dense tool-activity (no gap exceeds silence_threshold_ms) -> VERDICT=batched_declared,
@@ -174,6 +174,24 @@ SEVENTEEN CASES:
      the forged atom in `only_sql`. Proves the differential actually catches a real single-
      producer divergence -- never touching engine/contemp_floor.py's or
      engine/lp/contemporaneity.lp's own source to fake it (this commission's own witness mandate).
+
+  r-unsafe-window-refused (RED before this fix / RED-as-QUARANTINE after -- BACKLOG "a second
+     latent 32-bit clingo wraparound", 2026-07-12): reuses the SAME cumulative `contempprobe`
+     schema every earlier case in this file already wrote to -- by the time this case runs, that
+     schema spans BASE=2000000000-anchored rows (epoch ~2033, cases a/b/e-h/p/q) AND cases
+     i/l/m/n's real `led`-shim writes (real wall-clock ts, ~2026), a genuine ~7-YEAR audited
+     window, ~100x past clingo/clasp's signed 32-bit ceiling (~24.8 days). No new rows are
+     inserted; the hazard arises from ordinary fixture accretion, not a contrived worst case.
+     THREE PARTS on the SAME data: (1) the PRE-FIX engine/contemp_edb.py (git-show'd from HEAD,
+     shadowing the current module in an isolated subprocess) is run against this schema and
+     PROVEN to complete without refusing, emitting a fact whose relative-ms value already exceeds
+     the safe bound -- the before-the-fix witness, a value that would wrap silently inside clingo
+     with no error. (2) the CURRENT (fixed) plain `./audit` path (engine/contemp_audit.py, the
+     default, previously wholly UNPROTECTED path) is run against the identical schema and PROVEN
+     to refuse loudly with a typed `UnsafeWindowError` naming the ~24.8-day bound. (3) `./audit
+     --differential` is run against the same schema and PROVEN to QUARANTINE, caught at the
+     source (contemp_edb.py's own new guard, not contemp_differential.py's pre-existing
+     belt-and-braces text-level check, which stays in place but does not fire here).
 
 RED (pre-instrument, disclosed rather than re-captured): before this suite existed there was no
 Part 2 instrument at all -- ad-hoc SQL run by hand, once per crisis (BACKLOG's own indictment).
@@ -392,6 +410,9 @@ def main() -> int:
     case_g_out = ""
     case_p_out = ""
     case_q_out = ""
+    case_r_before_out = ""
+    case_r_audit_out = ""
+    case_r_diff_out = ""
 
     teardown()
     for f in ("high_watermark_1.sql", "s20-obligation-grants-and-view-refresh.sql",
@@ -901,6 +922,113 @@ def main() -> int:
                    f"naming the missing id, no kernel CHECK-constraint fall-through text, ledger "
                    f"id sequence last_value unchanged ({seq_before_o}), as expected")
 
+        # ---- CASE r: UNSAFE ANCHOR SPAN, both before-the-fix (RED, wraps silently, no refusal)
+        # and after-the-fix (RED, refuses loudly) on the SAME real data -- BACKLOG "a second
+        # latent 32-bit clingo wraparound" (2026-07-12). By this point in the case sequence this
+        # SAME cumulative `contempprobe` schema already carries BOTH cases a/b/e-h/p/q's own
+        # synthetic BASE=2000000000 rows (epoch ~2033) AND cases i/l/m/n's real `led`-shim writes
+        # (real wall-clock `ts`, ~2026) -- an audited window spanning ~7 YEARS, ~100x past
+        # clingo/clasp's signed 32-bit ceiling (~24.8 days), the EXACT shape found live authoring
+        # case (p)/(q) above (that comment's own account). No new rows are inserted for this case
+        # on purpose: the hazard is reproduced from data every earlier case already wrote, not
+        # manufactured freshly, so this case is also an honest re-witness of a wide window arising
+        # from ordinary fixture accretion rather than a contrived worst-case.
+        root_r = _make_world({})
+
+        # ---- CASE r, PART 1 (the BEFORE-THE-FIX witness): run the SAME schema through the
+        # PRE-FIX engine/contemp_edb.py (git-show'd from HEAD, before this commission's own
+        # working-tree edit landed) in an isolated subprocess -- `sys.path` is ordered so the
+        # OLD contemp_edb.py shadows the current one while every OTHER sibling module (clingo_run,
+        # ledger_edb) resolves normally from the real engine/ dir, unchanged by this commission.
+        old_edb_dir = Path(tempfile.mkdtemp(prefix="contemp-edb-pre-fix-"))
+        old_edb_src = subprocess.run(
+            ["git", "-C", str(REPO), "show", "HEAD:engine/contemp_edb.py"],
+            capture_output=True, text=True, check=True).stdout
+        (old_edb_dir / "contemp_edb.py").write_text(old_edb_src, encoding="utf-8")
+        before_script = f'''\
+import sys
+from pathlib import Path
+sys.path.insert(0, {str(old_edb_dir)!r})
+sys.path.insert(1, {str(ENGINE)!r})
+from contemp_edb import export
+exp = export("contempprobe", Path({str(root_r)!r}))
+max_t = 0
+for line in exp.facts:
+    if line.rstrip(".").endswith(")"):
+        tail = line.rstrip(".)")
+        digits = tail.rsplit(",", 1)[-1]
+        try:
+            v = abs(int(digits))
+        except ValueError:
+            continue
+        if v > max_t:
+            max_t = v
+print("PRE-FIX-EXPORT-SUCCEEDED facts=%d max_abs_relative_ms=%d anchor_ms=%d" % (
+    len(exp.facts), max_t, exp.anchor_ms))
+sys.exit(0 if max_t > 2**31 - 1 else 9)
+'''
+        fd_r, path_r = tempfile.mkstemp(suffix=".py", prefix="contemp-pre-fix-probe-")
+        try:
+            with os.fdopen(fd_r, "w", encoding="utf-8") as f:
+                f.write(before_script)
+            env_r = dict(os.environ)
+            env_r["LEDGER_DEPLOYMENT"] = str(root_r / "deployment.json")
+            cp_before = subprocess.run([sys.executable, path_r], capture_output=True, text=True,
+                                       env=env_r, cwd=str(ENGINE))
+        finally:
+            os.unlink(path_r)
+            shutil.rmtree(old_edb_dir, ignore_errors=True)
+        ck(cp_before.returncode == 0,
+           f"CASE r (before-the-fix witness): the PRE-FIX export() must SUCCEED (no bound check "
+           f"existed) AND emit at least one fact whose relative-ms value already exceeds "
+           f"clingo/clasp's 32-bit ceiling -- got exit {cp_before.returncode}: "
+           f"{(cp_before.stdout + cp_before.stderr)[-1000:]}")
+        before_out = cp_before.stdout + cp_before.stderr
+        case_r_before_out = before_out
+        log.append(f"CASE r part 1 (BEFORE this fix, pre-fix engine/contemp_edb.py from HEAD, "
+                   f"real ~7-year-wide schema): exit={cp_before.returncode}, "
+                   f"{before_out.strip().splitlines()[-1] if before_out.strip() else '(no output)'} "
+                   f"-- export() completed WITHOUT refusing and produced a fact whose T value "
+                   f"already exceeds the safe 32-bit bound, i.e. a value that would wrap silently "
+                   f"inside clingo with no error (this module's own empirically-verified "
+                   f"mechanism: `echo 'a(2000001010000).' | clingo - --outf=2` -> "
+                   f"`a(-1453749936)`)")
+
+        # ---- CASE r, PART 2 (the AFTER-THE-FIX witness): the SAME schema, through the CURRENT
+        # (fixed) engine/contemp_edb.py, via the REAL `./audit` subprocess path (run_audit, the
+        # SAME helper every other case in this file uses) -- proves the DEFAULT, non-differential
+        # audit path (previously wholly unprotected) now refuses loudly rather than silently
+        # comparing/reporting on possibly-wrapped facts.
+        worlds.append(root_r)
+        code_r_audit, out_r_audit = run_audit(root_r)
+        case_r_audit_out = out_r_audit
+        ck(code_r_audit != 0,
+           f"CASE r part 2 (after fix, plain ./audit): a window this wide must be REFUSED "
+           f"(non-zero exit), got {code_r_audit}: {out_r_audit[-1200:]}")
+        ck("UnsafeWindowError" in out_r_audit and "24.8 days" in out_r_audit,
+           f"CASE r part 2: the refusal must be TYPED (UnsafeWindowError) and name the bound "
+           f"(~24.8 days): {out_r_audit[-1200:]}")
+        log.append(f"CASE r part 2 (AFTER this fix, plain ./audit -- the default, previously "
+                   f"UNPROTECTED path): exit={code_r_audit}, refused loudly, typed "
+                   f"UnsafeWindowError naming the ~24.8-day bound, as expected")
+
+        # ---- CASE r, PART 3: the SAME schema through `./audit --differential` -- proves the
+        # belt-and-braces layering: contemp_edb.py's own new guard fires FIRST (caught by
+        # run_asp's `except UnsafeWindowError` clause), so contemp_differential.py's pre-existing
+        # `_max_abs_relative_ms` text-level guard is not what fires here -- QUARANTINED either way.
+        code_r_diff, out_r_diff = run_differential(root_r)
+        case_r_diff_out = out_r_diff
+        ck(code_r_diff != 0,
+           f"CASE r part 3 (after fix, --differential): a window this wide must QUARANTINE "
+           f"(non-zero/RED exit), got {code_r_diff}: {out_r_diff[-1200:]}")
+        ck("QUARANTINED" in out_r_diff and "caught at the source" in out_r_diff,
+           f"CASE r part 3: the differential must QUARANTINE via the source-level guard "
+           f"(contemp_edb.py's own export()), named as such: {out_r_diff[-1200:]}")
+        log.append(f"CASE r part 3 (AFTER this fix, ./audit --differential): exit={code_r_diff}, "
+                   f"QUARANTINED, caught at the source (contemp_edb.py's own export()) -- the "
+                   f"pre-existing belt-and-braces text-level guard in contemp_differential.py "
+                   f"stays in place but is not what fired here, as expected")
+
     finally:
         for w in worlds:
             shutil.rmtree(w, ignore_errors=True)
@@ -933,6 +1061,23 @@ def main() -> int:
         "# banked RED evidence -- CASE q (manufactured DIVERGE_DEFECT negative control, "
         "sql_atoms_override forging one atom into the SQL floor's returned set), "
         "engine/contemp_differential.py real output:\n" + case_q_out, encoding="utf-8")
+    (HERE / "unsafe-window-before-fix.txt").write_text(
+        "# banked RED evidence -- CASE r part 1, the SAME real ~7-year-wide contempprobe schema "
+        "run through the PRE-FIX engine/contemp_edb.py (git show HEAD, before BACKLOG 'a second "
+        "latent 32-bit clingo wraparound' was fixed): export() completes WITHOUT refusing and "
+        "emits a fact whose relative-ms value already exceeds clingo/clasp's signed 32-bit "
+        "ceiling -- a value that would wrap silently inside clingo, no error, exactly this "
+        "module's own empirically-verified mechanism (`echo 'a(2000001010000).' | clingo - "
+        "--outf=2` -> `a(-1453749936)`):\n" + case_r_before_out, encoding="utf-8")
+    (HERE / "unsafe-window-after-fix.txt").write_text(
+        "# banked evidence -- CASE r parts 2+3, the IDENTICAL real ~7-year-wide contempprobe "
+        "schema run through the CURRENT (fixed) engine/contemp_edb.py: plain `./audit` (part 2, "
+        "previously wholly unprotected) now refuses loudly with a typed UnsafeWindowError naming "
+        "the ~24.8-day bound; `./audit --differential` (part 3) QUARANTINEs, caught at the source "
+        "by contemp_edb.py's own new guard (contemp_differential.py's pre-existing "
+        "belt-and-braces text-level guard stays in place but does not fire here):\n\n"
+        "## part 2 -- plain ./audit\n" + case_r_audit_out +
+        "\n\n## part 3 -- ./audit --differential\n" + case_r_diff_out, encoding="utf-8")
     teardown()
     teardown(SCHEMA_PRE24, KERN_PRE24, ROLE_PRE24)
     print("\n# CONTEMPORANEITY-AUDIT FIXTURE PASS -- both polarities proven (clean batch does NOT "
@@ -950,7 +1095,13 @@ def main() -> int:
           "engine/contemp_differential.py) closes the Part-2 deferral -- AGREE on real-shaped "
           "data (run-10 intake-shape + late-declared combined, DerivationRecord pair retained) "
           "and a manufactured DIVERGE_DEFECT correctly caught, naming the forged atom, without "
-          "touching either real producer's source.")
+          "touching either real producer's source; the second latent 32-bit clingo wraparound "
+          "(BACKLOG 2026-07-12) is closed at the source in engine/contemp_edb.py's own export() "
+          "-- proven on the SAME real ~7-year-wide schema both BEFORE the fix (pre-fix export() "
+          "succeeds and emits an already-unsafe relative value, no refusal) and AFTER it (plain "
+          "./audit, previously unprotected, now refuses loudly with a typed UnsafeWindowError; "
+          "--differential QUARANTINEs, caught at the source, its own pre-existing text-level "
+          "guard kept as an unfired belt-and-braces second layer).")
     return 0
 
 

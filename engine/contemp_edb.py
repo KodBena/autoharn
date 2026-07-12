@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-11T14:40:08Z
-#   last-change: 2026-07-11T16:16:33Z
+#   last-change: 2026-07-11T23:57:12Z
 #   contributors: e4410ef6/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -70,6 +70,41 @@ this export), so the values clingo actually reasons over are small deltas (bound
 audited window's duration in ms -- even a full week is ~6e8, safely under the 2^31 ceiling), and
 the anchor (`ContempEdbExport.anchor_ms`) lets a report reconstruct the true absolute time for
 display (`to_absolute_ms`) without ever feeding an absolute value back into clingo.
+
+ENFORCEMENT ADDENDUM, 2026-07-12 (dated append, this note extends the paragraph above rather than
+rewriting it -- BACKLOG "a second latent 32-bit clingo wraparound", found live authoring
+engine/contemp_differential.py's own seen-red fixture on the SAME commission that shipped that
+module). The paragraph above was, until this addendum, an ANALYSIS, not a GUARANTEE: "even a full
+week is ~6e8, safely under the 2^31 ceiling" is true only while the audited window actually stays
+narrow, and nothing upstream of it enforced that -- `export()` reads the whole ledger table
+unconditionally (PASS 1, `SELECT ... FROM {rel} ORDER BY id` below, no time filter), so a real
+world whose ledger spans more than `SAFE_32BIT_MS` (~24.8 days) -- or a fixture that accidentally
+mixes widely-separated timestamps -- silently wraps the RELATIVE delta this fix exists to protect,
+the identical hazard class this module already documents for the absolute-value case, now shown to
+recur one layer down. `engine/contemp_differential.py` shipped a defensive QUARANTINE guard for
+its own (opt-in, `--differential`) call path, but the DEFAULT `./audit` path
+(`engine/contemp_audit.py::run_audit`, which calls `export()` directly) had no protection at all.
+THE FIX, AT THE SOURCE (ADR-0000 Rule 2(a): the class is "a caller of `export()` receives facts
+whose T values may already be silently wrapped," and the type that forecloses it is a
+construction-time refusal inside `export()` itself, the one place every caller -- differential AND
+plain `./audit` alike -- necessarily passes through): `export()` now computes the export's full
+relative SPAN (`max(all_abs) - anchor_ms`) immediately after the anchor itself is known, BEFORE
+pass 2 ever emits a fact, and raises `UnsafeWindowError` (typed, naming the exact span and the
+bound) rather than emitting a single fact once that span would exceed `SAFE_32BIT_MS`. This is the
+"enforce-or-refuse" disposition, not "per-window anchoring": the audited window is not narrowed or
+re-split here (a real re-windowing of the audit's semantics -- what does "the audit" mean for only
+part of a ledger's history? -- is a larger, more invasive design than this fix's remit), the export
+simply refuses loudly, by construction, the moment its own anchor-relative encoding would no longer
+be safe, exactly as this module's docstring already promises for the absolute-value case one
+paragraph up. `engine/contemp_differential.py`'s own `_max_abs_relative_ms` regex guard on the
+formatted EDB text is UNCHANGED and stays as belt-and-braces (a second, independent, text-level
+check) -- it is now expected to never actually fire in practice, since `export()` itself refuses
+first, but it costs nothing to keep as a second line of defense against a future regression in this
+very check. `SAFE_32BIT_MS` is defined ONCE, here (this module owns the anchor-relative encoding,
+so it is the natural single home per ADR-0012 P1); `contemp_differential.py` imports it rather than
+carrying its own copy of the literal, closing the two-independently-typed-copies-can-drift risk
+ADR-0000's Specimen 1 (`DECOMP_ANCHOR=0.0941` vs `0.094`) already names as the exact failure this
+kind of duplication invites.
 
 NAMED HAZARD, FLAGGED NOT SILENTLY ROUTED AROUND (CLAUDE.md's engineering-responsibility
 corollary): the three hook journals do NOT agree on a timestamp convention.
@@ -176,6 +211,20 @@ class CapabilityError(RuntimeError):
     """Raised when a caller (engine/contemp_audit.py) requests a fact family this world's EDB
     did not produce (ADR-0015 Rule 4) -- the honest typed refusal, never a silent empty read
     as "clean"."""
+
+
+# clingo/clasp's own signed 32-bit integer ceiling (this module's docstring, "TIMESTAMP UNITS").
+# The single home of this literal (ADR-0012 P1) -- engine/contemp_differential.py imports it
+# rather than carrying its own copy (see this module's docstring, "ENFORCEMENT ADDENDUM").
+SAFE_32BIT_MS = 2**31 - 1
+
+
+class UnsafeWindowError(RuntimeError):
+    """Raised by export() when the audited window's own relative span (max(all_abs) - anchor_ms)
+    would exceed SAFE_32BIT_MS -- see this module's docstring, "ENFORCEMENT ADDENDUM, 2026-07-12".
+    Raised BEFORE any fact is emitted, so a caller never receives a fact whose T value may already
+    be silently wrapped. The honest typed refusal for this hazard, exactly as CapabilityError is
+    for a missing fact family: never a guessed or corrupted verdict."""
 
 
 @dataclass
@@ -372,6 +421,25 @@ def export(target_name: str, root: Path) -> ContempEdbExport:
               + [ms for _, ms in te_tuples]
               + [dms for _, _, _, _, dms in row_tuples if dms is not None])
     exp.anchor_ms = min(all_abs) if all_abs else 0
+
+    # ---- THE ENFORCED BOUND (this module's docstring, "ENFORCEMENT ADDENDUM, 2026-07-12"): the
+    # widest relative delta this export WOULD emit, checked BEFORE pass 2 emits a single fact. A
+    # span this wide means at least one T below would exceed clingo/clasp's signed 32-bit ceiling
+    # and silently wrap -- refuse loudly here, at construction, rather than hand every caller
+    # (the default ./audit path included) a fact that may already be corrupted.
+    span_ms = (max(all_abs) - exp.anchor_ms) if all_abs else 0
+    if span_ms > SAFE_32BIT_MS:
+        raise UnsafeWindowError(
+            f"world '{root}' (target '{target_name}'): audited window spans {span_ms}ms "
+            f"(anchor {exp.anchor_ms}ms epoch) -- EXCEEDS clingo/clasp's signed 32-bit ceiling "
+            f"({SAFE_32BIT_MS}ms, ~24.8 days). engine/contemp_edb.py's anchor-relative encoding "
+            f"is only safe within that bound; emitting facts for a wider window would silently "
+            f"wrap at least one T value inside clingo, with no error from clingo itself. "
+            f"Refusing loudly instead of emitting a possibly-corrupted EDB (ADR-0000 Rule 2(a); "
+            f"ADR-0002). No windowed/narrowed export exists yet -- narrow the audited history at "
+            f"the source (e.g. a fresh world, or archiving old ledger rows) to bring the span "
+            f"back under the bound, or see this module's docstring 'ENFORCEMENT ADDENDUM' and "
+            f"BACKLOG.md's 'a second latent 32-bit clingo wraparound' for the full account.")
 
     # ---- PASS 2: emit facts, T relative to the anchor ----------------------------------------
     n_tok, n_untok, n_declared = 0, 0, 0

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-11T22:24:13Z
-#   last-change: 2026-07-11T22:36:23Z
+#   last-change: 2026-07-11T23:57:58Z
 #   contributors: e4410ef6/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -80,7 +80,7 @@ from pathlib import Path
 
 from clingo_run import run_clingo
 from contemp_audit import _resolve_target_name
-from contemp_edb import export
+from contemp_edb import SAFE_32BIT_MS, UnsafeWindowError, export
 from contemp_floor import floor_atoms
 from ledger_differential import (
     AGREE,
@@ -128,12 +128,20 @@ _TS_PAIR_RE = re.compile(
 # apply to the "safe" relative encoding once the window is wide enough. `_max_abs_relative_ms`
 # below is this module's OWN defense (in-scope: this file already owns the anchor-normalization
 # step) -- it refuses loudly (QUARANTINED) rather than silently comparing two producers where the
-# ASP side's own numeric encoding may already be corrupted. engine/contemp_edb.py's own semantics
-# are NOT touched by this commission (out of this commission's touch-list; the deferral named at
-# the top of this file is the SQL-floor differential ONLY) -- flagged here and in BACKLOG.md,
-# not fixed at the source, per CLAUDE.md's engineering-responsibility corollary ("fix or flag
-# loudly", never route around a hazard met in passing).
-_SAFE_32BIT_MAX = 2**31 - 1  # clingo/clasp's own signed 32-bit ceiling (engine/contemp_edb.py's docstring)
+# ASP side's own numeric encoding may already be corrupted.
+#
+# ADDENDUM, 2026-07-12 (BACKLOG "a second latent 32-bit clingo wraparound"; dated append, does not
+# rewrite the paragraph above): engine/contemp_edb.py's own `export()` NOW enforces this same bound
+# at the source, raising `UnsafeWindowError` before a single fact is emitted -- see that module's
+# docstring, "ENFORCEMENT ADDENDUM, 2026-07-12". That fix protects EVERY caller of `export()`,
+# including the default `./audit` path (`contemp_audit.py::run_audit`) this module's own guard
+# never covered. `_max_abs_relative_ms` below and the `run_asp` check that uses it are KEPT,
+# unremoved, as belt-and-braces (a second, independent, text-level check on the already-formatted
+# EDB) -- in the ordinary case `export()` now raises first, so this module's own check is expected
+# to never actually fire, but it costs nothing to keep as a second line of defense should a future
+# change to contemp_edb.py's enforcement regress. `SAFE_32BIT_MS` is imported from contemp_edb
+# (single home, ADR-0012 P1) rather than re-declared here, closing the two-independently-typed-
+# copies-can-drift risk a literal like this invites (ADR-0000's own DECOMP_ANCHOR specimen).
 _FACT_T_RE = re.compile(
     r'^(?:row_tokened|row_untokened|invocation|tool_event|row_declared)\(.*,(-?\d+)\)\.$')
 
@@ -180,17 +188,24 @@ def run_asp(target_name: str, root: Path) -> ProducerRun:
     any negative-control override) sees the SAME denomination the SQL floor natively emits."""
     try:
         exp = export(target_name, root)
+    except UnsafeWindowError as e:
+        # BELT: contemp_edb.py's own export() now refuses this at the source (that module's
+        # docstring, "ENFORCEMENT ADDENDUM, 2026-07-12") -- this is expected to be the ONLY path
+        # that fires today; the text-level check below (BRACES) is the second, independent layer.
+        return ProducerRun("asp:clingo", quarantine=(
+            f"UNSAFE ANCHOR SPAN (caught at the source, engine/contemp_edb.py's own export()): "
+            f"{e}"))
+    try:
         edb_text = exp.edb_text()
         max_rel = _max_abs_relative_ms(edb_text)
-        if max_rel > _SAFE_32BIT_MAX:
+        if max_rel > SAFE_32BIT_MS:
             return ProducerRun("asp:clingo", quarantine=(
-                f"UNSAFE ANCHOR SPAN: this world's audited window carries a relative delta of "
-                f"{max_rel}ms from its own anchor ({exp.anchor_ms}ms epoch) -- EXCEEDS clingo/"
-                f"clasp's signed 32-bit ceiling ({_SAFE_32BIT_MAX}ms, ~24.8 days). "
-                f"engine/contemp_edb.py's anchor-relative encoding only protects a BOUNDED "
-                f"window (its own docstring: 'even a full week is ~6e8, safely under the 2^31 "
-                f"ceiling'); this world's is wider, so the ASP producer's OWN numeric encoding "
-                f"may already be silently wrapped. Refusing loudly rather than comparing a "
+                f"UNSAFE ANCHOR SPAN (caught by this module's own BELT-AND-BRACES text-level "
+                f"check -- contemp_edb.py's own guard should have already refused this; both "
+                f"firing on the same world is itself worth investigating): this world's audited "
+                f"window carries a relative delta of {max_rel}ms from its own anchor "
+                f"({exp.anchor_ms}ms epoch) -- EXCEEDS clingo/clasp's signed 32-bit ceiling "
+                f"({SAFE_32BIT_MS}ms, ~24.8 days). Refusing loudly rather than comparing a "
                 f"possibly-corrupted producer -- NO RESULT (ADR-0015 Rule 3), never a guessed "
                 f"AGREE or DIVERGE. See this module's own NAMED HAZARD comment + BACKLOG.md."))
         raw_atoms = {a for a in run_clingo([CONTEMP_LP, THRESHOLDS_LP], edb_text) if "(" in a}

@@ -1,5 +1,5 @@
 # banked RED evidence -- CASE g (manufactured backfill, UNDECLARED twin, re-asserted post-s24), engine/contemp_audit.py real output:
-# contemporaneity audit -- target='contempprobe' root=/tmp/contemp-fixture-ynbfa5k2
+# contemporaneity audit -- target='contempprobe' root=/tmp/contemp-fixture-qb6eioev
 #   capabilities (family, capable, produced): [('stamp_invocation_column', True, True), ('event_declared_ts_column', True, True), ('s23_capable', True, True), ('invocation_journal', True, True), ('tool_event', True, True)]
 #   counts: {'row_tokened': 12, 'row_untokened': 0, 'row_declared': 1, 'invocation': 2, 'tool_event': 4}
 

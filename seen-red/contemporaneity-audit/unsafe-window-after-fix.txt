@@ -1,0 +1,15 @@
+# banked evidence -- CASE r parts 2+3, the IDENTICAL real ~7-year-wide contempprobe schema run through the CURRENT (fixed) engine/contemp_edb.py: plain `./audit` (part 2, previously wholly unprotected) now refuses loudly with a typed UnsafeWindowError naming the ~24.8-day bound; `./audit --differential` (part 3) QUARANTINEs, caught at the source by contemp_edb.py's own new guard (contemp_differential.py's pre-existing belt-and-braces text-level guard stays in place but does not fire here):
+
+## part 2 -- plain ./audit
+contemp_audit: tool error: UnsafeWindowError: world '/tmp/contemp-fixture-96fzemen' (target 'contempprobe'): audited window spans 216241405080ms (anchor 1783764000000ms epoch) -- EXCEEDS clingo/clasp's signed 32-bit ceiling (2147483647ms, ~24.8 days). engine/contemp_edb.py's anchor-relative encoding is only safe within that bound; emitting facts for a wider window would silently wrap at least one T value inside clingo, with no error from clingo itself. Refusing loudly instead of emitting a possibly-corrupted EDB (ADR-0000 Rule 2(a); ADR-0002). No windowed/narrowed export exists yet -- narrow the audited history at the source (e.g. a fresh world, or archiving old ledger rows) to bring the span back under the bound, or see this module's docstring 'ENFORCEMENT ADDENDUM' and BACKLOG.md's 'a second latent 32-bit clingo wraparound' for the full account.
+
+
+## part 3 -- ./audit --differential
+# contemporaneity marriage differential -- ASP (engine/lp/contemporaneity.lp) vs SQL floor (engine/contemp_floor.py)
+#   target='contempprobe' root=/tmp/contemp-fixture-96fzemen
+#   closed verdict vocabulary: ['AGREE', 'DIVERGE_BY_DESIGN', 'DIVERGE_DEFECT', 'QUARANTINED']; RED = ['DIVERGE_DEFECT', 'QUARANTINED']
+
+  [!! ] contempprobe QUARANTINED        asp=0 sql=57 atoms; Δasp=[] Δsql=[]
+          asp QUARANTINED: UNSAFE ANCHOR SPAN (caught at the source, engine/contemp_edb.py's own export()): world '/tmp/contemp-fixture-96fzemen' (target 'contempprobe'): audited window spans 216241405080ms (anchor 1783764000000ms epoch) -- EXCEEDS clingo/clasp's signed 32-bit ceiling (2147483647ms, ~24.8 days). engine/contemp_edb.py's anchor-relative encoding is only safe within that bound; emitting facts for a wider window would silently wrap at least one T value inside clingo, with no error from clingo itself. Refusing loudly instead of emitting a possibly-corrupted EDB (ADR-0000 Rule 2(a); ADR-0002). No windowed/narrowed export exists yet -- narrow the audited history at the source (e.g. a fresh world, or archiving old ledger rows) to bring the span back under the bound, or see this module's docstring 'ENFORCEMENT ADDENDUM' and BACKLOG.md's 'a second latent 32-bit clingo wraparound' for the full account.
+
+# DIFFERENTIAL RED -- diverged/quarantined (NO RESULT)
