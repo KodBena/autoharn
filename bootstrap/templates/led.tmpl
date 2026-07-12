@@ -837,6 +837,17 @@ import sys
 # ONE documented home of this grammar (a transcription, not a second, driftable definition of
 # it -- ADR-0012 P1). bootstrap/templates/pickup.tmpl's own _RESOURCE_FIELDS tuple is the
 # sibling reader of the same six names on the display side.
+#
+# TIER gained a fourth value, `forbidden: <task-shape>` (tracker item `accounting-stage-a`,
+# design/ORCH-SPEC-RESOURCE-ACCOUNTING.md §3/§8 stage A): the missing MUST-NOT modality
+# completing the MAY/SHOULD/MUST/MUST-NOT deontic register available/blessed/mandated already
+# covered three-quarters of. This is the fail-safe additive-vocabulary class CLAUDE.md's
+# ORCHESTRATION section pre-ratifies (nothing existing relaxed -- available/blessed/mandated
+# accept exactly what they always accepted). What this validator does NOT do: refuse an
+# invocation that actually reaches a `forbidden`-tier resource -- that write-time enforcement is
+# named out of scope in the spec's §7 ("a possible later mechanism ... declaring it in scope
+# would promise an enforcement grade nothing in this spec builds"). This block only accepts or
+# refuses the DECLARATION's grammar, exactly as it already did for available/blessed/mandated.
 FIELDS = ("NAME", "CLASS", "REACH", "WHAT-IT-PROVES", "GUIDANCE", "TIER")
 VALID_CLASSES = ("solver", "service", "backend", "binary", "library")
 
@@ -852,7 +863,8 @@ def refuse(msg: str) -> None:
     print("    resource: <NAME> | <CLASS> | <REACH> | <WHAT-IT-PROVES> | <GUIDANCE> | <TIER>", file=sys.stderr)
     print(f"  the six fields, in order: {', '.join(FIELDS)}", file=sys.stderr)
     print(f"  CLASS must be one of: {' | '.join(VALID_CLASSES)}", file=sys.stderr)
-    print("  TIER must be one of: available | blessed: <task-shape> | mandated: <task-shape>", file=sys.stderr)
+    print("  TIER must be one of: available | blessed: <task-shape> | mandated: <task-shape> | "
+          "forbidden: <task-shape>", file=sys.stderr)
     print(f"  received ({len(parts)} field(s), whitespace-normalized): {normalized}", file=sys.stderr)
     print("  NOTHING was written -- fix the statement and re-run.", file=sys.stderr)
     sys.exit(1)
@@ -864,10 +876,11 @@ if len(parts) != len(FIELDS):
 _name, cls, _reach, _proves, _guidance, tier = parts
 if cls not in VALID_CLASSES:
     refuse(f"CLASS field {cls!r} is not one of {VALID_CLASSES}")
-if not (tier == "available" or tier.startswith("blessed:") or tier.startswith("mandated:")):
-    refuse(f"TIER field {tier!r} is not 'available', 'blessed: <task-shape>', or "
-           f"'mandated: <task-shape>'")
-if (tier.startswith("blessed:") or tier.startswith("mandated:")) and not tier.split(":", 1)[1].strip():
+_TIER_PREFIXES = ("blessed:", "mandated:", "forbidden:")
+if not (tier == "available" or tier.startswith(_TIER_PREFIXES)):
+    refuse(f"TIER field {tier!r} is not 'available', 'blessed: <task-shape>', "
+           f"'mandated: <task-shape>', or 'forbidden: <task-shape>'")
+if tier.startswith(_TIER_PREFIXES) and not tier.split(":", 1)[1].strip():
     refuse(f"TIER field {tier!r} names no <task-shape> after the colon")
 
 sys.exit(0)

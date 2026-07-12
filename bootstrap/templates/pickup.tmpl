@@ -24,7 +24,11 @@ Sections emitted, each under a machine-parseable `### SECTION: <NAME>` header (g
                         whose statement carries the `resource:` prefix convention (§2 — no kernel
                         `resource` kind exists yet; that is stage 3), read from the same
                         supersedes-filtered `ledger_current` view IN-FORCE-DECISIONS above already
-                        uses. Printed TIER-SORTED, mandated first (spec §3), one block per
+                        uses. Printed TIER-SORTED, `forbidden` first, then `mandated`, then
+                        `blessed` (design/ORCH-SPEC-RESOURCE-ACCOUNTING.md §3: "a prohibition
+                        outranks a mandate for a reader's attention" — tracker item
+                        `accounting-stage-a` added the `forbidden` tier and its top-of-list rank;
+                        `mandated` first was the prior spec §3's own convention), one block per
                         resource. Malformed statements (not exactly the six `|`-separated fields
                         §2 fixes: NAME/CLASS/REACH/WHAT-IT-PROVES/GUIDANCE/TIER) print flagged
                         MALFORMED rather than being silently dropped — a bad declaration is a
@@ -200,15 +204,18 @@ _RESOURCE_FIELDS = ("NAME", "CLASS", "REACH", "WHAT-IT-PROVES", "GUIDANCE", "TIE
 
 
 def _resource_tier_rank(tier: str) -> int:
-    """mandated first, then blessed, then everything else (available, or an unrecognized tier
-    string -- both sort last rather than erroring, since sorting is a display convenience, never
-    a validation gate)."""
+    """forbidden first (design/ORCH-SPEC-RESOURCE-ACCOUNTING.md §3: a prohibition outranks a
+    mandate for a reader's attention -- tracker item `accounting-stage-a`), then mandated, then
+    blessed, then everything else (available, or an unrecognized tier string -- both sort last
+    rather than erroring, since sorting is a display convenience, never a validation gate)."""
     t = tier.strip().lower()
-    if t.startswith("mandated"):
+    if t.startswith("forbidden"):
         return 0
-    if t.startswith("blessed"):
+    if t.startswith("mandated"):
         return 1
-    return 2
+    if t.startswith("blessed"):
+        return 2
+    return 3
 
 
 def resources(dep) -> None:
