@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-12T12:42:33Z
-#   last-change: 2026-07-12T12:42:33Z
-#   contributors: e4410ef6/main
+#   last-change: 2026-07-12T22:35:34Z
+#   contributors: e4410ef6/main, 3c50e030/main
 # <<< PROVENANCE-STAMP <<<
 
 """run_fixtures.py -- both-polarity proof that a FULL-ROW DELETION (not a content alteration --
@@ -46,28 +46,58 @@ Cases -- the closure statement this file proves (per ADR-0000's amendment):
                                    for the case that has a later row to reveal it.
   c-tail-deletion-not-detected -- the closure statement's honest negative half (ADR-0000's
                                    "name what is NOT covered, converting a silent gap into a filed
-                                   deferral"): the LAST row (the highest surviving id, with no row
-                                   after it) is deleted the same way. No later row's predecessor
-                                   lookup depends on the deleted row's hash, so nothing in the
-                                   row_hash chain changes: `./verify-chain` reports INTACT over the
-                                   now-shorter chain, silently, with a lower head id and no
-                                   diagnostic that a row ever existed past it. This is empirically
-                                   verified here, not assumed, and reported plainly: chain-dependency
-                                   detection covers every INTERIOR deletion and structurally cannot
-                                   cover a TAIL deletion -- the row-hash chain alone has no notion
-                                   of "the sequence should have reached id N", only "does what
-                                   is here still agree with what is here". Disclosed as residue in
-                                   this fixture's own report and the commissioning agent's final
-                                   report, per CLAUDE.md's engineering-responsibility corollary --
-                                   not fixed here (kernel/lineage is FROZEN; closing it would need a
-                                   new mechanism -- e.g. a monotonic max-id witness recorded outside
-                                   the table itself -- which is out of this S-sized fixture's scope)
-                                   and not silently swept under "plausibly caught".
+                                   deferral") AS ORIGINALLY FILED, UPDATED 2026-07-13 for the s27
+                                   era (dated note, law/adr/0005 Rule 8 -- see below): the LAST row
+                                   (the highest surviving id, with no row after it) is deleted the
+                                   same way. No later row's predecessor lookup depends on the
+                                   deleted row's hash, so the row_hash chain alone still reports
+                                   INTACT over the now-shorter chain -- that half of the original
+                                   closure statement still holds, empirically, unchanged. What
+                                   changed: `bootstrap/new-project.sh --new-world` now applies
+                                   kernel/lineage/s27-chain-high-water.sql automatically (it did
+                                   not exist when this fixture was first banked), and s27's own
+                                   witness -- a monotonic high-water mark outside the row_hash
+                                   chain, exactly the closing mechanism this case's ORIGINAL text
+                                   named as "out of this S-sized fixture's scope" -- DOES see the
+                                   gap: `./verify-chain` now reports the row_hash chain's INTACT
+                                   alongside the s27 witness's TAIL-DELETION-SUSPECT (exit 3, never
+                                   conflated with exit 0's plain INTACT). The case now asserts BOTH
+                                   halves of the current, honest truth: the row_hash chain
+                                   mechanism this file exists to probe still cannot see a tail
+                                   deletion on its own (unchanged, still worth naming), AND the
+                                   full `./verify-chain` verb an operator actually runs no longer
+                                   lets that gap pass silently (s27 closed it at the tool level).
+                                   This is a strictly better outcome than the case's original
+                                   pessimistic closure, confirmed here rather than assumed.
+
+                                   DATED NOTE (2026-07-13, tracker item
+                                   s26-deletion-fixture-stale-case): this case's ORIGINAL assertion
+                                   (`./verify-chain` returncode 0, INTACT only, no witness) predates
+                                   s27 and FAILED on the current tree once s27 began applying
+                                   automatically -- not a regression in verify-chain, but this
+                                   fixture's own banked expectation going stale under a later,
+                                   additive kernel delta. Per law/adr/0005 Rule 8 (dated
+                                   corrections over silent rewrites of point-in-time records): the
+                                   banked `red.txt` alongside this file is REGENERATED by
+                                   re-running this fixture, not hand-edited -- the same convention
+                                   already used for `seen-red/doc-attestation-presence/red.txt`
+                                   (commit 4847a4a, "red.txt regenerated to bank the DISCOVER-MD
+                                   pin"): red.txt here is live evidence produced by running code,
+                                   not hand-authored prose, so "regenerate by re-running" IS this
+                                   record class's dated-correction mechanism, not a silent edit of
+                                   one. The case's assertion in code below is updated in place (not
+                                   sibling-duplicated) because the case's PURPOSE -- probe what the
+                                   row_hash chain alone can see on a tail deletion -- is unchanged;
+                                   only the surrounding tool grew a second, honest layer this case
+                                   must now also check to keep asserting the real, current truth.
 
 Usage: python3 seen-red/s26-row-hash-chain-deletion/run_fixtures.py
-Exit 0 if every case matches its EXPECTED (not necessarily "detected") outcome; 1 otherwise --
-case c's expected outcome is the honest INTACT-despite-deletion result, so this fixture's own exit
-0 is not a claim that all deletion is caught, only that the file's stated closure holds.
+Exit 0 if every case matches its EXPECTED outcome; 1 otherwise -- case c's expected outcome
+(2026-07-13, s27 era) is `./verify-chain` exit 3: the row_hash chain itself INTACT (unchanged,
+still cannot see a tail deletion alone) PLUS the s27 witness firing TAIL-DELETION-SUSPECT (the
+tool-level gap closure), so this fixture's own exit 0 is not a claim that the row_hash chain
+mechanism alone catches all deletion, only that the file's stated closure -- now including s27's
+contribution -- holds.
 Lazy imports banned.
 """
 from __future__ import annotations
@@ -198,16 +228,25 @@ def main() -> int:
         _, last_id = first_and_last_ids(WORLD_TAIL)
         delete_row(WORLD_TAIL, last_id)
         rc = run_verify_chain(world_dir_t)
-        # EXPECTED (empirically, not assumed): INTACT over the now-2-row chain -- no later row
-        # exists whose predecessor lookup depended on the deleted tail row's hash, so nothing in
-        # the row_hash chain detects its absence. This is the closure statement's honest negative
-        # half: PASS here means "the residual limit is confirmed and named", not "no gap exists".
-        ok_c = rc.returncode == 0 and rc.stdout.startswith("verify-chain: INTACT -- 2 row(s)")
+        # EXPECTED (empirically, not assumed; updated 2026-07-13 for the s27 era -- see module
+        # docstring case c): the row_hash chain itself still reports INTACT over the now-2-row
+        # chain -- no later row's predecessor lookup depended on the deleted tail row's hash, so
+        # the chain mechanism alone still cannot see the gap, unchanged. But `--new-world` now
+        # applies s27 automatically, and s27's own high-water witness DOES see it: `./verify-chain`
+        # exits 3 (TAIL-DELETION-SUSPECT), never plain exit-0 INTACT. Both halves are asserted:
+        # the chain-alone limit (still real, still named) AND the tool-level closure (s27 caught
+        # it) -- PASS here means "the current, honest truth holds", not "no gap exists anywhere".
+        ok_c = (rc.returncode == 3
+                and "verify-chain: INTACT -- 2 row(s)" in rc.stdout
+                and "TAIL-DELETION-SUSPECT" in rc.stdout)
         check("c-tail-deletion-not-detected", ok_c,
               f"deleted the tail row id={last_id}; verify-chain over the now-shorter chain: "
-              f"{rc.stdout.strip()} -- row_hash-chain-alone structurally cannot see a tail "
-              f"deletion (no surviving row's predecessor hash depends on it); this is a NAMED, "
-              f"disclosed limit, not a defect this fixture papers over", failures)
+              f"{rc.stdout.strip()} -- row_hash-chain-alone still structurally cannot see a tail "
+              f"deletion (no surviving row's predecessor hash depends on it), but s27's "
+              f"high-water witness (applied automatically by --new-world since this fixture was "
+              f"first banked) DOES catch it at the tool level (exit 3, TAIL-DELETION-SUSPECT) -- "
+              f"this is the current, honest, strictly-better-than-originally-filed behavior, not "
+              f"a defect this fixture papers over", failures)
 
     finally:
         teardown_all()
@@ -217,8 +256,9 @@ def main() -> int:
         print("FAILURES:", failures)
         return 1
     print("ALL CASES OK -- s26 row_hash chain full-row-deletion proof (intact baseline / interior "
-          "deletion detected one row downstream of the gap / tail deletion structurally "
-          "undetected by the chain alone, confirmed and named), zero residue.")
+          "deletion detected one row downstream of the gap / tail deletion still structurally "
+          "undetected by the row_hash chain alone but now caught at the tool level by s27's "
+          "high-water witness, TAIL-DELETION-SUSPECT), zero residue.")
     return 0
 
 

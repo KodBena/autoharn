@@ -1,15 +1,18 @@
 == scaffolding throwaway --new-world s26delfxint (4 rows) ==
 === a-intact-baseline ===
-  [ok] verify-chain: INTACT -- 4 row(s) walked, head id=4 hash=f9ca9dadfa8c4f4259506b5a7d0eeb2c3f7da5555b657cafd102443d3cf08700
+  [ok] verify-chain: INTACT -- 4 row(s) walked, head id=4 hash=45f490a8a4e7f21bc9007969187cc571ec543155a754a482b451960bcc900784
+verify-chain: TAIL-COVERAGE-CONFIRMED -- witness max_id=4 agrees with walked max_id=4 (secondary corroboration: ledger_id_seq.last_value=4, explain-not-fail -- nextval() is non-transactional and does not roll back on an aborted insert, so this figure alone would false-positive on any world that ever rolled back a write)
 
 === b-interior-deletion-detected ===
   [ok] deleted id=2, expected break at next-surviving id=3: verify-chain: BROKEN -- first break at row id 3:
-    stored:   937e08bf34ed418278f8c32ee45cb7894492c67bce9f1338b6470376f147b155
-    expected: 04a6111e564e0dc4fe5cffe03b0f2d01be5fc8d79d108c38abee92c6c8c4fb3e
+    stored:   7338a14ad42e360f70412939c5b29b956975d057b199f865dd8aa6f9a9fa7b0d
+    expected: a7787a75cf9a6ecf1a4eef6b6cf0afd6e35fc73aab579e1ffc885a4dd032f9c2
   (1 of 3 row(s) mismatch total. The FIRST break is where alteration is provably detectable: either the altered row's own content no longer matches its OWN stored hash (tamper left the stored row_hash stale, the common case), or -- if the tamperer also rewrote that row's row_hash to match its new content -- the NEXT row breaks instead, because its predecessor-hash reference was computed against the row's OLD, honest hash. Either way, the break can be no later than immediately after the true alteration point; it is never silently absorbed further downstream than that.)
+verify-chain: tail-deletion witness check SKIPPED -- hash-chain status is BROKEN, already diagnosed above
 
 == scaffolding throwaway --new-world s26delfxtail (3 rows) ==
 === c-tail-deletion-not-detected ===
-  [ok] deleted the tail row id=3; verify-chain over the now-shorter chain: verify-chain: INTACT -- 2 row(s) walked, head id=2 hash=f251f90442ffbe76ad9b090125f11d73629ae95844018afa3a86317b46e656c0 -- row_hash-chain-alone structurally cannot see a tail deletion (no surviving row's predecessor hash depends on it); this is a NAMED, disclosed limit, not a defect this fixture papers over
+  [ok] deleted the tail row id=3; verify-chain over the now-shorter chain: verify-chain: INTACT -- 2 row(s) walked, head id=2 hash=573e889c4122f139d4856042f43cf8d1c5085d2eb72848ff9a28334dfc54db32
+verify-chain: TAIL-DELETION-SUSPECT -- witness max_id=3 is AHEAD of the walked max_id=2 (1 row(s) missing from the tail; the row_hash chain alone cannot see this -- s27's own witness is what caught it) (secondary corroboration: ledger_id_seq.last_value=3, explain-not-fail -- nextval() is non-transactional and does not roll back on an aborted insert, so this figure alone would false-positive on any world that ever rolled back a write) -- row_hash-chain-alone still structurally cannot see a tail deletion (no surviving row's predecessor hash depends on it), but s27's high-water witness (applied automatically by --new-world since this fixture was first banked) DOES catch it at the tool level (exit 3, TAIL-DELETION-SUSPECT) -- this is the current, honest, strictly-better-than-originally-filed behavior, not a defect this fixture papers over
 
-ALL CASES OK -- s26 row_hash chain full-row-deletion proof (intact baseline / interior deletion detected one row downstream of the gap / tail deletion structurally undetected by the chain alone, confirmed and named), zero residue.
+ALL CASES OK -- s26 row_hash chain full-row-deletion proof (intact baseline / interior deletion detected one row downstream of the gap / tail deletion still structurally undetected by the row_hash chain alone but now caught at the tool level by s27's high-water witness, TAIL-DELETION-SUSPECT), zero residue.
