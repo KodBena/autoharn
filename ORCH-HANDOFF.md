@@ -1,125 +1,135 @@
-# HANDOFF (rewritten 2026-07-12 early morning, session e4410ef6 — fresh-context entry point)
+# HANDOFF (rewritten 2026-07-12 evening, session e4410ef6 — fresh-context entry point)
 
 Audience: orchestrator
 
-This file orients the next orchestrating session. Fable — the maintainer's senior AI
-authoring model, named throughout this project's law — retires within a day of this
-revision; the succession posture below is therefore this document's most load-bearing
-section. The file condenses and points; it does not duplicate. The
-[SSOTs](GLOSSARY.md#ssot) (single sources of truth) it names outrank any summary in it,
-and every claim below is re-observable — cite nothing from here without re-checking at
-the source it names. It supersedes the prior HANDOFF wholesale (that revision survives
-in git as commit f0718b8's ancestor state).
+This file orients the next orchestrating session. It condenses and points; it does not
+duplicate. The [SSOTs](GLOSSARY.md#ssot) (single sources of truth) it names outrank any
+summary in it, and every claim below is re-observable — cite nothing from here without
+re-checking at the source it names. It supersedes the prior HANDOFF wholesale (that
+revision survives in git as commit 22895f0). It was written because context length, not
+open work, ended the prior session: the fresh-session + pickup path is this project's own
+resumption doctrine, exercised on itself.
 
 ## Read in this order
 
 0. `./pickup` — at this repository's ROOT. The repo tracks its own work in a standing
-   Postgres ledger (closing the long-open question of how a project tracks its own work — the answer this repo's predecessor project omega prototyped; the closure record is design/USER-WORK-STATUS-OFFERING.md); the live open
-   set, each item's full statement, and the RESOURCES section all come from there, never
-   from this file.
+   Postgres ledger; the live open set, each item's full statement, the RESOURCES,
+   ESTIMATES, and TAXONOMIES sections all come from there, never from this file.
 1. ORCH-OPERATING-CARD.md — orientation in one page: the two-cwd model, vocabulary, the
    verbs, start/resume including the signed-commission start, the delta decision tree,
-   the hooks map (reconciled against the 11-mechanism registry), the verification
-   checklist.
+   the hooks map, the verification checklist.
 2. CLAUDE.md — law pointers (five ADRs incl. 0017, all binding) + ORCHESTRATION. Read
    the named ADRs IN FULL before work that invokes them.
-3. ORCH-CAPABILITIES.md — the operational truth: 30+ witnessed capability items.
+3. ORCH-CAPABILITIES.md — the operational truth: 35 witnessed capability items, each
+   carrying real output or an honest UNWITNESSED mark.
 4. The work tracker itself — `./led --recent` for the latest rows, `./led show <id>`
-   for any one in full. BACKLOG.md retired as a file on 2026-07-12 (maintainer ruling,
-   tracker ledger row 137: the ledger is the only liveness surface); it is now a
-   pointer stub, and the frozen dated record every "BACKLOG entry" citation in this
-   repository points into is read with `git show d6f64ee:BACKLOG.md`.
-5. USER-GUIDE.md — read once even as an orchestrator: it is the narrative spine an
-   adopter follows, and it orders the USER- shelf.
+   for any one in full. BACKLOG.md is a retired pointer stub (maintainer ruling, tracker
+   row 137); the frozen dated record every historical "BACKLOG entry" citation points
+   into is read with `git show d6f64ee:BACKLOG.md`.
+5. USER-GUIDE.md — the adopter's narrative spine; it orders the USER- shelf.
+   design/USER-RECIPES-FAQ.md is the intent-keyed index over that shelf ("can I do X?"
+   → the one page where the truth lives), attested against the live ledger.
 
-## Where the project stands (2026-07-12, Fable's last day)
+## Where the project stands (2026-07-12 evening)
 
-The documentation corpus is audience-split (MAINT-/ORCH-/USER- prefixes over design/ and
-root, 46 documents; `tools/rename_doc.py` is the per-document rename primitive). The
-maintainer's five decision-queue answers of 2026-07-11/12 are fully transcribed, each into its home artifact with the transcription acts in BACKLOG's dated entries of those days: both
-ADR amendments are law with his proviso (the text binds, the mechanism assists);
-ADR-0009 is re-instanced for autoharn; the research-ledger offering shipped — an "offering" is a one-command adoption any project can run, the genre USER-GUIDE.md's Adopt section orders — as `bootstrap/track-experiments.sh`, while applying the schema to his own standing research database remains his single pending command (`bootstrap/apply-research-ledger.sh`; tracker item research-ledger-apply);
-perimeter/host-ops questions are permanently out of scope by his ruling; and his answer to the then-pending
-review-gap scope-semantics ruling (a draft asking whether the kernel's second-pair-of-
-eyes obligation binds a whole principal or one task; MAINT-REVIEW-GAP-SCOPE-SEMANTICS-RULING.md)
-rejected its framing outright and became the obligation-attachment vocabulary in
-the registry spec.
+Run 12 completed as the first fully-ceremonied run: a SIGNED commission verified live
+(first VERIFIED on record), a live resource declaration, six reviewer dispatches, ended
+review-clean. Its defects became permanent mechanisms the same day: malformed
+`resource:` intake now refuses loudly at the boundary; content-free review discharge is
+audited (`./audit --review-gap`, FLAGGED-never-VIOLATED); decomposition review is a
+write-time blocker (`decomposition_review` mechanism, observe default).
 
-The overnight yield (every item witnessed, attested, merged; BACKLOG's dated tail
-carries each disposition):
+The maintainer's re-litigation commission ("re-judge adoption modulo the dearth of
+adoption evidence") ran as a five-lens panel and is synthesized in
+design/MAINT-RELITIGATION-SYNTHESIS.md (attested): 3–2 adoptable-in-principle, his bias
+suspicion substantially confirmed, FAA's dissent recorded, one decision-shaped wall
+standing (single trust domain — his, at leisure). Five Fable-authored specs shipped and
+were attested the same day: resource accounting, decomposition policy, task taxonomy
+(his boundary-discipline ask, polymorphic in taxonomy), the A:B:C offering, and the
+scope-semantics ruling that closed Q1.
 
-- **Pillar 1 exists.** design/ORCH-SPEC-RESOURCE-REGISTRY.md (Fable-authored, attested)
-  specifies the capability registry — three declaration tiers, the eliciting mechanism,
-  mandated-tier countersigned evidence review, first-class ordering constraints, and
-  planning as the explicitly-wrapped stretch appendix. STAGE 1 IS LIVE: `./pickup`
-  shows a RESOURCES section, the preamble carries the eliciting line, and
-  design/USER-BLESSED-TABLE-TEMPLATE.md holds the task-shape table and the
-  `resource:`/`constraint:` grammars. Stage 2 (the ordering checker) is an open,
-  Sonnet-executable tracker item; stages 3-4 wait on witnessed need and the
-  maintainer's word respectively.
-- **The preamble-ordering auditor is live and found real history.** Part 3 of
-  design/ORCH-CONTEMPORANEITY-PART3-SPEC.md is implemented: an ASP program under
-  engine/lp/ checking the twelve ordering obligations the governance preamble imposes
-  (families F1-F12 in that spec's catalogue), marriage-grade — derived independently in
-  ASP and SQL with the two required to agree — surfaced as `./audit --preamble` with
-  exit 5 on any VIOLATED family. It ran retroactively over seven settled worlds and
-  surfaced three genuine violations (run5 closed items before claims twice; run11's
-  decomposition never cited its commission; run4's countersign preceded its window).
-  The deductive-engine showcase is no longer prospective.
-- **Worktree ledgering is mechanized.** The union merge driver for the attestations
-  jsonl is installed (one-time `git config` line in bootstrap/QUICKSTART.md;
-  bootstrap.sh installs it for fresh clones; a sibling driver for BACKLOG.md's dated
-  sections was retired with that file on 2026-07-12 — tracker row 137); the invocation
-  journal (each world's `.claude/logs/invocations.jsonl`, hook-written per Bash call)
-  carries the working directory for branch attribution; the `merge:` convention row and the
-  merge-seam attestation rule live in ORCH-ABC-AUDIT-LOOP-RECIPE.md's integrator
-  checklist. The drivers' first live merges resolved mechanically what two days of
-  hand-regex kept fumbling.
-- **The consumer shelf is complete for this era:** USER-GUIDE.md (walks install, adopt,
-  operate, and audit in order; every command witnessed), USER-RETROSPECTIVE-RECIPE.md (the
-  run-10/11 method with the ratchet codified and a reusable commission template),
-  USER-CONFIGURATION.md, the offerings (track-work, track-experiments), and the GPG
-  FAQ with deployment-local keyrings.
+Two build waves then landed, every item claimed → estimated → built by a Sonnet
+worktree builder → independently re-witnessed at the merge seam → closed with witness:
+
+- **panel-cheap-fixes** — FAQ register fix ("is consistent with", CONTESTED→SIGNED
+  rule), money-figures-diagnostic disclosure in USER docs, commit-hash-in-PROVENANCE at
+  scaffold (DIRTY/UNAVAILABLE honesty), and the s26 deletion fixture, which FOUND a real
+  limit: tail-row deletion is invisible to the chain alone (interior deletion breaks it;
+  witnessed both ways twice). Tracker item `s26-tail-deletion-witness` holds the
+  designed always-on fix.
+- **apparatus-flip-witnessing** — every apparatus.json mutation journals a typed event
+  (watcher deliberately outside its own switchboard); `verify-chain --head` carries
+  `apparatus_hash` (manual two-head comparison, named precisely). CAPABILITIES item 32.
+- **cost-estimation-retro** — the `estimate:` grammar is LIVE in the tracker verbs
+  (six fields, refuse-before-write), `./pickup` renders ESTIMATES, the retrospective
+  recipe gained estimate-vs-actual with the grade split stated (witnessed counts
+  evidentiary once accounting stages B/D ship; tokens diagnostic-grade permanently).
+  NEVER for policing costs — the maintainer's invariant is in the refusal text itself.
+- **taxonomy-stage-a** — `taxon:`/`interface:` declarations live, TAXONOMIES in pickup,
+  the omega licensing specimen worked in design/USER-TAXONOMY-DECLARATION.md.
+  Stages B–D (audit, gate, task-policy wiring) are spec'd, unbuilt. Item 33.
+- **accounting-stage-a** — the `forbidden:` TIER (MUST-NOT completing the deontic
+  register); declaration + display only, enforcement is Stage C, unbuilt. Item 34.
+- **abc-loop-offering** — the A:B:C loop offered to deployments: `./attest-doc` (the
+  sixth in-project shim; the scaffold remains the seventh verb per
+  ORCH-OPERATING-CARD.md/USER-GUIDE.md), deployment-local attestations ledger,
+  distance-to-clean DOC-ATTESTATION section
+  behind the `doc_attestation` apparatus switch (default off), adopter walkthrough
+  design/USER-DOC-AUDIT-LOOP.md. Item 35.
+
+Estimates were ledgered for wave 2 before dispatch and reconciled at close — first
+calibration lesson, on the ledger: the 1M token-OOM denomination overshot all three
+times; estimate 100K–1M boundary cases as 100K.
 
 ## The succession posture (what happens when Fable is gone)
 
-- The succession drill PASSED, graded and ledgered (2026-07-12): Opus authored a real
-  law-adjacent spec (design/ORCH-SPEC-DOC-ATTESTATION-2.md — version 2 of the
-  attestation record format) under the CLAUDE.md succession rule's maximum
-  ceremony, every ceremony component provably load-bearing. That format is now in
-  routine service in the attestations ledger. Opus needs firm rails (evidence-pointer duties, scope bounds, named failure
-  modes in the commission) and gets them from the standing prompt patterns in BACKLOG's
-  commission records.
-- Every remaining engineering item is Sonnet-executable from an attested spec: registry
-  stage 2 (tracker item registry-stage2-ordering-checker); registry stage 3 — the
-  `resource` ledger kind as kernel lineage step s27, the pre-ratified fail-safe class
-  of change per CLAUDE.md's ORCHESTRATION — staged in
-  design/ORCH-SPEC-RESOURCE-REGISTRY.md §8; the worktree memo's deferred first-class
-  merge-event ledger kind (design/ORCH-WORKTREE-LEDGERING.md, on witnessed need); and
-  the ordering auditor's residue (design/ORCH-CONTEMPORANEITY-PART3-SPEC.md's Status
-  section). Nothing open requires Fable-class authoring.
-- The maintainer's own acts, tracked as items: the research-ledger apply (one line) and
-  key generation (USER-GPG-TRUST-LAYER-FAQ.md walks it; unlocks signed tags, SIGNED
-  commissions, and the signed chain head that doubles as his session sign-off).
+- The succession drill PASSED, graded and ledgered (2026-07-12 morning): Opus authored
+  design/ORCH-SPEC-DOC-ATTESTATION-2.md under the CLAUDE.md succession rule's maximum
+  ceremony; that format is in routine service. Opus needs firm rails (evidence-pointer
+  duties, scope bounds, named failure modes in the commission).
+- A readiness PROBE is armed, awaiting the maintainer: a questionnaire of questions the
+  maintainer actually asked Fable (capabilities / use-guidance / refusal-traps), graded
+  as a repo-legibility audit — each wrong answer becomes a tracker item against the doc
+  that should have carried it. The instrument lives OUTSIDE the repo (deliberately: a
+  greppable key contaminates the probe) at ~/opus-readiness-questionnaire.md; its sha256
+  and protocol amendments are ledgered (tracker item `opus-readiness-probe`). The
+  maintainer chose to reference the evaluation to a git commit stamp; the stamp is the
+  commit this file lands in, ledgered at close.
+- Every open engineering item is Sonnet-executable from an attested spec — the open set
+  lives in `./pickup`, not here; its current flavor: the tail-deletion witness,
+  work-tree estimate rollups, a deliberate glossary sweep, registry stage 2, and the
+  spec'd stages (accounting B–D, taxonomy B–D, decomposition-policy stages). Nothing
+  open requires Fable-class authoring.
+- The maintainer's own acts, tracked as items: key generation (hardware token; unlocks
+  signed tags, SIGNED commissions, chain-head sign-off), the research-ledger apply (one
+  line, armed), running the readiness probe, and the standing trust-domain decision
+  (second key-holder or written acceptance — Tier-3, at leisure, now confirmed by five
+  independent lenses as THE wall).
 
-## Standing cautions (paid for; details in BACKLOG's tail)
+## Standing cautions (paid for today or before; each was witnessed, not theorized)
 
-- Synchronous B — the fresh-context reviewer role of ORCH-ABC-AUDIT-LOOP-RECIPE.md's
-  audit loop — always, for attestation loops (the recipe now says so; orphaned
-  background verdicts were twice-witnessed). The loop's two-round cap escalates to the
-  orchestrator, who adjudicates by applying B's own repairs; the banked precedents are
-  the escalated records in attestations/doc-legibility-attestations.jsonl.
+- Synchronous B, always, for attestation loops — background Bs' verdicts were misrouted
+  to the orchestrator twice-witnessed (a type label is not an address), and one
+  background-resumed B reviewed STALE content. Give B the absolute path under the
+  builder's worktree, or it reads the main checkout while the builder edits the copy.
+- The loop's two-round cap escalates; the ratified pattern is applying B's round-2
+  repairs verbatim with an honest adjudication record — UNLESS a repair would encode a
+  falsehood (twice-witnessed: a stale "pending merge" claim, a retired-BACKLOG link);
+  then fix the underlying truth and disclose the divergence in the record.
+- Merge from the MAIN checkout — a shell cwd left inside a worktree yields "Already up
+  to date" against the branch itself (thrice-witnessed class). Never `git add -A` while
+  agent worktrees exist (one witnessed embedded-gitlink commit, amended out;
+  .claude/worktrees/ is now gitignored).
+- One ORCH-CAPABILITIES.md writer per wave; sibling builders return proposed item text
+  and the orchestrator lands the batch at the seam behind one scoped B.
 - The freeze rule covers hooks/, bootstrap/templates/, and live-executed engine/ code
-  while any wired session runs; worktree agents fast-forward their stale bases before
-  working (three witnessed stale-base incidents; every agent self-corrected).
-- Verify artifacts, never reports — including agents' summary messages (one witnessed
-  says-clean-was-refused case) and your own prior claims.
+  while any wired session runs (check process cwds, not assumptions); worktree agents
+  fast-forward their stale bases first (three witnessed incidents).
+- Verify artifacts, never reports — including agents' summaries and your own prior
+  claims; the seam re-runs every load-bearing fixture before merging.
 - The maintainer reads refusals, not source; his decision queue takes ONLY load-bearing
-  judgment questions (his calibration, on the record: trivia routed to him is a
-  failure). Auditability outranks agent ergonomics; the action stream is the
-  evidentiary basis and ~/.claude internals are diagnostics only.
-- The contemporaneity audit's fact exporter (engine/contemp_edb.py) refuses ledger
-  windows over ~24.8 days with a typed UnsafeWindowError; this repository's own
-  standing work tracker crosses that bound around 2026-08-05 — per-window anchoring is
-  the documented follow-up in that module's hazard docstring if the refusal starts
-  firing.
+  judgment questions. Auditability outranks agent ergonomics; the action stream is the
+  evidentiary basis; token/cost figures are diagnostic-grade permanently.
+- The contemporaneity fact exporter refuses ledger windows over ~24.8 days; this
+  repository's own tracker crosses that bound around 2026-08-05 — per-window anchoring
+  is the documented follow-up in engine/contemp_edb.py's hazard docstring.

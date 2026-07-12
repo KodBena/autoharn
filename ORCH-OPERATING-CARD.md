@@ -68,7 +68,7 @@ Condensed for quick reference; full definitions (the SSOT) live in
 - **[ephemera](GLOSSARY.md#ephemera)** — local session transcripts/snapshots; never
   committed (privacy ruling).
 
-## The verbs (run inside a world directory; six since 2026-07-11)
+## The verbs (run inside a world directory; seven since 2026-07-12)
 
 - `./led <kind> "<statement>"` — write a ledger row (kinds incl. decision, assumption,
   finding, question, verification, and — since s25 — commission). `./led --refs row:<id> ...`
@@ -94,6 +94,10 @@ Condensed for quick reference; full definitions (the SSOT) live in
 - `./distance-to-clean` — one composed read of all closure-debt dimensions with counts;
   additive convenience over the debt views above, which remain the default surface.
   Witness: CAPABILITIES item 25.
+- `./attest-doc` — record or check fresh-context documentation attestations against the
+  deployment's own local attestations ledger (`record`/`check`; the A:B:C loop offered
+  to deployments, surfaced in `distance-to-clean` behind the `doc_attestation` apparatus
+  switch, default off). Witness: CAPABILITIES item 35.
 - the scaffold — `bootstrap/new-project.sh`, run from the autoharn checkout: creates a
   fresh world directory plus its Postgres schema pair, applies the birth chain, wires
   hooks and verbs, registers the principals (invocation in the next section). Witness:

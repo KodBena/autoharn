@@ -1,7 +1,7 @@
 #!/bin/sh
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-11T20:34:46Z
-#   last-change: 2026-07-12T14:41:43Z
+#   last-change: 2026-07-12T15:30:40Z
 #   contributors: e4410ef6/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -272,8 +272,9 @@ else
 fi
 echo "wrote attestations/README.md"
 
-echo "-- the eight verbs (led, judge, pickup, audit, distance-to-clean, verify-commission,"
-echo "   verify-chain, attest-doc): thin shims exec'ing autoharn's live templates, identical"
+echo "-- the eight project-local shims (the operator verbs led, judge, pickup, audit,"
+echo "   distance-to-clean, attest-doc, plus the signing tools verify-commission and"
+echo "   verify-chain): thin shims exec'ing autoharn's live templates, identical"
 echo "   mechanism to new-project.sh's own (a template fix in bootstrap/templates/ reaches this"
 echo "   deployment instantly, same as every governed world) --"
 for verb in led judge pickup audit distance-to-clean verify-commission verify-chain attest-doc; do

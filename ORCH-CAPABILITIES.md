@@ -1069,7 +1069,8 @@ unbuilt. The scaffold preamble teaches the discipline; no mechanism polices it y
 documentation-review loop always worked inside any session; what a scaffolded project lacked was
 somewhere of its own to record that a review happened. `gates/doc_attestation_presence.py` gained
 `--doc-root`/`--ledger` parameterization (autoharn's own defaults unchanged);
-`bootstrap/templates/attest-doc.tmpl` (`record`/`check`) ships as an eighth verb, wired into both
+`bootstrap/templates/attest-doc.tmpl` (`record`/`check`) ships as the sixth in-project shim
+(the scaffold remains the seventh verb, per ORCH-OPERATING-CARD.md's verb table), wired into both
 `new-project.sh` and `track-work.sh`, with a deployment-local `attestations/` ledger seeded empty
 and never clobbered by `--force`; `distance-to-clean` gains a DOC-ATTESTATION section gated by a
 new `doc_attestation` apparatus mechanism (default `off` — an adoption switch, not a cost switch:

@@ -337,6 +337,9 @@ entry](BACKLOG.md#doc-audience-taxonomy--shipped-2026-07-12).
 
 The pages this guide ordered into a journey, gathered here as one map:
 
+- [design/USER-RECIPES-FAQ.md](design/USER-RECIPES-FAQ.md) — "can I do that?": an intent-keyed
+  index of operator recipes, each pointing at the one page where the full truth lives; the
+  quickest route from a use case in your head to the right document.
 - [USER-CONFIGURATION.md](USER-CONFIGURATION.md) — every configurable surface, the install-path
   contract, and the Postgres FAQ [§2](#2-before-you-start) points at.
 - [USER-WALKTHROUGH.md](USER-WALKTHROUGH.md) — a slower, narrated ten-minute walkthrough of
