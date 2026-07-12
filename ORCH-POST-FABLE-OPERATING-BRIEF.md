@@ -4,9 +4,12 @@ Audience: orchestrator (+secondary: maintainer) — this brief is written for th
 and for every model serving this project if Fable-class access ends.
 
 Authored by Fable (session be693afb) on possibly its last day; maintainer-ratified succession
-is in force (CLAUDE.md ORCHESTRATION). This SUPERSEDES `judgment/POST-FABLE-OPERATING-BRIEF.md`
+is in force (CLAUDE.md ORCHESTRATION). This SUPERSEDES the former `judgment/POST-FABLE-OPERATING-BRIEF.md`
 (2026-07-07, harness/e-series era — now history; its durable judgment is ported here, its
-paths and pipeline state are stale — trust nothing there that this file does not repeat).
+paths and pipeline state are stale — trust nothing there that this file does not repeat; the
+superseded file itself moved to
+[vestigial_documentation/judgment/POST-FABLE-OPERATING-BRIEF.md](vestigial_documentation/judgment/POST-FABLE-OPERATING-BRIEF.md)
+in the 2026-07-12 vestigial-doc-sweep, see [VESTIGIAL-INDEX.md](VESTIGIAL-INDEX.md)).
 Operational truth: CAPABILITIES.md + the four verbs + BACKLOG.md's dated tail. This file is
 the judgment layer: how to work here safely without Fable.
 

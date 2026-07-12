@@ -18,24 +18,24 @@ family section carries a primer for the maintainer's edification.
   stack**, learning path, first experiment. **Start here.**
 - **[B-autoharn-fit.md](B-autoharn-fit.md)** — adversarial critic: which logics earn their place vs.
   which are intellectual tourism for *this* project; coverage gaps.
-- **[A-software-landscape.md](A-software-landscape.md)** — unified engine catalog + concrete install plan.
+- **[A-software-landscape.md](../../vestigial_documentation/research/logic-investigation/A-software-landscape.md)** — unified engine catalog + concrete install plan.
 
 ## Family deep-dives (applicability · software · primer · honest limits)
 
 - [01-datalog.md](01-datalog.md) — Datalog & Deductive Databases
-- [02-prolog-clp.md](02-prolog-clp.md) — Prolog & Constraint Logic Programming (SWI-Prolog, CLP(FD))
-- [03-asp.md](03-asp.md) — Answer Set Programming (clingo / DLV)
-- [04-defeasible-argumentation.md](04-defeasible-argumentation.md) — Defeasible / Non-monotonic Reasoning & Formal Argumentation
+- [02-prolog-clp.md](../../vestigial_documentation/research/logic-investigation/02-prolog-clp.md) — Prolog & Constraint Logic Programming (SWI-Prolog, CLP(FD))
+- [03-asp.md](../../vestigial_documentation/research/logic-investigation/03-asp.md) — Answer Set Programming (clingo / DLV)
+- [04-defeasible-argumentation.md](../../vestigial_documentation/research/logic-investigation/04-defeasible-argumentation.md) — Defeasible / Non-monotonic Reasoning & Formal Argumentation
 - [05-modal-epistemic.md](05-modal-epistemic.md) — Modal & Epistemic Logic
 - [06-temporal-runtime.md](06-temporal-runtime.md) — Temporal Logic & Runtime Verification (LTL/CTL/MTL, TLA+)
 - [07-paraconsistent.md](07-paraconsistent.md) — Paraconsistent & Many-valued Logic
 - [08-description-logic.md](08-description-logic.md) — Description Logic & Ontologies (OWL)
 - [09-linear-resource.md](09-linear-resource.md) — Linear & Resource-aware Logic
-- [10-relevance-substructural.md](10-relevance-substructural.md) — Relevance & Substructural Logics
+- [10-relevance-substructural.md](../../vestigial_documentation/research/logic-investigation/10-relevance-substructural.md) — Relevance & Substructural Logics
 - [11-smt-fol.md](11-smt-fol.md) — SMT & Classical First-order Logic (Z3 / cvc5)
-- [12-abductive-ilp.md](12-abductive-ilp.md) — Abductive Reasoning & Inductive Logic Programming
-- [13-probabilistic-srl.md](13-probabilistic-srl.md) — Probabilistic Logic & Statistical-relational AI (ProbLog / PSL / MLN)
-- [14-probabilistic-programming-bayesian.md](14-probabilistic-programming-bayesian.md) — Probabilistic Programming & Formal Bayesian Frameworks (complement to 13)
+- [12-abductive-ilp.md](../../vestigial_documentation/research/logic-investigation/12-abductive-ilp.md) — Abductive Reasoning & Inductive Logic Programming
+- [13-probabilistic-srl.md](../../vestigial_documentation/research/logic-investigation/13-probabilistic-srl.md) — Probabilistic Logic & Statistical-relational AI (ProbLog / PSL / MLN)
+- [14-probabilistic-programming-bayesian.md](../../vestigial_documentation/research/logic-investigation/14-probabilistic-programming-bayesian.md) — Probabilistic Programming & Formal Bayesian Frameworks (complement to 13)
 
 ## Provenance & integrity
 

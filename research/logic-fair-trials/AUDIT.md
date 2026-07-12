@@ -1,6 +1,6 @@
 # AUDIT — the deflation audit (and how it deflated)
 
-> Part of the autoharn **logic fair-trials** (the corrected, frontier-creed pass). Coined terms → root **[GLOSSARY.md](../../GLOSSARY.md)**. The honest status of every verdict here is **undecided-until-the-experiment-runs** — see [README](README.md) and [AUDIT.md](AUDIT.md).
+> Part of the autoharn **logic fair-trials** (the corrected, frontier-creed pass). Coined terms → root **[GLOSSARY.md](../../GLOSSARY.md)**. The honest status of every verdict here is **undecided-until-the-experiment-runs** — see [README](README.md) for the fair-trials methodology. Below, **"phoenix"** labels a trial verdict leaning toward "this logic earns a place" and **"ash"** labels one leaning toward "this logic is retired" — both are this survey's own shorthand for a lean, not a final decision (the settling experiment each entry names is what would actually decide it).
 
 ## Headline
 
@@ -28,11 +28,11 @@ was executed"), never another model judgment.
 | 04 | [Defeasible / Non-monotonic Reasoning & Formal Argumentation](04-defeasible-argumentation.md) | `False` | 0 | — |
 | 05 | [Modal & Epistemic Logic](05-modal-epistemic.md) | `False` | 3 | ⚠️ yes |
 | 06 | [Temporal Logic & Runtime Verification (LTL/CTL/MTL, TLA+)](06-temporal-runtime.md) | `False` | 3 | ⚠️ yes |
-| 07 | [Paraconsistent & Many-valued Logic](07-paraconsistent.md) | `False` | 2 | — |
-| 08 | [Description Logic & Ontologies (OWL)](08-description-logic.md) | `False` | 2 | ⚠️ yes |
+| 07 | [Paraconsistent & Many-valued Logic](../../vestigial_documentation/research/logic-fair-trials/07-paraconsistent.md) | `False` | 2 | — |
+| 08 | [Description Logic & Ontologies (OWL)](../../vestigial_documentation/research/logic-fair-trials/08-description-logic.md) | `False` | 2 | ⚠️ yes |
 | 09 | [Linear & Resource-aware Logic](09-linear-resource.md) | `False` | 3 | ⚠️ yes |
-| 10 | [Relevance & Substructural Logics](10-relevance-substructural.md) | `False` | 3 | ⚠️ yes |
-| 11 | [SMT & Classical First-order Logic (Z3 / cvc5)](11-smt-fol.md) | `False` | 2 | — |
+| 10 | [Relevance & Substructural Logics](../../vestigial_documentation/research/logic-fair-trials/10-relevance-substructural.md) | `False` | 3 | ⚠️ yes |
+| 11 | [SMT & Classical First-order Logic (Z3 / cvc5)](../../vestigial_documentation/research/logic-fair-trials/11-smt-fol.md) | `False` | 2 | — |
 | 12 | [Abductive Reasoning & Inductive Logic Programming](12-abductive-ilp.md) | `False` | 3 | — |
 | 13 | [Probabilistic Logic & Statistical-relational AI (ProbLog / PSL / MLN)](13-probabilistic-srl.md) | `False` | 3 | — |
 | 14 | [Probabilistic Programming & Formal Bayesian Frameworks](14-probabilistic-programming-bayesian.md) | `False` | 2 | — |

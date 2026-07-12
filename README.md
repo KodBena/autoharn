@@ -24,34 +24,41 @@ level is `ls`-legible.
 
 ## The tree (what each directory IS — one currency each)
 
+Each line also carries a bracketed tag folded in from `ORCH-DIRCLASS.md` (moved to
+`vestigial_documentation/ORCH-DIRCLASS.md` in the 2026-07-12 vestigial sweep — see
+`VESTIGIAL-INDEX.md`): **[CORE]** — needed for a functioning autoharn; **[DOC]** —
+documentation, excludable; **[RESEARCH]** — research corpora / experiments-on-the-harness,
+excludable; **[OTHER]** — anything else. A directory that straddles two classes says so on its
+own line rather than being forced into one (ADR-0008).
+
 ```
-bootstrap/    clone → collaborating: bootstrap.sh, QUICKSTART.md, AUDITOR.md
-law/          what BINDS — read in full before work that invokes it
+bootstrap/    clone → collaborating: bootstrap.sh, QUICKSTART.md, AUDITOR.md  [CORE]
+law/          what BINDS — read in full before work that invokes it  [DOC — but binding-in-spirit, not merely descriptive]
   adr/          the ADR corpus 0000–0017, verbatim
   briefs/       authoritative external-standards briefs + conformance map
-judgment/     pre-banked odd-link judgment: apply, never weaken (POST-FABLE law)
+judgment/     pre-banked odd-link judgment: apply, never weaken (POST-FABLE law)  [DOC — but normative-in-spirit like law/]
   engine/       engine seeds + panel + increment-0 (the live design basis)
   e-series/     governing analyses (consults 27/31/35/39) + pending ratification packages
   rulings/      ratified deliberation records
-kernel/       the subject decision-ledger kernel
+kernel/       the subject decision-ledger kernel  [CORE]
   lineage/      s10 … s28 DDL in order; new increments append
   fixtures/     both-polarity kernel fixtures
-stores/       harness-db operational-store DDL (findings/foreclosures/rulings/acts/…) + fixtures
-instruments/  close-time instruments: manifest, consumers, derivers, verifiers
+stores/       harness-db operational-store DDL (findings/foreclosures/rulings/acts/…) + fixtures  [CORE]
+instruments/  close-time instruments: manifest, consumers, derivers, verifiers  [CORE]
   act_stream/   the session-transcript → acts-EDB adapter (the Port/ACL)
-engine/       the deductive engine (ledger⇄logic marriage) — the project's build front
+engine/       the deductive engine (ledger⇄logic marriage) — the project's build front  [CORE]
   lp/           the ASP programs
   tests/        engine tests (pure-logic + parity)
-gates/        what REFUSES at commit: staging guard, lazy-import, census gates, doc-legibility
-filing/       what WRITES records: file_finding / file_foreclosure / … / persist_ephemera
-hooks/        what INTERCEPTS at run time: git pre-commit, stamp, change gate
-drive/        run machinery for a collaboration: launch, arm template, delivery drill
-seen-red/     both-polarity gate evidence (a gate never seen red is a claim)
-design/       pattern & design documents (not law, not run evidence)
-research/     sourced research corpora
-runs/         NEW run/close records accrue here
-ephemera/     local-only session snapshots — gitignored, NEVER committed (privacy ruling 2026-07-09; the audit trail is the ledger + committed artifacts)
-provenance/   the transition record: migration manifest, path-translation, HOME-FLIP
+gates/        what REFUSES at commit: staging guard, lazy-import, census gates, doc-legibility  [CORE]
+filing/       what WRITES records: file_finding / file_foreclosure / … / persist_ephemera  [CORE]
+hooks/        what INTERCEPTS at run time: git pre-commit, stamp, change gate  [CORE]
+drive/        run machinery for a collaboration: launch, arm template, delivery drill  [RESEARCH — apparatus, not corpus; a couple of probes double as Use-mode demo helpers]
+seen-red/     both-polarity gate evidence (a gate never seen red is a claim)  [RESEARCH]
+design/       pattern & design documents (not law, not run evidence)  [DOC]
+research/     sourced research corpora  [RESEARCH]
+runs/         NEW run/close records accrue here  [OTHER]
+ephemera/     local-only session snapshots — gitignored, NEVER committed (privacy ruling 2026-07-09; the audit trail is the ledger + committed artifacts)  [OTHER]
+provenance/   the transition record: migration manifest, path-translation, HOME-FLIP  [OTHER]
 ```
 
 ## Two entry points

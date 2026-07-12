@@ -1,6 +1,6 @@
 # Obligations × formalisms — the survey
 
-_2026-06-27. A 27-formal-system survey at **life-critical seriousness**, organized by **obligation** (not by logic): each formal system is *assigned* to the responsibilities whose failure modes its semantics match, with a concrete **automation / encoding path**. Run `wf_2b657cd5-b06`; 38 agents._
+_2026-06-27. A 27-formal-system survey at **life-critical seriousness**, organized by **obligation** (not by logic): each formal system is *assigned* to the responsibilities whose failure modes its semantics match, with a concrete **automation / encoding path**, produced by workflow run `wf_2b657cd5-b06` using 38 agents._
 
 > **New here?** Read **[KEY.md](KEY.md)** first — it defines every obligation code (INV, DEGRADE, …), the guarantee/cost tiers (5–1, T0–T3), and every tool name. Codes are linked to it throughout. Coined terms are in the root **[GLOSSARY.md](../../GLOSSARY.md)**. Stray acronyms (MC-DC, WCET, DvP, …) are defined in the doc-legibility glossary **[gates/doc-legibility/terms.md](../../gates/doc-legibility/terms.md)**, mechanically enforced by its gate.
 
@@ -16,16 +16,16 @@ _2026-06-27. A 27-formal-system survey at **life-critical seriousness**, organiz
 
 ## The 27 formal systems  (in [formal-systems/](formal-systems/))
 
-- [Datalog & Deductive Databases](formal-systems/01-datalog.md)
+- [Datalog & Deductive Databases](../../vestigial_documentation/research/obligations-formalisms-survey/formal-systems/01-datalog.md)
 - [Prolog, CLP & Prolog-as-Encoding-Host](formal-systems/02-prolog-clp.md)
 - [Answer Set Programming (clingo)](formal-systems/03-asp.md)
 - [SMT & Classical First-order Logic (Z3 / cvc5)](formal-systems/04-smt-fol.md)
-- [SAT, CP & Finite-domain Constraint Solving](formal-systems/05-sat-cp.md)
+- [SAT, CP & Finite-domain Constraint Solving](../../vestigial_documentation/research/obligations-formalisms-survey/formal-systems/05-sat-cp.md)
 - [Linear & Branching Temporal Logic + Model Checking (LTL/CTL, NuSMV/Spot)](formal-systems/06-ltl-ctl-modelchecking.md)
 - [TLA+ / TLC — Specification & Refinement](formal-systems/07-tla-refinement.md)
 - [Metric, Real-time & Interval Temporal Logic (MTL/STL, Allen/HS)](formal-systems/08-metric-interval-temporal.md)
 - [Modal μ-calculus, Coinduction & Process Logics (maintenance over infinite behaviour)](formal-systems/09-mu-calculus-coalgebra.md)
-- [Description Logic & OWL (+ temporal/probabilistic DL)](formal-systems/10-description-logic.md)
+- [Description Logic & OWL (+ temporal/probabilistic DL)](../../vestigial_documentation/research/obligations-formalisms-survey/formal-systems/10-description-logic.md)
 - [Higher-order Logic, Dependent Types & Proof Assistants (Coq/Lean/Isabelle)](formal-systems/11-hol-proof-assistants.md)
 - [Probabilistic Logic & Statistical-relational AI (ProbLog/PSL/MLN)](formal-systems/12-probabilistic-logic-srl.md)
 - [Probabilistic Programming & Bayesian Inference (PyMC/Stan/NumPyro)](formal-systems/13-probabilistic-programming.md)
@@ -48,4 +48,4 @@ _2026-06-27. A 27-formal-system survey at **life-critical seriousness**, organiz
 
 - This survey is the **obligation-organized Correction** to two earlier bake-off-framed passes, kept intact as **Witnesses**: [logic-investigation](../logic-investigation/) and [logic-fair-trials](../logic-fair-trials/).
 - **Verdicts are agent-reasoned, not experimentally settled**; engine versions/licenses are agent-reported, web-checked where noted — confirm before install. Cross-cut **[C](C-encoding-qualification.md)** is the discipline that turns claims into qualified guarantees.
-- 27/27 formal-system sections; 38 agents across taxonomy → survey → cross-cut → synthesis.
+- All 27 of 27 planned formal-system sections were produced, using 38 agents across the four-stage pipeline: taxonomy → survey → cross-cut → synthesis.

@@ -1,6 +1,6 @@
 # 03 — Answer Set Programming (clingo / DLV)
 
-> Part of the autoharn **logics & automated-deduction investigation** — see the [index](README.md); coined terms (Pillar, *_violations gate, supersession, …) are defined in the root **[GLOSSARY.md](../../GLOSSARY.md)**.
+> Part of the autoharn **logics & automated-deduction investigation** — see the [index](../../../research/logic-investigation/README.md); coined terms (Pillar, *_violations gate, supersession, …) are defined in the root **[GLOSSARY.md](../../../GLOSSARY.md)**.
 
 ASP is a declarative logic-programming paradigm for combinatorial search and KR: you write rules over a finite domain, and the solver enumerates *answer sets* (stable models) — total assignments that justify themselves and satisfy every constraint. It is the natural engine for "find all worlds consistent with these defaults and exceptions."
 

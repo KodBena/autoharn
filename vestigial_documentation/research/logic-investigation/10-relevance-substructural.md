@@ -1,6 +1,6 @@
 # 10 — Relevance & Substructural Logics
 
-> Part of the autoharn **logics & automated-deduction investigation** — see the [index](README.md); coined terms (Pillar, *_violations gate, supersession, …) are defined in the root **[GLOSSARY.md](../../GLOSSARY.md)**.
+> Part of the autoharn **logics & automated-deduction investigation** — see the [index](../../../research/logic-investigation/README.md); coined terms (Pillar, *_violations gate, supersession, …) are defined in the root **[GLOSSARY.md](../../../GLOSSARY.md)**.
 
 Logics obtained by *dropping structural rules* (weakening, contraction, exchange) from classical sequent calculus, so that premises must be genuinely *used* rather than merely *present*. The family runs from relevance logic (no weakening → no irrelevant premises, and crucially no explosion from contradiction) through linear logic (no weakening *or* contraction → facts are consumable resources used exactly once).
 
