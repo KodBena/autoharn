@@ -1,17 +1,16 @@
 # CONFIGURATION — the adopter-facing surface
 
-Audience: adopter
-
-This page answers one question: **if you are adopting autoharn into your own project — cloning
-it, or adding it as a submodule — what do you actually get, where does each piece of state live,
-what can you turn on or off, and what does each choice cost?** It is written for someone who has
-never seen this repository's internal history: no prior BACKLOG entry, no ADR, no session context
-assumed. If you only read one section, read ["autoharn as a library"](#autoharn-as-a-library) and
-["what state lands where"](#what-state-lands-where) — the rest is reference detail for when you
-need it. Operator-facing procedure for people already running this harness (the `led`/`judge`/
-`pickup` verbs, the kernel-delta decision tree) lives in [OPERATING-CARD.md](ORCH-OPERATING-CARD.md);
-this page is upstream of that — it is about *getting to* a working project, not *operating* one
-you already have.
+This page is written for an adopter, and answers one question: **if you are adopting autoharn
+into your own project — cloning it, or adding it as a submodule — what do you actually get,
+where does each piece of state live, what can you turn on or off, and what does each choice
+cost?** It is written for someone who has never seen this repository's internal history: no
+prior BACKLOG entry, no ADR, no session context assumed. If you only read one section, read
+["autoharn as a library"](#autoharn-as-a-library) and ["what state lands
+where"](#what-state-lands-where) — the rest is reference detail for when you need it.
+Operator-facing procedure for people already running this harness (the `led`/`judge`/`pickup`
+verbs, the kernel-delta decision tree) lives in
+[ORCH-OPERATING-CARD.md](ORCH-OPERATING-CARD.md); this page is upstream of that — it is about
+*getting to* a working project, not *operating* one you already have.
 
 Coined terms below link to their definitions in [GLOSSARY.md](GLOSSARY.md) on first use, per this
 project's own [Stand-Alone Principle](GLOSSARY.md#project) — you should never have to grep the
@@ -49,7 +48,7 @@ than asserted:
   autoharn's own law-signing and reads nothing about any adopter's deployment) — the two
   signing domains are kept structurally apart, not merely by convention.
 
-**What one command gives you**, witnessed against real runs (OPERATING-CARD.md, "Start a run"):
+**What one command gives you**, witnessed against real runs ([ORCH-OPERATING-CARD.md](ORCH-OPERATING-CARD.md), "Start a run"):
 
 ```
 cd /path/to/your/autoharn-checkout
@@ -151,6 +150,20 @@ The two costed mechanisms carry their own `cost_note` field **in the config itse
 switch — you read what flipping it on will bill you for at the exact place you flip it, not in a
 separate document you might not find. Both default `off` under a standing maintainer mandate: "no
 world silently bills its operator."
+
+**None of this adds up to an accounting figure.** The `cost_note` fields above tell you a
+mechanism *spends* money per call; they are not, and are never meant to be, an accounting
+system. Draw the line precisely: a raw, **hook-witnessed event count** — how many times a
+mechanism actually fired, a plain tally — is evidentiary, because the harness really did
+witness it happen. Anything **derived** from that count — a subagent-spend estimate, a dollar
+total, or any other pricing of the raw tally — is a different kind of figure and is
+**diagnostic-grade, not evidentiary**: useful for a sanity check, never sound enough to bill
+against. This is a standing 2026-07-11 maintainer ruling, restated as a permanent design
+boundary in [design/ORCH-SPEC-RESOURCE-ACCOUNTING.md
+§6](design/ORCH-SPEC-RESOURCE-ACCOUNTING.md#6-the-financial-audit-grade-boundary) and stated
+as a headline disclosure in [USER-GUIDE.md §5](USER-GUIDE.md#5-audit-and-trust). Pricing a
+witnessed count into money is a step you do outside autoharn, on your own known rate, and that
+step inherits none of the harness's guarantees.
 
 **Unknown mechanism names are swept loudly, not silently ignored.** A typo'd key —
 `"doc_shapse_gate"` instead of `"doc_shapes_gate"` — used to configure nothing and warn no one
@@ -263,7 +276,7 @@ DATABASE name above) and default to `stores/001_research_ledger.sql`'s own fixed
 Most values a scaffolded project's hooks need resolve automatically from your `deployment.json` —
 you should rarely need any of the variables below. When you do (a one-off override, a debugging
 session, a non-standard layout), the precedence is always **env var > `deployment.json` >
-byte-held default**:
+built-in default**:
 
 | value | env var | reads from `deployment.json`'s |
 |---|---|---|
@@ -347,7 +360,7 @@ is almost always `pg_hba.conf`, not Postgres itself.
 This section documents a specific, investigated hardening step for one real deployment shape —
 Postgres reachable over a private subnet, one cluster-wide superuser role, `trust` authentication
 for every database — condensed from the full investigation in
-[`design/PG-HBA-HARDENING.md`](design/MAINT-PG-HBA-HARDENING.md) (every fact there is witnessed against
+[`design/MAINT-PG-HBA-HARDENING.md`](design/MAINT-PG-HBA-HARDENING.md) (every fact there is witnessed against
 a real cluster; read it in full before applying anything non-trivial). **This page documents; it
 does not apply anything for you** — editing `pg_hba.conf` and reloading Postgres on a database
 that matters is your own act, on your own schedule, with your own rollback plan. Skip this section
@@ -413,14 +426,14 @@ If either witness fails, restore from the backup (`cp pg_hba.conf.bak-<date> pg_
 `SELECT pg_reload_conf();`) and re-diagnose before retrying. Full detail, including the exact
 column-aligned rule block, the second (local Unix-socket) hole this pass deliberately leaves open
 and why, and the honest limits of what a password requirement does and does not protect against,
-is in [`design/PG-HBA-HARDENING.md`](design/MAINT-PG-HBA-HARDENING.md) §2–§5.
+is in [`design/MAINT-PG-HBA-HARDENING.md`](design/MAINT-PG-HBA-HARDENING.md) §2–§5.
 
 ## Related
 
-- [OPERATING-CARD.md](ORCH-OPERATING-CARD.md) — the operator-facing card for someone already running a
+- [ORCH-OPERATING-CARD.md](ORCH-OPERATING-CARD.md) — the operator-facing card for someone already running a
   scaffolded project: the verbs, the resumption doctrine, the kernel-delta decision tree.
 - [GLOSSARY.md](GLOSSARY.md) — every coined term this page uses, defined once.
-- [`design/PG-HBA-HARDENING.md`](design/MAINT-PG-HBA-HARDENING.md) — the full pg_hba investigation this
+- [`design/MAINT-PG-HBA-HARDENING.md`](design/MAINT-PG-HBA-HARDENING.md) — the full pg_hba investigation this
   page's FAQ condenses; read it in full before applying anything to a database that matters.
 - [`law/adr/0017-the-zero-context-reader.md`](law/adr/0017-the-zero-context-reader.md) — the
   documentation-legibility discipline this page is written to, and the source of

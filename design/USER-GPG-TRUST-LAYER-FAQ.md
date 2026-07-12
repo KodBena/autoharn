@@ -1,8 +1,7 @@
 # The GPG trust layer — operator FAQ
 
-Audience: adopter (this page's own prose calls that reader "an operator" — the same role)
-
-This page answers the question an operator actually has: **I've read
+This page is written for an adopter — this page's own prose calls that reader "an operator,"
+the same role. It answers the question an operator actually has: **I've read
 [design/MAINT-GPG-TRUST-LAYER.md](MAINT-GPG-TRUST-LAYER.md) and I understand WHY this project signs things —
 what do I actually type?** It is a companion to that spec, not a replacement for it: read
 MAINT-GPG-TRUST-LAYER.md first for the reasoning (what a signature proves, what is deliberately left
@@ -198,14 +197,27 @@ ledger-writing verb; `LED_ACTOR=<name>` selects which registered principal the r
 to) so the ask itself is part of the governed record, not just chat. The commission ladder is
 LAZY < FULL < SIGNED — three increasing strengths of guarantee about who actually made the ask:
 LAZY (an implementing agent transcribes the ask it was given, no commissioner guarantee), FULL
-(the commissioner types the `led commission` line himself, from his own terminal — proven by two
-signals together: the row's actor, and the ABSENCE of a "stamp," this project's term for the
+(the commissioner types the `led commission` line himself, from his own terminal — evidenced by
+two signals together: the row's actor, and the ABSENCE of a "stamp," this project's term for the
 HMAC (hash-based message authentication code — a cryptographic checksum keyed by a secret only
 the host holds) a Claude Code session's tool interception injects into every ledger write it
 makes; a row
-typed from a bare shell with no live session carries no stamp at all, which is exactly what
-proves a human typed it directly rather than an agent transcribing it), SIGNED (FULL, plus the
+typed from a bare shell with no live session carries no stamp at all, which is consistent with
+a human having typed it directly rather than an agent transcribing it), SIGNED (FULL, plus the
 detached GPG signature this section walks through).
+
+**Absence of a stamp is a rebuttable presumption, not proof.** The stamp is a disclosed
+tripwire, not a hidden one: an agent transcribing a commission through a live Claude Code
+session gets caught because the interception stamps its row automatically. But the stamp's
+absence only tells you the row did not pass through a live, stamped session — it cannot, by
+itself, rule out every other way a stampless row could arrive. Read "FULL" as what the
+negative evidence supports, not as a settled fact about who typed it. **The standing rule: a
+CONTESTED commission — one whose FULL status, or whose actor's identity, is disputed by anyone
+with standing to dispute it — must be SIGNED (the ceremony below) before it is relied upon.**
+The dispute is not resolved by re-arguing the absence-of-stamp signal harder; it is resolved by
+producing the cryptographic signature that actually settles the question a negative inference
+cannot.
+
 [`bootstrap/templates/CLAUDE.md.tmpl`](../bootstrap/templates/CLAUDE.md.tmpl)'s governance-preamble
 point about commission verification (search that file for "LAZY" if the point is renumbered by a
 later edit — a positional "point 10" would dangle, so it is named by content here, not position)
@@ -253,8 +265,9 @@ just relocated one step earlier — one file, one variable, read once, used twic
 ./verify-commission --id <id>
 ```
 
-**Witnessed, all outcomes** (`seen-red/verify-commission/red.txt` banks the full transcript, on a
-throwaway `--new-world` scaffold with a throwaway test key):
+The witness pass covered all outcomes (`seen-red/verify-commission/red.txt` banks the full
+transcript, on a throwaway `--new-world` scaffold with a throwaway test key); the table below
+records them:
 
 | You did | Verdict | Exit |
 |---|---|---|
@@ -271,13 +284,14 @@ does not match against it" — real, checkable evidence of tampering — while a
 never confuse with an actual forged commission. (An earlier pass folded the no-committed-key case
 into `FORGED-OR-CORRUPT`; a fresh, independent reviewer — deliberately without the implementer's
 own reasoning in view, this project's standing practice for catching self-rationalized shortcuts
-before they ship (CLAUDE.md's engineering-responsibility corollary) — caught it before this
-shipped, because doing so
+before they ship ([CLAUDE.md's engineering-responsibility
+corollary](../CLAUDE.md#engineering-responsibility-corollary-of-the-standard-above)) — caught it
+before this shipped, because doing so
 would make every commission in a fresh, keyless repository — this repository's own real state
 today — indistinguishable from an actual forgery by verdict string alone. See
 `verify-commission.tmpl`'s own module docstring for the full account.)
 
-Real quoted output from the witness pass (the VERIFIED case, test key committed at the
+The witness pass produced this real quoted output (the VERIFIED case, test key committed at the
 scaffolded world's own scratch `keys/` — never autoharn's `law/keys/`, per §3b above):
 
 ```
@@ -287,6 +301,11 @@ verify-commission: row 1 (actor=commissioner, signing_mode=FULL)
         statement sha256=0584c054c8844320c9ea64e37378b7a92168cf61b2f24c87b2bec39d7eed1cbe. gpg: Signature made ...
 gpg: Good signature from "AUTOHARN TEST KEY -- THROWAWAY -- NEVER A REAL MAINTAINER KEY <test-throwaway@example.invalid>" [unknown]
 ```
+
+(The quoted statement text above says `design/GPG-TRUST-LAYER.md`, not
+`design/MAINT-GPG-TRUST-LAYER.md` — this is the real, byte-exact commission text from before this
+spec's rename to its current `MAINT-` prefixed name, quoted verbatim rather than edited to match,
+per this project's own byte-fidelity discipline. Same file, old name.)
 
 **Until a real key is committed at that deployment's own `keys/<name>.asc` (never autoharn's
 `law/keys/maintainer.asc` — §3b above), every genuinely SIGNED commission in that deployment
@@ -298,7 +317,7 @@ want to see `VERIFIED` before a real key exists.
 ## 6. Ceremony 3 — the signed chain head (the run-close ritual)
 
 At the end of a session (or whenever you want to anchor the ledger's current state against your
-own key), from your own terminal, inside the world:
+own key), from your own terminal, inside the world, run:
 
 ```sh
 ./verify-chain --head > /tmp/head.json
@@ -321,8 +340,8 @@ the same key you just signed with. There is nothing to commit to either `law/key
 deployment's `keys/` for this specific step; §3b's deployment `keys/` directory exists for
 `verify-commission`, not this ceremony.
 
-**Witnessed, both polarities** (`seen-red/s26-row-hash-chain/red.txt`; also exercised live on a
-real `--new-world` scaffold with the throwaway test key, real quoted output):
+This was witnessed on both polarities (`seen-red/s26-row-hash-chain/red.txt`; also exercised
+live on a real `--new-world` scaffold with the throwaway test key, real quoted output):
 
 ```
 $ ./verify-chain --head
@@ -352,7 +371,7 @@ head your key vouches for. "Append-only by trigger" becomes "append-only or prov
 ## 7. Exercising a ceremony before the real key exists
 
 Every ceremony above works identically with a throwaway test key — that is how this whole layer
-was witnessed, end to end, before any real maintainer key existed. To try one yourself:
+was witnessed, end to end, before any real maintainer key existed. To try one yourself, run:
 
 ```sh
 mkdir -p /tmp/gpg-throwaway-home && chmod 700 /tmp/gpg-throwaway-home
@@ -436,7 +455,8 @@ key, run Ceremony 3 (§6) again with the new key:
 gpg --detach-sign --armor /tmp/head.json    # now signs with the NEW default key
 ```
 
-Witnessed with the rotated test key (a fresh chain-head-shaped document, signed and verified):
+This was witnessed with the rotated test key (a fresh chain-head-shaped document, signed and
+verified):
 
 ```
 $ gpg --verify head-for-resign.json.asc head-for-resign.json
@@ -466,7 +486,7 @@ That is the whole procedure: four steps, each already exercised above, none of i
 
 ## Related
 
-- [design/GPG-TRUST-LAYER.md](MAINT-GPG-TRUST-LAYER.md) — the spec this FAQ operationalizes; read it
+- [design/MAINT-GPG-TRUST-LAYER.md](MAINT-GPG-TRUST-LAYER.md) — the spec this FAQ operationalizes; read it
   first for the reasoning, especially §7's key-residence split (the same two domains §3 above
   walks as a ceremony).
 - [law/keys/README.md](../law/keys/README.md) — autoharn's OWN committed-keys directory (§3a),

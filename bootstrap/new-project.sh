@@ -1,7 +1,7 @@
 #!/bin/sh
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-09T11:15:53Z
-#   last-change: 2026-07-11T22:38:33Z
+#   last-change: 2026-07-12T12:44:34Z
 #   contributors: be693afb/main, e4410ef6/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -161,6 +161,24 @@ else
 fi
 
 AUTOHARN_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+
+# AUTOHARN_COMMIT -- the autoharn checkout's own commit hash at scaffold time, so a world's
+# evidence can be tied to the INSTRUMENT VERSION that produced it (prior regulator-panel
+# assessment's Tier-1 item 4: "no record ties a historical DENY to the hook bytes that produced
+# it" -- design/MAINT-RELITIGATION-SYNTHESIS.md, "No configuration index"). Read once, here,
+# never re-derived: this same value is written into the PROVENANCE header below (ADR-0012 P1).
+# Degrades honestly rather than silently blank -- a git failure or a dirty checkout are both
+# real facts about the instrument that produced this world, not to be hidden behind an empty
+# string (ADR-0002).
+AUTOHARN_COMMIT="$(cd "$AUTOHARN_ROOT" && git rev-parse HEAD 2>/dev/null || true)"
+if [ -n "$AUTOHARN_COMMIT" ]; then
+    if ! (cd "$AUTOHARN_ROOT" && git diff --quiet && git diff --cached --quiet) 2>/dev/null; then
+        AUTOHARN_COMMIT="$AUTOHARN_COMMIT (DIRTY -- uncommitted changes were present in the autoharn checkout at scaffold time; this world's evidence cannot be reproduced from this commit hash alone)"
+    fi
+else
+    AUTOHARN_COMMIT="UNAVAILABLE -- $AUTOHARN_ROOT is not a git checkout, or git is not on PATH (git rev-parse HEAD failed); this world's evidence cannot be tied to an instrument version by commit hash"
+fi
+
 TEMPLATES="$AUTOHARN_ROOT/bootstrap/templates"
 PY="$HOME/w/vdc/venvs/generic/bin/python"
 [ -x "$PY" ] || PY="$(command -v python3)"
@@ -285,6 +303,7 @@ sedsubst() {
         -e "s|__AUTOHARN_ROOT__|$AUTOHARN_ROOT|g" \
         -e "s|__CREATED_AT__|$CREATED_AT|g" \
         -e "s|__CREATE_CMD__|$CREATE_CMD|g" \
+        -e "s|__AUTOHARN_COMMIT__|$AUTOHARN_COMMIT|g" \
         -e "s|__LINEAGE_CHAIN__|$LINEAGE_CHAIN|g" \
         -e "s|__STAMP_SECRET_STATUS__|$STAMP_SECRET_STATUS|g" \
         -e "s|__S21_STATUS__|$S21_STATUS|g" \
