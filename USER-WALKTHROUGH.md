@@ -2,14 +2,16 @@
 
 Audience: adopter
 
-Ten minutes: stand up an append-only decision ledger for a project of yours, file a decision,
-read it back, tear it down. Worked example: `../toy-project` (terminal-color optimization).
-Everything else in this repo — the experiment apparatus in `drive/`, `seen-red/`, the e-series —
-is the project studying *itself*; you need none of it for this.
+In about ten minutes, this page walks you through standing up an append-only decision ledger
+for a project of yours, filing a decision, reading it back, and tearing it down. Its worked
+example is `../toy-project` (terminal-color optimization). Everything else in this repository —
+the experiment apparatus in `drive/`, `seen-red/`, and the e-series (this project's own
+run-numbered experiment logs) — is this project studying *itself*; you need none of it for this.
 
-What you get, concretely: decisions recorded as rows that cannot be edited or deleted (append-only,
-trigger-enforced), attributed to the connecting role (not self-declared), superseded by appending —
-never by rewriting.
+What you get, concretely: decisions are recorded as rows that cannot be edited or deleted
+(append-only, trigger-enforced), are attributed to the connecting role — the database role your
+session actually authenticates as, never a self-declared name — and are superseded only by
+appending a new row, never by rewriting an old one.
 
 ## 0. Prerequisites
 
@@ -198,26 +200,27 @@ above), so it has no principal table to register into yet and writes no `CLAUDE.
 claiming "a reviewer principal exists" would be false there until the operator applies a kernel
 lineage by hand.
 
-**Beyond the chain — a future delta is an operator act, not automatic.** `--new-world` applies
-the lineage current AS OF the scaffold's own header comment (s15 through s21 today); a lineage
-delta ratified AFTER that is never bundled in silently — the same standing rule s21 itself was
-under before it was folded into the chain above. Applying one to an already-open world (or to a
-world scaffolded before that delta landed in the chain — e.g. a `run3`-era world born on s20
-alone) is a separate, explicit act. Use `bootstrap/apply-delta.sh`, which resolves a world's
-db/host/schema/kern from its own `deployment.json`, prints the fully-resolved `psql` command
-before doing anything, and requires you to type the schema name back to confirm — never a bare
-apply, never a guess:
-
-```sh
-bootstrap/apply-delta.sh <world-dir> kernel/lineage/sNN-....sql
-```
-
-On success it records a dated `APPLIED` line in `<world-dir>/.claude/HOOKS.md`'s PROVENANCE
-section (if that file exists) and reminds you to add the matching `BACKLOG.md` note; on failure
-it prints the `psql` output verbatim and says plainly that the delta is NOT transaction-wrapped,
-so a mid-file error can leave a partial apply — read `apply-delta.sh`'s own header before
-re-running anything. Check `BACKLOG.md` for a delta's ratification/witness status before applying
-it to a world that matters.
+**Beyond the chain — a lineage delta is never applied to an already-open world.** `--new-world`
+applies the birth chain current as of the scaffold's own header comment. The birth chain is the
+ordered sequence of individually-named database migrations ("lineage steps," each one an
+`sNN`-numbered SQL file under `kernel/lineage/`) a new world receives at the moment it is
+created; today that sequence is `high_watermark_1.sql` (itself bundling the four earliest steps,
+s15 → s17-stamp → s17-independence → s19), then s20 → s21 → s22 → s23 → s24 → s25 — see
+[GLOSSARY.md's birth-chain entry](GLOSSARY.md#birth-chain) for the live, current list (a later
+delta can extend it further than this page says) and
+[kernel/lineage/README.md](kernel/lineage/README.md) for what each step added. A lineage delta
+ratified
+after your world was scaffolded is never bundled in silently, and — per the runs-are-strictly-
+linear ruling ([CLAUDE.md ORCHESTRATION](CLAUDE.md#orchestration--the-standing-delegation-contract-2026-07-09),
+2026-07-11) — it is also never *applied* to your already-open world: "run M > N means run N's
+world is dust and settled: read-only evidence, never patched, never refreshed, never delta'd."
+An earlier version of this walkthrough pointed at `bootstrap/apply-delta.sh` for that; that
+script, and the apply-to-existing-world ceremony it guarded, are retired
+([ORCH-OPERATING-CARD.md](ORCH-OPERATING-CARD.md#kernel-deltas--the-decision-tree-claudemd-orchestration-is-the-ssot):
+"There is NO apply-to-existing-world step, for anyone"). If a lineage delta lands after you
+opened a world and you need what it adds, the honest path is a fresh world: scaffold a new one
+with `--new-world` once the delta has entered the birth chain, and treat the old world as
+settled evidence, not a thing to patch.
 
 > **A hazard this section's own witnessing turned up, so it does not bite the next operator:**
 > the scaffold bakes `<dest-dir>`'s path into `.claude/settings.json` (the change-gate and
