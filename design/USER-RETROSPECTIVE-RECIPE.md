@@ -319,8 +319,137 @@ in that deployment's own preamble or documentation, not a change to the harness.
 that blurs the two either bloats the harness with one project's local habit or leaves a genuine
 harness gap undiscovered because it was filed as "just this project's convention."
 
+## 6. Estimate versus actual — cost-estimation retrospectives, never cost policing
+
+This section answers a narrower question than Sections 1–5: given a task carries a pre-execution
+cost *estimate* (an `estimate:`-prefixed ledger row, grammar below), what does a retrospective do
+with it? The answer is stated up front because it is easy to read this section backward: an
+estimate exists so a team can learn whether its own prediction habits are calibrated. It is
+**never** a cost-policing mechanism — the maintainer's own invariant, stated twice at
+commissioning, on the record in this repository's tracker ledger as work item
+`cost-estimation-retro` (run `./led show <id>` or `./led --recent` at the repository root to
+read it, the same live-lookup convention [design/ORCH-SPEC-RESOURCE-ACCOUNTING.md](ORCH-SPEC-RESOURCE-ACCOUNTING.md)
+and [design/ORCH-SPEC-DECOMPOSITION-POLICY.md](ORCH-SPEC-DECOMPOSITION-POLICY.md) use for their
+own commissioning work items) — and nothing below proposes a gate, an audit family, or an exit
+code that fails a build over a missed prediction. A missed estimate is retrospective data,
+exactly like an UNDECIDABLE finding (Section 2's discipline): the honest disposition, not a
+violation to punish.
+
+### The `estimate:` statement grammar
+
+The `estimate:` grammar below is the same sibling-grammar convention as the
+[Pillar 1](../GLOSSARY.md#pillar-1) capability registry's `resource:` statement
+([design/USER-BLESSED-TABLE-TEMPLATE.md](USER-BLESSED-TABLE-TEMPLATE.md)'s "statement grammars"
+section): a `decision`-kind ledger row whose statement carries a prefix, validated at write time
+by [`bootstrap/templates/led.tmpl`](../bootstrap/templates/led.tmpl) (its own refusal teach-text
+cites this section by name) and read at pickup time by the `ESTIMATES` section of
+[`bootstrap/templates/pickup.tmpl`](../bootstrap/templates/pickup.tmpl). This is the ONE
+documented home of the grammar — both parsers point back here rather than restating it a second
+time, per the single-source-of-truth-per-fact rule Principle 1 states in
+[ADR-0012 (compositional and structural hygiene)](../law/adr/0012-compositional-and-structural-hygiene.md).
+
+```
+estimate: <TASK-SLUG> | <TOOL-CALLS> | <SUBAGENT-SPAWNS> | <WALL-CLOCK> | <TOKEN-OOM> | <BASIS>
+```
+
+The six fields, in order, separated by ` | ` (space-pipe-space):
+
+- **TASK-SLUG** — the task this estimate covers, matching `^[a-z0-9][a-z0-9-]*$` (ideally the
+  same slug a later `led work open <slug>` row will use, though the ledger does not enforce that
+  link — a statement-prefix convention, not a foreign key).
+- **TOOL-CALLS** — predicted tool-call count: a bare non-negative integer (`40`) or an inclusive
+  range (`40-60`).
+- **SUBAGENT-SPAWNS** — predicted subagent-spawn count, the same integer-or-range grammar as
+  TOOL-CALLS (`0`, `1`, `2-4`).
+- **WALL-CLOCK** — predicted wall-clock duration: a bare duration (`20m`, `2h`, `1d`) or a range
+  (`10m-30m`).
+- **TOKEN-OOM** — predicted token order-of-magnitude, one of the closed vocabulary
+  `1K | 10K | 100K | 1M | 10M+` — deliberately coarse (an order of magnitude, not a figure)
+  because, per the grade boundary below, a token count never earns a precise evidentiary reading
+  in this harness, so a precise-looking prediction would promise more than the actuals side can
+  ever confirm.
+- **BASIS** — free text naming what the prediction is grounded in (a comparable past task, a file
+  count times an average, or a plain guess named as one) — never left blank; an estimate with no
+  stated basis teaches a retrospective nothing about whether the *reasoning* was sound, only
+  whether the *number* happened to land.
+
+Copy-paste example:
+
+```sh
+./led decision "estimate: cost-estimation-retro | 40-60 | 0 | 3h-5h | 100K | scoped from resource-accounting-spec stage A, a similarly-sized led.tmpl/pickup.tmpl validator pair plus one doc section and one seen-red fixture"
+```
+
+`./pickup` prints every on-record `estimate:` row under its own `### SECTION: ESTIMATES` header,
+sorted by TASK-SLUG then ledger row id — the same malformed-flagged, never-silently-dropped
+posture the RESOURCES section already keeps for `resource:` rows. Reading that section is where a
+retrospective (or anyone) sees what was predicted; it is not itself a comparison against what
+happened — that comparison is this section's remaining job.
+
+### Actuals — what the harness can honestly witness, and what it cannot yet
+
+Comparing a `TOOL-CALLS`/`SUBAGENT-SPAWNS` estimate to what actually happened is only as sound as
+the actuals it is compared against, and the honest state of those actuals — per
+[design/ORCH-SPEC-RESOURCE-ACCOUNTING.md](ORCH-SPEC-RESOURCE-ACCOUNTING.md) §5 ("Usage evidence
+and the accounting audit") — is a split grade:
+
+- **Witnessed event counts are evidentiary, once the counting machinery exists.** The accounting
+  spec routes tool-invocation and subagent-spawn counting through its §8 Stage B (the SQL
+  counting floor over the invocation journal and the ledger) and Stage D (a costless
+  subagent-spawn observer, mirroring the read/bash-completion observers already in the
+  apparatus). **Both are spec'd, not built, as of this writing** — the honest precondition
+  stated plainly rather than implied: an estimate can be *ledgered* today (the grammar above),
+  but the actuals half of a TOOL-CALLS/SUBAGENT-SPAWNS comparison lands only once those two
+  stages ship. Until then, a retrospective comparing such an estimate to reality is doing the
+  same manual evidence-pointer work Section 2 already describes for every other lens — walking
+  the invocation log and the delegation-observer journal by hand — not reading a built
+  comparison surface.
+- **Token figures are diagnostic-grade, permanently.** The maintainer's ruling of 2026-07-11
+  (restated in the accounting spec §6 as its own hard edge) holds with no sunset clause:
+  hook-witnessed *event counts* are evidentiary, but token and money figures never graduate past
+  diagnostic-grade — nothing in this harness will ever emit a monetary or precisely-metered-token
+  claim with evidentiary standing. A TOKEN-OOM estimate is therefore compared, honestly, only
+  against another diagnostic-grade figure (a subagent's self-reported usage, or a session's own
+  billing display) — never against a witnessed count, because no such count exists for tokens and
+  none is coming. Wall-clock likewise has no dedicated witnessed observer named in the accounting
+  spec; a retrospective reads WALL-CLOCK the same informal, timestamp-reading way Section 2's FLOW
+  lens already reads cycle-time generally.
+- **The comparison inherits its inputs' grade, honestly.** An estimate-vs-actual finding is only
+  as strong as its weaker side: a TOOL-CALLS/SUBAGENT-SPAWNS estimate checked against a witnessed
+  Stage-B/D count (once built) is a genuinely evidentiary comparison; a TOKEN-OOM or WALL-CLOCK
+  estimate checked against anything is, and stays, diagnostic-grade. State which grade a given
+  comparison is before drawing a conclusion from it — the same UNDECIDABLE discipline (Section 2)
+  applies where the actuals side cannot be produced at all yet.
+
+### The consumption surface — this section, and nowhere else
+
+Per the maintainer's design (tracker item `cost-estimation-retro`), the estimate-vs-actual
+comparison lives **here**, in a retrospective, and deliberately nowhere else: there is no audit
+family, no gate, and no exit code anywhere in this tree that reads an `estimate:` row and fails a
+build, refuses a commit, or flags a work item over a missed prediction. `led.tmpl`'s own validator
+(above) refuses only a malformed *shape* — it has no opinion on whether a well-formed prediction
+turned out to be right. A retrospective folds the comparison into its existing FLOW and DELEGATION
+lenses (Section 2) as an additional evidence pointer, cites the estimate's ledger row id alongside
+the actuals' own pointer (an invocation-log line, a journal entry, or — honestly — "no witnessed
+count exists yet, Stage B/D unbuilt"), and writes the finding as **retrospective data**: what the
+gap teaches about this team's estimation habits, never a verdict on the task that missed its
+number. A deployment that wants harder discipline than this — a standing habit of estimating
+*before* execution — declares it itself via the `task-policy:` convention's
+`estimate-before-execution` SHOULD criterion
+([design/ORCH-SPEC-DECOMPOSITION-POLICY.md](ORCH-SPEC-DECOMPOSITION-POLICY.md) §3), the same
+escape valve every blessed-tier convention in this harness offers: `should`, reviewer-judgment,
+declared on the deployment's own ledger — never a `must` this recipe invents on a deployment's
+behalf.
+
 ## Related
 
+- [design/ORCH-SPEC-RESOURCE-ACCOUNTING.md](ORCH-SPEC-RESOURCE-ACCOUNTING.md) — Section 6's
+  actuals-grade boundary (witnessed event counts evidentiary once Stages B/D ship; token figures
+  diagnostic-grade permanently) is that spec's §5/§6, cited rather than restated.
+- [design/ORCH-SPEC-DECOMPOSITION-POLICY.md](ORCH-SPEC-DECOMPOSITION-POLICY.md) — §3's starter
+  criteria table carries the `estimate-before-execution` SHOULD criterion Section 6 points a
+  deployment at for harder-than-default estimation discipline.
+- [design/USER-BLESSED-TABLE-TEMPLATE.md](USER-BLESSED-TABLE-TEMPLATE.md) — the `resource:`
+  statement grammar Section 6's `estimate:` grammar is styled as a sibling of.
 - [design/ORCH-RETROSPECTIVE-RUN10.md](ORCH-RETROSPECTIVE-RUN10.md) and
   [design/ORCH-RETROSPECTIVE-RUN11.md](ORCH-RETROSPECTIVE-RUN11.md) — the two live exercises
   this recipe distills; every specimen quoted above traces to one of the two.

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-09T13:36:11Z
-#   last-change: 2026-07-12T08:40:32Z
+#   last-change: 2026-07-12T12:47:55Z
 #   contributors: be693afb/main, e4410ef6/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -96,6 +96,7 @@ REGISTRY: dict[str, str] = {
     "content-free-review-audit":      "seen-red/content-free-review-audit/run_fixtures.py",
     "decomposition-review-blocker":   "seen-red/decomposition-review-blocker/run_fixtures.py",
     "registry-ordering":              "seen-red/registry-ordering/run_fixtures.py",
+    "estimate-intake-validation":     "seen-red/estimate-intake-validation/run_fixtures.py",
 }
 
 

@@ -35,6 +35,20 @@ Sections emitted, each under a machine-parseable `### SECTION: <NAME>` header (g
                         collapsed to single spaces SERVER-SIDE before this section's own row-per-
                         line reader ever sees them (run12 witness, 2026-07-12 — see resources()'s
                         own comment) — one query row is always one physical output line.
+  ESTIMATES           — tracker item `cost-estimation-retro`, 2026-07-12: every unsuperseded
+                        `kind=decision` row whose statement carries the `estimate:` prefix
+                        convention (design/USER-RETROSPECTIVE-RECIPE.md's "Estimate statement
+                        grammar" section — the decomposition-time sibling of `resource:` above),
+                        read from the same `ledger_current` view via the identical newline-
+                        normalization, coherence-partner, and MALFORMED-flagging conventions
+                        `resources()` established. Sorted by TASK-SLUG then ledger row id (no
+                        tier concept here — an estimate is a prediction, not a capability, so
+                        there is nothing to rank by urgency). FOR RETROSPECTIVES ONLY, never for
+                        cost policing (the maintainer's own invariant, stated twice at
+                        commissioning) — this section prints predictions on record; it does not
+                        compare them to what happened (that comparison is a retrospective's own
+                        job, per the recipe doc's estimate-vs-actual section, and is deliberately
+                        absent from any gate or audit family).
   RECENT-CHANGES      — ledger rows since `--since <timestamptz>`, or the last `-n` rows (default
                         10) if `--since` is omitted.
   GIT-STATE           — this project's own git repo: uncommitted changes and (if it has an
@@ -258,6 +272,67 @@ def resources(dep) -> None:
         print(m)
 
 
+# Field order for an `estimate:`-prefixed decision statement (see this file's docstring
+# ESTIMATES entry and design/USER-RETROSPECTIVE-RECIPE.md's "Estimate statement grammar"
+# section, the ONE place both this parser and led.tmpl's own intake validator read the grammar
+# from -- this list is that grammar transcribed, not a second definition of it, ADR-0012 P1).
+_ESTIMATE_FIELDS = ("TASK-SLUG", "TOOL-CALLS", "SUBAGENT-SPAWNS", "WALL-CLOCK", "TOKEN-OOM", "BASIS")
+
+
+def estimates(dep) -> None:
+    _section("ESTIMATES")
+    # Mirrors resources()'s own newline-normalization exactly, for the identical reason (a paste
+    # reflowed by a terminal must not shred one row into several under -t -A's one-physical-line-
+    # per-newline output convention -- see resources()'s own comment for the run12 specimen this
+    # guards against here too).
+    # COHERENCE PARTNER: the WHERE filter below and led.tmpl's `estimate:` validator trigger
+    # define "an estimate declaration" IDENTICALLY, by construction -- the same coherence
+    # contract resources()/led.tmpl's `resource:` block already keep (see that pair's own
+    # comments). Change either side only in lockstep with the other; the grammar's one documented
+    # home stays design/USER-RETROSPECTIVE-RECIPE.md's "Estimate statement grammar" section.
+    r = _psql_tuples(dep, "SELECT id, regexp_replace(statement, '[\\n\\r]+[ \\t]*', ' ', 'g') "
+                           f"FROM {dep.schema}.ledger_current "
+                           f"WHERE kind = 'decision' AND statement ~ '^[[:space:]]*estimate:' "
+                           f"ORDER BY id;")
+    if r.returncode != 0:
+        print(f"ERROR: {r.stderr.strip()}")
+        return
+    # -t -A echoes one leading line for the preceding `SET ROLE` statement (see resources()'s own
+    # identical drop) -- safe here too, now that the newline-normalization above guarantees one
+    # query row is always exactly one physical output line.
+    lines = [ln for ln in r.stdout.split("\n")[1:] if ln.strip()]
+    if not lines:
+        print("(no estimate declarations on record)")
+        return
+
+    parsed: list[tuple[str, int, str]] = []  # (task-slug, row-id, formatted block)
+    malformed: list[str] = []
+    for ln in lines:
+        row_id, _, statement = ln.partition("|")
+        statement = statement.lstrip()
+        body = statement.split(":", 1)[1] if ":" in statement else ""
+        fields = [f.strip() for f in body.split("|")]
+        if len(fields) != len(_ESTIMATE_FIELDS):
+            malformed.append(f"id={row_id.strip()}: MALFORMED estimate statement (expected "
+                              f"{len(_ESTIMATE_FIELDS)} '|'-separated fields "
+                              f"{_ESTIMATE_FIELDS}, got {len(fields)}) -- raw: {statement.strip()}")
+            continue
+        slug, tool_calls, spawns, wall_clock, token_oom, basis = fields
+        block = (f"{slug}  (ledger row id={row_id.strip()})\n"
+                 f"  predicted tool calls:      {tool_calls}\n"
+                 f"  predicted subagent spawns: {spawns}\n"
+                 f"  predicted wall-clock:      {wall_clock}\n"
+                 f"  predicted token OOM:       {token_oom}\n"
+                 f"  basis:                     {basis}")
+        parsed.append((slug, int(row_id.strip()), block))
+
+    parsed.sort(key=lambda t: (t[0], t[1]))
+    for _, _, block in parsed:
+        print(block)
+    for m in malformed:
+        print(m)
+
+
 def recent_changes(dep, since: str | None, n: int) -> None:
     _section("RECENT-CHANGES")
     if since:
@@ -367,6 +442,7 @@ def main(argv: list[str] | None = None) -> int:
     # scaffolded ./pickup shim -- and deployment.json itself -- actually sit).
     git_state(DEPLOYMENT_PATH.parent)
     resources(dep)
+    estimates(dep)
     in_flight(dep)
     print()
     return 0
