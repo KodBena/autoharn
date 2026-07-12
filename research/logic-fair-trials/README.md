@@ -2,7 +2,12 @@
 
 > ⚠️ **Superseded by a better frame.** This pass still treated logics as competitors (a bake-off). The obligation-organized **Correction** — assign formalisms to responsibilities at life-critical stakes — is in **[../2026-06-27-obligations-formalisms-survey/](../obligations-formalisms-survey/)**. Kept intact as a Witness.
 
-_2026-06-27. The frontier-creed re-run of the logic investigation: every logic gets a fair trial (maximal ambition · expressiveness gap · falsifiable experiment **with a kill-condition** · false-authority scaffolding), then an anti-deflation audit, then a re-synthesis._
+_2026-06-27. The frontier-creed re-run of the logic investigation: every logic gets a fair trial, meaning each of the four things below is worked out for it, then an anti-deflation audit, then a re-synthesis:_
+
+- _**maximal ambition** — the hardest, most favorable case the logic could plausibly win on, not a toy;_
+- _**expressiveness gap** — what the logic can state that the project's current SQL/ASP substrate cannot;_
+- _**a falsifiable experiment with a kill-condition** — a concrete, runnable test whose failure would retire the logic, stated up front;_
+- _**false-authority scaffolding** — checking the trial isn't leaning on the logic's academic reputation in place of that runnable test._
 
 > **Vocabulary:** coined terms are defined in the root **[GLOSSARY.md](../../GLOSSARY.md)**.
 
@@ -36,8 +41,9 @@ experiment designs with kill-conditions, the scaffolding — and the cascade fin
   correction** flagging its false "hardened out" claim.
 - **[AUDIT.md](AUDIT.md)** — the deflation audit: every verdict, every defect, the false-negatives.
 - **[EXEMPLAR-linear-resource.md](EXEMPLAR-linear-resource.md)** — hand-authored **gold standard** of a
-  *non-deflated* trial (the hardest case done right: move/borrow/region → Polonius). The reference for
-  what the deflated `09` should have been.
+  *non-deflated* trial (the hardest case done right: move/borrow/region → **Polonius**, the Rust
+  borrow-checker's region-inference engine, cited here as the real system this trial's logic would
+  need to match). The reference for what the deflated `09` should have been.
 - **01–14** — the first-pass trials *verbatim* (the **Witness**), each headed with its audit verdict.
 
   - [01-datalog.md](01-datalog.md) — Datalog & Deductive Databases
@@ -46,11 +52,11 @@ experiment designs with kill-conditions, the scaffolding — and the cascade fin
   - [04-defeasible-argumentation.md](04-defeasible-argumentation.md) — Defeasible / Non-monotonic Reasoning & Formal Argumentation
   - [05-modal-epistemic.md](05-modal-epistemic.md) — Modal & Epistemic Logic  ⚠️ false-negative
   - [06-temporal-runtime.md](06-temporal-runtime.md) — Temporal Logic & Runtime Verification (LTL/CTL/MTL, TLA+)  ⚠️ false-negative
-  - [07-paraconsistent.md](07-paraconsistent.md) — Paraconsistent & Many-valued Logic
-  - [08-description-logic.md](08-description-logic.md) — Description Logic & Ontologies (OWL)  ⚠️ false-negative
+  - [07-paraconsistent.md](../../vestigial_documentation/research/logic-fair-trials/07-paraconsistent.md) — Paraconsistent & Many-valued Logic
+  - [08-description-logic.md](../../vestigial_documentation/research/logic-fair-trials/08-description-logic.md) — Description Logic & Ontologies (OWL)  ⚠️ false-negative
   - [09-linear-resource.md](09-linear-resource.md) — Linear & Resource-aware Logic  ⚠️ false-negative
-  - [10-relevance-substructural.md](10-relevance-substructural.md) — Relevance & Substructural Logics  ⚠️ false-negative
-  - [11-smt-fol.md](11-smt-fol.md) — SMT & Classical First-order Logic (Z3 / cvc5)
+  - [10-relevance-substructural.md](../../vestigial_documentation/research/logic-fair-trials/10-relevance-substructural.md) — Relevance & Substructural Logics  ⚠️ false-negative
+  - [11-smt-fol.md](../../vestigial_documentation/research/logic-fair-trials/11-smt-fol.md) — SMT & Classical First-order Logic (Z3 / cvc5)
   - [12-abductive-ilp.md](12-abductive-ilp.md) — Abductive Reasoning & Inductive Logic Programming
   - [13-probabilistic-srl.md](13-probabilistic-srl.md) — Probabilistic Logic & Statistical-relational AI (ProbLog / PSL / MLN)
   - [14-probabilistic-programming-bayesian.md](14-probabilistic-programming-bayesian.md) — Probabilistic Programming & Formal Bayesian Frameworks

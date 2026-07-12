@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-11T14:37:38Z
-#   last-change: 2026-07-12T01:25:43Z
-#   contributors: e4410ef6/main
+#   last-change: 2026-07-12T20:27:33Z
+#   contributors: e4410ef6/main, 3c50e030/main
 # <<< PROVENANCE-STAMP <<<
 
 """link_integrity — the class-not-instance fix for the maintainer's 2026-07-11 legibility
@@ -31,13 +31,16 @@ human might read." Two EXCLUSIONS, both principled and both printed in every run
   1. judgment/**  — ORCH-OPERATING-CARD.md's own words: "predecessor era — history unless a current
      spec cites it." A declared-history archive is not held to a live-link bar; if a current
      spec ever cites into it, that citing document (not the archived one) carries the live link.
-  2. design/ORCH-ARCHITECTURE.md (renamed from design/ARCHITECTURE.md by the doc-audience-taxonomy
-     sweep, 2026-07-12 — the exclusion follows the file) — carries its own `⚠ STALE (2026-06-27;
-     migrated 2026-07-07, not rewritten)` banner: "Its internal path citations ... point at the OLD
-     `claude_harness` layout, not autoharn's tree ... carried as a design witness, not authority; a
-     full rewrite ... is owed and filed in BACKLOG.md." Patching its paths piecemeal without the
-     rewrite the banner itself calls for would manufacture false current-ness — worse than leaving
-     the banner's own honest disclaimer standing. Excluded until that filed rewrite lands.
+  2. vestigial_documentation/design/ORCH-ARCHITECTURE.md (renamed from design/ARCHITECTURE.md by
+     the doc-audience-taxonomy sweep, 2026-07-12; moved again to vestigial_documentation/design/
+     by the vestigial-doc-sweep, 2026-07-12 — the exclusion follows the file through both moves)
+     — carries its own `⚠ STALE (2026-06-27; migrated 2026-07-07, not rewritten)` banner: "Its
+     internal path citations ... point at the OLD `claude_harness` layout, not autoharn's tree
+     ... carried as a design witness, not authority; a full rewrite ... is owed and filed in
+     BACKLOG.md." Patching its paths piecemeal without the rewrite the banner itself calls for
+     would manufacture false current-ness — worse than leaving the banner's own honest disclaimer
+     standing. Excluded until that filed rewrite lands (see VESTIGIAL-INDEX.md for the file's
+     current entry and provenance).
 
 ANCHORS (`#fragment` after a resolving path): v1 does not verify the fragment resolves to a real
 heading/anchor in the target — flagged in a separate, NON-BLOCKING report section, never failing
@@ -61,9 +64,11 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 EXCLUDE_DIR_PREFIXES = ("judgment/",)
 # Exclusion 2: a single file, self-declared STALE with its rewrite filed separately (BACKLOG.md).
 # Renamed design/ARCHITECTURE.md -> design/ORCH-ARCHITECTURE.md by the doc-audience-taxonomy
-# sweep (tracker item doc-audience-taxonomy, 2026-07-12); the exclusion follows the file, not
-# the old name -- the STALE banner and its still-owed rewrite are unaffected by the rename.
-EXCLUDE_FILES = {"design/ORCH-ARCHITECTURE.md"}
+# sweep (tracker item doc-audience-taxonomy, 2026-07-12), then moved again to
+# vestigial_documentation/design/ORCH-ARCHITECTURE.md by the vestigial-doc-sweep (2026-07-12,
+# work_slug vestigial-doc-sweep) -- the exclusion follows the file, not the path, through both
+# moves -- the STALE banner and its still-owed rewrite are unaffected by either rename.
+EXCLUDE_FILES = {"vestigial_documentation/design/ORCH-ARCHITECTURE.md"}
 
 LINK = re.compile(r'(?<!!)\[[^\]]*\]\(([^)]+)\)')
 _SCHEMES = {"http", "https", "mailto", "ftp", "ftps", "tel"}
@@ -180,7 +185,8 @@ def main() -> int:
           f"{len(excluded)} excluded), {total_links} relative link(s) checked.")
     print(f"  excluded (principled, see gates/link_integrity.py docstring):")
     print(f"    judgment/**            — declared history (ORCH-OPERATING-CARD.md)")
-    print(f"    design/ORCH-ARCHITECTURE.md — self-declared STALE; rewrite filed in BACKLOG.md")
+    print(f"    vestigial_documentation/design/ORCH-ARCHITECTURE.md — self-declared STALE; "
+          f"rewrite filed in BACKLOG.md")
 
     if anchor_flags:
         print(f"\n  {len(anchor_flags)} link(s) with an unchecked #anchor (v1 does not verify "

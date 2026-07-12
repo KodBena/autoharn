@@ -12,9 +12,9 @@ Audience: orchestrator
 
 > The connective account the bottom-up research never states: *what the machine is, end to end, and
 > where each piece sits inside it.* Vocabulary: obligation codes (`INV`, `PROV`, …) are defined in the
-> survey's [KEY](research/2026-06-27-obligations-formalisms-survey/KEY.md); coined terms in the root
-> [GLOSSARY](../GLOSSARY.md). This document is the structure; the
-> [survey](research/2026-06-27-obligations-formalisms-survey/) is its parts list.
+> survey's [KEY](../../design/research/2026-06-27-obligations-formalisms-survey/KEY.md); coined terms in the root
+> [GLOSSARY](../../GLOSSARY.md). This document is the structure; the
+> [survey](../../design/research/2026-06-27-obligations-formalisms-survey) is its parts list.
 
 ---
 
@@ -42,7 +42,7 @@ LLM's claims, including its own.
 
 The organizing move (the one the parts-list presupposes but never argues): **stop thinking in logics, think
 in obligations.** A life-critical system bears a fixed, enumerable set of *responsibilities it must
-guarantee* — the [obligation taxonomy](research/2026-06-27-obligations-formalisms-survey/01-obligation-taxonomy.md):
+guarantee* — the [obligation taxonomy](../../design/research/2026-06-27-obligations-formalisms-survey/01-obligation-taxonomy.md):
 a safety invariant holds at every tick (`INV`); a required action completes within its deadline (`PROG`);
 once already in violation, the system enters a *defined* safe regime (`DEGRADE`); every change is bound to an
 agent who could have done otherwise (`ATTR`); every claim traces to primary evidence (`PROV`); and so on —
@@ -55,7 +55,7 @@ and the discharge is recorded with its justification.** Everything in autoharn i
 sentence.
 
 This is why "which logic is best" was always the wrong question (the dead end of two earlier research
-passes, kept as [Witnesses](research/2026-06-27-logic-fair-trials/)). You don't crown a logic. You take an
+passes, kept as [Witnesses](../../design/research/2026-06-27-logic-fair-trials)). You don't crown a logic. You take an
 obligation, read off its failure mode as a semantic condition, and *assign* the formalism whose semantics
 **is** that condition. A `□`/fixpoint-over-reachable-states condition wants a model checker; a
 "you-ought-Y-given-you-already-did-the-forbidden-X" condition is *inconsistent* in any monadic-obligation
@@ -82,7 +82,7 @@ The ledger is the single source of truth; the formalisms are **producers of just
 they compose *through* it, never directly. This one object is simultaneously `PROV` (groundedness),
 `RECORD` (the tamper-evident, decision-time trail), `REVISE` (retract a premise and every dependent claim is
 revisited — AGM, append-only), and `INDEP` (the justification is checkable by a mechanism that didn't author
-it). The survey's [composition cross-cut](research/2026-06-27-obligations-formalisms-survey/B-composition-architecture.md)
+it). The survey's [composition cross-cut](../../design/research/2026-06-27-obligations-formalisms-survey/B-composition-architecture.md)
 is the detailed design of this spine; this section is its reason for being.
 
 ## 4. The lifecycle of one change — the through-line
@@ -100,7 +100,7 @@ the survey never walks:
    separation-logic annotation, the NumPyro model. *This is the step the LLM is genuinely good at and humans
    historically were too slow for — the "encoding tax" the thesis says LLMs now pay.*
 5. **Qualify the encoding.** Because at these stakes **the encoding is itself on trial**, it must pass
-   mechanical [qualification gates](research/2026-06-27-obligations-formalisms-survey/C-encoding-qualification.md)
+   mechanical [qualification gates](../../design/research/2026-06-27-obligations-formalisms-survey/C-encoding-qualification.md)
    before it is allowed to discharge anything: differential solvers (Z3 vs cvc5 on the same SMT-LIB),
    mutation fixtures (a known-bad input *must* turn the gate red), vacuity detection (the spec isn't
    trivially satisfied), and conformance (the model actually over-approximates the real artifact — abstract
@@ -161,8 +161,8 @@ is earned by that experiment, not by this prose.
 ## 8. How to read the repository
 
 - **This file** — the through-line. Start here.
-- [GLOSSARY.md](../GLOSSARY.md) — coined terms (Pillar, intent SSOT, supersession, …).
-- [research/.../KEY.md](research/2026-06-27-obligations-formalisms-survey/KEY.md) — obligation codes, tiers, tools.
-- [research/.../00-synthesis.md](research/2026-06-27-obligations-formalisms-survey/00-synthesis.md) — the assignment, defended.
-- [research/.../B-composition-architecture.md](research/2026-06-27-obligations-formalisms-survey/B-composition-architecture.md) — the ledger/spine design (§3 in detail).
-- [research/2026-06-27-foundational-map/](research/2026-06-27-foundational-map/) — where this began: the two real projects whose hard-won disciplines seeded the obligation taxonomy.
+- [GLOSSARY.md](../../GLOSSARY.md) — coined terms (Pillar, intent SSOT, supersession, …).
+- [research/.../KEY.md](../../design/research/2026-06-27-obligations-formalisms-survey/KEY.md) — obligation codes, tiers, tools.
+- [research/.../00-synthesis.md](../../design/research/2026-06-27-obligations-formalisms-survey/00-synthesis.md) — the assignment, defended.
+- [research/.../B-composition-architecture.md](../../design/research/2026-06-27-obligations-formalisms-survey/B-composition-architecture.md) — the ledger/spine design (§3 in detail).
+- [research/2026-06-27-foundational-map/](../../design/research/2026-06-27-foundational-map) — where this began: the two real projects whose hard-won disciplines seeded the obligation taxonomy.
