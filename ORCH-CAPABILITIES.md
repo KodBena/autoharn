@@ -1032,6 +1032,64 @@ an overclaim, corrected here rather than left standing:
 This is not a security boundary against every possible bypass, and is not offered as one — it
 closes exactly the panel's named finding (a content flip with no witness), honestly bounded.
 
+**33. `taxon:`/`interface:` declarations — taxonomies as ledger rows (tracker item
+`taxonomy-stage-a`, Stage A of [design/ORCH-SPEC-TASK-TAXONOMY.md](design/ORCH-SPEC-TASK-TAXONOMY.md)).**
+`./led decision "taxon: <TAXONOMY> | <TAXON> | <PATTERNS> | <GLOSS>"` and
+`"interface: <TAXONOMY> | <ARTIFACT-PATTERN> | <GLOSS>"` validate at the boundary
+(refuse-before-write, byte-exact persist — the same discipline as `resource:`) and render under
+`./pickup`'s `### SECTION: TAXONOMIES`. Grammar and the omega licensing worked example:
+[design/USER-TAXONOMY-DECLARATION.md](design/USER-TAXONOMY-DECLARATION.md). *Witnessed live
+2026-07-12 (`seen-red/taxonomy-intake-validation/red.txt`, re-run independently at the merge
+seam): 9 RED refused with row count unchanged + 8 GREEN accepted byte-exact, e.g.*
+```
+GREEN-TAXON-WELL-FORMED: exit=0 accepted=True row-count before=0 after=1 (grew-by-one=True) -- PASS
+```
+*Declaring nothing declares no obligation — an empty registry is honest. Enforcement (audit
+family, write-time gate, `task-policy:` wiring) is Stages B–D, spec'd and unbuilt.*
+
+**34. `forbidden` resource TIER — the deontic register's missing MUST-NOT (tracker item
+`accounting-stage-a`, [design/ORCH-SPEC-RESOURCE-ACCOUNTING.md](design/ORCH-SPEC-RESOURCE-ACCOUNTING.md)
+§3/§8 Stage A).** The `resource:` TIER vocabulary (available/blessed/mandated) gains
+`forbidden: <task-shape>`, completing MAY/SHOULD/MUST with MUST-NOT. Two additive changes:
+`bootstrap/templates/led.tmpl` accepts it (and refuses a bare or empty-shape `forbidden`);
+`bootstrap/templates/pickup.tmpl` sorts `forbidden` ahead of `mandated` ("a prohibition outranks
+a mandate for a reader's attention"). *Witnessed live 2026-07-12
+(`seen-red/accounting-forbidden-tier/red.txt`, re-run at the merge seam):*
+```
+RED-FORBIDDEN-BARE: exit=1 refused=True row-count before=0 after=0 (unchanged=True) -- PASS
+GREEN-PICKUP-SORTS-FORBIDDEN-FIRST: forbidden block at index 309, mandated block at index 599 (forbidden-first=True) -- PASS
+```
+*Honest limit, named per the spec's §7: declaration grammar + display sort only. Nothing today
+refuses an invocation that reaches a forbidden resource — that is `./audit --resources`, Stage C,
+unbuilt. The scaffold preamble teaches the discipline; no mechanism polices it yet.*
+
+**35. The A:B:C attestation loop, offered to scaffolded deployments — `./attest-doc` +
+`distance-to-clean`'s DOC-ATTESTATION section (tracker item `abc-loop-offering`,
+[design/ORCH-SPEC-ABC-OFFERING.md](design/ORCH-SPEC-ABC-OFFERING.md)).** ADR-0017's fresh-context
+documentation-review loop always worked inside any session; what a scaffolded project lacked was
+somewhere of its own to record that a review happened. `gates/doc_attestation_presence.py` gained
+`--doc-root`/`--ledger` parameterization (autoharn's own defaults unchanged);
+`bootstrap/templates/attest-doc.tmpl` (`record`/`check`) ships as an eighth verb, wired into both
+`new-project.sh` and `track-work.sh`, with a deployment-local `attestations/` ledger seeded empty
+and never clobbered by `--force`; `distance-to-clean` gains a DOC-ATTESTATION section gated by a
+new `doc_attestation` apparatus mechanism (default `off` — an adoption switch, not a cost switch:
+the read is pure hashing). Adopter walkthrough:
+[design/USER-DOC-AUDIT-LOOP.md](design/USER-DOC-AUDIT-LOOP.md). *Witnessed live 2026-07-12 by the
+building session on a throwaway `--new-world` scaffold, torn down after — no banked transcript;
+reproduce with `bootstrap/new-project.sh <scratch-dir> --new-world <name> ...` then `./attest-doc
+record`/`check` and a `doc_attestation: observe` flip in that world's `.claude/apparatus.json`:
+a malformed record refused (exit 2, nothing appended, verified
+by ledger line count); a recorded CLEAN attestation flipped the doc `NO-ATTESTATION` → `ATTESTED`,
+and editing it afterward flipped it to `STALE`; `distance-to-clean` printed
+`doc-attestation : off (opt-in...)` by default and `doc-attestation : 1 debt (0 NO-ATTESTATION,
+1 STALE, 0 ATTESTED)` once flipped to `observe`. The builder's out-of-frame audit caught and
+closed two real defects before filing: a stale scaffold-owned exclusion set (fixed; not
+independently regression-pinned — the fix is the `DEPLOYMENT_SCAFFOLD_OWNED_MD` entry itself) and
+a false-clean on a git-initialized-but-nothing-committed tree (regression-pinned in
+`seen-red/doc-attestation-presence/`). Disclosed residual fragility: the module-global
+reparameterization is not safe for one process importing the module twice for two deployments
+concurrently — named, not fixed.*
+
 ## Built, unexercised (exists; has not yet fired in anger)
 
 - **Assumption validity bounds** — an assumption can carry "valid until / valid within" and an
