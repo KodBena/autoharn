@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-09T07:54:37Z
-#   last-change: 2026-07-12T12:46:38Z
-#   contributors: 9bcc0113/main, be693afb/main, e4410ef6/main
+#   last-change: 2026-07-12T22:36:28Z
+#   contributors: 9bcc0113/main, be693afb/main, e4410ef6/main, 3c50e030/main
 # <<< PROVENANCE-STAMP <<<
 
 """layout_census — LAYOUT.md's designed tree as a MECHANICAL registry (manifest [C21]).
@@ -69,6 +69,11 @@ ROOT_FILES = {
     # panel-cheap-fixes was editing USER-GUIDE.md itself; fixed in passing rather than left an
     # unregistered breach for the next gate run (CLAUDE.md hazard-flagging duty, 2026-07-12).
     "USER-GUIDE.md", "attest-tags",
+    # LICENSE (the Unlicense, added fca1100, maintainer's choice 2026-07-12) -- a root
+    # standing-document like the others above, never registered when it landed; caught by
+    # this gate's own next run (tracker item layout-census-license-unregistered, CLAUDE.md
+    # hazard-flagging duty).
+    "LICENSE",
 }
 ROOT_DIRS = {
     ".claude", "bootstrap", "law", "judgment", "kernel", "stores", "instruments", "engine",
