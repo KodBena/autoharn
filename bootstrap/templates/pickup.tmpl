@@ -30,7 +30,11 @@ Sections emitted, each under a machine-parseable `### SECTION: <NAME>` header (g
                         MALFORMED rather than being silently dropped — a bad declaration is a
                         visible defect, not a swallowed one. An empty registry prints its own
                         explicit "(no resource declarations on record)" line — never omitted
-                        silently, honesty over a section nobody has adopted yet.
+                        silently, honesty over a section nobody has adopted yet. A statement's own
+                        embedded newlines (a paste reflowed by a terminal's line wrap) are
+                        collapsed to single spaces SERVER-SIDE before this section's own row-per-
+                        line reader ever sees them (run12 witness, 2026-07-12 — see resources()'s
+                        own comment) — one query row is always one physical output line.
   RECENT-CHANGES      — ledger rows since `--since <timestamptz>`, or the last `-n` rows (default
                         10) if `--since` is omitted.
   GIT-STATE           — this project's own git repo: uncommitted changes and (if it has an
@@ -178,13 +182,47 @@ def _resource_tier_rank(tier: str) -> int:
 
 def resources(dep) -> None:
     _section("RESOURCES")
-    r = _psql_tuples(dep, f"SELECT id, statement FROM {dep.schema}.ledger_current "
-                           f"WHERE kind = 'decision' AND statement LIKE 'resource:%' ORDER BY id;")
+    # regexp_replace collapses every run of \n/\r plus its following indentation to a single
+    # space SERVER-SIDE, before the row ever reaches -t -A tuples-only output -- run12 witness,
+    # 2026-07-12: a `resource:` statement pasted with an embedded newline (a terminal line-wrap
+    # mid-word) shredded into TWO spurious rows here, because -t -A prints one PHYSICAL line per
+    # newline found in the data, and this function's own leading-SET-ROLE-line-drop convention
+    # (below) then treats each physical line as if it were one ledger row (one of the two fake
+    # rows even printed `id=experiments`, the tail of the pasted statement text misread as a row
+    # id). Normalizing the newline INSIDE the SQL guarantees one row of THIS query's result set
+    # is exactly one physical output line, regardless of what the statement's own text contains
+    # -- the fix belongs at the SQL layer, not a smarter Python line-splitter, because the
+    # row-boundary ambiguity is a property of `-t -A`'s own output format; this function's
+    # IN-FLIGHT sibling (in_flight(), below) already works around the identical ambiguity with an
+    # in-band `--- SPEC ---` marker, for exactly this reason.
+    # bootstrap/templates/led.tmpl's own resource-intake validator is the write-side half of this
+    # fix -- a malformed statement (not exactly the six-field grammar) is refused loudly before it
+    # can ever reach this SELECT. This normalization is defense for what a legitimate, un-refused
+    # row may still contain (an embedded newline from a paste, exactly the run12 specimen), never
+    # a substitute for that write-time refusal -- the MALFORMED path below stays, for a legacy row
+    # written before the write-side fix, or any statement that is malformed for a reason
+    # normalization does not cure.
+    # COHERENCE PARTNER: the WHERE filter below and led.tmpl's validator trigger define "a
+    # resource declaration" IDENTICALLY, by construction. led triggers on the statement AFTER
+    # stripping leading POSIX [:space:] (its `${statement%%[![:space:]]*}` strip) starting with
+    # `resource:`; the regex below names the SAME POSIX class (`^[[:space:]]*resource:`), so the
+    # set of rows this section reads is precisely the set led validated -- no more, no fewer. A
+    # statement led accepts can never be invisible here (the incoherence a position-0 LIKE used
+    # to permit: validated on write, absent from this read). Change either side only in lockstep
+    # with the other; the grammar's one documented home stays design/USER-BLESSED-TABLE-
+    # TEMPLATE.md's "statement grammars" section.
+    r = _psql_tuples(dep, "SELECT id, regexp_replace(statement, '[\\n\\r]+[ \\t]*', ' ', 'g') "
+                           f"FROM {dep.schema}.ledger_current "
+                           f"WHERE kind = 'decision' AND statement ~ '^[[:space:]]*resource:' "
+                           f"ORDER BY id;")
     if r.returncode != 0:
         print(f"ERROR: {r.stderr.strip()}")
         return
     # -t -A echoes one leading line for the preceding `SET ROLE` statement (see _psql_tuples
     # docstring) -- drop exactly that one line, same convention as in_flight()'s spec block above.
+    # With the newline-normalization above, one row of the query result is now ALWAYS exactly one
+    # physical output line, so this split-and-drop is safe again (it was NOT, before this fix, for
+    # any statement containing an embedded newline -- see the comment above).
     lines = [ln for ln in r.stdout.split("\n")[1:] if ln.strip()]
     if not lines:
         print("(no resource declarations on record)")
@@ -194,6 +232,11 @@ def resources(dep) -> None:
     malformed: list[str] = []
     for ln in lines:
         row_id, _, statement = ln.partition("|")
+        # lstrip BEFORE the prefix strip: the SQL filter above admits leading [:space:] (the
+        # coherence-partner contract with led.tmpl's own trigger), so the `resource:` prefix may
+        # arrive indented -- tolerate exactly what the filter admits, explicitly, rather than by
+        # the accident of split-on-first-colon skipping it.
+        statement = statement.lstrip()
         body = statement.split(":", 1)[1] if ":" in statement else ""
         fields = [f.strip() for f in body.split("|")]
         if len(fields) != len(_RESOURCE_FIELDS):

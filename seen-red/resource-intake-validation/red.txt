@@ -1,0 +1,115 @@
+seen-red/resource-intake-validation — banked both-polarity evidence (fixture-census)
+
+Work item `resource-intake-validation` (BACKLOG 2026-07-12). Three defects were witnessed live
+on 2026-07-12 when the maintainer declared the first live resource in world run12:
+
+  1. `bootstrap/templates/led.tmpl`'s generic `<kind> <statement...>` write path performed NO
+     intake validation of a `resource:`-prefixed decision statement -- a malformed statement
+     (missing fields, an embedded newline from a wrapped terminal paste) landed silently.
+  2. `bootstrap/templates/pickup.tmpl`'s `resources()` reader shredded a statement containing an
+     embedded newline into multiple spurious rows, because it iterated psql's own PHYSICAL output
+     lines (`-t -A`) rather than logical result rows -- one fake row even printed
+     `id=experiments`, the tail of the pasted text misread as a row id.
+  3. Neither write path was audited for atomicity beyond Postgres's own single-statement
+     guarantee (the maintainer's ruling: malformed adds must fail loudly at write time, and
+     ledger writes should carry atomic all-or-nothing semantics in general).
+
+THE FIX, both halves proven live below:
+
+  - led.tmpl now validates a `resource:` statement (whitespace-normalized copy: every run of
+    \n/\r plus following indentation collapsed to one space) against design/USER-BLESSED-TABLE-
+    TEMPLATE.md's "The statement grammars" section BEFORE the INSERT -- exactly six `|`-separated
+    fields, CLASS in {solver, service, backend, binary, library}, TIER one of
+    `available | blessed: <task-shape> | mandated: <task-shape>`. On failure: REFUSED, exit
+    nonzero, NOTHING written (atomicity by refusal-before-write). On success: the statement is
+    INSERTed AS TYPED, byte-exact (never the normalized copy).
+  - pickup.tmpl's resources() SELECT now applies the identical newline-collapse SERVER-SIDE
+    (`regexp_replace(statement, '[\n\r]+[ \t]*', ' ', 'g')`), so one query row is always exactly
+    one physical `-t -A` output line, regardless of what the statement's own text contains.
+  - COHERENCE (follow-up, same day): led's validator trigger and pickup's SELECT filter define
+    "a resource declaration" IDENTICALLY. led triggers on the statement AFTER stripping leading
+    POSIX [:space:] starting with `resource:`; pickup's filter names the same class:
+    `statement ~ '^[[:space:]]*resource:'` (it was `statement LIKE 'resource:%'` at first --
+    position-0 only, which would have let a validated-but-indented declaration vanish from the
+    read side). Each file's comment names the other as its coherence partner; changing either
+    side alone is flagged there as the defect it would be.
+  - Atomicity audit of every write path in led.tmpl (907 lines): every path but one (`led
+    review`) is a single INSERT/DELETE statement, atomic by Postgres semantics with no code
+    change needed. `led review` already wraps its two INSERTs (ledger + review_detail) in an
+    explicit BEGIN/COMMIT -- pre-existing, confirmed correct, untouched.
+
+WHAT THE FIXTURE PROVES, IN ORDER (seen-red/resource-intake-validation/run_fixtures.py, live run
+against a throwaway scratch deployment rivfixture/rivfixture_kernel/rivfixture_rw via
+bootstrap/track-work.sh, toy@192.168.122.1, torn down after):
+
+  1. RED -- a 3-field `resource:` statement (missing WHAT-IT-PROVES/GUIDANCE/TIER) is REFUSED:
+     `led decision` exits nonzero, and the ledger row count is witnessed UNCHANGED before vs.
+     after the attempt (0 -> 0) -- nothing was written.
+  2. RED -- a 6-field statement with an out-of-vocabulary CLASS (`notaclass`) is likewise
+     REFUSED, row count unchanged.
+  3. RED -- a 6-field statement with an out-of-vocabulary TIER (`sometier`, matching none of
+     available/blessed:/mandated:) is likewise REFUSED, row count unchanged.
+  4. GREEN -- run12's own specimen, reproduced verbatim (the QEUBO resource statement with its
+     embedded newline + 4-space indent splitting "maintainer's" from "experiments" mid-word) is
+     ACCEPTED: `led decision` exits 0, the ledger row count grows by exactly one, and the row
+     stored on disk is confirmed BYTE-EXACT -- the embedded newline is preserved verbatim, never
+     replaced by the validation-time normalized copy.
+  5. GREEN -- `./pickup`'s RESOURCES section renders the accepted row as ONE clean
+     `[available] QEUBO (backend)` block, with no "MALFORMED" string and no spurious
+     `id=experiments` line anywhere in the section -- the run12 read-side defect, closed.
+  6. GREEN -- a `resource:` declaration with LEADING whitespace (two spaces before the prefix)
+     is accepted by led (row count 1 -> 2) AND renders in pickup's RESOURCES section as
+     `[available] tsort (binary)` -- the coherence-partner contract proven live: nothing led
+     validates can be invisible to the read side.
+
+Full fixture transcript (seen-red/resource-intake-validation/run_fixtures.py, live run against
+toy@192.168.122.1, 2026-07-12, exit 0):
+
+ADOPT: track-work.sh exit=0 deployment.json=True -- PASS
+RED-MALFORMED-FIELDCOUNT: exit=1 refused=True row-count before=0 after=0 (unchanged=True) -- PASS
+--- led decision (malformed field-count) stderr ---
+led: REFUSED -- malformed 'resource:' statement -- expected exactly 6 '|'-separated fields, got 3.
+  grammar (design/USER-BLESSED-TABLE-TEMPLATE.md 'The statement grammars'):
+    resource: <NAME> | <CLASS> | <REACH> | <WHAT-IT-PROVES> | <GUIDANCE> | <TIER>
+  the six fields, in order: NAME, CLASS, REACH, WHAT-IT-PROVES, GUIDANCE, TIER
+  CLASS must be one of: solver | service | backend | binary | library
+  TIER must be one of: available | blessed: <task-shape> | mandated: <task-shape>
+  received (3 field(s), whitespace-normalized): resource: X | solver | reach-only
+  NOTHING was written -- fix the statement and re-run.
+--- end stderr ---
+RED-MALFORMED-CLASS: exit=1 refused=True row-count before=0 after=0 (unchanged=True) -- PASS
+RED-MALFORMED-TIER: exit=1 refused=True row-count before=0 after=0 (unchanged=True) -- PASS
+GREEN-EMBEDDED-NEWLINE: exit=0 accepted=True row-count before=0 after=1 (grew-by-one=True) -- PASS
+GREEN-EMBEDDED-NEWLINE: stored statement is byte-exact (embedded newline preserved) -- PASS
+GREEN-PICKUP-RENDERS: RESOURCES section renders '[available] QEUBO (backend)' with no MALFORMED entries -- PASS
+--- pickup RESOURCES section (verbatim) ---
+### SECTION: RESOURCES
+
+[available] QEUBO (backend)  (ledger row id=1)
+  reach:      http://192.168.122.68:8764
+  proves:     preference-optimization result for this maintainer's experiments
+  guidance:   auth via /auth/register then /auth/token; interactive docs at /docs; six /qeubo/experiment* routes
+--- end pickup RESOURCES section ---
+GREEN-LEADING-WHITESPACE: led exit=0 accepted=True row-count before=1 after=2 (grew-by-one=True) -- PASS
+GREEN-LEADING-WHITESPACE: pickup RESOURCES renders '[available] tsort (binary)' with no MALFORMED entries -- PASS
+--- pickup RESOURCES section after leading-whitespace declaration (verbatim) ---
+### SECTION: RESOURCES
+
+[available] QEUBO (backend)  (ledger row id=1)
+  reach:      http://192.168.122.68:8764
+  proves:     preference-optimization result for this maintainer's experiments
+  guidance:   auth via /auth/register then /auth/token; interactive docs at /docs; six /qeubo/experiment* routes
+[available] tsort (binary)  (ledger row id=2)
+  reach:      binary:tsort
+  proves:     a topological order over a DAG, or a cycle if none exists
+  guidance:   use for simple pairwise precedence with no arithmetic or resource dimension
+--- end pickup RESOURCES section ---
+
+resource-intake-validation fixture: all cases PASS, scratch substrate torn down to zero residue
+(tempdir removed, schema rivfixture/rivfixture_kernel/role rivfixture_rw dropped).
+
+Related: seen-red/resource-registry/ (the Pillar-1 registry feature this fix hardens intake
+for -- that fixture's three RESOURCES-DECLARED calls were all single-line and well-formed, so it
+never exercised the embedded-newline/malformed-intake path this fixture adds); run12 (the live
+world where the defect was first witnessed -- read-only verified post-fix, not written to by
+this fixture or by this commission).
