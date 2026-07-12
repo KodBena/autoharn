@@ -5285,3 +5285,176 @@ docs in scope); `python3 gates/link_integrity.py` (clean, full repo); `python3
 gates/fixture_census.py` (clean, 45 gates); `python3 gates/no_lazy_imports.py` (exit 0); `python3
 seen-red/apparatus-unknown-keys/run_fixtures.py` (6/6 PASS); `python3
 seen-red/change-gate-subject-root/run_fixtures.py` (8/8 PASS).
+
+## Four-item cleanup commission CLOSED (2026-07-12): ADR-0009 reinstanced, research-ledger offering shipped, second window-fix closed at the source, OPERATING-CARD map reconciled
+
+Maintainer YES 2026-07-12 on all four; liveness-checked before the one item touching
+live-executed `engine/` (`pgrep -a claude` showed three sessions, none with cwd under
+`/home/bork/w/vdc/1/run*`). All four tracker items closed `shipped`, each with a commit witness
+(`./led work list`/`./led show` carry the full record); one item (`research-ledger-apply`, the
+standing-db apply itself) stays deliberately OPEN, annotated, not closed.
+
+**Item 1 — `law/adr/0009-performance-investigation-discipline.md` re-instanced** (tracker
+`adr0009-reinstance`, commit `47b6693`). The document arrived as an unadapted chocofarm copy —
+Scope bound "the `chocofarm/` package", the tool list named chocofarm's ML bench harness,
+byte-identical to the transferred original. Provenance and Scope are bracket-edited in place
+per ADR-0005 Rule 8 (struck original preserved, never deleted); a dated 2026-07-12 Amendment at
+the foot maps the tool surface onto autoharn's real perf/equivalence surface: `./judge`'s
+ASP-vs-SQL differential (the `bench_equivalence.py` analog — `AGREE` is the bit-exact tier,
+`DIVERGE_BY_DESIGN`/`DIVERGE_DEFECT`/`QUARANTINED` the escalation tiers), `filing/
+record_reading.py` + `stores/001_research_ledger.sql` (the captured-investigation-DB analog,
+direct structural sibling of the 2026-06-24 amendment's own `exp_db.py`/`throughput_research`
+precedent), and `./audit`'s contemporaneity verdicts. The chocofarm-era body (Context, Decision,
+Calibration, Consequences, Exceptions, Revisit-when, Related, the 2026-06-24 Amendment) is left
+untouched as point-in-time record, the same never-retro-edit posture ADR-0000/ADR-0013 use for
+their own dated substrates. OPERATING-CARD.md's "The law" section needed no edit: it never
+listed ADR-0009 among the four chocofarm-native ADRs CLAUDE.md binds in the first place, so its
+caveat was already inapplicable to 0009 — the reinstancing makes ADR-0009 itself autoharn-native,
+matching that section's own posture rather than requiring a change to it.
+
+A:B:C loop (`design/ABC-AUDIT-LOOP-RECIPE.md`): round 1 found 7 legibility defects in the new
+material (undefined "kernel-lineage", opaque "ADR-0000 Specimen 1"/"ADR-0013 Specimen 1" refs,
+an untraceable tracker-item reference, a wrong section-list enumeration, a bare noun-phrase
+fragment, a strikethrough-dependent run-on sentence, a jargon-first opening), all repaired.
+Round 2 found 5 more (unglossed `./audit` verdicts, an unexpanded ASP acronym, an undefined
+"qualified instrument", "TYPED" left unexplained, two subject-less bracket openers). Per
+ADR-0017's two-round cap this routed as a non-converging-review-loop escalation, adjudicated by
+the orchestrator applying B's repairs directly rather than a third round —
+`attestations/doc-legibility-attestations.jsonl` carries the record (`schema doc-attestation/2`,
+content_sha256 `2d09eab51c688d93...`, `escalated: true`, `adjudication` object). Witness:
+`python3 gates/doc_attestation_presence.py law/adr/0009-performance-investigation-discipline.md`
+→ clean.
+
+**Item 2 — research-ledger offering shipped, bounded** (tracker `research-ledger-offering`,
+commit `9ebb7b8`). Maintainer framing, near-verbatim: "something our harness was supposed to
+service consumers of the harness... insofar as it's a kind of experiment ledger; though we've
+decided not to go all in on being a proper research ledger, that'd take us too far afield" —
+BOUNDED. New: `bootstrap/track-experiments.sh`, factored per `bootstrap/track-work.sh`'s own
+precedent — deployment-local, standing, no hooks, one command
+(`<project-dir> --name <name> --db <db> --host <host> [--core-schema][--research-schema]
+[--force]`). Unlike `track-work.sh` it applies no DDL: `stores/001_research_ledger.sql`'s schema
+names (`core`/`research`) are hardcoded, not psql-`-v`-parameterized, and the apply ceremony
+(`bootstrap/apply-research-ledger.sh`, typed confirmation) stays exclusively the maintainer's —
+this script was not run, and does not offer to run it. It writes `research-ledger.json` (a
+small deployment-local record) plus a thin `record-reading` exec shim (connection params baked,
+execs `filing/record_reading.py` live out of this checkout) and a read-only preflight (the same
+query `apply-research-ledger.sh`'s own preflight runs) that reports honestly whether the target
+schema is applied yet, without ever blocking adoption on it.
+
+Witness: `seen-red/track-experiments/run_fixtures.py`, both polarities plus extras, live against
+a RENAMED scratch copy of 001's own DDL text (`texpprobe_core`/`texpprobe_research` — 001's
+schema names being hardcoded, a scratch probe needs a rewritten copy, the same device BACKLOG's
+own 2026-07-11 scratch validation used for `rlprobe_core`/`rlprobe_research`): `RED-USAGE`
+(missing `--name`, no config written); `GREEN-ADOPT` (config + shim written, preflight correctly
+reports "applied"); a live `record-reading` + `record-finding` round-trip verified by a direct
+`SELECT` against the scratch schema, never trusted from the shim's own exit code alone
+(ADR-0013 Rule 5) — `reading_id='1'`, `SELECT metric, value FROM ... WHERE reading_id = 1` →
+`fixture_metric|3.14`; `RED-EXISTING` (refused re-run, config byte-identical, row counts
+unchanged); `GREEN-FORCE` (idempotent re-derive, rows untouched); `RED-UNAPPLIED-SCHEMA`
+(adoption itself never blocks — exit 0 — but a real `record-reading` call against a
+deliberately-unapplied schema pair is REFUSED live: `record_reading: REFUSED -- psql failed (3):
+ERROR:  relation "zzznoexist_core.project" does not exist`, proving `filing/record_reading.py`'s
+own documented fail-loud claim rather than asserting it). All 8 cases PASS, zero scratch
+residue (`\dn`-equivalent live check before/after). Registered in `gates/fixture_census.py`
+(47 gates, was 46). A fixture bug (a string-match assertion split across a wrapped `echo`
+line) was found and fixed during this same build — banked in `seen-red/track-experiments/
+red.txt` alongside the two refusal specimens, per this project's own "verify the artifact"
+posture (a fixture that asserts wrong is itself a defect, not a pass).
+
+`CONFIGURATION.md` gets a short new section (`### bootstrap/track-experiments.sh`) plus two
+`## Related` links. A:B:C loop: round 1 found 4 defects (an ambiguous "the standing `research`
+database" colliding with the schema-name default of the same word, unexplained
+"construction-time-refusal contract" jargon, a thin code-block caption inconsistent with sibling
+sections, an unintroduced "the store" nickname); round 2 found the caption fix had not actually
+landed and the jargon-removal repair had itself left a dangling sentence fragment ("refuses
+with," with no object) — both routed as a non-converging-review-loop escalation, repairs applied
+directly. `attestations/doc-legibility-attestations.jsonl`: `schema doc-attestation/2`,
+content_sha256 `3d8e87ea28f65ffb...`, `escalated: true`, adjudicated. Witness: `python3
+gates/doc_attestation_presence.py CONFIGURATION.md` → clean.
+
+`research-ledger-apply` (tracker item, the standing-db apply itself) is left OPEN, unchanged in
+substance, annotated with a decision row (`--refs row:5`) stating plainly that the adjacent
+offering shipping does not resolve it and that running `bootstrap/apply-research-ledger.sh`
+against the real `research` database remains exclusively the maintainer's own act.
+
+**Item 3 — the second latent 32-bit clingo wraparound, fixed at the source** (tracker
+`contemp-window-fix`, commit `3f1991b`). `engine/contemp_edb.py`'s anchor-relative encoding
+(the fix for the FIRST 32-bit wraparound, absolute-epoch-ms values silently wrapping inside
+clingo/clasp's signed-32-bit integer terms) is itself only safe within `2**31-1` ms (~24.8
+days) of audited window, and nothing enforced that bound — `export()` reads the whole ledger
+table unconditionally. `engine/contemp_differential.py` shipped a defensive `QUARANTINE` guard
+on its own opt-in `--differential` path (BACKLOG "Contemporaneity audit, Part 2", 2026-07-12,
+earlier this same day), but the DEFAULT `./audit` path (`contemp_audit.py::run_audit`, which
+calls `export()` directly) had no protection at all — and THE STANDING AUTOHARN TRACKER
+(this repo's own self-ledger, deployed 2026-07-11) crosses that bound around 2026-08-05.
+
+Fixed per the finding's own "enforce-or-refuse" option (judged sounder than per-window
+anchoring here — a real re-windowing of what "the audit" means for only part of a ledger's
+history is a larger, more invasive design than this fix's remit, named as such in the module's
+own extended docstring): `export()` now computes the full relative span
+(`max(all_abs) - anchor_ms`) immediately after the anchor is known, BEFORE pass 2 emits a single
+fact, and raises a new typed `UnsafeWindowError` (naming the exact span and the bound) rather
+than emitting a fact that may already be silently wrapped — protecting every caller by
+construction, not just the differential path. `contemp_edb.py`'s own hazard docstring is
+EXTENDED (a dated "ENFORCEMENT ADDENDUM, 2026-07-12" paragraph), never rewritten.
+`contemp_differential.py`'s own belt-and-braces guard stays, per the commission's own
+instruction, now importing `SAFE_32BIT_MS` from `contemp_edb` (single home, ADR-0012 P1)
+instead of an independently-typed copy of the literal, and `run_asp()` catches
+`UnsafeWindowError` specifically so its `QUARANTINE` message reads "caught at the source"
+rather than falling through to a generic tool-error wrapper.
+
+Witness (`seen-red/contemporaneity-audit/run_fixtures.py`'s new case r, extending the existing
+18-case suite to 18 — was 17): reuses the SAME cumulative scratch schema every earlier case in
+that file already writes to, which by that point in the sequence genuinely spans ~7 years
+(BASE-anchored synthetic rows at epoch ~2033 plus several real-wall-clock `led`-shim writes at
+~2026) — ~100x past the bound, arising from ordinary fixture accretion, not a contrived worst
+case. THREE PARTS on the identical data: (1) the PRE-FIX `contemp_edb.py` (`git show HEAD`,
+shadowing the current module in an isolated subprocess) completes WITHOUT refusing and emits a
+fact whose relative-ms value already exceeds the bound —
+`PRE-FIX-EXPORT-SUCCEEDED facts=27 max_abs_relative_ms=216241405080 anchor_ms=1783764000000`
+(216241405080 vs the 2147483647 ceiling), banked verbatim at `seen-red/contemporaneity-audit/
+unsafe-window-before-fix.txt`; (2) the CURRENT plain `./audit` path (previously wholly
+unprotected) now refuses loudly: `contemp_audit: tool error: UnsafeWindowError: ... audited
+window spans 216241405080ms ... EXCEEDS clingo/clasp's signed 32-bit ceiling (2147483647ms,
+~24.8 days)`; (3) `./audit --differential` `QUARANTINE`s, caught at the source — both banked at
+`unsafe-window-after-fix.txt`. Full 18-case suite re-run clean (`FIXTURE PASS`, exit 0),
+`gates/fixture_census.py` + `gates/no_lazy_imports.py` clean, zero scratch residue (`contempprobe`
+schema/role confirmed dropped). Liveness-checked first (`pgrep -a claude` / `/proc/<pid>/cwd`),
+per this commission's own instruction for any live-executed `engine/` edit.
+
+**Item 4 — `OPERATING-CARD.md`'s hooks × kernel map reconciled** (tracker
+`operating-card-hooks-map`, commit `09e4d7e`). The table had been one row short of live wiring
+since the small-follow-ups commission (2026-07-11), noted twice in this same file and left
+alone both times ("the map is now one row short of the live wiring", "remains one row short of
+the live wiring — seen again during this pass, left alone"). Reconciled against `filing/
+apparatus_registry.py`'s statically-derived 11-mechanism set (the same instrument that already
+caught `bootstrap/templates/apparatus.json`/`APPARATUS.md` drifting to ten while
+`bash_completion` had already shipped): added `bash_completion`
+(`posttooluse_bash_completion.py`) and `doc_legibility_critic.py` rows, both sourced from their
+own module docstrings (`doc_legibility_critic` noted honestly as UNWIRED — ships in no world's
+`settings.json` yet); updated `mutation_observer`/`delegation_observer`'s "fires on" to
+Pre+Post (the small-follow-ups commission's own PostToolUse return leg), with a note on why the
+filenames keep their original prefixes; added a lead paragraph naming `apparatus_registry.py`
+as the reconciliation source.
+
+A:B:C loop, scoped to the opening + the map section per this commission's own remit: round 1
+found 6 legibility defects (undefined "fresh-context probe", slash-soup joining
+`apparatus.json`/`APPARATUS.md`, an unlinked "invariant I6" citation, an unglossed
+"zero-context-reader" term, an uncited "small-follow-ups commission", an unexplained
+filename/behavior mismatch), all repaired. Round 2 found 3 more (a paraphrase presented as a
+verbatim quote — "reviewer independence" does not appear anywhere in the cited document, a live
+grep confirmed — an unglossed "Rule-3" cross-reference, an unlinked `gates/doc_shapes.py` path);
+routed as a non-converging-review-loop escalation, repairs applied directly.
+`attestations/doc-legibility-attestations.jsonl`: `schema doc-attestation/2`, content_sha256
+`51ba2a22ef583030...`, `escalated: true`, adjudicated. Witness: `python3
+gates/doc_attestation_presence.py OPERATING-CARD.md` → clean.
+
+**House-rule compliance, all four items.** Every claim above is WITNESSED (commit hash + a live
+command's actual output, not a claim about it); `CLAUDE_COMMIT_PATHS` was exported to the exact
+staged list for each of the four logical commits; each commit ends `Co-Authored-By: Claude
+Sonnet <noreply@anthropic.com>`; `git status --short` reads clean after all four; `python3
+gates/no_lazy_imports.py` (exit 0), `python3 gates/fixture_census.py` (clean, 47 gates),
+`python3 gates/link_integrity.py CONFIGURATION.md` (clean) all re-run after the full sequence,
+not merely once per item. No deferrals: all four items landed in full: `research-ledger-apply`
+is the one deliberate exception, named as such in the commission itself (leave OPEN, annotate)
+and not a scope cut of this pass's own making.
