@@ -37,27 +37,28 @@ one connected thing.
   but does not fully close (see the next paragraph for the honest current source).
   `bootstrap/new-project.sh`'s own `LINEAGE_CHAIN` variable is the CURRENT, authoritative
   apply order for a freshly-scaffolded world, re-derived live at every scaffold rather than
-  hand-copied into this file (so it cannot drift the way the list above did). As of this
-  writing that live order continues past s19 with `s20-obligation-grants-and-view-refresh.sql
-  → s21-session-aware-distinctness.sql → s22-work-item-ledger.sql →
-  s23-per-invocation-stamp-token.sql → s24-declared-event-time.sql →
-  s25-commission-kind.sql → s26-row-hash-chain.sql`, and all seven of those are wired into
-  every `--new-world` scaffold today.
+  hand-copied into this file. This README deliberately does NOT restate that chain
+  entry-by-entry: an enumerated copy here drifted stale twice in one day (first silent on
+  s26, then wrong about s28's wiring status — the second staleness was caught by a
+  fresh-context review of this very paragraph), so the durable instruction is: read it at
+  the source, `grep LINEAGE_CHAIN bootstrap/new-project.sh`, which as of 2026-07-12 runs
+  from s15 to `s28-work-parent-edge.sql` (s18 excepted — deliberately excluded, see the
+  `high_watermark_1.sql` bullet below), every entry applied automatically by a
+  `--new-world` scaffold.
 
-  `s28-work-parent-edge.sql` (the file living beside this README, in this same directory) is
-  one further delta, authored and scratch-witnessed (its own both-polarity proof lives at
-  `seen-red/s28-work-parent-edge/` in the repository root) but **not yet wired into
-  `bootstrap/new-project.sh`'s `LINEAGE_CHAIN`** — so it does not yet ship in a freshly
-  scaffolded world. Wiring it in is a maintainer/orchestrator act performed at the point
-  several concurrently-authored deltas are integrated together (called a "seam-integration
-  pass" in this project's own tracker record; s28's tracker item is slugged
-  `work-tree-rollup`, the short identifier this project's ledger uses to track it), not
-  something s28's own authoring work took on itself — doing so risked two people editing
-  `bootstrap/new-project.sh` at the same time. A sibling delta, `s27` (its number reserved
-  and coordinated with s28, but authored separately, elsewhere), may land before or after
-  s28 in the eventual wired order; s28 does not depend on it, which was checked directly by
-  applying s28 on top of only s15 through s26 and confirming it still works (see s28's own
-  file header, its "PARAMETERIZATION" section, for the exact command).
+  The two newest deltas both live beside this README in this same directory:
+  `s27-chain-high-water.sql` (the tail-deletion witness; tracker item
+  `s26-tail-deletion-witness`) and `s28-work-parent-edge.sql` (the typed work-parent edge;
+  tracker item `work-tree-rollup` — "tracker item" names a work item in this project's own
+  Postgres ledger, and the slug is the short identifier that ledger tracks it by). Each was
+  authored and scratch-witnessed independently (both-polarity proofs at
+  `seen-red/s27-chain-high-water/` and `seen-red/s28-work-parent-edge/` in the repository
+  root), then wired into `LINEAGE_CHAIN` by the orchestrator's seam-integration pass — the
+  integration act the authoring work deliberately left to one integrator so two concurrent
+  builders never raced edits to the same shared script. s28 does not depend on s27, which
+  was checked directly by applying s28 on top of only s15 through s26 and confirming it
+  still works (see s28's own file header, its "PARAMETERIZATION" section, for the exact
+  command).
 
 - **Side entries.** `nla-schema.sql` is a catalog-isolated `nla` re-instantiation (a
   parallel domain profile, not a generation in the s-line). `s13-remediation-review-detail-
