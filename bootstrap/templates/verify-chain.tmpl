@@ -12,19 +12,57 @@ content means" a second time in Python. Two independent implementations of one c
 is exactly the "two writers of one truth" cancer s26's own header names and forecloses; this
 script honors that by construction, not by discipline.
 
+TAIL-DELETION WITNESS (tracker item `s26-tail-deletion-witness`, kernel delta
+kernel/lineage/s27-chain-high-water.sql, decision row 192): the row_hash chain alone proves no
+row BETWEEN the genesis seed and the current head was altered, but is structurally blind to a
+TAIL deletion — deleting the highest-id row leaves no later row whose predecessor lookup
+depended on it, so the walk above reports INTACT over a silently-shortened chain
+(seen-red/s26-row-hash-chain-deletion/'s own closure statement, case c). This is the literature's
+TRUNCATION ATTACK against an append-only log; s27's `:kern.chain_high_water` witness — a one-row,
+kernel-side monotonic high-water mark, bumped in the SAME transaction as each ledger insert so a
+rollback cannot leave it ahead of a row that never durably existed — closes the gap for the
+common case: when it is present, this script compares the WALKED max id against it. witness >
+walked max means rows are missing from the tail, reported as the distinct verdict
+TAIL-DELETION-SUSPECT (exit 3, never conflated with a row_hash BROKEN result). A pre-s27 world
+(no `chain_high_water` relation) degrades honestly to WITNESS-UNAVAILABLE — never a false
+"suspect", never a crash. This witness is TRIPWIRE-grade, exactly as s26's own row_hash chain is:
+it does not defend against a schema-owner adversary who rewrites the witness table alongside the
+ledger (same LIMITS register — see s27's own header); the prior-arted closing move for that
+adversary remains the externally-held, human-signed chain head (design/MAINT-GPG-TRUST-LAYER.md
+§4, Ceremony 3). The bigserial sequence's `last_value` is reported alongside as SECONDARY,
+EXPLAIN-NOT-FAIL corroboration only (never affects the exit code): `nextval()` is
+non-transactional and survives a rolled-back insert, so a bare last_value-vs-ledger comparison
+would false-positive on any world that ever rolled back a write — s27's own header explains why
+the table-backed witness, not the sequence, is the PRIMARY signal.
+
 MODES:
-  ./verify-chain             — walk the whole chain, report the first break (if any). Exit 0 if
-                               intact, 1 if broken (the first break's row id, stored vs expected
-                               hash, and total break count are all printed — never an umbrella
-                               "chain broken" with no specifics).
+  ./verify-chain             — walk the whole chain, report the first break (if any), then (when
+                               the row_hash chain itself reports INTACT or EMPTY) compare the
+                               walked max id against the s27 chain_high_water witness. Exit 0 if
+                               intact and the witness agrees (or is honestly UNAVAILABLE on a
+                               pre-s27 world); 1 if the row_hash chain itself is BROKEN (the first
+                               break's row id, stored vs expected hash, and total break count are
+                               all printed — never an umbrella "chain broken" with no specifics);
+                               3 if the row_hash chain is otherwise clean but the witness reports
+                               TAIL-DELETION-SUSPECT (rows are missing from the tail — a class the
+                               row_hash chain alone cannot see, per seen-red/
+                               s26-row-hash-chain-deletion/'s own closure statement); 4 on the
+                               anomalous WITNESS-BEHIND-LEDGER case (the witness itself appears to
+                               have been lowered, which should never happen under correct
+                               operation — see s27-chain-high-water.sql's own header). Exit codes
+                               1/3/4 are deliberately DISTINCT so a caller can tell "interior
+                               tamper" from "tail truncation" from "witness anomaly" without
+                               parsing prose.
   ./verify-chain --head      — print {world, max_id, head_hash, utc, apparatus_hash} as JSON on
                                stdout and NOTHING else — this is the input to the signed-head
                                ceremony (`./verify-chain --head > /tmp/head.json; gpg --detach-sign
                                --armor /tmp/head.json`), so its stdout must be exactly the JSON, no
                                banner lines, or a naive `cat | gpg` would sign banner text too.
                                Exit 1 (with a diagnostic on STDERR, stdout left EMPTY) if the chain
-                               is broken — signing a head over a broken chain would be worse than
-                               refusing to produce one; VERIFIES the whole chain first, always.
+                               is broken, OR if the s27 witness reports TAIL-DELETION-SUSPECT or
+                               WITNESS-BEHIND-LEDGER — signing a head over a chain the witness
+                               itself flags would be worse than refusing to produce one; VERIFIES
+                               the whole chain AND the witness first, always.
                                `apparatus_hash` (added 2026-07-12, tracker item
                                `apparatus-flip-witnessing` — additive to spec §4's original
                                {world, max_id, head_hash, utc} shape, not a redefinition of it) is
@@ -166,6 +204,113 @@ def verify(dep) -> tuple[str, dict]:
     return "INTACT", {"rows_walked": len(rows), "head_id": rows[-1]["id"], "head_hash": rows[-1]["stored"]}
 
 
+def has_high_water_layer(dep) -> bool:
+    """An EXPLICIT capability check (information_schema), mirroring has_row_hash_layer()'s own
+    posture (never a fuzzy match on error text): a real query bug must surface as ERROR, never be
+    silently miscategorized as the honest pre-s27 WITNESS-UNAVAILABLE case."""
+    sql = (f"SELECT count(*) FROM information_schema.tables WHERE table_schema = '{dep.kern}' "
+           f"AND table_name = 'chain_high_water'")
+    rows, err = _psql_json_rows(dep, f"SELECT ({sql}) > 0 AS present")
+    return bool(rows) and rows[0].get("present") is True
+
+
+def read_high_water(dep) -> tuple[int | None, str]:
+    """Returns (max_id, error). max_id is None if the table exists but carries no row (should not
+    happen via bootstrap/new-project.sh's own idempotent seeding -- s27's DDL inserts the
+    singleton row itself -- but degraded honestly rather than assumed impossible)."""
+    rows, err = _psql_json_rows(dep, f"SELECT max_id FROM {dep.kern}.chain_high_water LIMIT 1")
+    if rows is None:
+        return None, err
+    if not rows:
+        return None, ""
+    return rows[0]["max_id"], ""
+
+
+def sequence_last_value(dep) -> int | None:
+    """SECONDARY, explain-not-fail corroboration only (s27's own header): the bigserial sequence
+    backing ledger.id, read via pg_sequences (no special privilege needed -- it is a system
+    catalog view, readable by any role). Returns None on any failure -- this reading is advisory
+    and must never itself cause an ERROR/non-zero exit; the primary witness is chain_high_water."""
+    sql = (f"SELECT last_value FROM pg_sequences WHERE schemaname = '{dep.schema}' "
+           f"AND sequencename = 'ledger_id_seq'")
+    rows, err = _psql_json_rows(dep, sql)
+    if not rows:
+        return None
+    return rows[0].get("last_value")
+
+
+def compare_witness(dep, walked_max_id: int) -> tuple[str, dict]:
+    """Returns (status, detail). status in {TAIL-COVERAGE-CONFIRMED, TAIL-DELETION-SUSPECT,
+    WITNESS-BEHIND-LEDGER, WITNESS-UNAVAILABLE, ERROR}. walked_max_id is the highest id actually
+    seen by the row_hash walk (0 for an EMPTY chain -- no row ever walked, so there is nothing to
+    be missing from the tail yet)."""
+    if not has_high_water_layer(dep):
+        return "WITNESS-UNAVAILABLE", {
+            "reason": ("pre-s27 kernel -- no chain_high_water witness in "
+                       f"{dep.kern} (kernel/lineage/s27-chain-high-water.sql not applied here); "
+                       "tail-deletion coverage cannot be claimed for this world")}
+    witness_max, err = read_high_water(dep)
+    if err:
+        return "ERROR", {"reason": err}
+    if witness_max is None:
+        return "WITNESS-UNAVAILABLE", {
+            "reason": (f"{dep.kern}.chain_high_water carries no row -- s27 applied without its "
+                       "singleton row seeded (should not happen via bootstrap/new-project.sh's "
+                       "own idempotent DDL); tail-deletion coverage cannot be claimed")}
+    if witness_max == walked_max_id:
+        return "TAIL-COVERAGE-CONFIRMED", {"witness_max_id": witness_max, "walked_max_id": walked_max_id}
+    if witness_max > walked_max_id:
+        return "TAIL-DELETION-SUSPECT", {
+            "witness_max_id": witness_max, "walked_max_id": walked_max_id,
+            "missing_count": witness_max - walked_max_id}
+    return "WITNESS-BEHIND-LEDGER", {
+        "witness_max_id": witness_max, "walked_max_id": walked_max_id,
+        "reason": ("the witness max_id is LOWER than the highest surviving ledger id -- "
+                   "structurally should never happen under correct operation (the witness only "
+                   "bumps upward, in the same transaction as each insert); this indicates the "
+                   "witness itself was altered outside its trigger (a schema-owner-level act, "
+                   "the same adversary class s26/s27's own LIMITS sections already name) or was "
+                   "reset/reseeded incorrectly for this world")}
+
+
+def _witness_note(dep, status: str, detail: dict) -> tuple[str, str, dict]:
+    """Runs the s27 witness comparison for the two hash-chain statuses where it is meaningful
+    (INTACT / EMPTY -- the row_hash chain itself claims no interior tamper, so a tail deletion is
+    the one remaining gap it cannot see) and returns (line-to-print, witness_status, witness_detail).
+    For BROKEN/UNAVAILABLE/ERROR the row_hash chain has ALREADY reported a problem through its own
+    channel; the witness check is explicitly SKIPPED (never silently omitted -- the skip is its
+    own printed line) rather than layered on top of an already-diagnosed chain."""
+    if status not in ("INTACT", "EMPTY"):
+        return (f"verify-chain: tail-deletion witness check SKIPPED -- hash-chain status is "
+                f"{status}, already diagnosed above", "SKIPPED", {})
+    walked_max_id = detail["head_id"] if status == "INTACT" else 0
+    w_status, w_detail = compare_witness(dep, walked_max_id)
+    seq_last = sequence_last_value(dep)
+    seq_note = (f" (secondary corroboration: ledger_id_seq.last_value={seq_last}, "
+                f"explain-not-fail -- nextval() is non-transactional and does not roll back on "
+                f"an aborted insert, so this figure alone would false-positive on any world that "
+                f"ever rolled back a write)" if seq_last is not None else "")
+    if w_status == "WITNESS-UNAVAILABLE":
+        return (f"verify-chain: tail-deletion witness UNAVAILABLE -- {w_detail['reason']}",
+                w_status, w_detail)
+    if w_status == "ERROR":
+        return (f"verify-chain: tail-deletion witness ERROR -- {w_detail['reason']}", w_status, w_detail)
+    if w_status == "TAIL-COVERAGE-CONFIRMED":
+        return (f"verify-chain: TAIL-COVERAGE-CONFIRMED -- witness max_id="
+                f"{w_detail['witness_max_id']} agrees with walked max_id="
+                f"{w_detail['walked_max_id']}{seq_note}", w_status, w_detail)
+    if w_status == "TAIL-DELETION-SUSPECT":
+        return (f"verify-chain: TAIL-DELETION-SUSPECT -- witness max_id="
+                f"{w_detail['witness_max_id']} is AHEAD of the walked max_id="
+                f"{w_detail['walked_max_id']} ({w_detail['missing_count']} row(s) missing from "
+                f"the tail; the row_hash chain alone cannot see this -- s27's own witness is "
+                f"what caught it){seq_note}", w_status, w_detail)
+    # WITNESS-BEHIND-LEDGER
+    return (f"verify-chain: WITNESS-BEHIND-LEDGER (anomaly) -- witness max_id="
+            f"{w_detail['witness_max_id']} is BEHIND the walked max_id={w_detail['walked_max_id']}: "
+            f"{w_detail['reason']}{seq_note}", w_status, w_detail)
+
+
 def main(argv: list[str]) -> int:
     head_mode = "--head" in argv
     dep = _load_deployment()
@@ -177,6 +322,13 @@ def main(argv: list[str]) -> int:
                   f"{detail}); signing a head over a non-verified chain is refused, not attempted.",
                   file=sys.stderr)
             return 1
+        w_status, w_detail = compare_witness(dep, detail["head_id"])
+        if w_status in ("TAIL-DELETION-SUSPECT", "WITNESS-BEHIND-LEDGER"):
+            print(f"verify-chain --head: REFUSED -- tail-deletion witness reports {w_status} "
+                  f"({w_detail}); signing a head over a chain the witness itself flags is refused, "
+                  f"not attempted -- exactly the same posture as refusing on a BROKEN row_hash "
+                  f"chain, applied to the gap that chain alone cannot see.", file=sys.stderr)
+            return 1
         head = {"world": dep.name or dep.schema, "max_id": detail["head_id"],
                 "head_hash": detail["head_hash"],
                 "utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
@@ -184,16 +336,29 @@ def main(argv: list[str]) -> int:
         print(json.dumps(head))  # ONLY the JSON on stdout -- see module docstring
         return 0
 
+    witness_line, witness_status, _ = _witness_note(dep, status, detail)
+
     if status == "INTACT":
         print(f"verify-chain: INTACT -- {detail['rows_walked']} row(s) walked, head id="
               f"{detail['head_id']} hash={detail['head_hash']}")
+        print(witness_line)
+        if witness_status == "TAIL-DELETION-SUSPECT":
+            return 3
+        if witness_status == "WITNESS-BEHIND-LEDGER":
+            return 4
         return 0
     if status == "EMPTY":
         print(f"verify-chain: EMPTY -- {detail['reason']} (an empty chain is trivially intact; "
               f"nothing to walk)")
+        print(witness_line)
+        if witness_status == "TAIL-DELETION-SUSPECT":
+            return 3
+        if witness_status == "WITNESS-BEHIND-LEDGER":
+            return 4
         return 0
     if status == "UNAVAILABLE":
         print(f"verify-chain: UNAVAILABLE -- {detail['reason']}")
+        print(witness_line)
         return 0
     if status == "BROKEN":
         print(f"verify-chain: BROKEN -- first break at row id {detail['first_break_id']}:")
@@ -207,6 +372,7 @@ def main(argv: list[str]) -> int:
               f"predecessor-hash reference was computed against the row's OLD, honest hash. "
               f"Either way, the break can be no later than immediately after the true alteration "
               f"point; it is never silently absorbed further downstream than that.)")
+        print(witness_line)
         return 1
     print(f"verify-chain: ERROR -- {detail['reason']}", file=sys.stderr)
     return 2

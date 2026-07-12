@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-09T13:36:11Z
-#   last-change: 2026-07-12T14:22:51Z
-#   contributors: be693afb/main, e4410ef6/main
+#   last-change: 2026-07-12T16:27:25Z
+#   contributors: be693afb/main, e4410ef6/main, 3c50e030/main
 # <<< PROVENANCE-STAMP <<<
 
 """fixture_census — mechanizes mandate §6's "every migrated gate's seen-red still proves it
@@ -82,6 +82,7 @@ REGISTRY: dict[str, str] = {
     "verify-commission":              "seen-red/verify-commission/run_fixtures.py",
     "s26-row-hash-chain":             "seen-red/s26-row-hash-chain/run_fixtures.py",
     "s26-row-hash-chain-deletion":    "seen-red/s26-row-hash-chain-deletion/run_fixtures.py",
+    "s27-chain-high-water":           "seen-red/s27-chain-high-water/run_fixtures.py",
     "no-conflict-markers":            "seen-red/no-conflict-markers/run_fixtures.py",
     "rename-doc":                     "seen-red/rename-doc/red-specimen.py",
     # the two census gates minted in this build carry their own seen-red (a census gate never seen
