@@ -1,14 +1,39 @@
 seen-red/apparatus-flip — banked RED evidence (both-polarity proof, fixture-census)
 
-Tracker item "apparatus-flip-witnessing" (panel finding NIST G1, re-litigation 2026-07-12): "a
-governed agent can Write .claude/apparatus.json and flip a mechanism to off mid-session with NO
-witnessed event -- no refusal, no journal line, no ledger row, in a system whose evidentiary basis
-is 'hooks only'". hooks/posttooluse_apparatus_flip.py closes this: before it existed, editing
+Tracker item "apparatus-flip-witnessing", from the "Unwitnessed apparatus flips" finding of the
+NIST-lens re-litigation panel (design/MAINT-RELITIGATION-SYNTHESIS.md, 2026-07-12): "a governed
+agent can Write .claude/apparatus.json and flip a mechanism to off mid-session with NO witnessed
+event -- no refusal, no journal line, no ledger row, in a system whose evidentiary basis is 'hooks
+only'". hooks/posttooluse_apparatus_flip.py closes this: before it existed, editing
 .claude/apparatus.json produced no signal anywhere -- no PreToolUse hook governs that file (it is
 not *.py, so hooks/pretooluse_change_gate.py's default governed patterns never match it), and no
 PostToolUse hook watched it either (hooks/posttooluse_mutation_observer.py only attaches to the
 Bash tool). A Write, Edit, or Bash-driven rewrite of apparatus.json was, and without this hook
 still would be, silently invisible -- exactly the panel finding.
+
+RED #0 (an out-of-frame hack-rationalization audit caught a SECOND red shape in this hook's own
+FIRST version, 2026-07-12, before this commission was reported done -- CLAUDE.md's engineering-
+responsibility corollary in action, not a corner routed around): the original "first observation
+establishes the baseline silently" logic trusted whatever apparatus.json ALREADY contained at the
+hook's very first-ever run for a world, so a flip that occurred before this hook had ever run once
+(the single highest-value blind spot for the exact threat this hook exists to close) was itself
+silently absorbed as trusted, with no event. Closed by comparing first observation against
+`bootstrap/templates/apparatus.json` (the shipped scaffold default) rather than trusting it
+blindly; see cases h/i below and the module docstring's BASELINE section for the residual gap that
+remains (a world whose scaffold default is unreachable, or whose day-zero divergence happens to
+restore the exact default bytes).
+
+REPRODUCED LIVE against the actual first-committed hook version (`git show
+dad3f82:hooks/posttooluse_apparatus_flip.py`, run in place under `hooks/` so its own
+`_REPO_ROOT`-relative imports resolve correctly): a FRESH scratch world seeded with apparatus.json
+already carrying `change_gate.mode: "off"` (diverging from the shipped scaffold default), then
+invoked for the very first time --
+
+  exit=0
+  journal after pre-fix hook run:
+  (EMPTY -- confirms RED #0, the pre-fix hook silently trusted the already-flipped day-zero state)
+
+-- the pre-fix hook produced NO journal line at all for a flip that had already happened.
 
 RED #1 (the pre-fix shape, reproduced live): with GATE_SUBJECT_ROOT pointed at a scratch world
 carrying a real apparatus.json, flipping `mechanisms.change_gate.mode` from "enforce" to "off" and
@@ -29,8 +54,8 @@ a-baseline-silent's state-file-written assertion:
   failures recorded by the harness: ['a-baseline-silent (deliberately broken stand-in, proving
     the harness catches it)']
 
-WITNESSED 2026-07-12, live against the real hook (seen-red/apparatus-flip/run_fixtures.py, no DB
-required -- this mechanism is filesystem-only):
+WITNESSED 2026-07-12, live against the current (day-zero-fixed) hook
+(seen-red/apparatus-flip/run_fixtures.py, no DB required -- this mechanism is filesystem-only):
 
   python3 seen-red/apparatus-flip/run_fixtures.py
 
@@ -40,8 +65,9 @@ required -- this mechanism is filesystem-only):
   === b-no-flip-silent ===
     [ok] exit=0 journal_lines=0
   === c-flip-produces-event ===
-    [ok] exit=0 warned=True lines=1 mechanisms_changed={'change_gate': {'before': 'enforce',
-      'after': 'off'}}
+    [ok] exit=0 warned=True lines=1 mechanisms_changed={'bash_completion': {'before': 'observe',
+      'after': None}, 'change_gate': {'before': 'enforce', 'after': 'off'}, ... (11 more entries,
+      one per scaffold-default mechanism not present in this case's minimal apparatus.json)}
   === d-malformed-fail-safe ===
     [ok] exit=0 no_traceback=True lines=2 after={'present': True, 'hash':
       '9c3dc5d29963910878c7386efa58fe1214282600a13b3113e7ef9bb03c873d17', 'malformed': True}
@@ -54,5 +80,10 @@ required -- this mechanism is filesystem-only):
       'malformed': False}
   === g-unwired-silent ===
     [ok] exit=0 stdout='' state_created=False
+  === h-day-zero-divergence ===
+    [ok] exit=0 warned=True lines=1 baseline_kind='first_observation_vs_scaffold_default'
+      tool=None
+  === i-day-zero-match-silent ===
+    [ok] exit=0 journal_lines=0
   -- teardown (post) --
-  run_fixtures: all 7 cases passed.
+  run_fixtures: all 9 cases passed.

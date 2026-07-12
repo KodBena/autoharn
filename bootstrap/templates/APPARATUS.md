@@ -187,6 +187,18 @@ hashed over raw bytes regardless of whether it parses as JSON, so a flip is stil
 journaled even when the file is broken; only the bonus per-mechanism mode breakdown degrades to
 empty when either side does not parse as an object.
 
+The world's very FIRST-ever observation is compared against `bootstrap/templates/apparatus.json`
+(the shipped scaffold default) rather than trusted blindly — an out-of-frame audit caught an
+earlier version of this hook silently absorbing a flip that occurred before it had ever run once,
+the single highest-value blind spot for the threat it exists to close (see the hook's own module
+docstring, "BASELINE"). This closes the gap for a genuine fresh scaffold; a world whose scaffold
+default is unreachable still establishes its baseline silently at first observation, a disclosed
+residual, not a hidden one. And, stated plainly rather than implied: this hook watches
+`apparatus.json`'s bytes, never the machinery that decides whether it (or any other hook) runs at
+all — rewriting `.claude/settings.json` to remove its wiring, or deleting the hook file, is
+unwatched by anything in this project today. That is a hook-integrity question general to every
+mechanism this document describes, not specific to this one, and is out of this watcher's scope.
+
 ## Honest limit (`law/adr/0011-mechanization-discipline.md` Rule 1's declared-enforcement-surface obligation)
 
 Every mode above is now **live-read**, not a forward declaration — this is the change from the

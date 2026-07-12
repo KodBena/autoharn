@@ -31,14 +31,18 @@ MODES:
                                the SHA-256 of THIS world's `.claude/apparatus.json` at the moment
                                of signing, or the literal string `"absent"` if that file does not
                                exist — see `_apparatus_hash()` below. It rides inside the SAME
-                               signed head, so two signed heads whose `apparatus_hash` differ prove
-                               apparatus.json changed somewhere between them, exactly as a
-                               differing `head_hash` proves the ledger changed — a flip of a
-                               mechanism's mode between two heads is now as detectable as a
-                               tampered ledger row, by the identical ceremony, at zero new
-                               infrastructure (no kernel/lineage change: this is a filesystem hash
-                               folded into an operator-facing JSON object already assembled here,
-                               never inside the database).
+                               signed head, so two signed heads whose `apparatus_hash` differ PROVE
+                               apparatus.json changed somewhere between them. Stated precisely, not
+                               oversold: this is weaker than `head_hash`'s own guarantee, which
+                               `./verify-chain` self-verifies end to end with no prior artifact
+                               needed. `apparatus_hash` has no continuous chain of custody of its
+                               own — proving a flip occurred means fetching two separately-signed
+                               heads and comparing this field by hand (no automated two-head-diff
+                               tool exists yet). What it delivers is still real and new (today,
+                               comparing two heads' apparatus.json state at all is impossible) at
+                               zero new infrastructure (no kernel/lineage change: this is a
+                               filesystem hash folded into an operator-facing JSON object already
+                               assembled here, never inside the database).
 
 A pre-s26 world (no `row_hash` column) degrades honestly to UNAVAILABLE (not a crash, not a false
 "intact") — mirrors distance-to-clean.tmpl's own pre-s22 fallback for `work_item_violations`.

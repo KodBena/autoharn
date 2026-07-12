@@ -112,8 +112,10 @@ gpg --detach-sign --armor /tmp/head.json
 *(Dated append, 2026-07-12, BACKLOG "apparatus-flip-witnessing": `apparatus_hash` — the SHA-256 of
 this world's `.claude/apparatus.json` at signing time, or `"absent"` if the file does not exist —
 joined the head object additively, so a flip of that file between two signed heads is now provable
-the same way a tampered ledger row is: `seen-red/s26-row-hash-chain/run_fixtures.py`,
-case `i-apparatus-hash-detects-flip`.)*
+by comparing the two heads' `apparatus_hash` fields by hand. This is weaker than the row_hash
+chain's own self-verifying guarantee (`./verify-chain` needs no prior artifact; this needs two
+fetched heads and a human/future-tool diff); the claim is named precisely rather than oversold:
+`seen-red/s26-row-hash-chain/run_fixtures.py`, case `i-apparatus-hash-detects-flip`.)*
 
 `gpg --detach-sign --armor` writes its detached signature alongside the input, as
 `/tmp/head.json.asc`; both `/tmp/head.json` and `/tmp/head.json.asc` bank as committed evidence.

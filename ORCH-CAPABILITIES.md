@@ -913,9 +913,8 @@ kernel/lineage:
   journals one `apparatus_flip` line to `.claude/logs/apparatus_flip.journal.jsonl` — before/after
   hashes, presence/malformed flags, and (best-effort — empty when either side does not parse as an
   object) which mechanisms' `mode` values changed — plus a loud, non-blocking `additionalContext`
-  warning, mirroring item 22's own convention. The FIRST invocation in a world's life establishes
-  the baseline silently (session start is not itself a flip); an unchanged file produces no event
-  at all. **Deliberately NOT a switchboard mechanism**: every other hook reads its own mode FROM
+  warning, mirroring item 22's own convention. An unchanged file produces no event at all.
+  **Deliberately NOT a switchboard mechanism**: every other hook reads its own mode FROM
   apparatus.json, but this hook's whole job is watching edits TO that file — if it read its own mode
   from the file it watches, the single most dangerous edit (flipping this watcher off in the same
   `Write` that flips something else) would read its own new `"off"` value before deciding whether to
@@ -923,8 +922,29 @@ kernel/lineage:
   a mode-gated decision" posture `hooks/pretooluse_change_gate.py`'s own docstring already
   establishes for `is_governed()`; a stray `"apparatus_flip"` key under `mechanisms` is caught,
   correctly, by the existing unknown-mechanism-name sweep (item 23) as a key no hook reads.
-  *Witnessed (this pass), `seen-red/apparatus-flip/run_fixtures.py`, no DB required (this mechanism
-  is filesystem-only):*
+
+  **Day-zero baseline gap, found and closed before this was reported done.** An out-of-frame
+  hack-rationalization audit (2026-07-12, commissioned deliberately by this same pass — ADR-0014)
+  caught the FIRST version of this hook trusting whatever apparatus.json ALREADY held at its own
+  first-ever run for a world, silently — meaning a flip that occurred before the hook had run even
+  once (the single highest-value blind spot for the exact threat this item closes) went unwitnessed.
+  The audit reproduced this live against the original committed version, confirming an empty
+  journal (RED #0, `seen-red/apparatus-flip/red.txt`). The fix closes the gap by comparing the
+  first observation against `bootstrap/templates/apparatus.json` (the shipped scaffold default,
+  reachable the same repo-relative way every sibling hook resolves its own paths) rather than
+  trusting it blindly — a reachable default that differs from current content journals a
+  `first_observation_vs_scaffold_default` flip (`tool: null`, honestly — which call produced the
+  divergence was never observed, only that one occurred before monitoring began). This closes the
+  gap for a genuine `--new-world` scaffold; it does **not** close it for a world whose scaffold
+  default is unreachable, or whose day-zero divergence happens to restore the exact default bytes —
+  those residual cases still establish the baseline silently, disclosed rather than hidden (no
+  monitor can detect a change that left no comparable reference before it existed).
+
+  **UNWITNESSED-LIVE**: this hook has fired only via a direct stdin harness against a real
+  filesystem (`seen-red/apparatus-flip/run_fixtures.py`), never yet during a genuine live Claude
+  Code session's own `PostToolUse` dispatch — the identical honest disclosure item 22 already
+  carries for the same reason. *Witnessed (this pass) via that harness, no DB required (this
+  mechanism is filesystem-only)*:
 
   ```
   === a-baseline-silent ===
@@ -933,7 +953,7 @@ kernel/lineage:
     [ok] exit=0 journal_lines=0
   === c-flip-produces-event ===
     [ok] exit=0 warned=True lines=1 mechanisms_changed={'change_gate': {'before': 'enforce',
-      'after': 'off'}}
+      'after': 'off'}, ...}
   === d-malformed-fail-safe ===
     [ok] exit=0 no_traceback=True lines=2 after={'present': True, 'hash': '9c3dc5d2...',
       'malformed': True}
@@ -943,21 +963,32 @@ kernel/lineage:
     [ok] exit=0 lines=4 before={'present': False, ...} after={'present': True, 'malformed': False}
   === g-unwired-silent ===
     [ok] exit=0 stdout='' state_created=False
-  run_fixtures: all 7 cases passed.
+  === h-day-zero-divergence ===
+    [ok] exit=0 warned=True lines=1 baseline_kind='first_observation_vs_scaffold_default' tool=None
+  === i-day-zero-match-silent ===
+    [ok] exit=0 journal_lines=0
+  run_fixtures: all 9 cases passed.
   ```
 
-- **Part 2 — the apparatus.json hash rides inside the signed chain head, so a flip between two
-  heads is detectable.** `bootstrap/templates/verify-chain.tmpl`'s `--head` mode (item 30) now
-  emits `{world, max_id, head_hash, utc, apparatus_hash}` — additive to the original four-key spec
-  shape, never a redefinition of it — where `apparatus_hash` is the SHA-256 of THIS world's
-  `.claude/apparatus.json` at the moment of signing (or the literal string `"absent"` if the file
-  does not exist). This required NO kernel/lineage change: `s26-row-hash-chain.sql` is untouched,
-  and the ledger's own `row_hash` chain covers only ledger rows exactly as before — `apparatus_hash`
-  is a filesystem hash folded into the operator-facing JSON object `verify-chain.tmpl` already
-  assembles and the maintainer already GPG-signs, so two signed heads whose `apparatus_hash` differ
-  prove apparatus.json changed somewhere between them, by the identical ceremony, at zero new
-  infrastructure. *Witnessed (this pass), live against a real throwaway `--new-world` scaffold and
-  the real toy db*, `seen-red/s26-row-hash-chain/run_fixtures.py`'s new case
+- **Part 2 — the apparatus.json hash rides inside the signed chain head, making a flip between two
+  heads PROVABLE, not automatically detected.** `bootstrap/templates/verify-chain.tmpl`'s `--head`
+  mode (item 30) now emits `{world, max_id, head_hash, utc, apparatus_hash}` — additive to the
+  original four-key spec shape, never a redefinition of it — where `apparatus_hash` is the SHA-256
+  of THIS world's `.claude/apparatus.json` at the moment of signing (or the literal string
+  `"absent"` if the file does not exist). This required NO kernel/lineage change:
+  `s26-row-hash-chain.sql` is untouched, and the ledger's own `row_hash` chain covers only ledger
+  rows exactly as before — `apparatus_hash` is a filesystem hash folded into the operator-facing
+  JSON object `verify-chain.tmpl` already assembles and the maintainer already GPG-signs. **Stated
+  precisely, not oversold**: this is weaker than the row_hash chain's own guarantee.
+  `./verify-chain` self-verifies the WHOLE ledger chain in one command with no prior artifact
+  needed (every row commits to its predecessor back to the genesis seed); `apparatus_hash` has no
+  such continuous chain of custody — proving a flip occurred requires a human (or a future tool
+  that does not yet exist) to fetch two separately-signed `head.json` files and compare their
+  `apparatus_hash` fields by hand. What this delivers is real and new (today, comparing two heads'
+  apparatus.json state at all is impossible; after this, it is a two-field diff), but "detectable"
+  here means "provable once someone thinks to compare," not "auto-flagged the way a tampered row
+  is." *Witnessed (this pass), live against a real throwaway `--new-world` scaffold and the real
+  toy db*, `seen-red/s26-row-hash-chain/run_fixtures.py`'s new case
   `i-apparatus-hash-detects-flip` (added to the existing s26 fixture rather than a new file, since
   it exercises the SAME `--head` ceremony that fixture already scaffolds):
 
@@ -976,14 +1007,30 @@ kernel/lineage:
   the pre-existing genesis-refusal/tamper/differential/collision cases) still passes end to end,
   confirming the addition does not perturb the existing chain guarantees.
 
-Named residue, disclosed rather than hidden: the state-compare sequence in Part 1 is not atomic
-across two genuinely concurrent tool calls in the same session (a rare race could in principle drop
-one of two overlapping flips) — the same class of disclosed race item 22's own docstring already
-names for its marker file, not a new risk this delta introduces. Deletions of `.claude/logs/`
-itself, or of the state file `apparatus_flip_state.json` (excluded from item 22's own mutated-file
-report, updated in this same pass so a Bash-driven apparatus.json edit does not also show up there
-as a second, confusing "mutated file"), are the only paths this mechanism does not watch — both are
-its own control plane, not subject-authored content.
+Named residue, disclosed rather than hidden — sharpened by the same out-of-frame hack-
+rationalization audit that found the day-zero gap above, which pushed back on an earlier, narrower
+draft of this paragraph that named only two exclusions and called them exhaustive; that was itself
+an overclaim, corrected here rather than left standing:
+
+- The state-compare sequence in Part 1 is not atomic across two genuinely concurrent tool calls in
+  the same session (a rare race could in principle drop one of two overlapping flips) — the same
+  class of disclosed race item 22's own docstring already names for its marker file, not a new risk
+  this delta introduces.
+- `.claude/logs/` itself and the state file `apparatus_flip_state.json` (excluded from item 22's
+  own mutated-file report, updated in this same pass so a Bash-driven apparatus.json edit does not
+  also show up there as a second, confusing "mutated file") are this mechanism's own control plane,
+  not subject-authored content — deliberately unwatched, not a gap.
+- **A materially larger, explicitly OUT-OF-SCOPE-for-this-item class**: this mechanism watches
+  apparatus.json's own bytes, never the machinery that decides whether it (or any other hook) runs
+  at all. An agent that rewrites `.claude/settings.json` to remove this hook's `PostToolUse`
+  wiring, or deletes `hooks/posttooluse_apparatus_flip.py` outright, is unwatched by anything in
+  this codebase today — that is a hook-integrity problem general to every mechanism in this
+  document, not specific to apparatus.json, and closing it is a materially bigger commission (who
+  watches the watchers, for every hook at once) that this tracker item does not attempt. Named here
+  so this item's own coverage claim stays honest, not silently narrowed to imply it was covered.
+
+This is not a security boundary against every possible bypass, and is not offered as one — it
+closes exactly the panel's named finding (a content flip with no witness), honestly bounded.
 
 ## Built, unexercised (exists; has not yet fired in anger)
 
