@@ -14,13 +14,13 @@
 -- ever existed past the new head. That gap is the literature's TRUNCATION ATTACK against an
 -- append-only log — a chain that authenticates "nothing between the ends was altered" but not
 -- "nothing was cut off the end" — named in Schneier & Kelsey 1998 ("Cryptographic Support for
--- Secure Logs on Untrusted Machines") [UNWITNESSED — pending web verification at seam], the
--- forward-secure aggregate-MAC literature (Ma & Tsudik, FssAgg) [UNWITNESSED — pending web
--- verification at seam], Crosby & Wallach 2009 ("Efficient Data Structures for Tamper-Evident
--- Logging") [UNWITNESSED — pending web verification at seam], and RFC 6962/9162's Certificate
+-- Secure Logs on Untrusted Machines") [web-verified 2026-07-12 against the published sources; ledger finding row 194], the
+-- forward-secure aggregate-MAC literature (Ma & Tsudik, "A New Approach to Secure Logging",
+-- DBSec 2008 / ACM TOS 2009 -- NOT CCS 2007, a common misattribution; FssAgg) [web-verified 2026-07-12 against the published sources; ledger finding row 194], Crosby & Wallach 2009 ("Efficient Data Structures for Tamper-Evident
+-- Logging") [web-verified 2026-07-12 against the published sources; ledger finding row 194], and RFC 6962/9162's Certificate
 -- Transparency signed tree heads, which exist BECAUSE a Merkle log's own internal consistency
 -- proof says nothing about whether the log was truncated between two observations
--- [UNWITNESSED — pending web verification at seam]. This delta is this project's in-domain
+-- [web-verified 2026-07-12 against the published sources; ledger finding row 194]. This delta is this project's in-domain
 -- instance of that literature's own remedy shape: a monotonic witness of "how far the sequence
 -- has reached", held OUTSIDE the audited table, that a truncation cannot roll back without
 -- rewriting the witness too — and, per that same literature's unanimous verdict, this witness is
