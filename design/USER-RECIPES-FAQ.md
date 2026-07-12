@@ -45,10 +45,17 @@ specs use for tracker items).
 use?**
 Yes — one `resource:` row per resource, whose TIER field carries the deontic force:
 `available` (MAY), `blessed:` (SHOULD), `mandated:` (MUST), `forbidden:` (MUST-NOT).
-`./pickup` renders them tier-sorted, prohibitions first. Honest limit: today this is
-declaration + display; no mechanism yet refuses an invocation that reaches a forbidden
-resource (that audit is spec'd, unbuilt — the spec's own §7 says so). Grammar home:
-[USER-BLESSED-TABLE-TEMPLATE.md](USER-BLESSED-TABLE-TEMPLATE.md); design:
+`./pickup` renders them tier-sorted, prohibitions first. Honest limit, tier by tier (not one
+blanket answer — the two owning specs drifted on exactly this in mid-2026-07-12 and were
+reconciled 2026-07-13, tracker row 223 — a ledger row, not a committed page: `./led show 223` at
+the repository root reads it in full): `mandated`'s close-review convention already shipped and
+surfaces an undischarged close as [`review_gap`](../GLOSSARY.md#review_gap) debt — never a
+refusal of the close itself;
+`forbidden` is declaration + display only today, with no mechanism yet refusing an invocation
+that reaches it (that audit is spec'd, unbuilt — the spec's own §7 says so). The reconciled,
+owning statement of what is and is not enforced per tier lives at
+[ORCH-SPEC-RESOURCE-ACCOUNTING.md §4.1](ORCH-SPEC-RESOURCE-ACCOUNTING.md#41--the-mandated-tiers-enforcement-status-reconciled-dated-correction-2026-07-13-tracker-row-223).
+Grammar home: [USER-BLESSED-TABLE-TEMPLATE.md](USER-BLESSED-TABLE-TEMPLATE.md); design:
 [ORCH-SPEC-RESOURCE-ACCOUNTING.md](ORCH-SPEC-RESOURCE-ACCOUNTING.md).
 
 **Can I declare an architectural or licensing boundary and split work along it?**
@@ -72,8 +79,9 @@ than is built. Design and criteria table:
 ## Trust ceremonies
 
 **Can I prove a commission really came from me?**
-Yes, in three increasing strengths — LAZY < FULL < SIGNED. FULL's evidence (right actor +
-absence of the session stamp) is a rebuttable presumption, not proof; the standing rule is
+Yes, in three increasing strengths — LAZY < FULL < SIGNED. FULL's evidence (the right actor
+recorded on the row, plus the absence of the interception stamp a hook adds only when an agent —
+not the maintainer directly — wrote the row) is a rebuttable presumption, not proof; the standing rule is
 that a CONTESTED commission must be SIGNED. You can rehearse every ceremony with a
 throwaway key before any real key exists. Walkthrough:
 [USER-GPG-TRUST-LAYER-FAQ.md](USER-GPG-TRUST-LAYER-FAQ.md) §5–§7.
@@ -82,9 +90,13 @@ throwaway key before any real key exists. Walkthrough:
 Yes — sign the chain head at run close (`verify-chain --head`, then a detached signature).
 Any retroactive row alteration then breaks provably against a head your key vouches for;
 the head also carries the apparatus-config hash, so a mechanism flipped off between two
-signed heads is provable by comparing them. Known honest limits: a deleted TAIL row is
-invisible to the chain alone between signings (tracker item `s26-tail-deletion-witness`
-holds the designed fix), and the apparatus comparison is manual, not auto-flagged.
+signed heads is provable by comparing them. Known honest limits: the chain-hash mechanism proves
+tampering with rows *between* two signed heads, but a deleted row at the very tail of the chain
+(the newest end, appended after the last signature) is invisible to the chain alone — nothing
+has signed over it yet (tracker item `s26-tail-deletion-witness` holds the designed fix — a
+ledger row, not a committed page: `./led show s26-tail-deletion-witness` at the repository root
+reads it), and the
+apparatus comparison is manual, not auto-flagged.
 Walkthrough: [USER-GPG-TRUST-LAYER-FAQ.md](USER-GPG-TRUST-LAYER-FAQ.md) §6.
 
 ## Review discipline
@@ -112,7 +124,9 @@ already raised the exit and at least one review is flagged. Witnessed both polar
 Yes — this was asked as "is there a reason we can't?", and the answer was no: the reviewer
 is an ordinary fresh-context subagent. Scaffolded projects get `./attest-doc`
 (`record`/`check`), a project-local attestations ledger, and an opt-in DOC-ATTESTATION
-section in `distance-to-clean` (apparatus switch `doc_attestation`, default off).
+section in `distance-to-clean` (the scaffold's own operator-facing report that prints how far
+the deployment sits from a clean governance state; apparatus switch `doc_attestation`, default
+off).
 Walkthrough: [USER-DOC-AUDIT-LOOP.md](USER-DOC-AUDIT-LOOP.md); the loop's rules:
 [ORCH-ABC-AUDIT-LOOP-RECIPE.md](ORCH-ABC-AUDIT-LOOP-RECIPE.md).
 

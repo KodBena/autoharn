@@ -1,8 +1,7 @@
 # The blessed-table template — filling your project's Capability Registry
 
-Audience: adopter
-
-This page is a **template you fill in**, not a reference you merely read. Filling it gives an
+This page is written for an adopter of autoharn. It is a **template you fill in**, not a
+reference you merely read. Filling it gives an
 agent working in your project a task-shape → blessed-tool table it can reach for by reflex,
 instead of you re-explaining which tool to use every session — the piece
 [Pillar 1](../GLOSSARY.md#pillar-1) (the Capability Registry) needs to exist before it can work.
@@ -19,7 +18,7 @@ Two things this page is **not**: it is not the mechanism that *declares* a resou
 act — the conversion, [below](#the-conversion-a-filled-row-becomes-one-led-command), shows the
 exact command a filled row converts to) and it is not this repository's own resource table
 (autoharn declares nothing for you — see
-"[the canonical residents](#the-canonical-residents-this-maintainers-stack-worked-examples)"
+"[the canonical residents](#the-canonical-residents-this-maintainers-stack--worked-examples)"
 below on why the examples here are marked as such). It is the durable, human-edited *source* you
 fill once and re-derive declarations from, the same relationship a spreadsheet has to the
 database rows it seeds.
@@ -234,6 +233,9 @@ stage 3.
 - [ORCH-SPEC-RESOURCE-ACCOUNTING.md](ORCH-SPEC-RESOURCE-ACCOUNTING.md) — the companion spec that
   added the fourth TIER value, `forbidden` (§3), completing the MAY/SHOULD/MUST/MUST-NOT deontic
   register; §5/§7 name how and how far it is checked (audit-policed, no write-time block yet).
+  §4.1 there is the owning statement of what "enforced" means for `mandated` specifically —
+  POLICED vs DECLARED-ONLY, and why the review convention above surfaces debt rather than
+  refusing the close.
 - [GLOSSARY.md](../GLOSSARY.md#pillar-1) — Pillar 1, `blessed`, `mandated (tier)`,
   `forbidden (tier)`, and `resource declaration` are all defined there; chase any of those terms
   there if this page's own use of them does not read as plain English (the Stand-Alone Principle
