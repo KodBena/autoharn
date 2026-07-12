@@ -5543,3 +5543,72 @@ accuracy fix + its first-ever attestation). Witness, live and clean after every 
 `gates/link_integrity.py`, `gates/fixture_census.py`, `gates/no_lazy_imports.py`,
 `gates/doc_shapes.py`/`gates/doc_attestation_presence.py` (touched-set), `gates/layout_census.py`
 (one pre-existing, unrelated `attest-tags` gap remains, not this item's to close).
+
+## worktree-ledgering-implementation — shipped (2026-07-12, Sonnet, isolated worktree)
+
+Implements [design/ORCH-WORKTREE-LEDGERING.md](design/ORCH-WORKTREE-LEDGERING.md)'s §5 Sonnet
+commission in full, tracker item `worktree-ledgering-implementation`, commit `91040d2`.
+
+**3a (both merge drivers).** `tools/merge_jsonl.py` (append-only jsonl line-union, always clean by
+construction) and `tools/merge_backlog_sections.py` (BACKLOG.md's dated `## ` sections, same union
+principle one level up, carrying the required loud-failure polarity: a section edited on both sides
+since the common ancestor refuses the merge and leaves real git conflict markers, independently
+catchable by `gates/no_conflict_markers.py`). Wired via `.gitattributes` plus the `.git/config`
+stanza every clone needs once — `bootstrap/bootstrap.sh` now installs it automatically (mirroring
+its existing `core.hooksPath` step), documented as a manual fallback in `bootstrap/QUICKSTART.md`
+and in each driver's own module docstring. Witnessed both polarities in a throwaway git repo
+(`seen-red/worktree-ledgering/run_fixtures.py`, registered in `gates/fixture_census.py`, banked red
+evidence at `seen-red/worktree-ledgering/red.txt`), and witnessed a second, independent way: a full
+fresh-clone `bootstrap.sh` run in `/tmp` merged two branches through the relative-path installed
+driver with no manual invocation, `git`'s own ordinary "Auto-merging ... Merge made by the 'ort'
+strategy" output now silently correct for this file class.
+
+**3b (branch attribution).** `hooks/stamp_intercept.py`'s per-invocation journal line gained one
+additive field, `cwd` (appended after every existing field, never reordering them; the standing
+hooks-liveness rule was checked first — `pgrep -a claude` found no session with a `cwd` under
+`~/w/vdc/1/run*`, so the edit was safe). `tools/branch_attribution.py` is the observer-grade,
+read-only derived view joining a ledger row's `stamp_invocation` token (s23) to that journal line's
+`cwd` — zero kernel change. Witnessed end-to-end against a real scaffolded world
+(`bootstrap/new-project.sh --new-world`, full kernel lineage through s26): a genuine
+`hooks/stamp_intercept.py` subprocess invocation minted a real HMAC stamp and token, the returned
+stamped command actually executed a real `./led decision` write, and `tools/branch_attribution.py`
+resolved that row `ATTRIBUTED` with the correct `cwd`; the same world's pre-change row (written
+before the code change landed) correctly reports `JOURNALED-NO-CWD`, never guessed. The reusable,
+self-contained (zero-residue) form of this witness is `instruments/verify_branch_attribution.py` —
+not registered in `gates/fixture_census.py`, since `tools/branch_attribution.py` is an
+observer/reporting tool with nothing to refuse, the same posture `engine/contemp_edb.py` and
+`engine/contemp_audit.py` already have there. The `merge:`-prefixed convention row itself (§3c) was
+also witnessed landing and being queryable via a `LIKE 'merge:%'` filter, in the same class of
+throwaway scaffolded world, then torn down.
+
+**3c/3d (recipe additions).** The `merge:`-prefixed `decision`-row convention and the merge-seam
+synchronous-B attestation rule are now written into
+[design/ORCH-ABC-AUDIT-LOOP-RECIPE.md](design/ORCH-ABC-AUDIT-LOOP-RECIPE.md)'s new "Merging: the
+integrator's checklist" section.
+
+**A:B:C loop, honestly.** All three touched maintainer-facing docs
+(`design/ORCH-WORKTREE-LEDGERING.md`'s dated Implementation-status append,
+`design/ORCH-ABC-AUDIT-LOOP-RECIPE.md`'s new section, `bootstrap/QUICKSTART.md`'s merge-driver
+paragraph) ran the fresh-context loop: round 1 found 7 + 5 + 4 defects respectively (noun-phrase
+fragments, slash-soup, dangling referents, one bare unlinked path, one jargon-first opening
+predating this edit but bound to standard by Rule 4 on touch); all repaired. Round 2 found small
+residual defects on all three (more slash-soup, one still-positional section-heading citation, one
+positional reference into an unshown file) — the two-round cap was hit, so each escalated per
+ADR-0017's own non-converging-review-loop path rather than grinding a third round; the Sonnet
+executor, as the available escalation recipient mid-commission, adjudicated by applying B's own
+suggested repairs verbatim in every case — the same disposition BACKLOG's "First live enforcement of
+ADR-0017's loop" entry set as precedent. Three `doc-attestation/2` records recorded (all
+`escalated: true`, each carrying a named `adjudication`);
+`gates/doc_attestation_presence.py`/`gates/link_integrity.py`/`gates/doc_shapes.py` all clean on the
+touched set.
+
+**Deferred, honestly.** The `.git/config` install line is scripted and tested (both via the
+seen-red fixture's own throwaway `git config` calls and a full fresh-clone `bootstrap.sh` run) but
+not applied to this worktree's own SHARED `.git/config` — a linked worktree shares that file with
+every sibling checkout of the same clone, and mutating shared state while sibling worktrees may be
+live is exactly the hazard this project's orchestration contract exists to avoid; left for the
+orchestrator to run once, or for the next fresh `bootstrap.sh` invocation to pick up automatically.
+The typed merge-event kernel kind and multi-host federation remain exactly as the memo designed:
+unbuilt, on purpose, pending witnessed need. Zero residue confirmed after every DB-touching witness
+(schema/role dropped, throwaway directories removed, checked against `information_schema.schemata`
+and `/tmp` listings after each run).
