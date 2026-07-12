@@ -103,7 +103,13 @@
 #                                              connection principal (`author`) — WITHOUT it, every write
 #                                              resolves to the same principal and a review is refused as
 #                                              self-review (validate_review keys on the actor/principal,
-#                                              never on the stamped invocation identity).
+#                                              never on the stamped invocation identity). A very short
+#                                              <statement> prints a WARN-ONLY tripwire (never a refusal --
+#                                              the write proceeds) naming engine/review_gap_audit.py's
+#                                              `./audit --review-gap` check, which flags exactly this shape
+#                                              of row IF it discharges a countersign obligation (tracker
+#                                              item `content-free-review-audit`; WITNESSED SPECIMEN: run12
+#                                              ledger row 20, statement="test").
 #
 #   led obligate <scope> <assigned-by-principal> <obliged-actor-principal>
 #                                              register a countersign_obligation. DIRECTION, spelled
@@ -352,6 +358,38 @@ warn_flag_in_statement() {
   done
 }
 
+# --- content-free-review-statement tripwire (tracker item `content-free-review-audit`; WITNESSED
+# SPECIMEN: run12 ledger row 20, statement="test" (4 chars) -- a review row whose ENTIRE statement
+# was 4 characters mechanically discharged another row's countersign obligation under
+# `<schema>.review_gap`'s own semantics (kernel/lineage/s13-schema.sql: ANY unsuperseded,
+# distinct-actor `attest` review discharges -- content is NEVER examined by the view). None of
+# run12's six reviewer passes ever caught it; it stands attested in the append-only record.
+# WARN-ONLY, mirrors warn_flag_in_statement's own posture exactly (same function shape, same
+# tone): a legitimately terse review DOES exist ("Confirmed, matches row 4's stated criteria
+# exactly." clears easily), so a false positive here is a harmless notice, not a blocked write --
+# the write PROCEEDS either way, never refused. The retroactive, content-examining half of this
+# check lives in engine/review_gap_audit.py (\`./audit --review-gap\`) -- this tripwire is
+# intake-time and length-only, exactly the honest limit that module's own docstring names.
+# THE SHARED THRESHOLD LIVES ONE PLACE (ADR-0012 P1): engine/review_gap_thresholds.py, read here
+# via the SAME python3-subprocess convention this file already uses for
+# filing/deployment_record.py (see this file's own top-of-file \`_dep_vars\` block) -- never a
+# second, hand-copied number. Fails OPEN on any subprocess trouble (python3 missing, a bad exit)
+# -- a tripwire that cannot run must never block the write it is only ever supposed to warn about.
+warn_content_free_review_statement() {
+  local text="$1" verdict
+  verdict=$(python3 "$AUTOHARN_ROOT/engine/review_gap_thresholds.py" "$text" 2>/dev/null) || return 0
+  case "$verdict" in
+    FLAGGED*)
+      echo "led: WARNING -- this review's statement is very short (${verdict#FLAGGED } "  >&2
+      echo "  whitespace-normalized chars). engine/review_gap_audit.py (./audit --review-gap," >&2
+      echo "  tracker item 'content-free-review-audit') will FLAG this row if it discharges a" >&2
+      echo "  countersign obligation -- state what you actually checked, not just the verdict." >&2
+      echo "  (warn-only tripwire, not a refusal -- a legitimate terse review exists; the write" >&2
+      echo "  proceeds either way)" >&2
+      ;;
+  esac
+}
+
 if [ "${1:-}" = "--recent" ] || [ "${1:-}" = "current" ]; then
   # `current` reads ledger_current (supersedes already filtered server-side, the ledger's own view).
   # `--recent` reads the raw table but MARKS a superseded row visibly instead of silently
@@ -525,6 +563,7 @@ if [ "${1:-}" = "review" ]; then
   regards="$1"; verdict="$2"; independence="$3"; shift 3
   statement="$*"
   warn_flag_in_statement "$statement"
+  warn_content_free_review_statement "$statement"
   resolve_actor
   # actor resolves via a subquery bind below, NOT string-spliced: NULLIF(:'actor_name','') is NULL
   # when LED_ACTOR is unset, so the ledger's actor column stays NULL and the kernel's set_actor
