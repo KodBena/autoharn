@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-09T13:36:11Z
-#   last-change: 2026-07-12T13:29:12Z
+#   last-change: 2026-07-12T13:57:11Z
 #   contributors: be693afb/main, e4410ef6/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -99,6 +99,7 @@ REGISTRY: dict[str, str] = {
     "registry-ordering":              "seen-red/registry-ordering/run_fixtures.py",
     "estimate-intake-validation":     "seen-red/estimate-intake-validation/run_fixtures.py",
     "apparatus-flip":                 "seen-red/apparatus-flip/run_fixtures.py",
+    "accounting-forbidden-tier":      "seen-red/accounting-forbidden-tier/run_fixtures.py",
 }
 
 

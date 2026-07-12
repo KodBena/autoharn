@@ -191,10 +191,25 @@ convention: its close is countersigned by a distinct [principal](#principal) who
 that evidence shape, present or absent
 ([ORCH-SPEC-RESOURCE-REGISTRY.md](design/ORCH-SPEC-RESOURCE-REGISTRY.md)
 §4 — self-reports are not trusted, per the maintainer's own witnessed reason: implementers "take
-undue license and lie about what they have done"). `TIER` is one of three values on a [resource
+undue license and lie about what they have done"). `TIER` is one of four values on a [resource
 declaration](#resource-declaration): `available` (on record, no endorsement), `blessed:
 <task-shape>` (the recommended reach for that shape), `mandated: <task-shape>` (required, and
-countersign-checked, for that shape).
+countersign-checked, for that shape), `forbidden: <task-shape>` (see [forbidden
+(tier)](#forbidden-tier) below).
+
+### forbidden (tier)
+The fourth [`TIER`](#mandated-tier) value on a [resource declaration](#resource-declaration),
+added by [ORCH-SPEC-RESOURCE-ACCOUNTING.md](design/ORCH-SPEC-RESOURCE-ACCOUNTING.md) §3 (tracker
+item `accounting-stage-a`) to complete the MAY/SHOULD/MUST/MUST-NOT deontic register the other
+three tiers already three-quarters covered: `forbidden: <task-shape>` says this resource MUST NOT
+be reached for, for that task shape. `./pickup`'s RESOURCES section sorts a `forbidden` entry
+first — ahead of `mandated` — because a prohibition outranks a mandate for a reader's attention.
+Version 1 is **audit-policed, not write-time-enforced**: nothing today refuses the INVOCATION of a
+forbidden resource as it happens; the `./audit --resources` surface (unbuilt as of this tier's
+addition — [ORCH-SPEC-RESOURCE-ACCOUNTING.md](design/ORCH-SPEC-RESOURCE-ACCOUNTING.md) §5/§8 stage
+C) is where a witnessed use against a `forbidden` entry becomes a checked violation. Saying so
+here is the honest declaration the tier's own spec makes (§7): a write-time refusal is a possible
+later mechanism, not this one.
 
 ### resource declaration
 A `kind=decision` ledger row carrying the `resource:` statement-prefix convention (stage 1;

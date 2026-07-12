@@ -39,9 +39,15 @@ ledger row carries a `kind` field naming what sort of act it records; `decision`
 several values that field takes) with a `resource:` statement-prefix convention — no kernel
 schema change. A resource carries six fixed fields (NAME, CLASS, REACH,
 WHAT-IT-PROVES, GUIDANCE, TIER) and a TIER of `available` (on record, no endorsement),
-`blessed: <task-shape>` (the recommended reach for that task shape), or
+`blessed: <task-shape>` (the recommended reach for that task shape),
 `mandated: <task-shape>` (required for that shape, and countersign-checked — see
-["the mandated-tier review convention"](#the-mandated-tier-review-convention) below). The table
+["the mandated-tier review convention"](#the-mandated-tier-review-convention) below), or
+`forbidden: <task-shape>` (this tool must NOT be reached for, for that shape —
+[ORCH-SPEC-RESOURCE-ACCOUNTING.md](ORCH-SPEC-RESOURCE-ACCOUNTING.md) §3 added this fourth tier
+to complete the MAY/SHOULD/MUST/MUST-NOT deontic register the first three already three-quarters
+covered; it is checked by the `./audit --resources` audit surface once that surface ships — a
+witnessed use against a forbidden entry is a violation — never by a write-time block, which that
+spec's §7 names as deliberately out of scope for now). The table
 in this page is organized around those same six fields, plus one more your project does not
 declare to the ledger but that helps you *choose* a tool: where it sits on the ordering
 [escalation ladder](#the-escalation-ladder-column) ORCH-SPEC-RESOURCE-REGISTRY.md §5 names.
@@ -71,7 +77,7 @@ them. Delete them, or leave them as reference, and add your own rows in the blan
 
 | NAME | CLASS | REACH | WHAT-IT-PROVES | GUIDANCE | TIER | RUNG (ordering ladder) |
 |---|---|---|---|---|---|---|
-| *(e.g. your-solver-name)* | *(solver \| service \| backend \| binary \| library)* | *(endpoint, binary path, venv, or import)* | *(one clause: "feasibility → this", "auditable enumeration → this")* | *(when to reach for it, when not to)* | *(available \| blessed: <task-shape> \| mandated: <task-shape>)* | *(rung 1 trivial / rung 2 tsort-or-ASP / rung 3 Z3-or-OR-Tools / n/a)* |
+| *(e.g. your-solver-name)* | *(solver \| service \| backend \| binary \| library)* | *(endpoint, binary path, venv, or import)* | *(one clause: "feasibility → this", "auditable enumeration → this")* | *(when to reach for it, when not to)* | *(available \| blessed: <task-shape> \| mandated: <task-shape> \| forbidden: <task-shape>)* | *(rung 1 trivial / rung 2 tsort-or-ASP / rung 3 Z3-or-OR-Tools / n/a)* |
 
 ### The escalation ladder column
 
@@ -95,7 +101,8 @@ they are NOT the same parser (corrected 2026-07-12, a hazard met in reach while 
 section previously claimed both grammars were parsed by `./pickup`'s RESOURCES section, which
 was true only of `resource:`). `./pickup`'s RESOURCES section
 (`bootstrap/templates/pickup.tmpl`) parses `resource:` rows only, for display at session
-hydration. `constraint:` rows have no `./pickup` display surface — they are read by the stage 2
+hydration. `constraint:` rows have no `./pickup` display surface — they are read by the
+[stage 2](ORCH-SPEC-RESOURCE-REGISTRY.md#8-implementation-routing-and-witness-plan)
 ordering-violations checker (`engine/ordering_edb.py` / `engine/ordering_floor.py`, wired into
 `./audit --ordering`), which is a report an operator RUNS, not something `./pickup` shows
 automatically. If a `./pickup` display surface for declared `constraint:` rows is ever wanted,
@@ -110,11 +117,20 @@ resource: <NAME> | <CLASS> | <REACH> | <WHAT-IT-PROVES> | <GUIDANCE> | <TIER>
 The six fields go in this exact order, separated by ` | ` (space-pipe-space) — the same order as
 the table's first six columns above — so a filled row converts mechanically (next section). `CLASS`
 is one of `solver | service | backend | binary | library`; `TIER` is one of
-`available | blessed: <task-shape> | mandated: <task-shape>`. Copy-paste example (the OR-Tools
-row above, promoted to `mandated` for a hyperparameter-enumeration task shape):
+`available | blessed: <task-shape> | mandated: <task-shape> | forbidden: <task-shape>`. Copy-paste
+example (the OR-Tools row above, promoted to `mandated` for a hyperparameter-enumeration task
+shape):
 
 ```sh
 ./led decision "resource: OR-Tools-CP-SAT | library | import:ortools.sat.python.cp_model | finite enumeration -> exact hyperparameter search proof | use for hyperparameter enumeration over heuristic search; discharge evidence = committed declarative model file | mandated: hyperparameter-enumeration"
+```
+
+A `forbidden` example — declaring a tool this maintainer's project has decided must NOT be
+reached for, for a named task shape (the MUST-NOT reads exactly like the two above, just with a
+prohibition instead of an endorsement):
+
+```sh
+./led decision "resource: legacy-eval-script | binary | binary:legacy_eval.sh | nothing provable -- an unmaintained script with no test coverage | superseded by MIP-SCIP; do not reach for it even under time pressure | forbidden: hyperparameter-enumeration"
 ```
 
 ### `constraint:` — declaring an ordering constraint beyond a plain `work depends` edge
@@ -155,14 +171,18 @@ in the grammar section above:
 ```
 
 Run that from your project's own root (the directory `./led` was scaffolded into), not from
-autoharn's own checkout — per ORCH-SPEC-RESOURCE-REGISTRY.md's boundary-hygiene rule, a resource
-is declared on **your** deployment's ledger, never in an upstream autoharn file. A mandated-tier
+autoharn's own checkout — per
+[ORCH-SPEC-RESOURCE-REGISTRY.md §2](ORCH-SPEC-RESOURCE-REGISTRY.md#2-declaration--resource-rows-on-the-deployments-own-ledger)'s
+boundary-hygiene rule, a resource is declared on **your** deployment's ledger, never in an
+upstream autoharn file. A mandated-tier
 declaration is commissioning-grade (it obliges a review discipline on whoever's work it governs
 — next section), so signing it — FULL mode from your own terminal, or SIGNED mode with a
 detached GPG signature — is apt; see
 [USER-GPG-TRUST-LAYER-FAQ.md](USER-GPG-TRUST-LAYER-FAQ.md) for both ceremonies. Once declared,
-`./pickup`'s RESOURCES section shows it on the very next hydration, tier-sorted with mandated
-entries first — no separate "publish" step.
+`./pickup`'s RESOURCES section shows it on the very next hydration, tier-sorted with `forbidden`
+entries first, then `mandated`, then `blessed`
+([ORCH-SPEC-RESOURCE-ACCOUNTING.md](ORCH-SPEC-RESOURCE-ACCOUNTING.md) §3: a prohibition outranks
+a mandate for a reader's attention) — no separate "publish" step.
 
 ## The mandated-tier review convention
 
@@ -211,8 +231,13 @@ stage 3.
 - [ORCH-SPEC-RESOURCE-REGISTRY.md](ORCH-SPEC-RESOURCE-REGISTRY.md) — the spec this template
   implements (§2 the statement fields, §4 the review convention, §5 the escalation ladder, §8 the
   stage plan and witness this template's own live proof follows).
-- [GLOSSARY.md](../GLOSSARY.md#pillar-1) — Pillar 1, `blessed`, `mandated (tier)`, and `resource
-  declaration` are all defined there and linked from this page on first use.
+- [ORCH-SPEC-RESOURCE-ACCOUNTING.md](ORCH-SPEC-RESOURCE-ACCOUNTING.md) — the companion spec that
+  added the fourth TIER value, `forbidden` (§3), completing the MAY/SHOULD/MUST/MUST-NOT deontic
+  register; §5/§7 name how and how far it is checked (audit-policed, no write-time block yet).
+- [GLOSSARY.md](../GLOSSARY.md#pillar-1) — Pillar 1, `blessed`, `mandated (tier)`,
+  `forbidden (tier)`, and `resource declaration` are all defined there; chase any of those terms
+  there if this page's own use of them does not read as plain English (the Stand-Alone Principle
+  two paragraphs above).
 - [USER-GPG-TRUST-LAYER-FAQ.md](USER-GPG-TRUST-LAYER-FAQ.md) — the FULL/SIGNED commission-signing
   ceremonies a mandated declaration is apt to use.
 - `bootstrap/templates/led.tmpl` — the `led obligate` / `led review` / `led review-gap`

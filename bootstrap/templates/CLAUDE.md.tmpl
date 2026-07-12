@@ -19,11 +19,15 @@ principals exist (see point 11 for the commissioner's role).
    separately (design/ORCH-RETROSPECTIVE-RUN10.md, Finding 2).
 2. Before choosing tools for a task, read the RESOURCES section. If the task's shape
    matches a blessed or mandated entry, reach for that tool — or ledger one line saying
-   why not. If you used a declared resource, say so in the closing row. A mandated-tier
-   task carries a review obligation by convention: its work item's close is countersigned
-   by a distinct principal whose review cites the resource's declared evidence shape —
-   present or absent — because self-reports are not trusted
-   (design/ORCH-SPEC-RESOURCE-REGISTRY.md §4).
+   why not. If the task's shape matches a forbidden entry, do not reach for that tool; if
+   you believe the prohibition is wrong for this task, ledger a question to the
+   commissioner — never a silent exception. If you used a declared resource, say so in
+   the closing row. A mandated-tier task carries a review obligation by convention: its
+   work item's close is countersigned by a distinct principal whose review cites the
+   resource's declared evidence shape — present or absent — because self-reports are not
+   trusted (design/ORCH-SPEC-RESOURCE-REGISTRY.md §4; the forbidden tier is
+   design/ORCH-SPEC-RESOURCE-ACCOUNTING.md §3, audit-policed per §5/§7, not yet checked
+   at write time).
 3. Assign the decomposition's countersign obligation to reviewer; reviewer countersigns
    via LED_ACTOR=reviewer claiming technical independence, AND runs an antecedent audit:
    enumerate design facts the artifacts encode with no antecedent in task text, ledger
