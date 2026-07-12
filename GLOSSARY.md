@@ -24,7 +24,7 @@ against this file, not a fact to live with.
 ## Project
 
 ### autoharn
-The project. A deliberately **neutral** name for a [metaproject](#metaproject): a harness that
+autoharn is the project — a deliberately **neutral** name for a [metaproject](#metaproject): a harness that
 formalizes an AI-collaborator workflow into queryable tools so an AI engineer can *pull* what it
 needs to do the right thing, instead of the maintainer re-explaining it each session. Repo:
 `github.com/KodBena/autoharn`. (Working tree is currently the `claude_harness` directory.)
@@ -49,7 +49,7 @@ own opening paragraphs above). Neither project's own source lives in this reposi
 cited here, the citation is provenance, not a resolvable path.
 
 ### extreme auditability / deductive maintenance
-The maintainer's framing of the problem genus autoharn addresses. *Auditability*: every claim
+This is the maintainer's framing of the problem genus autoharn addresses. *Auditability*: every claim
 (a benchmark result, a status, a belief) is attributable and checkable, not asserted. *Deductive
 maintenance*: the project's invariants and the supersession of its decisions are maintained by
 **deduction over a source of truth**, not by one person's memory.
@@ -59,26 +59,26 @@ maintenance*: the project's invariants and the supersession of its decisions are
 ## Architecture — the three Pillars
 
 ### Pillar
-One of the three load-bearing components of autoharn's design ([Pillar 1](#pillar-1),
+A Pillar is one of the three load-bearing components of autoharn's design ([Pillar 1](#pillar-1),
 [Pillar 2](#pillar-2), [Pillar 3](#pillar-3)). A working coinage — rename here if you prefer
 another word (e.g. "leg", "column", "subsystem").
 
 ### Pillar 1
-**Capability Registry** (a.k.a. the [intent SSOT](#intent-ssot)). A queryable store the agent
+Pillar 1 is the **Capability Registry** (a.k.a. the [intent SSOT](#intent-ssot)): a queryable store the agent
 **[pulls](#pull-not-push)** at point-of-need, listing every tool / service / venv / blessed
 method and — crucially — *what each one proves*, so the agent reaches for the provable tool by
 reflex (the [eliciting mechanism](#eliciting-mechanism)). Solves: "the maintainer keeps having
 to tell the agent what's available."
 
 ### Pillar 2
-**Provenance / Accountability Ledger.** Attributable, queryable links between a git commit, a
+Pillar 2 is the **Provenance / Accountability Ledger**: attributable, queryable links between a git commit, a
 benchmark reading, its environment, the hypothesis it tested, and the session that authored it —
 so a perf claim is a checkable fact and a regression is traceable to the change (and session)
 that introduced it. Built on [measurement ⊥ interpretation](#measurement--interpretation) and
 the [Witness → Correction](#witness--correction) chain.
 
 ### Pillar 3
-**Logic Safety Net.** The programmatic enforcement of disciplines that today live only as prose:
+Pillar 3 is the **Logic Safety Net**: the programmatic enforcement of disciplines that today live only as prose:
 per-store [`*_violations` gates](#violations-gate) backed by real engines — *classical* logic
 (recursive SQL, Z3, OR-Tools) for provable invariants, *non-classical* logic for
 [supersession](#supersession), provisional records, and conflicting advisories. The embodiment
@@ -240,8 +240,9 @@ lives in [OPERATING-CARD.md](ORCH-OPERATING-CARD.md); these are the definitions.
 
 ### world
 One isolated experiment habitat: a subject schema + kernel schema pair in Postgres plus a
-project directory carrying the operator verbs (`led`, `judge`, `pickup`, `distance-to-clean`,
-`audit`, `scaffold` — see [`led`/`pickup`](#led-and-pickup) below for the two most-cited),
+project directory carrying the operator verbs (`led`, [`judge`](#judge), `pickup`,
+[`distance-to-clean`](#distance-to-clean), [`audit`](#audit), the [scaffold](#the-scaffold) —
+see [`led`/`pickup`](#led-and-pickup) below for the two most-cited),
 `deployment.json`, `.claude/apparatus.json`, and an auto-loaded governance preamble. One world
 per run; a run's subject never sees a sibling world's ledger (maintainer ruling, 2026-07-09).
 
@@ -262,13 +263,29 @@ scaffold. Never applied to an existing world — runs are strictly linear and ol
 are settled evidence (maintainer ruling 2026-07-11; `bootstrap/apply-delta.sh` is
 demoted to history).
 
+<a id="toy-db"></a>
+### the toy db
+The shared, non-production Postgres database (host `192.168.122.1`, database name `toy`) this
+project's own witness work runs against — as opposed to a scaffolded deployment's real subject
+database. Individual scratch/fixture schema pairs (e.g. `toycolors` / `toycolors_kernel`) live
+inside it; see [`ORCH-USE-MODE-ENGINE-WIRING.md`](design/ORCH-USE-MODE-ENGINE-WIRING.md)'s
+target-info table for a worked example.
+
 ### scratch schema
-A throwaway schema pair in the toy db used to witness a delta or fixture both polarities,
-torn down to zero residue afterward (empty `information_schema.schemata` check).
+A throwaway schema pair in [the toy db](#toy-db) used to witness a delta or fixture both
+polarities, torn down to zero residue afterward (empty `information_schema.schemata` check).
+
+<a id="wired"></a>
+### wired
+A world or project directory is **wired** when it is scaffolded with this repo's hooks
+registered in its own `.claude/settings.json`, so a Claude session running there executes
+under the governance apparatus (PreToolUse/PostToolUse hooks, the change gate, the stamp) —
+as opposed to an unwired directory, where no hook intercepts anything
+([ORCH-OPERATING-CARD.md](ORCH-OPERATING-CARD.md), "The two-cwd model").
 
 ### stamp
 The HMAC binding a ledger row to the actual Claude session/agent that wrote it, injected
-into every Bash command in a wired world by `hooks/stamp_intercept.py`. Unforgeable without
+into every Bash command in a [wired](#wired) world by `hooks/stamp_intercept.py`. Unforgeable without
 a secret the writer's role cannot read; a bypass write lands visibly unstamped. A tripwire,
 not authentication (see [ORCH-CAPABILITIES.md, "Honest limits"](ORCH-CAPABILITIES.md#honest-limits-so-the-guarantees-arent-oversold)).
 
@@ -281,7 +298,42 @@ most. **`led`** appends one entry to a world's ledger per invocation (`./led dec
 comment is the canonical vocabulary). **`pickup`** is the session-start resume command: it
 reads the ledger LIVE and prints a fresh status brief (open work items, review debt, recent
 changes, and — since this session — the RESOURCES section), never a cached or stored one
-(design/ORCH-OPUS-READINESS.md's "derived at pickup time, never stored" rule).
+([design/ORCH-OPUS-READINESS.md](design/ORCH-OPUS-READINESS.md)'s "derived at pickup time, never stored" rule).
+
+<a id="judge"></a>
+### `judge`
+The operator verb `./judge`: runs `engine/ledger_differential.py` against the world's own
+ledger, deriving the same verdict independently in SQL and in ASP (Answer Set Programming, the
+`clingo` logic engine) and comparing them. Closed verdicts: `AGREE` (green) |
+`DIVERGE_BY_DESIGN` | `DIVERGE_DEFECT` | `QUARANTINED` — the latter two are TYPED escalation
+events (non-zero exit) that route upward rather than being self-adjudicated. Diagnosis
+walkthrough: `engine/docs/JUDGE-READING.md`. Source: `bootstrap/templates/judge.tmpl`.
+
+<a id="audit"></a>
+### `audit`
+The operator verb `./audit`: the contemporaneity check (`design/ORCH-CONTEMPORANEITY-AUDIT.md`
+Part 2) that joins every ledger row to the invocation that wrote it and the wall-clock journals,
+reporting per-row event-vs-record deltas. Closed verdicts: `CONTEMPORANEOUS` |
+`BATCHED_DECLARED` | `LATE_DECLARED` | `BACKFILL_SUSPECT` (non-zero exit only on the last).
+Read-only; safe to run mid-run or after. Not to be confused with the differently-scoped
+`./audit --review-gap` surface cited under [`review_gap`](#review_gap). Source:
+`bootstrap/templates/audit.tmpl`.
+
+<a id="distance-to-clean"></a>
+### `distance-to-clean`
+The operator verb `./distance-to-clean`: one composed read of all closure-debt dimensions
+(`review_gap`, `question_status`, `work_item_violations`) with counts and ids, computing
+nothing the three underlying views do not already compute. Strictly additive convenience —
+`led review-gap`, `led question-status`, and `led work violations` remain the documented
+default, disaggregated way to read closure debt (maintainer condition, 2026-07-11). Source:
+`bootstrap/templates/distance-to-clean.tmpl`.
+
+<a id="the-scaffold"></a>
+### the scaffold
+`bootstrap/new-project.sh`, run from the autoharn checkout: creates a fresh [world](#world)
+directory plus its Postgres schema pair, applies the [birth chain](#birth-chain),
+writes the per-world `deployment.json` and `.claude/` wiring, and wires the operator verbs as
+thin shims that `exec` autoharn's own templates live (see [`led`/`pickup`](#led-and-pickup)).
 
 ### principal
 A registered identity (`author`, `reviewer`) that ledger rows are attributed to;
@@ -302,10 +354,13 @@ review's own statement is content-free; this view's discharge test itself never 
 A `countersign_obligation` row: the obliged [principal](#principal)'s EVERY row (any kind)
 shows in [`review_gap`](#review_gap) until a distinct actor attests it. The row's `scope` column
 is a free-text label for a human reader, never a filter on which rows count — an obligation
-covers every row the obliged principal writes, regardless of scope. Oblige the WORKER, never the
-reviewer (see `led obligate` teach-text) — an obligation is standing operator-owned policy
-config, not a role self-service capability (`led obligate revoke` refuses a role's own attempt to
-lift it).
+covers every row the obliged principal writes, regardless of scope. Oblige the WORKER (this
+entry's shorthand for the `<obliged-actor-principal>` argument to `led obligate` — the
+[principal](#principal) whose rows need outside eyes, typically `author`), never the
+reviewer/countersigner itself (see `bootstrap/templates/led.tmpl`'s `led obligate` teach-text,
+which spells out the direction because getting it backwards was a repeated mistake) — an
+obligation is standing operator-owned policy config, not a role self-service capability (`led
+obligate revoke` refuses a role's own attempt to lift it).
 
 <a id="governed-file"></a>
 ### governed file
@@ -327,13 +382,13 @@ resolves it for the current invocation — from an explicit env var, or from a l
 The rule that a Write/Edit to a [governed file](#governed-file) is refused unless the world's
 ledger shows an open AND claimed s22 work item (s22: the kernel-lineage delta that adds a
 per-project work-item ledger, `kernel/lineage/s22-work-item-ledger.sql`) — a ledger entry is not
-a permit; an open+claimed work item is (ORCH-CAPABILITIES.md, numbered item 18 — cited by
-number, not a stable anchor, because that document's numbered items carry none yet; a known,
-filed gap, not a resolved reference).
+a permit; an open+claimed work item is ([ORCH-CAPABILITIES.md](ORCH-CAPABILITIES.md), numbered
+item 18 — cited by number, not a stable anchor, because that document's numbered items carry
+none yet; a known, filed gap, not a resolved reference).
 
 ### decomposition-review-blocker
 The `decomposition_review` mechanism in `hooks/pretooluse_change_gate.py`: a substantive
-Write/Edit/NotebookEdit anywhere under a wired [SUBJECT_ROOT](#subject-root), or a
+Write/Edit/NotebookEdit anywhere under a [wired](#wired) [SUBJECT_ROOT](#subject-root), or a
 [governed-file](#governed-file)-mutating Bash command, is refused unless the CLAIMED work item's
 OWN opening (`work_opened`) ledger row has been countersigned — the same
 [`review_gap`](#review_gap) discharge test applied to that one row. [Permit-to-work](#permit-to-work)
