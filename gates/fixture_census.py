@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-09T13:36:11Z
-#   last-change: 2026-07-12T06:33:55Z
+#   last-change: 2026-07-12T08:03:10Z
 #   contributors: be693afb/main, e4410ef6/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -93,6 +93,7 @@ REGISTRY: dict[str, str] = {
     "worktree-ledgering":             "seen-red/worktree-ledgering/run_fixtures.py",
     "preamble-ordering":              "seen-red/preamble-ordering/run_fixtures.py",
     "resource-intake-validation":     "seen-red/resource-intake-validation/run_fixtures.py",
+    "registry-ordering":              "seen-red/registry-ordering/run_fixtures.py",
 }
 
 

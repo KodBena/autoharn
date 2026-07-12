@@ -1,0 +1,5 @@
+ORDERING-VIOLATIONS REPORT (design/ORCH-SPEC-RESOURCE-REGISTRY.md §5 stage 2; observer-grade -- gates nothing):
+  target='regorderingneg' capable(work_items)=True counts={'any_row': 14, 'work_opened': 5, 'work_closed': 3, 'work_depends': 2, 'constraint_precedes_edges': 2, 'constraint_precedes_unparsed': 1, 'constraint_excludes_deferred': 1}
+  CLOSE_BEFORE_DEPENDENCY: VIOLATED (discharged=0, violated=1)
+  CONDITIONAL_PRECEDENCE: VIOLATED (discharged=0, violated=1), reasons=['constraint_unparsed']
+  DEPENDENCY_CYCLE: VIOLATED (edges=4, cycle_members=2)

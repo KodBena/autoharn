@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-11T14:41:23Z
-#   last-change: 2026-07-12T02:23:19Z
+#   last-change: 2026-07-12T07:55:59Z
 #   contributors: e4410ef6/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -57,6 +57,12 @@ existing N/A-is-distinct-from-clean convention, extended here):
      journaling hooks genuinely off/unwired per its own settings.json/apparatus.json) -- the
      explicit typed refusal, never conflated with 0 or 1. A wired-but-still-empty journal is
      NOT this case (that is capability present with zero events -- see contemp_edb.Capability).
+  4  ONLY reachable with --differential (bootstrap/templates/audit.tmpl's own doc): a clean base
+     exit (0) but the SQL-floor marriage differential diverged/quarantined.
+  5  ONLY reachable with --preamble (see engine/preamble_audit.py's own docstring): a clean base
+     exit (0/4) but >=1 Part 3 preamble-ordering family verdict is VIOLATED.
+  6  ONLY reachable with --ordering (see engine/ordering_audit.py's own docstring): a clean base
+     exit (0/4/5) but >=1 resource-registry ordering-violations family verdict is VIOLATED.
 
 Lazy imports banned (top-of-file only)."""
 from __future__ import annotations
@@ -72,6 +78,9 @@ from pathlib import Path
 
 from clingo_run import run_clingo
 from contemp_edb import CapabilityError, export
+from ordering_audit import build_report as build_ordering_report
+from ordering_audit import ordering_exit_addendum
+from ordering_audit import print_report as print_ordering_report
 from preamble_audit import build_report as build_preamble_report
 from preamble_audit import preamble_exit_addendum
 from preamble_audit import print_report as print_preamble_report
@@ -322,6 +331,13 @@ def main(argv: list[str] | None = None) -> int:
                          "F1-F12 family verdicts) -- observer-grade, gates nothing; see that module's own "
                          "docstring for the exit-code composition rule (a new exit 5, reachable only through "
                          "this flag, only when the base exit above is 0 and >=1 family is VIOLATED)")
+    ap.add_argument("--ordering", action="store_true",
+                    help="ADDITIONALLY print the resource-registry ordering-violations report "
+                         "(engine/ordering_audit.py; design/ORCH-SPEC-RESOURCE-REGISTRY.md §5 stage 2: "
+                         "close_before_dependency / conditional_precedence / dependency_cycle family "
+                         "verdicts) -- observer-grade, gates nothing; a new exit 6, reachable only through "
+                         "this flag, only when the base exit (and --preamble's own exit 5, if also passed "
+                         "and clean) is 0 and >=1 family is VIOLATED")
     args = ap.parse_args(argv)
 
     root = Path(args.root).resolve()
@@ -362,16 +378,30 @@ def main(argv: list[str] | None = None) -> int:
     # stated there in full): print the report regardless; a non-zero base_exit is NEVER
     # overridden (the first problem found stays the reported one, mirroring --differential's
     # own already-shipped rule) -- only a clean base_exit (0) may be raised, to 5, and only when
-    # this flag was passed and >=1 family verdict is VIOLATED.
+    # this flag was passed and >=1 family verdict is VIOLATED. --ordering composes the same way,
+    # CHAINED after --preamble (never early-returning) so both flags may be passed together: the
+    # first problem found across BOTH addenda stays the reported one (5 before 6, matching the
+    # order the flags are declared above), never silently dropping the second report.
+    final_exit = base_exit
     if args.preamble:
         print()
         pr = build_preamble_report(exp)
         print_preamble_report(pr)
-        if base_exit == 0:
+        if final_exit == 0:
             addendum = preamble_exit_addendum(pr)
             if addendum is not None:
-                return addendum
-    return base_exit
+                final_exit = addendum
+
+    if args.ordering:
+        print()
+        orep = build_ordering_report(target_name)
+        print_ordering_report(orep)
+        if final_exit == 0:
+            addendum = ordering_exit_addendum(orep)
+            if addendum is not None:
+                final_exit = addendum
+
+    return final_exit
 
 
 if __name__ == "__main__":

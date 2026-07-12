@@ -1,0 +1,35 @@
+{
+  "target": "run7",
+  "verdict": "AGREE",
+  "only_asp": [],
+  "only_sql": [],
+  "asp_record": {
+    "engine": "clingo",
+    "version": "clingo version 5.8.0",
+    "config": [
+      "ordering_violations.lp",
+      "ordering_obligations.lp"
+    ],
+    "input_basis": "edb-text (ordering EDB export, serialized; engine/ordering_edb.py)",
+    "input_hash": "fd19689f85d50779094500a53b34c4c80871f15943996881a062d76d2744de2e",
+    "program_hash": "70dc043caa968ad314142bb0022662eaad7d673c84f4a77658f8eaea9c6d09f5",
+    "output_hash": "d4a4f78c562ddd87a82745cd0ed69664b36b9e6d57df105e2816397d1e08de60",
+    "target": "run7",
+    "ts": "2026-07-12T10:18:56"
+  },
+  "sql_record": {
+    "engine": "postgres",
+    "version": "PostgreSQL 18.4",
+    "config": [
+      "ordering_floor.py::floor_atoms"
+    ],
+    "input_basis": "live-db ledger rows (toy.run7.ledger + .ledger_current)",
+    "input_hash": "c0788a8b13891f250a03c7ace4c582114ff9969e92ee9779279a7d2650fde55e",
+    "program_hash": "0efe9b8db33a18f5bf15342489a3e98f1ddc92f708908fadd587d6b68d58aa7f",
+    "output_hash": "d4a4f78c562ddd87a82745cd0ed69664b36b9e6d57df105e2816397d1e08de60",
+    "target": "run7",
+    "ts": "2026-07-12T10:18:56"
+  },
+  "asp_quarantine": null,
+  "sql_quarantine": null
+}

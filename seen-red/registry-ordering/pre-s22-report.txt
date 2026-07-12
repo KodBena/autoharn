@@ -1,0 +1,5 @@
+ORDERING-VIOLATIONS REPORT (design/ORCH-SPEC-RESOURCE-REGISTRY.md §5 stage 2; observer-grade -- gates nothing):
+  target='regorderingpre22' capable(work_items)=False counts={'any_row': 1, 'constraint_precedes_edges': 1, 'constraint_precedes_unparsed': 0, 'constraint_excludes_deferred': 0}
+  CLOSE_BEFORE_DEPENDENCY: UNDECIDABLE, reasons=['pre_s22']
+  CONDITIONAL_PRECEDENCE: UNDECIDABLE, reasons=['pre_s22']
+  DEPENDENCY_CYCLE: UNDECIDABLE (edges=1, cycle_members=0), reasons=['pre_s22']
