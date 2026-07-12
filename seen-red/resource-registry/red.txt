@@ -1,0 +1,99 @@
+seen-red/resource-registry — banked both-polarity evidence (fixture-census)
+
+ORCH-SPEC-RESOURCE-REGISTRY.md stage 1 (design/ORCH-SPEC-RESOURCE-REGISTRY.md) specifies the
+Pillar-1 resource registry: `resource:`-prefixed decision rows on a project's own ledger, a
+`./pickup` RESOURCES section that shows them tier-sorted (mandated first), and a mandated-tier
+review convention riding the existing `countersign_obligation`/`review_gap` machinery. §8's own
+witness plan asks for exactly what this file banks, from a LIVE run of
+seen-red/resource-registry/run_fixtures.py against the real toy@192.168.122.1 db, using a
+throwaway scratch deployment (rrfixture/rrfixture_kernel/rrfixture_rw via
+bootstrap/track-work.sh), torn down after.
+
+WHAT THE FIXTURE PROVES, IN ORDER:
+
+1. Three `./led decision "resource: ..."` calls (one per TIER: available, blessed: <shape>,
+   mandated: <shape>) land as ordinary ledger rows — the stage-1 convention, no kernel change.
+2. `./pickup`'s new RESOURCES section (bootstrap/templates/pickup.tmpl's `resources()`, added
+   this session) parses all three and prints them TIER-SORTED, mandated first — spec §3's
+   ordering, checked by string position in the real captured stdout below, not asserted.
+3. RED — a mandated-shape work item (OR-Tools-CP-SAT's own hyperparameter-enumeration task
+   shape) is opened, claimed, and closed --witness citing the evidence shape, all as the
+   `author` principal, after `./led obligate mandated-tool-review commissioner author` (spec §4
+   stage 1's convention). With no countersigning review yet, `./led review-gap` shows SIX
+   outstanding rows — not just the three hp-enum work_* rows, but the three earlier resource
+   declarations too. This is the documented KNOWN OVER-CATCH (bootstrap/templates/led.tmpl's
+   own `led obligate` comment): once a principal is obliged, `review_gap` joins on actor
+   identity alone, with no time filter — every row that principal ever wrote, before or after
+   the obligation existed, counts as debt until individually countersigned. The fixture
+   demonstrates this rather than hiding it (also documented in design/
+   USER-BLESSED-TABLE-TEMPLATE.md's "mandated-tier review convention" section).
+4. GREEN — every one of the six outstanding rows is countersigned by LED_ACTOR=reviewer (a
+   distinct principal — the kernel's segregation-of-duties check refuses same-actor
+   countersigns unconditionally), independence=self-review (this scratch deployment is UNWIRED:
+   track-work.sh provisions no stamp secret, so technical/managerial/financial independence
+   would be refused by the kernel's own stamp-distinctness CHECK — self-review is the honest
+   value on any unwired deployment, not a workaround). The hp-enum work item's three rows are
+   reviewed with an explicit citation of the evidence shape (the committed declarative model
+   file the mandated resource declaration names); the three resource-declaration rows get a
+   plain administrative countersign since they are not themselves mandated-shape discharges.
+   `./led review-gap` (a raw `SELECT * FROM review_gap`) then reads back "(0 rows)" — clean.
+
+Full fixture transcript (seen-red/resource-registry/run_fixtures.py, live run against
+toy@192.168.122.1, 2026-07-12, exit 0):
+
+ADOPT: track-work.sh exit=0 deployment.json=True -- PASS
+RESOURCES-DECLARED (available): exit=0 -- PASS
+RESOURCES-DECLARED (blessed): exit=0 -- PASS
+RESOURCES-DECLARED (mandated): exit=0 -- PASS
+PICKUP-TIER-SORTED: exit=0 RESOURCES section present=True order mandated<blessed<available=True -- PASS
+--- pickup RESOURCES section (verbatim) ---
+### SECTION: RESOURCES
+
+[mandated: hyperparameter-enumeration] OR-Tools-CP-SAT (library)  (ledger row id=3)
+  reach:      import:ortools.sat.python.cp_model
+  proves:     finite enumeration -> exact hyperparameter search proof
+  guidance:   use for hyperparameter enumeration over heuristic search; discharge evidence = committed declarative model file models/hp_enum_model.py
+[blessed: convex-allocation] cvxpy (library)  (ledger row id=2)
+  reach:      import:cvxpy
+  proves:     global optimum proof for convex allocation problems
+  guidance:   use for convex, continuous resource-allocation problems; not for combinatorial/integer structure
+[available] redis (service)  (ledger row id=1)
+  reach:      tcp://localhost:6379
+  proves:     ephemeral key/value cache or queue
+  guidance:   use for ephemeral state/coordination only, never durable ledger data
+--- end pickup RESOURCES section ---
+RED-REVIEW-GAP: led obligate exit=0 -- PASS
+RED-REVIEW-GAP: work open/claim/close exit=0/0/0 -- PASS
+RED-REVIEW-GAP: led review-gap shows outstanding debt -- PASS
+--- led review-gap (RED, before any countersign) ---
+id | actor |        scope         | assigned_by
+----+-------+----------------------+-------------
+  1 |     1 | mandated-tool-review |           3
+  2 |     1 | mandated-tool-review |           3
+  3 |     1 | mandated-tool-review |           3
+  4 |     1 | mandated-tool-review |           3
+  5 |     1 | mandated-tool-review |           3
+  6 |     1 | mandated-tool-review |           3
+(6 rows)
+--- end led review-gap (RED) ---
+GREEN-REVIEW-CLEAN: 6 outstanding row(s) to countersign: ['1', '2', '3', '4', '5', '6']
+GREEN-REVIEW-CLEAN: countersigned 6/6 outstanding rows -- PASS
+GREEN-REVIEW-CLEAN: led review-gap clean after countersigning -- PASS
+--- led review-gap (GREEN, after countersigning every outstanding row) ---
+id | actor | scope | assigned_by
+----+-------+-------+-------------
+(0 rows)
+--- end led review-gap (GREEN) ---
+
+resource-registry fixture: all cases PASS, scratch substrate torn down to zero residue
+(tempdir removed, schema rrfixture/rrfixture_kernel/role rrfixture_rw dropped).
+
+Two earlier live runs (torn-down evidence, not banked here) caught and fixed two bugs in the
+fixture script itself before this clean pass: (a) `_psql -tAc` with a leading `SET ROLE`
+statement echoes one leading non-numeric "SET" line ahead of the real query result — the row-id
+parser now filters to digit-only lines rather than assuming a fixed line count, matching
+bootstrap/templates/pickup.tmpl's own `_psql_tuples()` convention; (b) `./led review-gap` is a
+raw `SELECT * FROM review_gap` (bootstrap/templates/led.tmpl), so an empty result prints psql's
+own "(0 rows)", never the friendlier "(no review debt outstanding)" wording that is specifically
+`./pickup`'s REVIEW-DEBT section reading the same view — the fixture's clean/debt checks now
+match the string psql actually prints.
