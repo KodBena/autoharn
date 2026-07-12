@@ -1091,6 +1091,85 @@ a false-clean on a git-initialized-but-nothing-committed tree (regression-pinned
 reparameterization is not safe for one process importing the module twice for two deployments
 concurrently — named, not fixed.*
 
+**36. Content-free-review-discharge audit (`./audit --review-gap`) — a check that a discharging
+review's own statement isn't hollow (tracker item `content-free-review-audit`, commit 9a3250f;
+FAQ entry + GLOSSARY disambiguation added under tracker item
+`content-free-review-audit-legibility` after the opus-readiness probe's A2 result witnessed the
+mechanism as undiscoverable, ledger rows 181/182).** `<schema>.review_gap`'s own discharge test
+(s13/s22 lineage) never examines a countersigning review's content — any unsuperseded,
+distinct-actor `attest` clears an obligation regardless of what it says, by design. This audit
+layers a length heuristic on top: `engine/review_gap_thresholds.py`'s
+`CONTENT_FREE_STATEMENT_THRESHOLD = 40` (whitespace-normalized chars; corpus-measured against 42
+real run12 review rows — the shortest genuine review measured 130 chars, the specimen 4),
+consumed independently by an ASP producer (`engine/lp/review_gap_audit.lp`, `flagged(R) :-
+discharges(R,L), content_free(R)`) and a SQL floor, differentialed, and reported via `./audit
+--review-gap` (wired into `engine/contemp_audit.py`). Verdict vocabulary is `FLAGGED`, never
+`VIOLATED` — named honestly as a length heuristic that catches the "test"-shaped instance (run12
+ledger row 20: a 4-char review that mechanically discharged a genuine obligation, unflagged
+across six reviewer passes) and explicitly does NOT catch hollow-but-plausible prose of ordinary
+length. Exit code 6, composed under the first-problem-found rule: reachable only through
+`--review-gap`, only when no earlier flag already raised the exit, and only when ≥1 review is
+flagged. *Witnessed live 2026-07-12 (re-run at the merge seam):
+`seen-red/content-free-review-audit/run_fixtures.py` — ALL GREEN both polarities on scratch
+schemas: the GREEN world's genuine countersign shows `flagged=[]`; the RED world's `"test"`
+countersign is flagged (banked `red-report.txt` line 19: `FLAGGED (content-free statement
+discharging an obligation; suspicious, NOT proven dishonest ...): [2]`), `led review`'s
+warn-only tripwire fires on stderr
+without refusing the write, and both worlds' ASP/SQL differentials verdict AGREE. Disclosed
+honest gap, named in the fixture's own docstring: exit 6 is UNEXERCISED through the full
+`./audit` CLI on the fixture's standing unwired deployment (the base contemporaneity verdict
+refuses first at exit 3); the exit-6 composition logic itself (`review_gap_exit_addendum`) is
+witnessed directly in-process against the RED world's real report.*
+
+**37. `chain_high_water` witness — closing the s26 row_hash chain's tail-deletion gap (tracker
+item `s26-tail-deletion-witness`,
+[kernel/lineage/s27-chain-high-water.sql](kernel/lineage/s27-chain-high-water.sql), merged
+048b4e6).** seen-red/s26-row-hash-chain-deletion/'s own closure statement named a residue: the
+row_hash chain detects every interior row deletion but is structurally blind to a TAIL deletion —
+the literature's TRUNCATION ATTACK (Schneier-Kelsey USENIX Security 1998 / TISSEC 1999;
+Ma-Tsudik DBSec 2008 / ACM TOS 2009, whose own term it is; Crosby-Wallach USENIX Security 2009;
+RFC 6962/9162's signed tree heads — web-verified 2026-07-12, ledger finding row 194). s27 adds a
+one-row, kernel-side monotonic high-water witness bumped inside the same transaction as each
+ledger insert (so a rollback cannot desync it — the reason this shape beats a bare sequence
+`last_value` comparison, which is non-transactional); the subject role can read it but not lower
+it (SECURITY DEFINER trigger, mirroring s17's read-side closure on the write side).
+`bootstrap/templates/verify-chain.tmpl` compares the walked max id against the witness:
+agreement prints TAIL-COVERAGE-CONFIRMED; the witness ahead of the walked max reports
+`TAIL-DELETION-SUSPECT` (exit 3, distinct from `BROKEN`'s exit 1) and `--head` refuses to sign;
+a pre-s27 world degrades honestly to `WITNESS-UNAVAILABLE` (exit 0), never a false positive.
+*Witnessed live 2026-07-12 against throwaway scaffolds and re-witnessed independently at the
+merge seam (`seen-red/s27-chain-high-water/red.txt`, 8 cases): intact-and-agrees,
+rollback-does-not-bump, role-cannot-lower/-delete (`permission denied for table
+chain_high_water`), tail-deletion-suspect, head-refuses-on-suspect, pre-s27-degrades-honestly,
+differential AGREE.* TRIPWIRE-grade, named precisely per that literature's unanimous verdict: it
+does not defend against a schema-owner adversary who rewrites the witness alongside the ledger —
+the prior-arted closing move remains the externally-held signed chain head
+(design/MAINT-GPG-TRUST-LAYER.md §4, "The signed head"; the ceremony numbering lives in
+[design/USER-GPG-TRUST-LAYER-FAQ.md](design/USER-GPG-TRUST-LAYER-FAQ.md) §6, "Ceremony 3 — the
+signed chain head").
+
+**38. Typed work-parent edge + rollup split-metric — `led work open --parent`,
+`work_item_descendants`, pickup's ROLLUP section (tracker item `work-tree-rollup`,
+[kernel/lineage/s28-work-parent-edge.sql](kernel/lineage/s28-work-parent-edge.sql), merged
+1a24143; wired into the birth chain at the orchestrator's seam-integration pass, 78b0bd5).** A
+child work item can now cite its parent as a typed, refused-if-dangling-or-cyclic ledger column
+(slug-denominated, matching `work_depends_on` and the `estimate:` grammar's own join key)
+instead of free-text `--refs` prose. `pickup`'s new ROLLUP section joins that edge against
+`estimate:` rows to show a parent's own estimate beside the SUM of its direct children's — the
+free split-time decomposition-quality signal, retrospective-only, never a gate (the
+never-police-costs invariant is stated in the section's own header); actuals columns are
+honestly `NOT BUILT` until accounting stages B/D land. *Witnessed live 2026-07-12 on throwaway
+`--new-world` scaffolds (`seen-red/s28-work-parent-edge/`): valid parent accepted, dangling
+parent and self-parent refused at construction, cycle refusal proven both polarities in
+isolation (structurally unreachable via ordinary INSERT — the delta header's induction argument),
+rollup arithmetic checked against hand-computed values, SQL/ASP differential AGREE; re-witnessed
+END-TO-END at the merge seam through the fully-wired s15→s28 birth chain: parent edge accepted,
+dangling refusal with teach-text (exit 3), `work_item_descendants` correct, verify-chain INTACT
++ TAIL-COVERAGE-CONFIRMED, judge AGREE, teardown to zero residue.* Disclosed in the delta's own
+header: a first-draft self-parent CHECK (`work_parent IS DISTINCT FROM work_slug`) failed every
+ordinary all-NULL row — caught by the fixture run before shipping, corrected with the
+NULL-guarded form, named per the s26 injectivity-note precedent.
+
 ## Built, unexercised (exists; has not yet fired in anger)
 
 - **Assumption validity bounds** — an assumption can carry "valid until / valid within" and an
