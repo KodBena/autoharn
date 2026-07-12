@@ -6043,3 +6043,53 @@ its branch `content-free-review-audit` rather than the worktree default — the 
 merge attempt against the default branch name reported already-up-to-date; the real
 branch merged clean. Convention reminder for future commissions: state the branch name
 in the return contract.
+## decomposition-review-blocker — shipped (2026-07-12, Sonnet, commissioned build, isolated worktree)
+
+Maintainer ruling on the tracker: a task decomposition's second-pair-of-eyes review must
+be a BLOCKER for execution, not backloggable debt — if the decomposition is wrong, every
+discharged subtask is waste. Witnessed specimen: run12, where work item task 1 was
+claimed at 08:58:10 and its implementation began at 08:58:16 — six seconds later — while
+the decomposition's own countersign verdicts landed only at 09:00:38–09:01:01, execution
+running ~2.5 minutes ahead of the planning review meant to gate it. Existing
+`permit_to_work` proves an open+claimed work item exists; it says nothing about whether
+that item's own decomposition was ever countersigned.
+
+Shipped: a third, independently-switchable mechanism, `decomposition_review`, in
+`hooks/pretooluse_change_gate.py`. A substantive Write/Edit/NotebookEdit anywhere under a
+wired SUBJECT_ROOT (deliberately not restricted to the pre-existing `*.py`-pattern
+governed set), or a governed-file-mutating Bash command, is denied unless the claimed
+work item's own `work_opened` ledger row has been countersigned — the exact discharge
+test the ledger's `review_gap` SQL view already computes, composed against rather than
+re-derived. Vacuous by construction in a world whose `countersign_obligation` table
+carries no rows. Default mode `observe` (not `enforce` like its siblings), since it
+changes what an already-running world's writes are gated on the moment `hooks/` updates.
+
+An independent, out-of-frame second-opinion review (ADR-0014, a fresh subagent with no
+visibility into the implementation's reasoning) caught a real defect before commit: the
+Bash-branch DB-error handler was a bare `except: pass` copy-adapted from
+`permit_to_work`'s sibling check, whose safety depends on `change_gate`'s own
+unconditional deny always following it — a premise that does not hold when
+`change_gate` is off/observe, exactly the configuration this mechanism exists to matter
+in on its own. Fixed to fail closed under enforce, with a regression-test fixture case.
+
+Registered in the apparatus switchboard (`bootstrap/templates/apparatus.json`,
+`APPARATUS.md`), auto-picked-up by `filing/apparatus_registry.py`'s derived
+known-mechanism set, documented in `GLOSSARY.md` (new `SUBJECT_ROOT` / `governed file` /
+`decomposition-review-blocker` entries), and given a disclosed-self-review fallback in
+`bootstrap/templates/CLAUDE.md.tmpl` point 3 for solo worlds.
+
+`seen-red/decomposition-review-blocker/run_fixtures.py`: 9 cases against real scratch
+Postgres schemas (192.168.122.1/toy), zero DB/temp residue. Registered in
+`gates/fixture_census.py`.
+
+A:B:C on `GLOSSARY.md` and `bootstrap/templates/APPARATUS.md` (both touched by this
+change): B round 1 DEFECT (5 findings on APPARATUS.md, 6 on GLOSSARY.md — dangling
+`SUBJECT_ROOT`/`review_gap`/`s22` referents, two verbless fragments, a positional
+cross-reference into ORCH-CAPABILITIES.md), all repaired. B round 2 still DEFECT on both
+(3 residual findings on APPARATUS.md, 5 on GLOSSARY.md) — per ADR-0017's two-round cap,
+the loop escalated rather than grinding a third round; most GLOSSARY.md round-2 findings
+are pre-existing gaps in entries this change did not author (`ledger`, `world`,
+`teach-text` left undefined) and are disclosed here rather than swept into an unbounded
+glossary pass. Attestations recorded at doc-attestation/2, escalated=true, both
+adjudicated by the executor with the residue named in this entry and the work item's
+final report.

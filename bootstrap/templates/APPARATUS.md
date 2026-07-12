@@ -16,6 +16,7 @@ tool call, no re-scaffold needed. Format:
   "mechanisms": {
     "change_gate":      {"mode": "enforce"},
     "permit_to_work":   {"mode": "enforce"},
+    "decomposition_review": {"mode": "observe"},
     "stamp_intercept":  {"mode": "enforce"},
     "clean_exit":       {"mode": "enforce"},
     "demurral_detect":  {"mode": "off", "cost_note": "...", "classifier_command": [...], "timeout_s": 10},
@@ -60,7 +61,7 @@ check on demand against any named `apparatus.json` or world directory. Same neve
 as a bad mode value: an unrecognized key is never treated as configuring anything, and the
 warning names both the bad key and the full valid set.
 
-## The eleven mechanisms and their defaults
+## The twelve mechanisms and their defaults
 
 The table below lists every mechanism this project ships, the hook file that implements it, its
 shipped default mode, and why that default was chosen — the per-mechanism detail behind the
@@ -70,6 +71,7 @@ switchboard example above.
 |----------------------|------------------------------------------------|-----------|-----|
 | `change_gate`         | `hooks/pretooluse_change_gate.py`               | `enforce` | free per call — defaults to its current strength |
 | `permit_to_work`      | `hooks/pretooluse_change_gate.py` (same file, independent switch) | `enforce` | free per call |
+| `decomposition_review`| `hooks/pretooluse_change_gate.py` (same file, independent switch) | `observe` | free per call, but this mechanism is NEW and changes what an already-running world's writes are gated on the moment its `hooks/` is updated — defaults to `observe` (journals the would-be denial) rather than retroactively blocking a live world with no operator opt-in; `enforce` is the intended steady state once a world has adopted `countersign_obligation` rows for its work items |
 | `stamp_intercept`      | `hooks/stamp_intercept.py`                      | `enforce` | free per call — injection itself is free/harmless in EVERY mode; only the broken-secret DENY is mode-gated |
 | `clean_exit`           | `hooks/stop_clean_exit.py`                      | `enforce` | free per call |
 | `demurral_detect`      | `hooks/demurral_detect.py`                      | **`off`** | **spends a real `claude -p` classifier call per invocation** — "no world may silently bill its operator" (maintainer mandate, verbatim); the `cost_note` field sits next to this switch on purpose |
@@ -82,6 +84,23 @@ switchboard example above.
 
 Named nuances:
 
+- **`decomposition_review`** (BACKLOG "decomposition-review-blocker", maintainer ruling
+  2026-07-12) denies a substantive `Write`/`Edit`/`NotebookEdit` anywhere under `SUBJECT_ROOT`
+  (the scaffolded project's own root directory, wired via `deployment.json` or an explicit env
+  var — see this file's own `change_gate`/`permit_to_work` rows) — deliberately NOT restricted
+  to `permit_to_work`'s `*.py`-pattern governed set, since a bad decomposition threatens every
+  artifact a claimed work item touches — or a governed-file-mutating `Bash` command, unless the
+  CLAIMED work item's own opening ledger row has been countersigned (an unsuperseded `attest`
+  review from a distinct actor). This is the exact discharge test the ledger's `review_gap` SQL
+  view already computes for any obligated row (see `hooks/pretooluse_change_gate.py`'s own module
+  docstring for the full mechanics), applied here to that one row. VACUOUS, by construction, in a
+  world whose `countersign_obligation` table carries no rows at all — such a world never adopted
+  the review-obligation regime, so this mechanism adds nothing, automatically, with no separate
+  "table is empty" branch. Pre-s22 worlds — scaffolded before the s22 kernel-lineage delta, so
+  they carry no per-project work-item ledger view (`work_item_current`) at all — skip it
+  entirely, same as `permit_to_work`. The motivating specimen: in a prior run of this project's
+  own operator loop, a claimed work item's implementation began six seconds after it was claimed,
+  ~2.5 minutes ahead of the decomposition's own countersign verdict.
 - **`stamp_intercept`** treats injection and denial separately: `"observe"` still injects the
   HMAC stamp on a healthy secret (identical to `"enforce"` — injection is free and harmless), but
   the one thing it never does is DENY: an explicitly-configured-but-broken `STAMP_SECRET` passes
@@ -145,6 +164,7 @@ Every mode above is now **live-read**, not a forward declaration — this is the
 prior `assurance` block, which this project's own APPARATUS.md used to warn "neither hook reads
 this file." Editing `apparatus.json` today changes real behavior on the very next tool call; no
 re-scaffold, no settings.json regeneration needed. `deny_hint`, by contrast, is still baked into
-`.claude/settings.json`'s `DENY_HINT` env var at scaffold time (unchanged from before this pass) —
-editing it here does **not** retroactively update an already-scaffolded `settings.json`; re-run
-the settings-generation step of `bootstrap/new-project.sh`, or hand-edit both files together.
+`.claude/settings.json`'s `DENY_HINT` env var at scaffold time (unchanged by the live-read
+switchboard work described above) — editing it here does **not** retroactively update an
+already-scaffolded `settings.json`; re-run the settings-generation step of
+`bootstrap/new-project.sh`, or hand-edit both files together.

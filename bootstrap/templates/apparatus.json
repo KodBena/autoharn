@@ -3,6 +3,7 @@
   "mechanisms": {
     "change_gate": {"mode": "enforce"},
     "permit_to_work": {"mode": "enforce"},
+    "decomposition_review": {"mode": "observe"},
     "stamp_intercept": {"mode": "enforce"},
     "clean_exit": {"mode": "enforce"},
     "demurral_detect": {
