@@ -5543,3 +5543,71 @@ accuracy fix + its first-ever attestation). Witness, live and clean after every 
 `gates/link_integrity.py`, `gates/fixture_census.py`, `gates/no_lazy_imports.py`,
 `gates/doc_shapes.py`/`gates/doc_attestation_presence.py` (touched-set), `gates/layout_census.py`
 (one pre-existing, unrelated `attest-tags` gap remains, not this item's to close).
+
+## Retrospective-as-a-service shipped: design/USER-RETROSPECTIVE-RECIPE.md (2026-07-12, Sonnet, commissioned build, isolated worktree)
+
+Delivers tracker item `retrospective-offering` (`./led work list`; opened at row 75, queued
+behind `pillar-1-resource-registry`) and discharges this project's own decision ledger row 74,
+"Continuous-improvement input (maintainer, 2026-07-12, informal)" — `./led show 74` reads it
+verbatim: real deployments have subprojects, and on a fresh project nobody yet knows what they
+are doing right, so learning has to attach to the smallest unit that closes (the `work_closed`
+event), tiered by weight, with the ratchet institutionalized as the mechanism that makes each
+retrospective worth more than the last.
+
+**What shipped.** [design/USER-RETROSPECTIVE-RECIPE.md](design/USER-RETROSPECTIVE-RECIPE.md)
+codifies the retrospective method exercised live twice already
+([design/ORCH-RETROSPECTIVE-RUN10.md](design/ORCH-RETROSPECTIVE-RUN10.md),
+[design/ORCH-RETROSPECTIVE-RUN11.md](design/ORCH-RETROSPECTIVE-RUN11.md)) into a reusable,
+consumer-facing offering, `USER-`-prefixed per the doc-audience-taxonomy convention, sibling in
+shape to `design/USER-WORK-STATUS-OFFERING.md`. Five sections: (1) the two tiers — per-close (a
+self-reported `note` row, exact command shape plus a worked example) and per-phase (the full
+agent pass); (2) the full-pass method distilled from the two live runs — read-only evidence
+sources, the five standing lenses (flow, decision quality, assumptions, delegation, deliverable
+versus commission), the evidence-pointer rule, UNDECIDABLE discipline, and the boundary the
+run-10/run-11 pair itself drew against closure forensics' three-class struggle rubric (BACKLOG
+"Maintainer priority ruling: auditability outranks agent ergonomics"); (3) THE RATCHET — the
+load-bearing section, showing run10's six could-not-answer questions re-scored by run11 (three
+NOW ANSWERABLE, one PARTIALLY, two STILL BLOCKED) against exactly what got built in the interval
+(the signed commission row, the read-observer journal, declared event times, the
+decision-alternatives convention, decomposition-granularity guidance); (4) a fenced
+commission-prompt TEMPLATE, parameterized by deployment path, ledger schema, predecessor
+retrospective path, the read-only boundary, the five-lens list, the ratchet's re-asking duty,
+and the output document's home plus its own A:B:C attestation duty; (5) honest limits — a
+retrospective reads the record and marks what it lacks rather than inventing, and the tier-(a)
+self-reported lessons note is named explicitly as the LAZY-commission trust class (attributable,
+no harness guarantee), the same class as a LAZY-mode commission transcription and a subagent's
+self-reported token usage.
+
+**Process note, worth recording since the run exercised it live.** The commissioned worktree
+started three commits behind `next` (fast-forwarded `7246d82` → `75b5de1` before any of the
+required reading — ADR-0017, the two retrospective docs, `./led` itself — existed on disk;
+`./led --recent` failed outright until the fast-forward landed) — a hazard fixed in passing per
+CLAUDE.md's plank-nail reflex, not routed around, since none of this commission's required
+inputs existed at the stale commit.
+
+A:B:C loop ([design/ORCH-ABC-AUDIT-LOOP-RECIPE.md](design/ORCH-ABC-AUDIT-LOOP-RECIPE.md)): round
+1 found 6 legibility defects (an unlinked `led.tmpl` citation, a link-text/anchor mismatch on
+"ledger", a link-text/anchor mismatch on "run linearity", a forward reference to a labeling
+scheme not yet introduced, an unresolvable BACKLOG.md citation with no chase instruction, an
+unglossed capitalized "Agent" term), all repaired. Round 2 found 3 more (a proper-noun use of
+"the Run-11 first-shift forensics pass" before the document's own BACKLOG.md citation convention
+covered it, a bare "preamble point N" handle naming no document, and a Related-section promise
+about Section 5 that Section 5 did not yet keep) — per ADR-0017's two-round cap this routed as a
+non-converging-review-loop escalation, adjudicated by the orchestrator applying all three
+repairs directly rather than a third round. A mechanical follow-up (four `GLOSSARY.md#...`
+links resolved relative to `design/`'s own directory instead of the repo root, caught only by
+the pre-commit link-integrity gate itself) reshaped the on-disk bytes with no legibility change;
+the attestation was re-recorded once against the corrected content per the same precedent
+[design/ORCH-RETROSPECTIVE-RUN11.md](design/ORCH-RETROSPECTIVE-RUN11.md) already set for a
+link-only fix — the stale pre-fix record stands as append-only history, never rewritten.
+`attestations/doc-legibility-attestations.jsonl` carries both records; the CURRENT one (`schema
+doc-attestation/2`, content_sha256 `0cf51bb8674e...`, `escalated: true`, adjudication object) is
+what the gate checks. Witness: `python3
+gates/doc_attestation_presence.py design/USER-RETROSPECTIVE-RECIPE.md` → clean; `python3
+gates/link_integrity.py design/USER-RETROSPECTIVE-RECIPE.md` → clean; `python3
+gates/doc_shapes.py design/USER-RETROSPECTIVE-RECIPE.md` → clean; `python3
+gates/no_lazy_imports.py` (exit 0); `python3 gates/fixture_census.py` (clean, 48 gates).
+
+Tracker: `./led work claim retrospective-offering` at commission start; closed `shipped` at this
+entry's commit (`./led work list`/`./led show` carry the full record). `CLAUDE_COMMIT_PATHS`
+declared explicitly to this entry's commit's own staged set.
