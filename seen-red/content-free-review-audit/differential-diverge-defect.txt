@@ -1,0 +1,3 @@
+  [!! ] cfraudg      DIVERGE_DEFECT     asp=1 sql=1 atoms; Δasp=['discharges(2,1)'] Δsql=['flagged(999999)']
+
+VERDICT: DIVERGE_DEFECT

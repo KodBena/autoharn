@@ -1,0 +1,34 @@
+{
+  "target": "cfraudg",
+  "verdict": "AGREE",
+  "only_asp": [],
+  "only_sql": [],
+  "asp_record": {
+    "engine": "clingo",
+    "version": "clingo version 5.8.0",
+    "config": [
+      "review_gap_audit.lp"
+    ],
+    "input_basis": "edb-text (review-gap-audit EDB export, serialized; engine/review_gap_edb.py)",
+    "input_hash": "b26e3580d8b74bbb606ce43d5ae82757f08e51b18be3303bb9a7130ac3686373",
+    "program_hash": "c7e193dda309b6b4a9498f06793b7ac558d63713967661df180fd0cde18aed9a",
+    "output_hash": "81d0ce221151c1db02aac0e65f4dabdc3e100d70576437471e38cbdd5470354d",
+    "target": "cfraudg",
+    "ts": "2026-07-12T10:04:03"
+  },
+  "sql_record": {
+    "engine": "postgres",
+    "version": "PostgreSQL 18.4",
+    "config": [
+      "review_gap_floor.py::floor_atoms"
+    ],
+    "input_basis": "live-db rows read directly (toy.cfraudg.ledger + review_detail + countersign_obligation)",
+    "input_hash": "fe77bd217c35eb4b90bb41fa163fac16957e4b8a6ab79f7d35606f2a5b9c0934",
+    "program_hash": "231f334f0096e6be6f7c68e3e8803a435920e102a3d195aa5ea54290929499c6",
+    "output_hash": "81d0ce221151c1db02aac0e65f4dabdc3e100d70576437471e38cbdd5470354d",
+    "target": "cfraudg",
+    "ts": "2026-07-12T10:04:03"
+  },
+  "asp_quarantine": null,
+  "sql_quarantine": null
+}

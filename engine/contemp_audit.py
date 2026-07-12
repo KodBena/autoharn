@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-11T14:41:23Z
-#   last-change: 2026-07-12T02:23:19Z
+#   last-change: 2026-07-12T07:50:55Z
 #   contributors: e4410ef6/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -57,6 +57,12 @@ existing N/A-is-distinct-from-clean convention, extended here):
      journaling hooks genuinely off/unwired per its own settings.json/apparatus.json) -- the
      explicit typed refusal, never conflated with 0 or 1. A wired-but-still-empty journal is
      NOT this case (that is capability present with zero events -- see contemp_edb.Capability).
+  5  ONLY reachable with --preamble (engine/preamble_audit.py's own docstring owns this code).
+  6  ONLY reachable with --review-gap (engine/review_gap_audit.py's own docstring owns this
+     code): the base exit (and any earlier flag's own addendum) was clean, and this pass FLAGGED
+     >=1 content-free review discharging a countersign obligation (tracker item
+     `content-free-review-audit`) -- never conflated with a VIOLATED verdict; see that module's
+     own "THE HONEST LIMIT" for why this check's vocabulary stops at FLAGGED.
 
 Lazy imports banned (top-of-file only)."""
 from __future__ import annotations
@@ -75,6 +81,9 @@ from contemp_edb import CapabilityError, export
 from preamble_audit import build_report as build_preamble_report
 from preamble_audit import preamble_exit_addendum
 from preamble_audit import print_report as print_preamble_report
+from review_gap_audit import build_report as build_review_gap_report
+from review_gap_audit import print_report as print_review_gap_report
+from review_gap_audit import review_gap_exit_addendum
 
 HERE = Path(__file__).resolve().parent
 CONTEMP_LP = HERE / "lp" / "contemporaneity.lp"
@@ -322,6 +331,13 @@ def main(argv: list[str] | None = None) -> int:
                          "F1-F12 family verdicts) -- observer-grade, gates nothing; see that module's own "
                          "docstring for the exit-code composition rule (a new exit 5, reachable only through "
                          "this flag, only when the base exit above is 0 and >=1 family is VIOLATED)")
+    ap.add_argument("--review-gap", action="store_true",
+                    help="ADDITIONALLY print the content-free-review-discharge report "
+                         "(engine/review_gap_audit.py; tracker item `content-free-review-audit`) -- "
+                         "observer-grade, gates nothing; see that module's own docstring for the "
+                         "exit-code composition rule (a new exit 6, reachable only through this "
+                         "flag, only when no earlier flag already raised the exit and >=1 review "
+                         "row is FLAGGED)")
     args = ap.parse_args(argv)
 
     root = Path(args.root).resolve()
@@ -361,17 +377,33 @@ def main(argv: list[str] | None = None) -> int:
     # --preamble's OWN exit-code composition rule (engine/preamble_audit.py's own docstring,
     # stated there in full): print the report regardless; a non-zero base_exit is NEVER
     # overridden (the first problem found stays the reported one, mirroring --differential's
-    # own already-shipped rule) -- only a clean base_exit (0) may be raised, to 5, and only when
-    # this flag was passed and >=1 family verdict is VIOLATED.
+    # own already-shipped rule) -- only a clean exit so far may be raised, to 5, and only when
+    # this flag was passed and >=1 family verdict is VIOLATED. `final_exit` (rather than an early
+    # return) lets --review-gap below compose the SAME way after --preamble, so a caller passing
+    # BOTH flags still sees the first problem found win, per the same rule.
+    final_exit = base_exit
     if args.preamble:
         print()
         pr = build_preamble_report(exp)
         print_preamble_report(pr)
-        if base_exit == 0:
+        if final_exit == 0:
             addendum = preamble_exit_addendum(pr)
             if addendum is not None:
-                return addendum
-    return base_exit
+                final_exit = addendum
+
+    # --review-gap's OWN exit-code composition rule (engine/review_gap_audit.py's own docstring):
+    # identical shape to --preamble's, one new code (6, reachable only through this flag), and
+    # composed AFTER --preamble so the first problem found (whichever flag surfaces one first)
+    # stays the reported one.
+    if args.review_gap:
+        print()
+        rgr = build_review_gap_report(target_name)
+        print_review_gap_report(rgr)
+        if final_exit == 0:
+            addendum = review_gap_exit_addendum(rgr)
+            if addendum is not None:
+                final_exit = addendum
+    return final_exit
 
 
 if __name__ == "__main__":
