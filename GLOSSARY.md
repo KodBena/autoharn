@@ -292,6 +292,11 @@ requirement that review comes from a provably different invocation than the work
 The SQL view (`led review-gap`; also [`./pickup`](#led-and-pickup)'s REVIEW-DEBT section) that
 lists every ledger row an [obliged](#obligation) [principal](#principal) wrote with no
 distinct-actor countersign yet — an empty result is clean, any row listed is outstanding debt.
+Not to be confused with the content-free-review-discharge **audit** (`./audit --review-gap`,
+[engine/review_gap_thresholds.py](engine/review_gap_thresholds.py)) — a distinct,
+differently-scoped check over this same view's discharges, inspecting whether a discharging
+review's own statement is content-free; this view's discharge test itself never examines content
+(see [USER-RECIPES-FAQ.md](design/USER-RECIPES-FAQ.md) for the full answer).
 
 ### obligation
 A `countersign_obligation` row: the obliged [principal](#principal)'s EVERY row (any kind)
