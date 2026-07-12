@@ -13,23 +13,28 @@ into one human-navigable home. Those repos become read-only evidence archives af
 recorded HOME-FLIP; the complete working surface lives here, organized so every directory
 level is `ls`-legible.
 
-> New here? Read **`CLAUDE.md`** (the working standard every session runs under), then
-> **`bootstrap/QUICKSTART.md`** (clone → collaborating, executed not proofread). What
-> *binds* is in **`law/`**; the vocabulary is in **`GLOSSARY.md`**.
+> New here? Start with **`USER-GUIDE.md`** — the front door: it gates you on the two
+> prerequisites (a Postgres database you can reach and a Claude Code install) BEFORE any
+> command asks for them, then walks you through scaffolding your own governed project.
+> Then **`CLAUDE.md`** (the working standard every session runs under) and
+> **`bootstrap/QUICKSTART.md`** (clone → collaborating, executed not proofread — note its
+> `psql` examples name the maintainer's own LAN database host; substitute yours per
+> `USER-CONFIGURATION.md`). What *binds* is in **`law/`**; the vocabulary is in
+> **`GLOSSARY.md`**.
 
 ## The tree (what each directory IS — one currency each)
 
 ```
 bootstrap/    clone → collaborating: bootstrap.sh, QUICKSTART.md, AUDITOR.md
 law/          what BINDS — read in full before work that invokes it
-  adr/          the ADR corpus 0000–0016, verbatim
+  adr/          the ADR corpus 0000–0017, verbatim
   briefs/       authoritative external-standards briefs + conformance map
 judgment/     pre-banked odd-link judgment: apply, never weaken (POST-FABLE law)
   engine/       engine seeds + panel + increment-0 (the live design basis)
   e-series/     governing analyses (consults 27/31/35/39) + pending ratification packages
   rulings/      ratified deliberation records
 kernel/       the subject decision-ledger kernel
-  lineage/      s10 … s19 DDL in order; new increments append
+  lineage/      s10 … s28 DDL in order; new increments append
   fixtures/     both-polarity kernel fixtures
 stores/       harness-db operational-store DDL (findings/foreclosures/rulings/acts/…) + fixtures
 instruments/  close-time instruments: manifest, consumers, derivers, verifiers
@@ -45,7 +50,7 @@ seen-red/     both-polarity gate evidence (a gate never seen red is a claim)
 design/       pattern & design documents (not law, not run evidence)
 research/     sourced research corpora
 runs/         NEW run/close records accrue here
-ephemera/     whole-session Claude Code ephemera snapshots (the auditability law's home)
+ephemera/     local-only session snapshots — gitignored, NEVER committed (privacy ruling 2026-07-09; the audit trail is the ledger + committed artifacts)
 provenance/   the transition record: migration manifest, path-translation, HOME-FLIP
 ```
 

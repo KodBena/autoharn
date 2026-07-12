@@ -38,7 +38,12 @@ git config merge.jsonl-union.driver "python3 tools/merge_jsonl.py %O %A %B"
 
 The kernel DDL is a lineage (`kernel/lineage/`); apply it to a THROWAWAY schema (never an evidence
 ledger). s15 is the current generation; the deltas add stamps, independence vocabulary, criterion
-principals, and the s19 search-path foreclosure:
+principals, and the s19 search-path foreclosure.
+
+> Every `psql -h 192.168.122.1 ...` in this document names the MAINTAINER'S OWN LAN database
+> host — it will not connect from anywhere else. Substitute the host and database you
+> provisioned per `USER-CONFIGURATION.md`'s FAQ (that is also the page to read if you have no
+> Postgres yet).
 
 ```sh
 S=qs_demo; K=qs_demo_kernel; R=qs_demo_rw
