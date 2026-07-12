@@ -522,6 +522,45 @@ to ignore this tenet's text and hope a possibly-incomplete net catches the viola
 especially since ADRs are by their nature somewhat fuzzy. The text binds; the mechanism
 assists.*
 
+## Revisit #4 — 2026-07-12 (codified, maintainer-approved; from the what-did-we-miss RCA)
+
+*(Zero-context note: "the what-did-we-miss RCA" is a two-track root-cause analysis run
+2026-07-12 after the project discovered that read-access logging — a standard requirement
+family in NIST SP 800-53 and in health/classified/nuclear-adjacent practice — had never
+surfaced as either an implemented mechanism or a named exclusion, despite NIST being a
+repeatedly stated concern. Five independent layers — the founding brief, the conformance
+map, the mechanical conformance checker, two multi-lens review panels, and a deliberately
+blind completeness audit — each inherited the same silent omission. The full record lives
+on the project tracker; the two clauses below are the constitutional half of the fix.)*
+
+**Clause 1 — standards-scope disclaimers are mandatory.** A document that synthesizes,
+summarizes, or maps external standards MUST carry an explicit scope disclaimer enumerating
+what it deliberately does not cover. An unnamed omission in a standards document propagates
+to every downstream instrument that trusts it: the conformance map inherited the founding
+brief's silence, the checker inherited the map's, the review panels inherited the corpus's.
+Witnessed, not theorized — five layers, one omission, zero flags. A named exclusion is a
+decision a reader can contest; a silent one is invisible until an incident finds it.
+This clause binds at authoring and editing time, per ADR-0017 Rule 4's own mechanism: the
+back-catalog — including the founding safety-critical-logging BRIEF, which is exactly this
+kind of document and currently carries no such disclaimer — migrates on touch,
+opportunistically, or by maintainer-initiated sweep; it is not retroactively indicted
+by this clause's codification alone.
+
+**Clause 2 — the standards registry.** The set of external standards this project holds
+itself against is NOT discoverable from the corpus — a standard the maintainer cares about
+may predate any document citing it, and a standard no document operationalizes is exactly
+the one every corpus-rooted audit will miss (witnessed: NIST existed in this project as a
+word, never as a source). The authoritative set is a maintainer-approved registry,
+[law/STANDARDS-REGISTRY.md](../STANDARDS-REGISTRY.md), which may name standards no document
+yet operationalizes. Every completeness or conformance exercise runs against the registry,
+never against corpus-discovered citations. The registry lives in law/ deliberately: it is
+exempt from documentation-decay processes and changes only by maintainer amendment.
+
+*Codification proviso (mirroring Revisit #3's own): the registry does not claim the project
+CONFORMS to its entries — it claims the project has NAMED what it measures itself against.
+An entry may sit unoperationalized indefinitely; what it cannot be is silently absent from
+the next completeness audit.*
+
 ## License
 
 Public Domain (The Unlicense).
