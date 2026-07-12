@@ -5977,3 +5977,40 @@ Same morning, related: work item `abc-loop-offering` opened (unclaimed) — the 
 loop as a scaffolded-deployment offering; no architectural blocker (B is an ordinary
 subagent, no `claude -p`), but worlds are not git repos, so presence-checking must
 become hook- or verb-grade; needs a short authored spec before Sonnet execution.
+
+## Q1 discharged + decomposition-policy spec authored (2026-07-12 late morning, Fable, A:B:C loops)
+
+Two papers from the maintainer's departure instructions, both attested this session:
+
+1. **Q1 (review-gap scope semantics) discharged.** design/MAINT-REVIEW-GAP-SCOPE-SEMANTICS-RULING.md
+   now carries the maintainer's ~/q1_partial_response answer transcribed (the A/B binary
+   rejected as a framing error; review scope is a policy decision with a deontic
+   character; his three cases are the registry spec §4 attachment vocabulary), the
+   history he asked for (the run-5/run-7 direction episodes; what a scope answer
+   decides is what review_gap LISTS), and the new evidence: run12's countersign-regress
+   tail (rows 88-93, reviewers attesting the rows that dispatched them, terminated only
+   by judgment) is the first witnessed SCOPE-shaped (not direction-shaped) cost of the
+   blanket-principal semantics — banked as the first data point for the registry's
+   gated-on-witnessed-need typed-attachment kernel stage. Kernel unchanged; over-catch
+   stands, fail-safe. A:B:C: round 1 three findings; round 2 caught the repairs
+   falsifying the status block's own "unedited" claim — two-round cap, ESCALATED,
+   adjudicated by applying B's repair verbatim (the second escalated record in the
+   attestations ledger).
+
+2. **design/ORCH-SPEC-DECOMPOSITION-POLICY.md authored** (work item
+   decomposition-policy-spec, the maintainer's task-splitting ask): task-management
+   obligations as declared `task-policy:` ledger rows in the accounting spec's
+   MAY/SHOULD/MUST/MUST-NOT register; eight starter criteria with provenance and honest
+   policing labels (POLICED kernel/gate/audit vs REVIEWER-JUDGMENT vs DECLARED-ONLY);
+   three splitting criteria (one acceptance criterion per task, one boundary per task,
+   independently witnessable completion); the criterion-citing countersign as the
+   regulatory trail; the transition-criteria mapping with the honesty boundary that
+   conformance never equals decomposition quality. Three Sonnet-executable stages.
+   A:B:C: round 1 three findings repaired; round 2 CLEAN, all four Rule 1 clauses
+   checked. B's artifact spot-checks ran live (run12 ledger via psql, kernel s22
+   source, tracker rows) and every §3 table claim matched its artifact.
+
+Same session context: freeze lifted on the maintainer's word (run12 finished, idle
+window); three Sonnet builders staged in worktrees (decomposition-review-blocker,
+content-free-review-audit, registry-stage2-ordering-checker) — merges follow their
+completion, dispositions will land as their own dated entries.
