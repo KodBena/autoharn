@@ -1,5 +1,7 @@
 # PG-HBA-HARDENING — closing the network superuser trust hole on the toy-db host
 
+Audience: maintainer
+
 Status: **PREPARED-UNAPPLIED.** Investigated read-only (Sonnet, 2026-07-10) against the live
 cluster at `192.168.122.1`. Every fact below is WITNESSED — the actual query, the actual output.
 No file on the db host was written; no role, password, or `pg_hba.conf` line was changed. Applying

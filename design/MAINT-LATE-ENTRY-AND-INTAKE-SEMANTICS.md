@@ -1,5 +1,7 @@
 # Late entries and intake bursts — DRAFT design for the maintainer
 
+Audience: maintainer
+
 STATUS: RATIFIED (2026-07-11, maintainer: "you had three points on the contemporaneity
 question, and I agree with all of them"). Drafted the same day from run 10's first live
 audit verdict and its adjudication (BACKLOG, "Run-10 first audit verdict adjudicated",

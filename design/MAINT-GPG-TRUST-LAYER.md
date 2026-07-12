@@ -1,5 +1,7 @@
 # The GPG trust layer — signed ratifications, signed commissions, anchored ledgers
 
+Audience: maintainer (the opening paragraph below also names the executor who builds from this spec)
+
 This document specifies how GPG (GNU Privacy Guard, the standard OpenPGP signing tool)
 is applied to this project: what gets signed, by whom, what each signature proves, and
 what is deliberately left unsigned. It is written for the maintainer who will hold the

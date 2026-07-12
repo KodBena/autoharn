@@ -1,5 +1,7 @@
 # Publishing autoharn — the gates, the mechanism, the timing
 
+Audience: maintainer
+
 Ruled by Fable (session `7be3443d`, 2026-07-06) under maintainer-delegated authority;
 executed forensics on the full unpushed range (175 commits, ~5.7M insertions) before
 ruling. **Verdict: DO NOT push `main` to origin now.** Not caution-in-general — two

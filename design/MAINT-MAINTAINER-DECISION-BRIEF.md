@@ -1,5 +1,7 @@
 # Maintainer decision brief — six things only you can decide
 
+Audience: maintainer
+
 This document lays out six decisions in the autoharn project that no one else is authorized to
 make for you — each one is prepared as a short question with a plain recommendation, not a
 design document you need to evaluate from first principles. It is written for you specifically:
@@ -19,7 +21,7 @@ mistake.
 ## 1. Should the "needs a second pair of eyes" flag catch everything a person does, or just one task?
 
 *This decision is tracked internally under the name `review-gap-scope-ruling`; the full
-technical write-up is [REVIEW-GAP-SCOPE-SEMANTICS-RULING.md](REVIEW-GAP-SCOPE-SEMANTICS-RULING.md).*
+technical write-up is [REVIEW-GAP-SCOPE-SEMANTICS-RULING.md](MAINT-REVIEW-GAP-SCOPE-SEMANTICS-RULING.md).*
 
 **The question.** The project can mark someone as needing a second reviewer: from that point on,
 every single thing that person does is flagged as unreviewed until someone else checks it — not
@@ -183,7 +185,7 @@ confirm, or anything else to abort:`. Type `research` and press enter. You shoul
 ## 5. Close a network security hole on the database machine
 
 *This decision is tracked internally under the name `pg-hba-hardening`; the full technical
-write-up is [PG-HBA-HARDENING.md](PG-HBA-HARDENING.md).*
+write-up is [PG-HBA-HARDENING.md](MAINT-PG-HBA-HARDENING.md).*
 
 **The question.** One database account has full administrator power over every database the
 project uses — and today, that account can be reached from anywhere on the local network with no
@@ -210,7 +212,7 @@ minutes rather than an investigation, and the underlying weakness already caused
 in this project's history.
 
 **The act.** This is a short sequence of steps, not a single line — each one is spelled out in
-[PG-HBA-HARDENING.md](PG-HBA-HARDENING.md) section 3, with exactly what you should see at each
+[PG-HBA-HARDENING.md](MAINT-PG-HBA-HARDENING.md) section 3, with exactly what you should see at each
 step. Budget about five to ten minutes, including two checks at the end that confirm it worked.
 Start by opening a terminal (the command-line window on your computer) and running this first
 command — it opens `psql`, the database's own command-line tool — and leave that session open
@@ -317,8 +319,8 @@ questions.
 - [ABC-AUDIT-LOOP-RECIPE.md](ABC-AUDIT-LOOP-RECIPE.md) and
   [law/adr/0017-the-zero-context-reader.md](../law/adr/0017-the-zero-context-reader.md) — the
   legibility discipline this document was written and independently checked against.
-- [REVIEW-GAP-SCOPE-SEMANTICS-RULING.md](REVIEW-GAP-SCOPE-SEMANTICS-RULING.md),
-  [PG-HBA-HARDENING.md](PG-HBA-HARDENING.md), [GPG-TRUST-LAYER-FAQ.md](GPG-TRUST-LAYER-FAQ.md) —
+- [REVIEW-GAP-SCOPE-SEMANTICS-RULING.md](MAINT-REVIEW-GAP-SCOPE-SEMANTICS-RULING.md),
+  [PG-HBA-HARDENING.md](MAINT-PG-HBA-HARDENING.md), [GPG-TRUST-LAYER-FAQ.md](GPG-TRUST-LAYER-FAQ.md) —
   the full technical source documents behind decisions 1, 5, and 6, for anyone who wants more
   detail than this brief carries.
 - [law/adr/0009-performance-investigation-discipline.md](../law/adr/0009-performance-investigation-discipline.md),

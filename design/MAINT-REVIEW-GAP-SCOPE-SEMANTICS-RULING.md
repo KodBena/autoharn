@@ -1,5 +1,7 @@
 # review_gap scope semantics — DRAFT ruling for the maintainer
 
+Audience: maintainer
+
 STATUS: DRAFT — AWAITING MAINTAINER'S WORD (2026-07-11). Queued as item (a) of
 HANDOFF.md's "Maintainer's morning batch" open-work entry (cited by name, not position —
 an earlier revision of this line cited "HANDOFF open-work item 2," a pointer into a

@@ -1,5 +1,7 @@
 # Regulator-adoption assessment — four institutional lenses on autoharn, 2026-07-12
 
+Audience: maintainer
+
 This document answers one maintainer-commissioned question: **if institutions with the
 expectations of the NRC (nuclear high assurance), NIST (standards and controls), the FAA
 (aviation software assurance, DO-178C-shaped), or a demanding tribunal ("ICJ", read as the
@@ -49,7 +51,7 @@ The live observations this document leans on, each re-verified 2026-07-12:
 - `SELECT rolname, rolpassword IS NOT NULL, rolsuper FROM pg_authid WHERE rolname='bork'`
   returns `bork|f|t`, and `SHOW ssl` returns `off` — a passwordless superuser reachable
   over the network, TLS off, exactly the state
-  [design/PG-HBA-HARDENING.md](PG-HBA-HARDENING.md) was written to close and whose status
+  [design/PG-HBA-HARDENING.md](MAINT-PG-HBA-HARDENING.md) was written to close and whose status
   is still prepared-unapplied (also CAPABILITIES.md "Not yet enforced").
 - No `requirements.txt` or `pyproject.toml` exists at the repository's top two levels — the
   apparatus has no dependency manifest.
@@ -77,7 +79,7 @@ much else rests on it. Each gap names its evidence.
 
 ### Gap 1 — The cryptographic trust layer is built, witnessed, and inert; it covers none of the evidence that exists
 
-Every mechanism of [design/GPG-TRUST-LAYER.md](GPG-TRUST-LAYER.md) is implemented and
+Every mechanism of [design/GPG-TRUST-LAYER.md](MAINT-GPG-TRUST-LAYER.md) is implemented and
 seen-red-witnessed (CAPABILITIES.md items 28–30), but only against throwaway test keys. As
 of this writing (verified 2026-07-12, above): no maintainer key has ever been generated, no
 `ratified/*` tag exists, no real chain head has ever been signed, and no existing world's
@@ -86,7 +88,7 @@ runs 7, 10, and 11 were born, and [deltas](../GLOSSARY.md#delta-kernel-lineage-d
 never applied to settled worlds (the runs-are-linear ruling, CLAUDE.md). Consequence,
 stated plainly: the properties the GPG layer exists to provide — non-repudiation, forgery
 resistance against the apparatus itself, outside-verifiability
-([GPG-TRUST-LAYER.md](GPG-TRUST-LAYER.md) §1) — exist today for nothing real. "Append-only
+([GPG-TRUST-LAYER.md](MAINT-GPG-TRUST-LAYER.md) §1) — exist today for nothing real. "Append-only
 or provably broken" is true of scratch fixtures only; for runs 3–11 the append-only
 guarantee is a database trigger the same passwordless superuser of Gap 2 could drop
 ([s26's own header](../kernel/lineage/s26-row-hash-chain.sql) names this limit). All four
@@ -97,7 +99,7 @@ examiner would actually be handed is exactly the uncovered part.
 
 Two halves are live-verified here, both dated 2026-07-12. **The door:** the Postgres role `bork` is a
 superuser with no password, reachable over the network, TLS off — and the prepared fix
-([PG-HBA-HARDENING.md](PG-HBA-HARDENING.md)) has sat unapplied; CAPABILITIES.md's "Not yet
+([PG-HBA-HARDENING.md](MAINT-PG-HBA-HARDENING.md)) has sat unapplied; CAPABILITIES.md's "Not yet
 enforced" section names pg_hba hardening as unscheduled. This credential bypasses every
 control the harness has: triggers, stamps, grants, views. **The floor:** no backup,
 replication, retention, or disaster-recovery story exists anywhere for the single Postgres
@@ -134,7 +136,7 @@ at write time unless a provably distinct (session, agent) invocation wrote it
 one vendor, one Postgres, with the [stamp](../GLOSSARY.md#stamp) secret on the same host it
 attests — the project's own words: "a tripwire, not authentication" (CAPABILITIES.md
 "Honest limits") and "everything the harness proves today, it proves inside one trust
-domain" ([GPG-TRUST-LAYER.md](GPG-TRUST-LAYER.md) §1). Nuclear-culture independence
+domain" ([GPG-TRUST-LAYER.md](MAINT-GPG-TRUST-LAYER.md) §1). Nuclear-culture independence
 (technical/managerial/financial — the BRIEF's I6 backing) is organizational separation this
 deployment structurally cannot produce, only disclose. The sharpest current edge is the
 run-11 retrospective's own finding: the record can witness that review *happened* and
@@ -291,7 +293,7 @@ Maintainer-act items are flagged — they are decisions or ceremonies only he ca
    [GPG-TRUST-LAYER-FAQ.md](GPG-TRUST-LAYER-FAQ.md)), commit `law/keys/maintainer.asc`,
    sign the first `ratified/*` tag, run `./attest-tags` for real. S; maintainer act; turns
    Gap 1's Rung 1 live with zero new code.
-2. **Apply the prepared pg_hba hardening** ([PG-HBA-HARDENING.md](PG-HBA-HARDENING.md):
+2. **Apply the prepared pg_hba hardening** ([PG-HBA-HARDENING.md](MAINT-PG-HBA-HARDENING.md):
    password + scram host lines). S; maintainer act; closes Gap 2's door.
 3. **Scaffold the next world on the current chain (s26 is already in it) and sign a real
    chain head at close.** S–M; first genuine "append-only or provably broken" world.
@@ -333,7 +335,7 @@ Maintainer-act items are flagged — they are decisions or ceremonies only he ca
 
 13. **The trust-domain decision**: either engineer a second channel outside the single
     domain (a second human principal with their own key — the multi-human extension
-    [GPG-TRUST-LAYER.md](GPG-TRUST-LAYER.md) §5 already designs; or an
+    [GPG-TRUST-LAYER.md](MAINT-GPG-TRUST-LAYER.md) §5 already designs; or an
     externally-hosted attestation anchor), or ratify a written acceptance of the
     single-domain limit with the compensating controls named. Gap 4 cannot be closed by
     code alone; the decision itself is the deliverable.
@@ -368,10 +370,10 @@ ruling, 2026-07-11).
   this document's gaps are complementary, not competing.
 - [law/briefs/safety-critical-logging/BRIEF.md](../law/briefs/safety-critical-logging/BRIEF.md)
   — the aspiration layer; its §2 invariants are the vocabulary the lenses tested against.
-- [design/GPG-TRUST-LAYER.md](GPG-TRUST-LAYER.md) and
+- [design/GPG-TRUST-LAYER.md](MAINT-GPG-TRUST-LAYER.md) and
   [design/GPG-TRUST-LAYER-FAQ.md](GPG-TRUST-LAYER-FAQ.md) — the built-but-unarmed layer
   Tier 1 arms.
-- [design/PG-HBA-HARDENING.md](PG-HBA-HARDENING.md) — the prepared perimeter fix.
+- [design/PG-HBA-HARDENING.md](MAINT-PG-HBA-HARDENING.md) — the prepared perimeter fix.
 - [CAPABILITIES.md](../CAPABILITIES.md) — the witnessed-capability inventory every
   "already sufficient" credit above cites.
 - [law/adr/0017-the-zero-context-reader.md](../law/adr/0017-the-zero-context-reader.md)
