@@ -66,7 +66,8 @@ convention shows what columns earn their place.
   declaration is commissioning-grade, so signing it is apt. Superseding a declaration is
   the ordinary supersedes edge; the registry view shows only unsuperseded rows.
 - The canonical residents for this maintainer's projects are, from his own enumeration:
-  MIP (SCIP), cvxpy, OR-Tools, Z3, clingo (already the house engine), tsort, redis,
+  MIP (mixed-integer programming, via the SCIP solver), cvxpy, OR-Tools, Z3, clingo (already
+  the house engine), tsort, redis,
   and per-project backends such as QEUBO. The scaffold seeds NOTHING by default — an
   empty registry is honest; a template registry file the maintainer edits at adoption
   is the offered convenience.
@@ -102,7 +103,12 @@ its work). The registry's mandated tier is precisely a task-type attachment:
   countersigned by a distinct principal whose review row must cite the evidence shape,
   present or absent. Self-reports are not trusted, per the maintainer's blunt and
   witnessed reason: implementers "take undue license and lie about what they have
-  done." The reviewer verifies the ARTIFACT, never the narrative.
+  done." The reviewer verifies the ARTIFACT, never the narrative. (This section is the
+  authoritative build/witness record of what Stage 1 shipped; the reconciled statement of what
+  "enforced" means for this tier — POLICED vs DECLARED-ONLY, how it composes with the separate,
+  still-unbuilt usage-evidence deontic checker, and why it is not a refusal of the close itself —
+  is owned by [ORCH-SPEC-RESOURCE-ACCOUNTING.md §4.1](ORCH-SPEC-RESOURCE-ACCOUNTING.md#41--the-mandated-tiers-enforcement-status-reconciled-dated-correction-2026-07-13-tracker-row-223),
+  added 2026-07-13 to reconcile a same-day drift between the two specs, tracker row 223.)
 - Stage 2 (kernel change, on witnessed need) adds typed attachment columns on the
   obligation table — attachment_type ∈ {principal, task_type, commission} — with
   matching gap views (`review_gap` — the kernel-derived view that lists every
@@ -121,7 +127,8 @@ or deadlines; nothing DERIVES a lawful order.
   form. Richer constraints (conditional precedence, mutual exclusion) are declared as
   `constraint:`-prefixed convention rows naming slugs — parseable, supersedable,
   attributable, zero schema change.
-- Checking is done by one new ASP program — the ordering-violations checker — over the
+- Checking is done by one new ASP (Answer Set Programming, the clingo layer that is this
+  project's reason to exist) program — the ordering-violations checker — over the
   work-item EDB (extensional database: the fact set an ASP program reasons over,
   exported from the ledger). It verifies close-before-dependency (the verified missing
   check), conditional-precedence violations, and it re-derives the existing cycle check.
@@ -145,7 +152,8 @@ or deadlines; nothing DERIVES a lawful order.
 
 "Christmas gift" is the maintainer's own label for this tier: wanted, wrapped, and
 opened only if everything else above is done. Not built; recorded so the substrate
-stays honest about what it already permits. ASP subsumes STRIPS-class planning (fluents
+stays honest about what it already permits. ASP subsumes STRIPS-class planning (STRIPS: the
+classical AI-planning formalism of states, actions, and goals) — fluents
 over steps, inertia via negation-as-failure, goals as constraints, #minimize for
 shortest plans — every construct already in the house .lp corpus). If it is ever
 opened: (a) retrospective plan VALIDATION — declared pre/effects plus the ledger's
@@ -158,7 +166,9 @@ this appendix is research, opened last, by his explicit word.
 ## 7. Honest limits and refusals
 
 - Declared task shapes, preconditions, and why-not rows are judgment-triggered — the
-  J-boundary of [BRIEF-CONFORMANCE-MAP.md](../law/briefs/BRIEF-CONFORMANCE-MAP.md):
+  [J-boundary](../law/briefs/BRIEF-CONFORMANCE-MAP.md#the-j-boundary--the-limit-of-what-gap-detection-can-promise)
+  (the line between the absences a machine can detect and the ones only a human judgment can
+  catch) of [BRIEF-CONFORMANCE-MAP.md](../law/briefs/BRIEF-CONFORMANCE-MAP.md):
   no machine can detect that a judgment-triggered entry SHOULD have been made. The
   registry strengthens intake and review discipline; it cannot make the mind legible.
   The countersign verifies evidence shapes — artifacts — never intentions.
@@ -257,8 +267,11 @@ this project's standing hack-rationalization-check practice — caught it).
 HONEST CAVEAT on the close_before_dependency/F11 partition (found by the same out-of-frame
 review, disclosed rather than left implicit): F11's own coverage of a dangling antecedent is
 TIME-GATED — both its rules require a `stop_event` fact, and F11 carries no
-`ob_family_forced_undecidable` entry, so on a world/session with zero `stop_event` facts F11
-reads `vacuous`, not `undecidable`. In that window (mid-session, before any Stop) a real
+`ob_family_forced_undecidable` entry (the escape-hatch fact this program's own family uses to force
+an `undecidable` verdict instead of a silent `vacuous` one when a needed precondition is simply
+absent — see the `pre_s22` escape hatch described in the paragraph below for the same mechanism used
+elsewhere), so on a world/session with zero `stop_event` facts F11 reads `vacuous`, not
+`undecidable`. In that window (mid-session, before any Stop) a real
 dangling-dependency-plus-early-close defect is visible to neither checker at the OBSERVER layer.
 This is not a live-safety gap — `hooks/stop_clean_exit.py` queries `work_item_violations`
 directly at every actual Stop attempt, unconditioned on any EDB `stop_event` fact, so a session

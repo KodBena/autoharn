@@ -1,5 +1,12 @@
 # ORCH-SPEC-RESOURCE-ACCOUNTING — usage accounting and the deontic register
 
+This document answers one question: for a declared resource (a solver, a service, a tool this
+project may/should/must/must-not reach for), how does the harness count what was actually used,
+and how does it type — per resource — whether the MAY/SHOULD/MUST/MUST-NOT rule attached to it
+is actually policed, by what mechanism, and at what grade? It is a design spec for the
+orchestrator (implementation stages are Sonnet-executable per §8), authored 2026-07-12 from the
+maintainer's same-morning asks (§1).
+
 Audience: orchestrator (design spec; implementation stages are Sonnet-executable per §8).
 Status: Fable-authored 2026-07-12, from the maintainer's same-morning asks (§1). This is a
 COMPANION to [ORCH-SPEC-RESOURCE-REGISTRY.md](ORCH-SPEC-RESOURCE-REGISTRY.md) (the
@@ -46,7 +53,10 @@ mapping rather than widening the declaration grammar:
   was reached at all (first-witnessed use, last-witnessed use), not a meaningful count.
 
 A declaration whose reality diverges from its class's default (a metered service billed
-per call, say) records that in its GUIDANCE prose for now. A typed per-declaration
+per call, say) records that in its GUIDANCE prose for now — GUIDANCE being one of the six
+statement fields the registry spec defines
+([ORCH-SPEC-RESOURCE-REGISTRY.md §2](ORCH-SPEC-RESOURCE-REGISTRY.md#2-declaration--resource-rows-on-the-deployments-own-ledger)),
+the free-text field naming when to reach for the resource and when not to. A typed per-declaration
 ACCOUNTING column is deliberately deferred to the s27 kernel step (the `resource` ledger
 kind staged in the registry spec's §8), on that spec's own principle that columns are
 added when the convention has shown which ones earn their place.
@@ -76,7 +86,7 @@ prohibition is wrong for this task, ledger a question to the commissioner — ne
 silent exception"). Nothing existing is relaxed — the change is the fail-safe class
 defined in [CLAUDE.md](../CLAUDE.md)'s ORCHESTRATION section.
 
-Declined, with the reason on record: a SHOULD-NOT tier. GUIDANCE prose already carries
+A SHOULD-NOT tier was considered and declined; the reason is on record. GUIDANCE prose already carries
 "when not to reach" advice, and a SHOULD-NOT strong enough to police is a `forbidden`
 that hasn't admitted it yet. Two advisory registers with one policed boundary between
 them would blur exactly the distinction §4 exists to type.
@@ -104,11 +114,56 @@ the whole column: the presence of a mechanization never licenses an
 agent to treat the unmechanized text as optional. `DECLARED-ONLY` means "the text binds
 and no machine has checked it yet," not "ignorable."
 
+### 4.1 — The mandated tier's enforcement status, reconciled (dated correction, 2026-07-13; tracker row 223)
+
+*(Per [ADR-0005](../law/adr/0005-documentation-discipline.md) Rule 8: the two paragraphs above
+stand unedited as the planning-time record; this is the dated correction that makes explicit
+what they left too implicit to survive a fresh read. Substrate: three independent fresh-context
+probe runs asking whether the `mandated` tier is enforced — Opus once, Sonnet twice, the third
+run (referred to here as "probe3") graded on this project's own tracker row 223 (run
+`./led show 223` at the repository root to read the grading in full) — each probe answered the
+question wrongly in one direction, because this section's derivation rule and
+[ORCH-SPEC-RESOURCE-REGISTRY.md](ORCH-SPEC-RESOURCE-REGISTRY.md) §4's shipped-mechanism prose
+read, side by side, as two competing stories for the same tier. This is the single owning
+statement of that status; REGISTRY §4 remains the authoritative build/witness record of how
+Stage 1 was constructed, and is not retold here.)*
+
+Verified 2026-07-13 against the mechanisms themselves, not the documents about them:
+
+- The intake grammar refusal (`bootstrap/templates/led.tmpl`) is live for all four TIER values,
+  `mandated` and `forbidden` included — a malformed or bare tier is refused at write time.
+- `mandated`'s assigned mechanism (the row above: countersigned evidence-shape review) is REGISTRY
+  §4 Stage 1, **SHIPPED and live** as of 2026-07-12: a mandated-shape work item's close is a
+  review obligation by convention, and going undischarged surfaces as `review_gap` debt
+  (`./led review-gap`, `./audit --review-gap`) until a distinct principal countersigns citing the
+  evidence shape. Per this section's own derivation rule: a deployment that has run `led obligate`
+  for the relevant principal and exercised the countersign reads `POLICED
+  (countersigned-evidence-shape-review)`; a deployment that declared the tier but never ran
+  `led obligate` reads `DECLARED-ONLY` — the same two facts §4 above already names, restated
+  concretely for this one tier because the abstraction alone did not carry.
+- What that mechanism is **not**: a refusal of the close itself. No kernel CHECK/trigger refuses
+  `led work close` on a mandated-shape item lacking its countersign — verified by reading the
+  grammar; none exists. The debt is *surfaced*, not blocking, at the close. On a WIRED deployment,
+  `hooks/stop_clean_exit.py` additionally blocks the *session* (never the close) from ending while
+  the debt is open — itself switchable per `apparatus.json` (`enforce`/`observe`/`off`) and
+  fail-open after three identical blocks. "Enforced" and "surfaced as debt, gating the session
+  boundary" are two different strengths, and this section's honest-limits register (§7) — the
+  passage the probes over-read — is about `forbidden`'s still-unbuilt write-time gate, never a
+  claim that `mandated` has none.
+- The deontic checker at `./audit --resources` (§5/§8 Stage C) is a **third, separate, still
+  UNBUILT** mechanism: it would derive VIOLATED/FLAGGED verdicts from witnessed tool-*use*
+  evidence (REACH-matched invocations) against the declared tier — checking that the declared
+  tool was actually reached for, which the Stage 1 review convention never attempts (it checks
+  that a review happened, never that the tool was used). So, plainly: `mandated` has one live,
+  shipped mechanism today (the review-obligation convention) and one unbuilt one (the
+  usage-evidence deontic check); `forbidden` has zero live enforcement mechanisms today, with the
+  same Stage C as its eventual destination.
+
 ## 5. Usage evidence and the accounting audit
 
 **The evidence base is the action stream** — the maintainer's 2026-07-11 principle:
-guarantees rest on what the hooks witnessed, nothing else. Concretely, per deployment:
-the invocation journal (`.claude/logs/invocations.jsonl`, written by the hook apparatus
+guarantees rest on what the hooks witnessed, nothing else. Concretely, per deployment, the
+evidence base comprises three things: the invocation journal (`.claude/logs/invocations.jsonl`, written by the hook apparatus
 around every Bash call, carrying command text, timestamps, and working directory), the
 DerivationRecords the engine layer banks for solver runs (a DerivationRecord is the
 solver-run provenance record — engine, version, config, input/output hashes — defined in
@@ -161,6 +216,8 @@ a cost guarantee the harness cannot give.
 
 ## 7. Honest limits
 
+This spec is explicit about what the accounting layer does not resolve:
+
 - REACH matching is textual (§5); the error directions are named at every surface.
 - History predating the instrumentation is UNDECIDABLE for counts — worlds run before a
   given observer existed report that, not zero.
@@ -173,14 +230,17 @@ a cost guarantee the harness cannot give.
 
 ## 8. Implementation routing (all stages Sonnet-executable from this spec)
 
-- **Stage A — `forbidden` tier**: validator vocabulary + pickup sort + preamble clause +
-  seen-red both polarities. Touches `bootstrap/templates/` — FREEZE-GATED: staged in a
-  worktree and merged only when no wired session is live (run 12 is live at authoring
-  time).
-- **Stage B — counting floor**: the SQL usage view over journal + ledger, and the pickup
-  RESOURCES annotations, with the denomination text of §5 shown at the surface.
-- **Stage C — deontic checker**: the ASP program + SQL floor + differential behind
-  `./audit --resources`, Part 3's conventions throughout.
+The work splits into four independently shippable stages, plus one fold-in when the registry
+spec's own stage 3 lands:
+
+- **Stage A — `forbidden` tier**: adds the validator vocabulary, makes pickup sort `forbidden`
+  entries first, adds the preamble clause, and lands seen-red fixtures on both polarities.
+  Touches `bootstrap/templates/` — FREEZE-GATED: staged in a worktree and merged only when no
+  wired session is live (run 12 is live at authoring time).
+- **Stage B — counting floor**: builds the SQL usage view over the journal and ledger, plus the
+  pickup RESOURCES annotations, showing the §5 denomination text at the surface.
+- **Stage C — deontic checker**: builds the ASP program, the SQL floor, and the differential
+  between them behind `./audit --resources`, following Part 3's conventions throughout.
 - **Stage D — subagent-spawn observer**: one costless journal-line observer in the
   apparatus, registered in the mechanism registry like its read/bash siblings.
 - **s27 fold-in**: when the registry spec's stage 3 lands the `resource` kernel kind,
@@ -189,7 +249,9 @@ a cost guarantee the harness cannot give.
 
 Each stage carries the standing witness duties: claims WITNESSED with observed output,
 REFUSED-AS-EXPECTED, or UNEXERCISED with the blocker named; fixtures registered in the
-census; no umbrella claims.
+census (`gates/fixture_census.py`, this project's registry of scratch-schema test
+fixtures — every seen-red directory a stage banks is listed there, so a fixture never goes
+stale unnoticed); no umbrella claims.
 
 ## Closure statement (per [ADR-0000](../law/adr/0000-the-alpha-and-the-omega-type-driven-design.md)'s closure form)
 
@@ -197,7 +259,7 @@ The universe of this spec is the maintainer's three asks of §1. Ask 1 (usage co
 split requisitioned/ever-present) is closed by §2 + §5's surfaces. Ask 2 (the
 MAY/SHOULD/MUST/MUST-NOT register with task-shape conditions) is closed by §3, with
 SHOULD-NOT deliberately declined and the reason recorded. Ask 3 (typed per-resource
-policing) is closed by §4's derived column and §6's grade boundary. Deliberately absent,
-each named where it falls: monetary claims (§6), write-time forbidden enforcement (§7),
-a declared ACCOUNTING column before s27 (§2), subagent counts before stage D (§5). No
-other obligations are created by this document.
+policing) is closed by §4's derived column and §6's grade boundary. This spec deliberately
+leaves four things out of scope, each named where it falls: monetary claims (§6), write-time
+forbidden enforcement (§7), a declared ACCOUNTING column before s27 (§2), and subagent counts
+before stage D (§5). No other obligations are created by this document.
