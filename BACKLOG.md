@@ -6014,3 +6014,32 @@ Same session context: freeze lifted on the maintainer's word (run12 finished, id
 window); three Sonnet builders staged in worktrees (decomposition-review-blocker,
 content-free-review-audit, registry-stage2-ordering-checker) — merges follow their
 completion, dispositions will land as their own dated entries.
+
+## content-free-review-audit — shipped (2026-07-12 midday, Sonnet, commissioned build, isolated worktree)
+
+The run12 row-20 specimen (a review row whose entire statement is "test", verdict
+attest, mechanically discharging row 4's countersign obligation — content never
+examined by the review_gap view, never caught by six reviewer passes) now has its
+checker. Merge 0bc57fb; agent commit 9a3250f.
+
+Shipped: engine/review_gap_{thresholds,edb,floor,differential,audit}.py +
+engine/lp/review_gap_audit.lp, marriage-grade (ASP + independent SQL floor, AGREE
+required), surfaced as `./audit --review-gap` with exit 6; threshold 40 normalized
+chars, corpus-justified in the thresholds module docstring (specimen: 4 chars;
+shortest genuine run12 review: 130 — wide empty gap, zero false positives on the
+measured corpus); warn-only intake tripwire in led.tmpl's review subcommand (matching
+the --evidence tripwire's style; warns, never refuses; the honest limit stated: 'test'
+is catchable, hollow-but-plausible prose is not, and no mechanization licenses
+skipping fresh eyes on reviews). Verdict vocabulary FLAGGED, deliberately never
+VIOLATED.
+
+Witnessed by the orchestrator directly: fixture re-run clean (RED/GREEN/negative-
+control DIVERGE_DEFECT/direct-exit-6, scratch schemas torn down); post-merge live run
+via run12's real `./audit --review-gap` — FLAGGED exactly [20], 39 genuine discharges
+enumerated, differential AGREE 40/40 atoms. Residues disclosed by the agent and
+verified pre-existing: engine/tests pytest suite unexercised (pytest not installed),
+layout_census/findings_gate reds predate the branch. Merge-seam note: the agent named
+its branch `content-free-review-audit` rather than the worktree default — the first
+merge attempt against the default branch name reported already-up-to-date; the real
+branch merged clean. Convention reminder for future commissions: state the branch name
+in the return contract.
