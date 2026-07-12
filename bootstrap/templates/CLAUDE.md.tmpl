@@ -1,13 +1,13 @@
 # CLAUDE.md — __PROJECT_NAME__ (world __SCHEMA__)
 
 Read .claude/HOOKS.md first. You are the author principal; reviewer and commissioner
-principals exist (see point 10 for the commissioner's role).
+principals exist (see point 11 for the commissioner's role).
 1. Decompose the ENTIRE commission into ledgered work items BEFORE implementing — every
    increment the task names, including ones you will not start this session
    (./led work open <slug> <title...> per item, titled so a FRESH session could build
    from it; claim only what you begin: ./led work claim <slug>). Close each with
    ./led work close <slug> <resolution> --witness <ref> once delivered. An increment
-   left out of the ledger does not exist: resumption cannot see it and point 5's "clean"
+   left out of the ledger does not exist: resumption cannot see it and point 6's "clean"
    passes vacuously over it (run-8 finding, 2026-07-11). Decompose to the UNIT OF
    INDEPENDENT RESUMPTION, not below it and not above it — no numeric rule (a fixed
    item-count or file-count target is cargo-cultable and wrong as often as right): state
@@ -17,40 +17,47 @@ principals exist (see point 10 for the commissioner's role).
    adds ledger ceremony with no resumability gain (run10: three items that collapsed to
    one file and one commit); too coarse hides a seam a successor could have picked up
    separately (design/ORCH-RETROSPECTIVE-RUN10.md, Finding 2).
-2. Assign the decomposition's countersign obligation to reviewer; reviewer countersigns
+2. Before choosing tools for a task, read the RESOURCES section. If the task's shape
+   matches a blessed or mandated entry, reach for that tool — or ledger one line saying
+   why not. If you used a declared resource, say so in the closing row. A mandated-tier
+   task carries a review obligation by convention: its work item's close is countersigned
+   by a distinct principal whose review cites the resource's declared evidence shape —
+   present or absent — because self-reports are not trusted
+   (design/ORCH-SPEC-RESOURCE-REGISTRY.md §4).
+3. Assign the decomposition's countersign obligation to reviewer; reviewer countersigns
    via LED_ACTOR=reviewer claiming technical independence, AND runs an antecedent audit:
    enumerate design facts the artifacts encode with no antecedent in task text, ledger
    rows, or assumption rows; file each one found as its own `./led assumption "<fact>"
    --refs <artifact>` (assumption, not finding — it's the same unledgered-design-fact
-   defect as point 6, just caught by the other principal instead of self-reported).
-3. Pre-register acceptance criteria as their own ledger entry BEFORE implementing;
+   defect as point 7, just caught by the other principal instead of self-reported).
+4. Pre-register acceptance criteria as their own ledger entry BEFORE implementing;
    record results with --evidence AND --refs row:<criteria-row-id> against that entry
    (refs is the sanctioned channel for a non-review kind to cite an antecedent row,
    so the criteria->result link is queryable, not prose).
-4. A task that produces files is complete only when they are committed to git.
-5. Done means ./led review-gap, question-status, and ./led work violations are all clean
+5. A task that produces files is complete only when they are committed to git.
+6. Done means ./led review-gap, question-status, and ./led work violations are all clean
    (./distance-to-clean composes these same three views into one read, if a single command is
    preferred for a closure check — the three views above remain the documented default).
-6. Any design fact you commit to that has no antecedent in the task or an existing ledger
+7. Any design fact you commit to that has no antecedent in the task or an existing ledger
    row gets recorded FIRST via `./led assumption "<the fact and why it was assumed>"` —
    an unledgered load-bearing assumption is a defect, not a convenience.
-7. Investigation and delegation are work: ledger them BEFORE doing them. "I lack the
+8. Investigation and delegation are work: ledger them BEFORE doing them. "I lack the
    spec" has more than one honest kind — classify, don't default: a `question` row when
    the operator should answer; a `decision` row when you resolve to excavate or author
    the spec from the context at hand; an `assumption` row when you proceed on an
    inferred reading. Dispatching a subagent is a `decision` row (what is delegated,
    why). A silent investigation leaves a record that claims the session began at its
    first write.
-8. Stopping is a ledgered act. Before you stop — done, blocked, or leaving work for
+9. Stopping is a ledgered act. Before you stop — done, blocked, or leaving work for
    later — write the disposition a successor resumes from:
    `./led decision "stopping: <why>; stands: <what is done>; remains: <slugs/refs>"`.
    Workers leave their work resumable for whoever picks it up; a stop with no trail
    strands the successor in archaeology.
-9. Record as you go — one row at the moment of the act. Batching declarations you are
+10. Record as you go — one row at the moment of the act. Batching declarations you are
    making right now (an intake decomposition) is fine; the token declares it. If you
    must record an act after the fact, declare its event time — never narrate the past
    as if live.
-10. On RECEIVING a commission (the ask this session was given), your FIRST ledger act —
+11. On RECEIVING a commission (the ask this session was given), your FIRST ledger act —
     before point 1's decomposition — is to record it verbatim as its own row:
     `./led commission "<ask verbatim as received>"`. This is LAZY-mode signing: you are
     the implementer transcribing the ask vicariously, not the commissioner attesting it
@@ -73,17 +80,17 @@ principals exist (see point 10 for the commissioner's role).
     (VERIFIED / UNSIGNED / FORGED-OR-CORRUPT) into the FIRST row of point 1's decomposition —
     a FORGED-OR-CORRUPT verdict is a stop-and-escalate event, never a silently-proceeded-past
     detail (design/MAINT-GPG-TRUST-LAYER.md §3).
-11. A load-bearing decision names what was rejected and why, IN THE STATEMENT — not a
+12. A load-bearing decision names what was rejected and why, IN THE STATEMENT — not a
     separate row, not left implicit. `./led decision "<the choice>; rejected: <the
     alternative(s)> because <why>"`. Convention only (no kernel column enforces this —
     filed, not built, awaiting a witnessed need before a schema change is warranted);
     the retrospective's could-not-answer item 1 named the gap this closes: "why the two
     app defects arose — oversight vs a considered-but-wrong call — is UNDECIDABLE from
     the record" without the alternatives a decision weighed being on the record too.
-12. When a dispatched subagent returns, you SEE its reported token/usage numbers in the tool
+13. When a dispatched subagent returns, you SEE its reported token/usage numbers in the tool
     result. If you ledger them, mark them explicitly as an unverified self-report — prefix
     the statement "(self-reported by the subagent; no harness guarantee)" — the same trust
-    class as point 10's LAZY-mode commission transcription: an attributable claim, never a
+    class as point 11's LAZY-mode commission transcription: an attributable claim, never a
     witnessed fact. The harness has no mechanism that checks a token count the way it checks
     a stamp or a kernel constraint; this is a convention, not a gate, and stays diagnostic-
     grade by design (BACKLOG "Maintainer principle: the action stream is the evidentiary
