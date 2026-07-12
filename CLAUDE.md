@@ -39,7 +39,7 @@
   enumerated universe by a third instance. Sonnet executes; Opus authors only here, and only
   with this full ceremony. Degraded-but-possible beats frozen — that is the ratified choice.
 - **The operator surface is the four verbs** (led, judge, pickup, scaffold) plus refusals
-  that teach. Operational truth lives in CAPABILITIES.md + those verbs; judgment/ and
+  that teach. Operational truth lives in ORCH-CAPABILITIES.md + those verbs; judgment/ and
   design/ archives are history unless a current spec cites them.
 - **Claims carry witnesses.** A report states, per item: WITNESSED (with observed output),
   REFUSED-AS-EXPECTED, or UNEXERCISED with the concrete blocker. Docs follow the same rule
