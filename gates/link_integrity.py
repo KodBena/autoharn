@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-11T14:37:38Z
-#   last-change: 2026-07-11T14:37:38Z
+#   last-change: 2026-07-12T00:33:01Z
 #   contributors: e4410ef6/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -124,6 +124,26 @@ def resolve(doc_path: str, path_part: str) -> str:
     if path_part.startswith('/'):
         return os.path.normpath(os.path.join(ROOT, path_part.lstrip('/')))
     return os.path.normpath(os.path.join(os.path.dirname(doc_path), path_part))
+
+
+def iter_raw_line_links(text: str):
+    """Yield (line_no, match) for every LINK-regex match in `text`, one parser shared by this
+    gate and any other consumer that needs to find/rewrite real markdown links (tools/rename_doc.py
+    is the second consumer this was extracted for — CLAUDE.md ADR-0012 P1, one home for the link
+    grammar). Scans fence-stripped lines (a link-shaped example inside a code fence is never a
+    real link — same exclusion the gate applies) but, unlike the gate's own scan-line construction
+    (`strip_inline_code`, which DELETES backtick-wrapped content and so shifts offsets), this
+    function skips an inline-code match by a parity check on the UNMODIFIED line instead of
+    deleting anything — so a caller gets match objects whose `.start()`/`.end()` are valid offsets
+    into the exact line text it can slice and rewrite. This is purely an ADDITIVE helper: the gate's
+    own `main()` below is untouched byte-for-byte, so its output stays byte-equivalent."""
+    stripped_text = strip_fences(text)
+    for ln, line in enumerate(stripped_text.splitlines(), 1):
+        for m in LINK.finditer(line):
+            prefix = line[:m.start()]
+            if prefix.count('`') % 2 == 1:
+                continue  # match starts inside an inline `code` span — a quoted example, not a link
+            yield ln, m
 
 
 def main() -> int:
