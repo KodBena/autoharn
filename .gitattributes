@@ -6,4 +6,3 @@
 # own docstrings carry the manual one-time `git config` lines for an already-cloned checkout.
 
 attestations/*.jsonl merge=jsonl-union
-BACKLOG.md merge=backlog-section-union

@@ -12,26 +12,26 @@ proofread"), and the `runs/` directory holds that acceptance run as its witness.
 ```sh
 sh bootstrap/bootstrap.sh          # env + git-hook install + merge-driver install + gate runnability + DB reachability
 ```
-Green means the gate chain is installed, the harness DB is reachable, and the two merge drivers
-described just below (`jsonl-union` and `backlog-section-union`) are wired. A red DB line is a
+Green means the gate chain is installed, the harness DB is reachable, and the merge driver
+described just below (`jsonl-union`) is wired. A red DB line is a
 host fact (pg_hba), surfaced loudly — it names the maintainer act needed, never soft-passes.
 
-**What the merge-driver install line does, and the manual fallback.** `attestations/*.jsonl` and
-`BACKLOG.md`'s dated sections merge mechanically via two drivers, `tools/merge_jsonl.py` and
-`tools/merge_backlog_sections.py` (design's own name:
+**What the merge-driver install line does, and the manual fallback.** `attestations/*.jsonl`
+merges mechanically via `tools/merge_jsonl.py` (design's own name:
 [design/ORCH-WORKTREE-LEDGERING.md](../design/ORCH-WORKTREE-LEDGERING.md), "3a. The jsonl merge
-driver" and its sibling BACKLOG driver), instead of the append-append conflicts a bare `git merge`
-produces on those files. `.gitattributes` (versioned) names which files use them; the driver
-COMMAND itself lives in `.git/config` (unversioned, so it cannot ride in `.gitattributes`) —
-bootstrap.sh's step above installs it, once per clone, the same shape as the `core.hooksPath` line
-bootstrap.sh already sets. A checkout made from this repository before this merge-driver mechanism existed, or
-whose `.git/config` was never re-run through bootstrap.sh since, installs it by hand:
+driver"), instead of the append-append conflicts a bare `git merge` produces on those files.
+`.gitattributes` (versioned) names which files use it; the driver COMMAND itself lives in
+`.git/config` (unversioned, so it cannot ride in `.gitattributes`) — bootstrap.sh's step above
+installs it, once per clone, the same shape as the `core.hooksPath` line bootstrap.sh already
+sets. (A sibling dated-section driver for `BACKLOG.md` existed while that file carried dated
+entries; it was retired with the file on 2026-07-12 — tracker ledger row 137 — and
+`tools/merge_backlog_sections.py` remains in-tree as history.) A checkout made from this
+repository before this merge-driver mechanism existed, or whose `.git/config` was never re-run
+through bootstrap.sh since, installs it by hand:
 
 ```sh
 git config merge.jsonl-union.name "union merge driver for append-only jsonl ledgers"
 git config merge.jsonl-union.driver "python3 tools/merge_jsonl.py %O %A %B"
-git config merge.backlog-section-union.name "dated-section union merge driver for BACKLOG.md"
-git config merge.backlog-section-union.driver "python3 tools/merge_backlog_sections.py %O %A %B"
 ```
 
 ## 1. Stand up a scratch kernel (the subject decision-ledger)

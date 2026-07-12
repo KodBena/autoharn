@@ -24,8 +24,11 @@ in git as commit f0718b8's ancestor state).
 2. CLAUDE.md — law pointers (five ADRs incl. 0017, all binding) + ORCHESTRATION. Read
    the named ADRs IN FULL before work that invokes them.
 3. ORCH-CAPABILITIES.md — the operational truth: 30+ witnessed capability items.
-4. BACKLOG.md, dated tail from "Two ratifications (maintainer, 2026-07-12 evening)"
-   onward — the final Fable-era day's findings and dispositions.
+4. The work tracker itself — `./led --recent` for the latest rows, `./led show <id>`
+   for any one in full. BACKLOG.md retired as a file on 2026-07-12 (maintainer ruling,
+   tracker ledger row 137: the ledger is the only liveness surface); it is now a
+   pointer stub, and the frozen dated record every "BACKLOG entry" citation in this
+   repository points into is read with `git show d6f64ee:BACKLOG.md`.
 5. USER-GUIDE.md — read once even as an orchestrator: it is the narrative spine an
    adopter follows, and it orders the USER- shelf.
 
@@ -63,9 +66,10 @@ carries each disposition):
   surfaced three genuine violations (run5 closed items before claims twice; run11's
   decomposition never cited its commission; run4's countersign preceded its window).
   The deductive-engine showcase is no longer prospective.
-- **Worktree ledgering is mechanized.** Union merge drivers for the attestations jsonl
-  and BACKLOG's dated sections are installed (one-time `git config` lines in
-  bootstrap/QUICKSTART.md; bootstrap.sh installs them for fresh clones); the invocation
+- **Worktree ledgering is mechanized.** The union merge driver for the attestations
+  jsonl is installed (one-time `git config` line in bootstrap/QUICKSTART.md;
+  bootstrap.sh installs it for fresh clones; a sibling driver for BACKLOG.md's dated
+  sections was retired with that file on 2026-07-12 — tracker row 137); the invocation
   journal (each world's `.claude/logs/invocations.jsonl`, hook-written per Bash call)
   carries the working directory for branch attribution; the `merge:` convention row and the
   merge-seam attestation rule live in ORCH-ABC-AUDIT-LOOP-RECIPE.md's integrator
