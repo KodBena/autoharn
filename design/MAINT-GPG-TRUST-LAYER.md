@@ -105,14 +105,21 @@ differential in AGREE, then enters the birth chain for the next world.
 **The signed head (the human act):** at run close, the maintainer signs the chain head:
 
 ```
-./verify-chain --head > /tmp/head.json     # {world, max_id, head_hash, utc}
+./verify-chain --head > /tmp/head.json     # {world, max_id, head_hash, utc, apparatus_hash}
 gpg --detach-sign --armor /tmp/head.json
 ```
 
-both files bank as committed evidence. From that moment, ANY retroactive alteration of
-that world's ledger — including by the database superuser — breaks the chain against a
-head the maintainer's key vouches for. "Append-only by trigger" becomes "append-only
-or provably broken."
+*(Dated append, 2026-07-12, BACKLOG "apparatus-flip-witnessing": `apparatus_hash` — the SHA-256 of
+this world's `.claude/apparatus.json` at signing time, or `"absent"` if the file does not exist —
+joined the head object additively, so a flip of that file between two signed heads is now provable
+the same way a tampered ledger row is: `seen-red/s26-row-hash-chain/run_fixtures.py`,
+case `i-apparatus-hash-detects-flip`.)*
+
+`gpg --detach-sign --armor` writes its detached signature alongside the input, as
+`/tmp/head.json.asc`; both `/tmp/head.json` and `/tmp/head.json.asc` bank as committed evidence.
+From that moment, ANY retroactive alteration of that world's ledger — including by the database
+superuser — breaks the chain against a head the maintainer's key vouches for. "Append-only by
+trigger" becomes "append-only or provably broken."
 
 ## 5. The session sign-off (maintainer's concept, the multi-human extension)
 

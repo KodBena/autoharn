@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-11T20:17:27Z
-#   last-change: 2026-07-11T20:57:32Z
+#   last-change: 2026-07-12T12:49:31Z
 #   contributors: e4410ef6/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -19,7 +19,16 @@ Cases:
   b-chain-builds-and-verifies -- three real rows written via `led`, `./verify-chain` reports
                                  INTACT.
   c-head-json-shape           -- `./verify-chain --head` emits exactly the spec's
-                                 {world, max_id, head_hash, utc} shape, nothing else on stdout.
+                                 {world, max_id, head_hash, utc, apparatus_hash} shape, nothing
+                                 else on stdout (`apparatus_hash` added 2026-07-12, BACKLOG
+                                 "apparatus-flip-witnessing" -- additive to the original four-key
+                                 shape, see verify-chain.tmpl's own module docstring).
+  i-apparatus-hash-detects-flip -- a mechanism's mode in `.claude/apparatus.json` is edited with NO
+                                 ledger row written at all: a second `--head` snapshot shows
+                                 `apparatus_hash` CHANGED while `head_hash`/`max_id` stayed
+                                 IDENTICAL (no ledger activity occurred) -- proving a flip between
+                                 two signed heads is detectable purely from the apparatus_hash
+                                 field, independent of the ledger chain it rides alongside.
   d-tamper-stale-hash-breaks-at-altered-row -- a historical row's CONTENT is altered directly
                                  (trigger bypassed, mirrors a schema-owner-level tamper) while its
                                  OWN row_hash is left stale: ./verify-chain reports BROKEN with
@@ -169,9 +178,34 @@ def main() -> int:
             head_body = json.loads(rc.stdout.strip())
         except json.JSONDecodeError:
             pass
-        ok_c = (rc.returncode == 0 and set(head_body.keys()) == {"world", "max_id", "head_hash", "utc"}
-                and head_body.get("world") == WORLD)
+        apparatus_hash_c = head_body.get("apparatus_hash")
+        ok_c = (rc.returncode == 0
+                and set(head_body.keys()) == {"world", "max_id", "head_hash", "utc", "apparatus_hash"}
+                and head_body.get("world") == WORLD
+                and isinstance(apparatus_hash_c, str) and len(apparatus_hash_c) == 64)
         check("c-head-json-shape", ok_c, f"stdout={rc.stdout.strip()!r}", failures)
+
+        # --- i: apparatus.json flip detected via apparatus_hash, with NO ledger activity ---------
+        apparatus_path = world_dir / ".claude" / "apparatus.json"
+        before_text = apparatus_path.read_text(encoding="utf-8")
+        before_apparatus = json.loads(before_text)
+        before_apparatus.setdefault("mechanisms", {})["mutation_observer"] = {"mode": "off"}
+        apparatus_path.write_text(json.dumps(before_apparatus), encoding="utf-8")
+        ri = run_verify_chain(world_dir, "--head")
+        head_body_i = {}
+        try:
+            head_body_i = json.loads(ri.stdout.strip())
+        except json.JSONDecodeError:
+            pass
+        ok_i = (ri.returncode == 0
+                and head_body_i.get("apparatus_hash") != apparatus_hash_c
+                and head_body_i.get("head_hash") == head_body.get("head_hash")
+                and head_body_i.get("max_id") == head_body.get("max_id"))
+        check("i-apparatus-hash-detects-flip", ok_i,
+              f"before_apparatus_hash={apparatus_hash_c!r} after_apparatus_hash="
+              f"{head_body_i.get('apparatus_hash')!r} head_hash_unchanged="
+              f"{head_body_i.get('head_hash') == head_body.get('head_hash')}", failures)
+        apparatus_path.write_text(before_text, encoding="utf-8")  # restore, so later cases are unaffected
 
         # --- g: the EXISTING SQL/ASP marriage differential still AGREEs on an s26 world (run
         # BEFORE any tampering below -- this case's job is proving s26 does not perturb the
@@ -273,9 +307,9 @@ def main() -> int:
         print("FAILURES:", failures)
         return 1
     print("ALL CASES OK -- s26 row_hash chain both-polarity proof (genesis refusal / builds+"
-          "verifies / --head shape / differential AGREE / NULL-vs-empty-string collision closed / "
-          "breaks-at-altered-row / breaks-downstream-if-hash-also-faked / --head refuses-on-"
-          "broken), zero residue.")
+          "verifies / --head shape / apparatus_hash flip detection / differential AGREE / "
+          "NULL-vs-empty-string collision closed / breaks-at-altered-row / breaks-downstream-if-"
+          "hash-also-faked / --head refuses-on-broken), zero residue.")
     return 0
 
 
