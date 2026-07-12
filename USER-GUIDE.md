@@ -1,9 +1,7 @@
 # USER GUIDE — from a project and a Postgres box to a working, audited record
 
-Audience: adopter
-
-This page is the front door: it is for someone with a project of their own and a Postgres
-database they can reach, who wants to know how autoharn fits in — not for someone already
+This page is written for an adopter — someone with a project of their own and a Postgres
+database they can reach, who wants to know how autoharn fits in. It is the front door: not for someone already
 running it, and not for someone maintaining autoharn itself (see [§7](#7-where-everything-else-lives)
 for where those readers go instead). autoharn's other user-facing pages each answer one
 question well but assume you already know which one to read first; this page's only job is to
@@ -116,7 +114,8 @@ bootstrap/new-project.sh /path/to/your-project --new-world yourworld --db <db> -
 cd /path/to/your-project && claude
 ```
 
-**What you should see** (condensed; confirmed live against a throwaway world): the same kind of
+**What you should see** (condensed; confirmed live against a throwaway [world](GLOSSARY.md#world) —
+this guide's word for one scaffolded project instance): the same kind of
 database-apply block as above, then a fresh secret provisioned for attributing writes ([§5
 below](#5-audit-and-trust) explains what this "stamp" secret proves), the standard identities
 registered, and
@@ -133,10 +132,11 @@ wrote pickup (executable)
 ```
 
 Running `./judge` right after scaffolding printed `AGREE` in this page's own verification pass —
-the harness's two independent ways of computing "what is currently true" (a rule engine and a
-plain SQL query) agreeing on a brand-new, still-empty project. That is the expected result for a
-fresh world; [§4](#4-operate-the-six-verbs) explains what `./judge` checks and what a
-disagreement would mean.
+two independent ways the harness (autoharn's own tooling; this page uses the two names
+interchangeably from here on) computes "what is currently true" (a rule engine and a plain SQL
+query) agreeing on a brand-new, still-empty project. That is the expected result for a fresh
+[world](GLOSSARY.md#world); [§4](#4-operate-the-six-verbs) explains what `./judge` checks and
+what a disagreement would mean.
 
 **What landed where:** everything §3a describes above, plus `.claude/settings.json` (wires the
 hooks that check every edit), a stamp secret, and a `CLAUDE.md` at your project's root that
@@ -149,7 +149,8 @@ scaffold (including how to tear a throwaway one down) is
 
 ### 3c. Record an experiment reading: `bootstrap/track-experiments.sh`
 
-The narrowest of the three: wires your project to a shared measurement ledger that keeps a raw
+The narrowest of the three: wires your project to a shared measurement ledger — a separate,
+cross-project store, not the per-project record/ledger §1 above defines — that keeps a raw
 reading (a benchmark number, a timing) structurally separate from anyone's interpretation of it,
 so "a reading of the data recorded as the data" cannot happen by accident.
 
@@ -259,6 +260,21 @@ its own mechanism:
   access, stood behind this." [design/USER-GPG-TRUST-LAYER-FAQ.md](design/USER-GPG-TRUST-LAYER-FAQ.md)
   is the full step-by-step for generating a key, signing, and verifying — including what this
   layer does **not** protect against, stated plainly in its own closing section.
+
+**Money and token figures are not one of the four things above, and never will be.** Draw the
+line precisely: a raw, hook-witnessed **event count** (N subagent spawns really happened,
+witnessed by the harness) is evidentiary. Anything **derived** from that count — a
+subagent-spend estimate, or a dollar figure autoharn shows you anywhere — is a different kind
+of figure and is **diagnostic-grade, not evidentiary**: useful for noticing a session that looks
+obviously runaway, never sound enough to bill against, reconcile as an expense, or trust the way
+you trust attribution, immutability, contemporaneity, or a signature above. This is a standing
+maintainer ruling (2026-07-11), restated as a permanent design boundary in
+[design/ORCH-SPEC-RESOURCE-ACCOUNTING.md
+§6](design/ORCH-SPEC-RESOURCE-ACCOUNTING.md#6-the-financial-audit-grade-boundary): turning a
+witnessed count into a dollar figure is a pricing step outside the harness, and that step
+inherits none of the harness's own guarantees. If you need a number you can bill against, price
+the witnessed counts yourself, outside autoharn, against your own known rate — do not treat any
+total the harness prints as an accounting artifact.
 
 ## 6. When something refuses
 

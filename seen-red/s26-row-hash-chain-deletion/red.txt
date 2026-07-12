@@ -1,0 +1,15 @@
+== scaffolding throwaway --new-world s26delfxint (4 rows) ==
+=== a-intact-baseline ===
+  [ok] verify-chain: INTACT -- 4 row(s) walked, head id=4 hash=f9ca9dadfa8c4f4259506b5a7d0eeb2c3f7da5555b657cafd102443d3cf08700
+
+=== b-interior-deletion-detected ===
+  [ok] deleted id=2, expected break at next-surviving id=3: verify-chain: BROKEN -- first break at row id 3:
+    stored:   937e08bf34ed418278f8c32ee45cb7894492c67bce9f1338b6470376f147b155
+    expected: 04a6111e564e0dc4fe5cffe03b0f2d01be5fc8d79d108c38abee92c6c8c4fb3e
+  (1 of 3 row(s) mismatch total. The FIRST break is where alteration is provably detectable: either the altered row's own content no longer matches its OWN stored hash (tamper left the stored row_hash stale, the common case), or -- if the tamperer also rewrote that row's row_hash to match its new content -- the NEXT row breaks instead, because its predecessor-hash reference was computed against the row's OLD, honest hash. Either way, the break can be no later than immediately after the true alteration point; it is never silently absorbed further downstream than that.)
+
+== scaffolding throwaway --new-world s26delfxtail (3 rows) ==
+=== c-tail-deletion-not-detected ===
+  [ok] deleted the tail row id=3; verify-chain over the now-shorter chain: verify-chain: INTACT -- 2 row(s) walked, head id=2 hash=f251f90442ffbe76ad9b090125f11d73629ae95844018afa3a86317b46e656c0 -- row_hash-chain-alone structurally cannot see a tail deletion (no surviving row's predecessor hash depends on it); this is a NAMED, disclosed limit, not a defect this fixture papers over
+
+ALL CASES OK -- s26 row_hash chain full-row-deletion proof (intact baseline / interior deletion detected one row downstream of the gap / tail deletion structurally undetected by the chain alone, confirmed and named), zero residue.

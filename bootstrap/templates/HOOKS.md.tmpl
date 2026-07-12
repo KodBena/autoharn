@@ -9,6 +9,14 @@
   Written by `bootstrap/new-project.sh` itself, from its own real argv, at scaffold time — no
   future world should have to be reconstructed from script source the way an earlier one did
   (autoharn BACKLOG, "how was run3 created? that of course needs to be documented", 2026-07-09).
+- **Autoharn instrument version:** `__AUTOHARN_COMMIT__` — the commit hash of the autoharn
+  checkout (`__AUTOHARN_ROOT__`) this scaffold ran from, read once at scaffold time and never
+  re-derived. This ties this world's evidence to the exact hook/kernel/template bytes that
+  produced it: two worlds scaffolded from different autoharn commits ran under genuinely
+  different instruments, even if every other PROVENANCE field above looks identical. A
+  `(DIRTY -- ...)` suffix or `UNAVAILABLE -- ...` reason, if present, is not a defect in this
+  world — it is an honest fact about the checkout that produced it, stated plainly rather than
+  silently omitted (this project's standing fail-loud discipline, ADR-0002).
 - **World:** ledger schema `__SCHEMA__`, kernel schema `__KERN__`, role `__ROLE__` (db `__DB__` @
   host `__HOST__`).
 - **Kernel lineage applied by this scaffold run:** __LINEAGE_CHAIN__

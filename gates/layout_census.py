@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-09T07:54:37Z
-#   last-change: 2026-07-12T02:31:38Z
+#   last-change: 2026-07-12T12:46:38Z
 #   contributors: 9bcc0113/main, be693afb/main, e4410ef6/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -64,6 +64,11 @@ ROOT_FILES = {
     # registered here rather than left an unregistered breach for the census gate to hit next
     # run (CLAUDE.md hazard-flagging duty, worktree-ledgering-implementation, 2026-07-12).
     ".gitattributes",
+    # USER-GUIDE.md, attest-tags — pre-existing gap (landed by the doc-audience-taxonomy sweep
+    # and an earlier commission respectively, neither of which registered here), hit while
+    # panel-cheap-fixes was editing USER-GUIDE.md itself; fixed in passing rather than left an
+    # unregistered breach for the next gate run (CLAUDE.md hazard-flagging duty, 2026-07-12).
+    "USER-GUIDE.md", "attest-tags",
 }
 ROOT_DIRS = {
     ".claude", "bootstrap", "law", "judgment", "kernel", "stores", "instruments", "engine",
