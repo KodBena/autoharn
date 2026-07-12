@@ -387,6 +387,85 @@ already keeps for `resource:` rows. Reading that section is where a
 retrospective (or anyone) sees what was predicted; it is not itself a comparison against what
 happened — that comparison is this section's remaining job.
 
+### The `actual:` statement grammar (added 2026-07-13, tracker item `actual-intake-grammar`)
+
+The `estimate:` grammar above predicts a task's cost *before* execution; `actual:` is its
+measured-afterward twin — the same polymorphic six-field shape, the same sibling-grammar
+convention as `resource:`/`estimate:` themselves
+([design/USER-BLESSED-TABLE-TEMPLATE.md](USER-BLESSED-TABLE-TEMPLATE.md)'s "statement
+grammars" section), validated at write time by
+[`bootstrap/templates/led.tmpl`](../bootstrap/templates/led.tmpl) and read at pickup time by
+the `ESTIMATES` section of [`bootstrap/templates/pickup.tmpl`](../bootstrap/templates/pickup.tmpl)
+(which pairs an `actual:` row beside its matching `estimate:` row by shared TASK-SLUG, where
+both exist). This is the ONE documented home of the `actual:` grammar — both parsers cite this
+subsection by name rather than restating it a second time (ADR-0012 P1).
+
+```
+actual: <TASK-SLUG> | <TOOL-CALLS> | <SUBAGENT-SPAWNS> | <WALL-CLOCK> | <TOKENS> | <SOURCE>
+```
+
+The six fields, in order, separated by ` | ` (space-pipe-space):
+
+- **TASK-SLUG** — matching `^[a-z0-9][a-z0-9-]*$`, the same rule `estimate:`'s own TASK-SLUG
+  uses. A deliberate granularity convention rides this one field: a slug may name a *whole*
+  work item, or a *single spawn within it* — e.g. `kr-titration-design-exploration-b-round-2`
+  for round 2's B-fork alone. Same grammar, finer instance. This is what makes a per-phase
+  question queryable later — for instance, a `question`-kind ledger row filed for later
+  answering (a "parking row": a question the ledger records now, with no answer yet, so it is
+  not lost before the record that would settle it exists), tracked under the slug
+  `abc-wallclock-dominance-maintainer-callback`, asks what share of a task's wall-clock the
+  A:B:C attestation loop consumed — answerable only if the loop's own spawns can be
+  `actual:`-recorded at their own granularity, not folded into the whole item's one number.
+- **TOOL-CALLS** / **SUBAGENT-SPAWNS** — a bare non-negative integer, **never a range**. This
+  is the one deliberate divergence from `estimate:`'s matching fields (which accept an N-M
+  range, because a prediction is honestly a spread): a measurement is a point, not a range —
+  by the time a task has finished, the tool-call and subagent-spawn counts are exact numbers,
+  and a range here would launder an actual count back into prediction-shaped uncertainty. This
+  field REFUSES an N-M range where `estimate:` accepts one.
+- **WALL-CLOCK** — a duration, matching the identical parser `estimate:`'s own WALL-CLOCK field
+  uses (`20m`, `2h`, `1d`, and `90s` — the parser already accepts seconds, so this field does
+  too, at no extra cost). Kept as the same parser deliberately (including its range form),
+  per the "match its parser" instruction this addition was commissioned under, rather than
+  introducing a second, subtly-different duration grammar for what is otherwise the same unit.
+- **TOKENS** — an exact-ish count with a `K`/`M` suffix (`204K`, `1.2M`) **or** one of the same
+  closed OOM-bucket vocabulary `estimate:`'s TOKEN-OOM field uses (`1K | 10K | 100K | 1M | 10M+`)
+  — both forms accepted, because a measured actual is sometimes read off a precise-looking
+  harness figure and sometimes only an order-of-magnitude self-report. A **bare unsuffixed
+  number above 999 is refused** (e.g. `12000`): without a `K`/`M` suffix a number that large is
+  ambiguous between "twelve thousand" and a typo, and refusing it is cheaper than guessing. A
+  bare unsuffixed number of 999 or below is accepted as-is (an actual token count that small
+  needs no suffix to be unambiguous).
+- **SOURCE** — non-empty free text stating where the measurement came from (e.g. `"harness
+  task-notification duration_ms+subagent_tokens"`, `"orchestrator wall clock"`,
+  `"transcript token count"`). **The standing grade, stated here so it cannot be misread, and
+  scoped exactly as the "Actuals" subsection immediately below scopes it**: an `actual:` row's
+  WALL-CLOCK and TOKENS fields are **harness-sourced and diagnostic-grade, permanently, with no
+  sunset clause** — per the action-stream ruling (ledgered 2026-07-13: the harness's guarantees
+  rest on the hook-observed action stream only, and no per-invocation token or duration figure
+  ever graduates past diagnostic-grade). TOOL-CALLS/SUBAGENT-SPAWNS are the one exception the
+  next subsection names: they become genuinely evidentiary once the witnessed-counting
+  machinery (Stage B/D) ships, because those two are hook-observed event counts, not token or
+  duration figures. Regardless of grade, an `actual:` row is **never for cost policing** — the
+  exact same never-police invariant the `estimate:` grammar states above (the maintainer's own
+  invariant, stated twice at commissioning) applies to `actual:` **verbatim**: this grammar
+  exists so a team can learn whether its own estimation habits are calibrated against what the
+  harness later reports, never to audit or penalize a task over its measured cost. `led.tmpl`'s
+  intake validator restates the never-policing rule in its own refusal teach-text, exactly as
+  `estimate:`'s does.
+
+Copy-paste examples (whole-item and spawn-granularity):
+
+```sh
+./led decision "actual: actual-intake-grammar | 47 | 2 | 42m | 210K | harness task-notification duration_ms+subagent_tokens"
+./led decision "actual: kr-titration-design-exploration-b-round-2 | 6 | 1 | 8m | 1.2M | orchestrator wall clock plus subagent's own self-reported token usage"
+```
+
+`./pickup`'s `ESTIMATES` section pairs an accepted `actual:` row beside the `estimate:` row
+sharing its TASK-SLUG (printed directly beneath the matching estimate block); an `actual:` row
+whose TASK-SLUG matches no on-record `estimate:` is listed afterward, under its own
+unmatched-actuals listing — the same never-silently-dropped, MALFORMED-flagged posture
+`resources()`/`estimates()` already keep.
+
 ### Actuals — what the harness can honestly witness, and what it cannot yet
 
 Comparing a `TOOL-CALLS`/`SUBAGENT-SPAWNS` estimate to what actually happened is only as sound as
