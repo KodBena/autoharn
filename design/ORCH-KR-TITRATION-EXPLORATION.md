@@ -134,7 +134,7 @@ grammar's one documented home, and a lockstep "coherence partner" read filter in
 | kind | fields | write-side witness | read-side witness |
 | --- | --- | --- | --- |
 | `resource:` | NAME, CLASS, REACH, WHAT-IT-PROVES, GUIDANCE, TIER | `bootstrap/templates/led.tmpl:864-956` | `bootstrap/templates/pickup.tmpl:227,245` |
-| `estimate:` | TASK-SLUG, TOOL-CALLS, SUBAGENT-SPAWNS, WALL-CLOCK, TOKEN-OOM, BASIS | `led.tmpl:958-1059` | `pickup.tmpl:327,330` |
+| `estimate:` | TASK-SLUG, TOOL-CALLS, SUBAGENT-SPAWNS, WALL-CLOCK, TOKEN-OOM (order-of-magnitude token estimate — not out-of-memory), BASIS | `led.tmpl:958-1059` | `pickup.tmpl:327,330` |
 | `taxon:` | TAXONOMY, TAXON, PATTERNS, GLOSS | `led.tmpl:1061-1146` | `pickup.tmpl:395` |
 | `interface:` | TAXONOMY, ARTIFACT-PATTERN, GLOSS | `led.tmpl:1147` onward | `pickup.tmpl:395` (same renderer) |
 
@@ -146,8 +146,11 @@ documented home**, never a second driftable definition (`led.tmpl:899-903`: "tra
 VERBATIM from design/USER-BLESSED-TABLE-TEMPLATE.md ... the ONE documented home of this
 grammar (a transcription, not a second, driftable definition of it — ADR-0012 P1)"). Second,
 **each was minted reactively from a witnessed incident** (`resource:` from the run12
-newline-shred incident, `led.tmpl:870-875`; `estimate:` from the cost-estimation-retro item;
-`taxon:`/`interface:` from taxonomy-stage-a) — the vocabulary grew where reality burned,
+newline-shred incident, `led.tmpl:870-875`, banked in `seen-red/resource-intake-validation/red.txt`;
+`estimate:` from the cost-estimation-retro item, grammar home
+[USER-RETROSPECTIVE-RECIPE.md](USER-RETROSPECTIVE-RECIPE.md) §6, banked in
+`seen-red/estimate-intake-validation/`; `taxon:`/`interface:` from the taxonomy-stage-a item,
+banked in `seen-red/taxonomy-intake-validation/`) — the vocabulary grew where reality burned,
 which is the same trigger discipline the conjecture proposes. Third, **grammar additions are
 constitutionally cheap**: a new statement kind only adds refusals and vocabulary, the
 fail-safe additive class [CLAUDE.md](../CLAUDE.md)'s ORCHESTRATION section pre-ratifies —
@@ -229,21 +232,24 @@ derives what a CHECK constraint cannot.
    DL is monotone and open-world: adding an axiom can only add entailments, and an unstated
    fact is *unknown*, not false — the opposite of what "the current belief is the one nothing
    supersedes" needs. Contradictions, which are the *normal, expected* state of a record whose
-   entire purpose here is to catch collisions, explode a classical ABox rather than being
-   contained and queried. The house's prior verdict (§2.3) is upheld on fresh read of the
+   entire purpose here is to catch collisions, explode a classical ABox (the DL assertion
+   store — the set of individual facts; one contradiction makes every classical entailment
+   trivially true) rather than being contained and queried. The house's prior verdict (§2.3) is upheld on fresh read of the
    actual .lp programs, not inherited.
 2. **A second logic substrate is a two-writers violation at architecture scale.**
    [ADR-0012](../law/adr/0012-compositional-and-structural-hygiene.md) P1: every fact has one
    home; derived quantities are computed, never re-encoded. A parallel triple store must be
    populated. If a writer authors triples beside prose, that is a second hand-author of the
-   same truths (cancer B, across the hardest boundary to audit). If the triples are *derived*
+   same truths (cancer B — ADR-0012's own taxonomy label for a second hand-authored copy of
+   one truth — across the hardest boundary to audit). If the triples are *derived*
    from ledger rows, then the ledger rows are the SSOT, the RDF is a view — legitimate, but
    then the substrate question has already been answered by option (c), and the RDF layer is
    an export format looking for a consumer.
 3. **No identified consumer needs the RDF form.** A Haiku-tier scanner reading SPARQL results
    has no capability a Haiku-tier scanner reading `./pickup`'s rendered sections or
    `./led show <id>` output lacks — both are already discrete, labeled, closed-vocabulary
-   text. The reasoning services (subsumption over a rich TBox) have no current customer: the
+   text. The reasoning services (subsumption over a rich TBox — the ontology's class/relation
+   definitions, the DL counterpart of the ABox's individual facts) have no current customer: the
    project's closed vocabularies (CLASS, TIER, TOKEN-OOM, verdict sets) are flat enums whose
    integrity is already refused at the write boundary — exactly the survey's kill condition
    ("a one-line code check encodes just as well") firing on inspection.
@@ -440,13 +446,13 @@ makes the first one matter.
 The table below summarizes §3's per-candidate analysis of the commission's consumer question;
 each cell is argued in the candidate's own section above.
 
-| capability for a Haiku-tier consumer | (a) OWL/RDF store | (b) EDB/ASP tier | (c) typed grammars |
+| question, answered per candidate | (a) OWL/RDF store | (b) EDB/ASP tier | (c) typed grammars |
 | --- | --- | --- | --- |
-| look up one fact | SPARQL SELECT (needs endpoint + syntax) | invoke a pre-authored query | read pickup section / `./led show`; trivial |
-| enumerate current facts | SPARQL over latest-triples (versioning is manual in RDF) | derived view | pickup renders unsuperseded rows; supersession native |
-| detect a contradiction | ABox inconsistency — but explosion, and only within modeled axioms | absence/join judgments, differential-trusted | write-boundary refusal (malformed), collision detection stays with readers/probes |
-| trust story | reasoner-proof, but encoding untrusted (no differential exists) | two-producer differential, the house bar | grammar refusal witnessed live; byte-exact rows |
-| cost to stand up | new store + TBox + trust machinery | spec ceremony + program pairs | one cloned template block per kind |
+| how does a Haiku-tier consumer look up one fact? | SPARQL SELECT (needs endpoint + syntax) | invoke a pre-authored query | read pickup section / `./led show`; trivial |
+| how does it enumerate current facts? | SPARQL over latest-triples (versioning is manual in RDF) | derived view | pickup renders unsuperseded rows; supersession native |
+| how does it detect a contradiction? | ABox inconsistency — but explosion, and only within modeled axioms | absence/join judgments, differential-trusted | write-boundary refusal (malformed), collision detection stays with readers/probes |
+| why trust an answer it returns? | reasoner-proof, but encoding untrusted (no differential exists) | two-producer differential, the house bar | grammar refusal witnessed live; byte-exact rows |
+| what does the option cost to stand up? | new store + TBox + trust machinery | spec ceremony + program pairs | one cloned template block per kind |
 
 The reading: for lookup — which is what the collision class needs — (c) dominates. For
 inference, (b) is the house-conformant tier when a customer appears. (a) adds consumer
