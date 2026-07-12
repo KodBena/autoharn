@@ -87,6 +87,25 @@ USAGE:
   ./verify-commission --id 7           # a specific commission row by ledger id
   ./verify-commission --json           # machine-readable report, same verdicts
 
+EVENT JOURNAL (E6 of design/ORCH-CONTEMPORANEITY-PART3-SPEC.md §4, added 2026-07-12): every run
+that reaches a determination -- one of the three verdicts above OR one of the two typed refusals
+-- appends ONE line to `<world>/.claude/logs/verify_commission.jsonl` ({"ts": <UTC-Z
+milliseconds>, "verdict": <the determination string>}), the unified hook-journal timestamp
+convention this project's other journals already use (hooks/posttooluse_bash_completion.py's own
+`isoformat(timespec="milliseconds").replace("+00:00","Z")`). NEW-LINE-ONLY: this is the sole
+change this delta makes to this file's behavior -- no verdict, refusal, exit code, or printed
+text above is altered. Journaling is best-effort and FAILS OPEN (mirrors every hook journal in
+this project): a write failure here must never turn a real verdict into a crash. This is what
+lets `preamble_ordering.lp`'s F2 (`ob_verify_commission`, preamble point 10: "run
+./verify-commission and carry its verdict ... into the FIRST row of the decomposition") move
+from UNDECIDABLE(no_verify_journal) to a real M-class check once a world's own logs carry this
+file -- see engine/contemp_edb.py's E6 extension and engine/lp/preamble_ordering.lp's own header
+for the full account. A world whose `.claude/logs/` carries no verify_commission.jsonl at all
+(this verb was never invoked, or was invoked before this line landed in the checkout -- this
+file executes IN PLACE out of the live autoharn checkout like every other verb, so a re-run
+picks the journaling up immediately, no per-world re-scaffold needed) reads as capability-absent
+for that world, named honestly, never guessed.
+
 Deployment resolution, connection posture, and path resolution mirror pickup.tmpl /
 distance-to-clean.tmpl exactly (PICKUP_DEPLOYMENT, AUTOHARN, `SET ROLE <dep.role>`) — this file
 executes IN PLACE out of the autoharn checkout (the "live verbs" ruling); ADR-0012 P1, one
@@ -104,6 +123,7 @@ import os
 import subprocess
 import sys
 import tempfile
+from datetime import datetime, timezone
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -119,6 +139,23 @@ except ImportError as _e:
           f"({_e.__class__.__name__}: {_e})", file=sys.stderr)
     print("        set AUTOHARN=/path/to/autoharn, or place a sibling checkout at ../autoharn", file=sys.stderr)
     sys.exit(2)
+
+
+def _journal_verify_commission(world_root: Path, verdict: str) -> None:
+    """E6 (design/ORCH-CONTEMPORANEITY-PART3-SPEC.md §4): append ONE line naming this run's
+    determination -- best-effort, fail-open (module docstring's EVENT JOURNAL section): a
+    journaling failure must never turn a real verdict into a crash or change this verb's exit
+    code. `verdict` is one of the closed five: VERIFIED, UNSIGNED, FORGED-OR-CORRUPT (the three
+    verdicts `verify()` returns) or GPG-UNAVAILABLE, NO-COMMITTED-KEY (the two typed refusals) --
+    never a sixth value, so a consumer's Verdict vocabulary stays closed by construction."""
+    try:
+        path = world_root / ".claude" / "logs" / "verify_commission.jsonl"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        ts = datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+        with open(path, "a", encoding="utf-8") as f:
+            f.write(json.dumps({"ts": ts, "verdict": verdict}, ensure_ascii=False) + "\n")
+    except Exception:  # noqa: BLE001 -- journaling failure must never affect this verb's own exit
+        pass
 
 
 def _load_deployment():
@@ -253,6 +290,7 @@ def main(argv: list[str]) -> int:
     try:
         verdict, detail = verify(dep, row, world_root)
     except gpg_trust.GpgUnavailable as e:
+        _journal_verify_commission(world_root, "GPG-UNAVAILABLE")
         if as_json:
             print(json.dumps({"id": row["id"], "actor": row["actor"], "signing_mode": signing_mode(row),
                                "refusal": "GPG-UNAVAILABLE", "detail": str(e)}, indent=2))
@@ -260,6 +298,7 @@ def main(argv: list[str]) -> int:
             print(f"verify-commission: REFUSED — {e}", file=sys.stderr)
         return 2
     except NoCommittedKey as e:
+        _journal_verify_commission(world_root, "NO-COMMITTED-KEY")
         if as_json:
             print(json.dumps({"id": row["id"], "actor": row["actor"], "signing_mode": signing_mode(row),
                                "refusal": "NO-COMMITTED-KEY", "detail": str(e)}, indent=2))
@@ -270,6 +309,7 @@ def main(argv: list[str]) -> int:
             print(f"  [!!] NO-COMMITTED-KEY -- {e}")
         return 3
 
+    _journal_verify_commission(world_root, verdict)
     if as_json:
         print(json.dumps({"id": row["id"], "actor": row["actor"], "signing_mode": signing_mode(row),
                            "verdict": verdict, "detail": detail}, indent=2))
