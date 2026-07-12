@@ -90,7 +90,7 @@ usage() {
     echo "usage: $0 <dest-dir> --db <db> --host <host> --schema <schema> --kern <kern> --role <role> [--name <name>] [--force]" >&2
     echo "       $0 <dest-dir> --new-world <world> --db <db> --host <host> [--name <name>] [--force]" >&2
     echo "         (--new-world derives --schema/--kern/--role from <world> unless given explicitly;" >&2
-    echo "          also applies high_watermark_1.sql + s20 through s27 and seeds the stamp secret -- see" >&2
+    echo "          also applies high_watermark_1.sql + s20 through s28 and seeds the stamp secret -- see" >&2
     echo "          the --new-world block in this script's own header comment)" >&2
     exit 2
 }
@@ -128,7 +128,7 @@ fi
 # below -- the honest record of which sNN deltas this world was born on, so a future reader never
 # has to reconstruct it from source the way run3's own history had to be reconstructed.
 if [ -n "$NEW_WORLD" ]; then
-    LINEAGE_CHAIN="s15 -> s17-stamp-mechanism -> s17-independence-vocabulary -> s19 -> s20 -> s21-session-aware-distinctness -> s22-work-item-ledger -> s23-per-invocation-stamp-token -> s24-declared-event-time -> s25-commission-kind -> s26-row-hash-chain -> s27-chain-high-water (via kernel/lineage/high_watermark_1.sql + kernel/lineage/s20-obligation-grants-and-view-refresh.sql + kernel/lineage/s21-session-aware-distinctness.sql + kernel/lineage/s22-work-item-ledger.sql + kernel/lineage/s23-per-invocation-stamp-token.sql + kernel/lineage/s24-declared-event-time.sql + kernel/lineage/s25-commission-kind.sql + kernel/lineage/s26-row-hash-chain.sql + kernel/lineage/s27-chain-high-water.sql), applied automatically by this --new-world run"
+    LINEAGE_CHAIN="s15 -> s17-stamp-mechanism -> s17-independence-vocabulary -> s19 -> s20 -> s21-session-aware-distinctness -> s22-work-item-ledger -> s23-per-invocation-stamp-token -> s24-declared-event-time -> s25-commission-kind -> s26-row-hash-chain -> s27-chain-high-water -> s28-work-parent-edge (via kernel/lineage/high_watermark_1.sql + kernel/lineage/s20-obligation-grants-and-view-refresh.sql + kernel/lineage/s21-session-aware-distinctness.sql + kernel/lineage/s22-work-item-ledger.sql + kernel/lineage/s23-per-invocation-stamp-token.sql + kernel/lineage/s24-declared-event-time.sql + kernel/lineage/s25-commission-kind.sql + kernel/lineage/s26-row-hash-chain.sql + kernel/lineage/s27-chain-high-water.sql + kernel/lineage/s28-work-parent-edge.sql), applied automatically by this --new-world run"
     # --new-world ALSO auto-seeds the stamp secret (below) -- HOOKS.md must say so, not repeat the
     # generic "one manual step remains" text verbatim: an operator who trusted that stale claim and
     # re-ran the seeding block would TRUNCATE + re-INSERT an already-provisioned secret, ROTATING it
@@ -196,7 +196,7 @@ fi
 echo "== stamping instance at $PROJECT_ROOT (name=$NAME) =="
 
 if [ -n "$NEW_WORLD" ]; then
-    echo "-- new-world '$NEW_WORLD': applying high_watermark_1.sql + s20 + s21 + s22 + s23 + s24 + s25 + s26 + s27 to $DB (schema=$SCHEMA kern=$KERN role=$ROLE) --"
+    echo "-- new-world '$NEW_WORLD': applying high_watermark_1.sql + s20 + s21 + s22 + s23 + s24 + s25 + s26 + s27 + s28 to $DB (schema=$SCHEMA kern=$KERN role=$ROLE) --"
     psql -h "$HOST" -d "$DB" -v ON_ERROR_STOP=1 \
         -v schema="$SCHEMA" -v kern="$KERN" -v role="$ROLE" \
         -f "$AUTOHARN_ROOT/kernel/lineage/high_watermark_1.sql" \
@@ -207,8 +207,9 @@ if [ -n "$NEW_WORLD" ]; then
         -f "$AUTOHARN_ROOT/kernel/lineage/s24-declared-event-time.sql" \
         -f "$AUTOHARN_ROOT/kernel/lineage/s25-commission-kind.sql" \
         -f "$AUTOHARN_ROOT/kernel/lineage/s26-row-hash-chain.sql" \
-        -f "$AUTOHARN_ROOT/kernel/lineage/s27-chain-high-water.sql"
-    echo "   kernel applied (schema $SCHEMA + kernel schema $KERN + role $ROLE, s20 + s21 + s22 + s23 + s24 + s25 + s26 + s27 included)"
+        -f "$AUTOHARN_ROOT/kernel/lineage/s27-chain-high-water.sql" \
+        -f "$AUTOHARN_ROOT/kernel/lineage/s28-work-parent-edge.sql"
+    echo "   kernel applied (schema $SCHEMA + kernel schema $KERN + role $ROLE, s20 + s21 + s22 + s23 + s24 + s25 + s26 + s27 + s28 included)"
 
     echo "-- new-world '$NEW_WORLD': seeding the stamp secret (idempotent, mirrors drive/arm.sh ruling 43) --"
     mkdir -p "$PROJECT_ROOT/.claude/secrets"

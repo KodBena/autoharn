@@ -86,6 +86,29 @@ Sections emitted, each under a machine-parseable `### SECTION: <NAME>` header (g
                         kernel predates the work-item layer (kernel/lineage/s22-work-item-
                         ledger.sql not applied here yet) -- the honest fallback, not a crash and
                         not the old stale text.
+  ROLLUP              — tracker slug `work-tree-rollup`, wave-3 dispatch decision (ledger row 192):
+                        for every work item with at least one direct child under the TYPED parent
+                        edge (kernel/lineage/s28-work-parent-edge.sql's `work_parent` column, read
+                        here via `work_item_current.parent_slug` + the `work_item_descendants`
+                        closure view), prints the parent's OWN `estimate:` figures beside the SUM
+                        of its direct children's `estimate:` figures — the free SPLIT-TIME
+                        decomposition-quality signal (a parent whose own estimate undershoots its
+                        children's summed estimate decomposed more than it first predicted; no
+                        verdict is drawn from this, only the comparison is shown). TWO
+                        denominated column groups are kept apart, by construction, never folded
+                        into one number (the 2026-07-11 ruling): TOOL-CALLS/SUBAGENT-SPAWNS
+                        (witnessed-grade once the accounting spec's Stage B/D counting floor
+                        ships) versus WALL-CLOCK/TOKEN-OOM (diagnostic-grade, permanently — a
+                        TOKEN-OOM figure is an order of magnitude, not additive, and is listed
+                        per-child rather than summed). ACTUALS are honestly ABSENT today —
+                        printed as a named, NOT-BUILT line citing the accounting spec's own
+                        stage names, never fabricated. UNAVAILABLE, with the reason, if this
+                        world's kernel predates the typed parent edge (kernel/lineage/
+                        s28-work-parent-edge.sql not applied here yet — the same honest-fallback
+                        convention IN-FLIGHT already uses for a pre-s22 kernel). RETROSPECTIVE
+                        ONLY, always: this section never gates, never polices cost or scope (the
+                        maintainer's standing invariant, restated in this section's own printed
+                        header exactly as the recipe doc's estimate-vs-actual section states it).
 
 Deployment resolution: reads `deployment.json` next to this script (override with
 `PICKUP_DEPLOYMENT=/path/to/deployment.json`), via autoharn's `filing/deployment_record.py` (the
@@ -107,6 +130,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -549,6 +573,246 @@ def in_flight(dep) -> None:
     print("violations: none" if count == 0 else f"violations: {count} ({kinds})")
 
 
+# ==================================================================================================
+# ROLLUP (tracker slug `work-tree-rollup`, wave-3 dispatch decision, ledger row 192) -- see this
+# file's own module docstring ROLLUP entry for the full design rationale. Parsing helpers below are
+# a THIRD independent reader of the `estimate:` grammar (design/USER-RETROSPECTIVE-RECIPE.md's
+# "Estimate statement grammar" section), alongside `led.tmpl`'s intake validator and this file's own
+# `estimates()` above -- the established precedent for this grammar (stated in that section's own
+# text) is MULTIPLE independent readers of ONE documented grammar, not one shared code module, so a
+# third reader here is in keeping with, not a departure from, house convention. `_fetch_estimate_
+# rows()` DOES share the row-fetch-and-split logic with `estimates()`'s own loop (a plain SQL SELECT
+# + field split is not "a definition of a fact" ADR-0012 P1 forbids duplicating -- the FIELD LIST
+# `_ESTIMATE_FIELDS` above is the one definition, referenced, not re-typed, by both).
+# ==================================================================================================
+
+def _parse_intrange(s: str) -> tuple[int, int] | None:
+    """'40' -> (40, 40); '40-60' -> (40, 60); anything else -> None (not a well-formed
+    TOOL-CALLS/SUBAGENT-SPAWNS value -- the caller treats None as "cannot be summed", never as 0,
+    so a malformed figure is silently excluded from a sum rather than silently corrupting it)."""
+    m = re.fullmatch(r"(\d+)(?:-(\d+))?", s.strip())
+    if not m:
+        return None
+    lo = int(m.group(1))
+    hi = int(m.group(2)) if m.group(2) else lo
+    return (lo, hi)
+
+
+_DURATION_UNIT_MINUTES = {"m": 1, "h": 60, "d": 1440}
+
+
+def _parse_duration_minutes(s: str) -> int | None:
+    """'20m' -> 20; '2h' -> 120; '1d' -> 1440; anything else (including a bare number with no
+    unit) -> None. The WALL-CLOCK grammar (design/USER-RETROSPECTIVE-RECIPE.md) always carries a
+    unit, so a value with none is malformed, not a default unit guessed on its behalf (ADR-0002:
+    validate, do not coerce)."""
+    m = re.fullmatch(r"(\d+)([mhd])", s.strip())
+    if not m:
+        return None
+    return int(m.group(1)) * _DURATION_UNIT_MINUTES[m.group(2)]
+
+
+def _parse_duration_range(s: str) -> tuple[int, int] | None:
+    """'3h' -> (180, 180); '3h-5h' -> (180, 300). Each side of a range carries its OWN unit (no
+    unit is inherited across the '-'), so '10m-30m' parses each side independently -- exactly what
+    the grammar's own worked examples show."""
+    s = s.strip()
+    if "-" in s:
+        lo_s, _, hi_s = s.partition("-")
+        lo, hi = _parse_duration_minutes(lo_s), _parse_duration_minutes(hi_s)
+        return None if (lo is None or hi is None) else (lo, hi)
+    v = _parse_duration_minutes(s)
+    return None if v is None else (v, v)
+
+
+def _fmt_range(r: tuple[int, int] | None, suffix: str = "") -> str:
+    if r is None:
+        return "n/a"
+    lo, hi = r
+    body = str(lo) if lo == hi else f"{lo}-{hi}"
+    return f"{body}{suffix}"
+
+
+def _sum_ranges(ranges: list[tuple[int, int]]) -> tuple[int, int] | None:
+    if not ranges:
+        return None
+    return (sum(r[0] for r in ranges), sum(r[1] for r in ranges))
+
+
+def _fetch_estimate_rows(dep) -> tuple[list[tuple[str, int, dict[str, str]]], list[str]]:
+    """Shared fetch+parse for every well-formed `estimate:`-prefixed decision row: returns
+    (parsed, malformed) where parsed is a list of (TASK-SLUG, ledger row id, {field: value}) and
+    malformed is the same MALFORMED-line text `estimates()` above prints. Newline-normalization,
+    the WHERE filter, and the coherence-partner contract with led.tmpl's own validator are all
+    IDENTICAL to `estimates()`'s own query -- see that function's comments for the run12 rationale;
+    not restated a second time here."""
+    r = _psql_tuples(dep, "SELECT id, regexp_replace(statement, '[\\n\\r]+[ \\t]*', ' ', 'g') "
+                           f"FROM {dep.schema}.ledger_current "
+                           f"WHERE kind = 'decision' AND statement ~ '^[[:space:]]*estimate:' "
+                           f"ORDER BY id;")
+    if r.returncode != 0:
+        return [], [f"ERROR: {r.stderr.strip()}"]
+    lines = [ln for ln in r.stdout.split("\n")[1:] if ln.strip()]
+    parsed: list[tuple[str, int, dict[str, str]]] = []
+    malformed: list[str] = []
+    for ln in lines:
+        row_id, _, statement = ln.partition("|")
+        statement = statement.lstrip()
+        body = statement.split(":", 1)[1] if ":" in statement else ""
+        fields = [f.strip() for f in body.split("|")]
+        if len(fields) != len(_ESTIMATE_FIELDS):
+            malformed.append(f"id={row_id.strip()}: MALFORMED estimate statement (expected "
+                              f"{len(_ESTIMATE_FIELDS)} '|'-separated fields "
+                              f"{_ESTIMATE_FIELDS}, got {len(fields)}) -- raw: {statement.strip()}")
+            continue
+        parsed.append((fields[0], int(row_id.strip()), dict(zip(_ESTIMATE_FIELDS, fields))))
+    return parsed, malformed
+
+
+def rollup(dep) -> None:
+    _section("ROLLUP")
+    print("RETROSPECTIVE-ONLY, always (the maintainer's standing invariant, restated here exactly")
+    print("as design/USER-RETROSPECTIVE-RECIPE.md Section 6 states it for estimate:/actual figures")
+    print("generally): this section never gates, never polices cost or scope, and is never a verdict")
+    print("on a task that missed its number -- only a decomposition-quality signal a retrospective")
+    print("may cite.")
+    print()
+
+    # LIVE check (never assumed, never hardcoded -- the SAME convention led.tmpl's own --parent
+    # gate and `in_flight()`'s own pre-s22 fallback above already use): does this world's kernel
+    # carry the typed parent edge (kernel/lineage/s28-work-parent-edge.sql)? This file executes IN
+    # PLACE for every already-scaffolded world, and s28 is not wired into every world's birth chain.
+    chk = _psql_tuples(dep, "SELECT EXISTS (SELECT 1 FROM information_schema.columns "
+                             f"WHERE table_schema = '{dep.schema}' AND table_name = 'work_item_current' "
+                             "AND column_name = 'parent_slug');")
+    if chk.returncode != 0:
+        print(f"ERROR: {chk.stderr.strip()}")
+        return
+    if chk.stdout.strip().splitlines()[-1] != "t":
+        print("UNAVAILABLE (no typed parent edge -- this world's kernel predates kernel/lineage/"
+              "s28-work-parent-edge.sql, so work_item_current carries no parent_slug column and "
+              "work_item_descendants does not exist here yet; apply is a maintainer act).")
+        return
+
+    tree = _psql_tuples(dep, f"SELECT slug, coalesce(parent_slug, '') FROM "
+                              f"{dep.schema}.work_item_current ORDER BY slug;")
+    if tree.returncode != 0:
+        print(f"ERROR: {tree.stderr.strip()}")
+        return
+    parent_of: dict[str, str] = {}
+    for ln in [x for x in tree.stdout.split("\n")[1:] if x.strip()]:
+        slug, _, parent = ln.partition("|")
+        parent_of[slug.strip()] = parent.strip()
+
+    children_of: dict[str, list[str]] = {}
+    for slug, parent in parent_of.items():
+        if parent:
+            children_of.setdefault(parent, []).append(slug)
+
+    if not children_of:
+        print("(no parent edges on record -- every open/closed work item is a root; nothing to "
+              "roll up)")
+        return
+
+    est_rows, malformed = _fetch_estimate_rows(dep)
+    # latest estimate per slug wins (highest ledger row id) -- a re-estimate supersedes an earlier
+    # one for THIS retrospective read; the kernel itself enforces no supersession here (an
+    # `estimate:` row is a plain decision row, not a typed kind), so this is a display convention,
+    # named as such, not a kernel guarantee.
+    est_by_slug: dict[str, dict[str, str]] = {}
+    for slug, row_id, fields in est_rows:
+        prior = est_by_slug.get(slug)
+        if prior is None or row_id > int(prior["_row_id"]):
+            merged = dict(fields)
+            merged["_row_id"] = str(row_id)
+            est_by_slug[slug] = merged
+
+    def fmt_own(slug: str) -> str:
+        f = est_by_slug.get(slug)
+        if f is None:
+            return "(no estimate: row on record)"
+        return (f"tool_calls={f['TOOL-CALLS']}  subagent_spawns={f['SUBAGENT-SPAWNS']}  "
+                f"wall_clock={f['WALL-CLOCK']}  token_oom={f['TOKEN-OOM']}  "
+                f"(ledger row id={f['_row_id']})")
+
+    for parent in sorted(children_of):
+        kids = sorted(children_of[parent])
+        print(f"{parent}  (direct children: {', '.join(kids)})")
+        print(f"  OWN ESTIMATE:   {fmt_own(parent)}")
+
+        kid_calls: list[tuple[int, int]] = []
+        kid_spawns: list[tuple[int, int]] = []
+        kid_wall: list[tuple[int, int]] = []
+        kid_oom: list[str] = []
+        no_estimate: list[str] = []
+        for k in kids:
+            f = est_by_slug.get(k)
+            if f is None:
+                no_estimate.append(k)
+                continue
+            r = _parse_intrange(f["TOOL-CALLS"])
+            if r is not None:
+                kid_calls.append(r)
+            r = _parse_intrange(f["SUBAGENT-SPAWNS"])
+            if r is not None:
+                kid_spawns.append(r)
+            r = _parse_duration_range(f["WALL-CLOCK"])
+            if r is not None:
+                kid_wall.append(r)
+            kid_oom.append(f["TOKEN-OOM"])
+
+        sum_calls = _sum_ranges(kid_calls)
+        sum_spawns = _sum_ranges(kid_spawns)
+        sum_wall = _sum_ranges(kid_wall)
+        n_with_estimate = len(kids) - len(no_estimate)
+        # WITNESSED-GRADE columns (once accounting spec Stage B/D ship) kept apart from
+        # DIAGNOSTIC-GRADE columns, by construction -- two separate printed lines, never one folded
+        # figure (the 2026-07-11 ruling, restated in this section's own printed ACTUALS note below).
+        print(f"  CHILDREN SUM ({n_with_estimate}/{len(kids)} have an estimate: row) -- "
+              f"witnessed-grade-once-built: tool_calls={_fmt_range(sum_calls)}  "
+              f"subagent_spawns={_fmt_range(sum_spawns)}")
+        print(f"  CHILDREN SUM -- diagnostic-grade, permanently: wall_clock="
+              f"{_fmt_range(sum_wall, 'm')}")
+        if kid_oom:
+            print(f"    token_oom per child (order-of-magnitude figures are NOT additive -- shown "
+                  f"as a list, never summed): {kid_oom}")
+        if no_estimate:
+            print(f"    children with no estimate: row on record: {no_estimate}")
+
+        # SPLIT-TIME SIGNAL (commission point 3: "parent's own estimate vs SUM(children's
+        # estimates)" -- the free decomposition-quality signal available before any actuals).
+        f_own = est_by_slug.get(parent)
+        if f_own is not None and sum_calls is not None:
+            own_calls = _parse_intrange(f_own["TOOL-CALLS"])
+            if own_calls is not None:
+                verdict = ("own >= children sum (the parent's top-down estimate covered the "
+                           "decomposition)" if own_calls[0] >= sum_calls[1] else
+                           "children sum EXCEEDS own (the decomposition grew beyond the parent's "
+                           "original estimate -- a decomposition-quality signal, not a verdict)")
+                print(f"  SPLIT-TIME SIGNAL (tool_calls): own={_fmt_range(own_calls)} vs "
+                      f"children_sum={_fmt_range(sum_calls)} -- {verdict}")
+        print()
+
+    if malformed:
+        print("MALFORMED estimate: rows encountered while building this rollup (excluded, listed "
+              "-- never silently dropped):")
+        for m in malformed:
+            print(f"  {m}")
+        print()
+
+    # ACTUALS (commission point 2's own instruction: "structure the rollup so actual columns are
+    # honestly absent/NULL-with-a-name today, not faked"). NOTHING below is a live query -- both
+    # lines are a standing, named absence, updated only when the cited spec stage actually ships.
+    print("ACTUALS (witnessed-grade: tool_calls, subagent_spawns): NOT BUILT -- accounting spec")
+    print("  Stage B (counting floor) / Stage D (subagent-spawn observer) are spec'd, not built")
+    print("  (design/ORCH-SPEC-RESOURCE-ACCOUNTING.md Sections 5 and 8). NULL, named, not faked.")
+    print("ACTUALS (diagnostic-grade, permanent: wall_clock, token figures): no dedicated witnessed")
+    print("  observer is named for either, even once Stage B/D ship (maintainer ruling 2026-07-11:")
+    print("  token/money figures never graduate past diagnostic-grade). An interior sum NEVER folds")
+    print("  a witnessed count and a diagnostic figure into one number -- the two column groups")
+    print("  above are kept apart by construction, not by convention.")
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--since", default=None, help="timestamptz: only ledger rows newer than this")
@@ -570,6 +834,7 @@ def main(argv: list[str] | None = None) -> int:
     estimates(dep)
     taxonomies(dep)
     in_flight(dep)
+    rollup(dep)
     print()
     return 0
 

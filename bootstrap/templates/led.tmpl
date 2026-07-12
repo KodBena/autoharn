@@ -152,10 +152,23 @@
 #                                              the maintainer act that does revoke it. `led` never
 #                                              widens its own grants to bypass this.
 #
-#   led work open <slug> <title...>           open a work item (kernel/lineage/s22-work-item-ledger.sql's
+#   led work open <slug> <title...> [--parent <parent-slug>]
+#                                              open a work item (kernel/lineage/s22-work-item-ledger.sql's
 #                                              validate_work_item(): one opening act per slug — a
 #                                              duplicate open is REFUSED at insert, never silently
-#                                              accepted; the Q5 defect made unrepresentable)
+#                                              accepted; the Q5 defect made unrepresentable).
+#                                              --parent types this item as a CHILD of an
+#                                              already-opened work item (kernel/lineage/
+#                                              s28-work-parent-edge.sql, tracker slug
+#                                              work-tree-rollup) — REFUSED at construction on a
+#                                              dangling parent (unlike `work depends`'s antecedent,
+#                                              which stays deliberately unrefused, s22) and REFUSED
+#                                              on a cycle. Requires this world's kernel to carry
+#                                              s28 (LIVE-checked, not assumed; omitting --parent
+#                                              works unchanged on a pre-s28 kernel). RETROSPECTIVE
+#                                              topology only — never a gate, never polices scope or
+#                                              cost (the maintainer's standing invariant, same as
+#                                              the estimate:/resource: conventions below).
 #   led work claim <slug>                     claim an already-opened item as the acting principal
 #                                              (refused if <slug> has no opening act). Set
 #                                              LED_ACTOR=<principal-name> to claim as a registered
@@ -595,22 +608,73 @@ if [ "${1:-}" = "work" ]; then
   case "$sub" in
     open)
       shift
+      # --parent <parent-slug> (kernel/lineage/s28-work-parent-edge.sql, tracker slug
+      # work-tree-rollup): parsed like `work close`'s own --witness flag below, any position
+      # among the remaining args. LIVE column-existence check, not a hardcoded kernel-version
+      # assumption (the SAME convention `led obligate revoke`'s has_table_privilege check above
+      # already uses) -- this file executes IN PLACE out of the autoharn checkout for EVERY
+      # already-scaffolded world (the "live verbs" doctrine, ORCH-OPERATING-CARD.md), and s28 is
+      # NOT wired into every world's birth chain (it ships authored+scratch-witnessed only, per
+      # its own header's FAIL-SAFE CLASSIFICATION note) -- so an unconditional `work_parent` in
+      # the INSERT column list below would break `led work open` for every world whose kernel
+      # predates s28, the exact hazard-in-reach CLAUDE.md's engineering-responsibility corollary
+      # exists to catch before it ships, not after.
+      parent=""
+      args=()
+      while [ $# -gt 0 ]; do
+        case "$1" in
+          --parent) parent="${2:-}"; shift 2 ;;
+          *) args+=("$1"); shift ;;
+        esac
+      done
+      set -- "${args[@]}"
       if [ $# -lt 2 ]; then
-        echo "usage: led work open <slug> <title...>" >&2
+        echo "usage: led work open <slug> <title...> [--parent <parent-slug>]" >&2
         echo "       refused if <slug> already has an opening act (validate_work_item(): one" >&2
         echo "       opening act per slug -- the Q5 defect made unrepresentable, never a silent" >&2
         echo "       duplicate)" >&2
+        echo "       --parent <parent-slug> types this item as a CHILD of an already-opened work" >&2
+        echo "       item (kernel/lineage/s28-work-parent-edge.sql). REFUSED at construction if" >&2
+        echo "       <parent-slug> has no opening act (dangling parents ARE refused here, unlike" >&2
+        echo "       'led work depends's antecedent, which is deliberately left unrefused, s22)," >&2
+        echo "       and refused if honoring it would create a cycle. Requires this world's" >&2
+        echo "       kernel to carry s28 -- omit --parent on a pre-s28 kernel." >&2
         exit 1
       fi
       slug="$1"; shift
       title="$*"
-      exec psql -h "$PGHOST" -d "$PGDB" -v ON_ERROR_STOP=1 \
-        -v slug="$slug" -v title="$title" -v statement="work_opened: ${slug} -- ${title}" <<SQL
+      has_parent_col=$(psql -h "$PGHOST" -d "$PGDB" -tAq -v schema="$SCHEMA" <<SQL
+        SELECT EXISTS (SELECT 1 FROM information_schema.columns
+                       WHERE table_schema = :'schema' AND table_name = 'ledger'
+                         AND column_name = 'work_parent');
+SQL
+      )
+      if [ -n "$parent" ] && [ "$has_parent_col" != "t" ]; then
+        echo "led work open: REFUSED -- --parent requires kernel/lineage/s28-work-parent-edge.sql" >&2
+        echo "  applied to this project's schema (work_parent column not found on" >&2
+        echo "  ${SCHEMA}.ledger -- this world's kernel predates s28). Omit --parent, or apply" >&2
+        echo "  s28 to this schema as a maintainer act (ORCH-OPERATING-CARD.md's kernel-delta" >&2
+        echo "  decision tree)." >&2
+        exit 1
+      fi
+      if [ "$has_parent_col" = "t" ]; then
+        exec psql -h "$PGHOST" -d "$PGDB" -v ON_ERROR_STOP=1 \
+          -v slug="$slug" -v title="$title" -v parent="$parent" \
+          -v statement="work_opened: ${slug} -- ${title}" <<SQL
+        SET ROLE ${ROLE};
+        SET search_path = ${SCHEMA}, ${KERNEL};
+        INSERT INTO ${SCHEMA}.ledger (kind, work_slug, work_title, work_parent, statement)
+        VALUES ('work_opened', :'slug', :'title', NULLIF(:'parent', ''), :'statement');
+SQL
+      else
+        exec psql -h "$PGHOST" -d "$PGDB" -v ON_ERROR_STOP=1 \
+          -v slug="$slug" -v title="$title" -v statement="work_opened: ${slug} -- ${title}" <<SQL
         SET ROLE ${ROLE};
         SET search_path = ${SCHEMA}, ${KERNEL};
         INSERT INTO ${SCHEMA}.ledger (kind, work_slug, work_title, statement)
         VALUES ('work_opened', :'slug', :'title', :'statement');
 SQL
+      fi
       ;;
     claim)
       shift
@@ -769,7 +833,7 @@ SQL
 SQL
       ;;
     *)
-      echo "usage: led work open <slug> <title...>" >&2
+      echo "usage: led work open <slug> <title...> [--parent <parent-slug>]" >&2
       echo "       led work claim <slug>" >&2
       echo "       led work depends <slug> <on-slug>" >&2
       echo "       led work close <slug> <resolution> [--witness <ref>]" >&2
