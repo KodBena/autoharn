@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-12T06:33:13Z
-#   last-change: 2026-07-12T06:33:13Z
+#   last-change: 2026-07-12T06:40:56Z
 #   contributors: e4410ef6/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -51,6 +51,14 @@ deployment -- never a mock):
                               `[available] QEUBO (backend)` block and contains NO "MALFORMED"
                               string anywhere in the RESOURCES section -- the run12 read-side
                               defect, closed.
+  GREEN-LEADING-WHITESPACE -- a `resource:` declaration with LEADING whitespace (two spaces
+                              before the prefix) is accepted by led AND renders in pickup's
+                              RESOURCES section -- the coherence-partner contract proven live:
+                              led's validator trigger (leading POSIX [:space:] stripped, then
+                              the `resource:` prefix) and pickup's SQL filter
+                              (`statement ~ '^[[:space:]]*resource:'`) admit the IDENTICAL
+                              statement set, so nothing led validates can vanish from the read
+                              side (the incoherence a position-0 LIKE filter used to permit).
 
 Scratch-only: schema/kern/role derived from a throwaway name (`SCRATCH_NAME` below, distinct
 from resource-registry's own `rrfixture`) in the TOY db (192.168.122.1) plus a throwaway
@@ -85,6 +93,15 @@ RESOURCE_EMBEDDED_NEWLINE = (
 RESOURCE_MALFORMED_FIELDCOUNT = "resource: X | solver | reach-only"
 RESOURCE_MALFORMED_CLASS = "resource: X | notaclass | r | p | g | available"
 RESOURCE_MALFORMED_TIER = "resource: X | solver | r | p | g | sometier"
+# leading whitespace before the prefix -- the coherence-partner case: led's validator strips
+# leading [:space:] before its `resource:` trigger, and pickup's SQL filter admits the same via
+# `~ '^[[:space:]]*resource:'`; both sides must see this statement or the two mechanisms have
+# diverged on what "a resource declaration" is:
+RESOURCE_LEADING_WHITESPACE = (
+    "  resource: tsort | binary | binary:tsort | a topological order over a DAG, or a cycle "
+    "if none exists | use for simple pairwise precedence with no arithmetic or resource "
+    "dimension | available"
+)
 
 
 def _psql(*args: str) -> subprocess.CompletedProcess:
@@ -224,6 +241,40 @@ def main() -> int:
     log("--- pickup RESOURCES section (verbatim) ---")
     log(section_text)
     transcript.append(section_text)
+    log("--- end pickup RESOURCES section ---")
+
+    # -------------------------------------------------------------- GREEN-LEADING-WHITESPACE
+    before = _ledger_row_count(dest)
+    r_ws = _run(dest, "led", "decision", RESOURCE_LEADING_WHITESPACE)
+    after = _ledger_row_count(dest)
+    accepted = r_ws.returncode == 0
+    grew = after == before + 1
+    ok = accepted and grew
+    if not ok:
+        failures.append(f"GREEN-LEADING-WHITESPACE: led exit={r_ws.returncode} "
+                         f"accepted={accepted} before={before} after={after}\n"
+                         f"STDERR:\n{r_ws.stderr}")
+    log(f"GREEN-LEADING-WHITESPACE: led exit={r_ws.returncode} accepted={accepted} "
+        f"row-count before={before} after={after} (grew-by-one={grew}) -- "
+        f"{'PASS' if ok else 'FAIL'}")
+
+    # ...and the SAME statement must render in pickup's RESOURCES section -- the read side's
+    # filter admitting exactly what the write side validated (coherence-partner contract).
+    r_pickup_ws = _run(dest, "pickup")
+    out_ws = r_pickup_ws.stdout
+    start = out_ws.find("### SECTION: RESOURCES")
+    end = out_ws.find("### SECTION:", start + 1)
+    section_ws = out_ws[start:end if end != -1 else None].strip() if start != -1 else ""
+    renders = ("[available] tsort (binary)" in section_ws
+                and "MALFORMED" not in section_ws)
+    if not renders:
+        failures.append(f"GREEN-LEADING-WHITESPACE: pickup RESOURCES did not render the "
+                         f"leading-whitespace declaration\n{section_ws}")
+    log(f"GREEN-LEADING-WHITESPACE: pickup RESOURCES renders '[available] tsort (binary)' with "
+        f"no MALFORMED entries -- {'PASS' if renders else 'FAIL'}")
+    log("--- pickup RESOURCES section after leading-whitespace declaration (verbatim) ---")
+    log(section_ws)
+    transcript.append(section_ws)
     log("--- end pickup RESOURCES section ---")
 
     if failures:

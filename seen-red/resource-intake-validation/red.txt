@@ -26,6 +26,13 @@ THE FIX, both halves proven live below:
   - pickup.tmpl's resources() SELECT now applies the identical newline-collapse SERVER-SIDE
     (`regexp_replace(statement, '[\n\r]+[ \t]*', ' ', 'g')`), so one query row is always exactly
     one physical `-t -A` output line, regardless of what the statement's own text contains.
+  - COHERENCE (follow-up, same day): led's validator trigger and pickup's SELECT filter define
+    "a resource declaration" IDENTICALLY. led triggers on the statement AFTER stripping leading
+    POSIX [:space:] starting with `resource:`; pickup's filter names the same class:
+    `statement ~ '^[[:space:]]*resource:'` (it was `statement LIKE 'resource:%'` at first --
+    position-0 only, which would have let a validated-but-indented declaration vanish from the
+    read side). Each file's comment names the other as its coherence partner; changing either
+    side alone is flagged there as the defect it would be.
   - Atomicity audit of every write path in led.tmpl (907 lines): every path but one (`led
     review`) is a single INSERT/DELETE statement, atomic by Postgres semantics with no code
     change needed. `led review` already wraps its two INSERTs (ledger + review_detail) in an
@@ -50,6 +57,10 @@ bootstrap/track-work.sh, toy@192.168.122.1, torn down after):
   5. GREEN -- `./pickup`'s RESOURCES section renders the accepted row as ONE clean
      `[available] QEUBO (backend)` block, with no "MALFORMED" string and no spurious
      `id=experiments` line anywhere in the section -- the run12 read-side defect, closed.
+  6. GREEN -- a `resource:` declaration with LEADING whitespace (two spaces before the prefix)
+     is accepted by led (row count 1 -> 2) AND renders in pickup's RESOURCES section as
+     `[available] tsort (binary)` -- the coherence-partner contract proven live: nothing led
+     validates can be invisible to the read side.
 
 Full fixture transcript (seen-red/resource-intake-validation/run_fixtures.py, live run against
 toy@192.168.122.1, 2026-07-12, exit 0):
@@ -78,6 +89,20 @@ GREEN-PICKUP-RENDERS: RESOURCES section renders '[available] QEUBO (backend)' wi
   reach:      http://192.168.122.68:8764
   proves:     preference-optimization result for this maintainer's experiments
   guidance:   auth via /auth/register then /auth/token; interactive docs at /docs; six /qeubo/experiment* routes
+--- end pickup RESOURCES section ---
+GREEN-LEADING-WHITESPACE: led exit=0 accepted=True row-count before=1 after=2 (grew-by-one=True) -- PASS
+GREEN-LEADING-WHITESPACE: pickup RESOURCES renders '[available] tsort (binary)' with no MALFORMED entries -- PASS
+--- pickup RESOURCES section after leading-whitespace declaration (verbatim) ---
+### SECTION: RESOURCES
+
+[available] QEUBO (backend)  (ledger row id=1)
+  reach:      http://192.168.122.68:8764
+  proves:     preference-optimization result for this maintainer's experiments
+  guidance:   auth via /auth/register then /auth/token; interactive docs at /docs; six /qeubo/experiment* routes
+[available] tsort (binary)  (ledger row id=2)
+  reach:      binary:tsort
+  proves:     a topological order over a DAG, or a cycle if none exists
+  guidance:   use for simple pairwise precedence with no arithmetic or resource dimension
 --- end pickup RESOURCES section ---
 
 resource-intake-validation fixture: all cases PASS, scratch substrate torn down to zero residue

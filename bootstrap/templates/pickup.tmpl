@@ -202,9 +202,19 @@ def resources(dep) -> None:
     # a substitute for that write-time refusal -- the MALFORMED path below stays, for a legacy row
     # written before the write-side fix, or any statement that is malformed for a reason
     # normalization does not cure.
+    # COHERENCE PARTNER: the WHERE filter below and led.tmpl's validator trigger define "a
+    # resource declaration" IDENTICALLY, by construction. led triggers on the statement AFTER
+    # stripping leading POSIX [:space:] (its `${statement%%[![:space:]]*}` strip) starting with
+    # `resource:`; the regex below names the SAME POSIX class (`^[[:space:]]*resource:`), so the
+    # set of rows this section reads is precisely the set led validated -- no more, no fewer. A
+    # statement led accepts can never be invisible here (the incoherence a position-0 LIKE used
+    # to permit: validated on write, absent from this read). Change either side only in lockstep
+    # with the other; the grammar's one documented home stays design/USER-BLESSED-TABLE-
+    # TEMPLATE.md's "statement grammars" section.
     r = _psql_tuples(dep, "SELECT id, regexp_replace(statement, '[\\n\\r]+[ \\t]*', ' ', 'g') "
                            f"FROM {dep.schema}.ledger_current "
-                           f"WHERE kind = 'decision' AND statement LIKE 'resource:%' ORDER BY id;")
+                           f"WHERE kind = 'decision' AND statement ~ '^[[:space:]]*resource:' "
+                           f"ORDER BY id;")
     if r.returncode != 0:
         print(f"ERROR: {r.stderr.strip()}")
         return
@@ -222,6 +232,11 @@ def resources(dep) -> None:
     malformed: list[str] = []
     for ln in lines:
         row_id, _, statement = ln.partition("|")
+        # lstrip BEFORE the prefix strip: the SQL filter above admits leading [:space:] (the
+        # coherence-partner contract with led.tmpl's own trigger), so the `resource:` prefix may
+        # arrive indented -- tolerate exactly what the filter admits, explicitly, rather than by
+        # the accident of split-on-first-colon skipping it.
+        statement = statement.lstrip()
         body = statement.split(":", 1)[1] if ":" in statement else ""
         fields = [f.strip() for f in body.split("|")]
         if len(fields) != len(_RESOURCE_FIELDS):

@@ -778,6 +778,14 @@ statement="$*"
 # byte fidelity matters for a later GPG signing ceremony over this exact row (design/
 # USER-GPG-TRUST-LAYER-FAQ.md), so the normalized copy is validation-only scratch, never
 # persisted; nothing is written at all if validation fails (atomicity by refusal-before-write).
+#
+# COHERENCE PARTNER: the trigger condition below (leading POSIX [:space:] stripped, then a
+# `resource:` prefix) and bootstrap/templates/pickup.tmpl resources()'s SQL filter
+# (`statement ~ '^[[:space:]]*resource:'`) define "a resource declaration" IDENTICALLY, by
+# construction -- every statement this validator accepts is exactly a statement that SELECT
+# reads, no more and no fewer (a position-0-only read filter once let a validated-but-indented
+# declaration vanish from pickup's RESOURCES section). Change either side only in lockstep with
+# the other.
 _resource_trimmed="${statement#"${statement%%[![:space:]]*}"}"
 case "$_resource_trimmed" in
   resource:*)
