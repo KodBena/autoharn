@@ -103,7 +103,7 @@ plus three related follow-ups, still queued; (8) the audit-verb completions, bun
 SQL-floor differential for `./audit` plus three related follow-ups, still queued; (9) the
 small-follow-ups commission, bundling six queued items, described in its own `work_opened`
 statement as blocked behind "the GPG merge" — the implementation of
-[design/GPG-TRUST-LAYER.md](design/GPG-TRUST-LAYER.md), in progress in a concurrent worktree
+[design/GPG-TRUST-LAYER.md](design/MAINT-GPG-TRUST-LAYER.md), in progress in a concurrent worktree
 as of this revision; (10) this offering's own build, currently claimed by this session.
 
 Separately, 3 items were migrated already CLOSED, outside the count above: a 7th

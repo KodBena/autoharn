@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-12T00:37:40Z
-#   last-change: 2026-07-12T00:40:25Z
+#   last-change: 2026-07-12T00:43:20Z
 #   contributors: e4410ef6/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -200,6 +200,30 @@ def _prior_record_line(doc_rel: str, content_sha256: str) -> int | None:
     return last
 
 
+def _carry_forward_adjudication(prior: dict, prior_line: int) -> dict | None:
+    """A carry-forward record is always WRITTEN at doc-attestation/2 (the gate's --record always
+    emits SCHEMA_LATEST), which REQUIRES a typed `adjudication` object whenever `escalated` is
+    true (design/SPEC-DOC-ATTESTATION-2.md). A prior /2 record already carries one — reuse it
+    verbatim. A prior /1 record kept its escalation disposition as b_id free text (the seam /2
+    exists to close); this synthesizes an HONEST, clearly-labeled /2 adjudication FROM that text
+    rather than inventing a new judgment — the gate itself declares adjudication content is
+    reviewed like any other claim, never policed for correctness here. Returns None if
+    `escalated` is falsy (no adjudication needed or permitted)."""
+    if not prior.get("escalated"):
+        return None
+    if prior.get("schema") == "doc-attestation/2" and "adjudication" in prior:
+        return prior["adjudication"]
+    return {
+        "adjudicated_by": "tools/rename_doc.py (mechanical carry-forward, doc-audience-taxonomy rename sweep)",
+        "disposition": (f"no re-adjudication performed here — this is a mechanical path/link-only "
+                         f"carry-forward of the prior escalated doc-attestation/1 record's own "
+                         f"disposition, whose b_id (ledger line {prior_line}) already narrates who "
+                         f"adjudicated the escalation and what was applied; content_sha256 changed "
+                         f"only via the rename/relink, not via new prose"),
+        "adjudicated_at": prior.get("attested_at", "unknown"),
+    }
+
+
 def write_rename_note(old_rel: str, new_rel: str, content_sha256: str) -> bool:
     """Case 1 (byte-identical rename): append a mechanical rename-note record at the new path,
     same content_sha256, carrying the prior record's rounds forward. Returns True if written."""
@@ -219,8 +243,9 @@ def write_rename_note(old_rel: str, new_rel: str, content_sha256: str) -> bool:
         "rounds": prior.get("rounds"),
         "escalated": prior.get("escalated", False),
     }
-    if prior.get("schema") == "doc-attestation/2" and "adjudication" in prior:
-        body["adjudication"] = prior["adjudication"]
+    adj = _carry_forward_adjudication(prior, line_no)
+    if adj is not None:
+        body["adjudication"] = adj
     return _record(body)
 
 
@@ -255,8 +280,9 @@ def write_collateral_note(rel: str, old_content_sha256_unused: str) -> str:
         "rounds": prior.get("rounds"),
         "escalated": prior.get("escalated", False),
     }
-    if prior.get("schema") == "doc-attestation/2" and "adjudication" in prior:
-        body["adjudication"] = prior["adjudication"]
+    adj = _carry_forward_adjudication(prior, prior_line)
+    if adj is not None:
+        body["adjudication"] = adj
     ok = _record(body)
     return "COLLATERAL-CARRIED-FORWARD" if ok else "COLLATERAL-RECORD-FAILED"
 

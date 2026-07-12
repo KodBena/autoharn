@@ -345,7 +345,7 @@ is almost always `pg_hba.conf`, not Postgres itself.
 This section documents a specific, investigated hardening step for one real deployment shape —
 Postgres reachable over a private subnet, one cluster-wide superuser role, `trust` authentication
 for every database — condensed from the full investigation in
-[`design/PG-HBA-HARDENING.md`](design/PG-HBA-HARDENING.md) (every fact there is witnessed against
+[`design/PG-HBA-HARDENING.md`](design/MAINT-PG-HBA-HARDENING.md) (every fact there is witnessed against
 a real cluster; read it in full before applying anything non-trivial). **This page documents; it
 does not apply anything for you** — editing `pg_hba.conf` and reloading Postgres on a database
 that matters is your own act, on your own schedule, with your own rollback plan. Skip this section
@@ -411,14 +411,14 @@ If either witness fails, restore from the backup (`cp pg_hba.conf.bak-<date> pg_
 `SELECT pg_reload_conf();`) and re-diagnose before retrying. Full detail, including the exact
 column-aligned rule block, the second (local Unix-socket) hole this pass deliberately leaves open
 and why, and the honest limits of what a password requirement does and does not protect against,
-is in [`design/PG-HBA-HARDENING.md`](design/PG-HBA-HARDENING.md) §2–§5.
+is in [`design/PG-HBA-HARDENING.md`](design/MAINT-PG-HBA-HARDENING.md) §2–§5.
 
 ## Related
 
 - [OPERATING-CARD.md](OPERATING-CARD.md) — the operator-facing card for someone already running a
   scaffolded project: the verbs, the resumption doctrine, the kernel-delta decision tree.
 - [GLOSSARY.md](GLOSSARY.md) — every coined term this page uses, defined once.
-- [`design/PG-HBA-HARDENING.md`](design/PG-HBA-HARDENING.md) — the full pg_hba investigation this
+- [`design/PG-HBA-HARDENING.md`](design/MAINT-PG-HBA-HARDENING.md) — the full pg_hba investigation this
   page's FAQ condenses; read it in full before applying anything to a database that matters.
 - [`law/adr/0017-the-zero-context-reader.md`](law/adr/0017-the-zero-context-reader.md) — the
   documentation-legibility discipline this page is written to, and the source of

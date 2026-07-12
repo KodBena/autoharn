@@ -1,7 +1,7 @@
 # The GPG trust layer — operator FAQ
 
 This page answers the question an operator actually has: **I've read
-[design/GPG-TRUST-LAYER.md](GPG-TRUST-LAYER.md) and I understand WHY this project signs things —
+[design/GPG-TRUST-LAYER.md](MAINT-GPG-TRUST-LAYER.md) and I understand WHY this project signs things —
 what do I actually type?** It is a companion to that spec, not a replacement for it: read
 GPG-TRUST-LAYER.md first for the reasoning (what a signature proves, what is deliberately left
 unsigned, the three rungs); this page is the step-by-step "what you type, what you should see"
@@ -464,7 +464,7 @@ That is the whole procedure: four steps, each already exercised above, none of i
 
 ## Related
 
-- [design/GPG-TRUST-LAYER.md](GPG-TRUST-LAYER.md) — the spec this FAQ operationalizes; read it
+- [design/GPG-TRUST-LAYER.md](MAINT-GPG-TRUST-LAYER.md) — the spec this FAQ operationalizes; read it
   first for the reasoning, especially §7's key-residence split (the same two domains §3 above
   walks as a ceremony).
 - [law/keys/README.md](../law/keys/README.md) — autoharn's OWN committed-keys directory (§3a),

@@ -293,7 +293,7 @@ behavior belongs to the live verb, not this retrospective auditor).
 
 **Out of scope (4 of 12), with reasons:** pt 4 (files committed to git) — git is a third
 record system with its own clock and its own integrity machinery
-([design/GPG-TRUST-LAYER.md](GPG-TRUST-LAYER.md)'s verify-chain rung); joining it into this
+([design/GPG-TRUST-LAYER.md](MAINT-GPG-TRUST-LAYER.md)'s verify-chain rung); joining it into this
 event stream is real design work, filed as a possible Part 4, not smuggled in. pt 6
 (assumption-before-commitment) — the J-boundary's cleanest case: the trigger (recognizing
 that a design fact lacks an antecedent) fires only in an agent's head; the conformance map
@@ -369,7 +369,7 @@ witnessed honesty, not a defect.
 
 - [design/CONTEMPORANEITY-AUDIT.md](CONTEMPORANEITY-AUDIT.md) — Parts 1–2, the substrate
   and the Part 3 sketch this spec discharges.
-- [design/LATE-ENTRY-AND-INTAKE-SEMANTICS.md](LATE-ENTRY-AND-INTAKE-SEMANTICS.md) — the
+- [design/LATE-ENTRY-AND-INTAKE-SEMANTICS.md](MAINT-LATE-ENTRY-AND-INTAKE-SEMANTICS.md) — the
   s24 declared-event-time semantics §3 constrains.
 - [law/briefs/BRIEF-CONFORMANCE-MAP.md](../law/briefs/BRIEF-CONFORMANCE-MAP.md) — the M/J
   split that draws this spec's scope boundary.

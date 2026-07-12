@@ -5,7 +5,7 @@ keys that verify ONE thing: signatures over THIS repository's own `ratified/*` g
 the maintainer's act of ratifying an ADR, a delta, or a design in autoharn's own law. It is
 written for the maintainer generating or rotating this repository's own ratification key, and
 for anyone reading `./attest-tags`'s output and wanting to know what it checked against. The
-[GPG trust layer spec](../../design/GPG-TRUST-LAYER.md) names three signing mechanisms in
+[GPG trust layer spec](../../design/MAINT-GPG-TRUST-LAYER.md) names three signing mechanisms in
 build order, calling each a "Rung" (a tier of what gets signed and how strongly, Rung 1
 being the lightest): this directory serves Rung 1 only, its §2 — signed `ratified/*` tags —
 and `./attest-tags` is the only verb that reads this directory. Every file here is a
@@ -89,7 +89,7 @@ first.
 
 ## Related
 
-- [`design/GPG-TRUST-LAYER.md`](../../design/GPG-TRUST-LAYER.md) — the spec, §2 for Rung 1
+- [`design/GPG-TRUST-LAYER.md`](../../design/MAINT-GPG-TRUST-LAYER.md) — the spec, §2 for Rung 1
   (what this directory serves) and §7's key-residence split (why this directory and a
   deployment's own `keys/` are deliberately different places).
 - [`design/GPG-TRUST-LAYER-FAQ.md`](../../design/GPG-TRUST-LAYER-FAQ.md) — the operator
