@@ -1,0 +1,28 @@
+== source autoharn.ledger row count at fixture start: 229 ==
+
+=== a-dest-exists-refused ===
+  [ok] exit=1 stderr_tail='exists. Pass --force to overwrite, or pick\n  a fresh destination (a frozen snapshot is settled evidence; overwriting one in place\n  by default would silently discard whatever was frozen there before).'
+
+=== b-bad-commit-refused ===
+  [ok] exit=1 stderr_tail='rk/w/vdc/1/autoharn/.claude/worktrees/agent-a072fa383b7464382:\n  fatal: Needed a single revision\n  (git rev-parse --verify "not-a-real-ref-ever-xyz^{commit}" failed -- check the ref/sha and try again)' dest_created=False
+
+=== c-as-of-id-beyond-max-refused ===
+  [ok] exit=1 max_id=231 stderr_tail="freeze-at-stamp: REFUSED -- --as-of 1000230 names a ledger id beyond the source\n  tracker's own max id (231). Pick an id <= 231, or omit --as-of to\n  default to the commit's own committer timestamp."
+
+=== d-as-of-future-ts-refused ===
+  [ok] exit=1 stderr_tail="-at-stamp: REFUSED -- the cutoff timestamp '2099-01-01T00:00:00Z' is in the future\n  (server now() = 2026-07-12 20:13:44.535066+02). A frozen snapshot cannot include rows that have not\n  happened yet."
+
+== live probe: db_exists=1 owner_role_exists=1 ro_role_exists=1 connect-as-owner reachable=True ==
+   probe stderr: ''
+
+=== e-standing-db-unreachable-refused ===
+  [ok] SKIPPED (db is actually reachable now -- this polarity no longer applies; see case f below for the live end-to-end run instead)
+
+=== f-full-snapshot-e2e ===
+  [ok] script_exit=0 | row_id=1 present:True rows>200 present:False | verify-chain exit=0 stdout_tail='/lineage/s26-row-hash-chain.sql not applied here)\nverify-chain: tail-deletion witness check SKIPPED -- hash-chain status is UNAVAILABLE, already diagnosed above' | write-attempt exit=3 stderr_tail='SET\nSET\nERROR:  permission denied for table ledger'
+
+=== g-source-row-count-invariant ===
+  [ok] before=229 after=229 (source tracker must be untouched by every polarity above, refusal or success)
+
+== zero residue: /tmp/freeze-at-stamp-fx-uyzzwbhx removed; no schema/db was created or dropped in toy by this fixture ==
+ALL EXERCISED CASES OK (0 case(s) UNEXERCISED with a concrete, named blocker -- see above), zero residue, source row count invariant held.
