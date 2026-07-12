@@ -1,0 +1,40 @@
+# attestations/ — this deployment's own ADR-0017 A:B:C attestation ledger
+
+This directory holds `doc-legibility-attestations.jsonl`: an append-only record of every
+fresh-context review (the "A:B:C loop" — an author (A) writes a document, a separately-forked
+reviewer (B) who has seen only the document reviews it for legibility, a repairer (C) fixes
+what B found) run over a markdown document in **this deployment (`__PROJECT_NAME__`,
+scaffolded __CREATED_AT__)**. It is deliberately separate from autoharn's own ledger of the
+same name — commit rows here about YOUR OWN documents, never anywhere in the autoharn checkout
+this deployment was scaffolded from. See `design/USER-DOC-AUDIT-LOOP.md` (in the autoharn
+checkout) for the walkthrough and `keys/README.md` for the parallel deployment-local-ledger
+precedent this directory follows (a deployment-owned trust artifact, never autoharn's).
+
+## Current state: empty
+
+No attestation has been recorded here yet. This is the honest starting state, not an error —
+`./attest-doc check` reports every in-scope document as `NO-ATTESTATION` against an empty
+ledger, exactly as `./led --recent` shows nothing for a project that has not yet written a
+ledger row. Nothing here is required until you choose to run the A:B:C loop over a document you
+write or edit; the discipline is opt-in (`.claude/apparatus.json`'s `doc_attestation` mechanism
+defaults `"off"` for exactly this reason — see `.claude/APPARATUS.md`).
+
+## What lands here
+
+- `doc-legibility-attestations.jsonl` — one JSON object per line, appended ONLY by
+  `./attest-doc record <json-file>`, never hand-edited (the file is append-only by convention,
+  the same discipline autoharn's own copy of this ledger follows). Each line names the document
+  reviewed, its exact content hash, which rounds ran, and whether the loop converged or
+  escalated — see `gates/doc_attestation_presence.py`'s module docstring (in the autoharn
+  checkout) for the full record schema.
+
+## Related
+
+- `design/USER-DOC-AUDIT-LOOP.md` (in the autoharn checkout) — the step-by-step walkthrough:
+  what you type, what you should see, running the loop against one of your own documents.
+- `design/ORCH-SPEC-ABC-OFFERING.md` (in the autoharn checkout) — the design that decided this
+  ledger lives here, per-deployment, rather than upstream.
+- `.claude/APPARATUS.md` — the `doc_attestation` switchboard entry governing whether
+  `./distance-to-clean` counts debt from this ledger.
+- `../keys/README.md` — the sibling deployment-local trust artifact (this deployment's OWN GPG
+  keyring) this directory's residence pattern follows.

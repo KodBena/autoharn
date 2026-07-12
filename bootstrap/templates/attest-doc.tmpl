@@ -1,0 +1,205 @@
+#!/usr/bin/env python3
+"""attest-doc — the per-deployment verb for ADR-0017's A:B:C fresh-context audit loop
+(tracker item `abc-loop-offering`; design/ORCH-SPEC-ABC-OFFERING.md, in the autoharn checkout
+this deployment was scaffolded from). It answers the maintainer's own question, "is there a
+reason we can't use [the fresh-context audit loop] for end users?" — the loop itself already
+runs inside any Claude Code session; what a scaffolded deployment lacked was somewhere to
+RECORD that a review happened. This verb, plus the empty `attestations/` ledger the scaffold
+seeds beside it, is that somewhere.
+
+TWO SUBCOMMANDS, mirroring the upstream gate's two duties:
+
+  ./attest-doc record <json-file>
+      Validate and append a doc-attestation record to THIS DEPLOYMENT's own ledger
+      (attestations/doc-legibility-attestations.jsonl, seeded empty at scaffold time — never
+      autoharn's own ledger of the same name). Same JSON body shape, same refusals, as the
+      upstream gate's own `--record` (see gates/doc_attestation_presence.py's module docstring,
+      "ATTESTATION RECORD FORMAT", in the autoharn checkout this deployment was scaffolded
+      from) — a malformed record is refused (exit 2) and never appended.
+
+  ./attest-doc check [PATH...]
+      Report, per in-scope document, whether it is ATTESTED (a record exists for its exact
+      current bytes), STALE (a record exists for this doc path, but at DIFFERENT bytes — the
+      loop ran once, the file changed since), or NO-ATTESTATION (no record at all). With no
+      PATH, scope is every `*.md` under this deployment, minus two exclusions (see "SCOPE"
+      below). Exit 0 if every in-scope doc is ATTESTED, 1 otherwise — so `./attest-doc check`
+      composes as a script-friendly debt read, the same convention `./distance-to-clean` (whose
+      own DOC-ATTESTATION section reads the identical classification — see that template's own
+      module docstring) already uses.
+
+RESIDENCE (design/ORCH-SPEC-ABC-OFFERING.md §2 — "autoharn is used like a library"): the record
+SCHEMA, its VALIDATOR, and the classification logic (ATTESTED/STALE/NO-ATTESTATION) all stay
+UPSTREAM, single-homed in gates/doc_attestation_presence.py — this file imports that module
+directly (the same device distance-to-clean.tmpl already uses for filing/deployment_record.py)
+and reparameterizes it to THIS deployment's own doc root and ledger by reassigning its
+`REPO_ROOT`/`LEDGER_PATH` module globals once, at import time — the identical monkeypatch
+device that module's own Stage-A `--doc-root`/`--ledger` CLI flags and its seen-red fixture
+both already use. Nothing about the record format, the validation rules, or the ADR-0017
+Rule-1 test is redefined here; this file is a thin verb shim, same genre as `led`/`pickup`/
+`judge` (a three-line `exec` wrapper written by the scaffold, see bootstrap/new-project.sh and
+bootstrap/track-work.sh) plus the small amount of glue a Python entry point needs that a
+one-line shell shim cannot express (argument dispatch, scope exclusions).
+
+SCOPE (design/ORCH-SPEC-ABC-OFFERING.md §3), both exclusions PRINTED every run, never silent
+(ADR-0017 Rule 2(b)'s convention, inherited): (1) a document carrying the inline HTML-comment
+waiver `<!-- doc-attest-exempt: <reason> -->` (gates/doc_attestation_presence.py's own escape
+hatch, reused verbatim — a point-in-time record or a quoted-defect specimen this deployment
+does not want to re-attest on every edit); (2) a document on
+gates/doc_attestation_presence.py's `DEPLOYMENT_SCAFFOLD_OWNED_MD` list (the templated docs a
+scaffold writes — this deployment's own `CLAUDE.md`, `.claude/APPARATUS.md`,
+`.claude/HOOKS.md`, `.claude/GOVERNED_FILES.md`, `keys/README.md`) — those are AUTOHARN's own
+prose, attested upstream in the autoharn repository itself, not this deployment's to re-attest.
+That list is the ONE home of the exclusion (ADR-0012 P1): both this file and distance-to-clean's
+DOC-ATTESTATION section read it, never a second hand-copied set.
+
+WHAT THIS DOES NOT DO: it never runs the A:B:C loop itself (that is a workflow — spawn a fresh
+`Agent` invocation as B, per this deployment's own design/USER-DOC-AUDIT-LOOP.md, in the autoharn
+checkout's design/ORCH-ABC-AUDIT-LOOP-RECIPE.md terms) and it never makes any LLM verdict block
+anything — `check`'s ATTESTED/STALE/NO-ATTESTATION read is presence-and-shape only, structurally
+identical to the upstream gate's own posture ("it NEVER reads what B concluded to decide
+pass/fail"). It is not wired as a commit-time gate here (design/ORCH-SPEC-ABC-OFFERING.md §4:
+"worlds have no pre-commit" for most scaffolds) — the debt it reports joins the verb surface
+instead, through `./distance-to-clean`'s own DOC-ATTESTATION section, gated OFF by default via
+`mechanisms.doc_attestation.mode` in `.claude/apparatus.json` (a deployment adopts the LOOP by
+choice; debt-nagging for a discipline nobody adopted would be noise, not assurance).
+
+Lazy imports are banned (CLAUDE.md, 2026-07-02): everything below imports at module load.
+"""
+from __future__ import annotations
+
+import os
+import sys
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+AUTOHARN = Path(os.environ.get("AUTOHARN", str(HERE / ".." / ".."))).resolve()
+DEPLOYMENT_PATH = Path(os.environ.get("PICKUP_DEPLOYMENT", str(HERE / "deployment.json")))
+# This deployment's own root -- the directory containing deployment.json, exactly how every
+# sibling verb shim (led/judge/pickup/distance-to-clean) already resolves "where am I" (the
+# scaffolded shim sets PICKUP_DEPLOYMENT to "$HERE/deployment.json" where $HERE is ITS OWN
+# directory -- see bootstrap/new-project.sh's shim-writing loop). Unlike those verbs, attest-doc
+# needs no Postgres connection at all -- it is pure filesystem + one JSONL ledger -- so it does
+# NOT import filing/deployment_record.py or require deployment.json to actually exist/parse;
+# PROJECT_ROOT is derived from the PATH alone.
+PROJECT_ROOT = DEPLOYMENT_PATH.parent
+LEDGER_PATH = PROJECT_ROOT / "attestations" / "doc-legibility-attestations.jsonl"
+
+sys.path.insert(0, str(AUTOHARN / "gates"))
+try:
+    import doc_attestation_presence as dap  # noqa: E402  (autoharn's own gate module, the ONE home of the schema/validator)
+except ImportError as e:
+    print(f"attest-doc: cannot import autoharn's gates/doc_attestation_presence.py under "
+          f"AUTOHARN={AUTOHARN} ({e.__class__.__name__}: {e})", file=sys.stderr)
+    print("        set AUTOHARN=/path/to/autoharn, or place a sibling checkout at ../autoharn",
+          file=sys.stderr)
+    sys.exit(2)
+
+# Reparameterize the imported module to THIS deployment's own doc tree and ledger, once, at
+# import time -- the same module-global monkeypatch device
+# seen-red/doc-attestation-presence/red-specimen.py already uses in-process (in the autoharn
+# checkout), now doing the deployment-residence job design/ORCH-SPEC-ABC-OFFERING.md Stage A
+# commissioned. Every function `dap` exports (load_ledger, discover_md, classify, _has_waiver,
+# _sha256_of, main, ...) reads these two globals at CALL time, not at def time, so this
+# assignment governs everything below it.
+dap.REPO_ROOT = PROJECT_ROOT
+dap.LEDGER_PATH = LEDGER_PATH
+
+USAGE = """usage: attest-doc check [PATH...]     -- ATTESTED/STALE/NO-ATTESTATION per in-scope doc
+                                          (no PATH = every *.md under this deployment)
+       attest-doc record <json-file>  -- append a fresh-context attestation record to THIS
+                                          deployment's OWN ledger (attestations/
+                                          doc-legibility-attestations.jsonl), never autoharn's.
+                                          '-' reads the JSON body from stdin.
+                                          See design/USER-DOC-AUDIT-LOOP.md (this deployment's
+                                          own copy) for the record's shape and the loop itself.
+"""
+
+
+def _resolve_target(a: str) -> tuple[str, Path] | None:
+    """One CLI-given path -> (deployment-relative POSIX rel, absolute Path), or None if it is
+    not an existing `.md` file under this deployment (mirrors gates/doc_attestation_presence.py's
+    own gate-mode target resolution, `main()`'s targets loop, reused here rather than
+    re-invented)."""
+    p = Path(a)
+    if not p.is_absolute():
+        p = PROJECT_ROOT / p
+    if p.suffix != ".md" or not p.exists():
+        return None
+    try:
+        rel = p.resolve().relative_to(PROJECT_ROOT).as_posix()
+    except ValueError:
+        rel = p.as_posix()
+    return rel, p
+
+
+def cmd_check(argv: list[str]) -> int:
+    if argv:
+        targets: list[str] = []
+        for a in argv:
+            resolved = _resolve_target(a)
+            if resolved is None:
+                print(f"attest-doc check: not an existing .md file: {a}", file=sys.stderr)
+                return 2
+            targets.append(resolved[0])
+    else:
+        targets = dap.discover_md(PROJECT_ROOT)
+
+    scaffold_owned = sorted(t for t in targets if not dap.deployment_in_scope(t))
+    candidates = [t for t in targets if dap.deployment_in_scope(t)]
+    waived = sorted(t for t in candidates if dap._has_waiver(PROJECT_ROOT / t))
+    scope = sorted(t for t in candidates if t not in waived)
+
+    print(f"attest-doc check: {len(scope)} doc(s) in scope, {len(scaffold_owned)} scaffold-owned "
+          f"excluded, {len(waived)} waived.")
+    if scaffold_owned:
+        print("  scaffold-owned (autoharn's own docs, attested upstream -- not yours to re-attest):")
+        for s in scaffold_owned:
+            print(f"    {s}")
+    if waived:
+        print(f"  waived by inline '<!-- {dap.WAIVER_TOKEN} ... -->' marker:")
+        for w in waived:
+            print(f"    {w}")
+
+    records = dap.load_ledger()
+    counts = {"ATTESTED": 0, "STALE": 0, "NO-ATTESTATION": 0}
+    for rel in scope:
+        verdict = dap.classify(rel, records, PROJECT_ROOT)
+        counts[verdict] += 1
+        print(f"  {verdict:15s} {rel}")
+
+    debt = counts["STALE"] + counts["NO-ATTESTATION"]
+    print(f"attest-doc check: {counts['ATTESTED']} ATTESTED, {counts['STALE']} STALE, "
+          f"{counts['NO-ATTESTATION']} NO-ATTESTATION" + ("  (0 debt = clean)" if debt == 0 else ""))
+    return 1 if debt else 0
+
+
+def cmd_record(argv: list[str]) -> int:
+    if not argv:
+        print("usage: attest-doc record <json-file>   ('-' for stdin)", file=sys.stderr)
+        return 2
+    # dap.REPO_ROOT/dap.LEDGER_PATH are already reparameterized to THIS deployment above, at
+    # import time -- --record reads/writes through those same two globals, so no further
+    # parameterization is needed here (dap.main's own --doc-root/--ledger CLI flags exist for a
+    # caller that has NOT already imported and monkeypatched the module, which is not this file).
+    return dap.main(["--record", *argv])
+
+
+def main(argv: list[str]) -> int:
+    if not argv:
+        print(USAGE, file=sys.stderr)
+        return 2
+    if argv[0] in ("-h", "--help"):
+        print(USAGE)
+        return 0
+    sub, rest = argv[0], argv[1:]
+    if sub == "check":
+        return cmd_check(rest)
+    if sub == "record":
+        return cmd_record(rest)
+    print(f"attest-doc: unrecognized subcommand {sub!r}\n", file=sys.stderr)
+    print(USAGE, file=sys.stderr)
+    return 2
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

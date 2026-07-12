@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-11T22:23:51Z
-#   last-change: 2026-07-11T22:23:51Z
+#   last-change: 2026-07-12T14:19:58Z
 #   contributors: e4410ef6/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -48,6 +48,9 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
 GATE = REPO / "gates" / "apparatus_unknown_keys.py"
+
+sys.path.insert(0, str(REPO / "filing"))
+import apparatus_registry  # noqa: E402  (filing/apparatus_registry.py, the module case g exercises directly)
 
 PROBE_DIR = Path("/tmp/.apparatusunknownkeysprobe")
 
@@ -121,6 +124,53 @@ def main() -> int:
             failures.append(f"f-multiple-targets-mixed: expected exit 1, got {cp.returncode}\n{cp.stdout}{cp.stderr}")
         if "doc_shapse_gate" not in cp.stdout:
             failures.append(f"f-multiple-targets-mixed: expected the bad key named in stdout, got:\n{cp.stdout}")
+
+        # ---- g: the widened scan itself (tracker item `abc-loop-offering`) ------------
+        # known_mechanisms() was widened 2026-07-12 to scan bootstrap/templates/*.tmpl
+        # alongside hooks/*.py (the doc_attestation mechanism, read by distance-to-clean.tmpl,
+        # is the first apparatus-reading file that is not a hook -- see filing/
+        # apparatus_registry.py's own "WHERE IT SCANS" docstring section). This case proves the
+        # GENERAL mechanism directly (an isolated scratch hooks_dir/templates_dir pair, not this
+        # repo's own real files), both polarities: a mechanism named ONLY in a *.tmpl file is
+        # recognized (g1); a name that appears in neither scanned source, or only under a
+        # non-matching extension, is still correctly reported unknown (g2) -- the widening adds
+        # a source, it does not loosen the match.
+        scratch_hooks = PROBE_DIR / "scratch-hooks"
+        scratch_templates = PROBE_DIR / "scratch-templates"
+        scratch_hooks.mkdir(parents=True)
+        scratch_templates.mkdir(parents=True)
+        (scratch_hooks / "some_hook.py").write_text(
+            'MECHANISM_KEY = "hook_only_mechanism"\n', encoding="utf-8")
+        (scratch_templates / "some_verb.tmpl").write_text(
+            'MECHANISM_KEY = "doc_attestation"\nmechs.get(MECHANISM_KEY)\n', encoding="utf-8")
+        # A same-shaped constant in a NON-.tmpl file under templates_dir must NOT be picked up --
+        # proves the scan is glob-scoped (*.tmpl), not "every file in the directory".
+        (scratch_templates / "not_a_template.txt").write_text(
+            'MECHANISM_KEY = "should_not_be_found"\n', encoding="utf-8")
+
+        known = apparatus_registry.known_mechanisms(hooks_dir=scratch_hooks,
+                                                     templates_dir=scratch_templates)
+        print(f"CASE g1 (templates_dir scan, *.tmpl only): known={sorted(known)}")
+        if "doc_attestation" not in known:
+            failures.append(f"g1: expected 'doc_attestation' (declared only in a .tmpl file) in "
+                            f"known_mechanisms(), got {sorted(known)}")
+        if "hook_only_mechanism" not in known:
+            failures.append(f"g1: expected 'hook_only_mechanism' (declared only in the scratch "
+                            f"hooks_dir) in known_mechanisms(), got {sorted(known)}")
+        if "should_not_be_found" in known:
+            failures.append(f"g1: a MECHANISM_KEY inside a NON-.tmpl file under templates_dir "
+                            f"must not be picked up -- the scan is glob-scoped, got {sorted(known)}")
+
+        # g2: a genuinely unknown key, checked against the SAME scratch registry, is still
+        # correctly flagged -- the widening adds a source, it never widens the MATCH itself.
+        unknown = apparatus_registry.unknown_mechanism_keys(
+            {"mechanisms": {"doc_attestation": {"mode": "off"}, "totally_made_up": {"mode": "off"}}},
+            known=known)
+        print(f"CASE g2 (genuine unknown key still flagged against the widened registry): "
+              f"unknown={unknown}")
+        if unknown != ["totally_made_up"]:
+            failures.append(f"g2: expected exactly ['totally_made_up'] unknown (doc_attestation "
+                            f"recognized, the made-up key flagged), got {unknown}")
     finally:
         teardown()
 
@@ -129,9 +179,9 @@ def main() -> int:
         for f in failures:
             print(f"  - {f}")
         return 1
-    print("seen-red/apparatus-unknown-keys/run_fixtures.py: all 6 cases PASS "
+    print("seen-red/apparatus-unknown-keys/run_fixtures.py: all 7 cases PASS "
           "(a-report-mode-default, b-gate-clean, c-gate-unknown-key, d-gate-unresolvable, "
-          "e-world-dir-resolution, f-multiple-targets-mixed)")
+          "e-world-dir-resolution, f-multiple-targets-mixed, g-templates-dir-scan)")
     return 0
 
 

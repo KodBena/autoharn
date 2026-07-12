@@ -1,7 +1,7 @@
 #!/bin/sh
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-09T11:15:53Z
-#   last-change: 2026-07-12T12:44:34Z
+#   last-change: 2026-07-12T14:41:34Z
 #   contributors: be693afb/main, e4410ef6/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -314,6 +314,12 @@ sedsubst() {
 echo "-- .claude/ wiring --"
 sedsubst < "$TEMPLATES/settings.json.tmpl" > "$PROJECT_ROOT/.claude/settings.json"
 cp "$TEMPLATES/governed_files.json" "$PROJECT_ROOT/.claude/governed_files.json"
+# COHERENCE PARTNER: .claude/GOVERNED_FILES.md and .claude/APPARATUS.md below are AUTOHARN's own
+# prose, named in gates/doc_attestation_presence.py's DEPLOYMENT_SCAFFOLD_OWNED_MD (tracker item
+# `abc-loop-offering`) so a scaffolded deployment's ./attest-doc/./distance-to-clean never asks
+# an adopter to re-attest autoharn's own docs. Add any NEW scaffold-written .md file to BOTH
+# sides -- an out-of-frame audit already caught one addition (attestations/README.md) missing
+# from that set on day one; this comment exists so the next one is not missed the same way.
 cp "$TEMPLATES/GOVERNED_FILES.md" "$PROJECT_ROOT/.claude/GOVERNED_FILES.md"
 cp "$TEMPLATES/apparatus.json" "$PROJECT_ROOT/.claude/apparatus.json"
 cp "$TEMPLATES/APPARATUS.md" "$PROJECT_ROOT/.claude/APPARATUS.md"
@@ -331,6 +337,9 @@ if [ -n "$NEW_WORLD" ]; then
     # acceptance bar (2026-07-09): at most one scaffold command, one `cd`, one `claude`, and NO
     # paste step. A file named anything else, or living anywhere else, is not auto-loaded by
     # Claude Code at session start and would put the paste step right back.
+    # COHERENCE PARTNER: this CLAUDE.md is in gates/doc_attestation_presence.py's
+    # DEPLOYMENT_SCAFFOLD_OWNED_MD (see the .claude/ wiring block above's own coherence-partner
+    # comment) -- it is autoharn's own prose, not an adopter's to re-attest.
     sedsubst < "$TEMPLATES/CLAUDE.md.tmpl" > "$PROJECT_ROOT/CLAUDE.md"
     echo "wrote CLAUDE.md (governance preamble, auto-loaded at session start)"
 fi
@@ -357,13 +366,36 @@ fi
 # deliberately separate from autoharn's law/keys/ (scoped exclusively to autoharn's own
 # ratified/* tags). Mirrors bootstrap/track-work.sh's identical block; applied at the merge
 # window per the key-residence refactor's documented frozen-remainder diff (BACKLOG 2026-07-12).
+# COHERENCE PARTNER: keys/README.md and attestations/README.md below are BOTH in gates/
+# doc_attestation_presence.py's DEPLOYMENT_SCAFFOLD_OWNED_MD (tracker item `abc-loop-offering`)
+# -- they are autoharn's own templated prose, not an adopter's to re-attest. If a future template
+# adds another scaffold-written .md file, add it to that set too (that module's own docstring
+# names this exact scaffold as the coherence partner in the other direction).
 echo "-- keys/ (this deployment's OWN GPG keyring; never autoharn's law/keys/) --"
 mkdir -p "$PROJECT_ROOT/keys"
 sedsubst < "$TEMPLATES/keys-README.md.tmpl" > "$PROJECT_ROOT/keys/README.md"
 echo "wrote keys/README.md (AWAITING-KEY stub; commit THIS deployment's own signing key here)"
 
-echo "-- the seven verbs (led, judge, pickup, audit, distance-to-clean, verify-commission, verify-chain): thin shims exec'ing autoharn's live templates --"
-for verb in led judge pickup audit distance-to-clean verify-commission verify-chain; do
+# attestations/ -- this deployment's OWN ADR-0017 A:B:C fresh-context attestation ledger
+# (tracker item `abc-loop-offering`; design/ORCH-SPEC-ABC-OFFERING.md §3), deliberately separate
+# from autoharn's own ledger of the same name, exactly the keys/ split above. The ledger FILE
+# itself is created empty ONLY if it does not already exist -- the same idempotent,
+# never-clobber-real-data posture this script's own header comment documents for the stamp
+# secret ("skipped if a secret already exists, never silently rotated"): a --force re-scaffold
+# must never truncate a ledger that already carries real attestation history.
+echo "-- attestations/ (this deployment's OWN ADR-0017 A:B:C attestation ledger; never autoharn's) --"
+mkdir -p "$PROJECT_ROOT/attestations"
+sedsubst < "$TEMPLATES/attestations-README.md.tmpl" > "$PROJECT_ROOT/attestations/README.md"
+if [ -f "$PROJECT_ROOT/attestations/doc-legibility-attestations.jsonl" ]; then
+    echo "attestations/doc-legibility-attestations.jsonl already exists -- left untouched (never clobbered)"
+else
+    : > "$PROJECT_ROOT/attestations/doc-legibility-attestations.jsonl"
+    echo "wrote attestations/doc-legibility-attestations.jsonl (empty; the honest starting state)"
+fi
+echo "wrote attestations/README.md"
+
+echo "-- the eight verbs (led, judge, pickup, audit, distance-to-clean, verify-commission, verify-chain, attest-doc): thin shims exec'ing autoharn's live templates --"
+for verb in led judge pickup audit distance-to-clean verify-commission verify-chain attest-doc; do
     cat > "$PROJECT_ROOT/$verb" <<SHIM
 #!/bin/sh
 HERE="\$(cd "\$(dirname "\$0")" && pwd)"
@@ -387,7 +419,7 @@ if [ -n "$NEW_WORLD" ]; then
     echo "           # already registered above); nothing to paste."
     echo ""
     echo "(./led, ./judge, ./pickup, ./audit, ./distance-to-clean, ./verify-commission,"
-    echo " ./verify-chain are ready to use from inside that session; read"
+    echo " ./verify-chain, ./attest-doc are ready to use from inside that session; read"
     echo " $PROJECT_ROOT/.claude/HOOKS.md and replace its UNWITNESSED marks as you exercise each"
     echo " command.)"
     echo ""
