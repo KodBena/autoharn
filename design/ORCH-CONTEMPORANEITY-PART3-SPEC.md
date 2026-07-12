@@ -367,6 +367,136 @@ witnessed honesty, not a defect.
   are dust and read-only evidence anyway); if it ever matters, E8 grows a since-marker —
   filed, not built.
 
+## Status (appended, dated per [ADR-0005](../law/adr/0005-documentation-discipline.md) Rule 8 — the spec above stands unedited)
+
+This section records that an executor built the deliverables §8 above specified, what it found
+while building them, and what it witnessed working.
+
+**LANDED, 2026-07-12 (Sonnet, commissioned build — closes the Part-3-implementation half of the
+audit-verb-completions tracker item; the orchestrator annotates the tracker itself at merge).**
+Every §8 deliverable file exists: `engine/lp/preamble_ordering.lp` (F1–F12 + the verdict layer),
+`engine/preamble_obligations.lp` (E8), the E9 threshold appended to `engine/contemp_thresholds.lp`,
+E1–E5/E7 in `engine/contemp_edb.py`, E6 (the journal line) in
+`bootstrap/templates/verify-commission.tmpl`, the SQL floor (`engine/preamble_floor.py`) beside
+`engine/ledger_floor.py`, the differential runner (`engine/preamble_differential.py`, imports
+`engine/ledger_differential.py`'s conventions exactly, never re-derives them), fixtures under
+`seen-red/preamble-ordering/`, and the audit-verb mode (`./audit --preamble`, via
+`engine/preamble_audit.py` wired into `engine/contemp_audit.py`'s own `--preamble` flag). All
+additive; no kernel delta; nothing here touches a live session's hooks (delivered template-side,
+unwired, per §8's own routing rule).
+
+**TEMPLATE DRIFT CHECK (§8's own ask, "verify the enumeration against the CURRENT template"):
+NONE FOUND.** `bootstrap/templates/CLAUDE.md.tmpl` still carries exactly twelve numbered points,
+unchanged in count and in point-to-family mapping since this spec was authored — point 10's own
+prose has grown more elaborate (spelling out the FULL/LAZY signing-mode split and the
+`./verify-commission` gate in more words than the spec's own table paraphrase), but the
+OBLIGATION SHAPE F1/F2/F3 formalize (commission-first, verify-it, decompositions-cite-it) is
+unchanged. `engine/preamble_obligations.lp`'s own header records this check inline.
+
+**SPEC-VS-REALITY GAP FOUND AND CLOSED IN-PASS (CLAUDE.md's engineering-responsibility
+corollary — a hazard met in reach, fixed rather than routed around):** §4 lists
+`work_opened/2`/`work_closed/3`/`work_witness_present/1`/`work_depends/3` under "Reused as-is
+... same shapes as work_items.lp" — but no live Python module actually exported these before
+this build (`work_items.lp`'s own docstring cites `engine/work_item_scratch.py`, which does not
+exist as a general exporter). Built here instead, inside `engine/contemp_edb.py`'s own
+`export()`, from the SAME ledger row scan PASS 1 already runs for `row_tokened`/`row_untokened`
+— one extra set of SELECT columns, zero extra queries — alongside E1's own `work_claimed`
+addition. Named in `contemp_edb.py`'s own docstring ("PART 3 EXTENSION" section), not silently
+smuggled in as unscoped extra work.
+
+**SCOPE REDUCTION, NAMED HONESTLY (not silently narrowed):** F11's `question_open` and
+review-gap arms are UNCONDITIONALLY `UNDECIDABLE(capability_absent)` in this build whenever no
+s22 violation is separately found (a real violation still wins, loudest-first — spec §5's own
+priority). Wiring `question_open` would require composing THIS EDB with
+`engine/ledger_edb.py`'s own SEPARATE export (`entry`/`supersedes`/`answers`, a different
+denomination, no consumer for it here yet) — the spec's own text anticipates this ("when the
+ledger EDB is also exported") but this build does not implement the composition; filed, not
+built. The review-gap arm's own full fidelity (verdict='attest' + supersession) is the identical
+gap. F7's refined form (the review's `regards` edge landing on the decomposition, gated on E2)
+is similarly UNBUILT — the coarse presence+ordering form ships; E2's `row_regards/2` facts are
+emitted by `contemp_edb.py` but not yet consumed by any rule, ready for that follow-on.
+F5/F6's RED (VIOLATED) polarity is PROVABLY VACUOUS under normal write-time operation — s22's
+own `validate_work_item()` trigger refuses (by an existence check) any `work_claimed`/
+`work_closed` row for a slug with no pre-existing `work_opened` row, so a live write can never
+produce the violating shape — the SAME class `engine/lp/work_items.lp`'s own
+`work_duplicate_open`/`work_shipped_without_witness` members already are (that program's own
+header names the precedent); UNEXERCISED via live DB, GREEN witnessed live.
+
+**WITNESS SUMMARY (the spec's own §7 plan, `seen-red/preamble-ordering/run_fixtures.py`, ALL
+GREEN as of this landing):**
+- **Green+red per family F1–F11** (F12 imported wholesale, already witnessed under Part 2): this
+  build used two consolidated live-DB scratch worlds (schema `preambleorder` GREEN,
+  `preambleorderneg` RED, TOY db, full lineage through s25) rather than eleven separate tiny
+  ones, so each family's own polarity is individually inspectable in one coherent world's own
+  report. GREEN:
+  F1–F10 and F12 DISCHARGED, F11 UNDECIDABLE(capability_absent) (the scope reduction above,
+  not a defect). RED: F1/F2/F3/F4/F8/F9/F10/F11 VIOLATED, F7 UNDECIDABLE(untokened_row), F12
+  DISCHARGED (no backfill shape in this fixture's own timing).
+- **UNDECIDABLE seam reasons, all three plus capability-absence:** `untokened_row` (live, RED
+  world's own untokened review row) and `window_overlap` (live, RED world's own second
+  commission row, verify-event timed inside its own invocation window — an instance-level atom;
+  F2's family verdict stays VIOLATED regardless, via the first commission row alone) are
+  synthesized; `open_window` and `no_verify_journal` are witnessed from the REAL historical
+  corpus, not synthesized (see below) — run11 predates `hooks/posttooluse_bash_completion.py`
+  (E5) entirely, so every tokened row there lacks a completion record, and predates the E6
+  journal entirely.
+- **VACUOUS:** witnessed from the real corpus — run9 (`/home/bork/w/vdc/1/run9`, read-only,
+  dust), a freshly-scaffolded, fully s23-wired world with ZERO ledger rows, emits all twelve
+  family verdicts as `vacuous`, none silent.
+- **Differential AGREE, quoted:** GREEN `asp=36 sql=36 atoms; Δasp=[] Δsql=[]`; RED `asp=33
+  sql=33 atoms; Δasp=[] Δsql=[]`; both `--retain`ed under
+  `engine/docs/ledger-marriage/derivations/preamble-ordering/`. **Negative control:** reusing the
+  SAME `sql_atoms_override` seam `seen-red/contemporaneity-audit`'s own cases (p)/(q) precedent
+  already uses (forging one atom into the SQL floor's own returned set, never touching either
+  producer's real source) produces `DIVERGE_DEFECT`, with `Δasp` naming all 36 real GREEN atoms
+  and `Δsql=['preamble_verdict(f1,FORGED)']` — the differential catches a real single-producer
+  divergence.
+- **Historical corpus (runs 4, 5, 6, 7, 9, 10, 11 — read-only, dust, never touched):** each one's
+  own differential result is AGREE (`preamble_differential.py --root /home/bork/w/vdc/1/run<N>`). The
+  distribution across these 7 worlds × 12 families (84 instances) is
+  **UNDECIDABLE-heavy, reported honestly, exactly as spec §7 anticipated** ("pre-s23 worlds must
+  come back predominantly UNDECIDABLE on cross-seam families — witnessed honesty, not a
+  defect"): 39 vacuous, 25 undecidable, 17 discharged, 3 violated. The 3 real VIOLATED findings
+  are genuine, pre-existing gaps in those worlds' own historical practice, not fixture
+  artifacts: run4's F7 (no countersigning review found), run5's F6 (a work_closed row with no
+  preceding claim in this build's id-order sense), run11's F3 (its four `work_opened` rows
+  never `--refs` the commission row that exists in that same world, id 1) — surfaced here for
+  the first time by this mechanism, never previously checked.
+
+**EXIT-CODE COMPOSITION (§8's own "typed refusal on capability absence" ask, stated as this
+build's own explicit rule — `engine/preamble_audit.py`'s docstring carries the full account):**
+`--preamble` NEVER overrides a non-zero base `./audit` exit (1 BACKFILL_SUSPECT, 2 tool error, 3
+N/A capability refusal) — mirrors `--differential`'s own already-shipped "first problem found
+stays the reported one" rule. When the base exit is 0, `--preamble` may raise it to a NEW code,
+5, reachable only through this flag, iff ≥1 family verdict is VIOLATED. UNDECIDABLE/VACUOUS
+never move the exit (this is an observer per spec §8: "it gates nothing"; UNDECIDABLE is the
+expected common case on this project's own pre-E1–E9 historical corpus, not a defect signal).
+Witnessed live: `./audit --preamble` against run11 → exit 5 (F3 VIOLATED, base exit was 0).
+
+**DEFERRALS, NAMED WITH CONCRETE BLOCKERS (UNEXERCISED, not silently dropped):**
+- F11's `question_open`/review-gap full fidelity — blocker: the dual-EDB composition named
+  above; no consumer exists yet to justify the extra anchor-composition design work this pass.
+- F7's refined `regards`-edge form (E2, gated) — blocker: same as above, scope discipline; the
+  coarse form is sound and shipped.
+
+**THE SYNCHRONOUS-B REVIEW LOOP ([ADR-0017](../law/adr/0017-the-zero-context-reader.md)/
+[design/ORCH-ABC-AUDIT-LOOP-RECIPE.md](ORCH-ABC-AUDIT-LOOP-RECIPE.md)) — WITNESSED, both this
+section and [ORCH-CAPABILITIES.md](../ORCH-CAPABILITIES.md) item 24c, 2026-07-12.** This
+Status section: B round 1 found six defects (fragments lacking a finite verb, an
+under-glossed opening, and one ungrammatical clause); C repaired all six; B round 2 returned
+CLEAN on all four clauses. Item 24c: B round 1 found six defects (a two-verb collision, a
+mis-stated extension count, an undefined term, and two fragments); C repaired all six; B
+round 2 found one residual fragment (a dangling parenthetical after an em-dash). Per the
+loop's own two-round cap, that round-2 finding was fixed but the loop is recorded as
+NON-CONVERGING for item 24c specifically (the honest record the recipe itself asks for,
+rather than a silent third round) — routed to the maintainer/orchestrator as the escalation
+event the standing delegation contract already types, not blocking this commit (B's content
+judgment is advisory by ADR-0017's own constitutional constraint; the gate checks only that
+a fresh-context read happened, never what it concluded).
+
+See BACKLOG.md's dated entry beside this one for the full disposition and commit hashes, and
+[ORCH-CAPABILITIES.md](../ORCH-CAPABILITIES.md) item 24c for the operator-facing summary.
+
 ## Related
 
 - [design/CONTEMPORANEITY-AUDIT.md](ORCH-CONTEMPORANEITY-AUDIT.md) — Parts 1–2, the substrate
