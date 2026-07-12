@@ -5944,3 +5944,36 @@ teach-text, exit 1, ledger head unchanged at row 112); live GREEN via run12's re
 `./pickup` shim (row 2 renders `[available] QEUBO (backend)`, run12 ledger untouched at
 2 rows). Census: 52 seen-red gates. Residue: none carried; the layout_census root-file
 breaches predate this work and remain tracked by their own entries.
+
+## resource-accounting-spec — authored and attested (2026-07-12 morning, Fable, A:B:C loop)
+
+The maintainer's three same-morning asks — usage counts for requisitioned resources
+(subagent spawns, `claude -p`, solver runs) vs used/not-yet-used witness for
+ever-present ones; a MAY/SHOULD/MUST/MUST-NOT register with task-shape conditions; a
+typed per-resource statement of which distinction is policed by what mechanism at what
+grade, for financial-type audits — are closed on paper by
+design/ORCH-SPEC-RESOURCE-ACCOUNTING.md, a COMPANION to the registry spec (not an
+amendment: binds-on-touch would re-open the attested registry loop for three sections).
+
+Shape: `forbidden: <task-shape>` completes TIER as the deontic register (SHOULD-NOT
+declined, reason recorded); accounting mode derived from CLASS (typed column deferred
+to s27); the policing column DERIVED never self-declared (`POLICED (<mechanism>)` vs
+`DECLARED-ONLY` — a self-declared "enforced" field would be an unwitnessed claim in a
+typed costume); counts denominated as witnessed REACH-matching invocation events with
+both error directions named at every surface; the financial boundary restated as the
+spec's own hard edge (event counts evidentiary, token/money diagnostic-grade
+permanently, per the 2026-07-11 ruling). Subagent-spawn counting is honestly
+UNDECIDABLE(capability_absent) until the stage D observer ships. Four Sonnet-executable
+stages in §8; stage A (templates) freeze-gated while run12's wired session lives.
+
+A:B:C: B (fresh Sonnet, synchronous both rounds) round 1 DEFECT with 8 findings — the
+lead specimen was the recurring author-blindness shape, the unbuilt `forbidden` tier
+written in the present tense — all repaired; round 2 CLEAN with every repair verified
+against the artifacts on disk (led.tmpl's actual TIER vocabulary, the DerivationRecord
+dataclass fields, both ADR amendment texts, a live `./led show 115`). Attestation
+recorded at doc-attestation/2, escalated=false.
+
+Same morning, related: work item `abc-loop-offering` opened (unclaimed) — the A:B:C
+loop as a scaffolded-deployment offering; no architectural blocker (B is an ordinary
+subagent, no `claude -p`), but worlds are not git repos, so presence-checking must
+become hook- or verb-grade; needs a short authored spec before Sonnet execution.
