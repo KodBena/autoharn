@@ -1,4 +1,10 @@
 #!/bin/sh
+# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
+#   first-seen : 2026-07-12T02:05:13Z
+#   last-change: 2026-07-12T02:05:13Z
+#   contributors: e4410ef6/main
+# <<< PROVENANCE-STAMP <<<
+
 # bootstrap.sh — clone → collaborating. Idempotent: env check, git-hook install, gate
 # runnability, DB reachability. It is EXECUTED, not proofread (mandate §6): a DB-reachability
 # failure prints the pg_hba/host facts loudly and exits non-zero — it never soft-passes.
@@ -34,6 +40,17 @@ echo "-- git hook (the pre-commit gate chain) --"
 git config core.hooksPath hooks && [ -x hooks/pre-commit ] \
     && ok "core.hooksPath=hooks installed; pre-commit executable" \
     || no "could not install the git hook (staging_guard/no_lazy/census gates would not run)"
+
+echo "-- git merge drivers (union merge for append-only jsonl + BACKLOG dated sections) --"
+# design/ORCH-WORKTREE-LEDGERING.md 3a: .gitattributes (versioned) names WHICH files use these
+# drivers; the driver COMMAND itself must live in .git/config (unversioned), so every clone/worktree
+# installs it once here -- the same one-time-per-clone shape as core.hooksPath above.
+git config merge.jsonl-union.name "union merge driver for append-only jsonl ledgers" \
+    && git config merge.jsonl-union.driver "$PY tools/merge_jsonl.py %O %A %B" \
+    && git config merge.backlog-section-union.name "dated-section union merge driver for BACKLOG.md" \
+    && git config merge.backlog-section-union.driver "$PY tools/merge_backlog_sections.py %O %A %B" \
+    && ok "merge drivers installed (jsonl-union, backlog-section-union)" \
+    || no "could not install the merge drivers (attestations/*.jsonl + BACKLOG.md would conflict by hand on a worktree merge)"
 
 echo "-- gates runnable (import smoke: any module with NO test coverage is checked here) --"
 for g in gates/no_lazy_imports.py gates/staging_guard.py gates/fixture_census.py gates/layout_census.py gates/doc-legibility/check.py; do

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-09T12:38:35Z
-#   last-change: 2026-07-10T23:34:40Z
+#   last-change: 2026-07-12T01:57:55Z
 #   contributors: be693afb/main, e4410ef6/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -85,13 +85,18 @@ trigger (s23 delta) captures it into a nullable `stamp_invocation` ledger column
 stamp_session -- CAPTURE-ONLY, never part of the HMAC or any refusal. It is ALSO journaled, one JSON
 line per injection, to `<cwd>/.claude/logs/invocations.jsonl`: {token, wall-clock ISO-8601 UTC at
 injection, session_id, tool_use_id iff the hook payload carries one, sha256 of the command text, first
-120 chars of the command}. The journal is the "actual event" side; the ledger column is the "recorded
-event" side; a later `audit` verb (Part 2, NOT here) joins them to make honest simultaneity and
-retroactive backfill stop being the same row shape. The token is minted ONLY where a stamp is actually
-injected (a token no ledger row can carry would be a dangling journal line) -- so an "off"-mode, an
-unwired, or a dangling-secret (unstamped) invocation mints NO token and writes NO invocation journal
-line. Journaling is BEST-EFFORT and degrades SILENTLY (a full disk loses the journal line while the
-row still stamps): the token export must never depend on the journal write, and neither may ever break
+120 chars of the command, cwd}. The journal is the "actual event" side; the ledger column is the
+"recorded event" side; a later `audit` verb (Part 2, NOT here) joins them to make honest simultaneity
+and retroactive backfill stop being the same row shape. The token is minted ONLY where a stamp is
+actually injected (a token no ledger row can carry would be a dangling journal line) -- so an
+"off"-mode, an unwired, or a dangling-secret (unstamped) invocation mints NO token and writes NO
+invocation journal line. `cwd` (design/ORCH-WORKTREE-LEDGERING.md 3b, 2026-07-12) is an ADDITIVE field
+appended after every field named above, never reordering them: the same working directory already
+resolved earlier in this function to locate deployment.json, carried into the journal line so a later
+reader can join a ledger row -> its stamp_invocation token -> this journal line -> the checkout that
+wrote it, with zero kernel change (`tools/branch_attribution.py` is that reader). Journaling is
+BEST-EFFORT and degrades SILENTLY (a full disk loses the journal line while the row still stamps): the
+token export must never depend on the journal write, and neither may ever break
 a tool call. The token is UNAUTHENTICATED (no HMAC over it) -- a same-OS-user subject can self-SET
 app.vendor_invocation; a correlation tripwire, not authentication, matching s17's standing framing.
 
@@ -440,6 +445,13 @@ def main() -> int:
     tool_use_id = data.get("tool_use_id")
     if tool_use_id:
         inv_rec["tool_use_id"] = str(tool_use_id)
+    # WORKTREE-LEDGERING 3b (design/ORCH-WORKTREE-LEDGERING.md, "Branch attribution as derivation,
+    # not schema"): one ADDITIVE field, appended after every field above (never reordering them) --
+    # the working directory this invocation fired from, already resolved above as `data.get("cwd")`
+    # to locate deployment.json. This is the one journal-side change the memo's 3b calls for; no
+    # kernel change rides with it -- `tools/branch_attribution.py` derives "which checkout wrote this
+    # row" by joining a ledger row's stamp_invocation (s23) to this token, then this field.
+    inv_rec["cwd"] = data.get("cwd")
     _journal_invocation(data.get("cwd"), inv_rec)
     # EXPORT (not a one-command prefix): a Bash command may chain several psql calls; a bare
     # `PGOPTIONS=.. cmd1; cmd2` would stamp only cmd1. export makes every psql in the command

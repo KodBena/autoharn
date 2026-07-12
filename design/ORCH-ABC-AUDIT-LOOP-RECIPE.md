@@ -168,6 +168,67 @@ bill an operator who forgot it was on.
   carrying an inline `doc-attest-exempt: <reason>` marker for a case the other two exclusions do
   not cover.
 
+## Merging: the integrator's checklist (design/ORCH-WORKTREE-LEDGERING.md, "3c. The typed merge event" and "3d. The attestation merge-seam rule")
+
+Everything above covers ONE document changed in ONE session. This section answers a different
+question: **when a worktree's branch merges into mainline, what does the person or agent doing that
+merge (the "integrator") owe the ledger and this A:B:C loop, specifically because it was a merge and
+not an ordinary edit?** [design/ORCH-WORKTREE-LEDGERING.md](ORCH-WORKTREE-LEDGERING.md) designed both
+answers; this section is where that design's own "3c. The typed merge event (convention first)" and
+"3d. The attestation merge-seam rule (codify the precedent)" bullets asked to be written down, so the
+next integrator inherits the rule instead of rediscovering it.
+
+### The merge convention row ("3c. The typed merge event")
+
+This project keeps a general append-only decision ledger in Postgres — a record of ledgered acts
+(decisions, reviews, work-item state, and more), written and read through the `./led` command-line
+verb — which is a SEPARATE record from the `attestations/doc-legibility-attestations.jsonl` ledger
+this recipe's own step 6/7 write to; the two are both "ledgers" in the ordinary-English sense but are
+different files serving different purposes. At each worktree merge, the integrator writes ONE row to
+the `./led` decision ledger: `decision` kind, a statement that starts with the literal prefix `merge:`,
+naming the branch that was merged, the resulting merge commit, and the work-item slug(s) whose work
+rode that merge. Concretely:
+
+```
+./led decision "merge: <branch-name> -> <merge-commit-sha> (work items: <slug-1>, <slug-2>)"
+```
+
+This is a plain `decision` row — no new ledger kind, no kernel change (a first-class typed merge-event
+kind is deferred until a real need for one is witnessed, the same mechanize-on-recurrence discipline
+[ADR-0011](../law/adr/0011-mechanization-discipline.md) states generally: a new mechanism earns its
+place by a witnessed recurrence, not by anticipation). The `merge:` prefix is a naming CONVENTION, not
+a constraint the kernel enforces; it exists so the row is findable later (a text search for `merge:` in
+the ledger, or the branch-attribution reader
+[`tools/branch_attribution.py`](../tools/branch_attribution.py) —
+[design/ORCH-WORKTREE-LEDGERING.md](ORCH-WORKTREE-LEDGERING.md)'s "3b. Branch attribution as
+derivation, not schema" bullet — surfaced alongside it) and so a later deductive query can join "this
+line of work landed" to "at this commit, carrying these slugs" without inventing a second place that
+fact lives.
+
+### The merge-seam attestation rule ("3d. The attestation merge-seam rule")
+
+A git merge can produce a document byte-state that no fresh-context reviewer ever actually read: side
+A's B-reviewed edit and side B's B-reviewed edit each passed their own loop independently, but the
+MERGED text — the two edits interleaved, plus whatever surrounds the seam where they meet — is a new
+sequence of bytes neither review covered.
+[`gates/doc_attestation_presence.py`](../gates/doc_attestation_presence.py) already refuses exactly
+this: it checks a document's CURRENT content hash against the attestation ledger, so a merged state
+with no matching record is caught the same way an un-reviewed fresh edit would be — witnessed when a
+merged state of [`ORCH-CAPABILITIES.md`](../ORCH-CAPABILITIES.md) was refused until reviewed
+([BACKLOG.md](../BACKLOG.md), entry "First live enforcement of ADR-0017's loop — on the orchestrator's
+own merge").
+
+The remedy is the loop this whole recipe already describes, run once more at the merge, scoped
+narrower than a full-document pass: after the merge lands (or in the merge commit itself, before it is
+pushed), run this recipe's steps 2-6 with B reading the MERGED document, scoped to the changed sections
+from both sides PLUS the seam between them — the paragraphs immediately before and after wherever the
+two sides' independent edits now sit adjacent to each other, since that adjacency is the one thing
+neither side's own B ever saw. If B comes back CLEAN on that scope, record the attestation exactly as
+step 6 describes; if B finds a seam defect (a heading that no longer introduces what follows it, a
+cross-reference broken by the interleaving, a repeated point now sitting twice), C repairs it before
+the merge is considered done. This is not a new mechanism — it is this recipe's own loop, invoked once
+more, at one more trigger (a merge landing) than "an edit finished."
+
 ## Related
 
 - [ADR-0017](../law/adr/0017-the-zero-context-reader.md) — the law this recipe operationalizes,
@@ -179,3 +240,9 @@ bill an operator who forgot it was on.
   costed, headless alternative transport for the same Rule 1 test; its own module docstring
   states the two transports "want the same briefing, so `CRITIC_PROMPT_TEMPLATE` below is the
   ONE home of it" — this recipe's step 2 prompt skeleton is adapted from that same template.
+- [design/ORCH-WORKTREE-LEDGERING.md](ORCH-WORKTREE-LEDGERING.md) — the memo whose §3c/§3d this
+  page's "Merging: the integrator's checklist" section carries out, and the home of the merge
+  drivers ([`tools/merge_jsonl.py`](../tools/merge_jsonl.py),
+  [`tools/merge_backlog_sections.py`](../tools/merge_backlog_sections.py)) and the branch-
+  attribution reader ([`tools/branch_attribution.py`](../tools/branch_attribution.py)) the
+  merge convention row's `merge:` prefix is findable alongside.
