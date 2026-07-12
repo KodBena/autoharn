@@ -223,6 +223,39 @@ required (unlike `new-project.sh`'s optional `--name`): it derives `--schema`/`-
 from one value the same way `new-project.sh --new-world` does, so the three names that must agree
 stay in agreement by construction.
 
+### `bootstrap/track-experiments.sh` — a standing recording surface for the research ledger
+
+A third, narrower scaffold, alongside `new-project.sh` and `track-work.sh` above: this one wires
+a project to `stores/001_research_ledger.sql`, the project-agnostic measurement-provenance ledger
+that separates a raw *measurement* (`research.reading`, immutable once written) from an authored
+*interpretation* of it (`research.finding`, supersedable, never silently overwritten) — the record
+of "is X faster/regressed/behaviorally equivalent" that this project's own [ADR-0009](law/adr/0009-performance-investigation-discipline.md)
+disciplines. **Bounded scope, stated plainly:** this is an experiment *ledger*, not a full research
+platform — no factorial/panel study-design machinery, no analysis tooling. The command shape,
+naming the deployment's project identifier and, optionally, which schema pair inside the target
+database it points at:
+
+```
+bootstrap/track-experiments.sh <project-dir> --name <name> --db <db> --host <host> \
+    [--core-schema <schema>] [--research-schema <schema>] [--force]
+```
+
+Writes `research-ledger.json` (what this deployment points at) and one thin exec shim,
+`record-reading`, into `<project-dir>` — connection parameters baked in, so recording a reading is
+`./record-reading record-reading --project <name> --metric ... --value ...` with no host/db/schema
+boilerplate to retype. **No hooks are wired and no database schema is created by this script.**
+Applying `stores/001_research_ledger.sql`'s tables is a separate, maintainer-only ceremony
+(`bootstrap/apply-research-ledger.sh`, typed confirmation required) against ONE shared database —
+"the standing `research` database" means the specific `--db`/`--host` pair the maintainer already
+applied that schema to (ask the maintainer which host/db that is; this scaffold does not create,
+own, or discover it, and works whether or not the schema has landed there yet — the FIRST
+`record-reading` call is the honest signal if it has not). This scaffold only wires an adopter to
+whatever that database already has. Re-running against an already-adopted `<project-dir>` refuses
+(pass `--force` to re-derive the deployment-local files — never the ledger rows themselves).
+`--core-schema`/`--research-schema` name the two SCHEMAS inside that database (distinct from the
+DATABASE name above) and default to `stores/001_research_ledger.sql`'s own fixed names, `core`/
+`research`; override only to point a deployment at a non-standard schema pair.
+
 ### Environment variable overrides
 
 Most values a scaffolded project's hooks need resolve automatically from your `deployment.json` —
@@ -395,3 +428,10 @@ is in [`design/PG-HBA-HARDENING.md`](design/PG-HBA-HARDENING.md) §2–§5.
   project by the scaffold so it travels with the project, not only with this repository).
 - `filing/apparatus_registry.py` — the derived known-mechanism set the unknown-key sweep uses; its
   own docstring is the fuller account of why a hand-maintained list was rejected.
+- [`stores/001_research_ledger.sql`](stores/001_research_ledger.sql) — the schema
+  `bootstrap/track-experiments.sh` wires a project to; its own header states the bounded scope
+  (a measurement-provenance ledger, not a study-design platform) in full.
+- `filing/record_reading.py` — the writer `record-reading` (the shim `track-experiments.sh`
+  writes) execs; its own docstring is the fuller account of what it validates BEFORE ever
+  touching the database (a bad enum value, a derived reading inconsistent with its own recorded
+  operands) — refusing with a stated reason, rather than allowing a silent bad write.
