@@ -44,8 +44,9 @@ Condensed for quick reference; full definitions (the SSOT) live in
   (maintainer ruling, 2026-07-11).
 - **[birth chain](GLOSSARY.md#birth-chain)** — the SQL applied at world creation:
   `high_watermark_1.sql` (bundling s15 → s17-stamp → s17-independence → s19) → s20 → s21 →
-  s22 → s23 → s24 → s25. There is no s16; s18 is deliberately excluded (experiment
-  apparatus, not kernel). See kernel/lineage/README.md.
+  s22 → s23 → s24 → s25 → s26 (row-hash chain) → s27 (chain high-water witness, tracker item
+  `s26-tail-deletion-witness`, ledger decision row 192 -- `./led show 192`). There is no s16;
+  s18 is deliberately excluded (experiment apparatus, not kernel). See kernel/lineage/README.md.
 - **[delta](GLOSSARY.md#delta-kernel-lineage-delta)** — one additive lineage step. It
   reaches reality by entering the birth chain; the next world's scaffold carries it. Never
   applied to an existing world (see the decision tree below).
