@@ -30,6 +30,19 @@ principals exist (see point 11 for the commissioner's role).
    rows, or assumption rows; file each one found as its own `./led assumption "<fact>"
    --refs <artifact>` (assumption, not finding — it's the same unledgered-design-fact
    defect as point 7, just caught by the other principal instead of self-reported).
+   `hooks/pretooluse_change_gate.py`'s `decomposition_review` mechanism makes this a
+   BLOCKER, not backloggable debt (maintainer ruling 2026-07-12): a substantive edit is
+   denied while a claimed work item's own opening row is undischarged. Disclosed-self-
+   review fallback (solo worlds only, no second principal genuinely available): register
+   a second principal for the SAME operator (`./led register-principal <name>
+   human|model|subagent|tool`) — the kernel refuses a review by the SAME actor id
+   regardless of the independence label, so a second principal id is required even when
+   one human operates both — then countersign
+   disclosing it plainly: `LED_ACTOR=<second-principal> ./led review <id> attest
+   self-review "<basis; disclose no independent reviewer was available>"`. `self-review`
+   is a first-class `independence` value precisely for this case, and `review_gap`'s own
+   discharge test does not distinguish it from technical/managerial/financial — it only
+   requires a distinct actor and verdict=attest.
 4. Pre-register acceptance criteria as their own ledger entry BEFORE implementing;
    record results with --evidence AND --refs row:<criteria-row-id> against that entry
    (refs is the sanctioned channel for a non-review kind to cite an antecedent row,

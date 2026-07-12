@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-09T08:07:02Z
-#   last-change: 2026-07-11T22:25:27Z
+#   last-change: 2026-07-12T08:06:33Z
 #   contributors: 9bcc0113/main, be693afb/main, e4410ef6/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -105,10 +105,46 @@ genuine DB-unreachable failure fails closed (propagated into the existing fail-c
 below, same posture as every other check here). This keeps older, already-deployed worlds working
 unchanged; it does not retroactively demand a work-item layer they were never given.
 
+DECOMPOSITION-REVIEW BLOCKER (BACKLOG "decomposition-review-blocker", maintainer ruling
+2026-07-12 — "the decomposition's second-pair-of-eyes review must be a BLOCKER for execution, not
+backloggable debt — if the decomposition is wrong, every discharged subtask is waste"): the WITNESSED
+SPECIMEN driving this is run12, where work item task 1 was CLAIMED at 08:58:10 and its
+IMPLEMENTATION BEGAN at 08:58:16 — six seconds later — while the decomposition's countersign
+verdicts landed only at 09:00:38–09:01:01: execution ran ~2.5 minutes AHEAD of the planning review
+that was supposed to gate it. permit-to-work (above) proves an open+claimed work item exists; it
+says nothing about whether that item's OWN decomposition was ever countersigned — a ledger entry
+naming a claimed item is a permit to work on THAT item, never a certificate that the plan for it
+was reviewed. THE FIX: a THIRD, independent mechanism (`decomposition_review`) — a substantive
+Write/Edit/NotebookEdit ANYWHERE under a wired SUBJECT_ROOT (deliberately NOT restricted to
+`is_governed()`'s pattern set — a bad decomposition threatens every artifact a claimed item
+touches, not only its `*.py` sources), or a governed-file-mutating Bash command (the SAME
+`bash_mutates_governed()` definition permit-to-work's own bash-branch check already uses) — is
+DENIED unless the CLAIMED work item's `work_opened` ledger row has been countersigned: at least
+one unsuperseded `review` row, verdict `attest`, from an actor DISTINCT from the `work_opened`
+row's own actor, itself unsuperseded, regarding that row's id. This is deliberately the SAME
+discharge test `review_gap` (kernel/lineage/s15-schema.sql) already computes for ANY obligated
+row — `undischarged_claimed_work_item()` below transcribes it faithfully (one JOIN against
+`review_gap` by the work_opened row's id) rather than re-deriving a second copy of the same
+predicate (ADR-0012 P1). VACUOUS BY CONSTRUCTION, not by a second hand-checked branch: `review_gap`
+itself can only ever name a row whose actor carries a `countersign_obligation` — so a world whose
+`countersign_obligation` table carries NO rows at all (never adopted the review-obligation regime)
+makes `review_gap`, and therefore this check, empty for EVERY row, automatically — the "gate adds
+nothing" behavior the maintainer ruling requires falls out of the SAME query, never a separate
+"is the table empty" branch that could drift from it. Pre-s22 worlds (no `work_item_current`)
+skip this entirely, identically to permit-to-work's own NAMED CHOICE below. Default mode is
+`"observe"`, NOT `"enforce"` like `change_gate`/`permit_to_work` — a deliberate departure from
+this docstring's own rule (c) ("free per call → defaults to current strength"): this mechanism is
+NEW and, unlike the other two, changes what an ALREADY-SCAFFOLDED, already-running world's writes
+are gated on the moment its hooks/ is updated — defaulting to `enforce` would retroactively start
+blocking a live world's edits with no operator opt-in. `"enforce"` is the intended steady state
+once a world has actually adopted `countersign_obligation` rows for its work items; opting in is
+one line in that world's own `.claude/apparatus.json`.
+
 APPARATUS.JSON MECHANISM SWITCHBOARD (maintainer mandate, 2026-07-10 — "the configuration layer"):
-this file implements TWO separately-switchable mechanisms out of the project's six —
+this file implements mechanisms out of the project's several —
 `change_gate` (the SUBJECT_ROOT-integrity check plus the ticket/window logic, everything above
-this note) and `permit_to_work` (the s22 open+claimed-work-item check, immediately above) — each
+this note), `permit_to_work` (the s22 open+claimed-work-item check, immediately above), and
+`decomposition_review` (the countersign check just described) — each
 reads its OWN mode from `<SUBJECT_ROOT>/.claude/apparatus.json`'s `mechanisms.<name>.mode`, once
 per invocation, inside `_configure()`. Three modes, binding for every mechanism project-wide
 (rule a): `"off"` — the mechanism's own deny paths are skipped entirely, no journal, no state
@@ -279,6 +315,29 @@ DENY_NO_OPEN_WORK_ITEM = (
 )
 
 
+def _deny_decomposition_unreviewed(work_opened_id: int, slug: str) -> str:
+    """Teach-text for the decomposition-review blocker (BACKLOG "decomposition-review-blocker",
+    maintainer ruling 2026-07-12). Names the exact work_opened ROW ID (never the slug alone --
+    `./led review` takes a ledger row id, not a slug) and the discharge path, including the
+    solo-world disclosed-self-review fallback (bootstrap/templates/CLAUDE.md.tmpl point 3)."""
+    return (
+        f"Ledger policy (decomposition-review-blocker): work item '{slug}' (work_opened row "
+        f"{work_opened_id}) carries an undischarged decomposition-review obligation — executing a "
+        "claimed work item before its OWN decomposition is countersigned makes every subtask a bet "
+        "on an unreviewed plan (the run12 specimen: task 1's implementation began 6 seconds after "
+        "claim, ~2.5 minutes ahead of the countersign verdict that was supposed to gate it). "
+        "Discharge it, THEN retry the same edit:\n"
+        "  1. Dispatch a reviewer principal — a DISTINCT actor; the kernel refuses same-actor review "
+        "(segregation of duties).\n"
+        f"  2. LED_ACTOR=<reviewer> ./led review {work_opened_id} attest technical \"<basis for the "
+        "countersign>\"\n"
+        "  Solo-world fallback (no second principal genuinely available): register one for the same "
+        "operator and countersign disclosing it — this world's own CLAUDE.md documents the exact "
+        "commands (the disclosed-self-review fallback)."
+        + (f"\n{DENY_HINT}" if DENY_HINT else "")
+    )
+
+
 def _deny_subject_root_missing() -> str:
     """Teach-text for the run-2 integrity finding (BACKLOG 2026-07-09): SUBJECT_ROOT was
     explicitly configured but does not resolve to a real directory, so this gate cannot tell
@@ -331,6 +390,9 @@ GOVERNED_PATTERNS = _load_governed_patterns(GOVERNED_CONFIG)
 _VALID_MODES = ("off", "observe", "enforce")
 CHANGE_GATE_MODE = "enforce"
 PERMIT_TO_WORK_MODE = "enforce"
+# decomposition_review's own default is "observe", not "enforce" -- see the module docstring's
+# DECOMPOSITION-REVIEW BLOCKER section for why this one mechanism departs from rule (c).
+DECOMPOSITION_REVIEW_MODE = "observe"
 
 
 def _load_apparatus_quiet(root: str) -> dict:
@@ -420,6 +482,7 @@ def _configure(data: dict) -> None:
     only available once stdin has been read."""
     global PGHOST, PGDB, LEDGER, SUBJECT_ROOT, STATE, JOURNAL, GOVERNED_CONFIG, GOVERNED_PATTERNS
     global SUBJECT_ROOT_MISCONFIGURED, SUBJECT_ROOT_WIRED, CHANGE_GATE_MODE, PERMIT_TO_WORK_MODE
+    global DECOMPOSITION_REVIEW_MODE
     dep_path = _find_deployment_path(data)
     dep = _load_deployment_quiet(dep_path) if dep_path else None
 
@@ -459,18 +522,28 @@ def _configure(data: dict) -> None:
     apparatus = _load_apparatus_quiet(SUBJECT_ROOT)
     CHANGE_GATE_MODE = _resolve_mode(apparatus, "change_gate", "enforce", SUBJECT_ROOT)
     PERMIT_TO_WORK_MODE = _resolve_mode(apparatus, "permit_to_work", "enforce", SUBJECT_ROOT)
+    DECOMPOSITION_REVIEW_MODE = _resolve_mode(apparatus, "decomposition_review", "observe", SUBJECT_ROOT)
     _warn_unknown_mechanisms(apparatus, SUBJECT_ROOT)
+
+
+# Pure containment check (ADR-0012 P1: one home for "is this path inside SUBJECT_ROOT at all",
+# read by BOTH is_governed() below -- pattern-restricted -- and the decomposition-review blocker
+# -- deliberately UNrestricted, "anywhere in the world", see module docstring). Never itself a
+# pattern match; is_governed() layers GOVERNED_PATTERNS on top of this.
+def _under_subject_root(path: str) -> bool:
+    if not path:
+        return False
+    ap = os.path.abspath(path)
+    return ap == SUBJECT_ROOT or ap.startswith(SUBJECT_ROOT + os.sep)
 
 
 # Governance is CLASS-keyed (F33): match by pattern/nature, never by an enumerated file list.
 # Containment in the operator-fixed SUBJECT_ROOT is still absolute — no pattern can govern
 # outside it, and no pattern choice can exit governance for a file the config's patterns cover.
 def is_governed(path: str) -> bool:
-    if not path:
+    if not _under_subject_root(path):
         return False
     ap = os.path.abspath(path)
-    if not (ap == SUBJECT_ROOT or ap.startswith(SUBJECT_ROOT + os.sep)):
-        return False
     rel = os.path.relpath(ap, SUBJECT_ROOT)
     return any(fnmatch.fnmatch(rel, pat) or fnmatch.fnmatch(os.path.basename(ap), pat)
                for pat in GOVERNED_PATTERNS)
@@ -687,6 +760,46 @@ def has_open_claimed_work_item() -> bool:
     return out.stdout.strip() == "t"
 
 
+def undischarged_claimed_work_item() -> tuple[int, str] | None:
+    """Decomposition-review blocker (BACKLOG "decomposition-review-blocker", maintainer ruling
+    2026-07-12; see the module docstring's DECOMPOSITION-REVIEW BLOCKER section for the full
+    rationale and the run12 specimen). Returns (work_opened_id, work_slug) for the FIRST open+
+    claimed work item (per `work_item_current`) whose OWN `work_opened` row is undischarged per
+    `review_gap`'s own semantics (transcribed faithfully, not re-derived — kernel/lineage/
+    s15-schema.sql's `review_gap` view: an unsuperseded review row, verdict='attest', from an
+    actor DISTINCT from the target row's, itself unsuperseded, regarding the target row). Returns
+    None when every open+claimed item is discharged, or none is open+claimed at all.
+
+    VACUOUS BY CONSTRUCTION when `countersign_obligation` carries no rows for this world:
+    `review_gap`'s own FROM clause JOINs `ledger` to `countersign_obligation` ON
+    `o.obliges_actor = l.actor`, so a `countersign_obligation` table with zero rows makes
+    `review_gap` empty for EVERY row regardless of actor — this query then naturally returns None
+    for every open+claimed item, with no second "is the table empty" branch to drift out of sync
+    with the first (ADR-0012 P1). Only ever called after `has_work_item_layer()` has confirmed
+    `work_item_current` exists (and therefore, by the s22-atop-s15 lineage layering, so does
+    `review_gap` — s22 builds additively on s15/s20/s21, never removing an earlier view). Raises
+    on DB error (fail-closed, same posture as every query here)."""
+    schema = _ledger_schema()
+    sql = (
+        f"SELECT l.id, w.slug FROM {schema}.work_item_current w "
+        f"JOIN {schema}.ledger l ON l.kind = 'work_opened' AND l.work_slug = w.slug "
+        f"WHERE w.state = 'open' AND w.claimant IS NOT NULL "
+        f"AND EXISTS (SELECT 1 FROM {schema}.review_gap g WHERE g.id = l.id) "
+        f"ORDER BY l.id LIMIT 1;"
+    )
+    out = subprocess.run(
+        ["psql", "-h", PGHOST, "-d", PGDB, "-tA", "-F", FS, "-c", sql],
+        capture_output=True, text=True, timeout=8, check=True,
+    )
+    line = out.stdout.strip()
+    if not line:
+        return None
+    parts = line.split(FS)
+    if len(parts) < 2:
+        return None
+    return int(parts[0]), parts[1]
+
+
 def entry_flags(entry_id: int) -> list[str]:
     """The ledger-derived ticket_flags for the unlocking entry (all but window_redundant_entry,
     which is gate-state-derived). Computed from one focused query on the winning entry. Raises
@@ -807,6 +920,32 @@ def main() -> int:
                 return _deny(_deny_subject_root_missing(), "subject_root_missing", path)
             return _observe_allow("subject_root_missing", _deny_subject_root_missing(), path)
 
+        # DECOMPOSITION-REVIEW BLOCKER (its own mechanism, its own mode — independent of
+        # CHANGE_GATE_MODE and PERMIT_TO_WORK_MODE; BACKLOG "decomposition-review-blocker",
+        # 2026-07-12 — see module docstring). Deliberately evaluated BEFORE is_governed(): "a
+        # substantive tool call ... anywhere in the world" — a bad decomposition is a hazard to
+        # every artifact a claimed item touches, not only the `*.py`-class paths GOVERNED_PATTERNS
+        # restricts change_gate/permit_to_work to. mode="off" skips this mechanism's check
+        # entirely, same posture as every other mechanism here.
+        if DECOMPOSITION_REVIEW_MODE != "off" and SUBJECT_ROOT_WIRED and _under_subject_root(path):
+            try:
+                if has_work_item_layer():
+                    gap = undischarged_claimed_work_item()
+                    if gap is not None:
+                        wid, slug = gap
+                        msg = _deny_decomposition_unreviewed(wid, slug)
+                        if DECOMPOSITION_REVIEW_MODE == "enforce":
+                            return _deny(msg, "decomposition_unreviewed", path)
+                        return _observe_allow("decomposition_unreviewed", msg, path)
+            except Exception as e:  # noqa: BLE001
+                if DECOMPOSITION_REVIEW_MODE == "enforce":
+                    return _deny(DENY_NEEDS_ENTRY + f"  [decomposition-review check unavailable: "
+                                 f"{type(e).__name__}]", "gate_error", path)
+                return _observe_allow(
+                    "decomposition_review_check_unavailable",
+                    f"decomposition-review check unavailable ({type(e).__name__}: {e}) -- would "
+                    f"have denied under enforce if the check itself had run clean.", path)
+
         if not is_governed(path):
             return 0
         # identified governed mutation → gate; fail CLOSED on any error (enforce only — see below)
@@ -887,7 +1026,49 @@ def main() -> int:
         if isinstance(cmd, str):
             if CHANGE_GATE_MODE != "off" and is_boundary(cmd):
                 _close_windows(_load_state(), "test-run/commit", cmd[:80])
-            if CHANGE_GATE_MODE != "off" and bash_mutates_governed(cmd):
+
+            mutates = bash_mutates_governed(cmd)
+
+            # DECOMPOSITION-REVIEW BLOCKER, bash side — genuinely independent of CHANGE_GATE_MODE
+            # (unlike permit-to-work's bash-side check just below, which only ever fires nested
+            # inside CHANGE_GATE_MODE != "off" and is therefore only a better-informed message on
+            # an unconditional deny that already holds under that mode; decomposition_review has
+            # no such unconditional deny to ride, so it is evaluated on its own here). "mutating
+            # bash" per the task's own phrasing = bash_mutates_governed(), the gate's existing
+            # definition, unchanged.
+            if mutates and DECOMPOSITION_REVIEW_MODE != "off" and SUBJECT_ROOT_WIRED:
+                try:
+                    if has_work_item_layer():
+                        gap = undischarged_claimed_work_item()
+                        if gap is not None:
+                            wid, slug = gap
+                            msg = _deny_decomposition_unreviewed(wid, slug)
+                            if DECOMPOSITION_REVIEW_MODE == "enforce":
+                                return _deny(msg, "decomposition_unreviewed", cmd[:80])
+                            return _observe_allow("decomposition_unreviewed", msg, cmd[:80])
+                except Exception as e:  # noqa: BLE001
+                    # UNLIKE permit-to-work's bash-side check just below (which may safely swallow
+                    # an error because CHANGE_GATE_MODE's own unconditional bash_write deny, when
+                    # enforce, always follows it) -- decomposition_review has NO such fallback to
+                    # ride when CHANGE_GATE_MODE is "off" or "observe", which is exactly the
+                    # configuration this mechanism exists to matter in on its own (a world that
+                    # dropped ticket/window discipline but kept work-item review discipline). A
+                    # bare `pass` here would silently ALLOW a governed-file-mutating Bash command
+                    # on a transient DB hiccup in that configuration -- fail CLOSED under enforce
+                    # instead, the SAME posture the Write/Edit branch above and every other check
+                    # in this file already declare (independent second-opinion review finding,
+                    # 2026-07-12: the borrowed "still holds regardless" comment's premise does not
+                    # hold here).
+                    if DECOMPOSITION_REVIEW_MODE == "enforce":
+                        return _deny(DENY_BASH_WRITE + f"  [decomposition-review check unavailable: "
+                                     f"{type(e).__name__}]", "gate_error", cmd[:80])
+                    return _observe_allow(
+                        "decomposition_review_check_unavailable",
+                        f"decomposition-review check unavailable ({type(e).__name__}: {e}) -- "
+                        f"would have denied under enforce if the check itself had run clean.",
+                        cmd[:80])
+
+            if CHANGE_GATE_MODE != "off" and mutates:
                 # Permit-to-work covers this already-denied class too (module docstring): the
                 # more actionable teach-text wins over the generic bash-write message when it
                 # applies, but a DB error here never blocks the mutation deny that already holds.

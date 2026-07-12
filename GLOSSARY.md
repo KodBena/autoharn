@@ -274,21 +274,56 @@ A registered identity (`author`, `reviewer`) that ledger rows are attributed to;
 requirement that review comes from a provably different invocation than the work.
 
 ### `review_gap`
-The SQL view (`led review-gap`; also `./pickup`'s REVIEW-DEBT section) that lists every ledger
-row an [obliged](#obligation) [principal](#principal) wrote with no distinct-actor countersign
-yet — an empty result is clean, any row listed is outstanding debt.
+The SQL view (`led review-gap`; also [`./pickup`](#led-and-pickup)'s REVIEW-DEBT section) that
+lists every ledger row an [obliged](#obligation) [principal](#principal) wrote with no
+distinct-actor countersign yet — an empty result is clean, any row listed is outstanding debt.
 
 ### obligation
 A `countersign_obligation` row: the obliged [principal](#principal)'s EVERY row (any kind)
-shows in [`review_gap`](#review_gap) until a distinct actor attests it. Scope is a label, not a
-filter. Oblige the WORKER, never the reviewer (see `led obligate` teach-text) — an obligation is
-standing operator-owned policy config, not a role self-service capability (`led obligate
-revoke` refuses a role's own attempt to lift it).
+shows in [`review_gap`](#review_gap) until a distinct actor attests it. The row's `scope` column
+is a free-text label for a human reader, never a filter on which rows count — an obligation
+covers every row the obliged principal writes, regardless of scope. Oblige the WORKER, never the
+reviewer (see `led obligate` teach-text) — an obligation is standing operator-owned policy
+config, not a role self-service capability (`led obligate revoke` refuses a role's own attempt to
+lift it).
+
+<a id="governed-file"></a>
+### governed file
+A file `hooks/pretooluse_change_gate.py` protects — matched, by pattern (`*.py` by default; a
+project's own `.claude/governed_files.json` may widen or narrow the set), against
+[SUBJECT_ROOT](#subject-root). A Write/Edit to a governed file is what [permit-to-work](#permit-to-work)
+and the base `change_gate` mechanism gate on; [decomposition-review-blocker](#decomposition-review-blocker)
+deliberately governs a WIDER set (see its own entry).
+
+<a id="subject-root"></a>
+### SUBJECT_ROOT
+The scaffolded project's own root directory, as the `hooks/pretooluse_change_gate.py` hook
+resolves it for the current invocation — from an explicit env var, or from a located
+`deployment.json`, or (unwired) a byte-held default. Every path-scoped mechanism in that hook
+([governed file](#governed-file) matching, [permit-to-work](#permit-to-work),
+[decomposition-review-blocker](#decomposition-review-blocker)) is scoped to files under it.
 
 ### permit-to-work
-The rule that a Write/Edit to a governed file is refused unless the world's ledger shows an
-open AND claimed s22 work item — a ledger entry is not a permit; an open+claimed work item
-is ([ORCH-CAPABILITIES.md item 18](ORCH-CAPABILITIES.md)).
+The rule that a Write/Edit to a [governed file](#governed-file) is refused unless the world's
+ledger shows an open AND claimed s22 work item (s22: the kernel-lineage delta that adds a
+per-project work-item ledger, `kernel/lineage/s22-work-item-ledger.sql`) — a ledger entry is not
+a permit; an open+claimed work item is (ORCH-CAPABILITIES.md, numbered item 18 — cited by
+number, not a stable anchor, because that document's numbered items carry none yet; a known,
+filed gap, not a resolved reference).
+
+### decomposition-review-blocker
+The `decomposition_review` mechanism in `hooks/pretooluse_change_gate.py`: a substantive
+Write/Edit/NotebookEdit anywhere under a wired [SUBJECT_ROOT](#subject-root), or a
+[governed-file](#governed-file)-mutating Bash command, is refused unless the CLAIMED work item's
+OWN opening (`work_opened`) ledger row has been countersigned — the same
+[`review_gap`](#review_gap) discharge test applied to that one row. [Permit-to-work](#permit-to-work)
+proves an open+claimed item exists; this mechanism proves that item's plan was reviewed before
+its subtasks were executed (maintainer ruling 2026-07-12, [BACKLOG.md](BACKLOG.md)
+"decomposition-review-blocker — shipped" — the run12 specimen: a work item's implementation
+began six seconds after claim, ~2.5 minutes ahead of its own countersign verdict). This
+mechanism is vacuous in a world whose
+`countersign_obligation` table carries no rows at all. Its default mode is `observe`, not
+`enforce` — see `hooks/pretooluse_change_gate.py`'s module docstring.
 
 ### seen-red
 Banked evidence that a gate has actually REFUSED at least once (a dated fixture directory
