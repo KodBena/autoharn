@@ -5830,3 +5830,81 @@ Deferred, per the spec's own routing: stage 2 (ordering-violations ASP program +
 differential), stage 3 (the `resource` kernel kind + obligation-attachment columns, pre-ratified
 fail-safe class), stage 4 (the planning appendix, by explicit maintainer word only) — none begun,
 none scoped into this commission.
+## Contemporaneity Part 3 — the preamble's ordering obligations LANDED (2026-07-12, Sonnet, commissioned build, isolated worktree)
+
+Closes the Part-3-implementation half of the audit-verb-completions tracker item (the
+orchestrator annotates the shared tracker itself at merge; this worktree's own `./led --recent`
+reached the live ledger fine, so a decision row recording "implementation started and
+completed" was written directly, ledger row 99 — see `design/ORCH-CONTEMPORANEITY-PART3-SPEC.md`'s
+own dated Status section for the full technical disposition, which this entry summarizes rather
+than duplicates). Builds from `design/ORCH-CONTEMPORANEITY-PART3-SPEC.md` (Fable-authored,
+2026-07-12) end to end in one pass: EDB extensions, the ASP verdict program, its SQL-floor
+marriage pair, the audit-verb surface, and both-polarity fixtures.
+
+**Commit**: `c95b282` (all engine/lp/hooks-template/fixture/gate-registry files — the code half;
+this BACKLOG entry plus the CAPABILITIES/spec-status doc edits beside it are a separate,
+docs-only commit, so the code commit's own hash could be cited here honestly rather than
+guessed before it existed).
+
+**A worktree-hygiene finding, filed for the record (not this item's own scope, but caught in
+reach per CLAUDE.md's engineering-responsibility corollary and worth naming loudly for whoever
+reads this next):** the worktree this build started in had been branched from `next` BEFORE
+`s25-commission-kind.sql`, the E9 threshold's own measurement corpus (run11's
+`stop_clean_exit.journal.jsonl`), and the entire Part 2 differential/E9 lineage landed — a
+divergence invisible until `design/ORCH-CONTEMPORANEITY-PART3-SPEC.md`'s own referenced files
+(`engine/contemp_edb.py`'s `UnsafeWindowError`, `engine/preamble_obligations.lp`'s siblings)
+turned up simply absent. Fast-forwarded (`git merge --ff-only next`, safe: the worktree branch
+had zero commits `next` did not already contain) BEFORE any other action — the session's own
+first ledgered decision, matching this same pattern's prior specimen the note above (run97)
+already flags as "correctness-critical first step."
+
+**Spec-vs-reality gap found and closed in-pass:** §4 of the spec lists
+`work_opened/2`/`work_closed/3`/`work_witness_present/1`/`work_depends/3` under "Reused as-is"
+— but no live Python module actually produced these before this build (`work_items.lp`'s own
+docstring cites a fixture generator, not a general exporter). Built inside
+`engine/contemp_edb.py`'s own `export()`, from the SAME row scan PASS 1 already runs — in reach
+of this commission, per CLAUDE.md's corollary, rather than left as a dangling citation.
+
+**Template drift check (the commission's own explicit ask): NONE FOUND.**
+`bootstrap/templates/CLAUDE.md.tmpl` still carries exactly twelve numbered points, unchanged in
+count and point-to-family mapping since the spec was authored.
+
+**Witnessed**: `seen-red/preamble-ordering/run_fixtures.py`, ALL GREEN — two consolidated
+live-DB scratch worlds (schema `preambleorder` GREEN / `preambleorderneg` RED, TOY db, full
+lineage through s25) rather than eleven separate tiny ones; both differentials AGREE
+(`asp=36 sql=36` / `asp=33 sql=33`, zero delta), retained under
+`engine/docs/ledger-marriage/derivations/preamble-ordering/`; a manufactured `sql_atoms_override`
+negative control (the `seen-red/contemporaneity-audit` cases (p)/(q) precedent) correctly
+DIVERGE_DEFECTs. The three seam UNDECIDABLE reasons plus capability-absence are ALL witnessed:
+`untokened_row`/`window_overlap` live (the RED fixture's own untokened review row and its
+second commission row's own overlapping verify event); `open_window`/`no_verify_journal` from
+the REAL historical corpus (run11, read-only, predates E5/E6 entirely — not synthesized). VACUOUS
+from the real corpus too (run9, read-only, zero rows, all twelve families `vacuous`, none
+silent). The historical corpus (runs 4/5/6/7/9/10/11) all differential AGREE, and its own
+84-instance distribution is UNDECIDABLE-heavy exactly as the spec's own §7 predicted (39
+vacuous, 25 undecidable, 17 discharged, 3 real VIOLATED findings never previously surfaced:
+run4's F7, run5's F6, run11's F3).
+
+**Named scope reductions, not silent narrowing:** F11's `question_open`/full review-gap arms
+report `UNDECIDABLE(capability_absent)` categorically this pass (a second, separate EDB
+composition against `engine/ledger_edb.py`'s own export was judged disproportionate scope for
+this commission, no consumer existing yet to justify the anchor-composition design work) — a
+real s22 violation still overrides to VIOLATED, loudest-first, unaffected. F5/F6's RED polarity
+is provably vacuous under s22's own write-time trigger (the identical class
+`engine/lp/work_items.lp`'s own two defense-in-depth members already are) — UNEXERCISED via live
+DB, blocker named, GREEN witnessed live.
+
+**The synchronous-B review loop ([ADR-0017](law/adr/0017-the-zero-context-reader.md)) —
+WITNESSED, not deferred after all**: run via the `Agent` tool, synchronously, per
+[design/ORCH-ABC-AUDIT-LOOP-RECIPE.md](design/ORCH-ABC-AUDIT-LOOP-RECIPE.md), against
+`design/ORCH-CONTEMPORANEITY-PART3-SPEC.md`'s own Status section (B round 1: six defects, all
+repaired; B round 2: CLEAN) and `ORCH-CAPABILITIES.md` item 24c (B round 1: six defects, all
+repaired; B round 2: one residual fragment, fixed, but per the loop's own two-round cap the
+finding stands recorded as NON-CONVERGING for that one item — a typed escalation, not a
+blocked commit; B's content judgment is advisory by ADR-0017's own constitutional constraint,
+never in the blocking path). This entry itself is self-reviewed only, said so rather than
+claimed witnessed (a `gates/doc_shapes.py` exclusion, dated entries).
+
+Fixture census registered (`gates/fixture_census.py`'s own `REGISTRY["preamble-ordering"]`),
+`gates/fixture_census.py`/`gates/no_lazy_imports.py`/`gates/no_conflict_markers.py` all clean
+after the code commit. See `ORCH-CAPABILITIES.md` item 24c for the operator-facing summary.

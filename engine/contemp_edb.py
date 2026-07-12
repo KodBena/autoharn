@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-11T14:40:08Z
-#   last-change: 2026-07-11T23:57:12Z
+#   last-change: 2026-07-12T02:03:18Z
 #   contributors: e4410ef6/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -120,11 +120,85 @@ hooks now write UTC-Z like their siblings. The naive-local parse branch below is
 deliberately -- journal lines written before the fix remain on disk and must stay readable;
 same-host reading remains the correct assumption for exactly those historical lines.
 
+PART 3 EXTENSION, 2026-07-12 (design/ORCH-CONTEMPORANEITY-PART3-SPEC.md §4, "the EDB -- reused
+families and named extensions"; dated append, does not rewrite the Part 2 paragraphs above).
+E1-E9 land HERE, in `export()` itself, per the spec's own ONE-ANCHOR RULE (§4, binding): "these
+families are added to `contemp_edb.export()` itself -- NOT a sibling module with its own export.
+Two exports would mean two anchors, and facts on different anchors compared in one program is
+the silent-wraparound hazard class the module's docstring documents, one level up." Every new
+absolute-ms value below (E3's stop-event ts, E4's fine-grained dispatch/return ts, E5's
+completion ts, E6's verify-commission ts) is folded into the SAME `all_abs` list PASS 1 already
+builds, BEFORE the anchor and the `UnsafeWindowError` span guard are computed -- so the
+enforcement addendum above protects every Part 3 fact exactly as it protects every Part 2 fact,
+by construction, not by a second copy of the check.
+  E1 work_claimed(Slug,RowId) / work_opened(Slug,RowId) / work_closed(Slug,Resolution,RowId) /
+     work_witness_present(RowId) / work_depends(Dependent,Antecedent,RowId) -- the s22 work-item
+     shapes design/ORCH-CONTEMPORANEITY-PART3-SPEC.md §4 lists under "Reused as-is ... same shapes as
+     work_items.lp". SPEC-VS-REALITY NOTE, named honestly rather than silently assumed: no live
+     Python module actually exported these before this delta (work_items.lp's own docstring
+     cites `engine/work_item_scratch.py`, which does not exist as a general exporter -- only
+     `kernel/fixtures/s22_work_item_fixture.py`, a TEST fixture generator). Built here instead,
+     from the SAME ledger row scan PASS 1 already runs for row_tokened/row_untokened (one extra
+     set of SELECT columns, zero extra queries) -- in reach of this commission's own edit, per
+     CLAUDE.md's engineering-responsibility corollary, rather than left as a dangling "reused"
+     citation to a family nothing produces. work_slug/work_resolution/work_witness/
+     work_depends_on are capability-gated on `has_col("work_slug")` (all five s22 columns land in
+     one delta, kernel/lineage/s22-work-item-ledger.sql, so one column's presence implies all).
+  E2 row_refs_row(Id,TargetId) / row_regards(Id,TargetId) -- `refs` (free text, parsed for the
+     preamble's own `row:<id>` convention via `_REFS_ROW_RE`; a non-empty `refs` value with NO
+     parseable `row:<id>` token emits `row_refs_present(Id)` with no matching `row_refs_row/2` --
+     the EDB-level signal `preamble_ordering.lp` turns into UNDECIDABLE(refs_unparsed)) and
+     `regards` (typed bigint FK, direct column read, never parsed). Both capability-gated on
+     their own column's presence (pre-s15 schemas carry neither).
+  E3 stop_event(Outcome,T) -- `.claude/logs/stop_clean_exit.journal.jsonl`
+     (hooks/stop_clean_exit.py's own `_journal()`): the closed `outcome` vocabulary that hook
+     itself writes (`clean_allow`, `observed_would_block`, `breaker_fail_open`, `blocked`),
+     `ts` UTC-Z milliseconds -- read with the SAME `_parse_ts_ms` this module already uses.
+  E4 delegation_dispatch(T) / delegation_return(T) -- a FINER, independent read of
+     `.claude/logs/delegation_observer.journal.jsonl`, the SAME file `tool_event(delegation,T)`
+     already ingests whole (coarsely) -- a dispatch line carries no `"kind"` key at all
+     (hooks/pretooluse_delegation_observer.py's own dispatch-leg `_journal()` call); a return
+     line carries `"kind":"return"` (that same module's return-leg call). Reading BOTH shapes
+     out of the one file, distinctly, is exactly what F9 (ob_ledger_before_delegation) needs and
+     `tool_event/2`'s coarse Kind="delegation" bucket cannot supply on its own.
+  E5 invocation_completed(Token,T) -- `.claude/logs/bash_completions.jsonl`
+     (hooks/posttooluse_bash_completion.py): only records where `pairing == "token"` (a `token`
+     value present) carry a Token to join against `row_tokened/4`'s own Token -- a `"ts-only"`
+     record (no token found for that completion) contributes nothing to this family, honestly
+     (there is no Token to key it on), never guessed from FIFO proximity.
+  E6 verify_commission_event(Verdict,T) -- `.claude/logs/verify_commission.jsonl`
+     (bootstrap/templates/verify-commission.tmpl, THIS SAME COMMISSION's own addition to that
+     live verb -- see its own docstring's EVENT JOURNAL section). Verdict is one of the closed
+     FIVE that verb ever journals (VERIFIED, UNSIGNED, FORGED-OR-CORRUPT, GPG-UNAVAILABLE,
+     NO-COMMITTED-KEY). CAPABILITY, NAMED HONESTLY: since verify-commission.tmpl executes IN
+     PLACE out of the live autoharn checkout (like every other verb), there is no per-world
+     "template vintage" to detect -- the only observable signal is whether this world's own
+     `.claude/logs/verify_commission.jsonl` FILE exists at all. Its absence means either "this
+     verb was never invoked on this world" or "it predates this delta having landed in the
+     checkout" -- indistinguishable from artifacts alone, so BOTH read as capability-absent
+     (`no_verify_journal`), never guessed apart. A closed, dead world (a settled run whose
+     session has ended -- runs are linear, dust, read-only) can never retroactively produce this
+     file; that is the honest, permanent shape of its own F2 verdict, not a defect in this EDB.
+  E7 row_actor(Id,ActorId) / countersign_obliged(ActorId) -- `actor` (bigint FK to
+     `kern.principal`, direct column read, capability-gated on `has_col("actor")`) and
+     `countersign_obligation.obliges_actor` (a SEPARATE small table in the SAME ledger schema,
+     capability-gated on `has_relation(f"{schema}.countersign_obligation")`) -- needed only for
+     F11's review-gap arm and F7's refined form; both families' coarse forms run without it.
+  E8/E9 are FACTS FILES, not EDB extensions -- `engine/preamble_obligations.lp` (E8) and
+     `stop_disposition_window_ms/1` appended to `engine/contemp_thresholds.lp` (E9) -- loaded as
+     PROGRAM text beside `engine/lp/preamble_ordering.lp`, never emitted by this module.
+  COMMISSION-KIND CAPABILITY (F1/F2/F3's `pre_s25` reason): whether THIS schema's own
+  `ledger_kind_check` CHECK constraint admits `'commission'` as a legal `kind` value -- read
+  LIVE via `pg_get_constraintdef` against the schema's own constraint (mirrors
+  `bootstrap/templates/led.tmpl`'s own live-queried refusal-teaching convention, never a
+  hand-copied kind list that could drift from kernel/lineage/s25-commission-kind.sql's own text).
+
 Read-only. Lazy imports banned (top-of-file only)."""
 from __future__ import annotations
 
 import hashlib
 import json
+import re
 import sys
 import time
 from dataclasses import dataclass, field
@@ -133,6 +207,12 @@ from pathlib import Path
 
 from clingo_run import quote_term
 from ledger_edb import Target, resolve
+
+# The preamble's own `--refs row:<id>` convention (E2; CLAUDE.md.tmpl points 1/3/10) -- a
+# case-sensitive literal match, mirroring every other `row:<id>` citation site in this project
+# (led.tmpl's own `--refs` parser). Findall (not match) -- a `refs` value MAY cite more than one
+# antecedent row; every parsed target becomes its own `row_refs_row/2` fact.
+_REFS_ROW_RE = re.compile(r"row:(\d+)")
 
 # The three existing hook journals this module re-purposes as the tool_event/2 stream (design
 # memo Part 2 directive: "tool_event(Kind, T) (from the hook journals -- change-gate,
@@ -144,15 +224,33 @@ _TOOL_EVENT_JOURNALS: dict[str, str] = {
 }
 _INVOCATION_JOURNAL = "invocations.jsonl"
 
+# PART 3 (E3/E4/E5) journal filenames -- see this module's docstring "PART 3 EXTENSION" section.
+_STOP_JOURNAL = "stop_clean_exit.journal.jsonl"
+_DELEGATION_JOURNAL = "delegation_observer.journal.jsonl"  # SAME file as _TOOL_EVENT_JOURNALS'
+                                                            # own entry -- E4 re-reads it finely.
+_BASH_COMPLETIONS_JOURNAL = "bash_completions.jsonl"
+_VERIFY_COMMISSION_JOURNAL = "verify_commission.jsonl"
+# E3's closed outcome vocabulary (hooks/stop_clean_exit.py's own `_journal()` call sites) --
+# named here so a malformed/future outcome string is distinguishable from these four, not
+# silently accepted as a fifth (this module counts it but does not refuse -- the closed-
+# vocabulary CHECK belongs to preamble_ordering.lp's own `#show`n atoms, not this EDB layer).
+_STOP_OUTCOMES = frozenset({"clean_allow", "observed_would_block", "breaker_fail_open", "blocked"})
+# E6's closed verdict vocabulary (bootstrap/templates/verify-commission.tmpl's own
+# `_journal_verify_commission` call sites) -- named for the same reason.
+_VERIFY_COMMISSION_VERDICTS = frozenset(
+    {"VERIFIED", "UNSIGNED", "FORGED-OR-CORRUPT", "GPG-UNAVAILABLE", "NO-COMMITTED-KEY"})
+
 # The journal-writing mechanisms and the hook script whose presence in a world's
 # .claude/settings.json means that mechanism is WIRED (the capability signal the run9 fix
 # keys on -- see Capability's docstring). apparatus.json key -> hook script basename.
-# stamp_intercept writes invocations.jsonl; the other three write the tool-event journals.
+# stamp_intercept writes invocations.jsonl; the rest write the tool-event / Part 3 journals.
 _JOURNALING_MECHANISMS: dict[str, str] = {
     "stamp_intercept": "stamp_intercept.py",
     "change_gate": "pretooluse_change_gate.py",
     "mutation_observer": "posttooluse_mutation_observer.py",
     "delegation_observer": "pretooluse_delegation_observer.py",
+    "clean_exit": "stop_clean_exit.py",              # E3 (apparatus.json's own key: "clean_exit")
+    "bash_completion": "posttooluse_bash_completion.py",  # E5
 }
 _TOOL_EVENT_MECHANISMS = frozenset({"change_gate", "mutation_observer", "delegation_observer"})
 
@@ -362,6 +460,24 @@ def export(target_name: str, root: Path) -> ContempEdbExport:
         else "no event_declared_ts column on this schema (predates s24) -- LATE_DECLARED can "
              "never fire here; the identical-gap-undeclared BACKFILL_SUSPECT path is unaffected"))
 
+    # ---- PART 3 (design/ORCH-CONTEMPORANEITY-PART3-SPEC.md §4) column/relation capabilities --------
+    # each becomes a `capable(Family)` EDB marker fact below (PASS 2) so preamble_ordering.lp --
+    # which cannot itself query Postgres -- can derive the SAME typed UNDECIDABLE reasons
+    # (`pre_s25`, `pre_s22`, `capability_absent`) this module already names in prose.
+    has_work_cols = t.has_col("work_slug")          # E1 (s22-era schema; all five columns land
+                                                      # together, one column's presence implies all)
+    has_refs_col = t.has_col("refs")                 # E2
+    has_regards_col = t.has_col("regards")            # E2
+    has_actor_col = t.has_col("actor")                # E7
+    has_countersign_tbl = t.has_relation(f"{t.schema}.countersign_obligation")  # E7
+    # commission-kind capability: LIVE-queried against this schema's OWN ledger_kind_check CHECK
+    # constraint (mirrors led.tmpl's own live refusal-teaching query -- never a hand-copied kind
+    # list that could drift from kernel/lineage/s25-commission-kind.sql's own text).
+    kind_check_def = t.scalar(
+        f"SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conname='ledger_kind_check' "
+        f"AND conrelid = '{t.schema}.ledger'::regclass;")
+    has_commission_kind = "commission" in kind_check_def
+
     # ---- the WIRING signal (the run9 fix): which journal-writing mechanisms this world's own
     # settings.json + apparatus.json declare live -- capability keys on THIS, never on whether
     # anything has been journaled yet (see Capability's docstring for the live specimen).
@@ -374,12 +490,24 @@ def export(target_name: str, root: Path) -> ContempEdbExport:
     cols.append("round(extract(epoch FROM ts)*1000)::bigint")
     cols.append("round(extract(epoch FROM event_declared_ts)*1000)::bigint" if has_declared_col
                 else "NULL")
+    cols.append("coalesce(work_slug,'')" if has_work_cols else "NULL")
+    cols.append("coalesce(work_resolution,'')" if has_work_cols else "NULL")
+    cols.append("(work_witness IS NOT NULL AND work_witness <> '')" if has_work_cols else "NULL")
+    cols.append("coalesce(work_depends_on,'')" if has_work_cols else "NULL")
+    cols.append("coalesce(refs,'')" if has_refs_col else "NULL")
+    cols.append("regards" if has_regards_col else "NULL")
+    cols.append("actor" if has_actor_col else "NULL")
     raw_rows = t.rows(f"SELECT {', '.join(cols)} FROM {rel} ORDER BY id;")
-    row_tuples: list[tuple[int, str, str | None, int, int | None]] = []
-    for rid, kind, token, tms, declared_ms in raw_rows:
+    row_tuples: list[tuple] = []
+    for (rid, kind, token, tms, declared_ms, wslug, wres, wwit, wdep, refs, regards,
+         actor) in raw_rows:
         row_tuples.append((
             int(rid), kind, token or None, int(tms),
-            int(declared_ms) if declared_ms not in (None, "") else None))
+            int(declared_ms) if declared_ms not in (None, "") else None,
+            wslug or None, wres or None, (str(wwit).lower() == "t") if wwit not in (None, "") else False,
+            wdep or None, refs or None,
+            int(regards) if regards not in (None, "") else None,
+            int(actor) if actor not in (None, "") else None))
 
     inv_path = root / ".claude" / "logs" / _INVOCATION_JOURNAL
     inv_recs, inv_skip = _read_jsonl(inv_path)
@@ -413,13 +541,84 @@ def export(target_name: str, root: Path) -> ContempEdbExport:
                 continue
             te_tuples.append((kind, ms))
 
-    # ---- THE ANCHOR: the minimum absolute epoch-ms across every stream in this export --------
-    # (declared-ts values ride the SAME anchor as everything else -- s24's own header names this
-    # explicitly: a declared-event-time value must go through this same relative-anchor path,
-    # never absolute epoch-ms into clingo, per this module's own 32-bit-overflow hazard note.)
-    all_abs = ([tms for _, _, _, tms, _ in row_tuples] + [ms for _, ms in inv_tuples]
-              + [ms for _, ms in te_tuples]
-              + [dms for _, _, _, _, dms in row_tuples if dms is not None])
+    # ---- E3: stop_event(Outcome,T) -- hooks/stop_clean_exit.py's own journal -----------------
+    stop_path = root / ".claude" / "logs" / _STOP_JOURNAL
+    stop_recs, stop_skip = _read_jsonl(stop_path)
+    stop_tuples: list[tuple[str, int]] = []
+    for rec in stop_recs:
+        outcome, ts_raw = rec.get("outcome"), rec.get("ts")
+        if not outcome or not ts_raw:
+            stop_skip += 1
+            continue
+        ms = _parse_ts_ms(str(ts_raw))
+        if ms is None:
+            stop_skip += 1
+            continue
+        stop_tuples.append((str(outcome), ms))
+    exp.skipped_lines[_STOP_JOURNAL] = stop_skip
+    stop_wired = "clean_exit" in wired
+
+    # ---- E4: delegation_dispatch(T) / delegation_return(T) -- a FINER, independent re-read of --
+    # the SAME file _TOOL_EVENT_JOURNALS already ingests coarsely as tool_event(delegation,T).
+    deleg_path = root / ".claude" / "logs" / _DELEGATION_JOURNAL
+    deleg_recs, _deleg_skip_already_counted = _read_jsonl(deleg_path)  # skip count already
+                                                                        # banked under this same
+                                                                        # filename by the te_tuples
+                                                                        # loop above -- not doubled
+    deleg_dispatch_tuples: list[int] = []
+    deleg_return_tuples: list[int] = []
+    for rec in deleg_recs:
+        ts_raw = rec.get("ts")
+        if not ts_raw:
+            continue
+        ms = _parse_ts_ms(str(ts_raw))
+        if ms is None:
+            continue
+        if rec.get("kind") == "return":
+            deleg_return_tuples.append(ms)
+        else:
+            deleg_dispatch_tuples.append(ms)
+
+    # ---- E5: invocation_completed(Token,T) -- hooks/posttooluse_bash_completion.py's journal ---
+    completions_path = root / ".claude" / "logs" / _BASH_COMPLETIONS_JOURNAL
+    completions_recs, completions_skip = _read_jsonl(completions_path)
+    completed_tuples: list[tuple[str, int]] = []
+    for rec in completions_recs:
+        token, ts_raw = rec.get("token"), rec.get("ts")
+        if not token or not ts_raw:  # "ts-only" (pairing failed, no token) -- honestly skipped,
+            continue                  # never guessed onto a Token this record does not carry
+        ms = _parse_ts_ms(str(ts_raw))
+        if ms is None:
+            completions_skip += 1
+            continue
+        completed_tuples.append((str(token), ms))
+    exp.skipped_lines[_BASH_COMPLETIONS_JOURNAL] = completions_skip
+    completions_wired = "bash_completion" in wired
+
+    # ---- E6: verify_commission_event(Verdict,T) -- bootstrap/templates/verify-commission.tmpl's
+    # own journal (this same commission's addition to that live verb).
+    verify_path = root / ".claude" / "logs" / _VERIFY_COMMISSION_JOURNAL
+    verify_recs, verify_skip = _read_jsonl(verify_path)
+    verify_tuples: list[tuple[str, int]] = []
+    for rec in verify_recs:
+        verdict, ts_raw = rec.get("verdict"), rec.get("ts")
+        if not verdict or not ts_raw:
+            verify_skip += 1
+            continue
+        ms = _parse_ts_ms(str(ts_raw))
+        if ms is None:
+            verify_skip += 1
+            continue
+        verify_tuples.append((str(verdict), ms))
+    exp.skipped_lines[_VERIFY_COMMISSION_JOURNAL] = verify_skip
+
+    # ---- THE ANCHOR: the minimum absolute epoch-ms across EVERY stream in this export, Part 2
+    # AND Part 3 alike (§4's binding one-anchor rule: "the anchor minimum must be taken across
+    # ALL families including E3-E6") -------------------------------------------------------------
+    all_abs = ([r[3] for r in row_tuples] + [ms for _, ms in inv_tuples]
+              + [ms for _, ms in te_tuples] + [r[4] for r in row_tuples if r[4] is not None]
+              + [ms for _, ms in stop_tuples] + deleg_dispatch_tuples + deleg_return_tuples
+              + [ms for _, ms in completed_tuples] + [ms for _, ms in verify_tuples])
     exp.anchor_ms = min(all_abs) if all_abs else 0
 
     # ---- THE ENFORCED BOUND (this module's docstring, "ENFORCEMENT ADDENDUM, 2026-07-12"): the
@@ -443,7 +642,10 @@ def export(target_name: str, root: Path) -> ContempEdbExport:
 
     # ---- PASS 2: emit facts, T relative to the anchor ----------------------------------------
     n_tok, n_untok, n_declared = 0, 0, 0
-    for rid, kind, token, tms, declared_ms in row_tuples:
+    n_wopen, n_wclaim, n_wclose, n_wwit, n_wdep = 0, 0, 0, 0, 0
+    n_refs_row, n_refs_present, n_regards, n_actor = 0, 0, 0, 0
+    for (rid, kind, token, tms, declared_ms, wslug, wres, wwit, wdep, refs, regards,
+         actor) in row_tuples:
         rel_t = tms - exp.anchor_ms
         if token:
             exp.facts.append(f"row_tokened({rid},{quote_term(token)},{quote_term(kind)},{rel_t}).")
@@ -454,9 +656,86 @@ def export(target_name: str, root: Path) -> ContempEdbExport:
         if declared_ms is not None:
             exp.facts.append(f"row_declared({rid},{declared_ms - exp.anchor_ms}).")
             n_declared += 1
+        # ---- E1: s22 work-item shapes, from the SAME row scan (see docstring's SPEC-VS-REALITY
+        # NOTE -- no other exporter produces these today) --------------------------------------
+        if kind == "work_opened" and wslug:
+            exp.facts.append(f"work_opened({quote_term(wslug)},{rid}).")
+            n_wopen += 1
+        elif kind == "work_claimed" and wslug:
+            exp.facts.append(f"work_claimed({quote_term(wslug)},{rid}).")
+            n_wclaim += 1
+        elif kind == "work_closed" and wslug:
+            exp.facts.append(f"work_closed({quote_term(wslug)},{quote_term(wres or '')},{rid}).")
+            n_wclose += 1
+            if wwit:
+                exp.facts.append(f"work_witness_present({rid}).")
+                n_wwit += 1
+        elif kind == "work_depends_on" and wslug and wdep:
+            exp.facts.append(f"work_depends({quote_term(wslug)},{quote_term(wdep)},{rid}).")
+            n_wdep += 1
+        # ---- E2: refs (parsed row:<id> convention) + regards (typed FK) ----------------------
+        if refs:
+            targets = _REFS_ROW_RE.findall(refs)
+            if targets:
+                for tgt in targets:
+                    exp.facts.append(f"row_refs_row({rid},{int(tgt)}).")
+                    n_refs_row += 1
+            else:
+                # a non-empty refs value with NO parseable row:<id> token -- the EDB-level signal
+                # preamble_ordering.lp turns into UNDECIDABLE(refs_unparsed) for this row's
+                # instance, never a silent skip.
+                exp.facts.append(f"row_refs_present({rid}).")
+                n_refs_present += 1
+        if regards is not None:
+            exp.facts.append(f"row_regards({rid},{regards}).")
+            n_regards += 1
+        # ---- E7: actor (needed only for F11's review-gap arm + F7's refined form) -------------
+        if actor is not None:
+            exp.facts.append(f"row_actor({rid},{actor}).")
+            n_actor += 1
     exp.counts["row_tokened"] = n_tok
     exp.counts["row_untokened"] = n_untok
     exp.counts["row_declared"] = n_declared
+    exp.counts["work_opened"] = n_wopen
+    exp.counts["work_claimed"] = n_wclaim
+    exp.counts["work_closed"] = n_wclose
+    exp.counts["work_witness_present"] = n_wwit
+    exp.counts["work_depends"] = n_wdep
+    exp.counts["row_refs_row"] = n_refs_row
+    exp.counts["row_refs_present"] = n_refs_present
+    exp.counts["row_regards"] = n_regards
+    exp.counts["row_actor"] = n_actor
+    exp.capabilities.append(Capability(
+        "work_items", produced=has_work_cols, capable=has_work_cols,
+        reason="work_slug/work_title/work_depends_on/work_resolution/work_witness columns "
+               "present (s22-era schema) -- work_opened/work_claimed/work_closed/work_depends "
+               "readable" if has_work_cols
+        else "no work_slug column on this schema (predates s22) -- pre_s22: F4-F7's work "
+             "vocabulary cannot exist here"))
+    exp.capabilities.append(Capability(
+        "refs", produced=has_refs_col, capable=has_refs_col,
+        reason="refs column present -- row:<id> citations parsed" if has_refs_col
+        else "no refs column on this schema (pre-s15) -- capability absent"))
+    exp.capabilities.append(Capability(
+        "regards", produced=has_regards_col, capable=has_regards_col,
+        reason="regards column present -- review attestation targets readable" if has_regards_col
+        else "no regards column on this schema (pre-s15) -- capability absent"))
+    exp.capabilities.append(Capability(
+        "actor", produced=has_actor_col, capable=has_actor_col,
+        reason="actor column present -- row_actor/2 readable" if has_actor_col
+        else "no actor column on this schema (pre-s15) -- capability absent"))
+    exp.capabilities.append(Capability(
+        "countersign_obligation", produced=has_countersign_tbl, capable=has_countersign_tbl,
+        reason="countersign_obligation table present -- countersign_obliged/1 readable"
+        if has_countersign_tbl
+        else "no countersign_obligation relation on this schema (pre-s15) -- capability absent"))
+    exp.capabilities.append(Capability(
+        "commission_kind", produced=has_commission_kind, capable=has_commission_kind,
+        reason="'commission' is a legal kind on this schema's own ledger_kind_check "
+               "(live-queried, s25-era schema)" if has_commission_kind
+        else "'commission' is NOT in this schema's own ledger_kind_check -- pre_s25: F1/F2/F3 "
+             "cannot be decided (kernel/lineage/s25-commission-kind.sql not in this world's "
+             "birth chain)"))
     # NAMED CONSISTENTLY WITH EVERY OTHER CAPABILITY HERE (found live, in this module's own
     # first end-to-end shim test): produced=True means "the capability is present", uniformly --
     # an earlier draft named this family `pre_token_era` with produced=(NOT has_invocation_col),
@@ -514,6 +793,108 @@ def export(target_name: str, root: Path) -> ContempEdbExport:
     exp.capabilities.append(Capability(
         "tool_event", produced=len(te_tuples) > 0,
         capable=len(te_tuples) > 0 or bool(te_wired), reason=te_reason))
+
+    # ---- E7 (cont.): countersign_obliged/1 -- countersign_obligation.obliges_actor, a SEPARATE
+    # small table in the same schema (E7's own query, distinct from the main row scan above) -----
+    if has_countersign_tbl:
+        for (obliges,) in t.rows(f"SELECT obliges_actor FROM {t.schema}.countersign_obligation;"):
+            exp.facts.append(f"countersign_obliged({int(obliges)}).")
+        exp.counts["countersign_obliged"] = len(
+            [f for f in exp.facts if f.startswith("countersign_obliged(")])
+
+    # ---- E3: stop_event(Outcome,T) -------------------------------------------------------------
+    for outcome, ms in stop_tuples:
+        exp.facts.append(f"stop_event({quote_term(outcome)},{ms - exp.anchor_ms}).")
+    exp.counts["stop_event"] = len(stop_tuples)
+    if stop_tuples:
+        stop_reason = f"{len(stop_tuples)} stop_event record(s) read from {stop_path}"
+    elif stop_wired:
+        stop_reason = (f"clean_exit is WIRED in this world's settings.json (mode not off) but "
+                       f"{stop_path} carries no records yet -- capable, zero stop events so far "
+                       f"(this session has not stopped yet); not an unwired era")
+    else:
+        stop_reason = (f"no usable stop_event records at {stop_path} AND clean_exit is not "
+                       f"wired in this world's settings.json -- hooks off/unwired, or predates "
+                       f"hooks/stop_clean_exit.py -- F10/F11's stop-side arms are UNDECIDABLE"
+                       f"(no_stop_record) here")
+    exp.capabilities.append(Capability(
+        "stop_journal", produced=len(stop_tuples) > 0,
+        capable=len(stop_tuples) > 0 or stop_wired, reason=stop_reason))
+
+    # ---- E4: delegation_dispatch(T) / delegation_return(T) -- fine read of the SAME file --------
+    for ms in deleg_dispatch_tuples:
+        exp.facts.append(f"delegation_dispatch({ms - exp.anchor_ms}).")
+    for ms in deleg_return_tuples:
+        exp.facts.append(f"delegation_return({ms - exp.anchor_ms}).")
+    exp.counts["delegation_dispatch"] = len(deleg_dispatch_tuples)
+    exp.counts["delegation_return"] = len(deleg_return_tuples)
+    deleg_wired = "delegation_observer" in wired
+    exp.capabilities.append(Capability(
+        "delegation_journal", produced=len(deleg_dispatch_tuples) > 0,
+        capable=len(deleg_dispatch_tuples) > 0 or deleg_wired,
+        reason=(f"{len(deleg_dispatch_tuples)} dispatch / {len(deleg_return_tuples)} return "
+               f"record(s) read from {deleg_path}") if deleg_dispatch_tuples
+        else (f"delegation_observer is WIRED (mode not off) but no dispatch recorded yet -- "
+             f"capable, zero delegations so far" if deleg_wired
+             else f"no usable delegation records AND delegation_observer not wired -- F9's "
+                  f"delegation leg is UNDECIDABLE(capability_absent) here")))
+
+    # ---- E5: invocation_completed(Token,T) -------------------------------------------------------
+    for token, ms in completed_tuples:
+        exp.facts.append(f"invocation_completed({quote_term(token)},{ms - exp.anchor_ms}).")
+    exp.counts["invocation_completed"] = len(completed_tuples)
+    if completed_tuples:
+        completions_reason = (f"{len(completed_tuples)} completion record(s) with a token read "
+                              f"from {completions_path}")
+    elif completions_wired:
+        completions_reason = (f"bash_completion is WIRED (mode not off) but no completion with a "
+                              f"token has been journaled yet -- capable, zero so far; the cross-"
+                              f"seam upper bound (Hi) is UNDECIDABLE(open_window) per-row until "
+                              f"one lands")
+    else:
+        completions_reason = ("no usable completion records with a token AND bash_completion "
+                              "not wired -- every cross-seam 'before'/'after' comparison needing "
+                              "the upper bound is UNDECIDABLE(open_window)")
+    exp.capabilities.append(Capability(
+        "bash_completions_journal", produced=len(completed_tuples) > 0,
+        capable=len(completed_tuples) > 0 or completions_wired, reason=completions_reason))
+
+    # ---- E6: verify_commission_event(Verdict,T) --------------------------------------------------
+    for verdict, ms in verify_tuples:
+        exp.facts.append(f"verify_commission_event({quote_term(verdict)},{ms - exp.anchor_ms}).")
+    exp.counts["verify_commission_event"] = len(verify_tuples)
+    exp.capabilities.append(Capability(
+        "verify_commission_journal", produced=len(verify_tuples) > 0,
+        capable=len(verify_tuples) > 0,  # no settings.json toggle exists for a manually-invoked
+                                          # verb (see docstring's E6 paragraph) -- file-presence
+                                          # IS the only honest capability signal available
+        reason=(f"{len(verify_tuples)} verify_commission_event record(s) read from {verify_path}")
+        if verify_tuples else
+        (f"no {verify_path} on this world -- either ./verify-commission was never invoked here, "
+         f"or this world predates the E6 journaling extension landing in the live checkout "
+         f"(indistinguishable from artifacts alone, named honestly per this module's own "
+         f"docstring) -- F2 is UNDECIDABLE(no_verify_journal) here")))
+
+    # ---- capability/1 marker facts -- the ONLY way preamble_ordering.lp (which cannot itself
+    # query Postgres) learns which typed UNDECIDABLE reason (pre_s25 / pre_s22 / capability_absent)
+    # applies on this schema (§5's closed reason vocabulary). One marker per Part 3 capability this
+    # module discovered above, named consistently with every family's own `produced=True means
+    # present` polarity (this module's own "NAMED CONSISTENTLY" comment, applied here too).
+    for fam, present in (
+        ("work_items", has_work_cols), ("refs", has_refs_col), ("regards", has_regards_col),
+        ("actor", has_actor_col), ("countersign_obligation", has_countersign_tbl),
+        ("commission_kind", has_commission_kind),
+        ("stop_journal", len(stop_tuples) > 0 or stop_wired),
+        ("delegation_journal", len(deleg_dispatch_tuples) > 0 or deleg_wired),
+        ("bash_completions_journal", len(completed_tuples) > 0 or completions_wired),
+        ("verify_commission_journal", len(verify_tuples) > 0),
+        # s23_capable itself, so preamble_ordering.lp's own F12 family-level override (pre-token
+        # era, other activity on record -> UNDECIDABLE(capability_absent), never silent VACUOUS)
+        # has an EDB signal to key on -- mirrors the Capability object of the same name above.
+        ("s23_capable", has_invocation_col),
+    ):
+        if present:
+            exp.facts.append(f"capable({fam}).")
 
     return exp
 

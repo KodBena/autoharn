@@ -1,0 +1,37 @@
+# contemporaneity audit -- target='preambleorderneg' root=/tmp/preamble-fixture-vjgnx4or
+#   capabilities (family, capable, produced): [('stamp_invocation_column', True, True), ('event_declared_ts_column', True, True), ('work_items', True, True), ('refs', True, True), ('regards', True, True), ('actor', True, True), ('countersign_obligation', True, True), ('commission_kind', True, True), ('s23_capable', True, True), ('invocation_journal', True, True), ('tool_event', True, True), ('stop_journal', True, True), ('delegation_journal', True, True), ('bash_completions_journal', True, True), ('verify_commission_journal', True, True)]
+#   counts: {'row_tokened': 6, 'row_untokened': 1, 'row_declared': 0, 'work_opened': 1, 'work_claimed': 0, 'work_closed': 0, 'work_witness_present': 0, 'work_depends': 1, 'row_refs_row': 1, 'row_refs_present': 0, 'row_regards': 1, 'row_actor': 7, 'invocation': 7, 'tool_event': 2, 'countersign_obliged': 0, 'stop_event': 1, 'delegation_dispatch': 1, 'delegation_return': 0, 'invocation_completed': 7, 'verify_commission_event': 2}
+
+REFUSAL FINGERPRINTS (burned ledger ids): [7]
+BURST TABLE (STATED -- rows per invocation token):
+SILENCE TABLE (tool activity, zero ledger rows, gap > threshold):
+PER-ROW DELTAS (row ts minus its own invocation's journaled wall-clock, ms):
+  row 1: delta_ms=2000
+  row 2: delta_ms=2000
+  row 3: delta_ms=2000
+  row 4: delta_ms=2000
+  row 6: delta_ms=2000
+  row 8: delta_ms=2000
+PRECEDING-ACTIVITY AGE (ms since the nearest earlier tool_event, per row):
+  row 2: age_ms=3000
+  row 3: age_ms=8000
+  row 4: age_ms=13000
+  row 5: age_ms=58000
+  row 6: age_ms=118000
+  row 8: age_ms=128000
+
+VERDICT: CONTEMPORANEOUS
+
+PREAMBLE-ORDERING REPORT (design/ORCH-CONTEMPORANEITY-PART3-SPEC.md, F1-F12; observer-grade -- gates nothing):
+  F1 (preamble pt 10): VIOLATED (discharged=0, violated=1)
+  F2 (preamble pt 10): VIOLATED (discharged=0, violated=1), reasons=['window_overlap']
+  F3 (preamble pt 10): VIOLATED (discharged=0, violated=1)
+  F4 (preamble pt 1): VIOLATED (discharged=0, violated=1)
+  F5 (preamble pt 1): VACUOUS
+  F6 (preamble pt 1): VACUOUS
+  F7 (preamble pt 2): UNDECIDABLE, reasons=['untokened_row']
+  F8 (preamble pt 3): VIOLATED (discharged=0, violated=1)
+  F9 (preamble pt 7): VIOLATED (discharged=0, violated=1)
+  F10 (preamble pt 8): VIOLATED (discharged=0, violated=1)
+  F11 (preamble pt 5): VIOLATED (discharged=0, violated=1)
+  F12 (preamble pt 9): DISCHARGED (discharged=6, violated=0)

@@ -79,3 +79,34 @@ silence_threshold_ms(180000).
 %   negatives (named honestly, same disclosure silence_threshold_ms's own header carries) --
 %   re-measure once a run 24+ (s24-capable) corpus of genuinely declared late entries exists.
 late_threshold_ms(60000).
+
+% STOP_DISPOSITION_WINDOW_MS -- design/ORCH-CONTEMPORANEITY-PART3-SPEC.md E9: "the min gap, in ms,
+%   before a stop_event within which a decision row counts as ITS disposition" (F10, preamble
+%   point 8: "Stopping is a ledgered act ... write the disposition a successor resumes from").
+%   MEASURED, 2026-07-12: the only world in existence carrying a stop_clean_exit.journal.jsonl
+%   record at measurement time is run11 (`/home/bork/w/vdc/1/run11`, schema run11 -- the first
+%   world born with hooks/stop_clean_exit.py wired; runs 5-10 predate it entirely, an ABSENCE
+%   named honestly, not a second measurement). ONE real specimen: the journal's single
+%   `clean_allow` stop_event at 2026-07-11T19:29:58.648Z; the ledger's own "stopping: commission
+%   fulfilled ..." decision row (run11.ledger id 95, kind=decision, ts
+%   2026-07-11T19:28:36.08488+02 = 19:28:36.085Z) precedes it by 82563ms; a LATER decision row
+%   (id 96, "delegating a final ... reviewer countersign pass", 19:28:48.19Z) -- itself written
+%   AFTER the disposition decision but BEFORE the stop event -- precedes the stop event by
+%   70453ms. The wider of the two real gaps a window must cover is 82563ms.
+%   (Query, read-only, reproducible: `SELECT id,kind,ts,left(statement,60) FROM run11.ledger
+%   WHERE kind='decision' ORDER BY id DESC LIMIT 6;` joined against
+%   run11/.claude/logs/stop_clean_exit.journal.jsonl's own `ts`.)
+%   DIRECTION DIFFERS FROM burst/silence/late (named honestly): those three thresholds are set
+%   BELOW their one confirmed positive (a gap must EXCEED the bound to count as a finding); this
+%   window must instead COVER its confirmed positive -- setting W below 82563ms would misclassify
+%   run11's own honestly-disposed stop as a VIOLATION, the exact false-positive class this
+%   program exists to avoid (ADR-0000's engineering-responsibility corollary: a mechanism must not
+%   indict the one real specimen its own measurement is drawn from). 120000ms (2 minutes) sits
+%   ABOVE the measured 82563ms with a 45% margin -- comfortably covering the one real case while
+%   staying an order of magnitude BELOW "an unrelated much-earlier decision" (the run11 corpus's
+%   own decision cadence runs single-digit-minutes apart at the tightest, per the id 84-87 cluster
+%   above) so the window does not credit a disposition that was not actually THIS stop's own.
+%   REASONED BOUND FROM ONE KNOWN POSITIVE (the same honest disclosure silence_threshold_ms and
+%   late_threshold_ms's own headers carry) -- re-measure once a corpus of multiple s-hook-wired
+%   stop events exists; filed, not built, this pass.
+stop_disposition_window_ms(120000).

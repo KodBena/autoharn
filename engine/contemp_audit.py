@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-11T14:41:23Z
-#   last-change: 2026-07-11T16:19:54Z
+#   last-change: 2026-07-12T02:23:19Z
 #   contributors: e4410ef6/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -72,6 +72,9 @@ from pathlib import Path
 
 from clingo_run import run_clingo
 from contemp_edb import CapabilityError, export
+from preamble_audit import build_report as build_preamble_report
+from preamble_audit import preamble_exit_addendum
+from preamble_audit import print_report as print_preamble_report
 
 HERE = Path(__file__).resolve().parent
 CONTEMP_LP = HERE / "lp" / "contemporaneity.lp"
@@ -314,6 +317,11 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--root", required=True, help="world directory (carries deployment.json + .claude/logs/)")
     ap.add_argument("--target", default=None, help="ledger_edb.resolve() target name (default: read from deployment.json's name field, else 'world')")
     ap.add_argument("--retain", action="store_true", help="bank the EDB + report under engine/docs/contemporaneity-audit/runs/")
+    ap.add_argument("--preamble", action="store_true",
+                    help="ADDITIONALLY print the Part 3 preamble-ordering report (engine/preamble_audit.py; "
+                         "F1-F12 family verdicts) -- observer-grade, gates nothing; see that module's own "
+                         "docstring for the exit-code composition rule (a new exit 5, reachable only through "
+                         "this flag, only when the base exit above is 0 and >=1 family is VIOLATED)")
     args = ap.parse_args(argv)
 
     root = Path(args.root).resolve()
@@ -335,19 +343,35 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     _print_report(r)
+    exp = export(target_name, root)
     if args.retain:
-        exp = export(target_name, root)
         d = retain(r, exp.edb_text())
         print(f"\n# retained: {d}")
 
     if r["verdict"] == "backfill_suspect":
-        return 1
-    if r["verdict"] in ("contemporaneous", "batched_declared", "late_declared"):
-        return 0
-    if r["vacuous"]:
-        return 0  # fully capable, zero ledger rows: honestly nothing to audit (the run9 fix) --
-                  # clean by vacuity, stated in the output as such, never a refusal
-    return 3  # N/A: capability-gated refusal (never conflated with 0/1)
+        base_exit = 1
+    elif r["verdict"] in ("contemporaneous", "batched_declared", "late_declared"):
+        base_exit = 0
+    elif r["vacuous"]:
+        base_exit = 0  # fully capable, zero ledger rows: honestly nothing to audit (the run9
+                       # fix) -- clean by vacuity, stated in the output as such, never a refusal
+    else:
+        base_exit = 3  # N/A: capability-gated refusal (never conflated with 0/1)
+
+    # --preamble's OWN exit-code composition rule (engine/preamble_audit.py's own docstring,
+    # stated there in full): print the report regardless; a non-zero base_exit is NEVER
+    # overridden (the first problem found stays the reported one, mirroring --differential's
+    # own already-shipped rule) -- only a clean base_exit (0) may be raised, to 5, and only when
+    # this flag was passed and >=1 family verdict is VIOLATED.
+    if args.preamble:
+        print()
+        pr = build_preamble_report(exp)
+        print_preamble_report(pr)
+        if base_exit == 0:
+            addendum = preamble_exit_addendum(pr)
+            if addendum is not None:
+                return addendum
+    return base_exit
 
 
 if __name__ == "__main__":

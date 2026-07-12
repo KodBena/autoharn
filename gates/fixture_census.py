@@ -3,6 +3,7 @@
 #   first-seen : 2026-07-09T13:36:11Z
 #   last-change: 2026-07-12T02:04:53Z
 #   last-change: 2026-07-12T02:16:13Z
+#   last-change: 2026-07-12T02:29:29Z
 #   contributors: be693afb/main, e4410ef6/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -92,6 +93,7 @@ REGISTRY: dict[str, str] = {
     "link-integrity":                 "seen-red/link-integrity/run_fixtures.py",
     "apparatus-unknown-keys":         "seen-red/apparatus-unknown-keys/run_fixtures.py",
     "worktree-ledgering":             "seen-red/worktree-ledgering/run_fixtures.py",
+    "preamble-ordering":              "seen-red/preamble-ordering/run_fixtures.py",
 }
 
 

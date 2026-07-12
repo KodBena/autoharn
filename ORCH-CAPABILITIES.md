@@ -552,6 +552,56 @@ section and in BACKLOG.md's dated entry. Deferrals stay unchanged: `engine/conte
 flag OFF, the verdict is still computed over the whole ledger window rather than per-session, and
 Part 3 stays filed.
 
+**24c. Preamble-ordering audit (`./audit --preamble`) — Part 3 of design/
+ORCH-CONTEMPORANEITY-PART3-SPEC.md LANDED (2026-07-12, Sonnet, commissioned build; closes the
+Part-3-implementation half of the audit-verb-completions tracker item; item 24/24a/24b's own
+memo left standing, "Part 3 (untouched, as scoped above)").** Turns the governance preamble's
+twelve numbered points (`bootstrap/templates/CLAUDE.md.tmpl`, the points every scaffolded world
+receives at birth) from prose into F1-F12 verdicts a program derives from the world's own event
+record. It reasons inside the SAME settled deontic position item 20 below (obligation grants)
+already instantiates once (`countersign_obligation` -> `review_gap`): the **Anderson reduction**
+— an obligation is a recorded, other-assigned fact rather than a modal claim (no O/P/F operator
+exists in this project's logic layer), and a violation is simply a derived flag computed from
+whether the discharging record is present. Here that fact family is `preamble_obligation/2`, one
+per family, recorded in `engine/preamble_obligations.lp`. `engine/lp/preamble_ordering.lp` stacks
+on `engine/lp/contemporaneity.lp` (F12 imports Part 2's own backfill_suspect/late_declared
+wholesale) and reads SIX new EDB extensions folded into `engine/contemp_edb.py`'s own
+`export()`: E1 (work-item shapes + `work_claimed`), E2 (`refs`/`regards`), E3 (the stop-hook
+journal), E4 (a fine delegation-dispatch/return read), E5 (Bash-completion tokens), E7
+(actor/countersign) — plus E8, the `preamble_obligation/2` catalogue itself (a facts file, not
+an EDB read), and a template-side addition, E6 (one journaled line in
+`bootstrap/templates/verify-commission.tmpl`). The spec's own §3 TWO-CLOCK BRIDGE requires that
+a tokened ledger row occupy the interval `[invocation(Tok,Lo), invocation_completed(Tok,Hi)]`;
+this interval governs every cross-seam "before"/"after" comparison between a ledger row and a
+journal event, refusing with a typed reason (`untokened_row`/`open_window`/`window_overlap`)
+rather than ever guessing from a raw `ts` comparison. Each family gets a closed-vocabulary
+verdict — DISCHARGED | VIOLATED | UNDECIDABLE(reason) | VACUOUS — and the family stratum
+(`preamble_verdict/2`) emits all TWELVE always (E8's own catalogue grounds every family even on
+an empty world), so a missing verdict is itself a loud defect, never silence. Ships with its OWN
+SQL-floor marriage pair from day one (`engine/preamble_floor.py` + `engine/preamble_differential.py`,
+importing `engine/ledger_differential.py`'s conventions exactly) — unlike item 24's own first
+landing, which shipped single-producer and closed the gap one delta later (24b) — fulfilling the
+spec's own mandate ("no exemption is invoked... ships as a pair, or its report says why"). **Witnessed
+live**: `seen-red/preamble-ordering/run_fixtures.py`, ALL GREEN — two consolidated scratch worlds
+(GREEN: F1-F10/F12 DISCHARGED, F11 UNDECIDABLE by this build's own named scope reduction; RED:
+F1/F2/F3/F4/F8/F9/F10/F11 VIOLATED, F7 UNDECIDABLE(untokened_row)), both differentials AGREE
+(`asp=36 sql=36` / `asp=33 sql=33`, zero delta), and a manufactured negative control was caught
+and correctly labeled DIVERGE_DEFECT (this project's name, in its closed differential-verdict
+vocabulary, for "the two independent producers disagree" — see item 24b above for the full
+vocabulary). The REAL historical corpus (runs 4/5/6/7/9/10/11, read-only, dust) all differential
+AGREE too, and its own 84-instance (7 worlds x 12 families) distribution is UNDECIDABLE-heavy as
+the spec itself predicted (39 vacuous, 25 undecidable, 17 discharged, 3 real, previously-unknown
+VIOLATED findings — run4's F7, run5's F6, run11's F3). Exit-code composition: `--preamble` never
+overrides a non-zero base `./audit` exit; a clean base (0) may rise to a NEW code 5 iff >=1
+family is VIOLATED, mirroring `--differential`'s own exit-4 rule exactly. **Deferred, named
+honestly (not silently narrowed):** F11's `question_open`/full review-gap arms need a
+second, separate EDB composition (`engine/ledger_edb.py`'s own `entry`/`supersedes` export, a
+different denomination, no consumer yet) that this pass does not build — those arms report
+UNDECIDABLE(capability_absent) categorically rather than a guessed clean; F7's `regards`-edge
+refined form (E2, already EMITTED but not yet consumed by any rule) ships coarse only. Full
+disposition: `design/ORCH-CONTEMPORANEITY-PART3-SPEC.md`'s own dated Status section and
+BACKLOG.md's dated entry beside it.
+
 **25. `distance-to-clean` — the composed closure-debt verb (BACKLOG "Five-item batch,
 maintainer-approved 2026-07-11 evening", item 1; design/RETROSPECTIVE-RUN10.md Finding 1).** A
 sixth operator verb (`bootstrap/templates/distance-to-clean.tmpl`, scaffolded alongside
