@@ -5543,3 +5543,76 @@ accuracy fix + its first-ever attestation). Witness, live and clean after every 
 `gates/link_integrity.py`, `gates/fixture_census.py`, `gates/no_lazy_imports.py`,
 `gates/doc_shapes.py`/`gates/doc_attestation_presence.py` (touched-set), `gates/layout_census.py`
 (one pre-existing, unrelated `attest-tags` gap remains, not this item's to close).
+
+---
+
+## Resource registry, stage 1 — shipped (2026-07-12, Sonnet, isolated worktree)
+
+Tracker item `registry-stage1-implementation`: `design/ORCH-SPEC-RESOURCE-REGISTRY.md`'s §8
+stage 1 (pickup RESOURCES section, the preamble eliciting line, the `resource:`/`constraint:`
+statement conventions, the blessed-table template document, the mandated-tier review
+convention), built and witnessed exactly per that section's own plan, no scope pull into stage 2
+(the ordering-violations ASP program), stage 3 (the `resource` kernel kind), or the planning
+appendix — all three remain untouched, as specified.
+
+Built: `bootstrap/templates/pickup.tmpl`'s `resources()` — unsuperseded `kind=decision` rows
+carrying the `resource:` prefix, parsed on the fixed six-field `NAME | CLASS | REACH |
+WHAT-IT-PROVES | GUIDANCE | TIER` grammar, printed tier-sorted (mandated first), an honest
+"(no resource declarations on record)" line when the registry is empty, and a MALFORMED flag
+(never a silent drop) for a statement that doesn't parse to exactly six fields.
+`bootstrap/templates/CLAUDE.md.tmpl` gained a new numbered preamble point (2) carrying §3's
+eliciting line verbatim plus one sentence on the mandated-tier review convention from §4 stage 1
+(renumbering points 2-12 to 3-13 and fixing every internal cross-reference this touched).
+`design/USER-BLESSED-TABLE-TEMPLATE.md` (new, `Audience: adopter`) is the task-shape ->
+blessed-tool table, pre-filled with this maintainer's own stack (MIP/SCIP, cvxpy, OR-Tools, Z3,
+clingo, tsort, redis, plus a QEUBO per-project-backend example) as clearly marked EXAMPLES, one
+column per §2 statement field plus the §5 escalation-ladder ordering column, the exact
+`resource:`/`constraint:` statement grammars with a copy-paste example each, the mechanical
+row-to-declaration conversion worked through, and the mandated-tier review convention (composing
+`led obligate`/`led review`/`review_gap`, zero kernel change, the known over-catch — once a
+principal is obliged, `review_gap` counts every row it writes, not only the mandated-shape ones
+— stated plainly rather than glossed over). `GLOSSARY.md` gained `mandated (tier)` and `resource
+declaration` entries plus, from the fresh-context review's own findings on the touched file, an
+`omega and chocofarm` entry, `led`/`pickup` and `review_gap` entries, named operator verbs, two
+linked `ORCH-CAPABILITIES.md` citations, and a plain-language opening sentence.
+
+Witnessed live, both polarities, exactly per §8's plan: `seen-red/resource-registry/
+run_fixtures.py` stands up a scratch deployment (`bootstrap/track-work.sh` onto a throwaway
+tempdir + throwaway schema pair `rrfixture`/`rrfixture_kernel`/`rrfixture_rw` in the toy db),
+declares three resources across all three tiers via real `./led decision` calls, confirms
+`./pickup` shows them tier-sorted with the mandated entry first (checked by string position in
+the actual captured stdout), then RED (a mandated-shape work item — the OR-Tools-CP-SAT
+resource's own hyperparameter-enumeration shape — opened/claimed/closed as the obligated
+`author` principal with no countersigning review yet: `./led review-gap` shows six outstanding
+rows, not merely the three `hp-enum` rows — the documented over-catch, reproduced live, not
+merely asserted) and GREEN (all six countersigned by `LED_ACTOR=reviewer`, independence
+`self-review` since this scratch deployment is deliberately unwired — no stamp secret, so
+technical/managerial/financial independence would be refused by the kernel's own
+stamp-distinctness CHECK — `./led review-gap` then reads back `(0 rows)`). Both polarities banked
+in `seen-red/resource-registry/red.txt`; registered in `gates/fixture_census.py`'s REGISTRY;
+scratch substrate (tempdir + schema/kern/role) verified torn down to zero residue on the clean
+run (two earlier runs caught and fixed two fixture-script bugs — a `psql -tAc` leading-`SET`-line
+parse and a wrong clean-string check against `led review-gap`'s actual raw-`SELECT` output — both
+runs' scratch substrate also torn down, nothing left standing).
+
+Every touched maintainer-facing `.md` (`GLOSSARY.md`, `design/USER-BLESSED-TABLE-TEMPLATE.md`,
+`design/ORCH-SPEC-RESOURCE-REGISTRY.md`) carries an ADR-0017 A:B:C fresh-context attestation
+(`attestations/doc-legibility-attestations.jsonl`). Two of the three escalated per the two-round
+cap rather than forcing a false CLEAN: the blessed-table doc's round 2 flagged the standing,
+mechanized, corpus-wide `Audience: <word>` header convention (49 other tracked files carry the
+identical line; `tools/rename_doc.py` writes it verbatim) as a bare-sentence violation — declined,
+with reasoning, as a false positive against an established convention B's fresh context couldn't
+see; the spec's one round flagged its own pre-existing Fable-authored STATUS preamble — declined
+as out-of-scope point-in-time content (ADR-0005 Rule 8) this session did not author and was not
+editing, while every finding inside the session's own new content was applied verbatim. Both
+adjudications are recorded in the attestation ledger, not silently decided.
+
+Commits: `ad61818` (`pickup.tmpl` + `CLAUDE.md.tmpl`), `3ba44f4` (`seen-red/resource-registry/` +
+`gates/fixture_census.py`), `a304b20` (`GLOSSARY.md` + `design/USER-BLESSED-TABLE-TEMPLATE.md` +
+the spec's status append + attestations). Witness, live and clean after every commit:
+`gates/link_integrity.py`, `gates/fixture_census.py`, `gates/no_lazy_imports.py`,
+`gates/doc_shapes.py`/`gates/doc_attestation_presence.py` (touched-set), `gates/no_conflict_markers.py`.
+Deferred, per the spec's own routing: stage 2 (ordering-violations ASP program + SQL floor +
+differential), stage 3 (the `resource` kernel kind + obligation-attachment columns, pre-ratified
+fail-safe class), stage 4 (the planning appendix, by explicit maintainer word only) — none begun,
+none scoped into this commission.
