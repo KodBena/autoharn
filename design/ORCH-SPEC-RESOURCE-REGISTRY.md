@@ -178,6 +178,34 @@ Stage 3 (on witnessed need, the pre-ratified fail-safe class): the s27 `resource
 obligation-attachment columns. Stage 4: the appendix, if ever, by explicit maintainer
 word.
 
+**STATUS 2026-07-12: Stage 1 SHIPPED** (tracker item `registry-stage1-implementation`,
+Sonnet-executed). Four things were built:
+
+- The `./pickup` RESOURCES section (`bootstrap/templates/pickup.tmpl`), tier-sorted with
+  mandated entries first and an honest empty-registry line.
+- The preamble eliciting line, plus one sentence on the mandated-tier review convention, added
+  as a new numbered point in `bootstrap/templates/CLAUDE.md.tmpl`.
+- The `resource:`/`constraint:` statement grammars, each with a copy-paste example and the
+  mechanical row-to-declaration conversion worked through, in
+  [USER-BLESSED-TABLE-TEMPLATE.md](USER-BLESSED-TABLE-TEMPLATE.md) — the blessed-table
+  template, pre-filled with this maintainer's own stack as marked worked examples, one column
+  per §2 field plus the §5 escalation-ladder ordering column.
+- The mandated-tier review convention itself, composing `led obligate` / `led review` /
+  `review_gap` with no kernel change, including the [documented
+  over-catch](USER-BLESSED-TABLE-TEMPLATE.md#the-mandated-tier-review-convention) (once a
+  principal is obliged, `review_gap` counts every row that principal writes, not only its
+  mandated-shape ones) stated plainly rather than glossed over.
+
+GLOSSARY.md gained `mandated (tier)` and `resource declaration` entries. The whole build was
+witnessed live per this section's own plan, both polarities banked at
+`seen-red/resource-registry/` (registered in `gates/fixture_census.py`; scratch substrate torn
+down to zero residue afterward): three resources were declared across all three tiers via real
+`./led decision` calls; `./pickup` showed them tier-sorted, mandated first; a mandated-shape
+work item closed with no countersigning review landed as six visible `review_gap` rows (the
+over-catch above, reproduced live, not merely asserted); countersigning all six with a distinct
+principal brought `review_gap` back to zero rows. Stages 2-4 remain exactly as specified above,
+untouched.
+
 ## Closure statement (per [ADR-0000](../law/adr/0000-the-alpha-and-the-omega-type-driven-design.md)'s closure form)
 
 The universe this spec admits: resource declarations in three tiers on a deployment's
