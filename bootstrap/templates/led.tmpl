@@ -1058,6 +1058,131 @@ PYEOF
     ;;
 esac
 
+# --- actual: intake validation (tracker item `actual-intake-grammar`, 2026-07-13) -------------
+# A statement beginning `actual:` (after stripping leading whitespace) declares one MEASURED-
+# afterward cost row for a task -- the measured twin of `estimate:` immediately above, and MUST
+# carry the six-field grammar design/USER-RETROSPECTIVE-RECIPE.md's "The `actual:` statement
+# grammar" section documents before ANY write is attempted -- refuse loudly here, at the boundary
+# (ADR-0002 rule 2: validate at boundaries, do not coerce), cloned structurally from `estimate:`
+# (whitespace-normalized validation copy, byte-exact persisted statement, refuse-before-write
+# atomicity, teach-text naming the grammar).
+#
+# WHAT THIS IS FOR, STATED SO IT CANNOT BE MISREAD (mirrors `estimate:`'s own invariant
+# verbatim): an `actual:` row exists for OPERATIONAL-EFFICIENCY RETROSPECTIVES ONLY -- comparing
+# what a diagnostic-grade harness figure reports against a prior `estimate:` prediction, so a
+# team can learn whether its own estimation habits are calibrated. It is NEVER for policing
+# costs; policing is out of scope BY DESIGN, not by omission -- the same never-police invariant
+# `estimate:` states applies here verbatim (the maintainer's own invariant, stated twice at
+# commissioning). This validator therefore refuses only the INTAKE SHAPE (six well-formed
+# fields) -- it has no opinion on what the measured numbers mean, and there is no companion gate
+# anywhere in this tree that fails a build over an actual figure.
+#
+# `actual:` diverges from `estimate:` in exactly ONE field: TOOL-CALLS/SUBAGENT-SPAWNS is a bare
+# non-negative integer here, NEVER a range -- a measurement is a point, not a range (an N-M range
+# is honest for a *prediction*; a *measured* count is exact by the time the task has finished).
+# Every other field either reuses `estimate:`'s own parser (WALL-CLOCK, TASK-SLUG) or widens it
+# in a way stated in the grammar home (TOKENS accepts an exact-ish K/M-suffixed count in addition
+# to the closed OOM-bucket vocabulary; a bare unsuffixed number is refused only above 999,
+# ambiguous between a real count and a typo).
+#
+# The grammar check below runs against a WHITESPACE-NORMALIZED COPY only (every run of \n/\r plus
+# its following indentation collapsed to one space), so a legitimate embedded newline (a paste
+# reflowed by a terminal) is ACCEPTED rather than refused -- identical convention to the
+# `resource:`/`estimate:` blocks above. The row actually written on success is $statement,
+# completely untouched -- byte fidelity matters here for the same reason it matters for
+# `resource:`/`estimate:` (a later GPG signing ceremony reads this exact row, design/
+# USER-GPG-TRUST-LAYER-FAQ.md); the normalized copy is validation-only scratch, never persisted.
+# Nothing is written at all if validation fails (atomicity by refusal-before-write).
+#
+# COHERENCE PARTNER: the trigger condition below (leading POSIX [:space:] stripped, then an
+# `actual:` prefix) and bootstrap/templates/pickup.tmpl's `_read_actuals()` SQL filter (`statement
+# ~ '^[[:space:]]*actual:'`) define "an actual declaration" IDENTICALLY, by construction -- the
+# same coherence contract `resource:`/`estimate:` already keep with their own readers. Change
+# either side only in lockstep with the other.
+_actual_trimmed="${statement#"${statement%%[![:space:]]*}"}"
+case "$_actual_trimmed" in
+  actual:*)
+    if ! python3 - "$_actual_trimmed" <<'PYEOF'
+import re
+import sys
+
+# The six fields, in order, and the closed TOKEN-OOM vocabulary (shared with `estimate:`'s own
+# TOKEN-OOM) are transcribed VERBATIM from design/USER-RETROSPECTIVE-RECIPE.md's "The `actual:`
+# statement grammar" section -- the ONE documented home of this grammar (a transcription, not a
+# second, driftable definition of it -- ADR-0012 P1). bootstrap/templates/pickup.tmpl's own
+# _ACTUAL_FIELDS tuple is the sibling reader of the same six names on the display side.
+FIELDS = ("TASK-SLUG", "TOOL-CALLS", "SUBAGENT-SPAWNS", "WALL-CLOCK", "TOKENS", "SOURCE")
+VALID_TOKEN_OOM = ("1K", "10K", "100K", "1M", "10M+")
+_SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9-]*$")
+_POINT_COUNT_RE = re.compile(r"^\d+$")  # no ranges -- a measurement is a point, not a range
+_DURATION_RE = re.compile(r"^\d+(\.\d+)?[smhd](-\d+(\.\d+)?[smhd])?$", re.IGNORECASE)
+_TOKEN_EXACT_RE = re.compile(r"^\d+(\.\d+)?[KM]$", re.IGNORECASE)
+_BARE_NUMBER_RE = re.compile(r"^\d+$")
+
+raw = sys.argv[1]
+normalized = re.sub(r"[\r\n]+[ \t]*", " ", raw).strip()
+body = normalized[len("actual:"):]
+parts = [p.strip() for p in body.split("|")]
+
+
+def refuse(msg: str) -> None:
+    print(f"led: REFUSED -- malformed 'actual:' statement -- {msg}.", file=sys.stderr)
+    print("  grammar (design/USER-RETROSPECTIVE-RECIPE.md \"The 'actual:' statement grammar\"):", file=sys.stderr)
+    print("    actual: <TASK-SLUG> | <TOOL-CALLS> | <SUBAGENT-SPAWNS> | <WALL-CLOCK> | <TOKENS> | <SOURCE>", file=sys.stderr)
+    print(f"  the six fields, in order: {', '.join(FIELDS)}", file=sys.stderr)
+    print("  TASK-SLUG must match ^[a-z0-9][a-z0-9-]*$ (a bare slug, no spaces -- may name a whole", file=sys.stderr)
+    print("  work item or a single spawn within it, e.g. item-slug-b-round-2)", file=sys.stderr)
+    print("  TOOL-CALLS/SUBAGENT-SPAWNS must be a bare non-negative integer -- NEVER a range (a", file=sys.stderr)
+    print("  measurement is a point, not a range; this is the one deliberate divergence from", file=sys.stderr)
+    print("  estimate:'s matching fields)", file=sys.stderr)
+    print("  WALL-CLOCK must be a duration like 20m/2h/1d/90s, or a range 10m-30m", file=sys.stderr)
+    print(f"  TOKENS must be an exact-ish K/M-suffixed count (204K, 1.2M), or one of the closed OOM", file=sys.stderr)
+    print(f"  bucket vocabulary {' | '.join(VALID_TOKEN_OOM)}, or a bare number no greater than 999", file=sys.stderr)
+    print("  (a bare number above 999 is refused -- ambiguous between a real count and a typo)", file=sys.stderr)
+    print("  SOURCE must be non-empty (state where the measurement came from)", file=sys.stderr)
+    print(f"  received ({len(parts)} field(s), whitespace-normalized): {normalized}", file=sys.stderr)
+    print("  NOTHING was written -- fix the statement and re-run.", file=sys.stderr)
+    print("  this is an ACTUAL for operational-efficiency retrospectives ONLY, never for cost", file=sys.stderr)
+    print("  policing (the same never-police invariant estimate: states, stated twice at", file=sys.stderr)
+    print("  commissioning, applies here verbatim) -- WALL-CLOCK/TOKENS are harness-sourced and", file=sys.stderr)
+    print("  DIAGNOSTIC-GRADE, permanently, per the action-stream ruling (ledgered 2026-07-13);", file=sys.stderr)
+    print("  see design/USER-RETROSPECTIVE-RECIPE.md's actual: grammar section for the", file=sys.stderr)
+    print("  TOOL-CALLS/SUBAGENT-SPAWNS grade exception -- only the INTAKE SHAPE is refused", file=sys.stderr)
+    print("  here, never the measurement's meaning.", file=sys.stderr)
+    sys.exit(1)
+
+
+if len(parts) != len(FIELDS):
+    refuse(f"expected exactly {len(FIELDS)} '|'-separated fields, got {len(parts)}")
+
+slug, tool_calls, spawns, wall_clock, tokens, source = parts
+if not _SLUG_RE.match(slug):
+    refuse(f"TASK-SLUG field {slug!r} does not match ^[a-z0-9][a-z0-9-]*$ (a bare slug, no spaces)")
+if not _POINT_COUNT_RE.match(tool_calls):
+    refuse(f"TOOL-CALLS field {tool_calls!r} is not a bare non-negative integer (ranges are refused here)")
+if not _POINT_COUNT_RE.match(spawns):
+    refuse(f"SUBAGENT-SPAWNS field {spawns!r} is not a bare non-negative integer (ranges are refused here)")
+if not _DURATION_RE.match(wall_clock):
+    refuse(f"WALL-CLOCK field {wall_clock!r} is not a duration like 20m/2h/1d/90s or a range 10m-30m")
+_tokens_ok = (
+    tokens in VALID_TOKEN_OOM
+    or bool(_TOKEN_EXACT_RE.match(tokens))
+    or (bool(_BARE_NUMBER_RE.match(tokens)) and int(tokens) <= 999)
+)
+if not _tokens_ok:
+    refuse(f"TOKENS field {tokens!r} is not an exact-ish K/M-suffixed count, a valid OOM bucket "
+           f"{VALID_TOKEN_OOM}, or a bare number <= 999")
+if not source:
+    refuse("SOURCE field is empty -- state where the measurement came from")
+
+sys.exit(0)
+PYEOF
+    then
+      exit 1
+    fi
+    ;;
+esac
+
 # --- taxon: intake validation (tracker item `taxonomy-stage-a`, design/ORCH-SPEC-TASK-TAXONOMY.md
 # §3, Stage A) --------------------------------------------------------------------------------
 # A statement beginning `taxon:` (after stripping leading whitespace) declares one row of a
