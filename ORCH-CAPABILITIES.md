@@ -687,8 +687,8 @@ same wired probe append two more lines, in order — proving accumulation, not o
 green, zero probe-directory residue after the fixture's own teardown.
 
 **28. `attest-tags` — signed ratification tags, verified against a committed key
-(`attest-tags`, repo root; `filing/gpg_trust.py`; design/GPG-TRUST-LAYER.md §2, Rung 1 of 3 —
-design/GPG-TRUST-LAYER.md's own name for each of the three signing mechanisms it specifies, in
+(`attest-tags`, repo root; `filing/gpg_trust.py`; design/MAINT-GPG-TRUST-LAYER.md §2, Rung 1 of 3 —
+design/MAINT-GPG-TRUST-LAYER.md's own name for each of the three signing mechanisms it specifies, in
 build order; items 28/29/30 here are Rungs 1/2/3 respectively).**
 Enumerates every `ratified/*` git tag, verifies each against `law/keys/*.asc` using a throwaway
 GNUPGHOME built per invocation (never the operator's ambient keyring), and reports any commit
@@ -712,8 +712,8 @@ only once at least one `ratified/*` tag exists to check — witnessed in the see
 scratch repo, which has tags; this repository's own real history currently has none.)
 
 **29. `verify-commission` — SIGNED-mode commissions, the third of three commission-signing
-strengths (LAZY < FULL < SIGNED — `design/GPG-TRUST-LAYER-FAQ.md` §5 walks all three;
-`bootstrap/templates/verify-commission.tmpl`; design/GPG-TRUST-LAYER.md §3, Rung 2 of 3).**
+strengths (LAZY < FULL < SIGNED — `design/USER-GPG-TRUST-LAYER-FAQ.md` §5 walks all three;
+`bootstrap/templates/verify-commission.tmpl`; design/MAINT-GPG-TRUST-LAYER.md §3, Rung 2 of 3).**
 Implements the closed vocabulary `VERIFIED | UNSIGNED | FORGED-OR-CORRUPT` (exit non-zero only on
 the third) PLUS two typed refusals distinct from all three verdicts (`GPG-UNAVAILABLE`, exit 2;
 `NO-COMMITTED-KEY`, exit 3 — neither precondition leaves any of the three verdicts decidable),
@@ -728,7 +728,7 @@ verb originally resolved `AUTOHARN / "law" / "keys"` — a maintainer finding th
 [it] counter-intuitive") named this as a conflation of autoharn's own law-signing with every
 deployment's commission-signing. Fixed by resolving the deployment's own `keys/` instead (see
 `bootstrap/templates/keys-README.md.tmpl`, `bootstrap/track-work.sh`, and
-design/GPG-TRUST-LAYER.md §7 / design/GPG-TRUST-LAYER-FAQ.md §3 for the full split); wired into
+design/MAINT-GPG-TRUST-LAYER.md §7 / design/USER-GPG-TRUST-LAYER-FAQ.md §3 for the full split); wired into
 `bootstrap/track-work.sh`'s standing-deployment scaffold same-commission. `bootstrap/new-project.sh`'s
 matching `keys/` scaffolding for WORLDS is the one piece FROZEN this pass (a live session was
 running in the shared checkout when this landed — CLAUDE.md's liveness rule); the mechanism does
@@ -739,7 +739,7 @@ TWO real defects, neither merely flagged: (a) a byte-fidelity hazard in the cere
 form (`gpg --detach-sign --armor ~/aa` signs a trailing newline that `$(cat ~/aa)` strips before
 insertion — an honest commission would otherwise verify as forged; the fix, `printf '%s'
 "$STATEMENT" | gpg --detach-sign`, ships in both the scaffold's printed ceremony and
-`design/GPG-TRUST-LAYER-FAQ.md` §5); (b) an out-of-frame hack-rationalization audit, run before
+`design/USER-GPG-TRUST-LAYER-FAQ.md` §5); (b) an out-of-frame hack-rationalization audit, run before
 this shipped as "done" (CLAUDE.md's own standing rubric), caught an earlier version folding the
 "no committed key exists to check a claimed signature against" case into `FORGED-OR-CORRUPT`,
 reasoning the spec's vocabulary was "closed to three members" — a reason the SAME file's own
@@ -766,7 +766,7 @@ absent from `PATH` yields the other distinct refusal, `GPG-UNAVAILABLE`, exit 2.
 
 **30. `row_hash` chain + `verify-chain` — the anchored ledger, kernel delta s26 + the signed head
 (`kernel/lineage/s26-row-hash-chain.sql`; `bootstrap/templates/verify-chain.tmpl`;
-design/GPG-TRUST-LAYER.md §4, Rung 3 of 3).** Every ledger row gains a SHA-256 `row_hash` (hex text)
+design/MAINT-GPG-TRUST-LAYER.md §4, Rung 3 of 3).** Every ledger row gains a SHA-256 `row_hash` (hex text)
 of a canonical, INJECTIVE, timezone-safe serialization of every OTHER column, concatenated
 with the predecessor row's `row_hash` (or a per-world genesis seed, `kernel.chain_genesis`,
 auto-provisioned by `bootstrap/new-project.sh --new-world`, not a secret — its only job is making
@@ -808,10 +808,10 @@ literally); the sophisticated variant — the tamperer also rewrites that row's 
 its new content — moves the detected break to the very next row instead, never later; `--head`
 against a broken chain refuses with EMPTY stdout, exit 1 (never signs a head it has not
 verified). The full signed-head ceremony (§6 of `design/
-GPG-TRUST-LAYER-FAQ.md`) was additionally exercised end to end on a real scaffolded world with a
+USER-GPG-TRUST-LAYER-FAQ.md`) was additionally exercised end to end on a real scaffolded world with a
 throwaway test key: `gpg --verify` reports `Good signature` on the banked `.claude/head.json` +
 `.claude/head.json.asc` pair. Key rotation (revoke → generate → commit → re-sign) was also
-exercised on the same test key, witnessed in `design/GPG-TRUST-LAYER-FAQ.md` §8, including the
+exercised on the same test key, witnessed in `design/USER-GPG-TRUST-LAYER-FAQ.md` §8, including the
 genuine finding that a revoked key becomes immediately unusable for new signing (`gpg` refuses
 outright, "Unusable secret key" — stronger than a mere warning). **Note on key residence
 (2026-07-11/12 audit, filed alongside item 29's revision):** `verify-chain.tmpl` reads NO
@@ -819,10 +819,13 @@ committed-keys directory at all, in either domain — the signed-head ceremony a
 `gpg --detach-sign` / `gpg --verify` pair run by the operator against their own ambient
 `~/.gnupg` keyring, never `filing/gpg_trust.py`'s scratch-keyring mechanism items 28/29 share.
 An earlier draft of `filing/gpg_trust.py`'s own module docstring and of
-design/GPG-TRUST-LAYER-FAQ.md §3 claimed otherwise (listing this verb as a third caller of that
+design/USER-GPG-TRUST-LAYER-FAQ.md §3 claimed otherwise (listing this verb as a third caller of that
 mechanism); corrected in both places this same pass — a documentation inaccuracy caught and
 fixed in passing, not a code change, since there was no committed-key resolution here to
-relocate.
+relocate. **Note on the head shape (2026-07-12, filed alongside item 32):** `--head`'s JSON grew
+a fifth key, `apparatus_hash` — additive to the `{world, max_id, head_hash, utc}` shape witnessed
+above, which remains accurate as a point-in-time record of that run; see item 32 Part 2 for the
+extension and its own live witness.
 
 **31. Small follow-ups batch — a read-only ledger verb, two timing journals, and a gate liveness
 counter (BACKLOG "Follow-ups commission scope extended (maintainer, 2026-07-11)" and the
@@ -889,6 +892,145 @@ returning subagent's self-reported token/usage numbers, if ledgered at all, expl
 an unverified self-report ("no harness guarantee") — the same trust class as a LAZY commission
 transcription, diagnostic-grade by design (BACKLOG "Maintainer principle: the action stream is
 the evidentiary basis; session internals are diagnostics (2026-07-11)").
+
+**32. Apparatus-flip witnessing — closing the "no witnessed event" gap in `.claude/apparatus.json`
+itself (tracker item `apparatus-flip-witnessing`, from the "Unwitnessed apparatus flips" finding
+of the NIST-lens re-litigation panel — one of five review lenses the maintainer commissioned
+2026-07-12 over the whole apparatus, recorded in
+[design/MAINT-RELITIGATION-SYNTHESIS.md](design/MAINT-RELITIGATION-SYNTHESIS.md)'s "New findings
+this panel produced" section).** That finding, verbatim: a governed agent could `Write .claude/apparatus.json`
+and flip a mechanism to `"off"` mid-session with NO witnessed event anywhere — no refusal (that
+file is not `*.py`, so `hooks/pretooluse_change_gate.py`'s default governed patterns never match
+it), no journal line (`hooks/posttooluse_mutation_observer.py` only attaches to the `Bash` tool, so
+a `Write`/`Edit` never reached it), no ledger row. Two additive, fail-safe fixes, neither touching
+kernel/lineage:
+
+- **Part 1 — a typed journal event on every apparatus.json mutation.**
+  `hooks/posttooluse_apparatus_flip.py` (new) attaches at `PostToolUse(*)` — every tool, not an
+  enumerated list, the same "enumeration fails open" lesson item 22 already names — and compares
+  `<SUBJECT_ROOT>/.claude/apparatus.json`'s current SHA-256 (raw bytes, so a missing or invalid-JSON
+  file is still hashable) against the last-observed hash in a small persisted state file. A change
+  journals one `apparatus_flip` line to `.claude/logs/apparatus_flip.journal.jsonl` — before/after
+  hashes, presence/malformed flags, and (best-effort — empty when either side does not parse as an
+  object) which mechanisms' `mode` values changed — plus a loud, non-blocking `additionalContext`
+  warning, mirroring item 22's own convention. An unchanged file produces no event at all.
+  **Deliberately NOT a switchboard mechanism**: every other hook reads its own mode FROM
+  apparatus.json, but this hook's whole job is watching edits TO that file — if it read its own mode
+  from the file it watches, the single most dangerous edit (flipping this watcher off in the same
+  `Write` that flips something else) would read its own new `"off"` value before deciding whether to
+  journal, silencing its own witness. It runs unconditionally whenever wired, the same "never itself
+  a mode-gated decision" posture `hooks/pretooluse_change_gate.py`'s own docstring already
+  establishes for `is_governed()`; a stray `"apparatus_flip"` key under `mechanisms` is caught,
+  correctly, by the existing unknown-mechanism-name sweep (item 23) as a key no hook reads.
+
+  **Day-zero baseline gap, found and closed before this was reported done.** An out-of-frame
+  hack-rationalization audit (2026-07-12, commissioned deliberately by this same pass — ADR-0014)
+  caught the FIRST version of this hook trusting whatever apparatus.json ALREADY held at its own
+  first-ever run for a world, silently — meaning a flip that occurred before the hook had run even
+  once (the single highest-value blind spot for the exact threat this item closes) went unwitnessed.
+  The audit reproduced this live against the original committed version, confirming an empty
+  journal (RED #0, `seen-red/apparatus-flip/red.txt`). The fix closes the gap by comparing the
+  first observation against `bootstrap/templates/apparatus.json` (the shipped scaffold default,
+  reachable the same repo-relative way every sibling hook resolves its own paths) rather than
+  trusting it blindly — a reachable default that differs from current content journals a
+  `first_observation_vs_scaffold_default` flip (`tool: null`, honestly — which call produced the
+  divergence was never observed, only that one occurred before monitoring began). This closes the
+  gap for a genuine `--new-world` scaffold; it does **not** close it for a world whose scaffold
+  default is unreachable, or whose day-zero divergence happens to restore the exact default bytes —
+  those residual cases still establish the baseline silently, disclosed rather than hidden (no
+  monitor can detect a change that left no comparable reference before it existed).
+
+  **UNWITNESSED-LIVE**: this hook has fired only via a direct stdin harness against a real
+  filesystem (`seen-red/apparatus-flip/run_fixtures.py`), never yet during a genuine live Claude
+  Code session's own `PostToolUse` dispatch — the identical honest disclosure item 22 already
+  carries for the same reason. *Witnessed (this pass) via that harness, no DB required (this
+  mechanism is filesystem-only)*:
+
+  ```
+  === a-baseline-silent ===
+    [ok] exit=0 journal_lines=0 state_file_written=True
+  === b-no-flip-silent ===
+    [ok] exit=0 journal_lines=0
+  === c-flip-produces-event ===
+    [ok] exit=0 warned=True lines=1 mechanisms_changed={'change_gate': {'before': 'enforce',
+      'after': 'off'}, ...}
+  === d-malformed-fail-safe ===
+    [ok] exit=0 no_traceback=True lines=2 after={'present': True, 'hash': '9c3dc5d2...',
+      'malformed': True}
+  === e-absent-fail-safe ===
+    [ok] exit=0 no_traceback=True lines=3 after={'present': False, 'hash': None, 'malformed': False}
+  === f-restore-flip-again ===
+    [ok] exit=0 lines=4 before={'present': False, ...} after={'present': True, 'malformed': False}
+  === g-unwired-silent ===
+    [ok] exit=0 stdout='' state_created=False
+  === h-day-zero-divergence ===
+    [ok] exit=0 warned=True lines=1 baseline_kind='first_observation_vs_scaffold_default' tool=None
+  === i-day-zero-match-silent ===
+    [ok] exit=0 journal_lines=0
+  run_fixtures: all 9 cases passed.
+  ```
+
+- **Part 2 — the apparatus.json hash rides inside the signed chain head, making a flip between two
+  heads PROVABLE, not automatically detected.** `bootstrap/templates/verify-chain.tmpl`'s `--head`
+  mode (item 30) now emits `{world, max_id, head_hash, utc, apparatus_hash}` — additive to the
+  original four-key spec shape, never a redefinition of it — where `apparatus_hash` is the SHA-256
+  of THIS world's `.claude/apparatus.json` at the moment of signing (or the literal string
+  `"absent"` if the file does not exist). This required NO kernel/lineage change:
+  `s26-row-hash-chain.sql` is untouched, and the ledger's own `row_hash` chain covers only ledger
+  rows exactly as before — `apparatus_hash` is a filesystem hash folded into the operator-facing
+  JSON object `verify-chain.tmpl` already assembles and the maintainer already GPG-signs. **Stated
+  precisely, not oversold**: this is weaker than the row_hash chain's own guarantee.
+  `./verify-chain` self-verifies the WHOLE ledger chain in one command with no prior artifact
+  needed (every row commits to its predecessor back to the genesis seed); `apparatus_hash` has no
+  such continuous chain of custody — proving a flip occurred requires a human (or a future tool
+  that does not yet exist) to fetch two separately-signed `head.json` files and compare their
+  `apparatus_hash` fields by hand. What this delivers is real and new (today, comparing two heads'
+  apparatus.json state at all is impossible; after this, it is a two-field diff), but "detectable"
+  here means "provable once someone thinks to compare," not "auto-flagged the way a tampered row
+  is." *Witnessed (this pass), live against a real throwaway `--new-world` scaffold and the real
+  toy db*, `seen-red/s26-row-hash-chain/run_fixtures.py`'s new case
+  `i-apparatus-hash-detects-flip` (added to the existing s26 fixture rather than a new file, since
+  it exercises the SAME `--head` ceremony that fixture already scaffolds):
+
+  ```
+  === c-head-json-shape ===
+    [ok] stdout='{"world": "s26fxprobe", "max_id": 3, "head_hash": "597cac28...",
+      "utc": "2026-07-12T12:49:44Z", "apparatus_hash": "6d1fd1a9..."}'
+  === i-apparatus-hash-detects-flip ===
+    [ok] before_apparatus_hash='6d1fd1a9...' after_apparatus_hash='bc9346ef...'
+      head_hash_unchanged=True
+  ```
+
+  The `head_hash_unchanged=True` line is the point: `.claude/apparatus.json` was edited with ZERO
+  ledger activity, and the flip shows up ONLY in `apparatus_hash` — proving the extension actually
+  detects the class of flip the ledger chain alone cannot see. The full run (all 9 cases, including
+  the pre-existing genesis-refusal/tamper/differential/collision cases) still passes end to end,
+  confirming the addition does not perturb the existing chain guarantees.
+
+Named residue, disclosed rather than hidden — sharpened by the same out-of-frame hack-
+rationalization audit that found the day-zero gap above, which pushed back on an earlier, narrower
+draft of this paragraph that named only two exclusions and called them exhaustive; that was itself
+an overclaim, corrected here rather than left standing:
+
+- The state-compare sequence in Part 1 is not atomic across two genuinely concurrent tool calls in
+  the same session (a rare race could in principle drop one of two overlapping flips) — the same
+  class of disclosed race item 22's own docstring already names for its marker file, not a new risk
+  this delta introduces.
+- `.claude/logs/` itself and the state file `apparatus_flip_state.json` (excluded from item 22's
+  own mutated-file report, updated in this same pass so a Bash-driven apparatus.json edit does not
+  also show up there as a second, confusing "mutated file") are this mechanism's own control plane,
+  not subject-authored content — deliberately unwatched, not a gap.
+- **A materially larger, explicitly OUT-OF-SCOPE-for-this-item class**: this mechanism watches
+  apparatus.json's own bytes, never the machinery that decides whether it (or any other hook) runs
+  at all. An agent that rewrites `.claude/settings.json` to remove this hook's `PostToolUse`
+  wiring, or deletes `hooks/posttooluse_apparatus_flip.py` outright, is unwatched by anything in
+  this codebase today — that is a hook-integrity problem general to every mechanism in this
+  document, not specific to apparatus.json, and closing it is a materially bigger commission (who
+  watches the watchers, for every hook at once) that this tracker item does not attempt. Named here
+  so this item's own coverage claim stays honest, not silently narrowed to imply it was covered.
+
+This is not a security boundary against every possible bypass, and is not offered as one — it
+closes exactly the panel's named finding (a content flip with no witness), honestly bounded.
 
 ## Built, unexercised (exists; has not yet fired in anger)
 

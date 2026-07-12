@@ -327,12 +327,30 @@ cp /tmp/head.json /tmp/head.json.asc <world>/.claude/
 git -C <world> add .claude/head.json .claude/head.json.asc
 ```
 
-`--head` prints **exactly** `{world, max_id, head_hash, utc}` as JSON on stdout and nothing
-else — deliberately, so a naive `verify-chain --head | gpg --detach-sign` never accidentally signs
-a banner line along with the JSON. It **verifies the whole chain first**: if the chain is not
+`--head` prints **exactly** `{world, max_id, head_hash, utc, apparatus_hash}` as JSON on stdout and
+nothing else — deliberately, so a naive `verify-chain --head | gpg --detach-sign` never accidentally
+signs a banner line along with the JSON. It **verifies the whole chain first**: if the chain is not
 `INTACT`, `--head` refuses (exit 1, empty stdout, a diagnostic on stderr) rather than signing a
 head over a chain it has not confirmed — signing a broken chain would manufacture false assurance,
 worse than refusing.
+
+*(Dated append, 2026-07-12, tracker item `apparatus-flip-witnessing` — per ADR-0005 Rule 8, the worked
+example just below is a point-in-time record and is not retro-edited; it predates this field.)*
+`apparatus_hash` is the SHA-256 of this world's `.claude/apparatus.json` at the moment of signing
+(or the literal string `"absent"` if that file does not exist) — additive to the original four-key
+shape, not a redefinition of it. It rides inside the same signed head, so two signed heads whose
+`apparatus_hash` differ PROVE apparatus.json changed somewhere between them — a flip of a
+mechanism's mode (e.g. turning a safety hook `"off"`) between two signed heads is now provable at
+zero new infrastructure: no kernel/lineage change, just one more field in the JSON object this
+ceremony already signs. Stated precisely: this is weaker than the row_hash chain's own guarantee.
+`./verify-chain` self-verifies the whole ledger chain in one command with no prior artifact needed;
+`apparatus_hash` has no such continuous chain of custody, so proving a flip occurred means fetching
+two separately-signed `head.json` files and comparing their `apparatus_hash` fields by hand (no
+automated two-head-diff tool exists yet) — "provable once you compare," not "auto-flagged the way
+a tampered row is." See `seen-red/s26-row-hash-chain/run_fixtures.py` case
+`i-apparatus-hash-detects-flip` for a live, witnessed run: editing `.claude/apparatus.json` with
+zero ledger activity produces a second head whose `apparatus_hash` differs while
+`head_hash`/`max_id` stay byte-identical.
 
 Unlike §5's `verify-commission`, this ceremony reads no committed-keys directory at all — the
 `gpg --verify` step below checks the signature against YOUR OWN ambient `~/.gnupg` keyring,

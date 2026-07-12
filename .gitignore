@@ -30,3 +30,6 @@ ephemera/session-*
 # toy run 1 salvage (transcript-recovered deliverables) -- interim, pending the
 # maintainer's disposition ruling (commit vs local-only), see assent batch 2026-07-09
 ephemera/toy-run1-salvage/
+
+# Claude Code agent worktrees are session scratch, never repository content
+.claude/worktrees/

@@ -158,6 +158,49 @@ Named nuances:
   non-trivial call (a build, a test suite), not the common ~0s call. No deny path, same
   reasoning as `read_observer`.
 
+## The apparatus-flip watcher — deliberately NOT in the switchboard above
+
+`hooks/posttooluse_apparatus_flip.py` (tracker item `apparatus-flip-witnessing`, 2026-07-12) journals a
+typed event every time `.claude/apparatus.json` itself changes — content hashes before/after, and
+which mechanisms' `mode` values changed, when the content parses. It closes a real gap the twelve
+mechanisms above left open: none of them unconditionally watches an edit to THIS file —
+`posttooluse_mutation_observer.py`'s Bash-driven sweep can catch an apparatus.json mutation, but
+only for Bash writes and only when no work item is open+claimed — so a `Write`-tool flip of a
+mechanism to `"off"` mid-session (or a Bash flip during claimed work) previously left no refusal,
+no journal line, and no ledger row: the flip was simply invisible. It attaches at `PostToolUse(*)` (every tool, not an enumerated
+list — a future tool that can write a file is covered without a code change) and writes to
+`.claude/logs/apparatus_flip.journal.jsonl`.
+
+This mechanism does **not** appear in the `mechanisms` table above and reads no
+`mechanisms.apparatus_flip` key, on purpose: it is the one thing in this file that watches
+`apparatus.json` itself, so if it took its own on/off switch FROM that file, the single most
+dangerous edit — flipping this watcher off in the same `Write` that flips something else — would
+silence its own witness before journaling it. It runs unconditionally whenever this project is
+wired (a `SUBJECT_ROOT`, via env or `deployment.json`), the same "never itself a mode-gated
+decision" posture `hooks/pretooluse_change_gate.py`'s own module docstring already establishes for
+`is_governed()`. If a `"apparatus_flip"` key is ever added under `mechanisms` here expecting it to
+configure something, the existing unknown-mechanism-name sweep (`filing/apparatus_registry.py`,
+run from `hooks/pretooluse_change_gate.py` on every governed edit) will flag it, correctly, as a
+key no hook reads — that is the honest outcome, not a bug.
+
+Like `mutation_observer`, this hook can only warn, never deny — a `PostToolUse` leg fires after
+the change already happened. Missing or malformed `apparatus.json` is handled fail-safe: content is
+hashed over raw bytes regardless of whether it parses as JSON, so a flip is still detected and
+journaled even when the file is broken; only the bonus per-mechanism mode breakdown degrades to
+empty when either side does not parse as an object.
+
+The world's very FIRST-ever observation is compared against `bootstrap/templates/apparatus.json`
+(the shipped scaffold default) rather than trusted blindly — an out-of-frame audit caught an
+earlier version of this hook silently absorbing a flip that occurred before it had ever run once,
+the single highest-value blind spot for the threat it exists to close (see the hook's own module
+docstring, "BASELINE"). This closes the gap for a genuine fresh scaffold; a world whose scaffold
+default is unreachable still establishes its baseline silently at first observation, a disclosed
+residual, not a hidden one. And, stated plainly rather than implied: this hook watches
+`apparatus.json`'s bytes, never the machinery that decides whether it (or any other hook) runs at
+all — rewriting `.claude/settings.json` to remove its wiring, or deleting the hook file, is
+unwatched by anything in this project today. That is a hook-integrity question general to every
+mechanism this document describes, not specific to this one, and is out of this watcher's scope.
+
 ## Honest limit (`law/adr/0011-mechanization-discipline.md` Rule 1's declared-enforcement-surface obligation)
 
 Every mode above is now **live-read**, not a forward declaration — this is the change from the

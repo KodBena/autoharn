@@ -84,6 +84,16 @@
         ]
       },
       {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "env GATE_SUBJECT_ROOT=__PROJECT_ROOT__ python3 __AUTOHARN_ROOT__/hooks/posttooluse_apparatus_flip.py",
+            "timeout": 10
+          }
+        ]
+      },
+      {
         "matcher": "Task|Agent",
         "hooks": [
           {

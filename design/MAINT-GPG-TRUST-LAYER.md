@@ -64,7 +64,13 @@ The commission ladder becomes LAZY < FULL < SIGNED:
 - LAZY — the implementing agent transcribes the ask (the maintainer's task statement,
   verbatim); marked "no commissioner guarantee".
 - FULL — the commissioner types the `led commission` line from his own terminal;
-  proven by actor + absent stamp.
+  evidenced by actor + absent stamp — a rebuttable presumption, not proof (the
+  absence of a stamp is consistent with a human typing it, no stronger; a CONTESTED
+  commission must be SIGNED — the standing rule in
+  [USER-GPG-TRUST-LAYER-FAQ.md](USER-GPG-TRUST-LAYER-FAQ.md) §5, from the 2026-07-12
+  re-litigation panel's ICJ-lens finding,
+  [MAINT-RELITIGATION-SYNTHESIS.md](MAINT-RELITIGATION-SYNTHESIS.md) "New findings
+  this panel produced").
 - SIGNED — FULL, plus the file holding the ask (`~/aa` in the example below) carries a
   detached signature:
 
@@ -105,14 +111,23 @@ differential in AGREE, then enters the birth chain for the next world.
 **The signed head (the human act):** at run close, the maintainer signs the chain head:
 
 ```
-./verify-chain --head > /tmp/head.json     # {world, max_id, head_hash, utc}
+./verify-chain --head > /tmp/head.json     # {world, max_id, head_hash, utc, apparatus_hash}
 gpg --detach-sign --armor /tmp/head.json
 ```
 
-both files bank as committed evidence. From that moment, ANY retroactive alteration of
-that world's ledger — including by the database superuser — breaks the chain against a
-head the maintainer's key vouches for. "Append-only by trigger" becomes "append-only
-or provably broken."
+*(Dated append, 2026-07-12, tracker item `apparatus-flip-witnessing`: `apparatus_hash` — the SHA-256 of
+this world's `.claude/apparatus.json` at signing time, or `"absent"` if the file does not exist —
+joined the head object additively, so a flip of that file between two signed heads is now provable
+by comparing the two heads' `apparatus_hash` fields by hand. This is weaker than the row_hash
+chain's own self-verifying guarantee (`./verify-chain` needs no prior artifact; this needs two
+fetched heads and a human/future-tool diff); the claim is named precisely rather than oversold:
+`seen-red/s26-row-hash-chain/run_fixtures.py`, case `i-apparatus-hash-detects-flip`.)*
+
+`gpg --detach-sign --armor` writes its detached signature alongside the input, as
+`/tmp/head.json.asc`; both `/tmp/head.json` and `/tmp/head.json.asc` bank as committed evidence.
+From that moment, ANY retroactive alteration of that world's ledger — including by the database
+superuser — breaks the chain against a head the maintainer's key vouches for. "Append-only by
+trigger" becomes "append-only or provably broken."
 
 ## 5. The session sign-off (maintainer's concept, the multi-human extension)
 

@@ -17,14 +17,32 @@ MODES:
                                intact, 1 if broken (the first break's row id, stored vs expected
                                hash, and total break count are all printed — never an umbrella
                                "chain broken" with no specifics).
-  ./verify-chain --head      — print {world, max_id, head_hash, utc} as JSON on stdout (spec §4's
-                               exact shape) and NOTHING else — this is the input to the signed-head
+  ./verify-chain --head      — print {world, max_id, head_hash, utc, apparatus_hash} as JSON on
+                               stdout and NOTHING else — this is the input to the signed-head
                                ceremony (`./verify-chain --head > /tmp/head.json; gpg --detach-sign
                                --armor /tmp/head.json`), so its stdout must be exactly the JSON, no
                                banner lines, or a naive `cat | gpg` would sign banner text too.
                                Exit 1 (with a diagnostic on STDERR, stdout left EMPTY) if the chain
                                is broken — signing a head over a broken chain would be worse than
                                refusing to produce one; VERIFIES the whole chain first, always.
+                               `apparatus_hash` (added 2026-07-12, tracker item
+                               `apparatus-flip-witnessing` — additive to spec §4's original
+                               {world, max_id, head_hash, utc} shape, not a redefinition of it) is
+                               the SHA-256 of THIS world's `.claude/apparatus.json` at the moment
+                               of signing, or the literal string `"absent"` if that file does not
+                               exist — see `_apparatus_hash()` below. It rides inside the SAME
+                               signed head, so two signed heads whose `apparatus_hash` differ PROVE
+                               apparatus.json changed somewhere between them. Stated precisely, not
+                               oversold: this is weaker than `head_hash`'s own guarantee, which
+                               `./verify-chain` self-verifies end to end with no prior artifact
+                               needed. `apparatus_hash` has no continuous chain of custody of its
+                               own — proving a flip occurred means fetching two separately-signed
+                               heads and comparing this field by hand (no automated two-head-diff
+                               tool exists yet). What it delivers is still real and new (today,
+                               comparing two heads' apparatus.json state at all is impossible) at
+                               zero new infrastructure (no kernel/lineage change: this is a
+                               filesystem hash folded into an operator-facing JSON object already
+                               assembled here, never inside the database).
 
 A pre-s26 world (no `row_hash` column) degrades honestly to UNAVAILABLE (not a crash, not a false
 "intact") — mirrors distance-to-clean.tmpl's own pre-s22 fallback for `work_item_violations`.
@@ -39,6 +57,7 @@ Lazy imports banned.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import subprocess
@@ -66,6 +85,25 @@ def _load_deployment():
     except deployment_record.DeploymentError as e:
         print(f"verify-chain: {e}", file=sys.stderr)
         sys.exit(2)
+
+
+def _apparatus_hash() -> str:
+    """SHA-256 (hex) of `.claude/apparatus.json`'s raw bytes for THIS world (tracker item
+    `apparatus-flip-witnessing`, 2026-07-12 -- the panel finding that a flip of apparatus.json
+    between two signed chain heads was otherwise undetectable: the row_hash chain above covers
+    only ledger rows, never this filesystem config file). Project root is `DEPLOYMENT_PATH.parent`,
+    NOT `HERE` -- this script executes IN PLACE out of the autoharn checkout (module docstring), so
+    `HERE` is the autoharn tree, while `DEPLOYMENT_PATH` (env-overridden by every scaffolded
+    world's `verify-chain` shim to `$PROJECT_ROOT/deployment.json`) is the one value that reliably
+    resolves to THIS world's own root. Returns the literal string `"absent"` -- never a real
+    64-hex-char digest, so a reader can never mistake "no apparatus.json" for "some hash" -- when
+    the file does not exist or cannot be read; never raises."""
+    path = DEPLOYMENT_PATH.parent / ".claude" / "apparatus.json"
+    try:
+        raw = path.read_bytes()
+    except OSError:
+        return "absent"
+    return hashlib.sha256(raw).hexdigest()
 
 
 def _psql_json_rows(dep, sql: str) -> tuple[list[dict] | None, str]:
@@ -141,7 +179,8 @@ def main(argv: list[str]) -> int:
             return 1
         head = {"world": dep.name or dep.schema, "max_id": detail["head_id"],
                 "head_hash": detail["head_hash"],
-                "utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")}
+                "utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                "apparatus_hash": _apparatus_hash()}
         print(json.dumps(head))  # ONLY the JSON on stdout -- see module docstring
         return 0
 
