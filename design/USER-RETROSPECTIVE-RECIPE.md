@@ -1,0 +1,346 @@
+# RETROSPECTIVE-RECIPE — running a process-improvement retrospective on your own project
+
+Audience: adopter
+
+This document answers one question: **how does a project using this harness's ledger
+governance learn from its own finished work, in a way the record can back up rather than a
+vibe?** It codifies a method exercised twice already inside this repository — two full
+retrospectives over two governed builds — into something you can run on a deployment of your
+own. It is written for whoever runs, or commissions, a retrospective: a maintainer at a
+terminal, or an orchestrating agent handing the job to a fresh executor. It assumes you already
+have a ledger-governed [world](../GLOSSARY.md#world) — an append-only decision ledger recording
+every act a session took — or a [standing work tracker](USER-WORK-STATUS-OFFERING.md) to
+retrospect, and that you can read a git log and a JSONL journal.
+
+The method is not invented here; it is **distilled** from two live exercises —
+[design/ORCH-RETROSPECTIVE-RUN10.md](ORCH-RETROSPECTIVE-RUN10.md) and
+[design/ORCH-RETROSPECTIVE-RUN11.md](ORCH-RETROSPECTIVE-RUN11.md), retrospectives of two real
+governed builds (`run10`, `run11`) — into a reusable recipe, the same relationship
+[design/ORCH-ABC-AUDIT-LOOP-RECIPE.md](ORCH-ABC-AUDIT-LOOP-RECIPE.md) has to
+[ADR-0017](../law/adr/0017-the-zero-context-reader.md). Every claim below that describes what
+those two runs found cites the finding by name in the source document, not by paraphrase alone,
+so you can check it.
+
+## 1. What a retrospective is here, and when to run one
+
+A retrospective, in this project, is a **read-only** pass over a governed run's own record —
+never a rewrite of the record, never a live intervention in a run still underway — that asks
+what the record teaches about doing the *next* run better. There are two tiers, distinguished by
+weight and by trigger, both named in the maintainer's own framing of the need: real deployments
+have subprojects, and on a fresh project nobody yet knows what they are doing right, so learning
+has to attach to the smallest unit that closes, not only to a whole project's end.
+
+### Tier (a) — per-feature-close: a self-reported lessons note
+
+Every time a [work item](../GLOSSARY.md#permit-to-work) closes (a `work_closed` ledger row lands),
+the closing agent is exhorted — never gated — to write one more row: a `note` naming what it
+learned, in seconds, before moving on. This is a **preamble exhortation, not a gate**: nothing
+refuses a close that skips it, and nothing checks the note's content. It exists because most
+learning happens at the grain of one feature, and a full retrospective (tier b) is too heavy to
+run after every close.
+
+The exact command shape — a `work close` immediately followed by a `note` that cross-references
+it by slug (the ledger's free-text `--refs` field already carries mixed conventions such as
+`row:<id>` and a bare doc path side by side, per
+[`bootstrap/templates/led.tmpl`](../bootstrap/templates/led.tmpl)'s own header comment;
+`work:<slug>` extends that same convention to the one antecedent a closing agent always has on
+hand without an extra lookup):
+
+```sh
+./led work close <slug> shipped --witness <ref>
+./led --refs work:<slug> note "LESSON: <what worked, keep> / <what you'd change next time>"
+```
+
+A worked example, illustrative rather than a quoted ledger row (no such note is on record for
+this item; the shape is what matters):
+
+```sh
+./led work close research-ledger-offering shipped --witness commit:9ebb7b8
+./led --refs work:research-ledger-offering note "LESSON: bounding the offering (no DDL apply, that stays the maintainer's own act) kept scope honest; would pre-register the scratch-schema naming convention up front instead of improvising it per build."
+```
+
+### Tier (b) — per-phase: the full agent pass
+
+Periodically — per phase of work, or after some maintainer-chosen number of closures — a
+separate agent runs the **full method** (Section 2) over one settled world's or one project's
+whole governed record, producing a standing document like the two this recipe distills from.
+This is heavier (a genuine dispatch of a separate agent — Claude Code's own `Agent` tool,
+forking a fresh session with no memory of the one that dispatched it — plus evidence gathering
+across several journals, and a document that itself goes through the [A:B:C legibility
+loop](ORCH-ABC-AUDIT-LOOP-RECIPE.md)) and answers questions tier (a)'s one-line notes cannot: was
+the *flow* healthy, did *decisions* hold up, did the *delegation* pay for itself, did the
+*deliverable* match the *commission*.
+
+The two tiers are not competitors. Tier (a) is a cheap, continuous trickle of self-reported
+signal; tier (b) is the periodic, evidence-backed synthesis — and, per Section 3, tier (b) is
+also where tier (a)'s notes and everything else the record shows get read together.
+
+## 2. The full-pass method
+
+### Evidence sources — read-only, all of it
+
+A retrospective never writes to the world or project it is retrospecting; it treats the record
+exactly as the project's own [runs-are-strictly-linear
+rule](../CLAUDE.md#orchestration--the-standing-delegation-contract-2026-07-09) already treats a
+settled world — evidence, not a thing to be patched. The record run10 and run11 both drew from:
+
+- the append-only **ledger** itself (a numbered row per act — decision, assumption, question,
+  finding, review, `work_*` — the table every `led` verb reads or writes, attributed to a
+  registered [principal](../GLOSSARY.md#principal));
+- the **invocation log** (`.claude/logs/invocations.jsonl`), which timestamps every Bash call —
+  Bash only; run10's own retrospective named this gap explicitly and it is still not fully
+  closed (Section 3);
+- the **delegation-observer journal** (`.claude/logs/delegation_observer.journal.jsonl`), which
+  timestamps every subagent dispatch;
+- the **read-observer journal** (`.claude/logs/read_observer.journal.jsonl`), which timestamps
+  every Read-tool call — added between run10 and run11 specifically because run10 could not see
+  non-Bash tool use at all;
+- the world's own **git log** — commit hashes are a first-class evidence pointer, exactly like a
+  row id;
+- the **operator verbs**, re-run live during the retrospective itself rather than trusted from
+  a prior claim (`./judge`, `./distance-to-clean`, `./audit`, `./pickup` — a retrospective
+  re-confirms the end state is what the record says it is, the same discipline this project's
+  own "Run-11 first-shift forensics" pass used, a dated BACKLOG.md entry: "independently
+  re-confirmed live during this pass").
+
+### The five lenses
+
+Both live retrospectives organize their findings under the same five questions, and this recipe
+names them as the standing lens list:
+
+1. **Flow / cycle-time** — how did wall-clock split across phases (intake, decomposition,
+   build, closure), and where did rework loops cluster?
+2. **Decision quality** — which decisions held up under later scrutiny, which were amended or
+   reversed, and did the task decomposition survive contact with the actual work?
+3. **Assumptions** — what did the record file as an assumption, and was each one discharged,
+   left standing and disclosed, or silently violated into rework?
+4. **Delegation** — was a dispatched subagent (a reviewer, most often) load-bearing — did its
+   output change the shipped artifact — or ceremonial?
+5. **Deliverable versus commission** — does what shipped match what was asked, checked against
+   the actual signed ask where one exists (run11's row 1, a `commission`-kind row the
+   maintainer signs himself before any agent runs — detailed in Section 3's re-scored-question
+   table below, where it closes what run10 called its single most consequential finding: it
+   could diff a deliverable only against the agent's own restatement of the ask, never the ask
+   itself).
+
+### The evidence-pointer rule
+
+**Every lesson cites a row id, an invocation timestamp, a journal line, or a commit hash, or it
+is not a lesson.** Both source retrospectives state this as their own operating rule in their
+opening sections, and it is what makes a retrospective checkable rather than a summary a reader
+must take on faith: a finding that cannot be traced back to a specific piece of the record does
+not go in the document.
+
+### UNDECIDABLE discipline
+
+Where the record genuinely cannot settle a question, the retrospective says so in those terms —
+**UNDECIDABLE** — rather than picking the more flattering of two readings. Run10 marked whether
+its two shipped defects were oversight or a considered-but-wrong call UNDECIDABLE, and whether
+its ten-task granularity matched the user's own mental model UNDECIDABLE; run11's DELEGATION
+lens marked whether its clean-shipping review pass reasoned hard or merely opened the files
+UNDECIDABLE, calling both readings "live." An UNDECIDABLE verdict is not a shrug — Section 3
+shows it is exactly what feeds the ratchet's second output: it is always paired with the kind of
+record that would settle it.
+
+### The boundary this recipe does NOT cross: retrospective versus closure forensics
+
+A retrospective is **process-improvement**, not a defect audit of one run's struggle. This
+project runs a separate, complementary pass — closure forensics — that classifies each observed
+struggle in a run's closure against a three-class rubric, filed as a dated entry titled
+"Maintainer priority ruling: auditability outranks agent ergonomics" in this project's own
+BACKLOG.md (BACKLOG.md is an append-only journal with no per-entry anchors — find any entry
+cited below the same way: search the file for its quoted heading text): **(a) AGENT DEFECT**, **(b)
+MECHANISM-REFUSES-WITHOUT-TEACHING**, **(c) LEGITIMATE-REQUIREMENT-BEING-FELT** — only class (b)
+produces a change proposal, because the ruling behind the rubric holds that auditability
+outranks agent ergonomics: a struggling agent is not by itself evidence a mechanism is wrong.
+Both live retrospectives drew this line explicitly and kept to it, in near-identical words: run10
+states "a separate concurrent forensic pass is classifying run10's closure struggles in
+detail... Where this retrospective touches closure it does so only at the flow-and-delegation
+level and defers the fingerprint-level mechanics to that pass"; run11 states the same for its own
+companion pass (BACKLOG.md, "Run-11 first-shift forensics"). **A retrospective may notice a
+struggle and note its flow-level cost; classifying WHY the struggle happened against the
+a/b/c rubric belongs to forensics, not here.** Keeping the two separate is what let each pass
+answer its own question cleanly instead of producing one document that did both jobs poorly.
+
+## 3. The ratchet
+
+This is the load-bearing section — the mechanism that makes a *second* retrospective worth more
+than the first, rather than a fresh restart. Every retrospective ends with two typed outputs:
+
+- **lessons → mechanisms/conventions.** A finding that generalizes becomes a proposed fix: a new
+  verb, a preamble convention, a kernel column — the same shape run10's five findings each
+  closed with ("Recommendation for run11").
+- **could-not-answer → record-kind candidates.** Every question the record could not settle is
+  listed by name, paired with the *record-kind* that would settle it — never left as a bare
+  "we don't know."
+
+**The next retrospective's first duty is to re-ask the predecessor's could-not-answer list**
+against the newer, richer record — before it opens any of its own five lenses fresh. This is
+what makes the second pass a genuine test of the first pass's proposals rather than an unrelated
+report.
+
+### The live specimen: run10's six, re-scored by run11
+
+Run10 closed with six could-not-answer questions. Run11 opened its own body with "Part I — The
+six re-asked questions," restating each verbatim from run10 and giving it a fresh verdict. The
+tally, quoted from run11 (design/ORCH-RETROSPECTIVE-RUN11.md, Part I headings):
+
+| # | Run10's question | Run11's verdict |
+|---|---|---|
+| Q1 | Why the two app defects arose — oversight or a considered-but-wrong call | **NOW ANSWERABLE** (for the defects that occurred), one named limit |
+| Q2 | How wall-clock split between model deliberation and tool execution | **STILL BLOCKED** (narrowed, not answered) |
+| Q3 | Whether reviewer subagents read independently or paraphrased confidently | **PARTIALLY** (moved furthest; attribution rests on an inference, not a stamp) |
+| Q4 | The verbatim commission, and a true deliverable-versus-ask diff | **NOW ANSWERABLE** |
+| Q5 | Whether the run was efficient in cost terms | **STILL BLOCKED** |
+| Q6 | Whether the decomposition granularity matched the user's own mental model | **NOW ANSWERABLE** |
+
+Three now answerable, one partial, two still blocked — the table's own tally is the concrete
+shape of "the ratchet worked, in part." What separates the three that moved from the two that
+did not is exactly what got built in the interval, each addition named at the point in run11
+where it closed the gap:
+
+- **the verbatim signed commission** — a `commission`-kind ledger row (`row 1` of run11's
+  ledger), written by the `commissioner` [principal](../GLOSSARY.md#principal) — the maintainer's
+  own words, signed before any agent existed — closed Q4 outright and, as a side effect, gave
+  Q6 something to check the decomposition's grain against;
+- **the read-observer journal** (`.claude/logs/read_observer.journal.jsonl`) moved Q3 from
+  "trusted, not witnessed" to "PARTIALLY witnessed" — it proved a reviewer's Read calls landed
+  inside its own dispatch window, but could not attribute a read to a specific subagent by
+  identity, only by timing;
+- **declared event times** (`event_declared_ts`, so a ledgered act written after it happened is
+  dated honestly rather than narrated as live) closed the honesty gap run10's own self-flagging
+  discipline had exposed, feeding the FLOW lens's trustworthiness generally rather than one
+  numbered question directly;
+- **a decision-alternatives convention** — point 11 of the world's governance preamble
+  (`bootstrap/templates/CLAUDE.md.tmpl`, the file every governed world auto-loads at session
+  start): a load-bearing decision names what was rejected and why, in the statement — closed
+  most of Q1. Run11's decision rows carry explicit rejected-alternatives clauses, and the
+  convention visibly governed conduct even under a live operator instruction to rely on it;
+- **decomposition-granularity guidance** — the same preamble's point 1, citing run10's own
+  Finding 2 by name: decompose to "the unit of independent resumption" — is what run11's Q6
+  verdict is actually attributing the improved grain to. Four work items, each mapping to a
+  distinct commit, where run10 had three that collapsed into one file and one commit.
+
+Q2 (the deliberation/execution split) and Q5 (cost efficiency) stayed blocked because **nothing
+was built to move them** — run11 says so plainly: "The two questions no new record-kind
+targeted... are exactly the two that stayed STILL BLOCKED, which is the experiment behaving as
+designed rather than a disappointment." That is the ratchet's own honesty check: a question a
+retrospective names but nobody builds toward should still be blocked next time, and if it isn't,
+something else moved it by accident, worth asking about on its own.
+
+Run11 closes with its own fresh could-not-answer list of six items (its Part III) — the next
+retrospective's own first duty, unresolved as of this document.
+
+## 4. Commission-prompt TEMPLATE
+
+The fenced block below is the reusable prompt an orchestrator hands a fresh executor agent to
+run the full-pass method (Section 2) against any deployment. It is distilled from what actually
+worked across run10 and run11's own commissions — the evidence-pointer rule, the five-lens
+frame, the ratchet's re-asking duty, and the doc-attestation obligation the produced document
+itself owes under [ADR-0017](../law/adr/0017-the-zero-context-reader.md). Replace every
+`{PLACEHOLDER}`.
+
+```
+You are running a process-improvement retrospective per design/USER-RETROSPECTIVE-RECIPE.md.
+Read that document in full first, and read the predecessor retrospective named below in full
+before writing anything — its could-not-answer list is your first duty, not an afterthought.
+
+DEPLOYMENT UNDER REVIEW: {DEPLOYMENT_PATH}
+  (e.g. /home/bork/w/vdc/1/run12, or a standing bootstrap/track-work.sh deployment)
+LEDGER: {LEDGER_SCHEMA} / {LEDGER_KERNEL_SCHEMA} on {DB_HOST}
+PREDECESSOR RETROSPECTIVE (re-ask its could-not-answer list first): {PREDECESSOR_DOC_PATH}
+  (omit this line and state so explicitly if this is the first retrospective for this
+  deployment — there is then no predecessor list to re-ask)
+
+READ-ONLY BOUNDARY (hard requirement, not a preference): you may run any read-only verb
+(./led, ./judge, ./audit, ./distance-to-clean, ./pickup, git log/show/diff, psql SELECT) against
+{DEPLOYMENT_PATH}'s own ledger and repository. You may NEVER write a ledger row, edit a file, or
+run any mutating command inside {DEPLOYMENT_PATH} itself -- this pass is evidence-gathering, not
+intervention. If {DEPLOYMENT_PATH} is a settled/superseded world (a later run exists), treat it
+as read-only history by the project's own runs-are-linear rule regardless of this instruction.
+
+METHOD:
+1. Re-ask every item on {PREDECESSOR_DOC_PATH}'s could-not-answer list first. For each, give a
+   verdict of NOW ANSWERABLE, PARTIALLY, or STILL BLOCKED, quoting the predecessor's question
+   verbatim and citing the record-kind (if any) that moved it.
+2. Apply the five lenses to the deployment under review: FLOW/cycle-time, DECISION QUALITY,
+   ASSUMPTIONS, DELEGATION, DELIVERABLE VERSUS COMMISSION (against the signed commission row
+   if one exists; against the agent's own decomposition, disclosed as a weaker comparison, if
+   it does not).
+3. Every claim you write carries an evidence pointer: a ledger row id, an invocation-log
+   timestamp, a journal line, or a git commit hash. A claim with no pointer does not go in the
+   document.
+4. Where the record cannot settle a question, write UNDECIDABLE and name the record-kind that
+   would settle it -- never guess toward the more flattering reading.
+5. Do NOT classify closure struggles against the (a) AGENT DEFECT / (b)
+   MECHANISM-REFUSES-WITHOUT-TEACHING / (c) LEGITIMATE-REQUIREMENT-BEING-FELT rubric -- that is
+   closure forensics, a separate pass, out of scope here. You may note a struggle's flow-level
+   cost; you may not adjudicate its cause.
+6. Close with two typed outputs: LESSONS -> proposed mechanisms/conventions for the next run,
+   and a fresh COULD-NOT-ANSWER list, each item paired with the record-kind that would settle
+   it -- this is what the NEXT retrospective re-asks first.
+
+OUTPUT: write the document to {OUTPUT_DOC_PATH} (convention: design/ORCH-RETROSPECTIVE-{RUN_ID}.md,
+"Audience: orchestrator" as the second line under the title). Before considering the document
+done, run it through the ADR-0017 A:B:C fresh-context audit loop
+(design/ORCH-ABC-AUDIT-LOOP-RECIPE.md -- spawn B synchronously, run_in_background: false,
+always) and record its attestation via gates/doc_attestation_presence.py per that recipe's
+step 6. A retrospective that is itself illegible to a zero-context reader has failed on its own
+terms.
+```
+
+## 5. Honest limits
+
+A retrospective reads the record; it does not invent what the record lacks. Where a question is
+UNDECIDABLE, the document says so and names the missing record-kind — it never fills the gap
+with a plausible-sounding guess, and it never edits a settled world to make the record say more
+than it does (runs are linear; the world under review is dust the moment a newer run supersedes
+it, and evidence is never patched to fit a conclusion).
+
+The tier-(a) self-reported lessons note (Section 1) is deliberately the weakest trust class this
+project names: it is the **LAZY-commission trust class** — an attributable claim, carrying the
+writing agent's own identity, but no independent witness and no harness guarantee that the
+lesson is accurate or even honestly self-critical. This is the same trust class as a LAZY-mode
+commission transcription (`bootstrap/templates/CLAUDE.md.tmpl` point 10: an implementer
+transcribing an ask vicariously "carries no commissioner guarantee") and the same trust class as
+a subagent's self-reported token usage (BACKLOG.md, "Follow-ups commission scope extended":
+"no harness guarantee, just a 'hope it's being honest' sort of thing"). A tier-(a) note is worth
+exactly what an unverified self-report is worth — a cheap, honestly-labeled signal, not evidence
+a tier-(b) retrospective may cite as if it were a witnessed finding. Tier (b)'s full pass is the
+instrument that actually checks a claim against the ledger, the journals, and git; tier (a) is
+what makes sure there is something on record to check in the first place.
+
+One more limit, drawn directly from this method's own commissioning decision: a lesson's *home*
+depends on what it is a lesson about. A finding about the harness itself — this project's
+ledger, hooks, and verbs — becomes a proposed **mechanism** (Section 3's ratchet, upstream in
+this repository). A finding about the *deployment being retrospected* — a decision this specific
+project made, a convention this specific team should adopt — becomes a **convention** recorded
+in that deployment's own preamble or documentation, not a change to the harness. A retrospective
+that blurs the two either bloats the harness with one project's local habit or leaves a genuine
+harness gap undiscovered because it was filed as "just this project's convention."
+
+## Related
+
+- [design/ORCH-RETROSPECTIVE-RUN10.md](ORCH-RETROSPECTIVE-RUN10.md) and
+  [design/ORCH-RETROSPECTIVE-RUN11.md](ORCH-RETROSPECTIVE-RUN11.md) — the two live exercises
+  this recipe distills; every specimen quoted above traces to one of the two.
+- [design/ORCH-ABC-AUDIT-LOOP-RECIPE.md](ORCH-ABC-AUDIT-LOOP-RECIPE.md) — the fresh-context
+  legibility loop this recipe's own output document, and any retrospective document, must pass
+  before it is done.
+- [law/adr/0017-the-zero-context-reader.md](../law/adr/0017-the-zero-context-reader.md) — the
+  law the A:B:C loop operationalizes.
+- BACKLOG.md, **"Maintainer priority ruling: auditability outranks agent ergonomics"** — the
+  three-class struggle rubric that closure forensics uses and this recipe deliberately does not.
+- BACKLOG.md, **"Run-10 closure audit"** and **"Run-11 first-shift forensics"** — the
+  complementary forensics passes, cited above only to draw the boundary this recipe stays
+  inside of.
+- This project's own decision ledger, row 74 — **"Continuous-improvement input (maintainer,
+  2026-07-12, informal)"** — the commissioning decision this recipe discharges: per-feature
+  learning tiered by weight, the ratchet named explicitly ("every retrospective ends with
+  lessons->mechanisms and could-not-answer->record-kind-candidates"), and the cross-project
+  split this document's Section 5 keeps (harness lessons become mechanisms upstream; project
+  lessons become conventions in the deployment). Run `./led show 74` to read it verbatim.
+- [USER-WORK-STATUS-OFFERING.md](USER-WORK-STATUS-OFFERING.md) — the sibling consumer-facing
+  offering this document follows in shape and in its `USER-` naming convention.
+- [GLOSSARY.md](../GLOSSARY.md) — `world`, `run`, `principal`, and every other coined term this
+  document links on first use.
