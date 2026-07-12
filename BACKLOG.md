@@ -5458,3 +5458,88 @@ gates/no_lazy_imports.py` (exit 0), `python3 gates/fixture_census.py` (clean, 47
 not merely once per item. No deferrals: all four items landed in full: `research-ledger-apply`
 is the one deliberate exception, named as such in the commission itself (leave OPEN, annotate)
 and not a scope cut of this pass's own making.
+
+---
+
+## doc-audience-taxonomy — shipped (2026-07-12)
+
+Tracker item `doc-audience-taxonomy`: the maintainer's 2026-07-12 mechanism (audience prefixes
+over `design/` + root docs before a future directory reorg, plus in-document `Audience:`
+declaration, plus a rename script reusing `gates/link_integrity.py`'s own parser) executed in
+full. 46 documents renamed (7 `MAINT-`, 35 `ORCH-`, 4 `USER-`); `CLAUDE.md`, `README.md`,
+`BACKLOG.md`, `FINDINGS.md`, `GLOSSARY.md` deliberately left unprefixed (the first two for a
+structural reason — Claude Code auto-loads `CLAUDE.md` by that exact name, and GitHub's default
+repo rendering looks for root `README.md`; renaming either breaks the tool's own load path, not
+a taxonomy call — the latter three per the taxonomy's own exemptions: journals and the
+genuinely-universal glossary). Full classification table, per-doc reasons, seen-red outputs, and
+non-md reference fixes are in the closing session's report (not duplicated here — see the
+`work_closed` ledger row and this item's commits).
+
+`tools/rename_doc.py` (new, `seen-red/rename-doc/` both-polarity proof, registered in
+`gates/fixture_census.py`) is the per-document, ADR-0012-composable primitive: `git mv` + a
+corpus-wide markdown-link rewrite (reusing `link_integrity.py`'s regex/classifier/resolver via a
+new non-invasive `iter_raw_line_links` export — the gate's own `main()` untouched, byte-
+equivalent) + the `Audience:` header insertion + a final `link_integrity.py` gate-check. Every
+renamed doc gained the header in the SAME step as its rename, so every rename changed content
+(never byte-identical) — the tool's "mechanical rename-note, same content_sha256" attestation
+path is therefore built and seen-red-proven but UNEXERCISED by live traffic this run, stated
+honestly rather than silently assumed exercised. A collateral file (only a link retargeted, no
+prose touched) got a mechanical carry-forward attestation citing the prior record by ledger line,
+same principle.
+
+Fresh-context (A:B:C) review ran in ~11-12-doc batches per audience group, each scoped per
+ADR-0017 Rule 4 to the new header line + surrounding opening — not full-document review, since
+each document's body already held a separate, untouched, still-valid attestation. 10 of 46
+round-1 findings, all but one the same recurring shape: the inserted `Audience:` label used a
+term ("orchestrator") the document's own pre-existing prose didn't use for the apparent same
+reader ("executor", "operator", "maintainer") with no stated synonymy — repaired with an inline
+gloss quoting the document's own wording, never by inventing new vocabulary. One doc
+(`design/ORCH-CONTEMPORANEITY-PART3-SPEC.md`) needed a third B pass when round 2's own repair
+introduced a narrower positional-accuracy defect; recorded honestly as `escalated: true` with an
+adjudication naming the 3-invocation process deviation against ADR-0017's stated 2-round cap,
+since the underlying finding did converge CLEAN. One Group-A B review was inadvertently spawned
+with `run_in_background: true` against the audit-loop recipe's explicit synchronous requirement
+(a real risk this session was itself running as a dispatched subagent, the exact failure mode the
+recipe's own doc warns about); caught immediately, re-run synchronously, both outputs' findings
+unioned rather than the errant one discarded.
+
+Two LOAD-BEARING (functional, not cosmetic) non-md references were found and fixed in the
+grep-based second sweep the work item calls for (the link parser covers only `.md`):
+`gates/doc_shapes.py`'s `HANDOFF_CHECK_EXEMPT_NAMES` literal-compared `path.name` against the
+old `"HANDOFF.md"`, silently stopping matching once the file became `ORCH-HANDOFF.md`; and
+`gates/layout_census.py`'s `ROOT_FILES` manifest, six entries stale. Both fixed, plus two
+pre-existing/self-caused gaps in that same manifest (`CONFIGURATION.md` was never registered
+before this pass either; `tools/` is a new top-level dir this pass itself created) — both
+flagged and closed per CLAUDE.md's hazard-fixing duty while already touching that exact set,
+not left for the gate to hit cold on its own next run. ~50 more non-md hits were pure
+comment/docstring citations (engine/, hooks/, instruments/, kernel/fixtures/, filing/, seen-red/,
+bootstrap/) updated for accuracy with no behavior change — verified by `ast.parse` on every
+touched `.py` and `bash -n` on every touched `.sh`/bash-shebang `.tmpl`, all clean, plus a
+full gate re-run after. `drive/rehearsal/anchor_pre_registration.py` was deliberately excluded:
+a frozen e15/e16-era pre-registration script citing predecessor-project paths
+(`consults/`, `harness/e15-build/`) that don't exist in autoharn at all — already non-functional
+for unrelated reasons, a historical record of a past act, not live tooling.
+
+**Boundary stated plainly (as the commission required):** prose mentions of a renamed doc's old
+bare name — inside BACKLOG/FINDINGS' frozen dated entries, `provenance/`'s migration-history
+records, `law/`'s ratified ADRs and briefs, and each renamed document's own UNTOUCHED body prose
+(only the header was in this pass's scope, per ADR-0017 Rule 4's minimal-touch principle) — were
+**not** rewritten; only resolvable markdown LINKS were. A word-boundary-safe corpus grep after
+the full sweep found 137 such bare-prose residuals outside frozen/journal/law territory, nearly
+all inside renamed docs' own untouched bodies (e.g. `ORCH-CAPABILITIES.md` citing
+`design/GPG-TRUST-LAYER.md` in running text, not a link). This is the accepted, deliberate
+boundary this item's own commission drew, not an oversight; a handful were fixed anyway where
+they fell inside material a B review was already reading verbatim (the GPG-FAQ opening's stale
+caption, `design/USE-MODE-ENGINE-WIRING.md`'s and `design/ORCH-CONTEMPORANEITY-AUDIT.md`'s bare
+citations into the newly-titled `design/ORCH-possibly-addressable-concerns.md`, whose added
+title shifted its line numbers +4 and broke one line-ranged citation — caught and fixed since it
+was a real, silent citation break, not cosmetic staleness).
+
+Commits: `82d7f55` (script + seen-red), `ea6eb57`+`8ea3d62` (MAINT batch + a staging-correction
+follow-up — `git mv` stages at mv-time, not after the tool's subsequent header-insertion write;
+a process lesson from this pass, not a tool defect, corrected for every later batch), `c7ba403`
+(USER batch), `951e815` (ORCH batch), `86f5932` (non-md sweep), `19ed2ef` (one CLAUDE.md
+accuracy fix + its first-ever attestation). Witness, live and clean after every commit:
+`gates/link_integrity.py`, `gates/fixture_census.py`, `gates/no_lazy_imports.py`,
+`gates/doc_shapes.py`/`gates/doc_attestation_presence.py` (touched-set), `gates/layout_census.py`
+(one pre-existing, unrelated `attest-tags` gap remains, not this item's to close).
