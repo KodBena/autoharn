@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-09T07:54:37Z
-#   last-change: 2026-07-12T22:38:53Z
+#   last-change: 2026-07-12T22:40:18Z
 #   contributors: 9bcc0113/main, be693afb/main, e4410ef6/main, 3c50e030/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -74,6 +74,10 @@ ROOT_FILES = {
     # this gate's own next run (tracker item layout-census-license-unregistered, CLAUDE.md
     # hazard-flagging duty).
     "LICENSE",
+    # VESTIGIAL-INDEX.md (merge d4aac05, the vestigial-doc-sweep's mandatory root index --
+    # one paragraph per moved doc) -- landed with the sweep, never registered here; caught
+    # at the same 2026-07-13 seam as the vestigial_documentation/ dir registration above.
+    "VESTIGIAL-INDEX.md",
 }
 ROOT_DIRS = {
     ".claude", "bootstrap", "law", "judgment", "kernel", "stores", "instruments", "engine",
