@@ -1,0 +1,76 @@
+compound_nominal_scan (EXPERIMENT): 115 docs scanned (excluded: judgment/, vestigial_documentation/, research/ + definition surfaces)
+  noun-lexicon size (corpus-derived): 6942
+  whitelist (GLOSSARY/terms multiword + lexicalized): 113
+  TOTAL candidate hits: 15042  (11862 distinct compounds)
+
+  distinct compounds by frequency (top 70):
+      41  ledger row
+      36  failure mode
+      27  work item
+      26  second opinion
+      19  law adr
+      18  audit trail
+      17  work items
+      16  autoharn checkout
+      15  ledger rows
+      14  proof obligations
+      14  validity bounds
+      12  tracker item
+      12  point-in-time records
+      12  proof obligation
+      11  discharge status
+      11  second pair
+      11  three times
+      11  two questions
+      10  event time
+      10  project root
+      10  fresh-context audit loop
+      10  revocation certificate
+      10  work product
+       9  tool call
+       9  apparatus json
+       9  chain head
+       9  maintainer act
+       9  kernel change
+       8  decision ledger
+       8  ledger entry
+       8  throwaway test key
+       8  model checker
+       8  end state
+       8  rule introduces
+       8  loudness hierarchy
+       8  requirements model
+       8  change request
+       7  lying signature
+       7  subject role
+       7  work-item layer
+       7  invocation token
+       7  exit code
+       7  test key
+       7  key exists
+       7  code change
+       7  trust domain
+       7  change gate
+       7  private key
+       7  kernel delta
+       7  evidence base
+       7  conformance map
+       7  engine layer
+       7  hot path
+       7  runtime parity test
+       7  complete set
+       6  root cause
+       6  stamp secret
+       6  exact command
+       6  completion claim
+       6  zero residue
+       6  audit verdict
+       6  late entry
+       6  scaffold time
+       6  earlier draft
+       6  point-in-time record
+       6  hook reads
+       6  session ephemera
+       6  invocation log
+       6  engine version config
+       6  attestation record
