@@ -5908,3 +5908,39 @@ claimed witnessed (a `gates/doc_shapes.py` exclusion, dated entries).
 Fixture census registered (`gates/fixture_census.py`'s own `REGISTRY["preamble-ordering"]`),
 `gates/fixture_census.py`/`gates/no_lazy_imports.py`/`gates/no_conflict_markers.py` all clean
 after the code commit. See `ORCH-CAPABILITIES.md` item 24c for the operator-facing summary.
+
+## resource-intake-validation — shipped (2026-07-12 morning, Sonnet, commissioned build, isolated worktree)
+
+Defect trio witnessed live at run12's first resource declaration (the maintainer's own
+shell paste carried an embedded newline from a terminal line wrap; the write succeeded
+silently and `./pickup`'s RESOURCES section shredded the one statement into two MALFORMED
+entries, one of them printing `id=experiments` — statement text misread as a row id).
+Maintainer ruling on the spot: malformed resource adds must fail loudly at write time
+(ADR-0002), and ledger writes carry all-or-nothing semantics in general.
+
+Shipped (merge c4af377; agent commits e75dfbd + 5917d4e, the second a bounced-back
+coherence fix — the orchestrator refused to merge the agent's disclosed residue that led's
+validator and pickup's read filter disagreed on leading whitespace; both sides now share
+the POSIX `[:space:]` class with lockstep COHERENCE PARTNER comments):
+
+1. `bootstrap/templates/led.tmpl` — a `resource:`-prefixed decision statement is
+   grammar-checked (whitespace-normalized, six fields, CLASS and TIER vocabularies from
+   design/USER-BLESSED-TABLE-TEMPLATE.md) BEFORE the INSERT; refusal teaches the grammar
+   and writes nothing; an accepted statement is stored byte-exact as typed.
+2. `bootstrap/templates/pickup.tmpl` `resources()` — newline runs collapsed server-side
+   (`regexp_replace`) so one query row is one physical `-t -A` line; the MALFORMED loud
+   path stays for legacy rows. run12's row 2 became VALID with no ledger surgery — its
+   only defect was the pasted newline.
+3. Atomicity audit of every led.tmpl write path: all single-INSERT (atomic by Postgres
+   semantics) except `review`, which already carried an explicit BEGIN/COMMIT — no
+   untransacted multi-write hazard found, no change needed. One pre-existing check-then-
+   insert race on `work close` flagged: benign by kernel design (s22 deliberately permits
+   a second close; derived views take the latest), noted here, no item opened.
+
+Witnessed by the orchestrator directly, not from the agent's report: seen-red fixture
+re-run (exit 0, 3 RED + 3 GREEN incl. the embedded-newline and leading-whitespace
+specimens, scratch schema torn down); live RED at this repo's own tracker (refusal
+teach-text, exit 1, ledger head unchanged at row 112); live GREEN via run12's real
+`./pickup` shim (row 2 renders `[available] QEUBO (backend)`, run12 ledger untouched at
+2 rows). Census: 52 seen-red gates. Residue: none carried; the layout_census root-file
+breaches predate this work and remain tracked by their own entries.
