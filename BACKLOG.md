@@ -6093,3 +6093,130 @@ are pre-existing gaps in entries this change did not author (`ledger`, `world`,
 glossary pass. Attestations recorded at doc-attestation/2, escalated=true, both
 adjudicated by the executor with the residue named in this entry and the work item's
 final report.
+## Resource registry, stage 2 — ordering-violations checker shipped (2026-07-12, Sonnet, isolated worktree)
+
+Tracker item `registry-stage2-ordering-checker`: `design/ORCH-SPEC-RESOURCE-REGISTRY.md`'s §5
+stage 2 (the ordering-violations ASP program + SQL floor + differential + report surface),
+built and witnessed per that section's own plan. Deliberately NOT rebuilt: F5 (open-before-claim),
+F6 (claim-before-close), and F11's dangling-dependency member, all three already covered by Part 3
+(`engine/lp/preamble_ordering.lp`) per the tracker item's own explicit note.
+
+Built: `engine/lp/ordering_violations.lp` (three checks — close_before_dependency,
+conditional_precedence, dependency_cycle — plus a closed family-verdict layer
+`ordering_verdict/2`, grounded by `engine/ordering_obligations.lp` so an empty or pre-s22 world
+still speaks for all three families, never silence), `engine/ordering_edb.py` (the ASP producer's
+own ledger-only EDB — deliberately independent of `engine/contemp_edb.py`'s journal/token
+machinery, which this pure-id-order checker needs none of; parses the stage-1-shipped
+`constraint: precedes/excludes` grammar into typed facts, text staying home), `engine/ordering_floor.py`
+(the independent SQL floor, one recursive CTE for the cycle closure — mirrors
+`engine/ledger_floor.py`'s `work_item_floor_atoms` precedent — with its own, separate SQL-regex
+re-parse of the `constraint:` grammar), `engine/ordering_differential.py` (imports
+`engine/ledger_differential.py`'s AGREE/DIVERGE_BY_DESIGN/DIVERGE_DEFECT/QUARANTINED vocabulary
+and DerivationRecord shape wholesale), and `engine/ordering_audit.py` wired into `./audit
+--ordering` (`engine/contemp_audit.py`, a new exit code reachable only through that flag, chained
+additively after `--preamble`'s own exit 5 rather than early-returning, so both flags compose;
+authored as exit 6, bumped to 7 by the integrator at the merge seam — the `--review-gap` addendum,
+built in parallel, shipped first and owns 6).
+
+Two executor scope decisions, recorded in the program's own header and the spec's status
+section: a `constraint: precedes A B C...` row is expanded PAIRWISE into a chain (A-before-B,
+B-before-C, ...), since the grammar names N slugs without stating an N>2 semantics; and
+`dependency_cycle` is RE-DERIVED over the UNION of `work_depends` edges and the new
+`constraint_precedes` edges (a strict superset of `work_items.lp`'s own cycle check, catching a
+cycle spanning both edge families). `constraint: excludes` (mutual exclusion) is RECOGNIZED
+(`constraint_excludes_deferred/1`, visible in every report's counts) but NOT checked this pass —
+the tracker item's own text names only "conditional-precedence"; this is the one item filed here,
+not silently dropped, with an honest COST estimate (corrected after an out-of-frame
+hack-rationalization review caught the first draft understating it): `excludes` means "may not
+both be open/claimed at once," an interval-overlap question structurally closer to
+`preamble_ordering.lp`'s own two-clock-bridge/open-window machinery than to
+`conditional_precedence`'s plain pairwise id-ordering — a real, separate design pass reusing this
+EDB/program's shape, NOT a one-rule-block mirror of `conditional_precedence`.
+
+CAVEAT on the close_before_dependency/F11 partition, found by the same out-of-frame review and
+disclosed rather than left implicit (also recorded in `engine/lp/ordering_violations.lp`'s own
+header and the spec's status section): F11's own coverage of a dangling antecedent is TIME-GATED
+— both its rules require a `stop_event` fact and F11 carries no `ob_family_forced_undecidable`
+entry, so on a world/session with zero `stop_event` facts F11 reads `vacuous`, not `undecidable`.
+Mid-session, before any Stop, a real dangling-dependency-plus-early-close defect is visible to
+neither checker at the OBSERVER layer. Not a live-safety gap — `hooks/stop_clean_exit.py` queries
+`work_item_violations` directly at every actual Stop attempt, unconditioned on any EDB
+`stop_event` fact — but a real blind spot in the two visible-only reports specifically.
+
+Witnessed live, both polarities plus the pre-s22 capability axis: `seen-red/registry-ordering/
+run_fixtures.py` stands up THREE scratch schemas on the toy db (`regordering` GREEN — all three
+families DISCHARGE; `regorderingneg` RED — all three VIOLATE, including a genuine cross-family
+cycle built from one `work_depends` edge plus one `constraint: precedes` edge in the reverse
+direction, plus a malformed `constraint:` row and a well-formed `excludes` row witnessed present;
+`regorderingpre22` — lineage stops at s21, proving the `pre_s22` forced-undecidable escape hatch
+fires on all three families even with a `constraint:` row on record). Every scratch differential
+AGREEd bit-identically; a negative control (one forged SQL-floor atom, isolated subprocess, never
+touching either producer's real source) produced DIVERGE_DEFECT, caught. Registered in
+`gates/fixture_census.py`'s REGISTRY as `registry-ordering`; scratch substrate torn down to zero
+residue on the clean run (one real bug caught and fixed in-pass: the SQL floor's own returned atom
+set unconditionally echoed the `any_row/1` grounding fact, which the ASP program never `#show`s —
+DIVERGE_DEFECT on the very first live differential run, fixed by dropping that branch from the
+floor's SELECT, not by loosening the differential's own comparison).
+
+Retroactive read-only run (`engine/ordering_differential.py run<N> --retain`; SELECT-only, no
+lineage/schema mutation) over the settled historical worlds runs 4, 5, 6, 7, 9, 10, 11
+(`toy@192.168.122.1`, dust, per the runs-are-linear ruling never touched): every world's
+differential AGREEd, `derivation.json` DerivationRecord pairs banked per world under
+`engine/docs/ledger-marriage/derivations/ordering-violations/run<N>/` (an out-of-frame review
+caught that the first draft of this claim asserted the seven-world sweep in prose with no
+retained artifact — a real gap, fixed here by actually banking one, not merely disclosed). Exact
+per-world family verdicts: run4 `close_before_dependency=VACUOUS conditional_precedence=VACUOUS
+dependency_cycle=DISCHARGED(edges=4,cycle_members=0)`; run5/run6/run7/run9/run10 all three
+`VACUOUS` (run9 vacuous by construction — zero ledger rows); run11
+`close_before_dependency=DISCHARGED(discharged=2,violated=0) conditional_precedence=VACUOUS
+dependency_cycle=DISCHARGED(edges=2,cycle_members=0)`. Honest finding: none of the seven carries a
+`constraint:` row (the convention is new with this build, so no historical session could have used
+it yet — `conditional_precedence` reads VACUOUS uniformly across all seven); run4 and run11 each
+carry real `work_depends` edges and every close-before-dependency instance the checker could
+evaluate on them DISCHARGED (no historical violation of the newly-checked rule exists in this
+corpus) — the "verified missing check" the spec names was genuinely missing, but this corpus's own
+real history never happened to trip it.
+
+Out-of-frame hack-rationalization review run on this build before commit (per this project's own
+standing practice for a change about to be called done): VERDICT narrower-but-justified — the
+`excludes` deferral itself is genuinely spec-grounded (design/ORCH-SPEC-RESOURCE-REGISTRY.md §5's
+own text independently names exactly three checks and calls the build "the ordering leg's whole
+stage-2 build"), not a hack. Four findings surfaced beyond that verdict, all four addressed above
+or immediately below rather than merely noted: the F11 time-gating caveat (fixed, disclosed in
+three places); the unwitnessed seven-world claim (fixed, artifacts now banked); the understated
+`excludes` follow-up cost (fixed, corrected estimate above); and a PRE-EXISTING, unrelated
+documentation defect the review caught while reading in-neighborhood —
+`design/USER-BLESSED-TABLE-TEMPLATE.md` claimed `./pickup`'s RESOURCES section
+(`bootstrap/templates/pickup.tmpl`) parses BOTH the `resource:` and `constraint:` grammars; it
+never parsed `constraint:` at all (`pickup.tmpl`'s `resources()` only matches
+`^[[:space:]]*resource:`). Fixed in-pass (CLAUDE.md's engineering-responsibility corollary — a
+hazard met in reach of the work, not routed around): that doc now states plainly that `constraint:`
+rows have no `./pickup` display surface and are read by this stage 2 checker instead, with a
+"filed, not built" note for a future `./pickup` display surface if one is ever wanted.
+
+ADR-0017 A:B:C fresh-context attestation loop, both touched maintainer-facing docs (required at
+commit time by `gates/doc_attestation_presence.py`, since the fixes above changed the current
+content of both files): `design/USER-BLESSED-TABLE-TEMPLATE.md` — round 1 DEFECT (4 findings,
+one declined as the corpus-wide `Audience: <word>` false positive already adjudicated once
+before), round 2 CLEAN on all four Rule-1 clauses. `design/ORCH-SPEC-RESOURCE-REGISTRY.md` —
+round 1 DEFECT (15 findings, mostly pre-existing colon-list fragments and unglossed referents
+across the whole document, since the attestation is keyed to current content not a diff), round
+2 DEFECT (4 residual findings); per ADR-0017's two-round cap the round-2 repairs were applied
+but no third B round was run, so this one is recorded `escalated: true` — a non-converging-
+review-loop, adjudicated by the orchestrator per CLAUDE.md's ORCHESTRATION section (the same
+disposition Part 3's own build recorded for one of its docs). Both attestations appended to
+`attestations/doc-legibility-attestations.jsonl`.
+
+Pre-existing, unrelated `gates/layout_census.py` breach (USER-GUIDE.md and attest-tags
+unregistered top-level files) confirmed present on `next` BEFORE this work began (`git stash` +
+re-run) and untouched by this commission — already tracked by its own BACKLOG entry above
+("Residue: none carried; the layout_census root-file breaches predate this work..."), not a new
+finding, flagged here only so this entry's own gate summary reads honestly. All other gates run
+clean on the touched set: `gates/no_lazy_imports.py`, `gates/fixture_census.py`,
+`gates/link_integrity.py`, `gates/no_conflict_markers.py`, `gates/apparatus_unknown_keys.py`,
+`gates/doc_shapes.py` (report mode), `gates/append_only_integrity.py`,
+`gates/doc_attestation_presence.py` (report mode, touched-set clean).
+
+Deferred, per the spec's own routing: stage 3 (the `resource` kernel kind + obligation-attachment
+columns, pre-ratified fail-safe class), stage 4 (the planning appendix, by explicit maintainer
+word only) — neither begun, neither scoped into this commission.

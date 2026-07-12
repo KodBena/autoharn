@@ -1,0 +1,8 @@
+ordering_edge("q","p")
+ordering_edge_star("q","p")
+ordering_forced_undecidable(close_before_dependency,pre_s22)
+ordering_forced_undecidable(conditional_precedence,pre_s22)
+ordering_forced_undecidable(dependency_cycle,pre_s22)
+ordering_verdict(close_before_dependency,undecidable)
+ordering_verdict(conditional_precedence,undecidable)
+ordering_verdict(dependency_cycle,undecidable)

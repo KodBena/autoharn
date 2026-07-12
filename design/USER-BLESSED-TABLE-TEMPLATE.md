@@ -2,10 +2,11 @@
 
 Audience: adopter
 
-This page is a **template you fill in**, not a reference you merely read: it is the
-task-shape → blessed-tool table [Pillar 1](../GLOSSARY.md#pillar-1) (the Capability Registry)
-needs before an agent working in your project can reach for the right tool by reflex instead of
-you re-explaining it every session. ("Task-shape" — the category of problem a tool solves, such
+This page is a **template you fill in**, not a reference you merely read. Filling it gives an
+agent working in your project a task-shape → blessed-tool table it can reach for by reflex,
+instead of you re-explaining which tool to use every session — the piece
+[Pillar 1](../GLOSSARY.md#pillar-1) (the Capability Registry) needs to exist before it can work.
+("Task-shape" — the category of problem a tool solves, such
 as "finite enumeration" or "convex allocation" — is the thread this whole page is organized
 around; every row below names one.) If you are adopting autoharn — cloning it, or running
 `bootstrap/new-project.sh` / `bootstrap/track-work.sh` against your own project directory — this
@@ -33,9 +34,10 @@ word does not read as plain English.
 declares a resource — a tool, service, solver, or library — so a session hydrating with
 `./pickup` — the scaffolded resume command an agent runs at the start of a session, this
 project's other CLI verb alongside `./led` — sees it without you repeating yourself. Stage 1
-(what is built today) uses your
-project's ordinary `kind=decision` ledger rows with a `resource:` statement-prefix convention —
-no kernel schema change. A resource carries six fixed fields (NAME, CLASS, REACH,
+(what is built today) uses your project's ordinary ledger rows of `kind` `decision` (every
+ledger row carries a `kind` field naming what sort of act it records; `decision` is one of
+several values that field takes) with a `resource:` statement-prefix convention — no kernel
+schema change. A resource carries six fixed fields (NAME, CLASS, REACH,
 WHAT-IT-PROVES, GUIDANCE, TIER) and a TIER of `available` (on record, no endorsement),
 `blessed: <task-shape>` (the recommended reach for that task shape), or
 `mandated: <task-shape>` (required for that shape, and countersign-checked — see
@@ -86,9 +88,18 @@ habit on a problem `tsort` already solves.
 
 ## The statement grammars
 
-Both grammars below are what `./pickup`'s RESOURCES section (`bootstrap/templates/pickup.tmpl`)
-actually parses — this section is their one documented home; the parser's own comment points
-back here rather than restating the grammar a second time.
+This section is the one documented home for both grammars below — the two parsers that
+actually read them each point back here rather than restating a grammar a second time, but
+they are NOT the same parser (corrected 2026-07-12, a hazard met in reach while building
+[stage 2](ORCH-SPEC-RESOURCE-REGISTRY.md#8-implementation-routing-and-witness-plan): this
+section previously claimed both grammars were parsed by `./pickup`'s RESOURCES section, which
+was true only of `resource:`). `./pickup`'s RESOURCES section
+(`bootstrap/templates/pickup.tmpl`) parses `resource:` rows only, for display at session
+hydration. `constraint:` rows have no `./pickup` display surface — they are read by the stage 2
+ordering-violations checker (`engine/ordering_edb.py` / `engine/ordering_floor.py`, wired into
+`./audit --ordering`), which is a report an operator RUNS, not something `./pickup` shows
+automatically. If a `./pickup` display surface for declared `constraint:` rows is ever wanted,
+that is unbuilt, forward work — filed, not built.
 
 ### `resource:` — declaring one Capability Registry entry
 
@@ -157,7 +168,8 @@ entries first — no separate "publish" step.
 
 A `mandated: <task-shape>` declaration is a promise with teeth: work of that shape is not merely
 encouraged to use the declared tool, it is **checked**. Stage 1 builds this checking with the
-kernel machinery your project already has — `countersign_obligation` / `review_gap`
+kernel machinery your project already has (the "kernel" is this project's write-time enforcement
+layer — the schema, triggers, and checks the ledger itself runs on every write) — `countersign_obligation` / `review_gap`
 (`bootstrap/templates/led.tmpl`'s own `led obligate` and `led review` documentation is the one
 home of the underlying mechanism; this section composes it for the mandated-tier case, it does
 not re-explain it) — never a new kernel column (that is deferred to

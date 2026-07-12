@@ -1,0 +1,8 @@
+# ordering-violations marriage differential -- ASP (engine/lp/ordering_violations.lp) vs SQL floor (engine/ordering_floor.py)
+#   closed verdict vocabulary: ['AGREE', 'DIVERGE_BY_DESIGN', 'DIVERGE_DEFECT', 'QUARANTINED']; RED = ['DIVERGE_DEFECT', 'QUARANTINED']
+
+  [OK ] regordering  AGREE              asp=11 sql=11 atoms; Δasp=[] Δsql=[]
+
+# retained: /home/bork/w/vdc/1/autoharn/engine/docs/ledger-marriage/derivations/ordering-violations/regordering/20260712T084410Z_1273748e4e3c
+
+# DIFFERENTIAL GREEN -- every target bit-identical to the SQL floor
