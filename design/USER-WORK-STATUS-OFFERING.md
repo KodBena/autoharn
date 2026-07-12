@@ -1,5 +1,7 @@
 # WORK-STATUS-OFFERING — the omega work-status question, closed as a product
 
+Audience: adopter
+
 This document answers a question this project has opened and re-closed at least three times
 without ever shipping an answer: "how does a project track its own open work?" It describes a
 new, project-agnostic tool — `bootstrap/track-work.sh` — that gives any directory a

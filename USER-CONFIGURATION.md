@@ -1,5 +1,7 @@
 # CONFIGURATION — the adopter-facing surface
 
+Audience: adopter
+
 This page answers one question: **if you are adopting autoharn into your own project — cloning
 it, or adding it as a submodule — what do you actually get, where does each piece of state live,
 what can you turn on or off, and what does each choice cost?** It is written for someone who has

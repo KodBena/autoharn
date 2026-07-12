@@ -1,9 +1,11 @@
 # The GPG trust layer — operator FAQ
 
+Audience: adopter (this page's own prose calls that reader "an operator" — the same role)
+
 This page answers the question an operator actually has: **I've read
-[design/GPG-TRUST-LAYER.md](MAINT-GPG-TRUST-LAYER.md) and I understand WHY this project signs things —
+[design/MAINT-GPG-TRUST-LAYER.md](MAINT-GPG-TRUST-LAYER.md) and I understand WHY this project signs things —
 what do I actually type?** It is a companion to that spec, not a replacement for it: read
-GPG-TRUST-LAYER.md first for the reasoning (what a signature proves, what is deliberately left
+MAINT-GPG-TRUST-LAYER.md first for the reasoning (what a signature proves, what is deliberately left
 unsigned, the three rungs); this page is the step-by-step "what you type, what you should see"
 walkthrough for each ceremony, plus key management (generation, revocation, rotation) and the
 GPG (GNU Privacy Guard, the standard OpenPGP signing tool) basics an operator who has never used
@@ -53,7 +55,7 @@ gpg --batch --generate-key your-batch-file.txt
 A hardware-backed token (a YubiKey-class device) is **strongly preferred** over the software key
 generated above: the private key physically cannot leave the token, and every signature requires
 a physical touch — which is what makes a signature evidence of a *deliberate human act* rather
-than a key that happens to sit on a disk (design/GPG-TRUST-LAYER.md §1's whole argument). A
+than a key that happens to sit on a disk (design/MAINT-GPG-TRUST-LAYER.md §1's whole argument). A
 software key (the kind generated above, living in `~/.gnupg`) is the fallback, not the target
 state.
 

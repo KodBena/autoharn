@@ -1,5 +1,7 @@
 # WALKTHROUGH — a decision ledger for your own project
 
+Audience: adopter
+
 Ten minutes: stand up an append-only decision ledger for a project of yours, file a decision,
 read it back, tear it down. Worked example: `../toy-project` (terminal-color optimization).
 Everything else in this repo — the experiment apparatus in `drive/`, `seen-red/`, the e-series —

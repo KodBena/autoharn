@@ -290,7 +290,7 @@ Maintainer-act items are flagged — they are decisions or ceremonies only he ca
 **Tier 1 arms the existing machinery (mostly S, mostly maintainer acts).**
 
 1. **Generate the real maintainer keypair** (hardware token per
-   [GPG-TRUST-LAYER-FAQ.md](GPG-TRUST-LAYER-FAQ.md)), commit `law/keys/maintainer.asc`,
+   [GPG-TRUST-LAYER-FAQ.md](USER-GPG-TRUST-LAYER-FAQ.md)), commit `law/keys/maintainer.asc`,
    sign the first `ratified/*` tag, run `./attest-tags` for real. S; maintainer act; turns
    Gap 1's Rung 1 live with zero new code.
 2. **Apply the prepared pg_hba hardening** ([PG-HBA-HARDENING.md](MAINT-PG-HBA-HARDENING.md):
@@ -371,7 +371,7 @@ ruling, 2026-07-11).
 - [law/briefs/safety-critical-logging/BRIEF.md](../law/briefs/safety-critical-logging/BRIEF.md)
   — the aspiration layer; its §2 invariants are the vocabulary the lenses tested against.
 - [design/GPG-TRUST-LAYER.md](MAINT-GPG-TRUST-LAYER.md) and
-  [design/GPG-TRUST-LAYER-FAQ.md](GPG-TRUST-LAYER-FAQ.md) — the built-but-unarmed layer
+  [design/GPG-TRUST-LAYER-FAQ.md](USER-GPG-TRUST-LAYER-FAQ.md) — the built-but-unarmed layer
   Tier 1 arms.
 - [design/PG-HBA-HARDENING.md](MAINT-PG-HBA-HARDENING.md) — the prepared perimeter fix.
 - [CAPABILITIES.md](../CAPABILITIES.md) — the witnessed-capability inventory every

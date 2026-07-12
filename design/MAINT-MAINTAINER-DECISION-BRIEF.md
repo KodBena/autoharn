@@ -232,7 +232,7 @@ something looks wrong.
 ## 6. Generate your personal signing key — the one step only you can do
 
 *This decision is tracked internally under the name `his-key-generation`; the step-by-step
-walkthrough is [GPG-TRUST-LAYER-FAQ.md](GPG-TRUST-LAYER-FAQ.md), and the project's current,
+walkthrough is [GPG-TRUST-LAYER-FAQ.md](USER-GPG-TRUST-LAYER-FAQ.md), and the project's current,
 honest state (no key on file yet) is recorded in [law/keys/README.md](../law/keys/README.md).*
 
 **The question.** The project can cryptographically sign key actions — a formal approval you've
@@ -320,7 +320,7 @@ questions.
   [law/adr/0017-the-zero-context-reader.md](../law/adr/0017-the-zero-context-reader.md) — the
   legibility discipline this document was written and independently checked against.
 - [REVIEW-GAP-SCOPE-SEMANTICS-RULING.md](MAINT-REVIEW-GAP-SCOPE-SEMANTICS-RULING.md),
-  [PG-HBA-HARDENING.md](MAINT-PG-HBA-HARDENING.md), [GPG-TRUST-LAYER-FAQ.md](GPG-TRUST-LAYER-FAQ.md) —
+  [PG-HBA-HARDENING.md](MAINT-PG-HBA-HARDENING.md), [GPG-TRUST-LAYER-FAQ.md](USER-GPG-TRUST-LAYER-FAQ.md) —
   the full technical source documents behind decisions 1, 5, and 6, for anyone who wants more
   detail than this brief carries.
 - [law/adr/0009-performance-investigation-discipline.md](../law/adr/0009-performance-investigation-discipline.md),

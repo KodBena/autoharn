@@ -75,7 +75,7 @@ What this day added, each witnessed (BACKLOG's dated tail carries every disposit
 Open work for the autoharn project itself is no longer tracked in this file — it lives in a
 standing, Postgres-backed work tracker deployed at the repository root by
 [`bootstrap/track-work.sh`](bootstrap/track-work.sh); see
-[design/WORK-STATUS-OFFERING.md](design/WORK-STATUS-OFFERING.md) for what that tracker is and
+[design/WORK-STATUS-OFFERING.md](design/USER-WORK-STATUS-OFFERING.md) for what that tracker is and
 what question it closes (the omega work-status question — this repo's own repeated,
 never-shipped attempt to answer "how does a project track its own open work", named and closed
 in that document's own opening section). From the autoharn checkout root, run `./pickup` for
