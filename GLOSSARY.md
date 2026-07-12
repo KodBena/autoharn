@@ -1,5 +1,10 @@
 # Glossary — autoharn's coined vocabulary
 
+This is autoharn's glossary: definitions for every word this project uses with a meaning you
+could not infer from plain English, for any reader — human or agent — who hits one of those
+words in an autoharn document and needs to know what it means without asking anyone.
+
+<a id="stand-alone-principle"></a>
 **Wiki posture (the documentation discipline this file enforces).** Any *coined term* — a
 word that means something specific **here** that you could not infer from plain English — is
 defined in this file under a short `###` heading and **linked on first use** in every document,
@@ -30,6 +35,18 @@ autoharn itself: a harness for a **class** of projects, not for any one project.
 conceived. It is *fuzzy by intent*: the moment it hard-codes one project's specifics it stops
 serving the next. The class it serves: projects with needs of **extreme auditability and
 deductive maintenance**.
+
+<a id="omega-and-chocofarm"></a>
+### omega and chocofarm
+The maintainer's two prior, sibling software projects — not part of this repository — that
+autoharn's disciplines are generalized FROM. Both independently forked the same ADR-0011
+"Mechanization Discipline" tenet this glossary's [Mechanization
+Discipline](#mechanization-discipline) entry cites, and each contributed a concrete precedent
+autoharn's own design reuses (e.g. omega's `work_status_violations` view is the origin of the
+[`*_violations` gate](#violations-gate) idiom; chocofarm's `leaf_eval_bound/GLOSSARY.md` is the
+origin of this file's own [Stand-Alone Principle](#stand-alone-principle), named in this file's
+own opening paragraphs above). Neither project's own source lives in this repository; where
+cited here, the citation is provenance, not a resolvable path.
 
 ### extreme auditability / deductive maintenance
 The maintainer's framing of the problem genus autoharn addresses. *Auditability*: every claim
@@ -114,8 +131,8 @@ the tag is that it *blocks promotion to confirmed*, not merely records.
 <a id="violations-gate"></a>
 ### `*_violations` gate
 A SQL view (per store) whose **non-empty result fails CI**: *empty ⇒ clean*. The "logic-gate as a
-query" idiom, prototyped by omega's `work_status_violations` (Postgres `WITH RECURSIVE`). The
-basic unit of [Pillar 3](#pillar-3).
+query" idiom, prototyped by [omega](#omega-and-chocofarm)'s `work_status_violations` (Postgres
+`WITH RECURSIVE`). The basic unit of [Pillar 3](#pillar-3).
 
 ### meta-sweep
 The check that **every discipline-stating rule declares an [enforcement surface](#enforcement-surface)**
@@ -125,7 +142,8 @@ gate: it proves the disciplines are mechanized rather than merely asserted.
 ### enforcement surface
 The closed-vocabulary classification of **how** a rule is enforced: e.g. compile/construction-time,
 CI gate, write-time data constraint, runtime invariant, or *review-only* (declared
-"presumptively decaying"). From the source projects' "Mechanization Discipline" (ADR-0011).
+"presumptively decaying"). From the [source projects'](#omega-and-chocofarm) "Mechanization
+Discipline" (ADR-0011).
 
 ### class-not-instance net
 A gate that keys on the **class** of a defect — a structural slot, a name/shape predicate, or a
@@ -148,7 +166,7 @@ what was believed and when.
 ## Process & discipline
 
 ### Mechanization Discipline
-The north star (from the source projects' ADR-0011): **convert every executive lapse into a
+The north star (from the [source projects'](#omega-and-chocofarm) ADR-0011): **convert every executive lapse into a
 mechanism**, so the same error is never seen twice. A recurrence that was never mechanized is a
 guard the *executive* (maintainer) failed to build — structurally theirs to own, not the
 implementer's.
@@ -163,10 +181,35 @@ Endorsed by the maintainer for a class of task. A *blessed tool/method* is one t
 [Capability Registry](#pillar-1) advertises as the right reach for that task — not merely
 something that happens to be installed.
 
+### mandated (tier)
+One notch stronger than [blessed](#blessed): the [Capability Registry](#pillar-1) entry for this
+task-shape is not merely endorsed but REQUIRED, and its use is checked, not just advertised. A
+mandated declaration names an EVIDENCE SHAPE — the checkable artifact that proves the discipline
+was followed (a committed declarative model file; matching keys in a store; a solver-run
+provenance record) — and the work item for a mandated-shape task carries a review obligation by
+convention: its close is countersigned by a distinct [principal](#principal) whose review cites
+that evidence shape, present or absent
+([ORCH-SPEC-RESOURCE-REGISTRY.md](design/ORCH-SPEC-RESOURCE-REGISTRY.md)
+§4 — self-reports are not trusted, per the maintainer's own witnessed reason: implementers "take
+undue license and lie about what they have done"). `TIER` is one of three values on a [resource
+declaration](#resource-declaration): `available` (on record, no endorsement), `blessed:
+<task-shape>` (the recommended reach for that shape), `mandated: <task-shape>` (required, and
+countersign-checked, for that shape).
+
+### resource declaration
+A `kind=decision` ledger row carrying the `resource:` statement-prefix convention (stage 1;
+[ORCH-SPEC-RESOURCE-REGISTRY.md](design/ORCH-SPEC-RESOURCE-REGISTRY.md) §2) that declares one
+[Capability Registry](#pillar-1) resident: a solver, service, backend, binary, or library, what
+it proves, when to reach for it, and its [tier](#mandated-tier). [`./pickup`](#led-and-pickup)'s
+RESOURCES section is the pull surface a session reads it from;
+[USER-BLESSED-TABLE-TEMPLATE.md](design/USER-BLESSED-TABLE-TEMPLATE.md) is the adopter-facing
+template that fills these in and states the exact statement grammar.
+
 ### anti-corruption layer
 A structured store that **replaces a hand-edited file** as the source of truth, allowing access
 only through validated operations (the term is from Domain-Driven Design). The precedent:
-omega's `work-status` Postgres store, which replaced a hand-edited `work-status.json`.
+[omega](#omega-and-chocofarm)'s `work-status` Postgres store, which replaced a hand-edited
+`work-status.json`.
 
 ### paraconsistency
 A logic that does **not** explode (derive everything) from a contradiction, letting conflicting
@@ -182,9 +225,10 @@ lives in [OPERATING-CARD.md](ORCH-OPERATING-CARD.md); these are the definitions.
 
 ### world
 One isolated experiment habitat: a subject schema + kernel schema pair in Postgres plus a
-project directory carrying the operator verbs, `deployment.json`, `.claude/apparatus.json`,
-and an auto-loaded governance preamble. One world per run; a run's subject never sees a
-sibling world's ledger (maintainer ruling, 2026-07-09).
+project directory carrying the operator verbs (`led`, `judge`, `pickup`, `distance-to-clean`,
+`audit`, `scaffold` — see [`led`/`pickup`](#led-and-pickup) below for the two most-cited),
+`deployment.json`, `.claude/apparatus.json`, and an auto-loaded governance preamble. One world
+per run; a run's subject never sees a sibling world's ledger (maintainer ruling, 2026-07-09).
 
 ### run
 One governed Claude Code session (or resumed chain of sessions) executing a task inside one
@@ -211,24 +255,40 @@ torn down to zero residue afterward (empty `information_schema.schemata` check).
 The HMAC binding a ledger row to the actual Claude session/agent that wrote it, injected
 into every Bash command in a wired world by `hooks/stamp_intercept.py`. Unforgeable without
 a secret the writer's role cannot read; a bypass write lands visibly unstamped. A tripwire,
-not authentication (see CAPABILITIES "Honest limits").
+not authentication (see [ORCH-CAPABILITIES.md, "Honest limits"](ORCH-CAPABILITIES.md#honest-limits-so-the-guarantees-arent-oversold)).
+
+<a id="led-and-pickup"></a>
+### `led` and `pickup`
+Two of the project's [operator verbs](#world) (thin shell shims that `exec` autoharn's own
+live templates — see `bootstrap/templates/led.tmpl` / `pickup.tmpl`), the two an agent uses
+most. **`led`** appends one entry to a world's ledger per invocation (`./led decision "..."`,
+`./led work open <slug> ...`, `./led review <id> ...`, etc. — its own `--help`-style header
+comment is the canonical vocabulary). **`pickup`** is the session-start resume command: it
+reads the ledger LIVE and prints a fresh status brief (open work items, review debt, recent
+changes, and — since this session — the RESOURCES section), never a cached or stored one
+(design/ORCH-OPUS-READINESS.md's "derived at pickup time, never stored" rule).
 
 ### principal
 A registered identity (`author`, `reviewer`) that ledger rows are attributed to;
 `LED_ACTOR=reviewer` selects one for a command. **SoD** (separation of duties) is the
 requirement that review comes from a provably different invocation than the work.
 
+### `review_gap`
+The SQL view (`led review-gap`; also `./pickup`'s REVIEW-DEBT section) that lists every ledger
+row an [obliged](#obligation) [principal](#principal) wrote with no distinct-actor countersign
+yet — an empty result is clean, any row listed is outstanding debt.
+
 ### obligation
 A `countersign_obligation` row: the obliged [principal](#principal)'s EVERY row (any kind)
-shows in `review_gap` until a distinct actor attests it. Scope is a label, not a filter.
-Oblige the WORKER, never the reviewer (see `led obligate` teach-text) — an obligation is
+shows in [`review_gap`](#review_gap) until a distinct actor attests it. Scope is a label, not a
+filter. Oblige the WORKER, never the reviewer (see `led obligate` teach-text) — an obligation is
 standing operator-owned policy config, not a role self-service capability (`led obligate
 revoke` refuses a role's own attempt to lift it).
 
 ### permit-to-work
 The rule that a Write/Edit to a governed file is refused unless the world's ledger shows an
 open AND claimed s22 work item — a ledger entry is not a permit; an open+claimed work item
-is (CAPABILITIES item 18).
+is ([ORCH-CAPABILITIES.md item 18](ORCH-CAPABILITIES.md)).
 
 ### seen-red
 Banked evidence that a gate has actually REFUSED at least once (a dated fixture directory
