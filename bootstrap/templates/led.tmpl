@@ -757,6 +757,80 @@ fi
 
 kind="$1"; shift
 statement="$*"
+
+# --- resource: intake validation (BACKLOG 2026-07-12, run12 witness) ------------------------
+# A statement beginning `resource:` (after stripping leading whitespace) declares one Pillar-1
+# Capability Registry entry (design/USER-BLESSED-TABLE-TEMPLATE.md) and MUST carry the doc's
+# six-field grammar before ANY write is attempted -- refuse loudly here, at the boundary
+# (ADR-0002 rule 2: validate at boundaries, do not coerce), rather than let a malformed
+# declaration land silently and only be discovered later by pickup's own resources() parser.
+# Witnessed live, 2026-07-12 (run12, LED_ACTOR=commissioner): a maintainer-pasted `resource:`
+# statement carried an embedded newline from terminal line-wrap mid-word; the write SUCCEEDED
+# with only 4 of 6 fields, and pickup's own parser then further shredded the row into two
+# spurious MALFORMED entries because it iterates psql's own physical output lines, one of them
+# even reporting `id=experiments` (see bootstrap/templates/pickup.tmpl's sibling fix -- the
+# newline-normalization half of this same defect class -- for the read-side repair).
+#
+# The grammar check below runs against a WHITESPACE-NORMALIZED COPY only (every run of \n/\r
+# plus its following indentation collapsed to one space) -- so a legitimate embedded newline (a
+# paste reflowed by a terminal, exactly the witnessed run12 specimen) is ACCEPTED rather than
+# refused. The row actually written below on success is $statement, completely untouched --
+# byte fidelity matters for a later GPG signing ceremony over this exact row (design/
+# USER-GPG-TRUST-LAYER-FAQ.md), so the normalized copy is validation-only scratch, never
+# persisted; nothing is written at all if validation fails (atomicity by refusal-before-write).
+_resource_trimmed="${statement#"${statement%%[![:space:]]*}"}"
+case "$_resource_trimmed" in
+  resource:*)
+    if ! python3 - "$_resource_trimmed" <<'PYEOF'
+import re
+import sys
+
+# The six fields, in order, and the closed CLASS/TIER vocabularies below are transcribed
+# VERBATIM from design/USER-BLESSED-TABLE-TEMPLATE.md's "The statement grammars" section -- the
+# ONE documented home of this grammar (a transcription, not a second, driftable definition of
+# it -- ADR-0012 P1). bootstrap/templates/pickup.tmpl's own _RESOURCE_FIELDS tuple is the
+# sibling reader of the same six names on the display side.
+FIELDS = ("NAME", "CLASS", "REACH", "WHAT-IT-PROVES", "GUIDANCE", "TIER")
+VALID_CLASSES = ("solver", "service", "backend", "binary", "library")
+
+raw = sys.argv[1]
+normalized = re.sub(r"[\r\n]+[ \t]*", " ", raw).strip()
+body = normalized[len("resource:"):]
+parts = [p.strip() for p in body.split("|")]
+
+
+def refuse(msg: str) -> None:
+    print(f"led: REFUSED -- malformed 'resource:' statement -- {msg}.", file=sys.stderr)
+    print("  grammar (design/USER-BLESSED-TABLE-TEMPLATE.md 'The statement grammars'):", file=sys.stderr)
+    print("    resource: <NAME> | <CLASS> | <REACH> | <WHAT-IT-PROVES> | <GUIDANCE> | <TIER>", file=sys.stderr)
+    print(f"  the six fields, in order: {', '.join(FIELDS)}", file=sys.stderr)
+    print(f"  CLASS must be one of: {' | '.join(VALID_CLASSES)}", file=sys.stderr)
+    print("  TIER must be one of: available | blessed: <task-shape> | mandated: <task-shape>", file=sys.stderr)
+    print(f"  received ({len(parts)} field(s), whitespace-normalized): {normalized}", file=sys.stderr)
+    print("  NOTHING was written -- fix the statement and re-run.", file=sys.stderr)
+    sys.exit(1)
+
+
+if len(parts) != len(FIELDS):
+    refuse(f"expected exactly {len(FIELDS)} '|'-separated fields, got {len(parts)}")
+
+_name, cls, _reach, _proves, _guidance, tier = parts
+if cls not in VALID_CLASSES:
+    refuse(f"CLASS field {cls!r} is not one of {VALID_CLASSES}")
+if not (tier == "available" or tier.startswith("blessed:") or tier.startswith("mandated:")):
+    refuse(f"TIER field {tier!r} is not 'available', 'blessed: <task-shape>', or "
+           f"'mandated: <task-shape>'")
+if (tier.startswith("blessed:") or tier.startswith("mandated:")) and not tier.split(":", 1)[1].strip():
+    refuse(f"TIER field {tier!r} names no <task-shape> after the colon")
+
+sys.exit(0)
+PYEOF
+    then
+      exit 1
+    fi
+    ;;
+esac
+
 warn_flag_in_statement "$statement"
 rationale=""
 if [ -n "$files" ]; then
