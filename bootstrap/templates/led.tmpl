@@ -189,7 +189,7 @@
 #                                              (these seven verbs require kernel/lineage/s22-work-item-
 #                                              ledger.sql applied to this project's schema — s22 is
 #                                              an additive delta on the s15/s17/s19/s20/s21 birth
-#                                              chain, part of it from s22 onward — see OPERATING-CARD.md)
+#                                              chain, part of it from s22 onward — see ORCH-OPERATING-CARD.md)
 #
 # Connection defaults are sourced LIVE from this project's deployment.json at RUN TIME (BACKLOG
 # maintainer ruling 2026-07-11, "runs are strictly linear" disposition 6, "live verbs"). This file
@@ -276,7 +276,7 @@ done
 # INSERT INTO ledger that does not carry the column. REFUSE loudly here rather than silently
 # dropping a value the operator explicitly asked to be recorded (the class this file's own
 # `warn_flag_in_statement`/missing-column-refusal idioms both exist to foreclose) -- the flag is
-# scoped to the generic path today (design/LATE-ENTRY-AND-INTAKE-SEMANTICS.md Proposal 2's own
+# scoped to the generic path today (design/MAINT-LATE-ENTRY-AND-INTAKE-SEMANTICS.md Proposal 2's own
 # worked example is exactly that path); widening it to `review`/`work` is a future increment,
 # not a silent gap.
 if [ -n "$event_time" ]; then
@@ -792,7 +792,7 @@ if [ -n "$event_time" ]; then
     echo "  event_declared_ts column on ${SCHEMA}.ledger) -- the declaration cannot be recorded" >&2
     echo "  in a typed column here. Either omit --event-time, or note the late-entry event time" >&2
     echo "  in the statement's own prose instead (the improvised disclosure this flag mechanizes" >&2
-    echo "  -- see design/LATE-ENTRY-AND-INTAKE-SEMANTICS.md's run-10 row-1 specimen)." >&2
+    echo "  -- see design/MAINT-LATE-ENTRY-AND-INTAKE-SEMANTICS.md's run-10 row-1 specimen)." >&2
     exit 1
   fi
 fi

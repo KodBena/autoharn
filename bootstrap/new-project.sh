@@ -8,7 +8,7 @@
 # new-project.sh — stamp a new instance directory: deployment.json, .claude/ wiring
 # (settings.json, governed_files.json, apparatus.json, HOOKS.md), and the three verbs (led, judge,
 # pickup) as thin shims exec'ing bootstrap/templates/*.tmpl LIVE out of this autoharn checkout
-# (design/OPUS-READINESS.md move 2's template/instance split, then BACKLOG maintainer ruling
+# (design/ORCH-OPUS-READINESS.md move 2's template/instance split, then BACKLOG maintainer ruling
 # 2026-07-11 "runs are strictly linear" disposition 6 "live verbs": the verbs stopped being
 # sed-substituted frozen copies — a template fix here now reaches every already-scaffolded world
 # instantly, matching how the two PreToolUse hooks already execute live per invocation). Only
@@ -210,7 +210,7 @@ if [ -n "$NEW_WORLD" ]; then
         echo "   one fresh secret provisioned ($SECRET_FILE [chmod 600]; DB ${KERN}.stamp_secret)"
     fi
 
-    # GENESIS SEED (design/GPG-TRUST-LAYER.md Rung 3; kernel/lineage/s26-row-hash-chain.sql):
+    # GENESIS SEED (design/MAINT-GPG-TRUST-LAYER.md Rung 3; kernel/lineage/s26-row-hash-chain.sql):
     # the row_hash chain's zz_set_row_hash trigger REFUSES the first ledger INSERT loudly if no
     # seed is provisioned (see that delta's own header) -- this MUST run before the first write,
     # same ordering constraint as the stamp secret above. Idempotent (INSERT ... ON CONFLICT DO
@@ -320,7 +320,7 @@ fi
 # not frozen sed-substituted copies (BACKLOG maintainer ruling 2026-07-11, "runs are strictly
 # linear" disposition 6, "live verbs"; audit and distance-to-clean joined the same way later,
 # each a new template file rather than an edit to an existing live one -- see their own
-# commissions; verify-commission (design/GPG-TRUST-LAYER.md Rung 2) follows the SAME
+# commissions; verify-commission (design/MAINT-GPG-TRUST-LAYER.md Rung 2) follows the SAME
 # distance-to-clean precedent one verb later -- a brand-new template file carries none of
 # led.tmpl's freeze risk, so it is safe to add regardless of any live wired session elsewhere).
 # Baking was the asymmetry: hooks already execute live from this autoharn checkout per invocation
@@ -334,7 +334,7 @@ fi
 # env var `pickup`'s own live-resolution already used, extended to all three rather than growing
 # three near-identical mechanisms, ADR-0012 P1). deployment.json itself stays scaffold-written
 # per-world config (unchanged) -- only the VERBS stopped being copies.
-# keys/ -- this deployment's OWN GPG keyring (SIGNED commissions, design/GPG-TRUST-LAYER.md §3),
+# keys/ -- this deployment's OWN GPG keyring (SIGNED commissions, design/MAINT-GPG-TRUST-LAYER.md §3),
 # deliberately separate from autoharn's law/keys/ (scoped exclusively to autoharn's own
 # ratified/* tags). Mirrors bootstrap/track-work.sh's identical block; applied at the merge
 # window per the key-residence refactor's documented frozen-remainder diff (BACKLOG 2026-07-12).
@@ -382,7 +382,7 @@ if [ -n "$NEW_WORLD" ]; then
     echo "make FULL mode mechanically distinguishable from LAZY mode (the implementer's own"
     echo "vicarious transcription, CLAUDE.md preamble point 10), never prose claims alone."
     echo ""
-    echo "SIGNED mode (design/GPG-TRUST-LAYER.md Rung 2 -- FULL, plus a detached GPG signature"
+    echo "SIGNED mode (design/MAINT-GPG-TRUST-LAYER.md Rung 2 -- FULL, plus a detached GPG signature"
     echo "over the ask): do THIS INSTEAD of the plain FULL-mode line above, not after it --"
     echo "reading the ask from a file ONCE and reusing that same value for both the ledger write"
     echo "and the signature is what keeps the two byte-for-byte identical (typing the ask inline"
@@ -403,10 +403,10 @@ if [ -n "$NEW_WORLD" ]; then
     echo "a real key is committed at THIS deployment's keys/ directory (never autoharn's"
     echo "law/keys/ -- that one is scoped to autoharn's own law); until then every signature refuses"
     echo "as NO-COMMITTED-KEY, exit 3 (there is nothing to check it against yet -- distinct from"
-    echo "FORGED-OR-CORRUPT, per design/GPG-TRUST-LAYER-FAQ.md) -- exercise the ceremony with a"
+    echo "FORGED-OR-CORRUPT, per design/USER-GPG-TRUST-LAYER-FAQ.md) -- exercise the ceremony with a"
     echo "throwaway test key first if you want to see VERIFIED before the real key exists."
     echo ""
-    echo "The SIGNED HEAD (design/GPG-TRUST-LAYER.md Rung 3 -- the run-close ritual, one line):"
+    echo "The SIGNED HEAD (design/MAINT-GPG-TRUST-LAYER.md Rung 3 -- the run-close ritual, one line):"
     echo "at the end of a session, from YOUR OWN terminal, inside $PROJECT_ROOT:"
     echo "  cd $PROJECT_ROOT"
     echo "  ./verify-chain --head > /tmp/head.json    # refuses (exit 1, empty stdout) if the"
@@ -418,8 +418,8 @@ if [ -n "$NEW_WORLD" ]; then
     echo "Both files bank as committed evidence. From that moment, ANY retroactive alteration of"
     echo "this world's ledger -- including by the database superuser -- breaks the chain against a"
     echo "head your key vouches for: \"append-only by trigger\" becomes \"append-only or provably"
-    echo "broken\" (design/GPG-TRUST-LAYER.md §4). Full walkthrough, including WHY --head verifies"
-    echo "before it will print anything: design/GPG-TRUST-LAYER-FAQ.md."
+    echo "broken\" (design/MAINT-GPG-TRUST-LAYER.md §4). Full walkthrough, including WHY --head verifies"
+    echo "before it will print anything: design/USER-GPG-TRUST-LAYER-FAQ.md."
 else
     echo "  1. Apply a kernel lineage to $DB/$SCHEMA/$KERN/$ROLE if not already applied (kernel/lineage/, autoharn)."
     echo "  2. Provision the stamp secret -- see $PROJECT_ROOT/.claude/HOOKS.md (marked UNWITNESSED until you run it)."

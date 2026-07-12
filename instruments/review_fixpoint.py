@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""review_fixpoint — the review fixed-point close line (design note review-fixpoint-protocol.md; consult
+"""review_fixpoint — the review fixed-point close line (design note ORCH-review-fixpoint-protocol.md; consult
 35 §5 e18 lever candidate). A completion claim for a unit under this policy is RED unless the FINAL
 artifact version carries an attesting review that is (i) STAMP-DISTINCT from the author, (ii) FIRST-CONTACT
 (its stamp never appeared earlier in the unit — a fresh reviewer, not a directed delta-review), and

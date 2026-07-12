@@ -6,7 +6,7 @@
 # <<< PROVENANCE-STAMP <<<
 
 """ledger_edb -- the single home for "what the ledger looks like to a logic engine"
-(design LEDGER-LOGIC-MARRIAGE.md §3; ADR-0012 P1). The fact-mining-side analog of
+(design ORCH-LEDGER-LOGIC-MARRIAGE.md §3; ADR-0012 P1). The fact-mining-side analog of
 `contra_asp.edb_from_claims`, exporting a typed EDB from any ledger target for the
 ASP `T_now` program (ledger_tnow.lp) and the SQL floor (ledger_floor.py).
 
@@ -21,7 +21,7 @@ each with its reason (a missing column, a text-actor model, an absent apparatus
 relation). A capability a caller REQUESTS that the target lacks is refused LOUDLY
 (ADR-0015 Rule 4), never a silent empty.
 
-TARGET RESOLUTION derives from the ONE home `engine/targets.py` (design/USE-MODE-ENGINE-WIRING.md
+TARGET RESOLUTION derives from the ONE home `engine/targets.py` (design/ORCH-USE-MODE-ENGINE-WIRING.md
 item 1; ADR-0012 P1) -- the same home `instruments/ledger_target.py` derives from, so the two are
 never hand-synced duplicate copies. The db/schema agreement with the operator SSOT is still PINNED
 BY A PARITY TEST (engine/tests/test_ledger_marriage.py :: test_target_parity_against_operator_ssot),

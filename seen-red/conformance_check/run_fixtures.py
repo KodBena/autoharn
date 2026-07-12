@@ -14,7 +14,7 @@ Each case is a subdirectory containing:
     expected_exit.txt    — the single digit exit code the checker must produce
         (0 CONFORMANT / 1 CONFORMANT_WITH_DEFERRALS / 2 NONCONFORMANT)
 
-Covers design/CONFORMANCE-INSTRUMENT.md's acceptance cases (a)-(e) plus one
+Covers design/ORCH-CONFORMANCE-INSTRUMENT.md's acceptance cases (a)-(e) plus one
 EXTRA (f) demonstrating the OPERATOR-CHECK-never-silent-pass boundary for a
 witness_type this checker cannot reach mechanically.
 

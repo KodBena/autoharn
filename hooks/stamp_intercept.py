@@ -38,7 +38,7 @@ CONFIG (provisioned at arm; the subject never sees this file's prose, only the i
                   located (below); with neither, no secret resolves and the hook passes writes through
                   unstamped (fail-open, per SAFETY).
 
-DEPLOYMENT-RECORD PRESENCE (design/OPUS-READINESS.md move 1, BACKLOG "E13 retirement", 2026-07-09):
+DEPLOYMENT-RECORD PRESENCE (design/ORCH-OPUS-READINESS.md move 1, BACKLOG "E13 retirement", 2026-07-09):
 this hook is a fresh short-lived process per tool call and receives no persistent config of its own --
 its only per-call context is the hook-input JSON on stdin, which Claude Code populates with `cwd` (the
 session's working directory when the tool call fired; the same field `hooks/stamp_provenance.py`
@@ -77,7 +77,7 @@ behavior before this pass, including the dangling-secret deny. Missing file/key 
 An unrecognized mode string never widens permissions (rule d) -- falls back to `"enforce"`, already
 the strictest state this mechanism has, with a loud stderr warning naming the bad value.
 
-PER-INVOCATION CONTEMPORANEITY TOKEN (design/CONTEMPORANEITY-AUDIT.md Part 1; BACKLOG "Contemporaneity
+PER-INVOCATION CONTEMPORANEITY TOKEN (design/ORCH-CONTEMPORANEITY-AUDIT.md Part 1; BACKLOG "Contemporaneity
 indictment", 2026-07-11): on the SAME injection path that carries the HMAC stamp (a wired world, a
 healthy secret, mode observe/enforce), this hook additionally mints a per-Bash-invocation UUID and
 exports it as a SIXTH GUC `app.vendor_invocation` alongside the four HMAC GUCs. The kernel's set_stamp
@@ -305,7 +305,7 @@ def _journal(cwd, rec: dict) -> None:
 
 
 def _invocation_journal_path(cwd) -> Path | None:
-    """The per-invocation contemporaneity journal (design/CONTEMPORANEITY-AUDIT.md Part 1) -- a
+    """The per-invocation contemporaneity journal (design/ORCH-CONTEMPORANEITY-AUDIT.md Part 1) -- a
     SEPARATE file from the stamp_intercept.journal above (that one records secret-health outcomes;
     this one is the token<->command<->wall-clock correlation Part 2's audit verb joins against the
     ledger's stamp_invocation column). Same "no cwd, no journal, never invents a path" posture as
@@ -415,7 +415,7 @@ def main() -> int:
     agent = str(data.get("agent_id") or "main")   # ABSENT in main thread (shakedown); a subagent's UUID otherwise
     ts = int(time.time())
     mac = hmac.new(secret, f"{session}|{agent}|{ts}".encode(), hashlib.sha256).hexdigest()
-    # PER-INVOCATION CONTEMPORANEITY TOKEN (design/CONTEMPORANEITY-AUDIT.md Part 1; module docstring
+    # PER-INVOCATION CONTEMPORANEITY TOKEN (design/ORCH-CONTEMPORANEITY-AUDIT.md Part 1; module docstring
     # "PER-INVOCATION CONTEMPORANEITY TOKEN"). A fresh uuid4 minted per Bash call, exported as a sixth
     # GUC (app.vendor_invocation) on the SAME injection this stamp rides. It is NOT part of the HMAC --
     # it is a plain correlation token the s23 kernel column captures verification-inert. Minted ONLY

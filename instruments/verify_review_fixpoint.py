@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """verify_review_fixpoint — both-polarity fixtures for the review_fixpoint close line (design note
-review-fixpoint-protocol.md). Proves the three-join criterion GREEN when a fresh first-contact reviewer
+ORCH-review-fixpoint-protocol.md). Proves the three-join criterion GREEN when a fresh first-contact reviewer
 attests the final artifact with zero undisposed findings, and RED for each way it can fail:
 
   RED-1 (the e17 shape) — the final attest is a DELTA-review: same reviewer stamp already appeared earlier

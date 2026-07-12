@@ -6,7 +6,7 @@
 # <<< PROVENANCE-STAMP <<<
 
 """run_fixtures.py — both-polarity proof for the per-invocation contemporaneity token that
-hooks/stamp_intercept.py mints (design/CONTEMPORANEITY-AUDIT.md Part 1; s23 kernel delta).
+hooks/stamp_intercept.py mints (design/ORCH-CONTEMPORANEITY-AUDIT.md Part 1; s23 kernel delta).
 
 The existing seen-red/stamp-intercept-secret suite already proves the HMAC-stamp fail-closed
 path; this SIBLING suite proves the SIXTH GUC + its journal, which the substring-matching

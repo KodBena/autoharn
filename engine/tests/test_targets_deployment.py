@@ -6,7 +6,7 @@
 # <<< PROVENANCE-STAMP <<<
 
 """test_targets_deployment -- qualification gate for engine/targets.py's THIRD resolution source
-(design/OPUS-READINESS.md move 1): a deployment.json read via LEDGER_DEPLOYMENT, and the
+(design/ORCH-OPUS-READINESS.md move 1): a deployment.json read via LEDGER_DEPLOYMENT, and the
 precedence rule (explicit registry > deployment file > LEDGER_DB/LEDGER_SCHEMA/LEDGER_KERN env
 vars) `targets.py`'s docstring states and justifies. DB-free (targets.resolve() never opens a
 connection); no skip condition needed.

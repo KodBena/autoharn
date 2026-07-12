@@ -203,7 +203,7 @@ def _prior_record_line(doc_rel: str, content_sha256: str) -> int | None:
 def _carry_forward_adjudication(prior: dict, prior_line: int) -> dict | None:
     """A carry-forward record is always WRITTEN at doc-attestation/2 (the gate's --record always
     emits SCHEMA_LATEST), which REQUIRES a typed `adjudication` object whenever `escalated` is
-    true (design/SPEC-DOC-ATTESTATION-2.md). A prior /2 record already carries one — reuse it
+    true (design/ORCH-SPEC-DOC-ATTESTATION-2.md). A prior /2 record already carries one — reuse it
     verbatim. A prior /1 record kept its escalation disposition as b_id free text (the seam /2
     exists to close); this synthesizes an HONEST, clearly-labeled /2 adjudication FROM that text
     rather than inventing a new judgment — the gate itself declares adjudication content is

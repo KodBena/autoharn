@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-09T07:54:37Z
-#   last-change: 2026-07-11T21:08:11Z
+#   last-change: 2026-07-12T01:25:00Z
 #   contributors: 9bcc0113/main, be693afb/main, e4410ef6/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -41,11 +41,17 @@ ROOT_FILES = {
     "README.md", "CLAUDE.md", "GLOSSARY.md", "BACKLOG.md", "FINDINGS.md", ".gitignore",
     # organic additions since LAYOUT.md §1 was drafted (session 59c83ca6, 2026-07-09) —
     # LAYOUT.md's tree/table are not yet amended to match; flagged for maintainer review.
-    "DIRCLASS.md", "CAPABILITIES.md", "HANDOFF.md", "WALKTHROUGH.md",
-    "POST-FABLE-OPERATING-BRIEF.md",  # succession handoff, root doc (2026-07-09)
-    "OPERATING-CARD.md",  # Opus-readiness operating-era quick reference, root doc (2026-07-11)
+    # Renamed by the doc-audience-taxonomy sweep (2026-07-12): DIRCLASS/CAPABILITIES/HANDOFF ->
+    # ORCH-*, WALKTHROUGH -> USER-*, POST-FABLE-OPERATING-BRIEF/OPERATING-CARD -> ORCH-*.
+    "ORCH-DIRCLASS.md", "ORCH-CAPABILITIES.md", "ORCH-HANDOFF.md", "USER-WALKTHROUGH.md",
+    "ORCH-POST-FABLE-OPERATING-BRIEF.md",  # succession handoff, root doc (2026-07-09)
+    "ORCH-OPERATING-CARD.md",  # Opus-readiness operating-era quick reference, root doc (2026-07-11)
+    # CONFIGURATION.md (pre-existing gap, unregistered before this edit too), renamed to
+    # USER-CONFIGURATION.md by the doc-audience-taxonomy sweep; registered now while this exact
+    # set is already being touched (CLAUDE.md hazard-flagging duty).
+    "USER-CONFIGURATION.md",
     # bootstrap/track-work.sh's own STANDING deployment on autoharn itself (design/
-    # WORK-STATUS-OFFERING.md, deliverable 2, 2026-07-11): deployment.json + the five verb
+    # USER-WORK-STATUS-OFFERING.md, deliverable 2, 2026-07-11): deployment.json + the five verb
     # shims (led/judge/pickup/audit/distance-to-clean), landing at the repo root because that
     # IS this deployment's project-dir. No hooks are wired for it (a standing project is not a
     # governed world — track-work.sh's own header comment) so these are inert outside a
@@ -60,8 +66,13 @@ ROOT_DIRS = {
     # attestations/ — ADR-0017's A:B:C fresh-context audit-loop ledger
     # (attestations/doc-legibility-attestations.jsonl, gates/doc_attestation_presence.py),
     # landed 2026-07-11 but never added here; caught in passing while registering
-    # design/WORK-STATUS-OFFERING.md's own two attestations (CLAUDE.md hazard-flagging duty).
+    # design/USER-WORK-STATUS-OFFERING.md's own two attestations (CLAUDE.md hazard-flagging duty).
     "attestations",
+    # tools/ — the doc-audience-taxonomy work item's per-document rename primitive
+    # (tools/rename_doc.py); a new top-level directory this same sweep created, registered here
+    # rather than left an unregistered breach for the census gate to hit next run (CLAUDE.md
+    # hazard-flagging duty).
+    "tools",
 }
 
 # (2) per-directory currency patterns: a directory -> the regex(es) its basenames MUST match.

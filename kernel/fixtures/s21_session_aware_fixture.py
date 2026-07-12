@@ -7,7 +7,7 @@
 
 """s21_session_aware_fixture — proves the (stamp_session, stamp_agent) PAIR distinctness fix
 (s21-session-aware-distinctness.sql) AND the s19 residue fold-in, on a THROWAWAY schema pair in the
-TOY db (design/S21-SESSION-AWARE-DISTINCTNESS.md's witness protocol, items 1-5, run exactly):
+TOY db (design/ORCH-S21-SESSION-AWARE-DISTINCTNESS.md's witness protocol, items 1-5, run exactly):
 
   1. SAME-SESSION, DISTINCT-AGENT technical review PASSES (the e17 shape, preserved unchanged).
   2. CROSS-SESSION MAIN-vs-MAIN technical review PASSES — the retired false refusal: two distinct

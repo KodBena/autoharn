@@ -5,7 +5,7 @@
 #   contributors: e4410ef6/main
 # <<< PROVENANCE-STAMP <<<
 
-"""run_fixtures.py -- both-polarity proof for Part 2 of design/CONTEMPORANEITY-AUDIT.md
+"""run_fixtures.py -- both-polarity proof for Part 2 of design/ORCH-CONTEMPORANEITY-AUDIT.md
 (engine/contemp_edb.py + engine/lp/contemporaneity.lp + engine/contemp_audit.py; BACKLOG
 "Contemporaneity indictment", 2026-07-11) EXTENDED for design/LATE-ENTRY-AND-INTAKE-
 SEMANTICS.md's two ratified mechanisms (kernel/lineage/s24-declared-event-time.sql; the
@@ -17,7 +17,7 @@ take: correlated-authorship, disclosed, not a claim of independent-source proof)
 evidence IS exercised separately, live: case (c) against run7's actual (pre-s23) schema, and --
 banked beside this file, run9-vacuous-clean-witness.txt -- the run9 re-witness the wired-but-
 empty case (e) reproduces synthetically. Cases (f)/(g) reproduce, on the same scratch posture,
-the two polarities design/LATE-ENTRY-AND-INTAKE-SEMANTICS.md's ratification packet asked for
+the two polarities design/MAINT-LATE-ENTRY-AND-INTAKE-SEMANTICS.md's ratification packet asked for
 by name: a declared late entry verdicts LATE_DECLARED (exit 0), the identical undeclared gap
 (case (b), unchanged) verdicts BACKFILL_SUSPECT (exit 1). Case (h) reproduces run-10's own
 banked intake-burst SHAPE (BACKLOG "Run-10 first audit verdict adjudicated", 2026-07-11) on this
@@ -33,7 +33,7 @@ pattern for BACKLOG "Run-10 closure audit (2026-07-11)" item 1 / change proposal
 ledger_kind_check refusal now teaches its own live valid-kind list rather than leaving the agent
 to self-diagnose via a hand-run pg_get_constraintdef query (run-10 row 67's own specimen).
 
-Cases (p)/(q) close the SQL-floor differential deferral design/CONTEMPORANEITY-AUDIT.md's Status
+Cases (p)/(q) close the SQL-floor differential deferral design/ORCH-CONTEMPORANEITY-AUDIT.md's Status
 section names ("this verb ships ONE producer today, not the marriage discipline's cross-validated
 pair"): engine/contemp_floor.py (the SQL floor) + engine/contemp_differential.py (the differential
 runner, matching engine/ledger_differential.py's own AGREE/DIVERGE_BY_DESIGN/DIVERGE_DEFECT/
@@ -88,7 +88,7 @@ EIGHTEEN CASES:
      broken by a burst -- but the burst's silence-breaking row carries an `event_declared_ts`
      (s24) claiming the event occurred back near the START of the silence window, so the
      write-vs-declared gap comfortably exceeds late_threshold_ms. VERDICT=late_declared,
-     naming the token, exit 0 (design/LATE-ENTRY-AND-INTAKE-SEMANTICS.md Proposal 2: "a
+     naming the token, exit 0 (design/MAINT-LATE-ENTRY-AND-INTAKE-SEMANTICS.md Proposal 2: "a
      declared late entry satisfies the mandate"). Proves the mechanism distinguishes an
      HONESTLY-DECLARED late entry from case (b)'s UNDECLARED one over the identical gap shape.
 
@@ -652,7 +652,7 @@ def main() -> int:
                    f"token {tok_g} named -- byte-identical shape to case b, s24 changes nothing here")
 
         # ---- CASE h: intake-shape benign (run-10's own SHAPE, reproduced synthetically) -------
-        # design/LATE-ENTRY-AND-INTAKE-SEMANTICS.md Proposal 1: a multi-row token burst whose
+        # design/MAINT-LATE-ENTRY-AND-INTAKE-SEMANTICS.md Proposal 1: a multi-row token burst whose
         # every row precedes THIS world's own first tool_event -- run-10 rows 2-11 (ten
         # present-tense task declarations, written before any tool activity existed to narrate;
         # BACKLOG "Run-10 first audit verdict adjudicated", 2026-07-11). Reproduced here, not
@@ -685,7 +685,7 @@ def main() -> int:
                    f"verdict=BATCHED_DECLARED, token {tok_h} annotated intake-shape, as expected")
 
         # ---- CASE p: SQL-floor marriage differential -- AGREE on real-shaped data (GREEN) ------
-        # design/CONTEMPORANEITY-AUDIT.md Status's own deferral, closed: engine/contemp_floor.py
+        # design/ORCH-CONTEMPORANEITY-AUDIT.md Status's own deferral, closed: engine/contemp_floor.py
         # (the SQL floor) vs engine/lp/contemporaneity.lp (the ASP producer), via
         # engine/contemp_differential.py --retain -- the SAME subprocess `./audit --differential`
         # execs. Combines case (h)'s own run-10 intake-shape burst AND case (f)'s own manufactured

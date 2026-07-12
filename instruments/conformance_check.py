@@ -7,7 +7,7 @@
 
 """conformance_check.py — the commission/conformance instrument's mechanical differ.
 
-Mechanizes design/CONFORMANCE-INSTRUMENT.md (Fable-authored schema, ratified
+Mechanizes design/ORCH-CONFORMANCE-INSTRUMENT.md (Fable-authored schema, ratified
 2026-07-09) — itself the mechanism ADR-0013 Rule 1 names as missing: "a
 structured commission/result-conformance record — a checklist the result is
 mechanically diffed against." It converts executor narrowing (a scope item
@@ -37,7 +37,7 @@ closed verdict vocabulary:
                                      reason names the failing item_id and states
                                      the fix (deny -> teach).
 
-Boundaries (design/CONFORMANCE-INSTRUMENT.md, "Boundaries, honestly named"):
+Boundaries (design/ORCH-CONFORMANCE-INSTRUMENT.md, "Boundaries, honestly named"):
 this checker verifies claim/artifact CORRESPONDENCE, not artifact QUALITY, and
 not effect-level acceptance (ADR-0013 2026-07-02 amendment part 1) — those stay
 review/ratifier acts. Of the five witness_types, only `commit` and `file` are

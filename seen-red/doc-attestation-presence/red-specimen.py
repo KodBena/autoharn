@@ -22,10 +22,10 @@ exists to protect):
                           that same doc then exits 0.
   WAIVER-NOT-PROSE    -- a doc that merely MENTIONS the waiver token in plain prose (not inside
                           an HTML comment) is NOT waived and still gets flagged RED -- the live
-                          bug this gate's own build hit (design/ABC-AUDIT-LOOP-RECIPE.md's own
+                          bug this gate's own build hit (design/ORCH-ABC-AUDIT-LOOP-RECIPE.md's own
                           worked-example prose false-triggered a raw substring check) and the
                           regression this case pins.
-  V2-ADJUDICATION     -- doc-attestation/2 (design/SPEC-DOC-ATTESTATION-2.md) binds the escalation
+  V2-ADJUDICATION     -- doc-attestation/2 (design/ORCH-SPEC-DOC-ATTESTATION-2.md) binds the escalation
                           recipient's adjudication as a typed field: an escalated /2 record with a
                           well-shaped adjudication validates; one with NO adjudication (the seam),
                           or a malformed one, or a NON-escalated /2 record carrying an adjudication
@@ -168,7 +168,7 @@ def main() -> int:
         if rc != 0:
             failures.append("a doc with the token inside an HTML comment should be waived")
 
-        # --- SCHEMA /2 ADJUDICATION (design/SPEC-DOC-ATTESTATION-2.md) --------------------
+        # --- SCHEMA /2 ADJUDICATION (design/ORCH-SPEC-DOC-ATTESTATION-2.md) --------------------
         # The escalated-loop adjudication is a typed field in doc-attestation/2. Both illegal
         # states (escalated-without-adjudication; adjudication-without-escalation) are refused;
         # /1 records still validate (compatibility); an unknown schema is refused fail-closed.

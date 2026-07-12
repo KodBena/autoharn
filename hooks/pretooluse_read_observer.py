@@ -8,7 +8,7 @@
 """hooks/pretooluse_read_observer.py -- the READ observer (BACKLOG "Five-item batch,
 maintainer-approved 2026-07-11 evening", item 3). Purpose, on the record: makes "did the
 reviewer consult the artifact independently" answerable (the run10 retrospective's
-could-not-answer item 3, design/RETROSPECTIVE-RUN10.md: "the invocation log captures only
+could-not-answer item 3, design/ORCH-RETROSPECTIVE-RUN10.md: "the invocation log captures only
 Bash, and a reviewer that inspects files via the Read tool leaves no trace ... review rows
 that claim 'independently read app/index.html' are trusted, not witnessed"). This hook closes
 exactly that gap: every `Read` tool call is journaled, so a later audit can check a review

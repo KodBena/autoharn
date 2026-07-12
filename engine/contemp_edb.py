@@ -5,7 +5,7 @@
 #   contributors: e4410ef6/main
 # <<< PROVENANCE-STAMP <<<
 
-"""contemp_edb -- the EDB builder for Part 2 of design/CONTEMPORANEITY-AUDIT.md (the
+"""contemp_edb -- the EDB builder for Part 2 of design/ORCH-CONTEMPORANEITY-AUDIT.md (the
 correlation verb; BACKLOG "Contemporaneity indictment", 2026-07-11). Exports the typed EDB
 `engine/lp/contemporaneity.lp` reasons over, from a WORLD (a project directory carrying the
 ledger's deployment.json plus its `.claude/logs/*.jsonl` hook journals) -- the fact-mining-side
@@ -23,7 +23,7 @@ as #1 -- see "DECLARED EVENT TIME" below):
      delegation_observer.journal.jsonl) -- tool_event/2, re-purposed as the design memo's Part 2
      directive names them ("the hook-journaled tool activity that already exists").
 
-DECLARED EVENT TIME (design/LATE-ENTRY-AND-INTAKE-SEMANTICS.md Proposal 2; kernel/lineage/
+DECLARED EVENT TIME (design/MAINT-LATE-ENTRY-AND-INTAKE-SEMANTICS.md Proposal 2; kernel/lineage/
 s24-declared-event-time.sql, this same commission). A row may optionally carry
 `event_declared_ts` (`led --event-time <iso-ts> ...`) -- the writer's own claim of WHEN the
 recorded event occurred, distinct from `ts` (INSERT time). CAPABILITY-GATED exactly like

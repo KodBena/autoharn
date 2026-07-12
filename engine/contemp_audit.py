@@ -5,7 +5,7 @@
 #   contributors: e4410ef6/main
 # <<< PROVENANCE-STAMP <<<
 
-"""contemp_audit -- Part 2 of design/CONTEMPORANEITY-AUDIT.md: the first-class correlation VERB
+"""contemp_audit -- Part 2 of design/ORCH-CONTEMPORANEITY-AUDIT.md: the first-class correlation VERB
 the maintainer commissioned ("we want a tool that can automatically run this correlation, in a
 first-class way ... time deltas between actual events and recorded events", BACKLOG
 "Contemporaneity indictment", 2026-07-11). Joins ledger rows to the invocation journal and the
@@ -18,7 +18,7 @@ hook-journaled tool-activity streams (engine/contemp_edb.py), runs the ASP verdi
      journaled tool-activity window at the moment each row landed.
   2. the burst table (STATED, token-keyed) -- each burst annotated `intake-shape (precedes all
      tool activity)` when EVERY row in it predates this world's first tool_event
-     (design/LATE-ENTRY-AND-INTAKE-SEMANTICS.md Proposal 1: benign by construction, no vocabulary
+     (design/MAINT-LATE-ENTRY-AND-INTAKE-SEMANTICS.md Proposal 1: benign by construction, no vocabulary
      change) -- or, degraded, the ts-cluster table (INFERRED, pre-token era only -- never
      presented as the same thing).
   3. the silence/backfill table, BACKFILL_SUSPECT tokens, and LATE_DECLARED tokens (Proposal 2:
@@ -45,7 +45,7 @@ upgraded to "AGREE").
 EXIT CODES (a closed, checkable vocabulary -- mirrors instruments/verify_contemporaneity_degrade.py's
 existing N/A-is-distinct-from-clean convention, extended here):
   0  a verdict was computed and is CONTEMPORANEOUS, BATCHED_DECLARED, or LATE_DECLARED
-     (clean-ish, no UNDECLARED suspect burst -- design/LATE-ENTRY-AND-INTAKE-SEMANTICS.md
+     (clean-ish, no UNDECLARED suspect burst -- design/MAINT-LATE-ENTRY-AND-INTAKE-SEMANTICS.md
      Proposal 2: a declared late entry satisfies the mandate) -- OR the world is fully capable
      but its ledger carries ZERO rows, reported as VACUOUSLY_CLEAN in the output ("nothing to
      audit yet", explicitly NOT evidence of conduct; the run9 fix, 2026-07-11 -- a fresh,

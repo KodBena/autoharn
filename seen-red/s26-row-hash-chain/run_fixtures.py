@@ -6,7 +6,7 @@
 # <<< PROVENANCE-STAMP <<<
 
 """run_fixtures.py -- both-polarity proof for kernel/lineage/s26-row-hash-chain.sql +
-bootstrap/templates/verify-chain.tmpl (design/GPG-TRUST-LAYER.md §4, Rung 3). Real infra, no
+bootstrap/templates/verify-chain.tmpl (design/MAINT-GPG-TRUST-LAYER.md §4, Rung 3). Real infra, no
 mocks: a throwaway `--new-world` scaffold in the toy db (which applies s26 as part of its birth
 chain and auto-provisions the genesis seed), torn down before AND after this file runs so
 re-running it never leaves residue.

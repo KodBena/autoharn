@@ -6,7 +6,7 @@
 # <<< PROVENANCE-STAMP <<<
 
 """run_fixtures.py -- both-polarity proof for bootstrap/templates/verify-commission.tmpl
-(design/GPG-TRUST-LAYER.md §3, Rung 2). Real infra, no mocks: a throwaway `--new-world` scaffold
+(design/MAINT-GPG-TRUST-LAYER.md §3, Rung 2). Real infra, no mocks: a throwaway `--new-world` scaffold
 in the toy db, a throwaway GNUPGHOME (Ed25519 test key, generated fresh per run, clearly marked
 test-only), torn down before AND after this file runs so re-running it never leaves residue.
 
@@ -21,7 +21,7 @@ temporarily moving it OUT (never deleting -- restored before case e) for the
 NO-COMMITTED-KEY case. AUTOHARN itself is now only needed for the `filing/` module imports
 (deployment_record, gpg_trust) and is simply the real repo throughout -- there is no more
 "autoharn with/without a key" axis to vary, because autoharn's own `law/keys/` is no longer on
-verify-commission's read path at all (design/GPG-TRUST-LAYER.md §7; law/keys/README.md).
+verify-commission's read path at all (design/MAINT-GPG-TRUST-LAYER.md §7; law/keys/README.md).
 
 Cases (five: the closed VERIFIED/UNSIGNED/FORGED-OR-CORRUPT vocabulary, plus the two typed
 REFUSALS verify-commission.tmpl's own module docstring names — gpg missing, and no committed key
@@ -138,7 +138,7 @@ def main() -> int:
     # own module docstring). new-project.sh does not yet scaffold this directory itself (frozen
     # this pass -- a live session was running in the shared checkout when this commission landed,
     # see the commission's own report for the exact pending diff), so this fixture creates it by
-    # hand, exactly what an operator following design/GPG-TRUST-LAYER-FAQ.md §3b would do on an
+    # hand, exactly what an operator following design/USER-GPG-TRUST-LAYER-FAQ.md §3b would do on an
     # already-scaffolded world today.
     keys_dir = world_dir / "keys"
     saved_key_path = tmp / "test-key.asc.saved"  # case d's temporary move-out target
@@ -161,7 +161,7 @@ def main() -> int:
             (world_dir / verb).chmod(0o755)
         print("  scaffold OK.\n")
 
-        statement = "Build the GPG trust layer per design/GPG-TRUST-LAYER.md, all three rungs."
+        statement = "Build the GPG trust layer per design/MAINT-GPG-TRUST-LAYER.md, all three rungs."
         r = sh(["bash", str(world_dir / "led"), "commission", statement],
                env={**os.environ, "LED_ACTOR": "commissioner"}, cwd=str(world_dir))
         if r.returncode != 0:

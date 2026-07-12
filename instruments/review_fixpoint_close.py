@@ -6,7 +6,7 @@ three-join verdict. DESCRIPTIVE at close-1 AND close-2 (consult 37 two-close str
 anchor is which verdict each close records, not a gate. Lazy imports banned.
 
 Calibration vocabulary (maintainer ruling, 2026-07-07 e18-ratification forward; SSOT =
-claude_harness/docs/design-notes/review-fixpoint-protocol.md): this line evaluates ONE round of the
+claude_harness/docs/design-notes/ORCH-review-fixpoint-protocol.md): this line evaluates ONE round of the
 fixpoint loop. The loop's per-unit parameters are named in full words only — confirmation-depth
 (consecutive clean rounds to terminate, default 1), panel-width (fresh reviewers per round, default 1
 at e-series grain), round-ceiling (hard cap on total rounds including dirty ones; hitting it closes

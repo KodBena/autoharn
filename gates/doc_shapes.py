@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-11T15:09:26Z
-#   last-change: 2026-07-11T15:41:05Z
+#   last-change: 2026-07-12T01:25:24Z
 #   contributors: e4410ef6/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -26,7 +26,7 @@ WHAT IT CHECKS (both measured on the full 208-doc corpus, 2026-07-11):
      witness-integrity mandate."; law/adr/0015:50 "Four rules."). Zero observed false
      positives after the license exemption.
 
-  2. HANDOFF-POSITIONAL — a reference into HANDOFF.md by bare position ("HANDOFF ... item 2")
+  2. HANDOFF-POSITIONAL — a reference into ORCH-HANDOFF.md by bare position ("HANDOFF ... item 2")
      with no quoted named handle between "HANDOFF" and the position word. HANDOFF is rewritten
      wholesale (its own header: "supersedes prior handoff wholesale"), so a positional pointer
      into it dangles on the next rewrite — the maintainer's morning defect (a), hit live on
@@ -36,11 +36,11 @@ WHAT IT CHECKS (both measured on the full 208-doc corpus, 2026-07-11):
      line-prefix holds an odd number of double quotes is inside a quotation — text
      diagnosing the defect, not committing it; live specimen: REVIEW-GAP's 'an earlier
      revision of this line cited "HANDOFF open-work item 2," ...'). Measured on the live
-     corpus at authoring: 1 flag (design/ARTIFACT-VS-REQUIREMENTS-DETECTOR.md:4, a genuine
+     corpus at authoring: 1 flag (design/ORCH-ARTIFACT-VS-REQUIREMENTS-DETECTOR.md:4, a genuine
      instance — independently confirmed and fixed by the concurrent doc-legibility sweep,
      merged b5f9180 the same day), 0 false positives after the two exemptions; BACKLOG.md
-     and HANDOFF.md are exempt wholesale (point-in-time entries and self-references
-     respectively).
+     and ORCH-HANDOFF.md (renamed from HANDOFF.md, doc-audience-taxonomy sweep 2026-07-12)
+     are exempt wholesale (point-in-time entries and self-references respectively).
 
 WHAT WAS MEASURED AND DECLINED (UNBUILT, with reasons — ADR-0011 Rule 1 honesty):
 
@@ -96,8 +96,10 @@ _HANDOFF_POSITIONAL = re.compile(
     re.IGNORECASE,
 )
 
-# Check 2 exemptions: point-in-time entries (BACKLOG) and HANDOFF's self-references.
-HANDOFF_CHECK_EXEMPT_NAMES = {"BACKLOG.md", "HANDOFF.md"}
+# Check 2 exemptions: point-in-time entries (BACKLOG) and HANDOFF's self-references. HANDOFF.md
+# was renamed to ORCH-HANDOFF.md by the doc-audience-taxonomy sweep (2026-07-12); the exemption
+# follows the file, not the old name (a hazard caught while sweeping non-md hardcoded references).
+HANDOFF_CHECK_EXEMPT_NAMES = {"BACKLOG.md", "ORCH-HANDOFF.md"}
 
 _HEADING = re.compile(r"#{1,6}\s")
 _LIST_ITEM = re.compile(r"([-*+]|\d+\.)\s")
@@ -162,7 +164,7 @@ def check_file(path: Path) -> list[str]:
                 # Quoted-mention exemption: if the match starts inside an open double-quoted
                 # span (odd number of quote chars before it on the line), the text is QUOTING
                 # a positional reference — usually to diagnose it — not making one. Live FP
-                # specimen this closes: design/REVIEW-GAP-SCOPE-SEMANTICS-RULING.md's 'an
+                # specimen this closes: design/MAINT-REVIEW-GAP-SCOPE-SEMANTICS-RULING.md's 'an
                 # earlier revision of this line cited "HANDOFF open-work item 2," ...'.
                 prefix = raw[:m.start()]
                 if (prefix.count('"') + prefix.count('“') + prefix.count('”')) % 2 == 1:

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-11T14:37:38Z
-#   last-change: 2026-07-12T00:57:45Z
+#   last-change: 2026-07-12T01:25:43Z
 #   contributors: e4410ef6/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -28,7 +28,7 @@ SCOPE. Every tracked `*.md` (`git ls-files '*.md'`), same universe doc-legibilit
 human might read." Two EXCLUSIONS, both principled and both printed in every run's output
 (never silent, per the commission):
 
-  1. judgment/**  — OPERATING-CARD.md's own words: "predecessor era — history unless a current
+  1. judgment/**  — ORCH-OPERATING-CARD.md's own words: "predecessor era — history unless a current
      spec cites it." A declared-history archive is not held to a live-link bar; if a current
      spec ever cites into it, that citing document (not the archived one) carries the live link.
   2. design/ORCH-ARCHITECTURE.md (renamed from design/ARCHITECTURE.md by the doc-audience-taxonomy
@@ -57,7 +57,7 @@ from urllib.parse import unquote, urlsplit
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-# Exclusion 1: a whole directory, declared history (OPERATING-CARD.md, "The deep history" section).
+# Exclusion 1: a whole directory, declared history (ORCH-OPERATING-CARD.md, "The deep history" section).
 EXCLUDE_DIR_PREFIXES = ("judgment/",)
 # Exclusion 2: a single file, self-declared STALE with its rewrite filed separately (BACKLOG.md).
 # Renamed design/ARCHITECTURE.md -> design/ORCH-ARCHITECTURE.md by the doc-audience-taxonomy
@@ -179,7 +179,7 @@ def main() -> int:
     print(f"link-integrity: {len(scope)} docs in scope ({len(all_tracked)} tracked *.md, "
           f"{len(excluded)} excluded), {total_links} relative link(s) checked.")
     print(f"  excluded (principled, see gates/link_integrity.py docstring):")
-    print(f"    judgment/**            — declared history (OPERATING-CARD.md)")
+    print(f"    judgment/**            — declared history (ORCH-OPERATING-CARD.md)")
     print(f"    design/ORCH-ARCHITECTURE.md — self-declared STALE; rewrite filed in BACKLOG.md")
 
     if anchor_flags:

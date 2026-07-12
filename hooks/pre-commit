@@ -74,7 +74,7 @@ PY="$HOME/w/vdc/venvs/generic/bin/python"
 
 # link_integrity — every relative markdown link in tracked *.md must resolve on disk
 # (2026-07-11 doc-legibility-indictment commission). Two documented exclusions (judgment/,
-# design/ARCHITECTURE.md) printed in its own output every run — never silent.
+# design/ORCH-ARCHITECTURE.md) printed in its own output every run — never silent.
 "$PY" "$REPO_ROOT/gates/link_integrity.py" || {
     echo "" >&2
     echo "pre-commit: link-integrity gate FAILED — commit refused (a doc links somewhere that does not exist)." >&2

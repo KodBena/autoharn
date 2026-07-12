@@ -44,12 +44,12 @@ for what was chosen where the ADR is silent):
 
     {
       "schema": "doc-attestation/1",
-      "doc": "design/ABC-AUDIT-LOOP-RECIPE.md",   // repo-relative path, POSIX separators
+      "doc": "design/ORCH-ABC-AUDIT-LOOP-RECIPE.md",   // repo-relative path, POSIX separators
       "content_sha256": "<64-hex, sha256 of the exact bytes B read>",
       "b_id": "<free text identifying B's invocation, distinct from A's>",
       "rounds": [
         {"round": 1, "verdict": "DEFECT", "findings": [
-            {"file": "design/ABC-AUDIT-LOOP-RECIPE.md", "line": 42,
+            {"file": "design/ORCH-ABC-AUDIT-LOOP-RECIPE.md", "line": 42,
              "quote": "<verbatim excerpt>", "repair": "<one-sentence fix>"}
         ], "clauses_checked": []},
         {"round": 2, "verdict": "CLEAN", "findings": [],
@@ -67,7 +67,7 @@ but does NOT verify (no sound mechanical test separates a genuinely fresh fork f
 one, same reasoning ADR-0017 gives for declining coinage-detection in Rule 2). Distinctness is
 asserted in the record and reviewed like any other claim, never policed here.
 
-SCHEMA VERSIONS — doc-attestation/1 and /2 (the full rationale is design/SPEC-DOC-ATTESTATION-2.md).
+SCHEMA VERSIONS — doc-attestation/1 and /2 (the full rationale is design/ORCH-SPEC-DOC-ATTESTATION-2.md).
 The gate accepts BOTH; an unknown `schema` string is refused (fail-closed — a version whose rules
 this gate does not know cannot be shape-checked). The evolution closes ONE seam the first live
 escalations exposed (BACKLOG "First live enforcement of ADR-0017's loop"): when a loop escalated,
@@ -125,7 +125,7 @@ convention, "never silent"):
     fresh attestation of the entire growing file on every entry would attest noise, not the
     entry (BACKLOG "Zero-context-reader documentation discipline" packet, "point-in-time
     records like BACKLOG appends").
-  - `judgment/**` is excluded WHOLESALE — OPERATING-CARD.md's own words, "predecessor era —
+  - `judgment/**` is excluded WHOLESALE — ORCH-OPERATING-CARD.md's own words, "predecessor era —
     history unless a current spec cites it"; the same declared-history status
     gates/link_integrity.py already excludes this tree for (Rule 2(b)'s sibling gate).
   - A file carrying the HTML comment `<!-- doc-attest-exempt: <reason> -->` anywhere is
@@ -135,7 +135,7 @@ convention, "never silent"):
     gates/doc_shapes.py's `doc-shapes-allow:` waiver precedent, with one deliberate tightening:
     the token must sit inside an HTML comment, not a bare substring match — a plain substring
     check was tried first and caught itself live (this gate's own recipe doc, design/
-    ABC-AUDIT-LOOP-RECIPE.md, explains the waiver token in prose as a worked example, and that
+    ORCH-ABC-AUDIT-LOOP-RECIPE.md, explains the waiver token in prose as a worked example, and that
     explanation alone tripped a false exemption before the HTML-comment requirement was added).
     A waiver is a claim reviewed like any other,
     named inline rather than silent.
@@ -220,7 +220,7 @@ WAIVER_TOKEN = "doc-attest-exempt:"
 RULE1_CLAUSES = {"1a", "1b", "1c", "1d"}
 MAX_ROUNDS = 2  # ADR-0017's two-round B->C cap before the non-converging-review-loop escalation.
 
-# doc-attestation SCHEMA VERSIONS (design/SPEC-DOC-ATTESTATION-2.md). /2 adds a first-class
+# doc-attestation SCHEMA VERSIONS (design/ORCH-SPEC-DOC-ATTESTATION-2.md). /2 adds a first-class
 # `adjudication` object for escalated records, replacing the b_id free-text convention the seam
 # (BACKLOG "First live enforcement of ADR-0017's loop") named. /1 records stay valid history,
 # unchanged and never rewritten; the gate accepts BOTH versions. --record writes SCHEMA_LATEST.
@@ -263,7 +263,7 @@ _WAIVER_COMMENT = re.compile(r"<!--\s*" + re.escape(WAIVER_TOKEN) + r".*?-->", r
 def _has_waiver(path: Path) -> bool:
     """A waiver requires the token inside an HTML comment (`<!-- doc-attest-exempt: reason
     -->`), never a bare substring match. A raw substring check was tried first and caught
-    itself live: this gate's own recipe doc (design/ABC-AUDIT-LOOP-RECIPE.md) explains the
+    itself live: this gate's own recipe doc (design/ORCH-ABC-AUDIT-LOOP-RECIPE.md) explains the
     waiver token in prose as a worked example, and that explanation alone tripped a false
     wholesale exemption under a plain 'WAIVER_TOKEN in text' check. Requiring the HTML-comment
     wrapper is the same device gates/link_integrity.py's strip_inline_code / strip_fences use
@@ -363,7 +363,7 @@ def _validate_round(rnd: Any, idx: int) -> list[str]:
 
 
 def _validate_adjudication(adj: Any, escalated: bool) -> list[str]:
-    """doc-attestation/2 only (design/SPEC-DOC-ATTESTATION-2.md). Structural, never a judgment on
+    """doc-attestation/2 only (design/ORCH-SPEC-DOC-ATTESTATION-2.md). Structural, never a judgment on
     whether the adjudication was RIGHT — same posture as the rest of the gate. Two typed states,
     and the two illegal ones this field exists to make unrepresentable (ADR-0000 Rule 1):
 
@@ -380,7 +380,7 @@ def _validate_adjudication(adj: Any, escalated: bool) -> list[str]:
             return ["escalated record carries no 'adjudication' object — doc-attestation/2 requires "
                     "the escalation recipient's disposition (adjudicated_by / disposition / "
                     "adjudicated_at) as a first-class field, not b_id free text "
-                    "(design/SPEC-DOC-ATTESTATION-2.md; the seam BACKLOG 'First live enforcement')"]
+                    "(design/ORCH-SPEC-DOC-ATTESTATION-2.md; the seam BACKLOG 'First live enforcement')"]
         if not isinstance(adj, dict):
             return ["'adjudication' is not an object"]
         issues = []
@@ -391,7 +391,7 @@ def _validate_adjudication(adj: Any, escalated: bool) -> list[str]:
                 issues.append(f"'adjudication.{key}' is not a non-empty string")
         # The object is EXACTLY the three fields — extra keys are refused so `adjudication` cannot
         # itself become a second free-text overload home, the very defect /2 exists to end
-        # (design/SPEC-DOC-ATTESTATION-2.md, closure statement).
+        # (design/ORCH-SPEC-DOC-ATTESTATION-2.md, closure statement).
         unknown = sorted(k for k in adj if k not in ADJUDICATION_FIELDS)
         if unknown:
             issues.append(f"'adjudication' has unexpected field(s) {unknown} — the object is exactly "
@@ -409,7 +409,7 @@ def validate_record(rec: dict) -> list[str]:
     """Structural issues only — never a check on whether B's judgment was RIGHT. Empty list
     means the record is well-shaped (regardless of whether its content says CLEAN or DEFECT).
     Dispatches on `schema`: /1 rules are unchanged; /2 additionally binds the adjudication field
-    (design/SPEC-DOC-ATTESTATION-2.md)."""
+    (design/ORCH-SPEC-DOC-ATTESTATION-2.md)."""
     if "_parse_error" in rec:
         return [rec["_parse_error"]]
     issues: list[str] = []
@@ -467,7 +467,7 @@ def check_file(rel: str, records: list[dict]) -> list[str]:
         return [f"{rel}: NO-ATTESTATION no fresh-context attestation record in "
                 f"attestations/doc-legibility-attestations.jsonl matches this file's current "
                 f"content (sha256 {content_sha256[:12]}...) — run the A:B:C loop "
-                f"(design/ABC-AUDIT-LOOP-RECIPE.md) and record it with "
+                f"(design/ORCH-ABC-AUDIT-LOOP-RECIPE.md) and record it with "
                 f"'gates/doc_attestation_presence.py --record', or waive with "
                 f"'<!-- {WAIVER_TOKEN} <reason> -->' if this is a point-in-time record or "
                 f"quoted-defect specimen the wholesale exclusions do not already cover"]
@@ -480,7 +480,7 @@ def _print_exclusions(scope: list[str], excluded: list[str], waived: list[str]) 
           f"{len(waived)} waived.")
     print("  excluded (principled, printed per ADR-0017 Rule 2(b) convention):")
     print("    BACKLOG.md  — point-in-time dated entries (ADR-0017 Exceptions)")
-    print("    judgment/** — declared history (OPERATING-CARD.md), same status "
+    print("    judgment/** — declared history (ORCH-OPERATING-CARD.md), same status "
           "gates/link_integrity.py already grants it")
     if waived:
         print(f"  waived by inline '<!-- {WAIVER_TOKEN} ... -->' marker:")

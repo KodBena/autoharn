@@ -7,7 +7,7 @@
 
 """contemp_floor -- the SQL FLOOR of the contemporaneity verdicts: producer ONE of the
 contemporaneity marriage differential (engine/contemp_differential.py), the deferred half of
-design/CONTEMPORANEITY-AUDIT.md's Part 2 ("the SQL-floor differential ... is FILED, not built,
+design/ORCH-CONTEMPORANEITY-AUDIT.md's Part 2 ("the SQL-floor differential ... is FILED, not built,
 this pass"). Computes the SAME judgment predicates as engine/lp/contemporaneity.lp -- burst,
 ts_cluster, silence, intake_shape, backfill_suspect, late_declared, the per-row deltas, and the
 closed verdict -- in Postgres SQL (window functions + set logic; no recursion needed, unlike
@@ -84,7 +84,7 @@ HERE = Path(__file__).resolve().parent
 THRESHOLDS_LP = HERE / "contemp_thresholds.lp"
 
 # The three tool-activity journals + the invocation journal, and the Kind label each contributes
-# to tool_event/2 -- the SAME three-file/label mapping design/CONTEMPORANEITY-AUDIT.md's Part 2
+# to tool_event/2 -- the SAME three-file/label mapping design/ORCH-CONTEMPORANEITY-AUDIT.md's Part 2
 # directive names ("tool_event(Kind, T) (from the hook journals -- change-gate, mutation-observer
 # marker, delegation journal)"). This is CONFIGURATION (which files exist, what to call them), not
 # derivation logic -- duplicated locally rather than imported from contemp_edb.py for the same

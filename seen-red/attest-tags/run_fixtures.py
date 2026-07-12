@@ -5,12 +5,12 @@
 #   contributors: e4410ef6/main
 # <<< PROVENANCE-STAMP <<<
 
-"""run_fixtures.py -- both-polarity proof for ../../attest-tags (design/GPG-TRUST-LAYER.md §2,
+"""run_fixtures.py -- both-polarity proof for ../../attest-tags (design/MAINT-GPG-TRUST-LAYER.md §2,
 Rung 1). Real infra, no mocks: a throwaway GNUPGHOME (Ed25519 test key, generated fresh per run,
 clearly marked test-only) plus a throwaway scratch git repository, both under this process's own
 temp dir, both torn down before AND after this file runs so re-running it never leaves residue.
 
-Cases (five, matching design/GPG-TRUST-LAYER.md §7's "both polarities" + attest-tags' own three
+Cases (five, matching design/MAINT-GPG-TRUST-LAYER.md §7's "both polarities" + attest-tags' own three
 verdicts, GOOD/BAD/UNVERIFIABLE, each witnessed in its own right):
   a-no-tags-uncovered-claim  -- a repo with a RATIFIED-marked commit and no ratified/* tag AT ALL
                                 (zero tags to even check): attest-tags reports the commit as

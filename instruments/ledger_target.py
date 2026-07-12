@@ -32,7 +32,7 @@ Closure statement (ADR-0000 2026-07-02 amendment):
     (a bare schema string that is ambiguous between `epistemic.public` and `nla.public`).
 
 TARGET RESOLUTION (db, schema, kern) now derives from the ONE home `engine/targets.py`
-(design/USE-MODE-ENGINE-WIRING.md item 1; ADR-0012 P1) — the same home `engine/ledger_edb.py`
+(design/ORCH-USE-MODE-ENGINE-WIRING.md item 1; ADR-0012 P1) — the same home `engine/ledger_edb.py`
 derives from, so the two are never hand-synced duplicate copies (the db/schema agreement with
 `engine/ledger_edb.py` is pinned by engine/tests/test_ledger_marriage.py ::
 test_target_parity_against_operator_ssot, run by subprocess against a fresh interpreter that only
@@ -43,7 +43,7 @@ THIS module: the INSTRUMENT-only per-target fields (`subject_actor_sql`, `subjec
 are this SSOT's own domain, not the engine's.
 
 `_KERNEL_SUBJECT`'s schema literal is now PARAMETERIZED from the target's `kern` (the sibling of
-finding 51 named in design/USE-MODE-ENGINE-WIRING.md: this literal used to hardcode `kernel.principal`
+finding 51 named in design/ORCH-USE-MODE-ENGINE-WIRING.md: this literal used to hardcode `kernel.principal`
 regardless of a target's actual kernel schema). The `name='subject'` half is UNCHANGED — finding 51's
 own scope (the principal-actor assumption), explicitly not touched or regressed here.
 """

@@ -10,7 +10,7 @@
 # LIVE from deployment.json's `name` field -- BACKLOG maintainer ruling 2026-07-11, "live verbs";
 # no longer sed-substituted at scaffold time) with --retain, so every run banks a DerivationRecord
 # pair under autoharn's own engine/docs/ledger-marriage/derivations/<name>/ (the auditability
-# clause — design/USE-MODE-ENGINE-WIRING.md item 6). Prints the closed verdict vocabulary per
+# clause — design/ORCH-USE-MODE-ENGINE-WIRING.md item 6). Prints the closed verdict vocabulary per
 # judgment family:
 #   AGREE | DIVERGE_BY_DESIGN | DIVERGE_DEFECT | QUARANTINED
 #
@@ -28,13 +28,13 @@
 # world (no work-item layer) degrades honestly: the violations line reads UNAVAILABLE and does NOT
 # contribute to the exit code (absence of the layer is not itself a violation).
 #
-# Observer-first (design/USE-MODE-ENGINE-WIRING.md item 4): the DIFFERENTIAL half is NOT wired
+# Observer-first (design/ORCH-USE-MODE-ENGINE-WIRING.md item 4): the DIFFERENTIAL half is NOT wired
 # into any gate here or in autoharn; whether it ever becomes gating is a maintainer decision, filed
 # when the first real divergence is seen. The work_item_violations half is judge's own red
 # condition (this delta), not a gate either -- `judge` itself is still an observer verb, run by
 # hand or by `pickup`/`led`'s own callers, never invoked from a PreToolUse/Stop hook.
 #
-# TARGET RESOLUTION (design/OPUS-READINESS.md move 1): this project's own target name (read live
+# TARGET RESOLUTION (design/ORCH-OPUS-READINESS.md move 1): this project's own target name (read live
 # from deployment.json's `name` field below) is very unlikely to be one of autoharn
 # engine/targets.py's curated registry names (toy, nla, e15-e18) or match its scratch-naming
 # conventions -- so this script points LEDGER_DEPLOYMENT at this project's own deployment.json
@@ -70,7 +70,7 @@ fi
 # string satisfies engine/targets.py's resolve() here (LEDGER_DEPLOYMENT below wins for a name
 # unknown to its curated registry -- see targets.py's own precedence docstring); it is ALSO the
 # banking subdirectory name under autoharn's own engine/docs/ledger-marriage/derivations/
-# (design/USE-MODE-ENGINE-WIRING.md item 6), so it should stay stable across one project's runs --
+# (design/ORCH-USE-MODE-ENGINE-WIRING.md item 6), so it should stay stable across one project's runs --
 # deployment.json is exactly that stable, per-world, scaffold-written home
 # (filing/deployment_record.py).
 _dep_vars="$(python3 - "$AUTOHARN" "$DEPLOYMENT" <<'PYEOF'

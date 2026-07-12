@@ -6,7 +6,7 @@
 # <<< PROVENANCE-STAMP <<<
 
 """deployment_record -- the ONE home for a project instance's `deployment.json` SHAPE
-(design/OPUS-READINESS.md move 1; ADR-0012 P1). A deployment record is the machine-readable
+(design/ORCH-OPUS-READINESS.md move 1; ADR-0012 P1). A deployment record is the machine-readable
 answer to "where does THIS project's ledger live": db, host, schema, kern, role -- the same
 (db, schema, kern) triple `engine/targets.py`'s `TargetInfo` already owns for the apparatus's
 own curated targets, plus the two fields a SCAFFOLDED instance needs that the apparatus
@@ -18,7 +18,7 @@ connect as -- the field `instruments/ledger_target.py` already keeps instrument-
 WHY THIS IS THE ONE HOME, NOT A SECOND READER (ADR-0012 P1/P7 applied within one language):
 before this module, the names a deployment needs (db/schema/kern/role/host) were re-authored in
 N places -- engine's `_SPECIAL` dicts, a `kernel.principal` literal, `led`'s bash defaults,
-`settings.json`'s baked env, the WALKTHROUGH's `-v` vars (design/OPUS-READINESS.md's friction
+`settings.json`'s baked env, the WALKTHROUGH's `-v` vars (design/ORCH-OPUS-READINESS.md's friction
 finding). This module is the single parser+validator of the JSON shape; `engine/targets.py`
 (move 1's THIRD resolution source) and `bootstrap/new-project.sh` (move 2's scaffold, both the
 emission and the template-substitution sides) both import THIS module rather than each growing

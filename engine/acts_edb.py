@@ -60,7 +60,7 @@ def _epistemic_target(schema: str) -> Target:
     """This module ALWAYS reasons over an apparatus-authored scratch schema in `epistemic`
     (`marriage_acts_scratch` and kin) -- never a registered deployment target (nla/e15-e18/toy), so
     it constructs its `Target` directly rather than through `ledger_edb.resolve()` / `targets.resolve()`
-    (engine/targets.py, design/USE-MODE-ENGINE-WIRING.md item 1): those now refuse LOUDLY on a name
+    (engine/targets.py, design/ORCH-USE-MODE-ENGINE-WIRING.md item 1): those now refuse LOUDLY on a name
     outside the registry (the toy-collision defect they were built to foreclose), and an apparatus
     scratch schema name was never meant to pass through that registry at all."""
     return Target(schema, db="epistemic", schema=schema, kern="kernel")

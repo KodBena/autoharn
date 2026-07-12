@@ -8,11 +8,11 @@
 # track-work.sh — give ANY directory a STANDING work-tracking deployment (the "omega
 # work-status" litigation closed as a product: research/foundational-map/06-omega-work-status-
 # sql-anti-corruption-layer.md is the precedent this offering generalizes; design/
-# WORK-STATUS-OFFERING.md is the closure record and the item-by-item mapping table).
+# USER-WORK-STATUS-OFFERING.md is the closure record and the item-by-item mapping table).
 #
 # WHAT THIS IS, IN ONE SENTENCE: applies this repo's kernel lineage to a fresh schema pair
 # named for the target project, writes deployment.json + this deployment's OWN keys/ directory
-# (design/GPG-TRUST-LAYER.md §7's key-residence split — never autoharn's own law/keys/) + the
+# (design/MAINT-GPG-TRUST-LAYER.md §7's key-residence split — never autoharn's own law/keys/) + the
 # seven read/write verbs (led, pickup, distance-to-clean, judge, audit, verify-commission,
 # verify-chain) as live shims into <project-dir>, and registers the three standard principals —
 # nothing else. It is deliberately NOT `bootstrap/new-project.sh`:
@@ -245,13 +245,13 @@ sedsubst() {
 # and remains available for future template growth; none of the verb shims below currently
 # contain a __TOKEN__ -- they are pure `exec` shims, same as new-project.sh's own.)
 
-echo "-- keys/ (this deployment's OWN GPG keyring -- SIGNED commissions, design/GPG-TRUST-LAYER.md"
+echo "-- keys/ (this deployment's OWN GPG keyring -- SIGNED commissions, design/MAINT-GPG-TRUST-LAYER.md"
 echo "   §3 -- deliberately separate from autoharn's own law/keys/, which is scoped exclusively to"
 echo "   autoharn's own ratified/* tags and has no bearing on this deployment) --"
 mkdir -p "$PROJECT_ROOT/keys"
 sedsubst < "$TEMPLATES/keys-README.md.tmpl" > "$PROJECT_ROOT/keys/README.md"
 echo "wrote keys/README.md (AWAITING-KEY stub; commit THIS deployment's own signing key here --"
-echo "see design/GPG-TRUST-LAYER-FAQ.md §3 for the ceremony -- never to autoharn's law/keys/)"
+echo "see design/USER-GPG-TRUST-LAYER-FAQ.md §3 for the ceremony -- never to autoharn's law/keys/)"
 
 echo "-- the seven verbs (led, judge, pickup, audit, distance-to-clean, verify-commission,"
 echo "   verify-chain): thin shims exec'ing autoharn's live templates, identical mechanism to"
@@ -290,4 +290,4 @@ echo "  ./led work violations                # cycles / dangling deps / duplicat
 echo ""
 echo "keys/README.md (AWAITING-KEY) explains this deployment's OWN GPG keyring: commit a public"
 echo "key there (never to autoharn's law/keys/) to move SIGNED commissions from NO-COMMITTED-KEY"
-echo "to VERIFIED -- ./verify-commission --id <id>; see design/GPG-TRUST-LAYER-FAQ.md §3."
+echo "to VERIFIED -- ./verify-commission --id <id>; see design/USER-GPG-TRUST-LAYER-FAQ.md §3."

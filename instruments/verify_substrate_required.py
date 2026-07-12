@@ -28,7 +28,7 @@ import close_manifest as cm  # noqa: E402
 
 # A consumer-bearing target with NO registered substrate: not in ledger_target's per-target extras, so
 # resolve() returns fenced_dir=None + subject_session_dir=None. We add it to the consumer-target set for
-# the check. The name is scratch-shaped (`_scratch` suffix, design/USE-MODE-ENGINE-WIRING.md item 1 /
+# the check. The name is scratch-shaped (`_scratch` suffix, design/ORCH-USE-MODE-ENGINE-WIRING.md item 1 /
 # engine/targets.py) so it still resolves a valid (db, schema) via the apparatus-scratch pattern -- only
 # db/schema/kern are registry-derived now; the SUBSTRATE fields (fenced_dir/subject_session_dir) stay
 # instrument-local and this name is deliberately absent from that extras registry.
