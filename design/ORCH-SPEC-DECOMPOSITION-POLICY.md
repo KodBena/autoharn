@@ -73,11 +73,12 @@ Each names its provenance and its honest policing status at authoring time:
 | `decomposition-cites-commission` | must | audit family F3 (preamble-ordering, live) | run 11 violated it; the contemporaneity audit's Part 3 ([ORCH-CONTEMPORANEITY-PART3-SPEC.md](ORCH-CONTEMPORANEITY-PART3-SPEC.md), "Part 3" below) caught it retroactively |
 | `decomposition-reviewed-before-execution` | must | the change-gate extension (tracker `decomposition-review-blocker`) | run 12's 2.5-minute overlap |
 | `acceptance-criterion-first` | must | orderable audit family (buildable; Part 3 conventions) | run 12 commission point 5; witnessed honored there |
-| `completion-carries-witness` | must | kernel: s22 refuses shipped-without-witness at INSERT | the omega-era defect the kernel already forecloses |
-| `explicit-dependency-edges` | should | `work_depends_on` rows exist where sequencing is claimed (audit-checkable) | run 12 declared both its edges; stage-2 ordering checker consumes them |
+| `completion-carries-witness` | must | kernel: [s22](../kernel/lineage/s22-work-item-ledger.sql) (the work-item-ledger lineage step) refuses shipped-without-witness at INSERT | the omega-era defect the kernel already forecloses |
+| `explicit-dependency-edges` | should | orderable audit family (buildable; Part 3 conventions, same shape as `acceptance-criterion-first` above) — `work_depends_on` rows (a `led work depends <slug> <on-slug>` row, [bootstrap/templates/led.tmpl](../bootstrap/templates/led.tmpl)) exist where sequencing is claimed, but the checker that reads them is §8 Stage C's still-to-build work, not live yet | run 12 declared both its edges; the stage-2 ordering checker is designed to consume them once built |
 | `one-acceptance-criterion-per-task` | should | reviewer-judgment | splitting criterion, §5 |
 | `grain-follows-commission-text` | should | reviewer-judgment | run 11 retrospective: its decomposition tracked the maintainer's own sentence structure, and that was judged a virtue |
 | `task-closeable-in-one-session` | should | reviewer-judgment | resumption doctrine: a task spanning sessions must survive on ledger state alone |
+| `estimate-before-execution` | should | reviewer-judgment (the same orderable-audit-family shape as `acceptance-criterion-first` above — a task's `estimate:` row precedes its first `work_claimed` row, a `led work claim <slug>` row, [bootstrap/templates/led.tmpl](../bootstrap/templates/led.tmpl) — is buildable but unbuilt as of this row) | tracker item `cost-estimation-retro`, 2026-07-12: estimates are ledgered for operational-efficiency retrospectives ONLY, never cost policing (the maintainer's own invariant, stated twice at commissioning) — see [design/USER-RETROSPECTIVE-RECIPE.md](USER-RETROSPECTIVE-RECIPE.md) §6 for the grammar and the estimate-vs-actual comparison this criterion's discipline feeds |
 
 ## 4. Policing, derived — the same honesty as the accounting spec
 
@@ -86,9 +87,19 @@ the deployment's actual state, never self-declared: `POLICED (kernel)` when a co
 refuses at insert; `POLICED (gate)` when a write-time hook denies; `POLICED (audit)`
 when a live family flags; `REVIEWER-JUDGMENT` when the shape says so; `DECLARED-ONLY`
 when the named check does not exist in this deployment yet. The table in §3 is honest at
-authoring time: two criteria are already fully policed by shipped machinery, one is
-policed at kernel grade, one is gated pending the blocker's merge, and four rest on
-reviewer judgment — a distribution the maintainer's standing proviso (the 2026-07-12
+authoring time, named by slug rather than left as an unverifiable count: **one** criterion
+is already fully policed by shipped machinery (`decomposition-cites-commission`, audit
+family F3, live); **one** is policed at kernel grade (`completion-carries-witness`, s22's
+INSERT-time constraint); **one** is gated pending the blocker's merge
+(`decomposition-reviewed-before-execution`); and **six** rest on reviewer judgment today —
+two of them (`acceptance-criterion-first`, `explicit-dependency-edges`) because their named
+orderable-audit-family check is buildable per §8 Stage C but not yet built (honestly
+`DECLARED-ONLY`, not yet `POLICED (audit)`, despite `explicit-dependency-edges`'s own row
+naming a "stage-2 ordering checker" — that checker is designed, not live, until Stage C
+ships), and four (`one-acceptance-criterion-per-task`, `grain-follows-commission-text`,
+`task-closeable-in-one-session`, `estimate-before-execution`, the last added 2026-07-12) by
+design, their EVIDENCE-SHAPE field naming `reviewer-judgment` outright — a distribution the
+maintainer's standing proviso (the 2026-07-12
 amendments to [ADR-0000](../law/adr/0000-the-alpha-and-the-omega-type-driven-design.md)
 and [ADR-0013](../law/adr/0013-execution-stamina-and-structural-completeness.md))
 already governs: the text binds even where no machine checks it.
@@ -149,14 +160,21 @@ checked criteria for the whole of quality.
 - **Stage A — grammar + pull**: `task-policy:` intake validation in led.tmpl (clone the
   `resource:` validator's structure), pickup TASK-POLICY section, the template file
   (USER- audience, blessed-table style) with §3's starter set, preamble pointer
-  replacing hand-written commission points. Seen-red both polarities; census.
+  replacing hand-written commission points. Proven both polarities (a malformed statement
+  refused, a well-formed one accepted) with fixtures banked under [`seen-red/`](../GLOSSARY.md#seen-red)
+  and registered in [`gates/fixture_census.py`](../gates/fixture_census.py)'s registry — the
+  same discipline `bootstrap/templates/led.tmpl`'s existing `resource:` validator already
+  carries.
 - **Stage B — the countersign convention**: reviewer-brief text in the scaffold
   preamble/CLAUDE.md template teaching criterion-citing countersigns; the
   decomposition-review blocker's teach-text updated to name the policy section.
 - **Stage C — audit families for the orderable criteria**: `acceptance-criterion-first`
   (a task's acceptance-criteria row precedes its first implementation row — Part 3's
-  cross-clock conventions apply) and `explicit-dependency-edges`; marriage-grade, both
-  polarities, census.
+  cross-clock conventions apply) and `explicit-dependency-edges`; **marriage-grade** — an
+  independent SQL floor plus the ASP deductive-engine verdict, with the two required to
+  AGREE (the phrase [design/ORCH-SPEC-RESOURCE-ACCOUNTING.md](ORCH-SPEC-RESOURCE-ACCOUNTING.md)
+  §5 uses for the identical pairing) — proven both polarities and registered in
+  [`gates/fixture_census.py`](../gates/fixture_census.py)'s registry, same as Stage A.
 - **s27-adjacent deferral**: typed policy columns ride the same future kernel lineage
   step (s27, the deferred `resource` kernel kind both
   [ORCH-SPEC-RESOURCE-REGISTRY.md](ORCH-SPEC-RESOURCE-REGISTRY.md) §2 and the accounting
