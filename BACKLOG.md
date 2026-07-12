@@ -3224,7 +3224,7 @@ when they hold auditability constant.
 A maintainer-commissioned experiment: retrospect run10 from its governed record alone (ledger,
 invocation log, delegation journal, git repo), and record separately what the record turns out
 UNABLE to answer — each unanswerable question being itself a harness finding. Written up as a
-standing document at [design/RETROSPECTIVE-RUN10.md](design/RETROSPECTIVE-RUN10.md) (ADR-0017
+standing document at [design/RETROSPECTIVE-RUN10.md](design/ORCH-RETROSPECTIVE-RUN10.md) (ADR-0017
 compliant; passes gates/doc_shapes.py and gates/link_integrity.py). Read-only pass; no writes to
 run10's world. It does NOT re-cover run10's closure fingerprints (refused ids 67/112/113, stop
 discipline, countersign rounds) — that is the concurrent Sonnet forensic pass's territory and is
@@ -3476,7 +3476,7 @@ blocking path (sub-question 2, answered NO). This entry is that word carried int
    despite the header comment's "FINAL WIRING" note listing it — a pre-existing gap this pass
    noticed but did not cause and cannot touch.
 
-3. **The workflow recipe**, [`design/ABC-AUDIT-LOOP-RECIPE.md`](design/ABC-AUDIT-LOOP-RECIPE.md)
+3. **The workflow recipe**, [`design/ABC-AUDIT-LOOP-RECIPE.md`](design/ORCH-ABC-AUDIT-LOOP-RECIPE.md)
    (the ADR names no companion-doc location for this, so a new `design/` note, per the
    commission's own fallback instruction): step-by-step, self-contained instructions for
    spawning B as a genuinely fresh `Agent`-tool invocation, the two-round cap, the
@@ -4188,7 +4188,7 @@ umbrella claims.
 Filed alongside the mechanism-forensics entry above; the two are complementary passes on the same
 run11 world (this one is the six-questions-re-asked / process-lenses retrospective, that one the
 per-mechanism first-shift forensics). Deliverable:
-[design/RETROSPECTIVE-RUN11.md](design/RETROSPECTIVE-RUN11.md), attested through the ADR-0017
+[design/RETROSPECTIVE-RUN11.md](design/ORCH-RETROSPECTIVE-RUN11.md), attested through the ADR-0017
 A:B:C fresh-context loop (round 1 DEFECT — one unglossed coinage "flat-20" — repaired, round 2
 CLEAN; record in `attestations/doc-legibility-attestations.jsonl`).
 

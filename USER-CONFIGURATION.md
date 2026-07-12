@@ -9,7 +9,7 @@ never seen this repository's internal history: no prior BACKLOG entry, no ADR, n
 assumed. If you only read one section, read ["autoharn as a library"](#autoharn-as-a-library) and
 ["what state lands where"](#what-state-lands-where) — the rest is reference detail for when you
 need it. Operator-facing procedure for people already running this harness (the `led`/`judge`/
-`pickup` verbs, the kernel-delta decision tree) lives in [OPERATING-CARD.md](OPERATING-CARD.md);
+`pickup` verbs, the kernel-delta decision tree) lives in [OPERATING-CARD.md](ORCH-OPERATING-CARD.md);
 this page is upstream of that — it is about *getting to* a working project, not *operating* one
 you already have.
 
@@ -417,7 +417,7 @@ is in [`design/PG-HBA-HARDENING.md`](design/MAINT-PG-HBA-HARDENING.md) §2–§5
 
 ## Related
 
-- [OPERATING-CARD.md](OPERATING-CARD.md) — the operator-facing card for someone already running a
+- [OPERATING-CARD.md](ORCH-OPERATING-CARD.md) — the operator-facing card for someone already running a
   scaffolded project: the verbs, the resumption doctrine, the kernel-delta decision tree.
 - [GLOSSARY.md](GLOSSARY.md) — every coined term this page uses, defined once.
 - [`design/PG-HBA-HARDENING.md`](design/MAINT-PG-HBA-HARDENING.md) — the full pg_hba investigation this

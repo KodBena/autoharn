@@ -29,8 +29,8 @@ ruled".
 
 Four analyst agents were commissioned per the standing delegation contract
 ([CLAUDE.md](../CLAUDE.md) ORCHESTRATION), one per lens, each self-contained: each read the
-governing documents ([OPERATING-CARD.md](../OPERATING-CARD.md),
-[CAPABILITIES.md](../CAPABILITIES.md), the conformance map and BRIEF above, the
+governing documents ([OPERATING-CARD.md](../ORCH-OPERATING-CARD.md),
+[CAPABILITIES.md](../ORCH-CAPABILITIES.md), the conformance map and BRIEF above, the
 [kernel lineage](../kernel/lineage/), the [hooks](../hooks/), the
 [seen-red](../GLOSSARY.md#seen-red) corpus, [BACKLOG.md](../BACKLOG.md)'s dated 2026-07-11
 tail) and, where load-bearing, queried the settled [worlds](../GLOSSARY.md#world) read-only
@@ -114,7 +114,7 @@ promised to copy.
 
 ### Gap 3 — No configuration index: the apparatus is deliberately unpinned, so nothing records which instrument version produced or reads which evidence
 
-The "live verbs" model ([OPERATING-CARD.md](../OPERATING-CARD.md), "What this is") means
+The "live verbs" model ([OPERATING-CARD.md](../ORCH-OPERATING-CARD.md), "What this is") means
 hooks and operator verbs execute from the *current* autoharn checkout on every invocation
 in every wired world — including settled evidence worlds. The scaffold's PROVENANCE header
 records the birth command and the kernel SQL chain
@@ -141,7 +141,7 @@ domain" ([GPG-TRUST-LAYER.md](MAINT-GPG-TRUST-LAYER.md) §1). Nuclear-culture in
 deployment structurally cannot produce, only disclose. The sharpest current edge is the
 run-11 retrospective's own finding: the record can witness that review *happened* and
 *read* the files, but not that it *reasoned* — review's load-bearingness turns UNDECIDABLE
-exactly when review finds nothing ([RETROSPECTIVE-RUN11.md](RETROSPECTIVE-RUN11.md),
+exactly when review finds nothing ([RETROSPECTIVE-RUN11.md](ORCH-RETROSPECTIVE-RUN11.md),
 closing finding).
 
 ### Gap 5 — The verifier is unverified, and the contemporaneity verdict has one producer
@@ -374,7 +374,7 @@ ruling, 2026-07-11).
   [design/GPG-TRUST-LAYER-FAQ.md](USER-GPG-TRUST-LAYER-FAQ.md) — the built-but-unarmed layer
   Tier 1 arms.
 - [design/PG-HBA-HARDENING.md](MAINT-PG-HBA-HARDENING.md) — the prepared perimeter fix.
-- [CAPABILITIES.md](../CAPABILITIES.md) — the witnessed-capability inventory every
+- [CAPABILITIES.md](../ORCH-CAPABILITIES.md) — the witnessed-capability inventory every
   "already sufficient" credit above cites.
 - [law/adr/0017-the-zero-context-reader.md](../law/adr/0017-the-zero-context-reader.md)
   — the legibility law this document is written under; its attestation record lives in

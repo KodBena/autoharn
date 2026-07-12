@@ -47,7 +47,7 @@ that gives **any directory** — not just an autoharn-governed world — a stand
   world — none of the three hooks a governed world wires are present here: the change-gate
   (refuses a file edit with no open+claimed work item), stamp interception (HMAC-signs every
   ledger write), or Stop-gate (blocks a session from ending with outstanding review/work debt)
-  — see the "hooks × kernel map" table in [OPERATING-CARD.md](../OPERATING-CARD.md) for what
+  — see the "hooks × kernel map" table in [OPERATING-CARD.md](../ORCH-OPERATING-CARD.md) for what
   each does when wired. Nor is there a CLAUDE.md governance preamble. Every row this
   deployment's `./led` writes lands **unstamped**
   (`stamp_agent`/`stamp_session`/`stamp_hmac` all `NULL`, `stamp_verified=false`) — visible in
@@ -167,7 +167,7 @@ open question.
   the source this offering generalizes.
 - [`seen-red/track-work/`](../seen-red/track-work/) — both-polarity live proof (a refused
   re-run against an existing deployment; a clean adoption on a throwaway directory, torn down).
-- [`OPERATING-CARD.md`](../OPERATING-CARD.md) — the operator verbs (`led`, `pickup`,
+- [`OPERATING-CARD.md`](../ORCH-OPERATING-CARD.md) — the operator verbs (`led`, `pickup`,
   `distance-to-clean`, `judge`, `audit`) this offering reuses unchanged.
 - [`GLOSSARY.md`](../GLOSSARY.md) — `world`, `run`, `ephemera`, and every other coined term this
   document links on first use.

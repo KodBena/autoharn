@@ -178,7 +178,7 @@ coexist without the gate failing."
 The terms below entered the vocabulary with the world/run operating model (2026-07-09
 onward) and were previously defined nowhere — an Opus fresh-context probe (2026-07-11)
 found this file's own Stand-Alone Principle violated by their absence. Operational detail
-lives in [OPERATING-CARD.md](OPERATING-CARD.md); these are the definitions.
+lives in [OPERATING-CARD.md](ORCH-OPERATING-CARD.md); these are the definitions.
 
 ### world
 One isolated experiment habitat: a subject schema + kernel schema pair in Postgres plus a

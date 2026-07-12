@@ -316,7 +316,7 @@ The documents below are the full technical sources behind each decision above, f
 wants more detail than this brief carries; you do not need to read any of them to answer the six
 questions.
 
-- [ABC-AUDIT-LOOP-RECIPE.md](ABC-AUDIT-LOOP-RECIPE.md) and
+- [ABC-AUDIT-LOOP-RECIPE.md](ORCH-ABC-AUDIT-LOOP-RECIPE.md) and
   [law/adr/0017-the-zero-context-reader.md](../law/adr/0017-the-zero-context-reader.md) — the
   legibility discipline this document was written and independently checked against.
 - [REVIEW-GAP-SCOPE-SEMANTICS-RULING.md](MAINT-REVIEW-GAP-SCOPE-SEMANTICS-RULING.md),
