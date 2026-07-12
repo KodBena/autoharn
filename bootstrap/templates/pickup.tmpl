@@ -49,6 +49,23 @@ Sections emitted, each under a machine-parseable `### SECTION: <NAME>` header (g
                         compare them to what happened (that comparison is a retrospective's own
                         job, per the recipe doc's estimate-vs-actual section, and is deliberately
                         absent from any gate or audit family).
+  TAXONOMIES          — tracker item `taxonomy-stage-a`, design/ORCH-SPEC-TASK-TAXONOMY.md §3/§7
+                        Stage A: every unsuperseded `kind=decision` row whose statement carries
+                        the `taxon:` or `interface:` prefix convention (design/
+                        USER-TAXONOMY-DECLARATION.md's "The statement grammars" section), read
+                        from the same `ledger_current` view via the identical newline-
+                        normalization, coherence-partner, and MALFORMED-flagging conventions
+                        `resources()`/`estimates()` established. Taxa printed first (sorted by
+                        TAXONOMY then TAXON then ledger row id), then interfaces (sorted by
+                        TAXONOMY then ARTIFACT-PATTERN then ledger row id) — one `TAXONOMIES`
+                        section, two labeled sub-listings, mirroring how the spec's own §3
+                        declares both row shapes as one convention. An empty registry prints its
+                        own explicit "(no taxon declarations on record)" / "(no interface
+                        declarations on record)" line per sub-listing — never omitted silently.
+                        This section is a PULL surface only (display); the write-time gate
+                        (`no-cross-taxon-write`) and the audit family (`crossing-via-declared-
+                        interface`, the unassigned-artifact report) are later stages (spec §7
+                        Stage B/C), not built here.
   RECENT-CHANGES      — ledger rows since `--since <timestamptz>`, or the last `-n` rows (default
                         10) if `--since` is omitted.
   GIT-STATE           — this project's own git repo: uncommitted changes and (if it has an
@@ -333,6 +350,107 @@ def estimates(dep) -> None:
         print(m)
 
 
+# Field order for a `taxon:`-prefixed decision statement (see this file's docstring TAXONOMIES
+# entry and design/USER-TAXONOMY-DECLARATION.md's "The statement grammars" section, the ONE place
+# both this parser and led.tmpl's own intake validator read the grammar from -- this list is that
+# grammar transcribed, not a second definition of it, ADR-0012 P1).
+_TAXON_FIELDS = ("TAXONOMY", "TAXON", "PATTERNS", "GLOSS")
+
+# Field order for an `interface:`-prefixed decision statement -- same sourcing rule as
+# _TAXON_FIELDS above.
+_INTERFACE_FIELDS = ("TAXONOMY", "ARTIFACT-PATTERN", "GLOSS")
+
+
+def taxonomies(dep) -> None:
+    _section("TAXONOMIES")
+    # Mirrors resources()'s/estimates()'s own newline-normalization exactly, for the identical
+    # reason (a paste reflowed by a terminal must not shred one row into several under -t -A's
+    # one-physical-line-per-newline output convention -- see resources()'s own comment for the
+    # run12 specimen this guards against here too).
+    #
+    # COHERENCE PARTNER (taxon side): the WHERE filter below and led.tmpl's `taxon:` validator
+    # trigger define "a taxon declaration" IDENTICALLY, by construction -- the same coherence
+    # contract resources()/led.tmpl's `resource:` block already keep (see that pair's own
+    # comments for the run12 incident this pattern forecloses). Change either side only in
+    # lockstep with the other; the grammar's one documented home stays design/
+    # USER-TAXONOMY-DECLARATION.md's "The statement grammars" section.
+    r = _psql_tuples(dep, "SELECT id, regexp_replace(statement, '[\\n\\r]+[ \\t]*', ' ', 'g') "
+                           f"FROM {dep.schema}.ledger_current "
+                           f"WHERE kind = 'decision' AND statement ~ '^[[:space:]]*taxon:' "
+                           f"ORDER BY id;")
+    if r.returncode != 0:
+        print(f"ERROR: {r.stderr.strip()}")
+        return
+    # -t -A echoes one leading line for the preceding `SET ROLE` statement (see resources()'s own
+    # identical drop) -- safe here too, now that the newline-normalization above guarantees one
+    # query row is always exactly one physical output line.
+    lines = [ln for ln in r.stdout.split("\n")[1:] if ln.strip()]
+    if not lines:
+        print("(no taxon declarations on record)")
+    else:
+        parsed: list[tuple[str, str, int, str]] = []  # (taxonomy, taxon, row-id, formatted block)
+        malformed: list[str] = []
+        for ln in lines:
+            row_id, _, statement = ln.partition("|")
+            statement = statement.lstrip()
+            body = statement.split(":", 1)[1] if ":" in statement else ""
+            fields = [f.strip() for f in body.split("|")]
+            if len(fields) != len(_TAXON_FIELDS):
+                malformed.append(f"id={row_id.strip()}: MALFORMED taxon statement (expected "
+                                  f"{len(_TAXON_FIELDS)} '|'-separated fields "
+                                  f"{_TAXON_FIELDS}, got {len(fields)}) -- raw: {statement.strip()}")
+                continue
+            taxonomy, taxon, patterns, gloss = fields
+            block = (f"TAXON [{taxonomy}] {taxon}  (ledger row id={row_id.strip()})\n"
+                     f"  patterns: {patterns}\n"
+                     f"  gloss:    {gloss}")
+            parsed.append((taxonomy, taxon, int(row_id.strip()), block))
+        parsed.sort(key=lambda t: (t[0], t[1], t[2]))
+        for _, _, _, block in parsed:
+            print(block)
+        for m in malformed:
+            print(m)
+
+    # COHERENCE PARTNER (interface side): the WHERE filter below and led.tmpl's `interface:`
+    # validator trigger define "an interface declaration" IDENTICALLY, by construction -- the same
+    # coherence contract kept above for `taxon:`. Change either side only in lockstep with the
+    # other; the grammar's one documented home stays design/USER-TAXONOMY-DECLARATION.md's "The
+    # statement grammars" section.
+    r2 = _psql_tuples(dep, "SELECT id, regexp_replace(statement, '[\\n\\r]+[ \\t]*', ' ', 'g') "
+                            f"FROM {dep.schema}.ledger_current "
+                            f"WHERE kind = 'decision' AND statement ~ '^[[:space:]]*interface:' "
+                            f"ORDER BY id;")
+    if r2.returncode != 0:
+        print(f"ERROR: {r2.stderr.strip()}")
+        return
+    lines2 = [ln for ln in r2.stdout.split("\n")[1:] if ln.strip()]
+    if not lines2:
+        print("(no interface declarations on record)")
+        return
+
+    parsed2: list[tuple[str, str, int, str]] = []  # (taxonomy, artifact-pattern, row-id, block)
+    malformed2: list[str] = []
+    for ln in lines2:
+        row_id, _, statement = ln.partition("|")
+        statement = statement.lstrip()
+        body = statement.split(":", 1)[1] if ":" in statement else ""
+        fields = [f.strip() for f in body.split("|")]
+        if len(fields) != len(_INTERFACE_FIELDS):
+            malformed2.append(f"id={row_id.strip()}: MALFORMED interface statement (expected "
+                               f"{len(_INTERFACE_FIELDS)} '|'-separated fields "
+                               f"{_INTERFACE_FIELDS}, got {len(fields)}) -- raw: {statement.strip()}")
+            continue
+        taxonomy, artifact_pattern, gloss = fields
+        block = (f"INTERFACE [{taxonomy}] {artifact_pattern}  (ledger row id={row_id.strip()})\n"
+                 f"  gloss:    {gloss}")
+        parsed2.append((taxonomy, artifact_pattern, int(row_id.strip()), block))
+    parsed2.sort(key=lambda t: (t[0], t[1], t[2]))
+    for _, _, _, block in parsed2:
+        print(block)
+    for m in malformed2:
+        print(m)
+
+
 def recent_changes(dep, since: str | None, n: int) -> None:
     _section("RECENT-CHANGES")
     if since:
@@ -443,6 +561,7 @@ def main(argv: list[str] | None = None) -> int:
     git_state(DEPLOYMENT_PATH.parent)
     resources(dep)
     estimates(dep)
+    taxonomies(dep)
     in_flight(dep)
     print()
     return 0

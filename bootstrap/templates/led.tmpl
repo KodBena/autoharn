@@ -981,6 +981,168 @@ PYEOF
     ;;
 esac
 
+# --- taxon: intake validation (tracker item `taxonomy-stage-a`, design/ORCH-SPEC-TASK-TAXONOMY.md
+# §3, Stage A) --------------------------------------------------------------------------------
+# A statement beginning `taxon:` (after stripping leading whitespace) declares one row of a
+# declared taxonomy -- a boundary the maintainer's outset-settled decomposition discipline
+# generalizes: one row assigns a PATTERNS glob-set to a TAXON within a named TAXONOMY, and MUST
+# carry the four-field grammar design/USER-TAXONOMY-DECLARATION.md's "The statement grammars"
+# section documents before ANY write is attempted -- refuse loudly here, at the boundary
+# (ADR-0002 rule 2: validate at boundaries, do not coerce), exactly the same posture as the
+# `resource:`/`estimate:` blocks above, cloned structurally (whitespace-normalized validation
+# copy, byte-exact persisted statement, refuse-before-write atomicity, teach-text naming the
+# grammar and where it is documented).
+#
+# The grammar check below runs against a WHITESPACE-NORMALIZED COPY only (every run of \n/\r plus
+# its following indentation collapsed to one space), so a legitimate embedded newline (a paste
+# reflowed by a terminal) is ACCEPTED rather than refused -- identical convention to the
+# `resource:`/`estimate:` blocks above. The row actually written on success is $statement,
+# completely untouched -- byte fidelity matters here for the same reason it matters for
+# `resource:` (a later GPG signing ceremony reads this exact row, design/
+# USER-GPG-TRUST-LAYER-FAQ.md); the normalized copy is validation-only scratch, never persisted.
+# Nothing is written at all if validation fails (atomicity by refusal-before-write).
+#
+# COHERENCE PARTNER: the trigger condition below (leading POSIX [:space:] stripped, then a
+# `taxon:` prefix) and bootstrap/templates/pickup.tmpl taxonomies()'s SQL filter for taxon rows
+# (`statement ~ '^[[:space:]]*taxon:'`) define "a taxon declaration" IDENTICALLY, by construction
+# -- every statement this validator accepts is exactly a statement that SELECT reads, no more and
+# no fewer (the run12 incident `resource:`/`pickup.tmpl` forecloses is the precedent this
+# coherence contract exists to avoid repeating here). Change either side only in lockstep with the
+# other.
+_taxon_trimmed="${statement#"${statement%%[![:space:]]*}"}"
+case "$_taxon_trimmed" in
+  taxon:*)
+    if ! python3 - "$_taxon_trimmed" <<'PYEOF'
+import re
+import sys
+
+# The four fields, in order, are transcribed VERBATIM from design/USER-TAXONOMY-DECLARATION.md's
+# "The statement grammars" section -- the ONE documented home of this grammar (a transcription,
+# not a second, driftable definition of it -- ADR-0012 P1). bootstrap/templates/pickup.tmpl's own
+# _TAXON_FIELDS tuple is the sibling reader of the same four names on the display side. TAXONOMY
+# and TAXON are both machine keys design/ORCH-SPEC-TASK-TAXONOMY.md §4's predicates quantify over
+# (`single-taxon-task(T)`, `no-cross-taxon-write(T)`) -- held to the same bare-slug shape
+# `estimate:`'s TASK-SLUG field already uses, so a predicate never has to guess whether two
+# differently-cased or differently-punctuated spellings name the same taxon.
+FIELDS = ("TAXONOMY", "TAXON", "PATTERNS", "GLOSS")
+_SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9-]*$")
+
+raw = sys.argv[1]
+normalized = re.sub(r"[\r\n]+[ \t]*", " ", raw).strip()
+body = normalized[len("taxon:"):]
+parts = [p.strip() for p in body.split("|")]
+
+
+def refuse(msg: str) -> None:
+    print(f"led: REFUSED -- malformed 'taxon:' statement -- {msg}.", file=sys.stderr)
+    print("  grammar (design/USER-TAXONOMY-DECLARATION.md 'The statement grammars'):", file=sys.stderr)
+    print("    taxon: <TAXONOMY> | <TAXON> | <PATTERNS> | <GLOSS>", file=sys.stderr)
+    print(f"  the four fields, in order: {', '.join(FIELDS)}", file=sys.stderr)
+    print("  TAXONOMY and TAXON must each match ^[a-z0-9][a-z0-9-]*$ (a bare slug, no spaces)", file=sys.stderr)
+    print("  PATTERNS must be non-empty (one or more path globs assigning artifacts to the taxon)", file=sys.stderr)
+    print("  GLOSS must be non-empty (state what the taxon means, for a human reader)", file=sys.stderr)
+    print(f"  received ({len(parts)} field(s), whitespace-normalized): {normalized}", file=sys.stderr)
+    print("  NOTHING was written -- fix the statement and re-run.", file=sys.stderr)
+    sys.exit(1)
+
+
+if len(parts) != len(FIELDS):
+    refuse(f"expected exactly {len(FIELDS)} '|'-separated fields, got {len(parts)}")
+
+taxonomy, taxon, patterns, gloss = parts
+if not _SLUG_RE.match(taxonomy):
+    refuse(f"TAXONOMY field {taxonomy!r} does not match ^[a-z0-9][a-z0-9-]*$ (a bare slug, no spaces)")
+if not _SLUG_RE.match(taxon):
+    refuse(f"TAXON field {taxon!r} does not match ^[a-z0-9][a-z0-9-]*$ (a bare slug, no spaces)")
+if not patterns:
+    refuse("PATTERNS field is empty -- name at least one path glob assigning artifacts to the taxon")
+if not gloss:
+    refuse("GLOSS field is empty -- state what the taxon means, for a human reader")
+
+sys.exit(0)
+PYEOF
+    then
+      exit 1
+    fi
+    ;;
+esac
+
+# --- interface: intake validation (tracker item `taxonomy-stage-a`, design/ORCH-SPEC-TASK-TAXONOMY.md
+# §3, Stage A) -----------------------------------------------------------------------------------
+# A statement beginning `interface:` (after stripping leading whitespace) declares one sanctioned
+# crossing point (the ICD analog, spec §3) for a named TAXONOMY -- an artifact that MAY be
+# referenced from outside the taxon that contains it -- and MUST carry the three-field grammar
+# design/USER-TAXONOMY-DECLARATION.md's "The statement grammars" section documents before ANY
+# write is attempted, cloned structurally from `resource:`/`estimate:`/`taxon:` above (whitespace-
+# normalized validation copy, byte-exact persisted statement, refuse-before-write atomicity,
+# teach-text naming the grammar and where it is documented).
+#
+# The grammar check below runs against a WHITESPACE-NORMALIZED COPY only (every run of \n/\r plus
+# its following indentation collapsed to one space), so a legitimate embedded newline is ACCEPTED
+# rather than refused -- identical convention to the blocks above. The row actually written on
+# success is $statement, completely untouched -- byte fidelity matters here for the same reason it
+# matters for `resource:` (a later GPG signing ceremony reads this exact row, design/
+# USER-GPG-TRUST-LAYER-FAQ.md); the normalized copy is validation-only scratch, never persisted.
+# Nothing is written at all if validation fails (atomicity by refusal-before-write).
+#
+# COHERENCE PARTNER: the trigger condition below (leading POSIX [:space:] stripped, then an
+# `interface:` prefix) and bootstrap/templates/pickup.tmpl taxonomies()'s SQL filter for interface
+# rows (`statement ~ '^[[:space:]]*interface:'`) define "an interface declaration" IDENTICALLY, by
+# construction -- the same coherence contract the `taxon:` block above keeps with its own reader.
+# Change either side only in lockstep with the other.
+_interface_trimmed="${statement#"${statement%%[![:space:]]*}"}"
+case "$_interface_trimmed" in
+  interface:*)
+    if ! python3 - "$_interface_trimmed" <<'PYEOF'
+import re
+import sys
+
+# The three fields, in order, are transcribed VERBATIM from design/USER-TAXONOMY-DECLARATION.md's
+# "The statement grammars" section -- the ONE documented home of this grammar (a transcription,
+# not a second, driftable definition of it -- ADR-0012 P1). bootstrap/templates/pickup.tmpl's own
+# _INTERFACE_FIELDS tuple is the sibling reader of the same three names on the display side.
+FIELDS = ("TAXONOMY", "ARTIFACT-PATTERN", "GLOSS")
+_SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9-]*$")
+
+raw = sys.argv[1]
+normalized = re.sub(r"[\r\n]+[ \t]*", " ", raw).strip()
+body = normalized[len("interface:"):]
+parts = [p.strip() for p in body.split("|")]
+
+
+def refuse(msg: str) -> None:
+    print(f"led: REFUSED -- malformed 'interface:' statement -- {msg}.", file=sys.stderr)
+    print("  grammar (design/USER-TAXONOMY-DECLARATION.md 'The statement grammars'):", file=sys.stderr)
+    print("    interface: <TAXONOMY> | <ARTIFACT-PATTERN> | <GLOSS>", file=sys.stderr)
+    print(f"  the three fields, in order: {', '.join(FIELDS)}", file=sys.stderr)
+    print("  TAXONOMY must match ^[a-z0-9][a-z0-9-]*$ (a bare slug, no spaces) -- the same taxonomy", file=sys.stderr)
+    print("  a 'taxon:' row for it declared", file=sys.stderr)
+    print("  ARTIFACT-PATTERN must be non-empty (the sanctioned crossing artifact or glob)", file=sys.stderr)
+    print("  GLOSS must be non-empty (state what the interface is, for a human reader)", file=sys.stderr)
+    print(f"  received ({len(parts)} field(s), whitespace-normalized): {normalized}", file=sys.stderr)
+    print("  NOTHING was written -- fix the statement and re-run.", file=sys.stderr)
+    sys.exit(1)
+
+
+if len(parts) != len(FIELDS):
+    refuse(f"expected exactly {len(FIELDS)} '|'-separated fields, got {len(parts)}")
+
+taxonomy, artifact_pattern, gloss = parts
+if not _SLUG_RE.match(taxonomy):
+    refuse(f"TAXONOMY field {taxonomy!r} does not match ^[a-z0-9][a-z0-9-]*$ (a bare slug, no spaces)")
+if not artifact_pattern:
+    refuse("ARTIFACT-PATTERN field is empty -- name the sanctioned crossing artifact or glob")
+if not gloss:
+    refuse("GLOSS field is empty -- state what the interface is, for a human reader")
+
+sys.exit(0)
+PYEOF
+    then
+      exit 1
+    fi
+    ;;
+esac
+
 warn_flag_in_statement "$statement"
 rationale=""
 if [ -n "$files" ]; then

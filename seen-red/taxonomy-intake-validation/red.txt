@@ -1,0 +1,117 @@
+seen-red/taxonomy-intake-validation — banked both-polarity evidence (fixture-census)
+
+Tracker item `taxonomy-stage-a` (design/ORCH-SPEC-TASK-TAXONOMY.md §3/§7, Stage A). Deliverable
+(a): `taxon:`/`interface:` intake-validation conventions cloning the structure of the existing
+`resource:`/`estimate:` validators in bootstrap/templates/led.tmpl — same posture: field-count
+and per-field shape refusal, whitespace normalization for validation only, byte-exact persisted
+statement, a refusal that teaches (naming design/USER-TAXONOMY-DECLARATION.md), atomicity by
+refusal-before-write (ADR-0002).
+
+THE FEATURE, both halves proven live below:
+
+  - bootstrap/templates/led.tmpl now validates a `taxon:` statement (four `|`-separated fields:
+    TAXONOMY, TAXON, PATTERNS, GLOSS) and an `interface:` statement (three fields: TAXONOMY,
+    ARTIFACT-PATTERN, GLOSS) — each against a whitespace-normalized copy (every run of \n/\r
+    plus following indentation collapsed to one space) — BEFORE the INSERT. TAXONOMY and TAXON
+    must each match `^[a-z0-9][a-z0-9-]*$` (the same bare-slug shape `estimate:`'s TASK-SLUG
+    already uses, since both are machine keys design/ORCH-SPEC-TASK-TAXONOMY.md §4's predicates
+    quantify over); PATTERNS/GLOSS/ARTIFACT-PATTERN must be non-empty. On failure: REFUSED, exit
+    nonzero, NOTHING written (atomicity by refusal-before-write), teach-text naming the grammar
+    and the specific field that failed. On success: the statement is INSERTed AS TYPED,
+    byte-exact (never the normalized copy).
+  - bootstrap/templates/pickup.tmpl's new taxonomies() reader renders every on-record `taxon:`/
+    `interface:` row under one shared `### SECTION: TAXONOMIES` header — taxa first (sorted by
+    TAXONOMY then TAXON then row id), then interfaces (sorted by TAXONOMY then ARTIFACT-PATTERN
+    then row id) — using the identical newline-normalization SELECT and MALFORMED-flagging
+    posture resources()/estimates() already established — never silently dropping a bad row.
+  - COHERENCE (both grammars): led's validator triggers and pickup's SELECT filters define "a
+    taxon declaration" / "an interface declaration" IDENTICALLY, the same coherence-partner
+    contract `resource:`/resources() already keep — led triggers on the statement after
+    stripping leading POSIX [:space:] starting with `taxon:`/`interface:`; pickup's filters name
+    the same classes: `statement ~ '^[[:space:]]*taxon:'` / `'^[[:space:]]*interface:'`.
+  - The grammar's ONE documented home is design/USER-TAXONOMY-DECLARATION.md's "The statement
+    grammars" section, which both parsers cite in their own comments rather than restating the
+    grammar a second time (ADR-0012 P1).
+
+WHAT THE FIXTURE PROVES, IN ORDER (seen-red/taxonomy-intake-validation/run_fixtures.py, live run
+against a throwaway scratch deployment taxivfixture/taxivfixture_kernel/taxivfixture_rw via
+bootstrap/track-work.sh, toy@192.168.122.1, torn down after):
+
+  taxon: grammar — 5 RED cases (field-count; TAXONOMY not a slug; TAXON not a slug; empty
+  PATTERNS; empty GLOSS), each REFUSED with row count unchanged; then GREEN: the omega licensing
+  specimen (design/ORCH-SPEC-TASK-TAXONOMY.md §3) accepted byte-exact, an embedded-newline
+  specimen accepted with the newline preserved verbatim, `./pickup`'s TAXONOMIES section
+  rendering both cleanly with no MALFORMED entries, and a leading-whitespace declaration accepted
+  and rendered — the coherence-partner contract proven live.
+
+  interface: grammar — the same shape: 4 RED cases (field-count; TAXONOMY not a slug; empty
+  ARTIFACT-PATTERN; empty GLOSS), each REFUSED with row count unchanged; then GREEN: the omega
+  specimen's own interface row accepted byte-exact, an embedded-newline specimen accepted with
+  the newline preserved, `./pickup`'s TAXONOMIES section rendering both taxa and interfaces
+  cleanly with no MALFORMED entries, and a leading-whitespace declaration accepted and rendered.
+
+WITNESSED TRANSCRIPT (2026-07-12, live run, autoharn worktree
+worktree-agent-a0779e95705493a71 @ 39d8534):
+
+  ADOPT: track-work.sh exit=0 deployment.json=True -- PASS
+  RED-TAXON-FIELDCOUNT: exit=1 refused=True row-count before=0 after=0 (unchanged=True) -- PASS
+  RED-TAXON-BAD-TAXONOMY: exit=1 refused=True row-count before=0 after=0 (unchanged=True) -- PASS
+  RED-TAXON-BAD-TAXON: exit=1 refused=True row-count before=0 after=0 (unchanged=True) -- PASS
+  RED-TAXON-EMPTY-PATTERNS: exit=1 refused=True row-count before=0 after=0 (unchanged=True) -- PASS
+  RED-TAXON-EMPTY-GLOSS: exit=1 refused=True row-count before=0 after=0 (unchanged=True) -- PASS
+  GREEN-TAXON-WELL-FORMED: exit=0 accepted=True row-count before=0 after=1 (grew-by-one=True) -- PASS
+  GREEN-TAXON-WELL-FORMED: stored statement is byte-exact -- PASS
+  GREEN-TAXON-EMBEDDED-NEWLINE: exit=0 accepted=True row-count before=1 after=2 (grew-by-one=True) -- PASS
+  GREEN-TAXON-EMBEDDED-NEWLINE: stored statement is byte-exact -- PASS
+  GREEN-TAXON-PICKUP-RENDERS: TAXONOMIES section renders 'TAXON [license] mit-derivative ' with
+    no 'MALFORMED' -- PASS
+  GREEN-TAXON-LEADING-WHITESPACE: exit=0 accepted=True row-count before=2 after=3
+    (grew-by-one=True) -- PASS
+  GREEN-TAXON-LEADING-WHITESPACE: TAXONOMIES section renders 'TAXON [arch-layer] domain' with no
+    'MALFORMED' -- PASS
+  RED-INTERFACE-FIELDCOUNT: exit=1 refused=True row-count before=3 after=3 (unchanged=True) -- PASS
+  RED-INTERFACE-BAD-TAXONOMY: exit=1 refused=True row-count before=3 after=3 (unchanged=True) -- PASS
+  RED-INTERFACE-EMPTY-PATTERN: exit=1 refused=True row-count before=3 after=3 (unchanged=True) -- PASS
+  RED-INTERFACE-EMPTY-GLOSS: exit=1 refused=True row-count before=3 after=3 (unchanged=True) -- PASS
+  GREEN-INTERFACE-WELL-FORMED: exit=0 accepted=True row-count before=3 after=4
+    (grew-by-one=True) -- PASS
+  GREEN-INTERFACE-WELL-FORMED: stored statement is byte-exact -- PASS
+  GREEN-INTERFACE-EMBEDDED-NEWLINE: exit=0 accepted=True row-count before=4 after=5
+    (grew-by-one=True) -- PASS
+  GREEN-INTERFACE-EMBEDDED-NEWLINE: stored statement is byte-exact -- PASS
+  GREEN-INTERFACE-PICKUP-RENDERS: TAXONOMIES section renders
+    'INTERFACE [license] backend/qeubo/__init__.py' with no 'MALFORMED' -- PASS
+  GREEN-INTERFACE-LEADING-WHITESPACE: exit=0 accepted=True row-count before=5 after=6
+    (grew-by-one=True) -- PASS
+  GREEN-INTERFACE-LEADING-WHITESPACE: TAXONOMIES section renders
+    'INTERFACE [arch-layer] src/domain/ports.py' with no 'MALFORMED' -- PASS
+
+  --- pickup TAXONOMIES section (verbatim, after every GREEN declaration above landed) ---
+  ### SECTION: TAXONOMIES
+
+  TAXON [arch-layer] domain  (ledger row id=3)
+    patterns: src/domain/**
+    gloss:    pure business logic, no I/O
+  TAXON [license] mit-derivative  (ledger row id=1)
+    patterns: backend/qeubo/**
+    gloss:    upstream qEUBO derivative
+  TAXON [license] mit-derivative-fork  (ledger row id=2)
+    patterns: vendor/qeubo-fork/**
+    gloss:    a locally-patched fork of the upstream qEUBO derivative, kept separate pending
+    upstreaming
+  INTERFACE [arch-layer] src/domain/ports.py  (ledger row id=5)
+    gloss:    the only module an adapter may import from the domain layer, per the arch-layer
+    taxonomy's own boundary
+  INTERFACE [arch-layer] src/domain/ports.py  (ledger row id=6)
+    gloss:    the domain layer's own port module
+  INTERFACE [license] backend/qeubo/__init__.py  (ledger row id=4)
+    gloss:    the documented public surface
+  --- end pickup TAXONOMIES section ---
+
+  taxonomy-intake-validation fixture: all cases PASS, scratch substrate torn down to zero
+  residue (tempdir removed, schema taxivfixture/taxivfixture_kernel/role taxivfixture_rw
+  dropped).
+
+Registered in gates/fixture_census.py REGISTRY as "taxonomy-intake-validation" ->
+seen-red/taxonomy-intake-validation/run_fixtures.py. Re-run:
+  python3 seen-red/taxonomy-intake-validation/run_fixtures.py
