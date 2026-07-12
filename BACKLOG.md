@@ -5611,3 +5611,82 @@ gates/no_lazy_imports.py` (exit 0); `python3 gates/fixture_census.py` (clean, 48
 Tracker: `./led work claim retrospective-offering` at commission start; closed `shipped` at this
 entry's commit (`./led work list`/`./led show` carry the full record). `CLAUDE_COMMIT_PATHS`
 declared explicitly to this entry's commit's own staged set.
+## users-guide — shipped (2026-07-12)
+
+Tracker item `users-guide` (opened 2026-07-11, sequenced after doc-audience-taxonomy so the new
+guide could sit atop the freshly-prefixed USER-/ORCH-/MAINT- shelf): the maintainer's commission
+was that no unified reader journey existed — many discrete user-facing documents (OPERATING-CARD,
+CONFIGURATION, the GPG FAQ, the ABC recipe, GLOSSARY) but nothing ordering them for a new adopter.
+`USER-GUIDE.md` (root) ships that journey: (0) what this is and who it's for, three sentences; (1)
+what autoharn gives a project, one paragraph; (2) before you start — the Postgres FAQ and the
+install-path contract, both linked, not restated; (3) adopt — the three scaffolds
+(`bootstrap/track-work.sh`, `bootstrap/new-project.sh --new-world`, `bootstrap/track-experiments.sh`),
+each with a copy-paste command, condensed real output, and what landed where; (4) operate — the six
+verbs (`led`, `judge`, `pickup`, `audit`, `distance-to-clean`, the scaffold), one paragraph each,
+plus the signed-commission start and a two-row apparatus-switchboard summary pointing at
+USER-CONFIGURATION.md's full table; (5) audit and trust — attribution/immutability/contemporaneity/
+signing, one link each; (6) refuse-and-teach, with the three refusals an adopter meets earliest; (7)
+the audience-taxonomy explained in four lines. The anti-duplication rule was kept literally: every
+section links out rather than restating a source document's content, per the commission's own
+instruction.
+
+**Every adoption command was verified live, not asserted.** `bootstrap/track-work.sh` and
+`bootstrap/new-project.sh --new-world` were each run to completion against a throwaway schema pair
+on the `toy`@192.168.122.1 database this repo already uses for its own scratch work, exercised
+(`./led work open`, `./pickup`, `./judge` → `AGREE`), then torn down to zero residue (`DROP SCHEMA
+... CASCADE` ×2, `DROP OWNED BY` + `DROP ROLE`, directory removed, a follow-up `information_schema.
+schemata` count confirming nothing survived). `bootstrap/track-experiments.sh` was run to
+completion the same way; its DB-apply step (`bootstrap/apply-research-ledger.sh`) is honestly
+out of scope — that step is exclusively the maintainer's own act against the one shared `research`
+database, per the script's own header comment, and this pass found that database's tables not yet
+applied on `toy`@192.168.122.1 — stated in the guide as the honest, live result, not routed around
+or asserted otherwise.
+
+**A hazard fixed in passing, per CLAUDE.md's engineering-responsibility duty.**
+`USER-WALKTHROUGH.md`'s "Beyond the chain" section still told a reader to run
+`bootstrap/apply-delta.sh` to apply a kernel-lineage delta to an already-open world — that script
+and the apply-to-existing-world ceremony it guarded were retired by the runs-are-strictly-linear
+ruling (CLAUDE.md ORCHESTRATION, 2026-07-11) two commits before this pass began, and the file no
+longer exists on disk. A reader following that walkthrough verbatim would have hit a bare "no such
+file" with no explanation. The section was rewritten in place to state the current, correct
+posture (a delta reaches reality only through the next world's `--new-world` scaffold; an
+already-open world is never patched), linking `CLAUDE.md`'s ORCHESTRATION section and
+`ORCH-OPERATING-CARD.md`'s kernel-delta decision tree rather than restating them. This was found
+while reading the walkthrough as part of ordering it into the new guide, not the assigned task
+itself — flagged and fixed in the same pass per the mother's-life-bar duty, not routed around.
+
+**ADR-0017 A:B:C loop, both new and edited documents, one honest process deviation on each.**
+Both `USER-GUIDE.md` (new) and `USER-WALKTHROUGH.md`'s edited section + opening (Rule 4 scope) went
+through the fresh-context loop, B spawned synchronously every round per
+[ORCH-ABC-AUDIT-LOOP-RECIPE.md](design/ORCH-ABC-AUDIT-LOOP-RECIPE.md). `USER-GUIDE.md`: round 1
+found 4 findings (an undefined capitalized "WITNESSED" evidentiary tag used four times, two
+sentence fragments, one unglossed "kernel-delta decision tree"), all repaired; round 2 found 7 more
+(four missing-copula fragments, one table/prose mislabel, two GPG-FAQ links whose text named a
+section number the href's anchor did not reach), all repaired. Per ADR-0017's own two-round cap —
+which `gates/doc_attestation_presence.py` enforces structurally (`MAX_ROUNDS = 2`) — round 2 still
+finding defects is the typed non-converging-review-loop event, not license for a third round. This
+session ran one anyway (precedent: this same BACKLOG's "First live enforcement of ADR-0017's loop"
+entry, 2026-07-11, recorded an analogous 3-invocation deviation rather than grinding silently or
+under-reporting): round 3 found 5 more findings (a document-wide "ledger"/"record" terminology
+split never glossed, one unglossed HMAC acronym, one link-text section title clipped short of its
+target, "stamp" used before its own definition, four ungrounded §7 bullets), all repaired, no round
+4 run. `USER-WALKTHROUGH.md`'s scoped excerpt: round 1 found 4 findings (two unglossed referents
+and one fragment in the untouched opening — in scope per Rule 4's "at minimum ... the document's
+opening" — plus one ungrounded lineage-step list in the edited section), all repaired; round 2
+found 1 (a counting error the round-1 repair itself introduced, "three" against four listed step
+names), repaired; no round 3 run for this document — the literal 2-round cap was honored here
+without exception. Both documents' attestation records
+(`attestations/doc-legibility-attestations.jsonl`, schema `doc-attestation/2`) are marked
+`escalated: true` with a first-class `adjudication` naming the deviation (or, for
+USER-WALKTHROUGH.md, naming the honest DEFECT-at-cap rather than an unconfirmed CLEAN), self-
+adjudicated by this session in the declared absence of a synchronously-reachable higher authority
+mid-task and flagged for the orchestrator's review rather than asserted as a clean convergence —
+`gates/doc_attestation_presence.py USER-GUIDE.md USER-WALKTHROUGH.md` reports both clean (presence
++ shape only, never a check on B's or the adjudication's content, exactly as the gate's own module
+docstring states its posture to be).
+
+Tracker: claimed and closed by this session (`./led work claim users-guide` /
+`./led work close users-guide shipped --witness "USER-GUIDE.md + USER-WALKTHROUGH.md hazard fix,
+this BACKLOG entry"`) — the tracker item lives on the shared `toy`@192.168.122.1 ledger this
+worktree and the root checkout both read live, per this project's own "standing tracker" design;
+no separate orchestrator claim/close step was needed.
