@@ -1,5 +1,9 @@
 # ORCH-SPEC-DECOMPOSITION-POLICY — task-management obligations as declared policy
 
+This spec turns task-management obligations — task-splitting criteria above all — into
+policy a deployment declares on its own ledger, so that reviewers and machinery can cite
+and check the declared criteria instead of a commissioner restating them per commission.
+
 Audience: orchestrator (design spec; implementation stages are Sonnet-executable per §8).
 Status: Fable-authored 2026-07-12, from the maintainer's departure ask of the same day
 (on the record in this repository's tracker ledger, work item `decomposition-policy-spec`
@@ -36,7 +40,9 @@ A deployment declares its task-management policy the way it declares resources: 
 its own ledger, written once at adoption (seeded from a template file the maintainer
 edits, exactly the blessed-table pattern), pulled by every session at the same choke
 point as everything else (`./pickup`), and cited by the preamble instead of restated by
-each commission. Version 1 is a statement-prefix convention on `decision` rows — no
+each commission. Version 1 is a statement-prefix convention on `decision` rows (`decision` is a ledger
+row kind — the row an ordinary `./led decision "..."` write lands as;
+[bootstrap/templates/led.tmpl](../bootstrap/templates/led.tmpl)) — no
 kernel change, mirroring the registry's stage 1:
 
 ```
@@ -55,7 +61,8 @@ task-policy: <CRITERION-NAME> | <MODALITY> | <STATEMENT> | <EVIDENCE-SHAPE>
   pretending.
 
 Intake validation reuses the machinery the `resource:` grammar got on 2026-07-12
-(whitespace-normalized field-count refusal in `bootstrap/templates/led.tmpl`, teach-text
+(whitespace-normalized field-count refusal in
+[`bootstrap/templates/led.tmpl`](../bootstrap/templates/led.tmpl), teach-text
 naming the grammar, nothing written on refusal); `./pickup` gains a TASK-POLICY section
 with the same one-row-one-line parsing discipline. Superseding a criterion is the
 ordinary supersedes edge — policy rows are ledger rows and enjoy the same append-only
@@ -76,6 +83,7 @@ Each names its provenance and its honest policing status at authoring time:
 | `completion-carries-witness` | must | kernel: [s22](../kernel/lineage/s22-work-item-ledger.sql) (the work-item-ledger lineage step) refuses shipped-without-witness at INSERT | the omega-era defect the kernel already forecloses |
 | `explicit-dependency-edges` | should | orderable audit family (buildable; Part 3 conventions, same shape as `acceptance-criterion-first` above) — `work_depends_on` rows (a `led work depends <slug> <on-slug>` row, [bootstrap/templates/led.tmpl](../bootstrap/templates/led.tmpl)) exist where sequencing is claimed, but the checker that reads them is §8 Stage C's still-to-build work, not live yet | run 12 declared both its edges; the stage-2 ordering checker is designed to consume them once built |
 | `one-acceptance-criterion-per-task` | should | reviewer-judgment | splitting criterion, §5 |
+| `one-boundary-per-task` | should | reviewer-judgment — upgrades to `POLICED (gate)`/`POLICED (audit)` exactly when the deployment declares a taxonomy ([ORCH-SPEC-TASK-TAXONOMY.md](ORCH-SPEC-TASK-TAXONOMY.md) §5) | splitting criterion, §5; the maintainer's boundary-discipline ask, 2026-07-12 |
 | `grain-follows-commission-text` | should | reviewer-judgment | run 11 retrospective: its decomposition tracked the maintainer's own sentence structure, and that was judged a virtue |
 | `task-closeable-in-one-session` | should | reviewer-judgment | resumption doctrine: a task spanning sessions must survive on ledger state alone |
 | `estimate-before-execution` | should | reviewer-judgment (the same orderable-audit-family shape as `acceptance-criterion-first` above — a task's `estimate:` row precedes its first `work_claimed` row, a `led work claim <slug>` row, [bootstrap/templates/led.tmpl](../bootstrap/templates/led.tmpl) — is buildable but unbuilt as of this row) | tracker item `cost-estimation-retro`, 2026-07-12: estimates are ledgered for operational-efficiency retrospectives ONLY, never cost policing (the maintainer's own invariant, stated twice at commissioning) — see [design/USER-RETROSPECTIVE-RECIPE.md](USER-RETROSPECTIVE-RECIPE.md) §6 for the grammar and the estimate-vs-actual comparison this criterion's discipline feeds |
@@ -90,13 +98,18 @@ when the named check does not exist in this deployment yet. The table in §3 is 
 authoring time, named by slug rather than left as an unverifiable count: **one** criterion
 is already fully policed by shipped machinery (`decomposition-cites-commission`, audit
 family F3, live); **one** is policed at kernel grade (`completion-carries-witness`, s22's
-INSERT-time constraint); **one** is gated pending the blocker's merge
-(`decomposition-reviewed-before-execution`); and **six** rest on reviewer judgment today —
+INSERT-time constraint); **one** is policed at write-time by the change gate's
+`decomposition_review` mechanism, merged 2026-07-12
+(`decomposition-reviewed-before-execution` — `POLICED (gate)`, observe-mode default,
+apparatus-switched per world); and **seven** rest on reviewer judgment today —
 two of them (`acceptance-criterion-first`, `explicit-dependency-edges`) because their named
 orderable-audit-family check is buildable per §8 Stage C but not yet built (honestly
 `DECLARED-ONLY`, not yet `POLICED (audit)`, despite `explicit-dependency-edges`'s own row
 naming a "stage-2 ordering checker" — that checker is designed, not live, until Stage C
-ships), and four (`one-acceptance-criterion-per-task`, `grain-follows-commission-text`,
+ships), and five (`one-acceptance-criterion-per-task`, `one-boundary-per-task` — the
+latter upgrading to `POLICED` exactly when a taxonomy is declared,
+[ORCH-SPEC-TASK-TAXONOMY.md](ORCH-SPEC-TASK-TAXONOMY.md) §5 —
+`grain-follows-commission-text`,
 `task-closeable-in-one-session`, `estimate-before-execution`, the last added 2026-07-12) by
 design, their EVIDENCE-SHAPE field naming `reviewer-judgment` outright — a distribution the
 maintainer's standing proviso (the 2026-07-12

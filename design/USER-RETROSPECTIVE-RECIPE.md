@@ -381,7 +381,9 @@ Copy-paste example:
 
 `./pickup` prints every on-record `estimate:` row under its own `### SECTION: ESTIMATES` header,
 sorted by TASK-SLUG then ledger row id — the same malformed-flagged, never-silently-dropped
-posture the RESOURCES section already keeps for `resource:` rows. Reading that section is where a
+posture the RESOURCES section
+([bootstrap/templates/pickup.tmpl](../bootstrap/templates/pickup.tmpl)'s `resources()`)
+already keeps for `resource:` rows. Reading that section is where a
 retrospective (or anyone) sees what was predicted; it is not itself a comparison against what
 happened — that comparison is this section's remaining job.
 
@@ -436,7 +438,7 @@ number. A deployment that wants harder discipline than this — a standing habit
 *before* execution — declares it itself via the `task-policy:` convention's
 `estimate-before-execution` SHOULD criterion
 ([design/ORCH-SPEC-DECOMPOSITION-POLICY.md](ORCH-SPEC-DECOMPOSITION-POLICY.md) §3), the same
-escape valve every blessed-tier convention in this harness offers: `should`, reviewer-judgment,
+escape valve every [blessed](../GLOSSARY.md#blessed)-tier convention in this harness offers: `should`, reviewer-judgment,
 declared on the deployment's own ledger — never a `must` this recipe invents on a deployment's
 behalf.
 
