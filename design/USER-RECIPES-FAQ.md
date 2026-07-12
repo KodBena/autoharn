@@ -99,7 +99,7 @@ shorter than `CONTENT_FREE_STATEMENT_THRESHOLD` (40 chars,
 answers to was a real 4-char `"test"` review that silently discharged a genuine obligation.
 Honest limit, in the check's own vocabulary: it is a length heuristic, so its verdict is
 `FLAGGED`, never `VIOLATED` — a genuine terse review passes ("Confirmed, matches row 4's stated
-criteria exactly." is 42 chars) and hollow-but-plausible prose of ordinary length ("Reviewed and
+criteria exactly." is 51 chars) and hollow-but-plausible prose of ordinary length ("Reviewed and
 everything looks correct, no issues found, approved for merge.") is NOT caught; the check catches
 the "test"-shaped instance, not the class, and never substitutes for a human reading the review.
 This exit code (6) is reachable only through `--review-gap`, and only when nothing earlier
