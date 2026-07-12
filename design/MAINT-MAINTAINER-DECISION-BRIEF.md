@@ -1,13 +1,13 @@
-# Maintainer decision brief — four things only you can decide
+# Maintainer decision brief — five things only you can decide
 
 Audience: maintainer
 
 This is a wholesale rewrite of the decision brief, dated 2026-07-12. The prior edition (six
 decisions, written earlier this same day) survives in git history — it is not deleted, just
 superseded; this is the one live copy going forward, per this project's own "one live document,
-never two" rule. Two of the prior six were answered by you or ratified since that edition was
+never two" rule. Three of the prior six were answered by you or ratified since that edition was
 written and now appear only as one-liners in "Settled since the last edition" below; one was
-removed from your queue entirely by your own standing ruling; the remaining two, plus two new
+removed from your queue entirely by your own standing ruling; the remaining two, plus three new
 ones, are the live questions below.
 
 This document is written for you specifically: someone running this project who does not write
@@ -17,10 +17,11 @@ or no gets you, one recommendation, and exactly what to type or say. Where a dec
 genuinely fine "no" answer, that is stated plainly — declining is not a mistake.
 
 **Honest total time cost, recomputed for this edition:** roughly 20–40 minutes for the three
-quick items (one script, one optional model session, one scheduling nod) plus 15–30 minutes for
-key generation if you haven't already got a hardware key on hand. The trust-domain decision
-(item 3) carries no time budget at all — it is explicitly "answer whenever you get to it," not
-part of today's arithmetic.
+quick items (one script, one optional model session, one scheduling nod), plus 15–30 minutes for
+key generation if you haven't already got a hardware key on hand, plus 5–10 minutes for the
+publish decision (item 5: one license choice and two terminal commands). The trust-domain
+decision (item 3) carries no time budget at all — it is explicitly "answer whenever you get to
+it," not part of today's arithmetic.
 
 ---
 
@@ -145,7 +146,7 @@ confirm, or anything else to abort:`. Type `research` and press enter. You shoul
 ## 3. The trust-domain decision — the one standing wall behind all of this project's guarantees
 
 *This item is new to this edition. Sources, both read in full this session: the five-lens independent review you
-commissioned ([RELITIGATION-SYNTHESIS.md](MAINT-RELITIGATION-SYNTHESIS.md)) and the separately
+commissioned ([MAINT-RELITIGATION-SYNTHESIS.md](MAINT-RELITIGATION-SYNTHESIS.md)) and the separately
 verified research literature (the ledger's entry 194). Tracked as the standing Tier-3 item
 (this project's lowest-urgency priority bucket — no deadline, revisit when convenient) both
 sources name; no separate tracker slug. It carries over from an earlier, separate document
@@ -249,6 +250,71 @@ so; there's no prep needed beyond having a live session ready to be watched.
 
 ---
 
+## 5. Publish the current work — which history goes public, and under what license
+
+*This item is new to this edition. Source: your own ruling earlier today (publish before the
+current model is phased out, as continuity insurance), plus a read-only publication-readiness
+audit run this session — its full findings are on the project's activity log (the ledger), and
+the load-bearing facts are restated here so you don't need to look anything up.*
+
+**The question.** The repository is **already public**: an earlier version was pushed to
+`github.com/KodBena/autoharn` on 2026-07-07, and anyone can see it today. What is NOT public is
+everything since — roughly 260 commits of work and counting (all the machinery, documentation,
+and safety mechanisms built since then; 262 when the audit measured it on 2026-07-12, and the
+count grows as work continues — whoever runs the publish will state the exact live number at
+push time) exist only on your machine, on a branch named `next`. Your stated intent is
+that if the successor model can't maintain the project for you, a stranger who finds the
+repository should be able to finish the work as they see fit. That needs two decisions from
+you: which history to publish, and under what license.
+
+**Why it exists.** Publishing is your act alone (standing rule), and the audit that clears the
+way was completed this session: the full history — every commit on every branch — was swept for
+secrets, private keys, credentials, and session transcripts, and came back clean; no personal
+identifiers beyond your accepted placeholder identity; the two navigation gaps a stranger would
+hit (the README not pointing at the front-door guide; setup commands naming your own LAN
+database host with no explanation) were fixed and independently reviewed this session. One
+caution stands: publish by pushing the one named branch, never with a "push everything" command
+(`--all`/`--mirror`), because local scratch branches from this session's builder agents would
+ride along.
+
+**On the license (decided together with the push, because it determines what a stranger may
+legally do):** today the repository has no license file at all, which legally means "all rights
+reserved" — a stranger who finds it may read it but may NOT legally continue the work, which
+would defeat your stated purpose in publishing. Adding one small standard license file fixes
+that.
+
+- **If you publish (and license it):** the complete current state becomes public, and a stranger
+  finding it has both the material and the legal right to continue the work — your stated
+  insurance goal, achieved.
+- **If you don't (yet):** the stale 2026-07-07 snapshot stays public as-is; the real work
+  remains only on your machine, and the insurance doesn't exist until you do publish.
+
+**Recommendation: publish by fast-forwarding the public default branch to the current work, and
+add the MIT license.** The two histories don't conflict (the current work is a clean,
+straight-line continuation of what's already public — verified this session), so this is the
+simplest honest story: one public branch carrying the complete history. MIT because it is the
+shortest, most universally understood "do what you want, credit me, no warranty" license, which
+matches "finish the work as they see fit" exactly; if you'd rather have an explicit patent
+grant, Apache-2.0 is the standard alternative — either serves the purpose, and this choice is
+yours, not something to delegate.
+
+**The act, in order:**
+
+1. Tell whoever is running the session which license you choose ("MIT" or "Apache-2.0" is
+   enough) — the license file gets added and committed for you, under your name as copyright
+   holder.
+2. Then, in a terminal in this project's folder, publish:
+   ```
+   git checkout master && git merge --ff-only next && git push origin master
+   ```
+   You should see the merge print `Fast-forward` (never a conflict — if it says anything about
+   conflicts, stop and say so instead of proceeding), and the push end with lines naming
+   `master -> master`. Then switch back to the working branch: `git checkout next`.
+3. Optional, afterward: also `git push origin next` so the working branch itself is public and
+   the two stay in step from here on.
+
+---
+
 ## Removed from your queue
 
 - **The database network-access hardening item** (previously item 5, "close a network security
@@ -284,7 +350,7 @@ so; there's no prep needed beyond having a live session ready to be watched.
 
 The documents below are the full technical sources behind each decision above, for anyone who
 wants more detail than this brief carries; you do not need to read any of them to answer the
-four questions.
+five questions.
 
 - [ORCH-ABC-AUDIT-LOOP-RECIPE.md](ORCH-ABC-AUDIT-LOOP-RECIPE.md) and
   [law/adr/0017-the-zero-context-reader.md](../law/adr/0017-the-zero-context-reader.md) — the
