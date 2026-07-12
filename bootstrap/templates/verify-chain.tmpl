@@ -49,20 +49,37 @@ MODES:
                                s26-row-hash-chain-deletion/'s own closure statement); 4 on the
                                anomalous WITNESS-BEHIND-LEDGER case (the witness itself appears to
                                have been lowered, which should never happen under correct
-                               operation — see s27-chain-high-water.sql's own header). Exit codes
-                               1/3/4 are deliberately DISTINCT so a caller can tell "interior
-                               tamper" from "tail truncation" from "witness anomaly" without
-                               parsing prose.
+                               operation — see s27-chain-high-water.sql's own header); 5 on
+                               CANNOT-VERIFY (added 2026-07-13, tracker item
+                               `verify-chain-error-conflation`) — a capability-check query itself
+                               FAILED TO EXECUTE (connection refused, auth failed, timeout, or a
+                               real query bug), so this world's row_hash/high-water status could
+                               not be determined at all, and was NEVER read as the honest,
+                               unrelated "pre-s26/pre-s27, nothing to verify" case (exit 0/
+                               UNAVAILABLE/WITNESS-UNAVAILABLE) that a benign schema-absence
+                               produces. Concretely: exit 5 fires either when
+                               `has_row_hash_layer()`'s own query fails (top-level status
+                               CANNOT-VERIFY) or when `has_high_water_layer()`'s/
+                               `read_high_water()`'s query fails after the row_hash chain itself
+                               already reported INTACT/EMPTY (witness-level status ERROR) — a
+                               verifier that could not connect must say so loudly, never shrug and
+                               call it "nothing to verify here". Exit codes 1/3/4/5 are
+                               deliberately DISTINCT so a caller can tell "interior tamper" from
+                               "tail truncation" from "witness anomaly" from "could not even look"
+                               without parsing prose.
   ./verify-chain --head      — print {world, max_id, head_hash, utc, apparatus_hash} as JSON on
                                stdout and NOTHING else — this is the input to the signed-head
                                ceremony (`./verify-chain --head > /tmp/head.json; gpg --detach-sign
                                --armor /tmp/head.json`), so its stdout must be exactly the JSON, no
                                banner lines, or a naive `cat | gpg` would sign banner text too.
                                Exit 1 (with a diagnostic on STDERR, stdout left EMPTY) if the chain
-                               is broken, OR if the s27 witness reports TAIL-DELETION-SUSPECT or
-                               WITNESS-BEHIND-LEDGER — signing a head over a chain the witness
-                               itself flags would be worse than refusing to produce one; VERIFIES
-                               the whole chain AND the witness first, always.
+                               is not INTACT (including CANNOT-VERIFY — a capability-check query
+                               failure is never grounds to sign), OR if the s27 witness reports
+                               TAIL-DELETION-SUSPECT or WITNESS-BEHIND-LEDGER, OR (2026-07-13,
+                               `verify-chain-error-conflation`) if the witness check itself FAILED
+                               TO RUN — signing a head over a chain the witness itself flags, or
+                               couldn't even be asked about, would be worse than refusing to
+                               produce one; VERIFIES the whole chain AND the witness first, always.
                                `apparatus_hash` (added 2026-07-12, tracker item
                                `apparatus-flip-witnessing` — additive to spec §4's original
                                {world, max_id, head_hash, utc} shape, not a redefinition of it) is
@@ -83,7 +100,14 @@ MODES:
                                assembled here, never inside the database).
 
 A pre-s26 world (no `row_hash` column) degrades honestly to UNAVAILABLE (not a crash, not a false
-"intact") — mirrors distance-to-clean.tmpl's own pre-s22 fallback for `work_item_violations`.
+"intact") — mirrors distance-to-clean.tmpl's own pre-s22 fallback for `work_item_violations`. This
+degradation is claimed ONLY when the capability-check query that determines it actually SUCCEEDED
+in reporting the column absent; a query that instead fails to execute (unreachable host, refused
+connection, wrong credentials, a real bug in the check itself) is CANNOT-VERIFY (exit 5), never
+UNAVAILABLE (exit 0) — see `has_row_hash_layer()` / `verify()`'s own docstrings (tracker item
+`verify-chain-error-conflation`, 2026-07-13: this conflation was the defect this fix closes, and it
+applies identically to `has_high_water_layer()` for the s27 tail-deletion witness, one function
+down).
 
 Deployment resolution, connection posture, and path resolution mirror pickup.tmpl /
 distance-to-clean.tmpl exactly (PICKUP_DEPLOYMENT, AUTOHARN, `SET ROLE <dep.role>`) — this file
@@ -164,15 +188,27 @@ def _psql_json_rows(dep, sql: str) -> tuple[list[dict] | None, str]:
     return json.loads(body), ""
 
 
-def has_row_hash_layer(dep) -> bool:
+def has_row_hash_layer(dep) -> tuple[bool | None, str]:
     """An EXPLICIT capability check (information_schema), never a fuzzy match on error text --
-    a real query bug (a typo, a missing schema qualification) must surface as ERROR, not be
-    silently miscategorized as the honest pre-s26 UNAVAILABLE case just because its error
-    message happens to contain the word "does not exist" too."""
+    a real query bug (a typo, a missing schema qualification) OR a connection failure (refused,
+    auth failed, timeout) must surface as its own loud verdict, never be silently miscategorized
+    as the honest pre-s26 UNAVAILABLE case.
+
+    Returns (present, err), mirroring `_psql_json_rows`' own (rows, err) convention so the two
+    world-states it distinguishes cannot be collapsed by the caller: `present` is True/False when
+    the capability-check query itself SUCCEEDED (a genuine schema answer -- the honest case, either
+    polarity); `present` is None when the query FAILED TO EXECUTE at all (`err` carries psql's
+    stderr verbatim) -- we never got an answer, so the caller must never read that as "answer: no".
+    (tracker item `verify-chain-error-conflation`, 2026-07-13: before this fix, `bool(None)` -- i.e.
+    a connection refusal or auth failure on THIS query -- silently evaluated to `False`, which the
+    one caller (`verify()`) read as "table absent, honest pre-s26 world", exactly the conflation
+    this function's own docstring already promised never to commit.)"""
     sql = (f"SELECT count(*) FROM information_schema.columns WHERE table_schema = '{dep.schema}' "
            f"AND table_name = 'ledger' AND column_name = 'row_hash'")
     rows, err = _psql_json_rows(dep, f"SELECT ({sql}) > 0 AS present")
-    return bool(rows) and rows[0].get("present") is True
+    if rows is None:
+        return None, err
+    return (bool(rows) and rows[0].get("present") is True), ""
 
 
 def walk_chain(dep) -> tuple[list[dict] | None, str]:
@@ -185,8 +221,24 @@ def walk_chain(dep) -> tuple[list[dict] | None, str]:
 
 
 def verify(dep) -> tuple[str, dict]:
-    """Returns (status, detail). status in {INTACT, BROKEN, UNAVAILABLE, ERROR, EMPTY}."""
-    if not has_row_hash_layer(dep):
+    """Returns (status, detail). status in {INTACT, BROKEN, UNAVAILABLE, ERROR, EMPTY,
+    CANNOT-VERIFY}.
+
+    CANNOT-VERIFY (added 2026-07-13, tracker item `verify-chain-error-conflation`) is a DISTINCT
+    world-state from UNAVAILABLE, never conflated with it: UNAVAILABLE means the has_row_hash_layer
+    capability-check query SUCCEEDED and genuinely found no row_hash column (the honest pre-s26
+    case -- this world predates kernel delta s26, nothing to verify, not an error). CANNOT-VERIFY
+    means that SAME query FAILED TO EXECUTE (connection refused, auth failed, timeout, a real query
+    bug) -- we never looked at the schema at all, so reporting the benign pre-s26 absence would be
+    lying about having looked. A verifier that cannot connect must say so loudly, not shrug and
+    call it "nothing to verify here"."""
+    present, probe_err = has_row_hash_layer(dep)
+    if present is None:
+        return "CANNOT-VERIFY", {"reason": (
+            "could not determine whether kernel/lineage/s26-row-hash-chain.sql is applied here -- "
+            f"the has_row_hash_layer() capability-check query itself failed to execute (this is NOT "
+            f"a schema answer, and must never be read as one): {probe_err}")}
+    if not present:
         return "UNAVAILABLE", {"reason": ("pre-s26 kernel -- no row_hash chain in schema "
                                            f"{dep.schema} (kernel/lineage/s26-row-hash-chain.sql "
                                            "not applied here)")}
@@ -204,14 +256,20 @@ def verify(dep) -> tuple[str, dict]:
     return "INTACT", {"rows_walked": len(rows), "head_id": rows[-1]["id"], "head_hash": rows[-1]["stored"]}
 
 
-def has_high_water_layer(dep) -> bool:
+def has_high_water_layer(dep) -> tuple[bool | None, str]:
     """An EXPLICIT capability check (information_schema), mirroring has_row_hash_layer()'s own
-    posture (never a fuzzy match on error text): a real query bug must surface as ERROR, never be
-    silently miscategorized as the honest pre-s27 WITNESS-UNAVAILABLE case."""
+    posture and its (present, err) return shape (never a fuzzy match on error text, never a
+    collapsed boolean): a real query bug or connection failure must surface as its own loud ERROR
+    verdict (see compare_witness()), never be silently miscategorized as the honest pre-s27
+    WITNESS-UNAVAILABLE case just because the query returned no rows. `present` is None when the
+    query itself failed to execute (`err` carries psql's stderr); same conflation, same fix, one
+    function down (tracker item `verify-chain-error-conflation`, 2026-07-13)."""
     sql = (f"SELECT count(*) FROM information_schema.tables WHERE table_schema = '{dep.kern}' "
            f"AND table_name = 'chain_high_water'")
     rows, err = _psql_json_rows(dep, f"SELECT ({sql}) > 0 AS present")
-    return bool(rows) and rows[0].get("present") is True
+    if rows is None:
+        return None, err
+    return (bool(rows) and rows[0].get("present") is True), ""
 
 
 def read_high_water(dep) -> tuple[int | None, str]:
@@ -244,7 +302,14 @@ def compare_witness(dep, walked_max_id: int) -> tuple[str, dict]:
     WITNESS-BEHIND-LEDGER, WITNESS-UNAVAILABLE, ERROR}. walked_max_id is the highest id actually
     seen by the row_hash walk (0 for an EMPTY chain -- no row ever walked, so there is nothing to
     be missing from the tail yet)."""
-    if not has_high_water_layer(dep):
+    present, probe_err = has_high_water_layer(dep)
+    if present is None:
+        return "ERROR", {"reason": (
+            "could not determine whether kernel/lineage/s27-chain-high-water.sql is applied here "
+            f"-- the has_high_water_layer() capability-check query itself failed to execute (this "
+            f"is NOT a schema answer, and must never be read as the honest pre-s27 "
+            f"WITNESS-UNAVAILABLE case): {probe_err}")}
+    if not present:
         return "WITNESS-UNAVAILABLE", {
             "reason": ("pre-s27 kernel -- no chain_high_water witness in "
                        f"{dep.kern} (kernel/lineage/s27-chain-high-water.sql not applied here); "
@@ -329,6 +394,18 @@ def main(argv: list[str]) -> int:
                   f"not attempted -- exactly the same posture as refusing on a BROKEN row_hash "
                   f"chain, applied to the gap that chain alone cannot see.", file=sys.stderr)
             return 1
+        if w_status == "ERROR":
+            # Fixed alongside verify-chain-error-conflation (2026-07-13): before this, an ERROR
+            # here (has_high_water_layer or read_high_water's query failing to execute -- e.g. a
+            # connection drop between the row_hash walk and the witness check) fell through this
+            # `if` untouched and proceeded to SIGN a head whose witness was never actually
+            # consulted -- silently as strong a claim as TAIL-COVERAGE-CONFIRMED. A query failure
+            # must refuse the signing, exactly like a witness that actively flags a problem.
+            print(f"verify-chain --head: REFUSED -- tail-deletion witness check FAILED TO RUN "
+                  f"({w_detail}); signing a head when the witness itself could not be consulted is "
+                  f"refused, not attempted -- never silently treated as if the witness agreed.",
+                  file=sys.stderr)
+            return 1
         head = {"world": dep.name or dep.schema, "max_id": detail["head_id"],
                 "head_hash": detail["head_hash"],
                 "utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
@@ -346,6 +423,14 @@ def main(argv: list[str]) -> int:
             return 3
         if witness_status == "WITNESS-BEHIND-LEDGER":
             return 4
+        if witness_status == "ERROR":
+            # Fixed alongside verify-chain-error-conflation (2026-07-13): before this fix, a
+            # witness-level query failure (has_high_water_layer or read_high_water erroring, e.g.
+            # a connection drop mid-run) fell through every branch above to `return 0` -- the SAME
+            # exit code as a fully-confirmed witness, even though `witness_line` above already
+            # prints the failure. A query failure the operator only sees by reading stdout text is
+            # not loud enough (ADR-0002); the exit code must say so too.
+            return 5
         return 0
     if status == "EMPTY":
         print(f"verify-chain: EMPTY -- {detail['reason']} (an empty chain is trivially intact; "
@@ -355,11 +440,21 @@ def main(argv: list[str]) -> int:
             return 3
         if witness_status == "WITNESS-BEHIND-LEDGER":
             return 4
+        if witness_status == "ERROR":
+            return 5
         return 0
     if status == "UNAVAILABLE":
         print(f"verify-chain: UNAVAILABLE -- {detail['reason']}")
         print(witness_line)
         return 0
+    if status == "CANNOT-VERIFY":
+        # Distinct from UNAVAILABLE by construction (verify()'s own docstring): this is the
+        # has_row_hash_layer() capability-check query itself failing to execute -- connection
+        # refused, auth failed, timeout, or a real query bug -- never the honest pre-s26 absence.
+        # Its own exit code (5), never conflated with UNAVAILABLE's 0 or BROKEN's 1.
+        print(f"verify-chain: CANNOT-VERIFY -- {detail['reason']}")
+        print(witness_line)
+        return 5
     if status == "BROKEN":
         print(f"verify-chain: BROKEN -- first break at row id {detail['first_break_id']}:")
         print(f"    stored:   {detail['stored']}")
