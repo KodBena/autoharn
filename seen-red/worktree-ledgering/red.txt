@@ -1,0 +1,37 @@
+# Banked red evidence: seen-red/worktree-ledgering/run_fixtures.py::case_backlog_conflict
+# A same-section double-edit across two branches; the backlog-section-union driver
+# refuses the merge (non-zero exit), leaves real git conflict markers in BACKLOG.md, and
+# gates/no_conflict_markers.py independently catches them in the staged diff.
+# (Every line below is indented 4 spaces -- a deliberate quote of the markers, per
+# gates/no_conflict_markers.py's own documented escape for quoting rather than committing
+# a marker; see that gate's module docstring.)
+
+    $ git merge --no-edit edit-b
+    Auto-merging BACKLOG.md
+    CONFLICT (content): Merge conflict in BACKLOG.md
+    Automatic merge failed; fix conflicts and then commit the result.
+    merge_backlog_sections: CONFLICT -- the following section(s) need human resolution (conflict markers left in place):
+      !! '## 2026-02-01: Shared entry' (occurrence 0): edited on both sides since the common ancestor
+    
+    (exit 1)
+    --- BACKLOG.md after the refused merge ---
+    # fixture backlog
+    
+    preamble text.
+    
+    ## 2026-02-01: Shared entry
+    <<<<<<< A (current) ## 2026-02-01: Shared entry
+    
+    A's edited body line 1.
+    =======
+    
+    B's DIFFERENTLY edited body line 1.
+    >>>>>>> B (other) ## 2026-02-01: Shared entry
+    
+    $ python3 gates/no_conflict_markers.py (run against the conflicted staged state)
+    no-conflict-markers: REFUSED — staged additions contain raw git conflict markers (an unresolved merge is about to be committed):
+      BACKLOG.md: <<<<<<< A (current) ## 2026-02-01: Shared entry
+      BACKLOG.md: >>>>>>> B (other) ## 2026-02-01: Shared entry
+    Resolve the merge fully (remove every `<<<<<<< `/`=======`/`>>>>>>> ` block, keeping the intended content), re-stage, and commit again. If you are QUOTING a marker deliberately, indent or fence it so the line does not begin with the marker.
+    
+    (exit 1)

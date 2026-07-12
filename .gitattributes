@@ -1,0 +1,9 @@
+# .gitattributes — merge drivers for this project's append-only ledgers (design/
+# ORCH-WORKTREE-LEDGERING.md 3a). Naming a `merge=<name>` attribute here is only HALF the wiring:
+# git also needs a `[merge "<name>"] driver = ...` stanza, which lives in `.git/config` --
+# unversioned, so every clone/worktree installs it once. `bootstrap/bootstrap.sh` installs it
+# automatically; USER-CONFIGURATION.md and tools/merge_jsonl.py / tools/merge_backlog_sections.py's
+# own docstrings carry the manual one-time `git config` lines for an already-cloned checkout.
+
+attestations/*.jsonl merge=jsonl-union
+BACKLOG.md merge=backlog-section-union
