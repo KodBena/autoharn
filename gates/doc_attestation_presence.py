@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-11T16:14:47Z
-#   last-change: 2026-07-11T22:37:22Z
+#   last-change: 2026-07-12T14:39:40Z
 #   contributors: e4410ef6/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -154,6 +154,25 @@ MODES (mirrors gates/doc_shapes.py exactly, the discipline's own binds-on-touch 
     validates the shape; appends one line to the ledger. Exit 0 on a valid append, exit 2 on a
     malformed input (nothing is ever appended to the ledger unvalidated) — so an escalated record
     missing its adjudication, or a non-escalated one carrying one, is refused HERE, not at commit.
+  - `--doc-root PATH` / `--ledger PATH` — OPTIONAL leading flags (either order, either or both),
+    consumed before dispatch to any of the three modes above (tracker item `abc-loop-offering`,
+    design/ORCH-SPEC-ABC-OFFERING.md Stage A: "parameterize the upstream tool — ledger path + doc
+    root as explicit parameters on this module's entry points, autoharn's own invocations
+    unchanged, its defaults preserved bit-for-bit"). Reassigns the module-level `REPO_ROOT` /
+    `LEDGER_PATH` globals THIS module's every function already reads through — the exact
+    monkeypatch device seen-red/doc-attestation-presence/red-specimen.py already used
+    in-process, now also reachable from a plain subprocess invocation so a caller outside this
+    repository (a scaffolded deployment's own `./attest-doc` verb, bootstrap/templates/
+    attest-doc.tmpl) can point this gate at ITS OWN doc tree and ledger without editing this
+    file or reaching into its private module globals. Omitting both flags is a no-op — every
+    global keeps its module-load default (this repo's own REPO_ROOT/LEDGER_PATH), so autoharn's
+    own pre-commit invocation, CLI usage, and every existing seen-red case are byte-for-byte
+    unchanged. `discover_md()`, `records_for_doc()`, and `classify()` below are the additional
+    library-level surface the same commission needed (a three-way ATTESTED/STALE/NO-ATTESTATION
+    read, and a no-git-required doc listing) — reachable by importing this module directly
+    (the same device distance-to-clean.tmpl already uses for filing/deployment_record.py), not
+    through the CLI, since they answer a different question than this gate's own binary
+    pass/fail (see each function's own docstring).
 
 ARMING MODE — ANSWERED FROM THE ADR TEXT, NOT ASSUMED (this commission's Critical Arming
 Question). ADR-0017's "fresh-context audit loop" section states the attestation-presence
@@ -257,6 +276,57 @@ def in_scope(rel: str) -> bool:
     return True
 
 
+# Deployment-local scope exclusion (tracker item `abc-loop-offering`; design/
+# ORCH-SPEC-ABC-OFFERING.md §3). `EXCLUDE_FILES_WHOLESALE`/`EXCLUDE_DIR_PREFIXES` above name
+# AUTOHARN'S OWN point-in-time exclusions (BACKLOG.md, judgment/**) and have no meaning on a
+# scaffolded DEPLOYMENT's tree, which carries neither file. A deployment instead has its own
+# templated docs -- written by bootstrap/new-project.sh / bootstrap/track-work.sh at scaffold
+# time -- that are AUTOHARN's own prose (attested upstream, in THIS repository, not the
+# adopter's to re-attest). This set names every such file by its DEPLOYMENT-RELATIVE path.
+# It is read by bootstrap/templates/attest-doc.tmpl's `check` subcommand and
+# bootstrap/templates/distance-to-clean.tmpl's DOC-ATTESTATION section (both import this module
+# directly) — never by THIS gate's own commit-time `check_file()`/`in_scope()`, which stay
+# exactly as they were (autoharn's own repo tree has no deployment scaffold sitting inside it,
+# so this constant would be vacuous there).
+#
+# HONEST LIMIT, not glossed over (an out-of-frame hack-rationalization audit caught this exact
+# set stale on day one, missing `attestations/README.md` which this same commission's own
+# scaffold change writes -- fixed below the same pass). The general fix -- derive this set from
+# the scaffold scripts' own write calls, the SAME move `filing/apparatus_registry.py`'s
+# `known_mechanisms()` makes for mechanism names (grep hooks/*.py + bootstrap/templates/*.tmpl
+# for the shapes that declare a mechanism, never hand-list them) -- was considered and NOT taken
+# here, for a named, real reason distinct from a discipline-word: `apparatus_registry.py`'s
+# sources are Python source files matching one of three fixed, greppable syntactic shapes
+# (`MECHANISM_KEY = "..."`, `mechs.get("...")`, `_resolve_mode(apparatus, "...")`) — a derivation
+# problem well inside a regex's reach. A scaffold-written `.md` file's write site is a `cp`/
+# `sedsubst < TEMPLATE > TARGET` call inside a POSIX shell script, with `$PROJECT_ROOT` path
+# interpolation and, in `--new-world` mode, a conditional block — parsing that reliably (not
+# just for today's two scripts, but staying sound as they grow) is a materially larger and more
+# fragile undertaking than the set it would replace, and this repository already has a working
+# PRECEDENT for a curated set at exactly this file's own top (`EXCLUDE_FILES_WHOLESALE`,
+# `EXCLUDE_DIR_PREFIXES`). The mitigation actually taken: `bootstrap/new-project.sh` and
+# `bootstrap/track-work.sh` each carry a `COHERENCE PARTNER` comment at every `cp`/`sedsubst`
+# call that writes an entry of this set, naming this set explicitly, so the two sides are a
+# reviewable, greppable pair even though neither derives the other (ADR-0012 P1's "one source"
+# reduced, honestly, to "one CHECKED pair" where full derivation was not the sound tradeoff).
+DEPLOYMENT_SCAFFOLD_OWNED_MD = frozenset({
+    "CLAUDE.md",
+    ".claude/APPARATUS.md",
+    ".claude/HOOKS.md",
+    ".claude/GOVERNED_FILES.md",
+    "keys/README.md",
+    "attestations/README.md",
+})
+
+
+def deployment_in_scope(rel: str) -> bool:
+    """`in_scope()` above, restated for a DEPLOYMENT's own doc tree rather than this
+    repository's: excludes exactly `DEPLOYMENT_SCAFFOLD_OWNED_MD`. The waiver-marker exclusion
+    is unchanged and shared (`_has_waiver()` below takes no repo-specific state, so both
+    `in_scope()`'s and this function's callers check it the same separate way)."""
+    return rel not in DEPLOYMENT_SCAFFOLD_OWNED_MD
+
+
 _WAIVER_COMMENT = re.compile(r"<!--\s*" + re.escape(WAIVER_TOKEN) + r".*?-->", re.DOTALL)
 
 
@@ -308,6 +378,63 @@ def latest_record_for(records: list[dict], doc_rel: str, content_sha256: str) ->
         if rec.get("doc") == doc_rel and rec.get("content_sha256") == content_sha256:
             match = rec
     return match
+
+
+def records_for_doc(records: list[dict], doc_rel: str) -> list[dict]:
+    """Every record for this doc path, at ANY content hash — the basis for telling STALE (a
+    record exists, but for different bytes) apart from NO-ATTESTATION (no record ever), which
+    `latest_record_for` above cannot answer because it already filters by hash. This gate's own
+    commit-time check never needed the distinction (both are simply "not attested, refuse"); the
+    three-way read `bootstrap/templates/attest-doc.tmpl`'s `check` subcommand and
+    `distance-to-clean.tmpl`'s DOC-ATTESTATION section both want (design/ORCH-SPEC-ABC-OFFERING.md
+    Stage A/C) does, so it lives here once rather than twice (ADR-0012 P1)."""
+    return [r for r in records if r.get("doc") == doc_rel]
+
+
+def discover_md(doc_root: Path) -> list[str]:
+    """Every `*.md` file that physically EXISTS under `doc_root`, repo-relative POSIX paths,
+    sorted — a plain on-disk walk, unconditionally, never `git ls-files`.
+
+    NOT `_tracked_md()` generalized in place, and deliberately NOT git-tracked-preferring
+    (an earlier version of this function preferred `git ls-files` whenever `doc_root/.git`
+    existed, on the theory that it gave "exact parity with this gate's own `_tracked_md()`" —
+    an out-of-frame hack-rationalization audit caught that theory live-broken: `git ls-files`
+    on a git-initialized-but-nothing-yet-committed or nothing-yet-`git add`-ed tree succeeds
+    with EMPTY output, not an error, so the except-based fallback below never triggered and
+    this function silently returned `[]` on a tree that genuinely had undiscovered `.md` files
+    on disk — a false-CLEAN, worse than a false-red, on exactly the scenario this module's own
+    design doc names as real: "a world's own agent may or may not initialize [git] later"
+    (design/ORCH-SPEC-ABC-OFFERING.md §1)). The actual job this function has — "which documents
+    in this deployment might need a fresh-context review" — is never well-served by "tracked
+    only": an operator who just wrote a new, uncommitted `.md` file wants to know it needs
+    review too, not have it silently excluded until the next `git add`. `_tracked_md()` above
+    stays exactly as it is (this repo's own commit-time gate path, always a git worktree, where
+    "tracked only" is the CORRECT semantics, not a shortcut) — this function answers a different
+    question for a different caller and does not need, or want, git's involvement at all."""
+    out = []
+    for p in doc_root.rglob("*.md"):
+        rel_parts = p.relative_to(doc_root).parts
+        if ".git" in rel_parts:
+            continue
+        out.append(p.relative_to(doc_root).as_posix())
+    return sorted(out)
+
+
+def classify(rel: str, records: list[dict], doc_root: Path) -> str:
+    """"ATTESTED" / "STALE" / "NO-ATTESTATION" for one in-scope doc — the three-way read
+    `attest-doc check` and distance-to-clean's DOC-ATTESTATION section need, distinct from
+    `check_file()` below (this repo's own binary pass/fail PLUS shape validation, the commit
+    gate's job, unchanged). STALE means a record exists for this doc path at a content hash that
+    does not match the file's CURRENT bytes — a real prior attestation gone stale on a later
+    edit, worth naming differently from "never attested at all" so an operator knows whether to
+    run the loop for the first time or re-run it after a change."""
+    path = doc_root / rel
+    content_sha256 = _sha256_of(path)
+    if latest_record_for(records, rel, content_sha256) is not None:
+        return "ATTESTED"
+    if records_for_doc(records, rel):
+        return "STALE"
+    return "NO-ATTESTATION"
 
 
 # ---------------------------------------------------------------------------------------
@@ -489,6 +616,24 @@ def _print_exclusions(scope: list[str], excluded: list[str], waived: list[str]) 
 
 
 def main(argv: list[str]) -> int:
+    global REPO_ROOT, LEDGER_PATH
+    argv = list(argv)
+    # --doc-root/--ledger: optional leading flags, either order, either or both (tracker item
+    # `abc-loop-offering` Stage A — see module docstring's MODES section for the full rationale).
+    # Reassigning the SAME module globals every function below already reads is deliberate, not
+    # a shortcut: it is the identical device the seen-red fixture already used in-process
+    # (mod.REPO_ROOT = ...), now exposed at the CLI so a caller outside this repository need not
+    # import this module to redirect it. Omitting both flags leaves both globals at their
+    # module-load default, so every existing invocation (this repo's own pre-commit path, CLI
+    # usage, every prior seen-red case) is byte-for-byte unchanged.
+    while len(argv) >= 2 and argv[0] in ("--doc-root", "--ledger"):
+        flag, val = argv[0], argv[1]
+        if flag == "--doc-root":
+            REPO_ROOT = Path(val).expanduser().resolve()
+        else:
+            LEDGER_PATH = Path(val).expanduser().resolve()
+        argv = argv[2:]
+
     if argv and argv[0] == "--record":
         return _cmd_record(argv[1:])
 

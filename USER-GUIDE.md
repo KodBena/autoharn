@@ -20,7 +20,7 @@ handful of guardrails refuse an action that would break that guarantee — but r
 explanation*, not a bare error, so the refusal itself tells you what to do next (the
 "refuse-and-teach" idea [§6](#6-when-something-refuses) covers in full). Day to day, you touch
 this through a small number of commands — this guide calls them **verbs** because each one does
-one clear thing, [§4](#4-operate-the-six-verbs) names all six.
+one clear thing, [§4](#4-operate-the-seven-verbs) names all seven.
 
 ## 2. Before you start
 
@@ -82,12 +82,13 @@ wrote judge (shim -> .../bootstrap/templates/judge.tmpl)
 wrote pickup (shim -> .../bootstrap/templates/pickup.tmpl)
 wrote audit (shim -> .../bootstrap/templates/audit.tmpl)
 wrote distance-to-clean (shim -> .../bootstrap/templates/distance-to-clean.tmpl)
+wrote attest-doc (shim -> .../bootstrap/templates/attest-doc.tmpl)
 == done ==
 ```
 
-**What landed where:** `deployment.json` (which database/schema this project points at) and five
-small command files (`led`, `pickup`, `distance-to-clean`, `judge`, `audit`) in your project
-directory — nothing written back into the autoharn checkout. Try it immediately:
+**What landed where:** `deployment.json` (which database/schema this project points at) and six
+small command files (`led`, `pickup`, `distance-to-clean`, `judge`, `audit`, `attest-doc`) in
+your project directory — nothing written back into the autoharn checkout. Try it immediately:
 
 ```sh
 cd /path/to/your-project
@@ -135,7 +136,7 @@ Running `./judge` right after scaffolding printed `AGREE` in this page's own ver
 two independent ways the harness (autoharn's own tooling; this page uses the two names
 interchangeably from here on) computes "what is currently true" (a rule engine and a plain SQL
 query) agreeing on a brand-new, still-empty project. That is the expected result for a fresh
-[world](GLOSSARY.md#world); [§4](#4-operate-the-six-verbs) explains what `./judge` checks and
+[world](GLOSSARY.md#world); [§4](#4-operate-the-seven-verbs) explains what `./judge` checks and
 what a disagreement would mean.
 
 **What landed where:** everything §3a describes above, plus `.claude/settings.json` (wires the
@@ -175,10 +176,12 @@ such as study-design tooling or an analysis layer — read
 [design/USER-WORK-STATUS-OFFERING.md](design/USER-WORK-STATUS-OFFERING.md), which describes this
 offering's sibling (the work tracker from §3a) for contrast.
 
-## 4. Operate: the six verbs
+## 4. Operate: the seven verbs
 
-Once a project is scaffolded (either §3a or §3b), you interact with it through six small
-commands, run from inside your project directory. This section is a paragraph-each index — the
+Once a project is scaffolded (either §3a or §3b), you interact with it through seven small
+commands. Six of them (`led`, `judge`, `pickup`, `audit`, `distance-to-clean`, `attest-doc`) run
+from inside your project directory, once it exists; the seventh — the scaffold itself — runs once,
+before the project exists, from the autoharn checkout. This section is a paragraph-each index — the
 authoritative detail, including exact output and what each verdict means, is
 [ORCH-OPERATING-CARD.md](ORCH-OPERATING-CARD.md), written for whoever is actually running a
 session; read it once you're past this page.
@@ -206,9 +209,18 @@ any time, mid-project or after.
 **`./distance-to-clean`** is one composed report of everything still outstanding — open
 questions, pending reviews, unclaimed work — across the record, in one command instead of several.
 
+**`./attest-doc`** is a separate, optional verb for a separate discipline: recording that a
+markdown document in your project was reviewed by a fresh, unbiased AI reader before you called
+it done (the "A:B:C fresh-context audit loop" this project runs on its own documentation).
+`./attest-doc check` reports which of your documents are attested, stale, or never reviewed;
+`./attest-doc record` files a new review. It costs nothing to run and nothing blocks on it —
+[design/USER-DOC-AUDIT-LOOP.md](design/USER-DOC-AUDIT-LOOP.md) is the full "what you type, what
+you should see" walkthrough, including how to fold its debt into `./distance-to-clean` once you
+start using it.
+
 **The scaffold** (`bootstrap/new-project.sh`, `bootstrap/track-work.sh`,
-`bootstrap/track-experiments.sh` — §3 above) is the sixth verb: the one you run once per project,
-from the autoharn checkout, to stand the other five up.
+`bootstrap/track-experiments.sh` — §3 above) is the seventh verb: the one you run once per project,
+from the autoharn checkout, to stand the other six up.
 
 **Putting the task itself on the record.** If you want the very first thing your project's record
 shows to be the task you gave it — rather than an AI collaborator's own paraphrase of your chat
@@ -250,7 +262,7 @@ its own mechanism:
   recorded as a new entry that supersedes the old one, and the old one stays exactly as it was.
   [USER-WALKTHROUGH.md's "File a decision, read it back"](USER-WALKTHROUGH.md#2-file-a-decision-read-it-back)
   shows this live, including the refusal you get if you try to `UPDATE` or `DELETE` a row.
-- **Contemporaneity** — the [`./audit`](#4-operate-the-six-verbs) verb checks every entry for
+- **Contemporaneity** — the [`./audit`](#4-operate-the-seven-verbs) verb checks every entry for
   whether it was recorded at the time of the event it describes, or added after the fact, and
   reports the honest answer rather than assuming good faith.
 - **The signing layer is** an optional further step where a real person, using a key outside the
@@ -308,7 +320,7 @@ a page is meant for you:
 
 - **`USER-`** pages are for you: an adopter using autoharn in your own project. This guide is one.
 - **`ORCH-`** pages are for whoever is actually running or orchestrating a session day to day
-  (`ORCH-OPERATING-CARD.md`, [§4](#4-operate-the-six-verbs) above, is the main one). They are
+  (`ORCH-OPERATING-CARD.md`, [§4](#4-operate-the-seven-verbs) above, is the main one). They are
   useful once you're past adoption and into regular use.
 - **`MAINT-`** pages are for autoharn's own maintainer: decisions about autoharn's law and
   infrastructure, not things an adopter's project needs to act on.
@@ -335,7 +347,7 @@ The pages this guide ordered into a journey, gathered here as one map:
 - [design/USER-WORK-STATUS-OFFERING.md](design/USER-WORK-STATUS-OFFERING.md) — the work-tracking
   offering [§3a](#3a-just-track-your-work-bootstraptrack-worksh) uses, and why BACKLOG.md is a
   findings journal rather than a work tracker as of 2026-07-11.
-- [ORCH-OPERATING-CARD.md](ORCH-OPERATING-CARD.md) — the operator-facing reference for the six
+- [ORCH-OPERATING-CARD.md](ORCH-OPERATING-CARD.md) — the operator-facing reference for the seven
   verbs, resuming a project, and how to decide whether a future fix to autoharn's own database
   schema is safe to fold into your next project automatically or needs the maintainer's
   sign-off first; read it once you're running sessions regularly.

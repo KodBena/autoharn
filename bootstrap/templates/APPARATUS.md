@@ -25,7 +25,8 @@ tool call, no re-scaffold needed. Format:
     "doc_shapes_gate":  {"mode": "observe"},
     "doc_legibility_critic":{"mode": "off", "cost_note": "...", "classifier_command": [...], "timeout_s": 10},
     "read_observer":    {"mode": "observe"},
-    "bash_completion":  {"mode": "observe"}
+    "bash_completion":  {"mode": "observe"},
+    "doc_attestation":  {"mode": "off", "note": "..."}
   }
 }
 ```
@@ -61,7 +62,7 @@ check on demand against any named `apparatus.json` or world directory. Same neve
 as a bad mode value: an unrecognized key is never treated as configuring anything, and the
 warning names both the bad key and the full valid set.
 
-## The twelve mechanisms and their defaults
+## The thirteen mechanisms and their defaults
 
 The table below lists every mechanism this project ships, the hook file that implements it, its
 shipped default mode, and why that default was chosen — the per-mechanism detail behind the
@@ -71,7 +72,7 @@ switchboard example above.
 |----------------------|------------------------------------------------|-----------|-----|
 | `change_gate`         | `hooks/pretooluse_change_gate.py`               | `enforce` | free per call — defaults to its current strength |
 | `permit_to_work`      | `hooks/pretooluse_change_gate.py` (same file, independent switch) | `enforce` | free per call |
-| `decomposition_review`| `hooks/pretooluse_change_gate.py` (same file, independent switch) | `observe` | free per call, but this mechanism is NEW and changes what an already-running world's writes are gated on the moment its `hooks/` is updated — defaults to `observe` (journals the would-be denial) rather than retroactively blocking a live world with no operator opt-in; `enforce` is the intended steady state once a world has adopted `countersign_obligation` rows for its work items |
+| `decomposition_review`| `hooks/pretooluse_change_gate.py` (same file, independent switch) | `observe` | free per call, but this mechanism is NEW and changes what an already-running world's writes are gated on the moment its `hooks/` is updated — defaults to `observe` (journals the would-be denial) rather than retroactively blocking a live world with no operator opt-in; `enforce` is the intended steady state once a world has adopted `countersign_obligation` rows (the ledger table naming which claimed work items require an outside reviewer's countersign before their writes unblock — see the named nuance below) for its work items |
 | `stamp_intercept`      | `hooks/stamp_intercept.py`                      | `enforce` | free per call — injection itself is free/harmless in EVERY mode; only the broken-secret DENY is mode-gated |
 | `clean_exit`           | `hooks/stop_clean_exit.py`                      | `enforce` | free per call |
 | `demurral_detect`      | `hooks/demurral_detect.py`                      | **`off`** | **spends a real `claude -p` classifier call per invocation** — "no world may silently bill its operator" (maintainer mandate, verbatim); the `cost_note` field sits next to this switch on purpose |
@@ -81,11 +82,15 @@ switchboard example above.
 | `doc_legibility_critic`| `hooks/doc_legibility_critic.py`                | **`off`** | **spends a real `claude -p` classifier call per `.md` Write/Edit** — same "no world may silently bill its operator" mandate as `demurral_detect`; the zero-context-reader documentation discipline's (`law/adr/0017-the-zero-context-reader.md`) lightweight, portable transport, delivered UNWIRED into any hook chain — this entry only takes effect once a project wires the PostToolUse attachment documented in the hook's own module docstring |
 | `read_observer`        | `hooks/pretooluse_read_observer.py`             | `observe` | **free per call** (one journal line, no subprocess, no LLM call) — defaults `observe` like `mutation_observer`/`delegation_observer`, the house convention that a costless observer starts ON rather than OFF; `enforce` is **not sanctioned** (reading a file is not a refusable act under this project's law) — if apparatus.json ever names `enforce` here, the hook warns loudly and behaves as `observe` |
 | `bash_completion`      | `hooks/posttooluse_bash_completion.py`          | `observe` | **free per call** (one journal line, no subprocess, no LLM call) — same costless-observer convention as `mutation_observer`/`read_observer`; journals a Bash call's completion timestamp beside `stamp_intercept`'s existing pre-call token, correlated by command-text hash (module docstring: "the non-null tail — builds, test suites, dispatches"). `enforce` is **impossible** (a PostToolUse leg fires after the command already finished — no "deny" available), same shape as `mutation_observer`; the hook warns loudly and behaves as `observe` if apparatus.json ever names it. Added 2026-07-12 ("Small-follow-ups commission") — this row and the shipped `apparatus.json` default were briefly out of sync with the mechanism actually shipping in `hooks/`, found and fixed by the configuration-surface-survey commission's own unknown-key sweep work ([BACKLOG.md](../../BACKLOG.md) "Configuration-surface survey, adopter's eyes", 2026-07-11 entry, gap 1) — the worked example of exactly the drift `filing/apparatus_registry.py`'s derive-don't-hand-list design exists to foreclose |
+| `doc_attestation`      | `bootstrap/templates/distance-to-clean.tmpl` (NOT a hook — see the named nuance below) | **`off`** | **free per call** (pure hashing, no LLM call, no network) — OFF anyway, because this switch is not about cost: it gates whether `./distance-to-clean`'s DOC-ATTESTATION section counts debt for the ADR-0017 A:B:C fresh-context audit loop, a workflow a deployment adopts by choice (`design/ORCH-SPEC-ABC-OFFERING.md` §4). `enforce` is **not applicable** (this section only ever reports, it has no deny path) — degrades to `observe` with a warning, same shape as `mutation_observer`/`bash_completion`. Added 2026-07-12 (tracker item `abc-loop-offering`) |
 
-Named nuances:
+The table above states each mechanism's default and the one-line reason for it; the notes below
+add per-mechanism detail a table cell is too narrow to carry.
 
-- **`decomposition_review`** (BACKLOG "decomposition-review-blocker", maintainer ruling
-  2026-07-12) denies a substantive `Write`/`Edit`/`NotebookEdit` anywhere under `SUBJECT_ROOT`
+- **`decomposition_review`** (historical record — BACKLOG.md is retired as a live document; the
+  dated entry "decomposition-review-blocker" that named this ruling is preserved in git history,
+  `git show d6f64ee:BACKLOG.md`, maintainer ruling 2026-07-12) denies a substantive
+  `Write`/`Edit`/`NotebookEdit` anywhere under `SUBJECT_ROOT`
   (the scaffolded project's own root directory, wired via `deployment.json` or an explicit env
   var — see this file's own `change_gate`/`permit_to_work` rows) — deliberately NOT restricted
   to `permit_to_work`'s `*.py`-pattern governed set, since a bad decomposition threatens every
@@ -93,12 +98,14 @@ Named nuances:
   CLAIMED work item's own opening ledger row has been countersigned (an unsuperseded `attest`
   review from a distinct actor). This is the exact discharge test the ledger's `review_gap` SQL
   view already computes for any obligated row (see `hooks/pretooluse_change_gate.py`'s own module
-  docstring for the full mechanics), applied here to that one row. VACUOUS, by construction, in a
-  world whose `countersign_obligation` table carries no rows at all — such a world never adopted
-  the review-obligation regime, so this mechanism adds nothing, automatically, with no separate
-  "table is empty" branch. Pre-s22 worlds — scaffolded before the s22 kernel-lineage delta, so
-  they carry no per-project work-item ledger view (`work_item_current`) at all — skip it
-  entirely, same as `permit_to_work`. The motivating specimen: in a prior run of this project's
+  docstring for the full mechanics), applied here to that one row. This mechanism is VACUOUS, by
+  construction, in a world whose `countersign_obligation` table carries no rows at all — such a
+  world never adopted the review-obligation regime, so this mechanism adds nothing,
+  automatically, with no separate "table is empty" branch. Worlds scaffolded before the s22
+  kernel-lineage delta (`kernel/lineage/s22-work-item-ledger.sql`, the additive schema change
+  that adds each project's own per-project work-item ledger) carry no per-project work-item
+  ledger view (`work_item_current`) at all and skip it entirely, same as `permit_to_work`. The
+  motivating specimen: in a prior run of this project's
   own operator loop, a claimed work item's implementation began six seconds after it was claimed,
   ~2.5 minutes ahead of the decomposition's own countersign verdict.
 - **`stamp_intercept`** treats injection and denial separately: `"observe"` still injects the
@@ -139,10 +146,17 @@ Named nuances:
   (B), and a third repairs whatever B found (C) — with a sign-off record (an "attestation":
   which document version was reviewed, by whom, and with what result) checked for presence at
   commit time. That commit-time presence check — `gates/doc_attestation_presence.py` — belongs
-  to this project's own repository only (it is not part of the scaffold a new project gets)
-  and carries no apparatus.json entry: nothing in a freshly scaffolded project reads one, and per
-  this file's own convention a free deterministic gate (like `gates/doc_shapes.py` and
-  `gates/link_integrity.py` before it) is not switchboard-gated at all.
+  to this project's own repository only (it is not part of the scaffold a new project gets, and
+  this repo's own `.claude/apparatus.json` carries no entry for it either: a free deterministic
+  gate, like `gates/doc_shapes.py`/`gates/link_integrity.py` before it, is not switchboard-gated
+  at all). A scaffolded project DOES get a related, distinct capability — a `doc_attestation`
+  switchboard entry of its own (this table's last row) governing whether `./distance-to-clean`
+  counts A:B:C debt, plus a per-deployment `./attest-doc` verb that reads/writes THAT
+  deployment's own attestation ledger by importing this repo's gate module directly, live, the
+  same "verbs are shims into the autoharn checkout" pattern `led`/`judge`/`pickup` already use
+  (`design/ORCH-SPEC-ABC-OFFERING.md`, tracker item `abc-loop-offering`) — never a copy of the
+  gate script itself, and never wired as that deployment's own commit-time hook (most scaffolds
+  are not even guaranteed to be a git repository).
 - **`read_observer`** watches `PreToolUse(Read)` and journals every file read (session id,
   UTC-Z timestamp, file path) to `.claude/logs/read_observer.journal.jsonl` — nothing else
   (no file content, no excerpt). It answers a question the run10 retrospective named as
@@ -155,8 +169,21 @@ Named nuances:
 - **`bash_completion`** watches `PostToolUse(Bash)` and journals a completion record
   (`.claude/logs/bash_completions.jsonl`) FIFO-paired by command-text hash to
   `stamp_intercept`'s own dispatch journal — the value is the pairing's duration for a
-  non-trivial call (a build, a test suite), not the common ~0s call. No deny path, same
-  reasoning as `read_observer`.
+  non-trivial call (a build, a test suite), not the common ~0s call. It has no deny path, for
+  the same reason as `read_observer`.
+- **`doc_attestation`** is read by `bootstrap/templates/distance-to-clean.tmpl`, not by any file
+  under `hooks/` — the first mechanism in this project's history for which that is true.
+  `filing/apparatus_registry.py`'s known-mechanism sweep (the same one `gates/
+  apparatus_unknown_keys.py` and `hooks/pretooluse_change_gate.py`'s own `_warn_unknown_mechanisms`
+  use) was widened the same day to scan `bootstrap/templates/*.tmpl` alongside `hooks/*.py`, so
+  this key is recognized by construction rather than needing a one-off carve-out (see that
+  module's own "WHERE IT SCANS" docstring section) — a real hazard caught and closed in the same
+  change that introduced the need for it (CLAUDE.md's hazard-in-reach-of-the-work duty), not a
+  gap left for the next reader to trip on. `mode` is `"off"` or `"observe"` only (see the table
+  row above for why `"enforce"` degrades rather than applies); `./distance-to-clean`'s
+  DOC-ATTESTATION section and `./attest-doc check` read the identical classification
+  (`gates/doc_attestation_presence.py`'s `classify()`), so the two never disagree about which
+  documents are debt.
 
 ## The apparatus-flip watcher — deliberately NOT in the switchboard above
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-11T16:35:50Z
-#   last-change: 2026-07-11T22:38:01Z
+#   last-change: 2026-07-12T14:40:01Z
 #   contributors: e4410ef6/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -73,9 +73,14 @@ def _load_gate_module(repo_root: Path, ledger: Path):
     return mod
 
 
+REAL_LEDGER = REPO / "attestations" / "doc-legibility-attestations.jsonl"
+
+
 def main() -> int:
     tmp = Path(tempfile.mkdtemp(prefix="doc-attest-seenred-"))
     failures: list[str] = []
+    real_lines_before = (len(REAL_LEDGER.read_text(encoding="utf-8").splitlines())
+                         if REAL_LEDGER.exists() else 0)
     try:
         doc = tmp / "sample.md"
         doc.write_text("# Sample\n\nA short, clean paragraph with a real sentence.\n",
@@ -278,6 +283,129 @@ def main() -> int:
         print(f"CASE REPORT-NEVER-FAILS: exit={rc}")
         if rc != 0:
             failures.append("report mode must always exit 0")
+
+        # --- PARAMETERIZATION (tracker item `abc-loop-offering` Stage A) -----------------
+        # --doc-root/--ledger, discover_md(), records_for_doc(), classify() -- a SEPARATE
+        # throwaway tree from the module-level monkeypatch cases above, exercised via a REAL
+        # subprocess invocation (not the in-process `mod` this file otherwise uses) so this
+        # proves the actual CLI contract a caller outside this repository (attest-doc.tmpl)
+        # depends on, mirroring seen-red/apparatus-unknown-keys/run_fixtures.py's own
+        # subprocess-not-import posture for the same reason.
+        param_root = tmp / "param-root"
+        param_root.mkdir()
+        pdoc = param_root / "pdoc.md"
+        pdoc.write_text("# Param doc\n\nA short, clean paragraph with a real sentence.\n",
+                        encoding="utf-8")
+        param_ledger = param_root / "attestations" / "doc-legibility-attestations.jsonl"
+
+        # RED (--doc-root/--ledger, no matching record yet): the SAME NO-ATTESTATION shape as
+        # the unparameterized case above, now reached through the CLI flags against a tree
+        # this gate's own module-load REPO_ROOT/LEDGER_PATH know nothing about.
+        cp = _run(REPO, "--doc-root", str(param_root), "--ledger", str(param_ledger), str(pdoc))
+        print(f"CASE PARAM-RED (--doc-root/--ledger, no attestation): exit={cp.returncode}")
+        if cp.returncode != 1:
+            failures.append(f"PARAM-RED: expected exit 1, got {cp.returncode}\n{cp.stdout}{cp.stderr}")
+        if "NO-ATTESTATION" not in cp.stdout:
+            failures.append(f"PARAM-RED: expected NO-ATTESTATION in stdout, got:\n{cp.stdout}")
+
+        # GREEN: --record through the SAME two flags writes into param_ledger, never the
+        # real repo ledger (confirmed by checking the real ledger's line count is unchanged
+        # below) -- then gate mode against the same flags is clean.
+        param_clean_body = param_root / "clean_body.json"
+        param_clean_body.write_text(json.dumps({
+            "doc": "pdoc.md", "b_id": "param-fixture-B", "escalated": False,
+            "rounds": [{"round": 1, "verdict": "CLEAN", "findings": [],
+                        "clauses_checked": ["1a", "1b", "1c", "1d"]}],
+        }), encoding="utf-8")
+        cp = _run(REPO, "--doc-root", str(param_root), "--ledger", str(param_ledger),
+                  "--record", str(param_clean_body))
+        print(f"CASE PARAM-GREEN (--record via flags): exit={cp.returncode}")
+        if cp.returncode != 0:
+            failures.append(f"PARAM-GREEN --record: expected exit 0, got {cp.returncode}\n{cp.stdout}{cp.stderr}")
+        cp = _run(REPO, "--doc-root", str(param_root), "--ledger", str(param_ledger), str(pdoc))
+        print(f"CASE PARAM-GREEN (gate mode after --record via flags): exit={cp.returncode}")
+        if cp.returncode != 0:
+            failures.append(f"PARAM-GREEN gate: expected exit 0, got {cp.returncode}\n{cp.stdout}{cp.stderr}")
+        if REAL_LEDGER.exists():
+            real_lines_after = len(REAL_LEDGER.read_text(encoding="utf-8").splitlines())
+            if real_lines_after != real_lines_before:
+                failures.append(f"PARAM-GREEN: the REAL repo ledger's line count changed "
+                                f"({real_lines_before} -> {real_lines_after}) -- --doc-root/"
+                                f"--ledger must isolate a caller from this repo's own ledger")
+
+        # No-flags invocation is UNCHANGED (defaults preserved bit-for-bit): a bare `--record`
+        # with no --doc-root/--ledger still resolves against THIS repo's own REPO_ROOT/
+        # LEDGER_PATH -- proven here by asking it to record a doc that does not exist under
+        # this repo's root, which must fail exactly as it always has (doc not found on disk).
+        cp = _run(REPO, "--record", "-")
+        # empty stdin -> "input must be a JSON object" after json.loads("") raises -- confirms
+        # the --record dispatch path with NO leading flags is reached unchanged.
+        print(f"CASE PARAM-DEFAULTS-UNCHANGED (--record with no doc-root/ledger flags, bad "
+              f"input): exit={cp.returncode}")
+        if cp.returncode != 2:
+            failures.append(f"PARAM-DEFAULTS-UNCHANGED: expected exit 2 (malformed input), "
+                            f"got {cp.returncode}\n{cp.stdout}{cp.stderr}")
+
+        # --- discover_md() / records_for_doc() / classify() (in-process, `mod`) ------------
+        discover_root = tmp / "discover-root"
+        (discover_root / "sub").mkdir(parents=True)
+        (discover_root / "top.md").write_text("# top\n", encoding="utf-8")
+        (discover_root / "sub" / "nested.md").write_text("# nested\n", encoding="utf-8")
+        (discover_root / "not-markdown.txt").write_text("x", encoding="utf-8")
+        found = mod.discover_md(discover_root)
+        print(f"CASE DISCOVER-MD (no .git, on-disk walk): {found}")
+        if found != ["sub/nested.md", "top.md"]:
+            failures.append(f"discover_md (no .git): expected ['sub/nested.md', 'top.md'], got {found}")
+
+        # RED (regression, out-of-frame hack-rationalization audit, tracker item
+        # `abc-loop-offering`): an EARLIER version of discover_md() preferred `git ls-files`
+        # whenever `.git` existed -- on a git-initialized-but-nothing-committed-or-added tree,
+        # `git ls-files '*.md'` succeeds with EMPTY output (not an error), so the
+        # except-based fallback never triggered and the function silently returned [] on a
+        # tree that genuinely had .md files sitting on disk -- a false-CLEAN. The fix drops
+        # git involvement entirely (see the function's own docstring); this case pins the
+        # regression by initializing a REAL git repo with the SAME two files, uncommitted and
+        # unstaged, and asserting they are still found.
+        subprocess.run(["git", "init", "-q"], cwd=str(discover_root), check=True)
+        found_with_git = mod.discover_md(discover_root)
+        print(f"CASE DISCOVER-MD (real .git present, nothing committed/staged): {found_with_git}")
+        if found_with_git != ["sub/nested.md", "top.md"]:
+            failures.append(f"discover_md (.git present, uncommitted docs): expected "
+                            f"['sub/nested.md', 'top.md'] found regardless of git state, got "
+                            f"{found_with_git} -- the false-clean regression this case pins")
+
+        cls_records = [
+            {"doc": "classify.md", "content_sha256": "deadbeef" * 8},  # stale: wrong hash
+        ]
+        classify_doc = discover_root / "top.md"  # reuse an existing file, renamed logically
+        classify_rel = "top.md"
+        # NO-ATTESTATION: no record at all for this doc path.
+        verdict = mod.classify(classify_rel, [], discover_root)
+        print(f"CASE CLASSIFY (no record -> NO-ATTESTATION): {verdict}")
+        if verdict != "NO-ATTESTATION":
+            failures.append(f"classify: expected NO-ATTESTATION, got {verdict}")
+        # STALE: a record exists for this doc path, but at a hash that does not match the
+        # file's current bytes.
+        stale_records = [{"doc": classify_rel, "content_sha256": "0" * 64}]
+        verdict = mod.classify(classify_rel, stale_records, discover_root)
+        print(f"CASE CLASSIFY (record at wrong hash -> STALE): {verdict}")
+        if verdict != "STALE":
+            failures.append(f"classify: expected STALE, got {verdict}")
+        # ATTESTED: a record exists at the file's CURRENT hash.
+        current_hash = mod._sha256_of(classify_doc)
+        attested_records = [{"doc": classify_rel, "content_sha256": current_hash}]
+        verdict = mod.classify(classify_rel, attested_records, discover_root)
+        print(f"CASE CLASSIFY (record at current hash -> ATTESTED): {verdict}")
+        if verdict != "ATTESTED":
+            failures.append(f"classify: expected ATTESTED, got {verdict}")
+        # records_for_doc: multiple hashes for one doc path, none for another.
+        multi = [{"doc": "a.md", "content_sha256": "1" * 64},
+                 {"doc": "a.md", "content_sha256": "2" * 64},
+                 {"doc": "b.md", "content_sha256": "3" * 64}]
+        rfd = mod.records_for_doc(multi, "a.md")
+        print(f"CASE RECORDS-FOR-DOC (two hashes, one path): {len(rfd)} record(s)")
+        if len(rfd) != 2:
+            failures.append(f"records_for_doc: expected 2 records for 'a.md', got {len(rfd)}")
 
     finally:
         shutil.rmtree(tmp, ignore_errors=True)

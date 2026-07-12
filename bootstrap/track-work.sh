@@ -1,7 +1,7 @@
 #!/bin/sh
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-11T20:34:46Z
-#   last-change: 2026-07-11T22:27:11Z
+#   last-change: 2026-07-12T14:41:43Z
 #   contributors: e4410ef6/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -245,6 +245,10 @@ sedsubst() {
 # and remains available for future template growth; none of the verb shims below currently
 # contain a __TOKEN__ -- they are pure `exec` shims, same as new-project.sh's own.)
 
+# COHERENCE PARTNER: keys/README.md and attestations/README.md below are BOTH in gates/
+# doc_attestation_presence.py's DEPLOYMENT_SCAFFOLD_OWNED_MD (tracker item `abc-loop-offering`)
+# -- they are autoharn's own templated prose, not an adopter's to re-attest. If a future template
+# adds another scaffold-written .md file, add it to that set too.
 echo "-- keys/ (this deployment's OWN GPG keyring -- SIGNED commissions, design/MAINT-GPG-TRUST-LAYER.md"
 echo "   §3 -- deliberately separate from autoharn's own law/keys/, which is scoped exclusively to"
 echo "   autoharn's own ratified/* tags and has no bearing on this deployment) --"
@@ -253,11 +257,26 @@ sedsubst < "$TEMPLATES/keys-README.md.tmpl" > "$PROJECT_ROOT/keys/README.md"
 echo "wrote keys/README.md (AWAITING-KEY stub; commit THIS deployment's own signing key here --"
 echo "see design/USER-GPG-TRUST-LAYER-FAQ.md §3 for the ceremony -- never to autoharn's law/keys/)"
 
-echo "-- the seven verbs (led, judge, pickup, audit, distance-to-clean, verify-commission,"
-echo "   verify-chain): thin shims exec'ing autoharn's live templates, identical mechanism to"
-echo "   new-project.sh's own (a template fix in bootstrap/templates/ reaches this deployment"
-echo "   instantly, same as every governed world) --"
-for verb in led judge pickup audit distance-to-clean verify-commission verify-chain; do
+# attestations/ -- this deployment's OWN ADR-0017 A:B:C fresh-context attestation ledger
+# (tracker item `abc-loop-offering`; design/ORCH-SPEC-ABC-OFFERING.md §3), the same
+# deployment-local-artifact split as keys/ above, and the same idempotent never-clobber
+# posture new-project.sh's own copy of this block documents.
+echo "-- attestations/ (this deployment's OWN ADR-0017 A:B:C attestation ledger; never autoharn's) --"
+mkdir -p "$PROJECT_ROOT/attestations"
+sedsubst < "$TEMPLATES/attestations-README.md.tmpl" > "$PROJECT_ROOT/attestations/README.md"
+if [ -f "$PROJECT_ROOT/attestations/doc-legibility-attestations.jsonl" ]; then
+    echo "attestations/doc-legibility-attestations.jsonl already exists -- left untouched (never clobbered)"
+else
+    : > "$PROJECT_ROOT/attestations/doc-legibility-attestations.jsonl"
+    echo "wrote attestations/doc-legibility-attestations.jsonl (empty; the honest starting state)"
+fi
+echo "wrote attestations/README.md"
+
+echo "-- the eight verbs (led, judge, pickup, audit, distance-to-clean, verify-commission,"
+echo "   verify-chain, attest-doc): thin shims exec'ing autoharn's live templates, identical"
+echo "   mechanism to new-project.sh's own (a template fix in bootstrap/templates/ reaches this"
+echo "   deployment instantly, same as every governed world) --"
+for verb in led judge pickup audit distance-to-clean verify-commission verify-chain attest-doc; do
     cat > "$PROJECT_ROOT/$verb" <<SHIM
 #!/bin/sh
 HERE="\$(cd "\$(dirname "\$0")" && pwd)"
@@ -287,7 +306,14 @@ echo "  ./led work close <slug> shipped --witness \"<ref>\"   # close it, witnes
 echo "  ./pickup                             # live resume brief incl. IN-FLIGHT work items"
 echo "  ./distance-to-clean                  # composed closure-debt read"
 echo "  ./led work violations                # cycles / dangling deps / duplicate opens"
+echo "  ./attest-doc check                   # ADR-0017 A:B:C attestation status per doc"
 echo ""
 echo "keys/README.md (AWAITING-KEY) explains this deployment's OWN GPG keyring: commit a public"
 echo "key there (never to autoharn's law/keys/) to move SIGNED commissions from NO-COMMITTED-KEY"
 echo "to VERIFIED -- ./verify-commission --id <id>; see design/USER-GPG-TRUST-LAYER-FAQ.md §3."
+echo ""
+echo "attestations/README.md explains this deployment's OWN ADR-0017 A:B:C attestation ledger."
+echo "No .claude/apparatus.json is written here (no hooks were wired -- see above), so"
+echo "./distance-to-clean's DOC-ATTESTATION section always reads 'off' unless you scaffold one"
+echo "by hand (copy new-project.sh's .claude/ wiring, or just run ./attest-doc check directly --"
+echo "it needs no apparatus.json at all)."

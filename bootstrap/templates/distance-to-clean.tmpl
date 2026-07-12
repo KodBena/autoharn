@@ -36,9 +36,28 @@ Sections emitted, one call, one pass:
                       violation row, by slug — UNAVAILABLE (not zero) on a world whose kernel
                       predates kernel/lineage/s22-work-item-ledger.sql, mirroring pickup.tmpl's
                       own honest IN-FLIGHT fallback for the identical capability gap.
-  TOTAL             — the sum of the three counts above (0 iff all three are individually
-                      clean) plus the one-line verdict `led review-gap`/`question-status`/
-                      `work violations` would each print separately today, now in one place.
+  DOC-ATTESTATION   — added 2026-07-12 (tracker item `abc-loop-offering`; design/
+                      ORCH-SPEC-ABC-OFFERING.md Stage C). Counts every in-scope `*.md` under
+                      this deployment whose ADR-0017 A:B:C fresh-context attestation is STALE
+                      or NO-ATTESTATION (never ATTESTED — see `./attest-doc check`, this
+                      deployment's own verb, for the per-document classification this section
+                      reads via the SAME `gates/doc_attestation_presence.py` classify()
+                      autoharn's own checkout owns — ADR-0012 P1, one classifier, two callers).
+                      NOT counted by default: this section is gated OFF unless
+                      `mechanisms.doc_attestation.mode` is `"observe"` in this deployment's
+                      `.claude/apparatus.json` (missing file/key/mechanism resolves to `"off"`,
+                      never widens on a bad value — the SAME never-widens posture every other
+                      mechanism in this project's apparatus switchboard already has). OFF is
+                      not a cost decision (this section, like `./attest-doc check`, is pure
+                      hashing — no LLM call, no network) — it is an ADOPTION decision: a
+                      deployment that has not adopted the A:B:C loop as a workflow should not
+                      see debt for a discipline it never opted into (design/
+                      ORCH-SPEC-ABC-OFFERING.md §4).
+  TOTAL             — the sum of the counts above (REVIEW-GAP + QUESTION-STATUS +
+                      WORK-VIOLATIONS, plus DOC-ATTESTATION when its mode is not `"off"`; 0 iff
+                      every counted dimension is individually clean) plus the one-line verdict
+                      `led review-gap`/`question-status`/`work violations`/`attest-doc check`
+                      would each print separately today, now in one place.
 
 Deployment resolution, connection posture, and path resolution: byte-identical to
 pickup.tmpl's own module docstring section of the same name — this file executes IN PLACE out
@@ -54,6 +73,7 @@ Lazy imports banned (top-of-file only, per this project's inherited convention).
 """
 from __future__ import annotations
 
+import json
 import os
 import subprocess
 import sys
@@ -62,6 +82,11 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 AUTOHARN = Path(os.environ.get("AUTOHARN", str(HERE / ".." / ".."))).resolve()
 DEPLOYMENT_PATH = Path(os.environ.get("PICKUP_DEPLOYMENT", str(HERE / "deployment.json")))
+# The directory containing deployment.json IS this deployment's own root -- the same resolution
+# bootstrap/templates/attest-doc.tmpl uses (see that file's own module docstring). DOC-ATTESTATION
+# below needs only this path, never a Postgres connection -- it is pure filesystem + one JSONL
+# ledger, deliberately independent of the three DB-backed sections above it.
+PROJECT_ROOT = DEPLOYMENT_PATH.parent
 
 sys.path.insert(0, str(AUTOHARN / "filing"))
 try:
@@ -71,6 +96,79 @@ except ImportError as _e:
           f"AUTOHARN={AUTOHARN} ({_e.__class__.__name__}: {_e})", file=sys.stderr)
     print("        set AUTOHARN=/path/to/autoharn, or place a sibling checkout at ../autoharn", file=sys.stderr)
     sys.exit(2)
+
+sys.path.insert(0, str(AUTOHARN / "gates"))
+try:
+    import doc_attestation_presence as dap  # noqa: E402  (autoharn's own gate module, the ONE home of the classifier)
+except ImportError as _e:
+    print(f"distance-to-clean: cannot import autoharn's gates/doc_attestation_presence.py under "
+          f"AUTOHARN={AUTOHARN} ({_e.__class__.__name__}: {_e})", file=sys.stderr)
+    print("        set AUTOHARN=/path/to/autoharn, or place a sibling checkout at ../autoharn", file=sys.stderr)
+    sys.exit(2)
+dap.REPO_ROOT = PROJECT_ROOT
+dap.LEDGER_PATH = PROJECT_ROOT / "attestations" / "doc-legibility-attestations.jsonl"
+
+# apparatus.json switchboard for THIS section only (tracker item `abc-loop-offering` Stage C).
+# Same shape as every hooks/*.py mechanism reader (MECHANISM_KEY constant + mechs.get(...)) so
+# filing/apparatus_registry.py's known_mechanisms() recognizes this key without a special case
+# (see that module's own "WHERE IT SCANS" docstring section) -- the general fix for the general
+# class: any apparatus-reading file, not only a hook, is now covered.
+MECHANISM_KEY = "doc_attestation"
+_VALID_DOC_ATTESTATION_MODES = ("off", "observe")
+
+
+def _doc_attestation_mode(project_root: Path) -> str:
+    """Missing file/key/mechanism resolves to "off" (never an error) -- the SAME convention
+    every mechanism in this project's apparatus switchboard already follows. An unrecognized
+    mode value NEVER WIDENS: "enforce" degrades to "observe" with a warning (there is no deny
+    path here -- this section only ever REPORTS debt, the same "impossible enforce" shape
+    mutation_observer/bash_completion/read_observer already have, per bootstrap/templates/
+    APPARATUS.md); anything else falls back to "off" with a warning naming the bad value and
+    this file's own path, mirroring hooks/doc_legibility_critic.py's own _resolve_mode()."""
+    path = project_root / ".claude" / "apparatus.json"
+    try:
+        with open(path, encoding="utf-8") as f:
+            apparatus = json.load(f)
+    except Exception:
+        return "off"
+    if not isinstance(apparatus, dict):
+        return "off"
+    mechs = apparatus.get("mechanisms")
+    entry = mechs.get(MECHANISM_KEY) if isinstance(mechs, dict) else None
+    entry = entry if isinstance(entry, dict) else {}
+    raw = entry.get("mode")
+    if raw is None:
+        return "off"
+    if raw == "enforce":
+        print(f"[apparatus] WARNING: mechanisms.{MECHANISM_KEY}.mode='enforce' is not "
+              f"applicable ({MECHANISM_KEY} only ever REPORTS debt, it has no deny path) -- "
+              f"behaving as 'observe'. ({path})", file=sys.stderr)
+        return "observe"
+    if raw in _VALID_DOC_ATTESTATION_MODES:
+        return raw
+    print(f"[apparatus] WARNING: mechanisms.{MECHANISM_KEY}.mode={raw!r} in {path} is "
+          f"unrecognized (must be one of {_VALID_DOC_ATTESTATION_MODES}) -- never widening; "
+          f"falling back to 'off'.", file=sys.stderr)
+    return "off"
+
+
+def doc_attestation_debt(project_root: Path) -> tuple[int, dict[str, int], list[str]]:
+    """Returns (debt_count, {"ATTESTED":n,"STALE":n,"NO-ATTESTATION":n}, debt_doc_reprs). Reads
+    the SAME classify()/discover_md()/deployment_in_scope() this deployment's own
+    `./attest-doc check` reads (ADR-0012 P1, one classifier, two callers) -- never a second,
+    hand-rederived scan."""
+    targets = dap.discover_md(project_root)
+    scope = [t for t in targets if dap.deployment_in_scope(t)
+             and not dap._has_waiver(project_root / t)]
+    records = dap.load_ledger()
+    counts = {"ATTESTED": 0, "STALE": 0, "NO-ATTESTATION": 0}
+    debt_docs: list[str] = []
+    for rel in sorted(scope):
+        verdict = dap.classify(rel, records, project_root)
+        counts[verdict] += 1
+        if verdict != "ATTESTED":
+            debt_docs.append(f"{rel} ({verdict})")
+    return counts["STALE"] + counts["NO-ATTESTATION"], counts, debt_docs
 
 
 def _load_deployment():
@@ -182,6 +280,18 @@ def main() -> int:
         total += wv_count
         print(f"work-violations   : {wv_count} violation(s)" +
               (f" -- slugs: {wv_slugs}" if wv_slugs else ""))
+
+    da_mode = _doc_attestation_mode(PROJECT_ROOT)
+    if da_mode == "off":
+        print(f"doc-attestation   : off (opt-in -- set mechanisms.{MECHANISM_KEY}.mode to "
+              f"'observe' in .claude/apparatus.json once you're running the ADR-0017 A:B:C "
+              f"loop, so debt here reflects a discipline you actually adopted)")
+    else:
+        da_debt, da_counts, da_docs = doc_attestation_debt(PROJECT_ROOT)
+        total += da_debt
+        print(f"doc-attestation   : {da_debt} debt ({da_counts['NO-ATTESTATION']} "
+              f"NO-ATTESTATION, {da_counts['STALE']} STALE, {da_counts['ATTESTED']} ATTESTED)" +
+              (f" -- {da_docs}" if da_docs else ""))
 
     print()
     if any_blocked:
