@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-09T13:36:11Z
-#   last-change: 2026-07-13T17:42:54Z
-#   contributors: be693afb/main, e4410ef6/main, 3c50e030/main
+#   last-change: 2026-07-13T20:02:57Z
+#   contributors: be693afb/main, e4410ef6/main, 3c50e030/main, 3c942a60/main
 # <<< PROVENANCE-STAMP <<<
 
 """fixture_census — mechanizes mandate §6's "every migrated gate's seen-red still proves it
@@ -108,6 +108,7 @@ REGISTRY: dict[str, str] = {
     "verify-chain-error-conflation":  "seen-red/verify-chain-error-conflation/run_fixtures.py",
     "actual-intake-validation":       "seen-red/actual-intake-validation/run_fixtures.py",
     "review-queue-intake":            "seen-red/review-queue-intake/run_fixtures.py",
+    "adr-portability-terms":          "seen-red/adr-portability-terms/run_fixtures.py",
 }
 
 
