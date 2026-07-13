@@ -1,5 +1,11 @@
 # ADR-0002: Fail Loudly
 
+*In plain words first: this is the project's fail-loudly tenet. When code hits a bad
+config, an unexpected shape, a timeout, or any other deviation from what it expects, the
+rule is to say so clearly — raise, fail a build or test, log visibly — rather than quietly
+limping on, guessing, or hiding the problem behind a plausible-looking default. It binds
+every module in a hosting project that could otherwise let such a failure pass silently.*
+
 > *Refactored for cross-project portability on 2026-07-13 under
 > [`design/MAINT-ADR-PORTABILITY-SPEC.md`](../../design/MAINT-ADR-PORTABILITY-SPEC.md)
 > (tracker `adr-portability-refactor`, maintainer-ratified 2026-07-13). The pre-refactor
@@ -41,10 +47,11 @@
   surfaces a deviation through a loud channel is an instance. The source
   project's own instance list (an env's config validation, a parallel
   executor's bounded-drain refusal, a hyperparameter registry's
-  RESTART-drift refusal, a weights loader's shape checks, a precision guard)
+  restart-only-field drift refusal (the same instance the Context's extracted
+  record below describes), a weights loader's shape checks, a precision guard)
   is preserved in the Context's extracted record below; an adopting project
   re-derives its own instance list against its real surfaces, the same move
-  ADR-0009 models for this corpus.
+  [ADR-0009](0009-performance-investigation-discipline.md) models for this corpus.
 
 ## Context
 
@@ -92,8 +99,8 @@ Loudness is not binary. From strongest to weakest:
 
 1. **Import/construction-time error** (the program refuses to start with a
    bad config). Strongest; the anomaly never reaches a run. Preferred where
-   the invariant is knowable at setup — the AZ shape checks at load, the
-   dtype guard.
+   the invariant is knowable at setup — the AZ (AlphaZero-style search/training
+   stack) shape checks at load, the dtype guard.
 2. **Test/build-time error** (a test fails). Nearly as strong for runtime
    paths whose invariants the type system can't capture — the jax/numpy
    bit-equivalence test, the scenario validation tests.
@@ -110,10 +117,17 @@ Loudness is not binary. From strongest to weakest:
    fallback for a coord pair absent from the precomputed table — the
    fallback is bit-identical to the table, so it is not a coercion).
 
+*(Amended 2026-07-13 — see the dated Amendment below: a rung named
+**build/compile-time error**, ranking immediately below rung 1 and immediately
+above rung 2, was added to this hierarchy per §7 C8's adjudicated
+resolution.)*
+
 The tenet: **reach for the strongest level that fits the anomaly, not the
 weakest that's expedient.**
 
 ### Concrete rules
+
+The tenet above cashes out as six checkable rules:
 
 1. **No automatic retry / silent fallback for operations that could
    indicate a genuine problem.** Timeouts, failed transport, a config the
@@ -139,8 +153,9 @@ weakest that's expedient.**
    Extraction Pointer above links) —
    the same failure in the parameter register: a seam that looks configured
    but is dead. Honor it or delete it (this is the subject of
-   [ADR-0011](0011-mechanization-discipline.md) Rule 6's lineage and of
-   finding L6 of that same source audit).
+   [ADR-0011](0011-mechanization-discipline.md) Rule 6's lineage and of the
+   source audit's lying-signature finding, preserved in the extracted record
+   the Context's Extraction Pointer above links).
 5. **No silent state-mutation that breaks an invariant.** The float32 cache
    coherence ([ADR-0001](0001-immutability-and-copy-on-write.md)) is a
    fail-loud-adjacent invariant: a rebind keeps
@@ -304,6 +319,64 @@ and scheduled.
   records the gravest sin against this tenet for an LLM collaborator: citing
   a document one has not read in full. Surfacing the gap audibly is the only
   correct move.
+
+## Amendments
+
+### Amendment — 2026-07-13: the loudness hierarchy gains a build/compile-time rung (§7 C8)
+
+*(Dated append per [ADR-0005](0005-documentation-discipline.md) Rule 8, executed under
+[`design/MAINT-ADR-PORTABILITY-SPEC.md`](../../design/MAINT-ADR-PORTABILITY-SPEC.md) §7 C8 —
+that linked section records the maintainer's 2026-07-13 adjudication (in the project's own
+internal decision record, cited there as "ledger row 403"; this document does not depend on
+that internal record resolving, only on the linked spec section, which states the outcome in
+full): the spec's PROPOSED resolution stands as the default. This is the companion half of
+the same contradiction's resolution
+to [ADR-0011](0011-mechanization-discipline.md)'s
+[2026-07-13 vocabulary amendment](0011-mechanization-discipline.md#amendment-2026-07-13-rule-1s-enforcement-vocabulary-gains-a-buildcompile-time-member-7-c8):
+that amendment executed the ADR-0011 half of the same finding and explicitly routed this
+half back for separate dispatch, because its own work package's commission touched only
+ADR-0011 and its history/ files — naming the gap rather than silently leaving it undone or
+duplicating the other document's work. Provenance of the finding: the spec's full-corpus
+contradiction read found that [ADR-0012](0012-compositional-and-structural-hygiene.md) —
+whose Decision section states its rules as nine numbered principles labeled P1 through P9,
+the "P" labels this Amendment cites — ranks, in
+[P7 (cross-language wire discipline)](0012-compositional-and-structural-hygiene.md#p7-cross-language-wire-discipline-the-new-material),
+"generate-or-compile-from-one-source > **build-time lint** > runtime parity", and asserts,
+in rule 5 of
+[P9 (functional core, imperative shell)](0012-compositional-and-structural-hygiene.md#p9-functional-core-imperative-shell-the-compiled-component-contract),
+"**compile-time** > runtime in
+the loudness hierarchy P5 defers to" — but neither build-time-lint nor compile-time was
+nameable as a rung of the hierarchy above, which named only "Test/build-time error (a test
+fails)" at its second position: this corpus's most-cited structural tenet was enforcing at
+a level its own loudness hierarchy could not name.)*
+
+The hierarchy above gains a rung, **build/compile-time error**, ranking immediately below
+rung 1 (import/construction-time) and immediately above the existing rung 2 (test/build-time
+error): a check that fails the build itself, before the artifact exists to run or test at
+all — a build-time lint that fails on a cross-language format disagreement (ADR-0012 P7), a
+`constexpr`/`consteval` assertion, a `[[nodiscard]]` return treated as a compile error
+(ADR-0012 P9 rule 5), or a codegen step that would not compile if its one source and its
+generated output disagreed. It out-ranks the existing rung 2's "a test fails": a
+build/compile-time failure forecloses the defective artifact from ever being produced,
+where a test/CI gate catches it only after the artifact already exists and the suite runs
+against it — the same ordering [ADR-0011](0011-mechanization-discipline.md)'s companion
+amendment gives its own enforcement-surface vocabulary.
+
+This is a **fail-safe, additive class-ratified delta** in the sense of
+[CLAUDE.md](../../CLAUDE.md)'s "class-ratified fail-safe deltas" ruling: it only *adds* a
+rung to the hierarchy, relaxing no existing rung and weakening no existing rule — every
+prior citation of rung 1 ("Import/construction-time error") or the existing rung 2
+("Test/build-time error") remains exactly as strong as it was. Per [ADR-0005](0005-documentation-discipline.md) Rule 8, the
+numbered hierarchy in the Decision section above is not retro-edited to insert or renumber
+an entry; this Amendment names the new rung's rank by relation to the existing two instead.
+A rule that already declared rung 1 or the existing rung 2 is unaffected; a check whose true
+enforcement was always build/compile-time (ADR-0012 P7's build-time lint, P9's
+`[[nodiscard]]`) now has the honest word for it in this tenet's own hierarchy, closing the
+naming gap C8 found rather than inventing new obligation.
+
+*Enforcement surface: this amendment is itself review-only — it is a vocabulary-naming act,
+not a new check. The gap it closes (a hierarchy citing a level it could not name) is closed
+by naming, not by adding machinery.*
 
 ## License
 
