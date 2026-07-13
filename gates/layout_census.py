@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-09T07:54:37Z
-#   last-change: 2026-07-12T22:40:18Z
+#   last-change: 2026-07-13T15:25:19Z
 #   contributors: 9bcc0113/main, be693afb/main, e4410ef6/main, 3c50e030/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -99,6 +99,12 @@ ROOT_DIRS = {
     # 2026-07-13 merge seam when the LICENSE registration made the gate re-run (CLAUDE.md
     # hazard-flagging duty).
     "vestigial_documentation",
+    # observatory/ — the ent-observatory commission's recurring read-only evaluation of the
+    # live ~/ent deployment (autoharn tracker row 372, 2026-07-13): one dated cycle report per
+    # run under observatory/ent/, each doc-attest-exempt (point-in-time evidence record) and
+    # diffed against prior cycles. Registered on landing rather than left an unregistered
+    # breach for this gate's next run (CLAUDE.md hazard-flagging duty).
+    "observatory",
 }
 
 # (2) per-directory currency patterns: a directory -> the regex(es) its basenames MUST match.
