@@ -2,56 +2,71 @@
 
 - **Status:** Proposed
 - **Genre:** Tenet (cross-cutting corrective-design discipline) — the eighth
-  tenet. Rule 1 is the enforcement register of the
-  ADR-0002 / ADR-0008 / ADR-0009 unsubstantiated-claim family (an enforcement
-  level is a claim about a discipline, and it must be declared, not implied);
-  Rules 2–4 are corrective-design protocol adjacent to that family.
-- **Date:** 2026-06-15
-- **Provenance:** Transferred from the LengYue ADR corpus. The tenet
-  (disciplines declare their enforcement surface; recurrence converts to a
-  mechanism, not more prose; nets quantify over the class, not the instance)
-  is universal. LengYue's substrate was its own RCA and lint-adoption history;
-  chocofarm's substrate is the 2026-06-15 architectural audit, whose entire
-  diagnosis is the chocofarm form of LengYue's "prose disciplines decay,
-  mechanisms stick." The mechanism instances are re-derived as chocofarm's
-  real ones — the `FeatureLayout` descriptor, the equivalence tests, the
-  hp-registry schema constraints.
-- **Scope:** Corrective design and discipline authoring across the
-  `chocofarm/` package and the docs corpus — the moments when a discipline is
-  authored or amended, and when a corrective responds to a recurrence.
+  in this corpus's numbered sequence of cross-cutting tenets (ADR-0002,
+  ADR-0004 through ADR-0009, and ADR-0011 through ADR-0014; the ADR files
+  themselves are the only index of the sequence). Rule 1 is the enforcement
+  register of the ADR-0002 / ADR-0008 / ADR-0009 unsubstantiated-claim family
+  (an enforcement level is a claim about a discipline, and it must be
+  declared, not implied); Rules 2–4 are corrective-design protocol adjacent
+  to that family.
+- **Date:** 2026-06-15 (original); refactored for portability 2026-07-13 (below).
+- **Provenance:** The tenet — disciplines declare their enforcement surface; a
+  recurrence converts to a mechanism, not more prose; a net quantifies over the
+  class, not the instance — is universal. It has transferred once already: from
+  a browser-tooling project's own RCA and lint-adoption history, onto a
+  numpy/JAX/numba research codebase's own architectural audit, whose entire
+  diagnosis is the second project's form of the first project's "prose
+  disciplines decay, mechanisms stick." See the Extracted records below for
+  both prior substrates' full detail, kept as dated evidence; a hosting
+  project's own mechanism instances are re-derived as its real ones, never
+  copied from either prior substrate.
+- **Scope:** Corrective design and discipline authoring across a project's own
+  codebase and its docs corpus — the moments when a discipline is authored or
+  amended, and when a corrective responds to a recurrence. A hosting
+  deployment's own package name is not load-bearing to this tenet's rules.
+
+*This ADR was refactored for cross-project portability on 2026-07-13 under
+[`design/MAINT-ADR-PORTABILITY-SPEC.md`](../../design/MAINT-ADR-PORTABILITY-SPEC.md)
+(tracker `adr-portability-refactor`, maintainer-ratified 2026-07-13). The
+pre-refactor text stands verbatim at commit `cce9272`; extracted records live in
+[`history/0011-chocofarm-context.md`](history/0011-chocofarm-context.md) and
+[`history/0011-throughput-lab-amendments.md`](history/0011-throughput-lab-amendments.md)
+and are not retro-edited. This pass also executes the enforcement-vocabulary
+amendment Rule 1 was missing, per this refactor's own §7 C8
+(maintainer-adjudicated 2026-07-13, ledger row 403 — spec default stands): see
+the dated 2026-07-13 Amendment below. Dated amendments below are preserved
+verbatim from the original.*
 
 ## Context
 
-chocofarm's characteristic failure mode is the **invisible-at-authoring,
-visible-only-in-aggregate defect**, against which policy enforced by one
-person's attention and memory is structurally weak — only mechanical nets
-help. The 2026-06-15 architectural audit (`docs/notes/audit/`) is the
-chocofarm proof of exactly this, from both directions:
+*In plain words first: this ADR is a rule for anyone authoring or amending a project's own
+rules, lints, or checks — it requires each such rule to state plainly how it will be enforced
+(a raise at construction, a test, a runtime check, or "review only, for now"), and it gives the
+vocabulary for saying so, so that "review-only" is a visible, challengeable choice rather than
+a silent default.*
 
-- **The audit's anti-pattern G ("load-bearing knowledge offloaded to prose
-  the code cannot enforce").** `ADR-0002` was cited 16 times as a binding
-  convention with no registry to look it up in; a design doc was the de-facto
-  spec while three of its specifics were STALE in the code implementing their
-  successors; `consult-002 §4` was a dangling pointer to the simulation's
-  heart. Prose disciplines decayed exactly as LengYue's RCA found.
-- **The audit's L3 ("duplicated knowledge is a time-bomb whose fuse is the
-  next edit").** The reference-rate anchor *already drifted* (`0.0941` vs
-  `0.094`) — the fuse already lit once. A prose "keep these in sync" note
-  could not have caught it; only a single owner (`BeliefRefs(env)`) can.
-- **The audit's L2 ("the proof a codebase *can* do it right is the indictment
-  when it doesn't").** `feature_dim(env)` (derive, zero drift) sits in the
-  same package as three hardcoded reference constants (duplicate, already
-  drifted). The mechanism works where it is applied; the rot is where it is
-  not.
+A discipline-stating rule enforced only by one contributor's attention and
+memory is structurally weak against the **invisible-at-authoring,
+visible-only-in-aggregate defect** — a failure shape that looks fine at each
+site it is authored and shows up only once instances accumulate. Prose
+disciplines decay for exactly this reason: a convention cited repeatedly with
+no registry to check it against, a design document that quietly goes stale
+while the code it describes moves on, a duplicated fact whose two copies drift
+apart one edit at a time. The tenet+mechanism pairing — never the describing
+document alone — is what arrests recurrence: a mechanism keyed on the class (a
+single owned computation, a fail-loud structural check) removes the defect
+where it is applied; where the discipline stays prose only, the rot returns.
 
-The tenet+mechanism pairing — not the describing document alone — is what
-arrests recurrence. chocofarm has a worked proof: the feature-layout
-triplication (the audit's sharpest landmine, a three-writer SSOT violation
-that a reorder would silently mislabel) was converted from a prose hazard into
-a mechanism — `FeatureLayout` (`az/features.py`), a single ordered block table
-that the three former writers now read **by name**, with a fail-loud
-partition check (`ADR-0002`) that the blocks contiguously cover `[0, dim)`.
-The describing record (the audit) named the hazard; the mechanism removed it.
+> **Extracted record — the originating audit substrate and the FeatureLayout worked proof**
+> *(moved verbatim to [`history/0011-chocofarm-context.md`](history/0011-chocofarm-context.md))*:
+> a 2026-06-15 architectural audit of this tenet's originating codebase diagnosed the pattern
+> from both directions — a convention cited sixteen times with no registry to look it up in,
+> and a numeric anchor that had already drifted from its sibling copy before anyone noticed.
+> Its sharpest instance was a three-writer single-source-of-truth violation (a feature-layout
+> table duplicated across three files) that a reorder would have silently mislabeled;
+> converting it into one owned, by-name-addressed table with a fail-loud contiguous-partition
+> check is the worked proof this tenet generalizes from — the mechanism removed the hazard the
+> describing audit could only name.
 
 ## Decision
 
@@ -65,14 +80,18 @@ docstring contract — names how it is enforced, against this vocabulary
 part of the rule's meaning):
 
 - **construction/import-time** (a raise at setup; a strict schema decode — the
-  hp registry's `decode_config`);
+  originating codebase's `hp` (hyperparameter) registry's `decode_config`);
 - **test/CI gate** (a test at `assert` strength — the jax/numpy equivalence
   test, the scenario-validation tests, the deadlock test);
 - **write-time data constraint** (a schema/dataclass invariant that refuses a
-  malformed write — `hp/schema.py`'s `check_invariants`);
+  malformed write — the same `hp` registry's `hp/schema.py`'s `check_invariants`);
 - **run-time invariant** (a structural check at use — `FeatureLayout`'s
   contiguous-partition assertion; the f32-cache identity check of ADR-0001);
 - **review-only**.
+
+*(Amended 2026-07-13 — see the dated Amendment below: a sixth member,
+**build/compile-time**, was added to this vocabulary per §7 C8's adjudicated
+resolution.)*
 
 Review-only is legitimate but presumptively decaying — declaring it makes that
 a visible, challengeable choice. Across this corpus, the "discipline is policy,
@@ -91,13 +110,20 @@ corrective names the mechanism it pairs with the rule — at the strongest
 *feasible and proportionate* surface in Rule 1's vocabulary — or carries an
 explicit policy-only admission and the trigger that would change it. "Tenet +
 mechanism arrests recurrence; a describing-only document does not" is the
-cited rationale (the `FeatureLayout` worked proof; the audit's L1/L2), not an
-unconditional build-a-gate mandate. The audit's roadmap is the chocofarm
-register of this rule: the reference-rate drift recurs → `BeliefRefs(env)`
-(one owner, R3); the belief-mechanics duplication that the bound certifies
-against → `env.restrict` sharing one implementation (R8); the `id(env)`-keyed
-cache hazard → `env.slot_tables` owned on the object (R9). Each is a mechanism
-the corrective names, not a prose "be careful."
+cited rationale (the `FeatureLayout` worked proof; the originating audit's own
+findings — see the Extracted record under Context), not an
+unconditional build-a-gate mandate. This tenet's originating audit roadmap is
+this rule's own worked register (the audit's own numbered remediation
+list — see the Extracted record under Context for its substrate, and note
+these three items name internal objects of that originating codebase — `env`,
+its simulation-state object, and `belief`, the probability estimate `env`
+tracks over hidden state — not portable vocabulary this tenet itself defines):
+a duplicated numeric reference rate recurs as a drift → `BeliefRefs(env)` (one
+owner, item R3 on that list); a duplicated belief-computation that a
+correctness bound depends on → `env.restrict` sharing one implementation
+(item R8); an identity-keyed cache tied to the wrong lifetime →
+`env.slot_tables` owned on the object (item R9). Each is a mechanism the
+corrective names, not a prose "be careful."
 
 ### Rule 3 — Mechanisms adopt measure-first
 
@@ -117,7 +143,8 @@ stale-weight hazard the f32-cache invariant guards).
 
 Enumerations of instances fail open at the next instance. A net keys on a
 structural slot, a name/shape predicate, or a derived-from-one-source
-invariant. The chocofarm worked instances:
+invariant. The originating worked instances (see the Extracted record under
+Context for their substrate):
 
 - **`FeatureLayout`** keys on the ordered block *table* (the class of feature
   blocks), so a new block is one table entry and every consumer slices by name
@@ -133,20 +160,21 @@ invariant. The chocofarm worked instances:
 Conversely, the audit's `it + 1_000_000` version offset is the failure this
 rule names — a magic disambiguator that silently breaks at iters ≥ 1e6,
 because it enumerated a case rather than namespacing the class (the fix:
-namespace weight keys by `(run, phase, version)`, R14).
+namespace weight keys by `(run, phase, version)`, item R14 on the same
+numbered remediation list cited above).
 
 ## Self-application
 
 This tenet binds at corrective-design moments — audit recommendations, a new
 mechanism's adoption, an ADR amendment — a handful of high-attention events,
-not the per-edit regime where prose decays. Its own Rule-1 declaration:
-**review-only, with the audit as the absence-detector.** chocofarm has no CI
-sweep that detects a discipline-stating rule lacking an enforcement
-declaration; the architectural audit is that detector, run on demand. The
-protection this tenet offers is the mechanisms it mints (`FeatureLayout`,
-`BeliefRefs`, the equivalence tests), not its own prose — the tenet expects its
-own prose to be exactly as weak as Rule 1 says, which is why it names its
-mechanisms rather than relying on the rule text.
+not the per-edit regime where prose decays. Its own Rule-1 declaration
+**is review-only**, with the audit serving as the absence-detector. No CI sweep detects a
+discipline-stating rule lacking an enforcement declaration; the originating
+audit (see the Extracted record under Context) is that detector, run on
+demand. The protection this tenet offers is the mechanisms it mints
+(`FeatureLayout`, `BeliefRefs`, the equivalence tests), not its own prose —
+the tenet expects its own prose to be exactly as weak as Rule 1 says, which is
+why it names its mechanisms rather than relying on the rule text.
 
 ## Consequences
 
@@ -159,8 +187,8 @@ prose form; the audit's R-series is overwhelmingly mechanisms, not notes.
 **Negative.** Per-corrective authoring overhead (the assessment +
 declaration); the risk of cargo-cult mechanisms is real — a check at full
 strength on an un-triaged baseline is worse than none (Rule 3 is the
-counterweight). chocofarm has no automated enforcement of this tenet itself;
-it is review-and-audit-policed.
+counterweight). This tenet has no automated enforcement of itself; it is
+review-and-audit-policed.
 
 **Neutral.** No retroactive sweep (Rule 1's scoping clause); existing
 mechanisms are not re-litigated.
@@ -172,7 +200,9 @@ mechanisms are not re-litigated.
 2. A doc-side resolution check (does every cited path resolve?) matures — the
    advisory rung gains a member; reassess the vocabulary (this is also
    ADR-0005's Revisit #2).
-3. A second OR/game instance adopts the corpus (ADR-0003's trigger) — the
+3. A second instance of the class of project this corpus originated in — an
+   Operations-Research or game-playing/search codebase — adopts the corpus
+   (ADR-0003's own trigger, phrased there as "OR/game instance") — the
    enforcement-surface declarations are the transfer manifest; check each
    discipline's mechanism survived the re-instantiation.
 
@@ -183,84 +213,35 @@ mechanisms are not re-litigated.
   check and the registry strict decode are fail-loud mechanisms.
 - **ADR-0008 (classification discipline).** Rule 1's vocabulary is a closed
   vocabulary under ADR-0008's care; extending it follows the
-  revise-don't-fuzzy-match discipline.
+  revise-don't-fuzzy-match discipline — the 2026-07-13 Amendment below is a
+  worked instance of that discipline in force.
 - **ADR-0009 (perf investigation discipline).** The sibling per-domain
   instance of the unsubstantiated-claim family; Rule 3's measured baselines
   are the enforcement-domain analog of its captured benches.
-- **The 2026-06-15 architectural audit** — the chocofarm RCA this tenet
-  answers. Its R-series roadmap is the worked register of Rule 2
-  (recurrence → mechanism); `FeatureLayout` (R6) is the worked proof of the
-  tenet+mechanism pairing; its §5 measure-first deflation is Rule 3.
+- **The originating architectural audit** (see the Extracted record under
+  Context) — the worked register of Rule 2 (recurrence → mechanism); its
+  worked mechanism proof anchors Rule 4's quantify-over-the-class instances;
+  its measure-first deflation is Rule 3's origin.
 
 ## Amendments
 
-### 2026-06-24 — Empirical readings carry their code state (the commit-stamp net)
+> **Extracted record — the two 2026-06-24 throughput-lab amendments**
+> *(moved verbatim to
+> [`history/0011-throughput-lab-amendments.md`](history/0011-throughput-lab-amendments.md))*:
+> two dated amendments extended this tenet onto a C++/Python transport-throughput testbed,
+> both worked instances of Rule 2 (recurrence → mechanism) and Rule 4 (a net over the class).
+> The first: an unreproducible "+31%" throughput reading could not be pinned to the code that
+> produced it, so the measuring harness now stamps every reading with its producing commit's
+> hash and clean/dirty tree state, unconditionally — a captured reading is attributable by
+> construction, never by someone remembering to label it. The second: a project's own
+> perf-investigation journal had been recording *interpretations* of measurements (mutable,
+> frequently revised beliefs) as free-text prose indistinguishable from the *measurements*
+> themselves — one retracted "+31%" belief had motivated banking a wrong default — so the
+> belief layer moved into a separate, append-only, typed store (a finding supersedes a prior
+> finding; it never overwrites it), structurally separating a measurement from what someone
+> concluded from it.
 
-A "+31%" throughput win (the greedy vs round-sync episodic driver) banked from a
-single session failed to reproduce, and could not be pinned to a commit, on a
-controlled re-measurement — an attributed reading with no record of the code that
-produced it is **unattributable by construction**. This is the
-invisible-at-authoring/visible-only-in-aggregate defect this tenet names, in the
-empirical-measurement domain: the per-reading provenance was offloaded to the
-operator's memory (anti-pattern G), and it decayed across the very first session
-boundary.
-
-Per **Rule 2** (recurrence → mechanism, not more prose) and **Rule 4** (a net
-quantifies over the *class*, not the instance): the measuring harness itself
-emits, on **every** reading, the git commit short-hash + tree state
-(`clean | DIRTY`) of the checkout that produced it. A `DIRTY` tree marks a
-non-reproducible artifact — the producer binary / harness may not match `HEAD`,
-so the number is provisional until committed. The net keys on the class of *all
-readings* (the harness stamps unconditionally), not on an enumeration of the ones
-someone remembered to label.
-
-- **Enforcement surface (Rule 1):** run-time, at the harness — the stamp is
-  emitted with the number, not left to review or recall.
-- **Measure-first (Rule 3):** the trigger was itself a measurement failure (an
-  unreproducible bench delta), and the mechanism is the lightest proportionate
-  one (two `git` reads), not a heavier provenance system.
-- **Worked instances (one home, ADR-0012 P1):** `throughput-lab/harness/code_stamp.py`
-  is the single Python home, imported by `coalesce_sweep.py`, `topology_sweep.py`,
-  and `cpp/stage_a/overcommit_sweep.py`; `throughput-lab/harness/episodic_dps.sh`
-  mirrors the same two `git` invocations inline.
-- **Pairs with ADR-0009** (perf-investigation discipline): a captured bench number
-  is now code-addressable — the sibling of ADR-0009's captured-bench requirement.
-
-Provenance: the maintainer's contribution, 2026-06-24, during the throughput-lab
-driver-attribution work.
-
-### 2026-06-24 — The interpretation/belief layer (the Witness chain, mechanized)
-
-A measurement is an immutable fact; an **interpretation** of it (the reading that
-motivates the next code change) is a different kind of thing — mutable, frequently
-wrong, and spanning a *set* of readings. The throughput-lab journal recorded its
-interpretations as prose **Witness/Correction** entries (Witness 1: "+31% clean
-driver win" → retracted → Witness 2: "regime-dependent +15%" → Witness 3: the full
-2× attribution). That prose chain is exactly the load-bearing knowledge offloaded to
-a form the code cannot enforce (anti-pattern G), and the wrong belief that motivated
-banking the wrong default is the cost.
-
-Per **Rule 2** (recurrence → mechanism) and **Rule 4** (a net over the *class* of all
-interpretations, not the remembered ones): the belief layer moves into a queryable,
-append-only store — `tlab_finding` (`throughput-lab/harness/exp_db.py`), a SEPARATE
-table from the `tlab_reading` measurements, so the conflation the project has been
-burned by (a reading-*of* the data recorded as the data) is **structurally
-unrepresentable** (composing with ADR-0000). A finding carries `motivation` +
-`interpretation`, a `status` in the closed vocabulary `{provisional, confirmed,
-retracted}` (ADR-0008), the commit the belief was formed against (the commit-stamp
-amendment above), and a `supersedes` link to the finding it corrects — the
-Witness→Correction step, append-only (ADR-0005: the prior belief is never rewritten;
-the current belief on a scope is the one nothing supersedes).
-
-- **Enforcement surface (Rule 1):** write-time data constraint (the `CHECK` enum, the
-  NOT-NULL interpretation, the immutable supersede-chain) + the discipline that
-  *measurements auto-record but findings are deliberately authored* — an
-  interpretation is a conscious, attributable act, not a side effect of a run.
-- **Worked instance:** the Witness 1→2→3 chain is backfilled into the store, so the
-  retracted "+31%" is itself queryable (`exp_db.py --findings`).
-- **Pairs with ADR-0009** (the measured-vs-interpreted bar, amended there same day).
-
-### 2026-07-02 — Rule 2's trigger at the life-critical bar: the mechanism ships WITH the first fix
+### Amendment — 2026-07-02: Rule 2's trigger at the life-critical bar: the mechanism ships WITH the first fix
 
 *(Provenance: the fact-mining recidivism study. Measured: across three blind
 passes, prose obligations read in full recurred at a false-clear rate of
@@ -284,7 +265,7 @@ fix's definition of done, not a later conversion awaiting a second
 occurrence. A fix shipped without its net is, at this bar, the "describing
 record" whose decay Rule 2 was written against.
 
-### 2026-07-02 — Rule 3 extended: a gate proves itself by failing (negative control + shipped binding), and the enforcement machinery is in-scope code
+### Amendment — 2026-07-02: Rule 3 extended: a gate proves itself by failing (negative control + shipped binding), and the enforcement machinery is in-scope code
 
 *(Provenance: CB-33 — the study's load-bearing compile-bound/streaming gates
 were green while measuring a NON-SHIPPED encode backend; the shipped default
@@ -312,6 +293,47 @@ workflow instruments — the mechanisms this tenet mints — obey ADR-0002 (fail
 loudly, never corrupt what they touch), ADR-0000 (a defect in a gate gets the
 two questions), and this Rule 3 (a gate is measured before it is trusted).
 A net with holes catches nothing and reports otherwise.
+
+### Amendment — 2026-07-13: Rule 1's enforcement vocabulary gains a build/compile-time member (§7 C8)
+
+*(Dated append per ADR-0005 Rule 8, executed under
+[`design/MAINT-ADR-PORTABILITY-SPEC.md`](../../design/MAINT-ADR-PORTABILITY-SPEC.md) §7 C8
+— adjudicated by the maintainer 2026-07-13, ledger row 403: the spec's PROPOSED resolution
+stands as the default. Provenance of the finding: the spec's full-corpus contradiction read
+found that ADR-0012 P7 ranks "generate-or-compile-from-one-source > **build-time lint** >
+runtime parity" and P9 rule 5 asserts "**compile-time** > runtime in the loudness hierarchy
+P5 defers to" — but neither *build-time-lint* nor *compile-time* was a rung in this Rule's
+vocabulary or in ADR-0002's loudness hierarchy: this corpus's most-cited structural tenet was
+enforcing at a level its own enforcement vocabulary could not name.)*
+
+Rule 1's closed vocabulary gains a sixth member:
+
+- **build/compile-time** — a check that fails the build itself, before the artifact exists to
+  run or test: a build-time lint that fails on a cross-language format disagreement (ADR-0012
+  P7), a `constexpr`/`consteval` assertion, a `[[nodiscard]]` return treated as a compile
+  error (ADR-0012 P9 rule 5), a codegen step that would not compile if its one source and its
+  generated output disagreed. It sits strictly above **test/CI gate** in the surface a rule may
+  declare, because a build-time failure forecloses the defective artifact from ever being
+  produced, where a test/CI gate catches it only after the artifact exists and the suite runs.
+
+This is a **fail-safe, additive class-ratified delta** in the sense of
+[CLAUDE.md](../../CLAUDE.md)'s "class-ratified fail-safe deltas" ruling: it only *adds* a
+vocabulary member, relaxing no existing rung and weakening no existing rule — every prior
+declaration against the five-member vocabulary remains exactly as strong as it was. A rule
+that already declared **test/CI gate** or **construction/import-time** is unaffected; a rule
+whose true enforcement was always build/compile-time (ADR-0012 P7's build-time lint, P9's
+`[[nodiscard]]`) now has the honest word for it, closing the naming gap C8 found rather than
+inventing new obligation.
+
+*Enforcement surface: this amendment is itself review-only — it is a vocabulary-naming act,
+not a new check. The gap it closes (a rule enforcing at a level its own vocabulary could not
+name) is closed by naming, not by adding machinery.*
+
+*Companion note, scope-honest: [§7 C8](../../design/MAINT-ADR-PORTABILITY-SPEC.md) also
+proposes ADR-0002's own loudness hierarchy gain the same rung "by the same dated amendment."
+That companion edit to ADR-0002 is **out of this package's scope** (this work package touches
+only ADR-0011 and the history/ files its own extraction creates) and is not executed here —
+flagged for separate dispatch, not silently done or silently dropped.*
 
 ## License
 
