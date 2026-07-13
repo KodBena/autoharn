@@ -1,0 +1,125 @@
+compound_nominal_scan2 (EXPERIMENT, report-only): CLASS 1 ranked scan
+  excluded prefixes: vestigial_documentation/, judgment/; definition surfaces: GLOSSARY.md, gates/doc-legibility/terms.md, research/obligations-formalisms-survey/KEY.md
+  excluded (evidence-record marker 'doc-attest-exempt'): design/ORCH-RETROSPECTIVE-RUN11.md
+  excluded (evidence-record marker 'doc-attest-exempt'): tools/experiments/results/compound_nominal_classification.md
+  corpus: 174 docs; defined terms (GLOSSARY/terms/KEY + lexicalized): 288+27
+  distinct candidate pairs (any angle fired): 13860
+  per-angle candidate counts: {'A': 184, 'C': 13459, 'B': 3164}
+
+  ranking function: score = 10*A + 3*B + C, where
+    A = 2*head_weight + 2*[abstract modifier] + [borrowed head] + [<=2 docs]
+    B = min(head_uses/(determinered_uses+1), 12) when ratio>=2, det<=4, pair<=6
+    C = 3/pair_count (novelty tail — the measured-flood control angle)
+
+  top 50:
+    1. [ 100.30] 'trust story'  x10 in 1 doc(s)  (A=10.0, C=0.3)
+        design/ORCH-COMPOUND-NOMINAL-DETECTION.md:1
+        design/ORCH-COMPOUND-NOMINAL-DETECTION.md:16
+        design/ORCH-COMPOUND-NOMINAL-DETECTION.md:17
+    2. [  89.00] 'assurance posture'  x1 in 1 doc(s)  (A=8.0, B=2.0, C=3.0)
+        design/ORCH-KR-TITRATION-EXPLORATION.md:256
+    3. [  83.00] 'correctness story'  x1 in 1 doc(s)  (A=8.0, C=3.0)
+        law/adr/0002-fail-loudly.md:169
+    4. [  83.00] 'integrity story'  x1 in 1 doc(s)  (A=8.0, C=3.0)
+        design/ORCH-PGAUDIT-EXPLORATION.md:98
+    5. [  83.00] 'relocation story'  x1 in 1 doc(s)  (A=8.0, C=3.0)
+        USER-CONFIGURATION.md:107
+    6. [  75.00] 'inference hygiene'  x1 in 1 doc(s)  (A=6.0, B=4.0, C=3.0)
+        research/logic-investigation/05-modal-epistemic.md:41
+    7. [  73.00] 'fix narrative'  x1 in 1 doc(s)  (A=7.0, C=3.0)
+        design/ORCH-review-fixpoint-protocol.md:34
+    8. [  73.00] 'probe hygiene'  x3 in 1 doc(s)  (A=6.0, B=4.0, C=1.0)
+        design/ORCH-PGAUDIT-EXPLORATION.md:123
+        design/ORCH-PGAUDIT-EXPLORATION.md:157
+        design/ORCH-PGAUDIT-EXPLORATION.md:327
+    9. [  72.00] 'documentation landscape'  x1 in 1 doc(s)  (A=6.0, B=3.0, C=3.0)
+        law/STANDARDS-REGISTRY.md:29
+   10. [  72.00] 'software landscape'  x1 in 1 doc(s)  (A=6.0, B=3.0, C=3.0)
+        provenance/MIGRATION-MANIFEST.md:219
+   11. [  71.50] 'assertion mood'  x2 in 1 doc(s)  (A=7.0, C=1.5)
+        design/ORCH-LEDGER-LOGIC-MARRIAGE.md:92
+        design/ORCH-LEDGER-LOGIC-MARRIAGE.md:97
+   12. [  69.00] 'apparatus friction'  x1 in 1 doc(s)  (A=6.0, B=2.0, C=3.0)
+        FINDINGS.md:650
+   13. [  69.00] 'closure friction'  x1 in 1 doc(s)  (A=6.0, B=2.0, C=3.0)
+        design/ORCH-RETROSPECTIVE-RUN10.md:210
+   14. [  69.00] 'countersign friction'  x1 in 1 doc(s)  (A=6.0, B=2.0, C=3.0)
+        design/ORCH-OPUS-READINESS.md:14
+   15. [  69.00] 'dependency posture'  x1 in 1 doc(s)  (A=6.0, B=2.0, C=3.0)
+        design/ORCH-COMPOUND-NOMINAL-DETECTION.md:189
+   16. [  69.00] 'gap friction'  x1 in 1 doc(s)  (A=6.0, B=2.0, C=3.0)
+   17. [  69.00] 'granularity friction'  x1 in 1 doc(s)  (A=6.0, B=2.0, C=3.0)
+        design/ORCH-S22-WORK-ITEM-LEDGER.md:17
+   18. [  69.00] 'license posture'  x1 in 1 doc(s)  (A=6.0, B=2.0, C=3.0)
+        law/adr/0006-source-file-headers.md:129
+   19. [  69.00] 'recipe friction'  x1 in 1 doc(s)  (A=6.0, B=2.0, C=3.0)
+        design/ORCH-ABC-AUDIT-LOOP-RECIPE.md:83
+   20. [  69.00] 'row skeleton'  x1 in 1 doc(s)  (A=6.0, B=2.0, C=3.0)
+        design/ORCH-LEDGER-LOGIC-MARRIAGE.md:355
+   21. [  67.50] 'redaction posture'  x2 in 1 doc(s)  (A=6.0, B=2.0, C=1.5)
+        provenance/MIGRATION-MANIFEST.md:76
+        provenance/MIGRATION-MANIFEST.md:145
+   22. [  67.00] 'migration posture'  x3 in 2 doc(s)  (A=6.0, B=2.0, C=1.0)
+        law/adr/0017-the-zero-context-reader.md:40
+        law/adr/0017-the-zero-context-reader.md:170
+        design/ORCH-SPEC-DOC-ATTESTATION-2.md:153
+   23. [  63.00] 'authority surface'  x1 in 1 doc(s)  (A=6.0, C=3.0)
+        FINDINGS.md:1001
+   24. [  53.00] 'adoption reflex'  x1 in 1 doc(s)  (A=5.0, C=3.0)
+        design/ORCH-PGAUDIT-EXPLORATION.md:137
+   25. [  53.00] 'bias instinct'  x1 in 1 doc(s)  (A=5.0, C=3.0)
+        design/ORCH-review-fixpoint-protocol.md:30
+   26. [  53.00] 'cabin altitude'  x1 in 1 doc(s)  (A=5.0, C=3.0)
+        research/obligations-formalisms-survey/01-obligation-taxonomy.md:18
+   27. [  53.00] 'complete footprint'  x1 in 1 doc(s)  (A=5.0, C=3.0)
+        CLAUDE.md:82
+   28. [  53.00] 'composition spine'  x1 in 1 doc(s)  (A=5.0, C=3.0)
+        research/obligations-formalisms-survey/00-synthesis.md:164
+   29. [  53.00] 'default reflex'  x1 in 1 doc(s)  (A=5.0, C=3.0)
+        FINDINGS.md:281
+   30. [  53.00] 'detector geometry'  x1 in 1 doc(s)  (A=5.0, C=3.0)
+        law/adr/0003-domain-coupling-bands.md:133
+   31. [  53.00] 'kernel surgery'  x1 in 1 doc(s)  (A=5.0, C=3.0)
+        design/MAINT-REVIEW-GAP-SCOPE-SEMANTICS-RULING.md:72
+   32. [  53.00] 'lazy instinct'  x1 in 1 doc(s)  (A=5.0, C=3.0)
+        law/adr/0000-the-alpha-and-the-omega-type-driven-design.md:53
+   33. [  53.00] 'ledger spine'  x1 in 1 doc(s)  (A=5.0, C=3.0)
+        research/foundational-map/04-chocofarm-perf-investigation-discipline.md:29
+   34. [  53.00] 'reachability spine'  x1 in 1 doc(s)  (A=5.0, C=3.0)
+        research/obligations-formalisms-survey/formal-systems/09-mu-calculus-coalgebra.md:35
+   35. [  53.00] 'taught reflex'  x1 in 1 doc(s)  (A=5.0, C=3.0)
+        design/ORCH-SPEC-RESOURCE-REGISTRY.md:37
+   36. [  51.50] 'citation currency'  x2 in 2 doc(s)  (A=5.0, C=1.5)
+        FINDINGS.md:860
+        design/ORCH-LEDGER-LOGIC-MARRIAGE.md:53
+   37. [  51.50] 'detection geometry'  x2 in 1 doc(s)  (A=5.0, C=1.5)
+        law/adr/0003-domain-coupling-bands.md:29
+        law/adr/0003-domain-coupling-bands.md:164
+   38. [  51.50] 'justification spine'  x2 in 2 doc(s)  (A=5.0, C=1.5)
+        research/obligations-formalisms-survey/00-synthesis.md:45
+        research/obligations-formalisms-survey/B-composition-architecture.md:26
+   39. [  51.50] 'rulings spine'  x2 in 1 doc(s)  (A=5.0, C=1.5)
+        law/briefs/BRIEF-CONFORMANCE-MAP.md:33
+        law/briefs/BRIEF-CONFORMANCE-MAP.md:34
+   40. [  49.00] 'reconstruction tax'  x1 in 1 doc(s)  (A=4.0, B=2.0, C=3.0)
+        law/adr/0017-the-zero-context-reader.md:421
+   41. [  49.00] 'squirrel tax'  x1 in 1 doc(s)  (A=4.0, B=2.0, C=3.0)
+        law/adr/0017-the-zero-context-reader.md:420
+   42. [  43.00] 'adjudication surface'  x1 in 1 doc(s)  (A=4.0, C=3.0)
+        VESTIGIAL-INDEX.md:441
+   43. [  43.00] 'browser surface'  x1 in 1 doc(s)  (A=4.0, C=3.0)
+        law/adr/0009-performance-investigation-discipline.md:170
+   44. [  43.00] 'comparison surface'  x1 in 1 doc(s)  (A=4.0, C=3.0)
+        design/USER-RETROSPECTIVE-RECIPE.md:407
+   45. [  43.00] 'confabulation surface'  x1 in 1 doc(s)  (A=4.0, C=3.0)
+        FINDINGS.md:541
+   46. [  43.00] 'consumer surface'  x1 in 1 doc(s)  (A=4.0, C=3.0)
+        research/nlp-logic-interface/KB-CODESIGN.md:14
+   47. [  43.00] 'default surface'  x1 in 1 doc(s)  (A=4.0, C=3.0)
+        ORCH-OPERATING-CARD.md:96
+   48. [  43.00] 'error surface'  x1 in 1 doc(s)  (A=4.0, C=3.0)
+        law/adr/0012-compositional-and-structural-hygiene.md:588
+   49. [  43.00] 'gaps surface'  x1 in 1 doc(s)  (A=4.0, C=3.0)
+        design/ORCH-WORKTREE-LEDGERING.md:52
+   50. [  43.00] 'gate surface'  x1 in 1 doc(s)  (A=4.0, C=3.0)
+        law/adr/0016-the-service-contract-is-an-enforcement-surface.md:387

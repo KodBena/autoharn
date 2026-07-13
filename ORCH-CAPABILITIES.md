@@ -255,10 +255,13 @@ scratch-witnessed on both polarities with the SQL/ASP differential in AGREE, is 
 operator act" — the runs-are-linear ruling later abolished apply-to-existing entirely; a
 class-ratified delta reaches reality only via the birth chain at the next scaffold, and the
 apply script is deleted, see item 14.)* This class was named retroactively as the shape
-s21 and s22 both already satisfied. *UNWITNESSED as its own
-mechanism this pass*: no delta has yet been authored and landed *citing* this class explicitly
-(it is a standing rule, not (yet) an exercised gate) — the honest state is "ratified rule, no
-instance run under it yet."
+s21 and s22 both already satisfied. *Exercise status (corrected 2026-07-13; the original
+"no delta has yet been authored citing this class" was true when written and went stale
+unnoticed — caught when a probe run trusted it over the primary sources)*: s25 landed citing this
+class verbatim in its header ("pre-ratified as a class",
+kernel/lineage/s25-commission-kind.sql line 3-4) and s26 carries an explicit FAIL-SAFE
+CLASSIFICATION block against the same CLAUDE.md rule (s26-row-hash-chain.sql line 183) —
+the rule is exercised, not merely ratified.
 
 **16. Self-application — the harness's own operational acts meet its own bar.**
 CLAUDE.md ORCHESTRATION (2026-07-09 ruling, issued after run 2's world was found broken at birth
@@ -1181,8 +1184,9 @@ NULL-guarded form, named per the s26 injectivity-note precedent.
   distinctness defect s21 fixed at the kernel layer, one register up, in a Python instrument.
   Filed (BACKLOG 2026-07-09), fix shape named (thread `stamp_session` through `FpRow` and both
   joins, mirroring s21's pair rule), not yet built.
-- **Class-ratified fail-safe deltas (item 15 above)** — the rule stands; no delta has yet been
-  authored and landed under it by name.
+- **Class-ratified fail-safe deltas (item 15 above)** — the rule stands and has since been
+  exercised by name: s25 cites it verbatim and s26 carries its FAIL-SAFE CLASSIFICATION
+  block (stale "no delta yet" claim corrected 2026-07-13, see item 15).
 - **The Stop-hook wiring (`clean_exit`, item 20; `demurral_detect`'s Stop leg, item 21) and the
   mutation observer (item 22)** — every one of these has been driven, both-polarity, through a
   scripted stdin harness that hand-assembles the exact JSON Claude Code's hook contract

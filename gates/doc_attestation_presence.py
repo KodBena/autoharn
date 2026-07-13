@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-11T16:14:47Z
-#   last-change: 2026-07-12T14:39:40Z
-#   contributors: e4410ef6/main
+#   last-change: 2026-07-12T20:44:20Z
+#   contributors: e4410ef6/main, 3c50e030/main
 # <<< PROVENANCE-STAMP <<<
 
 """doc_attestation_presence — the commit-time enforcement floor for ADR-0017's A:B:C
@@ -128,6 +128,15 @@ convention, "never silent"):
   - `judgment/**` is excluded WHOLESALE — ORCH-OPERATING-CARD.md's own words, "predecessor era —
     history unless a current spec cites it"; the same declared-history status
     gates/link_integrity.py already excludes this tree for (Rule 2(b)'s sibling gate).
+  - `vestigial_documentation/**` is excluded WHOLESALE, added 2026-07-12 (work_slug
+    vestigial-doc-sweep) — the same declared-history status as `judgment/**` above, extended to
+    the sweep's own archive (see VESTIGIAL-INDEX.md): a `git mv` into this tree, with at most a
+    mechanical relative-link path repair, is content-preserving, not a prose touch, and most of
+    what lands here (research/**, judgment/e-series/, judgment/engine/) never carried an
+    ADR-0017 attestation before the move either, because it predates the gate or was already
+    excluded under `judgment/**`. Without this exclusion, the sweep's own move would force full
+    A:B:C review onto dozens of untouched old documents purely because they changed address —
+    named here as the gate-design finding it is, not waived file-by-file.
   - A file carrying the HTML comment `<!-- doc-attest-exempt: <reason> -->` anywhere is
     excluded WHOLESALE, reason named inline by the author — the escape hatch for a
     point-in-time record or a quoted-defect specimen this gate's two named exclusions do not
@@ -232,8 +241,25 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 LEDGER_PATH = REPO_ROOT / "attestations" / "doc-legibility-attestations.jsonl"
 
 # Wholesale file/dir exclusions — printed every run, never silent (see module docstring).
+# vestigial_documentation/ added 2026-07-12 (work_slug vestigial-doc-sweep): the maintainer's own
+# commission for that sweep (ledger work_opened id 241) designs vestigial_documentation/ as a
+# declared-history archive with the SAME status judgment/** already carries here -- prose kept
+# only for git-recoverable provenance, headed for eventual removal by a (spec'd, unbuilt)
+# read-decay reaper, not living documentation a maintainer or fresh agent is expected to act on
+# day to day. Moving a file there is exactly the "touch" ADR-0017 Rule 4 describes as re-entering
+# scope for FUTURE edits -- but the sweep's OWN move is a content-preserving relocation (git mv
+# plus, where needed, purely mechanical relative-link path repair -- never a prose edit), so
+# treating the move itself as a fresh-legibility-review trigger would force full A:B:C attestation
+# onto ~40 old documents whose text nobody actually touched, most of which (research/**,
+# judgment/e-series/, judgment/engine/) never carried an ADR-0017 attestation even before the
+# move because they simply predate the gate or, for judgment/**, were always excluded by name.
+# Excluding the directory the same way judgment/** already is closes that gap honestly instead of
+# waiving it file-by-file (see VESTIGIAL-INDEX.md for the sweep's own record of what moved here
+# and why; a document EDITED after landing in vestigial_documentation/ still binds on that touch,
+# same as any other prose -- this exclusion is for the archive's contents at rest, not a blanket
+# permanent pass).
 EXCLUDE_FILES_WHOLESALE = {"BACKLOG.md"}
-EXCLUDE_DIR_PREFIXES = ("judgment/",)
+EXCLUDE_DIR_PREFIXES = ("judgment/", "vestigial_documentation/")
 WAIVER_TOKEN = "doc-attest-exempt:"
 
 RULE1_CLAUSES = {"1a", "1b", "1c", "1d"}
@@ -609,6 +635,9 @@ def _print_exclusions(scope: list[str], excluded: list[str], waived: list[str]) 
     print("    BACKLOG.md  — point-in-time dated entries (ADR-0017 Exceptions)")
     print("    judgment/** — declared history (ORCH-OPERATING-CARD.md), same status "
           "gates/link_integrity.py already grants it")
+    print("    vestigial_documentation/** — declared-history archive (2026-07-12 vestigial-doc-"
+          "sweep, VESTIGIAL-INDEX.md), same status as judgment/**: content-preserving moves, not "
+          "living prose a touch should re-trigger legibility review for")
     if waived:
         print(f"  waived by inline '<!-- {WAIVER_TOKEN} ... -->' marker:")
         for w in waived:

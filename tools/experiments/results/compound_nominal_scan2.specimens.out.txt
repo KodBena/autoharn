@@ -1,0 +1,19 @@
+compound_nominal_scan2 — recall on the PRE-REGISTERED specimen set
+  specimen source: git b96a8c8:design/ORCH-KR-TITRATION-EXPLORATION.md (pre-repair blob;
+  the repair commit a4ef32d fixed both specimens, so the live corpus no longer
+  carries them except as quoted evidence)
+
+  S1 'trust story' (CLASS 1): CAUGHT — global rank 1 of 13855, score 100.27, angles {'A': 10.0, 'C': 0.27}
+
+  S2 original KR sec-5 table (CLASS 2): CAUGHT — <SPECIMEN:pre-repair-KR>:443
+     header='capability for a Haiku-tier consumer'
+     forms: [('look up one fact', 'VP'), ('enumerate current facts', 'VP'), ('detect a contradiction', 'VP'), ('trust story', 'NOM'), ('cost to stand up', 'NOM')]
+     [E +4.00] header head 'capability' expects ['GERUND', 'VP'] labels; mismatching rows: 'trust story' [NOM]; 'cost to stand up' [NOM]
+     [D +1.60] form mix: majority VP x3, minority 'trust story' [NOM]; 'cost to stand up' [NOM]
+
+  negative control — repaired KR table in live corpus flagged: NO (as it should be)
+
+  S3 'artifacts spec proof' (prior classification #25): VOID — the source text is
+     'the formal artifacts (spec + proof)' (law/briefs/.../sweep-assurance-cases-gsn.md);
+     the prior scanner tokenized across parentheses. Not a compound; a tokenization
+     artifact. This scanner segments at punctuation, so the shape cannot recur.

@@ -52,7 +52,16 @@ Sections emitted, each under a machine-parseable `### SECTION: <NAME>` header (g
                         commissioning) — this section prints predictions on record; it does not
                         compare them to what happened (that comparison is a retrospective's own
                         job, per the recipe doc's estimate-vs-actual section, and is deliberately
-                        absent from any gate or audit family).
+                        absent from any gate or audit family). Tracker item `actual-intake-
+                        grammar`, 2026-07-13, added the measured-afterward twin: every
+                        unsuperseded `kind=decision` row whose statement carries the `actual:`
+                        prefix (design/USER-RETROSPECTIVE-RECIPE.md's "The `actual:` statement
+                        grammar" section) is paired directly beneath the `estimate:` block
+                        sharing its TASK-SLUG, where both exist; an `actual:` row with no
+                        matching TASK-SLUG on record is listed afterward under its own
+                        unmatched-actuals listing, same MALFORMED-flagging posture. `actual:`
+                        rows are harness-sourced and diagnostic-grade (the action-stream ruling,
+                        ledgered 2026-07-13) — never evidentiary, never for cost policing.
   TAXONOMIES          — tracker item `taxonomy-stage-a`, design/ORCH-SPEC-TASK-TAXONOMY.md §3/§7
                         Stage A: every unsuperseded `kind=decision` row whose statement carries
                         the `taxon:` or `interface:` prefix convention (design/
@@ -70,6 +79,25 @@ Sections emitted, each under a machine-parseable `### SECTION: <NAME>` header (g
                         (`no-cross-taxon-write`) and the audit family (`crossing-via-declared-
                         interface`, the unassigned-artifact report) are later stages (spec §7
                         Stage B/C), not built here.
+  MAINTAINER-REVIEW-QUEUE — tracker item `maintainer-review-queue`, 2026-07-13: the maintainer's
+                        ranked "things I need to personally look at" queue, derived from every
+                        unsuperseded `kind=decision` row carrying the `review:` or `review-done:`
+                        prefix convention (design/USER-RECIPES-FAQ.md's "Your review queue"
+                        section — the ONE documented home of this grammar). Unlike RESOURCES/
+                        ESTIMATES/TAXONOMIES above, this section's state is DERIVED, not merely
+                        listed: the highest-ledger-row-id row per SLUG among BOTH prefixes decides
+                        that SLUG's current state — a `review:` row opens or RE-RANKS an item (no
+                        `--supersedes` flag needed), a `review-done:` row removes it from the
+                        rendered queue (nothing is deleted — it is simply no longer the latest
+                        state), and a later `review:` row RE-OPENS a ticked-off item. Open entries
+                        print rank-ascending (tie-broken by SLUG), each with the exact
+                        `./led decision "review-done: <slug> | <disposition>"` one-liner that
+                        ticks it — copy-paste, no grammar to recall. An empty queue prints its own
+                        explicit "(no open review-queue entries on record)" line — never silence.
+                        A malformed row (wrong field count, non-integer RANK) prints flagged
+                        MALFORMED rather than being silently dropped or corrupting another SLUG's
+                        state, the same never-silently-dropped posture every prefix-convention
+                        section above already keeps.
   RECENT-CHANGES      — ledger rows since `--since <timestamptz>`, or the last `-n` rows (default
                         10) if `--since` is omitted.
   GIT-STATE           — this project's own git repo: uncommitted changes and (if it has an
@@ -326,6 +354,53 @@ def resources(dep) -> None:
 # from -- this list is that grammar transcribed, not a second definition of it, ADR-0012 P1).
 _ESTIMATE_FIELDS = ("TASK-SLUG", "TOOL-CALLS", "SUBAGENT-SPAWNS", "WALL-CLOCK", "TOKEN-OOM", "BASIS")
 
+# Field order for an `actual:`-prefixed decision statement -- the measured-afterward twin (see
+# this file's docstring ESTIMATES entry and design/USER-RETROSPECTIVE-RECIPE.md's "The `actual:`
+# statement grammar" section, the ONE place both this parser and led.tmpl's own intake validator
+# read the grammar from -- this list is that grammar transcribed, not a second definition of it,
+# ADR-0012 P1).
+_ACTUAL_FIELDS = ("TASK-SLUG", "TOOL-CALLS", "SUBAGENT-SPAWNS", "WALL-CLOCK", "TOKENS", "SOURCE")
+
+
+def _read_actuals(dep) -> tuple[dict[str, list[str]], list[str]]:
+    """Read every on-record `actual:` row, grouped by TASK-SLUG -- estimates()'s own pairing
+    half. Mirrors estimates()'s newline-normalization/coherence-partner/MALFORMED conventions
+    exactly (see that function's own comments for the run12 specimen this guards against).
+    COHERENCE PARTNER: the WHERE filter below and led.tmpl's `actual:` validator trigger define
+    "an actual declaration" IDENTICALLY, by construction -- change either side only in lockstep
+    with the other; the grammar's one documented home stays design/USER-RETROSPECTIVE-RECIPE.md's
+    "The `actual:` statement grammar" section. Returns (by_slug, malformed) where by_slug maps
+    TASK-SLUG -> list of formatted detail blocks (ledger row id embedded), in ledger row-id
+    order."""
+    r = _psql_tuples(dep, "SELECT id, regexp_replace(statement, '[\\n\\r]+[ \\t]*', ' ', 'g') "
+                           f"FROM {dep.schema}.ledger_current "
+                           f"WHERE kind = 'decision' AND statement ~ '^[[:space:]]*actual:' "
+                           f"ORDER BY id;")
+    by_slug: dict[str, list[str]] = {}
+    malformed: list[str] = []
+    if r.returncode != 0:
+        malformed.append(f"ERROR: {r.stderr.strip()}")
+        return by_slug, malformed
+    for ln in [ln for ln in r.stdout.split("\n")[1:] if ln.strip()]:
+        row_id, _, statement = ln.partition("|")
+        statement = statement.lstrip()
+        body = statement.split(":", 1)[1] if ":" in statement else ""
+        fields = [f.strip() for f in body.split("|")]
+        if len(fields) != len(_ACTUAL_FIELDS):
+            malformed.append(f"id={row_id.strip()}: MALFORMED actual statement (expected "
+                              f"{len(_ACTUAL_FIELDS)} '|'-separated fields "
+                              f"{_ACTUAL_FIELDS}, got {len(fields)}) -- raw: {statement.strip()}")
+            continue
+        slug, tool_calls, spawns, wall_clock, tokens, source = fields
+        block = (f"  ACTUAL (ledger row id={row_id.strip()}):\n"
+                 f"    measured tool calls:      {tool_calls}\n"
+                 f"    measured subagent spawns: {spawns}\n"
+                 f"    measured wall-clock:      {wall_clock}\n"
+                 f"    measured tokens:          {tokens}\n"
+                 f"    source:                   {source}")
+        by_slug.setdefault(slug, []).append(block)
+    return by_slug, malformed
+
 
 def estimates(dep) -> None:
     _section("ESTIMATES")
@@ -349,9 +424,6 @@ def estimates(dep) -> None:
     # identical drop) -- safe here too, now that the newline-normalization above guarantees one
     # query row is always exactly one physical output line.
     lines = [ln for ln in r.stdout.split("\n")[1:] if ln.strip()]
-    if not lines:
-        print("(no estimate declarations on record)")
-        return
 
     parsed: list[tuple[str, int, str]] = []  # (task-slug, row-id, formatted block)
     malformed: list[str] = []
@@ -373,11 +445,36 @@ def estimates(dep) -> None:
                  f"  predicted token OOM:       {token_oom}\n"
                  f"  basis:                     {basis}")
         parsed.append((slug, int(row_id.strip()), block))
-
     parsed.sort(key=lambda t: (t[0], t[1]))
-    for _, _, block in parsed:
-        print(block)
-    for m in malformed:
+
+    # Tracker item `actual-intake-grammar`, 2026-07-13: pair each on-record `actual:` row beside
+    # the `estimate:` block sharing its TASK-SLUG (matched_slugs tracks which actuals get printed
+    # here so the leftover pass below never double-prints one). An `actual:` row with no matching
+    # estimate is genuinely common (a measured actual can exist with no prior prediction) and is
+    # listed afterward, never silently dropped -- the same MALFORMED-flagging honesty this
+    # section already keeps for a malformed `estimate:` row.
+    actuals_by_slug, actuals_malformed = _read_actuals(dep)
+    matched_slugs: set[str] = set()
+
+    if not parsed and not malformed:
+        print("(no estimate declarations on record)")
+    else:
+        for slug, _, block in parsed:
+            print(block)
+            for actual_block in actuals_by_slug.get(slug, []):
+                print(actual_block)
+                matched_slugs.add(slug)
+        for m in malformed:
+            print(m)
+
+    unmatched_slugs = sorted(s for s in actuals_by_slug if s not in matched_slugs)
+    if unmatched_slugs:
+        print("  -- unmatched actuals (no `estimate:` row on record for this TASK-SLUG) --")
+        for slug in unmatched_slugs:
+            print(f"{slug}:")
+            for actual_block in actuals_by_slug[slug]:
+                print(actual_block)
+    for m in actuals_malformed:
         print(m)
 
 
@@ -479,6 +576,107 @@ def taxonomies(dep) -> None:
     for _, _, _, block in parsed2:
         print(block)
     for m in malformed2:
+        print(m)
+
+
+# Field order for a `review:`-prefixed decision statement, and for a `review-done:`-prefixed one
+# (see this file's docstring MAINTAINER-REVIEW-QUEUE entry and design/USER-RECIPES-FAQ.md's "Your
+# review queue" section, the ONE place both this parser and led.tmpl's own intake validator read
+# the grammar from -- these lists are that grammar transcribed, not a second definition of it,
+# ADR-0012 P1).
+_REVIEW_FIELDS = ("SLUG", "RANK", "WHAT", "POINTER")
+_REVIEW_DONE_FIELDS = ("SLUG", "DISPOSITION")
+
+
+def review_queue(dep) -> None:
+    """MAINTAINER-REVIEW-QUEUE -- tracker item `maintainer-review-queue`, 2026-07-13: the
+    maintainer's ranked "things I need to personally look at" queue, derived live from every
+    unsuperseded `kind=decision` row whose statement carries the `review:` or `review-done:`
+    prefix convention (design/USER-RECIPES-FAQ.md's "Your review queue" section -- the ONE
+    documented home of this grammar). Unlike resources()/estimates()/taxonomies() above, this
+    section's state is NOT "one block per row" -- it is DERIVED: the latest ledger row (by row
+    id) for a given SLUG among BOTH prefixes decides that SLUG's current state (a `review:` row
+    open/re-ranks it, a `review-done:` row closes it, a later `review:` re-opens it) -- see the
+    grammar section's own "Semantics" paragraph for the full rule, transcribed here, not
+    restated a second time.
+
+    COHERENCE PARTNER: the WHERE filter below and led.tmpl's `review:`/`review-done:` validator
+    triggers define "a review-queue declaration" IDENTICALLY, by construction -- led triggers on
+    the statement after stripping leading POSIX [:space:] starting with EITHER `review:` or
+    `review-done:` (two separate case blocks, one per prefix); the regex below
+    (`^[[:space:]]*review(-done)?:`) names the SAME combined class. Change either side only in
+    lockstep with the other; the grammar's one documented home stays design/USER-RECIPES-FAQ.md's
+    "Your review queue" section.
+
+    Mirrors resources()'s/estimates()'s/taxonomies()'s own newline-normalization exactly, for the
+    identical reason (a paste reflowed by a terminal must not shred one row into several under
+    -t -A's one-physical-line-per-newline output convention -- see resources()'s own comment for
+    the run12 specimen this guards against here too).
+    """
+    _section("MAINTAINER-REVIEW-QUEUE")
+    r = _psql_tuples(dep, "SELECT id, regexp_replace(statement, '[\\n\\r]+[ \\t]*', ' ', 'g') "
+                           f"FROM {dep.schema}.ledger_current "
+                           f"WHERE kind = 'decision' AND statement ~ '^[[:space:]]*review(-done)?:' "
+                           f"ORDER BY id;")
+    if r.returncode != 0:
+        print(f"ERROR: {r.stderr.strip()}")
+        return
+    # -t -A echoes one leading line for the preceding `SET ROLE` statement (see resources()'s own
+    # identical drop) -- safe here too, given the newline-normalization above.
+    lines = [ln for ln in r.stdout.split("\n")[1:] if ln.strip()]
+
+    # latest_by_slug: SLUG -> (row_id, "open"|"done", parsed-fields-dict). Iterating rows in
+    # ascending id order and overwriting on every hit leaves, at the end, exactly the highest-id
+    # row per SLUG -- the "latest row per SLUG wins" rule the grammar section states.
+    latest_by_slug: dict[str, tuple[int, str, dict[str, str]]] = {}
+    malformed: list[str] = []
+    for ln in lines:
+        row_id, _, statement = ln.partition("|")
+        row_id = row_id.strip()
+        statement = statement.lstrip()
+        if statement.startswith("review-done:"):
+            body = statement[len("review-done:"):]
+            fields = [f.strip() for f in body.split("|")]
+            if len(fields) != len(_REVIEW_DONE_FIELDS):
+                malformed.append(f"id={row_id}: MALFORMED review-done statement (expected "
+                                  f"{len(_REVIEW_DONE_FIELDS)} '|'-separated fields "
+                                  f"{_REVIEW_DONE_FIELDS}, got {len(fields)}) -- raw: {statement.strip()}")
+                continue
+            slug, disposition = fields
+            latest_by_slug[slug] = (int(row_id), "done", {"DISPOSITION": disposition})
+        elif statement.startswith("review:"):
+            body = statement[len("review:"):]
+            fields = [f.strip() for f in body.split("|")]
+            if len(fields) != len(_REVIEW_FIELDS):
+                malformed.append(f"id={row_id}: MALFORMED review statement (expected "
+                                  f"{len(_REVIEW_FIELDS)} '|'-separated fields "
+                                  f"{_REVIEW_FIELDS}, got {len(fields)}) -- raw: {statement.strip()}")
+                continue
+            slug, rank, what, pointer = fields
+            if not rank.isdigit() or int(rank) < 1:
+                malformed.append(f"id={row_id}: MALFORMED review statement (RANK {rank!r} is not "
+                                  f"a positive integer) -- raw: {statement.strip()}")
+                continue
+            latest_by_slug[slug] = (int(row_id), "open", {"RANK": rank, "WHAT": what, "POINTER": pointer})
+        else:
+            # Unreachable under the WHERE filter above (both prefixes are required there); kept
+            # as an explicit, never-silent branch rather than assuming the filter can never drift
+            # from this parser (the exact run12 coherence lesson every sibling parser states).
+            malformed.append(f"id={row_id}: MALFORMED review-queue statement (matched neither "
+                              f"'review:' nor 'review-done:' after normalization) -- raw: {statement.strip()}")
+
+    open_entries = [(int(v[2]["RANK"]), slug, v[0], v[2]) for slug, v in latest_by_slug.items() if v[1] == "open"]
+    open_entries.sort(key=lambda t: (t[0], t[1]))
+
+    if not open_entries:
+        print("(no open review-queue entries on record)")
+    else:
+        for rank, slug, row_id, fields in open_entries:
+            print(f"[{rank}] {slug}  (ledger row id={row_id})")
+            print(f"  what:    {fields['WHAT']}")
+            print(f"  pointer: {fields['POINTER']}")
+            print(f"  tick:    ./led decision \"review-done: {slug} | <disposition>\"")
+    for m in malformed:
         print(m)
 
 
@@ -833,6 +1031,7 @@ def main(argv: list[str] | None = None) -> int:
     resources(dep)
     estimates(dep)
     taxonomies(dep)
+    review_queue(dep)
     in_flight(dep)
     rollup(dep)
     print()

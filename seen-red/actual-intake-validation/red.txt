@@ -1,0 +1,141 @@
+seen-red/actual-intake-validation — banked both-polarity evidence (fixture-census)
+
+Work item / tracker item `actual-intake-grammar` (2026-07-13). Maintainer directive: apply the
+`estimate:` discipline to MEASURED wall-time and tokens for all commands and subagent/workflow
+spawns — his framing: two or more quantities means the polymorphic shape, never per-quantity
+special cases. Deliverable was an `actual:` intake-validation convention cloning the structure of
+the existing `estimate:` validator in bootstrap/templates/led.tmpl — same posture (field-count
+refusal, whitespace normalization for validation only, byte-exact persisted statement, a refusal
+that teaches, atomicity by refusal-before-write, ADR-0002) with exactly one deliberate divergence:
+TOOL-CALLS/SUBAGENT-SPAWNS is a bare non-negative integer here, never a range, because a
+measurement is a point, not a prediction spread.
+
+THE FEATURE, both halves proven live below:
+
+  - bootstrap/templates/led.tmpl now validates an `actual:` statement (whitespace-normalized
+    copy: every run of \n/\r plus following indentation collapsed to one space) against
+    design/USER-RETROSPECTIVE-RECIPE.md's "The `actual:` statement grammar" section BEFORE the
+    INSERT -- exactly six `|`-separated fields (TASK-SLUG, TOOL-CALLS, SUBAGENT-SPAWNS,
+    WALL-CLOCK, TOKENS, SOURCE), each with its own shape check: TASK-SLUG matches
+    `^[a-z0-9][a-z0-9-]*$` (whole work item OR single-spawn granularity, e.g.
+    `item-slug-b-round-2`); TOOL-CALLS/SUBAGENT-SPAWNS match a bare non-negative integer ONLY
+    (a range REFUSED, the one deliberate divergence from `estimate:`); WALL-CLOCK matches the
+    identical duration-or-range parser `estimate:` uses (`20m`/`2h`/`1d`/`90s`); TOKENS is an
+    exact-ish K/M-suffixed count (`204K`, `1.2M`), or the closed OOM-bucket vocabulary shared
+    with `estimate:`'s TOKEN-OOM (`1K|10K|100K|1M|10M+`), or a bare number no greater than 999
+    (a bare number above 999 is refused as ambiguous between a real count and a typo); SOURCE is
+    non-empty. On failure: REFUSED, exit nonzero, NOTHING written (atomicity by
+    refusal-before-write), teach-text naming the grammar, the specific field that failed, AND
+    restating the never-police invariant (measurements are harness-sourced, diagnostic-grade
+    per the action-stream ruling ledgered 2026-07-13, never evidentiary). On success: the
+    statement is INSERTed AS TYPED, byte-exact (never the normalized copy).
+  - bootstrap/templates/pickup.tmpl's `_read_actuals()` helper plus `estimates()`'s own pairing
+    logic render every on-record `actual:` row directly beneath the `estimate:` block sharing
+    its TASK-SLUG (where both exist), and list an unmatched actual afterward under its own
+    unmatched-actuals listing — never silently dropped, same MALFORMED-flagging posture
+    `resources()`/`estimates()` already established.
+  - COHERENCE: led's `actual:` validator trigger and pickup's `_read_actuals()` SQL filter
+    define "an actual declaration" IDENTICALLY, the same coherence-partner contract
+    `resource:`/`estimate:` already keep — led triggers on the statement after stripping
+    leading POSIX [:space:] starting with `actual:`; pickup's filter names the same class:
+    `statement ~ '^[[:space:]]*actual:'`.
+  - The grammar's ONE documented home is design/USER-RETROSPECTIVE-RECIPE.md's new "The
+    `actual:` statement grammar" subsection (§6), which both parsers cite in their own comments
+    rather than restating the grammar a second time (ADR-0012 P1) — the same section restates
+    the `estimate:` never-police invariant verbatim, and states the harness-sourced/
+    diagnostic-grade standing grade (the action-stream ruling, ledgered 2026-07-13).
+
+WHAT THE FIXTURE PROVES, IN ORDER (seen-red/actual-intake-validation/run_fixtures.py, live run
+against a throwaway scratch deployment aivfixture/aivfixture_kernel/aivfixture_rw via
+bootstrap/track-work.sh, toy@192.168.122.1, torn down after):
+
+  1. RED -- a 3-field `actual:` statement (missing WALL-CLOCK/TOKENS/SOURCE) is REFUSED:
+     `led decision` exits nonzero, ledger row count witnessed UNCHANGED before vs. after (0 -> 0).
+  2. RED -- a 6-field statement whose TOOL-CALLS field is an N-M range (`40-60`, the shape
+     `estimate:` accepts for the same field) is REFUSED — the one deliberate divergence proven
+     live: a measurement is a point, not a range.
+  3. RED -- a 6-field statement whose TOKENS field is a bare unsuffixed number above 999
+     (`12000`) is REFUSED as ambiguous, row count unchanged.
+  4. RED -- a 6-field statement with an empty SOURCE (whitespace only) is REFUSED, row count
+     unchanged.
+  5. GREEN -- a well-formed whole-work-item `actual:` statement (TASK-SLUG naming the whole
+     `actual-intake-grammar` tracker item) is ACCEPTED (row count grows by one) and the STORED
+     statement is byte-exact against what was typed.
+  6. GREEN -- a well-formed `actual:` statement whose TASK-SLUG names a single spawn within a
+     work item (the `kr-titration-design-exploration-b-round-2` granularity convention) is
+     ACCEPTED and stored byte-exact.
+  7. GREEN -- a well-formed `actual:` statement using the closed OOM-bucket TOKENS vocabulary
+     (shared with `estimate:`'s TOKEN-OOM) is ACCEPTED and stored byte-exact.
+  8. GREEN -- a matching `estimate:` row is declared for the whole-item actual's TASK-SLUG, and
+     `./pickup`'s ESTIMATES section renders the `actual:` block directly BENEATH the matching
+     `estimate:` block, with no "MALFORMED" string anywhere in the section.
+  9. GREEN -- the spawn-granularity actual (whose TASK-SLUG has no matching `estimate:` row on
+     record) is listed under the section's own unmatched-actuals listing, never silently
+     dropped.
+
+WITNESSED TRANSCRIPT (2026-07-13, live run, autoharn worktree agent-ad51fef6f2a908a0c):
+
+  ADOPT: track-work.sh exit=0 deployment.json=True -- PASS
+  RED-MALFORMED-FIELDCOUNT: exit=1 refused=True row-count before=0 after=0 (unchanged=True) -- PASS
+  RED-RANGE-WHERE-POINT: exit=1 refused=True row-count before=0 after=0 (unchanged=True) -- PASS
+  RED-BARE-AMBIGUOUS-NUMBER: exit=1 refused=True row-count before=0 after=0 (unchanged=True) -- PASS
+  RED-EMPTY-SOURCE: exit=1 refused=True row-count before=0 after=0 (unchanged=True) -- PASS
+  GREEN-WHOLE-ITEM: exit=0 accepted=True row-count before=0 after=1 (grew-by-one=True) -- PASS
+  GREEN-WHOLE-ITEM: stored statement is byte-exact -- PASS
+  GREEN-SPAWN-GRANULARITY: exit=0 accepted=True row-count before=1 after=2 (grew-by-one=True) -- PASS
+  GREEN-SPAWN-GRANULARITY: stored statement is byte-exact -- PASS
+  GREEN-OOM-BUCKET-TOKENS: exit=0 accepted=True row-count before=2 after=3 (grew-by-one=True) -- PASS
+  GREEN-OOM-BUCKET-TOKENS: stored statement is byte-exact -- PASS
+  GREEN-PICKUP-PAIRING setup: estimate: declared for pairing, exit=0 -- PASS
+  GREEN-PICKUP-PAIRING: ESTIMATES section pairs the actual-intake-grammar actual beneath its
+    matching estimate, no MALFORMED entries -- PASS
+
+  --- pickup ESTIMATES section after pairing declaration (verbatim) ---
+  ### SECTION: ESTIMATES
+
+  actual-intake-grammar  (ledger row id=4)
+    predicted tool calls:      40-60
+    predicted subagent spawns: 0
+    predicted wall-clock:      3h-5h
+    predicted token OOM:       100K
+    basis:                     scoped from cost-estimation-retro's own sibling grammar, a
+    similarly-sized led.tmpl/pickup.tmpl validator pair plus one doc section and one seen-red
+    fixture
+    ACTUAL (ledger row id=1):
+      measured tool calls:      47
+      measured subagent spawns: 2
+      measured wall-clock:      42m
+      measured tokens:          210K
+      source:                   harness task-notification duration_ms+subagent_tokens
+    -- unmatched actuals (no `estimate:` row on record for this TASK-SLUG) --
+  doc-legibility-sweep:
+    ACTUAL (ledger row id=3):
+      measured tool calls:      12
+      measured subagent spawns: 1
+      measured wall-clock:      15m
+      measured tokens:          100K
+      source:                   orchestrator wall clock, subagent self-reported OOM bucket only
+  kr-titration-design-exploration-b-round-2:
+    ACTUAL (ledger row id=2):
+      measured tool calls:      6
+      measured subagent spawns: 1
+      measured wall-clock:      8m
+      measured tokens:          1.2M
+      source:                   orchestrator wall clock plus subagent's own self-reported token
+      usage
+  --- end pickup ESTIMATES section ---
+
+  GREEN-PICKUP-UNMATCHED: unmatched kr-titration-design-exploration-b-round-2 actual listed
+    under the unmatched-actuals listing -- PASS
+
+  actual-intake-validation fixture: all cases PASS, scratch substrate torn down to zero
+  residue (tempdir removed, schema aivfixture/aivfixture_kernel/role aivfixture_rw dropped).
+
+NOTE on the pickup transcript above: `doc-legibility-sweep` also appears unmatched here because
+this fixture's own scratch deployment carries no `estimate:` row for that slug (only
+`estimate-intake-validation`'s OWN scratch fixture, a wholly separate deployment/schema, declares
+one) — the unmatched listing is doing exactly its job, not a bug.
+
+Registered in gates/fixture_census.py REGISTRY as "actual-intake-validation" ->
+seen-red/actual-intake-validation/run_fixtures.py. Re-run:
+  python3 seen-red/actual-intake-validation/run_fixtures.py

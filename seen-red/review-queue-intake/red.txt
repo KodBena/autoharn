@@ -1,0 +1,114 @@
+seen-red/review-queue-intake — banked both-polarity evidence (fixture-census)
+
+Work item / tracker item `maintainer-review-queue` (2026-07-13). Maintainer commission: an
+EXECUTIVE LEDGER — a maintainer-facing review queue where items awaiting his EXPLICIT review can
+be ticked off, ranked. Design constraint from house law: the queue lives in the LEDGER, never in
+a prose file (the BACKLOG-retirement lesson: a live task queue narrated in immutable prose rots
+in seconds — ADR-0005 Rule 6 corollary). Deliverable was a `review:`/`review-done:` statement
+grammar pair, refusal-grade like the five existing precedents (`resource:`/`estimate:`/`actual:`/
+`taxon:`/`interface:`), plus a `MAINTAINER-REVIEW-QUEUE` section in `./pickup` rendering open
+entries rank-ascending with the exact tick command.
+
+THE FEATURE, both halves proven live below:
+
+  - bootstrap/templates/led.tmpl now validates a `review:`-prefixed decision statement
+    (whitespace-normalized copy: every run of \n/\r plus following indentation collapsed to one
+    space) against design/USER-RECIPES-FAQ.md's "Your review queue" section BEFORE the INSERT --
+    exactly four `|`-separated fields (SLUG, RANK, WHAT, POINTER): SLUG matches
+    `^[a-z0-9][a-z0-9-]*$`; RANK is a positive integer (1 = most important); WHAT and POINTER are
+    each non-empty. A `review-done:`-prefixed statement is validated identically against its own
+    two-field grammar (SLUG, DISPOSITION), with SLUG held to the SAME slug grammar `review:` uses.
+    On failure: REFUSED, exit nonzero, NOTHING written (atomicity by refusal-before-write),
+    teach-text naming the grammar and the specific failing field. On success: the statement is
+    INSERTed AS TYPED, byte-exact.
+  - bootstrap/templates/pickup.tmpl's new review_queue() reader renders the MAINTAINER-REVIEW-
+    QUEUE section by DERIVING each SLUG's current state from the highest-ledger-row-id row among
+    BOTH prefixes: a `review:` row opens or RE-RANKS an item (no `--supersedes` flag needed -- the
+    latest row for a SLUG simply wins), a `review-done:` row removes the SLUG from the rendered
+    open queue (nothing deleted -- append-only, just no longer the latest state), and a LATER
+    `review:` row for the same SLUG RE-OPENS it. Open entries print rank-ascending (tie-broken by
+    SLUG), each block carrying the exact `./led decision "review-done: <slug> | <disposition>"`
+    one-liner to tick it. An empty queue prints its own explicit "(no open review-queue entries
+    on record)" line, never silence. A malformed row (wrong field count, non-integer RANK) is
+    flagged MALFORMED, never silently dropped or allowed to corrupt another SLUG's derived state.
+  - COHERENCE: led's `review:`/`review-done:` validator triggers and pickup's combined SQL filter
+    (`statement ~ '^[[:space:]]*review(-done)?:'`) define "a review-queue declaration"
+    IDENTICALLY, the same coherence-partner contract every earlier grammar pair already keeps.
+  - The grammar's ONE documented home is design/USER-RECIPES-FAQ.md's new "Your review queue"
+    section -- a deliberate deviation from that page's usual "point elsewhere" convention (stated
+    inline, in the section itself), because this recipe is the grammar's actual SSOT rather than
+    a pointer to it (ADR-0005 Rule 1).
+  - No collision with the pre-existing `led review <entry-id> <verdict> ...` subcommand: that is
+    a distinct top-level dispatch on argv[0] (countersigning an earlier ledger row), never
+    reached from this generic `<kind> <statement>` validation path, and the shell case patterns
+    `review:*` / `review-done:*` partition every statement disjointly by construction (the latter
+    never matches the former's literal prefix).
+
+WHAT THE FIXTURE PROVES, IN ORDER (seen-red/review-queue-intake/run_fixtures.py, live run against
+a throwaway scratch deployment rqfixture/rqfixture_kernel/rqfixture_rw via
+bootstrap/track-work.sh, toy@192.168.122.1, torn down after):
+
+  1. GREEN -- a virgin deployment with NO review:/review-done: rows on record renders the
+     section's own explicit "(no open review-queue entries on record)" line, never silence.
+  2. RED -- a 3-field `review:` statement (missing POINTER) is REFUSED, row count unchanged.
+  3. RED -- a 4-field statement whose SLUG is not a bare slug ("Key Generation") is REFUSED.
+  4. RED -- a 4-field statement whose RANK is not an integer ("first") is REFUSED.
+  5. RED -- a 4-field statement whose RANK is "0" (not positive) is REFUSED.
+  6. RED -- a 4-field statement with an empty WHAT (whitespace only) is REFUSED.
+  7. RED -- a 4-field statement with an empty POINTER (whitespace only) is REFUSED.
+  8. RED -- a 1-field `review-done:` statement (missing DISPOSITION) is REFUSED.
+  9. RED -- a 2-field `review-done:` statement whose SLUG is malformed ("Key Generation") is
+     REFUSED.
+  10. GREEN -- a well-formed `review:` statement is ACCEPTED, stored byte-exact, and renders in
+      `./pickup`'s MAINTAINER-REVIEW-QUEUE section at rank 1 with its WHAT/POINTER.
+  11. GREEN -- the rendered queue's tick line is the EXACT
+      `./led decision "review-done: key-generation | <disposition>"` copy-paste command.
+  12. GREEN -- a second `review:` row for the SAME SLUG, different RANK/WHAT/POINTER, is
+      ACCEPTED; the rendered queue shows ONLY the new fields for that SLUG (re-ranking
+      supersedes by latest-row-wins, no `--supersedes` flag used).
+  13. GREEN -- a `review-done:` row for that SLUG is ACCEPTED; the SLUG disappears entirely from
+      the rendered open queue.
+  14. GREEN -- a further `review:` row for the SAME SLUG is ACCEPTED; the SLUG reappears in the
+      rendered open queue at its new rank -- re-opening after a tick, proven live.
+
+WITNESSED TRANSCRIPT (2026-07-13, live run, autoharn worktree agent-a19dda579da692958):
+
+  ADOPT: track-work.sh exit=0 deployment.json=True -- PASS
+  GREEN-EMPTY-QUEUE: virgin deployment renders the explicit empty-queue line -- PASS
+  RED-REVIEW-FIELDCOUNT: exit=1 refused=True row-count before=0 after=0 (unchanged=True) -- PASS
+  RED-REVIEW-BAD-SLUG: exit=1 refused=True row-count before=0 after=0 (unchanged=True) -- PASS
+  RED-REVIEW-NON-INTEGER-RANK: exit=1 refused=True row-count before=0 after=0 (unchanged=True) -- PASS
+  RED-REVIEW-ZERO-RANK: exit=1 refused=True row-count before=0 after=0 (unchanged=True) -- PASS
+  RED-REVIEW-EMPTY-WHAT: exit=1 refused=True row-count before=0 after=0 (unchanged=True) -- PASS
+  RED-REVIEW-EMPTY-POINTER: exit=1 refused=True row-count before=0 after=0 (unchanged=True) -- PASS
+  RED-REVIEW-DONE-FIELDCOUNT: exit=1 refused=True row-count before=0 after=0 (unchanged=True) -- PASS
+  RED-REVIEW-DONE-BAD-SLUG: exit=1 refused=True row-count before=0 after=0 (unchanged=True) -- PASS
+  GREEN-OPEN: exit=0 accepted=True row-count before=0 after=1 (grew-by-one=True) -- PASS
+  GREEN-OPEN: stored statement is byte-exact -- PASS
+  GREEN-OPEN: queue renders the open entry at rank 1 -- PASS
+  GREEN-TICK-COMMAND: printed tick command is the exact copy-paste shape -- PASS
+  GREEN-RERANK: exit=0 accepted=True row-count before=1 after=2 (grew-by-one=True) -- PASS
+  GREEN-RERANK: stored statement is byte-exact -- PASS
+  GREEN-RERANK: latest review: row supersedes the prior rank/what/pointer -- PASS
+  GREEN-TICK: exit=0 accepted=True row-count before=2 after=3 (grew-by-one=True) -- PASS
+  GREEN-TICK: stored statement is byte-exact -- PASS
+  GREEN-TICK: ticked SLUG disappears from the rendered open queue -- PASS
+  GREEN-REOPEN: exit=0 accepted=True row-count before=3 after=4 (grew-by-one=True) -- PASS
+  GREEN-REOPEN: stored statement is byte-exact -- PASS
+  GREEN-REOPEN: a review: row filed after review-done: re-opens the SLUG -- PASS
+
+  --- pickup MAINTAINER-REVIEW-QUEUE section after re-open (verbatim) ---
+  ### SECTION: MAINTAINER-REVIEW-QUEUE
+
+  [2] key-generation  (ledger row id=4)
+    what:    reopened -- ceremony needs a second look after the signed-chain-head question
+    pointer: design/MAINT-MAINTAINER-DECISION-BRIEF.md
+    tick:    ./led decision "review-done: key-generation | <disposition>"
+  --- end pickup MAINTAINER-REVIEW-QUEUE section ---
+
+  review-queue-intake fixture: all cases PASS, scratch substrate torn down to zero residue
+  (tempdir removed, schema rqfixture/rqfixture_kernel/role rqfixture_rw dropped).
+
+Registered in gates/fixture_census.py REGISTRY as "review-queue-intake" ->
+seen-red/review-queue-intake/run_fixtures.py. Re-run:
+  python3 seen-red/review-queue-intake/run_fixtures.py

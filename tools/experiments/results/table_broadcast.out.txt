@@ -1,0 +1,659 @@
+table_broadcast (EXPERIMENT): 64 markdown tables across 115 docs
+  tables with >=3 body rows (enumeration-shaped, broadcast-testable): 58
+
+  ORCH-DIRCLASS.md:15  label-column header = 'Directory'
+      broadcast: Directory : `bootstrap`
+      broadcast: Directory : `engine`
+      broadcast: Directory : `filing`
+      broadcast: Directory : `gates`
+      broadcast: Directory : `hooks`
+      broadcast: Directory : `instruments`
+      broadcast: Directory : `kernel`
+      broadcast: Directory : `stores`
+      broadcast: Directory : `design`
+      broadcast: Directory : `judgment`
+      broadcast: Directory : `law`
+      broadcast: Directory : `drive`
+      broadcast: Directory : `research`
+      broadcast: Directory : `seen-red`
+      broadcast: Directory : `provenance`
+      broadcast: Directory : `runs`
+      broadcast: Directory : `ephemera`
+      broadcast: Directory : `.claude`
+      broadcast: Directory : `.git`
+      broadcast: Directory : `.pytest_cache`
+
+  ORCH-OPERATING-CARD.md:194  label-column header = 'mechanism (hooks/)'
+      broadcast: mechanism (hooks/) : change_gate + permit_to_work (pretooluse_change_gate.py)
+      broadcast: mechanism (hooks/) : stamp_intercept.py
+      broadcast: mechanism (hooks/) : clean_exit (stop_clean_exit.py)
+      broadcast: mechanism (hooks/) : mutation_observer (posttooluse_mutation_observer.py)
+      broadcast: mechanism (hooks/) : delegation_observer (pretooluse_delegation_observer.py)
+      broadcast: mechanism (hooks/) : demurral_detect.py
+      broadcast: mechanism (hooks/) : doc_shapes_gate (pretooluse_doc_shapes_gate.py)
+      broadcast: mechanism (hooks/) : read_observer (pretooluse_read_observer.py)
+      broadcast: mechanism (hooks/) : bash_completion (posttooluse_bash_completion.py)
+      broadcast: mechanism (hooks/) : doc_legibility_critic.py
+
+  USER-CONFIGURATION.md:77  label-column header = 'what'
+      broadcast: what : `deployment.json`
+      broadcast: what : `.claude/apparatus.json`
+      broadcast: what : `.claude/governed_files.json`
+      broadcast: what : `.claude/settings.json`
+      broadcast: what : `.claude/secrets/stamp_secret.hex`
+      broadcast: what : `keys/` (your own signing-key directory)
+      broadcast: what : `.claude/logs/*.journal.jsonl`
+      broadcast: what : `CLAUDE.md` (the governance preamble)
+      broadcast: what : `led` / `judge` / `pickup` / `audit` / `distance-to-clean` / `verify-commission` / `verify-chain`
+      broadcast: what : kernel lineage SQL, `hooks/*.py`, `bootstrap/templates/*.tmpl`
+
+  USER-CONFIGURATION.md:135  label-column header = 'mechanism'
+      broadcast: mechanism : `change_gate`
+      broadcast: mechanism : `permit_to_work`
+      broadcast: mechanism : `stamp_intercept`
+      broadcast: mechanism : `clean_exit`
+      broadcast: mechanism : `demurral_detect`
+      broadcast: mechanism : `mutation_observer`
+      broadcast: mechanism : `delegation_observer`
+      broadcast: mechanism : `doc_shapes_gate`
+      broadcast: mechanism : `read_observer`
+      broadcast: mechanism : `bash_completion`
+      broadcast: mechanism : `doc_legibility_critic`
+
+  USER-CONFIGURATION.md:281  label-column header = 'value'
+      broadcast: value : Postgres host
+      broadcast: value : Postgres database
+      broadcast: value : ledger relation
+      broadcast: value : your project's root
+      broadcast: value : change-gate state file
+      broadcast: value : change-gate journal
+      broadcast: value : stamp secret path
+
+  bootstrap/templates/APPARATUS.md:71  label-column header = 'mechanism'
+      broadcast: mechanism : `change_gate`
+      broadcast: mechanism : `permit_to_work`
+      broadcast: mechanism : `decomposition_review`
+      broadcast: mechanism : `stamp_intercept`
+      broadcast: mechanism : `clean_exit`
+      broadcast: mechanism : `demurral_detect`
+      broadcast: mechanism : `mutation_observer`
+      broadcast: mechanism : `delegation_observer`
+      broadcast: mechanism : `doc_shapes_gate`
+      broadcast: mechanism : `doc_legibility_critic`
+      broadcast: mechanism : `read_observer`
+      broadcast: mechanism : `bash_completion`
+      broadcast: mechanism : `doc_attestation`
+
+  design/MAINT-REGULATOR-ADOPTION-ASSESSMENT.md:65  label-column header = 'Lens'
+      broadcast: Lens : NRC (nuclear high assurance)
+      broadcast: Lens : NIST (controls)
+      broadcast: Lens : FAA (DO-178C-shaped)
+      broadcast: Lens : ICJ (evidentiary)
+
+  design/ORCH-ARTIFACT-VS-REQUIREMENTS-DETECTOR.md:47  label-column header = 'Point'
+      broadcast: Point : 1
+      broadcast: Point : 2a
+      broadcast: Point : 2b
+      broadcast: Point : 3
+      broadcast: Point : 4
+      broadcast: Point : 5
+      broadcast: Point : 6
+
+  design/ORCH-CONTEMPORANEITY-PART3-SPEC.md:95  label-column header = '#'
+      broadcast: # : F1
+      broadcast: # : F2
+      broadcast: # : F3
+      broadcast: # : F4
+      broadcast: # : F5
+      broadcast: # : F6
+      broadcast: # : F7
+      broadcast: # : F8
+      broadcast: # : F9
+      broadcast: # : F10
+      broadcast: # : F11
+      broadcast: # : F12
+
+  design/ORCH-CONTEMPORANEITY-PART3-SPEC.md:155  label-column header = 'Seam failure mode'
+      broadcast: Seam failure mode : Untokened row (pre-s23 schema, or a write that bypassed Bash interception)
+      broadcast: Seam failure mode : No completion record for the token (crash mid-command; completion hook off) and the rule needs the upper bound
+      broadcast: Seam failure mode : Interval straddles the compared event
+      broadcast: Seam failure mode : Journal family unwired / absent for this world
+
+  design/ORCH-CONTEMPORANEITY-PART3-SPEC.md:186  label-column header = '#'
+      broadcast: # : E1
+      broadcast: # : E2
+      broadcast: # : E3
+      broadcast: # : E4
+      broadcast: # : E5
+      broadcast: # : E6
+      broadcast: # : E7
+      broadcast: # : E8
+      broadcast: # : E9
+
+  design/ORCH-DEPLOYMENT-ROADMAP.md:352  label-column header = 'Milestone'
+      broadcast: Milestone : **M0** (smallest viable)
+      broadcast: Milestone : **M1**
+      broadcast: Milestone : **M2**
+      broadcast: Milestone : **M3**
+      broadcast: Milestone : **M4**
+
+  design/ORCH-LEDGER-LOGIC-MARRIAGE.md:157  label-column header = 'Judgment (consumer)'
+      broadcast: Judgment (consumer) : History integrity, edge resolution, orphan detection, traceability walks (audit walk J2)
+      broadcast: Judgment (consumer) : `T_now`: in-force, head-resolution, answered-status, countersigned-in-force, stale-enactment debt, clause-defeat closure with moot/withdrawn defeaters
+      broadcast: Judgment (consumer) : Independence / SoD phase structure (k-parameterized principals, review_gap under delegation), minimal-repair blame ("smallest retraction restoring soundness")
+      broadcast: Judgment (consumer) : Quantities in evidence (R-NUM magnitude, tolerance, unit coercion), unsat-core explanations ("*which* obligations jointly conflict")
+      broadcast: Judgment (consumer) : The **aspectual state** (F44): a held row whose clause is defeated while the row stands
+      broadcast: Judgment (consumer) : Reference *truth* (does the cited row's content match the citing intent), MECE-of-meaning, J-triggered noticing
+
+  design/ORCH-LOGIC-LAYER-ASP.md:15  label-column header = 'file'
+      broadcast: file : `logic_layer.lp`
+      broadcast: file : `logic_repair.lp`
+      broadcast: file : `contra_asp.py`
+      broadcast: file : `test_contra_asp.py`
+
+  design/ORCH-LOGIC-LAYER-ASP.md:58  label-column header = 'rule'
+      broadcast: rule : **R-NEG**
+      broadcast: rule : **R-FUNC**
+      broadcast: rule : **R-NUM**
+
+  design/ORCH-LOGIC-LAYER-ASP.md:96  label-column header = 'mutation'
+      broadcast: mutation : R-NEG polarity `neg → pos`
+      broadcast: mutation : R-FUNC object `!=  → ==`
+      broadcast: mutation : R-FUNC defeater `not exception → exception`
+      broadcast: mutation : R-FUNC allowlist (drop `functional/1`)
+      broadcast: mutation : R-NUM value `!=  → ==`
+
+  design/ORCH-LOGIC-LAYER-SEAM.md:24  label-column header = 'member'
+      broadcast: member : `Claim` list (from `contra_detect.claims_from_bundle`)
+      broadcast: member : `LogicFinding`
+      broadcast: member : `LogicBackend` (Protocol)
+      broadcast: member : `cross_engine_differential`
+
+  design/ORCH-LOGIC-LAYER-SEAM.md:82  label-column header = 'mutation'
+      broadcast: mutation : `glut_is_both_bits` AND→OR
+      broadcast: mutation : `pos_value_t` (pos no longer told-true)
+      broadcast: mutation : `neg_value_f` (neg no longer told-false)
+      broadcast: mutation : `join_is_or` OR→AND (Belnap join)
+
+  design/ORCH-RETROSPECTIVE-RUN10.md:51  label-column header = 'Phase'
+      broadcast: Phase : Intake + decomposition
+      broadcast: Phase : Decomposition countersign
+      broadcast: Phase : Build
+      broadcast: Phase : Closure
+
+  design/ORCH-RETROSPECTIVE-RUN11.md:172  label-column header = 'Commission asks (row 1, quoted)'
+      broadcast: Commission asks (row 1, quoted) : "preference-based optimization of terminal colors" / "16 variable experiment"
+      broadcast: Commission asks (row 1, quoted) : "terminal-like renderer for an HTML file"
+      broadcast: Commission asks (row 1, quoted) : "looks like claude code (I've had problems with claude code low contrast)"
+      broadcast: Commission asks (row 1, quoted) : "user should be allowed to fix colors"
+      broadcast: Commission asks (row 1, quoted) : "a list with the 16 colors, fingernail-sized square boxes"
+      broadcast: Commission asks (row 1, quoted) : "Background around the terminal text area should be plain white, no frills"
+      broadcast: Commission asks (row 1, quoted) : "document [the QEUBO] interface in a terse markdown … single-homed"
+      broadcast: Commission asks (row 1, quoted) : "show how you ran the smoke test (deterministic objective … known optimum)"
+
+  design/ORCH-RETROSPECTIVE-RUN11.md:234  label-column header = 'Phase'
+      broadcast: Phase : Commission (pre-session)
+      broadcast: Phase : Intake + decomposition
+      broadcast: Phase : Decomposition countersign
+      broadcast: Phase : Build
+      broadcast: Phase : Closure
+
+  design/ORCH-SPEC-DECOMPOSITION-POLICY.md:78  label-column header = 'Criterion'
+      broadcast: Criterion : `decomposition-cites-commission`
+      broadcast: Criterion : `decomposition-reviewed-before-execution`
+      broadcast: Criterion : `acceptance-criterion-first`
+      broadcast: Criterion : `completion-carries-witness`
+      broadcast: Criterion : `explicit-dependency-edges`
+      broadcast: Criterion : `one-acceptance-criterion-per-task`
+      broadcast: Criterion : `one-boundary-per-task`
+      broadcast: Criterion : `grain-follows-commission-text`
+      broadcast: Criterion : `task-closeable-in-one-session`
+      broadcast: Criterion : `estimate-before-execution`
+
+  design/ORCH-SPEC-RESOURCE-ACCOUNTING.md:61  label-column header = 'TIER'
+      broadcast: TIER : `available`
+      broadcast: TIER : `blessed: <task-shape>`
+      broadcast: TIER : `mandated: <task-shape>`
+      broadcast: TIER : `forbidden: <task-shape>`
+
+  design/USER-BLESSED-TABLE-TEMPLATE.md:65  label-column header = 'NAME'
+      broadcast: NAME : MIP-SCIP
+      broadcast: NAME : cvxpy
+      broadcast: NAME : OR-Tools
+      broadcast: NAME : Z3
+      broadcast: NAME : clingo
+      broadcast: NAME : tsort
+      broadcast: NAME : redis
+      broadcast: NAME : QEUBO (example per-project backend)
+
+  design/USER-GPG-TRUST-LAYER-FAQ.md:272  label-column header = 'You did'
+      broadcast: You did : FULL-signed only, no `.asc` banked
+      broadcast: You did : Signed with `printf '%s'` per above, key committed
+      broadcast: You did : The `.asc` covers a DIFFERENT statement (tampered), a committed key exists to check it against
+      broadcast: You did : A signature is banked but the deployment's OWN `keys/` is empty (AWAITING-KEY, a fresh scaffold's honest starting state)
+      broadcast: You did : `gpg` itself is not installed
+
+  design/USER-RETROSPECTIVE-RECIPE.md:188  label-column header = '#'
+      broadcast: # : Q1
+      broadcast: # : Q2
+      broadcast: # : Q3
+      broadcast: # : Q4
+      broadcast: # : Q5
+      broadcast: # : Q6
+
+  design/USER-WORK-STATUS-OFFERING.md:64  label-column header = ''
+      broadcast:  : Lifetime
+      broadcast:  : Hooks
+      broadcast:  : Governance preamble
+      broadcast:  : Stamp secret
+      broadcast:  : Purpose
+
+  design/USER-WORK-STATUS-OFFERING.md:113  label-column header = 'Omega capability'
+      broadcast: Omega capability : SQL anti-corruption layer replacing a hand-edited file (no file to edit by hand)
+      broadcast: Omega capability : Relational image: parent `items` table + 3 child tables + `extra` jsonb junk drawer
+      broadcast: Omega capability : Within-row contract: id regex, closed-but-amendable enums, open/closed state-shape CHECK
+      broadcast: Omega capability : Deferred FK referential integrity (parent, superseded_by, deps.depends_on)
+      broadcast: Omega capability : Cheap self-reference CHECKs + `WITH RECURSIVE ... CYCLE` for longer cycles
+      broadcast: Omega capability : Cross-row invariant gate: `work_status_violations` VIEW, empty ⇒ CI-clean
+      broadcast: Omega capability : `audit_log` table + `record_audit()` trigger on every table, actor = free-text `application_name`
+      broadcast: Omega capability : `table_asof(tbl, t)` + `asof.sh` git-sha → committer-timestamp heuristic time-travel
+      broadcast: Omega capability : Audit-log reseed discontinuity (`DROP TABLE` fires no per-row `DELETE` trigger; needs `audit_genesis_snapshot()` to re-baseline)
+      broadcast: Omega capability : Migrator self-certification: row counts, violations view, field-for-field round-trip, non-zero exit on mismatch
+      broadcast: Omega capability : Deliberate, attributed, dated enum amendment (e.g. `refs.kind` gaining a value, comment citing the audit that found the gap)
+      broadcast: Omega capability : Tooling discipline: psycopg3 not psycopg2, `psql ON_ERROR_STOP=1`, parameterized statements
+      broadcast: Omega capability : Hierarchy: `parent`/`superseded_by` linking items into a tree
+      broadcast: Omega capability : Disposition sub-states (`open` → several intermediate states before `closed`)
+      broadcast: Omega capability : `extra` jsonb forward-compat drawer
+      broadcast: Omega capability : Capability inventory as prose (`services_local.gitignore`)
+      broadcast: Omega capability : *(new, not in omega)* An explicit **claim** verb, separating "opened" from "someone is actively working it"
+      broadcast: Omega capability : *(new, not in omega)* One command stands up the whole mechanism for **any** project
+
+  gates/doc-legibility/README.md:39  label-column header = 'surface'
+      broadcast: surface : [`terms.md`](terms.md)
+      broadcast: surface : survey [`KEY.md`](../../research/obligations-formalisms-survey/KEY.md)
+      broadcast: surface : root [`GLOSSARY.md`](../../GLOSSARY.md)
+
+  law/adr/0007-file-size-and-information-density.md:81  label-column header = 'Content'
+      broadcast: Content : **Data tables, constant arrays, fixture literals**
+      broadcast: Content : **Numerical / decision logic**
+      broadcast: Content : **Docstrings / contracts**
+
+  law/briefs/BRIEF-CONFORMANCE-MAP.md:29  label-column header = 'Inv'
+      broadcast: Inv : I1
+      broadcast: Inv : I2
+      broadcast: Inv : I3
+      broadcast: Inv : I4
+      broadcast: Inv : I5
+      broadcast: Inv : I6
+      broadcast: Inv : I7
+      broadcast: Inv : I8
+      broadcast: Inv : I9
+      broadcast: Inv : I10
+      broadcast: Inv : I11
+      broadcast: Inv : I12
+
+  law/briefs/BRIEF-CONFORMANCE-MAP.md:46  label-column header = 'Item'
+      broadcast: Item : **F6** Tool qualification & provenance
+      broadcast: Item : **F16** Proof-artifact retention
+      broadcast: Item : **F2 / I7** Assumptions with validity bounds
+      broadcast: Item : **I9** Discharge-status honesty
+      broadcast: Item : **I12** Scope self-disclosure
+      broadcast: Item : **F53 / I2 / I6** Independence-attestation, subject-side
+      broadcast: Item : **F35 / I4 / I5** Ruling-spine delivery integrity
+      broadcast: Item : **G7 / I6** Independent check on subject work
+
+  law/briefs/incomplete-evidence/BRIEF.md:166  label-column header = 'Archived file'
+      broadcast: Archived file : `sources/IAASB_ISA_500_audit_evidence.pdf`
+      broadcast: Archived file : `sources/IAASB_ISA_230_audit_documentation.pdf`
+      broadcast: Archived file : `sources/IESBA_Code_of_Ethics_2024_Handbook.pdf`
+      broadcast: Archived file : `sources/ISO_15489-1_2016_official_sample.pdf`
+      broadcast: Archived file : `sources/MHRA_GxP_data_integrity_guidance_2018.pdf`
+
+  law/briefs/safety-critical-logging/BRIEF.md:132  label-column header = '#'
+      broadcast: # : **I1**
+      broadcast: # : **I2**
+      broadcast: # : **I3**
+      broadcast: # : **I4**
+      broadcast: # : **I5**
+      broadcast: # : **I6**
+      broadcast: # : **I7**
+      broadcast: # : **I8**
+      broadcast: # : **I9**
+      broadcast: # : **I10**
+      broadcast: # : **I11**
+      broadcast: # : **I12**
+
+  law/briefs/safety-critical-logging/BRIEF.md:161  label-column header = 'id'
+      broadcast: id : **G1 — Action record**
+      broadcast: id : **G2 — Requirement**
+      broadcast: id : **G3 — Hazard / classification**
+      broadcast: id : **G4 — Problem report**
+      broadcast: id : **G5 — Change request**
+      broadcast: id : **G6 — Verification result**
+      broadcast: id : **G7 — Independent check**
+      broadcast: id : **G8 — Configuration baseline**
+      broadcast: id : **G9 — Sign-off / liability transfer**
+      broadcast: id : **G10 — Flagged out-of-scope hazard**
+      broadcast: id : **G11 — Deviation**
+      broadcast: id : **G12 — Retention/access event**
+      broadcast: id : **G13 — Competence record**
+      broadcast: id : **G14 — Security-relevant change / assessment**
+      broadcast: id : **G15 — Human-factors / HMI record**
+
+  law/briefs/safety-critical-logging/BRIEF.md:183  label-column header = 'id'
+      broadcast: id : **F1 — Specification recorded**
+      broadcast: id : **F2 — Environment/assumption model**
+      broadcast: id : **F3 — Requirement→spec→proof traceability**
+      broadcast: id : **F4 — Proof-obligation discharge**
+      broadcast: id : **F5 — Proof aggregate metrics**
+      broadcast: id : **F6 — Tool qualification & provenance**
+      broadcast: id : **F7 — Refinement step**
+      broadcast: id : **F8 — Synthesis record**
+      broadcast: id : **F9 — Counterexample & resolution**
+      broadcast: id : **F10 — Soundness basis**
+      broadcast: id : **F11 — Challenge / validation theorem**
+      broadcast: id : **F12 — Assurance-case node**
+      broadcast: id : **F13 — Retention/legibility plan**
+      broadcast: id : **F14 — Timing / WCET & resource-bound record**
+      broadcast: id : **F15 — Common-cause / channel-independence record**
+      broadcast: id : **F16 — Proof-artifact retention**
+
+  law/briefs/safety-critical-logging/BRIEF.md:237  label-column header = 'Ledger field'
+      broadcast: Ledger field : `kind`
+      broadcast: Ledger field : `status`
+      broadcast: Ledger field : `evidence`
+      broadcast: Ledger field : `supersedes`
+
+  law/briefs/safety-critical-logging/intermediate/synthesis-draft.md:120  label-column header = '#'
+      broadcast: # : **I1**
+      broadcast: # : **I2**
+      broadcast: # : **I3**
+      broadcast: # : **I4**
+      broadcast: # : **I5**
+      broadcast: # : **I6**
+      broadcast: # : **I7**
+      broadcast: # : **I8**
+      broadcast: # : **I9**
+      broadcast: # : **I10**
+      broadcast: # : **I11**
+      broadcast: # : **I12**
+
+  law/briefs/safety-critical-logging/intermediate/synthesis-draft.md:145  label-column header = 'id'
+      broadcast: id : **G1 — Action record**
+      broadcast: id : **G2 — Requirement**
+      broadcast: id : **G3 — Hazard / classification**
+      broadcast: id : **G4 — Problem report**
+      broadcast: id : **G5 — Change request**
+      broadcast: id : **G6 — Verification result**
+      broadcast: id : **G7 — Independent check**
+      broadcast: id : **G8 — Configuration baseline**
+      broadcast: id : **G9 — Sign-off / liability transfer**
+      broadcast: id : **G10 — Flagged out-of-scope hazard**
+      broadcast: id : **G11 — Deviation**
+      broadcast: id : **G12 — Retention/access event**
+
+  law/briefs/safety-critical-logging/intermediate/synthesis-draft.md:164  label-column header = 'id'
+      broadcast: id : **F1 — Specification recorded**
+      broadcast: id : **F2 — Environment/assumption model**
+      broadcast: id : **F3 — Requirement→spec→proof traceability**
+      broadcast: id : **F4 — Proof-obligation discharge**
+      broadcast: id : **F5 — Proof aggregate metrics**
+      broadcast: id : **F6 — Tool qualification & provenance**
+      broadcast: id : **F7 — Refinement step**
+      broadcast: id : **F8 — Synthesis record**
+      broadcast: id : **F9 — Counterexample & resolution**
+      broadcast: id : **F10 — Soundness basis**
+      broadcast: id : **F11 — Challenge / validation theorem**
+      broadcast: id : **F12 — Assurance-case node**
+
+  law/briefs/safety-critical-logging/intermediate/synthesis-draft.md:219  label-column header = 'Ledger field'
+      broadcast: Ledger field : `kind`
+      broadcast: Ledger field : `status`
+      broadcast: Ledger field : `evidence`
+      broadcast: Ledger field : `supersedes`
+
+  provenance/LAYOUT.md:157  label-column header = 'Directory'
+      broadcast: Directory : root files
+      broadcast: Directory : `bootstrap/`
+      broadcast: Directory : `law/adr/`
+      broadcast: Directory : `law/briefs/`
+      broadcast: Directory : `judgment/`
+      broadcast: Directory : `kernel/lineage/`
+      broadcast: Directory : `kernel/fixtures/`
+      broadcast: Directory : `stores/`
+      broadcast: Directory : `instruments/`
+      broadcast: Directory : `instruments/act_stream/`
+      broadcast: Directory : `engine/`
+      broadcast: Directory : `gates/`
+      broadcast: Directory : `filing/`
+      broadcast: Directory : `hooks/`
+      broadcast: Directory : `drive/`
+      broadcast: Directory : `seen-red/`
+      broadcast: Directory : `design/`
+      broadcast: Directory : `research/`
+      broadcast: Directory : `runs/`
+      broadcast: Directory : `ephemera/`
+      broadcast: Directory : `provenance/`
+
+  provenance/MIGRATION-MANIFEST.md:25  label-column header = 'Disposition'
+      broadcast: Disposition : MIGRATE
+      broadcast: Disposition : ATTIC-STAYS
+      broadcast: Disposition : EVIDENCE-STAYS
+      broadcast: Disposition : DEAD
+
+  provenance/MIGRATION-MANIFEST.md:137  label-column header = 'Source'
+      broadcast: Source : `README.md`
+      broadcast: Source : `CLAUDE.md`
+      broadcast: Source : `GLOSSARY.md`
+      broadcast: Source : `BACKLOG.md`
+      broadcast: Source : `HANDOFF.md`
+      broadcast: Source : `OOM-TMPFS-INCIDENT-2026-07-02.md`
+      broadcast: Source : `PUBLISHING.md`
+      broadcast: Source : `.claude/settings.json`
+      broadcast: Source : `.gitignore`
+      broadcast: Source : `docs/CONSOLIDATION-MANDATE.md`
+      broadcast: Source : `docs/consolidation/` (3 files, this design)
+      broadcast: Source : `docs/ARCHITECTURE.md`
+      broadcast: Source : `docs/SHIPPING-NORTH-STAR.md`
+      broadcast: Source : `docs/possibly-addressable-concerns.md`
+      broadcast: Source : `docs/publish-commit-map-2026-07-07.txt`
+      broadcast: Source : `docs/evidence-strays/…` (1)
+      broadcast: Source : `docs/bug-reports/*.md` (3)
+      broadcast: Source : `docs/bug-reports/.probe_test.txt`
+      broadcast: Source : `docs/work-units/*` (3)
+
+  provenance/MIGRATION-MANIFEST.md:161  label-column header = 'Source'
+      broadcast: Source : `db/harness/001_research_ledger.sql`
+      broadcast: Source : `db/harness/002_rationalization_ledger.sql`
+      broadcast: Source : `db/harness/003_acts_stream.sql`
+      broadcast: Source : `db/harness/004_rulings_ledger.sql`
+      broadcast: Source : `db/harness/005_findings_ledger.sql`
+      broadcast: Source : `db/harness/006_foreclosure_debt.sql`
+      broadcast: Source : `db/harness/006_foreclosure_debt_fixture.py`
+      broadcast: Source : `db/harness/007_ruling_delivers_fk.sql`
+      broadcast: Source : `db/harness/007_ruling_delivers_fixture.py`
+      broadcast: Source : `experiments/fact-mining/test_rationalization_ledger.py`
+
+  provenance/MIGRATION-MANIFEST.md:176  label-column header = 'Source'
+      broadcast: Source : `tools/staging_guard.py`
+      broadcast: Source : `tools/no_lazy_imports.py`
+      broadcast: Source : `tools/no_destructive_ddl.py`
+      broadcast: Source : `tools/append_only_integrity.py`
+      broadcast: Source : `tools/findings_gate.py`
+      broadcast: Source : `tools/findings_gate_fixture.py`
+      broadcast: Source : `tools/doc-legibility/` (4 files)
+      broadcast: Source : `tools/standing_service_gate.py`
+      broadcast: Source : `tools/file_finding.py`
+      broadcast: Source : `tools/file_foreclosure.py`
+      broadcast: Source : `tools/file_resolution.py`
+      broadcast: Source : `tools/file_rationalization.py`
+      broadcast: Source : `tools/persist_claude_ephemera.py`
+      broadcast: Source : `tools/hooks/pre-commit`
+      broadcast: Source : `tools/hooks/stamp_provenance.py`
+
+  provenance/MIGRATION-MANIFEST.md:196  label-column header = 'Source'
+      broadcast: Source : `docs/adr/0000…0016` (17 files)
+      broadcast: Source : `docs/adr-evidence/seen-red/**` (44 files, 17 gate dirs)
+      broadcast: Source : `docs/adr-evidence/foreclosure-waiver-requests.md`
+
+  provenance/MIGRATION-MANIFEST.md:204  label-column header = 'Source'
+      broadcast: Source : `design-notes/review-fixpoint-protocol.md`
+      broadcast: Source : `design-notes/never-again-mechanism-fable-main.md`
+      broadcast: Source : `design-notes/never-again-mechanism-fable-consult.md`
+      broadcast: Source : `design-notes/never-again-synthesis.md`
+      broadcast: Source : `design-notes/policy-authoring-seam.md`
+      broadcast: Source : `design-notes/deductive-engine-fable-main-shape.md`
+      broadcast: Source : `design-notes/human-side-fragility.md`
+
+  provenance/MIGRATION-MANIFEST.md:216  label-column header = 'Source'
+      broadcast: Source : `research/2026-06-27-foundational-map/` (12)
+      broadcast: Source : `research/2026-06-27-logic-investigation/` (18)
+      broadcast: Source : `research/2026-06-27-logic-fair-trials/` (18)
+      broadcast: Source : `research/2026-06-27-obligations-formalisms-survey/` (35)
+      broadcast: Source : `research/2026-07-02-nlp-logic-interface/` (7)
+
+  provenance/MIGRATION-MANIFEST.md:237  label-column header = 'Source (`experiments/fact-mining/`)'
+      broadcast: Source (`experiments/fact-mining/`) : `ledger_edb.py`
+      broadcast: Source (`experiments/fact-mining/`) : `ledger_floor.py`
+      broadcast: Source (`experiments/fact-mining/`) : `ledger_differential.py`
+      broadcast: Source (`experiments/fact-mining/`) : `clingo_run.py`
+      broadcast: Source (`experiments/fact-mining/`) : `acts_edb.py`
+      broadcast: Source (`experiments/fact-mining/`) : `acts_join.py`
+      broadcast: Source (`experiments/fact-mining/`) : `ledger_acts_scratch.py`
+      broadcast: Source (`experiments/fact-mining/`) : `ledger_diff_scratch.py`
+      broadcast: Source (`experiments/fact-mining/`) : `ledger_dto_scratch.py`
+      broadcast: Source (`experiments/fact-mining/`) : `ledger_support_scratch.py`
+      broadcast: Source (`experiments/fact-mining/`) : `dto_authentic_verify.py`
+      broadcast: Source (`experiments/fact-mining/`) : `judgment_registry.py`
+      broadcast: Source (`experiments/fact-mining/`) : `registry_baseline.json`
+      broadcast: Source (`experiments/fact-mining/`) : `verify_registry_parity.py`
+      broadcast: Source (`experiments/fact-mining/`) : `law_census.py`
+      broadcast: Source (`experiments/fact-mining/`) : `law_census_entries.py`
+      broadcast: Source (`experiments/fact-mining/`) : `ledger_acts.lp`
+      broadcast: Source (`experiments/fact-mining/`) : `ledger_assumes.lp`
+      broadcast: Source (`experiments/fact-mining/`) : `ledger_dto.lp`
+      broadcast: Source (`experiments/fact-mining/`) : `ledger_support.lp`
+      broadcast: Source (`experiments/fact-mining/`) : `ledger_tnow.lp`
+      broadcast: Source (`experiments/fact-mining/`) : `test_ledger_acts.py`
+      broadcast: Source (`experiments/fact-mining/`) : `test_ledger_marriage.py`
+      broadcast: Source (`experiments/fact-mining/`) : `test_ledger_support.py`
+      broadcast: Source (`experiments/fact-mining/`) : `test_acts_join.py`
+
+  provenance/MIGRATION-MANIFEST.md:267  label-column header = 'Source'
+      broadcast: Source : `row_performed_by.py`
+      broadcast: Source : `verify_binder.py`
+      broadcast: Source : `verify_operator_turns.py`
+      broadcast: Source : `verify_relevant_act.py`
+
+  provenance/MIGRATION-MANIFEST.md:280  label-column header = 'Source (`experiments/fact-mining/`)'
+      broadcast: Source (`experiments/fact-mining/`) : `README.md`, `BOOTSTRAP.md`
+      broadcast: Source (`experiments/fact-mining/`) : `nlp_server.py`, `nlp_client.py`, `nlp_docs_client.py`, `nlp_cache.py`, `docbin_cache.py`
+      broadcast: Source (`experiments/fact-mining/`) : `coref_decode_{server,daemon,client,wire,inputs}.py`, `coref_host_shell.py`, `run_coref_stack.py`
+      broadcast: Source (`experiments/fact-mining/`) : `jax_deberta.py`, `jax_decode.py`, `jax_only_guard.py`, `deberta_weights.py`, `deberta_export_codec.py`, `export_deberta_maverick.py`, `validate_deberta_keyset.py`, `enumerate_ckpt_globals.py`, `maverick_load.py`, `capture_fixtures.py`, `profile_decode.py`
+      broadcast: Source (`experiments/fact-mining/`) : `gliner_{server,client,wire,enrich}.py`, `measure_gliner_quality.py`
+      broadcast: Source (`experiments/fact-mining/`) : `extract.py`, `resolve.py`, `resolve_coref.py`, `load_facts.py`, `standalone_preprocess.py`, `transcript_prose.py`, `shape_buckets.py`, `spans.py`, `span_store.py`, `staging.py`, `scrub.py`, `wire_types.py`, `readiness.py`, `bound_socket.py`, `boot_id.py`, `hook_trial.py`, `measure_vocab_growth.py`
+      broadcast: Source (`experiments/fact-mining/`) : `kb_{ledger,writer,why,migrate}.py`, `logic_backend.py`, `logic_layer.lp`, `logic_repair.lp`, `why_layer.lp`, `why_orphaned.sql`, `rsup_esc.sql`, `l2_check.py` (churn-candidate [C8]), `fde_z3.py`, `qty_z3.py`, `unsat_core_z3.py`
+      broadcast: Source (`experiments/fact-mining/`) : `contra_{app,asp,context,detect}.py`, `contra_schema.sql`, `fixtures/contra_synthetic.txt`
+      broadcast: Source (`experiments/fact-mining/`) : `schema.sql`, `trace_schema.sql`
+      broadcast: Source (`experiments/fact-mining/`) : `standing_service_registry.py`, `conftest.py`
+      broadcast: Source (`experiments/fact-mining/`) : `parse_seam/` (7 files)
+      broadcast: Source (`experiments/fact-mining/`) : `nla_lab/` (50 files)
+      broadcast: Source (`experiments/fact-mining/`) : `test_*.py` (69 files: all root tests except the 5 engine/store tests migrated in A8/A2)
+
+  provenance/MIGRATION-MANIFEST.md:298  label-column header = 'Source'
+      broadcast: Source : `experiments/adjudicate/` (21 files)
+      broadcast: Source : `experiments/impedance/` (31 files)
+      broadcast: Source : `experiments/stamp-lab/` (3 files)
+
+  provenance/MIGRATION-MANIFEST.md:306  label-column header = 'Source (`…/fact-mining/docs/`)'
+      broadcast: Source (`…/fact-mining/docs/`) : `LEDGER-LOGIC-MARRIAGE.md`
+      broadcast: Source (`…/fact-mining/docs/`) : `LOGIC-LAYER-ASP.md`
+      broadcast: Source (`…/fact-mining/docs/`) : `LOGIC-LAYER-SEAM.md`
+      broadcast: Source (`…/fact-mining/docs/`) : `HOOK-DESIGN.md`
+      broadcast: Source (`…/fact-mining/docs/`) : `DEPLOYMENT-ROADMAP.md`
+      broadcast: Source (`…/fact-mining/docs/`) : `safety-critical-logging-standards/` (17 files incl. sources/)
+      broadcast: Source (`…/fact-mining/docs/`) : `incomplete-evidence-standards/` (6 files incl. sources/)
+      broadcast: Source (`…/fact-mining/docs/`) : `CONTRADICTION-DEMO.md`, `CONTRADICTION-DEMO-DESIGN.md`
+      broadcast: Source (`…/fact-mining/docs/`) : `NLA-OPTIMIZATION-PORTFOLIO.md`, `NLA-OPTIMIZATION-PORTFOLIO-RESIDUE-1.md`
+      broadcast: Source (`…/fact-mining/docs/`) : `HANDOFF.md`, `RELEASE-LEGAL-CONSULT.md`, `decode_forward.dot`, `decode_math.tex`
+      broadcast: Source (`…/fact-mining/docs/`) : `hook-trial/` (27 files)
+      broadcast: Source (`…/fact-mining/docs/`) : `recidivism-study/` (35 files)
+      broadcast: Source (`…/fact-mining/docs/`) : `ledger-marriage/` (24 files)
+      broadcast: Source (`…/fact-mining/docs/`) : `audit-evidence/` (12 files)
+
+  provenance/MIGRATION-MANIFEST.md:329  label-column header = 'Source'
+      broadcast: Source : `POST-FABLE-OPERATING-BRIEF.md`
+      broadcast: Source : `BRIEF-CONFORMANCE-MAP.md`
+      broadcast: Source : `FINDINGS.md`
+      broadcast: Source : `RATIFICATION.md`
+      broadcast: Source : `marriage-increment-1-closeout.md`
+      broadcast: Source : `harness/workflow-mechanics-lab.md`
+      broadcast: Source : `docs/deletions.md`
+      broadcast: Source : `e6…e9-operator-protocol.md` (4)
+      broadcast: Source : `publish-commit-map-2026-07-07.txt`
+      broadcast: Source : `tainted/e9-design-consult-9.TAINTED.md`
+      broadcast: Source : `.gitignore`
+
+  provenance/MIGRATION-MANIFEST.md:362  label-column header = 'Source'
+      broadcast: Source : `tools/act_stream/contract.py`
+      broadcast: Source : `tools/act_stream/claude_code_adapter.py`
+      broadcast: Source : `tools/act_stream/verify_adapter.py`
+      broadcast: Source : `tools/act_stream/verify_bash_write.py`
+      broadcast: Source : `tools/act_stream/fixtures/syn_session/` (2)
+      broadcast: Source : `tools/hooks/pre-commit`
+
+  provenance/MIGRATION-MANIFEST.md:373  label-column header = 'Source'
+      broadcast: Source : `harness/launch_subject.sh`
+      broadcast: Source : `harness/e18-build/arm_e18.sh`
+      broadcast: Source : `harness/e18-build/freeze_manifest.sh`
+      broadcast: Source : `harness/e17-build/launch.conf`
+      broadcast: Source : `harness/e14-build/delivery_drill.py`
+      broadcast: Source : `harness/e14-build/gate_probe.py`
+      broadcast: Source : `harness/e18-build/adjudicate_repro.py`
+      broadcast: Source : `harness/e15-build/rehearsal/{anchor_pre_registration,make_mock_session,rehearse}.py`
+      broadcast: Source : `harness/e14-build/pretooluse_change_policy.py`
+      broadcast: Source : `harness/e17-build/stamp_intercept.py`
+      broadcast: Source : `harness/e9-build/s10-schema.sql`
+      broadcast: Source : `harness/e10-build/s11-schema.sql`
+      broadcast: Source : `harness/e11-build/s12-schema.sql`
+      broadcast: Source : `harness/e13-build/s13-schema.sql`
+      broadcast: Source : `harness/e14-build/s14-schema.sql`
+      broadcast: Source : `harness/e14-build/nla/nla-schema.sql`
+      broadcast: Source : `harness/e15-build/s15-schema.sql`
+      broadcast: Source : `harness/e15-build/s13-review_detail-truncate-guard-remediation.sql`
+      broadcast: Source : `harness/e17-build/s17-stamp-mechanism.sql`
+      broadcast: Source : `harness/e17-build/s17-independence-vocabulary.sql`
+      broadcast: Source : `harness/e18-build/s18-criterion-principals.sql`
+      broadcast: Source : `harness/e17-build/s17_stamp_fixture.py`
+      broadcast: Source : `harness/e17-build/s17_independence_fixture.py`
+      broadcast: Source : `harness/e15-build/readiness_vs_close_fixture.py`
+      broadcast: Source : `harness/e16-build/FINDINGS-RATIFICATION-PACKAGE.md`
+      broadcast: Source : `harness/e17-build/FINDINGS-RATIFICATION-PACKAGE.md`
+
+  provenance/PATH-TRANSLATION.md:13  label-column header = 'Old-repo prefix'
+      broadcast: Old-repo prefix : `claude_harness/docs/adr/`
+      broadcast: Old-repo prefix : `claude_harness/docs/adr-evidence/seen-red/`
+      broadcast: Old-repo prefix : `claude_harness/docs/design-notes/`
+      broadcast: Old-repo prefix : `claude_harness/docs/research/2026-06-27-foundational-map/`
+      broadcast: Old-repo prefix : `claude_harness/docs/research/2026-06-27-logic-investigation/`
+      broadcast: Old-repo prefix : `claude_harness/docs/research/2026-06-27-logic-fair-trials/`
+      broadcast: Old-repo prefix : `claude_harness/docs/research/2026-06-27-obligations-formalisms-survey/`
+      broadcast: Old-repo prefix : `claude_harness/docs/research/2026-07-02-nlp-logic-interface/`
+      broadcast: Old-repo prefix : `claude_harness/db/harness/`
+      broadcast: Old-repo prefix : `claude_harness/tools/` (gates)
+      broadcast: Old-repo prefix : `claude_harness/tools/` (filing)
+      broadcast: Old-repo prefix : `claude_harness/tools/hooks/`
+      broadcast: Old-repo prefix : `claude_harness/experiments/fact-mining/` (engine)
+      broadcast: Old-repo prefix : `claude_harness/experiments/fact-mining/{row_performed_by,verify_binder,verify_operator_turns,verify_relevant_act}.py`
+      broadcast: Old-repo prefix : `claude_harness/experiments/fact-mining/docs/{LEDGER-LOGIC-MARRIAGE,LOGIC-LAYER-*,HOOK-DESIGN,DEPLOYMENT-ROADMAP}.md`
+      broadcast: Old-repo prefix : `claude_harness/experiments/fact-mining/docs/safety-critical-logging-standards/`
+      broadcast: Old-repo prefix : `claude_harness/experiments/fact-mining/docs/incomplete-evidence-standards/`
+      broadcast: Old-repo prefix : `epistemic-operator/instruments/`
+      broadcast: Old-repo prefix : `epistemic-operator/tools/act_stream/`
+      broadcast: Old-repo prefix : `epistemic-operator/harness/e*-build/` (DDL)
+      broadcast: Old-repo prefix : `epistemic-operator/harness/e*-build/` (machinery)
+      broadcast: Old-repo prefix : `epistemic-operator/consults/` (GOVERNS)
+      broadcast: Old-repo prefix : `epistemic-operator/POST-FABLE-OPERATING-BRIEF.md`
+      broadcast: Old-repo prefix : `epistemic-operator/FINDINGS.md`
+      broadcast: Old-repo prefix : `epistemic-operator/BRIEF-CONFORMANCE-MAP.md`
+
