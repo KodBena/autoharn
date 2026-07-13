@@ -84,6 +84,21 @@ loop-until-dry criterion in more depth, and
 exactly this shape — two agent roles, fresh-fork-per-round, a two-round cap, and a named
 escalation path for when the loop does not converge.
 
+**My workflow script just crashed / hung / did something baffling — is this a known
+shape?** Maybe — check first. Five gotchas have each bitten this project's own
+workflow scripts more than once (args arriving as an already-parsed JSON value rather
+than a string needing a parse, model-pinning on every dispatch call, the ban on
+calling `Date.now()`/`Math.random()` inside a script a durable workflow runtime may
+resume or replay from a checkpoint — either call can return a different value on
+resume and silently steer the script down a different path than it took the first
+time, stall-vs-crash as opposite-cause failure shapes needing opposite diagnoses, and
+a workflow run's own journal (its append-only `.jsonl` log of what each round did)
+carrying `result` fields that are repr-strings, not nested JSON) — four with a dated
+incident on record, one (the Date.now()/Math.random() ban) stated as a general hazard
+with no located incident yet — each with a stated fix regardless. Read
+[ORCH-WORKFLOW-SCRIPT-GOTCHAS-RECIPE.md](ORCH-WORKFLOW-SCRIPT-GOTCHAS-RECIPE.md)
+before writing a new workflow script, or when one fails in an unfamiliar way.
+
 ## Declaring things on the ledger
 
 **Can I declare which tools/services/agents this project may, should, must, or must not
