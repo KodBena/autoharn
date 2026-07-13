@@ -1,464 +1,315 @@
 # ADR-0009: Performance Investigation Discipline
 
 - **Status:** Accepted
-- **Genre:** Tenet (cross-cutting authoring discipline) — the seventh tenet,
-  after ADR-0002 (fail loudly), ADR-0004 (minimal-touch), ADR-0005
-  (documentation discipline), ADR-0006 (source-file headers), ADR-0007 (file
-  size and information density), and ADR-0008 (classification discipline).
-  Sibling of ADR-0008: same shape of unsubstantiated-claim failure, different
-  domain — classification discipline forbids fuzzy vocabulary-fit; this tenet
-  forbids unsubstantiated perf-fit ("this is faster," "this regressed," "no
-  change," "behaviorally equivalent") against the closed vocabulary of perf
+- **Genre:** Tenet (cross-cutting authoring discipline). Sibling of ADR-0008: same shape of
+  unsubstantiated-claim failure, different domain — classification discipline forbids fuzzy
+  vocabulary-fit; this tenet forbids unsubstantiated perf-fit ("this is faster," "this
+  regressed," "no change," "behaviorally equivalent") against the closed vocabulary of perf
   and equivalence claims.
-- **Date:** 2026-06-15
-- **Provenance:** Transferred from the LengYue ADR corpus. The tenet (a perf
-  claim is honest only when its investigation is captured and reproducible)
-  is universal. LengYue's tool surface was browser DevTools / Firefox-profiler
-  for a Vue SPA; chocofarm's perf surface is an ML/search hot path
-  (numpy/JAX/numba), so the tool surface, the metric vocabulary, and the
-  equivalence bar are re-instanced around chocofarm's real discipline. The
-  tenet survives the substitution; only the tooling changes.
-  **[This bracket records a re-instancing, done a second time, 2026-07-12,
-  maintainer YES, a dated bracketed-edit per ADR-0005 Rule 8. In plain words
-  first: this document's
-  rule is that a "this got faster" or "these two things behave the same"
-  claim is only honest when the evidence for it is written down somewhere
-  reproducible — this bracket says which project's evidence-capturing tools
-  that rule now points at. This document arrived in autoharn as an unadapted
-  copy of the chocofarm original above — this is a dated append per ADR-0005
-  Rule 8, so the original sentence stands untouched above this bracket, and
-  what follows is the correction. The same failure this Provenance sentence
-  already describes surviving once (LengYue's browser tooling → chocofarm's
-  ML tooling) survives it again here (chocofarm's ML tooling →
-  autoharn's own tooling): autoharn does not have a machine-learning hot
-  path to benchmark; instead it has (1) a "kernel" — this project's
-  append-only governance ledger and its Postgres schema, extended over time
-  by dated, versioned changes called a "lineage," each change a "delta,"
-  each delta's application to a fresh copy of the schema an "apply" — whose
-  apply time is a measurable perf quantity; and (2) `./judge`, a check that
-  computes the same verdict two independent ways (once via the clingo/ASP
-  logic engine — ASP is Answer Set Programming, the declarative logic
-  language the `clingo` tool solves — once via a plain SQL query) and
-  compares them — an
-  equivalence claim in the sense this ADR already disciplines. See the dated
-  Amendment at the foot of this document for the full tool-surface and
-  metric-vocabulary mapping onto these two things. The entire chocofarm-era
-  body of this document below this header — Context, Decision (Triggers,
-  Tools, Metric vocabulary, Acceptance criteria), Calibration, Consequences,
-  Exceptions, Revisit-when, Related, and the pre-existing 2026-06-24
-  Amendment — is retained exactly as authored, as the point-in-time record
-  of the discipline this tenet transferred with (ADR-0005 Rule 8; the same
-  never-retro-edit posture ADR-0000's and ADR-0013's own dated amendments at
-  the foot of those documents apply to their own frozen substrates). It is
-  illustrative history now, not this project's binding surface — the binding
-  surface is the rewritten Scope immediately below and the new
-  2026-07-12 Amendment at the foot of this document.]**
-- **Scope:** All authoring work that asserts a performance or
-  equivalence property — a speedup, a regression, a null result, or "the
-  optimized path matches the baseline" — across autoharn's own
-  experiment/investigation surface: the kernel/engine differential and
-  equivalence machinery (`engine/contemp_edb.py`, `engine/contemp_floor.py`,
-  `engine/contemp_differential.py`, and `./judge`'s ASP-vs-SQL marriage —
-  every ledger verdict derived independently in ASP and in SQL and compared),
-  kernel-lineage/delta-apply timing (see the Provenance bracket above for
-  what those two words mean), and any perf or equivalence claim recorded via
-  the research ledger (`stores/001_research_ledger.sql`,
-  `filing/record_reading.py`). Applies to any commit, BACKLOG.md entry, or PR
-  that lands a change to that surface and asserts it is faster, regressed,
-  unchanged, or behaviorally/logically equivalent.
-  **[This bracket records a re-instancing, 2026-07-12, for autoharn, a
-  dated bracketed-edit per ADR-0005 Rule 8. The original Scope sentence this
-  replaces bound "the `chocofarm/`
-  package. Applies to the perf write-ups (`docs/results/az-perf.md`,
-  `az-jax-perf.md`), the bench harnesses, and any PR or note that lands a
-  hot-path change." — preserved verbatim here, not deleted, exactly as
-  ADR-0005 Rule 8 requires for a point-in-time record; the sentence above
-  this bracket is what now governs.]**
+- **Date:** 2026-06-15 (original); re-instanced for autoharn 2026-07-12; refactored for
+  portability 2026-07-13 (below).
+- **Provenance:** The tenet is universal: a perf claim is honest only when its investigation
+  is captured and reproducible. It has now transferred twice across hot-path substrates — a
+  browser-tooling project's DevTools/profiler surface, then a numpy/JAX/ML search hot path —
+  and each time only the **tool surface and metric vocabulary** changed, never the rule. See
+  the Extracted records below for the two prior substrates' full detail, kept as dated
+  evidence.
+- **Scope:** All authoring work that asserts a performance or equivalence property — a
+  speedup, a regression, a null result, or "the optimized path matches the baseline" — across
+  a project's own experiment/investigation surface, and any perf or equivalence claim recorded
+  in a project's research/decision record. Applies to any commit, tracker entry, or PR that
+  lands a change to that surface and asserts it is faster, regressed, unchanged, or
+  behaviorally/logically equivalent. A hosting deployment's own experiment surface — which
+  files, which harnesses, which store — is named in its own **Instance bindings** section
+  below, not here.
+
+*Refactored for cross-project portability on 2026-07-13 under
+[`design/MAINT-ADR-PORTABILITY-SPEC.md`](../../design/MAINT-ADR-PORTABILITY-SPEC.md)
+(tracker `adr-portability-refactor`, maintainer-ratified
+2026-07-13). The pre-refactor text stands verbatim at commit `ff691bb`; extracted records live
+in [`history/0009-chocofarm-perf-discipline.md`](history/0009-chocofarm-perf-discipline.md) and
+[`history/0009-autoharn-reinstancement-2026-07-12.md`](history/0009-autoharn-reinstancement-2026-07-12.md)
+and are not retro-edited. This ADR is the corpus's own precedent for the whole refactor: its
+2026-07-12 amendment already declared the prior body "illustrative history now, not this
+project's binding surface" (preserved in the second history file above) — this pass completes
+that declaration by physically relocating the prose the amendment had already disowned, and
+rebuilding the document below from its spine, its generic two-tier calibration, and the
+amendment's content as a first-class Instance-bindings section, in the shape
+[ADR-0017](0017-the-zero-context-reader.md) already models (a portable core, a
+non-portable "Instance bindings" section an adopter replaces wholesale).*
 
 ## Context
 
-chocofarm's hot path is the AlphaZero/Gumbel search and the JAX/numba forward,
-not a browser render loop. The project already has a real, disciplined perf
-posture — it just hasn't been named as a tenet. Three artifacts carry it:
+A perf-property or equivalence claim is a **closed-vocabulary claim** exactly in ADR-0008's
+sense: "faster," "regressed," "no change," and "behaviorally equivalent" are not adjectives —
+they are assertions against a specific, checkable bar, and the claim is honest only when its
+substantiation is attached. Three failure modes recur wherever this tenet is missing:
 
-- **`docs/results/az-perf.md` / `az-jax-perf.md`** — the captured perf
-  write-ups. They report before/after numbers under a pinned, reproducible
-  scenario (e.g. "cold seeded net hidden=256, m=12 n_sims=48, λ₀=0.0855, 20
-  episodes, warmed"), not author intuition.
-- **`chocofarm/az/bench/bench_hotpath.py`** — the per-component
-  micro-benchmark of the search hot path. Each component (`env.marginals`,
-  `features.build`, the forward) is timed **in isolation on representative
-  captured states** (`states.npz`, beliefs from 15,504 worlds down to 1) so
-  "an optimization is validated one component at a time, before/after, and a
-  speedup claim is never an artifact of episode-level noise."
-- **`chocofarm/az/bench/bench_equivalence.py`** — the behavioral-equivalence
-  harness for the float32 + numba optimization.
+- **A perf claim without a captured before/after.** "The optimized path is faster" with no
+  timing evidence attached is the closest-match-selection failure ADR-0008's positive register
+  forbids — a defensible-looking classification picked without verification.
+- **An "equivalent" claim without the equivalence evidence.** "The optimized path matches" with
+  no equivalence-harness result attached is the same failure in the equivalence register: a
+  silent divergence an unrun check would miss.
+- **Per-investigation tool re-derivation.** Each ad-hoc perf check re-deriving its own timing
+  scaffolding and its own scenario. The cost compounds and comparability across investigations
+  drops; a shared harness and a shared metric vocabulary exist precisely to prevent this.
 
-The thing that makes chocofarm's perf register distinctive is the **two-tier
-equivalence bar**, because a perf optimization here changes floating-point
-results:
-
-1. **Bit / exact, for the logic invariant.** Where an invariant is a logic
-   fact rather than a numeric one — "exactly zero mass on illegal action
-   slots" — it is asserted exactly (`== 0.0`). float32 may not perturb it.
-2. **Aggregate behavioral, for the numerics.** float32 + numba *will* change
-   floats and flip near-tied argmax / Sequential-Halving choices, so the bar
-   is **not** bit- or per-decision equality (it can't be). It is **aggregate
-   behavioral equivalence**: the optimized policy's fixed-λ₀ rate, mean E[T],
-   and action distribution must be statistically indistinguishable from the
-   float64 baseline over N≥300 episodes across ≥2 seeds, within Monte-Carlo
-   CI — and the MC standard error is reported so "indistinguishable" is a
-   number, not an eyeball.
-3. **A tighter bar where it is achievable.** The jax/numpy forward
-   equivalence test (`tests/test_jax_equivalence.py`) holds the f64 / f32 /
-   jax forwards to `ABS_TOL = 1e-4` (comfortably above observed float error,
-   below any behaviorally-meaningful difference) — the bit-near-identity
-   contract that makes consolidating the four forward implementations (the
-   audit's R11 `ForwardSpec`) *safe to attempt*.
-
-The failure modes this tenet exists to forbid are the chocofarm analogs of
-the ones any perf register has:
-
-- **A perf claim without a captured before/after.** "The numba kernel is
-  faster" with no `bench_hotpath` run attached is the closest-match selection
-  ADR-0008's positive register forbids — a defensible-looking classification
-  picked without verification.
-- **An "equivalent" claim without the equivalence harness.** "The float32
-  path matches" without `bench_equivalence`'s CI-overlap evidence is the same
-  failure in the equivalence register. The audit's `max|Δp| = 0.0082`
-  finding — a reproduced stale-weight divergence in the f32 cache — is exactly
-  the kind of silent divergence an unrun equivalence check would miss
-  (and which the rebind-not-mutate invariant of ADR-0001 closes).
-- **Per-investigation tool re-derivation.** Each ad-hoc perf check
-  re-deriving its own timing scaffolding and its own scenario. The cost
-  compounds; comparability across investigations drops. The bench harnesses
-  exist precisely so the scaffolding is shared.
-
-The structural root is the same one ADR-0002 names at the runtime level and
-ADR-0008 at the classification level: when a closed-vocabulary claim is being
-made, the claim is honest only when its substantiation is attached.
+The structural root is the one ADR-0002 names at the runtime level and ADR-0008 names at the
+classification level: when a closed-vocabulary claim is made, it is honest only when its
+substantiation is attached. This tenet is that root applied to the perf/equivalence register.
+(The dated, first-person evidence this rule generalizes from — a two-tier bit-vs-behavioral
+bar proven out on a real ML search hot path, and the specific failure modes it caught — is
+preserved in full at the Extracted records below, not restated here.)
 
 ## Decision
 
-We adopt **Performance Investigation Discipline** as a codebase-wide tenet. A
-perf-property or equivalence claim — speedup, regression, null result, or
-"matches the baseline" — is honest only when the investigation behind it is
-captured in a form the next reader can reproduce.
+We adopt **Performance Investigation Discipline** as a codebase-wide tenet. A perf-property or
+equivalence claim — speedup, regression, null result, or "matches the baseline" — is honest
+only when the investigation behind it is captured in a form the next reader can reproduce.
 
 ### Triggers — when to capture
 
-1. **Before claiming a speedup landed.** A perf write-up or PR that asserts a
-   hot-path change made something faster attaches the before/after numbers
-   from `bench_hotpath` (per-component, on the captured states) or an
-   episode-level capture under a pinned scenario. Without the pair, the claim
-   reduces to author intuition.
-2. **Before claiming the optimized path is equivalent to the baseline.** A
-   float32 / numba / forward-consolidation change attaches the equivalence
-   evidence: the `== 0.0` logic invariant for the exact part, and
-   `bench_equivalence`'s CI-overlapping rate / E[T] / action-distribution for
-   the behavioral part, or `tests/test_jax_equivalence.py`'s `ABS_TOL = 1e-4`
-   for the forward. "Equivalent" is a claim against the equivalence
-   vocabulary and needs the same substantiation a speedup does.
-3. **Before/after a structural refactor of the hot path** (the forward
-   consolidation, the parallel substrate, the feature builder). A baseline
-   capture before the refactor lands gives a reference point if a felt or
-   measured regression surfaces later.
+1. **Before claiming a speedup landed.** A perf write-up or PR that asserts a hot-path change
+   made something faster attaches the before/after numbers from a per-component timing harness
+   (run on a representative, captured state) or a pinned end-to-end capture. Without the pair,
+   the claim reduces to author intuition.
+2. **Before claiming the optimized path is equivalent to the baseline.** A claim of "equivalent"
+   attaches the equivalence evidence appropriate to the quantity's kind (see Calibration):
+   exact assertion for a logic invariant, statistical-indistinguishability evidence for a
+   float-/noise-sensitive numeric. "Equivalent" is a claim against the equivalence vocabulary
+   and needs the same substantiation a speedup does.
+3. **Before/after a structural refactor of a hot path.** A baseline capture before the refactor
+   lands gives a reference point if a felt or measured regression surfaces later.
 
-### Tools — canonical surface
+### Tools — what the discipline requires, generically
 
-The canonical chocofarm perf surface (swap-the-tool, keep-the-tenet from
-LengYue's browser surface):
+The discipline requires three kinds of capability, named generically here; a hosting
+deployment's concrete tool names live in its own Instance-bindings section:
 
-- **`bench_hotpath.py`** — per-component timing on representative captured
-  states. The regression guard: one component at a time, before/after.
-- **`bench_equivalence.py`** — the behavioral-equivalence harness (fixed-λ₀
-  rate, mean E[T], action histogram, MC standard error) over N≥300 episodes,
-  ≥2 seeds, f64-vs-f32.
-- **`bench_value_target.py`** — the value-target MC-limit identity check.
-- **`tests/test_jax_equivalence.py`** — the f64/f32/jax forward bit-near-
-  identity test at `ABS_TOL = 1e-4`.
-- **`capture_states.py` → `states.npz`** — the representative-state corpus the
-  benches run against (belief widths from full to singleton), so a capture is
-  reproducible rather than dependent on ambient run state.
+- **A per-component (or per-claim) timing/measurement harness**, run against a representative,
+  reproducible input or scenario — so a speedup claim is validated one component at a time,
+  before/after, and is never an artifact of end-to-end noise.
+- **An equivalence-checking mechanism** appropriate to the domain: a numeric domain needs a
+  statistical or tolerance-bounded comparator; a discrete/symbolic domain needs an exact
+  comparator (see Calibration).
+- **A reproducible input/scenario corpus** the measurements run against, so a capture does not
+  depend on ambient run state and a later investigator can rerun it.
 
 ### Metric vocabulary
 
-A canonical metric set lets investigations compare across time:
+A canonical metric set lets investigations compare across time. At minimum, a project names:
 
-- **Per-component wall time** (before/after, on `states.npz`) — the speedup
-  comparable.
-- **Fixed-λ₀ rate `ΣR/ΣT`, mean E[T], action histogram, with MC standard
-  error** — the behavioral-equivalence comparable.
-- **Forward absolute difference** (value, logits) against `ABS_TOL = 1e-4` —
-  the forward-numerics comparable.
-- **Logic invariants asserted exactly** (`== 0.0` illegal-slot mass) — the
-  bit-exact comparable, distinct from the behavioral one and never relaxed to
-  a tolerance.
+- **A per-component or per-claim measurement comparable** (wall time, a rate, a cost) — the
+  speedup comparable.
+- **A behavioral-equivalence comparable** — a statistic (a rate, a mean, a distribution) with
+  its measured uncertainty (standard error, confidence interval, or equivalent), reported so
+  "indistinguishable" is a number, not an eyeball.
+- **A bit-exact comparable, for logic invariants** — asserted exactly, never given a
+  tolerance, and kept categorically distinct from the behavioral comparable above (see
+  Calibration).
 
-Additions to the vocabulary go here, not in per-investigation write-ups (the
-per-investigation scatter the audit's §2.G / SSOT discipline forbids).
+Additions to the vocabulary go here, in a project's own instance section, not scattered across
+per-investigation write-ups.
 
 ### Acceptance criteria for perf/equivalence-claimed changes
 
-- **Speedup claims** attach before/after numbers under the same reproducible
-  scenario (same belief corpus, same net, same seeds), via `bench_hotpath` or
-  a pinned episode capture.
-- **Equivalence claims** attach the two-tier evidence: the `== 0.0` exact
-  invariant *and* the CI-overlapping behavioral metrics (or the forward
-  `ABS_TOL` test).
+- **Speedup claims** attach before/after numbers under the same reproducible scenario (same
+  input corpus, same configuration, same seeds where applicable).
+- **Equivalence claims** attach the two-tier evidence Calibration requires: the exact
+  invariant check *and* the statistical/behavioral evidence, or a tighter bit-near-identity
+  test where one is legitimately achievable.
 - **Refactor PRs touching the hot path** attach the pre-refactor baseline.
 
-The absence of substantiation does not block a change from landing — perf work
-proceeds at the author's judgment — but the write-up **states the absence
-explicitly** rather than carrying an unsubstantiated claim. The honest shape:
-*"defensively sound but not substantiated by a bench pair; the speculative win
-is X, the cost is Y."* This is the loudly-marked unsubstantiated case
-(parallel to ADR-0008's deliberately-imprecise tags), not a fuzzy-fit claim
-against the closed vocabulary.
+The absence of substantiation does not block a change from landing — perf work proceeds at the
+author's judgment — but the write-up **states the absence explicitly** rather than carrying an
+unsubstantiated claim. The honest shape: *"defensively sound but not substantiated by a bench
+pair; the speculative win is X, the cost is Y."* This is the loudly-marked unsubstantiated case
+(parallel to ADR-0008's deliberately-imprecise tags), not a fuzzy-fit claim against the closed
+vocabulary.
 
 ## Calibration on the two-tier bar
 
-The bit-vs-behavioral distinction is the chocofarm-specific calibration and
-must not collapse:
+The bit-vs-behavioral distinction is the generic, portable calibration and must not collapse
+in either direction:
 
-- A **logic invariant** (illegal-slot mass, a legality mask) is a bit fact;
-  asserting it with a tolerance would be a category error — it is `== 0.0` or
-  it is a bug.
-- A **numeric result** (a rate, a forward value under float32) is a
-  behavioral fact; asserting it bit-exactly would be a category error in the
-  other direction — float32 + numba legitimately move the float, so the honest
-  bar is statistical indistinguishability within MC CI.
+- A **logic invariant** (a discrete/symbolic fact — "this set is exactly empty," "these two
+  independently-derived verdicts agree") is a bit fact; asserting it with a tolerance is a
+  category error — it is exact or it is a bug.
+- A **numeric result** (a rate, a float-computed value, a measurement subject to noise) is a
+  behavioral fact; asserting it bit-exactly is a category error in the other direction —
+  legitimate re-implementation, re-ordering, or numeric-precision changes *will* move the
+  value, so the honest bar is statistical indistinguishability within a reported uncertainty
+  bound.
 
-Confusing the two is the failure: pinning a float-sensitive rate bit-exactly
-forbids a legitimate optimization (the ADR-0008 fossil/fuzzy failure in the
-perf register), while relaxing a logic invariant to a tolerance admits a real
-bug. The discipline is to apply the bar the quantity's *kind* demands.
+Confusing the two is the failure: pinning a noise-sensitive quantity bit-exactly forbids a
+legitimate optimization — the ADR-0008 "fossil" failure in the perf register (a stale,
+over-precise claim frozen against evidence that has since moved on) paired with its "fuzzy"
+sibling (an imprecise claim picked without verification) — while relaxing a logic invariant to
+a tolerance admits a real bug. The discipline is to apply the bar the quantity's *kind*
+demands, never the bar that is merely convenient.
 
 ## Consequences
 
 ### Positive
 
-- **Perf and equivalence claims are legible across time.** A write-up backed
-  by a bench reference is one a future investigator can extend; an unbacked
-  claim is a dead end they must re-derive.
-- **Substantiation cost is paid up-front.** Capturing the bench during the
-  work is cheaper than reconstructing the scenario later — composes with
-  ADR-0005's author-as-you-decide.
-- **The forward consolidation is safe.** The `ABS_TOL = 1e-4` test and the
-  bit-exact invariants are the contract that makes collapsing four forwards
-  (audit R11) safe to attempt — the perf discipline directly enables a
-  structural refactor.
+- **Perf and equivalence claims are legible across time.** A write-up backed by a measurement
+  reference is one a future investigator can extend; an unbacked claim is a dead end they
+  must re-derive.
+- **Substantiation cost is paid up-front.** Capturing the measurement during the work is
+  cheaper than reconstructing the scenario later — composes with ADR-0005's author-as-you-decide.
 
 ### Negative
 
-- **Per-claim authoring overhead.** Each perf/equivalence assertion carries
-  "is this substantiated?" The answer must be "yes, bench attached" or "no,
-  explicitly marked unsubstantiated."
-- **Discipline is policy, not mechanism.** No automated check verifies that a
-  write-up's perf claim is backed by a referenced bench (ADR-0011 Rule 1: a
-  declared review-only surface; a claim-token scanner would be the
-  mechanization trigger).
-- **The behavioral bar needs enough episodes to be meaningful.** N≥300, ≥2
-  seeds is the floor; a cheaper check is not a substantiation.
+- **Per-claim authoring overhead.** Each perf/equivalence assertion carries "is this
+  substantiated?" The answer must be "yes, evidence attached" or "no, explicitly marked
+  unsubstantiated."
+- **Discipline is policy, not mechanism.** No automated check verifies that a write-up's perf
+  claim is backed by a referenced measurement (ADR-0011 Rule 1: a declared review-only
+  surface; a scanner that flags perf/equivalence claim words — "faster," "regressed,"
+  "equivalent" — lacking an attached measurement reference would be the mechanization trigger).
+- **The behavioral bar needs enough samples to be meaningful.** A single noisy reading is not
+  a substantiation; the sample size floor is a per-deployment instance decision.
 
 ### Neutral
 
-- **No retroactive sweep.** Existing write-ups whose claims lack the full
-  bench evidence are not targeted for rewrite (ADR-0004's incremental-retrofit
-  posture). The discipline operates at the moment of new authoring.
-- **No mandate on a fixed benchmark beyond the existing harnesses.** New
-  hot-path classes may need new benches; the tenet names the existing ones and
-  the metric vocabulary, not a frozen suite.
+- **No retroactive sweep.** Existing write-ups whose claims lack full evidence are not
+  targeted for rewrite (ADR-0004's incremental-retrofit posture). The discipline operates at
+  the moment of new authoring.
+- **No mandate on a fixed benchmark suite.** New investigation classes may need new
+  measurement tools; the tenet names the vocabulary and the requirement, not a frozen suite.
 
 ## Exceptions
 
 ### Structural-by-inspection wins
 
-A change whose perf effect is provable by inspection — an O(N²) replaced by
-O(N) at a hot path, a redundant full-marginals pass removed (the audit's dead
-`env.marginals()` at `netvalue_ismcts.py:54`) — does not require a bench pair.
-The structural argument substantiates the claim; the write-up still names the
-argument. This parallels ADR-0002's structurally-provable exception.
+A change whose perf effect is provable by inspection — an asymptotic-complexity reduction at a
+hot path, a redundant pass removed — does not require a measured pair. The structural argument
+substantiates the claim; the write-up still names the argument. This parallels ADR-0002's
+structurally-provable exception.
 
 ### Exploratory observations
 
-A write-up may include exploratory perf observations made during investigation
-without elevating them to the authoritative register ("I noticed X; needs a
-bench before it's load-bearing"). The discipline applies to the authoritative
-register, not the exploratory.
+A write-up may include exploratory perf observations made during investigation without
+elevating them to the authoritative register ("I noticed X; needs a measurement before it's
+load-bearing"). The discipline applies to the authoritative register, not the exploratory.
 
 ## Revisit when…
 
-1. **A specific rule introduces its own failure mode.** Flag as the revisit
-   trigger.
-2. **The canonical tool surface needs replacement.** If the project's hot path
-   moves (a C++ search seam — see `docs/design/scaling-and-cpp-seam.md` — or a
-   different profiling stack), the tool surface updates; the discipline
-   survives the substitution. Extensions go here by dated amendment.
-3. **The metric vocabulary stops covering the perf-relevant axes.** A new
-   investigation class (a multi-instance scenario sweep, a GPU forward) that
-   the existing metric set doesn't fit warrants extending the vocabulary here,
-   not in a per-investigation write-up.
-4. **A check can mechanize the substantiation requirement.** A scanner that
-   verifies a perf-claim write-up references a bench would partially mechanize
-   the discipline (ADR-0011 Rule 1's enforcement-surface trigger).
+1. **A specific rule introduces its own failure mode.** Flag as the revisit trigger.
+2. **A hosting deployment's hot path or tool surface changes.** The Instance-bindings section
+   updates by dated amendment there; the tenet's spine and Calibration survive the
+   substitution unchanged — as they already have, twice (see the Extracted records below).
+3. **The metric vocabulary stops covering the perf-relevant axes.** A new investigation class
+   that the existing metric set doesn't fit warrants extending the vocabulary in the instance
+   section, not in a per-investigation write-up.
+4. **A check can mechanize the substantiation requirement.** A scanner that verifies a
+   perf-claim write-up references a measurement would partially mechanize the discipline
+   (ADR-0011 Rule 1's enforcement-surface trigger).
 
 ## Related
 
-- **ADR-0002 (fail loudly).** The reactive ancestor. An unsubstantiated perf
-  or equivalence claim is the silent-failure shape ADR-0002 names, in the
-  write-up authoring register.
-- **ADR-0001 (immutability / rebind-not-mutate).** The `max|Δp| = 0.0082`
-  stale-weight divergence the audit reproduced is exactly the equivalence
-  failure this tenet's harness catches and ADR-0001's rebind invariant
-  prevents.
-- **ADR-0005 (documentation discipline).** Perf write-ups are documentation
-  events; author-as-you-decide (Rule 6) is the temporal posture this tenet
-  relies on for capturing the bench during the investigation, not after.
-- **ADR-0008 (classification discipline).** The proactive sibling. "Faster" /
-  "regression" / "equivalent" are closed-vocabulary claims; substantiation is
-  the vocabulary-fit verification ADR-0008 implies for the perf register.
-- **ADR-0010 (this corpus's render-locality entry).** Has no chocofarm
-  applicability (no UI); its Related note points back here as the nearest
-  chocofarm perf concern.
+- **ADR-0002 (fail loudly).** The reactive ancestor. An unsubstantiated perf or equivalence
+  claim is the silent-failure shape ADR-0002 names, in the write-up authoring register.
+- **ADR-0005 (documentation discipline).** Perf write-ups are documentation events;
+  author-as-you-decide (Rule 6) is the temporal posture this tenet relies on for capturing the
+  measurement during the investigation, not after.
+- **ADR-0008 (classification discipline).** The proactive sibling. "Faster" / "regression" /
+  "equivalent" are closed-vocabulary claims; substantiation is the vocabulary-fit verification
+  ADR-0008 implies for the perf register.
+- **ADR-0010 (this corpus's UI/render-locality-adjacent entry, where applicable).** A project
+  with no UI hot path has no applicability there; this tenet is the nearest perf concern for
+  such a project either way.
+- **ADR-0012 P6 (substantiate equivalence/perf claims).** Composes directly and imports this
+  tenet's two-tier bar wholesale rather than redefining it.
 
-## Amendments
+## Instance bindings (autoharn) — the non-portable section
 
-### 2026-06-24 — The throughput-lab perf surface + a captured-investigation DB (Revisit #2 + #4 fired)
+Everything above is project-neutral. This section is autoharn's binding of the tenet to its
+own machinery, re-instanced 2026-07-12 (maintainer-approved) and restated here as first-class
+prose rather than a dated bracket-edit, per this refactor's own template; an adopting project
+replaces this section wholesale with its own.
 
-The hot path moved exactly as Revisit #2 anticipated — the **C++ search seam**
-(`docs/design/scaling-and-cpp-seam.md`), realized as the `throughput-lab/`
-producer→boundary→inference-server testbed. The tool surface extends accordingly:
+Autoharn does not have a machine-learning hot path to benchmark. Its experiment surface is (1)
+a "kernel" — this project's append-only governance ledger and its Postgres schema, extended
+over time by dated, versioned changes called a "lineage," each change a "delta," each delta's
+application to a fresh copy of the schema an "apply" — whose apply time is a measurable perf
+quantity; and (2) `./judge`, a check that computes the same verdict two independent ways (once
+via the clingo/ASP logic engine, once via a plain SQL query) and compares them — an
+equivalence claim in the sense this ADR disciplines.
 
-- **Canonical tools (extending §Tools):** `throughput-lab/harness/` — `episodic_dps.sh`
-  (the production-shape DPS baseline), `coalesce_sweep.py`, `topology_enum.py` +
-  `topology_sweep.py` (the CP-SAT-enumerated config space), and the forward
-  microbench. These are this register's `bench_hotpath` analogs for transport
-  throughput.
-- **Metric vocabulary (extending §Metric vocabulary):** the throughput register —
-  **leaf-rows/s** (the comparable, server-feed-rate), **DPS** (decisions/s), **real
-  rows/forward** (batch fill), **server util %**, **forwards/s**, **LPD**. These are
-  the transport-throughput comparables, distinct from the per-component wall-time and
-  the equivalence comparables already named; a throughput claim attaches them.
-
-And the substantiation requirement is now **mechanized** (Revisit #4, partially): a
-captured throughput number is no longer prose. **`throughput-lab/harness/exp_db.py`**
-(the `throughput_research` Postgres store) persists every reading with its code stamp
-(commit/tree), HP config, exact command, and replicates — so a perf claim is
-*code-addressable* and aggregated (median/IQR), never a single eyeballed number
-(`robust-benchmark-statistics`). Crucially, this register now distinguishes the
-**measurement** from the **interpretation** at the schema level: a reading
-(`tlab_reading`) is an immutable fact; a perf *claim about* it ("X is faster", "the
-+31% was an artifact") is an authored, supersedable **finding** (`tlab_finding`) —
-the measured-vs-interpreted separation this tenet's honesty depends on, made
-structural so an overturned claim is auditable, not lost. (The belief-layer mechanism
-is recorded in ADR-0011's 2026-06-24 amendment; this is its perf-register face.)
-
-### 2026-07-12 — Re-instanced for autoharn (maintainer YES; Scope + Provenance bracket-edited above; tool surface + metric vocabulary extended here)
-
-*(This is a dated append per ADR-0005 Rule 8. Provenance: BACKLOG.md flagged this document
-2026-07-11 as an unadapted chocofarm copy — Scope still bound "the `chocofarm/`
-package," the tool list still named chocofarm's harness, byte-identical to the
-transferred original. Tracked as maintainer decision `adr0009-reinstance`
-(`design/MAINTAINER-DECISION-BRIEF.md` §3). Maintainer ruling, 2026-07-12,
-near-verbatim: "obviously... it's trivia" — a mild yes, at his convenience,
-recorded here as the act: someone rewrites the document's scope and tool
-references for autoharn.)*
-
-The Provenance and Scope header fields above are bracket-edited in place
-(struck original preserved, per ADR-0005 Rule 8's in-situ-dated-strike
-convention) to bind autoharn's own experiment/investigation surface rather
-than chocofarm's tree. This amendment supplies the tool-surface and
-metric-vocabulary mapping the 2026-06-24 amendment's own precedent already
-established the shape of (extend §Tools / §Metric vocabulary by dated
-amendment, rather than rewriting the chocofarm-era prose in place) — the same
-move, applied a second time, to a second substrate.
-
-**Tool surface, autoharn register (extending §Tools):**
-
-- **Equivalence tool — `./judge` (the ASP/SQL differential).** This is
-  autoharn's `bench_equivalence.py` analog and its two-tier bar reborn: every
-  ledger verdict is derived independently via ASP (clingo) *and* SQL, and the
-  two must agree. `AGREE` is the bit-exact tier (a discrete/symbolic
-  verdict — no floating-point noise to tolerate, so agreement is exact or it
-  is a defect, exactly §Calibration's "logic invariant" case).
-  `DIVERGE_BY_DESIGN` is a documented, expected divergence (the closed-form
-  analog of chocofarm's tolerance-banded behavioral case: named and
-  substantiated, not silently accepted). `DIVERGE_DEFECT` / `QUARANTINED` are
-  escalation events of a kind this project calls "typed" — meaning the
-  event carries a fixed, named category rather than free-text prose, so
-  "which failure happened" is a fact a script can read, not a sentence a
-  human has to parse — and here they mean a real bug or an unsafe input,
-  either way never silently patched around (composes with
-  `engine/contemp_differential.py`'s QUARANTINE guard and, per this ADR's
-  own §Calibration, never relaxed to a tolerance). Diagnosis walkthrough:
-  `engine/docs/JUDGE-READING.md`.
+- **Equivalence tool — `./judge` (the ASP/SQL differential).** This is autoharn's
+  equivalence-harness analog and its two-tier bar reborn: every ledger verdict is derived
+  independently via ASP (clingo) *and* SQL, and the two must agree. `AGREE` is the bit-exact
+  tier (a discrete/symbolic verdict — no floating-point noise to tolerate, so agreement is
+  exact or it is a defect, exactly Calibration's "logic invariant" case). `DIVERGE_BY_DESIGN`
+  is a documented, expected divergence (the closed-form analog of a tolerance-banded
+  behavioral case: named and substantiated, not silently accepted). `DIVERGE_DEFECT` /
+  `QUARANTINED` are typed escalation events — a fixed, named category rather than free-text
+  prose — meaning a real bug or an unsafe input, either way never silently patched around
+  (composes with `engine/contemp_differential.py`'s QUARANTINE guard and, per Calibration,
+  never relaxed to a tolerance). Diagnosis walkthrough:
+  [`engine/docs/JUDGE-READING.md`](../../engine/docs/JUDGE-READING.md).
 - **Investigation-capture tool — `filing/record_reading.py` writing to
-  `stores/001_research_ledger.sql`.** This is autoharn's captured-
-  investigation-DB analog, direct structural sibling of chocofarm's
-  `exp_db.py` / `throughput_research` store the 2026-06-24 amendment above
-  already names: a measurement (`research.reading`, immutable, frozen at
-  write) is distinct from an interpretation drawn from it (`research.finding`,
-  supersedable, `status ∈ {provisional, retracted}`) — the same
-  measured-vs-interpreted separation, same author, same rationale, second
-  project. `research.finding_confirmed` derives confirmation from three
-  conditions at once: a clean git tree, a qualified instrument (one whose
-  `research.instrument.qualification` column reads `'qualified'` rather
-  than `'provisional'`, `'suspect'`, or `'retracted'` — a status a human
-  sets, not a default), and a real session — never a writable field, so
+  [`stores/001_research_ledger.sql`](../../stores/001_research_ledger.sql).** Autoharn's
+  captured-investigation-DB: a measurement
+  (`research.reading`, immutable, frozen at write) is distinct from an interpretation drawn
+  from it (`research.finding`, supersedable, `status ∈ {provisional, retracted}`) — the
+  measured-vs-interpreted separation this tenet's honesty depends on, made structural.
+  `research.finding_confirmed` derives confirmation from three conditions at once: a clean
+  git tree, a qualified instrument (`research.instrument.qualification = 'qualified'` — a
+  status a human sets, not a default), and a real session — never a writable field, so
   "confirmed" cannot be asserted, only earned.
-- **No `bench_hotpath.py` analog is built for autoharn's own hot paths**
-  (kernel-lineage delta-apply time, `./audit` wall time, a world scaffold's
-  cost) as of this writing. A per-component before/after timing harness for
-  those paths does not yet exist. Per this ADR's own §Exceptions
-  ("Exploratory observations") and §Acceptance-criteria ("the absence of
-  substantiation does not block a change... but states the absence
-  explicitly"), a perf claim about autoharn's own hot paths is honest today
-  only as an explicitly-marked exploratory observation, not an authoritative
-  claim — and per this project's own standing prudential posture (a ledger
-  work-item named `prudential-filed-candidates`, listed by running
-  `./led work list` from this repository's root and read in full with
-  `./led show <its id>`, whose own text says "build on witnessed need... not
-  speculatively"), a dedicated bench harness is built when a real perf claim
+- **No per-component before/after timing harness is built for autoharn's own hot paths**
+  (kernel-lineage delta-apply time, `./audit` wall time, or the cost of scaffolding a "world" —
+  this project's term for one isolated project habitat the harness sets up, "scaffold" being
+  the act of setting one up) as of this writing. Per this ADR's own Exceptions ("Exploratory
+  observations") and Acceptance criteria
+  ("the absence of substantiation does not block a change... but states the absence
+  explicitly"), a perf claim about autoharn's own hot paths is honest today only as an
+  explicitly-marked exploratory observation — and per this project's standing prudential
+  posture (a ledger work-item named `prudential-filed-candidates`: "build on witnessed
+  need... not speculatively"), a dedicated timing harness is built when a real perf claim
   first needs one, not spun up now on spec.
+- **Metric vocabulary, autoharn register.** Autoharn's own metric vocabulary consists of:
+  verdict counts (`AGREE` / `DIVERGE_BY_DESIGN` /
+  `DIVERGE_DEFECT` / `QUARANTINED` tallies from `./judge` — the equivalence comparable);
+  contemporaneity verdict counts (the four verdicts `./audit` — this project's check that a
+  ledger row was recorded close in time to the act it describes — can assign to a row:
+  `CONTEMPORANEOUS`, `BATCHED_DECLARED`, `LATE_DECLARED`, `BACKFILL_SUSPECT`, a timeliness
+  comparable with no upstream analog); and `value` / `stderr` / `n` recorded via
+  `research.reading` (the behavioral comparable for a repeated, noisy measurement).
 
-**Metric vocabulary, autoharn register (extending §Metric vocabulary):**
+*Enforcement surface: review-only, same as the rest of this tenet — this section maps
+vocabulary and tools; it mints no new mechanism (ADR-0011 Rule 1).*
 
-- **Verdict counts** — `AGREE` / `DIVERGE_BY_DESIGN` / `DIVERGE_DEFECT` /
-  `QUARANTINED` tallies from `./judge` — the equivalence comparable.
-- **Contemporaneity verdict counts** — the four verdicts `./audit` (this
-  project's separate check that a ledger row was recorded close in time to
-  the act it describes, rather than backfilled later) can assign to a row:
-  `CONTEMPORANEOUS` (recorded close enough in time to trust), `BATCHED_DECLARED`
-  (recorded late but the lateness was itself declared honestly),
-  `LATE_DECLARED` (recorded later still, again declared), and
-  `BACKFILL_SUSPECT` (recorded late with no honest declaration — the one
-  verdict that fails the check) — a timeliness comparable specific to this
-  project's kernel, with no chocofarm analog.
-- **`value` / `stderr` / `n`** recorded via `research.reading` — the
-  behavioral comparable, for the (currently rare) autoharn claim that
-  involves a repeated, noisy measurement rather than a discrete verdict.
+## Extracted records
 
-**What is unchanged.** The tenet's spine — a perf or equivalence claim is
-honest only when its investigation is captured and reproducible — is
-untouched; §Calibration's bit-vs-behavioral distinction is untouched and
-still the correct discriminator (`./judge`'s `AGREE` is the bit case;
-`research.reading`'s noisy measurements are the behavioral case); the whole
-chocofarm-era body of this document (every section between this document's
-header and this 2026-07-12 Amendment, as the Provenance bracket above
-enumerates in full — including its worked examples such as
-`bench_hotpath.py`/`bench_equivalence.py` and `netvalue_ismcts.py:54`) is
-left as-authored, a point-in-time record of the discipline as it read on
-the substrate it was adapted to before this one — not deleted, not
-asserted current for autoharn. This is the same never-retro-edit posture
-ADR-0000 and ADR-0013 use for their own dated, first-person failure
-records: both documents keep their original context sections intact and
-add their corrections as separate, clearly dated "Amendment"/"Revisit"
-sections at the foot, exactly as this document now does.
+> **Extracted record — the chocofarm-era substrate (Context, Decision detail, Consequences,
+> Exceptions, Revisit-when, Related, and the 2026-06-24 throughput-lab amendment)**
+> *(moved verbatim to
+> [`history/0009-chocofarm-perf-discipline.md`](history/0009-chocofarm-perf-discipline.md))*:
+> this tenet transferred twice before autoharn — first from a browser-tooling project's
+> DevTools/profiler surface, then onto a numpy/JAX/numba AlphaZero search codebase, whose bench
+> harnesses (per-component timing, a behavioral-equivalence check, a forward bit-near-identity
+> test) are the worked proof that the two-tier bit-vs-behavioral bar holds up on a real ML hot
+> path. The failure modes it caught there — an unsubstantiated speedup claim, an unsubstantiated
+> equivalence claim, and per-investigation tool re-derivation — are exactly the three this
+> document's Context still names, now stated generically. A later amendment extended the same
+> discipline onto a C++ transport-throughput testbed and added a captured-investigation
+> Postgres store distinguishing an immutable reading from a supersedable finding — the same
+> measured-vs-interpreted split autoharn's own Instance bindings above independently reaches for
+> its research ledger.
 
-*Enforcement surface: review-only, same as the rest of this tenet — this
-amendment maps vocabulary and tools, it mints no new mechanism (ADR-0011
-Rule 1).*
+> **Extracted record — the 2026-07-12 autoharn re-instancing amendment**
+> *(moved verbatim to
+> [`history/0009-autoharn-reinstancement-2026-07-12.md`](history/0009-autoharn-reinstancement-2026-07-12.md))*:
+> the dated record of the maintainer-approved act that first re-instanced this ADR's Scope and
+> Provenance from its prior substrate onto autoharn's own experiment surface (`./judge`, the
+> research ledger), by an in-situ bracket-edit rather than the wholesale rewrite this refactor
+> now performs. Its content is not superseded — it is the same mapping now stated as first-class
+> prose in the Instance-bindings section above; this record is kept as the frozen evidence of
+> when and how that re-instancing happened.
 
 ## License
 
