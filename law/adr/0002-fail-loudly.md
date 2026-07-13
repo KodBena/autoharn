@@ -1,9 +1,30 @@
 # ADR-0002: Fail Loudly
 
+> *Refactored for cross-project portability on 2026-07-13 under
+> [`design/MAINT-ADR-PORTABILITY-SPEC.md`](../../design/MAINT-ADR-PORTABILITY-SPEC.md)
+> (tracker `adr-portability-refactor`, maintainer-ratified 2026-07-13). The pre-refactor
+> text stands verbatim at commit `ff691bb9bc430ad497d74ff82d580f758a969f99`; extracted
+> records live under [`history/`](history/) (each Extraction Pointer below names its own
+> destination file) and are not retro-edited. Dated amendments below are preserved
+> verbatim from the original. The
+> Genre and Scope fields below are re-instanced generically at this same act (spec §4); the
+> pre-refactor wording (which named this project's own filing path and package) is the git
+> history at the commit above, not silently lost. The Provenance field, by contrast, is a
+> preserved dated record the spec forbids rewording, so it keeps two source-project proper
+> names; for the zero-context reader (the field is frozen, positional reference is safe):
+> the first project it names is the ancestor whose ADR corpus this tenet was transferred
+> from, not otherwise referenced here; the second is the source project the original
+> instance list was re-derived against — the same project this ADR's `history/`
+> extractions describe. The artifacts the field names in passing (an "AZ stack", an
+> "hp registry", "env/scenario seams") are that source project's subsystems, a shorthand
+> a reader of this corpus is not expected to know — where they recur in the preserved
+> prose below, read them as the source-project instances the Context's extracted record
+> summarizes.*
+
 - **Status:** Accepted
 - **Genre:** Tenet (cross-cutting principle) — as distinct from ADR-0001,
   which was a specific technical decision. Tenets guide future decisions;
-  decisions resolve specific questions. Both are filed under `docs/adr/`
+  decisions resolve specific questions. Both are filed under `law/adr/`
   for single-location retrieval.
 - **Date:** 2026-06-15
 - **Provenance:** Transferred from the LengYue ADR corpus (this project forks
@@ -16,11 +37,14 @@
   their intent. (Before this ADR existed, the 2026-06-15 audit named those
   citations "a binding convention with no definition"; this ADR closes that
   gap.)
-- **Scope:** Codebase-wide — the whole `chocofarm/` package and `tests/`.
-  Every module that surfaces a deviation through a loud channel is an
-  instance: the env's config validation, the parallel executor's
-  bounded-drain RuntimeError, the hp registry's RESTART-drift refusal, the
-  AZ block-param shape checks, the dtype/precision guard.
+- **Scope:** Codebase-wide — every module in the hosting project that
+  surfaces a deviation through a loud channel is an instance. The source
+  project's own instance list (an env's config validation, a parallel
+  executor's bounded-drain refusal, a hyperparameter registry's
+  RESTART-drift refusal, a weights loader's shape checks, a precision guard)
+  is preserved in the Context's extracted record below; an adopting project
+  re-derives its own instance list against its real surfaces, the same move
+  ADR-0009 models for this corpus.
 
 ## Context
 
@@ -31,41 +55,23 @@ every such case the project has chosen visibility, and has been better off
 for it. The pattern has enough weight to be worth naming, so future decisions
 don't have to re-derive it.
 
-Examples of decisions already made under this tenet (some labeled with it in
-the code, some not, before this ADR existed):
-
-- **The parallel-executor deadlock band-aids.** The JAX-training parallel
-  loop suffered intermittent deadlocks (the parent parking in
-  `multiprocessing.imap_unordered` awaiting a worker incapacitated by
-  JAX-to-spawn-child thread residue; RCA in
-  `docs/notes/jaxtrain-deadlock-rca.md`). The remedy converts a permanent
-  hang into a **loud, diagnosable RuntimeError** naming the phase, the run,
-  and the iteration (`az/parallel.py`), with bounded socket timeouts and a
-  loud-now ping if redis is unreachable. Rationale: a silent permanent park
-  looks like progress until someone checks; a loud abort with
-  "restart from the last checkpoint" is actionable.
-- **The hp registry's RESTART-drift refusal.** Changing a baked field
-  (`lr`, `l2`, search width) mid-run is refused **loudly**, naming the field,
-  the construction-time value, and the new value (`az`/`hp/registry.py`,
-  `RestartRequired`), rather than silently running on a config the net is
-  invalid against. The registry also refuses a malformed write at the source
-  (`schema.py` strict decode) and never coerces a missing/drifted blob to a
-  default — `RegistryDecodeError`, `RegistryKeyMissing`, `RegistryUnavailable`
-  are distinct so the operator's mental model stays true.
-- **The env's config validation.** `with_scenario` raises `ValueError` on a
-  wrong-length value vector; `restrict` raises on an empty/out-of-range
-  `keep` or a `k_local` exceeding `|keep|` (`model/env.py`). A wrong-length
-  value vector is a config error, not something to silently broadcast or
-  truncate to N.
-- **The AZ block-param shape checks.** Loading weights with a corrupt or
-  dimension-mismatched residual block fails **loudly at load** (`az/mlp.py`,
-  `tests/test_az_loop.py`) — "fail informative HERE, not deep in the first
-  forward."
-- **The dtype/precision guard.** An unrecognised precision request is a
-  configuration error that raises, not a silent fallback (`az/dtypes.py`).
-- **The decomp boundedness abort.** `decomp.py`'s reachable-state
-  enumeration aborts loudly on an over-cap synthetic blob rather than
-  hanging or OOMing (`solvers/decomp.py`).
+> **Extracted record — the six fail-loud examples**
+> *(moved verbatim to [history/0002-chocofarm-fail-loud-substrate.md](history/0002-chocofarm-fail-loud-substrate.md))*:
+> six dated decisions from this tenet's source project each turned a potential silent
+> failure into a loud one at a specific point in the hierarchy below — a permanent
+> parallel-worker deadlock converted to a diagnosable exception naming the phase/run/
+> iteration; a hyperparameter registry refusing a drifted restart-only field by name
+> rather than running on an invalid config; an environment's config validation raising
+> on a malformed shape/range instead of silently truncating; a weights loader failing at
+> load on a dimension mismatch instead of deep in the first forward pass; an unrecognised
+> precision request raising instead of silently falling back; and a bounded-state
+> enumeration aborting loudly rather than hanging or exhausting memory. Each instance
+> names the module it lives in and the loudness level it fired at — the corpus's own
+> worked proof that the hierarchy below is not aspirational. The shorthand instance
+> names that recur in the hierarchy and rules below (the shape checks at load, the
+> registry strict decode, the drain RuntimeError, the wedge diagnostics, the
+> live-compute fallback) are these same source-project instances, preserved as the
+> original text's worked anchors.
 
 The common thread: **when the system has a choice between "recover quietly"
 and "fail audibly," prefer audibly.** Silent failures accumulate into debt
@@ -116,34 +122,43 @@ weakest that's expedient.**
    sense; it is the bound that makes a stall loud.)
 2. **Validate at boundaries; do not coerce.** The hp registry strict-decodes
    the config blob and refuses a malformed one rather than filling missing
-   fields with defaults. `with_scenario`/`restrict` validate shapes and
-   ranges. A boundary translates and checks; it does not guess.
+   fields with defaults; the source project's env validators likewise raise
+   on wrong-length or out-of-range config rather than truncating (the
+   specific validators are named in the extracted record the Context's
+   Extraction Pointer above links). A boundary translates and checks; it
+   does not guess.
 3. **Sentinel-return-instead-of-raise is a red flag** and requires
    justification. Prefer raising, or a value whose "absent" case is
    distinguishable from a legitimate empty result. A silently-returned wrong
    number is the worst case on a research codebase, because it surfaces as a
    plausible result.
 4. **A config field that the receiver cannot honor must not be silently
-   accepted.** The audit's "lying signature" finding (a `train_epochs(lr,
-   l2)` that ignored its args; a `build(marg)` ignored; a `restrict_faces`
-   gating `pass`) is the same failure in the parameter register: a seam that
-   looks configured but is dead. Honor it or delete it (this is the
-   subject of ADR-0011 Rule 6's lineage and the audit's L6).
+   accepted.** The source project's audit found three "lying signatures" —
+   functions whose accepted parameters the body silently ignored (the three
+   specific signatures are preserved in the extracted record the Context's
+   Extraction Pointer above links) —
+   the same failure in the parameter register: a seam that looks configured
+   but is dead. Honor it or delete it (this is the subject of
+   [ADR-0011](0011-mechanization-discipline.md) Rule 6's lineage and of
+   finding L6 of that same source audit).
 5. **No silent state-mutation that breaks an invariant.** The float32 cache
-   coherence (ADR-0001) is a fail-loud-adjacent invariant: a rebind keeps
+   coherence ([ADR-0001](0001-immutability-and-copy-on-write.md)) is a
+   fail-loud-adjacent invariant: a rebind keeps
    the cache honest; an in-place mutation that didn't bump the signature
    would silently serve stale weights, which is exactly the silent failure
    this tenet forbids.
 6. **A derived value frozen as a literal that feeds a result is a latent
-   silent failure.** The three reference rates (static floor, clairvoyant
-   ceiling, decomp anchor) are *derived* from the env. `eval/harness.py`
-   computes them live; where they are instead hardcoded as literals
-   (`exit_loop.py`, and the `%VoI` divisor), the metric will silently
-   misreport the moment the env's value vector moves — and a test that pins
-   the literal (`test_smoke.py`) *forbids the legitimate retune that should
-   update it*. The fix is to derive, never freeze, and to assert the
-   recompute is sane rather than pinning a number. (This is the audit's §4
-   trace and L4; the firing is currently latent, not realized.)
+   silent failure.** A quantity that is *derived* from a live source must be
+   computed at its point of use, never hand-copied as a literal that can
+   drift from that source — and a test that pins the frozen literal
+   compounds the failure by *forbidding* the legitimate retune that should
+   update it.
+
+> **Extracted record — the reference-rate drift trace**
+> *(moved verbatim to [history/0002-chocofarm-fail-loud-substrate.md](history/0002-chocofarm-fail-loud-substrate.md))*:
+> the source project's audit found exactly this drift already live between two
+> hardcoded copies of one derived rate, one of them a numerical input to a provable
+> bound — a concrete case of "latent, not yet realized" turning real.
 
 ### What counts as "loud enough"
 
@@ -167,8 +182,9 @@ nobody will see.
   fail-loud raise, every strict decode, every shape check is a tiny record
   of what the code expects. The 16+ `ADR-0002` citations are lane markings.
 - **The parallel substrate's correctness story is honest.** Because the
-  deadlock path fails loud, `test_parallel_deadlock` can assert the abort
-  fires — a smaller but truthful guarantee than a silent hang would allow.
+  source project's deadlock path fails loud, its test suite can assert the
+  abort fires — a smaller but truthful guarantee than a silent hang would
+  allow.
 
 ### Negative
 
@@ -176,12 +192,14 @@ nobody will see.
   is longer than one that returns a default. The justifying comments are
   lines that wouldn't exist without the tenet.
 - **The tenet is a policy, not (mostly) a mechanism.** A lazy bare `except:`
-  will run fine; only review catches it. *Partially mechanized:* the env
-  config validation, the registry strict decode, the AZ shape checks, and
-  the dtype guard are tests/raises at `error`-equivalent strength; the
+  will run fine; only review catches it. *Partially mechanized:* the source
+  project's config validation, registry strict decode, load-time shape
+  checks, and precision guard (the Context's extracted record enumerates
+  them) are tests/raises at `error`-equivalent strength; the
   judgment calls (is this fallback honest? is this sentinel justified?)
-  remain review's. ADR-0011 (mechanization discipline) is where the
-  enforcement-surface declaration for each rule lives.
+  remain review's. [ADR-0011](0011-mechanization-discipline.md)
+  (mechanization discipline) is where the enforcement-surface declaration
+  for each rule lives.
 
 ### Neutral
 
@@ -197,30 +215,41 @@ misapplied.
 
 ### Bit-identical structural fallbacks
 
-`env.d(a, b)` serves from the precomputed distance table and **falls back to
-a live `math.hypot` compute** for any coord pair absent from the table. This
-is not a coercion: the table was built from the same `math.hypot` inputs, so
-the fallback is bit-identical. The fallback keeps the contract total; it
-never hides a wrong answer. Rule of thumb: **a fallback that provably
+A live-compute fallback that is provably bit-identical to a precomputed lookup — because
+both were built from the same inputs and the same formula — is not a coercion; it keeps the
+contract total without ever hiding a wrong answer. Rule of thumb: **a fallback that provably
 returns the same value as the primary path is not a silent failure.**
+
+> **Extracted record — the distance-table instance**
+> *(moved verbatim to [history/0002-chocofarm-fail-loud-substrate.md](history/0002-chocofarm-fail-loud-substrate.md))*:
+> the source project's worked case is a distance-table lookup that falls back to a live
+> recompute using the identical formula the table was built from.
 
 ### Idempotent / no-op-when-already-done operations
 
-A teardown that runs twice, a `seed_registry` that no-ops when the blob
-already exists (a `--resume` re-binds rather than clobbering operator
-overrides), a cache rebuild skipped when the signature is unchanged — these
-are idempotence guarantees, not failures. Rule of thumb: **idempotence is
-not silent failure; it is an invariant being preserved.**
+A teardown that runs twice, a registry-seeding step that no-ops when its target already
+exists (a resume flag re-binding rather than clobbering operator overrides), a cache
+rebuild skipped when the signature is unchanged — these are idempotence guarantees, not
+failures. Rule of thumb: **idempotence is not silent failure; it is an invariant being
+preserved.**
+
+> **Extracted record — the registry-seeding instance**
+> *(moved verbatim to [history/0002-chocofarm-fail-loud-substrate.md](history/0002-chocofarm-fail-loud-substrate.md))*:
+> the source project's registry-seeding step no-ops when its blob already exists, and its
+> resume flag re-binds rather than clobbering operator overrides.
 
 ### Bounded, scheduled-for-removal compat shims
 
-A defensive fallback during a bounded transition (e.g. the worker
-core-pinning's fail-soft `except: widx = 0` while the
-process-name-scraping approach is replaced) is acceptable **if** the
-alternative would produce a failure the operator cannot action, and **if**
-it is commented as bounded and scheduled. (The audit flags the core-pinning
-fail-soft as a band-aid to remove, not a permanent exception — see ADR-0009's
-sibling and the audit's §2.H.)
+A defensive fallback during a bounded transition is acceptable **if** the alternative
+would produce a failure the operator cannot action, and **if** it is commented as bounded
+and scheduled.
+
+> **Extracted record — the core-pinning fail-soft instance**
+> *(moved verbatim to [history/0002-chocofarm-fail-loud-substrate.md](history/0002-chocofarm-fail-loud-substrate.md))*:
+> the source project's worker core-pinning fails soft to a default index while its
+> process-name-scraping approach is replaced — the source audit flags this specific
+> instance as a band-aid to remove, not a permanent exception, not an example of the
+> exception being misused generally.
 
 ## What this tenet does NOT mean
 
@@ -247,19 +276,30 @@ sibling and the audit's §2.H.)
 
 ## Related
 
-- **ADR-0001 (immutability and copy-on-write).** The copy-on-write seams and
-  the rebind-not-mutate cache invariant are applications of this tenet — they
-  raise at boundaries and keep a coherence invariant that, if violated
-  silently, is exactly the failure this tenet forbids.
-- **ADR-0004 (minimal-touch).** The authoring-side counterpart: ADR-0002
-  says "fail audibly at runtime"; ADR-0004 says "don't introduce changes a
-  later run will be the first to discover."
-- **ADR-0008 (classification discipline).** The proactive register of the
-  same family — refuse fuzzy vocabulary matches before they become the
-  silent failure this tenet surfaces.
-- **ADR-0009 (performance investigation discipline).** The per-domain
-  instance for perf claims — an unsubstantiated "faster" is the silent
-  failure this tenet names, in the perf-claim register.
+- **[ADR-0001](0001-immutability-and-copy-on-write.md) (immutability and
+  copy-on-write).** The copy-on-write seams and the rebind-not-mutate cache
+  invariant are applications of this tenet — they raise at boundaries and
+  keep a coherence invariant that, if violated silently, is exactly the
+  failure this tenet forbids.
+- **[ADR-0004](0004-minimal-touch-edits-to-partially-visible-files.md)
+  (minimal-touch).** The authoring-side counterpart: ADR-0002 says "fail
+  audibly at runtime"; ADR-0004 says "don't introduce changes a later run
+  will be the first to discover."
+- **[ADR-0008](0008-classification-discipline.md) (classification discipline).**
+  The proactive sibling, same failure family, different intervention point: this
+  tenet's loudness hierarchy above is the **reactive** register — it surfaces a
+  deviation once it has already occurred; ADR-0008's positive register (refuse a fuzzy
+  vocabulary match) and negative register (refuse a fabricated category) are the
+  **proactive** register — they refuse the deviation before it forms. ADR-0008's
+  substitution test (calibrate severity to the worst-case surface, not the observed
+  cost) is the classification-time counterpart of this tenet's Rule 3 (don't
+  sentinel-return a plausible-looking wrong answer): both refuse to let the
+  cheapest-looking instance of a failure shape set the bar for how seriously it is
+  treated.
+- **[ADR-0009](0009-performance-investigation-discipline.md) (performance
+  investigation discipline).** The per-domain instance for perf claims — an
+  unsubstantiated "faster" is the silent failure this tenet names, in the
+  perf-claim register.
 - **ADR-0002 applies to documentation consumption.** The root `CLAUDE.md`
   records the gravest sin against this tenet for an LLM collaborator: citing
   a document one has not read in full. Surfacing the gap audibly is the only
