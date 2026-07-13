@@ -16,7 +16,7 @@
 {"Project LAW, extrapolate from and interpret judiciously like a professional colleague": [
     "law/adr/0000-the-alpha-and-the-omega-type-driven-design.md",
     "law/adr/0012-compositional-and-structural-hygiene.md",
-    "law/adr/0013-execution-stamina-and-structural-completeness.md",
+    "law/adr/0013-execution-integrity.md",
     "law/adr/0014-executor-second-opinion.md",
     "law/adr/0017-the-zero-context-reader.md"]}
 

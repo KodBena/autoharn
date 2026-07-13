@@ -8,20 +8,24 @@
   stub. The provisional status is itself honest in the ADR-0011 Rule 1 register:
   the harm was concrete, the mechanism is partial, and saying so plainly beats
   letting the lesson decay into prose nobody enforces.
-- **Genre:** Tenet (cross-cutting execution discipline) — **ADR-0011
-  (mechanization discipline) turned INWARD on the executor's own process**.
-  ADR-0011's thesis is that *a recurrence converts to a mechanism rather than
-  more prose, at a declared enforcement surface*. ADR-0013 already instantiated
-  that to one failure mode — the *attrition of will to finish*. This tenet
-  instantiates it to a **sibling** failure mode: the *anchoring of reasoning that
-  will not finish because it cannot escape its own frame*. Where ADR-0013 guards
-  the will to carry a mandate to its end, this tenet guards the **ability to see
-  the problem freshly** when the executor's own line of attack has demonstrably
-  stalled. The recurring thing ADR-0011 keys on is, here, the executor's *own
-  repeated mis-targeted attempts at one problem*; the mechanism the recurrence
-  mints is the **structured second-opinion request**.
+- **Genre:** Tenet (cross-cutting execution discipline) — this tenet licenses and
+  encourages fetching an independent, deliberately un-led second opinion once an
+  executor's own line of reasoning has demonstrably stalled on one problem. It is
+  **ADR-0011 (mechanization discipline) turned INWARD on the executor's own
+  process**: ADR-0011's thesis is that *a recurrence converts to a mechanism
+  rather than more prose, at a declared enforcement surface*. ADR-0013 already
+  instantiated that to one failure mode — the *attrition of will to finish*.
+  This tenet instantiates it to a **sibling** failure mode: the *anchoring of
+  reasoning that will not finish because it cannot escape its own frame*. Where
+  ADR-0013 guards the will to carry a mandate to its end, this tenet guards the
+  **ability to see the problem freshly** when the executor's own line of attack
+  has demonstrably stalled. The recurring thing ADR-0011 keys on is, here, the
+  executor's *own repeated mis-targeted attempts at one problem*; the mechanism
+  the recurrence mints is the **structured second-opinion request**.
 - **Date:** 2026-06-24
-- **Provenance:** Native to chocofarm. Not a transferred universal — a response
+- **Provenance:** Native to chocofarm (this tenet's originating project — a numpy/JAX/numba
+  search codebase, named here in this Provenance field only as the dated source of the
+  specimen; no autoharn artifact depends on the name). Not a transferred universal — a response
   to a **named, dated, first-person failure** on the `throughput-lab` testbed,
   recorded in Context below. The substrate is an LLM executor's own session
   record, in the same first-person register ADR-0013 Specimen 2 established as
@@ -37,6 +41,16 @@
   finish (ADR-0013); the conduct it governs is *whether the executor, having
   demonstrably locked onto one line of reasoning, fetches an independent frame
   before burning a third, fourth, fifth attempt on the same wrong target*.
+
+*Refactored for cross-project portability on 2026-07-13 under
+[`design/MAINT-ADR-PORTABILITY-SPEC.md`](../../design/MAINT-ADR-PORTABILITY-SPEC.md)
+(tracker `adr-portability-refactor`, maintainer-ratified 2026-07-13). The
+pre-refactor text stands verbatim at commit `0f7b3e4`; extracted records live in
+[`history/0014-throughput-lab-specimen.md`](history/0014-throughput-lab-specimen.md)
+and are not retro-edited. This pass also fixes hazard H1 (two lines of tool-call
+residue committed after the License section — see the dated correction there),
+executed as its own witnessed item per the spec's fix-or-flag duty, never a
+silent cleanup. Dated amendments below are preserved verbatim from the original.*
 
 A word on register, so it is not mistaken for tone. This is a **license, not a
 mandate** (Decision, Rule 1). It grants permission and encouragement to escalate
@@ -73,48 +87,16 @@ aggregate (three attempts, same wrong target). ADR-0011's remedy is the right
 one: a mechanism keyed on the **observable aggregate pattern**, not on the
 executor's in-the-moment sense that the next attempt will surely land.
 
-### Specimen — the diagnostician on `throughput-lab` (this session's record)
-
-The substrate is first-person and fresh, native to the `throughput-lab` testbed
-(`throughput-lab/` — the clean-room synthetic-load testbed that isolates the
-`producer → boundary → server → reply` path from the tree search). An LLM
-executor was tasked with resolving a **server "wedge"**: under a producer flood,
-the Python server's IO thread blocked and throughput collapsed. The executor's
-diagnosis was "find the one blocking call," and it executed that diagnosis,
-faithfully and in the honest register, *twice*:
-
-1. **First fix — the unbounded socket-drain loop.** The receiver drained the
-   inbound socket without bound; the executor bounded it. Plausible, defensible,
-   committed. **The wedge persisted.**
-2. **Second fix — the blocking reply-send.** With the drain bounded and the
-   wedge still present, the executor re-applied the *same frame* to a different
-   call: the reply path's send blocked; the executor made it non-blocking.
-   Plausible, defensible, committed. **The wedge persisted.**
-
-Each attempt addressed *a* real call and was, in isolation, a reasonable change.
-But the diagnosis — "the wedge is one blocking call, find it" — was itself the
-frame, and the frame was wrong (or at best incomplete), and **the executor never
-left it.** Attempt three would have been a third blocking call. The faculty that
-should have asked "is this even the right kind of problem?" was the faculty that
-had committed to the frame, and it did not ask.
-
-A second, independent opinion **at the point of the second failed attempt** —
-given the problem and the evidence but *not* led down the "one blocking call"
-path — would, at minimum, have surfaced that the diagnosis kept proving partial,
-and quite possibly have broken the lock outright by proposing a different frame
-(a structural overlap problem, a back-pressure problem, a contention problem —
-something the locked executor could not see because it was standing inside the
-lock). The maintainer, commissioning this ADR, characterized the *absence* of a
-guideline that would have triggered that second opinion as an **executive
-dereliction** — one the recurring thrash made expensive in both compute and
-money. That characterization is recorded here as the honest, dated provenance,
-not softened.
-
-*(Point-in-time, per ADR-0005 Rule 8. The throughput-lab investigation has since
-advanced; this specimen is the frozen record of the *conduct* — the lock and the
-recurrence — not a claim about the current state of the wedge. The conduct is the
-durable fact this tenet is shaped against; the specific call sites are not
-asserted as still unfixed.)*
+> **Extracted record — the throughput-lab specimen**
+> *(moved verbatim to [`history/0014-throughput-lab-specimen.md`](history/0014-throughput-lab-specimen.md))*:
+> an LLM executor, tasked with resolving a server "wedge" (a producer flood blocking the
+> IO thread), diagnosed "find the one blocking call" and executed that diagnosis twice —
+> bounding an unbounded socket-drain loop, then making a blocking reply-send non-blocking —
+> each fix plausible and committed, and **the wedge persisted both times**. The executor
+> never left the frame that produced both misses; a second, independent opinion at the
+> second failed attempt would at minimum have surfaced the diagnosis kept proving partial,
+> and possibly broken the lock outright by proposing a different frame entirely (back-pressure,
+> contention, structural overlap) the locked executor could not see from inside its own lock.
 
 ### Precedent in the corpus — the deliberately-independent second pair of eyes
 
@@ -198,11 +180,11 @@ honest, checkable triggers — any one suffices, and they are deliberately about
 the *artifact of the attempts*, not the executor's confidence:
 
 - **≥2 attempts that each turned out to address the wrong target** (the
-  throughput-lab specimen: two blocking-call fixes, wedge persisted both times).
+  extracted specimen — Context above: two blocking-call fixes, wedge persisted both times).
 - **A diagnosis that keeps proving partial** — each fix moves the symptom but
   does not resolve it, a tell that the *frame*, not the *instance*, is wrong.
-- **Growing thrash** — successive attempts getting longer, more speculative, or
-  more numerous without converging.
+- **Growing thrash** — successive attempts are getting longer, more speculative,
+  or more numerous without converging.
 
 The honest admission ADR-0011 Rule 1 demands: **this trigger is enforced by the
 faculty most prone to the lock it guards against** — exactly the weakness
@@ -229,10 +211,11 @@ thing it was for:
 - **Do NOT pre-lead it** with your diagnosis, your frame, or your list of
   suspected calls. A brief that says "find the blocking call I missed" reproduces
   your lock in the second agent and collapses an independent perspective into
-  *one × M* — your single frame, run twice. The corpus's fan-out discipline is
-  explicit on this: over-leading a commissioned agent (prescribing its files, its
-  APIs, its model) forfeits exactly the cross-validation that is the entire
-  reason to ask. The fresh perspective *is* the deliverable; pre-leading destroys
+  *one × M* — your single frame, run twice. This project's own discipline for
+  spreading work across multiple independent commissioned agents (its "fan-out"
+  practice) is explicit on this: over-leading a commissioned agent (prescribing
+  its files, its APIs, its model) forfeits exactly the cross-validation that is
+  the entire reason to ask. The fresh perspective *is* the deliverable; pre-leading destroys
   it before it is produced.
 - **Invite reframing.** The second agent must be free to say "this is not a
   blocking-call problem at all" — that sentence is the highest-value output it
@@ -263,9 +246,10 @@ locked frame and an unseen type are the same blindness viewed from two
 directions: the executor keeps fixing instances because it cannot see the
 abstraction that would dissolve the class. The second opinion's job is to supply
 the frame in which that type becomes visible. (This is the project's central law
-in passing — **ADR-0012's typed-signature-is-SSOT (P8)**: the contract lives in
-the type, and a defect-class you keep patching instance-by-instance is usually a
-type you have not yet seen.)
+in passing — **[ADR-0012 (compositional and structural hygiene)](0012-compositional-and-structural-hygiene.md)'s
+typed-signature-is-SSOT principle (its numbered principle P8, "single source of truth")**: the
+contract lives in the type, and a defect-class you keep patching instance-by-instance is
+usually a type you have not yet seen.)
 
 And — composing with and **bounded by** ADR-0013 — the second opinion is
 *finishing the work via help*, **not** offloading the mandate. The executor
@@ -412,35 +396,37 @@ is settled would be the silent failure ADR-0008 exists to catch.
 
 ## Related
 
-- **ADR-0011 (mechanization discipline).** The parent. This tenet **is** ADR-0011
-  turned inward on the executor: the recurrence→mechanism conversion (Rule 2),
-  the enforcement-surface declaration (review-only, self-applied), and the honest
-  "this rung is enforced by the faculty it guards" admission are all ADR-0011's,
+- **[ADR-0011 (mechanization discipline)](0011-mechanization-discipline.md).** The parent.
+  This tenet **is** ADR-0011 turned inward on the executor: the recurrence→mechanism
+  conversion (Rule 2), the enforcement-surface declaration (review-only, self-applied), and
+  the honest "this rung is enforced by the faculty it guards" admission are all ADR-0011's,
   applied to the executor's *own reasoning process* rather than to the code.
-- **ADR-0013 (execution integrity).** The sibling, and the boundary. ADR-0013
-  guards the *will to finish*; this guards the *ability to reframe* when the
-  executor's line of attack has stalled. Its 2026-06-24 amendment (against
+- **[ADR-0013 (execution integrity)](0013-execution-integrity.md).** The sibling, and the
+  boundary. ADR-0013 guards the *will to finish*; this guards the *ability to reframe* when
+  the executor's line of attack has stalled. Its 2026-06-24 amendment (against
   malicious compliance / thought-avoidance) is the direct compose-point of this
   tenet's Rule 1: requesting help when stumped is the professional move, the
   opposite of both ego-locking *and* offloading-to-avoid-thought. Rule 5 (verify
   the artifact) binds the second opinion's fix exactly as it binds the
   executor's own.
-- **ADR-0008 (classification discipline).** The tension above is filed against
-  it: whether this is a distinct tenet or an application-note of its siblings is
-  the open ADR-0008 question, left visible per Rule 3 rather than fuzzy-matched
+- **[ADR-0008 (classification discipline)](0008-classification-discipline.md).** The tension
+  above is filed against it: whether this is a distinct tenet or an application-note of its
+  siblings is the open ADR-0008 question, left visible per Rule 3 rather than fuzzy-matched
   closed.
-- **ADR-0000 (type-driven design).** The sibling authored in parallel; the
-  thing the second opinion is brought *to* — when the executor cannot see the
-  type that would dissolve a defect-class, that blindness is the trigger to fetch
-  fresh eyes (Rule 4). Composes with **ADR-0012's typed-signature-is-SSOT (P8)**:
+- **[ADR-0000 (type-driven design)](0000-the-alpha-and-the-omega-type-driven-design.md).**
+  The sibling authored in parallel; the thing the second opinion is brought *to* — when the
+  executor cannot see the type that would dissolve a defect-class, that blindness is the
+  trigger to fetch fresh eyes (Rule 4). Composes with
+  **[ADR-0012 (compositional and structural hygiene)](0012-compositional-and-structural-hygiene.md)'s
+  typed-signature-is-SSOT principle (its numbered principle P8, "single source of truth")**:
   a class you keep patching instance-by-instance is usually a type not yet seen.
-- **ADR-0005 (documentation discipline).** Rule 9 (commissioned-review artifacts
-  recorded verbatim; a verdict whose artifact cannot be produced is no verdict)
-  governs how a fetched second opinion's commission and report are recorded; Rule
-  8 (point-in-time records amended by append) governs how the throughput-lab
+- **[ADR-0005 (documentation discipline)](0005-documentation-discipline.md).** Rule 9
+  (commissioned-review artifacts recorded verbatim; a verdict whose artifact cannot be
+  produced is no verdict) governs how a fetched second opinion's commission and report are
+  recorded; Rule 8 (point-in-time records amended by append) governs how the extracted
   specimen is cited without retro-editing it.
-- **ADR-0002 (fail loudly).** Rule 2's observable trigger is fail-loudly applied
-  to the executor's own lock: the recurrence is the loud channel; the bare
+- **[ADR-0002 (fail loudly)](0002-fail-loudly.md).** Rule 2's observable trigger is
+  fail-loudly applied to the executor's own lock: the recurrence is the loud channel; the bare
   in-the-moment confidence that the next attempt will land is the silent one.
 - **The hack-rationalization detector** (the corpus's standing out-of-frame
   instrument, cited in ADR-0013 Rule 3). The negative-register precedent for a
@@ -471,5 +457,19 @@ is settled would be the silent failure ADR-0008 exists to catch.
 ## License
 
 Public Domain (The Unlicense).
+
+*(Dated correction, 2026-07-13, per ADR-0005 Rule 8 — hazard H1 of
+`design/MAINT-ADR-PORTABILITY-SPEC.md`: this file's tail carried two literal lines of
+tool-call residue, committed into law by accident at some prior save, verified
+byte-level with `cat -A` before this fix. Before (verbatim, the corrupted tail
+immediately following the License line above):*
+
+```
 </content>
 </invoke>
+```
+
+*After: the two residue lines are removed; the License line above is now the last
+substantive content in the file, with only this dated correction note (per Rule 8, appended
+below it, exactly as this parenthetical itself is doing) following. Nothing else in this
+file changed by this correction.)*
