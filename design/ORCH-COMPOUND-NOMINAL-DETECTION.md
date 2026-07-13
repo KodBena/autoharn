@@ -6,6 +6,13 @@
 > shape, and a **measured** feasibility verdict against this repository's own static-analysis
 > assets. It recommends a process stopgap and files the mechanical version as not-yet-feasible
 > with the numbers that would change that. It changes no gate and binds no one.
+>
+> **Amendments (2026-07-13):** a second attempt
+> ([ORCH-COMPOUND-NOMINAL-DETECTION-2.md](ORCH-COMPOUND-NOMINAL-DETECTION-2.md)) built a
+> different instrument and measured a counterexample to part of this note's Verdict. See the
+> "Dated correction (2026-07-13)" section below, added per
+> [ADR-0005](../law/adr/0005-documentation-discipline.md) Rule 8 — this note's original text
+> is otherwise unedited.
 
 ## What this is about, in plain words
 
@@ -239,7 +246,7 @@ The headline numbers, each a count from the run, not an estimate:
 | --- | --- |
 | candidate hits flagged | **15042** (11862 distinct compounds) |
 | for comparison — acronym gate's own cry-wolf number | 1619 across 206 docs (ADR-0017 Context) |
-| DEFECT-class precision (hand-classified 40-sample) | **~2.5%** (1 weak true positive / 40) |
+| DEFECT-class precision (hand-classified 40-sample) | ~~**~2.5%** (1 weak true positive / 40)~~ **[2026-07-13 correction: 0/40, 0% — the sole claimed true positive is a tokenization artifact; see "Dated correction (2026-07-13)" below]** |
 | precision counting whitelist-worthy house terms as actionable | ~7.5% (3 / 40) |
 | recall on the motivating specimen "trust story" | **0** (never emitted) |
 
@@ -250,8 +257,9 @@ hand-classified 40-sample (random over the distinct set, seed 42, verdicts and r
 classification file) is ~36/40 false positives: verb phrases ("ledger implements", "machine
 checks"), possessives ("mechanism's mode"), adjective+noun ("fuzzy task", "non-zero exit"), and
 — the class that matters — **transparent real compounds whose relation is plainly recoverable**
-("failure mode", "phase structure", "audit trail"). Genuine unrecoverable-coinage defects: one
-weak instance in forty.
+("failure mode", "phase structure", "audit trail"). ~~Genuine unrecoverable-coinage defects: one
+weak instance in forty.~~ **[2026-07-13 correction: zero instances in forty — the one weak
+instance was a tokenization artifact; see "Dated correction (2026-07-13)" below.]**
 
 **It misses the specimen.** Probing the prototype directly (recorded in the classification
 file): the word "story" never appears in a determiner/preposition slot anywhere in the corpus,
@@ -269,7 +277,8 @@ they *are* N+N. The tagger fixes the verb/adjective false positives (Part 3's ga
 classification file) but not gap 3 — the transparent-compound flood — because that gap is
 **semantic**: it is Downing's result that relation-recoverability is not a finite syntactic
 property. No amount of grammar analysis computes it. So a perfect tagger moves precision from
-~2.5% up to whatever fraction of all-N+N-compounds-in-the-repo are genuinely defective, and the
+~~~2.5%~~ **[2026-07-13 correction: from 0%, not ~2.5% — see "Dated correction (2026-07-13)"
+below]** up to whatever fraction of all-N+N-compounds-in-the-repo are genuinely defective, and the
 40-sample says that fraction is very small. The whitelist rescues *coined* house terms but
 cannot enumerate the open-ended space of legible ad-hoc compounds.
 
@@ -300,17 +309,20 @@ when it did.
 ## Verdict
 
 **Not feasible as a deterministic gate at acceptable precision, at either the stdlib-crude tier
-(measured 2.5%, misses the specimen) or the with-a-real-tagger tier (the flood is semantic, not
-grammatical, so a tagger does not rescue precision).** Shipping either would rebuild the
-acronym gate's cry-wolf failure that ADR-0017's Context and `gates/doc_shapes.py`'s
-measure-first rule exist to prevent. The maintainer's claim 2 ("well-shaped enough for static
-grammar analysis") is the near-miss: the *shape* is well-defined and detectable, but
+(~~measured 2.5%~~ **[2026-07-13 correction: measured 0/40, 0% — see "Dated correction
+(2026-07-13)" below]**, misses the specimen) or the with-a-real-tagger tier (the flood is
+semantic, not grammatical, so a tagger does not rescue precision).** Shipping either would
+rebuild the acronym gate's cry-wolf failure that ADR-0017's Context and `gates/doc_shapes.py`'s
+measure-first rule exist to prevent — **this narrower claim (no blocking gate) stands
+CONFIRMED; see the dated correction below.** The maintainer's claim 2 ("well-shaped enough for
+static grammar analysis") is the near-miss: the *shape* is well-defined and detectable, but
 *defectiveness* is relation-recoverability, which static analysis cannot decide.
 
-Claim 1 ("common") is not confirmed as a distinct, separable high-frequency class: novel
+~~Claim 1 ("common") is not confirmed as a distinct, separable high-frequency class: novel
 unrecoverable coinages are real but rare against the legible-compound background, and no
-mechanical predicate isolates them. Claim 3 ("a linguist could name it") is confirmed —
-Part 1.
+mechanical predicate isolates them.~~ **[2026-07-13 correction: SUPERSEDED — a ranked,
+report-only instrument does isolate them at measured useful precision; see "Dated correction
+(2026-07-13)" below.]** Claim 3 ("a linguist could name it") is confirmed — Part 1.
 
 **The table class reaches the same verdict from the other side.** Its enumeration is
 sound and cheap (unlike the compound scan, no flood — 58 clean testable columns), but the
@@ -331,6 +343,43 @@ What would change the verdict, stated concretely so the next pass does not re-li
 - Evidence that the transparent-compound flood (gap 3) can be cut by something other than an
   unbounded whitelist — e.g. an LLM relation-recoverability judgment, which is not static
   analysis and belongs with the critic, not a gate.
+
+## Dated correction (2026-07-13)
+
+> Per [ADR-0005](../law/adr/0005-documentation-discipline.md) Rule 8, everything above this
+> section stands verbatim as the planning-time, point-in-time record — nothing above has
+> been rewritten. This section is the dated correction, filed against tracker items
+> `compound-nominal-detection-2-fable-attempt` (the second attempt's commission) and
+> `detection-note-1-dated-correction` (this transcription). Its source is
+> [ORCH-COMPOUND-NOMINAL-DETECTION-2.md](ORCH-COMPOUND-NOMINAL-DETECTION-2.md), the second
+> attempt commissioned because the maintainer did not accept this note's infeasibility
+> verdict as evidence about the task rather than about one method.
+
+Three corrections, each detailed in the second note's Verdict section:
+
+- **(a) The "no mechanical predicate isolates them" and recall-0-at-stdlib-tier conclusions
+  are superseded by a measured counterexample.** The second note's ranked, report-only
+  instrument — stdlib-only, like this note's — catches the "trust story" specimen at global
+  rank 1 of 13,855 candidates and measures top-10 100% / top-25 92% / top-50 78% precision
+  (actionable band) on the live corpus. This note's own diagnosis that a *corpus-derived*
+  noun lexicon is structurally blind to the defect it targets (Part 3, "It misses the
+  specimen") was correct — but that was an argument against corpus-derived lexicons
+  specifically, not against static analysis in general, and this note's broader closure ("no
+  mechanical predicate isolates them," Verdict above) does not survive the counterexample.
+- **(b) This note's own 40-sample evidence carried a tokenization artifact — its sole
+  claimed true positive is VOID.** "Artifacts spec proof" (Part 3, "It floods") is not a
+  real compound: the source text is "the formal artifacts (spec + proof)"
+  (`law/briefs/safety-critical-logging/intermediate/sweep-assurance-cases-gsn.md`), and the
+  prototype tokenized across the parentheses, manufacturing a three-noun run that does not
+  exist in the source. This note's measured crude-tier DEFECT-class precision on the
+  40-sample was therefore **0/40, not 1/40** — 0%, not the ~2.5% stated above.
+- **(c) The strict conclusion stands CONFIRMED.** No blocking (red/green) deterministic gate
+  is buildable, at this house's precision bar, for either defect class, at either the
+  stdlib-crude tier or the with-a-real-tagger tier — the semantic judgment (relation-
+  recoverability; table type-coherence) remains out of static reach, and the second note's
+  own Verdict confirms this explicitly. What is superseded by (a) is narrower than the
+  strict conclusion: the claim that *no* mechanical instrument of *any* grade isolates these
+  defects, not the claim that none clears the *blocking-gate* bar.
 
 ## Part 4 — Staged path
 
