@@ -531,7 +531,7 @@ own machinery, and an adopting project replaces it wholesale with its own.
   cancer G.** "Load-bearing knowledge offloaded to unenforceable prose" is this tenet's
   structural cousin: G forbids prose as a *substitute for mechanism*; this tenet governs the
   prose that legitimately remains.
-- **[ADR-0013 (execution integrity)](0013-execution-stamina-and-structural-completeness.md)
+- **[ADR-0013 (execution integrity)](0013-execution-integrity.md)
   and [ADR-0014 (second opinion)](0014-executor-second-opinion.md).** The
   faculty-that-corrupts admission and the out-of-frame remedy, which Rule 1 inherits: the
   author cannot run the zero-context test on their own text, so the honest checker is

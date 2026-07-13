@@ -370,7 +370,7 @@ named. Two design notes that belong here rather than there:
 ### (e) The remaining corners of the space, closed explicitly
 
 Enumerated so the space is closed rather than trailed off
-([ADR-0013](../law/adr/0013-execution-stamina-and-structural-completeness.md)'s completeness
+([ADR-0013](../law/adr/0013-execution-integrity.md)'s completeness
 posture):
 
 - **(e1) GLOSSARY.md as the packet store** (facts as glossary entries rather than ledger
