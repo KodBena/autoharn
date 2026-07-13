@@ -337,8 +337,14 @@ that amendment executed the ADR-0011 half of the same finding and explicitly rou
 half back for separate dispatch, because its own work package's commission touched only
 ADR-0011 and its history/ files — naming the gap rather than silently leaving it undone or
 duplicating the other document's work. Provenance of the finding: the spec's full-corpus
-contradiction read found that [ADR-0012](0012-compositional-and-structural-hygiene.md) P7 ranks "generate-or-compile-from-one-source >
-**build-time lint** > runtime parity" and P9 rule 5 asserts "**compile-time** > runtime in
+contradiction read found that [ADR-0012](0012-compositional-and-structural-hygiene.md) —
+whose Decision section states its rules as nine numbered principles labeled P1 through P9,
+the "P" labels this Amendment cites — ranks, in
+[P7 (cross-language wire discipline)](0012-compositional-and-structural-hygiene.md#p7-cross-language-wire-discipline-the-new-material),
+"generate-or-compile-from-one-source > **build-time lint** > runtime parity", and asserts,
+in rule 5 of
+[P9 (functional core, imperative shell)](0012-compositional-and-structural-hygiene.md#p9-functional-core-imperative-shell-the-compiled-component-contract),
+"**compile-time** > runtime in
 the loudness hierarchy P5 defers to" — but neither build-time-lint nor compile-time was
 nameable as a rung of the hierarchy above, which named only "Test/build-time error (a test
 fails)" at its second position: this corpus's most-cited structural tenet was enforcing at
