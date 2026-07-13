@@ -300,8 +300,11 @@ A net with holes catches nothing and reports otherwise.
 [`design/MAINT-ADR-PORTABILITY-SPEC.md`](../../design/MAINT-ADR-PORTABILITY-SPEC.md) §7 C8
 — adjudicated by the maintainer 2026-07-13, ledger row 403: the spec's PROPOSED resolution
 stands as the default. Provenance of the finding: the spec's full-corpus contradiction read
-found that ADR-0012 P7 ranks "generate-or-compile-from-one-source > **build-time lint** >
-runtime parity" and P9 rule 5 asserts "**compile-time** > runtime in the loudness hierarchy
+found that
+[ADR-0012 (compositional and structural hygiene)](0012-compositional-and-structural-hygiene.md)
+— whose nine numbered principles P1–P9 are that document's own section labels — ranks, in its
+P7, "generate-or-compile-from-one-source > **build-time lint** >
+runtime parity", and in its P9 rule 5 asserts "**compile-time** > runtime in the loudness hierarchy
 P5 defers to" — but neither *build-time-lint* nor *compile-time* was a rung in this Rule's
 vocabulary or in ADR-0002's loudness hierarchy: this corpus's most-cited structural tenet was
 enforcing at a level its own enforcement vocabulary could not name.)*
