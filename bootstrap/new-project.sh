@@ -1,7 +1,7 @@
 #!/bin/sh
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-09T11:15:53Z
-#   last-change: 2026-07-12T16:21:53Z
+#   last-change: 2026-07-13T17:39:09Z
 #   contributors: be693afb/main, e4410ef6/main, 3c50e030/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -16,7 +16,7 @@
 #
 # Usage:
 #   bootstrap/new-project.sh <dest-dir> --db <db> --host <host> --schema <schema> \
-#       --kern <kern> --role <role> [--name <project-name>] [--force]
+#       --kern <kern> --role <role> [--name <project-name>] [--governed <patterns>] [--force]
 #
 #   <dest-dir>   where to stamp the new instance (created if missing).
 #   --db         the ledger's database name.
@@ -31,6 +31,14 @@
 #                something that will NOT collide with autoharn engine/targets.py's curated
 #                registry names (toy, nla, e15-e18) or its scratch-naming conventions
 #                (^s\d+[a-z]*$, *_scratch), or `judge` will resolve to the WRONG target.
+#   --governed   comma-separated fnmatch patterns for `.claude/governed_files.json` (e.g.
+#                "*.py,*.sql,*.tf") -- what the change gate protects in THIS deployment (tracker
+#                item `scaffold-governed-set-language-default`, ent testbed finding 4, 2026-07-13:
+#                the scaffold used to write ['*.py'] unconditionally, so any non-Python deployment
+#                was born with its real work surfaces silently ungoverned). Omit it and the
+#                scaffold falls back to the historical `*.py`-only default -- but then prints a
+#                LOUD post-scaffold notice naming that default and the one-line widening act, so
+#                the gap is never silent again.
 #   --force      overwrite an existing deployment.json/scaffold at <dest-dir> (default: refuse).
 #
 # --new-world <world> mode (BACKLOG "Ruling: one world per run", 2026-07-09; this session's
@@ -87,11 +95,13 @@ done
 CREATED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
 usage() {
-    echo "usage: $0 <dest-dir> --db <db> --host <host> --schema <schema> --kern <kern> --role <role> [--name <name>] [--force]" >&2
-    echo "       $0 <dest-dir> --new-world <world> --db <db> --host <host> [--name <name>] [--force]" >&2
+    echo "usage: $0 <dest-dir> --db <db> --host <host> --schema <schema> --kern <kern> --role <role> [--name <name>] [--governed <patterns>] [--force]" >&2
+    echo "       $0 <dest-dir> --new-world <world> --db <db> --host <host> [--name <name>] [--governed <patterns>] [--force]" >&2
     echo "         (--new-world derives --schema/--kern/--role from <world> unless given explicitly;" >&2
     echo "          also applies high_watermark_1.sql + s20 through s28 and seeds the stamp secret -- see" >&2
     echo "          the --new-world block in this script's own header comment)" >&2
+    echo "         (--governed <comma-separated-fnmatch-patterns> sets .claude/governed_files.json;" >&2
+    echo "          omit it and the *.py-only default is used, with a loud post-scaffold notice)" >&2
     exit 2
 }
 
@@ -100,6 +110,7 @@ DEST="$1"; shift
 NAME=""
 FORCE=0
 NEW_WORLD=""
+GOVERNED=""
 DB=""; HOST=""; SCHEMA=""; KERN=""; ROLE=""
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -110,6 +121,7 @@ while [ $# -gt 0 ]; do
         --role) ROLE="$2"; shift 2 ;;
         --name) NAME="$2"; shift 2 ;;
         --new-world) NEW_WORLD="$2"; shift 2 ;;
+        --governed) GOVERNED="$2"; shift 2 ;;
         --force) FORCE=1; shift ;;
         *) echo "unrecognized argument: $1" >&2; usage ;;
     esac
@@ -292,6 +304,46 @@ PYEOF
 mkdir -p "$PROJECT_ROOT/.claude/logs" "$PROJECT_ROOT/.claude/secrets"
 chmod 700 "$PROJECT_ROOT/.claude/secrets"
 
+# .gitignore the scaffolding-owned churn paths INSIDE the subject repo this scaffold is stamping
+# (tracker item `scaffold-log-churn-in-subject-repo`, ent-observatory cycle-001 NEW lesson 1: the
+# invocation log landed git-tracked inside an audited subject repo -- picom/.claude/logs -- and
+# churned on every session action; that cycle's audit agent handled it correctly by hand
+# (excluding .claude from its diffs), but nothing stops the NEXT audit agent from missing that
+# exclusion and treating the churn as a false-positive mutation signal. Fixed at birth here rather
+# than left for every future audit to route around by hand.
+#
+# Append-if-missing (idempotent, mirrors the stamp-secret/genesis-seed never-rotate posture
+# elsewhere in this script): a marker pair brackets the block so a re-scaffold (--force) or a
+# second scaffold call against the same dest-dir never duplicates it.
+echo "-- .gitignore (scaffolding-owned churn paths in the subject repo) --"
+GITIGNORE="$PROJECT_ROOT/.gitignore"
+GITIGNORE_MARK_BEGIN="# >>> autoharn scaffold-owned churn (bootstrap/new-project.sh) >>>"
+GITIGNORE_MARK_END="# <<< autoharn scaffold-owned churn <<<"
+if [ -f "$GITIGNORE" ] && grep -qF "$GITIGNORE_MARK_BEGIN" "$GITIGNORE" 2>/dev/null; then
+    echo "   $GITIGNORE already carries the scaffold-owned churn block -- left untouched (idempotent)"
+else
+    {
+        echo ""
+        echo "$GITIGNORE_MARK_BEGIN"
+        echo "# Written by bootstrap/new-project.sh ($CREATED_AT), tracker item"
+        echo "# scaffold-log-churn-in-subject-repo: these paths are scaffolding/hook RUNTIME OUTPUT"
+        echo "# (invocation logs, change-gate state), not audited subject-repo content, and churn on"
+        echo "# every session action -- tracking them git-side is a false-positive generator for any"
+        echo "# diff/mutation-purity check run against this repo (ent-observatory cycle-001, NEW"
+        echo "# lesson 1). Append-if-missing; safe to re-run."
+        echo ".claude/logs/"
+        echo "$GITIGNORE_MARK_END"
+    } >> "$GITIGNORE"
+    echo "   appended scaffold-owned churn block to $GITIGNORE (.claude/logs/)"
+fi
+if (cd "$PROJECT_ROOT" && git rev-parse --is-inside-work-tree >/dev/null 2>&1); then
+    :
+else
+    echo "   NOTE: $PROJECT_ROOT is not (yet) a git repo -- the .gitignore above was still written;"
+    echo "   it is inert until this directory becomes one (e.g. \`git init\`), at which point it"
+    echo "   takes effect immediately with no further action."
+fi
+
 # sed substitution table, shared by every template below. `|` delimiter (paths contain `/`).
 sedsubst() {
     sed \
@@ -315,7 +367,39 @@ sedsubst() {
 
 echo "-- .claude/ wiring --"
 sedsubst < "$TEMPLATES/settings.json.tmpl" > "$PROJECT_ROOT/.claude/settings.json"
-cp "$TEMPLATES/governed_files.json" "$PROJECT_ROOT/.claude/governed_files.json"
+# governed_files.json: --governed <comma-separated-patterns> lets THIS deployment declare its
+# real work surface at birth (tracker item `scaffold-governed-set-language-default`, ent testbed
+# finding 4, 2026-07-13) instead of inheriting the historical *.py-only default silently. Absent
+# --governed, the old default template is copied unchanged (byte-identical scaffold behavior for
+# every existing caller) -- but the gap it can leave is no longer silent: the loud notice below
+# names the default and the exact one-line widening act, refusal-grade rather than a footnote.
+if [ -n "$GOVERNED" ]; then
+    "$PY" - "$PROJECT_ROOT/.claude/governed_files.json" "$GOVERNED" <<'PYEOF'
+import json
+import sys
+
+path, patterns_csv = sys.argv[1:3]
+patterns = [p.strip() for p in patterns_csv.split(",") if p.strip()]
+with open(path, "w") as f:
+    json.dump({"patterns": patterns}, f, indent=2)
+    f.write("\n")
+PYEOF
+    echo "wrote .claude/governed_files.json (custom, --governed '$GOVERNED')"
+else
+    cp "$TEMPLATES/governed_files.json" "$PROJECT_ROOT/.claude/governed_files.json"
+    echo "wrote .claude/governed_files.json (DEFAULT: *.py only)"
+    echo ""
+    echo "!! GOVERNED-SET DEFAULT NOTICE (no --governed given) !!"
+    echo "This deployment's change gate governs *.py files ONLY -- the scaffold's historical"
+    echo "default, not a judgment about what THIS project's real work surface is. If this"
+    echo "deployment's work is not Python (SQL, shell, Terraform, config, docs, anything else),"
+    echo "those files are UNGOVERNED right now: Claude Code can edit them with NO preceding ledger"
+    echo "entry, and nothing will warn you again after this line."
+    echo "Widen it with exactly one edit -- $PROJECT_ROOT/.claude/governed_files.json:"
+    echo "  { \"patterns\": [\"*.py\", \"*.sql\", \"*.tf\"] }"
+    echo "(fnmatch semantics, no restart needed: $PROJECT_ROOT/.claude/GOVERNED_FILES.md)"
+    echo ""
+fi
 # COHERENCE PARTNER: .claude/GOVERNED_FILES.md and .claude/APPARATUS.md below are AUTOHARN's own
 # prose, named in gates/doc_attestation_presence.py's DEPLOYMENT_SCAFFOLD_OWNED_MD (tracker item
 # `abc-loop-offering`) so a scaffolded deployment's ./attest-doc/./distance-to-clean never asks
