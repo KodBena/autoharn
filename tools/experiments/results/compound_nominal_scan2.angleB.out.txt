@@ -1,0 +1,47 @@
+compound_nominal_scan2 (EXPERIMENT, report-only): CLASS 1 ranked scan
+  excluded prefixes: vestigial_documentation/, judgment/; definition surfaces: GLOSSARY.md, gates/doc-legibility/terms.md, research/obligations-formalisms-survey/KEY.md
+  excluded (evidence-record marker 'doc-attest-exempt'): design/ORCH-RETROSPECTIVE-RUN11.md
+  excluded (evidence-record marker 'doc-attest-exempt'): tools/experiments/results/compound_nominal_classification.md
+  corpus: 174 docs; defined terms (GLOSSARY/terms/KEY + lexicalized): 288+27
+  distinct candidate pairs (any angle fired): 3164
+  per-angle candidate counts: {'B': 3164}
+
+  ranking function: score = 10*A + 3*B + C, where
+    A = 2*head_weight + 2*[abstract modifier] + [borrowed head] + [<=2 docs]
+    B = min(head_uses/(determinered_uses+1), 12) when ratio>=2, det<=4, pair<=6
+    C = 3/pair_count (novelty tail — the measured-flood control angle)
+
+  top 15:
+    1. [  36.00] 'absence plus'  x1 in 1 doc(s)  (B=12.0)
+        ORCH-OPERATING-CARD.md:128
+    2. [  36.00] 'abstraction nobody'  x1 in 1 doc(s)  (B=12.0)
+        law/adr/0003-domain-coupling-bands.md:198
+    3. [  36.00] 'abstraction today'  x1 in 1 doc(s)  (B=12.0)
+        law/adr/0003-domain-coupling-bands.md:70
+    4. [  36.00] 'act becomes'  x1 in 1 doc(s)  (B=12.0)
+        design/MAINT-GPG-TRUST-LAYER.md:206
+    5. [  36.00] 'act changes'  x1 in 1 doc(s)  (B=12.0)
+        research/obligations-formalisms-survey/formal-systems/24-counterfactual-causal.md:31
+    6. [  36.00] 'act like'  x1 in 1 doc(s)  (B=12.0)
+        CLAUDE.md:12
+    7. [  36.00] 'act stream'  x4 in 3 doc(s)  (B=12.0)
+        design/ORCH-USE-MODE-ENGINE-WIRING.md:72
+    8. [  36.00] 'action falls'  x2 in 2 doc(s)  (B=12.0)
+        research/obligations-formalisms-survey/01-obligation-taxonomy.md:34
+        research/obligations-formalisms-survey/formal-systems/16-epistemic-del.md:29
+    9. [  36.00] 'activity back'  x1 in 1 doc(s)  (B=12.0)
+        law/briefs/safety-critical-logging/intermediate/sweep-nuclear-ic.md:22
+   10. [  36.00] 'actor plus'  x1 in 1 doc(s)  (B=12.0)
+        design/ORCH-SPEC-RESOURCE-REGISTRY.md:63
+   11. [  36.00] 'acts stream'  x5 in 5 doc(s)  (B=12.0)
+        design/ORCH-human-side-fragility.md:13
+        runs/acceptance-20260707T222452/RECORD.md:34
+        design/ORCH-review-fixpoint-protocol.md:33
+   12. [  36.00] 'adjectives like'  x1 in 1 doc(s)  (B=12.0)
+        design/ORCH-COMPOUND-NOMINAL-DETECTION.md:187
+   13. [  36.00] 'adjudication applies'  x1 in 1 doc(s)  (B=12.0)
+        design/ORCH-SPEC-DOC-ATTESTATION-2.md:108
+   14. [  36.00] 'algorithm used'  x1 in 1 doc(s)  (B=12.0)
+        law/keys/README.md:63
+   15. [  36.00] 'alone today'  x1 in 1 doc(s)  (B=12.0)
+        design/USER-TAXONOMY-DECLARATION.md:105
