@@ -1,4 +1,4 @@
-# HANDOFF (rewritten 2026-07-12 evening, session e4410ef6 — fresh-context entry point)
+# HANDOFF (rewritten 2026-07-13, session 3c50e030 — fresh-context entry point)
 
 Audience: orchestrator
 
@@ -6,7 +6,7 @@ This file orients the next orchestrating session. It condenses and points; it do
 duplicate. The [SSOTs](GLOSSARY.md#ssot) (single sources of truth) it names outrank any
 summary in it, and every claim below is re-observable — cite nothing from here without
 re-checking at the source it names. It supersedes the prior HANDOFF wholesale (that
-revision survives in git as commit 22895f0). It was written because context length, not
+revision survives in git as commit 0704a4e). It was written because context length, not
 open work, ended the prior session: the fresh-session + pickup path is this project's own
 resumption doctrine, exercised on itself.
 
@@ -14,7 +14,8 @@ resumption doctrine, exercised on itself.
 
 0. `./pickup` — at this repository's ROOT. The repo tracks its own work in a standing
    Postgres ledger; the live open set, each item's full statement, the RESOURCES,
-   ESTIMATES, and TAXONOMIES sections all come from there, never from this file.
+   ESTIMATES, TAXONOMIES, and MAINTAINER-REVIEW-QUEUE sections all come from there,
+   never from this file.
 1. ORCH-OPERATING-CARD.md — orientation in one page: the two-cwd model, vocabulary, the
    verbs, start/resume including the signed-commission start, the delta decision tree,
    the hooks map, the verification checklist.
@@ -30,106 +31,126 @@ resumption doctrine, exercised on itself.
    design/USER-RECIPES-FAQ.md is the intent-keyed index over that shelf ("can I do X?"
    → the one page where the truth lives), attested against the live ledger.
 
-## Where the project stands (2026-07-12 evening)
+## Where the project stands (2026-07-13)
 
-Run 12 completed as the first fully-ceremonied run: a SIGNED commission verified live
-(first VERIFIED on record), a live resource declaration, six reviewer dispatches, ended
-review-clean. Its defects became permanent mechanisms the same day: malformed
-`resource:` intake now refuses loudly at the boundary; content-free review discharge is
-audited (`./audit --review-gap`, FLAGGED-never-VIOLATED); decomposition review is a
-write-time blocker (`decomposition_review` mechanism, observe default).
+The readiness-probe program CLOSED: probe 2 (frozen at stamp 0704a4e) replicated the
+first probe's results cleanly, and probe 3 (stamp d4aac05) scored 17/19 with both
+residual misses traced to documentation defects and fixed the same day (the
+mandated-tier reconciliation in design/ORCH-SPEC-RESOURCE-ACCOUNTING.md §4.1; a stale
+capability item repaired in 9c86d20). The instrument stays outside the repo on purpose (a greppable key contaminates
+the probe); its hashes and protocol are ledgered under tracker item
+`opus-readiness-probe`.
 
-The maintainer's re-litigation commission ("re-judge adoption modulo the dearth of
-adoption evidence") ran as a five-lens panel and is synthesized in
-design/MAINT-RELITIGATION-SYNTHESIS.md (attested): 3–2 adoptable-in-principle, his bias
-suspicion substantially confirmed, FAA's dissent recorded, one decision-shaped wall
-standing (single trust domain — his, at leisure). Five Fable-authored specs shipped and
-were attested the same day: resource accounting, decomposition policy, task taxonomy
-(his boundary-discipline ask, polymorphic in taxonomy), the A:B:C offering, and the
-scope-semantics ruling that closed Q1.
+A SECOND LIVE DEPLOYMENT runs at the maintainer's `~/ent`: a code-health audit of the
+picom compositor (C/GLSL), seeded with structural rows only (taxonomy, interface, and
+environment-constraint declarations — no findings, no interpretive prose) and a
+verbatim commission, orchestrated by the maintainer with Sonnet. Two standing consequences:
 
-Two build waves then landed, every item claimed → estimated → built by a Sonnet
-worktree builder → independently re-witnessed at the merge seam → closed with witness:
+- **Merge-gate while ent runs:** nothing merges to `next` that touches
+  bootstrap/templates/, hooks/, or gates imported by live verbs. proposals/ (registered,
+  transitional) stages template patches until a session gap.
+- **Observatory:** observatory/ent/ holds recurring read-only evaluation cycles
+  (001–003 so far, on the maintainer's word each time). From cycle 003 the reports carry
+  a METHOD CANDIDATES section — the maintainer's method-harvesting posture, ledgered:
+  observatory cycles and merge-seam reviews (a "seam" here and throughout is the
+  independent re-witnessing every builder branch receives at merge time, before it
+  lands on `next`) watch for durably-shaped workflows worth serving
+  into the recipes corpus, and we may not know in advance what we're looking for, so
+  odd-but-recurring shapes get flagged even when they can't yet be classified.
 
-- **panel-cheap-fixes** — FAQ register fix ("is consistent with", CONTESTED→SIGNED
-  rule), money-figures-diagnostic disclosure in USER docs, commit-hash-in-PROVENANCE at
-  scaffold (DIRTY/UNAVAILABLE honesty), and the s26 deletion fixture, which FOUND a real
-  limit: tail-row deletion is invisible to the chain alone (interior deletion breaks it;
-  witnessed both ways twice). Tracker item `s26-tail-deletion-witness` holds the
-  designed always-on fix.
-- **apparatus-flip-witnessing** — every apparatus.json mutation journals a typed event
-  (watcher deliberately outside its own switchboard); `verify-chain --head` carries
-  `apparatus_hash` (manual two-head comparison, named precisely). CAPABILITIES item 32.
-- **cost-estimation-retro** — the `estimate:` grammar is LIVE in the tracker verbs
-  (six fields, refuse-before-write), `./pickup` renders ESTIMATES, the retrospective
-  recipe gained estimate-vs-actual with the grade split stated (witnessed counts
-  evidentiary once accounting stages B/D ship; tokens diagnostic-grade permanently).
-  NEVER for policing costs — the maintainer's invariant is in the refusal text itself.
-- **taxonomy-stage-a** — `taxon:`/`interface:` declarations live, TAXONOMIES in pickup,
-  the omega licensing specimen worked in design/USER-TAXONOMY-DECLARATION.md.
-  Stages B–D (audit, gate, task-policy wiring) are spec'd, unbuilt. Item 33.
-- **accounting-stage-a** — the `forbidden:` TIER (MUST-NOT completing the deontic
-  register); declaration + display only, enforcement is Stage C, unbuilt. Item 34.
-- **abc-loop-offering** — the A:B:C loop offered to deployments: `./attest-doc` (the
-  sixth in-project shim; the scaffold remains the seventh verb per
-  ORCH-OPERATING-CARD.md/USER-GUIDE.md), deployment-local attestations ledger,
-  distance-to-clean DOC-ATTESTATION section
-  behind the `doc_attestation` apparatus switch (default off), adopter walkthrough
-  design/USER-DOC-AUDIT-LOOP.md. Item 35.
+Both auxiliary ledgers are applied and live (each by the maintainer's own
+typed-confirmation act, witnessed): the research ledger (stores/001) and the harness-failure ledger
+(stores/008, schema `harness_failure`, collection default-on; 12 records at handoff —
+see design/ORCH-HARNESS-FAILURE-LEDGER.md). The executive review queue is live: the
+`review:`/`review-done:` grammars feed a ranked MAINTAINER-REVIEW-QUEUE section in
+`./pickup`, so only load-bearing judgment questions reach the maintainer.
 
-Estimates were ledgered for wave 2 before dispatch and reconciled at close — first
-calibration lesson, on the ledger: the 1M token-OOM denomination overshot all three
-times; estimate 100K–1M boundary cases as 100K.
+pgAudit is at the provision-inert stage (design/ORCH-PGAUDIT-EXPLORATION.md): the
+package install, preload entry, and one restart are the maintainer's acts; every
+configuration decision is deferred until he is present for it. Do not advance this
+without him.
 
-## The succession posture (what happens when Fable is gone)
+Exploration/design records landed this session, all attested, none carrying a mandate:
+knowledge-representation titration (design/ORCH-KR-TITRATION-EXPLORATION.md),
+compound-nominal detection round-trip (design/ORCH-COMPOUND-NOMINAL-DETECTION.md and
+-2.md — an Opus infeasibility verdict constructively rebutted with a working detector),
+the typed-table constructor experiment (design/ORCH-TYPED-TABLE-EXPERIMENT.md), and the
+registry completeness audit (design/ORCH-REGISTRY-COMPLETENESS-AUDIT-001.md, a 20-family
+matrix with proposals P1–P7 queued for the maintainer).
 
-- The succession drill PASSED, graded and ledgered (2026-07-12 morning): Opus authored
-  design/ORCH-SPEC-DOC-ATTESTATION-2.md under the CLAUDE.md succession rule's maximum
-  ceremony; that format is in routine service. Opus needs firm rails (evidence-pointer
-  duties, scope bounds, named failure modes in the commission).
-- A readiness PROBE is armed, awaiting the maintainer: a questionnaire of questions the
-  maintainer actually asked Fable (capabilities / use-guidance / refusal-traps), graded
-  as a repo-legibility audit — each wrong answer becomes a tracker item against the doc
-  that should have carried it. The instrument lives OUTSIDE the repo (deliberately: a
-  greppable key contaminates the probe) at ~/opus-readiness-questionnaire.md; its sha256
-  and protocol amendments are ledgered (tracker item `opus-readiness-probe`). The
-  maintainer chose to reference the evaluation to a git commit stamp; the stamp is the
-  commit this file lands in, ledgered at close.
-- Every open engineering item is Sonnet-executable from an attested spec — the open set
-  lives in `./pickup`, not here; its current flavor: the tail-deletion witness,
-  work-tree estimate rollups, a deliberate glossary sweep, registry stage 2, and the
-  spec'd stages (accounting B–D, taxonomy B–D, decomposition-policy stages). Nothing
-  open requires Fable-class authoring.
-- The maintainer's own acts, tracked as items: key generation (hardware token; unlocks
-  signed tags, SIGNED commissions, chain-head sign-off), the research-ledger apply (one
-  line, armed), running the readiness probe, and the standing trust-domain decision
-  (second key-holder or written acceptance — Tier-3, at leisure, now confirmed by five
-  independent lenses as THE wall).
+The ADR-portability refactor stands at end of Phase 1
+(design/MAINT-ADR-PORTABILITY-SPEC.md): contradictions adjudicated (defaults stand plus
+three overrides), with one provenance correction on record — the §7a "Metz disagreement"
+statement was Opus-authored and only lazily approved at the time; it was never the
+maintainer's own position. Final ratification and the Phase-2 go (dedicated
+`adr-portability` branch, ~14 Sonnet work packages) sit in the maintainer's queue.
 
-## Standing cautions (paid for today or before; each was witnessed, not theorized)
+## Immediately actionable (fresh session, in this order)
 
-- Synchronous B, always, for attestation loops — background Bs' verdicts were misrouted
-  to the orchestrator twice-witnessed (a type label is not an address), and one
-  background-resumed B reviewed STALE content. Give B the absolute path under the
-  builder's worktree, or it reads the main checkout while the builder edits the copy.
-- The loop's two-round cap escalates; the ratified pattern is applying B's round-2
-  repairs verbatim with an honest adjudication record — UNLESS a repair would encode a
-  falsehood (twice-witnessed: a stale "pending merge" claim, a retired-BACKLOG link);
-  then fix the underlying truth and disclose the divergence in the record.
-- Merge from the MAIN checkout — a shell cwd left inside a worktree yields "Already up
-  to date" against the branch itself (thrice-witnessed class). Never `git add -A` while
-  agent worktrees exist (one witnessed embedded-gitlink commit, amended out;
-  .claude/worktrees/ is now gitignored).
-- One ORCH-CAPABILITIES.md writer per wave; sibling builders return proposed item text
-  and the orchestrator lands the batch at the seam behind one scoped B.
-- The freeze rule covers hooks/, bootstrap/templates/, and live-executed engine/ code
-  while any wired session runs (check process cwds, not assumptions); worktree agents
-  fast-forward their stale bases first (three witnessed incidents).
+1. **Re-dispatch two claimed items whose builders never ran** (the prior session hit
+   its context ceiling between claim and dispatch; an orchestrator note (`./led show
+   492`) records this): `served-workflow-gotchas` (statement at row 483,
+   verbatim — a Workflow-script gotchas recipe entry; three independent witnesses of the
+   args-parsing class) and `cosign-convention-crosscheck` (row 486 — adjudicate ent
+   cycle-003's iterate-to-approval co-sign convention against ADR-0014 and the A:B:C
+   recipe: already-covered, genuinely-new, or divergent — and if divergent, surface the
+   divergence for the maintainer, never silently harmonize). Both are
+   Sonnet-executable from their ledgered statements alone.
+2. **Four parked branches await one merge pass at an ent session gap** (each gets a
+   fresh seam review first; builders' worktree bases are stale by default — verify the
+   base before trusting any corpus claim): `3305a5c` (three trivial doc/comment
+   corrections), `a84d69c` (pickup CANNOT-HYDRATE, exit 5), `0cd0a6f` (stop-breaker
+   strict-subset inherits instead of resetting), `f382b63` (watchdog liveness harness —
+   a safety feature by the maintainer's explicit framing, never cost-policing; all
+   thresholds end-user configurable).
+3. proposals/ template patches apply at the same gap, behind the same seam discipline.
+
+Everything else waits on the maintainer's queue: ADR-portability ratification (§7a
+provenance question included), registry P1–P7, detector adoption (blocks the
+detector-firing-telemetry item), typed-table adoption, the trust-domain wording
+findings (three, disclosed at the README legibility sweep's merge, commit ae3eeb6), and
+the pgAudit package step.
+
+## Standing cautions (paid for; each was witnessed, not theorized)
+
+- **Commissions verbatim, never paraphrased** — a compressed brief narrowed a
+  deployment's scope, and the deployment session went straight at the headline defect
+  single-handedly instead of executing the commissioned full audit (censure on record).
+  State the scope before showing specimens. Never offer a free, narrow path alongside a
+  gated, broad one — that pairing is what invited the narrowing.
+- **Reviewer briefing is two agents, never one** — fusing "verify these fixes" with
+  "sweep fresh" front-loads the reviewer and blinds the sweep (maintainer-caught, served
+  to deployments the same day). Fresh fork per round; never resume a reviewer instance.
+  Run B synchronously, always; give B the absolute path under the builder's worktree.
+- **Delegation lane:** Sonnet executes by default; Opus only for unambiguous
+  multi-boundary specs, never where its overconfidence can hurt. The orchestrator's own
+  data-plane surface is the operator verbs, full stop — anything that reaches a database
+  directly, reads included, is delegated whole, with intent-only prompts: state WHAT to
+  record and point at the schema's own docs; the data design is wholly the subagent's.
+- **Workflow scripts:** args arrive as JSON values, not strings; pin the model on every
+  agent() call; no wall-clock/randomness calls (breaks resume); a stall and a crash
+  present identically from outside — check for the failure notification before
+  diagnosing. (These are the served-workflow-gotchas item's content; serving them is
+  actionable item 1.)
+- **Merge from the MAIN checkout** — a shell cwd left inside a worktree yields "Already
+  up to date" against the branch itself (a recurring class, witnessed again this
+  session). Never `git add -A` while agent worktrees exist.
+- The A:B:C attestation loop's two-round cap escalates
+  (design/ORCH-ABC-AUDIT-LOOP-RECIPE.md); apply B's round-2 repairs verbatim with an honest
+  adjudication record — UNLESS a repair would encode a falsehood; then fix the
+  underlying truth and disclose the divergence.
 - Verify artifacts, never reports — including agents' summaries and your own prior
   claims; the seam re-runs every load-bearing fixture before merging.
 - The maintainer reads refusals, not source; his decision queue takes ONLY load-bearing
-  judgment questions. Auditability outranks agent ergonomics; the action stream is the
-  evidentiary basis; token/cost figures are diagnostic-grade permanently.
+  judgment questions — trivia is fixed autonomously, never queued. Auditability outranks
+  agent ergonomics; the hooks-recorded action stream is the evidentiary basis
+  (harness-internal files are diagnostics only); token/cost figures are
+  diagnostic-grade permanently and estimates exist for hazard detection, never
+  economizing.
+- Key generation and everything downstream of it (signed tags, chain-head sign-off) is
+  DEFERRED by standing maintainer ruling until every other concern is banked — never
+  re-raise it as a recommendation. The trust-domain decision
+  ([README.md § Trust domain](README.md#trust-domain)) is likewise his, at leisure.
 - The contemporaneity fact exporter refuses ledger windows over ~24.8 days; this
   repository's own tracker crosses that bound around 2026-08-05 — per-window anchoring
   is the documented follow-up in engine/contemp_edb.py's hazard docstring.
