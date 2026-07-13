@@ -75,3 +75,12 @@ migration provenance (`provenance/MIGRATION.tsv`) records every file's source re
 commit, and sha256. The epistemic-pilot series is not winding down; the standing bar is
 the maintainer's: *until we can hand this harness to the NRC and walk away in good
 conscience, we are not done.*
+
+### Trust domain
+
+Every role in this project's evidence chain — operator, verifier, database administrator,
+and host owner — is one person in one trust domain. All tamper-evidence guarantees are
+bounded accordingly; no claim of externally-verifiable assurance is made. This bound is
+accepted and named rather than mitigated (maintainer ruling 2026-07-13). A second
+key-holder or external state anchoring remain documented upgrades should the bound ever
+be revisited — neither is in progress or planned.
