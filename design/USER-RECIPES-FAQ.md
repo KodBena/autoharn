@@ -130,6 +130,17 @@ off).
 Walkthrough: [USER-DOC-AUDIT-LOOP.md](USER-DOC-AUDIT-LOOP.md); the loop's rules:
 [ORCH-ABC-AUDIT-LOOP-RECIPE.md](ORCH-ABC-AUDIT-LOOP-RECIPE.md).
 
+**I have known findings to verify AND I want a fresh legibility sweep — can one reviewer do
+both?**
+No — and this was learned the hard way (a real, dated 2026-07-13 anchoring defect in a live
+deployment, not a hypothetical). A reviewer briefed with a known findings list *and* asked to also
+sweep fresh anchors on the list — the sweep silently degrades into a second verification pass. Run
+two separate reviewers: a targeted verifier (front-loaded with the list — correct there) and a
+genuinely blind B (artifact + commission only, no findings, no mention a correction pass
+happened). The same rule governs a co-signer/countersign briefing. Full account, with the
+witnessed 0-versus-4-and-7 findings gap between confirmation-mode and adversarial-fresh reviews:
+[USER-DOC-AUDIT-LOOP.md](USER-DOC-AUDIT-LOOP.md)'s "Briefing your reviewer" section.
+
 ## Operating rhythm
 
 **How do I pick up work after a break?**
