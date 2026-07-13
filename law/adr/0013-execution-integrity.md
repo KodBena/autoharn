@@ -63,8 +63,13 @@ the right to dismiss a rule here by finishing the work first.
 
 The corpus already names this failure shape — it simply names it for
 *structure*, in three places, in the same words, and then declines (correctly,
-for its scope) to generalize it to *finishing*. ADR-0012 P7, P8, and P9 each
-carry a verbatim clause:
+for its scope) to generalize it to *finishing*.
+[ADR-0012 (compositional and structural hygiene)](0012-compositional-and-structural-hygiene.md)
+— whose nine numbered principles P1–P9 are that document's own section labels — carries a
+verbatim clause in each of its
+[P7 (cross-language wire discipline)](0012-compositional-and-structural-hygiene.md#p7--cross-language-wire-discipline-the-new-material),
+[P8 (typed signatures are the contract's single source of truth)](0012-compositional-and-structural-hygiene.md#p8--typed-signatures-are-the-single-source-of-truth-of-a-functions-contract), and
+[P9 (functional core, imperative shell)](0012-compositional-and-structural-hygiene.md#p9--functional-core-imperative-shell-the-compiled-component-contract):
 
 > *Never* justify settling for a weaker mechanism with a scale / minimality /
 > "one X" / "for now" / "unnecessary here" / YAGNI argument — that argument
