@@ -1,0 +1,35 @@
+=== kr-2-2 ===
+Table: the four typed-intake grammars (design/ORCH-KR-TITRATION-EXPLORATION.md §2.2)
+
+| kind | fields | write-side witness | read-side witness |
+| --- | --- | --- | --- |
+| `resource:` | NAME, CLASS, REACH, WHAT-IT-PROVES, GUIDANCE, TIER | `bootstrap/templates/led.tmpl:864-956` | `bootstrap/templates/pickup.tmpl:227,245` |
+| `estimate:` | TASK-SLUG, TOOL-CALLS, SUBAGENT-SPAWNS, WALL-CLOCK, TOKEN-OOM, BASIS | `led.tmpl:958-1059` | `pickup.tmpl:327,330` |
+| `taxon:` | TAXONOMY, TAXON, PATTERNS, GLOSS | `led.tmpl:1061-1146` | `pickup.tmpl:395` |
+| `interface:` | TAXONOMY, ARTIFACT-PATTERN, GLOSS | `led.tmpl:1147` onward | `pickup.tmpl:395` (same renderer) |
+<!-- constructor-generated: tools/experiments/typed_table.py; declared type former = 'typed-intake grammar (a `kind:` statement prefix)'; 4 row(s) type-checked at construction (forced articulation + empty-header refusal + column-count coherence); see design/ORCH-TYPED-TABLE-EXPERIMENT.md -->
+
+=== kr-5 ===
+Table: Haiku-tier-consumer comparison across three substrate candidates (design/ORCH-KR-TITRATION-EXPLORATION.md §5)
+
+| question, answered per candidate | (a) OWL/RDF store | (b) EDB/ASP tier | (c) typed grammars |
+| --- | --- | --- | --- |
+| how does a Haiku-tier consumer look up one fact? | SPARQL SELECT (needs endpoint + syntax) | invoke a pre-authored query | read pickup section / `./led show`; trivial |
+| how does it enumerate current facts? | SPARQL over latest-triples (versioning is manual in RDF) | derived view | pickup renders unsuperseded rows; supersession native |
+| how does it detect a contradiction? | ABox inconsistency — but explosion, and only within modeled axioms | absence/join judgments, differential-trusted | write-boundary refusal (malformed), collision detection stays with readers/probes |
+| why trust an answer it returns? | reasoner-proof, but encoding untrusted (no differential exists) | two-producer differential, the house bar | grammar refusal witnessed live; byte-exact rows |
+| what does the option cost to stand up? | new store + TBox + trust machinery | spec ceremony + program pairs | one cloned template block per kind |
+<!-- constructor-generated: tools/experiments/typed_table.py; declared type former = 'question a Haiku-tier consumer might ask'; 5 row(s) type-checked at construction (forced articulation + empty-header refusal + column-count coherence); see design/ORCH-TYPED-TABLE-EXPERIMENT.md -->
+
+=== audit-au ===
+Table: the AU-family walk, 5 representative rows of 16 (design/ORCH-REGISTRY-COMPLETENESS-AUDIT-001.md)
+
+| AU control (ID and catalog title) | Posture in autoharn |
+| --- | --- |
+| AU-1 Policy and Procedures | ABSENT as a formal policy document; the ledger-and-witness doctrine in CLAUDE.md/ORCH-CAPABILITIES.md is the de-facto policy, unnamed as such. |
+| AU-3 Content of Audit Records | IMPLEMENTED for what is logged: ledger rows carry actor, timestamp, kind, statement, refs, stamp fields (kernel schema); the read-observer journals tool, path, session. |
+| AU-9 Protection of Audit Information | PARTIAL: strong against ordinary roles (append-only triggers + integrity gate; s26 SHA-256 row-hash chain; s27 truncation high-water witness) — a superuser/schema owner can still disable the triggers or drop the table. |
+| AU-11 Audit Record Retention | ABSENT-AND-NAMED: no backup/retention story for the Postgres instance. Git-tracked JSONL ledgers (attestations, journals) inherit git's retention; the database does not. |
+| AU-16 Cross-organizational Audit Logging | ABSENT-AND-UNNAMED (single-organization tool; unrecorded judgment, same caveat as PM/PS). |
+<!-- constructor-generated: tools/experiments/typed_table.py; declared type former = 'NIST SP 800-53 AU-family control (ID and catalog title)'; 5 row(s) type-checked at construction (forced articulation + empty-header refusal + column-count coherence); see design/ORCH-TYPED-TABLE-EXPERIMENT.md -->
+

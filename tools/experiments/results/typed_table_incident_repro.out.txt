@@ -1,0 +1,49 @@
+=== SANITY: the three hard refusals ===
+
+1. empty header (angle F, promoted to a hard refusal at construction):
+REFUSED: EMPTY HEADER: the label column declares no type former — there is no genus to check row labels against (angle F, compound_nominal_scan2.py; Named Defect Catalogue Entry 3, design/ORCH-ABC-AUDIT-LOOP-RECIPE.md)
+
+2. boilerplate inhabits= (names neither label nor type former):
+REFUSED: row 'trust story': inhabits='looks fine to me' names neither the label nor the declared type former 'capability' — this reads as boilerplate, not an articulated judgment; write it in terms of both
+
+3. column-count mismatch:
+REFUSED: row 'build the sweep': 2 cell(s) supplied, table declares 1 non-label column(s) (['notes'])
+
+=== INCIDENT RECONSTRUCTION: the pre-repair KR §5 table, type_former='capability' ===
+(ledger row 293/299; git b96a8c8:design/ORCH-KR-TITRATION-EXPLORATION.md)
+
+-- Attempt A: an author trying to write an HONEST inhabits= for every row --
+row 'trust story' accepted -- the tool does not require the articulation be TRUE, only that it name both terms
+  -> an HONEST author, forced to write this sentence, produces the exact catch the
+     maintainer made by hand; the tool did not compute it, the SENTENCE did, once written.
+
+-- Attempt B: a CARELESS or dishonest author forcing the sentence through anyway --
+| capability for a Haiku-tier consumer | (a) | (b) | (c) |
+| --- | --- | --- | --- |
+| look up one fact | x | y | z |
+| enumerate current facts | x | y | z |
+| detect a contradiction | x | y | z |
+| trust story | x | y | z |
+| cost to stand up | x | y | z |
+<!-- constructor-generated: tools/experiments/typed_table.py; declared type former = 'capability'; 5 row(s) type-checked at construction (forced articulation + empty-header refusal + column-count coherence); see design/ORCH-TYPED-TABLE-EXPERIMENT.md -->
+<!-- WARN: form-parallelism: label column mostly VP (3/5); minority form(s) in ['trust story', 'cost to stand up'] (['NOM', 'NOM']) — angle D, compound_nominal_scan2.py; zero semantics, worth a re-read, never a refusal -->
+
+  -> a confidently false articulation is ACCEPTED (both terms are named); the tool's
+     honesty is that it externalizes the judgment, it does not verify it. This is the
+     stated limit in the module docstring, reproduced here rather than only claimed.
+
+-- but the form-parallelism sub-check (angle D) fires on the SAME dishonest table --
+  WARN: form-parallelism: label column mostly VP (3/5); minority form(s) in ['trust story', 'cost to stand up'] (['NOM', 'NOM']) — angle D, compound_nominal_scan2.py; zero semantics, worth a re-read, never a refusal
+  -> this is a free, zero-semantics signal that happens to land on exactly the two
+     rows the maintainer caught, in THIS specimen -- angle D's own soundness story
+     (ORCH-COMPOUND-NOMINAL-DETECTION-2.md) says this is not guaranteed in general.
+
+=== SELF-CHECK: this note's own sub-check summary table, run through the constructor ===
+| sub-check | soundness |
+| --- | --- |
+| empty-header refusal | sound, zero-judgment, structural |
+| column-count coherence | sound, zero-judgment, structural |
+| form-parallelism warning | form-only, stated-incomplete, WARN not refuse |
+<!-- constructor-generated: tools/experiments/typed_table.py; declared type former = 'mechanical sub-check'; 3 row(s) type-checked at construction (forced articulation + empty-header refusal + column-count coherence); see design/ORCH-TYPED-TABLE-EXPERIMENT.md -->
+
+-> no refusal raised building this table; matches design/ORCH-TYPED-TABLE-EXPERIMENT.md's own sub-check table verbatim.
