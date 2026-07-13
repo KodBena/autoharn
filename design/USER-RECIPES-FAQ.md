@@ -185,6 +185,22 @@ This exit code (6) is reachable only through `--review-gap`, and only when nothi
 already raised the exit and at least one review is flagged. Witnessed both polarities:
 [seen-red/content-free-review-audit/](../seen-red/content-free-review-audit/).
 
+## Classifying audit/diagnostic findings
+
+**I have a batch of findings from a code audit or review, and sorting them into categories
+keeps producing overlapping or incomplete buckets — is there a standard way to do this?** Yes —
+split every narrative finding (one that bundles more than one bug or observation) into single-
+actionable-unit atoms first, with a provenance link back to where each atom came from, THEN
+classify; once every unit is atomic, "did we cover everything" and "does nothing overlap" become
+a one-line mechanical check instead of a manual sweep. A second pass then re-clusters the atoms
+into
+[fix-authorship blocks](ORCH-FINDING-ATOMIZATION-RECIPE.md#stage-2--reconstitute-atoms-into-blocks-author-fixes-at-the-block-grain-not-the-atomic-grain)
+by shared invariant, so one typed fix forecloses a whole class of bugs
+rather than patching each atom instance-by-instance. Full method, its adjudication against this
+corpus, and its relation to
+[ADR-0000's typed-fix discipline](../law/adr/0000-the-alpha-and-the-omega-type-driven-design.md):
+[ORCH-FINDING-ATOMIZATION-RECIPE.md](ORCH-FINDING-ATOMIZATION-RECIPE.md).
+
 ## Documentation quality
 
 **Can my project use the fresh-context documentation review loop autoharn uses on itself?**
