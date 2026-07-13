@@ -124,6 +124,16 @@ gate must **not explode on** (see [paraconsistency](#paraconsistency)). [DIRTY](
 readings and conflicting advisories live here without forcing a true/false collapse; the point of
 the tag is that it *blocks promotion to confirmed*, not merely records.
 
+<a id="home-flip"></a>
+### HOME-FLIP
+The maintainer-performed cutover recorded in `provenance/HOME-FLIP.md`: before the flip, the
+two source repos this project consolidates (`claude_harness`, `epistemic-operator`) are
+authoritative and this repo holds migrated copies; after the flip, provenance direction
+reverses — this repo becomes the source of truth and the two source repos become read-only
+evidence archives. A builder — an implementing agent or contributor carrying out a work item,
+as opposed to the maintainer who alone may rule on it — prepares the record and verifies its
+preconditions; only the maintainer performs the flip itself.
+
 ---
 
 ## Logic & gates
@@ -230,6 +240,30 @@ only through validated operations (the term is from Domain-Driven Design). The p
 A logic that does **not** explode (derive everything) from a contradiction, letting conflicting
 records coexist. Underwrites the [suspect](#suspect) third value and "conflicting advisories
 coexist without the gate failing."
+
+<a id="both-polarity"></a>
+### both-polarity
+A gate or an invariant it enforces is proven **both-polarity** when its evidence includes a
+case that fires red (the check catching a real violation) as well as a case that passes clean
+— "a gate never seen red is a claim," not a demonstrated one. `seen-red/` is the standing home
+for this evidence.
+
+<a id="refuse-and-teach"></a>
+### refuse-and-teach
+The design principle behind every mechanized guardrail in this project: a refusal is never a
+bare error. When a hook or gate blocks an action that would break a guarantee, its message
+names what was missing and what to do next, so the refusal itself is the instruction
+([USER-GUIDE.md §6](USER-GUIDE.md#6-when-something-refuses) works through a live example).
+
+<a id="post-fable-law"></a>
+### POST-FABLE (law)
+The operating posture adopted after Fable — the maintainer's primary AI-collaborator authoring
+model — withdrew from a session: judgment for known work is pre-banked to disk in `judgment/`
+rather than re-derived at run time. Apply it; never re-derive or weaken it; a misfit against
+the banked judgment is filed as a **FRAME-GAP finding** — a recorded mismatch between the
+banked judgment's frame and what the new case actually needed — rather than silently
+reinterpreted to make it fit. Named for and set out in
+`vestigial_documentation/judgment/POST-FABLE-OPERATING-BRIEF.md`.
 
 ## Operating-era terms (worlds and runs, added 2026-07-11)
 
