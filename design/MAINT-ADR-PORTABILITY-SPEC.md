@@ -10,6 +10,16 @@
 - **Author:** Fable spec author, 2026-07-13, isolated worktree. No file under `law/` is
   touched by this phase; the constitutional rule (CLAUDE.md ORCHESTRATION: nobody edits
   `law/` without a Fable-authored, maintainer-ratified spec) is why this document exists.
+- **Revision note (2026-07-13, same author, same phase):** the first draft was written on
+  a stale worktree base (`fca1100`, predating commit `24d1dfc`) and therefore read a
+  pre-Revisit-#4 ADR-0000 and a corpus missing `law/STANDARDS-REGISTRY.md`. The base was
+  brought current (merge of `next`); a diff between the two bases shows exactly two law/
+  changes — ADR-0000's appended "Revisit #4" section (+39 lines) and the new
+  `law/STANDARDS-REGISTRY.md` (46 lines) — both re-read in full. This revision updates the
+  corpus baseline, the 0000 treatment row, §5 A3's 0000 inventory, register entry C10
+  (new), §8's deployment-consumer list, §9's scope list, and hazard H2 (a dated correction,
+  per ADR-0005 Rule 8's own style, not a silent rewrite). Every other section survived the
+  re-read unchanged.
 
 **What this document is.** The maintainer commissioned a refactoring of the 18-file ADR
 corpus (`law/adr/0000` through `0017`) so it is portable across projects — first the
@@ -22,7 +32,9 @@ how "portable" and "complete" are checked (§5), the topology/renaming ruling th
 commission amendment invites (§6), the contradictions found during the full-corpus read
 (§7, for maintainer adjudication before Phase 1b), the Phase-2 execution plan (§8), and
 what this spec deliberately does not do (§9). Every judgment cites the file and line it
-rests on; the whole corpus (6,666 lines) was read in full for this spec.
+rests on; the whole corpus (6,705 lines on the current base; the draft's 6,666 figure was
+measured on the stale base the Revision note describes) was read in full for this spec,
+plus `law/STANDARDS-REGISTRY.md` (46 lines, in `law/` though outside `adr/`).
 
 ---
 
@@ -89,7 +101,7 @@ corpus-wide instead of paying it per-ADR per-deployment forever.
 
 | ADR | Lines | Project-bound refs | Treatment | Moves → history / stays inline | Δ lines |
 |---|---|---|---|---|---|
-| 0000 type-driven design | 527 | c2 t5 f2 · p2 i0 | examples-extract, condense | Moves: Specimens 1–4 + contrast specimen (0000:80–156, ~77 lines, chocofarm/throughput-lab artifacts: `BoundedBatch`, `CellLedger`, the OOM queue). Stays: Rules 1–3 verbatim in force; the closure-statement amendment (0000:441–495, normative); Revisit #3 amendment + ratification proviso (0000:497–523, dated record, preserved verbatim); one summary sentence per specimen (the four types + the doubled-patch lesson) inline, since Rule 2(a) cites "the four specimens" as its worked form. | ~330 |
+| 0000 type-driven design | 566 | c2 t5 f2 · p2 i0 | examples-extract, condense | Moves: Specimens 1–4 + contrast specimen (0000:80–156, ~77 lines, chocofarm/throughput-lab artifacts: `BoundedBatch`, `CellLedger`, the OOM queue). Stays: Rules 1–3 verbatim in force; the closure-statement amendment (0000:441–495, normative); Revisit #3 amendment + ratification proviso (0000:497–523, dated record, preserved verbatim); the 2026-07-12 "Revisit #4" section (0000:525–562, dated codified record, preserved verbatim — its Clause 1, standards-scope disclaimers, is already stated generically and portable as written; its Clause 2 binds the per-deployment registry, with `law/STANDARDS-REGISTRY.md` as this deployment's instance and an adopter substituting its own — the same core/bindings split ADR-0017 models); one summary sentence per specimen (the four types + the doubled-patch lesson) inline, since Rule 2(a) cites "the four specimens" as its worked form. | ~370 |
 | 0001 immutability/COW | 189 | c4 L4 · p8 i2 | retire-candidate | The whole document is a chocofarm-specific *Decision* (its own Genre field, 0001:4–7): three named numpy/JAX seams that exist in no other deployment. No rule here transfers that 0012 P1/P2/P4 and 0002 do not already own generically. Proposed disposition: relocate verbatim to history as a lineage record; the corpus keeps a one-paragraph tombstone (see §6 on the number). **Routes to the maintainer as its own question (§9).** | ~25 tombstone |
 | 0002 fail loudly | 270 | c3 L1 · p14 i0 | generalize-in-place, examples-extract | Moves: the chocofarm decision list (0002:34–72) and instance-bound Exceptions details (0002:198–223). Stays: the loudness hierarchy (0002:85–108) untouched; concrete rules 1–6 with rule 6's frozen-literal lesson kept as a two-sentence inline summary; the "loud enough" test; Exceptions as generic classes (bit-identical fallback, idempotence, bounded shim) with instances pointed. | ~180 |
 | 0003 domain-coupling bands | 261 | c7 L3 F23 · p8 i1 | examples-extract, generalize-in-place | Moves: the entire chocofarm band map (0003:89–185, Bands 1–3 + the two porting inventories — F23 makes this the most instance-bound body in the corpus). Stays: the two-question principle verbatim (0003:58–70), the no-premature-extraction rule with the Sandi Metz argument (0003:75–87), and a template instruction: *a deployment derives its own band map on adoption*. | ~120 |
@@ -111,8 +123,8 @@ corpus-wide instead of paying it per-ADR per-deployment forever.
 **Headline numbers.** 18 ADRs: primary treatment `examples-extract` × 7 (0000, 0003,
 0008, 0009, 0011, 0013, 0014) plus 0012 and 0016 (9 total carrying it),
 `generalize-in-place` × 5 (0002, 0004, 0005, 0006, 0007), `already-portable` × 2
-(0015, 0017), `retire-candidate` × 2 (0001, 0010). Projected corpus: 6,666 lines →
-~3,800 in `law/adr/*.md` + ~2,300 relocated verbatim under `law/adr/history/`
+(0015, 0017), `retire-candidate` × 2 (0001, 0010). Projected corpus: 6,705 lines →
+~3,850 in `law/adr/*.md` + ~2,300 relocated verbatim under `law/adr/history/`
 (relocation preserves bytes; the ~550-line net reduction is Context/instance prose
 replaced by pointer summaries). Succinctness AND completeness: no rule is dropped or
 weakened anywhere in this table — the deltas are all narrative, never normative (§5 A3
@@ -254,7 +266,9 @@ nothing is rewritten silently.
   inventory is enumerated below; each Phase-2 package's close reproduces it and asserts,
   per rule, PRESENT-UNCHANGED or PRESENT-GENERALIZED (with the diff cited); any DROP
   routes to the maintainer before the package lands. Inventory (before): 0000 R1–R3 +
-  closure-statement amendment; 0001 three seam rules (retirement question); 0002
+  closure-statement amendment + Revisit #4 Clauses 1–2 (standards-scope disclaimers
+  mandatory; the standards registry as the root of every completeness exercise, with its
+  codification proviso); 0001 three seam rules (retirement question); 0002
   hierarchy + rules 1–6; 0003 the two-question principle + no-premature-extraction; 0004
   the two-case rule; 0005 R1–R9; 0006 the three-part header rule; 0007 size + density +
   contraction rules; 0008 two registers + substitution test + rules 1–4; 0009 spine +
@@ -408,14 +422,31 @@ resolution. Nothing here is resolved silently in §2; Phase 1b incorporates the 
   (filename says "execution stamina and structural completeness"; H1 says "Execution
   Integrity", 0013:1). Listed here for completeness of the register.
 
+- **C10 — ADR-0000's new "Revisit #4" heading collides with Revisit-when item 4, which
+  it does not discharge.**
+  Horn A: the corpus's established convention, set by "Revisit #3 — 2026-07-12"
+  (0000:497), whose content (the demurral-detector mechanization) discharges
+  Revisit-when list item 3 (0000:370–374) — the heading number names the list item
+  being fired.
+  Horn B: the 2026-07-12 section "Revisit #4" (0000:525) concerns standards-scope
+  disclaimers and the standards registry, while Revisit-when list item 4 (0000:375–378)
+  is the ADR-0014 hand-off reconciliation — still open, unrelated to the new section's
+  content.
+  Conflict: a reader following the Revisit #3 precedent reads "Revisit #4" as item 4
+  discharged; it is not, and the new section corresponds to no list item at all.
+  PROPOSED: Phase 2's WP-9 adds a one-line dated clarifying note under the heading
+  (the section text itself stays verbatim per §4) stating it is a new numbered revisit
+  record, not a discharge of list item 4, which remains open.
+
 **Open loops surfaced (not contradictions — flagged for the same adjudication sitting,
-since the amendment authorizes reclassification):** ADR-0000 Revisit #1 leaves open
-whether 0000 is a distinct root or a frame over the 0011/0012/0013 trio (0000:352–365);
-ADR-0014's Known-tension section leaves open whether it stands, folds into 0013, or
-folds into 0011 (0014:383–411); ADR-0000 Revisit #4 asks for a hand-off reconciliation
-"once ADR-0014 is ratified" and 0014 remains Provisional (0000:375–378, 0014:3). None
-blocks the refactor; a ruling on 0014's fold question would change one row of §2, so it
-is cheapest decided before Phase 1b.
+since the amendment authorizes reclassification):** ADR-0000 Revisit-when item 1 leaves
+open whether 0000 is a distinct root or a frame over the 0011/0012/0013 trio
+(0000:352–365); ADR-0014's Known-tension section leaves open whether it stands, folds
+into 0013, or folds into 0011 (0014:383–411); ADR-0000 Revisit-when item 4 asks for a
+hand-off reconciliation "once ADR-0014 is ratified" and 0014 remains Provisional
+(0000:375–378, 0014:3 — see C10 for the heading collision with the new section of the
+same number). None blocks the refactor; a ruling on 0014's fold question would change
+one row of §2, so it is cheapest decided before Phase 1b.
 
 ---
 
@@ -461,6 +492,12 @@ live-session file is touched (standing rule). The commissioned
 maintainer a one-line note naming what a re-scaffold inherits. (c) `GLOSSARY.md` and the
 ORCH docs — the former is repointed by WP-13 where section anchors moved; the latter are
 history unless a current spec cites them (standing contract) and are left alone.
+(d) **the standards registry** — ADR-0000 Revisit #4 Clause 2 makes
+`law/STANDARDS-REGISTRY.md` the root of every completeness exercise; it is a
+per-deployment artifact by nature (each project names its own bars), so the portable form
+of Clause 2 is the rule plus a registry *slot*, and whether the scaffold should ship a
+blank registry template to new deployments is flagged to the maintainer as an optional
+WP-13 question, not decided here.
 
 ---
 
@@ -476,7 +513,10 @@ history unless a current spec cites them (standing contract) and are left alone.
   tombstone, or keep-and-generalize). No other ADR is proposed for retirement.
 - **No contradiction resolved by fiat.** Every §7 entry awaits the maintainer; §2's
   treatments that depend on a ruling say so in §8's dependency column.
-- **No scope creep into non-ADR law.** `law/briefs/` and `law/keys/` are untouched;
+- **No scope creep into non-ADR law.** `law/briefs/`, `law/keys/`, and
+  `law/STANDARDS-REGISTRY.md` are untouched — the registry changes only by maintainer
+  amendment per its own property 3, and it was read for this spec's analysis (it is the
+  instance binding of ADR-0000 Revisit #4 Clause 2, not a refactoring target);
   `bootstrap/templates/`, `tools/`, and the ORCH docs are out of scope except WP-13's
   read-only verification.
 
@@ -489,11 +529,20 @@ history unless a current spec cites them (standing contract) and are left alone.
   tool-call residue committed into a law file (verified byte-level with `cat -A`).
   Scheduled as a witnessed fix inside WP-8; flagged here because it is a defect in law
   standing today, independent of the refactor.
-- **H2 — commissioned file does not exist.** This spec's commission named
+- **H2 — commissioned file "does not exist" (original claim, WRONG — dated correction
+  follows).** As first drafted, this entry read: *"This spec's commission named
   `law/STANDARDS-REGISTRY.md` as required reading; no such file exists anywhere in the
   repository (searched by name and by content reference). Either the file is expected
-  from a different branch/world or the commission carried a stale name — surfaced per
-  ADR-0002's read-what-you-cite duty rather than silently skipped.
+  from a different branch/world or the commission carried a stale name."*
+  **Correction (2026-07-13, per ADR-0005 Rule 8 — original preserved above, not
+  silently rewritten):** the claim was wrong, and the search was honest but ran against
+  a stale substrate — this worktree's base (`fca1100`) predated commit `24d1dfc`
+  (2026-07-12), which created `law/STANDARDS-REGISTRY.md` together with ADR-0000's
+  Revisit #4. The file exists on the current branch and has now been read in full; the
+  Revision note in the header records everything the correction touched. What H2
+  actually witnessed was a stale-base defect in this spec's own process — itself a
+  small instance of ADR-0015's lesson (a verification's substrate is part of its
+  meaning): a repo-wide search on an out-of-date base is not a repo-wide search.
 
 ## License
 
