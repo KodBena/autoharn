@@ -57,12 +57,59 @@ The loop has three roles, each a distinct invocation, never the same context twi
    explicit CLEAN verdict naming all four clauses (1a/1b/1c/1d) you checked. A bare "looks fine"
    is not a valid verdict.
 
+   Before you conclude, walk the NAMED DEFECT CATALOGUE below (a growing, dated list of defect
+   shapes two independent fresh Bs missed on a live document) and dispose of each entry
+   explicitly against this document — either "not present" or a finding in the required shape.
+   Print your verdict as your FINAL MESSAGE — do not use SendMessage to report it.
+
+   === NAMED DEFECT CATALOGUE (see this recipe's own "Named defect catalogue" section) ===
+   <catalogue text — see below>
+
    === ADR-0017 ===
    <full text>
 
    === DOCUMENT UNDER REVIEW (path: <repo-relative path>) ===
    <full text>
    ```
+
+   **B-briefing clauses added 2026-07-13, from the attestation-incident diagnosis** (ledger
+   decision row 293, "INCIDENT + DIAGNOSIS: attested-CLEAN doc carried maintainer-visible
+   legibility defects" — a document attested CLEAN twice, by two independent fresh Bs, still
+   carried six defects the maintainer caught by eye). These three clauses belong in every B
+   prompt from this date forward, alongside the four-clause test above, not as a replacement
+   for it:
+
+   - **(a) Table row/column labels are referents under clause 1(b), walked individually.** The
+     incident's root cause #1 (ledger row 293) is that Rule 1's clause partition leaks at
+     structured content: clause 1(c) owns a table's *frame* (is it captioned, is it grounded),
+     and 1(b)'s referent-resolution walk is easy to read as a prose-only obligation, so nobody
+     owned "does each individual cell resolve." B must walk every table's row labels *and*
+     column headers one at a time, exactly as it would walk a paragraph's referents — a label is
+     a referent like any other, not a decoration on the frame clause already checks.
+   - **(b) The BROADCAST / INHABITATION TEST, stated in its general form.** A table's
+     label-column header is a **type former**; every row label must be an **inhabitant** of the
+     type the header declares
+     ([design/ORCH-COMPOUND-NOMINAL-DETECTION.md](ORCH-COMPOUND-NOMINAL-DETECTION.md) Part 1,
+     "the type-theoretic name"). For each row label `Li` under header `H`, distribute the header over
+     the label (`H : Li`, or in prose, "does `Li` read as a well-formed instance of what `H`
+     names?") and require the result well-formed. This is the general rule; "does the row answer
+     the header's question" is **one worked example of it**, not the definition — per the
+     maintainer's own type-theoretic clarification (ledger row 299): a `Directory` column whose
+     rows must all be directories, or a `Lens` column whose rows must all be lenses, are
+     instances of the identical test, and neither is phrased as a question. A column that fails
+     the test for even one row (the incident's "capability … : cost to stand up" — a cost is not
+     a capability) is a finding.
+   - **(c) Compound relation-recoverability.** A coined noun-noun (or noun-noun-noun) compound
+     is legible if and only if the reader can recover the implicit relation between its parts —
+     Levi's deleted predicate
+     ([design/ORCH-COMPOUND-NOMINAL-DETECTION.md](ORCH-COMPOUND-NOMINAL-DETECTION.md) Part 1:
+     CAUSE, HAVE, MAKE, USE, BE, IN, FOR, FROM, ABOUT) — **from the document's own definition surfaces**
+     (an inline gloss, a GLOSSARY.md link, or a single obvious relation apparent on the page).
+     "Row hash" and "birth chain" recover via a single obvious relation or a linked definition;
+     "trust story" (the incident's own specimen) does not — a reader cannot tell whether it
+     names a story about trust, a property of being trustworthy, or a capability to trust, and
+     the document says nothing that picks one. Flag any compound that does not resolve this way,
+     citing the candidate relations you considered and why none is recoverable from the text.
 
    Running B as a fresh `Agent` invocation (rather than a follow-up turn in A's own session) is
    what makes "provably distinct from A" true by construction here, not merely asserted: a new
@@ -90,7 +137,19 @@ The loop has three roles, each a distinct invocation, never the same context twi
    the `Agent` tool's own synchronous result, every time, regardless of which session is
    running the loop.
 
-
+   **B VERDICT ROUTING (rule added 2026-07-13): B prints its verdict as its FINAL MESSAGE and
+   never uses `SendMessage` to report it.** This is the same misrouting the background-spawn
+   paragraph above documents, restated as a standing rule because it recurred beyond that one
+   pair of incidents: a B that tries to route its verdict via `SendMessage` — to an agent
+   *type* rather than a specific address, or to whichever session it guesses is listening — has
+   been witnessed failing to deliver it, repeatedly, across independent loop runs. The
+   `run_in_background: false` requirement above closes the *background-completion* half of the
+   failure; this rule closes the other half by removing the failure-prone transport
+   altogether: whoever spawned B (per the B-briefing prompt skeleton above, which now
+   instructs this explicitly) reads B's own final output as the verdict, full stop — B is never
+   asked to actively route its own report anywhere. The workaround the two BACKLOG-recorded
+   incidents stumbled into by accident (both recovered only because B also happened to print
+   its verdict in its final message) is now the rule, not a lucky fallback.
 
 3. **B returns a verdict.** If CLEAN across all four clauses, skip to step 6. If B lists
    findings, each finding must carry a file:line specimen, a verbatim quote, and a suggested
@@ -114,6 +173,35 @@ The loop has three roles, each a distinct invocation, never the same context twi
    reviewer. The document still gets its attestation record at step 6 — recording a DEFECT
    verdict with `escalated: true` is not a failure to record, it is the honest record of what
    happened.
+
+   **ROUND-2 DISCIPLINE (two rules added 2026-07-13, both from the attestation incident, ledger
+   decision row 293):**
+
+   - **Round-2 B is always a FRESH FORK, never a resumed agent.** A round-2 B that is a
+     `SendMessage`-resumed continuation of round 1's own agent was witnessed repeating its
+     round-1 verdict *verbatim* against on-disk bytes that directly contradicted it — the
+     resumed agent's prior turn had already committed to a verdict in its own context and did
+     not genuinely re-read the repaired file. This is the same faculty-that-corrupts admission
+     ADR-0017 Rule 1 already makes about A ("the author cannot unknow their own context"),
+     applied to B across rounds: a B that remembers round 1 is no longer the zero-context
+     reader round 2 needs, for the identical structural reason A never was one. Round 2 spawns
+     a genuinely new `Agent` invocation, exactly like round 1 did — no `SendMessage` resume,
+     ever, at either round.
+   - **Round-2-after-repairs is the WEAKER verdict — it must re-sweep fresh, never only verify
+     the finding list.** A round-2 pass that merely checks "were C's specific repairs applied"
+     measures finding-list convergence, not defect-population exhaustion, and the incident is
+     the witnessed proof this gap is real: a round-2 CLEAN verdict on
+     [design/ORCH-KR-TITRATION-EXPLORATION.md](ORCH-KR-TITRATION-EXPLORATION.md) ("KR" =
+     Knowledge Representation; a knowledge-representation titration exploration, the document
+     the attestation incident's own specimens came from) was immediately followed by a
+     maintainer catch (the "trust story" specimen, missed by *two* independent fresh Bs across
+     two rounds), and a subsequent adversarial fresh sweep over the same document found
+     **7 more findings** the convergence-focused rounds never surfaced.
+     Round 2 therefore repeats the FULL four-clause test (plus the B-briefing clauses and the
+     Named Defect Catalogue below) over the entire document as it now stands, from zero context
+     — the same instruction as round 1, not a narrower "confirm these lines changed" pass. A
+     round 2 that only re-checks the round-1 finding list is not a valid round 2 under this
+     recipe; it is a rubber stamp wearing round 2's clothes.
 
 6. **Record the attestation.** Write a JSON body (see
    [`gates/doc_attestation_presence.py`](../gates/doc_attestation_presence.py)'s module
@@ -229,6 +317,67 @@ cross-reference broken by the interleaving, a repeated point now sitting twice),
 the merge is considered done. This is not a new mechanism — it is this recipe's own loop, invoked once
 more, at one more trigger (a merge landing) than "an edit finished."
 
+## Named defect catalogue (added 2026-07-13)
+
+This section answers a question the attestation incident (ledger decision row 293) raised
+directly: two independent fresh Bs each attested a document CLEAN, twice, while it carried
+defects the maintainer caught by eye — so B's briefing needed something more concrete than the
+four general Rule-1 clauses. This catalogue is that concrete supplement: a standing, named list
+of defect shapes handed to **every** B alongside the four-clause test and the briefing clauses
+above (the B-prompt skeleton in step 2 now references it by name). B disposes of every entry
+explicitly — "not present in this document" or a finding in the required shape — rather than
+re-deriving these blind spots from scratch each time.
+
+**Entry 1 — unrecoverable coined compounds.** A coined noun-noun (or noun-noun-noun) compound
+whose implicit relation the reader cannot recover from the document's own definition surfaces
+(see B-briefing clause (c) above). The measured evidence:
+[design/ORCH-COMPOUND-NOMINAL-DETECTION.md](ORCH-COMPOUND-NOMINAL-DETECTION.md) and its sequel
+[design/ORCH-COMPOUND-NOMINAL-DETECTION-2.md](ORCH-COMPOUND-NOMINAL-DETECTION-2.md) measured this
+defect class on the live corpus: a deterministic *blocking* gate is not buildable at this
+project's precision bar (the semantic judgment of relation-recoverability is not a static
+property, per Downing 1977's non-enumerability result — the second note's own Verdict section
+confirms this holds even for its stronger instrument), but a **ranked, report-only detector**
+(`tools/experiments/compound_nominal_scan2.py`) exists and is measured useful as a reviewer aid:
+top-10 100% / top-25 92% / top-50 78% precision on the actionable band (the "unrecoverable
+coinages + undefined Claude-idiom metaphor compounds" slice of the scan's ranked output — the
+band the second detection note names as the population these numbers describe), and it catches the
+incident's own "trust story" specimen at global rank 1 of 13,855 candidates. This entry's
+standing is therefore: B judges the compound directly (this is the semantic part no tool
+performs), and the scan2 tool's ranked output is available as a **report-only net** to consult
+when a document's compound-nominal load is large enough that manual review risks missing one —
+it does not replace B's own judgment and is not itself a gate.
+
+**Entry 2 — table label-type incoherence.** A table whose label-column header declares a type
+that one or more row labels do not inhabit (see B-briefing clause (b), the broadcast test,
+above) — the incident's own "capability for a Haiku-tier consumer" table, two of five rows
+silently switching type to "property of the option." Named in the linguistics/logic literature
+as faulty parallelism, the cross-division fallacy (mixing more than one *fundamentum
+divisionis*), and Ryle's category mistake, and in this project's own law as the
+[ADR-0008](../law/adr/0008-classification-discipline.md) MECE (Mutually Exclusive, Collectively
+Exhaustive) requirement violated on the label axis
+([design/ORCH-COMPOUND-NOMINAL-DETECTION.md](ORCH-COMPOUND-NOMINAL-DETECTION.md) Part 1). B
+applies the broadcast test to every table in the document under review, not only ones that look
+suspicious — the incident's tables looked ordinary to two independent Bs until the maintainer
+ran the test by eye.
+
+**Entry 3 — the empty-label-column-header lint.** The one sound, zero-judgment mechanical check
+either detection note identified: a label column with **no header at all** cannot be broadcast
+against any declared type (there is no genus to check inhabitance against), which is a
+structural fact a reader can spot without any semantic judgment
+([design/ORCH-COMPOUND-NOMINAL-DETECTION.md](ORCH-COMPOUND-NOMINAL-DETECTION.md) Part 2 and Part
+3's "edge case" row; [design/ORCH-COMPOUND-NOMINAL-DETECTION-2.md](ORCH-COMPOUND-NOMINAL-DETECTION-2.md)
+"Angle F"). B flags any table whose label column carries no header, independent of whether any
+row's type is otherwise judged coherent.
+
+**This catalogue GROWS by maintainer-caught incidents.** Every defect the maintainer catches
+that B's four-clause test and current catalogue entries missed is a **candidate entry** — filed
+here, dated, with the specimen and the general shape it represents (not just the one document it
+was caught in), the same way entries 1–3 above were filed from the 2026-07-13 incident. Adding an
+entry to this catalogue is a recipe edit like any other (binds on touch, per ADR-0017 Rule 4) and
+does not require re-ratifying the recipe or ADR-0017 itself — the catalogue is this recipe's own
+standing text, amended by addition, never by silently deleting or rewriting a prior entry's
+account of what was caught and why.
+
 ## Related
 
 - [ADR-0017](../law/adr/0017-the-zero-context-reader.md) — the law this recipe operationalizes,
@@ -240,6 +389,11 @@ more, at one more trigger (a merge landing) than "an edit finished."
   costed, headless alternative transport for the same Rule 1 test; its own module docstring
   states the two transports "want the same briefing, so `CRITIC_PROMPT_TEMPLATE` below is the
   ONE home of it" — this recipe's step 2 prompt skeleton is adapted from that same template.
+- [design/ORCH-COMPOUND-NOMINAL-DETECTION.md](ORCH-COMPOUND-NOMINAL-DETECTION.md) and
+  [design/ORCH-COMPOUND-NOMINAL-DETECTION-2.md](ORCH-COMPOUND-NOMINAL-DETECTION-2.md) — the
+  measured evidence behind the B-briefing clauses and the "Named defect catalogue" section
+  above: the compound-relation-recoverability defect, the broadcast/inhabitation test, and the
+  ranked report-only detector and empty-header lint the catalogue cites.
 - [design/ORCH-WORKTREE-LEDGERING.md](ORCH-WORKTREE-LEDGERING.md) — the memo whose §3c/§3d this
   page's "Merging: the integrator's checklist" section carries out, and the home of the merge
   drivers ([`tools/merge_jsonl.py`](../tools/merge_jsonl.py),
