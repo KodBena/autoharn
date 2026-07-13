@@ -1,0 +1,21 @@
+diff --git a/bootstrap/templates/HOOKS.md.tmpl b/bootstrap/templates/HOOKS.md.tmpl
+index 1307661..73ae7a3 100644
+--- a/bootstrap/templates/HOOKS.md.tmpl
++++ b/bootstrap/templates/HOOKS.md.tmpl
+@@ -59,8 +59,14 @@ pointed at this project's ledger:
+ 1. **Change gate** (`pretooluse_change_gate.py`) — an edit to a governed file is allowed only
+    under an unconsumed ledger entry naming that file, and the authorization is **windowed, not
+    standing** (`WINDOW_S = 600` s, closed early by a test-run/commit boundary command). Which
+-   files are governed is chosen in `governed_files.json` (see `GOVERNED_FILES.md`); default
+-   `*.py`. Deny/allow/deny-hint text is per-project via `apparatus.json` (see `APPARATUS.md`) —
++   files are governed is chosen in `governed_files.json` (see `GOVERNED_FILES.md`) — this
++   world's scaffold invocation (`--governed`, shown in the PROVENANCE section above) may have
++   set a project-specific pattern set; if none was given, the scaffold falls back to `*.py`
++   only and prints a loud notice at scaffold time naming that default and the one-line
++   widening act (tracker item `scaffold-governed-set-language-default`). Check
++   `governed_files.json` itself for the patterns actually in effect in THIS world — this
++   paragraph names the mechanism, not a per-world guarantee. Deny/allow/deny-hint text is
++   per-project via `apparatus.json` (see `APPARATUS.md`) —
+    **UNWITNESSED-until-run caveat**: `apparatus.json`'s `deny_hint` is baked into
+    `.claude/settings.json` at scaffold time, not read live; see `APPARATUS.md`'s honest-limit
+    note. On a deny, the message tells the agent exactly what to do:

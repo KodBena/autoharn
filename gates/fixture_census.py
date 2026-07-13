@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-09T13:36:11Z
-#   last-change: 2026-07-13T12:32:42Z
+#   last-change: 2026-07-13T17:42:54Z
 #   contributors: be693afb/main, e4410ef6/main, 3c50e030/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -85,6 +85,7 @@ REGISTRY: dict[str, str] = {
     "s27-chain-high-water":           "seen-red/s27-chain-high-water/run_fixtures.py",
     "no-conflict-markers":            "seen-red/no-conflict-markers/run_fixtures.py",
     "rename-doc":                     "seen-red/rename-doc/red-specimen.py",
+    "scaffold-governed-and-gitignore": "seen-red/scaffold-governed-and-gitignore/run_fixtures.py",
     # the two census gates minted in this build carry their own seen-red (a census gate never seen
     # red is the joke that writes itself); their fixture is the gate itself, red-specimen mutates its
     # registry in memory to force the breach.

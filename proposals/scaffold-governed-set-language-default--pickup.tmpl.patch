@@ -1,0 +1,24 @@
+diff --git a/bootstrap/templates/pickup.tmpl b/bootstrap/templates/pickup.tmpl
+index 513bbf2..ba7546d 100755
+--- a/bootstrap/templates/pickup.tmpl
++++ b/bootstrap/templates/pickup.tmpl
+@@ -489,6 +489,19 @@ _TAXON_FIELDS = ("TAXONOMY", "TAXON", "PATTERNS", "GLOSS")
+ _INTERFACE_FIELDS = ("TAXONOMY", "ARTIFACT-PATTERN", "GLOSS")
+ 
+ 
++# PROPOSAL (tracker item `scaffold-governed-set-language-default`, ent testbed finding 4,
++# 2026-07-13; not implemented here -- pickup.tmpl is merge-gated with concurrent holds at the
++# time this note was written, see the item's own ledger row): taxonomies() below already has,
++# per declared taxon, a `patterns` field (the TAXON's own artifact-pattern glob, see
++# _TAXON_FIELDS above and design/USER-TAXONOMY-DECLARATION.md's "The statement grammars"
++# section). A future revision of this function could cross-check each declared taxon's
++# `patterns` against this world's live `.claude/governed_files.json` and print a WARNING line
++# (not a refusal -- pickup never refuses, it only reports) when a taxon's own patterns are not
++# covered by ANY governed pattern: a taxonomy declared as real work but silently ungoverned by
++# the change gate is exactly the declared/policed gap `scaffold-governed-set-language-default`
++# names for the scaffold-time default; making that gap CONTINUOUSLY visible (not just at birth)
++# is the natural next mechanization, once this file is free to change. Fixture it both-polarity
++# the same way estimates()/resources() are fixtured today before landing.
+ def taxonomies(dep) -> None:
+     _section("TAXONOMIES")
+     # Mirrors resources()'s/estimates()'s own newline-normalization exactly, for the identical
