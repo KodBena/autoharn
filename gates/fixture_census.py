@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-09T13:36:11Z
-#   last-change: 2026-07-12T23:34:48Z
+#   last-change: 2026-07-13T12:32:42Z
 #   contributors: be693afb/main, e4410ef6/main, 3c50e030/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -106,6 +106,7 @@ REGISTRY: dict[str, str] = {
     "freeze-at-stamp":                "seen-red/freeze-at-stamp/run_fixtures.py",
     "verify-chain-error-conflation":  "seen-red/verify-chain-error-conflation/run_fixtures.py",
     "actual-intake-validation":       "seen-red/actual-intake-validation/run_fixtures.py",
+    "review-queue-intake":            "seen-red/review-queue-intake/run_fixtures.py",
 }
 
 

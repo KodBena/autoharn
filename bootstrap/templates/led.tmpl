@@ -1345,6 +1345,173 @@ PYEOF
     ;;
 esac
 
+# --- review: intake validation (tracker item `maintainer-review-queue`, 2026-07-13) -----------
+# A statement beginning `review:` (after stripping leading whitespace) opens OR RE-RANKS one row
+# of the maintainer's executive review queue -- an item he wants to personally look at, ranked by
+# urgency -- and MUST carry the four-field grammar design/USER-RECIPES-FAQ.md's "Your review
+# queue" section documents before ANY write is attempted -- refuse loudly here, at the boundary
+# (ADR-0002 rule 2: validate at boundaries, do not coerce), cloned structurally from `taxon:`/
+# `interface:` above (whitespace-normalized validation copy, byte-exact persisted statement,
+# refuse-before-write atomicity, teach-text naming the grammar and where it is documented).
+#
+# WHAT THIS IS FOR, STATED SO IT CANNOT BE MISREAD: the queue lives in the LEDGER, never in a
+# prose file (the BACKLOG-retirement lesson design/USER-RECIPES-FAQ.md's own section cites -- a
+# live task queue narrated in immutable prose rots in seconds, ADR-0005 Rule 6 corollary).
+# RE-RANKING an already-open SLUG is simply filing ANOTHER `review:` row for the same SLUG with a
+# different RANK -- no `--supersedes` flag needed; `bootstrap/templates/pickup.tmpl`'s
+# `MAINTAINER-REVIEW-QUEUE` section (the read side) resolves "current state" by taking the
+# HIGHEST ledger row id per SLUG among `review:`/`review-done:` rows -- deliberately simpler than
+# `resource:`'s explicit-supersedes convention, because this queue's whole point is a fast
+# one-liner. This validator refuses only the INTAKE SHAPE (four well-formed fields); it has no
+# opinion on rank collisions between different SLUGs (two items may share a RANK; the read side
+# breaks ties by SLUG) or on whether an item is actually important.
+#
+# The grammar check below runs against a WHITESPACE-NORMALIZED COPY only (every run of \n/\r plus
+# its following indentation collapsed to one space), so a legitimate embedded newline (a paste
+# reflowed by a terminal) is ACCEPTED rather than refused -- identical convention to the blocks
+# above. The row actually written on success is $statement, completely untouched -- byte fidelity
+# matters here for the same reason it matters for `resource:` (a later GPG signing ceremony reads
+# this exact row, design/USER-GPG-TRUST-LAYER-FAQ.md); the normalized copy is validation-only
+# scratch, never persisted. Nothing is written at all if validation fails (atomicity by
+# refusal-before-write).
+#
+# COHERENCE PARTNER: the trigger condition below (leading POSIX [:space:] stripped, then a
+# `review:` prefix) and bootstrap/templates/pickup.tmpl's review-queue reader (`statement ~
+# '^[[:space:]]*review(-done)?:'`, shared with the `review-done:` block immediately below) define
+# "a review-queue declaration" IDENTICALLY, by construction -- the same coherence contract every
+# grammar above already keeps with its own reader. Change either side only in lockstep with the
+# other. (No collision with the pre-existing `led review <entry-id> ...` subcommand: that is a
+# distinct top-level dispatch on argv[0], never reached from this generic `<kind> <statement>`
+# validation path -- this block only ever sees a statement BODY, never a subcommand invocation.)
+_review_trimmed="${statement#"${statement%%[![:space:]]*}"}"
+case "$_review_trimmed" in
+  review:*)
+    if ! python3 - "$_review_trimmed" <<'PYEOF'
+import re
+import sys
+
+# The four fields, in order, are transcribed VERBATIM from design/USER-RECIPES-FAQ.md's "Your
+# review queue" section -- the ONE documented home of this grammar (a transcription, not a
+# second, driftable definition of it -- ADR-0012 P1). bootstrap/templates/pickup.tmpl's own
+# _REVIEW_FIELDS tuple is the sibling reader of the same four names on the display side. SLUG is
+# held to the same bare-slug shape `estimate:`'s TASK-SLUG/`taxon:`'s TAXONOMY fields already use.
+FIELDS = ("SLUG", "RANK", "WHAT", "POINTER")
+_SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9-]*$")
+_RANK_RE = re.compile(r"^[1-9][0-9]*$")  # a positive integer -- 0 and negative ranks make no sense
+
+raw = sys.argv[1]
+normalized = re.sub(r"[\r\n]+[ \t]*", " ", raw).strip()
+body = normalized[len("review:"):]
+parts = [p.strip() for p in body.split("|")]
+
+
+def refuse(msg: str) -> None:
+    print(f"led: REFUSED -- malformed 'review:' statement -- {msg}.", file=sys.stderr)
+    print("  grammar (design/USER-RECIPES-FAQ.md \"Your review queue\"):", file=sys.stderr)
+    print("    review: <SLUG> | <RANK> | <WHAT> | <POINTER>", file=sys.stderr)
+    print(f"  the four fields, in order: {', '.join(FIELDS)}", file=sys.stderr)
+    print("  SLUG must match ^[a-z0-9][a-z0-9-]*$ (a bare slug, no spaces)", file=sys.stderr)
+    print("  RANK must be a positive integer (1 = most important -- the queue's sort key)", file=sys.stderr)
+    print("  WHAT must be non-empty (plain words: what you are reviewing)", file=sys.stderr)
+    print("  POINTER must be non-empty (where to look: a repo path, './led show N', or a URL)", file=sys.stderr)
+    print(f"  received ({len(parts)} field(s), whitespace-normalized): {normalized}", file=sys.stderr)
+    print("  NOTHING was written -- fix the statement and re-run.", file=sys.stderr)
+    sys.exit(1)
+
+
+if len(parts) != len(FIELDS):
+    refuse(f"expected exactly {len(FIELDS)} '|'-separated fields, got {len(parts)}")
+
+slug, rank, what, pointer = parts
+if not _SLUG_RE.match(slug):
+    refuse(f"SLUG field {slug!r} does not match ^[a-z0-9][a-z0-9-]*$ (a bare slug, no spaces)")
+if not _RANK_RE.match(rank):
+    refuse(f"RANK field {rank!r} is not a positive integer (1 = most important)")
+if not what:
+    refuse("WHAT field is empty -- state what you are reviewing, for a human reader")
+if not pointer:
+    refuse("POINTER field is empty -- state where to look (a repo path, './led show N', or a URL)")
+
+sys.exit(0)
+PYEOF
+    then
+      exit 1
+    fi
+    ;;
+esac
+
+# --- review-done: intake validation (tracker item `maintainer-review-queue`, 2026-07-13) ------
+# A statement beginning `review-done:` (after stripping leading whitespace) TICKS OFF one row of
+# the maintainer's review queue -- removing it from `./pickup`'s rendered `MAINTAINER-REVIEW-
+# QUEUE` section without deleting anything (append-only; see the `review:` block immediately
+# above for the full latest-row-per-SLUG semantics) -- and MUST carry the two-field grammar
+# design/USER-RECIPES-FAQ.md's "Your review queue" section documents before ANY write is
+# attempted, cloned structurally from the blocks above (whitespace-normalized validation copy,
+# byte-exact persisted statement, refuse-before-write atomicity, teach-text naming the grammar).
+#
+# Note the shell case pattern below (`review-done:*`) can never be confused with the `review:`
+# block's own trigger (`review:*`) -- "review-done:" does not begin with the literal substring
+# "review:", so the two patterns partition every statement disjointly, by construction.
+#
+# The grammar check below runs against a WHITESPACE-NORMALIZED COPY only, identical convention to
+# every block above. The row actually written on success is $statement, completely untouched.
+# Nothing is written at all if validation fails (atomicity by refusal-before-write).
+#
+# COHERENCE PARTNER: see the `review:` block's own comment immediately above -- the same combined
+# WHERE filter (`statement ~ '^[[:space:]]*review(-done)?:'`) in bootstrap/templates/pickup.tmpl's
+# review-queue reader covers both prefixes identically, by construction. Change either side only
+# in lockstep with the other.
+_review_done_trimmed="${statement#"${statement%%[![:space:]]*}"}"
+case "$_review_done_trimmed" in
+  review-done:*)
+    if ! python3 - "$_review_done_trimmed" <<'PYEOF'
+import re
+import sys
+
+# The two fields, in order, are transcribed VERBATIM from design/USER-RECIPES-FAQ.md's "Your
+# review queue" section -- the ONE documented home of this grammar (ADR-0012 P1). SLUG is held to
+# the SAME slug grammar the `review:` block above uses -- "SLUG must match grammar" per this
+# work item's own spec, so a `review-done:` can never target a slug shape `review:` could never
+# have opened in the first place.
+FIELDS = ("SLUG", "DISPOSITION")
+_SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9-]*$")
+
+raw = sys.argv[1]
+normalized = re.sub(r"[\r\n]+[ \t]*", " ", raw).strip()
+body = normalized[len("review-done:"):]
+parts = [p.strip() for p in body.split("|")]
+
+
+def refuse(msg: str) -> None:
+    print(f"led: REFUSED -- malformed 'review-done:' statement -- {msg}.", file=sys.stderr)
+    print("  grammar (design/USER-RECIPES-FAQ.md \"Your review queue\"):", file=sys.stderr)
+    print("    review-done: <SLUG> | <DISPOSITION>", file=sys.stderr)
+    print(f"  the two fields, in order: {', '.join(FIELDS)}", file=sys.stderr)
+    print("  SLUG must match ^[a-z0-9][a-z0-9-]*$ (a bare slug, no spaces -- the same grammar", file=sys.stderr)
+    print("  'review:' uses)", file=sys.stderr)
+    print("  DISPOSITION must be non-empty (state what you decided, or what happened)", file=sys.stderr)
+    print(f"  received ({len(parts)} field(s), whitespace-normalized): {normalized}", file=sys.stderr)
+    print("  NOTHING was written -- fix the statement and re-run.", file=sys.stderr)
+    sys.exit(1)
+
+
+if len(parts) != len(FIELDS):
+    refuse(f"expected exactly {len(FIELDS)} '|'-separated fields, got {len(parts)}")
+
+slug, disposition = parts
+if not _SLUG_RE.match(slug):
+    refuse(f"SLUG field {slug!r} does not match ^[a-z0-9][a-z0-9-]*$ (a bare slug, no spaces)")
+if not disposition:
+    refuse("DISPOSITION field is empty -- state what you decided, or what happened")
+
+sys.exit(0)
+PYEOF
+    then
+      exit 1
+    fi
+    ;;
+esac
+
 warn_flag_in_statement "$statement"
 rationale=""
 if [ -n "$files" ]; then

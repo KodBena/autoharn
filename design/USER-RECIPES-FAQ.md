@@ -79,7 +79,7 @@ than is built. Design and criteria table:
 ## Trust ceremonies
 
 **Can I prove a commission really came from me?**
-Yes, in three increasing strengths — LAZY < FULL < SIGNED. FULL's evidence (the right actor
+Yes, and it comes in three increasing strengths: LAZY, FULL, and SIGNED. FULL's evidence (the right actor
 recorded on the row, plus the absence of the interception stamp a hook adds only when an agent —
 not the maintainer directly — wrote the row) is a rebuttable presumption, not proof; the standing rule is
 that a CONTESTED commission must be SIGNED. You can rehearse every ceremony with a
@@ -133,7 +133,7 @@ Walkthrough: [USER-DOC-AUDIT-LOOP.md](USER-DOC-AUDIT-LOOP.md); the loop's rules:
 ## Operating rhythm
 
 **How do I pick up work after a break?**
-Fresh session, then `./pickup` — never a resumed/continued session. The brief is derived
+Start a fresh session and run `./pickup` — never resume or continue an existing one. The brief is derived
 at pickup time from live ledger state; a stored handoff decays and replayed context is
 the quadratic cost the ledger exists to replace. Card:
 [ORCH-OPERATING-CARD.md](../ORCH-OPERATING-CARD.md).
@@ -150,6 +150,80 @@ No — runs are strictly linear; a superseded world is settled, read-only eviden
 enters the next world via the scaffold (it usually already has), and the finding goes on
 the ledger. This is a ruling, not a limitation looking for a workaround. Ruling text:
 [../CLAUDE.md](../CLAUDE.md), ORCHESTRATION section.
+
+## Your review queue
+
+**Can I keep a ranked "things I need to personally look at" queue, and tick items off as I go?**
+Yes — a `review:`/`review-done:` ledger row pair does this; it renders at every `./pickup`
+under a `MAINTAINER-REVIEW-QUEUE` section. Unlike the `resource:`/`estimate:` grammars
+elsewhere on this page, the grammar is written out here **in full**, not merely pointed at —
+this recipe is its one documented home
+([ADR-0005 Rule 1](../law/adr/0005-documentation-discipline.md), single source of truth per
+fact), and it deviates from this page's usual "point elsewhere" convention on purpose so an
+executive queue has a self-contained page to hand a first-time reader.
+
+A queue entry is a `decision`-kind ledger row (the same kind `resource:`/`estimate:` ride, run
+via `./led decision "..."`), validated at write time by
+[`bootstrap/templates/led.tmpl`](../bootstrap/templates/led.tmpl) and rendered at pickup time
+by the `MAINTAINER-REVIEW-QUEUE` section of
+[`bootstrap/templates/pickup.tmpl`](../bootstrap/templates/pickup.tmpl) — both cite this
+subsection by name rather than restating the grammar a second time
+([ADR-0012](../law/adr/0012-compositional-and-structural-hygiene.md) P1).
+
+**Opening or re-ranking an item:**
+
+```
+review: <SLUG> | <RANK> | <WHAT> | <POINTER>
+```
+
+The four fields, in order, separated by ` | ` (space-pipe-space):
+
+- **SLUG** — a bare slug matching `^[a-z0-9][a-z0-9-]*$` (no spaces), the same shape
+  `estimate:`'s TASK-SLUG field already uses. Identifies the item across its whole lifetime —
+  opened, re-ranked, ticked off, and (if it recurs) re-opened.
+- **RANK** — a positive integer (`1`, `2`, `3`, …), where `1` is the MOST important item —
+  the queue's own sort key.
+- **WHAT** — non-empty plain words: what you are reviewing, in a phrase a cold reader
+  understands without opening the pointer.
+- **POINTER** — non-empty: where to look. A repository path, a live-lookup command
+  (`./led show 214`, run at the repository root), or a URL — whichever actually resolves for
+  this item.
+
+**Ticking an item off:**
+
+```
+review-done: <SLUG> | <DISPOSITION>
+```
+
+- **SLUG** — must match the same slug grammar `review:` uses (a `review-done:` for a
+  slug-shaped-wrong SLUG is refused — there being nothing on record it could sensibly close).
+- **DISPOSITION** — non-empty free text: what you decided, or what happened.
+
+**Semantics — latest row per SLUG wins, append-only.** Nothing here is mutated or deleted; the
+queue's state is *derived* from whichever row for a given SLUG has the highest ledger row id:
+
+- The **latest `review:` row** for a SLUG is the one whose RANK/WHAT/POINTER render — so
+  filing a new `review:` row with the same SLUG and a different RANK is how you re-rank an
+  item (no supersedes flag needed; this is a simpler rule than `resource:`'s, deliberately,
+  because a queue's whole point is a fast one-liner).
+- A **`review-done:` row for a SLUG removes it** from the rendered queue — it is still on the
+  ledger (append-only, nothing is ever deleted), just no longer printed as open.
+- A **`review:` row filed AFTER a `review-done:` for the same SLUG re-opens it** — the same
+  latest-row-wins rule applied uniformly, so reopening needs no special-cased verb.
+
+Copy-paste examples:
+
+```sh
+./led decision "review: key-generation | 1 | decide the signing-key generation ceremony | design/MAINT-MAINTAINER-DECISION-BRIEF.md"
+./led decision "review-done: key-generation | approved the brief's proposed ceremony as written"
+```
+
+`./pickup`'s `MAINTAINER-REVIEW-QUEUE` section prints every open entry rank-ascending, each with
+the exact `./led decision "review-done: <slug> | <disposition>"` one-liner to tick it —
+copy-paste, no grammar to recall. An empty queue prints a short, explicit line, never silence
+(the same never-silent convention `resources()`/`estimates()` already keep). A malformed
+`review:`/`review-done:` row is refused loudly at write time (see `led.tmpl`'s own teach-text);
+nothing here is a gate on WHAT you decide, only on the shape of the row that records it.
 
 ## What this page is not
 
