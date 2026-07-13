@@ -10,7 +10,7 @@
 
 - **Status:** Accepted
 - **Genre:** Tenet (cross-cutting authoring discipline) — the second tenet,
-  after ADR-0002 (fail loudly).
+  after [ADR-0002](0002-fail-loudly.md) (fail loudly).
 - **Date:** 2026-06-15
 - **Provenance:** Transferred from the LengYue ADR corpus — LengYue and chocofarm are
   two prior software projects this ADR corpus passed through before autoharn adopted
@@ -76,13 +76,10 @@ The discipline has two cases:
 - **Files visible only in part.** Edit only the specific lines the task or a
   failing test points at. If a broader rewrite seems warranted, read the full
   file first; do not produce one from inference. A large, multi-hundred-line
-  file carrying one of the contracts above (see
-  [`history/0004-contract-examples.md`](history/0004-contract-examples.md)
-  for the worked instances preserved in
+  file carrying one of the contracts above (worked instances preserved in
   [`history/0004-contract-examples.md`](history/0004-contract-examples.md))
-  is exactly the file where an
-  inferred rewrite drifts a numerical or layout contract the editor couldn't
-  see.
+  is exactly the file where an inferred rewrite drifts a numerical or layout
+  contract the editor couldn't see.
 
 ## Consequences
 
@@ -123,9 +120,10 @@ The discipline has two cases:
    policy can relax in proportion to the new guarantee — but only for the
    guarded class.
 2. **The largest files are split below the partial-visibility threshold.**
-   ADR-0007 (file size) is the prophylactic counterpart: if a codebase's
-   oversized files are split so partial visibility becomes rare, this tenet's
-   reactive discipline applies less often. The two compose.
+   [ADR-0007](0007-file-size-and-information-density.md) (file size) is the
+   prophylactic counterpart: if a codebase's oversized files are split so
+   partial visibility becomes rare, this tenet's reactive discipline applies
+   less often. The two compose.
 3. **The discipline introduces its own unanticipated failure mode.**
    Unlikely, but worth flagging as the trigger for revisit.
 
