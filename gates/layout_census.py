@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-09T07:54:37Z
-#   last-change: 2026-07-13T15:25:19Z
+#   last-change: 2026-07-13T17:45:28Z
 #   contributors: 9bcc0113/main, be693afb/main, e4410ef6/main, 3c50e030/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -105,6 +105,13 @@ ROOT_DIRS = {
     # diffed against prior cycles. Registered on landing rather than left an unregistered
     # breach for this gate's next run (CLAUDE.md hazard-flagging duty).
     "observatory",
+    # proposals/ — TRANSITIONAL (ADR-0005 Rule 7, retirement plan stated here): patch files for
+    # merge-gated surfaces (live-exec'd templates/hooks), staged by builders whose commissions
+    # forbid touching those surfaces while a deployment session is live (merge-gate policy,
+    # 2026-07-13). Each patch retires when applied at a session gap; the directory empties and
+    # may itself be retired when the gate policy has no standing holds. First entries:
+    # scaffold-governed-set-language-default's two template patches (merge e54c1eb).
+    "proposals",
 }
 
 # (2) per-directory currency patterns: a directory -> the regex(es) its basenames MUST match.
