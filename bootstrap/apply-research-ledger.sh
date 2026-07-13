@@ -1,8 +1,8 @@
 #!/bin/sh
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-11T00:14:59Z
-#   last-change: 2026-07-11T00:15:28Z
-#   contributors: e4410ef6/main
+#   last-change: 2026-07-13T16:35:19Z
+#   contributors: e4410ef6/main, 3c50e030/main
 # <<< PROVENANCE-STAMP <<<
 
 # apply-research-ledger.sh — the operator's/maintainer's ONE scripted step for applying
@@ -116,5 +116,5 @@ echo ""
 echo "-- apply succeeded --"
 DATE_UTC="$(date -u +%Y-%m-%d)"
 echo ""
-echo "REMINDER: add a one-line BACKLOG.md note (\"001_research_ledger.sql APPLIED $DATE_UTC ($HOST/$DB)\")"
-echo "so BACKLOG's own apply-status entry for this store stays true."
+echo "REMINDER: ledger the apply so the trail stays true (BACKLOG.md is retired; the tracker is the trail):"
+echo "  ./led decision \"001_research_ledger.sql APPLIED $DATE_UTC ($HOST/$DB), transaction-wrapped COMMIT witnessed\""
