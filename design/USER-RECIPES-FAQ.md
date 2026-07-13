@@ -36,8 +36,53 @@ interior node is auditable. The work verbs' home is
 [ORCH-OPERATING-CARD.md](../ORCH-OPERATING-CARD.md). Per-node estimate-vs-actual rollups
 are a designed follow-up, not yet built — the design lives on the deployment's own tracker
 as work item `work-tree-rollup` (a ledger row, not a committed page: read it with
-`./led show <id>` at the repository root, the same live-lookup convention the sibling
+`./led show work-tree-rollup` at the repository root, the same live-lookup convention the sibling
 specs use for tracker items).
+
+## Workflow patterns
+
+**I want a workflow to iterate until clean — can an agent spawn sub-agents and loop on its
+own output until a defect list comes up empty?**
+Yes, natively, and both halves of that question have a plain answer. The looping half: a
+"fix-point" here means a script keeps calling an agent, feeding it the artifact or defect
+list as it currently stands, until a round finds nothing new to fix — and that loop lives in
+the workflow **script's own deterministic control flow** (an ordinary `while` loop wrapping
+repeated agent invocations — whether that is the `Agent` tool from an orchestrating session
+or a standalone driver script built on the Claude Agent SDK), never in any one agent's own
+sense that it is "done." Terminate on **loop-until-dry**: keep looping until K *consecutive*
+rounds each report zero new findings, not just one empty round — a defect population of
+unknown size can have a long tail a single-round counter misses. (This project uses the
+identical criterion in its own fix-point loops:
+[design/ORCH-AGENTIC-PATTERNS.md](ORCH-AGENTIC-PATTERNS.md) §3's "adversary files zero new
+rows for K consecutive rounds", and the two-role audit loop below.) The spawning half: yes,
+an agent your workflow dispatches can itself dispatch further sub-agents — nesting is not
+disabled — with a fuller, more capable agent type (e.g. `general-purpose`) available to use
+where the workflow's own default agent type is a leaner, narrower one.
+
+The load-bearing caveat, stated because it was caught failing in practice: **each round of
+the loop must spawn a genuinely fresh agent, never resume one long-lived agent across
+rounds.** An agent that carries its own prior round's context into the next round is not
+actually re-examining the current state with open eyes — it already committed to a verdict
+in an earlier turn, and tends to re-assert that verdict even when the bytes in front of it
+have since changed underneath it. This is not a hypothetical risk: on 2026-07-13, in this
+project's own two-role fix-point loop (the A:B:C fresh-context documentation-review loop,
+[ORCH-ABC-AUDIT-LOOP-RECIPE.md](ORCH-ABC-AUDIT-LOOP-RECIPE.md)'s round-2 discipline), a
+reviewer agent resumed via a follow-up message — rather than spawned fresh — repeated its
+first round's verdict *verbatim* against on-disk content that directly contradicted it. Spawn
+round N+1 as a brand-new agent invocation with no memory of round N, every round, no
+exceptions.
+
+Termination discipline is the other half worth naming up front, not discovering by billing
+surprise: a dry-count guard (K consecutive empty rounds) belongs alongside a hard budget
+guard (a round cap, a cost or token ceiling) — a workflow script is ordinary deterministic
+code, so a fix-point loop with a broken or too-loose termination condition runs to whatever
+cap you built in, burning real, billed tokens the whole way there; nothing backstops a
+runaway loop before that cap except the cap itself. No single page owns this pattern end to
+end yet; [design/ORCH-AGENTIC-PATTERNS.md](ORCH-AGENTIC-PATTERNS.md) works out the
+loop-until-dry criterion in more depth, and
+[ORCH-ABC-AUDIT-LOOP-RECIPE.md](ORCH-ABC-AUDIT-LOOP-RECIPE.md) is a complete worked example of
+exactly this shape — two agent roles, fresh-fork-per-round, a two-round cap, and a named
+escalation path for when the loop does not converge.
 
 ## Declaring things on the ledger
 
@@ -46,7 +91,9 @@ use?**
 Yes — one `resource:` row per resource, whose TIER field carries the deontic force:
 `available` (MAY), `blessed:` (SHOULD), `mandated:` (MUST), `forbidden:` (MUST-NOT).
 `./pickup` renders them tier-sorted, prohibitions first. Honest limit, tier by tier (not one
-blanket answer — the two owning specs drifted on exactly this in mid-2026-07-12 and were
+blanket answer — the two owning specs, [USER-BLESSED-TABLE-TEMPLATE.md](USER-BLESSED-TABLE-TEMPLATE.md)
+and [ORCH-SPEC-RESOURCE-ACCOUNTING.md](ORCH-SPEC-RESOURCE-ACCOUNTING.md), drifted on exactly this
+in mid-2026-07-12 and were
 reconciled 2026-07-13, tracker row 223 — a ledger row, not a committed page: `./led show 223` at
 the repository root reads it in full): `mandated`'s close-review convention already shipped and
 surfaces an undischarged close as [`review_gap`](../GLOSSARY.md#review_gap) debt — never a
@@ -78,13 +125,18 @@ than is built. Design and criteria table:
 
 ## Trust ceremonies
 
-**Can I prove a commission really came from me?**
-Yes, and it comes in three increasing strengths: LAZY, FULL, and SIGNED. FULL's evidence (the right actor
-recorded on the row, plus the absence of the interception stamp a hook adds only when an agent —
-not the maintainer directly — wrote the row) is a rebuttable presumption, not proof; the standing rule is
-that a CONTESTED commission must be SIGNED. You can rehearse every ceremony with a
-throwaway key before any real key exists. Walkthrough:
+**Can I prove a commission really came from me?** (a "commission" here is a ledgered
+instruction attributed to a principal — the maintainer or an agent acting for them — and the
+question is how strongly that attribution can be trusted). Full grammar and worked walkthrough:
 [USER-GPG-TRUST-LAYER-FAQ.md](USER-GPG-TRUST-LAYER-FAQ.md) §5–§7.
+Yes, and it comes in three increasing strengths: **LAZY** (the row's stated actor is taken on
+its word, no cryptographic or structural check), **FULL** (the right actor recorded on the row,
+plus the absence of the interception stamp a hook adds only when an agent — not the maintainer
+directly — wrote the row: a rebuttable presumption, not proof), and **SIGNED** (a detached GPG
+signature over the row, checked against a known key — the only strength that survives a
+dispute). The standing rule is that a **CONTESTED** commission (one whose attributed actor is
+disputed after the fact) must be SIGNED to stand. You can rehearse every ceremony with a
+throwaway key before any real key exists.
 
 **Can I anchor the ledger so later tampering is provable?**
 Yes — sign the chain head at run close (`verify-chain --head`, then a detached signature).
@@ -227,8 +279,8 @@ nothing here is a gate on WHAT you decide, only on the shape of the row that rec
 
 ## What this page is not
 
-Not an inventory (that is [ORCH-CAPABILITIES.md](../ORCH-CAPABILITIES.md), where every
-mechanism carries witnessed output or an honest UNWITNESSED mark), not a setup guide
-([USER-GUIDE.md](../USER-GUIDE.md)), and not a promise that a recipe listed here is
+This page is not an inventory (that is [ORCH-CAPABILITIES.md](../ORCH-CAPABILITIES.md), where every
+mechanism carries witnessed output or an honest UNWITNESSED mark), it is not a setup guide
+([USER-GUIDE.md](../USER-GUIDE.md)), and it is not a promise that a recipe listed here is
 enforced — where an entry says "declaration only," the enforcement genuinely does not
 exist yet, and the cited spec names the stage that would build it.
