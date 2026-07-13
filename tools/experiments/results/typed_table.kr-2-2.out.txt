@@ -1,0 +1,9 @@
+Table: the four typed-intake grammars (design/ORCH-KR-TITRATION-EXPLORATION.md §2.2)
+
+| kind | fields | write-side witness | read-side witness |
+| --- | --- | --- | --- |
+| `resource:` | NAME, CLASS, REACH, WHAT-IT-PROVES, GUIDANCE, TIER | `bootstrap/templates/led.tmpl:864-956` | `bootstrap/templates/pickup.tmpl:227,245` |
+| `estimate:` | TASK-SLUG, TOOL-CALLS, SUBAGENT-SPAWNS, WALL-CLOCK, TOKEN-OOM, BASIS | `led.tmpl:958-1059` | `pickup.tmpl:327,330` |
+| `taxon:` | TAXONOMY, TAXON, PATTERNS, GLOSS | `led.tmpl:1061-1146` | `pickup.tmpl:395` |
+| `interface:` | TAXONOMY, ARTIFACT-PATTERN, GLOSS | `led.tmpl:1147` onward | `pickup.tmpl:395` (same renderer) |
+<!-- constructor-generated: tools/experiments/typed_table.py; declared type former = 'typed-intake grammar (a `kind:` statement prefix)'; 4 row(s) type-checked at construction (forced articulation + empty-header refusal + column-count coherence); see design/ORCH-TYPED-TABLE-EXPERIMENT.md -->

@@ -1,0 +1,10 @@
+Table: Haiku-tier-consumer comparison across three substrate candidates (design/ORCH-KR-TITRATION-EXPLORATION.md §5)
+
+| question, answered per candidate | (a) OWL/RDF store | (b) EDB/ASP tier | (c) typed grammars |
+| --- | --- | --- | --- |
+| how does a Haiku-tier consumer look up one fact? | SPARQL SELECT (needs endpoint + syntax) | invoke a pre-authored query | read pickup section / `./led show`; trivial |
+| how does it enumerate current facts? | SPARQL over latest-triples (versioning is manual in RDF) | derived view | pickup renders unsuperseded rows; supersession native |
+| how does it detect a contradiction? | ABox inconsistency — but explosion, and only within modeled axioms | absence/join judgments, differential-trusted | write-boundary refusal (malformed), collision detection stays with readers/probes |
+| why trust an answer it returns? | reasoner-proof, but encoding untrusted (no differential exists) | two-producer differential, the house bar | grammar refusal witnessed live; byte-exact rows |
+| what does the option cost to stand up? | new store + TBox + trust machinery | spec ceremony + program pairs | one cloned template block per kind |
+<!-- constructor-generated: tools/experiments/typed_table.py; declared type former = 'question a Haiku-tier consumer might ask'; 5 row(s) type-checked at construction (forced articulation + empty-header refusal + column-count coherence); see design/ORCH-TYPED-TABLE-EXPERIMENT.md -->
