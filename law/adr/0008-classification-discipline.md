@@ -1,5 +1,25 @@
 # ADR-0008: Classification Discipline
 
+> *Refactored for cross-project portability on 2026-07-13 under
+> [`design/MAINT-ADR-PORTABILITY-SPEC.md`](../../design/MAINT-ADR-PORTABILITY-SPEC.md)
+> (tracker `adr-portability-refactor`, maintainer-ratified 2026-07-13). The pre-refactor
+> text stands verbatim at commit `ff691bb9bc430ad497d74ff82d580f758a969f99`; extracted
+> records live under [`history/`](history/) (each Extraction Pointer below names its own
+> destination file) and are not retro-edited. Dated amendments below are preserved
+> verbatim from the original. The Scope field below is re-instanced generically at this
+> same act (spec §4); the pre-refactor wording (which named this project's own package) is
+> the git history at the commit above, not silently lost. The Provenance field, by
+> contrast, is a preserved dated record the spec forbids rewording, so it keeps two
+> source-project proper names; for the zero-context reader (the field is frozen,
+> positional reference is safe): the first project it names is the ancestor whose ADR
+> corpus this tenet was transferred from, and the instance substrate named beside it
+> (a "Vue knob-domain enum", "chrome-neighborhood mounts") is that ancestor's UI
+> machinery, which a reader here is not expected to know; the second project is the
+> source project the re-derivation targeted — the same project whose worked instances
+> this ADR's `history/` extractions describe. "The audit" throughout this document is
+> that source project's 2026-06-15 architectural audit, an artifact of that project, not
+> of this repository.*
+
 - **Status:** Accepted
 - **Genre:** Tenet (cross-cutting authoring discipline) — the sixth tenet,
   after ADR-0002 (fail loudly), ADR-0004 (minimal-touch), ADR-0005
@@ -19,61 +39,30 @@
   detector-model keying decision, the SSOT vocabulary, the audit's
   band/severity classifications, and the consult-record `kind` choice.
 - **Scope:** All authoring work involving classification — picking values from
-  closed vocabularies (enum-like choices, the detector action keys, severity
-  tags), placing files into the `docs/` tree, naming categories, and the
-  symmetric act of creating new categories under ambiguity. Applies across
-  the whole `chocofarm/` package and the docs corpus.
+  closed vocabularies (enum-like choices, action keys, severity tags), placing
+  files into the documentation tree, naming categories, and the symmetric act
+  of creating new categories under ambiguity. Applies across the whole hosting
+  codebase and its documentation corpus; the source project's own surfaces
+  (a detector-model keying decision, an SSOT vocabulary, an audit's
+  band/severity classifications, a consult-record `kind` choice) are the
+  worked instances this ADR's extracted records carry.
 
 ## Context
 
 A categorisation made by closest-fit when no true fit exists, or by
 fabricated-fit when no honest category exists, silently propagates a wrong
-vocabulary through every downstream consumer. The 2026-06-15 architectural
-audit surfaces both registers in chocofarm.
+vocabulary through every downstream consumer.
 
-### Substrate — positive register (fuzzy match against an inadequate vocabulary)
-
-- **The detector mis-specification (consult-002).** The original detector
-  model keyed sensing to *regions* (`cover_mask[i] = {i} ∪ overlap-neighbours`)
-  — the closest available encoding, the union over every face in a region,
-  passed off as a simultaneous disjunction. It was the wrong vocabulary: the
-  honest sensing unit is the *arrangement face*, not the region. The mismatch
-  propagated through six commits and three agent reports (each measuring
-  `cover_mask` against itself) before the consult caught it. The corrected
-  model re-keys the vocabulary from regions to faces
-  (`docs/consults/consult-002-detector-misspec-report.md` §(4)) — exactly the
-  "revise the vocabulary, don't pick the closest fit" move this register
-  prescribes.
-- **The `('d', i)` action-key preservation.** When the env adopted the face
-  model, the action-key shape `('d', i)` was *deliberately preserved* (the env
-  is "re-keyed from regions to faces; the action shape … UNCHANGED IN FORM" —
-  `model/env.py`). This is the honest move: the vocabulary element (`('d', i)`)
-  still fit; only the underlying data changed. The discipline is not "always
-  invent new names" — it is "verify the vocabulary still fits before reusing
-  it."
-
-### Substrate — negative register (fabricate a category under ambiguity)
-
-- **The fossil arrays in `instance.json`.** The instance file carried
-  the superseded 16-region `overlaps` / `delta_treasures` arrays the face
-  arrangement replaced (audit §3.1, appendix). A reader cannot tell which
-  fields are live and which are fossils; an edit to `overlaps` silently does
-  nothing. This is the negative-register failure: stale categorisation left
-  in the canonical vocabulary, which the next reader reads as authoritative.
-  *(Amended 2026-06-15: the two fossil arrays were subsequently stripped from
-  `instance.json` — both are derivable from the live geometry (`overlaps` ==
-  the arrangement co-coverage edge set, `delta_treasures` == the treasures no
-  face covers), and the one remaining reader, `scripts/verify_faces.py`, now
-  re-derives the old cover_mask from `regions_wkt` rather than the frozen array.
-  The instance now carries only live, non-derivable facts. The example above is
-  preserved as the motivating instance for this register.)*
-- **The audit's own band/severity vocabulary.** The audit classifies findings
-  `critical`/`major`/`minor` and modules `sound`/`messy`. It is disciplined
-  about the failure mode this register names: severity is calibrated by the
-  *substitution test* (below), not by the observed instance's cost, and the
-  audit's §10 self-critique flags that the `critical`/`major` line "is softer
-  than the line between `confirmed` and `refuted`" — naming the vocabulary's
-  own imprecision rather than pretending it is crisp.
+> **Extracted record — the detector-misspec and fossil-array substrates**
+> *(moved verbatim to [history/0008-chocofarm-classification-substrate.md](history/0008-chocofarm-classification-substrate.md))*:
+> the 2026-06-15 architectural audit that motivates this tenet surfaces both registers in
+> its source project. Positive register: a detector model keyed sensing to the closest
+> available encoding (a region) when the honest sensing unit was a different, finer thing
+> (a face) — the mismatch propagated through six commits before being caught — contrasted
+> with an action-key shape that was rightly *preserved* across the same re-keying because
+> the vocabulary element still fit. Negative register: a data file kept two superseded
+> fossil arrays a reader could not tell were dead, and the audit's own severity vocabulary
+> is disciplined about calibrating to the worst case rather than the observed cost.
 
 ### Two registers, one principle
 
@@ -94,14 +83,17 @@ the failure mode the tenet forbids.
 ### Positive register — refuse fuzzy matches against an inadequate vocabulary
 
 When choosing from a closed vocabulary and no element is a true match, the
-honest move is **revise the vocabulary**, not pick the closest fit. The
-detector model is the worked chocofarm instance: when "enter region Δ_i" did
-not honestly model a single-point sensor, the fix was to re-derive the
-vocabulary (faces, not regions), not to keep using the closest-fitting region
-encoding. If vocabulary revision is out of scope for the current arc, the
-deviation is filed visibly (a consult record, an inline comment naming the
-misfit, an ADR amendment) so the next reader sees the gap rather than reading
-the closest-match as a legitimate fit.
+honest move is **revise the vocabulary**, not pick the closest fit. If
+vocabulary revision is out of scope for the current arc, the deviation is
+filed visibly (a consult record, an inline comment naming the misfit, an ADR
+amendment) so the next reader sees the gap rather than reading the
+closest-match as a legitimate fit.
+
+> **Extracted record — the detector re-keying instance**
+> *(the same substrate the Context pointer above names, [history/0008-chocofarm-classification-substrate.md](history/0008-chocofarm-classification-substrate.md))*:
+> the source project's detector model modeled a single-point sensor with the
+> closest-fitting encoding available, which turned out to be the wrong vocabulary; the
+> fix re-derived the vocabulary itself rather than keep the near-fit.
 
 ### Negative register — refuse to fabricate categories under ambiguity
 
@@ -109,10 +101,9 @@ When CREATING a classification and no existing category cleanly fits, the
 honest move is **default to flat / leave it un-categorised and named as such**,
 not invent a synthetic parent or force a "least-bad" home. A fabricated
 category that descriptively fits nothing absorbs ambiguity into the taxonomy,
-where the absorbed wrongness becomes the new baseline. The fossil
-`instance.json` arrays are the dual failure: a stale categorisation left
-standing is as misleading as a fabricated one — the remedy is to strip the
-fossils (mark them dead or remove them), not to leave the reader to guess.
+where the absorbed wrongness becomes the new baseline; a stale categorisation
+left standing is as misleading as a fabricated one — the remedy is to strip
+the fossil (mark it dead or remove it), not to leave the reader to guess.
 
 ### Severity calibration — the substitution test
 
@@ -121,13 +112,14 @@ critical surface, not by the observed instance's user-visible cost. The
 exercise: name the failure shape in its most general form; list the surfaces
 to which the same shape could apply; calibrate to the worst case on that list.
 
-The audit's §4 reference-rate trace is the chocofarm worked example. A frozen
-`DECOMP_ANCHOR` literal used *only* as a TensorBoard display line has near-zero
-cost. The *same failure shape* — a derived value frozen as a literal — applied
-to the `%VoI` divisor (`exit_loop.py`) or to `vhat_lam` (a numerical input to
-a provable bound, `eval_bound.py`) has catastrophic cost: a silently wrong
-research result or a corrupted certificate. The discipline that catches the
-harmless instance must be calibrated to the worst case, not the observed one.
+> **Extracted record — the reference-rate severity trace**
+> *(moved verbatim to [history/0008-chocofarm-classification-substrate.md](history/0008-chocofarm-classification-substrate.md);
+> the same underlying incident also grounds [ADR-0002](0002-fail-loudly.md) Rule 6)*:
+> the source project's audit found one derived rate hardcoded as two literals that had
+> already drifted from each other — one copy a harmless display-only value, the other a
+> numerical input to a provable bound. The discipline that catches the harmless copy must
+> be calibrated to the worst case the same failure shape could reach, not the one that
+> happened to be observed first.
 
 ## Concrete rules
 
@@ -141,7 +133,9 @@ harmless instance must be calibrated to the worst case, not the observed one.
    parents are last resort, not default.
 3. **Surface the gap visibly.** When the right move (revise the vocabulary,
    strip the fossil, hold flat) is out of scope for the current arc, file the
-   deviation visibly — a consult record (per ADR-0005 Rule 2), an ADR
+   deviation visibly — a consult record (per
+   [ADR-0005](0005-documentation-discipline.md) Rule 2; an adopting project
+   substitutes its own filing convention, the obligation is the same), an ADR
    amendment, or at minimum an inline comment naming the misfit. Silent
    acceptance is the failure mode this tenet forbids.
 4. **Apply the substitution test for severity.** When a category error
@@ -173,13 +167,16 @@ the discipline working as intended.
 
 - **Vocabulary integrity over time.** Each addition is forced through "does
   this fit, or does the vocabulary need revising?" — which is exactly the
-  question the consult-002 fix answered (re-key to faces) and the fossil-array
-  finding flags (strip the dead arrays).
+  question the source project's detector re-keying fix answered (revise the
+  vocabulary) and its fossil-array finding flags (strip the dead categories);
+  both are carried in the extracted record the Context's Extraction Pointer
+  above links.
 - **Composes with existing tenets.** ADR-0002's reactive register catches the
   silent symptom; this tenet catches the cause before the symptom forms.
   ADR-0005's documentation discipline (Rule 5, file location reflects content)
   is the documentation register of the negative register's file-placement
-  case (the consult-002 relocation).
+  case (the source project relocated a mis-filed consult record for exactly
+  this reason).
 - **Self-evident audit trail.** When the gap is filed visibly, future readers
   see the gap rather than reading the closest-match as authoritative.
 
@@ -213,26 +210,34 @@ the discipline working as intended.
    exceptions allow). Reconcile then.
 4. **Tooling makes part of the discipline mechanical** — an enum-coverage
    check, a fabricated-parent (single-occupant synthetic directory) detector,
-   a fossil-field check on `instance.json`. Tighten the corresponding rule
-   toward enforcement as the mechanical surface grows.
+   a fossil-field check on a canonical instance/config file. Tighten the
+   corresponding rule toward enforcement as the mechanical surface grows.
 
 ## Related
 
-- **ADR-0002 (fail loudly).** The reactive sibling. A fuzzy classification
-  that slips through becomes the silent symptom ADR-0002 surfaces; this tenet
-  prevents the cause. The two compose at different intervention points.
-- **ADR-0003 (domain-coupling bands).** The Band 1/2/3 vocabulary is one of
-  the classifications this tenet protects against fuzzy-matching — a Band-2
-  module that accretes an FFXIII fact is a band-misfit this discipline catches.
-- **ADR-0005 (documentation discipline).** Rule 5 (file location reflects
-  content) is the documentation-register instance of this tenet's negative
-  register applied to file placement (the consult-002 relocation).
-- **ADR-0009 (performance investigation discipline).** The per-domain instance
-  for the perf-claim vocabulary — "faster"/"regression"/"no change" is a
-  closed vocabulary; substantiation is the fit-verification this tenet implies.
-- **The 2026-06-15 architectural audit** — the detector-misspec substrate, the
-  reference-rate severity calibration (§4/§5), and the fossil-array
-  negative-register instance.
+- **[ADR-0002](0002-fail-loudly.md) (fail loudly).** The reactive sibling: its loudness
+  hierarchy is where a classification failure that slips past this tenet's two registers
+  ends up surfacing — a fuzzy classification that slips through becomes the silent
+  symptom ADR-0002's hierarchy catches. This tenet's **positive register** (refuse a fuzzy
+  vocabulary match) and **negative register** (refuse a fabricated category) are the
+  proactive counterpart to ADR-0002's reactive rules; the two compose at different
+  intervention points, neither restates the other.
+- **[ADR-0003](0003-domain-coupling-bands.md) (domain-coupling bands).** The
+  Band 1/2/3 vocabulary is one of the classifications this tenet protects against
+  fuzzy-matching — a module drifting to depend on a fact that properly belongs to a
+  different named surface is a band-misfit this discipline catches.
+- **[ADR-0005](0005-documentation-discipline.md) (documentation discipline).**
+  Rule 5 (file location reflects content) is the documentation-register instance of
+  this tenet's negative register applied to file placement (the source project's
+  relocation of a mis-filed consult record is the worked case).
+- **[ADR-0009](0009-performance-investigation-discipline.md) (performance
+  investigation discipline).** The per-domain instance for the perf-claim
+  vocabulary — "faster"/"regression"/"no change" is a closed vocabulary;
+  substantiation is the fit-verification this tenet implies.
+- **The source project's 2026-06-15 architectural audit** — the detector-misspec
+  substrate, the reference-rate severity calibration, and the fossil-array
+  negative-register instance; all three are carried in this ADR's extracted record
+  under `history/` (the Extraction Pointers above link it directly).
 
 ## What this tenet does NOT mean
 
