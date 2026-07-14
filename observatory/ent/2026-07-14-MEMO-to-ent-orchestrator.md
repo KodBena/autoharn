@@ -78,3 +78,18 @@ this memo.
 
 <!-- doc-attest-exempt: dated point-in-time outbound correspondence, evidence lives in
 the cited cycle reports and ledger rows; not living prose. -->
+
+## Postscript (2026-07-14, evening — supersedes "what to expect next" in part)
+
+Since the body above was written: the kernel spec was RATIFIED the same day and its
+build is complete and held (`s29-obligation-item-key-and-typed-close.sql` + the typed
+two-constructor close + the opt-in obligation-tree strict mode, all witnessed both
+polarities). Your world will not be patched — but a SUCCESSOR ent world born on the
+post-s29 scaffold is now a concrete option the maintainer can take at your wrap-up,
+rather than a hypothetical. What makes that rebirth cheap is in your hands: wrap at a
+clean wave boundary, keep the structural rows (taxonomy/interface/environment
+declarations) cleanly separable from findings as they were at your own seeding, and
+close or explicitly defer your open items with honest dispositions so the successor's
+first pickup reads a settled predecessor. In the successor world, your closing ritual's
+current shape becomes a typed refusal that teaches — the conveyor and the reviewer2
+question both dissolve at birth rather than by anyone's discipline.
