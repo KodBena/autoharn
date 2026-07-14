@@ -1,0 +1,43 @@
+<!-- doc-attest-exempt: frozen verbatim auditor artifact (point-in-time record); the detector skill's return-path rule forbids editing it, so a legibility-repair loop cannot lawfully run on it -->
+# Out-of-frame hack-rationalization audit of ORCH-RCA-PAIRING-KEY-DIVERGENCE.md
+
+This file is the auditor's artifact, reproduced VERBATIM per the detector skill's return-path
+rule (the orchestrating layer may append below the marked line, never edit above it). Auditor: a
+fresh Sonnet subagent (agentId a276f465f13226432, 2026-07-14) that did not author the RCA and had
+not seen its authoring context; the RCA's own prose was its object of suspicion. Run at the
+maintainer's explicit mid-commission instruction.
+
+---
+
+## Hack-rationalization review: ORCH-RCA-PAIRING-KEY-DIVERGENCE.md
+
+FRAME CHECK: out-of-frame — I am a fresh invocation with no prior exposure to this document's authoring session; the document's own §8 self-check is treated here as the object of suspicion, not as a finding I inherit.
+
+GENERAL FIX: any two records claiming to describe the same event must be keyed by an identity minted once by the party that can see both occurrences, never by content re-derived independently at each occurrence — and no verdict computable by joining two such records may be stored as a third fact.
+PATCH SHIPPED: key `hooks/posttooluse_bash_completion.py` and its consumers on the harness-supplied `tool_use_id` instead of a FIFO/sha256 match against `hooks/stamp_intercept.py`'s pre-rewrite command hash; stop storing `pairing`/`token`/`dispatch_wall_clock` on the completion record; add three mechanisms (M1 real-two-party fixture rule, M2 dead-mechanism tripwire, M3 captured-payload contract fixture).
+DOWNGRADE: real cost named, not a discipline-word — §6.6 explicitly leaves `hooks/pretooluse_delegation_observer.py` (the one other live instance of this exact class, confirmed below) untouched in this build, citing scope discipline ("item 6 is the named sibling, separately dispatchable"). That is a legitimate ADR-0000 Exception #2 shape (filed deferral) only if it is actually filed — checked below, and it is not.
+WRITER DELTA: document's claimed universe (§4 (i)-(iv)) = `posttooluse_bash_completion.py` (fixed), `stamp_intercept.py` (docstring-only, compliant already), `pretooluse_delegation_observer.py` (named, deferred), ledger `stamp_invocation` column (named, compliant), `contemp_edb.py`/`watchdog_liveness.py` (consumers, covered by §6.3). Independent enumeration (`grep -rl "tool_use_id\|command_sha256\|pairing\|FIFO" hooks/ engine/ tools/`) returns exactly these four files — no undisclosed writer found. The delta is zero; the document's writer census is accurate.
+RUNTIME: reproduced against live evidence, fix itself unbuilt by design (RCA-only commission).
+
+TELLS (Step 1): `grep_tells.py` returned zero co-occurrence hits (2 minimality-terms, 9 named-fix cues, 0 co-occurring). Consistent with a document that narrates its own alternative-and-rejected fix (the "shared hashing function" reflex, §4) openly rather than burying it — the scanner not firing here is not surprising given how explicit the prose already is, and is not exonerating on its own.
+
+VERDICT: narrower-but-justified, with one undischarged residual (see findings — the §6.6 deferral fails the ADR's own filing bar as currently practiced in this project).
+WHY: The core (a)-answer — key on harness-assigned identity, delete the stored verdict — is a genuine class foreclosure: it removes the derivation entirely (nothing is computed twice, so nothing can disagree), it is denominated in the one currency that actually individuates a tool call, and it dissolves the FIFO/concurrency residual gap rather than merely disclosing it. The document also correctly identifies and rejects the shallower "one shared hash function" patch a less careful pass would have shipped. But the document claims (§4(i), §6.6, §8) that deferring `pretooluse_delegation_observer.py` is "filed, not buried" — and by the project's own current convention (BACKLOG.md is retired; `./led work open` is where deferred items now live, per ledger row 567/571 and BACKLOG.md's own retirement text) that deferral is not filed anywhere durable. It exists only as prose inside this design doc. That is exactly the narrated-and-left shape ADR-0000's Exceptions clause distinguishes from a genuine filed deferral — the document meets the letter of an ADR passage that cites a now-dead artifact (BACKLOG.md) and misses the spirit (a deferral must be independently discoverable by someone who never reads this file).
+
+FINDINGS BEYOND VERDICT:
+- **The §6.6 deferral is unfiled by current convention.** `ledger row 576` (`hooks-correlation-hash-defect`) captures the commission for *this* document's diagnosis, but `./led work list` shows no open item for `pretooluse_delegation_observer.py`'s own false `tool_use_id` claim (confirmed live — `hooks/pretooluse_delegation_observer.py:93` repeats verbatim the same false premise the completion hook's docstring stated, refuted by the same evidence in §3). If this document merges without a corresponding `./led work open`, the second live instance of the class this RCA names sits fixed-in-diagnosis-only, discoverable solely by a reader of this specific file — precisely the failure mode ADR-0000's Revisit #4 (registry/discoverability) and its Exceptions clause both warn against.
+- **Delegation observer's actual failure shape differs from bash-completion's, and the document doesn't say so.** Live data check (`~/ent/.claude/logs/delegation_observer.journal.jsonl`, 103 lines) shows `pairing: fifo_prompt_sha256` succeeding 51/103 times — not the 0-of-N total, dead-at-birth failure the bash-completion pairing exhibits (0 of 2112, confirmed live). The document's §4(i) folds both into "same class, second live instance" without noting that one is provably dead-by-construction (a rewritten command guarantees hash mismatch) and the other is a live, partially-working FIFO heuristic with a real but statistical collision risk (no command-rewrite defeats it the same way). Lumping them as identical understates that the delegation observer's fix is a different, and arguably lower-urgency, repair — worth stating explicitly rather than leaving the reader to assume equal severity.
+- **Independent verification of the core factual claims held up.** Live read of `~/ent/.claude/logs/{invocations,bash_completions}.jsonl` (grown to 2076/2112 lines since the document's 2056/2093 snapshot, consistent with a live session, as the document itself flags) reproduces: zero hash overlap, zero `pairing:"token"` records, 100% of completion `command_head`s beginning `export PGOPTIONS`, and `tool_use_id` present on all 2076 dispatch lines. The fixture-mocking claim (Lapse 1) was independently confirmed: `seen-red/bash-completion/run_fixtures.py`'s `append_invocation()` hand-synthesizes the dispatch record and never invokes `stamp_intercept.py`. Nothing here contradicts the document's evidentiary claims — the diagnosis is solid.
+- **Stale citation inside the law itself, surfaced but not by this document.** ADR-0000's own Exceptions clause still names `BACKLOG.md` as where a filed deferral lives; `BACKLOG.md` retired in favor of the Postgres ledger on 2026-07-12, before this document was authored. The RCA never notices or flags that the ADR passage it leans on (Exception #2) points at a dead target — it neither files via the ledger nor notes the ADR text needs the same repointing every other stale-BACKLOG-citation in this corpus presumably needs. This is a small, separate law-hygiene gap, not the RCA's job to fix outright, but worth a name since the RCA explicitly invokes the very clause that's stale.
+
+---
+*(Appended by the RCA author, per the skill's append-only rule — nothing above this line was
+edited.)* All four findings are accepted. Dispositions: the RCA's §4(i) and §6.6 were amended to
+state the delegation observer's different failure shape (51/103 live pairing rate, not
+dead-at-birth) and to make a `./led work open` row for it part of the recommendation's
+definition of done rather than a prose deferral; §7 gained the stale ADR-0000
+Exception-#2-cites-retired-BACKLOG.md hazard as a flagged, maintainer-owned law repair. The
+rationalization-ledger filing step (`tools/file_rationalization.py`) was not executed: that tool
+and its `harness` schema belong to the claude_harness repo and are not present in autoharn, and
+the verdict on this consult's own artifact was narrower-but-justified, not a confirmed fire on a
+shipped change — noted here so the non-filing is a stated choice, not an omission.
