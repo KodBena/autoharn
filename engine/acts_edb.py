@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-06T16:54:20Z
-#   last-change: 2026-07-09T09:59:20Z
-#   contributors: 37017f46/main, be693afb/main
+#   last-change: 2026-07-14T01:24:26Z
+#   contributors: 37017f46/main, be693afb/main, a857c93d/main
 # <<< PROVENANCE-STAMP <<<
 
 """acts_edb -- the ACTS EDB + SQL floor for the ledger_acts.lp consumers (consult 25 §2.3).
@@ -81,6 +81,22 @@ def acts_manifest(schema: str) -> dict[str, str]:
     m["stale_attestation"] = ("PRODUCED (basis: ledger regards + supersedes/amends, id-ordered)"
                               if t.has_col("regards") else
                               "DEFERRED (no regards column -- a lean/nla target cannot say)")
+    # stale_attest/stale_nonattest (finding 29's verdict-aware refinement) are ACTS_PREDS members
+    # too (F50: a family neither PRODUCED nor DEFERRED loudly is exactly the silent-family defect
+    # this manifest exists to foreclose) -- basis is stale_attestation further split by
+    # review_detail.verdict, so their availability tracks THAT relation's presence, not `regards`
+    # alone (a target can carry `regards` with no review_detail row).
+    for fam in ("stale_attest", "stale_nonattest"):
+        m[fam] = ("PRODUCED (basis: stale_attestation refined by review_detail.verdict, id-ordered)"
+                  if t.has_relation(f"{schema}.review_detail") else
+                  "DEFERRED (no review_detail relation -- verdict split unavailable)")
+    # SSOT invariant (ADR-0000/ADR-0012 P1): the manifest's keys are exactly ACTS_PREDS, not a
+    # hand-typed subset that can silently drift from it (F50's root cause) -- a future predicate
+    # added to ACTS_PREDS with no matching manifest entry now fails loudly here, at construction
+    # time, instead of passing the F49 completeness test silently.
+    assert set(m) == set(ACTS_PREDS), (
+        f"acts_manifest/ACTS_PREDS drift: {set(ACTS_PREDS) ^ set(m)} -- every ACTS_PREDS family "
+        f"must be declared PRODUCED or DEFERRED here (F49-class silent-family defect).")
     return m
 
 

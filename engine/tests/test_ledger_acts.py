@@ -1,7 +1,7 @@
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-06T16:58:38Z
-#   last-change: 2026-07-06T16:58:43Z
-#   contributors: 37017f46/main
+#   last-change: 2026-07-14T01:24:49Z
+#   contributors: 37017f46/main, a857c93d/main
 # <<< PROVENANCE-STAMP <<<
 
 """test_ledger_acts -- the acts<->ledger consumers (ledger_acts.lp / acts_edb.py) against the
@@ -24,7 +24,8 @@ HERE = Path(__file__).resolve().parent
 
 def _findings(atoms: set[str]) -> dict[str, set[str]]:
     return {p: {a for a in atoms if a.startswith(p + "(")}
-            for p in ("stale_attestation", "claimed_without_act", "unledgered_span")}
+            for p in ("stale_attestation", "stale_attest", "stale_nonattest",
+                       "claimed_without_act", "unledgered_span")}
 
 
 def test_honest_fixture_agrees_and_has_no_findings():
@@ -45,8 +46,18 @@ def test_dishonest_fixture_agrees_and_fires_each_consumer():
     res = las.acts_differential()
     assert res.verdict == AGREE, (res.only_asp, res.only_sql)
     f = _findings(res.asp)
-    # EXACT pre-registered atoms (PRE-REGISTERED-expectations.md Part 2, dishonest fixture)
-    assert f["stale_attestation"] == {"stale_attestation(20,12)"}
+    # EXACT pre-registered atoms (PRE-REGISTERED-expectations.md Part 2, dishonest fixture), UPDATED
+    # per finding 49's odd-link diagnosis (autoharn ledger id 49, resolved oracle-drift-not-engine-
+    # defect): the pre-registered oracle predates the dishonest fixture's finding-29 rows (21 = a
+    # BLOCKING refusal of step2/11; 41 = the amend the refusal demanded), which legitimately add a
+    # second, BENIGN member to the stale_attestation UNION (ledger_acts.lp's own comment: "stale_attestation
+    # stays the UNION... only refinement, honestly"). ledger_acts_scratch.py's own main() already
+    # asserts this split correctly (its `clean_split` check) -- this test previously only pinned the
+    # unrefined union and had gone stale, not the engine. Pinning both the union AND its split members
+    # closes the gap that pytest never actually exercised the verdict-aware refinement (finding 29).
+    assert f["stale_attestation"] == {"stale_attestation(20,12)", "stale_attestation(21,11)"}
+    assert f["stale_attest"] == {"stale_attest(20,12)"}       # 20 attests 12; 12 later amended by 40 -> load-bearing
+    assert f["stale_nonattest"] == {"stale_nonattest(21,11)"}  # 21 refuses 11; 11 amended by 41 as demanded -> benign
     assert f["claimed_without_act"] == {"claimed_without_act(50)"}
     assert f["unledgered_span"] == {"unledgered_span(7,9)", "unledgered_span(11,11)"}
 
