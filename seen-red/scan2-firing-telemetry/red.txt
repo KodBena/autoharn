@@ -1,0 +1,5 @@
+RED 1  ok: firing record missing git_hash is flagged
+RED 2  ok: disposition with an out-of-enum verdict is flagged
+RED 3  ok: FiringRecord refused a malformed record at construction (rank must be >= 1, got 0)
+GREEN ok: record_class1_run + triage disposition + schema gate, end-to-end clean
+ALL CASES OK -- scan2-firing-telemetry construction-refusal, schema-gate, and end-to-end recorder run, zero residue

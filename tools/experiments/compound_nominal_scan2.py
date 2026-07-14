@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-12T23:51:18Z
-#   last-change: 2026-07-12T23:57:20Z
-#   contributors: 3c50e030/main
+#   last-change: 2026-07-14T09:40:55Z
+#   contributors: 3c50e030/main, a857c93d/main
 # <<< PROVENANCE-STAMP <<<
 
 """compound_nominal_scan2 — EXPERIMENT, NOT A WIRED GATE (second attempt; supersedes-or-
@@ -83,6 +83,27 @@ for a human (or an LLM reviewer) to judge. Stdlib only (the no-lazy-imports law 
 gates/ dependency posture; a real POS tagger is a maintainer dependency decision, argued in
 the design note, not taken here).
 
+FIRING TELEMETRY (ledger row 337, maintainer directive, unblocked 2026-07-14). Adoption of
+this detector is conditional on tracking EVERY fired candidate, every run -- the maintainer's
+own words: "the accumulated firing data INCLUDING false positives becomes the dataset [for] a
+more general, disciplined solution" (the method may be biased; the specimen that proved it was
+known to its builder). `--tables` and the default CLASS-1 scan each append one compressed
+record per fired candidate to tools/experiments/results/scan2-firings.jsonl via
+scan2_firings.py, unconditionally -- recording is not a flag, so a real firing cannot happen
+unrecorded, and it is NOT bounded to --top/--dump-all: an earlier revision of this code bounded
+recording to the printed top-K on the theory that a candidate no reviewer saw was never a
+"finding"; an out-of-frame hack-rationalization review caught that this survivorship-biases the
+dataset toward whatever the CURRENT, unproven scoring function already favors -- exactly what
+the telemetry exists to let a later pass correct -- so the bound was removed. The disclosed
+cost: on this corpus the internal candidate pool commonly runs into five figures per invocation
+(angle C is a documented flood, "the measured-flood control angle", no defect-detection claim
+of its own -- see angle C's soundness story above); that volume is the dataset's signal, not
+noise, and if it becomes an operational (repo-size) problem, retention/rotation is a real
+follow-up question for the maintainer, not a reason to pre-filter today. See scan2_firings.py's
+own docstring for the schema, the disposition-backfill workflow, and the one stated mode
+exclusion (--specimens, a recall self-test over synthetic/historical text, is not recorded at
+all -- unrelated to the surfaced/full question, since specimen text is not the live corpus).
+
 Run (from the repo root):
   python3 tools/experiments/compound_nominal_scan2.py                 # CLASS 1 ranked scan
   python3 tools/experiments/compound_nominal_scan2.py --tables        # CLASS 2 table scan
@@ -99,6 +120,12 @@ import subprocess
 import sys
 from collections import Counter, defaultdict
 from pathlib import Path
+
+# firing telemetry (ledger row 337, unblocked by the 2026-07-14 detector-adoption decision,
+# ledger row 658) -- imported, not reimplemented (ADR-0012 P1): this module's own cmd_class1/
+# cmd_tables call it unconditionally so a real firing cannot happen unrecorded. See
+# scan2_firings.py's own docstring for the schema and what is/isn't recorded.
+from scan2_firings import record_class1_run, record_class2_run
 
 REPO = Path(__file__).resolve().parents[2]
 
@@ -693,12 +720,35 @@ def cmd_class1(args):
     docs, notes = load_docs()
     defined = load_defined_terms()
     stats, ranked = scan_class1(docs, defined, angles=args.angle or "ABC")
+    # Telemetry scope: EVERY fired candidate, every run -- the full `ranked` list, not the
+    # printed top-K (ledger row 337, maintainer's own words: "the accumulated firing data
+    # INCLUDING false positives becomes the dataset [for] a more general, disciplined
+    # solution"). An earlier revision of this code bounded recording to --top/--dump-all on
+    # the theory that a candidate never shown to a reviewer was never a "finding"; an
+    # out-of-frame hack-rationalization review caught the real cost of that: bounding to the
+    # printed top-K survivorship-biases the dataset toward whatever the CURRENT (unproven,
+    # that's the whole reason telemetry exists) score formula already favors, structurally
+    # excluding exactly the low-ranked real defects and false positives the maintainer said he
+    # wants preserved. Recording everything is the more literal, more general reading of the
+    # commission and needs no maintainer decision -- only accepting its disclosed cost: on
+    # this corpus the internal pool commonly runs into five figures (angle C is a documented
+    # flood -- "measured-flood control angle", no defect-detection claim of its own -- see its
+    # soundness story above), so a bare invocation appends a five-figure line count. That
+    # volume IS the signal this dataset is for, not noise to pre-filter; if it becomes an
+    # operational problem (repo size), retention/rotation is a real follow-up question for the
+    # maintainer, not a reason to silently narrow what gets recorded today.
+    # unconditional -- no flag skips this; a real fired finding cannot happen unrecorded
+    # (ledger row 337). record_class1_run is a no-op write (0 lines) when ranked is empty.
+    n_recorded = record_class1_run(ranked, args.angle or "ABC")
     print(f"compound_nominal_scan2 (EXPERIMENT, report-only): CLASS 1 ranked scan")
     for n in notes:
         print(f"  {n}")
     print(f"  corpus: {len(docs)} docs; defined terms (GLOSSARY/terms/KEY + lexicalized): "
           f"{len(defined)}+{len(LEXICALIZED)}")
     print(f"  distinct candidate pairs (any angle fired): {len(ranked)}")
+    print(f"  firing telemetry: {n_recorded} record(s) appended to "
+          f"tools/experiments/results/scan2-firings.jsonl (every fired candidate this run -- "
+          f"see this module's docstring, 'FIRING TELEMETRY')")
     per_angle = Counter(a for r in ranked for a in r["angles"])
     print(f"  per-angle candidate counts: {dict(per_angle)}")
     print(f"\n  ranking function: score = 10*A + 3*B + C, where")
@@ -722,6 +772,9 @@ def cmd_class1(args):
 def cmd_tables(args):
     docs, notes = load_docs()
     findings = scan_class2(docs)
+    # unconditional -- no flag skips this; a real firing cannot happen unrecorded (ledger row
+    # 337). record_class2_run is a no-op write (0 lines) when findings is empty.
+    n_recorded = record_class2_run(findings)
     n_tables = 0
     for _doc, text in docs.items():
         n_tables += len(list(parse_tables(text.splitlines())))
@@ -730,6 +783,8 @@ def cmd_tables(args):
         print(f"  {n}")
     print(f"  corpus: {len(docs)} docs, {n_tables} markdown tables")
     print(f"  flagged label columns: {len(findings)} (ranked; angle E > D > F by score)")
+    print(f"  firing telemetry: {n_recorded} record(s) appended to "
+          f"tools/experiments/results/scan2-firings.jsonl")
     for i, r in enumerate(findings, 1):
         print(f"\n  {i:3}. [{r['score']:.2f}] {r['doc']}:{r['line']}  header={r['header']!r}")
         print(f"       forms: {list(zip(r['labels'], r['forms']))}")
