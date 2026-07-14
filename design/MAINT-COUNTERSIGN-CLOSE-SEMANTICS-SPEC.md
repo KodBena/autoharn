@@ -1,9 +1,9 @@
 # MAINT — Countersign scoping, typed close, and the obligation-tree guarantee
 
-Status: DRAFT — Fable-authored, awaiting maintainer ratification (constitutional route:
-this spec directs a kernel/lineage change; nobody builds from it until the maintainer
-ratifies it, and the delta reaches reality only via the next world's birth chain, per
-the runs-are-linear ruling).
+Status: RATIFIED 2026-07-14 (maintainer, same-day, with the typed-actor
+non-foreclosure note recorded in section 9 — read it as part of the ratified intent).
+Constitutional route: the delta reaches reality only via the next world's birth chain,
+per the runs-are-linear ruling; the Sonnet build (section 8) may proceed in a worktree.
 
 Date: 2026-07-14. Author: the orchestrating Fable session, commissioned by the
 maintainer's executive response of the same date (ledger `commission` row) and refined
@@ -177,6 +177,34 @@ with fixture, the SQL view + ASP rules + judge differential, and the teach-texts
 piece has a named precedent in-tree; none requires invention beyond this spec. Hold all
 of it for the standing gates (hooks/templates merge gap; kernel apply is the
 maintainer's own act at next world birth).
+
+## 9. Ratification note (2026-07-14) — typed actors are not foreclosed
+
+The maintainer ratified this spec with one rider, recorded verbatim in substance: the
+design must not foreclose an organizational discipline where ACTORS ARE TYPED (types
+could be singleton, need not be) and where, e.g., only certain actor types are
+permitted to close an item or countersign a review — the NRC bar has always implied
+this ("it would be ridiculous for a non-certified engineer to counter-sign a review of
+a reactor component"). This is an extension for later, or possibly a fuller
+re-architecture — he explicitly flags that the `{work_item, obligation, actor}` atom
+shape itself is a design-space question — and neither blocks this ratification.
+
+Forward-compatibility audit of the ratified design against that rider, honestly stated:
+
+- Element A keys obligations by work item with principals as ATTRIBUTES — an actor
+  type/certification class attaches to the principal registry
+  (`kernel` `principal` table) as a new attribute without disturbing the key. Nothing
+  in this spec reads "who may act" beyond identity, so a later permission predicate
+  (actor-type × obligation-type → permitted) composes as one more conjunct on the
+  strict-mode close query and one more typed refusal on the discharge constructors.
+- The independence grade (Element C) is deliberately a CLOSED vocabulary today; an
+  actor-type dimension is orthogonal to it (independence says "how separate," type
+  says "how qualified") and would arrive as its own column, not a widening of the
+  grade enum.
+- What this spec does NOT prejudge: whether `{work_item, obligation, actor}` is the
+  right atom shape at all. The parked design item
+  `obligation-actor-type-system` holds that question; if a re-architecture wins there,
+  this spec's elements are its migration inputs, not its constraints.
 
 <!-- doc-attest-exempt: DRAFT constitutional spec awaiting maintainer ratification; will
 receive its full fresh-context A:B:C loop at ratification, when its content is final --
