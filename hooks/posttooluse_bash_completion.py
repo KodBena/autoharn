@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-11T21:35:25Z
-#   last-change: 2026-07-11T21:35:31Z
-#   contributors: e4410ef6/main
+#   last-change: 2026-07-14T01:07:14Z
+#   contributors: e4410ef6/main, a857c93d/main
 # <<< PROVENANCE-STAMP <<<
 
 """hooks/posttooluse_bash_completion.py -- the Bash TOOL-COMPLETION timestamp (small-follow-ups
@@ -30,46 +30,48 @@ separate, PURELY ADDITIVE file: it changes no existing consumer's read of `invoc
 and needs no change to `contemp_edb.py` (ADR-0004's minimal-touch posture -- this is a small
 follow-up, not a redesign of the contemporaneity EDB's own capability manifest).
 
-PAIRING RULE, STATED HONESTLY (the maintainer's own words in the commission: "invocation token
-if recoverable, else ts-pairing"). There is no side-channel this hook can use to recover
-stamp_intercept's own per-invocation UUID directly -- that token is exported into PGOPTIONS on
-the command's OWN execution (an env var, not something PostToolUse's JSON payload echoes back),
-and Claude Code's own hook-input contract has never been observed to carry a `tool_use_id` this
-project could rely on either (`hooks/stamp_intercept.py`'s own module docstring: "the parsed
-stdin contract has never carried one"). So this hook does the next best thing, exactly like
-`stamp_intercept.py`'s own journal was designed to be correlated: it computes the SAME
-`command_sha256` (sha256 of the command TEXT PostToolUse's own payload carries) and does a
-FIFO match against `invocations.jsonl`'s own dispatch records --
+PAIRING RULE, CORRECTED 2026-07-14 (design/ORCH-RCA-PAIRING-KEY-DIVERGENCE.md sec-4/6.1 -- an RCA
+found the ORIGINAL content-hash FIFO design below was dead at birth: `stamp_intercept.py`
+REWRITES every Bash command -- injecting a fresh per-call uuid4 into PGOPTIONS -- AFTER hashing
+the pre-rewrite text but BEFORE the command actually runs, so this hook's own `command_sha256`
+(hashed from the POST-rewrite text PostToolUse's payload carries) never equalled the dispatch
+side's hash. Measured live: 0 of 2093 completions ever paired in this deployment's history. The
+false premise that motivated the hash approach -- "Claude Code's hook-input contract has never
+been observed to carry a `tool_use_id`" -- was itself false the day it was written: every dispatch
+line `stamp_intercept.py` journals carries `tool_use_id` when the payload does (see that hook's
+own journal), and the official hooks contract documents PostToolUse's `tool_use_id` as "the same
+ID used in the corresponding PreToolUse event" -- i.e. the harness mints and transports this
+identity for exactly this correlation purpose. See `seen-red/hook-payload-contract/` for the
+captured payload-pair fixture proving both events carry it.
 
-  1. Read every dispatch record (token, wall_clock, command_sha256) from `invocations.jsonl`.
-  2. Read every ALREADY-PAIRED token from THIS hook's own `bash_completions.jsonl` (the tokens
-     any earlier completion already claimed), so a repeated identical command
-     (`command_sha256` collides) does not double-pair the same dispatch to two completions.
-  3. Among UNPAIRED dispatch records sharing this completion's `command_sha256`, pick the
-     EARLIEST one by wall_clock (FIFO -- the natural correlation for sequential Bash calls; two
-     concurrent Bash calls with byte-identical command text is a named residual gap, disclosed
-     here rather than silently mismatched: see NAMED RESIDUAL GAPS below).
-  4. A match yields `pairing: "token"` (the dispatch's own token, plus `dispatch_wall_clock` so
-     a reader can compute duration_ms without a second file join). No match yields
-     `pairing: "ts-only"` (`token: null`) -- the honest fallback the commission itself named,
-     not a failure: a completion line with no token is still the ONLY record of "this command,
-     with this hash, finished at this wall-clock time," which is strictly more than nothing.
+THE FIX: this hook no longer computes or stores any pairing verdict. It journals ONLY facts
+local to this event -- `{ts, session_id, tool_use_id, duration_ms?, command_sha256, command_head}`
+-- and stops reading `invocations.jsonl` entirely (cheaper AND correct: no FIFO scan, no
+already-paired-token scan). `command_sha256`/`command_head` are RETAINED as event facts (of the
+AS-EXECUTED, post-rewrite text this payload carried -- honestly re-documented; they are no longer
+correlation keys and are never compared against the dispatch side's hash of the pre-rewrite
+text). Pairing is now a READ-TIME JOIN on `tool_use_id`, performed by whoever reads both
+journals (`engine/contemp_edb.py`'s E5 family; a future `tools/watchdog_liveness.py`) -- never
+computed or cached here. A stored pairing verdict is a second, derivable copy of a join result
+(ADR-0012 P1); removing it makes a false pairing record unwritable, not merely less likely.
 
-NAMED RESIDUAL GAPS (v1, stated honestly rather than left for a future reader to discover):
-  - Two Bash calls with BYTE-IDENTICAL command text in flight concurrently (subagents running
-    the same command in parallel) can pair to the wrong dispatch -- FIFO order is a heuristic,
-    not a guarantee, when more than one candidate is genuinely eligible at once. Named, not
-    fixed: this project's own standing posture (`hooks/posttooluse_mutation_observer.py`'s own
-    "ONE SHARED MARKER PER WORLD" residue) is that single-agent-at-a-time sessions are the
-    overwhelmingly common case this pass is sized for.
-  - If `stamp_intercept` is off/unwired for this invocation (no healthy secret, or mode="off"),
-    no dispatch record exists to pair against at all -- every completion in that world reads
-    `pairing: "ts-only"` honestly, never a guessed token.
-  - PostToolUse's own `tool_input.command` is ASSUMED to echo the same text stamp_intercept's
-    PreToolUse leg saw (both hash the command BEFORE any hook-side modification) -- if a future
-    Claude Code version diverges on this, the sha256 match degrades gracefully to `"ts-only"`
-    for every call (never a wrong pairing silently accepted), because a hash mismatch simply
-    finds no candidate.
+When the payload carries no `tool_use_id` (a Claude Code version that omits it, or a subagent
+leg not yet witnessed to carry one -- see NAMED RESIDUAL GAPS): the line is journaled WITHOUT a
+`tool_use_id` key. No guessed pairing, ever -- the one behavior preserved from the old design is
+its honesty about absence.
+
+NAMED RESIDUAL GAPS (v2, stated honestly rather than left for a future reader to discover):
+  - Subagent-side PostToolUse payloads carrying `tool_use_id` are UNWITNESSED (only main-thread
+    sessions and one dispatch journal were checked, per the RCA's own §3 disclosure) -- the
+    absent-`tool_use_id` fallback above makes this safe either way; it degrades to an unjoinable
+    (but still honestly journaled) line, never a wrong join.
+  - If `stamp_intercept` is off/unwired for this invocation, no dispatch line exists to join
+    against at all -- this hook still journals the completion (it does not know or care whether
+    a dispatch line exists), and a reader's join simply finds nothing on that side.
+  - The CONCURRENT-IDENTICAL-COMMAND-TEXT residual gap the old FIFO-by-hash design carried is
+    DELETED, not merely reduced: it does not exist under an identity key. Two Bash calls sharing
+    byte-identical command text now carry two distinct `tool_use_id`s (the harness mints one per
+    tool call, not per command text), so a read-time join can never confuse them.
 
 APPARATUS.JSON SWITCHBOARD (mirrors the project's standing mechanism-mode convention):
 `mechanisms.bash_completion.mode`. `"off"` -- return before any read/write, genuinely zero
@@ -97,7 +99,6 @@ from pathlib import Path
 _VALID_MODES = ("off", "observe", "enforce")
 _DEFAULT_MODE = "observe"  # costless observer -- defaults ON, mirrors mutation_observer/read_observer
 MECHANISM_KEY = "bash_completion"
-_INVOCATION_JOURNAL = "invocations.jsonl"
 _COMPLETION_JOURNAL = "bash_completions.jsonl"
 
 
@@ -149,46 +150,6 @@ def _resolve_mode(apparatus: dict, root: str) -> str:
     return _DEFAULT_MODE
 
 
-def _read_jsonl(path: Path) -> list[dict]:
-    if not path.is_file():
-        return []
-    out: list[dict] = []
-    for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
-        line = line.strip()
-        if not line:
-            continue
-        try:
-            rec = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        if isinstance(rec, dict):
-            out.append(rec)
-    return out
-
-
-def _find_pairing(root: Path, command_sha256: str) -> tuple[str | None, str | None]:
-    """FIFO-pair this completion against an unpaired stamp_intercept dispatch record sharing the
-    same command_sha256 (module docstring, PAIRING RULE). Returns (token, dispatch_wall_clock),
-    both None if no candidate remains. Never raises -- caller treats any read failure as
-    'nothing to pair against', the honest ts-only fallback."""
-    dispatches = _read_jsonl(root / ".claude" / "logs" / _INVOCATION_JOURNAL)
-    already_paired = {
-        rec.get("token") for rec in _read_jsonl(root / ".claude" / "logs" / _COMPLETION_JOURNAL)
-        if rec.get("token")
-    }
-    candidates = [
-        d for d in dispatches
-        if d.get("command_sha256") == command_sha256 and d.get("token")
-        and d.get("token") not in already_paired
-    ]
-    if not candidates:
-        return None, None
-    # FIFO: earliest by wall_clock (lexicographic ISO-8601-Z sort is chronological).
-    candidates.sort(key=lambda d: str(d.get("wall_clock", "")))
-    chosen = candidates[0]
-    return str(chosen["token"]), str(chosen.get("wall_clock") or "")
-
-
 def _journal_completion(root: Path, rec: dict) -> None:
     path = root / ".claude" / "logs" / _COMPLETION_JOURNAL
     try:
@@ -226,17 +187,21 @@ def main() -> int:
         command_sha256 = hashlib.sha256(command_bytes).hexdigest()
         session_id = str(data.get("session_id") or "")
 
-        token, dispatch_wall_clock = _find_pairing(root, command_sha256)
-        rec = {
+        # IDENTITY, NOT A COMPUTED VERDICT (module docstring, PAIRING RULE): the harness-assigned
+        # tool_use_id, transported as-is when the payload carries one, never guessed or paired
+        # here. Pairing is a read-time join performed by the consumer, not this hook.
+        rec: dict = {
             "ts": datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z"),
             "session_id": session_id,
             "command_sha256": command_sha256,
             "command_head": command[:120],
-            "token": token,
-            "pairing": "token" if token else "ts-only",
         }
-        if dispatch_wall_clock:
-            rec["dispatch_wall_clock"] = dispatch_wall_clock
+        tool_use_id = data.get("tool_use_id")
+        if tool_use_id:
+            rec["tool_use_id"] = str(tool_use_id)
+        duration_ms = data.get("duration_ms")
+        if isinstance(duration_ms, (int, float)):
+            rec["duration_ms"] = duration_ms
         _journal_completion(root, rec)
     except Exception:  # noqa: BLE001 -- a diagnostic timing hook must never break a tool call
         return 0

@@ -74,6 +74,7 @@ REGISTRY: dict[str, str] = {
     "doc-shapes-gate-world":          "seen-red/doc-shapes-gate-world/run_fixtures.py",
     "read-observer":                  "seen-red/read-observer/run_fixtures.py",
     "bash-completion":                "seen-red/bash-completion/run_fixtures.py",
+    "hook-payload-contract":          "seen-red/hook-payload-contract/check_contract.py",
     "s25-commission-kind":            "seen-red/s25-commission-kind/run_fixtures.py",
     "track-work":                     "seen-red/track-work/run_fixtures.py",
     "resource-registry":              "seen-red/resource-registry/run_fixtures.py",

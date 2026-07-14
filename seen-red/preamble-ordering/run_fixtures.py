@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-12T02:17:36Z
-#   last-change: 2026-07-12T02:35:47Z
-#   contributors: e4410ef6/main
+#   last-change: 2026-07-14T02:26:44Z
+#   contributors: e4410ef6/main, a857c93d/main
 # <<< PROVENANCE-STAMP <<<
 
 """run_fixtures.py -- both-polarity witness for Part 3 of design/ORCH-CONTEMPORANEITY-PART3-SPEC.md
@@ -297,13 +297,18 @@ def main() -> int:
         ck(ok, f"green id9 (decision, stop disposition) insert failed: {out}")
 
         green_records = {
+            # NEW-SCHEMA journals (2026-07-14, design/ORCH-RCA-PAIRING-KEY-DIVERGENCE.md sec-6.1):
+            # a completion line carries `tool_use_id`, never a stored `token` -- pairing is the
+            # consumers' read-time join (dispatch tool_use_id -> token). The bare-`token`
+            # completion shape this fixture previously synthesized was a shape production never
+            # actually produced (the stored pairing never once fired, per the RCA).
             "invocations.jsonl": [
                 {"token": f"g-t{i}", "wall_clock": _iso_z(g + off - 2), "session_id": "fixture",
-                 "command_sha256": "x", "command_head": "led"}
+                 "command_sha256": "x", "command_head": "led", "tool_use_id": f"toolu-g-{i}"}
                 for i, off in ((1, 0), (2, 5), (3, 10), (4, 20), (5, 25), (6, 30), (7, 40), (8, 50), (9, 60))
             ],
             "bash_completions.jsonl": [
-                {"token": f"g-t{i}", "ts": _iso_z(g + off + 1)}
+                {"tool_use_id": f"toolu-g-{i}", "ts": _iso_z(g + off + 1)}
                 for i, off in ((1, 0), (2, 5), (3, 10), (4, 20), (5, 25), (6, 30), (7, 40), (8, 50), (9, 60))
             ],
             "mutation_observer.journal.jsonl": [{"ts": _iso_z(g + 70)}],
@@ -385,13 +390,14 @@ def main() -> int:
         ck(ok, f"red id7b (work_depends_on, dangling) insert failed: {out}")
 
         red_records = {
+            # NEW-SCHEMA journals, same correction as green_records above (RCA sec-6.1).
             "invocations.jsonl": [
                 {"token": f"r-t{i}", "wall_clock": _iso_z(r + off - 2), "session_id": "fixture",
-                 "command_sha256": "x", "command_head": "led"}
+                 "command_sha256": "x", "command_head": "led", "tool_use_id": f"toolu-r-{i}"}
                 for i, off in ((1, 0), (2, 5), (3, 10), (4, 15), (6, 120), (7, 130), ("7b", 130))
             ],
             "bash_completions.jsonl": [
-                {"token": f"r-t{i}", "ts": _iso_z(r + off + 1)}
+                {"tool_use_id": f"toolu-r-{i}", "ts": _iso_z(r + off + 1)}
                 for i, off in ((1, 0), (2, 5), (3, 10), (4, 15), (6, 120), (7, 130), ("7b", 130))
             ],
             # BEFORE id3's own work_opened completion (r+11) and id2's own commission completion

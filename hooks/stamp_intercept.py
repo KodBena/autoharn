@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-09T12:38:35Z
-#   last-change: 2026-07-12T01:57:55Z
-#   contributors: be693afb/main, e4410ef6/main
+#   last-change: 2026-07-14T01:07:32Z
+#   contributors: be693afb/main, e4410ef6/main, a857c93d/main
 # <<< PROVENANCE-STAMP <<<
 
 """stamp_intercept — the WRITE-TIME interception hook (BACKLOG ffafa59). A PreToolUse hook on Bash:
@@ -432,8 +432,15 @@ def main() -> int:
               f"-c app.vendor_invocation={invocation}")
     # BEST-EFFORT journal (the "actual event" side of the correlation) -- written BEFORE the token is
     # returned but AFTER it is fixed, so a journal failure (silent) never affects what gets exported.
-    # tool_use_id is included ONLY when the payload actually carries it (the parsed stdin contract has
-    # never carried one; read defensively and omit honestly when absent, rather than emit a null key).
+    # tool_use_id is included ONLY when the payload actually carries it. CORRECTED 2026-07-14
+    # (design/ORCH-RCA-PAIRING-KEY-DIVERGENCE.md sec-4/6.2): the prior claim here -- "the parsed
+    # stdin contract has never carried one" -- was false the day it was written; every PreToolUse
+    # payload observed in this deployment's history carries tool_use_id (see this hook's own
+    # invocations.jsonl), and the official hooks contract documents it as present on both
+    # PreToolUse and PostToolUse for the same tool call (see seen-red/hook-payload-contract/'s
+    # captured payload-pair fixture). Read defensively and omit honestly when genuinely absent
+    # (a future Claude Code version, or an unwitnessed subagent leg -- see that RCA's §3), rather
+    # than emit a null key.
     command_bytes = command.encode("utf-8", "surrogatepass")
     inv_rec = {
         "token": invocation,

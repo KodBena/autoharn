@@ -1,0 +1,25 @@
+{
+  "cwd": "/tmp/claude-1000/-home-bork-w-vdc-1-autoharn/a857c93d-d154-4d01-b726-122ec07401fc/scratchpad/hookcap",
+  "duration_ms": 78,
+  "effort": {
+    "level": "medium"
+  },
+  "hook_event_name": "PostToolUse",
+  "permission_mode": "auto",
+  "prompt_id": "ce4d61e4-0eea-438f-9be3-e27290c9b7ef",
+  "session_id": "dbd8e333-07c9-4001-b03d-4b173c2796b5",
+  "tool_input": {
+    "command": "echo hookcapture123",
+    "description": "Echo hookcapture123"
+  },
+  "tool_name": "Bash",
+  "tool_response": {
+    "interrupted": false,
+    "isImage": false,
+    "noOutputExpected": false,
+    "stderr": "",
+    "stdout": "hookcapture123"
+  },
+  "tool_use_id": "toolu_01DYvJFmjLBLWQsVVGeER6ai",
+  "transcript_path": "<scrubbed>"
+}

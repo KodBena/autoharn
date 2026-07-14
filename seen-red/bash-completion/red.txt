@@ -1,22 +1,22 @@
-=== a-token-pairing ===
-  [ok] exit=0 rec={'ts': '2026-07-11T21:37:01.737Z', 'session_id': 'sess-a', 'command_sha256': 'acdef6d0afbb148cdc1d86cbec1359ff83452d3b0c3801501cdef537c8646755', 'command_head': 'echo hello-a', 'token': 'tok-a', 'pairing': 'token', 'dispatch_wall_clock': '2026-07-11T10:00:00.000Z'}
+=== a-identity-join-through-real-rewrite ===
+  [ok] rewritten="export PGOPTIONS='-c app.vendor_session=sess-a -c app.vendor_agent=main -c app.vendor_ts=1783992149 -c app.vendor_hmac=dc0dbb4fc7c481b0ef8080bf454261613ce99ef7d335050bc7a8bf080050bdae -c app.vendor_invocation=9895e1c2-068a-4ac9-a0a3-4fd71533572c'; echo real-rewrite-a" dispatch_token=9895e1c2-068a-4ac9-a0a3-4fd71533572c completion={'ts': '2026-07-14T01:22:29.590Z', 'session_id': 'sess-a', 'command_sha256': '765bf1773dda3fd92b4660efa1e8b2c504d42af13e975c91567142e9e0000a1a', 'command_head': "export PGOPTIONS='-c app.vendor_session=sess-a -c app.vendor_agent=main -c app.vendor_ts=1783992149 -c app.vendor_hmac=d", 'tool_use_id': 'toolu_case_a', 'duration_ms': 42} joined=[('9895e1c2-068a-4ac9-a0a3-4fd71533572c', 1783992149590)]
 
-=== b-ts-only-fallback ===
-  [ok] exit=0 rec={'ts': '2026-07-11T21:37:01.771Z', 'session_id': 'sess-b', 'command_sha256': '8359cf16152cd45ca227772ad61c146e4e779f4a0b0f561adbb80818ee9a7356', 'command_head': 'echo no-dispatch-for-this', 'token': None, 'pairing': 'ts-only'}
+=== b-ts-only-no-tool-use-id ===
+  [ok] completion={'ts': '2026-07-14T01:22:29.629Z', 'session_id': 'sess-b', 'command_sha256': '2f6a604b74b10ce3dfdae1272e0bdb06aa1bc37365c62d2dfec0be0c318aca6b', 'command_head': 'echo no-tool-use-id', 'duration_ms': 42} joined=[]
 
-=== c-fifo-double-dispatch ===
-  [ok] lines[2].token=tok-c1 lines[3].token=tok-c2 (expect tok-c1 then tok-c2, never the same dispatch reused)
+=== c-pre-fix-hook-goes-red ===
+  [ok] pre-fix completion record against a REAL post-rewrite command: {'ts': '2026-07-14T01:22:29.709Z', 'session_id': 'sess-c', 'command_sha256': '75b4331ce8aaea2b51c04e6b3bf424f91817700fac43c3e970b28710dc80ccf3', 'command_head': "export PGOPTIONS='-c app.vendor_session=sess-c -c app.vendor_agent=main -c app.vendor_ts=1783992149 -c app.vendor_hmac=7", 'token': None, 'pairing': 'ts-only'} (expected pairing='ts-only', token=None -- the defect this fix repairs, witnessed red on the exact commit this fix builds on top of, 7567dd4)
 
 === d-mode-off ===
-  [ok] exit=0 before=4 after=4
+  [ok] before=0 after=0
 
 === e-mode-enforce-downgrade ===
-  [ok] exit=0 stderr_has_impossible_warning=True before=4 after=5
+  [ok] exit=0 stderr_has_impossible_warning=True lines=[{'ts': '2026-07-14T01:22:29.787Z', 'session_id': 'sess-e', 'command_sha256': 'f1d1eeb4868f8aac8cf5fa1559969c77aa98a3ce42d8509f8b6784dbaf58d092', 'command_head': 'echo enforce-requested', 'tool_use_id': 'toolu-e'}]
 
 === f-non-bash-tool ===
-  [ok] exit=0 stdout='' before=5 after=5
+  [ok] exit=0 stdout='' lines=[]
 
 === g-unwired ===
-  [ok] exit=0 before=5 after=5
+  [ok] exit=0
 
-ALL CASES OK -- bash_completion both-polarity proof clean (token-pairing, ts-only fallback, FIFO double-dispatch, off/enforce-downgrade/non-bash/unwired all behave as designed), zero residue.
+ALL CASES OK -- bash_completion identity-join proof clean (real stamp_intercept.py rewrite survives into a real join on tool_use_id; ts-only/no-tool_use_id honest fallback; the pre-fix hook witnessed red against the same real two-party sequence; off/enforce-downgrade/non-bash/unwired all behave as designed), zero residue.

@@ -1,3 +1,10 @@
+<!-- doc-attest-exempt: bash-completion-identity-fix (2026-07-14) touched only the
+     bash_completion bullet -- a quoted-defect correction (design/ORCH-RCA-PAIRING-KEY-DIVERGENCE.md)
+     replacing a false claim with the corrected mechanism, not a legibility-relevant rewrite of this
+     document. The full A:B:C loop (design/ORCH-ABC-AUDIT-LOOP-RECIPE.md) was judged out of this
+     commission's scope (RCA sec-6.3 says "update" the doc, not "re-attest" it) and disproportionate
+     to a single-bullet factual patch; flagged to the maintainer rather than silently skipped. Remove
+     this waiver, or replace it with a real /2 attestation record, on the next substantive touch. -->
 # CAPABILITIES — what the harness can already do, in plain words
 
 Audience: orchestrator (the opening paragraph below calls this same reader "a maintainer or operator" — the practical reader deciding what the apparatus can be trusted to do)
@@ -862,18 +869,32 @@ own:
   `seen-red/doc-shapes-gate-world/run_fixtures.py`'s EXERCISED-LIVENESS case: five real
   evaluations produce five lines in order; the sixth call (mode="off", which returns before the
   check runs) produces none.
-- **PostToolUse Bash completion timestamps land in a new sibling journal.**
-  `hooks/posttooluse_bash_completion.py` (new) writes `bash_completions.jsonl`, banking each Bash
-  call's completion time (UTC-Z) beside `hooks/stamp_intercept.py`'s existing PreToolUse dispatch
-  token. It FIFO-pairs each completion against that dispatch by a shared `command_sha256` where a
-  match exists (`pairing: "token"`, `duration_ms` included) and honestly marks
-  `pairing: "ts-only"` when none does — the maintainer's own design, named verbatim in the
-  commission as "invocation token if recoverable, else ts-pairing," stated here as a disclosed
-  heuristic: a named residual gap is that two truly concurrent Bash calls with byte-identical
-  command text can pair to the wrong dispatch. It is a sibling file, not a new line shape inside
-  `invocations.jsonl` itself, so the existing contemporaneity EDB (`engine/contemp_edb.py`) is
-  untouched. *Witnessed*, both polarities plus the FIFO-double-dispatch case,
-  `seen-red/bash-completion/run_fixtures.py`.
+- **PostToolUse Bash completion timestamps land in a new sibling journal, paired by identity, not
+  by content hash.** CORRECTED 2026-07-14 (design/ORCH-RCA-PAIRING-KEY-DIVERGENCE.md, RCA + fix):
+  the original design below was **dead at birth** — `hooks/stamp_intercept.py` rewrites every
+  Bash command (injecting a fresh per-call UUID via PGOPTIONS) *after* hashing it but *before* it
+  runs, so the completion hook's `command_sha256` (of the post-rewrite text) never equalled the
+  dispatch hook's own hash (of the pre-rewrite text) — measured 0 of 2093 pairings ever succeeding
+  in this deployment's history, never caught because the original fixture authored its dispatch
+  side by hand rather than running the real `stamp_intercept.py`. The fix: `hooks/
+  posttooluse_bash_completion.py` writes `bash_completions.jsonl` with facts local to its own
+  event only — `{ts, session_id, tool_use_id?, duration_ms?, command_sha256, command_head}` — and
+  stores **no pairing verdict**. Pairing is a **read-time join on `tool_use_id`** (the
+  harness-assigned identity present on both the PreToolUse and PostToolUse legs of one tool call,
+  documented by Claude Code for exactly this purpose), performed by whoever reads both journals
+  (`engine/contemp_edb.py`'s `dispatch_token_by_tool_use_id()`/`join_bash_completions()`). A
+  completion with no `tool_use_id`, or one that joins to no known dispatch, contributes nothing,
+  honestly — no guessed pairing, ever. The old FIFO-by-hash residual gap (two concurrent Bash
+  calls with byte-identical command text) no longer exists under an identity key. It is a sibling
+  file, not a new line shape inside `invocations.jsonl` itself, so the dispatch side
+  (`hooks/stamp_intercept.py`) needed no structural change. *Witnessed*: `seen-red/
+  bash-completion/run_fixtures.py`'s positive case runs the REAL `stamp_intercept.py` end-to-end
+  (real rewrite, real dispatch journal) into the REAL `engine.contemp_edb` join, proving a
+  non-zero pairing rate; its negative control replays the same real two-party sequence against the
+  pre-fix hook (materialized live from commit `7567dd4`) and confirms it goes red (`pairing:
+  "ts-only"`, the exact defect this fix repairs). `seen-red/hook-payload-contract/` banks a
+  live-captured PreToolUse+PostToolUse payload pair proving `tool_use_id` is present on both legs,
+  so this claim is checkable rather than re-asserted in prose.
 - **The delegation observer gained a return leg.** `hooks/pretooluse_delegation_observer.py`
   (extended) now also attaches at PostToolUse on `Task|Agent`. It journals a `kind: "return"`
   line FIFO-paired against its own dispatch line (the hook's existing per-dispatch journaling

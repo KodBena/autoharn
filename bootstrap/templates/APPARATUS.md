@@ -1,3 +1,11 @@
+<!-- doc-attest-exempt: bash-completion-identity-fix (2026-07-14) touched only the
+     bash_completion table row and one bullet -- a quoted-defect correction
+     (design/ORCH-RCA-PAIRING-KEY-DIVERGENCE.md) replacing a false claim with the corrected
+     mechanism, not a legibility-relevant rewrite of this document. The full A:B:C loop
+     (design/ORCH-ABC-AUDIT-LOOP-RECIPE.md) was judged out of this commission's scope (RCA sec-6.3
+     says "update" the doc, not "re-attest" it) and disproportionate to a two-passage factual patch;
+     flagged to the maintainer rather than silently skipped. Remove this waiver, or replace it with
+     a real /2 attestation record, on the next substantive touch. -->
 # Apparatus config — the per-world mechanism switchboard
 
 This document is for anyone configuring or auditing a project scaffolded from this repository:
@@ -81,7 +89,7 @@ switchboard example above.
 | `doc_shapes_gate`      | `hooks/pretooluse_doc_shapes_gate.py`           | `observe` | **free per call** (pure text scanning, no subprocess) — `observe`, not `enforce`, because this is the FIRST live deployment of this check as a write-time blocking gate anywhere in this project (see the hook's own module docstring for the full reasoning); **the one-line flip to `enforce` for a given scaffolded project** is `"doc_shapes_gate": {"mode": "enforce"}` in that project's own `.claude/apparatus.json` — no code change, live on the next `Write`/`Edit` |
 | `doc_legibility_critic`| `hooks/doc_legibility_critic.py`                | **`off`** | **spends a real `claude -p` classifier call per `.md` Write/Edit** — same "no world may silently bill its operator" mandate as `demurral_detect`; the zero-context-reader documentation discipline's (`law/adr/0017-the-zero-context-reader.md`) lightweight, portable transport, delivered UNWIRED into any hook chain — this entry only takes effect once a project wires the PostToolUse attachment documented in the hook's own module docstring |
 | `read_observer`        | `hooks/pretooluse_read_observer.py`             | `observe` | **free per call** (one journal line, no subprocess, no LLM call) — defaults `observe` like `mutation_observer`/`delegation_observer`, the house convention that a costless observer starts ON rather than OFF; `enforce` is **not sanctioned** (reading a file is not a refusable act under this project's law) — if apparatus.json ever names `enforce` here, the hook warns loudly and behaves as `observe` |
-| `bash_completion`      | `hooks/posttooluse_bash_completion.py`          | `observe` | **free per call** (one journal line, no subprocess, no LLM call) — same costless-observer convention as `mutation_observer`/`read_observer`; journals a Bash call's completion timestamp beside `stamp_intercept`'s existing pre-call token, correlated by command-text hash (module docstring: "the non-null tail — builds, test suites, dispatches"). `enforce` is **impossible** (a PostToolUse leg fires after the command already finished — no "deny" available), same shape as `mutation_observer`; the hook warns loudly and behaves as `observe` if apparatus.json ever names it. Added 2026-07-12 ("Small-follow-ups commission") — this row and the shipped `apparatus.json` default were briefly out of sync with the mechanism actually shipping in `hooks/`, found and fixed by the configuration-surface-survey commission's own unknown-key sweep work ([BACKLOG.md](../../BACKLOG.md) "Configuration-surface survey, adopter's eyes", 2026-07-11 entry, gap 1) — the worked example of exactly the drift `filing/apparatus_registry.py`'s derive-don't-hand-list design exists to foreclose |
+| `bash_completion`      | `hooks/posttooluse_bash_completion.py`          | `observe` | **free per call** (one journal line, no subprocess, no LLM call) — same costless-observer convention as `mutation_observer`/`read_observer`; journals a Bash call's completion timestamp beside `stamp_intercept`'s existing pre-call token, correlated by the harness-assigned `tool_use_id` at READ TIME (a consumer join, e.g. `engine/contemp_edb.py`'s `dispatch_token_by_tool_use_id()`/`join_bash_completions()`) — CORRECTED 2026-07-14 (design/ORCH-RCA-PAIRING-KEY-DIVERGENCE.md): the original command-text-hash correlation was dead at birth (`stamp_intercept` rewrites every command between the two hashes), so this hook now stores no pairing verdict at all, only event-local facts (`ts`, `session_id`, `tool_use_id?`, `duration_ms?`, `command_sha256`, `command_head`). `enforce` is **impossible** (a PostToolUse leg fires after the command already finished — no "deny" available), same shape as `mutation_observer`; the hook warns loudly and behaves as `observe` if apparatus.json ever names it. Added 2026-07-12 ("Small-follow-ups commission") — this row and the shipped `apparatus.json` default were briefly out of sync with the mechanism actually shipping in `hooks/`, found and fixed by the configuration-surface-survey commission's own unknown-key sweep work ([BACKLOG.md](../../BACKLOG.md) "Configuration-surface survey, adopter's eyes", 2026-07-11 entry, gap 1) — the worked example of exactly the drift `filing/apparatus_registry.py`'s derive-don't-hand-list design exists to foreclose |
 | `doc_attestation`      | `bootstrap/templates/distance-to-clean.tmpl` (NOT a hook — see the named nuance below) | **`off`** | **free per call** (pure hashing, no LLM call, no network) — OFF anyway, because this switch is not about cost: it gates whether `./distance-to-clean`'s DOC-ATTESTATION section counts debt for the ADR-0017 A:B:C fresh-context audit loop, a workflow a deployment adopts by choice (`design/ORCH-SPEC-ABC-OFFERING.md` §4). `enforce` is **not applicable** (this section only ever reports, it has no deny path) — degrades to `observe` with a warning, same shape as `mutation_observer`/`bash_completion`. Added 2026-07-12 (tracker item `abc-loop-offering`) |
 
 The table above states each mechanism's default and the one-line reason for it; the notes below
@@ -167,10 +175,15 @@ add per-mechanism detail a table cell is too narrow to carry.
   it has nothing to teach): reading a file is never itself a policy violation under this
   project's law, so there is no enforce state to sanction.
 - **`bash_completion`** watches `PostToolUse(Bash)` and journals a completion record
-  (`.claude/logs/bash_completions.jsonl`) FIFO-paired by command-text hash to
-  `stamp_intercept`'s own dispatch journal — the value is the pairing's duration for a
-  non-trivial call (a build, a test suite), not the common ~0s call. It has no deny path, for
-  the same reason as `read_observer`.
+  (`.claude/logs/bash_completions.jsonl`) carrying its own `tool_use_id` — the harness-assigned
+  identity present on both the PreToolUse and PostToolUse legs of one Bash call — so a consumer
+  can JOIN it at read time against `stamp_intercept`'s own dispatch journal, which carries the
+  same identity. CORRECTED 2026-07-14 (design/ORCH-RCA-PAIRING-KEY-DIVERGENCE.md): this hook
+  used to compute and store a FIFO-by-command-hash pairing verdict itself; that mechanism was
+  dead at birth (`stamp_intercept` rewrites the command between the two hashes) and is gone —
+  the hook now stores no pairing verdict at all, only facts local to its own event. The value is
+  still the pairing's duration for a non-trivial call (a build, a test suite), not the common ~0s
+  call. It has no deny path, for the same reason as `read_observer`.
 - **`doc_attestation`** is read by `bootstrap/templates/distance-to-clean.tmpl`, not by any file
   under `hooks/` — the first mechanism in this project's history for which that is true.
   `filing/apparatus_registry.py`'s known-mechanism sweep (the same one `gates/
