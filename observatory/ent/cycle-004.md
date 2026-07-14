@@ -20,9 +20,10 @@ below, no recipe/policy/design drafting, no autoharn tracker writes, nothing wri
 `~/ent`. Subject (`/home/bork/ent`) was read-only for this report — never Written/Edited/
 bash-mutated. New this cycle: the actual Claude Code session transcript(s) for `~/ent` were
 read directly from `/home/bork/.claude/projects/-home-bork-ent/*.jsonl` (four files; the
-terminal/current session is `948fb06c-0ffc-4d92-8892-fa2613e649bc`, which stamped every ledger
-row from 164 onward and contains the exchange this cycle was specifically asked to document —
-see §3a), cross-checked against `.claude/logs/delegation_observer.journal.jsonl` (a
+terminal/current session stamped every ledger row from 164 onward and contains the exchange
+this cycle was specifically asked to document — see §3a; its identifier and its verbatim text
+are withheld from this committed report per the maintainer's 2026-07-14 decision, see the
+closing note), cross-checked against `.claude/logs/delegation_observer.journal.jsonl` (a
 dispatch/return log this deployment has run in `observe` mode since at least 17:15Z on
 2026-07-13, not enumerated in cycles 001-003's gate tables though already populated during their
 windows).
@@ -193,29 +194,28 @@ another rather than concurrently, and why — with transcript evidence, classifi
 auditability ruling, flagged as a recommendation candidate for the orchestrator's separate
 ADR-0013 crosscheck. Not adjudicated here.
 
-**What the transcript shows, in order, with timestamps (session
-`948fb06c-0ffc-4d92-8892-fa2613e649bc`, which stamped every ledger row from 164 onward):**
+**What the transcript shows, in order, timestamps rounded to the minute, quotes paraphrased
+(session identity and exact wording withheld — see the closing note):**
 
-1. **22:46:28Z-22:48:13Z** — the session builds a 22-item checklist via the built-in
+1. **~22:46Z-22:48Z** — the session builds a 22-item checklist via the built-in
    `TaskCreate`/`TaskUpdate` tool (not a subagent dispatch mechanism; a plan/tracking list).
    Items #1-4 are marked `completed` retroactively, one per already-shipped P0 task. Items
    **#5 through #20 — exactly 16 items** — are each phrased "Ship fix-`<slug>`... Delegate full
    pipeline to subagent," one per remaining approved P1-P3 task. Items #21-22 cover the two
    corrected-but-unreviewed tasks (strtol redo, sqrt retry).
-2. **22:48:17.831Z** — `[Request interrupted by user]`, immediately after item #22 is created and
-   before any of items #5-22 are actually dispatched to a subagent.
-3. **22:49:01.450Z, maintainer, verbatim:** *"Hold on a minute, have you topologically sorted
-   (tsort) the tasks? Are you absolutely sure they need to be sequenced, or could possibly some
-   be run concurrently? Let's not violate ADR-0013"*
-4. **22:58:44.093Z, maintainer, verbatim (a fuller resend of a 22:57:33Z message):** *"Ok, this
-   is silly. Leave the fix task set as is for now, and instead build a minimum-makespan scheduler
-   for this type of bulk-editing operation; we have ~/w/vdc/venvs/generic which contains
-   OR-tools. The goal is to create a minimum makespan schedule given a collection of sets, each
-   set of which contains touched files, so that you don't need to sequence 16 approved tasks and
-   can instead batch where appropriate (here batch can mean a parallel workflow, which is the
-   default for anything that can be parallelized)."*
-5. **22:59:48.449Z, assistant:** *"Good call — stepping back from manual task bookkeeping to
-   build the actual tool."*
+2. **~22:48Z** — the maintainer interrupts, immediately after item #22 is created and before any
+   of items #5-22 are actually dispatched to a subagent.
+3. **~22:49Z, maintainer** — asks whether the remaining tasks were actually checked for mutual
+   independence (topologically sorted) before being queued for sequential dispatch, and
+   questions whether sequencing them this way honors ADR-0013.
+4. **~22:58Z, maintainer** — redirects: shelve the 16 queued tasks as they stand, and instead
+   build a minimum-makespan scheduler for this class of bulk-editing operation using the
+   OR-tools CP-SAT solver already available in the deployment's own environment. Stated goal:
+   given each task's touched-file set, compute an optimal batching so that sequencing many
+   approved tasks by hand is never required again, with parallel dispatch as the default
+   wherever tasks can be parallelized.
+5. **~22:59Z, assistant** — accepts the redirection and pivots from manual task bookkeeping to
+   building the tool.
 
 **What the ledger's own prior reasoning says (row 164, ts `2026-07-13T22:38:40Z`, written by a
 dispatched subagent BEFORE the maintainer's question, ~10 minutes earlier):** *"CONCURRENCY
@@ -427,17 +427,27 @@ codebase.
 `bash_completions.jsonl` and `invocations.jsonl` remain un-mined line-by-line (time-boxed, as all
 three prior cycles); their growth (+1425/+1455 lines) is reported as raw volume only. This
 cycle's transcript reads covered all four JSONL files under
-`/home/bork/.claude/projects/-home-bork-ent/` — two short early sessions
-(`91b52890-...`, 64 lines; `d9835b3f-...`, 71 lines) and two long sessions
-(`615b5d05-...`, 2048 lines; `948fb06c-...`, 2052 lines) that share overlapping early content
-before diverging — this observer did not establish the exact mechanism linking the two long
-sessions (e.g. a resume/compaction event) and does not assert one; only `948fb06c` was used as
-the source for §3a's quoted passages and timestamps, cross-checked against ledger `stamp_session`
-values (rows 164, 178, 265 all stamp to `948fb06c`, confirming it as the terminal session for
-every claim made in that section). §7's METHOD CANDIDATES section is this observer's judgment
-call per the STANDING POSTURE decision's own framing; items 2-3 report an already-landed harvest
-rather than propose one, and item 4 is flagged, not adjudicated, per this cycle's explicit
-mandate not to draft or propose recipes. No ADR-0013/0011/0012 compliance verdict is rendered
-anywhere in this report — §3a and §5 item 6 are deliberately confined to fact plus classification,
-per this cycle's mandate and per ledger row 571's on-the-record account of what happens when a
-report-only dispatch oversteps that line.
+`/home/bork/.claude/projects/-home-bork-ent/` — two short early sessions (64 and 71 lines) and
+two long sessions (2048 and 2052 lines) that share overlapping early content before diverging —
+this observer did not establish the exact mechanism linking the two long sessions (e.g. a
+resume/compaction event) and does not assert one; only the terminal (most recent) long session
+was used as the source for §3a's paraphrased passages and rounded timestamps, cross-checked
+against ledger `stamp_session` values (rows 164, 178, 265 all stamp to that same session,
+confirming it as the terminal session for every claim made in that section). §7's METHOD
+CANDIDATES section is this observer's judgment call per the STANDING POSTURE decision's own
+framing; items 2-3 report an already-landed harvest rather than propose one, and item 4 is
+flagged, not adjudicated, per this cycle's explicit mandate not to draft or propose recipes. No
+ADR-0013/0011/0012 compliance verdict is rendered anywhere in this report — §3a and §5 item 6 are
+deliberately confined to fact plus classification, per this cycle's mandate and per ledger row
+571's on-the-record account of what happens when a report-only dispatch oversteps that line.
+
+**Editorial note (orchestrator, 2026-07-14, dated per ADR-0005 Rule 8):** this report's first
+draft, as originally committed by the dispatched observer, included the source session's exact
+identifier plus word-for-word quotations of the exchange in §3a. A security review flagged that
+committing verbatim transcript content and session identifiers into autoharn's own permanent git
+history is a materially different act than reading a transcript for our own learning — the
+former exposes another deployment's private session content to autoharn's own eventual-public-
+repo posture, the latter does not. The maintainer decided: keep the findings, drop the verbatim
+quotes and the session identifier, round timestamps to the minute. This note records that
+rewrite rather than silently altering the record; the underlying transcript remains available,
+unmodified, at its own path as evidence for anyone re-verifying this report's claims.
