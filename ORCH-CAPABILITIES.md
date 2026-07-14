@@ -1,10 +1,3 @@
-<!-- doc-attest-exempt: bash-completion-identity-fix (2026-07-14) touched only the
-     bash_completion bullet -- a quoted-defect correction (design/ORCH-RCA-PAIRING-KEY-DIVERGENCE.md)
-     replacing a false claim with the corrected mechanism, not a legibility-relevant rewrite of this
-     document. The full A:B:C loop (design/ORCH-ABC-AUDIT-LOOP-RECIPE.md) was judged out of this
-     commission's scope (RCA sec-6.3 says "update" the doc, not "re-attest" it) and disproportionate
-     to a single-bullet factual patch; flagged to the maintainer rather than silently skipped. Remove
-     this waiver, or replace it with a real /2 attestation record, on the next substantive touch. -->
 # CAPABILITIES — what the harness can already do, in plain words
 
 Audience: orchestrator (the opening paragraph below calls this same reader "a maintainer or operator" — the practical reader deciding what the apparatus can be trusted to do)
@@ -26,7 +19,8 @@ of that date (four then: `led`/`judge`/`pickup`/the scaffold; `audit` and `dista
 joined later — item 25 below carries the current, canonical list), `bootstrap/apply-delta.sh`, the
 self-documenting `--new-world` scaffold, the conformance checker instrument, the fail-closed
 hook changes, and the class-ratification + self-application rules in CLAUDE.md ORCHESTRATION.
-Method: re-read the source files below, then re-witnessed the operator-facing round trip on a
+Method: re-read the source files each item cites (the hook, gate, and template paths named
+per-item), then re-witnessed the operator-facing round trip on a
 throwaway probe world (`bootstrap/new-project.sh /home/bork/w/vdc/1/.capsprobe --new-world
 capsprobe --db toy --host 192.168.122.1`, torn down after — `DROP SCHEMA ... CASCADE` both
 schemas + `DROP OWNED BY`/`DROP ROLE`, zero residue verified by an empty
@@ -79,7 +73,10 @@ cross-session, byte-identical same-session (a NULL half on either side is still 
 distinct, fail-safe never fail-open). *Witnessed: at e17 an inflated independence claim was
 refused live and the genuinely independent reviewer then caught a real defect the author's own
 verification had passed (pre-s21, still valid — same-session distinctness is unchanged by s21).
-s21 itself fired in anger for the first time during run 5 (2026-07-10, mid-run forensics): a
+s21 itself fired in anger for the first time during run 5 (2026-07-10, mid-run forensics; "run
+N" throughout this document names one of this project's numbered working deployments, kept as
+read-only evidence once settled per the runs-are-linear ruling — distinct from the throwaway
+`--new-world` probes): a
 reviewer's `technical` claim was REFUSED by `validate_independence` ("SAME invocation wrote
 both"), the reviewer then honestly downgraded to `self-review` citing the NULL-half fail-safe
 rule verbatim — kernel fail-safe held with the hook layer dark. Applied live to `toycolors` (an
@@ -425,7 +422,9 @@ typed refusal (`NO_VERDICT`, exit 3) naming the missing capability, never a gues
 named as the refusal's reason, exit 3, plus a degraded ts-cluster burst table (explicitly marked
 INFERRED, never conflated with a STATED token burst) that reproduces the exact burst shape
 BACKLOG's own hand forensics found (rows 5-8, 13-16, 17-20, ...) and the exact burned-id
-refusal fingerprint (id 62) BACKLOG's forensic pass found by hand. **CAPABILITY IS WIREDNESS,
+refusal fingerprint (id 62 — a "burned" id is a sequence value consumed by a write the kernel
+refused, leaving a gap in the row-id sequence as the refusal's fingerprint) BACKLOG's forensic
+pass found by hand. **CAPABILITY IS WIREDNESS,
 NOT CORPUS NON-EMPTINESS (run9 amendment, same day, 2026-07-11)**: the first landing keyed
 capability on whether any events had been journaled yet, so run9 — the first s23-capable world,
 fully and correctly wired, fresh enough that only orientation commands had run — was falsely
@@ -570,8 +569,8 @@ twelve numbered points (`bootstrap/templates/CLAUDE.md.tmpl`, the points every s
 receives at birth) from prose into F1-F12 verdicts a program derives from the world's own event
 record. It reasons inside the SAME settled deontic position item 20 below (obligation grants)
 already instantiates once (`countersign_obligation` -> `review_gap`): the **Anderson reduction**
-— an obligation is a recorded, other-assigned fact rather than a modal claim (no O/P/F operator
-exists in this project's logic layer), and a violation is simply a derived flag computed from
+— an obligation is a recorded, other-assigned fact rather than a modal claim (no
+Obligation/Permission/Forbidden deontic operator exists in this project's logic layer), and a violation is simply a derived flag computed from
 whether the discharging record is present. Here that fact family is `preamble_obligation/2`, one
 per family, recorded in `engine/preamble_obligations.lp`. `engine/lp/preamble_ordering.lp` stacks
 on `engine/lp/contemporaneity.lp` (F12 imports Part 2's own backfill_suspect/late_declared
@@ -1060,7 +1059,9 @@ closes exactly the panel's named finding (a content flip with no witness), hones
 `taxonomy-stage-a`, Stage A of [design/ORCH-SPEC-TASK-TAXONOMY.md](design/ORCH-SPEC-TASK-TAXONOMY.md)).**
 `./led decision "taxon: <TAXONOMY> | <TAXON> | <PATTERNS> | <GLOSS>"` and
 `"interface: <TAXONOMY> | <ARTIFACT-PATTERN> | <GLOSS>"` validate at the boundary
-(refuse-before-write, byte-exact persist — the same discipline as `resource:`) and render under
+(refuse-before-write, byte-exact persist — the same discipline as the `resource:` declaration
+prefix, item 34 below's tiered task-shape vocabulary,
+[design/ORCH-SPEC-RESOURCE-ACCOUNTING.md](design/ORCH-SPEC-RESOURCE-ACCOUNTING.md)) and render under
 `./pickup`'s `### SECTION: TAXONOMIES`. Grammar and the omega licensing worked example:
 [design/USER-TAXONOMY-DECLARATION.md](design/USER-TAXONOMY-DECLARATION.md). *Witnessed live
 2026-07-12 (`seen-red/taxonomy-intake-validation/red.txt`, re-run independently at the merge
@@ -1069,7 +1070,9 @@ seam): 9 RED refused with row count unchanged + 8 GREEN accepted byte-exact, e.g
 GREEN-TAXON-WELL-FORMED: exit=0 accepted=True row-count before=0 after=1 (grew-by-one=True) -- PASS
 ```
 *Declaring nothing declares no obligation — an empty registry is honest. Enforcement (audit
-family, write-time gate, `task-policy:` wiring) is Stages B–D, spec'd and unbuilt.*
+family, write-time gate, `task-policy:` wiring — the criteria-carrying declaration prefix the
+same spec's Stage D defines) is Stages B–D, spec'd and unbuilt in
+[design/ORCH-SPEC-TASK-TAXONOMY.md](design/ORCH-SPEC-TASK-TAXONOMY.md).*
 
 **34. `forbidden` resource TIER — the deontic register's missing MUST-NOT (tracker item
 `accounting-stage-a`, [design/ORCH-SPEC-RESOURCE-ACCOUNTING.md](design/ORCH-SPEC-RESOURCE-ACCOUNTING.md)
@@ -1118,8 +1121,9 @@ concurrently — named, not fixed.*
 **36. Content-free-review-discharge audit (`./audit --review-gap`) — a check that a discharging
 review's own statement isn't hollow (tracker item `content-free-review-audit`, commit 9a3250f;
 FAQ entry + GLOSSARY disambiguation added under tracker item
-`content-free-review-audit-legibility` after the opus-readiness probe's A2 result witnessed the
-mechanism as undiscoverable, ledger rows 181/182).** `<schema>.review_gap`'s own discharge test
+`content-free-review-audit-legibility` after the opus-readiness probe — a 2026-07 lettered-task
+evaluation of an Opus orchestrator candidate against this apparatus, recorded on the ledger —
+witnessed in its task A2 that the mechanism was undiscoverable, ledger rows 181/182).** `<schema>.review_gap`'s own discharge test
 (s13/s22 lineage) never examines a countersigning review's content — any unsuperseded,
 distinct-actor `attest` clears an obligation regardless of what it says, by design. This audit
 layers a length heuristic on top: `engine/review_gap_thresholds.py`'s
@@ -1177,7 +1181,9 @@ signed chain head").
 [kernel/lineage/s28-work-parent-edge.sql](kernel/lineage/s28-work-parent-edge.sql), merged
 1a24143; wired into the birth chain at the orchestrator's seam-integration pass, 78b0bd5).** A
 child work item can now cite its parent as a typed, refused-if-dangling-or-cyclic ledger column
-(slug-denominated, matching `work_depends_on` and the `estimate:` grammar's own join key)
+(slug-denominated, matching `work_depends_on` and the join key of the `estimate:` grammar —
+the task-cost declaration prefix defined in
+[design/USER-RETROSPECTIVE-RECIPE.md](design/USER-RETROSPECTIVE-RECIPE.md) Section 6)
 instead of free-text `--refs` prose. `pickup`'s new ROLLUP section joins that edge against
 `estimate:` rows to show a parent's own estimate beside the SUM of its direct children's — the
 free split-time decomposition-quality signal, retrospective-only, never a gate (the
@@ -1254,7 +1260,7 @@ NULL-guarded form, named per the s26 injectivity-note precedent.
   observation fires after the mutation already happened, so "deny" is not a state this attachment
   point can ever reach.
 
-## Not yet enforced — designed but unbuilt, or scheduled but not scheduled (load-bearing honesty)
+## Not yet enforced — designed but unbuilt, or named but never scheduled (load-bearing honesty)
 
 - **`pg_hba` superuser hardening.** A maintainer act, unscheduled — the host's `pg_hba.conf`
   currently governs auth by admitting only registered databases from the operator's host; no
