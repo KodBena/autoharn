@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-02T01:30:29Z
-#   last-change: 2026-07-14T01:47:52Z
+#   last-change: 2026-07-14T01:56:02Z
 #   contributors: 306d4c8f/main, a857c93d/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -47,6 +47,19 @@ EXCLUDE_PARTS = {"claude-ephemera", ".staging", "node_modules", ".venv", "venvs"
 #   diverge the vendored copy from its recorded source commit, exactly what PROVENANCE.md's
 #   own read-only-source rule forbids -- a fix belongs upstream, re-vendored here, never
 #   patched in place.
+#
+# GENERAL FIX NAMED AND DEFERRED, NOT SKIPPED (an out-of-frame hack-rationalization audit,
+# this same commission, asked directly whether a single self-declaring "this is a vendored
+# tree" marker convention -- e.g. a PROVENANCE.md sibling this and every other gate could
+# check for, rather than N separately hand-maintained path lists across gates/ -- would be the
+# sounder fix than this per-gate tuple). This is the FIRST vendored tree in this repository;
+# ADR-0011's own doctrine is to mechanize on the SECOND recurring instance of a shape, not the
+# first (Rule 2: a recurrence converts to a mechanism). Building a shared marker convention now,
+# for a population of one, would be exactly the "for now"/scale pre-emption ADR-0012 P7/P8/P9
+# warn against in the other direction -- so the hand-typed tuple is deliberately the honest,
+# minimal-for-now form, on the explicit condition that the SECOND vendored tree is the trigger
+# to replace this (and doc_attestation_presence.py's parallel exclusion) with one shared
+# mechanism, not a third hand-typed list.
 EXCLUDE_PATH_PREFIXES = ("tools/makespan-scheduler/",)
 
 _FUNCS = (ast.FunctionDef, ast.AsyncFunctionDef)

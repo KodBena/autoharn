@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-11T16:14:47Z
-#   last-change: 2026-07-14T01:38:32Z
+#   last-change: 2026-07-14T01:53:53Z
 #   contributors: e4410ef6/main, 3c50e030/main, a857c93d/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -259,17 +259,18 @@ LEDGER_PATH = REPO_ROOT / "attestations" / "doc-legibility-attestations.jsonl"
 # same as any other prose -- this exclusion is for the archive's contents at rest, not a blanket
 # permanent pass).
 #
-# tools/makespan-scheduler/README.md added 2026-07-14 (work item makespan-scheduler-vendoring):
-# a VENDORED third-party document, copied byte-for-byte from an external side project
-# (tools/makespan-scheduler/PROVENANCE.md records the source commit) and never independently
-# edited here per this project's own read-only-vendor discipline (ADR-0004) -- re-vendoring a
-# fresh copy is the only sanctioned way its text changes. Requiring a fresh-context legibility
-# review of prose this project does not author, and is not permitted to rewrite even if B found
-# a defect, would attest nothing actionable -- the same reasoning judgment/** and
-# vestigial_documentation/** already carry below for their own not-ours-to-rewrite content.
-# PROVENANCE.md in the same directory IS authored here and is NOT excluded -- it attests
-# normally.
-EXCLUDE_FILES_WHOLESALE = {"BACKLOG.md", "tools/makespan-scheduler/README.md"}
+# tools/makespan-scheduler/README.md (work item makespan-scheduler-vendoring, 2026-07-14) is
+# DELIBERATELY NOT excluded here, on reflection -- an out-of-frame hack-rationalization audit
+# (this same commission) caught the first-drafted version of this comment conflating two
+# different obligations: the read-only-vendor rule (ADR-0004) forbids EDITING the file, not
+# REVIEWING it. ADR-0017's A:B:C loop is itself non-destructive of its target (B reads; a
+# finding C cannot fix is recorded honestly as DEFECT with escalated:true, exactly ADR-0017's
+# own designed disposition for a document that resists repair) -- so a vendored doc is attested
+# like any other maintainer-facing doc, and any B finding this project is not permitted to fix
+# (because fixing it would edit vendored content) is recorded as an honest, escalated,
+# UNFIXED DEFECT rather than silently excluded from review altogether. See its attestation
+# record in attestations/doc-legibility-attestations.jsonl for the actual disposition reached.
+EXCLUDE_FILES_WHOLESALE = {"BACKLOG.md"}
 EXCLUDE_DIR_PREFIXES = ("judgment/", "vestigial_documentation/")
 WAIVER_TOKEN = "doc-attest-exempt:"
 
@@ -649,9 +650,6 @@ def _print_exclusions(scope: list[str], excluded: list[str], waived: list[str]) 
     print("    vestigial_documentation/** — declared-history archive (2026-07-12 vestigial-doc-"
           "sweep, VESTIGIAL-INDEX.md), same status as judgment/**: content-preserving moves, not "
           "living prose a touch should re-trigger legibility review for")
-    print("    tools/makespan-scheduler/README.md — vendored third-party doc (2026-07-14, "
-          "PROVENANCE.md), never independently edited here (ADR-0004 read-only-vendor); same "
-          "not-ours-to-rewrite status as judgment/**")
     if waived:
         print(f"  waived by inline '<!-- {WAIVER_TOKEN} ... -->' marker:")
         for w in waived:
