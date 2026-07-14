@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-09T07:54:37Z
-#   last-change: 2026-07-13T17:45:28Z
-#   contributors: 9bcc0113/main, be693afb/main, e4410ef6/main, 3c50e030/main
+#   last-change: 2026-07-14T01:35:28Z
+#   contributors: 9bcc0113/main, be693afb/main, e4410ef6/main, 3c50e030/main, a857c93d/main
 # <<< PROVENANCE-STAMP <<<
 
 """layout_census — LAYOUT.md's designed tree as a MECHANICAL registry (manifest [C21]).
@@ -36,11 +36,18 @@ import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-# (1) the top-level allowlist — LAYOUT §1's designed tree, verbatim (the SSOT for this invariant).
+# (1) the top-level allowlist. THIS REGISTRY (ROOT_FILES/ROOT_DIRS below) is the LIVING SSOT
+# for this invariant (corrected 2026-07-14, work item layout-census-teach-text-stale-ssot;
+# ADR-0012 P1, one owner per fact) — LAYOUT.md §1 is the frozen, point-in-time founding DESIGN
+# record (Status: DESIGN, provenance/LAYOUT.md; law/adr/0005 Rule 8 protected, never retro-
+# edited to track the tree's organic growth) that this registry originally derived from and has
+# since factually diverged from and superseded as the thing actually enforced. A new top-level
+# entry is registered HERE, not in LAYOUT.md.
 ROOT_FILES = {
     "README.md", "CLAUDE.md", "GLOSSARY.md", "BACKLOG.md", "FINDINGS.md", ".gitignore",
     # organic additions since LAYOUT.md §1 was drafted (session 59c83ca6, 2026-07-09) —
-    # LAYOUT.md's tree/table are not yet amended to match; flagged for maintainer review.
+    # LAYOUT.md is a frozen point-in-time design record and is never amended to match; this
+    # registry is the living SSOT that tracks them instead.
     # Renamed by the doc-audience-taxonomy sweep (2026-07-12): DIRCLASS/CAPABILITIES/HANDOFF ->
     # ORCH-*, WALKTHROUGH -> USER-*, POST-FABLE-OPERATING-BRIEF/OPERATING-CARD -> ORCH-*.
     "ORCH-DIRCLASS.md", "ORCH-CAPABILITIES.md", "ORCH-HANDOFF.md", "USER-WALKTHROUGH.md",
@@ -142,10 +149,13 @@ def main() -> int:
         if is_dir:
             if entry not in ROOT_DIRS:
                 breaches.append(f"UNREGISTERED top-level directory: {entry}/ "
-                                f"(add to LAYOUT §1 + this registry, or it is a misfit-absorbing parent)")
+                                f"(add to this registry's ROOT_DIRS — the living SSOT, see the "
+                                f"module docstring and the ROOT_FILES comment above — or it is "
+                                f"a misfit-absorbing parent)")
         elif entry not in ROOT_FILES:
             breaches.append(f"UNREGISTERED top-level file: {entry} "
-                            f"(a root standing-document must be registered in LAYOUT §1)")
+                            f"(a root standing-document must be registered in this registry's "
+                            f"ROOT_FILES — the living SSOT — not in the frozen LAYOUT.md §1 design)")
 
     # (2) per-directory currency patterns
     for f in files:

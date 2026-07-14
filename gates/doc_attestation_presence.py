@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-11T16:14:47Z
-#   last-change: 2026-07-12T20:44:20Z
-#   contributors: e4410ef6/main, 3c50e030/main
+#   last-change: 2026-07-14T01:34:33Z
+#   contributors: e4410ef6/main, 3c50e030/main, a857c93d/main
 # <<< PROVENANCE-STAMP <<<
 
 """doc_attestation_presence — the commit-time enforcement floor for ADR-0017's A:B:C
@@ -196,17 +196,21 @@ hash lookup and a JSON shape check, the same free-per-commit class as gates/doc_
 gates/link_integrity.py, NEITHER of which carries an apparatus.json off-switch. So: this gate
 is authored ENFORCE (gate mode exits 1 on a missing/malformed record) with no observe/off
 mode and no switchboard entry — there is nothing here whose cost an operator needs to opt into.
-What is DEFERRED is not the gate's own mode but its WIRING into hooks/pre-commit: this
-commission's constraints forbid editing hooks/ existing files while a governed session
-(run10) is live, so the pre-commit stanza is prepared and printed here rather than applied —
-see the module's bottom docstring block. (A pre-existing, unrelated gap noticed in passing:
-gates/doc_shapes.py, though built, seen-red, and registered days before this pass, is ALSO not
-yet invoked from hooks/pre-commit's body despite the header comment's "FINAL WIRING" note
-listing gates through link_integrity — flagged here per CLAUDE.md's hazard-flagging duty, not
-fixed, since it is the same frozen file.)
+STATUS (corrected 2026-07-14, mandated-tier builder, work item
+doc-attestation-arming-docstring-stale): the WIRING into hooks/pre-commit described below is
+no longer deferred — it has landed and is live. hooks/pre-commit invokes this gate over the
+commit's touched *.md set and exits non-zero (blocking the commit) on a missing/malformed
+attestation record, applying the WIRING STANZA below verbatim (confirmed by direct read of
+hooks/pre-commit's "doc-attestation-presence" section at the time of this correction). The
+paragraph above ("this gate is authored ENFORCE ... nothing here whose cost an operator needs
+to opt into") was already accurate; only the wiring-status sentence was stale. (The parenthetical
+that used to follow claimed gates/doc_shapes.py was ALSO not yet invoked from hooks/pre-commit
+— that same direct read shows doc_shapes.py IS invoked there too, so that claim was equally
+stale and is corrected by removing it here rather than left standing as a second stale fact
+beside the one this item was filed for.)
 
-WIRING STANZA — for the orchestrator to drop into hooks/pre-commit once the freeze lifts
-(mirrors the link_integrity block immediately above it in that file):
+WIRING STANZA — reproduced here as the source text hooks/pre-commit's own
+"doc-attestation-presence" block applies verbatim (see that file for the live copy):
 
     # doc-attestation-presence — every touched maintainer-facing *.md must carry a
     # fresh-context (A:B:C) attestation record for its exact content (ADR-0017, "The
