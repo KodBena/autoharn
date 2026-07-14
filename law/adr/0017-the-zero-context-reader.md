@@ -481,6 +481,20 @@ own machinery, and an adopting project replaces it wholesale with its own.
 1. **The link-resolution gate lands.** Record it in the instance bindings and tighten Rule
    2(b)'s declared surface from "commissioned" to the gate's actual reach; if the concurrent
    build dies, the commission re-files rather than silently lapsing.
+   **[Struck 2026-07-13, ADR-0005 Rule 8 dated in-situ strike, per
+   [design/MAINT-ADR-PORTABILITY-SPEC.md](../../design/MAINT-ADR-PORTABILITY-SPEC.md) §7 C7
+   (maintainer-adjudicated 2026-07-13, ledger row 403 — this project's append-only
+   decision/audit log, a Postgres-backed record of maintainer rulings and work items kept
+   outside this repository and read via the `./led` command-line tool, not a file here —
+   spec default stands): this trigger already fired and is already discharged elsewhere
+   in this same document — Rule 2's enforcement text above states the gate "landed mid-draft…
+   merged `b5f9180`… already wired as a blocking pre-commit step" (see Rule 2 and the
+   "link-resolution gate" entry under Instance bindings). A reader following the numbering
+   convention this ADR's own Amendment sections use (a later "Revisit #N" heading discharges
+   list item N, [ADR-0000](0000-the-alpha-and-the-omega-type-driven-design.md)'s precedent)
+   could mistake this still-open-looking numbered item for a live trigger; it is not — it is
+   preserved verbatim above per Rule 8 as the historical condition that was met, not a
+   discharge marker to act on again.]**
 2. **A transport has live numbers.** After a real period of operation — the A:B:C loop's
    attestations adjudicated by the maintainer, or the critic hook's journal findings
    labeled true/false — the corpus grows from live misses and the promotion question (may
@@ -517,7 +531,7 @@ own machinery, and an adopting project replaces it wholesale with its own.
   cancer G.** "Load-bearing knowledge offloaded to unenforceable prose" is this tenet's
   structural cousin: G forbids prose as a *substitute for mechanism*; this tenet governs the
   prose that legitimately remains.
-- **[ADR-0013 (execution integrity)](0013-execution-stamina-and-structural-completeness.md)
+- **[ADR-0013 (execution integrity)](0013-execution-integrity.md)
   and [ADR-0014 (second opinion)](0014-executor-second-opinion.md).** The
   faculty-that-corrupts admission and the out-of-frame remedy, which Rule 1 inherits: the
   author cannot run the zero-context test on their own text, so the honest checker is
@@ -551,6 +565,17 @@ own machinery, and an adopting project replaces it wholesale with its own.
   which the root cause makes structurally worthless on this one question.
 - **Not settled law.** This is a draft awaiting the maintainer's word, filed in `design/`
   precisely because nothing here binds until ratified.
+  **[Struck 2026-07-13, ADR-0005 Rule 8 dated in-situ strike, per
+  [design/MAINT-ADR-PORTABILITY-SPEC.md](../../design/MAINT-ADR-PORTABILITY-SPEC.md) §7 C1
+  (maintainer-adjudicated 2026-07-13, ledger row 403 — this project's append-only
+  decision/audit log, a Postgres-backed record of maintainer rulings and work items kept
+  outside this repository and read via the `./led` command-line tool, not a file here —
+  spec default stands): this bullet is stale. The status block at the top of this
+  document already reads "Accepted (maintainer-ratified 2026-07-11…)" and this file lives in
+  `law/adr/`, not `design/` — this document is ratified law, not an unratified draft. The
+  bullet was never updated at ratification. It is preserved verbatim above per Rule 8; read
+  it as true of the pre-ratification draft this bullet described, not of the document you are
+  reading now.]**
 
 ## License
 

@@ -45,6 +45,16 @@ lapse let it recur — and only then the fix. Everything below elaborates that.)
   (ADR-0011 owns mechanization) — the posture it governs is **which question is
   asked first**, and the trio it parents supplies the answers.
 
+*Refactored for cross-project portability on 2026-07-13 under
+[`design/MAINT-ADR-PORTABILITY-SPEC.md`](../../design/MAINT-ADR-PORTABILITY-SPEC.md)
+(tracker `adr-portability-refactor`, maintainer-ratified 2026-07-13). The
+pre-refactor text stands verbatim at commit `8e2759d`; extracted records live in
+[`history/0000-specimens.md`](history/0000-specimens.md) and are not retro-edited.
+This pass also adds a dated clarifying note under "Revisit #4" resolving the
+spec's §7 C10 finding (the heading number collides with Revisit-when item 4,
+which it does not discharge — the section text itself stays verbatim per §4).
+Dated amendments below are preserved verbatim from the original.*
+
 A word on register, in ADR-0013's key and for the same reason. The rest of the
 corpus is neutral; the trio it parents earns an edge from dated failures, and this
 root inherits that edge because its own substrate is a dated failure too — the
@@ -57,8 +67,11 @@ judgement as efficiency.
 ## Context
 
 The corpus already contains this law — distributed across three siblings, each
-owning one facet, none naming the root they share. ADR-0012 P8 says *the typed
-signature is the single source of truth of a function's contract*; the
+owning one facet, none naming the root they share.
+[ADR-0012 (compositional and structural hygiene)](0012-compositional-and-structural-hygiene.md)
+— whose nine numbered principles P1–P9 are that document's own section labels —
+[P8](0012-compositional-and-structural-hygiene.md#p8--typed-signatures-are-the-single-source-of-truth-of-a-functions-contract)
+says *the typed signature is the single source of truth of a function's contract*; the
 anti-pattern checklist's spine is *make illegal states unrepresentable*. ADR-0011
 Rule 2 says *a recurrence converts to a mechanism, not more prose*. ADR-0013's
 amendment (2026-06-24) says *fair dealing runs both ways* — apply the real fix, to
@@ -77,83 +90,24 @@ instance* failure ADR-0011 Rule 4 names. The substrate proves the reflex recurs 
 the diagnostician, and proves the alternative — *ask what type prevents the class* —
 was right every single time it was asked.
 
-### Specimen 1 — the oversize/wrong-width/wrong-dtype wire frame → `BoundedBatch`
-
-A producer emitted a leaf-evaluation batch onto the wire that was oversize (more
-rows than the server's `max_batch`), or the wrong width (a feature dimension the
-server did not expect), or the wrong dtype. The frame was structurally legal as
-*bytes* and detonated **three layers downstream** — past the wire, past the
-coalescing intake, inside the server's forward — where the diagnosis was furthest
-from the cause (the ADR-0002 hierarchy's whole point: fail at construction, not deep
-in the first forward). The *"how do I fix it"* reflex produces a downstream guard:
-a length check at the forward, a clamp, a defensive reshape. The **right** answer
-was the question's answer: a refined wire type — **`BoundedBatch`** — whose validator
-**makes the illegal shape unrepresentable at the boundary** (the Port/ACL of
-ADR-0012 P2: a boundary *translates-and-validates*, it does not coerce). A
-`BoundedBatch` that cannot be constructed from an over-`max_batch`, wrong-width, or
-wrong-dtype buffer cannot reach the forward at all. The defect class is gone, not
-guarded — ADR-0012's *illegal states unrepresentable* made concrete at the wire.
-
-### Specimen 2 — the cross-layer counter category error → `CellLedger`
-
-A health check compared counters drawn from three different layers — producer-batch
-counts, wire-message counts, and consumed-row counts — as if they were one currency,
-and **mis-flagged healthy cells** because the three are not commensurable (one
-producer batch is N wire messages is M rows). This is precisely an **ADR-0008
-category error**: a fuzzy match across an inadequate vocabulary, three distinct
-units read as one. The *"how do I fix it"* reflex adds a fudge factor, a tolerance,
-a special case for the cell that mis-flagged. The **right** answer was a type that
-makes the only-meaningful comparisons the only-expressible ones: a **`CellLedger`**
-reconciliation type that *owns* the three counters as distinct, typed quantities and
-exposes exactly one verdict — so a cross-currency comparison is not a bug to catch
-but a sentence you cannot write. The vocabulary was revised (ADR-0008's positive
-register), structurally, at the type.
-
-### Specimen 3 — the unbounded producer send queue → a byte-budgeted high-water-mark
-
-A producer's send queue had no bound; under backpressure it grew until the process
-was **OOM-killed at ~7 GB**. The *"how do I fix it"* reflex caps the queue at a
-round number of *messages* (1000? 10000?) — a magic constant strewn as a bare literal
-(ADR-0012 cancer F), arbitrary because the thing that actually exhausts memory is
-*bytes*, not message count, and messages vary in size. The **right** answer was a
-type whose bound is **derived from the one source that makes it meaningful**: a
-**byte-budgeted high-water-mark** computed from the message size (ADR-0012 P1,
-derive-don't-duplicate — the bound has one home and is computed, not guessed). The
-queue refuses the write that would exceed the byte budget, loudly (ADR-0002), at the
-boundary — and the OOM class is unrepresentable, not merely less likely.
-
-### Specimen 4 — the unbounded coalescing intake → a bounded blocking queue
-
-The server's coalescing intake (which gathers producer messages into a microbatch)
-was likewise unbounded — the same disease at the consuming end. The **right** answer
-was the same *kind* of answer: a **bounded blocking queue** whose capacity is a typed
-invariant of the structure, so an intake that would overflow **blocks** (applying
-backpressure) rather than growing without bound. The pattern across all four is one
-pattern: every defect was a **design signal**, and the durable fix was a **type**,
-not a patch.
-
-### The contrast specimen — "fix the one blocking call"
-
-The instructive negative is the reflex itself, caught in the act. Confronted with a
-blocking call in the serve loop, the executor asked *"how do I fix this one blocking
-call"* — and produced **two successive incomplete patches**, because each patch fixed
-the instance in view and left the *shape* that permits the class untouched, so the
-class re-surfaced one call over. Had the first move been *"what shape prevents a
-blocking call from sitting on this path at all"*, one structural answer would have
-closed it once. This is the same root as ADR-0013's attrition specimens — the patch
-that asks "how to fix" instead of "what shape prevents this class" is the *execution*
-sibling of the cut corner: it does the visible work and forfeits the durable work.
-
-### Why this is the root, and why it is filed now
-
-The four specimens are four instances of one missing reflex. The maintainer had to
-inject the question by hand, repeatedly, because no document carried it — the trio
-that *answers* it (0011/0012/0013) presumes it has already been asked. The cost of
-that omission was the OOM kill, the mis-flagged cells, the three-layer detonation,
-and the doubled patch — real time and real money. ADR-0013's edge is "finish what
-was ratified"; ADR-0012's is "born in the right shape"; ADR-0011's is "mechanize the
-recurrence." **None of them fires unless the contributor first asks the root
-question.** This ADR makes the question mandatory and first.
+> **Extracted record — the four specimens and the contrast specimen**
+> *(moved verbatim to [`history/0000-specimens.md`](history/0000-specimens.md))*:
+> four dated defects on the originating project's `throughput-lab` testbed are this tenet's
+> substrate, each closed by a type that made the whole defect class unrepresentable rather
+> than a downstream guard. **Specimen 1** is an oversize/wrong-width/wrong-dtype wire frame
+> that detonated three layers downstream before a boundary type (`BoundedBatch`) made the
+> illegal shape unrepresentable at construction. **Specimen 2** is a cross-layer counter
+> category error that mis-flagged healthy cells by comparing three incommensurable units as
+> one currency, closed by a reconciliation type (`CellLedger`) that owns the three counters
+> as distinct quantities. **Specimen 3** is an unbounded producer send queue that grew until
+> the process was OOM-killed, closed by a byte-budgeted high-water-mark derived from the one
+> resource that actually exhausts memory rather than a round message-count literal.
+> **Specimen 4** is the same unbounded-queue disease at the consuming end, closed the same
+> way — a bounded blocking queue that applies backpressure instead of growing without bound.
+> **The contrast specimen** is the reflex caught in the act: asking "how do I fix this one
+> blocking call" produced two successive incomplete patches, because each fixed the instance
+> in view and left the shape that permits the class untouched — the doubled-patch lesson
+> Rule 2 exists to foreclose.
 
 ## Decision
 
@@ -376,43 +330,51 @@ reject.
    ADR-0014 as the escape hatch for a stalled reflex; once ADR-0014 is ratified, confirm
    the hand-off (stall → second opinion) is described consistently from both sides, and
    repoint if its number or framing shifts (ADR-0005 Rule 3/5).
-5. **A second OR/game instance adopts the corpus** (ADR-0003's trigger). Confirm this
-   root transferred as *posture* — its substrate is the dated `throughput-lab` session,
-   local and first-person, so a fork re-anchors it to its own dated defects exactly as
-   ADR-0013 must.
+5. **A second OR/game instance adopts the corpus** (an Operations-Research or
+   game-playing/search codebase, the substrate class
+   [ADR-0003 (domain-coupling bands)](0003-domain-coupling-bands.md)'s own trigger names).
+   Confirm this root transferred as *posture* — its substrate is the dated `throughput-lab`
+   session, local and first-person, so a fork re-anchors it to its own dated defects exactly
+   as ADR-0013 must.
 
 ## Related
 
-- **ADR-0012 (compositional and structural hygiene).** The **shape** facet. P8 (the
-  typed signature is the SSOT) and the *illegal-states-unrepresentable* spine are
-  Rule 1's content and Rule 2(a)'s answer-form; P1/P2 are the SSOT and Port/ACL the four
-  specimens' types instantiate. This ADR elevates ADR-0012 to *first*; it does not
-  restate it.
-- **ADR-0011 (mechanization discipline).** The **net** facet. Rule 2(b) is ADR-0011
-  Rule 2 (recurrence → mechanism) named as the second of the two mandatory questions;
-  Rule 4 (quantify over the class) is why a foreclosing *type* beats a guard on an
-  *instance*. Rule 1's enforcement-surface vocabulary is the one this ADR declares its
-  rules against.
-- **ADR-0013 (execution integrity).** The **integrity** facet. Rule 2(a)'s "applied in
-  full, not a slipshod patch" is ADR-0013's mandate that the ratified fix is owed to its
-  ratified end; the contrast specimen (the doubled patch) is the *type-driven* sibling of
-  ADR-0013's attrition specimens. The 2026-06-24 amendment (fair dealing both ways) is
-  the integrity that keeps Rule 2 from being either narrowed or maliciously complied.
-- **ADR-0002 (fail loudly).** Rule 2(b)'s mechanism makes the foreclosed class fail
-  loudly; a type that makes an illegal state unconstructable is fail-loud at its
-  strongest surface (construction-time), the top of ADR-0002's hierarchy. The four
-  specimens' boundary refusals (the `BoundedBatch` validator, the byte-budgeted queue's
-  loud refusal) are ADR-0002 mechanisms.
-- **ADR-0008 (classification discipline).** Two ways: Specimen 2's counter category
-  error is an ADR-0008 positive-register failure (the `CellLedger` *revises the
-  vocabulary*), and this ADR's own genre is an ADR-0008 tension it flags rather than
-  resolves (Revisit #1).
-- **ADR-0014 (request a second opinion when a problem resists resolution) — authored in
-  parallel.** The escape hatch when the two-question reflex stalls: a type that will not
-  reveal itself is a trigger for an independent second pair of eyes, not for a patch.
-- **The `throughput-lab` testbed** (`throughput-lab/`). This ADR's direct substrate —
-  the producer↔server↔consumer leaf-evaluation loop on which the four specimens and the
-  contrast specimen occurred.
+- **[ADR-0012 (compositional and structural hygiene)](0012-compositional-and-structural-hygiene.md)
+  is this root's *shape* facet.** P8 (the typed signature is the SSOT) and the
+  *illegal-states-unrepresentable* spine are Rule 1's content and Rule 2(a)'s answer-form;
+  P1/P2 are the SSOT and Port/ACL the four specimens' types instantiate. This ADR elevates
+  ADR-0012 to *first*; it does not restate it.
+- **[ADR-0011 (mechanization discipline)](0011-mechanization-discipline.md) is this root's *net*
+  facet.** Rule 2(b) is ADR-0011 Rule 2 (recurrence → mechanism) named as the second of the two
+  mandatory questions; Rule 4 (quantify over the class) is why a foreclosing *type* beats a
+  guard on an *instance*. Rule 1's enforcement-surface vocabulary is the one this ADR declares
+  its rules against.
+- **[ADR-0013 (execution integrity)](0013-execution-integrity.md) is this root's *integrity*
+  facet.** Rule 2(a)'s "applied in full, not a slipshod patch" is ADR-0013's mandate that the
+  ratified fix is owed to its ratified end; the contrast specimen (the doubled patch) is the
+  *type-driven* sibling of ADR-0013's attrition specimens. The 2026-06-24 amendment (fair
+  dealing both ways) is the integrity that keeps Rule 2 from being either narrowed or
+  maliciously complied.
+- **[ADR-0002 (fail loudly)](0002-fail-loudly.md).** Rule 2(b)'s mechanism makes the foreclosed
+  class fail loudly; a type that makes an illegal state unconstructable is fail-loud at its
+  strongest surface (construction-time), the top of ADR-0002's hierarchy. The four specimens'
+  boundary refusals (the `BoundedBatch` validator, the byte-budgeted queue's loud refusal) are
+  ADR-0002 mechanisms.
+- **[ADR-0004 (minimal-touch edits to partially-visible files)](0004-minimal-touch-edits-to-partially-visible-files.md).**
+  This ADR's own no-retroactive-sweep posture (Neutral; "What this tenet does NOT mean") defers
+  to ADR-0004's incremental-retrofit scoping: asking the two questions on a newly-identified
+  defect is not a license to roam the tree re-typing existing code.
+- **[ADR-0008 (classification discipline)](0008-classification-discipline.md).** Two ways:
+  Specimen 2's counter category error is an ADR-0008 positive-register failure (the
+  `CellLedger` *revises the vocabulary*), and this ADR's own genre is an ADR-0008 tension it
+  flags rather than resolves (Revisit #1).
+- **[ADR-0014 (request a second opinion when a problem resists resolution)](0014-executor-second-opinion.md)
+  — authored in parallel.** The escape hatch when the two-question reflex stalls: a type that
+  will not reveal itself is a trigger for an independent second pair of eyes, not for a patch.
+- **The extracted specimens' testbed.** See the Extracted record under Context — this ADR's
+  direct substrate is a named, dated, first-person session on the originating project's own
+  testbed, detailed there and in the frozen [`history/0000-specimens.md`](history/0000-specimens.md)
+  record.
 
 ## What this tenet does NOT mean
 
@@ -523,6 +485,14 @@ especially since ADRs are by their nature somewhat fuzzy. The text binds; the me
 assists.*
 
 ## Revisit #4 — 2026-07-12 (codified, maintainer-approved; from the what-did-we-miss RCA)
+
+*(Dated clarifying note, 2026-07-13, per ADR-0005 Rule 8 — added under
+[`design/MAINT-ADR-PORTABILITY-SPEC.md`](../../design/MAINT-ADR-PORTABILITY-SPEC.md) §7 C10
+(maintainer-adjudicated, ledger row 403): this
+heading's "#4" numbers a new, independent dated revisit record — unlike "Revisit #3" above,
+which discharges Revisit-when list item 3, this section discharges no list item. Revisit-when
+item 4 (the ADR-0014 hand-off reconciliation) remains open. The section text below, including
+the "Zero-context note" immediately following, is unchanged by this note.)*
 
 *(Zero-context note: "the what-did-we-miss RCA" is a two-track root-cause analysis run
 2026-07-12 after the project discovered that read-access logging — a standard requirement

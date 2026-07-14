@@ -109,7 +109,7 @@ two facts the deployment can check:
 
 The maintainer's standing proviso — appended 2026-07-12 as amendments to
 [ADR-0000](../law/adr/0000-the-alpha-and-the-omega-type-driven-design.md) and
-[ADR-0013](../law/adr/0013-execution-stamina-and-structural-completeness.md) — governs
+[ADR-0013](../law/adr/0013-execution-integrity.md) — governs
 the whole column: the presence of a mechanization never licenses an
 agent to treat the unmechanized text as optional. `DECLARED-ONLY` means "the text binds
 and no machine has checked it yet," not "ignorable."

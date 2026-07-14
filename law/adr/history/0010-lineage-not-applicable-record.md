@@ -1,3 +1,18 @@
+<!-- doc-attest-exempt: point-in-time record per ADR-0005 Rule 8, extracted verbatim and never retro-edited (law/adr/history/README.md's frozen-record banner); same exclusion class as BACKLOG.md's dated entries per design/ORCH-ABC-AUDIT-LOOP-RECIPE.md "What the loop does not do" -->
+
+> *Point-in-time record (ADR-0005 Rule 8): extracted verbatim from
+> `law/adr/0010-render-locality-not-applicable.md` at commit
+> `ff691bb9bc430ad497d74ff82d580f758a969f99` under
+> `design/MAINT-ADR-PORTABILITY-SPEC.md` (tracker `adr-portability-refactor`,
+> WP-1, C6 ruling — ledger row 370). Not retro-edited; this is chocofarm's own
+> "the LengYue tenet does not transfer here" judgment, superseded in the live
+> slot by a generalized, UI-scoped ADR-0010 written from the same source
+> tenet's summary, per the maintainer's ruling that the summary supports a
+> generic statement. The live slot is
+> `law/adr/0010-render-locality-not-applicable.md`.*
+
+---
+
 # ADR-0010: Render Locality and Canvas — Not Applicable (Lineage Entry)
 
 - **Status:** Accepted (as a lineage record; no chocofarm decision is taken

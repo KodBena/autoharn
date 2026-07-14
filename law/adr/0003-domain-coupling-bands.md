@@ -3,7 +3,7 @@
 - **Status:** Accepted
 - **Genre:** Bounded Context Map (structural-descriptive with prescriptive
   elements) — a third genre after the *decision* of ADR-0001 and the *tenet*
-  of ADR-0002. Maps the domain coupling of the codebase and gives a principle
+  of ADR-0002. Maps the domain coupling of a codebase and gives a principle
   for evaluating future changes against it.
 - **Date:** 2026-06-15
 - **Provenance:** Adapted from the LengYue ADR corpus. LengYue's ADR-0003
@@ -13,248 +13,246 @@
   decision does: name the bands of coupling, give a forward-looking question
   that forces honest separation of abstraction from instance, and refuse to
   extract abstractions before a second concrete consumer exists. The bands
-  are re-derived for chocofarm's actual axes: how tightly each module is
+  were re-derived for chocofarm's actual axes: how tightly each module is
   coupled to FFXIII-the-game, to the operations-research machinery, and to
-  the simulation/solver seam.
-- **Scope:** The whole `chocofarm/` package. Cross-references the env/Policy
-  inversion of control (the load-bearing seam ADR-0001 and the audit both
-  protect).
+  the simulation/solver seam. That worked chocofarm band map, and the
+  original FFXIII-specific Context narrative, now live in
+  [`history/0003-band-map-and-instance-context.md`](history/0003-band-map-and-instance-context.md)
+  (this field is left as the dated fact of where the ADR's *structure* came
+  from, not as an instruction to re-derive chocofarm's answer).
+- **Scope:** Any codebase where domain-specific instance facts (a particular
+  game, a particular customer, a particular hardware target) are mixed with
+  domain-general problem-class machinery (an algorithm family, a protocol, a
+  solver). Cross-references whatever injected-seam / port-based
+  inversion-of-control the adopting project protects as its own load-bearing
+  boundary (chocofarm's instance of that boundary is the env/Policy seam,
+  ADR-0001).
+
+*Refactored for cross-project portability on 2026-07-13 under
+[`design/MAINT-ADR-PORTABILITY-SPEC.md`](../../design/MAINT-ADR-PORTABILITY-SPEC.md)
+(tracker `adr-portability-refactor`,
+maintainer-ratified 2026-07-13). The pre-refactor text stands verbatim at
+commit `ff691bb9bc430ad497d74ff82d580f758a969f99`; extracted records live in
+[`history/`](history/0003-band-map-and-instance-context.md) and are not
+retro-edited. Dated amendments below are preserved verbatim from the
+original (this ADR carries none as of the pre-refactor text).*
 
 ## Context
 
-chocofarm exists to compute optimal gil farming in FFXIII, formalized as
-adaptive stochastic orienteering under partial observation (a belief-state
-MDP). That is two facts glued together: a *specific game* (FFXIII chocobo
-treasure digging, with concrete treasure coordinates, teleports, and
-detection geometry) and a *general OR problem class* (belief-MDP, Dinkelbach
-renewal-rate optimization, orienteering). The codebase mixes both, and the
-mix is not uniform: some modules know about treasure coordinates and the CSNE
-teleport; some speak only in beliefs, worlds, and rates; some don't care
-which problem they're solving at all.
+A codebase built around one domain-specific instance of a general problem
+often mixes two things that are logically distinct: **instance facts** (a
+particular game's geometry, a particular customer's constraints, a
+particular hardware target's registers) and **problem-class machinery** (a
+solver family, a belief-update algorithm, a protocol). The two live glued
+together in the same tree, and the glue is rarely uniform — some modules are
+pure instance detail, some are pure problem-class logic, and some straddle
+both.
 
-Two prospective futures make the coupling worth mapping honestly:
+Two prospective futures make this coupling worth mapping honestly, whatever
+the domain:
 
-1. **A different OR problem** (a different orienteering/belief-MDP instance —
-   not FFXIII at all). What would survive? The belief mechanics, the
-   Dinkelbach loop, the orienteering/route machinery, the solvers, the
-   AlphaZero stack, the dual bound — all of it is problem-class machinery, not
-   FFXIII machinery. Only the instance data and the FFXIII-specific geometry
-   would be replaced.
+1. **A different instance of the same problem class** (the algorithm/solver
+   machinery stays; the instance data changes). What survives is the
+   problem-class machinery; what is replaced is the instance data and its
+   domain-specific encoding.
+2. **A different domain with the same problem shape** (a new "game," a new
+   customer, a new target — but the underlying problem class is unchanged).
+   What survives is the same machinery, seen from the other direction; what
+   is replaced is the domain-facing instance layer.
 
-2. **A different game with the same OR shape** (another treasure-hunt-style
-   game). The FFXIII coordinates, teleports, and arrangement faces would be
-   replaced; the OR machinery and the env/Policy seam would survive.
+Without a map, a new feature can't be honestly designed against the boundary
+between "this is instance fact" and "this is problem-class logic" — and
+without a principle for drawing that boundary at authoring time, a map by
+itself is just inventory, decaying the moment the code moves.
 
-Without a map, future features can't be honestly designed against the
-boundary — and without a principle, the map is just inventory.
+> **Extracted record — the chocofarm instance narrative**
+> ([relocated verbatim to `history/0003-band-map-and-instance-context.md`](history/0003-band-map-and-instance-context.md)):
+> this ADR's own worked instance is chocofarm, a project computing optimal
+> resource-gathering routes in a specific game, formalized as adaptive
+> stochastic orienteering under partial observation (a belief-state MDP). The
+> two "prospective futures" above were originally posed as "a different OR
+> problem" (a different game entirely — the belief mechanics, the Dinkelbach
+> loop, the solvers, and the AlphaZero stack are all problem-class machinery
+> that would survive unchanged) and "a different game with the same OR shape"
+> (the game-specific coordinates and teleports would be replaced; the OR
+> machinery and the env/Policy seam would survive). A deployment adopting this
+> ADR re-derives its own version of this narrative from its own instance and
+> problem class — the shape of the question transfers; the specific answer
+> does not.
 
 ## Decision
 
-**Document the current domain coupling of the codebase as three bands, and
-adopt a single forward-looking principle for evaluating new modules against
-it. Do not preemptively extract abstractions; do design new modules so the
-seam is clean.**
+**Document the current domain coupling of the codebase as a small set of
+bands, and adopt a single forward-looking principle for evaluating new
+modules against it. Do not preemptively extract abstractions; do design new
+modules so the seam is clean.**
 
 The principle, stated plainly:
 
-> When writing a new module, ask: **"what would change if the game were
-> different but the OR problem were the same? And what would change if the OR
-> problem were different but solved by the same machinery?"** Not because a
-> second instance exists, but because the two questions force honest
-> separation between the FFXIII instance, the OR abstraction, and the
-> solver-agnostic seam. If the answer to the first is "everything in this
-> module," the module is FFXIII-bound — isolate it so a different game could
-> replace it wholesale. If the answer to both is "nothing," the module is
-> solver-agnostic — name its concepts for the problem class, not the
-> instance. If the answer is "some of it," that is the seam; design it
-> deliberately, even if you don't extract an abstraction today.
+> When writing a new module, ask: **"what would change if the domain
+> instance were different but the problem class were the same? And what
+> would change if the problem class were different but solved by the same
+> machinery?"** Not because a second instance exists, but because the two
+> questions force honest separation between the domain instance, the
+> problem-class abstraction, and the solver-agnostic seam. If the answer to
+> the first is "everything in this module," the module is instance-bound —
+> isolate it so a different domain instance could replace it wholesale. If
+> the answer to both is "nothing," the module is solver-agnostic — name its
+> concepts for the problem class, not the instance. If the answer is "some of
+> it," that is the seam; design it deliberately, even if you don't extract an
+> abstraction today.
 
 This is a design discipline at authoring time, not an extraction mandate.
 Existing code stays put; new code is written with the seam in mind.
 
-### Why not extract abstractions preemptively
+### When to extract: a tradeoff, not a rule
 
-Sandi Metz's principle applies: *duplication is cheaper than the wrong
-abstraction.* An abstraction extracted before a second concrete instance
-exists is shaped by speculation and is almost always wrong-shaped. chocofarm
-has exactly one game instance and one OR instance today, so the cost-benefit
-tilts toward "extract when the second use case exists." The 2026-06-15 audit
-makes the same point from the dual direction (its E lesson — abstractions
-built then abandoned beside a live inline copy are *worse* than no
-abstraction): the `facemodel.SenseAction` object is fully built, documented,
-and dead, while the env reimplements it inline. The discipline is not "build
-abstractions"; it is "design clean seams and extract only when a second
-instance forces it."
+*(This section replaces the ADR's original "Why not extract abstractions
+preemptively" rule, per the maintainer's ratified position statement,
+2026-07-13 —
+[`design/MAINT-ADR-PORTABILITY-SPEC.md`](../../design/MAINT-ADR-PORTABILITY-SPEC.md)
+§7a. The two-question principle above is unaffected by this demotion; only
+the once-binding rule below is demoted to a named, non-binding tradeoff.)*
 
-## The three bands
+Two honest positions exist on when to extract an abstraction, and this
+corpus's maintainer holds one of them as his own stated default lean — this
+section is not a rule either horn can cite as settled law.
 
-The codebase's modules sit on a spectrum.
+- **The caution horn (Sandi Metz):** *duplication is cheaper than the wrong
+  abstraction.* An abstraction extracted before a second concrete instance
+  exists is shaped by speculation and is almost always wrong-shaped — the
+  cost-benefit tilts toward extracting only once a second use case exists.
+  This ADR's own worked instance produced live evidence for this horn (see
+  [the extracted evidence](history/0003-band-map-and-instance-context.md)): an
+  abstraction fully built, documented, and left dead beside a live
+  hand-inlined copy — worse, by that lesson, than never having built it.
+- **The maintainer's horn (Jacobi/Van Vleck):** *"Man muss immer
+  generalisieren"* — one must always generalize. His stated position: the
+  Metz caution is over-cautious and usually forward-incompatible, and in his
+  experience leaves technical debt more often than it prevents it. **This is
+  this ADR corpus's maintainer's stated default lean**, recorded here rather
+  than papered over, because a rule the maintainer disagrees with in
+  principle cannot bind adopters in his name — meeting the letter of a rule
+  while violating its author's actual intent is a failure, not a pass, and a
+  demoted rule that quietly kept binding force would be exactly that.
 
-### Band 1 — Solver-agnostic / the simulation–solver seam
+Neither horn is imposed as a rule. What this ADR actually enforces, regardless
+of which way a contributor leans on the tradeoff above, is the two-question
+principle above: whether an abstraction is extracted now or deferred, the
+seam is designed deliberately, not accidentally discovered later.
 
-These modules speak in concepts no specific solver and no specific game
-needs. The load-bearing instance is the **env/Policy inversion of control**:
-`Environment` owns dynamics, belief, and simulation; `Policy` is a thin
-injected `decide(env, loc, bw, collected, lam, rng)` seam; `env.py` imports
-no solver. A new solution method is a new `Policy` subclass with zero env
-edits. This seam is the single hardest architectural decision in the system,
-made right (the audit's §1), and it is solver-agnostic by construction: the
-env doesn't know whether it's being driven by greedy, ISMCTS, or AlphaZero.
+## Bands — a template for adopters
 
-### Band 2 — OR-general (belief-MDP / orienteering machinery)
+A deployment applying this ADR derives its **own** band map by applying the
+two-question principle to its own codebase — this document does not hand one
+down. This ADR's own worked instance produced one answer, kept as a worked
+example rather than prescribed here: three bands (a solver-agnostic
+seam-machinery band; a problem-class-general machinery band; an
+instance-bound facts band) plus a named "band-mixed" category for modules
+that straddle two bands at once, and two porting inventories sizing what a
+different-instance port and a different-domain port would each require.
 
-These modules speak the operations-research problem class, not the FFXIII
-instance. They would survive a port to *any* adaptive-stochastic-orienteering
-/ belief-MDP problem:
-
-- The **belief mechanics** (the world-set, filtering, marginals) — a
-  belief-MDP concept, not an FFXIII one.
-- The **Dinkelbach renewal-rate machinery** (`rate`, `dinkelbach_rate`, the
-  λ-penalty threaded as a live per-call argument) — the rate-optimization
-  abstraction; λ is the OR-general control variable.
-- The **orienteering / routing** (`route_time`, `exit_cost`, the
-  greedy/CE/rollout/sparse-sampling/UCT/ISMCTS/NMCS solvers) — orienteering
-  machinery parameterized by a distance function, not by FFXIII coordinates.
-- The **AlphaZero/Gumbel stack** (`az/`), the **provable dual bound**
-  (`bounds/`), and the **structural analyzer** (`analysis/`) — all phrased
-  over `worlds`, `cover`, `value`, `N`, `K`, never over "treasure 8" or
-  "the CSNE teleport."
-
-A different OR instance replaces the data, not this machinery.
-
-### Band 3 — FFXIII-bound
-
-These modules carry FFXIII facts that don't exist outside the game (or carry
-FFXIII-specific encodings of general concepts). Porting them is replacement,
-not refactoring:
-
-- The **instance data** (`instance.json`, `faces.json`): the 20 treasure
-  coordinates, the 3 teleports (CSNE/CSCE/τ_4), the detection-region geometry.
-- The **arrangement faces / detector geometry** (`arrangement.py`,
-  `facemodel.py`): the planar arrangement of FFXIII's 16 detection polygons
-  into 44 atomic faces, the corrected sense model
-  (`docs/consults/consult-002-detector-misspec-report.md` §(4)).
-- The **instance-loading and geometry tooling** that parses the FFXIII
-  GeoGebra/WKT source.
-
-A different game replaces all of this; a different OR problem keeps the
-*shape* (an instance file, a distance function, an observation model) but
-swaps the contents.
-
-### Band-mixed — the seams
-
-A few modules straddle bands and are where seam-design matters most:
-
-- **`Environment`** is Band 1 in its seam (the env/Policy contract) and Band
-  2 in its mechanics (belief, Dinkelbach), but loads Band 3 instance data.
-  The copy-on-write `with_scenario`/`restrict` (ADR-0001) are the clean seam
-  that keeps the Band-2 machinery sharable across Band-3 instance changes.
-- **`features.py` / `actions.py`** are Band 2 (an AZ feature/action encoding
-  over a general belief) but their *layout* is derived from the env's
-  instance shape (`feature_dim(env)`, `n_action_slots(env)`). The derived-
-  dimension discipline is what keeps them instance-agnostic in form while
-  instance-sized in fact. (The audit's three-writer FEATURE_LAYOUT finding is
-  exactly a case where this seam was not kept clean enough — see ADR-0011.)
-
-## What a different OR problem would actually require
-
-A useful concrete sizing. To retarget chocofarm to a *different*
-adaptive-stochastic-orienteering / belief-MDP instance (not FFXIII):
-
-- **Replace** (Band 3): the instance file, the detection geometry, the
-  game-specific loader. The observation model would be re-derived for the new
-  problem's sensing structure.
-- **Keep, parameterized** (Band 2): the belief mechanics, Dinkelbach,
-  orienteering, all eight solvers, the AZ stack, the dual bound, the
-  analyzer — they are phrased over `worlds`/`value`/`N`/`K`/`cover` and a
-  distance function, so a new instance with the same primitives reuses them.
-- **No change** (Band 1): the env/Policy seam. A new instance is a new
-  `Environment` and the same `Policy` subclasses drive it.
-
-The Band-2 surface is the overwhelming majority of the codebase by line
-count, which is *why* this is a research toolkit for the problem class rather
-than a single hardcoded solver — and it is so because the env/Policy seam and
-the derived-dimension discipline were honored as the code grew.
-
-## What a different game (same OR shape) would require
-
-The inverse partition: replace **only** the Band-3 instance data and
-geometry; keep Band 1 and Band 2 entirely. This is the cheaper port, because
-the OR machinery is already instance-agnostic — it is the partition the
-copy-on-write `with_scenario`/`restrict` seams were built to make cheap.
+> **Extracted record — the chocofarm band map**
+> ([relocated verbatim to `history/0003-band-map-and-instance-context.md`](history/0003-band-map-and-instance-context.md)):
+> three bands — Band 1 (solver-agnostic: the env/Policy inversion-of-control
+> seam, the single hardest architectural decision in the source project, made
+> right); Band 2 (OR-general: belief mechanics, the Dinkelbach renewal-rate
+> loop, the orienteering/routing machinery, the AlphaZero/Gumbel stack, the
+> provable dual bound — all phrased over the problem class, never over a named
+> game fact); Band 3 (instance-bound: the instance data, the detector
+> geometry, the instance-loading tooling) — plus a Band-mixed category for
+> modules straddling two bands (the environment object itself; the
+> feature/action encoding whose layout is *derived from*, but not textually
+> bound to, the instance). The two porting inventories size a
+> different-problem port (replace Band 3, keep Bands 1–2 parameterized)
+> against a different-domain port (replace only Band 3's instance data and
+> geometry, keep Bands 1–2 entirely) — the two mirror-image partitions the
+> two-question principle predicts. Applying the same discipline to a new
+> codebase typically produces an analogous multi-band split, but the number
+> and boundaries of the bands are discovered by asking the two questions
+> against the actual code, not copied from this record.
 
 ## Consequences
 
 ### Positive
 
 - **New modules are evaluated against the boundary at design time.** The two
-  questions are fast to ask and clarify the shape of new code (an FFXIII fact
-  goes in Band 3 and is isolated; a belief/rate concept goes in Band 2 and is
-  named for the class).
+  questions are fast to ask and clarify the shape of new code (an
+  instance-bound fact goes in the instance band and is isolated; a
+  problem-class concept goes in the problem-class band and is named for the
+  class, not the instance).
 - **Auditability of coupling.** A future maintainer (or a port adopter) has
-  this map as a starting point.
-- **Explicit seams without premature extraction.** The het-values experiment
-  gets the right shape (a `Scenario` sweep over Band-2 machinery) without
-  paying for an abstraction nobody needs yet.
+  a band map as a starting point, once one is drawn for the codebase at
+  hand.
+- **Explicit seams without premature extraction.** New work can get the
+  right shape (isolated from the instance, or named for the problem class)
+  without paying for an abstraction nobody needs yet.
 
 ### Negative
 
 - **The principle is policy, not mechanism.** A contributor who doesn't ask
   the question won't have a tool catch them. Like ADR-0002, the discipline
-  lives in review. (Unlike LengYue, chocofarm has no band-conformance CI
-  check; that would be the mechanization trigger — ADR-0011 Rule 1.)
+  lives in review. (A sibling project may run its own band-conformance CI
+  check; that would be the mechanization trigger — ADR-0011 Rule 1 — for
+  whichever deployment adopts one.)
 - **The inventory will drift.** As modules change, their band assignments may
-  shift. This document carries band *definitions* (which drift slowly), not a
-  per-file tag list (which would rot — the audit is the per-file coupling
-  evidence, and it is point-in-time).
+  shift. A band map should carry band *definitions* (which drift slowly),
+  not a per-file tag list (which rots) — a per-module coupling audit is the
+  point-in-time evidence, distinct from the map itself.
 
 ### Neutral
 
-- **No code change today.** This ADR documents existing structure and a
-  discipline for future structure. Existing code is not refactored against it.
+- **No code change today.** This ADR documents a discipline for future
+  structure. Existing code is not refactored against it.
 
 ## Revisit when…
 
-1. **A second concrete instance materializes** (a different OR problem, or a
-   different game with the same shape). At that point, extraction stops being
-   premature — the second use case is the trigger that flips the cost-benefit,
-   and the seams documented here become the natural extraction points.
-2. **The instance data and the machinery drift apart.** If a Band-2 module
-   accretes FFXIII facts (a hardcoded treasure id, a teleport name), the band
-   boundary has leaked; that is the canary this map exists to catch.
+1. **A second concrete instance materializes** (a different problem, or a
+   different domain with the same shape). At that point, extraction stops
+   being premature by the caution horn's own logic — the second use case is
+   the trigger that flips the cost-benefit, and a band map becomes the
+   natural set of extraction points.
+2. **The instance data and the machinery drift apart.** If a problem-class-
+   general module accretes instance-specific facts (a hardcoded name, a
+   domain-specific literal), the band boundary has leaked; that is the
+   canary a band map exists to catch.
 3. **A band classification turns out wrong in practice.** E.g. if a module
-   thought Band 2 turns out to be far more FFXIII-coupled once examined, the
-   band moves and the principle's application to it changes.
-4. **The two-question thought experiment stops being useful.** If the project
-   commits to FFXIII-only forever, the principle relaxes — though even then,
-   the seam-design discipline produces better code, so it is worth retaining
-   as a heuristic.
+   thought problem-class-general turns out to be far more instance-coupled
+   once examined, the band moves and the principle's application to it
+   changes.
+4. **The two-question thought experiment stops being useful.** If a project
+   commits to a single instance forever, the principle relaxes — though even
+   then, the seam-design discipline produces better code, so it is worth
+   retaining as a heuristic.
 
 ## Related
 
-- **ADR-0001 (immutability and copy-on-write).** The same philosophy —
-  declarations match actual behavior, no aspirational structure — applied to
-  the scenario/restriction seams that keep Band-2 machinery sharable across
-  Band-3 instance changes.
-- **ADR-0002 (fail loudly).** The env's config validation (a Band-1/2
-  surface) fails loud at the instance boundary; a Band-3 instance change that
-  produces a wrong-length value vector is caught there.
-- **ADR-0011 (mechanization discipline).** A band-conformance check would be
-  this ADR's mechanization; its absence is a declared review-only enforcement
-  surface, not an oversight.
-- **The 2026-06-15 architectural audit** — the per-module coupling evidence
-  (the env/Policy seam praise, the FEATURE_LAYOUT seam finding, the
-  analyzer's orphaned-but-reusable status) is the point-in-time substrate
-  this map abstracts.
+- **[ADR-0001 (immutability and copy-on-write)](0001-immutability-and-copy-on-write.md).**
+  The same philosophy — declarations match actual behavior, no aspirational
+  structure — applied to whatever scenario/restriction seam keeps
+  problem-class-general machinery sharable across instance changes.
+- **[ADR-0002 (fail loudly)](0002-fail-loudly.md).** An instance-boundary
+  config validation (a seam/problem-class-general surface) fails loud at the
+  instance boundary; an instance change that produces a malformed value is
+  caught there.
+- **[ADR-0011 (mechanization discipline)](0011-mechanization-discipline.md).**
+  A band-conformance check would be this ADR's mechanization; its absence is
+  a declared review-only enforcement surface, not an oversight.
+- **[`history/0003-band-map-and-instance-context.md`](history/0003-band-map-and-instance-context.md).**
+  This ADR's own worked-instance evidence — the env/Policy seam praise, the
+  FEATURE_LAYOUT seam finding, and the Metz-horn audit evidence — is the
+  point-in-time substrate this ADR's template abstracts.
 
 ## Not goals (explicit)
 
 - **Not a refactoring mandate.** Existing code stays put.
-- **Not an abstraction-extraction roadmap.** No Ports are being declared or
-  planned. The seams are designed; the abstractions are not extracted.
-- **Not a portability promise.** We are not committing to ever shipping a
-  different instance. The discipline produces better code even in an
-  FFXIII-only future, which is the actual justification.
+- **Not an abstraction-extraction roadmap.** No ports are being declared or
+  planned by this document itself. A deployment designs its own seams; this
+  ADR does not extract abstractions for it.
+- **Not a portability promise.** Adopting this discipline is not a
+  commitment to ever ship a different instance. The discipline produces
+  better code even in a single-instance-forever future, which is the actual
+  justification.
 
 ## License
 

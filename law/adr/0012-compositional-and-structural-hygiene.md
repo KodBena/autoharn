@@ -5,72 +5,101 @@
   tenet, and the structural counterpart to the *authoring*-discipline family
   (ADR-0002/0005/0007/0009) and the *corrective*-discipline tenet (ADR-0011).
   Where ADR-0011 says *a recurrence converts to a mechanism*, this tenet says
-  *new structure is born in the shape the audit's mechanisms enforce* — so the
-  conversion ADR-0011 mandates is rarely needed, because the rot never forms.
-  It is the **positive inverse of the 2026-06-15 architectural audit's
-  "architectural cancer" taxonomy**: each disease the audit named gets the
-  structural rule whose presence makes that disease impossible to author.
-- **Date:** 2026-06-15
-- **Provenance:** Native to chocofarm, not transferred. Its source substrate is
-  the 2026-06-15 architectural audit (`docs/notes/audit/architectural-audit-2026-06-15.md`)
-  and the forward-looking seam design (`docs/design/scaling-and-cpp-seam.md`).
-  The audit's §1 verdict — *"the bones are sound; the connective tissue is
+  *new structure is born in the shape an audit's mechanisms would otherwise
+  have to enforce after the fact* — so the conversion ADR-0011 mandates is
+  rarely needed, because the rot never forms. It is the **positive inverse of
+  an architectural audit's "architectural cancer" taxonomy**: each disease the
+  audit named gets the structural rule whose presence makes that disease
+  impossible to author.
+- **Date:** 2026-06-15 (original); refactored for portability 2026-07-13 (below).
+- **Provenance:** Native to this tenet's originating codebase, not transferred.
+  Its source substrate is a named, dated architectural audit of that codebase
+  (not held in this repository) and a forward-looking design note for its
+  incoming C++ component (see the worked instance in
+  [`history/0012-cpp-wire-contract.md`](history/0012-cpp-wire-contract.md)).
+  The audit's verdict — *"the bones are sound; the connective tissue is
   rotting … the right idea applied once and not propagated"* — is this tenet's
-  reason to exist: the disciplines were known (the env↔Policy seam, live λ,
-  derived dimensions) and proven, but were not the **default shape new code is
-  born in**. This ADR makes them the default. It is written now, ahead of the
-  incoming C++ runner and the future async actor-learner loop, precisely so
-  that those — the next large bodies of new code — are born clean rather than
-  audited dirty.
-- **Scope:** All **new** structure across the `chocofarm/` package and any
-  new-language component that joins it (the incoming C++ search/sim runner
-  first; a future async actor-learner second). It binds at design and
-  authoring time. Per ADR-0004's incremental-retrofit posture it mandates **no
-  retroactive sweep** of existing code; the audit's R-series roadmap (not this
-  ADR) sequences the cleanup of what already exists.
+  reason to exist: the disciplines were known (a dependency-inversion seam, a
+  live per-call tunable, zero-drift derived dimensions) and proven, but were
+  not the **default shape new code is born in**. This ADR makes them the
+  default, written ahead of that codebase's incoming C++ runner and future
+  async actor-learner loop, precisely so that those — the next large bodies of
+  new code — are born clean rather than audited dirty.
+- **Scope:** All **new** structure across a hosting project's own codebase and
+  any new-language component that joins it — this tenet's originating instance
+  is an incoming C++ search/sim runner, then a future async actor-learner loop.
+  It binds at design and authoring time. Per ADR-0004's incremental-retrofit
+  posture it mandates **no retroactive sweep** of existing code; a project's
+  own remediation roadmap (not this ADR) sequences the cleanup of what already
+  exists.
+
+*Refactored for cross-project portability on 2026-07-13 under
+[`design/MAINT-ADR-PORTABILITY-SPEC.md`](../../design/MAINT-ADR-PORTABILITY-SPEC.md)
+(tracker `adr-portability-refactor`, maintainer-ratified 2026-07-13). The
+pre-refactor text stands verbatim at commit `0f7b3e4`; extracted records live in
+[`history/0012-p9-worked-examples.md`](history/0012-p9-worked-examples.md),
+[`history/0012-cpp-wire-contract.md`](history/0012-cpp-wire-contract.md), and
+[`history/0012-cross-device-bench-saga.md`](history/0012-cross-device-bench-saga.md),
+and are not retro-edited. The anti-pattern checklist, all nine principles' rule
+statements, the Self-application declarations, and both 2026-07-02 amendments
+stand unedited in substance; each principle's worked example is condensed to
+its one-to-three-sentence lesson, the extracted material's own dated Amendment
+headings are renamed to the corpus's standing `Amendment — <date>: <title>`
+form (a labeling fix, not a content change, made so this refactor's own A1
+gate shields their Provenance fields correctly), and the header fields above
+are re-instanced generically per this refactor's own precedent (ADR-0009,
+ADR-0011). Dated amendments below are preserved verbatim from the original.*
 
 ## Context
 
-The 2026-06-15 architectural audit diagnosed eight recurring "architectural
-cancers" (§2, anti-patterns A–H), verified line-by-line against
-`main@cfce276`, and named the remediation as *"overwhelmingly subtraction and
-relocation … the codebase finishing a sentence it started correctly."* The
-deepest finding (§1, §14) is that **chocofarm already proved it knows the right
-answer** — λ is threaded as a live per-call cell to ~100 sites, owned by one
-fixed-point loop; `feature_dim(env)` and `n_action_slots(env)` are derived
-from the instance with zero drift; the env↔Policy inversion of control is
+An architectural audit of this tenet's originating codebase diagnosed eight
+recurring "architectural cancers" (anti-patterns A–H, verified line-by-line
+against the live tree) and named the remediation as *"overwhelmingly
+subtraction and relocation … the codebase finishing a sentence it started
+correctly."* The deepest finding is that **the codebase had already proved it
+knows the right answer**, in specific places — a live per-call tunable
+threaded through the hot path and owned by one loop; a derived dimension
+computed from the instance with zero drift; a dependency-inversion seam
 honored to the letter — *and then applied that discipline once and stopped.*
 The cancers are not wrong ideas; they are the **right idea not propagated.**
 
 This tenet's job is propagation by default. It states, as **checkable rules**,
-the compositional and structural hygiene the audit's R-series enforces, so a
-contributor (human or LLM) authoring new code can self-check against a closed
-list rather than rediscovering each lesson. It is deliberately **anti-pattern-
-first**: the cancer is the load-bearing motivation, so each rule is anchored to
-the specific disease its absence permits.
+the compositional and structural hygiene an audit's remediation roadmap would
+otherwise have to re-derive by hand, so a contributor (human or LLM) authoring
+new code can self-check against a closed list rather than rediscovering each
+lesson. It is deliberately **anti-pattern-first**: the cancer is the
+load-bearing motivation, so each rule is anchored to the specific disease its
+absence permits.
 
 This tenet **composes with — and does not restate —** its siblings, which own
 adjacent concerns:
 
-- **ADR-0002 (fail loudly)** owns *error/diagnosis surfacing*. Principle 5
-  below cites it; it does not re-derive the loudness hierarchy.
-- **ADR-0004 (minimal-touch)** owns *editing under partial visibility*. This
-  tenet's no-retroactive-sweep scoping defers to it.
-- **ADR-0005 (documentation discipline)** owns *how facts are documented*.
-  Principle 1's SSOT is the **structural** twin of ADR-0005 Rule 1's
-  single-source-of-truth-per-handle (documentation register); they cite each
-  other, neither restates the other.
-- **ADR-0007 (file size / information density)** owns *file budgets*. Principle
-  3 (no god-objects) produces small files as a byproduct but is justified on
-  one-owner grounds, not line count; the budget is ADR-0007's.
-- **ADR-0009 (perf/equivalence investigation discipline)** owns *substantiating
-  perf and equivalence claims*. Principle 6 composes with it directly and
-  imports its two-tier (bit-exact vs aggregate-behavioral) bar wholesale rather
-  than redefining it.
-- **ADR-0011 (mechanization discipline)** owns *converting a recurrence to a
-  mechanism*. This tenet is upstream of it: structure born clean is structure
-  ADR-0011 never has to convert. The mechanisms ADR-0011 mints (`FeatureLayout`,
-  `BeliefRefs`, the equivalence tests) are this tenet's worked examples.
+- **[ADR-0002](0002-fail-loudly.md) (fail loudly)** owns *error/diagnosis
+  surfacing*. Principle 5 below cites it; it does not re-derive the loudness
+  hierarchy.
+- **[ADR-0004](0004-minimal-touch-edits-to-partially-visible-files.md)
+  (minimal-touch)** owns *editing under partial visibility*. This tenet's
+  no-retroactive-sweep scoping defers to it.
+- **[ADR-0005](0005-documentation-discipline.md) (documentation discipline)**
+  owns *how facts are documented*. Principle 1's SSOT is the **structural**
+  twin of ADR-0005 Rule 1's single-source-of-truth-per-handle (documentation
+  register); they cite each other, neither restates the other.
+- **[ADR-0007](0007-file-size-and-information-density.md) (file size /
+  information density)** owns *file budgets*. Principle 3 (no god-objects)
+  produces small files as a byproduct but is justified on one-owner grounds,
+  not line count; the budget is ADR-0007's.
+- **[ADR-0009](0009-performance-investigation-discipline.md)
+  (perf/equivalence investigation discipline)** owns *substantiating perf and
+  equivalence claims*. Principle 6 composes with it directly and imports its
+  two-tier (bit-exact vs aggregate-behavioral) bar wholesale rather than
+  redefining it.
+- **[ADR-0011](0011-mechanization-discipline.md) (mechanization discipline)**
+  owns *converting a recurrence to a mechanism*. This tenet is upstream of it:
+  structure born clean is structure ADR-0011 never has to convert. The
+  mechanisms ADR-0011 mints — `FeatureLayout` (a single ordered feature-block
+  table with a fail-loud contiguous-partition check) and `BeliefRefs` (a single
+  owner for a set of duplicated reference rates), both defined there — and the
+  equivalence tests, are this tenet's worked examples.
 
 ## Decision
 
@@ -115,22 +144,19 @@ tree for the value; if it appears as an independent literal in two places that
 must agree, the rule is violated.* (P8 is this same single-home rule at the
 call boundary: a function's contract has one home — its typed signature.)
 
-**Worked example (this codebase).** `feature_dim(env)` and
-`n_action_slots(env)` are derived from the instance with **zero drift** — the
-audit's praise (§1, §6 "Seams to preserve"). The mechanism `FeatureLayout`
-(`az/features.py`, ADR-0011's worked proof) is the SSOT made structural: one
-ordered block table the three former writers (`features.py`, `actions.py`,
-`feature_response.py`) now read **by name**, with a fail-loud contiguous-
-partition check. `BeliefRefs(env)` (audit R3) is the same move for the three
-reference rates: computed once from `harness.realizable_static`/
-`clairvoyant_rate`, imported everywhere. `WeightContainer` (audit item J) owns
-the weight layout once.
+**Worked example (this tenet's originating codebase).** Two derived dimensions had **zero drift**
+because they were computed from the instance at every use; `FeatureLayout`
+([ADR-0011](0011-mechanization-discipline.md)'s worked proof) turned a
+three-writer duplicated table into one ordered, by-name-addressed structure
+with a fail-loud contiguous-partition check, and a same-shaped single-owner
+structure (`BeliefRefs`; and `WeightContainer`, described in
+[`history/0012-cpp-wire-contract.md`](history/0012-cpp-wire-contract.md)) did
+the same for a set of reference rates and a weight layout, respectively.
 
-**Cancer prevented: B (SSOT dissolved), and F (magic constants).** The audit
-proved the fuse is already lit: `DECOMP_ANCHOR=0.0941` (`exit_loop.py:51`) had
-already drifted from `0.094` (`eval_az.py`, and `eval_bound.py:173` where it is
-a *numerical input to a provable bound*). The sharpest landmine — the three-
-writer feature layout, one writer untested — would *silently mislabel feature-
+**Cancer prevented: B (SSOT dissolved), and F (magic constants).** The
+originating audit proved the fuse is already lit: one hand-copied numeric
+constant had already drifted from its sibling, and the three-writer feature
+layout (one writer untested) would have *silently mislabeled feature-
 importance rows* on a reorder. This rule is the structural form of ADR-0005
 Rule 1 (single-source-of-truth-per-handle, documentation register); they are
 twins, not duplicates.
@@ -143,40 +169,32 @@ other side's internals. The template is the env↔Policy seam: **a new capabilit
 is a new `Policy` subclass with ZERO core edits.** A Port/ACL boundary
 **translates-and-validates** — it decodes the foreign representation into the
 native one and rejects what it cannot honor; it does **not** coerce a
-malformed input into a plausible one (the hp registry's strict decode is the
-exemplar). The checks: *(a) does a new method/capability require editing the
+malformed input into a plausible one (a strict-decode boundary — see
+[ADR-0011](0011-mechanization-discipline.md)'s own `hp` registry example — is
+the exemplar). The checks: *(a) does a new method/capability require editing the
 core, or only adding a subclass/impl behind the seam? (b) does the boundary
 reject what it cannot honor, or silently accept it? (c) is any derived state
 owned on the object whose lifetime it shares, or on a module global keyed by
 identity?*
 
-**Worked example (this codebase).** `env.py` imports no solver; `Policy.decide(
-env, loc, bw, collected, lam, rng)` is the injected contract; adding a solver
-is a new subclass (`env.py:8-10`, `base.py:16-19` — the single hardest decision
-in the system, made right). The dual bound's injected-callable `V̂` seam lets a
-trained AZ net or a decomp decision-value serve interchangeably (audit §3.7).
-The hp registry's strict decode translates-and-validates rather than coercing
-(refuses a RESTART-field change mid-run, naming both values — ADR-0002). The R9
-remediation re-keys the slot-table cache from `id(env)` to a
-`WeakKeyDictionary` keyed on the **env object** (`actions.py:67`,
-`slot_action_tables`), tying each cached bijection to the env's lifetime rather
-than its CPython address — a recorded deviation from the audit's literal
-"`env.slot_tables` attribute" (an env attribute would force a
-features→env→features import cycle; the WeakKeyDictionary achieves R9's intent
-without it). It does not own the table on the env, and the module-level cache
-intentionally persists; what changes is the **key** (object-identity, GC-safe)
-not the storage location.
+**Worked example (this tenet's originating codebase).** A core module imported no solver; the
+environment↔policy contract was an injected method, so adding a new capability
+was a new subclass with zero core edits. A strict boundary decode
+translated-and-validated rather than coercing (refusing a conflicting
+mid-run value change, naming both values — ADR-0002). A module-global cache
+keyed on raw object identity was re-keyed to a `WeakKeyDictionary` on the
+owning object, tying the cache entry's lifetime to the object's rather than to
+its address.
 
 **Cancer prevented: C (hidden global state keyed by identity) and the leaky-
-boundary half of E.** The pre-R9 `_SLOT_TABLES[id(env)]` cache was
-keyed on the *least value-stable key possible* — masked today only because
-every env is layout-identical, it would hand back the **wrong bijection with no
-error** the moment two envs differ in N (and leak one never-evicted entry per
-env). A parameter the receiver cannot honor
-(`train_epochs(lr, l2)` ignored; `build(marg)` ignored; `restrict_faces` gates
-`pass`) is a *lying signature* — P2 forbids it: **a parameter the receiver
-cannot honor is not in the signature** (and P8 at the call boundary: an
-annotation the body does not honor is the same lie surfaced at the type layer).
+boundary half of E.** The original identity-keyed cache was keyed on the
+*least value-stable key possible* — masked only because every instance
+happened to share one layout, it would hand back the **wrong cached value with
+no error** the moment two instances diverged (and leak one never-evicted entry
+per instance). A parameter the receiver silently ignores is a *lying
+signature* — P2 forbids it: **a parameter the receiver cannot honor is not in
+the signature** (and P8 at the call boundary: an annotation the body does not
+honor is the same lie surfaced at the type layer).
 
 #### P3 — No god-objects
 
@@ -187,54 +205,47 @@ responsibility requires "and," it is two collaborators wearing one class.* This
 produces small files, but the justification is single-ownership, not the line
 budget (that is ADR-0007's).
 
-**Worked example (this codebase).** The audit's item K — the **Transport ⊥ Pool
-⊥ Task** split — is the worked target: `transport.py` owns *everything about
-how bytes travel over redis and nothing about the process pool (worker_pool.py)
-or what one worker computes (worker.py)* (its own header). `WeightContainer`
-(item J) owns the weight layout, split out of the transport's former second
-encoder. The optimizer split (item M) separates the precision-agnostic forward
-(`ForwardSpec`) from the JAX/optax trainer. The 26-flag argparse `Namespace`
-threaded as `args.*` (audit §3.5) is the god-object the `RunConfig` nested
-dataclasses (R12) dissolve.
+**Worked example (this tenet's originating codebase).** A transport/pool/task split separated *how
+bytes travel* from *what runs them* and *what one worker computes*; a weight
+container split out of a transport's former second encoder; a many-flag
+argument-namespace god-object was dissolved into nested per-concern
+configuration objects.
 
 **Cancer prevented: D (copy-paste programs) and the split-brain-encoder half of
 B.** A god-object forces every consumer to re-thread its whole state, which is
-why the same orchestration was re-typed across eight eval `main()`s and the
-weight layout was *split-brained* between `ValueMLP` and `JaxTrainer`. One
-parameterized collaborator (`eval/report.run_plan`, a `SOLVERS` registry,
-`WeightContainer`) replaces N copies.
+why one orchestration got re-typed across eight near-identical entry points and
+a weight layout was *split-brained* between two owners. One parameterized
+collaborator replaces N copies.
 
 #### P4 — Live, not frozen, where it should breathe
 
 **Rule (checkable).** A value that is **tuned mid-run or swept across runs** is
 **read at the point of use from the live source**, not baked at construction.
-A value's *heat is decided by where it lives, not by intentions* (audit L1):
+A value's *heat is decided by where it lives, not by intentions*:
 a knob assigned to `self.X` in `__init__` is cold no matter how often you mean
 to sweep it; the same knob arriving as a per-call argument or read from a live
-registry is hot for free. The check — the audit's litmus test: *if the value
-changes during a run or across a sweep, it is a live cell, not a constructor
-invariant.* Apply the hp registry's facet discipline: classify each tunable as
+registry is hot for free. The check — the originating audit's own litmus test:
+*if the value changes during a run or across a sweep, it is a live cell, not a
+constructor invariant.* Apply a facet discipline like [ADR-0011](0011-mechanization-discipline.md)'s
+originating codebase's `hp` (hyperparameter) registry: classify each tunable as
 **HOT** (read per-use, e.g. per-iteration), **RESTART** (changed only across a
 restart, with a loud drift refusal mid-run — ADR-0002), or **INSTANCE** (a true
 Tier-1 geometry invariant), and place it accordingly. Bake only the INSTANCE
 facet; never bake what is HOT.
 
-**Worked example (this codebase).** λ is the gold standard — owned by one
-fixed-point loop, threaded as a live per-call argument to ~100 sites;
-`DecompPolicy` even rebuilds its per-λ tables when λ moves (`base.py:18`,
-`env.py:141/159-165`, `decomp.py:546`). The remediation extends exactly this:
-live `lr`/`l2` via `optax.inject_hyperparams` (audit R13) to unblock the queued
-LR-anneal — *which today must kill the process and `--resume`* because
-`optax.adam(learning_rate=self.lr)` bakes the rate into the jit'd update closure
-at construction (`mlp_jax_train.py:215`). The hp registry's HOT-per-iteration
-snapshot of `n_step`/`td_lambda` with a loud RESTART-drift refusal is the facet
-discipline in the tree today.
+**Worked example (this tenet's originating codebase).** One tunable was the gold standard — owned by
+one loop, threaded as a live per-call argument to ~100 sites, with a dependent
+policy rebuilding its own tables whenever the value moved. A learning-rate
+knob baked into a jit'd optimizer closure at construction was the frozen
+counter-example: the remediation makes it live per-iteration instead, unblocking
+an experiment that previously required killing and restarting the process.
 
 **Cancer prevented: A (config frozen at construction; ownership lives
-nowhere).** The audit's verdict: *"of the project's experimentation levers,
-exactly one — λ — is live. Every other dial is welded shut."* The frozen-at-
-construction failure is **biting the project in production, on its own
-roadmap** — the LR-anneal experiment cannot run without a process restart.
+nowhere).** The originating audit's verdict: *"of the project's
+experimentation levers, exactly one was live. Every other dial was welded
+shut."* The frozen-at-construction failure was **biting the project in
+production, on its own roadmap** — an anneal experiment could not run without
+a process restart.
 
 #### P5 — Fail loud; remove the root cause, never band-aid
 
@@ -250,19 +261,14 @@ symptom of the previous layer's fight, and would the whole stack disappear if
 the substrate conflict were removed at the root?* If yes, it is a band-aid;
 remove the root instead.
 
-**Worked example (this codebase).** Audit R14 removed **JAX-from-the-child** —
-the deadlock *root cause* (a tight compiled inner loop sharing a process with
-XLA's thread pool) — by giving workers a numpy-only entrypoint, rather than
-adding an eighth mitigation to the seven stacked deadlock band-aids
-(`parallel.py`'s per-result timeouts, bounded socket timeouts, TTL leak-bounds,
-faulthandler+SIGUSR1, the native-thread env-var `setdefault`, the core-pin
-process-name scrape). Contrast the **kept** guards: `transport.py`'s bounded
-socket timeout is **re-justified on orthogonal merit** — "loopback redis under
-no memory pressure never trips 60s, so this is a safety net, not a happy-path
-behavior change" (its own docstring) — a guard that turns a stall into a loud
-`redis.TimeoutError`, kept because it is sound, not because it patches an
-undiagnosed cause. The audit's L8: *"when the reliability strategy becomes a
-stack of patches, the substrate is the bug."*
+**Worked example (this tenet's originating codebase).** A deadlock's root cause (a compiled inner loop
+sharing a process with a JIT compiler's own thread pool) was removed at the
+source — giving the affected workers a different entrypoint — rather than
+stacking an eighth mitigation onto seven prior deadlock band-aids. Contrast the
+**kept** guard in the same codebase: a bounded socket timeout, re-justified on
+orthogonal merit as a genuine safety net rather than a patch on an undiagnosed
+cause. The originating audit's own verdict: *"when the reliability strategy
+becomes a stack of patches, the substrate is the bug."*
 
 **Cancer prevented: H (defensive band-aids stacked against a hostile
 substrate) and the silent-fallback half of A/G.** A subsystem whose correctness
@@ -289,13 +295,12 @@ it is free and proven* (the three bit-exactness contracts the audit names: the
 distance memo, the `ABS_TOL=1e-4` forward equivalence test, the value-target
 MC-limit identity).
 
-**Worked example (this codebase).** `bench_equivalence.py` holds the float32 +
-numba path to aggregate behavioral equivalence; `tests/test_jax_equivalence.py`
-holds the f64/f32/jax forwards to `ABS_TOL=1e-4` (the bit-near-identity that
-makes the four-forward consolidation R11 *safe to attempt*); the illegal-slot
-mass is asserted `== 0.0`. The audit's reproduced `max|Δp| = 0.0082` stale-
-weight divergence is exactly the silent equivalence failure an un-run check
-misses.
+**Worked example (this tenet's originating codebase).** One harness held a float32 numeric path to
+aggregate behavioral equivalence; another held mixed-precision forwards to a
+tight absolute tolerance (the bit-near-identity that made a later forward
+consolidation safe to attempt); a logic invariant was asserted bit-exactly. A
+reproduced stale-weight numeric divergence is exactly the silent equivalence
+failure an un-run check misses.
 
 **Cancer prevented: unsubstantiated "equivalent"/"faster" claims** — the
 ADR-0008/0009 closed-vocabulary failure in the perf/equivalence register, and
@@ -334,8 +339,11 @@ exactly how the cancers grew).
 Separate the **serialization contract** from the **transport/coordination
 mechanism** — the durable rule is mechanism-independent. A shared bytes-store
 (redis today) holds **state/payloads** (the current weight snapshot, late-join,
-large blobs); a **messaging fabric** (ZeroMQ — `scaling-and-cpp-seam.md`
-Shape B — or a broker) carries **events/coordination/streaming**. **Never** use
+large blobs); a **messaging fabric** (ZeroMQ or a broker — the originating
+codebase's own forward-looking design note names this an explicit alternate
+shape, kept as history in
+[`history/0012-cpp-wire-contract.md`](history/0012-cpp-wire-contract.md))
+carries **events/coordination/streaming**. **Never** use
 a shared bytes-store as a synchronization/coordination primitive (polling a
 key; pub-sub-on-a-store as the backbone) — that is an architectural smell.
 Today the synchronous loop coordinates via the OS process pool with redis as a
@@ -391,7 +399,9 @@ parameter the receiver cannot honor is not in the signature." An annotation the
 body does not honor is a **lying signature** — the type-layer form of the same
 lie: `hp: AdamHParams = None` whose body proves `None` is an accepted value;
 `lr/b1/b2/eps: float` fields populated with traced jax `Array`s (the exact two
-defects the from-scratch strict run surfaced — assessment §3). The bar is
+defects the originating codebase's from-scratch strict-typing assessment — a
+dated artifact of that project, not held in this repository — surfaced). The
+bar is
 **strict-where-achievable**: `mypy --strict`-clean at the maximal real
 strictness a module can reach, where array internals annotated `NDArray[Any]` /
 `Any` *satisfy* strict without any relaxation (they are honest types, not
@@ -415,19 +425,14 @@ YAGNI argument; that argument shape is the tell P7 already named and rejected
 (the discipline applied once at small scale is exactly how the cancers grew). A
 weaker bar is justified only by a named, verified stub-gap, never by extent.
 
-**Worked example (this codebase).** The single genuine bug cluster the
-from-scratch strict run found is `az/mlp_jax_train.py`'s `AdamHParams` path
-(assessment §3): the `hp: AdamHParams = None` default whose body
-(`hp = self._default_hp if hp is None else hp`) *proves* `None` is accepted —
-a P2 / ADR-0002 **lying signature** surfaced at the type layer (fix:
-`AdamHParams | None`) — and the `NamedTuple` declaring `lr/b1/b2/eps: float`
-while `_hp_arrays` constructs it with `jnp.asarray(...)` traced Arrays (fix:
-widen to `float | jax.Array`, the two forms it genuinely holds). The
-contrasting **clean documented `Any`** is `forward_core`'s backend-polymorphic
-`xp` (numpy-or-jax module) — an honest, commented use-site `Any` at a real
-backend-polymorphism seam, not a relaxation: it is what an annotation looks like
-when the type genuinely *is* "either backend," distinguished from the lie by
-being honored.
+**Worked example (this tenet's originating codebase).** The single genuine bug cluster a from-scratch
+strict typecheck found was a default value proving an annotation false (a
+parameter typed as non-optional whose body accepted the omitted case) and a
+tuple type declaring plain-float fields that a constructor actually populated
+with a different numeric-array type — both P2/ADR-0002 **lying signatures**
+surfaced at the type layer. The contrasting clean case: a genuinely
+backend-polymorphic parameter typed `Any` at a real dispatch seam, honest
+because the type really is "either backend," not a relaxation.
 
 **Cancer prevented: untyped / lying-signature contracts.** A contract carried
 only by an unenforced signature lives nowhere checkable (the call-boundary form
@@ -606,116 +611,25 @@ boundary:
    the toolchain — GCC 15.2 — provides it, so the compiled components build at
    `-std=c++23`.)
 
-**Worked example (the anchor).** The C++ `NetForward` MLP
-(`cpp/include/chocofarm/net.hpp`, `cpp/src/net.cpp`) is the cautionary
-instance. Its leaf-evaluator entry point `NetPrediction predict(const float* X)
-const` does return by value (rule 2 met) — but it takes a **raw `const float*`
-with no length** (rule 1 violated: the caller must already know `in_dim_`, and
-the body trusts the pointer addresses that many floats — exactly the
-bounds-erasure `std::span<const float>` exists to close; the sibling
-`predict(const std::vector<float>&)` overload only re-derives the length to
-guard *one* caller, not the raw-pointer path the search will actually use). The
-internals are the **untyped-effectful void** in full: `void matvec_bias(const
-float* in, const std::vector<float>& W, int rows, int cols, const float* bias,
-std::vector<float>& out)` takes two raw pointers and an `int rows, int cols`
-pair (no bounds, no const-carrying view) and returns its result by **writing
-through `std::vector<float>& out`**; `void require_matrix(…, int& rows, int&
-cols, std::vector<float>& out)` returns `void` while writing **three**
-out-parameters and `void require_vector(…, int& len, std::vector<float>& out)`
-**two**, in place of returning a small typed result; `void
-relu_inplace(std::vector<float>& v)` is a void in-place mutation.
-None of these can be unit-tested as value-functions or chained, and none
-declares its contract in its signature. The **compliant form**: the matmul is a
-pure value-function — `std::vector<float> matvec_bias(std::span<const float> in,
-std::span<const float> W, int rows, int cols, std::span<const float> bias)`
-returning its result by value (free under NRVO), `relu` returning a new vector
-(or taking and returning by value), and `require_matrix`/`require_vector`
-returning a small typed result struct rather than writing those out-params; the
-public entry becomes `predict(std::span<const float> x, const WeightPayload& w)
--> NetPrediction` (value-returned), with the per-layer matmul scratch — **if and
-only if** a measured allocation profile on the search's leaf loop shows the
-per-`predict` `std::vector` churn matters — moved into a typed
-`ForwardWorkspace&` parameter, leaving the core otherwise pure and still
-returning `NetPrediction` by value. The as-merged interim `NetForward` predates
-P9 (it is the live instance that **motivated** the rule) and is to be brought
-into compliance; per the no-retroactive-sweep scoping it is retrofitted on
-touch, not by a P9 sweep.
-
-**Worked example (the error axis, rule 5).** Every `throw` in `cpp/src` today is
-a `std::runtime_error`, and every one of them is at a **boundary** — none on the
-hot path: `transport.cpp` (redis connect/GET/SET, and the missing-weight-payload
-abort mirroring `read_weights`), `instance.cpp` (the instance-file/JSON load),
-and the `NetForward` **constructor** with its `require_matrix`/`require_vector`
-helpers, which validate the manifest at construction. The forward compute itself
-(`predict(const float* X)`, `matvec_bias`, `relu`) and the search that will call
-it are **throw-free** — the only `throw` reachable from a `predict` overload is
-the length guard at the *boundary* of the `vector`-taking entry, not on the raw-
-pointer compute path the search uses. So the core is already total; what rule 5
-adds is that the boundary's failures should be **typed return values, not
-thrown.** The compliant form returns `[[nodiscard]] std::expected<…, Error>`
-from those boundary functions (`read_weights`, the instance loader,
-`require_matrix`/`require_vector`), so a caller cannot ignore the error path
-without a compile error; `NetForward`'s construction — a throwing ctor cannot
-return a value — becomes a `NetForward::create(const WeightPayload&) ->
-std::expected<NetForward, Error>` factory over a private `noexcept` ctor.
-The forward/search core stays total and exception-free, exactly as it is today.
-The distinction rule 5 draws against the as-merged code: those manifest-shape
-checks are **recoverable boundary conditions** (a malformed payload an upstream
-produced, a missing redis key an operator can be told about) — they are
-`expected`, not `assert`. A `matvec_bias` indexing past `cols` because the
-caller passed an `in_dim_`/`hidden_` the constructor already reconciled would be
-the other category — an **invariant violation**, a bug, an `assert`/abort — and
-it never becomes an `expected`.
-
-**Worked example (the optionality axis, rules 1 & 5).** The CLI helper in
-`cpp/src/main.cpp` is the live **untyped-optional** instance:
-
-```cpp
-const char* opt(int argc, char** argv, const char* name) {
-    for (int i = 1; i + 1 < argc; ++i)
-        if (std::strcmp(argv[i], name) == 0) return argv[i + 1];
-    return nullptr;                  // "not found" as a nullable raw pointer
-}
-```
-
-It parses `--instance`, `--phase`, `--lam`, etc., and returns `nullptr` when
-the flag is absent — and absence here **is a legitimate, expected outcome** (an
-optional flag the user simply did not pass), not a failure. So this is exactly
-the absence rule 5 names, encoded the forbidden way: an **untyped optional** (a
-nullable `const char*` whose absence is invisible in the type — a caller that
-forgets the null-check dereferences `nullptr`, undefined behavior the type never
-warned against) that is **also** a raw-pointer in *and* out (rule 1: raw `char**`
-input, raw `const char*` output). It is the C++ sentinel ADR-0002 names, and a
-P8 dishonest contract (the type does not carry the nullability the callers
-rely on). The **compliant form** makes the absence typed and the pointers views:
-
-```cpp
-[[nodiscard]] std::optional<std::string_view>
-opt(std::span<const std::string_view> args, std::string_view name);
-```
-
-— `std::optional` (not `expected`: a missing flag is routine absence, not an
-error) carries the "might be nothing" in the return type, `[[nodiscard]]` makes
-ignoring it a compile error, and `std::string_view` replaces the raw pointers in
-and out. The **imperative shell** does the one untyped→typed translation at the
-boundary, building the typed view once in `main`:
-
-```cpp
-std::vector<std::string_view> args{argv, argv + argc};   // the ACL, once
-```
-
-This is the boundary acting as the **Port/ACL** (P2) that translates the untyped
-`argv` the OS hands it into typed values the core consumes — **not an excuse to
-keep the raw pointers** flowing inward. The single `argv`→`string_view` decode
-is the sanctioned translate-at-the-edge; every signature downstream of it is
-typed. (This `opt` helper predates P9 and is **retrofitted on touch** — it falls
-in `#28`'s scope — per the no-retroactive-sweep scoping, not swept for its own
-sake.) The reflex to wave this off as "it's just CLI parsing, the absence is
-obvious" is **the exact rationalization this tenet rejects**: a nullable
-`const char*` is an untyped optional whether it parses argv or a redis payload,
-the missed null-check is the same undefined behavior, and "it's just X" is the
-scale/minimality tell P7/P8 already named — the discipline declined "just this
-once at the edge" is precisely how the cancers grew.
+> **Extracted record — P9's three worked examples**
+> (moved verbatim to
+> [`history/0012-p9-worked-examples.md`](history/0012-p9-worked-examples.md)):
+> three worked diagnoses of an as-merged, pre-P9 C++ MLP forward-pass
+> component against the five checkable rules above. The anchor example shows a
+> `predict` entry point that returns by value (rule 2 honored) but takes a raw
+> unbounded pointer (rule 1 violated), backed by internals that are pure
+> untyped-effectful `void` functions writing through out-parameters instead of
+> returning a value — the compliant form threads `std::span`/`std::optional`
+> throughout and moves the one measured hot-path buffer reuse into a typed
+> `Workspace` parameter. The error-axis example shows a total, throw-free
+> compute core whose *boundary* functions throw `std::runtime_error` instead of
+> returning `std::expected` — the compliant form makes every boundary failure a
+> typed, `[[nodiscard]]`-enforced return value, reserving `assert`/abort for a
+> genuine invariant violation rather than a recoverable boundary condition. The
+> optionality-axis example is a CLI flag parser returning a nullable
+> `const char*` for "flag absent" — the C++ sentinel ADR-0002 names — with the
+> compliant `std::optional<std::string_view>` form and the one sanctioned
+> untyped→typed decode at the boundary (`main`'s `argv` translation).
 
 **Cancer prevented: untestable, uncomposable black-box mutations.** A
 `void`-returning, raw-pointer-taking, out-parameter-writing function in a
@@ -731,216 +645,36 @@ compose, and confines every effect to the named, typed imperative shell.
 
 ## Concrete guidance for a new-language (C++) component
 
-This section is the actionable contract for the **incoming C++ search/sim
-runner** (the audit's and `scaling-and-cpp-seam.md`'s **Shape A**: a worker
-that runs the Gumbel-AZ search and belief mechanics in C++/numba, reading
-weight bytes from redis and writing transition bytes back). It is deliberately
-maximally concrete: a C++ author should be able to implement against it without
-reading Python source beyond `transport.py`. It rests on the four already-clean
-seams (`scaling-and-cpp-seam.md` §0): env↔Policy, the net-as-injected-port, the
-redis raw-bytes transport, and the version-gated weight broadcast.
+A new-language component (a C++ or similarly compiled search/sim runner, in
+this tenet's originating instance) applies P1–P2, P6, and P7 together at one
+real cross-language boundary: **(1)** it mirrors the existing seam pattern with
+a composable Policy-shaped interface in its own language — zero edits to the
+core to add a capability; **(2)** it **derives** its read/write of every
+cross-boundary key and byte layout from the one authoritative definition the
+host language already owns, never re-authoring a second hand codec — a
+*dynamic* layout (residual/optional fields, instance-derived dimensions) is
+legitimately read from a self-describing runtime manifest, while a *static*
+layout (fixed, known dtypes/shapes) is the case codegen or a build-time lint
+is for; **(3)** it reimplements the domain surface *behind* the seam, against
+the wire, not by translating host-language objects; and **(4)** it is
+validated by parity under the P6 behavioral-equivalence bar (matched-seed
+aggregate-statistic comparison against the reference implementation) as the
+**backstop**, never the primary guarantee — the primary guarantee is the
+generated/compiled/linted contract of step (2).
 
-### 1. Mirror the env↔Policy seam — a composable Policy interface (P2)
-
-The C++ runner reproduces the **shape** of the env↔Policy seam in its own
-language, not a binding to the Python objects. Define a C++ `Policy` interface
-whose single method mirrors `Policy.decide(env, loc, bw, collected, lam, rng)`:
-the env owns all dynamics (belief, simulate, cost), the policy is injected and
-decides. A new C++ capability is a new C++ `Policy` implementation with **zero
-edits to the C++ core** — the same inversion of control P2 mandates. Start with
-the trivial composable instance (a `RandomPolicy`, mirroring the Python
-`RandomPolicy`) to validate the seam and the wire end-to-end **before** porting
-any search; graduate to a search/MLP policy once parity on the trivial case
-holds. `lam` and the budget (`m`, `n_sims`, `max_steps`) arrive as **live
-per-decision scalars** (P4), never baked into the C++ object — they cross the
-wire as numbers (see §3).
-
-### 2. Derive from the bytes-store channel — cite the actual keys/format (P7)
-
-`chocofarm/az/transport.py` is the **SOLE authority** of the serialization
-contract (audit item K): the keys and byte layouts have **one definition**
-there, and the C++ runner **derives** its read/write from it — never re-authors
-it by hand. Keep the **serialization contract** distinct from the
-**transport/coordination mechanism**: redis here is a **pure bytes-store**
-holding state/payloads (the weight snapshot, the per-task result blobs), *not*
-a coordination primitive. **Coordination today** is the OS process pool — no
-sync-via-store is committed (no key-polling, no pub-sub-on-a-store backbone);
-**coordination tomorrow** (the C++ worker, the async actor-learner) is an
-explicit messaging fabric (ZeroMQ — `scaling-and-cpp-seam.md` Shape B — or a
-broker), introduced for events/coordination/streaming **while the bytes
-contract below is unchanged.** Redis is named here as the current instance of
-(bytes-store), not enshrined as "the contract"; do not enshrine the fabric as
-"the one way" either. The C++ runner is a **transport** component, so its
-connection is via the transport role's `config.transport_redis_params()` —
-default `127.0.0.1:6380` db 0, the **ephemeral** memory-cache instance
-(`allkeys-lru`), env-overridable through `CHOCO_TRANSPORT_REDIS_HOST`/
-`CHOCO_TRANSPORT_REDIS_PORT`/`CHOCO_TRANSPORT_REDIS_DB`. This is explicitly
-**NOT** the registry's disk-persisted `127.0.0.1:6379` `noeviction` instance
-(`config.registry_redis_params()`, the `CHOCO_REGISTRY_REDIS_*` family) — the
-two roles are deliberately distinct instances. The C++ runner reads the **same
-`CHOCO_TRANSPORT_REDIS_*` contract**, so it lands on whatever instance the
-operator points the Python transport at; `config.py` is the one owner of "which
-redis" per role (P1), not a port re-typed here. The protocol, verbatim from
-`transport.py`:
-
-**Weight keys (`weight_keys(run, phase, version)`).** Two keys per published
-net, namespaced by `run`, `phase ∈ {"gen","eval"}`, and `version`:
-
-```
-manifest_key = az:w:<run>:<phase>:<version>:m
-blob_key     = az:w:<run>:<phase>:<version>:b
-```
-
-The `phase` segment is the R14 namespacing that **replaced the `it + 1_000_000`
-hack** (audit item C, ADR-0011 Rule 4): the gen and eval phases of one
-iteration `it` publish to **distinct** keys at the **real** `version=it`. The
-C++ worker selects `gen` vs `eval` weights at the same real `version`. A
-missing payload is a **loud failure** (ADR-0002 / P5), never a silent stale-net
-serve — `read_weights` raises `RuntimeError(f"weight payload az:w:{run}:{phase}:
-{version} missing from redis")`; the C++ read must do the same (raise/abort,
-not serve a stale net).
-
-**Weight payload (manifest + blob).** The `blob` is **contiguous float64**
-weight bytes — the raw `tobytes()` of each weight concatenated, *not* float32,
-*not* pickle. The `manifest` is JSON: per-weight `(name, shape, dtype, offset,
-byte-length)` entries plus the scalar construction meta (`in_dim`, `H`,
-`n_actions`, `y_mean`, `y_std`, and `residual: bool`). The C++ side reconstructs
-the net by reading the manifest's meta (so an older manifest without `residual`
-→ block OFF), then binds each weight as a view/copy at its `(offset, len)` into
-the blob. **Do not re-enumerate or re-order the params**: the param order is
-the `WeightContainer`'s canonical (historical) order, recorded in the manifest;
-the C++ reader follows the manifest, it does not invent a layout. Optional
-params (the residual block `Wr*`/`br*`) ride along automatically **iff** the
-manifest lists them — exactly the derive-don't-duplicate (P1) the param-registry
-serializer already nails.
-
-**Result keys (`result_keys(res_token, idx)`).** Four keys per task, namespaced
-by a fresh per-`generate`-call `res_token` (a uuid) and the task `idx`. Result
-keys **carry no `phase` segment** — results exist only for the gen phase and the
-uuid `res_token` already prevents collision, so adding `phase` would be dead
-symmetry (ADR-0008: don't fabricate a dimension a key doesn't need):
-
-```
-X  = az:res:<token>:<idx>:X
-PI = az:res:<token>:<idx>:PI
-M  = az:res:<token>:<idx>:M
-Y  = az:res:<token>:<idx>:Y
-```
-
-**Result-blob layout (the float32 wire).** Each of the four blocks is the
-contiguous `tobytes()` of a **float32** array (note: results are float32,
-weights are float64 — match each exactly):
-
-- `X`  — features, reshaped `(n, feat_dim)`
-- `PI` — policy targets, reshaped `(n, n_slots)`
-- `M`  — legal-action mask, reshaped `(n, n_slots)`
-- `Y`  — value targets, shape `(n,)`
-
-where `n` is the number of transitions the task produced, and the parent reads
-each block with `np.frombuffer(..., dtype=np.float32).reshape(...)` against a
-`(idx, n, feat_dim, n_slots)` meta. The C++ worker emits each block as a
-contiguous little-endian float32 buffer in **row-major** order matching those
-shapes. Set the result TTL (`CHOCO_RESULT_TTL`, default 3600s) in the same SET
-round-trip — the aborted-iteration self-clean safety net (the post-mortem found
-~980 leaked `az:res:*` keys with no expiry; P5).
-
-**The hot knobs** (`m`, `n_sims`, `lam`, `max_steps`) cross as **scalars**
-(P4) — a key→number map plus the raw weight/result bytes is language-agnostic
-**by construction** (`scaling-and-cpp-seam.md` §0.3). There is nothing
-Python-specific on the wire.
-
-### 3. Stay SSOT — derive, never re-author; reimplement *behind* the seam (P1, P7)
-
-The C++ runner **reimplements the surface behind the seam** — the belief
-mechanics (`filter_treasure`/`filter_detector`/`sample_world`/`apply`/
-`marginals`) and the single `forward_core(params, X)` — against the wire, and
-**derives** its view of every cross-boundary layout from the one authority
-rather than **re-authoring it by hand**. This is the SSOT rule (P1) across the
-language boundary: a cross-boundary fact has **one authoritative definition**,
-and every side reads it (at runtime) or generates it (at build time) — two
-writers of one truth is the violation. The two payloads sit at opposite ends of
-the static↔dynamic axis and warrant different mechanisms:
-
-- **Dynamic weight layout → derive from the runtime manifest (no hardcoded
-  offsets in C++).** The layout has one owner (`WeightContainer`, surfaced on
-  the wire via the manifest), and because the layout is **dynamic** (residual-
-  block toggles, instance-derived dims), a self-describing manifest **read at
-  runtime** is the legitimate mechanism: read `(offset, len, shape, dtype)` per
-  weight from the manifest JSON each run, so a layout change is **absorbed, not
-  drifted**. A hardcoded offset would be the cross-language form of the
-  three-writer feature-layout cancer (B). *Residual gap:* the manifest's **own**
-  schema is still two hand-written (de)serializers (Python pack / C++ parse) —
-  the one place this payload is not yet generated from a single schema.
-- **Static result format → a generated/compiled/linted contract, not two hand
-  codecs.** The four float32 blocks X/PI/M/Y have **fixed, known dtypes/shapes**
-  — a **static** contract, exactly what codegen exists for. Today it is left to
-  two hand-written codecs (the Python `np.frombuffer(...).reshape(n, fd)`
-  reader and the C++ emitter) joined only by the runtime parity test — a
-  **runtime-only convention** (cancer G). At the strongest feasible level it
-  should be **generated/compiled from one schema**; the **floor** is a
-  build-time lint that **fails the build** on a Python/C++ format-constant
-  disagreement. Whichever mechanism is chosen, the C++ side **derives** the four
-  blocks' shapes from the one authority and invents **no** packed/struct format
-  of its own. (For raw float blobs on this hot path a zero-copy IDL —
-  FlatBuffers / Cap'n Proto — fits better than protobuf's parse-and-copy; this
-  is an example, not an ADR mandate.)
-
-R8 collapsed the belief mechanics to **one** implementation
-(`Environment.restrict`, no `MiniEnv` copy) and R11 collapsed the forward to
-**one** `forward_core` — so there is exactly **one** Python surface to mirror,
-not four (`scaling-and-cpp-seam.md` §0.1–0.2). The C++ port mirrors that one
-surface. Adding a second C++ encoder of a layout the manifest already owns
-would re-create the split-brain encoder the whole SSOT discipline exists to
-prevent — across the hardest boundary to audit.
-
-### 4. Validate by parity — the backstop, not the primary guarantee (P6)
-
-Parity is the C++ runner's acceptance test under the **same behavioral-
-equivalence bar as P6 / ADR-0009** — **not byte-identity** — but it is the
-**backstop, not the contract.** A runtime parity test catches a drift only if
-it runs, with the right fixtures, *after* the drift already exists; the primary
-guarantee is the generated/compiled/linted serialization contract of §3 that
-makes a format disagreement **unable to be authored** in the first place
-(strongest-feasible: generate-or-compile-from-one-source > build-time lint >
-this runtime parity test). With that floor in place, parity then certifies the
-*numerics* — a C++ reimplementation of the same math in a different language and
-compiler **will** move the float (float32 is not associative across the C++
-reorder, just as it moves across the numba/JAX reorder the project already
-accepts) and may flip a near-tied Sequential-Halving choice. So the parity bar
-is, exactly:
-
-- **Logic invariants → bit-exact.** Illegal-action-slot mass is `== 0.0`; the
-  legality `M` mask the C++ worker emits is bit-identical to the Python one for
-  the same `(loc, belief)` — these are logic facts float32 cannot perturb.
-- **Float-sensitive numerics → aggregate behavioral equivalence.** Run the C++
-  worker and the Python reference on **matched seeds** and compare **aggregate
-  statistics** — fixed-λ₀ rate `ΣR/ΣT`, mean E[T], and action distribution —
-  over **N≥300 episodes across ≥2 seeds**, requiring statistical
-  indistinguishability **within Monte-Carlo CI**, with the MC standard error
-  reported so "indistinguishable" is a number, not an eyeball (the
-  `bench_equivalence.py` metric set, applied cross-language).
-- **Bit-identity only where free and proven.** Where a quantity *is* bit-stable
-  (the legality mask above; a pure-integer index computation), assert it
-  bit-exactly — but do not extend that to any float-sensitive output.
-
-This is the **cross-episode** equivalence kind (`scaling-and-cpp-seam.md` §2
-Axis A / Shape B): it carries only the forward-roundoff non-exactness the
-project already accepts (`test_jax_equivalence` `ABS_TOL=1e-4`), **not** the
-approximate-search non-exactness the project defers. Begin parity at the
-trivial `RandomPolicy` (which removes the search-choice float-sensitivity and
-isolates the wire + belief mechanics), then graduate to the search policy under
-the full aggregate-stat bar.
-
-> **The single asterisk** (`scaling-and-cpp-seam.md` §3): the C++ worker is a
-> composition of seams that already exist — the env↔Policy seam, the redis
-> transport, the version-gated weight broadcast — and **falls out for free**.
-> The one structure that does *not* fall out is the synchronous
-> `generate → train` loop becoming a continuous async actor-learner; that is a
-> localized, R12/R14-enabled restructure, and the deliberate trade it records
-> (relaxing the parallel≈serial *bit-determinism* of aggregate reproducibility
-> for throughput, while keeping per-episode exactness) is itself a P6
-> behavioral-equivalence judgment, recorded so a later reader does not mistake
-> the relaxation for a regression.
+> **Extracted record — the concrete C++ wire contract**
+> (moved verbatim to
+> [`history/0012-cpp-wire-contract.md`](history/0012-cpp-wire-contract.md)):
+> the fully worked instance of the four steps above against a real system — the
+> actual redis key formats, weight-manifest layout, and four named result
+> blocks a Gumbel-AZ search worker's C++ port derives from its Python
+> reference, plus the parity-validation plan (logic invariants asserted
+> bit-exactly; float-sensitive numerics held to aggregate behavioral
+> equivalence over N≥300 episodes across ≥2 seeds). It is the fullest worked
+> demonstration of applying P1/P2/P6/P7 together at one cross-language
+> boundary, kept as dated evidence rather than restated as general guidance —
+> another project's wire contract has its own keys, payload shapes, and
+> reference implementation to derive from.
 
 ## Self-application (ADR-0011 Rule 1 — enforcement surface)
 
@@ -953,8 +687,8 @@ write-time data constraint / run-time invariant / review-only):
   `feature_names` test); **review-only** for new facts until their mechanism is
   minted (ADR-0011 Rule 2 is the conversion trigger).
 - **P2 (seam/port):** **review-only at design**, with the ACL's strict decode a
-  **construction/import-time** raise where a boundary exists (the hp registry
-  decode).
+  **construction/import-time** raise where a boundary exists (see
+  [ADR-0011](0011-mechanization-discipline.md)'s `hp` registry decode).
 - **P3 (no god-objects):** **review-only** (a one-clause-responsibility
   judgment), composing with ADR-0007's review-only file budget.
 - **P4 (live, not frozen):** **construction-time + run-time** where the registry
@@ -982,8 +716,9 @@ write-time data constraint / run-time invariant / review-only):
   ADR-0011 Rule-1 mechanism that converts "typed signatures" from review-only
   prose into an enforced contract. It runs `mypy --strict` against an explicit
   `STRICT_CLEAN` set and asserts zero errors, ratcheting a
-  **monotonically-decreasing baseline module-by-module** (assessment §5,
-  Stages 0–4): a module joins the gated set as it is typed, and a regression in
+  **monotonically-decreasing baseline module-by-module** (a staged rollout the
+  same strict-typing assessment cited under P8 planned in full): a module
+  joins the gated set as it is typed, and a regression in
   any gated module's annotations fails CI. A module is **review-only** until it
   joins that set — and that join is the ADR-0011 Rule-2 conversion trigger (the
   recurrence that converts review-only prose to a mechanism), here a scheduled
@@ -1079,12 +814,15 @@ prose.
 ### Neutral
 
 - **No retroactive sweep** (ADR-0004's incremental-retrofit posture). Existing
-  code is cleaned by the audit's R-series on its own schedule, not by this ADR;
-  this ADR binds **new** structure. Existing rules retrofit on touch.
-- **No new infrastructure mandated beyond what the R-series already names.** The
-  worked mechanisms (`FeatureLayout`, `BeliefRefs`, `WeightContainer`,
-  `transport.py`'s wire) are the audit's, surfaced here as this tenet's
-  examples — not new builds this ADR commissions.
+  code is cleaned by the audit's own remediation roadmap (its numbered "R"
+  items) on its own schedule, not by this ADR; this ADR binds **new**
+  structure. Existing rules retrofit on touch.
+- **No new infrastructure mandated beyond what that remediation roadmap
+  already names.** The worked mechanisms (`FeatureLayout`, `BeliefRefs`,
+  `WeightContainer`, the wire authority described in
+  [`history/0012-cpp-wire-contract.md`](history/0012-cpp-wire-contract.md))
+  are the audit's, surfaced here as this tenet's examples — not new builds
+  this ADR commissions.
 
 ## Revisit when…
 
@@ -1106,44 +844,49 @@ prose.
 4. **A principle's review-only enforcement recurs into a defect** (ADR-0011
    Rule 2). The recurrence converts the principle to a mechanism at the
    strongest feasible-and-proportionate surface; record the mechanism here.
-5. **The async actor-learner restructure lands** (`scaling-and-cpp-seam.md`
-   Shape C). It relaxes the aggregate bit-determinism P6/the design note record
-   as a deliberate trade; confirm the trade is still the right one and that
-   per-episode exactness held.
+5. **The async actor-learner restructure lands** (the originating codebase's
+   forward-looking design note's third deployment shape). It relaxes the
+   aggregate bit-determinism P6 records as a deliberate trade; confirm the
+   trade is still the right one and that per-episode exactness held.
 
 ## Related
 
-- **ADR-0002 (fail loudly).** P5 defers to it wholesale for the loudness
-  hierarchy; the missing-weight-payload `RuntimeError` and the RESTART-drift
-  refusal are its mechanisms in the wire/registry register.
-- **ADR-0004 (minimal-touch).** Owns the no-retroactive-sweep posture this
-  tenet's scoping defers to; new structure is born clean, existing structure is
+- **[ADR-0002](0002-fail-loudly.md) (fail loudly).** P5 defers to it wholesale
+  for the loudness hierarchy; the missing-weight-payload `RuntimeError` and the
+  RESTART-drift refusal are its mechanisms in the wire/registry register.
+- **[ADR-0004](0004-minimal-touch-edits-to-partially-visible-files.md)
+  (minimal-touch).** Owns the no-retroactive-sweep posture this tenet's
+  scoping defers to; new structure is born clean, existing structure is
   retrofitted on touch.
-- **ADR-0005 (documentation discipline).** Rule 1 (single-source-of-truth-per-
-  handle) is P1's documentation twin; this tenet is its structural form. Rule 8
-  (amend point-in-time records by append) governs how the audit is cited
-  without retro-editing it.
-- **ADR-0007 (file size / information density).** P3 (no god-objects) produces
-  small files; ADR-0007 owns the budget and the density heuristic. They
-  reinforce; neither restates the other.
-- **ADR-0009 (perf/equivalence investigation discipline).** P6 composes with it
-  directly and imports its two-tier (bit-exact vs aggregate-behavioral) bar;
-  the cross-language parity of P7 is that bar applied across the language
-  boundary.
-- **ADR-0011 (mechanization discipline).** This tenet is upstream of it:
+- **[ADR-0005](0005-documentation-discipline.md) (documentation discipline).**
+  Rule 1 (single-source-of-truth-per-handle) is P1's documentation twin; this
+  tenet is its structural form. Rule 8 (amend point-in-time records by append)
+  governs how the audit is cited without retro-editing it.
+- **[ADR-0007](0007-file-size-and-information-density.md) (file size /
+  information density).** P3 (no god-objects) produces small files; ADR-0007
+  owns the budget and the density heuristic. They reinforce; neither restates
+  the other.
+- **[ADR-0009](0009-performance-investigation-discipline.md) (perf/equivalence
+  investigation discipline).** P6 composes with it directly and imports its
+  two-tier (bit-exact vs aggregate-behavioral) bar; the cross-language parity
+  of P7 is that bar applied across the language boundary.
+- **[ADR-0011](0011-mechanization-discipline.md) (mechanization discipline).** This tenet is upstream of it:
   structure born clean is structure ADR-0011 never converts. ADR-0011's worked
   mechanisms (`FeatureLayout`, `BeliefRefs`, the param-registry serializer, and
   the **mypy `--strict` CI gate** that backs P8) are this tenet's worked
   examples; its Rule 1 governs this tenet's enforcement-surface declaration
   above, and its Rule 2 (recurrence → mechanism) is the trigger by which a
   module joins P8's gated set.
-- **The 2026-06-15 architectural audit** (`docs/notes/audit/`). The source
-  substrate — every anti-pattern A–H here inverts one of its §2 cancers, and
-  the R-series roadmap is the remediation of existing code this ADR's
-  forward-looking rules make unnecessary for new code.
-- **`docs/design/scaling-and-cpp-seam.md`.** The four-seam composition and the
-  three deployment shapes the C++ section operationalizes; P7's concrete wire
-  contract is `transport.py` cited against that design's Shape A.
+- **This tenet's originating architectural audit** (a dated artifact of the
+  source project, not held in this repository). Every anti-pattern A–H here
+  inverts one of its cancers, and its own remediation roadmap is the cleanup
+  of existing code this ADR's forward-looking rules make unnecessary for new
+  code.
+- **This tenet's originating cross-language seam design** (see
+  [`history/0012-cpp-wire-contract.md`](history/0012-cpp-wire-contract.md)).
+  The four-seam composition and deployment shapes the C++ section
+  operationalizes; P7's concrete wire contract is cited there against that
+  design's own worked instance.
 
 ## Amendments
 
@@ -1152,179 +895,74 @@ rewrite), each entry is dated and additive. The original Decision (the
 anti-pattern checklist table and the nine principles above) stands unedited;
 amendments extend it.*
 
-### 2026-06-20 — P7 lifted from the cross-LANGUAGE wire to the cross-DEVICE boundary: gratuitous host↔device (numpy↔jax) transfers
+### Amendment — 2026-06-20: P7 lifted from the cross-LANGUAGE wire to the cross-DEVICE boundary: gratuitous host↔device transfers
 
-**What fired this (ADR-0011 Rule 2 / this ADR's Revisit #4 — a review-only
-principle's enforcement recurring into a *measured* cost).** P7's
-"derive-don't-re-author across a boundary" was stated and enforced for the
-cross-*language* wire (`transport.py`, the C++ mirror, `tests/test_wire_drift.py`).
-The same compositional sin — a boundary crossing scattered across N sites
-instead of isolated at *one* auditable home — recurs at the cross-*device*
-(host↔device, numpy↔jax) boundary, and the recurrence is now **empirical, not
-hypothetical**: the just-merged low-overhead-JAX micro-lib bench (commit
-`feca4f2`; numbers under `~/w/vdc/chocobo/bench/lowlatency/`, ADR-0009 honesty —
-warm, R²>0.99 linear fits) found that a **~57 µs per-call cost was nothing but a
-repeated params host→device transfer** that `jax.jit(params, jnp.asarray(x))`
-redoes every call (the robust AOT handle stages params device-resident *once* at
-construction and drops it, intercept ≈121 µs → ≈64 µs, slope unchanged), and the
-inference server's `run_microbatch` pays an even larger **~85–135 µs on the
-input host→device hand-off plus a blocking device→host pull**. Scattered
-transfers *are* the cost; isolating + consolidating them is the lever. A
+*(Provenance: ADR-0011 Rule 2 / this ADR's Revisit #4 — a review-only
+principle's enforcement recurring into a *measured* cost, on this tenet's
+originating codebase. See the Extracted record below for the full benchmark
+narrative.)* P7's "derive-don't-re-author across a boundary" was stated and
+enforced for the cross-*language* wire. The same compositional sin — a
+boundary crossing scattered across N call sites instead of isolated at *one*
+auditable home — recurs at the cross-*device* (host↔device, e.g. numpy↔jax)
+boundary, and the recurrence was measured, not hypothetical: a per-call cost
+of tens of microseconds turned out to be nothing but a repeated host→device
+parameter transfer that a naive dispatch redoes every call, and a production
+inference path paid an even larger cost on its input/output transfer. A
 recurrence with a measured cost is exactly the ADR-0011 Rule-2 trigger that
 converts a review-only principle to a mechanism.
 
-**New anti-pattern row (extends the §"anti-pattern checklist" table — appended,
+**New anti-pattern row (extends the anti-pattern checklist table — appended,
 not edited into it):**
 
 | Audit cancer / boundary | The shape to never author | Preventing rule |
 | — | — | — |
-| **(new, cross-DEVICE)** — gratuitous host↔device (numpy↔jax) transfer | a host↔device crossing — `jnp.array`/`jnp.asarray`/`jax.device_put` (host→device), or a blocking `np.asarray(<jax>)` / `float(<jax>)` / `.block_until_ready()` / `.tolist()`/`.item()` pull (device→host) — scattered at an arbitrary call-site instead of isolated at one designated boundary, so a per-call params re-stage or a redundant device→host pull hides as a ~57–135 µs cost no one site owns (the `feca4f2` bench: ~57 µs params staging, ~85–135 µs `run_microbatch` input/output) | **P7** lifted from the cross-LANGUAGE wire to the cross-DEVICE boundary (composing with **P1** one-home/derive-don't-duplicate and **P2** seam/Port-ACL): a host↔device crossing has **one authoritative, auditable home** — a *designated boundary* — from which the hot path stages once and consolidates, never N scattered re-stages; mechanically enforced at the strongest feasible-and-proportionate level (an AST gate + ratcheting baseline, ADR-0011 Rule 1, mirroring the mypy `--strict` gate), so a NEW transfer outside a boundary fails CI |
+| **(new, cross-DEVICE)** — gratuitous host↔device transfer | a host↔device crossing (a framework-specific host→device stage, or a blocking device→host pull) scattered at an arbitrary call-site instead of isolated at one designated boundary, so a per-call re-stage or a redundant pull hides a real, measurable cost no one site owns | **P7** lifted from the cross-LANGUAGE wire to the cross-DEVICE boundary (composing with **P1** one-home/derive-don't-duplicate and **P2** seam/Port-ACL): a host↔device crossing has **one authoritative, auditable home** — a *designated boundary* — from which the hot path stages once and consolidates, never N scattered re-stages; mechanically enforced at the strongest feasible-and-proportionate level (an AST gate + ratcheting baseline, ADR-0011 Rule 1, mirroring a strict-typing CI gate), so a NEW transfer outside a boundary fails CI |
 
 **The rule (the cross-DEVICE register of P7/P1/P2).** A host↔device transfer
 **CALL-SITE is allowed only at a designated boundary**; anywhere else is a
 violation. This is **P1** (the crossing has *one* home, not a literal re-typed
-at N sites), **P2** (the boundary is an *explicit* port — the jax backends'
-edges, the SSOT `lowlatency` dispatcher's `device_put` — not a reach scattered
+at N sites), **P2** (the boundary is an *explicit* port, not a reach scattered
 through the hot loop), and **P7** (a cross-boundary fact — here the *device*
-boundary, not the *language* wire — is isolated and derived-from-one-home, never
-re-authored ad hoc). Isolating the crossings is what makes the **consolidation**
-the bench proved out (stage params once; one pull per microbatch) a *local* edit
-at the boundary rather than a tree-wide hunt — the same way the SSOT wire makes
-"swap the worker for C++" a drop-in.
+boundary, not the *language* wire — is isolated and derived-from-one-home,
+never re-authored ad hoc). Isolating the crossings is what makes a
+consolidation (stage once; one pull per call) a *local* edit at the boundary
+rather than a tree-wide hunt — the same way the SSOT wire makes "swap the
+worker for a new language" a drop-in.
 
 **The mechanism (ADR-0011 Rule 1 — this principle's enforcement surface, now
 upgraded for the cross-device boundary from review-only to a test/CI gate).**
-`tools/lint_host_device_transfers.py` is a **pure-`ast`** walker (imports neither
-jax nor any analyzed module — the host is reserved for timing-sensitive
-benchmarks) that flags transfer call-sites by name pattern and asserts each is at
-a boundary or grandfathered:
+A pure-AST walker flags transfer call-sites by name pattern and asserts each
+sits at an inline-marked or whitelisted boundary, against a ratcheting
+baseline (today's non-boundary transfers grandfathered, keyed structurally
+over the class of crossing, never a churning line number — ADR-0011 Rule 4);
+a new, non-baselined transfer outside a boundary fails CI, and the checker
+carries a negative/mutation self-check proving a synthetic new transfer fails
+and a boundary marker passes.
 
-- **Boundary** = an inline `# host-device-boundary: <reason>` marker on the
-  transfer's own line, **or** membership in a small named `BOUNDARY_MODULES`
-  whitelist (the jax backends `az/{mlp_jax,mlp_jax_train,optimizer,forward,
-  lowlatency}.py` and the dispatch micro-bench, whose declared job *is* the
-  device edge).
-- **Ratcheting baseline** (`tools/host_device_baseline.json`, mirroring
-  `tests/test_mypy_strict.py`'s `STRICT_CLEAN` monotonic ratchet, ADR-0011
-  Rule 1): TODAY's non-boundary transfers are grandfathered (keyed structurally
-  by `relpath::scope::kind` — ADR-0011 Rule 4, over the class of crossings, not a
-  churning line number). A NEW transfer not at a boundary and not baselined
-  **fails**; removing a baselined one **shrinks** the baseline (a stale entry
-  also fails, so the file can only monotonically decrease).
-- **Heuristic + opt-out (ADR-0011 Rule 3 measure-first / ADR-0008 vocabulary
-  precision).** The host→device jax names and `.block_until_ready()` are
-  *unambiguous* (jax-only — no false positive). The device→host pulls
-  (`np.asarray`/`np.array`/`float`/`int`/`bool`/`.tolist`/`.item`) are
-  *name-ambiguous* (the same call constructs numpy from a list or casts a Python
-  scalar), so they are flagged **only when the argument carries a static jax/
-  device signal** (a `forward`/`predict`/`device_put` call, or a device-residence
-  name like `x_dev`) — the canonical `np.asarray(forward_fn(...))` *is* caught
-  while the ~514 host-only scalar casts in the tree are *not* swept (netting them
-  would be the cargo-cult net ADR-0011's "Negative" warns is worse than none). An
-  inline `# host-device-allow: <reason>` marker silences a heuristic
-  false positive at the site. **The pytest hook is `tests/test_no_gratuitous_
-  transfers.py`** (always-on, pure `ast`, no jax import), with a negative/mutation
-  self-check proving a synthetic new transfer fails and the boundary marker
-  passes (mirroring `test_wire_drift.py` leg 2). The checker joins the mypy
-  `--strict` gate's `STRICT_CLEAN` set (P8).
-
-**Baseline at adoption (2026-06-20):** **3** grandfathered non-boundary
-device→host pulls (all genuine, all device-signaled) — `inference_server.py::
-run_microbatch::np.asarray` (the canonical offender), `netvalue_ismcts.py::
-NetValueISMCTS._leaf_value::float`, `feature_response.py::partial_dependence::
-float` — plus **38** transfer sites already at a designated boundary (the jax
-backends + the dispatch bench). The rule **grandfathers today's** sites;
-*consolidating* the biggest offender (`run_microbatch`'s input/output crossing —
-keep the input device-resident across the drain and batch the device→host pull)
-is the queued follow-on, not this record's scope.
+> **Extracted record — the cross-device bench saga**
+> (moved verbatim to
+> [`history/0012-cross-device-bench-saga.md`](history/0012-cross-device-bench-saga.md)):
+> the full measurement narrative this amendment's rule and mechanism rest on
+> — the originating micro-benchmark that found the per-call cost, the AST
+> lint's concrete implementation and adoption-time baseline, a same-day
+> decomposition that isolated parameter staging (not the input/output
+> transfer) as the dominant lever, the production consolidation that landed
+> and its measured fixed-cost reduction, and a follow-up assessment that
+> refuted the remaining input/output crossing as a further local win. The
+> rule, the anti-pattern row, and the mechanism above are unchanged by any of
+> it; the saga is the dated proof they were derived from a real measurement,
+> not asserted.
 
 **Scope (ADR-0004 no-retroactive-sweep, unchanged).** This amendment adds a
 mechanism and grandfathers the existing crossings; it sweeps *nothing*. The
-consolidation the bench motivates is separate forward work. The enforcement-
-surface declaration in §"Self-application" for **P7** is hereby extended: P7 is
-now mechanized at the **test/CI-gate** level for the **cross-DEVICE** boundary
-(the AST lint + ratcheting baseline above), in addition to its existing
-cross-LANGUAGE surfaces (the runtime manifest for the dynamic weight layout, the
-`test_wire_drift.py` parity backstop for the static result format).
+enforcement-surface declaration in §"Self-application" for **P7** is hereby
+extended: P7 is now mechanized at the **test/CI-gate** level for the
+**cross-DEVICE** boundary (the AST lint + ratcheting baseline above), in
+addition to its existing cross-LANGUAGE surfaces (the runtime manifest for
+the dynamic weight layout, a parity test as the backstop for the static
+result format).
 
-**Refinement (later same day — the real-MLP intercept decomposition, `fb9cfbc`).**
-The `~85–135 µs run_microbatch input/output` figure cited above was a rough
-pre-decomposition estimate. The standalone real-MLP benchmark
-(`chocofarm/az/bench/bench_mlp_lowlatency.py` — the production 241→256→65 forward,
-ADR-0009 rigor: warm, median + IQR over 9×2000 calls, R²≈0.998, four `allclose`-
-verified variants) decomposes the ~129 µs *fixed* per-call cost precisely:
-**params transfer ~45–53 µs** (the dominant consolidatable lever — staged
-device-resident *once* via the `lowlatency` handle, confirming the toy bench's
-~57 µs on the production net), **input + output transfer ~14.5 µs** (the
-*smaller* component the rough figure over-weighted — input host→device ~5.5 µs,
-batched device→host pull ~9 µs), and an **irreducible ~69 µs pjit/XLA dispatch
-floor** (~54 %, unremovable by staging — the "unsafe" direct-executable path was
-*refuted*, +103 µs worse). Net: consolidatable transfer ≈ 60 µs (~46 %), the
-floor ≈ 54 %. The rule, the new anti-pattern row, and the gate are
-**unchanged** — the refinement only sharpens *which* crossing is the lever:
-**params-staging**, not the input/output pull the rougher figure implied.
-
-**Follow-on landed (2026-06-20 — the params-staging consolidation in the live
-server).** The queued params lever above is now wired into the production leaf
-evaluator: `inference_server.py::build_staged_forward` builds the server's
-forward as a `lowlatency.LowLatencyFn` whose weights are staged device-resident
-once, and `InferenceServer._effective_forward` calls it from `run_microbatch`
-(default path) instead of re-passing the host weight dict each forward.
-**RECONFIG:** the staged handle is **rebuilt on every version-gated reload** —
-the reload rebinds a fresh params dict (ADR-0001 rebind-not-mutate), detected by
-object identity, so a forward never runs against a stale-version staged net
-(ADR-0002); the rebuild is a **warm XLA-cache hit (~2.7 ms** — the fixed
-`(max_batch, in_dim)` graph is already compiled, only the params re-stage),
-amortized over the version's many forwards, so the cheap-restage extension the
-record contemplated was **not** needed (the lib is used as-is; the cold ~170 ms
-compile stays the one-time `warmup()` cost). Measured in the **real
-`run_microbatch` path** (ADR-0009: warm, median+IQR, fit `time =
-intercept + slope·rows`, R²>0.998, numbers under
-`~/w/vdc/chocobo/bench/run_microbatch_staging/`): the fixed-cost intercept drops
-**~50–80 µs/forward** (the staged intercept is stable ~95 µs across reps; the
-`current` baseline intercept carries the dispatch floor's run-to-run variance,
-putting the delta at +52.8 µs one rep, +79.4 µs another) with the **per-row
-slope unchanged** (≈4.37 vs ≈4.44 µs/row) — a pure fixed-cost reduction
-consistent with (and at the high end exceeding) the ~45–53 µs params-transfer
-the decomposition isolated. Equivalence is behavior-preserving (ADR-0012 P6 /
-ADR-0009): the server-parity opt-in tests pass against the staged path
-(max|Δ| ≈ 2–5×10⁻⁷, residual ON/OFF, batched + the coalescing floor), and a new
-jax-gated test pins `build_staged_forward` allclose (1e-4) to `jit_forward_core`
-through `run_microbatch` plus the rebuild-on-reload guard. The **input/output
-crossing remains the open follow-on** (the grandfathered
-`run_microbatch::np.asarray` pull is untouched — the ~14.5 µs smaller lever).
-
-**Input/output crossing assessed — REFUTED as a local lever (2026-06-20).**
-The remaining `~14.5 µs` input+output crossing the params-staging follow-on left
-open was investigated in the **real `run_microbatch` path** (ADR-0009: warm,
-median+IQR over 7×3000 calls, fresh host `Xb` every forward, 3 reps incl. the
-isolated core; numbers under `~/w/vdc/chocobo/bench/run_microbatch_io/`) and is
-**not a cleanly-extractable local win** — the bench's 5.5 µs (input) and 9 µs
-(output) deltas were **counterfactuals**, not achievable per-call operations.
-**Input:** the staged path's implicit host→device inside `_compiled(params,
-x_host)` is already the cheapest achievable path — pulling it out to an eager
-`jax.device_put` is **+125–139 µs WORSE**, and `donate_x=True` is a measured
-no-op (≈0 µs; jax warns "buffers not usable" — donating a *host* numpy `x`
-cannot bite). The `staged_params_input` bench variant's 5.5 µs was the cost of
-an input transfer the bench amortized by placing `x` device-resident *once*
-outside the loop; in the server `Xb` is fresh host leaf-feature data every
-forward, so the transfer is **inherent**. **Output:** the grandfathered
-`run_microbatch::np.asarray` device→host pull is already the best local option —
-`jax.device_get` is **+56–60 µs WORSE**, `copy_to_host_async` is **+16–21 µs
-WORSE** (no overlap within a single sequential call), and
-`block_until_ready()`+`np.asarray` is a marginal ≈−3 µs (within IQR, and would
-*add* a flagged d2h call-site for sub-dispatch-noise). The ~9 µs is **inherent**
-to a blocking device→host of a result that must reach host for the wire; hiding
-it requires **pipelining the sequential serve loop** (overlap the pull with the
-next microbatch's compute — a structural rework of
-`_serve_batch`/`serve_forever`, gain capped at ~9 µs and only when
-forward-bound), recommended **deferred**. Net: the params-staging lever
-(~45–53 µs) was the whole of the consolidatable transfer; the input/output
-crossing is **inherent** in the real path. The grandfathered
-`run_microbatch::np.asarray` baseline entry and the lint gate are **unchanged** —
-no code landed, a substantiated negative (ADR-0009).
-
-### 2026-07-02 — The corrective diff IS new structure (closing the scope gap the fixes walked through)
+### Amendment — 2026-07-02: The corrective diff IS new structure (closing the scope gap the fixes walked through)
 
 *(Provenance: the fact-mining recidivism study. CB-21: a pass-2 fix placed
 `recv_bounded()` outside the guarded try, re-minting the exact
@@ -1358,7 +996,7 @@ New anti-pattern rows (appended, per this section's convention):
 | **(new, corrective)** — a fix exempted from the checklist | a corrective diff authored and claimed done without a checklist pass or a consult of the stack's defect ledger, so the fix re-mints a cataloged cancer (an outside-the-guard refusal, CB-21; a second producer of one intermediate, CB-31; blocking work on the hot thread, CB-32) | **the scope clause above** — a corrective diff is new structure; checklist + ledger pass before "fixed" is claimed |
 | **(new, proxy bound)** — a ceiling denominated in the wrong currency | a bound expressed in a unit OTHER than the resource that detonates (a char cap protecting a token budget, CB-08; a per-frame byte cap protecting aggregate memory, then a frame-count cap protecting wall time, CB-17/CB-15/CB-29; a round-number time literal orders above the warm envelope it protects, CB-30) | **P1 (derive-don't-duplicate) in the bound register** — a bound is denominated in, and derived from, the detonating resource (ADR-0000 Specimen 3's byte-budgeted high-water-mark is the worked form); each independent axis of an ingress surface (bytes, count, magnitude, time) carries its own bound, and a foreclosure claim names the axes it does not cover |
 
-### 2026-07-02 — P2 extended to the COMPOSED system: a boundary advertises what it will refuse (refusals are backstops, not the interface)
+### Amendment — 2026-07-02: P2 extended to the COMPOSED system: a boundary advertises what it will refuse (refusals are backstops, not the interface)
 
 *(Provenance: maintainer ground truth OBS-2
 (`recidivism-study/maintainer_observations.md`): after three hardening
@@ -1380,10 +1018,11 @@ the enforcing gate reads (P1), over a pre-use surface (readiness/info); and
 the system's own client libraries honor the advertisement transparently, so
 a legal end-user request never fails against an unadvertised internal limit.
 The typed refusal remains — as the backstop, never as the interface.** A
-ceiling knowable only downstream (derived from model outputs, not from the
-request — OBS-2's P/K axis) is exempt from advertisement but not from
-honesty: its disposition is stated explicitly at the earliest knowable
-point, not discovered by detonation.
+ceiling knowable only downstream — derivable only from a computed model
+output (call it a "P" quantity), not from anything present in the request
+itself (a "K" quantity) — is exempt from advertisement but not from honesty:
+its disposition is stated explicitly at the earliest knowable point, not
+discovered by detonation.
 
 The discriminator against over-reading: this binds *inside* one system's own
 composition. A hostile or third-party client still meets the refusal; the

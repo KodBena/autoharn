@@ -46,7 +46,7 @@ verbatim; for example, record 5's `b_id` reads:
 > adjudication field."
 
 That is load-bearing audit information — the "who decided, and what they applied" that
-[ADR-0013 Rule 1/2](../law/adr/0013-execution-stamina-and-structural-completeness.md) makes the
+[ADR-0013 Rule 1/2](../law/adr/0013-execution-integrity.md) makes the
 ratifier's to own — carried in a string the gate treats as opaque identity text. A reader
 auditing an escalation cannot find the adjudication by field; they must read prose. That is the
 [ADR-0012 P1](../law/adr/0012-compositional-and-structural-hygiene.md) single-source-of-truth
@@ -152,7 +152,7 @@ Two honest scoping notes, so the claim is not read wider than it is:
 
 The migration posture follows [ADR-0017's Exceptions](../law/adr/0017-the-zero-context-reader.md)
 (point-in-time records are never retro-edited) and
-[ADR-0013](../law/adr/0013-execution-stamina-and-structural-completeness.md) (finish the real
+[ADR-0013](../law/adr/0013-execution-integrity.md) (finish the real
 change, honestly):
 
 1. **Existing `/1` records stay valid, forever, unchanged.** The ~20 records already in the ledger

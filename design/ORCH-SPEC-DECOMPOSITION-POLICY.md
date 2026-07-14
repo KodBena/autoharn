@@ -114,7 +114,7 @@ latter upgrading to `POLICED` exactly when a taxonomy is declared,
 design, their EVIDENCE-SHAPE field naming `reviewer-judgment` outright — a distribution the
 maintainer's standing proviso (the 2026-07-12
 amendments to [ADR-0000](../law/adr/0000-the-alpha-and-the-omega-type-driven-design.md)
-and [ADR-0013](../law/adr/0013-execution-stamina-and-structural-completeness.md))
+and [ADR-0013](../law/adr/0013-execution-integrity.md))
 already governs: the text binds even where no machine checks it.
 
 ## 5. Splitting criteria — the maintainer's specific ask

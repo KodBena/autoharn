@@ -327,7 +327,7 @@ yours, not something to delegate.
 
 - **The two ADR amendment texts** (previously item 2) were ratified and appended — verified
   this session in [law/adr/0000-the-alpha-and-the-omega-type-driven-design.md](../law/adr/0000-the-alpha-and-the-omega-type-driven-design.md)
-  and [law/adr/0013-execution-stamina-and-structural-completeness.md](../law/adr/0013-execution-stamina-and-structural-completeness.md),
+  and [law/adr/0013-execution-integrity.md](../law/adr/0013-execution-integrity.md),
   both carrying the exact quoted paragraphs; tracker item `adr-amendment-texts` is closed
   (`shipped`, law commit `1012e21`).
 - **ADR-0009's re-instancing** (previously item 3) is done — verified this session in
@@ -367,5 +367,5 @@ five questions.
   full record of the settled review-flag question, including your own transcribed answer.
 - [law/adr/0009-performance-investigation-discipline.md](../law/adr/0009-performance-investigation-discipline.md),
   [law/adr/0000-the-alpha-and-the-omega-type-driven-design.md](../law/adr/0000-the-alpha-and-the-omega-type-driven-design.md),
-  [law/adr/0013-execution-stamina-and-structural-completeness.md](../law/adr/0013-execution-stamina-and-structural-completeness.md) —
+  [law/adr/0013-execution-integrity.md](../law/adr/0013-execution-integrity.md) —
   the bylaws named in the settled items above.

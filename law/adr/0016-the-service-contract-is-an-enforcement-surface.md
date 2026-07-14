@@ -1,5 +1,13 @@
 # ADR-0016: The Service Contract Is an Enforcement Surface — a standing service's promise to a client is gated, not aspired to
 
+*In plain words first: this ADR is for anyone who builds, reviews, or operates a **standing
+service** — a long-running network service that a client depends on across requests, as
+opposed to a one-shot script or batch job. It answers one question: what must be true of
+such a service before it may claim to be ready for a client? Its rule is that no client
+input can be allowed to crash, wedge, or corrupt a service that has advertised itself as
+standing, and that promise is enforced by gates checked at build/test time, not left as an
+aspiration reviewers hope held.*
+
 - **Status:** **Accepted** — ratified by the maintainer 2026-07-03. Ratified
   *without* a Fable-session compliance pass (economics): the acceptance is of
   the principle and the Rule-2 gate, not a claim that a full compliance sweep
@@ -42,7 +50,7 @@
   - **ADR-0014** is the method that found the class: five blind, deliberately
     un-led adversaries are the corpus's out-of-frame check (0014) run as a
     fan-out; this tenet is its *standing* form.
-- **Date:** 2026-07-02
+- **Date:** 2026-07-02 (original); refactored for portability 2026-07-13 (below).
 - **Provenance:** Native. The `standing-service-invariant` workflow (run
   `wf_ee73fb10-f41`, 2026-07-01): five blind adversaries/auditors were turned on
   the fact-mining ZMQ daemon stack (`nlp_server.py` :5599, `coref_decode_server.py`
@@ -74,11 +82,32 @@
   mechanisms already largely landed (see Decision) — are its first worked
   instance.
 
+*This ADR was refactored for cross-project portability on 2026-07-13 under
+[`design/MAINT-ADR-PORTABILITY-SPEC.md`](../../design/MAINT-ADR-PORTABILITY-SPEC.md)
+(tracker `adr-portability-refactor`, maintainer-ratified 2026-07-13). The
+pre-refactor text stands verbatim at commit `0f7b3e4`; extracted records live in
+[`history/0016-fact-mining-worked-instances.md`](history/0016-fact-mining-worked-instances.md)
+and are not retro-edited. This tenet cites ADR-0011's Rule 1 enforcement-surface
+vocabulary and its 2026-07-02 amendments throughout Rules 1–3 (ADR-0011 was
+refactored ahead of this package — work package WP-7 of the same portability
+refactor's schedule, tracked in `design/MAINT-ADR-PORTABILITY-SPEC.md` §8);
+those citations are prose references to ADR-0011's Rules and dated Amendments,
+all of which stayed inline in the refactored ADR-0011 — so no citation
+repointing was needed here. Verified directly: every `ADR-0011` citation below
+names a Rule number or a dated 2026-07-02 Amendment, and none of them names any
+of the project-specific worked-example material (an internal audit's own
+named data types and a separate throughput-measurement testbed's amendments)
+that ADR-0011's own refactor moved out to its `history/` directory — that
+material is simply absent from this ADR, not cited and left dangling. Dated
+amendments below are preserved verbatim from the original.*
+
 A word on register, in ADR-0000's and ADR-0013's key. This tenet is written from
 the executive chair, about an executive lapse, and the accountability it assigns
 is **self-directed** — a named failure mode is organizational, not personal
 (ADR-0000 Rule 2(b)). The disdain the record carries is for the *conduct* — the
-mother's-life bar applied by **glamour** rather than uniformly, the novel core
+**mother's-life bar** (this corpus's standard for code no one would trust a
+life to: treat every hazard within reach as one you would not leave for the
+next person to step on) applied by **glamour** rather than uniformly, the novel core
 lavished with rigor while the input validation, the readiness coverage, and the
 protocol handling coasted on "it works on what I fed it" — never for a
 contributor. A client lives at the boundary, not in the elegant core, which is
@@ -86,31 +115,23 @@ exactly where a life-critical system dies.
 
 ## Context
 
-The corpus mechanizes how *components* are built to a high bar: `mypy --strict`
-(ADR-0012 P8), the env↔Policy seams (P2), the **fidelity gates** (the suite of
-`*_fidelity` / `*_equivalence` / `*_bit_identity` tests that prove the fast path
-matches the reference — ADR-0009/P6), the trace SSOT. Every one of those gates
-polices *internal structure* and *happy-path correctness*. **None of them asks:
-can a client break this standing service?** So the failure class the workflow
-found lived in a dimension with **no enforcement surface at all** — and per
-ADR-0011, a class that recurs in a dimension no mechanism covers is a guard the
-executive never built, not an implementer who erred.
+> **Extracted record — the standing-service-invariant workflow's findings**
+> *(moved verbatim to [`history/0016-fact-mining-worked-instances.md`](history/0016-fact-mining-worked-instances.md))*:
+> a blind adversarial fan-out turned on a standing service, given only the
+> standing-service invariant and nothing else, found its failure class
+> concentrated entirely in the boring plumbing, never the novel core — every
+> one of the mechanized fidelity/equivalence gates polices internal structure
+> and happy-path correctness, and none of them asks whether a client can break
+> the service. Every finding was legal as bytes at the boundary and fatal, or
+> silently stateful, deep inside: an unbounded receive frame that OOM-kills the
+> process outside its own try/except, a client-chosen cache key with no
+> eviction, a client-supplied address string turned into a pivot, a multi-frame
+> message that desyncs the transport, wire content silently enabling
+> privileged I/O, and a readiness check proven only on a toy input. The lesson
+> is the **glamour bias** the tenet's spine names: rigor tracked how
+> interesting the code felt, not where a client can reach.
 
-The unifying miss is a **glamour bias** — the discipline was decided by how
-interesting the code felt, not by where a client can reach. The novel core (the
-jax decode, the shape buckets) got the mother's-life bar; the boring
-service-plumbing (input validation, readiness coverage, error and protocol
-handling, resource bounds) got "it works on my input." The workflow's findings
-are almost entirely in the plumbing: an unbounded `recv()` frame that OOM-kills
-the daemon *above* the try/except; a client-chosen `model` string driving an
-unbounded `spacy.load` into a never-evicted cache (first-request-pays
-statefulness); a client-supplied `decode_addr` turning the daemon into an SSRF
-pivot that wedges the single-in-flight loop for ten minutes; a multipart frame
-desyncing the REP socket into a crash; wire-injected trace context flipping the
-service into blocking DB I/O; readiness advertised over an *empty* compile cache
-so request #1 per shape cold-JITs inside the handle. Every one is legal as bytes
-and fatal deep inside — accept-then-detonate — or silently stateful. The seed
-distilled **three feeders**, and each gets a rule below:
+The seed distilled **three feeders**, and each gets a rule below:
 
 1. **Test philosophy was fidelity, not adversarial totality.** The suite proved
    the core *right* and never proved the service *robust*. There was no "∀ inputs
@@ -159,24 +180,21 @@ size, count, magnitude, encoding, value, ordering, concurrency — and every
 sibling entry point, so a covered axis on one path and an open one on its twin is
 a named, not a silent, gap.
 
-*Enforcement surface: construction/import-time + run-time + test/CI gate.* This
-rule is **already substantially discharged in the fact-mining daemons**, and the
-tenet records those as its worked instances so it codifies practice rather than
-aspiring: frozen, slotted, only-constructor-decode `attrs` boundary types
-(`wire_types.py` — the `ParseRequest` / `CorefRequest` / `DecodeRequest` /
-`DecodeDoc` request models with their `MAX_BATCH` count cap, which are Specimen
-1's `BoundedBatch` made concrete here; `AdvertisedLimits`, `ServableText`,
-`MemoryEnvelope`, `PerDocumentRefusal`); the transport-level `ZMQ_MAXMSGSIZE` /
-`ZMQ_RCVHWM` cap set on the `BoundSocket` before bind (an over-cap frame is
-dropped in libzmq, never allocated or delivered — the OOM-frame class
-unrepresentable above the handler);
-single-frame `recv_multipart` refusal (the REP-desync class); the trace-context
-gate that requires a locally-armed opt-in before wire content can enable DB I/O;
-the `spacy.load` allowlist and the removal of `decode_addr` from the wire schema.
-Each carries a `hypothesis`/`deal` property test (`test_recv_bounded.py`,
-`test_wire_boundary_class567.py`, `test_servable_text_boundary.py`,
-`test_wire_trace_gate.py`, `test_server_config_allowlist.py`). The *judgment* that
-a new ingress is a boundary is review-only; the boundary type and its cap are code.
+*Enforcement surface: construction/import-time + run-time + test/CI gate.*
+
+> **Extracted record — the fact-mining boundary types**
+> *(moved verbatim to [`history/0016-fact-mining-worked-instances.md`](history/0016-fact-mining-worked-instances.md))*:
+> this rule's first worked instance is a family of frozen, only-constructor-decode
+> wire-boundary types — a request/document model per ingress, each with a hard
+> count/size cap, which are Specimen 1's `BoundedBatch` made concrete — plus a
+> transport-level max-message-size cap enforced before the socket binds,
+> single-frame-only receipt, an opt-in gate before wire content can trigger
+> privileged I/O, and an allowlisted (not arbitrary) resource key, each carrying
+> its own adversarial property test. The lesson: `BoundedBatch`-at-every-ingress,
+> not at the one wire someone remembered to guard.
+
+The *judgment* that a new ingress is a boundary is review-only; the boundary
+type and its cap are code.
 
 ### Rule 2 — The standing-service invariant is a standing gate, co-equal with the fidelity gate — an audit that ran once is not it
 
@@ -216,28 +234,32 @@ its derived compile/autotune ladder) *and* survived the real corpus's worst case
 later request pays. Readiness is a **typed token** that the serve loop cannot
 obtain until coverage is proven; "bound but not fully warm" is made
 unconstructable, not guarded. **Beyond the seed's three candidate rules (flagged
-as this draft's addition, from OBS-2 / commit `5e9be34`):** the service's
+as this draft's addition, landed in commit `5e9be34`):** the service's
 *advertised limits are themselves part of the contract*. A typed refusal of a
 limit the service never told the client about is still a **system** failure — the
 client could not have avoided it — so a standing service advertises its ceilings
 (batch, text, token, frame, memory envelope) *before* inference, from the gates'
-own SSOT constants, and a client plans against the advertisement. Refusal is the
-sanctioned failure only when it is a refusal the client could predict.
+own SSOT (single source of truth) constants, and a client plans against the
+advertisement. Refusal is the sanctioned failure only when it is a refusal the
+client could predict.
 
 *Enforcement surface: construction/import-time + run-time invariant + test/CI
-gate.* Worked instances in the fact-mining daemons: the `Warmed` token minted
-only by `SweepLedger.seal()` after every required grid cell is recorded, and
-`ReadinessGate.reach_ready(warmed)` as the sole transition into READY
-(`readiness.py` — a partial sweep raises `SweepIncomplete`, never a `Warmed`, at
-zero warm-path cost since readiness is which dispatcher the loop calls, swapped
-once); the realistic-batch warmup ladder derived from the advertised envelope
-(commit `309de82`; `test_nlp_realistic_warmup.py`, `test_warmup_grid.py`,
-`test_readiness.py`); `AdvertisedLimits` on the `info` reply with the client
-planner (`plan_chunks`) that partitions against it; the `MemoryEnvelope` +
-degraded-readiness disposition (commit `83700dc`) that fails loud before failing
-slow on the never-evicting `StringStore` (the ADR-0015 intersection). The
-coverage-derivation and the token are code; the judgment "is this the full worst
-case" is review-owned but checkable against the advertised envelope.
+gate.*
+
+> **Extracted record — the fact-mining readiness token**
+> *(moved verbatim to [`history/0016-fact-mining-worked-instances.md`](history/0016-fact-mining-worked-instances.md))*:
+> this rule's first worked instance is a typed readiness token minted only once
+> every required warmup cell is recorded complete, so a partial sweep cannot
+> yield a ready service, at zero warm-path cost; a warmup ladder derived from the
+> advertised envelope; the advertised limits surfaced on the service's own
+> readiness reply with a client-side planner that partitions against them; and a
+> memory-envelope check that fails loud before the underlying cache fails slow.
+> The lesson: the empty-warm-cache readiness lie — a service that reported
+> itself ready while its cache, warm in name only, was empty — is exactly what a
+> typed readiness token forecloses.
+
+The coverage-derivation and the token are code; the judgment "is this the full
+worst case" is review-owned but checkable against the advertised envelope.
 
 ### Rule 4 — The plumbing is held to the core's bar — the mother's-life bar applied uniformly, not by glamour
 
@@ -248,7 +270,9 @@ bias**: rigor tracking how interesting the code felt rather than where a client
 can reach. This is ADR-0013's execution attrition raised to executive scale — the
 corner cut on the boring surface, arriving in the honest register ("it works on my
 input," "fine for the plumbing"), and therefore invisible as a corner. The
-14-year-old code (ADR-0000's register for code no one would trust a life to) hides
+**14-year-old code** — this corpus's own shorthand (ADR-0000's register) for
+code so old and untouched that no one still working here would vouch for it,
+used as the standard for "code no one would trust a life to" — hides
 precisely where the work felt boring.
 
 *Enforcement surface: review-only, backed by the mechanized siblings.* No gate
@@ -275,14 +299,18 @@ warmup sweep over the full ladder, an adversarial property suite. The umbrella
 gate (Rule 2) is named-and-filed, not built — so the tenet is honestly partial
 until it lands, and Rule 4 is review-only and enforced by the faculty (the
 executive's own sense of where rigor is owed) most prone to the glamour bias it
-guards. Advertised-limit SSOTs and memory envelopes can go stale (they are P1
-facts — one home, derived where possible).
+guards. Advertised-limit SSOTs (single sources of truth) and memory envelopes
+can go stale (they are facts this corpus's own P1 principle governs — one
+owned home per fact, derived everywhere else it is needed, per
+[ADR-0012](0012-compositional-and-structural-hygiene.md)).
 
 **Neutral.** No retroactive sweep (ADR-0004); services gain the gates on touch.
-The fact-mining daemons' hardening (commits `ce1b1a3`, `dbf70fa`, `5e9be34`,
-`309de82`, `83700dc`) is this tenet's first worked instance, landed before the
-tenet was written — the tenet records the lesson so the next service does not
-re-buy it, exactly as ADR-0015 records the OOM incident.
+
+> **Extracted record — first worked instance, dated**
+> *(moved verbatim to [`history/0016-fact-mining-worked-instances.md`](history/0016-fact-mining-worked-instances.md))*:
+> the Rules 1 and 3 worked instances above landed, by commit, before this tenet
+> was written — the tenet records the lesson so the next service does not
+> re-buy it, exactly as ADR-0015 records the OOM incident.
 
 ## Revisit when…
 
@@ -341,10 +369,8 @@ re-buy it, exactly as ADR-0015 records the OOM incident.
   a standing-service violation.
 - **ADR-0014 (second opinion).** The five blind adversaries are the out-of-frame
   check run as a fan-out; this tenet standing-ifies it.
-- **The `standing-service-invariant` workflow** (`wf_ee73fb10-f41`;
-  `experiments/fact-mining/docs/audit-evidence/iteration-1_wf_ee73fb10-f41/`) — the
-  audit this tenet generalizes into a standing gate; `BACKLOG.md`'s seed section is
-  its provenance.
+- **The originating `standing-service-invariant` workflow** — see the Extracted
+  record under Context; the audit this tenet generalizes into a standing gate.
 
 ## Amendments
 
