@@ -1,0 +1,44 @@
+== scaffolding throwaway --new-world s29fxprobe (s15..s28 birth chain) ==
+  scaffold OK (schema=s29fxprobe kern=s29fxprobe_kernel role=s29fxprobe_rw).
+
+== applying s29-obligation-item-key-and-typed-close.sql to s29fxprobe/s29fxprobe_kernel/s29fxprobe_rw ==
+  s29 applied.
+
+=== a-review-silent-close-refused ===
+  [ok] exit=1 names_both_constructors=True excerpt='led work close: REFUSED -- a review-silent close is unrepresentable (s29 Element B).\n  Choose exactly ONE constructor:\n    --review-witness <ref>   a review already exists; cite it\n    --review-deferred        this close act itself becomes the review obligation'
+
+=== b-both-constructors-refused ===
+  [ok] exit=1 excerpt='led work close: REFUSED -- --review-witness and --review-deferred are the TWO\n  CONSTRUCTORS of a review disposition; exactly ONE, never both, in one close act\n  (s29 Element B).'
+
+=== c-witnessed-without-ref-refused ===
+  [ok] exit=1 excerpt='led work close: REFUSED -- a review-silent close is unrepresentable (s29 Element B).\n  Choose exactly ONE constructor:\n    --review-witness <ref>   a review already exists; cite it\n    --review-deferred        this close act itself becomes the review obligation'
+
+=== d-witnessed-with-ref-accepted ===
+  [ok] exit=0 work_item_current='closed|witnessed|commit-abc123'
+
+=== e-deferred-creates-item-keyed-obligation ===
+  [ok] deferred_close_ok=True gap_after_deferred='slug  | close_id | closer \n--------+----------+--------\n item-e |        8 |      1\n(1 row)' same_actor_refused=True gap_after_same_actor='slug  | close_id | closer \n--------+----------+--------\n item-e |        8 |      1\n(1 row)' distinct_actor_ok=True gap_after_distinct_actor='slug | close_id | closer \n------+----------+--------\n(0 rows)'
+
+=== f-strict-plus-deferred-refused ===
+  [ok] exit=1 excerpt='led work close: REFUSED -- --review-deferred + --strict is a contradiction in terms\n  (s29 Element C): a just-deferred obligation is, by definition, unresolved the\n  moment it is created. Record the review first (./led review ...), then close\n  with --review-witness <ref> --strict.'
+
+=== g-strict-over-unresolved-tree-refused ===
+  [ok] exit=3 names_child_g=True excerpt="SET\nSET\nERROR:  Ledger policy: strict close of work item 'root-g' refused — its obligation tree is unresolved: child-g (item is not yet closed). Resolve every named leaf, then retry (s29 Element C: strict close is a pure query over the derived conjunction, no stored verdict).\nCONTEXT:  PL/pgSQL function validate_work_item() line 28 at RAISE"
+
+=== h-strict-succeeds-once-resolved ===
+  [ok] exit=0 stderr_tail='SET\nSET\nINSERT 0 1'
+
+=== k1-strict-over-unresolved-dependency-refused ===
+  [ok] exit=3 names_antecedent=True excerpt=" strict close of work item 'dep-k-a' refused — its obligation tree is unresolved: dep-k-b (review disposition deferred and undischarged (close row 22)). Resolve every named leaf, then retry (s29 Element C: strict close is a pure query over the derived conjunction, no stored verdict).\nCONTEXT:  PL/pgSQL function validate_work_item() line 28 at RAISE"
+
+=== k2-strict-over-dependency-succeeds-once-discharged ===
+  [ok] exit=0 stderr_tail='SET\nSET\nINSERT 0 1'
+
+=== i-differential-agree ===
+  [ok] verdict=AGREE asp_n=12 sql_n=12 has_unresolved_present=True only_asp=[] only_sql=[]
+
+== scaffolding a SEPARATE s28-only world s29fxprobe_pre (s29 deliberately NOT applied) ==
+=== j-pre-s29-led-close-unaffected ===
+  [ok] exit=0 stderr_tail='SET\nSET\nINSERT 0 1'
+
+ALL CASES OK -- s29 obligation item-key + typed close + obligation-tree guarantee both-polarity proof (review-silent close refused / both-constructors refused / witnessed-without-ref refused / witnessed-with-ref accepted / deferred creates and discharges the item-keyed obligation / strict+deferred refused / strict-over-unresolved-tree refused naming the leaf / strict succeeds once resolved / strict-over-unresolved-DEPENDENCY refused+succeeds (the audit-caught regression case) / SQL-ASP differential AGREE / pre-s29 led close unaffected), zero residue.
