@@ -521,6 +521,131 @@ escape valve every [blessed](../GLOSSARY.md#blessed)-tier convention in this har
 declared on the deployment's own ledger — never a `must` this recipe invents on a deployment's
 behalf.
 
+## 7. Model attribution — the `outcome:` statement grammar, and reading outcomes by model
+
+This section answers a narrower question than Section 6's cost retrospective: given a dispatched
+task closes at a seam, **which model executed it, and what did the seam review find?** — the
+maintainer's own framing, verbatim in substance (2026-07-12 ~noon): "track which MODEL executed
+each dispatched task and what misses it produced, to answer 'what are the observed capabilities
+of the models, across tasks?'". Like `estimate:`/`actual:` above, this is
+**RETROSPECTIVE-ONLY**, per the standing never-police invariant restated at Section 6's own
+opening — nothing below proposes a gate, an audit family, or an exit code that ranks or penalizes
+a model over an observed miss. It is hazard-detection instrumentation, not economizing, per the
+maintainer's same-day reiteration of that invariant.
+
+### Two upstream sources this section reads together
+
+An `outcome:` row (grammar below) is only half the picture. The other half is the
+**delegation-observer journal** (`.claude/logs/delegation_observer.journal.jsonl`,
+`hooks/pretooluse_delegation_observer.py`), which — since work item
+`model-attribution-tracking` (`./led work list` shows its row) — journals `tool_input.model` and `tool_input.subagent_type`
+verbatim on every subagent dispatch, alongside the session id and prompt fingerprint the module
+docstring's CORRELATION FIELD section already documents. **Both fields are
+DECLARED-BY-DISPATCHER grade, named honestly**: neither the journal nor an `outcome:` row is
+witnessed proof of which model actually served a call — the action stream cannot verify that, only
+record what the calling agent's own tool_input said would be used. This is the identical grade
+boundary Section 6's "Actuals" subsection already draws for token/duration figures, per the
+2026-07-11 evidentiary-basis ruling: diagnostic-grade, permanently, with no sunset clause.
+
+### The `outcome:` statement grammar
+
+A `decision`-kind ledger row whose statement carries the `outcome:` prefix, validated at write
+time by [`bootstrap/templates/led.tmpl`](../bootstrap/templates/led.tmpl) (its own refusal
+teach-text cites this section by name) — the same sibling-grammar convention as `resource:`/
+`estimate:`/`actual:` above and `taxon:`
+([design/USER-TAXONOMY-DECLARATION.md](USER-TAXONOMY-DECLARATION.md), that grammar's own home —
+this document does not restate it). This is the ONE documented home of the grammar; the
+validator transcribes it, never restates it as a second, driftable definition (ADR-0012 P1). An
+`outcome:` row is written by the **ORCHESTRATOR**, at each seam close — never by the executing
+agent describing its own work, the same posture `review:`/`review-done:`
+([design/USER-RECIPES-FAQ.md](USER-RECIPES-FAQ.md)) already keep for the maintainer's own queue.
+
+```
+outcome: <TASK-SLUG> | <MODEL> | <SEAM-VERDICT> | <DEFECTS-FOUND-AT-SEAM> | <NOTES>
+```
+
+The five fields, in order, separated by ` | ` (space-pipe-space):
+
+- **TASK-SLUG** — matching `^[a-z0-9][a-z0-9-]*$`, the same rule `estimate:`'s own TASK-SLUG
+  uses — ideally the same slug a `led work open <slug>` and/or `estimate:` row for the task
+  already carries, so a retrospective can join all three on one key (see "Joining the record"
+  below). A statement-prefix convention, not a foreign key — the ledger does not enforce the
+  link.
+- **MODEL** — matching `^[a-zA-Z0-9][a-zA-Z0-9._-]*$` (a bare identifier, e.g. `sonnet`, `opus`,
+  `claude-sonnet-4-5`) — no spaces, deliberately, so grouping rows by exact string equality (the
+  read surface below) is honest rather than approximate. DECLARED-BY-DISPATCHER grade (see
+  above): the orchestrator states which model it dispatched or observed, typically read off the
+  delegation-observer journal's own `model` field for the same task's dispatch line.
+- **SEAM-VERDICT** — free text, non-empty, stating what the seam review concluded, in the
+  orchestrator's own words. No closed vocabulary is imposed here deliberately: this project's own
+  seam-progress decisions already use varied phrasing ("DELIVERED", "merge HELD", "QUARANTINED")
+  depending on what actually happened, and inventing a taxonomy this grammar would then have to
+  police is exactly the over-reach Section 6 warns against for `estimate:`/`actual:`.
+- **DEFECTS-FOUND-AT-SEAM** — free text, non-empty — what the seam review found, or an honest `0`
+  / `none` when it found nothing. Never left blank: a clean seam is itself a fact worth recording
+  (a model with a long run of clean seams is exactly the "observed capability" signal the
+  maintainer's ask names), not an absence to omit.
+- **NOTES** — free text, non-empty (state `none` if there is nothing to add) — anything else worth
+  keeping: a link to the seam-review decision row, a named limitation, a flagged hazard.
+
+Copy-paste example:
+
+```sh
+./led decision "outcome: model-attribution-tracking | sonnet | DELIVERED, merge HELD (ent gap) | 0 | all sec-6 items witnessed; hooks/led.tmpl/pickup.tmpl legs built, hooks leg fixture-verified against the toy db"
+```
+
+### The read surface — grouping seam outcomes by model
+
+`led.tmpl`'s validator refuses only the intake *shape*; grouping and reading `outcome:` rows by
+MODEL is a retrospective's own job (Section 2's evidence-gathering method), deliberately kept off
+the live `./pickup` surface the same way the estimate-vs-actual *comparison* (Section 6, "The
+consumption surface") is: there is no standing display section, gate, or audit family anywhere in
+this tree that ranks models against each other. A tier-(b) full-pass retrospective (Section 1)
+reads `outcome:` rows the same way it reads every other prefix convention in this file: pull every
+unsuperseded `kind=decision` row matching `statement ~ '^[[:space:]]*outcome:'` from
+`ledger_current` (the same view `resources()`/`estimates()`/`taxonomies()` in
+[`bootstrap/templates/pickup.tmpl`](../bootstrap/templates/pickup.tmpl) already query), apply the
+identical `regexp_replace(statement, '[\n\r]+[ \t]*', ' ', 'g')` newline-normalization every reader
+in that file already applies (a paste-reflowed embedded newline must never shred one row into
+several), split the five `|`-delimited fields apart **in Python, not in SQL** — parsing a
+pipe-delimited free-text field is exactly the fragile work `led.tmpl`'s own validators exist to do
+once, correctly, rather than have every reader re-derive its own regex — then group the parsed
+rows by the MODEL field in memory: one bucket per distinct model string, each bucket holding its
+TASK-SLUG/SEAM-VERDICT/DEFECTS-FOUND-AT-SEAM/NOTES tuples in ledger-row-id order. A malformed
+`outcome:` row (wrong field count) is reported, never silently dropped — the same
+never-silently-dropped, MALFORMED-flagged posture every prefix-convention reader in this project
+already keeps.
+
+**Joining the record**, the two joins the commissioning work item's design (work item
+`model-attribution-tracking` — `./led work list` shows its row, whose title carries the full
+design captured at asking) names explicitly:
+
+- **join on the s28 parent edge** (`kernel/lineage/s28-work-parent-edge.sql`'s `work_parent`
+  column / the `work_item_descendants` view) — an `outcome:` row's TASK-SLUG against
+  `work_item_current.slug`, to fold a subagent-round outcome (e.g.
+  `kr-titration-design-exploration-b-round-2`, the same finer-granularity convention `actual:`'s
+  own TASK-SLUG field documents in Section 6) up into its parent item's own outcome tally;
+- **join on `estimate:`/`actual:` by TASK-SLUG** (Section 6) — pairing what was predicted and
+  measured for a task beside what model executed it and what the seam found, so a retrospective
+  can ask questions Section 6 alone cannot: did a particular model's tasks run over their own
+  estimate more often than another's, did a model's clean-seam tasks also land inside their
+  wall-clock prediction.
+
+A retrospective states which grade a given cross-tabulation is (DECLARED-BY-DISPATCHER for MODEL,
+diagnostic-grade for any WALL-CLOCK/TOKENS it pulls in from a joined `actual:` row — Section 6's
+own grade boundary applies unchanged) — the same UNDECIDABLE discipline (Section 2) governs where
+the record cannot settle a question about a model's capability, rather than guessing toward the
+more flattering reading.
+
+### The consumption surface — retrospective only, same posture as Section 6
+
+Exactly like the estimate-vs-actual comparison, the model-outcome grouping above lives **in a
+retrospective**, and deliberately nowhere else: no gate, no audit family, no exit code anywhere in
+this tree reads an `outcome:` row and fails a build, blocks a dispatch, or ranks a model. This is
+the maintainer's own standing invariant (Section 6, restated here verbatim for the same reason):
+an outcome is retrospective data about this team's own observed experience with a model on this
+project's tasks — never a verdict this harness enforces on a future dispatch decision.
+
 ## Related
 
 - [design/ORCH-SPEC-RESOURCE-ACCOUNTING.md](ORCH-SPEC-RESOURCE-ACCOUNTING.md) — Section 6's
@@ -554,3 +679,10 @@ behalf.
   offering this document follows in shape and in its `USER-` naming convention.
 - [GLOSSARY.md](../GLOSSARY.md) — `world`, `run`, `principal`, and every other coined term this
   document links on first use.
+- [`hooks/pretooluse_delegation_observer.py`](../hooks/pretooluse_delegation_observer.py) —
+  Section 7's other upstream source: the dispatch-time journal that carries `tool_input.model` +
+  `tool_input.subagent_type` verbatim, DECLARED-BY-DISPATCHER grade, per work item
+  `model-attribution-tracking`.
+- [`kernel/lineage/s28-work-parent-edge.sql`](../kernel/lineage/s28-work-parent-edge.sql) —
+  Section 7's "Joining the record" folds a subagent-round `outcome:` row up to its parent work
+  item via this edge.
