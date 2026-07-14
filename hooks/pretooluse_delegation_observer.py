@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-10T23:38:38Z
-#   last-change: 2026-07-11T21:39:04Z
-#   contributors: e4410ef6/main
+#   last-change: 2026-07-14T01:07:03Z
+#   contributors: e4410ef6/main, a857c93d/main
 # <<< PROVENANCE-STAMP <<<
 
 """hooks/pretooluse_delegation_observer.py -- the delegation OBSERVER (Part 2, BACKLOG "Run-8
@@ -86,23 +86,35 @@ extension. THE EXISTING DISPATCH LINE'S SHAPE IS UNCHANGED (module docstring's o
 EVERY DISPATCH" section, byte-identical) -- the return leg is a strictly ADDITIVE new line kind,
 appended to the SAME journal file, never a rewrite of an existing line.
 
-CORRELATION FIELD, STATED HONESTLY (mirrors hooks/posttooluse_bash_completion.py's own PAIRING
-RULE section verbatim in spirit): there is no side-channel this hook can use to tag a Task/Agent
-dispatch so its own return unambiguously echoes a minted id back (unlike Bash, where
-stamp_intercept injects a token into the command TEXT that the subject's own execution carries
-forward) -- Claude Code's hook-input contract has never been observed to carry a `tool_use_id`
-this project could rely on either (the same absence `hooks/stamp_intercept.py`'s own module
-docstring names for Bash). So the return leg does the next best thing: FIFO-pair against the
-dispatch journal's own unpaired lines sharing this session's `session_id` AND an identical
-`prompt` sha256 (recomputed from THIS event's own `tool_input.prompt` -- PostToolUse's payload
-is assumed to echo the same prompt text the PreToolUse leg saw, since this hook never mutates
-Task/Agent's tool_input). A match yields `pairing: "fifo_prompt_sha256"`, `dispatch_ts` (the
-matched dispatch line's own `ts`), and `duration_ms` (this return's ts minus the dispatch's ts).
-No match yields `pairing: "unresolved"`, `duration_ms: null` -- the honest fallback, never a
-guessed pairing. NAMED RESIDUAL GAP: two dispatches of the SAME tool with byte-identical prompt
-text truly concurrent in the same session can pair to the wrong dispatch (FIFO is a heuristic,
-not a guarantee) -- disclosed here rather than silently mismatched, matching
-hooks/posttooluse_bash_completion.py's own identical disclosure for the identical shape of gap.
+CORRELATION FIELD -- IDENTITY, NOT DERIVATION (2026-07-14 rebuild; ledger row 582, the pairing-
+key review commissioned off design/ORCH-RCA-PAIRING-KEY-DIVERGENCE.md sec-3/sec-4/sec-6.6, the
+sibling item to that RCA's Bash dispatch/completion fix). This file used to claim, verbatim, the
+SAME false premise `hooks/stamp_intercept.py`'s own module docstring stated for Bash --
+"Claude Code's hook-input contract has never been observed to carry a `tool_use_id` this project
+could rely on" -- and FIFO-paired dispatch/return lines by `session_id` + a recomputed `prompt`
+sha256 instead. That premise was checked, not assumed, and found false: a captured real
+PreToolUse+PostToolUse payload pair for the `Agent` tool (`seen-red/delegation-observer/
+agent_payload_capture/`, `check_contract.py`) shows `tool_use_id` present and BYTE-IDENTICAL
+across both legs of one Task/Agent dispatch, exactly as the RCA sec-3 witnessed for Bash (that
+RCA's own §7 item 2 named this specific leg -- Task/Agent's PostToolUse payload -- UNWITNESSED;
+this capture settles it). PostToolUse also carries `duration_ms` directly, computed by the
+harness itself, no local subtraction needed.
+
+So this leg is now identity-keyed, not derived: the dispatch line and the return line each carry
+the SAME `tool_use_id` (read defensively from the payload, `data.get("tool_use_id")`, the same
+posture `hooks/stamp_intercept.py` already uses for Bash). Neither leg computes a "does this
+pair with that" verdict -- there is no `_pair_return`, no FIFO, no stored `pairing`/`dispatch_ts`
+field. A false pairing record is unrepresentable: each journal line states only facts local to
+its own event (`tool_use_id`, and for the return leg, `duration_ms` copied straight from the
+payload when present). Pairing two lines into "one dispatch, one return" is a READ-TIME JOIN on
+`tool_use_id`, left to whichever consumer wants it (today: nobody -- `engine/contemp_edb.py`'s
+E4 family reads `ts`/`kind` only and never touched `pairing`, so this rebuild changes no
+consumer). When a payload carries no `tool_use_id` (an honest possibility this hook still
+degrades to, never guessed): the line journals without that key, and there is nothing to join
+it against -- the SAME per-line honesty the old FIFO fallback offered, without the concurrency
+residual gap FIFO-by-content-match named (two dispatches sharing byte-identical prompt text in
+the same session no longer collide: the harness's own per-call identity individuates them, not a
+recomputed hash of shared content).
 
 Stdlib only, top-of-file imports (the lazy-import gate, gates/no_lazy_imports.py, applies).
 """
@@ -273,96 +285,24 @@ def _journal(rec: dict) -> None:
         pass
 
 
-def _read_journal_lines() -> list[dict]:
-    """Every well-formed JSON object line in the journal, in file order -- the return leg's own
-    read of the SAME file the dispatch leg writes (module docstring, CORRELATION FIELD).
-    Malformed lines are skipped, never raised (best-effort, matching `_journal`'s own posture)."""
-    if not JOURNAL or not os.path.isfile(JOURNAL):
-        return []
-    out: list[dict] = []
-    try:
-        with open(JOURNAL, encoding="utf-8") as f:
-            for line in f:
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    rec = json.loads(line)
-                except json.JSONDecodeError:
-                    continue
-                if isinstance(rec, dict):
-                    out.append(rec)
-    except OSError:
-        pass
-    return out
-
-
-def _pair_return(session_id: str, prompt_sha256: str) -> dict | None:
-    """FIFO-pair this return against an unpaired dispatch line sharing the same session_id and
-    prompt_sha256 (module docstring, CORRELATION FIELD). A dispatch line carries no `kind` field
-    at all (module docstring: the existing dispatch shape is unchanged); a return line carries
-    `kind: "return"`. 'Already paired' is tracked by collecting every prior return's own
-    `dispatch_ts` -- the ts of the dispatch line it claimed -- so a repeated identical
-    session+prompt (the same subagent prompt dispatched twice) never double-pairs one dispatch
-    to two returns. Returns None (never raises past its own read) when no candidate remains."""
-    lines = _read_journal_lines()
-    already_paired_dispatch_ts = {
-        rec.get("dispatch_ts") for rec in lines
-        if rec.get("kind") == "return" and rec.get("dispatch_ts")
-    }
-    candidates = [
-        rec for rec in lines
-        if rec.get("kind") != "return"
-        and rec.get("session_id") == session_id
-        and rec.get("prompt_sha256") == prompt_sha256
-        and rec.get("ts") not in already_paired_dispatch_ts
-    ]
-    if not candidates:
-        return None
-    candidates.sort(key=lambda r: str(r.get("ts", "")))  # FIFO: earliest unpaired dispatch first
-    return candidates[0]
-
-
-def _duration_ms(start_iso: str, end_iso: str) -> int | None:
-    """Millisecond delta between two UTC-Z ISO-8601 timestamps (this file's own convention).
-    Returns None (never raises) on any malformed input -- a duration that cannot be computed is
-    omitted from the return record entirely, never a guessed or zero value."""
-    try:
-        start = datetime.fromisoformat(start_iso.replace("Z", "+00:00"))
-        end = datetime.fromisoformat(end_iso.replace("Z", "+00:00"))
-        return int((end - start).total_seconds() * 1000)
-    except (ValueError, TypeError):
-        return None
-
-
 def _handle_return(data: dict, tool: str) -> int:
-    """THE RETURN LEG (module docstring). Journals one `kind: "return"` line per Task/Agent
-    PostToolUse event, FIFO-paired against its own dispatch line where possible. Never raises --
-    every failure inside the pairing attempt degrades to `pairing: "unresolved"`, the honest
-    fallback, not a broken tool call."""
-    inp = _first(data, "tool_input", "toolInput", "input", default={})
-    if not isinstance(inp, dict):
-        inp = {}
-    prompt = str(inp.get("prompt", ""))
+    """THE RETURN LEG (module docstring, CORRELATION FIELD). Journals one `kind: "return"` line
+    per Task/Agent PostToolUse event, carrying facts local to THIS event only -- `tool_use_id`
+    (when the payload has one) and `duration_ms` (copied straight from the payload when present,
+    the harness's own computed figure, never re-derived here). No read of the dispatch journal,
+    no pairing attempt, no stored verdict: pairing is a read-time join on `tool_use_id` left to
+    whichever consumer wants it. Never raises -- a malformed/missing field degrades to that key's
+    honest absence, not a broken tool call."""
     session_id = str(data.get("session_id") or "")
-    prompt_sha256 = hashlib.sha256(prompt.encode("utf-8")).hexdigest()
+    tool_use_id = data.get("tool_use_id")
+    duration_ms = data.get("duration_ms")
     now = datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
 
-    try:
-        matched = _pair_return(session_id, prompt_sha256)
-    except Exception:  # noqa: BLE001 -- an observer must never break a tool call over a read hiccup
-        matched = None
-
     rec: dict = {"ts": now, "session_id": session_id, "tool": tool, "kind": "return"}
-    if matched is not None:
-        dispatch_ts = str(matched.get("ts", ""))
-        rec["pairing"] = "fifo_prompt_sha256"
-        rec["dispatch_ts"] = dispatch_ts
-        duration = _duration_ms(dispatch_ts, now)
-        if duration is not None:
-            rec["duration_ms"] = duration
-    else:
-        rec["pairing"] = "unresolved"
+    if tool_use_id:
+        rec["tool_use_id"] = str(tool_use_id)
+    if isinstance(duration_ms, (int, float)):
+        rec["duration_ms"] = int(duration_ms)
     _journal(rec)
     return 0
 
@@ -431,17 +371,24 @@ def main() -> int:
     prompt = str(inp.get("prompt", ""))
     session_id = str(data.get("session_id") or "")
     prompt_sha256 = hashlib.sha256(prompt.encode("utf-8")).hexdigest()
+    tool_use_id = data.get("tool_use_id")
 
     # 1. JOURNAL every dispatch, unconditionally (module docstring) -- before any DB work, so a
-    # DB hiccup below never costs the journal record.
-    _journal({
+    # DB hiccup below never costs the journal record. `tool_use_id` (read defensively, same
+    # posture as hooks/stamp_intercept.py) is the identity the return leg now keys on (module
+    # docstring, CORRELATION FIELD) -- `prompt_sha256`/`prompt_excerpt` remain, as event facts
+    # for a human/consumer to recognize the dispatch by, no longer as a correlation key.
+    rec = {
         "ts": datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z"),
         "session_id": session_id,
         "tool": tool,
         "description": description,
         "prompt_sha256": prompt_sha256,
         "prompt_excerpt": prompt[:200],
-    })
+    }
+    if tool_use_id:
+        rec["tool_use_id"] = str(tool_use_id)
+    _journal(rec)
 
     # 2. WARN only when the work-item layer exists and no item is open+claimed (module docstring).
     # Never raises past this point -- an observer must never break a tool call over a DB hiccup.
