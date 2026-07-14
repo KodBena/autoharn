@@ -1,0 +1,113 @@
+seen-red/deployment-pinning — banked BOTH-POLARITY evidence (fixture-census)
+
+Tracker item `deployment-live-exec-coupling` (design/ORCH-DEPLOYMENT-PINNING.md; maintainer
+commission 2026-07-14 late, "git submodule DEPLOYMENT must be IDIOT-PROOF"). No mechanism existed
+for this at all before this build (checked: `gates/fixture_census.py`'s REGISTRY had no entry for
+any of `bootstrap/new-project.sh`'s `--pin` flag, `bootstrap/convert-to-submodule.sh`,
+`bootstrap/upgrade-submodule.sh`, or `bootstrap/live_session_check.py` -- none of the four existed
+before this session). So "RED" here is not a pre-fix baseline (there was no prior behavior to
+regress from) -- it is the REFUSAL polarity of a brand-new mechanism: eleven cases below prove the
+scripts actually refuse (loudly, teaching, touching nothing) on every hazard they claim to guard,
+not just that they succeed on the happy path. This is the same genre `gates/fixture_census.py`
+itself uses for the two census gates it registers ("their fixture is the gate itself, red-specimen
+mutates its registry in memory to force the breach") -- a refusal proven live is the RED half of a
+gate that has no earlier failing version to extract via `git show`.
+
+Full run: `python3 seen-red/deployment-pinning/run_fixtures.py` -- REAL git (worktree, submodule
+add/checkout/commit/fetch), REAL toy postgres (192.168.122.1/toy), REAL scratch deployment
+directories, REAL background processes for the live-session cases. No mocks anywhere in this
+suite.
+
+RED (refusal) cases -- the hazard-guard actually fires, loudly, touching nothing:
+
+  RED 1 -- `new-project.sh --pin copy` (only 'submodule' is built; copy-at-scaffold is out of
+  scope for this build, named honestly rather than silently accepted):
+    new-project.sh: --pin 'copy' is not a recognized value -- only 'submodule' is supported
+                    today (the copy-at-scaffold fallback design/ORCH-DEPLOYMENT-PINNING.md
+                    names is deliberately out of scope for this build; the 2026-07-14
+                    maintainer commission asked for the submodule path specifically).
+    exit code: 2
+
+  RED 2 -- `--pin submodule` combined with `--new-world` (autoharn's own run* worlds are
+  deliberately scoped OUT of pinning, design/ORCH-DEPLOYMENT-PINNING.md's own text):
+    new-project.sh: --pin submodule cannot be combined with --new-world -- autoharn's own
+                    run*-style throwaway worlds are DELIBERATELY scoped OUT of pinning
+                    (design/ORCH-DEPLOYMENT-PINNING.md: "autoharn's own run* worlds keep
+                    the live-exec shape; that ruling was correctly scoped to them"). Drop
+                    --pin for a --new-world scaffold, or drop --new-world for a pinned
+                    adopter deployment.
+    exit code: 2
+
+  RED 3 -- `--pin submodule` against a DIRTY autoharn source (a tracked file modified,
+  uncommitted -- cannot pin to bytes that would not reproduce):
+    new-project.sh: --pin submodule refuses to pin a deployment to a DIRTY autoharn
+                    checkout (.../autoharn-src has uncommitted changes) -- the pinned SHA
+                    would not reproduce what actually gets copied into the submodule.
+                    Commit or stash the changes in .../autoharn-src, then re-run.
+    exit code: 1; the destination directory was never created.
+
+  RED 6 -- `convert-to-submodule.sh` re-run against an ALREADY-PINNED deployment:
+    convert-to-submodule.sh: .../.autoharn already exists -- this deployment looks ALREADY
+                             PINNED. If you meant to take a newer autoharn, use
+                             bootstrap/upgrade-submodule.sh <dest> <new-sha> instead.
+    exit code: 1; nothing touched (the existing pin was left exactly as it was).
+
+  RED 7 -- `convert-to-submodule.sh` against a deployment with a REAL background process sitting
+  in it (a genuine `sleep 30` subprocess with cwd set inside the target dir, detected by
+  bootstrap/live_session_check.py's best-effort /proc scan):
+    live_session_check: 1 process(es) appear to be running against .../red7-busy -- REFUSING
+    (this is a best-effort scan, not a guarantee; if you know these are stale/unrelated, end
+    them or investigate before re-running):
+      pid=<pid>  cwd=.../red7-busy  cmd='sleep 30'
+
+    convert-to-submodule.sh: REFUSING -- see the process list above. Converting a deployment
+                             out from under a live session is exactly the hazard pinning
+                             exists to retire, not a new way to reintroduce it (CLAUDE.md,
+                             'Never modify hooks/ or a user project while a live session
+                             runs there'). End the session, then re-run. Nothing touched.
+    exit code: 1; `.autoharn` was never created (verified by the fixture).
+
+  RED 9 -- `upgrade-submodule.sh` given a SHA that does not exist anywhere the submodule's
+  remote can reach, after a real `git fetch`:
+    upgrade-submodule.sh: '0000000000000000000000000000000000000' does not resolve to a
+                          commit in .../.autoharn after fetching -- typo, or a commit not
+                          reachable from this submodule's remote. Nothing touched.
+    exit code: 1; the pin was left at its prior commit (verified by the fixture).
+
+  RED 10 -- `upgrade-submodule.sh` against a deployment with a real background process sitting in
+  it (same live_session_check mechanism as RED 7, exercised on the upgrade path):
+    live_session_check: 1 process(es) appear to be running against .../green5-classic --
+    REFUSING ...
+    upgrade-submodule.sh: REFUSING -- see the process list above. Bumping the pin under a
+                          live session changes that session's behavior mid-stream, exactly
+                          the hazard pinning exists to retire. End the session, then
+                          re-run. Nothing touched.
+    exit code: 1; the pin was left at its prior commit (verified by the fixture: still equal
+    to the source worktree's original HEAD).
+
+  RED 11 -- `upgrade-submodule.sh` against a deployment that was never pinned (still live-exec):
+    upgrade-submodule.sh: .../red7-busy/.autoharn does not exist -- this deployment is not
+                          pinned yet. Run bootstrap/convert-to-submodule.sh .../red7-busy
+                          first (or bootstrap/new-project.sh --pin submodule for a
+                          brand-new one).
+    exit code: 1.
+
+GREEN (mechanism works end to end) cases, all against real postgres:
+
+  GREEN 4 -- `new-project.sh --pin submodule` on a clean source: `.autoharn` is added and
+  git-pinned to the source worktree's exact HEAD SHA; all 8 operator-verb shims and every hook
+  command line in `.claude/settings.json` resolve into the pinned copy with ZERO leftover
+  references to the source path; a real `./led decision` write followed by `./led --recent 1`
+  round-trips through the pin against 192.168.122.1/toy.
+
+  GREEN 5 -- `convert-to-submodule.sh` on a classic (today's live-exec-shape) deployment:
+  converts to the exact commit the deployment was ACTUALLY running (not the source's later tip),
+  zero leftover references to the old root in either the shims or `.claude/settings.json`, real
+  `./led` round-trip through the converted pin.
+
+  GREEN 8 -- `upgrade-submodule.sh` bumping an already-pinned deployment to a genuinely new
+  commit: real `git fetch` + `git checkout` + a commit in the DEPLOYMENT's own git history (never
+  autoharn's), real `./led --recent 1` round-trip through the upgraded pin.
+
+Full narrated run (all 17 cases): `python3 seen-red/deployment-pinning/run_fixtures.py`.
+Registered in `gates/fixture_census.py` as `deployment-pinning`.

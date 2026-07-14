@@ -1,8 +1,8 @@
 #!/bin/sh
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-09T11:15:53Z
-#   last-change: 2026-07-13T17:39:09Z
-#   contributors: be693afb/main, e4410ef6/main, 3c50e030/main
+#   last-change: 2026-07-14T21:17:42Z
+#   contributors: be693afb/main, e4410ef6/main, 3c50e030/main, a857c93d/main
 # <<< PROVENANCE-STAMP <<<
 
 # new-project.sh — stamp a new instance directory: deployment.json, .claude/ wiring
@@ -102,6 +102,12 @@ usage() {
     echo "          the --new-world block in this script's own header comment)" >&2
     echo "         (--governed <comma-separated-fnmatch-patterns> sets .claude/governed_files.json;" >&2
     echo "          omit it and the *.py-only default is used, with a loud post-scaffold notice)" >&2
+    echo "         (--pin submodule adds autoharn as a git submodule at <dest-dir>/.autoharn, pinned" >&2
+    echo "          to THIS checkout's current commit, and points every operator verb + hook at that" >&2
+    echo "          pinned copy instead of this live checkout -- design/ORCH-DEPLOYMENT-PINNING.md," >&2
+    echo "          NOT combinable with --new-world. --pin-url <url> overrides the submodule remote" >&2
+    echo "          (default: this checkout's own on-disk path -- portable only on this machine;" >&2
+    echo "          pass a real git remote URL for a submodule another machine can also fetch))" >&2
     exit 2
 }
 
@@ -112,6 +118,16 @@ FORCE=0
 NEW_WORLD=""
 GOVERNED=""
 DB=""; HOST=""; SCHEMA=""; KERN=""; ROLE=""
+# --pin submodule (tracker item deployment-live-exec-coupling, design/ORCH-DEPLOYMENT-PINNING.md,
+# maintainer commission 2026-07-14 late "submodule deployment must be IDIOT-PROOF"): an OPT-IN
+# scaffold-time flag, default UNSET so every existing caller (every --new-world run world, every
+# seen-red/instruments fixture that scaffolds a classic deployment without this flag) keeps
+# TODAY'S live-exec shape byte-for-byte -- this design's own text scopes the submodule shape to
+# "an adopter", never to autoharn's own run* worlds, so the flag is refused in combination with
+# --new-world below rather than silently accepted and ignored (ADR-0002: a refusal that teaches,
+# not a caveat buried in a comment nobody reads).
+PIN=""
+PIN_URL=""
 while [ $# -gt 0 ]; do
     case "$1" in
         --db) DB="$2"; shift 2 ;;
@@ -122,10 +138,32 @@ while [ $# -gt 0 ]; do
         --name) NAME="$2"; shift 2 ;;
         --new-world) NEW_WORLD="$2"; shift 2 ;;
         --governed) GOVERNED="$2"; shift 2 ;;
+        --pin) PIN="$2"; shift 2 ;;
+        --pin-url) PIN_URL="$2"; shift 2 ;;
         --force) FORCE=1; shift ;;
         *) echo "unrecognized argument: $1" >&2; usage ;;
     esac
 done
+if [ -n "$PIN" ] && [ "$PIN" != "submodule" ]; then
+    echo "new-project.sh: --pin '$PIN' is not a recognized value -- only 'submodule' is supported" >&2
+    echo "                today (the copy-at-scaffold fallback design/ORCH-DEPLOYMENT-PINNING.md" >&2
+    echo "                names is deliberately out of scope for this build; the 2026-07-14" >&2
+    echo "                maintainer commission asked for the submodule path specifically)." >&2
+    exit 2
+fi
+if [ -n "$PIN" ] && [ -n "$NEW_WORLD" ]; then
+    echo "new-project.sh: --pin submodule cannot be combined with --new-world -- autoharn's own" >&2
+    echo "                run*-style throwaway worlds are DELIBERATELY scoped OUT of pinning" >&2
+    echo "                (design/ORCH-DEPLOYMENT-PINNING.md: \"autoharn's own run* worlds keep" >&2
+    echo "                the live-exec shape; that ruling was correctly scoped to them\"). Drop" >&2
+    echo "                --pin for a --new-world scaffold, or drop --new-world for a pinned" >&2
+    echo "                adopter deployment." >&2
+    exit 2
+fi
+if [ -n "$PIN_URL" ] && [ -z "$PIN" ]; then
+    echo "new-project.sh: --pin-url given without --pin submodule -- it has nothing to apply to." >&2
+    exit 2
+fi
 if [ -n "$NEW_WORLD" ]; then
     # Derive, never require, the three names that must agree (P1: one source -- the world name --
     # not three hand-typed strings the caller must keep in sync). An explicit --schema/--kern/--role
@@ -182,13 +220,34 @@ AUTOHARN_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 # Degrades honestly rather than silently blank -- a git failure or a dirty checkout are both
 # real facts about the instrument that produced this world, not to be hidden behind an empty
 # string (ADR-0002).
-AUTOHARN_COMMIT="$(cd "$AUTOHARN_ROOT" && git rev-parse HEAD 2>/dev/null || true)"
+AUTOHARN_COMMIT_SHA="$(cd "$AUTOHARN_ROOT" && git rev-parse HEAD 2>/dev/null || true)"
+AUTOHARN_COMMIT="$AUTOHARN_COMMIT_SHA"
+AUTOHARN_DIRTY=0
 if [ -n "$AUTOHARN_COMMIT" ]; then
     if ! (cd "$AUTOHARN_ROOT" && git diff --quiet && git diff --cached --quiet) 2>/dev/null; then
+        AUTOHARN_DIRTY=1
         AUTOHARN_COMMIT="$AUTOHARN_COMMIT (DIRTY -- uncommitted changes were present in the autoharn checkout at scaffold time; this world's evidence cannot be reproduced from this commit hash alone)"
     fi
 else
     AUTOHARN_COMMIT="UNAVAILABLE -- $AUTOHARN_ROOT is not a git checkout, or git is not on PATH (git rev-parse HEAD failed); this world's evidence cannot be tied to an instrument version by commit hash"
+fi
+
+# --pin submodule needs a REPRODUCIBLE commit to pin to -- a dirty or unavailable checkout would
+# pin a deployment to bytes that cannot be reconstructed from the SHA alone, defeating the whole
+# point (ADR-0002: refuse loudly rather than pin to a lie).
+if [ "$PIN" = "submodule" ]; then
+    if [ -z "$AUTOHARN_COMMIT_SHA" ]; then
+        echo "new-project.sh: --pin submodule requires this autoharn checkout ($AUTOHARN_ROOT) to be" >&2
+        echo "                a git repository with git on PATH -- git rev-parse HEAD failed." >&2
+        exit 1
+    fi
+    if [ "$AUTOHARN_DIRTY" -eq 1 ]; then
+        echo "new-project.sh: --pin submodule refuses to pin a deployment to a DIRTY autoharn" >&2
+        echo "                checkout ($AUTOHARN_ROOT has uncommitted changes) -- the pinned SHA" >&2
+        echo "                would not reproduce what actually gets copied into the submodule." >&2
+        echo "                Commit or stash the changes in $AUTOHARN_ROOT, then re-run." >&2
+        exit 1
+    fi
 fi
 
 TEMPLATES="$AUTOHARN_ROOT/bootstrap/templates"
@@ -206,6 +265,58 @@ if [ -f "$DEPLOYMENT" ] && [ "$FORCE" -ne 1 ]; then
 fi
 
 echo "== stamping instance at $PROJECT_ROOT (name=$NAME) =="
+
+# EXEC_ROOT -- the autoharn tree every operator verb + hook actually points at. Unpinned (the
+# default, unchanged from before this flag existed): the live checkout, $AUTOHARN_ROOT, same as
+# every world scaffolded before this build. --pin submodule: a FROZEN copy of THIS commit, living
+# inside the deployment's own git tree at $PROJECT_ROOT/.autoharn -- design/ORCH-DEPLOYMENT-
+# PINNING.md's whole point (a deployment stops executing another project's mutable working tree).
+EXEC_ROOT="$AUTOHARN_ROOT"
+if [ "$PIN" = "submodule" ]; then
+    echo "-- --pin submodule: pinning autoharn@$AUTOHARN_COMMIT_SHA into $PROJECT_ROOT/.autoharn --"
+    if [ -e "$PROJECT_ROOT/.autoharn" ] && [ "$FORCE" -ne 1 ]; then
+        echo "new-project.sh: $PROJECT_ROOT/.autoharn already exists -- refusing to overwrite" >&2
+        echo "                (pass --force to replace it, or this deployment is already pinned)." >&2
+        exit 1
+    fi
+    if [ -e "$PROJECT_ROOT/.autoharn" ] && [ "$FORCE" -eq 1 ]; then
+        echo "   --force: removing existing $PROJECT_ROOT/.autoharn before re-adding"
+        (cd "$PROJECT_ROOT" && git submodule deinit -f .autoharn 2>/dev/null || true)
+        rm -rf "$PROJECT_ROOT/.autoharn" "$PROJECT_ROOT/.git/modules/.autoharn"
+    fi
+    if (cd "$PROJECT_ROOT" && git rev-parse --is-inside-work-tree >/dev/null 2>&1); then
+        echo "   $PROJECT_ROOT is already a git repository -- using it"
+    else
+        echo "   $PROJECT_ROOT is not yet a git repository -- running git init"
+        (cd "$PROJECT_ROOT" && git init --quiet)
+    fi
+    # Default submodule URL: THIS checkout's own on-disk path -- a plain local-filesystem submodule
+    # git supports natively, works with no network access, and is HONEST about its portability
+    # limit (printed below). --pin-url overrides with a real remote for a submodule another
+    # machine can also fetch.
+    SUBMODULE_URL="${PIN_URL:-$AUTOHARN_ROOT}"
+    # -c protocol.file.allow=always: ONLY set when SUBMODULE_URL is a local filesystem path (the
+    # default absent --pin-url) -- git 2.38.1+ (CVE-2022-39253) refuses the "file" transport for a
+    # submodule's internal clone unless explicitly allowed, even though `git submodule add` itself
+    # was a direct, deliberate operator/scaffold action. A real remote URL (--pin-url) never needs
+    # this override.
+    _submodule_add_opts=""
+    case "$SUBMODULE_URL" in
+        *://*) ;;  # a real URL (https://, ssh://, git://, ...) -- no override needed
+        *) _submodule_add_opts="-c protocol.file.allow=always" ;;
+    esac
+    (cd "$PROJECT_ROOT" && git $_submodule_add_opts submodule add --quiet "$SUBMODULE_URL" .autoharn)
+    (cd "$PROJECT_ROOT/.autoharn" && git checkout --quiet "$AUTOHARN_COMMIT_SHA")
+    (cd "$PROJECT_ROOT" && git add .gitmodules .autoharn)
+    echo "   submodule added and pinned to $AUTOHARN_COMMIT_SHA (staged; this scaffold run commits"
+    echo "   it, along with the operator verbs + hook wiring it points at, at the end of this run)"
+    if [ -z "$PIN_URL" ]; then
+        echo "   NOTE: submodule URL is a LOCAL PATH ($SUBMODULE_URL) -- this deployment's git clone"
+        echo "   is portable on THIS machine only. For a submodule another machine can also fetch,"
+        echo "   re-run with --pin-url <a real git remote for autoharn>."
+    fi
+    EXEC_ROOT="$PROJECT_ROOT/.autoharn"
+fi
 
 if [ -n "$NEW_WORLD" ]; then
     echo "-- new-world '$NEW_WORLD': applying high_watermark_1.sql + s20 + s21 + s22 + s23 + s24 + s25 + s26 + s27 + s28 to $DB (schema=$SCHEMA kern=$KERN role=$ROLE) --"
@@ -354,7 +465,7 @@ sedsubst() {
         -e "s|__ROLE__|$ROLE|g" \
         -e "s|__PROJECT_ROOT__|$PROJECT_ROOT|g" \
         -e "s|__PROJECT_NAME__|$NAME|g" \
-        -e "s|__AUTOHARN_ROOT__|$AUTOHARN_ROOT|g" \
+        -e "s|__AUTOHARN_ROOT__|$EXEC_ROOT|g" \
         -e "s|__CREATED_AT__|$CREATED_AT|g" \
         -e "s|__CREATE_CMD__|$CREATE_CMD|g" \
         -e "s|__AUTOHARN_COMMIT__|$AUTOHARN_COMMIT|g" \
@@ -485,11 +596,24 @@ for verb in led judge pickup audit distance-to-clean verify-commission verify-ch
     cat > "$PROJECT_ROOT/$verb" <<SHIM
 #!/bin/sh
 HERE="\$(cd "\$(dirname "\$0")" && pwd)"
-exec env PICKUP_DEPLOYMENT="\$HERE/deployment.json" $AUTOHARN_ROOT/bootstrap/templates/$verb.tmpl "\$@"
+exec env PICKUP_DEPLOYMENT="\$HERE/deployment.json" $EXEC_ROOT/bootstrap/templates/$verb.tmpl "\$@"
 SHIM
     chmod +x "$PROJECT_ROOT/$verb"
-    echo "wrote $verb (shim -> $AUTOHARN_ROOT/bootstrap/templates/$verb.tmpl)"
+    echo "wrote $verb (shim -> $EXEC_ROOT/bootstrap/templates/$verb.tmpl)"
 done
+
+if [ "$PIN" = "submodule" ]; then
+    echo "-- --pin submodule: committing the pin + the verbs/hooks it points at --"
+    (cd "$PROJECT_ROOT" && git add \
+        led judge pickup audit distance-to-clean verify-commission verify-chain attest-doc \
+        .claude/settings.json .gitignore 2>/dev/null || true)
+    if (cd "$PROJECT_ROOT" && git diff --cached --quiet) 2>/dev/null; then
+        echo "   nothing new to commit (already committed by an earlier --force re-run)"
+    else
+        (cd "$PROJECT_ROOT" && git commit --quiet -m "pin autoharn@$AUTOHARN_COMMIT_SHA via .autoharn submodule (bootstrap/new-project.sh --pin submodule)")
+        echo "   committed: $(cd "$PROJECT_ROOT" && git log -1 --oneline)"
+    fi
+fi
 
 echo "== done =="
 echo "Next steps:"
@@ -562,4 +686,12 @@ else
     echo "  2. Provision the stamp secret -- see $PROJECT_ROOT/.claude/HOOKS.md (marked UNWITNESSED until you run it)."
     echo "  3. cd $PROJECT_ROOT && ./led decision \"...\"  /  ./judge  /  ./pickup"
     echo "  4. Read $PROJECT_ROOT/.claude/HOOKS.md and replace its UNWITNESSED marks as you exercise each command."
+    if [ "$PIN" = "submodule" ]; then
+        echo ""
+        echo "PINNED DEPLOYMENT: every verb above and every hook in .claude/settings.json now runs"
+        echo "out of $PROJECT_ROOT/.autoharn (git submodule, pinned to $AUTOHARN_COMMIT_SHA) -- a"
+        echo "merge to autoharn's own working branch will NEVER change this deployment's behavior"
+        echo "again. To take a newer autoharn deliberately: bootstrap/upgrade-submodule.sh"
+        echo "$PROJECT_ROOT <new-sha> (from the autoharn checkout, not from inside $PROJECT_ROOT)."
+    fi
 fi
