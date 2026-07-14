@@ -130,6 +130,20 @@ def main(argv: list[str]) -> int:
         elif a == "--json":
             as_json = True
             i += 1
+        elif a in ("--help", "-h"):
+            print(
+                "usage: attest-tags [--repo PATH] [--keys-dir PATH] [--json]\n"
+                "\n"
+                "Verifies this repo's ratified/* git tags against the committed public key(s)\n"
+                "in law/keys/*.asc, and reports any RATIFIED-marked commit not covered by a\n"
+                "GOOD tag. Exit 0 iff every tag verifies GOOD and every claim is covered.\n"
+                "\n"
+                "  --repo PATH       repo to check (default: this checkout)\n"
+                "  --keys-dir PATH   committed public-key directory (default: law/keys)\n"
+                "  --json            machine-readable report on stdout\n"
+                "  --help, -h        show this message and exit"
+            )
+            return 0
         else:
             print(f"attest-tags: unrecognized argument: {a}", file=sys.stderr)
             return 2
