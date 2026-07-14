@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-11T14:44:01Z
-#   last-change: 2026-07-14T22:22:04Z
-#   contributors: e4410ef6/main, a857c93d/main
+#   last-change: 2026-07-12T00:02:56Z
+#   contributors: e4410ef6/main
 # <<< PROVENANCE-STAMP <<<
 
 """run_fixtures.py -- both-polarity proof for Part 2 of design/ORCH-CONTEMPORANEITY-AUDIT.md
@@ -936,18 +936,13 @@ def main() -> int:
         root_r = _make_world({})
 
         # ---- CASE r, PART 1 (the BEFORE-THE-FIX witness): run the SAME schema through the
-        # PRE-FIX engine/contemp_edb.py in an isolated subprocess -- `sys.path` is ordered so the
+        # PRE-FIX engine/contemp_edb.py (git-show'd from HEAD, before this commission's own
+        # working-tree edit landed) in an isolated subprocess -- `sys.path` is ordered so the
         # OLD contemp_edb.py shadows the current one while every OTHER sibling module (clingo_run,
         # ledger_edb) resolves normally from the real engine/ dir, unchanged by this commission.
-        # PINNED to the actual pre-fix commit (not HEAD, which has long since carried the fix
-        # itself past HEAD -- git-show'ing HEAD stopped reproducing the old unguarded behavior
-        # once HEAD moved beyond the fix commit): 09e4d7e is the immediate parent of 3f1991b
-        # ("engine/contemp_edb.py: enforce-or-refuse the 24.8-day 32-bit clingo window"), i.e.
-        # the last commit before the UnsafeWindowError bound check existed at all.
-        PRE_FIX_REV = "09e4d7e"
         old_edb_dir = Path(tempfile.mkdtemp(prefix="contemp-edb-pre-fix-"))
         old_edb_src = subprocess.run(
-            ["git", "-C", str(REPO), "show", f"{PRE_FIX_REV}:engine/contemp_edb.py"],
+            ["git", "-C", str(REPO), "show", "HEAD:engine/contemp_edb.py"],
             capture_output=True, text=True, check=True).stdout
         (old_edb_dir / "contemp_edb.py").write_text(old_edb_src, encoding="utf-8")
         before_script = f'''\
@@ -990,8 +985,8 @@ sys.exit(0 if max_t > 2**31 - 1 else 9)
            f"{(cp_before.stdout + cp_before.stderr)[-1000:]}")
         before_out = cp_before.stdout + cp_before.stderr
         case_r_before_out = before_out
-        log.append(f"CASE r part 1 (BEFORE this fix, pre-fix engine/contemp_edb.py pinned to "
-                   f"{PRE_FIX_REV}, real ~7-year-wide schema): exit={cp_before.returncode}, "
+        log.append(f"CASE r part 1 (BEFORE this fix, pre-fix engine/contemp_edb.py from HEAD, "
+                   f"real ~7-year-wide schema): exit={cp_before.returncode}, "
                    f"{before_out.strip().splitlines()[-1] if before_out.strip() else '(no output)'} "
                    f"-- export() completed WITHOUT refusing and produced a fact whose T value "
                    f"already exceeds the safe 32-bit bound, i.e. a value that would wrap silently "

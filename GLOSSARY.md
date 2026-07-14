@@ -263,7 +263,7 @@ rather than re-derived at run time. Apply it; never re-derive or weaken it; a mi
 the banked judgment is filed as a **FRAME-GAP finding** — a recorded mismatch between the
 banked judgment's frame and what the new case actually needed — rather than silently
 reinterpreted to make it fit. Named for and set out in
-[`vestigial_documentation/judgment/POST-FABLE-OPERATING-BRIEF.md`](vestigial_documentation/judgment/POST-FABLE-OPERATING-BRIEF.md).
+`vestigial_documentation/judgment/POST-FABLE-OPERATING-BRIEF.md`.
 
 ## Operating-era terms (worlds and runs, added 2026-07-11)
 
@@ -288,7 +288,7 @@ world. Runs are numbered; their worlds are named for them (`run5`, `run7`).
 The ordered kernel SQL a new world receives at scaffold time: `high_watermark_1.sql`
 (bundling s15 → s17-stamp → s17-independence → s19) → s20 → s21 → s22 → s23 → s24 → s25.
 There is no s16; s18 is deliberately excluded (experiment apparatus, not kernel). SSOT:
-[`kernel/lineage/README.md`](kernel/lineage/README.md) + [`bootstrap/new-project.sh`](bootstrap/new-project.sh).
+`kernel/lineage/README.md` + `bootstrap/new-project.sh`.
 
 ### delta (kernel lineage delta)
 One additive lineage step. Authoring may be class-ratified (strictly fail-safe
@@ -299,8 +299,7 @@ demoted to history).
 
 <a id="toy-db"></a>
 ### the toy db
-The shared, non-production Postgres database (host: this deployment's own `deployment.json`
-`host` field — see README.md "Configuration"; database name `toy`) this
+The shared, non-production Postgres database (host `192.168.122.1`, database name `toy`) this
 project's own witness work runs against — as opposed to a scaffolded deployment's real subject
 database. Individual scratch/fixture schema pairs (e.g. `toycolors` / `toycolors_kernel`) live
 inside it; see [`ORCH-USE-MODE-ENGINE-WIRING.md`](design/ORCH-USE-MODE-ENGINE-WIRING.md)'s
@@ -327,7 +326,7 @@ not authentication (see [ORCH-CAPABILITIES.md, "Honest limits"](ORCH-CAPABILITIE
 <a id="led-and-pickup"></a>
 ### `led` and `pickup`
 Two of the project's [operator verbs](#world) (thin shell shims that `exec` autoharn's own
-live templates — see [`bootstrap/templates/led.tmpl`](bootstrap/templates/led.tmpl) / [`pickup.tmpl`](bootstrap/templates/pickup.tmpl)), the two an agent uses
+live templates — see `bootstrap/templates/led.tmpl` / `pickup.tmpl`), the two an agent uses
 most. **`led`** appends one entry to a world's ledger per invocation (`./led decision "..."`,
 `./led work open <slug> ...`, `./led review <id> ...`, etc. — its own `--help`-style header
 comment is the canonical vocabulary). **`pickup`** is the session-start resume command: it
@@ -337,23 +336,22 @@ changes, and — since this session — the RESOURCES section), never a cached o
 
 <a id="judge"></a>
 ### `judge`
-The operator verb `./judge`: runs [`engine/ledger_differential.py`](engine/ledger_differential.py) against the world's own
+The operator verb `./judge`: runs `engine/ledger_differential.py` against the world's own
 ledger, deriving the same verdict independently in SQL and in ASP (Answer Set Programming, the
 `clingo` logic engine) and comparing them. Closed verdicts: `AGREE` (green) |
 `DIVERGE_BY_DESIGN` | `DIVERGE_DEFECT` | `QUARANTINED` — the latter two are TYPED escalation
 events (non-zero exit) that route upward rather than being self-adjudicated. Diagnosis
-walkthrough: [`engine/docs/JUDGE-READING.md`](engine/docs/JUDGE-READING.md). Source: [`bootstrap/templates/judge.tmpl`](bootstrap/templates/judge.tmpl).
+walkthrough: `engine/docs/JUDGE-READING.md`. Source: `bootstrap/templates/judge.tmpl`.
 
 <a id="audit"></a>
 ### `audit`
-The operator verb `./audit`: the contemporaneity check
-([design/ORCH-CONTEMPORANEITY-AUDIT.md, "Part 2"](design/ORCH-CONTEMPORANEITY-AUDIT.md#part-2--the-correlation-verb-audit--a-fifth-operator-verb-or-a-judge-subcommand))
-that joins every ledger row to the invocation that wrote it and the wall-clock journals,
+The operator verb `./audit`: the contemporaneity check (`design/ORCH-CONTEMPORANEITY-AUDIT.md`
+Part 2) that joins every ledger row to the invocation that wrote it and the wall-clock journals,
 reporting per-row event-vs-record deltas. Closed verdicts: `CONTEMPORANEOUS` |
 `BATCHED_DECLARED` | `LATE_DECLARED` | `BACKFILL_SUSPECT` (non-zero exit only on the last).
 Read-only; safe to run mid-run or after. Not to be confused with the differently-scoped
 `./audit --review-gap` surface cited under [`review_gap`](#review_gap). Source:
-[`bootstrap/templates/audit.tmpl`](bootstrap/templates/audit.tmpl).
+`bootstrap/templates/audit.tmpl`.
 
 <a id="distance-to-clean"></a>
 ### `distance-to-clean`
@@ -362,7 +360,7 @@ The operator verb `./distance-to-clean`: one composed read of all closure-debt d
 nothing the three underlying views do not already compute. Strictly additive convenience —
 `led review-gap`, `led question-status`, and `led work violations` remain the documented
 default, disaggregated way to read closure debt (maintainer condition, 2026-07-11). Source:
-[`bootstrap/templates/distance-to-clean.tmpl`](bootstrap/templates/distance-to-clean.tmpl).
+`bootstrap/templates/distance-to-clean.tmpl`.
 
 <a id="the-scaffold"></a>
 ### the scaffold
@@ -393,14 +391,14 @@ is a free-text label for a human reader, never a filter on which rows count — 
 covers every row the obliged principal writes, regardless of scope. Oblige the WORKER (this
 entry's shorthand for the `<obliged-actor-principal>` argument to `led obligate` — the
 [principal](#principal) whose rows need outside eyes, typically `author`), never the
-reviewer/countersigner itself (see [`bootstrap/templates/led.tmpl`](bootstrap/templates/led.tmpl)'s `led obligate` teach-text,
+reviewer/countersigner itself (see `bootstrap/templates/led.tmpl`'s `led obligate` teach-text,
 which spells out the direction because getting it backwards was a repeated mistake) — an
 obligation is standing operator-owned policy config, not a role self-service capability (`led
 obligate revoke` refuses a role's own attempt to lift it).
 
 <a id="governed-file"></a>
 ### governed file
-A file [`hooks/pretooluse_change_gate.py`](hooks/pretooluse_change_gate.py) protects — matched, by pattern (`*.py` by default; a
+A file `hooks/pretooluse_change_gate.py` protects — matched, by pattern (`*.py` by default; a
 project's own `.claude/governed_files.json` may widen or narrow the set), against
 [SUBJECT_ROOT](#subject-root). A Write/Edit to a governed file is what [permit-to-work](#permit-to-work)
 and the base `change_gate` mechanism gate on; [decomposition-review-blocker](#decomposition-review-blocker)
@@ -408,7 +406,7 @@ deliberately governs a WIDER set (see its own entry).
 
 <a id="subject-root"></a>
 ### SUBJECT_ROOT
-The scaffolded project's own root directory, as the [`hooks/pretooluse_change_gate.py`](hooks/pretooluse_change_gate.py) hook
+The scaffolded project's own root directory, as the `hooks/pretooluse_change_gate.py` hook
 resolves it for the current invocation — from an explicit env var, or from a located
 `deployment.json`, or (unwired) a byte-held default. Every path-scoped mechanism in that hook
 ([governed file](#governed-file) matching, [permit-to-work](#permit-to-work),
@@ -417,13 +415,13 @@ resolves it for the current invocation — from an explicit env var, or from a l
 ### permit-to-work
 The rule that a Write/Edit to a [governed file](#governed-file) is refused unless the world's
 ledger shows an open AND claimed s22 work item (s22: the kernel-lineage delta that adds a
-per-project work-item ledger, [`kernel/lineage/s22-work-item-ledger.sql`](kernel/lineage/s22-work-item-ledger.sql)) — a ledger entry is not
+per-project work-item ledger, `kernel/lineage/s22-work-item-ledger.sql`) — a ledger entry is not
 a permit; an open+claimed work item is ([ORCH-CAPABILITIES.md](ORCH-CAPABILITIES.md), numbered
 item 18 — cited by number, not a stable anchor, because that document's numbered items carry
 none yet; a known, filed gap, not a resolved reference).
 
 ### decomposition-review-blocker
-The `decomposition_review` mechanism in [`hooks/pretooluse_change_gate.py`](hooks/pretooluse_change_gate.py): a substantive
+The `decomposition_review` mechanism in `hooks/pretooluse_change_gate.py`: a substantive
 Write/Edit/NotebookEdit anywhere under a [wired](#wired) [SUBJECT_ROOT](#subject-root), or a
 [governed-file](#governed-file)-mutating Bash command, is refused unless the CLAIMED work item's
 OWN opening (`work_opened`) ledger row has been countersigned — the same
@@ -434,7 +432,7 @@ its subtasks were executed (maintainer ruling 2026-07-12, [BACKLOG.md](BACKLOG.m
 began six seconds after claim, ~2.5 minutes ahead of its own countersign verdict). This
 mechanism is vacuous in a world whose
 `countersign_obligation` table carries no rows at all. Its default mode is `observe`, not
-`enforce` — see [`hooks/pretooluse_change_gate.py`](hooks/pretooluse_change_gate.py)'s module docstring.
+`enforce` — see `hooks/pretooluse_change_gate.py`'s module docstring.
 
 ### seen-red
 Banked evidence that a gate has actually REFUSED at least once (a dated fixture directory

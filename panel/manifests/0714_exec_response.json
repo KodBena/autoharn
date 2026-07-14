@@ -1,0 +1,379 @@
+{
+  "manifest_id": "0714_exec_response",
+  "commission_row": 680,
+  "title": "MAINTAINER EXECUTIVE RESPONSE 2026-07-14",
+  "items": [
+    {
+      "id": "A1",
+      "parent": null,
+      "label": "Part A1 / A1 — Stage 0, fact-family engine integration, RDF/JSON-LD export, grammar-as-bridge",
+      "text": "Yes obviously stage 0. Prioritize (b) integration for fact families sooner rather than later. The engine is the project's unique strength — facts should feed it natively.\nBuild the derived RDF/JSON-LD export (a) in parallel as soon as fact: stabilizes. Interop is free leverage.\nTreat the grammar path as a bridge, not the destination. Plan the migration path to richer EDB facts explicitly.",
+      "witnesses": [
+        {"ref_kind": "work", "ref": "kr-titration-design-exploration", "note": "Closed/shipped. Row 681 review-done records: Stage 0 ADOPTED; (b) fact-family engine integration prioritized; (a) derived RDF/JSON-LD export planned in parallel once fact: stabilizes; grammar path named a bridge with an explicit migration path to richer EDB facts — matches all three named A1 directives."},
+        {"ref_kind": "row", "ref": 681, "note": "review-done: kr-titration-design-exploration — the disposition row itself, verbatim-matching language to row 680's A1 text."}
+      ]
+    },
+    {
+      "id": "A2",
+      "parent": null,
+      "label": "Part A1 / A2 — pgAudit exercised by a Sonnet agent; autoharn DB backed up first",
+      "text": "pgAudit is provisioned, please see ~/postgresql.conf for current configuration (and try it out via a sonnet agent; in fact, don't even look at the .conf, have the sonnet agent look at it instead)\nadditionally: I'll want the autoharn part of the db to be backed up before starting on this",
+      "witnesses": [
+        {"ref_kind": "work", "ref": "pgaudit-exploration", "note": "Closed/shipped (predates this commission but is the live pgAudit-provisioning thread the commission references). Row 682 review-done: PROVISIONED by maintainer; ~/postgresql.conf to be read and exercised by a Sonnet agent, not the maintainer directly — matches the 'don't even look at the .conf, have the sonnet agent look at it instead' instruction."},
+        {"ref_kind": "row", "ref": 716, "note": "seam notes, exec-response wave, [pgaudit-intake] section: backup WITNESSED ~/backups/autoharn-20260714-194426.sql (633KB, all 6 tables, taken as bork superuser) BEFORE the pgAudit conf read — discharges the 'backed up before starting' condition; conf read live by Sonnet per instruction, found pgaudit.so preloaded but pgaudit.log='none' (PRESENTLY INERT), exercised the incident class live to confirm the gap."}
+      ]
+    },
+    {
+      "id": "AC",
+      "parent": null,
+      "label": "Part A2 control family — AC (Access Control)",
+      "text": "AC:\t>= PARTIAL (reason: observed successful attempts by agents to circumvent access control; even if benign, it impugns the integrite of the harness)",
+      "witnesses": [
+        {"ref_kind": "row", "ref": 683, "note": "review-done: registry-audit-p1-p7 — umbrella disposition transcribing all 20 control-family postures from row 680, AC included, into design/ORCH-REGISTRY-COMPLETENESS-AUDIT-002.md."},
+        {"ref_kind": "work", "ref": "scaffold-owner-credential-separation", "note": "Open (B4). The concrete access-control gap AC names (an agent able to reach the powerful DB account) is the same incident B4 addresses; not yet closed, so AC's underlying hazard is still live work, honestly OPEN on the code side even though the posture is recorded."}
+      ]
+    },
+    {
+      "id": "AT",
+      "parent": null,
+      "label": "Part A2 control family — AT (Awareness and Training)",
+      "text": "AT:\tEPSILON (maintainer needs to be able to provision the system to it's own personal projects -- not yet achieved(!); nominally ABSENT)",
+      "witnesses": [
+        {"ref_kind": "row", "ref": 683, "note": "review-done: registry-audit-p1-p7 — transcribes AT's EPSILON/nominally-ABSENT posture verbatim."}
+      ]
+    },
+    {
+      "id": "AU",
+      "parent": null,
+      "label": "Part A2 control family — AU (Audit and Accountability)",
+      "text": "AU:\t>= PARTIAL (core (\"Pillar\") feature of the project)",
+      "witnesses": [
+        {"ref_kind": "row", "ref": 683, "note": "review-done: registry-audit-p1-p7 — transcribes AU's >= PARTIAL posture."},
+        {"ref_kind": "work", "ref": "pgaudit-exploration", "note": "Closed/shipped — the audit-logging (pgAudit) thread this family's posture leans on."}
+      ]
+    },
+    {
+      "id": "CA",
+      "parent": null,
+      "label": "Part A2 control family — CA (Security Assessment and Authorization)",
+      "text": "CA:\tmaintainer is not competent to judge; defer to orchestrator in",
+      "witnesses": [
+        {"ref_kind": "row", "ref": 683, "note": "review-done: registry-audit-p1-p7 — transcribes CA verbatim including the mid-sentence truncation, named explicitly as preserved not guessed at."}
+      ]
+    },
+    {
+      "id": "CM",
+      "parent": null,
+      "label": "Part A2 control family — CM (Configuration Management)",
+      "text": "CM:\t>= PARTIAL (documented GxP with strictly positive outcome from other projects)",
+      "witnesses": [
+        {"ref_kind": "row", "ref": 683, "note": "review-done: registry-audit-p1-p7 — transcribes CM's >= PARTIAL posture."}
+      ]
+    },
+    {
+      "id": "CP",
+      "parent": null,
+      "label": "Part A2 control family — CP (Contingency Planning)",
+      "text": "CP:\tmaintainer not competent; but on an operational level, it makes sense to deliberate the topic",
+      "witnesses": [
+        {"ref_kind": "row", "ref": 683, "note": "review-done: registry-audit-p1-p7 — transcribes CP's posture (composes with P3/P7 backup items below)."}
+      ]
+    },
+    {
+      "id": "IA",
+      "parent": null,
+      "label": "Part A2 control family — IA (Identification and Authentication)",
+      "text": "IA:\t>= PARTIAL (composes with AU and AC)",
+      "witnesses": [
+        {"ref_kind": "row", "ref": 683, "note": "review-done: registry-audit-p1-p7 — transcribes IA's >= PARTIAL posture."}
+      ]
+    },
+    {
+      "id": "IR",
+      "parent": null,
+      "label": "Part A2 control family — IR (Incident Response)",
+      "text": "IR:\t>= PARTIAL (formalize the \"spy\" method; observability-driven development)",
+      "witnesses": [
+        {"ref_kind": "row", "ref": 683, "note": "review-done: registry-audit-p1-p7 — transcribes IR's >= PARTIAL posture."},
+        {"ref_kind": "work", "ref": "spy-method-formalization", "note": "Open. Row 688: 'IR family posture >=PARTIAL rides on this' — same work item as concern-2 below; not yet claimed or closed, so honestly OPEN."}
+      ]
+    },
+    {
+      "id": "MA",
+      "parent": null,
+      "label": "Part A2 control family — MA (Maintenance)",
+      "text": "MA:\tmy take: project is not at the level of maturity where this makes sense to address, but if it reaches maturity, could be.",
+      "witnesses": [
+        {"ref_kind": "row", "ref": 683, "note": "review-done: registry-audit-p1-p7 — transcribes MA's maturity-conditional posture."}
+      ]
+    },
+    {
+      "id": "MP",
+      "parent": null,
+      "label": "Part A2 control family — MP (Media Protection)",
+      "text": "MP:\tnot within scope, or perhaps better *not tractably within scope* and low ROI",
+      "witnesses": [
+        {"ref_kind": "row", "ref": 683, "note": "review-done: registry-audit-p1-p7 — transcribes MP as out-of-tractable-scope."}
+      ]
+    },
+    {
+      "id": "PE",
+      "parent": null,
+      "label": "Part A2 control family — PE (Physical and Environmental Protection)",
+      "text": "PE:\tsame as MP",
+      "witnesses": [
+        {"ref_kind": "row", "ref": 683, "note": "review-done: registry-audit-p1-p7 — transcribes PE alongside MP as out-of-tractable-scope."}
+      ]
+    },
+    {
+      "id": "PL",
+      "parent": null,
+      "label": "Part A2 control family — PL (Planning)",
+      "text": "PL:\tapparently not applicable",
+      "witnesses": [
+        {"ref_kind": "row", "ref": 683, "note": "review-done: registry-audit-p1-p7 — transcribes PL as n/a."}
+      ]
+    },
+    {
+      "id": "PM",
+      "parent": null,
+      "label": "Part A2 control family — PM (Program Management)",
+      "text": "PM:\tnot competent to judge",
+      "witnesses": [
+        {"ref_kind": "row", "ref": 683, "note": "review-done: registry-audit-p1-p7 — transcribes PM as maintainer-not-competent."}
+      ]
+    },
+    {
+      "id": "PS",
+      "parent": null,
+      "label": "Part A2 control family — PS (Personnel Security)",
+      "text": "PS:\tnever applicable under any possible circumstances",
+      "witnesses": [
+        {"ref_kind": "row", "ref": 683, "note": "review-done: registry-audit-p1-p7 — transcribes PS as never-applicable."}
+      ]
+    },
+    {
+      "id": "PT",
+      "parent": null,
+      "label": "Part A2 control family — PT (PII Processing and Transparency)",
+      "text": "PT:\tapplicable but not within scope; aspiration explicitly rejected",
+      "witnesses": [
+        {"ref_kind": "row", "ref": 683, "note": "review-done: registry-audit-p1-p7 — transcribes PT as applicable-but-rejected."}
+      ]
+    },
+    {
+      "id": "RA",
+      "parent": null,
+      "label": "Part A2 control family — RA (Risk Assessment)",
+      "text": "RA:\tmay apply",
+      "witnesses": [
+        {"ref_kind": "row", "ref": 683, "note": "review-done: registry-audit-p1-p7 — transcribes RA as may-apply."}
+      ]
+    },
+    {
+      "id": "SA",
+      "parent": null,
+      "label": "Part A2 control family — SA (System and Services Acquisition)",
+      "text": "SA:\tI've been told the makespan guarantee potentially falls under SA-3 (assuming it's patched up where it isn't airtight -- NOT a Fable task due to a high demotion-to-Opus likelihood)",
+      "witnesses": [
+        {"ref_kind": "row", "ref": 683, "note": "review-done: registry-audit-p1-p7 — transcribes SA-3 candidacy via the makespan guarantee, explicitly flagged as not a Fable task."}
+      ]
+    },
+    {
+      "id": "SC",
+      "parent": null,
+      "label": "Part A2 control family — SC (System and Communications Protection)",
+      "text": "SC:\tmaintainer not competent",
+      "witnesses": [
+        {"ref_kind": "row", "ref": 683, "note": "review-done: registry-audit-p1-p7 — transcribes SC as maintainer-not-competent."}
+      ]
+    },
+    {
+      "id": "SI",
+      "parent": null,
+      "label": "Part A2 control family — SI (System and Information Integrity)",
+      "text": "SI:\tpossibly aspirational, but maintainer not competent to judge",
+      "witnesses": [
+        {"ref_kind": "row", "ref": 683, "note": "review-done: registry-audit-p1-p7 — transcribes SI as possibly-aspirational."}
+      ]
+    },
+    {
+      "id": "SR",
+      "parent": null,
+      "label": "Part A2 control family — SR (Supply Chain Risk Management)",
+      "text": "SR:\tnever applicable under any possible circumstances",
+      "witnesses": [
+        {"ref_kind": "row", "ref": 683, "note": "review-done: registry-audit-p1-p7 — transcribes SR as never-applicable."}
+      ]
+    },
+    {
+      "id": "P1",
+      "parent": null,
+      "label": "Part A2, P1 — scope-adjudication batch",
+      "text": "P1: maybe",
+      "witnesses": [
+        {"ref_kind": "row", "ref": 683, "note": "review-done: registry-audit-p1-p7 — 'P1 sitting substantially discharged IN WRITING: full 20-family posture list delivered in the commission row ... Interactive P1 follow-up remains open if appropriate.' The commission itself (row 680, closing section) also names P1 as the one item NOT fully closed by executive obligation ('modulo A2.P1 that is interactive if appropriate')."}
+      ]
+    },
+    {
+      "id": "P2",
+      "parent": null,
+      "label": "Part A2, P2 — dependency/tooling inventory",
+      "text": "P2: we do have {python, clingo,psql (now possibly pgAudit), OR-Tools (load-bearing software)}, {Gentoo + OpenSUSE + libvirt/qemu + nvim + claude-code (development substrate)}",
+      "witnesses": [
+        {"ref_kind": "row", "ref": 683, "note": "review-done: registry-audit-p1-p7 — 'P2 load-bearing inventory confirmed'."}
+      ]
+    },
+    {
+      "id": "P3",
+      "parent": null,
+      "label": "Part A2, P3 — SQL-dump-to-GitHub backup, incomplete without pgAudit data",
+      "text": "P3: can upload sql-dumps to github if size permits (no pgAudit data I guess; hence, incomplete)",
+      "witnesses": [
+        {"ref_kind": "row", "ref": 683, "note": "review-done: registry-audit-p1-p7 — 'P3 sql-dumps-to-github if size permits, honestly incomplete sans pgaudit data'."},
+        {"ref_kind": "work", "ref": "registry-audit-sql-dumps-github-incomplete", "note": "Open. Row 695: tracker item opened by content-title for the sql-dump-to-GitHub mechanism (AU-11/CP, P3), explicitly named incomplete because it carries no pgAudit read-log data — honestly OPEN, not yet built."}
+      ]
+    },
+    {
+      "id": "P4",
+      "parent": null,
+      "label": "Part A2, P4 — pgAudit provisioning, wait and see",
+      "text": "P4: pgAudit provisioned, let's see where that takes us",
+      "witnesses": [
+        {"ref_kind": "work", "ref": "pgaudit-exploration", "note": "Closed/shipped — pgAudit provisioning thread; row 683: 'P4 via pgaudit'."}
+      ]
+    },
+    {
+      "id": "P5",
+      "parent": null,
+      "label": "Part A2, P5 — confirmed",
+      "text": "P5: confirmed",
+      "witnesses": [
+        {"ref_kind": "row", "ref": 683, "note": "review-done: registry-audit-p1-p7 — 'P5 confirmed'."}
+      ]
+    },
+    {
+      "id": "P6",
+      "parent": null,
+      "label": "Part A2, P6 — accept",
+      "text": "P6: accept",
+      "witnesses": [
+        {"ref_kind": "row", "ref": 683, "note": "review-done: registry-audit-p1-p7 — 'P6 ABSENT-AND-NAMED accepted'. Row 699: literal law/STANDARDS-REGISTRY.md edit deferred to its Fable-authored/maintainer-ratified route — accepted in principle, not yet a law/ edit."}
+      ]
+    },
+    {
+      "id": "P7",
+      "parent": null,
+      "label": "Part A2, P7 — backup/retention policy, named organizational negligence in its absence",
+      "text": "P7: obviously needed (I thought we had this as a policy already; it's absence as a known and executed policy is organizational negligence.)",
+      "witnesses": [
+        {"ref_kind": "row", "ref": 683, "note": "review-done: registry-audit-p1-p7 — 'P7 tracker backup/retention OBVIOUSLY NEEDED, its absence as executed policy called organizational negligence.'"},
+        {"ref_kind": "work", "ref": "registry-audit-backup-retention-policy", "note": "Open. Row 694: work item opened for the tracker DB's backup/retention policy (AU-11/CP), his exact word choice 'organizational negligence' quoted — honestly OPEN, policy not yet written."}
+      ]
+    },
+    {
+      "id": "B1",
+      "parent": null,
+      "label": "Part B, B1 — the ADR-0017 'ratification packet' ghost referent, excavate what happened",
+      "text": "B1 through B6 all yes. More particularly, B1 is an ADR-0017 violation and it would be interesting to figure out what happened. If our ledger is unable to excavate this (assuming it was online when these were written) then that's in itself quite damning of our harness, though we should be forgiving if the deficiency is structural -- as a matter of policy we should never rely on .claude transcripts to derogate the harness, only to diagnose it (it's use for this is sanctioned, but in the real world, end users might not have access to the transcripts and so we have to \"play by the rules\" instead of bending over backwards or \"cheating\" when thinking about the capabilities the harness is able to provide).",
+      "witnesses": [
+        {"ref_kind": "work", "ref": "adr-0017-ratification-packet-referent", "note": "Closed/shipped. Slug matches design/MAINT-MAINTAINER-DECISION-BRIEF-2026-07-14.md's own B1 act ('go-ahead: adr-0017-ratification-packet-referent')."},
+        {"ref_kind": "row", "ref": 720, "note": "Full excavation answer, ledger-only, no transcripts consulted: two-stage causation (real packet filed 2026-07-11, cited as prose not a link — an ADR-0017 Rule 2(a) violation live from birth; ledger structurally could not have caught it, its own first row postdates ratification by 4.5h — the forgivable-if-structural class the maintainer pre-named in row 684)."},
+        {"ref_kind": "row", "ref": 729, "note": "seam close: gates-trio SHIPPED — restates the B1 excavation answer as delivered, plus the fix (commit 9a9dd3e, 0017 packet referent + attestations)."}
+      ]
+    },
+    {
+      "id": "B2",
+      "parent": null,
+      "label": "Part B, B2 — automate the bare-P-label detector; the A1.A2-vs-Part-A2 heading collision named as its own live specimen",
+      "text": "On B2, I say \"Yes please and automate it, it's pestilential and ironically visible in MAINT-MAINTAINER-DECISION-BRIEF-2026-07-14.md (Part A1 has a sub-heading called A2, meanwhile there's a \"part A2\" which is entirely distinct from A1.A2, if you can parse that sentence. It's ripe for confusion, just think about \"telephone game\" to realize how bad the situation really is.)",
+      "witnesses": [
+        {"ref_kind": "work", "ref": "adr-bare-p-label-detector", "note": "Closed/shipped. Row 684's go-ahead names it explicitly: 'bare-P-label detector (AUTOMATE IT -- his emphasis; the brief's own A1.A2-vs-Part-A2 heading collision named as a live specimen of the confusion class, fix it)'."},
+        {"ref_kind": "row", "ref": 729, "note": "seam close: gates-trio SHIPPED — f669bae bare-P-label detector + two LICENSED law one-liners + brief heading fix; gate witnessed clean corpus-wide, bare-P-label 0/35."}
+      ]
+    },
+    {
+      "id": "B3",
+      "parent": null,
+      "label": "Part B, B3 — fix the three known blind spots in gates/adr_portability_terms.py",
+      "text": "B1 through B6 all yes.",
+      "witnesses": [
+        {"ref_kind": "work", "ref": "adr-portability-terms-gate-shield-gaps", "note": "Closed/shipped. B3 is not individually addressed in row 680's own prose (only B1, B2, B6 get individual sentences there); its content comes from design/MAINT-MAINTAINER-DECISION-BRIEF-2026-07-14.md's own B1-B3 section and row 684's go-ahead act, which names 'gates shield gaps' as one of the six approved items."},
+        {"ref_kind": "row", "ref": 729, "note": "seam close: gates-trio SHIPPED — f8803fa shield gaps; gates/adr_portability_terms.py witnessed clean corpus-wide, terms 0/18 (5 residuals legitimately shielded)."}
+      ]
+    },
+    {
+      "id": "B4",
+      "parent": null,
+      "label": "Part B, B4 — structurally prevent an automated helper from self-escalating DB privileges",
+      "text": "B1 through B6 all yes.",
+      "witnesses": [
+        {"ref_kind": "work", "ref": "scaffold-owner-credential-separation", "note": "Open, not yet closed. Content from design/MAINT-MAINTAINER-DECISION-BRIEF-2026-07-14.md's B4 section and row 684's go-ahead ('scaffold-owner-credential-separation (build)')."},
+        {"ref_kind": "row", "ref": 716, "note": "seam notes, [credential-separation] section: 'leg-1 audit found scaffold never writes owner passwords (grep-witnessed); host-side pg_hba/.pgpass reachability UNVERIFIED -- the classifier refused credential-store scanning and the builder honored the refusal (correct, not routed around) -- residual named for the maintainer.' Partial audit progress, work item still open."}
+      ]
+    },
+    {
+      "id": "B5",
+      "parent": null,
+      "label": "Part B, B5 — decouple a merge on next from instantly changing live adopter deployments (git-submodule pinning)",
+      "text": "B1 through B6 all yes.",
+      "witnesses": [
+        {"ref_kind": "work", "ref": "deployment-live-exec-coupling", "note": "Closed/shipped. Content from design/MAINT-MAINTAINER-DECISION-BRIEF-2026-07-14.md's B5 section and row 684's go-ahead ('deployment-live-exec-coupling (build, composes with recovery-mode concern)')."},
+        {"ref_kind": "row", "ref": 761, "note": "deployment-live-exec-coupling: delivered idiot-proof git-submodule pinning (commits 3ec729e, 4c467fa on next) — bootstrap/new-project.sh --pin submodule, bootstrap/convert-to-submodule.sh, bootstrap/upgrade-submodule.sh, bootstrap/live_session_check.py; 17 both-polarity fixtures, no mocks, registered in gates/fixture_census.py."}
+      ]
+    },
+    {
+      "id": "B6",
+      "parent": null,
+      "label": "Part B, B6 — the countersign-obligation actor-vs-item scoping bug, constitutional route",
+      "text": "On B6, yes obviously, but see \"migration path\" below.",
+      "witnesses": [
+        {"ref_kind": "work", "ref": "countersign-scoping-actor-not-item", "note": "Open. The original bug tracker item (row 656, relayed from the restarted ent session); its own work item is not closed."},
+        {"ref_kind": "row", "ref": 717, "note": "review-done: countersign-close-semantics-spec — RATIFIED (maintainer 2026-07-14, same day), the Fable-authored constitutional spec that resolves the actor-vs-item scoping bug (item-keyed obligations, typed two-constructor close) B6 commissioned; a rider on typed-actor/certification-gated close is filed as a design-space question, not blocking."},
+        {"ref_kind": "row", "ref": 735, "note": "seam progress: s29 countersign/close build DELIVERED 92e1c75 on a worktree, NOT MERGED — the ratified spec's implementation exists but is not yet live in kernel/lineage on next, so B6's underlying fix is built but not shipped."}
+      ]
+    },
+    {
+      "id": "wall-clock-prod",
+      "parent": null,
+      "label": "Wall-clock A:B:C review-loop dominance — acknowledged, no decision yet",
+      "text": "On the wall-clock prod: thanks for prodding, I'm not tired of being prodded, but I've not taken a decision yet, it's less concerning than a lot of other things that need doing.",
+      "witnesses": [
+        {"ref_kind": "row", "ref": 686, "note": "wall-clock prod ack 2026-07-14: maintainer thanks for the prod, not tired of being prodded, no decision yet, lower priority than other matters — the disposition IS the deferral, recorded, not a fix."}
+      ]
+    },
+    {
+      "id": "concern-1",
+      "parent": null,
+      "label": "Concern 1 — migration path for a broken real deployment (~/ent): recovery mode, signed root provisioning + signed recovery act",
+      "text": "1. migration path: ~/ent being a broken installation, and *still being broken* (please send out another sonnet spy to see what has happened since last time), there should be a recovery mode,\n\"assurances\" be damned (a malfunctioning harness will be thrown away in practice, then providing nothing at all -- it's a common theme and danger with \"ceremony becomes cargo-cult\"); maybe provide a\nfail-hard when the initial commission (or, let's say, a root provisioning ledger entry -- and by the way, maybe this is something we need to have regardless and as a high-assurance service) has a cryptographic\nsignature, then requiring the \"recovery operation\" itself to be signed. This is distinct from the decision that \"old worlds are void and dust\", which was a *posture* regarding *autoharn experiments*\n(which are throwaway and obviously need no backfilling or migration, or anything like that). Note that this item composes somewhat with B5 above, more or less orthogonally.",
+      "witnesses": [
+        {"ref_kind": "work", "ref": "recovery-mode-signed-authority", "note": "Open. Design shipped (see row 714) but the buildable pieces fail hard on every invocation today because key generation remains deferred per the standing crypto ruling — honestly still open."},
+        {"ref_kind": "row", "ref": 714, "note": "shipped: ORCH-DEPLOYMENT-PINNING.md + ORCH-RECOVERY-MODE-SIGNED.md (commit 4ede79c) — recovery-mode-signed design: fail-hard destructive recovery for real deployments requiring a signed root provisioning ledger entry + a separately signed recovery operation; constitutional-vs-Sonnet-buildable split named; states plainly the buildable pieces fail hard today because key generation is deferred."},
+        {"ref_kind": "work", "ref": "ent-inplace-migration", "note": "Open. The concrete migration act for ~/ent itself (in-place, preserving history while gaining s29 features); Phase 0/1 rehearsals complete, Phase 2 live apply reserved to the maintainer."},
+        {"ref_kind": "row", "ref": 755, "note": "ent-inplace-migration Phase 1 REHEARSAL COMPLETE: PASS on all amended-checklist items — rehearsal witnessed passing on real ent data (row 757: 1889 rows byte-identical, chain intact), nothing live touched yet."}
+      ]
+    },
+    {
+      "id": "concern-2",
+      "parent": null,
+      "label": "Concern 2 — formalize the \"spy\" method as observability-driven development of autoharn itself",
+      "text": "2. on a related note, (and c.f. my note on Part A2.IR) we need to formalize the \"spy\" method as an observability-driven development of autoharn itself; I believe that we have already an opt-in key for\nsome of this type of autoharn service when provisioning autoharn for a project.",
+      "witnesses": [
+        {"ref_kind": "work", "ref": "spy-method-formalization", "note": "Open, unclaimed. Row 688: same work item rides the IR control-family posture above; no closure or claim row found in the ledger for this slug beyond its opening — honestly OPEN."}
+      ]
+    },
+    {
+      "id": "concern-3",
+      "parent": null,
+      "label": "Concern 3 — two random thoughts: defeasible epistemic logic for maintainer decisions; a FUSE VFS hydrated from a verified knowledge store",
+      "text": "3. Two random thoughts, somewhat mutually composable: (1) \"defeasible epistemic logic\" (at least on a surface reading, no idea what it would truly mean) applied to maintainer decisions, so that\norchestrator can take decisions in maintainer's absence. Take note: maintainer being human (for the time being, anyways) means it has imperfect memory and will \"lie\" and confabulate as a matter of course, and\nthat's just part of being human. Secondly, and related to the KR thread, is my idea to have a virtual file system (e.g. FUSE-mounted) with structured files hydrated from a verified knowledge store. In this\nsense, a README.md is basically a template that is interpreted by FUSE under a deductive engine to recover what is currently known and \"should be there\". I think it would be an interesting experiment; a Fable might want to discuss the idea with another philosopher Fable, should the idea seem fruitful. As for the maintainer, it's one of those ideas it just wants to record so it's not lost to oblivion.",
+      "witnesses": [
+        {"ref_kind": "work", "ref": "defeasible-maintainer-decision-model", "note": "Open. Row 689: parked idea, natural home named as the clingo/ASP engine; philosopher-Fable consult commissioned same day covers this."},
+        {"ref_kind": "work", "ref": "fuse-vfs-knowledge-hydration", "note": "Open. Row 690: parked idea, philosopher-Fable consult commissioned same day covers this too."},
+        {"ref_kind": "row", "ref": 697, "note": "phil consult DELIVERED af463a8 (design/PHIL-DEFEASIBLE-DECISIONS-AND-HYDRATED-DOCS.md, 569 lines incl. web-verified prior-art section) — both ideas discussed by the philosopher-Fable consult the maintainer suggested; ideas explored in writing, neither built."},
+        {"ref_kind": "work", "ref": "derive-docs-verb-experiment", "note": "Open. Row 698: the phil-consult-recommended degenerate experiment toward the FUSE idea, before any FUSE build — not yet claimed or closed."}
+      ]
+    }
+  ]
+}

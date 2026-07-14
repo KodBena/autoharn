@@ -1,9 +1,3 @@
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-14T22:13:49Z
-#   last-change: 2026-07-14T22:13:49Z
-#   contributors: a857c93d/main
-# <<< PROVENANCE-STAMP <<<
-
 """act_stream.contract — the VENDOR-NEUTRAL act-stream contract (consult 25 §2.1).
 
 This module is the Python side of the vendor-neutral contract whose DDL is
@@ -29,15 +23,10 @@ import hashlib
 import json
 import os
 import subprocess
-import sys
 from dataclasses import dataclass, field
 from enum import Enum
-from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from pghost_resolve import resolve_pghost  # noqa: E402
-
-PGHOST = resolve_pghost("HARNESS_PGHOST", "EPISTEMIC_PGHOST")
+PGHOST = os.environ.get("HARNESS_PGHOST", os.environ.get("EPISTEMIC_PGHOST", "192.168.122.1"))
 DB = os.environ.get("HARNESS_DB", "harness")
 
 # The CLOSED, widen-only kind vocabulary (§2.1.1) — the SSOT mirrors act_kind in the DDL; a parity

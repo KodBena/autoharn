@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-02T01:30:29Z
-#   last-change: 2026-07-14T22:26:50Z
+#   last-change: 2026-07-14T01:56:02Z
 #   contributors: 306d4c8f/main, a857c93d/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -72,7 +72,7 @@ def _names(node: ast.Import | ast.ImportFrom) -> str:
     return "import " + ", ".join(a.name for a in node.names)
 
 
-def violations_in(path: Path, base: Path = REPO) -> list[str]:
+def violations_in(path: Path) -> list[str]:
     try:
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
     except (SyntaxError, UnicodeDecodeError) as e:
@@ -80,20 +80,12 @@ def violations_in(path: Path, base: Path = REPO) -> list[str]:
 
     out: list[str] = []
 
-    # Report paths relative to `base` (the scanned root), not the module-level REPO constant:
-    # main()'s [root] argument mode may scan a directory outside this repo entirely, and
-    # path.relative_to(REPO) raised ValueError there instead of reporting cleanly (finding 52).
-    try:
-        display = path.relative_to(base)
-    except ValueError:
-        display = path
-
     def walk(node: ast.AST, func_stack: tuple[str, ...]) -> None:
         for child in ast.iter_child_nodes(node):
             if isinstance(child, _FUNCS):
                 walk(child, func_stack + (child.name,))
             elif isinstance(child, (ast.Import, ast.ImportFrom)) and func_stack:
-                out.append(f"{display}:{child.lineno}: {_names(child)}"
+                out.append(f"{path.relative_to(REPO)}:{child.lineno}: {_names(child)}"
                            f"  (inside {'.'.join(func_stack)})")
             else:
                 walk(child, func_stack)
@@ -120,7 +112,7 @@ def main() -> int:
     root = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else REPO
     bad: list[str] = []
     for f in tracked_py_files(root):
-        bad.extend(violations_in(f, base=root))
+        bad.extend(violations_in(f))
     if bad:
         print(f"LAZY-IMPORT VIOLATIONS ({len(bad)}) — banned by CLAUDE.md law 2026-07-02:")
         print("\n".join(bad))

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-14T21:20:36Z
-#   last-change: 2026-07-14T22:13:16Z
+#   last-change: 2026-07-14T21:38:58Z
 #   contributors: a857c93d/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -546,9 +546,6 @@ def _record_in_deployment_ledger(deployment_dir: Path, missing: list[str], backu
 # --------------------------------------------------------------------------------------------
 
 def main(argv: list[str]) -> int:
-    if len(argv) >= 2 and argv[1] in ("--help", "-h"):
-        print("usage: migrate <deployment-dir> [--dry-run]")
-        return 0
     if len(argv) not in (2, 3) or (len(argv) == 3 and argv[2] != "--dry-run"):
         print("usage: migrate <deployment-dir> [--dry-run]", file=sys.stderr)
         return 2

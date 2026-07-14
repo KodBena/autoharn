@@ -1,7 +1,7 @@
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-09T10:06:34Z
-#   last-change: 2026-07-14T22:12:54Z
-#   contributors: be693afb/main, a857c93d/main
+#   last-change: 2026-07-09T10:07:27Z
+#   contributors: be693afb/main
 # <<< PROVENANCE-STAMP <<<
 
 """SSOT for WHERE a ledger lives and HOW its actor model works — the single source every
@@ -57,9 +57,8 @@ _REPO_ROOT = os.path.dirname(_HERE)  # autoharn root
 sys.path.insert(0, os.path.join(_REPO_ROOT, "engine"))
 
 import targets  # noqa: E402  (engine/targets.py, the ONE home for (db, schema, kern) resolution)
-from pghost_resolve import resolve_pghost  # noqa: E402
 
-PGHOST = resolve_pghost("EPISTEMIC_PGHOST")
+PGHOST = os.environ.get("EPISTEMIC_PGHOST", "192.168.122.1")
 FS, RS = "\x1f", "\x1e"
 
 

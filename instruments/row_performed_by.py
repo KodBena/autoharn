@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-06T23:05:25Z
-#   last-change: 2026-07-14T22:13:25Z
-#   contributors: 37017f46/main, a857c93d/main
+#   last-change: 2026-07-07T12:24:11Z
+#   contributors: 37017f46/main
 # <<< PROVENANCE-STAMP <<<
 
 """row_performed_by -- the CLAIMED-vs-PERFORMED deriver (finding 28; consult 27 rubric (a) residual).
@@ -65,11 +65,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "engine"))  # autoharn: ledger_edb lives in engine/
 from ledger_edb import resolve as resolve_ledger  # noqa: E402
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-from pghost_resolve import resolve_pghost  # noqa: E402
 
-HARNESS_PGHOST = resolve_pghost("HARNESS_PGHOST", "EPISTEMIC_PGHOST")
-EPISTEMIC_PGHOST = resolve_pghost("EPISTEMIC_PGHOST")
+HARNESS_PGHOST = os.environ.get("HARNESS_PGHOST", os.environ.get("EPISTEMIC_PGHOST", "192.168.122.1"))
+EPISTEMIC_PGHOST = os.environ.get("EPISTEMIC_PGHOST", "192.168.122.1")
 FS, RS = "\x1f", "\x1e"
 ORCHESTRATOR_STREAM = "main"
 ORCHESTRATOR_PRINCIPAL = "author"  # the seeded connection principal (s15 DDL); main's own default identity

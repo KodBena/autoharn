@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-14T22:13:11Z
-#   last-change: 2026-07-14T22:13:11Z
-#   contributors: a857c93d/main
-# <<< PROVENANCE-STAMP <<<
-
 """cite_check — resolve provenance pointers in an AI collaborator's prose against the
 record and the read-log (FINDINGS F22, and its link-7 refinement).
 
@@ -28,10 +22,7 @@ import sys
 from dataclasses import dataclass
 from datetime import datetime
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from pghost_resolve import resolve_pghost  # noqa: E402
-
-PGHOST = resolve_pghost("EPISTEMIC_PGHOST")
+PGHOST = "192.168.122.1"
 PGDB = "epistemic"
 # Date-generic: scan every date-stamped statement log, so a run on any date is covered (a
 # date-pinned path silently found zero reads on a later run — a false UNGROUNDED). Mirrors

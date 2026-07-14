@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-07T03:29:13Z
-#   last-change: 2026-07-14T22:20:21Z
-#   contributors: 37017f46/main, a857c93d/main
+#   last-change: 2026-07-07T03:29:33Z
+#   contributors: 37017f46/main
 # <<< PROVENANCE-STAMP <<<
 
 """Seen-red specimen for the staging-guard gate (forecloses finding 33, commit-scope-sweep). Reproduces
@@ -16,7 +16,7 @@ import os
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "gates"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "tools"))
 import staging_guard as g  # noqa: E402
 
 

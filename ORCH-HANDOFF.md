@@ -43,8 +43,7 @@ the probe); its hashes and protocol are ledgered under tracker item
 `opus-readiness-probe`.
 
 A SECOND LIVE DEPLOYMENT runs at the maintainer's `~/ent` (his own nickname for this second
-deployment; it names no other project concept): a code-health audit of the
-picom compositor (C/GLSL), seeded with structural rows only (taxonomy, interface, and
+deployment; it names no other project concept): seeded with structural rows only (taxonomy, interface, and
 environment-constraint declarations — no findings, no interpretive prose) and a
 verbatim commission, orchestrated by the maintainer with Sonnet. Two standing consequences:
 

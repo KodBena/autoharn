@@ -1,9 +1,3 @@
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-14T22:13:55Z
-#   last-change: 2026-07-14T22:13:55Z
-#   contributors: a857c93d/main
-# <<< PROVENANCE-STAMP <<<
-
 """verify_adapter — run the two pre-registered adapter fixtures against the INDEPENDENT oracle
 (harness/e15-build/PRE-REGISTERED-expectations.md, committed BEFORE this adapter existed), prove
 each mutation flips RED, round-trip the DB persist (id-is-order), and prove the manifest's F49
@@ -19,7 +13,7 @@ from dataclasses import replace
 from pathlib import Path
 
 from claude_code_adapter import SubagentSource, parse_completed_session
-from contract import PGHOST, Act, CapabilityError, persist
+from contract import Act, CapabilityError, persist
 
 HERE = Path(__file__).resolve().parent
 REAL_TRANSCRIPT = Path(
@@ -140,13 +134,13 @@ def main() -> int:
 
     # ---- DB round-trip: persist fixture 1 into a scratch acts schema, read back id-is-order ----
     schema = "acts_fixture_scratch"
-    subprocess.run(["psql", "-h", PGHOST, "-d", "harness", "-c",
+    subprocess.run(["psql", "-h", "192.168.122.1", "-d", "harness", "-c",
                     f"DROP SCHEMA IF EXISTS {schema} CASCADE;"], capture_output=True, text=True)
-    subprocess.run(["psql", "-h", PGHOST, "-d", "harness", "-v", "ON_ERROR_STOP=1",
+    subprocess.run(["psql", "-h", "192.168.122.1", "-d", "harness", "-v", "ON_ERROR_STOP=1",
                     "-v", f"schema={schema}", "-f", str(HERE.parent.parent /
                     "stores" / "003_acts_stream.sql")], capture_output=True, text=True)   # autoharn: stores/
     sid = persist(syn, schema=schema)
-    back = subprocess.run(["psql", "-h", PGHOST, "-d", "harness", "-tA", "-F", "|",
+    back = subprocess.run(["psql", "-h", "192.168.122.1", "-d", "harness", "-tA", "-F", "|",
                            "-c", f"SELECT id, actor, kind, coalesce(name,''), coalesce(target,'') "
                                  f"FROM {schema}.act WHERE stream_id={sid} ORDER BY id;"],
                           capture_output=True, text=True).stdout.strip().splitlines()
@@ -155,7 +149,7 @@ def main() -> int:
     ok &= id_order
     print(f"[{'OK ' if id_order else '!! '}] DB round-trip: {len(ids)} acts persisted, id-is-order "
           f"{'held' if id_order else 'BROKEN'} (append-only contract)")
-    subprocess.run(["psql", "-h", PGHOST, "-d", "harness", "-c",
+    subprocess.run(["psql", "-h", "192.168.122.1", "-d", "harness", "-c",
                     f"DROP SCHEMA IF EXISTS {schema} CASCADE;"], capture_output=True, text=True)
 
     # ---- F49: require() a non-produced family refuses loudly ----

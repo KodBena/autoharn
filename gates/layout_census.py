@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-09T07:54:37Z
-#   last-change: 2026-07-14T22:12:50Z
+#   last-change: 2026-07-14T01:35:28Z
 #   contributors: 9bcc0113/main, be693afb/main, e4410ef6/main, 3c50e030/main, a857c93d/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -85,10 +85,6 @@ ROOT_FILES = {
     # one paragraph per moved doc) -- landed with the sweep, never registered here; caught
     # at the same 2026-07-13 seam as the vestigial_documentation/ dir registration above.
     "VESTIGIAL-INDEX.md",
-    # migrate — the sixth repo-root operator verb shim (bootstrap/migrate.sh), landed alongside
-    # led/judge/pickup/audit/distance-to-clean but never registered here; caught by this gate's
-    # own next run (CLAUDE.md hazard-flagging duty, root-shims-and-layout-census work item).
-    "migrate",
 }
 ROOT_DIRS = {
     ".claude", "bootstrap", "law", "judgment", "kernel", "stores", "instruments", "engine",

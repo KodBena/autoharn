@@ -13,7 +13,7 @@ Status vocabulary (closed): **mechanized** (a gate fires on the machine-observab
 facts) · **built-unexercised** (the mechanism exists but has never fired in anger) ·
 **review-only** (enforced by human/consult judgment, no oracle) · **open** (not modeled).
 
-<a id="the-j-boundary--the-limit-of-what-gap-detection-can-promise"></a>**The J-boundary — the limit of what gap-detection can promise.** The
+**The J-boundary — the limit of what gap-detection can promise.** The
 [BRIEF](safety-critical-logging/BRIEF.md) (§3 preamble) sorts every logging trigger into two
 kinds. **M — machine-observable**: a tool call, a file write, a status change; the harness can
 see these fire, so "trigger fired but no entry exists" is a mechanically detectable defect.

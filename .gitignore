@@ -33,8 +33,3 @@ ephemera/toy-run1-salvage/
 
 # Claude Code agent worktrees are session scratch, never repository content
 .claude/worktrees/
-
-# deployment.json is per-deployment (host/db/role — carries the maintainer's own LAN host on
-# this checkout); deployment.json.example (tracked, placeholder values) is the public surface
-# instead. See README.md "Configuration" for the field table.
-/deployment.json

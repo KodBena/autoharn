@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-12T02:00:39Z
-#   last-change: 2026-07-14T22:13:20Z
-#   contributors: e4410ef6/main, a857c93d/main
+#   last-change: 2026-07-12T02:01:06Z
+#   contributors: e4410ef6/main
 # <<< PROVENANCE-STAMP <<<
 
 """verify_branch_attribution — the reusable, end-to-end witness for design/ORCH-WORKTREE-LEDGERING.md
@@ -47,10 +47,7 @@ import time
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(REPO_ROOT / "instruments"))
-from pghost_resolve import resolve_pghost  # noqa: E402
-
-PGHOST = resolve_pghost("EPISTEMIC_PGHOST")
+PGHOST = "192.168.122.1"
 DB = "toy"
 
 
