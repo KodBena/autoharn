@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-10T23:38:38Z
-#   last-change: 2026-07-14T01:07:03Z
+#   last-change: 2026-07-14T01:46:30Z
 #   contributors: e4410ef6/main, a857c93d/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -115,6 +115,22 @@ it against -- the SAME per-line honesty the old FIFO fallback offered, without t
 residual gap FIFO-by-content-match named (two dispatches sharing byte-identical prompt text in
 the same session no longer collide: the harness's own per-call identity individuates them, not a
 recomputed hash of shared content).
+
+MODEL + SUBAGENT_TYPE ATTRIBUTION (work item `model-attribution-tracking`, maintainer ask
+2026-07-12 ~noon: "what are the observed capabilities of the models, across tasks?" -- observer
+leg 1 of 3, the other two being the ledger's `outcome:` intake grammar and the retrospective
+recipe's grouping section, neither of which touches this file). Two fields are added to the
+EXISTING dispatch journal line, strictly additively (module docstring's own "THE EXISTING
+DISPATCH LINE'S SHAPE IS UNCHANGED" convention, applied here a second time to the SAME line
+rather than a new one): `tool_input.model` (verbatim, defaulting to `None` when absent -- most
+dispatches never set it) and `tool_input.subagent_type` (verbatim, defaulting to `""` -- already
+read informally by `instruments/act_stream/claude_code_adapter.py` as the vendor's own per-agent
+label). NAMED GRADE, STATED HONESTLY: both fields are DECLARED-BY-DISPATCHER, not witnessed --
+this hook journals whatever the calling agent's own tool_input said would be used; nothing in the
+action stream confirms which model actually served the call. Model attribution is therefore
+diagnostic-grade, exactly like duration/tokens, per the 2026-07-11 evidentiary-basis ruling
+(design/USER-RETROSPECTIVE-RECIPE.md's own "Actuals" section states the identical grade boundary
+for token/duration figures) -- never evidentiary, never a policing input.
 
 Stdlib only, top-of-file imports (the lazy-import gate, gates/no_lazy_imports.py, applies).
 """
@@ -372,6 +388,12 @@ def main() -> int:
     session_id = str(data.get("session_id") or "")
     prompt_sha256 = hashlib.sha256(prompt.encode("utf-8")).hexdigest()
     tool_use_id = data.get("tool_use_id")
+    # MODEL + SUBAGENT_TYPE ATTRIBUTION (module docstring) -- verbatim from tool_input, DECLARED-
+    # BY-DISPATCHER grade. `model` is absent from most dispatches (None, not coerced to a string,
+    # so a reader can distinguish "not set" from an empty string); `subagent_type` defaults to ""
+    # the same way `description`/`prompt` already do above.
+    model = inp.get("model")
+    subagent_type = str(inp.get("subagent_type", ""))
 
     # 1. JOURNAL every dispatch, unconditionally (module docstring) -- before any DB work, so a
     # DB hiccup below never costs the journal record. `tool_use_id` (read defensively, same
@@ -385,6 +407,8 @@ def main() -> int:
         "description": description,
         "prompt_sha256": prompt_sha256,
         "prompt_excerpt": prompt[:200],
+        "model": model,
+        "subagent_type": subagent_type,
     }
     if tool_use_id:
         rec["tool_use_id"] = str(tool_use_id)

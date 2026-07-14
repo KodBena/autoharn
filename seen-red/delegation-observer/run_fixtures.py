@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-10T23:41:09Z
-#   last-change: 2026-07-14T01:08:23Z
+#   last-change: 2026-07-14T01:47:01Z
 #   contributors: e4410ef6/main, a857c93d/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -64,6 +64,15 @@ FIFO-paired by content hash), three cases, same stateful sequence:
                          with no journal read and no FIFO guess -- the residual gap is dissolved,
                          not merely narrowed.
 
+MODEL + SUBAGENT_TYPE ATTRIBUTION (work item `model-attribution-tracking`), two more cases:
+
+  j-model-declared      -- dispatch carries tool_input.model="claude-sonnet-4-5" and
+                         tool_input.subagent_type="general-purpose" -> the journal line carries
+                         both fields VERBATIM.
+  k-model-absent        -- dispatch carries NO tool_input.model at all (the common case) -> the
+                         journal line carries `model: null`, never a guessed or coerced value --
+                         the honest DECLARED-BY-DISPATCHER default.
+
 Usage: python3 seen-red/delegation-observer/run_fixtures.py
 Exit 0 if every case matches; 1 otherwise. Lazy imports banned.
 """
@@ -120,12 +129,15 @@ def led_sql(schema: str, kern: str, role: str, sql: str) -> subprocess.Completed
 
 
 def run_hook_leg(tool_name: str, description: str, prompt: str, session_id: str,
-                  env_extra: dict[str, str], tool_use_id: str | None = None
-                  ) -> subprocess.CompletedProcess[str]:
+                  env_extra: dict[str, str], tool_use_id: str | None = None,
+                  model: str | None = None,
+                  subagent_type: str = "general-purpose") -> subprocess.CompletedProcess[str]:
+    tool_input = {"description": description, "prompt": prompt, "subagent_type": subagent_type}
+    if model is not None:
+        tool_input["model"] = model
     payload = {
         "hook_event_name": "PreToolUse", "tool_name": tool_name,
-        "tool_input": {"description": description, "prompt": prompt,
-                       "subagent_type": "general-purpose"},
+        "tool_input": tool_input,
         "session_id": session_id, "cwd": str(PROBE_DIR),
     }
     if tool_use_id is not None:
@@ -378,6 +390,39 @@ def main() -> int:
         print()
         if not ok_i:
             failures.append("i-return-concurrent-identical-prompt")
+
+        # j) MODEL + SUBAGENT_TYPE ATTRIBUTION, declared: both fields verbatim in the journal.
+        r = run_hook_leg("Agent", "attribution probe j", "model declared explicitly", "sess-j",
+                          env, model="claude-sonnet-4-5", subagent_type="general-purpose")
+        print("=== j-model-declared ===")
+        lines_after_j = journal_lines()
+        ok_j = (r.returncode == 0 and len(lines_after_j) == 11
+                and lines_after_j[10].get("session_id") == "sess-j"
+                and lines_after_j[10].get("model") == "claude-sonnet-4-5"
+                and lines_after_j[10].get("subagent_type") == "general-purpose")
+        print(f"  [{'ok' if ok_j else 'FAIL'}] exit={r.returncode} journal line: "
+              f"{lines_after_j[10] if len(lines_after_j) == 11 else None}")
+        print()
+        if not ok_j:
+            failures.append("j-model-declared")
+
+        # k) MODEL + SUBAGENT_TYPE ATTRIBUTION, absent: model is never guessed or coerced --
+        # `null` in the journal, the honest DECLARED-BY-DISPATCHER default (module docstring).
+        r = run_hook_leg("Agent", "attribution probe k", "model not declared", "sess-k", env,
+                          model=None, subagent_type="")
+        print("=== k-model-absent ===")
+        lines_after_k = journal_lines()
+        ok_k = (r.returncode == 0 and len(lines_after_k) == 12
+                and lines_after_k[11].get("session_id") == "sess-k"
+                and lines_after_k[11].get("model") is None
+                and "model" in lines_after_k[11]  # present as an explicit null, not omitted
+                and lines_after_k[11].get("subagent_type") == "")
+        print(f"  [{'ok' if ok_k else 'FAIL'}] exit={r.returncode} journal line: "
+              f"{lines_after_k[11] if len(lines_after_k) == 12 else None}")
+        print()
+        if not ok_k:
+            failures.append("k-model-absent")
+
     finally:
         print("-- teardown (post) --")
         teardown()
@@ -387,7 +432,7 @@ def main() -> int:
         return 1
     print("run_fixtures: all 5 dispatch-leg cases + 1 bonus cross-check + 3 return-leg cases "
           "(tool_use_id-keyed, no-identity fallback, concurrent-identical-prompt "
-          "disambiguation) passed.")
+          "disambiguation) + 2 model-attribution cases (declared, absent) passed.")
     return 0
 
 
