@@ -16,32 +16,34 @@ resumption doctrine, exercised on itself.
    Postgres ledger; the live open set, each item's full statement, the RESOURCES,
    ESTIMATES, TAXONOMIES, and MAINTAINER-REVIEW-QUEUE sections all come from there,
    never from this file.
-1. ORCH-OPERATING-CARD.md — orientation in one page: the two-cwd model, vocabulary, the
+1. [ORCH-OPERATING-CARD.md](ORCH-OPERATING-CARD.md) — orientation in one page: the two-cwd model, vocabulary, the
    verbs, start/resume including the signed-commission start, the delta decision tree,
    the hooks map, the verification checklist.
-2. CLAUDE.md — law pointers (five ADRs incl. 0017, all binding) + ORCHESTRATION. Read
+2. [CLAUDE.md](CLAUDE.md) — law pointers (five ADRs incl. 0017, all binding) + ORCHESTRATION. Read
    the named ADRs IN FULL before work that invokes them.
-3. ORCH-CAPABILITIES.md — the operational truth: 35 witnessed capability items, each
+3. [ORCH-CAPABILITIES.md](ORCH-CAPABILITIES.md) — the operational truth: 35 witnessed capability items, each
    carrying real output or an honest UNWITNESSED mark.
 4. The work tracker itself — `./led --recent` for the latest rows, `./led show <id>`
-   for any one in full. BACKLOG.md is a retired pointer stub (maintainer ruling, tracker
+   for any one in full. [BACKLOG.md](BACKLOG.md) is a retired pointer stub (maintainer ruling, tracker
    row 137); the frozen dated record every historical "BACKLOG entry" citation points
    into is read with `git show d6f64ee:BACKLOG.md`.
-5. USER-GUIDE.md — the adopter's narrative spine; it orders the USER- shelf.
-   design/USER-RECIPES-FAQ.md is the intent-keyed index over that shelf ("can I do X?"
+5. [USER-GUIDE.md](USER-GUIDE.md) — the adopter's narrative spine; it orders the USER- shelf.
+   [design/USER-RECIPES-FAQ.md](design/USER-RECIPES-FAQ.md) is the intent-keyed index over that shelf ("can I do X?"
    → the one page where the truth lives), attested against the live ledger.
 
 ## Where the project stands (2026-07-13)
 
-The readiness-probe program CLOSED: probe 2 (frozen at stamp 0704a4e) replicated the
+The readiness-probe program CLOSED: probe 2 (frozen at [stamp](GLOSSARY.md#stamp) 0704a4e) replicated the
 first probe's results cleanly, and probe 3 (stamp d4aac05) scored 17/19 with both
-residual misses traced to documentation defects and fixed the same day (the
-mandated-tier reconciliation in design/ORCH-SPEC-RESOURCE-ACCOUNTING.md §4.1; a stale
+residual misses traced to documentation defects and fixed the same day (a reconciliation
+of which resource tier a task was mandated to use, in
+[design/ORCH-SPEC-RESOURCE-ACCOUNTING.md](design/ORCH-SPEC-RESOURCE-ACCOUNTING.md) §4.1; a stale
 capability item repaired in 9c86d20). The instrument stays outside the repo on purpose (a greppable key contaminates
 the probe); its hashes and protocol are ledgered under tracker item
 `opus-readiness-probe`.
 
-A SECOND LIVE DEPLOYMENT runs at the maintainer's `~/ent`: a code-health audit of the
+A SECOND LIVE DEPLOYMENT runs at the maintainer's `~/ent` (his own nickname for this second
+deployment; it names no other project concept): a code-health audit of the
 picom compositor (C/GLSL), seeded with structural rows only (taxonomy, interface, and
 environment-constraint declarations — no findings, no interpretive prose) and a
 verbatim commission, orchestrated by the maintainer with Sonnet. Two standing consequences:
@@ -49,7 +51,7 @@ verbatim commission, orchestrated by the maintainer with Sonnet. Two standing co
 - **Merge-gate while ent runs:** nothing merges to `next` that touches
   bootstrap/templates/, hooks/, or gates imported by live verbs. proposals/ (registered,
   transitional) stages template patches until a session gap.
-- **Observatory:** observatory/ent/ holds recurring read-only evaluation cycles
+- **Observatory:** `observatory/ent/` holds recurring read-only evaluation cycles
   (001–003 so far, on the maintainer's word each time). From cycle 003 the reports carry
   a METHOD CANDIDATES section — the maintainer's method-harvesting posture, ledgered:
   observatory cycles and merge-seam reviews (a "seam" here and throughout is the
@@ -59,30 +61,35 @@ verbatim commission, orchestrated by the maintainer with Sonnet. Two standing co
   odd-but-recurring shapes get flagged even when they can't yet be classified.
 
 Both auxiliary ledgers are applied and live (each by the maintainer's own
-typed-confirmation act, witnessed): the research ledger (stores/001) and the harness-failure ledger
-(stores/008, schema `harness_failure`, collection default-on; 12 records at handoff —
-see design/ORCH-HARNESS-FAILURE-LEDGER.md). The executive review queue is live: the
+typed-confirmation act, witnessed): the research ledger (`stores/001`) and the harness-failure ledger
+(`stores/008`, schema `harness_failure`, collection default-on; 12 records at handoff —
+see [design/ORCH-HARNESS-FAILURE-LEDGER.md](design/ORCH-HARNESS-FAILURE-LEDGER.md)). The executive review queue is live: the
 `review:`/`review-done:` grammars feed a ranked MAINTAINER-REVIEW-QUEUE section in
 `./pickup`, so only load-bearing judgment questions reach the maintainer.
 
-pgAudit is at the provision-inert stage (design/ORCH-PGAUDIT-EXPLORATION.md): the
+pgAudit is at the provision-inert stage ([design/ORCH-PGAUDIT-EXPLORATION.md](design/ORCH-PGAUDIT-EXPLORATION.md)): the
 package install, preload entry, and one restart are the maintainer's acts; every
 configuration decision is deferred until he is present for it. Do not advance this
 without him.
 
 Exploration/design records landed this session, all attested, none carrying a mandate:
-knowledge-representation titration (design/ORCH-KR-TITRATION-EXPLORATION.md),
-compound-nominal detection round-trip (design/ORCH-COMPOUND-NOMINAL-DETECTION.md and
--2.md — an Opus infeasibility verdict constructively rebutted with a working detector),
-the typed-table constructor experiment (design/ORCH-TYPED-TABLE-EXPERIMENT.md), and the
-registry completeness audit (design/ORCH-REGISTRY-COMPLETENESS-AUDIT-001.md, a 20-family
+a knowledge-representation titration exploration — narrowing how much structure a fact needs
+before it counts as usable knowledge — ([design/ORCH-KR-TITRATION-EXPLORATION.md](design/ORCH-KR-TITRATION-EXPLORATION.md)),
+compound-nominal detection round-trip ([design/ORCH-COMPOUND-NOMINAL-DETECTION.md](design/ORCH-COMPOUND-NOMINAL-DETECTION.md) and
+[-2.md](design/ORCH-COMPOUND-NOMINAL-DETECTION-2.md) — an Opus infeasibility verdict constructively rebutted with a working detector),
+a typed-table constructor experiment testing whether a table's rows can be generated from a
+declared type rather than hand-written ([design/ORCH-TYPED-TABLE-EXPERIMENT.md](design/ORCH-TYPED-TABLE-EXPERIMENT.md)), and the
+registry completeness audit ([design/ORCH-REGISTRY-COMPLETENESS-AUDIT-001.md](design/ORCH-REGISTRY-COMPLETENESS-AUDIT-001.md), a 20-family
 matrix with proposals P1–P7 queued for the maintainer).
 
 The ADR-portability refactor stands at end of Phase 1
-(design/MAINT-ADR-PORTABILITY-SPEC.md): contradictions adjudicated (defaults stand plus
-three overrides), with one provenance correction on record — the §7a "Metz disagreement"
-statement was Opus-authored and only lazily approved at the time; it was never the
-maintainer's own position. Final ratification and the Phase-2 go (dedicated
+([design/MAINT-ADR-PORTABILITY-SPEC.md](design/MAINT-ADR-PORTABILITY-SPEC.md)): contradictions adjudicated (defaults stand plus
+three overrides), with one provenance correction on record — that spec's §7a weighs
+[ADR-0003](law/adr/0003-domain-coupling-bands.md)'s cited tradeoff between Sandi Metz's
+"duplication is cheaper than the wrong abstraction" caution and the maintainer's own
+counter-position (the "Metz disagreement"); the correction is that the §7a text stating that
+counter-position was actually Opus-authored and only lazily approved at the time, never
+the maintainer's own actual position. Final ratification and the Phase-2 go (dedicated
 `adr-portability` branch, ~14 Sonnet work packages) sit in the maintainer's queue.
 
 ## Immediately actionable (fresh session, in this order)
@@ -93,21 +100,27 @@ maintainer's own position. Final ratification and the Phase-2 go (dedicated
    verbatim — a Workflow-script gotchas recipe entry; three independent witnesses of the
    args-parsing class) and `cosign-convention-crosscheck` (row 486 — adjudicate ent
    cycle-003's iterate-to-approval co-sign convention against ADR-0014 and the A:B:C
-   recipe: already-covered, genuinely-new, or divergent — and if divergent, surface the
+   recipe (the three-role fresh-context review workflow —
+   [design/ORCH-ABC-AUDIT-LOOP-RECIPE.md](design/ORCH-ABC-AUDIT-LOOP-RECIPE.md) — a document's
+   author (A), an independent fresh reviewer (B), and whoever repairs B's findings (C)):
+   already-covered, genuinely-new, or divergent — and if divergent, surface the
    divergence for the maintainer, never silently harmonize). Both are
    Sonnet-executable from their ledgered statements alone.
 2. **Four parked branches await one merge pass at an ent session gap** (each gets a
    fresh seam review first; builders' worktree bases are stale by default — verify the
    base before trusting any corpus claim): `3305a5c` (three trivial doc/comment
-   corrections), `a84d69c` (pickup CANNOT-HYDRATE, exit 5), `0cd0a6f` (stop-breaker
-   strict-subset inherits instead of resetting), `f382b63` (watchdog liveness harness —
+   corrections), `a84d69c` (pickup CANNOT-HYDRATE, exit 5), `0cd0a6f` (a fix to the
+   "stop-breaker" — `hooks/stop_clean_exit.py`'s guard against an agent claiming completion
+   prematurely — so its strict-subset progress check now inherits open items across a state
+   reset instead of clearing them), `f382b63` (watchdog liveness harness —
    a safety feature by the maintainer's explicit framing, never cost-policing; all
    thresholds end-user configurable).
 3. proposals/ template patches apply at the same gap, behind the same seam discipline.
 
 Everything else waits on the maintainer's queue: ADR-portability ratification (§7a
-provenance question included), registry P1–P7, detector adoption (blocks the
-detector-firing-telemetry item), typed-table adoption, the trust-domain wording
+provenance question included), registry P1–P7, detector adoption (blocks the item that
+would wire up telemetry for when the compound-nominal detector actually fires),
+typed-table adoption, the trust-domain wording
 findings (three, disclosed at the README legibility sweep's merge, commit ae3eeb6), and
 the pgAudit package step.
 
@@ -136,7 +149,7 @@ the pgAudit package step.
   up to date" against the branch itself (a recurring class, witnessed again this
   session). Never `git add -A` while agent worktrees exist.
 - The A:B:C attestation loop's two-round cap escalates
-  (design/ORCH-ABC-AUDIT-LOOP-RECIPE.md); apply B's round-2 repairs verbatim with an honest
+  ([design/ORCH-ABC-AUDIT-LOOP-RECIPE.md](design/ORCH-ABC-AUDIT-LOOP-RECIPE.md)); apply B's round-2 repairs verbatim with an honest
   adjudication record — UNLESS a repair would encode a falsehood; then fix the
   underlying truth and disclose the divergence.
 - Verify artifacts, never reports — including agents' summaries and your own prior
@@ -150,7 +163,11 @@ the pgAudit package step.
 - Key generation and everything downstream of it (signed tags, chain-head sign-off) is
   DEFERRED by standing maintainer ruling until every other concern is banked — never
   re-raise it as a recommendation. The trust-domain decision
-  ([README.md § Trust domain](README.md#trust-domain)) is likewise his, at leisure.
-- The contemporaneity fact exporter refuses ledger windows over ~24.8 days; this
+  ([docs/PROJECT-OVERVIEW.md § Trust domain](docs/PROJECT-OVERVIEW.md#trust-domain) — moved out
+  of README.md on 2026-07-14 when README.md became a pure deployment guide, ledger item
+  `readme-idiots-deployment-guide`) is likewise his, at leisure.
+- The contemporaneity fact exporter (`engine/contemp_edb.py`, which turns a ledger window
+  into facts the deductive engine reasons over for "was this written close enough in time to
+  count as contemporaneous") refuses ledger windows over ~24.8 days; this
   repository's own tracker crosses that bound around 2026-08-05 — per-window anchoring
-  is the documented follow-up in engine/contemp_edb.py's hazard docstring.
+  is the documented follow-up in `engine/contemp_edb.py`'s hazard docstring.

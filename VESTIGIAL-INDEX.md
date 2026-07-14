@@ -64,9 +64,11 @@ a single model's unchecked say-so.
   real, useful distinction — e.g. it is what names `judgment/` and `law/` as straddling
   DOC-but-binding-in-spirit), the sweep folded its per-directory labels into `README.md`'s tree
   as terse bracketed tags (`[CORE]`, `[DOC]`, `[RESEARCH]`, `[OTHER]`, with straddle notes kept
-  verbatim) before moving this file out — see `README.md`'s "The tree" section for the merged
-  result. Provenance: machine-consensus (classifier + adversarial skeptic) + maintainer-approved
-  2026-07-12.
+  verbatim) before moving this file out — see docs/PROJECT-OVERVIEW.md's "The tree" section for
+  the merged result (that section, and the rest of README.md's prior general content, moved
+  there on 2026-07-14, ledger item `readme-idiots-deployment-guide`, when README.md became a
+  pure git-submodule deployment guide). Provenance: machine-consensus (classifier + adversarial
+  skeptic) + maintainer-approved 2026-07-12.
 
 ## `design/` — 8 files, all VESTIGIAL
 
@@ -172,7 +174,9 @@ a single model's unchecked say-so.
 - **`judgment/POST-FABLE-OPERATING-BRIEF.md`** →
   `vestigial_documentation/judgment/POST-FABLE-OPERATING-BRIEF.md`. An operating brief Fable
   wrote 2026-07-07 for running the project without Fable-class access, covering e-series
-  judgment methodology (pre-banked judgment, frame/application split, FRAME-GAP findings). It is
+  judgment methodology (pre-banked judgment, frame/application split, and FRAME-GAP findings —
+  that predecessor era's label for a case where a judgment's frame and its application to a
+  specific instance diverged). It is
   explicitly and verbatim superseded by the root `ORCH-POST-FABLE-OPERATING-BRIEF.md`
   (2026-07-09), which states its own durable judgment was ported forward and that nothing in the
   old file should be trusted beyond what the new one repeats. Vestigial: a superseded
@@ -182,7 +186,9 @@ a single model's unchecked say-so.
 - **`judgment/e-series/e15-FINDINGS-ratification-package.md`** →
   `vestigial_documentation/judgment/e-series/e15-FINDINGS-ratification-package.md`. A
   proposed-but-never-ratified findings package from the e15 experiment, offering candidate
-  F-series entries (verdict-aware staleness, claimed-vs-performing-principal) with an explicit
+  F-series entries — a verdict going stale as circumstances change ("verdict-aware staleness")
+  and a principal claiming a role it isn't actually performing ("claimed-vs-performing-principal")
+  — with an explicit
   checklist gating their application to `FINDINGS.md`. `FINDINGS.md` shows the F52/F53 slots
   this package expected were in fact filled by a later e16 package instead — this one's
   checklist was never discharged and nothing downstream cites it. Vestigial: an abandoned draft
@@ -193,7 +199,9 @@ a single model's unchecked say-so.
   `vestigial_documentation/judgment/e-series/e15-analysis-consult-27.md`. The applied analysis
   for experimental run e15, verdicting that "the record told the truth about the work" for that
   one closed session. It is a single-run (N=1) forensic record from the pre-consolidation
-  experiment series, its lessons (stale-attestation handling, claimed-without-act triage) having
+  experiment series, its lessons — handling a stale attestation, and triaging a case where a
+  principal claimed to have acted but the underlying act was missing ("claimed-without-act
+  triage") — having
   fed forward into the current kernel/gate design rather than needing to be read directly.
   Vestigial: historical record of a settled, superseded experiment. Provenance:
   machine-consensus (classifier + adversarial skeptic) + maintainer-approved 2026-07-12.
@@ -210,16 +218,18 @@ a single model's unchecked say-so.
 
 - **`judgment/e-series/e17-FINDINGS-RATIFICATION-PACKAGE.md`** →
   `vestigial_documentation/judgment/e-series/e17-FINDINGS-RATIFICATION-PACKAGE.md`. Ratification
-  package for the e17 experiment's five findings (partial-review-stub-seam,
-  binder-batch-insert-artifact, etc.), each already marked fixed or filed at the time. The fixes
+  package for the e17 experiment's five findings — an incompletely-wired review stub
+  ("partial-review-stub-seam") and a batch-insert bug in the binder component
+  ("binder-batch-insert-artifact"), among others — each already marked fixed or filed at the time. The fixes
   it documents (fc21-fc27 style kernel patches) are long since folded into the shipped kernel;
   the package itself is a closed-out historical record. Vestigial: superseded by the kernel
   state it describes having already reached. Provenance: machine-consensus (classifier +
   adversarial skeptic) + maintainer-approved 2026-07-12.
 
 - **`judgment/e-series/e19-design-SEED.md`** →
-  `vestigial_documentation/judgment/e-series/e19-design-SEED.md`. A design seed proposing a
-  "residual-reappearance lever" follow-on to e18, explicitly unratified ("SEED, not a
+  `vestigial_documentation/judgment/e-series/e19-design-SEED.md`. A design seed proposing to
+  measure where defects ("residuals") reappear as in-run review depth thins — the
+  "residual-reappearance lever" — as a follow-on to e18, explicitly unratified ("SEED, not a
   commission") and dependent on the now-superseded `acts.ruling` vocabulary (rulings
   107/108/110/114). It was never elevated and the live engine design has since been written
   independently in `design/ORCH-LEDGER-LOGIC-MARRIAGE.md`. Vestigial: an abandoned proposal from
@@ -481,6 +491,11 @@ a single model's unchecked say-so.
   machine-consensus (classifier + adversarial skeptic) + maintainer-approved 2026-07-12.
 
 ### `research/obligations-formalisms-survey/formal-systems/` — 3 files
+
+The obligation-type labels below (PROV, TRACE, CLASS, CONSIST, STRUCT, COHERE) name entries in
+this project's own obligation taxonomy — what each formal system in this survey was being
+assessed against — defined in
+[`research/obligations-formalisms-survey/01-obligation-taxonomy.md`](research/obligations-formalisms-survey/01-obligation-taxonomy.md).
 
 - **`research/obligations-formalisms-survey/formal-systems/01-datalog.md`** →
   `vestigial_documentation/research/obligations-formalisms-survey/formal-systems/01-datalog.md`.
