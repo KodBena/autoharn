@@ -1,11 +1,3 @@
-<!-- doc-attest-exempt: bash-completion-identity-fix (2026-07-14) touched only the
-     bash_completion table row and one bullet -- a quoted-defect correction
-     (design/ORCH-RCA-PAIRING-KEY-DIVERGENCE.md) replacing a false claim with the corrected
-     mechanism, not a legibility-relevant rewrite of this document. The full A:B:C loop
-     (design/ORCH-ABC-AUDIT-LOOP-RECIPE.md) was judged out of this commission's scope (RCA sec-6.3
-     says "update" the doc, not "re-attest" it) and disproportionate to a two-passage factual patch;
-     flagged to the maintainer rather than silently skipped. Remove this waiver, or replace it with
-     a real /2 attestation record, on the next substantive touch. -->
 # Apparatus config — the per-world mechanism switchboard
 
 This document is for anyone configuring or auditing a project scaffolded from this repository:
@@ -90,7 +82,7 @@ switchboard example above.
 | `doc_legibility_critic`| `hooks/doc_legibility_critic.py`                | **`off`** | **spends a real `claude -p` classifier call per `.md` Write/Edit** — same "no world may silently bill its operator" mandate as `demurral_detect`; the zero-context-reader documentation discipline's (`law/adr/0017-the-zero-context-reader.md`) lightweight, portable transport, delivered UNWIRED into any hook chain — this entry only takes effect once a project wires the PostToolUse attachment documented in the hook's own module docstring |
 | `read_observer`        | `hooks/pretooluse_read_observer.py`             | `observe` | **free per call** (one journal line, no subprocess, no LLM call) — defaults `observe` like `mutation_observer`/`delegation_observer`, the house convention that a costless observer starts ON rather than OFF; `enforce` is **not sanctioned** (reading a file is not a refusable act under this project's law) — if apparatus.json ever names `enforce` here, the hook warns loudly and behaves as `observe` |
 | `bash_completion`      | `hooks/posttooluse_bash_completion.py`          | `observe` | **free per call** (one journal line, no subprocess, no LLM call) — same costless-observer convention as `mutation_observer`/`read_observer`; journals a Bash call's completion timestamp beside `stamp_intercept`'s existing pre-call token, correlated by the harness-assigned `tool_use_id` at READ TIME (a consumer join, e.g. `engine/contemp_edb.py`'s `dispatch_token_by_tool_use_id()`/`join_bash_completions()`) — CORRECTED 2026-07-14 (design/ORCH-RCA-PAIRING-KEY-DIVERGENCE.md): the original command-text-hash correlation was dead at birth (`stamp_intercept` rewrites every command between the two hashes), so this hook now stores no pairing verdict at all, only event-local facts (`ts`, `session_id`, `tool_use_id?`, `duration_ms?`, `command_sha256`, `command_head`). `enforce` is **impossible** (a PostToolUse leg fires after the command already finished — no "deny" available), same shape as `mutation_observer`; the hook warns loudly and behaves as `observe` if apparatus.json ever names it. Added 2026-07-12 ("Small-follow-ups commission") — this row and the shipped `apparatus.json` default were briefly out of sync with the mechanism actually shipping in `hooks/`, found and fixed by the configuration-surface-survey commission's own unknown-key sweep work ([BACKLOG.md](../../BACKLOG.md) "Configuration-surface survey, adopter's eyes", 2026-07-11 entry, gap 1) — the worked example of exactly the drift `filing/apparatus_registry.py`'s derive-don't-hand-list design exists to foreclose |
-| `doc_attestation`      | `bootstrap/templates/distance-to-clean.tmpl` (NOT a hook — see the named nuance below) | **`off`** | **free per call** (pure hashing, no LLM call, no network) — OFF anyway, because this switch is not about cost: it gates whether `./distance-to-clean`'s DOC-ATTESTATION section counts debt for the ADR-0017 A:B:C fresh-context audit loop, a workflow a deployment adopts by choice (`design/ORCH-SPEC-ABC-OFFERING.md` §4). `enforce` is **not applicable** (this section only ever reports, it has no deny path) — degrades to `observe` with a warning, same shape as `mutation_observer`/`bash_completion`. Added 2026-07-12 (tracker item `abc-loop-offering`) |
+| `doc_attestation`      | `bootstrap/templates/distance-to-clean.tmpl` (NOT a hook — see the named nuance below) | **`off`** | **free per call** (pure hashing, no LLM call, no network) — OFF anyway, because this switch is not about cost: it gates whether `./distance-to-clean` (the operator verb that reads a deployment's outstanding closure debt — unreviewed decisions, open questions, work-item violations — in one pass; `bootstrap/templates/distance-to-clean.tmpl`) counts a DOC-ATTESTATION section's debt for the ADR-0017 A:B:C fresh-context audit loop, a workflow a deployment adopts by choice (`design/ORCH-SPEC-ABC-OFFERING.md` §4). `enforce` is **not applicable** (this section only ever reports, it has no deny path) — degrades to `observe` with a warning, same shape as `mutation_observer`/`bash_completion`. Added 2026-07-12 (tracker item `abc-loop-offering`) |
 
 The table above states each mechanism's default and the one-line reason for it; the notes below
 add per-mechanism detail a table cell is too narrow to carry.
@@ -116,16 +108,11 @@ add per-mechanism detail a table cell is too narrow to carry.
   motivating specimen: in a prior run of this project's
   own operator loop, a claimed work item's implementation began six seconds after it was claimed,
   ~2.5 minutes ahead of the decomposition's own countersign verdict.
-<!-- doc-attest-exempt: this pass's `clean_exit` operator-note addition (stop-clean-exit-wide-decomposition-doc)
-     was self-reviewed against ADR-0017 Rule 1's four checks, not run through the A:B:C
-     fresh-context loop -- no Agent/Task dispatch tool was available to this Sonnet builder in
-     this session to fetch a genuinely independent B. The addition is short, factual, and follows
-     the surrounding bullets' established register (a named pattern, a named tracker slug, a
-     cross-reference to the mechanism it explains); a future A:B:C pass over this file should
-     re-attest the whole document rather than trust this self-review indefinitely. -->
 - **`clean_exit`**'s circuit breaker can fire repeatedly, in the SAME session, under a
   deliberately WIDE decomposition (many parallel open work items, sized for resumability) --
-  this is the mechanism working as designed, not breakage (ent-observatory cycle-001,
+  this is the mechanism working as designed, not breakage (witnessed in the ent-observatory
+  series — read-only audit cycles over the `~/ent` deployment, this repo's first scaffolded
+  subject — cycle-001, [observatory/ent/cycle-001.md](../../observatory/ent/cycle-001.md);
   tracker `stop-clean-exit-wide-decomposition-doc`). A session carrying 16-17 open work items
   can trip the 3-strike breaker (`DEBT_REPEAT_LIMIT`, `hooks/stop_clean_exit.py`) several times
   in one sustained run: closing one item shrinks the debt set but, with that many items still
@@ -186,7 +173,10 @@ add per-mechanism detail a table cell is too narrow to carry.
   switchboard entry of its own (this table's last row) governing whether `./distance-to-clean`
   counts A:B:C debt, plus a per-deployment `./attest-doc` verb that reads/writes THAT
   deployment's own attestation ledger by importing this repo's gate module directly, live, the
-  same "verbs are shims into the autoharn checkout" pattern `led`/`judge`/`pickup` already use
+  same "verbs are shims into the autoharn checkout" pattern the scaffold's three operator
+  commands `led`/`judge`/`pickup` already use (each is a thin per-deployment script that `exec`s
+  the corresponding `bootstrap/templates/*.tmpl` out of the autoharn checkout on every
+  invocation, never a frozen copy)
   (`design/ORCH-SPEC-ABC-OFFERING.md`, tracker item `abc-loop-offering`) — never a copy of the
   gate script itself, and never wired as that deployment's own commit-time hook (most scaffolds
   are not even guaranteed to be a git repository).
@@ -227,8 +217,9 @@ add per-mechanism detail a table cell is too narrow to carry.
 
 `hooks/posttooluse_apparatus_flip.py` (tracker item `apparatus-flip-witnessing`, 2026-07-12) journals a
 typed event every time `.claude/apparatus.json` itself changes — content hashes before/after, and
-which mechanisms' `mode` values changed, when the content parses. It closes a real gap the twelve
-mechanisms above left open: none of them unconditionally watches an edit to THIS file —
+which mechanisms' `mode` values changed, when the content parses. It closes a real gap the twelve hook-implemented
+mechanisms above left open (twelve, not thirteen: `doc_attestation` is read by a `.tmpl` verb, not
+by any hook, so it never watches anything): none of them unconditionally watches an edit to THIS file —
 `posttooluse_mutation_observer.py`'s Bash-driven sweep can catch an apparatus.json mutation, but
 only for Bash writes and only when no work item is open+claimed — so a `Write`-tool flip of a
 mechanism to `"off"` mid-session (or a Bash flip during claimed work) previously left no refusal,
