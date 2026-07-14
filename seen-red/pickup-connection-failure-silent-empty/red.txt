@@ -1,0 +1,73 @@
+RED EVIDENCE -- pickup-connection-failure-silent-empty (2026-07-14)
+
+Captured by reverting bootstrap/templates/pickup.tmpl to its pre-fix state (git stash) and
+running it against a deployment.json pointing at an unreachable host
+(pickup-conn-probe.invalid, RFC 2606 .invalid TLD -- guaranteed never to resolve), the exact
+scenario ENT TESTBED FINDING 3 (2026-07-13) named:
+
+EXIT: 0
+
+--- STDOUT (first ~10 sections, each printing its own ERROR: line, exit still 0) ---
+
+### SECTION: IN-FORCE-DECISIONS
+
+ERROR: psql: error: could not translate host name "pickup-conn-probe.invalid" to address: Name or service not known
+
+### SECTION: OPEN-QUESTIONS
+
+ERROR: psql: error: could not translate host name "pickup-conn-probe.invalid" to address: Name or service not known
+
+### SECTION: REVIEW-DEBT
+
+ERROR: psql: error: could not translate host name "pickup-conn-probe.invalid" to address: Name or service not known
+
+### SECTION: RECENT-CHANGES
+
+ERROR: psql: error: could not translate host name "pickup-conn-probe.invalid" to address: Name or service not known
+
+### SECTION: GIT-STATE
+
+(no git repo found at /tmp)
+
+### SECTION: RESOURCES
+
+ERROR: psql: error: could not translate host name "pickup-conn-probe.invalid" to address: Name or service not known
+
+### SECTION: ESTIMATES
+
+ERROR: psql: error: could not translate host name "pickup-conn-probe.invalid" to address: Name or service not known
+
+### SECTION: TAXONOMIES
+
+ERROR: psql: error: could not translate host name "pickup-conn-probe.invalid" to address: Name or service not known
+
+### SECTION: MAINTAINER-REVIEW-QUEUE
+
+ERROR: psql: error: could not translate host name "pickup-conn-probe.invalid" to address: Name or service not known
+
+### SECTION: IN-FLIGHT
+
+ERROR: psql: error: could not translate host name "pickup-conn-probe.invalid" to address: Name or service not known
+
+### SECTION: ROLLUP
+
+RETROSPECTIVE-ONLY, always (...)
+ERROR: psql: error: could not translate host name "pickup-conn-probe.invalid" to address: Name or service not known
+
+--- STDERR (process-level, the channel a caller actually checks for loud failure) ---
+
+(genuinely empty -- 0 bytes)
+
+THE DEFECT: exit code 0, empty process stderr, ten "ERROR:" lines buried inside stdout
+indistinguishable at a glance from the same script's own honest empty-result convention
+("(no rows)", "(no resource declarations on record)", etc.) -- a hydration brief a caller
+checking the exit code (the resumption doctrine's own entry point) cannot tell apart from an
+honestly-empty tracker. Same defect class as verify-chain-error-conflation (fixed 2026-07-13,
+commit 8768a01): a connection-level failure silently read and reported as if it were a
+query-level answer.
+
+THE FIX (this tracker item): `check_connectivity()` probes once, up front, with `SELECT 1;`
+under `SET ROLE dep.role`; on failure `main()` prints a typed CANNOT-HYDRATE banner to STDERR
+naming the psql error verbatim, prints NOTHING to stdout, and exits 3. See
+seen-red/pickup-connection-failure-silent-empty/run_fixtures.py for the both-polarity live
+proof (4/4 cases pass against real infra).

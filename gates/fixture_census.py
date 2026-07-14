@@ -112,6 +112,7 @@ REGISTRY: dict[str, str] = {
     "review-queue-intake":            "seen-red/review-queue-intake/run_fixtures.py",
     "adr-portability-terms":          "seen-red/adr-portability-terms/run_fixtures.py",
     "stamp-provenance-marker-corruption": "seen-red/stamp-provenance-marker-corruption/run_fixtures.py",
+    "pickup-connection-failure-silent-empty": "seen-red/pickup-connection-failure-silent-empty/run_fixtures.py",
 }
 
 
