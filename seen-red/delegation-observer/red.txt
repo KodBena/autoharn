@@ -40,3 +40,14 @@ programmatically, live, against two real throwaway scratch schemas, setup+teardo
   python3 seen-red/delegation-observer/run_fixtures.py
 
 WITNESSED 2026-07-11: `run_fixtures: all 5 named cases + 1 bonus cross-check passed.`
+
+ADDENDUM 2026-07-14 (work item `model-attribution-tracking`): the dispatch journal line now also
+carries `tool_input.model` (verbatim, `null` when absent -- the honest DECLARED-BY-DISPATCHER
+default, never guessed) and `tool_input.subagent_type` (verbatim) -- strictly additive to the
+EXISTING dispatch line, proven by two more fixture cases (j-model-declared, k-model-absent).
+WITNESSED 2026-07-14: `run_fixtures: all 5 dispatch-leg cases + 1 bonus cross-check + 3 return-leg
+cases (paired, unresolved, FIFO double-dispatch) + 2 model-attribution cases (declared, absent)
+passed.` (NOTE, honestly flagged rather than silently left: this file's own body above still
+describes only the original 5+1 dispatch-leg cases -- the return leg's own 3 cases, added under
+BACKLOG "small-follow-ups commission item 5", were never folded into this narrative either; a
+future pass should rewrite this file's body in full rather than accumulate addenda.)

@@ -1345,6 +1345,111 @@ PYEOF
     ;;
 esac
 
+# --- outcome: intake validation (work item `model-attribution-tracking`, maintainer ask
+# 2026-07-12 ~noon) --------------------------------------------------------------------------
+# A statement beginning `outcome:` (after stripping leading whitespace) declares one SEAM-CLOSE
+# outcome row for a task -- which model executed it and what a seam review found -- written by
+# the ORCHESTRATOR at each seam close (never by the executing agent itself, the same posture
+# `review:`/`review-done:` below already keep for the maintainer's own queue), and MUST carry the
+# five-field grammar design/USER-RETROSPECTIVE-RECIPE.md's "The `outcome:` statement grammar"
+# section documents before ANY write is attempted -- refuse loudly here, at the boundary (ADR-0002
+# rule 2: validate at boundaries, do not coerce), cloned structurally from `estimate:`/`actual:`/
+# `taxon:` above (whitespace-normalized validation copy, byte-exact persisted statement, refuse-
+# before-write atomicity, teach-text naming the grammar).
+#
+# WHAT THIS IS FOR, STATED SO IT CANNOT BE MISREAD (mirrors `estimate:`/`actual:`'s own invariant
+# verbatim, per the maintainer's same-day reiteration this is hazard-detection instrumentation,
+# not economizing): an `outcome:` row exists to answer "what are the observed capabilities of the
+# models, across tasks?" -- RETROSPECTIVE-ONLY, per the standing never-police invariant. This
+# validator refuses only the INTAKE SHAPE (five well-formed fields); it has no opinion on which
+# model is better, and there is no companion gate anywhere in this tree that reads this row and
+# fails a build.
+#
+# MODEL is DECLARED-BY-DISPATCHER grade, named honestly (same grade
+# hooks/pretooluse_delegation_observer.py's own journaled `tool_input.model` carries, per the
+# 2026-07-11 evidentiary-basis ruling) -- the ledger cannot verify which model actually served a
+# dispatch, only record what the orchestrator observed/declared at seam close.
+#
+# The grammar check below runs against a WHITESPACE-NORMALIZED COPY only (every run of \n/\r plus
+# its following indentation collapsed to one space), so a legitimate embedded newline (a paste
+# reflowed by a terminal) is ACCEPTED rather than refused -- identical convention to every block
+# above. The row actually written on success is $statement, completely untouched -- byte fidelity
+# matters here for the same reason it matters for `resource:`/`estimate:` (a later GPG signing
+# ceremony reads this exact row, design/USER-GPG-TRUST-LAYER-FAQ.md); the normalized copy is
+# validation-only scratch, never persisted. Nothing is written at all if validation fails
+# (atomicity by refusal-before-write).
+#
+# COHERENCE PARTNER: the trigger condition below (leading POSIX [:space:] stripped, then an
+# `outcome:` prefix) and any future `pickup.tmpl`/retrospective reader of outcome rows must define
+# "an outcome declaration" IDENTICALLY, by construction -- the same coherence contract every block
+# above already keeps with its own reader. Change either side only in lockstep with the other.
+_outcome_trimmed="${statement#"${statement%%[![:space:]]*}"}"
+case "$_outcome_trimmed" in
+  outcome:*)
+    if ! python3 - "$_outcome_trimmed" <<'PYEOF'
+import re
+import sys
+
+# The five fields, in order, are transcribed VERBATIM from design/USER-RETROSPECTIVE-RECIPE.md's
+# "The `outcome:` statement grammar" section -- the ONE documented home of this grammar (a
+# transcription, not a second, driftable definition of it -- ADR-0012 P1).
+FIELDS = ("TASK-SLUG", "MODEL", "SEAM-VERDICT", "DEFECTS-FOUND-AT-SEAM", "NOTES")
+_SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9-]*$")
+_MODEL_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._-]*$")
+
+raw = sys.argv[1]
+normalized = re.sub(r"[\r\n]+[ \t]*", " ", raw).strip()
+body = normalized[len("outcome:"):]
+parts = [p.strip() for p in body.split("|")]
+
+
+def refuse(msg: str) -> None:
+    print(f"led: REFUSED -- malformed 'outcome:' statement -- {msg}.", file=sys.stderr)
+    print("  grammar (design/USER-RETROSPECTIVE-RECIPE.md \"The 'outcome:' statement grammar\"):", file=sys.stderr)
+    print("    outcome: <TASK-SLUG> | <MODEL> | <SEAM-VERDICT> | <DEFECTS-FOUND-AT-SEAM> | <NOTES>", file=sys.stderr)
+    print(f"  the five fields, in order: {', '.join(FIELDS)}", file=sys.stderr)
+    print("  TASK-SLUG must match ^[a-z0-9][a-z0-9-]*$ (a bare slug, no spaces -- the same slug a", file=sys.stderr)
+    print("  'led work open <slug>'/'estimate:' row for it would use, so a retrospective can join", file=sys.stderr)
+    print("  on it)", file=sys.stderr)
+    print("  MODEL must match ^[a-zA-Z0-9][a-zA-Z0-9._-]*$ (a bare model identifier, e.g. 'sonnet',", file=sys.stderr)
+    print("  'opus', 'claude-sonnet-4-5' -- no spaces, so grouping by exact string match is honest)", file=sys.stderr)
+    print("  SEAM-VERDICT must be non-empty (what the seam review concluded, in the orchestrator's", file=sys.stderr)
+    print("  own words -- no closed vocabulary is imposed here)", file=sys.stderr)
+    print("  DEFECTS-FOUND-AT-SEAM must be non-empty (name what was found, or state '0'/'none' --", file=sys.stderr)
+    print("  never blank; a clean seam is a fact worth recording, not an absence)", file=sys.stderr)
+    print("  NOTES must be non-empty (free text; state 'none' if there is nothing to add)", file=sys.stderr)
+    print(f"  received ({len(parts)} field(s), whitespace-normalized): {normalized}", file=sys.stderr)
+    print("  NOTHING was written -- fix the statement and re-run.", file=sys.stderr)
+    print("  this is an OUTCOME for RETROSPECTIVE model-capability observation ONLY, never for", file=sys.stderr)
+    print("  policing a model or a task -- the same never-police invariant `estimate:`/`actual:`", file=sys.stderr)
+    print("  state applies here verbatim; MODEL is DECLARED-BY-DISPATCHER grade (diagnostic, not", file=sys.stderr)
+    print("  witnessed) -- only the INTAKE SHAPE is refused here, never the observation's content.", file=sys.stderr)
+    sys.exit(1)
+
+
+if len(parts) != len(FIELDS):
+    refuse(f"expected exactly {len(FIELDS)} '|'-separated fields, got {len(parts)}")
+
+slug, model, seam_verdict, defects, notes = parts
+if not _SLUG_RE.match(slug):
+    refuse(f"TASK-SLUG field {slug!r} does not match ^[a-z0-9][a-z0-9-]*$ (a bare slug, no spaces)")
+if not _MODEL_RE.match(model):
+    refuse(f"MODEL field {model!r} does not match ^[a-zA-Z0-9][a-zA-Z0-9._-]*$ (a bare model identifier, no spaces)")
+if not seam_verdict:
+    refuse("SEAM-VERDICT field is empty -- state what the seam review concluded")
+if not defects:
+    refuse("DEFECTS-FOUND-AT-SEAM field is empty -- name what was found, or state '0'/'none'")
+if not notes:
+    refuse("NOTES field is empty -- state 'none' if there is nothing to add")
+
+sys.exit(0)
+PYEOF
+    then
+      exit 1
+    fi
+    ;;
+esac
+
 # --- review: intake validation (tracker item `maintainer-review-queue`, 2026-07-13) -----------
 # A statement beginning `review:` (after stripping leading whitespace) opens OR RE-RANKS one row
 # of the maintainer's executive review queue -- an item he wants to personally look at, ranked by
