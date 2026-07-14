@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-14T21:20:36Z
-#   last-change: 2026-07-14T21:25:43Z
+#   last-change: 2026-07-14T21:38:58Z
 #   contributors: a857c93d/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -378,24 +378,72 @@ def _apply_chain(dep: DeploymentRecord, schema: str, kern: str, missing: list[st
 
 # --------------------------------------------------------------------------------------------
 # 7. GENERIC HISTORY-IDENTITY CHECK
+#
+# ACTUALLY delta-independent (fixed post-build, out-of-frame hack-rationalization audit,
+# 2026-07-14): the first cut of this check hardcoded `event_declared_ts` into its column list --
+# a column only `s24-declared-event-time.sql` adds, absent on any pre-s24 head (`s15-schema.sql`'s
+# base `ledger` has no such column). That silently broke this check's own docstring claim (this
+# is the one place in the file titled "GENERIC, DELTA-INDEPENDENT") the moment `./migrate` ran
+# against a deployment stuck behind s24 -- squarely in scope for a tool whose whole premise is
+# "any deployment, any missing suffix" -- surfacing a raw, untaught Postgres "column does not
+# exist" instead of the tool's own promised evidence trail. Fixed the ADR-0000 Rule 2(a) way: not
+# a special case for s24, but the SAME capability-gating idiom `.detect.sql` siblings already use
+# (query information_schema.columns for what is actually there), so the NEXT column added to
+# `ledger` by some future delta needs zero edit here either -- the projection is derived from the
+# live catalog, never a literal list trusted to stay in sync with the lineage.
 # --------------------------------------------------------------------------------------------
 
-_HISTORY_PROJECTION = (
-    "id::text || '|' || kind || '|' || coalesce(actor::text,'') || '|' || coalesce(statement,'') "
-    "|| '|' || coalesce(event_declared_ts::text,'')"
-)
+# Every column this check WOULD project if present -- `id`/`kind` exist on every generation this
+# tool supports (the base `ledger` table, s15-schema.sql) and are listed for clarity, not because
+# they need gating; `actor`/`statement`/`event_declared_ts` are gated because a real pre-s24 (or
+# even pre-s15-successor) head may lack the newer ones. Order here is the order that lands in the
+# fingerprint when present -- stable across two calls on the SAME schema, which is all identity
+# comparison needs (this list itself never has to match another schema's presence set).
+_HISTORY_CANDIDATE_COLUMNS = ("id", "kind", "actor", "statement", "event_declared_ts")
 
 
-def _history_fingerprint(dep: DeploymentRecord, schema: str) -> tuple[int, str]:
+def _history_columns(dep: DeploymentRecord, schema: str) -> list[str]:
+    proc = subprocess.run(
+        ["psql", "-h", dep.host, "-d", dep.db, "-v", "ON_ERROR_STOP=1", "-tA",
+         "-c", f"SELECT column_name FROM information_schema.columns "
+               f"WHERE table_schema = '{schema}' AND table_name = 'ledger' "
+               f"AND column_name = ANY(ARRAY[{','.join(repr(c) for c in _HISTORY_CANDIDATE_COLUMNS)}]);"],
+        capture_output=True, text=True,
+    )
+    if proc.returncode != 0:
+        raise MigrateRefusal(
+            f"migrate: could not read {schema}.ledger's column list:\n{proc.stderr.strip()}\n"
+            f"Nothing further was touched.")
+    present = {ln.strip() for ln in proc.stdout.splitlines() if ln.strip()}
+    if "id" not in present:
+        raise MigrateRefusal(
+            f"migrate: {schema}.ledger has no `id` column -- this is not a kernel this tool "
+            f"recognizes as a migration target. Nothing was touched.")
+    return [c for c in _HISTORY_CANDIDATE_COLUMNS if c in present]
+
+
+def _history_fingerprint(dep: DeploymentRecord, schema: str, columns: list[str]) -> tuple[int, str]:
+    """`columns` is ALWAYS the caller's, never recomputed here -- see the caller-side comment in
+    `main()` for why: recomputing per call would let a migrated-in column (e.g. `event_declared_ts`
+    on a deployment migrating THROUGH s24) silently widen the "after" projection relative to
+    "before", producing a false HISTORY BYTE-IDENTITY failure on rows whose content never
+    changed. One column set, fixed at the START of a run (`_history_columns` on the PRE-migration
+    live schema), used for every fingerprint call in that run -- apples to apples throughout."""
+    parts = []
+    for c in columns:
+        cast = f"{c}::text" if c not in ("kind", "statement") else c
+        parts.append(f"coalesce({cast},'')")
+    projection = " || '|' || ".join(parts)
     proc = subprocess.run(
         ["psql", "-h", dep.host, "-d", dep.db, "-v", "ON_ERROR_STOP=1", "-tA", "-F", "|",
-         "-c", f'SELECT count(*), coalesce(md5(string_agg({_HISTORY_PROJECTION}, \',\' '
+         "-c", f"SELECT count(*), coalesce(md5(string_agg({projection}, ',' "
                f'ORDER BY id)), \'\') FROM "{schema}".ledger;'],
         capture_output=True, text=True,
     )
     if proc.returncode != 0:
         raise MigrateRefusal(
-            f"migrate: could not compute the history fingerprint for {schema}.ledger:\n"
+            f"migrate: could not compute the history fingerprint for {schema}.ledger "
+            f"(columns projected: {', '.join(columns)}):\n"
             f"{proc.stderr.strip()}\nNothing further was touched.")
     count_s, digest = proc.stdout.strip().split("|", 1)
     return int(count_s), digest
@@ -529,23 +577,29 @@ def main(argv: list[str]) -> int:
         print(f"migrate: missing ({len(missing)}): {', '.join(missing)}")
 
         backup_path = _backup(dep, name)
-        pre_count, pre_fingerprint = _history_fingerprint(dep, dep.schema)
+        # Fixed at the START of the run, on the PRE-migration live schema, and reused for EVERY
+        # fingerprint call below -- never recomputed per call. See _history_fingerprint's own
+        # docstring: recomputing after a delta that adds a candidate column (event_declared_ts,
+        # s24) would widen the "after" projection relative to "before" and manufacture a false
+        # HISTORY BYTE-IDENTITY failure on rows that never changed.
+        history_columns = _history_columns(dep, dep.schema)
+        pre_count, pre_fingerprint = _history_fingerprint(dep, dep.schema, history_columns)
         print(f"migrate: pre-migration history fingerprint: {pre_count} rows, "
-              f"md5={pre_fingerprint}")
+              f"md5={pre_fingerprint} (columns: {', '.join(history_columns)})")
 
         scratch_schema, scratch_kern = _scratch_names(dep)
         print(f"migrate: REHEARSAL -- restoring backup into scratch schemas "
               f"{scratch_schema}/{scratch_kern} ...")
         try:
             _restore_to_scratch(dep, backup_path, scratch_schema, scratch_kern)
-            scratch_pre_count, scratch_pre_fp = _history_fingerprint(dep, scratch_schema)
+            scratch_pre_count, scratch_pre_fp = _history_fingerprint(dep, scratch_schema, history_columns)
             if (scratch_pre_count, scratch_pre_fp) != (pre_count, pre_fingerprint):
                 raise MigrateRefusal(
                     "migrate: REHEARSAL FAIL -- the scratch restore's history fingerprint does "
                     "not match the live pre-migration fingerprint; the backup did not restore "
                     "byte-identically. Nothing live was touched.")
             _apply_chain(dep, scratch_schema, scratch_kern, missing, where="REHEARSAL")
-            post_count, post_fingerprint = _history_fingerprint(dep, scratch_schema)
+            post_count, post_fingerprint = _history_fingerprint(dep, scratch_schema, history_columns)
             if (post_count, post_fingerprint) != (pre_count, pre_fingerprint):
                 raise MigrateRefusal(
                     "migrate: REHEARSAL FAIL -- HISTORY BYTE-IDENTITY check failed: applying the "
@@ -597,7 +651,7 @@ def main(argv: list[str]) -> int:
         print(f"migrate: applying to LIVE {dep.schema}/{dep.kern} ...")
         _apply_chain(dep, dep.schema, dep.kern, missing, where="LIVE")
 
-        post_live_count, post_live_fp = _history_fingerprint(dep, dep.schema)
+        post_live_count, post_live_fp = _history_fingerprint(dep, dep.schema, history_columns)
         if (post_live_count, post_live_fp) != (pre_count, pre_fingerprint):
             print(
                 f"migrate: *** POST-APPLY VERIFICATION FAILURE *** -- LIVE history byte-identity "
