@@ -2,12 +2,14 @@
 
 Audience: orchestrator
 
-Written 2026-07-11 after an Opus-model fresh-context probe — a second model instance
-handed only this repository's files, no session memory, no author context, deliberately
-run to surface what a genuinely new reader would trip on (the same method
-[ADR-0017](law/adr/0017-the-zero-context-reader.md) later codified as a required loop) —
-of this repo reported its orientation gaps; this card is the fix. It condenses; it does
-not supersede. The
+This card is the orchestrator's condensed operating reference for this repository: where
+you stand, which documents are authoritative, and the standing rules you operate under.
+It was written 2026-07-11 to fix the orientation gaps reported by an Opus-model
+fresh-context probe — a second model instance handed only this repository's files, no
+session memory, no author context, deliberately run to surface what a genuinely new
+reader would trip on (the same method
+[ADR-0017](law/adr/0017-the-zero-context-reader.md) later codified as a required loop).
+It condenses; it does not supersede. The
 [SSOTs](GLOSSARY.md#ssot) (single sources of truth — the one authoritative home for each
 kind of fact): CLAUDE.md (law + orchestration), CAPABILITIES.md (what is witnessed),
 BACKLOG.md dated tail (live findings), HANDOFF.md (session entry point). When this card
@@ -84,7 +86,10 @@ Condensed for quick reference; full definitions (the SSOT) live in
   agree). Closed verdicts: `AGREE` (green) |
   `DIVERGE_BY_DESIGN` | `DIVERGE_DEFECT` | `QUARANTINED`; non-zero exit iff defect or
   quarantine — both are TYPED escalation events: stop and route upward, with the banked
-  DerivationRecord pair under engine/docs/ledger-marriage/derivations/ as the artifact.
+  DerivationRecord pair (one provenance record per producer — engine, version, config,
+  input hash — for the ASP side and the SQL side of the verdict;
+  `engine/ledger_differential.py`'s `DerivationRecord` class is its definition) under
+  engine/docs/ledger-marriage/derivations/ as the artifact.
   Diagnosis walkthrough: engine/docs/JUDGE-READING.md. Witness: CAPABILITIES item 12.
 - `./pickup` — live-derived resume brief (six sections incl. IN-FLIGHT work items),
   recomputed from the ledger every time, never stored. Witness: CAPABILITIES item 11.
@@ -96,9 +101,11 @@ Condensed for quick reference; full definitions (the SSOT) live in
   additive convenience over the debt views above, which remain the default surface.
   Witness: CAPABILITIES item 25.
 - `./attest-doc` — record or check fresh-context documentation attestations against the
-  deployment's own local attestations ledger (`record`/`check`; the A:B:C loop offered
-  to deployments, surfaced in `distance-to-clean` behind the `doc_attestation` apparatus
-  switch, default off). Witness: CAPABILITIES item 35.
+  deployment's own local attestations ledger (`record`/`check`; the A:B:C loop — one
+  agent authors, a second with no shared context audits, a third repairs, per
+  [ADR-0017's fresh-context audit loop](law/adr/0017-the-zero-context-reader.md) —
+  offered to deployments, surfaced in `distance-to-clean` behind the `doc_attestation`
+  apparatus switch, default off). Witness: CAPABILITIES item 35.
 - the scaffold — `bootstrap/new-project.sh`, run from the autoharn checkout: creates a
   fresh world directory plus its Postgres schema pair, applies the birth chain, wires
   hooks and verbs, registers the principals (invocation in the next section). Witness:
@@ -172,9 +179,16 @@ history — the ceremony it guarded has no legitimate scenario).
    differential AGREE? → **class-ratified**: it enters the birth chain without a
    per-delta maintainer question.
 2. Delta loosens a refusal, alters existing semantics, or touches law/? → maintainer,
-   full ceremony (Fable-authored spec, or the succession ceremony in CLAUDE.md).
+   full ceremony (a spec authored by [Fable](GLOSSARY.md#post-fable-law), the maintainer's
+   primary AI-collaborator authoring model, or the succession ceremony — CLAUDE.md's
+   ORCHESTRATION section's "Succession rule": if Fable is unavailable, the maintainer +
+   Opus may author kernel/law/engine specs under maximum ceremony, including an
+   adversarial fresh-context review of the spec).
 3. **Any doubt about which side it falls on IS the routing: ask.**
-   Worked examples: s21/s22/s23 sail through as class 1; review_gap scope filtering (option
+   Worked examples: s21 (session-aware stamp distinctness), s22 (the per-project
+   work-item ledger), and s23 (the per-invocation stamp token) — three additive
+   kernel-lineage deltas, each the file of that name under `kernel/lineage/`, its header
+   comment the delta's own record — sail through as class 1; review_gap scope filtering (option
    B in design/REVIEW-GAP-SCOPE-SEMANTICS-RULING.md) routes as class 2 — it would make
    the view catch FEWER rows.
 
@@ -197,11 +211,11 @@ had already shipped in `hooks/`. There are eleven mechanisms today; every row be
 | stamp_intercept.py | PreToolUse Bash | injects HMAC stamp as PGOPTIONS, unconditionally | enforce |
 | clean_exit (stop_clean_exit.py) | Stop | review_gap / question_status / open work / violations; blocks dirty stop (3-strike breaker) | enforce |
 | mutation_observer (posttooluse_mutation_observer.py) | Pre+Post Bash (the filename keeps its original "posttooluse_" prefix even though it now also attaches PreToolUse — same naming precedent delegation_observer follows below, an added leg on an existing file rather than a rename) | find -newer sweep; warns on mutation with no work item | observe (enforce impossible) |
-| delegation_observer (pretooluse_delegation_observer.py) | Pre+Post Task/Agent (one file, two legs added by the "small follow-ups" work item closed 2026-07-11 — tracker slug `small-follow-ups-commission`, `./led show` its row for the full record: PreToolUse journals the dispatch, PostToolUse journals the return, FIFO-paired by session_id + prompt sha256) | journals every subagent dispatch and its return; warns when no open+claimed work item | observe |
+| delegation_observer (pretooluse_delegation_observer.py) | Pre+Post Task/Agent (one file, two legs added by the "small follow-ups" work item closed 2026-07-11 — tracker slug `small-follow-ups-commission`, `./led show` its row for the full record: PreToolUse journals the dispatch, PostToolUse journals the return) | journals every subagent dispatch and its return, each line carrying the harness-assigned `tool_use_id` when present; CORRECTED 2026-07-14 ([design/ORCH-RCA-PAIRING-KEY-DIVERGENCE.md](design/ORCH-RCA-PAIRING-KEY-DIVERGENCE.md) sec-3/sec-4/sec-6.6): the old FIFO-by-`session_id`+`prompt_sha256` pairing is retired — dispatch and return are identity-keyed on `tool_use_id` (present and byte-identical across both legs, per a live payload capture), and neither leg stores a pairing verdict; a reader joins the two lines at read time. Warns when no open+claimed work item | observe |
 | demurral_detect.py | AskUserQuestion, Stop | out-of-frame classifier for ADR-0013 Rule 3's "lower-ROI/invasive demurral is a tell, not an argument" pattern; warns only | **OFF (costs money)** |
 | doc_shapes_gate (pretooluse_doc_shapes_gate.py) | PreToolUse Write/Edit on *.md | runs [`gates/doc_shapes.py`](gates/doc_shapes.py) checks in-world; refuse-and-teach in enforce | observe |
 | read_observer (pretooluse_read_observer.py) | PreToolUse Read | journals ts/session/path — the evidence trail that lets a reviewer confirm they read a file themselves rather than trusting another agent's summary of it (invariant I6, [law/briefs/BRIEF-CONFORMANCE-MAP.md](law/briefs/BRIEF-CONFORMANCE-MAP.md): distinct-reviewer independence recorded separately from the author's own read) | observe |
-| bash_completion (posttooluse_bash_completion.py) | PostToolUse Bash | journals a completion timestamp, FIFO-paired to stamp_intercept's dispatch token by command-text sha256 (the non-null duration tail: builds, test suites, long subprocesses) | observe (enforce impossible — PostToolUse fires after the command already ran, so no "deny" exists) |
+| bash_completion (posttooluse_bash_completion.py) | PostToolUse Bash | journals a completion timestamp local to its own event only (`ts`, `session_id`, `tool_use_id?`, `duration_ms?`, `command_sha256`, `command_head`) and stores no pairing verdict; CORRECTED 2026-07-14 ([design/ORCH-RCA-PAIRING-KEY-DIVERGENCE.md](design/ORCH-RCA-PAIRING-KEY-DIVERGENCE.md)): the original FIFO-by-command-text-sha256 pairing to `stamp_intercept`'s dispatch token was dead at birth (`stamp_intercept.py` rewrites the command, injecting a fresh per-call UUID, after hashing it but before it runs, so the two hooks never hashed the same text — measured 0 of 2093 pairings ever succeeding in production). Pairing is now a read-time join on `tool_use_id`, the harness-assigned identity present on both legs (`engine/contemp_edb.py`'s `dispatch_token_by_tool_use_id()`/`join_bash_completions()`) | observe (enforce impossible — PostToolUse fires after the command already ran, so no "deny" exists) |
 | doc_legibility_critic.py | PostToolUse Write/Edit on *.md | headless `claude -p` call applying [ADR-0017](law/adr/0017-the-zero-context-reader.md)'s "zero-context reader" legibility test (can someone with none of the author's context parse this document?) to the edited doc; non-blocking `additionalContext` + journal only, never denies | **OFF (costs money); UNWIRED — ships in no world's `.claude/settings.json` yet, a maintainer/orchestrator drop-in per the hook's own module docstring** |
 
 Before ANY hooks/ edit: verify no wired session is live — `pgrep -a claude` then
