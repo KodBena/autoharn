@@ -1,33 +1,49 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-11T21:36:35Z
-#   last-change: 2026-07-11T21:36:35Z
-#   contributors: e4410ef6/main
+#   last-change: 2026-07-14T01:15:49Z
+#   contributors: e4410ef6/main, a857c93d/main
 # <<< PROVENANCE-STAMP <<<
 
-"""run_fixtures.py -- both-polarity proof for hooks/posttooluse_bash_completion.py (small-
-follow-ups commission item 4). No database is involved -- this hook's only inputs are the
-stdin payload and two on-disk JSONL files (invocations.jsonl to pair against, its own
-bash_completions.jsonl to write) -- so this fixture is pure filesystem, mirroring
-seen-red/read-observer/run_fixtures.py's own shape.
+"""run_fixtures.py -- both-polarity proof for hooks/posttooluse_bash_completion.py, REWRITTEN
+2026-07-14 (design/ORCH-RCA-PAIRING-KEY-DIVERGENCE.md sec-6.4, the M1 counterparty fix).
 
-Real infra, no mocks: a throwaway scratch directory under /tmp, torn down before AND after this
-file runs so re-running it never leaves residue. Cases, run as an independent sequence unless
-noted:
+WHY THIS WAS REWRITTEN, NOT JUST EXTENDED: the RCA that motivated this fix (design/
+ORCH-RCA-PAIRING-KEY-DIVERGENCE.md sec-5, lapse 1) found the PRIOR version of this fixture's
+positive case authored the dispatch side BY HAND from the completion hook's own assumption
+(`append_invocation()` hashed raw, un-rewritten command text into a synthetic dispatch record) --
+the real dispatcher, `hooks/stamp_intercept.py`, was never executed, so its command-rewriting
+behavior (the actual root cause of the pairing defect this fix repairs) never entered the test.
+"Real infra, no mocks" was true of the completion hook and false of its counterparty. Per
+ADR-0011's mechanization discipline (the RCA's own M1): a fixture whose subject is a correlation
+contract between N producers must execute ALL N real producers in their real sequence for its
+positive case. This rewrite does that: the REAL `hooks/stamp_intercept.py` mints the dispatch
+line and rewrites the command; the REAL `hooks/posttooluse_bash_completion.py` journals the
+completion from that rewritten command; the REAL `engine/contemp_edb.dispatch_token_by_tool_use_id`
+/ `join_bash_completions` (the actual consumer join code, not reimplemented here) perform the
+read-time join.
 
-  a-token-pairing     -- invocations.jsonl carries one dispatch record with a known token and
-                         command_sha256; a completion for the SAME command text pairs to it:
-                         token set, pairing="token", dispatch_wall_clock carried through.
-  b-ts-only-fallback  -- a completion for a command with NO matching dispatch record ->
-                         pairing="ts-only", token=null -- the honest fallback, not a failure.
-  c-fifo-double-dispatch -- TWO dispatch records share the same command_sha256 (a command run
-                         twice); TWO completions for that same text pair FIFO -- the first
-                         completion claims the earlier dispatch, the second claims the later
-                         one, never the same dispatch twice.
-  d-mode-off          -- apparatus.json sets bash_completion.mode="off" -> genuinely zero cost:
-                         no completion line at all, even though a real Bash call just finished.
+Cases:
+
+  a-identity-join-through-real-rewrite (POSITIVE) -- a scratch wired world; the REAL
+    stamp_intercept.py dispatches a Bash command carrying a tool_use_id, minting a token AND
+    rewriting the command text (the PGOPTIONS injection). The REAL posttooluse_bash_completion.py
+    then journals a completion from a PostToolUse payload carrying THAT rewritten command and the
+    SAME tool_use_id. The REAL consumer join (engine.contemp_edb) is run over both journals and
+    must yield exactly one (token, ts) pair for the dispatch's own token -- proving identity
+    survives the command rewrite that killed the old content-hash design.
+  b-ts-only-no-tool-use-id (NEGATIVE, mandatory per RCA sec-6.4(ii)) -- a completion payload with
+    no tool_use_id journals a line (facts-local-to-this-event, honestly) and the consumer join
+    pairs it to nothing.
+  c-pre-fix-hook-goes-red (NEGATIVE CONTROL, mandatory per RCA sec-6.4(i)) -- the SAME two-party
+    positive sequence (real stamp_intercept.py rewrite + real dispatch journal), fed to the
+    PRE-FIX completion hook (materialized from commit 7567dd4, the last commit before this fix)
+    instead of the current one: the join must find NO pair, witnessing that this fixture would
+    have caught the defect this fix repairs.
+  d-mode-off          -- apparatus.json sets bash_completion.mode="off" -> zero cost: no
+                         completion line at all.
   e-mode-enforce-downgrade -- mode="enforce" (NAMED-IMPOSSIBLE for a PostToolUse leg) -> warns
-                         loudly on STDERR naming the downgrade, then behaves like "observe".
+                         loudly on STDERR naming the downgrade, still journals (as "observe").
   f-non-bash-tool     -- tool_name="Write" -> no completion line, no output at all.
   g-unwired           -- no GATE_SUBJECT_ROOT and no cwd resolving to a real directory -> silent,
                          nothing to journal into.
@@ -37,72 +53,122 @@ Exit 0 if every case matches; 1 otherwise. Lazy imports banned.
 """
 from __future__ import annotations
 
-import hashlib
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
-HOOK = REPO / "hooks" / "posttooluse_bash_completion.py"
+DISPATCH_HOOK = REPO / "hooks" / "stamp_intercept.py"
+COMPLETION_HOOK = REPO / "hooks" / "posttooluse_bash_completion.py"
+# The commit this fix builds directly on top of -- posttooluse_bash_completion.py's last
+# pre-fix state, materialized live for case c's negative control (never hand-copied).
+PRE_FIX_REF = "7567dd4"
 
-PROBE_DIR = Path("/tmp/.bashcompprobe")
-INV_PATH = PROBE_DIR / ".claude" / "logs" / "invocations.jsonl"
-COMPLETION_PATH = PROBE_DIR / ".claude" / "logs" / "bash_completions.jsonl"
+# TOP-OF-FILE, EAGER (the lazy-import gate, gates/no_lazy_imports.py, bans a deferred import
+# inside a function body -- this project's law has no allowlist). The REAL consumer join code
+# this fixture proves against (RCA sec-6.4/M1: never a fixture-side reimplementation) lives in
+# engine/, which is not normally on sys.path; the path insert must therefore happen here, at
+# module scope, before the import that depends on it -- eager, not deferred.
+sys.path.insert(0, str(REPO / "engine"))
+import contemp_edb  # noqa: E402 -- see the sys.path.insert immediately above
 
-
-def teardown() -> None:
-    shutil.rmtree(PROBE_DIR, ignore_errors=True)
-
-
-def write_apparatus(mechanisms: dict) -> None:
-    (PROBE_DIR / ".claude").mkdir(parents=True, exist_ok=True)
-    (PROBE_DIR / ".claude" / "apparatus.json").write_text(
-        json.dumps({"mechanisms": mechanisms}), encoding="utf-8")
-
-
-def append_invocation(token: str, wall_clock: str, command: str) -> None:
-    INV_PATH.parent.mkdir(parents=True, exist_ok=True)
-    rec = {"token": token, "wall_clock": wall_clock, "session_id": "dispatcher-sess",
-           "command_sha256": hashlib.sha256(command.encode("utf-8")).hexdigest(),
-           "command_head": command[:120]}
-    with open(INV_PATH, "a", encoding="utf-8") as f:
-        f.write(json.dumps(rec) + "\n")
+_TOKEN_RE = re.compile(r"app\.vendor_invocation=([0-9a-f-]+)")
 
 
-def run_hook(command: str, session_id: str, cwd: str | None,
-             env_extra: dict[str, str]) -> subprocess.CompletedProcess[str]:
-    payload = json.dumps({
-        "hook_event_name": "PostToolUse", "tool_name": "Bash",
-        "tool_input": {"command": command},
-        "session_id": session_id, "cwd": cwd or "",
-    })
+def _make_world() -> tuple[Path, Path]:
+    """A throwaway wired world for stamp_intercept.py: deployment.json + a healthy secret --
+    same shape seen-red/stamp-intercept-invocation-token/run_fixtures.py already uses."""
+    root = Path(tempfile.mkdtemp(prefix="bashcomp-m1-"))
+    (root / ".claude" / "secrets").mkdir(parents=True)
+    secret = root / ".claude" / "secrets" / "stamp_secret.hex"
+    secret.write_text(os.urandom(32).hex())
+    secret.chmod(0o600)
+    (root / "deployment.json").write_text(json.dumps(
+        {"db": "toy", "host": "192.168.122.1", "schema": "bashcompm1",
+         "kern": "bashcompm1_kernel", "role": "bashcompm1_rw"}))
+    return root, secret
+
+
+def _write_apparatus(root: Path, mechanisms: dict) -> None:
+    (root / ".claude").mkdir(exist_ok=True)
+    (root / ".claude" / "apparatus.json").write_text(json.dumps({"mechanisms": mechanisms}))
+
+
+def _run_dispatch(root: Path, secret: Path, command: str, tool_use_id: str,
+                   session_id: str) -> tuple[str, dict | None]:
+    """Run the REAL hooks/stamp_intercept.py PreToolUse leg. Returns (rewritten_command,
+    dispatch_journal_line-or-None)."""
+    payload = {"tool_name": "Bash", "tool_input": {"command": command},
+               "cwd": str(root), "session_id": session_id, "tool_use_id": tool_use_id}
     env = dict(os.environ)
-    env.update(env_extra)
-    return subprocess.run([sys.executable, str(HOOK)], input=payload,
-                          capture_output=True, text=True, env=env)
+    env["STAMP_SECRET"] = str(secret)
+    env.pop("LEDGER_DEPLOYMENT", None)
+    env.pop("GATE_SUBJECT_ROOT", None)
+    cp = subprocess.run([sys.executable, str(DISPATCH_HOOK)], input=json.dumps(payload),
+                        capture_output=True, text=True, env=env)
+    try:
+        rewritten = json.loads(cp.stdout)["hookSpecificOutput"]["updatedInput"]["command"]
+    except (ValueError, KeyError):
+        rewritten = command  # unwired/passthrough (should not happen in a wired world)
+    journal = root / ".claude" / "logs" / "invocations.jsonl"
+    line = None
+    if journal.exists():
+        lines = journal.read_text().splitlines()
+        line = json.loads(lines[-1]) if lines else None
+    return rewritten, line
 
 
-def run_hook_other_tool(tool_name: str, cwd: str) -> subprocess.CompletedProcess[str]:
-    payload = json.dumps({
-        "hook_event_name": "PostToolUse", "tool_name": tool_name,
-        "tool_input": {"file_path": "/tmp/whatever"},
-        "session_id": "sess-f", "cwd": cwd,
-    })
+def _run_completion(hook_path: Path, root: Path, rewritten_command: str,
+                     tool_use_id: str | None, session_id: str) -> dict | None:
+    """Run a (real, current OR materialized pre-fix) posttooluse_bash_completion.py PostToolUse
+    leg against the REWRITTEN command text -- the exact text a real PostToolUse payload would
+    carry after stamp_intercept.py's own rewrite. Returns the last journaled line, or None."""
+    payload = {"hook_event_name": "PostToolUse", "tool_name": "Bash",
+               "tool_input": {"command": rewritten_command}, "session_id": session_id,
+               "cwd": str(root), "duration_ms": 42}
+    if tool_use_id is not None:
+        payload["tool_use_id"] = tool_use_id
     env = dict(os.environ)
-    env["GATE_SUBJECT_ROOT"] = cwd
-    return subprocess.run([sys.executable, str(HOOK)], input=payload,
-                          capture_output=True, text=True, env=env)
+    env["GATE_SUBJECT_ROOT"] = str(root)
+    subprocess.run([sys.executable, str(hook_path)], input=json.dumps(payload),
+                   capture_output=True, text=True, env=env)
+    comp_journal = root / ".claude" / "logs" / "bash_completions.jsonl"
+    if not comp_journal.exists():
+        return None
+    lines = comp_journal.read_text().splitlines()
+    return json.loads(lines[-1]) if lines else None
 
 
-def completion_lines() -> list[dict]:
-    if not COMPLETION_PATH.exists():
+def _materialize_pre_fix_hook() -> Path:
+    """Extract hooks/posttooluse_bash_completion.py AS IT STOOD at PRE_FIX_REF, live from git --
+    never a hand-copied stand-in (RCA sec-5 lapse 1's own lesson, applied to this negative
+    control too)."""
+    cp = subprocess.run(["git", "show", f"{PRE_FIX_REF}:hooks/posttooluse_bash_completion.py"],
+                        cwd=REPO, capture_output=True, text=True, check=True)
+    tmp_dir = Path(tempfile.mkdtemp(prefix="prefix-hook-"))
+    tmp = tmp_dir / "posttooluse_bash_completion.py"
+    tmp.write_text(cp.stdout)
+    return tmp
+
+
+def _real_join(inv_recs: list[dict], comp_recs: list[dict]) -> list[tuple[str, int]]:
+    """The REAL consumer join, the module-level `contemp_edb` import above -- never reimplemented
+    here (RCA sec-6.4/M1: a pairing fixture's assertion must run the actual join code)."""
+    token_map = contemp_edb.dispatch_token_by_tool_use_id(inv_recs)
+    joined, _skip = contemp_edb.join_bash_completions(comp_recs, token_map)
+    return joined
+
+
+def _read_jsonl(path: Path) -> list[dict]:
+    if not path.exists():
         return []
-    return [json.loads(ln) for ln in COMPLETION_PATH.read_text(encoding="utf-8").splitlines()
-            if ln.strip()]
+    return [json.loads(ln) for ln in path.read_text(encoding="utf-8").splitlines() if ln.strip()]
 
 
 def check(name: str, ok: bool, detail: str, failures: list[str]) -> None:
@@ -114,91 +180,143 @@ def check(name: str, ok: bool, detail: str, failures: list[str]) -> None:
 
 
 def main() -> int:
-    teardown()
     failures: list[str] = []
-    env = {"GATE_SUBJECT_ROOT": str(PROBE_DIR)}
 
-    # --- a-token-pairing: one dispatch record, one matching completion -----------------------
-    PROBE_DIR.mkdir(parents=True, exist_ok=True)
-    write_apparatus({})  # default -- bash_completion resolves to "observe"
-    append_invocation("tok-a", "2026-07-11T10:00:00.000Z", "echo hello-a")
-    r = run_hook("echo hello-a", "sess-a", str(PROBE_DIR), env)
-    lines = completion_lines()
-    ok = (r.returncode == 0 and len(lines) == 1
-          and lines[0].get("token") == "tok-a"
-          and lines[0].get("pairing") == "token"
-          and lines[0].get("dispatch_wall_clock") == "2026-07-11T10:00:00.000Z"
-          and isinstance(lines[0].get("ts"), str) and lines[0]["ts"].endswith("Z"))
-    check("a-token-pairing", ok,
-          f"exit={r.returncode} rec={lines[-1] if lines else None}", failures)
+    # --- a-identity-join-through-real-rewrite (POSITIVE): the full two-party sequence ----------
+    root_a, secret_a = _make_world()
+    try:
+        _write_apparatus(root_a, {"stamp_intercept": {"mode": "enforce"},
+                                   "bash_completion": {"mode": "observe"}})
+        rewritten, dispatch_line = _run_dispatch(
+            root_a, secret_a, "echo real-rewrite-a", "toolu_case_a", "sess-a")
+        tok_match = _TOKEN_RE.search(rewritten)
+        completion_line = _run_completion(
+            COMPLETION_HOOK, root_a, rewritten, "toolu_case_a", "sess-a")
+        inv_recs = _read_jsonl(root_a / ".claude" / "logs" / "invocations.jsonl")
+        comp_recs = _read_jsonl(root_a / ".claude" / "logs" / "bash_completions.jsonl")
+        joined = _real_join(inv_recs, comp_recs)
+        ok = (rewritten != "echo real-rewrite-a"  # stamp_intercept really rewrote it
+              and tok_match is not None
+              and dispatch_line is not None
+              and dispatch_line.get("tool_use_id") == "toolu_case_a"
+              and completion_line is not None
+              and completion_line.get("tool_use_id") == "toolu_case_a"
+              and "token" not in completion_line  # no stored verdict, per 6.1
+              and "pairing" not in completion_line
+              and joined == [(dispatch_line.get("token"), joined[0][1])] if joined else False)
+        check("a-identity-join-through-real-rewrite", ok,
+              f"rewritten={rewritten!r} dispatch_token={dispatch_line.get('token') if dispatch_line else None} "
+              f"completion={completion_line} joined={joined}", failures)
+    finally:
+        shutil.rmtree(root_a, ignore_errors=True)
 
-    # --- b-ts-only-fallback: no matching dispatch record --------------------------------------
-    r = run_hook("echo no-dispatch-for-this", "sess-b", str(PROBE_DIR), env)
-    lines = completion_lines()
-    ok = (r.returncode == 0 and len(lines) == 2
-          and lines[1].get("token") is None
-          and lines[1].get("pairing") == "ts-only"
-          and "dispatch_wall_clock" not in lines[1])
-    check("b-ts-only-fallback", ok,
-          f"exit={r.returncode} rec={lines[-1] if lines else None}", failures)
+    # --- b-ts-only-no-tool-use-id (NEGATIVE, mandatory) ------------------------------------------
+    root_b, _ = _make_world()
+    try:
+        _write_apparatus(root_b, {"bash_completion": {"mode": "observe"}})
+        completion_line = _run_completion(
+            COMPLETION_HOOK, root_b, "echo no-tool-use-id", None, "sess-b")
+        comp_recs = _read_jsonl(root_b / ".claude" / "logs" / "bash_completions.jsonl")
+        joined = _real_join([{"tool_use_id": "toolu_unrelated", "token": "tok-unrelated",
+                              "wall_clock": "2026-07-14T00:00:00Z"}], comp_recs)
+        ok = (completion_line is not None and "tool_use_id" not in completion_line
+              and joined == [])
+        check("b-ts-only-no-tool-use-id", ok,
+              f"completion={completion_line} joined={joined}", failures)
+    finally:
+        shutil.rmtree(root_b, ignore_errors=True)
 
-    # --- c-fifo-double-dispatch: two dispatches, same command text, FIFO pairing --------------
-    append_invocation("tok-c1", "2026-07-11T10:05:00.000Z", "echo hello-c")
-    append_invocation("tok-c2", "2026-07-11T10:05:05.000Z", "echo hello-c")
-    r1 = run_hook("echo hello-c", "sess-c1", str(PROBE_DIR), env)
-    r2 = run_hook("echo hello-c", "sess-c2", str(PROBE_DIR), env)
-    lines = completion_lines()
-    ok = (r1.returncode == 0 and r2.returncode == 0 and len(lines) == 4
-          and lines[2].get("token") == "tok-c1" and lines[3].get("token") == "tok-c2")
-    check("c-fifo-double-dispatch", ok,
-          f"lines[2].token={lines[2].get('token') if len(lines) > 2 else None} "
-          f"lines[3].token={lines[3].get('token') if len(lines) > 3 else None} "
-          f"(expect tok-c1 then tok-c2, never the same dispatch reused)", failures)
+    # --- c-pre-fix-hook-goes-red (NEGATIVE CONTROL, mandatory per RCA sec-6.4(i)) ----------------
+    root_c, secret_c = _make_world()
+    pre_fix_hook = None
+    try:
+        _write_apparatus(root_c, {"stamp_intercept": {"mode": "enforce"},
+                                   "bash_completion": {"mode": "observe"}})
+        rewritten, dispatch_line = _run_dispatch(
+            root_c, secret_c, "echo real-rewrite-c", "toolu_case_c", "sess-c")
+        pre_fix_hook = _materialize_pre_fix_hook()
+        completion_line = _run_completion(
+            pre_fix_hook, root_c, rewritten, "toolu_case_c", "sess-c")
+        # The pre-fix hook never read tool_use_id at all -- its own pairing verdict is what we
+        # assert went red: it always falls back to ts-only against a real rewritten command,
+        # because its FIFO-by-hash never matches (the exact defect this fix repairs).
+        ok = (completion_line is not None
+              and completion_line.get("pairing") == "ts-only"
+              and completion_line.get("token") is None)
+        check("c-pre-fix-hook-goes-red", ok,
+              f"pre-fix completion record against a REAL post-rewrite command: {completion_line} "
+              f"(expected pairing='ts-only', token=None -- the defect this fix repairs, witnessed "
+              f"red on the exact commit this fix builds on top of, {PRE_FIX_REF})", failures)
+    finally:
+        shutil.rmtree(root_c, ignore_errors=True)
+        if pre_fix_hook is not None:
+            shutil.rmtree(pre_fix_hook.parent, ignore_errors=True)
 
-    # --- d-mode-off: no completion line at all -------------------------------------------------
-    write_apparatus({"bash_completion": {"mode": "off"}})
-    before = len(completion_lines())
-    r = run_hook("echo should-not-journal", "sess-d", str(PROBE_DIR), env)
-    after = len(completion_lines())
-    ok = (r.returncode == 0 and after == before)
-    check("d-mode-off", ok, f"exit={r.returncode} before={before} after={after}", failures)
+    # --- d-mode-off: no completion line at all ---------------------------------------------------
+    root_d, _ = _make_world()
+    try:
+        _write_apparatus(root_d, {"bash_completion": {"mode": "off"}})
+        before = len(_read_jsonl(root_d / ".claude" / "logs" / "bash_completions.jsonl"))
+        _run_completion(COMPLETION_HOOK, root_d, "echo should-not-journal", "toolu-d", "sess-d")
+        after = len(_read_jsonl(root_d / ".claude" / "logs" / "bash_completions.jsonl"))
+        check("d-mode-off", after == before, f"before={before} after={after}", failures)
+    finally:
+        shutil.rmtree(root_d, ignore_errors=True)
 
-    # --- e-mode-enforce-downgrade: warns on stderr, still journals like observe ---------------
-    write_apparatus({"bash_completion": {"mode": "enforce"}})
-    before = len(completion_lines())
-    r = run_hook("echo enforce-requested", "sess-e", str(PROBE_DIR), env)
-    after = completion_lines()
-    ok = (r.returncode == 0 and len(after) == before + 1
-          and "IMPOSSIBLE" in r.stderr and after[-1].get("pairing") == "ts-only")
-    check("e-mode-enforce-downgrade", ok,
-          f"exit={r.returncode} stderr_has_impossible_warning={'IMPOSSIBLE' in r.stderr} "
-          f"before={before} after={len(after)}", failures)
-    write_apparatus({})  # restore default
+    # --- e-mode-enforce-downgrade: warns on stderr, still journals like observe -----------------
+    root_e, _ = _make_world()
+    try:
+        _write_apparatus(root_e, {"bash_completion": {"mode": "enforce"}})
+        payload = {"hook_event_name": "PostToolUse", "tool_name": "Bash",
+                   "tool_input": {"command": "echo enforce-requested"}, "session_id": "sess-e",
+                   "cwd": str(root_e), "tool_use_id": "toolu-e"}
+        env = dict(os.environ)
+        env["GATE_SUBJECT_ROOT"] = str(root_e)
+        r = subprocess.run([sys.executable, str(COMPLETION_HOOK)], input=json.dumps(payload),
+                           capture_output=True, text=True, env=env)
+        lines = _read_jsonl(root_e / ".claude" / "logs" / "bash_completions.jsonl")
+        ok = (r.returncode == 0 and len(lines) == 1 and "IMPOSSIBLE" in r.stderr
+              and lines[0].get("tool_use_id") == "toolu-e")
+        check("e-mode-enforce-downgrade", ok,
+              f"exit={r.returncode} stderr_has_impossible_warning={'IMPOSSIBLE' in r.stderr} "
+              f"lines={lines}", failures)
+    finally:
+        shutil.rmtree(root_e, ignore_errors=True)
 
-    # --- f-non-bash-tool: a Write call produces nothing -----------------------------------------
-    before = len(completion_lines())
-    r = run_hook_other_tool("Write", str(PROBE_DIR))
-    after = len(completion_lines())
-    ok = (r.returncode == 0 and after == before and r.stdout.strip() == "")
-    check("f-non-bash-tool", ok,
-          f"exit={r.returncode} stdout={r.stdout.strip()!r} before={before} after={after}",
-          failures)
+    # --- f-non-bash-tool: a Write call produces nothing -------------------------------------------
+    root_f, _ = _make_world()
+    try:
+        payload = {"hook_event_name": "PostToolUse", "tool_name": "Write",
+                   "tool_input": {"file_path": "/tmp/whatever"}, "session_id": "sess-f",
+                   "cwd": str(root_f)}
+        env = dict(os.environ)
+        env["GATE_SUBJECT_ROOT"] = str(root_f)
+        r = subprocess.run([sys.executable, str(COMPLETION_HOOK)], input=json.dumps(payload),
+                           capture_output=True, text=True, env=env)
+        lines = _read_jsonl(root_f / ".claude" / "logs" / "bash_completions.jsonl")
+        ok = (r.returncode == 0 and len(lines) == 0 and r.stdout.strip() == "")
+        check("f-non-bash-tool", ok,
+              f"exit={r.returncode} stdout={r.stdout.strip()!r} lines={lines}", failures)
+    finally:
+        shutil.rmtree(root_f, ignore_errors=True)
 
-    # --- g-unwired: no GATE_SUBJECT_ROOT, no real cwd directory --------------------------------
-    before = len(completion_lines())
-    r = run_hook("echo unwired", "sess-g", "/nonexistent/nowhere", {})
-    after = len(completion_lines())
-    ok = (r.returncode == 0 and after == before)
-    check("g-unwired", ok, f"exit={r.returncode} before={before} after={after}", failures)
-
-    teardown()
+    # --- g-unwired: no GATE_SUBJECT_ROOT, no real cwd directory -----------------------------------
+    payload = {"hook_event_name": "PostToolUse", "tool_name": "Bash",
+               "tool_input": {"command": "echo unwired"}, "session_id": "sess-g",
+               "cwd": "/nonexistent/nowhere"}
+    r = subprocess.run([sys.executable, str(COMPLETION_HOOK)], input=json.dumps(payload),
+                       capture_output=True, text=True, env={})
+    ok = (r.returncode == 0
+          and not Path("/nonexistent/nowhere/.claude/logs/bash_completions.jsonl").exists())
+    check("g-unwired", ok, f"exit={r.returncode}", failures)
 
     if failures:
         print(f"FAILURES: {failures}")
         return 1
-    print("ALL CASES OK -- bash_completion both-polarity proof clean (token-pairing, ts-only "
-          "fallback, FIFO double-dispatch, off/enforce-downgrade/non-bash/unwired all behave "
-          "as designed), zero residue.")
+    print("ALL CASES OK -- bash_completion identity-join proof clean (real stamp_intercept.py "
+          "rewrite survives into a real join on tool_use_id; ts-only/no-tool_use_id honest "
+          "fallback; the pre-fix hook witnessed red against the same real two-party sequence; "
+          "off/enforce-downgrade/non-bash/unwired all behave as designed), zero residue.")
     return 0
 
 

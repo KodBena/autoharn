@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-09T13:36:11Z
-#   last-change: 2026-07-13T20:02:57Z
-#   contributors: be693afb/main, e4410ef6/main, 3c50e030/main, 3c942a60/main
+#   last-change: 2026-07-14T01:21:51Z
+#   contributors: be693afb/main, e4410ef6/main, 3c50e030/main, 3c942a60/main, a857c93d/main
 # <<< PROVENANCE-STAMP <<<
 
 """fixture_census — mechanizes mandate §6's "every migrated gate's seen-red still proves it
@@ -74,6 +74,7 @@ REGISTRY: dict[str, str] = {
     "doc-shapes-gate-world":          "seen-red/doc-shapes-gate-world/run_fixtures.py",
     "read-observer":                  "seen-red/read-observer/run_fixtures.py",
     "bash-completion":                "seen-red/bash-completion/run_fixtures.py",
+    "hook-payload-contract":          "seen-red/hook-payload-contract/check_contract.py",
     "s25-commission-kind":            "seen-red/s25-commission-kind/run_fixtures.py",
     "track-work":                     "seen-red/track-work/run_fixtures.py",
     "resource-registry":              "seen-red/resource-registry/run_fixtures.py",

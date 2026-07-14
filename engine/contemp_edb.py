@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-11T14:40:08Z
-#   last-change: 2026-07-12T02:03:18Z
-#   contributors: e4410ef6/main
+#   last-change: 2026-07-14T01:09:47Z
+#   contributors: e4410ef6/main, a857c93d/main
 # <<< PROVENANCE-STAMP <<<
 
 """contemp_edb -- the EDB builder for Part 2 of design/ORCH-CONTEMPORANEITY-AUDIT.md (the
@@ -162,10 +162,18 @@ by construction, not by a second copy of the check.
      out of the one file, distinctly, is exactly what F9 (ob_ledger_before_delegation) needs and
      `tool_event/2`'s coarse Kind="delegation" bucket cannot supply on its own.
   E5 invocation_completed(Token,T) -- `.claude/logs/bash_completions.jsonl`
-     (hooks/posttooluse_bash_completion.py): only records where `pairing == "token"` (a `token`
-     value present) carry a Token to join against `row_tokened/4`'s own Token -- a `"ts-only"`
-     record (no token found for that completion) contributes nothing to this family, honestly
-     (there is no Token to key it on), never guessed from FIFO proximity.
+     (hooks/posttooluse_bash_completion.py). CORRECTED 2026-07-14
+     (design/ORCH-RCA-PAIRING-KEY-DIVERGENCE.md sec-4/6.1/6.3): this hook no longer stores a
+     computed `token`/`pairing` verdict (that FIFO-by-content-hash pairing was dead at birth --
+     the paired hook rewrites every Bash command between the dispatch hash and the completion
+     hash, so the two never agreed; 0 of 2093 completions ever paired in this deployment's
+     history). Pairing is now a READ-TIME JOIN, done HERE in `export()`: a completion's own
+     `tool_use_id` (the harness-assigned identity, present on both the PreToolUse and PostToolUse
+     legs of one tool call) is looked up against a `tool_use_id -> token` map built from the
+     dispatch journal (`invocations.jsonl`, which already carries `tool_use_id` per dispatch line
+     -- `hooks/stamp_intercept.py`). A completion with no `tool_use_id`, or one that joins to no
+     known dispatch, contributes nothing to this family, honestly -- never guessed from FIFO
+     proximity or a content hash.
   E6 verify_commission_event(Verdict,T) -- `.claude/logs/verify_commission.jsonl`
      (bootstrap/templates/verify-commission.tmpl, THIS SAME COMMISSION's own addition to that
      live verb -- see its own docstring's EVENT JOURNAL section). Verdict is one of the closed
@@ -426,6 +434,51 @@ def _read_jsonl(path: Path) -> tuple[list[dict], int]:
     return recs, skipped
 
 
+def dispatch_token_by_tool_use_id(inv_recs: list[dict]) -> dict[str, str]:
+    """The E5 join's LEFT side (design/ORCH-RCA-PAIRING-KEY-DIVERGENCE.md sec-4/6.1/6.3): a
+    tool_use_id -> token map built from `hooks/stamp_intercept.py`'s own dispatch records
+    (`invocations.jsonl`). A dispatch line contributes only when it carries BOTH fields --
+    tool_use_id is the harness-assigned identity, token is the per-invocation contemporaneity
+    UUID this project's own kernel column captures. Pure function of the records, no I/O, no
+    ledger -- factored out so `export()` and this module's own fixtures call the SAME join code
+    (ADR-0011's "the counterparty rule for pairing fixtures", RCA §6.4/M1), never a
+    fixture-side reimplementation that could silently drift from what `export()` actually does."""
+    out: dict[str, str] = {}
+    for rec in inv_recs:
+        tuid, token = rec.get("tool_use_id"), rec.get("token")
+        if tuid and token:
+            out[str(tuid)] = str(token)
+    return out
+
+
+def join_bash_completions(
+    completions_recs: list[dict], token_by_tool_use_id: dict[str, str]
+) -> tuple[list[tuple[str, int]], int]:
+    """The E5 join's RIGHT side: for each completion record carrying a `tool_use_id` that
+    resolves in `token_by_tool_use_id`, yield (token, completion_ts_ms). A completion with no
+    `tool_use_id`, or one that joins to no known dispatch, contributes nothing -- honestly
+    skipped, never guessed. Returns (joined tuples, count of records with a resolvable
+    tool_use_id whose own `ts` failed to parse -- the caller adds this to its skip tally; a
+    record with no `tool_use_id` at all, or one that fails to join, is NOT counted as skipped --
+    it is the honest, expected shape of an unpaired or old-era completion line, not malformed
+    input). Pure function, no I/O -- see `dispatch_token_by_tool_use_id`'s docstring for why."""
+    joined: list[tuple[str, int]] = []
+    unparseable_ts = 0
+    for rec in completions_recs:
+        tool_use_id, ts_raw = rec.get("tool_use_id"), rec.get("ts")
+        if not tool_use_id or not ts_raw:
+            continue
+        token = token_by_tool_use_id.get(str(tool_use_id))
+        if not token:
+            continue
+        ms = _parse_ts_ms(str(ts_raw))
+        if ms is None:
+            unparseable_ts += 1
+            continue
+        joined.append((token, ms))
+    return joined, unparseable_ts
+
+
 def export(target_name: str, root: Path) -> ContempEdbExport:
     """Build the contemporaneity EDB for one world: `target_name` resolves the ledger (via
     engine/ledger_edb.resolve -- set LEDGER_DEPLOYMENT=<root>/deployment.json for a project's own
@@ -523,6 +576,14 @@ def export(target_name: str, root: Path) -> ContempEdbExport:
             continue
         inv_tuples.append((str(token), ms))
 
+    # tool_use_id -> token map (design/ORCH-RCA-PAIRING-KEY-DIVERGENCE.md sec-4/6.3): the SOLE
+    # join key E5 below uses to correlate a completion line back to its dispatch token. Built
+    # from `inv_recs` directly (not `inv_tuples`, which additionally requires a parseable
+    # `wall_clock` -- tool_use_id/token presence is independent of that and must not be dropped
+    # by it) via the module-level `dispatch_token_by_tool_use_id()` -- the SAME function this
+    # module's own fixtures call (RCA §6.4/M1: no fixture-side reimplementation of this join).
+    tool_use_id_to_token = dispatch_token_by_tool_use_id(inv_recs)
+
     te_tuples: list[tuple[str, int]] = []
     any_te_file = False
     for fname, kind in _TOOL_EVENT_JOURNALS.items():
@@ -580,18 +641,20 @@ def export(target_name: str, root: Path) -> ContempEdbExport:
             deleg_dispatch_tuples.append(ms)
 
     # ---- E5: invocation_completed(Token,T) -- hooks/posttooluse_bash_completion.py's journal ---
+    # CORRECTED 2026-07-14 (design/ORCH-RCA-PAIRING-KEY-DIVERGENCE.md sec-4/6.1/6.3): the
+    # completion journal no longer carries a stored `token`/`pairing` verdict (that computed
+    # FIFO-by-hash pairing was dead at birth -- 0 of 2093 completions ever paired in this
+    # deployment's history, per the RCA). Pairing is now a READ-TIME JOIN, done via the
+    # module-level `join_bash_completions()` -- the SAME function this module's own fixtures call
+    # (RCA §6.4/M1). Old-era completion lines (pre-fix, carrying `token`/`pairing` but no
+    # `tool_use_id`) contribute nothing here by construction (the join reads only `tool_use_id`),
+    # exactly as they contributed nothing under the old pairing=="token" filter (that mechanism
+    # never once fired) -- no regression, no silent revival of stale data.
     completions_path = root / ".claude" / "logs" / _BASH_COMPLETIONS_JOURNAL
     completions_recs, completions_skip = _read_jsonl(completions_path)
-    completed_tuples: list[tuple[str, int]] = []
-    for rec in completions_recs:
-        token, ts_raw = rec.get("token"), rec.get("ts")
-        if not token or not ts_raw:  # "ts-only" (pairing failed, no token) -- honestly skipped,
-            continue                  # never guessed onto a Token this record does not carry
-        ms = _parse_ts_ms(str(ts_raw))
-        if ms is None:
-            completions_skip += 1
-            continue
-        completed_tuples.append((str(token), ms))
+    completed_tuples, completions_unparseable_ts = join_bash_completions(
+        completions_recs, tool_use_id_to_token)
+    completions_skip += completions_unparseable_ts
     exp.skipped_lines[_BASH_COMPLETIONS_JOURNAL] = completions_skip
     completions_wired = "bash_completion" in wired
 
