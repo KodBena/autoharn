@@ -1,4 +1,4 @@
-# contemporaneity audit -- target='preambleorderneg' root=/tmp/preamble-fixture-vjgnx4or
+# contemporaneity audit -- target='preambleorderneg' root=/tmp/preamble-fixture-t67lf1f2
 #   capabilities (family, capable, produced): [('stamp_invocation_column', True, True), ('event_declared_ts_column', True, True), ('work_items', True, True), ('refs', True, True), ('regards', True, True), ('actor', True, True), ('countersign_obligation', True, True), ('commission_kind', True, True), ('s23_capable', True, True), ('invocation_journal', True, True), ('tool_event', True, True), ('stop_journal', True, True), ('delegation_journal', True, True), ('bash_completions_journal', True, True), ('verify_commission_journal', True, True)]
 #   counts: {'row_tokened': 6, 'row_untokened': 1, 'row_declared': 0, 'work_opened': 1, 'work_claimed': 0, 'work_closed': 0, 'work_witness_present': 0, 'work_depends': 1, 'row_refs_row': 1, 'row_refs_present': 0, 'row_regards': 1, 'row_actor': 7, 'invocation': 7, 'tool_event': 2, 'countersign_obliged': 0, 'stop_event': 1, 'delegation_dispatch': 1, 'delegation_return': 0, 'invocation_completed': 7, 'verify_commission_event': 2}
 

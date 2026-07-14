@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-12T02:09:09Z
-#   last-change: 2026-07-12T02:28:42Z
-#   contributors: e4410ef6/main
+#   last-change: 2026-07-14T02:26:04Z
+#   contributors: e4410ef6/main, a857c93d/main
 # <<< PROVENANCE-STAMP <<<
 
 """preamble_floor -- the SQL FLOOR of the Part 3 preamble-ordering verdicts (design/
@@ -167,9 +167,19 @@ def floor_atoms(target_name: str, root: Path) -> tuple[set[str], str]:
     # ---- journal reads (independent re-parse, see docstring) ----------------------------------
     logs = root / ".claude" / "logs"
 
+    # tool_use_id -> token: this floor's OWN independent derivation of the E5 identity join
+    # (CORRECTED 2026-07-14, design/ORCH-RCA-PAIRING-KEY-DIVERGENCE.md sec-4/6.1: completion
+    # lines no longer store a `token` -- pairing is a read-time join on the harness-assigned
+    # `tool_use_id` present on both journals' lines. Same JOIN CONTRACT as contemp_edb.py's
+    # dispatch_token_by_tool_use_id/join_bash_completions, re-derived here with this module's
+    # own parser per the standing independence posture in this docstring: "independence of
+    # DERIVATION is the point, shared INPUT is the design" -- never a call into contemp_edb.py.)
+    floor_token_by_tool_use_id: dict[str, str] = {}
     inv_rows: list[tuple[str, int]] = []
     for rec in _floor_read_jsonl(logs / _INVOCATION_JOURNAL):
-        token, wc = rec.get("token"), rec.get("wall_clock")
+        token, wc, tuid = rec.get("token"), rec.get("wall_clock"), rec.get("tool_use_id")
+        if token and tuid:
+            floor_token_by_tool_use_id[str(tuid)] = str(token)
         if not token or not wc:
             continue
         ms = _floor_parse_ts_ms(str(wc))
@@ -178,12 +188,15 @@ def floor_atoms(target_name: str, root: Path) -> tuple[set[str], str]:
 
     completion_rows: list[tuple[str, int]] = []
     for rec in _floor_read_jsonl(logs / _BASH_COMPLETIONS_JOURNAL):
-        token, ts_raw = rec.get("token"), rec.get("ts")
-        if not token or not ts_raw:
-            continue
+        tuid, ts_raw = rec.get("tool_use_id"), rec.get("ts")
+        if not tuid or not ts_raw:
+            continue  # no identity to join on (incl. every pre-fix-era line) -- honestly skipped
+        token = floor_token_by_tool_use_id.get(str(tuid))
+        if not token:
+            continue  # no dispatch line shares this identity -- skipped, never guessed
         ms = _floor_parse_ts_ms(str(ts_raw))
         if ms is not None:
-            completion_rows.append((str(token), ms))
+            completion_rows.append((token, ms))
 
     mutation_ts: list[int] = []
     for rec in _floor_read_jsonl(logs / _MUTATION_JOURNAL):

@@ -1,0 +1,46 @@
+{
+  "target": "preambleorderneg",
+  "verdict": "DIVERGE_DEFECT",
+  "only_asp": [
+    "ob_undecidable(f2,2,open_window)",
+    "ob_undecidable(f2,6,open_window)",
+    "preamble_verdict(f2,undecidable)"
+  ],
+  "only_sql": [
+    "ob_undecidable(f2,6,window_overlap)",
+    "ob_violated(f2,2)",
+    "preamble_verdict(f2,violated)"
+  ],
+  "asp_record": {
+    "engine": "clingo",
+    "version": "clingo version 5.8.0",
+    "config": [
+      "preamble_ordering.lp",
+      "contemporaneity.lp",
+      "contemp_thresholds.lp",
+      "preamble_obligations.lp",
+      "work_items.lp"
+    ],
+    "input_basis": "edb-text (contemp EDB export, serialized; engine/contemp_edb.py)",
+    "input_hash": "ece981cf30aeb39933013e934d9632f27ab602a6010819f416b7c42afc342009",
+    "program_hash": "f254ceebaecfec6848981b5882dbce7f9d399fd63e926efde0d0ae4bc37242ef",
+    "output_hash": "60fb50d79b9d2399977f03336e547a99c67eda0ff0228ed99513870e2faeaf8b",
+    "target": "preambleorderneg",
+    "ts": "2026-07-14T04:24:35"
+  },
+  "sql_record": {
+    "engine": "postgres",
+    "version": "PostgreSQL 18.4",
+    "config": [
+      "preamble_floor.py::floor_atoms"
+    ],
+    "input_basis": "live-db ledger rows (toy) + independently re-read/re-parsed /tmp/preamble-fixture-emqlror4/.claude/logs/*.jsonl journal files",
+    "input_hash": "0087f6f26d22a3d944d7fe8e0d7c8bede39272a7d8f6b3eca750550f00126d89",
+    "program_hash": "a24be550516467809ee217724ea7fe076b8b3d429852f09ea307caa73ff0bc85",
+    "output_hash": "03a56a72f52f8ea5506e7a9229cb4278e127edd629963ac1cb0075f98aa4af1f",
+    "target": "preambleorderneg",
+    "ts": "2026-07-14T04:24:35"
+  },
+  "asp_quarantine": null,
+  "sql_quarantine": null
+}
