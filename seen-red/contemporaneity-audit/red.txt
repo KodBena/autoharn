@@ -1,7 +1,12 @@
 # banked RED evidence -- CASE b (manufactured backfill), engine/contemp_audit.py real output:
-# contemporaneity audit -- target='contempprobe' root=/tmp/contemp-fixture-uyh4fdg7
-#   capabilities (family, capable, produced): [('stamp_invocation_column', True, True), ('event_declared_ts_column', True, True), ('s23_capable', True, True), ('invocation_journal', True, True), ('tool_event', True, True)]
-#   counts: {'row_tokened': 6, 'row_untokened': 0, 'row_declared': 0, 'invocation': 2, 'tool_event': 4}
+# contemporaneity audit -- target='contempprobe' root=/tmp/contemp-fixture-5wh0sezy
+#   capabilities (family, capable, produced): [('stamp_invocation_column', True, True), ('event_declared_ts_column', True, True), ('work_items', True, True), ('refs', True, True), ('regards', True, True), ('actor', True, True), ('countersign_obligation', True, True), ('commission_kind', False, False), ('s23_capable', True, True), ('invocation_journal', True, True), ('tool_event', True, True), ('stop_journal', False, False), ('delegation_journal', False, False), ('bash_completions_journal', False, False), ('verify_commission_journal', False, False)]
+#   EXCLUDED commission_kind: 'commission' is NOT in this schema's own ledger_kind_check -- pre_s25: F1/F2/F3 cannot be decided (kernel/lineage/s25-commission-kind.sql not in this world's birth chain)
+#   EXCLUDED stop_journal: no usable stop_event records at /tmp/contemp-fixture-5wh0sezy/.claude/logs/stop_clean_exit.journal.jsonl AND clean_exit is not wired in this world's settings.json -- hooks off/unwired, or predates hooks/stop_clean_exit.py -- F10/F11's stop-side arms are UNDECIDABLE(no_stop_record) here
+#   EXCLUDED delegation_journal: no usable delegation records AND delegation_observer not wired -- F9's delegation leg is UNDECIDABLE(capability_absent) here
+#   EXCLUDED bash_completions_journal: no usable completion records with a token AND bash_completion not wired -- every cross-seam 'before'/'after' comparison needing the upper bound is UNDECIDABLE(open_window)
+#   EXCLUDED verify_commission_journal: no /tmp/contemp-fixture-5wh0sezy/.claude/logs/verify_commission.jsonl on this world -- either ./verify-commission was never invoked here, or this world predates the E6 journaling extension landing in the live checkout (indistinguishable from artifacts alone, named honestly per this module's own docstring) -- F2 is UNDECIDABLE(no_verify_journal) here
+#   counts: {'row_tokened': 6, 'row_untokened': 0, 'row_declared': 0, 'work_opened': 0, 'work_claimed': 0, 'work_closed': 0, 'work_witness_present': 0, 'work_depends': 0, 'row_refs_row': 0, 'row_refs_present': 0, 'row_regards': 0, 'row_actor': 6, 'invocation': 2, 'tool_event': 4, 'countersign_obliged': 0, 'stop_event': 0, 'delegation_dispatch': 0, 'delegation_return': 0, 'invocation_completed': 0, 'verify_commission_event': 0}
 
 BURST TABLE (STATED -- rows per invocation token):
   token=fixture-token-aaaa rows=2  intake-shape (precedes all tool activity)

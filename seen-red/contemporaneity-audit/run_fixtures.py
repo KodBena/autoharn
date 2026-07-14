@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-11T14:44:01Z
-#   last-change: 2026-07-12T00:02:56Z
-#   contributors: e4410ef6/main
+#   last-change: 2026-07-14T23:26:42Z
+#   contributors: e4410ef6/main, a857c93d/main
 # <<< PROVENANCE-STAMP <<<
 
 """run_fixtures.py -- both-polarity proof for Part 2 of design/ORCH-CONTEMPORANEITY-AUDIT.md
@@ -234,6 +234,36 @@ LINEAGE = REPO / "kernel" / "lineage"
 ENGINE = REPO / "engine"
 LED_TMPL = REPO / "bootstrap" / "templates" / "led.tmpl"
 RUN7_ROOT = Path("/home/bork/w/vdc/1/run7")
+
+# volatile substrings that differ run-to-run but carry no evidentiary content: scratch tmpdirs,
+# derivation-record timestamp/hash stamps, and the worktree-vs-main-checkout path prefix ahead of
+# the retained derivation path -- same idiom as seen-red/registry-ordering/run_fixtures.py's
+# _bank() helper (commit 27586d8), reproduced here rather than shared (each runner keeps its own
+# idiom, per that commit's own precedent).
+_VOLATILE_RES = (
+    re.compile(r"/tmp/[\w.-]+"),
+    re.compile(r"\d{8}T\d{6}Z_[0-9a-f]+"),
+    re.compile(r"^.*?(?=engine/docs/ledger-marriage/)", re.MULTILINE),
+)
+
+
+def _normalize(text: str) -> str:
+    for rx in _VOLATILE_RES:
+        text = rx.sub("<VOLATILE>", text)
+    return text
+
+
+def _bank(path: Path, content: str) -> None:
+    """Write CONTENT to PATH as banked seen-red evidence -- but only if it differs from what is
+    already there beyond ordinary run-to-run churn (see _VOLATILE_RES). Left unconditional, this
+    write dirtied the tree on every fixture run even when nothing substantive changed -- running
+    a check should not dirty the tree it checks. A genuine content change (a real verdict/count/
+    text difference) still writes through, so the file stays honest evidence rather than a stub
+    frozen out of date."""
+    existing = path.read_text(encoding="utf-8") if path.exists() else None
+    if existing is not None and _normalize(existing) == _normalize(content):
+        return
+    path.write_text(content, encoding="utf-8")
 # case (m)'s "old" comparison target: the commit immediately BEFORE the kind-refusal-teach fix
 # (BACKLOG "Run-10 closure audit ... both class-b fixes landed") landed -- pinned to this fixed,
 # immutable SHA rather than a moving `HEAD` on purpose. `HEAD` was correct only in the single
@@ -936,13 +966,18 @@ def main() -> int:
         root_r = _make_world({})
 
         # ---- CASE r, PART 1 (the BEFORE-THE-FIX witness): run the SAME schema through the
-        # PRE-FIX engine/contemp_edb.py (git-show'd from HEAD, before this commission's own
-        # working-tree edit landed) in an isolated subprocess -- `sys.path` is ordered so the
+        # PRE-FIX engine/contemp_edb.py in an isolated subprocess -- `sys.path` is ordered so the
         # OLD contemp_edb.py shadows the current one while every OTHER sibling module (clingo_run,
         # ledger_edb) resolves normally from the real engine/ dir, unchanged by this commission.
+        # PINNED to the actual pre-fix commit (not HEAD, which has long since carried the fix
+        # itself past HEAD -- git-show'ing HEAD stopped reproducing the old unguarded behavior
+        # once HEAD moved beyond the fix commit): 09e4d7e is the immediate parent of 3f1991b
+        # ("engine/contemp_edb.py: enforce-or-refuse the 24.8-day 32-bit clingo window"), i.e.
+        # the last commit before the UnsafeWindowError bound check existed at all.
+        PRE_FIX_REV = "09e4d7e"
         old_edb_dir = Path(tempfile.mkdtemp(prefix="contemp-edb-pre-fix-"))
         old_edb_src = subprocess.run(
-            ["git", "-C", str(REPO), "show", "HEAD:engine/contemp_edb.py"],
+            ["git", "-C", str(REPO), "show", f"{PRE_FIX_REV}:engine/contemp_edb.py"],
             capture_output=True, text=True, check=True).stdout
         (old_edb_dir / "contemp_edb.py").write_text(old_edb_src, encoding="utf-8")
         before_script = f'''\
@@ -985,8 +1020,8 @@ sys.exit(0 if max_t > 2**31 - 1 else 9)
            f"{(cp_before.stdout + cp_before.stderr)[-1000:]}")
         before_out = cp_before.stdout + cp_before.stderr
         case_r_before_out = before_out
-        log.append(f"CASE r part 1 (BEFORE this fix, pre-fix engine/contemp_edb.py from HEAD, "
-                   f"real ~7-year-wide schema): exit={cp_before.returncode}, "
+        log.append(f"CASE r part 1 (BEFORE this fix, pre-fix engine/contemp_edb.py pinned to "
+                   f"{PRE_FIX_REV}, real ~7-year-wide schema): exit={cp_before.returncode}, "
                    f"{before_out.strip().splitlines()[-1] if before_out.strip() else '(no output)'} "
                    f"-- export() completed WITHOUT refusing and produced a fact whose T value "
                    f"already exceeds the safe 32-bit bound, i.e. a value that would wrap silently "
@@ -1044,32 +1079,32 @@ sys.exit(0 if max_t > 2**31 - 1 else 9)
             print(f"  - {f}")
         return 1
 
-    (HERE / "red.txt").write_text(
+    _bank(HERE / "red.txt",
         "# banked RED evidence -- CASE b (manufactured backfill), engine/contemp_audit.py real output:\n"
-        + case_b_out, encoding="utf-8")
-    (HERE / "late-declared-green.txt").write_text(
+        + case_b_out)
+    _bank(HERE / "late-declared-green.txt",
         "# banked GREEN evidence -- CASE f (manufactured late-declared, DECLARED twin of case b), "
-        "engine/contemp_audit.py real output:\n" + case_f_out, encoding="utf-8")
-    (HERE / "late-declared-red.txt").write_text(
+        "engine/contemp_audit.py real output:\n" + case_f_out)
+    _bank(HERE / "late-declared-red.txt",
         "# banked RED evidence -- CASE g (manufactured backfill, UNDECLARED twin, re-asserted "
-        "post-s24), engine/contemp_audit.py real output:\n" + case_g_out, encoding="utf-8")
-    (HERE / "differential-agree.txt").write_text(
+        "post-s24), engine/contemp_audit.py real output:\n" + case_g_out)
+    _bank(HERE / "differential-agree.txt",
         "# banked GREEN evidence -- CASE p (SQL-floor marriage differential, run-10 intake-shape "
         "+ late-declared combined), engine/contemp_differential.py --retain real output:\n"
-        + case_p_out, encoding="utf-8")
-    (HERE / "differential-diverge-defect.txt").write_text(
+        + case_p_out)
+    _bank(HERE / "differential-diverge-defect.txt",
         "# banked RED evidence -- CASE q (manufactured DIVERGE_DEFECT negative control, "
         "sql_atoms_override forging one atom into the SQL floor's returned set), "
-        "engine/contemp_differential.py real output:\n" + case_q_out, encoding="utf-8")
-    (HERE / "unsafe-window-before-fix.txt").write_text(
+        "engine/contemp_differential.py real output:\n" + case_q_out)
+    _bank(HERE / "unsafe-window-before-fix.txt",
         "# banked RED evidence -- CASE r part 1, the SAME real ~7-year-wide contempprobe schema "
         "run through the PRE-FIX engine/contemp_edb.py (git show HEAD, before BACKLOG 'a second "
         "latent 32-bit clingo wraparound' was fixed): export() completes WITHOUT refusing and "
         "emits a fact whose relative-ms value already exceeds clingo/clasp's signed 32-bit "
         "ceiling -- a value that would wrap silently inside clingo, no error, exactly this "
         "module's own empirically-verified mechanism (`echo 'a(2000001010000).' | clingo - "
-        "--outf=2` -> `a(-1453749936)`):\n" + case_r_before_out, encoding="utf-8")
-    (HERE / "unsafe-window-after-fix.txt").write_text(
+        "--outf=2` -> `a(-1453749936)`):\n" + case_r_before_out)
+    _bank(HERE / "unsafe-window-after-fix.txt",
         "# banked evidence -- CASE r parts 2+3, the IDENTICAL real ~7-year-wide contempprobe "
         "schema run through the CURRENT (fixed) engine/contemp_edb.py: plain `./audit` (part 2, "
         "previously wholly unprotected) now refuses loudly with a typed UnsafeWindowError naming "
@@ -1077,7 +1112,7 @@ sys.exit(0 if max_t > 2**31 - 1 else 9)
         "by contemp_edb.py's own new guard (contemp_differential.py's pre-existing "
         "belt-and-braces text-level guard stays in place but does not fire here):\n\n"
         "## part 2 -- plain ./audit\n" + case_r_audit_out +
-        "\n\n## part 3 -- ./audit --differential\n" + case_r_diff_out, encoding="utf-8")
+        "\n\n## part 3 -- ./audit --differential\n" + case_r_diff_out)
     teardown()
     teardown(SCHEMA_PRE24, KERN_PRE24, ROLE_PRE24)
     print("\n# CONTEMPORANEITY-AUDIT FIXTURE PASS -- both polarities proven (clean batch does NOT "
