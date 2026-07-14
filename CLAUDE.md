@@ -15,7 +15,7 @@ project LAW (`law/adr/`), and the standing orchestration/delegation rulings.
 
 ## Engineering responsibility (corollary of the standard above)
 
-- **The LAW tells you how to build; it does not license stepping over a hazard you can see.** The ADRs are not a checklist you discharge to earn the right to ignore a defect you meet in passing. Before any calculation, a civil engineer is inculcated with one thing: lives depend on your work — act like it. So a hazard within reach of the work you are touching, you fix or you flag loudly; you do not route around it because it wasn't the assigned task. This is the mother's-life bar: at your mother's house, a plank with a nail pointing straight up gets the nail pulled — you don't note it and leave it for the next person to step on. Same reflex, every hazard in this code. What counts as a hazard is deliberately not enumerated here — recognizing one is your job, including the kind no one has named yet.
+- **The LAW tells you how to build; it does not license stepping over a hazard you can see.** The ADRs (Architecture Decision Records, `law/adr/`) are not a checklist you discharge to earn the right to ignore a defect you meet in passing. Before any calculation, a civil engineer is inculcated with one thing: lives depend on your work — act like it. So a hazard within reach of the work you are touching, you fix or you flag loudly; you do not route around it because it wasn't the assigned task. This is the mother's-life bar: at your mother's house, a plank with a nail pointing straight up gets the nail pulled — you don't note it and leave it for the next person to step on. Same reflex, every hazard in this code. What counts as a hazard is deliberately not enumerated here — recognizing one is your job, including the kind no one has named yet.
 
 - **Read the LAW first, and read it for its spirit.** When work requires the ADRs, read the actual files in full *before* you diagnose, design, or touch code — the fix is shaped by the law from its first line, not retrofitted to it at the end. And the spirit of an ADR governs as much as its letter, often more: these are principles written by a colleague to be extrapolated from and interpreted judiciously, not rules to satisfy literally. Meeting the letter while violating the intent is a failure, not a pass; where letter and spirit appear to diverge, the spirit wins and you surface the divergence.
 
@@ -39,12 +39,13 @@ it; the key restates the reading posture the bullet above mandates):
 - **Nobody edits kernel/lineage (frozen records), law/, or engine/lp/ semantics without a
   Fable-authored, maintainer-ratified spec** ([Fable](GLOSSARY.md#post-fable-law): the
   maintainer's primary AI-collaborator authoring model). A delta reaches reality by entering
-  the [birth chain](GLOSSARY.md#birth-chain), carried by the next world's scaffold — deltas
-  are never applied to an existing world (runs-are-linear ruling below, 2026-07-11).
+  the [birth chain](GLOSSARY.md#birth-chain), carried by the next [world](GLOSSARY.md#world)'s
+  scaffold — deltas are never applied to an existing world (runs-are-linear ruling below,
+  2026-07-11).
 - **Succession rule (maintainer-ratified 2026-07-09):** if Fable is unavailable, the
   constitutional layer does NOT freeze — the maintainer + Opus may author kernel/law/engine
-  specs under MAXIMUM ceremony: the commission/conformance instrument on the commission, an
-  adversarial fresh-context review of the spec (a second model instance that has never seen
+  specs under MAXIMUM ceremony: the [commission/conformance instrument](design/ORCH-CONFORMANCE-INSTRUMENT.md)
+  run on the commission, an adversarial fresh-context review of the spec (a second model instance that has never seen
   the working context, prompted to refute), a mandatory scratch-schema witness of any delta
   before the maintainer applies it, and the spec's closure statement checked against the
   enumerated universe by a third instance (closure statement and its explicitly enumerated
@@ -52,7 +53,7 @@ it; the key restates the reading posture the bullet above mandates):
   [ADR-0000's 2026-07-02 Rule 2(a) amendment](law/adr/0000-the-alpha-and-the-omega-type-driven-design.md)). Sonnet executes; Opus authors only here, and only
   with this full ceremony. Degraded-but-possible beats frozen — that is the ratified choice.
 - **The operator surface is the repo-root executable verbs** (currently led, judge, pickup,
-  distance-to-clean, drive, attest-tags, audit — the executable files at the repo root are
+  distance-to-clean, attest-tags, audit — the executable files at the repo root are
   the authoritative, self-updating list; scaffolding lives under bootstrap/) plus refusals
   that teach. Operational truth lives in ORCH-CAPABILITIES.md + those verbs; judgment/ and
   design/ archives are history unless a current spec cites them.
@@ -71,7 +72,7 @@ it; the key restates the reading posture the bullet above mandates):
   the kernel-lineage deltas of those names, `kernel/lineage/s21-session-aware-distinctness.sql`
   and `s22-work-item-ledger.sql` — both of which would have sailed through; the maintainer's ratification bandwidth is reserved for
   what the system may PERMIT, not what it may additionally refuse.)
-- **Runs are strictly linear (maintainer-ratified 2026-07-11).** Run M > N means run N's
+- **Runs are strictly linear (maintainer-ratified 2026-07-11).** [Run](GLOSSARY.md#run) M > N means run N's
   world is dust and settled: read-only evidence, never patched, never refreshed, never
   delta'd — "live world" is not a concept here and never was. The apply-to-existing-world
   clause that stood in the bullet above, and bootstrap/apply-delta.sh with its typed-
