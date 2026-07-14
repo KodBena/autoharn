@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-06T05:33:12Z
-#   last-change: 2026-07-09T09:59:53Z
-#   contributors: 37017f46/main, be693afb/main
+#   last-change: 2026-07-14T23:13:09Z
+#   contributors: 37017f46/main, be693afb/main, a857c93d/main
 # <<< PROVENANCE-STAMP <<<
 
 """ledger_edb -- the single home for "what the ledger looks like to a logic engine"
@@ -54,7 +54,10 @@ from dataclasses import dataclass, field
 
 import targets
 
-PGHOST = os.environ.get("EPISTEMIC_PGHOST", "192.168.122.1")
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "filing"))
+from pghost_resolve import resolve_pghost  # noqa: E402  (filing/pghost_resolve.py, the ONE home -- never a literal host default)
+
+PGHOST = resolve_pghost("EPISTEMIC_PGHOST")  # unchanged precedence -- this module never checked HARNESS_PGHOST
 FS, RS = "\x1f", "\x1e"
 
 # The fact families a logic engine may consume, and the capability each requires. This

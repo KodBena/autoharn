@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-06T23:23:39Z
-#   last-change: 2026-07-07T12:29:46Z
-#   contributors: 37017f46/main
+#   last-change: 2026-07-14T23:18:53Z
+#   contributors: 37017f46/main, a857c93d/main
 # <<< PROVENANCE-STAMP <<<
 
 """file_resolution -- file a LIVE operator resolution (an AskUserQuestion answer) into acts.ruling AT
@@ -45,7 +45,9 @@ import hashlib
 import subprocess
 import sys
 
-PGHOST = "192.168.122.1"
+import pghost_resolve  # filing/pghost_resolve.py, the ONE home -- never a literal host default
+
+PGHOST = pghost_resolve.resolve_pghost("HARNESS_PGHOST", "EPISTEMIC_PGHOST")
 DB = "harness"
 SCHEMA = "acts"
 

@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-06T18:14:54Z
-#   last-change: 2026-07-06T23:13:10Z
-#   contributors: 37017f46/main
+#   last-change: 2026-07-14T23:13:30Z
+#   contributors: 37017f46/main, a857c93d/main
 # <<< PROVENANCE-STAMP <<<
 
 """acts_join -- the REAL acts.act <-> s15 MATCHING DERIVER (consult 25 §7, Increment-5; finding-4's
@@ -77,13 +77,16 @@ from acts_edb import ACTS_PREDS, acts_edb, acts_floor_atoms
 from clingo_run import run_clingo
 from ledger_edb import resolve as resolve_ledger
 
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "filing"))
+from pghost_resolve import resolve_pghost  # noqa: E402  (filing/pghost_resolve.py, the ONE home -- never a literal host default)
+
 HERE = Path(__file__).resolve().parent
 TNOW_LP = HERE / "lp" / "ledger_tnow.lp"
 ACTS_LP = HERE / "lp" / "ledger_acts.lp"
 
-HARNESS_PGHOST = os.environ.get("HARNESS_PGHOST", os.environ.get("EPISTEMIC_PGHOST", "192.168.122.1"))
+HARNESS_PGHOST = resolve_pghost("HARNESS_PGHOST", "EPISTEMIC_PGHOST")  # unchanged precedence
 HARNESS_DB = os.environ.get("HARNESS_DB", "harness")
-EPISTEMIC_PGHOST = os.environ.get("EPISTEMIC_PGHOST", "192.168.122.1")
+EPISTEMIC_PGHOST = resolve_pghost("EPISTEMIC_PGHOST")  # unchanged precedence
 FS, RS = "\x1f", "\x1e"
 
 # oracle §4, one home (ADR-0012 P1) -- the ledger-relevant classification.

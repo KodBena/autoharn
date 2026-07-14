@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-07T01:30:00Z
-#   last-change: 2026-07-07T01:30:00Z
-#   contributors: 37017f46/main
+#   last-change: 2026-07-14T23:18:38Z
+#   contributors: 37017f46/main, a857c93d/main
 # <<< PROVENANCE-STAMP <<<
 
 """file_foreclosure — the filing path for the FORECLOSURE-DEBT LEDGER (db/harness/006_foreclosure_debt.sql;
@@ -30,7 +30,9 @@ import subprocess
 import sys
 from pathlib import Path
 
-PGHOST = "192.168.122.1"
+import pghost_resolve  # filing/pghost_resolve.py, the ONE home -- never a literal host default
+
+PGHOST = pghost_resolve.resolve_pghost("HARNESS_PGHOST", "EPISTEMIC_PGHOST")
 DB = "harness"
 
 

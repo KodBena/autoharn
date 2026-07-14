@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-07T01:47:28Z
-#   last-change: 2026-07-07T01:47:28Z
-#   contributors: 37017f46/main
+#   last-change: 2026-07-14T23:19:42Z
+#   contributors: 37017f46/main, a857c93d/main
 # <<< PROVENANCE-STAMP <<<
 
 """append_only_integrity — the append-only-trigger guard (forecloses the finding-6/15 class: an
@@ -28,8 +28,12 @@ Registered close/lint line id: `append-only-integrity`. Lazy imports banned.
 from __future__ import annotations
 
 import argparse
+import os
 import subprocess
 import sys
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "filing"))
+import pghost_resolve  # noqa: E402  (filing/pghost_resolve.py, the ONE home -- never a literal host default)
 
 # (schema, table): the guard is any trigger on the table firing for BOTH update and delete. We match on
 # coverage, not on a trigger name, so a rename does not read as rot — only a real loss of the guard does.
@@ -86,9 +90,11 @@ def missing_guards(host: str, db: str, required, optional) -> list[str]:
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--host", default="192.168.122.1")
+    ap.add_argument("--host", default=None)
     ap.add_argument("--db", default="harness")
     a = ap.parse_args(argv)
+    if a.host is None:
+        a.host = pghost_resolve.resolve_pghost("HARNESS_PGHOST", "EPISTEMIC_PGHOST")
     try:
         bad = missing_guards(a.host, a.db, REQUIRED_APPEND_ONLY, OPTIONAL_APPEND_ONLY)
     except RuntimeError as e:

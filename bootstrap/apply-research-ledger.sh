@@ -1,8 +1,8 @@
 #!/bin/sh
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-11T00:14:59Z
-#   last-change: 2026-07-13T16:35:19Z
-#   contributors: e4410ef6/main, 3c50e030/main
+#   last-change: 2026-07-14T23:21:43Z
+#   contributors: e4410ef6/main, 3c50e030/main, a857c93d/main
 # <<< PROVENANCE-STAMP <<<
 
 # apply-research-ledger.sh — the operator's/maintainer's ONE scripted step for applying
@@ -44,10 +44,32 @@ AUTOHARN_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 DDL="$AUTOHARN_ROOT/stores/001_research_ledger.sql"
 [ -f "$DDL" ] || { echo "apply-research-ledger.sh: DDL not found at $DDL" >&2; exit 1; }
 
-# --- resolve host/db: explicit env override, else the store's own stated defaults (mirrors
-# filing/record_reading.py's RL_PGHOST/RL_DB so the writer and the apply script agree on where
-# "the standing research db" is without a second hand-typed pair of strings). ---
-HOST="${RL_PGHOST:-192.168.122.1}"
+# --- resolve host/db: explicit env override, else this checkout's own deployment.json 'host'
+# field, else a loud refusal -- mirrors filing/record_reading.py's RL_PGHOST resolution (via
+# filing/pghost_resolve.py, the ONE home) so the writer and the apply script agree on where
+# "the standing research db" is without a second hand-typed pair of strings, and neither ever
+# silently defaults to any one host. ---
+HOST="${RL_PGHOST:-}"
+DEP="${LEDGER_DEPLOYMENT:-$AUTOHARN_ROOT/deployment.json}"
+PY="$HOME/w/vdc/venvs/generic/bin/python"
+[ -x "$PY" ] || PY="$(command -v python3)"
+if [ -z "$HOST" ] && [ -f "$DEP" ] && [ -n "$PY" ]; then
+    HOST="$("$PY" -c "
+import json, sys
+try:
+    with open(sys.argv[1]) as f:
+        print(json.load(f).get('host') or '')
+except Exception:
+    print('')
+" "$DEP" 2>/dev/null)"
+fi
+if [ -z "$HOST" ]; then
+    echo "apply-research-ledger.sh: REFUSED -- no Postgres host resolved. Set RL_PGHOST, or" >&2
+    echo "  place a deployment.json with a 'host' field at $DEP (copy deployment.json.example" >&2
+    echo "  and fill in your own values; see README.md 'Configuration'). Never defaulting to" >&2
+    echo "  any host." >&2
+    exit 1
+fi
 DB="${RL_DB:-research}"
 
 echo "== apply-research-ledger.sh: target =="

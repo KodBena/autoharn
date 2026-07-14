@@ -1,8 +1,8 @@
 #!/bin/sh
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-12T02:05:13Z
-#   last-change: 2026-07-12T11:57:38Z
-#   contributors: e4410ef6/main
+#   last-change: 2026-07-14T23:21:05Z
+#   contributors: e4410ef6/main, a857c93d/main
 # <<< PROVENANCE-STAMP <<<
 
 # bootstrap.sh — clone → collaborating. Idempotent: env check, git-hook install, gate
@@ -18,7 +18,20 @@ REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$REPO_ROOT" || exit 2
 PY="$HOME/w/vdc/venvs/generic/bin/python"
 [ -x "$PY" ] || PY="$(command -v python3)"
-PGHOST="${HARNESS_PGHOST:-${EPISTEMIC_PGHOST:-192.168.122.1}}"
+# PGHOST: env override, else this checkout's own deployment.json 'host' field, else UNSET --
+# never a silent literal default (the maintainer's own LAN host is not a fresh clone's fact).
+PGHOST="${HARNESS_PGHOST:-${EPISTEMIC_PGHOST:-}}"
+DEP="${LEDGER_DEPLOYMENT:-$REPO_ROOT/deployment.json}"
+if [ -z "$PGHOST" ] && [ -f "$DEP" ] && [ -n "$PY" ]; then
+    PGHOST="$("$PY" -c "
+import json, sys
+try:
+    with open(sys.argv[1]) as f:
+        print(json.load(f).get('host') or '')
+except Exception:
+    print('')
+" "$DEP" 2>/dev/null)"
+fi
 DB="${HARNESS_DB:-harness}"
 rc=0
 ok()   { printf '  [OK ] %s\n' "$1"; }
@@ -62,7 +75,12 @@ done
 "$PY" gates/fixture_census.py >/dev/null 2>&1 && ok "fixture-census GREEN" || no "fixture-census RED on a fresh clone"
 
 echo "-- DB reachability (the ledger/kernel substrate) --"
-if command -v psql >/dev/null 2>&1 && [ "$(psql -h "$PGHOST" -d "$DB" -tAc 'SELECT 1;' 2>/dev/null)" = "1" ]; then
+if [ -z "$PGHOST" ]; then
+    no "no Postgres host resolved (checked HARNESS_PGHOST, EPISTEMIC_PGHOST, and $DEP's 'host' field)"
+    echo "     Never defaulting to any host: set HARNESS_PGHOST or EPISTEMIC_PGHOST, or place a" >&2
+    echo "     deployment.json with a 'host' field at $DEP (copy deployment.json.example and fill" >&2
+    echo "     in your own values; see README.md 'Configuration')." >&2
+elif command -v psql >/dev/null 2>&1 && [ "$(psql -h "$PGHOST" -d "$DB" -tAc 'SELECT 1;' 2>/dev/null)" = "1" ]; then
     ok "harness DB reachable at $PGHOST/$DB"
 else
     no "harness DB NOT reachable at $PGHOST/$DB"

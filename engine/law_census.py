@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-07T17:28:25Z
-#   last-change: 2026-07-07T18:06:01Z
-#   contributors: 37017f46/main
+#   last-change: 2026-07-14T23:13:19Z
+#   contributors: 37017f46/main, a857c93d/main
 # <<< PROVENANCE-STAMP <<<
 
 """law_census — the machine-readable law census with ratification-depth marking (engine INC 1;
@@ -63,12 +63,15 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from judgment_registry import SPECS, superseded_ids  # noqa: E402
 from law_census_entries import RULING_BINDING_CLASSIFICATIONS, STATIC_ENTRIES  # noqa: E402
 
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "filing"))
+from pghost_resolve import resolve_pghost  # noqa: E402  (filing/pghost_resolve.py, the ONE home -- never a literal host default)
+
 CENSUS_RATIFIED: str | None = "RULING:120"  # maintainer census-ratification forward 2026-07-07, as amended (a)-(d)
 
 CLASSIFICATIONS = ("LAW-MECHANICAL", "OBSERVATION", "JUDGMENT-RESIDUE", "APOCRYPHA-QUARANTINED")
 DEPTH_ORDER = ("RULING", "FIND", "BRIEF-INV", "ADR")  # strongest -> weakest (D16, declared)
 
-PGHOST = os.environ.get("HARNESS_PGHOST", os.environ.get("EPISTEMIC_PGHOST", "192.168.122.1"))
+PGHOST = resolve_pghost("HARNESS_PGHOST", "EPISTEMIC_PGHOST")  # unchanged precedence
 FINDINGS_MD = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "FINDINGS.md")  # autoharn: repo-root FINDINGS.md
 
 # Informational acts.ruling rows covered by RULE (not per-id entries): the pre-registration /

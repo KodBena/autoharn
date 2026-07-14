@@ -1,8 +1,8 @@
 #!/bin/sh
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-12T18:06:58Z
-#   last-change: 2026-07-12T18:12:28Z
-#   contributors: 3c50e030/main
+#   last-change: 2026-07-14T23:23:00Z
+#   contributors: 3c50e030/main, a857c93d/main
 # <<< PROVENANCE-STAMP <<<
 
 # freeze-at-stamp.sh -- produce a "tree correlated with db frozen in time": a git tree pinned at
@@ -52,7 +52,8 @@
 # Usage:
 #   bootstrap/freeze-at-stamp.sh <commit> <dest-dir>
 #       [--db <name>]            standing frozen-snapshot database (default: autoharn_test)
-#       [--host <host>]          postgres host (default: 192.168.122.1, this repo's own)
+#       [--host <host>]          postgres host (default: this checkout's own deployment.json
+#                                'host' field; refuses loudly if neither resolves)
 #       [--as-of <iso-ts|id>]    cutoff override (default: the commit's own committer timestamp)
 #       [--worktree]             `git worktree add` instead of the default `git archive` export
 #       [--writable]             skip the REVOKE that makes the frozen copy SELECT-only
@@ -157,7 +158,7 @@ usage() {
 COMMIT="$1"; DEST="$2"; shift 2
 
 DB="autoharn_test"
-HOST="192.168.122.1"
+HOST=""
 AS_OF=""
 WORKTREE=0
 WRITABLE=0
@@ -179,6 +180,26 @@ done
 AUTOHARN_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 PY="$HOME/w/vdc/venvs/generic/bin/python"
 [ -x "$PY" ] || PY="$(command -v python3)"
+
+# HOST: --host flag, else this checkout's own deployment.json 'host' field, else a loud refusal
+# -- never a silent literal default (the maintainer's own LAN host is not every operator's fact).
+if [ -z "$HOST" ] && [ -f "$AUTOHARN_ROOT/deployment.json" ] && [ -n "$PY" ]; then
+    HOST="$("$PY" -c "
+import json, sys
+try:
+    with open(sys.argv[1]) as f:
+        print(json.load(f).get('host') or '')
+except Exception:
+    print('')
+" "$AUTOHARN_ROOT/deployment.json" 2>/dev/null)"
+fi
+if [ -z "$HOST" ]; then
+    echo "freeze-at-stamp.sh: REFUSED -- no Postgres host resolved. Pass --host <host>, or" >&2
+    echo "  place a deployment.json with a 'host' field at $AUTOHARN_ROOT/deployment.json" >&2
+    echo "  (copy deployment.json.example and fill in your own values; see README.md" >&2
+    echo "  'Configuration'). Never defaulting to any host." >&2
+    exit 2
+fi
 
 # --- source deployment: THIS checkout's own root tracker (deployment.json at the repo root) -----
 # derived LIVE via filing/deployment_record.py, never a hardcoded 'autoharn'/'autoharn_kernel'
