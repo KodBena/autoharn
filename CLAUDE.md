@@ -1,4 +1,10 @@
 # CLAUDE.md
+
+This file is autoharn's standing instruction document for AI collaborators: Claude Code
+loads it automatically at session start, and its rules override default agent behavior.
+It carries the tone register, the engineering-responsibility standard, the pointer to the
+project LAW (`law/adr/`), and the standing orchestration/delegation rulings.
+
 ## Personality & Tone Rules (Swedish Humility / Lagom Style)
 
 - **Default Tone:** Grounded, unpretentious, objective, and measured. Act as a capable but quiet peer, not an over-eager marketer or a self-proclaimed expert.
@@ -13,6 +19,9 @@
 
 - **Read the LAW first, and read it for its spirit.** When work requires the ADRs, read the actual files in full *before* you diagnose, design, or touch code — the fix is shaped by the law from its first line, not retrofitted to it at the end. And the spirit of an ADR governs as much as its letter, often more: these are principles written by a colleague to be extrapolated from and interpreted judiciously, not rules to satisfy literally. Meeting the letter while violating the intent is a failure, not a pass; where letter and spirit appear to diverge, the spirit wins and you surface the divergence.
 
+The LAW files themselves, as a list (kept in this JSON shape by convention — no tool parses
+it; the key restates the reading posture the bullet above mandates):
+
 {"Project LAW, extrapolate from and interpret judiciously like a professional colleague": [
     "law/adr/0000-the-alpha-and-the-omega-type-driven-design.md",
     "law/adr/0012-compositional-and-structural-hygiene.md",
@@ -25,20 +34,26 @@
 - **Sonnet executes by default.** Opus only when BOTH hold: the spec is unambiguous AND the
   work spans multiple boundaries at once (e.g. SQL schema + the Python consuming it) — and
   never where its overconfidence can hurt. Escalate on TYPED events (gate-refusal streaks,
-  DIVERGE_DEFECT/QUARANTINED, non-converging review loops), never on self-assessment.
+  DIVERGE_DEFECT/QUARANTINED — two of [`./judge`'s closed verdicts](GLOSSARY.md#judge) —
+  non-converging review loops), never on self-assessment.
 - **Nobody edits kernel/lineage (frozen records), law/, or engine/lp/ semantics without a
-  Fable-authored, maintainer-ratified spec.** A delta reaches reality by entering the birth
-  chain, carried by the next world's scaffold — deltas are never applied to an existing
-  world (runs-are-linear ruling below, 2026-07-11).
+  Fable-authored, maintainer-ratified spec** ([Fable](GLOSSARY.md#post-fable-law): the
+  maintainer's primary AI-collaborator authoring model). A delta reaches reality by entering
+  the [birth chain](GLOSSARY.md#birth-chain), carried by the next world's scaffold — deltas
+  are never applied to an existing world (runs-are-linear ruling below, 2026-07-11).
 - **Succession rule (maintainer-ratified 2026-07-09):** if Fable is unavailable, the
   constitutional layer does NOT freeze — the maintainer + Opus may author kernel/law/engine
   specs under MAXIMUM ceremony: the commission/conformance instrument on the commission, an
   adversarial fresh-context review of the spec (a second model instance that has never seen
   the working context, prompted to refute), a mandatory scratch-schema witness of any delta
   before the maintainer applies it, and the spec's closure statement checked against the
-  enumerated universe by a third instance. Sonnet executes; Opus authors only here, and only
+  enumerated universe by a third instance (closure statement and its explicitly enumerated
+  quantification universe:
+  [ADR-0000's 2026-07-02 Rule 2(a) amendment](law/adr/0000-the-alpha-and-the-omega-type-driven-design.md)). Sonnet executes; Opus authors only here, and only
   with this full ceremony. Degraded-but-possible beats frozen — that is the ratified choice.
-- **The operator surface is the four verbs** (led, judge, pickup, scaffold) plus refusals
+- **The operator surface is the repo-root executable verbs** (currently led, judge, pickup,
+  distance-to-clean, drive, attest-tags, audit — the executable files at the repo root are
+  the authoritative, self-updating list; scaffolding lives under bootstrap/) plus refusals
   that teach. Operational truth lives in ORCH-CAPABILITIES.md + those verbs; judgment/ and
   design/ archives are history unless a current spec cites them.
 - **Claims carry witnesses.** A report states, per item: WITNESSED (with observed output),
@@ -46,12 +61,15 @@
   (an example carries real output or an UNWITNESSED mark). No umbrella claims.
 - **Class-ratified fail-safe deltas (maintainer ruling 2026-07-09).** A kernel lineage delta
   that only ADDS refusals, vocabulary, or derived views — strictly fail-safe: nothing existing
-  relaxed, no existing semantics changed — and that arrives scratch-witnessed on both
-  polarities with the SQL/ASP differential in AGREE, is pre-ratified as a class: it enters
+  relaxed, no existing semantics changed — and that arrives witnessed on a
+  [scratch schema](GLOSSARY.md#scratch-schema) on
+  [both polarities](GLOSSARY.md#both-polarity) with the SQL/ASP differential in AGREE
+  ([`./judge`'s green verdict](GLOSSARY.md#judge)), is pre-ratified as a class: it enters
   the birth chain without a per-delta maintainer question. A delta that loosens
   any refusal, alters existing semantics, or touches law/ routes to the maintainer as before.
-  Doubt about which side a delta falls on IS the routing: ask. (Ratified after s21/s22, both
-  of which would have sailed through; the maintainer's ratification bandwidth is reserved for
+  Doubt about which side a delta falls on IS the routing: ask. (Ratified after s21/s22 —
+  the kernel-lineage deltas of those names, `kernel/lineage/s21-session-aware-distinctness.sql`
+  and `s22-work-item-ledger.sql` — both of which would have sailed through; the maintainer's ratification bandwidth is reserved for
   what the system may PERMIT, not what it may additionally refuse.)
 - **Runs are strictly linear (maintainer-ratified 2026-07-11).** Run M > N means run N's
   world is dust and settled: read-only evidence, never patched, never refreshed, never
