@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-14T21:26:05Z
-#   last-change: 2026-07-14T21:27:53Z
+#   last-change: 2026-07-14T21:31:40Z
 #   contributors: a857c93d/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -156,11 +156,21 @@ def main() -> int:
             dst.write_bytes(src.read_bytes())
             dst.chmod(0o755)
             rel_paths.append(rel)
-        cm = _commit_in_worktree(worktree, rel_paths,
-                                 "fixture: current pinning scripts (deployment-pinning run_fixtures.py, scratch worktree)")
-        if cm.returncode != 0:
-            check("SETUP: commit current scripts into scratch worktree", False, cm.stdout + cm.stderr)
-            return 1
+        # If the four scripts are ALREADY the tracked HEAD content (this build's own commit
+        # landed, so REPO's working tree and HEAD now agree byte-for-byte) there is nothing new
+        # to stage -- `git commit` correctly refuses with "nothing to commit", which is success,
+        # not failure, for this setup step's actual goal (a worktree whose HEAD carries the
+        # CURRENT script bytes). Only a genuinely failed commit (dirty-but-refused) is a problem.
+        pre_diff = _git(worktree, "diff", "--quiet", "--", *rel_paths)
+        if pre_diff.returncode == 0:
+            print(f"-- scratch worktree's HEAD already matches the current on-disk script bytes "
+                  f"(no delta to commit -- this build's own commit already landed) --")
+        else:
+            cm = _commit_in_worktree(worktree, rel_paths,
+                                     "fixture: current pinning scripts (deployment-pinning run_fixtures.py, scratch worktree)")
+            if cm.returncode != 0:
+                check("SETUP: commit current scripts into scratch worktree", False, cm.stdout + cm.stderr)
+                return 1
         base_sha = _git(worktree, "rev-parse", "HEAD").stdout.strip()
         print(f"-- scratch worktree {worktree} at {base_sha} (current pinning scripts committed) --")
 
