@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-09T07:54:37Z
-#   last-change: 2026-07-14T01:35:28Z
+#   last-change: 2026-07-14T23:25:02Z
 #   contributors: 9bcc0113/main, be693afb/main, e4410ef6/main, 3c50e030/main, a857c93d/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -85,6 +85,10 @@ ROOT_FILES = {
     # one paragraph per moved doc) -- landed with the sweep, never registered here; caught
     # at the same 2026-07-13 seam as the vestigial_documentation/ dir registration above.
     "VESTIGIAL-INDEX.md",
+    # migrate — the sixth repo-root operator verb shim (bootstrap/migrate.sh), landed alongside
+    # led/judge/pickup/audit/distance-to-clean but never registered here; caught by this gate's
+    # own next run (CLAUDE.md hazard-flagging duty, root-shims-and-layout-census work item).
+    "migrate",
 }
 ROOT_DIRS = {
     ".claude", "bootstrap", "law", "judgment", "kernel", "stores", "instruments", "engine",
@@ -119,6 +123,11 @@ ROOT_DIRS = {
     # may itself be retired when the gate policy has no standing holds. First entries:
     # scaffold-governed-set-language-default's two template patches (merge e54c1eb).
     "proposals",
+    # docs/ — landed 2026-07-13 (commit 3ac2080, the README.md idiot's-guide rewrite) carrying
+    # docs/PROJECT-OVERVIEW.md, a single adopter-facing overview doc split out of README.md;
+    # never registered here at landing time, caught by this gate's own next run (CLAUDE.md
+    # hazard-flagging duty, same shape as the migrate/attestations/tools entries above).
+    "docs",
 }
 
 # (2) per-directory currency patterns: a directory -> the regex(es) its basenames MUST match.
