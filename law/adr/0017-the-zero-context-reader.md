@@ -131,6 +131,7 @@ already dangling when the maintainer followed it (the slot had come to hold a di
 item). (b) The same ruling, prepared for a non-expert decision, opened with a SQL quotation
 and the coined kernel terms it presumed — the fix added a "question in plain words" lead.
 (c) A conformance map cited the BRIEF by the *source project's* path
+<!-- adr-portability-terms-allow: quoted defect specimen, per this tenet's own Exceptions -->
 (`experiments/fact-mining/...`), prose-styled and unresolvable here, and used "J-boundary"
 without any reachable definition. Four shapes, one class: references that gesture instead of
 resolving, and openings that assume the author's context.
@@ -157,8 +158,11 @@ deterministic check ships only with its false-positive load measured on the real
 first**, and a heuristic that fails that measurement is recorded as UNBUILT with the numbers,
 not shipped as noise. (The acronym gate's own disposition concluded mid-draft: the concurrent
 assessment ruled KEEP-ADVISORY-WITH-SEEDED-ALLOWLIST — allowlist seeding plus a history
-exclusion cut its flagged occurrences by 54% — and its BACKLOG entry names arming conditions;
-this tenet cites the episode as precedent and defers to that disposition.)
+exclusion cut its flagged occurrences by 54% — and its BACKLOG entry names arming conditions
+(that entry, like the ratification packet Rule 4's dated correction describes, was retired
+with [BACKLOG.md](../../BACKLOG.md)'s 2026-07-12 reduction to a pointer stub; its words are
+recoverable from git history, `git show f101b193^:BACKLOG.md`, as evidence rather than a live
+reference); this tenet cites the episode as precedent and defers to that disposition.)
 
 ## Decision
 
@@ -324,8 +328,10 @@ Three design commitments keep the loop honest, each learned from a named failure
 - **The enforced surface is the attestation, not the agent's identity.** "Writing .md files
   rejected by non-workflow agents" is *not* implemented as an identity check at the write
   hook — identity enumeration fails open, and this project has already witnessed its write
-  interceptors evaded (the stamp-bypass and bash-append specimens in the mutation-observer
-  record). The sound surface is commit-time and artifact-shaped: every changed
+  interceptors evaded (writes that dodged the command-shape matcher entirely — the banked
+  specimens in [seen-red/mutation-observer/red.txt](../../seen-red/mutation-observer/red.txt),
+  the record of why the after-the-fact mutation observer exists). The sound surface is
+  commit-time and artifact-shaped: every changed
   maintainer-facing document must carry a **fresh-context attestation record** — produced by
   a B that is provably distinct from A, naming the document version it read and either
   per-finding specimens or an explicit clean verdict over the test's four clauses. The A:B:C
@@ -347,10 +353,26 @@ Three design commitments keep the loop honest, each learned from a named failure
 *Enforcement surface: the attestation-presence gate is deterministic and commit-time-
 blockable once built (it is designed here and UNBUILT this pass — instance bindings); the
 A:B:C forking itself is workflow/review-policed; B's judgment is advisory by constitutional
-constraint (whether any LLM verdict may ever block is the ratification packet's explicit
-sub-question, answered "no" in this draft's recommendation). Arming the loop for autoharn's
-own doc work is the packet's main wiring question; its honest cost — roughly two to three
-times the tokens per documentation change — is stated there, not discovered later.*
+constraint (whether any LLM verdict may ever block was a separate sub-question at this
+tenet's 2026-07-11 ratification, answered "no" — deterministic surfaces stay the only
+blocking path). Arming the loop for autoharn's own doc work was the ratifying commission's
+main wiring question, resolved YES the same evening; its honest cost — roughly two to
+three times the tokens per documentation change — was named up front, not discovered
+later. **[Dated correction, 2026-07-14, ADR-0017 Rule 2(b) self-repair:** earlier text
+here (and at three other sites in this file — the Instance bindings' "fresh-context audit
+loop" entry, the critic hook entry, and Revisit-when #2) pointed to "the ratification
+packet" as a document a reader could chase. It was real — filed the evening of
+2026-07-11 as a BACKLOG.md section headed "RATIFICATION PACKET" (commit `b298079`) — but
+BACKLOG.md was retired to a pointer stub the next day (maintainer ruling, this project's
+ledger row 137, commit `f101b193`, 2026-07-12) and the packet's prose was not carried
+forward into the stub; no path in this repository resolves it today. The two answers it
+carried are restated in plain words above and at each other site, so the citation is no
+longer needed to complete the sentence; a reader who wants the packet's own words can
+still recover them from git history (`git show b298079:BACKLOG.md`), which is evidence,
+not a live reference this rule depends on. The defect this correction repairs — a
+thrice-cited, never-linked referent shipped in the very law file that names the citation
+discipline — is tracked as `adr-0017-ratification-packet-referent` in this project's work
+tracker.]**
 
 ## Instance bindings (autoharn, 2026-07-11) — the non-portable section
 
@@ -358,10 +380,14 @@ Everything above is project-neutral. This section is autoharn's binding of the t
 own machinery, and an adopting project replaces it wholesale with its own.
 
 - **The deterministic gate:** `gates/doc_shapes.py` — the two measured-sound checks
-  (standalone fragment paragraphs; positional references into HANDOFF.md), scoped to the
+  (standalone fragment paragraphs; positional references into `HANDOFF.md`, the operator
+  handoff file of the 2026-07-11 era, since renamed [ORCH-HANDOFF.md](../../ORCH-HANDOFF.md)),
+  scoped to the
   documents named on its command line (the touched set), repo-wide scan as report-only. Its
   header carries the 2026-07-11 measurements and the UNBUILT list with reasons. Registered
-  with the fixture census; an inline `<!-- doc-shapes-allow: reason -->` waiver handles the
+  with the fixture census ([gates/fixture_census.py](../../gates/fixture_census.py), the
+  registry requiring every gate to keep a runnable red-evidence fixture); an inline
+  `<!-- doc-shapes-allow: reason -->` waiver handles the
   measured false-positive classes (quoted historical references, deliberate fragments).
 - **The link-resolution gate:** `gates/link_integrity.py` — landed mid-draft (the
   concurrent Sonnet commission, merged `b5f9180` 2026-07-11) and already wired as a
@@ -370,16 +396,26 @@ own machinery, and an adopting project replaces it wholesale with its own.
   to it as built; its two printed exclusions (`judgment/**` history; the STALE-bannered
   architecture doc) are its own declared scope, not this tenet's to relitigate.
 - **The fresh-context audit loop (A:B:C):** the primary transport, maintainer-proposed
-  2026-07-11 (the Decision section above). Armed by the ratification packet's wiring
-  question, not by this draft. Its commit-time **attestation-presence gate is designed and
+  2026-07-11 (the Decision section above), armed at ratification the same evening (the
+  dated correction under Rule 4's "fresh-context audit loop" enforcement surface has the
+  history) rather than by this draft itself. Its commit-time **attestation-presence gate is designed and
   UNBUILT this pass** (the record format and the pre-commit wiring are one decision, filed
-  in the BACKLOG entry beside this draft). In a wired world the kernel already models the
-  relation: `countersign_obligation`/`review_gap` make a principal's writes visible debt
-  until a stamp-distinct invocation attests — verified against the pending review_gap
-  scope-semantics ruling: the obligation binds the *whole principal* (the scope word is a
+  in the BACKLOG entry beside this draft — an entry now recoverable only from git history,
+  `git show f101b193^:BACKLOG.md`, after [BACKLOG.md](../../BACKLOG.md)'s 2026-07-12
+  retirement to a pointer stub; Rule 4's dated correction explains that retirement once for
+  this whole file). In a wired world the kernel (the append-only Postgres schema holding
+  this project's decision ledger and its integrity machinery) already models the relation:
+  [`countersign_obligation`](../../GLOSSARY.md#obligation)/[`review_gap`](../../GLOSSARY.md#review_gap)
+  (the kernel's review-debt machinery: an obliged writer's rows are visible debt until
+  countersigned) make a principal's writes visible debt
+  until a [stamp](../../GLOSSARY.md#stamp)-distinct invocation (one whose session HMAC stamp
+  proves it is not the writer) attests — verified against the then-pending review_gap
+  scope-semantics ruling (since answered:
+  [design/MAINT-REVIEW-GAP-SCOPE-SEMANTICS-RULING.md](../../design/MAINT-REVIEW-GAP-SCOPE-SEMANTICS-RULING.md)):
+  the obligation binds the *whole principal* (the scope word is a
   label, not a filter), so a doc attestation can ride the existing attest machinery with
   zero kernel change, at the known coarseness that it catches all the principal's rows, not
-  only documentation; the pending ruling governs whether that coarseness stands.
+  only documentation; that ruling governs whether that coarseness stands.
 - **The critic hook:** `hooks/doc_legibility_critic.py`, the lightweight/portable transport,
   following the demurral-detector precedent (`hooks/demurral_detect.py`) exactly: observer
   mode, never blocks, fail-open on timeout/error, journal under the world's
@@ -390,8 +426,8 @@ own machinery, and an adopting project replaces it wholesale with its own.
   no-live-hooks-edits rule. Findings are structured (file, quoted offending text, shape,
   suggested repair) so a human or agent can act on each. Its prompt is also the SSOT of B's
   briefing in the A:B:C loop — one judgment, one home, measured once. Promotion beyond
-  observer is a maintainer act carried as an explicit sub-question in this draft's
-  ratification packet — never a default.
+  observer is a maintainer act, decided separately from this draft at ratification (the
+  dated correction under Rule 4 has the history) — never a default.
 - **The measured corpus:** `instruments/doc_legibility_corpus.jsonl` — 24 real passages from
   this repository, both polarities (BRIEF staccato, the `48dce0c` before-states, the
   in-house fragments; against clean ADR prose, glossary entries, the `48dce0c` after-states,
@@ -401,8 +437,11 @@ own machinery, and an adopting project replaces it wholesale with its own.
   0.524 / recall 1.000 — it punished excerpts for document-scope cross-references — and the
   shipped v2 measures RAW precision 0.692 / recall 0.750 (F1 0.720), calibrated in-sample
   against this same small corpus, said plainly. The numbers travel with the corpus and the
-  prompt version, and a stale number is treated as no number (the demurral harness's
-  Goodharting caveat applies verbatim); the mediocrity of the headless transport is itself
+  prompt version, and a stale number is treated as no number (the caveat
+  [hooks/demurral_detect.py](../../hooks/demurral_detect.py)'s own header states — a measured
+  precision figure is valid only for the exact classifier-prompt version it was measured
+  against, so every prompt edit bumps a version and re-measures — applies verbatim); the
+  mediocrity of the headless transport is itself
   recorded evidence for the A:B:C transport above.
 - **The glossary:** [GLOSSARY.md](../../GLOSSARY.md) is Rule 2(a)'s definition home; its "Wiki
   posture" preamble remains the practice's operational statement and now cites this tenet as
@@ -439,15 +478,17 @@ own machinery, and an adopting project replaces it wholesale with its own.
   tenet.
 - **The mandate's core is judgment, and its strongest transport is unarmed at birth.** Rule
   1 is review plus two out-of-frame transports, and both ship inert this pass: the A:B:C
-  loop awaits the ratification packet's wiring answer, and the headless critic is
+  loop's own attestation-presence gate awaits being built (the loop itself was armed in
+  principle at the 2026-07-11 ratification — Rule 4's dated correction has the history),
+  and the headless critic is
   default-OFF because it bills per call — so until one is armed, a documentation change is
   protected only by review and the two narrow gates. Stated plainly per ADR-0011 Rule 1:
   this tenet leans on attention exactly where the acronym gate proved attention decays,
   until the maintainer arms a transport.
 - **The fresh-context loop costs real money, named up front.** Roughly two to three times
   the tokens per documentation change, on session billing. That is the price of the only
-  reviewer who genuinely lacks the author's context; the packet asks for it explicitly
-  rather than letting it arrive as a surprise on the bill.
+  reviewer who genuinely lacks the author's context; the ratifying commission named that
+  cost explicitly on 2026-07-11 rather than letting it arrive as a surprise on the bill.
 
 ### Neutral
 
@@ -502,10 +543,15 @@ own machinery, and an adopting project replaces it wholesale with its own.
    measured live precision attached. Until then it is not asked again; an unmeasured
    promotion request would be the acronym gate's mistake at higher stakes. The
    attestation-presence gate (deterministic, checks that a fresh read happened, not what it
-   concluded) is exempt from this bar and may be built and armed on the packet's word.
+   concluded) is exempt from this bar and may be built and armed on the 2026-07-11
+   ratification's word (Rule 4's fresh-context-audit-loop section carries the dated
+   correction naming where that ratification's own record now lives).
 3. **The acronym gate moves from KEEP-ADVISORY.** Its assessment concluded 2026-07-11
    (keep advisory, allowlist seeded, arming gated on a real terms-authoring pass or a
-   narrower blocking scope — the disposition entry in BACKLOG carries the numbers). If it
+   narrower blocking scope — the disposition entry in BACKLOG carries the numbers; like
+   every BACKLOG entry this file cites, it survives only in git history,
+   `git show f101b193^:BACKLOG.md`, after the 2026-07-12 stub retirement Rule 4's dated
+   correction describes). If it
    is later armed or retired, update the Context's cautionary tale so it carries its
    ending.
 4. **A new failure shape recurs.** Per ADR-0011 Rule 2, the second instance of a shape not
@@ -535,8 +581,10 @@ own machinery, and an adopting project replaces it wholesale with its own.
   and [ADR-0014 (second opinion)](0014-executor-second-opinion.md).** The
   faculty-that-corrupts admission and the out-of-frame remedy, which Rule 1 inherits: the
   author cannot run the zero-context test on their own text, so the honest checker is
-  independent — the critic is to legibility what the hack-rationalization detector is to
-  scope.
+  independent — the critic is to legibility what the hack-rationalization detector (the
+  adversarial review pass ADR-0014's out-of-frame remedy instantiates for scope: a fresh
+  context asked to refute a fix's own justification, catching a hack dressed as discipline)
+  is to scope discipline.
 - **[The safety-critical-logging BRIEF](../../law/briefs/safety-critical-logging/BRIEF.md) and
   [its conformance map](../../law/briefs/BRIEF-CONFORMANCE-MAP.md).** The named specimen and —
   in the map's J-boundary paragraph — the model this tenet follows for scoping a guarantee
