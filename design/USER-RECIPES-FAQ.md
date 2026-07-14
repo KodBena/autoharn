@@ -99,6 +99,32 @@ with no located incident yet — each with a stated fix regardless. Read
 [ORCH-WORKFLOW-SCRIPT-GOTCHAS-RECIPE.md](ORCH-WORKFLOW-SCRIPT-GOTCHAS-RECIPE.md)
 before writing a new workflow script, or when one fails in an unfamiliar way.
 
+**I have a large batch of independent work units to dispatch — is there a standing
+recommendation for how to parallelize them instead of just running them one after another?**
+Yes — **standing recommendation** (maintainer directive, 2026-07-14): use the vendored
+`tools/makespan-scheduler/` for any large-scale batch of jobs that conflict only over shared
+resources (e.g. two edits touching the same file), rather than defaulting to a hand-picked
+sequential order. Claude Code is, functionally, an infinite-server model of work — parallel
+agent capacity is cheap to spin up — but the default LLM inclination is still to serialize
+work that could safely overlap, which wastes exactly the capacity that is available. Feed the
+batch's jobs (id + the resources each one touches + an optional duration) to the scheduler; it
+returns a schedule computed by CP-SAT (a constraint-programming solver, OR-Tools' `cp_model`) —
+either proven optimal or honestly labeled not — and a
+`batches` field — ordered waves of job ids safe to dispatch together — and that dispatch order
+is what you actually run, not a re-guess. **The guarantee is conditional, and the condition
+matters more than the tool**: the scheduler can only be as correct as the job list it is given,
+and it has NO notion of one job's output feeding another job as input (the vendored tool's own
+"independent-tasks" scope) — a batch with a real, hidden data dependency fed into it as if it
+were a mere resource conflict produces a schedule that looks authoritative and is wrong. Before
+treating a batch as ready to schedule, therefore, an independent countersign of the job list
+itself (not self-review) is the recommended discipline, not an optional nicety — full
+treatment, including exactly how that countersign rides this project's own `led
+review`/`led obligate` machinery and what remains unbuilt today: read
+[ORCH-MAKESPAN-SCHEDULING-GUARANTEE.md](ORCH-MAKESPAN-SCHEDULING-GUARANTEE.md) in full before
+adopting this for anything you'd actually rely on. Tool docs and vendoring provenance:
+[`tools/makespan-scheduler/README.md`](../tools/makespan-scheduler/README.md) /
+[`PROVENANCE.md`](../tools/makespan-scheduler/PROVENANCE.md).
+
 ## Declaring things on the ledger
 
 **Can I declare which tools/services/agents this project may, should, must, or must not
