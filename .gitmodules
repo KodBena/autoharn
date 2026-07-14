@@ -1,0 +1,3 @@
+[submodule "makespan-scheduler"]
+	path = tools/makespan-scheduler
+	url = https://github.com/KodBena/makespan-scheduler.git

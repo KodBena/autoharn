@@ -101,8 +101,10 @@ before writing a new workflow script, or when one fails in an unfamiliar way.
 
 **I have a large batch of independent work units to dispatch — is there a standing
 recommendation for how to parallelize them instead of just running them one after another?**
-Yes — **standing recommendation** (maintainer directive, 2026-07-14): use the vendored
-`tools/makespan-scheduler/` for any large-scale batch of jobs that conflict only over shared
+Yes — **standing recommendation** (maintainer directive, 2026-07-14): use
+`tools/makespan-scheduler/` (vendored 2026-07-14, split into its own published repository and
+converted to a git submodule 2026-07-15) for any large-scale batch of jobs that conflict only
+over shared
 resources (e.g. two edits touching the same file), rather than defaulting to a hand-picked
 sequential order. Claude Code is, functionally, an infinite-server model of work — parallel
 agent capacity is cheap to spin up — but the default LLM inclination is still to serialize
@@ -121,9 +123,9 @@ itself (not self-review) is the recommended discipline, not an optional nicety �
 treatment, including exactly how that countersign rides this project's own `led
 review`/`led obligate` machinery and what remains unbuilt today: read
 [ORCH-MAKESPAN-SCHEDULING-GUARANTEE.md](ORCH-MAKESPAN-SCHEDULING-GUARANTEE.md) in full before
-adopting this for anything you'd actually rely on. Tool docs and vendoring provenance:
+adopting this for anything you'd actually rely on. Tool docs and vendoring/split provenance:
 [`tools/makespan-scheduler/README.md`](../tools/makespan-scheduler/README.md) /
-[`PROVENANCE.md`](../tools/makespan-scheduler/PROVENANCE.md).
+[`tools/makespan-scheduler-PROVENANCE.md`](../tools/makespan-scheduler-PROVENANCE.md).
 
 ## Declaring things on the ledger
 

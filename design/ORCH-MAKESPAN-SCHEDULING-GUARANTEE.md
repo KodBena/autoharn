@@ -3,8 +3,9 @@
 Audience: an orchestrator (human or LLM) deciding how to dispatch a batch of independent work
 units across parallel agent capacity, and anyone assessing whether "the schedule was computed by
 a formal planner" is a claim this project can stand behind. This note answers one question
-precisely: given `tools/makespan-scheduler/` (vendored 2026-07-14; see
-[`tools/makespan-scheduler/PROVENANCE.md`](../tools/makespan-scheduler/PROVENANCE.md)) and this
+precisely: given `tools/makespan-scheduler/` (vendored 2026-07-14, split into its own published
+repository and converted to a git submodule 2026-07-15; see
+[`tools/makespan-scheduler-PROVENANCE.md`](../tools/makespan-scheduler-PROVENANCE.md)) and this
 project's own ledger, what is actually guaranteed about a dispatch order the scheduler produces,
 and what depends on a human/agent judgment the scheduler cannot check?
 
@@ -43,7 +44,7 @@ concurrently, (b) never exceeds a declared `max_parallel` cap, and (c) is either
 (`optimal: true`) or, if a time limit was given and expired first, the best schedule found so far
 — still fully valid, just not proven minimal (`optimal: false`, never silently presented as
 optimal). This is a real, checked guarantee: 73 tests, vendored verbatim and re-run in place
-(`tools/makespan-scheduler/PROVENANCE.md`), cover exactly these properties, including adversarial
+(`tools/makespan-scheduler-PROVENANCE.md`), cover exactly these properties, including adversarial
 input shapes (duplicate ids, non-positive/non-finite durations, astronomically large values,
 `max_parallel` beyond the solver's safe domain — each rejected with a clean, attributed error
 rather than a silent wrong answer or a raw crash).
