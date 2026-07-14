@@ -116,6 +116,31 @@ add per-mechanism detail a table cell is too narrow to carry.
   motivating specimen: in a prior run of this project's
   own operator loop, a claimed work item's implementation began six seconds after it was claimed,
   ~2.5 minutes ahead of the decomposition's own countersign verdict.
+<!-- doc-attest-exempt: this pass's `clean_exit` operator-note addition (stop-clean-exit-wide-decomposition-doc)
+     was self-reviewed against ADR-0017 Rule 1's four checks, not run through the A:B:C
+     fresh-context loop -- no Agent/Task dispatch tool was available to this Sonnet builder in
+     this session to fetch a genuinely independent B. The addition is short, factual, and follows
+     the surrounding bullets' established register (a named pattern, a named tracker slug, a
+     cross-reference to the mechanism it explains); a future A:B:C pass over this file should
+     re-attest the whole document rather than trust this self-review indefinitely. -->
+- **`clean_exit`**'s circuit breaker can fire repeatedly, in the SAME session, under a
+  deliberately WIDE decomposition (many parallel open work items, sized for resumability) --
+  this is the mechanism working as designed, not breakage (ent-observatory cycle-001,
+  tracker `stop-clean-exit-wide-decomposition-doc`). A session carrying 16-17 open work items
+  can trip the 3-strike breaker (`DEBT_REPEAT_LIMIT`, `hooks/stop_clean_exit.py`) several times
+  in one sustained run: closing one item shrinks the debt set but, with that many items still
+  open, the remaining set is still non-empty and still blocks. A separate fix
+  (`stop-breaker-progress-reset-defect`, see `hooks/stop_clean_exit.py`'s own "BREAKER
+  TRANSITION" module-docstring section) makes the breaker INHERIT its count across a
+  strict-subset debt-set shrink (closing an item) instead of resetting to 1 -- so ordinary
+  progress no longer pays for two fresh blocks per closed item -- but a wide-enough
+  decomposition can still exhaust the breaker on its own terms (the open count never drops to
+  zero across three consecutive stops) and fail open with the loud
+  "CIRCUIT BREAKER FIRED" banner. Read repeated fail-opens under a wide decomposition as the
+  designed trade named in the hook's own module docstring ("never let an unclosable-debt
+  session become un-endable"), not as a broken gate -- the fix above narrows how often it
+  fires, it does not (and is not meant to) eliminate legitimate firing under a genuinely wide,
+  still-open debt set.
 - **`stamp_intercept`** treats injection and denial separately: `"observe"` still injects the
   HMAC stamp on a healthy secret (identical to `"enforce"` — injection is free and harmless), but
   the one thing it never does is DENY: an explicitly-configured-but-broken `STAMP_SECRET` passes

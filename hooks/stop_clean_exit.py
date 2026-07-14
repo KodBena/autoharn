@@ -86,10 +86,27 @@ hook's own narrower purpose). FAIL DIRECTION,
 stated plainly: this fails OPEN on unclosable debt after N=3 identical blocks -- a session that
 can make no further progress on its own ledger is allowed to end rather than being trapped by its
 own gate; the warning is the compensating control (the debt is not silently dropped, it is loudly
-handed to whoever reads the transcript next). Any CHANGE in the debt fingerprint (the agent closed
-something, even if new debt appeared) resets the counter to 1 -- the breaker only fires on
-genuinely repeated, unchanged debt, never on ordinary multi-step progress. A clean stop also
-clears the state file, so an old fingerprint never leaks into an unrelated future debt episode.
+handed to whoever reads the transcript next).
+
+BREAKER TRANSITION -- PROGRESS DOES NOT RE-ARM (ENT TESTBED FINDING 5, 2026-07-13, DEFECT fix --
+`stop-breaker-progress-reset-defect`, diagnosed from ent's own stop_clean_exit journal
+16:01-16:32): the naive rule "any change in the debt fingerprint resets the counter to 1" was
+wrong for a WIDE DECOMPOSITION -- a session carrying many parallel open work items closes one,
+the entries set shrinks, the fingerprint changes, and under the naive rule the breaker reset to
+1/3 even though the agent had just made real progress. Witnessed live: fail-open at count 4 (an
+earlier per-session limit) at 16:18, item `upstream-anchoring` closed, then blocked/blocked/
+fail-open again 16:31:30-57 -- the session paid two fresh Stop blocks per unit of progress. The
+false assumption the naive rule encoded: fingerprint-change == new-debt-deserving-fresh-scrutiny;
+in a wide decomposition it usually means an item LEFT, not one ARRIVED. THE FIX
+(`_breaker_transition()` below): a debt-set change is inspected, not just hashed. If the new
+entries set is a STRICT SUBSET of the prior entries set (every current entry was already present
+last time; at least one prior entry is now gone; nothing new was added) the breaker INHERITS the
+prior open count instead of resetting -- progress never re-arms the blocker. Any entry that was
+NOT in the prior set (a genuinely NEW debt item, or a same-size swap) still resets the counter to
+1, exactly as before -- this fix narrows the reset condition, it does not remove it. A clean stop
+still clears the state file entirely, so an old fingerprint never leaks into an unrelated future
+debt episode, and the state file now additionally retains the prior entries LIST (not just its
+hash), because the subset comparison needs the actual member set, not a one-way digest.
 
 APPARATUS.JSON SWITCHBOARD (maintainer mandate, 2026-07-10): this mechanism's mode
 (`mechanisms.clean_exit.mode`) lives at `<SUBJECT_ROOT>/.claude/apparatus.json`, read once inside
@@ -467,10 +484,78 @@ def _debt_hash(entries: list[str]) -> str:
     return hashlib.sha256("|".join(sorted(entries)).encode("utf-8")).hexdigest()
 
 
+def _safe_prior_count(st: dict) -> int:
+    """GUARDED (`stop-breaker-state-type-guard`, from the 0cd0a6f seam review, WITNESSED by
+    direct test: an unguarded `st['count'] + 1` raises an uncaught TypeError when the on-disk
+    state file holds a non-numeric count -- reachable only via external corruption/hand-edit
+    (this hook itself only ever writes an int there), but the state file is plain JSON, so a
+    truncated write or a hand-edit can leave any shape). A non-int (or a bool, which is
+    technically an int subclass in Python but not a count this hook ever wrote) degrades to 0
+    -- 'no prior count on record' -- exactly as a MISSING count already does via `st.get("count",
+    0)`, never an uncaught exception escaping into `main()` and turning a Stop event into a
+    traceback exit instead of the hook's documented exit-0/exit-2 contract."""
+    val = st.get("count", 0)
+    return val if isinstance(val, int) and not isinstance(val, bool) else 0
+
+
+def _safe_prior_entries(st: dict) -> list[str] | None:
+    """GUARDED (`stop-breaker-state-type-guard`): the STRICT-SUBSET inheritance rule
+    (`_breaker_transition()` below, `stop-breaker-progress-reset-defect`) reads `st['entries']` --
+    a field this hook itself only ever writes as a list of strings, but which an on-disk
+    corruption/hand-edit (null, an int, a bare string, a dict) can leave wrong-typed. Returns the
+    list iff it really is a list of strings; returns None -- 'no usable prior entries, behave as
+    if this is a fresh signature' -- for anything else, mirroring `_load_apparatus_quiet()`'s and
+    `_load_deployment_quiet()`'s own best-effort-degrade posture elsewhere in this file. This is
+    the sole guarded read site for the field; `_breaker_transition()` never touches
+    `st['entries']` directly."""
+    val = st.get("entries")
+    if isinstance(val, list) and all(isinstance(x, str) for x in val):
+        return val
+    return None
+
+
+def _breaker_transition(st: dict, entries: list[str], debt_hash: str) -> int:
+    """Compute the circuit breaker's count for THIS stop (module docstring, "BREAKER TRANSITION
+    -- PROGRESS DOES NOT RE-ARM", `stop-breaker-progress-reset-defect`). The naive rule was
+    "any debt-hash change resets to 1"; the fix inspects the SET, not just its hash: if the
+    current entries are a STRICT SUBSET of the prior saved entries (every current entry was
+    already open last time, at least one prior entry is now gone, and nothing new was added),
+    the prior count is INHERITED (+1) -- progress never re-arms the blocker. An identical hash
+    still inherits as before; a genuinely NEW entry (anything not in the prior set) still resets
+    to 1, exactly as the original rule did -- this fix narrows the reset condition, it does not
+    remove it. Reads `st['entries']`/`st['count']` only through the guarded accessors above
+    (`stop-breaker-state-type-guard`), so a corrupted/wrong-typed state file degrades to
+    'treat as a fresh signature' (count 1) rather than raising."""
+    if st.get("debt_hash") == debt_hash:
+        return _safe_prior_count(st) + 1
+
+    prior_entries = _safe_prior_entries(st)
+    if prior_entries is not None:
+        cur_set = set(entries)
+        prior_set = set(prior_entries)
+        if cur_set and cur_set < prior_set:  # strict subset: progress, not new debt
+            return _safe_prior_count(st) + 1
+
+    return 1
+
+
 def _load_state() -> dict:
+    """GUARDED (`stop-breaker-state-type-guard`, generalized one level up from
+    `_safe_prior_count()`/`_safe_prior_entries()`: those two guard individual FIELDS of the
+    state dict; this guards the state dict's own TOP-LEVEL SHAPE). The on-disk file is plain
+    JSON -- a hand-edit or truncated write can leave syntactically-valid JSON that is not an
+    object at all (a bare `42`, `"corrupt"`, `[1, 2, 3]`). `json.load` happily returns that
+    non-dict value, and every caller (`_breaker_transition()` first among them) calls
+    `st.get(...)` on it -- an untyped-but-annotated `dict` return that is actually a str/list/int
+    at runtime raises an uncaught AttributeError, the exact same 'traceback instead of the
+    hook's documented exit-0/exit-2 contract' failure the field-level guards exist to foreclose,
+    one layer up. Guarding it HERE, at the single load site, is the general form: every
+    caller's `st: dict` contract is honestly enforced at its one boundary, rather than every
+    caller re-checking `isinstance(st, dict)` for itself."""
     try:
         with open(STATE, encoding="utf-8") as f:
-            return json.load(f)
+            data = json.load(f)
+        return data if isinstance(data, dict) else {}
     except Exception:
         return {}
 
@@ -508,9 +593,10 @@ def _allow_with_warning(reason: str) -> int:
     banner = (
         "\n" + "!" * 78 + "\n"
         "STOP-CLEAN-EXIT CIRCUIT BREAKER FIRED -- allowing this stop DESPITE open governance debt.\n"
-        f"The identical debt set below has now blocked {DEBT_REPEAT_LIMIT} consecutive stop "
-        "attempts and is being let through as a last resort (fail-open by design -- see "
-        "hooks/stop_clean_exit.py module docstring). A HUMAN MUST REVIEW THIS WORLD'S LEDGER:\n"
+        f"This debt set (or an unclosed remainder of it -- see BREAKER TRANSITION in the module "
+        f"docstring) has now blocked {DEBT_REPEAT_LIMIT} consecutive stop attempts and is being "
+        "let through as a last resort (fail-open by design -- see hooks/stop_clean_exit.py module "
+        "docstring). A HUMAN MUST REVIEW THIS WORLD'S LEDGER:\n"
         + reason + "\n" + "!" * 78 + "\n"
     )
     print(banner, file=sys.stderr)
@@ -590,7 +676,7 @@ def main() -> int:
 
     debt_hash = _debt_hash(entries)
     st = _load_state()
-    count = (st.get("count", 0) + 1) if st.get("debt_hash") == debt_hash else 1
+    count = _breaker_transition(st, entries, debt_hash)
 
     reason = (
         "Ledger policy (clean-exit gate, hooks/stop_clean_exit.py): this world's ledger shows "
@@ -598,7 +684,8 @@ def main() -> int:
         "\"Done means ./led review-gap, question-status, and ./led work violations are all "
         "clean.\"). Close each item below, THEN try to stop again -- this gate re-checks on every "
         f"attempt, so retrying after closing the debt is the whole fix. "
-        f"(this identical debt set has now been seen {count}/{DEBT_REPEAT_LIMIT} times at stop)\n\n"
+        f"(this debt set, or an unclosed remainder of it, has now been seen "
+        f"{count}/{DEBT_REPEAT_LIMIT} times at stop)\n\n"
         + "\n".join(debt_lines)
     )
 
@@ -608,13 +695,13 @@ def main() -> int:
         return rc
 
     if count >= DEBT_REPEAT_LIMIT:
-        _save_state({"debt_hash": debt_hash, "count": count})
+        _save_state({"debt_hash": debt_hash, "count": count, "entries": entries})
         _journal({"ts": _ts(), "outcome": "breaker_fail_open", "count": count, "entries": entries})
         rc = _allow_with_warning(reason)
         _warn_stop_disposition(session_id)  # side effect only -- breaker already fired to allow
         return rc
 
-    _save_state({"debt_hash": debt_hash, "count": count})
+    _save_state({"debt_hash": debt_hash, "count": count, "entries": entries})
     _journal({"ts": _ts(), "outcome": "blocked", "count": count, "entries": entries})
     return _block(reason)  # turn is NOT ending here -- stop-disposition is not yet consulted;
                             # the successor attempt (once this debt clears) re-enters an ALLOW path

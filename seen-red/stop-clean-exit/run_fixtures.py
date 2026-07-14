@@ -61,7 +61,23 @@ db, torn down before AND after):
   11. f-stop-disposition-silent -- both-polarity case 2: the identical shape as case 9, but THIS
              session now carries a stamped disposition row -- SILENT (no warning), proving the
              check is keyed on presence/absence, not a blanket always-warn.
-  12. [teardown] drop the probe schemas/role/directory.
+  12-16. BREAKER TRANSITION sequence (`stop-breaker-progress-reset-defect` /
+             `stop-breaker-state-type-guard`, ENT TESTBED FINDING 5): open two debt items
+             (probe-item-2, probe-item-3); g-subset-progress-block-1 blocks at count 1; close
+             probe-item-2 (progress, a strict subset of the debt survives); h-subset-progress-
+             block-2 blocks at count 2 -- the fix's whole point: the breaker did NOT reset to 1
+             just because the debt set shrank. Then open probe-item-4 alongside the still-open
+             probe-item-3 (a genuinely NEW entry, not a subset); i-added-entry-resets-block blocks
+             at count 1 -- proves the fix narrows the reset condition rather than removing it.
+  17. [corrupt] hand-write a wrong-typed state file (entries=null, count="two") -- the exact
+             on-disk corruption/hand-edit shape `stop-breaker-state-type-guard` defends against.
+  18. j-corrupted-state-degrades-safely -- call against the unchanged {probe-item-3, probe-item-4}
+             debt with the corrupted state file in place: MUST still block cleanly (exit 2, no
+             traceback), proving the guarded accessors degrade the corruption to "treat as a
+             fresh signature" instead of raising an uncaught TypeError out of `_breaker_transition`.
+  19. [cleanup] close probe-item-3/probe-item-4; verify a final clean allow and a cleared state
+             file -- a bonus sanity check, same shape as step 8.
+  20. [teardown] drop the probe schemas/role/directory.
 
 Usage: python3 seen-red/stop-clean-exit/run_fixtures.py
 Exit 0 if every case matches (including the unasserted/bonus inline checks); 1 otherwise.
@@ -287,6 +303,99 @@ def main() -> int:
         # 11. STOP-DISPOSITION WARNING, polarity 2: the identical shape as case 9, but THIS
         # session now carries a stamped disposition row -- SILENT (exit 0, no warning).
         run_named_case("f-stop-disposition-silent", failures)
+
+        # 12-16. BREAKER TRANSITION sequence (`stop-breaker-progress-reset-defect` /
+        # `stop-breaker-state-type-guard`) -- both-polarity proof that a debt-set change which is
+        # a strict SUBSET of the prior entries INHERITS the open breaker count instead of
+        # resetting (progress does not re-arm), that a genuinely NEW entry still resets as before,
+        # and that a corrupted/wrong-typed on-disk state file degrades safely (no traceback)
+        # rather than raising. Reuses the SAME probe world / SEENRED_SESSION as cases b-f above,
+        # continuing where they left off (state file was cleared by the post-cleanup bonus check
+        # in step 8, so this sequence starts from a clean breaker state of its own).
+        print("-- BREAKER TRANSITION: opening two debt items (probe-item-2, probe-item-3) --")
+        r = led("work", "open", "probe-item-2", "breaker-transition fixture item 2")
+        print(r.stdout.strip(), r.stderr.strip())
+        r = led("work", "open", "probe-item-3", "breaker-transition fixture item 3")
+        print(r.stdout.strip(), r.stderr.strip())
+        if r.returncode != 0:
+            failures.append("breaker_transition_debt_setup")
+
+        # 12. g: call #1 against {probe-item-2, probe-item-3} -- BLOCK, count -> 1 (fresh signature).
+        run_named_case("g-subset-progress-block-1", failures)
+
+        # 13. [progress] close probe-item-2 -- the remaining debt {probe-item-3} is a STRICT
+        # SUBSET of {probe-item-2, probe-item-3}: nothing was added, one item left.
+        print("-- BREAKER TRANSITION: closing probe-item-2 (progress, not new debt) --")
+        led("work", "claim", "probe-item-2")
+        r = led("work", "close", "probe-item-2", "dropped", actor="reviewer")
+        print(r.stdout.strip(), r.stderr.strip())
+        if r.returncode != 0:
+            failures.append("breaker_transition_progress_close")
+
+        # 14. h: call #2 against the now-smaller {probe-item-3} debt -- MUST still BLOCK, and the
+        # count MUST be 2 (INHERITED), never reset to 1 -- this is the defect fix's whole point.
+        run_named_case("h-subset-progress-block-2", failures)
+
+        # 15. [new debt] open probe-item-4 alongside the still-open probe-item-3 -- the resulting
+        # set {probe-item-3, probe-item-4} is NOT a subset of the prior {probe-item-3} (something
+        # was ADDED), so the breaker MUST reset to 1 -- proves the fix narrows the reset condition,
+        # it does not remove it.
+        print("-- BREAKER TRANSITION: opening probe-item-4 (genuinely NEW debt) --")
+        r = led("work", "open", "probe-item-4", "breaker-transition fixture item 4 (new debt)")
+        print(r.stdout.strip(), r.stderr.strip())
+        if r.returncode != 0:
+            failures.append("breaker_transition_new_debt_setup")
+
+        # 16. i: call #3 against {probe-item-3, probe-item-4} -- BLOCK, count resets to 1.
+        run_named_case("i-added-entry-resets-block", failures)
+
+        # 17. [corrupt] hand-write a wrong-typed state file (`stop-breaker-state-type-guard`):
+        # entries=null, count="two" -- exactly the corruption/hand-edit shape the guard defends
+        # against (this hook itself only ever writes a list/int there). The debt is UNCHANGED
+        # ({probe-item-3, probe-item-4}) so this proves the corrupted PRIOR state degrades to
+        # "treat as absent" rather than raising an uncaught TypeError out of `_breaker_transition`.
+        print("-- BREAKER TRANSITION: corrupting the on-disk state file (wrong-typed fields) --")
+        state_path = PROBE_DIR / ".claude" / "stop_clean_exit_state.json"
+        state_path.write_text(json.dumps({"debt_hash": "corrupt-marker", "count": "two", "entries": None}),
+                               encoding="utf-8")
+        print(f"  wrote corrupted state to {state_path}")
+
+        # 18. j: call #4 against the SAME {probe-item-3, probe-item-4} debt, with the corrupted
+        # state file in place -- MUST still BLOCK cleanly (exit 2, no traceback), count resets to 1
+        # (the corrupted debt_hash/entries cannot match, so this degrades to a fresh signature).
+        run_named_case("j-corrupted-state-degrades-safely", failures)
+
+        # 18.5. [unasserted, inline] a SECOND, more severe corruption shape: the state file's
+        # TOP LEVEL is not even a dict (a bare JSON int) -- found in passing while running this
+        # skill's hack-rationalization pass (`_load_state()`'s own guard was one layer too
+        # shallow: it caught malformed JSON but not syntactically-valid JSON of the wrong
+        # top-level type). Proves `_load_state()`'s own isinstance(dict) guard, not just the
+        # two field-level accessors, degrades safely.
+        print("=== (unasserted) top-level-non-dict state file degrades safely ===")
+        state_path.write_text("42", encoding="utf-8")
+        r5 = run_hook(HERE / "j-corrupted-state-degrades-safely")
+        ok5 = (r5.returncode == 2 and "Traceback" not in (r5.stdout + r5.stderr)
+               and "seen 1/3 times" in (r5.stdout + r5.stderr))
+        print(f"  [{'ok' if ok5 else 'FAIL'}] exit={r5.returncode}, no traceback, seen 1/3 times")
+        print()
+        if not ok5:
+            failures.append("top-level-non-dict-state-degrades")
+
+        # 19. [cleanup] close the remaining breaker-transition debt items; verify a final clean
+        # allow and that the state file is cleared (same bonus-sanity shape as step 8).
+        print("-- BREAKER TRANSITION: cleanup -- closing probe-item-3, probe-item-4 --")
+        led("work", "claim", "probe-item-3")
+        led("work", "close", "probe-item-3", "dropped", actor="reviewer")
+        led("work", "claim", "probe-item-4")
+        led("work", "close", "probe-item-4", "dropped", actor="reviewer")
+        case = HERE / "b-clean-world"
+        r4 = run_hook(case)
+        ok4 = r4.returncode == 0 and not r4.stdout.strip() and not r4.stderr.strip() and not state_path.exists()
+        print("=== (bonus) breaker-transition cleanup: clean allow + state file cleared ===")
+        print(f"  [{'ok' if ok4 else 'FAIL'}] exit={r4.returncode}, no output, state file absent")
+        print()
+        if not ok4:
+            failures.append("breaker-transition-post-cleanup")
     finally:
         print("-- teardown (post) --")
         teardown_probe()
@@ -294,7 +403,7 @@ def main() -> int:
     if failures:
         print(f"run_fixtures: {len(failures)} FAILURE(S): {', '.join(failures)}")
         return 1
-    print("run_fixtures: all cases passed (6 named + 2 inline sanity checks).")
+    print("run_fixtures: all cases passed (10 named + 4 inline sanity checks -- 6 original + 4 breaker-transition named cases, 2 original + 2 breaker-transition inline/bonus checks).")
     return 0
 
 

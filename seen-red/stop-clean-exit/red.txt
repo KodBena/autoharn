@@ -72,3 +72,55 @@ INSERT): exit 0, stdout AND stderr both empty -- silent, exactly like the pre-ex
 check were re-verified unaffected by this addition (a stamped baseline `stopping:` row is seeded
 for their shared `seenred` session in step 2.5, so they test debt collection in isolation from
 the new, orthogonal disposition check).
+
+
+---
+
+BREAKER TRANSITION (2026-07-14, `stop-breaker-progress-reset-defect` / `stop-breaker-state-type-guard`):
+diagnosed from ent's own stop_clean_exit journal, 16:01-16:32 -- a wide decomposition (many
+parallel open work items) paid two fresh Stop blocks per unit of progress, because closing ONE
+item changed the debt fingerprint and the naive rule ("any fingerprint change resets the breaker
+to 1") reset the count even though the remaining debt was strictly smaller than before.
+
+RED, BEFORE this pass (real output, 2026-07-14, git rev fbda75e -- pre-patch `hooks/stop_clean_exit.py`,
+via `git stash`, run against a throwaway probe world with two open work items):
+
+  # open probe-item-2b + probe-item-3, both unclaimed -> call #1
+  exit: 2, "...has now been seen 1/3 times at stop)..."
+  # close probe-item-2b (progress -- probe-item-3 alone is a STRICT SUBSET of the prior debt) -> call #2
+  exit: 2, "...has now been seen 1/3 times at stop)..."   <- RESET, not inherited (the bug)
+
+A second RED, the same session (a hand-corrupted state file, `count: "two"`, matching debt_hash):
+
+  Traceback (most recent call last):
+    File ".../hooks/stop_clean_exit.py", line 624, in <module>
+      sys.exit(main())
+    File ".../hooks/stop_clean_exit.py", line 593, in main
+      count = (st.get("count", 0) + 1) if st.get("debt_hash") == debt_hash else 1
+  TypeError: can only concatenate str (not "int") to str
+  exit: 1
+
+A third RED, found IN PASSING while running this pass's own hack-rationalization audit (same
+defect class, one container-level up -- the state file's TOP LEVEL, not just a field, wrong-typed):
+a state file containing the bare JSON value `42` (syntactically valid, not an object) made
+`_load_state()` return a non-dict, and the un-guarded `st.get(...)` call inside what would become
+`_breaker_transition()` raised an uncaught `AttributeError` the same way. Fixed in the same pass
+(`_load_state()` now validates `isinstance(data, dict)`), not filed separately, per the
+hazard-in-reach-of-the-work duty.
+
+GREEN / both-polarity, POST-patch (real output, 2026-07-14, same probe-world pattern, setup +
+teardown included, torn down zero-residue both before and after):
+
+  python3 seen-red/stop-clean-exit/run_fixtures.py
+
+WITNESSED 2026-07-14: `run_fixtures: all cases passed (10 named + 4 inline sanity checks -- 6
+original + 4 breaker-transition named cases, 2 original + 2 breaker-transition inline/bonus
+checks).` New named cases: `g-subset-progress-block-1` (two items open, blocks at 1/3),
+`h-subset-progress-block-2` (one item closed -- a strict subset survives -- blocks at 2/3,
+INHERITED, not reset: the fix's whole point), `i-added-entry-resets-block` (a genuinely NEW item
+opened alongside the survivor -- NOT a subset -- resets to 1/3, proving the fix narrows the reset
+condition rather than removing it), `j-corrupted-state-degrades-safely` (the same debt, a
+hand-corrupted `entries: null, count: "two"` state file in place -- still blocks cleanly, exit 2,
+no traceback). Two inline/bonus checks: a top-level-non-dict state file (`42`) also degrades
+safely (exit 2, no traceback, count resets to 1 as a fresh signature), and a final cleanup
+verifies a clean allow with the state file cleared.
