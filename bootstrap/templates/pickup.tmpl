@@ -138,6 +138,29 @@ Sections emitted, each under a machine-parseable `### SECTION: <NAME>` header (g
                         maintainer's standing invariant, restated in this section's own printed
                         header exactly as the recipe doc's estimate-vs-actual section states it).
 
+CONNECTIVITY (tracker item `pickup-connection-failure-silent-empty`, 2026-07-13): before any
+section below is queried, `check_connectivity()` runs ONE explicit `SELECT 1;` probe under
+`SET ROLE <dep.role>` -- the same conflation `bootstrap/templates/verify-chain.tmpl`'s
+`has_row_hash_layer()`/`has_high_water_layer()` already closed (tracker item
+`verify-chain-error-conflation`, 2026-07-13), one verb over: without this probe, every section
+function below independently prints its own "ERROR: <psql stderr>" line on a connection failure
+(unreachable host, refused connection, wrong credentials, an ungranted `role`) yet `main()`
+unconditionally `return`ed 0 regardless -- a fresh session hydrating via the resumption doctrine
+(CLAUDE.md) would see exit 0 and empty PROCESS stderr (the ERROR text lands on stdout, mixed in
+with each section's own honest "(no rows)"/"(no X on record)" empty-result convention), a
+hydration brief indistinguishable, at the process-exit-code level a caller actually checks, from
+"the tracker is genuinely empty" when the truth is "pickup could not look at it at all". The fix:
+`check_connectivity()` fires ONCE, up front; on failure `main()` prints a typed CANNOT-HYDRATE
+banner (to stderr, loud, per ADR-0002) naming the psql stderr verbatim and refuses to print ANY
+section (never ten stale-looking "ERROR:" lines masquerading as a brief), exiting 3 -- a code
+distinct from `_load_deployment()`'s existing 2 (a malformed/absent deployment.json, a
+config-level defect diagnosed BEFORE any network attempt) and from every section's own exit-0
+"ran fine, found nothing" convention. A GENUINE per-section absence (a pre-s22 kernel's
+`work_item_current` not existing yet, an ungranted `review_gap` under pre-s20 grants) is
+UNCHANGED by this fix -- those fire only AFTER `check_connectivity()` already proved the
+connection itself is good, so they remain honest section-level answers, never conflated with
+CANNOT-HYDRATE.
+
 Deployment resolution: reads `deployment.json` next to this script (override with
 `PICKUP_DEPLOYMENT=/path/to/deployment.json`), via autoharn's `filing/deployment_record.py` (the
 ONE home for that JSON shape — this script derives from it rather than growing a second parser).
@@ -186,6 +209,36 @@ def _load_deployment():
     except deployment_record.DeploymentError as e:
         print(f"pickup: {e}", file=sys.stderr)
         sys.exit(2)
+
+
+def check_connectivity(dep) -> tuple[bool, str]:
+    """An EXPLICIT capability probe -- 'can we even connect and SET ROLE dep.role at all' -- run
+    ONCE, before any section is queried, mirroring bootstrap/templates/verify-chain.tmpl's
+    has_row_hash_layer()/has_high_water_layer() (present, err) pattern (tracker item
+    `verify-chain-error-conflation`, 2026-07-13) applied one verb over (tracker item
+    `pickup-connection-failure-silent-empty`, 2026-07-13, see module docstring's CONNECTIVITY
+    section): a query that FAILS TO EXECUTE (connection refused, host unreachable, auth failed,
+    SET ROLE refused because the role is missing or not granted, or a connection that never
+    completes within a bounded wait) is a DIFFERENT world-state from a query that ran and gave a
+    real SQL answer -- every section function below presumes THIS probe already succeeded, so a
+    genuine per-section "does not exist" (a pre-s22 kernel, an ungranted view) is never confused
+    with "could not even ask".
+
+    Returns (ok, err): ok is True only when `SELECT 1;` actually ran under `SET ROLE dep.role`
+    and returned success; err carries psql's own stderr (or a bounded-wait timeout's own message)
+    verbatim when ok is False, never fabricated, never summarized away."""
+    full = f"SET ROLE {dep.role};\nSELECT 1;"
+    try:
+        r = subprocess.run(
+            ["psql", "-h", dep.host, "-d", dep.db, "-v", "ON_ERROR_STOP=1", "-c", full],
+            capture_output=True, text=True, timeout=15)
+    except subprocess.TimeoutExpired:
+        return False, (f"psql did not complete within 15s connecting to host={dep.host!r} "
+                        f"db={dep.db!r} -- treated as a connection-level failure, never as a "
+                        f"bounded schema answer")
+    if r.returncode != 0:
+        return False, r.stderr.strip()
+    return True, ""
 
 
 def _psql(dep, sql: str) -> subprocess.CompletedProcess:
@@ -1018,6 +1071,20 @@ def main(argv: list[str] | None = None) -> int:
     args = ap.parse_args(argv)
 
     dep = _load_deployment()
+    ok, err = check_connectivity(dep)
+    if not ok:
+        # Tracker item `pickup-connection-failure-silent-empty`, 2026-07-13 (see module docstring
+        # CONNECTIVITY section): refuse the WHOLE hydration brief rather than let every section
+        # below independently print its own "ERROR:" line while main() still exits 0 -- a brief
+        # built on a connection that never succeeded is worse than no brief, because it reads as
+        # ten stale empty sections rather than the one loud, typed refusal this is.
+        print(f"pickup: CANNOT-HYDRATE -- could not connect to host={dep.host!r} db={dep.db!r} "
+              f"schema={dep.schema!r} as role={dep.role!r}: {err}", file=sys.stderr)
+        print("pickup: refusing to print a hydration brief -- every section below reads from "
+              "this same connection, so a brief assembled after a failed connectivity probe "
+              "would be indistinguishable from an honest EMPTY tracker; nothing is printed "
+              "instead of everything being printed wrong.", file=sys.stderr)
+        return 3
     in_force_decisions(dep, args.limit)
     open_questions(dep)
     review_debt(dep)
