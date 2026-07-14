@@ -256,7 +256,9 @@ This rule is not new discipline so much as the *generalization* of machinery the
 corpus already runs: ADR-0002's fail-loud hierarchy exists so the artifact's own
 behavior surfaces a deviation; ADR-0012 P8's `mypy --strict` gate is an
 artifact-verifier (it reads the code, not the claim that the code is typed);
-ADR-0009 / P6's equivalence and parity tests verify the artifact's *numbers*
+ADR-0009 /
+[P6 (substantiate equivalence/perf claims)](0012-compositional-and-structural-hygiene.md#p6--substantiate-equivalenceperf-claims-composes-with-adr-0009)'s
+equivalence and parity tests verify the artifact's *numbers*
 against a measured baseline rather than trusting an "equivalent" claim. The
 mechanical instruction is therefore concrete and binding: **run the test suite
 when the change affects it** (testing discipline; not a blanket sweep —

@@ -298,7 +298,8 @@ filed, not silently left.**
 What is **never** an exception: the in-the-moment sense that a downstream guard is
 "good enough" because finding the foreclosing type is "more work than it's worth." That
 sense is the patch-reflex this ADR exists to overrule, and it is the same
-scale/minimality/"for now" tell ADR-0012 P7/P8/P9 and ADR-0013 Rule 3 already name and
+scale/minimality/"for now" tell ADR-0012
+[P7 (cross-language wire discipline)](0012-compositional-and-structural-hygiene.md#p7--cross-language-wire-discipline-the-new-material)/P8/P9 and ADR-0013 Rule 3 already name and
 reject.
 
 ## Revisit when…

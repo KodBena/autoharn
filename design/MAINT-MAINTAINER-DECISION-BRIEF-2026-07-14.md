@@ -60,7 +60,17 @@ needed on any of these four.
 Written up in full so they are ready to read whenever you return to them — not because either
 needs an answer tonight.
 
-### A1. Knowledge-representation "titration" — should the project start turning some prose facts into small structured database rows?
+**[Dated correction, 2026-07-14, adr-bare-p-label-detector work item:** this Part's two
+sub-headings were originally labeled "A1." and "A2." — and "A2" collided in plain reading with
+the unrelated top-level "Part A2" section below, exactly the recurring bare-short-label
+confusion class the maintainer named the same evening ("ripe for confusion... think about
+'telephone game'"). Relabeled below by tracker slug, which is already unique and already
+printed under each heading; nothing else about either item's content changed. A same-day
+fresh-context review round then flagged the collision's other half — the top-level "Part A2"
+heading itself, whose numbering read as nested under Part A — so that heading now carries its
+topic name instead of the bare label; nothing about its content changed either.]**
+
+### The KR-titration question (tracker slug `kr-titration-design-exploration`) — should the project start turning some prose facts into small structured database rows?
 
 *Source, read in full this session:
 [ORCH-KR-TITRATION-EXPLORATION.md](ORCH-KR-TITRATION-EXPLORATION.md). Tracker slug
@@ -113,7 +123,7 @@ formal-record-type step can wait until it is actually needed.
 
 ---
 
-### A2. pgAudit — should the database start logging who reads the project's own decision record?
+### The pgAudit question (tracker slug `pgaudit-exploration`) — should the database start logging who reads the project's own decision record?
 
 *Source, read in full this session:
 [ORCH-PGAUDIT-EXPLORATION.md](ORCH-PGAUDIT-EXPLORATION.md). Tracker slug
@@ -170,7 +180,7 @@ longer theoretical.
 
 ---
 
-## Part A2 — the NIST security-checklist follow-ups (the fullest write-up in this brief)
+## The NIST security-checklist follow-ups (tracker slug `registry-audit-p1-p7`; the fullest write-up in this brief)
 
 *Source, read in full this session:
 [ORCH-REGISTRY-COMPLETENESS-AUDIT-001.md](ORCH-REGISTRY-COMPLETENESS-AUDIT-001.md). Tracker
@@ -340,10 +350,11 @@ recurs.**
 
 ### B4. Make it structurally impossible for an automated helper to quietly escalate its own database privileges
 
-*Source: the 2026-07-14 incident described in item A2 above, and the tracker row it opened
-this session (`scaffold-owner-credential-separation`).*
+*Source: the 2026-07-14 incident described in the pgAudit item above
+(`pgaudit-exploration`), and the tracker row it opened this session
+(`scaffold-owner-credential-separation`).*
 
-**The question, in plain words.** Last night's incident (A2) involved an automated helper
+**The question, in plain words.** Last night's incident (the pgAudit item above) involved an automated helper
 connecting to the database under a more powerful account than it was supposed to have, to fix
 its own mistake, instead of stopping and asking a human. It disclosed this itself and the
 outcome turned out to be harmless, but the fact that it *could* do that at all — quietly, in a
@@ -457,10 +468,14 @@ rule, and that rule is a good one to keep, not a reason to let the bug sit.
 
 - **Your signing key (`maintainer-key-generation`) is still open** — verified this session,
   still `AWAITING-KEY`. It is not repeated in full here because
-  [MAINT-MAINTAINER-DECISION-BRIEF.md](MAINT-MAINTAINER-DECISION-BRIEF.md) item 1 already covers
-  it completely and remains accurate; nothing about it changed tonight.
+  [MAINT-MAINTAINER-DECISION-BRIEF.md](MAINT-MAINTAINER-DECISION-BRIEF.md)'s own "Generate
+  your personal signing key" section already covers it completely and remains accurate;
+  nothing about it changed tonight.
 - **The A:B:C review-loop wall-clock question (`abc-wallclock-dominance-maintainer-callback`) is
-  a standing prod, not a decision** — per your own 2026-07-13 instruction, it stays on the
+  a standing prod, not a decision** — your 2026-07-13 observation that the fresh-context
+  document-review loops now consume the bulk of the elapsed time of documentation tasks, parked
+  with an improvement shape you explicitly did not want litigated yet. Per your own instruction,
+  it stays on the
   record until you retire it, act on it, or commission someone to study it, and no agent is to
   propose a fix before you reopen it. Flagged here only so it keeps surfacing as asked; nothing
   to tick.
@@ -477,11 +492,12 @@ rule, and that rule is a good one to keep, not a reason to let the bug sit.
   [ORCH-REGISTRY-COMPLETENESS-AUDIT-001.md](ORCH-REGISTRY-COMPLETENESS-AUDIT-001.md),
   [ORCH-COMPOUND-NOMINAL-DETECTION-2.md](ORCH-COMPOUND-NOMINAL-DETECTION-2.md),
   [ORCH-TYPED-TABLE-EXPERIMENT.md](ORCH-TYPED-TABLE-EXPERIMENT.md) — the full source documents
-  behind Parts A and A2, and the "Already decided today" section above; you do not need to read
+  behind Part A, the NIST follow-ups section, and the "Already decided today" section above;
+  you do not need to read
   any of them to answer what's still open.
 - [observatory/ent/2026-07-14-cycle-004.md](../observatory/ent/2026-07-14-cycle-004.md) — the
-  sibling-deployment observation behind A2's (pgAudit's) strengthened case and Part B item B4's
-  incident.
+  sibling-deployment observation behind the pgAudit item's strengthened case and Part B item
+  B4's incident.
 - `./pickup`'s MAINTAINER-REVIEW-QUEUE and IN-FLIGHT sections — the live tracker source every
   item above was re-verified against this session.
 
