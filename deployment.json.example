@@ -1,0 +1,8 @@
+{
+  "db": "your-database-name",
+  "host": "<your-db-host>",
+  "kern": "your_project_kernel",
+  "name": "your-project",
+  "role": "your_project_rw",
+  "schema": "your_project"
+}

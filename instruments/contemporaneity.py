@@ -1,4 +1,10 @@
 #!/usr/bin/env python3
+# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
+#   first-seen : 2026-07-14T22:13:03Z
+#   last-change: 2026-07-14T22:13:03Z
+#   contributors: a857c93d/main
+# <<< PROVENANCE-STAMP <<<
+
 """Contemporaneity gap-detector — a retrospective audit instrument (and the seed of a
 deployable Claude-Code hook) for the epistemic-pilot series.
 
@@ -44,8 +50,9 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 
 from ledger_target import resolve
+from pghost_resolve import resolve_pghost
 
-PGHOST = "192.168.122.1"
+PGHOST = resolve_pghost("EPISTEMIC_PGHOST")
 _DB = "epistemic"  # set per-session in load_rows via the SSOT (nla lives in its own db)
 AUDIT_LOG = "/home/bork/w/vdc/1/epistemic-audit/logs/all.audit.jsonl"
 GAP_S = 60.0  # inserts more than this many seconds apart start a new temporal burst
