@@ -29,14 +29,33 @@ UNWIRED invocation of this exact hook):
   -- no journal file written anywhere; the dispatch above is now indistinguishable, after the
      fact, from a session that never delegated at all.
 
-GREEN / full five-named-case + one-bonus-cross-check run (no-open-item warns AND journals,
-open-claimed is silent but STILL journals, a pre-s22 world journals but has nothing to warn
-against, mode="off" is genuinely zero-cost [no journal line at all], mode="enforce" downgrades
-loudly to "observe" rather than either silently no-op'ing or pretending an unsanctioned deny
-surface exists, and a bonus end-to-end journal wire-format cross-check confirms every journaled
-line's session id and prompt sha256/excerpt are exactly right, in order -- all asserted
-programmatically, live, against two real throwaway scratch schemas, setup+teardown included):
+GREEN / full five-named-case + one-bonus-cross-check + three-return-leg-case run (no-open-item
+warns AND journals, open-claimed is silent but STILL journals, a pre-s22 world journals but has
+nothing to warn against, mode="off" is genuinely zero-cost [no journal line at all], mode="enforce"
+downgrades loudly to "observe" rather than either silently no-op'ing or pretending an unsanctioned
+deny surface exists, a bonus end-to-end journal wire-format cross-check confirms every journaled
+line's session id and prompt sha256/excerpt are exactly right in order, and the return leg
+(REBUILT 2026-07-14, ledger row 582 / design/ORCH-RCA-PAIRING-KEY-DIVERGENCE.md sec-3/sec-6.6)
+journals `tool_use_id`+`duration_ms` verbatim from the payload with no derived pairing verdict,
+degrades honestly when the payload carries no `tool_use_id`, and correctly individuates two
+concurrent dispatches sharing byte-identical prompt text -- all asserted programmatically, live,
+against two real throwaway scratch schemas, setup+teardown included):
 
   python3 seen-red/delegation-observer/run_fixtures.py
 
-WITNESSED 2026-07-11: `run_fixtures: all 5 named cases + 1 bonus cross-check passed.`
+WITNESSED 2026-07-14 (post-rebuild): `run_fixtures: all 5 dispatch-leg cases + 1 bonus
+cross-check + 3 return-leg cases (tool_use_id-keyed, no-identity fallback,
+concurrent-identical-prompt disambiguation) passed.`
+
+HARNESS-CONTRACT FACT, CHECKABLE NOT PROSE (M3-shaped fixture, same ledger row): a real captured
+PreToolUse+PostToolUse payload pair for the `Agent` tool, `seen-red/delegation-observer/
+agent_payload_capture/`, asserts `tool_use_id` is present and byte-identical across both legs of
+one Task/Agent dispatch (settling design/ORCH-RCA-PAIRING-KEY-DIVERGENCE.md's own §7 item 2
+residual, UNWITNESSED there for this specific leg) and that PostToolUse carries `duration_ms`
+directly:
+
+  python3 seen-red/delegation-observer/agent_payload_capture/check_contract.py
+
+WITNESSED 2026-07-14: `check_contract: OK -- tool_use_id='toolu_01PBsXs5ak3CmLhctEryx1Rs' present
+and byte-identical across PreToolUse and PostToolUse for Agent/Task; duration_ms=6184 present on
+PostToolUse.`
