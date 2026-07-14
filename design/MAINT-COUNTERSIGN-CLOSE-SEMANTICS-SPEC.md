@@ -113,13 +113,30 @@ Semantics, per the maintainer's conjunction refinement:
   same pattern as the existing `work_shipped_requires_witness` CHECK (which was
   witnessed refusing a witness-less close on 2026-07-14 — the pattern demonstrably
   works at this locus).
-- **Independence is stated at its honest grade.** The schema can witness that two
-  principal ids differ; it cannot witness that two ids are independent minds (the
-  reviewer2 shape). The view therefore exposes, per resolved review leaf, the acting and
-  obliged principals and their session ids, so a cosignature-spectre pattern is VISIBLE
-  to any auditor and to the retrospective recipe — the system makes the theater
-  legible; adjudicating it remains a human act. This limit is stated in the view's own
-  comment and in the teach-text, not discovered later.
+- **Independence is a typed grade, computed and carried at write time.** (Sharpened
+  2026-07-14 afternoon, under the maintainer's reviewer2 mandate; supersedes the weaker
+  join-at-read formulation this draft first carried.) The lazy path — "we track
+  session ids, so an auditor can just join later" — was duly interrogated and rejected
+  on the same ground as the pairing RCA: a read-time join reconstructs what the writing
+  act holds in its hands. Every review-discharge act therefore computes, from
+  harness-observable identities only, an INDEPENDENCE GRADE stored on the discharge row
+  as a closed vocabulary:
+
+    `same-principal` | `same-session` | `distinct-session` | `distinct-deployment`
+
+  The grade claims exactly what the action stream can witness (id and session
+  relationships) and nothing it cannot (whether two ids are independent minds — that
+  honest ceiling is stated in the teach-text). Consequences: (1) the resolution view
+  exposes the grade per leaf, so a cosignature-spectre pattern is a queryable fact, not
+  a forensic reconstruction; (2) strict mode may declare a minimum acceptable grade for
+  review leaves (e.g. `distinct-session`), making reviewer2-style discharge a typed
+  refusal rather than a loophole — the floor is a deployment's declared posture,
+  DEFAULT UNSET pending the maintainer's adjudication of the ent precedent; (3) a
+  discharge that cannot compute its grade (identity absent from the payload) records
+  `same-principal` — the least-independent assumption — rather than an optimistic
+  default, mirroring fail-safe polarity everywhere else in this corpus. Adjudicating
+  whether any grade suffices for a given obligation remains a human act; the type makes
+  the question answerable, not answered.
 
 Non-strict deployments retain Element B's deferral constructor; the guarantee is a
 declared posture, not a universal mandate — a deployment that opts in owns the
