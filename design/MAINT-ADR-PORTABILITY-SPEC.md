@@ -26,6 +26,18 @@ every maintainer ruling and work item is a numbered row.*
   the ADR corpus via its CLAUDE.md live pointer, so `law/` stays stable on the branch ent
   sees while the refactoring is built; merge to `next` only when ratified and good to go.
   The orchestrator creates the branch at dispatch time.
+- **Status update — WP-13 corpus-close (2026-07-14, Sonnet builder, isolated worktree,
+  dated append per ADR-0005 Rule 8 — the "AWAITING FINAL RATIFICATION" line above is left
+  standing as the honest record of where Phase 1b's text stood when written, not
+  retro-edited):** the Status line above is now historical. The maintainer's final
+  ratification (ledger row 511, `review-done: adr-portability-final-ratification`) gave
+  all three words this document was waiting on — §7a's demote-to-named-tradeoff ACCEPTED,
+  ADR-0001 RETIRE, and overall ratification YES — and Phase 2's fourteen work packages
+  (WP-0 through WP-13) have since executed and merged into the `adr-portability` branch;
+  this WP-13 pass is that table's own final row, "Corpus-wide close." The dated corrections
+  below (§2's C4→C3 and C3→C2 relabelings, §5 A3's 5→6 appended-row count, and §9's
+  ADR-0001 closure) are this pass's own findings, applied in place per this same
+  Rule-8-style convention.
 - **Tracker item:** `adr-portability-refactor` (work_opened row 357; commission amendment
   row 361).
 - **Author:** Fable spec author, 2026-07-13, isolated worktree. No file under `law/` is
@@ -144,22 +156,29 @@ corpus-wide instead of paying it per-ADR per-deployment forever.
 
 | ADR | Lines | Project-bound refs | Treatment | Moves → history / stays inline | Δ lines |
 |---|---|---|---|---|---|
-| 0000 type-driven design | 566 | c2 t5 f2 · p2 i0 | examples-extract, condense | Moves: Specimens 1–4 + contrast specimen (0000:80–156, ~77 lines, chocofarm/throughput-lab artifacts: `BoundedBatch`, `CellLedger`, the OOM queue). Stays: Rules 1–3 verbatim in force; the closure-statement amendment (0000:441–495, normative); Revisit #3 amendment + ratification proviso (0000:497–523, dated record, preserved verbatim); the 2026-07-12 "Revisit #4" section (0000:525–562, dated codified record, preserved verbatim — its Clause 1, standards-scope disclaimers, is already stated generically and portable as written; its Clause 2 binds the per-deployment registry, with `law/STANDARDS-REGISTRY.md` as this deployment's instance and an adopter substituting its own — the same core/bindings split ADR-0017 models); one summary sentence per specimen (the four types + the doubled-patch lesson) inline, since Rule 2(a) cites "the four specimens" as its worked form. | ~370 |
-| 0001 immutability/COW | 189 | c4 L4 · p8 i2 | retire-candidate | The whole document is a chocofarm-specific *Decision* (its own Genre field, 0001:4–7): three named numpy/JAX seams that exist in no other deployment. No rule here transfers that 0012 P1/P2/P4 and 0002 do not already own generically. Proposed disposition: relocate verbatim to history as a lineage record; the corpus keeps a one-paragraph tombstone (see §6 on the number). **Routes to the maintainer as its own question (§9).** | ~25 tombstone |
+| 0000 type-driven design | 566 | c2 t5 f2 · p2 i0 | examples-extract, condense | Moves: Specimens 1–4 + contrast specimen (0000:80–156, ~77 lines, chocofarm/throughput-lab artifacts: `BoundedBatch`, `CellLedger`, the OOM queue). Stays: Rules 1–3 verbatim in force; the closure-statement amendment (a per-rule certification
+block requiring the invariant, the quantification universe, and the denomination check before
+a defect-class is claimed foreclosed, 0000:441–495, normative); Revisit #3 amendment + ratification proviso (0000:497–523, dated record, preserved verbatim); the 2026-07-12 "Revisit #4" section (0000:525–562, dated codified record, preserved verbatim — its Clause 1, standards-scope disclaimers, is already stated generically and portable as written; its Clause 2 binds the per-deployment registry, with `law/STANDARDS-REGISTRY.md` as this deployment's instance and an adopter substituting its own — the same core/bindings split ADR-0017 models); one summary sentence per specimen (the four types + the doubled-patch lesson) inline, since Rule 2(a) cites "the four specimens" as its worked form. | ~370 |
+| 0001 immutability/COW | 189 | c4 L4 · p8 i2 | retire-candidate | The whole document is a chocofarm-specific *Decision* (its own Genre field, 0001:4–7): three named numpy/JAX seams that exist in no other deployment. No rule here transfers that 0012 P1/P2/P4 and 0002 do not already own generically. Proposed disposition: relocate verbatim to history as a lineage record; the corpus keeps a one-paragraph tombstone (see §6 on the number). **Routes to the maintainer as its own question (§9).** **[Closed 2026-07-14: ratified RETIRE, ledger row 511; executed by WP-1, ledger row 527 — see §9's dated append.]** | ~25 tombstone |
 | 0002 fail loudly | 270 | c3 L1 · p14 i0 | generalize-in-place, examples-extract | Moves: the chocofarm decision list (0002:34–72) and instance-bound Exceptions details (0002:198–223). Stays: the loudness hierarchy (0002:85–108) untouched; concrete rules 1–6 with rule 6's frozen-literal lesson kept as a two-sentence inline summary; the "loud enough" test; Exceptions as generic classes (bit-identical fallback, idempotence, bounded shim) with instances pointed. | ~180 |
 | 0003 domain-coupling bands | 261 | c7 L3 F23 · p8 i1 | examples-extract, generalize-in-place | Moves: the entire chocofarm band map (0003:89–185, Bands 1–3 + the two porting inventories — F23 makes this the most instance-bound body in the corpus). Stays: the two-question principle verbatim (0003:58–70) and a template instruction: *a deployment derives its own band map on adoption*. The no-premature-extraction rule with the Sandi Metz argument (0003:75–87 — verified in Phase 1b: the rule DOES live in 0003, "Why not extract abstractions preemptively", Metz named at 0003:77) is subject to the maintainer's adjudicated position statement; its Phase-2 treatment is §7a's proposal (demote from rule to named tradeoff carrying both positions), pending his ratification. | ~120 |
 | 0004 minimal-touch | 151 | c4 L2 · p16 i0 | generalize-in-place | Moves: the four chocofarm contract examples (0004:22–47) and the named-file size list (0004:49–57). Stays: the two-case rule (0004:59–76) intact; one generic sentence per contract class (numerical-equivalence, positional-layout, duality, shared-constant) so the rule's motivation survives without the instances. | ~110 |
-| 0005 documentation discipline | 255 | c8 L4 · p4 i2 | generalize-in-place | Moves: the audit-substrate Context items (0005:28–48) and per-rule chocofarm instances. Stays: all nine Rules, each verbatim in force; Rule 2's directory table re-parameterized — the *convention* (records have one predictable home) is the law; the *table of homes* becomes a per-deployment declaration (see contradiction C4). Rules 1, 3, 8 govern this refactoring's own mechanics and are not touched in substance. | ~190 |
+| 0005 documentation discipline | 255 | c8 L4 · p4 i2 | generalize-in-place | Moves: the audit-substrate Context items (0005:28–48) and per-rule chocofarm instances. Stays: all nine Rules, each verbatim in force; Rule 2's directory table re-parameterized — the *convention* (records have one predictable home) is the law; the *table of homes* becomes a per-deployment declaration (see contradiction C3 —
+corrected 2026-07-14 by the WP-13 corpus-close pass; the Phase-1a/1b drafts miscited
+this as C4, which is the unrelated unadapted-copy-class scope-clause entry). Rules 1, 3, 8 govern this refactoring's own mechanics and are not touched in substance. | ~190 |
 | 0006 source-file headers | 156 | c11 L5 · p13 i0 | generalize-in-place | Moves: chocofarm exemplar file list (0006:22–27), the audit "Part A/B/C" anecdote. Stays: the three-part header rule and form (0006:50–73) — but per the C5 ruling (ledger row 369, maintainer override): the **portable edition drops or parameterizes the per-file license-header mandate entirely** (file-headering is a matter of taste the served corpus does not impose; MIT, not Unlicense, is the common posture elsewhere), while **autoharn itself keeps its Unlicense-header posture locally** as its instance binding. The rule's portable form mandates the path/purpose slots; the license slot becomes an optional per-deployment declaration. | ~110 |
 | 0007 file size/density | 154 | c6 L2 · p12 i0 | generalize-in-place | Moves: the named oversized-file queue (0007:30–43). Stays: thresholds, density heuristic, contraction table, the no-code-golf rule — all already language-generic bar the Python framing, which stays (the thresholds are re-derived per language on adoption, as the ADR itself did from LengYue's TS numbers, 0007:9–13). | ~120 |
-| 0008 classification discipline | 255 | c5 L2 F1 · p9 i1 | examples-extract | Moves: the detector-misspec and fossil-array substrates (0008:34–76). Stays: both registers, the substitution test, concrete rules 1–4, both Exceptions — all stated generically already; one-sentence pointers carry each substrate's lesson (wrong vocabulary propagated six commits; fossils read as authoritative). | ~170 |
+| 0008 classification discipline | 255 | c5 L2 F1 · p9 i1 | examples-extract | Moves: the detector-misspec and fossil-array substrates — a "fossil array" is a stale hand-maintained lookup array whose entries drifted out of date and were then read as still-authoritative (0008:34–76). Stays: both registers, the substitution test, concrete rules 1–4, both Exceptions — all stated generically already; one-sentence pointers carry each substrate's lesson (wrong vocabulary propagated six commits; fossils read as authoritative). | ~170 |
 | 0009 perf investigation | 465 | c25 L4 a16 t4 · p38 i0 | examples-extract, condense | The corpus's own precedent, completed: the chocofarm-era body already declared non-binding (0009:52–55) moves verbatim to history; the ADR is rebuilt from its spine (a perf/equivalence claim is honest only when its investigation is captured and reproducible), the two-tier bit-vs-behavioral calibration (0009:219–235, generic), and the 2026-07-12 autoharn amendment's content as the instance-binding section. The two bracket-edits and both dated amendments are preserved verbatim (relocated with the body they annotate, per §4). | ~150 |
 | 0010 render-locality-not-applicable | 64 | c9 L7 · p1 i0 | ui-scoped-generalize-or-unserve | **RULED (C6 override, ledger row 370)** — the maintainer's disposition, superseding Phase 1a's retire proposal: do NOT simply retire. Where its recommendations are generic and good, GENERALIZE for projects that use a UI, carrying an explicit applies-where-UI-is-concerned scope note; otherwise it is removed from the autoharn-SERVED corpus — distinct from erasing it from autoharn's own history. Phase-2 note for WP-1: autoharn's 0010 file is a placeholder that *summarizes* the LengYue UI tenet in two sentences (render-locality of high-frequency reactive values; canvas over per-datum DOM for data-dense visuals, 0010:8–14) rather than carrying its rules; WP-1 judges whether that summary supports a generic UI-scoped statement — if yes, the generalized ADR is written from it with the scope note; if no, 0010 leaves the served set, autoharn's file stays as history, and the slot keeps number-stability either way (§6 R2). | ~40 (if generalized) / ~15 pointer (if unserved) |
 | 0011 mechanization discipline | 318 | c12 L4 t5 f1 · p11 i4 | examples-extract | Moves: the chocofarm Context substrate (0011:23–55) and the two 2026-06-24 throughput-lab amendments' worked detail (0011:197–262). Stays: Rules 1–4 verbatim in force; the closed enforcement-surface vocabulary (subject to C8's proposed extension); both 2026-07-02 amendments (mechanism-ships-with-first-fix; negative-control + shipped-binding) — these are normative and generic; the `FeatureLayout` worked proof compressed to its two-sentence lesson. | ~200 |
 | 0012 structural hygiene | 1404 | c6 f1 · p49 i5 | examples-extract, condense | The largest extraction. Moves: the whole C++ concrete-guidance section (0012:732–943, the chocofarm wire contract — redis keys, weight manifest, and the contract's four named data blocks, called X/PI/M/Y in the source project); P9's three long worked examples (0012:609–728); the cross-device amendment's bench saga (0012:1155–1325, keeping its rule + checklist row inline). Stays: the anti-pattern checklist with all appended rows; all nine principles, each with its checkable rule and a one-to-three-sentence worked-example summary; the Self-application surface declarations; the 2026-07-02 amendments (corrective-diff-is-new-structure; P2 advertised-limits) whose rules are generic. P1–P9 identifiers and checklist row letters are load-bearing citations corpus-wide and are **not** renamed. | ~550 |
 | 0013 execution integrity | 609 | c1 f1 · p23 i4 | examples-extract | Moves: Specimens 1–2's full narratives (0013:73–172, the leaf-eval delinquent and the diagnostician). Stays: Rules 1–5 verbatim in force; the register preamble (0013:35–43, the earned-disdain note — it is the tenet's voice, not an instance); all three amendments verbatim (fair-dealing; artifact-terminates-at-effect + claim shape; Rule-3 mechanization + proviso); per specimen, a three-sentence inline summary — the maintainer's most-important-context bar applies hardest here, because the specimen story is the tenet's teeth: "done" claimed against the author's own contradicting trailers; the diagnostician recommending the skip minutes after diagnosing it. | ~400 |
 | 0014 second opinion | 475* | c1 t7 · p0 i0 | examples-extract | Moves: the throughput-lab specimen (0014:76–117). Stays: Rules 1–4; the license-not-mandate register note; the ADR-0008 known-tension section (0014:383–411 — an honest open question, preserved; see §7 open loops). *The file also carries a corruption: lines 474–475 are literal `</content>`/`</invoke>` tool-residue after the License section — a defect fixed in Phase 2 as its own witnessed item (hazard flagged below; `law/` is read-only for this spec). | ~350 |
-| 0015 verification substrate | 145 | f1 · p2 i3 | already-portable | Nothing moves. The four rules are generic; the Provenance incident (0015:13–23) is a dated point-in-time record that stays verbatim per §4 — it is one paragraph, below the extraction threshold. Light touch only if C3 (status) adjudication requires a header edit. | ~145 |
+| 0015 verification substrate | 145 | f1 · p2 i3 | already-portable | Nothing moves. The four rules are generic; the Provenance incident (0015:13–23) is a dated point-in-time record that stays verbatim per §4 — it is one paragraph, below the extraction threshold. Light touch only if C2 (the Phase-1a/1b drafts miscited this row as C3; C3 is actually
+the filing-homes contradiction, unrelated to ADR status — corrected to C2 on 2026-07-14
+by the WP-13 corpus-close pass, found in passing while fixing the adjacent C4/C3 mislabel
+in the 0005 row above) adjudication requires a header edit. | ~145 |
 | 0016 service contract | 411 | f9 · p19 i5 | examples-extract | Moves: the fact-mining worked-instance inventories woven into Rules 1 and 3's enforcement paragraphs (0016:163–180, 227–240) and the Context feeder narrative (0016:87–127). Stays: the four rules and the one-sentence spine (0016:130–137) verbatim; the standing-service invariant definition; the 2026-07-03 ratification amendment verbatim (dated record); per rule, the instance compressed to its lesson (`BoundedBatch`-at-every-ingress; the empty-warm-cache readiness lie — a service that reported itself ready while its cache, warm in name only, was empty). | ~280 |
 | 0017 zero-context reader | 557 | a7 f1 · p9 i0 | already-portable | Nothing moves. This ADR was *written* portable: "Rules 1–4 name no autoharn-specific mechanism… autoharn's own bindings live in the 'Instance bindings' section" (0017:43–47), which is exactly the target shape this whole refactoring drives the corpus toward. The named specimens (BRIEF, morning defects) are its dated substrate, kept per §4. One stale bullet fixed per C2 ruling. | ~557 |
 
@@ -306,7 +325,11 @@ nothing is rewritten silently.
   red on the pre-refactor tree before its green is credited).
 - **A2 — fresh-context application test.** Per refactored ADR, the A:B:C attestation's B
   brief (§8) gains one clause: *"For each rule, state whether you could apply it in an
-  unrelated project without reading this repository; name any rule you could not."* Any
+  unrelated project without reading this repository; name any rule you could not."*
+  ("A:B:C" is ADR-0017's fresh-context review loop: A authors or edits the document, B is
+  a separately forked reviewer who reads only the document and ADR-0017, never A's
+  conversation, and applies the legibility test; C repairs whatever B found. §8 spells out
+  the mechanics; this is the loop's first mention.) Any
   cannot-apply verdict fails the package.
 - **A3 — completeness closure (no rule weakened or dropped).** The per-ADR rule
   inventory is enumerated below; each Phase-2 package's close reproduces it and asserts,
@@ -323,7 +346,11 @@ nothing is rewritten silently.
   the two-case rule; 0005 R1–R9; 0006 the three-part header rule; 0007 size + density +
   contraction rules; 0008 two registers + substitution test + rules 1–4; 0009 spine +
   two-tier calibration + triggers/acceptance; 0010 none (placeholder); 0011 R1–R4 + four
-  amendments' rules; 0012 checklist rows A–H + 5 appended rows + P1–P9 + advertised-limits
+  amendments' rules; 0012 checklist rows A–H + 6 appended rows (corrected 2026-07-14 by
+  the WP-13 corpus-close pass — the actual post-refactor table carries cross-language,
+  call-boundary, compiled-component, cross-DEVICE, corrective, and proxy-bound rows,
+  verified by direct count against the current table; the Phase-1a/1b drafts undercounted
+  by one) + P1–P9 + advertised-limits
   amendment; 0013 R1–R5 + three amendments' rules; 0014 R1–R4; 0015 R1–R4; 0016 R1–R4;
   0017 R1–R4 + A:B:C loop commitments.
 - **A4 — link and shape gates.** `gates/link_integrity.py` clean corpus-wide (every
@@ -647,7 +674,9 @@ never patched: the refactored corpus reaches ent via its next scaffold, and no
 live-session file is touched (standing rule). The commissioned
 "ent CLAUDE.md live-pointer section" is outside this repository; WP-13's close hands the
 maintainer a one-line note naming what a re-scaffold inherits. (c) `GLOSSARY.md` and the
-ORCH docs — the former is repointed by WP-13 where section anchors moved; the latter are
+ORCH docs (the repository's operator-facing orchestration documents — e.g.
+`ORCH-HANDOFF.md`, `ORCH-CAPABILITIES.md`, `ORCH-OPERATING-CARD.md`) — the former is
+repointed by WP-13 where section anchors moved; the latter are
 history unless a current spec cites them (standing contract) and are left alone.
 (d) **the standards registry** — ADR-0000 Revisit #4 Clause 2 makes
 `law/STANDARDS-REGISTRY.md` the root of every completeness exercise; it is a
@@ -684,7 +713,17 @@ as a question to the maintainer if a judgment call is needed, not decided here.
   Phase-1a sense is off the table for it. **0001's question remains OPEN and stays
   routed to the maintainer as its own yes/no question** (retire-to-history with
   tombstone, or keep-and-generalize); the adjudication did not reach it. No other ADR
-  is proposed for retirement.
+  is proposed for retirement. **Closed by dated append (WP-13 corpus-close pass,
+  2026-07-14, per ADR-0005 Rule 8 — the sentence above is left standing, not
+  retro-edited, as the honest record of where Phase 1b's adjudication actually
+  landed):** the maintainer's final ratification, given later the same session,
+  answered this question explicitly — *"ADR-0001 RETIRE as chocofarm-only
+  (overriding Phase 1b's stays-routed disposition — Phase 2 moves it to history per
+  the spec's convention)"* (ledger row 511, `review-done:
+  adr-portability-final-ratification`) — and Phase 2's WP-1 executed the retirement
+  (ledger row 527: "WP-1: 0001 retired (verbatim history extraction + tombstone)");
+  see the current [ADR-0001](../law/adr/0001-immutability-and-copy-on-write.md),
+  now a tombstone record.
 - **No contradiction resolved by fiat.** Every §7 entry now carries its adjudicated
   resolution and the authority it rests on (spec default per row 403, or the named
   override row); §2's treatments that still depend on an open ruling (0001; the §7a

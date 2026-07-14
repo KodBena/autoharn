@@ -10,7 +10,9 @@ every module in a hosting project that could otherwise let such a failure pass s
 > [`design/MAINT-ADR-PORTABILITY-SPEC.md`](../../design/MAINT-ADR-PORTABILITY-SPEC.md)
 > (tracker `adr-portability-refactor`, maintainer-ratified 2026-07-13). The pre-refactor
 > text stands verbatim at commit `ff691bb9bc430ad497d74ff82d580f758a969f99`; extracted
-> records live under [`history/`](history/) (each Extraction Pointer below names its own
+> records live under [`history/`](history/) (each **Extraction Pointer** — a bolded
+> "Extracted record" blockquote below, the pointer-with-summary convention
+> [history/README.md](history/README.md) defines — names its own
 > destination file) and are not retro-edited. Dated amendments below are preserved
 > verbatim from the original. The
 > Genre and Scope fields below are re-instanced generically at this same act (spec §4); the
@@ -37,7 +39,7 @@ every module in a hosting project that could otherwise let such a failure pass s
   that corpus's authoring discipline). The tenet is universal and transfers
   wholesale; the instance list is re-derived against chocofarm's real
   surfaces (the env/scenario seams, the parallel executor, the hp registry,
-  the AZ stack). chocofarm's code **already cites this ADR by number** — 16+
+  the AZ — AlphaZero-style search/training — stack). chocofarm's code **already cites this ADR by number** — 16+
   `ADR-0002` invocations across seven modules and the tests — so this
   document is the registry those citations point at. It must exist and match
   their intent. (Before this ADR existed, the 2026-06-15 audit named those
@@ -76,8 +78,10 @@ don't have to re-derive it.
 > names the module it lives in and the loudness level it fired at — the corpus's own
 > worked proof that the hierarchy below is not aspirational. The shorthand instance
 > names that recur in the hierarchy and rules below (the shape checks at load, the
-> registry strict decode, the drain RuntimeError, the wedge diagnostics, the
-> live-compute fallback) are these same source-project instances, preserved as the
+> registry strict decode, the drain RuntimeError, the wedge diagnostics (a "wedge" is a
+> stuck/deadlocked worker process; the diagnostic dumps its state), the
+> live-compute fallback, and rung 2's jax/numpy bit-equivalence and scenario-validation
+> tests) are these same source-project instances, preserved as the
 > original text's worked anchors.
 
 The common thread: **when the system has a choice between "recover quietly"
@@ -98,22 +102,23 @@ loudest appropriate channel, not papers over it.
 Loudness is not binary. From strongest to weakest:
 
 1. **Import/construction-time error** (the program refuses to start with a
-   bad config). Strongest; the anomaly never reaches a run. Preferred where
-   the invariant is knowable at setup — the AZ (AlphaZero-style search/training
-   stack) shape checks at load, the dtype guard.
-2. **Test/build-time error** (a test fails). Nearly as strong for runtime
-   paths whose invariants the type system can't capture — the jax/numpy
+   bad config). This is the strongest rung: the anomaly never reaches a run. It is
+   preferred where the invariant is knowable at setup — the AZ (AlphaZero-style
+   search/training) stack's shape checks at load, the dtype guard.
+2. **Test/build-time error** (a test fails). This rung is nearly as strong for
+   runtime paths whose invariants the type system can't capture — the jax/numpy
    bit-equivalence test, the scenario validation tests.
-3. **Runtime exception** (raises and halts the current operation). Strong;
-   breaks the offending path clearly rather than continuing in an undefined
-   state — the parallel-drain RuntimeError, the env config `ValueError`s,
+3. **Runtime exception** (raises and halts the current operation). This rung is
+   strong: it breaks the offending path clearly rather than continuing in an
+   undefined state — the parallel-drain RuntimeError, the env config `ValueError`s,
    the registry refusals.
 4. **Logged warning / surfaced diagnostic** (faulthandler dump, a named
-   log line). Visible to whoever runs or inspects the process. Appropriate
-   for "this shouldn't happen, but the run can continue" — the worker
-   faulthandler + SIGUSR1 wedge diagnostics.
-5. **Silent fallback or default.** Lowest. Appropriate only when the
-   fallback genuinely is the right answer (e.g. `env.d`'s live-compute
+   log line). This rung is visible to whoever runs or inspects the process, and it
+   is appropriate for "this shouldn't happen, but the run can continue" — the worker
+   faulthandler + SIGUSR1 wedge diagnostics (a "wedge" is a stuck/deadlocked process;
+   the diagnostic dumps its state rather than aborting it outright).
+5. **Silent fallback or default.** This is the lowest rung. It is appropriate only
+   when the fallback genuinely is the right answer (e.g. `env.d`'s live-compute
    fallback for a coord pair absent from the precomputed table — the
    fallback is bit-identical to the table, so it is not a coercion).
 
@@ -147,7 +152,9 @@ The tenet above cashes out as six checkable rules:
    number is the worst case on a research codebase, because it surfaces as a
    plausible result.
 4. **A config field that the receiver cannot honor must not be silently
-   accepted.** The source project's audit found three "lying signatures" —
+   accepted.** The source project's audit — the same 2026-06-15 architectural audit named
+   in Provenance above, here examined for code-level lying signatures rather than citation
+   hygiene — found three "lying signatures" —
    functions whose accepted parameters the body silently ignored (the three
    specific signatures are preserved in the extracted record the Context's
    Extraction Pointer above links) —
@@ -324,7 +331,8 @@ and scheduled.
 
 ### Amendment — 2026-07-13: the loudness hierarchy gains a build/compile-time rung (§7 C8)
 
-*(Dated append per [ADR-0005](0005-documentation-discipline.md) Rule 8, executed under
+*(Dated append per [ADR-0005](0005-documentation-discipline.md) (documentation discipline)
+Rule 8, executed under
 [`design/MAINT-ADR-PORTABILITY-SPEC.md`](../../design/MAINT-ADR-PORTABILITY-SPEC.md) §7 C8 —
 that linked section records the maintainer's 2026-07-13 adjudication (in the project's own
 internal decision record, cited there as "ledger row 403"; this document does not depend on
@@ -332,7 +340,7 @@ that internal record resolving, only on the linked spec section, which states th
 full): the spec's PROPOSED resolution stands as the default. This is the companion half of
 the same contradiction's resolution
 to [ADR-0011](0011-mechanization-discipline.md)'s
-[2026-07-13 vocabulary amendment](0011-mechanization-discipline.md#amendment-2026-07-13-rule-1s-enforcement-vocabulary-gains-a-buildcompile-time-member-7-c8):
+[2026-07-13 vocabulary amendment](0011-mechanization-discipline.md#amendment--2026-07-13-rule-1s-enforcement-vocabulary-gains-a-buildcompile-time-member-7-c8):
 that amendment executed the ADR-0011 half of the same finding and explicitly routed this
 half back for separate dispatch, because its own work package's commission touched only
 ADR-0011 and its history/ files — naming the gap rather than silently leaving it undone or
@@ -340,12 +348,13 @@ duplicating the other document's work. Provenance of the finding: the spec's ful
 contradiction read found that [ADR-0012](0012-compositional-and-structural-hygiene.md) —
 whose Decision section states its rules as nine numbered principles labeled P1 through P9,
 the "P" labels this Amendment cites — ranks, in
-[P7 (cross-language wire discipline)](0012-compositional-and-structural-hygiene.md#p7-cross-language-wire-discipline-the-new-material),
+[P7 (cross-language wire discipline)](0012-compositional-and-structural-hygiene.md#p7--cross-language-wire-discipline-the-new-material),
 "generate-or-compile-from-one-source > **build-time lint** > runtime parity", and asserts,
 in rule 5 of
-[P9 (functional core, imperative shell)](0012-compositional-and-structural-hygiene.md#p9-functional-core-imperative-shell-the-compiled-component-contract),
+[P9 (functional core, imperative shell)](0012-compositional-and-structural-hygiene.md#p9--functional-core-imperative-shell-the-compiled-component-contract),
 "**compile-time** > runtime in
-the loudness hierarchy P5 defers to" — but neither build-time-lint nor compile-time was
+the loudness hierarchy P5 defers to" (P5 is 0012's "fail loud; remove the root cause"
+principle) — but neither build-time-lint nor compile-time was
 nameable as a rung of the hierarchy above, which named only "Test/build-time error (a test
 fails)" at its second position: this corpus's most-cited structural tenet was enforcing at
 a level its own loudness hierarchy could not name.)*
