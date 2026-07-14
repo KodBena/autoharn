@@ -93,3 +93,14 @@ close or explicitly defer your open items with honest dispositions so the succes
 first pickup reads a settled predecessor. In the successor world, your closing ritual's
 current shape becomes a typed refusal that teaches — the conveyor and the reviewer2
 question both dissolve at birth rather than by anyone's discipline.
+
+## Correction (2026-07-14, late — read this against the body's section "What cannot be fixed in your world")
+
+The body's claim "Under the runs-are-linear ruling, no delta will ever be applied to
+your running world" over-read the ruling: it scopes to autoharn EXPERIMENTS (the
+maintainer's clarification, repeated). Your deployment is real; in-place migration is
+not doctrine-forbidden — it is assurance-blocked today (no signing key exists anywhere,
+so no signed root provisioning entry and no built recovery verbs) and remains the
+maintainer's own call under whatever assurance he rules sufficient. The successor-world
+rebirth in the postscript stays the recommended path; it is no longer the only lawful
+one.

@@ -160,9 +160,21 @@ This is NOT a class-ratified fail-safe delta: Element B changes the semantics of
 existing verb (`work close` gains a mandatory disposition), so it routes to the
 maintainer for ratification regardless of its otherwise-additive character. Elements A
 and C add refusals, keys, and derived views only. The delta enters the birth chain and
-reaches only future worlds; ent's current world keeps its bug for its lifetime (its
-in-world reviewer2 mitigation is a governance question for the maintainer, outside this
-spec's license). Scratch-schema witness on both polarities before the maintainer applies
+reaches future autoharn worlds by default; ent's current world keeps its bug unless the
+maintainer migrates it (its in-world reviewer2 mitigation is a governance question for
+the maintainer, outside this spec's license).
+
+> Dated correction, 2026-07-14 evening (maintainer-flagged, ADR-0005 Rule 8 style): the
+> sentence above originally read "reaches only future worlds; ent's current world keeps
+> its bug for its lifetime", grounded in the runs-are-linear ruling. That ruling scopes
+> to autoharn EXPERIMENTS — the maintainer has clarified this repeatedly, including in
+> the same day's executive-response commission row. For a real deployment such as ent,
+> in-place migration is NOT doctrine-forbidden; it is assurance-blocked today (no
+> signing key has ever existed — law/keys/ holds only its README — so no deployment
+> carries a signed root provisioning entry, and the recovery/migration verbs are
+> design-only in ORCH-RECOVERY-MODE-SIGNED.md). If the maintainer migrates ent in
+> place, that is his act under whatever assurance he rules sufficient; this spec's s29
+> delta is the content either way, and nothing in it assumes birth-chain-only delivery. Scratch-schema witness on both polarities before the maintainer applies
 anything; the SQL/ASP differential must sit in AGREE; negative controls: a review-silent
 close is refused with teach-text; a strict-mode close over an unresolved tree is
 refused naming the unresolved leaves; a false parent-resolution is demonstrated
