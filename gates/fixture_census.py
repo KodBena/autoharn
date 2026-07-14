@@ -111,6 +111,7 @@ REGISTRY: dict[str, str] = {
     "outcome-intake-validation":      "seen-red/outcome-intake-validation/run_fixtures.py",
     "review-queue-intake":            "seen-red/review-queue-intake/run_fixtures.py",
     "adr-portability-terms":          "seen-red/adr-portability-terms/run_fixtures.py",
+    "stamp-provenance-marker-corruption": "seen-red/stamp-provenance-marker-corruption/run_fixtures.py",
 }
 
 

@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-01T19:09:04Z
-#   last-change: 2026-07-01T23:19:46Z
-#   contributors: 3d7629dd/main, a737a042/main, a737a042/wf_40350274-0a4, 306d4c8f/main
+#   last-change: 2026-07-14T01:13:17Z
+#   contributors: 3d7629dd/main, a737a042/main, a737a042/wf_40350274-0a4, 306d4c8f/main, a857c93d/main
 # <<< PROVENANCE-STAMP <<<
 
 """stamp_provenance.py — PostToolUse hook: sign every changed source file in its header.
@@ -135,6 +135,67 @@ def _build_block(lead: str, first_seen: str, now: str, contributors: list[str]) 
     ]
 
 
+def _find_banner(lines: list[str], lead: str) -> tuple[int, int] | None:
+    """Locate a REAL banner: the fixed 5-line shape `_build_block()` emits, matched
+    structurally (line-start prefixes at the exact relative offsets), not a bare marker
+    substring anywhere in the file.
+
+    Witnessed defect (ADR-0011's 2026-07-02 amendment; re-witnessed 2026-07-13 by the
+    compound-nominal-detection-2 builder): the prior implementation matched `BEGIN_MARK in
+    ln` -- ANY line containing the marker text ANYWHERE, including a regex literal, a doc
+    comment describing the banner format, or a quoted specimen in a fixture file. That line
+    was then mistaken for a real banner and REPLACED, corrupting content that merely
+    *mentions* the marker rather than *being* one. A content-boundary check closes the
+    class: a candidate is a real banner only if the begin-marker text starts the line (col
+    0, not embedded mid-line inside other content) AND the following three lines and the
+    end-marker line reproduce the exact fixed shape `_build_block()` always emits, at their
+    exact relative offsets. A line mentioning the marker inside other code/text will not, in
+    general, additionally reproduce that full 5-line shape immediately beneath it, so it is
+    no longer mistaken for the banner it merely names.
+
+    Named residual (per ADR-0000's closure-statement discipline -- not silently swept): a
+    fixture that deliberately reproduces the full 5-line shape verbatim as CONTENT (e.g. a
+    doc quoting the exact banner text as an example) is still indistinguishable from a real
+    banner without full per-language quote/comment parsing, which this fix does not attempt.
+    That narrower residual is the honest limit of a content-boundary check, distinct from
+    (and far narrower than) the witnessed single-line-substring failure this closes.
+
+    Returns (begin_line, end_line) inclusive indices of the first structurally-complete
+    match, or None if no real banner is present (a truncated/damaged banner or a stray
+    marker mention are both treated as "no real banner here" -- see `stamp()`, which
+    disposes of the damaged-banner case separately via `_looks_like_damaged_banner`).
+    """
+    begin_prefix = f"{lead} {BEGIN_MARK}"
+    end_line = f"{lead} {END_MARK}"
+    fs_prefix = f"{lead}   first-seen :"
+    lc_prefix = f"{lead}   last-change:"
+    co_prefix = f"{lead}   contributors:"
+    for i, ln in enumerate(lines):
+        if not ln.startswith(begin_prefix):
+            continue
+        if (i + 4 < len(lines)
+                and lines[i + 1].startswith(fs_prefix)
+                and lines[i + 2].startswith(lc_prefix)
+                and lines[i + 3].startswith(co_prefix)
+                and lines[i + 4] == end_line):
+            return i, i + 4
+    return None
+
+
+def _looks_like_damaged_banner(lines: list[str], lead: str) -> int | None:
+    """A begin-marker line at column 0 immediately followed by a first-seen-shaped line, but
+    that does not complete to the full valid shape `_find_banner` requires -- plausibly a
+    REAL banner damaged by hand-editing (the old "malformed / truncated banner" safety net),
+    as opposed to a stray one-line mention of the marker text with unrelated content after
+    it. Returns the begin-line index of the first such candidate, or None."""
+    begin_prefix = f"{lead} {BEGIN_MARK}"
+    fs_prefix = f"{lead}   first-seen :"
+    for i, ln in enumerate(lines):
+        if ln.startswith(begin_prefix) and i + 1 < len(lines) and lines[i + 1].startswith(fs_prefix):
+            return i
+    return None
+
+
 def stamp(path: Path, session: str, workflow: str, now: str) -> None:
     ext = path.suffix.lower()
     lead = COMMENT.get(ext)
@@ -149,11 +210,11 @@ def stamp(path: Path, session: str, workflow: str, now: str) -> None:
     lines = text.split("\n")
     tag = f"{session}/{workflow}"
 
-    b0 = next((i for i, ln in enumerate(lines) if BEGIN_MARK in ln), None)
-    if b0 is not None:
-        b1 = next((j for j in range(b0, len(lines)) if END_MARK in lines[j]), None)
-        if b1 is None:
-            return  # malformed / truncated banner; refuse to touch
+    found = _find_banner(lines, lead)
+    if found is None and _looks_like_damaged_banner(lines, lead) is not None:
+        return  # plausibly a real banner, hand-damaged; refuse to touch (old safety net)
+    if found is not None:
+        b0, b1 = found
         block = lines[b0:b1 + 1]
         first_seen = next((ln.split("first-seen :", 1)[1].strip()
                            for ln in block if "first-seen :" in ln), now)
