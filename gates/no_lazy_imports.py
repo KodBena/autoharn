@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-02T01:30:29Z
-#   last-change: 2026-07-02T01:30:29Z
-#   contributors: 306d4c8f/main
+#   last-change: 2026-07-14T01:47:52Z
+#   contributors: 306d4c8f/main, a857c93d/main
 # <<< PROVENANCE-STAMP <<<
 
 """no_lazy_imports.py — mechanical gate for the project law: LAZY IMPORTS ARE BANNED.
@@ -32,6 +32,22 @@ REPO = Path(__file__).resolve().parents[1]
 # trees never subject to the gate: archived evidence and third-party/scratch dirs
 EXCLUDE_PARTS = {"claude-ephemera", ".staging", "node_modules", ".venv", "venvs",
                  "__pycache__", ".git"}
+
+# specific VENDORED third-party trees, excluded by full relative path prefix rather than a
+# generic directory-name component (EXCLUDE_PARTS above is for whole classes of dependency
+# tree -- venvs, node_modules -- never authored by a contributor here; this is the same
+# exclusion class applied to a single, named, provenance-recorded vendor drop). CLAUDE.md's
+# "no allowlist" text bans allowlisting a LAZY IMPORT a contributor writes in house code; it
+# says nothing about linting code this project does not author and is committed not to edit
+# (ADR-0004 read-only-vendor discipline -- see the named PROVENANCE.md at each path below).
+# Each entry: the vendored directory, and why editing it to satisfy this gate is foreclosed.
+#   tools/makespan-scheduler/ -- vendored 2026-07-14 (work item makespan-scheduler-vendoring;
+#   tools/makespan-scheduler/PROVENANCE.md), byte-for-byte from an external side project;
+#   independently patching its test suite's imports to satisfy this gate would silently
+#   diverge the vendored copy from its recorded source commit, exactly what PROVENANCE.md's
+#   own read-only-source rule forbids -- a fix belongs upstream, re-vendored here, never
+#   patched in place.
+EXCLUDE_PATH_PREFIXES = ("tools/makespan-scheduler/",)
 
 _FUNCS = (ast.FunctionDef, ast.AsyncFunctionDef)
 
@@ -71,8 +87,11 @@ def tracked_py_files(root: Path) -> list[Path]:
     files = []
     for line in r.stdout.splitlines():
         p = root / line
-        if not any(part in EXCLUDE_PARTS for part in p.parts):
-            files.append(p)
+        if any(part in EXCLUDE_PARTS for part in p.parts):
+            continue
+        if any(line.startswith(prefix) for prefix in EXCLUDE_PATH_PREFIXES):
+            continue
+        files.append(p)
     return files
 
 

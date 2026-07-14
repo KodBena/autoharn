@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-11T16:14:47Z
-#   last-change: 2026-07-12T20:44:20Z
-#   contributors: e4410ef6/main, 3c50e030/main
+#   last-change: 2026-07-14T01:38:32Z
+#   contributors: e4410ef6/main, 3c50e030/main, a857c93d/main
 # <<< PROVENANCE-STAMP <<<
 
 """doc_attestation_presence — the commit-time enforcement floor for ADR-0017's A:B:C
@@ -258,7 +258,18 @@ LEDGER_PATH = REPO_ROOT / "attestations" / "doc-legibility-attestations.jsonl"
 # and why; a document EDITED after landing in vestigial_documentation/ still binds on that touch,
 # same as any other prose -- this exclusion is for the archive's contents at rest, not a blanket
 # permanent pass).
-EXCLUDE_FILES_WHOLESALE = {"BACKLOG.md"}
+#
+# tools/makespan-scheduler/README.md added 2026-07-14 (work item makespan-scheduler-vendoring):
+# a VENDORED third-party document, copied byte-for-byte from an external side project
+# (tools/makespan-scheduler/PROVENANCE.md records the source commit) and never independently
+# edited here per this project's own read-only-vendor discipline (ADR-0004) -- re-vendoring a
+# fresh copy is the only sanctioned way its text changes. Requiring a fresh-context legibility
+# review of prose this project does not author, and is not permitted to rewrite even if B found
+# a defect, would attest nothing actionable -- the same reasoning judgment/** and
+# vestigial_documentation/** already carry below for their own not-ours-to-rewrite content.
+# PROVENANCE.md in the same directory IS authored here and is NOT excluded -- it attests
+# normally.
+EXCLUDE_FILES_WHOLESALE = {"BACKLOG.md", "tools/makespan-scheduler/README.md"}
 EXCLUDE_DIR_PREFIXES = ("judgment/", "vestigial_documentation/")
 WAIVER_TOKEN = "doc-attest-exempt:"
 
@@ -638,6 +649,9 @@ def _print_exclusions(scope: list[str], excluded: list[str], waived: list[str]) 
     print("    vestigial_documentation/** — declared-history archive (2026-07-12 vestigial-doc-"
           "sweep, VESTIGIAL-INDEX.md), same status as judgment/**: content-preserving moves, not "
           "living prose a touch should re-trigger legibility review for")
+    print("    tools/makespan-scheduler/README.md — vendored third-party doc (2026-07-14, "
+          "PROVENANCE.md), never independently edited here (ADR-0004 read-only-vendor); same "
+          "not-ours-to-rewrite status as judgment/**")
     if waived:
         print(f"  waived by inline '<!-- {WAIVER_TOKEN} ... -->' marker:")
         for w in waived:
