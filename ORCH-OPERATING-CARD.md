@@ -57,7 +57,8 @@ Condensed for quick reference; full definitions (the SSOT) live in
 - **[stamp](GLOSSARY.md#stamp)** — an HMAC binding a ledger row to the actual Claude
   session/agent that wrote it, injected into every Bash command by hook; unstamped rows
   are visible, not hidden.
-- **[principal](GLOSSARY.md#principal)** — a registered identity (`author`, `reviewer`)
+- **[principal](GLOSSARY.md#principal)** — a registered identity (`author`, `reviewer`, and
+  — for a signed-commission start, see "Start a run" below — `commissioner`)
   rows are attributed to; `LED_ACTOR=reviewer` selects one. **SoD** = separation of duties
   between them.
 - **[obligation](GLOSSARY.md#obligation)** — a `countersign_obligation` row: the obliged
@@ -72,6 +73,9 @@ Condensed for quick reference; full definitions (the SSOT) live in
   committed (privacy ruling).
 
 ## The verbs (run inside a world directory; seven since 2026-07-12)
+
+These are the operator verbs, invoked from inside a scaffolded world directory (see
+[world](GLOSSARY.md#world) above); the list below is authoritative as of 2026-07-12.
 
 - `./led <kind> "<statement>"` — write a ledger row (kinds incl. decision, assumption,
   finding, question, verification, and — since s25 — commission). `./led --refs row:<id> ...`
@@ -116,7 +120,7 @@ Condensed for quick reference; full definitions (the SSOT) live in
 Fresh world (witnessed, runs 5–11):
 ```
 cd /home/bork/w/vdc/1/autoharn
-bootstrap/new-project.sh /home/bork/w/vdc/1/runN --new-world runN --db toy --host 192.168.122.1
+bootstrap/new-project.sh /home/bork/w/vdc/1/runN --new-world runN --db toy --host <host>
 cd /home/bork/w/vdc/1/runN && claude    # type the task as the first message; nothing is pasted
 ```
 
@@ -203,9 +207,12 @@ own source, which is how a prior drift was caught: this table, the shipped
 mode config every scaffolded world starts from), and its companion
 [`bootstrap/templates/APPARATUS.md`](bootstrap/templates/APPARATUS.md) (the prose walkthrough of
 that same config) were all three stuck at ten mechanisms while an eleventh, `bash_completion`,
-had already shipped in `hooks/`. There are eleven mechanisms today; every row below names one.
+had already shipped in `hooks/`. There are eleven mechanisms today; every row below names one
+or more mechanisms sharing a single hook file (one row, `change_gate + permit_to_work`, is two
+mechanisms implemented in the same `pretooluse_change_gate.py` file, named together because
+they fire from the same hook invocation).
 
-| mechanism (hooks/) | fires on | reads / does | default |
+| mechanism(s) (hooks/) | fires on | reads / does | default |
 |---|---|---|---|
 | change_gate + permit_to_work (pretooluse_change_gate.py) | PreToolUse Write/Edit | ledger declaration + `work_item_current` open+claimed; also sweeps `apparatus.json`'s `mechanisms` object for unrecognized keys against `filing/apparatus_registry.py`'s known set | enforce |
 | stamp_intercept.py | PreToolUse Bash | injects HMAC stamp as PGOPTIONS, unconditionally | enforce |
@@ -223,6 +230,9 @@ Before ANY hooks/ edit: verify no wired session is live — `pgrep -a claude` th
 build-new-then-swap beats wait-and-block.
 
 ## Believing a "done" (never adjudicate a report from its text)
+
+Before accepting any agent's "done" claim, verify each of the following independently
+rather than taking the report's own text as evidence:
 
 1. Claimed commits exist with plausible diffs (`git show --stat`), in the repo claimed.
 2. Every load-bearing claim grep-verified at source.

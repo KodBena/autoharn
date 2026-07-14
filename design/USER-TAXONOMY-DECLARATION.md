@@ -50,7 +50,7 @@ which names them as "the maintainer's own omega project" — **one maintainer's 
 example**, included here to show a real, filled-in declaration, never as a claim that your
 project has, needs, or should copy this exact boundary. This is the same "EXAMPLES — this
 maintainer's own stack" marking
-[USER-BLESSED-TABLE-TEMPLATE.md's canonical-residents table](USER-BLESSED-TABLE-TEMPLATE.md#the-canonical-residents-this-maintainers-stack-worked-examples)
+[USER-BLESSED-TABLE-TEMPLATE.md's canonical-residents table](USER-BLESSED-TABLE-TEMPLATE.md#the-canonical-residents-this-maintainers-stack--worked-examples)
 uses for its own rows: delete it, or keep it as reference, and declare your own project's
 boundaries below it.
 
@@ -92,7 +92,7 @@ taxon: <TAXONOMY> | <TAXON> | <PATTERNS> | <GLOSS>
 
 The four fields go in this exact order, separated by ` | ` (space-pipe-space). `TAXONOMY` and
 `TAXON` are both **machine keys** — the predicates
-[ORCH-SPEC-TASK-TAXONOMY.md §4](ORCH-SPEC-TASK-TAXONOMY.md#4-the-polymorphic-predicates-what-the-engine-checks-without-knowing-why)
+[ORCH-SPEC-TASK-TAXONOMY.md §4](ORCH-SPEC-TASK-TAXONOMY.md#4-the-polymorphic-predicates--what-the-engine-checks-without-knowing-why)
 quantify over (`single-taxon-task(T)`, `no-cross-taxon-write(T)`) match them by exact string, so
 each must be a bare slug matching `^[a-z0-9][a-z0-9-]*$` — lowercase letters, digits, and
 hyphens only, no spaces — the identical shape
@@ -127,7 +127,7 @@ consistency check, if one is ever built, is a later-stage audit, not an intake r
 discipline names this an honest, deliberate absence rather than a silent gap). `ARTIFACT-PATTERN`
 is the path or glob of the artifact that MAY be referenced from outside its own taxon — the ICD
 (interface control document) analog
-[ORCH-SPEC-TASK-TAXONOMY.md §3](ORCH-SPEC-TASK-TAXONOMY.md#3-declaring-a-taxonomy-rows-like-everything-else)
+[ORCH-SPEC-TASK-TAXONOMY.md §3](ORCH-SPEC-TASK-TAXONOMY.md#3-declaring-a-taxonomy--rows-like-everything-else)
 names. `GLOSS` is free text, non-empty, naming what the interface is for a human reader.
 Copy-paste example (continuing the `arch-layer` taxonomy above):
 
@@ -144,7 +144,7 @@ terminal introduces by wrapping a long paste mid-word, is accepted rather than r
 statement that fails the check is **refused before any write happens** (nothing lands on the
 ledger, exit non-zero, a message naming the exact field and grammar that failed and pointing
 back at this section) — the same refuse-before-write atomicity
-[USER-BLESSED-TABLE-TEMPLATE.md's `resource:` validator](USER-BLESSED-TABLE-TEMPLATE.md#resource-declaring-one-capability-registry-entry)
+[USER-BLESSED-TABLE-TEMPLATE.md's `resource:` validator](USER-BLESSED-TABLE-TEMPLATE.md#resource--declaring-one-capability-registry-entry)
 already gives you. A statement that passes is stored **byte-exact** — the row actually written
 is what you typed, embedded newline included; the whitespace-normalized copy is validation-only
 scratch, never persisted.
