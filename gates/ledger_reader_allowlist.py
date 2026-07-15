@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-15T20:17:26Z
-#   last-change: 2026-07-15T20:18:20Z
+#   last-change: 2026-07-15T20:51:26Z
 #   contributors: a857c93d/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -67,8 +67,14 @@ CHAIN = [
     "s23-per-invocation-stamp-token.sql", "s24-declared-event-time.sql",
     "s25-commission-kind.sql", "s26-row-hash-chain.sql", "s28-work-parent-edge.sql",
     "s29-obligation-item-key-and-typed-close.sql", "s30-typed-dependency-edges.sql",
-    "s31-supersession-uniform-retraction.sql",
+    "s31-supersession-uniform-retraction.sql", "s32-edge-views-single-home.sql",
 ]
+# s32 (kernel/lineage/s32-edge-views-single-home.sql) extends this SAME gate rather than minting a
+# second one (ADR-0012 P1): its own edge-source collapse (F3/F6, the categorical-refactor consult)
+# is exactly the class of change this allowlist exists to keep honest -- two of its four new views
+# (work_edge_parent/work_edge_blocks_close) are DECLARED RAW/history readers by design (s32's own
+# header WHY), added below with their reasons; the other two (work_edge_obligation/
+# discharging_attest) read only ledger_current/other named views and classify clean with no entry.
 
 # ---------------------------------------------------------------------------------------------
 # THE CLOSED ALLOWLIST (spec §2's declared history readers + the residual correctly-scoped inline
@@ -106,10 +112,25 @@ ALLOWLIST: dict[str, str] = {
                   "in-force anti-joins, correct since s15; outside s31's four re-issued members.",
     "question_status": "question-row side factors through ledger_current (s31); the per-answer legs are "
                        "row-scoped in-force anti-joins on each answer candidate (already filtered).",
-    "work_review_gap": "close-row side factors through ledger_current (s31); the discharge-review leg is a "
-                       "row-scoped in-force anti-join (already filtered, spec §2).",
-    "work_item_strict_blockers": "edges/closes CTEs factor through ledger_current (s31); the residual "
-                                 "discharge-review leg is a row-scoped in-force anti-join (already filtered).",
+    "work_review_gap": "close-row side factors through ledger_current (s31); the discharge-review leg now "
+                       "composes with discharging_attest (s32) — ZERO raw-ledger legs remain; entry kept "
+                       "as a record of the collapse, vestigial (s32's own LIMITS disclosure).",
+    "work_item_strict_blockers": "edges CTE composes with work_edge_obligation, review_unresolved's discharge "
+                                 "leg composes with discharging_attest (both s32) — ZERO raw-ledger legs "
+                                 "remain; entry kept as a record of the collapse, vestigial (s32's own "
+                                 "LIMITS disclosure).",
+    # -- s32 (kernel/lineage/s32-edge-views-single-home.sql): the two RAW edge-source views (F3),
+    #    declared history readers by design — every current consumer of this shape (the two
+    #    would_cycle trigger helpers above, work_item_violations' dangling_parent/parent_cycle/
+    #    blocks_close_cycle members) is itself a declared history reader needing the UNRETRACTED
+    #    reading; work_edge_obligation (below, no entry needed) supplies the in-force reading by
+    #    joining these two to ledger_current on each edge's own carrying row.
+    "work_edge_parent": "single home of the RAW s28 parent-edge relation (s32) — reused by "
+                        "work_parent_would_cycle and work_item_violations' dangling_parent/parent_cycle, "
+                        "all declared history readers needing every such edge ever written.",
+    "work_edge_blocks_close": "single home of the RAW s30 blocks-close edge relation (s32) — reused by "
+                              "work_depends_on_would_cycle and work_item_violations.blocks_close_cycle, "
+                              "same reasoning one edge kind over.",
 }
 
 # A raw-`ledger` TABLE ACCESS: FROM/JOIN/INTO/UPDATE followed by an optionally schema-qualified
