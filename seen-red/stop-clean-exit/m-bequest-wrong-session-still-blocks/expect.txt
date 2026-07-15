@@ -1,0 +1,9 @@
++"decision": "block"
++OPEN WORK ITEMS
++work item 'probe-item-4' is open and claimed by THIS session
++./led work close probe-item-4
++bequeath it to a successor
++seen 1/3 times
+-still open, but bequeathed
+-not blocking
+-CIRCUIT BREAKER

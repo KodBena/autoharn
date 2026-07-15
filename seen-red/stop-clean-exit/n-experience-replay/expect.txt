@@ -1,0 +1,7 @@
+-"decision": "block"
+-CIRCUIT BREAKER
++open unclaimed item(s) remain
++probe-item-8
++probe-item-9
++bequeathed via a stopping-disposition row
++probe-item-10

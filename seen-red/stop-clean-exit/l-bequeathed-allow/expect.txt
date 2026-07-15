@@ -1,0 +1,5 @@
+-"decision": "block"
++bequeathed via a stopping-disposition row
++probe-item-3
+-CIRCUIT BREAKER
+-Ledger policy
