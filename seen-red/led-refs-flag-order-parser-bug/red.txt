@@ -1,0 +1,45 @@
+Banked RED evidence for ledger item `led-refs-flag-order-parser-bug`.
+
+Captured by running seen-red/led-refs-flag-order-parser-bug/run_fixtures.py against the
+PRE-FIX bootstrap/templates/led.tmpl (the shipped version this item's fix supersedes, obtained
+via `git stash push -- bootstrap/templates/led.tmpl` immediately before this fixture's own commit
+lands, then `git stash pop` to restore the fix): the RED cases (a flag placed AFTER the
+statement) both FAIL to refuse -- the pre-fix WARN-ONLY tripwire prints a warning to stderr but
+still accepts the write, exactly reproducing the reported defect (autoharn1 ledger rows
+1053/1054; experience-world rows 65/66/71, again at 87 -- a flag typed after the statement is
+silently swallowed into statement prose, and the typed column it names lands NULL).
+
+ADOPT: track-work.sh exit=0 deployment.json=True -- PASS
+RED-TRAILING-REFS: exit=0 refused=False teaches_trap=False teaches_correction=False shows_corrected_invocation=False row-count before=0 after=1 (unchanged=False) -- FAIL
+RED-TRAILING-SUPERSEDES: exit=0 refused=False teaches_trap=False row-count before=1 after=2 (unchanged=False) -- FAIL
+GREEN-FLAGS-BEFORE: exit=0 accepted=True -- PASS
+GREEN-FLAGS-BEFORE: statement byte-exact=True, refs column stored byte-exact='row:1'=True -- PASS
+GREEN-QUOTED-MENTION: exit=0 accepted=True row-count before=3 after=4 (grew-by-one=True) -- PASS
+GREEN-QUOTED-MENTION: stored statement is byte-exact (the quoted '--refs' mention survived, unrefused) -- PASS
+
+led-refs-flag-order-parser-bug fixture: 2 FAILURE(S) -- scratch substrate left standing as evidence:
+  tempdir: /tmp/led-refs-flag-order-parser-bug-fixture-hgiqrql_
+  schema:  lrfopfixture / lrfopfixture_kernel / lrfopfixture_rw (db toy@192.168.122.1)
+
+!! RED-TRAILING-REFS: exit=0 refused=False teaches_trap=False teaches_correction=False shows_corrected_invocation=False before=0 after=1
+STDERR:
+led: WARNING -- the statement text contains '--refs', which looks like one of
+  led's own flags. Flags inside the quoted statement are NOT parsed -- if you meant
+  to set the typed column, re-issue the command with --refs OUTSIDE the quotes.
+  (warn-only tripwire, not a refusal -- a statement that legitimately quotes
+  '--refs' in prose just sees this notice; the write proceeds either way)
+
+
+!! RED-TRAILING-SUPERSEDES: exit=0 refused=False teaches_trap=False before=1 after=2
+STDERR:
+led: WARNING -- the statement text contains '--supersedes', which looks like one of
+  led's own flags. Flags inside the quoted statement are NOT parsed -- if you meant
+  to set the typed column, re-issue the command with --supersedes OUTSIDE the quotes.
+  (warn-only tripwire, not a refusal -- a statement that legitimately quotes
+  '--supersedes' in prose just sees this notice; the write proceeds either way)
+
+After the fix (refuse_flag_in_statement replacing warn_flag_in_statement in
+bootstrap/templates/led.tmpl), the same run_fixtures.py goes fully green (all cases pass, both
+RED cases now correctly REFUSE with teach-text and an unchanged row count, both GREEN cases
+still accept and store byte-exact) -- witnessed live, same scratch substrate convention, torn
+down to zero residue on a clean pass.

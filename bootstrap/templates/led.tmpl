@@ -478,7 +478,7 @@ warn_path_shaped_in_statement() {
 # status/review-gap/stamp-distinctness/register-principal/obligate/review/work) has its OWN
 # INSERT INTO ledger that does not carry the column. REFUSE loudly here rather than silently
 # dropping a value the operator explicitly asked to be recorded (the class this file's own
-# `warn_flag_in_statement`/missing-column-refusal idioms both exist to foreclose) -- the flag is
+# `refuse_flag_in_statement`/missing-column-refusal idioms both exist to foreclose) -- the flag is
 # scoped to the generic path today (design/MAINT-LATE-ENTRY-AND-INTAKE-SEMANTICS.md Proposal 2's own
 # worked example is exactly that path); widening it to `review`/`work` is a future increment,
 # not a silent gap.
@@ -527,29 +527,62 @@ SQL
   fi
 }
 
-# --- flag-in-statement tripwire (BACKLOG "Chocofarm experiment-ledger disposition" 2026-07-11
-# night shift, finding 2, run7 row 71): a flag typed INSIDE the quoted statement text is invisible
-# ceremony -- by the time the top-of-file flag loop runs, that text is already part of the
-# statement word(s), so the flag never reaches the parser and the typed FK column it names
-# (supersedes/refs/regards/amends/answers/evidence/confidence) lands NULL, silently (run7 row 71:
-# statement text ended `--supersedes 48 --refs row:57,row:58,row:59`; both columns were NULL --
-# across all 79 run7 rows, supersedes/amends/answers were used zero times despite the vocabulary
-# existing). WARN-ONLY, never refuses: a statement can legitimately QUOTE one of these tokens in
-# prose (e.g. reporting someone else's command verbatim), so a false positive here is a harmless
-# notice, not a blocked write -- a tripwire, not a gate (mirrors demurral_detect.py's own
-# observer-only posture). led's OWN flag vocabulary is spelled out once, here, so a future flag
-# added to the top-of-file parser is not silently invisible to this check (ADR-0012 P1: one list).
-LED_FLAG_VOCAB="--supersedes --refs --regards --amends --answers --evidence --confidence --event-time"
-warn_flag_in_statement() {
-  local text="$1" flag
-  for flag in $LED_FLAG_VOCAB; do
-    case "$text" in
-      *"$flag"*)
-        echo "led: WARNING -- the statement text contains '${flag}', which looks like one of" >&2
-        echo "  led's own flags. Flags inside the quoted statement are NOT parsed -- if you meant" >&2
-        echo "  to set the typed column, re-issue the command with ${flag} OUTSIDE the quotes." >&2
-        echo "  (warn-only tripwire, not a refusal -- a statement that legitimately quotes" >&2
-        echo "  '${flag}' in prose just sees this notice; the write proceeds either way)" >&2
+# --- flag-in-statement REFUSAL (BACKLOG "Chocofarm experiment-ledger disposition" 2026-07-11
+# night shift, finding 2, run7 row 71; escalated from WARN-ONLY to a REFUSAL by ledger item
+# `led-refs-flag-order-parser-bug` after the WARN-ONLY tripwire below proved insufficient -- the
+# SAME mis-parse re-bit the orchestrator (autoharn1 rows 1053/1054) and an experience-world
+# reviewer TWICE in one day (rows 65/66/71, again at 87), each costing a superseding rewrite. A
+# WARNING that is easy to miss in scrollback does not stop a lying-signature-class defect; ADR-0000
+# Rule 2(a) asks for the type that makes the class unrepresentable -- a flag placed after the
+# variadic <statement...> capture is unrepresentable input for THIS parser now, not a noticed-too-
+# late mistake): a flag typed AFTER (or inside) the quoted statement text is invisible ceremony --
+# by the time the top-of-file flag loop runs, that text is already part of the statement word(s),
+# so the flag never reaches the parser and the typed FK column it names (supersedes/refs/regards/
+# amends/answers/evidence/confidence/antecedent) lands NULL, silently (run7 row 71: statement text
+# ended `--supersedes 48 --refs row:57,row:58,row:59`; both columns were NULL -- across all 79
+# run7 rows, supersedes/amends/answers were used zero times despite the vocabulary existing).
+#
+# BOUNDARY, DELIBERATELY NARROW (documented here because a false positive on legitimately-quoted
+# prose would be its own defect): this function scans the ORIGINAL, UNJOINED shell argv words that
+# make up the statement -- i.e. the caller passes "$@" as it stood right after the kind/positional
+# args were shifted off, BEFORE they are collapsed into one "$*" string. It refuses ONLY when one
+# of those words is an EXACT, WHOLE match for a known led flag token. This is why a genuinely
+# quoted mention survives: `./led decision "this references --refs flag in prose"` is a SINGLE
+# shell argument (one $@ word, the whole sentence) -- "--refs" is a SUBSTRING of that one word, not
+# a standalone word of its own, so it never matches and is never refused. Only
+# `./led decision "some text" --refs row:16`, where --refs arrives as its OWN separate shell
+# argument (exactly the trailing-flag mistake this item exists to catch), matches. Re-splitting an
+# already-joined statement string on whitespace (the old WARN-ONLY implementation's approach) does
+# NOT have this property -- a multi-word quoted argument containing "--refs" surrounded by spaces
+# would re-split into a spurious standalone "--refs" token and false-positive, which is exactly the
+# false-positive class this rewrite avoids by never re-joining-then-re-splitting.
+#
+# led's OWN flag vocabulary is spelled out once, here, so a future flag added to the top-of-file
+# parser (or to `led review`'s own --antecedent) is not silently invisible to this check (ADR-0012
+# P1: one list).
+LED_FLAG_VOCAB="-f -e --supersedes --amends --amends-scope --answers --refs --concern --evidence --confidence --event-time --antecedent"
+refuse_flag_in_statement() {
+  local usage="$1"; shift
+  local -a words=("$@")
+  local i word value
+  for ((i = 0; i < ${#words[@]}; i++)); do
+    word="${words[$i]}"
+    case " $LED_FLAG_VOCAB " in
+      *" $word "*)
+        value="${words[$((i + 1))]:-<value>}"
+        echo "led: REFUSED -- the statement contains '${word}' as a TRAILING (or embedded) shell" >&2
+        echo "  argument, which is a known led flag token. Flags are consumed by the top-of-file" >&2
+        echo "  parser BEFORE the variadic <statement...> capture begins -- a flag placed after" >&2
+        echo "  the statement is silently swallowed into statement prose instead of being parsed," >&2
+        echo "  and the typed column it names lands NULL with no error (ledger item" >&2
+        echo "  led-refs-flag-order-parser-bug; BACKLOG autoharn1 rows 1053/1054, experience-world" >&2
+        echo "  rows 65/66/71/87 -- each occurrence cost a superseding rewrite)." >&2
+        echo "  NOTHING was written. Flags go BEFORE the statement -- re-issue as:" >&2
+        echo "    ./led ${usage} ${word} ${value} \"<statement...>\"" >&2
+        echo "  (a statement that legitimately QUOTES '${word}' inside a single shell argument --" >&2
+        echo "  e.g. prose reporting someone else's command verbatim -- is not affected: this" >&2
+        echo "  check only fires when '${word}' arrives as its OWN separate shell argument)" >&2
+        exit 1
         ;;
     esac
   done
@@ -561,8 +594,9 @@ warn_flag_in_statement() {
 # `<schema>.review_gap`'s own semantics (kernel/lineage/s13-schema.sql: ANY unsuperseded,
 # distinct-actor `attest` review discharges -- content is NEVER examined by the view). None of
 # run12's six reviewer passes ever caught it; it stands attested in the append-only record.
-# WARN-ONLY, mirrors warn_flag_in_statement's own posture exactly (same function shape, same
-# tone): a legitimately terse review DOES exist ("Confirmed, matches row 4's stated criteria
+# WARN-ONLY, mirrors warn_path_shaped_in_statement's own posture (same function shape, same
+# tone) -- unlike refuse_flag_in_statement above, which was escalated to a hard REFUSE (ledger
+# item led-refs-flag-order-parser-bug): a legitimately terse review DOES exist ("Confirmed, matches row 4's stated criteria
 # exactly." clears easily), so a false positive here is a harmless notice, not a blocked write --
 # the write PROCEEDS either way, never refused. The retroactive, content-examining half of this
 # check lives in engine/review_gap_audit.py (\`./audit --review-gap\`) -- this tripwire is
@@ -817,8 +851,8 @@ if [ "${1:-}" = "review" ]; then
     exit 1
   fi
   regards="$1"; verdict="$2"; independence="$3"; shift 3
+  refuse_flag_in_statement "review ${regards} ${verdict} ${independence}" "$@"
   statement="$*"
-  warn_flag_in_statement "$statement"
   warn_content_free_review_statement "$statement"
   warn_path_shaped_in_statement "$statement"
   resolve_actor
@@ -1264,6 +1298,7 @@ if [ $# -lt 2 ]; then
 fi
 
 kind="$1"; shift
+refuse_flag_in_statement "[flags] ${kind}" "$@"
 statement="$*"
 
 # --- resource: intake validation (BACKLOG 2026-07-12, run12 witness) ------------------------
@@ -2022,7 +2057,8 @@ PYEOF
     ;;
 esac
 
-warn_flag_in_statement "$statement"
+# flag-in-statement is now REFUSED (not warned) at construction time, immediately after
+# kind/statement are assembled above -- see refuse_flag_in_statement() near the top of this file.
 warn_path_shaped_in_statement "$statement"
 rationale=""
 if [ -n "$files" ]; then

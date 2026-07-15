@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-09T13:36:11Z
-#   last-change: 2026-07-15T14:12:52Z
+#   last-change: 2026-07-15T18:49:51Z
 #   contributors: be693afb/main, e4410ef6/main, 3c50e030/main, 3c942a60/main, a857c93d/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -101,6 +101,7 @@ REGISTRY: dict[str, str] = {
     "link-integrity":                 "seen-red/link-integrity/run_fixtures.py",
     "apparatus-unknown-keys":         "seen-red/apparatus-unknown-keys/run_fixtures.py",
     "worktree-ledgering":             "seen-red/worktree-ledgering/run_fixtures.py",
+    "led-refs-flag-order-parser-bug": "seen-red/led-refs-flag-order-parser-bug/run_fixtures.py",
     "preamble-ordering":              "seen-red/preamble-ordering/run_fixtures.py",
     "resource-intake-validation":     "seen-red/resource-intake-validation/run_fixtures.py",
     "content-free-review-audit":      "seen-red/content-free-review-audit/run_fixtures.py",
