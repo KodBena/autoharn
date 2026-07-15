@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-09T13:36:11Z
-#   last-change: 2026-07-15T20:54:36Z
+#   last-change: 2026-07-15T20:59:29Z
 #   contributors: be693afb/main, e4410ef6/main, 3c50e030/main, 3c942a60/main, a857c93d/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -118,6 +118,7 @@ REGISTRY: dict[str, str] = {
     "s30-typed-dependency-edges":      "seen-red/s30-typed-dependency-edges/run_fixtures.py",
     "s31-supersession-uniform-retraction": "seen-red/s31-supersession-uniform-retraction/run_fixtures.py",
     "lp-module-registry":             "seen-red/lp-module-registry/run_fixtures.py",
+    "s32-edge-views-single-home":     "seen-red/s32-edge-views-single-home/run_fixtures.py",
     "column-complete-gate":           "seen-red/column-complete-gate/run_fixtures.py",
     "freeze-at-stamp":                "seen-red/freeze-at-stamp/run_fixtures.py",
     "verify-chain-error-conflation":  "seen-red/verify-chain-error-conflation/run_fixtures.py",

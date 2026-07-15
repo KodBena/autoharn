@@ -1,0 +1,74 @@
+== case a: scaffolding classic world s32fxa, manual s15..s31 apply ==
+== applying s32 on top of the SAME schema s32fxa ==
+=== a-before-after-output-equality ===
+  [ok] every capture byte-identical before/after s32
+
+== case b: scaffolding classic world s32fxb, manual s15..s32 apply ==
+=== b1-self-parent-refused ===
+  [ok] exit=3 excerpt='berately leaves unrefused, s22). Open the parent first: ./led work open bp-self "<title>", then retry this open with --parent bp-self.\nCONTEXT:  PL/pgSQL function validate_work_item() line 11 at RAISE'
+
+=== b2-dangling-parent-refused ===
+  [ok] exit=3 excerpt='rately leaves unrefused, s22). Open the parent first: ./led work open bp-ghost "<title>", then retry this open with --parent bp-ghost.\nCONTEXT:  PL/pgSQL function validate_work_item() line 11 at RAISE'
+
+=== b3-parent-cycle-function-both-polarities ===
+  [ok] would_cycle(ancestor-under-descendant)=t (expect t) would_cycle(unrelated)=f (expect f) extend_ok=0
+
+=== b4-blocks-close-self-edge-refused ===
+  [ok] exit=3 excerpt='e dependency on itself — a self-edge is refused at construction for blocks-close (s30). informs edges are not subject to this refusal.\nCONTEXT:  PL/pgSQL function validate_work_item() line 28 at RAISE'
+
+=== b5-blocks-close-dangling-antecedent-refused ===
+  [ok] exit=3 excerpt="cked work items (s30), unlike an informs edge's deliberately lax posture (s22). Open the antecedent first, or retry as --type informs.\nCONTEXT:  PL/pgSQL function validate_work_item() line 31 at RAISE"
+
+=== b6-blocks-close-cycle-refused ===
+  [ok] exit=3 excerpt='te a cycle; the obligation AND-tree must be a DAG or conjunction has no fixpoint (s30). informs edges are not subject to this refusal.\nCONTEXT:  PL/pgSQL function validate_work_item() line 33 at RAISE'
+
+=== b7-strict-close-names-unresolved-leaf ===
+  [ok] exit=3 excerpt='bligation tree is unresolved: sc-dep (item is not yet closed). Resolve every named leaf, then retry (s29 Element C: strict close is a pure query over the derived conjunction, no stored verdict).\nCONTEXT:  PL/pgSQL function validate_work_item() line 51 at RAISE'
+
+=== c-allowlist-gate-both-polarities ===
+  [ok] green_exit=0 red_exit=0 teach_names_both_paths=True
+
+== case d: scaffolding classic world s32fxj, manual s15..s32 apply, running ./judge ==
+=== d-judge-agree-unaffected ===
+  [ok] exit=0 tail="ERGE_BY_DESIGN', 'DIVERGE_DEFECT', 'QUARANTINED']; RED = ['DIVERGE_DEFECT', 'QUARANTINED']\n\n  [OK ] s32fxj AGREE              asp=4 sql=4 atoms; Δasp=[] Δsql=[]\n\n# DIFFERENTIAL GREEN -- every target bit-identical to the SQL floor\n\n-- work_item_violations (schema s32fxj) --\nwork_item_violations: none"
+
+ALL CASES OK -- s32 edge-views-single-home: before/after output equality on every re-issued view/function, every pre-existing refusal polarity re-witnessed with unchanged text, allowlist gate green+red, ./judge AGREE unaffected. Zero residue.
+
+==================================================================================
+RED-POLARITY EVIDENCE (grep-witnessed): the pre-s32 multi-home world's duplicated
+direction-flip prose and discharge-join homes, vs the one home each after s32.
+==================================================================================
+
+-- RED (pre-s32, s15..s31): direction-flip comment block homes (F3) --
+kernel/lineage/s29-obligation-item-key-and-typed-close.sql
+kernel/lineage/s30-typed-dependency-edges.sql
+  (3 homes: s29:466-473, s30:382-391, s31:384-391 -- the SAME comment block, hand-copied
+   verbatim each time work_item_strict_blockers() was re-issued)
+
+-- RED (pre-s32, s15..s31): discharge-join hand-copies (an un-superseded attest review
+   join shape -- r.kind='review' AND d.verdict='attest' AND NOT EXISTS(supersedes)) --
+kernel/lineage/s30-typed-dependency-edges.sql:2
+kernel/lineage/s31-supersession-uniform-retraction.sql:2
+kernel/lineage/s29-obligation-item-key-and-typed-close.sql:3
+kernel/lineage/s15-schema.sql:2
+  (s15: review_gap + countersigned_in_force = 2; s29: countersigned_in_force re-issue +
+   work_review_gap + strict_blockers.review_unresolved = 3; s30/s31: countersigned_in_force
+   re-issue + strict_blockers.review_unresolved re-issue = 2 each -- FOUR independent hand
+   homes of the same join shape, re-copied at every intervening delta that had to touch
+   countersigned_in_force or work_item_strict_blockers() for an unrelated reason)
+
+-- GREEN (after s32): direction-flip semantics, ONE home each (work_edge_parent /
+   work_edge_blocks_close's own COMMENT ON VIEW text) --
+2
+
+-- GREEN (after s32): discharge-join semantics, ONE home (discharging_attest) --
+4
+
+-- GREEN (after s32): zero new inline 'NOT EXISTS (... supersedes ...)' outside the
+   projection/discharging_attest homes -- every re-issued consumer composes via JOIN/EXISTS
+   against a named view, never re-derives the anti-join --
+3 (grep-matched lines; one is this file's OWN header prose describing the pattern in words,
+  not code -- kernel/lineage/s32-edge-views-single-home.sql:90; the other two are
+  review_gap's and countersigned_in_force's OWN pre-existing row-currentness anti-join,
+  untouched per s32's own header -- a DIFFERENT concern from the discharge join this delta
+  collapses. Zero occurrences inside any re-issued discharge leg.)
