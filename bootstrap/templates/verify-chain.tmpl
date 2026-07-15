@@ -212,12 +212,43 @@ def has_row_hash_layer(dep) -> tuple[bool | None, str]:
 
 
 def walk_chain(dep) -> tuple[list[dict] | None, str]:
+    """Walks every ledger row that CARRIES a row_hash. This is `WHERE l.row_hash IS NOT NULL`,
+    not `ORDER BY l.id` over the whole table unconditionally -- added 2026-07-15, tracker item
+    s26-accommodation-build, MID-HISTORY CHAIN START: a world migrated in place via
+    kernel/lineage/s26-row-hash-chain.accommodate.sql legitimately carries pre-migration-epoch
+    rows with NULL row_hash (exempt by type, never backfilled -- see that file's own header).
+    Before this fix, walking ALL rows unconditionally computed an "expected" hash for every
+    pre-epoch row too and compared it against its (always NULL) `stored` value -- ALWAYS a
+    mismatch, so a migrated world's chain reported BROKEN at row 1 with EVERY row flagged,
+    witnessed directly rehearsing this build's own accommodation against a byte-faithful clone of
+    real autoharn1 history (997/997 rows "mismatched"). The predecessor-hash subquery below is
+    UNCHANGED and does not need to be: it already looks at the row IMMEDIATELY preceding `l.id`
+    (regardless of that predecessor's own null-ness) and COALESCEs a NULL predecessor hash to the
+    genesis seed -- which is exactly what the live `zz_set_row_hash` trigger itself does (it reads
+    "the last row" unconditionally, not "the last row with a hash"), so the first WALKED
+    (post-epoch) row's expected predecessor is correctly the genesis seed whenever the row
+    immediately before it is a pre-epoch, NULL-row_hash row -- the natural, mid-chain-start
+    equivalent of a birth-chain world's very first row. A birth-chain world has no pre-epoch rows
+    at all, so this filter is a no-op there -- identical behavior to before this fix."""
     sql = (f"SELECT l.id, l.row_hash AS stored, "
            f"{dep.schema}.compute_row_hash(l, COALESCE("
            f"(SELECT p.row_hash FROM {dep.schema}.ledger p WHERE p.id < l.id ORDER BY p.id DESC LIMIT 1), "
            f"(SELECT seed FROM {dep.kern}.chain_genesis LIMIT 1))) AS expected "
-           f"FROM {dep.schema}.ledger l ORDER BY l.id")
+           f"FROM {dep.schema}.ledger l WHERE l.row_hash IS NOT NULL ORDER BY l.id")
     return _psql_json_rows(dep, sql)
+
+
+def count_pre_epoch_exempt_rows(dep) -> int | None:
+    """Rows with NULL row_hash that `walk_chain` correctly skips -- reported alongside the walk
+    result purely as EVIDENCE (never affects the exit code) so an operator reading verify-chain's
+    output on a migrated world sees the skip was deliberate, not silent. Returns None (never
+    raises) if the count query itself fails -- advisory only, mirrors `sequence_last_value`'s own
+    fail-open posture; the count is corroboration, not a claim this function is depended on for."""
+    rows, err = _psql_json_rows(dep, f"SELECT count(*) AS n FROM {dep.schema}.ledger "
+                                      f"WHERE row_hash IS NULL")
+    if not rows:
+        return None
+    return rows[0].get("n")
 
 
 def verify(dep) -> tuple[str, dict]:
@@ -245,15 +276,17 @@ def verify(dep) -> tuple[str, dict]:
     rows, err = walk_chain(dep)
     if rows is None:
         return "ERROR", {"reason": err}
+    exempt = count_pre_epoch_exempt_rows(dep)
     if not rows:
-        return "EMPTY", {"reason": "no ledger rows yet"}
+        return "EMPTY", {"reason": "no ledger rows yet", "pre_epoch_exempt_rows": exempt}
     breaks = [r for r in rows if r["stored"] != r["expected"]]
     if breaks:
         first = breaks[0]
         return "BROKEN", {"first_break_id": first["id"], "stored": first["stored"],
                            "expected": first["expected"], "total_breaks": len(breaks),
-                           "rows_walked": len(rows)}
-    return "INTACT", {"rows_walked": len(rows), "head_id": rows[-1]["id"], "head_hash": rows[-1]["stored"]}
+                           "rows_walked": len(rows), "pre_epoch_exempt_rows": exempt}
+    return "INTACT", {"rows_walked": len(rows), "head_id": rows[-1]["id"], "head_hash": rows[-1]["stored"],
+                       "pre_epoch_exempt_rows": exempt}
 
 
 def has_high_water_layer(dep) -> tuple[bool | None, str]:
@@ -416,8 +449,12 @@ def main(argv: list[str]) -> int:
     witness_line, witness_status, _ = _witness_note(dep, status, detail)
 
     if status == "INTACT":
+        exempt_note = (f", {detail['pre_epoch_exempt_rows']} pre-migration-epoch row(s) exempt "
+                        f"by type (NULL row_hash, skipped -- kernel/lineage/"
+                        f"s26-row-hash-chain.accommodate.sql)"
+                        if detail.get("pre_epoch_exempt_rows") else "")
         print(f"verify-chain: INTACT -- {detail['rows_walked']} row(s) walked, head id="
-              f"{detail['head_id']} hash={detail['head_hash']}")
+              f"{detail['head_id']} hash={detail['head_hash']}{exempt_note}")
         print(witness_line)
         if witness_status == "TAIL-DELETION-SUSPECT":
             return 3
