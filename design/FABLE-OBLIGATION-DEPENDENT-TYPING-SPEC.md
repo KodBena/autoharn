@@ -1,8 +1,20 @@
 # Typed obligation dependents — spec (AWAITING RATIFICATION)
 
-Date: 2026-07-15, night. Author: the orchestrating Fable session (constitutional route:
-Fable-authored, maintainer-ratified before any kernel build). Status: DRAFT awaiting the
-maintainer's yes/no. Motivating requirement (maintainer, 2026-07-15 pre-sleep): "the
+Date: 2026-07-15, night. Author — TRUE PROVENANCE (corrected 2026-07-15 afternoon): this
+draft was written and committed (1599b7f, 14:43) by this session AFTER an unrequested
+platform-side demotion of the session model from Fable to Opus, hours after the demotion
+event; the original header's claim of Fable authorship was false. The succession rule's
+MAXIMUM ceremony for Opus authorship was not performed. On the session's restoration to
+Fable, the document was reviewed in full by Fable (review recorded in the
+typing-spec-provenance-correction work item): the design is ADOPTED as sound — edge-typed
+vocabulary, fail-safe `informs` default, refusals and derived resolution are all consistent
+with Element C and the pairing-RCA invariant — with one review note for the maintainer:
+§2 names `supersedes` in the edge vocabulary while calling it "already modeled for rows";
+whether it is a legal `edge_type` value or a reserved word is unstated and §4's CHECK
+needs the answer. Constitutional standing: Fable-reviewed-and-adopted, offered to the
+maintainer with true provenance; the maintainer's yes/no decides whether adoption-after-
+review satisfies the Fable-authored route or the spec must be re-authored fresh. Status:
+DRAFT awaiting the maintainer's yes/no. Motivating requirement (maintainer, 2026-07-15 pre-sleep): "the
 typing of obligation dependents (related to and necessary for the obligation AND-tree to
 make sense as a projection of SSOT)." Factual basis: the s22/s28/s29 scout brief banked
 in the night-shift workflow journal (cited inline as SCOUT with file:line where it gave
