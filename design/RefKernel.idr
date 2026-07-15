@@ -4,6 +4,12 @@
 ||| Substrate ground truth for every section: kernel/lineage/s22/s29/s30/s31.sql +
 ||| engine/lp/ledger_tnow.lp, work_items.lp. Common Entry columns not load-bearing
 ||| for a claim (session/statement/amends/answers/enacts) are elided and said so.
+|||
+||| STATUS (2026-07-15, later): all nine refinements (R1-R9) folded into
+||| design/Autoharn.idr, which now supersedes this file as the checked model.
+||| This file is kept, unmodified, as the consultation's own checked artifact --
+||| historical record of the refinement claims as first proved, one probe per
+||| claim, referenced from Autoharn.idr's provenance header.
 module RefKernel
 
 import Data.Fin

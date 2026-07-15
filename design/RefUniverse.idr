@@ -9,6 +9,13 @@
 ||| that manifest, single-homed. Contrast: the shipped Autoharn.idr GADT fuses
 ||| vocabulary and shapes into one closed type, so "which kinds exist" is not
 ||| a value any function can quantify over.
+|||
+||| STATUS (2026-07-15, later): design/Autoharn.idr's 2026-07-15 refresh
+||| considered adopting this universe pattern and kept the fused GADT instead,
+||| on readability grounds for a non-Idris-fluent reader (see Autoharn.idr's
+||| own "UNIVERSE DECISION" header note, which cites this file by name as the
+||| checked equivalent rendering). Kept here, unmodified, as that consultation's
+||| own checked artifact -- revisit if the kind vocabulary starts growing fast.
 module RefUniverse
 
 import Data.Fin
