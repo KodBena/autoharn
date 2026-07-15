@@ -218,6 +218,37 @@ Forward-compatibility audit of the ratified design against that rider, honestly 
   `obligation-actor-type-system` holds that question; if a re-architecture wins there,
   this spec's elements are its migration inputs, not its constraints.
 
+## 10. Amendment (2026-07-14 night, AWAITING RATIFICATION) — the pre-migration epoch
+
+The ent rehearsal (witnessed, migrator report + ledger rows) falsified sec-7's corrected
+claim: Element B's two-way shape CHECK validates historical rows at ADD CONSTRAINT
+time, so any deployment with pre-s29 `work_closed` rows (ent: 157) refuses the
+migration. s29 as built silently assumed an empty ledger — birth-chain delivery.
+Amendment, choosing between the two honest candidates the migrator banked:
+
+- **RECOMMENDED — (ii) typed migration epoch.** s29 gains a one-row
+  `migration_epoch` table written by the applying act itself (epoch = the ledger's
+  max id at migration, plus provenance: dump path, date, applying authority — this row
+  is also a natural home for the root-provisioning anchor going forward, composing
+  with the maintainer's root-entry idea). The CHECK becomes: a `work_closed` row with
+  id > epoch must carry a disposition; rows at-or-before the epoch are exempt BY TYPE.
+  Birth-chain worlds get epoch 0 — all rows governed, semantics unchanged. The
+  exemption is a declared, queryable fact a zero-context reader can see, not a
+  constraint-state subtlety.
+- (i) `NOT VALID` constraint — Postgres-idiomatic, same net effect, but the exemption
+  lives in catalog state ("old rows never checked") rather than in a typed, cited
+  boundary; rejected as less legible, kept here as the fallback if the epoch table is
+  judged over-engineering.
+- (iii) backfill — REJECTED with the migrator's analysis owned: 'deferred' backfill
+  would mint 157 debt rows re-creating the conveyor this spec kills; 'witnessed'
+  backfill fabricates refs, silently (the s26 hash excludes the new columns). Worse
+  than the disease.
+
+On ratification of this amendment: a Sonnet builder amends the s29 file + fixture on
+its existing branch (adding an epoch-boundary polarity case: pre-epoch close accepted,
+post-epoch review-silent close refused), the rehearsal re-runs from its banked runbook,
+and Phase 2 proceeds as originally briefed.
+
 <!-- doc-attest-exempt: DRAFT constitutional spec awaiting maintainer ratification; will
 receive its full fresh-context A:B:C loop at ratification, when its content is final --
 attesting a draft the maintainer may rewrite would burn the loop on text with no
