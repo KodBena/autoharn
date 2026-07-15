@@ -1,0 +1,61 @@
+== scaffolding classic world s35fxprobe + manual s15..s33+s35 apply (s34 excluded) ==
+  scaffold OK (schema=s35fxprobe).
+
+=== a-open-claim-close-roundtrip ===
+  [ok] close_exit=0 state='closed'
+
+=== b-duplicate-open-refused ===
+  [ok] exit=3 exact_text_match=True
+
+=== c-event-on-unopened-slug ===
+  [ok] exit=3 excerpt='ater event on an item must reference an item that has been opened (invariant 2, item identity).\nCONTEXT:  PL/pgSQL function validate_work_item() line 9 at RAISE'
+
+=== d-dangling-parent-refused ===
+  [ok] exit=3 exact_text_match=True
+
+=== e-parent-cycle-function-direct ===
+  [ok] negative='f' positive='t'
+
+=== f-depends-self-edge-refused ===
+  [ok] exit=3 exact_text_match=True
+
+=== g-depends-dangling-antecedent ===
+  [ok] exit=3 exact_text_match=True
+
+=== h-depends-default-informs ===
+  [ok] exit=0 edge_type='informs'
+
+=== i-depends-cycle-refused ===
+  [ok] exit=3 excerpt='point (s30). informs edges are not subject to this refusal.\nCONTEXT:  PL/pgSQL function validate_work_item_depends(ledger) line 13 at RAISE\nPL/pgSQL function validate_work_item() line 12 at assignment'
+
+=== j-epoch-gated-review-missing ===
+  [ok] exit=1 excerpt='never silent (s29 Element B, sec-10 epoch amendment). Retry with --review-witness <ref> or --review-deferred.\nCONTEXT:  PL/pgSQL function validate_work_item_close(ledger,boolean,text) line 7 at RAISE\nPL/pgSQL function validate_work_item() line 16 at assignment'
+
+=== k-strict-deferred-refused ===
+  [ok] exit=1 exact_text_match=True
+
+=== l-strict-witnessed-blockers ===
+  [ok] exit=3 excerpt='se is a pure query over the derived conjunction, no stored verdict).\nCONTEXT:  PL/pgSQL function validate_work_item_close(ledger,boolean,text) line 17 at RAISE\nPL/pgSQL function validate_work_item() line 16 at assignment'
+
+=== m-strict-witnessed-resolved-ok ===
+  [ok] exit=0 state='closed'
+
+=== n-retracted-open-still-refused ===
+  [ok] exit=3 exact_text_match=True
+
+=== o-composite-zero-children-open ===
+  [ok] effective_state='open'
+
+=== p-composite-strict-by-type ===
+  [ok] exit=3 names_child=True no_strict_flag_passed=True excerpt='se is a pure query over the derived conjunction, no stored verdict).\nCONTEXT:  PL/pgSQL function validate_work_item_close(ledger,boolean,text) line 17 at RAISE\nPL/pgSQL function validate_work_item() line 16 at assignment'
+
+=== q-ordering-hazard-shape-comparison ===
+  [ok] shape-A refused-NULL=True shape-B(correctly-named)-refused-NULL=True shape-B(after rename)-defect-landed-val=999-with-no-error=True
+
+=== r-byte-identity-gate-both-polarities ===
+  [ok] green_exit=0 red_exit=1 names_leaf_and_diff=True
+
+=== s-differential-agree ===
+  [ok] verdict=AGREE asp_atoms=29 sql_atoms=29 only_asp=[] only_sql=[]
+
+ALL CASES OK -- s35 validation decomposition both-polarity proof (open/claim/close round trip, s22/s28/s29/s30/s31/s33 refusal polarities re-witnessed with s33-era-exact error text against the s35 dispatcher+leaf shape, parent-cycle function direct probe, the ordering-hazard shape comparison re-run live, the byte-identity gate green+red, standing ./judge --layer work differential AGREE), zero residue.
