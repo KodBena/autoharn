@@ -1,0 +1,43 @@
+seen-red/s29-migration-epoch -- BANKED RED EVIDENCE (2026-07-15, s29-epoch-amend-and-apply)
+
+This is the failure design/MAINT-COUNTERSIGN-CLOSE-SEMANTICS-SPEC.md sec-10's migration-epoch
+amendment exists to fix, reproduced directly: the PRE-AMENDMENT s29 file (commit 92e1c75,
+kernel/lineage/s29-obligation-item-key-and-typed-close.sql as originally ratified 2026-07-14)
+applied via `psql -f` against a scratch schema carrying ONE pre-existing work_closed row (the
+"157 historical rows" ent shape, minimized to 1) -- exactly the scenario the 2026-07-14 ent
+rehearsal witnessed live and design/MAINT-COUNTERSIGN-CLOSE-SEMANTICS-SPEC.md sec-10 names
+verbatim ("ent: 157 ... refuses the migration").
+
+Reproduction (adapted for this repo's own toy substrate; the ent numbers are in the spec):
+
+    $ psql -h 192.168.122.1 -d toy -v schema=s29redcap -v kern=s29redcap_kernel \
+        -v role=s29redcap_rw -f kernel/lineage/s15-schema.sql [... s17..s28 ...]
+    $ psql ... -c "INSERT INTO ledger (...) VALUES ('work_opened', 'item-hist', ...);
+                    INSERT INTO ledger (...) VALUES ('work_closed', 'item-hist', 'shipped', ...);"
+    $ git show 92e1c75:kernel/lineage/s29-obligation-item-key-and-typed-close.sql \
+        > /tmp/s29-pre-amendment.sql
+    $ psql -h 192.168.122.1 -d toy -v ON_ERROR_STOP=1 \
+        -v schema=s29redcap -v kern=s29redcap_kernel -v role=s29redcap_rw \
+        -f /tmp/s29-pre-amendment.sql
+
+Observed (verbatim):
+
+    ALTER TABLE
+    ALTER TABLE
+    ALTER TABLE
+    COMMENT
+    COMMENT
+    COMMENT
+    psql:/tmp/s29-pre-amendment.sql:277: NOTICE:  constraint "work_review_disposition_kind_shape" of relation "ledger" does not exist, skipping
+    ALTER TABLE
+    psql:/tmp/s29-pre-amendment.sql:279: ERROR:  check constraint "work_review_disposition_kind_shape" of relation "ledger" is violated by some row
+
+This is the exact class the amended file (this session, kernel/lineage/s29-obligation-item-key-
+and-typed-close.sql, sec-10) forecloses: `work_review_disposition_kind_shape` is no longer a
+bare table CHECK (which validates every existing row at ADD CONSTRAINT time, unconditionally);
+the disposition-presence invariant moved into `validate_work_item()`, epoch-gated via the new
+`migration_epoch` table -- see that file's own AMENDMENT header for the full design. The GREEN
+proof that the amended file applies cleanly over identical pre-existing history, and correctly
+governs only rows past the recorded epoch, is seen-red/s29-migration-epoch/run_fixtures.py
+(5 cases: pre-epoch-exempt, post-epoch-review-silent-refused, post-epoch-witnessed-accepted,
+idempotent-reapply, epoch-zero-fresh-world), all green as of this same session.

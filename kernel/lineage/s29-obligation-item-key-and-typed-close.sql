@@ -122,8 +122,15 @@
 --   - QUANTIFICATION UNIVERSE -- enumerated by re-reading every table/view the s15..s28 chain
 --     exposes to :role (mirroring s22/s28's own re-verification discipline), checked against the
 --     new columns/objects this delta adds:
---       TABLES reachable off :"schema"/:"kern": unchanged -- no new base table (Element A's own
---         no-new-table doctrine, re-applied).
+--       TABLES reachable off :"schema"/:"kern": unchanged w.r.t. Element A/B/C proper -- still no
+--         new base table under :"schema" (Element A's own no-new-table doctrine, re-applied). The
+--         sec-10 AMENDMENT adds exactly ONE new base table, and it lives under :"kern" (not
+--         :"schema"), mirroring :kern.chain_genesis/:kern.chain_high_water (s26/s27's own
+--         precedent for a one-row, kernel-side infrastructure fact): :"kern".migration_epoch
+--         (only_one, epoch, applied_ts, dump_path, applied_by), GRANT SELECT to :role, no
+--         write grant (see the AMENDMENT section above for the full design and why a base table
+--         was unavoidable here -- a CHECK constraint cannot read a value from another table, so
+--         "exempt below a value read elsewhere" cannot be expressed any other way).
 --       VIEWS re-read for the wildcard/column-complete class s20/s22/s23/s24/s26/s28 all named:
 --         * ledger_current / countersigned_in_force -- explicit column lists (s20+). GAIN the
 --           THREE new columns (work_review_disposition, work_review_ref, work_strict_close),
@@ -238,6 +245,129 @@
 \else
   \set role vsr_rw
 \endif
+-- AMENDMENT-ONLY VARS (sec-10, 2026-07-15 night): provenance strings the applying act may supply;
+-- both default to '' (NULLIF'd to NULL below) so a `psql -f` run with no extra `-v` at all -- e.g.
+-- a --new-world birth-chain apply, which passes only schema/kern/role -- still runs correctly and
+-- self-identifies epoch=0 by the ledger-emptiness argument in the migration_epoch block below, not
+-- by these vars being set.
+\if :{?epoch_dump_path}
+\else
+  \set epoch_dump_path ''
+\endif
+\if :{?epoch_applied_by}
+\else
+  \set epoch_applied_by ''
+\endif
+
+-- ============================================================================================
+-- AMENDMENT (sec-10 of design/MAINT-COUNTERSIGN-CLOSE-SEMANTICS-SPEC.md, 2026-07-14 night,
+-- RATIFIED 2026-07-15 pre-sleep -- ledger decision row 935 -- CONDITIONALLY, with the execution
+-- rule that ANY rehearsal/apply breakage is the pre-accepted "harmful" branch, not a failure) --
+-- THE PRE-MIGRATION EPOCH, option (ii) from the amendment's own two honest candidates.
+--
+-- WHY (falsified claim, named not buried): sec-7's "class-ratified fail-safe" framing assumed an
+-- empty ledger (birth-chain-only delivery). The ent rehearsal (2026-07-14) witnessed the ORIGINAL
+-- `work_review_disposition_kind_shape` -- a plain two-way `CHECK ((kind='work_closed') =
+-- (disposition IS NOT NULL))` -- REFUSE to even ADD on a deployment carrying pre-s29 work_closed
+-- rows (ent: 157): `ADD CONSTRAINT` validates EVERY EXISTING ROW at DDL time (unless `NOT VALID`),
+-- and every one of those 157 rows has `disposition IS NULL` while `kind='work_closed'` -- an
+-- immediate, universal violation. The amendment's REJECTED alternatives, both in this file's own
+-- history, are also named here for a zero-context reader: (i) `NOT VALID` on the same CHECK is
+-- Postgres-idiomatic but leaves the exemption living in unqueryable catalog state ("old rows were
+-- never checked", an absence, not a fact); (iii) backfilling a disposition onto the 157 historical
+-- rows was REJECTED outright -- `deferred` mints 157 fresh review_gap debt rows, RE-CREATING THE
+-- EXACT CONVEYOR THIS SPEC EXISTS TO KILL (sec-1's own defect), and `witnessed` fabricates 157
+-- review refs that were never made (s26's row_hash chain excludes these new columns from its
+-- fixed column list, so this would not even be DETECTABLE as a fabrication after the fact) --
+-- worse than the disease either way.
+--
+-- THE DESIGN: a one-row `migration_epoch` table (below), written ONCE by the applying act itself
+-- (birth-chain OR in-place, this file draws no distinction -- see "BIRTH-CHAIN = EPOCH 0" below),
+-- holding `epoch = the ledger's max id AT THE MOMENT THIS FILE IS APPLIED`. Every `work_closed`
+-- row with `id > epoch` is GOVERNED (must carry a disposition, exactly sec-4's original invariant,
+-- unchanged); every row at-or-before the epoch is EXEMPT BY TYPE -- a declared, queryable fact
+-- (`SELECT epoch, dump_path, applied_by, applied_ts FROM migration_epoch`) a zero-context reader
+-- or auditor can read directly, never a constraint-state subtlety inferred from what a `\d+
+-- ledger` catalog dump does NOT show.
+--
+-- WHY THIS IS A TRIGGER, NOT A SECOND CHECK CONSTRAINT (a real Postgres limit, not a style
+-- choice): a `CHECK` constraint is evaluated per-row against ONLY that row's own columns -- it
+-- cannot contain a subquery or reference any other table (Postgres: "cannot contain subqueries
+-- nor refer to variables other than columns of the current row"), so "exempt below a value read
+-- from another table" is NOT EXPRESSIBLE as a `CHECK` at all, epoch table or not. This is why
+-- `work_review_disposition_kind_shape` (the DECLARATIVE, construction-time CHECK sec-4's own text
+-- calls "the strongest available surface") is DROPPED below and its invariant re-homed inside
+-- `validate_work_item()` (the SAME BEFORE INSERT trigger this file already extends three times) --
+-- named, not silently weakened: a BEFORE INSERT trigger refuses an illegal row exactly as
+-- completely as a CHECK does (Postgres runs it before the row is ever visible to any other
+-- transaction), it is simply the ONLY surface that can also consult `migration_epoch`. The three
+-- OTHER Element B/C CHECK constraints below (`work_review_disposition_check`,
+-- `work_review_ref_kind_shape`, `work_review_witnessed_requires_ref`, `work_strict_close_kind_shape`)
+-- are UNCHANGED, still plain CHECKs: each one is vacuously satisfied by every historical row
+-- (`work_review_disposition IS NULL`, `work_review_ref IS NULL`, `work_strict_close IS NULL` on
+-- every pre-s29 row makes each of those four predicates TRUE regardless of epoch), so ONLY the
+-- disposition-presence invariant needed to move -- a minimal-touch fix (ADR-0004), not a rewrite of
+-- Element B's shape.
+--
+-- BIRTH-CHAIN = EPOCH 0, SEMANTICS UNCHANGED (verified, not asserted -- see the fixture below):
+-- `bootstrap/new-project.sh --new-world` applies the FULL `kernel/lineage/` chain, s29 included,
+-- to a schema with ZERO ledger rows, BEFORE the very first `led work open`/`led decision` etc. is
+-- ever issued (new-project.sh's own ordering: kernel apply, THEN stamp-secret seed, THEN
+-- chain-genesis seed, THEN principal registration -- all schema/DDL/seed acts, never a ledger
+-- INSERT). `SELECT COALESCE(max(id),0) FROM ledger` against an empty ledger returns exactly 0 --
+-- no special-casing, no `--new-world`-vs-in-place branch anywhere in this file: the SAME one
+-- `INSERT INTO migration_epoch ... SELECT COALESCE(max(id),0) ...` statement below naturally
+-- yields epoch=0 for a birth-chain world and epoch=<real max> for an in-place migration, because
+-- the fact it reads (the ledger's own row population at apply time) IS the distinction, not a flag
+-- this file has to be told. Epoch 0 makes `NEW.id > 0` true for literally every row a birth-chain
+-- world will ever write (ledger `id` is a strictly-increasing serial starting at 1) -- so a
+-- birth-chain world's disposition invariant governs EVERY work_closed row, byte-for-byte the
+-- pre-amendment behavior; nothing about Element B/C's semantics changes for a fresh world.
+-- ============================================================================================
+
+-- ============================================================================================
+-- migration_epoch -- the one-row, kernel-side (mirrors :kern.chain_genesis/:kern.chain_high_water,
+-- s26/s27's own precedent -- infrastructure facts live in :kern, never in the subject-visible
+-- :schema) provenance record of this delta's own epoch. `ON CONFLICT (only_one) DO NOTHING` makes
+-- this WRITE-ONCE, permanently -- a second `psql -f` of this same file (idempotent re-apply, this
+-- file's own standing contract) must NEVER re-widen an already-fixed epoch by recomputing
+-- `max(id)` a second time against a now-larger ledger; the FIRST apply's epoch is the one that
+-- governs for this world's whole remaining lifetime. `dump_path`/`applied_by` are OPTIONAL
+-- provenance (sec-10: "provenance: dump path, date, applying authority") -- NULL when the applying
+-- act supplies no `-v epoch_dump_path=...`/`-v epoch_applied_by=...` (every birth-chain apply, and
+-- any manual in-place apply that omits them); `applied_ts` is always populated (`now()`, never
+-- optional -- "date" from sec-10's own list is never absent). This table is ALSO a natural home
+-- for a future root-provisioning anchor (sec-10's own aside, "this row is also a natural home for
+-- the root-provisioning anchor going forward") -- named, not built: no such column exists here,
+-- filed for whoever designs that mechanism to extend this table rather than mint a sibling one
+-- (ADR-0012 P1).
+-- ============================================================================================
+CREATE TABLE IF NOT EXISTS :"kern".migration_epoch (
+    only_one   boolean PRIMARY KEY DEFAULT true CHECK (only_one),
+    epoch      bigint NOT NULL,
+    applied_ts timestamptz NOT NULL DEFAULT now(),
+    dump_path  text,
+    applied_by text
+);
+INSERT INTO :"kern".migration_epoch (only_one, epoch, dump_path, applied_by)
+SELECT true, COALESCE(max(id), 0), NULLIF(:'epoch_dump_path', ''), NULLIF(:'epoch_applied_by', '')
+FROM :"schema".ledger
+ON CONFLICT (only_one) DO NOTHING;
+
+GRANT SELECT ON :"kern".migration_epoch TO :"role";
+-- No INSERT/UPDATE/DELETE grant to :role -- the epoch is written once, by the schema owner
+-- applying this delta, exactly like :kern.chain_genesis's own posture (s26's own comment, "the
+-- seed is written once, by the scaffold, as the schema owner -- the subject can read it ... but
+-- cannot rewrite it"), one table over.
+
+COMMENT ON TABLE :"kern".migration_epoch IS
+  'sec-10 amendment (kernel/lineage/s29-obligation-item-key-and-typed-close.sql): the one-row,
+   write-once record of the ledger id boundary this world''s s29 apply drew. work_closed rows with
+   id <= epoch predate the review-disposition invariant and are EXEMPT BY TYPE (a declared,
+   queryable fact -- see this file''s AMENDMENT header for the full rationale); rows with
+   id > epoch are governed exactly as Element B''s original, unconditional text describes. A
+   birth-chain (--new-world) apply always yields epoch=0 (the ledger is empty at apply time),
+   which governs every row that world will ever write -- semantics unchanged for a fresh world.';
 
 -- ============================================================================================
 -- ELEMENT B -- THE THREE NEW COLUMNS on ledger (review disposition/ref legal+mandatory only on
@@ -271,12 +401,16 @@ COMMENT ON COLUMN :"schema".ledger.work_strict_close IS
 
 -- ============================================================================================
 -- SHAPE INVARIANTS (illegal states unrepresentable AT CONSTRUCTION, ADR-0000 Rule 1 -- the
--- strongest available surface). work_review_disposition_kind_shape is the TWO-WAY correlation
--- that makes a review-silent close unrepresentable (Element B's whole point).
+-- strongest available surface WHERE a plain CHECK can express it). The TWO-WAY correlation that
+-- makes a review-silent close unrepresentable (Element B's whole point) is, as of the sec-10
+-- amendment, EPOCH-GATED -- see this file's AMENDMENT header for why that makes it a
+-- `validate_work_item()` trigger clause (below) rather than a table CHECK: a CHECK cannot consult
+-- `migration_epoch`, a different table, at all. This DROP is kept (idempotent cleanup) in case
+-- this schema carries the CONSTRAINT from a PRE-amendment apply of this same file -- re-running
+-- the amended file against such a schema must actively REMOVE the old, epoch-blind CHECK, not
+-- merely fail to re-add it.
 -- ============================================================================================
 ALTER TABLE :"schema".ledger DROP CONSTRAINT IF EXISTS work_review_disposition_kind_shape;
-ALTER TABLE :"schema".ledger ADD CONSTRAINT work_review_disposition_kind_shape CHECK (
-    (kind = 'work_closed') = (work_review_disposition IS NOT NULL));
 
 ALTER TABLE :"schema".ledger DROP CONSTRAINT IF EXISTS work_review_disposition_check;
 ALTER TABLE :"schema".ledger ADD CONSTRAINT work_review_disposition_check CHECK (
@@ -381,8 +515,17 @@ $fn$;
 -- unresolved descendant/dependency leaf. Every pre-existing branch (duplicate-open; dangling
 -- parent/cycle; unopened-slug) is UNCHANGED, byte-for-byte, below.
 -- ============================================================================================
+-- sec-10 amendment: :"kern" is added to this function's search_path (mirrors s26's own
+-- zz_set_row_hash(), "SET search_path = :"schema", :"kern", pg_temp" -- the SAME reason: psql
+-- does NOT interpolate :"var" tokens INSIDE a dollar-quoted function BODY at all -- witnessed
+-- directly authoring this amendment (`:"kern".migration_epoch` inside $fn$...$fn$ reaches the
+-- server as a literal, un-substituted colon and fails with "syntax error at or near \":\""; only
+-- the CREATE FUNCTION preamble, outside the dollar quotes, is ever substituted) -- so a bare
+-- `migration_epoch` inside the body, resolved through search_path at RUNTIME, is the only correct
+-- way to reach a :kern-schema table from inside this function, exactly s26's own established
+-- idiom, not a new pattern.
 CREATE OR REPLACE FUNCTION :"schema".validate_work_item() RETURNS trigger LANGUAGE plpgsql
-    SET search_path = :"schema", pg_temp AS $fn$
+    SET search_path = :"schema", :"kern", pg_temp AS $fn$
 DECLARE
   blockers text;
 BEGIN
@@ -400,6 +543,16 @@ BEGIN
   ELSIF NEW.kind IN ('work_claimed','work_depends_on','work_closed') THEN
     IF NOT EXISTS (SELECT 1 FROM ledger WHERE kind = 'work_opened' AND work_slug = NEW.work_slug) THEN
       RAISE EXCEPTION 'Ledger policy: work item slug ''%'' has no opening act — every later event on an item must reference an item that has been opened (invariant 2, item identity).', NEW.work_slug;
+    END IF;
+    -- sec-10 amendment: Element B's disposition-presence invariant, EPOCH-GATED (re-homed here
+    -- from a plain CHECK -- see this file's AMENDMENT header for why a CHECK cannot express this).
+    -- COALESCE(...,0) is the fail-safe direction if migration_epoch's one row were ever absent
+    -- (it never should be -- this file's own INSERT above always seeds it before this trigger can
+    -- run): epoch=0 means EVERYTHING is governed, the strict/safe reading, never fail-open.
+    IF NEW.kind = 'work_closed'
+       AND NEW.id > COALESCE((SELECT epoch FROM migration_epoch LIMIT 1), 0)
+       AND NEW.work_review_disposition IS NULL THEN
+      RAISE EXCEPTION 'Ledger policy: work_closed row for item ''%'' (ledger id %) carries no review disposition — every close act past this world''s migration epoch (id %, see %.migration_epoch) must be witnessed or deferred, never silent (s29 Element B, sec-10 epoch amendment). Retry with --review-witness <ref> or --review-deferred.', NEW.work_slug, NEW.id, (SELECT epoch FROM migration_epoch LIMIT 1), TG_TABLE_SCHEMA;
     END IF;
     IF NEW.kind = 'work_closed' AND COALESCE(NEW.work_strict_close, false) THEN
       IF NEW.work_review_disposition = 'deferred' THEN

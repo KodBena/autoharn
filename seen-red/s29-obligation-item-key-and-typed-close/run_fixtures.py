@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-14T19:09:31Z
-#   last-change: 2026-07-14T19:29:19Z
+#   last-change: 2026-07-15T06:59:46Z
 #   contributors: a857c93d/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -143,6 +143,61 @@ def scaffold(world: str) -> tuple[Path, dict]:
         p = world_dir / verb
         if p.exists():
             p.chmod(0o755)
+    dep = json.loads((world_dir / "deployment.json").read_text(encoding="utf-8"))
+    return world_dir, dep
+
+
+# s15..s28, no s29 -- the exact prefix of new-project.sh's own --new-world -f list, one entry
+# short (mirrors this same file's own PARAMETERIZATION "VALIDATE" recipe in its header comment).
+S15_TO_S28 = [
+    "high_watermark_1.sql", "s20-obligation-grants-and-view-refresh.sql",
+    "s21-session-aware-distinctness.sql", "s22-work-item-ledger.sql",
+    "s23-per-invocation-stamp-token.sql", "s24-declared-event-time.sql",
+    "s25-commission-kind.sql", "s26-row-hash-chain.sql", "s28-work-parent-edge.sql",
+]
+
+
+def scaffold_classic_s28_only(world: str) -> tuple[Path, dict]:
+    """sec-10 amendment consequence (2026-07-15): `scaffold()` above uses `--new-world`, which --
+    as of THIS session's wiring of s29 into new-project.sh's own LINEAGE_CHAIN -- now applies the
+    FULL s15..s29 chain, not s15..s28. Case j's whole point is an s28-only kernel (s29 genuinely
+    absent), so it can no longer reuse `scaffold()` -- this is CLASSIC MODE (explicit --schema/
+    --kern/--role, no automatic kernel apply at all per new-project.sh's own header) followed by a
+    MANUAL s15..s28 apply (S15_TO_S28 above), mirroring new-project.sh's own --new-world block
+    (kernel apply, then stamp-secret seed, then chain-genesis seed, then principal registration)
+    by hand, one delta short on purpose."""
+    tmp = Path(tempfile.mkdtemp(prefix=f"{world}-seenred-"))
+    world_dir = tmp / world
+    schema, kern, role = world, f"{world}_kernel", f"{world}_rw"
+    r = sh(["bash", str(NEW_PROJECT), str(world_dir),
+            "--db", PGDB, "--host", PGHOST,
+            "--schema", schema, "--kern", kern, "--role", role])
+    if r.returncode != 0:
+        raise RuntimeError(f"CLASSIC SCAFFOLD FAILED ({world}): {r.stdout[-1500:]} {r.stderr[-1500:]}")
+    for verb in ("led", "judge", "pickup"):
+        p = world_dir / verb
+        if p.exists():
+            p.chmod(0o755)
+    args = ["psql", "-h", PGHOST, "-d", PGDB, "-v", "ON_ERROR_STOP=1",
+            "-v", f"schema={schema}", "-v", f"kern={kern}", "-v", f"role={role}"]
+    for name in S15_TO_S28:
+        args += ["-f", str(REPO / "kernel" / "lineage" / name)]
+    ra = sh(args)
+    if ra.returncode != 0:
+        raise RuntimeError(f"CLASSIC s15..s28 APPLY FAILED ({world}): {ra.stdout[-1500:]} {ra.stderr[-1500:]}")
+    # stamp secret + chain genesis, mirroring new-project.sh's own --new-world seeding blocks by
+    # hand (classic mode does neither automatically).
+    secret_dir = world_dir / ".claude" / "secrets"
+    secret_dir.mkdir(parents=True, exist_ok=True)
+    hexsecret = sh(["openssl", "rand", "-hex", "32"]).stdout.strip()
+    (secret_dir / "stamp_secret.hex").write_text(hexsecret + "\n", encoding="utf-8")
+    sh(["psql", "-h", PGHOST, "-d", PGDB, "-q", "-v", "ON_ERROR_STOP=1",
+        "-c", f"TRUNCATE {kern}.stamp_secret;",
+        "-c", f"INSERT INTO {kern}.stamp_secret (secret) VALUES (decode('{hexsecret}','hex'));"])
+    genesis_hex = sh(["openssl", "rand", "-hex", "32"]).stdout.strip()
+    sh(["psql", "-h", PGHOST, "-d", PGDB, "-q", "-v", "ON_ERROR_STOP=1",
+        "-c", f"INSERT INTO {kern}.chain_genesis (seed) VALUES ('{genesis_hex}') "
+              f"ON CONFLICT (only_one) DO NOTHING;"])
     dep = json.loads((world_dir / "deployment.json").read_text(encoding="utf-8"))
     return world_dir, dep
 
@@ -349,9 +404,11 @@ def main() -> int:
               f"only_asp={sorted(only_asp)} only_sql={sorted(only_sql)}", failures)
 
         # --- j: `led work close` with NO review flags, against an s28-ONLY kernel (s29 not
-        # applied), still succeeds exactly as before this delta -- a SEPARATE scaffold ----------
+        # applied), still succeeds exactly as before this delta -- a SEPARATE scaffold, CLASSIC
+        # MODE + manual s15..s28 apply (see scaffold_classic_s28_only's own docstring for why
+        # `scaffold()`'s --new-world can no longer produce this shape as of this session) --------
         print(f"== scaffolding a SEPARATE s28-only world {WORLD_PRE} (s29 deliberately NOT applied) ==")
-        world_dir_pre, dep_pre = scaffold(WORLD_PRE)
+        world_dir_pre, dep_pre = scaffold_classic_s28_only(WORLD_PRE)
         tmps.append(world_dir_pre.parent)
         led(world_dir_pre, "work", "open", "pre-item", "Pre")
         led(world_dir_pre, "work", "claim", "pre-item")
