@@ -1,0 +1,7 @@
+column-complete-gate -- banked RED evidence (synthetic missing/extra column cases; gates/column_complete_gate.py's teach-text)
+
+case c (missing column, undeclared): ColumnDiff(view='synth_view', ok=False, missing=['b'], extra=[], view_absent=False, table_absent=False)
+case e (extra column, undeclared): ColumnDiff(view='synth_view2', ok=False, missing=[], extra=['z'], view_absent=False, table_absent=False)
+
+gates/column_complete_gate.py's own check_registry()/_teach() output for the missing-column case (registry containing ONLY the synthetic broken view):
+COLUMN-INCOMPLETE VIEW: synth_view: MISSING column(s) ['b'] (present on the source table, not declared as an exclusion, absent from the view -- the s20-lesson class this gate exists to catch)
