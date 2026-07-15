@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-06T05:33:12Z
-#   last-change: 2026-07-15T20:50:02Z
+#   last-change: 2026-07-15T21:19:27Z
 #   contributors: 37017f46/main, be693afb/main, a857c93d/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -310,15 +310,17 @@ def export(name: str) -> EdbExport:
 # column) emits NOTHING from this family, declared EXCLUDED with reason -- never a silent empty a
 # caller misreads as "no work items exist." s28 (work_parent) and s29
 # (work_review_disposition/review_detail) are each their OWN sub-capability, independently gated,
-# so a s22-only target still gets the base work_* facts.
-WORK_FAMILIES = ("work_base", "work_parent", "work_review_disposition")
+# so a s22-only target still gets the base work_* facts. s33 (work_discharge -- composite
+# discharge, kernel/lineage/s33-composite-discharge.sql) is its own sub-capability the same way.
+WORK_FAMILIES = ("work_base", "work_parent", "work_review_disposition", "work_discharge")
 
 
 def export_work(name: str) -> EdbExport:
     """Export the work-layer EDB (work_opened/2, work_closed/3, work_witness_present/1,
     work_depends/3, work_claimed/2, work_parent_edge/3 -- work_items.lp's own family; plus
     w_open/2, w_parent_e/3, w_dep_e/3, w_closed/3, w_disposition/2, w_discharged/1 --
-    work_review.lp's own s31 row-id-carrying family) for a target, read-only, capability-gated."""
+    work_review.lp's own s31 row-id-carrying family; plus w_composite/1 -- work_review.lp's own
+    s33 composite-discharge family) for a target, read-only, capability-gated."""
     t = resolve(name)
     exp = EdbExport(target=t)
     rel = t.rel()
@@ -326,6 +328,7 @@ def export_work(name: str) -> EdbExport:
     has_work = t.has_col("work_slug")
     has_parent = t.has_col("work_parent")
     has_review = t.has_col("work_review_disposition") and t.has_relation(f"{t.schema}.review_detail")
+    has_discharge = t.has_col("work_discharge")
 
     exp.capabilities.append(Capability(
         "work_base", produced=has_work, capable=has_work,
@@ -341,6 +344,10 @@ def export_work(name: str) -> EdbExport:
         if has_review else
         "no `work_review_disposition` column or no `review_detail` relation (pre-s29 lineage) -- "
         "capability absent"))
+    exp.capabilities.append(Capability(
+        "work_discharge", produced=has_discharge, capable=has_discharge,
+        reason="work_discharge column present (s33 composite discharge) -- emitted" if has_discharge
+        else "no `work_discharge` column on this schema (pre-s33 lineage) -- capability absent"))
 
     if not has_work:
         return exp
@@ -407,6 +414,14 @@ def export_work(name: str) -> EdbExport:
             exp.facts.append(f"w_discharged({int(rid)}).")
             n += 1
         exp.counts["w_discharged"] = n
+
+    if has_discharge:
+        n = 0
+        for (slug,) in t.rows(f"SELECT work_slug FROM {rel} "
+                              f"WHERE kind='work_opened' AND work_discharge='composite' ORDER BY id;"):
+            exp.facts.append(f"w_composite({_atom(slug)}).")
+            n += 1
+        exp.counts["w_composite"] = n
 
     return exp
 

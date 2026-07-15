@@ -771,10 +771,21 @@ def git_state(repo_root: Path) -> None:
 
 def in_flight(dep) -> None:
     _section("IN-FLIGHT")
+    # EFFECTIVE_STATE (kernel/lineage/s33-composite-discharge.sql, ledger item
+    # composite-parent-autodischarge): a discharged-by-obligations composite must leave this
+    # queue with no act -- LIVE column-existence check (the SAME convention `rollup()`'s own
+    # parent_slug probe above already uses), never a hardcoded kernel-version assumption, since
+    # s33 is not wired into every world's birth chain. A pre-s33 kernel degrades to the raw
+    # `state` filter, byte-identical to this function's own pre-s33 behavior.
+    has_eff = _psql_tuples(dep, "SELECT EXISTS (SELECT 1 FROM information_schema.columns "
+                                 f"WHERE table_schema = '{dep.schema}' AND table_name = 'work_item_current' "
+                                 "AND column_name = 'effective_state');")
+    state_col = "effective_state" if (has_eff.returncode == 0
+                                       and has_eff.stdout.strip().splitlines()[-1] == "t") else "state"
     r = _psql(dep, f"SELECT w.slug, w.title, p.name AS claimant "
                     f"FROM {dep.schema}.work_item_current w "
                     f"LEFT JOIN {dep.kern}.principal p ON p.id = w.claimant "
-                    f"WHERE w.state = 'open' ORDER BY w.slug;")
+                    f"WHERE w.{state_col} = 'open' ORDER BY w.slug;")
     if r.returncode != 0:
         if "does not exist" in r.stderr:
             print("UNAVAILABLE (no work-item layer -- this world's applied kernel predates "
@@ -802,7 +813,7 @@ def in_flight(dep) -> None:
             f"E'\\n--- END SPEC: ' || w.slug || E' ---' "
             f"FROM {dep.schema}.work_item_current w "
             f"JOIN {dep.schema}.ledger o ON o.kind = 'work_opened' AND o.work_slug = w.slug "
-            f"WHERE w.state = 'open' ORDER BY w.slug;")
+            f"WHERE w.{state_col} = 'open' ORDER BY w.slug;")
         if spec.returncode != 0:
             print(f"ERROR: {spec.stderr.strip()}")
         else:

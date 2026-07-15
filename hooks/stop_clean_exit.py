@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-10T19:38:38Z
-#   last-change: 2026-07-15T18:06:08Z
+#   last-change: 2026-07-15T21:15:37Z
 #   contributors: be693afb/main, e4410ef6/main, a857c93d/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -562,11 +562,26 @@ def _collect_debt(session_id: str) -> tuple[list[str], list[str], list[str]]:
     # cannot be proven this call (no session_id, no stamp_session column) DEGRADE to the
     # pre-this-pass conservative predicate (every claimed open item blocks).
     if _view_exists(schema, "work_item_current"):
+        # EFFECTIVE_STATE (kernel/lineage/s33-composite-discharge.sql, ledger item
+        # composite-parent-autodischarge): the INFORMATIONAL "open unclaimed item(s) remain"
+        # line below reads effective_state, when present -- a discharged-by-obligations
+        # composite leaves the queue with no act (spec's own text). The DEBT predicate
+        # (claimed items, below) is deliberately UNTOUCHED -- it keeps reading the SAME `rows`
+        # this query returns, filtered on `has_claimant` only, exactly as before this pass
+        # (minimal-touch, ADR-0004; this commission's own scope names only the informational
+        # line). A pre-s33 kernel (no effective_state column) degrades to `eff == state`
+        # always, so `unclaimed`'s filter below is a no-op and behavior is byte-identical.
+        has_eff = _query(
+            "SELECT EXISTS (SELECT 1 FROM information_schema.columns "
+            f"WHERE table_schema = '{schema}' AND table_name = 'work_item_current' "
+            "AND column_name = 'effective_state');")
+        eff_col = "effective_state" if (has_eff and has_eff[0][0] == "t") else "state"
         rows = _query(
-            f"SELECT slug, (claimant IS NOT NULL) FROM {schema}.work_item_current "
+            f"SELECT slug, (claimant IS NOT NULL), {eff_col} FROM {schema}.work_item_current "
             f"WHERE state = 'open' ORDER BY slug;")
-        unclaimed = [slug for slug, has_claimant in rows if has_claimant != "t"]
-        claimed = [slug for slug, has_claimant in rows if has_claimant == "t"]
+        unclaimed = [slug for slug, has_claimant, eff in rows
+                     if has_claimant != "t" and eff != "discharged-by-obligations"]
+        claimed = [slug for slug, has_claimant, eff in rows if has_claimant == "t"]
 
         if unclaimed:
             info_lines.append(

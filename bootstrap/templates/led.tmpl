@@ -164,7 +164,7 @@
 #                                              the maintainer act that does revoke it. `led` never
 #                                              widens its own grants to bypass this.
 #
-#   led work open <slug> <title...> [--parent <parent-slug>]
+#   led work open <slug> <title...> [--parent <parent-slug>] [--discharge composite]
 #                                              open a work item (kernel/lineage/s22-work-item-ledger.sql's
 #                                              validate_work_item(): one opening act per slug — a
 #                                              duplicate open is REFUSED at insert, never silently
@@ -181,6 +181,19 @@
 #                                              topology only — never a gate, never polices scope or
 #                                              cost (the maintainer's standing invariant, same as
 #                                              the estimate:/resource: conventions below).
+#                                              --discharge composite (kernel/lineage/
+#                                              s33-composite-discharge.sql, ledger item
+#                                              composite-parent-autodischarge) types this item as a
+#                                              COMPOSITE whose discharge is DERIVED from its
+#                                              children's obligation tree, never a hand-authored
+#                                              close act — see `work list`'s effective_state note
+#                                              below. Set exactly once, at open time; a composite
+#                                              close is STRICT-BY-TYPE (every future close of this
+#                                              slug routes through the SAME obligation-tree check
+#                                              `--strict` uses, automatically — no --strict flag
+#                                              needed or accepted-differently). Requires this
+#                                              world's kernel to carry s33 (LIVE-checked; omitting
+#                                              --discharge works unchanged on a pre-s33 kernel).
 #   led work claim <slug>                     claim an already-opened item as the acting principal
 #                                              (refused if <slug> has no opening act). Set
 #                                              LED_ACTOR=<principal-name> to claim as a registered
@@ -231,6 +244,11 @@
 #                                                --strict is REFUSED directly (a just-deferred
 #                                                obligation is, by definition, unresolved the moment
 #                                                it is created).
+#                                              STRICT-BY-TYPE (kernel/lineage/
+#                                              s33-composite-discharge.sql): closing a slug opened
+#                                              with `--discharge composite` runs this SAME strict
+#                                              check automatically, whether or not --strict is
+#                                              passed — no new refusal, the type sets the flag.
 #   led work review-gap                       work_review_gap: item-keyed close acts with
 #                                              disposition=deferred not yet discharged by a
 #                                              distinct-actor attest review (s29's own sibling of
@@ -897,17 +915,23 @@ if [ "${1:-}" = "work" ]; then
       # the INSERT column list below would break `led work open` for every world whose kernel
       # predates s28, the exact hazard-in-reach CLAUDE.md's engineering-responsibility corollary
       # exists to catch before it ships, not after.
+      # --discharge composite (kernel/lineage/s33-composite-discharge.sql, ledger item
+      # composite-parent-autodischarge): parsed exactly like --parent above -- same LIVE
+      # column-existence convention, same reason (s33 is not wired into every world's birth
+      # chain either).
       parent=""
+      discharge=""
       args=()
       while [ $# -gt 0 ]; do
         case "$1" in
           --parent) parent="${2:-}"; shift 2 ;;
+          --discharge) discharge="${2:-}"; shift 2 ;;
           *) args+=("$1"); shift ;;
         esac
       done
       set -- "${args[@]}"
       if [ $# -lt 2 ]; then
-        echo "usage: led work open <slug> <title...> [--parent <parent-slug>]" >&2
+        echo "usage: led work open <slug> <title...> [--parent <parent-slug>] [--discharge composite]" >&2
         echo "       refused if <slug> already has an opening act (validate_work_item(): one" >&2
         echo "       opening act per slug -- the Q5 defect made unrepresentable, never a silent" >&2
         echo "       duplicate)" >&2
@@ -917,6 +941,16 @@ if [ "${1:-}" = "work" ]; then
         echo "       'led work depends's antecedent, which is deliberately left unrefused, s22)," >&2
         echo "       and refused if honoring it would create a cycle. Requires this world's" >&2
         echo "       kernel to carry s28 -- omit --parent on a pre-s28 kernel." >&2
+        echo "       --discharge composite types this item as a COMPOSITE whose discharge is" >&2
+        echo "       DERIVED from its children's obligation tree (kernel/lineage/" >&2
+        echo "       s33-composite-discharge.sql) -- every future close of <slug> becomes" >&2
+        echo "       STRICT-BY-TYPE (no --strict flag needed). Requires this world's kernel to" >&2
+        echo "       carry s33 -- omit --discharge on a pre-s33 kernel." >&2
+        exit 1
+      fi
+      if [ -n "$discharge" ] && [ "$discharge" != "composite" ]; then
+        echo "led work open: REFUSED -- --discharge accepts exactly one value: composite" >&2
+        echo "  (kernel/lineage/s33-composite-discharge.sql's closed vocabulary; got '${discharge}')." >&2
         exit 1
       fi
       slug="$1"; shift
@@ -935,7 +969,34 @@ SQL
         echo "  decision tree)." >&2
         exit 1
       fi
-      if [ "$has_parent_col" = "t" ]; then
+      has_discharge_col=$(psql -h "$PGHOST" -d "$PGDB" -tAq -v schema="$SCHEMA" <<SQL
+        SELECT EXISTS (SELECT 1 FROM information_schema.columns
+                       WHERE table_schema = :'schema' AND table_name = 'ledger'
+                         AND column_name = 'work_discharge');
+SQL
+      )
+      if [ -n "$discharge" ] && [ "$has_discharge_col" != "t" ]; then
+        echo "led work open: REFUSED -- --discharge requires" >&2
+        echo "  kernel/lineage/s33-composite-discharge.sql applied to this project's schema" >&2
+        echo "  (work_discharge column not found on ${SCHEMA}.ledger -- this world's kernel" >&2
+        echo "  predates s33). Omit --discharge, or apply s33 to this schema as a maintainer" >&2
+        echo "  act (ORCH-OPERATING-CARD.md's kernel-delta decision tree)." >&2
+        exit 1
+      fi
+      # Four explicit branches (has_parent_col x has_discharge_col), each a STATIC INSERT column
+      # list bound purely via psql -v -- mirrors this file's own standing convention of never
+      # building SQL text dynamically from feature flags (auditability: every possible INSERT
+      # shape is grep-able in this file, not synthesized at runtime).
+      if [ "$has_parent_col" = "t" ] && [ "$has_discharge_col" = "t" ]; then
+        exec psql -h "$PGHOST" -d "$PGDB" -v ON_ERROR_STOP=1 \
+          -v slug="$slug" -v title="$title" -v parent="$parent" -v discharge="$discharge" \
+          -v statement="work_opened: ${slug} -- ${title}" <<SQL
+        SET ROLE ${ROLE};
+        SET search_path = ${SCHEMA}, ${KERNEL};
+        INSERT INTO ${SCHEMA}.ledger (kind, work_slug, work_title, work_parent, work_discharge, statement)
+        VALUES ('work_opened', :'slug', :'title', NULLIF(:'parent', ''), NULLIF(:'discharge', ''), :'statement');
+SQL
+      elif [ "$has_parent_col" = "t" ]; then
         exec psql -h "$PGHOST" -d "$PGDB" -v ON_ERROR_STOP=1 \
           -v slug="$slug" -v title="$title" -v parent="$parent" \
           -v statement="work_opened: ${slug} -- ${title}" <<SQL
@@ -943,6 +1004,15 @@ SQL
         SET search_path = ${SCHEMA}, ${KERNEL};
         INSERT INTO ${SCHEMA}.ledger (kind, work_slug, work_title, work_parent, statement)
         VALUES ('work_opened', :'slug', :'title', NULLIF(:'parent', ''), :'statement');
+SQL
+      elif [ "$has_discharge_col" = "t" ]; then
+        exec psql -h "$PGHOST" -d "$PGDB" -v ON_ERROR_STOP=1 \
+          -v slug="$slug" -v title="$title" -v discharge="$discharge" \
+          -v statement="work_opened: ${slug} -- ${title}" <<SQL
+        SET ROLE ${ROLE};
+        SET search_path = ${SCHEMA}, ${KERNEL};
+        INSERT INTO ${SCHEMA}.ledger (kind, work_slug, work_title, work_discharge, statement)
+        VALUES ('work_opened', :'slug', :'title', NULLIF(:'discharge', ''), :'statement');
 SQL
       else
         exec psql -h "$PGHOST" -d "$PGDB" -v ON_ERROR_STOP=1 \
@@ -1283,7 +1353,7 @@ SQL
 SQL
       ;;
     *)
-      echo "usage: led work open <slug> <title...> [--parent <parent-slug>]" >&2
+      echo "usage: led work open <slug> <title...> [--parent <parent-slug>] [--discharge composite]" >&2
       echo "       led work claim <slug>" >&2
       echo "       led work depends <slug> <on-slug>" >&2
       echo "       led work close <slug> <resolution> (--review-witness <ref> | --review-deferred) [--witness <ref>] [--strict]" >&2
