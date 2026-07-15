@@ -179,7 +179,7 @@
 #                                              opened — a dangling antecedent is deliberately NOT
 #                                              refused (spec invariant 4); it is surfaced instead by
 #                                              `led work violations` (depends_on_unknown_slug)
-#   led work close <slug> <resolution> (--review-witness <ref> | --review-deferred) [--witness <ref>] [--strict]
+#   led work close <slug> <resolution> [--witness <ref>]
 #                                              close a work item. REFUSED if <slug> has no
 #                                              work_claimed row yet (led-side gate, mirroring the
 #                                              existing duplicate-open/unopened refusals — run-5
@@ -189,40 +189,7 @@
 #                                              resolution: shipped|superseded|dropped|deferred.
 #                                              resolution=shipped REQUIRES --witness — refused at
 #                                              construction time (work_shipped_requires_witness
-#                                              CHECK), never a tolerated-but-flagged row.
-#                                              EXACTLY ONE of two REVIEW-DISPOSITION constructors is
-#                                              REQUIRED (kernel/lineage/s29-obligation-item-key-and-
-#                                              typed-close.sql, Element B — design/MAINT-COUNTERSIGN-
-#                                              CLOSE-SEMANTICS-SPEC.md): a review-silent close is
-#                                              REFUSED at construction, never representable.
-#                                                --review-witness <ref>   a review already exists;
-#                                                  cite it (a ledger row id, commit hash, or
-#                                                  artifact path). DELIBERATELY SEPARATE from
-#                                                  --witness (the SHIP witness, above) — see the
-#                                                  kernel delta's own header for why the two facts
-#                                                  are kept apart.
-#                                                --review-deferred        this close act itself
-#                                                  BECOMES the review obligation (item-keyed by
-#                                                  <slug>, origin-identified by this close row's own
-#                                                  ledger id) — discharge it later with
-#                                                  `./led review <close-row-id> attest ... `, written
-#                                                  by a DIFFERENT actor (surfaced meanwhile by
-#                                                  `led work review-gap`).
-#                                              --strict (opt-in, Element C, "a declared posture, not
-#                                                a universal mandate") REFUSES this close unless
-#                                                --review-witness was used AND every leaf of this
-#                                                item's obligation tree (its own s28 descendants,
-#                                                and every tree member's work-depends antecedents)
-#                                                is independently resolved — REFUSED naming every
-#                                                unresolved leaf, no stored verdict anywhere (a pure,
-#                                                read-time-derived query). --review-deferred +
-#                                                --strict is REFUSED directly (a just-deferred
-#                                                obligation is, by definition, unresolved the moment
-#                                                it is created).
-#   led work review-gap                       work_review_gap: item-keyed close acts with
-#                                              disposition=deferred not yet discharged by a
-#                                              distinct-actor attest review (s29's own sibling of
-#                                              the pre-existing ACTOR-keyed `led review-gap`)
+#                                              CHECK), never a tolerated-but-flagged row
 #   led work list                             work_item_current: one row per slug — state (open/
 #                                              closed), title, resolution, witness, claimant
 #   led work violations                       work_item_violations: duplicate_open and
@@ -542,38 +509,15 @@ if [ "${1:-}" = "obligate" ]; then
     can_delete=$(psql -h "$PGHOST" -d "$PGDB" -tAc \
       "SELECT has_table_privilege('${ROLE}', '${SCHEMA}.countersign_obligation', 'DELETE');")
     if [ "$can_delete" != "t" ]; then
-      # TEACH-THE-REFUSAL (tracker scaffold-owner-credential-separation LEG 2, 2026-07-14 ent
-      # self-escalation incident, ledger row 640): this block used to end with the exact
-      # schema-owner DELETE line printed ready to paste -- teach-text in FORM but, in substance,
-      # an invitation to route around the refusal by reaching for owner privilege directly, which
-      # is what the incident's agent did (connected as ent_owner and ran the DELETE itself). The
-      # lawful next step this refusal must teach is LEDGER + STOP + ESCALATE, never "here is the
-      # owner command" -- escalation has to be the CHEAPER path or a struggling agent reaches for
-      # the workaround instead (ADR-0000 Rule 2(b): a recurring struggle is the executive's net to
-      # build, not the implementer's to route around; ADR-0013's "fair dealing" posture that a
-      # refusal is a place to stop, not a puzzle to solve).
       echo "led obligate revoke: REFUSED -- role '${ROLE}' has no DELETE grant on" >&2
       echo "  ${SCHEMA}.countersign_obligation (checked live via has_table_privilege, not" >&2
       echo "  hardcoded). This is s20's deliberate ruling, not an oversight: an obligation is" >&2
       echo "  standing operator-owned policy config, never a role-level self-service capability" >&2
       echo "  -- widening the grant would be a kernel delta and is out of scope for this verb to" >&2
-      echo "  take on itself." >&2
-      echo "" >&2
-      echo "  DO NOT connect as the schema owner (or any other elevated identity) to run this" >&2
-      echo "  DELETE yourself, however reachable that identity may be from this environment --" >&2
-      echo "  that is a self-escalation, not a fix, regardless of whether the outcome is benign." >&2
-      echo "" >&2
-      echo "  The lawful next step, in order:" >&2
-      echo "    1. LEDGER the block now, from THIS session, so the refusal is on the record" >&2
-      echo "       before anything else happens:" >&2
-      echo "         ./led finding \"obligate revoke blocked: role '${ROLE}' lacks DELETE on\" \\" >&2
-      echo "           \"${SCHEMA}.countersign_obligation for scope '${scope}' -- needs a\" \\" >&2
-      echo "           \"maintainer act to revoke, not a role-level workaround\"" >&2
-      echo "    2. STOP work on this scope. Do not attempt the DELETE via any other connection," >&2
-      echo "       role, or credential this environment can reach." >&2
-      echo "    3. ESCALATE for orchestrator/maintainer sign-off -- surface the ledgered finding" >&2
-      echo "       and wait for a maintainer act. Only the maintainer, as the schema owner, in" >&2
-      echo "       their own session, decides whether and how scope '${scope}' is revoked." >&2
+      echo "  take on itself. To revoke scope '${scope}', a maintainer runs, AS THE SCHEMA OWNER" >&2
+      echo "  (never as ${ROLE}, never by widening ${ROLE}'s grants):" >&2
+      echo "    psql -h ${PGHOST} -d ${PGDB} -v ON_ERROR_STOP=1 -c \\" >&2
+      echo "      \"DELETE FROM ${SCHEMA}.countersign_obligation WHERE scope = '${scope}';\"" >&2
       exit 1
     fi
     exec psql -h "$PGHOST" -d "$PGDB" -v ON_ERROR_STOP=1 -v scope="$scope" <<SQL
@@ -600,42 +544,6 @@ SQL
     exit 1
   fi
   scope="$1"; assigned_by_name="$2"; obliges_actor_name="$3"
-  # BOUNDARY VALIDATION, refuse-before-write (tracker scaffold-owner-credential-separation LEG 3;
-  # 2026-07-14 ent self-escalation incident, ledger row 640: "its own obligate command
-  # accidentally globalized to 813 historical countersign_obligation rows"). <scope> READS as a
-  # narrow label but is not a filter -- review_gap joins on the obliged actor's IDENTITY alone
-  # (see the usage text above), so every countersign_obligation row for a given actor is
-  # redundantly global, and a second (or 813th) row for the SAME actor adds no new coverage --
-  # only more governance-config rows an operator must later reason about and, per the incident,
-  # more rows an under-pressure agent may try to mass-delete. Mirroring the malformed-statement
-  # refuse-before-write idiom the generic <kind> path already uses (estimate:/outcome: etc.),
-  # this checks LIVE whether the obliged actor already carries an obligation and refuses before
-  # the INSERT rather than silently accumulating -- a duplicate is exactly as questionable as a
-  # duplicate work_opened (line ~158 above), just not yet enforced by a kernel constraint.
-  existing_scope=$(psql -h "$PGHOST" -d "$PGDB" -tAq -v obliges_actor_name="$obliges_actor_name" <<SQL
-    SET ROLE ${ROLE};
-    SET search_path = ${SCHEMA}, ${KERNEL};
-    SELECT o.scope FROM countersign_obligation o
-    JOIN principal p ON p.id = o.obliges_actor
-    WHERE p.name = :'obliges_actor_name'
-    LIMIT 1;
-SQL
-  )
-  if [ -n "$existing_scope" ]; then
-    echo "led obligate: REFUSED -- principal '${obliges_actor_name}' already carries an" >&2
-    echo "  obligation (scope '${existing_scope}'). Adding scope '${scope}' would NOT narrow or" >&2
-    echo "  extend coverage -- review_gap counts every row this actor writes regardless of how" >&2
-    echo "  many countersign_obligation rows name them, so a second row is redundant governance" >&2
-    echo "  config, not a stronger obligation (this is the same globalization the 2026-07-14" >&2
-    echo "  incident's 813-row accumulation came from)." >&2
-    echo "" >&2
-    echo "  If '${existing_scope}' is the wrong label and you mean to REPLACE it with" >&2
-    echo "  '${scope}', revoke the old one first (a role with DELETE grant can do this itself;" >&2
-    echo "  otherwise ledger the block and escalate, per \`led obligate revoke\`'s own refusal):" >&2
-    echo "    ./led obligate revoke ${existing_scope}" >&2
-    echo "  then re-run this command." >&2
-    exit 1
-  fi
   exec psql -h "$PGHOST" -d "$PGDB" -v ON_ERROR_STOP=1 \
     -v scope="$scope" -v assigned_by_name="$assigned_by_name" -v obliges_actor_name="$obliges_actor_name" <<SQL
     SET ROLE ${ROLE};
@@ -815,39 +723,21 @@ SQL
     close)
       shift
       witness=""
-      review_witness=""
-      review_deferred=""
-      strict=""
       args=()
       while [ $# -gt 0 ]; do
         case "$1" in
           --witness) witness="${2:-}"; shift 2 ;;
-          --review-witness) review_witness="${2:-}"; shift 2 ;;
-          --review-deferred) review_deferred="1"; shift ;;
-          --strict) strict="1"; shift ;;
           *) args+=("$1"); shift ;;
         esac
       done
       set -- "${args[@]}"
-      usage_close() {
-        echo "usage: led work close <slug> <resolution> (--review-witness <ref> | --review-deferred) [--witness <ref>] [--strict]" >&2
+      if [ $# -lt 2 ]; then
+        echo "usage: led work close <slug> <resolution> [--witness <ref>]" >&2
         echo "       resolution: shipped|superseded|dropped|deferred" >&2
         echo "       resolution=shipped REQUIRES --witness -- refused at construction time" >&2
         echo "       (work_shipped_requires_witness CHECK), never a tolerated-but-flagged row" >&2
         echo "       refused if <slug> has no work_claimed row yet -- claim it first:" >&2
         echo "       ./led work claim <slug>" >&2
-        echo "       EXACTLY ONE of --review-witness <ref> / --review-deferred is REQUIRED" >&2
-        echo "       (kernel/lineage/s29-obligation-item-key-and-typed-close.sql, Element B) --" >&2
-        echo "       a review-silent close is REFUSED at construction, never representable." >&2
-        echo "         --review-witness <ref>  a review already exists; cite it" >&2
-        echo "         --review-deferred       this close act itself becomes the item-keyed" >&2
-        echo "                                 review obligation, discharged later by a" >&2
-        echo "                                 DIFFERENT actor's ./led review <close-row-id> ..." >&2
-        echo "       --strict refuses this close unless --review-witness was used AND every leaf" >&2
-        echo "       of the obligation tree is resolved, naming every unresolved leaf" >&2
-      }
-      if [ $# -lt 2 ]; then
-        usage_close
         exit 1
       fi
       slug="$1"; resolution="$2"
@@ -868,83 +758,14 @@ SQL
         echo "  closed this way, unflagged, until an outside review caught it)" >&2
         exit 1
       fi
-      # LIVE column-existence check (the SAME convention `work open --parent` above already uses):
-      # s29 is NOT wired into every world's birth chain, so an unconditional
-      # work_review_disposition in the INSERT column list would break `led work close` for every
-      # world whose kernel predates s29 -- the exact hazard-in-reach CLAUDE.md's engineering-
-      # responsibility corollary exists to catch before it ships, not after.
-      has_review_disposition_col=$(psql -h "$PGHOST" -d "$PGDB" -tAq -v schema="$SCHEMA" <<SQL
-        SELECT EXISTS (SELECT 1 FROM information_schema.columns
-                       WHERE table_schema = :'schema' AND table_name = 'ledger'
-                         AND column_name = 'work_review_disposition');
-SQL
-      )
-      if [ "$has_review_disposition_col" != "t" ]; then
-        if [ -n "$review_witness" ] || [ -n "$review_deferred" ] || [ -n "$strict" ]; then
-          echo "led work close: REFUSED -- --review-witness/--review-deferred/--strict require" >&2
-          echo "  kernel/lineage/s29-obligation-item-key-and-typed-close.sql applied to this" >&2
-          echo "  project's schema (work_review_disposition column not found on" >&2
-          echo "  ${SCHEMA}.ledger -- this world's kernel predates s29). Omit these flags, or" >&2
-          echo "  apply s29 to this schema as a maintainer act (ORCH-OPERATING-CARD.md's" >&2
-          echo "  kernel-delta decision tree)." >&2
-          exit 1
-        fi
-        exec psql -h "$PGHOST" -d "$PGDB" -v ON_ERROR_STOP=1 \
-          -v slug="$slug" -v resolution="$resolution" -v witness="$witness" \
-          -v statement="work_closed: ${slug} (${resolution})" <<SQL
+      exec psql -h "$PGHOST" -d "$PGDB" -v ON_ERROR_STOP=1 \
+        -v slug="$slug" -v resolution="$resolution" -v witness="$witness" \
+        -v statement="work_closed: ${slug} (${resolution})" <<SQL
         SET ROLE ${ROLE};
         SET search_path = ${SCHEMA}, ${KERNEL};
         INSERT INTO ${SCHEMA}.ledger (kind, work_slug, work_resolution, work_witness, statement)
         VALUES ('work_closed', :'slug', :'resolution', NULLIF(:'witness', ''), :'statement');
 SQL
-        exit $?
-      fi
-      # TWO CONSTRUCTORS, EXACTLY ONE REQUIRED (Element B) -- refused at the led boundary with
-      # teach-text naming BOTH constructors, mirroring the intake-validation `refuse()` idiom
-      # (both-polarity fixture: seen-red/s29-obligation-item-key-and-typed-close/).
-      if [ -n "$review_witness" ] && [ -n "$review_deferred" ]; then
-        echo "led work close: REFUSED -- --review-witness and --review-deferred are the TWO" >&2
-        echo "  CONSTRUCTORS of a review disposition; exactly ONE, never both, in one close act" >&2
-        echo "  (s29 Element B)." >&2
-        exit 1
-      fi
-      if [ -z "$review_witness" ] && [ -z "$review_deferred" ]; then
-        echo "led work close: REFUSED -- a review-silent close is unrepresentable (s29 Element B)." >&2
-        echo "  Choose exactly ONE constructor:" >&2
-        echo "    --review-witness <ref>   a review already exists; cite it" >&2
-        echo "    --review-deferred        this close act itself becomes the review obligation" >&2
-        exit 1
-      fi
-      if [ -n "$review_deferred" ] && [ -n "$strict" ]; then
-        echo "led work close: REFUSED -- --review-deferred + --strict is a contradiction in terms" >&2
-        echo "  (s29 Element C): a just-deferred obligation is, by definition, unresolved the" >&2
-        echo "  moment it is created. Record the review first (./led review ...), then close" >&2
-        echo "  with --review-witness <ref> --strict." >&2
-        exit 1
-      fi
-      if [ -n "$review_witness" ]; then
-        disposition="witnessed"; review_ref="$review_witness"
-      else
-        disposition="deferred"; review_ref=""
-      fi
-      strict_bool="false"
-      [ -n "$strict" ] && strict_bool="true"
-      exec psql -h "$PGHOST" -d "$PGDB" -v ON_ERROR_STOP=1 \
-        -v slug="$slug" -v resolution="$resolution" -v witness="$witness" \
-        -v disposition="$disposition" -v review_ref="$review_ref" -v strict_bool="$strict_bool" \
-        -v statement="work_closed: ${slug} (${resolution})" <<SQL
-        SET ROLE ${ROLE};
-        SET search_path = ${SCHEMA}, ${KERNEL};
-        INSERT INTO ${SCHEMA}.ledger
-          (kind, work_slug, work_resolution, work_witness,
-           work_review_disposition, work_review_ref, work_strict_close, statement)
-        VALUES ('work_closed', :'slug', :'resolution', NULLIF(:'witness', ''),
-                :'disposition', NULLIF(:'review_ref', ''), :'strict_bool'::boolean, :'statement');
-SQL
-      ;;
-    review-gap)
-      exec psql -h "$PGHOST" -d "$PGDB" -c "
-        SELECT slug, close_id, closer FROM ${SCHEMA}.work_review_gap ORDER BY slug;"
       ;;
     list)
       exec psql -h "$PGHOST" -d "$PGDB" -c "
@@ -1015,8 +836,7 @@ SQL
       echo "usage: led work open <slug> <title...> [--parent <parent-slug>]" >&2
       echo "       led work claim <slug>" >&2
       echo "       led work depends <slug> <on-slug>" >&2
-      echo "       led work close <slug> <resolution> (--review-witness <ref> | --review-deferred) [--witness <ref>] [--strict]" >&2
-      echo "       led work review-gap    (work_review_gap, item-keyed deferred/undischarged closes)" >&2
+      echo "       led work close <slug> <resolution> [--witness <ref>]" >&2
       echo "       led work list          (work_item_current)" >&2
       echo "       led work violations    (work_item_violations)" >&2
       echo "       led work asof <timestamp>  (point-in-time reconstruction, read-only)" >&2

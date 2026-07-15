@@ -27,11 +27,9 @@ import tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 GATE = os.path.join(os.path.dirname(HERE), "hooks", "pretooluse_change_gate.py")  # autoharn: hooks/ (renamed [C13])
-sys.path.insert(0, os.path.join(os.path.dirname(HERE), "filing"))
-import pghost_resolve  # noqa: E402 (filing/pghost_resolve.py -- never a literal host default)
 # The subject ledger lives in the isolated `nla` database; the gate + this probe target it. Fixtures
 # run on the `probe` scratch mirror in `nla` (append-only stripped), never the durable ledger.
-PGHOST, PGDB = pghost_resolve.resolve_pghost("HARNESS_PGHOST", "EPISTEMIC_PGHOST"), "nla"
+PGHOST, PGDB = "192.168.122.1", "nla"
 
 
 def psql(sql: str) -> str:

@@ -42,14 +42,10 @@ import sys
 from collections import Counter
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
-from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "filing"))
-import pghost_resolve  # noqa: E402 (filing/pghost_resolve.py -- never a literal host default)
 
 from ledger_target import resolve
 
-PGHOST = pghost_resolve.resolve_pghost("HARNESS_PGHOST", "EPISTEMIC_PGHOST")
+PGHOST = "192.168.122.1"
 _DB = "epistemic"  # set per-session in load_rows via the SSOT (nla lives in its own db)
 AUDIT_LOG = "/home/bork/w/vdc/1/epistemic-audit/logs/all.audit.jsonl"
 GAP_S = 60.0  # inserts more than this many seconds apart start a new temporal burst

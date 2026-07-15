@@ -21,14 +21,10 @@ Four readouts:
 
 Read-only. Consumes {session}.ledger (per-session). Nothing is written.
 """
-import os
 import subprocess
 import sys
 
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "filing"))
-import pghost_resolve  # noqa: E402 (filing/pghost_resolve.py -- never a literal host default)
-
-PGHOST = pghost_resolve.resolve_pghost("HARNESS_PGHOST", "EPISTEMIC_PGHOST")
+PGHOST = "192.168.122.1"
 PGDB = "epistemic"
 
 

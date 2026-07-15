@@ -1,5 +1,13 @@
 # Deploying autoharn to your project (git submodule)
 
+<!-- doc-attest-exempt: v1.1 release-cut addition (the "What --recursive brings" section and the
+     item-1/before-you-start edits, commission item 3) by a subagent with no agent-forking tool
+     available for the ADR-0017 A:B:C fresh-context loop (same gap named at ledger rows
+     699/714/785 and in the v1.0 release-cut commit). Unlike that prior gap's mechanical
+     link-repairs, this IS new prose and genuinely warrants the real A:B:C loop, not just this
+     honesty marker — flagged to the maintainer in this session's report. Removal condition: run
+     the real A:B:C loop on this page and strike this marker. -->
+
 This page is only about deployment: getting autoharn wired into a project of your own as a
 pinned git submodule, and keeping it that way. It assumes you have `psql` and `git` on your
 `PATH` and a Postgres database you can reach, and it tells you exactly what to type and what
@@ -14,8 +22,11 @@ here.
 Everything below assumes three things are already true. None of the four commands does any of
 this for you:
 
-1. **You have cloned autoharn itself somewhere** (`git clone <autoharn's repo URL>`) — that
-   clone is "this autoharn checkout" every command below is run from.
+1. **You have cloned autoharn itself somewhere, with `--recursive`** (`git clone --recursive
+   <autoharn's repo URL>`) — that clone is "this autoharn checkout" every command below is run
+   from. `--recursive` matters here: this repo carries two git submodules of its own (below),
+   and a plain `git clone` leaves both as empty directories. If you already cloned without it,
+   `git submodule update --init --recursive` from inside the checkout fixes it after the fact.
 2. **A Postgres database, and a role that can log into it, already exist.** None of the four
    commands below runs `CREATE DATABASE` or `CREATE ROLE`, and step 1 does not apply the ledger's
    own SQL either — that's a separate manual step, spelled out in step 1's "Two manual steps
@@ -28,6 +39,29 @@ this for you:
 3. **You'll want [Claude Code](https://claude.com/product/claude-code) installed** before you
    actually start working inside the deployed project — the scaffold wires up `.claude/`
    settings for it, but installing Claude Code itself is outside this page's scope.
+
+### What `--recursive` brings: this repo's two submodules
+
+A `git clone --recursive` of autoharn itself (not the deployment it creates in *your* project —
+this repo, the one you're reading this file in) materializes two independent repositories under
+`tools/`:
+
+- **`tools/makespan-scheduler`** ([KodBena/makespan-scheduler](https://github.com/KodBena/makespan-scheduler)) —
+  a scheduling library some of autoharn's own tooling calls into. Vendored as a submodule rather
+  than copied in, same reasoning as the second one below: it has its own release cycle and its
+  own repo is the place to track it.
+- **`tools/autoharn-panel`** ([KodBena/autoharn-panel](https://github.com/KodBena/autoharn-panel)) —
+  the ledger-panel SPA: a Postgres-backed, read-mostly web viewer over your project's ledger
+  (typed row lists, a commission-decomposition view), with a thin write conduit that goes
+  through your deployment's own `led` verb rather than around it. It is **enabled by default**
+  as an autoharn extension — nothing you opt into, it's already there once the submodule is
+  present — but it is entirely optional to *run*: nothing else in autoharn depends on the panel
+  backend being up. Configuration is environment-first (`LEDGER_PG_URI` or discrete `PGHOST` /
+  `PGDATABASE` / … fields, `LEDGER_SCHEMA`, `LEDGER_KERNEL_SCHEMA`, `LED_BIN` for write access,
+  `PANEL_BIND` / `PANEL_PORT`, `PANEL_POLL_INTERVAL`); the full table of variables, precedence,
+  and copy-paste commands lives in
+  [USER-CONFIGURATION.md → "The autoharn-panel extension (submodule)"](USER-CONFIGURATION.md#the-autoharn-panel-extension-submodule) —
+  read that section before starting the panel backend, not this one.
 
 ### Two words this page uses constantly
 

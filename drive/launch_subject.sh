@@ -17,21 +17,7 @@ DRY=0; [ "${2:-}" = "--dry-run" ] && DRY=1
 BUILD="$(cd "$BUILD" && pwd)"
 OP="$(cd "$BUILD/../.." && pwd)"
 PACKET="$BUILD/packet"
-# PGHOST: env (HARNESS_PGHOST/EPISTEMIC_PGHOST), else THIS AUTOHARN CHECKOUT's own deployment.json
-# 'host' field, else a loud refusal -- never a silent literal default (filing/pghost_resolve.py,
-# the ONE home for this resolution; same convention drive/arm.sh and bootstrap/freeze-at-stamp.sh
-# use). Resolved from THIS SCRIPT's own location (drive/), NOT from $OP -- $OP is the external
-# apparatus/operator directory (derived from <build-dir>/../.., e.g. a harness/e18-build-style
-# testbed root), a different tree from the autoharn checkout filing/ lives in.
-REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-PY="$HOME/w/vdc/venvs/generic/bin/python"
-[ -x "$PY" ] || PY="$(command -v python3)"
-PGHOST="$("$PY" -c "
-import sys
-sys.path.insert(0, '$REPO_ROOT/filing')
-import pghost_resolve
-print(pghost_resolve.resolve_pghost('HARNESS_PGHOST', 'EPISTEMIC_PGHOST'))
-")" || exit 1
+PGHOST=192.168.122.1
 # shellcheck disable=SC1091
 source "$BUILD/launch.conf"
 say(){ echo "  $*"; }

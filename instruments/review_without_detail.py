@@ -21,11 +21,9 @@ import sys
 from dataclasses import dataclass
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "filing"))
 from ledger_target import resolve  # noqa: E402
-import pghost_resolve  # noqa: E402 (filing/pghost_resolve.py -- never a literal host default)
 
-PGHOST = pghost_resolve.resolve_pghost("EPISTEMIC_PGHOST")
+PGHOST = os.environ.get("EPISTEMIC_PGHOST", "192.168.122.1")
 
 
 @dataclass(frozen=True)

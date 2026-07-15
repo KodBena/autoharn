@@ -16,10 +16,6 @@ from claude_code_adapter import SubagentSource, parse_completed_session
 from contract import Act, CapabilityError, persist
 
 HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE.parent.parent / "filing"))
-import pghost_resolve  # noqa: E402 (filing/pghost_resolve.py -- never a literal host default)
-
-PGHOST = pghost_resolve.resolve_pghost("HARNESS_PGHOST", "EPISTEMIC_PGHOST")
 REAL_TRANSCRIPT = Path(
     "/home/bork/w/vdc/1/claude_harness/docs/claude-ephemera/-home-bork-w-vdc-1-claude-harness"
     "/session-transcript/37017f46-fa65-4981-b669-b4204a444de8.jsonl")
@@ -138,13 +134,13 @@ def main() -> int:
 
     # ---- DB round-trip: persist fixture 1 into a scratch acts schema, read back id-is-order ----
     schema = "acts_fixture_scratch"
-    subprocess.run(["psql", "-h", PGHOST, "-d", "harness", "-c",
+    subprocess.run(["psql", "-h", "192.168.122.1", "-d", "harness", "-c",
                     f"DROP SCHEMA IF EXISTS {schema} CASCADE;"], capture_output=True, text=True)
-    subprocess.run(["psql", "-h", PGHOST, "-d", "harness", "-v", "ON_ERROR_STOP=1",
+    subprocess.run(["psql", "-h", "192.168.122.1", "-d", "harness", "-v", "ON_ERROR_STOP=1",
                     "-v", f"schema={schema}", "-f", str(HERE.parent.parent /
                     "stores" / "003_acts_stream.sql")], capture_output=True, text=True)   # autoharn: stores/
     sid = persist(syn, schema=schema)
-    back = subprocess.run(["psql", "-h", PGHOST, "-d", "harness", "-tA", "-F", "|",
+    back = subprocess.run(["psql", "-h", "192.168.122.1", "-d", "harness", "-tA", "-F", "|",
                            "-c", f"SELECT id, actor, kind, coalesce(name,''), coalesce(target,'') "
                                  f"FROM {schema}.act WHERE stream_id={sid} ORDER BY id;"],
                           capture_output=True, text=True).stdout.strip().splitlines()
@@ -153,7 +149,7 @@ def main() -> int:
     ok &= id_order
     print(f"[{'OK ' if id_order else '!! '}] DB round-trip: {len(ids)} acts persisted, id-is-order "
           f"{'held' if id_order else 'BROKEN'} (append-only contract)")
-    subprocess.run(["psql", "-h", PGHOST, "-d", "harness", "-c",
+    subprocess.run(["psql", "-h", "192.168.122.1", "-d", "harness", "-c",
                     f"DROP SCHEMA IF EXISTS {schema} CASCADE;"], capture_output=True, text=True)
 
     # ---- F49: require() a non-produced family refuses loudly ----

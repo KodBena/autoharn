@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-12T02:17:36Z
-#   last-change: 2026-07-14T02:26:44Z
+#   last-change: 2026-07-14T22:24:42Z
 #   contributors: e4410ef6/main, a857c93d/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -103,6 +103,35 @@ HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
 LINEAGE = REPO / "kernel" / "lineage"
 ENGINE = REPO / "engine"
+
+# volatile substrings that differ run-to-run but carry no evidentiary content: scratch tmpdirs,
+# derivation-record timestamp/hash stamps, and the worktree-vs-main-checkout path prefix ahead of
+# the retained derivation path.
+_VOLATILE_RES = (
+    re.compile(r"/tmp/[\w.-]+"),
+    re.compile(r"\d{8}T\d{6}Z_[0-9a-f]+"),
+    re.compile(r"^.*?(?=engine/docs/ledger-marriage/)", re.MULTILINE),
+)
+
+
+def _normalize(text: str) -> str:
+    for rx in _VOLATILE_RES:
+        text = rx.sub("<VOLATILE>", text)
+    return text
+
+
+def _bank(path: Path, content: str) -> None:
+    """Write CONTENT to PATH as banked seen-red evidence -- but only if it differs from what is
+    already there beyond ordinary run-to-run churn (see _VOLATILE_RES). Left unconditional, this
+    write dirtied the tree on every fixture run even when nothing substantive changed (11 tracked
+    witness files, timestamp/run-id-only diffs, found in the 2026-07 release-audit sweep) --
+    running a check should not dirty the tree it checks. A genuine content change (a real
+    verdict/count/text difference) still writes through, so the file stays honest evidence rather
+    than a stub frozen out of date."""
+    existing = path.read_text(encoding="utf-8") if path.exists() else None
+    if existing is not None and _normalize(existing) == _normalize(content):
+        return
+    path.write_text(content, encoding="utf-8")
 
 BASE = 2100000000  # synthetic epoch-seconds anchor (year ~2036) -- distinct from
                     # seen-red/contemporaneity-audit's own BASE=2000000000, so the two fixture
@@ -479,11 +508,11 @@ sys.exit(0 if res.verdict() == "AGREE" else 1)
             except Exception:  # noqa: BLE001
                 pass
 
-    (HERE / "green-report.txt").write_text(green_report, encoding="utf-8")
-    (HERE / "red-report.txt").write_text(red_report, encoding="utf-8")
-    (HERE / "differential-agree-green.txt").write_text(green_out, encoding="utf-8")
-    (HERE / "differential-agree-red.txt").write_text(red_out, encoding="utf-8")
-    (HERE / "differential-diverge-defect.txt").write_text(diverge_out, encoding="utf-8")
+    _bank(HERE / "green-report.txt", green_report)
+    _bank(HERE / "red-report.txt", red_report)
+    _bank(HERE / "differential-agree-green.txt", green_out)
+    _bank(HERE / "differential-agree-red.txt", red_out)
+    _bank(HERE / "differential-diverge-defect.txt", diverge_out)
 
     if fails:
         print("# PREAMBLE-ORDERING FIXTURES: FAILED")

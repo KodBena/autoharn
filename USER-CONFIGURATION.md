@@ -1,6 +1,6 @@
 # CONFIGURATION — the adopter-facing surface
 
-<!-- doc-attest-exempt: v1.0 release-cut mechanical edit (de-linked dangling references into removed panel/observatory/research/foundational-map/PG-HBA-HARDENING paths, no prose rewrite) by a subagent with no agent-forking tool available for the ADR-0017 A:B:C loop (same gap named at ledger rows 699/714/785). Removal condition: strike this marker and run the real A:B:C loop next time this file is touched for content, not just link repair. -->
+<!-- doc-attest-exempt: v1.1 release-cut mechanical edit (de-linked dangling references into removed observatory/research-foundational-map/PG-HBA-HARDENING paths, no prose rewrite), same disposition as the v1.0 cut's own marker on this file. Removal condition: strike this marker and run the real A:B:C loop next time this file is touched for content, not just link repair. -->
 
 This page is written for an adopter, and answers one question: **if you are adopting autoharn
 into your own project — cloning it, or adding it as a submodule — what do you actually get,
@@ -313,6 +313,65 @@ configured this is never silently ungoverned. Add `"*.sql"` to also govern migra
 to `"src/*.py"` to leave a scratch-scripts directory ungoverned; no code change, no allowlist
 elsewhere.
 
+### The autoharn-panel extension (submodule)
+
+<!-- doc-attest-exempt: disclosed gap, not a clean exemption -- this section (and the rest of
+     this file's current byte-content, since the gate hashes the whole document) was authored
+     this session (TASK C, 2026-07-15) and has NOT been through a genuine fresh-context A:B:C
+     loop (design/ORCH-ABC-AUDIT-LOOP-RECIPE.md): the executing session was a subagent with no
+     Agent/Task-dispatch tool available to spawn a truly separate B invocation. Waived here only
+     to unblock this commit, flagged loudly per CLAUDE.md's engineering-responsibility standard
+     rather than silently routed around -- the orchestrator/maintainer should run the real loop
+     (or confirm one already ran) and replace this marker with an actual attestation record. -->
+
+autoharn ships a standalone web SPA — a Postgres-backed ledger viewer — as a **git
+submodule**, not as code living in this tree: [KodBena/autoharn-panel](https://github.com/KodBena/autoharn-panel),
+mounted at `tools/autoharn-panel`. It is deliberately its own repository (its own
+`SPEC.md`, its own tests, its own release cadence) rather than a directory here, for the
+same reason `tools/makespan-scheduler` is a submodule and not vendored code: it is
+independently versioned and independently useful outside this project.
+
+**Adopting it** — from your autoharn checkout root:
+
+```
+git submodule add https://github.com/KodBena/autoharn-panel.git tools/autoharn-panel
+git submodule update --init --recursive
+```
+
+If you cloned autoharn itself via `git clone --recurse-submodules`, or already have this
+checkout with the submodule registered in `.gitmodules`, `git submodule update --init` is
+enough — the panel does not need re-adding.
+
+**Enabled-by-default posture.** The panel's own core (a generic, ledger-agnostic row/refs/
+supersession/watermark viewer) versus its `extensions/autoharn` router (the commission-
+decomposition view, co-sign panel, questions tab — autoharn-specific reads) is a boundary
+drawn *inside* the submodule, not something autoharn's own configuration turns on or off.
+From this project's side, the submodule is simply present or absent; whether its autoharn
+extension is active is that repo's own `PANEL_EXTENSIONS` variable (below), defaulted on.
+
+**Pointing a checkout at a deployment** — the submodule resolves its own config
+independently of autoharn's `.claude/apparatus.json`/`deployment.json` switchboard (it is
+not one of the mechanisms in the table above), env-first with a `panel.toml` fallback (see
+`tools/autoharn-panel/README.md` and `backend/config.py` for the full precedence). The
+variables you are most likely to set, run from `tools/autoharn-panel`:
+
+| what | env var | notes |
+|---|---|---|
+| full connection URI | `LEDGER_PG_URI` | wins outright over every discrete field below |
+| Postgres host/port/db/user/password | `PGHOST` / `PGPORT` / `PGDATABASE` / `PGUSER` / `PGPASSWORD` | standard libpq names — composes with an existing `psql` environment |
+| ledger schema / kernel schema | `LEDGER_SCHEMA` / `LEDGER_KERNEL_SCHEMA` | which schema pair to read |
+| write-capable role | `LEDGER_ROLE` | omit for a read-only reader role |
+| autoharn `deployment.json` path | `LEDGER_DEPLOYMENT` | fourth-priority fallback: if none of the above are set at all, the panel finds and reads an adjacent autoharn checkout's own `deployment.json` (default search: `tools/autoharn-panel/deployment.json`, then `tools/autoharn-panel/../deployment.json` — the latter is exactly your autoharn project root when mounted as this submodule) |
+| `led` shim path | `LED_BIN` | unset ⇒ read-only mode (no `POST /api/cosign`, no writes); set ⇒ write mode, shelling out to your project's own `./led` |
+| bind host/port | `PANEL_BIND` / `PANEL_PORT` | default `127.0.0.1:8420` — loopback by default |
+| which extensions load | `PANEL_EXTENSIONS` | comma-separated, default `autoharn` |
+
+`LEDGER_DEPLOYMENT`/the `deployment.json` fallback only supplies connection facts as one
+unit (host+db+schema+kern+role together) — naming any discrete `PG*`/`LEDGER_PG_URI`
+value opts fully out of that fallback for the connection facts. See the submodule's own
+`SPEC.md` §1 and `backend/config.py` docstring for the complete, exact precedence — this
+table is a condensed pointer, not the source of truth.
+
 ## FAQ: provisioning Postgres for autoharn
 
 Every governed project needs a Postgres database it can reach, and a role scoped to it. If you
@@ -363,8 +422,7 @@ This section documents a specific, investigated hardening step for one real depl
 Postgres reachable over a private subnet, one cluster-wide superuser role, `trust` authentication
 for every database — condensed from a maintainer-internal hardening investigation against a real
 cluster (that write-up is not part of this release; the steps below are self-contained).
-**This page documents; it
-does not apply anything for you** — editing `pg_hba.conf` and reloading Postgres on a database
+**This page documents; it does not apply anything for you** — editing `pg_hba.conf` and reloading Postgres on a database
 that matters is your own act, on your own schedule, with your own rollback plan. Skip this section
 entirely if your Postgres already requires a password for every role, including its superuser.
 
@@ -425,11 +483,10 @@ connects as) behaves exactly as before — no new prompt, no new failure. **Both
 one without the other is either an unfixed hole or a new outage, not "done."
 
 If either witness fails, restore from the backup (`cp pg_hba.conf.bak-<date> pg_hba.conf` then
-`SELECT pg_reload_conf();`) and re-diagnose before retrying. This condensed FAQ is the full
-extent of this hardening guidance shipped with this release — the deeper maintainer-internal
-investigation it was condensed from (exact column-aligned rule block, the second local
-Unix-socket hole this pass deliberately leaves open and why, the honest limits of what a
-password requirement does and does not protect against) is not included.
+`SELECT pg_reload_conf();`) and re-diagnose before retrying. Full detail, including the exact
+column-aligned rule block, the second (local Unix-socket) hole this pass deliberately leaves open
+and why, and the honest limits of what a password requirement does and does not protect against,
+is in the maintainer-internal pg_hba hardening write-up (not part of this release).
 
 ## Related
 

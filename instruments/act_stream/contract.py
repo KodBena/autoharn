@@ -23,14 +23,10 @@ import hashlib
 import json
 import os
 import subprocess
-import sys
 from dataclasses import dataclass, field
 from enum import Enum
 
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "filing"))
-import pghost_resolve  # noqa: E402 (filing/pghost_resolve.py -- never a literal host default)
-
-PGHOST = pghost_resolve.resolve_pghost("HARNESS_PGHOST", "EPISTEMIC_PGHOST")
+PGHOST = os.environ.get("HARNESS_PGHOST", os.environ.get("EPISTEMIC_PGHOST", "192.168.122.1"))
 DB = os.environ.get("HARNESS_DB", "harness")
 
 # The CLOSED, widen-only kind vocabulary (§2.1.1) — the SSOT mirrors act_kind in the DDL; a parity

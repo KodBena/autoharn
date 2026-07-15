@@ -1,6 +1,6 @@
 # WORK-STATUS-OFFERING — the omega work-status question, closed as a product
 
-<!-- doc-attest-exempt: v1.0 release-cut mechanical edit (de-linked dangling references into removed panel/observatory/research/foundational-map/PG-HBA-HARDENING paths, no prose rewrite) by a subagent with no agent-forking tool available for the ADR-0017 A:B:C loop (same gap named at ledger rows 699/714/785). Removal condition: strike this marker and run the real A:B:C loop next time this file is touched for content, not just link repair. -->
+<!-- doc-attest-exempt: v1.1 release-cut mechanical edit (de-linked dangling references into the removed research/foundational-map/, no prose rewrite). Removal condition: strike this marker and run the real A:B:C loop next time this file is touched for content, not just link repair. -->
 
 Audience: adopter
 

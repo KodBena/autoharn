@@ -36,18 +36,7 @@ REPO_ROOT="$(cd "$DRIVE_DIR/.." && pwd)"
 INSTR="$REPO_ROOT/instruments"
 KERNEL_DIR="$REPO_ROOT/kernel/lineage"
 HOOKS_DIR="$REPO_ROOT/hooks"
-# PGHOST: env (HARNESS_PGHOST/EPISTEMIC_PGHOST), else this checkout's own deployment.json 'host'
-# field, else a loud refusal -- never a silent literal default (filing/pghost_resolve.py, the ONE
-# home for this resolution; same convention bootstrap/freeze-at-stamp.sh's own HOST resolution
-# already uses, reused here rather than a second hand-rolled bash reader).
-PY="$HOME/w/vdc/venvs/generic/bin/python"
-[ -x "$PY" ] || PY="$(command -v python3)"
-PGHOST="$("$PY" -c "
-import sys
-sys.path.insert(0, '$REPO_ROOT/filing')
-import pghost_resolve
-print(pghost_resolve.resolve_pghost('HARNESS_PGHOST', 'EPISTEMIC_PGHOST'))
-")" || exit 1
+PGHOST=192.168.122.1
 
 BUILD_DIR="${1:?usage: arm.sh <build-dir> --verify|--arm|--delivery-set}"; shift
 BUILD_DIR="$(cd "$BUILD_DIR" 2>/dev/null && pwd || echo "$BUILD_DIR")"

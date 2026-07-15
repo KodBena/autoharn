@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-06T05:35:36Z
-#   last-change: 2026-07-14T19:26:05Z
-#   contributors: 37017f46/main, be693afb/main, a857c93d/main
+#   last-change: 2026-07-09T14:33:49Z
+#   contributors: 37017f46/main, be693afb/main
 # <<< PROVENANCE-STAMP <<<
 
 """ledger_floor -- the SQL FLOOR of the T_now judgments: producer ONE of the
@@ -332,78 +332,6 @@ def work_item_floor_atoms(name: str) -> set[str]:
     UNION ALL SELECT 'work_shipped_without_witness(' || {q_slug} || ',' || id || ')' FROM shipped_no_witness
     UNION ALL SELECT 'work_depends_on_unknown(' || {q_slug} || ',' || {q_antecedent} || ')' FROM dangling_dep
     UNION ALL SELECT 'work_dependency_cycle(' || {q_slug} || ')' FROM dep_cycle
-    ;"""
-    out = t.run(sql).stdout
-    return {line.strip() for line in out.splitlines() if line.strip()}
-
-
-WORK_REVIEW_PREDS = ("w_tree_member", "w_own_leaf_unresolved", "w_tree_unresolved")
-
-
-def work_review_floor_atoms(name: str) -> set[str]:
-    """The set of s29 obligation-tree atoms the SQL floor derives for `name` (read-only), reading
-    the s29 work_review_* columns directly off `<schema>.ledger` + `review_detail` -- the SQL-side
-    mirror of `engine/lp/work_review.lp`, independently derived (NO shared code path with clingo,
-    the SAME I6 posture `work_item_floor_atoms` above declares -- see that function's own
-    INDEPENDENCE PRESERVED note; this floor duplicates the SAME reasoning rather than importing it).
-
-    CORRECTED (out-of-frame hack-rationalization audit, same session, before this file's first
-    commit): a first draft walked ONLY the s28 parent edge and treated a `work_depends_on`
-    antecedent as resolved once it had ANY close row. Mirrors `work_item_strict_blockers()`'s own
-    identical correction in `kernel/lineage/s29-...sql` and `work_review.lp`'s own `w_succ`
-    predicate: a `work_depends_on` edge is walked OPPOSITE its own column order (the dependent
-    plays the "parent" role in tree-membership terms, its antecedent plays the "child" role).
-
-    CORRELATED-AUTHORSHIP CAVEAT (named, per `work_item_floor_atoms`'s own precedent): this floor
-    and the s29 DDL (`work_item_strict_blockers()`, `work_review_gap`) share an author and the same
-    base facts, so bit-identity between THIS floor and `work_review.lp` proves ENCODING agreement
-    between the SQL and ASP producers, not independent fidelity to the spec."""
-    t = resolve(name)
-    rel = t.rel()
-    q_root, q_member = _wi_quote("t.root"), _wi_quote("t.member")
-    q_slug = _wi_quote("slug")
-    sql = f"""
-    WITH RECURSIVE
-      opens AS (SELECT work_slug AS slug FROM {rel} WHERE kind = 'work_opened'),
-      succ AS (
-        SELECT work_parent AS parent, work_slug AS child FROM {rel}
-        WHERE kind = 'work_opened' AND work_parent IS NOT NULL
-        UNION ALL
-        -- work_depends_on walked OPPOSITE its own column order -- see this function's docstring.
-        SELECT work_slug AS parent, work_depends_on AS child FROM {rel}
-        WHERE kind = 'work_depends_on'
-      ),
-      tree(root, member) AS (
-        SELECT slug, slug FROM opens
-        UNION
-        SELECT t.root, s.child FROM tree t JOIN succ s ON s.parent = t.member
-      ),
-      closes AS (
-        SELECT work_slug AS slug, id AS rid, actor AS closer, work_review_disposition AS disp
-        FROM {rel} WHERE kind = 'work_closed'
-      ),
-      discharged AS (
-        SELECT c.rid FROM closes c
-        WHERE EXISTS (
-          SELECT 1 FROM {rel} r JOIN {t.rel("review_detail")} rd ON rd.ledger_id = r.id
-          WHERE r.kind = 'review' AND r.regards = c.rid AND rd.verdict = 'attest' AND r.actor <> c.closer
-            AND NOT EXISTS (SELECT 1 FROM {rel} s2 WHERE s2.supersedes = r.id)
-        )
-      ),
-      own_unresolved AS (
-        SELECT c.slug FROM closes c
-        WHERE c.disp = 'deferred' AND c.rid NOT IN (SELECT rid FROM discharged)
-      ),
-      not_closed AS (
-        SELECT o.slug FROM opens o WHERE NOT EXISTS (SELECT 1 FROM closes c WHERE c.slug = o.slug)
-      )
-    SELECT 'w_tree_member(' || {q_root} || ',' || {q_member} || ')' FROM tree t
-    UNION ALL SELECT 'w_own_leaf_unresolved(' || {q_slug} || ')' FROM own_unresolved
-    UNION ALL
-      SELECT DISTINCT 'w_tree_unresolved(' || {_wi_quote("t.root")} || ')'
-      FROM tree t
-      WHERE t.member IN (SELECT slug FROM own_unresolved)
-         OR (t.member <> t.root AND t.member IN (SELECT slug FROM not_closed))
     ;"""
     out = t.run(sql).stdout
     return {line.strip() for line in out.splitlines() if line.strip()}

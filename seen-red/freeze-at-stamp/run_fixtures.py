@@ -65,15 +65,11 @@ import sys
 import tempfile
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # seen-red/, for _fixture_env
-from _fixture_env import fixture_pghost  # noqa: E402 (filing/pghost_resolve.py via seen-red/_fixture_env.py -- never a literal host default)
-
-
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
 SCRIPT = REPO / "bootstrap" / "freeze-at-stamp.sh"
 
-PGHOST, PGDB, SRC_SCHEMA = fixture_pghost(), "toy", "autoharn"
+PGHOST, PGDB, SRC_SCHEMA = "192.168.122.1", "toy", "autoharn"
 STANDING_DB = "autoharn_test"
 
 
@@ -107,7 +103,7 @@ def main() -> int:
         existing_dest = tmp / "already-here"
         existing_dest.mkdir()
         (existing_dest / "marker").write_text("pre-existing\n")
-        ra = sh(["sh", str(SCRIPT), "HEAD", str(existing_dest), "--host", PGHOST])
+        ra = sh(["sh", str(SCRIPT), "HEAD", str(existing_dest)])
         ok_a = (ra.returncode == 1 and "already exists" in ra.stderr
                 and (existing_dest / "marker").read_text() == "pre-existing\n")
         check("a-dest-exists-refused", ok_a,
@@ -115,7 +111,7 @@ def main() -> int:
 
         # --- b: bad commit ref ---------------------------------------------------------------
         dest_b = tmp / "bad-commit"
-        rb = sh(["sh", str(SCRIPT), "not-a-real-ref-ever-xyz", str(dest_b), "--host", PGHOST])
+        rb = sh(["sh", str(SCRIPT), "not-a-real-ref-ever-xyz", str(dest_b)])
         ok_b = (rb.returncode == 1 and "does not resolve to a commit" in rb.stderr
                 and not dest_b.exists())
         check("b-bad-commit-refused", ok_b,
@@ -127,7 +123,7 @@ def main() -> int:
                           f"SELECT max(id) FROM {SRC_SCHEMA}.ledger;"]).stdout.strip())
         beyond = max_id + 999999
         dest_c = tmp / "as-of-beyond"
-        rc = sh(["sh", str(SCRIPT), "HEAD", str(dest_c), "--as-of", str(beyond), "--host", PGHOST])
+        rc = sh(["sh", str(SCRIPT), "HEAD", str(dest_c), "--as-of", str(beyond)])
         ok_c = (rc.returncode == 1 and f"beyond the source" in rc.stderr
                 and str(max_id) in rc.stderr and not dest_c.exists())
         check("c-as-of-id-beyond-max-refused", ok_c,
@@ -135,7 +131,7 @@ def main() -> int:
 
         # --- d: --as-of a future timestamp ----------------------------------------------------
         dest_d = tmp / "as-of-future"
-        rd = sh(["sh", str(SCRIPT), "HEAD", str(dest_d), "--as-of", "2099-01-01T00:00:00Z", "--host", PGHOST])
+        rd = sh(["sh", str(SCRIPT), "HEAD", str(dest_d), "--as-of", "2099-01-01T00:00:00Z"])
         ok_d = (rd.returncode == 1 and "is in the future" in rd.stderr and not dest_d.exists())
         check("d-as-of-future-ts-refused", ok_d,
               f"exit={rd.returncode} stderr_tail={rd.stderr.strip()[-200:]!r}", failures)
@@ -155,7 +151,7 @@ def main() -> int:
 
         if not reachable:
             dest_e = tmp / "unreachable"
-            re_ = sh(["sh", str(SCRIPT), "HEAD", str(dest_e), "--host", PGHOST])
+            re_ = sh(["sh", str(SCRIPT), "HEAD", str(dest_e)])
             ok_e = (re_.returncode == 1
                     and "REFUSED -- the standing frozen-snapshot database is not reachable" in re_.stderr
                     and "CREATE DATABASE" in re_.stderr
@@ -174,7 +170,7 @@ def main() -> int:
             # Force a real, small cutoff (not "HEAD") so a KNOWN later row is provably excluded:
             # cutoff = a ledger id well below the current max (id 200), rather than "whatever HEAD
             # happens to be" -- the run must show rows <= 200 and prove a row well past 200 absent.
-            rf = sh(["sh", str(SCRIPT), "HEAD", str(dest_f), "--as-of", "200", "--host", PGHOST])
+            rf = sh(["sh", str(SCRIPT), "HEAD", str(dest_f), "--as-of", "200"])
             details: list[str] = [f"script_exit={rf.returncode}"]
             ok_f = rf.returncode == 0 and dest_f.exists()
             if ok_f:

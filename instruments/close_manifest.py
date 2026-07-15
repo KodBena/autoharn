@@ -46,9 +46,6 @@ from review_without_detail import atoms_for as _review_without_detail_atoms
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO_ROOT = os.path.dirname(HERE)   # autoharn: consumers are now repo-local (engine/, gates/), not cross-repo
-sys.path.insert(0, os.path.join(REPO_ROOT, "filing"))
-import pghost_resolve  # noqa: E402 (filing/pghost_resolve.py -- never a literal host default)
-
 DEFAULT_LOG_GLOB = "/home/bork/pg_log/tee.log"
 DEFAULT_JOURNAL = os.path.expanduser("~/w/vdc/1/epistemic-audit/logs/change_gate.journal.jsonl")
 
@@ -237,7 +234,7 @@ def _acts_stream_present(run_id: str) -> bool:
     (no-stream) report pre-run is correct and green; at the real close the stream exists and the
     consumers RUN (a missing stream at close would then be a loud DEFERRED, never a silent skip)."""
     try:
-        cp = subprocess.run(["psql", "-h", pghost_resolve.resolve_pghost("EPISTEMIC_PGHOST"),
+        cp = subprocess.run(["psql", "-h", os.environ.get("EPISTEMIC_PGHOST", "192.168.122.1"),
                              "-d", ACTS_STREAM_DB, "-tAc",
                              f'SELECT count(*) FROM "{ACTS_STREAM_SCHEMA}".stream '
                              f"WHERE run_id = '{run_id}';"],
@@ -419,7 +416,7 @@ def run_findings_gate() -> tuple[str, str]:
 # The check-line REGISTRY: a foreclosure's check_line_id must resolve to a line that actually exists
 # (the manifest's MANDATORY set OR a registered gate/lint id below). A foreclosure naming a deleted line
 # reverts to RED (rot), never a silent checkbox. Gates append their line id here as they are built.
-HARNESS_PGHOST_FC = pghost_resolve.resolve_pghost("EPISTEMIC_PGHOST")
+HARNESS_PGHOST_FC = os.environ.get("EPISTEMIC_PGHOST", "192.168.122.1")
 FORECLOSURE_LINE_REGISTRY = set(MANDATORY) | {
     "destructive-ddl-guard",   # tools/no_destructive_ddl.py (specimen 5; forecloses acts-schema-reset)
     "append-only-integrity",   # tools/append_only_integrity.py (forecloses findings 6+15; append-only guard)

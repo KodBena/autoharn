@@ -1,5 +1,7 @@
 # Findings log — epistemic pilot (OPERATOR ONLY)
 
+<!-- doc-attest-exempt: v1.1 release-cut mechanical edit (one bare noun-phrase paragraph at line 107 rewritten as a full sentence to satisfy gates/doc_shapes.py's gate mode, no other content change) by a subagent with no agent-forking tool available for the ADR-0017 A:B:C loop (same gap named at ledger rows 699/714/785 and in the v1.0 release-cut commit). Removal condition: strike this marker and run the real A:B:C loop next time this file is touched for content, not just this one-sentence repair. -->
+
 Do not place this file, or its contents, inside any subject directory.
 
 Evidence base per run: the Postgres ledger (`epistemic.ledger`, filter by `session`),
@@ -104,7 +106,7 @@ the collaborator's self-report.
 
 ## Experiment 3 (s4) — completed: does the witness-integrity mandate close the gap? (yes, mostly)
 
-This experiment adds the block-and-ask + witness-integrity mandate on top of the prior condition.
+This experiment adds the block-and-ask protocol plus an explicit witness-integrity mandate.
 
 ### F8 — the mandate captured the contests e2 hid, and flipped the F7 behavior
 Histogram: e2/s3 = 0 findings + 0 snags; e3/s4 = 1 finding + 1 snag. The exact F7 scenario

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-09T07:54:37Z
-#   last-change: 2026-07-14T23:25:02Z
+#   last-change: 2026-07-15T03:54:20Z
 #   contributors: 9bcc0113/main, be693afb/main, e4410ef6/main, 3c50e030/main, a857c93d/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -58,16 +58,15 @@ ROOT_FILES = {
     # set is already being touched (CLAUDE.md hazard-flagging duty).
     "USER-CONFIGURATION.md",
     # bootstrap/track-work.sh's own STANDING deployment on autoharn itself (design/
-    # USER-WORK-STATUS-OFFERING.md, deliverable 2, 2026-07-11): the five verb shims
-    # (led/judge/pickup/audit/distance-to-clean), landing at the repo root because that IS this
-    # deployment's project-dir. No hooks are wired for it (a standing project is not a governed
-    # world — track-work.sh's own header comment) so these are inert outside a deliberate
-    # `./led`/`./pickup`/etc invocation; registered here so an unregistered-top-level breach does
-    # not fire on the offering's own first, self-hosted consumer. deployment.json itself (the
-    # maintainer's own private instance pointer, host/schema/role) is deliberately NOT shipped
-    # in the v1.0 public cut and so is deliberately NOT registered here either (v1.0 release-cut
-    # removal step 2) -- an adopter's own `new-project.sh`/`convert-to-submodule.sh` run writes
-    # their own.
+    # USER-WORK-STATUS-OFFERING.md, deliverable 2, 2026-07-11): deployment.json + the five verb
+    # shims (led/judge/pickup/audit/distance-to-clean), landing at the repo root because that
+    # IS this deployment's project-dir. No hooks are wired for it (a standing project is not a
+    # governed world — track-work.sh's own header comment) so these are inert outside a
+    # deliberate `./led`/`./pickup`/etc invocation; registered here so an unregistered-top-level
+    # breach does not fire on the offering's own first, self-hosted consumer.
+    # deployment.json RETIRED from this registry for the v1.1 public cut (2026-07-15, same
+    # disposition as v1.0's): this checkout's own private live-deployment pointer is not part
+    # of the published tree; an adopter generates their own via bootstrap/new-project.sh.
     "led", "judge", "pickup", "audit", "distance-to-clean",
     # .gitattributes — the merge-driver wiring for attestations/*.jsonl and BACKLOG.md's dated
     # sections (design/ORCH-WORKTREE-LEDGERING.md 3a; tools/merge_jsonl.py,
@@ -75,6 +74,12 @@ ROOT_FILES = {
     # registered here rather than left an unregistered breach for the census gate to hit next
     # run (CLAUDE.md hazard-flagging duty, worktree-ledgering-implementation, 2026-07-12).
     ".gitattributes",
+    # .gitmodules — landed with the tools/makespan-scheduler/ vendor-to-submodule conversion
+    # (commit 5464937), never registered here at landing time; caught by this gate's own next
+    # run while WP-4 (panel v2) was already editing this exact registry to add "panel" below
+    # (CLAUDE.md hazard-flagging duty, same shape as the migrate/attestations/LICENSE entries
+    # above -- a hazard within reach of the touch gets fixed, not routed around).
+    ".gitmodules",
     # USER-GUIDE.md, attest-tags — pre-existing gap (landed by the doc-audience-taxonomy sweep
     # and an earlier commission respectively, neither of which registered here), hit while
     # panel-cheap-fixes was editing USER-GUIDE.md itself; fixed in passing rather than left an
@@ -93,10 +98,6 @@ ROOT_FILES = {
     # led/judge/pickup/audit/distance-to-clean but never registered here; caught by this gate's
     # own next run (CLAUDE.md hazard-flagging duty, root-shims-and-layout-census work item).
     "migrate",
-    # .gitmodules — landed with the tools/makespan-scheduler vendor-to-submodule conversion
-    # (commit 5464937), never registered here; caught in passing during the v1.0 release cut
-    # (CLAUDE.md hazard-flagging duty — a hazard within reach of the work being touched).
-    ".gitmodules",
 }
 ROOT_DIRS = {
     ".claude", "bootstrap", "law", "judgment", "kernel", "stores", "instruments", "engine",
@@ -118,9 +119,9 @@ ROOT_DIRS = {
     # 2026-07-13 merge seam when the LICENSE registration made the gate re-run (CLAUDE.md
     # hazard-flagging duty).
     "vestigial_documentation",
-    # observatory/ — REMOVED for the v1.0 public cut (2026-07-15): held ent/picom live-deployment
-    # review content, not part of the shipped product; the registry entry is retired alongside
-    # the directory rather than left dangling (v1.0 release-cut removal step 2).
+    # observatory/ RETIRED from this registry for the v1.1 public cut (2026-07-15, same
+    # disposition as v1.0's): the ent-observatory commission's recurring read-only evaluation
+    # of the maintainer's own live ~/ent deployment is not this release's to publish.
     # proposals/ — TRANSITIONAL (ADR-0005 Rule 7, retirement plan stated here): patch files for
     # merge-gated surfaces (live-exec'd templates/hooks), staged by builders whose commissions
     # forbid touching those surfaces while a deployment session is live (merge-gate policy,
@@ -133,6 +134,12 @@ ROOT_DIRS = {
     # never registered here at landing time, caught by this gate's own next run (CLAUDE.md
     # hazard-flagging duty, same shape as the migrate/attestations/tools entries above).
     "docs",
+    # panel/ DEREGISTERED (2026-07-15, TASK C, commission item 3): the PoC SPA that lived here
+    # (panel/backend, panel/frontend, panel/seed) moved to its own repo, KodBena/autoharn-panel,
+    # and is adopted back in as a git submodule at tools/autoharn-panel — no new top-level
+    # registration needed since tools/ is already a registered ROOT_DIR above and a submodule's
+    # gitlink entry sorts under it. panel/ itself is untracked now (removed from the index; any
+    # leftover files on disk are not git-tracked and this gate only walks `git ls-files`).
 }
 
 # (2) per-directory currency patterns: a directory -> the regex(es) its basenames MUST match.
@@ -145,6 +152,13 @@ DIR_PATTERNS: dict[str, list[str]] = {
 }
 # runs/ and seen-red/ additionally forbid LOOSE top-level files beyond an allowed set (evidence trees).
 _RUNS_LOOSE_OK = {"README.md"}
+# _fixture_env.py — the shared host-resolution helper every seen-red/<case>/run_fixtures.py
+# imports (its own docstring: "lives in seen-red/ itself, one directory above every driver that
+# imports it"); a genuine cross-fixture shared module, not a per-gate evidence dir, so it is the
+# one legitimate loose file under seen-red/ — caught here (panel v2, WP-4) while this exact
+# registry was already being edited to add "panel" above (CLAUDE.md hazard-flagging duty: a
+# hazard within reach of the touch gets fixed, not routed around).
+_SEEN_RED_LOOSE_OK = {"_fixture_env.py"}
 
 
 def tracked() -> list[str]:
@@ -190,10 +204,12 @@ def main() -> int:
                 breaches.append(f"PATTERN BREACH {f}: {base!r} does not match {d}/ currency "
                                 f"({' | '.join(pats)})")
 
-    # (2b) seen-red/ forbids loose top-level files (only per-gate subdirs)
+    # (2b) seen-red/ forbids loose top-level files (only per-gate subdirs + the allowed shared set)
     for f in files:
-        if f.startswith("seen-red/") and "/" not in f[len("seen-red/"):]:
-            breaches.append(f"PATTERN BREACH {f}: seen-red/ holds only per-gate subdirs, no loose files")
+        rest = f[len("seen-red/"):] if f.startswith("seen-red/") else None
+        if rest is not None and "/" not in rest and rest not in _SEEN_RED_LOOSE_OK:
+            breaches.append(f"PATTERN BREACH {f}: seen-red/ holds only per-gate subdirs "
+                            f"(+ {sorted(_SEEN_RED_LOOSE_OK)}), no other loose files")
 
     if breaches:
         print(f"layout-census: {len(breaches)} breach(es) of the designed tree (LAYOUT §1):\n")

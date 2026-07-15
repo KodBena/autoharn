@@ -22,11 +22,7 @@ import sys
 from dataclasses import dataclass
 from datetime import datetime
 
-_HERE = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, os.path.join(os.path.dirname(_HERE), "filing"))
-import pghost_resolve  # noqa: E402 (filing/pghost_resolve.py -- never a literal host default)
-
-PGHOST = pghost_resolve.resolve_pghost("HARNESS_PGHOST", "EPISTEMIC_PGHOST")
+PGHOST = "192.168.122.1"
 PGDB = "epistemic"
 # Date-generic: scan every date-stamped statement log, so a run on any date is covered (a
 # date-pinned path silently found zero reads on a later run — a false UNGROUNDED). Mirrors

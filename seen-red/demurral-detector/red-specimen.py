@@ -21,24 +21,6 @@ a per-commit tax.
 OBSERVER MODE, PROVEN HERE TOO: every case below asserts the hook's exit code is 0 regardless of
 verdict (it NEVER blocks) — the warning (when it fires) travels only via
 `hookSpecificOutput.additionalContext` and the journal file, never via a deny/ask decision.
-
-ARMED VIA THE REAL SWITCHBOARD (2026-07-15 fix, demurral-detector-arm branch): the
-APPARATUS.JSON SWITCHBOARD mandate landed in `hooks/demurral_detect.py` the same day this
-fixture was first written (2026-07-10), and its shipped default for `demurral_detect` is
-`"off"` — a real, ratified, LAW-documented policy ("no world may silently bill its operator";
-stated identically in the hook's own module docstring, `bootstrap/templates/apparatus.json`,
-`bootstrap/templates/APPARATUS.md`, `ORCH-OPERATING-CARD.md`, `USER-CONFIGURATION.md`,
-`ORCH-CAPABILITIES.md`, and `law/adr/0000` itself: "Its costed classifier defaults off per
-world"). Left unarmed, this fixture's temp `cwd` carries no `.claude/apparatus.json` at all, so
-every case resolved to `"off"` and went silent regardless of polarity — both the positive and
-the hard-negative case passed for the same wrong reason (nothing ever ran), which is a specimen
-INERT, not a specimen proven silent-on-a-negative. The honest fix is not to change the hook's
-shipped default (that would reverse a maintainer-ratified, LAW-stated policy with no fresh
-ratification behind the reversal) — it is to arm THIS fixture the same way any real operator
-must: write `.claude/apparatus.json` with `demurral_detect.mode = "observe"` into the temp
-`cwd` before invoking the hook (see `_arm()` below). This fixture already accepts the real
-per-call classifier cost (the module docstring above, and the `DEMURRAL_TIMEOUT_S=60` override
-in `_run()`); arming the mode switch is the same acceptance, not a new one.
 """
 from __future__ import annotations
 
@@ -135,29 +117,9 @@ def _run(payload: dict, cwd: Path) -> tuple[int, dict]:
     return cp.returncode, out
 
 
-def _arm(cwd: Path) -> None:
-    """ARM the switchboard honestly, the same way any real operator must (APPARATUS.MD /
-    module docstring, maintainer mandate 2026-07-10): write `<cwd>/.claude/apparatus.json`
-    with `mechanisms.demurral_detect.mode = "observe"`. Missing this file resolves to `"off"`
-    by design (`hooks/demurral_detect.py::_resolve_mode`'s default) -- that default is itself
-    the ratified, LAW-documented policy (law/adr/0000: "Its costed classifier defaults off per
-    world"; bootstrap/templates/apparatus.json; APPARATUS.md's table+notes; ORCH-OPERATING-CARD.md;
-    USER-CONFIGURATION.md; ORCH-CAPABILITIES.md all state the same "off unless a world opts in"
-    fact) and is NOT the defect this fixture exists to catch. This IS this acceptance fixture's
-    own opt-in to the real per-call classifier cost -- it already accepts that cost via the
-    DEMURRAL_TIMEOUT_S=60 override above ("this is the ACCEPTANCE fixture ... costs a few real
-    classifier calls per run"), so opting into `"observe"` here is the same acceptance applied
-    to the mode switch, not a change to the mechanism's shipped default."""
-    claude_dir = cwd / ".claude"
-    claude_dir.mkdir(parents=True, exist_ok=True)
-    (claude_dir / "apparatus.json").write_text(
-        json.dumps({"mechanisms": {"demurral_detect": {"mode": "observe"}}}), encoding="utf-8")
-
-
 def main() -> int:
     tmp = Path(tempfile.mkdtemp(prefix="demurral-seen-red-"))
     try:
-        _arm(tmp)
         failures = []
 
         # Case 1: Specimen 2's canonical violation via PreToolUse/AskUserQuestion -> must WARN, never block.

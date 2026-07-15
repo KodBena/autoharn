@@ -55,12 +55,10 @@ from dataclasses import dataclass
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _REPO_ROOT = os.path.dirname(_HERE)  # autoharn root
 sys.path.insert(0, os.path.join(_REPO_ROOT, "engine"))
-sys.path.insert(0, os.path.join(_REPO_ROOT, "filing"))
 
 import targets  # noqa: E402  (engine/targets.py, the ONE home for (db, schema, kern) resolution)
-import pghost_resolve  # noqa: E402 (filing/pghost_resolve.py -- never a literal host default)
 
-PGHOST = pghost_resolve.resolve_pghost("EPISTEMIC_PGHOST")
+PGHOST = os.environ.get("EPISTEMIC_PGHOST", "192.168.122.1")
 FS, RS = "\x1f", "\x1e"
 
 

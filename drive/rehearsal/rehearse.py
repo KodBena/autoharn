@@ -41,18 +41,14 @@ OPERATOR = HERE.parents[1]
 ENGINE = OPERATOR / "engine"
 if str(ENGINE) not in sys.path:
     sys.path.insert(0, str(ENGINE))
-FILING = OPERATOR / "filing"
-if str(FILING) not in sys.path:
-    sys.path.insert(0, str(FILING))
 
 # top-of-file imports (lazy-import edict) — the deriver + the marriage stack it feeds.
 import acts_join  # noqa: E402
 from acts_edb import acts_edb, acts_floor_atoms  # noqa: E402
 from clingo_run import run_clingo  # noqa: E402
 from ledger_differential import AGREE as MARR_AGREE, run_differential  # noqa: E402
-import pghost_resolve  # noqa: E402 (filing/pghost_resolve.py -- never a literal host default)
 
-PGHOST = pghost_resolve.resolve_pghost("HARNESS_PGHOST", "EPISTEMIC_PGHOST")
+PGHOST = "192.168.122.1"
 ACTS_SCHEMA = "acts_rehearsal"          # fresh acts schema (harness) — dropped+recreated each run
 RUN_ID = "rehearsal-mock"
 LEDGER_SCHEMA = "mock_e15_synth"        # fresh SYNTHETIC ledger schema (epistemic)

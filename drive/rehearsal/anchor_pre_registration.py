@@ -24,10 +24,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "filing"))
-import pghost_resolve  # noqa: E402 (filing/pghost_resolve.py -- never a literal host default)
-
-PGHOST = pghost_resolve.resolve_pghost("HARNESS_PGHOST", "EPISTEMIC_PGHOST")
+PGHOST = "192.168.122.1"
 DB = "harness"
 # Archive-pinned (like ledger_target's e15-e18 entries): the five DOCS below are e15 EVIDENCE that
 # stays in the epistemic-operator archive — never migrated into autoharn. The old layout put this file
