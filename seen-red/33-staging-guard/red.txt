@@ -1,3 +1,4 @@
-STAGING GUARD: commit REFUSED — staged index does not match the declared manifest (finding 33: a swept path would ride along).
-  SWEPT (staged, NOT declared — unstage or declare): ['BACKLOG.md']
+STAGING GUARD: commit REFUSED — staged index is not a subset of the declared manifest (finding 33 / staging-scope-subset-enforcement, motivating class c4923ae: a broad add with a narrow declared scope rides unrelated paths along).
+  EXCESS — staged but NOT declared (unstage them or widen the declared scope): ['BACKLOG.md']
+  This is discipline, not friction: a scope you cannot state precisely is a scope you have not finished deciding. Narrow CLAUDE_COMMIT_PATHS to match, or split this into separate commits.
 # staging-guard REFUSED (exit 1) — a concurrently-authored BACKLOG.md staged but not declared would have ridden along in the commit; the guard names it and blocks (finding 33).

@@ -1,0 +1,18 @@
+# RED — c4923ae reproduction: narrow declared scope, broad staged sweep
+  [ok] guard REFUSES (nonzero exit)
+  [ok] teach-text cites the item (staging-scope-subset-enforcement)
+  [ok] teach-text cites c4923ae
+  [ok] every swept path is named in the EXCESS line
+# GREEN 1 — staged set is a genuine subset of the declared scope
+  [ok] ordinary declared-superset commit PASSES
+# GREEN 2 — a real merge in progress (MERGE_HEAD present) is exempt, no manifest needed
+  [ok] scratch merge left MERGE_HEAD staged
+  [ok] merge commit with NO manifest still PASSES (escape hatch 2)
+# GREEN 3 — CLAUDE_COMMIT_ALL=maintainer sweeps the full staged set, loudly
+  [ok] maintainer override PASSES
+  [ok] override is logged, never silent (every path named)
+# GREEN 4 — temp-index commit (CLAUDE_COMMIT_PATHS + GIT_INDEX_FILE) reads the temp index
+  [ok] declared-matches-temp-index commit PASSES (real-index churn on keep.txt not seen)
+
+# staging-scope-subset-enforcement: RED reproduced + refused (c4923ae class named), all four GREEN
+legitimate flows (subset / merge / maintainer-hands / temp-index) pass.

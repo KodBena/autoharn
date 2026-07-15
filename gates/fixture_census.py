@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-09T13:36:11Z
-#   last-change: 2026-07-15T06:04:00Z
+#   last-change: 2026-07-15T07:02:28Z
 #   contributors: be693afb/main, e4410ef6/main, 3c50e030/main, 3c942a60/main, a857c93d/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -52,6 +52,7 @@ REGISTRY: dict[str, str] = {
     "25-operator-turn-extraction":    "instruments/verify_operator_turns.py",
     "31-interception-stamp":          "kernel/fixtures/s17_stamp_fixture.py",
     "33-staging-guard":               "seen-red/33-staging-guard/red-specimen.py",
+    "staging-scope-subset-enforcement": "seen-red/staging-scope-subset-enforcement/run_fixtures.py",
     "35-delivery-freight-integrity":  "instruments/verify_delivery_freight.py",
     "36-consumer-substrate-required": "instruments/verify_substrate_required.py",
     "38-review-without-detail":       "instruments/verify_review_without_detail.py",
@@ -107,6 +108,7 @@ REGISTRY: dict[str, str] = {
     "accounting-forbidden-tier":      "seen-red/accounting-forbidden-tier/run_fixtures.py",
     "s28-work-parent-edge":           "seen-red/s28-work-parent-edge/run_fixtures.py",
     "s29-obligation-item-key-and-typed-close": "seen-red/s29-obligation-item-key-and-typed-close/run_fixtures.py",
+    "s29-migration-epoch":            "seen-red/s29-migration-epoch/run_fixtures.py",
     "freeze-at-stamp":                "seen-red/freeze-at-stamp/run_fixtures.py",
     "verify-chain-error-conflation":  "seen-red/verify-chain-error-conflation/run_fixtures.py",
     "actual-intake-validation":       "seen-red/actual-intake-validation/run_fixtures.py",
