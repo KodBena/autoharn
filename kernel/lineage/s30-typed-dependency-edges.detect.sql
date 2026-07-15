@@ -25,9 +25,24 @@ SELECT
     WHERE table_schema = :'schema' AND table_name = 'ledger'
       AND column_name = 'edge_type'
   )
-  AND pg_get_functiondef(
-        (SELECT p.oid FROM pg_proc p
-           JOIN pg_namespace n ON n.oid = p.pronamespace
-          WHERE p.proname = 'work_item_strict_blockers' AND n.nspname = :'schema')
-      ) LIKE '%edge_type = ''blocks-close''%'
+  -- REVISED 2026-07-16 (maintainer-authorized, same verbatim authorization as s29's sibling;
+  -- ledger item migrate-detect-drift): the marker was pinned to work_item_strict_blockers()'s
+  -- own body, but s32 single-homed the blocks-close filter into the work_edge_blocks_close
+  -- VIEW (its whole point, ADR-0012 P1) -- so the fingerprint now accepts the filter's
+  -- presence in ANY function OR view :schema owns (behavior-fingerprint over the schema,
+  -- never over one pinned name).
+  AND (
+    EXISTS (
+      SELECT 1 FROM pg_proc p
+        JOIN pg_namespace n ON n.oid = p.pronamespace
+       WHERE n.nspname = :'schema'
+         AND p.prokind = 'f'  -- plain functions only: pg_get_functiondef errors on aggregates
+         AND pg_get_functiondef(p.oid) LIKE '%edge_type = ''blocks-close''%'
+    )
+    OR EXISTS (
+      SELECT 1 FROM pg_views v
+       WHERE v.schemaname = :'schema'
+         AND v.definition LIKE '%edge_type = ''blocks-close''%'
+    )
+  )
 AS applied;

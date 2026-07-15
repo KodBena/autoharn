@@ -47,9 +47,19 @@ SELECT
     WHERE table_schema = :'schema' AND table_name = 'review_detail'
       AND column_name = 'discharge_grade'
   )
-  AND pg_get_functiondef(
-        (SELECT p.oid FROM pg_proc p
-           JOIN pg_namespace n ON n.oid = p.pronamespace
-          WHERE p.proname = 'validate_work_item' AND n.nspname = :'schema')
-      ) LIKE '%sec-10 epoch amendment%'
+  -- REVISED 2026-07-16 (maintainer-authorized verbatim: "Authorized: edit kernel/lineage/
+  -- s29-obligation-item-key-and-typed-close.detect.sql and s30-typed-dependency-edges.detect.sql
+  -- to broaden their marker search per the migrate-detect-drift fix."; ledger item
+  -- migrate-detect-drift): the marker was pinned to the function NAMED validate_work_item, but
+  -- s35's dispatcher refactor moved the sec-10 branch into a leaf function -- a later refactor
+  -- must never flip this detect to a false negative, so the fingerprint now searches EVERY
+  -- function :schema owns for the marker text (behavior-fingerprint over the schema, never
+  -- over one pinned name).
+  AND EXISTS (
+    SELECT 1 FROM pg_proc p
+      JOIN pg_namespace n ON n.oid = p.pronamespace
+     WHERE n.nspname = :'schema'
+       AND p.prokind = 'f'  -- plain functions only: pg_get_functiondef errors on aggregates
+       AND pg_get_functiondef(p.oid) LIKE '%sec-10 epoch amendment%'
+  )
 AS applied;
