@@ -223,8 +223,18 @@
 #                                              disposition=deferred not yet discharged by a
 #                                              distinct-actor attest review (s29's own sibling of
 #                                              the pre-existing ACTOR-keyed `led review-gap`)
-#   led work list                             work_item_current: one row per slug — state (open/
-#                                              closed), title, resolution, witness, claimant
+#   led work list [--all]                     work_item_current: one row per slug — state (open/
+#                                              closed), title, resolution, witness, claimant.
+#                                              DEFAULT excludes state='closed' (the "what is open
+#                                              or claimed NOW" view — at ~60 lifetime items, the
+#                                              unfiltered dump overflowed an orchestrator context
+#                                              read; maintainer directive 2026-07-13,
+#                                              led-work-list-state-filter). `--all` restores the
+#                                              full historical view (closed included), unchanged
+#                                              from before this default flipped. Nothing is deleted
+#                                              or hidden from the ledger itself — this is a read-verb
+#                                              default only; `led work asof <ts>` and the raw ledger
+#                                              rows remain the complete, unfiltered record
 #   led work violations                       work_item_violations: duplicate_open and
 #                                              shipped_without_witness (both provably vacuous under
 #                                              normal operation — refused at insert above, listed as
@@ -947,10 +957,35 @@ SQL
         SELECT slug, close_id, closer FROM ${SCHEMA}.work_review_gap ORDER BY slug;"
       ;;
     list)
-      exec psql -h "$PGHOST" -d "$PGDB" -c "
-        SELECT w.slug, w.title, w.state, w.resolution, w.witness, p.name AS claimant
-        FROM ${SCHEMA}.work_item_current w LEFT JOIN ${KERNEL}.principal p ON p.id = w.claimant
-        ORDER BY w.slug;"
+      shift
+      # DEFAULT ANSWERS "what is open or claimed right now" (maintainer directive 2026-07-13,
+      # led-work-list-state-filter): the unfiltered dump grows with every lifetime item (~60 and
+      # counting, closed included), and just overflowed an orchestrator context read. --all
+      # restores the pre-existing full-history behavior (closed included) -- one explicit,
+      # discoverable flag away, never deleted or hidden from the ledger itself (this is a
+      # read-verb default only; `led work asof <ts>` and the raw ledger rows stay the complete,
+      # unfiltered record). work_item_current's `state` column is exactly {open, closed} (verified
+      # live against this project's own deployment: claimed-but-not-yet-closed items also carry
+      # state='open', distinguished by a non-NULL claimant) -- so the default filter is
+      # `state <> 'closed'`, not a third value that does not exist in the view.
+      show_all=false
+      case "${1:-}" in
+        --all) show_all=true; shift ;;
+        "") : ;;
+        *) echo "usage: led work list [--all]" >&2; exit 1 ;;
+      esac
+      if [ "$show_all" = true ]; then
+        exec psql -h "$PGHOST" -d "$PGDB" -c "
+          SELECT w.slug, w.title, w.state, w.resolution, w.witness, p.name AS claimant
+          FROM ${SCHEMA}.work_item_current w LEFT JOIN ${KERNEL}.principal p ON p.id = w.claimant
+          ORDER BY w.slug;"
+      else
+        exec psql -h "$PGHOST" -d "$PGDB" -c "
+          SELECT w.slug, w.title, w.state, w.resolution, w.witness, p.name AS claimant
+          FROM ${SCHEMA}.work_item_current w LEFT JOIN ${KERNEL}.principal p ON p.id = w.claimant
+          WHERE w.state <> 'closed'
+          ORDER BY w.slug;"
+      fi
       ;;
     violations)
       exec psql -h "$PGHOST" -d "$PGDB" -c "
@@ -1017,7 +1052,8 @@ SQL
       echo "       led work depends <slug> <on-slug>" >&2
       echo "       led work close <slug> <resolution> (--review-witness <ref> | --review-deferred) [--witness <ref>] [--strict]" >&2
       echo "       led work review-gap    (work_review_gap, item-keyed deferred/undischarged closes)" >&2
-      echo "       led work list          (work_item_current)" >&2
+      echo "       led work list [--all]  (work_item_current; default open/claimed only, --all" >&2
+      echo "                               for the full history including closed)" >&2
       echo "       led work violations    (work_item_violations)" >&2
       echo "       led work asof <timestamp>  (point-in-time reconstruction, read-only)" >&2
       exit 1
