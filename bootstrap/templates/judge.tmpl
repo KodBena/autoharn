@@ -1,0 +1,131 @@
+#!/usr/bin/env bash
+# judge — engine differential verdict for this project's ledger.
+#
+# Usage:
+#   ./judge [extra ledger_differential.py flags...]
+#     ./judge                  # the ordinary run: retain DerivationRecords, print the verdict
+#     ./judge --drop-record    # negative control: drop the ASP witness, see the consumer refuse
+#
+# Invokes autoharn's engine/ledger_differential.py against this project's own target name (read
+# LIVE from deployment.json's `name` field -- BACKLOG maintainer ruling 2026-07-11, "live verbs";
+# no longer sed-substituted at scaffold time) with --retain, so every run banks a DerivationRecord
+# pair under autoharn's own engine/docs/ledger-marriage/derivations/<name>/ (the auditability
+# clause — design/ORCH-USE-MODE-ENGINE-WIRING.md item 6). Prints the closed verdict vocabulary per
+# judgment family:
+#   AGREE | DIVERGE_BY_DESIGN | DIVERGE_DEFECT | QUARANTINED
+#
+# THEN (BACKLOG "Omega work-tracking disposition" 2026-07-11, item 1) additionally SELECTs
+# <schema>.work_item_violations (kernel/lineage/s22-work-item-ledger.sql): duplicate_open,
+# shipped_without_witness, depends_on_unknown_slug, dependency_cycle -- named individually in the
+# output, not just counted, so a red run tells the reader WHICH kind and WHICH slug without a
+# separate `led work violations` call. Previously this sat silent until someone ran that verb by
+# hand; cycles/dangling deps now fail loud in the same place the differential verdict does.
+#
+# EXIT-CODE SEMANTICS (both halves considered, neither silently dropped): exits non-zero (turns a
+# run red) iff EITHER (a) ledger_differential.py's own exit is non-zero (any family verdicts
+# DIVERGE_DEFECT or QUARANTINED) OR (b) work_item_violations is non-empty. The differential's own
+# exit code is never re-derived/reinterpreted -- only OR'd with the violations check. A pre-s22
+# world (no work-item layer) degrades honestly: the violations line reads UNAVAILABLE and does NOT
+# contribute to the exit code (absence of the layer is not itself a violation).
+#
+# Observer-first (design/ORCH-USE-MODE-ENGINE-WIRING.md item 4): the DIFFERENTIAL half is NOT wired
+# into any gate here or in autoharn; whether it ever becomes gating is a maintainer decision, filed
+# when the first real divergence is seen. The work_item_violations half is judge's own red
+# condition (this delta), not a gate either -- `judge` itself is still an observer verb, run by
+# hand or by `pickup`/`led`'s own callers, never invoked from a PreToolUse/Stop hook.
+#
+# TARGET RESOLUTION (design/ORCH-OPUS-READINESS.md move 1): this project's own target name (read live
+# from deployment.json's `name` field below) is very unlikely to be one of autoharn
+# engine/targets.py's curated registry names (toy, nla, e15-e18) or match its scratch-naming
+# conventions -- so this script points LEDGER_DEPLOYMENT at this project's own deployment.json
+# (repo root, next to .claude/), autoharn's targets.resolve() THIRD resolution source. If this
+# project's name later gets its own curated registry entry in autoharn (a maintainer act), the
+# registry wins over this deployment file automatically (targets.py's documented precedence) --
+# nothing here needs to change.
+#
+# Path resolution: this file executes IN PLACE out of the autoharn checkout now (BACKLOG
+# maintainer ruling 2026-07-11, "live verbs" -- the scaffolded ./judge is a 3-line shim that execs
+# THIS file directly, never a copy), so AUTOHARN defaults to two directories up from THIS file's
+# own on-disk location -- overridable with AUTOHARN=/path/to/autoharn for a differently-laid-out
+# checkout. deployment.json is found next to the shim, passed through via PICKUP_DEPLOYMENT (set
+# by the shim; same mechanism `pickup` already used).
+set -euo pipefail
+
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+AUTOHARN="${AUTOHARN:-$(cd "$HERE/../.." && pwd)}"
+DIFFERENTIAL="$AUTOHARN/engine/ledger_differential.py"
+DEPLOYMENT="${PICKUP_DEPLOYMENT:-$HERE/deployment.json}"
+
+if [ ! -f "$DIFFERENTIAL" ]; then
+  echo "judge: cannot find engine/ledger_differential.py under AUTOHARN=$AUTOHARN" >&2
+  echo "       set AUTOHARN=/path/to/autoharn (this file executes in place out of the autoharn" >&2
+  echo "       checkout itself now -- see the scaffolded ./judge shim's own comment)" >&2
+  exit 2
+fi
+
+# One live read of deployment.json (mirrors led.tmpl's own resolution block -- ADR-0012 P1, one
+# mechanism, not a second hand-copied JSON parser): TARGET NAME for the differential (unchanged
+# behavior) PLUS db/host/schema for the work_item_violations check below (new). BACKLOG maintainer
+# ruling 2026-07-11, "live verbs": no longer sed-substituted at scaffold time. Any TARGET_NAME
+# string satisfies engine/targets.py's resolve() here (LEDGER_DEPLOYMENT below wins for a name
+# unknown to its curated registry -- see targets.py's own precedence docstring); it is ALSO the
+# banking subdirectory name under autoharn's own engine/docs/ledger-marriage/derivations/
+# (design/ORCH-USE-MODE-ENGINE-WIRING.md item 6), so it should stay stable across one project's runs --
+# deployment.json is exactly that stable, per-world, scaffold-written home
+# (filing/deployment_record.py).
+_dep_vars="$(python3 - "$AUTOHARN" "$DEPLOYMENT" <<'PYEOF'
+import shlex
+import sys
+autoharn, dep_path = sys.argv[1:3]
+sys.path.insert(0, autoharn + "/filing")
+import deployment_record as dr
+try:
+    d = dr.load_deployment(dep_path)
+except dr.DeploymentError as e:
+    print(f"judge: {e}", file=sys.stderr)
+    sys.exit(2)
+if not d.name:
+    print(f"judge: deployment record at {dep_path!r} has no 'name' field -- scaffold this world "
+          f"with a current bootstrap/new-project.sh (writes it automatically), or add one by hand "
+          f"(filing/deployment_record.py's DeploymentRecord.name).", file=sys.stderr)
+    sys.exit(2)
+for k in ("db", "host", "schema", "kern", "role", "name"):
+    print(f"DEP_{k.upper()}={shlex.quote(getattr(d, k))}")
+PYEOF
+)" || exit 2
+eval "$_dep_vars"
+TARGET_NAME="$DEP_NAME"
+
+DIFF_EXIT=0
+env LEDGER_DEPLOYMENT="$DEPLOYMENT" python3 "$DIFFERENTIAL" "$TARGET_NAME" --retain "$@" || DIFF_EXIT=$?
+
+# work_item_violations (BACKLOG "Omega work-tracking disposition" 2026-07-11, item 1): a second,
+# independent red condition alongside the differential verdict above -- see this file's own header
+# for the full rationale and exit-code semantics. to_regclass() returns NULL (never an error) for
+# a relation that does not exist, which is exactly the pre-s22-kernel case -- so a world born
+# before s22 degrades to an honest UNAVAILABLE note rather than a psql failure.
+echo ""
+echo "-- work_item_violations (schema ${DEP_SCHEMA}) --"
+HAS_LAYER="$(psql -h "$DEP_HOST" -d "$DEP_DB" -tAc \
+  "SELECT to_regclass('${DEP_SCHEMA}.work_item_violations') IS NOT NULL;")"
+VIOL_EXIT=0
+if [ "$HAS_LAYER" = "t" ]; then
+  VIOLATIONS="$(psql -h "$DEP_HOST" -d "$DEP_DB" -tAc \
+    "SELECT violation || ': ' || slug || COALESCE(' (' || detail || ')', '')
+       FROM ${DEP_SCHEMA}.work_item_violations ORDER BY violation, slug;")"
+  if [ -n "$VIOLATIONS" ]; then
+    VIOL_COUNT="$(printf '%s\n' "$VIOLATIONS" | grep -c .)"
+    echo "work_item_violations: RED -- ${VIOL_COUNT} violation(s):"
+    printf '%s\n' "$VIOLATIONS" | sed 's/^/  !! /'
+    VIOL_EXIT=1
+  else
+    echo "work_item_violations: none"
+  fi
+else
+  echo "work_item_violations: UNAVAILABLE (pre-s22 kernel -- no work-item layer in schema ${DEP_SCHEMA}; does not affect exit code)"
+fi
+
+if [ "$DIFF_EXIT" -ne 0 ] || [ "$VIOL_EXIT" -ne 0 ]; then
+  exit 1
+fi
+exit 0

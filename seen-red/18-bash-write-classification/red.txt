@@ -1,0 +1,5 @@
+BASH-WRITE MISCLASSIFIED: 'echo hi > /fenced/out.txt': classified None, oracle '/fenced/out.txt'
+BASH-WRITE MISCLASSIFIED: 'echo hi >> /fenced/log.txt': classified None, oracle '/fenced/log.txt'
+BASH-WRITE MISCLASSIFIED: 'tee /fenced/t.txt': classified None, oracle '/fenced/t.txt'
+BASH-WRITE MISCLASSIFIED: 'tee -a /fenced/t.txt': classified None, oracle '/fenced/t.txt'
+# bash-write-classification FAIL — 4 command(s) diverge from the oracle (a fenced Bash-redirection write is not being accounted).

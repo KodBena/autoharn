@@ -1,0 +1,71 @@
+doc_attestation_presence --record: REFUSED — malformed record for v2sample.md:
+  escalated record carries no 'adjudication' object — doc-attestation/2 requires the escalation recipient's disposition (adjudicated_by / disposition / adjudicated_at) as a first-class field, not b_id free text (design/ORCH-SPEC-DOC-ATTESTATION-2.md; the seam BACKLOG 'First live enforcement')
+doc_attestation_presence: 1 doc(s) in scope, 0 excluded, 0 waived.
+  excluded (principled, printed per ADR-0017 Rule 2(b) convention):
+    BACKLOG.md  — point-in-time dated entries (ADR-0017 Exceptions)
+    judgment/** — declared history (ORCH-OPERATING-CARD.md), same status gates/link_integrity.py already grants it
+doc_attestation_presence (gate mode): 1 finding(s):
+  sample.md: NO-ATTESTATION no fresh-context attestation record in attestations/doc-legibility-attestations.jsonl matches this file's current content (sha256 ae943f6e9a3c...) — run the A:B:C loop (design/ORCH-ABC-AUDIT-LOOP-RECIPE.md) and record it with 'gates/doc_attestation_presence.py --record', or waive with '<!-- doc-attest-exempt: <reason> -->' if this is a point-in-time record or quoted-defect specimen the wholesale exclusions do not already cover
+CASE RED-NO-ATTESTATION: exit=1
+CASE RED-MALFORMED (umbrella DEFECT, no findings): 1 issue(s)
+CASE RED-MALFORMED (CLEAN missing a Rule-1 clause): 1 issue(s)
+CASE RED-MALFORMED (2 rounds still DEFECT, escalated=false): 1 issue(s)
+CASE GREEN (well-shaped CLEAN record): 0 issue(s)
+doc_attestation_presence: 1 doc(s) in scope, 0 excluded, 0 waived.
+  excluded (principled, printed per ADR-0017 Rule 2(b) convention):
+    BACKLOG.md  — point-in-time dated entries (ADR-0017 Exceptions)
+    judgment/** — declared history (ORCH-OPERATING-CARD.md), same status gates/link_integrity.py already grants it
+doc_attestation_presence (gate mode): clean — 1 doc(s) in scope, 0 findings
+CASE GREEN (gate mode after recording): exit=0
+doc_attestation_presence: 1 doc(s) in scope, 0 excluded, 0 waived.
+  excluded (principled, printed per ADR-0017 Rule 2(b) convention):
+    BACKLOG.md  — point-in-time dated entries (ADR-0017 Exceptions)
+    judgment/** — declared history (ORCH-OPERATING-CARD.md), same status gates/link_integrity.py already grants it
+doc_attestation_presence (gate mode): 1 finding(s):
+  mentions_token.md: NO-ATTESTATION no fresh-context attestation record in attestations/doc-legibility-attestations.jsonl matches this file's current content (sha256 31829465255f...) — run the A:B:C loop (design/ORCH-ABC-AUDIT-LOOP-RECIPE.md) and record it with 'gates/doc_attestation_presence.py --record', or waive with '<!-- doc-attest-exempt: <reason> -->' if this is a point-in-time record or quoted-defect specimen the wholesale exclusions do not already cover
+CASE WAIVER-NOT-PROSE (token mentioned in prose, not an HTML comment): exit=1
+doc_attestation_presence: 1 doc(s) in scope, 0 excluded, 1 waived.
+  excluded (principled, printed per ADR-0017 Rule 2(b) convention):
+    BACKLOG.md  — point-in-time dated entries (ADR-0017 Exceptions)
+    judgment/** — declared history (ORCH-OPERATING-CARD.md), same status gates/link_integrity.py already grants it
+  waived by inline '<!-- doc-attest-exempt: ... -->' marker:
+    real_waiver.md
+doc_attestation_presence (gate mode): clean — 1 doc(s) in scope, 0 findings
+CASE WAIVER-NOT-PROSE (token inside a real HTML comment): exit=0
+CASE V2 non-escalated, no adjudication: clean -> OK
+CASE V2 escalated, well-shaped adjudication: clean -> OK
+CASE V2 escalated, NO adjudication (the seam): 1 issue(s) -> OK
+CASE V2 escalated, adjudication missing a field: 1 issue(s) -> OK
+CASE V2 escalated, adjudication empty disposition: 1 issue(s) -> OK
+CASE V2 escalated, adjudication with extra key: 1 issue(s) -> OK
+CASE V2 non-escalated WITH adjudication (lie): 1 issue(s) -> OK
+CASE V1 legacy record still validates: clean -> OK
+CASE unknown schema refused fail-closed: 1 issue(s) -> OK
+CASE non-string schema (a list) refused, not crash: 1 issue(s) -> OK
+CASE CLEAN round with unhashable clause entries refused, not crash: 1 issue(s) -> OK
+CASE V2 null adjudication, non-escalated (treated absent -> clean): clean -> OK
+CASE V2 null adjudication, escalated (treated absent -> refused seam): 1 issue(s) -> OK
+CASE V2 --record escalated-without-adjudication: exit=2 (want 2, nothing appended)
+doc_attestation_presence --record: appended attestation for v2sample.md (schema doc-attestation/2, content_sha256 db09db3a39e7..., 2 round(s), escalated=True, adjudicated)
+CASE V2 --record escalated-with-adjudication: exit=0 (want 0, appended as /2)
+doc_attestation_presence: 3 doc(s) in scope, 0 excluded, 1 waived.
+  excluded (principled, printed per ADR-0017 Rule 2(b) convention):
+    BACKLOG.md  — point-in-time dated entries (ADR-0017 Exceptions)
+    judgment/** — declared history (ORCH-OPERATING-CARD.md), same status gates/link_integrity.py already grants it
+  waived by inline '<!-- doc-attest-exempt: ... -->' marker:
+    real_waiver.md
+doc_attestation_presence (report mode): 1 finding(s):
+  mentions_token.md: NO-ATTESTATION no fresh-context attestation record in attestations/doc-legibility-attestations.jsonl matches this file's current content (sha256 31829465255f...) — run the A:B:C loop (design/ORCH-ABC-AUDIT-LOOP-RECIPE.md) and record it with 'gates/doc_attestation_presence.py --record', or waive with '<!-- doc-attest-exempt: <reason> -->' if this is a point-in-time record or quoted-defect specimen the wholesale exclusions do not already cover
+doc_attestation_presence: report mode never fails — the back-catalog migrates on touch (ADR-0017 Rule 4), not by sweep
+CASE REPORT-NEVER-FAILS: exit=0
+CASE PARAM-RED (--doc-root/--ledger, no attestation): exit=1
+CASE PARAM-GREEN (--record via flags): exit=0
+CASE PARAM-GREEN (gate mode after --record via flags): exit=0
+CASE PARAM-DEFAULTS-UNCHANGED (--record with no doc-root/ledger flags, bad input): exit=2
+CASE DISCOVER-MD (no .git, on-disk walk): ['sub/nested.md', 'top.md']
+CASE DISCOVER-MD (real .git present, nothing committed/staged): ['sub/nested.md', 'top.md']
+CASE CLASSIFY (no record -> NO-ATTESTATION): NO-ATTESTATION
+CASE CLASSIFY (record at wrong hash -> STALE): STALE
+CASE CLASSIFY (record at current hash -> ATTESTED): ATTESTED
+CASE RECORDS-FOR-DOC (two hashes, one path): 2 record(s)
+doc-attestation-presence red-specimen: all cases behaved as designed — red on a missing attestation, refused-at-write on three malformed shapes, green once a well-shaped record is recorded, the prose-mention/HTML-comment waiver distinction holds, and report mode never fails.

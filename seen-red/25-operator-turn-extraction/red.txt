@@ -1,0 +1,1 @@
+# operator-turn-extraction FAIL — a harness-injected <task-notification> tripped the F40 splice signature (1 false hit(s)): ['<task-notification>agent 5ffc done <output-file>/tmp/claude/abc.output</output-file></task-notification>']

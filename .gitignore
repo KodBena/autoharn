@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# OS / editor
+.DS_Store
+*.swp
+
+# local scratch (never tracked)
+/scratchpad/
+*.local
+
+# runtime outputs written by drive/ tooling (delivery_drill --check writes its own transcript)
+/drive/delivery-drill-transcript.txt
+
+# NOTE: no blanket *.pdf/*.svg ignore — the authoritative BRIEFs travel WITH their
+# sources/ PDFs (law/briefs/*/sources/, manifest [C10]); those are tracked evidence.
+# The fact-mining NLP lane and its jax cache stay in the claude_harness attic (mandate
+# §4); autoharn has no such artifacts to ignore.
+
+# copyright sources are LOCAL ONLY (incident 2026-07-07)
+law/briefs/*/sources/*
+!law/briefs/*/sources/README.md
+
+# session ephemera are LOCAL ONLY (privacy; incident 2 same night)
+ephemera/session-*
+
+# toy run 1 salvage (transcript-recovered deliverables) -- interim, pending the
+# maintainer's disposition ruling (commit vs local-only), see assent batch 2026-07-09
+ephemera/toy-run1-salvage/
+
+# Claude Code agent worktrees are session scratch, never repository content
+.claude/worktrees/

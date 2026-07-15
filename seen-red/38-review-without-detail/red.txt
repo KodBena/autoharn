@@ -1,0 +1,3 @@
+# review-without-detail on the e17-shape unit (row 12 = the finding-38 detail-less stub):
+  surfaced: ['review_without_detail(12)']
+# the detail-less review 12 is named at close (descriptive, non-gating); reviews 17/18 (with detail) are not.

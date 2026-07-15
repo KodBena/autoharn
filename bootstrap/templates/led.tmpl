@@ -1,0 +1,1947 @@
+#!/usr/bin/env bash
+# led — one-liner decision-ledger entries for this project.
+#
+# Usage:
+#   led [flags] <kind> <statement...>          e.g. led decision "perceptual distance = CIEDE2000"
+#
+#   flags (any order, any subset, all optional, consumed before <kind>):
+#     -f a.py,b.py           declares files: a.py,b.py in the entry's rationale, so the
+#                            PreToolUse change gate (autoharn hooks/pretooluse_change_gate.py)
+#                            recognizes this entry as authorizing an edit to those files
+#     -e id1,id2             enacts: this entry carries the named EARLIER own-session row(s)
+#                            into a file (s15 validate_enacts; each id must resolve to an
+#                            earlier row in the same session or the trigger refuses)
+#     --supersedes id        this entry supersedes an earlier row; the superseded row drops out
+#                            of ledger_current and is marked SUPERSEDED in `led --recent`/`led current`
+#     --amends id --amends-scope "<verbatim clause>"
+#                            clause-level revision: id's clause named by amends-scope is
+#                            defeated while the rest of id stands (id itself is NOT superseded).
+#                            amends-scope must be an EXACT, unambiguous (occurs-once) 10+ char
+#                            substring of id's own statement or rationale (s15 validate_amends)
+#                            — both-or-neither; a mismatched/ambiguous quote is refused
+#     --answers id           this entry (any kind) resolves an earlier kind=question row id
+#                            (s15 validate_answers); shows up in `led question-status`
+#     --refs "<text>"        free-text cross-reference (ledger.refs). CONVENTION for citing an
+#                            antecedent ledger row from ANY kind: `--refs row:<id>` (e.g. a
+#                            verification result citing its pre-registered criteria row:
+#                            `led --refs row:12 --evidence "..." verification "criteria met"`).
+#                            This is the kernel's own sanctioned channel for a bare row
+#                            reference on a non-review kind — s15's enacts column comment says
+#                            it outright: "a bare reference uses refs". The TYPED regards edge
+#                            stays reserved for kind=review (s15 validate_review, unchanged
+#                            through s21: "regards is reserved for kind=review") and is written
+#                            only by `led review`'s own <entry-id> positional arg; a --regards
+#                            flag on a generic kind would be refused by the kernel every time,
+#                            so none is offered.
+#     --concern design|enactment|process|other
+#     --evidence "<text>"
+#     --confidence low|medium|high
+#     --event-time <iso-ts>  declares WHEN the recorded event actually occurred, distinct from
+#                            this row's write time (kernel/lineage/s24-declared-event-time.sql's
+#                            nullable event_declared_ts column; design/LATE-ENTRY-AND-INTAKE-
+#                            SEMANTICS.md Proposal 2). Recording an act after the fact? Declare
+#                            its event time -- never narrate the past as if live. Omitting this
+#                            flag means "this row records a present act" (today's semantics,
+#                            unchanged); a declared time far enough before the write time is what
+#                            `./audit` reads as an honest LATE_DECLARED entry rather than an
+#                            undeclared, suspect one. NOT a stamp: writer-supplied, unverified,
+#                            trusted exactly as far as the writer is honest. Supported ONLY on the
+#                            generic <kind> <statement...> path today -- `led review`/`led work
+#                            *`/etc. each have their own INSERT that does not carry the column, so
+#                            this flag is REFUSED loudly on those verbs (never a silent drop; see
+#                            the coverage guard near the top of this file's own logic).
+#
+#   LED_ACTOR=<principal-name>   (env var, not a flag) resolves the actor/principal for EVERY
+#                            ledger-writing verb -- the generic <kind> <statement> path below,
+#                            `led review`, and `led work claim` alike (ONE resolution point,
+#                            resolve_actor(), defined once and shared by all three). Unset, a
+#                            write lands under the default connection principal (`author`). Set to
+#                            an unregistered name, the write is REFUSED with teach-text (register
+#                            it first: `led register-principal <name> <class>`) rather than
+#                            silently falling back to the default principal.
+#
+#   led --recent [N]                          last N ledger rows (default 10), newest first;
+#                                              marks a row SUPERSEDED when a later row's
+#                                              `supersedes` names it (never displays a
+#                                              superseded row as if it were still current)
+#   led current [N]                           last N rows of ledger_current (supersedes-filtered
+#                                              read) — the view a consumer should read by default
+#   led show <id>                             ONE ledger row, every column, in full (`psql -x`
+#                                              expanded display — statement/rationale never
+#                                              truncated). READ-ONLY: refuses loudly, teach-text,
+#                                              on a missing <id> rather than falling through to
+#                                              the generic <kind> <statement...> write path below
+#                                              (run-11 class-b finding: `show` is not a member of
+#                                              ledger_kind_check's vocabulary, so an un-dispatched
+#                                              `led show <id>` used to be silently accepted by the
+#                                              arg-count guard as kind="show", burning a sequence
+#                                              id on the kernel's refusal — BACKLOG "Run-11
+#                                              first-shift forensics", item 7 / change proposal 1)
+#   led question-status                       question_status view: every open/answered question
+#   led review-gap                            review_gap view: EVERY row (any kind) by an obliged
+#                                              actor with no distinct-actor attest countersign yet —
+#                                              not scope-filtered (see `led obligate` below)
+#   led stamp-distinctness                    review_stamp_distinctness view: for each review,
+#                                              whether the SAME invocation wrote it and its target
+#
+#   led register-principal <name> <class>     register a principal (class: human|model|subagent|tool)
+#                                              so a countersign can be attributed to it — the
+#                                              writer registers its own principals, the kernel
+#                                              pre-seeds none but the one connection principal
+#
+#   led review <entry-id> <verdict> <independence> [--antecedent id] <statement...>
+#                                              countersign an earlier row. verdict:
+#                                              attest|attest_with_reservations|refuse. independence:
+#                                              self-review|technical|managerial|financial (technical/
+#                                              managerial/financial REQUIRE a stamp-distinct invocation
+#                                              — else the trigger refuses and teaches self-review).
+#                                              --antecedent id names the EARLIER defeated row this
+#                                              review affirms <entry-id> survives (review_detail.antecedent,
+#                                              NULL for a plain countersign). `statement` doubles as
+#                                              review_detail's `basis`. Set LED_ACTOR=<principal-name> to
+#                                              countersign as a registered principal other than the default
+#                                              connection principal (`author`) — WITHOUT it, every write
+#                                              resolves to the same principal and a review is refused as
+#                                              self-review (validate_review keys on the actor/principal,
+#                                              never on the stamped invocation identity). A very short
+#                                              <statement> prints a WARN-ONLY tripwire (never a refusal --
+#                                              the write proceeds) naming engine/review_gap_audit.py's
+#                                              `./audit --review-gap` check, which flags exactly this shape
+#                                              of row IF it discharges a countersign obligation (tracker
+#                                              item `content-free-review-audit`; WITNESSED SPECIMEN: run12
+#                                              ledger row 20, statement="test").
+#
+#   led obligate <scope> <assigned-by-principal> <obliged-actor-principal>
+#                                              register a countersign_obligation. DIRECTION, spelled
+#                                              out because getting it backwards is the recurring
+#                                              obligate mistake (BACKLOG run-5 AND run-7 forensics,
+#                                              two consecutive runs, each cost a workaround round):
+#                                              <obliged-actor-principal> is the WORKER — the principal
+#                                              whose rows need outside eyes. It must NEVER be the
+#                                              reviewer/countersigner. <assigned-by-principal> is
+#                                              whoever is imposing the obligation (must differ from
+#                                              the obliged actor — the obligation_not_self_assigned
+#                                              CHECK refuses a self-ASSIGNED obligation; distinct from
+#                                              `led register-principal`'s unrelated self-registration).
+#                                              <scope> is a free-text LABEL naming this obligation row
+#                                              (its PK) — it is NOT a filter key: `review_gap` joins on
+#                                              actor identity alone (o.obliges_actor = l.actor), and
+#                                              the ledger table carries no scope column to narrow it
+#                                              against. KNOWN OVER-CATCH (fail-safe direction, no
+#                                              maintainer ruling yet — kernel/lineage s13/s14 review_gap):
+#                                              once a principal is obliged, `led review-gap` counts
+#                                              EVERY uncountersigned row that principal ever writes —
+#                                              any kind, including that principal's OWN later review/
+#                                              attest rows — not only rows "in scope". Obliging the
+#                                              REVIEWER by mistake makes the reviewer's own countersigns
+#                                              show up as debt, forcing an author counter-countersign
+#                                              round (this already happened twice — see BACKLOG).
+#                                              Worked example: `led obligate decomposition-review
+#                                              orchestrator author` — after this, someone other than
+#                                              'author' must countersign every one of author's ledger
+#                                              rows (any kind) or `led review-gap` shows debt for each.
+#   led obligate revoke <scope>               delete a countersign_obligation row by scope (its PK).
+#                                              Whether this succeeds or is REFUSED depends on the
+#                                              connecting role's LIVE grants on countersign_obligation,
+#                                              checked here via has_table_privilege (never assumed,
+#                                              never hardcoded) — s20 granted this role SELECT,INSERT
+#                                              ONLY on countersign_obligation, by deliberate ruling (an
+#                                              obligation is standing OPERATOR-owned policy config, not
+#                                              a role self-service capability), so under an unmodified
+#                                              kernel this REFUSES every time, with teach-text naming
+#                                              the maintainer act that does revoke it. `led` never
+#                                              widens its own grants to bypass this.
+#
+#   led work open <slug> <title...> [--parent <parent-slug>]
+#                                              open a work item (kernel/lineage/s22-work-item-ledger.sql's
+#                                              validate_work_item(): one opening act per slug — a
+#                                              duplicate open is REFUSED at insert, never silently
+#                                              accepted; the Q5 defect made unrepresentable).
+#                                              --parent types this item as a CHILD of an
+#                                              already-opened work item (kernel/lineage/
+#                                              s28-work-parent-edge.sql, tracker slug
+#                                              work-tree-rollup) — REFUSED at construction on a
+#                                              dangling parent (unlike `work depends`'s antecedent,
+#                                              which stays deliberately unrefused, s22) and REFUSED
+#                                              on a cycle. Requires this world's kernel to carry
+#                                              s28 (LIVE-checked, not assumed; omitting --parent
+#                                              works unchanged on a pre-s28 kernel). RETROSPECTIVE
+#                                              topology only — never a gate, never polices scope or
+#                                              cost (the maintainer's standing invariant, same as
+#                                              the estimate:/resource: conventions below).
+#   led work claim <slug>                     claim an already-opened item as the acting principal
+#                                              (refused if <slug> has no opening act). Set
+#                                              LED_ACTOR=<principal-name> to claim as a registered
+#                                              principal other than the default connection principal
+#                                              (else the claim lands under that default principal)
+#   led work depends <slug> <on-slug>         record that <slug> (must already be opened) depends on
+#                                              <on-slug>. <on-slug> itself is NOT required to be
+#                                              opened — a dangling antecedent is deliberately NOT
+#                                              refused (spec invariant 4); it is surfaced instead by
+#                                              `led work violations` (depends_on_unknown_slug)
+#   led work close <slug> <resolution> (--review-witness <ref> | --review-deferred) [--witness <ref>] [--strict]
+#                                              close a work item. REFUSED if <slug> has no
+#                                              work_claimed row yet (led-side gate, mirroring the
+#                                              existing duplicate-open/unopened refusals — run-5
+#                                              forensics: two work items were closed with no claim
+#                                              ever landing, unflagged, until an outside review
+#                                              caught it) — claim it first: `./led work claim <slug>`.
+#                                              resolution: shipped|superseded|dropped|deferred.
+#                                              resolution=shipped REQUIRES --witness — refused at
+#                                              construction time (work_shipped_requires_witness
+#                                              CHECK), never a tolerated-but-flagged row.
+#                                              EXACTLY ONE of two REVIEW-DISPOSITION constructors is
+#                                              REQUIRED (kernel/lineage/s29-obligation-item-key-and-
+#                                              typed-close.sql, Element B — design/MAINT-COUNTERSIGN-
+#                                              CLOSE-SEMANTICS-SPEC.md): a review-silent close is
+#                                              REFUSED at construction, never representable.
+#                                                --review-witness <ref>   a review already exists;
+#                                                  cite it (a ledger row id, commit hash, or
+#                                                  artifact path). DELIBERATELY SEPARATE from
+#                                                  --witness (the SHIP witness, above) — see the
+#                                                  kernel delta's own header for why the two facts
+#                                                  are kept apart.
+#                                                --review-deferred        this close act itself
+#                                                  BECOMES the review obligation (item-keyed by
+#                                                  <slug>, origin-identified by this close row's own
+#                                                  ledger id) — discharge it later with
+#                                                  `./led review <close-row-id> attest ... `, written
+#                                                  by a DIFFERENT actor (surfaced meanwhile by
+#                                                  `led work review-gap`).
+#                                              --strict (opt-in, Element C, "a declared posture, not
+#                                                a universal mandate") REFUSES this close unless
+#                                                --review-witness was used AND every leaf of this
+#                                                item's obligation tree (its own s28 descendants,
+#                                                and every tree member's work-depends antecedents)
+#                                                is independently resolved — REFUSED naming every
+#                                                unresolved leaf, no stored verdict anywhere (a pure,
+#                                                read-time-derived query). --review-deferred +
+#                                                --strict is REFUSED directly (a just-deferred
+#                                                obligation is, by definition, unresolved the moment
+#                                                it is created).
+#   led work review-gap                       work_review_gap: item-keyed close acts with
+#                                              disposition=deferred not yet discharged by a
+#                                              distinct-actor attest review (s29's own sibling of
+#                                              the pre-existing ACTOR-keyed `led review-gap`)
+#   led work list                             work_item_current: one row per slug — state (open/
+#                                              closed), title, resolution, witness, claimant
+#   led work violations                       work_item_violations: duplicate_open and
+#                                              shipped_without_witness (both provably vacuous under
+#                                              normal operation — refused at insert above, listed as
+#                                              defense in depth) plus the two genuinely-reachable,
+#                                              deliberately-unrefused members depends_on_unknown_slug
+#                                              and dependency_cycle
+#   led work asof <timestamp>                 READ-ONLY point-in-time reconstruction: work-item
+#                                              states (open/claimed/closed) AS OF <timestamp>,
+#                                              derived by filtering the append-only work_* ledger
+#                                              rows to ts <= <timestamp> before picking each item's
+#                                              latest opened/claimed/closed row — no kernel change,
+#                                              a pure SELECT over existing columns (BACKLOG "Omega
+#                                              work-tracking disposition" 2026-07-11, item 2)
+#                                              (these seven verbs require kernel/lineage/s22-work-item-
+#                                              ledger.sql applied to this project's schema — s22 is
+#                                              an additive delta on the s15/s17/s19/s20/s21 birth
+#                                              chain, part of it from s22 onward — see ORCH-OPERATING-CARD.md)
+#
+# Connection defaults are sourced LIVE from this project's deployment.json at RUN TIME (BACKLOG
+# maintainer ruling 2026-07-11, "runs are strictly linear" disposition 6, "live verbs"). This file
+# is no longer copied into a project and sed-substituted at scaffold time -- the scaffolded ./led
+# is a 3-line shim that `exec`s THIS file directly out of the autoharn checkout, every invocation,
+# so a template fix (this file) reaches every already-scaffolded world instantly, not just the
+# next scaffold (the asymmetry that let one just-fixed defect live on in five worlds forever).
+# deployment.json is found next to the shim -- the shim passes its own directory through via the
+# PICKUP_DEPLOYMENT env var (the same mechanism `judge`/`pickup` already used for this; the name
+# predates `led` joining the convention, kept as ONE shared mechanism rather than three
+# near-identical env vars, ADR-0012 P1) -- loaded via autoharn's filing/deployment_record.py (the
+# ONE home for that JSON shape). autoharn's own location is resolved from THIS file's own on-disk
+# path (it executes in place now, never copied), overridable with AUTOHARN=/path/to/autoharn for a
+# differently-laid-out checkout (same convention `judge`/`pickup` use).
+# Override the resolved values via LED_PGHOST/LED_PGDB/LED_SCHEMA/LED_KERNEL/LED_ROLE if this
+# project's kernel is re-applied under different names -- unchanged from before.
+set -euo pipefail
+
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+AUTOHARN_ROOT="${AUTOHARN:-$(cd "$HERE/../.." && pwd)}"
+DEPLOYMENT="${PICKUP_DEPLOYMENT:-$HERE/deployment.json}"
+
+# One live read of deployment.json, via autoharn's filing/deployment_record.py (the ONE home for
+# that shape -- this script does not grow a second JSON parser). Prints shell-quoted DEP_* bindings
+# for `eval` below; refuses loudly (teach-text on stderr, exit 2) on a missing/malformed record,
+# never a guessed default (ADR-0002).
+_dep_vars="$(python3 - "$AUTOHARN_ROOT" "$DEPLOYMENT" <<'PYEOF'
+import sys, shlex
+autoharn_root, dep_path = sys.argv[1:3]
+sys.path.insert(0, autoharn_root + "/filing")
+import deployment_record as dr
+try:
+    d = dr.load_deployment(dep_path)
+except dr.DeploymentError as e:
+    print(f"led: {e}", file=sys.stderr)
+    sys.exit(2)
+for k in ("db", "host", "schema", "kern", "role"):
+    print(f"DEP_{k.upper()}={shlex.quote(getattr(d, k))}")
+PYEOF
+)" || exit 2
+eval "$_dep_vars"
+
+PGHOST="${LED_PGHOST:-$DEP_HOST}"
+PGDB="${LED_PGDB:-$DEP_DB}"
+SCHEMA="${LED_SCHEMA:-$DEP_SCHEMA}"
+KERNEL="${LED_KERNEL:-$DEP_KERN}"
+ROLE="${LED_ROLE:-$DEP_ROLE}"
+
+# --- flags (any order, any subset), consumed up front so the verb dispatch below and the
+# generic <kind> <statement...> path both see a clean $@ -------------------------------------
+files=""
+enacts=""
+supersedes=""
+amends=""
+amends_scope=""
+answers=""
+refs=""
+concern=""
+evidence=""
+confidence=""
+event_time=""
+while true; do
+  case "${1:-}" in
+    -f) files="${2:-}"; shift 2 ;;
+    -e) enacts="${2:-}"; shift 2 ;;
+    --supersedes) supersedes="${2:-}"; shift 2 ;;
+    --amends) amends="${2:-}"; shift 2 ;;
+    --amends-scope) amends_scope="${2:-}"; shift 2 ;;
+    --answers) answers="${2:-}"; shift 2 ;;
+    --refs) refs="${2:-}"; shift 2 ;;
+    --concern) concern="${2:-}"; shift 2 ;;
+    --evidence) evidence="${2:-}"; shift 2 ;;
+    --confidence) confidence="${2:-}"; shift 2 ;;
+    --event-time) event_time="${2:-}"; shift 2 ;;
+    *) break ;;
+  esac
+done
+
+# --event-time COVERAGE GUARD -- --event-time is parsed by the SHARED top-of-file loop above
+# (same convention as every other flag here), but only the generic <kind> <statement...> path's
+# INSERT at the bottom of this file actually writes event_declared_ts (kernel/lineage/
+# s24-declared-event-time.sql). Every OTHER dispatched verb below (--recent/current/question-
+# status/review-gap/stamp-distinctness/register-principal/obligate/review/work) has its OWN
+# INSERT INTO ledger that does not carry the column. REFUSE loudly here rather than silently
+# dropping a value the operator explicitly asked to be recorded (the class this file's own
+# `warn_flag_in_statement`/missing-column-refusal idioms both exist to foreclose) -- the flag is
+# scoped to the generic path today (design/MAINT-LATE-ENTRY-AND-INTAKE-SEMANTICS.md Proposal 2's own
+# worked example is exactly that path); widening it to `review`/`work` is a future increment,
+# not a silent gap.
+if [ -n "$event_time" ]; then
+  case "${1:-}" in
+    --recent|current|question-status|review-gap|stamp-distinctness|register-principal|obligate|review|work)
+      echo "led: REFUSED -- --event-time is only supported on the generic <kind> <statement...>" >&2
+      echo "  path today (e.g. './led --event-time <ts> finding \"...\"'); '${1:-}' has its own" >&2
+      echo "  INSERT that does not carry event_declared_ts, so the value would otherwise be" >&2
+      echo "  silently dropped. Omit --event-time for this verb, or route the declaration" >&2
+      echo "  through the generic path instead." >&2
+      exit 1
+      ;;
+  esac
+fi
+
+# --- LED_ACTOR resolution (ONE point, used by every ledger-writing path below: `led review`,
+# `led work claim`, and the generic <kind> <statement> path) -----------------------------------
+# Sets $actor_name to LED_ACTOR (may be empty). Downstream, NULLIF(:'actor_name','') still turns
+# an empty value into NULL so the kernel's set_actor trigger fills the default connection
+# principal, unchanged from before. What's new here: an explicit, up-front existence check. A
+# NAMED but unregistered LED_ACTOR used to fall through that same NULL path too -- the subquery
+# `SELECT id FROM principal WHERE name = ...` matches no row and also returns NULL -- so it landed
+# attributed to the default principal exactly like an unset LED_ACTOR, indistinguishable
+# misattribution, never surfaced. This function forecloses that as a CLASS (ADR-0000: one fact,
+# one writer) instead of leaving it as three separately-patchable instances: it used to be
+# duplicated inline in the review/work-claim paths and OMITTED entirely from the generic path --
+# the generic path never read LED_ACTOR at all, so every `led <kind> ...` write landed under the
+# default principal regardless of LED_ACTOR (BACKLOG run-7 forensics, ledger row 63:
+# LED_ACTOR=reviewer landed as actor='author').
+resolve_actor() {
+  actor_name="${LED_ACTOR:-}"
+  if [ -n "$actor_name" ]; then
+    local registered
+    registered=$(psql -h "$PGHOST" -d "$PGDB" -tAq -v actor_name="$actor_name" <<SQL
+      SET ROLE ${ROLE};
+      SET search_path = ${SCHEMA}, ${KERNEL};
+      SELECT EXISTS (SELECT 1 FROM principal WHERE name = :'actor_name');
+SQL
+    )
+    if [ "$registered" != "t" ]; then
+      echo "led: REFUSED -- LED_ACTOR='${actor_name}' is not a registered principal." >&2
+      echo "  Register it first: ./led register-principal ${actor_name} <human|model|subagent|tool>" >&2
+      exit 1
+    fi
+  fi
+}
+
+# --- flag-in-statement tripwire (BACKLOG "Chocofarm experiment-ledger disposition" 2026-07-11
+# night shift, finding 2, run7 row 71): a flag typed INSIDE the quoted statement text is invisible
+# ceremony -- by the time the top-of-file flag loop runs, that text is already part of the
+# statement word(s), so the flag never reaches the parser and the typed FK column it names
+# (supersedes/refs/regards/amends/answers/evidence/confidence) lands NULL, silently (run7 row 71:
+# statement text ended `--supersedes 48 --refs row:57,row:58,row:59`; both columns were NULL --
+# across all 79 run7 rows, supersedes/amends/answers were used zero times despite the vocabulary
+# existing). WARN-ONLY, never refuses: a statement can legitimately QUOTE one of these tokens in
+# prose (e.g. reporting someone else's command verbatim), so a false positive here is a harmless
+# notice, not a blocked write -- a tripwire, not a gate (mirrors demurral_detect.py's own
+# observer-only posture). led's OWN flag vocabulary is spelled out once, here, so a future flag
+# added to the top-of-file parser is not silently invisible to this check (ADR-0012 P1: one list).
+LED_FLAG_VOCAB="--supersedes --refs --regards --amends --answers --evidence --confidence --event-time"
+warn_flag_in_statement() {
+  local text="$1" flag
+  for flag in $LED_FLAG_VOCAB; do
+    case "$text" in
+      *"$flag"*)
+        echo "led: WARNING -- the statement text contains '${flag}', which looks like one of" >&2
+        echo "  led's own flags. Flags inside the quoted statement are NOT parsed -- if you meant" >&2
+        echo "  to set the typed column, re-issue the command with ${flag} OUTSIDE the quotes." >&2
+        echo "  (warn-only tripwire, not a refusal -- a statement that legitimately quotes" >&2
+        echo "  '${flag}' in prose just sees this notice; the write proceeds either way)" >&2
+        ;;
+    esac
+  done
+}
+
+# --- content-free-review-statement tripwire (tracker item `content-free-review-audit`; WITNESSED
+# SPECIMEN: run12 ledger row 20, statement="test" (4 chars) -- a review row whose ENTIRE statement
+# was 4 characters mechanically discharged another row's countersign obligation under
+# `<schema>.review_gap`'s own semantics (kernel/lineage/s13-schema.sql: ANY unsuperseded,
+# distinct-actor `attest` review discharges -- content is NEVER examined by the view). None of
+# run12's six reviewer passes ever caught it; it stands attested in the append-only record.
+# WARN-ONLY, mirrors warn_flag_in_statement's own posture exactly (same function shape, same
+# tone): a legitimately terse review DOES exist ("Confirmed, matches row 4's stated criteria
+# exactly." clears easily), so a false positive here is a harmless notice, not a blocked write --
+# the write PROCEEDS either way, never refused. The retroactive, content-examining half of this
+# check lives in engine/review_gap_audit.py (\`./audit --review-gap\`) -- this tripwire is
+# intake-time and length-only, exactly the honest limit that module's own docstring names.
+# THE SHARED THRESHOLD LIVES ONE PLACE (ADR-0012 P1): engine/review_gap_thresholds.py, read here
+# via the SAME python3-subprocess convention this file already uses for
+# filing/deployment_record.py (see this file's own top-of-file \`_dep_vars\` block) -- never a
+# second, hand-copied number. Fails OPEN on any subprocess trouble (python3 missing, a bad exit)
+# -- a tripwire that cannot run must never block the write it is only ever supposed to warn about.
+warn_content_free_review_statement() {
+  local text="$1" verdict
+  verdict=$(python3 "$AUTOHARN_ROOT/engine/review_gap_thresholds.py" "$text" 2>/dev/null) || return 0
+  case "$verdict" in
+    FLAGGED*)
+      echo "led: WARNING -- this review's statement is very short (${verdict#FLAGGED } "  >&2
+      echo "  whitespace-normalized chars). engine/review_gap_audit.py (./audit --review-gap," >&2
+      echo "  tracker item 'content-free-review-audit') will FLAG this row if it discharges a" >&2
+      echo "  countersign obligation -- state what you actually checked, not just the verdict." >&2
+      echo "  (warn-only tripwire, not a refusal -- a legitimate terse review exists; the write" >&2
+      echo "  proceeds either way)" >&2
+      ;;
+  esac
+}
+
+if [ "${1:-}" = "--recent" ] || [ "${1:-}" = "current" ]; then
+  # `current` reads ledger_current (supersedes already filtered server-side, the ledger's own view).
+  # `--recent` reads the raw table but MARKS a superseded row visibly instead of silently
+  # showing it as current -- stamp_agent: the invocation identity that actually WROTE the row --
+  # "main" for the top-level context, a subagent's own agent_id otherwise, NULL when unstamped
+  # (a non-intercepted write path). Shown alongside the writer-supplied actor principal so a
+  # reader can see WHO (principal) and, independently, WHICH INVOCATION wrote each row.
+  if [ "${1:-}" = "current" ]; then
+    n="${2:-10}"
+    exec psql -h "$PGHOST" -d "$PGDB" -tAc "
+      SELECT l.id, l.kind, l.statement, p.name
+      FROM ${SCHEMA}.ledger_current l JOIN ${KERNEL}.principal p ON p.id = l.actor
+      ORDER BY l.id DESC LIMIT ${n};"
+  fi
+  n="${2:-10}"
+  exec psql -h "$PGHOST" -d "$PGDB" -tAc "
+    SELECT l.id, l.kind, l.statement, p.name, l.stamp_agent, l.stamp_verified,
+           CASE WHEN EXISTS (SELECT 1 FROM ${SCHEMA}.ledger s WHERE s.supersedes = l.id)
+                THEN 'SUPERSEDED' ELSE 'current' END AS status_now
+    FROM ${SCHEMA}.ledger l JOIN ${KERNEL}.principal p ON p.id = l.actor
+    ORDER BY l.id DESC LIMIT ${n};"
+fi
+
+if [ "${1:-}" = "show" ]; then
+  # led show <id> — a real, read-only subcommand (run-11 class-b finding, BACKLOG "Run-11
+  # first-shift forensics" item 7 / change proposal 1): before this, `led show <id>` cleared
+  # the generic path's `$# -lt 2` usage guard and fell through to the generic <kind>
+  # <statement...> INSERT with kind="show", refused by ledger_kind_check -- a phantom sequence
+  # burn on what reads as an intuitive read-only verb (mirroring `git show`/`docker inspect`).
+  # This block sits BEFORE the generic dispatch below, so `show` never reaches the write path.
+  id="${2:-}"
+  case "$id" in
+    ''|*[!0-9]*)
+      echo "usage: led show <id>" >&2
+      echo "       <id> must be a positive integer ledger row id (see 'led --recent' or" >&2
+      echo "       'led current' to find one) -- prints EVERY column of that one row, in" >&2
+      echo "       full (psql -x expanded display; statement/rationale never truncated)." >&2
+      exit 1
+      ;;
+  esac
+  found=$(psql -h "$PGHOST" -d "$PGDB" -tAq -v id="$id" <<SQL
+    SELECT EXISTS (SELECT 1 FROM ${SCHEMA}.ledger WHERE id = :id::bigint);
+SQL
+  )
+  if [ "$found" != "t" ]; then
+    echo "led show: REFUSED -- no ledger row with id=${id}." >&2
+    echo "  This is a READ-ONLY refusal: nothing was written, no sequence id was burned." >&2
+    echo "  See 'led --recent [N]' or 'led current [N]' for ids that actually exist." >&2
+    exit 1
+  fi
+  # NOTE (this file's own established gotcha, see `led work asof` below): psql's :'var'/:var
+  # interpolation is only applied to a script read from stdin/-f, NOT to a -c argument -- so
+  # this is fed via heredoc, not -c, exactly like every other bound query in this file.
+  exec psql -h "$PGHOST" -d "$PGDB" -x -v id="$id" <<SQL
+    SELECT l.*, p.name AS actor_name
+    FROM ${SCHEMA}.ledger l LEFT JOIN ${KERNEL}.principal p ON p.id = l.actor
+    WHERE l.id = :id::bigint;
+SQL
+fi
+
+if [ "${1:-}" = "question-status" ]; then
+  exec psql -h "$PGHOST" -d "$PGDB" -c "SELECT * FROM ${SCHEMA}.question_status ORDER BY question_id;"
+fi
+
+if [ "${1:-}" = "review-gap" ]; then
+  exec psql -h "$PGHOST" -d "$PGDB" -c "SELECT * FROM ${SCHEMA}.review_gap ORDER BY id;"
+fi
+
+if [ "${1:-}" = "stamp-distinctness" ]; then
+  exec psql -h "$PGHOST" -d "$PGDB" -c "SELECT * FROM ${SCHEMA}.review_stamp_distinctness ORDER BY review_id;"
+fi
+
+if [ "${1:-}" = "register-principal" ]; then
+  name="${2:-}"; class="${3:-}"
+  if [ -z "$name" ] || [ -z "$class" ]; then
+    echo "usage: led register-principal <name> <human|model|subagent|tool>" >&2
+    exit 1
+  fi
+  exec psql -h "$PGHOST" -d "$PGDB" -v ON_ERROR_STOP=1 -v name="$name" -v class="$class" <<SQL
+    SET ROLE ${ROLE};
+    SET search_path = ${SCHEMA}, ${KERNEL};
+    INSERT INTO principal (name, agent_class) VALUES (:'name', :'class')
+    ON CONFLICT (name) DO NOTHING;
+SQL
+fi
+
+if [ "${1:-}" = "obligate" ]; then
+  shift
+  if [ "${1:-}" = "revoke" ]; then
+    shift
+    if [ $# -lt 1 ]; then
+      echo "usage: led obligate revoke <scope>" >&2
+      echo "       deletes a countersign_obligation row (scope is its PK). Whether this succeeds" >&2
+      echo "       or is refused depends on the connecting role's LIVE grants on" >&2
+      echo "       countersign_obligation -- checked here via has_table_privilege, never assumed" >&2
+      echo "       (s20 granted this role SELECT,INSERT only, by deliberate ruling: an obligation" >&2
+      echo "       is standing OPERATOR-owned policy config, never a role self-service capability)" >&2
+      exit 1
+    fi
+    scope="$1"
+    # LIVE check, not a hardcoded assumption: if a future kernel delta ever grants DELETE, this
+    # verb starts working with no code change here -- the grant state has one home (pg_catalog),
+    # never a second hand-copied boolean in this script (ADR-0012 P1).
+    can_delete=$(psql -h "$PGHOST" -d "$PGDB" -tAc \
+      "SELECT has_table_privilege('${ROLE}', '${SCHEMA}.countersign_obligation', 'DELETE');")
+    if [ "$can_delete" != "t" ]; then
+      # TEACH-THE-REFUSAL (tracker scaffold-owner-credential-separation LEG 2, 2026-07-14 ent
+      # self-escalation incident, ledger row 640): this block used to end with the exact
+      # schema-owner DELETE line printed ready to paste -- teach-text in FORM but, in substance,
+      # an invitation to route around the refusal by reaching for owner privilege directly, which
+      # is what the incident's agent did (connected as ent_owner and ran the DELETE itself). The
+      # lawful next step this refusal must teach is LEDGER + STOP + ESCALATE, never "here is the
+      # owner command" -- escalation has to be the CHEAPER path or a struggling agent reaches for
+      # the workaround instead (ADR-0000 Rule 2(b): a recurring struggle is the executive's net to
+      # build, not the implementer's to route around; ADR-0013's "fair dealing" posture that a
+      # refusal is a place to stop, not a puzzle to solve).
+      echo "led obligate revoke: REFUSED -- role '${ROLE}' has no DELETE grant on" >&2
+      echo "  ${SCHEMA}.countersign_obligation (checked live via has_table_privilege, not" >&2
+      echo "  hardcoded). This is s20's deliberate ruling, not an oversight: an obligation is" >&2
+      echo "  standing operator-owned policy config, never a role-level self-service capability" >&2
+      echo "  -- widening the grant would be a kernel delta and is out of scope for this verb to" >&2
+      echo "  take on itself." >&2
+      echo "" >&2
+      echo "  DO NOT connect as the schema owner (or any other elevated identity) to run this" >&2
+      echo "  DELETE yourself, however reachable that identity may be from this environment --" >&2
+      echo "  that is a self-escalation, not a fix, regardless of whether the outcome is benign." >&2
+      echo "" >&2
+      echo "  The lawful next step, in order:" >&2
+      echo "    1. LEDGER the block now, from THIS session, so the refusal is on the record" >&2
+      echo "       before anything else happens:" >&2
+      echo "         ./led finding \"obligate revoke blocked: role '${ROLE}' lacks DELETE on\" \\" >&2
+      echo "           \"${SCHEMA}.countersign_obligation for scope '${scope}' -- needs a\" \\" >&2
+      echo "           \"maintainer act to revoke, not a role-level workaround\"" >&2
+      echo "    2. STOP work on this scope. Do not attempt the DELETE via any other connection," >&2
+      echo "       role, or credential this environment can reach." >&2
+      echo "    3. ESCALATE for orchestrator/maintainer sign-off -- surface the ledgered finding" >&2
+      echo "       and wait for a maintainer act. Only the maintainer, as the schema owner, in" >&2
+      echo "       their own session, decides whether and how scope '${scope}' is revoked." >&2
+      exit 1
+    fi
+    exec psql -h "$PGHOST" -d "$PGDB" -v ON_ERROR_STOP=1 -v scope="$scope" <<SQL
+      SET ROLE ${ROLE};
+      SET search_path = ${SCHEMA}, ${KERNEL};
+      DELETE FROM ${SCHEMA}.countersign_obligation WHERE scope = :'scope';
+SQL
+  fi
+  if [ $# -lt 3 ]; then
+    echo "usage: led obligate <scope> <assigned-by-principal> <obliged-actor-principal>" >&2
+    echo "  DIRECTION MATTERS -- this is the mistake that has cost a workaround two runs" >&2
+    echo "  running (BACKLOG run-5, run-7): <obliged-actor-principal> is the WORKER whose" >&2
+    echo "  rows need outside eyes -- never the reviewer. <assigned-by-principal> is whoever" >&2
+    echo "  imposes the obligation and must be a DIFFERENT registered principal than the" >&2
+    echo "  obliged actor (obligation_not_self_assigned CHECK refuses a self-ASSIGNED" >&2
+    echo "  obligation -- distinct from register-principal's self-REGISTRATION). <scope> is" >&2
+    echo "  a free-text label, not a filter: review_gap joins on actor identity alone, so" >&2
+    echo "  it counts EVERY row (any kind) the obliged actor writes, not just this scope's" >&2
+    echo "  rows -- obliging the reviewer by mistake catches the reviewer's own countersigns." >&2
+    echo "  example: led obligate decomposition-review orchestrator author" >&2
+    echo "    -> after this, someone other than 'author' must countersign every one of" >&2
+    echo "       author's ledger rows or \`led review-gap\` shows debt for each." >&2
+    echo "       led obligate revoke <scope>" >&2
+    exit 1
+  fi
+  scope="$1"; assigned_by_name="$2"; obliges_actor_name="$3"
+  # BOUNDARY VALIDATION, refuse-before-write (tracker scaffold-owner-credential-separation LEG 3;
+  # 2026-07-14 ent self-escalation incident, ledger row 640: "its own obligate command
+  # accidentally globalized to 813 historical countersign_obligation rows"). <scope> READS as a
+  # narrow label but is not a filter -- review_gap joins on the obliged actor's IDENTITY alone
+  # (see the usage text above), so every countersign_obligation row for a given actor is
+  # redundantly global, and a second (or 813th) row for the SAME actor adds no new coverage --
+  # only more governance-config rows an operator must later reason about and, per the incident,
+  # more rows an under-pressure agent may try to mass-delete. Mirroring the malformed-statement
+  # refuse-before-write idiom the generic <kind> path already uses (estimate:/outcome: etc.),
+  # this checks LIVE whether the obliged actor already carries an obligation and refuses before
+  # the INSERT rather than silently accumulating -- a duplicate is exactly as questionable as a
+  # duplicate work_opened (line ~158 above), just not yet enforced by a kernel constraint.
+  existing_scope=$(psql -h "$PGHOST" -d "$PGDB" -tAq -v obliges_actor_name="$obliges_actor_name" <<SQL
+    SET ROLE ${ROLE};
+    SET search_path = ${SCHEMA}, ${KERNEL};
+    SELECT o.scope FROM countersign_obligation o
+    JOIN principal p ON p.id = o.obliges_actor
+    WHERE p.name = :'obliges_actor_name'
+    LIMIT 1;
+SQL
+  )
+  if [ -n "$existing_scope" ]; then
+    echo "led obligate: REFUSED -- principal '${obliges_actor_name}' already carries an" >&2
+    echo "  obligation (scope '${existing_scope}'). Adding scope '${scope}' would NOT narrow or" >&2
+    echo "  extend coverage -- review_gap counts every row this actor writes regardless of how" >&2
+    echo "  many countersign_obligation rows name them, so a second row is redundant governance" >&2
+    echo "  config, not a stronger obligation (this is the same globalization the 2026-07-14" >&2
+    echo "  incident's 813-row accumulation came from)." >&2
+    echo "" >&2
+    echo "  If '${existing_scope}' is the wrong label and you mean to REPLACE it with" >&2
+    echo "  '${scope}', revoke the old one first (a role with DELETE grant can do this itself;" >&2
+    echo "  otherwise ledger the block and escalate, per \`led obligate revoke\`'s own refusal):" >&2
+    echo "    ./led obligate revoke ${existing_scope}" >&2
+    echo "  then re-run this command." >&2
+    exit 1
+  fi
+  exec psql -h "$PGHOST" -d "$PGDB" -v ON_ERROR_STOP=1 \
+    -v scope="$scope" -v assigned_by_name="$assigned_by_name" -v obliges_actor_name="$obliges_actor_name" <<SQL
+    SET ROLE ${ROLE};
+    SET search_path = ${SCHEMA}, ${KERNEL};
+    INSERT INTO ${SCHEMA}.countersign_obligation (scope, assigned_by, obliges_actor)
+    VALUES (:'scope',
+            (SELECT id FROM principal WHERE name = :'assigned_by_name'),
+            (SELECT id FROM principal WHERE name = :'obliges_actor_name'));
+SQL
+fi
+
+if [ "${1:-}" = "review" ]; then
+  shift
+  antecedent=""
+  args=()
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --antecedent) antecedent="${2:-}"; shift 2 ;;
+      *) args+=("$1"); shift ;;
+    esac
+  done
+  set -- "${args[@]}"
+  if [ $# -lt 4 ]; then
+    echo "usage: led review <entry-id> <verdict> <independence> [--antecedent id] <statement...>" >&2
+    echo "       verdict: attest|attest_with_reservations|refuse" >&2
+    echo "       independence: self-review|technical|managerial|financial" >&2
+    echo "       set LED_ACTOR=<principal-name> to countersign as a registered principal" >&2
+    exit 1
+  fi
+  regards="$1"; verdict="$2"; independence="$3"; shift 3
+  statement="$*"
+  warn_flag_in_statement "$statement"
+  warn_content_free_review_statement "$statement"
+  resolve_actor
+  # actor resolves via a subquery bind below, NOT string-spliced: NULLIF(:'actor_name','') is NULL
+  # when LED_ACTOR is unset, so the ledger's actor column stays NULL and the kernel's set_actor
+  # trigger fills the default connection principal -- the same principal every other led write
+  # uses, so an un-set LED_ACTOR against one's own earlier row is refused as self-review (the
+  # honest, intended outcome). resolve_actor (defined near the top of this file) is the ONE place
+  # LED_ACTOR is read and validated, shared with `led work claim` and the generic
+  # <kind> <statement> path.
+  psql -h "$PGHOST" -d "$PGDB" -v ON_ERROR_STOP=1 \
+    -v regards="$regards" -v verdict="$verdict" -v independence="$independence" \
+    -v statement="$statement" -v actor_name="$actor_name" -v antecedent="$antecedent" <<SQL
+    SET ROLE ${ROLE};
+    SET search_path = ${SCHEMA}, ${KERNEL};
+    BEGIN;
+    INSERT INTO ${SCHEMA}.ledger (kind, statement, regards, actor)
+    VALUES ('review', :'statement', :'regards'::bigint,
+            (SELECT id FROM principal WHERE name = NULLIF(:'actor_name', '')))
+    RETURNING id \gset r_
+    INSERT INTO ${SCHEMA}.review_detail (ledger_id, verdict, independence, basis, antecedent)
+    VALUES (:r_id, :'verdict', :'independence', :'statement', NULLIF(:'antecedent', '')::bigint);
+    COMMIT;
+SQL
+  exit $?
+fi
+
+if [ "${1:-}" = "work" ]; then
+  shift
+  sub="${1:-}"
+  case "$sub" in
+    open)
+      shift
+      # --parent <parent-slug> (kernel/lineage/s28-work-parent-edge.sql, tracker slug
+      # work-tree-rollup): parsed like `work close`'s own --witness flag below, any position
+      # among the remaining args. LIVE column-existence check, not a hardcoded kernel-version
+      # assumption (the SAME convention `led obligate revoke`'s has_table_privilege check above
+      # already uses) -- this file executes IN PLACE out of the autoharn checkout for EVERY
+      # already-scaffolded world (the "live verbs" doctrine, ORCH-OPERATING-CARD.md), and s28 is
+      # NOT wired into every world's birth chain (it ships authored+scratch-witnessed only, per
+      # its own header's FAIL-SAFE CLASSIFICATION note) -- so an unconditional `work_parent` in
+      # the INSERT column list below would break `led work open` for every world whose kernel
+      # predates s28, the exact hazard-in-reach CLAUDE.md's engineering-responsibility corollary
+      # exists to catch before it ships, not after.
+      parent=""
+      args=()
+      while [ $# -gt 0 ]; do
+        case "$1" in
+          --parent) parent="${2:-}"; shift 2 ;;
+          *) args+=("$1"); shift ;;
+        esac
+      done
+      set -- "${args[@]}"
+      if [ $# -lt 2 ]; then
+        echo "usage: led work open <slug> <title...> [--parent <parent-slug>]" >&2
+        echo "       refused if <slug> already has an opening act (validate_work_item(): one" >&2
+        echo "       opening act per slug -- the Q5 defect made unrepresentable, never a silent" >&2
+        echo "       duplicate)" >&2
+        echo "       --parent <parent-slug> types this item as a CHILD of an already-opened work" >&2
+        echo "       item (kernel/lineage/s28-work-parent-edge.sql). REFUSED at construction if" >&2
+        echo "       <parent-slug> has no opening act (dangling parents ARE refused here, unlike" >&2
+        echo "       'led work depends's antecedent, which is deliberately left unrefused, s22)," >&2
+        echo "       and refused if honoring it would create a cycle. Requires this world's" >&2
+        echo "       kernel to carry s28 -- omit --parent on a pre-s28 kernel." >&2
+        exit 1
+      fi
+      slug="$1"; shift
+      title="$*"
+      has_parent_col=$(psql -h "$PGHOST" -d "$PGDB" -tAq -v schema="$SCHEMA" <<SQL
+        SELECT EXISTS (SELECT 1 FROM information_schema.columns
+                       WHERE table_schema = :'schema' AND table_name = 'ledger'
+                         AND column_name = 'work_parent');
+SQL
+      )
+      if [ -n "$parent" ] && [ "$has_parent_col" != "t" ]; then
+        echo "led work open: REFUSED -- --parent requires kernel/lineage/s28-work-parent-edge.sql" >&2
+        echo "  applied to this project's schema (work_parent column not found on" >&2
+        echo "  ${SCHEMA}.ledger -- this world's kernel predates s28). Omit --parent, or apply" >&2
+        echo "  s28 to this schema as a maintainer act (ORCH-OPERATING-CARD.md's kernel-delta" >&2
+        echo "  decision tree)." >&2
+        exit 1
+      fi
+      if [ "$has_parent_col" = "t" ]; then
+        exec psql -h "$PGHOST" -d "$PGDB" -v ON_ERROR_STOP=1 \
+          -v slug="$slug" -v title="$title" -v parent="$parent" \
+          -v statement="work_opened: ${slug} -- ${title}" <<SQL
+        SET ROLE ${ROLE};
+        SET search_path = ${SCHEMA}, ${KERNEL};
+        INSERT INTO ${SCHEMA}.ledger (kind, work_slug, work_title, work_parent, statement)
+        VALUES ('work_opened', :'slug', :'title', NULLIF(:'parent', ''), :'statement');
+SQL
+      else
+        exec psql -h "$PGHOST" -d "$PGDB" -v ON_ERROR_STOP=1 \
+          -v slug="$slug" -v title="$title" -v statement="work_opened: ${slug} -- ${title}" <<SQL
+        SET ROLE ${ROLE};
+        SET search_path = ${SCHEMA}, ${KERNEL};
+        INSERT INTO ${SCHEMA}.ledger (kind, work_slug, work_title, statement)
+        VALUES ('work_opened', :'slug', :'title', :'statement');
+SQL
+      fi
+      ;;
+    claim)
+      shift
+      if [ $# -lt 1 ]; then
+        echo "usage: led work claim <slug>" >&2
+        echo "       refused if <slug> has no opening act (validate_work_item(): every later" >&2
+        echo "       event on an item must reference an item that has been opened)" >&2
+        echo "       set LED_ACTOR=<principal-name> to claim as a registered principal other" >&2
+        echo "       than the default connection principal" >&2
+        exit 1
+      fi
+      slug="$1"
+      resolve_actor
+      # actor resolves via a subquery bind exactly as `led review` does above: NULLIF(:'actor_name','')
+      # is NULL when LED_ACTOR is unset, so the claim lands under the default connection principal.
+      # resolve_actor (defined near the top of this file) is the ONE place LED_ACTOR is read/
+      # validated, shared with `led review` and the generic <kind> <statement> path.
+      exec psql -h "$PGHOST" -d "$PGDB" -v ON_ERROR_STOP=1 \
+        -v slug="$slug" -v actor_name="$actor_name" -v statement="work_claimed: ${slug}" <<SQL
+        SET ROLE ${ROLE};
+        SET search_path = ${SCHEMA}, ${KERNEL};
+        INSERT INTO ${SCHEMA}.ledger (kind, work_slug, statement, actor)
+        VALUES ('work_claimed', :'slug', :'statement',
+                (SELECT id FROM principal WHERE name = NULLIF(:'actor_name', '')));
+SQL
+      ;;
+    depends)
+      shift
+      if [ $# -lt 2 ]; then
+        echo "usage: led work depends <slug> <on-slug>" >&2
+        echo "       <slug> must already be opened (refused otherwise); <on-slug> (the" >&2
+        echo "       antecedent) is NOT required to be opened -- a dangling antecedent is" >&2
+        echo "       deliberately NOT refused (spec invariant 4), it is surfaced instead by" >&2
+        echo "       'led work violations' (depends_on_unknown_slug)" >&2
+        exit 1
+      fi
+      slug="$1"; on="$2"
+      exec psql -h "$PGHOST" -d "$PGDB" -v ON_ERROR_STOP=1 \
+        -v slug="$slug" -v on="$on" -v statement="work_depends_on: ${slug} depends on ${on}" <<SQL
+        SET ROLE ${ROLE};
+        SET search_path = ${SCHEMA}, ${KERNEL};
+        INSERT INTO ${SCHEMA}.ledger (kind, work_slug, work_depends_on, statement)
+        VALUES ('work_depends_on', :'slug', :'on', :'statement');
+SQL
+      ;;
+    close)
+      shift
+      witness=""
+      review_witness=""
+      review_deferred=""
+      strict=""
+      args=()
+      while [ $# -gt 0 ]; do
+        case "$1" in
+          --witness) witness="${2:-}"; shift 2 ;;
+          --review-witness) review_witness="${2:-}"; shift 2 ;;
+          --review-deferred) review_deferred="1"; shift ;;
+          --strict) strict="1"; shift ;;
+          *) args+=("$1"); shift ;;
+        esac
+      done
+      set -- "${args[@]}"
+      usage_close() {
+        echo "usage: led work close <slug> <resolution> (--review-witness <ref> | --review-deferred) [--witness <ref>] [--strict]" >&2
+        echo "       resolution: shipped|superseded|dropped|deferred" >&2
+        echo "       resolution=shipped REQUIRES --witness -- refused at construction time" >&2
+        echo "       (work_shipped_requires_witness CHECK), never a tolerated-but-flagged row" >&2
+        echo "       refused if <slug> has no work_claimed row yet -- claim it first:" >&2
+        echo "       ./led work claim <slug>" >&2
+        echo "       EXACTLY ONE of --review-witness <ref> / --review-deferred is REQUIRED" >&2
+        echo "       (kernel/lineage/s29-obligation-item-key-and-typed-close.sql, Element B) --" >&2
+        echo "       a review-silent close is REFUSED at construction, never representable." >&2
+        echo "         --review-witness <ref>  a review already exists; cite it" >&2
+        echo "         --review-deferred       this close act itself becomes the item-keyed" >&2
+        echo "                                 review obligation, discharged later by a" >&2
+        echo "                                 DIFFERENT actor's ./led review <close-row-id> ..." >&2
+        echo "       --strict refuses this close unless --review-witness was used AND every leaf" >&2
+        echo "       of the obligation tree is resolved, naming every unresolved leaf" >&2
+      }
+      if [ $# -lt 2 ]; then
+        usage_close
+        exit 1
+      fi
+      slug="$1"; resolution="$2"
+      # claim-before-close gate (led-side; s22's own trigger checks only that <slug> was OPENED,
+      # not that anyone claimed it) -- run-5 forensics: two work items were closed with no claim
+      # ever landing, unflagged. Mirrors the existing duplicate-open/unopened refusal style: a
+      # named usage message on stderr, exit 1, no silent acceptance.
+      claimed=$(psql -h "$PGHOST" -d "$PGDB" -tAq -v slug="$slug" <<SQL
+        SET ROLE ${ROLE};
+        SET search_path = ${SCHEMA}, ${KERNEL};
+        SELECT EXISTS (SELECT 1 FROM ledger WHERE kind = 'work_claimed' AND work_slug = :'slug');
+SQL
+      )
+      if [ "$claimed" != "t" ]; then
+        echo "led work close: REFUSED -- slug '${slug}' has no work_claimed row (claim it first):" >&2
+        echo "  ./led work claim ${slug}" >&2
+        echo "  (a close with no claim ever landing is the run-5 finding: two work items were" >&2
+        echo "  closed this way, unflagged, until an outside review caught it)" >&2
+        exit 1
+      fi
+      # LIVE column-existence check (the SAME convention `work open --parent` above already uses):
+      # s29 is NOT wired into every world's birth chain, so an unconditional
+      # work_review_disposition in the INSERT column list would break `led work close` for every
+      # world whose kernel predates s29 -- the exact hazard-in-reach CLAUDE.md's engineering-
+      # responsibility corollary exists to catch before it ships, not after.
+      has_review_disposition_col=$(psql -h "$PGHOST" -d "$PGDB" -tAq -v schema="$SCHEMA" <<SQL
+        SELECT EXISTS (SELECT 1 FROM information_schema.columns
+                       WHERE table_schema = :'schema' AND table_name = 'ledger'
+                         AND column_name = 'work_review_disposition');
+SQL
+      )
+      if [ "$has_review_disposition_col" != "t" ]; then
+        if [ -n "$review_witness" ] || [ -n "$review_deferred" ] || [ -n "$strict" ]; then
+          echo "led work close: REFUSED -- --review-witness/--review-deferred/--strict require" >&2
+          echo "  kernel/lineage/s29-obligation-item-key-and-typed-close.sql applied to this" >&2
+          echo "  project's schema (work_review_disposition column not found on" >&2
+          echo "  ${SCHEMA}.ledger -- this world's kernel predates s29). Omit these flags, or" >&2
+          echo "  apply s29 to this schema as a maintainer act (ORCH-OPERATING-CARD.md's" >&2
+          echo "  kernel-delta decision tree)." >&2
+          exit 1
+        fi
+        exec psql -h "$PGHOST" -d "$PGDB" -v ON_ERROR_STOP=1 \
+          -v slug="$slug" -v resolution="$resolution" -v witness="$witness" \
+          -v statement="work_closed: ${slug} (${resolution})" <<SQL
+        SET ROLE ${ROLE};
+        SET search_path = ${SCHEMA}, ${KERNEL};
+        INSERT INTO ${SCHEMA}.ledger (kind, work_slug, work_resolution, work_witness, statement)
+        VALUES ('work_closed', :'slug', :'resolution', NULLIF(:'witness', ''), :'statement');
+SQL
+        exit $?
+      fi
+      # TWO CONSTRUCTORS, EXACTLY ONE REQUIRED (Element B) -- refused at the led boundary with
+      # teach-text naming BOTH constructors, mirroring the intake-validation `refuse()` idiom
+      # (both-polarity fixture: seen-red/s29-obligation-item-key-and-typed-close/).
+      if [ -n "$review_witness" ] && [ -n "$review_deferred" ]; then
+        echo "led work close: REFUSED -- --review-witness and --review-deferred are the TWO" >&2
+        echo "  CONSTRUCTORS of a review disposition; exactly ONE, never both, in one close act" >&2
+        echo "  (s29 Element B)." >&2
+        exit 1
+      fi
+      if [ -z "$review_witness" ] && [ -z "$review_deferred" ]; then
+        echo "led work close: REFUSED -- a review-silent close is unrepresentable (s29 Element B)." >&2
+        echo "  Choose exactly ONE constructor:" >&2
+        echo "    --review-witness <ref>   a review already exists; cite it" >&2
+        echo "    --review-deferred        this close act itself becomes the review obligation" >&2
+        exit 1
+      fi
+      if [ -n "$review_deferred" ] && [ -n "$strict" ]; then
+        echo "led work close: REFUSED -- --review-deferred + --strict is a contradiction in terms" >&2
+        echo "  (s29 Element C): a just-deferred obligation is, by definition, unresolved the" >&2
+        echo "  moment it is created. Record the review first (./led review ...), then close" >&2
+        echo "  with --review-witness <ref> --strict." >&2
+        exit 1
+      fi
+      if [ -n "$review_witness" ]; then
+        disposition="witnessed"; review_ref="$review_witness"
+      else
+        disposition="deferred"; review_ref=""
+      fi
+      strict_bool="false"
+      [ -n "$strict" ] && strict_bool="true"
+      exec psql -h "$PGHOST" -d "$PGDB" -v ON_ERROR_STOP=1 \
+        -v slug="$slug" -v resolution="$resolution" -v witness="$witness" \
+        -v disposition="$disposition" -v review_ref="$review_ref" -v strict_bool="$strict_bool" \
+        -v statement="work_closed: ${slug} (${resolution})" <<SQL
+        SET ROLE ${ROLE};
+        SET search_path = ${SCHEMA}, ${KERNEL};
+        INSERT INTO ${SCHEMA}.ledger
+          (kind, work_slug, work_resolution, work_witness,
+           work_review_disposition, work_review_ref, work_strict_close, statement)
+        VALUES ('work_closed', :'slug', :'resolution', NULLIF(:'witness', ''),
+                :'disposition', NULLIF(:'review_ref', ''), :'strict_bool'::boolean, :'statement');
+SQL
+      ;;
+    review-gap)
+      exec psql -h "$PGHOST" -d "$PGDB" -c "
+        SELECT slug, close_id, closer FROM ${SCHEMA}.work_review_gap ORDER BY slug;"
+      ;;
+    list)
+      exec psql -h "$PGHOST" -d "$PGDB" -c "
+        SELECT w.slug, w.title, w.state, w.resolution, w.witness, p.name AS claimant
+        FROM ${SCHEMA}.work_item_current w LEFT JOIN ${KERNEL}.principal p ON p.id = w.claimant
+        ORDER BY w.slug;"
+      ;;
+    violations)
+      exec psql -h "$PGHOST" -d "$PGDB" -c "
+        SELECT violation, slug, detail FROM ${SCHEMA}.work_item_violations ORDER BY violation, slug;"
+      ;;
+    asof)
+      shift
+      if [ $# -lt 1 ]; then
+        echo "usage: led work asof <timestamp>" >&2
+        echo "       point-in-time backlog reconstruction -- work-item states AS OF <timestamp>," >&2
+        echo "       derived purely by filtering the append-only work_* ledger rows to ts <=" >&2
+        echo "       <timestamp> (read-only; no kernel change, no new table -- BACKLOG 'Omega" >&2
+        echo "       work-tracking disposition' 2026-07-11, item 2). <timestamp> is anything" >&2
+        echo "       postgres's timestamptz cast accepts, e.g. '2026-07-11 10:23:00' or an ISO" >&2
+        echo "       8601 string; quote it if it contains a space." >&2
+        exit 1
+      fi
+      asof="$1"
+      # Three states (open/claimed/closed), NOT work_item_current's two (open/closed +
+      # claimant column) -- the omega-disposition ask was explicitly "open/claimed/closed as of
+      # T", so this mirrors work_item_current's own opened/claimed/closed CTE shape (s22) with
+      # ONE addition: every CTE is filtered to ts <= :asof before the DISTINCT ON latest-row
+      # pick, so "latest as of T" replaces "latest ever". An item whose opening act is itself
+      # after T does not exist yet as of T and is correctly absent (INNER JOIN on opened).
+      # Bound via psql -v/heredoc (a psql bind, not string concatenation or -c), same convention
+      # this file's own generic <kind> <statement> path documents below: psql's :'var'
+      # interpolation is only applied to a script read from stdin/-f, NOT to a -c argument -- so
+      # this is fed via stdin like every OTHER work verb above, not -c like the parameter-free
+      # list/violations reads.
+      exec psql -h "$PGHOST" -d "$PGDB" -v ON_ERROR_STOP=1 -v asof="$asof" <<SQL
+        WITH opened AS (
+          SELECT work_slug AS slug, work_title AS title, id AS opened_id
+          FROM ${SCHEMA}.ledger
+          WHERE kind = 'work_opened' AND ts <= :'asof'::timestamptz
+        ),
+        claimed AS (
+          SELECT DISTINCT ON (work_slug) work_slug AS slug, actor AS claimant, id AS claimed_id
+          FROM ${SCHEMA}.ledger
+          WHERE kind = 'work_claimed' AND ts <= :'asof'::timestamptz
+          ORDER BY work_slug, id DESC
+        ),
+        closed AS (
+          SELECT DISTINCT ON (work_slug) work_slug AS slug, work_resolution AS resolution,
+                 work_witness AS witness, id AS closed_id
+          FROM ${SCHEMA}.ledger
+          WHERE kind = 'work_closed' AND ts <= :'asof'::timestamptz
+          ORDER BY work_slug, id DESC
+        )
+        SELECT o.slug, o.title,
+               CASE WHEN c.slug IS NOT NULL THEN 'closed'
+                    WHEN cl.slug IS NOT NULL THEN 'claimed'
+                    ELSE 'open' END AS state_asof,
+               c.resolution, c.witness, p.name AS claimant
+        FROM opened o
+        LEFT JOIN claimed cl ON cl.slug = o.slug
+        LEFT JOIN closed  c  ON c.slug  = o.slug
+        LEFT JOIN ${KERNEL}.principal p ON p.id = cl.claimant
+        ORDER BY o.slug;
+SQL
+      ;;
+    *)
+      echo "usage: led work open <slug> <title...> [--parent <parent-slug>]" >&2
+      echo "       led work claim <slug>" >&2
+      echo "       led work depends <slug> <on-slug>" >&2
+      echo "       led work close <slug> <resolution> (--review-witness <ref> | --review-deferred) [--witness <ref>] [--strict]" >&2
+      echo "       led work review-gap    (work_review_gap, item-keyed deferred/undischarged closes)" >&2
+      echo "       led work list          (work_item_current)" >&2
+      echo "       led work violations    (work_item_violations)" >&2
+      echo "       led work asof <timestamp>  (point-in-time reconstruction, read-only)" >&2
+      exit 1
+      ;;
+  esac
+fi
+
+if [ $# -lt 2 ]; then
+  echo "usage: led [flags] <kind> <statement...>   (see top-of-file comment for the full flag list:" >&2
+  echo "       -f -e --supersedes --amends --amends-scope --answers --refs --concern --evidence" >&2
+  echo "       --confidence; cite an antecedent row from any kind via --refs row:<id>)" >&2
+  echo "       led --recent [N] | led current [N] | led show <id> | led question-status | led review-gap | led stamp-distinctness" >&2
+  echo "       led register-principal <name> <class>" >&2
+  echo "       led obligate <scope> <assigned-by-principal> <obliged-actor-principal>" >&2
+  echo "       led obligate revoke <scope>" >&2
+  echo "       led review <entry-id> <verdict> <independence> [--antecedent id] <statement...>" >&2
+  echo "       led work open|claim|depends|close|list|violations|asof  (see top-of-file comment)" >&2
+  exit 1
+fi
+
+kind="$1"; shift
+statement="$*"
+
+# --- resource: intake validation (BACKLOG 2026-07-12, run12 witness) ------------------------
+# A statement beginning `resource:` (after stripping leading whitespace) declares one Pillar-1
+# Capability Registry entry (design/USER-BLESSED-TABLE-TEMPLATE.md) and MUST carry the doc's
+# six-field grammar before ANY write is attempted -- refuse loudly here, at the boundary
+# (ADR-0002 rule 2: validate at boundaries, do not coerce), rather than let a malformed
+# declaration land silently and only be discovered later by pickup's own resources() parser.
+# Witnessed live, 2026-07-12 (run12, LED_ACTOR=commissioner): a maintainer-pasted `resource:`
+# statement carried an embedded newline from terminal line-wrap mid-word; the write SUCCEEDED
+# with only 4 of 6 fields, and pickup's own parser then further shredded the row into two
+# spurious MALFORMED entries because it iterates psql's own physical output lines, one of them
+# even reporting `id=experiments` (see bootstrap/templates/pickup.tmpl's sibling fix -- the
+# newline-normalization half of this same defect class -- for the read-side repair).
+#
+# The grammar check below runs against a WHITESPACE-NORMALIZED COPY only (every run of \n/\r
+# plus its following indentation collapsed to one space) -- so a legitimate embedded newline (a
+# paste reflowed by a terminal, exactly the witnessed run12 specimen) is ACCEPTED rather than
+# refused. The row actually written below on success is $statement, completely untouched --
+# byte fidelity matters for a later GPG signing ceremony over this exact row (design/
+# USER-GPG-TRUST-LAYER-FAQ.md), so the normalized copy is validation-only scratch, never
+# persisted; nothing is written at all if validation fails (atomicity by refusal-before-write).
+#
+# COHERENCE PARTNER: the trigger condition below (leading POSIX [:space:] stripped, then a
+# `resource:` prefix) and bootstrap/templates/pickup.tmpl resources()'s SQL filter
+# (`statement ~ '^[[:space:]]*resource:'`) define "a resource declaration" IDENTICALLY, by
+# construction -- every statement this validator accepts is exactly a statement that SELECT
+# reads, no more and no fewer (a position-0-only read filter once let a validated-but-indented
+# declaration vanish from pickup's RESOURCES section). Change either side only in lockstep with
+# the other.
+_resource_trimmed="${statement#"${statement%%[![:space:]]*}"}"
+case "$_resource_trimmed" in
+  resource:*)
+    if ! python3 - "$_resource_trimmed" <<'PYEOF'
+import re
+import sys
+
+# The six fields, in order, and the closed CLASS/TIER vocabularies below are transcribed
+# VERBATIM from design/USER-BLESSED-TABLE-TEMPLATE.md's "The statement grammars" section -- the
+# ONE documented home of this grammar (a transcription, not a second, driftable definition of
+# it -- ADR-0012 P1). bootstrap/templates/pickup.tmpl's own _RESOURCE_FIELDS tuple is the
+# sibling reader of the same six names on the display side.
+#
+# TIER gained a fourth value, `forbidden: <task-shape>` (tracker item `accounting-stage-a`,
+# design/ORCH-SPEC-RESOURCE-ACCOUNTING.md §3/§8 stage A): the missing MUST-NOT modality
+# completing the MAY/SHOULD/MUST/MUST-NOT deontic register available/blessed/mandated already
+# covered three-quarters of. This is the fail-safe additive-vocabulary class CLAUDE.md's
+# ORCHESTRATION section pre-ratifies (nothing existing relaxed -- available/blessed/mandated
+# accept exactly what they always accepted). What this validator does NOT do: refuse an
+# invocation that actually reaches a `forbidden`-tier resource -- that write-time enforcement is
+# named out of scope in the spec's §7 ("a possible later mechanism ... declaring it in scope
+# would promise an enforcement grade nothing in this spec builds"). This block only accepts or
+# refuses the DECLARATION's grammar, exactly as it already did for available/blessed/mandated.
+FIELDS = ("NAME", "CLASS", "REACH", "WHAT-IT-PROVES", "GUIDANCE", "TIER")
+VALID_CLASSES = ("solver", "service", "backend", "binary", "library")
+
+raw = sys.argv[1]
+normalized = re.sub(r"[\r\n]+[ \t]*", " ", raw).strip()
+body = normalized[len("resource:"):]
+parts = [p.strip() for p in body.split("|")]
+
+
+def refuse(msg: str) -> None:
+    print(f"led: REFUSED -- malformed 'resource:' statement -- {msg}.", file=sys.stderr)
+    print("  grammar (design/USER-BLESSED-TABLE-TEMPLATE.md 'The statement grammars'):", file=sys.stderr)
+    print("    resource: <NAME> | <CLASS> | <REACH> | <WHAT-IT-PROVES> | <GUIDANCE> | <TIER>", file=sys.stderr)
+    print(f"  the six fields, in order: {', '.join(FIELDS)}", file=sys.stderr)
+    print(f"  CLASS must be one of: {' | '.join(VALID_CLASSES)}", file=sys.stderr)
+    print("  TIER must be one of: available | blessed: <task-shape> | mandated: <task-shape> | "
+          "forbidden: <task-shape>", file=sys.stderr)
+    print(f"  received ({len(parts)} field(s), whitespace-normalized): {normalized}", file=sys.stderr)
+    print("  NOTHING was written -- fix the statement and re-run.", file=sys.stderr)
+    sys.exit(1)
+
+
+if len(parts) != len(FIELDS):
+    refuse(f"expected exactly {len(FIELDS)} '|'-separated fields, got {len(parts)}")
+
+_name, cls, _reach, _proves, _guidance, tier = parts
+if cls not in VALID_CLASSES:
+    refuse(f"CLASS field {cls!r} is not one of {VALID_CLASSES}")
+_TIER_PREFIXES = ("blessed:", "mandated:", "forbidden:")
+if not (tier == "available" or tier.startswith(_TIER_PREFIXES)):
+    refuse(f"TIER field {tier!r} is not 'available', 'blessed: <task-shape>', "
+           f"'mandated: <task-shape>', or 'forbidden: <task-shape>'")
+if tier.startswith(_TIER_PREFIXES) and not tier.split(":", 1)[1].strip():
+    refuse(f"TIER field {tier!r} names no <task-shape> after the colon")
+
+sys.exit(0)
+PYEOF
+    then
+      exit 1
+    fi
+    ;;
+esac
+
+# --- estimate: intake validation (tracker item `cost-estimation-retro`, 2026-07-12) ----------
+# A statement beginning `estimate:` (after stripping leading whitespace) declares one predicted-
+# cost row for a task, ahead of the task's execution -- the decomposition-time sibling grammar to
+# `resource:` above, and MUST carry the six-field grammar design/USER-RETROSPECTIVE-RECIPE.md's
+# "Estimate statement grammar" section documents before ANY write is attempted -- refuse loudly
+# here, at the boundary (ADR-0002 rule 2: validate at boundaries, do not coerce), exactly the same
+# posture as the `resource:` block immediately above, cloned structurally (whitespace-normalized
+# validation copy, byte-exact persisted statement, refuse-before-write atomicity, teach-text
+# naming the grammar).
+#
+# WHAT THIS IS FOR, STATED SO IT CANNOT BE MISREAD (maintainer's own invariant, stated twice at
+# commissioning): an estimate exists for OPERATIONAL-EFFICIENCY RETROSPECTIVES ONLY -- comparing
+# a prediction against what the accounting layer later witnesses, so a team can learn whether its
+# own estimation habits are calibrated. It is NEVER for policing costs; policing is out of scope
+# BY DESIGN, not by omission. This validator therefore refuses only the INTAKE SHAPE (six
+# well-formed fields) -- it has no opinion on whether a prediction is a GOOD one, and there is no
+# companion gate anywhere in this tree that later checks a prediction against what actually
+# happened and fails a build over the gap. A missed estimate is retrospective data, never a
+# violation (see design/USER-RETROSPECTIVE-RECIPE.md's estimate-vs-actual section).
+#
+# The grammar check below runs against a WHITESPACE-NORMALIZED COPY only (every run of \n/\r plus
+# its following indentation collapsed to one space), so a legitimate embedded newline (a paste
+# reflowed by a terminal) is ACCEPTED rather than refused -- identical convention to the
+# `resource:` block above. The row actually written on success is $statement, completely
+# untouched -- byte fidelity matters here for the same reason it matters for `resource:` (a later
+# GPG signing ceremony reads this exact row, design/USER-GPG-TRUST-LAYER-FAQ.md); the normalized
+# copy is validation-only scratch, never persisted. Nothing is written at all if validation fails
+# (atomicity by refusal-before-write).
+#
+# COHERENCE PARTNER: the trigger condition below (leading POSIX [:space:] stripped, then an
+# `estimate:` prefix) and bootstrap/templates/pickup.tmpl estimates()'s SQL filter (`statement ~
+# '^[[:space:]]*estimate:'`) define "an estimate declaration" IDENTICALLY, by construction -- the
+# same coherence contract `resource:`/pickup.tmpl's resources() already keep (see that pair's own
+# comments for the run12 incident this pattern forecloses). Change either side only in lockstep
+# with the other.
+_estimate_trimmed="${statement#"${statement%%[![:space:]]*}"}"
+case "$_estimate_trimmed" in
+  estimate:*)
+    if ! python3 - "$_estimate_trimmed" <<'PYEOF'
+import re
+import sys
+
+# The six fields, in order, and the closed TOKEN-OOM vocabulary below are transcribed VERBATIM
+# from design/USER-RETROSPECTIVE-RECIPE.md's "Estimate statement grammar" section -- the ONE
+# documented home of this grammar (a transcription, not a second, driftable definition of it --
+# ADR-0012 P1). bootstrap/templates/pickup.tmpl's own _ESTIMATE_FIELDS tuple is the sibling
+# reader of the same six names on the display side.
+FIELDS = ("TASK-SLUG", "TOOL-CALLS", "SUBAGENT-SPAWNS", "WALL-CLOCK", "TOKEN-OOM", "BASIS")
+VALID_TOKEN_OOM = ("1K", "10K", "100K", "1M", "10M+")
+_SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9-]*$")
+_COUNT_RE = re.compile(r"^\d+(-\d+)?$")
+_DURATION_RE = re.compile(r"^\d+(\.\d+)?[smhd](-\d+(\.\d+)?[smhd])?$", re.IGNORECASE)
+
+raw = sys.argv[1]
+normalized = re.sub(r"[\r\n]+[ \t]*", " ", raw).strip()
+body = normalized[len("estimate:"):]
+parts = [p.strip() for p in body.split("|")]
+
+
+def refuse(msg: str) -> None:
+    print(f"led: REFUSED -- malformed 'estimate:' statement -- {msg}.", file=sys.stderr)
+    print("  grammar (design/USER-RETROSPECTIVE-RECIPE.md 'Estimate statement grammar'):", file=sys.stderr)
+    print("    estimate: <TASK-SLUG> | <TOOL-CALLS> | <SUBAGENT-SPAWNS> | <WALL-CLOCK> | <TOKEN-OOM> | <BASIS>", file=sys.stderr)
+    print(f"  the six fields, in order: {', '.join(FIELDS)}", file=sys.stderr)
+    print("  TASK-SLUG must match ^[a-z0-9][a-z0-9-]*$ (a bare slug, no spaces)", file=sys.stderr)
+    print("  TOOL-CALLS/SUBAGENT-SPAWNS must be a non-negative integer or an integer range N-M (e.g. 12 or 8-15)", file=sys.stderr)
+    print("  WALL-CLOCK must be a duration like 20m/2h/1d, or a range 10m-30m", file=sys.stderr)
+    print(f"  TOKEN-OOM must be one of: {' | '.join(VALID_TOKEN_OOM)}", file=sys.stderr)
+    print("  BASIS must be non-empty (state what the prediction is grounded in)", file=sys.stderr)
+    print(f"  received ({len(parts)} field(s), whitespace-normalized): {normalized}", file=sys.stderr)
+    print("  NOTHING was written -- fix the statement and re-run.", file=sys.stderr)
+    print("  this is an ESTIMATE for operational-efficiency retrospectives ONLY, never for cost", file=sys.stderr)
+    print("  policing (maintainer's own invariant, stated twice at commissioning) -- a missed", file=sys.stderr)
+    print("  estimate is retrospective data, never a violation; only the INTAKE SHAPE is refused", file=sys.stderr)
+    print("  here, never the prediction's eventual accuracy.", file=sys.stderr)
+    sys.exit(1)
+
+
+if len(parts) != len(FIELDS):
+    refuse(f"expected exactly {len(FIELDS)} '|'-separated fields, got {len(parts)}")
+
+slug, tool_calls, spawns, wall_clock, token_oom, basis = parts
+if not _SLUG_RE.match(slug):
+    refuse(f"TASK-SLUG field {slug!r} does not match ^[a-z0-9][a-z0-9-]*$ (a bare slug, no spaces)")
+if not _COUNT_RE.match(tool_calls):
+    refuse(f"TOOL-CALLS field {tool_calls!r} is not a non-negative integer or an N-M range")
+if not _COUNT_RE.match(spawns):
+    refuse(f"SUBAGENT-SPAWNS field {spawns!r} is not a non-negative integer or an N-M range")
+if not _DURATION_RE.match(wall_clock):
+    refuse(f"WALL-CLOCK field {wall_clock!r} is not a duration like 20m/2h/1d or a range 10m-30m")
+if token_oom not in VALID_TOKEN_OOM:
+    refuse(f"TOKEN-OOM field {token_oom!r} is not one of {VALID_TOKEN_OOM}")
+if not basis:
+    refuse("BASIS field is empty -- name what the prediction is grounded in")
+
+sys.exit(0)
+PYEOF
+    then
+      exit 1
+    fi
+    ;;
+esac
+
+# --- actual: intake validation (tracker item `actual-intake-grammar`, 2026-07-13) -------------
+# A statement beginning `actual:` (after stripping leading whitespace) declares one MEASURED-
+# afterward cost row for a task -- the measured twin of `estimate:` immediately above, and MUST
+# carry the six-field grammar design/USER-RETROSPECTIVE-RECIPE.md's "The `actual:` statement
+# grammar" section documents before ANY write is attempted -- refuse loudly here, at the boundary
+# (ADR-0002 rule 2: validate at boundaries, do not coerce), cloned structurally from `estimate:`
+# (whitespace-normalized validation copy, byte-exact persisted statement, refuse-before-write
+# atomicity, teach-text naming the grammar).
+#
+# WHAT THIS IS FOR, STATED SO IT CANNOT BE MISREAD (mirrors `estimate:`'s own invariant
+# verbatim): an `actual:` row exists for OPERATIONAL-EFFICIENCY RETROSPECTIVES ONLY -- comparing
+# what a diagnostic-grade harness figure reports against a prior `estimate:` prediction, so a
+# team can learn whether its own estimation habits are calibrated. It is NEVER for policing
+# costs; policing is out of scope BY DESIGN, not by omission -- the same never-police invariant
+# `estimate:` states applies here verbatim (the maintainer's own invariant, stated twice at
+# commissioning). This validator therefore refuses only the INTAKE SHAPE (six well-formed
+# fields) -- it has no opinion on what the measured numbers mean, and there is no companion gate
+# anywhere in this tree that fails a build over an actual figure.
+#
+# `actual:` diverges from `estimate:` in exactly ONE field: TOOL-CALLS/SUBAGENT-SPAWNS is a bare
+# non-negative integer here, NEVER a range -- a measurement is a point, not a range (an N-M range
+# is honest for a *prediction*; a *measured* count is exact by the time the task has finished).
+# Every other field either reuses `estimate:`'s own parser (WALL-CLOCK, TASK-SLUG) or widens it
+# in a way stated in the grammar home (TOKENS accepts an exact-ish K/M-suffixed count in addition
+# to the closed OOM-bucket vocabulary; a bare unsuffixed number is refused only above 999,
+# ambiguous between a real count and a typo).
+#
+# The grammar check below runs against a WHITESPACE-NORMALIZED COPY only (every run of \n/\r plus
+# its following indentation collapsed to one space), so a legitimate embedded newline (a paste
+# reflowed by a terminal) is ACCEPTED rather than refused -- identical convention to the
+# `resource:`/`estimate:` blocks above. The row actually written on success is $statement,
+# completely untouched -- byte fidelity matters here for the same reason it matters for
+# `resource:`/`estimate:` (a later GPG signing ceremony reads this exact row, design/
+# USER-GPG-TRUST-LAYER-FAQ.md); the normalized copy is validation-only scratch, never persisted.
+# Nothing is written at all if validation fails (atomicity by refusal-before-write).
+#
+# COHERENCE PARTNER: the trigger condition below (leading POSIX [:space:] stripped, then an
+# `actual:` prefix) and bootstrap/templates/pickup.tmpl's `_read_actuals()` SQL filter (`statement
+# ~ '^[[:space:]]*actual:'`) define "an actual declaration" IDENTICALLY, by construction -- the
+# same coherence contract `resource:`/`estimate:` already keep with their own readers. Change
+# either side only in lockstep with the other.
+_actual_trimmed="${statement#"${statement%%[![:space:]]*}"}"
+case "$_actual_trimmed" in
+  actual:*)
+    if ! python3 - "$_actual_trimmed" <<'PYEOF'
+import re
+import sys
+
+# The six fields, in order, and the closed TOKEN-OOM vocabulary (shared with `estimate:`'s own
+# TOKEN-OOM) are transcribed VERBATIM from design/USER-RETROSPECTIVE-RECIPE.md's "The `actual:`
+# statement grammar" section -- the ONE documented home of this grammar (a transcription, not a
+# second, driftable definition of it -- ADR-0012 P1). bootstrap/templates/pickup.tmpl's own
+# _ACTUAL_FIELDS tuple is the sibling reader of the same six names on the display side.
+FIELDS = ("TASK-SLUG", "TOOL-CALLS", "SUBAGENT-SPAWNS", "WALL-CLOCK", "TOKENS", "SOURCE")
+VALID_TOKEN_OOM = ("1K", "10K", "100K", "1M", "10M+")
+_SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9-]*$")
+_POINT_COUNT_RE = re.compile(r"^\d+$")  # no ranges -- a measurement is a point, not a range
+_DURATION_RE = re.compile(r"^\d+(\.\d+)?[smhd](-\d+(\.\d+)?[smhd])?$", re.IGNORECASE)
+_TOKEN_EXACT_RE = re.compile(r"^\d+(\.\d+)?[KM]$", re.IGNORECASE)
+_BARE_NUMBER_RE = re.compile(r"^\d+$")
+
+raw = sys.argv[1]
+normalized = re.sub(r"[\r\n]+[ \t]*", " ", raw).strip()
+body = normalized[len("actual:"):]
+parts = [p.strip() for p in body.split("|")]
+
+
+def refuse(msg: str) -> None:
+    print(f"led: REFUSED -- malformed 'actual:' statement -- {msg}.", file=sys.stderr)
+    print("  grammar (design/USER-RETROSPECTIVE-RECIPE.md \"The 'actual:' statement grammar\"):", file=sys.stderr)
+    print("    actual: <TASK-SLUG> | <TOOL-CALLS> | <SUBAGENT-SPAWNS> | <WALL-CLOCK> | <TOKENS> | <SOURCE>", file=sys.stderr)
+    print(f"  the six fields, in order: {', '.join(FIELDS)}", file=sys.stderr)
+    print("  TASK-SLUG must match ^[a-z0-9][a-z0-9-]*$ (a bare slug, no spaces -- may name a whole", file=sys.stderr)
+    print("  work item or a single spawn within it, e.g. item-slug-b-round-2)", file=sys.stderr)
+    print("  TOOL-CALLS/SUBAGENT-SPAWNS must be a bare non-negative integer -- NEVER a range (a", file=sys.stderr)
+    print("  measurement is a point, not a range; this is the one deliberate divergence from", file=sys.stderr)
+    print("  estimate:'s matching fields)", file=sys.stderr)
+    print("  WALL-CLOCK must be a duration like 20m/2h/1d/90s, or a range 10m-30m", file=sys.stderr)
+    print(f"  TOKENS must be an exact-ish K/M-suffixed count (204K, 1.2M), or one of the closed OOM", file=sys.stderr)
+    print(f"  bucket vocabulary {' | '.join(VALID_TOKEN_OOM)}, or a bare number no greater than 999", file=sys.stderr)
+    print("  (a bare number above 999 is refused -- ambiguous between a real count and a typo)", file=sys.stderr)
+    print("  SOURCE must be non-empty (state where the measurement came from)", file=sys.stderr)
+    print(f"  received ({len(parts)} field(s), whitespace-normalized): {normalized}", file=sys.stderr)
+    print("  NOTHING was written -- fix the statement and re-run.", file=sys.stderr)
+    print("  this is an ACTUAL for operational-efficiency retrospectives ONLY, never for cost", file=sys.stderr)
+    print("  policing (the same never-police invariant estimate: states, stated twice at", file=sys.stderr)
+    print("  commissioning, applies here verbatim) -- WALL-CLOCK/TOKENS are harness-sourced and", file=sys.stderr)
+    print("  DIAGNOSTIC-GRADE, permanently, per the action-stream ruling (ledgered 2026-07-13);", file=sys.stderr)
+    print("  see design/USER-RETROSPECTIVE-RECIPE.md's actual: grammar section for the", file=sys.stderr)
+    print("  TOOL-CALLS/SUBAGENT-SPAWNS grade exception -- only the INTAKE SHAPE is refused", file=sys.stderr)
+    print("  here, never the measurement's meaning.", file=sys.stderr)
+    sys.exit(1)
+
+
+if len(parts) != len(FIELDS):
+    refuse(f"expected exactly {len(FIELDS)} '|'-separated fields, got {len(parts)}")
+
+slug, tool_calls, spawns, wall_clock, tokens, source = parts
+if not _SLUG_RE.match(slug):
+    refuse(f"TASK-SLUG field {slug!r} does not match ^[a-z0-9][a-z0-9-]*$ (a bare slug, no spaces)")
+if not _POINT_COUNT_RE.match(tool_calls):
+    refuse(f"TOOL-CALLS field {tool_calls!r} is not a bare non-negative integer (ranges are refused here)")
+if not _POINT_COUNT_RE.match(spawns):
+    refuse(f"SUBAGENT-SPAWNS field {spawns!r} is not a bare non-negative integer (ranges are refused here)")
+if not _DURATION_RE.match(wall_clock):
+    refuse(f"WALL-CLOCK field {wall_clock!r} is not a duration like 20m/2h/1d/90s or a range 10m-30m")
+_tokens_ok = (
+    tokens in VALID_TOKEN_OOM
+    or bool(_TOKEN_EXACT_RE.match(tokens))
+    or (bool(_BARE_NUMBER_RE.match(tokens)) and int(tokens) <= 999)
+)
+if not _tokens_ok:
+    refuse(f"TOKENS field {tokens!r} is not an exact-ish K/M-suffixed count, a valid OOM bucket "
+           f"{VALID_TOKEN_OOM}, or a bare number <= 999")
+if not source:
+    refuse("SOURCE field is empty -- state where the measurement came from")
+
+sys.exit(0)
+PYEOF
+    then
+      exit 1
+    fi
+    ;;
+esac
+
+# --- taxon: intake validation (tracker item `taxonomy-stage-a`, design/ORCH-SPEC-TASK-TAXONOMY.md
+# §3, Stage A) --------------------------------------------------------------------------------
+# A statement beginning `taxon:` (after stripping leading whitespace) declares one row of a
+# declared taxonomy -- a boundary the maintainer's outset-settled decomposition discipline
+# generalizes: one row assigns a PATTERNS glob-set to a TAXON within a named TAXONOMY, and MUST
+# carry the four-field grammar design/USER-TAXONOMY-DECLARATION.md's "The statement grammars"
+# section documents before ANY write is attempted -- refuse loudly here, at the boundary
+# (ADR-0002 rule 2: validate at boundaries, do not coerce), exactly the same posture as the
+# `resource:`/`estimate:` blocks above, cloned structurally (whitespace-normalized validation
+# copy, byte-exact persisted statement, refuse-before-write atomicity, teach-text naming the
+# grammar and where it is documented).
+#
+# The grammar check below runs against a WHITESPACE-NORMALIZED COPY only (every run of \n/\r plus
+# its following indentation collapsed to one space), so a legitimate embedded newline (a paste
+# reflowed by a terminal) is ACCEPTED rather than refused -- identical convention to the
+# `resource:`/`estimate:` blocks above. The row actually written on success is $statement,
+# completely untouched -- byte fidelity matters here for the same reason it matters for
+# `resource:` (a later GPG signing ceremony reads this exact row, design/
+# USER-GPG-TRUST-LAYER-FAQ.md); the normalized copy is validation-only scratch, never persisted.
+# Nothing is written at all if validation fails (atomicity by refusal-before-write).
+#
+# COHERENCE PARTNER: the trigger condition below (leading POSIX [:space:] stripped, then a
+# `taxon:` prefix) and bootstrap/templates/pickup.tmpl taxonomies()'s SQL filter for taxon rows
+# (`statement ~ '^[[:space:]]*taxon:'`) define "a taxon declaration" IDENTICALLY, by construction
+# -- every statement this validator accepts is exactly a statement that SELECT reads, no more and
+# no fewer (the run12 incident `resource:`/`pickup.tmpl` forecloses is the precedent this
+# coherence contract exists to avoid repeating here). Change either side only in lockstep with the
+# other.
+_taxon_trimmed="${statement#"${statement%%[![:space:]]*}"}"
+case "$_taxon_trimmed" in
+  taxon:*)
+    if ! python3 - "$_taxon_trimmed" <<'PYEOF'
+import re
+import sys
+
+# The four fields, in order, are transcribed VERBATIM from design/USER-TAXONOMY-DECLARATION.md's
+# "The statement grammars" section -- the ONE documented home of this grammar (a transcription,
+# not a second, driftable definition of it -- ADR-0012 P1). bootstrap/templates/pickup.tmpl's own
+# _TAXON_FIELDS tuple is the sibling reader of the same four names on the display side. TAXONOMY
+# and TAXON are both machine keys design/ORCH-SPEC-TASK-TAXONOMY.md §4's predicates quantify over
+# (`single-taxon-task(T)`, `no-cross-taxon-write(T)`) -- held to the same bare-slug shape
+# `estimate:`'s TASK-SLUG field already uses, so a predicate never has to guess whether two
+# differently-cased or differently-punctuated spellings name the same taxon.
+FIELDS = ("TAXONOMY", "TAXON", "PATTERNS", "GLOSS")
+_SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9-]*$")
+
+raw = sys.argv[1]
+normalized = re.sub(r"[\r\n]+[ \t]*", " ", raw).strip()
+body = normalized[len("taxon:"):]
+parts = [p.strip() for p in body.split("|")]
+
+
+def refuse(msg: str) -> None:
+    print(f"led: REFUSED -- malformed 'taxon:' statement -- {msg}.", file=sys.stderr)
+    print("  grammar (design/USER-TAXONOMY-DECLARATION.md 'The statement grammars'):", file=sys.stderr)
+    print("    taxon: <TAXONOMY> | <TAXON> | <PATTERNS> | <GLOSS>", file=sys.stderr)
+    print(f"  the four fields, in order: {', '.join(FIELDS)}", file=sys.stderr)
+    print("  TAXONOMY and TAXON must each match ^[a-z0-9][a-z0-9-]*$ (a bare slug, no spaces)", file=sys.stderr)
+    print("  PATTERNS must be non-empty (one or more path globs assigning artifacts to the taxon)", file=sys.stderr)
+    print("  GLOSS must be non-empty (state what the taxon means, for a human reader)", file=sys.stderr)
+    print(f"  received ({len(parts)} field(s), whitespace-normalized): {normalized}", file=sys.stderr)
+    print("  NOTHING was written -- fix the statement and re-run.", file=sys.stderr)
+    sys.exit(1)
+
+
+if len(parts) != len(FIELDS):
+    refuse(f"expected exactly {len(FIELDS)} '|'-separated fields, got {len(parts)}")
+
+taxonomy, taxon, patterns, gloss = parts
+if not _SLUG_RE.match(taxonomy):
+    refuse(f"TAXONOMY field {taxonomy!r} does not match ^[a-z0-9][a-z0-9-]*$ (a bare slug, no spaces)")
+if not _SLUG_RE.match(taxon):
+    refuse(f"TAXON field {taxon!r} does not match ^[a-z0-9][a-z0-9-]*$ (a bare slug, no spaces)")
+if not patterns:
+    refuse("PATTERNS field is empty -- name at least one path glob assigning artifacts to the taxon")
+if not gloss:
+    refuse("GLOSS field is empty -- state what the taxon means, for a human reader")
+
+sys.exit(0)
+PYEOF
+    then
+      exit 1
+    fi
+    ;;
+esac
+
+# --- interface: intake validation (tracker item `taxonomy-stage-a`, design/ORCH-SPEC-TASK-TAXONOMY.md
+# §3, Stage A) -----------------------------------------------------------------------------------
+# A statement beginning `interface:` (after stripping leading whitespace) declares one sanctioned
+# crossing point (the ICD analog, spec §3) for a named TAXONOMY -- an artifact that MAY be
+# referenced from outside the taxon that contains it -- and MUST carry the three-field grammar
+# design/USER-TAXONOMY-DECLARATION.md's "The statement grammars" section documents before ANY
+# write is attempted, cloned structurally from `resource:`/`estimate:`/`taxon:` above (whitespace-
+# normalized validation copy, byte-exact persisted statement, refuse-before-write atomicity,
+# teach-text naming the grammar and where it is documented).
+#
+# The grammar check below runs against a WHITESPACE-NORMALIZED COPY only (every run of \n/\r plus
+# its following indentation collapsed to one space), so a legitimate embedded newline is ACCEPTED
+# rather than refused -- identical convention to the blocks above. The row actually written on
+# success is $statement, completely untouched -- byte fidelity matters here for the same reason it
+# matters for `resource:` (a later GPG signing ceremony reads this exact row, design/
+# USER-GPG-TRUST-LAYER-FAQ.md); the normalized copy is validation-only scratch, never persisted.
+# Nothing is written at all if validation fails (atomicity by refusal-before-write).
+#
+# COHERENCE PARTNER: the trigger condition below (leading POSIX [:space:] stripped, then an
+# `interface:` prefix) and bootstrap/templates/pickup.tmpl taxonomies()'s SQL filter for interface
+# rows (`statement ~ '^[[:space:]]*interface:'`) define "an interface declaration" IDENTICALLY, by
+# construction -- the same coherence contract the `taxon:` block above keeps with its own reader.
+# Change either side only in lockstep with the other.
+_interface_trimmed="${statement#"${statement%%[![:space:]]*}"}"
+case "$_interface_trimmed" in
+  interface:*)
+    if ! python3 - "$_interface_trimmed" <<'PYEOF'
+import re
+import sys
+
+# The three fields, in order, are transcribed VERBATIM from design/USER-TAXONOMY-DECLARATION.md's
+# "The statement grammars" section -- the ONE documented home of this grammar (a transcription,
+# not a second, driftable definition of it -- ADR-0012 P1). bootstrap/templates/pickup.tmpl's own
+# _INTERFACE_FIELDS tuple is the sibling reader of the same three names on the display side.
+FIELDS = ("TAXONOMY", "ARTIFACT-PATTERN", "GLOSS")
+_SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9-]*$")
+
+raw = sys.argv[1]
+normalized = re.sub(r"[\r\n]+[ \t]*", " ", raw).strip()
+body = normalized[len("interface:"):]
+parts = [p.strip() for p in body.split("|")]
+
+
+def refuse(msg: str) -> None:
+    print(f"led: REFUSED -- malformed 'interface:' statement -- {msg}.", file=sys.stderr)
+    print("  grammar (design/USER-TAXONOMY-DECLARATION.md 'The statement grammars'):", file=sys.stderr)
+    print("    interface: <TAXONOMY> | <ARTIFACT-PATTERN> | <GLOSS>", file=sys.stderr)
+    print(f"  the three fields, in order: {', '.join(FIELDS)}", file=sys.stderr)
+    print("  TAXONOMY must match ^[a-z0-9][a-z0-9-]*$ (a bare slug, no spaces) -- the same taxonomy", file=sys.stderr)
+    print("  a 'taxon:' row for it declared", file=sys.stderr)
+    print("  ARTIFACT-PATTERN must be non-empty (the sanctioned crossing artifact or glob)", file=sys.stderr)
+    print("  GLOSS must be non-empty (state what the interface is, for a human reader)", file=sys.stderr)
+    print(f"  received ({len(parts)} field(s), whitespace-normalized): {normalized}", file=sys.stderr)
+    print("  NOTHING was written -- fix the statement and re-run.", file=sys.stderr)
+    sys.exit(1)
+
+
+if len(parts) != len(FIELDS):
+    refuse(f"expected exactly {len(FIELDS)} '|'-separated fields, got {len(parts)}")
+
+taxonomy, artifact_pattern, gloss = parts
+if not _SLUG_RE.match(taxonomy):
+    refuse(f"TAXONOMY field {taxonomy!r} does not match ^[a-z0-9][a-z0-9-]*$ (a bare slug, no spaces)")
+if not artifact_pattern:
+    refuse("ARTIFACT-PATTERN field is empty -- name the sanctioned crossing artifact or glob")
+if not gloss:
+    refuse("GLOSS field is empty -- state what the interface is, for a human reader")
+
+sys.exit(0)
+PYEOF
+    then
+      exit 1
+    fi
+    ;;
+esac
+
+# --- outcome: intake validation (work item `model-attribution-tracking`, maintainer ask
+# 2026-07-12 ~noon) --------------------------------------------------------------------------
+# A statement beginning `outcome:` (after stripping leading whitespace) declares one SEAM-CLOSE
+# outcome row for a task -- which model executed it and what a seam review found -- written by
+# the ORCHESTRATOR at each seam close (never by the executing agent itself, the same posture
+# `review:`/`review-done:` below already keep for the maintainer's own queue), and MUST carry the
+# five-field grammar design/USER-RETROSPECTIVE-RECIPE.md's "The `outcome:` statement grammar"
+# section documents before ANY write is attempted -- refuse loudly here, at the boundary (ADR-0002
+# rule 2: validate at boundaries, do not coerce), cloned structurally from `estimate:`/`actual:`/
+# `taxon:` above (whitespace-normalized validation copy, byte-exact persisted statement, refuse-
+# before-write atomicity, teach-text naming the grammar).
+#
+# WHAT THIS IS FOR, STATED SO IT CANNOT BE MISREAD (mirrors `estimate:`/`actual:`'s own invariant
+# verbatim, per the maintainer's same-day reiteration this is hazard-detection instrumentation,
+# not economizing): an `outcome:` row exists to answer "what are the observed capabilities of the
+# models, across tasks?" -- RETROSPECTIVE-ONLY, per the standing never-police invariant. This
+# validator refuses only the INTAKE SHAPE (five well-formed fields); it has no opinion on which
+# model is better, and there is no companion gate anywhere in this tree that reads this row and
+# fails a build.
+#
+# MODEL is DECLARED-BY-DISPATCHER grade, named honestly (same grade
+# hooks/pretooluse_delegation_observer.py's own journaled `tool_input.model` carries, per the
+# 2026-07-11 evidentiary-basis ruling) -- the ledger cannot verify which model actually served a
+# dispatch, only record what the orchestrator observed/declared at seam close.
+#
+# The grammar check below runs against a WHITESPACE-NORMALIZED COPY only (every run of \n/\r plus
+# its following indentation collapsed to one space), so a legitimate embedded newline (a paste
+# reflowed by a terminal) is ACCEPTED rather than refused -- identical convention to every block
+# above. The row actually written on success is $statement, completely untouched -- byte fidelity
+# matters here for the same reason it matters for `resource:`/`estimate:` (a later GPG signing
+# ceremony reads this exact row, design/USER-GPG-TRUST-LAYER-FAQ.md); the normalized copy is
+# validation-only scratch, never persisted. Nothing is written at all if validation fails
+# (atomicity by refusal-before-write).
+#
+# COHERENCE PARTNER: the trigger condition below (leading POSIX [:space:] stripped, then an
+# `outcome:` prefix) and any future `pickup.tmpl`/retrospective reader of outcome rows must define
+# "an outcome declaration" IDENTICALLY, by construction -- the same coherence contract every block
+# above already keeps with its own reader. Change either side only in lockstep with the other.
+_outcome_trimmed="${statement#"${statement%%[![:space:]]*}"}"
+case "$_outcome_trimmed" in
+  outcome:*)
+    if ! python3 - "$_outcome_trimmed" <<'PYEOF'
+import re
+import sys
+
+# The five fields, in order, are transcribed VERBATIM from design/USER-RETROSPECTIVE-RECIPE.md's
+# "The `outcome:` statement grammar" section -- the ONE documented home of this grammar (a
+# transcription, not a second, driftable definition of it -- ADR-0012 P1).
+FIELDS = ("TASK-SLUG", "MODEL", "SEAM-VERDICT", "DEFECTS-FOUND-AT-SEAM", "NOTES")
+_SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9-]*$")
+_MODEL_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._-]*$")
+
+raw = sys.argv[1]
+normalized = re.sub(r"[\r\n]+[ \t]*", " ", raw).strip()
+body = normalized[len("outcome:"):]
+parts = [p.strip() for p in body.split("|")]
+
+
+def refuse(msg: str) -> None:
+    print(f"led: REFUSED -- malformed 'outcome:' statement -- {msg}.", file=sys.stderr)
+    print("  grammar (design/USER-RETROSPECTIVE-RECIPE.md \"The 'outcome:' statement grammar\"):", file=sys.stderr)
+    print("    outcome: <TASK-SLUG> | <MODEL> | <SEAM-VERDICT> | <DEFECTS-FOUND-AT-SEAM> | <NOTES>", file=sys.stderr)
+    print(f"  the five fields, in order: {', '.join(FIELDS)}", file=sys.stderr)
+    print("  TASK-SLUG must match ^[a-z0-9][a-z0-9-]*$ (a bare slug, no spaces -- the same slug a", file=sys.stderr)
+    print("  'led work open <slug>'/'estimate:' row for it would use, so a retrospective can join", file=sys.stderr)
+    print("  on it)", file=sys.stderr)
+    print("  MODEL must match ^[a-zA-Z0-9][a-zA-Z0-9._-]*$ (a bare model identifier, e.g. 'sonnet',", file=sys.stderr)
+    print("  'opus', 'claude-sonnet-4-5' -- no spaces, so grouping by exact string match is honest)", file=sys.stderr)
+    print("  SEAM-VERDICT must be non-empty (what the seam review concluded, in the orchestrator's", file=sys.stderr)
+    print("  own words -- no closed vocabulary is imposed here)", file=sys.stderr)
+    print("  DEFECTS-FOUND-AT-SEAM must be non-empty (name what was found, or state '0'/'none' --", file=sys.stderr)
+    print("  never blank; a clean seam is a fact worth recording, not an absence)", file=sys.stderr)
+    print("  NOTES must be non-empty (free text; state 'none' if there is nothing to add)", file=sys.stderr)
+    print(f"  received ({len(parts)} field(s), whitespace-normalized): {normalized}", file=sys.stderr)
+    print("  NOTHING was written -- fix the statement and re-run.", file=sys.stderr)
+    print("  this is an OUTCOME for RETROSPECTIVE model-capability observation ONLY, never for", file=sys.stderr)
+    print("  policing a model or a task -- the same never-police invariant `estimate:`/`actual:`", file=sys.stderr)
+    print("  state applies here verbatim; MODEL is DECLARED-BY-DISPATCHER grade (diagnostic, not", file=sys.stderr)
+    print("  witnessed) -- only the INTAKE SHAPE is refused here, never the observation's content.", file=sys.stderr)
+    sys.exit(1)
+
+
+if len(parts) != len(FIELDS):
+    refuse(f"expected exactly {len(FIELDS)} '|'-separated fields, got {len(parts)}")
+
+slug, model, seam_verdict, defects, notes = parts
+if not _SLUG_RE.match(slug):
+    refuse(f"TASK-SLUG field {slug!r} does not match ^[a-z0-9][a-z0-9-]*$ (a bare slug, no spaces)")
+if not _MODEL_RE.match(model):
+    refuse(f"MODEL field {model!r} does not match ^[a-zA-Z0-9][a-zA-Z0-9._-]*$ (a bare model identifier, no spaces)")
+if not seam_verdict:
+    refuse("SEAM-VERDICT field is empty -- state what the seam review concluded")
+if not defects:
+    refuse("DEFECTS-FOUND-AT-SEAM field is empty -- name what was found, or state '0'/'none'")
+if not notes:
+    refuse("NOTES field is empty -- state 'none' if there is nothing to add")
+
+sys.exit(0)
+PYEOF
+    then
+      exit 1
+    fi
+    ;;
+esac
+
+# --- review: intake validation (tracker item `maintainer-review-queue`, 2026-07-13) -----------
+# A statement beginning `review:` (after stripping leading whitespace) opens OR RE-RANKS one row
+# of the maintainer's executive review queue -- an item he wants to personally look at, ranked by
+# urgency -- and MUST carry the four-field grammar design/USER-RECIPES-FAQ.md's "Your review
+# queue" section documents before ANY write is attempted -- refuse loudly here, at the boundary
+# (ADR-0002 rule 2: validate at boundaries, do not coerce), cloned structurally from `taxon:`/
+# `interface:` above (whitespace-normalized validation copy, byte-exact persisted statement,
+# refuse-before-write atomicity, teach-text naming the grammar and where it is documented).
+#
+# WHAT THIS IS FOR, STATED SO IT CANNOT BE MISREAD: the queue lives in the LEDGER, never in a
+# prose file (the BACKLOG-retirement lesson design/USER-RECIPES-FAQ.md's own section cites -- a
+# live task queue narrated in immutable prose rots in seconds, ADR-0005 Rule 6 corollary).
+# RE-RANKING an already-open SLUG is simply filing ANOTHER `review:` row for the same SLUG with a
+# different RANK -- no `--supersedes` flag needed; `bootstrap/templates/pickup.tmpl`'s
+# `MAINTAINER-REVIEW-QUEUE` section (the read side) resolves "current state" by taking the
+# HIGHEST ledger row id per SLUG among `review:`/`review-done:` rows -- deliberately simpler than
+# `resource:`'s explicit-supersedes convention, because this queue's whole point is a fast
+# one-liner. This validator refuses only the INTAKE SHAPE (four well-formed fields); it has no
+# opinion on rank collisions between different SLUGs (two items may share a RANK; the read side
+# breaks ties by SLUG) or on whether an item is actually important.
+#
+# The grammar check below runs against a WHITESPACE-NORMALIZED COPY only (every run of \n/\r plus
+# its following indentation collapsed to one space), so a legitimate embedded newline (a paste
+# reflowed by a terminal) is ACCEPTED rather than refused -- identical convention to the blocks
+# above. The row actually written on success is $statement, completely untouched -- byte fidelity
+# matters here for the same reason it matters for `resource:` (a later GPG signing ceremony reads
+# this exact row, design/USER-GPG-TRUST-LAYER-FAQ.md); the normalized copy is validation-only
+# scratch, never persisted. Nothing is written at all if validation fails (atomicity by
+# refusal-before-write).
+#
+# COHERENCE PARTNER: the trigger condition below (leading POSIX [:space:] stripped, then a
+# `review:` prefix) and bootstrap/templates/pickup.tmpl's review-queue reader (`statement ~
+# '^[[:space:]]*review(-done)?:'`, shared with the `review-done:` block immediately below) define
+# "a review-queue declaration" IDENTICALLY, by construction -- the same coherence contract every
+# grammar above already keeps with its own reader. Change either side only in lockstep with the
+# other. (No collision with the pre-existing `led review <entry-id> ...` subcommand: that is a
+# distinct top-level dispatch on argv[0], never reached from this generic `<kind> <statement>`
+# validation path -- this block only ever sees a statement BODY, never a subcommand invocation.)
+_review_trimmed="${statement#"${statement%%[![:space:]]*}"}"
+case "$_review_trimmed" in
+  review:*)
+    if ! python3 - "$_review_trimmed" <<'PYEOF'
+import re
+import sys
+
+# The four fields, in order, are transcribed VERBATIM from design/USER-RECIPES-FAQ.md's "Your
+# review queue" section -- the ONE documented home of this grammar (a transcription, not a
+# second, driftable definition of it -- ADR-0012 P1). bootstrap/templates/pickup.tmpl's own
+# _REVIEW_FIELDS tuple is the sibling reader of the same four names on the display side. SLUG is
+# held to the same bare-slug shape `estimate:`'s TASK-SLUG/`taxon:`'s TAXONOMY fields already use.
+FIELDS = ("SLUG", "RANK", "WHAT", "POINTER")
+_SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9-]*$")
+_RANK_RE = re.compile(r"^[1-9][0-9]*$")  # a positive integer -- 0 and negative ranks make no sense
+
+raw = sys.argv[1]
+normalized = re.sub(r"[\r\n]+[ \t]*", " ", raw).strip()
+body = normalized[len("review:"):]
+parts = [p.strip() for p in body.split("|")]
+
+
+def refuse(msg: str) -> None:
+    print(f"led: REFUSED -- malformed 'review:' statement -- {msg}.", file=sys.stderr)
+    print("  grammar (design/USER-RECIPES-FAQ.md \"Your review queue\"):", file=sys.stderr)
+    print("    review: <SLUG> | <RANK> | <WHAT> | <POINTER>", file=sys.stderr)
+    print(f"  the four fields, in order: {', '.join(FIELDS)}", file=sys.stderr)
+    print("  SLUG must match ^[a-z0-9][a-z0-9-]*$ (a bare slug, no spaces)", file=sys.stderr)
+    print("  RANK must be a positive integer (1 = most important -- the queue's sort key)", file=sys.stderr)
+    print("  WHAT must be non-empty (plain words: what you are reviewing)", file=sys.stderr)
+    print("  POINTER must be non-empty (where to look: a repo path, './led show N', or a URL)", file=sys.stderr)
+    print(f"  received ({len(parts)} field(s), whitespace-normalized): {normalized}", file=sys.stderr)
+    print("  NOTHING was written -- fix the statement and re-run.", file=sys.stderr)
+    sys.exit(1)
+
+
+if len(parts) != len(FIELDS):
+    refuse(f"expected exactly {len(FIELDS)} '|'-separated fields, got {len(parts)}")
+
+slug, rank, what, pointer = parts
+if not _SLUG_RE.match(slug):
+    refuse(f"SLUG field {slug!r} does not match ^[a-z0-9][a-z0-9-]*$ (a bare slug, no spaces)")
+if not _RANK_RE.match(rank):
+    refuse(f"RANK field {rank!r} is not a positive integer (1 = most important)")
+if not what:
+    refuse("WHAT field is empty -- state what you are reviewing, for a human reader")
+if not pointer:
+    refuse("POINTER field is empty -- state where to look (a repo path, './led show N', or a URL)")
+
+sys.exit(0)
+PYEOF
+    then
+      exit 1
+    fi
+    ;;
+esac
+
+# --- review-done: intake validation (tracker item `maintainer-review-queue`, 2026-07-13) ------
+# A statement beginning `review-done:` (after stripping leading whitespace) TICKS OFF one row of
+# the maintainer's review queue -- removing it from `./pickup`'s rendered `MAINTAINER-REVIEW-
+# QUEUE` section without deleting anything (append-only; see the `review:` block immediately
+# above for the full latest-row-per-SLUG semantics) -- and MUST carry the two-field grammar
+# design/USER-RECIPES-FAQ.md's "Your review queue" section documents before ANY write is
+# attempted, cloned structurally from the blocks above (whitespace-normalized validation copy,
+# byte-exact persisted statement, refuse-before-write atomicity, teach-text naming the grammar).
+#
+# Note the shell case pattern below (`review-done:*`) can never be confused with the `review:`
+# block's own trigger (`review:*`) -- "review-done:" does not begin with the literal substring
+# "review:", so the two patterns partition every statement disjointly, by construction.
+#
+# The grammar check below runs against a WHITESPACE-NORMALIZED COPY only, identical convention to
+# every block above. The row actually written on success is $statement, completely untouched.
+# Nothing is written at all if validation fails (atomicity by refusal-before-write).
+#
+# COHERENCE PARTNER: see the `review:` block's own comment immediately above -- the same combined
+# WHERE filter (`statement ~ '^[[:space:]]*review(-done)?:'`) in bootstrap/templates/pickup.tmpl's
+# review-queue reader covers both prefixes identically, by construction. Change either side only
+# in lockstep with the other.
+_review_done_trimmed="${statement#"${statement%%[![:space:]]*}"}"
+case "$_review_done_trimmed" in
+  review-done:*)
+    if ! python3 - "$_review_done_trimmed" <<'PYEOF'
+import re
+import sys
+
+# The two fields, in order, are transcribed VERBATIM from design/USER-RECIPES-FAQ.md's "Your
+# review queue" section -- the ONE documented home of this grammar (ADR-0012 P1). SLUG is held to
+# the SAME slug grammar the `review:` block above uses -- "SLUG must match grammar" per this
+# work item's own spec, so a `review-done:` can never target a slug shape `review:` could never
+# have opened in the first place.
+FIELDS = ("SLUG", "DISPOSITION")
+_SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9-]*$")
+
+raw = sys.argv[1]
+normalized = re.sub(r"[\r\n]+[ \t]*", " ", raw).strip()
+body = normalized[len("review-done:"):]
+parts = [p.strip() for p in body.split("|")]
+
+
+def refuse(msg: str) -> None:
+    print(f"led: REFUSED -- malformed 'review-done:' statement -- {msg}.", file=sys.stderr)
+    print("  grammar (design/USER-RECIPES-FAQ.md \"Your review queue\"):", file=sys.stderr)
+    print("    review-done: <SLUG> | <DISPOSITION>", file=sys.stderr)
+    print(f"  the two fields, in order: {', '.join(FIELDS)}", file=sys.stderr)
+    print("  SLUG must match ^[a-z0-9][a-z0-9-]*$ (a bare slug, no spaces -- the same grammar", file=sys.stderr)
+    print("  'review:' uses)", file=sys.stderr)
+    print("  DISPOSITION must be non-empty (state what you decided, or what happened)", file=sys.stderr)
+    print(f"  received ({len(parts)} field(s), whitespace-normalized): {normalized}", file=sys.stderr)
+    print("  NOTHING was written -- fix the statement and re-run.", file=sys.stderr)
+    sys.exit(1)
+
+
+if len(parts) != len(FIELDS):
+    refuse(f"expected exactly {len(FIELDS)} '|'-separated fields, got {len(parts)}")
+
+slug, disposition = parts
+if not _SLUG_RE.match(slug):
+    refuse(f"SLUG field {slug!r} does not match ^[a-z0-9][a-z0-9-]*$ (a bare slug, no spaces)")
+if not disposition:
+    refuse("DISPOSITION field is empty -- state what you decided, or what happened")
+
+sys.exit(0)
+PYEOF
+    then
+      exit 1
+    fi
+    ;;
+esac
+
+warn_flag_in_statement "$statement"
+rationale=""
+if [ -n "$files" ]; then
+  rationale="files: ${files}"
+fi
+enacts_lit=""
+if [ -n "$enacts" ]; then
+  enacts_lit="{${enacts}}"
+fi
+resolve_actor
+# actor resolves via a subquery bind below exactly as `led review`/`led work claim` do above:
+# NULLIF(:'actor_name','') is NULL when LED_ACTOR is unset, so the ledger's actor column stays
+# NULL and the kernel's set_actor trigger fills the default connection principal. THIS was the
+# witnessed defect (BACKLOG run-7 forensics, ledger row 63): this generic path never read
+# LED_ACTOR at all, so every `led <kind> ...` write landed under the default principal regardless
+# of LED_ACTOR. resolve_actor (defined near the top of this file) is now the ONE place LED_ACTOR
+# is read and validated, shared with `led review` and `led work claim`.
+
+# event_declared_ts (s24) is a WRITER-SUPPLIED column, unlike stamp_invocation (s23, trigger-
+# captured from a GUC -- it needs no mention here at all). This SAME led.tmpl executes LIVE for
+# EVERY wired world regardless of when it was scaffolded (BACKLOG maintainer ruling 2026-07-11,
+# "live verbs") -- an OLDER world's schema may predate s24 and simply lack the column, so this
+# generic path cannot hardcode it into the INSERT's column list (that would break `led` on every
+# pre-s24 world the instant this template lands, an ADR-0000 silent-breakage class this project
+# exists to foreclose). A LIVE check, mirroring `led obligate revoke`'s own has_table_privilege
+# pattern above: only paid when --event-time was actually passed (the common no-flag path is
+# byte-identical to before this delta, zero extra query, zero behavior change).
+if [ -n "$event_time" ]; then
+  has_event_declared_ts=$(psql -h "$PGHOST" -d "$PGDB" -tAc \
+    "SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = '${SCHEMA}' AND table_name = 'ledger' AND column_name = 'event_declared_ts');")
+  if [ "$has_event_declared_ts" != "t" ]; then
+    echo "led: REFUSED -- --event-time was given, but this world's kernel predates s24 (no" >&2
+    echo "  event_declared_ts column on ${SCHEMA}.ledger) -- the declaration cannot be recorded" >&2
+    echo "  in a typed column here. Either omit --event-time, or note the late-entry event time" >&2
+    echo "  in the statement's own prose instead (the improvised disclosure this flag mechanizes" >&2
+    echo "  -- see design/MAINT-LATE-ENTRY-AND-INTAKE-SEMANTICS.md's run-10 row-1 specimen)." >&2
+    exit 1
+  fi
+fi
+
+# _led_kind_refusal_teach -- run-10 closure audit, item 1 (BACKLOG "Run-10 closure audit
+# (2026-07-11)", change proposal 1): row 67 was an invented kind ('acceptance-criteria'),
+# refused by the kernel's ledger_kind_check CHECK constraint -- correctly -- but the bare
+# "violates check constraint ledger_kind_check" error names the constraint, not its vocabulary,
+# so the agent had to separately run `SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE
+# conname='ledger_kind_check'` by hand (17s, one extra command) to learn what this file's own
+# header comment already lists. Called ONLY from the two INSERT shapes below, ONLY after their
+# own psql invocation has already failed -- it never touches or redirects that invocation's
+# stdout/stderr, so a successful write is completely untouched (byte-identical to before this
+# fix) and a NON-kind failure's original error stands alone, unrewrapped and unswallowed.
+# Detection is an INDEPENDENT client-side re-check against the LIVE constraint (never a guess at
+# psql's error TEXT, which could read differently across postgres versions, and never a second
+# hand-maintained kind enumeration in this script to drift out of sync with s22's kernel-side
+# one -- enumerations drift; s22 already extended s15's original list once): if $kind is not a
+# member of the vocabulary `pg_get_constraintdef` reports RIGHT NOW for ledger_kind_check on
+# THIS schema's ledger table, this failure certainly was that refusal, and the valid-kind list
+# is printed; if $kind IS a live member, the failure was for some other reason (a bad
+# --supersedes id, an unknown --answers id, etc.) and this function prints nothing.
+_led_kind_refusal_teach() {
+  local valid_kinds valid_kinds_csv
+  valid_kinds=$(psql -h "$PGHOST" -d "$PGDB" -tAc \
+    "SELECT string_agg(t.k, ', ') FROM (SELECT (regexp_matches(pg_get_constraintdef(con.oid), '''([a-z_]+)''::text', 'g'))[1] AS k FROM pg_catalog.pg_constraint con JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid JOIN pg_catalog.pg_namespace ns ON ns.oid = rel.relnamespace WHERE con.conname = 'ledger_kind_check' AND ns.nspname = '${SCHEMA}' AND rel.relname = 'ledger') t;" 2>/dev/null)
+  if [ -z "$valid_kinds" ]; then
+    return 0   # could not re-query the live constraint -- say nothing extra, the raw error above stands alone
+  fi
+  valid_kinds_csv=$(printf '%s' "$valid_kinds" | tr -d ' ')
+  case ",${valid_kinds_csv}," in
+    *",${kind},"*) return 0 ;;   # $kind IS valid -- this failure was something else, stay silent
+  esac
+  echo "" >&2
+  echo "led: '${kind}' is not a member of ledger_kind_check's vocabulary (the refusal above)." >&2
+  echo "  valid kinds (live, queried from the kernel's own constraint definition -- never" >&2
+  echo "  hardcoded here): ${valid_kinds}" >&2
+}
+
+# Bound via psql -v (a psql bind, not string concatenation) so `statement`/`rationale` can
+# contain quotes, semicolons, or anything else without escaping into SQL (P2: a boundary
+# translates-and-validates untrusted text; it does not hand-splice it into a query). NOTE: psql's
+# :'var' interpolation is only applied to a script read from stdin/-f, NOT to a -c argument -- so
+# the script is fed via stdin, not -c. TWO INSERT SHAPES (event_declared_ts column present or
+# not -- see the live check above): the column list itself must differ, not merely the bound
+# value, on a schema that lacks the column entirely. Both shapes get the SAME refusal-teaching
+# treatment (factored into _led_kind_refusal_teach above, called identically from each `else`
+# below) rather than duplicating that logic per shape.
+if [ -n "$event_time" ]; then
+  if psql -h "$PGHOST" -d "$PGDB" -v ON_ERROR_STOP=1 \
+    -v kind="$kind" -v statement="$statement" -v rationale="$rationale" \
+    -v supersedes="$supersedes" -v amends="$amends" -v amends_scope="$amends_scope" \
+    -v answers="$answers" -v refs="$refs" -v concern="$concern" \
+    -v evidence="$evidence" -v confidence="$confidence" -v enacts="$enacts_lit" \
+    -v actor_name="$actor_name" -v event_time="$event_time" <<SQL
+      SET ROLE ${ROLE};
+      SET search_path = ${SCHEMA}, ${KERNEL};
+      INSERT INTO ${SCHEMA}.ledger
+          (kind, statement, rationale, supersedes, amends, amends_scope, answers,
+           refs, concern, evidence, confidence, enacts, actor, event_declared_ts)
+      VALUES (:'kind', :'statement', NULLIF(:'rationale', ''),
+              NULLIF(:'supersedes', '')::bigint,
+              NULLIF(:'amends', '')::bigint,
+              NULLIF(:'amends_scope', ''),
+              NULLIF(:'answers', '')::bigint,
+              NULLIF(:'refs', ''),
+              NULLIF(:'concern', ''),
+              NULLIF(:'evidence', ''),
+              NULLIF(:'confidence', ''),
+              NULLIF(:'enacts', '')::bigint[],
+              (SELECT id FROM principal WHERE name = NULLIF(:'actor_name', '')),
+              NULLIF(:'event_time', '')::timestamptz);
+SQL
+  then
+    :
+  else
+    status=$?
+    _led_kind_refusal_teach
+    exit "$status"
+  fi
+else
+  if psql -h "$PGHOST" -d "$PGDB" -v ON_ERROR_STOP=1 \
+    -v kind="$kind" -v statement="$statement" -v rationale="$rationale" \
+    -v supersedes="$supersedes" -v amends="$amends" -v amends_scope="$amends_scope" \
+    -v answers="$answers" -v refs="$refs" -v concern="$concern" \
+    -v evidence="$evidence" -v confidence="$confidence" -v enacts="$enacts_lit" \
+    -v actor_name="$actor_name" <<SQL
+      SET ROLE ${ROLE};
+      SET search_path = ${SCHEMA}, ${KERNEL};
+      INSERT INTO ${SCHEMA}.ledger
+          (kind, statement, rationale, supersedes, amends, amends_scope, answers,
+           refs, concern, evidence, confidence, enacts, actor)
+      VALUES (:'kind', :'statement', NULLIF(:'rationale', ''),
+              NULLIF(:'supersedes', '')::bigint,
+              NULLIF(:'amends', '')::bigint,
+              NULLIF(:'amends_scope', ''),
+              NULLIF(:'answers', '')::bigint,
+              NULLIF(:'refs', ''),
+              NULLIF(:'concern', ''),
+              NULLIF(:'evidence', ''),
+              NULLIF(:'confidence', ''),
+              NULLIF(:'enacts', '')::bigint[],
+              (SELECT id FROM principal WHERE name = NULLIF(:'actor_name', '')));
+SQL
+  then
+    :
+  else
+    status=$?
+    _led_kind_refusal_teach
+    exit "$status"
+  fi
+fi

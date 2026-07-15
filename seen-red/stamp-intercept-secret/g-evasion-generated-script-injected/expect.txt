@@ -1,0 +1,5 @@
++"permissionDecision": "allow"
++export PGOPTIONS=
++app.vendor_hmac=
++bash run_reviews.sh
+-STAMP_SECRET is configured

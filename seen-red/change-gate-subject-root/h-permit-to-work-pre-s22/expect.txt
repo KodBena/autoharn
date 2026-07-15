@@ -1,0 +1,5 @@
++a change to a source file must be preceded by a ledger entry naming the file
++"permissionDecision": "deny"
+-s22 permit-to-work
+-OPEN and CLAIMED
+-./led work open

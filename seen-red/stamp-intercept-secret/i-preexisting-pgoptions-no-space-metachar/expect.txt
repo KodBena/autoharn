@@ -1,0 +1,6 @@
++"permissionDecision": "allow"
++export PGOPTIONS=
++app.vendor_hmac=
++echo hello-world
++echo second-command
+-STAMP_SECRET is configured

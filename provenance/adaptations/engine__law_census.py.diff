@@ -1,0 +1,11 @@
+--- CH:experiments/fact-mining/law_census.py@87e1bcc3e03b
++++ autoharn/engine/law_census.py
+@@ -69,7 +69,7 @@
+ DEPTH_ORDER = ("RULING", "FIND", "BRIEF-INV", "ADR")  # strongest -> weakest (D16, declared)
+ 
+ PGHOST = os.environ.get("HARNESS_PGHOST", os.environ.get("EPISTEMIC_PGHOST", "192.168.122.1"))
+-FINDINGS_MD = os.path.expanduser("~/w/vdc/1/epistemic-operator/FINDINGS.md")
++FINDINGS_MD = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "FINDINGS.md")  # autoharn: repo-root FINDINGS.md
+ 
+ # Informational acts.ruling rows covered by RULE (not per-id entries): the pre-registration /
+ # packet-freeze anchor idiom. Everything else informational needs an explicit entry.

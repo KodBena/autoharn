@@ -1,0 +1,10 @@
+--- CH:experiments/fact-mining/verify_relevant_act.py@87e1bcc3e03b
++++ autoharn/instruments/verify_relevant_act.py
+@@ -19,6 +19,7 @@
+ from pathlib import Path
+ 
+ sys.path.insert(0, str(Path(__file__).resolve().parent))
++sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "engine"))  # autoharn: acts_join lives in engine/
+ from acts_join import ActRow, LedgerRow, derive  # noqa: E402
+ 
+ FENCED = "/fenced/"

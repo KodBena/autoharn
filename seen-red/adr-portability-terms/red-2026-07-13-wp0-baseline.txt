@@ -1,0 +1,11 @@
+CASE 1 (unshielded term, gate mode): exit=1
+adr_portability_terms (gate mode): 1 finding(s) across 1 file(s)
+  /tmp/tmplbldhk_w/0001-fixture.md:8: TERM 'chocofarm' not inside a shielded Provenance/Amendment-or-Revisit/Extraction-Pointer block — 'We adopt this rule for chocofarm because it worked there.'
+CASE 2 (every term shielded, gate mode): exit=0
+adr_portability_terms (gate mode): clean — 1 file(s), 0 findings
+adr_portability_terms (report mode): clean — 1 file(s), 0 findings
+CASE 3 (report mode, synthetic clean dir): exit=0
+CASE 4 (negative control -- real law/adr/*.md, report mode): exit=1
+adr_portability_terms (report mode): 120 finding(s) across 18 file(s)
+  (EXPECTED non-zero pre-refactor -- ADR-0011's 2026-07-02 amendment: shown red before its green is credited. Not counted as a fixture failure; it legitimately goes green only as design/MAINT-ADR-PORTABILITY-SPEC.md's WP-1..WP-13 land.)
+adr-portability-terms red-specimen: all synthetic cases behaved as designed -- red on the unshielded term, green on the fully-shielded fixture, report mode reflecting true findings; the real corpus negative control is printed above.

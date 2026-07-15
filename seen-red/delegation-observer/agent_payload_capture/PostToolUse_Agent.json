@@ -1,0 +1,65 @@
+{
+  "cwd": "<scrubbed>",
+  "duration_ms": 6184,
+  "effort": {
+    "level": "medium"
+  },
+  "hook_event_name": "PostToolUse",
+  "permission_mode": "acceptEdits",
+  "prompt_id": "d44d74ae-fb17-4fd9-a1a9-e0a789e15fa3",
+  "session_id": "<scrubbed>",
+  "tool_input": {
+    "description": "Ask sub-agent 2+2",
+    "prompt": "What is 2+2? Reply with just the number.",
+    "run_in_background": false,
+    "subagent_type": "general-purpose"
+  },
+  "tool_name": "Agent",
+  "tool_response": {
+    "agentId": "aa0944c6491e8c6e7",
+    "agentType": "general-purpose",
+    "content": [
+      {
+        "text": "4",
+        "type": "text"
+      }
+    ],
+    "prompt": "What is 2+2? Reply with just the number.",
+    "resolvedModel": "claude-fable-5",
+    "status": "completed",
+    "totalDurationMs": 6183,
+    "totalTokens": 10113,
+    "totalToolUseCount": 0,
+    "usage": {
+      "cache_creation": {
+        "ephemeral_1h_input_tokens": 0,
+        "ephemeral_5m_input_tokens": 10108
+      },
+      "cache_creation_input_tokens": 10108,
+      "cache_read_input_tokens": 0,
+      "inference_geo": "not_available",
+      "input_tokens": 2,
+      "iterations": [
+        {
+          "cache_creation": {
+            "ephemeral_1h_input_tokens": 0,
+            "ephemeral_5m_input_tokens": 10108
+          },
+          "cache_creation_input_tokens": 10108,
+          "cache_read_input_tokens": 0,
+          "input_tokens": 2,
+          "output_tokens": 3,
+          "type": "message"
+        }
+      ],
+      "output_tokens": 3,
+      "server_tool_use": {
+        "web_fetch_requests": 0,
+        "web_search_requests": 0
+      },
+      "service_tier": "standard",
+      "speed": "standard"
+    }
+  },
+  "tool_use_id": "toolu_01PBsXs5ak3CmLhctEryx1Rs"
+}

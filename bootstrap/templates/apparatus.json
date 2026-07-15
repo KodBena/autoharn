@@ -1,0 +1,31 @@
+{
+  "deny_hint": "Run:  ./led -f <basename-of-the-file-you-are-editing> decision \"<why this change>\"   then re-issue the SAME edit -- the gate re-checks on every attempt, so retrying is the whole fix.",
+  "mechanisms": {
+    "change_gate": {"mode": "enforce"},
+    "permit_to_work": {"mode": "enforce"},
+    "decomposition_review": {"mode": "observe"},
+    "stamp_intercept": {"mode": "enforce"},
+    "clean_exit": {"mode": "enforce"},
+    "demurral_detect": {
+      "mode": "off",
+      "cost_note": "Spends a real 'claude -p' classifier call per AskUserQuestion/Stop event when enabled -- billed to whoever pays for this world's Claude usage. OFF by default so no world silently bills its operator (maintainer mandate, 2026-07-10); flip to 'observe' only with that cost accepted.",
+      "classifier_command": ["claude", "-p", "--model", "claude-haiku-4-5-20251001"],
+      "timeout_s": 10
+    },
+    "mutation_observer": {"mode": "observe"},
+    "delegation_observer": {"mode": "observe"},
+    "doc_shapes_gate": {"mode": "observe"},
+    "read_observer": {"mode": "observe"},
+    "bash_completion": {"mode": "observe"},
+    "doc_legibility_critic": {
+      "mode": "off",
+      "cost_note": "Spends a real 'claude -p' classifier call per Write/Edit of a .md file when enabled -- billed to whoever pays for this world's Claude usage. OFF by default so no world silently bills its operator (maintainer mandate, 2026-07-10); flip to 'observe' only with that cost accepted. 'enforce' is not implemented (degrades to 'observe' with a warning) -- see hooks/doc_legibility_critic.py.",
+      "classifier_command": ["claude", "-p", "--model", "claude-haiku-4-5-20251001"],
+      "timeout_s": 10
+    },
+    "doc_attestation": {
+      "mode": "off",
+      "note": "Gates ONLY whether ./distance-to-clean's DOC-ATTESTATION section counts debt -- it spends nothing (pure hashing, no LLM call, no network), so this is NOT a cost switch like demurral_detect/doc_legibility_critic above. OFF by default because the ADR-0017 A:B:C fresh-context audit loop is a workflow you adopt by choice; debt-nagging for a discipline you never started running would be noise. Flip to 'observe' once you're actually running the loop (see design/USER-DOC-AUDIT-LOOP.md, this deployment's own copy) so ./distance-to-clean surfaces its debt alongside review-gap/question-status/work-violations."
+    }
+  }
+}

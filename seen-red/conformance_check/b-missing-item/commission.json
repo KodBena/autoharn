@@ -1,0 +1,23 @@
+{
+  "commission_id": "seen-red-b",
+  "date": "2026-07-09",
+  "ratifier": "test-fixture",
+  "executor": "Sonnet",
+  "scope": [
+    {
+      "item_id": "item-1",
+      "mandate": "Deliver artifact 1.",
+      "witness_type": "file",
+      "witness_hint": "CLAUDE.md"
+    },
+    {
+      "item_id": "item-2",
+      "mandate": "Deliver artifact 2.",
+      "witness_type": "file",
+      "witness_hint": "some/other/path"
+    }
+  ],
+  "out_of_scope": [],
+  "constraints": [],
+  "escalation": []
+}

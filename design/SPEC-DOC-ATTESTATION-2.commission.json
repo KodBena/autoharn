@@ -1,0 +1,27 @@
+{
+  "commission_id": "succession-drill-doc-attestation-2",
+  "note": "The succession-drill commission, structured for instruments/conformance_check.py (ceremony component 1 of the CLAUDE.md succession rule). Each scope item is one drill deliverable; the report beside this file carries the verdicts and witnesses. file/commit witnesses are verified mechanically; ledger_row/doc_excerpt witnesses print a loud OPERATOR-CHECK line (the checker cannot reach them and must not silently pass them).",
+  "scope": [
+    {"item_id": "spec-authored",
+     "mandate": "Author design/SPEC-DOC-ATTESTATION-2.md: ADR-0017-legible, with an ADR-0000 closure statement enumerating the record-shape universe.",
+     "witness_type": "file", "witness_hint": "the spec exists at its committed path"},
+    {"item_id": "gate-v2-implemented",
+     "mandate": "Implement doc-attestation/2 in the gate: schema dispatch, the adjudication validator bound to escalated, --record writing /2.",
+     "witness_type": "file", "witness_hint": "gates/doc_attestation_presence.py carries the /2 logic"},
+    {"item_id": "scratch-witness-both-polarities",
+     "mandate": "Extend the seen-red fixture with /2 cases and bank its both-polarity red evidence (valid /2 passes; escalated-without-adjudication and adjudication-without-escalation refused; /1 still valid).",
+     "witness_type": "file", "witness_hint": "seen-red/doc-attestation-presence/red.txt banks the live run"},
+    {"item_id": "spec-attestation-recorded",
+     "mandate": "Run the spec through the ADR-0017 A:B:C loop (synchronous B) and record its attestation in the ledger as a /2 record.",
+     "witness_type": "doc_excerpt", "witness_hint": "attestations/doc-legibility-attestations.jsonl"},
+    {"item_id": "ceremony-2-adversarial-review",
+     "mandate": "Adversarial fresh-context review of the spec by a second instance charged to refute; every finding repaired or rebutted on the record.",
+     "witness_type": "doc_excerpt", "witness_hint": "BACKLOG.md succession-drill entry, 'Ceremony 2' block"},
+    {"item_id": "ceremony-4-closure-check",
+     "mandate": "The closure statement checked against the enumerated universe by a third fresh instance; verdict banked.",
+     "witness_type": "doc_excerpt", "witness_hint": "BACKLOG.md succession-drill entry, 'Ceremony 4' block"},
+    {"item_id": "backlog-drill-record",
+     "mandate": "Dated BACKLOG entry recording the drill AS a drill, pointing at all four ceremony artifacts.",
+     "witness_type": "file", "witness_hint": "BACKLOG.md carries the dated entry"}
+  ]
+}

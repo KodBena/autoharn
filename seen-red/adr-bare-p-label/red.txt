@@ -1,0 +1,22 @@
+CASE 1 (bare P-label, gate mode): exit=1
+adr_bare_p_label (gate mode): 1 finding(s) across 1 file(s)
+  /tmp/tmps3rib74j/case1.md:5: BARE P-LABEL 'P3' first use has no gloss or link into 0012's #p3 anchor — 'This composes with ADR-0012 P3 in the obvious way.'
+CASE 2 (parenthetical gloss, gate mode): exit=0
+adr_bare_p_label (gate mode): clean — 1 file(s), 0 findings
+CASE 3 (markdown link into 0012, gate mode): exit=0
+adr_bare_p_label (gate mode): clean — 1 file(s), 0 findings
+CASE 4 (second bare mention, first glossed, gate mode): exit=0
+adr_bare_p_label (gate mode): clean — 1 file(s), 0 findings
+CASE 5 (gloss split across line wrap, gate mode): exit=0
+adr_bare_p_label (gate mode): clean — 1 file(s), 0 findings
+CASE 6 (range-intro idiom, gate mode): exit=0
+adr_bare_p_label (gate mode): clean — 1 file(s), 0 findings
+CASE 7 (bolded, still bare, gate mode): exit=1
+adr_bare_p_label (gate mode): 1 finding(s) across 1 file(s)
+  /tmp/tmps3rib74j/case7.md:5: BARE P-LABEL 'P4' first use has no gloss or link into 0012's #p4 anchor — '**ADR-0012 P4** is cited here with no trailing gloss at all, just unrelated prose that follows.'
+adr_bare_p_label (report mode): clean — 1 file(s), 0 findings
+CASE 8 (report mode, synthetic clean dir): exit=0
+CASE 9 (negative control -- real law/**/*.md, report mode): exit=0
+adr_bare_p_label (report mode): clean — 35 file(s), 0 findings
+  (Expected 0 as of 2026-07-14; a nonzero result here is a live regression, not an expected baseline state -- unlike adr-portability-terms, this gate was measured and fixed against the real corpus before it ever shipped.)
+adr-bare-p-label red-specimen: all synthetic cases behaved as designed -- red on the genuinely bare citation and the bolded-but-ungloosed one, green on every sanctioned gloss/link/range/second-mention shape; the real corpus negative control is printed above.

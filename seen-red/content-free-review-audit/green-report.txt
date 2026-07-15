@@ -1,0 +1,19 @@
+# contemporaneity audit -- target='cfraudg' root=/tmp/content-free-review-audit-fixture-m8d5miq4/green
+#   capabilities (family, capable, produced): [('stamp_invocation_column', True, True), ('event_declared_ts_column', True, True), ('work_items', True, True), ('refs', True, True), ('regards', True, True), ('actor', True, True), ('countersign_obligation', True, True), ('commission_kind', True, True), ('s23_capable', True, True), ('invocation_journal', False, False), ('tool_event', False, False), ('stop_journal', False, False), ('delegation_journal', False, False), ('bash_completions_journal', False, False), ('verify_commission_journal', False, False)]
+#   EXCLUDED invocation_journal: no usable invocation records at /tmp/content-free-review-audit-fixture-m8d5miq4/green/.claude/logs/invocations.jsonl AND stamp_intercept is not wired in this world's settings.json -- hooks off/unwired, or a genuinely pre-journal era (design memo: 'must report that absence loudly, UNJOURNALED ERA, never as no findings')
+#   EXCLUDED tool_event: no tool-activity journal files under this world's .claude/logs/ AND no observer mechanism wired in its settings.json -- observers off/unwired, or a pre-journal era
+#   EXCLUDED stop_journal: no usable stop_event records at /tmp/content-free-review-audit-fixture-m8d5miq4/green/.claude/logs/stop_clean_exit.journal.jsonl AND clean_exit is not wired in this world's settings.json -- hooks off/unwired, or predates hooks/stop_clean_exit.py -- F10/F11's stop-side arms are UNDECIDABLE(no_stop_record) here
+#   EXCLUDED delegation_journal: no usable delegation records AND delegation_observer not wired -- F9's delegation leg is UNDECIDABLE(capability_absent) here
+#   EXCLUDED bash_completions_journal: no usable completion records with a token AND bash_completion not wired -- every cross-seam 'before'/'after' comparison needing the upper bound is UNDECIDABLE(open_window)
+#   EXCLUDED verify_commission_journal: no /tmp/content-free-review-audit-fixture-m8d5miq4/green/.claude/logs/verify_commission.jsonl on this world -- either ./verify-commission was never invoked here, or this world predates the E6 journaling extension landing in the live checkout (indistinguishable from artifacts alone, named honestly per this module's own docstring) -- F2 is UNDECIDABLE(no_verify_journal) here
+#   counts: {'row_tokened': 0, 'row_untokened': 2, 'row_declared': 0, 'work_opened': 0, 'work_claimed': 0, 'work_closed': 0, 'work_witness_present': 0, 'work_depends': 0, 'row_refs_row': 0, 'row_refs_present': 0, 'row_regards': 1, 'row_actor': 2, 'invocation': 0, 'tool_event': 0, 'countersign_obliged': 1, 'stop_event': 0, 'delegation_dispatch': 0, 'delegation_return': 0, 'invocation_completed': 0, 'verify_commission_event': 0}
+
+DEGRADED ts-CLUSTER TABLE (INFERRED from row ts-adjacency, pre-token era only -- NEVER the same claim as a STATED token burst):
+  rows [1,2] within burst_threshold_ms
+
+NO_VERDICT (capability-gated refusal, never a guessed verdict): this world cannot support the full CONTEMPORANEOUS|BATCHED_DECLARED|LATE_DECLARED|BACKFILL_SUSPECT vocabulary. Missing/excluded: ['invocation_journal', 'tool_event', 'stop_journal', 'delegation_journal', 'bash_completions_journal', 'verify_commission_journal']. Degraded ts-cluster burst report available below (INFERRED, not STATED).
+
+CONTENT-FREE-REVIEW-DISCHARGE AUDIT (tracker item `content-free-review-audit`; target='cfraudg'):
+  counts: {'obliged': 1, 'row_actor': 2, 'superseded': 0, 'review_row': 1, 'review_regards': 1, 'review_attest': 1, 'content_free': 0}
+  DISCHARGING REVIEWS (review_id, target_row_id): [(2, 1)]
+  FLAGGED: none -- every discharging review's statement clears the content-free-length threshold (engine/review_gap_thresholds.CONTENT_FREE_STATEMENT_THRESHOLD).

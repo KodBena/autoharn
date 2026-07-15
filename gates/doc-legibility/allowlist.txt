@@ -1,0 +1,323 @@
+# allowlist — tokens the doc-legibility gate may treat as needing no project definition.
+#
+# Each line is a CLAIM: "this token is common knowledge (a widely-known tech/English term) OR a
+# proper noun (a tool, language, library, conference, journal, org, university, license, person)."
+# It is NOT a place to silence genuine jargon — real concepts go in terms.md with a correct
+# definition. Allowlisting an undefined concept to make the gate pass is the exact false-authority
+# failure this gate exists to catch.  One token per line; `#` starts a comment.
+
+# --- Common computing terms ---
+AI            # artificial intelligence
+ML            # machine learning
+API           # application programming interface
+CLI           # command-line interface
+OS            # operating system
+OSS           # open-source software
+DB            # database
+SQL           # structured query language
+JVM           # Java virtual machine
+JDK           # Java development kit
+JIT           # just-in-time (compilation)
+JAX           # Google's JAX array/autodiff library
+NET           # Microsoft .NET platform
+MB            # megabyte
+PDF           # portable document format
+SHA           # git commit hash / secure hash
+PIP           # Python package installer
+APT           # Debian/Ubuntu package manager
+WEB           # the World Wide Web ("web-verified", "web")
+COMP          # competition (as in SMT-COMP)
+
+# --- Software licenses ---
+MIT           # MIT permissive license (also Massachusetts Institute of Technology)
+BSD           # Berkeley Software Distribution license
+GPL           # GNU General Public License
+GPLv3         # GNU GPL version 3
+LGPL          # GNU Lesser General Public License
+LGPLv3        # GNU LGPL version 3
+MPL           # Mozilla Public License
+UPL           # Universal Permissive License
+EPL           # Eclipse Public License
+CC            # Creative Commons (CC-BY, ...)
+BY            # Creative Commons Attribution ("CC BY")
+OSI           # Open Source Initiative
+GNU           # the GNU project
+
+# --- Proper nouns: tools, languages, libraries, solvers, provers ---
+SWI           # SWI-Prolog
+sCASP         # s(CASP), goal-directed ASP system
+CADP          # Construction and Analysis of Distributed Processes toolbox
+CmdStan       # the command-line interface to Stan
+TLAPS         # the TLA+ Proof System
+CVC           # cvc5 SMT solver family
+GRASP         # GRASP SAT solver
+MiniSat       # SAT solver
+MiniZinc      # constraint-modelling language
+DDlog         # Differential Datalog
+DeepProbLog   # neural-symbolic ProbLog
+DOOP          # Datalog-based points-to analysis framework
+LogicNG       # Java propositional-logic / SAT library
+LogiKEy       # logic-engineering methodology/toolkit
+MetTeL1       # tableau-prover generator (v1)
+MetTeL2       # tableau-prover generator (v2)
+MSPASS        # modal extension of the SPASS prover
+MleanCoP      # modal connection prover
+SPASS         # first-order theorem prover
+MULTLOG       # many-valued-logic prover generator
+mNiBLoS       # many-valued / fuzzy SMT-based solver
+PyArg         # Python argumentation library
+PyTensor      # tensor library (PyMC backend)
+PyPI          # Python Package Index
+OpenJDK       # open-source JDK
+OCaml         # the OCaml language
+SPARK         # the SPARK Ada subset/toolset
+SPARQL        # RDF/graph query language
+PRISM         # probabilistic model checker
+MCMAS         # multi-agent-systems model checker
+MCHyper       # hyperproperty model checker
+ISPL          # MCMAS's Interpreted Systems Programming Language
+SMV           # NuSMV/nuXmv input language
+TaLiRo        # S-TaLiRo temporal-logic falsification toolbox
+STREL         # Spatio-Temporal Reach and Escape Logic (MoonLight)
+MoonLight     # spatio-temporal monitoring tool
+MoonLightSuite # MoonLight's GitHub org
+CommunityModules # the TLA+ community modules
+TweetyProject # Java libraries for logical AI
+DoWhy         # causal-inference library
+CompCert      # formally verified C compiler
+KeYmaera      # hybrid-systems theorem prover (KeYmaera X)
+RAML          # Resource Aware ML (resource-bound analysis)
+HP2SAT1       # the HP2SAT 1.0 actual-causality tool (github.com/amjadKhalifah/HP2SAT1.0)
+EVM           # Ethereum Virtual Machine
+DynamoDB      # AWS DynamoDB
+VMware        # VMware
+GitHub        # GitHub
+
+# --- Proper nouns: conferences, journals, archives ---
+AIJ           # Artificial Intelligence Journal
+AIML          # Advances in Modal Logic (also written AiML)
+AiML          # Advances in Modal Logic
+APAL          # Annals of Pure and Applied Logic
+ATVA          # Automated Technology for Verification and Analysis
+CACM          # Communications of the ACM
+CAV           # Computer Aided Verification
+FOCS          # Foundations of Computer Science
+ICCMA         # Int'l Competition on Computational Models of Argumentation
+ICLP          # Int'l Conference on Logic Programming
+IEEE          # IEEE
+IJCAI         # Int'l Joint Conference on Artificial Intelligence
+IJCAR         # Int'l Joint Conference on Automated Reasoning
+JAIR          # Journal of Artificial Intelligence Research
+JAR           # Journal of Automated Reasoning
+JELIA         # European Conference on Logics in Artificial Intelligence
+JFP           # Journal of Functional Programming
+JMLR          # Journal of Machine Learning Research
+JPL           # Journal of Philosophical Logic
+JSL           # Journal of Symbolic Logic
+JWS           # Journal of Web Semantics
+LICS          # Logic in Computer Science
+MLJ           # Machine Learning (journal)
+PODS          # Principles of Database Systems
+SOSP          # Symposium on Operating Systems Principles
+STTT          # Int'l Journal on Software Tools for Technology Transfer
+TACAS         # Tools and Algorithms for the Construction and Analysis of Systems
+TKDE          # IEEE Transactions on Knowledge and Data Engineering
+TOPLAS        # ACM Transactions on Programming Languages and Systems
+TPLP          # Theory and Practice of Logic Programming
+TPTP          # Thousands of Problems for Theorem Provers (problem library/format)
+SEP           # Stanford Encyclopedia of Philosophy
+AFP           # Archive of Formal Proofs (Isabelle)
+PhilPapers    # PhilPapers bibliography
+CORDIS        # EU research-projects portal
+TEAMDEP       # EU project (team-semantics dependence logic)
+TCS           # Theoretical Computer Science (field/journal)
+CUP           # Cambridge University Press
+UP            # University Press ("Cambridge UP")
+
+# --- Proper nouns: organizations, universities, labs, people ---
+NASA          # NASA
+NYSE          # New York Stock Exchange
+ICU           # intensive care unit
+RTCA          # Radio Technical Commission for Aeronautics (publishes DO-178C)
+ETH           # ETH Zurich
+CSIC          # Spanish National Research Council
+UCSC          # UC Santa Cruz
+UMD           # University of Maryland
+KU            # KU Leuven (and other "KU" universities)
+KULeuven      # KU Leuven
+DTAI          # KU Leuven DTAI research group
+LINQS         # the LINQS research lab (PSL)
+HazyResearch  # Stanford Hazy Research group
+FBK           # Fondazione Bruno Kessler
+EPITA         # EPITA / LRDE (Spot's home)
+McCarthy      # John McCarthy
+McGuinness    # Deborah McGuinness
+DaphneOdekerken # researcher (argumentation tooling)
+TU            # Technische Universiteit / Technical University (e.g. TU/e)
+
+# --- ALL-CAPS English words used for emphasis / as headers in the frozen survey prose ---
+# (common English, not acronyms; the survey SHOUTS them stylistically and its text is frozen)
+NOT
+AND
+OR
+ALL
+DEFINED
+LICENSE
+HYPERPROPERTIES
+ALREADY
+INTO
+OUT
+OVER
+THE
+THIS
+YES
+RUN
+WHAT
+MODE
+FAILURE
+EXAMPLE
+CONDITION
+KILL
+MANDATORY
+VERIFIED
+VERIFY
+HONEST
+HARD
+HOST
+META
+MASTER
+TABLE
+PLAN
+TIERED
+BINARY
+COMPILE
+PREBUILT
+PRESENT
+RESOURCE
+CONSUMPTION
+REVERSIBILITY
+FAIRNESS
+CONFIDENTIALITY
+ADEQUACY
+ADVERSARIAL
+BOUNDED
+COVERAGE
+GAPS
+FLAGS
+FORMATS
+FRONTIER
+MISSED
+OBLIGATIONS
+SPECIFICATION
+SYSTEMS
+TOOLS
+COMPOSITION
+ARCHITECTURE
+AUTOMATION
+ENCODING
+ENCODE
+STRATEGY
+EVALUATOR
+README
+SATISFIABLE
+UNSATISFIABLE
+ASH            # "HONEST ASH FLAGS" header — read as English "ash" (burnt-out residue); see README note
+
+# --- Common computing terms (extension) ---
+JSON          # JavaScript Object Notation
+URL           # uniform resource locator
+ID            # identifier
+GB            # gigabyte
+NLP           # natural-language processing
+GPU           # graphics processing unit
+FK            # foreign key (SQL) — named explicitly as SQL-keyword noise, BACKLOG.md:624
+HMAC          # hash-based message authentication code (this project's own stamp mechanism)
+PR            # pull request
+
+# --- Proper nouns: organizations, standards bodies (extension) ---
+ISO           # International Organization for Standardization
+IEC           # International Electrotechnical Commission
+NRC           # (US) Nuclear Regulatory Commission — this project's own "NRC-grade" quality-bar framing (README.md:64)
+
+# --- Claude Code's own API vocabulary (proper nouns of the tool this harness is built on) ---
+PreToolUse    # Claude Code hook event name
+PostToolUse   # Claude Code hook event name
+
+# --- This project's own SSOT document/directory names, used bare in prose (not acronyms —
+# the expansion is the file itself: BACKLOG.md, CLAUDE.md, law/adr/*.md, law/briefs/*.md,
+# FINDINGS.md, HANDOFF.md, CAPABILITIES.md, GLOSSARY.md, provenance/*.md, the design/ and
+# law/ directories, CLAUDE.md's ORCHESTRATION section) ---
+ADR           # law/adr/NNNN-*.md — Architecture Decision Record, this repo's own convention
+BACKLOG       # BACKLOG.md
+CLAUDE        # CLAUDE.md
+BRIEF         # law/briefs/*/BRIEF.md, also plain English "a brief"
+FINDINGS      # FINDINGS.md
+HANDOFF       # HANDOFF.md
+CAPABILITIES  # CAPABILITIES.md
+GLOSSARY      # GLOSSARY.md
+PROVENANCE    # provenance/*.md, also plain English "provenance"
+ORCHESTRATION # CLAUDE.md's ORCHESTRATION section
+DESIGN        # design/*.md, also plain English "design"
+LAW           # law/, also plain English "law"
+
+# --- ALL-CAPS English words used for emphasis in the CORE repo's own prose (BACKLOG.md,
+# CLAUDE.md, CAPABILITIES.md, ...) — the same shouting style as the frozen-survey section
+# above, applied to this repo's own terse register. RED/NEG/NUM/ONE/NO/IS/IN and
+# INSERT/NULL/MIGRATE/STAYS/DECIDED/INC are named VERBATIM as this exact noise class by the
+# project's own commentary (BACKLOG.md:623-624, hooks/pre-commit) — not a fresh judgment call,
+# a mechanical transcription of an already-made one. The rest are the same category, spot-
+# checked against their actual doc context before listing (never guessed) ---
+RED
+NEG
+NUM
+ONE
+NO
+IS
+IN
+INSERT
+NULL
+MIGRATE
+STAYS
+DECIDED
+INC
+BOTH
+BEFORE
+NEW
+WHY
+OPEN
+CLOSED
+EXCLUDED
+NEVER
+MUST
+SAME
+AS
+AT
+HIGH
+GREEN
+STALE
+EVIDENCE
+SEED
+RATIFIED
+REFUSED
+WITNESSED
+DERIVED
+RULING
+SERVED
+POST
+ORDER
+VIEW
+HOOK
+FRAME
+FIND
+ERA
+MODEL
+SPEC
+CONS
+CHECK
+DEFECT
+DIVERGE
+AGREE
+AUDIT
+QUARANTINED
+BUILD
+ONLY

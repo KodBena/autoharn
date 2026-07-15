@@ -1,0 +1,44 @@
+compound_nominal_scan2 (EXPERIMENT, report-only): CLASS 1 ranked scan
+  excluded prefixes: vestigial_documentation/, judgment/; definition surfaces: GLOSSARY.md, gates/doc-legibility/terms.md, research/obligations-formalisms-survey/KEY.md
+  excluded (evidence-record marker 'doc-attest-exempt'): design/ORCH-RETROSPECTIVE-RUN11.md
+  excluded (evidence-record marker 'doc-attest-exempt'): tools/experiments/results/compound_nominal_classification.md
+  corpus: 174 docs; defined terms (GLOSSARY/terms/KEY + lexicalized): 288+27
+  distinct candidate pairs (any angle fired): 13459
+  per-angle candidate counts: {'C': 13459}
+
+  ranking function: score = 10*A + 3*B + C, where
+    A = 2*head_weight + 2*[abstract modifier] + [borrowed head] + [<=2 docs]
+    B = min(head_uses/(determinered_uses+1), 12) when ratio>=2, det<=4, pair<=6
+    C = 3/pair_count (novelty tail — the measured-flood control angle)
+
+  top 15:
+    1. [   3.00] 'abandonware families'  x1 in 1 doc(s)  (C=3.0)
+        research/logic-investigation/B-autoharn-fit.md:77
+    2. [   3.00] 'abduction demo'  x1 in 1 doc(s)  (C=3.0)
+        research/logic-fair-trials/AUDIT.md:93
+    3. [   3.00] 'abduction returns'  x1 in 1 doc(s)  (C=3.0)
+        research/logic-fair-trials/12-abductive-ilp.md:57
+    4. [   3.00] 'abnormality predicate'  x1 in 1 doc(s)  (C=3.0)
+        research/obligations-formalisms-survey/formal-systems/22-nonmonotonic-classics.md:28
+    5. [   3.00] 'abort mirroring'  x1 in 1 doc(s)  (C=3.0)
+        law/adr/0012-compositional-and-structural-hygiene.md:647
+    6. [   3.00] 'aborts loudly'  x1 in 1 doc(s)  (C=3.0)
+        law/adr/0002-fail-loudly.md:67
+    7. [   3.00] 'absence cost'  x1 in 1 doc(s)  (C=3.0)
+        law/adr/0000-the-alpha-and-the-omega-type-driven-design.md:436
+    8. [   3.00] 'absence permits'  x1 in 1 doc(s)  (C=3.0)
+        law/adr/0012-compositional-and-structural-hygiene.md:50
+    9. [   3.00] 'absence plus'  x1 in 1 doc(s)  (C=3.0)
+        ORCH-OPERATING-CARD.md:128
+   10. [   3.00] 'absence rule'  x1 in 1 doc(s)  (C=3.0)
+        law/adr/0012-compositional-and-structural-hygiene.md:684
+   11. [   3.00] 'absence typed'  x1 in 1 doc(s)  (C=3.0)
+        law/adr/0012-compositional-and-structural-hygiene.md:690
+   12. [   3.00] 'absolute difference'  x1 in 1 doc(s)  (C=3.0)
+        law/adr/0009-performance-investigation-discipline.md:192
+   13. [   3.00] 'absolute epoch-ms'  x1 in 1 doc(s)  (C=3.0)
+        design/ORCH-CONTEMPORANEITY-AUDIT.md:176
+        design/ORCH-CONTEMPORANEITY-AUDIT.md:227
+   14. [   3.00] 'absolute era'  x1 in 1 doc(s)  (C=3.0)
+   15. [   3.00] 'absorb additional'  x1 in 1 doc(s)  (C=3.0)
+        law/adr/0005-documentation-discipline.md:223

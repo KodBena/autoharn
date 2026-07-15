@@ -1,0 +1,1 @@
+{"tool_name":"Bash","tool_input":{"command":"PGOPTIONS='-c statement_timeout=5000' psql -h 192.168.122.1 -d toy -c \"select 1\""},"cwd":"/tmp","session_id":"seenred-s1"}

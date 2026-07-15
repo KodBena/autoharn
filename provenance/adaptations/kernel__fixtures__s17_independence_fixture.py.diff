@@ -1,0 +1,11 @@
+--- EO:harness/e17-build/s17_independence_fixture.py@e34759885879
++++ autoharn/kernel/fixtures/s17_independence_fixture.py
+@@ -61,7 +61,7 @@
+     subprocess.run(["psql", "-h", PGHOST, "-d", DB, "-c",
+                     f"DROP SCHEMA IF EXISTS {SCHEMA} CASCADE; DROP SCHEMA IF EXISTS {KERN} CASCADE; "  # declared-drop: s17iv (declared scratch/test reset)
+                     f"DROP OWNED BY {ROLE}; DROP ROLE IF EXISTS {ROLE};"], capture_output=True, text=True)
+-    for f in ("../e15-build/s15-schema.sql", "s17-stamp-mechanism.sql", "s17-independence-vocabulary.sql"):
++    for f in ("../lineage/s15-schema.sql", "../lineage/s17-stamp-mechanism.sql", "../lineage/s17-independence-vocabulary.sql"):   # autoharn: DDL lives in kernel/lineage/
+         cp = subprocess.run(["psql", "-h", PGHOST, "-d", DB, "-v", "ON_ERROR_STOP=1", "-v", f"schema={SCHEMA}",
+                              "-v", f"kern={KERN}", "-v", f"role={ROLE}", "-f", str(HERE / f)],
+                             capture_output=True, text=True)

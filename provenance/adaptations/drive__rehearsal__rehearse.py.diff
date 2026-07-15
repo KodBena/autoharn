@@ -1,0 +1,56 @@
+--- EO:harness/e15-build/rehearsal/rehearse.py@e34759885879
++++ autoharn/drive/rehearsal/rehearse.py
+@@ -27,10 +27,20 @@
+ from pathlib import Path
+ 
+ HERE = Path(__file__).resolve().parent
+-OPERATOR = HERE.parents[2]
+-FACTMINING = Path.home() / "w" / "vdc" / "1" / "claude_harness" / "experiments" / "fact-mining"
+-if str(FACTMINING) not in sys.path:
+-    sys.path.insert(0, str(FACTMINING))
++# OPERATOR here anchors run-MACHINERY (the CC adapter, close_manifest), not archived e15 evidence —
++# unlike anchor_pre_registration.py's OPERATOR, which is deliberately archive-pinned. That machinery
++# was migrated INTO autoharn (instruments/act_stream/claude_code_adapter.py, instruments/close_manifest.py
++# both live here now, confirmed identical/live copies), so OPERATOR repoints to the autoharn repo root,
++# not the epistemic-operator archive. In the old layout this file sat at harness/e15-build/rehearsal/
++# and parents[2] reached the operator root; in autoharn the file is one level shallower
++# (drive/rehearsal/), so parents[1] reaches the (new) repo root.
++OPERATOR = HERE.parents[1]
++# autoharn: acts_join/acts_edb/clingo_run/ledger_differential migrated INTO engine/ [A8; C7 —
++# post-flip the autoharn copy is authoritative]. Importing the fact-mining ATTIC copies here would
++# be the stale two-writer coupling the fresh home must not inherit.
++ENGINE = OPERATOR / "engine"
++if str(ENGINE) not in sys.path:
++    sys.path.insert(0, str(ENGINE))
+ 
+ # top-of-file imports (lazy-import edict) — the deriver + the marriage stack it feeds.
+ import acts_join  # noqa: E402
+@@ -46,13 +56,13 @@
+ FENCED = "/synthetic/nk4-mock"
+ SESSION = HERE / "mock_session"
+ WITNESS = HERE / "rehearsal.witness.txt"
+-ADAPTER = OPERATOR / "tools" / "act_stream" / "claude_code_adapter.py"
++ADAPTER = OPERATOR / "instruments" / "act_stream" / "claude_code_adapter.py"  # autoharn: instruments/ (no top-level tools/, unlike the archive)
+ CLOSE_MANIFEST = OPERATOR / "instruments" / "close_manifest.py"
+-ACTS_LP = FACTMINING / "ledger_acts.lp"
+-TNOW_LP = FACTMINING / "ledger_tnow.lp"
+-DTO_LP = FACTMINING / "ledger_dto.lp"
+-ASSUMES_LP = FACTMINING / "ledger_assumes.lp"
+-SUPPORT_LP = FACTMINING / "ledger_support.lp"
++ACTS_LP = ENGINE / "lp" / "ledger_acts.lp"
++TNOW_LP = ENGINE / "lp" / "ledger_tnow.lp"
++DTO_LP = ENGINE / "lp" / "ledger_dto.lp"
++ASSUMES_LP = ENGINE / "lp" / "ledger_assumes.lp"
++SUPPORT_LP = ENGINE / "lp" / "ledger_support.lp"
+ 
+ # The PRE-REGISTERED intended judgments (INCREMENT-5-PRE-REGISTERED-expectations.md Part 4) — the
+ # independent oracle; this runner asserts the deriver reproduces EXACTLY these, never the reverse.
+@@ -83,7 +93,7 @@
+ def persist_acts() -> None:
+     subprocess.run([sys.executable, str(HERE / "make_mock_session.py")], check=True, capture_output=True)
+     _harness(f"DROP SCHEMA IF EXISTS {ACTS_SCHEMA} CASCADE;")
+-    acts_ddl = FACTMINING.parents[1] / "db" / "harness" / "003_acts_stream.sql"
++    acts_ddl = OPERATOR / "stores" / "003_acts_stream.sql"   # autoharn: stores/ [A2]
+     subprocess.run(["psql", "-h", PGHOST, "-d", "harness", "-v", f"schema={ACTS_SCHEMA}",
+                     "-f", str(acts_ddl)], check=True, capture_output=True)
+     subprocess.run([sys.executable, str(ADAPTER), str(SESSION / "main.jsonl"),

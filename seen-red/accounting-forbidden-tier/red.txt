@@ -1,0 +1,97 @@
+seen-red/accounting-forbidden-tier — banked both-polarity evidence (fixture-census)
+
+Tracker item `accounting-stage-a` (design/ORCH-SPEC-RESOURCE-ACCOUNTING.md §3/§8 stage A):
+`forbidden: <task-shape>` is a fourth TIER value on the `resource:` declaration grammar,
+completing the MAY/SHOULD/MUST/MUST-NOT deontic register the existing three tiers
+(available/blessed/mandated) already three-quarters covered. Two mechanisms changed:
+
+  1. `bootstrap/templates/led.tmpl`'s `resource:` intake validator now ACCEPTS a well-formed
+     `forbidden: <task-shape>` TIER (same whitespace-normalized-copy / byte-exact-persisted /
+     refuse-before-write discipline the existing three tiers already carry) and REFUSES a
+     malformed one (bare `forbidden` with no colon; `forbidden:` with an empty task-shape).
+  2. `bootstrap/templates/pickup.tmpl`'s RESOURCES section now sorts a `forbidden` entry AHEAD
+     of a `mandated` entry (ORCH-SPEC-RESOURCE-ACCOUNTING.md §3: "a prohibition outranks a
+     mandate for a reader's attention").
+
+Nothing existing is relaxed: `available`/`blessed`/`mandated` accept exactly what they accepted
+before this change (seen-red/resource-intake-validation/ continues to prove that, unchanged).
+This fixture proves only the ADDITION.
+
+WHAT THE FIXTURE PROVES, IN ORDER (seen-red/accounting-forbidden-tier/run_fixtures.py, live run
+against a throwaway scratch deployment acsafixture/acsafixture_kernel/acsafixture_rw via
+bootstrap/track-work.sh, toy@192.168.122.1, torn down after):
+
+  1. RED -- a `resource:` statement whose TIER field is the bare word `forbidden` (no colon, no
+     task-shape) is REFUSED: `led decision` exits nonzero, stderr names all four valid TIER
+     forms including `forbidden: <task-shape>`, and the ledger row count is witnessed UNCHANGED
+     before vs. after the attempt (0 -> 0).
+  2. RED -- a `resource:` statement whose TIER field is `forbidden:` with an EMPTY task-shape
+     after the colon is likewise REFUSED ("names no <task-shape> after the colon"), row count
+     unchanged.
+  3. GREEN -- a well-formed `forbidden: <task-shape>` declaration (a superseded legacy solver
+     script) is ACCEPTED: `led decision` exits 0, the ledger row count grows by exactly one, and
+     the row stored on disk is confirmed BYTE-EXACT.
+  4. GREEN -- a `forbidden`-tier declaration carrying an EMBEDDED NEWLINE (the run12 reflow
+     specimen's own shape, reproduced against this new tier) is ACCEPTED after whitespace
+     normalization, and the persisted row preserves the embedded newline verbatim -- never the
+     normalized validation-only copy.
+  5. GREEN -- a `mandated`-tier resource is declared BEFORE a `forbidden`-tier resource
+     (insertion order deliberately opposite the expected display order), then `./pickup`'s
+     RESOURCES section is read and the `forbidden` block is shown ahead of the `mandated`
+     block -- proving the SORT, not merely ledger insertion order.
+
+Full fixture transcript (seen-red/accounting-forbidden-tier/run_fixtures.py, live run against
+toy@192.168.122.1, 2026-07-12, exit 0):
+
+ADOPT: track-work.sh exit=0 deployment.json=True -- PASS
+RED-FORBIDDEN-BARE: exit=1 refused=True row-count before=0 after=0 (unchanged=True) -- PASS
+--- led decision (bare 'forbidden', no colon) stderr ---
+led: REFUSED -- malformed 'resource:' statement -- TIER field 'forbidden' is not 'available', 'blessed: <task-shape>', 'mandated: <task-shape>', or 'forbidden: <task-shape>'.
+  grammar (design/USER-BLESSED-TABLE-TEMPLATE.md 'The statement grammars'):
+    resource: <NAME> | <CLASS> | <REACH> | <WHAT-IT-PROVES> | <GUIDANCE> | <TIER>
+  the six fields, in order: NAME, CLASS, REACH, WHAT-IT-PROVES, GUIDANCE, TIER
+  CLASS must be one of: solver | service | backend | binary | library
+  TIER must be one of: available | blessed: <task-shape> | mandated: <task-shape> | forbidden: <task-shape>
+  received (6 field(s), whitespace-normalized): resource: X | solver | r | p | g | forbidden
+  NOTHING was written -- fix the statement and re-run.
+--- end stderr ---
+RED-FORBIDDEN-EMPTY-SHAPE: exit=1 refused=True row-count before=0 after=0 (unchanged=True) -- PASS
+--- led decision ('forbidden:' with empty shape) stderr ---
+led: REFUSED -- malformed 'resource:' statement -- TIER field 'forbidden:' names no <task-shape> after the colon.
+  grammar (design/USER-BLESSED-TABLE-TEMPLATE.md 'The statement grammars'):
+    resource: <NAME> | <CLASS> | <REACH> | <WHAT-IT-PROVES> | <GUIDANCE> | <TIER>
+  the six fields, in order: NAME, CLASS, REACH, WHAT-IT-PROVES, GUIDANCE, TIER
+  CLASS must be one of: solver | service | backend | binary | library
+  TIER must be one of: available | blessed: <task-shape> | mandated: <task-shape> | forbidden: <task-shape>
+  received (6 field(s), whitespace-normalized): resource: X | solver | r | p | g | forbidden:
+  NOTHING was written -- fix the statement and re-run.
+--- end stderr ---
+GREEN-FORBIDDEN-ACCEPTED: exit=0 accepted=True row-count before=0 after=1 (grew-by-one=True) -- PASS
+GREEN-FORBIDDEN-ACCEPTED: stored statement is byte-exact -- PASS
+GREEN-FORBIDDEN-EMBEDDED-NEWLINE: exit=0 accepted=True row-count before=1 after=2 (grew-by-one=True) -- PASS
+GREEN-FORBIDDEN-EMBEDDED-NEWLINE: stored statement is byte-exact (embedded newline preserved) -- PASS
+GREEN-PICKUP-SORTS-FORBIDDEN-FIRST: forbidden block at index 309, mandated block at index 599 (forbidden-first=True) -- PASS
+--- pickup RESOURCES section (verbatim) ---
+### SECTION: RESOURCES
+
+[forbidden: hyperparameter-enumeration] legacy-eval-script (binary)  (ledger row id=1)
+  reach:      binary:legacy_eval.sh
+  proves:     nothing provable -- an unmaintained script with no test coverage
+  guidance:   superseded by MIP-SCIP; do not reach for it even under time pressure
+[forbidden: production-optimization] legacy-solver-v1 (solver)  (ledger row id=2)
+  reach:      binary:legacy_solver_v1
+  proves:     nothing provable -- the predecessor solver this project's benchmark superseded
+  guidance:   never reach for it; kept only for historical reproduction runs
+[mandated: hyperparameter-enumeration] OR-Tools-CP-SAT (library)  (ledger row id=3)
+  reach:      import:ortools.sat.python.cp_model
+  proves:     finite enumeration -> exact hyperparameter search proof
+  guidance:   discharge evidence = committed declarative model file
+--- end pickup RESOURCES section ---
+
+accounting-forbidden-tier fixture: all cases PASS, scratch substrate torn down to zero residue
+(tempdir removed, schema acsafixture/acsafixture_kernel/role acsafixture_rw dropped).
+
+Related: seen-red/resource-intake-validation/ (the original three-tier intake-validation fix
+this fixture extends -- its own fixture continues to prove available/blessed/mandated are
+unchanged); run12 (the live world where the original defect class was witnessed; not touched
+by this fixture).

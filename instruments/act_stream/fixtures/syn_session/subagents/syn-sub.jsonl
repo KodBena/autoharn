@@ -1,0 +1,2 @@
+{"type":"assistant","isSidechain":true,"uuid":"s1","timestamp":"2026-07-06T10:00:08.500Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"stu1","name":"Read","input":{"file_path":"/fenced/report_lint.py"}}]}}
+{"type":"user","isSidechain":true,"uuid":"s2","timestamp":"2026-07-06T10:00:08.700Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"stu1","content":"# lint"}]}}

@@ -1,0 +1,2 @@
+# review_fixpoint on the e17 unit shape: RED
+the final attest is a DELTA-review, not first-contact — reviewer stamp(s) ['a8d15e15'] already appeared earlier in the unit; a fresh first-contact review is owed

@@ -1,0 +1,40 @@
+--- EO:harness/e17-build/launch.conf@e34759885879
++++ autoharn/drive/launch.conf.template
+@@ -1,7 +1,34 @@
+-# launch config for e17 (sourced by ../launch_subject.sh). Per-run.
+-FENCED="$HOME/kt3-build"                                              # the subject's sandbox working dir
+-DB=wmb                                                                # the subject ledger db (s17 kernel)
++# launch config — PER-RUN, sourced by BOTH drive/launch_subject.sh AND drive/arm.sh (their <build-dir>
++# argument's launch.conf, e.g. runs/<label>-build/launch.conf — see runs/README.md). Originally e17-only
++# and consumed by launch_subject.sh alone; extended here [manifest C13 / BUILD-BRIEF Step 8] with the vars
++# arm.sh needs once IT was parameterized off arm_e18.sh. Reconciled, not duplicated: arm_e18.sh had its
++# own SUBJDIR for "the subject sandbox dir" and its own DB for "the subject ledger db" — both concepts
++# already had names here (FENCED, DB), so arm.sh now reads FENCED/DB too instead of carrying a second name
++# for the same thing. Every var below has a fallback default in the consuming script, so an absent
++# launch.conf (or one missing a var) still runs — reproducing the historical e17/e18 values.
++
++FENCED="$HOME/kt3-build"                                              # the subject's sandbox working dir (arm.sh: was SUBJDIR)
++DB=wmb                                                                # the subject ledger db (s17+ kernel; arm.sh's DDL-apply, negative-control and hook-idiom checks target this same db)
+ JOURNAL="$HOME/w/vdc/1/epistemic-audit/logs/change_gate.journal.jsonl"
+ STAGE="CLAUDE.md spec.md ledger_helper.md fixtures"                   # packet files COPIED into FENCED (subject reads them)
+ DELIVER="kickoff.md directive.txt"                                    # packet files the human PASTES (never staged, never cat)
+ WEBOFF='claude --disallowedTools "WebFetch WebSearch"'               # the web-off launch
++
++# --- drive/arm.sh additions (arm.sh <build-dir> --verify|--arm|--delivery-set) ---------------------------
++# These had no prior home in this template (arm_e18.sh hardcoded them); RUN_-prefixed to stay visually
++# distinct from the launch_subject.sh-established names above.
++RUN_LABEL=e18                          # internal engineering label (finding/consult numbering) — distinct
++                                        # from any subject-facing opaque token (FENCED/DB/etc. below MUST
++                                        # be opaque tokens that do not leak RUN_LABEL to the subject)
++RUN_ROLE=qbx_rw                        # the author role that owns/writes the ledger in $DB
++RUN_REV1=qbx_rev1                      # criterion-reviewer role 1 (INSERT-only negative control on the ledger)
++RUN_REV2=qbx_rev2                      # criterion-reviewer role 2 (INSERT-only negative control on the ledger)
++RELBASE="harness/${RUN_LABEL}-build"   # anchor-manifest path prefix recorded into acts.ruling at arm (provenance labeling only, no filesystem meaning post-migration)
++SECRET_FILE="$HOME/.config/epistemic/${RUN_LABEL}-stamp-secret.hex"   # the one-per-run apparatus HMAC secret (lives OUTSIDE the repo, chmod 600; STAMP_SECRET_FILE env var overrides at invocation time)
++KERNEL_STACK=""                        # optional override: space-separated ABSOLUTE paths of kernel DDL files
++                                        # to apply, IN ORDER, replacing arm.sh's default 5-file stack
++                                        # (s15+s17-stamp+s17-independence+s18-principals+s19-trigger-
++                                        # search-path — kernel/lineage/README.md's "current kernel").
++                                        # Empty = use the default.
++PREV_LABEL=e17                         # the predecessor run this one's packet is byte-lineage-derived from (arm.sh §4(k), printed only, not otherwise consumed)
++TOKEN_MAP="kt3->jm7, wmb->qbx, wmb_rw->qbx_rw"   # the predecessor's token map for the same §4(k) manual checklist line

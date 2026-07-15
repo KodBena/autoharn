@@ -1,0 +1,2 @@
+UNDECLARED CASCADE: docs/adr-evidence/seen-red/24-destructive-ddl-guard/red-specimen.py:4: subprocess.run(["psql", "-d", "harness", "-c", "DROP SCHEMA acts CASCADE"])
+# destructive-ddl-guard FAIL — 1 undeclared DROP ... CASCADE. Add a `declared-drop: <name>` marker on/above the line, or move it into a db/ migration.

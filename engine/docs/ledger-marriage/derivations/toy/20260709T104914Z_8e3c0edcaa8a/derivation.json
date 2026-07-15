@@ -1,0 +1,34 @@
+{
+  "target": "toy",
+  "verdict": "AGREE",
+  "only_asp": [],
+  "only_sql": [],
+  "asp_record": {
+    "engine": "clingo",
+    "version": "clingo version 5.8.0",
+    "config": [
+      "ledger_tnow.lp"
+    ],
+    "input_basis": "edb-text (ledger_edb export, serialized)",
+    "input_hash": "8e3c0edcaa8ad855b51818bb09faf2979c7de01d1eebf4c35d40039219e35f44",
+    "program_hash": "3a0ab1ea1966f07131986b03fa4f39302c517a7b3d2524450731b5bb6890f9dd",
+    "output_hash": "fa5bd825e3d554522d6340aa22eb9df6335e2a0d599f3ea7b5754f2bb0ac9278",
+    "target": "toy",
+    "ts": "2026-07-09T12:49:14"
+  },
+  "sql_record": {
+    "engine": "postgres",
+    "version": "PostgreSQL 18.4",
+    "config": [
+      "ledger_floor.py::floor_atoms"
+    ],
+    "input_basis": "live-db rows read directly (toy.toycolors.ledger)",
+    "input_hash": "e6512a91cdd44160dfc7f3ffe84d3a77c3662290191c5baf7d6155bfda00c09f",
+    "program_hash": "e2591ab2ee77d3eea5a404e4d7107eec882a2c6356b0da2155e1f10942ee4445",
+    "output_hash": "fa5bd825e3d554522d6340aa22eb9df6335e2a0d599f3ea7b5754f2bb0ac9278",
+    "target": "toy",
+    "ts": "2026-07-09T12:49:15"
+  },
+  "asp_quarantine": null,
+  "sql_quarantine": null
+}

@@ -1,0 +1,18 @@
+{
+  "cwd": "<scrubbed>",
+  "effort": {
+    "level": "medium"
+  },
+  "hook_event_name": "PreToolUse",
+  "permission_mode": "acceptEdits",
+  "prompt_id": "d44d74ae-fb17-4fd9-a1a9-e0a789e15fa3",
+  "session_id": "<scrubbed>",
+  "tool_input": {
+    "description": "Ask sub-agent 2+2",
+    "prompt": "What is 2+2? Reply with just the number.",
+    "run_in_background": false,
+    "subagent_type": "general-purpose"
+  },
+  "tool_name": "Agent",
+  "tool_use_id": "toolu_01PBsXs5ak3CmLhctEryx1Rs"
+}

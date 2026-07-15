@@ -1,0 +1,8 @@
+SET
+SET
+SET
+SET
+SET
+SET
+ERROR:  Ledger policy: the write stamp did not validate (fabricated, replayed, or stale). Ledger writes are stamped by the tool interception, not typed by the writer — route this write through the intercepted psql path; do not hand-set app.vendor_*.
+CONTEXT:  PL/pgSQL function set_stamp() line 19 at RAISE

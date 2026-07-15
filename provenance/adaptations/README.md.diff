@@ -1,0 +1,120 @@
+--- CH:README.md@87e1bcc3e03b
++++ autoharn/README.md
+@@ -1,64 +1,65 @@
+ # autoharn
+ 
+-A **harness for working with AI collaborators** — a metaproject that formalizes a
+-maintainer's Claude Code workflow into *queryable* tools (SQL stores + logic
+-programs) so that what an AI engineer needs to "do the right thing" is something it
+-can **pull on demand**, not something the maintainer must re-explain every session.
++The continuation home of the AI-collaborator harness project: the repo you clone for
++any important work. From a fresh clone you can do **both** things this project is for —
+ 
+-It is deliberately general: its subject is *doing the right thing, and documenting how*,
+-for concrete projects — including ones not yet conceived. Two real projects (an
+-operations-research package and a Go-study web app) serve as the worked examples it is
+-derived from, not as its scope.
++- **collaborate** under the harness (the working standard, the decision ledger, stamps,
++  refuse-and-teach, "fire up an auditor" on a snag); and
++- **build** the project (run closes, file findings/foreclosures, run the census/registry,
++  build engine increments).
+ 
+-> **Want the whole machine in one read?** **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** is the
+-> through-line — what the system *is*, end to end, and how an LLM + human use it to manage life-critical
+-> code. Start there; the [research/](docs/research/) tree is the evidence behind it.
++It is the corrected consolidation of two older repos (`claude_harness`, `epistemic-operator`)
++into one human-navigable home. Those repos become read-only evidence archives after the
++recorded HOME-FLIP; the complete working surface lives here, organized so every directory
++level is `ls`-legible.
+ 
+-> **New to the vocabulary?** Coined terms — [Pillar](GLOSSARY.md#pillar),
+-> [intent SSOT](GLOSSARY.md#intent-ssot), [Mechanization Discipline](GLOSSARY.md#mechanization-discipline), … —
+-> are defined in **[GLOSSARY.md](GLOSSARY.md)** and linked on first use throughout the docs, so you
+-> never have to grep to learn what a term means.
++> New here? Read **`CLAUDE.md`** (the working standard every session runs under), then
++> **`bootstrap/QUICKSTART.md`** (clone → collaborating, executed not proofread). What
++> *binds* is in **`law/`**; the vocabulary is in **`GLOSSARY.md`**.
+ 
+-## The thesis
++## The tree (what each directory IS — one currency each)
+ 
+-Prose disciplines decay, because they are policed by one person's memory. The only
+-durable corrective is a **mechanism** — a queryable, mechanical net that quantifies over
+-the *class* of a defect, not the instance. autoharn is that net, generalized from a single
+-existing precedent (a Postgres "anti-corruption layer" that replaced a hand-edited JSON
+-file with a relational source-of-truth + invariant gate) into three pillars:
++```
++bootstrap/    clone → collaborating: bootstrap.sh, QUICKSTART.md, AUDITOR.md
++law/          what BINDS — read in full before work that invokes it
++  adr/          the ADR corpus 0000–0016, verbatim
++  briefs/       authoritative external-standards briefs + conformance map
++judgment/     pre-banked odd-link judgment: apply, never weaken (POST-FABLE law)
++  engine/       engine seeds + panel + increment-0 (the live design basis)
++  e-series/     governing analyses (consults 27/31/35/39) + pending ratification packages
++  rulings/      ratified deliberation records
++kernel/       the subject decision-ledger kernel
++  lineage/      s10 … s19 DDL in order; new increments append
++  fixtures/     both-polarity kernel fixtures
++stores/       harness-db operational-store DDL (findings/foreclosures/rulings/acts/…) + fixtures
++instruments/  close-time instruments: manifest, consumers, derivers, verifiers
++  act_stream/   the session-transcript → acts-EDB adapter (the Port/ACL)
++engine/       the deductive engine (ledger⇄logic marriage) — the project's build front
++  lp/           the ASP programs
++  tests/        engine tests (pure-logic + parity)
++gates/        what REFUSES at commit: staging guard, lazy-import, census gates, doc-legibility
++filing/       what WRITES records: file_finding / file_foreclosure / … / persist_ephemera
++hooks/        what INTERCEPTS at run time: git pre-commit, stamp, change gate
++drive/        run machinery for a collaboration: launch, arm template, delivery drill
++seen-red/     both-polarity gate evidence (a gate never seen red is a claim)
++design/       pattern & design documents (not law, not run evidence)
++research/     sourced research corpora
++runs/         NEW run/close records accrue here
++ephemera/     whole-session Claude Code ephemera snapshots (the auditability law's home)
++provenance/   the transition record: migration manifest, path-translation, HOME-FLIP
++```
+ 
+-1. **[Capability registry](GLOSSARY.md#pillar-1) ([intent SSOT](GLOSSARY.md#intent-ssot)).** What tools, services, venvs, and *blessed*
+-   methods are available — including automated-reasoning / optimization tools (Z3,
+-   OR-Tools) that yield *provable* results rather than statistical hunches. The agent
+-   **queries** this at point-of-need (pull), instead of leaning on stale injected memory
+-   (push) exactly when context is thinnest.
++## Two entry points
+ 
+-2. **[Provenance / accountability ledger](GLOSSARY.md#pillar-2).** Attributable links between a git commit, a
+-   benchmark artifact, its environment, the hypothesis it tested, and the session that
+-   authored it — so a performance claim is a checkable fact, and a regression is traceable
+-   to the change that introduced it.
+-
+-3. **[Logic safety net](GLOSSARY.md#pillar-3).** Per-store invariant gates backed by real engines: *classical*
+-   logic (SQL `WITH RECURSIVE`, Z3, OR-Tools CP-SAT) for provable invariants, and
+-   *non-classical* logic (defeasible / temporal / paraconsistent) for the things prose
+-   handles informally — superseded decisions, provisional records, conflicting advisories.
+-
+-The unifying north star is a discipline the source projects already name **"Mechanization
+-Discipline"**: *convert every executive lapse into a mechanism, so the same error is never
+-seen twice.* autoharn is, in one line, the CI sweep that discipline openly admits it lacks.
++- **"How do I collaborate here?"** → `bootstrap/` (setup + walkthrough), standard in
++  `CLAUDE.md`, what binds in `law/`.
++- **"How do I build here?"** → `engine/`, `kernel/`, `stores/`, `instruments/`, with
++  `judgment/` holding the banked design basis.
+ 
+ ## Status
+ 
+-Early. The first artifact is the **foundational map** — a high-fidelity survey of the
+-existing disciplines, the SQL/lint mechanisms already in use, the benchmark-attribution
+-gap, and the tool/intent surface — which grounds the design so the harness grows *out of*
+-existing conventions rather than imposing foreign ones.
+-
+-- 📍 **[docs/research/2026-06-27-foundational-map/](docs/research/2026-06-27-foundational-map/)**
+-  — start with `00-synthesis.md`.
+-
+-## A note on the name
+-
+-`autoharn` is intentionally neutral. The harness is built with, and currently tuned for,
+-Anthropic's Claude Code, but its design (pull-not-push capability SSOT, attributable
+-provenance, logic-backed invariant gates) is not specific to any one assistant.
++Fresh home, migrated 2026-07-07 from the two source repos (per `provenance/`). The
++migration provenance (`provenance/MIGRATION.tsv`) records every file's source repo,
++commit, and sha256. The epistemic-pilot series is not winding down; the standing bar is
++the maintainer's: *until we can hand this harness to the NRC and walk away in good
++conscience, we are not done.*

@@ -1,0 +1,20 @@
+== scaffolding throwaway --new-world vccfxprobe ==
+=== a-connection-failure-is-cannot-verify ===
+  [ok] exit=5 stdout='verify-chain: CANNOT-VERIFY -- could not determine whether kernel/lineage/s26-row-hash-chain.sql is applied here -- the has_row_hash_layer() capability-check query itself failed to execute (this is NOT a schema answer, and must never be read as one): psql: error: could not translate host name "verify-chain-conflation-probe.invalid" to address: Name or service not known\nverify-chain: tail-deletion witness check SKIPPED -- hash-chain status is CANNOT-VERIFY, already diagnosed above'
+
+=== b-head-refuses-on-cannot-verify ===
+  [ok] exit=1 stdout='' stderr_excerpt="verify-chain --head: REFUSED -- chain is not INTACT (status=CANNOT-VERIFY, {'reason': 'could not determine whether kernel/lineage/s26-row-hash-chain.sql is applied here -- the has_row_hash_layer() cap"
+
+=== c-has-high-water-layer-query-failure-is-error ===
+  [ok] present=None probe_err_nonempty=True w_status='ERROR' w_detail={'reason': 'could not determine whether kernel/lineage/s27-chain-high-water.sql is applied here -- the has_high_water_layer() capability-check query itself failed to execute (this is NOT a schema answer, and must never be read as the honest pre-s27 WITNESS-UNAVAILABLE case): psql: error: could not translate host name "verify-chain-conflation-probe.invalid" to address: Name or service not known'}
+
+=== d-good-host-control ===
+  [ok] verify-chain: INTACT -- 1 row(s) walked, head id=1 hash=04c83e318be4363bfe45d749ee3790912663de683ada8d11082173fbf55a2187
+verify-chain: TAIL-COVERAGE-CONFIRMED -- witness max_id=1 agrees with walked max_id=1 (secondary corroboration: ledger_id_seq.last_value=1, explain-not-fail -- nextval() is non-transactional and does not roll back on an aborted insert, so this figure alone would false-positive on any world that ever rolled back a write)
+
+== applying s15..s25 (NOT s26/s27) to vccfxpres26 ==
+=== e-pre-s26-honest-absence-preserved ===
+  [ok] verify-chain: UNAVAILABLE -- pre-s26 kernel -- no row_hash chain in schema vccfxpres26 (kernel/lineage/s26-row-hash-chain.sql not applied here)
+verify-chain: tail-deletion witness check SKIPPED -- hash-chain status is UNAVAILABLE, already diagnosed above
+
+ALL CASES OK -- verify-chain-error-conflation both-polarity proof (connection-failure -> CANNOT-VERIFY, distinct exit 5 / --head refuses over it / has_high_water_layer's sibling conflation closed the same way / good-host control still INTACT / pre-s26 honest UNAVAILABLE preserved), zero residue.

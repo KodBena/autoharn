@@ -1,0 +1,1 @@
+# S17 INDEPENDENCE FIXTURE GREEN — self-review allowed; proxy-independence refused+taught; distinct-invocation independence allowed; unstamped-independence refused.

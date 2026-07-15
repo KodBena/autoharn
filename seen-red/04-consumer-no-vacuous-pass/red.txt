@@ -1,0 +1,4 @@
+CONSUMER VACUOUS-PASS: CLOSE on an empty stream did not go REQUIRED-ABSENT (got ['OK', 'OK', 'OK']) — a vacuous green would re-launder finding 4
+CONSUMER VACUOUS-PASS: READINESS on an empty stream did not DEFER (got ['OK', 'OK', 'OK'])
+CONSUMER VACUOUS-PASS: a consumer reported OK on an empty stream — the exact silent-vacuous-pass
+# consumer-no-vacuous-pass FAIL — 3 defect(s): consumers greened an empty substrate.

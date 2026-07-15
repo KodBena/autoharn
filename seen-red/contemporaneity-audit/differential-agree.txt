@@ -1,0 +1,10 @@
+# banked GREEN evidence -- CASE p (SQL-floor marriage differential, run-10 intake-shape + late-declared combined), engine/contemp_differential.py --retain real output:
+# contemporaneity marriage differential -- ASP (engine/lp/contemporaneity.lp) vs SQL floor (engine/contemp_floor.py)
+#   target='contempprobe' root=/tmp/contemp-fixture-qy1yyisl
+#   closed verdict vocabulary: ['AGREE', 'DIVERGE_BY_DESIGN', 'DIVERGE_DEFECT', 'QUARANTINED']; RED = ['DIVERGE_DEFECT', 'QUARANTINED']
+
+  [OK ] contempprobe AGREE              asp=63 sql=63 atoms; Δasp=[] Δsql=[]
+
+# retained: /home/bork/w/vdc/1/autoharn/engine/docs/ledger-marriage/derivations/contemporaneity/contempprobe/20260712T000306Z_f69a6f602b04
+
+# DIFFERENTIAL GREEN -- SQL floor bit-identical to the ASP verdict program

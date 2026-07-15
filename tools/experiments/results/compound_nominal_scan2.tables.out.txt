@@ -1,0 +1,14 @@
+compound_nominal_scan2 (EXPERIMENT, report-only): CLASS 2 table scan
+  excluded prefixes: vestigial_documentation/, judgment/; definition surfaces: GLOSSARY.md, gates/doc-legibility/terms.md, research/obligations-formalisms-survey/KEY.md
+  excluded (evidence-record marker 'doc-attest-exempt'): design/ORCH-RETROSPECTIVE-RUN11.md
+  excluded (evidence-record marker 'doc-attest-exempt'): tools/experiments/results/compound_nominal_classification.md
+  corpus: 174 docs, 120 markdown tables
+  flagged label columns: 2 (ranked; angle E > D > F by score)
+
+    1. [1.00] design/ORCH-COMPOUND-NOMINAL-DETECTION.md:396  header=''
+       forms: [('when it acts', 'QUESTION'), ('what it does', 'QUESTION'), ('covers', 'NOM'), ('failure mode', 'NOM')]
+       [F +1.00] label column has an EMPTY header — no type declared to check labels against
+
+    2. [1.00] design/USER-WORK-STATUS-OFFERING.md:64  header=''
+       forms: [('Lifetime', 'NOM'), ('Hooks', 'NOM'), ('Governance preamble', 'NOM'), ('Stamp secret', 'NOM'), ('Purpose', 'NOM')]
+       [F +1.00] label column has an EMPTY header — no type declared to check labels against

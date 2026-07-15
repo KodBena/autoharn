@@ -1,0 +1,85 @@
+seen-red/scaffold-governed-and-gitignore — banked BOTH-POLARITY evidence (fixture-census)
+
+Two tracker items fixed in the same builder session (one file touched, `bootstrap/new-project.sh`):
+`scaffold-governed-set-language-default` (ent testbed finding 4, 2026-07-13 — the scaffold wrote
+`governed_files.json` as `["*.py"]` unconditionally, silently ungoverning any non-Python
+deployment's real work surface) and `scaffold-log-churn-in-subject-repo` (ent-observatory
+cycle-001 NEW lesson 1 — the invocation log landed git-tracked inside an audited subject repo,
+churning on every session action; witnessed against picom/.claude/logs).
+
+No fixture existed for `bootstrap/new-project.sh` AT ALL before this suite (checked:
+`gates/fixture_census.py`'s REGISTRY had no entry naming it or any of its templates; `grep -rl
+"new-project" seen-red/` matched nothing) — flagged as its own finding, not just a gap in THIS
+fix's coverage: the scaffold that stamps every deployment's `.claude/` wiring had zero live,
+both-polarity proof behind any of its behavior. This suite is the first.
+
+Both polarities below are from a LIVE run of `seen-red/scaffold-governed-and-gitignore/
+run_fixtures.py` — classic (non `--new-world`) scaffold mode never opens a DB connection, so no
+scratch schema is needed; every case is a real subprocess invocation of the real script against
+a throwaway tempdir, torn down after a clean run.
+
+RED (the pre-fix script, extracted live via `git show 7097533:bootstrap/new-project.sh` — 7097533
+is the merge-base commit this session's fix landed on top of — into a sibling file under this
+checkout's own `bootstrap/` so its relative AUTOHARN_ROOT/TEMPLATES resolution stays correct;
+deleted immediately after use, never committed):
+
+  RED --governed: the pre-fix script has no `--governed` flag at all — passing it is REJECTED as
+    an unrecognized argument.
+    exit code: 2 (matches the script's own `unrecognized argument: --governed` / usage() path)
+
+  RED plain run (no flags): the pre-fix script writes `.claude/governed_files.json` as
+    `{"patterns": ["*.py"]}` UNCONDITIONALLY, prints NO notice of any kind, and writes NO
+    `.gitignore` at all.
+    exit code: 0
+    governed_files.json == default_only: True
+    stdout contains a governed-set notice: False
+    .gitignore written: False
+
+GREEN (the current, fixed script, this checkout's working tree):
+
+  GREEN --governed (dest is a real `git init`-ed repo): `--governed "*.sql,*.tf,Makefile"` lands
+    verbatim in `.claude/governed_files.json` as a JSON array; no default notice prints (the flag
+    was given); `.gitignore` gains the scaffold-owned-churn block (`.claude/logs/`); the
+    not-a-git-repo NOTE does NOT print (this dest IS a repo).
+    exit code: 0
+    patterns landed: True ("*.sql", "*.tf", "Makefile" all present)
+    default notice suppressed: True
+    .gitignore contains ".claude/logs/": True
+    not-a-repo NOTE suppressed (correctly, dest is a repo): True
+
+  GREEN default (no --governed, dest NOT a git repo): `.claude/governed_files.json` falls back to
+    `{"patterns": ["*.py"]}` (unchanged historical default, byte-identical to the pre-fix shape)
+    BUT the scaffold now prints a loud, refusal-grade notice naming the default and the exact
+    one-line widening act; `.gitignore` still lands (written even though the dest is not yet a
+    git repo, per the item's own spec) with an explicit NOTE that it is inert until `git init`.
+    exit code: 0
+    governed_files.json == default_only: True
+    "GOVERNED-SET DEFAULT NOTICE" + "*.py files ONLY" present in stdout: True
+    .gitignore contains ".claude/logs/": True
+    "not (yet) a git repo" NOTE present in stdout: True
+
+  GREEN idempotent re-run (same dest, `--force`): re-running the scaffold against the SAME
+    project directory leaves `.gitignore` BYTE-IDENTICAL (no duplicate block) — the marker pair
+    `# >>> autoharn scaffold-owned churn ... >>>` / `# <<< ... <<<` appears exactly once (one
+    BEGIN + one END = count 2 for the substring "autoharn scaffold-owned churn"), and the script
+    prints "already carries the scaffold-owned churn block -- left untouched" rather than
+    re-appending.
+    exit code: 0
+    .gitignore unchanged across re-run: True
+    marker occurrence count: 2 (exactly one begin/end pair)
+
+Live transcript (as printed by the fixture script, same run this file documents):
+
+RED --governed (pre-fix script rejects the flag): exit=2 (expect 2) -- PASS
+RED plain run (pre-fix: unconditional *.py, no notice, no .gitignore): exit=0 default_only=True silent=True no_gitignore=True -- PASS
+GREEN --governed (custom patterns, real git repo dest): exit=0 patterns_landed=True notice_suppressed=True gitignore_landed=True repo_note_suppressed=True -- PASS
+GREEN default (no --governed, non-git dest): exit=0 default_only=True loud_notice_present=True gitignore_landed=True non_repo_note_present=True -- PASS
+GREEN idempotent re-run (--force): exit=0 gitignore_unchanged=True marker_pairs=1 (count=2) -- PASS
+
+All cases PASS; scratch dirs removed (zero residue).
+
+NOT covered by this suite (named honestly, not silently omitted): the pickup taxon-vs-governed
+cross-check WARNING is a PROPOSAL only (see proposals/scaffold-governed-set-language-default--
+pickup.tmpl.patch), not implemented — pickup.tmpl was merge-gated with concurrent holds at build
+time, per this item's own instructions. No fixture exists for it because there is no mechanism
+yet to fixture.

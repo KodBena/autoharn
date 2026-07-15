@@ -1,0 +1,23 @@
+{
+  "commission_id": "seen-red-d",
+  "date": "2026-07-09",
+  "ratifier": "test-fixture",
+  "executor": "Sonnet",
+  "scope": [
+    {
+      "item_id": "item-1",
+      "mandate": "Commit the deliverable.",
+      "witness_type": "commit",
+      "witness_hint": "this repo — the root commit, permanent by construction"
+    },
+    {
+      "item_id": "item-2",
+      "mandate": "Ship the file artifact.",
+      "witness_type": "file",
+      "witness_hint": "CLAUDE.md"
+    }
+  ],
+  "out_of_scope": [],
+  "constraints": [],
+  "escalation": []
+}

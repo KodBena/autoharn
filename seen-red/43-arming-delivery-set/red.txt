@@ -1,0 +1,5 @@
+# seen-red: arming-delivery-set (finding 43). A packet whose frozen delivery item directive.txt
+# was removed; the emitter REFUSES (exit 1) naming the item — never a silent partial delivery set.
+$ arm_e18.sh --delivery-set   # against a packet copy missing directive.txt
+  [!! ] DELIVERY SET REFUSED: frozen delivery item directive.txt is missing or empty in the packet
+exit=1

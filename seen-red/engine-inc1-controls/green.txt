@@ -1,0 +1,23 @@
+== parity ==
+# registry parity — judgment_registry.SPECS vs the live surface
+# surface=112 keys; covered=112; direction-1 RED=0; direction-2 RED=0; append-only RED=0
+# parity GREEN — every implementation registered, every row discharged, baseline intact
+== F49 negative control ==
+# negative control (a): drop ledger_acts.lp atoms from the surface -> direction-2 must fire
+  FIRED (8 rows RED-undischarged)
+# negative control (b): inject an unregistered close line -> direction-1 must fire
+  FIRED
+# negative-control PASS — both polarities caught
+== census ==
+# law-census — 120 static entries (JUDGMENT-RESIDUE=16, LAW-MECHANICAL=75, OBSERVATION=29), 13 explicit ruling classifications, 112 live acts.ruling rows, FINDINGS max=F53, apocrypha=0
+#   depth ordering (D16, binding): RULING > FIND > BRIEF-INV > ADR; gate-feeding needs RULING; FIND/BRIEF-INV/ADR all suffice for flag-only
+#   ratification: PROPOSED (maintainer slot open — the census classification is a scope ruling)
+# law-census COMPLETE
+== core-a ==
+# Core-A k-phase sweep (corpus-consistency; waiver-row evidence)
+  k=1                    -> UNSATISFIABLE
+  k=2                    -> SATISFIABLE
+  k=2 sod=1              -> UNSATISFIABLE
+  k=3 sod=1              -> SATISFIABLE
+  k=2 fin=1 orgs=1       -> UNSATISFIABLE
+  k=2 fin=1 orgs=2       -> SATISFIABLE

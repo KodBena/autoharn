@@ -1,0 +1,16 @@
+# banked GREEN-polarity witness -- run9 (the first s23-capable world), REAL data, read-only,
+# re-run after the capability-vs-corpus fix (2026-07-11). Before the fix this exact world got
+# NO_VERDICT exit 3 ('Missing/excluded: [tool_event]') and the maintainer stopped the run over
+# it; after the fix: capability-present (tool_event EMPTY, not EXCLUDED), VACUOUSLY_CLEAN,
+# exit 0. Observed output verbatim below.
+# contemporaneity audit -- target='run9' root=/home/bork/w/vdc/1/run9
+#   capabilities (family, capable, produced): [('stamp_invocation_column', True, True), ('s23_capable', True, True), ('invocation_journal', True, True), ('tool_event', True, False)]
+#   EMPTY (capable, zero events yet) tool_event: observer mechanism(s) ['change_gate', 'delegation_observer', 'mutation_observer'] are WIRED in this world's settings.json (mode not off) but no journal-worthy event has occurred yet -- capable, zero events so far; not an unwired era (the run9 false-refusal specimen, 2026-07-11)
+#   counts: {'row_tokened': 0, 'row_untokened': 0, 'invocation': 12, 'tool_event': 0}
+
+BURST TABLE (STATED -- rows per invocation token):
+SILENCE TABLE (tool activity, zero ledger rows, gap > threshold):
+PER-ROW DELTAS (row ts minus its own invocation's journaled wall-clock, ms):
+PRECEDING-ACTIVITY AGE (ms since the nearest earlier tool_event, per row):
+
+VACUOUSLY_CLEAN: 0 ledger rows -- nothing to audit yet. This world's recording apparatus is fully wired (s23 schema + invocation journaling + tool-event observers), so this is an honest empty corpus, NOT evidence of conduct and NOT a capability refusal. Re-run once the session has written ledger rows.

@@ -1,0 +1,17 @@
+seen-red/hook-payload-contract/check_contract.py -- captured RED, 2026-07-14
+
+Reproduction: with captured_pretooluse_bash.json's `tool_use_id` field deliberately removed
+(simulating a Claude Code contract regression -- the exact class this fixture exists to catch,
+per design/ORCH-RCA-PAIRING-KEY-DIVERGENCE.md sec-6.5/M3), check_contract.py fails loudly:
+
+  $ python3 seen-red/hook-payload-contract/check_contract.py
+  FAILURES (2):
+    !! PreToolUse: missing or empty 'tool_use_id'
+    !! tool_use_id diverges across legs: PreToolUse=None PostToolUse='toolu_01DYvJFmjLBLWQsVVGeER6ai' -- if this ever fires, the identity-elimination fix's own foundation (design/ORCH-RCA-PAIRING-KEY-DIVERGENCE.md sec-3) no longer holds
+  exit=1
+
+Restored (captured_pretooluse_bash.json reverted to its real, live-captured content) -> green:
+
+  $ python3 seen-red/hook-payload-contract/check_contract.py
+  OK -- both legs carry tool_use_id='toolu_01DYvJFmjLBLWQsVVGeER6ai', PostToolUse carries duration_ms=78. Hook-payload contract fixture intact.
+  exit=0

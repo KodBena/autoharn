@@ -1,0 +1,15 @@
+# s19 SEEN-RED — pre-fix set_actor on a NON-default-schema kernel (findings 16/37/45).
+# Captured from: python3 seen-red/s19-trigger-search-path/red-specimen.py  (exit 0, RED confirmed)
+# Deployment: schema=s19red, kern=s19red_kernel (NOT the literal `kernel` s15's set_actor hardcodes).
+# An actor-OMITTED insert by the subject role is REFUSED — s15's frozen set_actor reads the hardcoded
+# `kernel.principal_role`, absent on this kernel, so the write cannot resolve an actor.
+
+SET
+SET
+ERROR:  relation "kernel.principal_role" does not exist
+LINE 1: SELECT principal_id                FROM kernel.principal_rol...
+                                                ^
+QUERY:  SELECT principal_id                FROM kernel.principal_role WHERE db_role = current_user
+CONTEXT:  PL/pgSQL function set_actor() line 4 at SQL statement
+# RED CONFIRMED — the actor-omitted write was REFUSED (findings 16/37/45 reproduced); s19 forecloses this.
+# GREEN half: kernel/fixtures/s19_search_path_fixture.py (post-s19 the same write succeeds, actor -> 'author').

@@ -1,0 +1,79 @@
+seen-red/delegation-observer — banked RED evidence (both-polarity proof, fixture-census)
+
+Part 2, BACKLOG "Run-8 mid-run forensics" (2026-07-11), finding 3: "investigation is ungoverned."
+A live run-8 session spent 5m12s and 13 tool calls -- six Bash reads, a 100-second Explore
+subagent dispatch ("Find run7 phase-2 task spec", which recovered the spec by grepping the raw
+run-7 transcript), more reads -- between pickup's empty answer and the first `./led` call: ZERO
+ledger rows for any of it, and `kind='question'` count across the ENTIRE ledger, ALL runs, is 0.
+Permit-to-work gates the WRITING hand (hooks/pretooluse_change_gate.py); the INVESTIGATING hand,
+including a real subagent dispatch, had no observation point at all. Finding 3 named the fix
+site explicitly: "the subagent dispatch is a machine-observable tool event, so a permit/observer
+at PreToolUse(Task/Agent) IS mechanizable." `hooks/pretooluse_delegation_observer.py` is that
+mechanization -- queued in the same BACKLOG entry, now built.
+
+BEFORE this hook is WIRED into a world's `.claude/settings.json` (the state of every project
+scaffolded before this pass, and of any invocation with no deployment.json/GATE_SUBJECT_ROOT
+configured), a real Task/Agent dispatch produces ZERO signal: no journal line, no warning,
+nothing distinguishable from any other tool call. This IS the red, reproduced live below (the
+run-8 shape: a subagent dispatch with a real description+prompt, against an intentionally
+UNWIRED invocation of this exact hook):
+
+  echo '{"hook_event_name":"PreToolUse","tool_name":"Agent","tool_input":{"description":
+    "investigate the missing spec","prompt":"grep the raw run-7 transcript for phase 2"},
+    "session_id":"redcap-session","cwd":"/tmp/nonexistent-unwired-dir"}' \
+    | env -u GATE_SUBJECT_ROOT -u LEDGER_DEPLOYMENT python3 hooks/pretooluse_delegation_observer.py
+
+  exit: 0
+  stdout: (empty)
+  stderr: (empty)
+  -- no journal file written anywhere; the dispatch above is now indistinguishable, after the
+     fact, from a session that never delegated at all.
+
+GREEN / full five-named-case + one-bonus-cross-check + three-return-leg-case run (no-open-item
+warns AND journals, open-claimed is silent but STILL journals, a pre-s22 world journals but has
+nothing to warn against, mode="off" is genuinely zero-cost [no journal line at all], mode="enforce"
+downgrades loudly to "observe" rather than either silently no-op'ing or pretending an unsanctioned
+deny surface exists, a bonus end-to-end journal wire-format cross-check confirms every journaled
+line's session id and prompt sha256/excerpt are exactly right in order, and the return leg
+(REBUILT 2026-07-14, ledger row 582 / design/ORCH-RCA-PAIRING-KEY-DIVERGENCE.md sec-3/sec-6.6)
+journals `tool_use_id`+`duration_ms` verbatim from the payload with no derived pairing verdict,
+degrades honestly when the payload carries no `tool_use_id`, and correctly individuates two
+concurrent dispatches sharing byte-identical prompt text -- all asserted programmatically, live,
+against two real throwaway scratch schemas, setup+teardown included):
+
+  python3 seen-red/delegation-observer/run_fixtures.py
+
+WITNESSED 2026-07-14 (post-rebuild): `run_fixtures: all 5 dispatch-leg cases + 1 bonus
+cross-check + 3 return-leg cases (tool_use_id-keyed, no-identity fallback,
+concurrent-identical-prompt disambiguation) passed.`
+
+HARNESS-CONTRACT FACT, CHECKABLE NOT PROSE (M3-shaped fixture, same ledger row): a real captured
+PreToolUse+PostToolUse payload pair for the `Agent` tool, `seen-red/delegation-observer/
+agent_payload_capture/`, asserts `tool_use_id` is present and byte-identical across both legs of
+one Task/Agent dispatch (settling design/ORCH-RCA-PAIRING-KEY-DIVERGENCE.md's own §7 item 2
+residual, UNWITNESSED there for this specific leg) and that PostToolUse carries `duration_ms`
+directly:
+
+  python3 seen-red/delegation-observer/agent_payload_capture/check_contract.py
+
+WITNESSED 2026-07-14: `check_contract: OK -- tool_use_id='toolu_01PBsXs5ak3CmLhctEryx1Rs' present
+and byte-identical across PreToolUse and PostToolUse for Agent/Task; duration_ms=6184 present on
+PostToolUse.`
+
+ADDENDUM 2026-07-14 (work item `model-attribution-tracking`): the dispatch journal line now also
+carries `tool_input.model` (verbatim, `null` when absent -- the honest DECLARED-BY-DISPATCHER
+default, never guessed) and `tool_input.subagent_type` (verbatim) -- strictly additive to the
+EXISTING dispatch line, proven by two more fixture cases (j-model-declared, k-model-absent).
+WITNESSED 2026-07-14: `run_fixtures: all 5 dispatch-leg cases + 1 bonus cross-check + 3 return-leg
+cases (paired, unresolved, FIFO double-dispatch) + 2 model-attribution cases (declared, absent)
+passed.` (NOTE, honestly flagged rather than silently left: this file's own body above still
+describes only the original 5+1 dispatch-leg cases -- the return leg's own 3 cases, added under
+BACKLOG "small-follow-ups commission item 5", were never folded into this narrative either; a
+future pass should rewrite this file's body in full rather than accumulate addenda.)
+
+
+MERGE WITNESS 2026-07-14 (orchestrator, fb35d68 x fbc58d1 reconciliation -- identity-keyed
+observer union'd with model/subagent_type attribution; j/k re-run against the REBUILT hook):
+`run_fixtures: all 5 dispatch-leg cases + 1 bonus cross-check + 3 return-leg cases
+(tool_use_id-keyed, no-identity fallback, concurrent-identical-prompt disambiguation) + 2
+model-attribution cases (declared, absent) passed.`

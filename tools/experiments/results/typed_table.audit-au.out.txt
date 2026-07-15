@@ -1,0 +1,10 @@
+Table: the AU-family walk, 5 representative rows of 16 (design/ORCH-REGISTRY-COMPLETENESS-AUDIT-001.md)
+
+| AU control (ID and catalog title) | Posture in autoharn |
+| --- | --- |
+| AU-1 Policy and Procedures | ABSENT as a formal policy document; the ledger-and-witness doctrine in CLAUDE.md/ORCH-CAPABILITIES.md is the de-facto policy, unnamed as such. |
+| AU-3 Content of Audit Records | IMPLEMENTED for what is logged: ledger rows carry actor, timestamp, kind, statement, refs, stamp fields (kernel schema); the read-observer journals tool, path, session. |
+| AU-9 Protection of Audit Information | PARTIAL: strong against ordinary roles (append-only triggers + integrity gate; s26 SHA-256 row-hash chain; s27 truncation high-water witness) — a superuser/schema owner can still disable the triggers or drop the table. |
+| AU-11 Audit Record Retention | ABSENT-AND-NAMED: no backup/retention story for the Postgres instance. Git-tracked JSONL ledgers (attestations, journals) inherit git's retention; the database does not. |
+| AU-16 Cross-organizational Audit Logging | ABSENT-AND-UNNAMED (single-organization tool; unrecorded judgment, same caveat as PM/PS). |
+<!-- constructor-generated: tools/experiments/typed_table.py; declared type former = 'NIST SP 800-53 AU-family control (ID and catalog title)'; 5 row(s) type-checked at construction (forced articulation + empty-header refusal + column-count coherence); see design/ORCH-TYPED-TABLE-EXPERIMENT.md -->

@@ -1,0 +1,17 @@
+{
+  "commission_id": "seen-red-d",
+  "verdicts": [
+    {
+      "item_id": "item-1",
+      "verdict": "WITNESSED",
+      "witness": "0e8001fefe2f1fd58cbc24c3668562beafb537d8"
+    },
+    {
+      "item_id": "item-2",
+      "verdict": "WITNESSED",
+      "witness": "CLAUDE.md"
+    }
+  ],
+  "extras": [],
+  "renegotiations": []
+}

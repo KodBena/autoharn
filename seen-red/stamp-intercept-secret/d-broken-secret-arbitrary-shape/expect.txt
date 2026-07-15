@@ -1,0 +1,3 @@
++STAMP_SECRET is configured
++missing, unreadable, or empty
++"permissionDecision": "deny"

@@ -1,0 +1,13 @@
+--- CH:tools/persist_claude_ephemera.py@87e1bcc3e03b
++++ autoharn/filing/persist_claude_ephemera.py
+@@ -28,8 +28,8 @@
+ is live/growing and enormous; pass --include-session-transcript to snapshot it too.
+ 
+ Usage:
+-    python tools/persist_claude_ephemera.py --session <SESSION_ID> \
+-        --dest experiments/fact-mining/docs/recidivism-study/raw-ephemera
++    python filing/persist_claude_ephemera.py --session <SESSION_ID> \
++        --dest ephemera/session-<SESSION_ID>
+ """
+ from __future__ import annotations
+ 

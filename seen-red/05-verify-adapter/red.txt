@@ -1,0 +1,4 @@
+verify-adapter oracle comparison: adapter output vs pre-registered oracle -> DIVERGE (RED)
+  row 11: got ('main', 'tool_call', 'Read', '/fenced/report_lint.py') expected ('sub:general-purpose', 'tool_call', 'Read', '/fenced/report_lint.py')
+  row 12: got ('main', 'tool_result', 'Read', '/fenced/report_lint.py') expected ('sub:general-purpose', 'tool_result', 'Read', '/fenced/report_lint.py')
+# ADAPTER RED — a mis-attributed/mis-recognized act flips the verifier; the finding-5/17/23 class (unchecked manifest family, unrecognized delegation, attribution defeat) is caught.

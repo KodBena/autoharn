@@ -1,0 +1,2 @@
++SUBJECT_ROOT is configured as '/nonexistent-seenred-fixture-root'
++"permissionDecision": "deny"

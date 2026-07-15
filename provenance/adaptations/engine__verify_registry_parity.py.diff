@@ -1,0 +1,100 @@
+--- CH:experiments/fact-mining/verify_registry_parity.py@87e1bcc3e03b
++++ autoharn/engine/verify_registry_parity.py
+@@ -42,20 +42,31 @@
+ import re
+ import sys
+ 
+-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+-sys.path.insert(0, os.path.expanduser("~/w/vdc/1/epistemic-operator/instruments"))
+-
+-import close_manifest  # noqa: E402  (cross-repo import IS the anti-hand-sync move)
++HERE = os.path.dirname(os.path.abspath(__file__))
++REPO_ROOT = os.path.dirname(HERE)   # autoharn root
++sys.path.insert(0, HERE)
++sys.path.insert(0, os.path.join(REPO_ROOT, "instruments"))   # autoharn: repo-local instruments/ (was the cross-repo reach)
++
++import close_manifest  # noqa: E402  (autoharn: repo-local; parity verifies THIS home's surface)
+ from judgment_registry import DECLARED_EXCLUSIONS, IMPL_INDEX, SPECS  # noqa: E402
+ 
+-HERE = os.path.dirname(os.path.abspath(__file__))
+-INSTR = os.path.expanduser("~/w/vdc/1/epistemic-operator/instruments")
++INSTR = os.path.join(REPO_ROOT, "instruments")
+ DDL_FILES = [
+-    os.path.expanduser("~/w/vdc/1/epistemic-operator/harness/e15-build/s15-schema.sql"),
+-    os.path.expanduser("~/w/vdc/1/epistemic-operator/harness/e17-build/s17-stamp-mechanism.sql"),
+-    os.path.expanduser("~/w/vdc/1/epistemic-operator/harness/e17-build/s17-independence-vocabulary.sql"),
++    os.path.join(REPO_ROOT, "kernel", "lineage", "s15-schema.sql"),
++    os.path.join(REPO_ROOT, "kernel", "lineage", "s17-stamp-mechanism.sql"),
++    os.path.join(REPO_ROOT, "kernel", "lineage", "s17-independence-vocabulary.sql"),
+ ]
+ BASELINE = os.path.join(HERE, "registry_baseline.json")
++
++# The judgment_registry SPECS carry APPEND-ONLY tool identifiers baked into each row's content_hash
++# (D2); they name the OLD-repo paths and MUST NOT change (a hash edit is forbidden). autoharn dissolves
++# the cross-repo reach (C18) by TRANSLATING those historical identifiers to their autoharn locations for
++# the existence check — the spec identifier is immutable, the resolution adapts.
++_TOOL_TRANSLATE = {
++    "claude_harness/tools/findings_gate.py": "gates/findings_gate.py",
++    "claude_harness/experiments/fact-mining/row_performed_by.py": "instruments/row_performed_by.py",
++    "claude_harness/experiments/fact-mining/ledger_differential.py": "engine/ledger_differential.py",
++}
+ 
+ _SHOW_RE = re.compile(r"^\s*#show\s+([a-z_][A-Za-z0-9_]*/\d+)\s*\.", re.M)
+ _TRIGGER_RE = re.compile(r"^CREATE (?:CONSTRAINT )?TRIGGER\s+(\w+)", re.M)
+@@ -77,9 +88,23 @@
+     return {f"close:{ln}" for ln in lines}
+ 
+ 
++LP_DIR = os.path.join(HERE, "lp")   # autoharn: the engine ASP programs live in engine/lp/ (LAYOUT split)
++# [C16]: these 4 fact-mining verifiers now live in instruments/. They are seen-red FIXTURES (findings
++# 39/25/09/28), not registered close-instruments, so they are excluded from the instrument enumeration
++# (in the old topology they lived in fact-mining and were never enumerated — the split surfaced them).
++_RELOCATED_VERIFIERS = {"row_performed_by.py", "verify_binder.py",
++                        "verify_operator_turns.py", "verify_relevant_act.py"}
++# The NLP kb-logic-layer / why-orphan judgment classes' .lp implementations stayed in the fact-mining
++# ATTIC (mandate §4). Their registry rows (append-only, judgment_registry verbatim) legitimately have no
++# implementation in autoharn; parity excludes them here rather than by editing the frozen registry.
++_ATTIC_LP = {"logic_layer.lp", "logic_repair.lp", "why_layer.lp"}
++
++
+ def enumerate_instruments() -> set[str]:
+     keys: set[str] = set()
+     for f in sorted(os.listdir(INSTR)):
++        if f in _RELOCATED_VERIFIERS:
++            continue
+         if f.endswith(".py"):
+             keys.add(f"instrument:{f}")
+         elif f.endswith(".sh"):
+@@ -92,10 +117,12 @@
+ 
+ def enumerate_lp_atoms(skip_file: str | None = None) -> set[str]:
+     keys: set[str] = set()
+-    for f in sorted(os.listdir(HERE)):
++    if not os.path.isdir(LP_DIR):
++        return keys
++    for f in sorted(os.listdir(LP_DIR)):
+         if not f.endswith(".lp") or f == skip_file:
+             continue
+-        atoms = _SHOW_RE.findall(open(os.path.join(HERE, f), encoding="utf-8").read())
++        atoms = _SHOW_RE.findall(open(os.path.join(LP_DIR, f), encoding="utf-8").read())
+         keys |= {f"lp:{f}#{a}" for a in atoms}  # zero-#show files emit no judgment outputs
+     return keys
+ 
+@@ -125,12 +152,14 @@
+     d2 = []
+     excl_by_id = {s.judgment_id: s.exclusion for s in SPECS}
+     for k in sorted(enumerable):
++        if k.startswith("lp:") and any(k.startswith(f"lp:{a}") for a in _ATTIC_LP):
++            continue   # implementation stayed in the fact-mining attic (mandate §4)
+         if k not in surface and not excl_by_id.get(IMPL_INDEX[k]):
+             d2.append(k)
+-    for k in sorted(set(IMPL_INDEX) - enumerable):  # tool: keys — repo-relative from ~/w/vdc/1
++    for k in sorted(set(IMPL_INDEX) - enumerable):  # tool: keys — resolved repo-locally in autoharn
+         path = k.split(":", 1)[1]
+-        roots = (os.path.expanduser("~/w/vdc/1"),
+-                 os.path.expanduser("~/w/vdc/1/epistemic-operator"))  # bare instruments/ paths
++        path = _TOOL_TRANSLATE.get(path, path)   # translate historical old-repo identifiers -> autoharn (C18)
++        roots = (REPO_ROOT,)                     # autoharn only — no cross-repo archive reach
+         if not any(os.path.exists(os.path.join(r, path)) for r in roots):
+             if not excl_by_id.get(IMPL_INDEX[k]):
+                 d2.append(k)

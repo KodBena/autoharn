@@ -1,0 +1,30 @@
+== scaffolding throwaway --new-world s27fxprobe (4 rows; s27 applied automatically) ==
+=== a-intact-witness-agrees ===
+  [ok] verify-chain: INTACT -- 4 row(s) walked, head id=4 hash=6a2d26e30610a6e8dd67504d117a29535a1c44cbd48cf4cbfd84bd19ad3d4386
+verify-chain: TAIL-COVERAGE-CONFIRMED -- witness max_id=4 agrees with walked max_id=4 (secondary corroboration: ledger_id_seq.last_value=4, explain-not-fail -- nextval() is non-transactional and does not roll back on an aborted insert, so this figure alone would false-positive on any world that ever rolled back a write)
+
+=== f-rollback-does-not-bump ===
+  [ok] witness before='4' after-rolled-back-insert='4' (expect unchanged at 4 -- a rolled-back insert must not advance the witness, the entire reason this delta's shape is a same-transaction trigger rather than a bare sequence comparison)
+
+=== d-role-cannot-lower-witness ===
+  [ok] exit=1 stderr='ERROR:  permission denied for table chain_high_water'
+
+=== e-role-cannot-delete-witness ===
+  [ok] exit=1 stderr='ERROR:  permission denied for table chain_high_water'
+
+=== b-tail-deletion-suspect ===
+  [ok] deleted tail id=4: verify-chain: INTACT -- 3 row(s) walked, head id=3 hash=54cf300b001290ba0ccc6781961615d9906fbd135c8a0310749b09ee9099fa1d
+verify-chain: TAIL-DELETION-SUSPECT -- witness max_id=4 is AHEAD of the walked max_id=3 (1 row(s) missing from the tail; the row_hash chain alone cannot see this -- s27's own witness is what caught it) (secondary corroboration: ledger_id_seq.last_value=5, explain-not-fail -- nextval() is non-transactional and does not roll back on an aborted insert, so this figure alone would false-positive on any world that ever rolled back a write)
+
+=== c-head-refuses-on-suspect ===
+  [ok] exit=1 stdout='' stderr_excerpt="verify-chain --head: REFUSED -- tail-deletion witness reports TAIL-DELETION-SUSPECT ({'witness_max_id': 4, 'walked_max_id': 3, 'missing_count': 1}); signing a h"
+
+== applying s15..s26 (NOT s27) to s27fxpre27 ==
+=== g-pre-s27-degrades-honestly ===
+  [ok] verify-chain: INTACT -- 1 row(s) walked, head id=1 hash=8e60213f6c8280ffe719b4c379de772ae6bcb9627d41bfab37ad2313a516ed33
+verify-chain: tail-deletion witness UNAVAILABLE -- pre-s27 kernel -- no chain_high_water witness in s27fxpre27_kernel (kernel/lineage/s27-chain-high-water.sql not applied here); tail-deletion coverage cannot be claimed for this world
+
+=== h-differential-agree ===
+  [ok] diff_ok=True
+
+ALL CASES OK -- s27 chain-high-water witness both-polarity proof (intact+agrees / rollback-does-not-bump / role-cannot-lower / role-cannot-delete / tail-deletion-suspect / head-refuses-on-suspect / pre-s27-degrades-honestly / differential-agree), zero residue.

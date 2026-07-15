@@ -1,0 +1,9 @@
+# review-gap-audit marriage differential -- ASP (engine/lp/review_gap_audit.lp) vs SQL floor (engine/review_gap_floor.py)
+#   target='cfraudg'
+#   closed verdict vocabulary: ['AGREE', 'DIVERGE_BY_DESIGN', 'DIVERGE_DEFECT', 'QUARANTINED']; RED = ['DIVERGE_DEFECT', 'QUARANTINED']
+
+  [OK ] cfraudg      AGREE              asp=1 sql=1 atoms; Δasp=[] Δsql=[]
+
+# retained: /home/bork/w/vdc/1/autoharn/.claude/worktrees/agent-af95fb516b53cf48d/engine/docs/ledger-marriage/derivations/review-gap-audit/cfraudg/20260712T080403Z_d34cd218a1c3
+
+# DIFFERENTIAL GREEN -- SQL floor bit-identical to the ASP verdict program

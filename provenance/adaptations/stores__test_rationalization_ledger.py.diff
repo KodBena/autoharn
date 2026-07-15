@@ -1,0 +1,13 @@
+--- CH:experiments/fact-mining/test_rationalization_ledger.py@87e1bcc3e03b
++++ autoharn/stores/test_rationalization_ledger.py
+@@ -24,8 +24,8 @@
+ 
+ import pytest
+ 
+-REPO_ROOT = Path(__file__).resolve().parents[2]
+-SCRIPT = REPO_ROOT / "tools" / "file_rationalization.py"
++REPO_ROOT = Path(__file__).resolve().parents[1]   # autoharn: stores/<this> -> repo root (was parents[2] in fact-mining)
++SCRIPT = REPO_ROOT / "filing" / "file_rationalization.py"   # autoharn: filing/ (was tools/)
+ PGHOST = os.environ.get("HARNESS_PGHOST", os.environ.get("EPISTEMIC_PGHOST", "192.168.122.1"))
+ DB = "harness"
+ SCRATCH = "rat_test_scratch"

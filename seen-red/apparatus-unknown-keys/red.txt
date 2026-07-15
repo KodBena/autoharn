@@ -1,0 +1,16 @@
+=== banked RED specimen: gates/apparatus_unknown_keys.py against a typo'd mechanism key ===
+$ python3 gates/apparatus_unknown_keys.py /tmp/apparatus-unknown-keys-redbank
+apparatus_unknown_keys: known mechanism set (11, derived from hooks/*.py): ['bash_completion', 'change_gate', 'clean_exit', 'delegation_observer', 'demurral_detect', 'doc_legibility_critic', 'doc_shapes_gate', 'mutation_observer', 'permit_to_work', 'read_observer', 'stamp_intercept']
+apparatus_unknown_keys (gate mode): 1 target(s) with unrecognized mechanism key(s):
+  [apparatus] WARNING: unrecognized mechanism name(s) ['doc_shapse_gate'] in /tmp/apparatus-unknown-keys-redbank/.claude/apparatus.json -- no hook in this project reads any of these keys, so whatever is configured under them (mode, cost_note, or anything else) has NO EFFECT, silently. The known mechanism set (derived live from hooks/*.py, never hand-maintained) is ['bash_completion', 'change_gate', 'clean_exit', 'delegation_observer', 'demurral_detect', 'doc_legibility_critic', 'doc_shapes_gate', 'mutation_observer', 'permit_to_work', 'read_observer', 'stamp_intercept']. Likely a typo of one of those names -- fix the key and re-run; an unrecognized key is never treated as widening any permission, but it is also never treated as configuring anything, which is exactly the fail-open this check exists to end.
+exit code: 1
+
+=== companion: unresolvable target polarity (usage error, distinct from a bad key) ===
+$ python3 gates/apparatus_unknown_keys.py /tmp/does-not-exist-anywhere
+apparatus_unknown_keys (gate mode): 1 target(s) could not be resolved:
+  /tmp/does-not-exist-anywhere: no apparatus.json found (checked as a direct file path and as <dir>/.claude/apparatus.json)
+exit code: 2
+
+=== both captured live during this repository's own commission, 2026-07-12; reproduced by
+=== seen-red/apparatus-unknown-keys/run_fixtures.py cases c-gate-unknown-key and
+=== d-gate-unresolvable, re-run at any time to regenerate ===

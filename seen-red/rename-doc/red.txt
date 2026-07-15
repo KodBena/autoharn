@@ -1,0 +1,15 @@
+seen-red/rename-doc — both-polarity proof, banked 2026-07-12 (doc-audience-taxonomy work item)
+Live run of seen-red/rename-doc/red-specimen.py:
+
+PASS: GREEN (clean rename, corpus relinked, gate clean)
+PASS: RED (deliberately-missed reference caught by link_integrity)
+
+The RED case's actual link_integrity.py output (captured separately for the record):
+link-integrity: 2 docs in scope (2 tracked *.md, 0 excluded), 1 relative link(s) checked.
+  excluded (principled, see gates/link_integrity.py docstring):
+    judgment/**            — declared history (OPERATING-CARD.md)
+    design/ARCHITECTURE.md — self-declared STALE; rewrite filed in BACKLOG.md
+
+link-integrity: 1 broken link(s) — target does not exist on disk:
+
+  !! REFERRER.md:3  design/OLD-DOC.md

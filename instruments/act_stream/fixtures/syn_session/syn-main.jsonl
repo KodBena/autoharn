@@ -1,0 +1,11 @@
+{"type":"user","uuid":"u1","timestamp":"2026-07-06T10:00:00.000Z","message":{"role":"user","content":[{"type":"text","text":"build the thing"}]}}
+{"type":"assistant","uuid":"a1","timestamp":"2026-07-06T10:00:01.000Z","message":{"role":"assistant","usage":{"input_tokens":1200,"output_tokens":40},"content":[{"type":"thinking","thinking":"the user wants X; I should Y"}]}}
+{"type":"assistant","uuid":"a2","timestamp":"2026-07-06T10:00:02.000Z","message":{"role":"assistant","usage":{"input_tokens":1210,"output_tokens":8},"content":[{"type":"text","text":"On it."}]}}
+{"type":"assistant","uuid":"a3","timestamp":"2026-07-06T10:00:03.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"tu1","name":"Bash","input":{"command":"ls","description":"list"}}]}}
+{"type":"user","uuid":"u2","timestamp":"2026-07-06T10:00:04.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"tu1","content":"a\nb"}]}}
+{"type":"assistant","uuid":"a4","timestamp":"2026-07-06T10:00:05.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"tu2","name":"Write","input":{"file_path":"/fenced/report_lint.py","content":"# lint"}}]}}
+{"type":"user","uuid":"u3","timestamp":"2026-07-06T10:00:06.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"tu2","content":"ok"}]}}
+{"type":"assistant","uuid":"a5","timestamp":"2026-07-06T10:00:07.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"tu3","name":"TodoWrite","input":{"todos":[{"content":"parse header","status":"pending"},{"content":"validate sections","status":"in_progress"}]}}]}}
+{"type":"assistant","uuid":"a6","timestamp":"2026-07-06T10:00:08.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"tu4","name":"Task","input":{"subagent_type":"general-purpose","description":"sub check","prompt":"check it"}}]}}
+{"type":"user","uuid":"u4","timestamp":"2026-07-06T10:00:09.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"tu4","content":"sub done"}]}}
+{"type":"assistant","uuid":"a7","timestamp":"2026-07-06T10:00:10.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"tu5","name":"TodoWrite","input":{"todos":[{"content":"parse header","status":"completed"},{"content":"validate sections","status":"in_progress"}]}}]}}

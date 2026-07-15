@@ -1,0 +1,3 @@
+delivery_freight_integrity: RED
+  2 of 2 delivery row(s) FAIL freight-integrity: ['ruling 26: NO earlier binding freight row byte-matches it (freight-less delivery filing)', 'ruling 27: earlier binding freight 25 sha-matches but verbatim DIFFERS (byte-mismatch — delivered text is not the frozen freight)']
+# delivery-freight-integrity SEEN-RED — a freight-less delivery and a verbatim-DIFFERS (forged-sha) delivery each turn the line RED, naming the ruling ids (finding 35 stage 1).

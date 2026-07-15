@@ -1,0 +1,2 @@
+UNGUARDED APPEND-ONLY TABLE: ao_redspec.review_detail: append-only guard missing (update=False delete=False)
+# append-only-integrity FAIL — 1 audit-spine table(s) lack their append-only guard. The ledger's tamper-evidence is not intact.

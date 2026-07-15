@@ -1,0 +1,126 @@
+seen-red/stop-clean-exit — banked RED evidence (both-polarity proof, fixture-census)
+
+BACKLOG "Run-5 forensics" family (2026-07-10): run 5 handed off with two open review_gap rows
+and one never-closed work item, despite CLAUDE.md's own point 5 ("Done means ./led review-gap,
+question-status, and ./led work violations are all clean") -- ADVICE inside a context window
+drifts under load. hooks/stop_clean_exit.py mechanizes point 5 as a Claude Code Stop hook.
+
+BEFORE this hook exists, no mechanism refuses a Stop with open governance debt -- a Stop event
+just ends the turn, silently, with review_gap/question_status/work_item_current/
+work_item_violations however dirty they are. This IS the red: an unmechanized "done means
+clean" is exactly the run-5 shape, reproduced live below against a real throwaway probe world
+(bootstrap/new-project.sh --new-world stopprobe --db toy --host 192.168.122.1, torn down after).
+
+RED (real output, 2026-07-10) — an open, unclaimed work item (`./led work open probe-item-1
+"..."`, never claimed or closed) against the freshly-scaffolded, otherwise-clean probe world:
+
+  echo '{"cwd":"/home/bork/w/vdc/1/.stopprobe"}' \
+    | env LEDGER_HOST=192.168.122.1 LEDGER_DB=toy GATE_LEDGER=stopprobe.ledger \
+          GATE_SUBJECT_ROOT=/home/bork/w/vdc/1/.stopprobe \
+      python3 hooks/stop_clean_exit.py
+  exit: 2
+  stdout: {"decision": "block", "reason": "Ledger policy (clean-exit gate, hooks/stop_clean_exit.py):
+    this world's ledger shows unfinished governance state -- the turn cannot end until it is clean
+    (CLAUDE.md point 5: \"Done means ./led review-gap, question-status, and ./led work violations
+    are all clean.\"). ... OPEN WORK ITEMS (stopprobe.work_item_current, state=open) -- 1 item(s):
+      - work item 'probe-item-1' is open and UNCLAIMED ->
+          ./led work claim probe-item-1   (then ./led work close probe-item-1 <resolution>
+          [--witness <ref>]) ..."}
+
+GREEN / full four-case run (clean-world allow, unwired allow-untouched, dirty-world block,
+circuit-breaker third-repeat allow-with-loud-warning — all asserted programmatically, live,
+against the same throwaway probe world, setup+teardown included):
+
+  python3 seen-red/stop-clean-exit/run_fixtures.py
+
+WITNESSED 2026-07-10: `run_fixtures: all cases passed (4 named + 2 inline sanity checks).`
+
+---
+
+STOP-DISPOSITION WARNING (Part 1, BACKLOG "Run-8 mid-run forensics", 2026-07-11): preamble
+point 8 ("stopping is a ledgered act") is mechanized as an ADDITIONAL, non-blocking check on
+this same hook -- a `decision` row beginning `stopping:`, stamped to the stopping session,
+should exist before the turn ends. RED, BEFORE this pass (real output, 2026-07-11): the
+PRE-PATCH hook (git rev 4e21fae, `hooks/stop_clean_exit.py`), run against a FRESHLY-scaffolded,
+otherwise-clean probe world (same `--new-world stopprobe` setup as above) with a session that
+never wrote a `stopping:` row, produces ZERO output and exit 0 -- indistinguishable from a
+session that DID leave a clean disposition trail. This is the run-8 gap named live: a stop can
+be silently "clean" by the OLD debt-only definition while the disposition obligation itself
+went unrecorded -- exactly the "vacuously green Stop" corollary the BACKLOG entry names.
+
+  cat seen-red/stop-clean-exit/e-stop-disposition-warn/stdin.json \
+    | env LEDGER_HOST=192.168.122.1 LEDGER_DB=toy GATE_LEDGER=stopprobe.ledger \
+          GATE_SUBJECT_ROOT=/home/bork/w/vdc/1/.stopprobe \
+          STOP_CLEAN_EXIT_STATE=/home/bork/w/vdc/1/.stopprobe/.claude/stop_clean_exit_state.json \
+      python3 <pre-patch hooks/stop_clean_exit.py, git rev 4e21fae>
+  exit: 0
+  stdout: (empty)
+  stderr: (empty)
+
+GREEN / both-polarity, POST-patch (real output, 2026-07-11, same probe world, setup+teardown
+included, torn down zero-residue both before and after):
+
+  python3 seen-red/stop-clean-exit/run_fixtures.py
+
+WITNESSED 2026-07-11: `run_fixtures: all cases passed (6 named + 2 inline sanity checks).`
+Case `e-stop-disposition-warn` (session never stamped a `stopping:` row): exit 0, stderr carries
+`STOP-DISPOSITION WARNING ... no \`decision\` row beginning 'stopping:' is stamped to this
+session ... ./led decision "stopping: ...`. Case `f-stop-disposition-silent` (a REAL stamped
+`stopping:` row exists for that session, via a genuine HMAC-stamped write -- not a raw unstamped
+INSERT): exit 0, stdout AND stderr both empty -- silent, exactly like the pre-existing
+`b-clean-world` case. The four ORIGINAL debt-focused cases (a/b/c/d) and the post-cleanup bonus
+check were re-verified unaffected by this addition (a stamped baseline `stopping:` row is seeded
+for their shared `seenred` session in step 2.5, so they test debt collection in isolation from
+the new, orthogonal disposition check).
+
+
+---
+
+BREAKER TRANSITION (2026-07-14, `stop-breaker-progress-reset-defect` / `stop-breaker-state-type-guard`):
+diagnosed from ent's own stop_clean_exit journal, 16:01-16:32 -- a wide decomposition (many
+parallel open work items) paid two fresh Stop blocks per unit of progress, because closing ONE
+item changed the debt fingerprint and the naive rule ("any fingerprint change resets the breaker
+to 1") reset the count even though the remaining debt was strictly smaller than before.
+
+RED, BEFORE this pass (real output, 2026-07-14, git rev fbda75e -- pre-patch `hooks/stop_clean_exit.py`,
+via `git stash`, run against a throwaway probe world with two open work items):
+
+  # open probe-item-2b + probe-item-3, both unclaimed -> call #1
+  exit: 2, "...has now been seen 1/3 times at stop)..."
+  # close probe-item-2b (progress -- probe-item-3 alone is a STRICT SUBSET of the prior debt) -> call #2
+  exit: 2, "...has now been seen 1/3 times at stop)..."   <- RESET, not inherited (the bug)
+
+A second RED, the same session (a hand-corrupted state file, `count: "two"`, matching debt_hash):
+
+  Traceback (most recent call last):
+    File ".../hooks/stop_clean_exit.py", line 624, in <module>
+      sys.exit(main())
+    File ".../hooks/stop_clean_exit.py", line 593, in main
+      count = (st.get("count", 0) + 1) if st.get("debt_hash") == debt_hash else 1
+  TypeError: can only concatenate str (not "int") to str
+  exit: 1
+
+A third RED, found IN PASSING while running this pass's own hack-rationalization audit (same
+defect class, one container-level up -- the state file's TOP LEVEL, not just a field, wrong-typed):
+a state file containing the bare JSON value `42` (syntactically valid, not an object) made
+`_load_state()` return a non-dict, and the un-guarded `st.get(...)` call inside what would become
+`_breaker_transition()` raised an uncaught `AttributeError` the same way. Fixed in the same pass
+(`_load_state()` now validates `isinstance(data, dict)`), not filed separately, per the
+hazard-in-reach-of-the-work duty.
+
+GREEN / both-polarity, POST-patch (real output, 2026-07-14, same probe-world pattern, setup +
+teardown included, torn down zero-residue both before and after):
+
+  python3 seen-red/stop-clean-exit/run_fixtures.py
+
+WITNESSED 2026-07-14: `run_fixtures: all cases passed (10 named + 4 inline sanity checks -- 6
+original + 4 breaker-transition named cases, 2 original + 2 breaker-transition inline/bonus
+checks).` New named cases: `g-subset-progress-block-1` (two items open, blocks at 1/3),
+`h-subset-progress-block-2` (one item closed -- a strict subset survives -- blocks at 2/3,
+INHERITED, not reset: the fix's whole point), `i-added-entry-resets-block` (a genuinely NEW item
+opened alongside the survivor -- NOT a subset -- resets to 1/3, proving the fix narrows the reset
+condition rather than removing it), `j-corrupted-state-degrades-safely` (the same debt, a
+hand-corrupted `entries: null, count: "two"` state file in place -- still blocks cleanly, exit 2,
+no traceback). Two inline/bonus checks: a top-level-non-dict state file (`42`) also degrades
+safely (exit 2, no traceback, count resets to 1 as a fresh signature), and a final cleanup
+verifies a clean allow with the state file cleared.

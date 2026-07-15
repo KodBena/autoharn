@@ -1,0 +1,88 @@
+seen-red/outcome-intake-validation — banked both-polarity evidence (fixture-census)
+
+Work item `model-attribution-tracking` (maintainer ask 2026-07-12 ~noon, verbatim in substance):
+"track which MODEL executed each dispatched task and what misses it produced, to answer 'what are
+the observed capabilities of the models, across tasks?'". Design captured at asking names three
+legs: (1) the delegation-observer journals tool_input.model/subagent_type on dispatch (proven
+live in seen-red/delegation-observer's own j-model-declared/k-model-absent cases, not repeated
+here); (2) a typed `outcome:` intake grammar, written by the orchestrator at each seam close
+(THIS fixture); (3) a retrospective-recipe read surface grouping outcomes by model
+(design/USER-RETROSPECTIVE-RECIPE.md §7, deliberately NOT a live `./pickup` section -- see below).
+
+THE FEATURE, proven live below:
+
+  - bootstrap/templates/led.tmpl now validates an `outcome:` statement (whitespace-normalized
+    copy: every run of \n/\r plus following indentation collapsed to one space) against
+    design/USER-RETROSPECTIVE-RECIPE.md §7's "The `outcome:` statement grammar" section BEFORE
+    the INSERT -- exactly five `|`-separated fields (TASK-SLUG, MODEL, SEAM-VERDICT,
+    DEFECTS-FOUND-AT-SEAM, NOTES), each with its own shape check: TASK-SLUG matches
+    `^[a-z0-9][a-z0-9-]*$` (the same rule `estimate:`/`actual:`/`taxon:` already use); MODEL
+    matches `^[a-zA-Z0-9][a-zA-Z0-9._-]*$` (a bare identifier, no spaces, so a future grouping-
+    by-model read is an honest exact-string match); SEAM-VERDICT/DEFECTS-FOUND-AT-SEAM/NOTES are
+    each non-empty free text. On failure: REFUSED, exit nonzero, NOTHING written (atomicity by
+    refusal-before-write, ADR-0002), teach-text naming the grammar and the specific field that
+    failed. On success: the statement is INSERTed AS TYPED, byte-exact (never the normalized
+    copy).
+  - UNLIKE `estimate:`/`actual:`/`taxon:`, `outcome:` deliberately has NO `./pickup` display
+    section -- Section 7's own "consumption surface" states this is RETROSPECTIVE-ONLY, per the
+    standing never-police invariant (the same invariant §6 states twice for `estimate:`/
+    `actual:`): grouping outcomes by model is a retrospective's own read (documented method,
+    §7's "read surface" subsection), never a live ranking display. This fixture therefore proves
+    the accepted row is readable straight off `ledger_current` (the same view every `pickup.tmpl`
+    reader already queries) instead of proving a pickup section renders it.
+  - COHERENCE: the grammar's ONE documented home is design/USER-RETROSPECTIVE-RECIPE.md §7,
+    which led.tmpl's validator cites in its own comments rather than restating the grammar a
+    second time (ADR-0012 P1).
+
+WHAT THE FIXTURE PROVES, IN ORDER (seen-red/outcome-intake-validation/run_fixtures.py, live run
+against a throwaway scratch deployment oivfixture/oivfixture_kernel/oivfixture_rw via
+bootstrap/track-work.sh, toy@192.168.122.1, torn down after):
+
+  1. RED -- a 3-field `outcome:` statement (missing DEFECTS-FOUND-AT-SEAM/NOTES) is REFUSED:
+     `led decision` exits nonzero, ledger row count witnessed UNCHANGED before vs. after (0 -> 0).
+  2. RED -- a 5-field statement with an illegal TASK-SLUG (`Model Attribution`, uppercase + space)
+     is likewise REFUSED, row count unchanged.
+  3. RED -- a 5-field statement with an illegal MODEL (`claude sonnet`, contains a space) is
+     REFUSED, row count unchanged.
+  4. RED -- a 5-field statement with an empty SEAM-VERDICT (whitespace only) is REFUSED, row
+     count unchanged.
+  5. RED -- a 5-field statement with an empty DEFECTS-FOUND-AT-SEAM (whitespace only) is REFUSED,
+     row count unchanged.
+  6. RED -- a 5-field statement with an empty NOTES (whitespace only) is REFUSED, row count
+     unchanged.
+  7. GREEN -- a well-formed statement is ACCEPTED (row count grows by one) and the STORED
+     statement is byte-exact against what was typed.
+  8. GREEN -- a statement with an embedded newline + indentation (a terminal line-wrap specimen,
+     the same shape run12's `resource:` incident reproduced) is ACCEPTED after whitespace
+     normalization, and the stored row preserves the embedded newline VERBATIM (normalization is
+     validation-only scratch, never persisted).
+  9. GREEN -- a THIRD declaration with LEADING WHITESPACE before the `outcome:` prefix is
+     ACCEPTED by led.
+  10. GREEN -- the accepted well-formed outcome row is readable straight off `ledger_current`
+      (the field values, e.g. `DELIVERED`, appear verbatim), proving the row is genuinely
+      consumable by a future retrospective read, not merely stored.
+
+WITNESSED TRANSCRIPT (2026-07-14, live run, autoharn worktree wf_7006023a-457-6):
+
+  ADOPT: track-work.sh exit=0 deployment.json=True -- PASS
+  RED-MALFORMED-FIELDCOUNT: exit=1 refused=True row-count before=0 after=0 (unchanged=True) -- PASS
+  RED-MALFORMED-SLUG: exit=1 refused=True row-count before=0 after=0 (unchanged=True) -- PASS
+  RED-MALFORMED-MODEL: exit=1 refused=True row-count before=0 after=0 (unchanged=True) -- PASS
+  RED-MALFORMED-VERDICT: exit=1 refused=True row-count before=0 after=0 (unchanged=True) -- PASS
+  RED-MALFORMED-DEFECTS: exit=1 refused=True row-count before=0 after=0 (unchanged=True) -- PASS
+  RED-MALFORMED-NOTES: exit=1 refused=True row-count before=0 after=0 (unchanged=True) -- PASS
+  GREEN-WELL-FORMED: exit=0 accepted=True row-count before=0 after=1 (grew-by-one=True) -- PASS
+  GREEN-WELL-FORMED: stored statement is byte-exact -- PASS
+  GREEN-EMBEDDED-NEWLINE: exit=0 accepted=True row-count before=1 after=2 (grew-by-one=True) -- PASS
+  GREEN-EMBEDDED-NEWLINE: stored statement is byte-exact (embedded newline preserved) -- PASS
+  GREEN-LEADING-WHITESPACE: led exit=0 accepted=True row-count before=2 after=3
+    (grew-by-one=True) -- PASS
+  GREEN-READABLE-VIA-LEDGER: the accepted well-formed outcome row is readable off
+    ledger_current -- PASS
+
+  outcome-intake-validation fixture: all cases PASS, scratch substrate torn down to zero
+  residue (tempdir removed, schema oivfixture/oivfixture_kernel/role oivfixture_rw dropped).
+
+Registered in gates/fixture_census.py REGISTRY as "outcome-intake-validation" ->
+seen-red/outcome-intake-validation/run_fixtures.py. Re-run:
+  python3 seen-red/outcome-intake-validation/run_fixtures.py

@@ -1,0 +1,20 @@
+{
+  "commission_id": "succession-drill-doc-attestation-2",
+  "note": "Report against the sibling commission.json. Every scope item carries exactly one verdict with its witness (ADR-0013 Rule 5: verify the artifact, not the claim). file witnesses are repo-relative paths; doc_excerpt witnesses name the exact content the OPERATOR-CHECK line will have the reader confirm.",
+  "verdicts": [
+    {"item_id": "spec-authored", "verdict": "WITNESSED",
+     "witness": "design/SPEC-DOC-ATTESTATION-2.md"},
+    {"item_id": "gate-v2-implemented", "verdict": "WITNESSED",
+     "witness": "gates/doc_attestation_presence.py"},
+    {"item_id": "scratch-witness-both-polarities", "verdict": "WITNESSED",
+     "witness": "seen-red/doc-attestation-presence/red.txt"},
+    {"item_id": "spec-attestation-recorded", "verdict": "WITNESSED",
+     "witness": "a doc-attestation/2 record for design/SPEC-DOC-ATTESTATION-2.md, content_sha256 19ad34d9e71a6d7921b15df8eb2ee53da732aecdc54a3c2bb5775f148f4c7f3b, escalated=false, two CLEAN rounds"},
+    {"item_id": "ceremony-2-adversarial-review", "verdict": "WITNESSED",
+     "witness": "adversarial reviewer agentId a79b4256e2576200d found 5 findings; 1 gate fix (extra-key refusal), 3 spec-honesty repairs, 1 design-by-intent clarified -- all dispositioned in the BACKLOG entry"},
+    {"item_id": "ceremony-4-closure-check", "verdict": "WITNESSED",
+     "witness": "closure-check instance agentId aadd87ee96d7ef5c3 verdict CLOSURE SOUND; two robustness hazards it flagged both fixed"},
+    {"item_id": "backlog-drill-record", "verdict": "WITNESSED",
+     "witness": "BACKLOG.md"}
+  ]
+}

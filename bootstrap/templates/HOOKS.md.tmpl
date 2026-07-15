@@ -1,0 +1,176 @@
+# Use-mode hooks wired to this project
+
+## PROVENANCE
+
+- **Created:** __CREATED_AT__ (UTC), by:
+  ```
+  __CREATE_CMD__
+  ```
+  Written by `bootstrap/new-project.sh` itself, from its own real argv, at scaffold time — no
+  future world should have to be reconstructed from script source the way an earlier one did
+  (autoharn BACKLOG, "how was run3 created? that of course needs to be documented", 2026-07-09).
+- **Autoharn instrument version:** `__AUTOHARN_COMMIT__` — the commit hash of the autoharn
+  checkout (`__AUTOHARN_ROOT__`) this scaffold ran from, read once at scaffold time and never
+  re-derived. This ties this world's evidence to the exact hook/kernel/template bytes that
+  produced it: two worlds scaffolded from different autoharn commits ran under genuinely
+  different instruments, even if every other PROVENANCE field above looks identical. A
+  `(DIRTY -- ...)` suffix or `UNAVAILABLE -- ...` reason, if present, is not a defect in this
+  world — it is an honest fact about the checkout that produced it, stated plainly rather than
+  silently omitted (this project's standing fail-loud discipline, ADR-0002).
+- **World:** ledger schema `__SCHEMA__`, kernel schema `__KERN__`, role `__ROLE__` (db `__DB__` @
+  host `__HOST__`).
+- **Kernel lineage applied by this scaffold run:** __LINEAGE_CHAIN__
+- **s21 (session-aware distinctness) status:** __S21_STATUS__ A future delta beyond this world's
+  birth chain (above) is NOT applied here (maintainer ruling 2026-07-11, "runs are strictly
+  linear": this world is the only present-tense one; older/current worlds are never patched or
+  refreshed in place — `bootstrap/apply-delta.sh` is demoted to history, no operator scenario
+  applies it to an existing world). A delta reaches reality by entering the birth chain, carried
+  automatically into the NEXT world's `--new-world` scaffold — see autoharn's ORCH-OPERATING-CARD.md
+  "Kernel deltas" decision tree for the current, authoritative shape.
+- **`reviewer` principal status:** __REVIEWER_STATUS__ See this world's root `CLAUDE.md` (if
+  present) for the governance preamble that assumes this principal already exists — it is
+  auto-loaded by Claude Code at session start, so there is nothing to paste.
+- **`commissioner` principal status:** __COMMISSIONER_STATUS__ Two signing modes exist for the
+  commission that opened this world (kernel/lineage/s25-commission-kind.sql): FULL mode is the
+  maintainer typing the copy-paste line above himself, in his own terminal; LAZY mode is the
+  implementer's first ledger act on receiving the ask, transcribing it vicariously (marked as
+  such in the statement text — see this world's root `CLAUDE.md`). The two are mechanically
+  distinguishable by reading the row's actor (which principal signed it) together with its
+  stamp state (whether a live Claude session invocation stamped it), never by prose claims
+  alone.
+- **Orienting in this world:** run `./pickup` (below) any time you need a live resume brief —
+  in-force decisions, open questions, review debt, recent changes — derived fresh, never stale.
+
+**Doc-witness convention (this file is a scaffold-generated TEMPLATE):** every example below is
+marked **UNWITNESSED** — it has not been run against this instance's own ledger. A template
+cannot honestly claim another project's witnessed output as its own (ADR-0005's documentation
+discipline: a claim without its own artifact is not a claim). As you actually run each command
+against THIS project, replace its UNWITNESSED marker with the real output (or a fresh
+UNWITNESSED-until-run note if it still hasn't happened) — the instance witnesses its own
+examples; the template only shows their shape.
+
+This instance's stamped deployment (from `deployment.json`, `bootstrap/new-project.sh`
+scaffold-time values): db `__DB__`, host `__HOST__`, ledger schema `__SCHEMA__`, kernel schema
+`__KERN__`, role `__ROLE__`.
+
+Two PreToolUse hooks in `.claude/settings.json`, both living in autoharn (`__AUTOHARN_ROOT__/hooks/`),
+pointed at this project's ledger:
+
+1. **Change gate** (`pretooluse_change_gate.py`) — an edit to a governed file is allowed only
+   under an unconsumed ledger entry naming that file, and the authorization is **windowed, not
+   standing** (`WINDOW_S = 600` s, closed early by a test-run/commit boundary command). Which
+   files are governed is chosen in `governed_files.json` (see `GOVERNED_FILES.md`); default
+   `*.py`. Deny/allow/deny-hint text is per-project via `apparatus.json` (see `APPARATUS.md`) —
+   **UNWITNESSED-until-run caveat**: `apparatus.json`'s `deny_hint` is baked into
+   `.claude/settings.json` at scaffold time, not read live; see `APPARATUS.md`'s honest-limit
+   note. On a deny, the message tells the agent exactly what to do:
+   `./led -f <file> decision "<why>"`, then re-issue the same edit. State and journal live under
+   `.claude/` (gitignored).
+
+   **Known host-connection limitation (BACKLOG, autoharn, 2026-07-09):** the change gate's
+   `PGHOST` is a hardcoded module constant in `hooks/pretooluse_change_gate.py`, not
+   env-overridable — if this instance's postgres host (`__HOST__`) differs from that hardcoded
+   default, the gate will connect to the WRONG host. Check `hooks/pretooluse_change_gate.py`'s
+   `PGHOST` literal against this instance's `__HOST__` before trusting the gate's refusals; the
+   fix is filed, not yet landed (hooks are out of scaffold scope this session).
+
+2. **Stamp interceptor** (`stamp_intercept.py`) — every `psql` call against db `__DB__` is
+   rewritten to carry an HMAC write-stamp (session id, agent id, ts) into the connection as
+   `app.vendor_*` GUCs; the kernel's `set_stamp` trigger validates it server-side. This is
+   what makes review-independence checks real: a self-review carries the same agent id as
+   its authoring, visibly.
+
+__STAMP_SECRET_STATUS__ The hook reads the apparatus secret from
+`.claude/secrets/stamp_secret.hex` (chmod 600, gitignored). The kernel DDL creates
+`stamp_secret` EMPTY on purpose — seed it once, and do NOT re-run later (re-seeding rotates the
+secret and invalidates stamps on rows written under the old one):
+
+```sh
+cd __PROJECT_ROOT__
+
+# 1. seed ONE fresh secret. Do NOT re-run later.
+HEX=$(openssl rand -hex 32)
+psql -h __HOST__ -d __DB__ -q -v ON_ERROR_STOP=1 \
+  -c "TRUNCATE __KERN__.stamp_secret;" \
+  -c "INSERT INTO __KERN__.stamp_secret (secret) VALUES (decode('$HEX','hex'));"
+
+# 2. negative control — the granted role must NOT be able to read it:
+psql -h __HOST__ -d __DB__ -c "SET ROLE __ROLE__; SELECT secret FROM __KERN__.stamp_secret;"
+# expect: ERROR: permission denied for table stamp_secret
+
+# 3. export for the hook (CHECK the row count is 1, then confirm the file is 64 bytes afterward):
+psql -h __HOST__ -d __DB__ -tAc \
+  "SELECT encode(secret,'hex') FROM __KERN__.stamp_secret" \
+  > .claude/secrets/stamp_secret.hex
+wc -c .claude/secrets/stamp_secret.hex   # expect 65 (64 hex chars + trailing newline); 0 is the silent-failure tell
+chmod 600 .claude/secrets/stamp_secret.hex
+```
+
+Until then the interceptor passes psql calls through unstamped — writes still land, with
+`stamp_verified = false`. A *wrong* stamp is refused outright by the trigger, so a
+mis-provisioned secret fails loudly on the first ledger write, not silently.
+
+## `led` — one-liner ledger entries
+
+```sh
+./led decision "..."
+./led -f palette.py decision "palette.py: ..."   # authorizes editing palette.py
+./led --recent [N]           # last N rows (default 10)
+./led current [N]            # last N rows of ledger_current (supersedes filtered)
+./led register-principal reviewer subagent   # already done for you in --new-world mode --
+                                              # see the "reviewer principal status" bullet above;
+                                              # this form registers any FURTHER principal you need
+./led review 12 attest technical "independent read: ... checks out"
+```
+
+**UNWITNESSED** — run these against this project's own ledger and replace this line with the
+observed output (id, kind, statement, actor) before trusting this doc's claims about `led`.
+
+`-f` puts `files: ...` into the entry's rationale — the declaration form the change gate
+matches on. Overridable connection via `LED_PGHOST/LED_PGDB/LED_SCHEMA/LED_KERNEL/LED_ROLE`.
+
+### `led question-status` / `led review-gap` / `led stamp-distinctness`
+
+Read-only views, connecting as the operator identity (not `SET ROLE __ROLE__`) — display
+conveniences for an operator, not evidence of what the granted subject role can read.
+
+**UNWITNESSED.** Note the toy-pilot's own finding (autoharn BACKLOG, 2026-07-09): the
+`countersign_obligation` table may have no grant for the subject role in the applied kernel
+lineage pre-s20 (`led obligate` / `led review-gap` would then refuse with `permission denied`
+under `SET ROLE __ROLE__` — `led`'s own `review-gap` verb does not `SET ROLE`, so it typically
+still returns a result; `pickup`'s review-debt section deliberately DOES `SET ROLE` and reports
+this honestly as `BLOCKED: pre-s20 grants` if it fires here too).
+
+### `led review` — countersigning an earlier row
+
+`led review` countersigns an earlier row; a countersign claiming
+`independence=technical|managerial|financial` requires a VERIFIED interception stamp from a
+DIFFERENT invocation than the row it regards — otherwise the trigger refuses and teaches
+`self-review`. **UNWITNESSED** in this instance.
+
+## `judge` — the engine differential verdict
+
+`./judge` is `led`'s sibling, wiring this project's ledger to autoharn's deductive engine. It
+invokes autoharn's `engine/ledger_differential.py __PROJECT_NAME__ --retain` (via
+`LEDGER_DEPLOYMENT=__PROJECT_ROOT__/deployment.json`, autoharn `engine/targets.py`'s THIRD
+resolution source — design/ORCH-OPUS-READINESS.md move 1) and prints the closed verdict vocabulary
+(`AGREE` / `DIVERGE_BY_DESIGN` / `DIVERGE_DEFECT` / `QUARANTINED`), exiting non-zero on
+`DIVERGE_DEFECT`/`QUARANTINED`. **Observer-first**: not wired into either project's gates.
+
+```sh
+./judge                  # ordinary run: retain DerivationRecords, print the verdict
+./judge --drop-record    # negative control: drop the ASP witness, watch the consumer refuse
+```
+
+**UNWITNESSED** — run `./judge` against this project's own live ledger and replace this line
+with the observed verdict line before trusting this doc's claim about `judge`.
+
+## `pickup` — the resume verb
+
+`./pickup` derives a resume brief from live sources every time it runs (never stored — a stored
+handoff decays from the moment of writing): in-force decisions, open questions, review debt,
+recent changes, this repo's git state, and an explicit "in-flight: UNAVAILABLE" line (no
+work-item layer yet — v2 territory). See `pickup --help`.
+
+**UNWITNESSED** — run `./pickup` against this project's own live ledger and replace this line
+with its actual section-by-section output before trusting this doc's claim about `pickup`.

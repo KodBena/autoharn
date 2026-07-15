@@ -1,0 +1,11 @@
+--- CH:tools/file_finding.py@87e1bcc3e03b
++++ autoharn/filing/file_finding.py
+@@ -36,7 +36,7 @@
+ DB = os.environ.get("HARNESS_DB", "harness")
+ DEFAULT_SCHEMA = os.environ.get("HARNESS_SCHEMA", "harness")
+ REPO_ROOT = Path(__file__).resolve().parent.parent
+-DDL = REPO_ROOT / "db" / "harness" / "005_findings_ledger.sql"
++DDL = REPO_ROOT / "stores" / "005_findings_ledger.sql"   # autoharn: stores/ (was db/harness/)
+ 
+ 
+ def _psql(sql: str, *, params: dict[str, str] | None = None, schema: str = DEFAULT_SCHEMA) -> str:

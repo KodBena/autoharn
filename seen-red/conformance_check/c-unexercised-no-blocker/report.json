@@ -1,0 +1,11 @@
+{
+  "commission_id": "seen-red-c",
+  "verdicts": [
+    {
+      "item_id": "item-1",
+      "verdict": "UNEXERCISED"
+    }
+  ],
+  "extras": [],
+  "renegotiations": []
+}

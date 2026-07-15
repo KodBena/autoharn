@@ -1,0 +1,422 @@
+#!/usr/bin/env python3
+# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
+#   first-seen : 2026-07-06T05:35:36Z
+#   last-change: 2026-07-14T19:26:05Z
+#   contributors: 37017f46/main, be693afb/main, a857c93d/main
+# <<< PROVENANCE-STAMP <<<
+
+"""ledger_floor -- the SQL FLOOR of the T_now judgments: producer ONE of the
+marriage differential (design ORCH-LEDGER-LOGIC-MARRIAGE.md §4; "SQL (recursive views)
+-- this IS SQL's home turf" for monotone closure). Computes the SAME judgment
+predicates as ledger_tnow.lp, in SQL recursive CTEs, over the same target, and
+returns them as clingo-shaped ATOM STRINGS so ledger_differential.py can compare
+the two producers by set-equality.
+
+INDEPENDENCE (I6, ADR-0000 INDEP). This producer shares NO code path with clingo:
+the closure is a Postgres `WITH RECURSIVE`, not the ASP grounder. Two genuinely
+independent producers agreeing bit-identically is the substance of the differential;
+a shared helper would defeat it. The only thing shared is the EDB source (one
+ledger, read-only) and the id-is-order law (design §3 rule 2) -- every precedence
+below keys on the integer id, never ts.
+
+Read-only. Emits the SAME #show set as ledger_tnow.lp (minus DTO/assumes, which have
+no SQL floor -- they are engine-layer-only consumers on the scratch lineage)."""
+from __future__ import annotations
+
+import sys
+
+from ledger_edb import Target, resolve
+
+
+def _enacts_cte(t: Target) -> str:
+    """The normalized enacts edge source (e,d), for scalar (s10) or array enacts."""
+    is_array = t.scalar(
+        f"SELECT data_type FROM information_schema.columns WHERE table_schema='{t.schema}' "
+        f"AND table_name='ledger' AND column_name='enacts';") == "ARRAY"
+    if is_array:
+        return (f"SELECT e.id AS e, u.tid AS d FROM {t.rel()} e "
+                f"CROSS JOIN LATERAL unnest(e.enacts) AS u(tid)")
+    return f"SELECT id AS e, enacts AS d FROM {t.rel()} WHERE enacts IS NOT NULL"
+
+
+def _base_ctes(rel: str, enacts_cte: str, amends_cte: str, answers_cte: str) -> str:
+    """The SHARED supersession/in-force/head closure + edge sources, as ONE SQL home
+    (ADR-0012 P1: the supersession closure is a fact with one authoritative encoding, not a
+    second CTE re-authored per consumer -- cancer B). floor_atoms (the kernel T_now floor) and
+    support_floor_atoms (the Increment-2 support-exposure floor) BOTH build on this identical
+    block, so the id-ordered supersession math cannot drift between the two SQL producers. The
+    text is semantics-identical to the pre-extraction inline block; the byte-identity of the
+    banked #show atoms is verified (§1.6), not asserted."""
+    return f"""
+      led AS (SELECT id, kind FROM {rel}),
+      en AS ({enacts_cte}),
+      am AS ({amends_cte}),
+      ans AS ({answers_cte}),
+      sup AS (SELECT id AS x, supersedes AS y FROM {rel} WHERE supersedes IS NOT NULL),
+      sup_star(x,y) AS (
+        SELECT x,y FROM sup
+        UNION
+        SELECT s.x, ss.y FROM sup s JOIN sup_star ss ON s.y = ss.x
+      ),
+      superseded AS (SELECT DISTINCT y AS id FROM sup_star),
+      in_force AS (SELECT id FROM led WHERE id NOT IN (SELECT id FROM superseded)),
+      head AS (
+        SELECT id AS y, id AS h FROM in_force
+        UNION
+        SELECT ss.y, ss.x FROM sup_star ss WHERE ss.x NOT IN (SELECT id FROM superseded)
+      )"""
+
+
+def floor_atoms(name: str) -> set[str]:
+    """The set of T_now judgment atoms the SQL floor derives for `name` (read-only)."""
+    t = resolve(name)
+    rel = t.rel()
+    has_amends = t.has_col("amends")
+    has_answers = t.has_col("answers")
+
+    # amends/answers CTEs degrade to an empty relation where the capability is absent
+    # (a pre-e13 schema) -- the same declared-exclusion posture as ledger_edb, in SQL.
+    amends_cte = (f"SELECT id AS a, amends AS t FROM {rel} WHERE amends IS NOT NULL"
+                  if has_amends else "SELECT NULL::bigint AS a, NULL::bigint AS t WHERE false")
+    answers_cte = (f"SELECT id AS a, answers AS q FROM {rel} WHERE answers IS NOT NULL"
+                   if has_answers else "SELECT NULL::bigint AS a, NULL::bigint AS q WHERE false")
+
+    sql = f"""
+    WITH RECURSIVE{_base_ctes(rel, _enacts_cte(t), amends_cte, answers_cte)},
+      -- gate_ok(e,d): d<e ; sound rejects when some superseder x of d has x<e
+      unsound AS (
+        SELECT e.e, e.d FROM en e
+        WHERE e.d < e.e
+          AND EXISTS (SELECT 1 FROM sup_star ss WHERE ss.y = e.d AND ss.x < e.e)
+      ),
+      launder AS (
+        SELECT u.e, u.d, h.h FROM unsound u JOIN head h ON h.y = u.d WHERE h.h <> u.d
+      ),
+      alias AS (
+        SELECT e.e, e.d FROM en e JOIN led d ON d.id = e.d WHERE d.kind <> 'decision'
+      ),
+      stale AS (
+        SELECT e.e, e.d FROM en e
+        WHERE e.e IN (SELECT id FROM in_force) AND e.d IN (SELECT id FROM superseded)
+      ),
+      q AS (SELECT id FROM led WHERE kind = 'question'),
+      -- F-A (fidelity review §1): a question is answered only by an IN-FORCE answer -- the
+      -- answering row must not be superseded (the s13.question_status judgment). The mirror
+      -- of ledger_tnow.lp's `answered(Q) :- answers(A,Q), not superseded(A).`; q_open derives
+      -- from q_answered so the in-force filter has ONE home on this side too.
+      q_answered AS (SELECT DISTINCT q.id FROM q JOIN ans ON ans.q = q.id
+                     WHERE ans.a NOT IN (SELECT id FROM superseded)),
+      q_open AS (SELECT id FROM q WHERE id NOT IN (SELECT id FROM q_answered)),
+      cd_withdrawn AS (SELECT a, t FROM am WHERE a IN (SELECT id FROM superseded)),
+      cd_moot AS (SELECT a, t FROM am
+                  WHERE t IN (SELECT id FROM superseded)
+                    AND a NOT IN (SELECT id FROM superseded)),
+      cd_live AS (SELECT a, t FROM am
+                  WHERE t NOT IN (SELECT id FROM superseded)
+                    AND a NOT IN (SELECT id FROM superseded)),
+      cond2 AS (SELECT t FROM cd_live GROUP BY t HAVING count(*) >= 2)
+    SELECT 'in_force('||id||')' FROM in_force
+    UNION ALL SELECT 'head('||y||','||h||')' FROM head
+    UNION ALL SELECT 'unsound_derivation('||e||','||d||')' FROM unsound
+    UNION ALL SELECT 'launder('||e||','||d||','||h||')' FROM launder
+    UNION ALL SELECT 'alias_surface('||e||','||d||')' FROM alias
+    UNION ALL SELECT 'stale_enactment_row('||e||','||d||')' FROM stale
+    UNION ALL SELECT 'question_open('||id||')' FROM q_open
+    UNION ALL SELECT 'question_answered('||id||')' FROM q_answered
+    UNION ALL SELECT 'clause_defeat('||a||','||t||')' FROM cd_live
+    UNION ALL SELECT 'clause_defeat_moot('||a||','||t||')' FROM cd_moot
+    UNION ALL SELECT 'clause_defeat_withdrawn('||a||','||t||')' FROM cd_withdrawn
+    UNION ALL SELECT 'condition2_individuation('||t||')' FROM cond2
+    ;"""
+    out = t.run(sql).stdout
+    return {line.strip() for line in out.splitlines() if line.strip()}
+
+
+# ===========================================================================
+# Increment 2 -- the SUPPORT-EXPOSURE floor: producer ONE of the support differential
+# (WORK-UNIT-exposure-discharge.md §2/§3). The SQL mirror of ledger_support.lp, computed in a
+# recursive CTE over the union of the three support-edge kinds, differentialed bit-identically
+# against the ASP producer over the scratch lineage. Reuses _base_ctes so the supersession/
+# in-force closure has ONE SQL home (P1). Read-only.
+#
+# CYCLE-SAFETY (work unit §2 "cycle-safe ... the floor must not loop on a scratch cycle fixture";
+# proven by fixture 7, not asserted). support_star is a set-`UNION` recursion over (dep,ant)
+# PAIRS -- the pair domain is finite, so the recursion reaches fixpoint and TERMINATES on a cyclic
+# graph, INCLUDING the self-pairs (F,F) that make support_cycle(F) fire. SPIRIT-OVER-LETTER (surfaced
+# in the build consult): the work unit's literal suggestion (a path array / the SQL `CYCLE` clause)
+# would DROP the self-pair that closes a cycle and thus DIVERGE from the ASP self-pair closure --
+# breaking the differential AGREE requirement. The established ledger_floor.py idiom (set-UNION on
+# pairs, exactly as sup_star above) IS the cycle guard here, and it is the only form that agrees
+# with the monotone ASP recursion. Fixture 7 proves termination + agreement.
+#
+# The APPARATUS-AUTHORED SCRATCH-ONLY inputs (§3 pending ruling; side tables on the scratch schema):
+#   <schema>.support_affirm(r, dependent, antecedent)   -- affirms(R,F,D); affirm_author is derived
+#                                                          from the ledger `actor` of row r (P1: actor
+#                                                          has one home, the ledger.actor column).
+#   <schema>.support_assumes(assumption, scope, valid_until)  -- assumes(A,Scope) + the I7 bound.
+# A schema lacking support_assumes marks exposure_expired DEFERRED (support_manifest), never a
+# silent empty (F49). row_actor(F,P) is the ledger.actor column; affirm_sod_violation needs only
+# the EQUALITY actor(r)==actor(dependent) -- no actor value crosses into a #shown support atom.
+
+SUPPORT_PREDS = ("support_edge", "support_star", "support_cycle", "exposure",
+                 "exposure_expired", "affirmed", "exposure_undischarged", "affirm_sod_violation")
+
+
+def support_manifest(name: str) -> dict[str, str]:
+    """The capability manifest for the support-exposure layer on `name` (§5, F49). Every family
+    is declared PRODUCED or DEFERRED with its input basis -- a target lacking `support_assumes`
+    facts gets `exposure_expired` marked DEFERRED, never a silent empty a consumer misreads as
+    'no expired exposures exist'."""
+    t = resolve(name)
+    has_affirm = t.has_relation(f"{t.schema}.support_affirm")
+    has_assumes = t.has_relation(f"{t.schema}.support_assumes")
+    m: dict[str, str] = {}
+    for fam in ("support_edge", "support_star", "support_cycle", "exposure"):
+        m[fam] = "PRODUCED (basis: enacts/answers edges + supersession closure -- always available)"
+    m["exposure_expired"] = ("PRODUCED (basis: support_assumes + now)" if has_assumes else
+                             "DEFERRED (no support_assumes source on this target -- not a silent empty)")
+    for fam in ("affirmed", "exposure_undischarged", "affirm_sod_violation"):
+        m[fam] = ("PRODUCED (basis: support_affirm EDB, scratch-only per §3 pending ruling)"
+                  if has_affirm else "DEFERRED (no support_affirm source on this target)")
+    return m
+
+
+def support_floor_atoms(name: str, now_epoch: int) -> set[str]:
+    """The set of support-exposure atoms the SQL floor derives for `name` (read-only). `now_epoch`
+    is the single-home wall-clock cursor the scratch loader also injects into the ASP EDB as
+    now/1, so the temporal expiry compares against ONE value on both producers (P1)."""
+    t = resolve(name)
+    rel = t.rel()
+    has_answers = t.has_col("answers")
+    has_amends = t.has_col("amends")
+    has_affirm = t.has_relation(f"{t.schema}.support_affirm")
+    has_assumes = t.has_relation(f"{t.schema}.support_assumes")
+
+    amends_cte = (f"SELECT id AS a, amends AS t FROM {rel} WHERE amends IS NOT NULL"
+                  if has_amends else "SELECT NULL::bigint AS a, NULL::bigint AS t WHERE false")
+    answers_cte = (f"SELECT id AS a, answers AS q FROM {rel} WHERE answers IS NOT NULL"
+                   if has_answers else "SELECT NULL::bigint AS a, NULL::bigint AS q WHERE false")
+    # affirm/assumes degrade to an empty relation where the scratch side-table is absent (the same
+    # declared-exclusion posture as the column-gated CTEs) -- support_manifest names the DEFERRAL.
+    affirm_cte = (f"SELECT r, dependent AS dep, antecedent AS ant FROM {t.schema}.support_affirm"
+                  if has_affirm else
+                  "SELECT NULL::bigint AS r, NULL::bigint AS dep, NULL::bigint AS ant WHERE false")
+    assumes_cte = (f"SELECT assumption AS ant, scope AS dep, valid_until FROM {t.schema}.support_assumes"
+                   if has_assumes else
+                   "SELECT NULL::bigint AS ant, NULL::bigint AS dep, NULL::bigint AS valid_until WHERE false")
+
+    sql = f"""
+    WITH RECURSIVE{_base_ctes(rel, _enacts_cte(t), amends_cte, answers_cte)},
+      aff AS ({affirm_cte}),
+      asm AS ({assumes_cte}),
+      support_edge(dep, ant, kind) AS (
+        SELECT e, d, 'enacts' FROM en
+        UNION ALL SELECT a, q, 'answers' FROM ans
+        UNION ALL SELECT dep, ant, 'assumes' FROM asm
+      ),
+      support_star(f, d) AS (
+        SELECT dep, ant FROM support_edge
+        UNION
+        SELECT ss.f, e.ant FROM support_star ss JOIN support_edge e ON e.dep = ss.d
+      ),
+      expired AS (SELECT ant FROM asm WHERE valid_until < {int(now_epoch)}),
+      exposure AS (
+        SELECT DISTINCT ss.f, ss.d FROM support_star ss
+        WHERE ss.f IN (SELECT id FROM in_force) AND ss.d IN (SELECT id FROM superseded)
+      ),
+      exposure_expired AS (
+        SELECT DISTINCT ss.f, ss.d FROM support_star ss
+        WHERE ss.f IN (SELECT id FROM in_force) AND ss.d IN (SELECT ant FROM expired)
+      ),
+      sod AS (SELECT DISTINCT a.r FROM aff a
+              JOIN {rel} lr ON lr.id = a.r JOIN {rel} lf ON lf.id = a.dep
+              WHERE lr.actor = lf.actor),
+      -- affirmed GATES on SoD-distinctness (r NOT IN sod), the exact mirror of ledger_dto.lp's
+      -- decomp_attested gate -- a self-affirmation does not discharge (never a pass). See the
+      -- spirit-over-letter note in ledger_support.lp; both producers gate identically.
+      affirmed AS (SELECT DISTINCT dep, ant FROM aff
+                   WHERE r NOT IN (SELECT id FROM superseded) AND r NOT IN (SELECT r FROM sod)),
+      undischarged AS (SELECT f, d FROM exposure EXCEPT SELECT dep, ant FROM affirmed)
+    SELECT 'support_edge('||dep||','||ant||','||kind||')' FROM support_edge
+    UNION ALL SELECT 'support_star('||f||','||d||')' FROM support_star
+    UNION ALL SELECT 'support_cycle('||f||')' FROM support_star WHERE f = d
+    UNION ALL SELECT 'exposure('||f||','||d||')' FROM exposure
+    UNION ALL SELECT 'exposure_expired('||f||','||d||')' FROM exposure_expired
+    UNION ALL SELECT 'affirmed('||dep||','||ant||')' FROM affirmed
+    UNION ALL SELECT 'exposure_undischarged('||f||','||d||')' FROM undischarged
+    UNION ALL SELECT 'affirm_sod_violation('||r||')' FROM sod
+    ;"""
+    out = t.run(sql).stdout
+    return {line.strip() for line in out.splitlines() if line.strip()}
+
+
+# ===========================================================================
+# Increment 3 (s22) -- the WORK-ITEM LEDGER floor: producer ONE of the work-item differential
+# (design/ORCH-S22-WORK-ITEM-LEDGER.md; engine/lp/work_items.lp is producer two, reconciled by
+# engine/work_item_scratch.py / kernel/fixtures/s22_work_item_fixture.py). Computes the SAME base
+# relations + four judgments engine/lp/work_items.lp #shows (work_dep_edge/2, work_dep_star/2,
+# work_duplicate_open/1, work_shipped_without_witness/2, work_depends_on_unknown/2,
+# work_dependency_cycle/1), as clingo-shaped atom strings, via a Postgres `WITH RECURSIVE` --
+# SQL's home turf for the transitive-closure half, matching floor_atoms/support_floor_atoms above.
+#
+# INDEPENDENCE (I6, ADR-0000 INDEP) PRESERVED: this module's whole reason to exist is sharing NO
+# code path with clingo. `_wi_quote` below is a LOCAL, standalone string-escape helper -- NOT
+# imported from `clingo_run.quote_term` (which would thread a clingo-side module into the SQL
+# producer) -- deliberately duplicated in the SAME spirit `clingo_run.quote_term`'s own docstring
+# names ("contra_asp keeps its own spaCy-side `_quote`; this is kb_why's"): a trivial string-escape
+# helper is NOT the logic under test, so two independent copies cost nothing and keep the
+# producers genuinely separate. Its escaping matches `quote_term` byte-for-byte (backslash then
+# quote, in that order) so both producers' quoted-string atoms compare bit-identically.
+def _wi_quote(col: str) -> str:
+    """A SQL expression quoting `col` (text) as a clingo double-quoted string term -- the SQL-side
+    mirror of `clingo_run.quote_term`, not a call to it (see the independence note above)."""
+    return "('\"' || replace(replace(" + col + ", '\\', '\\\\'), '\"', '\\\"') || '\"')"
+
+
+WORK_ITEM_PREDS = ("work_dep_edge", "work_dep_star", "work_duplicate_open",
+                   "work_shipped_without_witness", "work_depends_on_unknown",
+                   "work_dependency_cycle")
+
+
+def work_item_floor_atoms(name: str) -> set[str]:
+    """The set of work-item atoms the SQL floor derives for `name` (read-only), reading the s22
+    work_* columns directly off `<schema>.ledger`. `duplicate_open` and `shipped_without_witness`
+    are provably vacuous under normal operation (s22's write-boundary trigger + CHECK constraint
+    refuse both at construction -- see s22-work-item-ledger.sql's header); this floor still emits
+    them (defense in depth, matching engine/lp/work_items.lp's identical stance) so a scratch
+    fixture that bypasses the live trigger (an apparatus-authored negative-control row, never a
+    real write path) still differentials correctly against the ASP producer.
+
+    CORRELATED-AUTHORSHIP CAVEAT (named, per the ledger_support_scratch.py precedent): this floor
+    and the s22 DDL view (`work_item_violations`) share an author and the same base facts, so
+    bit-identity between THIS floor and `work_items.lp` proves ENCODING agreement between the SQL
+    and ASP producers, not independent fidelity to the spec -- the same caveat every `*_scratch.py`
+    differential in this file already carries."""
+    t = resolve(name)
+    rel = t.rel()
+    q_dependent, q_antecedent = _wi_quote("dependent"), _wi_quote("antecedent")
+    q_start, q_cur = _wi_quote("start_slug"), _wi_quote("cur")
+    q_slug = _wi_quote("slug")
+    sql = f"""
+    WITH RECURSIVE
+      opens AS (
+        SELECT work_slug AS slug FROM {rel} WHERE kind = 'work_opened'
+      ),
+      dup_open AS (
+        SELECT slug FROM opens GROUP BY slug HAVING count(*) > 1
+      ),
+      shipped_no_witness AS (
+        SELECT work_slug AS slug, id FROM {rel}
+        WHERE kind = 'work_closed' AND work_resolution = 'shipped'
+          AND (work_witness IS NULL OR btrim(work_witness) = '')
+      ),
+      deps AS (
+        SELECT work_slug AS dependent, work_depends_on AS antecedent FROM {rel}
+        WHERE kind = 'work_depends_on'
+      ),
+      dangling_dep AS (
+        SELECT d.dependent AS slug, d.antecedent FROM deps d
+        WHERE NOT EXISTS (SELECT 1 FROM opens o WHERE o.slug = d.antecedent)
+      ),
+      reach(start_slug, cur) AS (
+        SELECT dependent, antecedent FROM deps
+        UNION
+        SELECT r.start_slug, d.antecedent FROM reach r JOIN deps d ON d.dependent = r.cur
+      ),
+      dep_cycle AS (
+        SELECT DISTINCT start_slug AS slug FROM reach WHERE cur = start_slug
+      )
+    SELECT 'work_dep_edge(' || {q_dependent} || ',' || {q_antecedent} || ')' FROM deps
+    UNION ALL SELECT 'work_dep_star(' || {q_start} || ',' || {q_cur} || ')' FROM reach
+    UNION ALL SELECT 'work_duplicate_open(' || {q_slug} || ')' FROM dup_open
+    UNION ALL SELECT 'work_shipped_without_witness(' || {q_slug} || ',' || id || ')' FROM shipped_no_witness
+    UNION ALL SELECT 'work_depends_on_unknown(' || {q_slug} || ',' || {q_antecedent} || ')' FROM dangling_dep
+    UNION ALL SELECT 'work_dependency_cycle(' || {q_slug} || ')' FROM dep_cycle
+    ;"""
+    out = t.run(sql).stdout
+    return {line.strip() for line in out.splitlines() if line.strip()}
+
+
+WORK_REVIEW_PREDS = ("w_tree_member", "w_own_leaf_unresolved", "w_tree_unresolved")
+
+
+def work_review_floor_atoms(name: str) -> set[str]:
+    """The set of s29 obligation-tree atoms the SQL floor derives for `name` (read-only), reading
+    the s29 work_review_* columns directly off `<schema>.ledger` + `review_detail` -- the SQL-side
+    mirror of `engine/lp/work_review.lp`, independently derived (NO shared code path with clingo,
+    the SAME I6 posture `work_item_floor_atoms` above declares -- see that function's own
+    INDEPENDENCE PRESERVED note; this floor duplicates the SAME reasoning rather than importing it).
+
+    CORRECTED (out-of-frame hack-rationalization audit, same session, before this file's first
+    commit): a first draft walked ONLY the s28 parent edge and treated a `work_depends_on`
+    antecedent as resolved once it had ANY close row. Mirrors `work_item_strict_blockers()`'s own
+    identical correction in `kernel/lineage/s29-...sql` and `work_review.lp`'s own `w_succ`
+    predicate: a `work_depends_on` edge is walked OPPOSITE its own column order (the dependent
+    plays the "parent" role in tree-membership terms, its antecedent plays the "child" role).
+
+    CORRELATED-AUTHORSHIP CAVEAT (named, per `work_item_floor_atoms`'s own precedent): this floor
+    and the s29 DDL (`work_item_strict_blockers()`, `work_review_gap`) share an author and the same
+    base facts, so bit-identity between THIS floor and `work_review.lp` proves ENCODING agreement
+    between the SQL and ASP producers, not independent fidelity to the spec."""
+    t = resolve(name)
+    rel = t.rel()
+    q_root, q_member = _wi_quote("t.root"), _wi_quote("t.member")
+    q_slug = _wi_quote("slug")
+    sql = f"""
+    WITH RECURSIVE
+      opens AS (SELECT work_slug AS slug FROM {rel} WHERE kind = 'work_opened'),
+      succ AS (
+        SELECT work_parent AS parent, work_slug AS child FROM {rel}
+        WHERE kind = 'work_opened' AND work_parent IS NOT NULL
+        UNION ALL
+        -- work_depends_on walked OPPOSITE its own column order -- see this function's docstring.
+        SELECT work_slug AS parent, work_depends_on AS child FROM {rel}
+        WHERE kind = 'work_depends_on'
+      ),
+      tree(root, member) AS (
+        SELECT slug, slug FROM opens
+        UNION
+        SELECT t.root, s.child FROM tree t JOIN succ s ON s.parent = t.member
+      ),
+      closes AS (
+        SELECT work_slug AS slug, id AS rid, actor AS closer, work_review_disposition AS disp
+        FROM {rel} WHERE kind = 'work_closed'
+      ),
+      discharged AS (
+        SELECT c.rid FROM closes c
+        WHERE EXISTS (
+          SELECT 1 FROM {rel} r JOIN {t.rel("review_detail")} rd ON rd.ledger_id = r.id
+          WHERE r.kind = 'review' AND r.regards = c.rid AND rd.verdict = 'attest' AND r.actor <> c.closer
+            AND NOT EXISTS (SELECT 1 FROM {rel} s2 WHERE s2.supersedes = r.id)
+        )
+      ),
+      own_unresolved AS (
+        SELECT c.slug FROM closes c
+        WHERE c.disp = 'deferred' AND c.rid NOT IN (SELECT rid FROM discharged)
+      ),
+      not_closed AS (
+        SELECT o.slug FROM opens o WHERE NOT EXISTS (SELECT 1 FROM closes c WHERE c.slug = o.slug)
+      )
+    SELECT 'w_tree_member(' || {q_root} || ',' || {q_member} || ')' FROM tree t
+    UNION ALL SELECT 'w_own_leaf_unresolved(' || {q_slug} || ')' FROM own_unresolved
+    UNION ALL
+      SELECT DISTINCT 'w_tree_unresolved(' || {_wi_quote("t.root")} || ')'
+      FROM tree t
+      WHERE t.member IN (SELECT slug FROM own_unresolved)
+         OR (t.member <> t.root AND t.member IN (SELECT slug FROM not_closed))
+    ;"""
+    out = t.run(sql).stdout
+    return {line.strip() for line in out.splitlines() if line.strip()}
+
+
+def main(argv: list[str] | None = None) -> int:
+    for name in (argv if argv is not None else sys.argv[1:]) or ["s10"]:
+        atoms = floor_atoms(name)
+        print(f"# ledger_floor(SQL) -- {name}: {len(atoms)} atoms")
+        for a in sorted(atoms):
+            print(f"  {a}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

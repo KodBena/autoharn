@@ -1,0 +1,28 @@
+# adr-portability-terms both-polarity witness, refreshed 2026-07-14 (work item
+# adr-portability-terms-gate-shield-gaps, ledger row 572): cases 1-3 unchanged from
+# WP-0; cases 5-7 added to prove the three shield-gap fixes both green-inside and
+# red-outside their declared scope. The original WP-0 baseline (2026-07-13, 120
+# findings on the pre-refactor corpus) is preserved verbatim in
+# red-2026-07-13-wp0-baseline.txt beside this file, per ADR-0005 Rule 8 -- not
+# overwritten, kept as the historical negative-control witness.
+#
+CASE 1 (unshielded term, gate mode): exit=1
+adr_portability_terms (gate mode): 1 finding(s) across 1 file(s)
+  /tmp/tmpxxu30dpf/0001-fixture.md:8: TERM 'chocofarm' not inside a shielded Provenance/Amendment-or-Revisit/Extraction-Pointer/link-target block — 'We adopt this rule for chocofarm because it worked there.'
+CASE 2 (every term shielded, gate mode): exit=0
+adr_portability_terms (gate mode): clean — 1 file(s), 0 findings
+adr_portability_terms (report mode): clean — 1 file(s), 0 findings
+CASE 3 (report mode, synthetic clean dir): exit=0
+CASE 5 (plural Amendments container, gate mode): exit=1
+adr_portability_terms (gate mode): 1 finding(s) across 1 file(s)
+  /tmp/tmpxxu30dpf/0003-fixture.md:13: TERM 'lengyue' not inside a shielded Provenance/Amendment-or-Revisit/Extraction-Pointer/link-target block — 'lengyue is mentioned here, outside the Amendments container, and must be flagged.'
+CASE 6 (markdown-link-target, gate mode): exit=1
+adr_portability_terms (gate mode): 1 finding(s) across 1 file(s)
+  /tmp/tmpxxu30dpf/0004-fixture.md:7: TERM 'chocofarm' not inside a shielded Provenance/Amendment-or-Revisit/Extraction-Pointer/link-target block — 'See [history/chocofarm-notes.md](history/chocofarm-notes.md) and note that chocofarm itself'
+CASE 7 (inline waiver comment, gate mode): exit=1
+adr_portability_terms (gate mode): 1 finding(s) across 1 file(s)
+  /tmp/tmpxxu30dpf/0005-fixture.md:10: TERM 'chocofarm' not inside a shielded Provenance/Amendment-or-Revisit/Extraction-Pointer/link-target block — "A second, unrelated mention of chocofarm two lines below the marker's reach."
+CASE 4 (negative control -- real law/adr/*.md, report mode): exit=0
+adr_portability_terms (report mode): clean — 18 file(s), 0 findings
+  (Expected 0 post-refactor + post-shield-gap-fix; a nonzero result here after 2026-07-14 is a live regression, not an expected pre-refactor state.)
+adr-portability-terms red-specimen: all synthetic cases behaved as designed -- red on the unshielded term, green on the fully-shielded fixture, report mode reflecting true findings, and the three 2026-07-14 shield-gap fixes (cases 5-7) each proven both green-inside and red-outside their declared scope; the real corpus negative control is printed above.

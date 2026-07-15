@@ -1,0 +1,77 @@
+seen-red/track-experiments — banked RED evidence (both-polarity proof, fixture-census)
+
+bootstrap/track-experiments.sh is the standing research-ledger recording-surface offering
+(BACKLOG "research-ledger-offering", 2026-07-12): a new, project-agnostic entry point
+mirroring bootstrap/track-work.sh's own shape (deployment-local, standing, no hooks), wired to
+stores/001_research_ledger.sql + filing/record_reading.py rather than the kernel work-item
+lineage. Both polarities below are from a LIVE run of seen-red/track-experiments/
+run_fixtures.py against the real toy@192.168.122.1 db, using throwaway, renamed schema pairs
+(texpprobe_core/texpprobe_research, texpprobe2_core/texpprobe2_research — see that file's own
+docstring, "WHY A SCRATCH SCHEMA PAIR, RENAMED"), torn down after.
+
+CASE RED-USAGE (a required flag omitted — --name — refuses at argument-parsing time, before
+any config file is written or any DB touched):
+
+  usage: bootstrap/track-experiments.sh <project-dir> --name <name> --db <db> --host <host>
+             [--core-schema <schema>] [--research-schema <schema>] [--force]
+         (--name becomes this deployment's project_id in core.project — REQUIRED, this
+          script's one namespacing input, mirroring track-work.sh's own required --name.
+          --core-schema/--research-schema default to 001_research_ledger.sql's own fixed
+          names, core/research — override only to point at a scratch pair.)
+  exit code: 2
+  no research-ledger.json was written (verified live: the file does not exist after the refusal)
+
+CASE RED-EXISTING (a second invocation against a directory that already carries a
+research-ledger.json — refused before any file is rewritten and before any DB is touched;
+verbatim, from a manual reproduction against a live throwaway dir):
+
+  track-experiments.sh: /tmp/tmp.QKbcMaM2Wo/proj/research-ledger.json already exists -- refusing to overwrite (pass --force to replace it).
+    (a standing deployment is meant to persist indefinitely; re-running this script against
+    an existing one is presumptively a mistake, not a routine 'refresh' -- there is no such
+    concept here, mirroring track-work.sh's identical posture on its own deployment.json.)
+  exit code: 1
+  research-ledger.json byte-identical before/after the refused re-run (verified live); reading
+  and finding row counts unchanged (verified live, direct SELECT against the scratch schema)
+
+CASE RED-UNAPPLIED-SCHEMA (the offering's own honest limit, proven live rather than merely
+documented: adopting a deployment against a schema pair the maintainer has not yet applied
+stores/001_research_ledger.sql to — track-experiments.sh itself does NOT refuse; it writes the
+deployment-local files and prints an honest preflight note. The REAL recording call is where
+the refusal actually happens, verbatim, from a manual reproduction against a live throwaway
+schema pair deliberately left unapplied):
+
+  record_reading: REFUSED -- psql failed (3): ERROR:  relation "zzznoexist_core.project" does not exist
+  LINE 1: INSERT INTO "zzznoexist_core".project (project_id, name) VAL...
+                      ^
+  exit code: 1
+
+  This is the exact fail-loud signal filing/record_reading.py's own module docstring documents
+  ("No `ensure-schema` verb here... If research.reading does not yet exist, psql's own
+  'relation does not exist' error is the fail-loud signal") — proven here through
+  track-experiments.sh's own generated shim, not merely asserted from the writer module's prose.
+
+A HAZARD FOUND AND FIXED DURING THIS BUILD, worth banking alongside the refusals above: the
+first fixture run's RED-UNAPPLIED-SCHEMA assertion checked for the literal substring "NOT yet
+applied" in the script's stdout, but the script's own multi-line `echo` output happened to wrap
+that exact phrase across two lines ("is NOT yet" / "   applied on..."), so the live assertion
+FAILED even though the underlying behavior was already correct — a fixture bug, not a script
+bug, caught by actually running the fixture rather than trusting its logic by inspection (ADR-
+0013 Rule 5). Fixed by keeping the phrase "NOT yet applied" together on one `echo` line in
+bootstrap/track-experiments.sh; the fixture then passed live on the next run, banked below.
+
+Full fixture transcript (seen-red/track-experiments/run_fixtures.py, live run against
+toy@192.168.122.1, 2026-07-12):
+
+RED-USAGE: exit=2 (expect 2), config_written=False (expect False) -- PASS
+SETUP: renamed DDL applied clean to texpprobe_core/texpprobe_research
+GREEN-ADOPT: exit=0 research-ledger.json=True record-reading shim present+executable=True preflight reported applied=True -- PASS
+GREEN-ADOPT: research-ledger.json content matches invocation -- PASS
+GREEN-ADOPT (live): record-reading exit=0 reading_id='1' -- PASS
+GREEN-ADOPT (live): record-finding exit=0 -- PASS
+GREEN-ADOPT (live): direct SELECT confirms the reading row -- PASS
+RED-EXISTING: exit=1 (expect 1, 'already exists'), config byte-identical and reading/finding rows unchanged -- PASS
+GREEN-FORCE: exit=0 reading/finding rows unchanged -- PASS
+RED-UNAPPLIED-SCHEMA: track-experiments.sh itself exit=0 (expect 0, never blocks), preflight reported NOT-yet-applied=True -- PASS
+RED-UNAPPLIED-SCHEMA: a real record-reading call against the unapplied schema is REFUSED (exit=1) -- PASS
+
+track-experiments fixture: all cases PASS, scratch substrate torn down to zero residue (tempdir removed, schemas texpprobe_core/texpprobe_research + texpprobe2_core/texpprobe2_research dropped).

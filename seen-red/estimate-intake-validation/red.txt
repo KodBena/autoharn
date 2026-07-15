@@ -1,0 +1,119 @@
+seen-red/estimate-intake-validation — banked both-polarity evidence (fixture-census)
+
+Work item / tracker item `cost-estimation-retro` (2026-07-12). Maintainer's design, verbatim at
+asking: agents estimate costs BEFORE a task, for operational-efficiency retrospectives ONLY —
+never for policing costs (his invariant, stated twice; policing is out of scope by design, not
+omission). Deliverable (a) was an `estimate:` intake-validation convention cloning the structure
+of the existing `resource:` validator in bootstrap/templates/led.tmpl — same posture: field-count
+refusal, whitespace normalization for validation only, byte-exact persisted statement, a refusal
+that teaches, atomicity by refusal-before-write (ADR-0002).
+
+THE FEATURE, both halves proven live below:
+
+  - bootstrap/templates/led.tmpl now validates an `estimate:` statement (whitespace-normalized
+    copy: every run of \n/\r plus following indentation collapsed to one space) against
+    design/USER-RETROSPECTIVE-RECIPE.md's "Estimate statement grammar" section BEFORE the
+    INSERT -- exactly six `|`-separated fields (TASK-SLUG, TOOL-CALLS, SUBAGENT-SPAWNS,
+    WALL-CLOCK, TOKEN-OOM, BASIS), each with its own shape check: TASK-SLUG matches
+    `^[a-z0-9][a-z0-9-]*$`; TOOL-CALLS/SUBAGENT-SPAWNS match a non-negative integer or an N-M
+    range; WALL-CLOCK matches a duration (`20m`/`2h`/`1d`) or a range; TOKEN-OOM is one of the
+    closed vocabulary `1K | 10K | 100K | 1M | 10M+`; BASIS is non-empty. On failure: REFUSED,
+    exit nonzero, NOTHING written (atomicity by refusal-before-write), teach-text naming the
+    grammar and the specific field that failed. On success: the statement is INSERTed AS TYPED,
+    byte-exact (never the normalized copy).
+  - bootstrap/templates/pickup.tmpl's new estimates() reader renders every on-record `estimate:`
+    row under its own `### SECTION: ESTIMATES` header, sorted by TASK-SLUG then ledger row id,
+    using the identical newline-normalization SELECT and MALFORMED-flagging posture
+    resources() already established for `resource:` — never silently dropping a bad row.
+  - COHERENCE: led's validator trigger and pickup's SELECT filter define "an estimate
+    declaration" IDENTICALLY, the same coherence-partner contract `resource:`/resources()
+    already keep — led triggers on the statement after stripping leading POSIX [:space:]
+    starting with `estimate:`; pickup's filter names the same class:
+    `statement ~ '^[[:space:]]*estimate:'`.
+  - The grammar's ONE documented home is design/USER-RETROSPECTIVE-RECIPE.md's new "Estimate
+    versus actual" section (§6), which both parsers cite in their own comments rather than
+    restating the grammar a second time (ADR-0012 P1) — the same doc also carries the
+    estimate-vs-actual retrospective method (deliberately NO audit family, NO gate, NO exit
+    code: a missed estimate is retrospective data, never a violation).
+
+WHAT THE FIXTURE PROVES, IN ORDER (seen-red/estimate-intake-validation/run_fixtures.py, live run
+against a throwaway scratch deployment eivfixture/eivfixture_kernel/eivfixture_rw via
+bootstrap/track-work.sh, toy@192.168.122.1, torn down after):
+
+  1. RED -- a 2-field `estimate:` statement (missing SUBAGENT-SPAWNS/WALL-CLOCK/TOKEN-OOM/BASIS)
+     is REFUSED: `led decision` exits nonzero, ledger row count witnessed UNCHANGED before vs.
+     after (0 -> 0).
+  2. RED -- a 6-field statement with an illegal TASK-SLUG (`Cost Retro`, uppercase + space) is
+     likewise REFUSED, row count unchanged.
+  3. RED -- a 6-field statement with a non-numeric TOOL-CALLS (`many`) is REFUSED, row count
+     unchanged.
+  4. RED -- a 6-field statement with an unparseable WALL-CLOCK (`soonish`) is REFUSED, row count
+     unchanged.
+  5. RED -- a 6-field statement with an out-of-vocabulary TOKEN-OOM (`500K`, not one of
+     1K/10K/100K/1M/10M+) is REFUSED, row count unchanged.
+  6. RED -- a 6-field statement with an empty BASIS (whitespace only) is REFUSED, row count
+     unchanged.
+  7. GREEN -- a well-formed statement exercising BOTH range grammars (TOOL-CALLS `40-60`,
+     WALL-CLOCK `3h-5h`) is ACCEPTED (row count grows by one) and the STORED statement is
+     byte-exact against what was typed.
+  8. GREEN -- a statement with an embedded newline + indentation (a terminal line-wrap
+     specimen, the same shape run12's `resource:` incident reproduced) is ACCEPTED after
+     whitespace normalization, and the stored row preserves the embedded newline VERBATIM
+     (normalization is validation-only scratch, never persisted).
+  9. GREEN -- `./pickup`'s ESTIMATES section renders both accepted rows cleanly, with no
+     "MALFORMED" string anywhere in the section.
+  10. GREEN -- a THIRD declaration with LEADING WHITESPACE before the `estimate:` prefix is
+      ACCEPTED by led AND renders in pickup's ESTIMATES section — the coherence-partner contract
+      proven live, exactly as resource-intake-validation proves it for `resource:`.
+
+WITNESSED TRANSCRIPT (2026-07-12, live run, autoharn worktree agent-a110f175472dba787):
+
+  ADOPT: track-work.sh exit=0 deployment.json=True -- PASS
+  RED-MALFORMED-FIELDCOUNT: exit=1 refused=True row-count before=0 after=0 (unchanged=True) -- PASS
+  RED-MALFORMED-SLUG: exit=1 refused=True row-count before=0 after=0 (unchanged=True) -- PASS
+  RED-MALFORMED-COUNT: exit=1 refused=True row-count before=0 after=0 (unchanged=True) -- PASS
+  RED-MALFORMED-DURATION: exit=1 refused=True row-count before=0 after=0 (unchanged=True) -- PASS
+  RED-MALFORMED-TOKEN-OOM: exit=1 refused=True row-count before=0 after=0 (unchanged=True) -- PASS
+  RED-MALFORMED-BASIS: exit=1 refused=True row-count before=0 after=0 (unchanged=True) -- PASS
+  GREEN-WELL-FORMED: exit=0 accepted=True row-count before=0 after=1 (grew-by-one=True) -- PASS
+  GREEN-WELL-FORMED: stored statement is byte-exact -- PASS
+  GREEN-EMBEDDED-NEWLINE: exit=0 accepted=True row-count before=1 after=2 (grew-by-one=True) -- PASS
+  GREEN-EMBEDDED-NEWLINE: stored statement is byte-exact (embedded newline preserved) -- PASS
+  GREEN-PICKUP-RENDERS: ESTIMATES section renders 'cost-estimation-retro' with no MALFORMED
+    entries -- PASS
+  GREEN-LEADING-WHITESPACE: led exit=0 accepted=True row-count before=2 after=3
+    (grew-by-one=True) -- PASS
+  GREEN-LEADING-WHITESPACE: pickup ESTIMATES renders 'tsort-port' with no MALFORMED entries --
+    PASS
+
+  --- pickup ESTIMATES section (verbatim, after all three GREEN declarations) ---
+  ### SECTION: ESTIMATES
+
+  cost-estimation-retro  (ledger row id=1)
+    predicted tool calls:      40-60
+    predicted subagent spawns: 0
+    predicted wall-clock:      3h-5h
+    predicted token OOM:       100K
+    basis:                     scoped from resource-accounting-spec stage A, a similarly-sized
+    led.tmpl/pickup.tmpl validator pair plus one doc section and one seen-red fixture
+  doc-legibility-sweep  (ledger row id=2)
+    predicted tool calls:      20-30
+    predicted subagent spawns: 1
+    predicted wall-clock:      2h
+    predicted token OOM:       10K
+    basis:                     a routine pass over the operational-efficiency retrospective
+    backlog, similar in scope to the last one
+  tsort-port  (ledger row id=3)
+    predicted tool calls:      5
+    predicted subagent spawns: 0
+    predicted wall-clock:      30m
+    predicted token OOM:       1K
+    basis:                     trivial binary wrap, no arithmetic surface
+  --- end pickup ESTIMATES section ---
+
+  estimate-intake-validation fixture: all cases PASS, scratch substrate torn down to zero
+  residue (tempdir removed, schema eivfixture/eivfixture_kernel/role eivfixture_rw dropped).
+
+Registered in gates/fixture_census.py REGISTRY as "estimate-intake-validation" ->
+seen-red/estimate-intake-validation/run_fixtures.py. Re-run:
+  python3 seen-red/estimate-intake-validation/run_fixtures.py

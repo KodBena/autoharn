@@ -1,0 +1,9 @@
+# preamble-ordering marriage differential -- ASP (engine/lp/preamble_ordering.lp) vs SQL floor (engine/preamble_floor.py)
+#   target='preambleorder' root=/tmp/preamble-fixture-8u8u0829
+#   closed verdict vocabulary: ['AGREE', 'DIVERGE_BY_DESIGN', 'DIVERGE_DEFECT', 'QUARANTINED']; RED = ['DIVERGE_DEFECT', 'QUARANTINED']
+
+  [OK ] preambleorder AGREE              asp=36 sql=36 atoms; Δasp=[] Δsql=[]
+
+# retained: /home/bork/w/vdc/1/autoharn/.claude/worktrees/agent-a9a3ebb5130e379e3/engine/docs/ledger-marriage/derivations/preamble-ordering/preambleorder/20260714T022656Z_3242e643a0ab
+
+# DIFFERENTIAL GREEN -- SQL floor bit-identical to the ASP verdict program

@@ -1,0 +1,143 @@
+#!/bin/sh
+# autoharn pre-commit — the mechanical refusals, invoked by REPO-RELATIVE path.
+#
+# Adapted from claude_harness/tools/hooks/pre-commit [C18]: the old hook reached
+# into a sibling repo by absolute path (the two-repo coupling the fresh home must
+# not inherit) and ran the ADR-0016 standing-service umbrella gate — which has NO
+# services to gate here (the NLP lane stays in the attic, C14). Running it here
+# would be a silent vacuous pass (F49). It is therefore NOT wired; it rejoins
+# autoharn only when autoharn's first standing service does.
+#
+# FINAL WIRING (BUILD-BRIEF Step 9, extended 2026-07-11 doc-legibility-indictment commission,
+# further extended 2026-07-11 run-10-closure-audit commission, further extended 2026-07-12
+# configuration-surface-survey commission):
+# staging_guard -> no_lazy_imports -> fixture_census -> link_integrity ->
+# apparatus_unknown_keys (gated only when bootstrap/templates/apparatus.json is touched) ->
+# doc_shapes -> doc-attestation-presence -> layout_census -> doc-legibility. layout_census is DISABLED here
+# as of the maintainer ruling below (2026-07-09); it still appears in this history note as the
+# Step-9 design.
+# doc-legibility is wired REPORT-ONLY (runs and prints,
+# does not block): the C15 scope-widening to ALL tracked *.md surfaces ~1429 acronym reports
+# over the migrated corpus — mostly the crude heuristic misfiring on all-caps emphasis words
+# and standards acronyms in docs never written against it. Making it a BLOCKING gate over the
+# full corpus needs a corpus acronym-sweep (filed, BACKLOG); wiring it blocking now would make
+# the repo uncommittable — the maintainer-flagged tension (C15 widen vs Step-9 block vs Step-10
+# green). Its seen-red both-polarity proof already exists; only its pre-commit disposition is
+# report-only pending the sweep. link_integrity (2026-07-11) checks a DIFFERENT, cheaper
+# invariant than doc-legibility (link resolution, not acronym definition) and runs clean over
+# the full tracked-*.md corpus today (two principled, documented exclusions — see its own
+# docstring) — it BLOCKS. doc_shapes (design/ADR-DRAFT-documentation-discipline.md Rule 3) was
+# built, seen-red, and registered days before this wiring but never actually invoked from here
+# until now (a gap this same commission's hazard-flagging duty caught and closed alongside its
+# own assigned task, not routed around). doc-attestation-presence (ADR-0017, ratified
+# 2026-07-11) is authored ENFORCE with no observe/off mode — its own module docstring carries
+# the exact WIRING STANZA applied verbatim below, deferred at authoring time only because a
+# governed session was live and hooks/ may not be touched while one runs; none is live now. The
+# other five non-disabled gates BLOCK too.
+#
+# Install (once per clone; .git/hooks is unversioned): git config core.hooksPath hooks
+set -u
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+PY="$HOME/w/vdc/venvs/generic/bin/python"
+[ -x "$PY" ] || PY="$(command -v python3)"
+
+# staging_guard FIRST — a swept-in path is a scope defect to resolve before any
+# content gate matters (finding 33 foreclosure). Repo-local, its one home (P1).
+"$PY" "$REPO_ROOT/gates/staging_guard.py" || {
+    echo "" >&2
+    echo "pre-commit: staging guard FAILED — commit refused (finding 33, commit-scope-sweep)." >&2
+    exit 1
+}
+
+# no_conflict_markers EARLY — an unresolved merge in the staged additions makes every
+# later content gate's verdict meaningless (witnessed: merge b25272f landed raw markers
+# in BACKLOG.md past the whole chain; gate added 2026-07-12, same day, seen-red both
+# polarities).
+"$PY" "$REPO_ROOT/gates/no_conflict_markers.py" || {
+    echo "" >&2
+    echo "pre-commit: conflict-marker gate FAILED — commit refused (unresolved merge in staged additions)." >&2
+    exit 1
+}
+
+"$PY" "$REPO_ROOT/gates/no_lazy_imports.py" || {
+    echo "" >&2
+    echo "pre-commit: lazy-import gate FAILED — commit refused (CLAUDE.md edict 2026-07-02)." >&2
+    echo "Hoist the imports to module top, then commit again." >&2
+    exit 1
+}
+
+"$PY" "$REPO_ROOT/gates/fixture_census.py" || {
+    echo "" >&2
+    echo "pre-commit: fixture census FAILED — commit refused (a gate/seen-red is not intact, ADR-0011/C20)." >&2
+    exit 1
+}
+
+# link_integrity — every relative markdown link in tracked *.md must resolve on disk
+# (2026-07-11 doc-legibility-indictment commission). Two documented exclusions (judgment/,
+# vestigial_documentation/design/ORCH-ARCHITECTURE.md, moved there by the 2026-07-12
+# vestigial-doc-sweep) printed in its own output every run — never silent.
+"$PY" "$REPO_ROOT/gates/link_integrity.py" || {
+    echo "" >&2
+    echo "pre-commit: link-integrity gate FAILED — commit refused (a doc links somewhere that does not exist)." >&2
+    exit 1
+}
+
+# apparatus_unknown_keys — the shipped apparatus.json default this repo owns must itself carry
+# no unrecognized mechanism key (BACKLOG "Configuration-surface survey, adopter's eyes",
+# 2026-07-11, gap 1). Gated ONLY when the template is part of this commit (most commits don't
+# touch it); report mode (its own default target) is the same file, so this call is redundant
+# with the module's own default but explicit here for the blocking case.
+if git diff --cached --name-only --diff-filter=ACMR | grep -qx "bootstrap/templates/apparatus.json"; then
+    "$PY" "$REPO_ROOT/gates/apparatus_unknown_keys.py" "$REPO_ROOT/bootstrap/templates/apparatus.json" || {
+        echo "" >&2
+        echo "pre-commit: apparatus-unknown-keys gate FAILED — the shipped apparatus.json" >&2
+        echo "default carries a mechanism key no hook reads (see gates/apparatus_unknown_keys.py)." >&2
+        exit 1
+    }
+fi
+
+# TOUCHED_MD computed once, shared by doc_shapes and doc-attestation-presence below (both are
+# gate-mode, touched-file-scoped checks over the same staged *.md set — one git diff, not two).
+TOUCHED_MD=$(git diff --cached --name-only --diff-filter=ACMR -- '*.md')
+
+# doc_shapes — the deterministic zero-context-reader legibility gate (design/ADR-DRAFT-
+# documentation-discipline.md Rule 3; BACKLOG "Documentation legibility indictment", 2026-07-11)
+# binds ON TOUCH: every changed *.md in this commit must clear FRAGMENT/HANDOFF-POSITIONAL.
+# gates/doc_shapes.py's own header names this exact gate-mode invocation shape — built and
+# seen-red days before this wiring, never actually invoked from here until the run-10-closure-
+# audit commission caught the gap (BACKLOG "Run-10 closure audit (2026-07-11)").
+if [ -n "$TOUCHED_MD" ]; then
+    # shellcheck disable=SC2086
+    "$PY" "$REPO_ROOT/gates/doc_shapes.py" $TOUCHED_MD || {
+        echo "" >&2
+        echo "pre-commit: doc-shapes gate FAILED — a changed doc has a legibility shape defect" >&2
+        echo "(FRAGMENT or HANDOFF-POSITIONAL; see gates/doc_shapes.py's own header)." >&2
+        exit 1
+    }
+fi
+
+# doc-attestation-presence — every touched maintainer-facing *.md must carry a fresh-context
+# (A:B:C) attestation record for its exact content (ADR-0017, "The fresh-context audit loop";
+# ratified 2026-07-11). Checks PRESENCE+SHAPE only, never the attestation's conclusions — nothing
+# here blocks on LLM judgment. This IS gates/doc_attestation_presence.py's own WIRING STANZA,
+# applied verbatim (only its target file list generalized to the shared $TOUCHED_MD above).
+if [ -n "$TOUCHED_MD" ]; then
+    # shellcheck disable=SC2086
+    "$PY" "$REPO_ROOT/gates/doc_attestation_presence.py" $TOUCHED_MD || {
+        echo "" >&2
+        echo "pre-commit: doc-attestation-presence FAILED — a changed doc carries no" >&2
+        echo "fresh-context attestation record for its current content (ADR-0017)." >&2
+        exit 1
+    }
+fi
+
+# layout_census — DISABLED here (maintainer ruling, 2026-07-09): research repo, census is for
+# downstream instances; disabled until further notice. gates/layout_census.py is untouched and
+# remains shipped tooling — a downstream template consumer re-enables this block to get the
+# ls-legibility guarantee in their own repo. Not removed from gates/, only from this hook's
+# enforced set.
+
+# doc-legibility — REPORT-ONLY (see header): runs for visibility, never blocks, pending the
+# corpus acronym-sweep (BACKLOG / finding 48). Its exit code is deliberately NOT propagated.
+"$PY" "$REPO_ROOT/gates/doc-legibility/check.py" >&2 || \
+    echo "pre-commit: doc-legibility reported undefined acronyms (REPORT-ONLY — not blocking; see BACKLOG finding 48)." >&2

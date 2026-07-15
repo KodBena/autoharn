@@ -1,0 +1,6 @@
++"decision": "block"
++OPEN WORK ITEMS
++work item 'probe-item-3' is open and UNCLAIMED
+-probe-item-2
++seen 2/3 times
+-CIRCUIT BREAKER

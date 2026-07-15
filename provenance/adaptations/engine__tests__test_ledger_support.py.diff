@@ -1,0 +1,95 @@
+--- CH:experiments/fact-mining/test_ledger_support.py@87e1bcc3e03b
++++ autoharn/engine/tests/test_ledger_support.py
+@@ -38,6 +38,7 @@
+ from ledger_floor import SUPPORT_PREDS, floor_atoms, support_manifest
+ 
+ HERE = Path(__file__).resolve().parent
++LP = HERE.parent / "lp"   # the ASP programs live in engine/lp/ (split-layout migration)
+ BANKED = ["s10", "s11", "s12", "s13", "nla"]
+ EXISTING_LP = ["ledger_tnow.lp", "ledger_dto.lp", "ledger_assumes.lp"]
+ 
+@@ -58,7 +59,7 @@
+ def test_1_1_base_relations_are_first_class_shown() -> None:
+     """§1.1: support_edge/3 and support_star/2 are #shown (mechanism, not scaffolding hidden
+     inside derived judgments) -- verified against the program text."""
+-    text = (HERE / "ledger_support.lp").read_text(encoding="utf-8")
++    text = (LP / "ledger_support.lp").read_text(encoding="utf-8")
+     assert "#show support_edge/3." in text
+     assert "#show support_star/2." in text
+ 
+@@ -66,7 +67,7 @@
+ def test_1_2_no_verdict_vocabulary_over_the_dependent() -> None:
+     """§1.2: nothing names a predicate invalid/1, unsound/1 or similar over the dependent --
+     exposure describes the support graph, not the dependent's truth."""
+-    text = (HERE / "ledger_support.lp").read_text(encoding="utf-8")
++    text = (LP / "ledger_support.lp").read_text(encoding="utf-8")
+     heads = {ln.split(":-")[0].split("(")[0].strip()
+              for ln in text.splitlines() if ":-" in ln and not ln.strip().startswith("%")}
+     forbidden = {"invalid", "unsound", "unsound_dependent", "false", "wrong"}
+@@ -76,7 +77,7 @@
+ def test_1_3_no_integrity_constraints_cycle_stays_satisfiable() -> None:
+     """§1.3: zero `:-` (headless) integrity constraints; a cyclic record stays SATISFIABLE
+     (fixture 7 -- two rows citing each other), never made UNSAT."""
+-    text = (HERE / "ledger_support.lp").read_text(encoding="utf-8")
++    text = (LP / "ledger_support.lp").read_text(encoding="utf-8")
+     for ln in text.splitlines():
+         s = ln.strip()
+         if s.startswith("%") or not s:
+@@ -85,7 +86,7 @@
+     edb = ("enacts(500,510).\nenacts(510,500).\n"
+            "entry(500,1,verification,enactment,none,high).\n"
+            "entry(510,2,verification,enactment,none,high).\n")
+-    atoms = {a for a in run_clingo([HERE / "ledger_tnow.lp", HERE / "ledger_support.lp"], edb)}
++    atoms = {a for a in run_clingo([LP / "ledger_tnow.lp", LP / "ledger_support.lp"], edb)}
+     assert "support_cycle(500)" in atoms and "support_cycle(510)" in atoms  # flagged, not fatal
+ 
+ 
+@@ -122,14 +123,14 @@
+         head = subprocess.run(["git", "show", f"HEAD:experiments/fact-mining/{f}"],
+                               cwd="/home/bork/w/vdc/1/claude_harness", capture_output=True, text=True)
+         assert head.returncode == 0, f"cannot read HEAD:{f}: {head.stderr!r}"
+-        cur_rules, cur_shows = rules_and_shows((HERE / f).read_text(encoding="utf-8"))
++        cur_rules, cur_shows = rules_and_shows((LP / f).read_text(encoding="utf-8"))
+         head_rules, head_shows = rules_and_shows(head.stdout)
+         assert cur_rules == head_rules, f"a RULE/fact changed in {f} (not additive #show/comment) -- feedback edge?"
+         missing = head_shows - cur_shows
+         assert not missing, f"a #show export was REMOVED/RETARGETED in {f}: {sorted(missing)} (only additive #show allowed)"
+     # and no existing program's text mentions a support/exposure head (belt-and-braces)
+     for f in EXISTING_LP:
+-        t = (HERE / f).read_text(encoding="utf-8")
++        t = (LP / f).read_text(encoding="utf-8")
+         for p in SUPPORT_PREDS:
+             assert f"{p}(" not in t, f"{f} references {p}"
+ 
+@@ -137,7 +138,7 @@
+ def test_1_5_naf_only_at_the_discharge_seam() -> None:
+     """§1.5: the base (support_edge/support_star) uses no NAF; the ONLY `not` is at the discharge
+     seam (affirmed / exposure_undischarged)."""
+-    text = (HERE / "ledger_support.lp").read_text(encoding="utf-8")
++    text = (LP / "ledger_support.lp").read_text(encoding="utf-8")
+     for ln in text.splitlines():
+         s = ln.strip()
+         if s.startswith("%") or " not " not in f" {s} ":
+@@ -154,7 +155,8 @@
+         edb = export(t).edb_text()
+         asp = sorted(run_asp(t, edb).atoms)
+         sql = sorted(floor_atoms(t))
+-        d = HERE / "docs" / "ledger-marriage" / "derivations" / t
++        # autoharn: banked derivations are EVIDENCE-STAYS [A11] — read from the claude_harness archive.
++        d = Path("/home/bork/w/vdc/1/claude_harness/experiments/fact-mining/docs/ledger-marriage/derivations") / t
+         ba = [l for l in (d / "asp_atoms.txt").read_text().splitlines() if l.strip()]
+         bs = [l for l in (d / "sql_atoms.txt").read_text().splitlines() if l.strip()]
+         assert asp == ba, f"{t}: banked ASP #show atoms changed"
+@@ -165,10 +167,10 @@
+ def test_grounds_standalone_and_composed() -> None:
+     """ledger_support.lp grounds standalone (#defined guards make an empty extension silence, not
+     a grounding warning) AND composed on top of ledger_tnow.lp."""
+-    assert run_clingo([HERE / "ledger_support.lp"], "") == []  # empty EDB, SATISFIABLE, no atoms
++    assert run_clingo([LP / "ledger_support.lp"], "") == []  # empty EDB, SATISFIABLE, no atoms
+     edb = ("entry(1,1,decision,design,held,high).\nentry(2,2,decision,design,held,high).\n"
+            "supersedes(2,1).\nenacts(3,1).\nentry(3,3,verification,enactment,none,high).\n")
+-    atoms = set(run_clingo([HERE / "ledger_tnow.lp", HERE / "ledger_support.lp"], edb))
++    atoms = set(run_clingo([LP / "ledger_tnow.lp", LP / "ledger_support.lp"], edb))
+     assert "exposure(3,1)" in atoms  # 3 in-force, rests on superseded 1
+ 
+ 

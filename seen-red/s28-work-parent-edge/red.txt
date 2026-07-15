@@ -1,0 +1,28 @@
+== scaffolding throwaway --new-world s28fxprobe (s15..s26 birth chain) ==
+  scaffold OK (schema=s28fxprobe kern=s28fxprobe_kernel role=s28fxprobe_rw).
+
+== applying s28-work-parent-edge.sql to s28fxprobe/s28fxprobe_kernel/s28fxprobe_rw ==
+  s28 applied.
+
+=== a-valid-parent-accepted ===
+  [ok] open exits: root=0 child=0; work_item_current='child-b|root-a\nroot-a|'; work_item_descendants='root-a|child-b|1'
+
+=== b-dangling-parent-refused ===
+  [ok] exit=3 row_count_unchanged=True stderr_excerpt='e spec deliberately leaves unrefused, s22). Open the parent first: ./led work open no-such-slug "<title>", then retry this open with --parent no-such-slug.\nCONTEXT:  PL/pgSQL function validate_work_item() line 9 at RAISE'
+
+=== c-self-parent-refused ===
+  [ok] exit=3 stderr_excerpt='nt, which the spec deliberately leaves unrefused, s22). Open the parent first: ./led work open self-x "<title>", then retry this open with --parent self-x.\nCONTEXT:  PL/pgSQL function validate_work_item() line 9 at RAISE'
+
+=== d-cycle-function-both-polarities ===
+  [ok] negative(unrelated pair)='f' (expect 'f') positive(ancestor-under-descendant)='t' (expect 't')
+
+=== e-rollup-arithmetic-vs-hand-computed ===
+  [ok] pickup exit=0; ROLLUP excerpt="SECTION: ROLLUP\n\nRETROSPECTIVE-ONLY, always (the maintainer's standing invariant, restated here exactly\nas design/USER-RETROSPECTIVE-RECIPE.md Section 6 states it for estimate:/actual figures\ngenerally): this section never gates, never polices cost or scope, and is never a verdict\non a task that missed its number -- only a decomposition-quality signal a retrospective\nmay cite.\n\nroot-a  (direct children: child-b, child-d)\n  OWN ESTIMATE:   tool_calls=100  subagent_spawns=1  wall_clock=3h  token_oom=100K  (ledger row id=6)\n  CHILDREN SUM (2/2 have an estimate: row) -- witnessed-grade-once-built: tool_calls=60-70  subagent_spawns=0\n  CHILDREN SUM -- diagnostic-grade, permanently: wall_clock=90-150m\n    token_oom per child (order-of-magnitude figures are NOT additive -- shown as a list, never summed): ['10K', '10K']\n  SPLIT-TIME SIGNAL (tool_calls): own=100 vs children_sum=60-70 -- own >= children sum (the parent's top-down estimate covered the decomposition)\n\nACTUALS (witnessed-grade: tool_calls, subagent_spawns): NOT BUILT -- accounting spec\n  Stage B (counting floor) / Stage D (subagent-spawn observer) are spec'd, not built\n  (design/ORCH-SPEC-RESOURCE-ACCOUNTING.md Sections 5 and 8). NULL, named, not faked.\nACTUALS (diagnostic-grade, permanent: wall_clock, token figures): no dedicated witnessed\n  observer is named for either, even once Stage B/D ship (maintainer ruling 2026-07-"
+
+=== f-differential-agree ===
+  [ok] diff_ok=True (exit=0)
+
+=== g-pre-s28-led-open-unaffected ===
+  [ok] exit=0 parent_slug_is_null='t'
+
+ALL CASES OK -- s28 work-parent-edge both-polarity proof (valid parent accepted / dangling parent refused / self-parent refused at construction / cycle function both polarities / rollup arithmetic vs hand-computed / differential AGREE / --parent-less open unaffected on an s28 kernel), zero residue.

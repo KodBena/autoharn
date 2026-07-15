@@ -1,0 +1,327 @@
+#!/usr/bin/env python3
+"""verify-commission — Rung 2 of design/MAINT-GPG-TRUST-LAYER.md §3 ("SIGNED commissions, the third
+signing mode"). Implements the closed verdict vocabulary VERIFIED | UNSIGNED |
+FORGED-OR-CORRUPT the spec names, exit non-zero ONLY on the third — PLUS two typed REFUSALS
+(distinct from all three verdicts, never folded into one) for the two preconditions under which
+none of the three verdicts is actually decidable: gpg itself missing, or no committed key to
+check a claimed signature against. See VERDICTS below for the exact shape and the revision
+history note on why the no-committed-key case moved out of FORGED-OR-CORRUPT.
+
+WHAT THIS CHECKS. A `commission` kind ledger row (kernel/lineage/s25-commission-kind.sql) can
+carry three signing strengths: LAZY (implementer's own vicarious transcription), FULL (the
+commissioner types the row himself, from his own terminal — proven by actor + absent stamp,
+kernel/lineage/s25's own closure statement), and SIGNED (FULL, plus a detached GPG signature
+banked alongside the world at `.claude/commission-<id>.asc`). This verb recomputes the
+statement's digest from the ledger row's OWN current bytes (never trusting a caller-supplied
+digest — the same posture gates/doc_attestation_presence.py already takes for its content hash)
+and checks any banked `.asc` against it, using ONLY the committed public keys in THIS
+DEPLOYMENT's own `keys/` directory (a sibling of its `deployment.json`, resolved the same way
+`.claude/commission-<id>.asc` already is — see `_world_root()` below) — never the operator's
+ambient GPG keyring, and never autoharn's own `law/keys/` (see filing/gpg_trust.py, shared with
+`attest-tags`, for the scratch-keyring mechanics both callers share; `attest-tags` and this verb
+now point that shared mechanism at TWO DIFFERENT directories, deliberately — autoharn's own
+`law/keys/` verifies only autoharn's own `ratified/*` tags, this deployment's `keys/` verifies
+only this deployment's own commissions; design/MAINT-GPG-TRUST-LAYER.md §7 and
+design/USER-GPG-TRUST-LAYER-FAQ.md §3 name the split. KEY-RESIDENCE REVISION, 2026-07-11 evening: an
+earlier version of this file resolved `AUTOHARN / "law" / "keys"` here — a maintainer finding
+the same day ("THIS repository should not have anything to do with end user's keys") named this
+as a conflation of autoharn's own law-signing with every deployment's commission-signing; fixed
+by resolving the deployment's own `keys/` instead, the same residence `.claude/commission-<id>.asc`
+already uses).
+
+VERDICTS (exit code in parentheses) — exactly the three the spec names, nothing folded in:
+  VERIFIED         (0) — a `.claude/commission-<id>.asc` exists and its signature verifies
+                         against the statement's exact current bytes, using a committed key.
+                         "The maintainer asked for X" can no longer be manufactured (spec §3).
+  UNSIGNED         (0) — no `.claude/commission-<id>.asc` exists. A LEGITIMATE, WEAKER claim —
+                         a FULL or LAZY commission, not a defect. Exit 0: the spec is explicit
+                         that UNSIGNED is not a failure, only a lesser guarantee.
+  FORGED-OR-CORRUPT(1) — a `.claude/commission-<id>.asc` EXISTS, a committed key EXISTS to check
+                         it against, and the signature does NOT verify against the statement's
+                         current bytes. A real, checkable, cryptographic mismatch. LOUD.
+
+TWO TYPED REFUSALS (exit code in parentheses) — distinct from all three verdicts above, because
+neither precondition leaves any of the three actually decidable:
+  gpg missing       (2) — none of the three verdicts can be computed without gpg itself.
+  NO-COMMITTED-KEY  (3) — a `.claude/commission-<id>.asc` EXISTS (a claim of SIGNED-mode
+                         strength) but this deployment's OWN `keys/*.asc` is empty
+                         (AWAITING-KEY — see `keys/README.md`) — there is
+                         nothing to check the claimed signature AGAINST, which is not the same
+                         fact as "the signature does not match" (FORGED-OR-CORRUPT) or "no
+                         signature was claimed" (UNSIGNED). Mirrors `attest-tags`' own
+                         `UNVERIFIABLE` verdict (a DISTINCT label there too, never folded into
+                         its `BAD` outcome) — loud, never silently treated as a pass, but never
+                         mislabeled as evidence of forgery either.
+
+REVISION NOTE (2026-07-11/12, same commission, caught by an out-of-frame hack-rationalization
+audit before this shipped as "done" — CLAUDE.md's engineering-responsibility corollary in
+action): an earlier version of this file folded the NO-COMMITTED-KEY case into
+FORGED-OR-CORRUPT, reasoning the spec's vocabulary was "closed to three members" — but this
+file's OWN missing-gpg handling had already broken that closure one paragraph away, and the
+cited precedent (`attest-tags`) actually uses a fourth, DISTINCT label for the identical
+precondition, not a relabeled worst case. Reusing FORGED-OR-CORRUPT would make every commission
+in a fresh, keyless repository (this repository's own real state today) indistinguishable, by
+verdict string alone, from an actual forged signature — a real operational hazard for anyone or
+anything that keys off that string. Fixed by giving the precondition its own exit code and its
+own printed/JSON verdict string, `NO-COMMITTED-KEY`, exactly as the missing-gpg case already had
+its own exit code, rather than overloading a verdict that means something else.
+
+THE BYTE-FIDELITY HAZARD, FIXED (a hazard met in passing, per CLAUDE.md's engineering-
+responsibility corollary — flagged AND fixed, not routed around). The spec's own illustrative
+ceremony (§3) is:
+    gpg --detach-sign --armor ~/aa
+    LED_ACTOR=commissioner ./led commission "$(cat ~/aa)"
+`$(cat ~/aa)` strips ALL trailing newlines when the shell interpolates it, but `gpg --detach-sign
+--armor ~/aa` signs the RAW FILE, trailing newline(s) included. If `~/aa` ends in a newline (as
+almost every editor-saved file does), the ledger's stored `statement` and the bytes the signature
+actually covers DIFFER — and a completely honest, non-forged commission would verify as
+FORGED-OR-CORRUPT. This is a real defect class (ADR-0000: the type that forecloses it is "sign
+exactly the bytes that will be compared", not a downstream tolerance/fuzzy-match patch), fixed
+here and in the ceremony this project's own scaffold prints
+(bootstrap/new-project.sh's SIGNED-mode block) and in design/USER-GPG-TRUST-LAYER-FAQ.md: sign
+`printf '%s' "$STATEMENT"` (no trailing newline, byte-identical to what `$(...)` produces and
+what lands in the ledger), never the raw file.
+
+USAGE:
+  ./verify-commission                  # the MOST RECENT commission row
+  ./verify-commission --id 7           # a specific commission row by ledger id
+  ./verify-commission --json           # machine-readable report, same verdicts
+
+EVENT JOURNAL (E6 of design/ORCH-CONTEMPORANEITY-PART3-SPEC.md §4, added 2026-07-12): every run
+that reaches a determination -- one of the three verdicts above OR one of the two typed refusals
+-- appends ONE line to `<world>/.claude/logs/verify_commission.jsonl` ({"ts": <UTC-Z
+milliseconds>, "verdict": <the determination string>}), the unified hook-journal timestamp
+convention this project's other journals already use (hooks/posttooluse_bash_completion.py's own
+`isoformat(timespec="milliseconds").replace("+00:00","Z")`). NEW-LINE-ONLY: this is the sole
+change this delta makes to this file's behavior -- no verdict, refusal, exit code, or printed
+text above is altered. Journaling is best-effort and FAILS OPEN (mirrors every hook journal in
+this project): a write failure here must never turn a real verdict into a crash. This is what
+lets `preamble_ordering.lp`'s F2 (`ob_verify_commission`, preamble point 10: "run
+./verify-commission and carry its verdict ... into the FIRST row of the decomposition") move
+from UNDECIDABLE(no_verify_journal) to a real M-class check once a world's own logs carry this
+file -- see engine/contemp_edb.py's E6 extension and engine/lp/preamble_ordering.lp's own header
+for the full account. A world whose `.claude/logs/` carries no verify_commission.jsonl at all
+(this verb was never invoked, or was invoked before this line landed in the checkout -- this
+file executes IN PLACE out of the live autoharn checkout like every other verb, so a re-run
+picks the journaling up immediately, no per-world re-scaffold needed) reads as capability-absent
+for that world, named honestly, never guessed.
+
+Deployment resolution, connection posture, and path resolution mirror pickup.tmpl /
+distance-to-clean.tmpl exactly (PICKUP_DEPLOYMENT, AUTOHARN, `SET ROLE <dep.role>`) — this file
+executes IN PLACE out of the autoharn checkout (the "live verbs" ruling); ADR-0012 P1, one
+resolution mechanism, not a fourth hand-copy.
+
+Read-only against the ledger throughout (a single SELECT); the only filesystem reads are the
+world's own `.claude/commission-<id>.asc` (if present) and its own `keys/*.asc` (if any — see
+KEY-RESIDENCE REVISION above). Lazy imports banned.
+"""
+from __future__ import annotations
+
+import hashlib
+import json
+import os
+import subprocess
+import sys
+import tempfile
+from datetime import datetime, timezone
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+AUTOHARN = Path(os.environ.get("AUTOHARN", str(HERE / ".." / ".."))).resolve()
+DEPLOYMENT_PATH = Path(os.environ.get("PICKUP_DEPLOYMENT", str(HERE / "deployment.json")))
+
+sys.path.insert(0, str(AUTOHARN / "filing"))
+try:
+    import deployment_record  # noqa: E402  (filing/deployment_record.py, the ONE home for the shape)
+    import gpg_trust  # noqa: E402  (filing/gpg_trust.py, the ONE home for the scratch-keyring mechanics)
+except ImportError as _e:
+    print(f"verify-commission: cannot import autoharn's filing/ modules under AUTOHARN={AUTOHARN} "
+          f"({_e.__class__.__name__}: {_e})", file=sys.stderr)
+    print("        set AUTOHARN=/path/to/autoharn, or place a sibling checkout at ../autoharn", file=sys.stderr)
+    sys.exit(2)
+
+
+def _journal_verify_commission(world_root: Path, verdict: str) -> None:
+    """E6 (design/ORCH-CONTEMPORANEITY-PART3-SPEC.md §4): append ONE line naming this run's
+    determination -- best-effort, fail-open (module docstring's EVENT JOURNAL section): a
+    journaling failure must never turn a real verdict into a crash or change this verb's exit
+    code. `verdict` is one of the closed five: VERIFIED, UNSIGNED, FORGED-OR-CORRUPT (the three
+    verdicts `verify()` returns) or GPG-UNAVAILABLE, NO-COMMITTED-KEY (the two typed refusals) --
+    never a sixth value, so a consumer's Verdict vocabulary stays closed by construction."""
+    try:
+        path = world_root / ".claude" / "logs" / "verify_commission.jsonl"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        ts = datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+        with open(path, "a", encoding="utf-8") as f:
+            f.write(json.dumps({"ts": ts, "verdict": verdict}, ensure_ascii=False) + "\n")
+    except Exception:  # noqa: BLE001 -- journaling failure must never affect this verb's own exit
+        pass
+
+
+def _load_deployment():
+    try:
+        return deployment_record.load_deployment(DEPLOYMENT_PATH)
+    except deployment_record.DeploymentError as e:
+        print(f"verify-commission: {e}", file=sys.stderr)
+        sys.exit(2)
+
+
+def _world_root() -> Path:
+    """The directory deployment.json lives in — the world root, where `.claude/commission-
+    <id>.asc` is banked (mirrors pickup.tmpl's GIT-STATE resolution: report on the world the
+    deployment record was found in, never wherever this template file itself lives)."""
+    return DEPLOYMENT_PATH.resolve().parent
+
+
+def fetch_commission(dep, commission_id: int | None) -> dict | None:
+    """One row, as JSON (never pipe-delimited text — a commission statement can itself contain
+    '|' or newlines, and JSON is the safe encoding doc_attestation_presence.py's own convention
+    already established for this project). None if no matching row exists."""
+    where = f"l.id = {int(commission_id)}" if commission_id is not None else "TRUE"
+    order = "" if commission_id is not None else "ORDER BY l.id DESC LIMIT 1"
+    sql = (f"SET ROLE {dep.role};\n"
+           f"SELECT row_to_json(t) FROM (SELECT l.id, l.statement, p.name AS actor, "
+           f"l.stamp_agent, l.stamp_verified FROM {dep.schema}.ledger_current l "
+           f"JOIN {dep.kern}.principal p ON p.id = l.actor "
+           f"WHERE l.kind = 'commission' AND {where} {order}) t;")
+    r = subprocess.run(["psql", "-h", dep.host, "-d", dep.db, "-t", "-A", "-v", "ON_ERROR_STOP=1",
+                        "-c", sql], capture_output=True, text=True, timeout=15)
+    if r.returncode != 0:
+        print(f"verify-commission: query failed: {r.stderr.strip()}", file=sys.stderr)
+        sys.exit(2)
+    lines = [ln for ln in r.stdout.strip("\n").splitlines() if ln.strip()]
+    # first line echoes the preceding SET ROLE statement (pickup.tmpl's own documented quirk);
+    # the row (if any) is whatever remains.
+    rows = lines[1:] if lines else []
+    if not rows:
+        return None
+    return json.loads(rows[0])
+
+
+def signing_mode(row: dict) -> str:
+    """FULL (commissioner's own terminal, unstamped) vs LAZY (implementer's vicarious
+    transcription, stamped) — the two independent signals kernel/lineage/s25-commission-
+    kind.sql's own closure statement names, read here rather than re-derived a third time."""
+    if row["actor"] == "commissioner" and not row["stamp_agent"]:
+        return "FULL"
+    return "LAZY"
+
+
+class NoCommittedKey(Exception):
+    """A `.asc` is banked (a claim of SIGNED-mode strength) but THIS DEPLOYMENT's own
+    `keys/*.asc` is empty — there is nothing to check the claim against. Distinct from
+    GpgUnavailable (gpg itself missing) and from a genuine FORGED-OR-CORRUPT (a committed key
+    exists and the signature fails against it). See this module's REVISION NOTE for why this is
+    not folded into FORGED-OR-CORRUPT, and this module's KEY-RESIDENCE REVISION note (module
+    docstring) for why the keys directory checked is this deployment's own, never autoharn's
+    `law/keys/`."""
+
+
+def verify(dep, row: dict, world_root: Path) -> tuple[str, str]:
+    """Returns (verdict, detail). verdict in {VERIFIED, UNSIGNED, FORGED-OR-CORRUPT}. Raises
+    gpg_trust.GpgUnavailable if a .asc exists but gpg itself is not on PATH, or NoCommittedKey if
+    a .asc exists but THIS DEPLOYMENT's own keys/ (world_root / "keys", never autoharn's own
+    law/keys/) is empty — both are the caller's problem to report as typed refusals, distinct
+    from all three verdicts."""
+    asc_path = world_root / ".claude" / f"commission-{row['id']}.asc"
+    if not asc_path.exists():
+        mode = signing_mode(row)
+        return "UNSIGNED", (f"no {asc_path.relative_to(world_root)} found — legitimate {mode}-mode "
+                             f"commission, not a defect (spec §3: UNSIGNED is a weaker claim, "
+                             f"never a failure)")
+
+    # THIS DEPLOYMENT's own keyring — a sibling of deployment.json, never autoharn's law/keys/
+    # (see this module's KEY-RESIDENCE REVISION note above for why). `gpg_trust.committed_keys`
+    # already degrades honestly (returns []) if `keys/` does not exist at all -- a deployment
+    # scaffolded before this directory was introduced behaves identically to one whose keys/ is
+    # simply empty, no special-casing needed here.
+    keys_dir = world_root / "keys"
+    keys = gpg_trust.committed_keys(keys_dir)
+    if not keys:
+        raise NoCommittedKey(
+            f"a signature is banked ({asc_path.name}) but {keys_dir} carries NO committed public "
+            f"key (AWAITING-KEY) — nothing exists to check the claimed signature against")
+    gnupghome = gpg_trust.build_scratch_keyring(keys)  # raises GpgUnavailable if gpg is missing
+    try:
+        statement_bytes = row["statement"].encode("utf-8")
+        digest = hashlib.sha256(statement_bytes).hexdigest()
+        with tempfile.NamedTemporaryFile(delete=False) as tf:
+            tf.write(statement_bytes)  # exact bytes, no added/stripped newline
+            data_path = Path(tf.name)
+        try:
+            env = {"GNUPGHOME": str(gnupghome), "PATH": "/usr/bin:/bin:/usr/local/bin"}
+            r = subprocess.run(["gpg", "--verify", str(asc_path), str(data_path)],
+                                capture_output=True, text=True, env=env)
+            detail = (r.stdout + r.stderr).strip()
+            if r.returncode == 0 and "Good signature" in detail:
+                return "VERIFIED", f"statement sha256={digest}. {detail}"
+            return "FORGED-OR-CORRUPT", f"statement sha256={digest}. {detail}"
+        finally:
+            data_path.unlink(missing_ok=True)
+    finally:
+        gpg_trust.teardown_scratch_keyring(gnupghome)
+
+
+def main(argv: list[str]) -> int:
+    commission_id: int | None = None
+    as_json = False
+    args = list(argv)
+    i = 0
+    while i < len(args):
+        a = args[i]
+        if a == "--id":
+            commission_id = int(args[i + 1])
+            i += 2
+        elif a == "--json":
+            as_json = True
+            i += 1
+        else:
+            print(f"verify-commission: unrecognized argument: {a}", file=sys.stderr)
+            return 2
+
+    dep = _load_deployment()
+    world_root = _world_root()
+    row = fetch_commission(dep, commission_id)
+    if row is None:
+        target = f"id {commission_id}" if commission_id is not None else "any commission row"
+        print(f"verify-commission: no commission row found ({target}) in {dep.schema}.ledger", file=sys.stderr)
+        return 2
+
+    try:
+        verdict, detail = verify(dep, row, world_root)
+    except gpg_trust.GpgUnavailable as e:
+        _journal_verify_commission(world_root, "GPG-UNAVAILABLE")
+        if as_json:
+            print(json.dumps({"id": row["id"], "actor": row["actor"], "signing_mode": signing_mode(row),
+                               "refusal": "GPG-UNAVAILABLE", "detail": str(e)}, indent=2))
+        else:
+            print(f"verify-commission: REFUSED — {e}", file=sys.stderr)
+        return 2
+    except NoCommittedKey as e:
+        _journal_verify_commission(world_root, "NO-COMMITTED-KEY")
+        if as_json:
+            print(json.dumps({"id": row["id"], "actor": row["actor"], "signing_mode": signing_mode(row),
+                               "refusal": "NO-COMMITTED-KEY", "detail": str(e)}, indent=2))
+        else:
+            print(f"verify-commission: row {row['id']} (actor={row['actor']}, "
+                  f"signing_mode={signing_mode(row)})")
+            print(f"  statement: {row['statement']!r}")
+            print(f"  [!!] NO-COMMITTED-KEY -- {e}")
+        return 3
+
+    _journal_verify_commission(world_root, verdict)
+    if as_json:
+        print(json.dumps({"id": row["id"], "actor": row["actor"], "signing_mode": signing_mode(row),
+                           "verdict": verdict, "detail": detail}, indent=2))
+        return 1 if verdict == "FORGED-OR-CORRUPT" else 0
+
+    print(f"verify-commission: row {row['id']} (actor={row['actor']}, signing_mode={signing_mode(row)})")
+    print(f"  statement: {row['statement']!r}")
+    marker = {"VERIFIED": "OK", "UNSIGNED": "..", "FORGED-OR-CORRUPT": "!!"}[verdict]
+    print(f"  [{marker}] {verdict}")
+    print(f"        {detail}")
+    return 1 if verdict == "FORGED-OR-CORRUPT" else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

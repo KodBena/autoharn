@@ -1,0 +1,25 @@
+# Design-decision witness — the atomic review+detail write-time fix, DECLARED NOT SHIPPED (consult 37 Addendum A)
+
+The finding-38 atomic fix (a DEFERRABLE INITIALLY DEFERRED constraint trigger requiring every kind='review'
+ledger row to carry a review_detail by end of transaction) was built and tested against the two honest
+insert idioms on a throwaway s17 kernel:
+
+  psql -c "INSERT review; INSERT detail"   (multi-statement -c = ONE implicit transaction)  -> PASSES
+  heredoc: INSERT review; \n INSERT detail; (per-statement AUTOCOMMIT — the e17 subject's actual idiom,
+                                             consult 35 §0)                                  -> REFUSED
+
+  Refusal on the heredoc form (verbatim):
+    ERROR:  Ledger policy: a review must carry its review_detail in the same transaction (atomic
+            review+detail, finding 38) — row 3 has no detail at commit.
+    CONTEXT:  PL/pgSQL function review_requires_detail() line 4 at RAISE
+    (and then) ERROR: null value in column "ledger_id" of relation "review_detail" ... not-null
+
+The review row NEVER LANDS under the honest heredoc idiom — an honest self-review (distinct principal,
+independence='self-review') recorded the way e17's subject did would be refused, purely for not being
+BEGIN/COMMIT-wrapped. Making it behavior-invisible would require updating ledger_helper to the transaction
+pattern — a subject-visible packet change that consult 37 §3 fences.
+
+RULING (Addendum A): the STOP guard fired as designed; s18 = s17 byte-identical; the class is covered by
+the DESCRIPTIVE review_without_detail close line instead (this foreclosure). A refusal predicate must
+never capture a shape honest work takes (F34-lineage scoping discipline) — flagged as a candidate law for
+the next FINDINGS pass, not filed here.

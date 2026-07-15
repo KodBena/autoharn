@@ -1,0 +1,4 @@
++CIRCUIT BREAKER FIRED
++seen 3/3 times
++work item 'probe-item-1' is open and UNCLAIMED
+-"decision": "block"

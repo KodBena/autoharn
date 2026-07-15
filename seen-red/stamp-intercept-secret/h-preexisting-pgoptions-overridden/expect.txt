@@ -1,0 +1,5 @@
++"permissionDecision": "allow"
++export PGOPTIONS=
++app.vendor_hmac=
+-statement_timeout
+-STAMP_SECRET is configured

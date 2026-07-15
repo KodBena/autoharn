@@ -1,0 +1,103 @@
+seen-red/decomposition-review-blocker — banked RED evidence (both-polarity proof, fixture-census)
+
+BACKLOG "decomposition-review-blocker" (maintainer ruling, 2026-07-12): "the decomposition's
+second-pair-of-eyes review must be a BLOCKER for execution, not backloggable debt — if the
+decomposition is wrong, every discharged subtask is waste." WITNESSED SPECIMEN driving this:
+run12, where work item task 1 was CLAIMED at 08:58:10 and its IMPLEMENTATION BEGAN at 08:58:16 —
+six seconds later — while the decomposition's own countersign verdicts landed only at
+09:00:38–09:01:01: execution ran ~2.5 minutes AHEAD of the planning review that was supposed to
+gate it. permit-to-work (the existing s22 mechanism) proves an open+claimed work item exists; it
+says nothing about whether that item's OWN decomposition was ever countersigned.
+
+BEFORE the fix (git show HEAD:hooks/pretooluse_change_gate.py — this fix's own edits are still an
+uncommitted working-tree change, so HEAD is the byte-held pre-fix version — run standalone against
+a real scratch schema carrying an open+claimed work item AND an undischarged
+countersign_obligation on it, real output, 2026-07-12):
+
+  Take 1 (no ticket at all): the pre-fix hook denies, but for a reason that has NOTHING to do with
+  the undischarged decomposition-review obligation — it does not know that concept exists:
+    exit: 2
+    Ledger policy: a change to a source file must be preceded by a ledger entry naming the file
+    it changes. Insert the entry (one INSERT, as usual), then RE-ISSUE THE SAME EDIT ...
+
+  Take 2 (an ordinary ticket now names the file — the pre-fix hook's ONLY notion of permission):
+    echo '{"tool_name":"Write","tool_input":{"file_path":"/tmp/decompdr_redtxt_root/foo.py"},"cwd":"/tmp"}' \
+      | GATE_SUBJECT_ROOT=/tmp/decompdr_redtxt_root LEDGER_HOST=192.168.122.1 LEDGER_DB=toy \
+        GATE_LEDGER=decompdr_redtxt.ledger python3 <pre-fix hooks/pretooluse_change_gate.py>
+    exit: 0
+    (nothing printed)
+  This is the exact defect the maintainer ruling names: the SAME DB state that carries an open+
+  claimed work item, an assigned countersign_obligation on it, and ZERO discharging review rows —
+  execution proceeds silently, ~2.5 minutes ahead of any decomposition review, exactly the run12
+  shape, the instant an unrelated ticket exists. The pre-fix hook has no representation of "was
+  the plan for THIS item reviewed" at all.
+
+AFTER the fix (case a, real output via `python3 seen-red/decomposition-review-blocker/run_fixtures.py`,
+2026-07-12 — the IDENTICAL DB state as above, `decomposition_review` mode=enforce):
+
+  exit: 2
+  {"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "deny",
+   "permissionDecisionReason": "Ledger policy (decomposition-review-blocker): work item
+   'decomp-fixture' (work_opened row 1) carries an undischarged decomposition-review obligation —
+   executing a claimed work item before its OWN decomposition is countersigned makes every subtask
+   a bet on an unreviewed plan (the run12 specimen: task 1's implementation began 6 seconds after
+   claim, ~2.5 minutes ahead of the countersign verdict that was supposed to gate it). Discharge
+   it, THEN retry the same edit:
+     1. Dispatch a reviewer principal — a DISTINCT actor; the kernel refuses same-actor review
+        (segregation of duties).
+     2. LED_ACTOR=<reviewer> ./led review 1 attest technical \"<basis for the countersign>\"
+     Solo-world fallback (no second principal genuinely available): register one for the same
+     operator and countersign disclosing it — this world's own CLAUDE.md documents the exact
+     commands (the disclosed-self-review fallback)."}}
+
+Case b proves the OBSERVE polarity on the IDENTICAL undischarged DB state (mode=observe): exit 0,
+allow, but `additionalContext` carries the "would DENY under enforce" warning verbatim, plus a
+journal record (outcome: observed_would_deny) — nothing is silently swallowed, unlike the pre-fix
+hook's genuine silence above.
+
+Case e proves the check fires "anywhere in the world": the SAME undischarged obligation, but the
+target is a `.md` file — NOT matched by permit_to_work's own `*.py` GOVERNED_PATTERNS default —
+still denied.
+
+Case f proves the Bash-mutation branch, independent of change_gate's own mode: a `sed -i` command
+into a governed `.py` path is denied on the SAME undischarged obligation.
+
+Cases c/g prove the OPPOSITE polarity after a distinct-actor attest review discharges the
+obligation (kernel/lineage/s15-schema.sql's own review_gap semantics, faithfully transcribed): the
+IDENTICAL Write (c) and Bash (g) calls now exit 0 with no decomposition-review text anywhere in
+the output — the run12 specimen replayed end to end: claim a work item, attempt a write before any
+review row exists → deny; add the attest → pass.
+
+Case d proves the VACUOUS case the maintainer ruling requires: an open+claimed work item in a
+world whose countersign_obligation table carries ZERO rows at all (never adopted the
+review-obligation regime) — mode=enforce, exit 0, no decomposition-review text: the gate adds
+nothing, by construction (review_gap's own JOIN against countersign_obligation is empty for every
+row when that table is empty — not a second, separately-checked "is it empty" branch).
+
+Case h proves the NAMED fail-open choice, mirroring permit-to-work's own: a pre-s22 world (no
+work_item_current view at all, high_watermark_1.sql alone) skips this check entirely — exit 0, no
+decomposition-review text.
+
+Case i is a REGRESSION TEST for a real defect an INDEPENDENT second-opinion review (dispatched
+per ADR-0014, out-of-frame — a fresh agent that had not seen this diff or its reasoning) caught in
+this mechanism's first-shipped version, 2026-07-12: the Bash-branch DB-error handler was a bare
+`except Exception: pass`, copy-adapted from permit-to-work's own bash-side check — but that check
+can safely swallow an error only because CHANGE_GATE_MODE's own UNCONDITIONAL bash_write deny
+(when enforce) always follows it. decomposition_review has no such fallback to ride when
+CHANGE_GATE_MODE is "off"/"observe" — exactly the configuration this mechanism exists to matter in
+on its own — so a transient DB hiccup would have silently ALLOWED a governed-file-mutating Bash
+command, contradicting the module's own repeated "fail-closed, same posture as every query here"
+claim. Fixed: the handler now denies under enforce, naming the check as unavailable, exactly
+mirroring the Write/Edit branch's existing posture. Case i proves it live: `change_gate` and
+`permit_to_work` both OFF (so no other mechanism's deny can mask the result), `decomposition_review`
+enforce, LEDGER_DB pointed at a genuinely unreachable database — DENIED, teach-text names the
+check as unavailable:
+  exit: 2
+  Ledger policy: source files are modified via the Write/Edit tools, so each change is tied to
+  its ledger entry — shell writes into these files are disabled.  [decomposition-review check
+  unavailable: CalledProcessError]
+
+Full nine-case run (a/b/e/f/i pre-discharge, c/g post-discharge, d vacuous, h pre-s22, all
+asserted programmatically; three scratch schemas applied-and-dropped in the toy db per run, zero
+DB residue, zero temp-dir residue):
+  python3 seen-red/decomposition-review-blocker/run_fixtures.py
