@@ -1,5 +1,0 @@
-naive substring check: 'panel-item:680:A1' in 'panel-item:680:A10 row:900' = True
-FAIL (if this were the real parser): item A1 falsely matched against A10's own row
-
-The anchored parser this repo actually ships (ledger_read.parse_item_refs) does NOT
-make this mistake -- see seen-red/panel-disposition/run_fixtures.py case (j), GREEN.

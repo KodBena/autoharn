@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-09T07:54:37Z
-#   last-change: 2026-07-15T01:35:27Z
+#   last-change: 2026-07-15T03:54:20Z
 #   contributors: 9bcc0113/main, be693afb/main, e4410ef6/main, 3c50e030/main, a857c93d/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -134,14 +134,12 @@ ROOT_DIRS = {
     # never registered here at landing time, caught by this gate's own next run (CLAUDE.md
     # hazard-flagging duty, same shape as the migrate/attestations/tools entries above).
     "docs",
-    # panel/ — the maintainer co-sign SPA (BUILD SPEC v2 r5, ADR-0000/0012 amendment):
-    # panel/backend (FastAPI + ledger reads/writes), panel/frontend (the vendored, no-CDN SPA),
-    # panel/seed (the point-in-time commission-680 decomposition seed). No panel/manifests/ —
-    # that git-resident manifest was the v1 architecture the amendment condemns (BUILD SPEC v2
-    # r5 sec 0/8); decomposition lives in the ledger, never in a second git-resident home.
-    # Registered on landing (WP-4) rather than left an unregistered breach for this gate's next
-    # run (CLAUDE.md hazard-flagging duty, same shape as the docs/observatory/tools entries above).
-    "panel",
+    # panel/ DEREGISTERED (2026-07-15, TASK C, commission item 3): the PoC SPA that lived here
+    # (panel/backend, panel/frontend, panel/seed) moved to its own repo, KodBena/autoharn-panel,
+    # and is adopted back in as a git submodule at tools/autoharn-panel — no new top-level
+    # registration needed since tools/ is already a registered ROOT_DIR above and a submodule's
+    # gitlink entry sorts under it. panel/ itself is untracked now (removed from the index; any
+    # leftover files on disk are not git-tracked and this gate only walks `git ls-files`).
 }
 
 # (2) per-directory currency patterns: a directory -> the regex(es) its basenames MUST match.

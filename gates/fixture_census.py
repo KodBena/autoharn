@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-09T13:36:11Z
-#   last-change: 2026-07-15T01:34:22Z
+#   last-change: 2026-07-15T03:54:30Z
 #   contributors: be693afb/main, e4410ef6/main, 3c50e030/main, 3c942a60/main, a857c93d/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -116,10 +116,11 @@ REGISTRY: dict[str, str] = {
     "pickup-connection-failure-silent-empty": "seen-red/pickup-connection-failure-silent-empty/run_fixtures.py",
     "scan2-firing-telemetry":       "seen-red/scan2-firing-telemetry/run_fixtures.py",
     "deployment-pinning":           "seen-red/deployment-pinning/run_fixtures.py",
-    # panel v2 (BUILD SPEC v2 r5, WP-4): the pure disposition/parser derivation, no DB, and the
-    # live scratch-schema co-sign write path + disposition read path, both-polarity.
-    "panel-disposition":            "seen-red/panel-disposition/run_fixtures.py",
-    "panel-cosign":                 "seen-red/panel-cosign/run_fixtures.py",
+    # panel-disposition / panel-cosign DEREGISTERED (2026-07-15, TASK C, commission item 3):
+    # both suites ported to the standalone SPA repo's own tests/ (test_disposition.py,
+    # test_cosign_live.py in KodBena/autoharn-panel) when the PoC moved out of panel/ into its
+    # own repo, adopted back as a git submodule at tools/autoharn-panel — both-polarity
+    # discipline continues to hold there, just no longer under this repo's seen-red/ registry.
 }
 
 
