@@ -1,0 +1,222 @@
+#!/usr/bin/env python3
+"""orchlog -- the changelog for a RESTARTING orchestrator (ledger item
+orchlog-changelog-verb). A fresh orchestrator session hydrates from the ledger, but the
+ledger does not narrate "things a restarting orchestrator would want to know" -- a fixed
+refusal they may have hit before, a new verb, a semantics change. That is what orchlog.d/ is
+for: one short markdown note per notable landing, and this verb reads them back in commit
+order.
+
+NAMING NOTE (a deliberate, stated deviation): the commissioning brief for this verb named the
+notes directory "orchlog/" -- but a filesystem cannot hold both a file "orchlog" (this verb,
+at the repo root, matching the one-word naming of every sibling verb: pickup, judge, led,
+audit) and a directory "orchlog" in the same parent. That is not a stylistic choice, it is a
+literal impossibility (verified: `echo x > foo` fails with "is a directory" when `foo/`
+exists). The directory is therefore "orchlog.d/" -- the standard Unix idiom for "the
+directory backing a same-named thing" (cron.d, logrotate.d, sudoers.d) -- the closest
+possible fit to the brief's intent that a plain filesystem can host. See orchlog.d/README.md
+for the same note from the directory side.
+
+THE HASH CORRELATION IS GIT'S OWN RECORD (deliberate design, dissolves the egg-vs-hen
+problem of a note needing to know its own future commit hash): no note file ever contains
+its own hash. Instead, a note's "adding commit" is derived, per invocation, from
+`git log --diff-filter=A -- orchlog.d/<file>` -- the first commit that added that exact path.
+That derived commit is what both display ORDER and `since` FILTERING key on. A note may
+also carry an OPTIONAL `subject: <commit-ish>` first line -- the commit the note is *about*,
+for a note written after the fact, describing a commit that already landed. `subject:` is
+shown for context only; it never governs ordering or filtering.
+
+NOTE FILE SHAPE: a note is a markdown file under orchlog.d/ (not orchlog.d/README.md, which
+is the policy document, not a note). Its optional first line is exactly `subject:
+<commit-ish>`; everything from the next non-blank line on is the note body, written TO the
+restarting orchestrator (what changed, what symptom it resolves, what to do differently).
+Most commits carry no note -- the directory is NULLABLE by construction.
+
+USAGE:
+  ./orchlog                    list every note, newest-first (by adding commit), each with
+                                that commit's hash, date, and first line (its subject); the
+                                note's own optional `subject:` field is shown alongside if set.
+  ./orchlog since <commit-ish> list only notes whose ADDING commit is not an ancestor-or-equal
+                                of <commit-ish> -- i.e. notes that landed after it. An
+                                unresolvable <commit-ish> is REFUSED loudly with teach-text
+                                (never a silent empty list). A <commit-ish> that resolves but
+                                is not an ancestor of HEAD (a diverged/unrelated branch) is
+                                reported honestly as such before the (still well-defined)
+                                ancestor filter runs.
+  ./orchlog --help             this message.
+  --repo PATH                  OPTIONAL leading flag, before any subcommand, pointing this
+                                verb at a different repository root than the one it lives in
+                                (mirrors attest-tags' own --repo flag). Reassigns the module's
+                                REPO_ROOT global before dispatch. Omitting it is a no-op --
+                                every ordinary invocation is unaffected. Exists so the seen-red
+                                fixture (seen-red/orchlog-since-filter/run_fixtures.py) can
+                                both-polarity-prove this verb against a disposable scratch git
+                                repo instead of this one.
+
+EXIT CODES: 0 on a normal listing (including an empty one -- no notes, or none-since-X, are
+not errors); 2 on a REFUSED invalid commit-ish or a malformed invocation.
+
+Lazy imports are banned (CLAUDE.md, 2026-07-02): everything below imports at module load.
+"""
+from __future__ import annotations
+
+import subprocess
+import sys
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parent
+
+
+def _git(args: list[str]) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(["git", "-C", str(REPO_ROOT)] + args, capture_output=True, text=True)
+
+
+def _tracked_notes() -> list[str]:
+    """Every git-tracked orchlog.d/*.md file except the policy doc orchlog.d/README.md."""
+    r = _git(["ls-files", "orchlog.d/*.md"])
+    if r.returncode != 0:
+        print(f"orchlog: 'git ls-files' failed: {r.stderr.strip()}", file=sys.stderr)
+        sys.exit(2)
+    return sorted(
+        p for p in r.stdout.splitlines()
+        if p.strip() and Path(p).name != "README.md"
+    )
+
+
+def _parse_note(path: Path) -> tuple[str | None, str]:
+    """(subject-field-or-None, body). The subject field is the note's OWN optional
+    'subject: <commit-ish>' first line -- distinct from the commit that ADDED the note. A
+    leading '<!-- ... -->' line (e.g. a doc-attest-exempt waiver, gates/
+    doc_attestation_presence.py's convention) is header furniture, not body content, and is
+    skipped the same way the subject line is -- neither should ever be mistaken for the
+    note's first line of actual content when displayed."""
+    text = path.read_text(encoding="utf-8")
+    lines = text.splitlines()
+    subject: str | None = None
+    idx = 0
+    if lines and lines[idx].startswith("subject:"):
+        subject = lines[idx][len("subject:"):].strip()
+        idx += 1
+    while idx < len(lines) and lines[idx].strip().startswith("<!--") and lines[idx].strip().endswith("-->"):
+        idx += 1
+    body = "\n".join(lines[idx:]).strip()
+    return subject, body
+
+
+def _adding_commit(relpath: str) -> tuple[str, str, str] | None:
+    """(sha, ISO date, commit subject line) of the FIRST commit that added this exact path,
+    derived straight from git's own record -- the git-is-the-correlation design this verb is
+    built around. None if the path has no add-commit reachable from HEAD (should not happen
+    for a tracked file, but handled rather than assumed)."""
+    r = _git(["log", "--diff-filter=A", "--format=%H%x01%aI%x01%s", "--", relpath])
+    lines = [ln for ln in r.stdout.splitlines() if ln.strip()]
+    if r.returncode != 0 or not lines:
+        return None
+    # git log is newest-first; the FIRST add is the LAST line.
+    sha, date, subject = lines[-1].split("\x01", 2)
+    return sha, date, subject
+
+
+def _resolve_commit(commit_ish: str) -> str | None:
+    r = _git(["rev-parse", "--verify", "--end-of-options", f"{commit_ish}^{{commit}}"])
+    if r.returncode != 0:
+        return None
+    return r.stdout.strip()
+
+
+def _is_ancestor(ancestor_sha: str, descendant_sha: str) -> bool:
+    return _git(["merge-base", "--is-ancestor", ancestor_sha, descendant_sha]).returncode == 0
+
+
+def _list_notes() -> list[dict]:
+    out: list[dict] = []
+    for relpath in _tracked_notes():
+        info = _adding_commit(relpath)
+        if info is None:
+            continue
+        sha, date, commit_subject = info
+        note_subject, body = _parse_note(REPO_ROOT / relpath)
+        out.append({
+            "path": relpath, "sha": sha, "date": date, "commit_subject": commit_subject,
+            "note_subject": note_subject, "body": body,
+        })
+    out.sort(key=lambda n: n["date"], reverse=True)
+    return out
+
+
+def _print_note(n: dict) -> None:
+    print(f"{n['sha'][:12]}  {n['date'][:10]}  {n['path']} -- {n['commit_subject']}")
+    if n["note_subject"]:
+        print(f"    subject: {n['note_subject']}")
+    first_body_line = n["body"].splitlines()[0] if n["body"] else "(empty note)"
+    print(f"    {first_body_line}")
+    print()
+
+
+def cmd_list() -> int:
+    notes = _list_notes()
+    if not notes:
+        print("orchlog: no notes yet -- orchlog.d/ is empty (nullable by construction). "
+              "Nothing for a restarting orchestrator to catch up on.")
+        return 0
+    for n in notes:
+        _print_note(n)
+    return 0
+
+
+def cmd_since(commit_ish: str) -> int:
+    resolved = _resolve_commit(commit_ish)
+    if resolved is None:
+        print(
+            f"orchlog: REFUSED -- {commit_ish!r} does not resolve to a commit in this repo.\n"
+            f"  usage: ./orchlog since <commit-ish>   (a git commit-ish: full/short sha, tag, "
+            f"branch name, HEAD~N, ...)\n"
+            f"  try 'git log --oneline -5' to find a real commit-ish, or './orchlog' with no "
+            f"arguments to list every note.",
+            file=sys.stderr,
+        )
+        return 2
+
+    head = _resolve_commit("HEAD")
+    if head and not _is_ancestor(resolved, head):
+        print(
+            f"orchlog: NOTE -- {commit_ish!r} ({resolved[:12]}) is not an ancestor of HEAD "
+            f"({head[:12]}); it is not on this branch's history (a diverged or unrelated "
+            f"commit). Proceeding with a literal ancestor-of-{commit_ish} filter -- git's "
+            f"ancestry check is well-defined regardless -- but the result may not mean "
+            f"'since my last session on this branch'. Cross-check with "
+            f"'git log --oneline {commit_ish}..HEAD' if in doubt.",
+            file=sys.stderr,
+        )
+
+    fresh = [n for n in _list_notes() if not _is_ancestor(n["sha"], resolved)]
+    if not fresh:
+        print(f"orchlog: no notes landed after {commit_ish} ({resolved[:12]}). Nothing new.")
+        return 0
+    for n in fresh:
+        _print_note(n)
+    return 0
+
+
+def main(argv: list[str]) -> int:
+    global REPO_ROOT
+    argv = list(argv)
+    while len(argv) >= 2 and argv[0] == "--repo":
+        REPO_ROOT = Path(argv[1]).resolve()
+        argv = argv[2:]
+
+    if not argv:
+        return cmd_list()
+    if argv[0] in ("--help", "-h"):
+        print(__doc__)
+        return 0
+    if argv[0] == "since":
+        if len(argv) != 2:
+            print("usage: orchlog [--repo PATH] since <commit-ish>", file=sys.stderr)
+            return 2
+        return cmd_since(argv[1])
+    print(f"orchlog: unrecognized argument: {argv[0]!r} (see './orchlog --help')", file=sys.stderr)
+    return 2
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
