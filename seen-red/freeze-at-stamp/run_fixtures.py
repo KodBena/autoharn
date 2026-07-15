@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-12T18:08:05Z
-#   last-change: 2026-07-12T18:13:39Z
-#   contributors: 3c50e030/main
+#   last-change: 2026-07-14T22:23:15Z
+#   contributors: 3c50e030/main, a857c93d/main
 # <<< PROVENANCE-STAMP <<<
 
 """run_fixtures.py -- both-polarity proof for bootstrap/freeze-at-stamp.sh (tracker slug
@@ -69,7 +69,21 @@ HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
 SCRIPT = REPO / "bootstrap" / "freeze-at-stamp.sh"
 
-PGHOST, PGDB, SRC_SCHEMA = "192.168.122.1", "toy", "autoharn"
+sys.path.insert(0, str(REPO / "filing"))
+import deployment_record as _dr  # noqa: E402 -- must follow sys.path insert; top-of-file, not lazy
+
+# Source db/host/schema are read LIVE from this checkout's own deployment.json -- the SAME single
+# home freeze-at-stamp.sh itself resolves them from (its header: "never hardcoded 'autoharn'/
+# 'autoharn_kernel' literal", ADR-0012 P1). A prior version of this fixture hardcoded
+# SRC_SCHEMA = "autoharn" as a second, independent derivation of "where the source tracker lives";
+# this repo's live schema was renamed to "autoharn1" (a stale, no-longer-live "autoharn" schema
+# still sits in the same "toy" database from before that rename), so the hardcoded literal quietly
+# started reading the WRONG schema -- a fixture bug, not a freeze-at-stamp.sh bug (see the RCA in
+# `./led show` for tracker slug freeze-at-stamp: proven by querying the frozen copy's actual
+# contents under the correct schema name, which were correct all along). Deriving it the same way
+# the product script does makes this class of drift structurally impossible to repeat.
+_src = _dr.load_deployment(REPO / "deployment.json")
+PGHOST, PGDB, SRC_SCHEMA = _src.host, _src.db, _src.schema
 STANDING_DB = "autoharn_test"
 
 
