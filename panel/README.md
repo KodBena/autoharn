@@ -7,14 +7,16 @@ item-by-item and putting my name on one.* It assumes nothing about the panel's i
 design lives in this build's own commissioned spec (not itself a committed repo file) and in
 `panel/backend`/`panel/frontend`'s own module docstrings, not this page's job.
 
-**Known blocking gap, verified while writing this page (§3 has the reproduction and the fix
-needed) — read this before you try §3.** Opening `panel/frontend/index.html` as shipped does
-NOT currently work: the frontend's API calls are root-relative (`/api/health`, etc.) and only
-resolve when the page is served from the SAME origin as the backend, which the backend does not
-yet do (no static-file mount). §3 below documents the failure exactly as observed, not as
-hoped, and a tracker item (`panel-frontend-same-origin-serving-gap`, §9) names the fix — outside
-this page's authoring scope (it touches `panel/backend`/`panel/frontend` source, which this
-build does not touch).
+**Formerly-blocking gap, closed (ledger row 870, `panel-frontend-same-origin-serving-gap`,
+disposed by row 875) —
+§3 below is now the walkthrough for the WORKING path, kept alongside the original reproduction
+for the record.** Opening `panel/frontend/index.html` directly as a `file://` URL still does not
+work, and never will by design (see §3) — but that is no longer how you are meant to open the
+panel. `panel/backend/app.py` now mounts `panel/frontend/` as static files at `/`
+(`app.mount("/", StaticFiles(...), name="frontend")`, added AFTER every `/api/*` route so those
+routes keep precedence), so `http://127.0.0.1:8420/` serves `index.html` from the SAME origin the
+API answers on, and the frontend's root-relative `fetch("/api/...")` calls resolve exactly as
+written.
 
 The panel is a small, self-contained web page plus a local API server. It reads the project's
 decision ledger (the append-only record `./led`/`./pickup` already write to) and renders it as
@@ -92,40 +94,55 @@ What you should see (WITNESSED, live):
 the interception-stamp mechanism, so only `self-review` co-signs will succeed. That is normal,
 not an error.
 
-## 3. Open the SPA — CURRENTLY BLOCKED, verified, do not skip this section
+## 3. Open the SPA — now: `http://127.0.0.1:8420/`, not `file://`
 
-`panel/frontend/` is fully self-contained (no build step, no CDN — everything it needs is
-inlined or vendored across its three files), and the natural thing to try is opening
-`panel/frontend/index.html` directly in a browser. **As shipped, this does not work.** Verified
-while writing this page (headless Chromium, `--dump-dom`, against a live backend on
-`127.0.0.1:8420`): the page loads, then immediately shows
+With the backend running (§2), open **`http://127.0.0.1:8420/`** in a browser (or `curl`, for a
+non-visual check) — do not open `panel/frontend/index.html` directly by double-clicking it or
+via a `file://` URL; that path is explained below and still does not work, by design, and never
+will.
+
+WITNESSED (live backend, `autoharn1` deployment, this fix):
 
 ```
-Failed to load panel: Failed to fetch
+$ curl -s -i http://127.0.0.1:8420/ | head -8
+HTTP/1.1 200 OK
+content-type: text/html; charset=utf-8
+...
+<!doctype html>
+<html lang="en">
+...
+$ curl -s http://127.0.0.1:8420/api/health
+{"ok":true,"deployment":{"schema":"autoharn1","db":"toy","host_resolved":true}, ...}
+$ curl -s -i http://127.0.0.1:8420/app.js | head -3
+HTTP/1.1 200 OK
+content-type: application/javascript
+...
 ```
 
-**Why:** `panel/frontend/app.js` calls its backend with root-relative paths (`fetch("/api/health")`,
-`fetch("/api/commissions")`, etc. — by design, so it never hand-codes a host/port, see the file's
-own header). A root-relative fetch resolves against the *document's own origin*. Opened via
-`file://`, the document's origin is the `file://` scheme itself — there is no `127.0.0.1:8420` to
-reach, and the browser refuses the request before it goes anywhere. `panel/backend/app.py`, as
-committed, mounts no static-file route of its own, so there is currently no way to serve
-`index.html` from the *same* origin as the API without a code change.
+**What changed and why (ledger row 870, `panel-frontend-same-origin-serving-gap`, closed):**
+`panel/backend/app.py` now ends with `app.mount("/", StaticFiles(directory=..., html=True),
+name="frontend")`, added AFTER every `@app.get("/api/...")`/`@app.post("/api/...")` route in the
+file. FastAPI resolves routes in registration order and a mount only ever catches a request no
+earlier route already claimed, so `/api/*` keeps answering exactly as before (verified: `GET
+/api/nonexistent` still 404s as JSON, it does not fall through to the SPA's `index.html`) while
+`GET /` and any other unmatched path under `/` now serves `panel/frontend/`'s static files,
+`html=True` giving `index.html` as the fallback document. `panel/frontend/app.js`'s
+root-relative `fetch("/api/...")` calls (unchanged) now resolve correctly because the document
+and the API finally share an origin.
 
-**The fix this needs (out of this README's scope — it is a `panel/backend`/`panel/frontend`
-source change, and this build does not touch that source):** either (a) have `app.py` mount
-`panel/frontend/` as static files at `/`, so opening `http://127.0.0.1:8420/` serves the SPA from
-the same origin the API already answers on, or (b) give the frontend a configurable absolute API
-base URL plus a CORS allowance on the backend. Filed as `panel-frontend-same-origin-serving-gap`
-(§9) — this is a genuine blocker for using the panel as a browser page at all, not a cosmetic
-gap, and the next builder who touches `panel/backend`/`panel/frontend` should treat it as the
-first thing to close.
+**Why `file://` still does not work, and is not the intended path:** opening
+`panel/frontend/index.html` directly (double-click, or a bare `file://` URL) still shows `Failed
+to load panel: Failed to fetch`, for the same reason as always — a root-relative fetch resolves
+against the document's own origin, and a `file://` document has no origin a `127.0.0.1:8420`
+request can reach. That is not a residual bug; it is why the fix is a same-origin static mount
+rather than a frontend change. Always open the panel via the URL the running backend serves
+(`http://127.0.0.1:8420/`), never via the file directly.
 
-**Until that lands**, the panel's read/write surface is still fully exercisable directly against
-the API with `curl` (every example in §4–§6 below shows the exact request/response you'd see),
-and the scratch-schema fixture (`seen-red/panel-cosign/run_fixtures.py`) exercises the co-sign
-write path end to end without a browser at all. There is no working browser-page path to
-document honestly until the mount (or equivalent) lands.
+The panel's read/write surface remains fully exercisable directly against the API with `curl`
+(every example in §4–§6 below shows the exact request/response you'd see), and the
+scratch-schema fixture (`seen-red/panel-cosign/run_fixtures.py`) exercises the co-sign write path
+end to end without a browser at all — those paths are unaffected by this fix and still work
+exactly as documented.
 
 ## 4. Pick a commission and read it item by item
 
@@ -278,11 +295,11 @@ out-of-scope act.
 - `pghost-resolve-duplicate-home` — `instruments/pghost_resolve.py` should re-export from
   `filing/pghost_resolve.py` rather than duplicate it (§8; flagged, not fixed here — out of this
   build's scope, touches `instruments/`'s other possible consumers).
-- `panel-frontend-same-origin-serving-gap` — (§3, discovered while writing this page, not a
-  residual named by the build spec) the SPA cannot be opened as a browser page as shipped;
-  `app.py` needs a static-file mount (or the frontend needs an absolute API base URL plus CORS)
-  before `panel/frontend/index.html` can reach the backend at all. This is a blocking gap for
-  the panel's basic operation, not a cosmetic one.
+- `panel-frontend-same-origin-serving-gap` — **CLOSED** (ledger row 870, discovered while writing
+  this page, not a residual named by the build spec; disposed by ledger row 875, which
+  supersedes 870). `app.py` now mounts `panel/frontend/` as static files at `/`, registered
+  after every `/api/*` route, `html=True` for the `index.html` fallback — §3 has the fix, the
+  witness, and why the mount (not CORS + absolute API base) was chosen.
 
 <!-- doc-attest-exempt: no forking-capable tool (an Agent/Task tool distinct from this session)
 was available in this WP-4 invocation to run the A:B:C fresh-context loop -- removal condition:

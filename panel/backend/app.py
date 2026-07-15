@@ -1,6 +1,6 @@
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-14T23:23:56Z
-#   last-change: 2026-07-15T01:07:02Z
+#   last-change: 2026-07-15T01:50:04Z
 #   contributors: a857c93d/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -21,16 +21,20 @@ from __future__ import annotations
 import asyncio
 import json
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Any, AsyncIterator
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import StreamingResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 import cosign
 import ledger_read
 from config import PanelConfig, load_config
 from ledger_read import AmbiguousItem, ResolvedItem
+
+_FRONTEND_DIR = Path(__file__).resolve().parent.parent / "frontend"
 
 
 class Broadcaster:
@@ -243,3 +247,14 @@ def api_cosign(req: CosignRequest) -> dict[str, Any]:
         "stderr": result.stderr,
         "review_id": result.review_id,
     }
+
+
+# Static-file mount for panel/frontend/, MOUNTED LAST so every /api/* route above already holds
+# precedence in FastAPI's routing table (a mount only ever catches a request no earlier route
+# claimed) -- ledger row 870 (panel-frontend-same-origin-serving-gap): without this, the SPA and
+# the API had no shared origin at all (root-relative fetch()s in app.js resolve against the
+# document's own origin, and this backend served no document). html=True makes `GET /` and any
+# unmatched path under it fall back to index.html (a normal SPA static-serving convention -- this
+# is a single-page app with client-side routing, not a multi-page site), while `GET /app.js`,
+# `GET /styles.css`, etc. serve the literal files.
+app.mount("/", StaticFiles(directory=_FRONTEND_DIR, html=True), name="frontend")
