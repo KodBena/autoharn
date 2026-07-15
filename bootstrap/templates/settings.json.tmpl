@@ -13,6 +13,11 @@
             "type": "command",
             "command": "env STAMP_SECRET=__PROJECT_ROOT__/.claude/secrets/stamp_secret.hex python3 __AUTOHARN_ROOT__/hooks/stamp_intercept.py",
             "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "env GATE_SUBJECT_ROOT=__PROJECT_ROOT__ python3 __AUTOHARN_ROOT__/hooks/pretooluse_sql_block.py",
+            "timeout": 5
           }
         ]
       },
