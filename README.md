@@ -1,13 +1,5 @@
 # Deploying autoharn to your project (git submodule)
 
-<!-- doc-attest-exempt: v1.1 release-cut addition (the "What --recursive brings" section and the
-     item-1/before-you-start edits, commission item 3) by a subagent with no agent-forking tool
-     available for the ADR-0017 A:B:C fresh-context loop (same gap named at ledger rows
-     699/714/785 and in the v1.0 release-cut commit). Unlike that prior gap's mechanical
-     link-repairs, this IS new prose and genuinely warrants the real A:B:C loop, not just this
-     honesty marker — flagged to the maintainer in this session's report. Removal condition: run
-     the real A:B:C loop on this page and strike this marker. -->
-
 This page is only about deployment: getting autoharn wired into a project of your own as a
 pinned git submodule, and keeping it that way. It assumes you have `psql` and `git` on your
 `PATH` and a Postgres database you can reach, and it tells you exactly what to type and what
@@ -22,11 +14,8 @@ here.
 Everything below assumes three things are already true. None of the four commands does any of
 this for you:
 
-1. **You have cloned autoharn itself somewhere, with `--recursive`** (`git clone --recursive
-   <autoharn's repo URL>`) — that clone is "this autoharn checkout" every command below is run
-   from. `--recursive` matters here: this repo carries two git submodules of its own (below),
-   and a plain `git clone` leaves both as empty directories. If you already cloned without it,
-   `git submodule update --init --recursive` from inside the checkout fixes it after the fact.
+1. **You have cloned autoharn itself somewhere** (`git clone <autoharn's repo URL>`) — that
+   clone is "this autoharn checkout," the one every command below is run from.
 2. **A Postgres database, and a role that can log into it, already exist.** None of the four
    commands below runs `CREATE DATABASE` or `CREATE ROLE`, and step 1 does not apply the ledger's
    own SQL either — that's a separate manual step, spelled out in step 1's "Two manual steps
@@ -39,29 +28,6 @@ this for you:
 3. **You'll want [Claude Code](https://claude.com/product/claude-code) installed** before you
    actually start working inside the deployed project — the scaffold wires up `.claude/`
    settings for it, but installing Claude Code itself is outside this page's scope.
-
-### What `--recursive` brings: this repo's two submodules
-
-A `git clone --recursive` of autoharn itself (not the deployment it creates in *your* project —
-this repo, the one you're reading this file in) materializes two independent repositories under
-`tools/`:
-
-- **`tools/makespan-scheduler`** ([KodBena/makespan-scheduler](https://github.com/KodBena/makespan-scheduler)) —
-  a scheduling library some of autoharn's own tooling calls into. Vendored as a submodule rather
-  than copied in, same reasoning as the second one below: it has its own release cycle and its
-  own repo is the place to track it.
-- **`tools/autoharn-panel`** ([KodBena/autoharn-panel](https://github.com/KodBena/autoharn-panel)) —
-  the ledger-panel SPA: a Postgres-backed, read-mostly web viewer over your project's ledger
-  (typed row lists, a commission-decomposition view), with a thin write conduit that goes
-  through your deployment's own `led` verb rather than around it. It is **enabled by default**
-  as an autoharn extension — nothing you opt into, it's already there once the submodule is
-  present — but it is entirely optional to *run*: nothing else in autoharn depends on the panel
-  backend being up. Configuration is environment-first (`LEDGER_PG_URI` or discrete `PGHOST` /
-  `PGDATABASE` / … fields, `LEDGER_SCHEMA`, `LEDGER_KERNEL_SCHEMA`, `LED_BIN` for write access,
-  `PANEL_BIND` / `PANEL_PORT`, `PANEL_POLL_INTERVAL`); the full table of variables, precedence,
-  and copy-paste commands lives in
-  [USER-CONFIGURATION.md → "The autoharn-panel extension (submodule)"](USER-CONFIGURATION.md#the-autoharn-panel-extension-submodule) —
-  read that section before starting the panel backend, not this one.
 
 ### Two words this page uses constantly
 
@@ -132,10 +98,11 @@ usage: bootstrap/new-project.sh <dest-dir> --db <db> --host <host> --schema <sch
 ```
 
 The command's own help text above covers more than this guide does: **ignore the second usage
-line** (the one starting `--new-world`) **and the `--governed` parenthetical** — both describe
-autoharn's own internal disposable test instances (this project's own "run" scaffolds, unrelated
-to deploying autoharn anywhere), not a deployment to your project. Only the first
-usage line, plus the `--pin`/`--pin-url` parenthetical, apply here.
+line** (the one starting `--new-world`) — it describes autoharn's own internal disposable test
+instances (this project's own "run" scaffolds, unrelated to deploying autoharn anywhere), not a
+deployment to your project. The first usage line, the `--pin`/`--pin-url` parenthetical, and the
+`--governed` parenthetical DO apply here: omitting `--governed` is a real, live choice for your
+deployment (see below — it prints more than one line when you make it).
 
 With real arguments, the command does the following, in order (read plainly, not witnessed with
 live output in this document — running it needs a real Postgres target):
@@ -148,7 +115,20 @@ live output in this document — running it needs a real Postgres target):
 - Writes `<dest-dir>/deployment.json` (see [Configuration](#configuration)).
 - Writes `<dest-dir>/.claude/` wiring (hook settings; `governed_files.json`, the pattern list the
   pre-commit change gate — the hook that refuses an edit to a file no open ticket has declared —
-  checks edits against; and supporting docs).
+  checks edits against; and supporting docs). Omit `--governed` and you get the historical
+  `*.py`-only default plus a loud, multi-line **GOVERNED-SET DEFAULT NOTICE** printed to your
+  terminal — not a one-line footnote — naming the gap and the exact one-edit fix
+  (`.claude/governed_files.json`) if your project's real work surface isn't Python.
+- Appends the scaffolding-owned churn paths (`.claude/secrets/`, `.claude/logs/`, etc.) to
+  `<dest-dir>/.gitignore`, creating the file if it doesn't exist yet.
+- Writes `<dest-dir>/keys/README.md` (an AWAITING-KEY stub — this deployment's own GPG signing
+  key, once you generate and commit one, lives in this directory; never autoharn's own
+  `law/keys/`).
+- Creates `<dest-dir>/attestations/` — this deployment's own record of
+  [ADR-0017](law/adr/0017-the-zero-context-reader.md)'s "A:B:C" documentation-review loop (a
+  writer drafts a doc, a fresh-context reviewer with no memory of the writing session checks it
+  reads clearly on its own, a repairer fixes what that reviewer flags): `attestations/README.md`
+  plus an empty `attestations/doc-legibility-attestations.jsonl`, separate from autoharn's own.
 - Writes eight thin shim scripts at the top of `<dest-dir>` — `led`, `judge`, `pickup`, `audit`,
   `distance-to-clean`, `verify-commission`, `verify-chain`, `attest-doc` — each one `exec`s the
   matching template out of `<dest-dir>/.autoharn/bootstrap/templates/`, i.e. out of the pinned
@@ -167,9 +147,15 @@ you** (the command's own closing output names both, but read them here too so yo
 them):
 
 1. **Apply a kernel lineage** — the actual SQL that creates the ledger tables — to
-   `<db>/<schema>/<kern>/<role>`. This is not part of `new-project.sh`; read
-   [`kernel/lineage/README.md`](kernel/lineage/README.md) in this checkout for the current
-   apply order and the `psql` invocation.
+   `<db>/<schema>/<kern>/<role>`. This is not part of `new-project.sh`; two steps, not one guess:
+   read [`kernel/lineage/README.md`](kernel/lineage/README.md) in this checkout and apply
+   `high_watermark_1.sql` (the starting-point schema this lineage builds on top of, current as of
+   its s19 generation — the `psql` invocation is spelled out there), then run
+   [`./migrate <dest-dir>`](#4-bring-a-deployments-database-up-to-date-with-a-newer-kernel)
+   from this checkout to carry that base forward to the actual current lineage head (`s20`
+   onward, whatever it is by the time you read this — `./migrate` derives it live, so this page
+   never has to name it). Never reverse-engineer `bootstrap/new-project.sh`'s own shell variables
+   to guess the full chain by hand; that is exactly what `./migrate` exists to do for you.
 2. **Provision the stamp secret.** `<dest-dir>/.claude/HOOKS.md`, written by the scaffold, has
    the exact copy-paste commands for this (search it for "stamp secret") — do this once, and do
    not repeat it later: re-running it rotates the secret and invalidates every ledger entry
@@ -340,7 +326,11 @@ backup and the printed evidence are what you'd use to investigate.
 
 Every field below either lives in a deployment's `deployment.json` (written by
 `bootstrap/new-project.sh`, read by every operator verb and by `./migrate`) or is a flag one of
-the four pinning/migration scripts above reads directly.
+the four pinning/migration scripts above reads directly. `deployment.json` is a per-deployment
+file, not tracked by this repo (JSON has no comment syntax, so `deployment.json.example` at the
+repo root carries placeholder values only — this table is the field-by-field documentation for
+them; copy the example to `deployment.json` and fill in your own values, or let
+`bootstrap/new-project.sh` write it for you).
 
 ### `deployment.json` fields
 
@@ -354,6 +344,10 @@ the four pinning/migration scripts above reads directly.
 | `name` | This deployment's own label (optional; defaults to the destination directory's basename). Used live by the `judge` shim as the target name it passes to autoharn's ledger-differential engine (the tool behind `./judge` that diffs two ledgers against each other), and hence which `derivations/<name>/` subdirectory inside *this autoharn checkout* your comparisons get filed under. | Something short and specific to your project, and — same constraint as `schema` above — not one of autoharn's own curated target names or scratch-naming patterns (`^s\d+[a-z]*$`, `*_scratch`), or `./judge` resolves to the wrong target. | `./judge` compares against, or files derivations under, the wrong target — confusing, not catastrophic, but worth getting right at scaffold time since renaming later means re-scaffolding. |
 
 ### Flags the pinning/migration scripts read (not stored in `deployment.json`)
+
+Unlike the fields above, the settings in this table are never written to `deployment.json` — each
+is passed directly on the command line, every time you run one of the four pinning/migration
+scripts (steps 1–4 above).
 
 | Setting | Where | Meaning | Sane value / what breaks if wrong |
 |---|---|---|---|

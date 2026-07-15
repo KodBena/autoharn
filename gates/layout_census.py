@@ -64,10 +64,7 @@ ROOT_FILES = {
     # governed world — track-work.sh's own header comment) so these are inert outside a
     # deliberate `./led`/`./pickup`/etc invocation; registered here so an unregistered-top-level
     # breach does not fire on the offering's own first, self-hosted consumer.
-    # deployment.json RETIRED from this registry for the v1.1 public cut (2026-07-15, same
-    # disposition as v1.0's): this checkout's own private live-deployment pointer is not part
-    # of the published tree; an adopter generates their own via bootstrap/new-project.sh.
-    "led", "judge", "pickup", "audit", "distance-to-clean",
+    "deployment.json", "led", "judge", "pickup", "audit", "distance-to-clean",
     # .gitattributes — the merge-driver wiring for attestations/*.jsonl and BACKLOG.md's dated
     # sections (design/ORCH-WORKTREE-LEDGERING.md 3a; tools/merge_jsonl.py,
     # tools/merge_backlog_sections.py), a new top-level file this same commission created,
@@ -119,9 +116,12 @@ ROOT_DIRS = {
     # 2026-07-13 merge seam when the LICENSE registration made the gate re-run (CLAUDE.md
     # hazard-flagging duty).
     "vestigial_documentation",
-    # observatory/ RETIRED from this registry for the v1.1 public cut (2026-07-15, same
-    # disposition as v1.0's): the ent-observatory commission's recurring read-only evaluation
-    # of the maintainer's own live ~/ent deployment is not this release's to publish.
+    # observatory/ — the ent-observatory commission's recurring read-only evaluation of the
+    # live ~/ent deployment (autoharn tracker row 372, 2026-07-13): one dated cycle report per
+    # run under observatory/ent/, each doc-attest-exempt (point-in-time evidence record) and
+    # diffed against prior cycles. Registered on landing rather than left an unregistered
+    # breach for this gate's next run (CLAUDE.md hazard-flagging duty).
+    "observatory",
     # proposals/ — TRANSITIONAL (ADR-0005 Rule 7, retirement plan stated here): patch files for
     # merge-gated surfaces (live-exec'd templates/hooks), staged by builders whose commissions
     # forbid touching those surfaces while a deployment session is live (merge-gate policy,

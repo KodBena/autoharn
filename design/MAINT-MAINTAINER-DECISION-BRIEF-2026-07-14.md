@@ -1,7 +1,5 @@
 # Maintainer decision brief — the open review queue, 2026-07-14
 
-<!-- doc-attest-exempt: v1.1 release-cut mechanical edit (de-linked dangling references into the removed observatory/, no prose rewrite). Removal condition: strike this marker and run the real A:B:C loop next time this file is touched for content, not just link repair. -->
-
 Audience: maintainer
 
 This is a new, separate brief — it does not replace
@@ -130,7 +128,7 @@ formal-record-type step can wait until it is actually needed.
 *Source, read in full this session:
 [ORCH-PGAUDIT-EXPLORATION.md](ORCH-PGAUDIT-EXPLORATION.md). Tracker slug
 `pgaudit-exploration`. Strengthened by last night's finding, read in full this session:
-the ent-observatory cycle-004 record (maintainer-internal review, not part of this release) §2.*
+[observatory/ent/2026-07-14-cycle-004.md](../observatory/ent/2026-07-14-cycle-004.md) §2.*
 
 **The question, in plain words.** The project's decision record (the "ledger," the database
 table everything important gets written into) is very well protected against someone secretly
@@ -497,8 +495,8 @@ rule, and that rule is a good one to keep, not a reason to let the bug sit.
   behind Part A, the NIST follow-ups section, and the "Already decided today" section above;
   you do not need to read
   any of them to answer what's still open.
-- The ent-observatory cycle-004 record (maintainer-internal review, not part of this release) —
-  the sibling-deployment observation behind the pgAudit item's strengthened case and Part B item
+- [observatory/ent/2026-07-14-cycle-004.md](../observatory/ent/2026-07-14-cycle-004.md) — the
+  sibling-deployment observation behind the pgAudit item's strengthened case and Part B item
   B4's incident.
 - `./pickup`'s MAINTAINER-REVIEW-QUEUE and IN-FLIGHT sections — the live tracker source every
   item above was re-verified against this session.

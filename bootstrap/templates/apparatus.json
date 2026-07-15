@@ -26,6 +26,13 @@
     "doc_attestation": {
       "mode": "off",
       "note": "Gates ONLY whether ./distance-to-clean's DOC-ATTESTATION section counts debt -- it spends nothing (pure hashing, no LLM call, no network), so this is NOT a cost switch like demurral_detect/doc_legibility_critic above. OFF by default because the ADR-0017 A:B:C fresh-context audit loop is a workflow you adopt by choice; debt-nagging for a discipline you never started running would be noise. Flip to 'observe' once you're actually running the loop (see design/USER-DOC-AUDIT-LOOP.md, this deployment's own copy) so ./distance-to-clean surfaces its debt alongside review-gap/question-status/work-violations."
+    },
+    "sql_block": {
+      "mode": "off",
+      "session_model": "unknown",
+      "policy": {"fable*": "deny", "opus*": "deny", "sonnet*": "allow", "haiku*": "allow"},
+      "unknown_model_mode": "observe",
+      "cost_note": "Spends nothing (pure regex scan, no LLM call, no network) -- NOT a cost switch like demurral_detect/doc_legibility_critic above. OFF by default per work item model-conditional-sql-block: a PreToolUse hook on Bash gating raw-SQL-bearing commands is a genuine behavior change to what a session can do, so arming it is the operator's choice, not a silent default. A PreToolUse hook on Bash never carries the acting model's identity (checked empirically, hooks/pretooluse_sql_block.py module docstring) -- `session_model` is DECLARED by whoever scaffolds/arms this world, not witnessed by the harness; set it honestly or leave 'unknown' (which the shipped policy maps to observe-only, never a silent block). To arm: set mode to 'observe' (warn-only) or 'enforce' (actually denies a deny-model's raw SQL), and set session_model to this session's real model, e.g. mechanisms.sql_block = {\"mode\": \"enforce\", \"session_model\": \"sonnet\"}."
     }
   }
 }

@@ -1,7 +1,5 @@
 # Finding atomization — split narrative findings into atomic units before classifying them
 
-<!-- doc-attest-exempt: v1.1 release-cut mechanical edit (de-linked dangling references into the removed observatory/, no prose rewrite). Removal condition: strike this marker and run the real A:B:C loop next time this file is touched for content, not just link repair. -->
-
 Audience: anyone running a diagnostic or audit pass that produces a list of findings destined
 for classification — a defensive code audit turning up a batch of bugs to triage and fix, a
 document or process review sorting observations into categories, or a taxonomy of work items
@@ -50,7 +48,7 @@ none of them state the atomize-then-classify staging this recipe describes:
   a mechanical partition check over the input findings themselves. Adjacent (both are about
   splitting work into checkable units), not covering.
 - **[design/ORCH-COSIGN-CONVENTION-CROSSCHECK.md](ORCH-COSIGN-CONVENTION-CROSSCHECK.md)** and
-  **the ent-observatory cycle-003 record (maintainer-internal review, not part of this release)** were checked as the nearest
+  **[observatory/ent/cycle-003.md](../observatory/ent/cycle-003.md)** were checked as the nearest
   prior art from the same `ent` deployment and the same week: cycle-003 records a concrete episode
   this recipe's method would apply to directly (93 findings from a prior audit pass, reduced by
   hand into a 23-task taxonomy over several review rounds — see its §6 "CYCLE NARRATIVE"), but
@@ -229,7 +227,7 @@ Following the enforcement-surface vocabulary
   precedent this document's own "Adjudication" section follows (cross-check named candidate homes,
   state a verdict, name what the verdict does and does not claim), from the same source deployment
   and the same week, adjudicating a different, unrelated method candidate.
-- The ent-observatory cycle-003 record (maintainer-internal review, not part of this release) §6 — the concrete 93-findings/
+- [observatory/ent/cycle-003.md](../observatory/ent/cycle-003.md) §6 — the concrete 93-findings/
   23-task episode this recipe's method would apply to directly, cited above as the motivating
   scenario rather than as a prior statement of the method (it is not one).
 

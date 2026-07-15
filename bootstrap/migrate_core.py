@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-14T21:20:36Z
-#   last-change: 2026-07-14T22:13:16Z
+#   last-change: 2026-07-15T06:57:48Z
 #   contributors: a857c93d/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -361,8 +361,21 @@ def _drop_schema(dep: DeploymentRecord, schema: str) -> None:
 # --------------------------------------------------------------------------------------------
 
 def _apply_chain(dep: DeploymentRecord, schema: str, kern: str, missing: list[str],
-                  where: str) -> None:
+                  where: str, backup_path: Path | None = None) -> None:
+    """`backup_path`, when given, is threaded through as two GENERIC (delta-independent, no sNN
+    name here -- see module docstring) psql vars, `epoch_dump_path`/`epoch_applied_by`: any future
+    delta that wants to record its own provenance the way s29's sec-10 migration_epoch amendment
+    does (kernel/lineage/s29-obligation-item-key-and-typed-close.sql's own AMENDMENT header) reads
+    them the same way s29 does, via its own `\\if :{?var}` default-to-empty guard -- a delta that
+    does not care about these vars simply never references them, exactly like `schema`/`kern`/
+    `role` are already passed to every delta whether or not it uses them. REHEARSAL and LIVE are
+    BOTH given the same `backup_path`: REHEARSAL restores from that exact dump (this function's
+    own caller), so its provenance is honestly identical to LIVE's -- the same backup file is what
+    either apply's history stood on at that moment."""
     args = _psql_args(dep, schema, kern) + ["-1"]
+    if backup_path is not None:
+        args += ["-v", f"epoch_dump_path={backup_path}",
+                 "-v", f"epoch_applied_by={os.environ.get('USER', 'unknown')}"]
     for name in missing:
         args += ["-f", str(LINEAGE_DIR / name)]
     proc = subprocess.run(args, capture_output=True, text=True)
@@ -707,7 +720,8 @@ def main(argv: list[str]) -> int:
                     "migrate: REHEARSAL FAIL -- the scratch restore's history fingerprint does "
                     "not match the live pre-migration fingerprint; the backup did not restore "
                     "byte-identically. Nothing live was touched.")
-            _apply_chain(dep, scratch_schema, scratch_kern, missing, where="REHEARSAL")
+            _apply_chain(dep, scratch_schema, scratch_kern, missing, where="REHEARSAL",
+                         backup_path=backup_path)
             post_count, post_fingerprint = _history_fingerprint(dep, scratch_schema, history_columns)
             if (post_count, post_fingerprint) != (pre_count, pre_fingerprint):
                 raise MigrateRefusal(
@@ -759,7 +773,7 @@ def main(argv: list[str]) -> int:
 
         print()
         print(f"migrate: applying to LIVE {dep.schema}/{dep.kern} ...")
-        _apply_chain(dep, dep.schema, dep.kern, missing, where="LIVE")
+        _apply_chain(dep, dep.schema, dep.kern, missing, where="LIVE", backup_path=backup_path)
 
         post_live_count, post_live_fp = _history_fingerprint(dep, dep.schema, history_columns)
         if (post_live_count, post_live_fp) != (pre_count, pre_fingerprint):

@@ -1,0 +1,46 @@
+Banked RED evidence for night-build-defect-repair DEFECT 3 (bootstrap/rehearse-from-origin.sh's
+initial clone running outside the env jail and outside the trace).
+
+STATIC leg, captured by running seen-red/rehearse-clone-jail-confinement/run_fixtures.py against
+the PRE-FIX rehearse-from-origin.sh (git stash of this session's fix): the executable `git clone
+"$REPO_URL" "$CLONE"` line sat BEFORE run_jailed() was even defined -- untraced, unjailed, exactly
+the shape the verifier exploited.
+
+# STATIC — the clone must run textually AFTER run_jailed() is defined, and THROUGH it
+  [ok] run_jailed() is defined in the script
+  [ok] at least one executable `git clone` invocation exists
+  [FAIL] no executable `git clone` appears BEFORE run_jailed() is defined (the pre-fix shape)
+# LIVE — a polluted HOME (~/.gitconfig url.insteadOf) must NOT redirect the clone
+  UNEXERCISED — PGHOST/PGDATABASE not set in this environment; this leg requires a live scratch
+  database and is skipped rather than falsely reported.
+
+SPECIMEN INERT — 1 check(s) failed: ['no executable `git clone` appears BEFORE run_jailed() is
+defined (the pre-fix shape)']
+
+LIVE leg, captured manually against the PRE-FIX script (same stash), PGHOST=192.168.122.1
+PGDATABASE=toy, real network, a real decoy repo + a polluted throwaway HOME carrying a
+`~/.gitconfig` url.insteadOf rewrite for https://github.com/KodBena/autoharn.git:
+
+  == rehearse-from-origin: scratch dir /tmp/rehearse-from-origin.H0fZLC ==
+     clone <- https://github.com/KodBena/autoharn.git
+     schema=rehearse_negctlpre_scratch kern=rehearse_negctlpre_kernel_scratch role=rehearse_negctlpre_rw (db=toy host=192.168.122.1)
+     cloned https://github.com/KodBena/autoharn.git @ ccd5f11254052a62004559dbd2468767340ecc51 into /tmp/rehearse-from-origin.H0fZLC/clone
+  == rehearse-from-origin: walkthrough (README.md section 1) inside env jail ==
+  -- step 1: new-project.sh --pin submodule --pin-url https://github.com/KodBena/autoharn.git --
+  == rehearse-from-origin: tearing down ==
+     scratch dir removed.
+
+ccd5f11254052a62004559dbd2468767340ecc51 IS THE DECOY REPO'S OWN HEAD, not the real public
+repo's (verified separately: `git ls-remote https://github.com/KodBena/autoharn.git HEAD` ->
+f039c84ca4a395317a91966cf2640b4aff912a04). The pre-fix script silently cloned the attacker's decoy
+under a polluted ambient HOME, untraced, then failed downstream once new-project.sh hit content
+the decoy doesn't have -- exactly the RCA row 909/928 same-host illusion, reopened through the
+clone step itself, live-witnessed.
+
+After the fix (clone moved inside run_jailed() with HOME=throwaway + GIT_CONFIG_GLOBAL/SYSTEM=
+/dev/null, plus an explicit post-clone origin-URL assertion), the IDENTICAL polluted-HOME attack
+is defeated: the resolved clone SHA is f039c84ca4a395317a91966cf2640b4aff912a04 (the real
+remote's HEAD), DECOY.txt never appears anywhere, and the full walkthrough (steps 1-9) completes
+with ALL CHECKS PASS -- see this session's ledger rows and commit for the green capture. A second,
+distinct adversarial angle (GIT_CONFIG_GLOBAL env-var pollution from the calling shell, rather
+than ~/.gitconfig) was independently re-probed and also defeated (same real-remote SHA resolved).

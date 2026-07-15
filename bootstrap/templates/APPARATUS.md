@@ -1,7 +1,5 @@
 # Apparatus config — the per-world mechanism switchboard
 
-<!-- doc-attest-exempt: v1.1 release-cut mechanical edit (de-linked dangling references into the removed observatory/, no prose rewrite), same disposition as the v1.0 cut's own marker on this file. Removal condition: strike this marker and run the real A:B:C loop next time this file is touched for content, not just link repair. -->
-
 This document is for anyone configuring or auditing a project scaffolded from this repository:
 it explains how to turn each safety mechanism on, off, or into observe-only mode, and what
 changes when you do. `apparatus.json` is this project's per-instance choice surface: the
@@ -114,8 +112,8 @@ add per-mechanism detail a table cell is too narrow to carry.
   deliberately WIDE decomposition (many parallel open work items, sized for resumability) --
   this is the mechanism working as designed, not breakage (witnessed in the ent-observatory
   series — read-only audit cycles over the `~/ent` deployment, this repo's first scaffolded
-  subject — cycle-001; that observatory series is a maintainer-internal review record, not part
-  of this release; tracker `stop-clean-exit-wide-decomposition-doc`). A session carrying 16-17 open work items
+  subject — cycle-001, [observatory/ent/cycle-001.md](../../observatory/ent/cycle-001.md);
+  tracker `stop-clean-exit-wide-decomposition-doc`). A session carrying 16-17 open work items
   can trip the 3-strike breaker (`DEBT_REPEAT_LIMIT`, `hooks/stop_clean_exit.py`) several times
   in one sustained run: closing one item shrinks the debt set but, with that many items still
   open, the remaining set is still non-empty and still blocks. A separate fix

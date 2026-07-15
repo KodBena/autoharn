@@ -1,7 +1,5 @@
 # Workflow script gotchas — five witnessed failure shapes and how to avoid them
 
-<!-- doc-attest-exempt: v1.1 release-cut mechanical edit (de-linked dangling references into the removed observatory/, no prose rewrite). Removal condition: strike this marker and run the real A:B:C loop next time this file is touched for content, not just link repair. -->
-
 Audience: whoever is about to write or launch a workflow script — an orchestrating
 session dispatching the `Agent` tool in a loop, or a standalone driver script built on
 the Claude Agent SDK (the "Workflow tool" or an in-session equivalent this project
@@ -30,12 +28,12 @@ the runtime hands it a raw JSON string instead. Both directions have been witnes
 this repository's own harness scaffolds and observes, hardening the compositor
 `picom` — a separate open-source project ent's own work targets, not part of this
 repository — as its test subject;
-see the ent-observatory cycle-003 record (maintainer-internal review, not part of this release) for the report this
+see [observatory/ent/cycle-003.md](../observatory/ent/cycle-003.md) for the report this
 witness is drawn from — observatory cycle-003):** the
 real (non-emulated) Phase 2/3 Workflow was launched and **crashed in 31 milliseconds**
 on exactly this mismatch — "the tool passed `args` as a JSON string rather than a live
 array, compounded by a script-side field-name mismatch"
-(the ent-observatory cycle-003 record, not part of this release, §"DIFF-VS-PRIOR" and
+([observatory/ent/cycle-003.md](../observatory/ent/cycle-003.md), §"DIFF-VS-PRIOR" and
 line 238). The orchestrator running that cycle caught its own near-miss explicitly: it
 had been about to report the workflow as silently stalled again, and instead checked
 for a failure notification first, found the crash, fixed both bugs defensively, and
@@ -151,7 +149,7 @@ cycle **caught itself about to misclassify the second failure as a repeat of the
 first**: "this, not any silent hang, is the actual answer... I had not checked for a
 failure notification before reporting it as running," recorded as an explicit
 self-correction on the ledger
-(the ent-observatory cycle-003 record, not part of this release, lines 58–61 and the
+([observatory/ent/cycle-003.md](../observatory/ent/cycle-003.md) lines 58–61 and the
 METHOD CANDIDATES section, item 3, which names this exact pair as "odd-but-recurring,
 not yet classified" — flagged by that observer as a durable lesson even though its own
 evidence base was, by its own account, still thin).
@@ -186,7 +184,7 @@ assuming a parseable structure underneath.
 - [USER-RECIPES-FAQ.md](USER-RECIPES-FAQ.md), "Workflow patterns" section — the
   fix-point loop's own shape (loop-until-dry, fresh-agent-per-round, the termination
   discipline) and this page's sibling entry.
-- The ent-observatory cycle-003 record (maintainer-internal review, not part of this release) — the dated source
+- [observatory/ent/cycle-003.md](../observatory/ent/cycle-003.md) — the dated source
   for items 1 and 4, including the METHOD CANDIDATES section that first flagged the
   stall-vs-crash pair as a durable, not-yet-fully-classified shape.
 - [design/ORCH-HARNESS-FAILURE-LEDGER.md](ORCH-HARNESS-FAILURE-LEDGER.md) — the
