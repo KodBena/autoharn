@@ -42,6 +42,25 @@
   in-force decisions, open questions, review debt, recent changes — derived fresh, never stale.
 
 __LAW_SECTION__
+## Skills
+
+`.claude/skills/` was seeded at scaffold time with every skill under autoharn's
+`bootstrap/templates/claude-skills/` (tracker item `skill-vendoring-hack-rationalization`),
+copied in **verbatim** — the skill body is not this scaffold's to rewrite; see each vendored
+skill's own `PROVENANCE.md` for its source and vendor date.
+
+**Precedence fact (read this before assuming a vendored skill is "the" copy in force):**
+Claude Code resolves same-named skills **enterprise > personal > project**. This
+deployment's copy is project-level, so it is silently **shadowed** whenever a personal
+(`~/.claude/skills/`) or enterprise copy of the same name exists on the machine actually
+running the session — including, concretely, the maintainer's own personal
+`hack-rationalization-detector`, the very skill this one was vendored from. Duplication is
+therefore **idempotent by platform rule**, not a drift hazard: whichever copy is effective is
+determined by that fixed precedence order every time, never a race. No mechanism here detects
+or warns about the two copies drifting apart in *content* over time (only which one wins is
+fixed, not whether they still agree) — the vendored copy's own `PROVENANCE.md` records its
+source date for exactly that reason: so a reader can judge staleness by eye.
+
 **Doc-witness convention (this file is a scaffold-generated TEMPLATE):** every example below is
 marked **UNWITNESSED** — it has not been run against this instance's own ledger. A template
 cannot honestly claim another project's witnessed output as its own (ADR-0005's documentation

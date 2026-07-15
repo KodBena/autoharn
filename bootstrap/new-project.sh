@@ -1,7 +1,7 @@
 #!/bin/sh
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-09T11:15:53Z
-#   last-change: 2026-07-15T16:22:40Z
+#   last-change: 2026-07-15T16:27:46Z
 #   contributors: be693afb/main, e4410ef6/main, 3c50e030/main, a857c93d/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -629,6 +629,23 @@ sedsubst < "$TEMPLATES/HOOKS.md.tmpl" > "$PROJECT_ROOT/.claude/HOOKS.md"
 # section (default) -- either way this is a no-op-safe insert (an empty `r` inserts nothing).
 sed -i -e "/^__LAW_SECTION__\$/r $LAW_SECTION_FILE" -e "/^__LAW_SECTION__\$/d" "$PROJECT_ROOT/.claude/HOOKS.md"
 echo "wrote .claude/settings.json, governed_files.json, GOVERNED_FILES.md, apparatus.json, APPARATUS.md, HOOKS.md"
+
+# Vendored skills (tracker item skill-vendoring-hack-rationalization, maintainer commission
+# 2026-07-15): install every skill under bootstrap/templates/claude-skills/ into this
+# deployment's own .claude/skills/, verbatim -- a plain recursive copy, never a template
+# substitution (the skill body is not autoharn's to rewrite; see each skill's own PROVENANCE.md
+# for the precedence fact: Claude Code resolves same-named skills enterprise > personal >
+# project, so a user's personal copy of the same name silently shadows this one -- duplication
+# is idempotent by that platform rule, not a drift hazard needing a warning mechanism here).
+if [ -d "$TEMPLATES/claude-skills" ]; then
+    mkdir -p "$PROJECT_ROOT/.claude/skills"
+    for _skill_dir in "$TEMPLATES/claude-skills"/*/; do
+        [ -d "$_skill_dir" ] || continue
+        _skill_name="$(basename "$_skill_dir")"
+        cp -r "$_skill_dir" "$PROJECT_ROOT/.claude/skills/$_skill_name"
+        echo "wrote .claude/skills/$_skill_name (vendored skill, verbatim)"
+    done
+fi
 
 if [ -n "$NEW_WORLD" ]; then
     # CLAUDE.md's preamble states "a reviewer principal exists" as fact -- only true once the
