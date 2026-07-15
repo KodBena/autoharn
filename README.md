@@ -14,11 +14,17 @@ here.
 Everything below assumes three things are already true. None of the four commands does any of
 this for you:
 
-1. **You have cloned autoharn itself somewhere** (`git clone <autoharn's repo URL>`) — that
-   clone is "this autoharn checkout," the one every command below is run from.
+1. **You have cloned autoharn itself somewhere, with `--recursive`** (`git clone --recursive
+   <autoharn's repo URL>`) — that clone is "this autoharn checkout," the one every command below
+   is run from. `--recursive` matters here: this repo carries two git submodules of its own
+   (below), and a plain `git clone` leaves both as empty directories. If you already cloned
+   without it, `git submodule update --init --recursive` from inside the checkout fixes it after
+   the fact.
 2. **A Postgres database, and a role that can log into it, already exist.** None of the four
-   commands below runs `CREATE DATABASE` or `CREATE ROLE`, and step 1 does not apply the ledger's
-   own SQL either — that's a separate manual step, spelled out in step 1's "Two manual steps
+   commands below runs `CREATE DATABASE` or `CREATE ROLE`, and step 1 does not apply the
+   ledger's own SQL either (the ledger — defined under ["Two words this page uses
+   constantly"](#two-words-this-page-uses-constantly) below — is the append-only record autoharn
+   gives your project) — that's a separate manual step, spelled out in step 1's "Two manual steps
    remain" note below. If you don't have a database/role yet, see USER-CONFIGURATION.md's
    ["FAQ: provisioning Postgres for
    autoharn"](USER-CONFIGURATION.md#faq-provisioning-postgres-for-autoharn) for a copy-paste
@@ -28,6 +34,29 @@ this for you:
 3. **You'll want [Claude Code](https://claude.com/product/claude-code) installed** before you
    actually start working inside the deployed project — the scaffold wires up `.claude/`
    settings for it, but installing Claude Code itself is outside this page's scope.
+
+### What `--recursive` brings: this repo's two submodules
+
+A `git clone --recursive` of autoharn itself (not the deployment it creates in *your* project —
+this repo, the one you're reading this file in) materializes two independent repositories under
+`tools/`:
+
+- **`tools/makespan-scheduler`** ([KodBena/makespan-scheduler](https://github.com/KodBena/makespan-scheduler)) —
+  a scheduling library some of autoharn's own tooling calls into. Vendored as a submodule rather
+  than copied in, same reasoning as the second one below: it has its own release cycle and its
+  own repo is the place to track it.
+- **`tools/autoharn-panel`** ([KodBena/autoharn-panel](https://github.com/KodBena/autoharn-panel)) —
+  the ledger-panel SPA: a Postgres-backed, read-mostly web viewer over your project's ledger
+  (typed row lists, a commission-decomposition view), with a thin write conduit that goes
+  through your deployment's own `led` verb rather than around it. It is **enabled by default**
+  as an autoharn extension — nothing you opt into, it's already there once the submodule is
+  present — but it is entirely optional to *run*: nothing else in autoharn depends on the panel
+  backend being up. Configuration is environment-first (`LEDGER_PG_URI` or discrete `PGHOST` /
+  `PGDATABASE` / … fields, `LEDGER_SCHEMA`, `LEDGER_KERNEL_SCHEMA`, `LED_BIN` for write access,
+  `PANEL_BIND` / `PANEL_PORT`, `PANEL_POLL_INTERVAL`); the full table of variables, precedence,
+  and copy-paste commands lives in
+  [USER-CONFIGURATION.md → "The autoharn-panel extension (submodule)"](USER-CONFIGURATION.md#the-autoharn-panel-extension-submodule) —
+  read that section before starting the panel backend, not this one.
 
 ### Two words this page uses constantly
 
@@ -291,12 +320,18 @@ and it takes the deployment directory as an argument.
 ./migrate <deployment-dir> --dry-run  # rehearse and print evidence; never applies anything
 ```
 
-**What you should see** if you get the arguments wrong (its own usage line, witnessed by calling
-it with an unrecognized deployment path — nothing is touched):
+**What you should see** if you run it with no arguments at all (its own usage line, witnessed by
+calling it bare — nothing is touched):
 
 ```
 usage: migrate <deployment-dir> [--dry-run]
 ```
+
+(Calling it with one argument that isn't a real deployment — e.g. an unrecognized path — does
+**not** print this usage line; it instead refuses with a `deployment record not found` message,
+because a single positional argument is always treated as an attempted deployment path, not as a
+malformed-arguments case. Only zero arguments, `--help`/`-h`, or three-or-more/malformed flag
+arguments reach the usage line above.)
 
 With a real, already-scaffolded `<deployment-dir>`, in order:
 

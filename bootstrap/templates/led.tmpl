@@ -947,22 +947,69 @@ SQL
       ;;
     depends)
       shift
+      type=""
+      args=()
+      while [ $# -gt 0 ]; do
+        case "$1" in
+          --type) type="${2:-}"; shift 2 ;;
+          *) args+=("$1"); shift ;;
+        esac
+      done
+      set -- "${args[@]}"
       if [ $# -lt 2 ]; then
-        echo "usage: led work depends <slug> <on-slug>" >&2
-        echo "       <slug> must already be opened (refused otherwise); <on-slug> (the" >&2
-        echo "       antecedent) is NOT required to be opened -- a dangling antecedent is" >&2
-        echo "       deliberately NOT refused (spec invariant 4), it is surfaced instead by" >&2
-        echo "       'led work violations' (depends_on_unknown_slug)" >&2
+        echo "usage: led work depends <slug> <on-slug> [--type blocks-close|informs]" >&2
+        echo "       <slug> must already be opened (refused otherwise)." >&2
+        echo "       --type informs (the default, omit --type to get it): the antecedent" >&2
+        echo "       (<on-slug>) is NOT required to be opened -- a dangling antecedent is" >&2
+        echo "       deliberately NOT refused (spec invariant 4), surfaced instead by" >&2
+        echo "       'led work violations' (depends_on_unknown_slug)." >&2
+        echo "       --type blocks-close (kernel/lineage/s30-typed-dependency-edges.sql): the" >&2
+        echo "       ONLY edge type the obligation AND-tree (s29 Element C / --strict close)" >&2
+        echo "       conjoins. REFUSED at construction if <on-slug> has no opening act, if" >&2
+        echo "       <slug> = <on-slug> (self-edge), or if it would create a cycle in the" >&2
+        echo "       blocks-close subgraph. Requires this world's kernel to carry s30 -- omit" >&2
+        echo "       --type (or pass --type informs) on a pre-s30 kernel." >&2
         exit 1
       fi
       slug="$1"; on="$2"
-      exec psql -h "$PGHOST" -d "$PGDB" -v ON_ERROR_STOP=1 \
-        -v slug="$slug" -v on="$on" -v statement="work_depends_on: ${slug} depends on ${on}" <<SQL
+      if [ -n "$type" ] && [ "$type" != "blocks-close" ] && [ "$type" != "informs" ]; then
+        echo "led work depends: REFUSED -- --type must be blocks-close or informs (got '${type}')." >&2
+        echo "  'supersedes' is a RESERVED WORD here, not a legal edge_type -- row supersession" >&2
+        echo "  already has its one home in the pre-existing ledger.supersedes column." >&2
+        exit 1
+      fi
+      has_edge_type_col=$(psql -h "$PGHOST" -d "$PGDB" -tAq -v schema="$SCHEMA" <<SQL
+        SELECT EXISTS (SELECT 1 FROM information_schema.columns
+                       WHERE table_schema = :'schema' AND table_name = 'ledger'
+                         AND column_name = 'edge_type');
+SQL
+      )
+      if [ -n "$type" ] && [ "$has_edge_type_col" != "t" ]; then
+        echo "led work depends: REFUSED -- --type requires kernel/lineage/s30-typed-dependency-edges.sql" >&2
+        echo "  applied to this project's schema (edge_type column not found on" >&2
+        echo "  ${SCHEMA}.ledger -- this world's kernel predates s30). Omit --type, or apply" >&2
+        echo "  s30 to this schema as a maintainer act (ORCH-OPERATING-CARD.md's kernel-delta" >&2
+        echo "  decision tree)." >&2
+        exit 1
+      fi
+      if [ "$has_edge_type_col" = "t" ]; then
+        exec psql -h "$PGHOST" -d "$PGDB" -v ON_ERROR_STOP=1 \
+          -v slug="$slug" -v on="$on" -v type="$type" \
+          -v statement="work_depends_on: ${slug} depends on ${on}" <<SQL
+        SET ROLE ${ROLE};
+        SET search_path = ${SCHEMA}, ${KERNEL};
+        INSERT INTO ${SCHEMA}.ledger (kind, work_slug, work_depends_on, edge_type, statement)
+        VALUES ('work_depends_on', :'slug', :'on', NULLIF(:'type', ''), :'statement');
+SQL
+      else
+        exec psql -h "$PGHOST" -d "$PGDB" -v ON_ERROR_STOP=1 \
+          -v slug="$slug" -v on="$on" -v statement="work_depends_on: ${slug} depends on ${on}" <<SQL
         SET ROLE ${ROLE};
         SET search_path = ${SCHEMA}, ${KERNEL};
         INSERT INTO ${SCHEMA}.ledger (kind, work_slug, work_depends_on, statement)
         VALUES ('work_depends_on', :'slug', :'on', :'statement');
 SQL
+      fi
       ;;
     close)
       shift

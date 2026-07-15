@@ -1,0 +1,44 @@
+== scaffolding throwaway --new-world s30fxprobe (full s15..s30 birth chain) ==
+  scaffold OK (schema=s30fxprobe kern=s30fxprobe_kernel role=s30fxprobe_rw).
+
+=== a-blocks-close-self-edge-refused ===
+  [ok] exit=3 excerpt="SET\nSET\nERROR:  Ledger policy: work item slug 'self-a' cannot have a blocks-close dependency on itself — a self-edge is refused at construction for blocks-close (s30). informs edges are not subject to this refusal.\nCONTEXT:  PL/pgSQL function validate_work_item() line 27 at RAISE"
+
+=== b-informs-self-edge-allowed ===
+  [ok] exit=0 stderr_tail='SET\nSET\nINSERT 0 1'
+
+=== c-blocks-close-dangling-refused ===
+  [ok] exit=3 excerpt="ver-opened-c' which has no opening act — a blocks-close edge requires BOTH endpoints to be close-tracked work items (s30), unlike an informs edge's deliberately lax posture (s22). Open the antecedent first, or retry as --type informs.\nCONTEXT:  PL/pgSQL function validate_work_item() line 30 at RAISE"
+
+=== d-informs-dangling-allowed ===
+  [ok] exit=0 stderr_tail='SET\nSET\nINSERT 0 1'
+
+=== e-blocks-close-cycle-refused ===
+  [ok] exit=3 excerpt="not take a blocks-close dependency on 'cyc-e-x' — 'cyc-e-x' already (transitively) has a blocks-close dependency on 'cyc-e-y', so this edge would create a cycle; the obligation AND-tree must be a DAG or conjunction has no fixpoint (s30). informs edges are not subject to this refusal.\nCONTEXT:  PL/pgSQL function validate_work_item() line 32 at RAISE"
+
+=== f-informs-cycle-allowed ===
+  [ok] exit=0 stderr_tail='SET\nSET\nINSERT 0 1'
+
+=== g-blocks-close-child-blocks-strict ===
+  [ok] exit=3 names_leaf=True excerpt="SET\nSET\nERROR:  Ledger policy: strict close of work item 'root-g' refused — its obligation tree is unresolved: leaf-g (item is not yet closed). Resolve every named leaf, then retry (s29 Element C: strict close is a pure query over the derived conjunction, no stored verdict).\nCONTEXT:  PL/pgSQL function validate_work_item() line 50 at RAISE"
+
+=== h-informs-child-does-not-block ===
+  [ok] exit=0 stderr_tail='SET\nSET\nINSERT 0 1' -- proves the TYPE, not the mere edge, gates (identical structural shape as case g)
+
+=== j-reserved-word-supersedes-refused ===
+  [ok] exit=1 excerpt="led work depends: REFUSED -- --type must be blocks-close or informs (got 'supersedes').\n  'supersedes' is a RESERVED WORD here, not a legal edge_type -- row supersession\n  already has its one home in the pre-existing ledger.supersedes column."
+
+== scaffolding a SEPARATE s15..s29 world s30fxprobe_pre (s30 deliberately NOT in its birth chain) ==
+=== i0-pre-s30-depends-edge-authored-with-no-edge-type-column ===
+  [ok] exit=0 stderr_tail='SET\nSET\nINSERT 0 1'
+
+== applying s30-typed-dependency-edges.sql to s30fxprobe_pre/s30fxprobe_pre_kernel/s30fxprobe_pre_rw (mirrors a real ./migrate step by hand) ==
+  s30 applied on top of the s15..s29 world.
+
+=== i1-legacy-edge-stays-null-unwritable-reads-informs-by-omission ===
+  [ok] edge_type='' (empty = SQL NULL -- append-only makes this unwritable forever; case i2 below proves it reads as informs)
+
+=== i2-legacy-edge-does-not-retroactively-block-strict-close ===
+  [ok] exit=0 stderr_tail='SET\nSET\nINSERT 0 1' -- leaf-i is still open+unclosed; the legacy edge reads informs, so it does NOT gate
+
+ALL CASES OK -- s30 typed dependency edges both-polarity proof (self-edge/dangling/cycle refused for blocks-close, allowed for informs / an unresolved blocks-close child blocks strict close, the SAME shape typed informs does not / supersedes refused as a reserved word / a legacy pre-s30 edge stays NULL forever (unwritable) and reads as informs by omission, not retroactively blocking a strict close), zero residue.

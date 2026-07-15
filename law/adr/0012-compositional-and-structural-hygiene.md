@@ -1,3 +1,15 @@
+<!-- doc-attest-exempt: 2026-07-15 doc-table-mechanization commission — the only change at this
+     content hash is three table-separator lines (em-dash to hyphen; gates/doc_tables.py,
+     tools/markdown_tables.py), mechanically proven content-preserving (identical extracted
+     cell stream before/after, see the commit message). No prose changed, so ADR-0017's
+     fresh-context legibility concern does not apply to this touch; no live A:B:C loop was run
+     (this session cannot fork a genuinely fresh reviewer) and this marker does not claim one
+     did. Flagged to the maintainer as a standing exemption on this file rather than a
+     content-hash-scoped one — narrower handling (e.g. a --record entry that names "mechanical,
+     not reviewed" explicitly) may be worth adding to the gate; left as residue, not silently
+     resolved. A future PROSE edit to this file should get a real attestation regardless of
+     this marker's literal wholesale scope. -->
+
 # ADR-0012: Compositional and Structural Hygiene
 
 - **Status:** Proposed
@@ -118,7 +130,7 @@ new structure, and again at review. Each row is "if your new code can exhibit
 this shape, the named principle forbids it."
 
 | Audit cancer (§2) | The shape to never author | Preventing rule |
-| — | — | — |
+| --- | --- | --- |
 | **A** — Config frozen at construction; ownership lives nowhere | a tunable swept across a run captured once in `__init__`/`Namespace` with no per-call or per-iteration read | **P4** (live, not frozen) — heat is decided by *where the value lives*; a value that changes within a run is a live cell, not a ctor invariant |
 | **B** — SSOT dissolved; same knowledge re-encoded in N places | a second hand-maintained copy of a fact (belief math, the C(N,K) prior, the feature layout, K, the reference rates) | **P1** (single source of truth / derive-don't-duplicate) — every fact has one home; derived quantities are computed, never re-typed |
 | **C** — Hidden global state keyed by object identity | a module-global cache keyed on `id(env)` (or any value-less identity) instead of owned on the object | **P2** (seam/port discipline) — derived data lives on the object whose lifetime it shares; no module global keyed by address |
@@ -915,7 +927,7 @@ converts a review-only principle to a mechanism.
 not edited into it):**
 
 | Audit cancer / boundary | The shape to never author | Preventing rule |
-| — | — | — |
+| --- | --- | --- |
 | **(new, cross-DEVICE)** — gratuitous host↔device transfer | a host↔device crossing (a framework-specific host→device stage, or a blocking device→host pull) scattered at an arbitrary call-site instead of isolated at one designated boundary, so a per-call re-stage or a redundant pull hides a real, measurable cost no one site owns | **P7** lifted from the cross-LANGUAGE wire to the cross-DEVICE boundary (composing with **P1** one-home/derive-don't-duplicate and **P2** seam/Port-ACL): a host↔device crossing has **one authoritative, auditable home** — a *designated boundary* — from which the hot path stages once and consolidates, never N scattered re-stages; mechanically enforced at the strongest feasible-and-proportionate level (an AST gate + ratcheting baseline, ADR-0011 Rule 1, mirroring a strict-typing CI gate), so a NEW transfer outside a boundary fails CI |
 
 **The rule (the cross-DEVICE register of P7/P1/P2).** A host↔device transfer
@@ -992,7 +1004,7 @@ checklist), consulting it is part of the fix, not part of some later audit.
 New anti-pattern rows (appended, per this section's convention):
 
 | Audit cancer / boundary | The shape to never author | Preventing rule |
-| — | — | — |
+| --- | --- | --- |
 | **(new, corrective)** — a fix exempted from the checklist | a corrective diff authored and claimed done without a checklist pass or a consult of the stack's defect ledger, so the fix re-mints a cataloged cancer (an outside-the-guard refusal, CB-21; a second producer of one intermediate, CB-31; blocking work on the hot thread, CB-32) | **the scope clause above** — a corrective diff is new structure; checklist + ledger pass before "fixed" is claimed |
 | **(new, proxy bound)** — a ceiling denominated in the wrong currency | a bound expressed in a unit OTHER than the resource that detonates (a char cap protecting a token budget, CB-08; a per-frame byte cap protecting aggregate memory, then a frame-count cap protecting wall time, CB-17/CB-15/CB-29; a round-number time literal orders above the warm envelope it protects, CB-30) | **P1 (derive-don't-duplicate) in the bound register** — a bound is denominated in, and derived from, the detonating resource (ADR-0000 Specimen 3's byte-budgeted high-water-mark is the worked form); each independent axis of an ingress surface (bytes, count, magnitude, time) carries its own bound, and a foreclosure claim names the axes it does not cover |
 

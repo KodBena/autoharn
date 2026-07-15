@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-13T17:42:07Z
-#   last-change: 2026-07-13T17:56:04Z
-#   contributors: 3c50e030/main
+#   last-change: 2026-07-15T14:11:13Z
+#   contributors: 3c50e030/main, a857c93d/main
 # <<< PROVENANCE-STAMP <<<
 
 """typed_table — EXPERIMENT, NO MANDATE (work item typed-table-constructor-experiment; see
@@ -83,6 +83,16 @@ from pathlib import Path
 # transcribed, never a second driftable copy. Safe at module-import time: scan2's own main()
 # sits behind an `if __name__ == "__main__"` guard, so importing it here runs no side effect.
 from compound_nominal_scan2 import classify_label
+
+# The markdown row/separator rendering primitive is imported from the single-home parser+
+# renderer module (work item doc-table-mechanization, 2026-07-15) rather than re-typed here a
+# second time — ADR-0012 P1, one definition. tools/markdown_tables.py sits one directory up
+# from this file (tools/experiments/); reached the same way gates/scan2_firing_schema.py
+# reaches into tools/experiments/ from the other direction.
+_TOOLS_DIR = str(Path(__file__).resolve().parents[1])
+if _TOOLS_DIR not in sys.path:
+    sys.path.insert(0, _TOOLS_DIR)
+from markdown_tables import render_row, render_separator
 
 
 class TableConstructionError(ValueError):
@@ -201,10 +211,10 @@ class Table:
         if self.caption:
             lines.append(self.caption.rstrip())
             lines.append("")
-        lines.append("| " + " | ".join(self.columns) + " |")
-        lines.append("| " + " | ".join(["---"] * len(self.columns)) + " |")
+        lines.append(render_row(self.columns))
+        lines.append(render_separator(len(self.columns)))
         for r in self.rows:
-            lines.append("| " + " | ".join([r.label, *r.cells]) + " |")
+            lines.append(render_row([r.label, *r.cells]))
         body = "\n".join(lines)
         prov = (
             f"<!-- constructor-generated: tools/experiments/typed_table.py; "

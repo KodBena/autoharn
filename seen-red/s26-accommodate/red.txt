@@ -1,0 +1,38 @@
+=== baseline-blocker-reproduced ===
+  [ok] exit=3 excerpt='ork/w/vdc/1/autoharn/kernel/lineage/s26-row-hash-chain.sql:345: NOTICE:  trigger "zz_set_row_hash" for relation "s26accbase.ledger" does not exist, skipping\npsql:/home/bork/w/vdc/1/autoharn/kernel/lineage/s26-row-hash-chain.sql:353: ERROR:  column "row_hash" of relation "ledger" contains null values'
+
+migrate: s26-row-hash-chain.sql has an accommodation sibling (s26-row-hash-chain.accommodate.sql) -- applying with its history-validating statement substituted (design/MAINT-MIGRATION-ACCOMMODATIONS-SPEC.md sec-2).
+=== accommodation-applied-succeeds ===
+  [ok] exit=0 stderr='_79.sql:345: NOTICE:  trigger "zz_set_row_hash" for relation "s26accgood.ledger" does not exist, skipping\npsql:/home/bork/w/vdc/1/autoharn/kernel/lineage/s26-row-hash-chain.accommodate.sql:180: NOTICE:  trigger "zzz_enforce_row_hash_not_null" for relation "s26accgood.ledger" does not exist, skipping'
+
+=== epoch-correctly-drawn ===
+  [ok] migration_epoch.epoch='3' pre-apply max(id)='3'
+
+=== history-untouched-by-accommodation ===
+  [ok] pre-existing rows with a non-NULL row_hash after accommodated apply: 0 (expect 0 -- no backfill, ever)
+
+=== post-epoch-row-gets-hash ===
+  [ok] insert_exit=0 newest_row(id|has_hash)='4|t'
+
+=== chain-check-mid-history-tolerant ===
+  [ok] exit=0 stdout='verify-chain: INTACT -- 1 row(s) walked, head id=4 hash=9bced9a8b9165e7f5c475096d7551767f75117cf507e51c827d643004d6d61c8, 3 pre-migration-epoch row(s) exempt by type (NULL row_hash, skipped -- kernel/lineage/s26-row-hash-chain.accommodate.sql)\nverify-chain: tail-deletion witness UNAVAILABLE -- pre-s27 kernel -- no chain_high_water witness in s26accgood_kernel (kernel/lineage/s27-chain-high-water.sql not applied here); tail-deletion coverage cannot be claimed for this world'
+
+=== chain-check-detects-tamper ===
+  [ok] exit=1 stdout=" computed against the row's OLD, honest hash. Either way, the break can be no later than immediately after the true alteration point; it is never silently absorbed further downstream than that.)\nverify-chain: tail-deletion witness check SKIPPED -- hash-chain status is BROKEN, already diagnosed above"
+
+=== accommodation-cannot-be-relaxed ===
+  [ok] exit=1 excerpt="ERROR:  row_hash chain: ledger row id 5 carries no row_hash past this world's migration epoch (epoch=3, see s26accgood.migration_epoch) -- kernel/lineage/s26-row-hash-chain.accommodate.sql\nCONTEXT:  PL/pgSQL function zzz_enforce_row_hash_not_null() line 7 at RAISE"
+
+=== accommodate-verify-catches-violation ===
+  [ok] exit=0 ok-lines=['t', 'f', 't', 't'] (expect at least one 'f')
+
+=== history-header-silent-refused ===
+  [ok] migrate: REFUSED before touching anything -- the following kernel/lineage/ delta(s) are wired into new-project.sh's birth chain but carry no `-- HISTORY: safe -- <reasons>` or `-- HISTORY: requires accommodation -- provided as sibling` header line (d
+
+=== history-header-present-accepted ===
+  [ok] no refusal, as expected
+
+=== history-header-exempt-set-passes ===
+  [ok] no refusal, as expected
+
+ALL CASES OK -- s26-row-hash-chain.accommodate.sql both-polarity proof (row-972 blocker reproduced bare / accommodation applies clean over the same history / epoch correctly drawn / no backfill / post-epoch rows hash normally / verify-chain's mid-history-start fix walks only governed rows and reports the exempt count honestly / tamper on a governed row still caught / the accommodation's own epoch-gated trigger refuses a forged NULL past the epoch even with the primary hashing trigger disabled / its own .verify.sql catches the same violation directly / the forward-binding HISTORY: header rule refuses silence, accepts a declared header, and never fires on the frozen s15..s29 exempt set), zero residue.

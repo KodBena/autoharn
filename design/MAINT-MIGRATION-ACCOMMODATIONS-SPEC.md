@@ -1,12 +1,16 @@
-# Migration accommodations for frozen deltas — spec (AWAITING RATIFICATION)
+# Migration accommodations for frozen deltas — spec (RATIFIED)
 
 Date: 2026-07-15, night. Author: the orchestrating Fable session (constitutional route:
-Fable-authored, maintainer-ratified before any build). Status: DRAFT awaiting the
-maintainer's yes/no. Motivating evidence: ledger finding row 972 — the live world
-`autoharn1` heads at s25, and `./migrate` rehearsal against a clone of its real history
-fails at s26 (`ALTER COLUMN row_hash SET NOT NULL` validates 943 pre-existing rows),
-the same class sec-10 of `MAINT-COUNTERSIGN-CLOSE-SEMANTICS-SPEC.md` cured for s29.
-s26 is frozen and predates the cure; s27/s28 have not been audited for the class.
+Fable-authored, maintainer-ratified before any build). Status: RATIFIED 2026-07-15 (ledger
+decision row 1018, verbatim: "design/FABLE-OBLIGATION-DEPENDENT-TYPING-SPEC.md, design/
+MAINT-MIGRATION-ACCOMMODATIONS-SPEC.md accepted, apply"); section 3's build shipped under
+ledger work item `s26-accommodation-build` (claim-then-close, see that item's own commit for the
+build report). Motivating evidence: ledger finding row 972 — the live world `autoharn1` heads at
+s25, and `./migrate` rehearsal against a clone of its real history fails at s26
+(`ALTER COLUMN row_hash SET NOT NULL` validates pre-existing rows), the same class sec-10 of
+`MAINT-COUNTERSIGN-CLOSE-SEMANTICS-SPEC.md` cured for s29. s26 is frozen and predates the cure;
+the class audit built under this spec (section 3, item 2) confirms s27/s28 (and every other
+frozen delta s15 through s28) carry no comparable hazard — s26 is the sole blocker.
 
 ## 1. The problem, stated once for the class
 
@@ -78,5 +82,9 @@ confirmation, per the recorded execution boundary); no change to birth-chain sem
 the maintainer may instead choose world-rebirth over migration for autoharn1 — this
 spec makes migration POSSIBLE, not mandatory.
 
-<!-- doc-attest-exempt: DRAFT constitutional spec awaiting maintainer ratification;
-frozen as of its date once ratified. -->
+<!-- doc-attest-exempt: RATIFIED 2026-07-15 (ledger decision row 1018) constitutional spec;
+its own content is now final. Exempt marker KEPT (not removed) pending its own fresh-context
+A:B:C loop (law/adr/0017), which has not run yet -- attesting is a separate act from
+ratifying, and this build's own brief (ledger work item s26-accommodation-build) did not
+commission that loop. Removal condition: the A:B:C loop runs and an attestation record for
+this exact content lands in attestations/doc-legibility-attestations.jsonl. -->

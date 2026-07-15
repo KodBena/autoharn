@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-14T21:20:36Z
-#   last-change: 2026-07-15T06:57:48Z
+#   last-change: 2026-07-15T13:38:32Z
 #   contributors: a857c93d/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -199,6 +199,80 @@ def _require_detect_files(manifest: list[str]) -> dict[str, Path]:
 
 
 # --------------------------------------------------------------------------------------------
+# 1a. HISTORY: HEADER RULE (design/MAINT-MIGRATION-ACCOMMODATIONS-SPEC.md sec-3, item 3 --
+# forward-binding, ratified 2026-07-15). Every delta AUTHORED AFTER this rule states its own
+# history-posture in its header (`HISTORY: safe -- reasons` or `HISTORY: requires accommodation
+# -- provided as sibling`); a delta silent on this is refused before rehearsal touches anything.
+#
+# s15-s28 (plus the pre-s20 high_watermark_1.sql base) are EXEMPT BY NAME, never edited to add a
+# header (ADR-0005 Rule 8 -- frozen deltas stay byte-frozen): the spec's own build (this
+# commission) instead produced a CLASS AUDIT of every one of them (design/
+# MAINT-MIGRATION-ACCOMMODATIONS-SPEC.md's build report / this commission's ledger row),
+# dispositioning each SAFE-OVER-HISTORY or NEEDS-ACCOMMODATION so the same information the header
+# rule would carry going forward already exists, external to the frozen files, for this fixed
+# set. s29 is ALSO exempt: it predates this spec's ratification and already resolved its own
+# history posture INLINE (its sec-10 `migration_epoch` amendment, design/
+# MAINT-COUNTERSIGN-CLOSE-SEMANTICS-SPEC.md) -- substantively, not merely a header claiming
+# safety -- so refusing it for a missing header would be punishing the delta that originated the
+# whole accommodation concept this spec generalizes. Every OTHER future manifest entry (s30
+# onward) is governed by this rule with no further exemption.
+# --------------------------------------------------------------------------------------------
+
+_HISTORY_HEADER_EXEMPT: frozenset[str] = frozenset({
+    "high_watermark_1.sql",
+    "s15-schema.sql",
+    "s17-stamp-mechanism.sql",
+    "s17-independence-vocabulary.sql",
+    "s19-trigger-search-path.sql",
+    "s20-obligation-grants-and-view-refresh.sql",
+    "s21-session-aware-distinctness.sql",
+    "s22-work-item-ledger.sql",
+    "s23-per-invocation-stamp-token.sql",
+    "s24-declared-event-time.sql",
+    "s25-commission-kind.sql",
+    "s26-row-hash-chain.sql",
+    "s27-chain-high-water.sql",
+    "s28-work-parent-edge.sql",
+    "s29-obligation-item-key-and-typed-close.sql",
+})
+
+_HISTORY_HEADER_RE = re.compile(
+    r"^--\s*HISTORY:\s*(safe|requires accommodation)\b", re.MULTILINE)
+
+
+def _require_history_headers(manifest: list[str]) -> None:
+    """Refuses, before touching anything, if any manifest entry OUTSIDE
+    `_HISTORY_HEADER_EXEMPT` carries no `HISTORY: safe|requires accommodation` header line
+    (design/MAINT-MIGRATION-ACCOMMODATIONS-SPEC.md sec-3, item 3)."""
+    silent: list[str] = []
+    for name in manifest:
+        if name in _HISTORY_HEADER_EXEMPT:
+            continue
+        path = LINEAGE_DIR / name
+        if not path.is_file():
+            continue  # _require_detect_files (called alongside) already refuses a missing file
+        text = path.read_text(encoding="utf-8", errors="surrogateescape")
+        if not _HISTORY_HEADER_RE.search(text):
+            silent.append(name)
+    if silent:
+        lines = "\n".join(f"    kernel/lineage/{n}" for n in silent)
+        raise MigrateRefusal(
+            "migrate: REFUSED before touching anything -- the following kernel/lineage/ delta(s) "
+            "are wired into new-project.sh's birth chain but carry no `-- HISTORY: safe -- "
+            "<reasons>` or `-- HISTORY: requires accommodation -- provided as sibling` header "
+            "line (design/MAINT-MIGRATION-ACCOMMODATIONS-SPEC.md sec-3, item 3 -- every delta "
+            "authored after this rule must declare its own history-posture; a silent header is "
+            "refused, never guessed):\n"
+            f"{lines}\n"
+            "Remediation: add the HISTORY: header line to the delta's own comment block (a "
+            "frozen file that has already been applied anywhere is NEVER edited -- ADR-0005 Rule "
+            "8 -- so this refusal can only ever fire on a delta that has not yet been applied to "
+            "any world). If the delta needs an accommodation, author its "
+            "`kernel/lineage/<name>.accommodate.sql` sibling first (design/"
+            "MAINT-MIGRATION-ACCOMMODATIONS-SPEC.md sec-2). Nothing was touched.")
+
+
+# --------------------------------------------------------------------------------------------
 # 2. psql PLUMBING
 # --------------------------------------------------------------------------------------------
 
@@ -308,26 +382,67 @@ def _scratch_names(dep: DeploymentRecord) -> tuple[str, str]:
     return f"{dep.schema}_{suffix}", f"{dep.kern}_{suffix}"
 
 
+def _rename_identifiers_outside_copy_data(text: str, dep: DeploymentRecord,
+                                           scratch_schema: str, scratch_kern: str) -> str:
+    """Renames the two schema identifiers everywhere EXCEPT inside `COPY ... FROM stdin;` ...
+    `\\.` DATA payload lines -- the actual hazard this function exists to close (found live,
+    2026-07-15, rehearsing s26-accommodation-build against a real autoharn1 clone: the prior
+    version's docstring CLAIMED "COPY-data-safe" but never actually excluded data rows from the
+    regex, so a word-boundary match doesn't distinguish "COPY schema.ledger (...)" from a data
+    row's own `statement`/`rationale` text that happens to mention the deployment's schema name
+    in PROSE -- e.g. a ledger row literally saying "the world autoharn1 heads at s25" gets its
+    stored text silently rewritten to "...autoharn1_mig12345 heads..." on restore, corrupting
+    history and manufacturing a false HISTORY BYTE-IDENTITY failure (witnessed directly: the
+    autoharn1 real-history clone rehearsal failed at the pre-check with exactly this shape before
+    this fix). A mature project's own ledger discusses its own deployment/schema name constantly
+    (this project's is no exception), so this is not an edge case -- it fires on ordinary content.
+
+    Fix: track COPY-data-block state line by line (pg_dump's plain-SQL COPY statement is always
+    exactly `COPY <possibly-schema-qualified-relation> (...) FROM stdin;` on its own line,
+    terminated by a line that is exactly `\\.`) and rename ONLY on lines OUTSIDE that state --
+    the COPY command line itself (which correctly needs the schema renamed so the load lands in
+    the scratch schema) is not inside the block it opens, so it is still renamed normally.
+
+    Word-boundary regex, NOT a bare substring replace, is retained for the non-data lines:
+    pg_dump's plain-SQL output only double-quotes an identifier when Postgres would otherwise
+    need quoting (mixed case, special characters) -- a plain lowercase schema name like
+    `migfixa` appears BARE (`CREATE SCHEMA migfixa;`), so a quoted-only replace silently misses
+    every unquoted occurrence (witnessed: `CREATE SCHEMA migfixa;` unrenamed, second restore
+    collided with the live schema). `\\b<name>\\b` matches both the bare and the `"quoted"` form
+    (the quote characters are non-word, so the boundary still lands) while correctly NOT
+    matching a LONGER identifier that happens to start with the same text (`migfixa_kernel`,
+    `migfixa_rw` -- the role name, deliberately never renamed) because `_` is itself a word
+    character, so no boundary exists between `migfixa` and `_kernel`/`_rw`."""
+    kern_re = re.compile(rf"\b{re.escape(dep.kern)}\b")
+    schema_re = re.compile(rf"\b{re.escape(dep.schema)}\b")
+    copy_start_re = re.compile(r"^COPY\s")
+    out_lines: list[str] = []
+    in_copy_data = False
+    for line in text.split("\n"):
+        if in_copy_data:
+            out_lines.append(line)
+            if line == "\\.":
+                in_copy_data = False
+            continue
+        # The COPY command line itself is NOT data -- it must still be renamed so the load
+        # targets the scratch schema -- but it flips state so every line AFTER it, up to the
+        # terminating `\.`, is left byte-for-byte untouched.
+        renamed = schema_re.sub(scratch_schema, kern_re.sub(scratch_kern, line))
+        out_lines.append(renamed)
+        if copy_start_re.match(line):
+            in_copy_data = True
+    return "\n".join(out_lines)
+
+
 def _restore_to_scratch(dep: DeploymentRecord, backup_path: Path,
                          scratch_schema: str, scratch_kern: str) -> None:
-    """Renames the two schema identifiers in a COPY of the dump text and applies it into fresh
-    scratch schemas in the SAME database. This is the "COPY-data-safe schema renamer" technique
-    the 2026-07-14 ent rehearsal used by hand (ledger decision row 747); mechanized here so it
-    never has to be re-typed.
-
-    Word-boundary regex, NOT a bare substring replace: pg_dump's plain-SQL output only
-    double-quotes an identifier when Postgres would otherwise need quoting (mixed case,
-    special characters) -- a plain lowercase schema name like `migfixa` appears BARE
-    (`CREATE SCHEMA migfixa;`), so a quoted-only replace silently misses every unquoted
-    occurrence (witnessed: `CREATE SCHEMA migfixa;` unrenamed, second restore collided with the
-    live schema). `\\b<name>\\b` matches both the bare and the `"quoted"` form (the quote
-    characters are non-word, so the boundary still lands) while correctly NOT matching a
-    LONGER identifier that happens to start with the same text (`migfixa_kernel`, `migfixa_rw`
-    -- the role name, deliberately never renamed) because `_` is itself a word character, so
-    no boundary exists between `migfixa` and `_kernel`/`_rw`."""
+    """Renames the two schema identifiers (outside COPY data payloads -- see
+    `_rename_identifiers_outside_copy_data`'s own docstring for the hazard this closes) in a copy
+    of the dump text and applies it into fresh scratch schemas in the SAME database. This is the
+    "COPY-data-safe schema renamer" technique the 2026-07-14 ent rehearsal used by hand (ledger
+    decision row 747); mechanized here so it never has to be re-typed."""
     text = backup_path.read_text(encoding="utf-8", errors="surrogateescape")
-    text = re.sub(rf"\b{re.escape(dep.kern)}\b", scratch_kern, text)
-    text = re.sub(rf"\b{re.escape(dep.schema)}\b", scratch_schema, text)
+    text = _rename_identifiers_outside_copy_data(text, dep, scratch_schema, scratch_kern)
     with tempfile.NamedTemporaryFile("w", suffix=".sql", delete=False,
                                       encoding="utf-8", errors="surrogateescape") as tf:
         tf.write(text)
@@ -356,6 +471,107 @@ def _drop_schema(dep: DeploymentRecord, schema: str) -> None:
 
 
 # --------------------------------------------------------------------------------------------
+# 5a. ACCOMMODATIONS (design/MAINT-MIGRATION-ACCOMMODATIONS-SPEC.md sec-2). A missing delta with a
+# `kernel/lineage/<name>.accommodate.sql` sibling is applied with its history-validating
+# statement(s) SUBSTITUTED, never applied bare -- `./migrate` is, per the spec's own "who applies
+# what" bullet, the ONLY surface that ever reads an `.accommodate.sql` file (a birth-chain
+# `--new-world` apply names only frozen files in new-project.sh, never a sibling).
+# --------------------------------------------------------------------------------------------
+
+_ACCOMMODATE_BEGIN = "-- ACCOMMODATE-SUBSTITUTES-BEGIN"
+_ACCOMMODATE_END = "-- ACCOMMODATE-SUBSTITUTES-END"
+
+
+def _extract_substituted_block(accommodate_text: str, accommodate_path: Path) -> str:
+    """The exact frozen-file text this accommodation substitutes for, delimited in the
+    accommodation file by two lines that are EXACTLY (not merely containing)
+    ACCOMMODATE-SUBSTITUTES-BEGIN / ACCOMMODATE-SUBSTITUTES-END (see
+    kernel/lineage/s26-row-hash-chain.accommodate.sql for the convention this generalizes) --
+    whole-LINE matching, not a bare substring search, so prose elsewhere in the same file that
+    merely MENTIONS the marker name (e.g. this docstring, or the accommodation file's own header
+    explaining the convention) can never be mistaken for the marker itself. Refuses if exactly
+    one BEGIN and exactly one END line are not found, in that order -- never guesses a
+    substitution boundary.
+
+    Every line strictly between the markers must itself be a SQL comment (`-- ...`) -- this is
+    what keeps the accommodation file valid, INERT SQL on its own (fed to psql unmodified, unlike
+    the frozen file, which gets a temp copy with its block removed): the marker block quotes the
+    frozen statement for human review, it does not re-execute it a second time. Exactly one
+    leading `-- ` (or a bare `--` for an empty line) is stripped from each such line before
+    comparing against the frozen file's own, uncommented, live text. A block line that is NOT a
+    comment is refused -- it would otherwise execute twice (once here, once in the frozen file)."""
+    lines = accommodate_text.split("\n")
+    begin_idxs = [i for i, ln in enumerate(lines) if ln.strip() == _ACCOMMODATE_BEGIN]
+    end_idxs = [i for i, ln in enumerate(lines) if ln.strip() == _ACCOMMODATE_END]
+    if len(begin_idxs) != 1 or len(end_idxs) != 1 or end_idxs[0] <= begin_idxs[0]:
+        raise MigrateRefusal(
+            f"migrate: REFUSED -- {accommodate_path} does not carry exactly one "
+            f"'{_ACCOMMODATE_BEGIN}' line followed by exactly one '{_ACCOMMODATE_END}' line, "
+            f"each on its own line (design/MAINT-MIGRATION-ACCOMMODATIONS-SPEC.md sec-2's own "
+            f"reviewability requirement) -- found {len(begin_idxs)} BEGIN, {len(end_idxs)} END. "
+            f"This script cannot tell what it is meant to substitute. Nothing was touched.")
+    block = lines[begin_idxs[0] + 1:end_idxs[0]]
+    uncommented: list[str] = []
+    for ln in block:
+        if ln == "--":
+            uncommented.append("")
+        elif ln.startswith("-- "):
+            uncommented.append(ln[3:])
+        else:
+            raise MigrateRefusal(
+                f"migrate: REFUSED -- {accommodate_path}'s substitution block contains a line "
+                f"that is not a SQL comment ({ln!r}) -- every line between "
+                f"{_ACCOMMODATE_BEGIN}/{_ACCOMMODATE_END} must be commented (`-- `-prefixed) so "
+                f"the accommodation file stays valid, inert SQL on its own; an uncommented line "
+                f"there would execute a second time when this file is fed to psql. Nothing was "
+                f"touched.")
+    return "\n".join(uncommented).strip("\n")
+
+
+def _prepare_apply_files(missing: list[str]) -> tuple[list[Path], list[Path]]:
+    """Returns (files_to_feed_to_psql_in_order, tempfiles_to_delete_after). For a plain missing
+    delta this is just `[LINEAGE_DIR/name]`. For one with an `.accommodate.sql` sibling, the
+    frozen file's exact substituted block (see `_extract_substituted_block`) is removed from an
+    IN-MEMORY copy, written to a tempfile, and the accommodation file is fed immediately after it
+    -- the on-disk frozen file is never written to (ADR-0005 Rule 8)."""
+    feed: list[Path] = []
+    temps: list[Path] = []
+    for name in missing:
+        stem = name[:-4] if name.endswith(".sql") else name
+        frozen_path = LINEAGE_DIR / name
+        accommodate_path = LINEAGE_DIR / f"{stem}.accommodate.sql"
+        if not accommodate_path.is_file():
+            feed.append(frozen_path)
+            continue
+        frozen_text = frozen_path.read_text(encoding="utf-8", errors="surrogateescape")
+        accommodate_text = accommodate_path.read_text(encoding="utf-8", errors="surrogateescape")
+        substituted = _extract_substituted_block(accommodate_text, accommodate_path)
+        if substituted not in frozen_text:
+            raise MigrateRefusal(
+                f"migrate: REFUSED -- {accommodate_path}'s ACCOMMODATE-SUBSTITUTES block does "
+                f"not appear byte-for-byte in {frozen_path} -- the two have drifted (or the "
+                f"marker block is stale/wrong). A substitution this script cannot verify against "
+                f"the frozen file's actual on-disk text is refused, never guessed. Nothing was "
+                f"touched.")
+        modified = frozen_text.replace(
+            substituted,
+            f"-- (removed here -- substituted by {accommodate_path.name}, see that file's own "
+            f"header for the exact statement this replaces)",
+            1)
+        with tempfile.NamedTemporaryFile("w", suffix=".sql", delete=False,
+                                          encoding="utf-8", errors="surrogateescape") as tf:
+            tf.write(modified)
+            modified_path = Path(tf.name)
+        feed.append(modified_path)
+        temps.append(modified_path)
+        feed.append(accommodate_path)
+        print(f"migrate: {name} has an accommodation sibling ({accommodate_path.name}) -- "
+              f"applying with its history-validating statement substituted (design/"
+              f"MAINT-MIGRATION-ACCOMMODATIONS-SPEC.md sec-2).")
+    return feed, temps
+
+
+# --------------------------------------------------------------------------------------------
 # 6. APPLYING THE MISSING CHAIN (rehearsal and live share this function -- ADR-0012 P1: one apply
 #    path, never a rehearsal-shaped copy and a live-shaped copy that could silently diverge)
 # --------------------------------------------------------------------------------------------
@@ -371,22 +587,31 @@ def _apply_chain(dep: DeploymentRecord, schema: str, kern: str, missing: list[st
     `role` are already passed to every delta whether or not it uses them. REHEARSAL and LIVE are
     BOTH given the same `backup_path`: REHEARSAL restores from that exact dump (this function's
     own caller), so its provenance is honestly identical to LIVE's -- the same backup file is what
-    either apply's history stood on at that moment."""
-    args = _psql_args(dep, schema, kern) + ["-1"]
-    if backup_path is not None:
-        args += ["-v", f"epoch_dump_path={backup_path}",
-                 "-v", f"epoch_applied_by={os.environ.get('USER', 'unknown')}"]
-    for name in missing:
-        args += ["-f", str(LINEAGE_DIR / name)]
-    proc = subprocess.run(args, capture_output=True, text=True)
-    if proc.returncode != 0:
-        raise MigrateRefusal(
-            f"migrate: {where} APPLY FAILED (single transaction, rolled back whole -- "
-            f"{'scratch' if where == 'REHEARSAL' else 'LIVE'} schema {schema}/{kern} is "
-            f"unaffected by this failed attempt):\n{proc.stderr.strip()}\n"
-            f"Nothing further was touched.")
-    print(f"migrate: {where} apply of {len(missing)} delta(s) to {schema}/{kern}: OK "
-          f"(single transaction).")
+    either apply's history stood on at that moment.
+
+    Missing deltas carrying an `.accommodate.sql` sibling are applied with their history-
+    validating statement substituted (`_prepare_apply_files`) -- see design/
+    MAINT-MIGRATION-ACCOMMODATIONS-SPEC.md sec-2."""
+    files, temps = _prepare_apply_files(missing)
+    try:
+        args = _psql_args(dep, schema, kern) + ["-1"]
+        if backup_path is not None:
+            args += ["-v", f"epoch_dump_path={backup_path}",
+                     "-v", f"epoch_applied_by={os.environ.get('USER', 'unknown')}"]
+        for path in files:
+            args += ["-f", str(path)]
+        proc = subprocess.run(args, capture_output=True, text=True)
+        if proc.returncode != 0:
+            raise MigrateRefusal(
+                f"migrate: {where} APPLY FAILED (single transaction, rolled back whole -- "
+                f"{'scratch' if where == 'REHEARSAL' else 'LIVE'} schema {schema}/{kern} is "
+                f"unaffected by this failed attempt):\n{proc.stderr.strip()}\n"
+                f"Nothing further was touched.")
+        print(f"migrate: {where} apply of {len(missing)} delta(s) to {schema}/{kern}: OK "
+              f"(single transaction).")
+    finally:
+        for t in temps:
+            t.unlink(missing_ok=True)
 
 
 # --------------------------------------------------------------------------------------------
@@ -466,19 +691,30 @@ def _run_verify_files(dep: DeploymentRecord, schema: str, kern: str,
                        missing: list[str]) -> list[str]:
     """Runs each missing delta's `.verify.sql` sibling (if present); returns the list of names
     that HAD a verify file, so the evidence summary can name which deltas got the fuller check
-    and which fell back to detect-only (per the module docstring's honest-degradation clause)."""
+    and which fell back to detect-only (per the module docstring's honest-degradation clause).
+
+    When a delta ALSO carries an `.accommodate.sql` sibling (see `_prepare_apply_files`), its
+    `.accommodate.verify.sql` (if present) is run TOO, in addition to the delta's own plain
+    `.verify.sql` -- the accommodation's own behavioral invariants (e.g. the epoch-gated
+    substitute's NOT NULL guarantee) are a distinct claim from the frozen delta's own, and a
+    delta counts as having verify coverage if EITHER file ran (never silently dropped because the
+    other one happened to exist)."""
     verified: list[str] = []
     for name in missing:
         stem = name[:-4] if name.endswith(".sql") else name
-        verify_path = LINEAGE_DIR / f"{stem}.verify.sql"
-        if not verify_path.is_file():
-            continue
-        ok = _run_detect(dep, schema, kern, verify_path)
-        if not ok:
-            raise MigrateRefusal(
-                f"migrate: VERIFY FAILED -- {verify_path} reported at least one `ok=false` "
-                f"against schema={schema} kern={kern}. Nothing further was touched.")
-        verified.append(name)
+        had_any = False
+        for candidate in (LINEAGE_DIR / f"{stem}.verify.sql",
+                          LINEAGE_DIR / f"{stem}.accommodate.verify.sql"):
+            if not candidate.is_file():
+                continue
+            ok = _run_detect(dep, schema, kern, candidate)
+            if not ok:
+                raise MigrateRefusal(
+                    f"migrate: VERIFY FAILED -- {candidate} reported at least one `ok=false` "
+                    f"against schema={schema} kern={kern}. Nothing further was touched.")
+            had_any = True
+        if had_any:
+            verified.append(name)
     return verified
 
 
@@ -683,8 +919,10 @@ def main(argv: list[str]) -> int:
 
         manifest = _manifest()
         detects = _require_detect_files(manifest)
+        _require_history_headers(manifest)
         print(f"migrate: manifest has {len(manifest)} entries (parsed from "
-              f"{NEW_PROJECT_SH.relative_to(AUTOHARN_ROOT)}, every one carrying a `.detect.sql`).")
+              f"{NEW_PROJECT_SH.relative_to(AUTOHARN_ROOT)}, every one carrying a `.detect.sql` "
+              f"and a declared HISTORY posture).")
 
         head, missing = _current_head_and_missing(dep, dep.schema, dep.kern, manifest, detects)
         print(f"migrate: current lineage head = {head or '(none -- no manifest entry detected)'}")

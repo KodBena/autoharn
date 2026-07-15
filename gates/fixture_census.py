@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-09T13:36:11Z
-#   last-change: 2026-07-15T12:59:45Z
+#   last-change: 2026-07-15T14:12:52Z
 #   contributors: be693afb/main, e4410ef6/main, 3c50e030/main, 3c942a60/main, a857c93d/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -88,6 +88,7 @@ REGISTRY: dict[str, str] = {
     "verify-commission":              "seen-red/verify-commission/run_fixtures.py",
     "s26-row-hash-chain":             "seen-red/s26-row-hash-chain/run_fixtures.py",
     "s26-row-hash-chain-deletion":    "seen-red/s26-row-hash-chain-deletion/run_fixtures.py",
+    "s26-accommodate":                "seen-red/s26-accommodate/run_fixtures.py",
     "s27-chain-high-water":           "seen-red/s27-chain-high-water/run_fixtures.py",
     "no-conflict-markers":            "seen-red/no-conflict-markers/run_fixtures.py",
     "rename-doc":                     "seen-red/rename-doc/red-specimen.py",
@@ -112,6 +113,7 @@ REGISTRY: dict[str, str] = {
     "s28-work-parent-edge":           "seen-red/s28-work-parent-edge/run_fixtures.py",
     "s29-obligation-item-key-and-typed-close": "seen-red/s29-obligation-item-key-and-typed-close/run_fixtures.py",
     "s29-migration-epoch":            "seen-red/s29-migration-epoch/run_fixtures.py",
+    "s30-typed-dependency-edges":      "seen-red/s30-typed-dependency-edges/run_fixtures.py",
     "freeze-at-stamp":                "seen-red/freeze-at-stamp/run_fixtures.py",
     "verify-chain-error-conflation":  "seen-red/verify-chain-error-conflation/run_fixtures.py",
     "actual-intake-validation":       "seen-red/actual-intake-validation/run_fixtures.py",
@@ -119,6 +121,7 @@ REGISTRY: dict[str, str] = {
     "review-queue-intake":            "seen-red/review-queue-intake/run_fixtures.py",
     "adr-portability-terms":          "seen-red/adr-portability-terms/run_fixtures.py",
     "adr-bare-p-label":               "seen-red/adr-bare-p-label/run_fixtures.py",
+    "doc-tables":                     "seen-red/doc-tables/red-specimen.py",
     "stamp-provenance-marker-corruption": "seen-red/stamp-provenance-marker-corruption/run_fixtures.py",
     "pickup-connection-failure-silent-empty": "seen-red/pickup-connection-failure-silent-empty/run_fixtures.py",
     "scan2-firing-telemetry":       "seen-red/scan2-firing-telemetry/run_fixtures.py",
