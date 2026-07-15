@@ -76,9 +76,13 @@ import sys
 import tempfile
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # seen-red/, for _fixture_env
+from _fixture_env import fixture_pghost  # noqa: E402 (filing/pghost_resolve.py via seen-red/_fixture_env.py -- never a literal host default)
+
+
 REPO = Path(__file__).resolve().parents[2]
 TRACK_WORK = REPO / "bootstrap" / "track-work.sh"
-PGHOST, DB = "192.168.122.1", "toy"
+PGHOST, DB = fixture_pghost(), "toy"
 SCRATCH_NAME = "aivfixture"
 SCHEMA, KERN, ROLE = SCRATCH_NAME, f"{SCRATCH_NAME}_kernel", f"{SCRATCH_NAME}_rw"
 

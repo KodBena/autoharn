@@ -65,12 +65,16 @@ import sys
 import tempfile
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # seen-red/, for _fixture_env
+from _fixture_env import fixture_pghost  # noqa: E402 (filing/pghost_resolve.py via seen-red/_fixture_env.py -- never a literal host default)
+
+
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
 NEW_PROJECT = REPO / "bootstrap" / "new-project.sh"
 VERIFY_COMMISSION_TMPL = REPO / "bootstrap" / "templates" / "verify-commission.tmpl"
 
-PGHOST, PGDB = "192.168.122.1", "toy"
+PGHOST, PGDB = fixture_pghost(), "toy"
 WORLD = "vcfxprobe"
 
 KEYGEN_BATCH_TEMPLATE = """%no-protection

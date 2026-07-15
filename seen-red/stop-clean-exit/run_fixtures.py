@@ -95,13 +95,17 @@ import sys
 import time
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # seen-red/, for _fixture_env
+from _fixture_env import fixture_pghost  # noqa: E402 (filing/pghost_resolve.py via seen-red/_fixture_env.py -- never a literal host default)
+
+
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
 HOOK = REPO / "hooks" / "stop_clean_exit.py"
 NEW_PROJECT = REPO / "bootstrap" / "new-project.sh"
 
 PROBE_DIR = Path("/home/bork/w/vdc/1/.stopprobe")
-PGHOST, PGDB = "192.168.122.1", "toy"
+PGHOST, PGDB = fixture_pghost(), "toy"
 SCHEMA, KERN, ROLE = "stopprobe", "stopprobe_kernel", "stopprobe_rw"
 SLUG = "probe-item-1"
 SEENRED_SESSION = "seenred"           # the session id every ORIGINAL case's stdin.json carries

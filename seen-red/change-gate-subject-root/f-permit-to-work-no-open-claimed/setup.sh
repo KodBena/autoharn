@@ -10,7 +10,7 @@
 # opens (but never claims) one work item -- has_work_item_layer() must see the view, and
 # has_open_claimed_work_item() must see it as False.
 set -euo pipefail
-PGHOST=192.168.122.1
+PGHOST="${PGHOST:?PGHOST not set -- run this fixture via run_fixtures.py, which resolves it via seen-red/_fixture_env.py (EPISTEMIC_PGHOST/HARNESS_PGHOST or deployment.json), never a literal host default}"
 DB=toy
 SCHEMA=hookprobe_ptw_f
 KERN=hookprobe_ptw_f_kernel

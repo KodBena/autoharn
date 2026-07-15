@@ -222,7 +222,10 @@ import sys
 import tempfile
 from pathlib import Path
 
-PGHOST, DB = "192.168.122.1", "toy"
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # seen-red/, for _fixture_env
+from _fixture_env import fixture_pghost  # noqa: E402 (filing/pghost_resolve.py via seen-red/_fixture_env.py -- never a literal host default)
+
+PGHOST, DB = fixture_pghost(), "toy"
 SCHEMA, KERN, ROLE = "contempprobe", "contempprobe_kernel", "contempprobe_rw"
 # case (k) only: a SECOND scratch schema, applied through s23 ONLY (no s24), so the led.tmpl
 # missing-column refusal path is exercised against a REAL pre-s24 schema, not merely asserted.

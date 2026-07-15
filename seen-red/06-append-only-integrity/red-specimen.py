@@ -19,7 +19,11 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "gates"))   # autoharn: gates/ (was tools/, shallower)
 from append_only_integrity import missing_guards  # noqa: E402
 
-HOST, DB, SCHEMA = "192.168.122.1", "harness", "ao_redspec"
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # seen-red/, for _fixture_env
+from _fixture_env import fixture_pghost  # noqa: E402 (filing/pghost_resolve.py via seen-red/_fixture_env.py -- never a literal host default)
+
+
+HOST, DB, SCHEMA = fixture_pghost(), "harness", "ao_redspec"
 
 
 def main() -> int:

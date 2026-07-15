@@ -16,7 +16,11 @@ import subprocess
 import sys
 from pathlib import Path
 
-PGHOST, DB = "192.168.122.1", "harness"
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # seen-red/, for _fixture_env
+from _fixture_env import fixture_pghost  # noqa: E402 (filing/pghost_resolve.py via seen-red/_fixture_env.py -- never a literal host default)
+
+
+PGHOST, DB = fixture_pghost(), "harness"
 SCHEMA, KERN, ROLE = "s19red", "s19red_kernel", "s19red_rw"
 LINEAGE = Path(__file__).resolve().parents[2] / "kernel" / "lineage"
 

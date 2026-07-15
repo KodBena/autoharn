@@ -46,15 +46,18 @@ import subprocess
 import sys
 from pathlib import Path
 
-PGHOST, DB = "192.168.122.1", "toy"
 SCHEMA, KERN, ROLE = "s22probe", "s22probe_kernel", "s22probe_rw"
 HERE = Path(__file__).resolve().parent
 LINEAGE = HERE.parent / "lineage"
 ENGINE = HERE.parent.parent / "engine"
 sys.path.insert(0, str(ENGINE))  # bridge for item 5 (clingo_run / ledger_floor) -- see docstring
+sys.path.insert(0, str(HERE.parent.parent / "filing"))
 
 import clingo_run  # noqa: E402  (engine/clingo_run.py, via the sys.path bridge above)
 import ledger_floor  # noqa: E402  (engine/ledger_floor.py -- work_item_floor_atoms, WORK_ITEM_PREDS)
+import pghost_resolve  # noqa: E402 (filing/pghost_resolve.py -- never a literal host default)
+
+PGHOST, DB = pghost_resolve.resolve_pghost("HARNESS_PGHOST", "EPISTEMIC_PGHOST"), "toy"
 
 WORK_ITEMS_LP = ENGINE / "lp" / "work_items.lp"
 

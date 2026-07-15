@@ -65,6 +65,10 @@ import tempfile
 import time
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # seen-red/, for _fixture_env
+from _fixture_env import fixture_pghost  # noqa: E402 (filing/pghost_resolve.py via seen-red/_fixture_env.py -- never a literal host default)
+
+
 REPO = Path(__file__).resolve().parents[2]
 NEW_PROJECT = REPO / "bootstrap" / "new-project.sh"
 CONVERT = REPO / "bootstrap" / "convert-to-submodule.sh"
@@ -78,7 +82,7 @@ PINNING_SCRIPTS = [
 ]
 
 DB = "toy"
-HOST = "192.168.122.1"
+HOST = fixture_pghost()
 STAMP = str(int(time.time()))[-6:]  # short, run-unique DB name suffix -- avoids collisions
                                      # between concurrent fixture runs without a coordination
                                      # mechanism (ADR-0012 P1: one cheap fix, not a lock server)

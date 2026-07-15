@@ -78,10 +78,14 @@ import sys
 import tempfile
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # seen-red/, for _fixture_env
+from _fixture_env import fixture_pghost  # noqa: E402 (filing/pghost_resolve.py via seen-red/_fixture_env.py -- never a literal host default)
+
+
 REPO = Path(__file__).resolve().parents[2]
 TRACK_EXPERIMENTS = REPO / "bootstrap" / "track-experiments.sh"
 DDL = REPO / "stores" / "001_research_ledger.sql"
-PGHOST, DB = "192.168.122.1", "toy"
+PGHOST, DB = fixture_pghost(), "toy"
 
 CORE_SCHEMA, RESEARCH_SCHEMA = "texpprobe_core", "texpprobe_research"
 CORE_SCHEMA2, RESEARCH_SCHEMA2 = "texpprobe2_core", "texpprobe2_research"

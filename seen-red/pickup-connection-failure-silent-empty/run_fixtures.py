@@ -72,13 +72,17 @@ from importlib.machinery import SourceFileLoader
 from pathlib import Path
 from types import SimpleNamespace
 
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # seen-red/, for _fixture_env
+from _fixture_env import fixture_pghost  # noqa: E402 (filing/pghost_resolve.py via seen-red/_fixture_env.py -- never a literal host default)
+
+
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
 NEW_PROJECT = REPO / "bootstrap" / "new-project.sh"
 PICKUP_TMPL = REPO / "bootstrap" / "templates" / "pickup.tmpl"
 LINEAGE = REPO / "kernel" / "lineage"
 
-PGHOST, PGDB = "192.168.122.1", "toy"
+PGHOST, PGDB = fixture_pghost(), "toy"
 BAD_HOST = "pickup-conn-probe.invalid"  # RFC 2606 .invalid -- never resolves, ever
 WORLD = "pcfsxprobe"
 PRES22_SCHEMA, PRES22_KERN, PRES22_ROLE = "pcfsxpres22", "pcfsxpres22_kernel", "pcfsxpres22_rw"

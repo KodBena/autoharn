@@ -80,12 +80,16 @@ import sys
 import tempfile
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # seen-red/, for _fixture_env
+from _fixture_env import fixture_pghost  # noqa: E402 (filing/pghost_resolve.py via seen-red/_fixture_env.py -- never a literal host default)
+
+
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
 HOOK = REPO / "hooks" / "pretooluse_change_gate.py"
 LINEAGE = REPO / "kernel" / "lineage"
 
-PGHOST, PGDB = "192.168.122.1", "toy"
+PGHOST, PGDB = fixture_pghost(), "toy"
 
 # three independent scratch schemas -- (main: enforce/observe/discharge sequence),
 # (vacuous: open+claimed, zero obligations), (pre-s22: no work_item_current at all).

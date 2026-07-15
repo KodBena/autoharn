@@ -11,7 +11,7 @@
 # file (the PRE-EXISTING ticket/window logic this fix composes in front of -- permit-to-work alone
 # is not sufficient for an overall ALLOW; the ticket requirement is unchanged and still applies).
 set -euo pipefail
-PGHOST=192.168.122.1
+PGHOST="${PGHOST:?PGHOST not set -- run this fixture via run_fixtures.py, which resolves it via seen-red/_fixture_env.py (EPISTEMIC_PGHOST/HARNESS_PGHOST or deployment.json), never a literal host default}"
 DB=toy
 SCHEMA=hookprobe_ptw_g
 KERN=hookprobe_ptw_g_kernel

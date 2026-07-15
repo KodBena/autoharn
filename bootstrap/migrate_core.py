@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-14T21:20:36Z
-#   last-change: 2026-07-14T21:38:58Z
+#   last-change: 2026-07-14T22:13:16Z
 #   contributors: a857c93d/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -495,6 +495,107 @@ def _chain_check(dep: DeploymentRecord, schema: str, kern: str) -> str:
 
 
 # --------------------------------------------------------------------------------------------
+# 7a. CHAIN GENESIS SEED -- closes the manual-path gap witnessed in the stranger rehearsal
+# (tracker item chain-genesis-manual-path, 2026-07-15): README.md's manual deployment route
+# (scaffold -> apply a kernel lineage by hand -> ./migrate to catch up) has NO step that seeds
+# `:kern.chain_genesis` -- only `bootstrap/new-project.sh --new-world` ever did (see that
+# script's own "GENESIS SEED" block, right after its stamp-secret seeding). A manually-kernelled
+# world that reaches or passes s26-row-hash-chain.sql this way has the trigger
+# (zz_set_row_hash) wired but no seed row for it to read -- the FIRST real ledger INSERT (in
+# this script's own case, `_record_in_deployment_ledger`'s `led decision` call) hits
+# `RAISE EXCEPTION 'row_hash chain: no world-birth seed ...'` and fails loudly, exactly the
+# "post-migrate ledger-recording fails" defect witnessed live.
+#
+# This is deliberately NOT gated on `missing` (a world that is already at the lineage head --
+# the early-return branch in main() -- can STILL lack a genesis seed, since the manual-path gap
+# is "nobody ever seeded it," independent of whether THIS run applied anything): every
+# `./migrate` invocation checks and seeds if needed, mirroring new-project.sh's own idempotent
+# one-row-table pattern (INSERT ... ON CONFLICT (only_one) DO NOTHING) so a second run against an
+# already-seeded world is a provable no-op, never a silent second seed / never an error.
+# --------------------------------------------------------------------------------------------
+
+def _chain_genesis_status(dep: DeploymentRecord, schema: str, kern: str) -> str:
+    """Read-only counterpart of `_seed_chain_genesis` -- reports LIVE `:kern.chain_genesis`
+    status for the evidence summary WITHOUT writing anything (used on `--dry-run`, where no LIVE
+    touch is permitted, and in the REHEARSAL evidence block). Two SEPARATE queries, not one
+    CASE-wrapped query naming `{kern}.chain_genesis` in a branch that may never execute: Postgres
+    resolves every relation a query text NAMES at parse/plan time regardless of which CASE arm
+    runs, so a single statement referencing the (possibly absent) table always errors on a
+    pre-s26 schema -- witnessed directly authoring this function. `to_regclass` first (never
+    errors, NULL if absent), the count only issued when the table is confirmed present."""
+    exists = subprocess.run(
+        ["psql", "-h", dep.host, "-d", dep.db, "-v", "ON_ERROR_STOP=1", "-tAc",
+         f"SELECT to_regclass('{kern}.chain_genesis') IS NOT NULL;"],
+        capture_output=True, text=True,
+    )
+    if exists.returncode != 0:
+        return f"chain_genesis: could not read LIVE status ({exists.stderr.strip()[-200:]})"
+    if exists.stdout.strip() != "t":
+        return "chain_genesis: LIVE has no chain_genesis table yet (pre-s26 lineage)."
+    have = subprocess.run(
+        ["psql", "-h", dep.host, "-d", dep.db, "-v", "ON_ERROR_STOP=1", "-tAc",
+         f"SELECT count(*) FROM {kern}.chain_genesis;"],
+        capture_output=True, text=True,
+    )
+    if have.returncode != 0:
+        return f"chain_genesis: could not read LIVE status ({have.stderr.strip()[-200:]})"
+    v = have.stdout.strip()
+    if v == "1":
+        return "chain_genesis: LIVE already seeded (1 row) -- would be a no-op."
+    return f"chain_genesis: LIVE table exists but UNSEEDED ({v} rows) -- would be seeded on apply."
+
+
+def _seed_chain_genesis(dep: DeploymentRecord, schema: str, kern: str) -> str:
+    """Idempotently provisions `:kern.chain_genesis` (the s26 row-hash chain's world-birth seed)
+    if the table exists and is empty -- mirrors bootstrap/new-project.sh's own --new-world
+    GENESIS SEED block byte-for-byte (same table shape, same `openssl rand -hex 32`, same
+    ON CONFLICT (only_one) DO NOTHING). Returns a one-line, evidence-summary-ready string
+    describing what happened: SEEDED / already-seeded (no-op) / SKIPPED (pre-s26 lineage, no
+    chain_genesis table -- not an error, an older lineage, exactly new-project.sh's own wording
+    for the same case)."""
+    exists = subprocess.run(
+        ["psql", "-h", dep.host, "-d", dep.db, "-v", "ON_ERROR_STOP=1", "-tAc",
+         f"SELECT to_regclass('{kern}.chain_genesis') IS NOT NULL;"],
+        capture_output=True, text=True,
+    )
+    if exists.returncode != 0:
+        raise MigrateRefusal(
+            f"migrate: could not check for {kern}.chain_genesis:\n{exists.stderr.strip()}\n"
+            f"Nothing further was touched.")
+    if exists.stdout.strip() != "t":
+        return (f"chain_genesis: SKIPPED -- {kern}.chain_genesis does not exist (this world's "
+                f"kernel predates s26-row-hash-chain.sql; not an error, an older lineage).")
+    have = subprocess.run(
+        ["psql", "-h", dep.host, "-d", dep.db, "-v", "ON_ERROR_STOP=1", "-tAc",
+         f"SELECT count(*) FROM {kern}.chain_genesis;"],
+        capture_output=True, text=True,
+    )
+    if have.returncode != 0:
+        raise MigrateRefusal(
+            f"migrate: could not read {kern}.chain_genesis row count:\n{have.stderr.strip()}\n"
+            f"Nothing further was touched.")
+    if have.stdout.strip() == "1":
+        return f"chain_genesis: already seeded (1 row in {kern}.chain_genesis) -- no-op."
+    genesis_hex = subprocess.run(["openssl", "rand", "-hex", "32"],
+                                  capture_output=True, text=True)
+    if genesis_hex.returncode != 0 or not genesis_hex.stdout.strip():
+        raise MigrateRefusal(
+            f"migrate: `openssl rand -hex 32` failed while seeding {kern}.chain_genesis:\n"
+            f"{genesis_hex.stderr.strip()}\nNothing further was touched.")
+    ins = subprocess.run(
+        ["psql", "-h", dep.host, "-d", dep.db, "-q", "-v", "ON_ERROR_STOP=1", "-c",
+         f"INSERT INTO {kern}.chain_genesis (seed) VALUES "
+         f"('{genesis_hex.stdout.strip()}') ON CONFLICT (only_one) DO NOTHING;"],
+        capture_output=True, text=True,
+    )
+    if ins.returncode != 0:
+        raise MigrateRefusal(
+            f"migrate: seeding {kern}.chain_genesis FAILED:\n{ins.stderr.strip()}\n"
+            f"Nothing further was touched.")
+    return f"chain_genesis: SEEDED (one fresh genesis seed provisioned in {kern}.chain_genesis)."
+
+
+# --------------------------------------------------------------------------------------------
 # 8. THE ONE TYPED CONFIRMATION
 # --------------------------------------------------------------------------------------------
 
@@ -546,6 +647,9 @@ def _record_in_deployment_ledger(deployment_dir: Path, missing: list[str], backu
 # --------------------------------------------------------------------------------------------
 
 def main(argv: list[str]) -> int:
+    if len(argv) >= 2 and argv[1] in ("--help", "-h"):
+        print("usage: migrate <deployment-dir> [--dry-run]")
+        return 0
     if len(argv) not in (2, 3) or (len(argv) == 3 and argv[2] != "--dry-run"):
         print("usage: migrate <deployment-dir> [--dry-run]", file=sys.stderr)
         return 2
@@ -573,6 +677,11 @@ def main(argv: list[str]) -> int:
         print(f"migrate: current lineage head = {head or '(none -- no manifest entry detected)'}")
         if not missing:
             print(f"migrate: '{name}' is already at the lineage head. Nothing to migrate.")
+            genesis_note = (
+                _chain_genesis_status(dep, dep.schema, dep.kern) if dry_run
+                else _seed_chain_genesis(dep, dep.schema, dep.kern)
+            )
+            print(f"migrate: {genesis_note}")
             return 0
         print(f"migrate: missing ({len(missing)}): {', '.join(missing)}")
 
@@ -637,6 +746,7 @@ def main(argv: list[str]) -> int:
         print(f"  per-delta verify           : PASSED ({len(verified)}/{len(missing)} had a "
               f".verify.sql)")
         print(f"  chain check                : {chain_note}")
+        print(f"  {_chain_genesis_status(dep, dep.schema, dep.kern)}")
         print("=" * 70)
 
         if dry_run:
@@ -667,6 +777,13 @@ def main(argv: list[str]) -> int:
         print(f"migrate: LIVE post-apply re-verify -- history byte-identity PASSED "
               f"({post_live_count} rows), per-delta verify PASSED "
               f"({len(verified_live)}/{len(missing)}), chain check: {chain_note_live}")
+
+        # Genesis seed check runs AFTER the lineage apply and BEFORE the first real ledger write
+        # below (_record_in_deployment_ledger's own `led decision` call) -- same ordering
+        # constraint new-project.sh's --new-world block honors (seed before first write), closing
+        # the manual-path gap this defect is filed under: see _seed_chain_genesis's own docstring.
+        genesis_note = _seed_chain_genesis(dep, dep.schema, dep.kern)
+        print(f"migrate: {genesis_note}")
 
         _record_in_deployment_ledger(deployment_dir, missing, backup_path, chain_note_live)
 

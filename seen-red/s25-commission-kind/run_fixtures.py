@@ -54,12 +54,16 @@ import subprocess
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # seen-red/, for _fixture_env
+from _fixture_env import fixture_pghost  # noqa: E402 (filing/pghost_resolve.py via seen-red/_fixture_env.py -- never a literal host default)
+
+
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
 LINEAGE = REPO / "kernel" / "lineage"
 LED_TMPL = REPO / "bootstrap" / "templates" / "led.tmpl"
 
-PGHOST, PGDB = "192.168.122.1", "toy"
+PGHOST, PGDB = fixture_pghost(), "toy"
 SCHEMA, KERN, ROLE = "s25fxprobe", "s25fxprobe_kernel", "s25fxprobe_rw"                 # post-s25
 SCHEMA2, KERN2, ROLE2 = "s25fxprobe_pre", "s25fxprobe_pre_kernel", "s25fxprobe_pre_rw"  # pre-s25
 

@@ -25,7 +25,10 @@ import subprocess
 import sys
 from pathlib import Path
 
-PGHOST, DB = "192.168.122.1", "harness"
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "filing"))
+import pghost_resolve  # noqa: E402 (filing/pghost_resolve.py -- never a literal host default)
+
+PGHOST, DB = pghost_resolve.resolve_pghost("HARNESS_PGHOST", "EPISTEMIC_PGHOST"), "harness"
 SCHEMA, KERN, ROLE = "s19val", "s19val_kernel", "s19val_rw"
 HERE = Path(__file__).resolve().parent
 LINEAGE = HERE.parent / "lineage"

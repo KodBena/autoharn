@@ -45,6 +45,10 @@ import sys
 import tempfile
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # seen-red/, for _fixture_env
+from _fixture_env import fixture_pghost  # noqa: E402 (filing/pghost_resolve.py via seen-red/_fixture_env.py -- never a literal host default)
+
+
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
 HOOK = REPO / "hooks" / "stamp_intercept.py"
@@ -59,7 +63,7 @@ def _make_world(mode: str | None) -> Path:
     secret.write_text(os.urandom(32).hex())
     secret.chmod(0o600)
     (root / "deployment.json").write_text(json.dumps(
-        {"db": "toy", "host": "192.168.122.1", "schema": "invprobe",
+        {"db": "toy", "host": fixture_pghost(), "schema": "invprobe",
          "kern": "invprobe_kernel", "role": "invprobe_rw"}))
     if mode is not None:
         (root / ".claude").mkdir(exist_ok=True)

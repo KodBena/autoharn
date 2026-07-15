@@ -26,7 +26,10 @@ import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[1]   # autoharn: stores/<this> -> repo root (was parents[2] in fact-mining)
 SCRIPT = REPO_ROOT / "filing" / "file_rationalization.py"   # autoharn: filing/ (was tools/)
-PGHOST = os.environ.get("HARNESS_PGHOST", os.environ.get("EPISTEMIC_PGHOST", "192.168.122.1"))
+sys.path.insert(0, str(REPO_ROOT / "filing"))
+import pghost_resolve  # noqa: E402 (filing/pghost_resolve.py -- never a literal host default)
+
+PGHOST = pghost_resolve.resolve_pghost("HARNESS_PGHOST", "EPISTEMIC_PGHOST")
 DB = "harness"
 SCRATCH = "rat_test_scratch"
 

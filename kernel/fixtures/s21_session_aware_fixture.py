@@ -34,10 +34,14 @@ import hashlib
 import hmac
 import os
 import subprocess
+import sys
 import time
 from pathlib import Path
 
-PGHOST, DB = "192.168.122.1", "toy"
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "filing"))
+import pghost_resolve  # noqa: E402 (filing/pghost_resolve.py -- never a literal host default)
+
+PGHOST, DB = pghost_resolve.resolve_pghost("HARNESS_PGHOST", "EPISTEMIC_PGHOST"), "toy"
 SCHEMA, KERN, ROLE = "s21probe", "s21probe_kernel", "s21probe_rw"
 HERE = Path(__file__).resolve().parent
 LINEAGE = HERE.parent / "lineage"

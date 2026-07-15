@@ -52,6 +52,15 @@ HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
 HOOK = REPO / "hooks" / "pretooluse_change_gate.py"
 
+sys.path.insert(0, str(REPO / "seen-red"))  # seen-red/, for _fixture_env
+from _fixture_env import fixture_pghost  # noqa: E402 (filing/pghost_resolve.py via seen-red/_fixture_env.py -- never a literal host default)
+
+# setup.sh/teardown.sh (cases f/g) read PGHOST from the environment (they carry no literal host of
+# their own) -- resolved once here and exported so every subprocess this driver launches inherits
+# it, exactly the way build_env() below already layers env.json's own `set` overrides onto a copy
+# of os.environ.
+os.environ.setdefault("PGHOST", fixture_pghost())
+
 # fixture files a case dir carries in git; anything else `setup.sh` creates (e.g. the hook's own
 # scratch GATE_STATE/GATE_JOURNAL files, generated fresh each run) is scratch and removed in the
 # `finally` below so the repo tree stays clean between runs -- only these named files are ever

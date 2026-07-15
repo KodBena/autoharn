@@ -86,12 +86,16 @@ import subprocess
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # seen-red/, for _fixture_env
+from _fixture_env import fixture_pghost  # noqa: E402 (filing/pghost_resolve.py via seen-red/_fixture_env.py -- never a literal host default)
+
+
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
 HOOK = REPO / "hooks" / "pretooluse_delegation_observer.py"
 
 PROBE_DIR = Path("/tmp/.delegobsprobe")
-PGHOST, PGDB = "192.168.122.1", "toy"
+PGHOST, PGDB = fixture_pghost(), "toy"
 SCHEMA, KERN, ROLE = "delegprobe", "delegprobe_kernel", "delegprobe_rw"           # s22, cases a/b/d/e
 SCHEMA2, KERN2, ROLE2 = "delegprobe2", "delegprobe2_kernel", "delegprobe2_rw"     # pre-s22, case c
 

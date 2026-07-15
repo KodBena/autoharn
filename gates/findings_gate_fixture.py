@@ -24,7 +24,10 @@ import sys
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
-PGHOST = os.environ.get("HARNESS_PGHOST", os.environ.get("EPISTEMIC_PGHOST", "192.168.122.1"))
+sys.path.insert(0, str(REPO / "filing"))
+import pghost_resolve  # noqa: E402 (filing/pghost_resolve.py -- never a literal host default)
+
+PGHOST = pghost_resolve.resolve_pghost("HARNESS_PGHOST", "EPISTEMIC_PGHOST")
 SCHEMA = "findings_fixture"
 WITNESS = REPO / "runs" / "findings-gate-fixture" / "witness.txt"   # autoharn: runs/ (no docs/; old work-units witness is archive evidence)
 FF = [sys.executable, str(REPO / "filing" / "file_finding.py"), "--schema", SCHEMA]   # autoharn: filing/

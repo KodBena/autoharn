@@ -78,6 +78,10 @@ PRE_FIX_REF = "7567dd4"
 sys.path.insert(0, str(REPO / "engine"))
 import contemp_edb  # noqa: E402 -- see the sys.path.insert immediately above
 
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # seen-red/, for _fixture_env
+from _fixture_env import fixture_pghost  # noqa: E402 (filing/pghost_resolve.py via seen-red/_fixture_env.py -- never a literal host default)
+
+
 _TOKEN_RE = re.compile(r"app\.vendor_invocation=([0-9a-f-]+)")
 
 
@@ -90,7 +94,7 @@ def _make_world() -> tuple[Path, Path]:
     secret.write_text(os.urandom(32).hex())
     secret.chmod(0o600)
     (root / "deployment.json").write_text(json.dumps(
-        {"db": "toy", "host": "192.168.122.1", "schema": "bashcompm1",
+        {"db": "toy", "host": fixture_pghost(), "schema": "bashcompm1",
          "kern": "bashcompm1_kernel", "role": "bashcompm1_rw"}))
     return root, secret
 

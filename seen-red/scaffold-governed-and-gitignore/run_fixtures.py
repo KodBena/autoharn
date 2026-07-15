@@ -48,10 +48,14 @@ import sys
 import tempfile
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # seen-red/, for _fixture_env
+from _fixture_env import fixture_pghost  # noqa: E402 (filing/pghost_resolve.py via seen-red/_fixture_env.py -- never a literal host default)
+
+
 REPO = Path(__file__).resolve().parents[2]
 NEW_PROJECT = REPO / "bootstrap" / "new-project.sh"
 BASE_COMMIT = "7097533"  # the merge base this session's fix landed on top of (pre-fix state)
-BASE_ARGS = ["--db", "toy", "--host", "192.168.122.1"]
+BASE_ARGS = ["--db", "toy", "--host", fixture_pghost()]
 
 
 def _run(script: Path, dest: Path, *extra: str) -> subprocess.CompletedProcess:

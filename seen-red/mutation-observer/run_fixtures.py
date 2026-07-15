@@ -47,12 +47,16 @@ import sys
 import time
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # seen-red/, for _fixture_env
+from _fixture_env import fixture_pghost  # noqa: E402 (filing/pghost_resolve.py via seen-red/_fixture_env.py -- never a literal host default)
+
+
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
 HOOK = REPO / "hooks" / "posttooluse_mutation_observer.py"
 
 PROBE_DIR = Path("/tmp/.mutobsprobe")
-PGHOST, PGDB = "192.168.122.1", "toy"
+PGHOST, PGDB = fixture_pghost(), "toy"
 SCHEMA, KERN, ROLE = "mutobsprobe", "mutobsprobe_kernel", "mutobsprobe_rw"
 SCHEMA2, KERN2, ROLE2 = "mutobsprobe2", "mutobsprobe2_kernel", "mutobsprobe2_rw"  # pre-s22, case c
 
