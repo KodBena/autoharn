@@ -106,6 +106,38 @@ is COMPUTED — blockers-empty, visible the instant the last leaf resolves, no c
   typing changes the semantics of every EXISTING parent item retroactively, the opposite
   of fail-safe.
 
+## 3b. Defeasibility (added on the maintainer's question, 2026-07-15)
+
+The maintainer asked: if a later review defeats an interior or leaf node's validity, does
+the whole tree re-surface as open, as it should? Answer, made binding here:
+
+- **Review defeat propagates by construction.** `work_item_strict_blockers` stores no
+  verdict; its review leaf requires an UN-SUPERSEDED attest by a distinct actor. A later
+  supersession of that attest un-discharges the leaf on the next read, and every derived
+  ancestor re-opens with it — no propagation machinery, no stored state to invalidate.
+  This is not a feature added by this spec; it is why the spec refuses to mint any stored
+  discharge verdict anywhere.
+- **Derived state ALWAYS wins over a hand-close.** A composite's `effective_state` is the
+  blockers reading unconditionally — the optional hand-close row is a point-in-time
+  witness, never an override. A tree defeated AFTER a hand-close re-surfaces the composite
+  as open (`effective_state`), while the raw close row stands as history; the divergence
+  is surfaced as a new `work_item_violations` member (`closed_but_tree_defeated`), never
+  silently reconciled in either direction.
+- **The close leaf is NOT supersession-aware today — a shared blind spot this spec fixes
+  in the one home.** The `closes` CTE inside `work_item_strict_blockers` (and
+  `work_item_current`'s closed leg) counts a `work_closed` row regardless of whether a
+  later row superseded it: a defeated CLOSE still reads as closed. The review path is
+  defeasance-aware; the close path is not — asymmetric for no stated reason. Element:
+  filter superseded rows from the closes CTE (both readers, same fix). Fail-safe
+  direction (a strict close now requires MORE to be resolved, never less), but it
+  tightens the EXISTING strict-close semantics for non-composite items too, so it is
+  named as the one element of this spec that is not a pure addition — it is inside what
+  this ratification decides, not smuggled under the class ruling.
+- **The ASP twin carries the same semantics.** The ledger's defeasible reasoning is the
+  deductive layer's whole point; the discharge/defeat rules above get their `engine/lp/`
+  counterpart, and `./judge`'s SQL/ASP differential in AGREE — on fixtures that include
+  a post-discharge defeat — is the acceptance witness that the two readings cannot drift.
+
 ## 4. Fail-safe classification
 
 Adds one nullable shape-checked column, one refusal (scoped entirely to the new opt-in
@@ -131,7 +163,15 @@ the queue), and doubt about the side of the line IS the routing.
 - Non-composite items: `effective_state` identical to `state` across the whole fixture
   world (byte-identical behavior witnessed, not asserted).
 - Nested composites: grandparent discharges when the middle composite derives discharged.
-- `./judge` SQL/ASP differential: AGREE on a world containing all shapes above.
+- DEFEAT REPLAY: discharged composite; the attest review that discharged a child's
+  deferred close is superseded → `effective_state` returns open in the SAME read, and a
+  grandparent composite re-opens with it (propagation witnessed, not asserted).
+- DEFEAT PAST A HAND-CLOSE: hand-closed composite; a descendant leaf defeated →
+  `effective_state` open, `closed_but_tree_defeated` present in `work_item_violations`.
+- SUPERSEDED CLOSE: an antecedent's close row superseded → the antecedent re-appears in
+  `work_item_strict_blockers` output (the closes-CTE fix witnessed on both readers).
+- `./judge` SQL/ASP differential: AGREE on a world containing all shapes above,
+  including the post-discharge defeat fixtures.
 
 ## 6. Migration posture
 
