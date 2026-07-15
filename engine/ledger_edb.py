@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-06T05:33:12Z
-#   last-change: 2026-07-14T23:13:09Z
+#   last-change: 2026-07-15T20:50:02Z
 #   contributors: 37017f46/main, be693afb/main, a857c93d/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -289,6 +289,124 @@ def export(name: str) -> EdbExport:
             exp.facts.append(f"answers({int(a)},{int(q)}).")
             n += 1
         exp.counts["answers"] = n
+
+    return exp
+
+
+# ===========================================================================
+# WORK-LAYER EDB (plan step 8(ii); design/ORCH-CATEGORICAL-REFACTOR-CONSULT-2026-07-15.md F7 --
+# "ledger_edb.py exports no work_* fact family" was one of the two named judge-wiring gaps this
+# closes). Exports the s22/s28/s29 work-item fact families engine/lp/work_items.lp and
+# engine/lp/work_review.lp consume, so engine/lp_registry.py's "work" LAYER can be grounded from a
+# real target the same way the "tnow" layer already is -- previously only hand-assembled per
+# scratch fixture (kernel/fixtures/s22_work_item_fixture.py's work_item_edb(),
+# seen-red/s31-supersession-uniform-retraction/run_fixtures.py's build_edb()). This function is
+# the SINGLE HOME those two ad-hoc extractions should have shared (ADR-0012 P1); it is not yet
+# retrofitted into either fixture (a minimal-touch call, ADR-0004 -- both already pass their own
+# witness protocol against their own extraction, and retiring a working fixture's own EDB builder
+# is out of this delta's scope).
+#
+# CAPABILITY-GATED, same I12 posture as export() above: a target predating s22 (no `work_slug`
+# column) emits NOTHING from this family, declared EXCLUDED with reason -- never a silent empty a
+# caller misreads as "no work items exist." s28 (work_parent) and s29
+# (work_review_disposition/review_detail) are each their OWN sub-capability, independently gated,
+# so a s22-only target still gets the base work_* facts.
+WORK_FAMILIES = ("work_base", "work_parent", "work_review_disposition")
+
+
+def export_work(name: str) -> EdbExport:
+    """Export the work-layer EDB (work_opened/2, work_closed/3, work_witness_present/1,
+    work_depends/3, work_claimed/2, work_parent_edge/3 -- work_items.lp's own family; plus
+    w_open/2, w_parent_e/3, w_dep_e/3, w_closed/3, w_disposition/2, w_discharged/1 --
+    work_review.lp's own s31 row-id-carrying family) for a target, read-only, capability-gated."""
+    t = resolve(name)
+    exp = EdbExport(target=t)
+    rel = t.rel()
+
+    has_work = t.has_col("work_slug")
+    has_parent = t.has_col("work_parent")
+    has_review = t.has_col("work_review_disposition") and t.has_relation(f"{t.schema}.review_detail")
+
+    exp.capabilities.append(Capability(
+        "work_base", produced=has_work, capable=has_work,
+        reason="work_slug column present (s22 work-item ledger) -- emitted" if has_work
+        else "no `work_slug` column on this schema (pre-s22 lineage) -- capability absent"))
+    exp.capabilities.append(Capability(
+        "work_parent", produced=has_parent, capable=has_parent,
+        reason="work_parent column present (s28) -- emitted" if has_parent
+        else "no `work_parent` column on this schema (pre-s28 lineage) -- capability absent"))
+    exp.capabilities.append(Capability(
+        "work_review_disposition", produced=has_review, capable=has_review,
+        reason="work_review_disposition column + review_detail relation present (s29) -- emitted"
+        if has_review else
+        "no `work_review_disposition` column or no `review_detail` relation (pre-s29 lineage) -- "
+        "capability absent"))
+
+    if not has_work:
+        return exp
+
+    n = 0
+    for slug, rid in t.rows(f"SELECT work_slug, id FROM {rel} WHERE kind='work_opened' ORDER BY id;"):
+        exp.facts.append(f"work_opened({_atom(slug)},{int(rid)}).")
+        exp.facts.append(f"w_open({_atom(slug)},{int(rid)}).")
+        n += 1
+    exp.counts["work_opened"] = n
+
+    if has_parent:
+        n = 0
+        for child, parent, rid in t.rows(
+                f"SELECT work_slug, work_parent, id FROM {rel} "
+                f"WHERE kind='work_opened' AND work_parent IS NOT NULL ORDER BY id;"):
+            exp.facts.append(f"work_parent_edge({_atom(child)},{_atom(parent)},{int(rid)}).")
+            exp.facts.append(f"w_parent_e({_atom(child)},{_atom(parent)},{int(rid)}).")
+            n += 1
+        exp.counts["work_parent_edge"] = n
+
+    n = 0
+    for slug, rid in t.rows(f"SELECT work_slug, id FROM {rel} WHERE kind='work_claimed' ORDER BY id;"):
+        exp.facts.append(f"work_claimed({_atom(slug)},{int(rid)}).")
+        n += 1
+    exp.counts["work_claimed"] = n
+
+    n = 0
+    disp_col = "COALESCE(work_review_disposition,'')" if has_review else "''"
+    for slug, resolution, rid, closer, disp in t.rows(
+            f"SELECT work_slug, work_resolution, id, COALESCE(actor::text,'0'), {disp_col} "
+            f"FROM {rel} WHERE kind='work_closed' ORDER BY id;"):
+        exp.facts.append(f"work_closed({_atom(slug)},{resolution},{int(rid)}).")
+        exp.facts.append(f"w_closed({_atom(slug)},{int(rid)},{int(closer)}).")
+        if disp:
+            exp.facts.append(f"w_disposition({int(rid)},{disp}).")
+        n += 1
+    exp.counts["work_closed"] = n
+
+    n = 0
+    for (rid,) in t.rows(f"SELECT id FROM {rel} WHERE kind='work_closed' "
+                         f"AND work_witness IS NOT NULL AND btrim(work_witness) <> '' ORDER BY id;"):
+        exp.facts.append(f"work_witness_present({int(rid)}).")
+        n += 1
+    exp.counts["work_witness_present"] = n
+
+    n = 0
+    for dep, ant, rid in t.rows(f"SELECT work_slug, work_depends_on, id FROM {rel} "
+                                f"WHERE kind='work_depends_on' ORDER BY id;"):
+        exp.facts.append(f"work_depends({_atom(dep)},{_atom(ant)},{int(rid)}).")
+        exp.facts.append(f"w_dep_e({_atom(dep)},{_atom(ant)},{int(rid)}).")
+        n += 1
+    exp.counts["work_depends"] = n
+
+    if has_review:
+        n = 0
+        for (rid,) in t.rows(
+                f"SELECT c.id FROM {rel} c WHERE c.kind='work_closed' AND EXISTS ("
+                f"  SELECT 1 FROM {rel} r JOIN {t.rel('review_detail')} rd ON rd.ledger_id = r.id"
+                f"  WHERE r.kind='review' AND r.regards = c.id AND rd.verdict='attest' "
+                f"    AND r.actor <> c.actor"
+                f"    AND NOT EXISTS (SELECT 1 FROM {rel} s2 WHERE s2.supersedes = r.id)) "
+                f"ORDER BY c.id;"):
+            exp.facts.append(f"w_discharged({int(rid)}).")
+            n += 1
+        exp.counts["w_discharged"] = n
 
     return exp
 

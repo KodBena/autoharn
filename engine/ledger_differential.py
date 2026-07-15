@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-06T05:37:25Z
-#   last-change: 2026-07-09T12:34:09Z
-#   contributors: 37017f46/main, be693afb/main
+#   last-change: 2026-07-15T20:52:14Z
+#   contributors: 37017f46/main, be693afb/main, a857c93d/main
 # <<< PROVENANCE-STAMP <<<
 
 """ledger_differential -- the marriage's load-bearing gate: the ASP `T_now` program
@@ -42,13 +42,21 @@ import sys
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
+import lp_registry
 from clingo_run import run_clingo
-from ledger_edb import PGHOST, export, resolve
-from ledger_floor import floor_atoms
+from ledger_edb import PGHOST, export, export_work, resolve
+from ledger_floor import WORK_ITEM_PREDS, WORK_REVIEW_PREDS, floor_atoms, work_item_floor_atoms, work_review_floor_atoms
 
 HERE = Path(__file__).resolve().parent
-TNOW_LP = HERE / "lp" / "ledger_tnow.lp"
+LP_DIR = HERE / "lp"
+TNOW_LP = LP_DIR / "ledger_tnow.lp"
 RETENTION = HERE / "docs" / "ledger-marriage" / "derivations"
+
+# The predicates the "work" layer's differential compares (plan step 8(ii)) -- the union of both
+# work-layer #show families, never the whole composed stack's atoms (which also carries
+# ledger_tnow.lp's own in_force/head/etc, out of scope for THIS comparison -- the "tnow" layer
+# already covers those via the standing run_differential above).
+WORK_LAYER_PREDS = frozenset(WORK_ITEM_PREDS) | frozenset(WORK_REVIEW_PREDS)
 
 # The closed verdict vocabulary -- a frozen set, so a stray string can never masquerade
 # as a verdict (ADR-0012 P8: illegal states unrepresentable at the seam).
@@ -116,11 +124,21 @@ class ProducerRun:
     quarantine: str | None = None
 
 
-def run_asp(name: str, edb_text: str, program: Path = TNOW_LP) -> ProducerRun:
-    """The ASP second producer. A grounding/solve crash QUARANTINES it (never silent)."""
+def run_asp(name: str, edb_text: str, program: Path = TNOW_LP,
+           programs: list[Path] | None = None) -> ProducerRun:
+    """The ASP second producer. A grounding/solve crash QUARANTINES it (never silent).
+
+    `program` (single-Path, the original signature) stays the default -- every existing caller
+    (tests, negative controls) is unaffected. `programs` is the plan-step-8(ii) generalization: a
+    caller running a NAMED LAYER (engine/lp_registry.py's LAYERS) passes the whole stack here
+    instead; when given, it wins over `program`. Neither this function nor `run_differential`
+    below CHECKS the stack against the registry -- that is `run_layer_differential`'s job (it
+    calls `lp_registry.require_layer_stack` BEFORE reaching here); this function stays a thin,
+    registry-agnostic producer, same as it always was for the single-program case."""
+    prog_list = programs if programs is not None else [program]
     try:
-        program_text = program.read_text(encoding="utf-8")  # a missing program is a quarantine,
-        atoms = {a for a in run_clingo([program], edb_text) if "(" in a}  # not an uncaught crash
+        program_text = "\n".join(p.read_text(encoding="utf-8") for p in prog_list)  # a missing
+        atoms = {a for a in run_clingo(prog_list, edb_text) if "(" in a}  # program is a quarantine
     except Exception as e:  # noqa: BLE001 -- clingo_run raises on a no-JSON grounding error
         return ProducerRun("asp:clingo", quarantine=f"clingo failed: {type(e).__name__}: {e}")
     # THE SILENT-NON-RUN HAZARD (F49, surfaced live): clingo emits valid JSON with an
@@ -134,7 +152,7 @@ def run_asp(name: str, edb_text: str, program: Path = TNOW_LP) -> ProducerRun:
                            quarantine="clingo produced ZERO atoms over a non-empty EDB "
                                        "(a grounding error emits empty JSON, not a raise) -- NO RESULT")
     rec = DerivationRecord(
-        engine="clingo", version=_clingo_version(), config=[program.name],
+        engine="clingo", version=_clingo_version(), config=[p.name for p in prog_list],
         input_basis="edb-text (ledger_edb export, serialized)", input_hash=_sha(edb_text),
         program_hash=_sha(program_text),
         output_hash=_sha("\n".join(sorted(atoms))), target=name, ts=_now())
@@ -210,6 +228,67 @@ def run_differential(name: str, *, edb_text: str | None = None,
     return res
 
 
+# ===========================================================================
+# THE "work" LAYER DIFFERENTIAL (plan step 8(ii); the second named F7 gap this build closes --
+# "ledger_differential.py is single-program-typed with TNOW_LP hardcoded"). Runs the SAME
+# AGREE/DIVERGE_DEFECT/QUARANTINED vocabulary as run_differential above, but composes
+# engine/lp_registry.py's "work" LAYER (ledger_tnow.lp + work_items.lp + work_review.lp) against
+# the work-item/work-review SQL floors, over ledger_edb.export_work's new EDB family -- the SAME
+# comparison seen-red/s31-supersession-uniform-retraction/run_fixtures.py hand-assembled as "the
+# standing ./judge differential ... named separate seam" (that fixture's own h-differential-agree
+# docstring). `judge` (bootstrap/templates/judge.tmpl) forwards every extra CLI flag through to
+# this module unchanged (`"$@"`), so `./judge --layer work` reaches `main` below with NO template
+# edit needed -- an existing, already-generic passthrough, not a new wiring point.
+def run_sql_work(name: str, edb_text: str) -> ProducerRun:
+    """The SQL floor for the 'work' layer: work_item_floor_atoms | work_review_floor_atoms,
+    restricted to WORK_LAYER_PREDS (the tnow-layer atoms -- in_force/head/etc -- are out of scope
+    for this comparison, exactly as run_sql's floor_atoms is out of scope for the work layer)."""
+    t = resolve(name)
+    if not t.has_col("work_slug"):
+        return ProducerRun("sql:floor(work)",
+                           quarantine="target has no `work_slug` column (pre-s22 lineage) -- "
+                                       "the 'work' layer has no substrate here, capability absent")
+    try:
+        atoms = work_item_floor_atoms(name) | work_review_floor_atoms(name)
+        atoms = {a for a in atoms if a.split("(", 1)[0] in WORK_LAYER_PREDS}
+    except Exception as e:  # noqa: BLE001
+        return ProducerRun("sql:floor(work)", quarantine=f"SQL work floor failed: {type(e).__name__}: {e}")
+    rec = DerivationRecord(
+        engine="postgres", version=_pg_version(t.db),
+        config=["ledger_floor.py::work_item_floor_atoms", "ledger_floor.py::work_review_floor_atoms"],
+        input_basis=f"live-db rows read directly ({t.db}.{t.schema}.ledger[/ledger_current])",
+        input_hash=_ledger_snapshot_hash(name),
+        program_hash=_sha((HERE / "ledger_floor.py").read_text(encoding="utf-8")),
+        output_hash=_sha("\n".join(sorted(atoms))), target=name, ts=_now())
+    return ProducerRun("sql:floor(work)", atoms=atoms, record=rec)
+
+
+def run_layer_differential(name: str, layer: str = "work", *,
+                           program_names: list[str] | None = None) -> DifferentialResult:
+    """Differential one target on a NAMED layer (engine/lp_registry.py's LAYERS). `program_names`
+    defaults to the layer's own full, registry-declared stack (always valid by construction); a
+    caller passing an INCOMPLETE list here (the red-polarity seam -- see the seen-red fixture this
+    delta ships) hits `lp_registry.require_layer_stack`'s typed refusal (`RegistryError`) BEFORE
+    any clingo invocation -- never a silent empty grounding (the F7 hazard this closes)."""
+    names = program_names if program_names is not None else list(lp_registry.LAYERS[layer])
+    lp_registry.require_layer_stack(layer, names)  # raises RegistryError on a mis-stacked list
+    paths = [LP_DIR / n for n in names]
+    if layer != "work":
+        raise NotImplementedError(f"run_layer_differential only implements the 'work' floor "
+                                  f"comparison this delta shipped; layer {layer!r} has no SQL "
+                                  f"floor wired here yet (the 'tnow' layer's is run_differential).")
+    edb_text = export(name).edb_text() + "\n" + export_work(name).edb_text()
+    asp = run_asp(name, edb_text, programs=paths)
+    if asp.quarantine is None:
+        asp.atoms = {a for a in asp.atoms if a.split("(", 1)[0] in WORK_LAYER_PREDS}
+    sql = run_sql_work(name, edb_text)
+    res = DifferentialResult(target=name, asp=asp, sql=sql)
+    if asp.quarantine is None and sql.quarantine is None:
+        res.only_asp = asp.atoms - sql.atoms
+        res.only_sql = sql.atoms - asp.atoms
+    return res
+
+
 def _run_unique_dir(target: str, edb_text: str) -> Path:
     """The run-unique retention subdir: <target>/<UTC-ts>_<input_hash[:12]>/. Never a single
     mutable slot per target -- a bare `RETENTION / target` was clobbered wholesale by a later
@@ -261,15 +340,26 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--drop-record", action="store_true",
                     help="negative control: drop the ASP derivation record and show the "
                          "consumer refuses (a verdict without its witness is NO RESULT)")
+    ap.add_argument("--layer", choices=sorted(lp_registry.LAYERS), default="tnow",
+                    help="which engine/lp_registry.py LAYER to differential (plan step 8(ii)): "
+                         "'tnow' (default, unchanged behavior -- ledger_tnow.lp vs "
+                         "ledger_floor.py::floor_atoms) or 'work' (ledger_tnow.lp + "
+                         "work_items.lp + work_review.lp vs the work-item/work-review SQL "
+                         "floors, over ledger_edb.export_work's EDB). `judge` forwards this flag "
+                         "through unchanged -- `./judge --layer work`.")
     args = ap.parse_args(argv)
     targets = args.targets or ["s10", "s11", "s12", "s13", "nla"]
 
-    print("# marriage differential -- ASP T_now (ledger_tnow.lp) vs SQL floor (ledger_floor.py)")
+    print(f"# marriage differential -- layer={args.layer!r}")
     print(f"#   closed verdict vocabulary: {sorted(VERDICTS)}; RED = {sorted(RED)}\n")
     red = 0
     for name in targets:
-        edb_text = export(name).edb_text()
-        res = run_differential(name, edb_text=edb_text)
+        if args.layer == "tnow":
+            edb_text = export(name).edb_text()
+            res = run_differential(name, edb_text=edb_text)
+        else:
+            edb_text = export(name).edb_text() + "\n" + export_work(name).edb_text()
+            res = run_layer_differential(name, args.layer)
         if args.drop_record and res.asp.record is not None:
             res.asp.record = None  # simulate a lost witness
         print_result(res)
