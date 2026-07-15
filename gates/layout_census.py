@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-09T07:54:37Z
-#   last-change: 2026-07-15T03:54:20Z
+#   last-change: 2026-07-15T19:28:56Z
 #   contributors: 9bcc0113/main, be693afb/main, e4410ef6/main, 3c50e030/main, a857c93d/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -65,6 +65,13 @@ ROOT_FILES = {
     # deliberate `./led`/`./pickup`/etc invocation; registered here so an unregistered-top-level
     # breach does not fire on the offering's own first, self-hosted consumer.
     "deployment.json", "led", "judge", "pickup", "audit", "distance-to-clean",
+    # deployment.json.example — the committed template deployment.json is generated from
+    # (deployment.json itself is real/local and typically gitignored per-deployment; the
+    # .example sibling is the tracked root standing-document). Pre-existing gap, never
+    # registered here since deployment.json.example landed; caught in passing while this
+    # exact registry was already being edited to add "orchlog" (CLAUDE.md hazard-flagging
+    # duty: a hazard within reach of the touch gets fixed, not routed around).
+    "deployment.json.example",
     # .gitattributes — the merge-driver wiring for attestations/*.jsonl and BACKLOG.md's dated
     # sections (design/ORCH-WORKTREE-LEDGERING.md 3a; tools/merge_jsonl.py,
     # tools/merge_backlog_sections.py), a new top-level file this same commission created,
@@ -95,6 +102,12 @@ ROOT_FILES = {
     # led/judge/pickup/audit/distance-to-clean but never registered here; caught by this gate's
     # own next run (CLAUDE.md hazard-flagging duty, root-shims-and-layout-census work item).
     "migrate",
+    # orchlog — the changelog-for-a-restarting-orchestrator verb (ledger item
+    # orchlog-changelog-verb, 2026-07-15), a standalone Python executable like attest-tags
+    # (no DB deployment needed). Its data directory is registered below as "orchlog.d" -- see
+    # orchlog.d/README.md for why the directory could not be named "orchlog" too (a plain
+    # filesystem cannot hold a file and a directory of the same name in one parent).
+    "orchlog",
 }
 ROOT_DIRS = {
     ".claude", "bootstrap", "law", "judgment", "kernel", "stores", "instruments", "engine",
@@ -140,6 +153,14 @@ ROOT_DIRS = {
     # registration needed since tools/ is already a registered ROOT_DIR above and a submodule's
     # gitlink entry sorts under it. panel/ itself is untracked now (removed from the index; any
     # leftover files on disk are not git-tracked and this gate only walks `git ls-files`).
+    # orchlog.d/ — the notes directory for the ./orchlog verb (ledger item
+    # orchlog-changelog-verb, 2026-07-15): one markdown note per commit a restarting
+    # orchestrator would want to know about, plus its policy README.md. Named "orchlog.d"
+    # rather than "orchlog" because the verb itself is the root file "orchlog" -- a
+    # filesystem cannot hold both a file and a directory of the same name in one parent (see
+    # orchlog.d/README.md's "Why the directory is named orchlog.d/" section for the full
+    # reasoning). Registered on landing rather than left for the next census run.
+    "orchlog.d",
 }
 
 # (2) per-directory currency patterns: a directory -> the regex(es) its basenames MUST match.

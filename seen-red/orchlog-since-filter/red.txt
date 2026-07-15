@@ -1,0 +1,13 @@
+=== green-since-n-minus-1-shows-note ===
+  [ok] exit=0 shown=True
+
+=== green-since-n-hides-note ===
+  [ok] exit=0 hidden=True stdout='orchlog: no notes landed after 92e5a9939cf72fa188e7f148bf2f354b3aa31988 (92e5a9939cf7). Nothing new.'
+
+=== red-invalid-commit-ish-refused ===
+  [ok] exit=2 stderr="orchlog: REFUSED -- 'totally-not-a-real-commit-ish-xyz' does not resolve to a commit in this repo.\n  usage: ./orchlog since <commit-ish>   (a git commit-ish: full/short sha, tag, branch name, HEAD~N, ...)\n  try 'git log --oneline -5' to find a real commit-ish, or './orchlog' with no arguments to list every note."
+
+=== plain-list-shows-note ===
+  [ok] exit=0
+
+ALL CASES OK -- orchlog both-polarity proof (since-filter green/green, invalid-commit-ish red), zero residue (tmp dir removed).
