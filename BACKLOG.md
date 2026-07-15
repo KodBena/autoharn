@@ -6,9 +6,10 @@ This repository's work tracking lives in its append-only Postgres ledger, not in
 file (maintainer ruling, 2026-07-12 afternoon, witnessed as tracker ledger row 137 —
 `./led show 137` reads it: while the work is not yet in maintenance mode, the tracker
 is maintained in local Postgres only; this file's only remaining job is to say where).
-The coordinates, from this repository's own `deployment.json`:
+The coordinates, from this repository's own `deployment.json` (untracked; see
+`deployment.json.example` + README.md "Configuration" for the field shape):
 
-- database `toy` on host `192.168.122.1`
+- database `toy` on this deployment's own `host`
 - schema `autoharn` (kernel schema `autoharn_kernel`, role `autoharn_rw`)
 
 To read it: `./pickup` at this repository's root shows the open set, in-force decisions,
