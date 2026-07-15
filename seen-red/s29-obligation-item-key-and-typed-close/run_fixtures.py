@@ -1,19 +1,27 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-14T19:09:31Z
-#   last-change: 2026-07-15T06:59:46Z
+#   last-change: 2026-07-15T20:44:07Z
 #   contributors: a857c93d/main
 # <<< PROVENANCE-STAMP <<<
 
 """run_fixtures.py -- both-polarity proof for kernel/lineage/s29-obligation-item-key-and-typed-
 close.sql + bootstrap/templates/led.tmpl's `work close` two-constructor change + `work review-gap`
 (design/MAINT-COUNTERSIGN-CLOSE-SEMANTICS-SPEC.md, Fable-authored spec, RATIFIED 2026-07-14).
-Real infra, no mocks: a throwaway `--new-world` scaffold in the toy db (which applies the s15..s28
-birth chain automatically, s28 included per bootstrap/new-project.sh's own LINEAGE_CHAIN), with
-s29 applied EXPLICITLY on top via a direct psql -f (s29 is not wired into LINEAGE_CHAIN yet --
-that wiring is a maintainer/orchestrator seam-integration act, per s29's own header, mirroring
-s28's own deferral) -- torn down before AND after this file runs so re-running it never leaves
-residue.
+Real infra, no mocks: a throwaway `--new-world` scaffold in the toy db, with s29 GUARANTEED
+present on the resulting schema/kern -- via s29's own `.detect.sql` (the same live-catalog check
+`./migrate` itself uses, kernel/lineage/s29-obligation-item-key-and-typed-close.detect.sql), never
+via a hardcoded assumption about which head `--new-world` stops at. History (ledger finding row
+1143, s31 builder, dispatched by decision row 1151): a first draft of this file assumed
+`--new-world` stopped at s28 and unconditionally re-applied s29 itself; once new-project.sh's own
+LINEAGE_CHAIN grew past s29 (first s30, then s31), that unconditional re-apply started failing at
+s29's ledger_current re-issue ("cannot drop columns from view") because s29 was already live.
+Fixed here to be robust to FUTURE chain growth too: after scaffolding, this file runs s29's
+`.detect.sql` against the live schema/kern and only issues the explicit `psql -f` apply when
+detect says s29 is NOT yet present -- so this fixture keeps working whether `--new-world` stops
+short of s29 (apply happens explicitly, as originally written) or already carries s29 and
+everything past it (s30/s31/... -- the apply is skipped, no re-issue collision) -- torn down
+before AND after this file runs so re-running it never leaves residue.
 
 Cases (spec sec-7's own negative controls, plus the positive path each is paired against):
   a-review-silent-close-refused     -- `led work close` with NEITHER --review-witness NOR
@@ -89,6 +97,7 @@ HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
 NEW_PROJECT = REPO / "bootstrap" / "new-project.sh"
 S29_DELTA = REPO / "kernel" / "lineage" / "s29-obligation-item-key-and-typed-close.sql"
+S29_DETECT = REPO / "kernel" / "lineage" / "s29-obligation-item-key-and-typed-close.detect.sql"
 WORK_REVIEW_LP = REPO / "engine" / "lp" / "work_review.lp"
 
 sys.path.insert(0, str(REPO / "engine"))
@@ -132,6 +141,22 @@ def psql_tuples(sql: str) -> subprocess.CompletedProcess[str]:
     return sh(["psql", "-h", PGHOST, "-d", PGDB, "-tAq", "-v", "ON_ERROR_STOP=1", "-c", sql])
 
 
+def s29_already_applied(schema: str, kern: str, role: str) -> bool:
+    """Runs s29's own `.detect.sql` (the same live-catalog check `./migrate` uses via
+    bootstrap/migrate_core.py::_run_detect) against schema/kern/role and returns whether it
+    reports s29's objects already present -- `-tA` so the one boolean `applied` column prints as
+    a bare `t`/`f`. This is the single source of truth for whether `scaffold()`'s `--new-world`
+    run already carried s29 (true today, since new-project.sh's LINEAGE_CHAIN runs s15..s31) or
+    needs it applied explicitly (true if that chain ever regresses to stop short of s29 again)."""
+    proc = sh(["psql", "-h", PGHOST, "-d", PGDB, "-tA", "-v", "ON_ERROR_STOP=1",
+               "-v", f"schema={schema}", "-v", f"kern={kern}", "-v", f"role={role}",
+               "-f", str(S29_DETECT)])
+    if proc.returncode != 0:
+        raise RuntimeError(f"s29 DETECT FAILED ({schema}): {proc.stdout[-1500:]} {proc.stderr[-1500:]}")
+    lines = [ln.strip() for ln in proc.stdout.splitlines() if ln.strip() != ""]
+    return bool(lines) and all(ln == "t" for ln in lines)
+
+
 def scaffold(world: str) -> tuple[Path, dict]:
     tmp = Path(tempfile.mkdtemp(prefix=f"{world}-seenred-"))
     world_dir = tmp / world
@@ -158,14 +183,16 @@ S15_TO_S28 = [
 
 
 def scaffold_classic_s28_only(world: str) -> tuple[Path, dict]:
-    """sec-10 amendment consequence (2026-07-15): `scaffold()` above uses `--new-world`, which --
-    as of THIS session's wiring of s29 into new-project.sh's own LINEAGE_CHAIN -- now applies the
-    FULL s15..s29 chain, not s15..s28. Case j's whole point is an s28-only kernel (s29 genuinely
-    absent), so it can no longer reuse `scaffold()` -- this is CLASSIC MODE (explicit --schema/
-    --kern/--role, no automatic kernel apply at all per new-project.sh's own header) followed by a
-    MANUAL s15..s28 apply (S15_TO_S28 above), mirroring new-project.sh's own --new-world block
-    (kernel apply, then stamp-secret seed, then chain-genesis seed, then principal registration)
-    by hand, one delta short on purpose."""
+    """sec-10 amendment consequence (2026-07-15): `scaffold()` above uses `--new-world`, which
+    applies new-project.sh's own LINEAGE_CHAIN in full -- s29 and everything wired in after it
+    (s30, s31, ... as the chain keeps growing), never just s15..s28. Case j's whole point is an
+    s28-only kernel (s29 genuinely absent), so it cannot reuse `scaffold()` -- this is CLASSIC
+    MODE (explicit --schema/--kern/--role, no automatic kernel apply at all per new-project.sh's
+    own header) followed by a MANUAL s15..s28 apply (S15_TO_S28 above, a fixed list -- safe to
+    hardcode because s15..s28 are frozen, already-shipped lineage files, ADR-0005 Rule 8; only
+    entries AFTER s28 could ever be added to the chain), mirroring new-project.sh's own
+    --new-world block (kernel apply, then stamp-secret seed, then chain-genesis seed, then
+    principal registration) by hand, one delta short on purpose."""
     tmp = Path(tempfile.mkdtemp(prefix=f"{world}-seenred-"))
     world_dir = tmp / world
     schema, kern, role = world, f"{world}_kernel", f"{world}_rw"
@@ -208,21 +235,28 @@ def main() -> int:
     tmps: list[Path] = []
 
     try:
-        # --- scaffold the s15..s28 birth chain, then apply s29 explicitly on top ----------------
-        print(f"== scaffolding throwaway --new-world {WORLD} (s15..s28 birth chain) ==")
+        # --- scaffold via --new-world (whatever head new-project.sh's LINEAGE_CHAIN currently
+        # reaches), then apply s29 explicitly ONLY IF s29's own .detect.sql says it isn't already
+        # live -- robust to the chain's head moving in either direction over time -------------
+        print(f"== scaffolding throwaway --new-world {WORLD} ==")
         world_dir, dep = scaffold(WORLD)
         tmps.append(world_dir.parent)
         schema, kern, role = dep["schema"], dep["kern"], dep["role"]
         print(f"  scaffold OK (schema={schema} kern={kern} role={role}).\n")
 
-        print(f"== applying s29-obligation-item-key-and-typed-close.sql to {schema}/{kern}/{role} ==")
-        ra = sh(["psql", "-h", PGHOST, "-d", PGDB, "-v", "ON_ERROR_STOP=1",
-                 "-v", f"schema={schema}", "-v", f"kern={kern}", "-v", f"role={role}",
-                 "-f", str(S29_DELTA)])
-        if ra.returncode != 0:
-            print("s29 APPLY FAILED:", ra.stdout[-1500:], ra.stderr[-1500:])
-            return 1
-        print("  s29 applied.\n")
+        if s29_already_applied(schema, kern, role):
+            print(f"== s29's own .detect.sql reports it is ALREADY LIVE on {schema}/{kern}/{role} "
+                  f"(--new-world's chain reached past s29) -- skipping the explicit re-apply ==\n")
+        else:
+            print(f"== s29 not yet present on {schema}/{kern}/{role} -- applying "
+                  f"s29-obligation-item-key-and-typed-close.sql explicitly ==")
+            ra = sh(["psql", "-h", PGHOST, "-d", PGDB, "-v", "ON_ERROR_STOP=1",
+                     "-v", f"schema={schema}", "-v", f"kern={kern}", "-v", f"role={role}",
+                     "-f", str(S29_DELTA)])
+            if ra.returncode != 0:
+                print("s29 APPLY FAILED:", ra.stdout[-1500:], ra.stderr[-1500:])
+                return 1
+            print("  s29 applied.\n")
 
         # register a second principal for distinct-actor discharge cases
         led(world_dir, "register-principal", "reviewer2", "model")
@@ -333,7 +367,14 @@ def main() -> int:
         led(world_dir, "work", "close", "dep-k-b", "dropped", "--review-deferred")
         led(world_dir, "work", "open", "dep-k-a", "DepKA")
         led(world_dir, "work", "claim", "dep-k-a")
-        led(world_dir, "work", "depends", "dep-k-a", "dep-k-b")
+        # --type blocks-close (kernel/lineage/s30-typed-dependency-edges.sql, typed dependency
+        # edges): as of the s30 delta now permanently wired into --new-world's own
+        # chain (LINEAGE_CHAIN), an UNTYPED `work depends` edge is "informs by omission" and no
+        # longer gates a strict close on its own -- only `--type blocks-close` is conjoined into
+        # the obligation AND-tree. k1/k2's own intent (an unresolved DEPENDENCY, not an s28
+        # parent edge, blocks strict close) is unchanged; expressing "this edge is load-bearing"
+        # now requires the explicit type this world's kernel (s30-and-later) provides.
+        led(world_dir, "work", "depends", "dep-k-a", "dep-k-b", "--type", "blocks-close")
         rk1_ = led(world_dir, "work", "close", "dep-k-a", "dropped", "--review-witness", "refka", "--strict")
         out_k1 = rk1_.stdout + rk1_.stderr
         ok_k1 = rk1_.returncode != 0 and "dep-k-b" in out_k1 and "deferred and undischarged" in out_k1

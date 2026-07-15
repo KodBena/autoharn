@@ -1,8 +1,7 @@
-== scaffolding throwaway --new-world s29fxprobe (s15..s28 birth chain) ==
+== scaffolding throwaway --new-world s29fxprobe ==
   scaffold OK (schema=s29fxprobe kern=s29fxprobe_kernel role=s29fxprobe_rw).
 
-== applying s29-obligation-item-key-and-typed-close.sql to s29fxprobe/s29fxprobe_kernel/s29fxprobe_rw ==
-  s29 applied.
+== s29's own .detect.sql reports it is ALREADY LIVE on s29fxprobe/s29fxprobe_kernel/s29fxprobe_rw (--new-world's chain reached past s29) -- skipping the explicit re-apply ==
 
 === a-review-silent-close-refused ===
   [ok] exit=1 names_both_constructors=True excerpt='led work close: REFUSED -- a review-silent close is unrepresentable (s29 Element B).\n  Choose exactly ONE constructor:\n    --review-witness <ref>   a review already exists; cite it\n    --review-deferred        this close act itself becomes the review obligation'
@@ -23,13 +22,13 @@
   [ok] exit=1 excerpt='led work close: REFUSED -- --review-deferred + --strict is a contradiction in terms\n  (s29 Element C): a just-deferred obligation is, by definition, unresolved the\n  moment it is created. Record the review first (./led review ...), then close\n  with --review-witness <ref> --strict.'
 
 === g-strict-over-unresolved-tree-refused ===
-  [ok] exit=3 names_child_g=True excerpt="SET\nSET\nERROR:  Ledger policy: strict close of work item 'root-g' refused — its obligation tree is unresolved: child-g (item is not yet closed). Resolve every named leaf, then retry (s29 Element C: strict close is a pure query over the derived conjunction, no stored verdict).\nCONTEXT:  PL/pgSQL function validate_work_item() line 28 at RAISE"
+  [ok] exit=3 names_child_g=True excerpt="SET\nSET\nERROR:  Ledger policy: strict close of work item 'root-g' refused — its obligation tree is unresolved: child-g (item is not yet closed). Resolve every named leaf, then retry (s29 Element C: strict close is a pure query over the derived conjunction, no stored verdict).\nCONTEXT:  PL/pgSQL function validate_work_item() line 51 at RAISE"
 
 === h-strict-succeeds-once-resolved ===
   [ok] exit=0 stderr_tail='SET\nSET\nINSERT 0 1'
 
 === k1-strict-over-unresolved-dependency-refused ===
-  [ok] exit=3 names_antecedent=True excerpt=" strict close of work item 'dep-k-a' refused — its obligation tree is unresolved: dep-k-b (review disposition deferred and undischarged (close row 22)). Resolve every named leaf, then retry (s29 Element C: strict close is a pure query over the derived conjunction, no stored verdict).\nCONTEXT:  PL/pgSQL function validate_work_item() line 28 at RAISE"
+  [ok] exit=3 names_antecedent=True excerpt=" strict close of work item 'dep-k-a' refused — its obligation tree is unresolved: dep-k-b (review disposition deferred and undischarged (close row 22)). Resolve every named leaf, then retry (s29 Element C: strict close is a pure query over the derived conjunction, no stored verdict).\nCONTEXT:  PL/pgSQL function validate_work_item() line 51 at RAISE"
 
 === k2-strict-over-dependency-succeeds-once-discharged ===
   [ok] exit=0 stderr_tail='SET\nSET\nINSERT 0 1'
