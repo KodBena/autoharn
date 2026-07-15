@@ -1,7 +1,7 @@
 #!/bin/sh
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-09T11:15:53Z
-#   last-change: 2026-07-15T13:55:04Z
+#   last-change: 2026-07-15T16:27:46Z
 #   contributors: be693afb/main, e4410ef6/main, 3c50e030/main, a857c93d/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -108,6 +108,11 @@ usage() {
     echo "          NOT combinable with --new-world. --pin-url <url> overrides the submodule remote" >&2
     echo "          (default: this checkout's own on-disk path -- portable only on this machine;" >&2
     echo "          pass a real git remote URL for a submodule another machine can also fetch))" >&2
+    echo "         (--no-law suppresses the generated LAW section (portable ADR subset + pointers)" >&2
+    echo "          this scaffold otherwise writes into .claude/HOOKS.md (and root CLAUDE.md in" >&2
+    echo "          --new-world mode) by default -- tracker item portable-adr-delivery, maintainer" >&2
+    echo "          instruction 2026-07-15: deployments must at least optionally receive the" >&2
+    echo "          portable ADRs; default is ON)" >&2
     exit 2
 }
 
@@ -128,6 +133,13 @@ DB=""; HOST=""; SCHEMA=""; KERN=""; ROLE=""
 # not a caveat buried in a comment nobody reads).
 PIN=""
 PIN_URL=""
+# LAW section (tracker item portable-adr-delivery, maintainer instruction 2026-07-15:
+# deployments must at least optionally receive the portable ADRs). Default ON -- opt out with
+# --no-law -- so a scaffold never silently withholds the LAW delivery the maintainer asked for;
+# an adopter who genuinely wants no ADR pointers says so explicitly, once, rather than the
+# scaffold defaulting to silence (mirrors this script's own --governed default-notice posture:
+# the safe default is loud, not absent).
+LAW_SECTION=1
 while [ $# -gt 0 ]; do
     case "$1" in
         --db) DB="$2"; shift 2 ;;
@@ -140,6 +152,7 @@ while [ $# -gt 0 ]; do
         --governed) GOVERNED="$2"; shift 2 ;;
         --pin) PIN="$2"; shift 2 ;;
         --pin-url) PIN_URL="$2"; shift 2 ;;
+        --no-law) LAW_SECTION=0; shift ;;
         --force) FORCE=1; shift ;;
         *) echo "unrecognized argument: $1" >&2; usage ;;
     esac
@@ -478,6 +491,92 @@ sedsubst() {
         -e "s|__COMMISSIONER_STATUS__|$COMMISSIONER_STATUS|g"
 }
 
+# LAW section (tracker item portable-adr-delivery, maintainer instruction 2026-07-15): the
+# portable ADR subset (design/MAINT-ADR-PORTABILITY-SPEC.md's own per-ADR treatment table --
+# every ADR file under law/adr/ EXCEPT a Status:Retired-to-history tombstone already carries a
+# generalize-in-place/examples-extract/already-portable/ui-scoped treatment, i.e. is written to
+# be read and applied outside autoharn itself), each pointed at its file INSIDE THIS DEPLOYMENT'S
+# OWN EXEC_ROOT -- REQUIRED SHAPE is no-copying: a pinned deployment (--pin submodule) already
+# carries the full corpus at .autoharn/law/adr/ by construction (the submodule IS the copy), so
+# this writes pointers, never a second copy of the ADR bytes. Derived from the filesystem, not a
+# hand-maintained duplicate list (ADR-0012 P1: one source -- the corpus itself is the
+# enumeration; a hardcoded second list would drift the moment an ADR's Status changes, exactly
+# the "fossil array" ADR-0008 names). Two honest shapes, per EXEC_ROOT: PINNED (submodule, frozen
+# to a commit -- pointers move only via bootstrap/upgrade-submodule.sh, deliberately) and
+# UNPINNED live-exec (EXEC_ROOT is the shared checkout -- pointers move whenever that checkout
+# changes, stated plainly rather than implying a frozen copy that does not exist; this is the
+# deliberate shape for a deployment autoharn itself vendors, e.g. a panel project that cannot
+# embed autoharn as a submodule without a cycle). Written into .claude/HOOKS.md always (the one
+# doc guaranteed in every scaffold mode, pinned or not, new-world or classic) and into root
+# CLAUDE.md too when --new-world writes one (auto-loaded at session start). --no-law suppresses
+# this entirely -- an adopter who wants no ADR pointers says so explicitly, once.
+LAW_SECTION_FILE="$PROJECT_ROOT/.claude/.law-section.md.tmp"
+if [ "$LAW_SECTION" -eq 1 ]; then
+    echo "-- LAW section (portable ADR subset, design/MAINT-ADR-PORTABILITY-SPEC.md) --"
+    if [ "$PIN" = "submodule" ]; then
+        LAW_PIN_NOTE="This deployment is **PINNED** (git submodule at \`.autoharn\`, frozen to commit \`$AUTOHARN_COMMIT_SHA\`) -- the pointers below are frozen along with it. A newer autoharn's ADR corpus reaches this deployment only via a deliberate \`bootstrap/upgrade-submodule.sh\`, never silently on a \`git pull\` of autoharn itself."
+    else
+        LAW_PIN_NOTE="This deployment is **UNPINNED** (live-exec against the checkout at \`$EXEC_ROOT\`, no \`.autoharn\` submodule) -- the pointers below resolve into that checkout and MOVE whenever it changes; there is no frozen copy here. (Deliberate for a deployment that autoharn itself vendors -- e.g. a panel/demo project -- where pinning autoharn in as a submodule would create a submodule cycle.)"
+    fi
+    "$PY" - "$AUTOHARN_ROOT/law/adr" "$EXEC_ROOT" "$LAW_SECTION_FILE" "$LAW_PIN_NOTE" <<'PYEOF'
+import pathlib
+import sys
+
+adr_dir, exec_root, out_path, pin_note = sys.argv[1:5]
+adr_dir = pathlib.Path(adr_dir)
+rows = []
+for f in sorted(adr_dir.glob("[0-9][0-9][0-9][0-9]-*.md")):
+    text = f.read_text(encoding="utf-8")
+    lines = text.splitlines()
+    # Find the first real H1 (`# ...`), not necessarily line 0 -- some ADRs open with an
+    # HTML doc-attest-exempt comment block (e.g. 0012, 2026-07-15 table-sweep commission)
+    # ahead of the heading; a fossil "read line 0 as the title" assumption would silently
+    # mislabel every such ADR (exactly the fossil-array failure mode ADR-0008 names).
+    title = f.name
+    for ln in lines:
+        s = ln.strip()
+        if s.startswith("# "):
+            title = s[2:].strip()
+            break
+    # Same reasoning for the Status line: search the whole file, not a fixed line-count
+    # window, since a leading comment block can push it past any fixed cutoff.
+    status_line = ""
+    for ln in lines:
+        if ln.strip().startswith("- **Status:**"):
+            status_line = ln
+            break
+    if "Retired-to-history" in status_line:
+        continue  # a tombstone carries no live rule content -- excluded from the served set
+    rows.append((f.name, title))
+
+with open(out_path, "w", encoding="utf-8") as out:
+    out.write("## LAW (portable ADR subset, vendored via this scaffold)\n\n")
+    out.write(
+        "Written by `bootstrap/new-project.sh` (tracker item `portable-adr-delivery`, maintainer "
+        "instruction 2026-07-15). The subset below is the CURRENTLY-SERVED, "
+        "cross-project-portable slice of autoharn's ADR corpus -- "
+        "`design/MAINT-ADR-PORTABILITY-SPEC.md`'s own per-ADR treatment table: every entry here "
+        "already carries a `generalize-in-place`/`examples-extract`/`already-portable`/"
+        "`ui-scoped-generalize-or-unserve` treatment, i.e. it is written to be read and applied "
+        "outside autoharn itself (ADR-0001 is excluded -- its own Status retired it to a history "
+        "tombstone; it carries no live rule content to extrapolate from). " + pin_note + "\n\n"
+        "**Reading posture:** read each ADR IN FULL before any work requiring it -- diagnosing, "
+        "designing, or touching code shaped by its rule -- and read it for its SPIRIT: these are "
+        "principles to extrapolate from and interpret judiciously, not rules to satisfy by letter "
+        "alone. Where letter and spirit appear to diverge, the spirit governs, and the divergence "
+        "is surfaced, not silently resolved.\n\n"
+    )
+    for name, title in rows:
+        out.write(f"- **{title}** -- `{exec_root}/law/adr/{name}`\n")
+    out.write("\n")
+PYEOF
+    N=$(grep -c '^- \*\*' "$LAW_SECTION_FILE" 2>/dev/null || echo 0)
+    echo "   generated LAW section ($N portable ADRs enumerated)"
+else
+    : > "$LAW_SECTION_FILE"
+    echo "-- LAW section: --no-law given -- deployment scaffolded WITHOUT the portable-ADR LAW section --"
+fi
+
 echo "-- .claude/ wiring --"
 sedsubst < "$TEMPLATES/settings.json.tmpl" > "$PROJECT_ROOT/.claude/settings.json"
 # governed_files.json: --governed <comma-separated-patterns> lets THIS deployment declare its
@@ -523,7 +622,30 @@ cp "$TEMPLATES/GOVERNED_FILES.md" "$PROJECT_ROOT/.claude/GOVERNED_FILES.md"
 cp "$TEMPLATES/apparatus.json" "$PROJECT_ROOT/.claude/apparatus.json"
 cp "$TEMPLATES/APPARATUS.md" "$PROJECT_ROOT/.claude/APPARATUS.md"
 sedsubst < "$TEMPLATES/HOOKS.md.tmpl" > "$PROJECT_ROOT/.claude/HOOKS.md"
+# LAW section insertion: the __LAW_SECTION__ placeholder line in HOOKS.md.tmpl is replaced with
+# LAW_SECTION_FILE's content (`r` reads the file in raw, so its own __AUTOHARN_ROOT__-style
+# tokens were already resolved when it was generated above -- no double-substitution needed) and
+# the placeholder line itself is dropped. LAW_SECTION_FILE is empty (`--no-law`) or a real
+# section (default) -- either way this is a no-op-safe insert (an empty `r` inserts nothing).
+sed -i -e "/^__LAW_SECTION__\$/r $LAW_SECTION_FILE" -e "/^__LAW_SECTION__\$/d" "$PROJECT_ROOT/.claude/HOOKS.md"
 echo "wrote .claude/settings.json, governed_files.json, GOVERNED_FILES.md, apparatus.json, APPARATUS.md, HOOKS.md"
+
+# Vendored skills (tracker item skill-vendoring-hack-rationalization, maintainer commission
+# 2026-07-15): install every skill under bootstrap/templates/claude-skills/ into this
+# deployment's own .claude/skills/, verbatim -- a plain recursive copy, never a template
+# substitution (the skill body is not autoharn's to rewrite; see each skill's own PROVENANCE.md
+# for the precedence fact: Claude Code resolves same-named skills enterprise > personal >
+# project, so a user's personal copy of the same name silently shadows this one -- duplication
+# is idempotent by that platform rule, not a drift hazard needing a warning mechanism here).
+if [ -d "$TEMPLATES/claude-skills" ]; then
+    mkdir -p "$PROJECT_ROOT/.claude/skills"
+    for _skill_dir in "$TEMPLATES/claude-skills"/*/; do
+        [ -d "$_skill_dir" ] || continue
+        _skill_name="$(basename "$_skill_dir")"
+        cp -r "$_skill_dir" "$PROJECT_ROOT/.claude/skills/$_skill_name"
+        echo "wrote .claude/skills/$_skill_name (vendored skill, verbatim)"
+    done
+fi
 
 if [ -n "$NEW_WORLD" ]; then
     # CLAUDE.md's preamble states "a reviewer principal exists" as fact -- only true once the
@@ -540,8 +662,10 @@ if [ -n "$NEW_WORLD" ]; then
     # DEPLOYMENT_SCAFFOLD_OWNED_MD (see the .claude/ wiring block above's own coherence-partner
     # comment) -- it is autoharn's own prose, not an adopter's to re-attest.
     sedsubst < "$TEMPLATES/CLAUDE.md.tmpl" > "$PROJECT_ROOT/CLAUDE.md"
+    sed -i -e "/^__LAW_SECTION__\$/r $LAW_SECTION_FILE" -e "/^__LAW_SECTION__\$/d" "$PROJECT_ROOT/CLAUDE.md"
     echo "wrote CLAUDE.md (governance preamble, auto-loaded at session start)"
 fi
+rm -f "$LAW_SECTION_FILE"
 
 # the seven verbs (led, judge, pickup, audit, distance-to-clean, verify-commission, verify-chain): thin shims,
 # not frozen sed-substituted copies (BACKLOG maintainer ruling 2026-07-11, "runs are strictly

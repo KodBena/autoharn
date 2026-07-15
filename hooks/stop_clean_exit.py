@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-10T19:38:38Z
-#   last-change: 2026-07-14T19:10:55Z
+#   last-change: 2026-07-15T18:06:08Z
 #   contributors: be693afb/main, e4410ef6/main, a857c93d/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -18,7 +18,10 @@ governed schema) and refuses to let the turn end while governance state is visib
 WHAT IT CHECKS (read-only SELECTs against views the kernel already exposes):
   - review_gap            : obliged-actor ledger rows with no distinct-actor attest yet.
   - question_status       : kind=question rows with no answers edge landed yet.
-  - work_item_current     : work items with state='open' (s22; see NAMED CHOICE below).
+  - work_item_current     : OPEN items CLAIMED BY THIS SESSION, still undischarged and not
+                            bequeathed (s22; see NAMED CHOICE -- STOP-GATE QUEUE SEMANTICS below).
+                            Open UNCLAIMED items are never debt -- they are the queue -- and are
+                            surfaced only as an informational count on allow paths.
   - work_item_violations  : duplicate_open / shipped_without_witness / depends_on_unknown_slug /
                             dependency_cycle rows (s22; same NAMED CHOICE).
   - work_review_gap       : item-keyed close acts with disposition=deferred not yet discharged by
@@ -35,12 +38,14 @@ underlying obligation on the SAME slug, now needing a different next action. `_d
 `_breaker_transition()` below normalize this pair to one identity so the breaker INHERITS across
 the conversion instead of treating it as fresh debt and resetting the count to 1 -- see
 `_debt_identity()`'s own docstring for the mechanism.
-If every check that APPLIES to this world is empty, the stop is ALLOWED (silently -- exit 0, no
-output; a clean world sees zero interference from this hook, every single time). If ANY check is
-non-empty, the stop is BLOCKED with a message enumerating exactly what is open, by id/slug, each
-paired with the concrete command that closes it -- the same fix-point-ergonomics posture
-`hooks/pretooluse_change_gate.py`'s DENY_HINT already uses: the refusal IS the loop's feedback
-channel, so it must name the next command, never just the policy.
+If every check that APPLIES to this world is empty, the stop is ALLOWED -- silently (exit 0, no
+output) UNLESS open-but-non-blocking queue items exist (NAMED CHOICE -- STOP-GATE QUEUE SEMANTICS
+below), in which case a one-line informational count is printed but the stop is still allowed; a
+truly empty world (no open items of any kind) still sees zero interference from this hook, every
+single time. If ANY check is non-empty, the stop is BLOCKED with a message enumerating exactly
+what is open, by id/slug, each paired with the concrete command that closes it -- the same
+fix-point-ergonomics posture `hooks/pretooluse_change_gate.py`'s DENY_HINT already uses: the
+refusal IS the loop's feedback channel, so it must name the next command, never just the policy.
 
 WIRING / UNWIRED POSTURE (same posture as `hooks/pretooluse_change_gate.py`, re-derived
 independently in this file -- see "WHY A SEPARATE RESOLUTION" below): this hook is WIRED for a
@@ -71,6 +76,43 @@ existence probe for uniform defensive coverage (every wired world since s15 carr
 branch is not expected to fire in practice, but an absent view is architecturally the same "check
 only what exists" shape either way -- treating it identically costs nothing and avoids a second,
 differently-reasoned code path).
+
+NAMED CHOICE -- STOP-GATE QUEUE SEMANTICS (design/FABLE-STOP-GATE-QUEUE-SEMANTICS-SPEC.md,
+ratified by the maintainer 2026-07-15, ledger decision row same date): the work-item leg's
+predicate narrowed from "any state='open' item is debt" to "an item THIS session still HOLDS a
+claim on, undischarged and unbequeathed, is debt." Witnessed live in the experience world:
+preamble point 1's own mandated queue decomposition (open, unclaimed items are the PLANNED,
+not-yet-started work every scaffolded deployment is told to ledger up front, including items "you
+will not start this session") was tripping the OLD predicate on every routine multi-session or
+background-workflow commission, driving the circuit breaker's loudest fail-open banner onto the
+routine happy path and destroying its evidentiary meaning (alarm fatigue). The principle (spec
+§2): "A stop is dirty when THIS session abandons something it holds -- never because the world
+contains planned work." Three cases, in this order:
+  1. UNCLAIMED open items NEVER block -- they are the queue, exactly what preamble point 1 asks
+     every deployment to pre-ledger. They are still surfaced, on ALLOW paths only, as a one-line
+     informational count ("N open unclaimed item(s) remain -- the successor's queue"), never as
+     debt and never as a reason to block.
+  2. An item CLAIMED BY THIS SESSION -- kernel-visible: the claiming `work_claimed` row's own
+     `stamp_session` (the interception stamp, not a writer-supplied value -- the same field the
+     STOP-DISPOSITION WARNING below already reads) equals the Stop hook input's own `session_id`
+     -- blocks UNLESS bequeathed (case 3). This is exactly run-5's original defect (a session
+     abandoning its own open claim) and is still refused, unchanged.
+  3. BEQUEST: a `kind='decision'` row stamped to this session whose `statement` begins `stopping:`
+     and whose `remains:` clause names the claimed slug as a literal token (substring/token match
+     against the `remains:` text only -- no inference) discharges the item: the handoff becomes a
+     typed, stamped, on-ledger act instead of archaeology. Listed on the allow path as bequeathed,
+     never silently dropped.
+Items claimed by a DIFFERENT session -- including one whose claimant session no longer exists,
+the "orphaned claim" case -- are OUT OF THIS SPEC'S SCOPE, deliberately (spec §3 last bullet):
+under the new predicate they never block a different session's stop either way, so this pass does
+not manufacture new coverage for them; they need a home in `work_item_violations` or an audit
+view instead, named here as a known gap, not solved here.
+DEGRADE (spec §4 4th bullet, fail direction stated): when THIS session's ownership of a claim
+CANNOT be proven -- no `session_id` on stdin, a pre-s17 world with no `stamp_session` column at
+all, or the column-existence probe itself fails -- the work-item leg degrades to the CURRENT
+(pre-this-pass) behavior: every claimed open item blocks, unconditionally, exactly as it always
+did before this NAMED CHOICE. This is the conservative direction: narrowing needs the proof;
+absent the proof, the old, stricter predicate stands rather than silently under-blocking.
 
 DB-UNREACHABLE POSTURE -- NAMED CHOICE, fail direction stated: a DB error (any query failing, not
 "the view is absent" -- that is the OK branch above) is treated as its own single non-clean
@@ -180,6 +222,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import subprocess
 import sys
 from datetime import datetime, timezone
@@ -412,15 +455,79 @@ def _query(sql: str) -> list[tuple[str, ...]]:
     return rows
 
 
-def _collect_debt() -> tuple[list[str], list[str]]:
-    """Read every governance check that applies to this world. Returns (debt_lines, entries):
-    `debt_lines` is the human-readable, per-item teach-text (one item per open row/violation,
-    each paired with the command that closes it); `entries` is the same information in a stable,
-    machine-comparable form used only to fingerprint the debt set for the circuit breaker.
+def _stamp_session_available(schema: str) -> bool:
+    """NAMED CHOICE -- STOP-GATE QUEUE SEMANTICS (module docstring): True iff `ledger.stamp_session`
+    can be PROVEN to exist this call. Wraps `_column_exists()` (which raises on a genuine DB error)
+    in a try/except that returns False instead -- unlike most of this hook's checks, an inability
+    to prove the column exists is NOT "ledger unreachable" debt here; it is the DEGRADE signal:
+    the caller (the work-item leg) falls back to the pre-this-pass conservative predicate rather
+    than raising. Never raises."""
+    try:
+        return _column_exists(schema, "ledger", "stamp_session")
+    except Exception:  # noqa: BLE001 -- degrade, don't fail (see docstring above)
+        return False
+
+
+def _claim_sessions(schema: str, slugs: list[str]) -> dict[str, str | None]:
+    """For each already-claimed `slugs` (per `work_item_current`), returns the CLAIMING
+    `work_claimed` row's own `stamp_session` -- the interception stamp, the only thing that proves
+    a claim is THIS session's (spec §3, module docstring NAMED CHOICE). Mirrors
+    `work_item_current`'s own `claimed` CTE exactly (`DISTINCT ON (work_slug) ... ORDER BY
+    work_slug, id DESC`) so this reads the identical latest-claim row the view itself resolved
+    `claimant` from -- never a stale or wrong-row answer. Caller has already proven the
+    `stamp_session` column exists (`_stamp_session_available()`) before calling this; raises on a
+    genuine DB error like every other `_query()` call in this module (the caller's normal
+    ledger_unreachable posture applies)."""
+    if not slugs:
+        return {}
+    quoted = ",".join("'" + s.replace("'", "''") + "'" for s in slugs)
+    rows = _query(
+        f"SELECT DISTINCT ON (work_slug) work_slug, coalesce(stamp_session, '') "
+        f"FROM {schema}.ledger WHERE kind = 'work_claimed' AND work_slug IN ({quoted}) "
+        f"ORDER BY work_slug, id DESC;")
+    return {slug: (sess or None) for slug, sess in rows}
+
+
+def _bequeathed_slugs(schema: str, session_id: str) -> set[str]:
+    """BEQUEST (module docstring NAMED CHOICE, spec §3 third bullet): every slug named as a
+    LITERAL TOKEN in the `remains:` clause of a `kind='decision'` row stamped to THIS session
+    whose `statement` begins `stopping:`. Literal token match ONLY -- no inference: the
+    `remains:` text (everything after the literal substring `remains:` up to the next `;` or end
+    of string) is split on commas/whitespace and each token stripped of trailing punctuation;
+    a slug bequeaths iff it appears there verbatim. A session may write more than one qualifying
+    disposition row (e.g. amending an earlier one); every row's `remains:` clause contributes.
+    Raises on a genuine DB error like every other `_query()` call here (ledger_unreachable)."""
+    if not session_id:
+        return set()
+    sid = session_id.replace("'", "''")
+    rows = _query(
+        f"SELECT statement FROM {schema}.ledger WHERE kind = 'decision' "
+        f"AND statement LIKE 'stopping:%' AND stamp_session = '{sid}';")
+    slugs: set[str] = set()
+    for (statement,) in rows:
+        m = re.search(r"remains:\s*([^;]*)", statement)
+        if not m:
+            continue
+        for tok in re.split(r"[,\s]+", m.group(1)):
+            tok = tok.strip(" \t.,;")
+            if tok:
+                slugs.add(tok)
+    return slugs
+
+
+def _collect_debt(session_id: str) -> tuple[list[str], list[str], list[str]]:
+    """Read every governance check that applies to this world. Returns (debt_lines, entries,
+    info_lines): `debt_lines` is the human-readable, per-item teach-text (one item per open
+    row/violation, each paired with the command that closes it); `entries` is the same
+    information in a stable, machine-comparable form used only to fingerprint the debt set for
+    the circuit breaker; `info_lines` (NAMED CHOICE -- STOP-GATE QUEUE SEMANTICS, module
+    docstring) is NEVER debt -- it is informational-only text (the open-unclaimed-queue count,
+    bequeathed items) a caller MAY surface on an ALLOW path, never on a block.
     Raises on a genuine DB error -- the caller converts that into the ledger_unreachable category."""
     schema = _ledger_schema()
     debt_lines: list[str] = []
     entries: list[str] = []
+    info_lines: list[str] = []
 
     if _view_exists(schema, "review_gap"):
         rows = _query(f"SELECT id, coalesce(scope,'') FROM {schema}.review_gap ORDER BY id;")
@@ -448,24 +555,70 @@ def _collect_debt() -> tuple[list[str], list[str]]:
 
     # NAMED CHOICE (module docstring): work_item_current/work_item_violations are s22-only.
     # A view that does not exist is skipped entirely, not an error -- "check only what exists."
+    #
+    # NAMED CHOICE -- STOP-GATE QUEUE SEMANTICS (module docstring, full rationale there):
+    # unclaimed open items are the queue, never debt (informational only, allow paths only);
+    # items claimed by THIS session are debt unless bequeathed; items whose claim ownership
+    # cannot be proven this call (no session_id, no stamp_session column) DEGRADE to the
+    # pre-this-pass conservative predicate (every claimed open item blocks).
     if _view_exists(schema, "work_item_current"):
         rows = _query(
             f"SELECT slug, (claimant IS NOT NULL) FROM {schema}.work_item_current "
             f"WHERE state = 'open' ORDER BY slug;")
-        if rows:
-            debt_lines.append(f"OPEN WORK ITEMS ({schema}.work_item_current, state=open) -- {len(rows)} item(s):")
-            for slug, has_claimant in rows:
-                if has_claimant == "t":
-                    debt_lines.append(
-                        f"  - work item '{slug}' is open and claimed ->\n"
+        unclaimed = [slug for slug, has_claimant in rows if has_claimant != "t"]
+        claimed = [slug for slug, has_claimant in rows if has_claimant == "t"]
+
+        if unclaimed:
+            info_lines.append(
+                f"{len(unclaimed)} open unclaimed item(s) remain -- the successor's queue: "
+                + ", ".join(unclaimed))
+
+        if claimed:
+            narrow_ok = bool(session_id) and _stamp_session_available(schema)
+            blocking_lines: list[str] = []
+            blocking_entries: list[str] = []
+
+            if not narrow_ok:
+                # DEGRADE (spec §4 4th bullet, module docstring): this session's ownership of a
+                # claim cannot be proven this call -- fall back to the CURRENT (pre-this-pass)
+                # conservative predicate: every claimed open item blocks, unconditionally.
+                for slug in claimed:
+                    blocking_lines.append(
+                        f"  - work item '{slug}' is open and claimed (session-narrowing "
+                        f"unavailable this call -- degraded to the pre-queue-semantics "
+                        f"conservative predicate; see hooks/stop_clean_exit.py's NAMED CHOICE "
+                        f"-- STOP-GATE QUEUE SEMANTICS) ->\n"
                         f"      ./led work close {slug} <shipped|superseded|dropped|deferred> "
                         f"[--witness <ref>]")
-                else:
-                    debt_lines.append(
-                        f"  - work item '{slug}' is open and UNCLAIMED ->\n"
-                        f"      ./led work claim {slug}   (then ./led work close {slug} "
-                        f"<resolution> [--witness <ref>])")
-                entries.append(f"work_open:{slug}")
+                    blocking_entries.append(f"work_open:{slug}")
+            else:
+                claim_sessions = _claim_sessions(schema, claimed)
+                bequeathed = _bequeathed_slugs(schema, session_id)
+                for slug in claimed:
+                    if claim_sessions.get(slug) != session_id:
+                        # not THIS session's claim -- out of this spec's scope (the orphaned-claim
+                        # gap, module docstring / spec §3 last bullet): never blocks a DIFFERENT
+                        # session's stop under the new predicate either way.
+                        continue
+                    if slug in bequeathed:
+                        info_lines.append(
+                            f"work item '{slug}' is claimed by this session and still open, but "
+                            f"bequeathed via a stopping-disposition row -- not blocking")
+                        continue
+                    blocking_lines.append(
+                        f"  - work item '{slug}' is open and claimed by THIS session ->\n"
+                        f"      ./led work close {slug} <shipped|superseded|dropped|deferred> "
+                        f"[--witness <ref>]\n"
+                        f"      -- or bequeath it to a successor: ./led decision \"stopping: "
+                        f"<why>; remains: {slug}\"")
+                    blocking_entries.append(f"work_open:{slug}")
+
+            if blocking_lines:
+                debt_lines.append(
+                    f"OPEN WORK ITEMS ({schema}.work_item_current, state=open, claimed by this "
+                    f"session, undischarged) -- {len(blocking_lines)} item(s):")
+                debt_lines.extend(blocking_lines)
+                entries.extend(blocking_entries)
 
     if _view_exists(schema, "work_item_violations"):
         rows = _query(
@@ -507,7 +660,7 @@ def _collect_debt() -> tuple[list[str], list[str]]:
                     f"<technical|managerial|financial> \"<basis>\"   (written by a DIFFERENT actor)")
                 entries.append(f"work_review_deferred:{slug}")
 
-    return debt_lines, entries
+    return debt_lines, entries, info_lines
 
 
 def _debt_identity(entry: str) -> str:
@@ -725,18 +878,24 @@ def main() -> int:
     session_id = str(p.get("session_id") or "")
 
     try:
-        debt_lines, entries = _collect_debt()
+        debt_lines, entries, info_lines = _collect_debt(session_id)
     except Exception as e:  # noqa: BLE001 -- DB-unreachable posture (module docstring)
         debt_lines = [f"LEDGER UNREACHABLE ({type(e).__name__}): {e} -- check DB connectivity / "
                        f"GATE_SUBJECT_ROOT / deployment.json for this world, then retry."]
         entries = [f"error:{type(e).__name__}"]
+        info_lines = []
 
     if not debt_lines:
         _clear_state()
-        _journal({"ts": _ts(), "outcome": "clean_allow"})
+        _journal({"ts": _ts(), "outcome": "clean_allow", "info": info_lines})
+        if info_lines:
+            # NAMED CHOICE -- STOP-GATE QUEUE SEMANTICS (module docstring): the queue/bequest
+            # count is informational-only and never blocks -- printed plainly (no "decision"
+            # field, no exit-2), so a truly empty world's silence stays byte-identical.
+            print("\n".join(info_lines))
         _warn_stop_disposition(session_id)  # side effect only -- never changes this allow
         return 0  # all clean -- allow, zero interference for a clean world UNLESS the
-                  # stop-disposition warning above just fired
+                  # informational queue line or the stop-disposition warning above just fired
 
     debt_hash = _debt_hash(entries)
     st = _load_state()
@@ -744,10 +903,13 @@ def main() -> int:
 
     reason = (
         "Ledger policy (clean-exit gate, hooks/stop_clean_exit.py): this world's ledger shows "
-        "unfinished governance state -- the turn cannot end until it is clean (CLAUDE.md point 5: "
-        "\"Done means ./led review-gap, question-status, and ./led work violations are all "
-        "clean.\"). Close each item below, THEN try to stop again -- this gate re-checks on every "
-        f"attempt, so retrying after closing the debt is the whole fix. "
+        "unfinished governance state -- this gate blocks the stop until it is clean, until the "
+        "named items below are bequeathed via a stopping-disposition row, or until this gate "
+        f"fails open after {DEBT_REPEAT_LIMIT} identical attempts as a last resort (CLAUDE.md "
+        "point 5: \"Done means ./led review-gap, question-status, and ./led work violations are "
+        "all clean.\"). Close each item below, or bequeath a claimed item to a successor "
+        "(./led decision \"stopping: <why>; remains: <slug>\"), THEN try to stop again -- this "
+        "gate re-checks on every attempt. "
         f"(this debt set, or an unclosed remainder of it, has now been seen "
         f"{count}/{DEBT_REPEAT_LIMIT} times at stop)\n\n"
         + "\n".join(debt_lines)
@@ -755,6 +917,8 @@ def main() -> int:
 
     if CLEAN_EXIT_MODE == "observe":
         rc = _allow_with_observe_warning(reason, entries)
+        if info_lines:
+            print("\n".join(info_lines))
         _warn_stop_disposition(session_id)  # side effect only -- observe mode already never blocks
         return rc
 
@@ -762,6 +926,8 @@ def main() -> int:
         _save_state({"debt_hash": debt_hash, "count": count, "entries": entries})
         _journal({"ts": _ts(), "outcome": "breaker_fail_open", "count": count, "entries": entries})
         rc = _allow_with_warning(reason)
+        if info_lines:
+            print("\n".join(info_lines))
         _warn_stop_disposition(session_id)  # side effect only -- breaker already fired to allow
         return rc
 

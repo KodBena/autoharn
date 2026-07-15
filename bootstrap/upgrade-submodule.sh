@@ -1,7 +1,7 @@
 #!/bin/sh
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-14T21:20:21Z
-#   last-change: 2026-07-14T21:21:54Z
+#   last-change: 2026-07-15T15:14:33Z
 #   contributors: a857c93d/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -33,9 +33,12 @@
 #   - <deployment-dir> is not pinned yet (no .autoharn submodule -- convert it first).
 #   - <new-sha> is not resolvable after a fetch (typo, or a commit that was never pushed anywhere
 #     this submodule's remote can reach).
-#   - a LIVE SESSION appears to be running against <deployment-dir> (same hazard as conversion --
-#     bumping the pin under a live session defeats the entire point of pinning, mid-session, just
-#     like the live-exec coupling this whole design retires).
+#   - a LIVE CLAUDE CODE SESSION appears to be running against <deployment-dir> (same hazard as
+#     conversion -- bumping the pin under a live session defeats the entire point of pinning,
+#     mid-session, just like the live-exec coupling this whole design retires). Other processes
+#     merely residing in the directory (a shell, an editor) are listed as informational,
+#     non-blocking output only (2026-07-15 maintainer-ratified narrowing, ledger row 1055 -- see
+#     live_session_check.py's module docstring for the REFUSE-class/WARN-class matching rule).
 #   - the typed confirmation is not given (unless --yes).
 set -eu
 

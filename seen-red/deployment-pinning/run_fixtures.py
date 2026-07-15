@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-14T21:26:05Z
-#   last-change: 2026-07-14T21:31:40Z
+#   last-change: 2026-07-15T15:19:56Z
 #   contributors: a857c93d/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -44,13 +44,25 @@ Cases (RED = the refusal is the point; GREEN = the mechanism must work end to en
            (live-exec) deployment                   converts correctly, 0 leftover references to
                                                      the old root, real ./led round-trip
   RED   6. convert-to-submodule.sh, already pinned  refused, exit 1, nothing touched
-  RED   7. convert-to-submodule.sh, LIVE SESSION    refused (real background process, cwd inside
-                                                     the target dir), .autoharn never created
+  RED   7. convert-to-submodule.sh, LIVE CLAUDE     refused (real claude-shaped process --
+           CODE SESSION                             argv[0]="claude" via a real `/bin/sleep`
+                                                     executed with its argv[0] overridden, no
+                                                     mock -- REFUSE-class per
+                                                     bootstrap/live_session_check.py's 2026-07-15
+                                                     narrowing, ledger row 1055), cwd inside the
+                                                     target dir, .autoharn never created
   GREEN 8. upgrade-submodule.sh, real new commit    fetch + checkout + commit succeed, real
                                                      ./led round-trip on the new pin
   RED   9. upgrade-submodule.sh, bogus SHA           refused after a real fetch, nothing touched
-  RED  10. upgrade-submodule.sh, LIVE SESSION        refused, pin unchanged
+  RED  10. upgrade-submodule.sh, LIVE CLAUDE CODE    refused (claude-shaped process, same
+           SESSION                                   real-runnable approach as case 7), pin
+                                                     unchanged
   RED  11. upgrade-submodule.sh, not yet pinned      refused, teaches to convert first
+  GREEN 12. convert-to-submodule.sh, plain BYSTANDER  NOT refused (WARN-class, real unrenamed
+            process (real `sleep`) sitting in cwd    `sleep` process) -- listed as "not blocking"
+                                                     informational output, conversion proceeds
+  GREEN 13. upgrade-submodule.sh, plain BYSTANDER    NOT refused (WARN-class) -- listed as "not
+            process sitting in cwd                   blocking", pin genuinely bumps
 
 Usage: python3 seen-red/deployment-pinning/run_fixtures.py
 Exit 0 if every case matches; 1 otherwise. Lazy imports banned.
@@ -154,6 +166,14 @@ def main() -> int:
         if r.returncode != 0:
             check("SETUP: git worktree add", False, r.stderr)
             return 1
+        # `git worktree add` does NOT populate submodules (tools/makespan-scheduler,
+        # tools/autoharn-panel) -- without this, hooks/pre-commit's link-integrity gate refuses
+        # the fixture's own scratch commit below (relative links into those submodules resolve
+        # to nothing on disk in the bare worktree). Local object store, no network needed.
+        rsub = _git(worktree, "submodule", "update", "--init", "--recursive")
+        if rsub.returncode != 0:
+            check("SETUP: git submodule update --init in scratch worktree", False, rsub.stdout + rsub.stderr)
+            return 1
         rel_paths = []
         for rel, src in PINNING_SCRIPTS:
             dst = worktree / rel
@@ -165,12 +185,17 @@ def main() -> int:
         # to stage -- `git commit` correctly refuses with "nothing to commit", which is success,
         # not failure, for this setup step's actual goal (a worktree whose HEAD carries the
         # CURRENT script bytes). Only a genuinely failed commit (dirty-but-refused) is a problem.
+        # Declare (CLAUDE_COMMIT_PATHS) and `git add` only the paths that ACTUALLY differ --
+        # hooks/pre-commit's staging-scope-subset guard (finding 33) refuses a declared-but-not-
+        # staged path (a no-op `git add` on an unchanged file stages nothing), so a stale/unmoved
+        # script among the four must not ride along in the declared manifest.
+        changed_paths = [p for p in rel_paths if _git(worktree, "diff", "--quiet", "--", p).returncode != 0]
         pre_diff = _git(worktree, "diff", "--quiet", "--", *rel_paths)
         if pre_diff.returncode == 0:
             print(f"-- scratch worktree's HEAD already matches the current on-disk script bytes "
                   f"(no delta to commit -- this build's own commit already landed) --")
         else:
-            cm = _commit_in_worktree(worktree, rel_paths,
+            cm = _commit_in_worktree(worktree, changed_paths,
                                      "fixture: current pinning scripts (deployment-pinning run_fixtures.py, scratch worktree)")
             if cm.returncode != 0:
                 check("SETUP: commit current scripts into scratch worktree", False, cm.stdout + cm.stderr)
@@ -275,23 +300,50 @@ def main() -> int:
               rc6.returncode == 1 and "ALREADY" in rc6.stderr and "PINNED" in rc6.stderr,
               rc6.stdout + rc6.stderr)
 
-        # RED 7: convert against a BUSY deployment (a real background process sitting inside it)
+        # RED 7: convert against a BUSY deployment (a REAL claude-shaped process sitting inside
+        # it -- REFUSE-class per bootstrap/live_session_check.py's 2026-07-15 narrowing, ledger
+        # row 1055: argv[0]'s basename == "claude". Real runnable approach, no mock of the code
+        # under test -- `/bin/sleep` executed with its argv[0] overridden to "claude" via
+        # subprocess's `executable=` kwarg, exactly the shape a genuine `claude` binary presents
+        # to /proc/<pid>/cmdline.)
         dest7 = tmproot / "red7-busy"
         schema7, kern7, role7 = f"dpf{STAMP}r7", f"dpf{STAMP}r7_kernel", f"dpf{STAMP}r7_rw"
         r7s = _sh(["bash", str(worktree / "bootstrap" / "new-project.sh"), str(dest7),
                   "--db", DB, "--host", HOST, "--schema", schema7, "--kern", kern7, "--role", role7,
                   "--governed", "*.py"], cwd=worktree)
-        proc = subprocess.Popen(["sleep", "30"], cwd=str(dest7))
+        proc = subprocess.Popen(["claude", "30"], executable="/bin/sleep", cwd=str(dest7))
         time.sleep(0.5)
         try:
             rc7 = _sh(["bash", str(CONVERT), str(dest7), "--yes"], cwd=REPO)
-            check("RED 7 (convert-to-submodule.sh refuses a deployment with a live process sitting in it)",
+            check("RED 7 (convert-to-submodule.sh refuses a deployment with a claude-shaped process sitting in it)",
                   r7s.returncode == 0 and rc7.returncode == 1 and
                   f"pid={proc.pid}" in rc7.stderr and not (dest7 / ".autoharn").exists(),
                   f"setup_exit={r7s.returncode} convert_exit={rc7.returncode}\n{rc7.stdout}\n{rc7.stderr}")
         finally:
             proc.terminate()
             proc.wait(timeout=5)
+
+        # GREEN 12: convert against a deployment with a plain BYSTANDER process sitting inside
+        # it (a real `sleep 30`, argv[0] left alone -- WARN-class, not REFUSE-class) -- proves the
+        # 2026-07-15 narrowing does NOT block on a bystander: the conversion proceeds, and the
+        # printed output names the bystander as "not blocking" informational output.
+        dest12 = tmproot / "green12-warn"
+        schema12, kern12, role12 = f"dpf{STAMP}g12", f"dpf{STAMP}g12_kernel", f"dpf{STAMP}g12_rw"
+        r12s = _sh(["bash", str(worktree / "bootstrap" / "new-project.sh"), str(dest12),
+                   "--db", DB, "--host", HOST, "--schema", schema12, "--kern", kern12, "--role", role12,
+                   "--governed", "*.py"], cwd=worktree)
+        proc3 = subprocess.Popen(["sleep", "30"], cwd=str(dest12))
+        time.sleep(0.5)
+        try:
+            rc12 = _sh(["bash", str(CONVERT), str(dest12), "--yes"], cwd=REPO)
+            check("GREEN 12 (convert-to-submodule.sh does NOT refuse a bystander process, lists it as not-blocking, and converts)",
+                  r12s.returncode == 0 and rc12.returncode == 0 and
+                  "not blocking" in rc12.stdout and f"pid={proc3.pid}" in rc12.stdout and
+                  (dest12 / ".autoharn").is_dir(),
+                  f"setup_exit={r12s.returncode} convert_exit={rc12.returncode}\n{rc12.stdout}\n{rc12.stderr}")
+        finally:
+            proc3.terminate()
+            proc3.wait(timeout=5)
 
         # ============================================================ GREEN 8 / RED 9,10,11: upgrade
         # A real second commit, ON A BRANCH (not detached -- `git fetch` only follows refs), so
@@ -316,24 +368,38 @@ def main() -> int:
         check("RED 9 (upgrade-submodule.sh refuses a SHA that does not resolve after fetch)",
               r9.returncode == 1 and "does not resolve to a commit" in r9.stderr, r9.stdout + r9.stderr)
 
-        # RED 10: live session present
-        proc2 = subprocess.Popen(["sleep", "30"], cwd=str(dest5))
+        # RED 10: live CLAUDE CODE session present (claude-shaped process, same real-runnable
+        # argv[0]-override approach as RED 7 -- REFUSE-class)
+        proc2 = subprocess.Popen(["claude", "30"], executable="/bin/sleep", cwd=str(dest5))
         time.sleep(0.5)
         try:
             r10 = _sh(["bash", str(UPGRADE), str(dest5), new_sha, "--yes"], cwd=REPO)
             pin_unchanged = _git(dest5 / ".autoharn", "rev-parse", "HEAD").stdout.strip() == base_sha
-            check("RED 10 (upgrade-submodule.sh refuses with a live process sitting in the deployment)",
+            check("RED 10 (upgrade-submodule.sh refuses with a claude-shaped process sitting in the deployment)",
                   r10.returncode == 1 and f"pid={proc2.pid}" in r10.stderr and pin_unchanged,
                   r10.stdout + r10.stderr)
         finally:
             proc2.terminate()
             proc2.wait(timeout=5)
 
-        # GREEN 8: the real upgrade
-        r8 = _sh(["bash", str(UPGRADE), str(dest5), new_sha, "--yes"], cwd=REPO)
+        # GREEN 8 / GREEN 13: the real upgrade, with a plain BYSTANDER process sitting inside
+        # the deployment at the same time -- WARN-class, per the 2026-07-15 narrowing (ledger
+        # row 1055) it must NOT block: the upgrade proceeds and the printed output names the
+        # bystander as "not blocking" informational output (GREEN 13), while the pin genuinely
+        # bumps (GREEN 8).
+        proc4 = subprocess.Popen(["sleep", "30"], cwd=str(dest5))
+        time.sleep(0.5)
+        try:
+            r8 = _sh(["bash", str(UPGRADE), str(dest5), new_sha, "--yes"], cwd=REPO)
+        finally:
+            proc4.terminate()
+            proc4.wait(timeout=5)
         pin_sha8 = _git(dest5 / ".autoharn", "rev-parse", "HEAD").stdout.strip() if (dest5 / ".autoharn").is_dir() else ""
         check("GREEN 8a (upgrade-submodule.sh: real fetch + checkout + commit, pin bumped to the new sha)",
               r8.returncode == 0 and pin_sha8 == new_sha, f"exit={r8.returncode} pin_sha8={pin_sha8} new_sha={new_sha}\n{r8.stdout}\n{r8.stderr}")
+        check("GREEN 13 (upgrade-submodule.sh does NOT refuse a bystander process, lists it as not-blocking, and upgrades)",
+              r8.returncode == 0 and "not blocking" in r8.stdout and f"pid={proc4.pid}" in r8.stdout,
+              r8.stdout + r8.stderr)
         smoke8 = _sh([str(dest5 / "led"), "--recent", "1"], cwd=dest5)
         check("GREEN 8b (real ./led round-trip through the UPGRADED pin, real postgres)",
               smoke8.returncode == 0 and "conversion path" in smoke8.stdout,

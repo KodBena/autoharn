@@ -1,7 +1,5 @@
 # Regulator-adoption assessment — four institutional lenses on autoharn, 2026-07-12
 
-<!-- doc-attest-exempt: v1.1.3 release-cut mechanical edit (de-linked dangling references into paths excluded from this public cut -- observatory/, research/foundational-map/, design/MAINT-PG-HBA-HARDENING.md -- plain-text citation, no prose rewrite), same disposition as the v1.0/v1.1/v1.1.1/v1.1.2 cuts' own markers on their touched files. Removal condition: strike this marker and run the real A:B:C loop next time this file is touched for content, not just link repair. -->
-
 Audience: maintainer
 
 This document answers one maintainer-commissioned question: **if institutions with the
@@ -53,7 +51,7 @@ The live observations this document leans on, each re-verified 2026-07-12:
 - `SELECT rolname, rolpassword IS NOT NULL, rolsuper FROM pg_authid WHERE rolname='bork'`
   returns `bork|f|t`, and `SHOW ssl` returns `off` — a passwordless superuser reachable
   over the network, TLS off, exactly the state
-  design/PG-HBA-HARDENING.md (the maintainer-internal pg_hba hardening write-up, not part of this public release) was written to close and whose status
+  [design/PG-HBA-HARDENING.md](MAINT-PG-HBA-HARDENING.md) was written to close and whose status
   is still prepared-unapplied (also CAPABILITIES.md "Not yet enforced").
 - No `requirements.txt` or `pyproject.toml` exists at the repository's top two levels — the
   apparatus has no dependency manifest.
@@ -101,7 +99,7 @@ examiner would actually be handed is exactly the uncovered part.
 
 Two halves are live-verified here, both dated 2026-07-12. **The door:** the Postgres role `bork` is a
 superuser with no password, reachable over the network, TLS off — and the prepared fix
-(PG-HBA-HARDENING.md (the maintainer-internal pg_hba hardening write-up, not part of this public release)) has sat unapplied; CAPABILITIES.md's "Not yet
+([PG-HBA-HARDENING.md](MAINT-PG-HBA-HARDENING.md)) has sat unapplied; CAPABILITIES.md's "Not yet
 enforced" section names pg_hba hardening as unscheduled. This credential bypasses every
 control the harness has: triggers, stamps, grants, views. **The floor:** no backup,
 replication, retention, or disaster-recovery story exists anywhere for the single Postgres
@@ -295,7 +293,7 @@ Maintainer-act items are flagged — they are decisions or ceremonies only he ca
    [GPG-TRUST-LAYER-FAQ.md](USER-GPG-TRUST-LAYER-FAQ.md)), commit `law/keys/maintainer.asc`,
    sign the first `ratified/*` tag, run `./attest-tags` for real. S; maintainer act; turns
    Gap 1's Rung 1 live with zero new code.
-2. **Apply the prepared pg_hba hardening** (PG-HBA-HARDENING.md (the maintainer-internal pg_hba hardening write-up, not part of this public release):
+2. **Apply the prepared pg_hba hardening** ([PG-HBA-HARDENING.md](MAINT-PG-HBA-HARDENING.md):
    password + scram host lines). S; maintainer act; closes Gap 2's door.
 3. **Scaffold the next world on the current chain (s26 is already in it) and sign a real
    chain head at close.** S–M; first genuine "append-only or provably broken" world.
@@ -375,7 +373,7 @@ ruling, 2026-07-11).
 - [design/GPG-TRUST-LAYER.md](MAINT-GPG-TRUST-LAYER.md) and
   [design/GPG-TRUST-LAYER-FAQ.md](USER-GPG-TRUST-LAYER-FAQ.md) — the built-but-unarmed layer
   Tier 1 arms.
-- design/PG-HBA-HARDENING.md (the maintainer-internal pg_hba hardening write-up, not part of this public release) — the prepared perimeter fix.
+- [design/PG-HBA-HARDENING.md](MAINT-PG-HBA-HARDENING.md) — the prepared perimeter fix.
 - [CAPABILITIES.md](../ORCH-CAPABILITIES.md) — the witnessed-capability inventory every
   "already sufficient" credit above cites.
 - [law/adr/0017-the-zero-context-reader.md](../law/adr/0017-the-zero-context-reader.md)

@@ -1,6 +1,10 @@
 +"decision": "block"
 +OPEN WORK ITEMS
-+work item 'probe-item-1' is open and UNCLAIMED
-+./led work claim probe-item-1
++work item 'probe-item-1' is open and claimed by THIS session
++./led work close probe-item-1
++bequeath it to a successor
++./led decision "stopping:
 +seen 1/3 times
 -CIRCUIT BREAKER
+-cannot end until it is clean
+-UNCLAIMED

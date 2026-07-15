@@ -1,7 +1,5 @@
 # ORCH-HARNESS-FAILURE-LEDGER — a structured store for autoharn's own harness failures
 
-<!-- doc-attest-exempt: v1.1.3 release-cut mechanical edit (de-linked dangling references into paths excluded from this public cut -- observatory/, research/foundational-map/, design/MAINT-PG-HBA-HARDENING.md -- plain-text citation, no prose rewrite), same disposition as the v1.0/v1.1/v1.1.1/v1.1.2 cuts' own markers on their touched files. Removal condition: strike this marker and run the real A:B:C loop next time this file is touched for content, not just link repair. -->
-
 This document is written for the orchestrator (secondarily for the maintainer, and for any
 builder who later implements or extends `stores/008_harness_failure_ledger.sql`). It designs a
 new Postgres store, `harness_failure`, that gives autoharn's own harness misbehavior — a hook
@@ -478,8 +476,8 @@ for the record.
   shape.
 - [`bootstrap/apply-research-ledger.sh`](../bootstrap/apply-research-ledger.sh) — the apply-script
   pattern `bootstrap/apply-harness-failure-ledger.sh` clones.
-- `observatory/ent/cycle-001.md` (internal audit record, not part of this public release) and
-  `cycle-002.md` (internal audit record, not part of this public release) — the evidence this schema was worked out
+- [`observatory/ent/cycle-001.md`](../observatory/ent/cycle-001.md) and
+  [`cycle-002.md`](../observatory/ent/cycle-002.md) — the evidence this schema was worked out
   against; the backfill appendix above transcribes their lessons into this store's shape.
 - [`bootstrap/templates/APPARATUS.md`](../bootstrap/templates/APPARATUS.md) — the mode vocabulary
   (`off`/`observe`/`enforce`) the subscription flag above reuses rather than reinventing.

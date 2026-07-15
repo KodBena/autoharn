@@ -6,7 +6,7 @@ for this at all before this build (checked: `gates/fixture_census.py`'s REGISTRY
 any of `bootstrap/new-project.sh`'s `--pin` flag, `bootstrap/convert-to-submodule.sh`,
 `bootstrap/upgrade-submodule.sh`, or `bootstrap/live_session_check.py` -- none of the four existed
 before this session). So "RED" here is not a pre-fix baseline (there was no prior behavior to
-regress from) -- it is the REFUSAL polarity of a brand-new mechanism: eleven cases below prove the
+regress from) -- it is the REFUSAL polarity of a brand-new mechanism: the RED cases below prove the
 scripts actually refuse (loudly, teaching, touching nothing) on every hazard they claim to guard,
 not just that they succeed on the happy path. This is the same genre `gates/fixture_census.py`
 itself uses for the two census gates it registers ("their fixture is the gate itself, red-specimen
@@ -52,13 +52,14 @@ RED (refusal) cases -- the hazard-guard actually fires, loudly, touching nothing
                              bootstrap/upgrade-submodule.sh <dest> <new-sha> instead.
     exit code: 1; nothing touched (the existing pin was left exactly as it was).
 
-  RED 7 -- `convert-to-submodule.sh` against a deployment with a REAL background process sitting
-  in it (a genuine `sleep 30` subprocess with cwd set inside the target dir, detected by
-  bootstrap/live_session_check.py's best-effort /proc scan):
-    live_session_check: 1 process(es) appear to be running against .../red7-busy -- REFUSING
-    (this is a best-effort scan, not a guarantee; if you know these are stale/unrelated, end
-    them or investigate before re-running):
-      pid=<pid>  cwd=.../red7-busy  cmd='sleep 30'
+  RED 7 -- `convert-to-submodule.sh` against a deployment with a REAL claude-shaped process
+  sitting in it (a genuine `/bin/sleep` subprocess with its argv[0] overridden to "claude" --
+  real runnable approach, no mock -- and cwd set inside the target dir; REFUSE-class per
+  bootstrap/live_session_check.py's 2026-07-15 narrowing, ledger row 1055 -- see below):
+    live_session_check: 1 Claude Code process(es) appear to be running against .../red7-busy --
+    REFUSING (this is a best-effort scan, not a guarantee; if you know these are stale/
+    unrelated, end them or investigate before re-running):
+      pid=<pid>  cwd=.../red7-busy  cmd='claude 30'
 
     convert-to-submodule.sh: REFUSING -- see the process list above. Converting a deployment
                              out from under a live session is exactly the hazard pinning
@@ -74,10 +75,11 @@ RED (refusal) cases -- the hazard-guard actually fires, loudly, touching nothing
                           reachable from this submodule's remote. Nothing touched.
     exit code: 1; the pin was left at its prior commit (verified by the fixture).
 
-  RED 10 -- `upgrade-submodule.sh` against a deployment with a real background process sitting in
-  it (same live_session_check mechanism as RED 7, exercised on the upgrade path):
-    live_session_check: 1 process(es) appear to be running against .../green5-classic --
-    REFUSING ...
+  RED 10 -- `upgrade-submodule.sh` against a deployment with a real claude-shaped process sitting
+  in it (same live_session_check mechanism and argv[0]-override approach as RED 7, exercised on
+  the upgrade path):
+    live_session_check: 1 Claude Code process(es) appear to be running against
+    .../green5-classic -- REFUSING ...
     upgrade-submodule.sh: REFUSING -- see the process list above. Bumping the pin under a
                           live session changes that session's behavior mid-stream, exactly
                           the hazard pinning exists to retire. End the session, then
@@ -109,5 +111,17 @@ GREEN (mechanism works end to end) cases, all against real postgres:
   commit: real `git fetch` + `git checkout` + a commit in the DEPLOYMENT's own git history (never
   autoharn's), real `./led --recent 1` round-trip through the upgraded pin.
 
-Full narrated run (all 17 cases): `python3 seen-red/deployment-pinning/run_fixtures.py`.
+  GREEN 12/13 -- the 2026-07-15 REFUSE-class/WARN-class narrowing (ledger row 1055),
+  bootstrap/live_session_check.py, exercised through both convert-to-submodule.sh (GREEN 12) and
+  upgrade-submodule.sh (GREEN 13): a REAL plain `sleep 30` process (argv[0] left alone -- a
+  bystander, not claude-shaped) sitting in the deployment's cwd does NOT refuse. Actual printed
+  output, both cases:
+    live_session_check: not blocking -- 1 process(es) merely reside in .../<dest> (cwd or
+    cmdline match, but do not look like a Claude Code session -- see module docstring's
+    REFUSE-class/WARN-class matching rule):
+      pid=<pid>  cwd=.../<dest>  cmd='sleep 30'
+  ...and the script proceeds to completion (GREEN 12: `.autoharn` created and pinned; GREEN 13:
+  the pin genuinely bumps to the new commit) -- verified by the fixture in both cases.
+
+Full narrated run (all 19 cases): `python3 seen-red/deployment-pinning/run_fixtures.py`.
 Registered in `gates/fixture_census.py` as `deployment-pinning`.

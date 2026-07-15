@@ -1,7 +1,5 @@
 # WORK-STATUS-OFFERING — the omega work-status question, closed as a product
 
-<!-- doc-attest-exempt: v1.1.3 release-cut mechanical edit (de-linked dangling references into paths excluded from this public cut -- observatory/, research/foundational-map/, design/MAINT-PG-HBA-HARDENING.md -- plain-text citation, no prose rewrite), same disposition as the v1.0/v1.1/v1.1.1/v1.1.2 cuts' own markers on their touched files. Removal condition: strike this marker and run the real A:B:C loop next time this file is touched for content, not just link repair. -->
-
 Audience: adopter
 
 This document answers a question this project has opened and re-closed at least three times
@@ -23,7 +21,7 @@ claim itself is in "Provenance: verifying the 'three times' claim") and
 left it, in the maintainer's words, "as nebulous as ever" while "abusing a 2k+ line BACKLOG.md as
 a work tracker." A single append-only prose file cannot answer "what is open, what is blocked,
 what is done" without a human reading it end to end — the same anti-corruption-layer problem
-omega (internal research note, not part of this public release)'s
+[omega](../research/foundational-map/06-omega-work-status-sql-anti-corruption-layer.md)'s
 `work-status` Postgres store solved for hand-edited JSON, unsolved here for hand-edited BACKLOG
 prose. This document's job is to end that gap, not describe it further.
 
@@ -107,7 +105,7 @@ closed during this build; see `bootstrap/track-work.sh`'s own header comment and
 
 The maintainer named the pattern: this question keeps getting re-opened without a shipped
 answer. The table below is that closure — every capability
-omega's `work-status` store (internal research note, not part of this public release)
+[omega's `work-status` store](../research/foundational-map/06-omega-work-status-sql-anti-corruption-layer.md)
 built, one row each, mapped to its home in this offering (built here, inherited from this
 repo's existing kernel conventions, deliberately not ported, or genuinely new). Read this table,
 not a re-derivation of the question, the next time "didn't we solve this already" comes up.
@@ -165,7 +163,7 @@ open question.
   comment carries the full usage contract and the standing-vs-world rationale in detail.
 - [`kernel/lineage/s22-work-item-ledger.sql`](../kernel/lineage/s22-work-item-ledger.sql) — the
   work-item layer's own closure statement, invariant-by-invariant.
-- omega's work-status precedent (internal research note, not part of this public release) —
+- [omega's work-status precedent](../research/foundational-map/06-omega-work-status-sql-anti-corruption-layer.md) —
   the source this offering generalizes.
 - [`seen-red/track-work/`](../seen-red/track-work/) — both-polarity live proof (a refused
   re-run against an existing deployment; a clean adoption on a throwaway directory, torn down).

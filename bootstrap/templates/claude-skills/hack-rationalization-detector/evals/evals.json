@@ -1,0 +1,23 @@
+{
+  "skill_name": "hack-rationalization-detector",
+  "note": "Real validation uses KNOWN-ANSWER cases from your own history (the 8 commits on the fix branch, notes/audit/*). Point the skill at one whose verdict you already know and check it lands the same call.",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Independent review of this fix before I call it done: I added an isReviewActive gate so the card-tree slot isn't cleared during review. Tests green, another pass approved it. Is this sound?",
+      "expected_output": "UNDISCHARGED-HACK. Flags 'scope creep'/'gate' near a named ownership fix; enumerates 3 writers vs the 2 assumed; demands runtime repro. Should refuse 'minimal' as the downgrade reason.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "Review this: api-client throws 'API Error <status>: <body>' and consumers regex it back out. I added a // brittle in principle note and it's fine for now. Good to ship?",
+      "expected_output": "UNDISCHARGED-HACK. Names-and-bypassed signature ('brittle ... for now'); general fix is a structured error type as one invariant; flags failure to generalize across the six consumers.",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "Review: the general fix is a structured ApiError type, but it changes a public contract mid-sweep and ADR-0004 forbids touching consumers I can't fully see, so I added the field only at the one site already open and filed follow-up #412 with the invariant. OK?",
+      "expected_output": "narrower-but-justified. A tell may fire, but the DOWNGRADE line names a concrete cost (public contract, ADR-0004) and the general fix is filed, not waved at. Should NOT call this a hack."
+    }
+  ]
+}

@@ -1,7 +1,7 @@
 #!/bin/sh
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-14T21:19:44Z
-#   last-change: 2026-07-14T21:21:51Z
+#   last-change: 2026-07-15T15:14:25Z
 #   contributors: a857c93d/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -41,10 +41,13 @@
 #     script will not paper over by picking one arbitrarily).
 #   - the discovered autoharn checkout is dirty or its commit cannot be determined (nothing
 #     reproducible to pin to).
-#   - a LIVE SESSION appears to be running against <deployment-dir> (bootstrap/
+#   - a LIVE CLAUDE CODE SESSION appears to be running against <deployment-dir> (bootstrap/
 #     live_session_check.py, a best-effort /proc scan -- CLAUDE.md's standing rule, restated by
 #     this design note's own migration section: "migrating a deployment mid-session is itself an
-#     act that needs to not race a live operator").
+#     act that needs to not race a live operator"). Other processes merely residing in the
+#     directory (a shell, an editor) are listed as informational, non-blocking output only
+#     (2026-07-15 maintainer-ratified narrowing, ledger row 1055 -- see live_session_check.py's
+#     module docstring for the REFUSE-class/WARN-class matching rule).
 #   - the typed confirmation is not given (unless --yes).
 #
 # Prints exactly what you should see after each step; every refusal names the fix.

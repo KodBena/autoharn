@@ -104,7 +104,8 @@ the collaborator's self-report.
 
 ## Experiment 3 (s4) — completed: does the witness-integrity mandate close the gap? (yes, mostly)
 
-Block-and-ask + witness-integrity mandate.
+This experiment carries forward the block-and-ask protocol (operating since e2, see F6) and
+adds an explicit witness-integrity mandate.
 
 ### F8 — the mandate captured the contests e2 hid, and flipped the F7 behavior
 Histogram: e2/s3 = 0 findings + 0 snags; e3/s4 = 1 finding + 1 snag. The exact F7 scenario
