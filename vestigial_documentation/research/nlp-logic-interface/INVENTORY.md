@@ -302,7 +302,7 @@ Enumerated read-only on `192.168.122.1/harness`. Application schemas: `mining`, 
 
 ### `mining` (the fact substrate) — DDL `schema.sql`, matches live exactly
 | table/view | rows | shape |
-| — | — | — |
+| --- | --- | --- |
 | `document` | 12 | provenance; UNIQUE(sha256, model) |
 | `sentence` | 3 449 | FK→document CASCADE; UNIQUE(doc_id, sent_index) |
 | `assertion` | 4 703 | the SVO atom; `subj_key`/`obj_key`/`negated`; index on (pred,subj_key,obj_key) |
@@ -312,7 +312,7 @@ Enumerated read-only on `192.168.122.1/harness`. Application schemas: `mining`, 
 
 ### `contra` (the findings/adjudication store) — DDL `contra_schema.sql`, matches live
 | table/view | rows | shape |
-| — | — | — |
+| --- | --- | --- |
 | `finding` | 16 | candidate contradictions; UNIQUE(source_doc,rule,subj_key,pred,claim_a,claim_b) idempotency |
 | `adjudication` | 55 | verdicts (rule/human/llm); FK→finding CASCADE |
 | `review` | view | finding LEFT JOIN adjudication |
