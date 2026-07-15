@@ -1,5 +1,7 @@
 # CONFIGURATION — the adopter-facing surface
 
+<!-- doc-attest-exempt: v1.1.2 release-cut mechanical edit (de-linked dangling references into paths excluded from this public cut -- observatory/, research/foundational-map/, design/MAINT-PG-HBA-HARDENING.md -- plain-text citation, no prose rewrite), same disposition as the v1.0/v1.1 cuts' own markers on their touched files. Removal condition: strike this marker and run the real A:B:C loop next time this file is touched for content, not just link repair. -->
+
 This page is written for an adopter, and answers one question: **if you are adopting autoharn
 into your own project — cloning it, or adding it as a submodule — what do you actually get,
 where does each piece of state live, what can you turn on or off, and what does each choice
@@ -419,7 +421,7 @@ is almost always `pg_hba.conf`, not Postgres itself.
 This section documents a specific, investigated hardening step for one real deployment shape —
 Postgres reachable over a private subnet, one cluster-wide superuser role, `trust` authentication
 for every database — condensed from the full investigation in
-[`design/MAINT-PG-HBA-HARDENING.md`](design/MAINT-PG-HBA-HARDENING.md) (every fact there is witnessed against
+`design/MAINT-PG-HBA-HARDENING.md` (the maintainer-internal pg_hba hardening write-up, not part of this public release) (every fact there is witnessed against
 a real cluster; read it in full before applying anything non-trivial). **This page documents; it
 does not apply anything for you** — editing `pg_hba.conf` and reloading Postgres on a database
 that matters is your own act, on your own schedule, with your own rollback plan. Skip this section
@@ -485,14 +487,14 @@ If either witness fails, restore from the backup (`cp pg_hba.conf.bak-<date> pg_
 `SELECT pg_reload_conf();`) and re-diagnose before retrying. Full detail, including the exact
 column-aligned rule block, the second (local Unix-socket) hole this pass deliberately leaves open
 and why, and the honest limits of what a password requirement does and does not protect against,
-is in [`design/MAINT-PG-HBA-HARDENING.md`](design/MAINT-PG-HBA-HARDENING.md) §2–§5.
+is in `design/MAINT-PG-HBA-HARDENING.md` (the maintainer-internal pg_hba hardening write-up, not part of this public release) §2–§5.
 
 ## Related
 
 - [ORCH-OPERATING-CARD.md](ORCH-OPERATING-CARD.md) — the operator-facing card for someone already running a
   scaffolded project: the verbs, the resumption doctrine, the kernel-delta decision tree.
 - [GLOSSARY.md](GLOSSARY.md) — every coined term this page uses, defined once.
-- [`design/MAINT-PG-HBA-HARDENING.md`](design/MAINT-PG-HBA-HARDENING.md) — the full pg_hba investigation this
+- `design/MAINT-PG-HBA-HARDENING.md` (the maintainer-internal pg_hba hardening write-up, not part of this public release) — the full pg_hba investigation this
   page's FAQ condenses; read it in full before applying anything to a database that matters.
 - [`law/adr/0017-the-zero-context-reader.md`](law/adr/0017-the-zero-context-reader.md) — the
   documentation-legibility discipline this page is written to, and the source of

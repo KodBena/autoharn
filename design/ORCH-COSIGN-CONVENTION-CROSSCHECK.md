@@ -1,5 +1,7 @@
 # ORCH-COSIGN-CONVENTION-CROSSCHECK — adjudicating ent cycle-003's METHOD CANDIDATE 2
 
+<!-- doc-attest-exempt: v1.1.2 release-cut mechanical edit (de-linked dangling references into paths excluded from this public cut -- observatory/, research/foundational-map/, design/MAINT-PG-HBA-HARDENING.md -- plain-text citation, no prose rewrite), same disposition as the v1.0/v1.1 cuts' own markers on their touched files. Removal condition: strike this marker and run the real A:B:C loop next time this file is touched for content, not just link repair. -->
+
 Audience: maintainer (and the orchestrator relaying to him)
 
 **Status: point-in-time adjudication record, dated 2026-07-13. Never retro-edited; a later
@@ -16,7 +18,7 @@ serve a new recipe, because the verdict below is **already-covered**.
 
 ## The candidate, as described in its own source
 
-[observatory/ent/cycle-003.md](../observatory/ent/cycle-003.md) §7, item 2, quotes ent's
+observatory/ent/cycle-003.md (internal audit record, not part of this public release) §7, item 2, quotes ent's
 fix-stage redesign (ent tracker row 54) as stating "a clean, generalizable review rule: a
 co-sign gate loops until the reviewer actually APPROVES (capped, here at 3 rounds); short of
 that, the work is IN FLIGHT, never treated as done; and a task that exhausts the cap without
@@ -45,7 +47,7 @@ maintainer-relayed correction enforced when it un-fused ent's rounds 2-3 reviewe
 had used the same single reviewer instance for both a front-loaded findings briefing and what
 was meant to be a fresh sweep, and the correction split those two into genuinely separate,
 independent reviewer instances. That correction is ent's own tracker row 71, cited in
-[observatory/ent/cycle-003.md](../observatory/ent/cycle-003.md)'s "DIFF-VS-PRIOR" section — the
+observatory/ent/cycle-003.md (internal audit record, not part of this public release)'s "DIFF-VS-PRIOR" section — the
 section, near the top of that report, that compares this cycle's ledger state against the prior
 cycle's snapshot — and again in that report's §3, "Harness Friction"). ADR-0014 does not itself
 specify a round cap or a
@@ -142,7 +144,7 @@ with, not disruptive to, that open question.
 
 ## Related
 
-- [observatory/ent/cycle-003.md](../observatory/ent/cycle-003.md) §7 item 2 — the candidate this
+- observatory/ent/cycle-003.md (internal audit record, not part of this public release) §7 item 2 — the candidate this
   document adjudicates, and the observer's own explicit flag that the cross-check was deferred.
 - [law/adr/0014-executor-second-opinion.md](../law/adr/0014-executor-second-opinion.md) — the
   root tenet (single independent opinion, briefed for independence, Rule 3) that the
