@@ -1,0 +1,47 @@
+== RED WITNESS (pre-s34, s15..s33 kernel only, scratch schema s34fxa, toy db, torn down after) ==
+  ./led register-principal reviewer2 model
+  ./led decision "target row for pre-s34-bug -- s34 fixture, not a real project decision"
+  -- direct SQL writer (never the CLI -- `led review` never names discharge_grade in its own
+  -- INSERT column list; this is the class the finding names: `GRANT INSERT` on review_detail has
+  -- stood since s15, so a writer with direct table access can supply the column today):
+  SET ROLE s34fxa_rw; SET search_path = s34fxa, s34fxa_kernel;
+  INSERT INTO ledger (kind, statement, regards, actor)
+  VALUES ('review', 'raw-writer review -- s34 fixture', <target-id>,
+          (SELECT id FROM principal WHERE name = 'reviewer2'))
+  RETURNING id \gset r_
+  INSERT INTO review_detail (ledger_id, verdict, independence, basis, discharge_grade)
+  VALUES (:r_id, 'attest', 'self-review', 'pre-s34 silent overwrite specimen', 'distinct-deployment');
+  -- SUCCEEDED (exit 0) on the pre-s34 kernel -- NO ERROR, NO WARNING:
+  --   SELECT discharge_grade FROM review_detail WHERE basis = 'pre-s34 silent overwrite specimen';
+  --     same-principal
+  -- The writer asserted 'distinct-deployment'; the stored value is 'same-principal' -- the
+  -- kernel's OWN computation, silently substituted for the writer's claim with nothing on the
+  -- record to show the coercion happened (ledger finding 1157, the Idris refinement consult's
+  -- verified reading of s29's live SQL). This is the defect s34 forecloses. On the s34 kernel
+  -- below, the IDENTICAL shape (a raw INSERT naming a non-NULL discharge_grade) is REFUSED, with
+  -- teach-text naming the field as kernel-computed and citing this exact pre-s34 behavior as the
+  -- WHY -- no new column, no new vocabulary, one refusal checked first in validate_independence().
+
+== GREEN WITNESS -- full both-polarity fixture run (seen-red/s34-computed-grade-refusal/run_fixtures.py) ==
+== scaffolding classic world s34fxa (chain ends s33-composite-discharge.sql, s34 NOT applied) ==
+  scaffold OK (schema=s34fxa).
+
+=== pre-s34-silent-overwrite ===
+  [ok] raw INSERT supplying discharge_grade='distinct-deployment' exit=0 (0 = accepted, no error) stored discharge_grade='same-principal' -- the writer's asserted value was silently discarded and replaced, no error surfaced anywhere (ledger finding 1157, witnessed live on this s33-head world before s34 exists)
+
+== scaffolding classic world s34fxb (chain ends s34-computed-grade-refusal.sql, s34 APPLIED) ==
+  scaffold OK (schema=s34fxb).
+
+=== red-refused-with-teach ===
+  [ok] raw INSERT supplying discharge_grade='distinct-deployment' exit=3 (nonzero = refused) rows_landed=0 teach_names_computed=True teach_cites_finding=True excerpt='puted-grade-refusal.sql), a writer-supplied grade was silently OVERWRITTEN by the computed value with no error, so a caller who believed their asserted grade was honored had no way to discover it was discarded (ledger finding 1157). Omit discharge_grade on INSERT (leave it NULL/unset) -- this trigger computes and sets it for you.\nCONTEXT:  PL/pgSQL function validate_independence() line 11 at RAISE'
+
+=== green-computed-unchanged ===
+  [ok] WORLD A (pre-s34) computed discharge_grade='same-principal'; WORLD B (post-s34) computed discharge_grade='same-principal' on the SAME-shaped input (no stamp present, distinct actor, self-review) -- byte-identical: True
+
+=== allowlist-gate-unaffected ===
+  [ok] gates/ledger_reader_allowlist.py exit=0 on its own standing CHAIN (validate_independence's existing ALLOWLIST entry covers the re-issued function; s34 introduces no new raw-ledger reader, so no CHAIN change was needed)
+
+=== differential-agree-both-layers ===
+  [ok] tnow verdict=AGREE work verdict=AGREE -- engine/ledger_differential's run_differential (tnow) and run_layer_differential (work), the SAME code `./judge` and `./judge --layer work` run, over WORLD B's real export (this delta introduces no ASP-modeled predicate; discharge_grade/independence are not engine atoms, so parity is expected and here witnessed, not merely asserted)
+
+ALL CASES OK -- s34 computed-grade-refusal both-polarity proof (pre-s34 silent overwrite witnessed live / post-s34 refusal with teach-text naming the WHY / computed-default path byte-identical pre vs post / allowlist gate unaffected / standing ./judge differential AGREE on both layers), zero residue.
