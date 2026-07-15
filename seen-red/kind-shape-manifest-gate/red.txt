@@ -1,0 +1,3 @@
+kind-shape-manifest-gate: 1 violation(s):
+
+  !! UNLICENSED PAYLOAD COLUMN 'work_bogus_scratch_field': not in CORE_COLUMNS (structural/universal) and not in MANIFEST (kind-scoped payload) -- an unlicensed column. Discharge paths: (a) add a MANIFEST row naming its (kind(s), arity, mechanism, reason) if it is genuinely kind-scoped payload, or (b) remove the column if it should not exist.
