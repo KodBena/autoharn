@@ -1,0 +1,24 @@
+Banked RED evidence for night-build-defect-repair DEFECT 1 (gates/staging_guard.py merge bypass).
+Captured by running seen-red/merge-diff-confinement/run_fixtures.py against the PRE-FIX
+gates/staging_guard.py (git stash of the fix commit, i.e. `_merge_in_progress()` exempting the
+whole staged set on bare MERGE_HEAD presence, no merge-diff confinement). The smuggled
+`law-edit.txt` — untouched by either side of the merge — rides through unchecked; the guard
+prints its OK line and every REFUSE assertion below FAILs. This is the exact hole the
+fresh-context verifier found live.
+
+STAGING GUARD: OK — merge commit in progress (MERGE_HEAD present); the merged diff against HEAD is exempt from the declared-scope check (escape hatch 2, staging-scope-subset-enforcement).
+# RED — a real merge (no conflicts) + an unrelated `git add` smuggle: MUST REFUSE
+  [ok] scratch merge left MERGE_HEAD staged (no conflicts)
+  [FAIL] guard REFUSES the smuggle (nonzero exit)
+  [FAIL] teach-text names the smuggled path
+  [FAIL] teach-text cites night-build-defect-repair
+  [FAIL] teach-text cites the reopened class (staging-scope-subset-enforcement/c4923ae)
+# GREEN — a genuine conflict-resolution merge still PASSES (resolved file is in-diff)
+  [ok] merge produced a real conflict on shared.txt
+  [ok] genuine conflict-resolution merge PASSES
+
+SPECIMEN INERT — 4 check(s) failed: ['guard REFUSES the smuggle (nonzero exit)', 'teach-text names the smuggled path', 'teach-text cites night-build-defect-repair', 'teach-text cites the reopened class (staging-scope-subset-enforcement/c4923ae)']
+
+After the fix (gates/staging_guard.py's _merge_diff_paths() confining the merge exemption to the
+merge's own changed-file set), the same run_fixtures.py goes fully green — see this session's
+commit message / ledger row for the green capture.

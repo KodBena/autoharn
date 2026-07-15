@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-15T07:10:40Z
-#   last-change: 2026-07-15T07:10:40Z
+#   last-change: 2026-07-15T12:55:32Z
 #   contributors: a857c93d/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -41,8 +41,15 @@
 #                 four commands does any of this for you").
 # OPTIONAL, passed through the jail unchanged if set: PGUSER, PGPASSWORD, PGPORT.
 #
-# WHAT THIS DOES, in order, entirely inside an env-jailed subshell (see build_jail_env() below):
-#   1. Fresh `git clone <repo-url>` into a scratch dir.
+# WHAT THIS DOES, in order, entirely inside an env-jailed subshell (see run_jailed() below --
+# the jail is now constructed BEFORE anything touches the network, night-build-defect-repair
+# DEFECT 3: the clone used to run untraced, before the jail existed, letting an ambient
+# ~/.gitconfig url.insteadOf rewrite substitute a local decoy for the public repo unwitnessed):
+#   1. Fresh `git clone <repo-url>` into a scratch dir, INSIDE the jail (HOME=throwaway,
+#      GIT_CONFIG_GLOBAL/SYSTEM=/dev/null, traced), immediately followed by an ASSERTION that the
+#      cloned remote's resolved origin URL equals the requested <repo-url> exactly -- itself
+#      checked under the same neutralized config, so the check cannot be fooled by what it is
+#      checking for. A mismatch REFUSES loudly; nothing further runs.
 #   2. bootstrap/new-project.sh --pin submodule --pin-url <repo-url> (README section 1, step 1)
 #      -- deliberately --pin-url <repo-url>, NOT the default on-disk path, so the submodule this
 #      creates is fetched from the real remote, exactly what a real stranger would get.
@@ -55,8 +62,9 @@
 #   7. gates/cut_probe_inventory.py run against the CLONE (step 1's tree) -- the regression-probe
 #      leg (RCA row 909's "propagation" half): every shipped-fix class gets one probe line there;
 #      this call is that inventory's standing wire-in for a rehearsal/cut context.
-#   8. An exec-trace assertion over the WHOLE jailed subshell (steps 2-6): refuses loudly if any
-#      traced path escaped the clone/scratch-HOME/system-toolchain/named-scratch-db envelope.
+#   8. An exec-trace assertion over the WHOLE jailed subshell (steps 1-6, the clone now included):
+#      refuses loudly if any traced path escaped the clone/scratch-HOME/system-toolchain/named-
+#      scratch-db envelope.
 #   9. Teardown (schema/kern/role dropped, scratch dir removed) unless --keep.
 #
 # EXIT: 0 only if every step above passed AND the trace assertion found no escape AND the probe
@@ -79,7 +87,7 @@ while [ $# -gt 0 ]; do
         --keep) KEEP=1; shift ;;
         --schema-suffix) SUFFIX="$2"; shift 2 ;;
         -h|--help)
-            sed -n '2,55p' "$0" | sed 's/^# \{0,1\}//'
+            sed -n '2,73p' "$0" | sed 's/^# \{0,1\}//'
             exit 0 ;;
         -*)
             echo "rehearse-from-origin.sh: unrecognized flag $1. Nothing was touched." >&2
@@ -149,14 +157,14 @@ cleanup() {
 trap cleanup EXIT
 
 # ------------------------------------------------------------------------------------------------
-# 2. FRESH CLONE OF THE PUBLIC URL (never a local path -- the same-host-illusion killer)
-# ------------------------------------------------------------------------------------------------
-git clone --quiet "$REPO_URL" "$CLONE"
-CLONE_SHA="$(git -C "$CLONE" rev-parse HEAD)"
-echo "   cloned $REPO_URL @ $CLONE_SHA into $CLONE"
-
-# ------------------------------------------------------------------------------------------------
-# 3. THE ENV JAIL. env -i with a MINIMAL allowlist:
+# 2. THE ENV JAIL, defined FIRST (night-build-defect-repair DEFECT 3, fresh-context verifier
+#    finding: the clone used to run BEFORE this jail existed, untraced -- an ambient
+#    ~/.gitconfig url.insteadOf rewrite could substitute a local decoy for the public repo, and
+#    the clone step itself was invisible to the trace assertion in step 5 below, since it ran
+#    before TRACE_LOG had anything appended to it. The verifier proved this live. The jail must
+#    exist before ANYTHING touches the network, not just before the walkthrough steps.)
+#
+#    env -i with a MINIMAL allowlist:
 #      PATH                 -- the system toolchain only (git/psql/python3/openssl), never this
 #                              operator's full PATH (which could resolve a shadowing binary).
 #      PG{HOST,DATABASE,USER,PASSWORD,PORT} -- the walkthrough's own connection target, exactly
@@ -164,12 +172,19 @@ echo "   cloned $REPO_URL @ $CLONE_SHA into $CLONE"
 #      HOME=$JAILHOME       -- a throwaway dir inside the scratch tree, empty at start; no
 #                              ambient ~/.pgpass, ~/.gitconfig, ~/.claude/, etc. is readable
 #                              unless THIS script itself puts something there.
+#      GIT_CONFIG_GLOBAL=/dev/null / GIT_CONFIG_SYSTEM=/dev/null -- defense in depth alongside
+#                              HOME=$JAILHOME: even if this host's git were built to consult a
+#                              config path outside $HOME (or GIT_CONFIG_GLOBAL/SYSTEM somehow
+#                              survived from the calling shell -- env -i already wipes it, this
+#                              is belt-and-braces), a url.insteadOf rewrite has nowhere left to
+#                              live that this jail would read.
 #      GIT_AUTHOR_*/GIT_COMMITTER_* -- new-project.sh's --pin submodule step commits inside
 #                              <dest-dir>; a throwaway git identity avoids depending on this
 #                              operator's real ~/.gitconfig (which HOME=$JAILHOME already hides).
-#    Every command in the walkthrough runs inside this jail. `sh -x` traces every command to
-#    TRACE_LOG (the same evidentiary convention row 928's own from-origin witness used: "sh -x
-#    ... traced entirely inside the clone path, zero <host-path> occurrences").
+#    Every command in the walkthrough runs inside this jail, INCLUDING the initial clone (step 3
+#    below, now moved inside). `sh -x` traces every command to TRACE_LOG (the same evidentiary
+#    convention row 928's own from-origin witness used: "sh -x ... traced entirely inside the
+#    clone path, zero <host-path> occurrences") -- the clone is no longer exempt from that trace.
 # ------------------------------------------------------------------------------------------------
 SYSTEM_PATH="/usr/local/bin:/usr/bin:/bin"
 
@@ -177,6 +192,8 @@ run_jailed() {
     env -i \
         PATH="$SYSTEM_PATH" \
         HOME="$JAILHOME" \
+        GIT_CONFIG_GLOBAL=/dev/null \
+        GIT_CONFIG_SYSTEM=/dev/null \
         PGHOST="$PGHOST" \
         PGDATABASE="$PGDATABASE" \
         ${PGUSER:+PGUSER="$PGUSER"} \
@@ -186,6 +203,34 @@ run_jailed() {
         GIT_COMMITTER_NAME="rehearse-from-origin" GIT_COMMITTER_EMAIL="rehearse@localhost" \
         bash -x -c "$1" 2>>"$TRACE_LOG"
 }
+
+# ------------------------------------------------------------------------------------------------
+# 3. FRESH CLONE OF THE PUBLIC URL, INSIDE THE JAIL (never a local path, never ambient config --
+#    the same-host-illusion killer, now closed at the clone step itself).
+# ------------------------------------------------------------------------------------------------
+echo "== rehearse-from-origin: cloning $REPO_URL inside the env jail =="
+run_jailed "git clone --quiet '$REPO_URL' '$CLONE'"
+CLONE_SHA="$(git -C "$CLONE" rev-parse HEAD)"
+echo "   cloned $REPO_URL @ $CLONE_SHA into $CLONE"
+
+# ASSERTION: the cloned remote's resolved origin URL equals the requested public URL, EXACTLY --
+# checked with the identical jail neutralization (GIT_CONFIG_GLOBAL/SYSTEM=/dev/null, HOME=
+# $JAILHOME) the clone itself ran under, so this check cannot be fooled by the same mechanism it
+# is verifying against. If a url.insteadOf rewrite (or any other config substitution) got through
+# anyway, this refuses loudly instead of silently proceeding against a decoy.
+RESOLVED_URL="$(env -i PATH="$SYSTEM_PATH" HOME="$JAILHOME" \
+    GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_SYSTEM=/dev/null \
+    git -C "$CLONE" remote get-url origin)"
+if [ "$RESOLVED_URL" != "$REPO_URL" ]; then
+    echo "rehearse-from-origin: REFUSED -- the cloned remote's resolved origin URL" >&2
+    echo "  ('$RESOLVED_URL') does not match the requested public URL ('$REPO_URL')." >&2
+    echo "  This is exactly the same-host illusion RCA rows 909/928 name: a url.insteadOf" >&2
+    echo "  rewrite (or similar git config substitution) can swap a local decoy in for the" >&2
+    echo "  public repo. Nothing further was touched -- the clone is in the scratch dir, about" >&2
+    echo "  to be torn down by this script's own cleanup trap." >&2
+    exit 1
+fi
+echo "   origin URL verified: $RESOLVED_URL (matches the requested URL exactly, jail-checked)"
 
 echo "== rehearse-from-origin: walkthrough (README.md section 1) inside env jail =="
 

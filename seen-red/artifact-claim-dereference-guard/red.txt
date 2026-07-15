@@ -1,0 +1,42 @@
+Banked RED evidence for night-build-defect-repair DEFECT 2 (bootstrap/templates/led.tmpl's
+--evidence path-dereference guard). Captured by running
+seen-red/artifact-claim-dereference-guard/run_fixtures.py against the PRE-FIX led.tmpl (b77ee7a's
+own shipped version, before this session's night-build-defect-repair fix): the bare-directory
+REFUSE cases and the statement-path WARN cases all FAIL, reproducing exactly the two verifier
+findings (directory acceptance via bare `test -e`; $statement never scanned at all).
+
+# RED — dead --evidence path: MUST REFUSE, no row written
+  [ok] guard REFUSES (nonzero exit)
+  [ok] teach-text cites the specimen class (896-899)
+  [ok] no row written (max id unchanged)
+# RED — bare directory --evidence (no trailing slash): MUST REFUSE, no row written
+  [FAIL] guard REFUSES the bare directory (nonzero exit)
+  [FAIL] teach-text names it a DIRECTORY, not a file
+  [FAIL] teach-text points at the trailing-slash opt-in
+  [FAIL] no row written (max id unchanged)
+# GREEN — a live --evidence FILE: MUST ACCEPT, real row lands, round-trip verified
+  [ok] guard ACCEPTS (exit 0)
+  [ok] real led round-trip: led show <id> reads the row back
+# GREEN — --evidence directory cited via trailing slash: MUST ACCEPT
+  [ok] guard ACCEPTS the explicitly-cited directory (exit 0)
+  [ok] round-trip verified
+# GREEN — dead path-shaped token in STATEMENT prose: WARN-ONLY, still writes
+  [ok] write still succeeds (exit 0, warn-only, not a refusal)
+  [FAIL] a WARNING is printed naming the path-shaped token
+  [FAIL] warning states the warn-only/refuse asymmetry
+  [ok] round-trip verified
+# GREEN — row:<id> citation in statement: untouched, no warning, writes clean
+  [ok] write succeeds (exit 0)
+  [ok] no path-shape WARNING fires for a row: citation
+# GREEN — URL in statement: untouched, no warning, writes clean
+  [ok] write succeeds (exit 0)
+  [ok] no path-shape WARNING fires for a URL
+
+SPECIMEN INERT — 6 check(s) failed: ['guard REFUSES the bare directory (nonzero exit)',
+'teach-text names it a DIRECTORY, not a file', 'teach-text points at the trailing-slash opt-in',
+'no row written (max id unchanged)', 'a WARNING is printed naming the path-shaped token',
+'warning states the warn-only/refuse asymmetry']
+
+After the fix, the same run_fixtures.py goes fully green (all 7 cases, real led round-trips
+verified) -- see this session's commit message / ledger rows for the green capture and the
+written row ids.

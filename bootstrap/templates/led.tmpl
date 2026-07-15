@@ -367,6 +367,22 @@ done
 # A path-shaped value that does not exist on disk right now is REFUSED with teach-text pointing
 # at the specimen class and at the non-path citation form (--refs row:<id>) for a genuinely-
 # remote artifact -- never a silent write of an unwitnessed claim.
+#
+# NIGHT-BUILD-DEFECT-REPAIR (verifier finding, this file's own row 977 correction): the guard
+# above went through fresh-context verification and was found NARROWED on two axes, both closed
+# here:
+#   (a) it only ever looked at --evidence, never at $statement -- the ORIGINAL rows 896-897
+#       specimen was a path embedded IN THE STATEMENT TEXT itself ("artifact written at <path>"),
+#       not passed via --evidence at all, so the guard above never would have caught its own
+#       motivating case. See warn_path_shaped_in_statement() below, called at every point a
+#       verb assembles its own $statement (the generic <kind> <statement...> path and `led
+#       review`). Free text is asymmetric to --evidence and WARN-ONLY, not a refusal -- see that
+#       function's own docstring for why.
+#   (b) `test -e` is true for a directory, so a bare directory used to sail through this check
+#       even though row 898's remediation is explicitly "ls/wc of a FILE" -- a directory citation
+#       reads as satisfying that remediation but does not. Closed just below: an existing
+#       path-shaped --evidence value must be a regular FILE, or a directory explicitly cited as
+#       one via a trailing "/" (an unambiguous, visible opt-in -- never inferred).
 if [ -n "$evidence" ]; then
   case "$evidence" in
     row:*|*://*)
@@ -385,10 +401,75 @@ if [ -n "$evidence" ]; then
         echo "  describes it instead, e.g. --refs row:<id> (led's own existing 'a bare" >&2
         echo "  reference uses refs' citation form) -- or re-run once the path is real." >&2
         exit 1
+      elif [ -d "$evidence" ]; then
+        case "$evidence" in
+          */)
+            : # trailing slash = an explicit, deliberate directory citation -- accepted
+            ;;
+          *)
+            echo "led: REFUSED -- --evidence '${evidence}' exists but is a DIRECTORY, not a" >&2
+            echo "  file (night-build-defect-repair: 'test -e' is also true for a directory, but" >&2
+            echo "  row 898's remediation is explicitly 'ls/wc of a FILE' -- a bare directory" >&2
+            echo "  citation reads as satisfying that remediation without actually doing so)." >&2
+            echo "  If you deliberately mean to cite the directory itself as the artifact, repeat" >&2
+            echo "  the flag with a trailing slash to say so explicitly:" >&2
+            echo "    --evidence '${evidence}/'" >&2
+            echo "  Otherwise cite the specific file inside it that is the actual evidence." >&2
+            exit 1
+            ;;
+        esac
+      elif [ ! -f "$evidence" ]; then
+        echo "led: REFUSED -- --evidence '${evidence}' exists but is not a regular file (a" >&2
+        echo "  symlink to nowhere, a device, a socket, or similar) -- cite the concrete file" >&2
+        echo "  the artifact claim actually points at." >&2
+        exit 1
       fi
       ;;
   esac
 fi
+
+# STATEMENT PATH-SHAPE SCAN (night-build-defect-repair, register (a) of the gap above): the same
+# path-shape test as --evidence's, applied to every whitespace-separated token of a verb's own
+# $statement once it is assembled -- called explicitly at each of the (small, enumerated) points
+# in this file where a verb builds its own $statement from user-supplied words: the generic
+# <kind> <statement...> path and `led review`'s <statement...>. `led work *`'s statements are all
+# BUILT BY THIS FILE ITSELF from typed fields (slug/title/resolution), never raw user free text,
+# so they carry no user-suppliable path-shaped token to scan -- not a gap, just nothing to check.
+#
+# WARN-ONLY, DELIBERATELY ASYMMETRIC TO --evidence's hard REFUSE, and that asymmetry is a
+# considered choice, not a shortcut: --evidence is a dedicated, single-purpose flag whose entire
+# job is to assert "this artifact exists, right now, dereference it" -- there is no legitimate
+# reason for it to name a path that does not yet exist, so refusing is exactly right. A
+# STATEMENT is free-text narration of an event; a path token inside it can legitimately describe
+# something ABOUT TO be created ("writing the spec to design/X.md next"), something that exists
+# on a different host/checkout than this one, or a path quoted verbatim from someone else's
+# report -- treating every such mention as a hard claim-of-existence-now would refuse honest
+# prose. A miss here is exactly what row 898 itself calls a cheap check that a HUMAN reader
+# should not have to notice unaided -- so it surfaces as a WARNING, not a blocked write.
+warn_path_shaped_in_statement() {
+  local text="$1" word
+  set -f  # no glob expansion while scanning statement words
+  for word in $text; do
+    case "$word" in
+      row:*|*://*)
+        : # ledger row citations and URLs are never path-shaped; never checked (same rule as --evidence)
+        ;;
+      /*|./*|*/*)
+        if [ ! -e "$word" ]; then
+          echo "led: WARNING -- the statement contains a path-shaped token '${word}' with nothing" >&2
+          echo "  at that path right now (artifact-claim-dereference-guard / night-build-defect-" >&2
+          echo "  repair: the original ledger rows 896-897 specimen was exactly this shape -- a" >&2
+          echo "  path embedded in STATEMENT PROSE, not passed via --evidence)." >&2
+          echo "  WARN-ONLY, not a refusal: a statement may legitimately narrate a path that is" >&2
+          echo "  about to be created, or one that lives on a different host/checkout. If this" >&2
+          echo "  statement is asserting the artifact exists NOW, re-check '${word}' before" >&2
+          echo "  trusting this row later." >&2
+        fi
+        ;;
+    esac
+  done
+  set +f
+}
 
 # --event-time COVERAGE GUARD -- --event-time is parsed by the SHARED top-of-file loop above
 # (same convention as every other flag here), but only the generic <kind> <statement...> path's
@@ -739,6 +820,7 @@ if [ "${1:-}" = "review" ]; then
   statement="$*"
   warn_flag_in_statement "$statement"
   warn_content_free_review_statement "$statement"
+  warn_path_shaped_in_statement "$statement"
   resolve_actor
   # actor resolves via a subquery bind below, NOT string-spliced: NULLIF(:'actor_name','') is NULL
   # when LED_ACTOR is unset, so the ledger's actor column stays NULL and the kernel's set_actor
@@ -1894,6 +1976,7 @@ PYEOF
 esac
 
 warn_flag_in_statement "$statement"
+warn_path_shaped_in_statement "$statement"
 rationale=""
 if [ -n "$files" ]; then
   rationale="files: ${files}"

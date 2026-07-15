@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-09T13:36:11Z
-#   last-change: 2026-07-15T07:02:28Z
+#   last-change: 2026-07-15T12:59:45Z
 #   contributors: be693afb/main, e4410ef6/main, 3c50e030/main, 3c942a60/main, a857c93d/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -53,6 +53,9 @@ REGISTRY: dict[str, str] = {
     "31-interception-stamp":          "kernel/fixtures/s17_stamp_fixture.py",
     "33-staging-guard":               "seen-red/33-staging-guard/red-specimen.py",
     "staging-scope-subset-enforcement": "seen-red/staging-scope-subset-enforcement/run_fixtures.py",
+    "merge-diff-confinement":         "seen-red/merge-diff-confinement/run_fixtures.py",
+    "artifact-claim-dereference-guard": "seen-red/artifact-claim-dereference-guard/run_fixtures.py",
+    "rehearse-clone-jail-confinement": "seen-red/rehearse-clone-jail-confinement/run_fixtures.py",
     "35-delivery-freight-integrity":  "instruments/verify_delivery_freight.py",
     "36-consumer-substrate-required": "instruments/verify_substrate_required.py",
     "38-review-without-detail":       "instruments/verify_review_without_detail.py",

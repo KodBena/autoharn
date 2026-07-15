@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-07T03:28:16Z
-#   last-change: 2026-07-15T06:59:16Z
+#   last-change: 2026-07-15T12:48:20Z
 #   contributors: 37017f46/main, a857c93d/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -105,14 +105,105 @@ def _merge_in_progress() -> bool:
     return cp.returncode == 0
 
 
+def _blob_hash(rev: str | None, path: str) -> str | None:
+    """git's own object hash for `path` as of `rev` (e.g. "HEAD", "MERGE_HEAD"), or, when `rev` is
+    None, the STAGED (index) blob for `path` (git's own `:path` index-stage-0 syntax) — None if the
+    path does not exist there."""
+    spec = f"{rev}:{path}" if rev is not None else f":{path}"
+    cp = subprocess.run(["git", "rev-parse", "-q", "--verify", spec],
+                        capture_output=True, text=True)
+    return cp.stdout.strip() if cp.returncode == 0 else None
+
+
+def _merge_diff_paths() -> set[str] | None:
+    """The honest changed-file set of the in-progress merge (night-build-defect-repair, verifier
+    finding: the prior escape hatch trusted bare MERGE_HEAD *presence* and exempted the ENTIRE
+    staged set unconditionally — a file `git add`ed during the merge but not actually part of the
+    merge diff (the verifier's `law-edit.txt` smuggle) rode through unchecked, reopening the exact
+    c4923ae class this guard exists to close).
+
+    Returns the set of paths a staged edit is permitted to touch during this merge. Two disjoint
+    sub-cases, both computed against the merge-base:
+      - paths touched by BOTH sides (in the incoming diff AND the ours diff) are real conflict
+        candidates — git's own machinery can only conflict on a path touched by both, so ANY
+        staged content there is legitimate conflict-resolution output, unrestricted.
+      - paths touched by only ONE side are never conflicted — a plain three-way merge leaves such
+        a path exactly as that one side already has it, so the staged blob must equal that side's
+        blob content, or it is not a merge-resolution edit at all, just a same-named smuggle riding
+        an incidentally-touched path (a real gap this guard would otherwise miss: a path legitimately
+        touched on one side since divergence, with its staged content silently swapped for something
+        else during the merge window — content-blind path-set confinement alone cannot see this).
+    Returns None if MERGE_HEAD or the merge base cannot be resolved (caller must then refuse to
+    exempt anything — fail-safe, never a silent full-sweep pass)."""
+    head = subprocess.run(["git", "rev-parse", "-q", "--verify", "HEAD"],
+                          capture_output=True, text=True)
+    merge_head = subprocess.run(["git", "rev-parse", "-q", "--verify", "MERGE_HEAD"],
+                                capture_output=True, text=True)
+    if head.returncode != 0 or merge_head.returncode != 0:
+        return None
+    base = subprocess.run(["git", "merge-base", "HEAD", "MERGE_HEAD"],
+                          capture_output=True, text=True)
+    if base.returncode != 0:
+        return None
+    base_sha = base.stdout.strip()
+    incoming_cp = subprocess.run(["git", "diff", "--name-only", base_sha, "MERGE_HEAD"],
+                                 capture_output=True, text=True)
+    ours_cp = subprocess.run(["git", "diff", "--name-only", base_sha, "HEAD"],
+                             capture_output=True, text=True)
+    if incoming_cp.returncode != 0 or ours_cp.returncode != 0:
+        return None
+    incoming = {ln.strip() for ln in incoming_cp.stdout.splitlines() if ln.strip()}
+    ours = {ln.strip() for ln in ours_cp.stdout.splitlines() if ln.strip()}
+    both = incoming & ours              # real conflict candidates -- unrestricted
+    one_sided = incoming ^ ours         # touched by exactly one side -- content-pinned below
+    permitted = set(both)
+    for path in one_sided:
+        rev = "MERGE_HEAD" if path in incoming else "HEAD"
+        expected = _blob_hash(rev, path)
+        staged = _blob_hash(None, path)
+        if expected is not None and staged == expected:
+            permitted.add(path)
+        # else: staged content deviates from the untouched side's own version -- NOT part of git's
+        # own merge machinery, left OUT of `permitted` deliberately (caught by the caller's smuggle
+        # check below, unless separately declared via CLAUDE_COMMIT_PATHS)
+    return permitted
+
+
 def main(argv: list[str] | None = None) -> int:
     staged = _staged_paths()
     if not staged:
         return 0  # nothing staged — an empty commit is git's own problem, not the sweep class
 
     if _merge_in_progress():
-        print("STAGING GUARD: OK — merge commit in progress (MERGE_HEAD present); the merged diff "
-              "against HEAD is exempt from the declared-scope check (escape hatch 2, "
+        merge_diff = _merge_diff_paths()
+        # a committer MAY also explicitly declare additional paths via CLAUDE_COMMIT_PATHS during a
+        # merge (e.g. a genuinely new file introduced as part of resolving the merge) — that is an
+        # explicit, visible declaration, never a silent widening; anything staged that is neither in
+        # the merge diff NOR explicitly declared is the smuggle this fix closes.
+        declared_extra = _declared_paths(os.environ.get("CLAUDE_COMMIT_PATHS", ""))
+        if merge_diff is None:
+            print("STAGING GUARD: commit REFUSED — MERGE_HEAD is present but the merge diff could "
+                  "not be computed (merge-base/diff failed); the merge escape hatch cannot honestly "
+                  "exempt an unknown set, so nothing is exempted (staging-scope-subset-enforcement, "
+                  "night-build-defect-repair).", file=sys.stderr)
+            return 1
+        smuggled = sorted(p for p in staged if p not in merge_diff and p not in declared_extra)
+        if smuggled:
+            print("STAGING GUARD: commit REFUSED — MERGE_HEAD is present, but the staged set is NOT "
+                  "confined to the merge's own changed-file set (night-build-defect-repair: bare "
+                  "MERGE_HEAD *presence* used to exempt the entire staged index unconditionally, "
+                  "letting a file `git add`ed during the merge but not part of the merge diff ride "
+                  "through unchecked — the exact class staging-scope-subset-enforcement/c4923ae "
+                  "exists to close, reopened through this hatch).", file=sys.stderr)
+            print(f"  SMUGGLED — staged, not in the merge diff, not declared via "
+                  f"CLAUDE_COMMIT_PATHS: {smuggled}", file=sys.stderr)
+            print("  A genuine conflict-resolution edit is always inside the merge diff (it can only "
+                  "conflict on a path touched by both sides). If this path is legitimately part of "
+                  "this merge, declare it explicitly via CLAUDE_COMMIT_PATHS; if it is unrelated, "
+                  "unstage it and commit it separately.", file=sys.stderr)
+            return 1
+        print("STAGING GUARD: OK — merge commit in progress (MERGE_HEAD present); staged set is "
+              "confined to the merge's own changed-file set (escape hatch 2, "
               "staging-scope-subset-enforcement).", file=sys.stderr)
         return 0
 
