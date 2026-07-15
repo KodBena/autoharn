@@ -1,0 +1,43 @@
+seen-red/model-sql-block -- banked RED evidence (both-polarity proof, fixture-census)
+
+Work item model-conditional-sql-block (ledger, opened 2026-07-14; maintainer near-verbatim: "it
+would be helpful ... if our harness can conditionally block raw sql depending on which model
+does it"), enforcing the standing delegation policy (memory delegation-policy-sonnet-first,
+2026-07-14: "Sonnet for everything; Fable never writes SQL"; Opus permanently off limits for a
+quota-burn incident the same date) AT THE TOOL BOUNDARY instead of by executor discipline alone.
+
+BEFORE hooks/pretooluse_sql_block.py existed, a raw SQL-bearing Bash command --
+
+    psql -h h -d d -c "SELECT * FROM kernel.ledger LIMIT 1"
+
+-- passed through IDENTICALLY regardless of which model issued it: a main-session driven by
+Fable or Opus (both off-limits for hand-typed SQL per the standing delegation policy) had
+exactly the same PreToolUse path to a live psql call as a Sonnet session, because nothing at
+the tool boundary ever looked at the acting model at all. The policy existed only as prose the
+executor was trusted to remember and apply to itself -- precisely the "by discipline, not by
+mechanism" gap this work item names.
+
+Reproduced live below (an intentionally UNGATED invocation -- no apparatus.json mechanism entry
+present at all, the state of every project before this build, and of any hook invocation the
+hook's own missing-key default resolves to "off"):
+
+$ cd /tmp/.sqlblockprobe_red_demo && mkdir -p .claude/logs
+$ echo '{"hook_event_name":"PreToolUse","tool_name":"Bash","session_id":"s0","cwd":"'"$PWD"'","tool_use_id":"tu-red","tool_input":{"command":"psql -h h -d d -c \"SELECT * FROM kernel.ledger LIMIT 1\""}}' \
+    | python3 hooks/pretooluse_sql_block.py
+(no output, exit 0 -- the command is allowed through untouched, with no journal line and no
+warning, no matter what model "s0" belongs to, because mode defaults to "off" absent an explicit
+apparatus.json entry, and even a wired-but-observe/enforce world with no `session_model`
+declared has no independent way to learn who is actually driving the session -- the LOAD-BEARING
+empirical finding this build rests on: a PreToolUse hook firing on Bash carries NO model-identity
+field anywhere in its payload (seen-red/hook-payload-contract/captured_pretooluse_bash.json,
+this deployment's own live capture), and no model-identity environment variable is exported to
+a hook subprocess either (checked live against this deployment's own session environment).
+
+seen-red/model-sql-block/run_fixtures.py is the fix's both-polarity proof: nine cases (deny-model
+strong match blocked with teach-text; allow-model strong match passes; a sanctioned `./led`
+wrapper never matches even carrying a deny model + SQL-shaped argument text; a merely-mentions-
+SQL command warns rather than blocks; observe mode surfaces a would-have-denied warning without
+blocking; mode="off" costs genuinely nothing, not even a journal line; an undeclared/"unknown"
+session_model warns rather than silently blocking OR silently passing; heredoc and pipe-into-psql
+shapes are caught, not just `-c`/`-f`; an unrecognized mode value degrades to "off" rather than
+silently widening to enforce) -- run: python3 seen-red/model-sql-block/run_fixtures.py
