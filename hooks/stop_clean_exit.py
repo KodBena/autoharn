@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-10T19:38:38Z
-#   last-change: 2026-07-11T17:15:28Z
-#   contributors: be693afb/main, e4410ef6/main
+#   last-change: 2026-07-14T19:10:55Z
+#   contributors: be693afb/main, e4410ef6/main, a857c93d/main
 # <<< PROVENANCE-STAMP <<<
 
 """stop_clean_exit — the clean-exit gate (Claude Code Stop hook).
@@ -21,6 +21,20 @@ WHAT IT CHECKS (read-only SELECTs against views the kernel already exposes):
   - work_item_current     : work items with state='open' (s22; see NAMED CHOICE below).
   - work_item_violations  : duplicate_open / shipped_without_witness / depends_on_unknown_slug /
                             dependency_cycle rows (s22; same NAMED CHOICE).
+  - work_review_gap       : item-keyed close acts with disposition=deferred not yet discharged by
+                            a distinct-actor attest review (s29; same NAMED CHOICE, probed the
+                            same way -- design/MAINT-COUNTERSIGN-CLOSE-SEMANTICS-SPEC.md Element B).
+
+DEBT-TYPE CONVERSION (s29 Element B's own text: "a review_gap entry whose obligation row carries a
+close-origin identity is debt CONVERSION -- the same debt changing type -- and
+hooks/stop_clean_exit.py inherits breaker state over it exactly as it already inherits over
+strict-subset shrinkage"). Under s29, a slug's debt entry naturally CONVERTS from `work_open:<slug>`
+(the item hasn't closed yet) to `work_review_deferred:<slug>` (it closed with disposition=deferred
+and has not yet been discharged) the moment `led work close ... --review-deferred` runs -- the SAME
+underlying obligation on the SAME slug, now needing a different next action. `_debt_identity()` /
+`_breaker_transition()` below normalize this pair to one identity so the breaker INHERITS across
+the conversion instead of treating it as fresh debt and resetting the count to 1 -- see
+`_debt_identity()`'s own docstring for the mechanism.
 If every check that APPLIES to this world is empty, the stop is ALLOWED (silently -- exit 0, no
 output; a clean world sees zero interference from this hook, every single time). If ANY check is
 non-empty, the stop is BLOCKED with a message enumerating exactly what is open, by id/slug, each
@@ -477,7 +491,41 @@ def _collect_debt() -> tuple[list[str], list[str]]:
                 debt_lines.append(f"  - {violation}: slug '{slug}' ({detail}) -> {hint}")
                 entries.append(f"violation:{violation}:{slug}:{detail}")
 
+    # NAMED CHOICE (module docstring): work_review_gap is s29-only, same "check only what exists"
+    # posture as work_item_current/work_item_violations above (s22). ENTRY PREFIX
+    # work_review_deferred:<slug> is deliberately the CONVERSION partner of work_open:<slug> above
+    # -- see `_debt_identity()`'s docstring for why (s29 Element B's own text).
+    if _view_exists(schema, "work_review_gap"):
+        rows = _query(f"SELECT slug, close_id FROM {schema}.work_review_gap ORDER BY slug;")
+        if rows:
+            debt_lines.append(f"DEFERRED REVIEW OBLIGATIONS ({schema}.work_review_gap) -- {len(rows)} item(s):")
+            for slug, close_id in rows:
+                debt_lines.append(
+                    f"  - work item '{slug}' closed with --review-deferred (close row {close_id}) "
+                    f"and has no distinct-actor attest yet ->\n"
+                    f"      ./led review {close_id} <attest|attest_with_reservations|refuse> "
+                    f"<technical|managerial|financial> \"<basis>\"   (written by a DIFFERENT actor)")
+                entries.append(f"work_review_deferred:{slug}")
+
     return debt_lines, entries
+
+
+def _debt_identity(entry: str) -> str:
+    """Normalizes an `entries` list item to its DEBT IDENTITY -- the underlying thing the debt is
+    ABOUT, stripped of its current TYPE tag. Two entries with the same identity are the SAME debt
+    that changed type (a CONVERSION, s29 Element B / kernel/lineage/s29-obligation-item-key-and-
+    typed-close.sql), not new debt -- `_breaker_transition()` below inherits over an
+    identity-subset exactly as it already inherits over a literal (string-identical) shrinkage.
+    Today's one conversion pair: `work_open:<slug>` <-> `work_review_deferred:<slug>` (an item that
+    closes with `--review-deferred` converts from "needs closing" debt to "needs a distinct-actor
+    review" debt on the SAME slug -- s29's own header names this the CONVERSION case Element B's
+    text predicts, quoted in this module's own docstring). Every other entry's identity is itself
+    (no conversion partner is named yet for review_gap/question_status/violations entries)."""
+    if entry.startswith("work_open:"):
+        return "work:" + entry[len("work_open:") :]
+    if entry.startswith("work_review_deferred:"):
+        return "work:" + entry[len("work_review_deferred:") :]
+    return entry
 
 
 def _debt_hash(entries: list[str]) -> str:
@@ -525,7 +573,17 @@ def _breaker_transition(st: dict, entries: list[str], debt_hash: str) -> int:
     to 1, exactly as the original rule did -- this fix narrows the reset condition, it does not
     remove it. Reads `st['entries']`/`st['count']` only through the guarded accessors above
     (`stop-breaker-state-type-guard`), so a corrupted/wrong-typed state file degrades to
-    'treat as a fresh signature' (count 1) rather than raising."""
+    'treat as a fresh signature' (count 1) rather than raising.
+
+    DEBT-TYPE CONVERSION (s29, this module's own docstring quotes the spec's mandate verbatim):
+    a SECOND, IDENTITY-NORMALIZED subset check (`_debt_identity()` above) runs alongside the
+    literal one. Raw-string subset catches literal shrinkage (an entry disappears outright);
+    identity subset ALSO catches an entry changing its TYPE TAG while naming the SAME underlying
+    debt (`work_open:<slug>` becoming `work_review_deferred:<slug>` the moment that slug closes
+    with `--review-deferred`) -- a case the raw-string check misses because neither string is a
+    substring/subset of the other, even though nothing NEW happened. Both checks are tried; either
+    inheriting is sufficient (a conversion is, by construction, never a case the literal check
+    would have caught, so the two are complementary, not redundant)."""
     if st.get("debt_hash") == debt_hash:
         return _safe_prior_count(st) + 1
 
@@ -534,6 +592,12 @@ def _breaker_transition(st: dict, entries: list[str], debt_hash: str) -> int:
         cur_set = set(entries)
         prior_set = set(prior_entries)
         if cur_set and cur_set < prior_set:  # strict subset: progress, not new debt
+            return _safe_prior_count(st) + 1
+
+        cur_ids = {_debt_identity(e) for e in entries}
+        prior_ids = {_debt_identity(e) for e in prior_entries}
+        if cur_ids and cur_ids <= prior_ids:  # every current debt is a KNOWN identity (a
+            # conversion of, or identical to, something already open) -- inherited, not new
             return _safe_prior_count(st) + 1
 
     return 1
