@@ -123,16 +123,24 @@ the whole tree re-surface as open, as it should? Answer, made binding here:
   as open (`effective_state`), while the raw close row stands as history; the divergence
   is surfaced as a new `work_item_violations` member (`closed_but_tree_defeated`), never
   silently reconciled in either direction.
-- **The close leaf is NOT supersession-aware today — a shared blind spot this spec fixes
-  in the one home.** The `closes` CTE inside `work_item_strict_blockers` (and
-  `work_item_current`'s closed leg) counts a `work_closed` row regardless of whether a
-  later row superseded it: a defeated CLOSE still reads as closed. The review path is
-  defeasance-aware; the close path is not — asymmetric for no stated reason. Element:
-  filter superseded rows from the closes CTE (both readers, same fix). Fail-safe
-  direction (a strict close now requires MORE to be resolved, never less), but it
-  tightens the EXISTING strict-close semantics for non-composite items too, so it is
-  named as the one element of this spec that is not a pure addition — it is inside what
-  this ratification decides, not smuggled under the class ruling.
+- **The close leaf is NOT supersession-aware today — a blind spot this spec NAMES and
+  ROUTES, deliberately no longer fixes in place.** The `closes` CTE inside
+  `work_item_strict_blockers` (and `work_item_current`'s closed leg) counts a
+  `work_closed` row regardless of whether a later row superseded it: a defeated CLOSE
+  still reads as closed, while a defeated review does not. A prior revision of this spec
+  patched that one CTE; the maintainer challenged the shape (2026-07-15: patchwork), and
+  the challenge is correct — the defect is one cell of an unenumerated matrix (every
+  internal reader × every kind it consumes × does supersession of that kind even have
+  assigned meaning), and readers bypass `ledger_current` (the kernel's one existing home
+  of "the un-superseded reading") by quantifying over raw `ledger` each on their own
+  judgment. That is an ADR-0000 Rule 2(a) closure question in its own right, opened as
+  its own work (`supersession-semantics-closure`) with its own enumerated universe and
+  its own spec. THIS spec therefore states its defeasibility guarantee with an honest
+  bound: defeat propagates exactly as far as the shared calculus is supersession-aware —
+  fully for the review leaf today, for the close leaf once the closure audit's fix lands.
+  The composite mechanism itself needs no change either way (it reads the one calculus;
+  when the calculus becomes fully defeasance-aware, composites inherit it in the same
+  read).
 - **The ASP twin carries the same semantics.** The ledger's defeasible reasoning is the
   deductive layer's whole point; the discharge/defeat rules above get their `engine/lp/`
   counterpart, and `./judge`'s SQL/ASP differential in AGREE — on fixtures that include
@@ -168,8 +176,9 @@ the queue), and doubt about the side of the line IS the routing.
   grandparent composite re-opens with it (propagation witnessed, not asserted).
 - DEFEAT PAST A HAND-CLOSE: hand-closed composite; a descendant leaf defeated →
   `effective_state` open, `closed_but_tree_defeated` present in `work_item_violations`.
-- SUPERSEDED CLOSE: an antecedent's close row superseded → the antecedent re-appears in
-  `work_item_strict_blockers` output (the closes-CTE fix witnessed on both readers).
+- SUPERSEDED CLOSE: deferred to `supersession-semantics-closure`'s own acceptance (this
+  spec no longer carries that fix — see 3b); until it lands, this polarity is named
+  UNEXERCISED here, honestly, not claimed.
 - `./judge` SQL/ASP differential: AGREE on a world containing all shapes above,
   including the post-discharge defeat fixtures.
 
