@@ -19,15 +19,10 @@ project LAW (`law/adr/`), and the standing orchestration/delegation rulings.
 
 - **Read the LAW first, and read it for its spirit.** When work requires the ADRs, read the actual files in full *before* you diagnose, design, or touch code — the fix is shaped by the law from its first line, not retrofitted to it at the end. And the spirit of an ADR governs as much as its letter, often more: these are principles written by a colleague to be extrapolated from and interpreted judiciously, not rules to satisfy literally. Meeting the letter while violating the intent is a failure, not a pass; where letter and spirit appear to diverge, the spirit wins and you surface the divergence.
 
-The LAW files themselves, as a list (kept in this JSON shape by convention — no tool parses
+The LAW files themselves, as a glob (kept in this JSON shape by convention — no tool parses
 it; the key restates the reading posture the bullet above mandates):
 
-{"Project LAW, extrapolate from and interpret judiciously like a professional colleague": [
-    "law/adr/0000-the-alpha-and-the-omega-type-driven-design.md",
-    "law/adr/0012-compositional-and-structural-hygiene.md",
-    "law/adr/0013-execution-integrity.md",
-    "law/adr/0014-executor-second-opinion.md",
-    "law/adr/0017-the-zero-context-reader.md"]}
+{"Project LAW, extrapolate from and interpret judiciously like a professional colleague": ["law/adr/*.md"]}
 
 ## ORCHESTRATION — the standing delegation contract (2026-07-09)
 
