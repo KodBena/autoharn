@@ -7,7 +7,25 @@ you should see.
 
 If you want to know what autoharn *is*, or how to collaborate/build inside the autoharn repo
 itself, that content now lives in [`docs/PROJECT-OVERVIEW.md`](docs/PROJECT-OVERVIEW.md) — not
-here.
+here. One exception, worth knowing before you deploy: the pointer immediately below.
+
+### Architecture at a glance
+
+Autoharn's "kernel" — the Postgres schema this whole guide deploys and migrates (the `schema`/
+`kern` settings under [Configuration](#configuration) below) — is, at its core, one append-only
+ledger table plus the rules that govern which rows may be written to it: for example, the rule
+that a "work item" (one unit of tracked work) may only be marked closed once every other work
+item it depends on has itself closed. [`design/Autoharn.idr`](design/Autoharn.idr) renders those
+rules as one machine-checked file a reader can walk top to bottom, instead of piecing the picture
+together from `kernel/lineage/*.sql` (the directory of dated SQL files that actually define the
+kernel) by hand. Its own header explains how to read an Idris file even if you don't know the
+language, and it says plainly that it is documentation only, never the source of truth — the SQL
+in `kernel/lineage/` always governs. Because a documentation file like this can silently fall
+behind the SQL changes it describes, a dedicated check —
+[`gates/idris_model_freshness.py`](gates/idris_model_freshness.py) — compares the model's
+declared currency against the actual `kernel/lineage/*.sql` chain head and re-verifies that the
+file still elaborates (type-checks), so a stale or broken model is caught mechanically rather
+than discovered by a reader who trusted it.
 
 ### Before you start
 

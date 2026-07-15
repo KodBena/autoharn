@@ -1,0 +1,24 @@
+idris-model-freshness — banked RED evidence (ledger item idris-model-freshness-gate)
+Captured 2026-07-15T21:39:56Z, first honest run of gates/idris_model_freshness.py
+against the real repo tree (declared AS-OF s32, actual kernel/lineage head s33).
+
+=== 1. THE REAL REPO'S FIRST HONEST RUN (RED, no flags, no synthetic anything) ===
+idris_model_freshness: 1 finding(s) for /home/bork/w/vdc/1/autoharn/.claude/worktrees/agent-a351389df307fbfaf/design/Autoharn.idr:
+  !! RED — Autoharn.idr's AS-OF declares kernel chain through s32, but the actual kernel/lineage/*.sql head is s33 (mechanically derived from filenames, excluding .detect/.verify/.accommodate siblings). The model is stale. Two honest discharge paths, name one: (1) REFRESH — update the model's semantics to transcribe s33 and bump the AS-OF line to say so, only after verifying the new delta's semantics are actually rendered (never bump AS-OF on faith); or (2) LAG HONESTLY — amend the AS-OF line with an explicit 'LAGGING: <reason>' suffix, which downgrades this exact finding to a WARN instead of a lying green. A stale, silent AS-OF claim is refused either way.
+exit: 1
+
+=== 2. seen-red/idris-model-freshness/run_fixtures.py -- full both-polarity proof ===
+=== red-stale-no-lagging ===
+  [ok] exit=1, stdout="idris_model_freshness: 1 finding(s) for /tmp/idris-freshness-fixtures-k_f29hz4/case1/Autoharn.idr:\n  !! RED — Autoharn.idr's AS-OF declares kernel chain through s3, but the actual kernel/lineage/*.sql"
+
+=== red-broken-syntax ===
+  [ok] exit=1, stdout='idris_model_freshness: 1 finding(s) for /tmp/idris-freshness-fixtures-k_f29hz4/case2/Autoharn.idr:\n  !! RED — idris2 elaboration of Autoharn.idr FAILED (checked unconditionally, independent of AS-OF currency):\n1/1: Building Autoharn (/tmp/idris-model-freshness-196nfdsv/Autoharn.idr)\nError: Bracket i'
+
+=== warn-lagging-downgrade ===
+  [ok] exit=0, stdout="idris_model_freshness: 1 finding(s) for /tmp/idris-freshness-fixtures-k_f29hz4/case3/Autoharn.idr:\n  !! WARN — Autoharn.idr's AS-OF declares kernel chain through s3, but the actual kernel/lineage/*.sq"
+
+=== green-clean ===
+  [ok] exit=0, stdout='idris_model_freshness: clean ✓ — Autoharn.idr AS-OF (s32) matches or leads the actual lineage head (s32), and idris2 --check elaborates (zero errors).'
+
+idris-model-freshness fixtures: all 4 cases matched their expected polarity.
+exit: 0
