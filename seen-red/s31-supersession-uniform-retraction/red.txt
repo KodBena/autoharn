@@ -1,0 +1,31 @@
+== scaffolding classic world s31fxprobe + manual s15..s31 apply (see docstring for why classic) ==
+  scaffold OK (schema=s31fxprobe).
+
+=== a-retracted-close-reopens ===
+  [ok] before='closed|dropped' retract_exit=0 after='open||' (open, resolution+witness gone)
+
+=== a2-composite-ancestor-reopen ===
+  [ok] UNEXERCISED -- concrete blocker: design/FABLE-COMPOSITE-DISCHARGE-SPEC.md is DRAFT/unratified/unbuilt; no work_discharge/effective_state column exists in any kernel, so the polarity has no substrate. The composite spec's own sec-3b names how it inherits this delta's fix in the same read once built. Filed, not silently claimed.
+
+=== b-retracted-claim-unclaims ===
+  [ok] claimed_before=t retract_exit=0 after(claimant NULL, still open)='t|open'
+
+=== c-retracted-edge-stops-gating ===
+  [ok] strict_close_blocked_first=True (excerpt='). Resolve every named leaf, then retry (s29 Element C: strict close is a pure query over the derived conjunction, no stored verdict).\nCONTEXT:  PL/pgSQL function validate_work_item() line 51 at RAISE') retract_exit=0 strict_close_after_exit=0 edge+retractor_rows_in_history=2
+
+=== d-retracted-open-burns-slug ===
+  [ok] retract_exit=0 in_current=0 orphans='orphaned_by_retraction~item-d~surviving work_claimed row 16 cites a retracted opening act' reopen_refused=True teach_text_names_redo_idiom=True excerpt='rm retraction (s31, ratified 2026-07-15) a retracted open still permanently burns its slug, reinstatement-free. To redo the work under a fresh identity, open a NEW slug citing the old row: ./led work open <new-slug> "<title>" --refs row:<old-open-row-id>.\nCONTEXT:  PL/pgSQL function validate_work_item() line 7 at RAISE'
+
+=== e-reinstatement-free ===
+  [ok] retract_retractor_exit=0 item-a after='open|' (still open -- the defeated defeater does NOT revive the close)
+
+=== f-history-readers-unchanged ===
+  [ok] row-hash chain recomputes clean across ALL rows incl. 5 retracted: t; led --recent shows retracted rows MARKED (SUPERSEDED x5), never hidden
+
+=== g-allowlist-gate-both-polarities ===
+  [ok] green_exit=0 red_exit=0 teach_names_both_paths=True red_tail='claration, never a silent bypass.\n\nRED POLARITY OK -- zz_red_misfactored_probe (a deliberate inline NOT EXISTS(supersedes) copy over raw ledger) was REFUSED as an undeclared reader; every standing reader stayed declared.'
+
+=== h-differential-agree ===
+  [ok] verdict=AGREE asp=7 sql=7 atoms orphan_atom_in_set=True only_asp=[] only_sql=[] -- ledger_tnow.lp+work_items.lp+work_review.lp composed over ONE EDB vs the SQL floor, on a world containing every s31 shape (standing ./judge wiring: named separate seam, see docstring)
+
+ALL CASES OK -- s31 uniform retraction both-polarity proof (retracted close re-opens / claim unclaims / blocks-close edge stops gating / open burns slug + orphans surface + redo idiom taught / reinstatement-free / hash chain + led --recent history reads unchanged / allowlist gate green+red / composed SQL-ASP differential AGREE), zero residue. a2 (composite ancestor) UNEXERCISED with its named blocker.

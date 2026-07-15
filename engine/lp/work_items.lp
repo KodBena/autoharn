@@ -7,12 +7,21 @@
 % work_item_floor_atoms in engine/ledger_floor.py), so the two producers differential
 % bit-identically (spec witness protocol item 5: SQL floor vs .lp AGREE).
 %
-% THIS PROGRAM STANDS ALONE (no ledger_tnow.lp load-on-top). Work-item events are never whole-row
-% superseded/amended by design (the spec's Q4 evidence: "status never left 'open' in 33/33 rows" --
-% v1's vocabulary is open->closed only, no disposition-churn machinery) -- so the supersession
-% closure ledger_tnow.lp supplies has nothing to compose with here. Grounds standalone via the
-% `#defined` guards below (an empty extension is silence, not a grounding warning -- the
-% ledger_tnow.lp / why_layer.lp idiom).
+% SUPERSESSION (s31 -- kernel/lineage/s31-supersession-uniform-retraction.sql;
+% design/FABLE-SUPERSESSION-UNIFORM-RETRACTION-SPEC.md, RATIFIED 2026-07-15). This header's
+% original premise -- "work-item events are never whole-row superseded/amended by design" (the s22
+% spec's Q4 evidence) -- is SUPERSEDED on the record by that ratified spec: superseding a row of
+% ANY kind now means uniform retraction from current truth, reinstatement-free. This program
+% therefore COMPOSES with ledger_tnow.lp's supersession closure (`superseded/1`, derived there
+% from supersedes/2) for its one current-truth judgment, work_orphaned_by_retraction below --
+% loaded WITH ledger_tnow.lp over one shared EDB, or standalone (the `#defined superseded/1`
+% guard makes an absent closure read as "nothing retracted", the fail-safe direction). The
+% pre-existing judgments (duplicate opens, dangling deps, cycles, missing witnesses) deliberately
+% KEEP their raw/history reading over ALL events, retracted or not -- they mirror
+% work_item_violations' declared-history members byte-for-byte (duplicate_open is slug-burned by
+% the spec's own ratified fork; the graph members answer "did this shape ever get written").
+% Grounds standalone via the `#defined` guards below (an empty extension is silence, not a
+% grounding warning -- the ledger_tnow.lp / why_layer.lp idiom).
 %
 % TEXT STAYS HOME (design rule, ledger_edb.py rule 1): work_title and work_witness (prose / free
 % text) do NOT cross into this EDB -- only the SLUG (a stable identifier, atom-quoted like `kind`/
@@ -44,10 +53,21 @@
 %     work_witness_present(RowId).          the work_closed row RowId carries a non-empty witness.
 %     work_depends(Dependent, Antecedent, RowId). a work_depends_on row: Dependent (=its own
 %                                            work_slug) depends on Antecedent (=work_depends_on).
+%     work_claimed(Slug, RowId).            a work_claimed row exists for Slug (s31 addition --
+%                                            needed only by work_orphaned_by_retraction below).
+%     work_parent_edge(Child, Parent, RowId). Child's work_opened row (RowId) names Parent (the
+%                                            s28 edge; s31 addition, same reason).
+%     superseded(RowId).                     ledger_tnow.lp's supersession closure (composed, not
+%                                            re-derived here -- ADR-0012 P1; absent when this
+%                                            program runs standalone, which reads fail-safe as
+%                                            "nothing retracted").
 #defined work_opened/2.
 #defined work_closed/3.
 #defined work_witness_present/1.
 #defined work_depends/3.
+#defined work_claimed/2.
+#defined work_parent_edge/3.
+#defined superseded/1.
 
 % ---- duplicate_open (invariant 2; PROVABLY VACUOUS under normal operation -- s22's
 % validate_work_item() refuses a second work_opened row for one slug at construction time; this
@@ -70,9 +90,21 @@ work_dep_star(F,D) :- work_dep_edge(F,D).
 work_dep_star(F,D) :- work_dep_edge(F,X), work_dep_star(X,D).
 work_dependency_cycle(F) :- work_dep_star(F,F).
 
+% ---- orphaned_by_retraction (s31; GENUINELY REACHABLE -- retracting an opening act while later
+% events survive is legal, surfaced never refused). The ONE current-truth judgment in this
+% program: an IN-FORCE (not superseded) later event whose slug has NO in-force opening act.
+% Mirrors work_item_violations' four orphan_* CTEs exactly, one atom shape (Slug, the surviving
+% row's id) covering all four sub-cases -- the row id disambiguates which event is orphaned. ----
+work_opened_in_force(S) :- work_opened(S,R), not superseded(R).
+work_orphaned_by_retraction(S,R) :- work_claimed(S,R),     not superseded(R), not work_opened_in_force(S).
+work_orphaned_by_retraction(S,R) :- work_closed(S,_,R),    not superseded(R), not work_opened_in_force(S).
+work_orphaned_by_retraction(S,R) :- work_depends(S,_,R),   not superseded(R), not work_opened_in_force(S).
+work_orphaned_by_retraction(C,R) :- work_parent_edge(C,P,R), not superseded(R), not work_opened_in_force(P).
+
 #show work_dep_edge/2.
 #show work_dep_star/2.
 #show work_duplicate_open/1.
 #show work_shipped_without_witness/2.
 #show work_depends_on_unknown/2.
 #show work_dependency_cycle/1.
+#show work_orphaned_by_retraction/2.

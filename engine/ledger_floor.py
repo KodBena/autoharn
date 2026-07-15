@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-06T05:35:36Z
-#   last-change: 2026-07-14T19:26:05Z
+#   last-change: 2026-07-15T20:24:34Z
 #   contributors: 37017f46/main, be693afb/main, a857c93d/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -275,7 +275,7 @@ def _wi_quote(col: str) -> str:
 
 WORK_ITEM_PREDS = ("work_dep_edge", "work_dep_star", "work_duplicate_open",
                    "work_shipped_without_witness", "work_depends_on_unknown",
-                   "work_dependency_cycle")
+                   "work_dependency_cycle", "work_orphaned_by_retraction")
 
 
 def work_item_floor_atoms(name: str) -> set[str]:
@@ -291,12 +291,29 @@ def work_item_floor_atoms(name: str) -> set[str]:
     and the s22 DDL view (`work_item_violations`) share an author and the same base facts, so
     bit-identity between THIS floor and `work_items.lp` proves ENCODING agreement between the SQL
     and ASP producers, not independent fidelity to the spec -- the same caveat every `*_scratch.py`
-    differential in this file already carries."""
+    differential in this file already carries.
+
+    s31 (kernel/lineage/s31-supersession-uniform-retraction.sql): gains the ONE current-truth
+    member, work_orphaned_by_retraction -- an IN-FORCE later event (claim/close/dep edge/child
+    open) whose slug's opening act is retracted -- read off `<schema>.ledger_current` exactly as
+    the DDL view's four orphan_* CTEs do. Every pre-existing member deliberately KEEPS its raw
+    reading (they mirror the view's declared-history members; duplicate_open is slug-burned by
+    the ratified spec's own fork)."""
     t = resolve(name)
     rel = t.rel()
+    rel_cur = t.rel("ledger_current")
     q_dependent, q_antecedent = _wi_quote("dependent"), _wi_quote("antecedent")
     q_start, q_cur = _wi_quote("start_slug"), _wi_quote("cur")
     q_slug = _wi_quote("slug")
+    # the child-orphan arm needs work_parent (s28) -- column-gated so a pre-s28 target (e.g. the
+    # s22 fixture's own probe chain) degrades to the three event-kind arms, the same
+    # declared-exclusion posture the amends/answers CTEs above already take. The ASP twin
+    # degrades identically for free: a pre-s28 exporter emits no work_parent_edge/3 facts.
+    orphan_children_arm = (f"""UNION ALL
+        SELECT lc.work_slug AS slug, lc.id FROM {rel_cur} lc
+        WHERE lc.kind = 'work_opened' AND lc.work_parent IS NOT NULL
+          AND NOT EXISTS (SELECT 1 FROM opened_current oc WHERE oc.slug = lc.work_parent)"""
+                           if t.has_col("work_parent") else "")
     sql = f"""
     WITH RECURSIVE
       opens AS (
@@ -325,6 +342,17 @@ def work_item_floor_atoms(name: str) -> set[str]:
       ),
       dep_cycle AS (
         SELECT DISTINCT start_slug AS slug FROM reach WHERE cur = start_slug
+      ),
+      -- s31: the in-force orphan member, mirroring work_item_violations' orphan_* CTEs (see
+      -- docstring). Reads ledger_current -- the one SQL home of the in-force projection.
+      opened_current AS (
+        SELECT work_slug AS slug FROM {rel_cur} WHERE kind = 'work_opened'
+      ),
+      orphans AS (
+        SELECT lc.work_slug AS slug, lc.id FROM {rel_cur} lc
+        WHERE lc.kind IN ('work_claimed', 'work_closed', 'work_depends_on')
+          AND NOT EXISTS (SELECT 1 FROM opened_current oc WHERE oc.slug = lc.work_slug)
+        {orphan_children_arm}
       )
     SELECT 'work_dep_edge(' || {q_dependent} || ',' || {q_antecedent} || ')' FROM deps
     UNION ALL SELECT 'work_dep_star(' || {q_start} || ',' || {q_cur} || ')' FROM reach
@@ -332,6 +360,7 @@ def work_item_floor_atoms(name: str) -> set[str]:
     UNION ALL SELECT 'work_shipped_without_witness(' || {q_slug} || ',' || id || ')' FROM shipped_no_witness
     UNION ALL SELECT 'work_depends_on_unknown(' || {q_slug} || ',' || {q_antecedent} || ')' FROM dangling_dep
     UNION ALL SELECT 'work_dependency_cycle(' || {q_slug} || ')' FROM dep_cycle
+    UNION ALL SELECT DISTINCT 'work_orphaned_by_retraction(' || {q_slug} || ',' || id || ')' FROM orphans
     ;"""
     out = t.run(sql).stdout
     return {line.strip() for line in out.splitlines() if line.strip()}
@@ -357,20 +386,28 @@ def work_review_floor_atoms(name: str) -> set[str]:
     CORRELATED-AUTHORSHIP CAVEAT (named, per `work_item_floor_atoms`'s own precedent): this floor
     and the s29 DDL (`work_item_strict_blockers()`, `work_review_gap`) share an author and the same
     base facts, so bit-identity between THIS floor and `work_review.lp` proves ENCODING agreement
-    between the SQL and ASP producers, not independent fidelity to the spec."""
+    between the SQL and ASP producers, not independent fidelity to the spec.
+
+    s31 (kernel/lineage/s31-supersession-uniform-retraction.sql): opens/succ/closes read
+    `<schema>.ledger_current` (in-force events only), byte-for-byte the semantics of the DDL
+    twin's own s31 re-issue (work_item_strict_blockers()'s edges/closes CTEs). The `discharged`
+    leg is UNCHANGED -- the discharge-review side was already in-force-filtered at its source on
+    both producers (the ratified spec's own sec-2 finding), so it keeps its raw read + row-scoped
+    anti-join exactly as the DDL does."""
     t = resolve(name)
     rel = t.rel()
+    rel_cur = t.rel("ledger_current")
     q_root, q_member = _wi_quote("t.root"), _wi_quote("t.member")
     q_slug = _wi_quote("slug")
     sql = f"""
     WITH RECURSIVE
-      opens AS (SELECT work_slug AS slug FROM {rel} WHERE kind = 'work_opened'),
+      opens AS (SELECT work_slug AS slug FROM {rel_cur} WHERE kind = 'work_opened'),
       succ AS (
-        SELECT work_parent AS parent, work_slug AS child FROM {rel}
+        SELECT work_parent AS parent, work_slug AS child FROM {rel_cur}
         WHERE kind = 'work_opened' AND work_parent IS NOT NULL
         UNION ALL
         -- work_depends_on walked OPPOSITE its own column order -- see this function's docstring.
-        SELECT work_slug AS parent, work_depends_on AS child FROM {rel}
+        SELECT work_slug AS parent, work_depends_on AS child FROM {rel_cur}
         WHERE kind = 'work_depends_on'
       ),
       tree(root, member) AS (
@@ -380,7 +417,7 @@ def work_review_floor_atoms(name: str) -> set[str]:
       ),
       closes AS (
         SELECT work_slug AS slug, id AS rid, actor AS closer, work_review_disposition AS disp
-        FROM {rel} WHERE kind = 'work_closed'
+        FROM {rel_cur} WHERE kind = 'work_closed'
       ),
       discharged AS (
         SELECT c.rid FROM closes c

@@ -8,9 +8,18 @@
 % engine/ledger_floor.py), so the two producers differential bit-identically (this delta's own
 % scratch fixture: SQL floor vs .lp AGREE).
 %
-% THIS PROGRAM STANDS ALONE (no ledger_tnow.lp load-on-top; mirrors work_items.lp's own standing-
-% alone posture, s22) -- a work-item close is never whole-row superseded/amended by design (the
-% s22 lesson, unchanged by s29).
+% SUPERSESSION (s31 -- kernel/lineage/s31-supersession-uniform-retraction.sql;
+% design/FABLE-SUPERSESSION-UNIFORM-RETRACTION-SPEC.md, RATIFIED 2026-07-15). This header's
+% original premise -- "a work-item close is never whole-row superseded/amended by design" (the
+% s22 lesson, carried into s29) -- is SUPERSEDED on the record by that ratified spec: superseding
+% a row of ANY kind is uniform retraction from current truth, reinstatement-free. This program
+% now COMPOSES with ledger_tnow.lp's supersession closure (`superseded/1`): in-force work events
+% ONLY feed the tree/close state derivation below, exactly mirroring the SQL twin's s31 re-issue
+% (work_item_strict_blockers()'s edges/closes CTEs now read ledger_current). Loaded WITH
+% ledger_tnow.lp over one shared EDB, or standalone (the `#defined superseded/1` guard makes an
+% absent closure read fail-safe as "nothing retracted" -- pre-s31 fixtures keep grounding and
+% keep their pre-s31 meaning). The w_discharged/1 leg is UNCHANGED: the discharge-review side was
+% already in-force-filtered at its source (the spec's own sec-2 finding), on both producers.
 %
 % TEXT STAYS HOME (design rule, ledger_edb.py rule 1): work_review_ref (prose / a free-text
 % reference) does NOT cross into this EDB -- only the SLUG, the ROW ID (an opaque identifier,
@@ -57,12 +66,33 @@
 %                                            join shape work_review_gap's own SQL uses: verdict=
 %                                            attest, actor<>closer, not superseded).
 %     w_dep(Dependent, Antecedent).         a work_depends_on row: Dependent depends on Antecedent.
+%     w_open(Slug, RowId).                  s31: a work_opened row (RowId) exists for Slug -- the
+%                                            row-id-carrying form w_opened/1 is now DERIVED from,
+%                                            in-force only (below).
+%     w_parent_e(Child, Parent, RowId).     s31: the row-id-carrying s28 edge; w_parent/2 is now
+%                                            derived from it, in-force only.
+%     w_dep_e(Dependent, Antecedent, RowId). s31: the row-id-carrying dependency edge; w_dep/2 is
+%                                            now derived from it, in-force only.
+%     superseded(RowId).                    ledger_tnow.lp's supersession closure (composed, not
+%                                            re-derived -- ADR-0012 P1).
 #defined w_opened/1.
 #defined w_parent/2.
 #defined w_closed/3.
 #defined w_disposition/2.
 #defined w_discharged/1.
 #defined w_dep/2.
+#defined w_open/2.
+#defined w_parent_e/3.
+#defined w_dep_e/3.
+#defined superseded/1.
+
+% ---- s31: the in-force projections (one factoring, mirroring SQL's ledger_current reads). A
+% pre-s31 fixture that supplies w_opened/1 / w_parent/2 / w_dep/2 facts DIRECTLY still grounds
+% (additive; those facts are then un-filtered, exactly the pre-s31 reading it was banked under).
+w_opened(S)    :- w_open(S,R),       not superseded(R).
+w_parent(C,P)  :- w_parent_e(C,P,R), not superseded(R).
+w_dep(D,A)     :- w_dep_e(D,A,R),    not superseded(R).
+w_closed_in_force(S,R,C) :- w_closed(S,R,C), not superseded(R).
 
 % ---- the ONE combined successor relation (mirrors the SQL floor's `edges` CTE): an s28 w_parent
 % edge walks parent->child literally; a w_dep edge walks OPPOSITE its own argument order (the
@@ -74,12 +104,14 @@ w_succ(Dependent,Antecedent) :- w_dep(Dependent,Antecedent).
 w_tree_member(Root,Root) :- w_opened(Root).
 w_tree_member(Root,C) :- w_tree_member(Root,P), w_succ(P,C).
 
-% ---- own-leaf unresolved: a slug's OWN close row is deferred and not yet discharged ------------
+% ---- own-leaf unresolved: a slug's OWN IN-FORCE close row is deferred and not yet discharged
+% (s31: a retracted close is no unresolved leaf -- the item simply reads not-closed again) -------
 w_own_leaf_unresolved(Slug) :-
-    w_closed(Slug,R,_), w_disposition(R,deferred), not w_discharged(R).
+    w_closed_in_force(Slug,R,_), w_disposition(R,deferred), not w_discharged(R).
 
-% ---- a tree member (other than the root itself) with no work_closed row at all -----------------
-w_not_closed(Slug) :- w_opened(Slug), not w_closed(Slug,_,_).
+% ---- a tree member (other than the root itself) with no IN-FORCE work_closed row (s31) ---------
+w_closed_any(Slug) :- w_closed_in_force(Slug,_,_).
+w_not_closed(Slug) :- w_opened(Slug), not w_closed_any(Slug).
 
 % ---- tree-level unresolved (Element C's derived conjunction, negated): Root's obligation tree is
 % UNRESOLVED iff any tree member (Root itself, or a transitive successor via EITHER edge kind) has
