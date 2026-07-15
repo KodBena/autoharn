@@ -1,8 +1,0 @@
-{
-  "db": "toy",
-  "host": "192.168.122.1",
-  "kern": "autoharn1_kernel",
-  "name": "autoharn1",
-  "role": "autoharn_rw",
-  "schema": "autoharn1"
-}
