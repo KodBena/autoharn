@@ -1,0 +1,77 @@
+Banked RED evidence for ledger item `led-work-depends-default-type-advisory`.
+
+Captured by running seen-red/led-work-depends-default-type-advisory/run_fixtures.py against the
+PRE-FIX bootstrap/templates/led.tmpl (the shipped version this item's fix supersedes, obtained
+via `git stash push -- bootstrap/templates/led.tmpl` immediately before this fixture's own commit
+lands, then `git stash pop` to restore the fix): the two RED cases (--type omitted, on both a
+full-s30 and a pre-s30 kernel world) FAIL to find the advisory text on stderr -- the row still
+lands (informs by omission / no edge_type column at all) with byte-identical write behavior to
+the post-fix run, exactly reproducing the reported defect: a live deployment session recorded
+every genuine "X must finish before Y may close" constraint as informs and never once used
+--type blocks-close, because nothing at the CLI taught the unqualified default is
+advisory-only.
+
+== scaffolding throwaway --new-world ldadvfxfull (full s15..s30 birth chain) ==
+  scaffold OK (schema=ldadvfxfull).
+
+== scaffolding throwaway ldadvfxpre via track-work.sh (s15..s25 only) ==
+  scaffold OK.
+
+=== omitted-advisory-full-s30-world ===
+  [FAIL] exit=0 advisory_present=False mentions_slugs=False row_landed=True
+STDERR:
+
+
+=== omitted-advisory-pre-s30-world ===
+  [FAIL] exit=0 advisory_present=False row_landed=True
+STDERR:
+
+
+=== explicit-blocks-close-no-advisory ===
+  [ok] exit=0 advisory_absent=True
+STDERR:
+
+
+=== explicit-informs-no-advisory ===
+  [ok] exit=0 advisory_absent=True
+STDERR:
+
+
+FAILURES: ['omitted-advisory-full-s30-world', 'omitted-advisory-pre-s30-world']
+
+After the fix (the STDERR advisory added to bootstrap/templates/led.tmpl's `work depends` verb,
+firing whenever --type is omitted, on both the has_edge_type_col branch and the pre-s30
+no-column branch), the same run_fixtures.py goes fully green (all four cases pass -- both
+omitted---type cases now show the advisory text and still land the row unchanged, both
+explicit---type cases still show no advisory) -- witnessed live, same scratch substrate
+convention, torn down to zero residue on a clean pass:
+
+== scaffolding throwaway --new-world ldadvfxfull (full s15..s30 birth chain) ==
+  scaffold OK (schema=ldadvfxfull).
+
+== scaffolding throwaway ldadvfxpre via track-work.sh (s15..s25 only) ==
+  scaffold OK.
+
+=== omitted-advisory-full-s30-world ===
+  [ok] exit=0 advisory_present=True mentions_slugs=True row_landed=True
+STDERR:
+led work depends: recorded as informs (advisory only -- never enforced at close);
+  if <on-slug> must be finished before <slug> may close, use --type blocks-close.
+
+=== omitted-advisory-pre-s30-world ===
+  [ok] exit=0 advisory_present=True row_landed=True
+STDERR:
+led work depends: recorded as informs (advisory only -- never enforced at close);
+  if <on-slug> must be finished before <slug> may close, use --type blocks-close.
+
+=== explicit-blocks-close-no-advisory ===
+  [ok] exit=0 advisory_absent=True
+STDERR:
+
+=== explicit-informs-no-advisory ===
+  [ok] exit=0 advisory_absent=True
+STDERR:
+
+ALL CASES OK -- led work depends default-type advisory both-polarity proof (advisory fires on
+omission on both a full-s30 and a pre-s30 world, row-write behavior unchanged either way; an
+explicit --type of either value suppresses the advisory), zero residue.

@@ -1026,6 +1026,19 @@ SQL
         echo "  decision tree)." >&2
         exit 1
       fi
+      # DEFAULT-TYPE ADVISORY (root cause this closes: a live deployment session recorded
+      # every genuine "must finish before" precedence constraint as informs and never once used
+      # --type blocks-close, because nothing at the CLI said the unqualified default is
+      # advisory-only -- surfaced neither in the deployed project docs nor at the moment the
+      # constraint was typed). A caller who omits --type still gets the row written EXACTLY as
+      # before (informs by omission, or -- on a pre-s30 kernel -- no edge_type column at all);
+      # this only adds a one-line STDERR teach at the exact point of the omission. WARN-ONLY, not
+      # a refusal -- informs is a legal, common, correct choice for a merely contextual edge, and
+      # this advisory does not gate the write, it makes the choice visible.
+      if [ -z "$type" ]; then
+        echo "led work depends: recorded as informs (advisory only -- never enforced at close);" >&2
+        echo "  if ${on} must be finished before ${slug} may close, use --type blocks-close." >&2
+      fi
       if [ "$has_edge_type_col" = "t" ]; then
         exec psql -h "$PGHOST" -d "$PGDB" -v ON_ERROR_STOP=1 \
           -v slug="$slug" -v on="$on" -v type="$type" \

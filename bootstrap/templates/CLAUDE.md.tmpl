@@ -8,7 +8,13 @@ __LAW_SECTION__
    increment the task names, including ones you will not start this session
    (./led work open <slug> <title...> per item, titled so a FRESH session could build
    from it; claim only what you begin: ./led work claim <slug>). Close each with
-   ./led work close <slug> <resolution> --witness <ref> once delivered. An increment
+   ./led work close <slug> <resolution> --witness <ref> once delivered. Record a real
+   precedence constraint between two items with ./led work depends <slug> <on-slug>
+   --type blocks-close|informs — informs (the default if --type is omitted) is context
+   only, never enforced at close; blocks-close is the only type the kernel conjoins at
+   --strict close, so use it whenever the honest prose would be "<on-slug> must finish
+   before <slug> may close" — an informs-only precedence constraint is a fact nothing
+   mechanical will ever refuse. An increment
    left out of the ledger does not exist: resumption cannot see it and point 6's "clean"
    passes vacuously over it (run-8 finding, 2026-07-11). Decompose to the UNIT OF
    INDEPENDENT RESUMPTION, not below it and not above it — no numeric rule (a fixed
