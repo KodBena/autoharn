@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-14T21:20:36Z
-#   last-change: 2026-07-15T13:38:32Z
+#   last-change: 2026-07-15T15:14:20Z
 #   contributors: a857c93d/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -26,11 +26,13 @@ WHAT ONE RUN DOES, IN ORDER (every step prints what-you-should-see; any deviatio
 loudly and touches nothing further -- ADR-0002, ADR-0013 Rule 1):
   1. Load the deployment's deployment.json (filing/deployment_record.py -- the one SSOT parser
      every other verb in this project already uses; ADR-0012 P1, not a second reader).
-  2. PROCESS CHECK -- refuse if any live process has its cwd under the deployment directory (a
-     live Claude Code session, a stray shell, anything) -- migrating out from under a live
-     session is exactly the class of hazard CLAUDE.md's "never modify hooks/ or a user project
-     while a live session runs there" names for the harness's own files, applied here to the
-     deployment's data.
+  2. PROCESS CHECK -- refuse if a live process that looks like a Claude Code session has its cwd
+     or cmdline under the deployment directory -- migrating out from under a live session is
+     exactly the class of hazard CLAUDE.md's "never modify hooks/ or a user project while a live
+     session runs there" names for the harness's own files, applied here to the deployment's
+     data. Other processes merely residing in the directory (a stray shell, an editor) are listed
+     as informational, non-blocking output -- bootstrap/live_session_check.py's REFUSE-class/
+     WARN-class narrowing (2026-07-15 maintainer ratification, ledger row 1055).
   3. pg_dump the deployment's schema+kern to a timestamped file under ~/backups/, printed as the
      ROLLBACK ARTIFACT. This file is also the REHEARSAL's own data source (step 4), so the
      rehearsal proves the backup itself is restorable -- a backup nobody has restored is a claim,
@@ -127,7 +129,7 @@ AUTOHARN_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(AUTOHARN_ROOT / "filing"))
 sys.path.insert(0, str(AUTOHARN_ROOT / "bootstrap"))
 from deployment_record import DeploymentError, DeploymentRecord, load_deployment  # noqa: E402
-from live_session_check import find_live_sessions  # noqa: E402
+from live_session_check import find_live_sessions, partition_matches  # noqa: E402
 
 LINEAGE_DIR = AUTOHARN_ROOT / "kernel" / "lineage"
 NEW_PROJECT_SH = AUTOHARN_ROOT / "bootstrap" / "new-project.sh"
@@ -339,15 +341,22 @@ def _refuse_if_live_session(deployment_dir: Path) -> None:
         matches = find_live_sessions(str(deployment_dir))
     except RuntimeError as e:
         raise MigrateRefusal(f"migrate: REFUSED -- {e}") from e
-    if matches:
-        lines = "\n".join(f"    pid={m.pid}  {m.reason}  cmd={m.cmdline!r}" for m in matches)
+    refuse_matches, warn_matches = partition_matches(matches)
+    if warn_matches:
+        lines = "\n".join(f"    pid={m.pid}  {m.reason}  cmd={m.cmdline!r}" for m in warn_matches)
+        print(f"migrate: not blocking -- {len(warn_matches)} process(es) merely reside in "
+              f"{deployment_dir} (cwd or cmdline match, but do not look like a Claude Code "
+              f"session -- bootstrap/live_session_check.py's REFUSE-class/WARN-class matching "
+              f"rule):\n{lines}")
+    if refuse_matches:
+        lines = "\n".join(f"    pid={m.pid}  {m.reason}  cmd={m.cmdline!r}" for m in refuse_matches)
         raise MigrateRefusal(
-            f"migrate: REFUSED -- {len(matches)} process(es) appear to be running against "
-            f"{deployment_dir} (bootstrap/live_session_check.py):\n{lines}\n"
+            f"migrate: REFUSED -- {len(refuse_matches)} Claude Code process(es) appear to be "
+            f"running against {deployment_dir} (bootstrap/live_session_check.py):\n{lines}\n"
             f"A migration must not run underneath a live session. End the session(s) above and "
             f"re-run. Nothing was touched.")
     print(f"migrate: process check PASSED -- {find_live_sessions.__module__} reports no live "
-          f"session against {deployment_dir.resolve()}.")
+          f"Claude Code session against {deployment_dir.resolve()}.")
 
 
 # --------------------------------------------------------------------------------------------
