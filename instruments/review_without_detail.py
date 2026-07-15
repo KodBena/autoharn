@@ -1,4 +1,10 @@
 #!/usr/bin/env python3
+# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
+#   first-seen : 2026-07-14T22:13:07Z
+#   last-change: 2026-07-14T22:13:07Z
+#   contributors: a857c93d/main
+# <<< PROVENANCE-STAMP <<<
+
 """review_without_detail — a DESCRIPTIVE close-line consumer (consult 37 Addendum A; finding 38). Same
 tier as proxy_written: it surfaces every `kind='review'` ledger row that carries NO `review_detail`, and
 adjudication disposes it — it does NOT gate the close.
@@ -22,8 +28,9 @@ from dataclasses import dataclass
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from ledger_target import resolve  # noqa: E402
+from pghost_resolve import resolve_pghost  # noqa: E402
 
-PGHOST = os.environ.get("EPISTEMIC_PGHOST", "192.168.122.1")
+PGHOST = resolve_pghost("EPISTEMIC_PGHOST")
 
 
 @dataclass(frozen=True)
