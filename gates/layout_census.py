@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-09T07:54:37Z
-#   last-change: 2026-07-14T23:25:02Z
+#   last-change: 2026-07-15T01:35:27Z
 #   contributors: 9bcc0113/main, be693afb/main, e4410ef6/main, 3c50e030/main, a857c93d/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -71,6 +71,12 @@ ROOT_FILES = {
     # registered here rather than left an unregistered breach for the census gate to hit next
     # run (CLAUDE.md hazard-flagging duty, worktree-ledgering-implementation, 2026-07-12).
     ".gitattributes",
+    # .gitmodules — landed with the tools/makespan-scheduler/ vendor-to-submodule conversion
+    # (commit 5464937), never registered here at landing time; caught by this gate's own next
+    # run while WP-4 (panel v2) was already editing this exact registry to add "panel" below
+    # (CLAUDE.md hazard-flagging duty, same shape as the migrate/attestations/LICENSE entries
+    # above -- a hazard within reach of the touch gets fixed, not routed around).
+    ".gitmodules",
     # USER-GUIDE.md, attest-tags — pre-existing gap (landed by the doc-audience-taxonomy sweep
     # and an earlier commission respectively, neither of which registered here), hit while
     # panel-cheap-fixes was editing USER-GUIDE.md itself; fixed in passing rather than left an
@@ -128,6 +134,14 @@ ROOT_DIRS = {
     # never registered here at landing time, caught by this gate's own next run (CLAUDE.md
     # hazard-flagging duty, same shape as the migrate/attestations/tools entries above).
     "docs",
+    # panel/ — the maintainer co-sign SPA (BUILD SPEC v2 r5, ADR-0000/0012 amendment):
+    # panel/backend (FastAPI + ledger reads/writes), panel/frontend (the vendored, no-CDN SPA),
+    # panel/seed (the point-in-time commission-680 decomposition seed). No panel/manifests/ —
+    # that git-resident manifest was the v1 architecture the amendment condemns (BUILD SPEC v2
+    # r5 sec 0/8); decomposition lives in the ledger, never in a second git-resident home.
+    # Registered on landing (WP-4) rather than left an unregistered breach for this gate's next
+    # run (CLAUDE.md hazard-flagging duty, same shape as the docs/observatory/tools entries above).
+    "panel",
 }
 
 # (2) per-directory currency patterns: a directory -> the regex(es) its basenames MUST match.
@@ -140,6 +154,13 @@ DIR_PATTERNS: dict[str, list[str]] = {
 }
 # runs/ and seen-red/ additionally forbid LOOSE top-level files beyond an allowed set (evidence trees).
 _RUNS_LOOSE_OK = {"README.md"}
+# _fixture_env.py — the shared host-resolution helper every seen-red/<case>/run_fixtures.py
+# imports (its own docstring: "lives in seen-red/ itself, one directory above every driver that
+# imports it"); a genuine cross-fixture shared module, not a per-gate evidence dir, so it is the
+# one legitimate loose file under seen-red/ — caught here (panel v2, WP-4) while this exact
+# registry was already being edited to add "panel" above (CLAUDE.md hazard-flagging duty: a
+# hazard within reach of the touch gets fixed, not routed around).
+_SEEN_RED_LOOSE_OK = {"_fixture_env.py"}
 
 
 def tracked() -> list[str]:
@@ -185,10 +206,12 @@ def main() -> int:
                 breaches.append(f"PATTERN BREACH {f}: {base!r} does not match {d}/ currency "
                                 f"({' | '.join(pats)})")
 
-    # (2b) seen-red/ forbids loose top-level files (only per-gate subdirs)
+    # (2b) seen-red/ forbids loose top-level files (only per-gate subdirs + the allowed shared set)
     for f in files:
-        if f.startswith("seen-red/") and "/" not in f[len("seen-red/"):]:
-            breaches.append(f"PATTERN BREACH {f}: seen-red/ holds only per-gate subdirs, no loose files")
+        rest = f[len("seen-red/"):] if f.startswith("seen-red/") else None
+        if rest is not None and "/" not in rest and rest not in _SEEN_RED_LOOSE_OK:
+            breaches.append(f"PATTERN BREACH {f}: seen-red/ holds only per-gate subdirs "
+                            f"(+ {sorted(_SEEN_RED_LOOSE_OK)}), no other loose files")
 
     if breaches:
         print(f"layout-census: {len(breaches)} breach(es) of the designed tree (LAYOUT §1):\n")
