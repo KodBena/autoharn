@@ -487,6 +487,85 @@ column-aligned rule block, the second (local Unix-socket) hole this pass deliber
 and why, and the honest limits of what a password requirement does and does not protect against,
 is in [`design/MAINT-PG-HBA-HARDENING.md`](design/MAINT-PG-HBA-HARDENING.md) §2–§5.
 
+## FAQ: pgAudit — logging what the database saw, not just what autoharn's verbs did
+
+**Status: parked, opt-in, off by default.** Nothing in a scaffolded project touches pgAudit unless
+you run the tool below and then choose to run what it prints. This section documents the path;
+whether to walk it is yours.
+
+**What pgAudit adds over the ledger's own audit trail — honestly, not as marketing.** autoharn's
+ledger already gives you a real audit trail for one specific slice of activity: every act a
+*collaborator performs through the project's own verbs* (`led`, `pickup`, `judge`, …) lands as an
+append-only, hash-chained row (`kernel/lineage/s26-row-hash-chain.sql`) — tamper-evident, and
+scoped to exactly the acts the verbs know how to record. What that trail structurally cannot see is
+anything that reaches the database *around* the verb layer: a role with raw `psql` access running
+DDL directly against your schema, a superuser regranting privileges, an ad-hoc `UPDATE` issued
+outside any verb. [pgAudit](https://github.com/pgaudit/pgaudit) is Postgres's own extension for
+exactly that gap — it logs what the **database itself observed**, statement by statement, into the
+server's ordinary log stream, regardless of which tool (or lack of one) issued the statement. The
+honest trade, both directions: pgAudit sees things the ledger cannot (bypass acts), but the ledger
+has properties pgAudit's log does not — pgAudit's log is a plain text file on the database host,
+editable by whoever administers that host, with no hash chain and no truncation witness protecting
+it, and pgAudit itself documents that superusers cannot be reliably audited by it. Treat a pgAudit
+log as diagnostic-grade evidence (useful for RCA, useful as a tripwire), never as a second
+tamper-evidence root standing alongside the ledger's own — see
+[`design/ORCH-PGAUDIT-EXPLORATION.md`](design/ORCH-PGAUDIT-EXPLORATION.md) for the full
+investigation this paragraph condenses, including the read-auditing question (a separate, larger
+decision this FAQ's default deliberately leaves out — see below).
+
+**The walkthrough.** `bootstrap/pgaudit-ease-in.sh` never touches your server — it only reads and
+prints, the same emits-never-executes contract as [provisioning](#faq-provisioning-postgres-for-autoharn)
+above.
+
+1. **Inspect the live state** — read-only, from your project directory:
+
+   ```
+   $ bootstrap/pgaudit-ease-in.sh inspect
+   ```
+
+   *What you should see:* four sections — (1) whether the pgAudit module is loaded (checked two
+   ways: a permission-free check anyone can run, plus a fuller one that needs `pg_read_all_settings`
+   or superuser — the tool names which one it used and how to get the fuller read, e.g.
+   `PGUSER=<a privileged role> bootstrap/pgaudit-ease-in.sh inspect`), (2) the master `pgaudit.log`
+   value and which `postgresql.conf` line set it, (3) whether the extension is actually installed
+   (cluster-wide availability and per-database `CREATE EXTENSION` status — these are two different
+   questions, and the module being *loaded* does not imply the extension is *installable*, let alone
+   installed), (4) any existing per-role/per-database `pgaudit.*` override already on the cluster.
+
+2. **Emit the scoped statements** — still read-only against your server (this only prints):
+
+   ```
+   $ bootstrap/pgaudit-ease-in.sh emit
+   ```
+
+   *What you should see:* an `ALTER ROLE <your role> SET pgaudit.log = 'ddl,role'` /
+   `RESET pgaudit.log` pair scoped to your deployment's own role — never a cluster-wide
+   `postgresql.conf` change, which the tool deliberately never emits (it would affect every other
+   project on a shared cluster). The default class set is `ddl,role`, not `write` or `all` — the
+   comment printed alongside it explains why: `write` largely duplicates what the ledger's own
+   verb-issued trail already records, while `ddl` (schema changes) and `role` (grant/role changes)
+   are exactly the two classes a bypass of the verb layer would use and the ledger cannot see.
+   Override with `--classes` if you want a different set (e.g. add `read` if you separately decide
+   you want audit-of-reads — a bigger decision, not this tool's default). If your prerequisites
+   (module loaded, extension created) are not yet met, the tool says so loudly before printing the
+   statement anyway — the statement is meant to be ready for whenever they are.
+
+3. **Apply it yourself, on your own schedule, as a superuser.** `pgaudit.log`'s permission story is
+   part of what `inspect`/`emit` report: the setting is superuser-only to change (pgAudit's own
+   documentation is explicit about this), so the `ALTER ROLE` statement must be run by an operator
+   with superuser access — the role being altered does not itself need to be a superuser. Nothing
+   in autoharn runs this for you.
+
+**The parked status, plainly.** As of this writing pgAudit is a real but incomplete install on at
+least one live deployment's cluster: `pgaudit.so` is preloaded (`shared_preload_libraries`), but no
+`pgaudit` row exists in `pg_available_extensions` at all — the module being loaded and the
+extension being *installable* are two separate steps, and `CREATE EXTENSION pgaudit` will fail
+until an operator with host filesystem access installs the extension's control/SQL files alongside
+the already-loaded `.so`. `inspect` surfaces this distinction every time it runs rather than
+glossing over it. Testing this path end-to-end (a real `CREATE EXTENSION`, a real `ALTER ROLE`,
+reading back an actual log line) is intentionally not part of this change — it remains the
+maintainer's (or an adopter's) own act, at their own convenience.
+
 ## Related
 
 - [ORCH-OPERATING-CARD.md](ORCH-OPERATING-CARD.md) — the operator-facing card for someone already running a
@@ -494,6 +573,11 @@ is in [`design/MAINT-PG-HBA-HARDENING.md`](design/MAINT-PG-HBA-HARDENING.md) §2
 - [GLOSSARY.md](GLOSSARY.md) — every coined term this page uses, defined once.
 - [`design/MAINT-PG-HBA-HARDENING.md`](design/MAINT-PG-HBA-HARDENING.md) — the full pg_hba investigation this
   page's FAQ condenses; read it in full before applying anything to a database that matters.
+- [`design/ORCH-PGAUDIT-EXPLORATION.md`](design/ORCH-PGAUDIT-EXPLORATION.md) — the full pgAudit
+  investigation the pgAudit FAQ above condenses (what it is, what it cannot give you, the
+  audit-of-reads design space, its own evidence-tier limits).
+- `bootstrap/pgaudit-ease-in.sh` — the `inspect`/`emit` tool the pgAudit FAQ walks through; reads
+  your live target read-only and prints (never runs) the scoped enable/disable statements.
 - [`law/adr/0017-the-zero-context-reader.md`](law/adr/0017-the-zero-context-reader.md) — the
   documentation-legibility discipline this page is written to, and the source of
   `doc_legibility_critic`'s design.
