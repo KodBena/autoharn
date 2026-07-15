@@ -26,12 +26,12 @@ appending a new row, never by rewriting an old one.
 
 ## 1. Apply the kernel
 
-One file. It chains the frozen DDL lineage (s15 → s17-stamp → s17-independence → s19) with
+One file chains the frozen DDL lineage (s15 → s17-stamp → s17-independence → s19) with
 `ON_ERROR_STOP` on, and creates nothing outside the schemas and role you name:
 
 ```sh
 cd autoharn
-psql -h 192.168.122.1 -d toy \
+psql -h <host> -d toy \
      -v schema=toycolors -v kern=toycolors_kernel -v role=toycolors_rw \
      -f kernel/lineage/high_watermark_1.sql
 ```
@@ -53,14 +53,14 @@ without it, any row that *links* to another row fails with `relation "ledger" do
 exists.)
 
 ```sh
-psql -h 192.168.122.1 -d toy -c "
+psql -h <host> -d toy -c "
   SET ROLE toycolors_rw; SET search_path = toycolors, toycolors_kernel;
   INSERT INTO toycolors.ledger (kind, statement) VALUES ('decision','perceptual distance = CIEDE2000, not RGB Euclidean');
   INSERT INTO toycolors.ledger (kind, statement) VALUES ('assumption','output constrained to the 16 ANSI slots');"
 ```
 
 ```sh
-psql -h 192.168.122.1 -d toy -tAc "
+psql -h <host> -d toy -tAc "
   SELECT l.id, l.kind, l.statement, p.name
   FROM toycolors.ledger l JOIN toycolors_kernel.principal p ON p.id = l.actor;"
 ```
@@ -72,9 +72,12 @@ The habit this buys: decision lands in the ledger, *then* the code gets written.
 
 ## 3. Tear down
 
+Two commands undo everything section 1 created: drop the schema-bearing database, then drop
+the cluster-global role.
+
 ```sh
 dropdb toy        # on the DB host — removes schemas, tables, the pgcrypto extension
-psql -h 192.168.122.1 -d postgres -c "DROP ROLE IF EXISTS toycolors_rw;"   # roles are cluster-global
+psql -h <host> -d postgres -c "DROP ROLE IF EXISTS toycolors_rw;"   # roles are cluster-global
 ```
 
 ## 4. Opening a new world (one world per run)
@@ -86,7 +89,7 @@ against the ledger — not just try the mechanism — use this instead, every ti
 computed over a mixed ledger reads as "in force" ACROSS runs that never happened together —
 cribbing, bias, cross-run leakage into whatever the subject does next. Branches share only the
 branch point (the kernel apply — schema, triggers, secret, roles); they never share each other's
-rows. (Maintainer ruling, "one world per run," 2026-07-09 — see `BACKLOG.md`.) The old habit of
+rows. (Maintainer ruling, "one world per run," 2026-07-09 — see [BACKLOG.md](BACKLOG.md).) The old habit of
 reusing one schema across runs (`toycolors` across runs 0-2) is exactly the mistake this fixes:
 run 2 is recorded as contaminated by run-1 visibility; a fresh world does not carry that risk.
 
@@ -105,8 +108,12 @@ bootstrap/new-project.sh <dest-dir> --new-world <world-name> --db <db> --host <h
   (`<world-name>`, `<world-name>_kernel`, `<world-name>_rw`) so you never have to keep three
   strings in agreement by hand. Applies the current kernel lineage (s15 → s17-stamp →
   s17-independence → s19 → s20 → s21-session-aware-distinctness — s20 and s21 included by
-  construction, never the pre-s20 grants-gap shape nor s21's session-blind distinctness/s19
-  residue) and seeds a fresh stamp secret, both in one call.
+  construction, never the pre-s20 shape (which left the `countersign_obligation` review-debt
+  table ungranted to the roles that needed to read it — the "grants gap" s20 closed) nor
+  s21's pre-fix shape (session-blind distinctness, which falsely refused an honest
+  cross-session review; and the s19 residue, four `validate_*` functions that resolved the
+  ledger via session `search_path` in a way `SET ROLE` could break — both closed by s21) and
+  seeds a fresh stamp secret, both in one call.
 - `--name <name>` — this project's own identifier for `judge`'s target-name argument. Defaults to
   `<dest-dir>`'s basename; give it explicitly if that basename would collide with autoharn's
   curated target names (`toy`, `nla`, `e15`-`e18`) or its scratch-naming conventions
@@ -117,7 +124,7 @@ bootstrap/new-project.sh <dest-dir> --new-world <world-name> --db <db> --host <h
 (`DROP SCHEMA ... CASCADE` ×2 + `DROP OWNED BY`/`DROP ROLE` + `rm -rf`) — the mechanism witnessed
 here is identical to what a real run gets; only the schema name differs. This capture post-dates
 the scaffold folding in reviewer-principal registration and the `CLAUDE.md` governance
-preamble — BACKLOG.md, "Maintainer ruling: self-application", 2026-07-09, "starting a run
+preamble — [BACKLOG.md](BACKLOG.md), "Maintainer ruling: self-application", 2026-07-09, "starting a run
 becomes a verb"):
 
 ```
@@ -193,8 +200,9 @@ now exactly the three lines the scaffold itself prints at the end (real witnesse
            # registered above); nothing to paste.
 ```
 
-One scaffold command, one `cd`, one `claude` — then type the task. No file to paste, no prompt
-to retype from memory (ratifier's acceptance bar, 2026-07-09). This is gated to `--new-world`
+Starting a run now takes one scaffold command, one `cd`, and one `claude` invocation where
+you type the task — there is no file to paste and no prompt to retype from memory
+(ratifier's acceptance bar, 2026-07-09). This is gated to `--new-world`
 mode only: classic `--schema/--kern/--role` mode applies no kernel lineage at all (see item 1
 above), so it has no principal table to register into yet and writes no `CLAUDE.md` — a file
 claiming "a reviewer principal exists" would be false there until the operator applies a kernel
