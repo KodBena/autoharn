@@ -26,7 +26,12 @@
 ||| because the SUBSTRATE is -- see the "PRESERVED, ON PURPOSE" list in this header.
 ||| Beauty that would erase one of those facts is a regression, not a cleanup.
 |||
-||| AS-OF: kernel chain through s33 (kernel/lineage/s33-composite-discharge.sql, landed)
+||| AS-OF: kernel chain through s35 (verified, no semantic delta to transcribe since s33:
+|||   s34 adds the kernel-side refusal of a writer-supplied discharge_grade -- an illegal
+|||   state this model's Draft-stage index already made UNREPRESENTABLE (GradeF Draft = ()),
+|||   so the substrate caught up to the model, not vice versa; s35 is a behavior-identical
+|||   dispatcher refactor of validate_work_item, every refusal text byte-identical by its
+|||   own leaf-manifest gate's witness. Same shapes, same derivations, same refusals.)
 |||
 ||| PROVENANCE:
 |||   v1 (2026-07-15, night) -- an Opus transcription consultation, machine-checked,

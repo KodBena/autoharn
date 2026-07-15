@@ -141,3 +141,11 @@ fi
 # corpus acronym-sweep (BACKLOG / finding 48). Its exit code is deliberately NOT propagated.
 "$PY" "$REPO_ROOT/gates/doc-legibility/check.py" >&2 || \
     echo "pre-commit: doc-legibility reported undefined acronyms (REPORT-ONLY — not blocking; see BACKLOG finding 48)." >&2
+
+# idris-model-freshness — REPORT-ONLY (maintainer promotion of design/Autoharn.idr to
+# architecture documentation, 2026-07-15): compares the model's AS-OF line against the actual
+# kernel/lineage head and runs idris2 --check. Report-only by its own author's wiring proposal
+# (a stale model is true-but-not-actionable for an unrelated committer); upgrade to blocking is
+# a deliberate future act, not a default. Exit code deliberately NOT propagated.
+"$PY" "$REPO_ROOT/gates/idris_model_freshness.py" >&2 || \
+    echo "pre-commit: idris-model-freshness reported the model stale or non-elaborating (REPORT-ONLY — not blocking; ledger item idris-model-freshness-gate)." >&2
