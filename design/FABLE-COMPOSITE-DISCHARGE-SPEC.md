@@ -34,28 +34,47 @@ The kernel can already say everything EXCEPT the discharge rule:
   defect: a derivable fact maintained by convention (ADR-0000 Rule 2(a) — the fix is a
   type, not a discipline).
 
-## 2. Principle
+## 2. Principle (v2 — revised after the maintainer's isomorphism question, 2026-07-15)
 
-**A composite item's discharge is a DERIVED fact, never an authored act.** The ledger is
-append-only and every row carries an actor's stamp; a trigger that writes close rows
-nobody authored would forge agency (rejected below). So "automatically discharged" means:
-the item's effective state is COMPUTED from its children's closes, visible the instant the
-last child closes, with no ceremony row required — and the states a hand-written act could
-lie about are refused at construction.
+**A composite item's discharge is a DERIVED fact, never an authored act — and the
+derivation is the obligation calculus the kernel ALREADY owns, not a sibling of it.** The
+maintainer asked whether work-item discharge should be modelled as an obligation, and
+whether this spec was about to duplicate the AND-tree the SPA commission's obligation work
+produced. Checked against the kernel: yes, and yes. `work_item_strict_blockers()`
+(s29, narrowed by s30) is already the one home of "is this item's obligation tree
+resolved" — recursive over s28 children and `blocks-close` antecedents, leaf condition
+"closed AND review debt discharged", empty iff resolved, conjunction-derived with no
+stored verdict. A first draft of this spec defined a SECOND recursive walker with a
+WEAKER leaf ("closed", ignoring review debt) — two homes for one truth, disagreeing
+exactly where it matters (ADR-0012 P1; the weaker leaf would have auto-discharged a
+parent over a child's outstanding review debt). v2 deletes that walker: composite
+discharge is a READ of the existing conjunction. The ledger is append-only and every row
+carries an actor's stamp; a trigger that writes close rows nobody authored would forge
+agency (rejected below). So "automatically discharged" means: the item's effective state
+is COMPUTED — blockers-empty, visible the instant the last leaf resolves, no ceremony row.
 
 ## 3. Mechanism (s31, additive delta)
 
-- **Composite-ness is declared at the opening act, typed.** New nullable column
-  `work_discharge`, legal only on `work_opened` rows (one-way shape CHECK, the
-  s28/s30 idiom), closed vocabulary: `composite` is its one legal value. CLI:
-  `./led work open <slug> "<title>" --discharge composite`. An ordinary item (NULL) behaves
-  byte-for-byte as before this delta.
-- **Derived state.** `work_item_current` gains an appended column `effective_state`
-  (the s20 column-complete lesson): for a composite item with at least one child (direct
-  children via `work_parent`), `discharged-by-children` when every child's own
-  effective state is closed-or-discharged; `open` otherwise. Recursive (a composite child
-  discharges its composite parent), depth-capped like its s28/s30 siblings. For every
-  non-composite item, `effective_state` = `state`, unconditionally.
+- **Composite-ness is declared at the opening act, typed — and it means STRICT-BY-TYPE.**
+  New nullable column `work_discharge`, legal only on `work_opened` rows (one-way shape
+  CHECK, the s28/s30 idiom), closed vocabulary: `composite` is its one legal value. CLI:
+  `./led work open <slug> "<title>" --discharge composite`. Semantics: every future close
+  of a composite slug is a strict close — s29's `--strict` guarantee moves from opt-in at
+  the moment of closing (exactly the moment a hurried closer skips it) into the item's
+  type, where no later actor can forget it. No new enforcement mechanism exists: the
+  trigger treats a composite close as if `work_strict_close` were set, byte-for-byte the
+  s29 path. An ordinary item (NULL) behaves byte-for-byte as before this delta.
+- **Derived state — a read of the ONE conjunction.** `work_item_current` gains an
+  appended column `effective_state` (the s20 column-complete lesson): for a composite
+  item with at least one direct child, `discharged-by-obligations` when
+  `work_item_strict_blockers(slug)` returns empty; `open` otherwise. No second tree
+  walker is minted — the view calls the same STABLE function the strict-close trigger
+  already conjoins, so enforcement, derived state, and (downstream) the SPA's AND-tree
+  visualization are three readers of one calculus and CANNOT drift. Note this is the
+  STRONGER leaf than a bare "children closed": a child closed `--review-deferred` with
+  its review undischarged keeps the parent open — the fail-safe direction, inherited
+  rather than invented. For every non-composite item, `effective_state` = `state`,
+  unconditionally.
 - **The vacuous-truth hazard is foreclosed.** A composite item with ZERO children is
   `open`, never vacuously discharged — the parent opened before its decomposition exists
   must wait for it. The residual race (all currently-open children close before a sibling
@@ -63,18 +82,15 @@ lie about are refused at construction.
   LIMIT, not hidden: the standing preamble discipline (decompose the ENTIRE commission
   into items BEFORE implementing) is exactly the operating rule that keeps the window
   empty, and the teach-text on the open constructor says so.
-- **The lying close is refused.** A `work_closed` row on a composite slug is REFUSED while
-  any direct child is not closed-or-discharged (validate_work_item, extended — the same
-  function every prior refusal lives in), with teach-text naming the open children. This
-  is s29's existing strict-close blocker made UNCONDITIONAL for declared composites: s29
-  guards only a `--strict` close (opt-in at the moment of closing, exactly the moment a
-  hurried closer skips it); declaring `--discharge composite` at the OPENING act moves
-  that protection to the item's type, where no later actor can forget it (the experience
-  world's own row-52 finding characterized s29 as running "the opposite direction" from
-  auto-discharge — this delta supplies the missing direction and hardens the existing one). Once
-  all children are discharged, a hand-written close remains LEGAL and optional — it adds a
-  witness/resolution on top of the derived fact (useful for `shipped --witness`), it never
-  substitutes for it.
+- **The lying close is refused — by the strict path that already exists.** Because a
+  composite close IS a strict close (strict-by-type, above), a `work_closed` row on a
+  composite slug with any blocker outstanding is refused by s29's existing trigger branch,
+  teach-text naming the blocking leaves — no new refusal code, only the type routing into
+  it (the experience world's own row-52 finding characterized s29 as running "the opposite
+  direction" from auto-discharge — this delta supplies the missing direction and hardens
+  the existing one). Once the tree is resolved, a hand-written close remains LEGAL and
+  optional — it adds a witness/resolution on top of the derived fact (useful for
+  `shipped --witness`), it never substitutes for it.
 - **Precedence composes, unchanged.** Children ordered among themselves use s30
   `blocks-close` edges exactly as today; this delta adds no second precedence mechanism.
   The commission's full shape — "parent discharges when children are done AND their
@@ -104,10 +120,14 @@ the queue), and doubt about the side of the line IS the routing.
 
 - Composite with zero children: `effective_state` = open (vacuous discharge witnessed
   ABSENT).
-- Composite with two children, one closed: open; second closes: `discharged-by-children`
+- Composite with two children, one closed: open; second closes: `discharged-by-obligations`
   with no further act, WITNESSED in the same read that shows the closes.
-- Hand close of a composite with an open child: REFUSED, teach-text names the child.
-- Hand close after all children closed: accepted; `state` and `effective_state` agree.
+- Composite with all children CLOSED but one closed `--review-deferred`, review
+  undischarged: parent stays open (the stronger leaf WITNESSED, not asserted); the review
+  lands: parent derives discharged in the same read.
+- Hand close of a composite with an open child: REFUSED via the s29 strict branch without
+  `--strict` being passed (strict-by-type witnessed), teach-text names the child.
+- Hand close after the tree resolves: accepted; `state` and `effective_state` agree.
 - Non-composite items: `effective_state` identical to `state` across the whole fixture
   world (byte-identical behavior witnessed, not asserted).
 - Nested composites: grandparent discharges when the middle composite derives discharged.
