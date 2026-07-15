@@ -1,17 +1,20 @@
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-14T23:23:56Z
-#   last-change: 2026-07-14T23:24:05Z
+#   last-change: 2026-07-15T01:07:02Z
 #   contributors: a857c93d/main
 # <<< PROVENANCE-STAMP <<<
 
-"""panel.backend.app — the FastAPI service implementing the API contract (spec S3).
+"""panel.backend.app — the FastAPI service implementing the API contract (BUILD SPEC v2 r5 sec 4).
 
 Bound to 127.0.0.1 only (standing ruling: no host-hardening ceremony for a localhost tool on
 the maintainer's own machine). Reads go through `ledger_read.py` (pure SELECTs); the ONLY write
 route, `/api/cosign`, shells to `./led review` via `cosign.py` -- never a parallel write path.
 
+Decomposition items live in the ledger as `kind='note'` rows (sec 3) -- this module never reads
+`panel/manifests/` (condemned and removed, sec 8) and never imports `manifest_load` (deleted).
+
 Run directly: `python3 -m uvicorn app:app --host 127.0.0.1 --port <config.DEFAULT_BIND_PORT>`
-from this directory (see panel/README.md, WP-D, for the operator walkthrough).
+from this directory (see panel/README.md, WP-4, for the operator walkthrough).
 """
 from __future__ import annotations
 
@@ -26,13 +29,12 @@ from pydantic import BaseModel
 
 import cosign
 import ledger_read
-import manifest_load
 from config import PanelConfig, load_config
-from disposition import derive_status
+from ledger_read import AmbiguousItem, ResolvedItem
 
 
 class Broadcaster:
-    """Fan-out from ONE background DB poll to N connected SSE clients (spec S4) -- not one poll
+    """Fan-out from ONE background DB poll to N connected SSE clients (spec sec 7) -- not one poll
     per client. A plain set of per-client asyncio.Queues; publish pushes to every live one."""
 
     def __init__(self) -> None:
@@ -60,7 +62,7 @@ class AppState:
 
 async def _poll_loop(state: AppState) -> None:
     """The ONE background task polling `SELECT max(id), max(ts), count(*) FROM ledger` every
-    `cfg.poll_interval` (spec S4's resolved tradeoff: no NOTIFY exists on this ledger's writes,
+    `cfg.poll_interval` (spec sec 7's resolved tradeoff: no NOTIFY exists on this ledger's writes,
     and minting one means editing a frozen kernel/template surface -- polling is the only
     mechanism that respects that constraint). Publishes to every subscribed SSE client only when
     the watermark actually moves."""
@@ -83,7 +85,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     state = AppState(cfg)
     app.state.panel = state
     # Startup: ensure the maintainer principal is registered (idempotent -- ON CONFLICT DO
-    # NOTHING at the kernel), so the first co-sign never fails on an unregistered actor (spec S5).
+    # NOTHING at the kernel), so the first co-sign never fails on an unregistered actor (spec
+    # sec 6).
     result = await asyncio.to_thread(
         cosign.ensure_principal_registered, cfg, cfg.maintainer_principal, "human"
     )
@@ -113,47 +116,63 @@ def api_health() -> dict[str, Any]:
     return ledger_read.health(cfg)
 
 
-@app.get("/api/commission/{manifest_id}")
-def api_commission(manifest_id: str) -> dict[str, Any]:
+@app.get("/api/commissions")
+def api_commissions() -> list[dict[str, Any]]:
+    """Every `kind='commission'` row, each with its post-collision-grouping `item_count` (spec
+    sec 4) -- `ledger_read.commissions` is the ONE place that count is computed; this route
+    performs no re-derivation of it."""
     cfg = _state(app).cfg
-    try:
-        manifest = manifest_load.load_manifest(cfg.manifests_dir, manifest_id)
-    except manifest_load.ManifestError as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
+    return ledger_read.commissions(cfg)
 
-    commission_row = ledger_read.ledger_row(cfg, manifest.commission_row)
 
-    items_out: list[dict[str, Any]] = []
-    for item in manifest.items:
-        resolved_witnesses = ledger_read.resolve_item_witnesses(cfg, item)
-        status = derive_status([rw.facts for rw in resolved_witnesses])
-        items_out.append(
-            {
-                "id": item.id,
-                "parent": item.parent,
-                "label": item.label,
-                "text": item.text,
-                "status": status,
-                "witnesses": [
-                    {
-                        "ref_kind": rw.ref_kind,
-                        "ref": rw.ref,
-                        "note": rw.note,
-                        "resolved": rw.resolved,
-                        "cosign_target_row": rw.cosign_target_row,
-                        "cosign": rw.cosign,
-                    }
-                    for rw in resolved_witnesses
-                ],
-            }
-        )
-
+def _witness_wire(rw: ledger_read.ResolvedWitness) -> dict[str, Any]:
+    """Flatten one `ResolvedWitness` to the frozen wire `Witness` shape (spec sec 4) -- no `note`
+    key (`ResolvedWitness.note` was dropped, sec 3/8 r3: it never had a wire representation)."""
     return {
-        "manifest_id": manifest.manifest_id,
-        "commission_row": manifest.commission_row,
-        "title": manifest.title,
-        "commission_row_facts": commission_row,
-        "items": items_out,
+        "ref_kind": rw.ref_kind,
+        "ref": rw.ref,
+        "resolved": rw.resolved,
+        "substantive": rw.facts.exists and rw.facts.substantive,
+        "cosign_target_row": rw.cosign_target_row,
+        "cosign": rw.cosign,
+    }
+
+
+def _item_wire(item: ledger_read.Item) -> dict[str, Any]:
+    """Flatten one `ResolvedItem | AmbiguousItem` to the frozen wire `Item` shape (spec sec 4):
+    `row_id`/`label` are null iff `status == "AMBIGUOUS"`; `ambiguous_row_ids` is non-null iff
+    `status == "AMBIGUOUS"`, else null -- the two fields are each other's exhaustive complement."""
+    if isinstance(item, AmbiguousItem):
+        return {
+            "row_id": None,
+            "item_id": item.item_id,
+            "label": None,
+            "status": "AMBIGUOUS",
+            "cosign": None,
+            "witnesses": [],
+            "ambiguous_row_ids": list(item.candidate_row_ids),
+        }
+    assert isinstance(item, ResolvedItem)
+    return {
+        "row_id": item.row_id,
+        "item_id": item.item_id,
+        "label": item.label,
+        "status": item.status,
+        "cosign": item.item_cosign,
+        "witnesses": [_witness_wire(rw) for rw in item.witnesses],
+        "ambiguous_row_ids": None,
+    }
+
+
+@app.get("/api/commission/{commission_row:int}")
+def api_commission(commission_row: int) -> dict[str, Any]:
+    cfg = _state(app).cfg
+    commission = ledger_read.ledger_row(cfg, commission_row)
+    decomposition = ledger_read.decomposition_items(cfg, commission_row)
+    return {
+        "commission_row": commission_row,
+        "commission": commission,
+        "items": [_item_wire(item) for item in decomposition.items],
     }
 
 
