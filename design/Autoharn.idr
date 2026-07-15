@@ -26,7 +26,7 @@
 ||| because the SUBSTRATE is -- see the "PRESERVED, ON PURPOSE" list in this header.
 ||| Beauty that would erase one of those facts is a regression, not a cleanup.
 |||
-||| AS-OF: kernel chain through s32 (+ FABLE-COMPOSITE-DISCHARGE-SPEC ratified, s33 in build)
+||| AS-OF: kernel chain through s33 (kernel/lineage/s33-composite-discharge.sql, landed)
 |||
 ||| PROVENANCE:
 |||   v1 (2026-07-15, night) -- an Opus transcription consultation, machine-checked,
@@ -78,6 +78,26 @@
 ||| refinement consult's own finding is that the universe form scales additively where
 ||| the GADT does not.
 |||
+||| S33 PARITY PASS (2026-07-15, ledger item autoharn-idr-s33-parity): re-derived directly
+||| from kernel/lineage/s33-composite-discharge.sql (the DELTA is the truth transcribed,
+||| not the gate author's own prose description of it -- the two divergences
+||| gates/idris_model_freshness.py's author flagged when this file was deliberately left
+||| at s32 are both closed here). (1) Element 2, STRICT-BY-TYPE: VClose's strict premise
+||| now reads the slug's OWN declared work_discharge via `isComposite` (a raw
+||| write-boundary read, the same posture `everOpened` already has) and widens to the
+||| strict branch whenever the slug is composite, REGARDLESS of the writer-supplied
+||| strict flag (quoted inline at both sites) -- a composite hand-close with an
+||| unresolved obligation tree now fails to construct even with strict=False (r33a). (2)
+||| Element 4: the prior refresh's `effectiveState` was WRONG for a composite item -- it
+||| ignored the passed-in `ItemState` entirely and applied the never-hand-closed
+||| child-count gate unconditionally. The landed SQL's hand-close branch (`WHEN c.slug IS
+||| NOT NULL THEN CASE WHEN EXISTS(blockers) THEN 'open' ELSE 'closed' END`) has NO
+||| child-count requirement at all -- re-derived from the SQL lines, quoted at the
+||| definition below, not taken on the gate author's description on faith. rc4/rc5/rc6
+||| witness the corrected branch (defeat-reopens-a-hand-close,
+||| hand-close-respected-once-resolved, zero-children-hand-close-still-closes), none of
+||| which the prior code could have produced.
+|||
 ||| PRESERVED, ON PURPOSE (beauty that would erase these is a regression, not a fix):
 |||   * The epoch gate stays OUT (s29 sec-10: disposition mandatory iff row id exceeds
 |||     an operator-set migration epoch). This renders the POST-EPOCH STEADY STATE only;
@@ -98,13 +118,15 @@
 |||     is honest only for a birth-chain world; a MIGRATED world can carry legacy NULL
 |||     edges from before s30. Named here, not hidden.
 |||   * The composite-discharge field (`composite : Bool` on an opening act) models
-|||     design/FABLE-COMPOSITE-DISCHARGE-SPEC.md, RATIFIED 2026-07-15 -- but its kernel
-|||     delta (kernel/lineage/s33, owned by a concurrent build, not touched by this
-|||     refresh) has not landed. The write boundary below enforces NOTHING extra for a
-|||     composite item (no kernel mechanism exists yet to enforce "composite implies
-|||     strict"); `effectiveState` is the derivation the spec describes, offered as a
-|||     pure READ that will start meaning something the moment s33 lands. Marked
-|||     ratified-but-build-in-flight, not pretended-shipped and not omitted.
+|||     design/FABLE-COMPOSITE-DISCHARGE-SPEC.md as LANDED, kernel/lineage/s33-composite-
+|||     discharge.sql (s33 parity pass, header above). The write boundary now enforces
+|||     strict-by-type at close (`isComposite`, VClose, Element 2) and `effectiveState`'s
+|||     hand-close branch matches Element 4's landed SQL byte-for-byte (no child-count
+|||     requirement there -- see its own definition-site comment, quoted from the SQL).
+|||     Still preserved, unchanged from the prior refresh: the vacuous-truth foreclosure
+|||     for a NEVER-hand-closed zero-child composite (spec sec-3's own named LIMIT), and
+|||     the fact that `composite` is a Bool parameter models the declared TYPE, never
+|||     inferred from having children (spec's own Rejected list).
 |||
 ||| Black-box mocks at every boundary (Postgres, clingo, git, hook transport are
 ||| opaque). Where the rendering fights the language, the fight is the finding;
@@ -275,9 +297,9 @@ data Payload : (st : Stage) -> (n : Nat) -> Type where
   -- s22 work-item event vocabulary + s28 parent + composite-discharge spec.
   PWorkOpened : (slug : Slug) -> (title : String)
              -> (parent : Maybe Slug)          -- s28: set once at opening
-             -> (composite : Bool)             -- FABLE-COMPOSITE-DISCHARGE-SPEC,
-                                                -- ratified, s33 build in flight
-                                                -- (see header): inert today.
+             -> (composite : Bool)             -- s33-composite-discharge.sql, LANDED:
+                                                -- read by isComposite (VClose, §3) and
+                                                -- effectiveState (§4).
              -> Payload st n
   PWorkClaimed : (slug : Slug) -> Payload st n
   PWorkDepends : (slug : Slug) -> (antecedent : Slug) -> EdgeF st -> Payload st n
@@ -552,6 +574,24 @@ everOpened (l :< e) s = isOpen e.payload || everOpened l s
     isOpen (PWorkOpened s' _ _ _) = s == s'
     isOpen _                      = False
 
+||| s33 Element 2 -- STRICT-BY-TYPE, the read half. RAW write-boundary read of
+||| slug s's OWN work_opened row's declared discharge -- the SAME posture
+||| `everOpened` already has (a BEFORE INSERT trigger cannot read a view
+||| excluding the row being inserted; composite-ness is set exactly once, at
+||| opening, s33 Element 1, so the raw domain is also the correct one, not
+||| merely the only available one). QUOTE (s33-composite-discharge.sql, lines
+||| 374-377): "IF NEW.kind = 'work_closed' THEN is_composite := EXISTS (SELECT
+||| 1 FROM ledger WHERE kind = 'work_opened' AND work_slug = NEW.work_slug AND
+||| work_discharge = 'composite'); END IF;" -- rendered here as a plain fold
+||| over the SAME raw ledger everOpened walks.
+isComposite : Ledger n -> Slug -> Bool
+isComposite Lin      _ = False
+isComposite (l :< e) s = isCompOpen e.payload || isComposite l s
+  where
+    isCompOpen : Payload st m -> Bool
+    isCompOpen (PWorkOpened s' _ _ True) = s == s'
+    isCompOpen _                         = False
+
 ||| Raw blocks-close reachability, seeded at `from` (LWriteBoundary: a BEFORE
 ||| INSERT trigger cannot read a view excluding the row being inserted, so
 ||| the cycle check -- s30's work_depends_on_would_cycle -- is a declared RAW
@@ -609,9 +649,18 @@ data ValidPayload : {n : Nat} -> Ledger n -> Payload Draft n -> Type where
          -> (0 acyclic   : So (not (elem s (bcReach l ant))))
          -> ValidPayload l (PWorkDepends s ant (Just BlocksClose))
   ||| s29: epoch steady state (disposition is total by type -- unchanged
-  ||| fidelity choice, see header) + Element C strict premises (s31 in-force).
+  ||| fidelity choice, see header) + Element C strict premises (s31 in-force)
+  ||| + s33 Element 2 STRICT-BY-TYPE: the entry condition into the strict
+  ||| branch widens from the writer-supplied flag alone to
+  ||| `strict || isComposite l s` -- QUOTE (s33-composite-discharge.sql, lines
+  ||| 380-381): "IF NEW.kind = 'work_closed' AND (COALESCE(NEW.work_strict_close,
+  ||| false) OR COALESCE(is_composite, false)) THEN" -- nothing INSIDE the
+  ||| strict branch changes (strictPremise itself is untouched, s29 Element C,
+  ||| byte-for-byte); only what ROUTES a close into it widens. A composite
+  ||| slug's close is therefore ALWAYS strict, regardless of the strict field
+  ||| the writer supplied (r33a below: refused even at strict=False).
   VClose  : (0 opened   : So (everOpened l s))
-         -> (0 strictOk : So (strictPremise l s strict disp))
+         -> (0 strictOk : So (strictPremise l s (strict || isComposite l s) disp))
          -> ValidPayload l (PWorkClosed s res w disp ref strict)
 
 -- ===========================================================================
@@ -670,14 +719,12 @@ data ItemState = StOpen | StClosed Resolution
 
 ||| Composite discharge -- A READ, never an authored act (composite spec §2:
 ||| "the derivation is the obligation calculus the kernel ALREADY owns").
-||| Vacuous-truth hazard foreclosed: zero children => open, never discharged.
-||| RATIFIED, BUILD IN FLIGHT (header): this function types the spec's
-||| intended read faithfully, but no kernel mechanism (s33) enforces
-||| composite-implies-strict at the write boundary yet -- ValidPayload above
-||| carries no premise referencing `composite` at all. Calling this today on
-||| a real kernel would be reading a column the kernel does not yet have;
-||| the function is correct against the SPEC, UNEXERCISABLE against the
-||| substrate until s33 lands.
+||| Vacuous-truth hazard foreclosed: a NEVER-hand-closed zero-child composite
+||| stays open, never discharged (that gate lives in the never-hand-closed
+||| branch below; see its own comment for why the hand-closed branch does not
+||| repeat it). s33 LANDED (header): this function now matches Element 4's
+||| ACTUAL SQL, re-derived from the delta itself (not the gate author's
+||| description of it) -- quoted at the definition below.
 data EffectiveState = ESOpen | ESClosed Resolution | ESDischargedByObligations
 
 ||| Does root have at least one direct child edge (parent or blocks-close),
@@ -686,14 +733,46 @@ data EffectiveState = ESOpen | ESClosed Resolution | ESDischargedByObligations
 hasDirectChild : {n : Nat} -> Ledger n -> Slug -> Bool
 hasDirectChild l root = anyB (\e => fst e == root) (edgesCur l)
 
+||| s33 Element 4, re-derived from the landed SQL (s33-composite-discharge.sql,
+||| lines 494-504), quoted:
+|||   CASE
+|||     WHEN o.discharge IS DISTINCT FROM 'composite' THEN <state>
+|||     WHEN c.slug IS NOT NULL THEN                          -- hand-closed
+|||       CASE WHEN EXISTS (blockers) THEN 'open' ELSE 'closed' END
+|||     WHEN COALESCE(cc.n, 0) >= 1 AND NOT EXISTS (blockers)  -- never hand-closed
+|||       THEN 'discharged-by-obligations'
+|||     ELSE 'open'
+|||   END
+||| The gate author's own PRESERVED note (superseded by this pass, header)
+||| named the divergence but not its shape; reading the SQL directly shows the
+||| `c.slug IS NOT NULL` (hand-closed, i.e. `StClosed`) arm tests ONLY the
+||| blocker set -- NO child-count test appears in that branch at all. Only the
+||| `ELSE` (never-hand-closed, `StOpen`) arm gates on `cc.n >= 1`, which is
+||| where the vacuous-truth foreclosure actually lives. The prior refresh's
+||| code ignored `ItemState` for every composite item and applied the
+||| child-count gate unconditionally -- wrong in both directions (a
+||| hand-closed zero-child composite should read closed once resolved; a
+||| hand-closed composite with an unresolved tree should re-open even with
+||| children present). Fixed here by matching on ItemState first, exactly as
+||| the SQL's CASE order does.
 effectiveState : {n : Nat} -> Ledger n -> Slug
               -> (composite : Bool) -> ItemState -> EffectiveState
-effectiveState l s True _ =
-  if hasDirectChild l s
-    then case strictBlockers l s of
-           [] => ESDischargedByObligations
-           _  => ESOpen
-    else ESOpen  -- vacuous-truth hazard foreclosed (spec §3)
+-- hand-closed (raw `state = 'closed'`): derived reading ALWAYS wins over the
+-- hand-close (spec sec-3b) -- blockers non-empty reopens it IN THE SAME READ
+-- even though the raw close row still stands; no child-count test, matching
+-- the SQL's `c.slug IS NOT NULL` arm byte-for-byte.
+effectiveState l s True (StClosed r) =
+  case strictBlockers l s of
+    [] => ESClosed r
+    _  => ESOpen
+-- never hand-closed: discharged-by-obligations iff >=1 direct child AND
+-- blockers empty; the ELSE arm (including the zero-children case) is 'open'
+-- -- vacuous-truth foreclosure lives HERE, and only here (spec sec-3's own
+-- named LIMIT).
+effectiveState l s True StOpen =
+  if hasDirectChild l s && null (strictBlockers l s)
+    then ESDischargedByObligations
+    else ESOpen
 effectiveState _ _ False StOpen       = ESOpen
 effectiveState _ _ False (StClosed r) = ESClosed r
 
@@ -897,9 +976,11 @@ failing
 r6a : Projection Autoharn.worldC
 r6a = project worldC
 
--- Composite-discharge fixtures (ratified-but-build-in-flight, header):
--- a two-child composite discharges once both children close, and a zero-
--- child composite never vacuously discharges.
+-- Composite-discharge fixtures (s33 LANDED, header): a two-child composite
+-- discharges once both children close, a zero-child never-hand-closed
+-- composite never vacuously discharges, a composite close is always strict
+-- regardless of the writer's strict flag, and a hand-close's derived reading
+-- always wins over the raw state column (both directions).
 -- world D: composite root "p" opened; child "c1" opened, parented to "p".
 worldD : Ledger 2
 worldD = Lin :< mkE 1 Nothing (PWorkOpened "p" "parent" Nothing True)
@@ -911,7 +992,8 @@ worldE = worldD :< mkE 1 Nothing
            (PWorkClosed "c1" RShipped (MkNonEmptyText "done" Oh)
               DWitnessed (MkNonEmptyText "ledger row 2" Oh) False)
 
--- R-composite-1 GREEN/Refl: zero children (root alone) never discharges.
+-- R-composite-1 GREEN/Refl: zero children (root alone), never hand-closed --
+-- never discharges (the vacuous-truth foreclosure, ELSE arm, StOpen leg).
 rc1 : effectiveState Autoharn.worldA "a" True StOpen = ESOpen
 rc1 = Refl
 
@@ -923,3 +1005,59 @@ rc2 = Refl
 -- discharged, no authored close row on "p" anywhere in worldE.
 rc3 : effectiveState Autoharn.worldE "p" True StOpen = ESDischargedByObligations
 rc3 = Refl
+
+-- R-composite-4 GREEN/Refl (Element 4 fix, CORRECTED BEHAVIOR): a HAND-CLOSED
+-- composite ("p" read as StClosed) whose child is still open (worldD) re-
+-- opens -- derived state ALWAYS wins over a hand-close (spec sec-3b), which
+-- the prior code could not produce (it ignored ItemState for every composite
+-- item and never returned ESOpen from a StClosed input).
+rc4 : effectiveState Autoharn.worldD "p" True (StClosed RShipped) = ESOpen
+rc4 = Refl
+
+-- R-composite-5 GREEN/Refl (Element 4 fix, CORRECTED BEHAVIOR): the SAME
+-- hand-closed composite, but the child has since closed (worldE) -- blockers
+-- are now empty, so the hand-close is respected and reads ESClosed, exactly
+-- the raw resolution the writer supplied. The prior code could not produce
+-- this either (it never read ESClosed for a composite item at all).
+rc5 : effectiveState Autoharn.worldE "p" True (StClosed RShipped) = ESClosed RShipped
+rc5 = Refl
+
+-- world G: a composite root "z" opened ALONE -- no children, no close row of
+-- any kind (worldA is deliberately not reused here: it already carries a
+-- deferred, unattested close on "a", which would itself contribute a
+-- review_unresolved blocker on the root and confound this fixture's point).
+worldG : Ledger 1
+worldG = Lin :< mkE 1 Nothing (PWorkOpened "z" "solo" Nothing True)
+
+-- R-composite-6 GREEN/Refl (Element 4 fix, NO CHILD-COUNT IN THE HAND-CLOSE
+-- BRANCH): a hand-closed composite with ZERO children (worldG) still reads
+-- ESClosed -- the SQL's `c.slug IS NOT NULL` arm has no `cc.n >= 1` test,
+-- unlike the never-hand-closed ELSE arm (rc1). The prior code's single
+-- unconditional `hasDirectChild` gate would have read this as ESOpen,
+-- silently overriding a resolved hand-close for want of children it was
+-- never asked to have.
+rc6 : effectiveState Autoharn.worldG "z" True (StClosed RDropped) = ESClosed RDropped
+rc6 = Refl
+
+-- R33a RED (Element 2, STRICT-BY-TYPE): closing composite "p" (worldD: child
+-- "c1" still OPEN) with the WRITER-SUPPLIED strict flag set to False still
+-- routes into the strict branch -- composite-ness alone widens the entry
+-- condition (isComposite worldD "p" = True, read off p's own PWorkOpened row)
+-- -- and the obligation tree is unresolved, so strictPremise evaluates False
+-- and the term does not construct. This is the fixture task 1 names: a
+-- composite hand-close with an open child fails WITHOUT the strict flag set.
+failing
+  r33a : ValidPayload Autoharn.worldD
+           (PWorkClosed "p" RDropped Nothing DWitnessed
+              (MkNonEmptyText "row 1" Oh) False)
+  r33a = VClose Oh Oh
+
+-- R33b GREEN: the SAME composite close (strict=False, worldE this time --
+-- child "c1" now closed) succeeds, because composite-ness routed it into the
+-- strict branch and the obligation tree IS resolved -- "the type sets the
+-- flag" (spec's own words) does not mean composite closes are unconditionally
+-- refused, only that they are unconditionally strict.
+r33b : ValidPayload Autoharn.worldE
+         (PWorkClosed "p" RDropped Nothing DWitnessed
+            (MkNonEmptyText "row 1" Oh) False)
+r33b = VClose Oh Oh
