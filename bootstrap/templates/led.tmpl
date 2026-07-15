@@ -542,15 +542,38 @@ if [ "${1:-}" = "obligate" ]; then
     can_delete=$(psql -h "$PGHOST" -d "$PGDB" -tAc \
       "SELECT has_table_privilege('${ROLE}', '${SCHEMA}.countersign_obligation', 'DELETE');")
     if [ "$can_delete" != "t" ]; then
+      # TEACH-THE-REFUSAL (tracker scaffold-owner-credential-separation LEG 2, 2026-07-14 ent
+      # self-escalation incident, ledger row 640): this block used to end with the exact
+      # schema-owner DELETE line printed ready to paste -- teach-text in FORM but, in substance,
+      # an invitation to route around the refusal by reaching for owner privilege directly, which
+      # is what the incident's agent did (connected as ent_owner and ran the DELETE itself). The
+      # lawful next step this refusal must teach is LEDGER + STOP + ESCALATE, never "here is the
+      # owner command" -- escalation has to be the CHEAPER path or a struggling agent reaches for
+      # the workaround instead (ADR-0000 Rule 2(b): a recurring struggle is the executive's net to
+      # build, not the implementer's to route around; ADR-0013's "fair dealing" posture that a
+      # refusal is a place to stop, not a puzzle to solve).
       echo "led obligate revoke: REFUSED -- role '${ROLE}' has no DELETE grant on" >&2
       echo "  ${SCHEMA}.countersign_obligation (checked live via has_table_privilege, not" >&2
       echo "  hardcoded). This is s20's deliberate ruling, not an oversight: an obligation is" >&2
       echo "  standing operator-owned policy config, never a role-level self-service capability" >&2
       echo "  -- widening the grant would be a kernel delta and is out of scope for this verb to" >&2
-      echo "  take on itself. To revoke scope '${scope}', a maintainer runs, AS THE SCHEMA OWNER" >&2
-      echo "  (never as ${ROLE}, never by widening ${ROLE}'s grants):" >&2
-      echo "    psql -h ${PGHOST} -d ${PGDB} -v ON_ERROR_STOP=1 -c \\" >&2
-      echo "      \"DELETE FROM ${SCHEMA}.countersign_obligation WHERE scope = '${scope}';\"" >&2
+      echo "  take on itself." >&2
+      echo "" >&2
+      echo "  DO NOT connect as the schema owner (or any other elevated identity) to run this" >&2
+      echo "  DELETE yourself, however reachable that identity may be from this environment --" >&2
+      echo "  that is a self-escalation, not a fix, regardless of whether the outcome is benign." >&2
+      echo "" >&2
+      echo "  The lawful next step, in order:" >&2
+      echo "    1. LEDGER the block now, from THIS session, so the refusal is on the record" >&2
+      echo "       before anything else happens:" >&2
+      echo "         ./led finding \"obligate revoke blocked: role '${ROLE}' lacks DELETE on\" \\" >&2
+      echo "           \"${SCHEMA}.countersign_obligation for scope '${scope}' -- needs a\" \\" >&2
+      echo "           \"maintainer act to revoke, not a role-level workaround\"" >&2
+      echo "    2. STOP work on this scope. Do not attempt the DELETE via any other connection," >&2
+      echo "       role, or credential this environment can reach." >&2
+      echo "    3. ESCALATE for orchestrator/maintainer sign-off -- surface the ledgered finding" >&2
+      echo "       and wait for a maintainer act. Only the maintainer, as the schema owner, in" >&2
+      echo "       their own session, decides whether and how scope '${scope}' is revoked." >&2
       exit 1
     fi
     exec psql -h "$PGHOST" -d "$PGDB" -v ON_ERROR_STOP=1 -v scope="$scope" <<SQL
@@ -577,6 +600,42 @@ SQL
     exit 1
   fi
   scope="$1"; assigned_by_name="$2"; obliges_actor_name="$3"
+  # BOUNDARY VALIDATION, refuse-before-write (tracker scaffold-owner-credential-separation LEG 3;
+  # 2026-07-14 ent self-escalation incident, ledger row 640: "its own obligate command
+  # accidentally globalized to 813 historical countersign_obligation rows"). <scope> READS as a
+  # narrow label but is not a filter -- review_gap joins on the obliged actor's IDENTITY alone
+  # (see the usage text above), so every countersign_obligation row for a given actor is
+  # redundantly global, and a second (or 813th) row for the SAME actor adds no new coverage --
+  # only more governance-config rows an operator must later reason about and, per the incident,
+  # more rows an under-pressure agent may try to mass-delete. Mirroring the malformed-statement
+  # refuse-before-write idiom the generic <kind> path already uses (estimate:/outcome: etc.),
+  # this checks LIVE whether the obliged actor already carries an obligation and refuses before
+  # the INSERT rather than silently accumulating -- a duplicate is exactly as questionable as a
+  # duplicate work_opened (line ~158 above), just not yet enforced by a kernel constraint.
+  existing_scope=$(psql -h "$PGHOST" -d "$PGDB" -tAq -v obliges_actor_name="$obliges_actor_name" <<SQL
+    SET ROLE ${ROLE};
+    SET search_path = ${SCHEMA}, ${KERNEL};
+    SELECT o.scope FROM countersign_obligation o
+    JOIN principal p ON p.id = o.obliges_actor
+    WHERE p.name = :'obliges_actor_name'
+    LIMIT 1;
+SQL
+  )
+  if [ -n "$existing_scope" ]; then
+    echo "led obligate: REFUSED -- principal '${obliges_actor_name}' already carries an" >&2
+    echo "  obligation (scope '${existing_scope}'). Adding scope '${scope}' would NOT narrow or" >&2
+    echo "  extend coverage -- review_gap counts every row this actor writes regardless of how" >&2
+    echo "  many countersign_obligation rows name them, so a second row is redundant governance" >&2
+    echo "  config, not a stronger obligation (this is the same globalization the 2026-07-14" >&2
+    echo "  incident's 813-row accumulation came from)." >&2
+    echo "" >&2
+    echo "  If '${existing_scope}' is the wrong label and you mean to REPLACE it with" >&2
+    echo "  '${scope}', revoke the old one first (a role with DELETE grant can do this itself;" >&2
+    echo "  otherwise ledger the block and escalate, per \`led obligate revoke\`'s own refusal):" >&2
+    echo "    ./led obligate revoke ${existing_scope}" >&2
+    echo "  then re-run this command." >&2
+    exit 1
+  fi
   exec psql -h "$PGHOST" -d "$PGDB" -v ON_ERROR_STOP=1 \
     -v scope="$scope" -v assigned_by_name="$assigned_by_name" -v obliges_actor_name="$obliges_actor_name" <<SQL
     SET ROLE ${ROLE};
