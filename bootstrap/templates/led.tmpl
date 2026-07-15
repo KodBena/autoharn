@@ -34,7 +34,19 @@
 #                            flag on a generic kind would be refused by the kernel every time,
 #                            so none is offered.
 #     --concern design|enactment|process|other
-#     --evidence "<text>"
+#     --evidence "<text>"          path-shaped values (start with / or ./, or contain a path
+#                            separator) are dereferenced against the filesystem AT WRITE TIME
+#                            and REFUSED, loudly, if nothing exists there (item
+#                            artifact-claim-dereference-guard; ledger rows 896-899's specimen
+#                            class -- a Write to a mistyped path succeeds silently, and the
+#                            writer records artifact-written-at-<path> as witnessed without ever
+#                            dereferencing the claimed path). row:<id> ledger citations and URLs
+#                            are never path-shaped and are never checked. A genuinely-remote
+#                            artifact (real, but not on this checkout) is cited by ROW, not by a
+#                            bare path that cannot yet dereference: --refs row:<id> against a
+#                            ledger row that describes it, per this file's own existing
+#                            "a bare reference uses refs" convention (see --refs above) --
+#                            invent no new citation form here.
 #     --confidence low|medium|high
 #     --event-time <iso-ts>  declares WHEN the recorded event actually occurred, distinct from
 #                            this row's write time (kernel/lineage/s24-declared-event-time.sql's
@@ -329,6 +341,54 @@ while true; do
     *) break ;;
   esac
 done
+
+# --- --evidence PATH-DEREFERENCE GUARD (item artifact-claim-dereference-guard; register (b) of
+# the three candidate enforcement registers named on that item -- a fail-safe additive refusal,
+# plausibly class-ratified under the 2026-07-09 ruling: it only ADDS a refusal, nothing existing
+# is relaxed and no existing semantics change). Ledger rows 896-899 are the specimen class this
+# closes: row 896 recorded an artifact-written-at-<path> claim; row 897 is the correction (the
+# Write silently landed at a DIFFERENT, mistyped path -- "Write returned success" witnessed A
+# path, not THE claimed path); row 898 names the cheap universal check the specimen skipped (ls
+# of the exact claimed path) and the class itself, artifact-claim-without-dereference; row 899
+# opened this item. The harness is uniquely positioned to make this unrepresentable for `led`'s
+# own --evidence flag specifically: the check is cheap (a single `test -e`), so it runs here
+# rather than being left to a human or a downstream reader to notice.
+#
+# Detection is PATH-SHAPED, not "any string that could be a filesystem location" -- deliberately
+# narrow so free-text evidence (commit lists, prose, ledger citations) is never mistaken for a
+# path:
+#   - row:<id> (led's own existing bare-reference citation form, "a bare reference uses refs")
+#     and anything containing "://" (a URL) are NEVER path-shaped -- never checked, no exception
+#     needed because they were never claiming a LOCAL dereferenceable path in the first place.
+#   - anything starting with "/" or "./", or containing a "/" path separator anywhere, IS
+#     path-shaped -- cheap to check (`test -e`), so it is checked, unconditionally, before any
+#     verb dispatch below sees it (one check point for every verb that accepts --evidence, not
+#     one per call site).
+# A path-shaped value that does not exist on disk right now is REFUSED with teach-text pointing
+# at the specimen class and at the non-path citation form (--refs row:<id>) for a genuinely-
+# remote artifact -- never a silent write of an unwitnessed claim.
+if [ -n "$evidence" ]; then
+  case "$evidence" in
+    row:*|*://*)
+      : # ledger row citations and URLs are never path-shaped; never checked
+      ;;
+    /*|./*|*/*)
+      if [ ! -e "$evidence" ]; then
+        echo "led: REFUSED -- --evidence '${evidence}' is path-shaped (starts with / or ./, or" >&2
+        echo "  contains a path separator) but nothing exists at that path right now." >&2
+        echo "  This is the artifact-claim-without-dereference class (ledger rows 896-899): a" >&2
+        echo "  Write to a mistyped path can succeed silently, and 'the Write call returned" >&2
+        echo "  success' witnesses A path, not THE claimed path -- row 898's cheap universal" >&2
+        echo "  check (ls/wc of the exact claimed path) is the one the specimen skipped." >&2
+        echo "  If the artifact is real but genuinely not on this checkout yet, do not cite it" >&2
+        echo "  as a bare path that cannot dereference: cite an antecedent ledger row that" >&2
+        echo "  describes it instead, e.g. --refs row:<id> (led's own existing 'a bare" >&2
+        echo "  reference uses refs' citation form) -- or re-run once the path is real." >&2
+        exit 1
+      fi
+      ;;
+  esac
+fi
 
 # --event-time COVERAGE GUARD -- --event-time is parsed by the SHARED top-of-file loop above
 # (same convention as every other flag here), but only the generic <kind> <statement...> path's
