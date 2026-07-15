@@ -61,6 +61,16 @@
 %                                            re-derived here -- ADR-0012 P1; absent when this
 %                                            program runs standalone, which reads fail-safe as
 %                                            "nothing retracted").
+%
+% CLOSURE.LP COMPOSITION (design/ORCH-CATEGORICAL-REFACTOR-CONSULT-2026-07-15.md F3 / plan step
+% 4; engine/lp_registry.py is the one home of the provides/requires declaration -- not restated
+% here). This program CONTRIBUTES its dependency edge to the generic kind-indexed closure module
+% as edge(work_dep,Dependent,Antecedent), and, when engine/lp/closure.lp is ALSO loaded, exposes
+% the identical closure a second way via work_dep_star_via_closure/2 (READS star/3). The
+% historical work_dep_star/2 rule below is UNCHANGED (ADDITIVE-ONLY per this file's own §1.6-
+% style discipline) so every banked derivation that loads this program alone still reproduces
+% byte-identical; a registry-aware consumer that also stacks closure.lp gets the SAME set through
+% star/3 -- proven equal, not merely claimed, by the fixture the registry names.
 #defined work_opened/2.
 #defined work_closed/3.
 #defined work_witness_present/1.
@@ -68,6 +78,7 @@
 #defined work_claimed/2.
 #defined work_parent_edge/3.
 #defined superseded/1.
+#defined star/3.
 
 % ---- duplicate_open (invariant 2; PROVABLY VACUOUS under normal operation -- s22's
 % validate_work_item() refuses a second work_opened row for one slug at construction time; this
@@ -86,9 +97,16 @@ work_depends_on_unknown(Dependent,Antecedent) :-
     work_dep_edge(Dependent,Antecedent), not work_opened(Antecedent,_).
 
 % ---- dependency_cycle (invariant 4, "the omega port"; GENUINELY REACHABLE) --------------------
+% work_dep_star/2 is this program's own recursion (the derivation of record, kept byte-identical
+% for every consumer that loads this file alone). edge/3 + work_dep_star_via_closure/2 is the
+% SAME closure read through engine/lp/closure.lp's generic star/3 (see the header note above) --
+% additive, never a replacement.
 work_dep_star(F,D) :- work_dep_edge(F,D).
 work_dep_star(F,D) :- work_dep_edge(F,X), work_dep_star(X,D).
 work_dependency_cycle(F) :- work_dep_star(F,F).
+
+edge(work_dep,Dependent,Antecedent) :- work_dep_edge(Dependent,Antecedent).
+work_dep_star_via_closure(F,D) :- star(work_dep,F,D).
 
 % ---- orphaned_by_retraction (s31; GENUINELY REACHABLE -- retracting an opening act while later
 % events survive is legal, surfaced never refused). The ONE current-truth judgment in this
@@ -103,6 +121,7 @@ work_orphaned_by_retraction(C,R) :- work_parent_edge(C,P,R), not superseded(R), 
 
 #show work_dep_edge/2.
 #show work_dep_star/2.
+#show work_dep_star_via_closure/2.
 #show work_duplicate_open/1.
 #show work_shipped_without_witness/2.
 #show work_depends_on_unknown/2.

@@ -75,6 +75,15 @@
 %                                            now derived from it, in-force only.
 %     superseded(RowId).                    ledger_tnow.lp's supersession closure (composed, not
 %                                            re-derived -- ADR-0012 P1).
+%
+% CLOSURE.LP COMPOSITION (design/ORCH-CATEGORICAL-REFACTOR-CONSULT-2026-07-15.md F3 / plan step
+% 4; engine/lp_registry.py is the one home of the provides/requires declaration -- not restated
+% here). This program CONTRIBUTES its combined successor edge (w_succ -- see the direction note
+% above) to the generic kind-indexed closure module as edge(work_succ,Parent,Child), and, when
+% engine/lp/closure.lp is ALSO loaded, exposes the pairwise closure a second way via
+% work_succ_star_via_closure/2 (READS star/3). The historical w_tree_member/2 walk below is
+% UNCHANGED (ADDITIVE-ONLY) so every banked derivation that loads this program alone still
+% reproduces byte-identical.
 #defined w_opened/1.
 #defined w_parent/2.
 #defined w_closed/3.
@@ -85,6 +94,7 @@
 #defined w_parent_e/3.
 #defined w_dep_e/3.
 #defined superseded/1.
+#defined star/3.
 
 % ---- s31: the in-force projections (one factoring, mirroring SQL's ledger_current reads). A
 % pre-s31 fixture that supplies w_opened/1 / w_parent/2 / w_dep/2 facts DIRECTLY still grounds
@@ -101,8 +111,17 @@ w_succ(Parent,Child) :- w_parent(Child,Parent).
 w_succ(Dependent,Antecedent) :- w_dep(Dependent,Antecedent).
 
 % ---- tree membership: Root's tree is {Root} union every transitive successor via w_succ --------
+% w_tree_member/2 is this program's own recursion (the derivation of record, kept byte-identical
+% for every consumer that loads this file alone). edge/3 + work_succ_star_via_closure/2 is the
+% SAME pairwise closure read through engine/lp/closure.lp's generic star/3 (see the header note
+% above) -- additive, never a replacement; note star/3 has no reflexive Root-to-itself atom
+% (closure.lp computes the pure edge closure, never a member's own tree membership over itself),
+% so the equivalence a consumer checks is w_tree_member(Root,C), C != Root <-> star(work_succ,Root,C).
 w_tree_member(Root,Root) :- w_opened(Root).
 w_tree_member(Root,C) :- w_tree_member(Root,P), w_succ(P,C).
+
+edge(work_succ,Parent,Child) :- w_succ(Parent,Child).
+work_succ_star_via_closure(F,D) :- star(work_succ,F,D).
 
 % ---- own-leaf unresolved: a slug's OWN IN-FORCE close row is deferred and not yet discharged
 % (s31: a retracted close is no unresolved leaf -- the item simply reads not-closed again) -------
@@ -124,3 +143,4 @@ w_tree_unresolved(Root) :- w_tree_member(Root,M), M != Root, w_not_closed(M).
 #show w_tree_member/2.
 #show w_own_leaf_unresolved/1.
 #show w_tree_unresolved/1.
+#show work_succ_star_via_closure/2.

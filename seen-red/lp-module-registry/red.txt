@@ -1,0 +1,19 @@
+=== red-mis-stacked-refused ===
+  [ok] raised RegistryError naming ledger_tnow.lp + vacuous-pass hazard: "REFUSED: layer 'work' requires ['ledger_tnow.lp', 'work_items.lp', 'work_review.lp'] but the invocation only loaded ['work_items.lp', 'work_review.lp'] -- missi"...
+
+=== red-unknown-layer-refused ===
+  [ok] raised RegistryError: "unknown layer 'no-such-layer' -- known layers: ['tnow', 'work']. A layer is registered in engine/lp_registry.py's LAYERS"
+
+=== green-export-work-degrades ===
+  [ok] pre-s22 'toy' target: facts=[] exclusions=['work_base', 'work_parent', 'work_review_disposition'] work_base=Capability(family='work_base', produced=False, capable=False, reason='no `work_slug` column on this schema (pre-s22 lineage) -- capability absent')
+
+== scaffolding classic world lpregprobe + manual s15..s31 apply ==
+  scaffold OK (schema=lpregprobe).
+
+=== green-full-stack-agrees ===
+  [ok] verdict=AGREE asp=10 sql=10 atoms only_asp=[] only_sql=[]
+
+=== green-cli-layer-flag ===
+  [ok] exit=0 excerpt="ial -- layer='work'\n#   closed verdict vocabulary: ['AGREE', 'DIVERGE_BY_DESIGN', 'DIVERGE_DEFECT', 'QUARANTINED']; RED = ['DIVERGE_DEFECT', 'QUARANTINED']\n\n  [OK ] lpregprobe AGREE              asp=10 sql=10 atoms; Δasp=[] Δsql=[]\n\n# DIFFERENTIAL GREEN -- every target bit-identical to the SQL floor"
+
+ALL CASES OK -- engine/lp_registry.py's require_layer_stack refuses a mis-stacked 'work' layer invocation (missing ledger_tnow.lp) AND an unknown-layer request, both BEFORE any clingo call; ledger_edb.export_work degrades honestly on a pre-s22 target; the full registry-declared stack grounds and ledger_differential.run_layer_differential ('work') AGREEs on a live probe carrying an s28 parent edge, an s30 dependency, and an s31 retraction; the `--layer work` CLI flag (the exact path `./judge --layer work` reaches through judge.tmpl's existing generic passthrough) exits 0 GREEN.
