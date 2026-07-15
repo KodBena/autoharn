@@ -1,4 +1,7 @@
 -- s32 EDGE VIEWS + DISCHARGE JOIN: SINGLE HOME (design/ORCH-CATEGORICAL-REFACTOR-CONSULT-2026-07-15.md,
+-- HISTORY: safe -- pure refactor: named edge/discharge views + consumer re-issues with
+-- before/after OUTPUT EQUALITY witnessed (diff empty) on a fixture world; no table change,
+-- no backfill, no semantics change anywhere.
 -- a fresh-Fable-eyes consultation record, F3/F6 + plan step 3; ledger item edge-views-single-home,
 -- claimed by the orchestrator). This delta is AUTHORED and SCRATCH-WITNESSED only; APPLYING it to
 -- any live/existing world is the maintainer's act at a FUTURE world's birth (runs-are-strictly-

@@ -1,4 +1,7 @@
 -- s34 COMPUTED-GRADE REFUSAL (ledger item discharge-grade-refuse-if-supplied, claimed by the
+-- HISTORY: safe -- adds one INSERT-time refusal only; no existing row is read, validated, or
+-- reinterpreted (a historical writer-supplied grade was already silently overwritten at its
+-- own INSERT and is stored as the computed value -- nothing to re-judge).
 -- orchestrator; refinement-consult finding, ledger row 1157). This delta is AUTHORED and
 -- SCRATCH-WITNESSED only; APPLYING it to any live/existing world is the maintainer's act at a
 -- FUTURE world's birth (runs-are-strictly-linear ruling, 2026-07-11), never taken here. An

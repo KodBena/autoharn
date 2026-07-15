@@ -1,4 +1,8 @@
 -- s31 SUPERSESSION = UNIFORM RETRACTION (design/FABLE-SUPERSESSION-UNIFORM-RETRACTION-SPEC.md,
+-- HISTORY: safe -- re-issues readers only (views + trigger text; the one new violations member
+-- is a derived read); no backfill, no UPDATE, no new column; every pre-existing row's bytes and
+-- every history reader's output are untouched (byte-identity witnessed in this delta's own
+-- seen-red fixture: hash chain recomputes clean across retracted rows, led --recent unchanged).
 -- Fable-authored spec, RATIFIED 2026-07-15 (maintainer yes) -- ledger item
 -- `supersession-semantics-closure`). This delta is AUTHORED and SCRATCH-WITNESSED only; APPLYING
 -- it to any live/existing world is the maintainer's act at a FUTURE world's birth

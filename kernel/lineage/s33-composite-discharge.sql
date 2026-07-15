@@ -1,4 +1,8 @@
 -- s33 COMPOSITE WORK-ITEM DISCHARGE (design/FABLE-COMPOSITE-DISCHARGE-SPEC.md, Fable-authored
+-- HISTORY: safe -- adds one nullable column (work_discharge, no DEFAULT, so no rewrite and no
+-- backfill: every pre-existing row reads NULL = non-composite, byte-for-byte prior behavior),
+-- one appended view column, and refusals scoped entirely to the new opt-in type; nothing
+-- existing relaxed or reinterpreted.
 -- spec, RATIFIED 2026-07-15 (maintainer yes); ledger item composite-parent-autodischarge, claimed
 -- by the orchestrator). This delta is AUTHORED and SCRATCH-WITNESSED only; APPLYING it to any
 -- live/existing world is the maintainer's act at a FUTURE world's birth (runs-are-strictly-linear

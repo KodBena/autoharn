@@ -1,4 +1,7 @@
 -- s35 VALIDATION DECOMPOSITION (design/ORCH-CATEGORICAL-REFACTOR-CONSULT-2026-07-15.md F4 + plan
+-- HISTORY: safe -- pure refactor of validate_work_item() into dispatcher + leaves; every
+-- refusal's error text byte-identical (witnessed across the s22..s33 fixture suites); no
+-- table, view, or row change of any kind.
 -- step 7; design/ORCH-IDRIS-REFINEMENT-CONSULT-2026-07-15.md's R8 lowering row; ledger item
 -- validation-trigger-decomposition, claimed by the orchestrator, not closed by this delta). This
 -- delta is AUTHORED and SCRATCH-WITNESSED only; APPLYING it to any live/existing world is the
