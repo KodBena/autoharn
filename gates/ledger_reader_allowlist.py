@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-15T20:17:26Z
-#   last-change: 2026-07-15T20:51:26Z
+#   last-change: 2026-07-15T21:15:53Z
 #   contributors: a857c93d/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -68,7 +68,15 @@ CHAIN = [
     "s25-commission-kind.sql", "s26-row-hash-chain.sql", "s28-work-parent-edge.sql",
     "s29-obligation-item-key-and-typed-close.sql", "s30-typed-dependency-edges.sql",
     "s31-supersession-uniform-retraction.sql", "s32-edge-views-single-home.sql",
+    "s33-composite-discharge.sql",
 ]
+# s33 (kernel/lineage/s33-composite-discharge.sql) extends this SAME gate's scratch CHAIN so its
+# re-issued objects (work_item_current/work_item_violations/work_item_strict_blockers/
+# validate_work_item) are exercised by the scratch apply below -- it introduces NO new raw-`ledger`
+# reference anywhere (work_item_current's new effective_state column composes with the already-
+# vestigial work_item_strict_blockers(); work_item_violations' three new composite-tracking CTEs
+# read ledger_current exclusively, matching orphaned_by_retraction's own posture), so no ALLOWLIST
+# dict entry changes.
 # s32 (kernel/lineage/s32-edge-views-single-home.sql) extends this SAME gate rather than minting a
 # second one (ADR-0012 P1): its own edge-source collapse (F3/F6, the categorical-refactor consult)
 # is exactly the class of change this allowlist exists to keep honest -- two of its four new views

@@ -75,6 +75,21 @@
 %                                            now derived from it, in-force only.
 %     superseded(RowId).                    ledger_tnow.lp's supersession closure (composed, not
 %                                            re-derived -- ADR-0012 P1).
+%     w_composite(Slug).                    s33 (kernel/lineage/s33-composite-discharge.sql;
+%                                            design/FABLE-COMPOSITE-DISCHARGE-SPEC.md, RATIFIED
+%                                            2026-07-15): Slug's OWN work_opened row (in force)
+%                                            carries work_discharge='composite'.
+%
+% s33 COMPOSITE-DISCHARGE EXTENSION (design/FABLE-COMPOSITE-DISCHARGE-SPEC.md sec-3, "no second
+% tree walker" -- the derivation is a READ of this SAME conjunction, extended once, here). A
+% composite tree member with AT LEAST ONE CHILD in this SAME `w_succ` walk is resolved through
+% ITS OWN children (already tree members here, already separately contributing their own
+% w_own_leaf_unresolved/w_not_closed facts to the SAME w_tree_unresolved derivation below) -- it
+% never additionally requires its own w_closed row. A composite with ZERO children is NOT
+% exempted (never vacuously discharged). This is the INDEPENDENT ASP twin of the SQL floor's
+% identical `not_closed` extension (engine/ledger_floor.py's work_review_floor_atoms) and the DDL
+% kernel's identical `work_item_strict_blockers()` extension (s33) -- three independent
+% derivations of the SAME rule, per the standing do-not-abstract (I6) ruling, never shared code.
 %
 % CLOSURE.LP COMPOSITION (design/ORCH-CATEGORICAL-REFACTOR-CONSULT-2026-07-15.md F3 / plan step
 % 4; engine/lp_registry.py is the one home of the provides/requires declaration -- not restated
@@ -95,6 +110,7 @@
 #defined w_dep_e/3.
 #defined superseded/1.
 #defined star/3.
+#defined w_composite/1.
 
 % ---- s31: the in-force projections (one factoring, mirroring SQL's ledger_current reads). A
 % pre-s31 fixture that supplies w_opened/1 / w_parent/2 / w_dep/2 facts DIRECTLY still grounds
@@ -129,8 +145,11 @@ w_own_leaf_unresolved(Slug) :-
     w_closed_in_force(Slug,R,_), w_disposition(R,deferred), not w_discharged(R).
 
 % ---- a tree member (other than the root itself) with no IN-FORCE work_closed row (s31) ---------
+% s33: exempted when the member is itself a composite WITH at least one child in this walk (see
+% the extension note above the EDB list) -- its resolution is delegated to its own children.
 w_closed_any(Slug) :- w_closed_in_force(Slug,_,_).
-w_not_closed(Slug) :- w_opened(Slug), not w_closed_any(Slug).
+w_composite_with_children(Slug) :- w_composite(Slug), w_succ(Slug,_).
+w_not_closed(Slug) :- w_opened(Slug), not w_closed_any(Slug), not w_composite_with_children(Slug).
 
 % ---- tree-level unresolved (Element C's derived conjunction, negated): Root's obligation tree is
 % UNRESOLVED iff any tree member (Root itself, or a transitive successor via EITHER edge kind) has

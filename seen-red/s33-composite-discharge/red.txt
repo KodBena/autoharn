@@ -1,0 +1,53 @@
+== RED WITNESS (pre-s33, s15..s32 kernel only, scratch schema pre33probe, toy db, torn down after) ==
+  ./led work open pre-root "Pre33Root (composite-intended, no such type exists yet)"
+  ./led work open pre-c1 "PreChild" --parent pre-root
+  ./led work claim pre-root
+  ./led work close pre-root dropped --review-witness ref-pre
+  -- SUCCEEDED (exit 0) on a pre-s33 kernel, with pre-c1 still open:
+  --   SELECT slug,state FROM pre33probe.work_item_current WHERE slug IN ('pre-root','pre-c1');
+  --     pre-c1  | open
+  --     pre-root| closed
+  -- This is the defect s33 forecloses (spec header: cites, does not read, the experience world's
+  -- own rows 128/129 emulation -- a parent closed by hand with disposition text naming it an
+  -- emulation of semantics the kernel does not provide). On the s33 kernel below (case d), the
+  -- IDENTICAL shape (a hand close of a composite-typed parent with an open child, no --strict
+  -- passed) is REFUSED, naming the open child, via the pre-existing s29 strict branch widened by
+  -- type alone -- no new refusal code.
+
+== GREEN WITNESS -- scaffolding classic world s33fxprobe + manual s15..s33 apply ==
+  scaffold OK (schema=s33fxprobe).
+
+=== a-zero-children-open ===
+  [ok] effective_state(a-root)='open' (expected open)
+
+=== b-two-children-derive ===
+  [ok] before='open' one-closed='open' both-closed='discharged-by-obligations'
+
+=== c-stronger-leaf ===
+  [ok] before(child closed, deferred undischarged)='open' child_state='closed' review_exit=0 after(distinct-actor attest)='discharged-by-obligations'
+
+=== d-hand-close-open-child-refused ===
+  [ok] exit=3 names_child=True excerpt=' obligation tree is unresolved: d-c1 (item is not yet closed). Resolve every named leaf, then retry (s29 Element C: strict close is a pure query over the derived conjunction, no stored verdict).\nCONTEXT:  PL/pgSQL function validate_work_item() line 64 at RAISE'
+
+=== e-hand-close-after-resolution ===
+  [ok] close_exit=0 state='closed' effective_state='closed' (agree)
+
+=== f-nested-composites ===
+  [ok] before='open' middle_after_leaf_closed='discharged-by-obligations' (no close row of its own: 'f') grandparent='discharged-by-obligations'
+
+=== g-defeat-replay ===
+  [ok] before_supersede middle='discharged-by-obligations' grandparent='discharged-by-obligations' supersede_exit=0 after middle='open' grandparent='open' -- this ALSO discharges s31's own UNEXERCISED composite-ancestor-reopen polarity (seen-red/s31-supersession-uniform-retraction/run_fixtures.py's case a2), now exercised for the first time.
+
+=== h-defeat-past-hand-close ===
+  [ok] before_supersede state='closed' effective_state='closed' supersede_exit=0 after state(raw, unchanged)='closed' effective_state='open' closed_but_tree_defeated='h-root~close row 42; unresolved: h-c1 (review disposition deferred and undischarged (close row 39))'
+
+=== i-non-composite-byte-identity ===
+  [ok] non-composite items checked=9 mismatches='' (empty = byte-identical)
+
+=== j-allowlist-gate-both-polarities ===
+  [ok] green_exit=0 red_exit=0 teach_names_both_paths=True
+
+=== k-differential-agree ===
+  [ok] verdict=AGREE asp_atoms=39 sql_atoms=39 only_asp=[] only_sql=[] -- engine/ledger_differential.run_layer_differential('work'), the SAME code `./judge --layer work` runs, over ledger_edb's real export (export()+export_work(), including w_composite) vs the SQL floor (work_item_floor_atoms|work_review_floor_atoms, restricted to WORK_LAYER_PREDS), on this whole world (nested composites, defeat replay, defeat-past-hand-close all present).
+
+ALL CASES OK -- s33 composite discharge both-polarity proof (zero-children never vacuous / two-children derive / stronger review leaf + distinct-actor discharge / hand-close-with-open-child strict-by-type refusal / hand-close-after-resolution agreement / nested composites / defeat replay across two ancestor levels (also exercising s31's own a2 UNEXERCISED polarity) / defeat past a hand close -> closed_but_tree_defeated / non-composite byte-identity / allowlist gate green+red / standing ./judge --layer work differential AGREE), zero residue.

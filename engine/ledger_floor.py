@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-06T05:35:36Z
-#   last-change: 2026-07-15T20:24:34Z
+#   last-change: 2026-07-15T21:18:53Z
 #   contributors: 37017f46/main, be693afb/main, a857c93d/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -393,12 +393,26 @@ def work_review_floor_atoms(name: str) -> set[str]:
     twin's own s31 re-issue (work_item_strict_blockers()'s edges/closes CTEs). The `discharged`
     leg is UNCHANGED -- the discharge-review side was already in-force-filtered at its source on
     both producers (the ratified spec's own sec-2 finding), so it keeps its raw read + row-scoped
-    anti-join exactly as the DDL does."""
+    anti-join exactly as the DDL does.
+
+    s33 (kernel/lineage/s33-composite-discharge.sql): `not_closed` gains the SAME composite-with-
+    children exemption `work_item_strict_blockers()`'s own s33 re-issue adds -- a composite tree
+    member (`work_discharge='composite'` on its own IN-FORCE work_opened row) with at least one
+    child in THIS SAME `succ` walk is resolved through its own children, never requiring its own
+    close row (never vacuously discharged when it has zero children). Column-gated (the SAME
+    convention `orphan_children_arm` above uses for `work_parent`) so a pre-s33 target degrades to
+    the byte-identical pre-s33 reading -- no `work_discharge` column, no exemption possible."""
     t = resolve(name)
     rel = t.rel()
     rel_cur = t.rel("ledger_current")
     q_root, q_member = _wi_quote("t.root"), _wi_quote("t.member")
     q_slug = _wi_quote("slug")
+    composite_exempt = (
+        f"""AND NOT (
+          EXISTS (SELECT 1 FROM {rel_cur} oo WHERE oo.kind = 'work_opened'
+                  AND oo.work_slug = o.slug AND oo.work_discharge = 'composite')
+          AND EXISTS (SELECT 1 FROM succ s WHERE s.parent = o.slug)
+        )""" if t.has_col("work_discharge") else "")
     sql = f"""
     WITH RECURSIVE
       opens AS (SELECT work_slug AS slug FROM {rel_cur} WHERE kind = 'work_opened'),
@@ -432,7 +446,9 @@ def work_review_floor_atoms(name: str) -> set[str]:
         WHERE c.disp = 'deferred' AND c.rid NOT IN (SELECT rid FROM discharged)
       ),
       not_closed AS (
-        SELECT o.slug FROM opens o WHERE NOT EXISTS (SELECT 1 FROM closes c WHERE c.slug = o.slug)
+        SELECT o.slug FROM opens o
+        WHERE NOT EXISTS (SELECT 1 FROM closes c WHERE c.slug = o.slug)
+        {composite_exempt}
       )
     SELECT 'w_tree_member(' || {q_root} || ',' || {q_member} || ')' FROM tree t
     UNION ALL SELECT 'w_own_leaf_unresolved(' || {q_slug} || ')' FROM own_unresolved
