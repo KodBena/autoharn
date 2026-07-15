@@ -131,6 +131,7 @@ REGISTRY: dict[str, str] = {
     "scan2-firing-telemetry":       "seen-red/scan2-firing-telemetry/run_fixtures.py",
     "deployment-pinning":           "seen-red/deployment-pinning/run_fixtures.py",
     "orchlog-since-filter":         "seen-red/orchlog-since-filter/run_fixtures.py",
+    "kind-shape-manifest-gate":     "seen-red/kind-shape-manifest-gate/run_fixtures.py",
     # panel-disposition / panel-cosign DEREGISTERED (2026-07-15, TASK C, commission item 3):
     # both suites ported to the standalone SPA repo's own tests/ (test_disposition.py,
     # test_cosign_live.py in KodBena/autoharn-panel) when the PoC moved out of panel/ into its
