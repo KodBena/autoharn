@@ -919,19 +919,49 @@ if [ "${1:-}" = "work" ]; then
       # composite-parent-autodischarge): parsed exactly like --parent above -- same LIVE
       # column-existence convention, same reason (s33 is not wired into every world's birth
       # chain either).
+      # --refs <ref> (ledger.refs, base schema since s10 -- no column-existence check needed,
+      # unlike --parent/--discharge above): CONVENTION for citing an antecedent ledger row,
+      # e.g. --refs row:<id> (the commission-decomposition "child cites parent" convention).
+      # Scalar, last-wins on repeat -- deliberately consistent with the top-of-file generic
+      # --refs parser (line ~354 above), which is also a plain overwrite, not an accumulator.
+      #
+      # UNKNOWN-FLAG REFUSAL (ledger item led-work-open-refs-swallowed): before this fix, any
+      # token this loop didn't recognize fell into the `*) args+=("$1")` catch-all below and
+      # was silently concatenated into the title via `title="$*"` -- so `--refs row:N` (or any
+      # OTHER typo'd/unsupported flag) landed as literal text inside work_title, and the
+      # structured column it named stayed NULL, with no error at all. Witnessed downstream: an
+      # adopting deployment had 27/27 work_opened rows with NULL refs. A bare `--*`-shaped word
+      # is now refused here instead of silently absorbed -- ordinary title words are untouched
+      # because this only fires when a token IS, in full, `--*` (mirrors
+      # refuse_flag_in_statement's word-level-match posture above, not a substring/re-split
+      # check), so a title that happens to CONTAIN "--" inside a longer word survives.
       parent=""
       discharge=""
+      refs=""
       args=()
       while [ $# -gt 0 ]; do
         case "$1" in
           --parent) parent="${2:-}"; shift 2 ;;
           --discharge) discharge="${2:-}"; shift 2 ;;
+          --refs) refs="${2:-}"; shift 2 ;;
+          --*)
+            echo "led work open: REFUSED -- unrecognized flag '$1'." >&2
+            echo "  led work open <slug> <title...> accepts only: --parent <parent-slug>," >&2
+            echo "  --discharge composite, --refs <ref>. An unrecognized --flag used to be" >&2
+            echo "  silently concatenated into the title text instead of erroring (ledger item" >&2
+            echo "  led-work-open-refs-swallowed: 27/27 work_opened rows in an adopting" >&2
+            echo "  deployment had NULL refs because '--refs row:N' landed in work_title)." >&2
+            echo "  NOTHING was written. Fix the flag name, or drop it if it was meant as" >&2
+            echo "  ordinary title text (title text containing '--' inside a longer word is" >&2
+            echo "  never affected by this check -- only a standalone --* argument is)." >&2
+            exit 1
+            ;;
           *) args+=("$1"); shift ;;
         esac
       done
       set -- "${args[@]}"
       if [ $# -lt 2 ]; then
-        echo "usage: led work open <slug> <title...> [--parent <parent-slug>] [--discharge composite]" >&2
+        echo "usage: led work open <slug> <title...> [--parent <parent-slug>] [--discharge composite] [--refs <ref>]" >&2
         echo "       refused if <slug> already has an opening act (validate_work_item(): one" >&2
         echo "       opening act per slug -- the Q5 defect made unrepresentable, never a silent" >&2
         echo "       duplicate)" >&2
@@ -946,6 +976,8 @@ if [ "${1:-}" = "work" ]; then
         echo "       s33-composite-discharge.sql) -- every future close of <slug> becomes" >&2
         echo "       STRICT-BY-TYPE (no --strict flag needed). Requires this world's kernel to" >&2
         echo "       carry s33 -- omit --discharge on a pre-s33 kernel." >&2
+        echo "       --refs <ref> lands on ledger.refs (base schema; always available) -- the" >&2
+        echo "       CONVENTION for citing an antecedent ledger row, e.g. --refs row:<id>." >&2
         exit 1
       fi
       if [ -n "$discharge" ] && [ "$discharge" != "composite" ]; then
@@ -990,48 +1022,64 @@ SQL
       if [ "$has_parent_col" = "t" ] && [ "$has_discharge_col" = "t" ]; then
         exec psql -h "$PGHOST" -d "$PGDB" -v ON_ERROR_STOP=1 \
           -v slug="$slug" -v title="$title" -v parent="$parent" -v discharge="$discharge" \
-          -v statement="work_opened: ${slug} -- ${title}" <<SQL
+          -v refs="$refs" -v statement="work_opened: ${slug} -- ${title}" <<SQL
         SET ROLE ${ROLE};
         SET search_path = ${SCHEMA}, ${KERNEL};
-        INSERT INTO ${SCHEMA}.ledger (kind, work_slug, work_title, work_parent, work_discharge, statement)
-        VALUES ('work_opened', :'slug', :'title', NULLIF(:'parent', ''), NULLIF(:'discharge', ''), :'statement');
+        INSERT INTO ${SCHEMA}.ledger (kind, work_slug, work_title, work_parent, work_discharge, refs, statement)
+        VALUES ('work_opened', :'slug', :'title', NULLIF(:'parent', ''), NULLIF(:'discharge', ''), NULLIF(:'refs', ''), :'statement');
 SQL
       elif [ "$has_parent_col" = "t" ]; then
         exec psql -h "$PGHOST" -d "$PGDB" -v ON_ERROR_STOP=1 \
           -v slug="$slug" -v title="$title" -v parent="$parent" \
-          -v statement="work_opened: ${slug} -- ${title}" <<SQL
+          -v refs="$refs" -v statement="work_opened: ${slug} -- ${title}" <<SQL
         SET ROLE ${ROLE};
         SET search_path = ${SCHEMA}, ${KERNEL};
-        INSERT INTO ${SCHEMA}.ledger (kind, work_slug, work_title, work_parent, statement)
-        VALUES ('work_opened', :'slug', :'title', NULLIF(:'parent', ''), :'statement');
+        INSERT INTO ${SCHEMA}.ledger (kind, work_slug, work_title, work_parent, refs, statement)
+        VALUES ('work_opened', :'slug', :'title', NULLIF(:'parent', ''), NULLIF(:'refs', ''), :'statement');
 SQL
       elif [ "$has_discharge_col" = "t" ]; then
         exec psql -h "$PGHOST" -d "$PGDB" -v ON_ERROR_STOP=1 \
           -v slug="$slug" -v title="$title" -v discharge="$discharge" \
-          -v statement="work_opened: ${slug} -- ${title}" <<SQL
+          -v refs="$refs" -v statement="work_opened: ${slug} -- ${title}" <<SQL
         SET ROLE ${ROLE};
         SET search_path = ${SCHEMA}, ${KERNEL};
-        INSERT INTO ${SCHEMA}.ledger (kind, work_slug, work_title, work_discharge, statement)
-        VALUES ('work_opened', :'slug', :'title', NULLIF(:'discharge', ''), :'statement');
+        INSERT INTO ${SCHEMA}.ledger (kind, work_slug, work_title, work_discharge, refs, statement)
+        VALUES ('work_opened', :'slug', :'title', NULLIF(:'discharge', ''), NULLIF(:'refs', ''), :'statement');
 SQL
       else
         exec psql -h "$PGHOST" -d "$PGDB" -v ON_ERROR_STOP=1 \
-          -v slug="$slug" -v title="$title" -v statement="work_opened: ${slug} -- ${title}" <<SQL
+          -v slug="$slug" -v title="$title" -v refs="$refs" \
+          -v statement="work_opened: ${slug} -- ${title}" <<SQL
         SET ROLE ${ROLE};
         SET search_path = ${SCHEMA}, ${KERNEL};
-        INSERT INTO ${SCHEMA}.ledger (kind, work_slug, work_title, statement)
-        VALUES ('work_opened', :'slug', :'title', :'statement');
+        INSERT INTO ${SCHEMA}.ledger (kind, work_slug, work_title, refs, statement)
+        VALUES ('work_opened', :'slug', :'title', NULLIF(:'refs', ''), :'statement');
 SQL
       fi
       ;;
     claim)
       shift
-      if [ $# -lt 1 ]; then
+      usage_claim() {
         echo "usage: led work claim <slug>" >&2
         echo "       refused if <slug> has no opening act (validate_work_item(): every later" >&2
         echo "       event on an item must reference an item that has been opened)" >&2
         echo "       set LED_ACTOR=<principal-name> to claim as a registered principal other" >&2
         echo "       than the default connection principal" >&2
+      }
+      if [ $# -lt 1 ]; then
+        usage_claim
+        exit 1
+      fi
+      # `work claim` takes exactly one positional (<slug>) and no flags at all -- unlike
+      # open/depends/close it never had a parse loop, so a typo'd flag or stray extra word
+      # after <slug> was previously just silently ignored (same hazard-in-reach shape as the
+      # other three subcommands' catch-alls, ledger item led-work-open-refs-swallowed point 4:
+      # a claim that looks like it did something with an extra argument actually dropped it
+      # with no error). Refused here instead of silently ignored.
+      if [ $# -gt 1 ]; then
+        echo "led work claim: REFUSED -- unexpected extra argument(s): ${*:2}" >&2
+        usage_claim
+        echo "  NOTHING was written." >&2
         exit 1
       fi
       slug="$1"
@@ -1056,6 +1104,17 @@ SQL
       while [ $# -gt 0 ]; do
         case "$1" in
           --type) type="${2:-}"; shift 2 ;;
+          --*)
+            # Same hazard-in-reach fix as `work open` above (ledger item
+            # led-work-open-refs-swallowed, point 4): an unrecognized flag used to fall into
+            # the catch-all below and sit unused past $1/$2 (slug/on-slug), silently dropped
+            # with no error -- e.g. a typo'd --typ blocks-close would record NEITHER the type
+            # nor any complaint. Refused here instead.
+            echo "led work depends: REFUSED -- unrecognized flag '$1'." >&2
+            echo "  led work depends <slug> <on-slug> accepts only: --type blocks-close|informs." >&2
+            echo "  NOTHING was written." >&2
+            exit 1
+            ;;
           *) args+=("$1"); shift ;;
         esac
       done
@@ -1141,6 +1200,17 @@ SQL
           --review-witness) review_witness="${2:-}"; shift 2 ;;
           --review-deferred) review_deferred="1"; shift ;;
           --strict) strict="1"; shift ;;
+          --*)
+            # Same hazard-in-reach fix as `work open`/`work depends` above (ledger item
+            # led-work-open-refs-swallowed, point 4): an unrecognized flag used to fall into
+            # the catch-all below and sit unused past $1/$2 (slug/resolution), silently
+            # dropped with no error -- e.g. a typo'd --witnes <ref> would record no witness at
+            # all on a shipped close, with nothing to say so. Refused here instead.
+            echo "led work close: REFUSED -- unrecognized flag '$1'." >&2
+            echo "  led work close <slug> <resolution> accepts only: --witness <ref>," >&2
+            echo "  --review-witness <ref>, --review-deferred, --strict. NOTHING was written." >&2
+            exit 1
+            ;;
           *) args+=("$1"); shift ;;
         esac
       done
@@ -1353,7 +1423,7 @@ SQL
 SQL
       ;;
     *)
-      echo "usage: led work open <slug> <title...> [--parent <parent-slug>] [--discharge composite]" >&2
+      echo "usage: led work open <slug> <title...> [--parent <parent-slug>] [--discharge composite] [--refs <ref>]" >&2
       echo "       led work claim <slug>" >&2
       echo "       led work depends <slug> <on-slug>" >&2
       echo "       led work close <slug> <resolution> (--review-witness <ref> | --review-deferred) [--witness <ref>] [--strict]" >&2
