@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-16T02:44:15Z
-#   last-change: 2026-07-16T02:44:15Z
+#   last-change: 2026-07-16T04:03:49Z
 #   contributors: 9a17b6b9/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -71,15 +71,18 @@ here can audit whether a `resources` list is complete either).
 USAGE:
   python3 tools/export_precedence.py [target-name]
 
-Reads the SAME deployment config `led`/`judge`/`pickup` read (bootstrap/templates/led.tmpl
-"Connection defaults are sourced LIVE from this project's deployment.json"; filing/
-deployment_record.py, the ONE home for that JSON shape): PICKUP_DEPLOYMENT env var if set (the
-mechanism the scaffolded `led`/`judge`/`pickup` shims already use), else LEDGER_DEPLOYMENT (engine/
-targets.py's THIRD RESOLUTION SOURCE), else `<repo-root>/deployment.json` next to this checkout.
-`target-name` is accepted but unused today (no name->deployment registry lookup exists for this
-script; kept as a reserved positional for parity with `led`'s own target-name-taking verbs and to
-avoid a silent-argument-swallow surprise if one is passed) -- pass nothing on a normal scaffolded
-project.
+Reads deployment config via filing/deployment_resolve.py (the ONE home for this resolution --
+ledger item deployment-resolution-cwd-first; read that module's docstring for the full order and
+rationale, this script's own idiom was the ORIGINAL SOURCE the bug was copy-pasted from into
+tools/regrade_decisions.py): PICKUP_DEPLOYMENT env var if set (the mechanism the scaffolded
+`led`/`judge`/`pickup` shims already use), else LEDGER_DEPLOYMENT (engine/targets.py's THIRD
+RESOLUTION SOURCE), else `$PWD/deployment.json` (the CALLER's own cwd -- the primary use case, an
+operator running this script from their own project directory, e.g. `cd
+<your-deployment-directory> && python3 /path/to/autoharn/tools/export_precedence.py`), else
+`<repo-root>/deployment.json` next to this checkout (preserves in-checkout use). `target-name` is
+accepted but unused today (no name->deployment registry lookup exists for this script; kept as a
+reserved positional for parity with `led`'s own target-name-taking verbs and to avoid a
+silent-argument-swallow surprise if one is passed) -- pass nothing on a normal scaffolded project.
 
 Stdlib-only, top-of-file imports (gates/no_lazy_imports.py; CLAUDE.md, "Lazy imports are BANNED").
 """
@@ -96,16 +99,26 @@ _REPO_ROOT = _HERE.parent
 sys.path.insert(0, str(_REPO_ROOT / "filing"))
 
 import deployment_record  # noqa: E402  (filing/deployment_record.py, the ONE home for the deployment.json shape)
+import deployment_resolve  # noqa: E402  (filing/deployment_resolve.py, the ONE home for CWD-FIRST
+                            # deployment.json resolution -- ledger item deployment-resolution-cwd-first)
+
+
+def _refuse(message: str) -> None:
+    print(f"export_precedence: REFUSED -- {message}", file=sys.stderr)
+    raise SystemExit(1)
 
 
 def _load_deployment() -> deployment_record.DeploymentRecord:
-    """Resolve this project's deployment.json exactly as led.tmpl/judge/pickup do: PICKUP_DEPLOYMENT
-    (the scaffolded-shim mechanism) first, then LEDGER_DEPLOYMENT (engine/targets.py's own env
-    override), then the repo-root default. Refuses loudly (DeploymentError propagates) on a
-    missing/malformed record -- never a guessed connection."""
-    dep_path = os.environ.get("PICKUP_DEPLOYMENT") or os.environ.get("LEDGER_DEPLOYMENT") \
-        or str(_REPO_ROOT / "deployment.json")
-    return deployment_record.load_deployment(dep_path)
+    """Resolve this project's deployment.json via filing/deployment_resolve.py (the ONE home,
+    cwd-first): PICKUP_DEPLOYMENT, then LEDGER_DEPLOYMENT, then $PWD/deployment.json (the caller's
+    own cwd), then this checkout's own repo-root default. Refuses loudly, with teach-text naming
+    every searched location, on a missing/malformed record -- never a guessed connection, never a
+    raw traceback."""
+    try:
+        dep, _resolved = deployment_resolve.resolve_deployment(_REPO_ROOT)
+    except deployment_record.DeploymentError as e:
+        _refuse(str(e))
+    return dep
 
 
 def _psql(dep: deployment_record.DeploymentRecord, sql: str) -> str:
@@ -130,11 +143,6 @@ def _has_column(dep: deployment_record.DeploymentRecord, schema: str, table: str
 def _has_relation(dep: deployment_record.DeploymentRecord, qualified: str) -> bool:
     out = _psql(dep, f"SELECT to_regclass('{qualified}') IS NOT NULL;")
     return out.strip() == "t"
-
-
-def _refuse(message: str) -> None:
-    print(f"export_precedence: REFUSED -- {message}", file=sys.stderr)
-    raise SystemExit(1)
 
 
 def export_precedence(dep: deployment_record.DeploymentRecord) -> dict:
