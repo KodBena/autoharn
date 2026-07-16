@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-10T19:38:38Z
-#   last-change: 2026-07-15T21:15:37Z
-#   contributors: be693afb/main, e4410ef6/main, a857c93d/main
+#   last-change: 2026-07-16T02:07:02Z
+#   contributors: be693afb/main, e4410ef6/main, a857c93d/main, 9a17b6b9/main
 # <<< PROVENANCE-STAMP <<<
 
 """stop_clean_exit — the clean-exit gate (Claude Code Stop hook).
@@ -143,6 +143,14 @@ stated plainly: this fails OPEN on unclosable debt after N=3 identical blocks --
 can make no further progress on its own ledger is allowed to end rather than being trapped by its
 own gate; the warning is the compensating control (the debt is not silently dropped, it is loudly
 handed to whoever reads the transcript next).
+
+MAINTAINER RULING, 2026-07-16: the fail-open-after-3-identical-fingerprints trade-off above is a
+DELIBERATE, maintainer-ratified posture, not a placeholder awaiting hardening -- chosen over
+hardening the third strike with a distinct signal (e.g. a harder block, an escalation channel, or
+a different N). The stated condition for reopening this question is a WITNESSED SPECIMEN of the
+breaker actually being gamed by bare repetition (an agent deliberately re-emitting the identical
+debt fingerprint to cash the fail-open rather than genuinely being stuck) -- absent that specimen,
+this trade-off stands as designed.
 
 BREAKER TRANSITION -- PROGRESS DOES NOT RE-ARM (ENT TESTBED FINDING 5, 2026-07-13, DEFECT fix --
 `stop-breaker-progress-reset-defect`, diagnosed from ent's own stop_clean_exit journal

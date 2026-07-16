@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-10T23:41:09Z
-#   last-change: 2026-07-14T01:47:01Z
-#   contributors: e4410ef6/main, a857c93d/main
+#   last-change: 2026-07-16T02:06:43Z
+#   contributors: e4410ef6/main, a857c93d/main, 9a17b6b9/main
 # <<< PROVENANCE-STAMP <<<
 
 """run_fixtures.py -- both-polarity proof for hooks/pretooluse_delegation_observer.py (Part 2,
 BACKLOG "Run-8 mid-run forensics", 2026-07-11 finding 3: "investigation is ungoverned" -- a
 subagent dispatch is a machine-observable tool event with zero ledger trace across every run to
-date; preamble point 7 says dispatching a subagent is a `decision` row, but nothing enforced or
+date; preamble point 8 says dispatching a subagent is a `decision` row, but nothing enforced or
 even OBSERVED that until this hook).
 
 Real infra, no mocks: a throwaway scratch directory + TWO throwaway ledger schemas in the toy db
@@ -320,15 +320,53 @@ def main() -> int:
         print()
         write_apparatus({})  # restore default
 
+        # l/m) HONEST-TEXT FIX (work item `delegation-observer-honest-teachtext`): the OTHER
+        # stated remedy -- a `decision` row, with NO claimed work item -- must ALSO silence the
+        # warning (previously only the work-item half was checked). Schema A still has no
+        # open+claimed item at this point (closed after case b, never reopened).
+        sh(["psql", "-h", PGHOST, "-d", PGDB, "-v", "ON_ERROR_STOP=1", "-c",
+            f"SET ROLE {ROLE}; SET search_path = {SCHEMA}, {KERN}; "
+            f"SET app.vendor_session = 'sess-l'; "
+            "INSERT INTO ledger(kind, statement) VALUES "
+            "('decision', 'decision: sess-l ledgers this delegation instead of claiming a work item');"])
+        r = run_hook_leg("Agent", "covered by a decision row, not a work item", "sess-l has a "
+                          "decision row on record", "sess-l", env)
+        check("l-decision-row-silences", r, False, [], failures)
+        lines_after_l = journal_lines()
+        ok_l_journal = (len(lines_after_l) == 5 and lines_after_l[4].get("session_id") == "sess-l")
+        print(f"  [{'ok' if ok_l_journal else 'FAIL'}] journal line 5 matches case l's dispatch "
+              f"(a decision row stamped to THIS session silences the warning with no work item "
+              f"open+claimed at all)")
+        if not ok_l_journal:
+            failures.append("l-journal-content")
+        print()
+
+        # m) same schema/state, a DIFFERENT session with no decision row of its own -> still WARNS
+        # (proves case l's silence traces to the decision row, not to some other side effect of
+        # the SQL just run, e.g. a schema-wide rather than session-scoped read).
+        r = run_hook_leg("Agent", "no decision row, no work item", "sess-m has neither remedy on "
+                          "record", "sess-m", env)
+        check("m-no-remedy-still-warns", r, True,
+              ["./led decision", "./led work open"], failures)
+        lines_after_m = journal_lines()
+        ok_m_journal = (len(lines_after_m) == 6 and lines_after_m[5].get("session_id") == "sess-m")
+        print(f"  [{'ok' if ok_m_journal else 'FAIL'}] journal line 6 matches case m's dispatch "
+              f"(a DIFFERENT session with no decision row of its own still warns -- the check is "
+              f"session-scoped, not schema-wide)")
+        if not ok_m_journal:
+            failures.append("m-journal-content")
+        print()
+
         # f) bonus, inline: end-to-end journal wire-format cross-check (session ids in order,
         # prompt_sha256 matches a fresh local hash of the same prompt text).
         print("=== (bonus) f-journal-unconditional wire-format cross-check ===")
         all_lines = journal_lines()
-        expected_sessions = ["sess-a", "sess-b", "sess-c", "sess-e"]  # NOT sess-d -- mode was off
+        # NOT sess-d -- mode was off; sess-l/sess-m added by the honest-text-fix cases above
+        expected_sessions = ["sess-a", "sess-b", "sess-c", "sess-e", "sess-l", "sess-m"]
         got_sessions = [ln.get("session_id") for ln in all_lines]
         prompt_a = "go read the transcript and find phase 2's task text"
         sha_a = hashlib.sha256(prompt_a.encode("utf-8")).hexdigest()
-        ok_f = (got_sessions == expected_sessions and len(all_lines) == 4
+        ok_f = (got_sessions == expected_sessions and len(all_lines) == 6
                 and all_lines[0].get("prompt_sha256") == sha_a
                 and all_lines[0].get("prompt_excerpt") == prompt_a[:200])
         print(f"  [{'ok' if ok_f else 'FAIL'}] sessions in order = {got_sessions} "
@@ -342,14 +380,14 @@ def main() -> int:
         r = run_return_leg("Agent", prompt_a, "sess-a", env, tool_use_id="tu-g", duration_ms=1234)
         print("=== g-return-tool-use-id ===")
         lines_after_g = journal_lines()
-        ok_g = (r.returncode == 0 and len(lines_after_g) == 5
-                and lines_after_g[4].get("kind") == "return"
-                and lines_after_g[4].get("tool_use_id") == "tu-g"
-                and lines_after_g[4].get("duration_ms") == 1234
-                and "pairing" not in lines_after_g[4]
-                and "dispatch_ts" not in lines_after_g[4])
+        ok_g = (r.returncode == 0 and len(lines_after_g) == 7
+                and lines_after_g[6].get("kind") == "return"
+                and lines_after_g[6].get("tool_use_id") == "tu-g"
+                and lines_after_g[6].get("duration_ms") == 1234
+                and "pairing" not in lines_after_g[6]
+                and "dispatch_ts" not in lines_after_g[6])
         print(f"  [{'ok' if ok_g else 'FAIL'}] exit={r.returncode} return line: "
-              f"{lines_after_g[4] if len(lines_after_g) == 5 else None}")
+              f"{lines_after_g[6] if len(lines_after_g) == 7 else None}")
         print()
         if not ok_g:
             failures.append("g-return-tool-use-id")
@@ -358,13 +396,13 @@ def main() -> int:
         r = run_return_leg("Agent", "no tool_use_id on this payload", "sess-h", env)
         print("=== h-return-no-identity ===")
         lines_after_h = journal_lines()
-        ok_h = (r.returncode == 0 and len(lines_after_h) == 6
-                and lines_after_h[5].get("kind") == "return"
-                and "tool_use_id" not in lines_after_h[5]
-                and "duration_ms" not in lines_after_h[5]
-                and "pairing" not in lines_after_h[5])
+        ok_h = (r.returncode == 0 and len(lines_after_h) == 8
+                and lines_after_h[7].get("kind") == "return"
+                and "tool_use_id" not in lines_after_h[7]
+                and "duration_ms" not in lines_after_h[7]
+                and "pairing" not in lines_after_h[7])
         print(f"  [{'ok' if ok_h else 'FAIL'}] exit={r.returncode} return line: "
-              f"{lines_after_h[5] if len(lines_after_h) == 6 else None}")
+              f"{lines_after_h[7] if len(lines_after_h) == 8 else None}")
         print()
         if not ok_h:
             failures.append("h-return-no-identity")
@@ -382,13 +420,13 @@ def main() -> int:
         r2 = run_return_leg("Agent", prompt_i, "sess-i", env, tool_use_id="tu-i1", duration_ms=9)
         lines_after_i = journal_lines()
         print("=== i-return-concurrent-identical-prompt ===")
-        ok_i = (r1.returncode == 0 and r2.returncode == 0 and len(lines_after_i) == 10
-                and lines_after_i[8].get("tool_use_id") == "tu-i2"
-                and lines_after_i[9].get("tool_use_id") == "tu-i1")
+        ok_i = (r1.returncode == 0 and r2.returncode == 0 and len(lines_after_i) == 12
+                and lines_after_i[10].get("tool_use_id") == "tu-i2"
+                and lines_after_i[11].get("tool_use_id") == "tu-i1")
         print(f"  [{'ok' if ok_i else 'FAIL'}] return1.tool_use_id="
-              f"{lines_after_i[8].get('tool_use_id') if len(lines_after_i) == 10 else None} "
+              f"{lines_after_i[10].get('tool_use_id') if len(lines_after_i) == 12 else None} "
               f"(expect tu-i2, returned out of dispatch order on purpose); return2.tool_use_id="
-              f"{lines_after_i[9].get('tool_use_id') if len(lines_after_i) == 10 else None} "
+              f"{lines_after_i[11].get('tool_use_id') if len(lines_after_i) == 12 else None} "
               f"(expect tu-i1) -- each return keeps exactly the identity its OWN payload carried, "
               f"proving there is no FIFO/journal-order dependency left to defeat")
         print()
@@ -400,12 +438,12 @@ def main() -> int:
                           env, model="claude-sonnet-4-5", subagent_type="general-purpose")
         print("=== j-model-declared ===")
         lines_after_j = journal_lines()
-        ok_j = (r.returncode == 0 and len(lines_after_j) == 11
-                and lines_after_j[10].get("session_id") == "sess-j"
-                and lines_after_j[10].get("model") == "claude-sonnet-4-5"
-                and lines_after_j[10].get("subagent_type") == "general-purpose")
+        ok_j = (r.returncode == 0 and len(lines_after_j) == 13
+                and lines_after_j[12].get("session_id") == "sess-j"
+                and lines_after_j[12].get("model") == "claude-sonnet-4-5"
+                and lines_after_j[12].get("subagent_type") == "general-purpose")
         print(f"  [{'ok' if ok_j else 'FAIL'}] exit={r.returncode} journal line: "
-              f"{lines_after_j[10] if len(lines_after_j) == 11 else None}")
+              f"{lines_after_j[12] if len(lines_after_j) == 13 else None}")
         print()
         if not ok_j:
             failures.append("j-model-declared")
@@ -416,13 +454,13 @@ def main() -> int:
                           model=None, subagent_type="")
         print("=== k-model-absent ===")
         lines_after_k = journal_lines()
-        ok_k = (r.returncode == 0 and len(lines_after_k) == 12
-                and lines_after_k[11].get("session_id") == "sess-k"
-                and lines_after_k[11].get("model") is None
-                and "model" in lines_after_k[11]  # present as an explicit null, not omitted
-                and lines_after_k[11].get("subagent_type") == "")
+        ok_k = (r.returncode == 0 and len(lines_after_k) == 14
+                and lines_after_k[13].get("session_id") == "sess-k"
+                and lines_after_k[13].get("model") is None
+                and "model" in lines_after_k[13]  # present as an explicit null, not omitted
+                and lines_after_k[13].get("subagent_type") == "")
         print(f"  [{'ok' if ok_k else 'FAIL'}] exit={r.returncode} journal line: "
-              f"{lines_after_k[11] if len(lines_after_k) == 12 else None}")
+              f"{lines_after_k[13] if len(lines_after_k) == 14 else None}")
         print()
         if not ok_k:
             failures.append("k-model-absent")
@@ -434,9 +472,11 @@ def main() -> int:
     if failures:
         print(f"run_fixtures: {len(failures)} FAILURE(S): {', '.join(failures)}")
         return 1
-    print("run_fixtures: all 5 dispatch-leg cases + 1 bonus cross-check + 3 return-leg cases "
-          "(tool_use_id-keyed, no-identity fallback, concurrent-identical-prompt "
-          "disambiguation) + 2 model-attribution cases (declared, absent) passed.")
+    print("run_fixtures: all 5 dispatch-leg cases + 2 honest-text-fix cases (decision row "
+          "silences with no work item; a different session with neither remedy still warns) + "
+          "1 bonus cross-check + 3 return-leg cases (tool_use_id-keyed, no-identity fallback, "
+          "concurrent-identical-prompt disambiguation) + 2 model-attribution cases (declared, "
+          "absent) passed.")
     return 0
 
 
