@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-06T05:35:36Z
-#   last-change: 2026-07-15T21:18:53Z
-#   contributors: 37017f46/main, be693afb/main, a857c93d/main
+#   last-change: 2026-07-16T10:15:11Z
+#   contributors: 37017f46/main, be693afb/main, a857c93d/main, 9a17b6b9/main
 # <<< PROVENANCE-STAMP <<<
 
 """ledger_floor -- the SQL FLOOR of the T_now judgments: producer ONE of the
@@ -268,9 +268,32 @@ def support_floor_atoms(name: str, now_epoch: int) -> set[str]:
 # producers genuinely separate. Its escaping matches `quote_term` byte-for-byte (backslash then
 # quote, in that order) so both producers' quoted-string atoms compare bit-identically.
 def _wi_quote(col: str) -> str:
-    """A SQL expression quoting `col` (text) as a clingo double-quoted string term -- the SQL-side
-    mirror of `clingo_run.quote_term`, not a call to it (see the independence note above)."""
-    return "('\"' || replace(replace(" + col + ", '\\', '\\\\'), '\"', '\\\"') || '\"')"
+    """A SQL expression rendering `col` (text) as a clingo term -- the SQL-side mirror of
+    `ledger_edb._atom` (NOT `clingo_run.quote_term`, and not a call to either -- see the
+    independence note above), matched here for the FIRST time (s37 fix, hazard-in-reach per
+    CLAUDE.md's engineering-responsibility corollary: found live while building s37's own
+    dependency_cycle/orphaned_by_retraction narrowing, witnessed causing DIVERGE_DEFECT on an
+    UNTOUCHED s36 baseline world for a single bare `./led work open probe1 ...` -- `_atom()`
+    (ledger_edb.py) renders a SAFE lowercase identifier (e.g. a typical slug) as a BARE clingo
+    constant, but this function unconditionally quoted every value, so the SQL floor and the .lp
+    producer have compared bit-UNEQUAL atom text for every ordinary slug since `_atom`'s own
+    bare/quoted branch was written -- `./judge --layer work` could not read AGREE on ANY world,
+    for ANY target, independent of this delta's own content). Fixed to the SAME branch: bare when
+    `col` is non-empty, starts with a lowercase letter, and contains only lowercase letters,
+    digits, and underscores (COALESCE/empty maps to the bare constant `none`, matching `_atom`'s
+    own empty-string case); quoted-string otherwise, same escaping as before. The three sibling
+    files carrying this same byte-identical 'independent mirror' comment (engine/ordering_floor.py
+    `_quote`, engine/preamble_floor.py `_atom_quote`, engine/contemp_floor.py `_atom_quote`) were
+    checked and are NOT affected by this same defect: each one's own EDB counterpart quotes
+    unconditionally on both sides (no bare-when-safe branch to diverge from), so the asymmetry
+    fixed here was specific to `ledger_edb._atom`'s bare/quoted pairing, not a shape the other
+    three producers share."""
+    quoted = "('\"' || replace(replace(" + col + ", '\\', '\\\\'), '\"', '\\\"') || '\"')"
+    return (
+        "(CASE WHEN " + col + " IS NULL OR " + col + " = '' THEN 'none' "
+        "WHEN " + col + " ~ '^[a-z][a-z0-9_]*$' THEN " + col + " "
+        "ELSE " + quoted + " END)"
+    )
 
 
 WORK_ITEM_PREDS = ("work_dep_edge", "work_dep_star", "work_duplicate_open",
@@ -296,62 +319,194 @@ def work_item_floor_atoms(name: str) -> set[str]:
     s31 (kernel/lineage/s31-supersession-uniform-retraction.sql): gains the ONE current-truth
     member, work_orphaned_by_retraction -- an IN-FORCE later event (claim/close/dep edge/child
     open) whose slug's opening act is retracted -- read off `<schema>.ledger_current` exactly as
-    the DDL view's four orphan_* CTEs do. Every pre-existing member deliberately KEEPS its raw
-    reading (they mirror the view's declared-history members; duplicate_open is slug-burned by
-    the ratified spec's own fork)."""
+    the DDL view's four orphan_* CTEs do.
+
+    s37 v3 amendment (design/FABLE-ORPHAN-DISPOSITION-SPEC.md v3, design/ORCH-CONSULT-DEBT-
+    SEMANTICS-2026-07-16.md, ratified 2026-07-16): THE DEBT PROJECTION QUANTIFIES OVER IN-FORCE
+    ROWS ONLY. This docstring's OWN prior text here claimed every pre-existing member (duplicate
+    opens, dangling deps, cycles) "deliberately KEEPS its raw reading" -- SUPERSEDED by this same
+    amendment: dup_open/shipped_no_witness/dangling_dep/the blocks-close cycle arms now carry
+    row-scoped in-force anti-joins (or read `{rel_cur}` directly), mirroring the kernel view's own
+    move off raw `ledger` onto `ledger_current` throughout (kernel/lineage/
+    s37-violation-disposition.sql). The plain, id-less dependency GRAPH (`deps`/`reach`, feeding
+    `work_dep_edge`/`work_dep_star`) is the one deliberate exception, UNCHANGED -- it still answers
+    "did this edge ever exist", matching work_items.lp's own identical split."""
     t = resolve(name)
     rel = t.rel()
     rel_cur = t.rel("ledger_current")
     q_dependent, q_antecedent = _wi_quote("dependent"), _wi_quote("antecedent")
     q_start, q_cur = _wi_quote("start_slug"), _wi_quote("cur")
     q_slug = _wi_quote("slug")
+    # s37 (kernel/lineage/s37-violation-disposition.sql): dependency_cycle NARROWS to blocks-close
+    # edges only (RATIFIED sibling narrowing, consult A1(b)) -- column-gated exactly like
+    # orphan_children_arm above: a pre-s30 target has no edge_type column at all, so `bc_deps`/
+    # `dep_cycle` degrade to an empty set (properly vacuous, matching the ASP twin's own
+    # capability-gated #defined work_dep_type/2 degrading identically for free on a pre-s30
+    # exporter). `deps`/`dangling_dep`/`reach` below (depends_on_unknown_slug's OWN computation)
+    # are UNCHANGED -- this narrowing is scoped to dependency_cycle alone. s37 v3 amendment: reads
+    # `{rel_cur}` (was `{rel}`) -- an in-force-only blocks-close edge set, mirroring the kernel
+    # view's bc_deps CTE moving to a `work_edge_blocks_close JOIN ledger_current` composition
+    # (kernel/lineage/s37-violation-disposition.sql).
+    bc_deps_cte = (
+        "bc_deps AS (SELECT work_slug AS dependent, work_depends_on AS antecedent "
+        f"FROM {rel_cur} WHERE kind = 'work_depends_on' AND edge_type = 'blocks-close'), "
+        "bc_reach(start_slug, cur) AS ("
+        "  SELECT dependent, antecedent FROM bc_deps"
+        "  UNION"
+        "  SELECT r.start_slug, d.antecedent FROM bc_reach r JOIN bc_deps d ON d.dependent = r.cur"
+        "), "
+        "dep_cycle AS (SELECT DISTINCT start_slug AS slug FROM bc_reach WHERE cur = start_slug)"
+        if t.has_col("edge_type") else
+        "dep_cycle AS (SELECT NULL::text AS slug WHERE false)"
+    )
+    # s37: a raw arm drops out only while an in-force disposition answers it AND that
+    # disposition's basis still holds -- mirroring the kernel view's disposition_basis_holds join
+    # (see kernel/lineage/s37-violation-disposition.sql, same predicate, independently re-derived
+    # here per ADR-0000 I6's do-not-abstract-across-producers posture). Column-gated: a pre-s37
+    # target has no work_violation_class column, so every arm stays exactly its pre-s37 shape.
+    #
+    # s37 v3 amendment (design/FABLE-ORPHAN-DISPOSITION-SPEC.md v3, design/ORCH-CONSULT-DEBT-
+    # SEMANTICS-2026-07-16.md part 2D: "remove the unconditional target-currency requirement").
+    # `JOIN {rel_cur} t ON t.id = d.target_id` below is KEPT, not deleted -- mirroring the kernel's
+    # own choice (that CTE's own v3 comment carries the full proof). SAME PROOF, restated for this
+    # producer: disposition_basis_holds is consulted ONLY via `_disposition_filter`'s anti-join
+    # against a candidate row (shipped_no_witness/dangling_dep/orphans/orphan_children below) that
+    # is ITSELF now sourced from `{rel_cur}` or carries its own in-force anti-join (this same
+    # function's other v3 edits) -- so every (class, target_id) pair this join is ever asked about
+    # already has a current target by construction. The join can never again FALSIFY a basis that
+    # would otherwise hold; a disposition on a later-retracted target is MOOT (its candidate row
+    # already absent upstream), never DEFEATED here -- "moot, never defeated" (spec Element 3),
+    # achieved structurally, matching both the kernel producer and work_items.lp's own identical
+    # choice so all three stay literal mirrors of the same invariant.
+    # s37 fix (reviewer defect 4, ADR-0014-review round): the FIRST draft hardcoded this filter's
+    # class literal to 'orphaned_by_retraction' and applied it to ONE arm (`orphans`), while the
+    # kernel VIEW's own anti-join is UNIFORM over every arm carrying a real target_id -- a class
+    # gaining a real target_id elsewhere (shipped_without_witness always had one; depends_on_
+    # unknown_slug gains one in THIS SAME fix round, defect 1) would then narrow in the kernel
+    # VIEW but not in this floor, an undetectable-by-construction DIVERGE_DEFECT (the mismatch IS
+    # what judge exists to catch; a class-hardcoded filter can't even look at a class it wasn't
+    # told about). `_disposition_filter(class_literal, id_expr)` below is the SAME SQL fragment
+    # parameterized instead of duplicated -- applied to every arm whose ASP-comparable atom
+    # carries a real row id (orphans/orphan_children, shipped_no_witness, dangling_dep -- the
+    # SAME three the .lp twin's now-generalized w_vdisp_basis_holds/3 covers). duplicate_open/
+    # dependency_cycle/dangling_parent/parent_cycle/blocks_close_cycle are NOT covered -- their
+    # ASP-comparable atoms carry no id argument at all (a pre-existing atom-shape limit, not
+    # something this fix changes), named here rather than silently left unaddressed.
+    disposition_join = ("""
+      dispositions AS (
+        SELECT id AS disp_id, work_violation_class AS class, work_violation_target_id AS target_id,
+               work_resolution AS resolution, work_violation_witness AS witness_id
+        FROM """ + rel_cur + """ WHERE kind = 'work_violation_disposition'
+      ),
+      disposition_basis_holds AS (
+        SELECT d.class, d.target_id
+        FROM dispositions d
+        JOIN """ + rel_cur + """ t ON t.id = d.target_id
+        WHERE
+          (d.resolution = 'retired' AND (
+             t.kind <> 'work_opened'
+             OR EXISTS (SELECT 1 FROM """ + rel_cur + """ cw
+                        WHERE cw.kind = 'work_closed' AND cw.work_slug = t.work_slug)
+          ))
+          OR
+          (d.resolution = 'reissued' AND (
+             d.witness_id IS NULL
+             OR EXISTS (SELECT 1 FROM """ + rel_cur + """ w WHERE w.id = d.witness_id)
+          ))
+      )"""
+                        if t.has_col("work_violation_class") else "")
+
+    def _disposition_filter(class_literal: str, id_expr: str) -> str:
+        if not t.has_col("work_violation_class"):
+            return ""
+        return (f"AND NOT EXISTS (SELECT 1 FROM disposition_basis_holds dbh "
+                f"WHERE dbh.class = '{class_literal}' AND dbh.target_id = {id_expr})")
+
+    orphans_filter = _disposition_filter("orphaned_by_retraction", "lc.id")
     # the child-orphan arm needs work_parent (s28) -- column-gated so a pre-s28 target (e.g. the
     # s22 fixture's own probe chain) degrades to the three event-kind arms, the same
     # declared-exclusion posture the amends/answers CTEs above already take. The ASP twin
-    # degrades identically for free: a pre-s28 exporter emits no work_parent_edge/3 facts.
+    # degrades identically for free: a pre-s28 exporter emits no work_parent_edge/3 facts. Carries
+    # the SAME s37 disposition filter as the main `orphans` WHERE above -- this arm is a
+    # UNION ALL'd sibling of that same predicate, not a separate one.
     orphan_children_arm = (f"""UNION ALL
         SELECT lc.work_slug AS slug, lc.id FROM {rel_cur} lc
         WHERE lc.kind = 'work_opened' AND lc.work_parent IS NOT NULL
-          AND NOT EXISTS (SELECT 1 FROM opened_current oc WHERE oc.slug = lc.work_parent)"""
+          AND NOT EXISTS (SELECT 1 FROM opened_current oc WHERE oc.slug = lc.work_parent)
+          {orphans_filter}"""
                            if t.has_col("work_parent") else "")
     sql = f"""
     WITH RECURSIVE
+      -- s37 v3 amendment: `opens_cur` is a NEW, separate CTE ({rel_cur}-sourced) feeding ONLY
+      -- dup_open below -- mirroring the kernel view's opens_cur CTE. `opens` (unqualified, RAW,
+      -- unchanged) stays the one dangling_dep's antecedent check reads (see that CTE's own v3
+      -- CORRECTNESS NOTE below for why raw is deliberate, not an oversight).
+      opens_cur AS (
+        SELECT work_slug AS slug FROM {rel_cur} WHERE kind = 'work_opened'
+      ),
+      dup_open AS (
+        SELECT slug FROM opens_cur GROUP BY slug HAVING count(*) > 1
+      ),
       opens AS (
         SELECT work_slug AS slug FROM {rel} WHERE kind = 'work_opened'
       ),
-      dup_open AS (
-        SELECT slug FROM opens GROUP BY slug HAVING count(*) > 1
-      ),
+      -- s37 fix (defect 4): shipped_without_witness already carried a real id (the close row's
+      -- own) -- narrowed here for the first time, uniformly with the other id-bearing arms. s37
+      -- v3 amendment: reads {rel_cur} (was {rel}) -- the close row itself must be in force,
+      -- mirroring the kernel view's shipped_no_witness CTE.
       shipped_no_witness AS (
-        SELECT work_slug AS slug, id FROM {rel}
+        SELECT work_slug AS slug, id FROM {rel_cur}
         WHERE kind = 'work_closed' AND work_resolution = 'shipped'
           AND (work_witness IS NULL OR btrim(work_witness) = '')
+          {_disposition_filter("shipped_without_witness", "id")}
       ),
+      -- s37 fix (defect 1): `deps` gains the depending act's OWN id -- see kernel/lineage/
+      -- s37-violation-disposition.sql's identical fix for why (NULL never equality-matches, so
+      -- depends_on_unknown_slug was permanently unanswerable without it). `deps` itself STAYS raw
+      -- (feeds `reach`/work_dep_star, the general dependency GRAPH, deliberately unnarrowed).
       deps AS (
-        SELECT work_slug AS dependent, work_depends_on AS antecedent FROM {rel}
+        SELECT work_slug AS dependent, work_depends_on AS antecedent, id FROM {rel}
         WHERE kind = 'work_depends_on'
       ),
+      -- s37 v3 amendment: the depends_on row's OWN id must be in force (a row-scoped anti-join on
+      -- d.id, since `deps` itself stays raw for `reach`'s sake -- the house idiom this file's own
+      -- `review_gap`-shaped in-force anti-joins already use elsewhere) -- mirroring the kernel
+      -- view's dangling_dep CTE (element 1's actual gate: the MEMBER'S OWN TARGET row, d.id here).
+      --
+      -- v3 CORRECTNESS NOTE (hazard-in-reach, found and fixed live building this delta -- see
+      -- kernel/lineage/s37-violation-disposition.sql's dangling_dep CTE, same fix, same reason):
+      -- the antecedent-opened check below reads `opens` (RAW, defined above) -- UNCHANGED,
+      -- deliberately NOT switched to `opens_cur`. Element 1 does not redefine the
+      -- antecedent-opened PREDICATE itself, only the target row's (d.id) own currency. Reading
+      -- the antecedent check current-truth would make this arm fire for "antecedent was opened,
+      -- then later retracted" -- a shape work_items.lp's OWN `not work_opened(Antecedent,_)`
+      -- (kept raw, same fix, same file) can never reproduce, which would silently DIVERGE the
+      -- SQL/ASP differential `./judge` exists to catch. Kept raw so this floor's member set is
+      -- always the in-force-target SUBSET of the raw-antecedent-check set, matching both the
+      -- kernel view's and the ASP twin's own corrected posture exactly.
       dangling_dep AS (
-        SELECT d.dependent AS slug, d.antecedent FROM deps d
+        SELECT d.dependent AS slug, d.antecedent, d.id FROM deps d
         WHERE NOT EXISTS (SELECT 1 FROM opens o WHERE o.slug = d.antecedent)
+          AND NOT EXISTS (SELECT 1 FROM {rel} s WHERE s.supersedes = d.id)
+          {_disposition_filter("depends_on_unknown_slug", "d.id")}
       ),
       reach(start_slug, cur) AS (
         SELECT dependent, antecedent FROM deps
         UNION
         SELECT r.start_slug, d.antecedent FROM reach r JOIN deps d ON d.dependent = r.cur
       ),
-      dep_cycle AS (
-        SELECT DISTINCT start_slug AS slug FROM reach WHERE cur = start_slug
-      ),
+      {bc_deps_cte},
       -- s31: the in-force orphan member, mirroring work_item_violations' orphan_* CTEs (see
       -- docstring). Reads ledger_current -- the one SQL home of the in-force projection.
       opened_current AS (
         SELECT work_slug AS slug FROM {rel_cur} WHERE kind = 'work_opened'
-      ),
+      ){"," if disposition_join else ""}
+      {disposition_join},
       orphans AS (
         SELECT lc.work_slug AS slug, lc.id FROM {rel_cur} lc
         WHERE lc.kind IN ('work_claimed', 'work_closed', 'work_depends_on')
           AND NOT EXISTS (SELECT 1 FROM opened_current oc WHERE oc.slug = lc.work_slug)
+          {orphans_filter}
         {orphan_children_arm}
       )
     SELECT 'work_dep_edge(' || {q_dependent} || ',' || {q_antecedent} || ')' FROM deps

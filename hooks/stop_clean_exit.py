@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-10T19:38:38Z
-#   last-change: 2026-07-16T02:07:02Z
+#   last-change: 2026-07-16T06:39:26Z
 #   contributors: be693afb/main, e4410ef6/main, a857c93d/main, 9a17b6b9/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -644,26 +644,54 @@ def _collect_debt(session_id: str) -> tuple[list[str], list[str], list[str]]:
                 entries.extend(blocking_entries)
 
     if _view_exists(schema, "work_item_violations"):
-        rows = _query(
-            f"SELECT violation, slug, coalesce(detail,'') FROM {schema}.work_item_violations "
-            f"ORDER BY violation, slug;")
+        # s37 (kernel/lineage/s37-violation-disposition.sql, consult A6(i)): LIVE column-existence
+        # gate for target_id (the SAME convention this whole module uses for every kernel-version-
+        # dependent read) -- a pre-s37 view has no target_id column, so the discharge-path hint
+        # below degrades to the pre-s37 generic escalate-to-maintainer text for EVERY member
+        # (there is no answering act on a pre-s37 world; that text was correct there, and stays
+        # correct there -- only a POST-s37 world gets the new, accurate hint).
+        has_target_id = bool(_query(
+            f"SELECT 1 FROM information_schema.columns WHERE table_schema = '{schema}' "
+            f"AND table_name = 'work_item_violations' AND column_name = 'target_id';"))
+        if has_target_id:
+            rows = _query(
+                f"SELECT violation, slug, coalesce(detail,''), target_id "
+                f"FROM {schema}.work_item_violations ORDER BY violation, slug;")
+        else:
+            rows = [(v, s, d, None) for v, s, d in _query(
+                f"SELECT violation, slug, coalesce(detail,'') FROM {schema}.work_item_violations "
+                f"ORDER BY violation, slug;")]
         if rows:
             debt_lines.append(f"WORK ITEM VIOLATIONS ({schema}.work_item_violations) -- {len(rows)} row(s):")
-            for violation, slug, detail in rows:
-                if violation == "depends_on_unknown_slug":
+            for violation, slug, detail, target_id in rows:
+                if target_id is not None:
+                    # s37: every violations-view member is answerable now (debt until answered,
+                    # record forever) -- this is the discharge path, not "escalate to the
+                    # maintainer" (that text was WRONG for a class that is legal-and-surfaced by
+                    # design, consult A6(i)'s own finding).
+                    hint = (f"answer it: ./led work resolve-violation {target_id} "
+                             f"<reissued|retired> \"<basis>\" "
+                             f"(--review-witness <ref> | --review-deferred) "
+                             f"[--witness <successor-ref>] -- debt until answered, record forever "
+                             f"(kernel/lineage/s37-violation-disposition.sql)")
+                elif violation == "depends_on_unknown_slug":
                     hint = (f"open the missing antecedent (./led work open <antecedent-slug> "
                              f"\"<title>\"), or correct the typo'd dependency -- {detail}")
                 elif violation == "dependency_cycle":
                     hint = ("break the cycle: review ./led work list / ./led work violations for "
                              "slug '" + slug + "' and record a corrected dependency -- no single "
-                             "command resolves a cycle automatically")
+                             "command resolves a cycle automatically (pre-s37 world: no answering "
+                             "act exists yet -- apply kernel/lineage/s37-violation-disposition.sql)")
                 else:
                     # duplicate_open / shipped_without_witness are provably vacuous under normal
                     # operation (refused at insert by the s22 kernel trigger/CHECK) -- seeing one
-                    # here indicates a kernel anomaly, not a normal debt item.
+                    # here indicates a kernel anomaly, not a normal debt item. (pre-s37 world only
+                    # -- see has_target_id branch above for the post-s37 discharge-path hint.)
                     hint = ("this violation class is normally refused at INSERT by the kernel -- "
                              "seeing it live indicates a kernel/trigger anomaly; escalate to the "
-                             "maintainer rather than attempting a ledger fix")
+                             "maintainer rather than attempting a ledger fix (pre-s37 world: no "
+                             "answering act exists yet -- apply kernel/lineage/"
+                             "s37-violation-disposition.sql)")
                 debt_lines.append(f"  - {violation}: slug '{slug}' ({detail}) -> {hint}")
                 entries.append(f"violation:{violation}:{slug}:{detail}")
 

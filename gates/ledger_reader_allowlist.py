@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-15T20:17:26Z
-#   last-change: 2026-07-15T21:15:53Z
-#   contributors: a857c93d/main
+#   last-change: 2026-07-16T09:51:28Z
+#   contributors: a857c93d/main, 9a17b6b9/main
 # <<< PROVENANCE-STAMP <<<
 
 """ledger_reader_allowlist — the s31 standing mechanical detect: every ledger reader is a
@@ -68,8 +68,27 @@ CHAIN = [
     "s25-commission-kind.sql", "s26-row-hash-chain.sql", "s28-work-parent-edge.sql",
     "s29-obligation-item-key-and-typed-close.sql", "s30-typed-dependency-edges.sql",
     "s31-supersession-uniform-retraction.sql", "s32-edge-views-single-home.sql",
-    "s33-composite-discharge.sql",
+    "s33-composite-discharge.sql", "s34-computed-grade-refusal.sql",
+    "s35-validation-decomposition.sql", "s36-decision-grade.sql",
+    "s37-violation-disposition.sql",
 ]
+# s37 (kernel/lineage/s37-violation-disposition.sql) extends this SAME gate's scratch CHAIN --
+# REQUIRED here (not merely following precedent) because s37 syntactically depends on s36's exact
+# ledger_current/countersigned_in_force column list (its own PREREQUISITE section), which in turn
+# needs s34/s35 present in the chain first; those two ship no ALLOWLIST-relevant change of their
+# own (s34 adds a refusal only, s35 is a pure dispatcher refactor, neither introduces or removes a
+# raw-`ledger` leg). s37 v3 amendment (design/FABLE-ORPHAN-DISPOSITION-SPEC.md v3, design/
+# ORCH-CONSULT-DEBT-SEMANTICS-2026-07-16.md): `work_item_violations` RETYPES to a NARROWLY mixed
+# reader (its own ALLOWLIST entry below now names exactly two remaining raw legs, down from
+# seven -- see that entry's own comment for the coherence reason those two stay raw) -- nine
+# arms, including dup_open/dependency_cycle/parent_cycle/blocks_close_cycle, now read
+# ledger_current exclusively, including their target_id subqueries; `validate_work_item`'s
+# disposition branch reads work_item_violations (a view) and ledger_current only, no raw leg;
+# `work_review_gap`'s UNION arm reads ledger_current only. The other object that keeps a raw/
+# history entry: `work_violation_history` (below) -- a DECLARED raw/history reader by design (its
+# own header comment: "every violation ever
+# surfaced... UNFILTERED"), now the SOLE home of the raw reading work_item_violations used to
+# share with it before the v3 retype.
 # s33 (kernel/lineage/s33-composite-discharge.sql) extends this SAME gate's scratch CHAIN so its
 # re-issued objects (work_item_current/work_item_violations/work_item_strict_blockers/
 # validate_work_item) are exercised by the scratch apply below -- it introduces NO new raw-`ledger`
@@ -97,10 +116,38 @@ ALLOWLIST: dict[str, str] = {
     "countersigned_in_force": "the projection home's countersign sibling — same single authoritative anti-join (s15).",
     # -- declared history / forensic readers --
     "review_stamp_distinctness": "row-addressed stamp forensics across review rows (s17/s21) — history by type.",
-    "work_item_violations": "mixed by declared design: seven history/defense-in-depth members over raw history "
-                            "(duplicate_open is SLUG-BURNED by the ratified fork; the graph members answer "
-                            "'did this shape ever get written'); its orphaned_by_retraction member reads "
-                            "ledger_current (s31).",
+    # s37 v3 amendment (kernel/lineage/s37-violation-disposition.sql; design/FABLE-ORPHAN-
+    # DISPOSITION-SPEC.md v3 / design/ORCH-CONSULT-DEBT-SEMANTICS-2026-07-16.md part 2F, last
+    # sentence): work_item_violations RETYPES from "mixed by declared design: seven history/
+    # defense-in-depth members" (its v2/pre-v3 entry) to a NARROWLY mixed reader carrying exactly
+    # TWO deliberate raw legs, down from seven — nine of the eleven arms are now plain
+    # current-truth (ledger_current exclusively). DIVERGENCE FROM THE ORIGINAL BUILD BRIEF, NAMED:
+    # the brief that produced this delta called for work_item_violations to retype ALL THE WAY to
+    # zero raw legs; building that version live surfaced a genuine coherence defect (found and
+    # fixed in THIS SAME delta, see dangling_dep's and dangling_parent's own v3 CORRECTNESS NOTE
+    # comments in the kernel file) — switching dangling_dep's/dangling_parent's INNER "antecedent/
+    # parent ever opened" checks from raw `ledger` to `ledger_current` would make the debt view
+    # fire for "parent/antecedent was opened, then later retracted", a shape
+    # work_violation_history's OWN raw computation (deliberately unchanged, per the amendment's
+    # own "raw arms unchanged" instruction) can never reproduce — breaking "the record is never
+    # thinner than work_item_violations" in the wrong direction (debt showing a member history
+    # cannot represent at all, not merely one that later lapsed). The amendment's own text (design/
+    # ORCH-CONSULT-DEBT-SEMANTICS-2026-07-16.md part 2B) gates lapsing on the MEMBER'S TARGET ROW
+    # currency only — for these two classes the target is the CHILD's own edge/opening row
+    # (already ledger_current-gated via `parents`/`deps` above), never the antecedent/parent row
+    # the inner NOT EXISTS checks reference — so keeping those two checks raw is the letter AND
+    # the spirit of the amendment, not a shortfall from it. Nine arms retype; two stay raw, named
+    # here rather than silently reverted.
+    "work_item_violations": "NARROWLY mixed (v3 amendment, down from seven raw legs to two): "
+                            "dangling_dep's and dangling_parent's own inner antecedent/parent-"
+                            "ever-opened NOT EXISTS checks stay raw `ledger` -- coherence with "
+                            "work_violation_history's own unchanged raw computation (see this "
+                            "file's own comment above, and those two CTEs' own v3 CORRECTNESS "
+                            "NOTE in kernel/lineage/s37-violation-disposition.sql). Every other "
+                            "arm (duplicate_open, shipped_without_witness, depends_on_unknown_"
+                            "slug, dependency_cycle, parent_cycle, blocks_close_cycle, the four "
+                            "orphaned_by_retraction sub-cases, closed_but_tree_defeated) is "
+                            "current-truth-typed, ledger_current exclusively.",
     "zz_set_row_hash": "row-hash chain writer (s26) — every row must chain, superseded or not.",
     "validate_enacts": "write-boundary BEFORE INSERT trigger — cannot read a view excluding the inserting row.",
     "validate_review": "write-boundary BEFORE INSERT trigger — same reason.",
@@ -108,6 +155,20 @@ ALLOWLIST: dict[str, str] = {
     "validate_answers": "write-boundary BEFORE INSERT trigger — same reason.",
     "validate_work_item": "write-boundary BEFORE INSERT trigger; its identity checks (slug ever opened, "
                           "would-cycle against history) are deliberately history-typed (slug burned, spec §3).",
+    # -- s35 (kernel/lineage/s35-validation-decomposition.sql): validate_work_item() decomposed
+    #    into a thin dispatcher (already listed above, unchanged reason) + four LEAF functions,
+    #    called from inside the SAME BEFORE INSERT trigger's call graph -- each leaf inherits the
+    #    dispatcher's own write-boundary/history-typed posture one level down (a PRE-EXISTING gap
+    #    this gate's CHAIN never reached until s37 extended it to include s35 as its own
+    #    PREREQUISITE -- named and fixed here, not left for a future pass to rediscover).
+    "validate_work_item_open": "s35 LEAF, called from validate_work_item()'s dispatcher — s22 duplicate-open "
+                               "+ s28 dangling-parent/parent-cycle refusals, same history-typed reasoning "
+                               "as validate_work_item's own entry, one function down.",
+    "validate_work_item_depends": "s35 LEAF — s30 blocks-close self-edge/dangling-antecedent/cycle refusals, "
+                                  "same reasoning one leaf over.",
+    "validate_work_item_close_is_composite": "s35 LEAF — s33's is_composite predicate, split out as its own "
+                                             "pure read; reads raw ledger for the SAME work_discharge lookup "
+                                             "the pre-s35 monolith already performed inline.",
     "validate_independence": "reads (stamp_session, stamp_agent) off the two named rows — row-addressed "
                              "forensics, not a truth projection (s17/s21/s29).",
     "work_parent_would_cycle": "trigger helper — cycle check against history (s28; slug-burned world: a "
@@ -128,17 +189,35 @@ ALLOWLIST: dict[str, str] = {
                                  "remain; entry kept as a record of the collapse, vestigial (s32's own "
                                  "LIMITS disclosure).",
     # -- s32 (kernel/lineage/s32-edge-views-single-home.sql): the two RAW edge-source views (F3),
-    #    declared history readers by design — every current consumer of this shape (the two
-    #    would_cycle trigger helpers above, work_item_violations' dangling_parent/parent_cycle/
-    #    blocks_close_cycle members) is itself a declared history reader needing the UNRETRACTED
-    #    reading; work_edge_obligation (below, no entry needed) supplies the in-force reading by
-    #    joining these two to ledger_current on each edge's own carrying row.
-    "work_edge_parent": "single home of the RAW s28 parent-edge relation (s32) — reused by "
-                        "work_parent_would_cycle and work_item_violations' dangling_parent/parent_cycle, "
-                        "all declared history readers needing every such edge ever written.",
-    "work_edge_blocks_close": "single home of the RAW s30 blocks-close edge relation (s32) — reused by "
-                              "work_depends_on_would_cycle and work_item_violations.blocks_close_cycle, "
-                              "same reasoning one edge kind over.",
+    #    declared history readers by design — THESE TWO VIEWS THEMSELVES still read raw `ledger`
+    #    directly (every such edge ever written, retracted or not) and so still need this entry,
+    #    independent of who consumes them. Their consumer set: work_parent_would_cycle/
+    #    work_depends_on_would_cycle (trigger helpers, genuinely need the unretracted reading, s28/
+    #    s30's own posture) keep reading them raw; work_item_violations' dangling_parent/
+    #    parent_cycle/blocks_close_cycle members (s37 v3 amendment) now JOIN these two views to
+    #    ledger_current on each edge's own carrying row (edge_row_id) instead — the SAME
+    #    in-force-only composition work_edge_obligation (below, no entry needed) already uses, now
+    #    inlined into work_item_violations' own current-truth-retyped definition rather than
+    #    composed through that view. Naming this view here does not, by itself, make a CONSUMER a
+    #    history reader — each consumer's OWN definition is independently classified below/absent.
+    "work_edge_parent": "single home of the RAW s28 parent-edge relation (s32) — read RAW by "
+                        "work_parent_would_cycle (needs the unretracted reading, s28); "
+                        "work_item_violations' dangling_parent/parent_cycle (s37 v3) instead JOIN it "
+                        "to ledger_current, an in-force reading, but that JOIN lives in "
+                        "work_item_violations' OWN definition, not this view's -- this entry covers "
+                        "only this view's own raw legs.",
+    "work_edge_blocks_close": "single home of the RAW s30 blocks-close edge relation (s32) — read RAW by "
+                              "work_depends_on_would_cycle (needs the unretracted reading, s30); "
+                              "work_item_violations' dependency_cycle/blocks_close_cycle (s37 v3) instead "
+                              "JOIN it to ledger_current in THEIR OWN definition, same reasoning one edge "
+                              "kind over.",
+    # -- s37 (kernel/lineage/s37-violation-disposition.sql) --
+    "work_violation_history": "DECLARED raw/history reader by design (spec element 1: 'every violation ever "
+                              "surfaced... never thinner'), the UNFILTERED read -- reads raw ledger directly "
+                              "for the SAME shapes work_item_violations computed before its v3 current-truth "
+                              "retype (dup_open/dependency_cycle/parent_cycle/blocks_close_cycle among them); "
+                              "since v3 this is the ONLY view still reading these raw, by design (the record "
+                              "projection quantifies over everything, forever).",
 }
 
 # A raw-`ledger` TABLE ACCESS: FROM/JOIN/INTO/UPDATE followed by an optionally schema-qualified

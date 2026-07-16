@@ -1,0 +1,37 @@
+{
+  "target": "s37wit",
+  "verdict": "AGREE",
+  "only_asp": [],
+  "only_sql": [],
+  "asp_record": {
+    "engine": "clingo",
+    "version": "clingo version 5.8.0",
+    "config": [
+      "ledger_tnow.lp",
+      "work_items.lp",
+      "work_review.lp"
+    ],
+    "input_basis": "edb-text (ledger_edb export, serialized)",
+    "input_hash": "1bf136bdda34b2b32fa4dc0a828bd2ffbb23bef13ea2f39f9b62c49908c4a354",
+    "program_hash": "b91d2a2f0e3dcaf2ead3b996081b987e478a99d33629b4e01afa6ff565a9fa40",
+    "output_hash": "c58c0a88c74e9c6761354ae40448ad26d8ef0ff937da49fc2d10a9e82f256d6d",
+    "target": "s37wit",
+    "ts": "2026-07-16T08:35:32"
+  },
+  "sql_record": {
+    "engine": "postgres",
+    "version": "PostgreSQL 18.4",
+    "config": [
+      "ledger_floor.py::work_item_floor_atoms",
+      "ledger_floor.py::work_review_floor_atoms"
+    ],
+    "input_basis": "live-db rows read directly (toy.s37wit.ledger[/ledger_current])",
+    "input_hash": "f5f7e0783e6e64fb96612d84dcd6c8ab2835d1f19debb11d06005ba2b4d0b23c",
+    "program_hash": "7a1033a5b01012e453e709f9e145982d797cc74f47a40a8bcf54e0315acc3567",
+    "output_hash": "57c3190e5f1c82c050590f12388beab93cd394f79635c1355825a7f1670cdc26",
+    "target": "s37wit",
+    "ts": "2026-07-16T08:35:33"
+  },
+  "asp_quarantine": null,
+  "sql_quarantine": null
+}
