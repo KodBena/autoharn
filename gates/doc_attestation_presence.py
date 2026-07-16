@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-11T16:14:47Z
-#   last-change: 2026-07-14T01:53:53Z
-#   contributors: e4410ef6/main, 3c50e030/main, a857c93d/main
+#   last-change: 2026-07-16T02:03:50Z
+#   contributors: e4410ef6/main, 3c50e030/main, a857c93d/main, 9a17b6b9/main
 # <<< PROVENANCE-STAMP <<<
 
 """doc_attestation_presence — the commit-time enforcement floor for ADR-0017's A:B:C
@@ -433,33 +433,87 @@ def records_for_doc(records: list[dict], doc_rel: str) -> list[dict]:
     return [r for r in records if r.get("doc") == doc_rel]
 
 
+def _git_ignored_rel_paths(doc_root: Path, rel_paths: list[str]) -> set[str] | None:
+    """Returns the subset of `rel_paths` (repo-relative POSIX paths under `doc_root`) that git
+    itself considers ignored, or `None` if that question can't honestly be answered here (git
+    absent, or `doc_root` is not inside a git work tree) -- the caller's contract (`discover_md`
+    below) is: `None` means "fall back to the unfiltered walk", NEVER "treat as empty", so a
+    tree with no git at all still gets every `.md` file it always got (the false-CLEAN fix
+    `discover_md` exists to preserve, see that function's docstring)."""
+    try:
+        probe = subprocess.run(
+            ["git", "-C", str(doc_root), "rev-parse", "--is-inside-work-tree"],
+            capture_output=True, text=True, timeout=8)
+    except (OSError, FileNotFoundError):
+        return None  # no git binary on PATH
+    if probe.returncode != 0 or probe.stdout.strip() != "true":
+        return None  # doc_root is not inside a git work tree (or the probe itself failed)
+    if not rel_paths:
+        return set()
+    try:
+        # `check-ignore --stdin` batches the whole candidate list in one process (never one
+        # subprocess per file) and exits 0 (>=1 match), 1 (no match), or 128 (fatal git error,
+        # e.g. a corrupt repo) -- 128 degrades to the same "can't tell, don't filter" contract
+        # as no-git-at-all, rather than risk silently widening or narrowing the scope.
+        out = subprocess.run(
+            ["git", "-C", str(doc_root), "check-ignore", "--stdin"],
+            input="\n".join(rel_paths) + "\n", capture_output=True, text=True, timeout=15)
+    except (OSError, FileNotFoundError):
+        return None
+    if out.returncode not in (0, 1):
+        return None
+    return {line for line in out.stdout.splitlines() if line}
+
+
 def discover_md(doc_root: Path) -> list[str]:
     """Every `*.md` file that physically EXISTS under `doc_root`, repo-relative POSIX paths,
-    sorted — a plain on-disk walk, unconditionally, never `git ls-files`.
+    sorted, MINUS any that git itself reports as gitignored — a plain on-disk walk first, then
+    a git-ignore FILTER on top of it, never `git ls-files` as the discovery mechanism itself.
 
-    NOT `_tracked_md()` generalized in place, and deliberately NOT git-tracked-preferring
-    (an earlier version of this function preferred `git ls-files` whenever `doc_root/.git`
-    existed, on the theory that it gave "exact parity with this gate's own `_tracked_md()`" —
-    an out-of-frame hack-rationalization audit caught that theory live-broken: `git ls-files`
-    on a git-initialized-but-nothing-yet-committed or nothing-yet-`git add`-ed tree succeeds
-    with EMPTY output, not an error, so the except-based fallback below never triggered and
-    this function silently returned `[]` on a tree that genuinely had undiscovered `.md` files
-    on disk — a false-CLEAN, worse than a false-red, on exactly the scenario this module's own
-    design doc names as real: "a world's own agent may or may not initialize [git] later"
-    (design/ORCH-SPEC-ABC-OFFERING.md §1)). The actual job this function has — "which documents
-    in this deployment might need a fresh-context review" — is never well-served by "tracked
-    only": an operator who just wrote a new, uncommitted `.md` file wants to know it needs
-    review too, not have it silently excluded until the next `git add`. `_tracked_md()` above
-    stays exactly as it is (this repo's own commit-time gate path, always a git worktree, where
-    "tracked only" is the CORRECT semantics, not a shortcut) — this function answers a different
-    question for a different caller and does not need, or want, git's involvement at all."""
+    TWO-STEP DESIGN (discover-md-gitignore-scope defect fix, 2026-07-16): discovery and
+    ignore-filtering are deliberately two separate passes, not one `git ls-files`-based query,
+    because they answer two different questions this function must get right independently:
+    "does this file exist on disk" (the raw `rglob` walk, step one) can never be answered by
+    asking git anything (see the NOT `_tracked_md()` history below), while "should a vendored/
+    generated tree the operator explicitly gitignored count as debt" (the `check-ignore`
+    filter, step two, `_git_ignored_rel_paths()` above) is exactly the question `.gitignore`
+    exists to answer, and skipping it let gitignored vendor trees (`node_modules/`, a venv's
+    `site-packages/`) flood the attestation debt count with files nobody asked this gate to
+    read (witnessed live: 118 of 155 debt rows on one deployment were vendor files). The filter
+    degrades to a no-op (returns the full unfiltered walk) whenever it can't honestly answer —
+    no git binary, or `doc_root` not inside a work tree — so a non-git tree keeps seeing every
+    `.md` file it always did; it never trades the false-CLEAN fix below away to buy this one.
+
+    NOT `_tracked_md()` generalized in place, and the raw walk is deliberately NOT
+    git-tracked-preferring (an earlier version of this function preferred `git ls-files`
+    whenever `doc_root/.git` existed, on the theory that it gave "exact parity with this gate's
+    own `_tracked_md()`" — an out-of-frame hack-rationalization audit caught that theory
+    live-broken: `git ls-files` on a git-initialized-but-nothing-yet-committed or
+    nothing-yet-`git add`-ed tree succeeds with EMPTY output, not an error, so the except-based
+    fallback below never triggered and this function silently returned `[]` on a tree that
+    genuinely had undiscovered `.md` files on disk — a false-CLEAN, worse than a false-red, on
+    exactly the scenario this module's own design doc names as real: "a world's own agent may
+    or may not initialize [git] later" (design/ORCH-SPEC-ABC-OFFERING.md §1)). The actual job
+    this function has — "which documents in this deployment might need a fresh-context review"
+    — is never well-served by "tracked only": an operator who just wrote a new, uncommitted
+    `.md` file wants to know it needs review too, not have it silently excluded until the next
+    `git add`. The `check-ignore` filter above does not reopen that hole: an untracked-but-real
+    `.md` file is never gitignored merely by being untracked, so it stays in scope; only a file
+    a `.gitignore` pattern actually matches drops out. `_tracked_md()` above stays exactly as
+    it is (this repo's own commit-time gate path, always a git worktree, where "tracked only"
+    is the CORRECT semantics, not a shortcut) — this function answers a different question for
+    a different caller."""
     out = []
     for p in doc_root.rglob("*.md"):
         rel_parts = p.relative_to(doc_root).parts
         if ".git" in rel_parts:
             continue
         out.append(p.relative_to(doc_root).as_posix())
-    return sorted(out)
+    out = sorted(out)
+    ignored = _git_ignored_rel_paths(doc_root, out)
+    if ignored is None:
+        return out
+    return [rel for rel in out if rel not in ignored]
 
 
 def classify(rel: str, records: list[dict], doc_root: Path) -> str:

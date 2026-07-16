@@ -358,10 +358,13 @@ Read-only; safe to run mid-run or after. Not to be confused with the differently
 <a id="distance-to-clean"></a>
 ### `distance-to-clean`
 The operator verb `./distance-to-clean`: one composed read of all closure-debt dimensions
-(`review_gap`, `question_status`, `work_item_violations`) with counts and ids, computing
-nothing the three underlying views do not already compute. Strictly additive convenience —
-`led review-gap`, `led question-status`, and `led work violations` remain the documented
-default, disaggregated way to read closure debt (maintainer condition, 2026-07-11). Source:
+([`review_gap`](#review_gap) and its four siblings named at that entry — `question_status`,
+`work_item_violations`, `work_item_current`, `work_review_gap` — the same five categories
+`hooks/stop_clean_exit.py` (the Stop-hook that blocks a session from ending with undischarged
+debt) itself checks, as of the 2026-07-16 dtc-stopgate-parity fix) with counts and ids,
+computing nothing the underlying views do not already compute. Strictly additive convenience — `led review-gap`, `led question-status`, and
+`led work violations` remain the documented default, disaggregated way to read closure debt
+(maintainer condition, 2026-07-11). Source:
 [`bootstrap/templates/distance-to-clean.tmpl`](bootstrap/templates/distance-to-clean.tmpl).
 
 <a id="the-scaffold"></a>
@@ -384,7 +387,17 @@ Not to be confused with the content-free-review-discharge **audit** (`./audit --
 [engine/review_gap_thresholds.py](engine/review_gap_thresholds.py)) — a distinct,
 differently-scoped check over this same view's discharges, inspecting whether a discharging
 review's own statement is content-free; this view's discharge test itself never examines content
-(see [USER-RECIPES-FAQ.md](design/USER-RECIPES-FAQ.md) for the full answer).
+(see [USER-RECIPES-FAQ.md](design/USER-RECIPES-FAQ.md) for the full answer). Sibling closure-debt
+views read by [`distance-to-clean`](#distance-to-clean) and the same Stop-hook: `question_status`
+(open/unanswered `led ask`/`led decide` questions), `work_item_violations` (a
+[`*_violations` gate](#violations-gate) instance over the work-item ledger), `work_item_current`
+(open work items, filtered to ones this session claimed and has not discharged), and
+`work_review_gap` (a work item closed `--review-deferred`, awaiting the same distinct-actor
+countersign this entry describes) — none has its own heading here because each is a thin,
+single-purpose view over the same kernel tables this entry and [`obligation`](#obligation)
+already describe; their source is `kernel/lineage/s22-work-item-ledger.sql` (violations,
+current) and `kernel/lineage/s29-obligation-item-key-and-typed-close.sql` (review-gap) for the
+work-item pair, and `kernel/lineage/s15-schema.sql` for `question_status`.
 
 ### obligation
 A `countersign_obligation` row: the obliged [principal](#principal)'s EVERY row (any kind)
@@ -410,7 +423,9 @@ deliberately governs a WIDER set (see its own entry).
 ### SUBJECT_ROOT
 The scaffolded project's own root directory, as the [`hooks/pretooluse_change_gate.py`](hooks/pretooluse_change_gate.py) hook
 resolves it for the current invocation — from an explicit env var, or from a located
-`deployment.json`, or (unwired) a byte-held default. Every path-scoped mechanism in that hook
+`deployment.json`, or (unwired) a hardcoded fallback path baked into the hook's own source
+(`_DEFAULT_SUBJECT_ROOT`, used only when neither of the first two resolves). Every path-scoped
+mechanism in that hook
 ([governed file](#governed-file) matching, [permit-to-work](#permit-to-work),
 [decomposition-review-blocker](#decomposition-review-blocker)) is scoped to files under it.
 
