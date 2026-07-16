@@ -158,11 +158,18 @@ work_dep_star_via_closure(F,D) :- star(work_dep,F,D).
 % would have no way to catch on its own (the mismatch IS what judge exists to catch, but a
 % class-hardcoded join can never even LOOK at a class it wasn't told about). Fixed by making Class
 % a VARIABLE throughout -- these two predicates now match the kernel's disposition_basis_holds
-% CTE literally, clause for clause, independent of which violation class calls them. `retired`
-% holds while the target's own slug (if the target IS an opening row, work_opened(Slug,R))
-% currently reads closed (an in-force work_closed row for that slug); for every other target kind,
-% membership in the caller's own raw derivation already required `not superseded(R)`, so "settled"
-% is automatic. `reissued` holds while no witness was cited, or the cited witness row is itself
+% CTE literally, clause for clause, independent of which violation class calls them. s37 fix
+% (reviewer defect, post-first-draft: the kernel's disposition_basis_holds CTE JOINs
+% ledger_current t ON t.id = d.target_id, i.e. the TARGET row itself must be current --
+% w_vdisp_basis_holds/3 lacked this precondition, so a disposition whose target row was later
+% superseded (e.g. the depends_on_unknown_slug or shipped_without_witness target, neither of
+% which re-checks currency in its own raw derivation the way work_orphaned_by_retraction_raw
+% does) would still narrow the violation in ASP after the kernel VIEW had already stopped
+% narrowing it -- a silent DIVERGE_DEFECT. Fixed by adding `not superseded(R)` as a shared
+% precondition to all four rules below, mirroring the kernel's `JOIN ledger_current t` literally).
+% `retired` holds while the target row itself is current AND (if the target IS an opening row,
+% work_opened(Slug,R)) its slug currently reads closed (an in-force work_closed row for that
+% slug). `reissued` holds while no witness was cited, or the cited witness row is itself
 % still in force. THREE CALLERS below (work_orphaned_by_retraction, work_depends_on_unknown above,
 % work_shipped_without_witness above) -- the NAMED, disclosed exception is duplicate_open/
 % dependency_cycle/dangling_parent/parent_cycle/blocks_close_cycle, whose atom shape carries no id
@@ -171,15 +178,19 @@ w_vdisp_in_force(Class,R,Disp) :- w_vdisp(Class,R,Disp), not superseded(Disp).
 
 w_vdisp_basis_holds(Class,R,Disp) :-
     w_vdisp_in_force(Class,R,Disp), w_vdisp_resolution(Disp,retired),
+    not superseded(R),
     work_opened(Slug,R), work_closed(Slug,_,CloseR), not superseded(CloseR).
 w_vdisp_basis_holds(Class,R,Disp) :-
     w_vdisp_in_force(Class,R,Disp), w_vdisp_resolution(Disp,retired),
+    not superseded(R),
     not work_opened(_,R).
 w_vdisp_basis_holds(Class,R,Disp) :-
     w_vdisp_in_force(Class,R,Disp), w_vdisp_resolution(Disp,reissued),
+    not superseded(R),
     not w_vdisp_witness_present(Disp).
 w_vdisp_basis_holds(Class,R,Disp) :-
     w_vdisp_in_force(Class,R,Disp), w_vdisp_resolution(Disp,reissued),
+    not superseded(R),
     w_vdisp_witness_present(Disp), w_vdisp_witness_in_force(Disp).
 
 % ---- orphaned_by_retraction (s31; GENUINELY REACHABLE -- retracting an opening act while later
