@@ -225,12 +225,36 @@ BEGIN
   -- `prior_id` as already retired for BOTH checks (the reviewer's own instruction, verbatim).
   -- `r.supersedes` naming anything else (or nothing) changes NOTHING below -- the ordinary A3
   -- refusal still fires for a genuine duplicate attempt.
+  --
+  -- s37 fix (independent-review round 2, post-A3-fix defect): `r.supersedes = prior_id`, plain
+  -- `=`, is a THREE-VALUED comparison -- the ordinary insert path (no --supersedes given) carries
+  -- `r.supersedes IS NULL`, and `NULL = <anything>` is SQL UNKNOWN, not FALSE. `is_correction :=
+  -- (prior_id IS NOT NULL AND UNKNOWN)` is itself UNKNOWN (AND's truth table: TRUE AND UNKNOWN =
+  -- UNKNOWN), so `NOT is_correction` is ALSO UNKNOWN, and plpgsql's `IF <UNKNOWN> THEN` treats
+  -- UNKNOWN exactly as FALSE (per the PL/pgSQL manual: only a TRUE condition executes the
+  -- branch) -- so BOTH refusals below silently failed to fire on the single most common call
+  -- shape (a duplicate WITHOUT --supersedes), the flaw's witnessed core case. This is the ADR-0000
+  -- Rule-2(a) type question answered directly: the illegal state was a THIRD, UNNAMED value
+  -- (UNKNOWN) smuggled into what the code's own shape (`IF NOT is_correction AND ...`) already
+  -- presumed was a two-valued boolean -- so the type that forecloses the class is `is_correction`
+  -- itself, made TOTAL: never NULL, always exactly TRUE or FALSE, by construction. `IS NOT
+  -- DISTINCT FROM` (this file's own house idiom for a null-safe comparison -- see
+  -- s17-independence-vocabulary.sql/s29-obligation-item-key-and-typed-close.sql/
+  -- s34-computed-grade-refusal.sql, all pre-existing kernel deltas, ADR-0012 P1: reuse the
+  -- established mechanism, do not invent a new one) collapses NULL/NULL and NULL/non-NULL into a
+  -- real boolean rather than UNKNOWN, so `is_correction` can never again silently disarm either
+  -- refusal. Quantification universe (ADR-0000 2026-07-02 amendment, the closure statement): the
+  -- one axis at risk is `r.supersedes`'s NULLity (every call either carries no --supersedes, i.e.
+  -- NULL, or a stated old-disposition id); the one sibling surface is `prior_id`'s NULLity, which
+  -- is already handled correctly by the leading `prior_id IS NOT NULL` conjunct and needs no
+  -- change. Both are now closed by one total expression -- there is no second call shape left
+  -- that can leave `is_correction` UNKNOWN.
   SELECT lc.id INTO prior_id
   FROM ledger_current lc
   WHERE lc.kind = 'work_violation_disposition'
     AND lc.work_violation_class = r.work_violation_class
     AND lc.work_violation_target_id = r.work_violation_target_id;
-  is_correction := (prior_id IS NOT NULL AND r.supersedes = prior_id);
+  is_correction := (prior_id IS NOT NULL AND r.supersedes IS NOT DISTINCT FROM prior_id);
 
   -- Three refusals, in order:
   --   (a) the target must be an IN-FORCE work_item_violations member RIGHT NOW, established by
