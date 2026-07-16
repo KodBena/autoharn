@@ -33,6 +33,11 @@
       "policy": {"fable*": "deny", "opus*": "deny", "sonnet*": "allow", "haiku*": "allow"},
       "unknown_model_mode": "observe",
       "cost_note": "Spends nothing (pure regex scan, no LLM call, no network) -- NOT a cost switch like demurral_detect/doc_legibility_critic above. OFF by default per work item model-conditional-sql-block: a PreToolUse hook on Bash gating raw-SQL-bearing commands is a genuine behavior change to what a session can do, so arming it is the operator's choice, not a silent default. A PreToolUse hook on Bash never carries the acting model's identity (checked empirically, hooks/pretooluse_sql_block.py module docstring) -- `session_model` is DECLARED by whoever scaffolds/arms this world, not witnessed by the harness; set it honestly or leave 'unknown' (which the shipped policy maps to observe-only, never a silent block). To arm: set mode to 'observe' (warn-only) or 'enforce' (actually denies a deny-model's raw SQL), and set session_model to this session's real model, e.g. mechanisms.sql_block = {\"mode\": \"enforce\", \"session_model\": \"sonnet\"}."
+    },
+    "standing_decisions": {
+      "grades": ["durable"],
+      "byte_cap": 4000,
+      "note": "design/FABLE-GRADED-DECISIONS-SPEC.md: which decision_grade words (kernel/lineage/s36-decision-grade.sql) count as 'standing' for this deployment, and how many bytes hooks/sessionstart_durable_decisions.py (SessionStart, matchers compact/resume) and bootstrap/templates/pickup.tmpl's STANDING-DECISIONS section will re-inject before loudly truncating (never silently). The kernel knows nothing of this list -- decision_grade itself has no enum -- so a grade word absent here is legal to write but invisible to both readers until added. No mode switch here (unlike change_gate/clean_exit/etc above): both readers are read-only and fail open on their own (missing deployment.json, unreachable ledger, pre-s36 schema), so there is nothing to arm/disarm -- this entry is pure policy data, not a mechanism toggle."
     }
   }
 }

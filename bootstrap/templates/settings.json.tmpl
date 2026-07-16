@@ -124,6 +124,18 @@
           }
         ]
       }
+    ],
+    "SessionStart": [
+      {
+        "matcher": "compact|resume",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "env LEDGER_DEPLOYMENT=__PROJECT_ROOT__/deployment.json python3 __AUTOHARN_ROOT__/hooks/sessionstart_durable_decisions.py",
+            "timeout": 15
+          }
+        ]
+      }
     ]
   }
 }
