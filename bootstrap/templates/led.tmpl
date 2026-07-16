@@ -96,6 +96,20 @@
 #   led stamp-distinctness                    review_stamp_distinctness view: for each review,
 #                                              whether the SAME invocation wrote it and its target
 #
+#   led decision --grade <word> <statement...>  writes a kind=decision row carrying a durability
+#                                              GRADE (kernel/lineage/s36-decision-grade.sql,
+#                                              design/FABLE-GRADED-DECISIONS-SPEC.md; starter
+#                                              vocabulary: durable). --grade is parsed in THIS
+#                                              verb's OWN loop (not the top-of-file flag loop) --
+#                                              an unrecognized --flag here is refused, never
+#                                              swallowed into statement prose (ledger item
+#                                              led-work-open-refs-swallowed's own lesson).
+#                                              LIVE column-existence check: refused with
+#                                              teach-text on a pre-s36 world, never a silent drop.
+#   led standing                              standing_decisions view: every in-force (super-
+#                                              session-filtered) graded decision, no recency
+#                                              limit. REFUSED with teach-text on a pre-s36 world.
+#
 #   led register-principal <name> <class>     register a principal (class: human|model|subagent|tool)
 #                                              so a countersign can be attributed to it — the
 #                                              writer registers its own principals, the kernel
@@ -502,7 +516,7 @@ warn_path_shaped_in_statement() {
 # not a silent gap.
 if [ -n "$event_time" ]; then
   case "${1:-}" in
-    --recent|current|question-status|review-gap|stamp-distinctness|register-principal|obligate|review|work)
+    --recent|current|question-status|review-gap|stamp-distinctness|standing|register-principal|obligate|review|work)
       echo "led: REFUSED -- --event-time is only supported on the generic <kind> <statement...>" >&2
       echo "  path today (e.g. './led --event-time <ts> finding \"...\"'); '${1:-}' has its own" >&2
       echo "  INSERT that does not carry event_declared_ts, so the value would otherwise be" >&2
@@ -709,6 +723,37 @@ fi
 
 if [ "${1:-}" = "stamp-distinctness" ]; then
   exec psql -h "$PGHOST" -d "$PGDB" -c "SELECT * FROM ${SCHEMA}.review_stamp_distinctness ORDER BY review_id;"
+fi
+
+if [ "${1:-}" = "standing" ]; then
+  # led standing — trivial reader over standing_decisions (kernel/lineage/s36-decision-grade.sql,
+  # design/FABLE-GRADED-DECISIONS-SPEC.md element 6). The escape hatch both the SessionStart
+  # hook's (hooks/sessionstart_durable_decisions.py) and pickup's STANDING-DECISIONS section's own
+  # loud-truncation messages point at ("N more standing decisions not shown -- run ./led
+  # standing") -- READ-ONLY, no recency limit (standing_decisions is already the FULL in-force
+  # graded set, s31's own supersession semantics drop a retracted one automatically).
+  #
+  # GRACEFUL TEACH-TEXT REFUSAL on a pre-s36 world -- LIVE column-existence check, the SAME
+  # convention `work open --parent`/`work open --discharge` above already use (this file executes
+  # IN PLACE for every already-scaffolded world, live verbs doctrine, and s36 is NOT wired into
+  # every world's birth chain -- it ships authored+scratch-witnessed only, per its own header's
+  # PARAMETERIZATION note), so an unconditional `SELECT * FROM standing_decisions` here would
+  # error with a bare "relation does not exist" instead of teaching the fix.
+  has_grade_col=$(psql -h "$PGHOST" -d "$PGDB" -tAq -v schema="$SCHEMA" <<SQL
+    SELECT EXISTS (SELECT 1 FROM information_schema.columns
+                   WHERE table_schema = :'schema' AND table_name = 'ledger'
+                     AND column_name = 'decision_grade');
+SQL
+  )
+  if [ "$has_grade_col" != "t" ]; then
+    echo "led standing: REFUSED -- this world's kernel predates s36 (decision_grade column not" >&2
+    echo "  found on ${SCHEMA}.ledger, so standing_decisions does not exist either). Apply" >&2
+    echo "  kernel/lineage/s36-decision-grade.sql to this schema as a maintainer act" >&2
+    echo "  (ORCH-OPERATING-CARD.md's kernel-delta decision tree), or -- if this world never" >&2
+    echo "  needs graded standing decisions -- there is nothing more to do here." >&2
+    exit 1
+  fi
+  exec psql -h "$PGHOST" -d "$PGDB" -c "SELECT * FROM ${SCHEMA}.standing_decisions ORDER BY id;"
 fi
 
 if [ "${1:-}" = "register-principal" ]; then
@@ -1441,7 +1486,8 @@ if [ $# -lt 2 ]; then
   echo "usage: led [flags] <kind> <statement...>   (see top-of-file comment for the full flag list:" >&2
   echo "       -f -e --supersedes --amends --amends-scope --answers --refs --concern --evidence" >&2
   echo "       --confidence; cite an antecedent row from any kind via --refs row:<id>)" >&2
-  echo "       led --recent [N] | led current [N] | led show <id> | led question-status | led review-gap | led stamp-distinctness" >&2
+  echo "       led --recent [N] | led current [N] | led show <id> | led question-status | led review-gap | led stamp-distinctness | led standing" >&2
+  echo "       led decision [--grade <word>] <statement...>  (kernel/lineage/s36-decision-grade.sql)" >&2
   echo "       led register-principal <name> <class>" >&2
   echo "       led obligate <scope> <assigned-by-principal> <obliged-actor-principal>" >&2
   echo "       led obligate revoke <scope>" >&2
@@ -1451,6 +1497,51 @@ if [ $# -lt 2 ]; then
 fi
 
 kind="$1"; shift
+
+# --- --grade <word> (kind="decision" ONLY; kernel/lineage/s36-decision-grade.sql, design/
+# FABLE-GRADED-DECISIONS-SPEC.md element 2) -- parsed in DECISION'S OWN loop here, immediately
+# after kind is known and BEFORE the generic statement="$*" assembly below, mirroring `led work
+# open`'s --parent idiom AND its own UNKNOWN-FLAG REFUSAL fix (ledger item
+# led-work-open-refs-swallowed, found the same day this spec was ratified: a flag the subcommand
+# loop does not parse is silently swallowed into statement prose). --grade MUST NOT repeat that
+# shape: an unrecognized --flag among the remaining `decision` args is refused here, loudly,
+# rather than silently becoming part of the decision's own statement text.
+#
+# A recognized top-of-file flag (LED_FLAG_VOCAB) placed AFTER 'decision' is deliberately left
+# alone here (re-collected into args, not claimed as "unrecognized") -- refuse_flag_in_statement
+# below already teaches the correct fix for THAT mistake (flags belong BEFORE the kind word); this
+# loop's own refusal is reserved for a flag that is genuinely unknown to led anywhere.
+grade=""
+if [ "$kind" = "decision" ]; then
+  args=()
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --grade) grade="${2:-}"; shift 2 ;;
+      --*)
+        case " $LED_FLAG_VOCAB " in
+          *" $1 "*) args+=("$1"); shift ;;
+          *)
+            echo "led decision: REFUSED -- unrecognized flag '$1'." >&2
+            echo "  led decision [--grade <word>] <statement...> accepts --grade (kernel/lineage/" >&2
+            echo "  s36-decision-grade.sql) plus led's standing top-of-file flags (-f -e" >&2
+            echo "  --supersedes --amends --amends-scope --answers --refs --concern --evidence" >&2
+            echo "  --confidence --event-time, given BEFORE the 'decision' kind word -- see led's" >&2
+            echo "  own usage header). An unrecognized --flag here would otherwise be silently" >&2
+            echo "  concatenated into the decision statement text instead of erroring -- the exact" >&2
+            echo "  defect class ledger item led-work-open-refs-swallowed found and fixed for" >&2
+            echo "  'led work open'; this loop applies the same fix to 'led decision --grade'." >&2
+            echo "  NOTHING was written. Fix the flag name, or drop it if it was meant as" >&2
+            echo "  ordinary statement text." >&2
+            exit 1
+            ;;
+        esac
+        ;;
+      *) args+=("$1"); shift ;;
+    esac
+  done
+  set -- "${args[@]}"
+fi
+
 refuse_flag_in_statement "[flags] ${kind}" "$@"
 statement="$*"
 
@@ -2252,6 +2343,27 @@ if [ -n "$event_time" ]; then
   fi
 fi
 
+# decision_grade (kernel/lineage/s36-decision-grade.sql) -- SAME live-check convention as
+# event_declared_ts immediately above: `--grade` is only meaningful when kind="decision" (the
+# arg-loop above only sets $grade in that branch), and s36 is NOT wired into every world's birth
+# chain (authored+scratch-witnessed only, per its own header) -- so this generic path cannot
+# hardcode the column into the INSERT column list below. Only paid when --grade was actually
+# supplied (the common no-flag path -- including every OTHER kind, and a bare `led decision
+# "..."` with no --grade -- is byte-identical to before this delta, zero extra query, zero
+# behavior change).
+has_grade_col="f"
+if [ -n "$grade" ]; then
+  has_grade_col=$(psql -h "$PGHOST" -d "$PGDB" -tAc \
+    "SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = '${SCHEMA}' AND table_name = 'ledger' AND column_name = 'decision_grade');")
+  if [ "$has_grade_col" != "t" ]; then
+    echo "led decision: REFUSED -- --grade was given, but this world's kernel predates s36 (no" >&2
+    echo "  decision_grade column on ${SCHEMA}.ledger) -- the grade cannot be recorded in a typed" >&2
+    echo "  column here. Omit --grade, or apply kernel/lineage/s36-decision-grade.sql to this" >&2
+    echo "  schema as a maintainer act (ORCH-OPERATING-CARD.md's kernel-delta decision tree)." >&2
+    exit 1
+  fi
+fi
+
 # _led_kind_refusal_teach -- run-10 closure audit, item 1 (BACKLOG "Run-10 closure audit
 # (2026-07-11)", change proposal 1): row 67 was an invented kind ('acceptance-criteria'),
 # refused by the kernel's ledger_kind_check CHECK constraint -- correctly -- but the bare
@@ -2291,12 +2403,83 @@ _led_kind_refusal_teach() {
 # contain quotes, semicolons, or anything else without escaping into SQL (P2: a boundary
 # translates-and-validates untrusted text; it does not hand-splice it into a query). NOTE: psql's
 # :'var' interpolation is only applied to a script read from stdin/-f, NOT to a -c argument -- so
-# the script is fed via stdin, not -c. TWO INSERT SHAPES (event_declared_ts column present or
-# not -- see the live check above): the column list itself must differ, not merely the bound
-# value, on a schema that lacks the column entirely. Both shapes get the SAME refusal-teaching
-# treatment (factored into _led_kind_refusal_teach above, called identically from each `else`
-# below) rather than duplicating that logic per shape.
-if [ -n "$event_time" ]; then
+# the script is fed via stdin, not -c. FOUR INSERT SHAPES (event_declared_ts column present or
+# not, CROSSED with decision_grade supplied or not -- see the two live checks above): the column
+# list itself must differ, not merely the bound value, on a schema that lacks a column entirely.
+# grade is empty (has_grade_col="f") on every path except a validated `led decision --grade`, so
+# the common case (no --grade, any kind, any --event-time state) takes exactly the ORIGINAL two
+# shapes below, byte-identical to before this delta -- zero new column in the INSERT, zero
+# behavior change. All four shapes get the SAME refusal-teaching treatment (factored into
+# _led_kind_refusal_teach above, called identically from each `else` below) rather than
+# duplicating that logic per shape.
+if [ -n "$grade" ]; then
+  if [ -n "$event_time" ]; then
+    if psql -h "$PGHOST" -d "$PGDB" -v ON_ERROR_STOP=1 \
+      -v kind="$kind" -v statement="$statement" -v rationale="$rationale" \
+      -v supersedes="$supersedes" -v amends="$amends" -v amends_scope="$amends_scope" \
+      -v answers="$answers" -v refs="$refs" -v concern="$concern" \
+      -v evidence="$evidence" -v confidence="$confidence" -v enacts="$enacts_lit" \
+      -v actor_name="$actor_name" -v event_time="$event_time" -v grade="$grade" <<SQL
+        SET ROLE ${ROLE};
+        SET search_path = ${SCHEMA}, ${KERNEL};
+        INSERT INTO ${SCHEMA}.ledger
+            (kind, statement, rationale, supersedes, amends, amends_scope, answers,
+             refs, concern, evidence, confidence, enacts, actor, event_declared_ts, decision_grade)
+        VALUES (:'kind', :'statement', NULLIF(:'rationale', ''),
+                NULLIF(:'supersedes', '')::bigint,
+                NULLIF(:'amends', '')::bigint,
+                NULLIF(:'amends_scope', ''),
+                NULLIF(:'answers', '')::bigint,
+                NULLIF(:'refs', ''),
+                NULLIF(:'concern', ''),
+                NULLIF(:'evidence', ''),
+                NULLIF(:'confidence', ''),
+                NULLIF(:'enacts', '')::bigint[],
+                (SELECT id FROM principal WHERE name = NULLIF(:'actor_name', '')),
+                NULLIF(:'event_time', '')::timestamptz,
+                NULLIF(:'grade', ''));
+SQL
+    then
+      :
+    else
+      status=$?
+      _led_kind_refusal_teach
+      exit "$status"
+    fi
+  else
+    if psql -h "$PGHOST" -d "$PGDB" -v ON_ERROR_STOP=1 \
+      -v kind="$kind" -v statement="$statement" -v rationale="$rationale" \
+      -v supersedes="$supersedes" -v amends="$amends" -v amends_scope="$amends_scope" \
+      -v answers="$answers" -v refs="$refs" -v concern="$concern" \
+      -v evidence="$evidence" -v confidence="$confidence" -v enacts="$enacts_lit" \
+      -v actor_name="$actor_name" -v grade="$grade" <<SQL
+        SET ROLE ${ROLE};
+        SET search_path = ${SCHEMA}, ${KERNEL};
+        INSERT INTO ${SCHEMA}.ledger
+            (kind, statement, rationale, supersedes, amends, amends_scope, answers,
+             refs, concern, evidence, confidence, enacts, actor, decision_grade)
+        VALUES (:'kind', :'statement', NULLIF(:'rationale', ''),
+                NULLIF(:'supersedes', '')::bigint,
+                NULLIF(:'amends', '')::bigint,
+                NULLIF(:'amends_scope', ''),
+                NULLIF(:'answers', '')::bigint,
+                NULLIF(:'refs', ''),
+                NULLIF(:'concern', ''),
+                NULLIF(:'evidence', ''),
+                NULLIF(:'confidence', ''),
+                NULLIF(:'enacts', '')::bigint[],
+                (SELECT id FROM principal WHERE name = NULLIF(:'actor_name', '')),
+                NULLIF(:'grade', ''));
+SQL
+    then
+      :
+    else
+      status=$?
+      _led_kind_refusal_teach
+      exit "$status"
+    fi
+  fi
+elif [ -n "$event_time" ]; then
   if psql -h "$PGHOST" -d "$PGDB" -v ON_ERROR_STOP=1 \
     -v kind="$kind" -v statement="$statement" -v rationale="$rationale" \
     -v supersedes="$supersedes" -v amends="$amends" -v amends_scope="$amends_scope" \

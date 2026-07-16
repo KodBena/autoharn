@@ -8,6 +8,25 @@ reads a LIVE source and prints it; nothing here is cached or written back.
 Sections emitted, each under a machine-parseable `### SECTION: <NAME>` header (grep
 `^### SECTION: ` to split this script's own output programmatically):
 
+  STANDING-DECISIONS  — design/FABLE-GRADED-DECISIONS-SPEC.md (RATIFIED 2026-07-16), printed
+                        BEFORE IN-FORCE-DECISIONS below, on purpose: this section closes the same
+                        spec's own witnessed gap in THIS verb -- IN-FORCE-DECISIONS is recency-
+                        windowed (`ORDER BY id DESC LIMIT N`), so a standing decision scrolls out
+                        of it exactly as it scrolls out of a compacted context, the root-cause
+                        finding that motivated the whole spec (see that doc's Provenance section).
+                        Reads `standing_decisions` (kernel/lineage/s36-decision-grade.sql) --
+                        every in-force (supersession-filtered, s31 semantics) `kind=decision` row
+                        carrying a `decision_grade` in this deployment's configured set
+                        (`apparatus.json` `mechanisms.standing_decisions.grades`, default
+                        `["durable"]`) -- with NO recency limit and no `-n`/`--since` interaction
+                        (every standing decision matters regardless of when it was written), byte-
+                        capped with the SAME loud-truncation convention (never silent) hooks/
+                        sessionstart_durable_decisions.py's own SessionStart hook uses, sharing
+                        the identical config resolution (filing/standing_decisions_config.py, ONE
+                        home, ADR-0012 P1). A pre-s36 world (no `standing_decisions` view) prints
+                        an honest "(this world's kernel predates s36...)" line, never a bare SQL
+                        error -- the same graceful-degradation posture REVIEW-DEBT's own
+                        pre-s20-grants BLOCKED line already establishes for a different gap.
   IN-FORCE-DECISIONS  — the SQL floor `ledger_current` view (supersedes-filtered). v1 ships the
                         SQL floor only; a future pass may also print the ASP T_now verdict via
                         `judge`, once the engine wiring is the routine path here too.
@@ -180,6 +199,7 @@ Lazy imports banned (top-of-file only, per this project's inherited convention).
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import re
 import subprocess
@@ -196,6 +216,10 @@ DEPLOYMENT_PATH = Path(os.environ.get("PICKUP_DEPLOYMENT", str(HERE / "deploymen
 sys.path.insert(0, str(AUTOHARN / "filing"))
 try:
     import deployment_record  # noqa: E402  (filing/deployment_record.py, the ONE home for the shape)
+    import standing_decisions_config  # noqa: E402  (filing/standing_decisions_config.py, the ONE
+                                       # home for the grades/byte_cap defaulting logic -- shared
+                                       # with hooks/sessionstart_durable_decisions.py, see that
+                                       # module's own docstring NAMED CHOICE)
 except ImportError as _e:
     print(f"pickup: cannot import autoharn's filing/deployment_record.py under "
           f"AUTOHARN={AUTOHARN} ({_e.__class__.__name__}: {_e})", file=sys.stderr)
@@ -264,6 +288,90 @@ def _psql_tuples(dep, sql: str) -> subprocess.CompletedProcess:
 
 def _section(name: str) -> None:
     print(f"\n### SECTION: {name}\n")
+
+
+def _load_apparatus(dep_dir: Path) -> dict:
+    """Best-effort `<world-root>/.claude/apparatus.json` load -- mirrors hooks/
+    sessionstart_durable_decisions.py's own `_load_apparatus_quiet()` exactly (same shape, same
+    fail-quiet-to-{} posture): a missing/malformed apparatus.json degrades to the documented
+    defaults (filing/standing_decisions_config.py), never a crash."""
+    path = dep_dir / ".claude" / "apparatus.json"
+    try:
+        with open(path, encoding="utf-8") as f:
+            cfg = json.load(f)
+        return cfg if isinstance(cfg, dict) else {}
+    except Exception:
+        return {}
+
+
+def standing_decisions(dep) -> None:
+    _section("STANDING-DECISIONS")
+    # design/FABLE-GRADED-DECISIONS-SPEC.md element 5: printed BEFORE IN-FORCE-DECISIONS (module
+    # docstring's own STANDING-DECISIONS entry explains why), no recency limit, byte-capped with
+    # loud truncation -- the SAME config resolution (filing/standing_decisions_config.py) hooks/
+    # sessionstart_durable_decisions.py's own SessionStart hook shares (ADR-0012 P1: one home for
+    # the grades/byte_cap defaulting logic; the mechs.get("standing_decisions") EXTRACTION itself
+    # stays HERE, in this scanned .tmpl file -- see that module's own docstring NAMED CHOICE for
+    # why: filing/apparatus_registry.py's mechanical mechanism-name derivation never scans
+    # filing/*.py itself).
+    apparatus = _load_apparatus(DEPLOYMENT_PATH.parent)
+    mechs = apparatus.get("mechanisms")
+    entry = mechs.get("standing_decisions") if isinstance(mechs, dict) else None
+    grades, byte_cap = standing_decisions_config.resolve_standing_decisions_config(entry)
+
+    # LIVE column-existence check (the SAME convention in_flight()'s own effective_state probe
+    # above already uses) -- s36 is NOT wired into every world's birth chain (authored+scratch-
+    # witnessed only, per its own header), so an unconditional SELECT here would surface a bare
+    # SQL error instead of the graceful, honest degradation every other pre-sNN gap in this file
+    # already gets (REVIEW-DEBT's own pre-s20-grants BLOCKED line is the precedent).
+    has_grade_col = _psql_tuples(dep, "SELECT EXISTS (SELECT 1 FROM information_schema.columns "
+                                       f"WHERE table_schema = '{dep.schema}' AND table_name = 'ledger' "
+                                       "AND column_name = 'decision_grade');")
+    if not (has_grade_col.returncode == 0
+            and has_grade_col.stdout.strip().splitlines()[-1] == "t"):
+        print("(this world's kernel predates kernel/lineage/s36-decision-grade.sql -- no standing "
+              "decisions to show; apply s36 to this schema as a maintainer act to adopt graded "
+              "decisions, or there is nothing more to do here)")
+        return
+
+    grades_sql_list = ",".join("'" + g.replace("'", "''") + "'" for g in grades)
+    # regexp_replace collapses an embedded newline to a single space SERVER-SIDE before this
+    # section's own row-per-line reader ever sees it -- the SAME run12-witnessed fix resources()/
+    # estimates() above already apply, for the identical reason (this function reads via -t -A,
+    # one physical output line per newline found in the data, not per query row).
+    r = _psql_tuples(dep, "SELECT id, grade, regexp_replace(statement, '[\\n\\r]+[ \\t]*', ' ', 'g') "
+                           f"FROM {dep.schema}.standing_decisions "
+                           f"WHERE grade IN ({grades_sql_list}) ORDER BY id;")
+    if r.returncode != 0:
+        print(f"ERROR: {r.stderr.strip()}")
+        return
+    # -t -A echoes one leading "SET\n" line for the preceding `SET ROLE` statement (_psql_tuples'
+    # own docstring) -- drop exactly that one line, the SAME convention resources()/estimates()
+    # above already use.
+    lines = [ln for ln in r.stdout.split("\n")[1:] if ln.strip()]
+    if not lines:
+        print("(no standing decisions on record in this deployment's configured grade set: "
+              f"{grades})")
+        return
+
+    rendered: list[str] = []
+    budget = byte_cap
+    shown = 0
+    for ln in lines:
+        row_id, _, rest = ln.partition("|")
+        grade, _, statement = rest.partition("|")
+        line = f"{row_id}\t{grade}\t{statement}"
+        cost = len(line.encode("utf-8")) + 1
+        if cost > budget:
+            break
+        rendered.append(line)
+        budget -= cost
+        shown += 1
+    remaining = len(lines) - shown
+    if remaining > 0:
+        rendered.append(f"... {remaining} more standing decision(s) not shown -- run "
+                         f"`./led standing`.")
+    print("\n".join(rendered))
 
 
 def in_force_decisions(dep, n: int) -> None:
@@ -1096,6 +1204,7 @@ def main(argv: list[str] | None = None) -> int:
               "would be indistinguishable from an honest EMPTY tracker; nothing is printed "
               "instead of everything being printed wrong.", file=sys.stderr)
         return 3
+    standing_decisions(dep)
     in_force_decisions(dep, args.limit)
     open_questions(dep)
     review_debt(dep)
