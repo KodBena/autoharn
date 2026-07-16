@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-06T05:35:36Z
-#   last-change: 2026-07-15T21:18:53Z
-#   contributors: 37017f46/main, be693afb/main, a857c93d/main
+#   last-change: 2026-07-16T06:35:24Z
+#   contributors: 37017f46/main, be693afb/main, a857c93d/main, 9a17b6b9/main
 # <<< PROVENANCE-STAMP <<<
 
 """ledger_floor -- the SQL FLOOR of the T_now judgments: producer ONE of the
@@ -268,9 +268,26 @@ def support_floor_atoms(name: str, now_epoch: int) -> set[str]:
 # producers genuinely separate. Its escaping matches `quote_term` byte-for-byte (backslash then
 # quote, in that order) so both producers' quoted-string atoms compare bit-identically.
 def _wi_quote(col: str) -> str:
-    """A SQL expression quoting `col` (text) as a clingo double-quoted string term -- the SQL-side
-    mirror of `clingo_run.quote_term`, not a call to it (see the independence note above)."""
-    return "('\"' || replace(replace(" + col + ", '\\', '\\\\'), '\"', '\\\"') || '\"')"
+    """A SQL expression rendering `col` (text) as a clingo term -- the SQL-side mirror of
+    `ledger_edb._atom` (NOT `clingo_run.quote_term`, and not a call to either -- see the
+    independence note above), matched here for the FIRST time (s37 fix, hazard-in-reach per
+    CLAUDE.md's engineering-responsibility corollary: found live while building s37's own
+    dependency_cycle/orphaned_by_retraction narrowing, witnessed causing DIVERGE_DEFECT on an
+    UNTOUCHED s36 baseline world for a single bare `./led work open probe1 ...` -- `_atom()`
+    (ledger_edb.py) renders a SAFE lowercase identifier (e.g. a typical slug) as a BARE clingo
+    constant, but this function unconditionally quoted every value, so the SQL floor and the .lp
+    producer have compared bit-UNEQUAL atom text for every ordinary slug since `_atom`'s own
+    bare/quoted branch was written -- `./judge --layer work` could not read AGREE on ANY world,
+    for ANY target, independent of this delta's own content). Fixed to the SAME branch: bare when
+    `col` is non-empty, starts with a lowercase letter, and contains only lowercase letters,
+    digits, and underscores (COALESCE/empty maps to the bare constant `none`, matching `_atom`'s
+    own empty-string case); quoted-string otherwise, same escaping as before."""
+    quoted = "('\"' || replace(replace(" + col + ", '\\', '\\\\'), '\"', '\\\"') || '\"')"
+    return (
+        "(CASE WHEN " + col + " IS NULL OR " + col + " = '' THEN 'none' "
+        "WHEN " + col + " ~ '^[a-z][a-z0-9_]*$' THEN " + col + " "
+        "ELSE " + quoted + " END)"
+    )
 
 
 WORK_ITEM_PREDS = ("work_dep_edge", "work_dep_star", "work_duplicate_open",
@@ -305,14 +322,69 @@ def work_item_floor_atoms(name: str) -> set[str]:
     q_dependent, q_antecedent = _wi_quote("dependent"), _wi_quote("antecedent")
     q_start, q_cur = _wi_quote("start_slug"), _wi_quote("cur")
     q_slug = _wi_quote("slug")
+    # s37 (kernel/lineage/s37-violation-disposition.sql): dependency_cycle NARROWS to blocks-close
+    # edges only (RATIFIED sibling narrowing, consult A1(b)) -- column-gated exactly like
+    # orphan_children_arm above: a pre-s30 target has no edge_type column at all, so `bc_deps`/
+    # `dep_cycle` degrade to an empty set (properly vacuous, matching the ASP twin's own
+    # capability-gated #defined work_dep_type/2 degrading identically for free on a pre-s30
+    # exporter). `deps`/`dangling_dep`/`reach` below (depends_on_unknown_slug's OWN computation)
+    # are UNCHANGED -- this narrowing is scoped to dependency_cycle alone.
+    bc_deps_cte = (
+        "bc_deps AS (SELECT work_slug AS dependent, work_depends_on AS antecedent "
+        f"FROM {rel} WHERE kind = 'work_depends_on' AND edge_type = 'blocks-close'), "
+        "bc_reach(start_slug, cur) AS ("
+        "  SELECT dependent, antecedent FROM bc_deps"
+        "  UNION"
+        "  SELECT r.start_slug, d.antecedent FROM bc_reach r JOIN bc_deps d ON d.dependent = r.cur"
+        "), "
+        "dep_cycle AS (SELECT DISTINCT start_slug AS slug FROM bc_reach WHERE cur = start_slug)"
+        if t.has_col("edge_type") else
+        "dep_cycle AS (SELECT NULL::text AS slug WHERE false)"
+    )
+    # s37: a raw orphan drops out only while an in-force disposition answers it AND that
+    # disposition's basis still holds -- mirroring the kernel view's disposition_basis_holds join
+    # (see kernel/lineage/s37-violation-disposition.sql, same predicate, independently re-derived
+    # here per ADR-0000 I6's do-not-abstract-across-producers posture). Column-gated: a pre-s37
+    # target has no work_violation_class column, so `orphans` stays exactly its pre-s37 shape.
+    disposition_join = ("""
+      dispositions AS (
+        SELECT id AS disp_id, work_violation_class AS class, work_violation_target_id AS target_id,
+               work_resolution AS resolution, work_violation_witness AS witness_id
+        FROM """ + rel_cur + """ WHERE kind = 'work_violation_disposition'
+      ),
+      disposition_basis_holds AS (
+        SELECT d.class, d.target_id
+        FROM dispositions d
+        JOIN """ + rel_cur + """ t ON t.id = d.target_id
+        WHERE
+          (d.resolution = 'retired' AND (
+             t.kind <> 'work_opened'
+             OR EXISTS (SELECT 1 FROM """ + rel_cur + """ cw
+                        WHERE cw.kind = 'work_closed' AND cw.work_slug = t.work_slug)
+          ))
+          OR
+          (d.resolution = 'reissued' AND (
+             d.witness_id IS NULL
+             OR EXISTS (SELECT 1 FROM """ + rel_cur + """ w WHERE w.id = d.witness_id)
+          ))
+      )"""
+                        if t.has_col("work_violation_class") else "")
+    orphans_filter = ("""
+        AND NOT EXISTS (
+          SELECT 1 FROM disposition_basis_holds dbh
+          WHERE dbh.class = 'orphaned_by_retraction' AND dbh.target_id = lc.id
+        )""" if t.has_col("work_violation_class") else "")
     # the child-orphan arm needs work_parent (s28) -- column-gated so a pre-s28 target (e.g. the
     # s22 fixture's own probe chain) degrades to the three event-kind arms, the same
     # declared-exclusion posture the amends/answers CTEs above already take. The ASP twin
-    # degrades identically for free: a pre-s28 exporter emits no work_parent_edge/3 facts.
+    # degrades identically for free: a pre-s28 exporter emits no work_parent_edge/3 facts. Carries
+    # the SAME s37 disposition filter as the main `orphans` WHERE above -- this arm is a
+    # UNION ALL'd sibling of that same predicate, not a separate one.
     orphan_children_arm = (f"""UNION ALL
         SELECT lc.work_slug AS slug, lc.id FROM {rel_cur} lc
         WHERE lc.kind = 'work_opened' AND lc.work_parent IS NOT NULL
-          AND NOT EXISTS (SELECT 1 FROM opened_current oc WHERE oc.slug = lc.work_parent)"""
+          AND NOT EXISTS (SELECT 1 FROM opened_current oc WHERE oc.slug = lc.work_parent)
+          {orphans_filter}"""
                            if t.has_col("work_parent") else "")
     sql = f"""
     WITH RECURSIVE
@@ -340,18 +412,18 @@ def work_item_floor_atoms(name: str) -> set[str]:
         UNION
         SELECT r.start_slug, d.antecedent FROM reach r JOIN deps d ON d.dependent = r.cur
       ),
-      dep_cycle AS (
-        SELECT DISTINCT start_slug AS slug FROM reach WHERE cur = start_slug
-      ),
+      {bc_deps_cte},
       -- s31: the in-force orphan member, mirroring work_item_violations' orphan_* CTEs (see
       -- docstring). Reads ledger_current -- the one SQL home of the in-force projection.
       opened_current AS (
         SELECT work_slug AS slug FROM {rel_cur} WHERE kind = 'work_opened'
-      ),
+      ){"," if disposition_join else ""}
+      {disposition_join},
       orphans AS (
         SELECT lc.work_slug AS slug, lc.id FROM {rel_cur} lc
         WHERE lc.kind IN ('work_claimed', 'work_closed', 'work_depends_on')
           AND NOT EXISTS (SELECT 1 FROM opened_current oc WHERE oc.slug = lc.work_slug)
+          {orphans_filter}
         {orphan_children_arm}
       )
     SELECT 'work_dep_edge(' || {q_dependent} || ',' || {q_antecedent} || ')' FROM deps

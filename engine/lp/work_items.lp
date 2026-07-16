@@ -79,6 +79,11 @@
 #defined work_parent_edge/3.
 #defined superseded/1.
 #defined star/3.
+#defined work_dep_type/2.
+#defined w_vdisp/3.
+#defined w_vdisp_resolution/2.
+#defined w_vdisp_witness_present/1.
+#defined w_vdisp_witness_in_force/1.
 
 % ---- duplicate_open (invariant 2; PROVABLY VACUOUS under normal operation -- s22's
 % validate_work_item() refuses a second work_opened row for one slug at construction time; this
@@ -96,14 +101,26 @@ work_dep_edge(Dependent,Antecedent) :- work_depends(Dependent,Antecedent,_).
 work_depends_on_unknown(Dependent,Antecedent) :-
     work_dep_edge(Dependent,Antecedent), not work_opened(Antecedent,_).
 
-% ---- dependency_cycle (invariant 4, "the omega port"; GENUINELY REACHABLE) --------------------
-% work_dep_star/2 is this program's own recursion (the derivation of record, kept byte-identical
-% for every consumer that loads this file alone). edge/3 + work_dep_star_via_closure/2 is the
-% SAME closure read through engine/lp/closure.lp's generic star/3 (see the header note above) --
-% additive, never a replacement.
+% ---- dependency_cycle (invariant 4, "the omega port"). work_dep_star/2 (below) is the GENERAL,
+% ALL-edge-type recursion -- UNCHANGED, byte-for-byte, still the derivation of record for the
+% dependency GRAPH (depends_on_unknown_slug above deliberately reads every edge type too, and
+% every consumer of work_dep_star/2 alone keeps reproducing byte-identical). s37
+% (kernel/lineage/s37-violation-disposition.sql, RATIFIED sibling narrowing, consult A1(b)):
+% the VIOLATIONS predicate work_dependency_cycle/1 now narrows to a SEPARATE, blocks-close-ONLY
+% closure (work_dep_star_bc/2) -- blocks-close cycles are already refused at construction (s30),
+% so this predicate becomes properly vacuous, defense-in-depth, matching work_dep_edge's own
+% sibling s22 members' vacuous posture; an informs cycle is now a legal non-event (informs never
+% gates, s30's own text), matching the SQL floor's identical narrowing. work_dep_type/2 is
+% capability-gated (#defined above) -- a pre-s30 exporter emits none, so work_dep_edge_bc/2 (and
+% therefore work_dependency_cycle/1) is vacuously empty on a pre-s30 target, the SAME fail-safe
+% direction every other capability-gated family in this program already takes.
 work_dep_star(F,D) :- work_dep_edge(F,D).
 work_dep_star(F,D) :- work_dep_edge(F,X), work_dep_star(X,D).
-work_dependency_cycle(F) :- work_dep_star(F,F).
+
+work_dep_edge_bc(Dependent,Antecedent) :- work_depends(Dependent,Antecedent,R), work_dep_type(R,"blocks-close").
+work_dep_star_bc(F,D) :- work_dep_edge_bc(F,D).
+work_dep_star_bc(F,D) :- work_dep_edge_bc(F,X), work_dep_star_bc(X,D).
+work_dependency_cycle(F) :- work_dep_star_bc(F,F).
 
 edge(work_dep,Dependent,Antecedent) :- work_dep_edge(Dependent,Antecedent).
 work_dep_star_via_closure(F,D) :- star(work_dep,F,D).
@@ -112,12 +129,41 @@ work_dep_star_via_closure(F,D) :- star(work_dep,F,D).
 % events survive is legal, surfaced never refused). The ONE current-truth judgment in this
 % program: an IN-FORCE (not superseded) later event whose slug has NO in-force opening act.
 % Mirrors work_item_violations' four orphan_* CTEs exactly, one atom shape (Slug, the surviving
-% row's id) covering all four sub-cases -- the row id disambiguates which event is orphaned. ----
+% row's id) covering all four sub-cases -- the row id disambiguates which event is orphaned.
+% work_orphaned_by_retraction_raw/2 is this UNCHANGED, byte-for-byte, four-rule derivation.
+% s37 -- ONE MORE JOIN, narrowing the SAME predicate name (matching s33's own w_tree_unresolved
+% narrowing precedent, "no new predicate NAME, only a changed extension"): a raw orphan drops out
+% only while an IN-FORCE disposition answers it (class=orphaned_by_retraction, target=R) AND
+% that disposition's own checkable basis still holds -- mirroring the kernel view's
+% disposition_basis_holds join exactly. `retired` holds while the target's own slug (if the
+% target IS an opening row, work_opened(Slug,R)) currently reads closed (an in-force work_closed
+% row for that slug); for every other target kind, membership in work_orphaned_by_retraction_raw
+% itself already required `not superseded(R)`, so "settled" is automatic. `reissued` holds while
+% no witness was cited, or the cited witness row is itself still in force. ----------------------
 work_opened_in_force(S) :- work_opened(S,R), not superseded(R).
-work_orphaned_by_retraction(S,R) :- work_claimed(S,R),     not superseded(R), not work_opened_in_force(S).
-work_orphaned_by_retraction(S,R) :- work_closed(S,_,R),    not superseded(R), not work_opened_in_force(S).
-work_orphaned_by_retraction(S,R) :- work_depends(S,_,R),   not superseded(R), not work_opened_in_force(S).
-work_orphaned_by_retraction(C,R) :- work_parent_edge(C,P,R), not superseded(R), not work_opened_in_force(P).
+work_orphaned_by_retraction_raw(S,R) :- work_claimed(S,R),     not superseded(R), not work_opened_in_force(S).
+work_orphaned_by_retraction_raw(S,R) :- work_closed(S,_,R),    not superseded(R), not work_opened_in_force(S).
+work_orphaned_by_retraction_raw(S,R) :- work_depends(S,_,R),   not superseded(R), not work_opened_in_force(S).
+work_orphaned_by_retraction_raw(C,R) :- work_parent_edge(C,P,R), not superseded(R), not work_opened_in_force(P).
+
+w_vdisp_in_force(orphaned_by_retraction,R,Disp) :- w_vdisp(orphaned_by_retraction,R,Disp), not superseded(Disp).
+
+w_vdisp_basis_holds(orphaned_by_retraction,R,Disp) :-
+    w_vdisp_in_force(orphaned_by_retraction,R,Disp), w_vdisp_resolution(Disp,retired),
+    work_opened(Slug,R), work_closed(Slug,_,CloseR), not superseded(CloseR).
+w_vdisp_basis_holds(orphaned_by_retraction,R,Disp) :-
+    w_vdisp_in_force(orphaned_by_retraction,R,Disp), w_vdisp_resolution(Disp,retired),
+    not work_opened(_,R).
+w_vdisp_basis_holds(orphaned_by_retraction,R,Disp) :-
+    w_vdisp_in_force(orphaned_by_retraction,R,Disp), w_vdisp_resolution(Disp,reissued),
+    not w_vdisp_witness_present(Disp).
+w_vdisp_basis_holds(orphaned_by_retraction,R,Disp) :-
+    w_vdisp_in_force(orphaned_by_retraction,R,Disp), w_vdisp_resolution(Disp,reissued),
+    w_vdisp_witness_present(Disp), w_vdisp_witness_in_force(Disp).
+
+work_orphaned_by_retraction(S,R) :-
+    work_orphaned_by_retraction_raw(S,R),
+    not w_vdisp_basis_holds(orphaned_by_retraction,R,_).
 
 #show work_dep_edge/2.
 #show work_dep_star/2.
@@ -127,3 +173,4 @@ work_orphaned_by_retraction(C,R) :- work_parent_edge(C,P,R), not superseded(R), 
 #show work_depends_on_unknown/2.
 #show work_dependency_cycle/1.
 #show work_orphaned_by_retraction/2.
+#show work_orphaned_by_retraction_raw/2.

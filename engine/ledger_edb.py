@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-06T05:33:12Z
-#   last-change: 2026-07-15T21:19:27Z
-#   contributors: 37017f46/main, be693afb/main, a857c93d/main
+#   last-change: 2026-07-16T06:31:18Z
+#   contributors: 37017f46/main, be693afb/main, a857c93d/main, 9a17b6b9/main
 # <<< PROVENANCE-STAMP <<<
 
 """ledger_edb -- the single home for "what the ledger looks like to a logic engine"
@@ -329,6 +329,8 @@ def export_work(name: str) -> EdbExport:
     has_parent = t.has_col("work_parent")
     has_review = t.has_col("work_review_disposition") and t.has_relation(f"{t.schema}.review_detail")
     has_discharge = t.has_col("work_discharge")
+    has_edge_type = t.has_col("edge_type")
+    has_disposition = t.has_col("work_violation_class")
 
     exp.capabilities.append(Capability(
         "work_base", produced=has_work, capable=has_work,
@@ -348,6 +350,11 @@ def export_work(name: str) -> EdbExport:
         "work_discharge", produced=has_discharge, capable=has_discharge,
         reason="work_discharge column present (s33 composite discharge) -- emitted" if has_discharge
         else "no `work_discharge` column on this schema (pre-s33 lineage) -- capability absent"))
+    exp.capabilities.append(Capability(
+        "work_violation_disposition", produced=has_disposition, capable=has_disposition,
+        reason="work_violation_class column present (s37 violation disposition) -- emitted"
+        if has_disposition else
+        "no `work_violation_class` column on this schema (pre-s37 lineage) -- capability absent"))
 
     if not has_work:
         return exp
@@ -402,6 +409,14 @@ def export_work(name: str) -> EdbExport:
         n += 1
     exp.counts["work_depends"] = n
 
+    if has_edge_type:
+        n = 0
+        for rid, etype in t.rows(f"SELECT id, edge_type FROM {rel} "
+                                  f"WHERE kind='work_depends_on' AND edge_type IS NOT NULL ORDER BY id;"):
+            exp.facts.append(f"work_dep_type({int(rid)},{_atom(etype)}).")
+            n += 1
+        exp.counts["work_dep_type"] = n
+
     if has_review:
         n = 0
         for (rid,) in t.rows(
@@ -422,6 +437,50 @@ def export_work(name: str) -> EdbExport:
             exp.facts.append(f"w_composite({_atom(slug)}).")
             n += 1
         exp.counts["w_composite"] = n
+
+    if has_disposition:
+        # s37 (kernel/lineage/s37-violation-disposition.sql): work_items.lp's own disposition
+        # family, mirroring the kernel's disposition-narrowing shape (target_id-keyed, resolution
+        # + optional witness, "in force" resolved AT EXPORT TIME here rather than re-derived in
+        # ASP -- w_vdisp/w_vdisp_resolution read raw history, exactly work_depends/work_claimed's
+        # own posture; superseded/1 (composed from ledger_tnow.lp, per this program's own header)
+        # narrows them to in-force at the CONSUMER end, matching work_orphaned_by_retraction's
+        # own existing composition style). witness-in-force is the ONE fact this exporter resolves
+        # itself (a boolean over an arbitrary-kind row, which no other EDB family already
+        # generalizes) -- named here, not silently baked into a bigger "everything" export.
+        n = 0
+        for cls, target, rid in t.rows(
+                f"SELECT work_violation_class, work_violation_target_id, id FROM {rel} "
+                f"WHERE kind='work_violation_disposition' ORDER BY id;"):
+            exp.facts.append(f"w_vdisp({_atom(cls)},{int(target)},{int(rid)}).")
+            n += 1
+        exp.counts["w_vdisp"] = n
+
+        n = 0
+        for rid, resolution in t.rows(
+                f"SELECT id, work_resolution FROM {rel} "
+                f"WHERE kind='work_violation_disposition' ORDER BY id;"):
+            exp.facts.append(f"w_vdisp_resolution({int(rid)},{_atom(resolution)}).")
+            n += 1
+        exp.counts["w_vdisp_resolution"] = n
+
+        n = 0
+        for (rid,) in t.rows(
+                f"SELECT id FROM {rel} WHERE kind='work_violation_disposition' "
+                f"AND work_violation_witness IS NOT NULL ORDER BY id;"):
+            exp.facts.append(f"w_vdisp_witness_present({int(rid)}).")
+            n += 1
+        exp.counts["w_vdisp_witness_present"] = n
+
+        n = 0
+        for (rid,) in t.rows(
+                f"SELECT d.id FROM {rel} d WHERE d.kind='work_violation_disposition' "
+                f"AND d.work_violation_witness IS NOT NULL AND EXISTS ("
+                f"  SELECT 1 FROM {t.rel('ledger_current')} w WHERE w.id = d.work_violation_witness) "
+                f"ORDER BY d.id;"):
+            exp.facts.append(f"w_vdisp_witness_in_force({int(rid)}).")
+            n += 1
+        exp.counts["w_vdisp_witness_in_force"] = n
 
     return exp
 

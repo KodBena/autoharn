@@ -1127,6 +1127,11 @@ SQL
         echo "  '${slug}' -- re-running 'led work claim'/'led work depends'/'led work open" >&2
         echo "  --parent' with the new slug, as appropriate. The kernel enforces the retraction" >&2
         echo "  and the slug burn; this text only teaches the consequence." >&2
+        echo "  Once orphaned, answer each row with 'led work resolve-violation' (a typed," >&2
+        echo "  reviewed disposition -- debt until answered, record forever, kernel/lineage/" >&2
+        echo "  s37-violation-disposition.sql) rather than leaving it permanent debt; if this" >&2
+        echo "  supersede is repairing a COMPOSITE parent with children, 'led work" >&2
+        echo "  supersede-cascade' composes the same primitive over the whole direct-child set." >&2
       fi
       # Four explicit branches (has_parent_col x has_discharge_col), each a STATIC INSERT column
       # list bound purely via psql -v -- mirrors this file's own standing convention of never
@@ -1454,6 +1459,319 @@ SQL
       exec psql -h "$PGHOST" -d "$PGDB" -c "
         SELECT slug, close_id, closer FROM ${SCHEMA}.work_review_gap ORDER BY slug;"
       ;;
+    resolve-violation)
+      shift
+      # kernel/lineage/s37-violation-disposition.sql, design/FABLE-ORPHAN-DISPOSITION-SPEC.md
+      # element 4. LIVE column-existence gate (the SAME convention `work open --parent`/
+      # `work close --review-witness` above already use) -- s37 is NOT wired into every world's
+      # birth chain, so an unconditional INSERT below would break this subcommand for every world
+      # whose kernel predates s37.
+      has_disposition_col=$(psql -h "$PGHOST" -d "$PGDB" -tAq -v schema="$SCHEMA" <<SQL
+        SELECT EXISTS (SELECT 1 FROM information_schema.columns
+                       WHERE table_schema = :'schema' AND table_name = 'ledger'
+                         AND column_name = 'work_violation_class');
+SQL
+      )
+      if [ "$has_disposition_col" != "t" ]; then
+        echo "led work resolve-violation: REFUSED -- requires" >&2
+        echo "  kernel/lineage/s37-violation-disposition.sql applied to this project's schema" >&2
+        echo "  (work_violation_class column not found on ${SCHEMA}.ledger -- this world's" >&2
+        echo "  kernel predates s37). Apply s37 to this schema as a maintainer act" >&2
+        echo "  (ORCH-OPERATING-CARD.md's kernel-delta decision tree)." >&2
+        exit 1
+      fi
+      witness=""
+      review_witness=""
+      review_deferred=""
+      args=()
+      while [ $# -gt 0 ]; do
+        case "$1" in
+          --witness) witness="${2:-}"; shift 2 ;;
+          --review-witness) review_witness="${2:-}"; shift 2 ;;
+          --review-deferred) review_deferred="1"; shift ;;
+          --*)
+            # SAME refuse-unknown-flags idiom as `work open`/`work close` above -- an
+            # unrecognized flag is refused, never silently absorbed into the basis text.
+            echo "led work resolve-violation: REFUSED -- unrecognized flag '$1'." >&2
+            echo "  led work resolve-violation <violating-act-id> <reissued|retired> \"<basis>\"" >&2
+            echo "    accepts only: --witness <successor-ref>, --review-witness <ref>," >&2
+            echo "    --review-deferred. NOTHING was written." >&2
+            exit 1
+            ;;
+          *) args+=("$1"); shift ;;
+        esac
+      done
+      set -- "${args[@]}"
+      usage_resolve_violation() {
+        echo "usage: led work resolve-violation <violating-act-id> <reissued|retired> \"<basis>\"" >&2
+        echo "         (--review-witness <ref> | --review-deferred) [--witness <successor-ref>]" >&2
+        echo "       <violating-act-id> is a target_id from 'led work violations' -- the row is" >&2
+        echo "       RE-DERIVED against work_item_violations at write time (never parsed from" >&2
+        echo "       display text); refused if it is not currently an in-force member." >&2
+        echo "       reissued: a successor act exists -- cite it with --witness <ref> (WARNS if" >&2
+        echo "       omitted, never refused -- the kernel cannot verify successor equivalence)." >&2
+        echo "       retired: the defect is moot -- the basis text says why." >&2
+        echo "       EXACTLY ONE of --review-witness/--review-deferred is REQUIRED (consult A5:" >&2
+        echo "       a disposition removes stop-gate debt, same discipline as work_closed)." >&2
+        echo "       Refused if <violating-act-id> already has an IN-FORCE disposition (consult" >&2
+        echo "       A3: uniqueness is in-force-scoped -- supersede the wrong one first to" >&2
+        echo "       reopen the slot, never a raw-history read)." >&2
+      }
+      if [ $# -lt 3 ]; then
+        usage_resolve_violation
+        exit 1
+      fi
+      target_id="$1"; resolution="$2"; shift 2
+      basis="$*"
+      if [ "$resolution" != "reissued" ] && [ "$resolution" != "retired" ]; then
+        echo "led work resolve-violation: REFUSED -- resolution must be exactly 'reissued' or" >&2
+        echo "  'retired' (got '${resolution}')." >&2
+        exit 1
+      fi
+      if [ -n "$review_witness" ] && [ -n "$review_deferred" ]; then
+        echo "led work resolve-violation: REFUSED -- --review-witness and --review-deferred are" >&2
+        echo "  the TWO CONSTRUCTORS of a review disposition; exactly ONE, never both (consult A5," >&2
+        echo "  mirrors s29 Element B)." >&2
+        exit 1
+      fi
+      if [ -z "$review_witness" ] && [ -z "$review_deferred" ]; then
+        echo "led work resolve-violation: REFUSED -- a review-silent disposition is unrepresentable" >&2
+        echo "  (consult A5). Choose exactly ONE: --review-witness <ref> | --review-deferred." >&2
+        exit 1
+      fi
+      if [ "$resolution" = "reissued" ] && [ -z "$witness" ]; then
+        echo "led work resolve-violation: WARNING -- reissued with no --witness <successor-ref>" >&2
+        echo "  cited -- the kernel cannot verify successor equivalence, so this is NOT refused," >&2
+        echo "  but the disposition's checkable basis (element 3/A4) then holds VACUOUSLY (never" >&2
+        echo "  lapses on its own). Prefer citing the successor row id when one exists." >&2
+      fi
+      # RE-DERIVE the violation class for <violating-act-id> against work_item_violations itself
+      # (never parsed from display text) -- the CLI's own convenience lookup, mirroring the exact
+      # re-derivation the kernel trigger performs a second time at INSERT.
+      class_count=$(psql -h "$PGHOST" -d "$PGDB" -tAq -v tid="$target_id" <<SQL
+        SET ROLE ${ROLE};
+        SET search_path = ${SCHEMA}, ${KERNEL};
+        SELECT count(DISTINCT violation) FROM work_item_violations WHERE target_id = :'tid'::bigint;
+SQL
+      )
+      if [ "$class_count" = "0" ]; then
+        echo "led work resolve-violation: REFUSED -- target ${target_id} is not currently an" >&2
+        echo "  in-force work_item_violations member (re-derived against the view itself). Run" >&2
+        echo "  './led work violations' to see what is currently answerable." >&2
+        exit 1
+      fi
+      if [ "$class_count" != "1" ]; then
+        echo "led work resolve-violation: REFUSED -- target ${target_id} matches MORE THAN ONE" >&2
+        echo "  work_item_violations class at once (${class_count}) -- this CLI convenience" >&2
+        echo "  cannot disambiguate; write the work_violation_disposition row directly via SQL," >&2
+        echo "  naming the intended class explicitly." >&2
+        exit 1
+      fi
+      class=$(psql -h "$PGHOST" -d "$PGDB" -tAq -v tid="$target_id" <<SQL
+        SET ROLE ${ROLE};
+        SET search_path = ${SCHEMA}, ${KERNEL};
+        SELECT DISTINCT violation FROM work_item_violations WHERE target_id = :'tid'::bigint;
+SQL
+      )
+      if [ -n "$review_witness" ]; then
+        disposition="witnessed"; review_ref="$review_witness"
+      else
+        disposition="deferred"; review_ref=""
+      fi
+      exec psql -h "$PGHOST" -d "$PGDB" -v ON_ERROR_STOP=1 \
+        -v class="$class" -v tid="$target_id" -v resolution="$resolution" -v basis="$basis" \
+        -v witness="$witness" -v disposition="$disposition" -v review_ref="$review_ref" \
+        -v statement="work_violation_disposition: ${class} target ${target_id} (${resolution})" <<SQL
+      SET ROLE ${ROLE};
+      SET search_path = ${SCHEMA}, ${KERNEL};
+      INSERT INTO ${SCHEMA}.ledger
+        (kind, work_violation_class, work_violation_target_id, work_resolution,
+         work_violation_witness, rationale, work_review_disposition, work_review_ref, statement)
+      VALUES ('work_violation_disposition', :'class', :'tid'::bigint, :'resolution',
+              NULLIF(:'witness', '')::bigint, :'basis', :'disposition', NULLIF(:'review_ref', ''), :'statement');
+SQL
+      ;;
+    supersede-cascade)
+      shift
+      # kernel/lineage/s37-violation-disposition.sql, design/FABLE-ORPHAN-DISPOSITION-SPEC.md
+      # element 5 -- "the maintainer's subtree instinct, placed correctly": a CLI COMPOSITION of
+      # ordinary acts (work open --supersedes, work resolve-violation), NO kernel involvement
+      # beyond what elements 1-4 already provide. Supersedes <old-slug>'s open row under a new
+      # <new-slug>, then walks <old-slug>'s DIRECT children ONLY (one level -- a named LIMIT, see
+      # usage below): a CLOSED child gets a `retired` disposition on its dangling parent-edge; an
+      # OPEN child is RE-OPENED under a deterministic successor slug (<child>--via-<new-slug>),
+      # `--parent`ed to <new-slug>, and its own resulting orphan (the reissue-recursion element 6
+      # names) is walked to a fixpoint, bounded, citing the SAME successor at every step.
+      has_disposition_col=$(psql -h "$PGHOST" -d "$PGDB" -tAq -v schema="$SCHEMA" <<SQL
+        SELECT EXISTS (SELECT 1 FROM information_schema.columns
+                       WHERE table_schema = :'schema' AND table_name = 'ledger'
+                         AND column_name = 'work_violation_class');
+SQL
+      )
+      if [ "$has_disposition_col" != "t" ]; then
+        echo "led work supersede-cascade: REFUSED -- requires" >&2
+        echo "  kernel/lineage/s37-violation-disposition.sql applied to this project's schema" >&2
+        echo "  (work_violation_class column not found on ${SCHEMA}.ledger -- this world's" >&2
+        echo "  kernel predates s37)." >&2
+        exit 1
+      fi
+      cascade_parent=""
+      cascade_discharge=""
+      cascade_refs=""
+      args=()
+      while [ $# -gt 0 ]; do
+        case "$1" in
+          --parent) cascade_parent="${2:-}"; shift 2 ;;
+          --discharge) cascade_discharge="${2:-}"; shift 2 ;;
+          --refs) cascade_refs="${2:-}"; shift 2 ;;
+          --*)
+            echo "led work supersede-cascade: REFUSED -- unrecognized flag '$1'." >&2
+            echo "  accepts only: --parent <grandparent-slug>, --discharge composite, --refs <ref>." >&2
+            exit 1
+            ;;
+          *) args+=("$1"); shift ;;
+        esac
+      done
+      set -- "${args[@]}"
+      if [ $# -lt 3 ]; then
+        echo "usage: led work supersede-cascade <old-slug> <new-slug> <title...>" >&2
+        echo "         [--parent <grandparent-slug>] [--discharge composite] [--refs <ref>]" >&2
+        echo "       Supersedes <old-slug> under <new-slug>, then cascades <old-slug>'s DIRECT" >&2
+        echo "       children only (one level -- a named LIMIT: a child that itself has children" >&2
+        echo "       is REFUSED, not guessed at; repair the grandchild level by hand or re-invoke" >&2
+        echo "       this verb one level down after this one settles). Refuses on a dirty" >&2
+        echo "       starting state (old-slug not currently open) rather than guessing." >&2
+        exit 1
+      fi
+      old_slug="$1"; new_slug="$2"; shift 2
+      cascade_title="$*"
+      old_open_id=$(psql -h "$PGHOST" -d "$PGDB" -tAq -v slug="$old_slug" <<SQL
+        SET ROLE ${ROLE};
+        SET search_path = ${SCHEMA}, ${KERNEL};
+        SELECT id FROM ${SCHEMA}.ledger_current WHERE kind = 'work_opened' AND work_slug = :'slug';
+SQL
+      )
+      if [ -z "$old_open_id" ]; then
+        echo "led work supersede-cascade: REFUSED -- '${old_slug}' is not currently an in-force" >&2
+        echo "  work_opened item (already superseded, or never opened) -- refusing on this dirty" >&2
+        echo "  starting state rather than guessing what was meant." >&2
+        exit 1
+      fi
+      has_grandchild=$(psql -h "$PGHOST" -d "$PGDB" -tAq -v slug="$old_slug" <<SQL
+        SET ROLE ${ROLE};
+        SET search_path = ${SCHEMA}, ${KERNEL};
+        SELECT EXISTS (
+          SELECT 1 FROM ${SCHEMA}.work_edge_parent gp
+          JOIN ${SCHEMA}.work_edge_parent p ON gp.parent_slug = p.child_slug
+          WHERE p.parent_slug = :'slug');
+SQL
+      )
+      if [ "$has_grandchild" = "t" ]; then
+        echo "led work supersede-cascade: REFUSED -- '${old_slug}' has a grandchild-shaped" >&2
+        echo "  descendant (a child that itself has children) -- this convenience verb walks ONE" >&2
+        echo "  level only (a named LIMIT, spec element 5). Repair the deeper level by hand" >&2
+        echo "  (led work resolve-violation ...), or re-invoke this verb one level at a time," >&2
+        echo "  bottom-up, once the level below settles." >&2
+        exit 1
+      fi
+      echo "led work supersede-cascade: superseding '${old_slug}' (row ${old_open_id}) under" >&2
+      echo "  '${new_slug}'..." >&2
+      ./led work open "$new_slug" "$cascade_title" --supersedes "$old_open_id" \
+        ${cascade_parent:+--parent "$cascade_parent"} ${cascade_discharge:+--discharge "$cascade_discharge"} \
+        ${cascade_refs:+--refs "$cascade_refs"}
+      new_open_id=$(psql -h "$PGHOST" -d "$PGDB" -tAq -v slug="$new_slug" <<SQL
+        SET ROLE ${ROLE};
+        SET search_path = ${SCHEMA}, ${KERNEL};
+        SELECT id FROM ${SCHEMA}.ledger_current WHERE kind = 'work_opened' AND work_slug = :'slug';
+SQL
+      )
+      if [ -z "$new_open_id" ]; then
+        echo "led work supersede-cascade: STOPPED -- 'led work open ${new_slug} ...' did not" >&2
+        echo "  succeed (see its own error above). No child was touched." >&2
+        exit 1
+      fi
+      children=$(psql -h "$PGHOST" -d "$PGDB" -tAq -v slug="$old_slug" <<SQL
+        SET ROLE ${ROLE};
+        SET search_path = ${SCHEMA}, ${KERNEL};
+        SELECT child_slug FROM ${SCHEMA}.work_edge_parent WHERE parent_slug = :'slug' ORDER BY child_slug;
+SQL
+      )
+      for child in $children; do
+        child_state=$(psql -h "$PGHOST" -d "$PGDB" -tAq -v slug="$child" <<SQL
+          SET ROLE ${ROLE};
+          SET search_path = ${SCHEMA}, ${KERNEL};
+          SELECT state FROM ${SCHEMA}.work_item_current WHERE slug = :'slug';
+SQL
+        )
+        if [ "$child_state" = "closed" ]; then
+          child_target=$(psql -h "$PGHOST" -d "$PGDB" -tAq -v slug="$child" <<SQL
+            SET ROLE ${ROLE};
+            SET search_path = ${SCHEMA}, ${KERNEL};
+            SELECT target_id FROM ${SCHEMA}.work_item_violations
+            WHERE violation = 'orphaned_by_retraction' AND slug = :'slug' LIMIT 1;
+SQL
+          )
+          if [ -z "$child_target" ]; then
+            echo "led work supersede-cascade: '${child}' is closed but no orphaned_by_retraction" >&2
+            echo "  violation surfaced for it -- skipping (already answered, or nothing to answer)." >&2
+            continue
+          fi
+          ./led work resolve-violation "$child_target" retired \
+            "child closed and settled at cascade time (supersede-cascade, parent superseded ${old_slug} -> ${new_slug})" \
+            --review-deferred
+        else
+          new_child="${child}--via-${new_slug}"
+          child_open_id=$(psql -h "$PGHOST" -d "$PGDB" -tAq -v slug="$child" <<SQL
+            SET ROLE ${ROLE};
+            SET search_path = ${SCHEMA}, ${KERNEL};
+            SELECT id FROM ${SCHEMA}.ledger_current WHERE kind = 'work_opened' AND work_slug = :'slug';
+SQL
+          )
+          ./led work open "$new_child" "reopened under ${new_slug} (supersede-cascade)" \
+            --parent "$new_slug" --supersedes "$child_open_id" --refs "row:${child_open_id}"
+          new_child_open_id=$(psql -h "$PGHOST" -d "$PGDB" -tAq -v slug="$new_child" <<SQL
+            SET ROLE ${ROLE};
+            SET search_path = ${SCHEMA}, ${KERNEL};
+            SELECT id FROM ${SCHEMA}.ledger_current WHERE kind = 'work_opened' AND work_slug = :'slug';
+SQL
+          )
+          # Element 6, "reissue recursion, named plainly": retracting the child's own opening row
+          # orphans that child's OWN surviving claims/edges one level down. Walked to a fixpoint,
+          # BOUNDED (refuses loudly rather than looping forever -- "refuse on a dirty state it
+          # cannot reason about") -- each surfacing orphan on the OLD child slug is answered
+          # `reissued`, citing the SAME successor.
+          iter=0
+          while :; do
+            recursed_target=$(psql -h "$PGHOST" -d "$PGDB" -tAq -v slug="$child" <<SQL
+              SET ROLE ${ROLE};
+              SET search_path = ${SCHEMA}, ${KERNEL};
+              SELECT target_id FROM ${SCHEMA}.work_item_violations
+              WHERE violation = 'orphaned_by_retraction' AND slug = :'slug' LIMIT 1;
+SQL
+            )
+            [ -z "$recursed_target" ] && break
+            iter=$((iter + 1))
+            if [ "$iter" -gt 20 ]; then
+              echo "led work supersede-cascade: REFUSED -- the orphan recursion for '${child}'" >&2
+              echo "  did not converge after 20 steps -- refusing rather than looping forever." >&2
+              echo "  Repair the remainder by hand (led work resolve-violation ...)." >&2
+              exit 1
+            fi
+            ./led work resolve-violation "$recursed_target" reissued \
+              "surviving act on the old slug '${child}' orphaned one level down by the reopen (supersede-cascade recursion)" \
+              --review-deferred --witness "$new_child_open_id"
+          done
+        fi
+      done
+      echo "led work supersede-cascade: done -- '${new_slug}' opened, direct children of" >&2
+      echo "  '${old_slug}' cascaded. Run 'led work violations' to confirm." >&2
+      # EXPLICIT exit (every OTHER work) leaf ends in `exec psql`, which replaces the process and
+      # never falls through -- this leaf runs MULTIPLE psql calls in a loop and cannot `exec` its
+      # last one alone, so it must exit here or fall through into the generic top-of-file
+      # `led [flags] <kind> <statement...>` dispatch below, misinterpreting this command's own
+      # already-consumed arguments (caught live on this verb's own first scratch witness).
+      exit 0
+      ;;
     list)
       shift
       # DEFAULT ANSWERS "what is open or claimed right now" (maintainer directive 2026-07-13,
@@ -1486,8 +1804,25 @@ SQL
       fi
       ;;
     violations)
-      exec psql -h "$PGHOST" -d "$PGDB" -c "
-        SELECT violation, slug, detail FROM ${SCHEMA}.work_item_violations ORDER BY violation, slug;"
+      # s37 (consult A6, spec element 6): each row gains the discharge path, the same way the
+      # stop-gate's debt lines name theirs (hooks/stop_clean_exit.py's own violations else-branch,
+      # rewritten alongside this). LIVE column-existence gate -- a pre-s37 world has no target_id
+      # column on the view at all, so the query degrades to the pre-s37 3-column read.
+      has_target_id_col=$(psql -h "$PGHOST" -d "$PGDB" -tAq -v schema="$SCHEMA" <<SQL
+        SELECT EXISTS (SELECT 1 FROM information_schema.columns
+                       WHERE table_schema = :'schema' AND table_name = 'work_item_violations'
+                         AND column_name = 'target_id');
+SQL
+      )
+      if [ "$has_target_id_col" = "t" ]; then
+        exec psql -h "$PGHOST" -d "$PGDB" -c "
+          SELECT violation, slug, detail, target_id,
+                 'led work resolve-violation ' || target_id || ' <reissued|retired> \"<basis>\" (--review-witness <ref> | --review-deferred)' AS resolve_with
+          FROM ${SCHEMA}.work_item_violations ORDER BY violation, slug;"
+      else
+        exec psql -h "$PGHOST" -d "$PGDB" -c "
+          SELECT violation, slug, detail FROM ${SCHEMA}.work_item_violations ORDER BY violation, slug;"
+      fi
       ;;
     asof)
       shift
@@ -1553,6 +1888,14 @@ SQL
       echo "       led work list [--all]  (work_item_current; default open/claimed only, --all" >&2
       echo "                               for the full history including closed)" >&2
       echo "       led work violations    (work_item_violations)" >&2
+      echo "       led work resolve-violation <violating-act-id> <reissued|retired> \"<basis>\"" >&2
+      echo "         (--review-witness <ref> | --review-deferred) [--witness <successor-ref>]" >&2
+      echo "         (kernel/lineage/s37-violation-disposition.sql -- answers a work_item_violations" >&2
+      echo "         member; debt until answered, record forever)" >&2
+      echo "       led work supersede-cascade <old-slug> <new-slug> <title...>" >&2
+      echo "         [--parent <grandparent-slug>] [--discharge composite] [--refs <ref>]" >&2
+      echo "         (supersedes <old-slug>, cascades its direct children -- retired for closed," >&2
+      echo "         reissued for open -- s37 element 5)" >&2
       echo "       led work asof <timestamp>  (point-in-time reconstruction, read-only)" >&2
       exit 1
       ;;
