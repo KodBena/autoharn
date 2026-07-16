@@ -1,6 +1,38 @@
--- s37 VIOLATION DISPOSITION (design/FABLE-ORPHAN-DISPOSITION-SPEC.md v2, RATIFIED 2026-07-16,
+-- s37 VIOLATION DISPOSITION (design/FABLE-ORPHAN-DISPOSITION-SPEC.md v3, RATIFIED 2026-07-16,
 -- reviewed under ADR-0014 by a fresh-context Fable instance -- consult banked verbatim at
--- design/ORCH-ADR14-ORPHAN-DISPOSITION-CONSULT-2026-07-16.md, amendments A1-A6 incorporated).
+-- design/ORCH-ADR14-ORPHAN-DISPOSITION-CONSULT-2026-07-16.md, amendments A1-A6 incorporated;
+-- v3 amendment consulted under ADR-0018, record banked verbatim at
+-- design/ORCH-CONSULT-DEBT-SEMANTICS-2026-07-16.md, ratified same day).
+--
+-- v3 AMENDMENT (this file's own second-pass content, applied directly to the same delta -- s37
+-- has not shipped to any live world yet, runs-are-linear, so this is authorship correction, not a
+-- retro-edit of a frozen record, ADR-0005 Rule 8 n/a). v2's Element 3 bound a disposition's
+-- validity to its TARGET row's own currency (`JOIN ledger_current t ON t.id = d.target_id` inside
+-- disposition_basis_holds) while Element 1's `work_item_violations` narrowing left several arms
+-- reading raw history for MEMBERSHIP -- a MIXED-TIMELINE predicate (membership non-sequenced,
+-- answerability current-sequenced, the temporal-database literature's own named bug class per the
+-- consult's part 3): once a violation's target row was itself superseded (the ordinary, CLI-
+-- recommended repair), the basis-holds join could never again match, and the violation was
+-- eternal debt -- via the very repair path the tooling recommends. THE FIX (consult part 2B,
+-- ratified verbatim): THE DEBT PROJECTION QUANTIFIES OVER IN-FORCE ROWS ONLY; THE RECORD
+-- PROJECTION QUANTIFIES OVER EVERYTHING, FOREVER. `work_item_violations` (Element 1 continued,
+-- below) is REDERIVED current-truth-typed throughout -- every CTE reads `ledger_current`, never
+-- raw `ledger` -- so a member's target row leaving ledger_current lapses the member in the SAME
+-- read, retraction itself the answering act, no disposition needed; `work_violation_history` (the
+-- record projection) is UNCHANGED, still the raw/unfiltered read, PLUS two new columns surfacing
+-- the answering act for every lapsed member (disposition, retraction, or open -- attributable on
+-- the record, per element 2/consult 2C). `disposition_basis_holds` KEEPS its join to
+-- `ledger_current` (not removed to raw `ledger`) -- see that CTE's own comment for the PROOF this
+-- is not the v2 defect reintroduced: by construction, disposition_basis_holds is only ever
+-- consulted for a `(class, target_id)` pair that ALREADY has a live `raw_violations` row, and
+-- every such row's target_id is ALREADY current (the CTE chain above only ever selects current
+-- rows) -- so the join can never again FALSIFY a basis that would otherwise hold; a disposition on
+-- a later-retracted target is MOOT (its member already dropped out upstream), never DEFEATED by
+-- this join. gates/ledger_reader_allowlist.py's own entry for `work_item_violations` retypes
+-- accordingly (that file's own edit, this same commit): from "mixed by declared design" to a
+-- plain current-truth reader (no raw-ledger legs, no allowlist entry needed at all); the raw/
+-- history reading lives wholly in `work_violation_history`'s own declared-history entry now.
+--
 -- HISTORY: safe -- one new kind (work_violation_disposition), three new nullable columns legal
 -- ONLY on that new kind (work_violation_class/work_violation_target_id two-way, work_violation_
 -- witness one-way), TWO existing columns' kind-shape CHECKs WIDENED to also license the new kind
@@ -327,62 +359,79 @@ CREATE TRIGGER validate_work_item BEFORE INSERT ON :"schema".ledger
     FOR EACH ROW EXECUTE FUNCTION :"schema".validate_work_item();
 
 -- ============================================================================================
--- ELEMENT 1 continued -- work_item_violations RE-ISSUED: (a) every arm gains a target_id column
--- (see header DESIGN CHOICE), (b) dependency_cycle NARROWS to blocks-close edges only (RATIFIED
--- sibling narrowing -- blocks-close cycles are already refused at construction, so this member
--- becomes properly vacuous, defense-in-depth, matching blocks_close_cycle's own existing vacuous
--- posture; an informs cycle is now a legal non-event, matching informs' advisory-only semantics),
--- (c) a FINAL anti-join drops any arm answered by an in-force, basis-still-holding disposition
--- (Element 3 / A4 folded in here, "one join... not a procedure"). Every pre-existing CTE body
--- (opens/dup_open/shipped_no_witness/deps/dangling_dep/parents/dangling_parent/parent_anc/
--- parent_cycle/blocks_close_deps/bc_reach/blocks_close_cycle/opened_current/orphan_claims/
--- orphan_closes/orphan_deps/orphan_children/composites/composite_hand_closed/
--- closed_but_tree_defeated) is UNCHANGED, byte-for-byte, below -- only `deps`/`reach`/`dep_cycle`
--- (dependency_cycle's OWN computation) are replaced with a blocks-close-only pair, and every arm's
--- final SELECT gains one more expression (its target_id).
+-- ELEMENT 1 continued -- work_item_violations RE-ISSUED, v3 AMENDMENT (this file's header, and
+-- design/FABLE-ORPHAN-DISPOSITION-SPEC.md v3 / design/ORCH-CONSULT-DEBT-SEMANTICS-2026-07-16.md
+-- part 2B, ratified verbatim): THE DEBT PROJECTION QUANTIFIES OVER IN-FORCE ROWS ONLY. Every CTE
+-- below reads `ledger_current` -- NEVER raw `ledger` -- so this is a REDERIVATION of the v2 raw
+-- CTE chain, current-truth-typed throughout, not a filter bolted onto history: (a) every arm still
+-- gains a target_id column (header DESIGN CHOICE, unchanged), (b) dependency_cycle still narrows
+-- to blocks-close edges only (RATIFIED sibling narrowing, unchanged), now additionally scoped to
+-- IN-FORCE blocks-close edges (the `work_edge_blocks_close`/`work_edge_parent` legs below JOIN
+-- ledger_current on each edge's own carrying row, edge_row_id -- the SAME pattern
+-- `orphan_children` already used in v2, now applied uniformly to every edge-graph arm), (c) a
+-- FINAL anti-join drops any arm answered by an in-force, basis-still-holding disposition (Element
+-- 3, unchanged in shape though its consequence changes -- see disposition_basis_holds' own
+-- comment), (d) ONE MORE final join makes the target-in-force gate a single, explicit, auditable
+-- textual anchor (redundant with (a)-(c)'s own current-truth construction for every arm above, by
+-- proof; kept anyway, "one join... not a procedure", matching Element 3's own idiom, and the one
+-- place a future arm's author is forced to notice the invariant). orphan_claims/orphan_closes/
+-- orphan_deps/orphan_children/composites/composite_hand_closed/closed_but_tree_defeated were
+-- ALREADY current-truth-typed in v2 (s31/s33's own doing) and are UNCHANGED, byte-for-byte, below
+-- -- only opens/dup_open, shipped_no_witness, deps/dangling_dep, the two blocks-close-edge legs
+-- (bc_deps/blocks_close_deps), and parents/dangling_parent/parent_anc/parent_cycle move off raw
+-- `ledger` onto `ledger_current` (dup_open/dangling_parent) or gain an edge_row_id-keyed
+-- ledger_current join (bc_deps/blocks_close_deps/parents) that v2 lacked.
 -- ============================================================================================
 CREATE OR REPLACE VIEW :"schema".work_item_violations
     WITH (security_invoker = true) AS
 WITH RECURSIVE
-  opens AS (
+  opens_cur AS (
     SELECT work_slug AS slug, count(*) AS n
-    FROM :"schema".ledger WHERE kind = 'work_opened'
+    FROM :"schema".ledger_current WHERE kind = 'work_opened'
     GROUP BY work_slug
   ),
   dup_open AS (
-    SELECT slug FROM opens WHERE n > 1
+    SELECT slug FROM opens_cur WHERE n > 1
   ),
   shipped_no_witness AS (
     SELECT work_slug AS slug, id
-    FROM :"schema".ledger
+    FROM :"schema".ledger_current
     WHERE kind = 'work_closed' AND work_resolution = 'shipped'
       AND (work_witness IS NULL OR btrim(work_witness) = '')
   ),
-  -- s37: dependency_cycle NARROWS to blocks-close edges only -- reads work_edge_blocks_close
-  -- (s32's single home of the RAW s30 blocks-close edge relation) instead of ALL work_depends_on
-  -- rows. depends_on_unknown_slug's OWN `deps`/`dangling_dep` (below) still reads every edge
-  -- type, unnarrowed -- this narrowing is scoped to dependency_cycle alone, per the ratified
-  -- sibling fix.
-  -- s37 fix (reviewer-witnessed defect 1, ADR-0014-review round): `deps` gains the depending
-  -- act's OWN ledger id -- the SAME "violating act's own row" reading target_id already uses
-  -- everywhere else an id is natural (shipped_without_witness/orphan_*). Without it,
-  -- depends_on_unknown_slug's target_id was hardcoded NULL below, and NULL never
-  -- equality-matches (target_id = target_id is never true when both sides are NULL) -- the class
-  -- was permanently unanswerable, directly violating amendment A1's closure claim ("EVERY
-  -- work_item_violations member... is answerable").
+  -- s37 fix (reviewer-witnessed defect 1, ADR-0014-review round; UNCHANGED by v3): `deps` gains
+  -- the depending act's OWN ledger id -- the SAME "violating act's own row" reading target_id
+  -- already uses everywhere else an id is natural. v3: reads ledger_current, not raw ledger --
+  -- a retracted depends_on row is no longer even a CANDIDATE dangling-dep, matching the amendment
+  -- (this is the TARGET row's own currency -- element 1's actual gate).
   deps AS (
     SELECT work_slug AS dependent, work_depends_on AS antecedent, id
-    FROM :"schema".ledger WHERE kind = 'work_depends_on'
+    FROM :"schema".ledger_current WHERE kind = 'work_depends_on'
   ),
+  -- v3 CORRECTNESS NOTE (found in this delta's own build, hazard-in-reach per CLAUDE.md's
+  -- engineering-responsibility corollary): the antecedent-opened check below reads RAW `ledger`,
+  -- UNCHANGED from v2 -- deliberately NOT switched to ledger_current. Element 1 gates lapsing on
+  -- the MEMBER'S OWN TARGET ROW currency (d.id, via `deps` above) ONLY; it does not redefine the
+  -- INNER PREDICATE (whether the antecedent was ever opened). Switching this NOT EXISTS check to
+  -- ledger_current would make it fire for "antecedent was opened, then later retracted" too -- a
+  -- case history's OWN unfiltered computation (work_violation_history, unchanged, same raw check)
+  -- can NEVER produce, since that condition has no raw-history counterpart at all -- breaking
+  -- "the record is never thinner than work_item_violations" in the WRONG direction (debt showing
+  -- a member history structurally cannot represent). Kept raw so DEBT's member set is always the
+  -- in-force-target SUBSET of HISTORY's raw member set, never a superset.
   dangling_dep AS (
     SELECT d.dependent AS slug, d.antecedent, d.id
     FROM deps d
     WHERE NOT EXISTS (SELECT 1 FROM :"schema".ledger o
                        WHERE o.kind = 'work_opened' AND o.work_slug = d.antecedent)
   ),
+  -- v3: work_edge_blocks_close (s32's RAW single home) JOINed to ledger_current on edge_row_id --
+  -- the edge's own carrying row must be in force, matching work_edge_obligation's own composition
+  -- one file over (s32) and orphan_children's own pre-existing pattern one CTE below.
   bc_deps AS (
-    SELECT dependent_slug AS dependent, antecedent_slug AS antecedent
-    FROM :"schema".work_edge_blocks_close
+    SELECT e.dependent_slug AS dependent, e.antecedent_slug AS antecedent
+    FROM :"schema".work_edge_blocks_close e
+    JOIN :"schema".ledger_current lc ON lc.id = e.edge_row_id
   ),
   bc_reach_dep(start_slug, cur) AS (
     SELECT dependent, antecedent FROM bc_deps
@@ -393,8 +442,18 @@ WITH RECURSIVE
     SELECT DISTINCT start_slug AS slug FROM bc_reach_dep WHERE cur = start_slug
   ),
   parents AS (
-    SELECT child_slug AS slug, parent_slug, edge_row_id FROM :"schema".work_edge_parent
+    SELECT e.child_slug AS slug, e.parent_slug, e.edge_row_id
+    FROM :"schema".work_edge_parent e
+    JOIN :"schema".ledger_current lc ON lc.id = e.edge_row_id
   ),
+  -- v3 CORRECTNESS NOTE (same hazard as dangling_dep's own comment above, same fix): the
+  -- parent-opened check below reads RAW `ledger`, UNCHANGED from v2. `parents` above already
+  -- carries the TARGET row's own currency gate (edge_row_id JOINed to ledger_current -- the
+  -- child's own opening act, this class's actual target per the header DESIGN CHOICE). Switching
+  -- THIS NOT EXISTS check to ledger_current would make dangling_parent fire for "parent was
+  -- opened, then retracted" -- exactly orphaned_by_retraction's own territory, and a shape
+  -- work_violation_history's unchanged raw computation can never reproduce (same "debt showing a
+  -- member history cannot represent" defect dangling_dep's comment names). Kept raw.
   dangling_parent AS (
     SELECT p.slug, p.parent_slug, p.edge_row_id
     FROM parents p
@@ -412,7 +471,9 @@ WITH RECURSIVE
     SELECT DISTINCT start_slug AS slug FROM parent_anc WHERE cur = start_slug
   ),
   blocks_close_deps AS (
-    SELECT dependent_slug AS dependent, antecedent_slug AS antecedent FROM :"schema".work_edge_blocks_close
+    SELECT e.dependent_slug AS dependent, e.antecedent_slug AS antecedent
+    FROM :"schema".work_edge_blocks_close e
+    JOIN :"schema".ledger_current lc ON lc.id = e.edge_row_id
   ),
   bc_reach(start_slug, cur) AS (
     SELECT dependent, antecedent FROM blocks_close_deps
@@ -462,11 +523,14 @@ WITH RECURSIVE
     FROM composite_hand_closed chc
     WHERE EXISTS (SELECT 1 FROM :"schema".work_item_strict_blockers(chc.slug))
   ),
-  -- s37 Element 1/3 -- raw_violations: every arm above, PLUS its target_id (the natural row id
-  -- where one exists; the slug's own work_opened row id otherwise -- header DESIGN CHOICE).
+  -- s37 Element 1/3, v3-rederived -- raw_violations: every arm above, PLUS its target_id (the
+  -- natural row id where one exists; the slug's own CURRENT work_opened row id otherwise --
+  -- header DESIGN CHOICE). Every target_id subquery below now reads ledger_current, so a handle
+  -- whose own opening act is retracted resolves to NULL here (excluded downstream by the final
+  -- target-in-force join, same as any other lapsed member).
   raw_violations AS (
     SELECT 'duplicate_open'::text AS violation, slug, NULL::text AS detail,
-           (SELECT min(id) FROM :"schema".ledger WHERE kind = 'work_opened' AND work_slug = dup_open.slug) AS target_id
+           (SELECT min(id) FROM :"schema".ledger_current WHERE kind = 'work_opened' AND work_slug = dup_open.slug) AS target_id
     FROM dup_open
     UNION ALL
     SELECT 'shipped_without_witness', slug, 'ledger row ' || id, id FROM shipped_no_witness
@@ -474,18 +538,18 @@ WITH RECURSIVE
     SELECT 'depends_on_unknown_slug', slug, 'depends on ' || antecedent, id FROM dangling_dep
     UNION ALL
     SELECT 'dependency_cycle', slug, NULL,
-           (SELECT id FROM :"schema".ledger WHERE kind = 'work_opened' AND work_slug = dep_cycle.slug) AS target_id
+           (SELECT id FROM :"schema".ledger_current WHERE kind = 'work_opened' AND work_slug = dep_cycle.slug) AS target_id
     FROM dep_cycle
     UNION ALL
     SELECT 'dangling_parent', slug, 'parent ' || parent_slug || ' has no opening act', edge_row_id
     FROM dangling_parent
     UNION ALL
     SELECT 'parent_cycle', slug, NULL,
-           (SELECT id FROM :"schema".ledger WHERE kind = 'work_opened' AND work_slug = parent_cycle.slug) AS target_id
+           (SELECT id FROM :"schema".ledger_current WHERE kind = 'work_opened' AND work_slug = parent_cycle.slug) AS target_id
     FROM parent_cycle
     UNION ALL
     SELECT 'blocks_close_cycle', slug, NULL,
-           (SELECT id FROM :"schema".ledger WHERE kind = 'work_opened' AND work_slug = blocks_close_cycle.slug) AS target_id
+           (SELECT id FROM :"schema".ledger_current WHERE kind = 'work_opened' AND work_slug = blocks_close_cycle.slug) AS target_id
     FROM blocks_close_cycle
     UNION ALL
     SELECT 'orphaned_by_retraction', slug, 'surviving work_claimed row ' || id || ' cites a retracted opening act', id FROM orphan_claims
@@ -498,17 +562,34 @@ WITH RECURSIVE
     UNION ALL
     SELECT 'closed_but_tree_defeated', slug, 'close row ' || close_id || '; unresolved: ' || blockers, close_id FROM closed_but_tree_defeated
   ),
-  -- s37 Element 3 (A4) -- dispositions IN FORCE, and whether each one's OWN checkable basis
-  -- STILL holds, re-derived on every read (never a stored verdict):
+  -- s37 Element 3 (A4), v3-corrected -- dispositions IN FORCE, and whether each one's OWN
+  -- checkable basis STILL holds, re-derived on every read (never a stored verdict):
   --   retired : holds while the target row's own acts still read settled. If the target is a
   --             work_opened row (the four slug-keyed arms + orphan_children), "settled" means its
   --             own slug currently reads 'closed' in work_item_current -- so a LATER-superseded
   --             close on that slug flips this back to false in the SAME read (A4's own example,
-  --             verbatim). For every other kind of target row (claim/dep/close/edge row),
-  --             "settled" is the row's own continued presence in ledger_current.
+  --             verbatim, still fully live under v3 -- the CHILD's own opening row stays current
+  --             throughout this scenario, only its CLOSE row's currency changes). For every other
+  --             kind of target row (claim/dep/close/edge row), "settled" holds unconditionally
+  --             once retired (no named resurrectable condition for those classes -- element 3/
+  --             consult 2D: only retired-on-a-settled-child and reissued name a condition at all).
   --   reissued: holds while EITHER no successor was cited (nothing to invalidate -- element 4's
   --             own "warns, never refused" posture) OR the cited successor row is itself still
   --             in force (ledger_current).
+  -- v3 NOTE on the `JOIN ledger_current t` below (consult part 2D: "remove the unconditional
+  -- target-currency requirement"): this join is KEPT, not deleted, but it can no longer PRODUCE
+  -- v2's defect, by construction -- PROOF: disposition_basis_holds is consulted ONLY via the
+  -- final anti-join against `raw_violations rv` (below), and every rv.target_id is ALREADY
+  -- current (every CTE feeding raw_violations above reads ledger_current exclusively, so a
+  -- retracted target never produces an rv row to match against in the first place). So whenever
+  -- this join's WHERE clause actually gets evaluated for a (class, target_id) pair that matters,
+  -- `t` is GUARANTEED to be found -- the join can never again FALSIFY a basis that would
+  -- otherwise hold. A disposition whose target is later retracted is MOOT (its rv row already
+  -- gone upstream), never DEFEATED by this join finding no match -- exactly "moot, never
+  -- defeated" (spec Element 3, consult part 2D), achieved structurally rather than by deleting
+  -- the join and re-deriving t's static kind/work_slug off raw ledger (which would reintroduce a
+  -- raw-ledger leg into THIS view, undoing the current-truth retype gates/ledger_reader_
+  -- allowlist.py now expects -- see that file's own s37 entry).
   dispositions AS (
     SELECT lc.id AS disp_id, lc.work_violation_class AS class, lc.work_violation_target_id AS target_id,
            lc.work_resolution AS resolution, lc.work_violation_witness AS witness_id
@@ -533,17 +614,26 @@ WITH RECURSIVE
   )
 SELECT rv.violation, rv.slug, rv.detail, rv.target_id
 FROM   raw_violations rv
+-- v3 Element 1 -- the EXPLICIT target-in-force gate: redundant with raw_violations' own
+-- current-truth construction above (every target_id it emits is already current or NULL), kept
+-- as the ONE textual anchor a future arm's author must preserve (matching Element 3's own "one
+-- join... not a procedure" idiom) -- "a member lapses when its target row leaves ledger_current"
+-- is now true by TWO independent readings of this view's text, not one.
+JOIN   :"schema".ledger_current tgt ON tgt.id = rv.target_id
 WHERE  NOT EXISTS (
          SELECT 1 FROM disposition_basis_holds dbh
          WHERE dbh.class = rv.violation AND dbh.target_id = rv.target_id
        );
 
 COMMENT ON VIEW :"schema".work_item_violations IS
-  'kernel/lineage/s37-violation-disposition.sql: every member now carries target_id, the key a
-   work_violation_disposition answers it by. A member drops out only while an in-force
-   disposition answers it AND that disposition''s own checkable basis still holds (validity-
-   bounded, consult A4) -- see work_violation_history for the UNFILTERED read (every violation
-   ever surfaced, with its disposition trail, thinner never).';
+  'kernel/lineage/s37-violation-disposition.sql (v3 amendment): every member carries target_id,
+   the key a work_violation_disposition answers it by. THE DEBT PROJECTION QUANTIFIES OVER
+   IN-FORCE ROWS ONLY (v3, design/ORCH-CONSULT-DEBT-SEMANTICS-2026-07-16.md part 2B): a member
+   lapses the moment its target row leaves ledger_current -- retraction IS the answering act, no
+   disposition needed -- OR while an in-force disposition answers it AND that disposition''s own
+   checkable basis still holds (validity-bounded, consult A4/2D). See work_violation_history for
+   the UNFILTERED read (every violation ever surfaced, with its full disposition AND retraction
+   trail, thinner never).';
 
 -- ============================================================================================
 -- work_violation_history -- THE ONE NEW VIEW (spec element 1). Every violation ever surfaced
@@ -687,11 +777,26 @@ WITH RECURSIVE
     UNION ALL
     SELECT 'closed_but_tree_defeated', slug, 'close row ' || close_id || '; unresolved: ' || blockers, close_id FROM closed_but_tree_defeated
   )
+-- v3 amendment (element 2 / consult part 2C): two ADDITIVE columns, appended after the
+-- pre-existing disposition_in_force (a pure column-list widening of an already-declared-history
+-- view -- HISTORY: safe, no existing column touched). target_in_force names whether rv.target_id
+-- itself still reads current -- the direct, attributable answer to "is this member's target row
+-- still standing" that work_item_violations' own narrowing computes but never surfaced before.
+-- target_retraction_id names the SPECIFIC ledger row that superseded (retracted) the target, when
+-- one exists -- the "a retraction, a disposition, or open debt" trichotomy (spec element 2,
+-- verbatim) now fully attributable in ONE row: target_in_force=false + target_retraction_id set
+-- is the retraction story; a disposition_id with disposition_in_force=true is the disposition
+-- story; neither is open debt (assuming target_in_force is also true, i.e. a live, unanswered
+-- violation). A member can show BOTH a retraction and a disposition trail (e.g. a corrected
+-- disposition superseded before the target itself was later retracted) -- the record stays
+-- complete, never collapsed to one story.
 SELECT rv.violation, rv.slug, rv.detail, rv.target_id,
        d.id AS disposition_id, d.work_resolution AS disposition_resolution,
        d.rationale AS disposition_basis, d.work_violation_witness AS disposition_witness,
        (d.id IS NOT NULL
-        AND NOT EXISTS (SELECT 1 FROM :"schema".ledger s2 WHERE s2.supersedes = d.id)) AS disposition_in_force
+        AND NOT EXISTS (SELECT 1 FROM :"schema".ledger s2 WHERE s2.supersedes = d.id)) AS disposition_in_force,
+       EXISTS (SELECT 1 FROM :"schema".ledger_current tgt WHERE tgt.id = rv.target_id) AS target_in_force,
+       (SELECT s3.id FROM :"schema".ledger s3 WHERE s3.supersedes = rv.target_id) AS target_retraction_id
 FROM   raw_violations rv
 LEFT JOIN :"schema".ledger d
        ON d.kind = 'work_violation_disposition'
@@ -702,7 +807,10 @@ ORDER BY rv.violation, rv.slug, d.id;
 COMMENT ON VIEW :"schema".work_violation_history IS
   'kernel/lineage/s37-violation-disposition.sql: UNFILTERED read -- every work_item_violations
    member ever surfaced (raw, never narrowed), LEFT JOINed to every disposition ever written
-   against it (in force or superseded -- disposition_in_force names which). Never thinner than
+   against it (in force or superseded -- disposition_in_force names which), PLUS (v3 amendment,
+   design/ORCH-CONSULT-DEBT-SEMANTICS-2026-07-16.md part 2C) target_in_force and
+   target_retraction_id -- every lapsed member''s fate is attributable: a disposition, a
+   retraction, or open debt, never silently unaccounted for. Never thinner than
    work_item_violations; the companion read for "what became of this defect, ever" (spec element
    1). Deliberately NOT current-truth-narrowed -- see gates/ledger_reader_allowlist.py''s
    classification of this view for the declared-history posture.';

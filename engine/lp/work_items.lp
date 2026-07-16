@@ -13,15 +13,25 @@
 % spec's Q4 evidence) -- is SUPERSEDED on the record by that ratified spec: superseding a row of
 % ANY kind now means uniform retraction from current truth, reinstatement-free. This program
 % therefore COMPOSES with ledger_tnow.lp's supersession closure (`superseded/1`, derived there
-% from supersedes/2) for its one current-truth judgment, work_orphaned_by_retraction below --
-% loaded WITH ledger_tnow.lp over one shared EDB, or standalone (the `#defined superseded/1`
-% guard makes an absent closure read as "nothing retracted", the fail-safe direction). The
-% pre-existing judgments (duplicate opens, dangling deps, cycles, missing witnesses) deliberately
-% KEEP their raw/history reading over ALL events, retracted or not -- they mirror
-% work_item_violations' declared-history members byte-for-byte (duplicate_open is slug-burned by
-% the spec's own ratified fork; the graph members answer "did this shape ever get written").
-% Grounds standalone via the `#defined` guards below (an empty extension is silence, not a
-% grounding warning -- the ledger_tnow.lp / why_layer.lp idiom).
+% from supersedes/2) -- loaded WITH ledger_tnow.lp over one shared EDB, or standalone (the
+% `#defined superseded/1` guard makes an absent closure read as "nothing retracted", the fail-safe
+% direction). Grounds standalone via the `#defined` guards below (an empty extension is silence,
+% not a grounding warning -- the ledger_tnow.lp / why_layer.lp idiom).
+%
+% s37 v3 AMENDMENT (design/FABLE-ORPHAN-DISPOSITION-SPEC.md v3, design/ORCH-CONSULT-DEBT-
+% SEMANTICS-2026-07-16.md, ratified 2026-07-16): THE DEBT PROJECTION QUANTIFIES OVER IN-FORCE ROWS
+% ONLY. This header's OWN prior text here claimed the pre-existing judgments (duplicate opens,
+% dangling deps, cycles, missing witnesses) "deliberately KEEP their raw/history reading over ALL
+% events, retracted or not" -- that claim is SUPERSEDED by this same amendment, on the record,
+% exactly as this header's own opening paragraph once superseded the s22 spec's Q4 evidence: every
+% judgment this program computes that also appears as a work_item_violations member now requires
+% `not superseded(R)` on its own target/handle row (added inline at each rule below), mirroring
+% the kernel view's move off raw `ledger` onto `ledger_current` throughout. work_dep_edge/2 and
+% work_dep_star/2 -- the GENERAL, id-less dependency GRAPH relations, not violations members
+% themselves -- are the one deliberate exception, UNCHANGED: they still answer "did this edge ever
+% exist", the derivation of record for consumers that want the full historical graph (matching the
+% kernel view's own `deps`/`reach` split, where the general graph and the narrowed violations
+% arm are computed separately).
 %
 % TEXT STAYS HOME (design rule, ledger_edb.py rule 1): work_title and work_witness (prose / free
 % text) do NOT cross into this EDB -- only the SLUG (a stable identifier, atom-quoted like `kind`/
@@ -93,17 +103,28 @@
 % CHOICE named in s37's own header, not a fact this EDB exports as a distinct id) -- a NAMED,
 % disclosed gap (matching dependency_cycle/dangling_parent/parent_cycle/blocks_close_cycle
 % below), not a silent omission: disposing THIS class is reachable only via a trigger-bypass
-% negative-control write (s37's own closure statement), never ordinary operation. --------------
-work_duplicate_open(Slug) :- work_opened(Slug,R1), work_opened(Slug,R2), R1 != R2.
+% negative-control write (s37's own closure statement), never ordinary operation. s37 v3
+% amendment (design/FABLE-ORPHAN-DISPOSITION-SPEC.md v3, design/ORCH-CONSULT-DEBT-SEMANTICS-
+% 2026-07-16.md part 2B): THE DEBT PROJECTION QUANTIFIES OVER IN-FORCE ROWS ONLY -- both R1 and
+% R2 must themselves be current (not superseded), mirroring the kernel view's dup_open CTE
+% switching from raw `ledger` to `ledger_current` (kernel/lineage/s37-violation-disposition.sql).
+% --------------------------------------------------------------------------------------------
+work_duplicate_open(Slug) :-
+    work_opened(Slug,R1), work_opened(Slug,R2), R1 != R2,
+    not superseded(R1), not superseded(R2).
 
 % ---- shipped_without_witness (invariant 3; PROVABLY VACUOUS under normal operation -- s22's
 % work_shipped_requires_witness CHECK constraint refuses this at construction time; defense in
 % depth, matching the SQL floor's identical member). s37 fix (reviewer defect 4, ADR-0014-review
 % round): disposition-narrowed like every OTHER id-bearing class -- w_vdisp_basis_holds/3 is
 % GENERAL (see below), not hardcoded to one class, so this predicate inherits the SAME narrowing
-% the kernel VIEW already applies uniformly, for free. --------------------------------------
+% the kernel VIEW already applies uniformly, for free. s37 v3 amendment: `not superseded(R)`
+% ADDED as its own precondition (mirroring the kernel view's shipped_no_witness CTE moving off
+% raw `ledger` onto `ledger_current`) -- the close row itself must be in force before this
+% predicate is even a candidate, matching "a member lapses when its target row leaves
+% ledger_current" literally. --------------------------------------------------------------
 work_shipped_without_witness(Slug,R) :-
-    work_closed(Slug,shipped,R), not work_witness_present(R),
+    work_closed(Slug,shipped,R), not superseded(R), not work_witness_present(R),
     not w_vdisp_basis_holds(shipped_without_witness,R,_).
 
 % ---- depends_on_unknown_slug (invariant 4; GENUINELY REACHABLE -- s22 deliberately does not
@@ -118,10 +139,25 @@ work_shipped_without_witness(Slug,R) :-
 % narrowing join here, a disposed instance would still show up in ASP after the kernel VIEW
 % dropped it, a silent DIVERGE (defect 4). Same set as `work_dep_edge(Dependent,Antecedent) :-
 % work_depends(Dependent,Antecedent,_), not work_opened(Antecedent,_)` would produce -- only the
-% id-threading and the narrowing join are new. -------------------------------------------------
+% id-threading and the narrowing join are new. s37 v3 amendment: `not superseded(R)` ADDED -- the
+% depends_on row itself (this class's TARGET, per the header DESIGN CHOICE) must be current,
+% mirroring the kernel view's `deps` CTE moving off raw `ledger` onto `ledger_current`.
+%
+% v3 CORRECTNESS NOTE (hazard-in-reach, found and fixed live building this delta -- see kernel/
+% lineage/s37-violation-disposition.sql's dangling_dep CTE, same fix, same reason, mirrored here
+% for the SQL/ASP differential's sake): the antecedent-opened check STAYS `not
+% work_opened(Antecedent,_)` -- raw, UNCHANGED -- deliberately NOT replaced with `not
+% work_opened_in_force(Antecedent)`. Element 1 gates lapsing on the MEMBER'S OWN TARGET (R, the
+% depends_on row) currency only; it does not redefine the antecedent-opened PREDICATE itself.
+% Reading it current-truth would make this rule fire for "antecedent was opened, then later
+% retracted" -- a shape work_item_floor_atoms' `dangling_dep` (its own raw, unchanged mirror) can
+% never reproduce, breaking the SQL/ASP differential (`./judge`) rather than fixing it. Kept raw
+% so this predicate's member set is always the in-force-target SUBSET of the raw-antecedent-check
+% set, matching the kernel view's own corrected posture exactly. ---------------------------------
 work_dep_edge(Dependent,Antecedent) :- work_depends(Dependent,Antecedent,_).
 work_depends_on_unknown(Dependent,Antecedent) :-
-    work_depends(Dependent,Antecedent,R), not work_opened(Antecedent,_),
+    work_depends(Dependent,Antecedent,R), not superseded(R),
+    not work_opened(Antecedent,_),
     not w_vdisp_basis_holds(depends_on_unknown_slug,R,_).
 
 % ---- dependency_cycle (invariant 4, "the omega port"). work_dep_star/2 (below) is the GENERAL,
@@ -140,7 +176,11 @@ work_depends_on_unknown(Dependent,Antecedent) :-
 work_dep_star(F,D) :- work_dep_edge(F,D).
 work_dep_star(F,D) :- work_dep_edge(F,X), work_dep_star(X,D).
 
-work_dep_edge_bc(Dependent,Antecedent) :- work_depends(Dependent,Antecedent,R), work_dep_type(R,"blocks-close").
+% s37 v3 amendment: `not superseded(R)` ADDED -- the blocks-close edge's own carrying row must be
+% current, mirroring the kernel view's bc_deps/blocks_close_deps CTEs JOINing work_edge_blocks_close
+% to ledger_current on edge_row_id (kernel/lineage/s37-violation-disposition.sql).
+work_dep_edge_bc(Dependent,Antecedent) :-
+    work_depends(Dependent,Antecedent,R), work_dep_type(R,"blocks-close"), not superseded(R).
 work_dep_star_bc(F,D) :- work_dep_edge_bc(F,D).
 work_dep_star_bc(F,D) :- work_dep_edge_bc(F,X), work_dep_star_bc(X,D).
 work_dependency_cycle(F) :- work_dep_star_bc(F,F).
@@ -173,7 +213,24 @@ work_dep_star_via_closure(F,D) :- star(work_dep,F,D).
 % still in force. THREE CALLERS below (work_orphaned_by_retraction, work_depends_on_unknown above,
 % work_shipped_without_witness above) -- the NAMED, disclosed exception is duplicate_open/
 % dependency_cycle/dangling_parent/parent_cycle/blocks_close_cycle, whose atom shape carries no id
-% at all (see work_duplicate_open's own comment). --------------------------------------------
+% at all (see work_duplicate_open's own comment).
+%
+% s37 v3 amendment (design/FABLE-ORPHAN-DISPOSITION-SPEC.md v3, design/ORCH-CONSULT-DEBT-
+% SEMANTICS-2026-07-16.md part 2D: "remove the unconditional target-currency requirement"). The
+% `not superseded(R)` conjunct on both `retired` rules below is KEPT, not deleted -- mirroring the
+% kernel's OWN choice, kernel/lineage/s37-violation-disposition.sql's disposition_basis_holds CTE
+% (see that CTE's own v3 comment for the full proof). SAME PROOF, restated for this producer:
+% w_vdisp_basis_holds/3 is consulted ONLY as `not w_vdisp_basis_holds(Class,R,_)` inside a caller
+% rule (work_shipped_without_witness, work_depends_on_unknown, work_orphaned_by_retraction*) that
+% ALREADY requires `not superseded(R)` in ITS OWN body before reaching this call (this file's own
+% v3 edits above added that precondition to the first two; work_orphaned_by_retraction_raw's four
+% rules already required it, unchanged since s31). So `not superseded(R)` here can never again
+% FALSIFY a basis that would otherwise hold for any R this predicate is actually asked about --
+% R is guaranteed current at every real call site. A disposition on a later-retracted target is
+% MOOT (its caller rule already stopped firing), never DEFEATED by this conjunct -- exactly
+% "moot, never defeated" (spec Element 3), achieved structurally, matching the kernel producer's
+% own choice so the two stay literal mirrors rather than accidentally-different encodings of the
+% same invariant. --------------------------------------------------------------------------
 w_vdisp_in_force(Class,R,Disp) :- w_vdisp(Class,R,Disp), not superseded(Disp).
 
 w_vdisp_basis_holds(Class,R,Disp) :-
