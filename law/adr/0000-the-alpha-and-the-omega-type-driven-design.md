@@ -535,3 +535,5 @@ the next completeness audit.*
 ## License
 
 Public Domain (The Unlicense).
+
+*Facet (2026-07-16): closure questions posed to consults are not front-loaded — [ADR-0018](0018-consults-are-not-front-loaded.md).*
