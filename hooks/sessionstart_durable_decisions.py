@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-16T02:28:43Z
-#   last-change: 2026-07-16T02:34:12Z
+#   last-change: 2026-07-16T04:24:20Z
 #   contributors: 9a17b6b9/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -34,14 +34,19 @@ unreachable ledger takes -- see FAILS OPEN below; the spec's own element 3 langu
 ... if the ledger is unreachable") covers both: a schema that cannot answer this query is,
 functionally, unreachable FOR THIS QUERY.
 
-BYTE CAP, LOUD TRUNCATION (spec element 3; the no-silent-caps rule this project holds everywhere
-else a display is capped): `apparatus.json` -> `mechanisms.standing_decisions.byte_cap` (default
-4000) bounds the TOTAL rendered size of the injected block. Rows are included, in id order, until
-the NEXT row would exceed the cap; every row after that point is represented ONLY by a trailing
-line naming the count and the escape hatch: "N more standing decisions not shown -- run
-`./led standing`" -- never a silently truncated mid-row cut, never a quietly dropped tail with no
-trace. Compaction happens because context is tight in the first place; an UNBOUNDED re-injection
-here would be self-defeating -- the whole point is durability, not volume.
+BYTE CAP, ITEM CAP, LOUD TRUNCATION (spec element 3; the no-silent-caps rule this project holds
+everywhere else a display is capped): `apparatus.json` -> `mechanisms.standing_decisions.byte_cap`
+(default 4000) bounds the TOTAL rendered size of the injected block, and `mechanisms.
+standing_decisions.max_items` (default null -- no count limit, byte cap alone governs, unchanged
+from before this key existed) additionally bounds the ROW COUNT. Both apply, independently:
+whichever bites first truncates. Rows are included, oldest-first (id order), until the NEXT row
+would exceed the byte cap OR `max_items` rows have already been shown; every row after that point
+is represented ONLY by a trailing, IMPERATIVE line naming the count omitted and directing the
+reader's next action -- `./led standing` -- never a silently truncated mid-row cut, never a
+quietly dropped tail with no trace (ledger item `standing-injection-max-items`: an earlier,
+parenthetical phrasing of this line was witnessed NOT being acted on by an agent reader). Compaction
+happens because context is tight in the first place; an UNBOUNDED re-injection here would be
+self-defeating -- the whole point is durability, not volume.
 
 FAILS OPEN (spec element 3): a missing deployment record, an unreachable database, a pre-s36
 schema (no `standing_decisions` view), or any other exception anywhere in this pipeline prints
@@ -122,7 +127,7 @@ def _load_apparatus_quiet(root: str) -> dict:
         return {}
 
 
-def _resolve_standing_decisions_config(apparatus: dict) -> tuple[list[str], int]:
+def _resolve_standing_decisions_config(apparatus: dict) -> tuple[list[str], int, int | None]:
     """Extracts `apparatus["mechanisms"]["standing_decisions"]` HERE (the literal `mechs.get(
     "standing_decisions")` shape `filing/apparatus_registry.py`'s mechanical scan of hooks/*.py
     depends on -- see filing/standing_decisions_config.py's own docstring NAMED CHOICE), then
@@ -179,17 +184,21 @@ def _fetch_standing_decisions(dep: deployment_record.DeploymentRecord,
     return rows
 
 
-def _render(rows: list[tuple[str, str, str]], byte_cap: int) -> str:
+def _render(rows: list[tuple[str, str, str]], byte_cap: int, max_items: int | None) -> str:
     """Renders `id  grade  statement` lines, one per row, byte-capped at `byte_cap` with LOUD
-    truncation (spec element 3: 'never silent') -- rows are taken IN ORDER until the next row
-    would push the rendered block over the cap; every row after that point is represented only by
-    the trailing count-and-escape-hatch line. Byte-counted on the UTF-8 encoding (never a
-    character count, which can undercount a multi-byte statement)."""
+    truncation (spec element 3: 'never silent') -- rows are taken IN ORDER (oldest-first; `rows`
+    already arrives `ORDER BY id`) until the next row would push the rendered block over the cap
+    OR `max_items` rows have already been shown, whichever bites first -- both guards are
+    independent and both always apply; every row after that point is represented only by the
+    trailing count-and-instruction line. Byte-counted on the UTF-8 encoding (never a character
+    count, which can undercount a multi-byte statement)."""
     header = "Standing decisions (durable -- survive context loss; kernel/lineage/s36-decision-grade.sql):"
     lines = [header]
     budget = byte_cap - len(header.encode("utf-8")) - 1  # -1 for the header's own trailing newline
     shown = 0
     for row_id, grade, statement in rows:
+        if max_items is not None and shown >= max_items:
+            break
         line = f"{row_id}\t{grade}\t{statement}"
         cost = len(line.encode("utf-8")) + 1  # +1 for its own trailing newline
         if cost > budget:
@@ -199,7 +208,12 @@ def _render(rows: list[tuple[str, str, str]], byte_cap: int) -> str:
         shown += 1
     remaining = len(rows) - shown
     if remaining > 0:
-        lines.append(f"... {remaining} more standing decision(s) not shown -- run `./led standing`.")
+        # Imperative teach-text (ledger item standing-injection-max-items): the witnessed failure
+        # was an agent reader that saw an aside naming `./led standing` and did not act on it. This
+        # is a DIRECTIVE, not a footnote -- it names the count omitted and the reader's immediate
+        # next action, kept to one line since this text itself lives inside the byte cap it polices.
+        lines.append(f"ACTION REQUIRED: {remaining} more standing decision(s) omitted -- run "
+                      f"`./led standing` NOW to read them before proceeding.")
     return "\n".join(lines)
 
 
@@ -220,7 +234,7 @@ def main() -> int:
 
         root = os.path.dirname(dep_path)
         apparatus = _load_apparatus_quiet(root)
-        grades, byte_cap = _resolve_standing_decisions_config(apparatus)
+        grades, byte_cap, max_items = _resolve_standing_decisions_config(apparatus)
 
         rows = _fetch_standing_decisions(dep, grades)
     except Exception as e:  # noqa: BLE001 -- FAILS OPEN posture (module docstring): a
@@ -237,7 +251,7 @@ def main() -> int:
         return 0  # a clean/new/ungraded world -- zero interference, matching every other hook's
                   # "quiet unless there is something to say" posture
 
-    context = _render(rows, byte_cap)
+    context = _render(rows, byte_cap, max_items)
     print(json.dumps({"hookSpecificOutput": {"hookEventName": "SessionStart",
                                               "additionalContext": context}}))
     return 0

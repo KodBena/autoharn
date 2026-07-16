@@ -20,10 +20,14 @@ Sections emitted, each under a machine-parseable `### SECTION: <NAME>` header (g
                         (`apparatus.json` `mechanisms.standing_decisions.grades`, default
                         `["durable"]`) -- with NO recency limit and no `-n`/`--since` interaction
                         (every standing decision matters regardless of when it was written), byte-
-                        capped with the SAME loud-truncation convention (never silent) hooks/
-                        sessionstart_durable_decisions.py's own SessionStart hook uses, sharing
-                        the identical config resolution (filing/standing_decisions_config.py, ONE
-                        home, ADR-0012 P1). A pre-s36 world (no `standing_decisions` view) prints
+                        capped (`byte_cap`, default 4000) AND optionally item-capped (`max_items`,
+                        default null = no count limit), both independent guards, whichever bites
+                        first truncates, with the SAME loud-truncation convention (never silent,
+                        and now IMPERATIVE -- an instruction to run `./led standing`, not an
+                        aside) hooks/sessionstart_durable_decisions.py's own SessionStart hook
+                        uses, sharing the identical config resolution (filing/
+                        standing_decisions_config.py, ONE home, ADR-0012 P1). A pre-s36 world (no
+                        `standing_decisions` view) prints
                         an honest "(this world's kernel predates s36...)" line, never a bare SQL
                         error -- the same graceful-degradation posture REVIEW-DEBT's own
                         pre-s20-grants BLOCKED line already establishes for a different gap.
@@ -317,7 +321,7 @@ def standing_decisions(dep) -> None:
     apparatus = _load_apparatus(DEPLOYMENT_PATH.parent)
     mechs = apparatus.get("mechanisms")
     entry = mechs.get("standing_decisions") if isinstance(mechs, dict) else None
-    grades, byte_cap = standing_decisions_config.resolve_standing_decisions_config(entry)
+    grades, byte_cap, max_items = standing_decisions_config.resolve_standing_decisions_config(entry)
 
     # LIVE column-existence check (the SAME convention in_flight()'s own effective_state probe
     # above already uses) -- s36 is NOT wired into every world's birth chain (authored+scratch-
@@ -358,6 +362,8 @@ def standing_decisions(dep) -> None:
     budget = byte_cap
     shown = 0
     for ln in lines:
+        if max_items is not None and shown >= max_items:
+            break
         row_id, _, rest = ln.partition("|")
         grade, _, statement = rest.partition("|")
         line = f"{row_id}\t{grade}\t{statement}"
@@ -369,8 +375,11 @@ def standing_decisions(dep) -> None:
         shown += 1
     remaining = len(lines) - shown
     if remaining > 0:
-        rendered.append(f"... {remaining} more standing decision(s) not shown -- run "
-                         f"`./led standing`.")
+        # Imperative teach-text (ledger item standing-injection-max-items), mirrored verbatim from
+        # hooks/sessionstart_durable_decisions.py's own _render(): a DIRECTIVE, not a footnote --
+        # the witnessed failure was an agent reader that saw an aside and did not act on it.
+        rendered.append(f"ACTION REQUIRED: {remaining} more standing decision(s) omitted -- run "
+                         f"`./led standing` NOW to read them before proceeding.")
     print("\n".join(rendered))
 
 
