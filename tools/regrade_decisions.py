@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-16T03:29:13Z
-#   last-change: 2026-07-16T04:03:14Z
+#   last-change: 2026-07-16T04:25:05Z
 #   contributors: 9a17b6b9/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -238,7 +238,7 @@ def _load_standing_decisions_grades(project_dir: Path) -> list[str]:
         apparatus = {}
     mechs = apparatus.get("mechanisms") if isinstance(apparatus, dict) else None
     entry = mechs.get("standing_decisions") if isinstance(mechs, dict) else None
-    grades, _byte_cap = standing_decisions_config.resolve_standing_decisions_config(entry)
+    grades, _byte_cap, _max_items = standing_decisions_config.resolve_standing_decisions_config(entry)
     return grades
 
 
