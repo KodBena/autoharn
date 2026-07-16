@@ -46,8 +46,14 @@ ANCHORS (`#fragment` after a resolving path): v1 does not verify the fragment re
 heading/anchor in the target — flagged in a separate, NON-BLOCKING report section, never failing
 the gate on a bad anchor alone (declared residue, not a silent gap).
 
-Exit 0 clean (broken-path violations only); exit 1 listing every one. Run from repo root:
-  python3 gates/link_integrity.py
+Exit 0 clean (broken-path violations only); exit 1 listing every one. Default target is THIS
+checkout (autoharn) regardless of caller's cwd -- ROOT is derived from this file's own location,
+not os.getcwd(), so running the script from inside a different repo does NOT check that repo's
+docs (a real, dated gap: an adopting project running this script unmodified got a false "clean"
+verdict for autoharn's own docs while its own docs went unchecked -- AUTOHARN_BACKFLOW.md,
+autoharn-panel deployment, 2026-07-16). Pass --repo to check a different tree instead:
+  python3 gates/link_integrity.py                    # scans THIS checkout (autoharn)
+  python3 gates/link_integrity.py --repo /path/to/other/project   # scans that tree instead
 Lazy imports banned.
 """
 from __future__ import annotations
@@ -58,7 +64,22 @@ import subprocess
 import sys
 from urllib.parse import unquote, urlsplit
 
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DEFAULT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+def _resolve_root(argv: list[str]) -> str:
+    """--repo PATH overrides the default self-check root; omitting it preserves the exact prior
+    behavior (scan this checkout) for every existing caller."""
+    if "--repo" in argv:
+        i = argv.index("--repo")
+        if i + 1 >= len(argv):
+            print("link-integrity: --repo requires a PATH argument", file=sys.stderr)
+            sys.exit(2)
+        return os.path.abspath(argv[i + 1])
+    return DEFAULT_ROOT
+
+
+ROOT = _resolve_root(sys.argv[1:])
 
 # Exclusion 1: a whole directory, declared history (ORCH-OPERATING-CARD.md, "The deep history" section).
 EXCLUDE_DIR_PREFIXES = ("judgment/",)
