@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-15T20:19:45Z
-#   last-change: 2026-07-15T20:20:02Z
-#   contributors: a857c93d/main
+#   last-change: 2026-07-16T10:14:30Z
+#   contributors: a857c93d/main, 9a17b6b9/main
 # <<< PROVENANCE-STAMP <<<
 
 """kind_shape_manifest_gate -- MANIFEST + GATE for the kernel ledger's kind-scoped shape
@@ -54,8 +54,14 @@ CLOSURE STATEMENT (ADR-0000 Rule 2a):
     refused.
   - QUANTIFICATION UNIVERSE: every column of `<schema>.ledger` in a live catalog produced by
     applying the FULL current birth chain (`high_watermark_1.sql` through
-    `s30-typed-dependency-edges.sql`, `bootstrap/new-project.sh`'s own `LINEAGE_CHAIN` order) --
-    not a fixture, not memory of an earlier sweep. Every kind-mentioning CHECK on `ledger` is
+    `s37-violation-disposition.sql`, `bootstrap/new-project.sh`'s own `LINEAGE_CHAIN` order,
+    mirroring how `gates/ledger_reader_allowlist.py`'s own CHAIN was extended in this same
+    branch) -- not a fixture, not memory of an earlier sweep. STALENESS NOTE: this gate's CHAIN
+    stopped at s30 from s30's own delta onward -- s31 through s36 never reached it either, only
+    surfaced when s37 (which widens two ALREADY-MANIFESTed columns, work_resolution and
+    work_review_ref, to also license its own new kind) made the gap visible. Extended through
+    the FULL chain to s37 here, not merely the s37 hop, closing the whole gap at once. Every
+    kind-mentioning CHECK on `ledger` is
     parsed generically (regex over `pg_get_constraintdef` output, not a name allowlist), so a
     NEW kind-shape CHECK a future delta adds is caught by this gate on its own shape, not only by
     name collision with something already in MANIFEST. Sibling surface swept and confirmed empty:
@@ -70,7 +76,17 @@ silently uniformized): the DEFAULT-then-CHECK ordering inside `validate_work_ite
 7's own concern); the .lp engine side's kind-tagged predicates (plan step 4/8, a different
 producer); WHICH kind values are legal at all (`ledger_kind_check` -- a vocabulary CHECK, not a
 shape CHECK, carries no `IS NULL`/`IS NOT NULL` correlate and is correctly parsed-and-skipped by
-`_classify_kind_shape` below).
+`_classify_kind_shape` below); WHICH VALUES a column may take PER KIND, once that column's own
+(kind, arity) shape is already MANIFEST-declared (s37's `work_resolution_check`, witnessed live
+when the CHAIN below was extended through s37: it widens to `work_resolution IS NULL OR (kind =
+'work_closed' AND work_resolution = ANY(...)) OR (kind = 'work_violation_disposition' AND
+work_resolution = ANY(...))` -- a VALUE-VOCABULARY CHECK partitioned by kind, one level below the
+(kind, column, arity) SHAPE `work_resolution_kind_shape` already covers for the SAME column, not
+a second, competing shape declaration for it. Recognized and skipped generically by
+`classify_kind_shape` below via `_VOCAB_PARTITION_RE` -- matched on the CHECK's own textual shape
+(a `kind = '<literal>'` branch AND-combined with a `col = ANY(...)` membership test), never by
+constraint name, so a future column's own kind-partitioned vocabulary CHECK is caught by the same
+generic test).
 
 USAGE:
   python3 gates/kind_shape_manifest_gate.py                 # scratch apply, assert, teardown
@@ -113,7 +129,30 @@ CHAIN = [
     "s28-work-parent-edge.sql",
     "s29-obligation-item-key-and-typed-close.sql",
     "s30-typed-dependency-edges.sql",
+    "s31-supersession-uniform-retraction.sql",
+    "s32-edge-views-single-home.sql",
+    "s33-composite-discharge.sql",
+    "s34-computed-grade-refusal.sql",
+    "s35-validation-decomposition.sql",
+    "s36-decision-grade.sql",
+    "s37-violation-disposition.sql",
 ]
+# Extended through the FULL chain to s37 (not merely an s37-only hop) so the QUANTIFICATION
+# UNIVERSE is the live chain in full, matching `gates/ledger_reader_allowlist.py`'s own extension
+# in this same branch -- and this extension's own first scratch-witness attempt (this file's own
+# "caught live" lesson, same as every sNN delta's header before it) surfaced that s31/s32/s34/s35
+# ship no new kind-shape CHECK of their own, but s33 AND s36 do, alongside s37: s33
+# (kernel/lineage/s33-composite-discharge.sql) adds `work_discharge` (one-way, kind='work_opened'
+# -- declared at OPEN time whether the item is composite, s33 Element 1) and s36
+# (kernel/lineage/s36-decision-grade.sql) adds `decision_grade` (one-way, kind='decision', s36
+# Element/CLOSURE STATEMENT) -- both NEW MANIFEST rows below, found the same way the s37 columns
+# were: by running THIS gate against the extended chain and reading its own UNLICENSED PAYLOAD
+# COLUMN violations, not by re-reading every intervening header speculatively. s37
+# (kernel/lineage/s37-violation-disposition.sql) is the delta that ALSO needs new MANIFEST rows:
+# a new kind (`work_violation_disposition`), three new columns (work_violation_class,
+# work_violation_target_id, work_violation_witness), and TWO existing MANIFEST rows
+# (work_resolution, work_review_ref) whose CHECKs widen to also license the new kind -- see
+# MANIFEST below.
 
 # ================================================================================================
 # THE MANIFEST -- the ONE declared table (ADR-0011 Rule 4: a net over the class, never an
@@ -133,9 +172,15 @@ MANIFEST = [
     dict(column="work_depends_on", kinds=("work_depends_on",),
          arity="two-way", mechanism="CHECK", constraint="work_depends_on_kind_shape",
          defining_delta="s22-work-item-ledger.sql", reason=None),
-    dict(column="work_resolution", kinds=("work_closed",),
+    dict(column="work_resolution", kinds=("work_closed", "work_violation_disposition"),
          arity="two-way", mechanism="CHECK", constraint="work_resolution_kind_shape",
-         defining_delta="s22-work-item-ledger.sql", reason=None),
+         defining_delta="s22-work-item-ledger.sql "
+                         "(kinds widened by s37-violation-disposition.sql)",
+         reason="s37 widens the iff to license work_violation_disposition too -- disposition rows "
+                "carry work_resolution='reissued'|'retired', a vocabulary disjoint from "
+                "work_closed's own four values (see work_resolution_check, a SEPARATE "
+                "kind-partitioned VALUE-VOCABULARY CHECK on the same column, out of this "
+                "manifest's (kind,arity)-SHAPE scope -- module docstring's NOT IN SCOPE section)."),
     dict(column="work_witness", kinds=("work_closed",),
          arity="one-way", mechanism="CHECK", constraint="work_witness_kind_shape",
          defining_delta="s22-work-item-ledger.sql",
@@ -148,12 +193,15 @@ MANIFEST = [
          defining_delta="s28-work-parent-edge.sql",
          reason="nullable-legal-roots (s28 header, verbatim): a root item legitimately has "
                 "kind='work_opened' with work_parent NULL, so the correlation is NOT an iff."),
-    dict(column="work_review_ref", kinds=("work_closed",),
+    dict(column="work_review_ref", kinds=("work_closed", "work_violation_disposition"),
          arity="one-way", mechanism="CHECK", constraint="work_review_ref_kind_shape",
-         defining_delta="s29-obligation-item-key-and-typed-close.sql",
+         defining_delta="s29-obligation-item-key-and-typed-close.sql "
+                         "(kinds widened by s37-violation-disposition.sql)",
          reason="mirrors work_witness one column over: only a 'witnessed' disposition "
                 "(work_review_witnessed_requires_ref) requires a ref; a 'deferred' work_closed "
-                "row legitimately has NULL."),
+                "row legitimately has NULL. s37 widens the one-way implication to also license "
+                "work_violation_disposition rows, which carry the SAME witnessed/deferred "
+                "discipline (its own header, verbatim)."),
     dict(column="work_strict_close", kinds=("work_closed",),
          arity="one-way", mechanism="CHECK", constraint="work_strict_close_kind_shape",
          defining_delta="s29-obligation-item-key-and-typed-close.sql",
@@ -167,6 +215,41 @@ MANIFEST = [
                 "work_depends_on row predates this column and can never be backfilled (no "
                 "UPDATE, append-only) -- a two-way iff would fail ADD CONSTRAINT's whole-table "
                 "validation on any world with pre-existing rows."),
+    dict(column="work_discharge", kinds=("work_opened",),
+         arity="one-way", mechanism="CHECK", constraint="work_discharge_kind_shape",
+         defining_delta="s33-composite-discharge.sql",
+         reason="declared at OPEN time whether the item is composite (s33 Element 1, 'every "
+                "non-composite item is legally work_discharge IS NULL') -- lives on the item's "
+                "OWN opening row, not its close row, so the one licensed kind is work_opened; "
+                "one-way forecloses it appearing on a non-work_opened row only, not every "
+                "work_opened row carries it."),
+    dict(column="decision_grade", kinds=("decision",),
+         arity="one-way", mechanism="CHECK", constraint="decision_grade_kind_shape",
+         defining_delta="s36-decision-grade.sql",
+         reason="nullable, legal only on kind='decision' rows, no enum/CHECK on the value itself "
+                "(s36 header, verbatim: 'the kernel stores a word; which words matter is "
+                "deployment policy') -- one-way forecloses it appearing on a non-decision row, "
+                "it does not demand one on every decision row."),
+    dict(column="work_violation_class", kinds=("work_violation_disposition",),
+         arity="two-way", mechanism="CHECK", constraint="work_violation_class_kind_shape",
+         defining_delta="s37-violation-disposition.sql",
+         reason="which work_item_violations arm (e.g. orphaned_by_retraction, dependency_cycle) "
+                "the disposition answers -- legal and REQUIRED exactly on the new kind, an iff "
+                "like work_slug/work_title/work_depends_on/work_resolution."),
+    dict(column="work_violation_target_id", kinds=("work_violation_disposition",),
+         arity="two-way", mechanism="CHECK", constraint="work_violation_target_id_kind_shape",
+         defining_delta="s37-violation-disposition.sql",
+         reason="the answered violations-view row's target_id (the violating act's own row id, "
+                "or the slug's own work_opened row id for the five slug-keyed arms) -- legal and "
+                "REQUIRED exactly on the new kind, same iff shape as work_violation_class."),
+    dict(column="work_violation_witness", kinds=("work_violation_disposition",),
+         arity="one-way", mechanism="CHECK", constraint="work_violation_witness_kind_shape",
+         defining_delta="s37-violation-disposition.sql",
+         reason="for work_resolution='reissued', the cited successor row id -- NULLABLE even "
+                "when reissued (s37 element 4: warns, never refused; the kernel cannot verify "
+                "successor equivalence), so one-way forecloses it appearing on a NON-"
+                "work_violation_disposition row only, mirroring work_witness/work_violation_"
+                "witness's own sibling shapes one column over."),
     dict(column="regards", kinds=("review",),
          arity="two-way", mechanism="trigger", constraint=None,
          defining_delta="s15-schema.sql",
@@ -175,14 +258,20 @@ MANIFEST = [
                 "express that. Logically two-way (kind='review' iff regards IS NOT NULL): the "
                 "trigger's first IF raises when kind='review' AND regards IS NULL, its ELSIF "
                 "raises when kind<>'review' AND regards IS NOT NULL."),
-    dict(column="work_review_disposition", kinds=("work_closed",),
+    dict(column="work_review_disposition", kinds=("work_closed", "work_violation_disposition"),
          arity="two-way", mechanism="trigger", constraint=None,
-         defining_delta="s29-obligation-item-key-and-typed-close.sql (sec-10 epoch amendment)",
+         defining_delta="s29-obligation-item-key-and-typed-close.sql (sec-10 epoch amendment; "
+                         "kinds widened by s37-violation-disposition.sql)",
          reason="WAS a table CHECK (work_review_disposition_kind_shape) until the sec-10 "
                 "amendment made the two-way correlation EPOCH-GATED (grandfathers pre-amendment "
                 "rows) -- a CHECK cannot consult migration_epoch, a different table, so the "
                 "correlation moved into validate_work_item()'s trigger clause. The old CHECK's "
-                "DROP CONSTRAINT IF EXISTS is kept in s29 as idempotent cleanup, never re-added."),
+                "DROP CONSTRAINT IF EXISTS is kept in s29 as idempotent cleanup, never re-added. "
+                "s37's validate_work_item_disposition() applies the SAME "
+                "IS NULL-raises-refusal check to work_violation_disposition rows (its own line "
+                "'r.work_review_disposition IS NULL THEN RAISE...') -- kinds widened here to "
+                "record that, though (per this row's own mechanism=trigger) no catalog CHECK "
+                "verifies it; the trigger source is the actual enforcement, same as before."),
 ]
 MANIFEST_BY_COLUMN = {row["column"]: row for row in MANIFEST}
 assert len(MANIFEST_BY_COLUMN) == len(MANIFEST), "duplicate column in MANIFEST -- SSOT violated"
@@ -266,6 +355,14 @@ _ARRAY_ELEM_RE = re.compile(r"'([^']+)'")
 _TWO_WAY_RE = re.compile(r"= \((\w+) IS NOT NULL\)")
 _ONE_WAY_A_RE = re.compile(r"\((\w+) IS NULL\) OR \(kind")   # col IS NULL OR kind = ...
 _ONE_WAY_B_RE = re.compile(r"kind[^()]*\)\)?\) OR \((\w+) IS NULL\)")  # kind = ... OR col IS NULL
+# s37's work_resolution_check, witnessed live once the CHAIN below was extended through s37: a
+# VALUE-VOCABULARY CHECK partitioned by kind (`col IS NULL OR (kind = 'K1' AND col = ANY(vals1))
+# OR (kind = 'K2' AND col = ANY(vals2))`) -- matched generically on shape (a `kind = '<literal>'`
+# branch AND-combined with a `col = ANY(...)` membership test on the SAME check), never by
+# constraint name. See module docstring's NOT IN SCOPE section for why this is a distinct concern
+# from the (kind, column, arity) SHAPE the two regexes above classify, not a competing shape for
+# the same column.
+_VOCAB_PARTITION_RE = re.compile(r"\(kind = '[^']+'[^()]*\)\s+AND\s+\(\w+ = ANY")
 
 
 def _extract_kinds(defn: str) -> tuple[str, ...]:
@@ -288,6 +385,16 @@ def classify_kind_shape(conname: str, defn: str):
         # a pure kind-VOCABULARY CHECK (e.g. ledger_kind_check's `kind = ANY (ARRAY[...])`) --
         # constrains kind's own legal values, correlates it with no OTHER column's nullability,
         # so it is not a "shape" CHECK in F5's sense at all. Out of this manifest's scope.
+        return None
+    if _VOCAB_PARTITION_RE.search(defn):
+        # a VALUE-VOCABULARY CHECK partitioned by kind (s37's work_resolution_check) -- carries
+        # its own nullable-escape disjunct ("col IS NULL OR ...") so it does NOT skip on the
+        # branch above, but its per-branch AND-combination of a `kind = '<literal>'` test with a
+        # `col = ANY(...)` membership test means it constrains WHICH VALUES are legal per kind,
+        # not WHETHER the column may be non-NULL per kind -- a different concern from the (kind,
+        # column, arity) SHAPE this manifest tracks, one level below a shape this same column
+        # already carries its own MANIFEST row for. Out of this manifest's scope (module
+        # docstring's NOT IN SCOPE section); never silently dropped, matched generically.
         return None
     kinds = _extract_kinds(defn)
     if not kinds:

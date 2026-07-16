@@ -1757,21 +1757,39 @@ SQL
 SQL
         )
         if [ "$child_state" = "closed" ]; then
-          child_target=$(psql -h "$PGHOST" -d "$PGDB" -tAq -v slug="$child" <<SQL
-            SET ROLE ${ROLE};
-            SET search_path = ${SCHEMA}, ${KERNEL};
-            SELECT target_id FROM ${SCHEMA}.work_item_violations
-            WHERE violation = 'orphaned_by_retraction' AND slug = :'slug' LIMIT 1;
+          # A closed child's slug can carry MULTIPLE live orphaned_by_retraction rows (e.g. a
+          # parent-edge orphan and a separate orphaned claim/edge on the same slug) -- walk to a
+          # bounded fixpoint the same way the OPEN-child branch below does (element 6), rather
+          # than disposing of a single nondeterministic LIMIT 1 row and silently leaving the rest
+          # as debt.
+          iter=0
+          while :; do
+            child_target=$(psql -h "$PGHOST" -d "$PGDB" -tAq -v slug="$child" <<SQL
+              SET ROLE ${ROLE};
+              SET search_path = ${SCHEMA}, ${KERNEL};
+              SELECT target_id FROM ${SCHEMA}.work_item_violations
+              WHERE violation = 'orphaned_by_retraction' AND slug = :'slug'
+              ORDER BY target_id LIMIT 1;
 SQL
-          )
-          if [ -z "$child_target" ]; then
-            echo "led work supersede-cascade: '${child}' is closed but no orphaned_by_retraction" >&2
-            echo "  violation surfaced for it -- skipping (already answered, or nothing to answer)." >&2
-            continue
-          fi
-          ./led work resolve-violation "$child_target" retired \
-            "child closed and settled at cascade time (supersede-cascade, parent superseded ${old_slug} -> ${new_slug})" \
-            --review-deferred
+            )
+            if [ -z "$child_target" ]; then
+              if [ "$iter" -eq 0 ]; then
+                echo "led work supersede-cascade: '${child}' is closed but no orphaned_by_retraction" >&2
+                echo "  violation surfaced for it -- skipping (already answered, or nothing to answer)." >&2
+              fi
+              break
+            fi
+            iter=$((iter + 1))
+            if [ "$iter" -gt 20 ]; then
+              echo "led work supersede-cascade: REFUSED -- the closed-child orphan disposal for" >&2
+              echo "  '${child}' did not converge after 20 steps -- refusing rather than looping" >&2
+              echo "  forever. Repair the remainder by hand (led work resolve-violation ...)." >&2
+              exit 1
+            fi
+            ./led work resolve-violation "$child_target" retired \
+              "child closed and settled at cascade time (supersede-cascade, parent superseded ${old_slug} -> ${new_slug})" \
+              --review-deferred
+          done
         else
           new_child="${child}--via-${new_slug}"
           child_open_id=$(psql -h "$PGHOST" -d "$PGDB" -tAq -v slug="$child" <<SQL

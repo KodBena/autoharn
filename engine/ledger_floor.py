@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-06T05:35:36Z
-#   last-change: 2026-07-16T09:52:40Z
+#   last-change: 2026-07-16T10:15:11Z
 #   contributors: 37017f46/main, be693afb/main, a857c93d/main, 9a17b6b9/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -281,7 +281,13 @@ def _wi_quote(col: str) -> str:
     for ANY target, independent of this delta's own content). Fixed to the SAME branch: bare when
     `col` is non-empty, starts with a lowercase letter, and contains only lowercase letters,
     digits, and underscores (COALESCE/empty maps to the bare constant `none`, matching `_atom`'s
-    own empty-string case); quoted-string otherwise, same escaping as before."""
+    own empty-string case); quoted-string otherwise, same escaping as before. The three sibling
+    files carrying this same byte-identical 'independent mirror' comment (engine/ordering_floor.py
+    `_quote`, engine/preamble_floor.py `_atom_quote`, engine/contemp_floor.py `_atom_quote`) were
+    checked and are NOT affected by this same defect: each one's own EDB counterpart quotes
+    unconditionally on both sides (no bare-when-safe branch to diverge from), so the asymmetry
+    fixed here was specific to `ledger_edb._atom`'s bare/quoted pairing, not a shape the other
+    three producers share."""
     quoted = "('\"' || replace(replace(" + col + ", '\\', '\\\\'), '\"', '\\\"') || '\"')"
     return (
         "(CASE WHEN " + col + " IS NULL OR " + col + " = '' THEN 'none' "
