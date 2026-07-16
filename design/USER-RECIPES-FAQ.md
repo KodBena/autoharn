@@ -347,6 +347,55 @@ copy-paste, no grammar to recall. An empty queue prints a short, explicit line, 
 `review:`/`review-done:` row is refused loudly at write time (see `led.tmpl`'s own teach-text);
 nothing here is a gate on WHAT you decide, only on the shape of the row that records it.
 
+## Correcting the record — supersession, and what to do about its fallout
+
+**I encoded a row wrong (wrong flag, missing refs, bad wording) — how do I fix it?**
+Supersede it: write the corrected row with `--supersedes <old-row-id>` (for work items,
+`led work open <new-slug> ... --supersedes <old-open-row-id>`). The ledger is append-only,
+so a correction is always a new, linked row — the old one leaves current truth but stays
+in history, never obscured. This is the default answer to every "I wrote it wrong"
+situation; nothing is ever edited in place, and raw SQL against the ledger is never the
+answer to a missing verb. Honest limit: superseding a work item's OPEN row permanently
+burns its slug (a deliberate, ratified choice) — the replacement needs a new slug, and
+surviving claims/edges that named the old slug must be re-issued. Grammar:
+`./led work open` usage; semantics:
+[FABLE-SUPERSESSION-UNIFORM-RETRACTION-SPEC.md](FABLE-SUPERSESSION-UNIFORM-RETRACTION-SPEC.md).
+
+**I superseded a parent item and `work violations` now shows orphan rows that nothing can
+clear — did I break the world?**
+No, and this exact situation happened in a real deployment (a composite parent superseded
+while five children — three already closed — still hung under it; every child's parent-edge
+became an `orphaned_by_retraction` violation with no discharge path, permanent blocking
+debt). Nothing was lost: the children's own rows, closes, and reviews are all intact; the
+violations are the record correctly describing dangling linkage. The gap was ours — a
+violation an operator can legally cause must have an answering act, and orphans had none.
+The fix is the s37 violation-disposition mechanism
+([FABLE-ORPHAN-DISPOSITION-SPEC.md](FABLE-ORPHAN-DISPOSITION-SPEC.md)):
+`led work resolve-violation <violating-act-id> <reissued|retired> "<basis>"` answers any
+in-force violation with a reviewed, attributable row, and `led work supersede-cascade` handles the
+live-descendants ripple in one witnessed pass. Until your world has s37: take no further
+supersession, let the stop-gate (`hooks/stop_clean_exit.py`, the Stop hook that blocks a
+session from ending while governance debt is open) handle stops via its loud fail-open
+(that valve exists for exactly this — structurally unclosable debt), and migrate when the
+delta reaches you.
+**Why is the fix a disposition act, not "supersede the whole subtree"?**
+A subtree is not closed under reference, and a settled review cannot be honestly
+re-issued (a new review row in the reviewer's name would forge their agency) — the full
+reasoning, with the witnessed evidence, is the ADR-0014 consultation record at
+[ORCH-ADR14-ORPHAN-DISPOSITION-CONSULT-2026-07-16.md](ORCH-ADR14-ORPHAN-DISPOSITION-CONSULT-2026-07-16.md).
+
+**Why does the harness insist closed and reviewed items stay correctable at all?**
+Because the record model this project imports requires it, independent of anyone's
+preference: [the safety-critical-logging BRIEF](../law/briefs/safety-critical-logging/BRIEF.md)'s
+invariant I3 (a correction is a new, linked entry that never obscures the prior state),
+I7 (every discharged obligation carries the conditions under which it ceases to hold),
+and the nuclear/aviation clusters' change-through-re-verification linkage (IEC 60880,
+DO-178C) all demand that a close — and the reviews that discharged it — can be superseded
+or lapse when their basis is defeated, append-only, with the defeat linked. The kernel
+already delivers the core of this (superseding a close re-opens the item and re-surfaces
+its review debt, witnessed in the consult above); s37's validity-bounded dispositions
+extend the same discipline to violation answers themselves.
+
 ## What this page is not
 
 This page is not an inventory (that is [ORCH-CAPABILITIES.md](../ORCH-CAPABILITIES.md), where every
