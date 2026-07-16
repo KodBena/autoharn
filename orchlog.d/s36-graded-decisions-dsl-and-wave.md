@@ -72,3 +72,13 @@ byte-capped, loudly truncated, failing open. The block to add alongside the exis
 `mechanisms.standing_decisions` `{"grades": ["durable"], "byte_cap": 4000}` — which
 grade words the hook/pickup surface, and the injection byte budget. Pure policy data,
 no mode switch.
+
+**Retro-grading the decisions that already exist (maintainer-run, after `./migrate`):**
+`tools/regrade_decisions.py` walks every in-force ungraded decision, oldest first,
+shows the full statement, and asks `[d]urable / [g]rade <word> / [s]kip / [q]uit`.
+Each accept re-issues the statement byte-verbatim through `./led --supersedes <id>
+... --grade <word>` (refs carried), confirms the swap by read-back, and prints it.
+It refuses on a non-TTY (never runs unattended) and pre-s36. Safe to quit halfway —
+already-graded rows are never re-offered. What the maintainer types from this repo:
+`python3 /home/bork/w/vdc/1/experience/autoharn/tools/regrade_decisions.py` — full
+what-you-should-see walkthrough in the module docstring.
