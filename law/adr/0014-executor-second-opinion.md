@@ -473,3 +473,5 @@ immediately following the License line above):*
 substantive content in the file, with only this dated correction note (per Rule 8, appended
 below it, exactly as this parenthetical itself is doing) following. Nothing else in this
 file changed by this correction.)*
+
+*Facet (2026-07-16): second opinions are not front-loaded — [ADR-0018](0018-consults-are-not-front-loaded.md).*

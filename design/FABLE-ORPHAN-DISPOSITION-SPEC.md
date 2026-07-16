@@ -2,7 +2,9 @@
 
 This spec fixes a witnessed trap in the work-item layer: some members of the
 `work_item_violations` view (this project's registry of governance defects on work
-items, which the Stop hook and `distance-to-clean` count as blocking debt) have NO
+items, which the Stop hook (`hooks/stop_clean_exit.py`, the gate that blocks a
+session from ending on open debt) and `distance-to-clean` (the repo-root
+debt-count verb) count as blocking debt) have NO
 act that can ever answer them — the debt is permanent by construction, and the only
 way out today is destructive (retracting the historical fact itself) or the
 stop-gate's last-resort fail-open. This spec closes the whole class: every
@@ -10,8 +12,19 @@ violations member becomes answerable by a typed, reviewed, validity-bounded
 disposition act — debt until answered, record forever. It is written for the
 maintainer (ratified, see Status) and the Sonnet builder (to implement).
 
-Status: v2, RATIFIED 2026-07-16. v1 (same day) was reviewed under
-[ADR-0014](../law/adr/0014-executor-second-opinion.md) by a fresh-context Fable
+Status: v3, RATIFIED 2026-07-16 (amendment ratified same day). v2's Element 3 bound
+disposition validity to the target row's own currency; the final review witnessed
+that this makes a violation on a superseded target row permanently unanswerable —
+eternal debt via the `led` CLI's own recommended repair. The fix semantics were
+consulted under [ADR-0018](../law/adr/0018-consults-are-not-front-loaded.md)
+(record banked verbatim:
+[ORCH-CONSULT-DEBT-SEMANTICS-2026-07-16.md](ORCH-CONSULT-DEBT-SEMANTICS-2026-07-16.md))
+and ratified by the maintainer: THE DEBT PROJECTION QUANTIFIES OVER IN-FORCE ROWS
+ONLY; THE RECORD PROJECTION QUANTIFIES OVER EVERYTHING, FOREVER. Elements 1 and 3
+and the Closure below carry the amended text.
+Prior status line: v2, RATIFIED 2026-07-16. v1 (same day) was reviewed under
+[ADR-0014](../law/adr/0014-executor-second-opinion.md) by a fresh-context [Fable](../GLOSSARY.md#post-fable-law) (the maintainer's
+primary AI-collaborator authoring model)
 instance — consultation record banked verbatim at
 [ORCH-ADR14-ORPHAN-DISPOSITION-CONSULT-2026-07-16.md](ORCH-ADR14-ORPHAN-DISPOSITION-CONSULT-2026-07-16.md)
 — with verdict RATIFY-WITH-AMENDMENTS: the mechanism was upheld, v1's closure claim
@@ -80,12 +93,25 @@ invariant I3, with I7's validity bounds built in (element 3).
   carries the same witnessed-or-deferred posture as `work_closed` — deferred lands
   in the existing review-gap path and is countersignable there. No new review
   mechanism; the existing column discipline extended to one new kind.
-- `work_item_violations` narrows: a member drops out only while an in-force
-  disposition answers it AND the disposition's checkable basis still holds
-  (element 3). Companion view `work_violation_history` returns every violation
-  ever surfaced with its disposition trail — the record is never thinner than
-  today, only no longer miscounted as debt. The new view needs its GRANT and its
-  `gates/ledger_reader_allowlist.py` classification.
+- `work_item_violations` becomes the DEBT projection, and (v3 amendment) debt
+  quantifies over in-force rows only. Every member class declares its TARGET
+  TYPING — row-targeted (the defect inheres in one ledger row: the orphan
+  sub-cases, `shipped_without_witness`, `depends_on_unknown_slug`,
+  `dangling_parent`, `closed_but_tree_defeated`) or slug-targeted (the defect
+  inheres in a configuration, the slug's `work_opened` row serving as handle:
+  `duplicate_open`, `dependency_cycle`, `parent_cycle`, `blocks_close_cycle`) —
+  and a member is debt only while its target row is in force. Retracting the
+  target row IS the answering act: the member lapses in the same read, no
+  disposition needed. A member whose target is in force drops out only while an
+  in-force disposition answers it and that disposition's basis holds (element 3).
+  Companion view `work_violation_history` — the RECORD projection named in the
+  ratification above — keeps every raw, unfiltered arm forever
+  and additionally surfaces, per lapsed member, the superseding row that answered
+  it — every defect's fate is attributable on the record: a disposition, a
+  retraction, or open debt. The new view needs its GRANT and its
+  `gates/ledger_reader_allowlist.py` classification; `work_item_violations`'
+  allowlist entry retypes to current-truth-factored, with the raw structural
+  reads living wholly in the history view's declared-history entry.
 - Sibling narrowing, RATIFIED: the view's `dependency_cycle` member narrows to
   `blocks-close` edges only. Blocks-close cycles are already refused at
   construction, so the member becomes properly vacuous (defense-in-depth); an
@@ -116,15 +142,20 @@ when both layers derive identical facts) must read AGREE on a scratch world
 exercising: an answered orphan (drops from both), an unanswered one (present in
 both), and an informs cycle (absent from both post-narrowing).
 
-### 3. Validity-bounded dispositions (consult A4 — BRIEF I7 made mechanical)
+### 3. Validity-bounded dispositions (consult A4 — BRIEF I7 made mechanical; v3-corrected)
 
 A disposition whose basis lapses must stop answering, automatically, in the same
-read: `retired` answers only while its target's own acts still read settled (if a
-child's close is later superseded — which stays fully possible — the child is live
-again and the orphan debt resurfaces); `reissued` answers only while the cited
-successor row is itself in force. This is one join in the narrowed view, not a
-procedure. Without it the spec would meet the letter of the maintainer's
-closed-items constraint and miss its spirit.
+read — where the basis is a NAMED, GENUINELY RESURRECTABLE condition: `retired` on
+a settled child answers only while that child's close stands (a later supersession
+of the close revives the child, and the orphan debt resurfaces — work items are
+resurrectable); `reissued` answers only while the cited successor row is in force.
+The v2 text additionally required the disposition's TARGET row to remain current —
+the final review witnessed that this inverts I7 for row targets: under s31's
+reinstatement-free retraction, "target retracted" is a permanent condition, so a
+bound conditioned on un-retraction is not a bound but eternal debt. v3 removes it:
+a disposition whose target row is later retracted becomes MOOT (its member already
+lapsed per element 1), never defeated. This is one join in the debt view, not a
+procedure.
 
 ### 4. CLI: `led work resolve-violation`
 
@@ -137,7 +168,7 @@ in-force disposition. `reissued` without `--witness` warns (the successor citati
 is the row's whole value) but is not refused — the kernel cannot verify successor
 equivalence, and pretending otherwise would be a lying signature.
 
-### 5. Cascade convenience: `led work supersede-cascade` (the maintainer's subtree instinct, placed correctly)
+### 5. Cascade convenience: `led work supersede-cascade`
 
 The consult refuted subtree re-issue as the PRIMITIVE (a subtree is not closed
 under reference, and settled reviews cannot be honestly re-issued — a re-issued
@@ -177,14 +208,20 @@ basis), and does not exempt violations from surfacing — every defect still app
 as debt until an attributable act answers it, and lapses back into debt if the
 answer's basis is defeated. The trap is removed; the discipline is strengthened.
 
-## Closure (post-consult posture)
+## Closure (v3 posture)
 
-v1 quantified over enumerated specimens and was refuted by the second specimen.
-v2 forecloses the class structurally instead: after s37, EVERY
-`work_item_violations` member — present and future — is answerable by the same
-disposition act, because the act's validation is "is an in-force member of the
-view", not a per-class list. A future delta adding a violations member inherits
-its discharge path by construction; what it must still state is its members'
-checkable basis conditions for element 3, and this spec is the precedent to cite.
-The residual defense-in-depth members (construction-refused, vacuous in ordinary
-operation) are covered by the same act should a trigger bypass ever mint one.
+v1 quantified over enumerated specimens and was refuted by a second specimen. v2
+quantified over "every member has the disposition act" and was refuted by the
+retracted-target case — the disposition existed but could never answer. v3 states
+the invariant the consulted literature grounds: every `work_item_violations`
+member has, at every moment, at least one REACHABLE answering act — a disposition
+while its target row is in force, the target's own retraction otherwise. The state
+"debt with no possible answering act" is unrepresentable because the debt
+predicate and the answer predicate quantify over the same world (`ledger_current`,
+the kernel view returning only non-superseded rows — current truth)
+— the v2 defect was precisely a mixed-timeline predicate, membership read from raw
+history while answers read from current truth. A future delta adding a violations
+member must declare its target typing (row- or slug-targeted) and, if it names a
+resurrectable basis condition for element 3, name it explicitly. The residual
+defense-in-depth members (construction-refused, vacuous in ordinary operation)
+inherit the same invariant by the same construction.

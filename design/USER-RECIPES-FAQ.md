@@ -378,6 +378,25 @@ supersession, let the stop-gate (`hooks/stop_clean_exit.py`, the Stop hook that 
 session from ending while governance debt is open) handle stops via its loud fail-open
 (that valve exists for exactly this — structurally unclosable debt), and migrate when the
 delta reaches you.
+**When do I reach for `resolve-violation`, and when for `supersede-cascade`?**
+They are not alternatives at the same level: `resolve-violation` is the primitive and
+`supersede-cascade` is a convenience built entirely out of it — nothing the cascade does
+is impossible by hand, and the cascade writes no special rows. Reach for
+`resolve-violation` when violations ALREADY EXIST (you are cleaning up after a
+supersession, yours or an inherited one), and always for a superseded parent's
+closed/settled children — their edges get `retired` dispositions and the children
+themselves are never touched. Reach for `supersede-cascade` when you are ABOUT TO
+supersede an item that still has live (open) descendants: it performs the whole ripple —
+re-open each live child under a new slug citing its predecessor, re-issue claims and
+edges, write each resulting orphan's `reissued` disposition — in one witnessed pass, in
+dependency order. The order is the point: done by hand, each step of the ripple mints new
+orphans one level down (by design — the mechanism is closed under that recursion), and a
+mis-ordered hand-walk leaves you resolving violations you created two steps earlier.
+Honest limit: the cascade only handles the subtree below the item you name; edges INTO
+the subtree from elsewhere still surface as orphans afterward and are yours to
+`resolve-violation` individually, because no tool can know whether an outside edge should
+follow the successor or die with the predecessor.
+
 **Why is the fix a disposition act, not "supersede the whole subtree"?**
 A subtree is not closed under reference, and a settled review cannot be honestly
 re-issued (a new review row in the reviewer's name would forge their agency) — the full
