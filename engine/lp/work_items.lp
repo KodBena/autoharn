@@ -87,19 +87,42 @@
 
 % ---- duplicate_open (invariant 2; PROVABLY VACUOUS under normal operation -- s22's
 % validate_work_item() refuses a second work_opened row for one slug at construction time; this
-% predicate is defense-in-depth, matching the SQL floor's identical member) -------------------
+% predicate is defense-in-depth, matching the SQL floor's identical member). NOT disposition-
+% narrowed: this predicate's own atom shape (Slug only) carries no target_id, and the kernel
+% view's own target_id for this class is the slug's own work_opened row id (a builder DESIGN
+% CHOICE named in s37's own header, not a fact this EDB exports as a distinct id) -- a NAMED,
+% disclosed gap (matching dependency_cycle/dangling_parent/parent_cycle/blocks_close_cycle
+% below), not a silent omission: disposing THIS class is reachable only via a trigger-bypass
+% negative-control write (s37's own closure statement), never ordinary operation. --------------
 work_duplicate_open(Slug) :- work_opened(Slug,R1), work_opened(Slug,R2), R1 != R2.
 
 % ---- shipped_without_witness (invariant 3; PROVABLY VACUOUS under normal operation -- s22's
 % work_shipped_requires_witness CHECK constraint refuses this at construction time; defense in
-% depth, matching the SQL floor's identical member) --------------------------------------------
-work_shipped_without_witness(Slug,R) :- work_closed(Slug,shipped,R), not work_witness_present(R).
+% depth, matching the SQL floor's identical member). s37 fix (reviewer defect 4, ADR-0014-review
+% round): disposition-narrowed like every OTHER id-bearing class -- w_vdisp_basis_holds/3 is
+% GENERAL (see below), not hardcoded to one class, so this predicate inherits the SAME narrowing
+% the kernel VIEW already applies uniformly, for free. --------------------------------------
+work_shipped_without_witness(Slug,R) :-
+    work_closed(Slug,shipped,R), not work_witness_present(R),
+    not w_vdisp_basis_holds(shipped_without_witness,R,_).
 
 % ---- depends_on_unknown_slug (invariant 4; GENUINELY REACHABLE -- s22 deliberately does not
-% refuse a dangling antecedent at write time) ---------------------------------------------------
+% refuse a dangling antecedent at write time). work_dep_edge/2 (below) stays the GENERAL,
+% id-less graph edge -- UNCHANGED, still the derivation of record for depends_on_unknown_slug's
+% OWN unnarrowed sibling relation (the dependency GRAPH) and for work_dep_star/2's closure. s37
+% fix (reviewer defects 1 + 4, ADR-0014-review round): the VIOLATIONS predicate reads
+% work_depends/3 directly instead of through work_dep_edge/2, so the depending act's OWN row id
+% (R) is available to key a disposition against -- mirroring the kernel fix (deps/dangling_dep
+% gain `id`, kernel/lineage/s37-violation-disposition.sql) exactly: without R, this class's
+% target_id was hardcoded NULL there and permanently unanswerable (defect 1); without the
+% narrowing join here, a disposed instance would still show up in ASP after the kernel VIEW
+% dropped it, a silent DIVERGE (defect 4). Same set as `work_dep_edge(Dependent,Antecedent) :-
+% work_depends(Dependent,Antecedent,_), not work_opened(Antecedent,_)` would produce -- only the
+% id-threading and the narrowing join are new. -------------------------------------------------
 work_dep_edge(Dependent,Antecedent) :- work_depends(Dependent,Antecedent,_).
 work_depends_on_unknown(Dependent,Antecedent) :-
-    work_dep_edge(Dependent,Antecedent), not work_opened(Antecedent,_).
+    work_depends(Dependent,Antecedent,R), not work_opened(Antecedent,_),
+    not w_vdisp_basis_holds(depends_on_unknown_slug,R,_).
 
 % ---- dependency_cycle (invariant 4, "the omega port"). work_dep_star/2 (below) is the GENERAL,
 % ALL-edge-type recursion -- UNCHANGED, byte-for-byte, still the derivation of record for the
@@ -125,41 +148,54 @@ work_dependency_cycle(F) :- work_dep_star_bc(F,F).
 edge(work_dep,Dependent,Antecedent) :- work_dep_edge(Dependent,Antecedent).
 work_dep_star_via_closure(F,D) :- star(work_dep,F,D).
 
+% ---- THE DISPOSITION-NARROWING JOIN, GENERALIZED (s37 fix, reviewer defect 4, ADR-0014-review
+% round: w_vdisp_in_force/w_vdisp_basis_holds were HARDCODED to the literal atom
+% `orphaned_by_retraction` in the first draft, while the kernel VIEW's own anti-join
+% (kernel/lineage/s37-violation-disposition.sql, the FINAL `WHERE NOT EXISTS` after raw_violations'
+% UNION ALL) is UNIFORM over every arm that carries a real target_id -- a future SQL-side member
+% gaining a real target_id (as depends_on_unknown_slug and shipped_without_witness both do, this
+% SAME fix) would then narrow in the kernel VIEW but NOT in ASP, a silent DIVERGE_DEFECT `./judge`
+% would have no way to catch on its own (the mismatch IS what judge exists to catch, but a
+% class-hardcoded join can never even LOOK at a class it wasn't told about). Fixed by making Class
+% a VARIABLE throughout -- these two predicates now match the kernel's disposition_basis_holds
+% CTE literally, clause for clause, independent of which violation class calls them. `retired`
+% holds while the target's own slug (if the target IS an opening row, work_opened(Slug,R))
+% currently reads closed (an in-force work_closed row for that slug); for every other target kind,
+% membership in the caller's own raw derivation already required `not superseded(R)`, so "settled"
+% is automatic. `reissued` holds while no witness was cited, or the cited witness row is itself
+% still in force. THREE CALLERS below (work_orphaned_by_retraction, work_depends_on_unknown above,
+% work_shipped_without_witness above) -- the NAMED, disclosed exception is duplicate_open/
+% dependency_cycle/dangling_parent/parent_cycle/blocks_close_cycle, whose atom shape carries no id
+% at all (see work_duplicate_open's own comment). --------------------------------------------
+w_vdisp_in_force(Class,R,Disp) :- w_vdisp(Class,R,Disp), not superseded(Disp).
+
+w_vdisp_basis_holds(Class,R,Disp) :-
+    w_vdisp_in_force(Class,R,Disp), w_vdisp_resolution(Disp,retired),
+    work_opened(Slug,R), work_closed(Slug,_,CloseR), not superseded(CloseR).
+w_vdisp_basis_holds(Class,R,Disp) :-
+    w_vdisp_in_force(Class,R,Disp), w_vdisp_resolution(Disp,retired),
+    not work_opened(_,R).
+w_vdisp_basis_holds(Class,R,Disp) :-
+    w_vdisp_in_force(Class,R,Disp), w_vdisp_resolution(Disp,reissued),
+    not w_vdisp_witness_present(Disp).
+w_vdisp_basis_holds(Class,R,Disp) :-
+    w_vdisp_in_force(Class,R,Disp), w_vdisp_resolution(Disp,reissued),
+    w_vdisp_witness_present(Disp), w_vdisp_witness_in_force(Disp).
+
 % ---- orphaned_by_retraction (s31; GENUINELY REACHABLE -- retracting an opening act while later
 % events survive is legal, surfaced never refused). The ONE current-truth judgment in this
 % program: an IN-FORCE (not superseded) later event whose slug has NO in-force opening act.
 % Mirrors work_item_violations' four orphan_* CTEs exactly, one atom shape (Slug, the surviving
 % row's id) covering all four sub-cases -- the row id disambiguates which event is orphaned.
-% work_orphaned_by_retraction_raw/2 is this UNCHANGED, byte-for-byte, four-rule derivation.
-% s37 -- ONE MORE JOIN, narrowing the SAME predicate name (matching s33's own w_tree_unresolved
-% narrowing precedent, "no new predicate NAME, only a changed extension"): a raw orphan drops out
-% only while an IN-FORCE disposition answers it (class=orphaned_by_retraction, target=R) AND
-% that disposition's own checkable basis still holds -- mirroring the kernel view's
-% disposition_basis_holds join exactly. `retired` holds while the target's own slug (if the
-% target IS an opening row, work_opened(Slug,R)) currently reads closed (an in-force work_closed
-% row for that slug); for every other target kind, membership in work_orphaned_by_retraction_raw
-% itself already required `not superseded(R)`, so "settled" is automatic. `reissued` holds while
-% no witness was cited, or the cited witness row is itself still in force. ----------------------
+% work_orphaned_by_retraction_raw/2 is this UNCHANGED, byte-for-byte, four-rule derivation. s37 --
+% ONE MORE JOIN, narrowing the SAME predicate name (matching s33's own w_tree_unresolved narrowing
+% precedent, "no new predicate NAME, only a changed extension"), now via the GENERALIZED
+% w_vdisp_basis_holds/3 above. -------------------------------------------------------------------
 work_opened_in_force(S) :- work_opened(S,R), not superseded(R).
 work_orphaned_by_retraction_raw(S,R) :- work_claimed(S,R),     not superseded(R), not work_opened_in_force(S).
 work_orphaned_by_retraction_raw(S,R) :- work_closed(S,_,R),    not superseded(R), not work_opened_in_force(S).
 work_orphaned_by_retraction_raw(S,R) :- work_depends(S,_,R),   not superseded(R), not work_opened_in_force(S).
 work_orphaned_by_retraction_raw(C,R) :- work_parent_edge(C,P,R), not superseded(R), not work_opened_in_force(P).
-
-w_vdisp_in_force(orphaned_by_retraction,R,Disp) :- w_vdisp(orphaned_by_retraction,R,Disp), not superseded(Disp).
-
-w_vdisp_basis_holds(orphaned_by_retraction,R,Disp) :-
-    w_vdisp_in_force(orphaned_by_retraction,R,Disp), w_vdisp_resolution(Disp,retired),
-    work_opened(Slug,R), work_closed(Slug,_,CloseR), not superseded(CloseR).
-w_vdisp_basis_holds(orphaned_by_retraction,R,Disp) :-
-    w_vdisp_in_force(orphaned_by_retraction,R,Disp), w_vdisp_resolution(Disp,retired),
-    not work_opened(_,R).
-w_vdisp_basis_holds(orphaned_by_retraction,R,Disp) :-
-    w_vdisp_in_force(orphaned_by_retraction,R,Disp), w_vdisp_resolution(Disp,reissued),
-    not w_vdisp_witness_present(Disp).
-w_vdisp_basis_holds(orphaned_by_retraction,R,Disp) :-
-    w_vdisp_in_force(orphaned_by_retraction,R,Disp), w_vdisp_resolution(Disp,reissued),
-    w_vdisp_witness_present(Disp), w_vdisp_witness_in_force(Disp).
 
 work_orphaned_by_retraction(S,R) :-
     work_orphaned_by_retraction_raw(S,R),

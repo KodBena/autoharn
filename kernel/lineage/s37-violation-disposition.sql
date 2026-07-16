@@ -57,15 +57,18 @@
 --
 -- DESIGN CHOICE, NAMED (not in the spec's own text, a builder decision within its bounds): the
 -- spec says a disposition carries "a stable key identifying the violations-view member it
--- answers (the member class + the violating act's ledger id)". Four of work_item_violations'
--- eleven arms already carry a natural row id (shipped_without_witness, the three orphan_* arms,
--- closed_but_tree_defeated); five do not (duplicate_open, dependency_cycle, dangling_parent,
--- parent_cycle, blocks_close_cycle -- all slug-keyed, no single edge/row is "the" violator of a
--- cycle or a duplicate). This delta gives EVERY member a target_id (appended column, Element 1
--- below) by using the natural row id where one exists, and the SLUG'S OWN work_opened row id
--- where it does not (always resolvable once a slug is opened, and itself the row the spec's own
--- "violating act" language most naturally lands on for a slug-shaped defect) -- filed here, not
--- buried, because it is the one place this spec's prose underdetermines the mechanism.
+-- answers (the member class + the violating act's ledger id)". FOUR of work_item_violations'
+-- NINE classes already carry a natural row id (shipped_without_witness -- the close row's own id;
+-- depends_on_unknown_slug -- the depending work_depends_on row's own id, CORRECTED in this same
+-- delta's own review round: a first draft hardcoded this one NULL, a defect named in its own
+-- fix's comment below; the three orphan_* sub-cases; closed_but_tree_defeated); FIVE do not
+-- (duplicate_open, dependency_cycle, dangling_parent, parent_cycle, blocks_close_cycle -- all
+-- slug-keyed, no single edge/row is "the" violator of a cycle or a duplicate). This delta gives
+-- EVERY member a target_id (appended column, Element 1 below) by using the natural row id where
+-- one exists, and the SLUG'S OWN work_opened row id where it does not (always resolvable once a
+-- slug is opened, and itself the row the spec's own "violating act" language most naturally
+-- lands on for a slug-shaped defect) -- filed here, not buried, because it is the one place this
+-- spec's prose underdetermines the mechanism.
 --
 -- ELEMENT 1 -- KIND + COLUMNS + THE RE-DERIVED VALIDATOR (spec sec-1).
 -- New kind `work_violation_disposition`, three new columns (work_violation_class,
@@ -127,19 +130,33 @@ ALTER TABLE :"schema".ledger ADD CONSTRAINT work_violation_witness_kind_shape CH
 
 -- REUSE, WIDENED (ADR-0012 P1 -- one home per shape, not five new columns for shapes that
 -- already have one): work_resolution's vocabulary widens with two values disjoint from
--- work_closed's own set (no ambiguity possible: a work_closed row can never read 'reissued'/
--- 'retired', a work_violation_disposition row can never read 'shipped'/'superseded'/'dropped'/
--- 'deferred' -- both enforced by the SAME single CHECK below), and its kind-shape iff widens to
--- the two-kind union. rationale (CORE, no shape column at all) carries the basis text --
--- required, refused empty, by the trigger (Element 2 below), not a CHECK.
+-- work_closed's own set, and its kind-shape iff widens to the two-kind union. rationale (CORE,
+-- no shape column at all) carries the basis text -- required, refused empty, by the trigger
+-- (Element 2 below), not a CHECK.
 ALTER TABLE :"schema".ledger DROP CONSTRAINT IF EXISTS work_resolution_kind_shape;
 ALTER TABLE :"schema".ledger ADD CONSTRAINT work_resolution_kind_shape CHECK (
     (kind IN ('work_closed', 'work_violation_disposition')) = (work_resolution IS NOT NULL));
 
+-- s37 fix (reviewer-witnessed defect 3, ADR-0014-review round): the FIRST draft's
+-- work_resolution_check was a flat 6-value union (no kind test at all) despite this file's own
+-- header claiming "disjoint... no ambiguity possible" -- a claim the CHECK never actually
+-- enforced. Reviewer witnessed BOTH illegal directions inserting live: a work_closed row reading
+-- 'reissued'/'retired', and a work_violation_disposition row reading 'shipped'/'superseded'/
+-- 'dropped'/'deferred' -- the last of which is the worse defect, because 'dropped' is not in
+-- validate_work_item_disposition()'s own retired/reissued basis-holds logic (Element 3 below):
+-- a disposition landed with work_resolution='dropped' counts for A3's uniqueness (permanently
+-- occupying the slot) but never satisfies disposition_basis_holds (neither the 'retired' nor
+-- the 'reissued' arm matches it) -- so it PERMANENTLY POISONS its (class, target_id) slot,
+-- compounding defect 2's own supersede-to-correct path (a 'dropped' row is exactly the shape
+-- the correction path in Element 2 above now handles, but the row should never have been
+-- constructible in the first place). Fixed to the work_review_ref_kind_shape PATTERN one column
+-- over -- partitioned BY KIND, not a flat union: a work_closed row's four legacy values, a
+-- work_violation_disposition row's two new values, each set illegal on the OTHER kind.
 ALTER TABLE :"schema".ledger DROP CONSTRAINT IF EXISTS work_resolution_check;
 ALTER TABLE :"schema".ledger ADD CONSTRAINT work_resolution_check CHECK (
     work_resolution IS NULL
-    OR work_resolution IN ('shipped','superseded','dropped','deferred','reissued','retired'));
+    OR (kind = 'work_closed' AND work_resolution IN ('shipped','superseded','dropped','deferred'))
+    OR (kind = 'work_violation_disposition' AND work_resolution IN ('reissued','retired')));
 
 ALTER TABLE :"schema".ledger DROP CONSTRAINT IF EXISTS work_review_ref_kind_shape;
 ALTER TABLE :"schema".ledger ADD CONSTRAINT work_review_ref_kind_shape CHECK (
@@ -192,26 +209,50 @@ AND    EXISTS (SELECT 1 FROM :"schema".discharging_attest da WHERE da.regards_id
 CREATE OR REPLACE FUNCTION :"schema".validate_work_item_disposition(r :"schema".ledger)
     RETURNS :"schema".ledger LANGUAGE plpgsql
     SET search_path = :"schema", :"kern", pg_temp AS $fn$
+DECLARE
+  prior_id bigint;
+  is_correction boolean;
 BEGIN
+  -- s37 fix (reviewer-witnessed defect 2, ADR-0014-review round): a BEFORE INSERT trigger sees
+  -- ledger_current/work_item_violations as they read BEFORE this row lands -- so a corrective
+  -- disposition that itself carries `supersedes = <the wrong disposition's own id>` could NEVER
+  -- pass either check below (the wrong disposition is still in force at read time, so the target
+  -- reads "already answered" by check (a)'s own logic, AND check (b)'s uniqueness sees the SAME
+  -- still-in-force row): A3's own text ("superseding a wrong disposition reopens the slot") was
+  -- true of the VIEW after the fact but unreachable through the ONE act meant to cause it. Fix:
+  -- resolve, ONCE, whether a disposition is CURRENTLY in force for this exact (class, target) --
+  -- `prior_id`. If `r.supersedes` names EXACTLY that row, this insert IS the correction: treat
+  -- `prior_id` as already retired for BOTH checks (the reviewer's own instruction, verbatim).
+  -- `r.supersedes` naming anything else (or nothing) changes NOTHING below -- the ordinary A3
+  -- refusal still fires for a genuine duplicate attempt.
+  SELECT lc.id INTO prior_id
+  FROM ledger_current lc
+  WHERE lc.kind = 'work_violation_disposition'
+    AND lc.work_violation_class = r.work_violation_class
+    AND lc.work_violation_target_id = r.work_violation_target_id;
+  is_correction := (prior_id IS NOT NULL AND r.supersedes = prior_id);
+
   -- Three refusals, in order:
   --   (a) the target must be an IN-FORCE work_item_violations member RIGHT NOW, established by
   --       RE-DERIVING against the view itself (a typed (violation, target_id) match), never by
-  --       parsing `detail` (consult builder note). A pre-s37 world naturally refuses at the
-  --       CLI's own live column-existence gate first (Element 4).
+  --       parsing `detail` (consult builder note) -- UNLESS this insert is itself the correction
+  --       identified above, in which case the member reads "answered" ONLY because of the row
+  --       this same insert is about to retract, so the ordinary re-derivation is bypassed. A
+  --       pre-s37 world naturally refuses at the CLI's own live column-existence gate first
+  --       (Element 4).
   --   (b) IN-FORCE-SCOPED uniqueness (consult A3): a second disposition on the SAME
-  --       (class, target_id) is refused only while a PRIOR one is still in force (reads
-  --       ledger_current) -- superseding a wrong disposition reopens the slot.
+  --       (class, target_id) is refused only while a PRIOR one is still in force AND this insert
+  --       is not that prior one's own correction (reads ledger_current) -- superseding a wrong
+  --       disposition reopens the slot.
   --   (c) the basis (rationale) must be stated, non-blank.
-  IF NOT EXISTS (SELECT 1 FROM work_item_violations v
-                 WHERE v.violation = r.work_violation_class
-                   AND v.target_id = r.work_violation_target_id) THEN
+  IF NOT is_correction
+     AND NOT EXISTS (SELECT 1 FROM work_item_violations v
+                     WHERE v.violation = r.work_violation_class
+                       AND v.target_id = r.work_violation_target_id) THEN
     RAISE EXCEPTION 'Ledger policy: work_violation_disposition (class ''%'', target %) refused — that is not currently an in-force work_item_violations member (re-derived against the view itself, never parsed from display text). Either the defect was never real, has already lapsed on its own, or is already answered by an in-force disposition (see work_violation_history for the trail). Run ./led work violations to see what is currently answerable.', r.work_violation_class, r.work_violation_target_id;
   END IF;
-  IF EXISTS (SELECT 1 FROM ledger_current lc
-             WHERE lc.kind = 'work_violation_disposition'
-               AND lc.work_violation_class = r.work_violation_class
-               AND lc.work_violation_target_id = r.work_violation_target_id) THEN
-    RAISE EXCEPTION 'Ledger policy: work_violation_disposition (class ''%'', target %) refused — an IN-FORCE disposition already answers this member (s37 consult A3: uniqueness is in-force-scoped, not raw-history). If that disposition was wrong, SUPERSEDE it first (--supersedes <its-row-id>) — superseding reopens the slot; a raw-history uniqueness read would re-mint the slug-burn trap this spec exists to remove.', r.work_violation_class, r.work_violation_target_id;
+  IF NOT is_correction AND prior_id IS NOT NULL THEN
+    RAISE EXCEPTION 'Ledger policy: work_violation_disposition (class ''%'', target %) refused — an IN-FORCE disposition (row %) already answers this member (s37 consult A3: uniqueness is in-force-scoped, not raw-history). If that disposition was wrong, SUPERSEDE it: retry this SAME act with --supersedes %  — superseding reopens the slot; a raw-history uniqueness read would re-mint the slug-burn trap this spec exists to remove.', r.work_violation_class, r.work_violation_target_id, prior_id, prior_id;
   END IF;
   IF r.rationale IS NULL OR btrim(r.rationale) = '' THEN
     RAISE EXCEPTION 'Ledger policy: work_violation_disposition requires a non-blank basis (the rationale field) — "what became of this defect?" is the whole point of the record (spec: "a free-text basis"). Retry with a stated basis.';
@@ -295,14 +336,22 @@ WITH RECURSIVE
   ),
   -- s37: dependency_cycle NARROWS to blocks-close edges only -- reads work_edge_blocks_close
   -- (s32's single home of the RAW s30 blocks-close edge relation) instead of ALL work_depends_on
-  -- rows. depends_on_unknown_slug's OWN `deps`/`dangling_dep` (below, unchanged) still reads every
-  -- edge type -- this narrowing is scoped to dependency_cycle alone, per the ratified sibling fix.
+  -- rows. depends_on_unknown_slug's OWN `deps`/`dangling_dep` (below) still reads every edge
+  -- type, unnarrowed -- this narrowing is scoped to dependency_cycle alone, per the ratified
+  -- sibling fix.
+  -- s37 fix (reviewer-witnessed defect 1, ADR-0014-review round): `deps` gains the depending
+  -- act's OWN ledger id -- the SAME "violating act's own row" reading target_id already uses
+  -- everywhere else an id is natural (shipped_without_witness/orphan_*). Without it,
+  -- depends_on_unknown_slug's target_id was hardcoded NULL below, and NULL never
+  -- equality-matches (target_id = target_id is never true when both sides are NULL) -- the class
+  -- was permanently unanswerable, directly violating amendment A1's closure claim ("EVERY
+  -- work_item_violations member... is answerable").
   deps AS (
-    SELECT work_slug AS dependent, work_depends_on AS antecedent
+    SELECT work_slug AS dependent, work_depends_on AS antecedent, id
     FROM :"schema".ledger WHERE kind = 'work_depends_on'
   ),
   dangling_dep AS (
-    SELECT d.dependent AS slug, d.antecedent
+    SELECT d.dependent AS slug, d.antecedent, d.id
     FROM deps d
     WHERE NOT EXISTS (SELECT 1 FROM :"schema".ledger o
                        WHERE o.kind = 'work_opened' AND o.work_slug = d.antecedent)
@@ -398,7 +447,7 @@ WITH RECURSIVE
     UNION ALL
     SELECT 'shipped_without_witness', slug, 'ledger row ' || id, id FROM shipped_no_witness
     UNION ALL
-    SELECT 'depends_on_unknown_slug', slug, 'depends on ' || antecedent, NULL::bigint FROM dangling_dep
+    SELECT 'depends_on_unknown_slug', slug, 'depends on ' || antecedent, id FROM dangling_dep
     UNION ALL
     SELECT 'dependency_cycle', slug, NULL,
            (SELECT id FROM :"schema".ledger WHERE kind = 'work_opened' AND work_slug = dep_cycle.slug) AS target_id
@@ -494,12 +543,14 @@ WITH RECURSIVE
     WHERE kind = 'work_closed' AND work_resolution = 'shipped'
       AND (work_witness IS NULL OR btrim(work_witness) = '')
   ),
+  -- s37 fix (reviewer-witnessed defect 1, ADR-0014-review round; same fix as the view's own
+  -- `deps`/`dangling_dep` above -- see that CTE's own comment for why `id` is required).
   deps AS (
-    SELECT work_slug AS dependent, work_depends_on AS antecedent
+    SELECT work_slug AS dependent, work_depends_on AS antecedent, id
     FROM :"schema".ledger WHERE kind = 'work_depends_on'
   ),
   dangling_dep AS (
-    SELECT d.dependent AS slug, d.antecedent FROM deps d
+    SELECT d.dependent AS slug, d.antecedent, d.id FROM deps d
     WHERE NOT EXISTS (SELECT 1 FROM :"schema".ledger o
                        WHERE o.kind = 'work_opened' AND o.work_slug = d.antecedent)
   ),
@@ -585,7 +636,7 @@ WITH RECURSIVE
     UNION ALL
     SELECT 'shipped_without_witness', slug, 'ledger row ' || id, id FROM shipped_no_witness
     UNION ALL
-    SELECT 'depends_on_unknown_slug', slug, 'depends on ' || antecedent, NULL::bigint FROM dangling_dep
+    SELECT 'depends_on_unknown_slug', slug, 'depends on ' || antecedent, id FROM dangling_dep
     UNION ALL
     SELECT 'dependency_cycle', slug, NULL,
            (SELECT id FROM :"schema".ledger WHERE kind = 'work_opened' AND work_slug = dep_cycle.slug)

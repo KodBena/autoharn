@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-06T05:35:36Z
-#   last-change: 2026-07-16T06:35:24Z
+#   last-change: 2026-07-16T07:19:22Z
 #   contributors: 37017f46/main, be693afb/main, a857c93d/main, 9a17b6b9/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -341,11 +341,26 @@ def work_item_floor_atoms(name: str) -> set[str]:
         if t.has_col("edge_type") else
         "dep_cycle AS (SELECT NULL::text AS slug WHERE false)"
     )
-    # s37: a raw orphan drops out only while an in-force disposition answers it AND that
+    # s37: a raw arm drops out only while an in-force disposition answers it AND that
     # disposition's basis still holds -- mirroring the kernel view's disposition_basis_holds join
     # (see kernel/lineage/s37-violation-disposition.sql, same predicate, independently re-derived
     # here per ADR-0000 I6's do-not-abstract-across-producers posture). Column-gated: a pre-s37
-    # target has no work_violation_class column, so `orphans` stays exactly its pre-s37 shape.
+    # target has no work_violation_class column, so every arm stays exactly its pre-s37 shape.
+    #
+    # s37 fix (reviewer defect 4, ADR-0014-review round): the FIRST draft hardcoded this filter's
+    # class literal to 'orphaned_by_retraction' and applied it to ONE arm (`orphans`), while the
+    # kernel VIEW's own anti-join is UNIFORM over every arm carrying a real target_id -- a class
+    # gaining a real target_id elsewhere (shipped_without_witness always had one; depends_on_
+    # unknown_slug gains one in THIS SAME fix round, defect 1) would then narrow in the kernel
+    # VIEW but not in this floor, an undetectable-by-construction DIVERGE_DEFECT (the mismatch IS
+    # what judge exists to catch; a class-hardcoded filter can't even look at a class it wasn't
+    # told about). `_disposition_filter(class_literal, id_expr)` below is the SAME SQL fragment
+    # parameterized instead of duplicated -- applied to every arm whose ASP-comparable atom
+    # carries a real row id (orphans/orphan_children, shipped_no_witness, dangling_dep -- the
+    # SAME three the .lp twin's now-generalized w_vdisp_basis_holds/3 covers). duplicate_open/
+    # dependency_cycle/dangling_parent/parent_cycle/blocks_close_cycle are NOT covered -- their
+    # ASP-comparable atoms carry no id argument at all (a pre-existing atom-shape limit, not
+    # something this fix changes), named here rather than silently left unaddressed.
     disposition_join = ("""
       dispositions AS (
         SELECT id AS disp_id, work_violation_class AS class, work_violation_target_id AS target_id,
@@ -369,11 +384,14 @@ def work_item_floor_atoms(name: str) -> set[str]:
           ))
       )"""
                         if t.has_col("work_violation_class") else "")
-    orphans_filter = ("""
-        AND NOT EXISTS (
-          SELECT 1 FROM disposition_basis_holds dbh
-          WHERE dbh.class = 'orphaned_by_retraction' AND dbh.target_id = lc.id
-        )""" if t.has_col("work_violation_class") else "")
+
+    def _disposition_filter(class_literal: str, id_expr: str) -> str:
+        if not t.has_col("work_violation_class"):
+            return ""
+        return (f"AND NOT EXISTS (SELECT 1 FROM disposition_basis_holds dbh "
+                f"WHERE dbh.class = '{class_literal}' AND dbh.target_id = {id_expr})")
+
+    orphans_filter = _disposition_filter("orphaned_by_retraction", "lc.id")
     # the child-orphan arm needs work_parent (s28) -- column-gated so a pre-s28 target (e.g. the
     # s22 fixture's own probe chain) degrades to the three event-kind arms, the same
     # declared-exclusion posture the amends/answers CTEs above already take. The ASP twin
@@ -394,18 +412,25 @@ def work_item_floor_atoms(name: str) -> set[str]:
       dup_open AS (
         SELECT slug FROM opens GROUP BY slug HAVING count(*) > 1
       ),
+      -- s37 fix (defect 4): shipped_without_witness already carried a real id (the close row's
+      -- own) -- narrowed here for the first time, uniformly with the other id-bearing arms.
       shipped_no_witness AS (
         SELECT work_slug AS slug, id FROM {rel}
         WHERE kind = 'work_closed' AND work_resolution = 'shipped'
           AND (work_witness IS NULL OR btrim(work_witness) = '')
+          {_disposition_filter("shipped_without_witness", "id")}
       ),
+      -- s37 fix (defect 1): `deps` gains the depending act's OWN id -- see kernel/lineage/
+      -- s37-violation-disposition.sql's identical fix for why (NULL never equality-matches, so
+      -- depends_on_unknown_slug was permanently unanswerable without it).
       deps AS (
-        SELECT work_slug AS dependent, work_depends_on AS antecedent FROM {rel}
+        SELECT work_slug AS dependent, work_depends_on AS antecedent, id FROM {rel}
         WHERE kind = 'work_depends_on'
       ),
       dangling_dep AS (
-        SELECT d.dependent AS slug, d.antecedent FROM deps d
+        SELECT d.dependent AS slug, d.antecedent, d.id FROM deps d
         WHERE NOT EXISTS (SELECT 1 FROM opens o WHERE o.slug = d.antecedent)
+          {_disposition_filter("depends_on_unknown_slug", "d.id")}
       ),
       reach(start_slug, cur) AS (
         SELECT dependent, antecedent FROM deps

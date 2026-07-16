@@ -1483,19 +1483,21 @@ SQL
       witness=""
       review_witness=""
       review_deferred=""
+      supersedes=""
       args=()
       while [ $# -gt 0 ]; do
         case "$1" in
           --witness) witness="${2:-}"; shift 2 ;;
           --review-witness) review_witness="${2:-}"; shift 2 ;;
           --review-deferred) review_deferred="1"; shift ;;
+          --supersedes) supersedes="${2:-}"; shift 2 ;;
           --*)
             # SAME refuse-unknown-flags idiom as `work open`/`work close` above -- an
             # unrecognized flag is refused, never silently absorbed into the basis text.
             echo "led work resolve-violation: REFUSED -- unrecognized flag '$1'." >&2
             echo "  led work resolve-violation <violating-act-id> <reissued|retired> \"<basis>\"" >&2
             echo "    accepts only: --witness <successor-ref>, --review-witness <ref>," >&2
-            echo "    --review-deferred. NOTHING was written." >&2
+            echo "    --review-deferred, --supersedes <old-disposition-id>. NOTHING was written." >&2
             exit 1
             ;;
           *) args+=("$1"); shift ;;
@@ -1505,6 +1507,7 @@ SQL
       usage_resolve_violation() {
         echo "usage: led work resolve-violation <violating-act-id> <reissued|retired> \"<basis>\"" >&2
         echo "         (--review-witness <ref> | --review-deferred) [--witness <successor-ref>]" >&2
+        echo "         [--supersedes <old-disposition-id>]" >&2
         echo "       <violating-act-id> is a target_id from 'led work violations' -- the row is" >&2
         echo "       RE-DERIVED against work_item_violations at write time (never parsed from" >&2
         echo "       display text); refused if it is not currently an in-force member." >&2
@@ -1514,8 +1517,14 @@ SQL
         echo "       EXACTLY ONE of --review-witness/--review-deferred is REQUIRED (consult A5:" >&2
         echo "       a disposition removes stop-gate debt, same discipline as work_closed)." >&2
         echo "       Refused if <violating-act-id> already has an IN-FORCE disposition (consult" >&2
-        echo "       A3: uniqueness is in-force-scoped -- supersede the wrong one first to" >&2
-        echo "       reopen the slot, never a raw-history read)." >&2
+        echo "       A3: uniqueness is in-force-scoped) UNLESS --supersedes names EXACTLY that" >&2
+        echo "       disposition's own row id -- that is how you CORRECT a wrong disposition:" >&2
+        echo "       re-run this SAME command with the corrected reissued/retired/basis/review" >&2
+        echo "       and --supersedes <the wrong disposition's row id> (printed by 'led work" >&2
+        echo "       violations'/'led work resolve-violation' itself on the ORIGINAL write, or" >&2
+        echo "       read via work_violation_history). A raw-history uniqueness read would re-mint" >&2
+        echo "       the slug-burn trap this spec exists to remove -- this is the one, in-force-" >&2
+        echo "       scoped exception, s37 consult A3." >&2
       }
       if [ $# -lt 3 ]; then
         usage_resolve_violation
@@ -1545,34 +1554,75 @@ SQL
         echo "  but the disposition's checkable basis (element 3/A4) then holds VACUOUSLY (never" >&2
         echo "  lapses on its own). Prefer citing the successor row id when one exists." >&2
       fi
-      # RE-DERIVE the violation class for <violating-act-id> against work_item_violations itself
-      # (never parsed from display text) -- the CLI's own convenience lookup, mirroring the exact
-      # re-derivation the kernel trigger performs a second time at INSERT.
-      class_count=$(psql -h "$PGHOST" -d "$PGDB" -tAq -v tid="$target_id" <<SQL
+      # RE-DERIVE the violation class for <violating-act-id>. TWO sources, chosen by whether
+      # --supersedes was given (s37 fix, ADR-0014-review round, defect 2's own CLI half -- there
+      # was NO CLI path to a correction at all before this fix, a self-application violation on
+      # its own):
+      #   NO --supersedes (the ordinary construction path): class comes from work_item_violations
+      #   itself (never parsed from display text) -- the target must be a CURRENTLY UNANSWERED
+      #   member, mirroring the kernel trigger's own re-derivation.
+      #   --supersedes <old-id> (the CORRECTION path): the target is, by definition, CURRENTLY
+      #   ANSWERED by <old-id> (that is what makes it wrong and worth correcting) -- so it will
+      #   NOT appear in work_item_violations at all, and reading class from there would refuse
+      #   every correction before the kernel's own (now-fixed) supersedes logic is even reached.
+      #   Instead, class is read off the OLD disposition row named by --supersedes itself
+      #   (ledger_current, in force), cross-checked that ITS OWN target_id matches the one given
+      #   here -- a mismatch means --supersedes named the wrong row, refused with a teach-text,
+      #   never silently substituted.
+      if [ -n "$supersedes" ]; then
+        class_row=$(psql -h "$PGHOST" -d "$PGDB" -tAq -F'|' -v sid="$supersedes" <<SQL
+        SET ROLE ${ROLE};
+        SET search_path = ${SCHEMA}, ${KERNEL};
+        SELECT work_violation_class, work_violation_target_id
+        FROM ${SCHEMA}.ledger_current
+        WHERE id = :'sid'::bigint AND kind = 'work_violation_disposition';
+SQL
+        )
+        if [ -z "$class_row" ]; then
+          echo "led work resolve-violation: REFUSED -- --supersedes ${supersedes} does not name a" >&2
+          echo "  currently in-force work_violation_disposition row (already superseded, wrong" >&2
+          echo "  kind, or does not exist). Run 'led work violations' or read" >&2
+          echo "  work_violation_history to find the row you mean." >&2
+          exit 1
+        fi
+        class="${class_row%%|*}"
+        old_target="${class_row##*|}"
+        if [ "$old_target" != "$target_id" ]; then
+          echo "led work resolve-violation: REFUSED -- --supersedes ${supersedes} answers target" >&2
+          echo "  ${old_target}, not ${target_id} (this command's own first argument) -- a" >&2
+          echo "  correction must name the SAME target its predecessor answered. Retry with" >&2
+          echo "  <violating-act-id> = ${old_target}, or with the correct --supersedes id." >&2
+          exit 1
+        fi
+      else
+        class_count=$(psql -h "$PGHOST" -d "$PGDB" -tAq -v tid="$target_id" <<SQL
         SET ROLE ${ROLE};
         SET search_path = ${SCHEMA}, ${KERNEL};
         SELECT count(DISTINCT violation) FROM work_item_violations WHERE target_id = :'tid'::bigint;
 SQL
-      )
-      if [ "$class_count" = "0" ]; then
-        echo "led work resolve-violation: REFUSED -- target ${target_id} is not currently an" >&2
-        echo "  in-force work_item_violations member (re-derived against the view itself). Run" >&2
-        echo "  './led work violations' to see what is currently answerable." >&2
-        exit 1
-      fi
-      if [ "$class_count" != "1" ]; then
-        echo "led work resolve-violation: REFUSED -- target ${target_id} matches MORE THAN ONE" >&2
-        echo "  work_item_violations class at once (${class_count}) -- this CLI convenience" >&2
-        echo "  cannot disambiguate; write the work_violation_disposition row directly via SQL," >&2
-        echo "  naming the intended class explicitly." >&2
-        exit 1
-      fi
-      class=$(psql -h "$PGHOST" -d "$PGDB" -tAq -v tid="$target_id" <<SQL
+        )
+        if [ "$class_count" = "0" ]; then
+          echo "led work resolve-violation: REFUSED -- target ${target_id} is not currently an" >&2
+          echo "  in-force work_item_violations member (re-derived against the view itself). Run" >&2
+          echo "  './led work violations' to see what is currently answerable. (If you are" >&2
+          echo "  CORRECTING a wrong disposition rather than answering a fresh violation, add" >&2
+          echo "  --supersedes <the wrong disposition's row id>.)" >&2
+          exit 1
+        fi
+        if [ "$class_count" != "1" ]; then
+          echo "led work resolve-violation: REFUSED -- target ${target_id} matches MORE THAN ONE" >&2
+          echo "  work_item_violations class at once (${class_count}) -- this CLI convenience" >&2
+          echo "  cannot disambiguate; write the work_violation_disposition row directly via SQL," >&2
+          echo "  naming the intended class explicitly." >&2
+          exit 1
+        fi
+        class=$(psql -h "$PGHOST" -d "$PGDB" -tAq -v tid="$target_id" <<SQL
         SET ROLE ${ROLE};
         SET search_path = ${SCHEMA}, ${KERNEL};
         SELECT DISTINCT violation FROM work_item_violations WHERE target_id = :'tid'::bigint;
 SQL
-      )
+        )
+      fi
       if [ -n "$review_witness" ]; then
         disposition="witnessed"; review_ref="$review_witness"
       else
@@ -1581,14 +1631,17 @@ SQL
       exec psql -h "$PGHOST" -d "$PGDB" -v ON_ERROR_STOP=1 \
         -v class="$class" -v tid="$target_id" -v resolution="$resolution" -v basis="$basis" \
         -v witness="$witness" -v disposition="$disposition" -v review_ref="$review_ref" \
+        -v supersedes="$supersedes" \
         -v statement="work_violation_disposition: ${class} target ${target_id} (${resolution})" <<SQL
       SET ROLE ${ROLE};
       SET search_path = ${SCHEMA}, ${KERNEL};
       INSERT INTO ${SCHEMA}.ledger
         (kind, work_violation_class, work_violation_target_id, work_resolution,
-         work_violation_witness, rationale, work_review_disposition, work_review_ref, statement)
+         work_violation_witness, rationale, work_review_disposition, work_review_ref, supersedes,
+         statement)
       VALUES ('work_violation_disposition', :'class', :'tid'::bigint, :'resolution',
-              NULLIF(:'witness', '')::bigint, :'basis', :'disposition', NULLIF(:'review_ref', ''), :'statement');
+              NULLIF(:'witness', '')::bigint, :'basis', :'disposition', NULLIF(:'review_ref', ''),
+              NULLIF(:'supersedes', '')::bigint, :'statement');
 SQL
       ;;
     supersede-cascade)
@@ -1890,8 +1943,10 @@ SQL
       echo "       led work violations    (work_item_violations)" >&2
       echo "       led work resolve-violation <violating-act-id> <reissued|retired> \"<basis>\"" >&2
       echo "         (--review-witness <ref> | --review-deferred) [--witness <successor-ref>]" >&2
+      echo "         [--supersedes <old-disposition-id>]" >&2
       echo "         (kernel/lineage/s37-violation-disposition.sql -- answers a work_item_violations" >&2
-      echo "         member; debt until answered, record forever)" >&2
+      echo "         member; debt until answered, record forever; --supersedes corrects a wrong" >&2
+      echo "         disposition, consult A3)" >&2
       echo "       led work supersede-cascade <old-slug> <new-slug> <title...>" >&2
       echo "         [--parent <grandparent-slug>] [--discharge composite] [--refs <ref>]" >&2
       echo "         (supersedes <old-slug>, cascades its direct children -- retired for closed," >&2
