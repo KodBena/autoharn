@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-16T03:29:13Z
-#   last-change: 2026-07-16T03:32:01Z
+#   last-change: 2026-07-16T04:03:14Z
 #   contributors: 9a17b6b9/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -70,11 +70,15 @@ OPERATOR WALKTHROUGH -- what you type, what you should see
 
 ===============================================================================================
 
-DEPLOYMENT RESOLUTION -- the SAME convention tools/export_precedence.py uses (read there first):
-PICKUP_DEPLOYMENT env var, else LEDGER_DEPLOYMENT, else `<repo-root>/deployment.json` next to
-this checkout. The deployment's own `./led` shim is expected to sit in the SAME directory as its
-deployment.json (bootstrap/new-project.sh's own scaffold layout) -- this tool refuses loudly if
-it is not there rather than guessing a path or falling back to a raw INSERT.
+DEPLOYMENT RESOLUTION -- filing/deployment_resolve.py, the ONE home for this (shared with
+tools/export_precedence.py, the idiom's original source -- read that module's docstring for the
+full rationale, ledger item deployment-resolution-cwd-first): PICKUP_DEPLOYMENT env var, else
+LEDGER_DEPLOYMENT, else `$PWD/deployment.json` (the CALLER's own cwd -- the primary use case, an
+operator running this tool from their own project directory), else `<repo-root>/deployment.json`
+next to this checkout (preserves in-checkout use). The deployment's own `./led` shim is expected
+to sit in the SAME directory as its deployment.json (bootstrap/new-project.sh's own scaffold
+layout) -- this tool refuses loudly if it is not there rather than guessing a path or falling
+back to a raw INSERT.
 
 Stdlib-only, top-of-file imports (gates/no_lazy_imports.py; CLAUDE.md, "Lazy imports are BANNED").
 """
@@ -93,6 +97,8 @@ _REPO_ROOT = _HERE.parent
 sys.path.insert(0, str(_REPO_ROOT / "filing"))
 
 import deployment_record  # noqa: E402  (filing/deployment_record.py, the ONE home for the deployment.json shape)
+import deployment_resolve  # noqa: E402  (filing/deployment_resolve.py, the ONE home for CWD-FIRST
+                            # deployment.json resolution -- ledger item deployment-resolution-cwd-first)
 import standing_decisions_config  # noqa: E402  (filing/standing_decisions_config.py, the ONE home
                                    # for the grades/byte_cap defaulting logic)
 
@@ -111,16 +117,14 @@ def _refuse(message: str) -> None:
 
 
 def _load_deployment() -> tuple[deployment_record.DeploymentRecord, Path]:
-    """Resolve this project's deployment.json exactly as tools/export_precedence.py does:
-    PICKUP_DEPLOYMENT (the scaffolded-shim mechanism) first, then LEDGER_DEPLOYMENT (engine/
-    targets.py's own env override), then the repo-root default. Returns (record, resolved path)
-    -- the path's own parent directory is where this tool expects to find the deployment's own
-    `./led` shim (the scaffold's layout: deployment.json and led sit side by side)."""
-    dep_path = os.environ.get("PICKUP_DEPLOYMENT") or os.environ.get("LEDGER_DEPLOYMENT") \
-        or str(_REPO_ROOT / "deployment.json")
-    resolved = Path(dep_path).resolve()
+    """Resolve this project's deployment.json via filing/deployment_resolve.py (the ONE home,
+    shared with tools/export_precedence.py): PICKUP_DEPLOYMENT, then LEDGER_DEPLOYMENT, then
+    $PWD/deployment.json (the caller's own cwd), then this checkout's own repo-root default.
+    Returns (record, resolved path) -- the path's own parent directory is where this tool expects
+    to find the deployment's own `./led` shim (the scaffold's layout: deployment.json and led sit
+    side by side)."""
     try:
-        dep = deployment_record.load_deployment(str(resolved))
+        dep, resolved = deployment_resolve.resolve_deployment(_REPO_ROOT)
     except deployment_record.DeploymentError as e:
         _refuse(str(e))
     return dep, resolved
