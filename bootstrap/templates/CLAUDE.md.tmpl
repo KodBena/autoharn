@@ -72,7 +72,14 @@ __LAW_SECTION__
    the spec from the context at hand; an `assumption` row when you proceed on an
    inferred reading. Dispatching a subagent is a `decision` row (what is delegated,
    why). A silent investigation leaves a record that claims the session began at its
-   first write.
+   first write. If the dispatch's deliverable (a report, screenshot, or script) must
+   outlive the session, state its durable landing path in the dispatch prompt itself —
+   an ephemeral scratchpad is not a plan; a deployment lost a full audit cycle's evidence
+   exactly this way, dispatched agents told only to "report back in plain text."
+   Dispatching more than one file-mutating subagent to run concurrently requires
+   worktree isolation for each — never a shared tree; a shared-tree parallel dispatch
+   witnessed one stage's `git stash` transiently clobber a sibling stage's uncommitted
+   work (recovered only via `git fsck`).
 9. Stopping is a ledgered act. Before you stop — done, blocked, or leaving work for
    later — write the disposition a successor resumes from:
    `./led decision "stopping: <why>; stands: <what is done>; remains: <slugs/refs>"`.

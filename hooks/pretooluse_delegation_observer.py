@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-10T23:38:38Z
-#   last-change: 2026-07-14T01:46:30Z
-#   contributors: e4410ef6/main, a857c93d/main
+#   last-change: 2026-07-16T02:07:47Z
+#   contributors: e4410ef6/main, a857c93d/main, 9a17b6b9/main
 # <<< PROVENANCE-STAMP <<<
 
 """hooks/pretooluse_delegation_observer.py -- the delegation OBSERVER (Part 2, BACKLOG "Run-8
 mid-run forensics", 2026-07-11 finding 3: "investigation is ungoverned" -- 5m12s and 13 tool
 calls, including a 100-second subagent dispatch, landed ZERO ledger rows before the first
 `./led` call; no `question` row was ever filed for "the spec is missing" across the ENTIRE
-ledger, all runs). Preamble point 7 (mechanized here, observer-first): "Investigation and
+ledger, all runs). Preamble point 8 (mechanized here, observer-first): "Investigation and
 delegation are work: ledger them BEFORE doing them ... Dispatching a subagent is a `decision`
 row (what is delegated, why)." Finding 3 named the mechanization site explicitly: "the subagent
 dispatch is a machine-observable tool event, so a permit/observer at PreToolUse(Task/Agent) IS
@@ -30,13 +30,49 @@ SWITCHBOARD below):
      recognize it later without duplicating potentially-large or sensitive prompt text into a
      plaintext log).
   2. WARN (never deny -- see OBSERVER ONLY below) via a loud, non-blocking `additionalContext`
-     injection, ONLY when this world's ledger carries the s22 work-item layer AND no work item is
-     currently open+claimed -- the exact permit-to-work SHAPE `hooks/pretooluse_change_gate.py`
-     already established (`has_work_item_layer()` / `has_open_claimed_work_item()`), re-derived
-     here rather than imported (see WHY A SEPARATE RESOLUTION below), teaching the operator to
-     ledger the delegation itself as a `decision` row (preamble point 7) -- not merely to open a
-     work item, since a delegation with no stated "what/why" is the actual defect finding 3 named
-     (an OPEN+CLAIMED work item alone does not answer "what is delegated, why").
+     injection, ONLY when this world's ledger carries the s22 work-item layer, no work item is
+     currently open+claimed, AND this session has filed no `decision` row -- the exact
+     permit-to-work SHAPE `hooks/pretooluse_change_gate.py` already established
+     (`has_work_item_layer()` / `has_open_claimed_work_item()`), re-derived here rather than
+     imported (see WHY A SEPARATE RESOLUTION below), PLUS a third check
+     (`has_session_decision_row()`, HONEST-TEXT FIX below) so that EITHER stated remedy -- ledger
+     the delegation as a `decision` row, or cover it with an open+claimed work item -- actually
+     silences the warning, matching what the printed text has always told the operator to do (an
+     OPEN+CLAIMED work item alone does not answer "what is delegated, why"; a `decision` row
+     alone answers it directly).
+     HONEST-TEXT FIX (work item `delegation-observer-honest-teachtext`, defect found by re-read:
+     this docstring and the warning text both named "ledger a decision row AND/OR claim a work
+     item" as acceptable, but the firing condition tested only the work-item half -- an operator
+     who filed a decision row with no claimed item was warned anyway; an operator with a claimed
+     item but no decision row was silently fine). FIXED by strengthening the check (the maintainer
+     mandate's own preference, "prefer strengthening the check over weakening the text") rather
+     than downgrading the text: `has_session_decision_row()` gives a clean, session-scoped query
+     for "this session filed a decision row" using the SAME `stamp_session` mechanism (kernel s21,
+     `kernel/lineage/s21-session-aware-distinctness.sql`) and the SAME pattern
+     `hooks/stop_clean_exit.py`'s `_stop_disposition_reason` already uses for its own
+     session-scoped decision-row check -- so it was cleanly derivable, not merely aspirational.
+  2a. LANDING ZONE FOR DELIVERABLES (pattern witnessed twice in a deployment: dispatched
+     consult/audit subagents told only to "report back in plain text" left reports/screenshots/
+     scripts to die in ephemeral /tmp scratchpads -- one full audit cycle's evidence was lost this
+     way). This hook adds no new blocking behavior for it, but the warning text below carries one
+     compact reminder: any deliverable meant to outlive the session needs a stated durable landing
+     path, decided at dispatch time, not improvised after the subagent returns.
+
+WORKTREE ISOLATION FOR PARALLEL DISPATCHES -- GUIDANCE-ONLY, NAMED CHOICE (work item
+`workflow-parallel-stage-isolation`; hazard witnessed in a deployment: parallel workflow stages
+shared one git tree, and a subagent's `git stash` transiently clobbered a sibling stage's
+uncommitted work, recovered only via `git fsck`). This hook does NOT add advisory detection for
+the risky shape ("multiple concurrent Task/Agent dispatches while the tree is dirty"): the PreTool
+Use payload this hook reads (session_id, tool_name, tool_input, cwd, hook_event_name) carries no
+signal for "another dispatch from this session is concurrently in flight" (the journal records
+past dispatches, but a dispatch with no return recorded yet could mean "still running" OR "this
+world never wired a return leg" -- indistinguishable from this hook's own inputs) and NO signal
+for git tree cleanliness at all (would require a NEW `git status` subprocess call this hook does
+not otherwise make). Per this work item's own scope instruction, advisory detection is added ONLY
+when the hook's EXISTING inputs already carry enough to tell, and new plumbing is not built to
+manufacture that signal -- so this hazard is guidance-only, carried once in
+`bootstrap/templates/CLAUDE.md.tmpl`'s preamble point 8 (the scaffolded per-world CLAUDE.md every
+dispatching session actually reads), not mechanized here and not duplicated into a second doc.
 
 OBSERVER ONLY, BY MAINTAINER MANDATE -- NOT A TECHNICAL IMPOSSIBILITY (named honestly, the
 opposite framing from `hooks/posttooluse_mutation_observer.py`'s own OBSERVER ONLY section): a
@@ -290,6 +326,52 @@ def has_open_claimed_work_item() -> bool:
     return out.stdout.strip() == "t"
 
 
+def _column_exists(schema: str, table: str, column: str) -> bool:
+    """Mirrors hooks/stop_clean_exit.py's identically-named function exactly (module docstring,
+    WHY A SEPARATE RESOLUTION -- re-derived here, not imported)."""
+    sch, tab, col = (schema.replace("'", "''"), table.replace("'", "''"), column.replace("'", "''"))
+    out = subprocess.run(
+        ["psql", "-h", PGHOST, "-d", PGDB, "-tA", "-c",
+         f"SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = '{sch}' "
+         f"AND table_name = '{tab}' AND column_name = '{col}');"],
+        capture_output=True, text=True, timeout=8, check=True,
+    )
+    return out.stdout.strip() == "t"
+
+
+def has_session_decision_row(session_id: str) -> bool:
+    """HONEST-TEXT FIX (work item `delegation-observer-honest-teachtext`, defect: this hook's own
+    docstring/warning text named TWO acceptable remedies -- "ledger the delegation as a decision
+    row AND/OR claim a work item" -- but only checked the work-item half, so a fully-compliant
+    filer of a decision row with no claimed item was still warned). True iff a `kind = 'decision'`
+    row is stamped (`stamp_session`) to THIS session -- the identical pattern
+    hooks/stop_clean_exit.py's `_stop_disposition_reason` already uses for its own session-scoped
+    decision-row check (module docstring, WHY A SEPARATE RESOLUTION -- re-derived, not imported).
+    Unlike that sibling check, this one is NOT scoped to a `statement LIKE 'stopping:%'` prefix --
+    ANY decision row this session filed counts, since the remedy this hook teaches is "ledger the
+    delegation as a decision row", not one specific statement shape. NOT time-windowed ("recently")
+    -- a session is already the bounding scope the kernel gives us (s21 session-aware identity);
+    narrower than "this session" is not cleanly derivable from stamp_session alone (no monotonic
+    ordering vs. THIS dispatch is exposed to this hook), so "any decision row this session has
+    filed, ever" is the honest, cleanly-derivable predicate, and the warning/DENY_HINT text below
+    is worded to match exactly. False (never raises past its caller) when: no session_id, a
+    pre-stamp world (no `stamp_session` column -- s17 introduced it), a genuine DB error, or the
+    ledger genuinely carries no such row for this session."""
+    if not session_id:
+        return False
+    schema = _ledger_schema()
+    if not _column_exists(schema, "ledger", "stamp_session"):
+        return False  # pre-stamp world -- nothing to check, same posture as the sibling hook
+    sid = session_id.replace("'", "''")
+    out = subprocess.run(
+        ["psql", "-h", PGHOST, "-d", PGDB, "-tA", "-c",
+         f"SELECT EXISTS (SELECT 1 FROM {schema}.ledger WHERE kind = 'decision' "
+         f"AND stamp_session = '{sid}');"],
+        capture_output=True, text=True, timeout=8, check=True,
+    )
+    return out.stdout.strip() == "t"
+
+
 def _journal(rec: dict) -> None:
     if not JOURNAL:
         return
@@ -329,16 +411,26 @@ DENY_HINT = ("./led decision \"<what is delegated, why>\"\n"
 
 
 def _emit_warning(description: str) -> None:
+    # HONEST-TEXT FIX (work item `delegation-observer-honest-teachtext`): this text must describe
+    # EXACTLY the two conditions main() checks before calling here -- no open+claimed work item
+    # AND no decision row stamped to this session (has_open_claimed_work_item() /
+    # has_session_decision_row()) -- so that EITHER remedy, once actually filed, silences the
+    # warning on the next dispatch, matching what the text tells the operator to do.
     warning = (
         "[delegation-observer WARNING, observer-mode -- never blocks] dispatching a subagent is "
-        "work (CLAUDE.md preamble point 7: \"Dispatching a subagent is a `decision` row (what is "
-        "delegated, why)\") and this world has NO open+claimed work item covering it "
+        "work (CLAUDE.md preamble point 8: \"Dispatching a subagent is a `decision` row (what is "
+        "delegated, why)\") and this world has NEITHER an open+claimed work item NOR a `decision` "
+        "row stamped to this session covering it "
         "(hooks/pretooluse_delegation_observer.py; BACKLOG 'Run-8 mid-run forensics', 2026-07-11 "
         "finding 3: 5m12s of investigation, including a subagent dispatch, landed zero ledger "
         "rows before the first ./led call):\n"
         f"delegation: {description or '(no description given)'}\n"
-        f"ledger the delegation BEFORE it starts, and/or cover it with an open+claimed work item:\n"
-        f"  {DENY_HINT}"
+        f"ledger the delegation BEFORE it starts, and/or cover it with an open+claimed work item "
+        f"(either one silences this warning):\n"
+        f"  {DENY_HINT}\n"
+        "if this dispatch produces a deliverable that must outlive the session (report, "
+        "screenshot, script), state its durable landing path in the dispatch prompt now -- an "
+        "ephemeral scratchpad is not a plan (module docstring, LANDING ZONE FOR DELIVERABLES)."
     )
     print(json.dumps({"hookSpecificOutput": {
         "hookEventName": "PreToolUse", "permissionDecision": "allow",
@@ -414,10 +506,15 @@ def main() -> int:
         rec["tool_use_id"] = str(tool_use_id)
     _journal(rec)
 
-    # 2. WARN only when the work-item layer exists and no item is open+claimed (module docstring).
-    # Never raises past this point -- an observer must never break a tool call over a DB hiccup.
+    # 2. WARN only when the work-item layer exists, no item is open+claimed, AND this session has
+    # filed no `decision` row (HONEST-TEXT FIX, work item `delegation-observer-honest-teachtext`
+    # -- module docstring named TWO acceptable remedies but the check used to test only the
+    # work-item half; has_session_decision_row() makes the OTHER remedy silence the warning too,
+    # so the printed text's "either one silences this warning" claim is actually true). Never
+    # raises past this point -- an observer must never break a tool call over a DB hiccup.
     try:
-        if has_work_item_layer() and not has_open_claimed_work_item():
+        if (has_work_item_layer() and not has_open_claimed_work_item()
+                and not has_session_decision_row(session_id)):
             _emit_warning(description)
     except Exception:  # noqa: BLE001
         pass
