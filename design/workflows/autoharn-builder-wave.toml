@@ -1,0 +1,77 @@
+# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
+#   first-seen : 2026-07-16T02:45:20Z
+#   last-change: 2026-07-16T02:45:20Z
+#   contributors: 9a17b6b9/main
+# <<< PROVENANCE-STAMP <<<
+
+# Specimen D -- transcribed from THIS repository's own builder-wave shape of 2026-07-16, per the
+# build task's own description: "parallel Sonnet builders in isolated worktrees, each claiming
+# ledger work items, witnessing both polarities on scratch worlds, closing shipped
+# --review-deferred; the orchestrator merges and wires seams." This is the shape this very build
+# (ledger work item pipeline-dsl-v0) is itself an instance of -- a self-referential specimen, kept
+# honest by only claiming what the standing orchestration contract (CLAUDE.md,
+# "ORCHESTRATION -- the standing delegation contract") and this build's own witnessed steps
+# actually establish, not a generalization beyond what has been run.
+
+[[phases]]
+name = "claim"
+depends_on = []
+
+[[phases]]
+name = "build-and-witness"
+depends_on = ["claim"]
+
+[[phases]]
+name = "close-deferred"
+depends_on = ["build-and-witness"]
+
+[[phases]]
+name = "orchestrator-merge"
+depends_on = ["close-deferred"]
+
+[roles.claim]
+authors = "maintainer/orchestrator (ledger work item authored via ./led work open, prior to this wave)"
+implements = "sonnet builder (./led work claim <slug> inside its own isolated worktree)"
+
+[roles.build-and-witness]
+authors = "sonnet builder"
+implements = "sonnet builder"
+reviews = "sonnet builder, self-witnessed both polarities on scratch worlds (t/t and f/f, per the standing witness discipline) -- CLAUDE.md's 'Class-ratified fail-safe deltas' ruling names this as the bar for kernel-lineage work; this build item (non-kernel) applies the same witness discipline by analogy, not by that ruling's own scope."
+
+[roles.close-deferred]
+authors = "sonnet builder"
+implements = "sonnet builder (./led work close <slug> shipped --review-deferred --witness <short-sha>)"
+reviews = "deferred explicitly -- --review-deferred means the independent countersign has NOT yet happened at this phase; it is owed to the orchestrator at the next phase, not skipped."
+
+[roles.orchestrator-merge]
+authors = "orchestrator"
+implements = "orchestrator (merges each builder's worktree branch, wires cross-item seams no single builder could see)"
+reviews = "orchestrator, discharging the review deferred at close-deferred, per CLAUDE.md's runs-are-linear ruling: a run's world is dust once merged, so this review happens at the seam, not by reopening the builder's own worktree."
+
+[convergence.claim]
+done = "the ledger row `work_claimed: <slug>` exists for this builder's principal, per CLAUDE.md's standing delegation contract."
+escalation_event = "none typed for this phase alone -- a claim either succeeds or the slug is unavailable (already claimed/closed), which is a kernel-level refusal, not a convergence question."
+
+[convergence.build-and-witness]
+done = "the deliverable is witnessed on both polarities (or, for non-kernel work like this DSL build, the equivalent: every deliverable exercised and its refusal paths exercised too) before any close is attempted -- CLAUDE.md's standing witness discipline: 'A report states, per item: WITNESSED (with observed output), REFUSED-AS-EXPECTED, or UNEXERCISED with the concrete blocker.'"
+escalation_event = "gate-refusal streak or non-converging review loop -- CLAUDE.md's own named escalation triggers ('Escalate on TYPED events... gate-refusal streaks, DIVERGE_DEFECT/QUARANTINED... non-converging review loops, never on self-assessment')."
+
+[convergence.close-deferred]
+done = "`./led work close <slug> shipped --review-deferred --witness <short-sha>` is filed, naming the commit the witness evidence lives at."
+escalation_event = "none typed for this phase alone -- deferring review is itself the typed disposition (work_review_disposition), not a failure state; the review it defers is owed at orchestrator-merge."
+
+[convergence.orchestrator-merge]
+done = "the branch is merged, cross-item seams (files two builders both touched) are wired and re-verified, and the deferred review from close-deferred is discharged -- either confirmed or sent back."
+escalation_event = "non-converging-review-loop -- if the orchestrator's own review of the merged, seam-wired result finds a real defect the builder's own witness missed, per the same class of escalation ADR-0017's merge-seam attestation rule names for documentation (design/ORCH-ABC-AUDIT-LOOP-RECIPE.md, 'The merge-seam attestation rule'), applied here to code/spec work by the same reasoning: a merge produces bytes no single builder's own witness ever covered."
+
+[landing_zones.claim]
+zone = "this project's append-only Postgres ledger (via ./led), read by ./pickup on the next hydration."
+
+[landing_zones.build-and-witness]
+zone = "the builder's own isolated worktree under .claude/worktrees/, committed but not pushed; witness output recorded in the builder's final report to the orchestrator."
+
+[landing_zones.close-deferred]
+zone = "the ledger row `work_closed: <slug> (shipped)` with `--review-deferred` and `--witness <short-sha>`, naming the worktree commit; the worktree branch itself, awaiting merge."
+
+[landing_zones.orchestrator-merge]
+zone = "the repository's main branch (post-merge), plus a `decision` ledger row per design/ORCH-ABC-AUDIT-LOOP-RECIPE.md's merge convention (`merge: <branch> -> <commit> (work items: <slug>)`)."

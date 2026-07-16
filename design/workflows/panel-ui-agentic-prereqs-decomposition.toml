@@ -1,0 +1,100 @@
+# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
+#   first-seen : 2026-07-16T02:44:24Z
+#   last-change: 2026-07-16T02:44:24Z
+#   contributors: 9a17b6b9/main
+# <<< PROVENANCE-STAMP <<<
+
+# Specimen B -- transcribed from the autoharn-panel deployment's ledger
+# (~/w/vdc/1/experience/autoharn-panel), rows 48-85: a compound commission (row 48, "vicarious
+# transcription by the implementer") asking for two todo items to be decomposed, reviewed to
+# convergence, and implemented, with the decomposition itself countersigned before any code is
+# written. `./led show 57` (one of the three anchor rows the build task named) sits INSIDE this
+# pipeline -- it is the work_opened row for the "profile-health-surface" leaf phase below, not a
+# compound pipeline on its own; see design/workflows/README.md "Known misfits".
+#
+# This specimen is the richest of the four for the ROLES and CONVERGENCE fields: the decompose
+# phase's own review was delegated TWICE (rows 63, 64 -- a caution the ledger itself does not
+# explain further) before countersigning (row 60), and each of the four leaf work items got its
+# own independent per-item review (rows 82-85) citing antecedent-audit findings filed as
+# assumptions along the way (rows 65-70, 72-78) -- a review discipline heavier than Specimen A's.
+# It also surfaced same-file contention findings (rows 79-81) that this v0 grammar has no field
+# for; see the README's "Known misfits" entry on that.
+
+[[phases]]
+name = "decompose"
+depends_on = []
+
+[[phases]]
+name = "profile-storage"
+depends_on = ["decompose"]
+
+[[phases]]
+name = "readonly-lock"
+depends_on = ["decompose"]
+
+[[phases]]
+name = "profile-health-surface"
+depends_on = ["profile-storage"]
+
+[[phases]]
+name = "readonly-lock-indicator"
+depends_on = ["readonly-lock"]
+
+[roles.decompose]
+authors = "sonnet-main-session"
+reviews = "sonnet-independent-subagent"
+
+[roles.profile-storage]
+authors = "sonnet-main-session"
+implements = "sonnet-main-session"
+reviews = "sonnet-independent-subagent"
+
+[roles.readonly-lock]
+authors = "sonnet-main-session"
+implements = "sonnet-main-session"
+reviews = "sonnet-independent-subagent"
+
+[roles.profile-health-surface]
+authors = "sonnet-main-session"
+implements = "sonnet-main-session"
+reviews = "sonnet-independent-subagent"
+
+[roles.readonly-lock-indicator]
+authors = "sonnet-main-session"
+implements = "sonnet-main-session"
+reviews = "sonnet-independent-subagent"
+
+[convergence.decompose]
+done = "the parent work_opened (row 55) plus its four children (rows 56-59) and two depends_on edges (rows 61-62) are countersigned clean (row 60) -- the commission's own 'iterate until convergence' clause (row 48) required revising and re-submitting on any real defect, not just an unantecedented-but-reasonable inference (rows 63-64)."
+escalation_event = "non-converging-review-loop -- had the independent reviewer found a real defect (not merely an antecedent gap), the commission's own text requires revising and re-submitting rather than treating one pass as converged; a second non-converging pass routes to the maintainer."
+
+[convergence.profile-storage]
+done = "the item is correctly scoped as its own resumable unit and its implementer assumptions (rows 65-66, 72-73) are antecedent-audited as reasonable though uncommissioned; countersigned in row 83."
+escalation_event = "non-converging-review-loop -- an independent reviewer finding a real (not merely unantecedented) defect routes back to revision, per the commission's convergence clause; unresolved after re-review escalates to the maintainer."
+
+[convergence.readonly-lock]
+done = "the item is correctly scoped, its five implementer design facts (rows 67-70, 74-77) are antecedent-audited as reasonable, and the mount-gating mechanism is verified consistent with the existing cfg.read_only gate (app.py:141-144); countersigned in row 85."
+escalation_event = "non-converging-review-loop -- as above."
+
+[convergence.profile-health-surface]
+done = "the item is correctly scoped, its names-only-never-credentials security boundary (rows 71, 78) is antecedent-audited as sound and consistent with project ethos, and its single depends_on edge (row 61, on profile-storage) is verified correct and sufficient; countersigned in row 84."
+escalation_event = "non-converging-review-loop -- as above."
+
+[convergence.readonly-lock-indicator]
+done = "the item's dependency on readonly-lock (row 62) is verified correct; same-file contention with profile-health-surface (row 81) is filed as a scheduling finding, not a defect in this item's own definition."
+escalation_event = "non-converging-review-loop -- as above; no review row for this specific leaf was located in the rows read for this transcription (rows 14-85), which the README's Known misfits section records as an open gap in this specimen's evidence, not a grammar defect."
+
+[landing_zones.decompose]
+zone = "ledger rows 48-64: the parent work_opened (55), four children (56-59), two depends_on edges (61-62), and the countersign (60)."
+
+[landing_zones.profile-storage]
+zone = "backend/config.py (PanelConfig dataclass, load_config()) in the panel repo; ledger rows 56, 65-66, 72-73, 83."
+
+[landing_zones.readonly-lock]
+zone = "backend/app.py (route-mount gate) and backend/extensions/autoharn/cosign.py in the panel repo; ledger rows 58, 67-70, 74-77, 85."
+
+[landing_zones.profile-health-surface]
+zone = "backend/app.py's api_health() and frontend/src/core/services/types.ts's HealthResponse type in the panel repo; ledger rows 57, 61, 71, 78, 84."
+
+[landing_zones.readonly-lock-indicator]
+zone = "frontend/src/App.vue's header badge region in the panel repo; ledger rows 59, 62, 81."
