@@ -230,9 +230,9 @@ import apparatus_registry  # noqa: E402  (filing/apparatus_registry.py, the deri
 #   JOURNAL      | GATE_JOURNAL      | E13_GATE_JOURNAL     | f"{SUBJECT_ROOT}/.claude/logs/change_gate.journal.jsonl"
 #
 # (STATE/JOURNAL's deployment-relative defaults only apply when a deployment record was actually
-# found — else they fall back to the byte-held absolute epistemic-audit paths, exactly as before
-# this pass, so autoharn's own e13/e14 flow — whose state/journal never lived under SUBJECT_ROOT —
-# is unaffected.)
+# found — else SUBJECT_ROOT/STATE/JOURNAL resolve to "" instead of any foreign-project fallback;
+# see the "NO _DEFAULT_SUBJECT_ROOT / _DEFAULT_STATE / _DEFAULT_JOURNAL" comment block below for
+# the full removal rationale.)
 #
 # Config is resolved once per invocation, inside `_configure()`, called at the top of `main()`
 # right after stdin is parsed — the deployment.json lookup needs the hook input's own `cwd`, only
@@ -243,9 +243,18 @@ import apparatus_registry  # noqa: E402  (filing/apparatus_registry.py, the deri
 _DEFAULT_PGHOST = "192.168.122.1"
 _DEFAULT_PGDB = "nla"
 _DEFAULT_LEDGER = "public.ledger"
-_DEFAULT_SUBJECT_ROOT = os.path.expanduser("~/w/vdc/1/epistemic-e14")
-_DEFAULT_STATE = os.path.expanduser("~/w/vdc/1/epistemic-audit/change_gate_state.json")
-_DEFAULT_JOURNAL = os.path.expanduser("~/w/vdc/1/epistemic-audit/logs/change_gate.journal.jsonl")
+# NO _DEFAULT_SUBJECT_ROOT / _DEFAULT_STATE / _DEFAULT_JOURNAL (removed 2026-07-17, work item
+# change-gate-foreign-defaults): the byte-held values here used to be a FOREIGN project's absolute
+# paths (~/w/vdc/1/epistemic-e14 and ~/w/vdc/1/epistemic-audit/...) — a project that happens to
+# exist on the machine this gate was authored on, unrelated to whatever subject this hook is
+# actually asked to govern. An unwired invocation (no GATE_SUBJECT_ROOT/E13_SUBJECT_ROOT env var,
+# no locatable deployment.json) now resolves SUBJECT_ROOT/STATE/JOURNAL to "" instead, mirroring
+# hooks/stop_clean_exit.py's `_configure()` posture (that hook's own module-scope defaults are
+# `SUBJECT_ROOT = STATE = JOURNAL = ""`, no foreign-path fallback at all) — every consumer below is
+# traced to degrade safely on "" (see `_under_subject_root()`'s explicit empty-SUBJECT_ROOT guard,
+# added in the same pass, and `_load_state()`/`_journal()`'s existing best-effort try/except).
+# PGHOST/PGDB/LEDGER keep their legacy DB-default posture unchanged (separate ruling; stop_clean_exit
+# keeps its own copies of these three too, ADR-0012 P1's "one vocabulary" already spans both files).
 
 # Module globals every function below reads as plain globals, populated by `_configure()` at the
 # start of every `main()` call. Declared here at their byte-held defaults so the module still
@@ -254,9 +263,9 @@ _DEFAULT_JOURNAL = os.path.expanduser("~/w/vdc/1/epistemic-audit/logs/change_gat
 PGHOST = _DEFAULT_PGHOST
 PGDB = _DEFAULT_PGDB
 LEDGER = _DEFAULT_LEDGER
-SUBJECT_ROOT = _DEFAULT_SUBJECT_ROOT
-STATE = _DEFAULT_STATE
-JOURNAL = _DEFAULT_JOURNAL
+SUBJECT_ROOT = ""
+STATE = ""
+JOURNAL = ""
 # True iff GATE_SUBJECT_ROOT (or its deprecated alias E13_SUBJECT_ROOT) was EXPLICITLY set for
 # this invocation and the resolved SUBJECT_ROOT does not exist on disk (run-2 integrity finding,
 # BACKLOG 2026-07-09: a moved project directory left a stale absolute path baked into
@@ -358,14 +367,24 @@ def _deny_subject_root_missing() -> str:
 # per-project, trivially-editable choice — a small config file the PROJECT'S USER selects
 # patterns in, never a set hardcoded here. Resolved once per invocation, inside `_configure()`
 # (this process is a fresh short-lived hook invocation per tool call, so "once per call" is the
-# relevant unit — no P4 staleness; only WHEN this is computed moved with this pass, from import
-# time to inside main(), because its default now depends on SUBJECT_ROOT which itself can depend
-# on the hook input's `cwd`). Format: {"patterns": ["*.py", ...]}, fnmatch'd against the path
+# relevant unit — no P4 staleness). Format: {"patterns": ["*.py", ...]}, fnmatch'd against the path
 # relative to SUBJECT_ROOT (fnmatch's "*" matches "/" too, so "*.py" alone reaches nested files —
 # no "**" needed). Missing/unreadable/malformed config -> the F33 invariant default: every *.py
 # file, class-keyed, exactly the old hardcoded behavior, so a project that has not yet configured
 # governance is not silently ungoverned.
-GOVERNED_CONFIG = os.path.join(SUBJECT_ROOT, ".claude", "governed_files.json")
+#
+# GOVERNED_CONFIG/GOVERNED_PATTERNS are NOT resolved at module scope (2026-07-17, work item
+# change-gate-foreign-defaults): before this pass, GOVERNED_CONFIG was computed here from the
+# (then foreign-defaulted) SUBJECT_ROOT and GOVERNED_PATTERNS immediately read that path off disk
+# — an import-time filesystem read against a hardcoded, unrelated project's directory, performed
+# unconditionally by the mere act of `import pretooluse_change_gate`, even for a caller that never
+# invokes `main()`/`_configure()`. `_configure()` already recomputed BOTH values correctly, every
+# real invocation, from THIS call's own resolved SUBJECT_ROOT (see below) — the module-scope
+# computation was dead weight on every real invocation and the only place the foreign read
+# actually fired. Module scope now keeps only the byte-held default pattern list and an empty
+# placeholder; the real values exist only after `_configure()` runs (called at the top of every
+# `main()`), exactly as this comment already claimed and the code did not yet honor.
+GOVERNED_CONFIG = ""
 _DEFAULT_GOVERNED_PATTERNS = ["*.py"]
 
 
@@ -381,7 +400,11 @@ def _load_governed_patterns(cfg_path: str) -> list[str]:
     return _DEFAULT_GOVERNED_PATTERNS
 
 
-GOVERNED_PATTERNS = _load_governed_patterns(GOVERNED_CONFIG)
+# Placeholder only — a caller that imports this module and reads GOVERNED_PATTERNS without ever
+# calling `main()`/`_configure()` gets an empty list (matches no pattern), not the *.py default;
+# see `is_governed()`, which is unreachable for any real path anyway until `_configure()` sets
+# SUBJECT_ROOT to something non-empty (`_under_subject_root()` returns False on SUBJECT_ROOT == "").
+GOVERNED_PATTERNS: list[str] = []
 
 # APPARATUS.JSON MECHANISM SWITCHBOARD (module docstring, maintainer mandate 2026-07-10). Two
 # mechanisms live in this file; each gets its own module-global mode, resolved once per invocation
@@ -493,10 +516,15 @@ def _configure(data: dict) -> None:
     LEDGER = (os.environ.get("GATE_LEDGER") or os.environ.get("E13_GATE_LEDGER")
               or (f"{dep.schema}.ledger" if dep else None) or _DEFAULT_LEDGER)
 
+    # SUBJECT_ROOT (work item change-gate-foreign-defaults, 2026-07-17): an unwired invocation
+    # (no explicit env var, no locatable deployment.json) now resolves to "" -- mirroring
+    # hooks/stop_clean_exit.py's `_configure()` -- NOT a foreign project's hardcoded absolute
+    # path. `default_root` is "" unless a deployment.json was actually located.
     using_deployment = bool(dep_path and dep)
-    default_root = os.path.dirname(dep_path) if using_deployment else _DEFAULT_SUBJECT_ROOT
+    default_root = os.path.dirname(dep_path) if using_deployment else ""
     env_subject_root = os.environ.get("GATE_SUBJECT_ROOT") or os.environ.get("E13_SUBJECT_ROOT")
-    SUBJECT_ROOT = os.path.abspath(env_subject_root or default_root)
+    SUBJECT_ROOT = (os.path.abspath(env_subject_root or default_root)
+                     if (env_subject_root or default_root) else "")
     # Run-2 integrity finding (BACKLOG 2026-07-09): SUBJECT_ROOT is "configured" for this check
     # only when an operator explicitly set the env var -- a deployment.json-/hardcoded-derived
     # default that happens not to exist is a DIFFERENT, unwired-session shape this fix must leave
@@ -506,17 +534,27 @@ def _configure(data: dict) -> None:
     # Permit-to-work (BACKLOG "Run-5 forensics", 2026-07-10): "wired" is broader than the
     # misconfiguration check above — EITHER wiring path (explicit env var OR a located deployment
     # record) counts, since a scaffolded project driven purely by deployment.json must still get
-    # permit-to-work, not only one pinned via an explicit env var.
-    SUBJECT_ROOT_WIRED = bool(env_subject_root or using_deployment) and os.path.isdir(SUBJECT_ROOT)
+    # permit-to-work, not only one pinned via an explicit env var. `bool(SUBJECT_ROOT)` guards the
+    # now-possible "" case explicitly (os.path.isdir("") is False anyway, but the empty check is
+    # kept alongside it as the same explicit posture `_under_subject_root()` below uses).
+    SUBJECT_ROOT_WIRED = (bool(env_subject_root or using_deployment) and bool(SUBJECT_ROOT)
+                           and os.path.isdir(SUBJECT_ROOT))
+    # STATE/JOURNAL derive from SUBJECT_ROOT only when WIRED (work item change-gate-foreign-
+    # defaults, 2026-07-17) -- byte-held foreign fallback removed; an unwired invocation gets ""
+    # for both, same posture as SUBJECT_ROOT itself and as stop_clean_exit.py's own `_configure()`.
+    # (Pre-fix this used `using_deployment` here, NOT `SUBJECT_ROOT_WIRED` -- an explicitly
+    # env-var-wired session with no deployment.json would have gotten the foreign STATE/JOURNAL
+    # path even though it WAS wired; `SUBJECT_ROOT_WIRED` covers both wiring paths correctly.)
     default_state = (os.path.join(SUBJECT_ROOT, ".claude", "change_gate_state.json")
-                      if using_deployment else _DEFAULT_STATE)
+                      if SUBJECT_ROOT_WIRED else "")
     default_journal = (os.path.join(SUBJECT_ROOT, ".claude", "logs", "change_gate.journal.jsonl")
-                        if using_deployment else _DEFAULT_JOURNAL)
+                        if SUBJECT_ROOT_WIRED else "")
     STATE = os.environ.get("GATE_STATE") or os.environ.get("E13_GATE_STATE") or default_state
     JOURNAL = os.environ.get("GATE_JOURNAL") or os.environ.get("E13_GATE_JOURNAL") or default_journal
 
     GOVERNED_CONFIG = os.environ.get(
-        "GOVERNED_CONFIG", os.path.join(SUBJECT_ROOT, ".claude", "governed_files.json"))
+        "GOVERNED_CONFIG",
+        os.path.join(SUBJECT_ROOT, ".claude", "governed_files.json") if SUBJECT_ROOT else "")
     GOVERNED_PATTERNS = _load_governed_patterns(GOVERNED_CONFIG)
 
     apparatus = _load_apparatus_quiet(SUBJECT_ROOT)
@@ -531,7 +569,14 @@ def _configure(data: dict) -> None:
 # -- deliberately UNrestricted, "anywhere in the world", see module docstring). Never itself a
 # pattern match; is_governed() layers GOVERNED_PATTERNS on top of this.
 def _under_subject_root(path: str) -> bool:
-    if not path:
+    # Explicit SUBJECT_ROOT == "" guard (work item change-gate-foreign-defaults, 2026-07-17): with
+    # the foreign-path default removed, an unwired invocation now resolves SUBJECT_ROOT to "" --
+    # and `ap.startswith("" + os.sep)` is `ap.startswith(os.sep)`, which is TRUE for every absolute
+    # path on this platform. Without this guard, an unwired session would treat EVERY file on disk
+    # as "under" the (unset) subject root -- the opposite of the module docstring's unwired posture
+    # (an unwired session is left alone) and a straight regression from the foreign default's own
+    # accidental safety (a real, but irrelevant-elsewhere, directory that almost nothing lived under).
+    if not path or not SUBJECT_ROOT:
         return False
     ap = os.path.abspath(path)
     return ap == SUBJECT_ROOT or ap.startswith(SUBJECT_ROOT + os.sep)

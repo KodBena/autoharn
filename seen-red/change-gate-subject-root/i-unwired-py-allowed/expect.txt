@@ -1,0 +1,2 @@
+-"permissionDecision": "deny"
+-SUBJECT_ROOT is configured

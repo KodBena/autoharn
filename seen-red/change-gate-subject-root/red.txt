@@ -60,7 +60,20 @@ requirement satisfied. Case h proves the NAMED fail-open choice: a pre-s22 world
 work_item_current view; the byte-held nla/public default) skips this check entirely and falls
 through to the old "needs a ledger entry" deny, unchanged.
 
-Full eight-case run (red + healthy-subject-root + unwired-unset + deprecated-alias + Bash-path-
-scope + permit-to-work no-open-claimed/open-claimed-allowed/pre-s22, all asserted programmatically;
-f/g apply-and-drop a scratch s22 schema in the toy db per run, zero DB residue):
+Case i (work item change-gate-foreign-defaults, 2026-07-17): pins `_under_subject_root()`'s
+explicit empty-SUBJECT_ROOT guard added when the byte-held foreign-project SUBJECT_ROOT/STATE/
+JOURNAL defaults were removed. An unwired invocation (no GATE_SUBJECT_ROOT/E13_SUBJECT_ROOT, no
+locatable deployment.json) now resolves SUBJECT_ROOT to "" -- and the containment check
+`ap.startswith(SUBJECT_ROOT + os.sep)` degenerates to `ap.startswith(os.sep)` on
+SUBJECT_ROOT == "", which is TRUE for every absolute path on this platform. SUBJECT_ROOT="" must
+govern NOTHING; without the guard, an unwired session would treat EVERY file on disk as "under"
+the (unset) subject root -- the opposite of the module docstring's unwired posture and a straight
+regression from the foreign default's own accidental safety (a real, but irrelevant-elsewhere,
+directory that almost nothing lived under). Case i exercises exactly that shape: unwired env, a
+*.py Edit target, exit 0 and no deny text.
+
+Full nine-case run (red + healthy-subject-root + unwired-unset + deprecated-alias + Bash-path-
+scope + permit-to-work no-open-claimed/open-claimed-allowed/pre-s22 + unwired-py-allowed, all
+asserted programmatically; f/g apply-and-drop a scratch s22 schema in the toy db per run, zero DB
+residue):
   python3 seen-red/change-gate-subject-root/run_fixtures.py
