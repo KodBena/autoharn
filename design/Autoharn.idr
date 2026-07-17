@@ -26,16 +26,18 @@
 ||| because the SUBSTRATE is -- see the "PRESERVED, ON PURPOSE" list in this header.
 ||| Beauty that would erase one of those facts is a regression, not a cleanup.
 |||
-||| AS-OF: kernel chain through s35 LAGGING: s38 (three untranscribed deltas: s36
+||| AS-OF: kernel chain through s35 LAGGING: s39 (four untranscribed deltas: s36
 |||   decision-grade -- nullable writer-supplied grade + standing_decisions in-force view,
 |||   design/FABLE-GRADED-DECISIONS-SPEC.md; s37 violation-disposition -- typed answering
 |||   acts for violations, debt quantifying over in-force rows,
 |||   design/FABLE-ORPHAN-DISPOSITION-SPEC.md v3; s38 bookkeeping-close -- third close
 |||   constructor, commit-witnessed, kind-scoped to work_closed,
-|||   design/FABLE-BOOKKEEPING-CLOSE-SPEC.md). A parity pass should model the grade at
-|||   the write boundary, the standing view as a derived read, the debt/record
-|||   projection split as two derived reads, and the close disposition as a
-|||   three-constructor sum with the bookkeeping arm's commit-shape refinement. (verified through s35, no semantic delta since s33:
+|||   design/FABLE-BOOKKEEPING-CLOSE-SPEC.md; s39 blocks-start -- claim-time dependency
+|||   foreclosure, widened edge-type vocabulary, work_startable derived read). A parity
+|||   pass should model the grade at the write boundary, the standing view as a derived
+|||   read, the debt/record projection split as two derived reads, the close disposition
+|||   as a three-constructor sum with the bookkeeping arm's commit-shape refinement, and
+|||   the claim constructor's blocks-start antecedent precondition. (verified through s35, no semantic delta since s33:
 |||   s34 adds the kernel-side refusal of a writer-supplied discharge_grade -- an illegal
 |||   state this model's Draft-stage index already made UNREPRESENTABLE (GradeF Draft = ()),
 |||   so the substrate caught up to the model, not vice versa; s35 is a behavior-identical
