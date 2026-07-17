@@ -969,9 +969,17 @@ if [ "${1:-}" = "decomposition-review-status" ]; then
   # this file's own top-of-file DEPLOYMENT variable already uses, and the SAME convention
   # pickup.tmpl's `_load_apparatus()`/`DEPLOYMENT_PATH.parent` use -- never a second hand-derived
   # notion of "world root"). Default/validation logic is a LINE-FOR-LINE mirror of hooks/
-  # pretooluse_change_gate.py's own `_resolve_mode()` (ADR-0012 P1: one definition of this
-  # mechanism's default, not a second hand-copied one that could silently drift from the
-  # authoritative one the gate itself enforces): missing apparatus.json / missing "mechanisms" key
+  # pretooluse_change_gate.py's own `_resolve_mode()` -- NOT a single-sourced import of it (an
+  # import would pay pretooluse_change_gate.py's own module-scope GOVERNED_PATTERNS filesystem
+  # read against its _DEFAULT_SUBJECT_ROOT, a foreign project path, when this file's world isn't
+  # wired). This is a DELIBERATE additional per-process copy, following the SAME duplication
+  # posture this project already carries across eleven hooks/*.py files, each with its own
+  # `_resolve_mode` -- see filing/apparatus_registry.py's own docstring ("WHY A DERIVED REGISTRY,
+  # NOT A HAND-MAINTAINED LIST"): the mechanism is reconciled by MECHANICALLY SCANNING every copy,
+  # never by forcing one shared import across independent short-lived processes. This 'observe'
+  # literal tracks pretooluse_change_gate.py's DECOMPOSITION_REVIEW_MODE by the SAME discipline
+  # every other hook's copy already relies on -- not a fresh gap, the twelfth instance of an
+  # entrenched, documented one: missing apparatus.json / missing "mechanisms" key
   # / missing "decomposition_review" entry -> default 'observe' (NOT 'enforce' -- this is the one
   # mechanism that departs from enforce-by-default, per that module's own docstring); an
   # unrecognized mode string never widens permissions -- falls back to 'observe' with a loud
