@@ -136,7 +136,22 @@ CHAIN = [
     "s35-validation-decomposition.sql",
     "s36-decision-grade.sql",
     "s37-violation-disposition.sql",
+    "s38-bookkeeping-close.sql",
 ]
+# s38 (kernel/lineage/s38-bookkeeping-close.sql, design/FABLE-BOOKKEEPING-CLOSE-SPEC.md) extends
+# this SAME gate's scratch CHAIN so its re-issued objects (validate_work_item_close) are exercised
+# by the scratch apply below. It introduces NO new kind-shape (kind, column, arity) CHECK of its
+# own: work_review_disposition_check (widened to admit 'bookkeeping') carries no `kind` test at
+# all (a flat vocabulary CHECK, `kind` never appears in its definition), so
+# `classify_kind_shape` returns None for it (out of scope, same as before this delta) -- confirmed
+# live by running this gate against the extended chain, not merely read and reasoned about. The
+# new CHECK work_review_bookkeeping_requires_commit_ref ALSO carries no `kind` test (its predicate
+# is `work_review_disposition IS DISTINCT FROM 'bookkeeping' OR work_review_ref ~ '...'`, a
+# value-shape correlation between two ALREADY-payload columns, never a kind correlation), so it
+# too is correctly out of this manifest's (kind, column, arity) scope -- no MANIFEST row needed,
+# no _VOCAB_PARTITION_RE-style new regex needed (that regex exists for a CHECK that DOES combine a
+# `kind = '<literal>'` branch with a value-membership test on the SAME check, which neither s38
+# CHECK does). No new column, no new kind: CHAIN is the only edit this delta requires.
 # Extended through the FULL chain to s37 (not merely an s37-only hop) so the QUANTIFICATION
 # UNIVERSE is the live chain in full, matching `gates/ledger_reader_allowlist.py`'s own extension
 # in this same branch -- and this extension's own first scratch-witness attempt (this file's own
