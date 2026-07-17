@@ -75,7 +75,7 @@ WORLD_FULL = "ldadvfxfull"
 WORLD_PRE = "ldadvfxpre"
 TAG = f"led-work-depends-default-type-advisory-{int(time.time())}"
 
-ADVISORY_MARKER = "recorded as informs (advisory only -- never enforced at close)"
+ADVISORY_MARKER = "recorded as informs (advisory only -- never enforced at close or claim)"
 
 
 def sh(args: list[str], **kw) -> subprocess.CompletedProcess[str]:

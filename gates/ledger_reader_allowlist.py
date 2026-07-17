@@ -70,8 +70,25 @@ CHAIN = [
     "s31-supersession-uniform-retraction.sql", "s32-edge-views-single-home.sql",
     "s33-composite-discharge.sql", "s34-computed-grade-refusal.sql",
     "s35-validation-decomposition.sql", "s36-decision-grade.sql",
-    "s37-violation-disposition.sql", "s38-bookkeeping-close.sql",
+    "s37-violation-disposition.sql", "s38-bookkeeping-close.sql", "s39-blocks-start.sql",
 ]
+# s39 (kernel/lineage/s39-blocks-start.sql) extends this SAME gate's scratch CHAIN so its own new
+# objects are exercised by the scratch apply below. It ships ONE new RAW/history reader by design
+# (work_edge_blocks_start, added to ALLOWLIST below, mirroring work_edge_blocks_close one edge-type
+# over -- s32's own single-home pattern) and FOUR new objects that classify clean with NO allowlist
+# entry, verified live: work_blocks_start_would_cycle (composes with work_edge_blocks_start, no raw
+# `ledger` reference of its own -- same vestigial-by-composition posture as work_depends_on_would_
+# cycle post-s32), work_item_blocks_start_blockers (composes with work_edge_blocks_start/
+# ledger_current/work_item_current only), validate_work_item_claim (calls work_item_blocks_start_
+# blockers only, no raw ledger reference), and work_startable (composes with work_item_current/
+# work_item_blocks_start_blockers only). validate_work_item_depends (already ALLOWLISTED above,
+# s35) and work_item_violations/work_violation_history (already ALLOWLISTED above, s37) are
+# re-issued by s39 with an ADDITIVE branch/arm each -- their own entries' reasons are unchanged
+# since neither re-issue introduces a NEW raw-`ledger` leg (the new blocks-start branch/arms
+# compose with work_edge_blocks_start/ledger_current exactly as their blocks-close siblings already
+# do), so no dict edit is needed for either.
+
+
 # s38 (kernel/lineage/s38-bookkeeping-close.sql, design/FABLE-BOOKKEEPING-CLOSE-SPEC.md) extends
 # this SAME gate's scratch CHAIN so its one new object (work_bookkeeping_closes, a raw/history
 # reader by design -- see its own ALLOWLIST entry below) is exercised by the scratch apply. It
@@ -227,6 +244,14 @@ ALLOWLIST: dict[str, str] = {
                               "retype (dup_open/dependency_cycle/parent_cycle/blocks_close_cycle among them); "
                               "since v3 this is the ONLY view still reading these raw, by design (the record "
                               "projection quantifies over everything, forever).",
+    # -- s39 (kernel/lineage/s39-blocks-start.sql) --
+    "work_edge_blocks_start": "single home of the RAW blocks-start edge relation (s39, mirroring "
+                              "s32's work_edge_blocks_close one edge-type over) — read RAW by "
+                              "work_blocks_start_would_cycle (needs the unretracted reading, same "
+                              "induction-over-insertion-order reasoning as work_depends_on_would_"
+                              "cycle, s30); work_item_violations'/work_violation_history's own new "
+                              "blocks_start_cycle arms (s39) instead JOIN it to ledger_current in "
+                              "THEIR OWN definition, same reasoning one edge kind over.",
     # -- s38 (kernel/lineage/s38-bookkeeping-close.sql) --
     "work_bookkeeping_closes": "DECLARED raw/history reader by design (design/FABLE-BOOKKEEPING-"
                                "CLOSE-SPEC.md Element 1: the escape hatch's own audit trail must "
