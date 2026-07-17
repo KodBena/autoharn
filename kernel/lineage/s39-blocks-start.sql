@@ -327,11 +327,16 @@ GRANT SELECT ON :"schema".work_startable TO :"role";
 -- CREATE OR REPLACE, the SAME view -- ADR-0012 P1) GAINS ONE MEMBER, blocks_start_cycle -- pure
 -- defense-in-depth (already refused at construction, Element 3 above), mirroring blocks_close_
 -- cycle's own precedent (s30) exactly one edge-type over. Every pre-existing CTE and every
--- pre-existing member is BYTE-IDENTICAL below (this is s37 v3's own exact body, unaltered by
--- s38, per this file's own PREREQUISITE section) -- only the two new CTEs (blocks_start_deps/
--- bs_reach/blocks_start_cycle) and the one new UNION ALL arm are appended. The v3 final gate
--- (`JOIN ledger_current tgt ON tgt.id = rv.target_id`) covers the new arm automatically, with no
--- edit of its own -- it is written once, over `raw_violations` as a whole, not per-arm.
+-- pre-existing member's EXECUTABLE SQL is byte-identical below (comment-stripped diff against
+-- s37 v3, unaltered by s38, per this file's own PREREQUISITE section) -- only the two new CTEs
+-- (blocks_start_deps/bs_reach/blocks_start_cycle) and the one new UNION ALL arm are appended.
+-- s37's OWN hazard/design-rationale comments on the pre-existing CTEs are CARRIED FORWARD
+-- verbatim below (restored in this file after a review catch: an earlier pass of this re-issue
+-- had dropped them while re-typing the view text by hand -- the code was never wrong, only the
+-- comments guarding it went missing; see this delta's own commit history for the fix). The v3
+-- final gate (`JOIN ledger_current tgt ON tgt.id = rv.target_id`) covers the new arm
+-- automatically, with no edit of its own -- it is written once, over `raw_violations` as a
+-- whole, not per-arm.
 -- ============================================================================================
 CREATE OR REPLACE VIEW :"schema".work_item_violations
     WITH (security_invoker = true) AS
@@ -350,16 +355,35 @@ WITH RECURSIVE
     WHERE kind = 'work_closed' AND work_resolution = 'shipped'
       AND (work_witness IS NULL OR btrim(work_witness) = '')
   ),
+  -- s37 fix (reviewer-witnessed defect 1, ADR-0014-review round; UNCHANGED by v3): `deps` gains
+  -- the depending act's OWN ledger id -- the SAME "violating act's own row" reading target_id
+  -- already uses everywhere else an id is natural. v3: reads ledger_current, not raw ledger --
+  -- a retracted depends_on row is no longer even a CANDIDATE dangling-dep, matching the amendment
+  -- (this is the TARGET row's own currency -- element 1's actual gate).
   deps AS (
     SELECT work_slug AS dependent, work_depends_on AS antecedent, id
     FROM :"schema".ledger_current WHERE kind = 'work_depends_on'
   ),
+  -- v3 CORRECTNESS NOTE (found in this delta's own build, hazard-in-reach per CLAUDE.md's
+  -- engineering-responsibility corollary): the antecedent-opened check below reads RAW `ledger`,
+  -- UNCHANGED from v2 -- deliberately NOT switched to ledger_current. Element 1 gates lapsing on
+  -- the MEMBER'S OWN TARGET ROW currency (d.id, via `deps` above) ONLY; it does not redefine the
+  -- INNER PREDICATE (whether the antecedent was ever opened). Switching this NOT EXISTS check to
+  -- ledger_current would make it fire for "antecedent was opened, then later retracted" too -- a
+  -- case history's OWN unfiltered computation (work_violation_history, unchanged, same raw check)
+  -- can NEVER produce, since that condition has no raw-history counterpart at all -- breaking
+  -- "the record is never thinner than work_item_violations" in the WRONG direction (debt showing
+  -- a member history structurally cannot represent). Kept raw so DEBT's member set is always the
+  -- in-force-target SUBSET of HISTORY's raw member set, never a superset.
   dangling_dep AS (
     SELECT d.dependent AS slug, d.antecedent, d.id
     FROM deps d
     WHERE NOT EXISTS (SELECT 1 FROM :"schema".ledger o
                        WHERE o.kind = 'work_opened' AND o.work_slug = d.antecedent)
   ),
+  -- v3: work_edge_blocks_close (s32's RAW single home) JOINed to ledger_current on edge_row_id --
+  -- the edge's own carrying row must be in force, matching work_edge_obligation's own composition
+  -- one file over (s32) and orphan_children's own pre-existing pattern one CTE below.
   bc_deps AS (
     SELECT e.dependent_slug AS dependent, e.antecedent_slug AS antecedent
     FROM :"schema".work_edge_blocks_close e
@@ -378,6 +402,14 @@ WITH RECURSIVE
     FROM :"schema".work_edge_parent e
     JOIN :"schema".ledger_current lc ON lc.id = e.edge_row_id
   ),
+  -- v3 CORRECTNESS NOTE (same hazard as dangling_dep's own comment above, same fix): the
+  -- parent-opened check below reads RAW `ledger`, UNCHANGED from v2. `parents` above already
+  -- carries the TARGET row's own currency gate (edge_row_id JOINed to ledger_current -- the
+  -- child's own opening act, this class's actual target per the header DESIGN CHOICE). Switching
+  -- THIS NOT EXISTS check to ledger_current would make dangling_parent fire for "parent was
+  -- opened, then retracted" -- exactly orphaned_by_retraction's own territory, and a shape
+  -- work_violation_history's unchanged raw computation can never reproduce (same "debt showing a
+  -- member history cannot represent" defect dangling_dep's comment names). Kept raw.
   dangling_parent AS (
     SELECT p.slug, p.parent_slug, p.edge_row_id
     FROM parents p
@@ -462,6 +494,11 @@ WITH RECURSIVE
     FROM composite_hand_closed chc
     WHERE EXISTS (SELECT 1 FROM :"schema".work_item_strict_blockers(chc.slug))
   ),
+  -- s37 Element 1/3, v3-rederived -- raw_violations: every arm above, PLUS its target_id (the
+  -- natural row id where one exists; the slug's own CURRENT work_opened row id otherwise --
+  -- header DESIGN CHOICE). Every target_id subquery below now reads ledger_current, so a handle
+  -- whose own opening act is retracted resolves to NULL here (excluded downstream by the final
+  -- target-in-force join, same as any other lapsed member).
   raw_violations AS (
     SELECT 'duplicate_open'::text AS violation, slug, NULL::text AS detail,
            (SELECT min(id) FROM :"schema".ledger_current WHERE kind = 'work_opened' AND work_slug = dup_open.slug) AS target_id
@@ -503,6 +540,34 @@ WITH RECURSIVE
     UNION ALL
     SELECT 'closed_but_tree_defeated', slug, 'close row ' || close_id || '; unresolved: ' || blockers, close_id FROM closed_but_tree_defeated
   ),
+  -- s37 Element 3 (A4), v3-corrected -- dispositions IN FORCE, and whether each one's OWN
+  -- checkable basis STILL holds, re-derived on every read (never a stored verdict):
+  --   retired : holds while the target row's own acts still read settled. If the target is a
+  --             work_opened row (the four slug-keyed arms + orphan_children), "settled" means its
+  --             own slug currently reads 'closed' in work_item_current -- so a LATER-superseded
+  --             close on that slug flips this back to false in the SAME read (A4's own example,
+  --             verbatim, still fully live under v3 -- the CHILD's own opening row stays current
+  --             throughout this scenario, only its CLOSE row's currency changes). For every other
+  --             kind of target row (claim/dep/close/edge row), "settled" holds unconditionally
+  --             once retired (no named resurrectable condition for those classes -- element 3/
+  --             consult 2D: only retired-on-a-settled-child and reissued name a condition at all).
+  --   reissued: holds while EITHER no successor was cited (nothing to invalidate -- element 4's
+  --             own "warns, never refused" posture) OR the cited successor row is itself still
+  --             in force (ledger_current).
+  -- v3 NOTE on the `JOIN ledger_current t` below (consult part 2D: "remove the unconditional
+  -- target-currency requirement"): this join is KEPT, not deleted, but it can no longer PRODUCE
+  -- v2's defect, by construction -- PROOF: disposition_basis_holds is consulted ONLY via the
+  -- final anti-join against `raw_violations rv` (below), and every rv.target_id is ALREADY
+  -- current (every CTE feeding raw_violations above reads ledger_current exclusively, so a
+  -- retracted target never produces an rv row to match against in the first place). So whenever
+  -- this join's WHERE clause actually gets evaluated for a (class, target_id) pair that matters,
+  -- `t` is GUARANTEED to be found -- the join can never again FALSIFY a basis that would
+  -- otherwise hold. A disposition whose target is later retracted is MOOT (its rv row already
+  -- gone upstream), never DEFEATED by this join finding no match -- exactly "moot, never
+  -- defeated" (spec Element 3, consult part 2D), achieved structurally rather than by deleting
+  -- the join and re-deriving t's static kind/work_slug off raw ledger (which would reintroduce a
+  -- raw-ledger leg into THIS view, undoing the current-truth retype gates/ledger_reader_
+  -- allowlist.py now expects -- see that file's own s37 entry).
   dispositions AS (
     SELECT lc.id AS disp_id, lc.work_violation_class AS class, lc.work_violation_target_id AS target_id,
            lc.work_resolution AS resolution, lc.work_violation_witness AS witness_id
@@ -527,6 +592,11 @@ WITH RECURSIVE
   )
 SELECT rv.violation, rv.slug, rv.detail, rv.target_id
 FROM   raw_violations rv
+-- v3 Element 1 -- the EXPLICIT target-in-force gate: redundant with raw_violations' own
+-- current-truth construction above (every target_id it emits is already current or NULL), kept
+-- as the ONE textual anchor a future arm's author must preserve (matching Element 3's own "one
+-- join... not a procedure" idiom) -- "a member lapses when its target row leaves ledger_current"
+-- is now true by TWO independent readings of this view's text, not one.
 JOIN   :"schema".ledger_current tgt ON tgt.id = rv.target_id
 WHERE  NOT EXISTS (
          SELECT 1 FROM disposition_basis_holds dbh
@@ -544,7 +614,10 @@ COMMENT ON VIEW :"schema".work_item_violations IS
 -- work_violation_history (s37, THE declared raw/history reader -- unfiltered, never narrowed)
 -- RE-ISSUED to add the SAME blocks_start_cycle shape, raw/unfiltered, mirroring blocks_close_
 -- cycle's own raw arm in this same view exactly one edge-type over. Every pre-existing CTE and
--- arm is BYTE-IDENTICAL below; only the two new CTEs and the one new UNION ALL arm are appended.
+-- arm's EXECUTABLE SQL is byte-identical below; only the two new CTEs and the one new UNION ALL
+-- arm are appended. s37's OWN comments on the pre-existing CTEs/arms are carried forward
+-- verbatim (restored in this file after a review catch -- see Element 6's own header above for
+-- the same note, which applies here too).
 -- ============================================================================================
 CREATE OR REPLACE VIEW :"schema".work_violation_history
     WITH (security_invoker = true) AS
@@ -561,6 +634,8 @@ WITH RECURSIVE
     WHERE kind = 'work_closed' AND work_resolution = 'shipped'
       AND (work_witness IS NULL OR btrim(work_witness) = '')
   ),
+  -- s37 fix (reviewer-witnessed defect 1, ADR-0014-review round; same fix as the view's own
+  -- `deps`/`dangling_dep` above -- see that CTE's own comment for why `id` is required).
   deps AS (
     SELECT work_slug AS dependent, work_depends_on AS antecedent, id
     FROM :"schema".ledger WHERE kind = 'work_depends_on'
@@ -694,6 +769,19 @@ WITH RECURSIVE
     UNION ALL
     SELECT 'closed_but_tree_defeated', slug, 'close row ' || close_id || '; unresolved: ' || blockers, close_id FROM closed_but_tree_defeated
   )
+-- v3 amendment (element 2 / consult part 2C): two ADDITIVE columns, appended after the
+-- pre-existing disposition_in_force (a pure column-list widening of an already-declared-history
+-- view -- HISTORY: safe, no existing column touched). target_in_force names whether rv.target_id
+-- itself still reads current -- the direct, attributable answer to "is this member's target row
+-- still standing" that work_item_violations' own narrowing computes but never surfaced before.
+-- target_retraction_id names the SPECIFIC ledger row that superseded (retracted) the target, when
+-- one exists -- the "a retraction, a disposition, or open debt" trichotomy (spec element 2,
+-- verbatim) now fully attributable in ONE row: target_in_force=false + target_retraction_id set
+-- is the retraction story; a disposition_id with disposition_in_force=true is the disposition
+-- story; neither is open debt (assuming target_in_force is also true, i.e. a live, unanswered
+-- violation). A member can show BOTH a retraction and a disposition trail (e.g. a corrected
+-- disposition superseded before the target itself was later retracted) -- the record stays
+-- complete, never collapsed to one story.
 SELECT rv.violation, rv.slug, rv.detail, rv.target_id,
        d.id AS disposition_id, d.work_resolution AS disposition_resolution,
        d.rationale AS disposition_basis, d.work_violation_witness AS disposition_witness,
@@ -834,6 +922,15 @@ GRANT SELECT ON :"schema".work_violation_history TO :"role";
 --     for blocks-close (a strict-close check is likewise construction-time-only, never retroactive)
 --     and is the correct, disclosed bound for an append-only ledger, not a gap this delta could
 --     close without violating HISTORY: safe.
+--   - A blocks-close edge and a blocks-start edge between the SAME two items, in OPPOSITE
+--     directions, construct without refusal -- deliberate, per Element 2's own ground (a) above
+--     (the two obligations fire at different lifecycle moments and are jointly satisfiable in the
+--     ordinary case). But if --strict (or composite discharge) is later invoked on the
+--     blocks-close side, the topology produces a GENUINE mutual claim/close deadlock that NEITHER
+--     construction-time cycle check detects, each being scoped to a single edge type by design
+--     (Element 2's own decision, this file). This is an admitted, named axis, not a mechanism gap:
+--     it is recoverable via the standard supersession recipe (supersede one of the two edges),
+--     the same recovery path as any other regretted edge in this lineage.
 --
 -- PARAMETERIZATION (db/harness/00N idiom; same vars/defaults as s15/.../s38): schema/kern/role are
 -- psql variables so this delta is VALIDATED on a throwaway substrate before any real apply.
