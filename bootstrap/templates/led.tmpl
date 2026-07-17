@@ -574,7 +574,7 @@ warn_path_shaped_in_statement() {
 # not a silent gap.
 if [ -n "$event_time" ]; then
   case "${1:-}" in
-    --recent|current|question-status|review-gap|stamp-distinctness|standing|register-principal|obligate|review|work)
+    --recent|current|question-status|review-gap|stamp-distinctness|standing|register-principal|obligate|review|work|decomposition-review-status)
       echo "led: REFUSED -- --event-time is only supported on the generic <kind> <statement...>" >&2
       echo "  path today (e.g. './led --event-time <ts> finding \"...\"'); '${1:-}' has its own" >&2
       echo "  INSERT that does not carry event_declared_ts, so the value would otherwise be" >&2
