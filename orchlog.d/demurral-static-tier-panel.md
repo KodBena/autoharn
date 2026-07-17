@@ -36,3 +36,17 @@ where the classifier call itself fails.
 Full documentation: `bootstrap/templates/APPARATUS.md` (the switchboard doc),
 the `cost_note` beside the switch in `bootstrap/templates/apparatus.json`, and
 `hooks/demurral_detect.py`'s own docstring.
+
+**Same-day amendment (2026-07-17, after this note was first written — flagging it
+here since the panel has not yet pulled it):** the notice text you get on a
+static-tier hit was, until this amendment, hardcoded in
+`hooks/demurral_detect.py`. It is now operator data too, living in the SAME
+`instruments/demurral_phrases.default.json` file (and its per-world override)
+as the phrase list above, under an optional `"notice"` key. Two shapes are
+accepted: a bare array of phrase strings (what this note already described —
+phrases only, built-in notice, unchanged), or `{"phrases": [...], "notice":
+"..."}` for both knobs in one file. `notice` may contain the placeholder
+`{phrases}`, substituted with the phrase(s) this invocation matched. An absent
+or non-string `notice` falls back to the built-in text (a non-string value
+also warns loudly on stderr, never crashes). Edit `notice` the same way you'd
+edit `phrases` — same file, same override path.
