@@ -63,18 +63,16 @@
 #                            this flag is REFUSED loudly on those verbs (never a silent drop; see
 #                            the coverage guard near the top of this file's own logic).
 #
-#   LED_ACTOR=<principal-name>   (env var, not a flag) resolves the actor/principal for FOUR
+#   LED_ACTOR=<principal-name>   (env var, not a flag) resolves the actor/principal for ALL SEVEN
 #                            ledger-writing paths -- the generic <kind> <statement> path below,
-#                            `led review`, `led work claim`, and `led work open` (ONE
-#                            resolution point, resolve_actor(), defined once and shared by all
-#                            four). NOT YET WIRED (named honestly, not covered): `led work
-#                            depends`, `led work close`, and `led work resolve-violation` all
-#                            ignore LED_ACTOR today -- their rows land under the default
-#                            connection principal regardless (tracked upstream as
-#                            work item write-path-actor-completion). Unset, a write lands under
-#                            the default connection principal (`author`). Set to an unregistered
-#                            name, the write is REFUSED with teach-text (register it first:
-#                            `led register-principal <name> <class>`) rather than silently
+#                            `led review`, `led work claim`, `led work open`, `led work depends`,
+#                            `led work close`, and `led work resolve-violation` (ONE resolution
+#                            point, resolve_actor(), defined once and shared by all seven; work
+#                            item write-path-actor-completion wired the last three -- depends,
+#                            close, resolve-violation -- closing the class). Unset, a write lands
+#                            under the default connection principal (`author`). Set to an
+#                            unregistered name, the write is REFUSED with teach-text (register it
+#                            first: `led register-principal <name> <class>`) rather than silently
 #                            falling back to the default principal.
 #
 #   led --recent [N]                          last N ledger rows (default 10), newest first;
@@ -627,10 +625,11 @@ if [ -n "$event_time" ]; then
   esac
 fi
 
-# --- LED_ACTOR resolution (ONE point, used by FOUR of the ledger-writing paths below:
-# `led review`, `led work claim`, `led work open`, and the generic <kind> <statement> path;
-# `led work depends`/`close`/`resolve-violation` are NOT yet wired and ignore LED_ACTOR --
-# tracked upstream as write-path-actor-completion) ----------------------------------------------
+# --- LED_ACTOR resolution (ONE point, used by ALL SEVEN of the ledger-writing paths below:
+# `led review`, `led work claim`, `led work open`, `led work depends`, `led work close`,
+# `led work resolve-violation`, and the generic <kind> <statement> path -- work item
+# write-path-actor-completion wired the final three, depends/close/resolve-violation, closing
+# the class across every ledger-writing path in this file) --------------------------------------
 # Sets $actor_name to LED_ACTOR (may be empty). Downstream, NULLIF(:'actor_name','') still turns
 # an empty value into NULL so the kernel's set_actor trigger fills the default connection
 # principal, unchanged from before. What's new here: an explicit, up-front existence check. A
@@ -645,8 +644,14 @@ fi
 # LED_ACTOR=reviewer landed as actor='author'). `led work open` was a FOURTH, separately-
 # discovered instance of the same gap (this file's own B-pass over design/USER-RECIPES-FAQ.md,
 # 2026-07-16/17: a shipped FAQ recipe depends on LED_ACTOR working for work open, and it silently
-# didn't) -- now wired into resolve_actor() the same way, closing the class across all four
-# ledger-writing paths rather than leaving a fifth as an exercise for the next reader.
+# didn't) -- now wired into resolve_actor() the same way. `led work depends` (both
+# has_edge_type_col branches), `led work close` (both its pre-s29 and s29+/s38 INSERT branches),
+# and `led work resolve-violation` were THREE more, remaining instances of the same gap (their
+# rows landed under the default connection principal regardless of LED_ACTOR -- the panel
+# deployment's five witnessed LED_ACTOR=item-countersign closes all landed actor=author, rows
+# 1710/1716/1719/1732/1746) -- work item write-path-actor-completion wires all three the same
+# way, closing the class across every ledger-writing path in this file rather than leaving an
+# eighth as an exercise for the next reader.
 resolve_actor() {
   actor_name="${LED_ACTOR:-}"
   if [ -n "$actor_name" ]; then
@@ -1751,23 +1756,33 @@ SQL
         echo "  if ${on} must be finished before ${slug} may close, use --type blocks-close;" >&2
         echo "  if ${on} must be CLOSED before ${slug} may be CLAIMED, use --type blocks-start (s39)." >&2
       fi
+      resolve_actor
+      # actor resolves via a subquery bind exactly as `led review`/`led work claim`/`led work
+      # open` above: NULLIF(:'actor_name','') is NULL when LED_ACTOR is unset, so the edge lands
+      # under the default connection principal, byte-identical to before this wiring.
+      # resolve_actor (defined near the top of this file) is the ONE place LED_ACTOR is read/
+      # validated, shared across all seven ledger-writing paths.
       if [ "$has_edge_type_col" = "t" ]; then
         exec psql -h "$PGHOST" -d "$PGDB" -v ON_ERROR_STOP=1 \
           -v slug="$slug" -v on="$on" -v type="$type" -v supersedes="$supersedes" \
+          -v actor_name="$actor_name" \
           -v statement="work_depends_on: ${slug} depends on ${on}" <<SQL
         SET ROLE ${ROLE};
         SET search_path = ${SCHEMA}, ${KERNEL};
-        INSERT INTO ${SCHEMA}.ledger (kind, work_slug, work_depends_on, edge_type, supersedes, statement)
-        VALUES ('work_depends_on', :'slug', :'on', NULLIF(:'type', ''), NULLIF(:'supersedes', '')::bigint, :'statement');
+        INSERT INTO ${SCHEMA}.ledger (kind, work_slug, work_depends_on, edge_type, supersedes, statement, actor)
+        VALUES ('work_depends_on', :'slug', :'on', NULLIF(:'type', ''), NULLIF(:'supersedes', '')::bigint, :'statement',
+                (SELECT id FROM principal WHERE name = NULLIF(:'actor_name', '')));
 SQL
       else
         exec psql -h "$PGHOST" -d "$PGDB" -v ON_ERROR_STOP=1 \
           -v slug="$slug" -v on="$on" -v supersedes="$supersedes" \
+          -v actor_name="$actor_name" \
           -v statement="work_depends_on: ${slug} depends on ${on}" <<SQL
         SET ROLE ${ROLE};
         SET search_path = ${SCHEMA}, ${KERNEL};
-        INSERT INTO ${SCHEMA}.ledger (kind, work_slug, work_depends_on, supersedes, statement)
-        VALUES ('work_depends_on', :'slug', :'on', NULLIF(:'supersedes', '')::bigint, :'statement');
+        INSERT INTO ${SCHEMA}.ledger (kind, work_slug, work_depends_on, supersedes, statement, actor)
+        VALUES ('work_depends_on', :'slug', :'on', NULLIF(:'supersedes', '')::bigint, :'statement',
+                (SELECT id FROM principal WHERE name = NULLIF(:'actor_name', '')));
 SQL
       fi
       ;;
@@ -1873,13 +1888,19 @@ SQL
           echo "  kernel-delta decision tree)." >&2
           exit 1
         fi
+        resolve_actor
+        # actor resolves via the SAME subquery-bind idiom as every other ledger-writing path
+        # (resolve_actor defined near the top of this file) -- unset LED_ACTOR is byte-identical
+        # to before this wiring (NULLIF(:'actor_name','') -> NULL -> set_actor's default fill).
         exec psql -h "$PGHOST" -d "$PGDB" -v ON_ERROR_STOP=1 \
           -v slug="$slug" -v resolution="$resolution" -v witness="$witness" \
+          -v actor_name="$actor_name" \
           -v statement="work_closed: ${slug} (${resolution})" <<SQL
         SET ROLE ${ROLE};
         SET search_path = ${SCHEMA}, ${KERNEL};
-        INSERT INTO ${SCHEMA}.ledger (kind, work_slug, work_resolution, work_witness, statement)
-        VALUES ('work_closed', :'slug', :'resolution', NULLIF(:'witness', ''), :'statement');
+        INSERT INTO ${SCHEMA}.ledger (kind, work_slug, work_resolution, work_witness, statement, actor)
+        VALUES ('work_closed', :'slug', :'resolution', NULLIF(:'witness', ''), :'statement',
+                (SELECT id FROM principal WHERE name = NULLIF(:'actor_name', '')));
 SQL
         exit $?
       fi
@@ -2006,17 +2027,25 @@ SQL
       fi
       strict_bool="false"
       [ -n "$strict" ] && strict_bool="true"
+      resolve_actor
+      # actor resolves via the SAME subquery-bind idiom as every other ledger-writing path
+      # (resolve_actor defined near the top of this file) -- unset LED_ACTOR is byte-identical
+      # to before this wiring (NULLIF(:'actor_name','') -> NULL -> set_actor's default fill). All
+      # THREE constructors above (--review-witness/--review-deferred/--review-bookkeeping) share
+      # this one INSERT, so LED_ACTOR attribution is identical across all three.
       exec psql -h "$PGHOST" -d "$PGDB" -v ON_ERROR_STOP=1 \
         -v slug="$slug" -v resolution="$resolution" -v witness="$witness" \
         -v disposition="$disposition" -v review_ref="$review_ref" -v strict_bool="$strict_bool" \
+        -v actor_name="$actor_name" \
         -v statement="work_closed: ${slug} (${resolution})" <<SQL
         SET ROLE ${ROLE};
         SET search_path = ${SCHEMA}, ${KERNEL};
         INSERT INTO ${SCHEMA}.ledger
           (kind, work_slug, work_resolution, work_witness,
-           work_review_disposition, work_review_ref, work_strict_close, statement)
+           work_review_disposition, work_review_ref, work_strict_close, statement, actor)
         VALUES ('work_closed', :'slug', :'resolution', NULLIF(:'witness', ''),
-                :'disposition', NULLIF(:'review_ref', ''), :'strict_bool'::boolean, :'statement');
+                :'disposition', NULLIF(:'review_ref', ''), :'strict_bool'::boolean, :'statement',
+                (SELECT id FROM principal WHERE name = NULLIF(:'actor_name', '')));
 SQL
       ;;
     review-gap)
@@ -2192,20 +2221,25 @@ SQL
       else
         disposition="deferred"; review_ref=""
       fi
+      resolve_actor
+      # actor resolves via the SAME subquery-bind idiom as every other ledger-writing path
+      # (resolve_actor defined near the top of this file) -- unset LED_ACTOR is byte-identical
+      # to before this wiring (NULLIF(:'actor_name','') -> NULL -> set_actor's default fill).
       exec psql -h "$PGHOST" -d "$PGDB" -v ON_ERROR_STOP=1 \
         -v class="$class" -v tid="$target_id" -v resolution="$resolution" -v basis="$basis" \
         -v witness="$witness" -v disposition="$disposition" -v review_ref="$review_ref" \
-        -v supersedes="$supersedes" \
+        -v supersedes="$supersedes" -v actor_name="$actor_name" \
         -v statement="work_violation_disposition: ${class} target ${target_id} (${resolution})" <<SQL
       SET ROLE ${ROLE};
       SET search_path = ${SCHEMA}, ${KERNEL};
       INSERT INTO ${SCHEMA}.ledger
         (kind, work_violation_class, work_violation_target_id, work_resolution,
          work_violation_witness, rationale, work_review_disposition, work_review_ref, supersedes,
-         statement)
+         statement, actor)
       VALUES ('work_violation_disposition', :'class', :'tid'::bigint, :'resolution',
               NULLIF(:'witness', '')::bigint, :'basis', :'disposition', NULLIF(:'review_ref', ''),
-              NULLIF(:'supersedes', '')::bigint, :'statement');
+              NULLIF(:'supersedes', '')::bigint, :'statement',
+              (SELECT id FROM principal WHERE name = NULLIF(:'actor_name', '')));
 SQL
       ;;
     supersede-cascade)
