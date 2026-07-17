@@ -36,10 +36,42 @@ discriminator ("who decides") and the four negative shapes explicitly, not just 
 vocabulary (ADR-0011 Rule 4: enumeration fails open — a phrase blocklist is exactly the
 mechanism this hook must NOT be, because the attrition reflex is a paraphrase engine).
 
+STATIC TIER, ADDED 2026-07-17 (maintainer design, ledger decision rows dated 2026-07-17) — the
+enumeration-fails-open argument directly above is preserved IN FULL, for the case it was
+written for: a phrase blocklist as the SOLE or the ENFORCING mechanism is still exactly what
+this hook must never be, because the attrition reflex is a paraphrase engine and any
+enumerated list is always one paraphrase behind it. What changed is the SPACE next to that
+argument, not the argument itself. `mode="static"` is a new, deliberately weak, ADDITIONAL
+first tier: a case-insensitive, word-boundary match against a phrase list rooted in Rule 3's own
+canonical vocabulary. It catches nothing the classifier would not also catch; it MISSES every
+paraphrase by construction (a "gilding the lily" or "the juice isn't worth the squeeze" positive
+in the eval corpus is a static-tier miss ON PURPOSE, not a defect); and it is offered strictly as
+an OBSERVER, never as a gate — the same never-blocks posture as the classifier tier. It exists
+because the honest alternative — leave the choice at "off" (free, no detection) or "observe" (a
+real, billed `claude -p` call) — left most worlds with no detection running at all (maintainer's
+2026-07-17 rationale, verbatim: off-or-costed left most worlds with no detection at all). A world
+unwilling to pay for the classifier now gets a free, honestly-disclosed-as-weak net instead of
+nothing; a world that DOES pay for the classifier (`mode="observe"`) gets the static tier only as
+that classifier's OWN fallback, when a call is unavailable — see APPARATUS.JSON SWITCHBOARD
+below. The static tier is not, and is not meant to become, a substitute for the classifier's
+shape-based judgment (Rule 3's three discriminators); it is the free floor underneath it.
+
+THE PHRASE LIST IS DATA, NOT CODE (same-day amendment, ADR-0012's data/code separation applied
+here on the maintainer's explicit instruction): the vocabulary does NOT live as a Python
+constant baked into this file. It lives in `instruments/demurral_phrases.default.json` — a
+plain, documented JSON file (its own header fields explain what it is and how to change it) —
+so an operator edits vocabulary without touching this hook's code. A deployment that wants its
+own words entirely replaces the effective list, without editing the shipped default, by dropping
+`<world-root>/.claude/demurral_phrases.json` (same shape: `{"phrases": [...], ...}`) — see
+`_resolve_static_phrases` below for the exact three-step resolution order (per-world override,
+else the shipped default, else a tiny hardcoded emergency floor if even the shipped file is
+unreadable) and its own comment for why each step exists.
+
 OBSERVER MODE ONLY (house rule, 2026-07-09 mandate) — THIS HOOK NEVER BLOCKS, NEVER DENIES,
-NEVER ASKS. It only WARNS: on a POSITIVE verdict it (a) injects a warning + the flagged text +
-a Rule 3 reminder into the agent's own context via `hookSpecificOutput.additionalContext` (so
-the agent sees the flag on its own next turn), and (b) appends a record to a journal file
+NEVER ASKS, AT ANY TIER (classifier or static). It only WARNS: on a POSITIVE verdict — classifier
+or static, including the observe-mode static fallback — it (a) injects a warning + the flagged
+text + a Rule 3 reminder into the agent's own context via `hookSpecificOutput.additionalContext`
+(so the agent sees the flag on its own next turn), and (b) appends a record to a journal file
 under the world's `.claude/logs/`. Promotion of this detector from observer to enforcing
 (e.g. a PreToolUse `permissionDecision: "ask"/"deny"`) is a MAINTAINER ACT, never a default
 this file adopts unilaterally — ADR-0013 Rule 3's own text says the rule's enforcement surface
@@ -70,38 +102,79 @@ for a maintainer/future pass to drop in):
       }
     }
 
-NAMED CHOICE — FAIL-OPEN ON TIMEOUT/ERROR. Any classifier timeout, subprocess failure,
-unparsed verdict, or unexpected exception is treated as "no verdict" and the hook exits 0,
-silent, unchanged — the SAME posture `stamp_intercept.py`/`pretooluse_change_gate.py` state
-for their own passthrough paths, applied here for the same reason stated plainly: this is an
-OBSERVER, and a detector hiccup (a slow model call, a CLI hiccup, a malformed reply) must
-never cost the session a blocked tool call or a wedged Stop. The cost of fail-open is a missed
-warning on that one turn; the cost of fail-closed would be breaking every session the moment
-the classifier is unavailable, for a rule ADR-0013 itself already declares "review-only". Both
+NAMED CHOICE — FAIL-OPEN ON TIMEOUT/ERROR, TO THE STATIC TIER, NEVER TO A BLOCK. Any classifier
+timeout, subprocess failure, unparsed verdict, or unexpected exception is treated as "no
+verdict" and NEVER blocks the tool call or wedges Stop — the SAME posture
+`stamp_intercept.py`/`pretooluse_change_gate.py` state for their own passthrough paths, applied
+here for the same reason stated plainly: this is an OBSERVER, and a detector hiccup (a slow
+model call, a CLI hiccup, a malformed reply) must never cost the session anything blocking. Prior
+to 2026-07-17 that was the WHOLE story: fail-open meant "exits 0, silent". As of the static tier,
+`mode="observe"` on a classifier ERROR now falls back to the free static-tier check (module
+docstring's APPARATUS.JSON SWITCHBOARD section) rather than going fully silent — the classifier's
+own strength claim is unaffected (a fallback is journaled honestly as `tier: "static_fallback"`,
+never conflated with a classifier verdict), but a live session in `"observe"` mode with a flaky
+classifier now gets SOME detection on that turn instead of none. `mode="static"` never touches
+the classifier at all, so this named choice does not apply to it. The cost of fail-open remains a
+possibly-weaker warning (static tier, not classifier) on a flaky turn, never a block; fail-closed
+would still be the wrong trade for a rule ADR-0013 itself already declares "review-only". Both
 the hook and `instruments/demurral_eval.py` share the exact classifier machinery below (same
 prompt-builder, same subprocess invocation), so the eval numbers reported by the eval harness
-ARE this hook's honest strength claim — not a separately-tuned proxy.
+ARE this hook's honest strength claim for the CLASSIFIER tier — not a separately-tuned proxy; the
+static tier's own honest strength claim is the corpus confusion count reported alongside it
+(this file's own module docstring change record / the commissioning report, not a separate
+harness — the static tier is one small regex, not a classifier needing a parity harness).
 
-APPARATUS.JSON SWITCHBOARD (maintainer mandate, 2026-07-10) -- THE CASE IN POINT for "anything
-that spends money per invocation defaults to OFF": this mechanism's mode
-(`mechanisms.demurral_detect.mode`) lives at `<root>/.claude/apparatus.json` (`root` = an explicit
-GATE_SUBJECT_ROOT env var, else this session's own `cwd` -- this hook has never had a separate
-SUBJECT_ROOT/deployment.json notion, only `cwd`, the same field `_journal_path` already keys off).
-Missing file/key resolves to `"off"` -- NOT `"enforce"` and not even `"observe"` -- because the
-classifier this mechanism gates is a real `claude -p` subprocess call, billed per invocation, and
-"no world may silently bill its operator" (maintainer mandate, verbatim) overrides the "defaults
-to current strength" rule every OTHER mechanism in this project gets. `"off"` -- exit before any
-subprocess is even considered; `"observe"` -- exactly this file's behavior before this pass (the
-ONLY behavior this file has ever had: it never blocked to begin with, so `"observe"` is simply
-"on"). `"enforce"` is NOT implemented for this mechanism (module docstring above: promotion to
-enforcing is a maintainer act, never unilaterally adopted here) -- if apparatus.json names it
-anyway, this hook warns loudly and behaves as `"observe"`, the strongest real behavior it has,
-rather than either silently doing nothing or inventing an enforcement surface nobody designed.
+APPARATUS.JSON SWITCHBOARD (maintainer mandate, 2026-07-10; extended 2026-07-17 with the static
+tier) -- THE CASE IN POINT for "anything that spends money per invocation defaults to OFF": this
+mechanism's mode (`mechanisms.demurral_detect.mode`) lives at `<root>/.claude/apparatus.json`
+(`root` = an explicit GATE_SUBJECT_ROOT env var, else this session's own `cwd` -- this hook has
+never had a separate SUBJECT_ROOT/deployment.json notion, only `cwd`, the same field
+`_journal_path` already keys off). Missing file/key resolves to `"off"` -- NOT `"enforce"` and
+not even `"observe"` -- because the classifier this mechanism gates is a real `claude -p`
+subprocess call, billed per invocation, and "no world may silently bill its operator" (maintainer
+mandate, verbatim) overrides the "defaults to current strength" rule every OTHER mechanism in
+this project gets.
+
+FOUR values now, not the project-wide three (`bootstrap/templates/APPARATUS.md`'s own
+"binding for every mechanism" off/observe/enforce statement) -- this mechanism is the one
+deliberate, disclosed exception, because the static tier is a genuinely distinct THIRD detection
+strength, not a variant of an existing one:
+  `"off"`     -- exit before any work -- static match or subprocess -- is even considered
+                 (unchanged).
+  `"static"`  -- NEW: only the zero-cost phrase tier below runs, matching against the phrase
+                 list resolved from `instruments/demurral_phrases.default.json` (or a
+                 `<world-root>/.claude/demurral_phrases.json` override -- see
+                 `_resolve_static_phrases` and its section comment for the full DATA, NOT CODE
+                 story). No subprocess, no model call, EVER, at this mode value. The weakest
+                 real behavior this mechanism has, offered for a world that will not pay for
+                 `"observe"`.
+  `"observe"` -- the costed classifier subprocess runs exactly as this file's behavior before
+                 this pass (the ONLY behavior this file had before 2026-07-17: it never blocked
+                 to begin with, so `"observe"` was simply "on"). When the classifier RETURNS a
+                 verdict (POSITIVE or NEGATIVE), that verdict GOVERNS and the static tier is not
+                 consulted at all -- no double nudge on a POSITIVE, no second-guessing a clean
+                 NEGATIVE. ONLY when the classifier is unavailable (timeout, subprocess launch
+                 failure, or an unparsed reply -- `ClassifyResult.verdict == "ERROR"`) does this
+                 mode fall back to the static tier, and the resulting journal row honestly
+                 records the fallback (`tier: "static_fallback"`) rather than silently presenting
+                 a static hit as a classifier verdict.
+  `"enforce"` -- unchanged, still NOT implemented for this mechanism (module docstring above:
+                 promotion to enforcing is a maintainer act, never unilaterally adopted here) --
+                 if apparatus.json names it anyway, this hook warns loudly and behaves as
+                 `"observe"`, the strongest real behavior it has, rather than either silently
+                 doing nothing or inventing an enforcement surface nobody designed.
+An unrecognized mode string (anything outside these four) never widens behavior -- same posture
+as every other mechanism's mode validation -- and falls back to `"off"` with a loud stderr
+warning naming the bad value and the full valid set.
+
 Per-mechanism SETTINGS (not just mode) live alongside it: `classifier_command` (a JSON list of
 argv strings overriding the default `["claude", "-p", "--model", CLASSIFIER_MODEL]`),
 `timeout_s` (overriding `CLASSIFIER_TIMEOUT_S`), and `cost_note` (free text, read but never
 acted on by code -- "the cost_note sits next to the switch" for a human reading the file, per the
-mandate's own wording).
+mandate's own wording). The static tier introduces no new SETTINGS of its own -- it has nothing
+to configure beyond mode (`STATIC_DEMURRAL_PHRASES` below is a code-level constant, not a
+per-deployment override; a deployment wanting a different vocabulary is asking for a different
+mechanism, not a config knob on this one).
 
 GOODHARTING (BACKLOG's own caveat, restated here where the running prompt lives): a fixed
 classifier prompt is a target the same attrition reflex can eventually learn to slip past
@@ -313,7 +386,7 @@ def _journal(payload: dict, record: dict) -> None:
 # APPARATUS.JSON MECHANISM SWITCHBOARD (module docstring, maintainer mandate 2026-07-10). Self-
 # contained (no cross-file import, same posture every other hook in this pass states).
 # ---------------------------------------------------------------------------------------
-_VALID_MODES = ("off", "observe", "enforce")
+_VALID_MODES = ("off", "static", "observe", "enforce")
 
 
 def _apparatus_root(payload: dict) -> Optional[str]:
@@ -348,10 +421,12 @@ def _mechanism_entry(apparatus: dict) -> dict:
 
 def _resolve_mode(entry: dict, root: Optional[str]) -> str:
     """apparatus["mechanisms"]["demurral_detect"]["mode"], defaulted/validated per the
-    maintainer's 2026-07-10 switchboard mandate. Default is `"off"` (rule c: THE case in point --
-    a real `claude -p` subprocess is billed per invocation; no world may silently bill its
-    operator). `"enforce"` is not implemented for this mechanism (module docstring) -- named,
-    warned, and degraded to `"observe"` rather than silently ignored or silently invented."""
+    maintainer's 2026-07-10 switchboard mandate, extended 2026-07-17 with `"static"`. Default is
+    `"off"` (rule c: THE case in point -- a real `claude -p` subprocess is billed per invocation;
+    no world may silently bill its operator). `"static"` passes straight through -- it is a real,
+    fully-implemented mode (the zero-cost phrase tier, module docstring), unlike `"enforce"`,
+    which is not implemented for this mechanism (module docstring) -- named, warned, and degraded
+    to `"observe"` rather than silently ignored or silently invented."""
     default = "off"
     raw = entry.get("mode")
     if raw is None:
@@ -370,18 +445,118 @@ def _resolve_mode(entry: dict, root: Optional[str]) -> str:
     return default
 
 
+# ---------------------------------------------------------------------------------------
+# STATIC TIER (added 2026-07-17, module docstring "STATIC TIER" section; DATA/CODE SEPARATION
+# amendment, same day, maintainer-ratified -- ADR-0012's data-vs-code discipline applied here:
+# the phrase list is DATA an operator may edit without touching this file, not a constant baked
+# into the code). ADR-0013 Rule 3's own canonical demurral vocabulary (law/adr/0013-execution-
+# integrity.md, Rule 3 body) plus this file's own WHAT-THIS-CATCHES enumeration above now lives
+# in ONE documented DATA file, `instruments/demurral_phrases.default.json` -- its own header
+# fields (`_note`, `_override`) bind it to Rule 3's text and explain the override path, so that
+# binding travels with the data, not only with this comment. "overkill" is NOT verbatim in Rule
+# 3's text -- disclosed in that file's own `_note`, not silently folded in as if it were.
+#
+# RESOLUTION ORDER, per invocation (`_resolve_static_phrases` below):
+#   1. Per-world override, `<world-root>/.claude/demurral_phrases.json` -- if present and valid
+#      (same shape as the default file: a JSON object with a non-empty `phrases` array of
+#      strings), this IS the effective list, in FULL -- a deployment owns its vocabulary
+#      outright, this is never merged with the shipped default. Present-but-malformed warns
+#      loudly (one stderr line) and falls through to 2 -- never a silently empty list.
+#   2. The shipped default, `instruments/demurral_phrases.default.json`, read directly by its
+#      REPO-RELATIVE path (`_REPO_ROOT`, already computed above for this exact purpose) -- the
+#      hook already lives in this checkout, the same posture every other repo-relative fact in
+#      this file already assumes (e.g. `_REPO_ROOT` itself, computed at import time).
+#   3. `_EMERGENCY_STATIC_DEMURRAL_PHRASES` below -- a TINY hardcoded last resort, used ONLY if
+#      step 2 ALSO fails to load (the shipped data file itself missing or malformed -- a broken
+#      checkout, not an ordinary operating condition), with a loud warning. Chosen over "keep no
+#      hardcoded fallback at all" because the maintainer's own instruction is explicit that this
+#      mechanism must never go silently toothless; a hardcoded five-phrase floor costs nothing
+#      and guarantees the static tier still does SOMETHING even if `instruments/` itself is
+#      unreadable. It is deliberately NOT the full list (so it is visibly a last resort, not a
+#      second copy of the real one) and is never used when the shipped default loads cleanly.
+_PHRASES_DEFAULT_PATH = os.path.join(_REPO_ROOT, "instruments", "demurral_phrases.default.json")
+
+_EMERGENCY_STATIC_DEMURRAL_PHRASES: tuple[str, ...] = (
+    "invasive", "over-engineering", "yagni", "gold-plating", "overkill",
+)
+
+
+def _load_phrase_list(path: str) -> Optional[list[str]]:
+    """Read a demurral-phrase JSON file at `path`: `{"phrases": [str, ...], ...}`. Returns the
+    phrase list if the file parses and shapes correctly (a dict carrying a non-empty list of
+    non-empty strings under `"phrases"`), else None -- never raises. The caller decides what
+    None means (fall through silently, or warn then fall through) -- this function only reads
+    and validates."""
+    try:
+        with open(path, encoding="utf-8") as f:
+            data = json.load(f)
+    except Exception:
+        return None
+    if not isinstance(data, dict):
+        return None
+    phrases = data.get("phrases")
+    if not isinstance(phrases, list) or not phrases or not all(
+        isinstance(p, str) and p for p in phrases
+    ):
+        return None
+    return phrases
+
+
+def _resolve_static_phrases(root: Optional[str]) -> tuple[str, ...]:
+    """The EFFECTIVE static-tier phrase list for this invocation -- see the module comment above
+    this section for the full three-step resolution order and its rationale. `root` is the same
+    world root `_apparatus_root`/`_load_apparatus_quiet` already resolve apparatus.json against
+    (GATE_SUBJECT_ROOT env var, else this session's `cwd`) -- the override lives at
+    `<root>/.claude/demurral_phrases.json`, one directory over from `apparatus.json` itself."""
+    if root:
+        override_path = os.path.join(root, ".claude", "demurral_phrases.json")
+        if os.path.exists(override_path):
+            phrases = _load_phrase_list(override_path)
+            if phrases is not None:
+                return tuple(phrases)
+            print(f"[demurral-detect] WARNING: {override_path} exists but is malformed "
+                  f"(must be a JSON object with a non-empty 'phrases' array of non-empty "
+                  f"strings) -- falling back to the shipped default list, never to a silently "
+                  f"empty one.", file=sys.stderr)
+    default_phrases = _load_phrase_list(_PHRASES_DEFAULT_PATH)
+    if default_phrases is not None:
+        return tuple(default_phrases)
+    print(f"[demurral-detect] WARNING: shipped default phrase list at {_PHRASES_DEFAULT_PATH!r} "
+          f"is missing or malformed -- falling back to a tiny hardcoded emergency list "
+          f"({len(_EMERGENCY_STATIC_DEMURRAL_PHRASES)} phrases); this checkout is likely "
+          f"broken.", file=sys.stderr)
+    return _EMERGENCY_STATIC_DEMURRAL_PHRASES
+
+
+def static_match(text: str, phrases: tuple[str, ...]) -> Optional[str]:
+    """Case-insensitive, word-boundary match of `text` against `phrases` (the caller's already-
+    resolved effective list, `_resolve_static_phrases`'s return). Returns the FIRST matched
+    phrase in its original (as-typed) casing, or None. Pure regex -- never raises, never calls
+    out, zero cost -- the whole point of this tier (module docstring). The regex is compiled
+    fresh per call rather than cached at import time, on purpose: `phrases` can differ per
+    invocation (a per-world override), and this hook runs once per process, so there is no hot
+    loop to optimize for."""
+    if not phrases:
+        return None
+    pattern = re.compile(r"\b(" + "|".join(re.escape(p) for p in phrases) + r")\b", re.IGNORECASE)
+    m = pattern.search(text)
+    return m.group(1) if m else None
+
+
 RULE3_REMINDER = (
     "ADR-0013 Rule 3: a 'lower-ROI / invasive / over-engineering / YAGNI / gold-plating' "
     "demurral against ALREADY-MANDATED work is presumptively the attrition of will "
     "rationalizing itself, not a license to narrow scope. At most it is a NEUTRAL question "
     "to the ratifier, conclusion not pre-drawn ('the mandate includes X; here is the cost of "
     "X and of skipping X; do you still want X?') — never a recommendation to skip. This is an "
-    "OBSERVER-MODE warning; it does not block. See law/adr/0013-execution-stamina-and-"
-    "structural-completeness.md Rule 3 and its 2026-06-24 fair-dealing amendment."
+    "OBSERVER-MODE warning; it does not block. See law/adr/0013-execution-integrity.md "
+    "Rule 3 and its 2026-06-24 fair-dealing amendment."
 )
 
 
-def _emit_warning(payload: dict, event_name: str, flagged_text: str, result: ClassifyResult) -> None:
+def _emit_classifier_warning(payload: dict, event_name: str, flagged_text: str,
+                              result: ClassifyResult) -> None:
+    """CLASSIFIER-tier warning (mode="observe", the classifier returned a POSITIVE verdict)."""
     quoted = flagged_text if len(flagged_text) <= 600 else flagged_text[:600] + " …[truncated]"
     warning = (
         f"[demurral-detect] WARNING (observer-mode, non-blocking): the {event_name} content "
@@ -396,12 +571,60 @@ def _emit_warning(payload: dict, event_name: str, flagged_text: str, result: Cla
     _journal(payload, {
         "ts": time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime()) + "Z",
         "event": event_name,
+        "tier": "classifier",
         "verdict": result.verdict,
         "reason": result.reason,
         "prompt_version": PROMPT_VERSION,
         "flagged_text": flagged_text,
         "elapsed_s": round(result.elapsed_s, 3),
     })
+
+
+def _emit_static_notice(payload: dict, event_name: str, flagged_text: str, matched_phrase: str,
+                         *, tier: str, classifier_error: str = "") -> None:
+    """STATIC-tier nudge (mode="static", or mode="observe"'s fallback when the classifier is
+    unavailable/errors -- `tier` distinguishes the two in the journal, per the maintainer's
+    2026-07-17 design: never silently present a static hit as a classifier verdict).
+
+    Posture (module docstring's STATIC TIER paragraph, and the maintainer's exact framing): name
+    the matched phrase, ask the agent to be mindful of Rule 3 and reconsider, then name the
+    legitimate disregards in one sentence -- the agent itself judges false positives. This is a
+    BENIGN, disregardable nudge, not an accusation: the static tier has no shape-based judgment
+    at all, only an enumerated word match, so it is honest about being weaker evidence than the
+    classifier tier's POSITIVE."""
+    quoted = flagged_text if len(flagged_text) <= 600 else flagged_text[:600] + " …[truncated]"
+    fallback_note = (
+        f" (classifier fallback: {classifier_error})" if tier == "static_fallback" and classifier_error
+        else ""
+    )
+    warning = (
+        f"[demurral-detect] NOTICE (static tier, non-blocking{fallback_note}): the {event_name} "
+        f"content below contains the phrase {matched_phrase!r}, which is in ADR-0013 Rule 3's "
+        f"canonical demurral vocabulary. Be mindful of Rule 3 and reconsider whether this narrows "
+        f"already-mandated work. This is a free, enumeration-only word match with no judgment of "
+        f"context or shape -- it is disregardable if this is a neutral scope question to the "
+        f"ratifier, a fair-dealing renegotiation of a spec found wrong (with evidence), or a "
+        f"genuine external bound reported upward; you, the agent, judge whether this is a false "
+        f"positive.\n"
+        f"--- flagged text ---\n{quoted}\n--- end flagged text ---\n{RULE3_REMINDER}"
+    )
+    print(json.dumps({"hookSpecificOutput": {
+        "hookEventName": event_name,
+        **({"permissionDecision": "allow"} if event_name == "PreToolUse" else {}),
+        "additionalContext": warning,
+    }}))
+    record = {
+        "ts": time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime()) + "Z",
+        "event": event_name,
+        "tier": tier,
+        "verdict": "POSITIVE",
+        "matched_phrase": matched_phrase,
+        "prompt_version": PROMPT_VERSION,
+        "flagged_text": flagged_text,
+    }
+    if tier == "static_fallback" and classifier_error:
+        record["classifier_error"] = classifier_error
+    _journal(payload, record)
 
 
 def main() -> int:
@@ -441,6 +664,18 @@ def main() -> int:
     if not text:
         return 0
 
+    if mode == "static":
+        # STATIC TIER, 2026-07-17: no subprocess, no model call, ever, at this mode value
+        # (module docstring's STATIC TIER paragraph). Pure regex match against the resolved
+        # phrase list (per-world override, else the shipped default, else the emergency
+        # fallback -- `_resolve_static_phrases`); nothing else to do.
+        matched = static_match(text, _resolve_static_phrases(root))
+        if matched:
+            _emit_static_notice(payload, event, text, matched, tier="static")
+        return 0
+
+    # mode == "observe" from here (mode == "enforce" was already degraded to "observe" by
+    # _resolve_mode above; mode == "off"/"static" already returned).
     # Per-mechanism SETTINGS (module docstring): classifier_command / timeout_s override the
     # byte-held defaults when present and well-shaped; malformed values degrade quietly to the
     # default rather than erroring (same posture as every other config value in this project).
@@ -456,12 +691,26 @@ def main() -> int:
     try:
         result = classify_text(text, timeout=timeout_s, command=command)
     except Exception:  # noqa: BLE001 — belt-and-suspenders; classify_text already fail-opens
+        result = ClassifyResult("ERROR", "classify_text raised despite its own fail-open contract",
+                                 "", 0.0)
+
+    if result.verdict == "POSITIVE":
+        _emit_classifier_warning(payload, event, text, result)
+        return 0
+    if result.verdict == "NEGATIVE":
+        # The classifier GOVERNS (module docstring's APPARATUS.JSON SWITCHBOARD section): no
+        # static-tier double-check, no double nudge, on a clean classifier verdict.
         return 0
 
-    if result.verdict != "POSITIVE":
-        return 0  # NEGATIVE, or ERROR (timeout/subprocess failure/unparsed reply) -> fail-open, silent
-
-    _emit_warning(payload, event, text, result)
+    # result.verdict == "ERROR" (timeout, subprocess launch failure, or unparsed reply) -- the
+    # classifier is UNAVAILABLE this turn, so "observe" falls back to the static tier rather than
+    # going silent the way this file did before 2026-07-17 (maintainer design: off-or-costed left
+    # most worlds with no detection at all). Journaled honestly as a fallback, never as if it were
+    # a classifier verdict.
+    matched = static_match(text, _resolve_static_phrases(root))
+    if matched:
+        _emit_static_notice(payload, event, text, matched, tier="static_fallback",
+                             classifier_error=result.reason)
     return 0
 
 

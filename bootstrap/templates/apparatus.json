@@ -8,7 +8,7 @@
     "clean_exit": {"mode": "enforce"},
     "demurral_detect": {
       "mode": "off",
-      "cost_note": "Spends a real 'claude -p' classifier call per AskUserQuestion/Stop event when enabled -- billed to whoever pays for this world's Claude usage. OFF by default so no world silently bills its operator (maintainer mandate, 2026-07-10); flip to 'observe' only with that cost accepted.",
+      "cost_note": "Spends a real 'claude -p' classifier call per AskUserQuestion/Stop event ONLY in 'observe' mode -- billed to whoever pays for this world's Claude usage. OFF by default so no world silently bills its operator (maintainer mandate, 2026-07-10); flip to 'observe' only with that cost accepted. A fourth mode, 'static' (2026-07-17), spends nothing -- a zero-cost, word-boundary match against a phrase list rooted in ADR-0013 Rule 3's own vocabulary, observer-only, no classifier call ever; 'observe' also falls back to it when the classifier is unavailable this turn. The phrase list is DATA, not code: shipped default at instruments/demurral_phrases.default.json, wholesale-replaceable per-deployment at <world-root>/.claude/demurral_phrases.json (copy the default there and edit). See hooks/demurral_detect.py's module docstring (STATIC TIER / APPARATUS.JSON SWITCHBOARD) for the full shape.",
       "classifier_command": ["claude", "-p", "--model", "claude-haiku-4-5-20251001"],
       "timeout_s": 10
     },

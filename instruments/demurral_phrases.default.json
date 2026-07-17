@@ -1,0 +1,16 @@
+{
+  "_note": "Shipped DEFAULT phrase list for hooks/demurral_detect.py's static tier (mechanisms.demurral_detect mode=\"static\", or mode=\"observe\"'s fallback when the classifier is unavailable). Source: ADR-0013 Rule 3's own canonical demurral vocabulary (law/adr/0013-execution-integrity.md, Rule 3 body) plus that same hook's own docstring enumeration (which additionally names \"YAGNI\" and \"gold-plating\"); \"overkill\" is a maintainer-added item (2026-07-17) not verbatim in Rule 3's text but matching the eval corpus's own POSITIVE specimens (instruments/demurral_corpus.jsonl rows 7 and 62). This is a DELIBERATELY WEAK, enumeration-fails-open (ADR-0011 Rule 4) list -- a static, case-insensitive, word-boundary match, not a claim of the classifier's shape-based coverage.",
+  "_override": "A deployment may replace this list WHOLESALE (not merged) at <world-root>/.claude/demurral_phrases.json -- same shape as this file (a JSON object with a 'phrases' array of non-empty strings). Start by copying this file there and editing freely; the override, once present and valid, IS the effective list in full. A present-but-malformed override degrades loudly (one stderr warning) back to this shipped default, never to a silently empty list. See hooks/demurral_detect.py's module docstring (STATIC TIER section) for the full mechanism, and bootstrap/templates/APPARATUS.md's demurral_detect note for the operator-facing summary.",
+  "phrases": [
+    "lower value",
+    "debatable roi",
+    "invasive",
+    "over-engineering",
+    "overengineering",
+    "not worth the churn",
+    "yagni",
+    "gold-plating",
+    "overkill",
+    "defensible alternative to do less"
+  ]
+}

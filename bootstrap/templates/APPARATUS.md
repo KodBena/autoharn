@@ -5,7 +5,9 @@ it explains how to turn each safety mechanism on, off, or into observe-only mode
 changes when you do. `apparatus.json` is this project's per-instance choice surface: the
 deny-hint text a refused edit is taught, plus a **`mechanisms`** object — one entry per
 mechanism this project ships, each independently switched **`"off"` | `"observe"` |
-`"enforce"`** (maintainer mandate, 2026-07-10). Unlike the OLD `assurance` block this file used
+`"enforce"`** (maintainer mandate, 2026-07-10) — with ONE named exception,
+`demurral_detect`'s additional `"static"` value (maintainer design, 2026-07-17; see its own
+row in the table below and its dedicated note). Unlike the OLD `assurance` block this file used
 to carry (a forward declaration that no hook actually read), **every hook below reads its
 own mode live, at invocation time** — editing this file changes real behavior on the very next
 tool call, no re-scaffold needed. Format:
@@ -31,7 +33,7 @@ tool call, no re-scaffold needed. Format:
 }
 ```
 
-## The three modes, binding for every mechanism
+## The three modes, binding for every mechanism (one named exception below)
 
 - **`"off"`** — the mechanism's own deny/warn paths are skipped entirely: no journal entry, no
   state file touched, exactly as if that mechanism's code did not exist for this call.
@@ -42,13 +44,19 @@ tool call, no re-scaffold needed. Format:
   blocks, or asks.
 - **`"enforce"`** — the mechanism runs its full, original behavior: a refusal really refuses.
 
+**The one named exception:** `demurral_detect` alone also accepts **`"static"`**, a fourth,
+zero-cost, observer-only tier that never calls the classifier and never blocks — see its table
+row and dedicated note below for the full shape (what it matches, how it composes with
+`"observe"`'s fallback, and why this one mechanism departs from the three-mode convention every
+other mechanism in this project holds to).
+
 **Missing file, missing `mechanisms` key, or a missing per-mechanism entry** resolves to that
 mechanism's own **stated default** (next section) — never an error.
 
-**An unrecognized mode string** (anything other than the three above) never widens permissions:
-every hook falls back to its own default with a loud stderr warning naming the exact bad value
-and the file it came from. A typo in this file can only make a mechanism MORE conservative than
-intended, never less.
+**An unrecognized mode string** (anything other than the mechanism's own valid set — the three
+above, or `demurral_detect`'s four) never widens permissions: every hook falls back to its own
+default with a loud stderr warning naming the exact bad value and the file it came from. A typo
+in this file can only make a mechanism MORE conservative than intended, never less.
 
 **An unrecognized mechanism NAME** — a typo'd key under `mechanisms` itself, e.g.
 `"doc_shapse_gate"` — is a DIFFERENT defect from a bad mode value, caught a different way
@@ -64,18 +72,19 @@ warning names both the bad key and the full valid set.
 
 ## The thirteen mechanisms and their defaults
 
-The table below lists every mechanism this project ships, the hook file that implements it, its
-shipped default mode, and why that default was chosen — the per-mechanism detail behind the
-switchboard example above.
+The table below lists every mechanism this project ships, the file that implements it (a hook,
+for twelve of the thirteen; a `.tmpl` operator verb for the thirteenth, `doc_attestation` — its
+own row says so explicitly), its shipped default mode, and why that default was chosen — the
+per-mechanism detail behind the switchboard example above.
 
-| mechanism            | hook                                          | default   | why |
+| mechanism            | implementing file                             | default   | why |
 |----------------------|------------------------------------------------|-----------|-----|
 | `change_gate`         | `hooks/pretooluse_change_gate.py`               | `enforce` | free per call — defaults to its current strength |
 | `permit_to_work`      | `hooks/pretooluse_change_gate.py` (same file, independent switch) | `enforce` | free per call |
 | `decomposition_review`| `hooks/pretooluse_change_gate.py` (same file, independent switch) | `observe` | free per call, but this mechanism is NEW and changes what an already-running world's writes are gated on the moment its `hooks/` is updated — defaults to `observe` (journals the would-be denial) rather than retroactively blocking a live world with no operator opt-in; `enforce` is the intended steady state once a world has adopted `countersign_obligation` rows (the ledger table naming which claimed work items require an outside reviewer's countersign before their writes unblock — see the named nuance below) for its work items |
 | `stamp_intercept`      | `hooks/stamp_intercept.py`                      | `enforce` | free per call — injection itself is free/harmless in EVERY mode; only the broken-secret DENY is mode-gated |
 | `clean_exit`           | `hooks/stop_clean_exit.py`                      | `enforce` | free per call |
-| `demurral_detect`      | `hooks/demurral_detect.py`                      | **`off`** | **spends a real `claude -p` classifier call per invocation** — "no world may silently bill its operator" (maintainer mandate, verbatim); the `cost_note` field sits next to this switch on purpose |
+| `demurral_detect`      | `hooks/demurral_detect.py`                      | **`off`** | **spends a real `claude -p` classifier call per invocation, in `"observe"` only** — "no world may silently bill its operator" (maintainer mandate, verbatim); the `cost_note` field sits next to this switch on purpose. Accepts a FOURTH value, `"static"` (2026-07-17), which spends nothing — see the dedicated note below |
 | `mutation_observer`    | `hooks/posttooluse_mutation_observer.py`        | `observe` | `enforce` is **impossible** for this mechanism (a PostToolUse observation fires after the mutation already happened — there is no "deny" available); if apparatus.json ever names `enforce` here, the hook warns loudly and behaves as `observe` |
 | `delegation_observer`  | `hooks/pretooluse_delegation_observer.py`       | `observe` | `enforce` is **not yet sanctioned** for this mechanism (a PreToolUse deny on a subagent dispatch is possible in principle, unlike `mutation_observer`'s genuine PostToolUse impossibility, but has not been maintainer-ratified — [BACKLOG.md](../../BACKLOG.md) "Run-8 mid-run forensics", 2026-07-11); if apparatus.json ever names `enforce` here, the hook warns loudly and behaves as `observe` |
 | `doc_shapes_gate`      | `hooks/pretooluse_doc_shapes_gate.py`           | `observe` | **free per call** (pure text scanning, no subprocess) — `observe`, not `enforce`, because this is the FIRST live deployment of this check as a write-time blocking gate anywhere in this project (see the hook's own module docstring for the full reasoning); **the one-line flip to `enforce` for a given scaffolded project** is `"doc_shapes_gate": {"mode": "enforce"}` in that project's own `.claude/apparatus.json` — no code change, live on the next `Write`/`Edit` |
@@ -136,7 +145,40 @@ add per-mechanism detail a table cell is too narrow to carry.
 - **`demurral_detect`** also carries per-mechanism SETTINGS next to its mode: `classifier_command`
   (a JSON list of argv strings overriding the default `claude -p --model ...` invocation),
   `timeout_s` (the classifier's hard per-call timeout), and `cost_note` (free text for a human
-  reading this file — never acted on by code).
+  reading this file — never acted on by code). **Its mode accepts a FOURTH value, `"static"`**
+  (maintainer design, 2026-07-17, `hooks/demurral_detect.py`'s own module docstring "STATIC
+  TIER" section) — the one mechanism in this project that departs from the project-wide
+  off/observe/enforce convention, because the static tier is a genuinely distinct detection
+  strength, not a variant of an existing one:
+    - `"static"` runs ONLY a case-insensitive, word-boundary match against a phrase list rooted
+      in [ADR-0013](../../law/adr/0013-execution-integrity.md) Rule 3's own canonical demurral
+      vocabulary — no subprocess, no `claude -p` call, ever, at this mode value. It misses every
+      paraphrase by construction (enumeration fails open, per
+      [ADR-0011](../../law/adr/0011-mechanization-discipline.md) Rule 4's "a net quantifies over
+      the class, not the instance") and is offered anyway because the honest alternative —
+      `"off"` (nothing) or `"observe"` (a real, billed call) — left most worlds with no
+      detection running at all.
+    - `"observe"` is unchanged: the costed classifier runs, and its verdict (POSITIVE or
+      NEGATIVE) governs outright — the static tier is not consulted when the classifier answers.
+      `"observe"` falls back to the static tier ONLY when the classifier is unavailable this
+      turn (timeout, subprocess failure, unparsed reply), and journals that fallback honestly
+      (`tier: "static_fallback"`), never presenting a static hit as a classifier verdict.
+    - `"enforce"` is unaffected by this addition — still not implemented for this mechanism,
+      still degrades to `"observe"` with a warning.
+    - **The phrase list is DATA, not a code constant** (ADR-0012's data/code-separation
+      discipline, applied here 2026-07-17 on the maintainer's explicit instruction): the
+      shipped default lives at
+      [`instruments/demurral_phrases.default.json`](../../instruments/demurral_phrases.default.json)
+      — a plain JSON file (`{"phrases": [...], ...}`) with its own header fields explaining what
+      it is and how to change it, so an operator edits the vocabulary without touching any code.
+      A deployment that wants its own words entirely replaces the effective list — not merged,
+      full replacement — by copying that file to
+      `<world-root>/.claude/demurral_phrases.json` and editing it; a present-but-malformed
+      override degrades loudly (one stderr warning) back to the shipped default, never to a
+      silently empty list, and a missing override simply uses the shipped default. See
+      `hooks/demurral_detect.py`'s `_resolve_static_phrases` for the exact resolution order
+      (override, then shipped default, then a tiny hardcoded emergency floor if even the
+      shipped file is unreadable — a broken-checkout case, not an ordinary one).
 - **`mutation_observer`** has no enforce state at all (see table) — it can only warn, never deny,
   by the nature of its PostToolUse attachment point.
 - **`delegation_observer`** watches `PreToolUse(Task/Agent)` — every subagent dispatch is
