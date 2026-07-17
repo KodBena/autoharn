@@ -230,9 +230,9 @@ import apparatus_registry  # noqa: E402  (filing/apparatus_registry.py, the deri
 #   JOURNAL      | GATE_JOURNAL      | E13_GATE_JOURNAL     | f"{SUBJECT_ROOT}/.claude/logs/change_gate.journal.jsonl"
 #
 # (STATE/JOURNAL's deployment-relative defaults only apply when a deployment record was actually
-# found — else they fall back to the byte-held absolute epistemic-audit paths, exactly as before
-# this pass, so autoharn's own e13/e14 flow — whose state/journal never lived under SUBJECT_ROOT —
-# is unaffected.)
+# found — else SUBJECT_ROOT/STATE/JOURNAL resolve to "" instead of any foreign-project fallback;
+# see the "NO _DEFAULT_SUBJECT_ROOT / _DEFAULT_STATE / _DEFAULT_JOURNAL" comment block below for
+# the full removal rationale.)
 #
 # Config is resolved once per invocation, inside `_configure()`, called at the top of `main()`
 # right after stdin is parsed — the deployment.json lookup needs the hook input's own `cwd`, only
