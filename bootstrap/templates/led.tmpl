@@ -95,6 +95,28 @@
 #                                              not scope-filtered (see `led obligate` below)
 #   led stamp-distinctness                    review_stamp_distinctness view: for each review,
 #                                              whether the SAME invocation wrote it and its target
+#   led decomposition-review-status           READ-ONLY: is this world's decomposition-review gate
+#                                              armed, and in what mode. Reports (a) mode, read from
+#                                              <world-root>/.claude/apparatus.json's
+#                                              mechanisms.decomposition_review.mode, defaulted/
+#                                              validated EXACTLY as hooks/pretooluse_change_gate.py's
+#                                              own _resolve_mode() does (default 'observe', not
+#                                              'enforce' -- this mechanism's own deliberate
+#                                              departure; an unrecognized mode string never widens
+#                                              permissions, falls back to 'observe' with a stderr
+#                                              warning) -- ONE definition of that default, not a
+#                                              second hand-copied one (ADR-0012 P1); (b) row counts
+#                                              from countersign_obligation, total and undischarged --
+#                                              "undischarged" reuses `review_gap`'s own actor-identity
+#                                              join (o.obliges_actor = l.actor, NOT scope-filtered --
+#                                              see `led obligate`'s own note above) rather than a
+#                                              second discharge predicate; (c) a one-line verdict:
+#                                              ARMED-ENFORCING | ARMED-OBSERVING | VACUOUS (no
+#                                              obligation rows) | OFF. LIVE table-existence check on
+#                                              countersign_obligation, teach-text (never a bare psql
+#                                              error) on a kernel that predates it (kernel/lineage/
+#                                              s15-schema.sql, the current standalone generation --
+#                                              s10-s14 are earlier, superseded generations).
 #
 #   led decision --grade <word> <statement...>  writes a kind=decision row carrying a durability
 #                                              GRADE (kernel/lineage/s36-decision-grade.sql,
@@ -289,7 +311,17 @@
 #                                              distinct-actor attest review (s29's own sibling of
 #                                              the pre-existing ACTOR-keyed `led review-gap`)
 #   led work list [--all]                     work_item_current: one row per slug — state (open/
-#                                              closed), title, resolution, witness, claimant.
+#                                              closed), title, resolution, witness, claimant, and
+#                                              (kernel/lineage/s33-composite-discharge.sql, LIVE
+#                                              column-existence checked — never assumed) an
+#                                              effective_state_if_diff column: a composite item's
+#                                              DERIVED discharge status (e.g.
+#                                              discharged-by-obligations, or a re-opened hand-close
+#                                              defeated by a later child) whenever it DIFFERS from
+#                                              the raw state column; blank when they agree or on a
+#                                              pre-s33 kernel. DISPLAY-ONLY — which rows are
+#                                              returned is governed purely by the state filter
+#                                              below, unchanged either way.
 #                                              DEFAULT excludes state='closed' (the "what is open
 #                                              or claimed NOW" view — at ~60 lifetime items, the
 #                                              unfiltered dump overflowed an orchestrator context
@@ -312,7 +344,12 @@
 #                                              rows to ts <= <timestamp> before picking each item's
 #                                              latest opened/claimed/closed row — no kernel change,
 #                                              a pure SELECT over existing columns (BACKLOG "Omega
-#                                              work-tracking disposition" 2026-07-11, item 2)
+#                                              work-tracking disposition" 2026-07-11, item 2).
+#                                              RAW event-reconstructed state ONLY — a composite
+#                                              item's DERIVED discharge status (effective_state) is
+#                                              a CURRENT-view concept (s33) and is deliberately NOT
+#                                              retrofitted here; see `led work list`'s
+#                                              effective_state_if_diff column for that view instead.
 #                                              (these seven verbs require kernel/lineage/s22-work-item-
 #                                              ledger.sql applied to this project's schema — s22 is
 #                                              an additive delta on the s15/s17/s19/s20/s21 birth
@@ -537,7 +574,7 @@ warn_path_shaped_in_statement() {
 # not a silent gap.
 if [ -n "$event_time" ]; then
   case "${1:-}" in
-    --recent|current|question-status|review-gap|stamp-distinctness|standing|register-principal|obligate|review|work)
+    --recent|current|question-status|review-gap|stamp-distinctness|standing|register-principal|obligate|review|work|decomposition-review-status)
       echo "led: REFUSED -- --event-time is only supported on the generic <kind> <statement...>" >&2
       echo "  path today (e.g. './led --event-time <ts> finding \"...\"'); '${1:-}' has its own" >&2
       echo "  INSERT that does not carry event_declared_ts, so the value would otherwise be" >&2
@@ -914,6 +951,123 @@ SQL
             (SELECT id FROM principal WHERE name = :'assigned_by_name'),
             (SELECT id FROM principal WHERE name = :'obliges_actor_name'));
 SQL
+fi
+
+if [ "${1:-}" = "decomposition-review-status" ]; then
+  shift
+  # NO FLAGS accepted -- any token here is unrecognized (same refuse-unknown-flags discipline
+  # `led work open`'s own UNKNOWN-FLAG REFUSAL and `led work list [--all]`'s bare-arg case above
+  # apply): a typo'd/unsupported flag is refused loudly, never silently swallowed or ignored.
+  if [ $# -gt 0 ]; then
+    echo "led decomposition-review-status: REFUSED -- unrecognized argument '$1'." >&2
+    echo "  This verb takes NO flags or arguments -- see top-of-file comment." >&2
+    exit 1
+  fi
+
+  # (a) MODE. Read from <world-root>/.claude/apparatus.json's mechanisms.decomposition_review.mode,
+  # world root == the directory the deployment record was actually found in (the SAME resolution
+  # this file's own top-of-file DEPLOYMENT variable already uses, and the SAME convention
+  # pickup.tmpl's `_load_apparatus()`/`DEPLOYMENT_PATH.parent` use -- never a second hand-derived
+  # notion of "world root"). Default/validation logic is a LINE-FOR-LINE mirror of hooks/
+  # pretooluse_change_gate.py's own `_resolve_mode()` -- NOT a single-sourced import of it (an
+  # import would pay pretooluse_change_gate.py's own module-scope GOVERNED_PATTERNS filesystem
+  # read against its _DEFAULT_SUBJECT_ROOT, a foreign project path, when this file's world isn't
+  # wired). This is a DELIBERATE additional per-process copy, following the SAME duplication
+  # posture this project already carries across eleven hooks/*.py files, each with its own
+  # `_resolve_mode` -- see filing/apparatus_registry.py's own docstring ("WHY A DERIVED REGISTRY,
+  # NOT A HAND-MAINTAINED LIST"): the mechanism is reconciled by MECHANICALLY SCANNING every copy,
+  # never by forcing one shared import across independent short-lived processes. This 'observe'
+  # literal tracks pretooluse_change_gate.py's DECOMPOSITION_REVIEW_MODE by the SAME discipline
+  # every other hook's copy already relies on -- not a fresh gap, the twelfth instance of an
+  # entrenched, documented one: missing apparatus.json / missing "mechanisms" key
+  # / missing "decomposition_review" entry -> default 'observe' (NOT 'enforce' -- this is the one
+  # mechanism that departs from enforce-by-default, per that module's own docstring); an
+  # unrecognized mode string never widens permissions -- falls back to 'observe' with a loud
+  # stderr warning naming the bad value and the file it came from, exactly as the gate's own
+  # _resolve_mode does.
+  world_root="$(cd "$(dirname "$DEPLOYMENT")" && pwd)"
+  mode="$(python3 - "$world_root" <<'PYEOF'
+import json, os, sys
+root = sys.argv[1]
+_VALID = ("off", "observe", "enforce")
+default = "observe"
+path = os.path.join(root, ".claude", "apparatus.json")
+try:
+    with open(path, encoding="utf-8") as f:
+        cfg = json.load(f)
+    apparatus = cfg if isinstance(cfg, dict) else {}
+except Exception:
+    apparatus = {}
+mechs = apparatus.get("mechanisms")
+entry = mechs.get("decomposition_review") if isinstance(mechs, dict) else None
+raw = entry.get("mode") if isinstance(entry, dict) else None
+if raw is None:
+    print(default)
+elif raw in _VALID:
+    print(raw)
+else:
+    print(f"[apparatus] WARNING: mechanisms.decomposition_review.mode={raw!r} in {path} is "
+          f"unrecognized (must be one of {_VALID}) -- never widening permissions; falling back "
+          f"to {default!r}.", file=sys.stderr)
+    print(default)
+PYEOF
+  )"
+
+  # (b) countersign_obligation row counts. LIVE table-existence check (the SAME convention
+  # `work list`/`work violations`/`standing` above all already use) -- a kernel that predates
+  # kernel/lineage/s15-schema.sql (countersign_obligation's own origin; s10-s14 are earlier,
+  # superseded standalone generations) has no such table at all, and this degrades to an honest
+  # teach-text rather than a bare psql error.
+  has_tbl=$(psql -h "$PGHOST" -d "$PGDB" -tAq -v schema="$SCHEMA" <<SQL
+    SELECT EXISTS (SELECT 1 FROM information_schema.tables
+                   WHERE table_schema = :'schema' AND table_name = 'countersign_obligation');
+SQL
+  )
+  if [ "$has_tbl" != "t" ]; then
+    echo "mode: $mode"
+    echo "countersign_obligation: UNAVAILABLE -- this world's kernel predates"
+    echo "  countersign_obligation (kernel/lineage/s15-schema.sql). Apply s15 (or a later"
+    echo "  generation) to this schema as a maintainer act to adopt the obligation regime, or --"
+    echo "  if this world never needs it -- there is nothing more to do here."
+    if [ "$mode" = "off" ]; then
+      echo "verdict: OFF"
+    else
+      echo "verdict: VACUOUS (no obligation rows)"
+    fi
+    exit 0
+  fi
+  # total, undischarged. "undischarged" reuses `review_gap`'s OWN actor-identity join
+  # (o.obliges_actor = l.actor) rather than a second, independently-authored discharge predicate
+  # (ADR-0012 P1) -- review_gap is NOT scope-filtered (kernel/lineage/s15-schema.sql; see this
+  # file's own `led obligate` doc comment above), so an obligation row counts as undischarged iff
+  # the actor it obliges has AT LEAST ONE row review_gap surfaces, regardless of that row's kind
+  # or of which scope label produced the match.
+  counts=$(psql -h "$PGHOST" -d "$PGDB" -tAq <<SQL
+    SELECT count(*), count(*) FILTER (
+      WHERE EXISTS (SELECT 1 FROM ${SCHEMA}.review_gap g WHERE g.actor = o.obliges_actor)
+    )
+    FROM ${SCHEMA}.countersign_obligation o;
+SQL
+  )
+  total="${counts%%|*}"
+  undischarged="${counts##*|}"
+
+  echo "mode: $mode"
+  echo "countersign_obligation: total=$total undischarged=$undischarged"
+  # (c) verdict. OFF only when mode itself is 'off' (the operator switched the mechanism off,
+  # regardless of what obligation rows exist); VACUOUS when the mechanism could act but there is
+  # nothing for it to act ON (zero obligation rows -- an armed gate with no ammunition); otherwise
+  # ARMED, split by mode into ENFORCING (refuses) vs OBSERVING (warns only).
+  if [ "$mode" = "off" ]; then
+    echo "verdict: OFF"
+  elif [ "$total" = "0" ]; then
+    echo "verdict: VACUOUS (no obligation rows)"
+  elif [ "$mode" = "enforce" ]; then
+    echo "verdict: ARMED-ENFORCING"
+  else
+    echo "verdict: ARMED-OBSERVING"
+  fi
+  exit 0
 fi
 
 if [ "${1:-}" = "review" ]; then
@@ -1861,14 +2015,37 @@ SQL
         "") : ;;
         *) echo "usage: led work list [--all]" >&2; exit 1 ;;
       esac
+      # EFFECTIVE_STATE (kernel/lineage/s33-composite-discharge.sql, ledger item
+      # composite-parent-autodischarge): work_item_current gains a DERIVED effective_state column
+      # on an s33-carrying kernel -- LIVE column-existence check (the SAME convention this file's
+      # own `standing`/`violations` cases and pickup.tmpl's `in_flight()` all already use), never a
+      # hardcoded kernel-version assumption, since s33 is not wired into every world's birth chain.
+      # A pre-s33 kernel degrades to the plain state-only SELECT below, byte-identical to this
+      # command's own pre-s33 output. DISPLAY-ONLY: the WHERE filter (show_all vs default) is
+      # UNCHANGED either way -- which rows are returned never depends on effective_state, only
+      # what is printed alongside them does.
+      has_eff=$(psql -h "$PGHOST" -d "$PGDB" -tAq -v schema="$SCHEMA" <<SQL
+        SELECT EXISTS (SELECT 1 FROM information_schema.columns
+                       WHERE table_schema = :'schema' AND table_name = 'work_item_current'
+                         AND column_name = 'effective_state');
+SQL
+      )
+      if [ "$has_eff" = "t" ]; then
+        # Blank (NULL) when effective_state agrees with the raw state -- draws the eye only when
+        # they DIFFER (a composite item's derived discharge status), never adds visual noise to
+        # the common non-composite case where the two columns are byte-identical by construction.
+        eff_col=", CASE WHEN w.effective_state IS DISTINCT FROM w.state THEN w.effective_state ELSE NULL END AS effective_state_if_diff"
+      else
+        eff_col=""
+      fi
       if [ "$show_all" = true ]; then
         exec psql -h "$PGHOST" -d "$PGDB" -c "
-          SELECT w.slug, w.title, w.state, w.resolution, w.witness, p.name AS claimant
+          SELECT w.slug, w.title, w.state, w.resolution, w.witness, p.name AS claimant${eff_col}
           FROM ${SCHEMA}.work_item_current w LEFT JOIN ${KERNEL}.principal p ON p.id = w.claimant
           ORDER BY w.slug;"
       else
         exec psql -h "$PGHOST" -d "$PGDB" -c "
-          SELECT w.slug, w.title, w.state, w.resolution, w.witness, p.name AS claimant
+          SELECT w.slug, w.title, w.state, w.resolution, w.witness, p.name AS claimant${eff_col}
           FROM ${SCHEMA}.work_item_current w LEFT JOIN ${KERNEL}.principal p ON p.id = w.claimant
           WHERE w.state <> 'closed'
           ORDER BY w.slug;"
@@ -1919,6 +2096,16 @@ SQL
       # interpolation is only applied to a script read from stdin/-f, NOT to a -c argument -- so
       # this is fed via stdin like every OTHER work verb above, not -c like the parameter-free
       # list/violations reads.
+      #
+      # HONESTY NOTE (kernel/lineage/s33-composite-discharge.sql): this reconstruction is RAW
+      # event-replay only -- state_asof is derived purely from work_opened/work_claimed/
+      # work_closed rows filtered to ts <= <timestamp>, never re-derived through s33's
+      # effective_state logic. A composite item's DERIVED discharge status is a CURRENT-view
+      # concept (it re-checks live obligation-tree state on every read), not a temporal one, and
+      # is deliberately NOT retrofitted onto this historical reconstruction -- see
+      # `led work list`'s effective_state_if_diff column for that view instead.
+      echo "note: asof is a RAW event-reconstruction (open/claimed/closed only) -- a composite" >&2
+      echo "      item's DERIVED discharge status is a current-view concept, see 'led work list'." >&2
       exec psql -h "$PGHOST" -d "$PGDB" -v ON_ERROR_STOP=1 -v asof="$asof" <<SQL
         WITH opened AS (
           SELECT work_slug AS slug, work_title AS title, id AS opened_id
@@ -1980,6 +2167,7 @@ if [ $# -lt 2 ]; then
   echo "       -f -e --supersedes --amends --amends-scope --answers --refs --concern --evidence" >&2
   echo "       --confidence; cite an antecedent row from any kind via --refs row:<id>)" >&2
   echo "       led --recent [N] | led current [N] | led show <id> | led question-status | led review-gap | led stamp-distinctness | led standing" >&2
+  echo "       led decomposition-review-status  (mode + countersign_obligation counts + verdict, read-only)" >&2
   echo "       led decision [--grade <word>] <statement...>  (kernel/lineage/s36-decision-grade.sql)" >&2
   echo "       led register-principal <name> <class>" >&2
   echo "       led obligate <scope> <assigned-by-principal> <obliged-actor-principal>" >&2
