@@ -296,6 +296,18 @@ the three is unarmed, silently:
    `./led obligate decomposition-review <reviewer-principal> <worker-principal>` (the worker is the
    *obliged* actor — get the direction backwards and you obligate the reviewer instead, a mistake
    this project's own `led obligate` usage text calls out by name because it has happened twice).
+   **Second warning, repeated here at the copy point because the CLI's usage text carries it and
+   this recipe previously did not** (a downstream deployment caught the omission before arming,
+   2026-07-17): the `decomposition-review` word above is a free-text LABEL, not a filter —
+   `review_gap` joins on actor identity alone, so once a principal is obliged, EVERY
+   uncountersigned row that principal writes, of any kind, accumulates review-gap debt until a
+   distinct actor countersigns it. Obliging a session's general working identity (the `author`
+   that writes every `decision`/`finding` row) makes nearly every row that session writes need a
+   countersign — an operational cost far larger than the label suggests. The narrower recipe that
+   bounds the blast radius: register a dedicated principal used EXCLUSIVELY to open
+   decompositions (`LED_ACTOR=<dedicated-name> ./led work open ...`), and obligate that. The
+   bound holds only as long as the dedicated principal is never reused for other writes — the
+   over-catch returns the moment it is.
 2. **Flip the mode to `enforce`** in `.claude/apparatus.json`:
    `"mechanisms": {"decomposition_review": {"mode": "enforce"}}` — see
    [bootstrap/templates/APPARATUS.md](../bootstrap/templates/APPARATUS.md) for the full switchboard.
