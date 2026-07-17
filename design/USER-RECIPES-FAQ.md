@@ -127,6 +127,33 @@ adopting this for anything you'd actually rely on. Tool docs and vendoring/split
 [`tools/makespan-scheduler/README.md`](../tools/makespan-scheduler/README.md) /
 [`tools/makespan-scheduler-PROVENANCE.md`](../tools/makespan-scheduler-PROVENANCE.md).
 
+**How do I prove two phases ran in the right order, instead of trusting an agent's
+say-so?**
+Split the work into two separately-dispatched agents and let the ledger's append-only row ids
+do the proving, rather than trusting either agent's narrative about which one went first. The
+pattern: dispatch a document-only agent whose sole output is the docs describing what changed
+and why; the orchestrator itself then writes a ledger row citing those produced docs, once it
+has read them; only after that row lands, in a wholly separate dispatch, is a fix-only agent
+created — an agent that, by construction, did not exist yet at the moment the documentation
+row landed. Because ledger rows are append-only and numbered in issuance order, a reader who
+was never in the room can verify the same three facts a live witness saw: the docs landed, the
+orchestrator's row citing them landed next, and the fix agent's own row landed only after
+that — order as a structural fact about row ids, never a self-report from either agent
+claiming it went first.
+
+Honest limit: this proves the ORDER in which the ledgered acts happened, not that the fix
+agent actually read the documents it was dispatched after — a fix-only agent created after a
+documentation row could still ignore it. Pair the sequencing with an ordinary review step that
+checks the fix's content against the docs it was supposed to follow; sequencing alone answers
+"did this happen in the right order", not "was the later act actually informed by the earlier
+one".
+
+Invented downstream, not here: this shape was invented by the autoharn-panel deployment's own
+orchestrator, in its own ledger (rows 401, 415, and 1144 there, named here only as history),
+and is carried upstream into this project's record via decision row 1295 (2026-07-17 two-spy
+synthesis) — the underlying panel session transcripts remain local evidence per this project's
+auditability ruling; the ledger row is the citable record.
+
 ## Declaring things on the ledger
 
 **Can I declare which tools/services/agents this project may, should, must, or must not
@@ -298,6 +325,29 @@ script fires on a dispatched subagent's own tool calls at all; this scratch-worl
 `decomposition_review`'s own deny path, once armed, actually fires for an undischarged obligation.
 Neither witness alone would close it — the subagent specimens never exercised `decomposition_review`
 armed, and this test never dispatched through a subagent.
+
+**Should compliance review run per-commit or per-changeset?**
+Per-changeset, at minimum — one reviewer reading the entire multi-commit changeset against the
+LAW together, rather than one reviewer per commit checking each commit in isolation. The
+reason is not caution for its own sake: a defect can live entirely in the INTERACTION of two
+individually-correct commits, and no per-commit review ever sees that interaction, because
+each commit, read alone, is fine.
+
+The witnessed specimen (via decision row 1295's two-spy synthesis, citing the autoharn-panel
+deployment's own row 590, named here only as history): a backend commit that validated
+`limit=0` as a rejected input, and a frontend commit that messaged that same `limit=0` case to
+the end user, landed about a minute apart as two separate commits. Each commit was correct in
+isolation — the backend validation was sound on its own, the frontend messaging was sound on
+its own — and the pairing was a regression, caught only because the review that found it
+spanned both commits together, not because either commit's own review flagged anything.
+
+Honest trade-off, stated plainly rather than left implicit: a whole-changeset review costs more
+context per review round (the reviewer holds every commit in the set at once, not one at a
+time) and arrives later than a per-commit review would (it waits for the changeset to close
+rather than firing on each commit as it lands). The recipe is span-at-least-the-changeset for
+LAW/compliance review — not never-review-early; a fast per-commit pass can still run as a first
+filter, but it is not a substitute for the changeset-spanning pass, which is the only one
+positioned to catch an interaction defect between two commits that are each correct alone.
 
 ## Classifying audit/diagnostic findings
 
