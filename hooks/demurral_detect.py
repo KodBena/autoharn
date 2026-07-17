@@ -540,6 +540,11 @@ _EMERGENCY_STATIC_DEMURRAL_PHRASES: tuple[str, ...] = (
 # starting point. `{phrases}` is substituted by `_emit_static_notice` via `str.replace`, never
 # `str.format` (module docstring: an operator's own notice text may carry stray braces that must
 # never raise).
+# Held byte-identical to instruments/demurral_phrases.default.json's own "notice" field by
+# seen-red/demurral-detector/red-specimen.py's drift check (test/CI gate, ADR-0011 Rule 1
+# vocabulary) -- case 10 in that suite imports this constant directly and compares it against the
+# shipped JSON's "notice" value, failing loudly (printing both) on any drift. NOT held in sync by
+# discipline/comment alone, and never was verified to be until that case existed.
 DEFAULT_NOTICE = (
     "content below contains the phrase {phrases}, which is in ADR-0013 Rule 3's canonical "
     "demurral vocabulary. Be mindful of Rule 3 and reconsider whether this narrows "
