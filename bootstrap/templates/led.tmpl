@@ -278,11 +278,25 @@
 #                                              LED_ACTOR=<principal-name> to claim as a registered
 #                                              principal other than the default connection principal
 #                                              (else the claim lands under that default principal)
-#   led work depends <slug> <on-slug>         record that <slug> (must already be opened) depends on
+#   led work depends <slug> <on-slug> [--type blocks-close|blocks-start|informs]
+#                                              record that <slug> (must already be opened) depends on
 #                                              <on-slug>. <on-slug> itself is NOT required to be
 #                                              opened — a dangling antecedent is deliberately NOT
 #                                              refused (spec invariant 4); it is surfaced instead by
-#                                              `led work violations` (depends_on_unknown_slug)
+#                                              `led work violations` (depends_on_unknown_slug).
+#                                              --type informs (default): advisory only, never
+#                                              enforced. --type blocks-close (kernel/lineage/
+#                                              s30-typed-dependency-edges.sql): the obligation
+#                                              AND-tree (--strict close) conjoins it. --type
+#                                              blocks-start (kernel/lineage/s39-blocks-start.sql):
+#                                              <slug> may not be CLAIMED until <on-slug> reaches
+#                                              CLOSED — checked at claim time (`led work claim`),
+#                                              refused by name. Both typed forms are REFUSED at
+#                                              construction on a self-edge, a dangling antecedent, or
+#                                              a cycle in their OWN subgraph (independent subgraphs —
+#                                              a blocks-close edge and a blocks-start edge between
+#                                              the same two slugs, opposite directions, is legal, not
+#                                              a cycle).
 #   led work close <slug> <resolution> (--review-witness <ref> | --review-deferred | --review-bookkeeping --witness commit:<sha>) [--witness <ref>] [--strict]
 #                                              close a work item. REFUSED if <slug> has no
 #                                              work_claimed row yet (led-side gate, mirroring the
@@ -1158,9 +1172,20 @@ mechs = apparatus.get("mechanisms")
 entry = mechs.get("rules_briefing") if isinstance(mechs, dict) else None
 extra = entry.get("extra_items") if isinstance(entry, dict) else None
 
-if entry is not None and (not isinstance(entry, dict) or (
-        "extra_items" in entry and (
-            not isinstance(extra, list) or not all(isinstance(x, str) for x in extra)))):
+# Diagnostic fix (ledgered fold-into-next-led.tmpl-touch, 2026-07-17): the two malformed shapes --
+# `rules_briefing` itself not a dict/object (a non-dict scalar), vs. `rules_briefing.extra_items`
+# present but not a list-of-strings -- are DIFFERENT defects and used to be reported through the
+# SAME message, which always names `extra` (computed as None whenever entry is not a dict, since
+# the `.get` above never runs) -- so a non-dict `rules_briefing` scalar (e.g. a bare string) was
+# always reported as "got None", never naming the actual offending value. Split into two checks,
+# each naming the value that is actually wrong.
+if entry is not None and not isinstance(entry, dict):
+    print(f"[led briefing] WARNING: mechanisms.rules_briefing in {path} must be a JSON object -- "
+          f"got {entry!r}; ignoring it, core briefing above still stands.", file=sys.stderr)
+    sys.exit(0)
+
+if isinstance(entry, dict) and "extra_items" in entry and (
+        not isinstance(extra, list) or not all(isinstance(x, str) for x in extra)):
     print(f"[led briefing] WARNING: mechanisms.rules_briefing.extra_items in {path} must be a "
           f"JSON array of strings -- got {extra!r}; ignoring it, core briefing above still stands.",
           file=sys.stderr)
@@ -1451,6 +1476,12 @@ SQL
         echo "usage: led work claim <slug>" >&2
         echo "       refused if <slug> has no opening act (validate_work_item(): every later" >&2
         echo "       event on an item must reference an item that has been opened)" >&2
+        echo "       refused if <slug> carries an unresolved blocks-start antecedent -- an" >&2
+        echo "       antecedent named by --type blocks-start (kernel/lineage/s39-blocks-start.sql)" >&2
+        echo "       whose own work item has not yet reached state=closed. The refusal names" >&2
+        echo "       every unresolved antecedent by slug; claim/finish it first, or re-edge if" >&2
+        echo "       the dependency is wrong (see design/USER-RECIPES-FAQ.md). 'led work" >&2
+        echo "       startable' lists items with no such refusal pending right now." >&2
         echo "       set LED_ACTOR=<principal-name> to claim as a registered principal other" >&2
         echo "       than the default connection principal" >&2
       }
@@ -1499,7 +1530,7 @@ SQL
             # with no error -- e.g. a typo'd --typ blocks-close would record NEITHER the type
             # nor any complaint. Refused here instead.
             echo "led work depends: REFUSED -- unrecognized flag '$1'." >&2
-            echo "  led work depends <slug> <on-slug> accepts only: --type blocks-close|informs." >&2
+            echo "  led work depends <slug> <on-slug> accepts only: --type blocks-close|blocks-start|informs." >&2
             echo "  NOTHING was written." >&2
             exit 1
             ;;
@@ -1508,7 +1539,7 @@ SQL
       done
       set -- "${args[@]}"
       if [ $# -lt 2 ]; then
-        echo "usage: led work depends <slug> <on-slug> [--type blocks-close|informs]" >&2
+        echo "usage: led work depends <slug> <on-slug> [--type blocks-close|blocks-start|informs]" >&2
         echo "       <slug> must already be opened (refused otherwise)." >&2
         echo "       --type informs (the default, omit --type to get it): the antecedent" >&2
         echo "       (<on-slug>) is NOT required to be opened -- a dangling antecedent is" >&2
@@ -1520,11 +1551,18 @@ SQL
         echo "       <slug> = <on-slug> (self-edge), or if it would create a cycle in the" >&2
         echo "       blocks-close subgraph. Requires this world's kernel to carry s30 -- omit" >&2
         echo "       --type (or pass --type informs) on a pre-s30 kernel." >&2
+        echo "       --type blocks-start (kernel/lineage/s39-blocks-start.sql): <slug> may not" >&2
+        echo "       be CLAIMED (led work claim) until <on-slug> reaches CLOSED -- checked at" >&2
+        echo "       claim time, not merely advisory. REFUSED at construction under the SAME" >&2
+        echo "       three conditions as blocks-close (dangling antecedent, self-edge, cycle --" >&2
+        echo "       the blocks-start subgraph's own cycle check, independent of blocks-close's" >&2
+        echo "       own). Requires this world's kernel to carry s39 -- omit --type (or pass" >&2
+        echo "       --type informs) on a pre-s39 kernel." >&2
         exit 1
       fi
       slug="$1"; on="$2"
-      if [ -n "$type" ] && [ "$type" != "blocks-close" ] && [ "$type" != "informs" ]; then
-        echo "led work depends: REFUSED -- --type must be blocks-close or informs (got '${type}')." >&2
+      if [ -n "$type" ] && [ "$type" != "blocks-close" ] && [ "$type" != "blocks-start" ] && [ "$type" != "informs" ]; then
+        echo "led work depends: REFUSED -- --type must be blocks-close, blocks-start, or informs (got '${type}')." >&2
         echo "  'supersedes' is a RESERVED WORD here, not a legal edge_type -- row supersession" >&2
         echo "  already has its one home in the pre-existing ledger.supersedes column." >&2
         exit 1
@@ -1543,6 +1581,30 @@ SQL
         echo "  decision tree)." >&2
         exit 1
       fi
+      # kernel/lineage/s39-blocks-start.sql's own pre-check idiom, one edge-type over from the
+      # has_edge_type_col check immediately above: edge_type ALREADY EXISTS as of s30, so a
+      # column-presence check alone cannot detect a pre-s39 kernel that lacks the WIDENED
+      # vocabulary -- the constraint's own definition is inspected instead (pg_get_constraintdef,
+      # matching this world's own s39 detect sibling's fingerprinting method).
+      if [ "$type" = "blocks-start" ]; then
+        has_blocks_start=$(psql -h "$PGHOST" -d "$PGDB" -tAq -v schema="$SCHEMA" <<SQL
+          SELECT EXISTS (
+            SELECT 1 FROM pg_constraint c
+            JOIN pg_namespace n ON n.oid = c.connamespace
+            WHERE n.nspname = :'schema' AND c.conname = 'edge_type_check'
+              AND pg_get_constraintdef(c.oid) LIKE '%blocks-start%'
+          );
+SQL
+        )
+        if [ "$has_blocks_start" != "t" ]; then
+          echo "led work depends: REFUSED -- --type blocks-start requires kernel/lineage/s39-blocks-start.sql" >&2
+          echo "  applied to this project's schema (edge_type_check does not admit blocks-start on" >&2
+          echo "  ${SCHEMA}.ledger -- this world's kernel predates s39). Omit --type, use --type" >&2
+          echo "  blocks-close or informs, or apply s39 to this schema as a maintainer act" >&2
+          echo "  (ORCH-OPERATING-CARD.md's kernel-delta decision tree)." >&2
+          exit 1
+        fi
+      fi
       # DEFAULT-TYPE ADVISORY (root cause this closes: a live deployment session recorded
       # every genuine "must finish before" precedence constraint as informs and never once used
       # --type blocks-close, because nothing at the CLI said the unqualified default is
@@ -1553,8 +1615,9 @@ SQL
       # a refusal -- informs is a legal, common, correct choice for a merely contextual edge, and
       # this advisory does not gate the write, it makes the choice visible.
       if [ -z "$type" ]; then
-        echo "led work depends: recorded as informs (advisory only -- never enforced at close);" >&2
-        echo "  if ${on} must be finished before ${slug} may close, use --type blocks-close." >&2
+        echo "led work depends: recorded as informs (advisory only -- never enforced at close or claim);" >&2
+        echo "  if ${on} must be finished before ${slug} may close, use --type blocks-close;" >&2
+        echo "  if ${on} must be CLOSED before ${slug} may be CLAIMED, use --type blocks-start (s39)." >&2
       fi
       if [ "$has_edge_type_col" = "t" ]; then
         exec psql -h "$PGHOST" -d "$PGDB" -v ON_ERROR_STOP=1 \
@@ -2286,6 +2349,27 @@ SQL
           SELECT violation, slug, detail FROM ${SCHEMA}.work_item_violations ORDER BY violation, slug;"
       fi
       ;;
+    startable)
+      # kernel/lineage/s39-blocks-start.sql's work_startable: open, unclaimed items whose
+      # blocks-start antecedents (if any) are all resolved (closed) -- "what can I legitimately
+      # claim right now". LIVE relation-existence gate (the SAME convention `list`'s effective_state
+      # check and `violations`' target_id check already use) -- a pre-s39 kernel has no such view at
+      # all, refused with teach-text rather than a bare psql "relation does not exist" error.
+      has_startable=$(psql -h "$PGHOST" -d "$PGDB" -tAq -v schema="$SCHEMA" <<SQL
+        SELECT EXISTS (SELECT 1 FROM information_schema.views
+                       WHERE table_schema = :'schema' AND table_name = 'work_startable');
+SQL
+      )
+      if [ "$has_startable" != "t" ]; then
+        echo "led work startable: REFUSED -- requires kernel/lineage/s39-blocks-start.sql applied" >&2
+        echo "  to this project's schema (work_startable view not found on ${SCHEMA} -- this" >&2
+        echo "  world's kernel predates s39). Apply s39 as a maintainer act (ORCH-OPERATING-" >&2
+        echo "  CARD.md's kernel-delta decision tree), or use 'led work list' in the meantime." >&2
+        exit 1
+      fi
+      exec psql -h "$PGHOST" -d "$PGDB" -c "
+        SELECT slug, title FROM ${SCHEMA}.work_startable ORDER BY slug;"
+      ;;
     asof)
       shift
       if [ $# -lt 1 ]; then
@@ -2360,6 +2444,9 @@ SQL
       echo "       led work list [--all]  (work_item_current; default open/claimed only, --all" >&2
       echo "                               for the full history including closed)" >&2
       echo "       led work violations    (work_item_violations)" >&2
+      echo "       led work startable     (work_startable; open+unclaimed items whose blocks-start" >&2
+      echo "                               antecedents, if any, are all resolved -- kernel/lineage/" >&2
+      echo "                               s39-blocks-start.sql)" >&2
       echo "       led work resolve-violation <violating-act-id> <reissued|retired> \"<basis>\"" >&2
       echo "         (--review-witness <ref> | --review-deferred) [--witness <successor-ref>]" >&2
       echo "         [--supersedes <old-disposition-id>]" >&2

@@ -152,7 +152,18 @@ CHAIN = [
     "s36-decision-grade.sql",
     "s37-violation-disposition.sql",
     "s38-bookkeeping-close.sql",
+    "s39-blocks-start.sql",
 ]
+# s39 (kernel/lineage/s39-blocks-start.sql) extends this SAME gate's scratch CHAIN so its re-issued
+# objects are exercised by the scratch apply below. It ships NO new (kind, column, arity) MANIFEST
+# row and NO new PARTIAL-VALUE VALUE_PARTITION_MANIFEST row: edge_type_check (the one CHECK it
+# widens) carries no `kind` test at all (a flat vocabulary CHECK, s30's own shape, out of this
+# gate's scope exactly like work_review_disposition_check) and edge_type_kind_shape (the SEPARATE
+# CHECK that scopes the column to kind='work_depends_on' at all, s30's own existing MANIFEST row)
+# is UNTOUCHED -- blocks-start rides the SAME column, the SAME one-way kind-scoping, no widening of
+# ANY (kind, column, arity) correlation. Verified live by running this gate against the extended
+# chain: it reports clean with the SAME 16 MANIFEST rows checked as before this delta, confirming
+# no new payload column and no widened kind-shape CHECK slipped in undeclared.
 # s38 (kernel/lineage/s38-bookkeeping-close.sql, design/FABLE-BOOKKEEPING-CLOSE-SPEC.md) extends
 # this SAME gate's scratch CHAIN so its re-issued objects (validate_work_item_close) are exercised
 # by the scratch apply below. It ships THREE new CHECKs, all named here (fresh reviewer finding,
