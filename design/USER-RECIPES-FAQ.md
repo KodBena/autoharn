@@ -213,6 +213,92 @@ This exit code (6) is reachable only through `--review-gap`, and only when nothi
 already raised the exit and at least one review is flagged. Witnessed both polarities:
 [seen-red/content-free-review-audit/](../seen-red/content-free-review-audit/).
 
+**How do I make an implementation step mechanically wait on a review step, instead of relying on
+remembered discipline?** Arm `decomposition_review` — a third, independent PreToolUse mechanism in
+[hooks/pretooluse_change_gate.py](../hooks/pretooluse_change_gate.py), alongside `change_gate`
+(the ticket/window check) and `permit_to_work` (the open-claim check). It exists because a claimed,
+open work item proves *permission* to work, never that the item's own decomposition — its plan, its
+acceptance criteria — was ever looked at by anyone but its author: on this project's own record, a
+claimed task's implementation began six seconds after claim, roughly 2.5 minutes ahead of the
+countersign verdict that was supposed to gate it (the run12 specimen, named in the hook's own
+docstring). A serious adopting organization should read that specimen as a *class*, not a one-off:
+any harness that lets an agent dispatch straight from "plan accepted in principle" to "editing files"
+carries the same race, and self-disclosed recurrences of exactly this shape are on record upstream
+too, filed as [anthropics/claude-code#77900](https://github.com/anthropics/claude-code/issues/77900).
+`decomposition_review` closes it by refusing a substantive `Write`/`Edit`/`NotebookEdit` — or a
+governed-file-mutating `Bash` command — anywhere under the world's root while the claimed work
+item's own opening act (`work_opened`) carries an undischarged
+[`countersign_obligation`](../GLOSSARY.md#obligation): the same [`review_gap`](../GLOSSARY.md#review_gap)
+discharge test every other obligated row already uses, not a second hand-rolled predicate.
+
+Arming it is three steps, and none of them is optional-by-omission — a world that skips any one of
+the three is unarmed, silently:
+
+1. **Obligate the actor whose decompositions need outside eyes:**
+   `./led obligate decomposition-review <reviewer-principal> <worker-principal>` (the worker is the
+   *obliged* actor — get the direction backwards and you obligate the reviewer instead, a mistake
+   this project's own `led obligate` usage text calls out by name because it has happened twice).
+2. **Flip the mode to `enforce`** in `.claude/apparatus.json`:
+   `"mechanisms": {"decomposition_review": {"mode": "enforce"}}` — see
+   [bootstrap/templates/APPARATUS.md](../bootstrap/templates/APPARATUS.md) for the full switchboard.
+3. **Verify it is actually armed before trusting it.** `led decomposition-review-status` is the
+   purpose-built verb for this — it prints the resolved mode, the obligation-table row counts, and a
+   one-line verdict (`ARMED-ENFORCING` / `ARMED-OBSERVING` / `VACUOUS` / `OFF`) — but as of this
+   writing it exists only on the unmerged `build/effective-state-display` branch, not yet on this
+   page's own base; check its own repository state before assuming it is present in yours. Until it
+   lands, or if it has not landed in your checkout, read the same two raw facts by hand: (a) `cat
+   .claude/apparatus.json` for `mechanisms.decomposition_review.mode` (missing entirely means the
+   mechanism's own default, `observe`, applies — see below); (b) `./led review-gap`, cross-read
+   against `./led work list` for which slug is currently open and claimed — if that slug's
+   `work_opened` row appears in the `review-gap` output, the obligation is live and undischarged.
+
+**The shipped default is `observe`, not `enforce` — deliberately, and unlike its two sibling
+mechanisms.** `change_gate` and `permit_to_work` both default to `enforce` because they are free per
+call and were already the project's steady state before per-mechanism modes existed.
+`decomposition_review` is new machinery: an already-running, already-scaffolded world would find its
+writes newly gated the moment `hooks/` is updated, with no operator opt-in — so this one mechanism
+defaults to the weaker mode on purpose, and arming it to `enforce` is a one-line, per-world decision
+an operator makes deliberately (see the module docstring's own "DECOMPOSITION-REVIEW BLOCKER"
+section for the reasoning in full). A serious adopting organization should read this the same way:
+the mechanism ships inert everywhere, and an unarmed world is not a bug, it is the honest starting
+state — arming it is a policy choice belonging to whoever owns the world, not something a scaffold
+should spring on a project mid-flight.
+
+**What is, and is not, witnessed for this mechanism specifically.** PreToolUse hooks demonstrably
+fire on a dispatched subagent's own tool calls — 24 specimens of `change_gate` (this same script,
+this same invocation path) denying a subagent's edit are recorded in the upstream autoharn ledger,
+decision row 1295 (2026-07-17 two-spy synthesis); the underlying session transcripts remain local
+evidence per the project's auditability ruling — the ledger row is the citable record. What had
+NOT been separately witnessed, because every previously-observed world carried zero
+`countersign_obligation` rows under the shipped `observe` default, is `decomposition_review` itself
+actually blocking anything. A scratch world (`decompprobe`, scaffolded via
+`bootstrap/new-project.sh --new-world`, torn down completely afterward) closes that gap directly:
+with a claimed work item's decomposition obligated and the mode flipped to `enforce`, invoking
+`hooks/pretooluse_change_gate.py` with a real `PreToolUse` `Write` event on stdin produced
+
+```
+Ledger policy (decomposition-review-blocker): work item 'probe-task' (work_opened row 2) carries an
+undischarged decomposition-review obligation — executing a claimed work item before its OWN
+decomposition is countersigned makes every subtask a bet on an unreviewed plan (the run12 specimen:
+task 1's implementation began 6 seconds after claim, ~2.5 minutes ahead of the countersign verdict
+that was supposed to gate it). Discharge it, THEN retry the same edit: ...
+```
+
+(exit code 2, `permissionDecision: "deny"`). Discharging the obligation — a distinct-actor
+`self-review` countersign, disclosed as such (the solo-world fallback this project's own scaffolded
+`CLAUDE.md` documents) — and re-issuing the byte-identical event then produced exit code 0 with no
+deny output at all: the same claimed item, the same edit, only the obligation's discharge state
+changed. Flipping the mode back to `observe` and re-issuing the same event against a fresh
+undischarged obligation produced `permissionDecision: "allow"` with an `additionalContext` field
+opening `[apparatus observe-mode WARNING — would DENY under enforce] Ledger policy
+(decomposition-review-blocker): ...` — the warn-not-block contrast, same check, same undischarged
+state, only the mode differed. **What closes the crux is the composition of these two witnesses, not
+either alone**: the ledger-recorded subagent specimens (decision row 1295) establish that this hook
+script fires on a dispatched subagent's own tool calls at all; this scratch-world test establishes that
+`decomposition_review`'s own deny path, once armed, actually fires for an undischarged obligation.
+Neither witness alone would close it — the subagent specimens never exercised `decomposition_review`
+armed, and this test never dispatched through a subagent.
+
 ## Classifying audit/diagnostic findings
 
 **I have a batch of findings from a code audit or review, and sorting them into categories
