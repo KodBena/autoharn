@@ -154,6 +154,37 @@ and is carried upstream into this project's record via decision row 1295 (2026-0
 synthesis) — the underlying panel session transcripts remain local evidence per this project's
 auditability ruling; the ledger row is the citable record.
 
+**How do I record, defeasibly, that a close's promised commit actually landed in the tree?**
+Pair the work item with a second one. Whenever closing a work item necessarily modifies the
+tracked source tree, open a companion item at the same time whose entire resolution IS the
+git commit that captures the promised tree state. The first item closes on its own merits,
+with one of the two review-bearing constructors (`--review-witness` or `--review-deferred`),
+because it carries judgment. The companion closes only after the commit exists, with the
+third constructor built for exactly this shape (s38):
+
+    ./led work close <slug>-commit shipped --review-bookkeeping --witness commit:<sha>
+
+The CLI machine-checks the claim at construction: the witness must be commit-shaped, and the
+commit must actually exist in this world's repository (`git cat-file` is run for you — a
+nonexistent or non-commit object refuses with a teach-text). The pairing gives you a
+defeasible, queryable record that the promised commit landed, without manufacturing a review
+obligation that has nothing in it to review.
+
+Honest limits, stated so the pattern is not over-trusted: a bookkeeping close claims ONLY
+"this commit exists" — nothing about its content, correctness, or completeness; the paired
+JUDGMENT item's own review is where content is vouched for. And the constructor is
+deliberately a closed category: if you find yourself reaching for `--review-bookkeeping` on
+a close that carries any judgment at all, that is category creep — the exact drift the
+`work_bookkeeping_closes` view exists to make visible (every bookkeeping close, forever, one
+query; a growing view full of judgment-bearing closes is a finding to report upstream, never
+a local norm to settle into).
+
+Invented downstream, not here: the pairing convention comes from the autoharn-panel
+deployment's own orchestrator (its ledger rows 407 and 408, named here only as history),
+carried upstream via decision row 1295 (2026-07-17 two-spy synthesis); the s38 constructor
+(`design/FABLE-BOOKKEEPING-CLOSE-SPEC.md`, maintainer-ratified) is what made the convention's
+closes representable honestly instead of forcing rubber-stamp countersigns.
+
 ## Declaring things on the ledger
 
 **Can I declare which tools/services/agents this project may, should, must, or must not
