@@ -970,10 +970,14 @@ if [ "${1:-}" = "decomposition-review-status" ]; then
   # pickup.tmpl's `_load_apparatus()`/`DEPLOYMENT_PATH.parent` use -- never a second hand-derived
   # notion of "world root"). Default/validation logic is a LINE-FOR-LINE mirror of hooks/
   # pretooluse_change_gate.py's own `_resolve_mode()` -- NOT a single-sourced import of it (an
-  # import would pay pretooluse_change_gate.py's own module-scope GOVERNED_PATTERNS filesystem
-  # read against its _DEFAULT_SUBJECT_ROOT, a foreign project path, when this file's world isn't
-  # wired). This is a DELIBERATE additional per-process copy, following the SAME duplication
-  # posture this project already carries across eleven hooks/*.py files, each with its own
+  # import would pay pretooluse_change_gate.py's own module-load cost and process footprint for a
+  # one-shot shell verb; as of the change-gate-foreign-defaults pass, 2026-07-17, that module no
+  # longer performs a filesystem read at import time at all -- GOVERNED_PATTERNS is resolved inside
+  # `_configure()`, once per invocation, never at module scope -- so the historical foreign-path
+  # read this comment used to name is gone; revisiting the copy-vs-import choice itself is a
+  # possible FUTURE item, not required by this fix). This is a DELIBERATE additional per-process
+  # copy, following the SAME duplication posture this project already carries across eleven
+  # hooks/*.py files, each with its own
   # `_resolve_mode` -- see filing/apparatus_registry.py's own docstring ("WHY A DERIVED REGISTRY,
   # NOT A HAND-MAINTAINED LIST"): the mechanism is reconciled by MECHANICALLY SCANNING every copy,
   # never by forcing one shared import across independent short-lived processes. This 'observe'
