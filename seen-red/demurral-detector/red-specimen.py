@@ -23,7 +23,7 @@ STATIC-TIER + OBSERVE-FALLBACK CASES (added alongside the 2026-07-17 static-tier
 unchanged. Cases 4-5 both-polarity-prove `mode="static"` the same way, at ZERO classifier cost
 (pure regex, module docstring's STATIC TIER section) — case 4 fires the NOTICE on a canonical
 "overkill" positive (corpus row 6/61, `instruments/demurral_corpus.jsonl`), case 5 stays SILENT
-on a genuine corpus NEGATIVE row (row 26) that contains none of the listed phrases (chosen
+on a genuine corpus NEGATIVE row (row 27, 1-indexed) that contains none of the listed phrases (chosen
 deliberately over the corpus's own gold-plating hard negative, row 74, which DOES contain a
 listed phrase and is the documented FP=1 static-tier miss — using it here would prove the wrong
 thing). Case 6 proves the `mode="observe"` classifier-unavailable fallback path: a
@@ -126,7 +126,7 @@ STOP_COMPLETION_CLAIM = {
     ),
 }
 
-# STATIC-TIER canonical positive (instruments/demurral_corpus.jsonl row 61, gold=POSITIVE,
+# STATIC-TIER canonical positive (instruments/demurral_corpus.jsonl row 62 (1-indexed), gold=POSITIVE,
 # verbatim): contains "overkill", a listed static-tier phrase (instruments/demurral_phrases.
 # default.json's `_note` names "overkill" as the maintainer-added item matching this exact
 # corpus specimen) -- must fire the static NOTICE with no classifier call at all.
@@ -149,7 +149,7 @@ STATIC_POSITIVE_ASK_USER_QUESTION = {
     },
 }
 
-# STATIC-TIER hard negative (instruments/demurral_corpus.jsonl row 26, gold=NEGATIVE, verbatim):
+# STATIC-TIER hard negative (instruments/demurral_corpus.jsonl row 27 (1-indexed), gold=NEGATIVE, verbatim):
 # a genuine neutral scope question that contains NONE of the static phrase list's entries --
 # deliberately NOT row 74 (the corpus's own gold-plating hard negative), which DOES contain a
 # listed phrase and is the documented FP=1 static-tier miss (hooks/demurral_detect.py module
@@ -288,7 +288,7 @@ def main() -> int:
         if tier4 != "static":
             failures.append(f"case4: journal tier mismatch -- expected 'static', got {tier4!r}")
 
-        # Case 5: mode="static" stays SILENT on a genuine corpus hard negative (row 26) that
+        # Case 5: mode="static" stays SILENT on a genuine corpus hard negative (row 27, 1-indexed) that
         # contains none of the listed phrases -- proves the static tier does not fire on every
         # AskUserQuestion, only on an actual phrase match.
         rc5, out5 = _run(STATIC_HARD_NEGATIVE_ASK_USER_QUESTION, tmp)
