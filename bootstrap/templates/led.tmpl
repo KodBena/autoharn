@@ -117,6 +117,28 @@
 #                                              error) on a kernel that predates it (kernel/lineage/
 #                                              s15-schema.sql, the current standalone generation --
 #                                              s10-s14 are earlier, superseded generations).
+#   led briefing                               READ-ONLY, no DB access: prints the fresh-agent
+#                                              rules briefing -- the three house rules a new agent
+#                                              otherwise discovers only by tripping them (the ledger
+#                                              change-gate, the flag-order asymmetry, the same-
+#                                              session countersign refusal), then one pointer line to
+#                                              design/USER-RECIPES-FAQ.md. Extension point: reads
+#                                              <world-root>/.claude/apparatus.json's
+#                                              mechanisms.rules_briefing.extra_items (a JSON array of
+#                                              strings) -- world-root resolved EXACTLY as
+#                                              `decomposition-review-status` above resolves it (the
+#                                              directory DEPLOYMENT was actually found in), not a
+#                                              second hand-derived notion of "world root" (ADR-0012
+#                                              P1). Present and valid: each string prints verbatim
+#                                              under an "additional world-specific rules" line.
+#                                              Absent: silence, zero interference. Present but
+#                                              malformed (not a JSON array of strings): a single loud
+#                                              stderr warning naming the file and the bad value,
+#                                              core briefing still prints in full -- never a crash,
+#                                              never a silent drop. This is the SessionStart hook
+#                                              hooks/sessionstart_rules_briefing.py's own transport:
+#                                              that hook carries no copy of the briefing text, it
+#                                              only invokes this verb and forwards its output.
 #
 #   led decision --grade <word> <statement...>  writes a kind=decision row carrying a durability
 #                                              GRADE (kernel/lineage/s36-decision-grade.sql,
@@ -565,7 +587,8 @@ warn_path_shaped_in_statement() {
 # (same convention as every other flag here), but only the generic <kind> <statement...> path's
 # INSERT at the bottom of this file actually writes event_declared_ts (kernel/lineage/
 # s24-declared-event-time.sql). Every OTHER dispatched verb below (--recent/current/question-
-# status/review-gap/stamp-distinctness/register-principal/obligate/review/work) has its OWN
+# status/review-gap/stamp-distinctness/register-principal/obligate/review/work/decomposition-
+# review-status/briefing) has its OWN
 # INSERT INTO ledger that does not carry the column. REFUSE loudly here rather than silently
 # dropping a value the operator explicitly asked to be recorded (the class this file's own
 # `refuse_flag_in_statement`/missing-column-refusal idioms both exist to foreclose) -- the flag is
@@ -574,7 +597,7 @@ warn_path_shaped_in_statement() {
 # not a silent gap.
 if [ -n "$event_time" ]; then
   case "${1:-}" in
-    --recent|current|question-status|review-gap|stamp-distinctness|standing|register-principal|obligate|review|work|decomposition-review-status)
+    --recent|current|question-status|review-gap|stamp-distinctness|standing|register-principal|obligate|review|work|decomposition-review-status|briefing)
       echo "led: REFUSED -- --event-time is only supported on the generic <kind> <statement...>" >&2
       echo "  path today (e.g. './led --event-time <ts> finding \"...\"'); '${1:-}' has its own" >&2
       echo "  INSERT that does not carry event_declared_ts, so the value would otherwise be" >&2
@@ -1067,6 +1090,81 @@ SQL
   else
     echo "verdict: ARMED-OBSERVING"
   fi
+  exit 0
+fi
+
+if [ "${1:-}" = "briefing" ]; then
+  shift
+  # NO FLAGS accepted -- same refuse-unknown-flags discipline `decomposition-review-status` above
+  # already uses: a typo'd/unsupported argument is refused loudly, never silently swallowed.
+  if [ $# -gt 0 ]; then
+    echo "led briefing: REFUSED -- unrecognized argument '$1'." >&2
+    echo "  This verb takes NO flags or arguments -- see top-of-file comment." >&2
+    exit 1
+  fi
+
+  cat <<'BRIEFING'
+Fresh-agent rules briefing -- three rules a new agent otherwise discovers only by tripping them.
+
+1. The ledger change-gate. A source-file edit must be preceded by a ledger entry naming that
+   file: `./led -f <basename> decision "<why>"`. Then RE-ISSUE THE SAME EDIT -- the gate re-checks
+   on every attempt, so retrying after the insert is the whole fix. Do not write the file first
+   and ledger it after; the gate blocks the write, not the record.
+
+2. Flag-order asymmetry. Generic ledger flags go BEFORE the kind word: `./led --refs row:N
+   decision "..."`. `led work <sub>` flags go AFTER the slug/title/verdict instead: `./led work
+   open <slug> "<title>" --parent <parent-slug>`. A flag placed on the wrong side of that boundary
+   is REFUSED, never silently swallowed into the statement's own prose -- move it to the other
+   side and re-issue.
+
+3. Same-session countersign. `led review <id> attest ...` is refused when the countersigning
+   actor authored the row (self-review, keyed on the actor/principal, not the invocation).
+   Disclosed fallbacks: countersign with independence `self-review` explicitly, or register a
+   distinct principal first (`./led register-principal <name> <class>`) and set
+   LED_ACTOR=<name> before re-issuing the review.
+
+See design/USER-RECIPES-FAQ.md for the full recipe corpus these rules are drawn from.
+BRIEFING
+
+  # Extension point: <world-root>/.claude/apparatus.json's mechanisms.rules_briefing.extra_items.
+  # world_root resolved EXACTLY as `decomposition-review-status` above resolves it -- the directory
+  # DEPLOYMENT was actually found in, not a second hand-derived notion of "world root" (ADR-0012 P1).
+  world_root="$(cd "$(dirname "$DEPLOYMENT")" && pwd)"
+  python3 - "$world_root" <<'PYEOF'
+import json, os, sys
+
+root = sys.argv[1]
+path = os.path.join(root, ".claude", "apparatus.json")
+try:
+    with open(path, encoding="utf-8") as f:
+        cfg = json.load(f)
+    apparatus = cfg if isinstance(cfg, dict) else {}
+except FileNotFoundError:
+    apparatus = {}
+except Exception as e:
+    print(f"[led briefing] WARNING: could not parse {path} ({type(e).__name__}: {e}) -- "
+          f"skipping world-specific extra_items; core briefing above still stands.", file=sys.stderr)
+    apparatus = {}
+
+mechs = apparatus.get("mechanisms")
+entry = mechs.get("rules_briefing") if isinstance(mechs, dict) else None
+extra = entry.get("extra_items") if isinstance(entry, dict) else None
+
+if entry is not None and "extra_items" in entry and (
+        not isinstance(extra, list) or not all(isinstance(x, str) for x in extra)):
+    print(f"[led briefing] WARNING: mechanisms.rules_briefing.extra_items in {path} must be a "
+          f"JSON array of strings -- got {extra!r}; ignoring it, core briefing above still stands.",
+          file=sys.stderr)
+    sys.exit(0)
+
+if not extra:
+    sys.exit(0)  # absent, or present-but-empty -- zero interference either way
+
+print()
+print("Additional world-specific rules (.claude/apparatus.json mechanisms.rules_briefing.extra_items):")
+for item in extra:
+    print(f"  - {item}")
+PYEOF
   exit 0
 fi
 
@@ -2168,6 +2266,7 @@ if [ $# -lt 2 ]; then
   echo "       --confidence; cite an antecedent row from any kind via --refs row:<id>)" >&2
   echo "       led --recent [N] | led current [N] | led show <id> | led question-status | led review-gap | led stamp-distinctness | led standing" >&2
   echo "       led decomposition-review-status  (mode + countersign_obligation counts + verdict, read-only)" >&2
+  echo "       led briefing  (fresh-agent rules briefing, read-only, no DB access)" >&2
   echo "       led decision [--grade <word>] <statement...>  (kernel/lineage/s36-decision-grade.sql)" >&2
   echo "       led register-principal <name> <class>" >&2
   echo "       led obligate <scope> <assigned-by-principal> <obliged-actor-principal>" >&2
