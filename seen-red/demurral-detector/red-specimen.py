@@ -33,6 +33,32 @@ as `tier: "static_fallback"` rather than silently or as a classifier verdict —
 zero-network assertion (the stub classifier command never calls out), unlike cases 1 and 3,
 which cost a live `claude -p` call.
 
+NOTICE-CONFIGURATION CASES (added alongside the 2026-07-17 notice-config pass, cases 7-9 below):
+the injected notice text joins the phrase list as operator DATA in the same config pair,
+`{detected_strings, injected_string}` (`hooks/demurral_detect.py` module docstring, "NOTICE TEXT
+IS ALSO DATA"). Case 7 proves a custom object-shape override (`{"phrases": [...], "notice":
+"..."}`) injects its OWN notice text, with the `{phrases}` placeholder substituted, in place of
+the built-in wording. Case 8 is the explicit BACK-COMPAT PIN for shape (a) — a legacy bare-array
+override (phrases only, no notice concept) must keep working exactly as before this pass, using
+the built-in notice. Case 9 proves the malformed-notice degrade path (`"notice"` present but not
+a string) warns loudly on stderr, naming the offending value, and falls back to the built-in
+notice — never a crash, never a silently empty notice. All three run at zero classifier cost
+(mode="static").
+
+TWO-HOME AGREEMENT + STRAY-BRACE HAZARD CASES (added mechanically, this pass): Case 10 is not a
+hook-fixture case at all — it directly compares `hooks/demurral_detect.py`'s `DEFAULT_NOTICE`
+against `instruments/demurral_phrases.default.json`'s `"notice"` field, byte-for-byte, and fails
+loudly (printing both values) on any drift. The two were, until this case existed, "deliberately
+identical hand-typed copies with only a comment binding them" — no mechanism ever re-verified
+that binding; this case is that mechanism (test/CI gate, ADR-0011 Rule 1 vocabulary), re-run
+every time this suite runs. Case 11 pins the stray-brace hazard the design already names
+(`_emit_static_notice`'s own comment: "str.replace, never str.format -- an operator's own notice
+text may carry stray braces that must never raise") as a standing regression fixture: a per-world
+override notice containing BOTH a stray, non-placeholder brace pair (`{oops}`) and the real
+`{phrases}` placeholder must inject `{oops}` verbatim (unsubstituted) while `{phrases}` is
+correctly substituted, with no traceback and exit 0 — proving the hazard is fixed AND staying
+fixed, not merely documented.
+
 OBSERVER MODE, PROVEN HERE TOO: every case below asserts the hook's exit code is 0 regardless of
 verdict (it NEVER blocks) — the warning (when it fires) travels only via
 `hookSpecificOutput.additionalContext` and the journal file, never via a deny/ask decision.
@@ -68,6 +94,10 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
 HOOK = REPO / "hooks" / "demurral_detect.py"
+PHRASES_DEFAULT_JSON = REPO / "instruments" / "demurral_phrases.default.json"
+
+sys.path.insert(0, str(HOOK.parent))  # hooks/, for DEFAULT_NOTICE -- case 10's drift check below
+from demurral_detect import DEFAULT_NOTICE  # noqa: E402
 
 # Specimen 2 (ADR-0013's own centerpiece): a drafted AskUserQuestion whose OPTIONS pre-recommend
 # skipping the invasive, already-mandated §3 package skeleton work.
@@ -178,7 +208,7 @@ STATIC_HARD_NEGATIVE_ASK_USER_QUESTION = {
 }
 
 
-def _run(payload: dict, cwd: Path) -> tuple[int, dict]:
+def _run(payload: dict, cwd: Path) -> tuple[int, dict, str]:
     # DEMURRAL_TIMEOUT_S=60: this is the ACCEPTANCE fixture, so it waits for a real verdict
     # instead of exercising the production 10s fail-open path (which would make every case
     # vacuously silent whenever the classifier runs slow — observed latency is ~7–20s). The
@@ -198,7 +228,10 @@ def _run(payload: dict, cwd: Path) -> tuple[int, dict]:
                 out = json.loads(line)
             except Exception:
                 pass
-    return cp.returncode, out
+    # stderr returned too (added alongside the 2026-07-17 notice-config cases 7-9): case 9 needs
+    # to assert the loud one-line warning naming the offending non-string 'notice' value actually
+    # printed, not just that the hook degraded and didn't crash.
+    return cp.returncode, out, (cp.stderr or "")
 
 
 def _arm(cwd: Path, mode: str = "observe", *, classifier_command: list[str] | None = None) -> None:
@@ -227,6 +260,27 @@ def _arm(cwd: Path, mode: str = "observe", *, classifier_command: list[str] | No
         json.dumps({"mechanisms": {"demurral_detect": entry}}), encoding="utf-8")
 
 
+def _arm_phrase_override(cwd: Path, data) -> None:
+    """Write `<cwd>/.claude/demurral_phrases.json` -- the per-world override
+    `hooks/demurral_detect.py::_resolve_static_config` reads before falling back to the shipped
+    `instruments/demurral_phrases.default.json` (module docstring, "NOTICE TEXT IS ALSO DATA").
+    `data` is the raw JSON-serializable value to write -- either a bare list (shape (a), legacy
+    phrases-only, case 8 below) or a dict (shape (b), `{"phrases": [...], "notice": ...}`, cases
+    7 and 9 below), armed the same honest way `_arm` above arms the mode switch: writing the real
+    file a real operator would write, not a fixture-only shortcut."""
+    claude_dir = cwd / ".claude"
+    claude_dir.mkdir(parents=True, exist_ok=True)
+    (claude_dir / "demurral_phrases.json").write_text(json.dumps(data), encoding="utf-8")
+
+
+def _clear_phrase_override(cwd: Path) -> None:
+    """Remove `<cwd>/.claude/demurral_phrases.json` if present -- used between notice-config
+    cases (7-9) so one case's override file never leaks into the next case's expectations."""
+    override = cwd / ".claude" / "demurral_phrases.json"
+    if override.exists():
+        override.unlink()
+
+
 def main() -> int:
     tmp = Path(tempfile.mkdtemp(prefix="demurral-seen-red-"))
     try:
@@ -234,7 +288,7 @@ def main() -> int:
         failures = []
 
         # Case 1: Specimen 2's canonical violation via PreToolUse/AskUserQuestion -> must WARN, never block.
-        rc, out = _run(SPECIMEN_2_ASK_USER_QUESTION, tmp)
+        rc, out, _stderr1 = _run(SPECIMEN_2_ASK_USER_QUESTION, tmp)
         ctx = out.get("hookSpecificOutput", {}).get("additionalContext", "")
         journal = tmp / ".claude" / "logs" / "demurral_detect.journal.jsonl"
         journaled_positive = False
@@ -252,7 +306,7 @@ def main() -> int:
 
         # Case 2: hard negative (neutral scope question) -> must stay SILENT.
         neg_journal_before = journal.read_text().splitlines() if journal.exists() else []
-        rc2, out2 = _run(NEUTRAL_SCOPE_QUESTION_ASK_USER_QUESTION, tmp)
+        rc2, out2, _stderr2 = _run(NEUTRAL_SCOPE_QUESTION_ASK_USER_QUESTION, tmp)
         ctx2 = out2.get("hookSpecificOutput", {}).get("additionalContext", "")
         print(f"CASE 2 (hard negative, PreToolUse/AskUserQuestion): exit={rc2} warned={'WARNING' in ctx2!r}")
         if rc2 != 0:
@@ -261,7 +315,7 @@ def main() -> int:
             failures.append(f"case2: FALSE POSITIVE -- warned on a neutral scope question: {ctx2[:200]!r}")
 
         # Case 3: the same buried demurral via the Stop attachment point -> must WARN, never block.
-        rc3, out3 = _run(STOP_COMPLETION_CLAIM, tmp)
+        rc3, out3, _stderr3 = _run(STOP_COMPLETION_CLAIM, tmp)
         ctx3 = out3.get("hookSpecificOutput", {}).get("additionalContext", "")
         print(f"CASE 3 (Stop completion claim): exit={rc3} warned={'WARNING' in ctx3}")
         if rc3 != 0:
@@ -274,7 +328,7 @@ def main() -> int:
         # no model call, EVER, at this mode value"). Re-arm the switchboard to "static" first.
         _arm(tmp, mode="static")
         static_journal_before = journal.read_text().splitlines() if journal.exists() else []
-        rc4, out4 = _run(STATIC_POSITIVE_ASK_USER_QUESTION, tmp)
+        rc4, out4, _stderr4 = _run(STATIC_POSITIVE_ASK_USER_QUESTION, tmp)
         ctx4 = out4.get("hookSpecificOutput", {}).get("additionalContext", "")
         static_journal_after = journal.read_text().splitlines() if journal.exists() else []
         new_rows4 = [json.loads(l) for l in static_journal_after[len(static_journal_before):] if l.strip()]
@@ -291,7 +345,7 @@ def main() -> int:
         # Case 5: mode="static" stays SILENT on a genuine corpus hard negative (row 27, 1-indexed) that
         # contains none of the listed phrases -- proves the static tier does not fire on every
         # AskUserQuestion, only on an actual phrase match.
-        rc5, out5 = _run(STATIC_HARD_NEGATIVE_ASK_USER_QUESTION, tmp)
+        rc5, out5, _stderr5 = _run(STATIC_HARD_NEGATIVE_ASK_USER_QUESTION, tmp)
         ctx5 = out5.get("hookSpecificOutput", {}).get("additionalContext", "")
         print(f"CASE 5 (static-tier hard negative, no listed phrase): exit={rc5} notice={'NOTICE' in ctx5!r}")
         if rc5 != 0:
@@ -307,7 +361,7 @@ def main() -> int:
         failing_classifier = [sys.executable, "-c", "import sys; sys.exit(1)"]
         _arm(tmp, mode="observe", classifier_command=failing_classifier)
         fallback_journal_before = journal.read_text().splitlines() if journal.exists() else []
-        rc6, out6 = _run(SPECIMEN_2_ASK_USER_QUESTION, tmp)
+        rc6, out6, _stderr6 = _run(SPECIMEN_2_ASK_USER_QUESTION, tmp)
         ctx6 = out6.get("hookSpecificOutput", {}).get("additionalContext", "")
         fallback_journal_after = journal.read_text().splitlines() if journal.exists() else []
         new_rows6 = [json.loads(l) for l in fallback_journal_after[len(fallback_journal_before):] if l.strip()]
@@ -322,19 +376,159 @@ def main() -> int:
             failures.append(f"case6: journal tier mismatch -- expected 'static_fallback' (never a bare "
                              f"'static' or a classifier verdict), got {tier6!r}")
 
+        # NOTICE-CONFIGURATION CASES (added alongside the 2026-07-17 notice-config pass, cases
+        # 7-9 below): the phrase list and the injected notice text now live in the SAME config
+        # pair, `{detected_strings, injected_string}` (module docstring, "NOTICE TEXT IS ALSO
+        # DATA"). Cases 7-9 both-polarity-prove the notice half the same way cases 4-6 proved the
+        # phrase half -- mode="static" throughout, zero classifier cost.
+        _arm(tmp, mode="static")
+
+        # Case 7: a custom object-shape override (`{"phrases": [...], "notice": "..."}`) whose
+        # notice carries the `{phrases}` placeholder -> the injected text must carry the CUSTOM
+        # notice, with the matched phrase substituted in, NOT the built-in text.
+        custom_notice = "CUSTOM NOTICE: matched {phrases} -- flag it in the ops channel before narrowing."
+        _arm_phrase_override(tmp, {"phrases": ["overkill"], "notice": custom_notice})
+        rc7, out7, _stderr7 = _run(STATIC_POSITIVE_ASK_USER_QUESTION, tmp)
+        ctx7 = out7.get("hookSpecificOutput", {}).get("additionalContext", "")
+        expected7 = "CUSTOM NOTICE: matched 'overkill' -- flag it in the ops channel before narrowing."
+        print(f"CASE 7 (custom object-shape notice + {{phrases}} placeholder): exit={rc7} "
+              f"custom_notice_present={expected7 in ctx7}")
+        if rc7 != 0:
+            failures.append("case7: hook exited non-zero -- OBSERVER MODE VIOLATED")
+        if expected7 not in ctx7:
+            failures.append(f"case7: CUSTOM NOTICE NOT INJECTED -- expected {expected7!r} substring "
+                             f"in the additionalContext, got {ctx7[:300]!r}")
+        if "Be mindful of Rule 3 and reconsider" in ctx7:
+            failures.append("case7: built-in notice text leaked into a world with a valid custom notice")
+
+        # Case 8: legacy bare-array override (shape (a), phrases only, no notice concept at all)
+        # -- BACK-COMPAT PIN: a world that already wrote an array-shaped override (this morning,
+        # per the commission) must keep working unchanged. A phrase NOT in the shipped default
+        # list proves the OVERRIDE (not the shipped default) is the effective list; the injected
+        # text must be the BUILT-IN notice (arrays carry no notice of their own).
+        _arm_phrase_override(tmp, ["frobnicate-into-oblivion"])
+        legacy_positive = {
+            "hook_event_name": "PreToolUse",
+            "tool_name": "AskUserQuestion",
+            "tool_input": {"questions": [{
+                "question": "Adding the full audit-log replay path is a lot of ceremony; let's "
+                             "frobnicate-into-oblivion the edge cases and ship the common path.",
+                "header": "Audit-log replay scope",
+                "options": [{"label": "Ship the common path"}, {"label": "Do the full replay path"}],
+            }]},
+        }
+        rc8, out8, _stderr8 = _run(legacy_positive, tmp)
+        ctx8 = out8.get("hookSpecificOutput", {}).get("additionalContext", "")
+        print(f"CASE 8 (legacy bare-array override, back-compat pin): exit={rc8} "
+              f"fired={'NOTICE' in ctx8} built_in_notice={'canonical demurral vocabulary' in ctx8}")
+        if rc8 != 0:
+            failures.append("case8: hook exited non-zero -- OBSERVER MODE VIOLATED")
+        if "NOTICE" not in ctx8 or "'frobnicate-into-oblivion'" not in ctx8:
+            failures.append(f"case8: LEGACY ARRAY OVERRIDE INERT -- override phrase did not fire, "
+                             f"got {ctx8[:300]!r}")
+        if "canonical demurral vocabulary" not in ctx8:
+            failures.append("case8: legacy array override should inject the BUILT-IN notice "
+                             "(arrays carry no notice of their own) -- built-in wording missing")
+
+        # Case 9: 'notice' present but NOT a string (an int here) -> loud one-line stderr warning
+        # naming the offending value, built-in notice injected, hook still exits 0 -- never a
+        # crash, never a silently empty notice (module docstring's degrade-path contract).
+        _arm_phrase_override(tmp, {"phrases": ["overkill"], "notice": 12345})
+        rc9, out9, stderr9 = _run(STATIC_POSITIVE_ASK_USER_QUESTION, tmp)
+        ctx9 = out9.get("hookSpecificOutput", {}).get("additionalContext", "")
+        warned9 = "WARNING" in stderr9 and "12345" in stderr9 and "notice" in stderr9
+        print(f"CASE 9 (notice not a string -> loud warn + built-in): exit={rc9} "
+              f"warned_stderr={warned9} built_in_notice={'canonical demurral vocabulary' in ctx9}")
+        if rc9 != 0:
+            failures.append("case9: hook exited non-zero on a malformed 'notice' -- must degrade, never crash/block")
+        if "Traceback" in stderr9:
+            failures.append(f"case9: hook raised a traceback on a non-string 'notice' value: {stderr9[:400]!r}")
+        if not warned9:
+            failures.append(f"case9: no loud stderr WARNING naming the offending 'notice' value (12345) -- "
+                             f"got stderr={stderr9[:300]!r}")
+        if "canonical demurral vocabulary" not in ctx9:
+            failures.append("case9: expected the BUILT-IN notice text after a malformed 'notice' degrade, "
+                             f"got {ctx9[:300]!r}")
+
+        _clear_phrase_override(tmp)
+
+        # Case 10: TWO-HOME NOTICE-STRING DRIFT CHECK (not a hook-fixture case -- no subprocess,
+        # no cwd, no classifier tier at all). hooks/demurral_detect.py's DEFAULT_NOTICE and
+        # instruments/demurral_phrases.default.json's "notice" field are two independently
+        # hand-typed copies of the same text (module docstrings at both homes: "byte-for-byte the
+        # same wording", "carries this file's own current built-in text verbatim") -- nothing
+        # upstream of this file ever compared them. This IS that comparison, re-run every time
+        # this suite runs, so a future hand-edit to either copy that drifts from the other fails
+        # LOUDLY here (test/CI gate, ADR-0011 Rule 1 vocabulary) instead of silently shipping a
+        # world whose shipped-default notice text disagrees with the hook's own emergency
+        # fallback text.
+        shipped = json.loads(PHRASES_DEFAULT_JSON.read_text(encoding="utf-8"))
+        shipped_notice = shipped.get("notice")
+        print(f"CASE 10 (two-home notice-string drift check): "
+              f"hook_default_notice_len={len(DEFAULT_NOTICE)} "
+              f"json_notice_len={len(shipped_notice) if isinstance(shipped_notice, str) else 'n/a'} "
+              f"match={shipped_notice == DEFAULT_NOTICE}")
+        if shipped_notice != DEFAULT_NOTICE:
+            failures.append(
+                "case10: NOTICE-STRING DRIFT -- hooks/demurral_detect.py's DEFAULT_NOTICE and "
+                "instruments/demurral_phrases.default.json's \"notice\" field have gone out of "
+                "sync (the two hand-typed homes no longer agree byte-for-byte).\n"
+                f"    hooks/demurral_detect.py::DEFAULT_NOTICE =\n        {DEFAULT_NOTICE!r}\n"
+                f"    instruments/demurral_phrases.default.json[\"notice\"] =\n        {shipped_notice!r}"
+            )
+
+        # Case 11: STRAY-BRACE HAZARD FIXTURE (module docstring's "NOTICE TEXT IS ALSO DATA"
+        # section, and `_emit_static_notice`'s own comment: "str.replace, never str.format -- an
+        # operator's own notice text may carry stray braces that must never raise"). A per-world
+        # override notice containing braces that are NOT the `{phrases}` placeholder is exactly
+        # the operator-authored text this design names as a hazard: `str.format` on such a string
+        # raises (KeyError/IndexError on `{oops}`), which would turn a benign, disregardable
+        # NOTICE into a hook crash on an arbitrary operator's own wording. Pins that hazard as a
+        # standing regression fixture -- if `_emit_static_notice` is ever changed from
+        # `str.replace` to `str.format` (or anything else that interprets `{oops}` as a format
+        # field), this case must fail red.
+        _arm(tmp, mode="static")
+        stray_brace_notice = "weird braces {oops} and {phrases} here"
+        _arm_phrase_override(tmp, {"phrases": ["overkill"], "notice": stray_brace_notice})
+        rc11, out11, stderr11 = _run(STATIC_POSITIVE_ASK_USER_QUESTION, tmp)
+        ctx11 = out11.get("hookSpecificOutput", {}).get("additionalContext", "")
+        expected11 = "weird braces {oops} and 'overkill' here"
+        print(f"CASE 11 (stray-brace hazard, {{oops}} + {{phrases}} in one notice): exit={rc11} "
+              f"no_traceback={'Traceback' not in stderr11} literal_oops={'{oops}' in ctx11} "
+              f"substituted_phrases={expected11 in ctx11}")
+        if rc11 != 0:
+            failures.append("case11: hook exited non-zero on a stray-brace notice -- OBSERVER MODE VIOLATED")
+        if "Traceback" in stderr11:
+            failures.append(f"case11: hook raised a traceback on a stray-brace notice (str.format-shaped "
+                             f"regression): {stderr11[:400]!r}")
+        if "{oops}" not in ctx11:
+            failures.append(f"case11: STRAY-BRACE HAZARD -- '{{oops}}' was not carried through verbatim "
+                             f"(unsubstituted) in the injected notice, got {ctx11[:300]!r}")
+        if expected11 not in ctx11:
+            failures.append(f"case11: '{{phrases}}' was not correctly substituted alongside the stray "
+                             f"brace, expected {expected11!r} in the injected notice, got {ctx11[:300]!r}")
+        _clear_phrase_override(tmp)
+
         if failures:
             print("\nSPECIMEN INERT / OBSERVER-MODE BREACH -- one or more expectations failed:")
             for f in failures:
                 print(f"  !! {f}")
             return 1
 
-        print("\ndemurral-detector red-specimen: all six cases behaved as designed -- the "
+        print("\ndemurral-detector red-specimen: all eleven cases behaved as designed -- the "
               "classifier tier fires on Specimen 2's canonical shape on BOTH attachment points "
               "and stays silent on a genuine hard negative (cases 1-3); the static tier fires on "
               "a canonical phrase positive and stays silent on a phrase-free hard negative (cases "
               "4-5); the observe-mode classifier-unavailable path honestly falls back to the "
-              "static tier (case 6); and the hook NEVER exits non-zero at any mode (observer "
-              "mode, verified live).")
+              "static tier (case 6); a custom object-shape notice with the {phrases} placeholder "
+              "is injected verbatim-substituted (case 7); a legacy bare-array override still "
+              "works with the built-in notice (case 8, back-compat pin); a non-string 'notice' "
+              "value degrades loudly to the built-in notice rather than crashing (case 9); the "
+              "two-home DEFAULT_NOTICE / demurral_phrases.default.json[\"notice\"] pair agree "
+              "byte-for-byte (case 10, the mechanized drift check); a stray-brace notice carries "
+              "its non-placeholder braces verbatim while {phrases} substitutes correctly (case "
+              "11, the stray-brace hazard fixture); and the hook NEVER exits non-zero at any mode "
+              "(observer mode, verified live).")
         return 0
     finally:
         shutil.rmtree(tmp, ignore_errors=True)

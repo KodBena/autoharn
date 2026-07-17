@@ -67,9 +67,44 @@ plain, documented JSON file (its own header fields explain what it is and how to
 so an operator edits vocabulary without touching this hook's code. A deployment that wants its
 own words entirely replaces the effective list, without editing the shipped default, by dropping
 `<world-root>/.claude/demurral_phrases.json` (same shape: `{"phrases": [...], ...}`) — see
-`_resolve_static_phrases` below for the exact three-step resolution order (per-world override,
+`_resolve_static_config` below for the exact three-step resolution order (per-world override,
 else the shipped default, else a tiny hardcoded emergency floor if even the shipped file is
 unreadable) and its own comment for why each step exists.
+
+NOTICE TEXT IS ALSO DATA (2026-07-17 pair-completion amendment, ledgered commission
+2026-07-17): the injected notice text — the "reconsider Rule 3" nudge `_emit_static_notice`
+below sends into the agent's context on a static-tier hit — was, until this pass, a Python
+f-string baked into that function. It now lives beside the phrase list, in the SAME file, under
+an optional `"notice"` key: the config file this mechanism reads now accepts TWO shapes. Shape
+(a), the legacy bare JSON array of phrase strings (`["phrase one", "phrase two", ...]`), keeps
+working completely unchanged — phrases only, built-in notice, exactly today's behavior; a world
+that already carries an array-shaped override is not broken by this pass. Shape (b), an object
+(`{"phrases": [...], "notice": "..."}`), is the shipped default's own shape as of this pass, and
+lets an operator carry both knobs — vocabulary and injected text — in one file, one place. The
+notice string may contain the literal placeholder `{phrases}`, substituted via `str.replace`
+(never `str.format` — an operator's own notice text may carry stray braces that must never raise)
+with the comma-joined, `repr`-quoted phrase(s) this invocation actually matched. `"notice"` is
+optional at every level: absent key, explicit `null`, or an entirely legacy array file all fall
+back to `DEFAULT_NOTICE` below (the same text the shipped default's own `"notice"` field now
+carries verbatim, so an unconfigured world's injected text is byte-for-byte unchanged from before
+this pass — witnessed at commission time, not merely asserted). A present-but-non-string
+`"notice"` value degrades the same way the phrase list's own malformed-file case does: one loud
+stderr warning naming the actual offending value, then `DEFAULT_NOTICE` — never a crash, never a
+silently empty notice. See `_resolve_static_config` below for the combined three-step resolution
+(phrases and notice are read from the SAME file at the SAME step, since they live together —
+reading twice and warning twice for one malformed file would be a confusing double nudge for a
+single defect).
+
+NAMED FUTURE DIRECTION (maintainer's own framing, verbatim-in-substance, recorded here so the
+next builder finds it where they are already reading): the maintainer has named this whole area —
+static detector, static-tier response — as POLYMORPHIC in both directions. The detector need not
+stay a phrase-list regex; it could be a grep, a different pattern engine, or any function shaped
+`text -> matched-signal`. The response need not stay a single templated notice string; it could
+generalize past the `{detected_strings, injected_string}` pair this pass completes. This v1
+deliberately STOPS at that pair — one phrase-list-shaped detector, one templated notice string —
+because that is the concrete commission ledgered 2026-07-17, not because the maintainer believes
+it is the ceiling. No speculative machinery for the wider shape is built here; the direction is
+recorded so a future pass that DOES generalize is amending a named intent, not inventing one.
 
 OBSERVER MODE ONLY (house rule, 2026-07-09 mandate) — THIS HOOK NEVER BLOCKS, NEVER DENIES,
 NEVER ASKS, AT ANY TIER (classifier or static). It only WARNS: on a POSITIVE verdict — classifier
@@ -148,7 +183,7 @@ strength, not a variant of an existing one:
   `"static"`  -- NEW: only the zero-cost phrase tier below runs, matching against the phrase
                  list resolved from `instruments/demurral_phrases.default.json` (or a
                  `<world-root>/.claude/demurral_phrases.json` override -- see
-                 `_resolve_static_phrases` and its section comment for the full DATA, NOT CODE
+                 `_resolve_static_config` and its section comment for the full DATA, NOT CODE
                  story). No subprocess, no model call, EVER, at this mode value. The weakest
                  real behavior this mechanism has, offered for a world that will not pay for
                  `"observe"`.
@@ -460,81 +495,150 @@ def _resolve_mode(entry: dict, root: Optional[str]) -> str:
 # binding travels with the data, not only with this comment. "overkill" is NOT verbatim in Rule
 # 3's text -- disclosed in that file's own `_note`, not silently folded in as if it were.
 #
-# RESOLUTION ORDER, per invocation (`_resolve_static_phrases` below):
+# RESOLUTION ORDER, per invocation (`_resolve_static_config` below) -- phrases AND notice are
+# resolved TOGETHER, from the SAME file, at the SAME step, since 2026-07-17 they live together
+# (module docstring's "NOTICE TEXT IS ALSO DATA" section) -- reading the file twice and warning
+# twice for one malformed file would be a confusing double nudge for a single defect:
 #   1. Per-world override, `<world-root>/.claude/demurral_phrases.json` -- if present and valid
-#      (same shape as the default file: a JSON object with a non-empty `phrases` array of
-#      strings), this IS the effective list, in FULL -- a deployment owns its vocabulary
-#      outright, this is never merged with the shipped default. Present-but-malformed warns
-#      loudly (one stderr line) and falls through to 2 -- never a silently empty list.
+#      (either shape: a bare JSON array of non-empty strings, or a JSON object with a non-empty
+#      `phrases` array and an optional `notice` string), this IS the effective phrase list AND
+#      notice, in FULL -- a deployment owns its vocabulary/notice outright, never merged with the
+#      shipped default. Present-but-malformed warns loudly (one stderr line) and falls through to
+#      2 -- never a silently empty list.
 #   2. The shipped default, `instruments/demurral_phrases.default.json`, read directly by its
 #      REPO-RELATIVE path (`_REPO_ROOT`, already computed above for this exact purpose) -- the
 #      hook already lives in this checkout, the same posture every other repo-relative fact in
 #      this file already assumes (e.g. `_REPO_ROOT` itself, computed at import time).
-#   3. `_EMERGENCY_STATIC_DEMURRAL_PHRASES` below -- a TINY hardcoded last resort, used ONLY if
-#      step 2 ALSO fails to load (the shipped data file itself missing or malformed -- a broken
-#      checkout, not an ordinary operating condition), with a loud warning. Chosen over "keep no
-#      hardcoded fallback at all" because the maintainer's own instruction is explicit that this
-#      mechanism must never go silently toothless; a hardcoded five-phrase floor costs nothing
-#      and guarantees the static tier still does SOMETHING even if `instruments/` itself is
-#      unreadable. It is deliberately NOT the full list (so it is visibly a last resort, not a
-#      second copy of the real one) and is never used when the shipped default loads cleanly.
+#   3. `_EMERGENCY_STATIC_DEMURRAL_PHRASES` / `DEFAULT_NOTICE` below -- a TINY hardcoded last
+#      resort, used ONLY if step 2 ALSO fails to load (the shipped data file itself missing or
+#      malformed -- a broken checkout, not an ordinary operating condition), with a loud warning.
+#      Chosen over "keep no hardcoded fallback at all" because the maintainer's own instruction is
+#      explicit that this mechanism must never go silently toothless; a hardcoded five-phrase
+#      floor costs nothing and guarantees the static tier still does SOMETHING even if
+#      `instruments/` itself is unreadable. It is deliberately NOT the full list (so it is
+#      visibly a last resort, not a second copy of the real one) and is never used when the
+#      shipped default loads cleanly. `DEFAULT_NOTICE` is the SAME text the shipped default's own
+#      `"notice"` field carries verbatim -- an unconfigured world's injected text is unaffected by
+#      which of the two is technically consulted.
+#
+# Independently of the notice's OWN "present but not a string" degrade (loud warning, then
+# `DEFAULT_NOTICE`, `_resolve_notice_value` below), a missing/absent/null `"notice"` key -- or an
+# entirely legacy array-shaped file, which carries no notice concept at all -- degrades SILENTLY
+# to `DEFAULT_NOTICE`: that is not a defect to warn about, it is shape (a)'s and the optional-key
+# contract's normal, documented case (module docstring).
 _PHRASES_DEFAULT_PATH = os.path.join(_REPO_ROOT, "instruments", "demurral_phrases.default.json")
 
 _EMERGENCY_STATIC_DEMURRAL_PHRASES: tuple[str, ...] = (
     "invasive", "over-engineering", "yagni", "gold-plating", "overkill",
 )
 
+# The built-in notice text, byte-for-byte the same wording `_emit_static_notice` hardcoded before
+# the 2026-07-17 notice-configuration pass (witnessed at commission time: an unconfigured world's
+# injected text is identical before/after this pass) -- and the same text the shipped default's
+# own `instruments/demurral_phrases.default.json` `"notice"` field now carries verbatim, so a
+# deployment copying that file to author its own vocabulary sees this exact wording as its
+# starting point. `{phrases}` is substituted by `_emit_static_notice` via `str.replace`, never
+# `str.format` (module docstring: an operator's own notice text may carry stray braces that must
+# never raise).
+# Held byte-identical to instruments/demurral_phrases.default.json's own "notice" field by
+# seen-red/demurral-detector/red-specimen.py's drift check (test/CI gate, ADR-0011 Rule 1
+# vocabulary) -- case 10 in that suite imports this constant directly and compares it against the
+# shipped JSON's "notice" value, failing loudly (printing both) on any drift. NOT held in sync by
+# discipline/comment alone, and never was verified to be until that case existed.
+DEFAULT_NOTICE = (
+    "content below contains the phrase {phrases}, which is in ADR-0013 Rule 3's canonical "
+    "demurral vocabulary. Be mindful of Rule 3 and reconsider whether this narrows "
+    "already-mandated work. This is a free, enumeration-only word match with no judgment of "
+    "context or shape -- it is disregardable if this is a neutral scope question to the "
+    "ratifier, a fair-dealing renegotiation of a spec found wrong (with evidence), or a genuine "
+    "external bound reported upward; you, the agent, judge whether this is a false positive."
+)
 
-def _load_phrase_list(path: str) -> Optional[list[str]]:
-    """Read a demurral-phrase JSON file at `path`: `{"phrases": [str, ...], ...}`. Returns the
-    phrase list if the file parses and shapes correctly (a dict carrying a non-empty list of
-    non-empty strings under `"phrases"`), else None -- never raises. The caller decides what
-    None means (fall through silently, or warn then fall through) -- this function only reads
-    and validates."""
+
+def _load_phrase_config(path: str) -> Optional[tuple[list[str], Any]]:
+    """Read a demurral-phrase-config JSON file at `path`, either of the two shapes the module
+    docstring's "NOTICE TEXT IS ALSO DATA" section names: (a) a legacy bare array of non-empty
+    strings (`["phrase one", ...]`, phrases only, no notice concept), or (b) an object
+    (`{"phrases": [str, ...], "notice": <anything, optional>}`). Returns `(phrases, notice_raw)`
+    if the file parses and the phrase list shapes correctly (a non-empty list of non-empty
+    strings), else `None` -- never raises. `notice_raw` is whatever JSON value sat under
+    `"notice"` (absent key or shape (a) both yield `None`, meaning "use the built-in text" -- see
+    `_resolve_notice_value`); it is NOT type-checked here, since a present-but-non-string value is
+    a legal parse of THIS function's job (read + phrase-validate) and only becomes a degrade
+    decision one layer up, where the offending path is known for the warning message. The caller
+    decides what a `None` return means (fall through silently, or warn then fall through) -- this
+    function only reads and validates the phrase list."""
     try:
         with open(path, encoding="utf-8") as f:
             data = json.load(f)
     except Exception:
         return None
-    if not isinstance(data, dict):
+    if isinstance(data, list):
+        phrases, notice_raw = data, None
+    elif isinstance(data, dict):
+        phrases, notice_raw = data.get("phrases"), data.get("notice")
+    else:
         return None
-    phrases = data.get("phrases")
     if not isinstance(phrases, list) or not phrases or not all(
         isinstance(p, str) and p for p in phrases
     ):
         return None
-    return phrases
+    return phrases, notice_raw
 
 
-def _resolve_static_phrases(root: Optional[str]) -> tuple[str, ...]:
-    """The EFFECTIVE static-tier phrase list for this invocation -- see the module comment above
-    this section for the full three-step resolution order and its rationale. `root` is the same
-    world root `_apparatus_root`/`_load_apparatus_quiet` already resolve apparatus.json against
-    (GATE_SUBJECT_ROOT env var, else this session's `cwd`) -- the override lives at
-    `<root>/.claude/demurral_phrases.json`, one directory over from `apparatus.json` itself."""
+def _resolve_notice_value(notice_raw: Any, source_path: str) -> str:
+    """Degrade a raw `"notice"` JSON value (from `_load_phrase_config`'s second tuple element)
+    into the effective notice TEMPLATE string (still carrying any `{phrases}` placeholder
+    unsubstituted -- substitution happens in `_emit_static_notice`, per-match). `None` (absent
+    key, explicit `null`, or a legacy array-shaped file) is the NORMAL "operator did not set a
+    custom notice" case and degrades silently to `DEFAULT_NOTICE` -- not a warning-worthy
+    condition. A present value that is not a string IS malformed (module docstring: "notice
+    present but not a string -> loud one-line stderr warning naming the actual offending value +
+    built-in notice") and warns loudly, naming both the offending value and `source_path`, before
+    falling back to the same `DEFAULT_NOTICE`."""
+    if notice_raw is None:
+        return DEFAULT_NOTICE
+    if isinstance(notice_raw, str):
+        return notice_raw
+    print(f"[demurral-detect] WARNING: {source_path} carries a non-string 'notice' value "
+          f"({notice_raw!r}) -- 'notice' must be a JSON string if present -- falling back to the "
+          f"built-in notice, never a crash or a silently empty notice.", file=sys.stderr)
+    return DEFAULT_NOTICE
+
+
+def _resolve_static_config(root: Optional[str]) -> tuple[tuple[str, ...], str]:
+    """The EFFECTIVE static-tier `(phrases, notice_template)` pair for this invocation -- see the
+    module comment above this section for the full three-step resolution order and its rationale.
+    `root` is the same world root `_apparatus_root`/`_load_apparatus_quiet` already resolve
+    apparatus.json against (GATE_SUBJECT_ROOT env var, else this session's `cwd`) -- the override
+    lives at `<root>/.claude/demurral_phrases.json`, one directory over from `apparatus.json`
+    itself. `notice_template` may still carry an unsubstituted `{phrases}` placeholder; the
+    caller (`_emit_static_notice`) substitutes it per-match."""
     if root:
         override_path = os.path.join(root, ".claude", "demurral_phrases.json")
         if os.path.exists(override_path):
-            phrases = _load_phrase_list(override_path)
-            if phrases is not None:
-                return tuple(phrases)
+            cfg = _load_phrase_config(override_path)
+            if cfg is not None:
+                phrases, notice_raw = cfg
+                return tuple(phrases), _resolve_notice_value(notice_raw, override_path)
             print(f"[demurral-detect] WARNING: {override_path} exists but is malformed "
-                  f"(must be a JSON object with a non-empty 'phrases' array of non-empty "
-                  f"strings) -- falling back to the shipped default list, never to a silently "
-                  f"empty one.", file=sys.stderr)
-    default_phrases = _load_phrase_list(_PHRASES_DEFAULT_PATH)
-    if default_phrases is not None:
-        return tuple(default_phrases)
+                  f"(must be a JSON array of non-empty strings, or a JSON object with a "
+                  f"non-empty 'phrases' array of non-empty strings) -- falling back to the "
+                  f"shipped default, never to a silently empty one.", file=sys.stderr)
+    default_cfg = _load_phrase_config(_PHRASES_DEFAULT_PATH)
+    if default_cfg is not None:
+        default_phrases, default_notice_raw = default_cfg
+        return tuple(default_phrases), _resolve_notice_value(default_notice_raw, _PHRASES_DEFAULT_PATH)
     print(f"[demurral-detect] WARNING: shipped default phrase list at {_PHRASES_DEFAULT_PATH!r} "
           f"is missing or malformed -- falling back to a tiny hardcoded emergency list "
-          f"({len(_EMERGENCY_STATIC_DEMURRAL_PHRASES)} phrases); this checkout is likely "
-          f"broken.", file=sys.stderr)
-    return _EMERGENCY_STATIC_DEMURRAL_PHRASES
+          f"({len(_EMERGENCY_STATIC_DEMURRAL_PHRASES)} phrases) and the built-in notice; this "
+          f"checkout is likely broken.", file=sys.stderr)
+    return _EMERGENCY_STATIC_DEMURRAL_PHRASES, DEFAULT_NOTICE
 
 
 def static_match(text: str, phrases: tuple[str, ...]) -> Optional[str]:
     """Case-insensitive, word-boundary match of `text` against `phrases` (the caller's already-
-    resolved effective list, `_resolve_static_phrases`'s return). Returns the FIRST matched
+    resolved effective list, `_resolve_static_config`'s first return element). Returns the FIRST matched
     phrase in its original (as-typed) casing, or None. Pure regex -- never raises, never calls
     out, zero cost -- the whole point of this tier (module docstring). The regex is compiled
     fresh per call rather than cached at import time, on purpose: `phrases` can differ per
@@ -585,7 +689,8 @@ def _emit_classifier_warning(payload: dict, event_name: str, flagged_text: str,
 
 
 def _emit_static_notice(payload: dict, event_name: str, flagged_text: str, matched_phrase: str,
-                         *, tier: str, classifier_error: str = "") -> None:
+                         *, tier: str, notice_template: str = DEFAULT_NOTICE,
+                         classifier_error: str = "") -> None:
     """STATIC-tier nudge (mode="static", or mode="observe"'s fallback when the classifier is
     unavailable/errors -- `tier` distinguishes the two in the journal, per the maintainer's
     2026-07-17 design: never silently present a static hit as a classifier verdict).
@@ -595,21 +700,28 @@ def _emit_static_notice(payload: dict, event_name: str, flagged_text: str, match
     legitimate disregards in one sentence -- the agent itself judges false positives. This is a
     BENIGN, disregardable nudge, not an accusation: the static tier has no shape-based judgment
     at all, only an enumerated word match, so it is honest about being weaker evidence than the
-    classifier tier's POSITIVE."""
+    classifier tier's POSITIVE.
+
+    `notice_template` (default `DEFAULT_NOTICE`, but always passed explicitly by `main()` below --
+    the default here only covers a hypothetical future direct caller) is the EFFECTIVE notice
+    string this invocation resolved (`_resolve_static_config`'s second return element): the
+    shipped/overridden text, with any `{phrases}` placeholder still unsubstituted. Substitution
+    happens HERE, per-match, via `str.replace` (never `str.format` -- module docstring: an
+    operator's own notice text may carry stray braces that must never raise) with the
+    comma-joined, `repr`-quoted matched phrase(s) -- today that is always a single phrase
+    (`static_match` returns the FIRST match only), so for the unconfigured/default world this
+    produces the exact same `'phrase'`-quoted text the old hardcoded f-string produced -- byte-
+    identical, witnessed at commission time."""
     quoted = flagged_text if len(flagged_text) <= 600 else flagged_text[:600] + " …[truncated]"
     fallback_note = (
         f" (classifier fallback: {classifier_error})" if tier == "static_fallback" and classifier_error
         else ""
     )
+    phrases_str = ", ".join(repr(p) for p in (matched_phrase,))
+    notice_text = notice_template.replace("{phrases}", phrases_str)
     warning = (
         f"[demurral-detect] NOTICE (static tier, non-blocking{fallback_note}): the {event_name} "
-        f"content below contains the phrase {matched_phrase!r}, which is in ADR-0013 Rule 3's "
-        f"canonical demurral vocabulary. Be mindful of Rule 3 and reconsider whether this narrows "
-        f"already-mandated work. This is a free, enumeration-only word match with no judgment of "
-        f"context or shape -- it is disregardable if this is a neutral scope question to the "
-        f"ratifier, a fair-dealing renegotiation of a spec found wrong (with evidence), or a "
-        f"genuine external bound reported upward; you, the agent, judge whether this is a false "
-        f"positive.\n"
+        f"{notice_text}\n"
         f"--- flagged text ---\n{quoted}\n--- end flagged text ---\n{RULE3_REMINDER}"
     )
     print(json.dumps({"hookSpecificOutput": {
@@ -672,10 +784,12 @@ def main() -> int:
         # STATIC TIER, 2026-07-17: no subprocess, no model call, ever, at this mode value
         # (module docstring's STATIC TIER paragraph). Pure regex match against the resolved
         # phrase list (per-world override, else the shipped default, else the emergency
-        # fallback -- `_resolve_static_phrases`); nothing else to do.
-        matched = static_match(text, _resolve_static_phrases(root))
+        # fallback -- `_resolve_static_config`); nothing else to do.
+        phrases, notice_template = _resolve_static_config(root)
+        matched = static_match(text, phrases)
         if matched:
-            _emit_static_notice(payload, event, text, matched, tier="static")
+            _emit_static_notice(payload, event, text, matched, tier="static",
+                                 notice_template=notice_template)
         return 0
 
     # mode == "observe" from here (mode == "enforce" was already degraded to "observe" by
@@ -711,10 +825,11 @@ def main() -> int:
     # going silent the way this file did before 2026-07-17 (maintainer design: off-or-costed left
     # most worlds with no detection at all). Journaled honestly as a fallback, never as if it were
     # a classifier verdict.
-    matched = static_match(text, _resolve_static_phrases(root))
+    phrases, notice_template = _resolve_static_config(root)
+    matched = static_match(text, phrases)
     if matched:
         _emit_static_notice(payload, event, text, matched, tier="static_fallback",
-                             classifier_error=result.reason)
+                             notice_template=notice_template, classifier_error=result.reason)
     return 0
 
 
