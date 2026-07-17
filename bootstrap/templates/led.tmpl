@@ -261,7 +261,7 @@
 #                                              opened — a dangling antecedent is deliberately NOT
 #                                              refused (spec invariant 4); it is surfaced instead by
 #                                              `led work violations` (depends_on_unknown_slug)
-#   led work close <slug> <resolution> (--review-witness <ref> | --review-deferred) [--witness <ref>] [--strict]
+#   led work close <slug> <resolution> (--review-witness <ref> | --review-deferred | --review-bookkeeping --witness commit:<sha>) [--witness <ref>] [--strict]
 #                                              close a work item. REFUSED if <slug> has no
 #                                              work_claimed row yet (led-side gate, mirroring the
 #                                              existing duplicate-open/unopened refusals — run-5
