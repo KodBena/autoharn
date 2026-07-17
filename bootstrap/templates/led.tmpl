@@ -283,7 +283,7 @@
 #                                              opened — a dangling antecedent is deliberately NOT
 #                                              refused (spec invariant 4); it is surfaced instead by
 #                                              `led work violations` (depends_on_unknown_slug)
-#   led work close <slug> <resolution> (--review-witness <ref> | --review-deferred) [--witness <ref>] [--strict]
+#   led work close <slug> <resolution> (--review-witness <ref> | --review-deferred | --review-bookkeeping --witness commit:<sha>) [--witness <ref>] [--strict]
 #                                              close a work item. REFUSED if <slug> has no
 #                                              work_claimed row yet (led-side gate, mirroring the
 #                                              existing duplicate-open/unopened refusals — run-5
@@ -1580,6 +1580,7 @@ SQL
       witness=""
       review_witness=""
       review_deferred=""
+      review_bookkeeping=""
       strict=""
       args=()
       while [ $# -gt 0 ]; do
@@ -1587,6 +1588,11 @@ SQL
           --witness) witness="${2:-}"; shift 2 ;;
           --review-witness) review_witness="${2:-}"; shift 2 ;;
           --review-deferred) review_deferred="1"; shift ;;
+          # kernel/lineage/s38-bookkeeping-close.sql, design/FABLE-BOOKKEEPING-CLOSE-SPEC.md
+          # Element 2: takes NO argument -- the commit witness rides the EXISTING --witness flag
+          # (ADR-0012 P1: reuse, do not duplicate), derived into work_review_ref below after both
+          # machine checks pass.
+          --review-bookkeeping) review_bookkeeping="1"; shift ;;
           --strict) strict="1"; shift ;;
           --*)
             # Same hazard-in-reach fix as `work open`/`work depends` above (ledger item
@@ -1596,7 +1602,8 @@ SQL
             # all on a shipped close, with nothing to say so. Refused here instead.
             echo "led work close: REFUSED -- unrecognized flag '$1'." >&2
             echo "  led work close <slug> <resolution> accepts only: --witness <ref>," >&2
-            echo "  --review-witness <ref>, --review-deferred, --strict. NOTHING was written." >&2
+            echo "  --review-witness <ref>, --review-deferred, --review-bookkeeping, --strict." >&2
+            echo "  NOTHING was written." >&2
             exit 1
             ;;
           *) args+=("$1"); shift ;;
@@ -1604,19 +1611,26 @@ SQL
       done
       set -- "${args[@]}"
       usage_close() {
-        echo "usage: led work close <slug> <resolution> (--review-witness <ref> | --review-deferred) [--witness <ref>] [--strict]" >&2
+        echo "usage: led work close <slug> <resolution> (--review-witness <ref> | --review-deferred | --review-bookkeeping --witness commit:<sha>) [--witness <ref>] [--strict]" >&2
         echo "       resolution: shipped|superseded|dropped|deferred" >&2
         echo "       resolution=shipped REQUIRES --witness -- refused at construction time" >&2
         echo "       (work_shipped_requires_witness CHECK), never a tolerated-but-flagged row" >&2
         echo "       refused if <slug> has no work_claimed row yet -- claim it first:" >&2
         echo "       ./led work claim <slug>" >&2
-        echo "       EXACTLY ONE of --review-witness <ref> / --review-deferred is REQUIRED" >&2
-        echo "       (kernel/lineage/s29-obligation-item-key-and-typed-close.sql, Element B) --" >&2
+        echo "       EXACTLY ONE of --review-witness <ref> / --review-deferred / --review-bookkeeping" >&2
+        echo "       is REQUIRED (kernel/lineage/s29-.../s38-bookkeeping-close.sql, Element B) --" >&2
         echo "       a review-silent close is REFUSED at construction, never representable." >&2
         echo "         --review-witness <ref>  a review already exists; cite it" >&2
         echo "         --review-deferred       this close act itself becomes the item-keyed" >&2
         echo "                                 review obligation, discharged later by a" >&2
         echo "                                 DIFFERENT actor's ./led review <close-row-id> ..." >&2
+        echo "         --review-bookkeeping    a JUDGMENT-FREE close whose entire content is a" >&2
+        echo "                                 git commit landing (s38) -- takes NO argument," >&2
+        echo "                                 requires --witness commit:<7-40 lowercase hex>," >&2
+        echo "                                 verified to exist in this world's own repository" >&2
+        echo "                                 at construction time. The category is CLOSED to" >&2
+        echo "                                 exactly this one form (design/FABLE-BOOKKEEPING-" >&2
+        echo "                                 CLOSE-SPEC.md, \"the category is CLOSED\")." >&2
         echo "       --strict refuses this close unless --review-witness was used AND every leaf" >&2
         echo "       of the obligation tree is resolved, naming every unresolved leaf" >&2
       }
@@ -1654,10 +1668,10 @@ SQL
 SQL
       )
       if [ "$has_review_disposition_col" != "t" ]; then
-        if [ -n "$review_witness" ] || [ -n "$review_deferred" ] || [ -n "$strict" ]; then
-          echo "led work close: REFUSED -- --review-witness/--review-deferred/--strict require" >&2
-          echo "  kernel/lineage/s29-obligation-item-key-and-typed-close.sql applied to this" >&2
-          echo "  project's schema (work_review_disposition column not found on" >&2
+        if [ -n "$review_witness" ] || [ -n "$review_deferred" ] || [ -n "$review_bookkeeping" ] || [ -n "$strict" ]; then
+          echo "led work close: REFUSED -- --review-witness/--review-deferred/--review-bookkeeping/" >&2
+          echo "  --strict require kernel/lineage/s29-obligation-item-key-and-typed-close.sql" >&2
+          echo "  applied to this project's schema (work_review_disposition column not found on" >&2
           echo "  ${SCHEMA}.ledger -- this world's kernel predates s29). Omit these flags, or" >&2
           echo "  apply s29 to this schema as a maintainer act (ORCH-OPERATING-CARD.md's" >&2
           echo "  kernel-delta decision tree)." >&2
@@ -1673,20 +1687,57 @@ SQL
 SQL
         exit $?
       fi
-      # TWO CONSTRUCTORS, EXACTLY ONE REQUIRED (Element B) -- refused at the led boundary with
-      # teach-text naming BOTH constructors, mirroring the intake-validation `refuse()` idiom
-      # (both-polarity fixture: seen-red/s29-obligation-item-key-and-typed-close/).
-      if [ -n "$review_witness" ] && [ -n "$review_deferred" ]; then
-        echo "led work close: REFUSED -- --review-witness and --review-deferred are the TWO" >&2
-        echo "  CONSTRUCTORS of a review disposition; exactly ONE, never both, in one close act" >&2
-        echo "  (s29 Element B)." >&2
+      # kernel/lineage/s38-bookkeeping-close.sql: LIVE CHECK-shape existence check (the SAME
+      # convention as the column-existence check above, one level down -- s38 widens an EXISTING
+      # column's vocabulary rather than adding a new column, so a column-existence probe cannot
+      # distinguish a pre-s38 from a post-s38 kernel; a catalog CHECK-definition probe is the
+      # correct live-shape test here, mirroring kernel/lineage/s38-bookkeeping-close.detect.sql's
+      # own technique). --review-bookkeeping on a pre-s38 kernel is refused here, teach-text naming
+      # the two honest pre-s38 alternatives, rather than reaching the kernel and failing on an
+      # unrecognized vocabulary value with a bare constraint-violation error.
+      if [ -n "$review_bookkeeping" ]; then
+        has_bookkeeping_vocab=$(psql -h "$PGHOST" -d "$PGDB" -tAq -v schema="$SCHEMA" <<SQL
+          SELECT EXISTS (
+            SELECT 1 FROM pg_constraint con
+              JOIN pg_class rel ON rel.oid = con.conrelid
+              JOIN pg_namespace ns ON ns.oid = rel.relnamespace
+             WHERE ns.nspname = :'schema' AND rel.relname = 'ledger' AND con.contype = 'c'
+               AND pg_get_constraintdef(con.oid) LIKE '%bookkeeping%');
+SQL
+        )
+        if [ "$has_bookkeeping_vocab" != "t" ]; then
+          echo "led work close: REFUSED -- --review-bookkeeping requires" >&2
+          echo "  kernel/lineage/s38-bookkeeping-close.sql applied to this project's schema (no" >&2
+          echo "  CHECK constraint on ${SCHEMA}.ledger admits the 'bookkeeping' disposition value" >&2
+          echo "  -- this world's kernel predates s38). Use --review-witness <ref> or" >&2
+          echo "  --review-deferred instead, or apply s38 to this schema as a maintainer act" >&2
+          echo "  (ORCH-OPERATING-CARD.md's kernel-delta decision tree)." >&2
+          exit 1
+        fi
+      fi
+      # THREE CONSTRUCTORS, EXACTLY ONE REQUIRED (s29 Element B, widened by s38) -- refused at the
+      # led boundary with teach-text naming the relevant constructors, mirroring the
+      # intake-validation `refuse()` idiom (both-polarity fixture:
+      # seen-red/s29-obligation-item-key-and-typed-close/).
+      _rc_count=0
+      [ -n "$review_witness" ] && _rc_count=$((_rc_count + 1))
+      [ -n "$review_deferred" ] && _rc_count=$((_rc_count + 1))
+      [ -n "$review_bookkeeping" ] && _rc_count=$((_rc_count + 1))
+      if [ "$_rc_count" -gt 1 ]; then
+        echo "led work close: REFUSED -- --review-witness, --review-deferred, and" >&2
+        echo "  --review-bookkeeping are the THREE CONSTRUCTORS of a review disposition;" >&2
+        echo "  exactly ONE, never more than one, in one close act (s29 Element B, s38 Element 2)." >&2
         exit 1
       fi
-      if [ -z "$review_witness" ] && [ -z "$review_deferred" ]; then
+      if [ "$_rc_count" -eq 0 ]; then
         echo "led work close: REFUSED -- a review-silent close is unrepresentable (s29 Element B)." >&2
         echo "  Choose exactly ONE constructor:" >&2
-        echo "    --review-witness <ref>   a review already exists; cite it" >&2
-        echo "    --review-deferred        this close act itself becomes the review obligation" >&2
+        echo "    --review-witness <ref>       a review already exists; cite it" >&2
+        echo "    --review-deferred            this close act itself becomes the review obligation" >&2
+        echo "    --review-bookkeeping         a judgment-free close whose entire content is a git" >&2
+        echo "                                 commit landing -- requires --witness commit:<sha>," >&2
+        echo "                                 verified to exist in this world's repository (s38," >&2
+        echo "                                 design/FABLE-BOOKKEEPING-CLOSE-SPEC.md)." >&2
         exit 1
       fi
       if [ -n "$review_deferred" ] && [ -n "$strict" ]; then
@@ -1696,8 +1747,64 @@ SQL
         echo "  with --review-witness <ref> --strict." >&2
         exit 1
       fi
+      # kernel/lineage/s38-bookkeeping-close.sql Element 2: a strict bookkeeping close is a
+      # contradiction, same footing as --review-deferred --strict above -- a bookkeeping close
+      # carries no reviewer verdict for strict mode's obligation-tree check to consult. Refused
+      # HERE (led-side, before ever reaching the kernel) so the caller sees this specific teach-
+      # text rather than the kernel trigger's own (equally correct, but less immediate) RAISE.
+      if [ -n "$review_bookkeeping" ] && [ -n "$strict" ]; then
+        echo "led work close: REFUSED -- --review-bookkeeping + --strict is a contradiction in" >&2
+        echo "  terms (s38 Element 2): a judgment-free close carries no reviewer verdict for" >&2
+        echo "  strict mode's obligation-tree requirement to consult. Record a real review first" >&2
+        echo "  (./led review ...), then close with --review-witness <ref> --strict." >&2
+        exit 1
+      fi
+      if [ -n "$review_bookkeeping" ]; then
+        # kernel/lineage/s38-bookkeeping-close.sql Element 3 (the honest trust boundary, ADR-0011):
+        # the KERNEL enforces SHAPE only (the commit-ref regex, at INSERT time); commit EXISTENCE
+        # is checked HERE, CLI-side, at construction -- the spec's own "two machine checks" (shape,
+        # then existence), each refusing with its own named failure and the two honest
+        # alternatives.
+        if [ -z "$witness" ]; then
+          echo "led work close: REFUSED -- --review-bookkeeping requires --witness commit:<sha>" >&2
+          echo "  (s38 Element 2) -- no --witness was given. Two honest alternatives:" >&2
+          echo "    --review-witness <ref>   a review already exists; cite it" >&2
+          echo "    --review-deferred        this close act itself becomes the review obligation" >&2
+          exit 1
+        fi
+        # This shape check is a TRANSCRIPTION of kernel/lineage/s38-bookkeeping-close.sql's own
+        # work_review_bookkeeping_requires_commit_ref CHECK (`work_review_ref ~
+        # '^commit:[0-9a-f]{7,40}$'`), not a second, driftable definition of it -- ADR-0012 P1.
+        # The kernel CHECK is the ONE documented home of the shape; refusing here first only gets
+        # the caller the more immediate CLI-side teach-text (same posture as s38 Element 2's
+        # --strict refusal above) before ever reaching the kernel's own (equally correct) error.
+        if ! [[ "$witness" =~ ^commit:[0-9a-f]{7,40}$ ]]; then
+          echo "led work close: REFUSED -- --review-bookkeeping's --witness '${witness}' failed" >&2
+          echo "  the COMMIT-SHAPE check (s38: must match ^commit:[0-9a-f]{7,40}\$ -- 7 to 40" >&2
+          echo "  lowercase hex characters after 'commit:'). Two honest alternatives:" >&2
+          echo "    --review-witness <ref>   a review already exists; cite it" >&2
+          echo "    --review-deferred        this close act itself becomes the review obligation" >&2
+          exit 1
+        fi
+        _bk_sha="${witness#commit:}"
+        # world root == the directory the deployment record was actually found in -- the SAME
+        # resolution `led decomposition-review-status` above already uses (this file's own single
+        # definition of "world root", ADR-0012 P1: never a second hand-derived notion of it).
+        _bk_world_root="$(cd "$(dirname "$DEPLOYMENT")" && pwd)"
+        if ! git -C "$_bk_world_root" cat-file -e "${_bk_sha}^{commit}" 2>/dev/null; then
+          echo "led work close: REFUSED -- --review-bookkeeping's --witness commit '${_bk_sha}'" >&2
+          echo "  failed the COMMIT-EXISTENCE check (s38 Element 3: 'git cat-file -e" >&2
+          echo "  ${_bk_sha}^{commit}' against ${_bk_world_root} did not resolve). Two honest" >&2
+          echo "  alternatives:" >&2
+          echo "    --review-witness <ref>   a review already exists; cite it" >&2
+          echo "    --review-deferred        this close act itself becomes the review obligation" >&2
+          exit 1
+        fi
+      fi
       if [ -n "$review_witness" ]; then
         disposition="witnessed"; review_ref="$review_witness"
+      elif [ -n "$review_bookkeeping" ]; then
+        disposition="bookkeeping"; review_ref="$witness"
       else
         disposition="deferred"; review_ref=""
       fi

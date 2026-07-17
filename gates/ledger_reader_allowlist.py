@@ -70,8 +70,17 @@ CHAIN = [
     "s31-supersession-uniform-retraction.sql", "s32-edge-views-single-home.sql",
     "s33-composite-discharge.sql", "s34-computed-grade-refusal.sql",
     "s35-validation-decomposition.sql", "s36-decision-grade.sql",
-    "s37-violation-disposition.sql",
+    "s37-violation-disposition.sql", "s38-bookkeeping-close.sql",
 ]
+# s38 (kernel/lineage/s38-bookkeeping-close.sql, design/FABLE-BOOKKEEPING-CLOSE-SPEC.md) extends
+# this SAME gate's scratch CHAIN so its one new object (work_bookkeeping_closes, a raw/history
+# reader by design -- see its own ALLOWLIST entry below) is exercised by the scratch apply. It
+# re-issues validate_work_item_close (the s35 leaf), unchanged in its OWN raw-`ledger`-reading
+# posture (it reads no ledger row of its own at all -- every fact it consults arrives already
+# resolved in its `r`/`is_composite` parameters or via work_item_strict_blockers(), both
+# unaffected by this delta) -- CORRECTLY classifies clean with NO allowlist entry, exactly as it
+# did before this delta (confirmed live: validate_work_item_close carries no entry above, by
+# design, both before and after s38).
 # s37 (kernel/lineage/s37-violation-disposition.sql) extends this SAME gate's scratch CHAIN --
 # REQUIRED here (not merely following precedent) because s37 syntactically depends on s36's exact
 # ledger_current/countersigned_in_force column list (its own PREREQUISITE section), which in turn
@@ -218,6 +227,14 @@ ALLOWLIST: dict[str, str] = {
                               "retype (dup_open/dependency_cycle/parent_cycle/blocks_close_cycle among them); "
                               "since v3 this is the ONLY view still reading these raw, by design (the record "
                               "projection quantifies over everything, forever).",
+    # -- s38 (kernel/lineage/s38-bookkeeping-close.sql) --
+    "work_bookkeeping_closes": "DECLARED raw/history reader by design (design/FABLE-BOOKKEEPING-"
+                               "CLOSE-SPEC.md Element 1: the escape hatch's own audit trail must "
+                               "stay visible even past a supersession -- 'permanently visible', "
+                               "the spec's own phrase), mirroring work_violation_history one file "
+                               "over (s37): reads raw ledger directly, never ledger_current, so a "
+                               "later-superseded bookkeeping close row remains enumerable here "
+                               "forever, never silently dropped by a current-truth projection.",
 }
 
 # A raw-`ledger` TABLE ACCESS: FROM/JOIN/INTO/UPDATE followed by an optionally schema-qualified
