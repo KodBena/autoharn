@@ -88,6 +88,21 @@ a second, competing shape declaration for it. Recognized and skipped generically
 constraint name, so a future column's own kind-partitioned vocabulary CHECK is caught by the same
 generic test).
 
+IN SCOPE, a THIRD manifest (added by the s38 fixpoint-review repair, 2026-07-17, alongside
+MANIFEST and CORE_COLUMNS above): PARTIAL-VALUE kind-shape CHECKs, the idiom `<col> IS DISTINCT
+FROM '<literal>' OR kind = '<K>'` (s38's `work_review_bookkeeping_kind_shape`, the first live
+instance). This is genuinely a (kind, column)-correlation in F5's sense -- it answers "which kind
+is this ONE value of the column legal on" -- but at single-value granularity below a whole-column
+(kind, arity) SHAPE row, so it is tracked in its OWN manifest, `VALUE_PARTITION_MANIFEST`, keyed by
+(column, value), never folded into MANIFEST_BY_COLUMN (which is one-shape-per-column and may
+already hold a DIFFERENT, whole-column row for the same column, exactly the `work_review_
+disposition` case: mechanism=trigger, two-way, over BOTH its licensed kinds, layered under by this
+narrower CHECK for one of its three vocabulary values). Matched generically by `_PARTIAL_VALUE_RE`
+on the CHECK's own textual shape, never by constraint name, so a NEW, unlicensed PARTIAL-VALUE
+CHECK a future delta adds on a different (column, value) pair is caught by the same test and
+refused as an unlicensed payload column unless a corresponding VALUE_PARTITION_MANIFEST row is
+added alongside it.
+
 USAGE:
   python3 gates/kind_shape_manifest_gate.py                 # scratch apply, assert, teardown
   python3 gates/kind_shape_manifest_gate.py --keep-scratch   # leave the scratch schema (debug)
@@ -140,18 +155,39 @@ CHAIN = [
 ]
 # s38 (kernel/lineage/s38-bookkeeping-close.sql, design/FABLE-BOOKKEEPING-CLOSE-SPEC.md) extends
 # this SAME gate's scratch CHAIN so its re-issued objects (validate_work_item_close) are exercised
-# by the scratch apply below. It introduces NO new kind-shape (kind, column, arity) CHECK of its
-# own: work_review_disposition_check (widened to admit 'bookkeeping') carries no `kind` test at
-# all (a flat vocabulary CHECK, `kind` never appears in its definition), so
-# `classify_kind_shape` returns None for it (out of scope, same as before this delta) -- confirmed
-# live by running this gate against the extended chain, not merely read and reasoned about. The
-# new CHECK work_review_bookkeeping_requires_commit_ref ALSO carries no `kind` test (its predicate
-# is `work_review_disposition IS DISTINCT FROM 'bookkeeping' OR work_review_ref ~ '...'`, a
-# value-shape correlation between two ALREADY-payload columns, never a kind correlation), so it
-# too is correctly out of this manifest's (kind, column, arity) scope -- no MANIFEST row needed,
-# no _VOCAB_PARTITION_RE-style new regex needed (that regex exists for a CHECK that DOES combine a
-# `kind = '<literal>'` branch with a value-membership test on the SAME check, which neither s38
-# CHECK does). No new column, no new kind: CHAIN is the only edit this delta requires.
+# by the scratch apply below. It ships THREE new CHECKs, all named here (fresh reviewer finding,
+# 2026-07-17: an earlier version of this comment reasoned about only two of the three -- corrected):
+#   1. work_review_disposition_check (widened to admit 'bookkeeping') carries no `kind` test at
+#      all (a flat vocabulary CHECK, `kind` never appears in its definition), so
+#      `classify_kind_shape` returns None for it (out of scope, same as before this delta).
+#   2. work_review_bookkeeping_requires_commit_ref ALSO carries no `kind` test (its predicate is
+#      `work_review_disposition IS DISTINCT FROM 'bookkeeping' OR work_review_ref ~ '...'`, a
+#      value-shape correlation between two ALREADY-payload columns, never a kind correlation), so
+#      it too is correctly out of this manifest's (kind, column, arity) scope -- no MANIFEST row
+#      needed.
+#   3. work_review_bookkeeping_kind_shape ( `work_review_disposition IS DISTINCT FROM 'bookkeeping'
+#      OR kind = 'work_closed'` ) is a GENUINE (kind, column)-correlation: it confines the single
+#      value 'bookkeeping' of work_review_disposition to kind='work_closed' alone (the reviewer-
+#      caught gap fix, s38's own header on the constraint). This is NOT the same shape as #2 (that
+#      one correlates two payload columns with no `kind` test at all) and it is NOT
+#      _VOCAB_PARTITION_RE's "which values legal per kind" concern either (that regex matches a
+#      `kind = '<literal>' AND col = ANY(...)` membership test, a DIFFERENT-column-values-per-kind
+#      question; this CHECK asks "which kind is this ONE value of the column legal on", the same
+#      question `classify_kind_shape`'s two-way/one-way regexes answer for a whole column, just at
+#      single-value granularity). It was, before this fix, silently swallowed by the entry filter
+#      just below (`"IS NULL" not in defn and "IS NOT NULL" not in defn`) because it is phrased
+#      with `IS DISTINCT FROM`, not `IS NULL`/`IS NOT NULL` -- caught live by re-running this gate
+#      against the extended chain and finding it reported clean with only 15 MANIFEST rows
+#      checked, never surfacing the third CHECK at all. Fixed by recognizing the idiom generically
+#      (`_PARTIAL_VALUE_RE`, matched on shape, never on constraint name) as its own classification,
+#      PARTIAL-VALUE, with its own manifest (`VALUE_PARTITION_MANIFEST`) below -- not folded into
+#      the whole-column MANIFEST/MANIFEST_BY_COLUMN, because `work_review_disposition` ALREADY
+#      holds a MANIFEST_BY_COLUMN row (mechanism=trigger, two-way, over the WHOLE column across
+#      both its licensed kinds) and a value-scoped CHECK for one of its three vocabulary values is
+#      an additional, narrower correlation layered on top, not a competing or replacing shape for
+#      the same (column) key -- forcing it into the single-shape-per-column MANIFEST_BY_COLUMN slot
+#      would false-positive a "mechanism drifted from trigger to CHECK" violation against the
+#      column's own already-correct trigger-mechanism row.
 # Extended through the FULL chain to s37 (not merely an s37-only hop) so the QUANTIFICATION
 # UNIVERSE is the live chain in full, matching `gates/ledger_reader_allowlist.py`'s own extension
 # in this same branch -- and this extension's own first scratch-witness attempt (this file's own
@@ -291,6 +327,32 @@ MANIFEST = [
 MANIFEST_BY_COLUMN = {row["column"]: row for row in MANIFEST}
 assert len(MANIFEST_BY_COLUMN) == len(MANIFEST), "duplicate column in MANIFEST -- SSOT violated"
 
+# ================================================================================================
+# VALUE_PARTITION_MANIFEST -- a SECOND, narrower manifest for PARTIAL-VALUE kind-shape CHECKs (see
+# module docstring's "IN SCOPE, a THIRD manifest" paragraph). Keyed by (column, value), never
+# folded into MANIFEST_BY_COLUMN: a column may already hold a whole-column MANIFEST row (e.g.
+# work_review_disposition's own trigger-mechanism, two-way row above) AND separately carry a
+# CHECK-enforced correlation for just ONE of its vocabulary values -- two different, non-competing
+# concerns at two different granularities, not a second declaration of the same shape.
+# ================================================================================================
+VALUE_PARTITION_MANIFEST = [
+    dict(column="work_review_disposition", value="bookkeeping", kinds=("work_closed",),
+         mechanism="CHECK", constraint="work_review_bookkeeping_kind_shape",
+         defining_delta="s38-bookkeeping-close.sql",
+         reason="reviewer-caught gap (s38's own header on the constraint, verbatim): "
+                "work_review_disposition is shared with work_violation_disposition rows (s37) via "
+                "its OWN whole-column MANIFEST row above (mechanism=trigger, kinds=(work_closed, "
+                "work_violation_disposition)) -- without this CHECK, 'bookkeeping' would be "
+                "constructible on a work_violation_disposition row too, invisible to "
+                "work_bookkeeping_closes (WHERE kind = 'work_closed') and contradicting this "
+                "delta's own closure statement ('the bookkeeping fact rides the EXISTING "
+                "work_closed kind's own columns'). Mirrors work_review_ref_kind_shape (s37) one "
+                "column over: one-way, licenses 'bookkeeping' on kind = 'work_closed' alone."),
+]
+VALUE_PARTITION_BY_KEY = {(row["column"], row["value"]): row for row in VALUE_PARTITION_MANIFEST}
+assert len(VALUE_PARTITION_BY_KEY) == len(VALUE_PARTITION_MANIFEST), \
+    "duplicate (column, value) in VALUE_PARTITION_MANIFEST -- SSOT violated"
+
 # CORE_COLUMNS: every OTHER live ledger column, confirmed NOT kind-scoped (see module docstring's
 # "MANIFEST SCOPE" paragraph for how amends/amends_scope/answers were checked). A column that is
 # neither in MANIFEST nor here is, by construction, an unlicensed payload column.
@@ -378,6 +440,17 @@ _ONE_WAY_B_RE = re.compile(r"kind[^()]*\)\)?\) OR \((\w+) IS NULL\)")  # kind = 
 # from the (kind, column, arity) SHAPE the two regexes above classify, not a competing shape for
 # the same column.
 _VOCAB_PARTITION_RE = re.compile(r"\(kind = '[^']+'[^()]*\)\s+AND\s+\(\w+ = ANY")
+# s38's work_review_bookkeeping_kind_shape, witnessed live once the CHAIN below was extended
+# through s38 (fresh reviewer finding, 2026-07-17): a PARTIAL-VALUE kind-shape CHECK, `<col> IS
+# DISTINCT FROM '<literal>' OR kind = '<K>'` -- one-way, single-value granularity ("this ONE value
+# of col is confined to kind K"), a genuine (kind, column)-correlation this codebase had no idiom
+# for before s38. Matched generically on shape, never by constraint name, so a NEW PARTIAL-VALUE
+# CHECK a future delta adds on a different (column, value) pair is caught the same way. See module
+# docstring's "IN SCOPE, a THIRD manifest" paragraph and VALUE_PARTITION_MANIFEST below -- tracked
+# in its OWN manifest, not folded into MANIFEST/MANIFEST_BY_COLUMN (see that manifest's own header
+# comment for why: a column may already hold a whole-column MANIFEST row at a DIFFERENT
+# granularity, exactly work_review_disposition's own case).
+_PARTIAL_VALUE_RE = re.compile(r"(\w+) IS DISTINCT FROM '([^']+)'(?:::\w+)?\)\s*OR\s*\(kind")
 
 
 def _extract_kinds(defn: str) -> tuple[str, ...]:
@@ -391,11 +464,25 @@ def classify_kind_shape(conname: str, defn: str):
     """Parse a single CHECK constraint definition. Returns None if it does not mention `kind` at
     all (an ordinary vocabulary/business-rule CHECK, out of this manifest's scope). Returns
     ("UNPARSEABLE", conname, defn) if it mentions `kind` but matches neither the two-way nor the
-    one-way shape this codebase's kind-shape CHECKs use (a NEW shape a future delta introduced,
-    refused loudly rather than silently skipped -- ADR-0002). Otherwise returns
+    one-way whole-column shape, nor the PARTIAL-VALUE single-value shape, this codebase's
+    kind-shape CHECKs use (a NEW shape a future delta introduced, refused loudly rather than
+    silently skipped -- ADR-0002). Returns ("PARTIAL-VALUE", column, value, kinds, conname) for
+    the single-value idiom (see _PARTIAL_VALUE_RE above). Otherwise returns
     (column, kinds, arity)."""
     if "kind" not in defn:
         return None
+    m_pv = _PARTIAL_VALUE_RE.search(defn)
+    if m_pv:
+        # checked BEFORE the "IS NULL"/"IS NOT NULL" entry filter below: this idiom is phrased
+        # with `IS DISTINCT FROM`, never `IS NULL`/`IS NOT NULL`, so it would otherwise be
+        # silently swallowed by that filter exactly as work_review_bookkeeping_kind_shape was
+        # (the fresh reviewer finding this fix repairs, 2026-07-17).
+        col, literal = m_pv.group(1), m_pv.group(2)
+        kinds = _extract_kinds(defn)
+        if col == "kind" or not kinds:
+            # degenerate/unrecognized variant of the idiom -- refuse loudly rather than guess.
+            return ("UNPARSEABLE", conname, defn)
+        return ("PARTIAL-VALUE", col, literal, kinds, conname)
     if "IS NULL" not in defn and "IS NOT NULL" not in defn:
         # a pure kind-VOCABULARY CHECK (e.g. ledger_kind_check's `kind = ANY (ARRAY[...])`) --
         # constrains kind's own legal values, correlates it with no OTHER column's nullability,
@@ -438,6 +525,7 @@ def assert_manifest(schema: str) -> list[str]:
 
     # 1. classify every CHECK constraint that mentions `kind`
     catalog_shapes: dict[str, tuple] = {}   # column -> (kinds, arity, conname)
+    partial_value_shapes: dict[tuple[str, str], tuple] = {}   # (column, value) -> (kinds, conname)
     for conname, defn in check_defs.items():
         parsed = classify_kind_shape(conname, defn)
         if parsed is None:
@@ -445,10 +533,21 @@ def assert_manifest(schema: str) -> list[str]:
         if parsed[0] == "UNPARSEABLE":
             violations.append(
                 f"UNPARSEABLE kind-mentioning CHECK {parsed[1]!r} ({parsed[2]!r}) -- this "
-                f"gate's classifier recognizes only the two shapes MANIFEST declares "
-                f"(two-way iff, one-way implication). Either this is a NEW kind-shape idiom "
-                f"(extend classify_kind_shape and MANIFEST together) or it is not truly "
-                f"kind-scoped (rename it off 'kind' to stop tripping this gate).")
+                f"gate's classifier recognizes only the three shapes MANIFEST/"
+                f"VALUE_PARTITION_MANIFEST declare (two-way iff, one-way implication, "
+                f"PARTIAL-VALUE single-value implication). Either this is a NEW kind-shape idiom "
+                f"(extend classify_kind_shape and the relevant manifest together) or it is not "
+                f"truly kind-scoped (rename it off 'kind' to stop tripping this gate).")
+            continue
+        if parsed[0] == "PARTIAL-VALUE":
+            _, col, literal, kinds, _conname = parsed
+            key = (col, literal)
+            if key in partial_value_shapes:
+                violations.append(
+                    f"(column, value) {key!r} carries MULTIPLE PARTIAL-VALUE kind-shape CHECKs "
+                    f"({partial_value_shapes[key][1]!r} and {conname!r}) -- one home only.")
+                continue
+            partial_value_shapes[key] = (kinds, conname)
             continue
         col, kinds, arity = parsed
         if col in catalog_shapes:
@@ -502,6 +601,38 @@ def assert_manifest(schema: str) -> list[str]:
             violations.append(f"MANIFEST row for column {col!r} declares an unrecognized "
                                f"mechanism {row['mechanism']!r}.")
 
+    # 2b. every catalog PARTIAL-VALUE CHECK must match its VALUE_PARTITION_MANIFEST row exactly
+    for (col, literal), (kinds, conname) in partial_value_shapes.items():
+        row = VALUE_PARTITION_BY_KEY.get((col, literal))
+        if row is None:
+            violations.append(
+                f"UNLICENSED PAYLOAD COLUMN {col!r} value {literal!r}: catalog CHECK {conname!r} "
+                f"ties this ONE value to kind, but no VALUE_PARTITION_MANIFEST row declares it. "
+                f"Add it to VALUE_PARTITION_MANIFEST in gates/kind_shape_manifest_gate.py "
+                f"(kind(s)={kinds}), or remove the column/constraint if it should not exist.")
+            continue
+        if row["mechanism"] != "CHECK":
+            violations.append(
+                f"column {col!r} value {literal!r}: VALUE_PARTITION_MANIFEST declares "
+                f"mechanism={row['mechanism']!r} but the catalog carries a CHECK ({conname!r}) -- "
+                f"shape drifted from its licensed mechanism.")
+            continue
+        if set(row["kinds"]) != set(kinds):
+            violations.append(
+                f"column {col!r} value {literal!r}: VALUE_PARTITION_MANIFEST declares "
+                f"kinds={row['kinds']}, catalog CHECK {conname!r} covers kinds={kinds} -- shape "
+                f"drifted.")
+
+    # 3b. every VALUE_PARTITION_MANIFEST row must exist in the catalog
+    for row in VALUE_PARTITION_MANIFEST:
+        key = (row["column"], row["value"])
+        if row["mechanism"] == "CHECK" and key not in partial_value_shapes:
+            violations.append(
+                f"VALUE_PARTITION_MANIFEST row for column {row['column']!r} value "
+                f"{row['value']!r} declares mechanism=CHECK (constraint={row['constraint']!r}) "
+                f"but no such CHECK exists in the live catalog -- stale manifest row or a dropped "
+                f"constraint.")
+
     # 4. every payload-like (non-core) column must be licensed, whether or not it carries a
     #    catalog CHECK -- this is what catches a column with NO CHECK at all (the seen-red case:
     #    mechanism="CHECK"-shaped hazard that never got its CHECK written).
@@ -552,7 +683,8 @@ def main(argv: list[str] | None = None) -> int:
         for v in violations:
             print(f"  !! {v}")
         return 1
-    print(f"kind-shape-manifest-gate: clean -- {len(MANIFEST)} MANIFEST row(s) match the live "
+    print(f"kind-shape-manifest-gate: clean -- {len(MANIFEST)} MANIFEST row(s) + "
+          f"{len(VALUE_PARTITION_MANIFEST)} VALUE_PARTITION_MANIFEST row(s) match the live "
           f"catalog exactly, {len(CORE_COLUMNS)} core column(s) accounted for, no unlicensed "
           f"payload column. ✓")
     return 0
