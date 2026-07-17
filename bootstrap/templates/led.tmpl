@@ -63,14 +63,19 @@
 #                            this flag is REFUSED loudly on those verbs (never a silent drop; see
 #                            the coverage guard near the top of this file's own logic).
 #
-#   LED_ACTOR=<principal-name>   (env var, not a flag) resolves the actor/principal for EVERY
-#                            ledger-writing verb -- the generic <kind> <statement> path below,
-#                            `led review`, and `led work claim` alike (ONE resolution point,
-#                            resolve_actor(), defined once and shared by all three). Unset, a
-#                            write lands under the default connection principal (`author`). Set to
-#                            an unregistered name, the write is REFUSED with teach-text (register
-#                            it first: `led register-principal <name> <class>`) rather than
-#                            silently falling back to the default principal.
+#   LED_ACTOR=<principal-name>   (env var, not a flag) resolves the actor/principal for FOUR
+#                            ledger-writing paths -- the generic <kind> <statement> path below,
+#                            `led review`, `led work claim`, and `led work open` (ONE
+#                            resolution point, resolve_actor(), defined once and shared by all
+#                            four). NOT YET WIRED (named honestly, not covered): `led work
+#                            depends`, `led work close`, and `led work resolve-violation` all
+#                            ignore LED_ACTOR today -- their rows land under the default
+#                            connection principal regardless (tracked upstream as
+#                            work item write-path-actor-completion). Unset, a write lands under
+#                            the default connection principal (`author`). Set to an unregistered
+#                            name, the write is REFUSED with teach-text (register it first:
+#                            `led register-principal <name> <class>`) rather than silently
+#                            falling back to the default principal.
 #
 #   led --recent [N]                          last N ledger rows (default 10), newest first;
 #                                              marks a row SUPERSEDED when a later row's
@@ -622,8 +627,10 @@ if [ -n "$event_time" ]; then
   esac
 fi
 
-# --- LED_ACTOR resolution (ONE point, used by every ledger-writing path below: `led review`,
-# `led work claim`, and the generic <kind> <statement> path) -----------------------------------
+# --- LED_ACTOR resolution (ONE point, used by FOUR of the ledger-writing paths below:
+# `led review`, `led work claim`, `led work open`, and the generic <kind> <statement> path;
+# `led work depends`/`close`/`resolve-violation` are NOT yet wired and ignore LED_ACTOR --
+# tracked upstream as write-path-actor-completion) ----------------------------------------------
 # Sets $actor_name to LED_ACTOR (may be empty). Downstream, NULLIF(:'actor_name','') still turns
 # an empty value into NULL so the kernel's set_actor trigger fills the default connection
 # principal, unchanged from before. What's new here: an explicit, up-front existence check. A
@@ -635,7 +642,11 @@ fi
 # duplicated inline in the review/work-claim paths and OMITTED entirely from the generic path --
 # the generic path never read LED_ACTOR at all, so every `led <kind> ...` write landed under the
 # default principal regardless of LED_ACTOR (BACKLOG run-7 forensics, ledger row 63:
-# LED_ACTOR=reviewer landed as actor='author').
+# LED_ACTOR=reviewer landed as actor='author'). `led work open` was a FOURTH, separately-
+# discovered instance of the same gap (this file's own B-pass over design/USER-RECIPES-FAQ.md,
+# 2026-07-16/17: a shipped FAQ recipe depends on LED_ACTOR working for work open, and it silently
+# didn't) -- now wired into resolve_actor() the same way, closing the class across all four
+# ledger-writing paths rather than leaving a fifth as an exercise for the next reader.
 resolve_actor() {
   actor_name="${LED_ACTOR:-}"
   if [ -n "$actor_name" ]; then
@@ -1341,6 +1352,8 @@ if [ "${1:-}" = "work" ]; then
         echo "       refused if <slug> already has an opening act (validate_work_item(): one" >&2
         echo "       opening act per slug -- the Q5 defect made unrepresentable, never a silent" >&2
         echo "       duplicate)" >&2
+        echo "       set LED_ACTOR=<principal-name> to open as a registered principal other" >&2
+        echo "       than the default connection principal" >&2
         echo "       --parent <parent-slug> types this item as a CHILD of an already-opened work" >&2
         echo "       item (kernel/lineage/s28-work-parent-edge.sql). REFUSED at construction if" >&2
         echo "       <parent-slug> has no opening act (dangling parents ARE refused here, unlike" >&2
@@ -1419,6 +1432,20 @@ SQL
         echo "  supersede is repairing a COMPOSITE parent with children, 'led work" >&2
         echo "  supersede-cascade' composes the same primitive over the whole direct-child set." >&2
       fi
+      resolve_actor
+      # actor resolves via a subquery bind below exactly as `led review`/`led work claim` do
+      # above: NULLIF(:'actor_name','') is NULL when LED_ACTOR is unset, so the ledger's actor
+      # column stays NULL and the kernel's set_actor trigger fills the default connection
+      # principal, unchanged from before this fix. THIS was the witnessed misattribution class
+      # (BACKLOG run-7 forensics, ledger row 63; comment at the top of this file ~line 636-638):
+      # `led work open` was the ONE ledger-writing path that never called resolve_actor at all,
+      # so LED_ACTOR silently landed every work_opened row under the default connection
+      # principal regardless of what the operator set. resolve_actor (defined near the top of
+      # this file) is now the ONE place LED_ACTOR is read and validated, shared with `led
+      # review`, `led work claim`, and the generic <kind> <statement> path -- ALL FOUR of this
+      # subcommand's INSERT branches below carry the same `actor` column and the same bind, so
+      # no kernel-feature branch is left with the silent gap one level down.
+      #
       # Four explicit branches (has_parent_col x has_discharge_col), each a STATIC INSERT column
       # list bound purely via psql -v -- mirrors this file's own standing convention of never
       # building SQL text dynamically from feature flags (auditability: every possible INSERT
@@ -1435,38 +1462,46 @@ SQL
       if [ "$has_parent_col" = "t" ] && [ "$has_discharge_col" = "t" ]; then
         exec psql -h "$PGHOST" -d "$PGDB" -v ON_ERROR_STOP=1 \
           -v slug="$slug" -v title="$title" -v parent="$parent" -v discharge="$discharge" \
-          -v refs="$refs" -v supersedes="$supersedes" -v statement="work_opened: ${slug} -- ${title}" <<SQL
+          -v refs="$refs" -v supersedes="$supersedes" -v actor_name="$actor_name" \
+          -v statement="work_opened: ${slug} -- ${title}" <<SQL
         SET ROLE ${ROLE};
         SET search_path = ${SCHEMA}, ${KERNEL};
-        INSERT INTO ${SCHEMA}.ledger (kind, work_slug, work_title, work_parent, work_discharge, refs, supersedes, statement)
-        VALUES ('work_opened', :'slug', :'title', NULLIF(:'parent', ''), NULLIF(:'discharge', ''), NULLIF(:'refs', ''), NULLIF(:'supersedes', '')::bigint, :'statement');
+        INSERT INTO ${SCHEMA}.ledger (kind, work_slug, work_title, work_parent, work_discharge, refs, supersedes, statement, actor)
+        VALUES ('work_opened', :'slug', :'title', NULLIF(:'parent', ''), NULLIF(:'discharge', ''), NULLIF(:'refs', ''), NULLIF(:'supersedes', '')::bigint, :'statement',
+                (SELECT id FROM principal WHERE name = NULLIF(:'actor_name', '')));
 SQL
       elif [ "$has_parent_col" = "t" ]; then
         exec psql -h "$PGHOST" -d "$PGDB" -v ON_ERROR_STOP=1 \
           -v slug="$slug" -v title="$title" -v parent="$parent" \
-          -v refs="$refs" -v supersedes="$supersedes" -v statement="work_opened: ${slug} -- ${title}" <<SQL
+          -v refs="$refs" -v supersedes="$supersedes" -v actor_name="$actor_name" \
+          -v statement="work_opened: ${slug} -- ${title}" <<SQL
         SET ROLE ${ROLE};
         SET search_path = ${SCHEMA}, ${KERNEL};
-        INSERT INTO ${SCHEMA}.ledger (kind, work_slug, work_title, work_parent, refs, supersedes, statement)
-        VALUES ('work_opened', :'slug', :'title', NULLIF(:'parent', ''), NULLIF(:'refs', ''), NULLIF(:'supersedes', '')::bigint, :'statement');
+        INSERT INTO ${SCHEMA}.ledger (kind, work_slug, work_title, work_parent, refs, supersedes, statement, actor)
+        VALUES ('work_opened', :'slug', :'title', NULLIF(:'parent', ''), NULLIF(:'refs', ''), NULLIF(:'supersedes', '')::bigint, :'statement',
+                (SELECT id FROM principal WHERE name = NULLIF(:'actor_name', '')));
 SQL
       elif [ "$has_discharge_col" = "t" ]; then
         exec psql -h "$PGHOST" -d "$PGDB" -v ON_ERROR_STOP=1 \
           -v slug="$slug" -v title="$title" -v discharge="$discharge" \
-          -v refs="$refs" -v supersedes="$supersedes" -v statement="work_opened: ${slug} -- ${title}" <<SQL
+          -v refs="$refs" -v supersedes="$supersedes" -v actor_name="$actor_name" \
+          -v statement="work_opened: ${slug} -- ${title}" <<SQL
         SET ROLE ${ROLE};
         SET search_path = ${SCHEMA}, ${KERNEL};
-        INSERT INTO ${SCHEMA}.ledger (kind, work_slug, work_title, work_discharge, refs, supersedes, statement)
-        VALUES ('work_opened', :'slug', :'title', NULLIF(:'discharge', ''), NULLIF(:'refs', ''), NULLIF(:'supersedes', '')::bigint, :'statement');
+        INSERT INTO ${SCHEMA}.ledger (kind, work_slug, work_title, work_discharge, refs, supersedes, statement, actor)
+        VALUES ('work_opened', :'slug', :'title', NULLIF(:'discharge', ''), NULLIF(:'refs', ''), NULLIF(:'supersedes', '')::bigint, :'statement',
+                (SELECT id FROM principal WHERE name = NULLIF(:'actor_name', '')));
 SQL
       else
         exec psql -h "$PGHOST" -d "$PGDB" -v ON_ERROR_STOP=1 \
           -v slug="$slug" -v title="$title" -v refs="$refs" -v supersedes="$supersedes" \
+          -v actor_name="$actor_name" \
           -v statement="work_opened: ${slug} -- ${title}" <<SQL
         SET ROLE ${ROLE};
         SET search_path = ${SCHEMA}, ${KERNEL};
-        INSERT INTO ${SCHEMA}.ledger (kind, work_slug, work_title, refs, supersedes, statement)
-        VALUES ('work_opened', :'slug', :'title', NULLIF(:'refs', ''), NULLIF(:'supersedes', '')::bigint, :'statement');
+        INSERT INTO ${SCHEMA}.ledger (kind, work_slug, work_title, refs, supersedes, statement, actor)
+        VALUES ('work_opened', :'slug', :'title', NULLIF(:'refs', ''), NULLIF(:'supersedes', '')::bigint, :'statement',
+                (SELECT id FROM principal WHERE name = NULLIF(:'actor_name', '')));
 SQL
       fi
       ;;
