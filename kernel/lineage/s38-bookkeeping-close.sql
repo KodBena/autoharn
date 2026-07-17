@@ -87,6 +87,25 @@ ALTER TABLE :"schema".ledger ADD CONSTRAINT work_review_bookkeeping_requires_com
     work_review_disposition IS DISTINCT FROM 'bookkeeping'
     OR work_review_ref ~ '^commit:[0-9a-f]{7,40}$');
 
+-- REVIEWER-CAUGHT GAP (pre-commit review round, this same delta): work_review_disposition is a
+-- column s37 already shares between TWO kinds -- work_closed (this delta's own home for
+-- 'bookkeeping') and work_violation_disposition (s37's own vocabulary, 'witnessed'/'deferred'
+-- there too, see work_review_ref_kind_shape one column over). Without a kind test of its own,
+-- work_review_disposition_check above admits 'bookkeeping' on EITHER kind -- a raw INSERT could
+-- construct a work_violation_disposition row carrying work_review_disposition='bookkeeping' (plus
+-- a commit-shaped ref, satisfying the CHECK immediately above), a state this file's own closure
+-- statement claims does not exist ("the bookkeeping fact rides the EXISTING work_closed kind's own
+-- columns") and one work_bookkeeping_closes (`WHERE kind = 'work_closed'`) never enumerates --
+-- invisible to the one audit view this delta's own Element 4 built specifically to make the
+-- category's growth rate visible. Fixed by mirroring the file family's established kind-scoping
+-- idiom one column over (s37's own work_review_ref_kind_shape, `col IS NULL OR kind IN (...)`,
+-- one-way): 'bookkeeping' is licensed on work_closed alone, closing the gap the SAME way s37 closed
+-- work_resolution_check's own flat-union defect (that file's own "reviewer-witnessed defect 3"
+-- header, this constraint's direct precedent).
+ALTER TABLE :"schema".ledger DROP CONSTRAINT IF EXISTS work_review_bookkeeping_kind_shape;
+ALTER TABLE :"schema".ledger ADD CONSTRAINT work_review_bookkeeping_kind_shape CHECK (
+    work_review_disposition IS DISTINCT FROM 'bookkeeping' OR kind = 'work_closed');
+
 COMMENT ON CONSTRAINT work_review_disposition_check ON :"schema".ledger IS
   'kernel/lineage/s38-bookkeeping-close.sql: widens s29''s two-value vocabulary to a third,
    machine-verified value, bookkeeping -- a close with no judgment content, whose witness is a
@@ -99,6 +118,12 @@ COMMENT ON CONSTRAINT work_review_bookkeeping_requires_commit_ref ON :"schema".l
    clause over -- a bookkeeping row without a commit-shaped review ref (commit:<7-40 lowercase hex
    chars>) is UNREPRESENTABLE. The kernel checks SHAPE only; commit EXISTENCE is a CLI-side check
    at construction (ADR-0011: the honest trust boundary, see this file''s ELEMENT 3 note below).';
+COMMENT ON CONSTRAINT work_review_bookkeeping_kind_shape ON :"schema".ledger IS
+  'kernel/lineage/s38-bookkeeping-close.sql: reviewer-caught gap fix -- work_review_disposition is
+   shared with work_violation_disposition rows (s37), so without this CHECK ''bookkeeping'' would be
+   constructible on a work_violation_disposition row, invisible to work_bookkeeping_closes (WHERE
+   kind = ''work_closed''). Mirrors work_review_ref_kind_shape (s37) one column over: one-way,
+   licenses ''bookkeeping'' on kind = ''work_closed'' alone.';
 
 -- ============================================================================================
 -- ELEMENT 2 -- validate_work_item_close() RE-ISSUED (the s35 LEAF, CREATE OR REPLACE -- ADR-0012
@@ -215,13 +240,16 @@ GRANT SELECT ON :"schema".work_bookkeeping_closes TO :"role";
 -- HISTORY: safe -- one existing CHECK re-issued WIDER (work_review_disposition_check gains one
 -- new legal value, 'bookkeeping', disjoint from the pre-existing two -- every pre-existing row's
 -- own disposition value was already witnessed/deferred/NULL and remains exactly as legal as
--- before: RE-ISSUE-ONLY, no existing row touched, no backfill, no UPDATE); one NEW CHECK
--- (work_review_bookkeeping_requires_commit_ref) that is VACUOUSLY SATISFIED by every pre-existing
--- row (work_review_disposition IS DISTINCT FROM 'bookkeeping' is TRUE for every row whose
--- disposition is witnessed, deferred, or NULL -- i.e. every row that exists before this delta ever
--- ships, since 'bookkeeping' did not exist as a legal value until the CHECK immediately above this
--- one licensed it in the SAME file: ADDITIVE-VOCABULARY, the new constraint can only ever be
--- exercised by a row this delta's own widening makes legal in the first place); one existing LEAF
+-- before: RE-ISSUE-ONLY, no existing row touched, no backfill, no UPDATE); two NEW CHECKs
+-- (work_review_bookkeeping_requires_commit_ref, work_review_bookkeeping_kind_shape) that are BOTH
+-- VACUOUSLY SATISFIED by every pre-existing row (work_review_disposition IS DISTINCT FROM
+-- 'bookkeeping' is TRUE for every row whose disposition is witnessed, deferred, or NULL -- i.e.
+-- every row that exists before this delta ever ships, since 'bookkeeping' did not exist as a legal
+-- value until the CHECK immediately above these two licensed it in the SAME file: ADDITIVE-
+-- VOCABULARY, neither new constraint can ever be exercised by a row this delta's own widening
+-- does not first make legal; work_review_bookkeeping_kind_shape closes the reviewer-caught gap
+-- that a flat, kind-blind vocabulary widening would otherwise leave open on
+-- work_violation_disposition rows, s37's own sibling kind sharing this same column); one existing LEAF
 -- FUNCTION re-issued with one new ELSIF branch (a NEW refusal path, never a relaxation of an
 -- existing one -- the pre-existing 'deferred'/'witnessed' branches are BYTE-IDENTICAL, unchanged);
 -- one new VIEW (work_bookkeeping_closes, a pure additive audit projection, no existing object
@@ -244,9 +272,11 @@ GRANT SELECT ON :"schema".work_bookkeeping_closes TO :"role";
 --     in work_bookkeeping_closes) -- or the row is refused at construction (no disposition at all,
 --     s29's mandatory-disposition trigger clause, unchanged). No fourth value is representable
 --     (the widened but still-closed vocabulary CHECK); no bookkeeping row without a commit-shaped
---     ref is representable (the new CHECK); a --strict close of any disposition other than
---     witnessed is refused (Element 2, the new ELSIF closes what would otherwise have been a
---     silent fall-through gap for exactly this one new value).
+--     ref is representable (work_review_bookkeeping_requires_commit_ref); no bookkeeping row on any
+--     kind other than work_closed is representable (work_review_bookkeeping_kind_shape, the
+--     reviewer-caught gap fix); a --strict close of any disposition other than witnessed is refused
+--     (Element 2, the new ELSIF closes what would otherwise have been a silent fall-through gap for
+--     exactly this one new value).
 --
 --   - QUANTIFICATION UNIVERSE (re-read every table/view the s15..s37 chain exposes to :role,
 --     checked against this delta's own additions, mirroring every prior delta's own
@@ -267,9 +297,18 @@ GRANT SELECT ON :"schema".work_bookkeeping_closes TO :"role";
 --         its 'deferred'-equality predicate is untouched, so it needs no re-issue to stay correct
 --         under the widened vocabulary -- the correctness is BY EQUALITY, not by any code this
 --         delta needed to touch. work_bookkeeping_closes -- THIS delta's own new view (Element 4).
---       KIND VOCABULARY -- unchanged. No new `kind` value; the bookkeeping fact rides the EXISTING
---         work_closed kind's own work_review_disposition/work_review_ref columns, exactly as
---         witnessed/deferred already do.
+--       KIND VOCABULARY -- unchanged (no new `kind` value); the bookkeeping fact rides the EXISTING
+--         work_closed kind's own work_review_disposition/work_review_ref columns -- but NOT
+--         "exactly as witnessed/deferred already do" (an earlier draft of this paragraph claimed
+--         that; it is false, reviewer-caught: witnessed/deferred are NOT work_closed-exclusive --
+--         s37 shares work_review_disposition/work_review_ref with work_violation_disposition rows
+--         too, and witnessed/deferred ride BOTH kinds by s37's own design, work_review_ref_kind_shape
+--         licensing both). 'bookkeeping' is deliberately NOT given that same two-kind license: this
+--         delta's new work_review_bookkeeping_kind_shape CHECK scopes it to kind = 'work_closed'
+--         alone, so the bookkeeping universe is EXACTLY the work_closed rows work_bookkeeping_closes
+--         (WHERE kind = 'work_closed') enumerates -- no work_violation_disposition row can ever
+--         carry it, closing the gap a flat vocabulary widening (Element 1's own CHECK, which carries
+--         no kind test) would otherwise have left open.
 --       GRANTS -- mirrors s29/s37's own posture: the ONE new view (work_bookkeeping_closes) gets a
 --         fresh GRANT SELECT; the widened CHECK and the re-issued leaf function ride their
 --         already-granted base table/already-EXECUTE-by-default function, so no other grant change

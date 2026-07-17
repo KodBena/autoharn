@@ -1665,6 +1665,12 @@ SQL
           echo "    --review-deferred        this close act itself becomes the review obligation" >&2
           exit 1
         fi
+        # This shape check is a TRANSCRIPTION of kernel/lineage/s38-bookkeeping-close.sql's own
+        # work_review_bookkeeping_requires_commit_ref CHECK (`work_review_ref ~
+        # '^commit:[0-9a-f]{7,40}$'`), not a second, driftable definition of it -- ADR-0012 P1.
+        # The kernel CHECK is the ONE documented home of the shape; refusing here first only gets
+        # the caller the more immediate CLI-side teach-text (same posture as s38 Element 2's
+        # --strict refusal above) before ever reaching the kernel's own (equally correct) error.
         if ! [[ "$witness" =~ ^commit:[0-9a-f]{7,40}$ ]]; then
           echo "led work close: REFUSED -- --review-bookkeeping's --witness '${witness}' failed" >&2
           echo "  the COMMIT-SHAPE check (s38: must match ^commit:[0-9a-f]{7,40}\$ -- 7 to 40" >&2
