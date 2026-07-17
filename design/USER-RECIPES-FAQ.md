@@ -349,6 +349,49 @@ LAW/compliance review — not never-review-early; a fast per-commit pass can sti
 filter, but it is not a substitute for the changeset-spanning pass, which is the only one
 positioned to catch an interaction defect between two commits that are each correct alone.
 
+**How do I make sure an item can't be started before its preconditions are met?** The maintainer's
+own question, verbatim: "do we have some kind of way to ensure that items ... are not 'opened' or
+'started' until preconditions are met? So that a hook can tell the agent 'don't do that, do the
+right thing instead'?" Three separate mechanisms answer three separate moments in a work item's
+life — none of them alone is the whole answer, and knowing which moment each one guards is the
+point of this entry.
+
+1. **`--type blocks-start` (claim-time, kernel/lineage/s39-blocks-start.sql).** `./led work depends
+   <slug> <on-slug> --type blocks-start` records that `<slug>` may not be CLAIMED until `<on-slug>`
+   reaches CLOSED. `./led work claim <slug>` is refused at construction while any direct,
+   in-force blocks-start antecedent is unresolved, naming every unresolved antecedent by slug —
+   the exact "don't do that" refusal the maintainer's question asks for, fired at the moment work
+   would actually begin. `./led work startable` lists every open, unclaimed item with no such
+   refusal pending right now — the "what can I legitimately start" query. Honest limits: direct
+   antecedents only, not a transitive walk (an item three hops upstream of an unresolved
+   precondition is not itself refused — widen `work_item_blocks_start_blockers` if you need that);
+   and it binds only the ledger's OWN claim path — an agent that edits files without ever running
+   `./led work claim` never trips this refusal at all (see point 3).
+2. **`decomposition_review` (write-time, the armed mechanism).** Already covered in full under
+   "Review discipline" above — a *claimed, open* work item only proves permission to work, never
+   that its own decomposition (the plan, the acceptance criteria) was ever reviewed.
+   `decomposition_review` closes that different gap: it refuses a substantive `Write`/`Edit`/
+   `NotebookEdit` (or a governed-file-mutating `Bash` command) while the claimed item's own opening
+   act carries an undischarged `countersign_obligation`. This is a PreToolUse hook, not a ledger
+   refusal — it fires on the *tool call*, not the claim.
+3. **`--type blocks-close` (close-time, kernel/lineage/s30-typed-dependency-edges.sql).** The
+   oldest of the three: `--type blocks-close` refuses a `--strict` close (or the strict-by-type
+   discharge of a composite item) while the antecedent is unresolved. It guards the *end* of the
+   work, not the start — an item can be opened, claimed, and worked on with a blocks-close
+   antecedent still unresolved; only its own strict close is refused.
+
+**The composition point, stated plainly because no single mechanism above is complete on its
+own.** Full structural foreclosure of "started before its precondition" is TWO gates together, not
+one: **claim-gating** (point 1) for any work that goes through the ledgered `./led work claim` path,
+**PLUS** the write-gate (point 2) for an agent that skips claiming and edits files directly. Neither
+alone closes the class — a `blocks-start` edge with no `decomposition_review` armed cannot stop an
+agent that never claims the item and edits anyway; `decomposition_review` armed with no
+`blocks-start` edge recorded has no *precondition* fact to check at all, only a review-obligation
+one. `--type blocks-close` (point 3) is a THIRD, later gate — closing time, not starting time — and
+is not a substitute for either of the first two, though all three commonly apply to the same item
+(an antecedent that must be finished before X starts is very often also load-bearing for X's own
+strict close).
+
 ## Classifying audit/diagnostic findings
 
 **I have a batch of findings from a code audit or review, and sorting them into categories
@@ -496,6 +539,38 @@ burns its slug (a deliberate, ratified choice) — the replacement needs a new s
 surviving claims/edges that named the old slug must be re-issued. Grammar:
 `./led work open` usage; semantics:
 [FABLE-SUPERSESSION-UNIFORM-RETRACTION-SPEC.md](FABLE-SUPERSESSION-UNIFORM-RETRACTION-SPEC.md).
+
+**I recorded a `work_depends_on` edge wrong (wrong `--type`, wrong endpoints) — how do I fix
+it?** Same primitive, one kind over: `./led work depends <slug> <on-slug> [--type
+blocks-close|blocks-start|informs] --supersedes <old-edge-row-id>`. This writes a NEW
+work_depends_on row that both carries the corrected edge (a different `--type`, or different
+`<slug>`/`<on-slug>` endpoints — re-pointing a mistaken edge entirely is legal) and retracts
+the old row from current truth in the same act (`ledger.supersedes`, s31 — uniform across
+every kind, reinstatement-free). Reach for this specifically when: the edge was typed wrong
+(e.g. recorded `informs` when it should have been `blocks-close`, or vice versa); the edge
+pointed at the wrong antecedent or dependent slug; or the mixed-deadlock case that s39's
+claim-time refusal teach-text and its LIMITS section both name explicitly: a `blocks-close`
+edge and a `blocks-start` edge between the
+SAME two items in OPPOSITE directions produced a genuine mutual claim/close deadlock (neither
+edge type's own construction-time cycle check catches this, because each is scoped to its own
+edge type only): supersede ONE of the two edges to break the deadlock. Refused at construction
+if `<old-edge-row-id>` does not exist, is not itself a `work_depends_on` row (a different kind
+is corrected via its OWN verb's `--supersedes`, e.g. `led work open --supersedes` for a
+`work_opened` row, `led work resolve-violation --supersedes` for a disposition row — one
+column, three typed entry points, never a raw-SQL fourth), or is already superseded (the row
+that superseded it is named, so you can inspect or correct THAT one instead). Re-issuing the
+exact same edge shape that a supersession just retired is NOT refused as a duplicate — there
+is no uniqueness check on `work_depends_on` rows at all (unlike `work_opened`'s permanent
+slug-burn). When the new edge's slug or type differs from the old one, the CLI prints an
+advisory naming both the old and new endpoints, so the correction stays legible without
+digging through raw history. History stays: the superseded edge remains visible in
+`work_violation_history`/raw ledger reads; current truth (`work_edge_blocks_close`,
+`work_edge_blocks_start`, `work_item_blocks_start_blockers`, and the claim-time/strict-close
+refusals that read them) moves on to the new edge only. Grammar: `./led work depends` usage;
+kernel semantics: kernel/lineage/s39-blocks-start.sql (blocks-start),
+kernel/lineage/s30-typed-dependency-edges.sql (blocks-close),
+[FABLE-SUPERSESSION-UNIFORM-RETRACTION-SPEC.md](FABLE-SUPERSESSION-UNIFORM-RETRACTION-SPEC.md)
+(the shared supersession mechanics).
 
 **I superseded a parent item and `work violations` now shows orphan rows that nothing can
 clear — did I break the world?**
