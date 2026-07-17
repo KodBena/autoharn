@@ -43,9 +43,13 @@ this hook must never be, because the attrition reflex is a paraphrase engine and
 enumerated list is always one paraphrase behind it. What changed is the SPACE next to that
 argument, not the argument itself. `mode="static"` is a new, deliberately weak, ADDITIONAL
 first tier: a case-insensitive, word-boundary match against a phrase list rooted in Rule 3's own
-canonical vocabulary. It catches nothing the classifier would not also catch; it MISSES every
-paraphrase by construction (a "gilding the lily" or "the juice isn't worth the squeeze" positive
-in the eval corpus is a static-tier miss ON PURPOSE, not a defect); and it is offered strictly as
+canonical vocabulary. It MISSES every paraphrase by construction (a "gilding the lily" or "the
+juice isn't worth the squeeze" positive in the eval corpus is a static-tier miss ON PURPOSE, not
+a defect); it can also FALSE-POSITIVE on a hard negative that merely contains a listed phrase,
+since it has no shape-based judgment at all — the shipped corpus's own FP=1 row (a fair-dealing
+hard negative that happens to contain the literal phrase "gold-plating") is exactly this case,
+and it is acceptable precisely because the nudge this tier emits is disregardable, not a block
+or an accusation (`_emit_static_notice` below). It is offered strictly as
 an OBSERVER, never as a gate — the same never-blocks posture as the classifier tier. It exists
 because the honest alternative — leave the choice at "off" (free, no detection) or "observe" (a
 real, billed `claude -p` call) — left most worlds with no detection running at all (maintainer's
