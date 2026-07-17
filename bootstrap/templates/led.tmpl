@@ -1618,8 +1618,8 @@ SQL
       [ -n "$review_bookkeeping" ] && _rc_count=$((_rc_count + 1))
       if [ "$_rc_count" -gt 1 ]; then
         echo "led work close: REFUSED -- --review-witness, --review-deferred, and" >&2
-        echo "  --review-bookkeeping are the THREE CONSTRUCTORS of a review disposition; exactly" >&2
-        echo "  ONE, never more than one, in one close act (s29 Element B, s38 Element 2)." >&2
+        echo "  --review-bookkeeping are the THREE CONSTRUCTORS of a review disposition;" >&2
+        echo "  exactly ONE, never more than one, in one close act (s29 Element B, s38 Element 2)." >&2
         exit 1
       fi
       if [ "$_rc_count" -eq 0 ]; then
