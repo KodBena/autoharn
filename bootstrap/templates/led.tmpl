@@ -1117,11 +1117,15 @@ Fresh-agent rules briefing -- three rules a new agent otherwise discovers only b
    is REFUSED, never silently swallowed into the statement's own prose -- move it to the other
    side and re-issue.
 
-3. Same-session countersign. `led review <id> attest ...` is refused when the countersigning
-   actor authored the row (self-review, keyed on the actor/principal, not the invocation).
-   Disclosed fallbacks: countersign with independence `self-review` explicitly, or register a
-   distinct principal first (`./led register-principal <name> <class>`) and set
-   LED_ACTOR=<name> before re-issuing the review.
+3. Same-actor countersign (segregation of duties). `led review <id> attest ...` is refused
+   when the countersigning actor authored the row it regards -- keyed on actor/principal
+   identity alone, unconditionally, regardless of the independence value chosen (the ledger
+   INSERT that fires this check lands before independence is even known). The only fix:
+   register a distinct principal (`./led register-principal <name> <class>`) and set
+   LED_ACTOR=<name> before re-issuing the review. Solo-world fallback (no second principal
+   genuinely available): register one anyway for the same operator, and countersign through
+   it disclosing `independence self-review` -- honest labeling of the countersign, not a
+   substitute for the distinct-actor step.
 
 See design/USER-RECIPES-FAQ.md for the full recipe corpus these rules are drawn from.
 BRIEFING
@@ -1150,8 +1154,9 @@ mechs = apparatus.get("mechanisms")
 entry = mechs.get("rules_briefing") if isinstance(mechs, dict) else None
 extra = entry.get("extra_items") if isinstance(entry, dict) else None
 
-if entry is not None and "extra_items" in entry and (
-        not isinstance(extra, list) or not all(isinstance(x, str) for x in extra)):
+if entry is not None and (not isinstance(entry, dict) or (
+        "extra_items" in entry and (
+            not isinstance(extra, list) or not all(isinstance(x, str) for x in extra)))):
     print(f"[led briefing] WARNING: mechanisms.rules_briefing.extra_items in {path} must be a "
           f"JSON array of strings -- got {extra!r}; ignoring it, core briefing above still stands.",
           file=sys.stderr)

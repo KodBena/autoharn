@@ -3,7 +3,7 @@
 (bootstrap/templates/led.tmpl), the fresh-agent rules briefing verb.
 
 MOTIVATION: a fresh agent presently discovers this project's three sharpest house rules (the
-ledger change-gate, the flag-order asymmetry, the same-session countersign refusal) only by
+ledger change-gate, the flag-order asymmetry, the same-actor countersign refusal) only by
 tripping them -- each is a REFUSAL with teach-text, but the teach-text arrives only after the
 agent has already spent a turn on the wrong shape. `led briefing` (bootstrap/templates/led.tmpl)
 is the single source of truth for that briefing's TEXT; this hook is a THIN TRANSPORT that resolves
