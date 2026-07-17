@@ -63,14 +63,19 @@
 #                            this flag is REFUSED loudly on those verbs (never a silent drop; see
 #                            the coverage guard near the top of this file's own logic).
 #
-#   LED_ACTOR=<principal-name>   (env var, not a flag) resolves the actor/principal for EVERY
-#                            ledger-writing verb -- the generic <kind> <statement> path below,
-#                            `led review`, `led work claim`, and `led work open` alike (ONE
+#   LED_ACTOR=<principal-name>   (env var, not a flag) resolves the actor/principal for FOUR
+#                            ledger-writing paths -- the generic <kind> <statement> path below,
+#                            `led review`, `led work claim`, and `led work open` (ONE
 #                            resolution point, resolve_actor(), defined once and shared by all
-#                            four). Unset, a write lands under the default connection principal
-#                            (`author`). Set to an unregistered name, the write is REFUSED with
-#                            teach-text (register it first: `led register-principal <name>
-#                            <class>`) rather than silently falling back to the default principal.
+#                            four). NOT YET WIRED (named honestly, not covered): `led work
+#                            depends`, `led work close`, and `led work resolve-violation` all
+#                            ignore LED_ACTOR today -- their rows land under the default
+#                            connection principal regardless (tracked upstream as
+#                            work item write-path-actor-completion). Unset, a write lands under
+#                            the default connection principal (`author`). Set to an unregistered
+#                            name, the write is REFUSED with teach-text (register it first:
+#                            `led register-principal <name> <class>`) rather than silently
+#                            falling back to the default principal.
 #
 #   led --recent [N]                          last N ledger rows (default 10), newest first;
 #                                              marks a row SUPERSEDED when a later row's
@@ -622,8 +627,10 @@ if [ -n "$event_time" ]; then
   esac
 fi
 
-# --- LED_ACTOR resolution (ONE point, used by every ledger-writing path below: `led review`,
-# `led work claim`, `led work open`, and the generic <kind> <statement> path) -------------------
+# --- LED_ACTOR resolution (ONE point, used by FOUR of the ledger-writing paths below:
+# `led review`, `led work claim`, `led work open`, and the generic <kind> <statement> path;
+# `led work depends`/`close`/`resolve-violation` are NOT yet wired and ignore LED_ACTOR --
+# tracked upstream as write-path-actor-completion) ----------------------------------------------
 # Sets $actor_name to LED_ACTOR (may be empty). Downstream, NULLIF(:'actor_name','') still turns
 # an empty value into NULL so the kernel's set_actor trigger fills the default connection
 # principal, unchanged from before. What's new here: an explicit, up-front existence check. A
