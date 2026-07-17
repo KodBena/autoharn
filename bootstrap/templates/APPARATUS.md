@@ -165,19 +165,33 @@ add per-mechanism detail a table cell is too narrow to carry.
       (`tier: "static_fallback"`), never presenting a static hit as a classifier verdict.
     - `"enforce"` is unaffected by this addition — still not implemented for this mechanism,
       still degrades to `"observe"` with a warning.
-    - **The phrase list is DATA, not a code constant** (ADR-0012's data/code-separation
-      discipline, applied here 2026-07-17 on the maintainer's explicit instruction): the
-      shipped default lives at
+    - **The phrase list AND the injected notice text are both DATA, not code constants**
+      (ADR-0012's data/code-separation discipline, applied here 2026-07-17 on the maintainer's
+      explicit instruction; the notice half completes the pair the same day, ledgered
+      commission 2026-07-17): the shipped default lives at
       [`instruments/demurral_phrases.default.json`](../../instruments/demurral_phrases.default.json)
-      — a plain JSON file (`{"phrases": [...], ...}`) with its own header fields explaining what
-      it is and how to change it, so an operator edits the vocabulary without touching any code.
-      A deployment that wants its own words entirely replaces the effective list — not merged,
-      full replacement — by copying that file to
+      — a plain JSON file with its own header fields explaining what it is and how to change it,
+      so an operator edits the vocabulary AND the injected notice text without touching any code.
+      The file accepts two shapes: a legacy bare JSON array of phrase strings (`["phrase one",
+      ...]` — phrases only, built-in notice, unchanged since before this pass), or an object
+      (`{"phrases": [...], "notice": "..."}` — the shipped default's own current shape) whose
+      optional `"notice"` string may contain the placeholder `{phrases}`, substituted with the
+      matched phrase(s) via `str.replace` (never `str.format`, so stray braces in an operator's
+      own notice text never raise). A deployment that wants its own vocabulary and/or notice
+      entirely replaces the effective file — not merged, full replacement — by copying it to
       `<world-root>/.claude/demurral_phrases.json` and editing it; a present-but-malformed
-      override degrades loudly (one stderr warning) back to the shipped default, never to a
-      silently empty list, and a missing override simply uses the shipped default. See
-      `hooks/demurral_detect.py`'s `_resolve_static_phrases` for the exact resolution order
-      (override, then shipped default, then a tiny hardcoded emergency floor if even the
+      override (bad phrase shape, or a `"notice"` value that isn't a string) degrades loudly (one
+      stderr warning naming the offending value) back to the shipped default's phrase list and
+      the default notice text respectively — each artifact falls back on its own axis,
+      never to a silently empty list or notice — and a missing override simply uses the shipped
+      default. One clarification so the fallback names don't multiply: "the default notice
+      text" is ONE string under two homes — the `DEFAULT_NOTICE` constant in
+      `hooks/demurral_detect.py` and the shipped default file's own `"notice"` value — held
+      byte-identical by a test gate (`seen-red/demurral-detector/red-specimen.py` case 10), so
+      every fallback path (legacy array shape with no notice key, malformed override notice,
+      unreadable shipped file) lands on the same text. See `hooks/demurral_detect.py`'s
+      `_resolve_static_config` for the exact combined resolution order (override, then shipped
+      default, then a tiny hardcoded emergency phrase floor + `DEFAULT_NOTICE` if even the
       shipped file is unreadable — a broken-checkout case, not an ordinary one).
 - **`mutation_observer`** has no enforce state at all (see table) — it can only warn, never deny,
   by the nature of its PostToolUse attachment point.
