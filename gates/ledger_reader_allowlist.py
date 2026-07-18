@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-15T20:17:26Z
-#   last-change: 2026-07-18T04:25:54Z
+#   last-change: 2026-07-18T05:44:28Z
 #   contributors: a857c93d/main, 9a17b6b9/main, ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -74,7 +74,23 @@ CHAIN = [
     "s40-principal-identity-events.sql", "s41-principal-bindings-and-relations.sql",
     "s42-row-hash-full-coverage.sql",
     "s43-typed-verdict-write-boundary.sql",
+    "s45-standing-lifecycle.sql",
 ]
+# s45 (kernel/lineage/s45-standing-lifecycle.sql, ratified spec design/FABLE-STANDING-
+# LIFECYCLE-SPEC.md) extends this SAME gate's scratch CHAIN. It ships NO new raw-`ledger`
+# reader: kernel.principal_role (re-issued) still factors through ledger_current exclusively
+# (its one edit is an added conjunct on an already-ledger_current-sourced column, not a new
+# raw leg); kernel.principal_standing/principal_standing_basis (re-issued) are OUTSIDE this
+# gate's declared :schema universe exactly as their s40 forms were (they live in :kern -- the
+# same standing scope note s40's own comment above makes); validate_supersession_target
+# keeps its standing ALLOWLIST entry below, updated in place: its row-addressed target read
+# widens from one column (kind) to three (kind, principal_db_role, principal_subject) --
+# same SHAPE of read (one row, by id), so no new entry is needed, only the existing one's
+# reason text extended to name the widened read (verified live: this gate classifies the
+# re-issued function exactly as it classified the s43 one, zero new findings). set_actor
+# (re-issued, teach-text only) keeps reading the kernel.principal_role VIEW and the two
+# SECURITY DEFINER standing functions exactly as its s43 body did -- no raw `ledger`
+# reference of its own, correctly ABSENT from the allowlist as before.
 # s43 (kernel/lineage/s43-typed-verdict-write-boundary.sql) extends this SAME gate's scratch
 # CHAIN. It ships ONE new :schema-namespace raw reader (validate_supersession_target, the R6
 # substance -- ALLOWLIST entry below) and re-issues set_actor in place (session_user instead
@@ -245,10 +261,13 @@ ALLOWLIST: dict[str, str] = {
     "validate_independence": "reads (stamp_session, stamp_agent) off the two named rows — row-addressed "
                              "forensics, not a truth projection (s17/s21/s29).",
     "validate_supersession_target": "write-boundary BEFORE INSERT trigger (s43, the ratified R6's "
-                                    "substance): a single row-addressed read of the supersession "
-                                    "TARGET's kind (is it write_refused?), superseded-or-not "
-                                    "immaterial -- same history-typed reasoning as validate_review, "
-                                    "one column over.",
+                                    "substance; widened s45 §3.4): a single row-addressed read of "
+                                    "the supersession TARGET's (kind, principal_db_role, "
+                                    "principal_subject) -- is it write_refused? is it a standing-"
+                                    "lifecycle kind, and if so does the superseding row restate "
+                                    "its identity fields? -- superseded-or-not immaterial, same "
+                                    "history-typed reasoning as validate_review, three columns "
+                                    "over now instead of one.",
     "work_parent_would_cycle": "trigger helper — cycle check against history (s28; slug-burned world: a "
                                "retracted open still occupies its slug's place in the one-open-per-slug order).",
     "work_depends_on_would_cycle": "trigger helper — cycle check over blocks-close history (s30).",

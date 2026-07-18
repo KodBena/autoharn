@@ -753,6 +753,24 @@ has_s43_boundary() {
   [ "$_has_s43" = "t" ]
 }
 
+# --- the s45 standing-lifecycle capability probe (kernel/lineage/s45-standing-lifecycle.sql;
+# ratified spec design/FABLE-STANDING-LIFECYCLE-SPEC.md §3.8) -- a BEHAVIOR FINGERPRINT, never
+# a version literal (the migrate-detect-drift discipline; the s43 probe above is the same-file
+# precedent): TRUE iff pg_get_constraintdef of principal_binding_active_kind_shape carries
+# 'principal_standing_declared' -- a fact only s45's re-issue of that CHECK produces (the s41-
+# era CHECK licenses only the four binding kinds). Gates `undeclare-standing`/`lift-suspension`
+# and the `suspend`/`declare-standing` payloads' own principal_binding_active flag on an s45
+# world, so an s40/s41/s42/s43-only world's existing verb payloads stay byte-identical (the
+# flag would violate that world's OLDER, narrower CHECK).
+_has_s45=""
+has_s45_standing_lifecycle() {
+  if [ -z "$_has_s45" ]; then
+    _has_s45=$(psql -h "$PGHOST" -d "$PGDB" -tAc \
+      "SELECT EXISTS (SELECT 1 FROM pg_constraint con JOIN pg_class rel ON rel.oid = con.conrelid JOIN pg_namespace ns ON ns.oid = rel.relnamespace WHERE ns.nspname = '${SCHEMA}' AND rel.relname = 'ledger' AND con.conname = 'principal_binding_active_kind_shape' AND pg_get_constraintdef(con.oid) LIKE '%principal_standing_declared%');")
+  fi
+  [ "$_has_s45" = "t" ]
+}
+
 # _payload_json key value [key value ...] -- compact JSON on stdout; a key whose value is the
 # EMPTY STRING is omitted entirely (the boundary's absent-key semantics: the column falls to
 # its default / stays NULL -- the same outcome the legacy branches' NULLIF(:'v','') binds
@@ -1185,8 +1203,10 @@ if [ "${1:-}" = "principal" ]; then
   sub="${1:-}"; shift 2>/dev/null || true
   _principal_usage() {
     echo "usage: led principal declare-standing <name> [--db-role <role>]   # bind a db role's default attribution to <name> (rotation auto-supersedes)" >&2
-    echo "       led principal suspend <name> [reason...]                   # withdraw standing (no v1 verb lifts it -- see s40 §3.4)" >&2
-    echo "       led principal revoke <name> [reason...]                    # withdraw standing, terminally (revoked dominates suspended)" >&2
+    echo "       led principal undeclare-standing [--db-role <role>]        # unbind a db role -- role reverts to undeclared (s45; refused on an s40/s41/s42/s43-only kernel)" >&2
+    echo "       led principal suspend <name> [reason...] [--supersedes <id>]  # withdraw standing (liftable on an s45 kernel -- see s45 §3.4)" >&2
+    echo "       led principal lift-suspension <name>                      # lift a suspension (s45; refused on an s40/s41/s42/s43-only kernel)" >&2
+    echo "       led principal revoke <name> [reason...]                    # withdraw standing, terminally by TYPE since s45 (revoked dominates suspended)" >&2
     echo "  (s41 kernels add: relate/unrelate, bind-role/release-role, bind-key/revoke-key," >&2
     echo "   grant-competence/withdraw-competence -- each refused with teach-text on an s40-only kernel)" >&2
   }
@@ -1237,13 +1257,37 @@ SQL
         ORDER BY lc.id DESC LIMIT 1;
 SQL
       )
+      # s45: the rotation lookup only ever TARGETS the currently in-force declaration -- add
+      # the active filter on an s45 world so a rotation never supersedes an already-unbound
+      # (terminal) declaration row (kernel/lineage/s45-standing-lifecycle.sql §3.8 item 1). On
+      # a pre-s45 world every declaration row is implicitly active (no unbind kind exists), so
+      # this is a no-op there.
+      if has_s45_standing_lifecycle; then
+        old_id=$(psql -h "$PGHOST" -d "$PGDB" -tAq -v db_role="$db_role" <<SQL
+        SET ROLE ${ROLE};
+        SET search_path = ${SCHEMA}, ${KERNEL};
+        SELECT lc.id FROM ${SCHEMA}.ledger_current lc
+        WHERE lc.kind = 'principal_standing_declared' AND lc.principal_db_role = :'db_role'
+          AND lc.principal_binding_active
+        ORDER BY lc.id DESC LIMIT 1;
+SQL
+        )
+      fi
       [ -n "$old_id" ] && echo "led principal declare-standing: rotating -- superseding standing declaration row ${old_id} for role '${db_role}'."
       # s43 BOUNDARY BRANCH (see kernel_write's own comment near the top of this file).
       if has_s43_boundary; then
-        payload=$(_payload_json kind principal_standing_declared \
-          statement "database role '${db_role}' speaks for principal '${name}' by default (standing declaration)" \
-          actor "$actor_id" principal_subject "$pid" principal_db_role "$db_role" \
-          supersedes "$old_id" event_declared_ts "$event_time")
+        if has_s45_standing_lifecycle; then
+          payload=$(_payload_json kind principal_standing_declared \
+            statement "database role '${db_role}' speaks for principal '${name}' by default (standing declaration)" \
+            actor "$actor_id" principal_subject "$pid" principal_db_role "$db_role" \
+            principal_binding_active true \
+            supersedes "$old_id" event_declared_ts "$event_time")
+        else
+          payload=$(_payload_json kind principal_standing_declared \
+            statement "database role '${db_role}' speaks for principal '${name}' by default (standing declaration)" \
+            actor "$actor_id" principal_subject "$pid" principal_db_role "$db_role" \
+            supersedes "$old_id" event_declared_ts "$event_time")
+        fi
         kernel_write ledger_write "$payload"
         exit $?
       fi
@@ -1263,19 +1307,84 @@ SQL
                 NULLIF(:'event_time', '')::timestamptz);
 SQL
       ;;
-    suspend|revoke)
+    undeclare-standing)
+      # s45 (kernel/lineage/s45-standing-lifecycle.sql §3.8 item 2; NEW verb): unbind a
+      # db_role's standing declaration -- the role reverts to UNDECLARED (kernel.principal_role
+      # emits no row for it), never silently resurrecting an older declaration (Element 2's
+      # resurrection-proof view semantics do the structural work; this verb only builds the
+      # unbind row).
+      db_role="$ROLE"
+      while [ $# -gt 0 ]; do
+        case "$1" in
+          --db-role) db_role="${2:-}"; shift 2 ;;
+          *) echo "led principal undeclare-standing: REFUSED -- unrecognized argument '$1'." >&2; _principal_usage; exit 1 ;;
+        esac
+      done
+      if ! has_s45_standing_lifecycle; then
+        echo "led principal undeclare-standing: REFUSED -- this world's kernel predates" >&2
+        echo "  s45-standing-lifecycle (kernel/lineage/s45-standing-lifecycle.sql): standing" >&2
+        echo "  declarations there cannot be retracted (s40 C8's own disclosed limit)." >&2
+        exit 1
+      fi
+      refuse_shared_flags_for_principal_verb "principal undeclare-standing"
+      resolve_actor
+      # the governing declaration for db_role -- the SAME lookup declare-standing's rotation
+      # uses, additionally requiring it active (the CLI reads identity fields off the TARGET
+      # row itself, so a CLI-driven unbind can never mismatch them -- the kernel's own §3.4
+      # continuity check is the backstop for non-CLI callers).
+      gov=$(psql -h "$PGHOST" -d "$PGDB" -tAq -v db_role="$db_role" <<SQL
+        SET ROLE ${ROLE};
+        SET search_path = ${SCHEMA}, ${KERNEL};
+        SELECT lc.id::text || '|' || lc.principal_subject::text
+        FROM ${SCHEMA}.ledger_current lc
+        WHERE lc.kind = 'principal_standing_declared' AND lc.principal_db_role = :'db_role'
+          AND lc.principal_binding_active
+        ORDER BY lc.id DESC LIMIT 1;
+SQL
+      )
+      gov_id="${gov%%|*}"; gov_pid="${gov##*|}"
+      if [ -z "$gov_id" ]; then
+        echo "led principal undeclare-standing: REFUSED -- role '${db_role}' has no in-force" >&2
+        echo "  standing declaration -- nothing to unbind." >&2
+        exit 1
+      fi
+      stmt="database role '${db_role}' unbound -- standing declaration retracted (role reverts to undeclared)"
+      payload=$(_payload_json kind principal_standing_declared statement "$stmt" \
+        actor "$actor_id" principal_subject "$gov_pid" principal_db_role "$db_role" \
+        principal_binding_active false supersedes "$gov_id" event_declared_ts "$event_time")
+      kernel_write ledger_write "$payload"
+      rc=$?
+      if [ $rc -eq 0 ]; then
+        echo "led principal undeclare-standing: role '${db_role}' unbound (superseded declaration row ${gov_id})."
+        echo "  This unbind is FORWARD-ONLY: rows already written under the outgoing declaration" >&2
+        echo "  stay attributed to their outgoing principal forever -- its last act under the" >&2
+        echo "  role was relinquishing it. If the reason for unbinding is that PAST rows were" >&2
+        echo "  MISattributed, the sanctioned backward-looking correction is the (future)" >&2
+        echo "  defeasibility layer, never retro-editing attribution (kernel/lineage/" >&2
+        echo "  s45-standing-lifecycle.sql §3.8 item 2's own operational guidance)." >&2
+      fi
+      exit $rc
+      ;;
+    suspend)
       name="${1:-}"; shift 2>/dev/null || true
-      reason="$*"
-      if [ -z "$name" ]; then _principal_usage; exit 1; fi
       case "$name" in --*) _principal_usage; exit 1 ;; esac
+      sup_id=""; reason_words=""
+      while [ $# -gt 0 ]; do
+        case "$1" in
+          --supersedes) sup_id="${2:-}"; shift 2 ;;
+          *) reason_words="${reason_words:+$reason_words }$1"; shift ;;
+        esac
+      done
+      reason="$reason_words"
+      if [ -z "$name" ]; then _principal_usage; exit 1; fi
       # THE RECORDER'S OWN STANDING (s43 Element 6, the C7-analog dead-end guard, CLI-grade
       # only -- disclosed as such in the delta's LIMITS): the write-boundary tool principal
-      # AUTHORS every write_refused row; suspending or revoking it bricks refusal recording
-      # itself (every subsequent refusal becomes a loud abort instead of a committed record).
+      # AUTHORS every write_refused row; suspending it bricks refusal recording itself (every
+      # subsequent refusal becomes a loud abort instead of a committed record).
       if [ "$name" = "write-boundary" ]; then
-        echo "led principal ${sub}: REFUSED -- 'write-boundary' is the kernel write boundary's" >&2
+        echo "led principal suspend: REFUSED -- 'write-boundary' is the kernel write boundary's" >&2
         echo "  own recording identity (kernel/lineage/s43-typed-verdict-write-boundary.sql" >&2
-        echo "  Element 6): every write_refused row is authored by it, so ${sub}ing it bricks" >&2
+        echo "  Element 6): every write_refused row is authored by it, so suspending it bricks" >&2
         echo "  refusal recording -- every later refusal would abort loudly instead of landing" >&2
         echo "  as a committed record. This guard is CLI-grade (the kernel does not enforce it" >&2
         echo "  -- the s40 C7 recovery posture: repair below this line is a schema-owner act);" >&2
@@ -1283,32 +1392,177 @@ SQL
         echo "  maintainer decision, not a verb." >&2
         exit 1
       fi
-      refuse_shared_flags_for_principal_verb "principal ${sub}"
+      if [ -n "$sup_id" ] && ! has_s45_standing_lifecycle; then
+        echo "led principal suspend: REFUSED -- --supersedes (a rationale-correcting re-suspend)" >&2
+        echo "  needs an s45 kernel (kernel/lineage/s45-standing-lifecycle.sql); this world's" >&2
+        echo "  kernel predates it." >&2
+        exit 1
+      fi
+      refuse_shared_flags_for_principal_verb "principal suspend"
       resolve_actor
       pid=$(_principal_subject_id "$name")
       if [ -z "$pid" ]; then
-        echo "led principal ${sub}: REFUSED -- '${name}' is not a registered principal." >&2
+        echo "led principal suspend: REFUSED -- '${name}' is not a registered principal." >&2
         exit 1
       fi
-      kind_val="principal_${sub}"
-      case "$sub" in suspend) kind_val="principal_suspended" ;; revoke) kind_val="principal_revoked" ;; esac
-      stmt="principal '${name}' ${sub}d -- standing withdrawn"
+      # s45 (spec §3.8 item 3): the duplicate-active guard every s41 bind verb carries --
+      # refuse a second in-force suspension unless --supersedes names exactly the existing one
+      # (a rationale-correcting re-suspend). Only meaningful (and only checked) on an s45
+      # world -- pre-s45, principal_suspended carries no active flag at all, so "in-force" has
+      # no narrower meaning than "exists, unsuperseded", which set_actor already treats as a
+      # standing refusal on the next write regardless of how many such rows accumulate.
+      if has_s45_standing_lifecycle; then
+        cur_id=$(psql -h "$PGHOST" -d "$PGDB" -tAq -v p="$pid" <<SQL
+        SET ROLE ${ROLE};
+        SET search_path = ${SCHEMA}, ${KERNEL};
+        SELECT lc.id FROM ${SCHEMA}.ledger_current lc
+        WHERE lc.kind = 'principal_suspended' AND lc.principal_subject = :'p'::bigint
+          AND lc.principal_binding_active
+        ORDER BY lc.id DESC LIMIT 1;
+SQL
+        )
+        if [ -n "$cur_id" ] && [ "$cur_id" != "$sup_id" ]; then
+          echo "led principal suspend: REFUSED -- '${name}' already carries an in-force" >&2
+          echo "  suspension (row ${cur_id}); no duplicate active truth. To correct its" >&2
+          echo "  rationale, re-suspend WITH --supersedes ${cur_id}; to lift it instead:" >&2
+          echo "  ./led principal lift-suspension ${name}" >&2
+          exit 1
+        fi
+        if [ -n "$sup_id" ] && [ "$cur_id" != "$sup_id" ]; then
+          echo "led principal suspend: REFUSED -- --supersedes '${sup_id}' is not the in-force" >&2
+          echo "  suspension for '${name}' (the current one is ${cur_id:-none})." >&2
+          exit 1
+        fi
+      fi
+      stmt="principal '${name}' suspended -- standing withdrawn"
       [ -n "$reason" ] && stmt="${stmt}: ${reason}"
       # s43 BOUNDARY BRANCH (see kernel_write's own comment near the top of this file).
       if has_s43_boundary; then
-        payload=$(_payload_json kind "$kind_val" statement "$stmt" actor "$actor_id" \
-          principal_subject "$pid" event_declared_ts "$event_time")
+        if has_s45_standing_lifecycle; then
+          payload=$(_payload_json kind principal_suspended statement "$stmt" actor "$actor_id" \
+            principal_subject "$pid" principal_binding_active true supersedes "$sup_id" \
+            event_declared_ts "$event_time")
+        else
+          payload=$(_payload_json kind principal_suspended statement "$stmt" actor "$actor_id" \
+            principal_subject "$pid" event_declared_ts "$event_time")
+        fi
         kernel_write ledger_write "$payload"
         exit $?
       fi
       exec psql -h "$PGHOST" -d "$PGDB" -v ON_ERROR_STOP=1 \
-        -v kind_val="$kind_val" -v stmt="$stmt" -v pid="$pid" \
+        -v stmt="$stmt" -v pid="$pid" \
         -v actor_name="$actor_name" -v event_time="$event_time" <<SQL
         SET ROLE ${ROLE};
         SET search_path = ${SCHEMA}, ${KERNEL};
         INSERT INTO ${SCHEMA}.ledger
             (kind, statement, actor, principal_subject, event_declared_ts)
-        VALUES (:'kind_val', :'stmt',
+        VALUES ('principal_suspended', :'stmt',
+                (SELECT id FROM principal WHERE name = NULLIF(:'actor_name', '')),
+                :'pid'::bigint,
+                NULLIF(:'event_time', '')::timestamptz);
+SQL
+      ;;
+    lift-suspension)
+      # s45 (kernel/lineage/s45-standing-lifecycle.sql §3.8 item 4; NEW verb): lift the
+      # in-force suspension for <name>. Requires ANOTHER active principal's write -- a
+      # suspended principal's own writes refuse (set_actor); the kernel refusal, now a
+      # journaled verdict, is the teacher, not a special case here.
+      name="${1:-}"; shift 1 2>/dev/null || true
+      reason="$*"
+      if [ -z "$name" ]; then
+        echo "usage: led principal lift-suspension <name> [reason...]" >&2
+        exit 1
+      fi
+      if ! has_s45_standing_lifecycle; then
+        echo "led principal lift-suspension: REFUSED -- this world's kernel predates" >&2
+        echo "  s45-standing-lifecycle (kernel/lineage/s45-standing-lifecycle.sql): suspensions" >&2
+        echo "  there cannot be lifted (s40 Element 4's own disclosed v1 limit)." >&2
+        exit 1
+      fi
+      refuse_shared_flags_for_principal_verb "principal lift-suspension"
+      resolve_actor
+      pid=$(_principal_subject_id "$name")
+      if [ -z "$pid" ]; then
+        echo "led principal lift-suspension: REFUSED -- '${name}' is not a registered principal." >&2
+        exit 1
+      fi
+      sup_id=$(psql -h "$PGHOST" -d "$PGDB" -tAq -v p="$pid" <<SQL
+        SET ROLE ${ROLE};
+        SET search_path = ${SCHEMA}, ${KERNEL};
+        SELECT lc.id FROM ${SCHEMA}.ledger_current lc
+        WHERE lc.kind = 'principal_suspended' AND lc.principal_subject = :'p'::bigint
+          AND lc.principal_binding_active
+        ORDER BY lc.id DESC LIMIT 1;
+SQL
+      )
+      if [ -z "$sup_id" ]; then
+        echo "led principal lift-suspension: REFUSED -- principal '${name}' has no in-force suspension." >&2
+        exit 1
+      fi
+      is_revoked=$(psql -h "$PGHOST" -d "$PGDB" -tAq -v p="$pid" <<SQL
+        SET ROLE ${ROLE};
+        SET search_path = ${SCHEMA}, ${KERNEL};
+        SELECT EXISTS (SELECT 1 FROM ${SCHEMA}.ledger_current lc
+                       WHERE lc.kind = 'principal_revoked' AND lc.principal_subject = :'p'::bigint);
+SQL
+      )
+      stmt="principal '${name}' suspension lifted"
+      [ -n "$reason" ] && stmt="${stmt}: ${reason}"
+      payload=$(_payload_json kind principal_suspended statement "$stmt" actor "$actor_id" \
+        principal_subject "$pid" principal_binding_active false supersedes "$sup_id" \
+        event_declared_ts "$event_time")
+      kernel_write ledger_write "$payload"
+      rc=$?
+      if [ $rc -eq 0 ] && [ "$is_revoked" = "t" ]; then
+        echo "led principal lift-suspension: note -- '${name}' is ALSO revoked; standing" >&2
+        echo "  remains 'revoked' (revoked dominates suspended, s40 §3.4; lifting a suspension" >&2
+        echo "  under an active revocation is a legal, observable no-op -- s45 I5)." >&2
+      fi
+      exit $rc
+      ;;
+    revoke)
+      name="${1:-}"; shift 2>/dev/null || true
+      reason="$*"
+      if [ -z "$name" ]; then _principal_usage; exit 1; fi
+      case "$name" in --*) _principal_usage; exit 1 ;; esac
+      # THE RECORDER'S OWN STANDING (s43 Element 6) -- see suspend's own copy of this guard.
+      if [ "$name" = "write-boundary" ]; then
+        echo "led principal revoke: REFUSED -- 'write-boundary' is the kernel write boundary's" >&2
+        echo "  own recording identity (kernel/lineage/s43-typed-verdict-write-boundary.sql" >&2
+        echo "  Element 6): every write_refused row is authored by it, so revoking it bricks" >&2
+        echo "  refusal recording -- every later refusal would abort loudly instead of landing" >&2
+        echo "  as a committed record. This guard is CLI-grade (the kernel does not enforce it" >&2
+        echo "  -- the s40 C7 recovery posture: repair below this line is a schema-owner act);" >&2
+        echo "  if you genuinely mean to retire this world's refusal recorder, that is a" >&2
+        echo "  maintainer decision, not a verb." >&2
+        exit 1
+      fi
+      refuse_shared_flags_for_principal_verb "principal revoke"
+      resolve_actor
+      pid=$(_principal_subject_id "$name")
+      if [ -z "$pid" ]; then
+        echo "led principal revoke: REFUSED -- '${name}' is not a registered principal." >&2
+        exit 1
+      fi
+      stmt="principal '${name}' revoked -- standing withdrawn"
+      [ -n "$reason" ] && stmt="${stmt}: ${reason}"
+      # s43 BOUNDARY BRANCH (see kernel_write's own comment near the top of this file).
+      # revocation NEVER carries principal_binding_active (s45 §3.1: that absence IS the
+      # ratified "terminal by type" -- the CHECK forbids it, this verb never attempts it).
+      if has_s43_boundary; then
+        payload=$(_payload_json kind principal_revoked statement "$stmt" actor "$actor_id" \
+          principal_subject "$pid" event_declared_ts "$event_time")
+        kernel_write ledger_write "$payload"
+        exit $?
+      fi
+      exec psql -h "$PGHOST" -d "$PGDB" -v ON_ERROR_STOP=1 \
+        -v stmt="$stmt" -v pid="$pid" \
+        -v actor_name="$actor_name" -v event_time="$event_time" <<SQL
+        SET ROLE ${ROLE};
+        SET search_path = ${SCHEMA}, ${KERNEL};
+        INSERT INTO ${SCHEMA}.ledger
+            (kind, statement, actor, principal_subject, event_declared_ts)
+        VALUES ('principal_revoked', :'stmt',
                 (SELECT id FROM principal WHERE name = NULLIF(:'actor_name', '')),
                 :'pid'::bigint,
                 NULLIF(:'event_time', '')::timestamptz);

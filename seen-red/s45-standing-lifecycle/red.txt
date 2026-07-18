@@ -1,0 +1,82 @@
+== scaffolding classic world s45fxa (chain ends s43-typed-verdict-write-boundary.sql, no s45) ==
+=== detect-f-on-s43-head ===
+  [ok] s45 detect on an s43-head chain reads 'f' (expect f)
+
+=== flag-refused-on-pre-s45-kernel ===
+  [ok] principal_binding_active on a declaration is REFUSED pre-s45 (23514) -- the CHECK genuinely does not license it there
+
+=== cli-refuses-new-verbs-on-pre-s45-kernel ===
+  [ok] undeclare-standing exit=1 (taught); lift-suspension exit=1 (taught)
+
+== scaffolding classic world s45fxb (chain ends s45-standing-lifecycle.sql) ==
+=== detect-t-on-s45-head ===
+  [ok] s45 detect on the s45 chain reads 't' (expect t)
+
+=== resurrection-trap-both-forms ===
+  [ok] before unbind both variants read governing=dave (naive='4' shipped='4'); AFTER unbinding dave's declaration: NAIVE VARIANT (harness-local, never shipped) resurrects to '3' (the RED this delta's own header warns against) while the SHIPPED view correctly reads '' (undeclared, empty); a fresh declaration then re-binds governing='3'
+
+=== section-3.1-flag-shape ===
+  [ok] declaration w/o flag refused (23514); suspension w/o flag refused (23514); inactive-from-birth declaration refused (23514); revocation WITH any flag value refused (23514) -- all four, verdicts, journaled
+
+=== section-3.3-lift-in-force-filter ===
+  [ok] after suspend: shipped='suspended' naive='suspended' (agree); after lift: SHIPPED='active' (correctly 'active') vs NAIVE='suspended' (the RED s45 Element 3 fixes -- a lifted suspension would read suspended FOREVER under the naive bare-EXISTS form)
+
+=== section-3.3-precedence-both-orders-and-lift-under-revocation ===
+  [ok] suspend-then-revoke -> 'revoked'; revoke-then-suspend -> 'revoked' (both 'revoked', precedence unchanged); for grace (revoked + an unlifted suspension), principal_standing_basis='26' (the revocation row) while the NAIVE bare-conjunct form (harness-local) wrongly yields '27' (the SUSPENSION row -- a different, wrong governing basis); for irene (revoked, never suspended), shipped basis='30' vs naive='' (empty -- the revocation VANISHES under the bare conjunct, the fork trap's cleanest form, s45 Element 3); lift-under-revocation is ACCEPTED and CHANGES NOTHING OBSERVABLE ('revoked', the ratified I5 no-op)
+
+=== section-3.4-three-cross-kind-hide-attempts-journaled ===
+  [ok] a `note` superseding a declaration (P0001, journaled row 32), a suspension (P0001, row 35), and a revocation (P0001, row 38) are each REFUSED-AS-EXPECTED -- the hide attempt ITSELF becomes a committed record
+
+=== section-3.4-value-continuity-mismatches-refused ===
+  [ok] declaration-db_role mismatch refused (P0001); suspension-subject mismatch refused (P0001); revocation-subject mismatch refused (P0001)
+
+=== section-3.4-legal-corrections-accepted ===
+  [ok] rotation repointing subject (row 45), unbind matching both fields (row 46), re-suspend correction (row 47), re-revoke correction (row 48) all ACCEPTED; standing after the re-revoke correction is still 'revoked'
+
+=== section-3.5-teach-text-branches ===
+  [ok] a write under a suspended actor teaches lift-suspension: 'Ledger policy: strict attribution (s40) — actor principal 5 is suspended (standing event r'...; under a revoked actor teaches TERMINAL BY TYPE / succession, no lift-suspension mention: 'Ledger policy: strict attribution (s40) — actor principal 6 is revoked (standing event row'...
+
+=== section-3.5-write-accepted-after-lift ===
+  [ok] lift accepted (row 53); erin's next write accepted (row 54) -- the never-refuses-after-lift leg
+
+=== section-3.8-cli-no-target-refusals ===
+  [ok] undeclare-standing on an undeclared role: exit=1 (taught); lift-suspension on a non-suspended principal: exit=1 (taught)
+
+=== section-3.8-cli-suspend-duplicate-guard ===
+  [ok] CLI `suspend frank` while frank already carries an in-force suspension (from the precedence leg above, never lifted): exit=1 (taught)
+
+=== section-3.8-cli-declare-then-undeclare-round-trip ===
+  [ok] declare-standing exit=0; undeclare-standing exit=0; governing role after unbind='' (undeclared); the unbind row's own actor='author' (the outgoing principal's own last act under the role -- set_actor resolves BEFORE the row lands, while the declaration is still governing)
+
+=== section-3.8-cli-lift-by-second-active-principal ===
+  [ok] `lift-suspension frank` run as a SECOND active principal (LED_ACTOR=erin): exit=0; frank's standing stays 'revoked' (revoked dominates -- the note the verb itself is supposed to print)
+
+=== section-3.8-write-boundary-repair-leg ===
+  [ok] write-boundary suspended via a direct (non-CLI) call (row 58); `lift-suspension write-boundary` by another active principal repairs it through the sanctioned surface: exit=0, standing after='active'
+
+=== gate-kind-shape-manifest-green ===
+  [ok] gates/kind_shape_manifest_gate.py exit=0 on the real repo head (the widened principal_binding_active row)
+
+=== gate-reader-allowlist-green ===
+  [ok] gates/ledger_reader_allowlist.py exit=0
+
+=== gate-hash-coverage-green-no-reissue ===
+  [ok] gates/hash_coverage_gate.py exit=0 on the s45 head (still 58 columns -- s45 adds no ledger column, so s42's law does not fire)
+
+=== gate-hash-coverage-negative-control-still-red ===
+  [ok] gates/hash_coverage_gate.py --inject-column exit=1 (expect 1 -- the gate itself stays alive)
+
+=== differential-agree-with-lifecycle-rows-live ===
+  [ok] tnow=AGREE work=AGREE with 26 standing-lifecycle row(s) live (declarations/suspensions/revocations/lifts/unbinds all included) -- expect AGREE/AGREE
+
+=== verify-chain-intact-through-s45-writes ===
+  [ok] ./verify-chain exit=0, INTACT through every s45 write and refusal this fixture produced
+
+== REAL --new-world scaffold run (s45fxnw, chain s15..s45) ==
+=== new-world-s45-birth-and-undeclare-round-trip ===
+  [ok] scaffold exit=0; detect='t'; birth declarations all carry principal_binding_active=true ('t'); first ordinary ./led write exit=0; `undeclare-standing` (no --db-role, defaults to the world's own granted role) exit=0; a write right after STILL SUCCEEDS via the untouched LOGIN-role declaration (exit=0, the s43 Element 8 dual-declaration behavior, correctly NOT bricked by one unbind); undeclaring the login role 'bork' too (exit=0) THEN makes the next NULL-actor write correctly refuse undeclared (exit=1)
+
+=== idris-freshness-warn-not-red ===
+  [ok] gates/idris_model_freshness.py exit=0 (LAGGING-disclosed WARN, not a RED failure -- design/Autoharn.idr honestly names the s45 model gap)
+
+ALL CASES OK -- s45 standing-lifecycle both-polarity proof, zero residue.

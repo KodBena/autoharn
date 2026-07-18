@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-15T20:19:45Z
-#   last-change: 2026-07-18T04:25:39Z
+#   last-change: 2026-07-18T05:43:54Z
 #   contributors: a857c93d/main, 9a17b6b9/main, ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -157,7 +157,17 @@ CHAIN = [
     "s41-principal-bindings-and-relations.sql",
     "s42-row-hash-full-coverage.sql",
     "s43-typed-verdict-write-boundary.sql",
+    "s45-standing-lifecycle.sql",
 ]
+# s45 (kernel/lineage/s45-standing-lifecycle.sql, ratified spec design/FABLE-STANDING-
+# LIFECYCLE-SPEC.md, maintainer batch ratification ledger row 1481) extends this SAME gate's
+# scratch CHAIN and ships NO new column and NO new kind -- its one MANIFEST-relevant act is a
+# ROW UPDATE: principal_binding_active_kind_shape (already MANIFESTed above, s41) is RE-ISSUED
+# widening its licensed kinds tuple from the four s41 binding kinds to six, adding
+# principal_standing_declared and principal_suspended (principal_revoked deliberately absent --
+# that absence is s45's ratified "terminal by type"). This is an EDIT to the existing MANIFEST
+# row's kinds field, not a new row -- verified live by running this gate against the extended
+# chain and confirming zero UNLICENSED/MISMATCHED findings with the widened tuple in place.
 # s43 (kernel/lineage/s43-typed-verdict-write-boundary.sql, the ratified s42/s43 family's
 # second delta) extends this SAME gate's scratch CHAIN and ships SIX new kind-scoped columns
 # for the new write_refused kind (five two-way, one one-way -- refusal_attempted_actor is
@@ -390,15 +400,25 @@ MANIFEST = [
                 "sibling s40 columns)."),
     dict(column="principal_binding_active",
          kinds=("principal_relation_asserted", "principal_role_bound", "principal_key_bound",
-                "principal_competence_granted"),
+                "principal_competence_granted",
+                "principal_standing_declared", "principal_suspended"),
          arity="two-way", mechanism="CHECK", constraint="principal_binding_active_kind_shape",
-         defining_delta="s41-principal-bindings-and-relations.sql",
-         reason="the identity/value discriminator of the four binding kinds (true = assertion, "
+         defining_delta="s41-principal-bindings-and-relations.sql "
+                         "(kinds widened to six by s45-standing-lifecycle.sql)",
+         reason="the identity/value discriminator, now of SIX kinds (true = assertion, "
                 "false = retraction restating identity fields only) -- mandatory via this CHECK "
-                "on exactly the four s41 kinds, never a column-level NOT NULL (basis C10); "
-                "vacuous validation, kinds born in the same delta. Its inactive-needs-supersedes "
-                "and mandatory-iff-active companions carry no kind test (value CHECKs, out of "
-                "scope by the classifier's first test)."),
+                "on exactly those kinds, never a column-level NOT NULL (basis C10); vacuous "
+                "validation, each kind's licensing born in the delta that licenses it. s45 "
+                "(kernel/lineage/s45-standing-lifecycle.sql, ratified spec design/FABLE-"
+                "STANDING-LIFECYCLE-SPEC.md) widens the four s41 binding kinds to six, adding "
+                "principal_standing_declared (false = an unbind, restating BOTH principal_"
+                "db_role and principal_subject) and principal_suspended (false = a lift, "
+                "restating principal_subject) -- ONE re-issue of this same CHECK, never a "
+                "second patching constraint (ADR-0012 P1, the principal_subject_kind_shape "
+                "precedent). principal_revoked is DELIBERATELY ABSENT -- that absence IS s45's "
+                "ratified 'terminal by type'. Its inactive-needs-supersedes and mandatory-iff-"
+                "active companions carry no kind test (value CHECKs, out of scope by the "
+                "classifier's first test)."),
     dict(column="principal_object", kinds=("principal_relation_asserted",),
          arity="two-way", mechanism="CHECK", constraint="principal_object_kind_shape",
          defining_delta="s41-principal-bindings-and-relations.sql",

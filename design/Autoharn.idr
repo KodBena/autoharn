@@ -26,7 +26,8 @@
 ||| because the SUBSTRATE is -- see the "PRESERVED, ON PURPOSE" list in this header.
 ||| Beauty that would erase one of those facts is a regression, not a cleanup.
 |||
-||| AS-OF: kernel chain through s43 (s43, 2026-07-18, same-commit extension: the
+||| AS-OF: kernel chain through s43 (LAGGING: s45-standing-lifecycle not yet transcribed here -- see the dated note near this header's end for the honest reason and the filed debt.)
+||| (s43, 2026-07-18, same-commit extension: the
 |||   typed-verdict write boundary. What s43 became here: PWriteRefused -- the journaled
 |||   refusal as an ordinary payload constructor with its six typed fields and the closed
 |||   RefusalSurface sum; VWriteRefused (no payload premise of its own -- the who-may-mint
@@ -72,6 +73,26 @@
 |||   human-only key premise, the same-natural-person canonical-order premise, and D-6's
 |||   human-attested managerial/financial scoping inside boundaryOk. s34's own note
 |||   stands: the Draft-stage GradeF index still models that refusal for free.)
+|||
+||| LAGGING: s45-standing-lifecycle (kernel/lineage/s45-standing-lifecycle.sql, ratified spec
+|||   design/FABLE-STANDING-LIFECYCLE-SPEC.md, maintainer batch ratification ledger row 1481)
+|||   is NOT YET TRANSCRIBED here, named rather than silently absorbed (row 1481's own carve-
+|||   out: "the gate, witnessed working at s42/s43, is the enforcement; the builder closes the
+|||   model gap to the head or the gate stays honest about the lag"). s45's SQL semantics --
+|||   principal_binding_active licensed on principal_standing_declared/principal_suspended
+|||   (deliberately NOT principal_revoked -- terminal by type), kernel.principal_role's
+|||   resurrection-proof governing-row read (latest unsuperseded declaration REGARDLESS of its
+|||   active flag, emitted only if that governing row is itself active), the standing
+|||   functions' in-force filter, and the standing-lifecycle supersession discipline -- are all
+|||   witnessed at the SQL layer (seen-red/s45-standing-lifecycle/run_fixtures.py) and would,
+|||   transcribed here, require genuine new type-level structure this model does not yet carry:
+|||   a THREE-VALUED (not boolean) read of "does this row govern" (superseded / unsuperseded-
+|||   inactive / unsuperseded-active) is exactly the kind of derived-read refinement this file's
+|||   existing sections model well (see principalStanding's own revoked-dominates ordering), but
+|||   it was not built this pass -- named as a filed debt, not a silent gap, per this file's own
+|||   HONESTY CONTRACT above. AS-OF stays s43 until a future pass pays this down; the freshness
+|||   gate (gates/idris_model_freshness.py) reads this line as a WARN, not a failure, exactly as
+|||   designed for this disclosure.
 |||
 ||| PROVENANCE:
 |||   v1 (2026-07-15, night) -- an Opus transcription consultation, machine-checked,
