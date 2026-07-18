@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-15T20:17:26Z
-#   last-change: 2026-07-18T10:29:21Z
+#   last-change: 2026-07-18T15:53:32Z
 #   contributors: a857c93d/main, 9a17b6b9/main, ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -78,7 +78,24 @@ CHAIN = [
     "s44-model-identity-attestation.sql",
     "s46-credited-views.sql",
     "s47-claim-on-closed-refusal.sql",
+    "s48-review-witness-existence.sql",
+    "s49-journaler-overflow-guard.sql",
 ]
+# s49 (kernel/lineage/s49-journaler-overflow-guard.sql, design/FABLE-KERNEL-INTAKE-PAIR-SPEC.md
+# Delta 2) extends this SAME gate's scratch CHAIN. It ships ZERO new readers of any kind: its one
+# re-issued object (kernel.journal_write_refusal) lives in :"kern", OUTSIDE this gate's declared
+# :"schema" universe -- the SAME standing scope note s43's own header already gives for this
+# identical function (s43's ALLOWLIST section above); its one behavior change (a local exception
+# handler around one pre-existing cast) reads no new table, view, or column -- verified live by
+# running this gate against the extended chain and reading it clean with NO new ALLOWLIST entry
+# required.
+# s48 (kernel/lineage/s48-review-witness-existence.sql, design/FABLE-KERNEL-INTAKE-PAIR-SPEC.md
+# Delta 1) extends this SAME gate's scratch CHAIN. It ships ONE new :"schema"-namespace raw
+# reader: validate_review_witness_existence, a NEW standalone BEFORE INSERT trigger (the s43
+# validate_supersession_target idiom) that reads raw `ledger` for a single existence check (does
+# a cited row:<id> exist) -- row-addressed forensics, not a truth projection, same history-typed
+# reasoning as validate_review/validate_supersession_target one level over. ALLOWLIST entry
+# below.
 # s47 (kernel/lineage/s47-claim-on-closed-refusal.sql, design/FABLE-CLAIM-ON-CLOSED-REFUSAL-SPEC.md,
 # RATIFIED BUILD BASIS 2026-07-18) extends this SAME gate's scratch CHAIN. It ships ZERO new
 # readers: its one re-issued object (validate_work_item_claim) is a FUNCTION whose new check reads
@@ -297,6 +314,13 @@ ALLOWLIST: dict[str, str] = {
                                     "its identity fields? -- superseded-or-not immaterial, same "
                                     "history-typed reasoning as validate_review, three columns "
                                     "over now instead of one.",
+    "validate_review_witness_existence": "write-boundary BEFORE INSERT trigger (s48, Delta 1 of "
+                                         "design/FABLE-KERNEL-INTAKE-PAIR-SPEC.md): a single "
+                                         "existence check per cited row:<id> token in the "
+                                         "review-witness field (work_review_ref) of a "
+                                         "work_closed/work_violation_disposition row -- "
+                                         "row-addressed forensics (does this id exist at all), "
+                                         "same history-typed reasoning as validate_review.",
     "work_parent_would_cycle": "trigger helper — cycle check against history (s28; slug-burned world: a "
                                "retracted open still occupies its slug's place in the one-open-per-slug order).",
     "work_depends_on_would_cycle": "trigger helper — cycle check over blocks-close history (s30).",

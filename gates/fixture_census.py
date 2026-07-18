@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-09T13:36:11Z
-#   last-change: 2026-07-18T10:47:56Z
+#   last-change: 2026-07-18T15:53:59Z
 #   contributors: be693afb/main, e4410ef6/main, 3c50e030/main, 3c942a60/main, a857c93d/main, ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -152,6 +152,8 @@ REGISTRY: dict[str, str] = {
     "s44-model-identity-attestation":  "seen-red/s44-model-identity-attestation/run_fixtures.py",
     "s46-credited-views":              "seen-red/s46-credited-views/run_fixtures.py",
     "s47-claim-on-closed-refusal":     "seen-red/s47-claim-on-closed-refusal/run_fixtures.py",
+    "s48-review-witness-existence":    "seen-red/s48-review-witness-existence/run_fixtures.py",
+    "s49-journaler-overflow-guard":    "seen-red/s49-journaler-overflow-guard/run_fixtures.py",
     "defeat-pipeline":                 "seen-red/defeat-pipeline/run_fixtures.py",
     "judge-all-capable-layers":       "seen-red/judge-all-capable-layers/run_fixtures.py",
     "boundary-service":                "seen-red/boundary-service/run_fixtures.py",
