@@ -80,6 +80,40 @@ existing world — including this repository's own live tracker (`autoharn1`) �
 ORCH-CAPABILITIES.md item 12). An adopter starting fresh gets the full chain from birth;
 the existing corpus does not and never will.
 
+## At a glance — the whole map in one table
+
+Compressed from the clause-by-clause sections below, which remain the authoritative
+reading (every verdict there carries its file-path witnesses; this table carries none).
+Two caveats travel with every row: the strongest mechanisms are **birth-chain-only** (no
+live world carries them yet), and **no clause verdict is a compliance claim** — this is a
+capability map of a system Part 11 does not apply to.
+
+| Part 11 clause | Asks for | Standing | One line |
+| --- | --- | --- | --- |
+| §11.10(a) validation; discern altered records | invalid/altered records discernible | PARTIAL — altered-record half is the repo's strongest suit | full-row hash chain + tamper walk, every column witnessed; hook layer itself has no test suite yet |
+| §11.10(b) inspection copies | accurate, complete, human-readable copies | PARTIAL | every row readable in full today; the one-act signed export verb is planned, unbuilt |
+| §11.10(c) record protection & retention | records survive the retention period | PARTIAL — the worst floor | nothing is ever deleted by design; but one disk, no backup, no restore drill |
+| §11.10(d) access limits | only authorized individuals | PARTIAL | per-world DB roles + a no-raw-INSERT write boundary; host perimeter is the adopter's scope |
+| §11.10(e) audit trails | secure, time-stamped, changes never obscure | WITNESSED-BY-DESIGN | the clause the system was practically built for — even *refused* writes become permanent rows |
+| §11.10(f) sequencing enforcement | permitted order of steps enforced | WITNESSED-BY-DESIGN | permit-to-work: edits refused without an open+claimed work item; typed state machine; clean-exit gate |
+| §11.10(g) authority checks | only authorized users act/sign | PARTIAL | typed identity, standing, suspension/revocation events; authentication behind it is one trust domain |
+| §11.10(h) device checks | validity of input source | PARTIAL (reinterpreted) | for AI-agent records the "device" is the model — a served-vs-declared identity sentry watches exactly that |
+| §11.10(i) training records | qualification files | BUREAUCRACY-CLASS | adopter-supplied; a typed competence-grant record exists to hang a regime on |
+| §11.10(j) signature accountability policy | written + enforced | PARTIAL | governance preamble is mechanically enforced (hooks refuse, refusals teach); no signatures exist yet |
+| §11.10(k) documentation control | versioned, change-controlled docs | WITNESSED-BY-DESIGN | amend-by-append law, legibility attestation loop, git — with an honest unsigned-history caveat |
+| §11.30 open systems | encryption + signatures in transit | N/A (closed posture) | would be ABSENT if opened; stated, not worked |
+| §11.50 signature manifestation | signer, time, meaning shown | PARTIAL | the record shapes already carry all three; the signatures themselves are inert |
+| §11.70 signature/record linking | signatures cannot be excised/transferred | MACHINERY BUILT, INERT | signature welded to the hash chain (transfer breaks it); witnessed with test keys, zero real bytes signed |
+| §11.100 signature uniqueness & identity | unique, never reassigned, verified owner | PARTIAL | identity is append-only events, duplicate registration refused; key slots typed and empty |
+| §11.100(c) certification letter to FDA | a paper letter | ABSENT, categorically | an adopter's act, never a repository artifact |
+| §11.200 signing ceremony | two-component non-biometric signatures | ABSENT | hardware-token GPG route exists on paper; whether it meets the two-component letter is flagged, unanswered |
+| §11.300 credential controls | unique, aged, loss-managed credentials | MOSTLY ABSENT | two genuine matches: recorded revocation lifecycle, and refusal-recording + phone-alert watchdog for §11.300(d) |
+
+The signature-shaped half of the table (§11.50 through §11.300) terminates almost entirely
+at the cryptographic layer that is **deferred by standing maintainer ruling** — built,
+witnessed with throwaway keys, covering zero real bytes, and deliberately not being armed
+yet. That is a ruling, not an oversight.
+
 ---
 
 ## Subpart B — §11.10, controls for closed systems
