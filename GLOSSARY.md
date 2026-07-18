@@ -1,5 +1,8 @@
 # Glossary — autoharn's coined vocabulary
 
+<!-- doc-attest-exempt: doc-tree relocation mechanical edit (work item doc-tree-reorg-user-guide, ledger row 1620, 2026-07-18) -- relative link path(s) repointed to a sibling file's new location after a git-mv relocation elsewhere in the tree; no prose rewrite, same disposition as the v1.1.2 release-cut's own markers (commit 543a389). Removal condition: strike this marker and run the real A:B:C loop next time this file is touched for content, not just link repair. -->
+
+
 This is autoharn's glossary: definitions for every word this project uses with a meaning you
 could not infer from plain English, for any reader — human or agent — who hits one of those
 words in an autoharn document and needs to know what it means without asking anyone.
@@ -227,7 +230,7 @@ A `kind=decision` ledger row carrying the `resource:` statement-prefix conventio
 [Capability Registry](#pillar-1) resident: a solver, service, backend, binary, or library, what
 it proves, when to reach for it, and its [tier](#mandated-tier). [`./pickup`](#led-and-pickup)'s
 RESOURCES section is the pull surface a session reads it from;
-[USER-BLESSED-TABLE-TEMPLATE.md](design/USER-BLESSED-TABLE-TEMPLATE.md) is the adopter-facing
+[USER-BLESSED-TABLE-TEMPLATE.md](user-guide/USER-BLESSED-TABLE-TEMPLATE.md) is the adopter-facing
 template that fills these in and states the exact statement grammar.
 
 ### anti-corruption layer
@@ -253,7 +256,7 @@ for this evidence.
 The design principle behind every mechanized guardrail in this project: a refusal is never a
 bare error. When a hook or gate blocks an action that would break a guarantee, its message
 names what was missing and what to do next, so the refusal itself is the instruction
-([USER-GUIDE.md §6](USER-GUIDE.md#6-when-something-refuses) works through a live example).
+([USER-GUIDE.md §6](user-guide/USER-GUIDE.md#6-when-something-refuses) works through a live example).
 
 <a id="post-fable-law"></a>
 ### POST-FABLE (law)
@@ -270,7 +273,7 @@ reinterpreted to make it fit. Named for and set out in
 The terms below entered the vocabulary with the world/run operating model (2026-07-09
 onward) and were previously defined nowhere — an Opus fresh-context probe (2026-07-11)
 found this file's own Stand-Alone Principle violated by their absence. Operational detail
-lives in [OPERATING-CARD.md](ORCH-OPERATING-CARD.md); these are the definitions.
+lives in [OPERATING-CARD.md](user-guide/ORCH-OPERATING-CARD.md); these are the definitions.
 
 ### world
 One isolated experiment habitat: a subject schema + kernel schema pair in Postgres plus a
@@ -303,7 +306,7 @@ The shared, non-production Postgres database (host: this deployment's own `deplo
 `host` field — see README.md "Configuration"; database name `toy`) this
 project's own witness work runs against — as opposed to a scaffolded deployment's real subject
 database. Individual scratch/fixture schema pairs (e.g. `toycolors` / `toycolors_kernel`) live
-inside it; see [`ORCH-USE-MODE-ENGINE-WIRING.md`](design/ORCH-USE-MODE-ENGINE-WIRING.md)'s
+inside it; see [`ORCH-USE-MODE-ENGINE-WIRING.md`](vestigial_documentation/design/ORCH-USE-MODE-ENGINE-WIRING.md)'s
 target-info table for a worked example.
 
 ### scratch schema
@@ -316,7 +319,7 @@ A world or project directory is **wired** when it is scaffolded with this repo's
 registered in its own `.claude/settings.json`, so a Claude session running there executes
 under the governance apparatus (PreToolUse/PostToolUse hooks, the change gate, the stamp) —
 as opposed to an unwired directory, where no hook intercepts anything
-([ORCH-OPERATING-CARD.md](ORCH-OPERATING-CARD.md), "The two-cwd model").
+([ORCH-OPERATING-CARD.md](user-guide/ORCH-OPERATING-CARD.md), "The two-cwd model").
 
 ### stamp
 The HMAC binding a ledger row to the actual Claude session/agent that wrote it, injected
@@ -333,7 +336,7 @@ most. **`led`** appends one entry to a world's ledger per invocation (`./led dec
 comment is the canonical vocabulary). **`pickup`** is the session-start resume command: it
 reads the ledger LIVE and prints a fresh status brief (open work items, review debt, recent
 changes, and — since this session — the RESOURCES section), never a cached or stored one
-([design/ORCH-OPUS-READINESS.md](design/ORCH-OPUS-READINESS.md)'s "derived at pickup time, never stored" rule).
+([design/ORCH-OPUS-READINESS.md](vestigial_documentation/design/ORCH-OPUS-READINESS.md)'s "derived at pickup time, never stored" rule).
 
 <a id="judge"></a>
 ### `judge`
@@ -342,12 +345,12 @@ ledger, deriving the same verdict independently in SQL and in ASP (Answer Set Pr
 `clingo` logic engine) and comparing them. Closed verdicts: `AGREE` (green) |
 `DIVERGE_BY_DESIGN` | `DIVERGE_DEFECT` | `QUARANTINED` — the latter two are TYPED escalation
 events (non-zero exit) that route upward rather than being self-adjudicated. Diagnosis
-walkthrough: [`engine/docs/JUDGE-READING.md`](engine/docs/JUDGE-READING.md). Source: [`bootstrap/templates/judge.tmpl`](bootstrap/templates/judge.tmpl).
+walkthrough: [`engine/docs/JUDGE-READING.md`](user-guide/JUDGE-READING.md). Source: [`bootstrap/templates/judge.tmpl`](bootstrap/templates/judge.tmpl).
 
 <a id="audit"></a>
 ### `audit`
 The operator verb `./audit`: the contemporaneity check
-([design/ORCH-CONTEMPORANEITY-AUDIT.md, "Part 2"](design/ORCH-CONTEMPORANEITY-AUDIT.md#part-2--the-correlation-verb-audit--a-fifth-operator-verb-or-a-judge-subcommand))
+([design/ORCH-CONTEMPORANEITY-AUDIT.md, "Part 2"](vestigial_documentation/design/ORCH-CONTEMPORANEITY-AUDIT.md#part-2--the-correlation-verb-audit--a-fifth-operator-verb-or-a-judge-subcommand))
 that joins every ledger row to the invocation that wrote it and the wall-clock journals,
 reporting per-row event-vs-record deltas. Closed verdicts: `CONTEMPORANEOUS` |
 `BATCHED_DECLARED` | `LATE_DECLARED` | `BACKFILL_SUSPECT` (non-zero exit only on the last).
@@ -387,7 +390,7 @@ Not to be confused with the content-free-review-discharge **audit** (`./audit --
 [engine/review_gap_thresholds.py](engine/review_gap_thresholds.py)) — a distinct,
 differently-scoped check over this same view's discharges, inspecting whether a discharging
 review's own statement is content-free; this view's discharge test itself never examines content
-(see [USER-RECIPES-FAQ.md](design/USER-RECIPES-FAQ.md) for the full answer). Sibling closure-debt
+(see [USER-RECIPES-FAQ.md](user-guide/USER-RECIPES-FAQ.md) for the full answer). Sibling closure-debt
 views read by [`distance-to-clean`](#distance-to-clean) and the same Stop-hook: `question_status`
 (open/unanswered `led ask`/`led decide` questions), `work_item_violations` (a
 [`*_violations` gate](#violations-gate) instance over the work-item ledger), `work_item_current`

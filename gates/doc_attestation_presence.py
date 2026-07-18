@@ -44,12 +44,12 @@ for what was chosen where the ADR is silent):
 
     {
       "schema": "doc-attestation/1",
-      "doc": "design/ORCH-ABC-AUDIT-LOOP-RECIPE.md",   // repo-relative path, POSIX separators
+      "doc": "user-guide/ORCH-ABC-AUDIT-LOOP-RECIPE.md",   // repo-relative path, POSIX separators
       "content_sha256": "<64-hex, sha256 of the exact bytes B read>",
       "b_id": "<free text identifying B's invocation, distinct from A's>",
       "rounds": [
         {"round": 1, "verdict": "DEFECT", "findings": [
-            {"file": "design/ORCH-ABC-AUDIT-LOOP-RECIPE.md", "line": 42,
+            {"file": "user-guide/ORCH-ABC-AUDIT-LOOP-RECIPE.md", "line": 42,
              "quote": "<verbatim excerpt>", "repair": "<one-sentence fix>"}
         ], "clauses_checked": []},
         {"round": 2, "verdict": "CLEAN", "findings": [],
@@ -125,7 +125,7 @@ convention, "never silent"):
     fresh attestation of the entire growing file on every entry would attest noise, not the
     entry (BACKLOG "Zero-context-reader documentation discipline" packet, "point-in-time
     records like BACKLOG appends").
-  - `judgment/**` is excluded WHOLESALE — ORCH-OPERATING-CARD.md's own words, "predecessor era —
+  - `judgment/**` is excluded WHOLESALE — user-guide/ORCH-OPERATING-CARD.md's own words, "predecessor era —
     history unless a current spec cites it"; the same declared-history status
     gates/link_integrity.py already excludes this tree for (Rule 2(b)'s sibling gate).
   - `vestigial_documentation/**` is excluded WHOLESALE, added 2026-07-12 (work_slug
@@ -375,7 +375,7 @@ _WAIVER_COMMENT = re.compile(r"<!--\s*" + re.escape(WAIVER_TOKEN) + r".*?-->", r
 def _has_waiver(path: Path) -> bool:
     """A waiver requires the token inside an HTML comment (`<!-- doc-attest-exempt: reason
     -->`), never a bare substring match. A raw substring check was tried first and caught
-    itself live: this gate's own recipe doc (design/ORCH-ABC-AUDIT-LOOP-RECIPE.md) explains the
+    itself live: this gate's own recipe doc (user-guide/ORCH-ABC-AUDIT-LOOP-RECIPE.md) explains the
     waiver token in prose as a worked example, and that explanation alone tripped a false
     wholesale exemption under a plain 'WAIVER_TOKEN in text' check. Requiring the HTML-comment
     wrapper is the same device gates/link_integrity.py's strip_inline_code / strip_fences use
@@ -690,7 +690,7 @@ def check_file(rel: str, records: list[dict]) -> list[str]:
         return [f"{rel}: NO-ATTESTATION no fresh-context attestation record in "
                 f"attestations/doc-legibility-attestations.jsonl matches this file's current "
                 f"content (sha256 {content_sha256[:12]}...) — run the A:B:C loop "
-                f"(design/ORCH-ABC-AUDIT-LOOP-RECIPE.md) and record it with "
+                f"(user-guide/ORCH-ABC-AUDIT-LOOP-RECIPE.md) and record it with "
                 f"'gates/doc_attestation_presence.py --record', or waive with "
                 f"'<!-- {WAIVER_TOKEN} <reason> -->' if this is a point-in-time record or "
                 f"quoted-defect specimen the wholesale exclusions do not already cover"]
@@ -703,7 +703,7 @@ def _print_exclusions(scope: list[str], excluded: list[str], waived: list[str]) 
           f"{len(waived)} waived.")
     print("  excluded (principled, printed per ADR-0017 Rule 2(b) convention):")
     print("    BACKLOG.md  — point-in-time dated entries (ADR-0017 Exceptions)")
-    print("    judgment/** — declared history (ORCH-OPERATING-CARD.md), same status "
+    print("    judgment/** — declared history (user-guide/ORCH-OPERATING-CARD.md), same status "
           "gates/link_integrity.py already grants it")
     print("    vestigial_documentation/** — declared-history archive (2026-07-12 vestigial-doc-"
           "sweep, VESTIGIAL-INDEX.md), same status as judgment/**: content-preserving moves, not "

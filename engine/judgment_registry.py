@@ -769,7 +769,7 @@ SPECS: tuple[JudgmentSpec, ...] = (
         complexity_class="B",
         promotion_stage="P1",
     ),
-    # ---- s22 work-item ledger (design/ORCH-S22-WORK-ITEM-LEDGER.md, session be693afb, 2026-07-09) ---
+    # ---- s22 work-item ledger (vestigial_documentation/design/ORCH-S22-WORK-ITEM-LEDGER.md, session be693afb, 2026-07-09) ---
     JudgmentSpec(
         judgment_id="work-item-violations",
         family="D",

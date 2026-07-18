@@ -223,7 +223,7 @@ def main() -> int:
         check("green2-close-accepted", c2["disposition"] == "accepted", f"{c2}", failures)
         c2_id = c2["row_id"]
         # supersede the close DIRECTLY (s31's own uniform retraction mechanics, witnessed for this
-        # exact shape in design/ORCH-ADR14-ORPHAN-DISPOSITION-CONSULT-2026-07-16.md: "the close
+        # exact shape in vestigial_documentation/design/ORCH-ADR14-ORPHAN-DISPOSITION-CONSULT-2026-07-16.md: "the close
         # superseded -> item reads open in the same read"): ledger_current excludes row R iff SOME
         # row's own `supersedes` column names R, regardless of the superseding row's OWN kind (the
         # view's WHERE clause is `NOT EXISTS (SELECT 1 FROM ledger s WHERE s.supersedes = l.id)`,

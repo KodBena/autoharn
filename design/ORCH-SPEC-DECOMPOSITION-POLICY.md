@@ -1,5 +1,8 @@
 # ORCH-SPEC-DECOMPOSITION-POLICY — task-management obligations as declared policy
 
+<!-- doc-attest-exempt: doc-tree relocation mechanical edit (work item doc-tree-reorg-user-guide, ledger row 1620, 2026-07-18) -- relative link path(s) repointed to a sibling file's new location after a git-mv relocation elsewhere in the tree; no prose rewrite, same disposition as the v1.1.2 release-cut's own markers (commit 543a389). Removal condition: strike this marker and run the real A:B:C loop next time this file is touched for content, not just link repair. -->
+
+
 This spec turns task-management obligations — task-splitting criteria above all — into
 policy a deployment declares on its own ledger, so that reviewers and machinery can cite
 and check the declared criteria instead of a commissioner restating them per commission.
@@ -14,7 +17,7 @@ regulatory commitments. This spec shares two structures with its siblings and sa
 rather than redefining them: the deontic register (deontic: the vocabulary of permission
 and obligation) of [ORCH-SPEC-RESOURCE-ACCOUNTING.md](ORCH-SPEC-RESOURCE-ACCOUNTING.md)
 §3, and the fill-once-derive-declarations pattern of
-[USER-BLESSED-TABLE-TEMPLATE.md](USER-BLESSED-TABLE-TEMPLATE.md).
+[USER-BLESSED-TABLE-TEMPLATE.md](../user-guide/USER-BLESSED-TABLE-TEMPLATE.md).
 
 ## 1. The problem — six hand-written points, every time
 
@@ -86,7 +89,7 @@ Each names its provenance and its honest policing status at authoring time:
 | `one-boundary-per-task` | should | reviewer-judgment — upgrades to `POLICED (gate)`/`POLICED (audit)` exactly when the deployment declares a taxonomy ([ORCH-SPEC-TASK-TAXONOMY.md](ORCH-SPEC-TASK-TAXONOMY.md) §5) | splitting criterion, §5; the maintainer's boundary-discipline ask, 2026-07-12 |
 | `grain-follows-commission-text` | should | reviewer-judgment | run 11 retrospective: its decomposition tracked the maintainer's own sentence structure, and that was judged a virtue |
 | `task-closeable-in-one-session` | should | reviewer-judgment | resumption doctrine: a task spanning sessions must survive on ledger state alone |
-| `estimate-before-execution` | should | reviewer-judgment (the same orderable-audit-family shape as `acceptance-criterion-first` above — a task's `estimate:` row precedes its first `work_claimed` row, a `led work claim <slug>` row, [bootstrap/templates/led.tmpl](../bootstrap/templates/led.tmpl) — is buildable but unbuilt as of this row) | tracker item `cost-estimation-retro`, 2026-07-12: estimates are ledgered for operational-efficiency retrospectives ONLY, never cost policing (the maintainer's own invariant, stated twice at commissioning) — see [design/USER-RETROSPECTIVE-RECIPE.md](USER-RETROSPECTIVE-RECIPE.md) §6 for the grammar and the estimate-vs-actual comparison this criterion's discipline feeds |
+| `estimate-before-execution` | should | reviewer-judgment (the same orderable-audit-family shape as `acceptance-criterion-first` above — a task's `estimate:` row precedes its first `work_claimed` row, a `led work claim <slug>` row, [bootstrap/templates/led.tmpl](../bootstrap/templates/led.tmpl) — is buildable but unbuilt as of this row) | tracker item `cost-estimation-retro`, 2026-07-12: estimates are ledgered for operational-efficiency retrospectives ONLY, never cost policing (the maintainer's own invariant, stated twice at commissioning) — see [design/USER-RETROSPECTIVE-RECIPE.md](../user-guide/USER-RETROSPECTIVE-RECIPE.md) §6 for the grammar and the estimate-vs-actual comparison this criterion's discipline feeds |
 
 ## 4. Policing, derived — the same honesty as the accounting spec
 

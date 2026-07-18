@@ -24,7 +24,7 @@ WHAT THIS PROVES: `bootstrap/templates/led.tmpl` validates a `taxon:`-prefixed d
 (four fields: TAXONOMY | TAXON | PATTERNS | GLOSS) and an `interface:`-prefixed decision
 statement (three fields: TAXONOMY | ARTIFACT-PATTERN | GLOSS) -- both against a
 whitespace-normalized copy -- BEFORE the INSERT, refusing loudly (exit nonzero, nothing written,
-teach-text naming the grammar and design/USER-TAXONOMY-DECLARATION.md) on any single-field
+teach-text naming the grammar and user-guide/USER-TAXONOMY-DECLARATION.md) on any single-field
 defect, and accepting a well-formed statement byte-exact, embedded newline included.
 `bootstrap/templates/pickup.tmpl`'s taxonomies() reader renders an accepted row cleanly under the
 shared `### SECTION: TAXONOMIES` header (taxa first, then interfaces), using the identical

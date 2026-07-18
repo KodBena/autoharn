@@ -7,7 +7,7 @@
 
 """kind_shape_manifest_gate -- MANIFEST + GATE for the kernel ledger's kind-scoped shape
 invariants (ledger item `kind-shape-manifest-gate`, per
-design/ORCH-CATEGORICAL-REFACTOR-CONSULT-2026-07-15.md finding F5 / plan step 6).
+vestigial_documentation/design/ORCH-CATEGORICAL-REFACTOR-CONSULT-2026-07-15.md finding F5 / plan step 6).
 
 WHAT THIS IS. `kernel/lineage/*.sql` re-authors, by hand, per delta, the correlation between
 `ledger.kind` and a payload column that only means something for that kind (F5: "the ledger row

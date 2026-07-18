@@ -53,8 +53,8 @@ That list is the ONE home of the exclusion (ADR-0012 P1): both this file and dis
 DOC-ATTESTATION section read it, never a second hand-copied set.
 
 WHAT THIS DOES NOT DO: it never runs the A:B:C loop itself (that is a workflow — spawn a fresh
-`Agent` invocation as B, per this deployment's own design/USER-DOC-AUDIT-LOOP.md, in the autoharn
-checkout's design/ORCH-ABC-AUDIT-LOOP-RECIPE.md terms) and it never makes any LLM verdict block
+`Agent` invocation as B, per this deployment's own user-guide/USER-DOC-AUDIT-LOOP.md, in the autoharn
+checkout's user-guide/ORCH-ABC-AUDIT-LOOP-RECIPE.md terms) and it never makes any LLM verdict block
 anything — `check`'s ATTESTED/STALE/NO-ATTESTATION read is presence-and-shape only, structurally
 identical to the upstream gate's own posture ("it NEVER reads what B concluded to decide
 pass/fail"). It is not wired as a commit-time gate here (design/ORCH-SPEC-ABC-OFFERING.md §4:
@@ -110,7 +110,7 @@ USAGE = """usage: attest-doc check [PATH...]     -- ATTESTED/STALE/NO-ATTESTATIO
                                           deployment's OWN ledger (attestations/
                                           doc-legibility-attestations.jsonl), never autoharn's.
                                           '-' reads the JSON body from stdin.
-                                          See design/USER-DOC-AUDIT-LOOP.md (this deployment's
+                                          See user-guide/USER-DOC-AUDIT-LOOP.md (this deployment's
                                           own copy) for the record's shape and the loop itself.
 """
 

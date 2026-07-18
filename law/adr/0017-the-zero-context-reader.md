@@ -1,5 +1,8 @@
 # ADR-0017: The Zero-Context Reader — Documentation Legibility Discipline
 
+<!-- doc-attest-exempt: doc-tree relocation mechanical edit (work item doc-tree-reorg-user-guide, ledger row 1620, 2026-07-18) -- relative link path(s) repointed to a sibling file's new location after a git-mv relocation elsewhere in the tree; no prose rewrite, same disposition as the v1.1.2 release-cut's own markers (commit 543a389). Removal condition: strike this marker and run the real A:B:C loop next time this file is touched for content, not just link repair. -->
+
+
 > **ACCEPTED — maintainer-ratified 2026-07-11, with one proviso amending Rule 4.** Ratified
 > from the same-day Fable-authored draft (`design/ADR-DRAFT-documentation-discipline.md`,
 > commit `c65cd4d`; moved here with links re-rooted at ratification). The proviso, in the
@@ -381,7 +384,7 @@ own machinery, and an adopting project replaces it wholesale with its own.
 
 - **The deterministic gate:** `gates/doc_shapes.py` — the two measured-sound checks
   (standalone fragment paragraphs; positional references into `HANDOFF.md`, the operator
-  handoff file of the 2026-07-11 era, since renamed [ORCH-HANDOFF.md](../../ORCH-HANDOFF.md)),
+  handoff file of the 2026-07-11 era, since renamed [ORCH-HANDOFF.md](../../user-guide/ORCH-HANDOFF.md)),
   scoped to the
   documents named on its command line (the touched set), repo-wide scan as report-only. Its
   header carries the 2026-07-11 measurements and the UNBUILT list with reasons. Registered

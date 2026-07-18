@@ -14,7 +14,7 @@ the obligation-graph view, the extension boundary, the no-elision rule — lives
 
 The SPA itself ships into an adopting project as a git submodule (`tools/autoharn-panel`),
 an enabled-by-default extension over the core generic ledger viewer — see
-[USER-CONFIGURATION.md](../USER-CONFIGURATION.md) ("The autoharn-panel extension") for the
+[USER-CONFIGURATION.md](../user-guide/USER-CONFIGURATION.md) ("The autoharn-panel extension") for the
 submodule-add command and the environment variables that point a checkout at a deployment.
 
 This pointer is not a summary and carries no independent design content — read the SPA

@@ -6,7 +6,7 @@
 # <<< PROVENANCE-STAMP <<<
 
 """run_fixtures — both-polarity live proof for bootstrap/track-work.sh (the standing
-work-tracking offering; design/USER-WORK-STATUS-OFFERING.md; gates/fixture_census.py REGISTRY entry
+work-tracking offering; user-guide/USER-WORK-STATUS-OFFERING.md; gates/fixture_census.py REGISTRY entry
 "track-work"). Mirrors kernel/fixtures/s22_work_item_fixture.py's scratch-and-drop pattern: a
 throwaway project directory plus a throwaway schema pair in the TOY db, torn down after unless a
 case fails (left standing as evidence, matching the standing-probe convention).

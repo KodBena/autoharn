@@ -6,7 +6,7 @@
 # <<< PROVENANCE-STAMP <<<
 
 """column_complete_gate — the mechanical GATE half of the column-complete-view mechanism (work
-item column-complete-gate, design/ORCH-CATEGORICAL-REFACTOR-CONSULT-2026-07-15.md F2 / plan
+item column-complete-gate, vestigial_documentation/design/ORCH-CATEGORICAL-REFACTOR-CONSULT-2026-07-15.md F2 / plan
 step 5). Wraps tools/column_complete.py's catalog functor as a gate, following
 gates/doc_tables.py's own precedent (a thin gate importing its tools/ single-home parser rather
 than re-deriving the check): same tools-module-as-source-of-truth shape, same GATE-vs-REPORT

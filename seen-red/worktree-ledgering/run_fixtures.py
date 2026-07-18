@@ -5,7 +5,7 @@
 #   contributors: e4410ef6/main
 # <<< PROVENANCE-STAMP <<<
 
-"""run_fixtures.py — both-polarity proof for design/ORCH-WORKTREE-LEDGERING.md 3a's two merge
+"""run_fixtures.py — both-polarity proof for vestigial_documentation/design/ORCH-WORKTREE-LEDGERING.md 3a's two merge
 drivers (`tools/merge_jsonl.py`, `tools/merge_backlog_sections.py`), driven through REAL `git merge`
 in a throwaway git repo (never this repo's own history; scrubbed in `finally`).
 
@@ -37,7 +37,7 @@ line-set union cannot conflict (tools/merge_jsonl.py's own docstring, "THE ALGOR
 "NON-appendable" shape for one immutable jsonl line the way there is for a prose section that can
 legitimately be edited in place. Manufacturing a fake red case for it would be asserting a hazard the
 driver's own design forecloses, the acronym-gate mistake ADR-0017's Context warns against (a
-mechanism that "cries wolf"); the honest-limits section design/ORCH-WORKTREE-LEDGERING.md §4 already
+mechanism that "cries wolf"); the honest-limits section vestigial_documentation/design/ORCH-WORKTREE-LEDGERING.md §4 already
 states this boundary, and this fixture matches it rather than papering over it with a contrived case.
 
 Run: python3 seen-red/worktree-ledgering/run_fixtures.py

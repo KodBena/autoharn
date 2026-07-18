@@ -30,7 +30,7 @@ detectors together:
             analogue: a Bash dispatch (`tu-stale-bash-paired-1`) with a matching, 599s-old
             completion in `bash_completions.jsonl`, joined on `tool_use_id` -- it must never
             surface as a finding either, and its absence is the WITNESSED regression proof for
-            design/ORCH-RCA-PAIRING-KEY-DIVERGENCE.md: under the pre-fix `token`/`pairing` join
+            vestigial_documentation/design/ORCH-RCA-PAIRING-KEY-DIVERGENCE.md: under the pre-fix `token`/`pairing` join
             (fields `hooks/posttooluse_bash_completion.py` no longer writes at all), this exact
             dispatch would have read as perpetually open.
 
@@ -62,7 +62,7 @@ building this coverage (CLAUDE.md engineering-responsibility clause):
      -- fields `bash_completions.jsonl` never carries (the hook journals only `{ts, session_id,
      tool_use_id, duration_ms?, command_sha256, command_head}`) -- so `paired_tokens` was always
      empty and every completed Bash dispatch read as perpetually open (the exact failure
-     design/ORCH-RCA-PAIRING-KEY-DIVERGENCE.md documents, ~2000 false liveness questions in a
+     vestigial_documentation/design/ORCH-RCA-PAIRING-KEY-DIVERGENCE.md documents, ~2000 false liveness questions in a
      real run). Fixed to join on `tool_use_id`, per the stale fixture's new paired-bash case
      above; M2's mechanism-dead tripwire (module docstring hazard-shape above) ships with this
      same fix per ADR-0011's mechanism-ships-with-first-fix tightening.
@@ -114,7 +114,7 @@ def main() -> int:
         # Class-1 analogue (this pass's fix): a Bash dispatch with a matching, past-threshold-age
         # completion, joined on tool_use_id, must never surface as a finding either -- the
         # WITNESSED regression proof that a completed Bash dispatch now reads quiet instead of
-        # perpetually open (design/ORCH-RCA-PAIRING-KEY-DIVERGENCE.md). Neither its token-prefix
+        # perpetually open (vestigial_documentation/design/ORCH-RCA-PAIRING-KEY-DIVERGENCE.md). Neither its token-prefix
         # display key nor its tool_use_id may appear anywhere in stdout.
         and "c3d4e5f6" not in r.stdout
         and "tu-stale-bash-paired-1" not in r.stdout

@@ -8,7 +8,7 @@
 """hooks/posttooluse_apparatus_flip.py -- a typed journal event for every mutation of
 `<SUBJECT_ROOT>/.claude/apparatus.json` (tracker item "apparatus-flip-witnessing", from the
 "Unwitnessed apparatus flips" finding of the NIST-lens re-litigation panel, 2026-07-12 --
-design/MAINT-RELITIGATION-SYNTHESIS.md: "a governed agent can Write .claude/apparatus.json and flip a
+vestigial_documentation/design/MAINT-RELITIGATION-SYNTHESIS.md: "a governed agent can Write .claude/apparatus.json and flip a
 mechanism to off mid-session with NO witnessed event -- no refusal, no journal line, no ledger
 row, in a system whose evidentiary basis is 'hooks only'").
 

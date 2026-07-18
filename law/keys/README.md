@@ -1,5 +1,8 @@
 # law/keys/ — committed GPG public keys for AUTOHARN'S OWN LAW, and nothing else
 
+<!-- doc-attest-exempt: doc-tree relocation mechanical edit (work item doc-tree-reorg-user-guide, ledger row 1620, 2026-07-18) -- relative link path(s) repointed to a sibling file's new location after a git-mv relocation elsewhere in the tree; no prose rewrite, same disposition as the v1.1.2 release-cut's own markers (commit 543a389). Removal condition: strike this marker and run the real A:B:C loop next time this file is touched for content, not just link repair. -->
+
+
 This directory holds the GPG (GNU Privacy Guard, the OpenPGP signing standard) **public**
 keys that verify ONE thing: signatures over THIS repository's own `ratified/*` git tags —
 the maintainer's act of ratifying an ADR, a delta, or a design in autoharn's own law. It is
@@ -20,12 +23,12 @@ key it revokes).
 a world (`bootstrap/new-project.sh --new-world`) or a standing project
 (`bootstrap/track-work.sh`) — carries its OWN `keys/` directory next to its own
 `deployment.json`, used for SIGNED **commissions** — a commission is the ledger row recording
-an operator's ask (see [the operator FAQ](../../design/USER-GPG-TRUST-LAYER-FAQ.md) §5 for the full
+an operator's ask (see [the operator FAQ](../../user-guide/USER-GPG-TRUST-LAYER-FAQ.md) §5 for the full
 definition and the LAZY/FULL/SIGNED ladder) — the spec's §3, Rung 2, verified by
 `./verify-commission`, and any future signed chain-head verification (the spec's §4, Rung 3).
 An end user standing up a deployment commits their own signing key to **their own project's
 `keys/`**, never here — see that deployment's own `keys/README.md` (a stub the scaffold
-writes) and [the operator FAQ](../../design/USER-GPG-TRUST-LAYER-FAQ.md) §3 for the full
+writes) and [the operator FAQ](../../user-guide/USER-GPG-TRUST-LAYER-FAQ.md) §3 for the full
 two-domain split, with the ceremony commands for each.
 
 This boundary is deliberate and corrective: an earlier draft of the FAQ pointed every end
@@ -76,7 +79,7 @@ fake key would be dishonest about having any.
   before generating anything.
 - The full generation → commit → rotation walkthrough, with exact commands and the exercised
   rotation ceremony, lives in
-  [`design/GPG-TRUST-LAYER-FAQ.md`](../../design/USER-GPG-TRUST-LAYER-FAQ.md) — this stub only
+  [`design/GPG-TRUST-LAYER-FAQ.md`](../../user-guide/USER-GPG-TRUST-LAYER-FAQ.md) — this stub only
   states what belongs in this directory and why nothing does yet.
 
 ## What `./attest-tags` does when this directory is empty (today's state)
@@ -92,7 +95,7 @@ first.
 - [`design/GPG-TRUST-LAYER.md`](../../design/MAINT-GPG-TRUST-LAYER.md) — the spec, §2 for Rung 1
   (what this directory serves) and §7's key-residence split (why this directory and a
   deployment's own `keys/` are deliberately different places).
-- [`design/GPG-TRUST-LAYER-FAQ.md`](../../design/USER-GPG-TRUST-LAYER-FAQ.md) — the operator
+- [`design/GPG-TRUST-LAYER-FAQ.md`](../../user-guide/USER-GPG-TRUST-LAYER-FAQ.md) — the operator
   walkthrough, §3 for the two-domain commit ceremony side by side.
 - [`attest-tags`](../../attest-tags), [`filing/gpg_trust.py`](../../filing/gpg_trust.py) —
   the verb that reads this directory, and the shared scratch-keyring mechanics it uses.

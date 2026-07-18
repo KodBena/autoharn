@@ -14,9 +14,9 @@ document's authoring.
 [orchlog.d/panel-single-boundary-direction.md](../orchlog.d/panel-single-boundary-direction.md);
 [kernel/lineage/s43-typed-verdict-write-boundary.sql](../kernel/lineage/s43-typed-verdict-write-boundary.sql)
 (the four boundary functions and `write_verdict`);
-[design/FABLE-DEFEASIBILITY-ENVELOPE-2026-07-18.md](FABLE-DEFEASIBILITY-ENVELOPE-2026-07-18.md) §9;
+[design/FABLE-DEFEASIBILITY-ENVELOPE-2026-07-18.md](../vestigial_documentation/design/FABLE-DEFEASIBILITY-ENVELOPE-2026-07-18.md) §9;
 [design/FABLE-DEFEAT-PIPELINE-SPEC.md](FABLE-DEFEAT-PIPELINE-SPEC.md) §9 (the SPA display
-contract); [design/FABLE-WORLD-CONTEXT-MIGRATION-CONSULT-2026-07-19.md](FABLE-WORLD-CONTEXT-MIGRATION-CONSULT-2026-07-19.md)
+contract); [design/FABLE-WORLD-CONTEXT-MIGRATION-CONSULT-2026-07-19.md](../vestigial_documentation/design/FABLE-WORLD-CONTEXT-MIGRATION-CONSULT-2026-07-19.md)
 (the deprecation-pointer target; its filename date is a recorded drift, correction row 1517);
 [law/adr/0002-fail-loudly.md](../law/adr/0002-fail-loudly.md),
 [law/adr/0012-compositional-and-structural-hygiene.md](../law/adr/0012-compositional-and-structural-hygiene.md) (P2),
@@ -117,7 +117,7 @@ Every legacy direct-psql consumer path — v1 concretely: the autoharn-panel Fas
 plus any panel doc describing direct access — gets a deprecation mark that is LOUD AT
 INVOCATION (a runtime warning naming the replacement endpoint on every use, plus a marker
 comment at the code site), states the replacement (`serving/` endpoint), and points at
-[design/FABLE-WORLD-CONTEXT-MIGRATION-CONSULT-2026-07-19.md](FABLE-WORLD-CONTEXT-MIGRATION-CONSULT-2026-07-19.md)
+[design/FABLE-WORLD-CONTEXT-MIGRATION-CONSULT-2026-07-19.md](../vestigial_documentation/design/FABLE-WORLD-CONTEXT-MIGRATION-CONSULT-2026-07-19.md)
 for the crossing method. Deprecation-marked means still functional (backwards compatibility,
 the commission's own carve-out) — but never silent: a silently-tolerated legacy path is the
 fail-quietly shape ADR-0002 exists to forbid. Panel-side edits happen in the panel's own repo

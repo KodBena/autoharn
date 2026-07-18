@@ -25,7 +25,7 @@
     },
     "doc_attestation": {
       "mode": "off",
-      "note": "Gates ONLY whether ./distance-to-clean's DOC-ATTESTATION section counts debt -- it spends nothing (pure hashing, no LLM call, no network), so this is NOT a cost switch like demurral_detect/doc_legibility_critic above. OFF by default because the ADR-0017 A:B:C fresh-context audit loop is a workflow you adopt by choice; debt-nagging for a discipline you never started running would be noise. Flip to 'observe' once you're actually running the loop (see design/USER-DOC-AUDIT-LOOP.md, this deployment's own copy) so ./distance-to-clean surfaces its debt alongside review-gap/question-status/work-violations."
+      "note": "Gates ONLY whether ./distance-to-clean's DOC-ATTESTATION section counts debt -- it spends nothing (pure hashing, no LLM call, no network), so this is NOT a cost switch like demurral_detect/doc_legibility_critic above. OFF by default because the ADR-0017 A:B:C fresh-context audit loop is a workflow you adopt by choice; debt-nagging for a discipline you never started running would be noise. Flip to 'observe' once you're actually running the loop (see user-guide/USER-DOC-AUDIT-LOOP.md, this deployment's own copy) so ./distance-to-clean surfaces its debt alongside review-gap/question-status/work-violations."
     },
     "sql_block": {
       "mode": "off",

@@ -45,7 +45,7 @@ work-item-open/closed state is load-bearing across cases, so case ORDER matters 
                          local hash of the same prompt text (the wire-format cross-check).
 
 THE RETURN LEG (small-follow-ups commission item 5; REBUILT 2026-07-14, ledger row 582 /
-design/ORCH-RCA-PAIRING-KEY-DIVERGENCE.md sec-3/sec-6.6 -- identity-keyed on `tool_use_id`, not
+vestigial_documentation/design/ORCH-RCA-PAIRING-KEY-DIVERGENCE.md sec-3/sec-6.6 -- identity-keyed on `tool_use_id`, not
 FIFO-paired by content hash), three cases, same stateful sequence:
 
   g-return-tool-use-id -- a PostToolUse event carrying `tool_use_id="tu-g"` and `duration_ms=1234`

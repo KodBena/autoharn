@@ -36,7 +36,7 @@ explicitly in GATE mode (an operator or a future `distance-to-clean`-style perio
 pointing this gate at a real deployment — e.g. `python3 gates/apparatus_unknown_keys.py
 /home/bork/w/vdc/1/run11`). This gate does not go looking for worlds on its own: which
 directories are "worlds" is not this repo's business to know (an adopter's worlds live wherever
-they choose, per the library framing USER-CONFIGURATION.md states), so every target is named on the
+they choose, per the library framing user-guide/USER-CONFIGURATION.md states), so every target is named on the
 command line or defaults to the one file this repo genuinely owns.
 
 MODES (mirrors gates/doc_shapes.py's own two-mode split):

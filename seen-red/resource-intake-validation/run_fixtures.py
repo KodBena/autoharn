@@ -23,7 +23,7 @@ psql's own physical output lines rather than result rows. THE FIX, in two halves
   1. bootstrap/templates/led.tmpl now validates a `resource:`-prefixed statement (against a
      WHITESPACE-NORMALIZED copy -- newline runs collapsed to one space) BEFORE the INSERT, and
      refuses loudly (exit nonzero, nothing written) if it does not carry exactly the six-field
-     grammar design/USER-BLESSED-TABLE-TEMPLATE.md's "statement grammars" section specifies, or
+     grammar user-guide/USER-BLESSED-TABLE-TEMPLATE.md's "statement grammars" section specifies, or
      if CLASS/TIER fall outside that section's closed vocabularies. The row actually written on
      success is the statement AS TYPED (byte-exact, embedded newline included).
   2. bootstrap/templates/pickup.tmpl's resources() reader now performs the identical newline-

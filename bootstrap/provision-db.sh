@@ -8,7 +8,7 @@
 # provision-db.sh — generate (never execute) the pg_hba fragment + provisioning SQL an operator
 # needs to stand up ONE new world's Postgres role/database, matching bootstrap/new-project.sh
 # --new-world's naming template EXACTLY (schema=<NAME>, kern=<NAME>_kernel, role=<NAME>_rw — see
-# that script's own header comment and USER-CONFIGURATION.md's "FAQ: provisioning Postgres for
+# that script's own header comment and user-guide/USER-CONFIGURATION.md's "FAQ: provisioning Postgres for
 # autoharn"). This closes the first-use hurdle that FAQ documents as copy-paste-by-hand today:
 # this script derives the three names from one <NAME> the same way --new-world does, so they
 # cannot drift out of agreement, and it never touches a live server itself.
@@ -20,7 +20,7 @@
 #   s15-schema.sql owns `CREATE SCHEMA IF NOT EXISTS :"schema"` / `:"kern"`), applies the full
 #   kernel lineage, provisions the stamp secret, and registers the standard principals. Run
 #   THIS script's SQL first (role + database must exist before new-project.sh can connect as
-#   the role and SET ROLE to apply DDL — USER-CONFIGURATION.md FAQ step 2), THEN run
+#   the role and SET ROLE to apply DDL — user-guide/USER-CONFIGURATION.md FAQ step 2), THEN run
 #   new-project.sh --new-world.
 #
 # Usage:
@@ -43,7 +43,7 @@
 # WHAT THIS SCRIPT NEVER DOES: it never runs DDL against the target server, never edits
 # pg_hba.conf, never sets a password. Every artifact is printed/written for the operator (a
 # human with superuser access) to apply on their own schedule — same posture as
-# design/MAINT-PG-HBA-HARDENING.md and bootstrap/apply-research-ledger.sh's typed-confirmation
+# vestigial_documentation/design/MAINT-PG-HBA-HARDENING.md and bootstrap/apply-research-ledger.sh's typed-confirmation
 # scripts: this project documents and generates, an operator with superuser access applies.
 set -eu
 
@@ -178,7 +178,7 @@ fi
     echo "-- which creates the $SCHEMA/$KERN schemas, applies the kernel lineage, and registers"
     echo "-- principals -- see new-project.sh's own header comment for that lineage chain."
     echo "--"
-    echo "-- PASSWORD: deliberately NOT set here (LOGIN, no PASSWORD clause). USER-CONFIGURATION.md's"
+    echo "-- PASSWORD: deliberately NOT set here (LOGIN, no PASSWORD clause). user-guide/USER-CONFIGURATION.md's"
     echo "-- FAQ shows 'CREATE ROLE ... LOGIN PASSWORD ...' as a copy-paste example for a human"
     echo "-- typing their OWN password inline; a machine-generated file is a different hazard class"
     echo "-- -- a guessable placeholder password landing in a file anyone can read is a nail left"
@@ -200,7 +200,7 @@ fi
     echo "SELECT 'CREATE DATABASE $DB OWNER $ROLE'"
     echo "WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = '$DB')\\gexec"
     echo ""
-    echo "-- USER-CONFIGURATION.md FAQ step 2: the role needs CREATE on its own database before"
+    echo "-- user-guide/USER-CONFIGURATION.md FAQ step 2: the role needs CREATE on its own database before"
     echo "-- new-project.sh --new-world can apply the kernel lineage AS that role (SET ROLE, never"
     echo "-- a superuser bypass -- ADR-0012 P1)."
     echo "GRANT CREATE ON DATABASE $DB TO $ROLE;"

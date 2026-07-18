@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-09T07:54:37Z
-#   last-change: 2026-07-18T11:28:56Z
+#   last-change: 2026-07-18T16:20:44Z
 #   contributors: 9bcc0113/main, be693afb/main, e4410ef6/main, 3c50e030/main, a857c93d/main, ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -50,13 +50,12 @@ ROOT_FILES = {
     # registry is the living SSOT that tracks them instead.
     # Renamed by the doc-audience-taxonomy sweep (2026-07-12): DIRCLASS/CAPABILITIES/HANDOFF ->
     # ORCH-*, WALKTHROUGH -> USER-*, POST-FABLE-OPERATING-BRIEF/OPERATING-CARD -> ORCH-*.
-    "ORCH-DIRCLASS.md", "ORCH-CAPABILITIES.md", "ORCH-HANDOFF.md", "USER-WALKTHROUGH.md",
-    "ORCH-POST-FABLE-OPERATING-BRIEF.md",  # succession handoff, root doc (2026-07-09)
-    "ORCH-OPERATING-CARD.md",  # Opus-readiness operating-era quick reference, root doc (2026-07-11)
-    # CONFIGURATION.md (pre-existing gap, unregistered before this edit too), renamed to
-    # USER-CONFIGURATION.md by the doc-audience-taxonomy sweep; registered now while this exact
-    # set is already being touched (CLAUDE.md hazard-flagging duty).
-    "USER-CONFIGURATION.md",
+    # user-guide/ORCH-HANDOFF.md, user-guide/USER-WALKTHROUGH.md, user-guide/ORCH-POST-FABLE-OPERATING-BRIEF.md,
+    # user-guide/ORCH-OPERATING-CARD.md, user-guide/USER-CONFIGURATION.md, user-guide/USER-GUIDE.md moved OFF root into
+    # user-guide/ by the doc-tree relocation (work item doc-tree-reorg-user-guide, ledger row
+    # 1620, 2026-07-18); deregistered here, see the "user-guide" ROOT_DIRS entry below for
+    # their new home. ORCH-CAPABILITIES.md stays root (maintainer's call, row 1625).
+    "ORCH-DIRCLASS.md", "ORCH-CAPABILITIES.md",
     # bootstrap/track-work.sh's own STANDING deployment on autoharn itself (design/
     # USER-WORK-STATUS-OFFERING.md, deliverable 2, 2026-07-11): deployment.json + the five verb
     # shims (led/judge/pickup/audit/distance-to-clean), landing at the repo root because that
@@ -73,7 +72,7 @@ ROOT_FILES = {
     # duty: a hazard within reach of the touch gets fixed, not routed around).
     "deployment.json.example",
     # .gitattributes — the merge-driver wiring for attestations/*.jsonl and BACKLOG.md's dated
-    # sections (design/ORCH-WORKTREE-LEDGERING.md 3a; tools/merge_jsonl.py,
+    # sections (vestigial_documentation/design/ORCH-WORKTREE-LEDGERING.md 3a; tools/merge_jsonl.py,
     # tools/merge_backlog_sections.py), a new top-level file this same commission created,
     # registered here rather than left an unregistered breach for the census gate to hit next
     # run (CLAUDE.md hazard-flagging duty, worktree-ledgering-implementation, 2026-07-12).
@@ -84,11 +83,12 @@ ROOT_FILES = {
     # (CLAUDE.md hazard-flagging duty, same shape as the migrate/attestations/LICENSE entries
     # above -- a hazard within reach of the touch gets fixed, not routed around).
     ".gitmodules",
-    # USER-GUIDE.md, attest-tags — pre-existing gap (landed by the doc-audience-taxonomy sweep
-    # and an earlier commission respectively, neither of which registered here), hit while
-    # panel-cheap-fixes was editing USER-GUIDE.md itself; fixed in passing rather than left an
-    # unregistered breach for the next gate run (CLAUDE.md hazard-flagging duty, 2026-07-12).
-    "USER-GUIDE.md", "attest-tags",
+    # attest-tags — pre-existing gap (landed by an earlier commission, never registered here),
+    # hit while panel-cheap-fixes was editing USER-GUIDE.md (root, at the time) itself; fixed
+    # in passing rather than left an unregistered breach for the next gate run (CLAUDE.md
+    # hazard-flagging duty, 2026-07-12). USER-GUIDE.md itself moved off root into user-guide/
+    # 2026-07-18 (see above).
+    "attest-tags",
     # LICENSE (the Unlicense, added fca1100, maintainer's choice 2026-07-12) -- a root
     # standing-document like the others above, never registered when it landed; caught by
     # this gate's own next run (tracker item layout-census-license-unregistered, CLAUDE.md
@@ -118,10 +118,10 @@ ROOT_FILES = {
     # the asof-export builder (2026-07-18) and fixed at the merge seam rather than left for
     # the next run (CLAUDE.md hazard-flagging duty).
     "otel-attest",
-    # ANTHROPIC-FEEDBACK-2026-07-17-security-recommendation-incident.md — the publicly-filed
-    # model-behavior feedback report (commit 2f19f88), a root standing-document; same seam,
-    # same duty as otel-attest above.
-    "ANTHROPIC-FEEDBACK-2026-07-17-security-recommendation-incident.md",
+    # vestigial_documentation/ANTHROPIC-FEEDBACK-2026-07-17-security-recommendation-incident.md moved into
+    # vestigial_documentation/ by the doc-tree relocation (row 1620, 2026-07-18) as
+    # IMPLEMENTED-LEGACY (a self-declared point-in-time correspondence record); deregistered
+    # here, see VESTIGIAL-INDEX.md.
 }
 ROOT_DIRS = {
     ".claude", "bootstrap", "law", "judgment", "kernel", "stores", "instruments", "engine",
@@ -135,7 +135,7 @@ ROOT_DIRS = {
     # attestations/ — ADR-0017's A:B:C fresh-context audit-loop ledger
     # (attestations/doc-legibility-attestations.jsonl, gates/doc_attestation_presence.py),
     # landed 2026-07-11 but never added here; caught in passing while registering
-    # design/USER-WORK-STATUS-OFFERING.md's own two attestations (CLAUDE.md hazard-flagging duty).
+    # user-guide/USER-WORK-STATUS-OFFERING.md's own two attestations (CLAUDE.md hazard-flagging duty).
     "attestations",
     # tools/ — the doc-audience-taxonomy work item's per-document rename primitive
     # (tools/rename_doc.py); a new top-level directory this same sweep created, registered here
@@ -161,11 +161,18 @@ ROOT_DIRS = {
     # may itself be retired when the gate policy has no standing holds. First entries:
     # scaffold-governed-set-language-default's two template patches (merge e54c1eb).
     "proposals",
-    # docs/ — landed 2026-07-13 (commit 3ac2080, the README.md idiot's-guide rewrite) carrying
-    # docs/PROJECT-OVERVIEW.md, a single adopter-facing overview doc split out of README.md;
-    # never registered here at landing time, caught by this gate's own next run (CLAUDE.md
-    # hazard-flagging duty, same shape as the migrate/attestations/tools entries above).
-    "docs",
+    # docs/ DEREGISTERED (2026-07-18, doc-tree relocation, row 1620): its sole tenant,
+    # PROJECT-OVERVIEW.md, moved to user-guide/PROJECT-OVERVIEW.md; docs/ is now empty and
+    # untracked (git does not track empty directories), so the top-level allowlist walk never
+    # sees it — no entry needed, kept out per the same reasoning as the panel/ note below.
+    #
+    # user-guide/ — the single-homed adopter/operator "book" the doc-tree relocation created
+    # (work item doc-tree-reorg-user-guide, ledger row 1620, maintainer ask 2026-07-18;
+    # adjudication row 1625), collecting the USER-GUIDE-class docs (recipes, FAQs, the
+    # walkthrough, the operating card/handoff, JUDGE-READING, PROJECT-OVERVIEW, ...) that were
+    # previously scattered across root/design//bootstrap//docs//engine/docs/. Registered on
+    # landing, same as serving/ above (CLAUDE.md hazard-flagging duty).
+    "user-guide",
     # panel/ DEREGISTERED (2026-07-15, TASK C, commission item 3): the PoC SPA that lived here
     # (panel/backend, panel/frontend, panel/seed) moved to its own repo, KodBena/autoharn-panel,
     # and is adopted back in as a git submodule at tools/autoharn-panel — no new top-level

@@ -195,7 +195,7 @@ def _parse_ts(s: str) -> datetime | None:
 
 # ---------------------------------------------------------------------------------------------
 # Class 1 -- Bash dispatch/completion pairing, joined on the harness-assigned `tool_use_id`
-# (design/ORCH-RCA-PAIRING-KEY-DIVERGENCE.md sec-4/6.1/6.3 -- the RCA that root-caused this
+# (vestigial_documentation/design/ORCH-RCA-PAIRING-KEY-DIVERGENCE.md sec-4/6.1/6.3 -- the RCA that root-caused this
 # project's original content-hash FIFO pairing as DEAD AT BIRTH: `hooks/stamp_intercept.py`
 # hashes the pre-rewrite command text but then REWRITES the command -- injecting a fresh
 # per-call uuid4 into PGOPTIONS -- before it actually runs, so `hooks/posttooluse_bash_completion.py`'s

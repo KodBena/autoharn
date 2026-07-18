@@ -14,7 +14,7 @@ db, torn down after unless a case fails (left standing as evidence).
 
 WHAT THIS PROVES: `bootstrap/templates/led.tmpl` validates an `outcome:`-prefixed decision
 statement (whitespace-normalized copy) against the five-field grammar
-design/USER-RETROSPECTIVE-RECIPE.md's "The `outcome:` statement grammar" section (Section 7)
+user-guide/USER-RETROSPECTIVE-RECIPE.md's "The `outcome:` statement grammar" section (Section 7)
 specifies BEFORE the INSERT -- field count, TASK-SLUG shape, MODEL shape, non-empty
 SEAM-VERDICT/DEFECTS-FOUND-AT-SEAM/NOTES -- refusing loudly (exit nonzero, nothing written,
 teach-text naming the grammar) on any single-field defect, and accepting a well-formed statement

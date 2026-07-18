@@ -38,7 +38,7 @@ CONFIG (provisioned at arm; the subject never sees this file's prose, only the i
                   located (below); with neither, no secret resolves and the hook passes writes through
                   unstamped (fail-open, per SAFETY).
 
-DEPLOYMENT-RECORD PRESENCE (design/ORCH-OPUS-READINESS.md move 1, BACKLOG "E13 retirement", 2026-07-09):
+DEPLOYMENT-RECORD PRESENCE (vestigial_documentation/design/ORCH-OPUS-READINESS.md move 1, BACKLOG "E13 retirement", 2026-07-09):
 this hook is a fresh short-lived process per tool call and receives no persistent config of its own --
 its only per-call context is the hook-input JSON on stdin, which Claude Code populates with `cwd` (the
 session's working directory when the tool call fired; the same field `hooks/stamp_provenance.py`
@@ -77,7 +77,7 @@ behavior before this pass, including the dangling-secret deny. Missing file/key 
 An unrecognized mode string never widens permissions (rule d) -- falls back to `"enforce"`, already
 the strictest state this mechanism has, with a loud stderr warning naming the bad value.
 
-PER-INVOCATION CONTEMPORANEITY TOKEN (design/ORCH-CONTEMPORANEITY-AUDIT.md Part 1; BACKLOG "Contemporaneity
+PER-INVOCATION CONTEMPORANEITY TOKEN (vestigial_documentation/design/ORCH-CONTEMPORANEITY-AUDIT.md Part 1; BACKLOG "Contemporaneity
 indictment", 2026-07-11): on the SAME injection path that carries the HMAC stamp (a wired world, a
 healthy secret, mode observe/enforce), this hook additionally mints a per-Bash-invocation UUID and
 exports it as a SIXTH GUC `app.vendor_invocation` alongside the four HMAC GUCs. The kernel's set_stamp
@@ -90,7 +90,7 @@ injection, session_id, tool_use_id iff the hook payload carries one, sha256 of t
 and retroactive backfill stop being the same row shape. The token is minted ONLY where a stamp is
 actually injected (a token no ledger row can carry would be a dangling journal line) -- so an
 "off"-mode, an unwired, or a dangling-secret (unstamped) invocation mints NO token and writes NO
-invocation journal line. `cwd` (design/ORCH-WORKTREE-LEDGERING.md 3b, 2026-07-12) is an ADDITIVE field
+invocation journal line. `cwd` (vestigial_documentation/design/ORCH-WORKTREE-LEDGERING.md 3b, 2026-07-12) is an ADDITIVE field
 appended after every field named above, never reordering them: the same working directory already
 resolved earlier in this function to locate deployment.json, carried into the journal line so a later
 reader can join a ledger row -> its stamp_invocation token -> this journal line -> the checkout that
@@ -310,7 +310,7 @@ def _journal(cwd, rec: dict) -> None:
 
 
 def _invocation_journal_path(cwd) -> Path | None:
-    """The per-invocation contemporaneity journal (design/ORCH-CONTEMPORANEITY-AUDIT.md Part 1) -- a
+    """The per-invocation contemporaneity journal (vestigial_documentation/design/ORCH-CONTEMPORANEITY-AUDIT.md Part 1) -- a
     SEPARATE file from the stamp_intercept.journal above (that one records secret-health outcomes;
     this one is the token<->command<->wall-clock correlation Part 2's audit verb joins against the
     ledger's stamp_invocation column). Same "no cwd, no journal, never invents a path" posture as
@@ -420,7 +420,7 @@ def main() -> int:
     agent = str(data.get("agent_id") or "main")   # ABSENT in main thread (shakedown); a subagent's UUID otherwise
     ts = int(time.time())
     mac = hmac.new(secret, f"{session}|{agent}|{ts}".encode(), hashlib.sha256).hexdigest()
-    # PER-INVOCATION CONTEMPORANEITY TOKEN (design/ORCH-CONTEMPORANEITY-AUDIT.md Part 1; module docstring
+    # PER-INVOCATION CONTEMPORANEITY TOKEN (vestigial_documentation/design/ORCH-CONTEMPORANEITY-AUDIT.md Part 1; module docstring
     # "PER-INVOCATION CONTEMPORANEITY TOKEN"). A fresh uuid4 minted per Bash call, exported as a sixth
     # GUC (app.vendor_invocation) on the SAME injection this stamp rides. It is NOT part of the HMAC --
     # it is a plain correlation token the s23 kernel column captures verification-inert. Minted ONLY
@@ -433,7 +433,7 @@ def main() -> int:
     # BEST-EFFORT journal (the "actual event" side of the correlation) -- written BEFORE the token is
     # returned but AFTER it is fixed, so a journal failure (silent) never affects what gets exported.
     # tool_use_id is included ONLY when the payload actually carries it. CORRECTED 2026-07-14
-    # (design/ORCH-RCA-PAIRING-KEY-DIVERGENCE.md sec-4/6.2): the prior claim here -- "the parsed
+    # (vestigial_documentation/design/ORCH-RCA-PAIRING-KEY-DIVERGENCE.md sec-4/6.2): the prior claim here -- "the parsed
     # stdin contract has never carried one" -- was false the day it was written; every PreToolUse
     # payload observed in this deployment's history carries tool_use_id (see this hook's own
     # invocations.jsonl), and the official hooks contract documents it as present on both
@@ -452,7 +452,7 @@ def main() -> int:
     tool_use_id = data.get("tool_use_id")
     if tool_use_id:
         inv_rec["tool_use_id"] = str(tool_use_id)
-    # WORKTREE-LEDGERING 3b (design/ORCH-WORKTREE-LEDGERING.md, "Branch attribution as derivation,
+    # WORKTREE-LEDGERING 3b (vestigial_documentation/design/ORCH-WORKTREE-LEDGERING.md, "Branch attribution as derivation,
     # not schema"): one ADDITIVE field, appended after every field above (never reordering them) --
     # the working directory this invocation fired from, already resolved above as `data.get("cwd")`
     # to locate deployment.json. This is the one journal-side change the memo's 3b calls for; no

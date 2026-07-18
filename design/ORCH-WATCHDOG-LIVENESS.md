@@ -462,7 +462,7 @@ name — e.g. "ADR-0013 Rule 5", "ADR-0002's fail-loud tenet" — is linked exac
   discipline this note itself is written to (a fresh-context A:B:C attestation for this note's
   own content is recorded in
   [attestations/doc-legibility-attestations.jsonl](../attestations/doc-legibility-attestations.jsonl)).
-- [design/USER-RETROSPECTIVE-RECIPE.md](USER-RETROSPECTIVE-RECIPE.md) §6 — the `estimate:`/
+- [design/USER-RETROSPECTIVE-RECIPE.md](../user-guide/USER-RETROSPECTIVE-RECIPE.md) §6 — the `estimate:`/
   `actual:` grammars this checker's whole-task check (§4 item 4) consumes, and the
   never-policing invariant §7 restates in one line.
 - [design/ORCH-SPEC-ABC-OFFERING.md](ORCH-SPEC-ABC-OFFERING.md) §4 — specifies the

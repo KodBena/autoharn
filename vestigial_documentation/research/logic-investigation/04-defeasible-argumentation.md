@@ -1,6 +1,6 @@
 # 04 — Defeasible / Non-monotonic Reasoning & Formal Argumentation
 
-> Part of the autoharn **logics & automated-deduction investigation** — see the [index](../../../research/logic-investigation/README.md); coined terms (Pillar, *_violations gate, supersession, …) are defined in the root **[GLOSSARY.md](../../../GLOSSARY.md)**.
+> Part of the autoharn **logics & automated-deduction investigation** — see the [index](README.md); coined terms (Pillar, *_violations gate, supersession, …) are defined in the root **[GLOSSARY.md](../../../GLOSSARY.md)**.
 
 Logics where conclusions are *retractable*: adding new facts can withdraw a previously-derived conclusion (non-monotonic), and conflicting rules are resolved by priority/specificity rather than exploding into contradiction (defeasible / argumentation). The natural home for "defaults later overridden", supersession, and "conflicting advisories coexist".
 

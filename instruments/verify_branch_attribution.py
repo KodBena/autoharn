@@ -5,7 +5,7 @@
 #   contributors: e4410ef6/main, a857c93d/main
 # <<< PROVENANCE-STAMP <<<
 
-"""verify_branch_attribution — the reusable, end-to-end witness for design/ORCH-WORKTREE-LEDGERING.md
+"""verify_branch_attribution — the reusable, end-to-end witness for vestigial_documentation/design/ORCH-WORKTREE-LEDGERING.md
 3b: (a) a REAL invocation of hooks/stamp_intercept.py writes the additive `cwd` field into
 `.claude/logs/invocations.jsonl`; (b) a REAL stamped ledger row lands carrying the matching
 `stamp_invocation` token; (c) `tools/branch_attribution.py` joins the two and resolves that row to

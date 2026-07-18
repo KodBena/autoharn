@@ -46,7 +46,7 @@ def _tracked_md():
 
 
 # Scope: every tracked *.md whose acronyms must all be defined, minus the definition surfaces,
-# minus judgment/** — declared HISTORY (ORCH-OPERATING-CARD.md: "predecessor era — history unless a
+# minus judgment/** — declared HISTORY (user-guide/ORCH-OPERATING-CARD.md: "predecessor era — history unless a
 # current spec cites it"), the same principled exclusion gates/link_integrity.py uses, applied
 # here consistently (2026-07-11 doc-legibility-indictment assessment, BACKLOG disposition).
 _EXCLUDE_DIR_PREFIXES = ("judgment/",)
@@ -139,11 +139,11 @@ def main():
                 violations.setdefault(part, []).append((rel, ln))
     if not violations:
         print(f"doc-legibility: clean ✓  ({len(SCOPE)} docs, {len(defined)} defined/allowlisted tokens)")
-        print(f"  excluded: judgment/** — declared history (ORCH-OPERATING-CARD.md)")
+        print(f"  excluded: judgment/** — declared history (user-guide/ORCH-OPERATING-CARD.md)")
         return 0
     print(f"doc-legibility: {len(violations)} undefined acronym(s) across {len(SCOPE)} docs — define in "
           f"gates/doc-legibility/terms.md or add to gates/doc-legibility/allowlist.txt")
-    print(f"  excluded: judgment/** — declared history (ORCH-OPERATING-CARD.md)\n")
+    print(f"  excluded: judgment/** — declared history (user-guide/ORCH-OPERATING-CARD.md)\n")
     for tok in sorted(violations, key=lambda t: (-len(violations[t]), t)):
         locs = violations[tok]
         where = ", ".join(f"{r}:{l}" for r, l in locs[:3]) + (" …" if len(locs) > 3 else "")

@@ -7,7 +7,7 @@
 
 """workflow_check — the v0 validator for declared pipeline workflows under design/workflows/*.toml
 (ledger work item pipeline-dsl-v0; governing exploration doc
-design/FABLE-PIPELINE-DSL-EXPLORATION.md, uncommitted in the maintainer's main checkout, read
+vestigial_documentation/design/FABLE-PIPELINE-DSL-EXPLORATION.md, uncommitted in the maintainer's main checkout, read
 verbatim from its absolute path during this build).
 
 WHAT THIS CHECKS. The exploration doc names exactly four fields a v0 workflow declaration may
@@ -77,7 +77,7 @@ def _check_unknown_top_level_keys(path: Path, doc: dict) -> None:
             path,
             f"unknown top-level key(s): {', '.join(unknown)}. v0's grammar is exactly four "
             f"fields -- phases, roles, convergence, landing_zones -- nothing else "
-            f"(design/FABLE-PIPELINE-DSL-EXPLORATION.md, \"What the DSL would be\"). An "
+            f"(vestigial_documentation/design/FABLE-PIPELINE-DSL-EXPLORATION.md, \"What the DSL would be\"). An "
             f"unrecognized key is refused rather than silently ignored, the same lesson this "
             f"project's own led.tmpl unknown-flag handling teaches: a typo'd or speculative "
             f"field must not silently vanish. Remove it, or if it names a real recurring need, "
@@ -137,7 +137,7 @@ def _check_cycle(path: Path, doc: dict, phase_names: list[str]) -> None:
                 _refuse(
                     path,
                     f"dependency cycle among phases: {' -> '.join(cycle)}. Phases must form a "
-                    f"DAG with a valid topological order (design/FABLE-PIPELINE-DSL-EXPLORATION.md "
+                    f"DAG with a valid topological order (vestigial_documentation/design/FABLE-PIPELINE-DSL-EXPLORATION.md "
                     f"field 1, 'Phases' -- 'the harness can check for cycles, the same acyclicity "
                     f"discipline this project's own ledger already carries on its dependency "
                     f"edges'). Break the cycle by removing or redirecting one of the depends_on "
@@ -170,7 +170,7 @@ def _check_roles(path: Path, doc: dict, phase_names: list[str]) -> None:
                 path,
                 f"phase '{name}' has no role declared (no [roles.{name}] table at all). Every "
                 f"phase must name at least one role -- field 2 of "
-                f"design/FABLE-PIPELINE-DSL-EXPLORATION.md ('Roles -- which model tier authors, "
+                f"vestigial_documentation/design/FABLE-PIPELINE-DSL-EXPLORATION.md ('Roles -- which model tier authors, "
                 f"which reviews, which implements, per phase'). A phase nobody is assigned to "
                 f"cannot be dispatched; add [roles.{name}] with at least one of authors / "
                 f"reviews / implements."
@@ -190,7 +190,7 @@ def _check_roles(path: Path, doc: dict, phase_names: list[str]) -> None:
                 path,
                 f"phase '{name}' has no role declared: [roles.{name}] exists but every one of "
                 f"authors / reviews / implements is empty or absent. Every phase must name at "
-                f"least one role (design/FABLE-PIPELINE-DSL-EXPLORATION.md field 2) -- a phase "
+                f"least one role (vestigial_documentation/design/FABLE-PIPELINE-DSL-EXPLORATION.md field 2) -- a phase "
                 f"nobody is assigned to cannot be dispatched."
             )
 
@@ -212,7 +212,7 @@ def _check_convergence(path: Path, doc: dict, phase_names: list[str]) -> None:
             _refuse(
                 path,
                 f"phase '{name}' has no [convergence.{name}] table. Field 3 of "
-                f"design/FABLE-PIPELINE-DSL-EXPLORATION.md requires 'what \"done\" means per "
+                f"vestigial_documentation/design/FABLE-PIPELINE-DSL-EXPLORATION.md requires 'what \"done\" means per "
                 f"phase, and the typed escalation event ... that routes to the maintainer when "
                 f"it is not reached' -- add [convergence.{name}] with 'done' and "
                 f"'escalation_event'."
@@ -221,14 +221,14 @@ def _check_convergence(path: Path, doc: dict, phase_names: list[str]) -> None:
             _refuse(
                 path,
                 f"[convergence.{name}] has no 'done' -- what \"done\" means for this phase must "
-                f"be stated (design/FABLE-PIPELINE-DSL-EXPLORATION.md field 3)."
+                f"be stated (vestigial_documentation/design/FABLE-PIPELINE-DSL-EXPLORATION.md field 3)."
             )
         if not entry.get("escalation_event"):
             _refuse(
                 path,
                 f"[convergence.{name}] has no 'escalation_event' -- the typed event that routes "
                 f"to the maintainer when this phase does not converge must be named, even if it "
-                f"never fires in practice (design/FABLE-PIPELINE-DSL-EXPLORATION.md field 3: "
+                f"never fires in practice (vestigial_documentation/design/FABLE-PIPELINE-DSL-EXPLORATION.md field 3: "
                 f"'Escalation on typed events only, never on self-assessment'). A bare 'done' "
                 f"with no named escalation leaves non-convergence with nowhere defined to go."
             )
@@ -254,7 +254,7 @@ def _check_landing_zones(path: Path, doc: dict, phase_names: list[str]) -> None:
             _refuse(
                 path,
                 f"phase '{name}' has no landing_zones.{name} entry -- its deliverable has "
-                f"nowhere declared to land. Field 4 of design/FABLE-PIPELINE-DSL-EXPLORATION.md "
+                f"nowhere declared to land. Field 4 of vestigial_documentation/design/FABLE-PIPELINE-DSL-EXPLORATION.md "
                 f"requires this for every phase ('where each phase's deliverable lands so it "
                 f"outlives the session'), and mechanically discharges the lesson of ledger item "
                 f"dispatch-deliverable-landing-zone: a deployment lost a full audit cycle's "

@@ -1,6 +1,6 @@
 # 12 — Abductive Reasoning & Inductive Logic Programming
 
-> Part of the autoharn **logics & automated-deduction investigation** — see the [index](../../../research/logic-investigation/README.md); coined terms (Pillar, *_violations gate, supersession, …) are defined in the root **[GLOSSARY.md](../../../GLOSSARY.md)**.
+> Part of the autoharn **logics & automated-deduction investigation** — see the [index](README.md); coined terms (Pillar, *_violations gate, supersession, …) are defined in the root **[GLOSSARY.md](../../../GLOSSARY.md)**.
 
 Two complementary "backward" logics: **abduction** infers the most plausible *causes/hypotheses* that would explain an observation given a theory; **ILP** infers the *general rule* (a logic program) that covers positive examples and excludes negatives. Deduction goes premises→conclusion; abduction goes conclusion→best premise; induction goes examples→rule.
 

@@ -255,7 +255,7 @@ echo "   autoharn's own ratified/* tags and has no bearing on this deployment) -
 mkdir -p "$PROJECT_ROOT/keys"
 sedsubst < "$TEMPLATES/keys-README.md.tmpl" > "$PROJECT_ROOT/keys/README.md"
 echo "wrote keys/README.md (AWAITING-KEY stub; commit THIS deployment's own signing key here --"
-echo "see design/USER-GPG-TRUST-LAYER-FAQ.md §3 for the ceremony -- never to autoharn's law/keys/)"
+echo "see user-guide/USER-GPG-TRUST-LAYER-FAQ.md §3 for the ceremony -- never to autoharn's law/keys/)"
 
 # attestations/ -- this deployment's OWN ADR-0017 A:B:C fresh-context attestation ledger
 # (tracker item `abc-loop-offering`; design/ORCH-SPEC-ABC-OFFERING.md §3), the same
@@ -311,7 +311,7 @@ echo "  ./attest-doc check                   # ADR-0017 A:B:C attestation status
 echo ""
 echo "keys/README.md (AWAITING-KEY) explains this deployment's OWN GPG keyring: commit a public"
 echo "key there (never to autoharn's law/keys/) to move SIGNED commissions from NO-COMMITTED-KEY"
-echo "to VERIFIED -- ./verify-commission --id <id>; see design/USER-GPG-TRUST-LAYER-FAQ.md §3."
+echo "to VERIFIED -- ./verify-commission --id <id>; see user-guide/USER-GPG-TRUST-LAYER-FAQ.md §3."
 echo ""
 echo "attestations/README.md explains this deployment's OWN ADR-0017 A:B:C attestation ledger."
 echo "No .claude/apparatus.json is written here (no hooks were wired -- see above), so"

@@ -1,5 +1,8 @@
 # terms — the doc-legibility glossary
 
+<!-- doc-attest-exempt: doc-tree relocation mechanical edit (work item doc-tree-reorg-user-guide, ledger row 1620, 2026-07-18) -- relative link path(s) repointed to a sibling file's new location after a git-mv relocation elsewhere in the tree; no prose rewrite, same disposition as the v1.1.2 release-cut's own markers (commit 543a389). Removal condition: strike this marker and run the real A:B:C loop next time this file is touched for content, not just link repair. -->
+
+
 Persistent, hand-authored definitions for the acronyms and jargon-codes used in the scoped docs
 (the obligations×formalisms survey + `docs/ARCHITECTURE.md`). This file is a **definition surface**
 for [`gates/doc-legibility/check.py`](check.py): a token bolded `**LIKE-THIS**` on any line below
@@ -10,7 +13,7 @@ definitions are checked, not guessed. A token that is genuinely common knowledge
 (a tool, conference, journal, org, license) does **not** belong here; it goes in
 [`allowlist.txt`](allowlist.txt). See [`README.md`](README.md) for the define-vs-allowlist rule.
 
-> Sibling surfaces (also authoritative): the survey's **[KEY.md](../../research/obligations-formalisms-survey/KEY.md)**
+> Sibling surfaces (also authoritative): the survey's **[KEY.md](../../vestigial_documentation/research/obligations-formalisms-survey/KEY.md)**
 > (obligation codes, tiers, tool index) and the root **[GLOSSARY.md](../../GLOSSARY.md)** (autoharn's coined vocabulary).
 
 ---
@@ -161,7 +164,7 @@ definitions are checked, not guessed. A token that is genuinely common knowledge
 
 ## Project & tooling terms
 
-**QUAL** — a qualification gate (QUAL-1 … QUAL-7), the discipline that makes an LLM-authored encoding trustworthy at life-critical stakes (see [C-encoding-qualification.md](../../research/obligations-formalisms-survey/C-encoding-qualification.md)).
+**QUAL** — a qualification gate (QUAL-1 … QUAL-7), the discipline that makes an LLM-authored encoding trustworthy at life-critical stakes (see [C-encoding-qualification.md](../../vestigial_documentation/research/obligations-formalisms-survey/C-encoding-qualification.md)).
 **SSOT** — Single Source Of Truth: the one authoritative home for a fact (also in the root [GLOSSARY.md](../../GLOSSARY.md)).
 **SMT-LIB** — the standard textual input/exchange format for SMT solvers.
 **CTE** — Common Table Expression (a `WITH`-clause subquery in SQL; recursive CTEs ≈ Datalog).

@@ -6,7 +6,7 @@
 # <<< PROVENANCE-STAMP <<<
 
 """run_fixtures.py -- both-polarity proof for gates/column_complete_gate.py + tools/column_complete.py
-(work item column-complete-gate, design/ORCH-CATEGORICAL-REFACTOR-CONSULT-2026-07-15.md F2 / plan
+(work item column-complete-gate, vestigial_documentation/design/ORCH-CATEGORICAL-REFACTOR-CONSULT-2026-07-15.md F2 / plan
 step 5). Real infra, no mocks: a throwaway `--new-world` scaffold in the toy db (full s15..s30 birth
 chain, mirroring seen-red/s30-typed-dependency-edges/run_fixtures.py's own scaffold idiom exactly),
 torn down before AND after this file runs so re-running it never leaves residue.

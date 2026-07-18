@@ -6,7 +6,7 @@
 # <<< PROVENANCE-STAMP <<<
 
 """run_fixtures.py -- both-polarity proof for engine/lp_registry.py + the generalized "work"-layer
-differential (design/ORCH-CATEGORICAL-REFACTOR-CONSULT-2026-07-15.md F7 / plan step 8; ledger item
+differential (vestigial_documentation/design/ORCH-CATEGORICAL-REFACTOR-CONSULT-2026-07-15.md F7 / plan step 8; ledger item
 `lp-module-registry`). Closes the two named judge-wiring gaps: ledger_edb.py exported no work_*
 fact family (fixed: `ledger_edb.export_work`) and ledger_differential.py was single-program-typed
 with TNOW_LP hardcoded (fixed: `ledger_differential.run_layer_differential` + `--layer` flag,

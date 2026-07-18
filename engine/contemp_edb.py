@@ -5,7 +5,7 @@
 #   contributors: e4410ef6/main, a857c93d/main
 # <<< PROVENANCE-STAMP <<<
 
-"""contemp_edb -- the EDB builder for Part 2 of design/ORCH-CONTEMPORANEITY-AUDIT.md (the
+"""contemp_edb -- the EDB builder for Part 2 of vestigial_documentation/design/ORCH-CONTEMPORANEITY-AUDIT.md (the
 correlation verb; BACKLOG "Contemporaneity indictment", 2026-07-11). Exports the typed EDB
 `engine/lp/contemporaneity.lp` reasons over, from a WORLD (a project directory carrying the
 ledger's deployment.json plus its `.claude/logs/*.jsonl` hook journals) -- the fact-mining-side
@@ -163,7 +163,7 @@ by construction, not by a second copy of the check.
      `tool_event/2`'s coarse Kind="delegation" bucket cannot supply on its own.
   E5 invocation_completed(Token,T) -- `.claude/logs/bash_completions.jsonl`
      (hooks/posttooluse_bash_completion.py). CORRECTED 2026-07-14
-     (design/ORCH-RCA-PAIRING-KEY-DIVERGENCE.md sec-4/6.1/6.3): this hook no longer stores a
+     (vestigial_documentation/design/ORCH-RCA-PAIRING-KEY-DIVERGENCE.md sec-4/6.1/6.3): this hook no longer stores a
      computed `token`/`pairing` verdict (that FIFO-by-content-hash pairing was dead at birth --
      the paired hook rewrites every Bash command between the dispatch hash and the completion
      hash, so the two never agreed; 0 of 2093 completions ever paired in this deployment's
@@ -435,7 +435,7 @@ def _read_jsonl(path: Path) -> tuple[list[dict], int]:
 
 
 def dispatch_token_by_tool_use_id(inv_recs: list[dict]) -> dict[str, str]:
-    """The E5 join's LEFT side (design/ORCH-RCA-PAIRING-KEY-DIVERGENCE.md sec-4/6.1/6.3): a
+    """The E5 join's LEFT side (vestigial_documentation/design/ORCH-RCA-PAIRING-KEY-DIVERGENCE.md sec-4/6.1/6.3): a
     tool_use_id -> token map built from `hooks/stamp_intercept.py`'s own dispatch records
     (`invocations.jsonl`). A dispatch line contributes only when it carries BOTH fields --
     tool_use_id is the harness-assigned identity, token is the per-invocation contemporaneity
@@ -576,7 +576,7 @@ def export(target_name: str, root: Path) -> ContempEdbExport:
             continue
         inv_tuples.append((str(token), ms))
 
-    # tool_use_id -> token map (design/ORCH-RCA-PAIRING-KEY-DIVERGENCE.md sec-4/6.3): the SOLE
+    # tool_use_id -> token map (vestigial_documentation/design/ORCH-RCA-PAIRING-KEY-DIVERGENCE.md sec-4/6.3): the SOLE
     # join key E5 below uses to correlate a completion line back to its dispatch token. Built
     # from `inv_recs` directly (not `inv_tuples`, which additionally requires a parseable
     # `wall_clock` -- tool_use_id/token presence is independent of that and must not be dropped
@@ -641,7 +641,7 @@ def export(target_name: str, root: Path) -> ContempEdbExport:
             deleg_dispatch_tuples.append(ms)
 
     # ---- E5: invocation_completed(Token,T) -- hooks/posttooluse_bash_completion.py's journal ---
-    # CORRECTED 2026-07-14 (design/ORCH-RCA-PAIRING-KEY-DIVERGENCE.md sec-4/6.1/6.3): the
+    # CORRECTED 2026-07-14 (vestigial_documentation/design/ORCH-RCA-PAIRING-KEY-DIVERGENCE.md sec-4/6.1/6.3): the
     # completion journal no longer carries a stored `token`/`pairing` verdict (that computed
     # FIFO-by-hash pairing was dead at birth -- 0 of 2093 completions ever paired in this
     # deployment's history, per the RCA). Pairing is now a READ-TIME JOIN, done via the

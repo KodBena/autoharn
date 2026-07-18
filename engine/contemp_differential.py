@@ -8,7 +8,7 @@
 """contemp_differential -- the contemporaneity marriage's load-bearing gate: the ASP verdict
 program (engine/lp/contemporaneity.lp, producer two) differentialed BIT-IDENTICALLY against the
 SQL floor (engine/contemp_floor.py, producer one) over one world's real inputs -- the deferred
-half of design/ORCH-CONTEMPORANEITY-AUDIT.md's Part 2 ("this verb ships ONE producer today, not the
+half of vestigial_documentation/design/ORCH-CONTEMPORANEITY-AUDIT.md's Part 2 ("this verb ships ONE producer today, not the
 marriage discipline's cross-validated pair"), closed by this module. MATCHES
 engine/ledger_differential.py's OWN CONVENTIONS EXACTLY (imported, not re-derived, so the two
 marriages cannot drift): the closed verdict vocabulary (AGREE / DIVERGE_BY_DESIGN /

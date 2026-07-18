@@ -45,7 +45,7 @@ serialization.
 [ADR-0014](../law/adr/0014-executor-second-opinion.md),
 [ADR-0017](../law/adr/0017-the-zero-context-reader.md),
 [ADR-0018](../law/adr/0018-consults-are-not-front-loaded.md);
-[design/ORCH-CONSULT-REFUSAL-RECORDING-2026-07-17.md](ORCH-CONSULT-REFUSAL-RECORDING-2026-07-17.md)
+[design/ORCH-CONSULT-REFUSAL-RECORDING-2026-07-17.md](../vestigial_documentation/design/ORCH-CONSULT-REFUSAL-RECORDING-2026-07-17.md)
 (the banked consultation whose candidate E the maintainer ratified);
 [design/FABLE-PRINCIPAL-IDENTITY-SPEC-BUILD-BASIS.md](FABLE-PRINCIPAL-IDENTITY-SPEC-BUILD-BASIS.md)
 (§7 item 9 and §9(e) — the preserved mechanism history of the refuted candidates A and B — and its

@@ -26,7 +26,7 @@ WHAT IT CHECKS (both measured on the full 208-doc corpus, 2026-07-11):
      witness-integrity mandate."; law/adr/0015:50 "Four rules."). Zero observed false
      positives after the license exemption.
 
-  2. HANDOFF-POSITIONAL — a reference into ORCH-HANDOFF.md by bare position ("HANDOFF ... item 2")
+  2. HANDOFF-POSITIONAL — a reference into user-guide/ORCH-HANDOFF.md by bare position ("HANDOFF ... item 2")
      with no quoted named handle between "HANDOFF" and the position word. HANDOFF is rewritten
      wholesale (its own header: "supersedes prior handoff wholesale"), so a positional pointer
      into it dangles on the next rewrite — the maintainer's morning defect (a), hit live on
@@ -36,10 +36,10 @@ WHAT IT CHECKS (both measured on the full 208-doc corpus, 2026-07-11):
      line-prefix holds an odd number of double quotes is inside a quotation — text
      diagnosing the defect, not committing it; live specimen: REVIEW-GAP's 'an earlier
      revision of this line cited "HANDOFF open-work item 2," ...'). Measured on the live
-     corpus at authoring: 1 flag (design/ORCH-ARTIFACT-VS-REQUIREMENTS-DETECTOR.md:4, a genuine
+     corpus at authoring: 1 flag (vestigial_documentation/design/ORCH-ARTIFACT-VS-REQUIREMENTS-DETECTOR.md:4, a genuine
      instance — independently confirmed and fixed by the concurrent doc-legibility sweep,
      merged b5f9180 the same day), 0 false positives after the two exemptions; BACKLOG.md
-     and ORCH-HANDOFF.md (renamed from HANDOFF.md, doc-audience-taxonomy sweep 2026-07-12)
+     and user-guide/ORCH-HANDOFF.md (renamed from HANDOFF.md, doc-audience-taxonomy sweep 2026-07-12)
      are exempt wholesale (point-in-time entries and self-references respectively).
 
 WHAT WAS MEASURED AND DECLINED (UNBUILT, with reasons — ADR-0011 Rule 1 honesty):
@@ -97,9 +97,9 @@ _HANDOFF_POSITIONAL = re.compile(
 )
 
 # Check 2 exemptions: point-in-time entries (BACKLOG) and HANDOFF's self-references. HANDOFF.md
-# was renamed to ORCH-HANDOFF.md by the doc-audience-taxonomy sweep (2026-07-12); the exemption
+# was renamed to user-guide/ORCH-HANDOFF.md by the doc-audience-taxonomy sweep (2026-07-12); the exemption
 # follows the file, not the old name (a hazard caught while sweeping non-md hardcoded references).
-HANDOFF_CHECK_EXEMPT_NAMES = {"BACKLOG.md", "ORCH-HANDOFF.md"}
+HANDOFF_CHECK_EXEMPT_NAMES = {"BACKLOG.md", "user-guide/ORCH-HANDOFF.md"}
 
 _HEADING = re.compile(r"#{1,6}\s")
 _LIST_ITEM = re.compile(r"([-*+]|\d+\.)\s")

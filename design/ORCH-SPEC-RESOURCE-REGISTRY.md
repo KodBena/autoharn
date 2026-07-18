@@ -1,5 +1,8 @@
 # The resource registry — Pillar 1, with obligation attachment and first-class ordering
 
+<!-- doc-attest-exempt: doc-tree relocation mechanical edit (work item doc-tree-reorg-user-guide, ledger row 1620, 2026-07-18) -- relative link path(s) repointed to a sibling file's new location after a git-mv relocation elsewhere in the tree; no prose rewrite, same disposition as the v1.1.2 release-cut's own markers (commit 543a389). Removal condition: strike this marker and run the real A:B:C loop next time this file is touched for content, not just link repair. -->
+
+
 Audience: orchestrator (secondary: maintainer — §2 tiers and §6 are his calls)
 
 This document specifies the capability registry: how a project declares the resources
@@ -62,7 +65,7 @@ convention shows what columns earn their place.
   commissioner can sign the declaration with the commission-signing machinery — FULL mode
   (typed from his own terminal, proven by actor plus absent stamp) or SIGNED mode (a GPG
   detached signature over the text), both defined in
-  [USER-GPG-TRUST-LAYER-FAQ.md](USER-GPG-TRUST-LAYER-FAQ.md) — and a mandated-tier
+  [USER-GPG-TRUST-LAYER-FAQ.md](../user-guide/USER-GPG-TRUST-LAYER-FAQ.md) — and a mandated-tier
   declaration is commissioning-grade, so signing it is apt. Superseding a declaration is
   the ordinary supersedes edge; the registry view shows only unsuperseded rows.
 - The canonical residents for this maintainer's projects are, from his own enumeration:
@@ -204,12 +207,12 @@ Sonnet-executed). Four things were built:
   as a new numbered point in `bootstrap/templates/CLAUDE.md.tmpl`.
 - The `resource:`/`constraint:` statement grammars, each with a copy-paste example and the
   mechanical row-to-declaration conversion worked through, in
-  [USER-BLESSED-TABLE-TEMPLATE.md](USER-BLESSED-TABLE-TEMPLATE.md) — the blessed-table
+  [USER-BLESSED-TABLE-TEMPLATE.md](../user-guide/USER-BLESSED-TABLE-TEMPLATE.md) — the blessed-table
   template, pre-filled with this maintainer's own stack as marked worked examples, one column
   per §2 field plus the §5 escalation-ladder ordering column.
 - The mandated-tier review convention itself, composing `led obligate` / `led review` /
   `review_gap` with no kernel change, including the [documented
-  over-catch](USER-BLESSED-TABLE-TEMPLATE.md#the-mandated-tier-review-convention) (once a
+  over-catch](../user-guide/USER-BLESSED-TABLE-TEMPLATE.md#the-mandated-tier-review-convention) (once a
   principal is obliged, `review_gap` counts every row that principal writes, not only its
   mandated-shape ones) stated plainly rather than glossed over.
 

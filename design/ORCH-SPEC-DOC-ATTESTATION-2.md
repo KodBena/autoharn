@@ -1,12 +1,15 @@
 # SPEC: doc-attestation/2 — a first-class adjudication field for escalated attestation records
 
+<!-- doc-attest-exempt: doc-tree relocation mechanical edit (work item doc-tree-reorg-user-guide, ledger row 1620, 2026-07-18) -- relative link path(s) repointed to a sibling file's new location after a git-mv relocation elsewhere in the tree; no prose rewrite, same disposition as the v1.1.2 release-cut's own markers (commit 543a389). Removal condition: strike this marker and run the real A:B:C loop next time this file is touched for content, not just link repair. -->
+
+
 Audience: orchestrator (+secondary: maintainer — the section below names both: "whoever maintains that gate" and "the maintainer reviewing this change")
 
 ## What this document is, who it is for, and what it decides
 
 This is a small, self-contained specification for the next version of the attestation record
 format the [doc-attestation gate](../gates/doc_attestation_presence.py) reads and writes. It is
-written for whoever maintains that gate or the [A:B:C audit-loop recipe](ORCH-ABC-AUDIT-LOOP-RECIPE.md),
+written for whoever maintains that gate or the [A:B:C audit-loop recipe](../user-guide/ORCH-ABC-AUDIT-LOOP-RECIPE.md),
 and for the maintainer reviewing this change. It decides exactly one thing: **an attestation
 record for an *escalated* fresh-context review loop must record the escalation recipient's
 adjudication — who adjudicated it, what they applied, and when — in a typed field of its own,
@@ -192,7 +195,7 @@ nothing and changes no existing record's validity.
   escalated). Such a record is *admitted* under `/2` as long as it carries a well-shaped
   adjudication; its honesty is left to review. This axis is **named as not covered** here rather
   than silently left, per ADR-0000's closure discipline.
-- **It does not update the recipe prose in this pass.** [ABC-AUDIT-LOOP-RECIPE.md](ORCH-ABC-AUDIT-LOOP-RECIPE.md)
+- **It does not update the recipe prose in this pass.** [ABC-AUDIT-LOOP-RECIPE.md](../user-guide/ORCH-ABC-AUDIT-LOOP-RECIPE.md)
   step 6 delegates the exact schema to the gate docstring, so it stays correct; its step-5 summary
   of escalation does not yet mention the adjudication field. Because `--record` now *teaches* the
   requirement on refusal (it names the missing field and points here), the staleness is a
@@ -280,7 +283,7 @@ looseness, not a gap in the escalation/adjudication invariant this spec governs.
 - [`gates/doc_attestation_presence.py`](../gates/doc_attestation_presence.py) — the gate; its
   module docstring's "SCHEMA VERSIONS" block is the SSOT of the on-disk format, this spec is its
   rationale.
-- [ABC-AUDIT-LOOP-RECIPE.md](ORCH-ABC-AUDIT-LOOP-RECIPE.md) — the operator recipe for running the loop
+- [ABC-AUDIT-LOOP-RECIPE.md](../user-guide/ORCH-ABC-AUDIT-LOOP-RECIPE.md) — the operator recipe for running the loop
   and recording a record.
 - [ADR-0000](../law/adr/0000-the-alpha-and-the-omega-type-driven-design.md) — the type-driven fix
   and the closure-statement form used above.

@@ -6,7 +6,7 @@
 # <<< PROVENANCE-STAMP <<<
 
 """check_contract.py -- the M3-shaped fixture for the delegation-observer pairing-key review
-(ledger row 582, design/ORCH-RCA-PAIRING-KEY-DIVERGENCE.md sec-3/sec-6.6). This directory holds a
+(ledger row 582, vestigial_documentation/design/ORCH-RCA-PAIRING-KEY-DIVERGENCE.md sec-3/sec-6.6). This directory holds a
 REAL captured PreToolUse+PostToolUse payload pair for the `Agent` tool (Task's current name),
 taken from a scratch headless `claude -p` run that dispatched a subagent via the Task tool
 (2026-07-14, this build) -- `transcript_path`/`cwd`/`session_id` scrubbed of user-identifying

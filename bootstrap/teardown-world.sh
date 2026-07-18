@@ -59,8 +59,8 @@
 #                            passim; also covers derivatives like run3_kernel if ever passed
 #                            directly).
 #   - `s[0-9]*`           -- kernel-lineage-delta-named probe worlds (s20probe et al.,
-#                            design/MAINT-PG-HBA-HARDENING.md's own toy-host schema inventory).
-#   - `faqwit*`           -- the FAQ-demo scratch-world family (design/USER-RECIPES-FAQ.md's own
+#                            vestigial_documentation/design/MAINT-PG-HBA-HARDENING.md's own toy-host schema inventory).
+#   - `faqwit*`           -- the FAQ-demo scratch-world family (user-guide/USER-RECIPES-FAQ.md's own
 #                            `faqwit0718` walkthrough world -- THIS row's own cleanup target).
 #   - `svcfx*`            -- the boundary-service fixture family (seen-red/boundary-service/
 #                            run_fixtures.py's own RUN_SUFFIX = os.getpid() naming: svcfxpre<pid>,

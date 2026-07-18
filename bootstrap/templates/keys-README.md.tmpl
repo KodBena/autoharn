@@ -7,7 +7,7 @@ deployment was scaffolded from) and any future signed chain-head verification
 (`./verify-chain`, §4). It is deliberately separate from autoharn's own `law/keys/`, which
 verifies only autoharn's own `ratified/*` git tags on the autoharn repository itself and has
 no bearing on this deployment — commit YOUR OWN signing key here, never there. See
-design/USER-GPG-TRUST-LAYER-FAQ.md §3 (in the autoharn checkout) for the full two-domain split
+user-guide/USER-GPG-TRUST-LAYER-FAQ.md §3 (in the autoharn checkout) for the full two-domain split
 and the exact commit ceremony for each.
 
 ## Current state: AWAITING-KEY
@@ -28,11 +28,11 @@ the signature does not match it).
   itself version-controlled).
 - The **private** key and any **revocation certificate** never belong here — print the
   revocation certificate and store it offline, away from both this deployment and the
-  signing key itself; see design/USER-GPG-TRUST-LAYER-FAQ.md §2 for why.
+  signing key itself; see user-guide/USER-GPG-TRUST-LAYER-FAQ.md §2 for why.
 
 ## Related
 
 - design/MAINT-GPG-TRUST-LAYER.md — the spec (§3 SIGNED commissions, §7 key residence).
-- design/USER-GPG-TRUST-LAYER-FAQ.md — the operator walkthrough, §3 for the commit ceremony.
+- user-guide/USER-GPG-TRUST-LAYER-FAQ.md — the operator walkthrough, §3 for the commit ceremony.
 - `../law/keys/README.md` (in the autoharn checkout) — the OTHER trust domain, scoped
   exclusively to autoharn's own law-signing; not this deployment's concern.

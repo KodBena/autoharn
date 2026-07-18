@@ -4,7 +4,7 @@
 #   contributors: ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
-# Transcribed from design/USER-RECIPES-FAQ.md, "Workflow patterns" section, entry "How do I
+# Transcribed from user-guide/USER-RECIPES-FAQ.md, "Workflow patterns" section, entry "How do I
 # record, defeasibly, that a close's promised commit actually landed in the tree?" -- the
 # bookkeeping-close pairing convention (invented downstream by the autoharn-panel deployment's own
 # orchestrator, its ledger rows 407/408, carried upstream via decision row 1295; the s38
@@ -20,7 +20,7 @@
 # is the convention's own governance caveat (--review-bookkeeping is a deliberately closed
 # category -- reaching for it on a close that carries any judgment at all is category creep, per
 # the FAQ's own text), a policy/judgment statement, not a control-flow constraint -- it stays
-# prose-only, named in the contrast note in design/USER-SHAPED-RECIPES-FAQ.md.
+# prose-only, named in the contrast note in user-guide/USER-SHAPED-RECIPES-FAQ.md.
 
 [[phases]]
 name = "open-items"

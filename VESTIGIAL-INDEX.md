@@ -1,5 +1,8 @@
 # VESTIGIAL-INDEX
 
+<!-- doc-attest-exempt: doc-tree relocation mechanical edit (work item doc-tree-reorg-user-guide, ledger row 1620, 2026-07-18) -- relative link path(s) repointed to a sibling file's new location after a git-mv relocation elsewhere in the tree; no prose rewrite, same disposition as the v1.1.2 release-cut's own markers (commit 543a389). Removal condition: strike this marker and run the real A:B:C loop next time this file is touched for content, not just link repair. -->
+
+
 Audience: maintainer (+secondary: orchestrator)
 
 This file is the index of every document the 2026-07-12 vestigial-doc-sweep moved out of the
@@ -495,7 +498,7 @@ a single model's unchecked say-so.
 The obligation-type labels below (PROV, TRACE, CLASS, CONSIST, STRUCT, COHERE) name entries in
 this project's own obligation taxonomy — what each formal system in this survey was being
 assessed against — defined in
-[`research/obligations-formalisms-survey/01-obligation-taxonomy.md`](research/obligations-formalisms-survey/01-obligation-taxonomy.md).
+[`research/obligations-formalisms-survey/01-obligation-taxonomy.md`](vestigial_documentation/research/obligations-formalisms-survey/01-obligation-taxonomy.md).
 
 - **`research/obligations-formalisms-survey/formal-systems/01-datalog.md`** →
   `vestigial_documentation/research/obligations-formalisms-survey/formal-systems/01-datalog.md`.
@@ -530,3 +533,111 @@ assessed against — defined in
 47 entries above (1 root + 8 `design/` + 1 `instruments/` + 12 `judgment/` + 25 `research/`),
 matching the maintainer-adjudicated upheld list exactly — no file added, dropped, or
 re-verdicted from what ledger decision id 251 ratified.
+
+## 2026-07-18 doc-tree relocation (work item doc-tree-reorg-user-guide, ledger row 1620)
+
+A second, larger sweep: the maintainer's ask (row 1620, verbatim quoted at the top of that
+ledger row) to reorganize the doc tree, splitting a survey-classified `USER-GUIDE` class into a
+new `user-guide/` directory (indexed separately — see `user-guide/` itself, not this file) and
+an `IMPLEMENTED-LEGACY` class into `vestigial_documentation/`, preserving each file's relative
+substructure exactly as the 2026-07-12 sweep above established the precedent for (e.g.
+`design/ORCH-ABC-AUDIT-LOOP-RECIPE.md` landed at `vestigial_documentation/design/...`, though
+that particular file is USER-GUIDE class and moved to `user-guide/` instead — see that index).
+Classification: a survey agent's manifest (drafted from tracked-file dates/inbound-link counts
+plus this file's own governing rule, "design/ archives are history unless a current spec cites
+them"), adjudicated file-by-file by the maintainer (ledger row 1625). Per the commission, THIS
+section uses one line per file (or one line per moved directory for the bulk `research/` survey
+trees, rather than the original sweep's full descriptive paragraph per file) — the maintainer's
+own instruction for this round, lighter than the 2026-07-12 idiom above. None of these 133 files
+were deleted or content-edited beyond relative-link repointing (`git mv`, byte-identical
+otherwise; link_integrity is the acceptance gate, same as the first sweep).
+
+**Root (1 file):**
+- `ANTHROPIC-FEEDBACK-2026-07-17-security-recommendation-incident.md` → `vestigial_documentation/ANTHROPIC-FEEDBACK-2026-07-17-security-recommendation-incident.md` — self-declared point-in-time correspondence record, frozen at filing.
+
+**`bootstrap/templates/claude-skills/hack-rationalization-detector/` (2 files):**
+- `PROVENANCE.md` → `vestigial_documentation/bootstrap/templates/claude-skills/hack-rationalization-detector/PROVENANCE.md` — provenance record for a shipped skill.
+- `olds.md` → `vestigial_documentation/bootstrap/templates/claude-skills/hack-rationalization-detector/olds.md` — retired case material ("olds").
+
+**`design/` (58 files, one-for-one under `vestigial_documentation/design/`):**
+FABLE-21CFR11-STANDING-ASSESSMENT.md, FABLE-ATTRIBUTION-CLASS-RCA.md,
+FABLE-DEFEASIBILITY-ENVELOPE-2026-07-18.md, FABLE-LEDGER-TAG-FOLKSONOMY-CONSULT.md,
+FABLE-PIPELINE-DSL-EXPLORATION.md, FABLE-PRINCIPAL-SURFACE-CONSULT.md,
+FABLE-RCA-CLASS-WIDTH-METACONSULT.md, FABLE-WORLD-CONTEXT-MIGRATION-CONSULT-2026-07-19.md,
+MAINT-DECISION-QUEUE-2026-07-16.md, MAINT-DECISION-QUEUE-2026-07-17.md,
+MAINT-MAINTAINER-DECISION-BRIEF-2026-07-14.md, MAINT-MAINTAINER-DECISION-BRIEF.md,
+MAINT-PG-HBA-HARDENING.md, **MAINT-PUBLISHING.md** (row 1625 adjudicated this file legacy,
+overriding the survey's UNCLEAR flag), MAINT-REGULATOR-ADOPTION-ASSESSMENT.md,
+MAINT-RELITIGATION-SYNTHESIS.md, ORCH-ADR14-ORPHAN-DISPOSITION-CONSULT-2026-07-16.md,
+ORCH-AGENTIC-PATTERNS.md, ORCH-ARTIFACT-VS-REQUIREMENTS-DETECTOR.md,
+ORCH-AUTOMATION-ENVELOPE.md, ORCH-CATEGORICAL-REFACTOR-CONSULT-2026-07-15.md,
+ORCH-COMPOUND-NOMINAL-DETECTION-2.md, ORCH-COMPOUND-NOMINAL-DETECTION.md,
+ORCH-CONSULT-DEBT-SEMANTICS-2026-07-16.md, ORCH-CONSULT-PRINCIPAL-SURFACE-2026-07-18.md,
+ORCH-CONSULT-REFUSAL-RECORDING-2026-07-17.md, ORCH-CONTEMPORANEITY-AUDIT.md,
+ORCH-COSIGN-CONVENTION-CROSSCHECK.md, ORCH-HARNESS-FAILURE-LEDGER.md,
+ORCH-IDRIS-REFINEMENT-CONSULT-2026-07-15.md, ORCH-IDRIS-TRANSCRIPTION-CONSULT-2026-07-15.md,
+ORCH-KR-TITRATION-EXPLORATION.md, ORCH-LEDGER-LOGIC-MARRIAGE.md,
+ORCH-METACONSULT-RCA-CLASS-WIDTH-2026-07-18.md, ORCH-OPUS-READINESS.md,
+ORCH-PGAUDIT-EXPLORATION.md, ORCH-RCA-ATTRIBUTION-CLASS-2026-07-18.md,
+ORCH-RCA-PAIRING-KEY-DIVERGENCE.audit.md, ORCH-RCA-PAIRING-KEY-DIVERGENCE.md,
+ORCH-RECOVERY-MODE-SIGNED.md, ORCH-REGISTRY-COMPLETENESS-AUDIT-001.md,
+ORCH-REGISTRY-COMPLETENESS-AUDIT-002.md, ORCH-RETROSPECTIVE-RUN10.md,
+ORCH-RETROSPECTIVE-RUN11.md, ORCH-S15-S28-HISTORY-AUDIT.md,
+ORCH-S21-SESSION-AWARE-DISTINCTNESS.md, ORCH-S22-WORK-ITEM-LEDGER.md,
+ORCH-SCAFFOLD-OWNER-CREDENTIAL-SEPARATION-AUDIT.md, ORCH-SPY-METHOD.md,
+ORCH-TYPED-TABLE-EXPERIMENT.md, ORCH-USE-MODE-ENGINE-WIRING.md,
+ORCH-WORK-ITEM-DECISION-MEMO.md, ORCH-WORKTREE-LEDGERING.md,
+ORCH-deductive-engine-fable-main-shape.md, ORCH-human-side-fragility.md,
+ORCH-never-again-mechanism-fable-consult.md, ORCH-never-again-synthesis.md,
+ORCH-possibly-addressable-concerns.md.
+(NOT moved despite `design/` location: `FABLE-RESERVED-DESIGNS-2026-07-18.md` — row 1625
+verified two of its three reserved designs shipped as s45-standing-lifecycle this same date, the
+third (competence-bands) still placeholder, so the doc remains live analysis, not legacy;
+`MAINT-GPG-TRUST-LAYER.md` — row 1625 "kept as is"; every `LIVING-DESIGN`-class file, untouched.)
+
+**`proposals/` (1 file):**
+- `s29-inplace-migration/ENT-S29-INPLACE-RUNBOOK.md` → `vestigial_documentation/proposals/s29-inplace-migration/ENT-S29-INPLACE-RUNBOOK.md` — rehearsed s29 runbook, point-in-time (migration complete).
+
+**`provenance/` (5 of 6 files; `LAYOUT.md` stays per row 1625, already carrying its own
+no-longer-actual note):**
+- `BUILD-BRIEF.md`, `CONSOLIDATION-MANDATE.md`, `HOME-FLIP.md`, `MIGRATION-MANIFEST.md`,
+  `PATH-TRANSLATION.md` → `vestigial_documentation/provenance/` — repo-migration/consolidation
+  provenance, all migrations complete.
+
+**`runs/` (1 file):**
+- `acceptance-20260707T222452/RECORD.md` → `vestigial_documentation/runs/acceptance-20260707T222452/RECORD.md` — dated run acceptance record, history.
+
+**`research/` (65 files across 6 subtrees, one-for-one substructure preserved under
+`vestigial_documentation/research/`; `research/LOGIC-COVERAGE-STATUS.md` itself stays per row
+1625, UNCLEAR resolved to "live tracker"):**
+- `research/foundational-map/` — 7 files (banked research, oldest tree, reference-only).
+- `research/logic-fair-trials/` — 14 files (banked research survey + synthesis + audit + README + exemplar).
+- `research/logic-investigation/` — 10 files (banked research survey + synthesis + README).
+- `research/nlp-logic-interface/` — 2 files (banked research: KB-CODESIGN.md, RESEARCH-SUMMARIES.md).
+- `research/obligations-formalisms-survey/` — 8 files at that level (synthesis, taxonomy, A–D
+  angle docs, KEY.md, README.md).
+- `research/obligations-formalisms-survey/formal-systems/` — 24 files (per-formalism survey
+  chapters; NOTE three sibling chapters — `01-datalog.md`, `05-sat-cp.md`,
+  `10-description-logic.md` — already lived at this same `vestigial_documentation/` path from
+  the 2026-07-12 sweep above and are NOT re-listed or re-moved here, only the 24 chapters this
+  round's manifest classified IMPLEMENTED-LEGACY that were still at the working-tree `research/`
+  path).
+
+**Deviations from the manifest's raw class assignment, decided this round (not the survey's
+call):**
+- `BACKLOG.md` — manifest classed IMPLEMENTED-LEGACY (45 inbound), but it is a high-inbound
+  redirect TOMBSTONE ("retired as a file; tracker is the ledger"); moving a tombstone breaks its
+  purpose (readers following old links need it to still resolve at the well-known root path).
+  Left at root.
+- `observatory/ent/*` (8 cycle-log files) — manifest classed IMPLEMENTED-LEGACY, but
+  `observatory/` is already a segregated, single-purpose directory; moving its contents into
+  `vestigial_documentation/` buys no additional navigability and breaks the observatory cycle
+  tooling's own relative assumptions about its directory. Left in place.
+- `law/briefs/**` (13 files under `incomplete-evidence/` and `safety-critical-logging/`) —
+  manifest classed IMPLEMENTED-LEGACY (sources/README.md and intermediate research/synthesis
+  files behind two conformance briefs), but `law/` is wholly out of scope for this relocation
+  (row 1625: "law/ wholly out of scope, agreed"); the manifest's file-level classification
+  inside `law/` does not override the directory-level exclusion. Left in place.
+- `tools/makespan-scheduler-PROVENANCE.md` — manifest classed IMPLEMENTED-LEGACY, but it is
+  submodule-adjacent provenance (vendored-submodule documentation directly under `tools/`); row
+  1625 exception, left in place.

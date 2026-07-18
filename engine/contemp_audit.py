@@ -5,7 +5,7 @@
 #   contributors: e4410ef6/main
 # <<< PROVENANCE-STAMP <<<
 
-"""contemp_audit -- Part 2 of design/ORCH-CONTEMPORANEITY-AUDIT.md: the first-class correlation VERB
+"""contemp_audit -- Part 2 of vestigial_documentation/design/ORCH-CONTEMPORANEITY-AUDIT.md: the first-class correlation VERB
 the maintainer commissioned ("we want a tool that can automatically run this correlation, in a
 first-class way ... time deltas between actual events and recorded events", BACKLOG
 "Contemporaneity indictment", 2026-07-11). Joins ledger rows to the invocation journal and the

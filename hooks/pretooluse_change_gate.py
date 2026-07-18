@@ -191,7 +191,7 @@ import apparatus_registry  # noqa: E402  (filing/apparatus_registry.py, the deri
 # OTHER key too -- see _warn_unknown_mechanisms below, called once from _configure().
 
 # ---------------------------------------------------------------------------------------------
-# CONNECTION/CONFIG RESOLUTION (design/ORCH-OPUS-READINESS.md move 1; BACKLOG "PGHOST hardcoded" +
+# CONNECTION/CONFIG RESOLUTION (vestigial_documentation/design/ORCH-OPUS-READINESS.md move 1; BACKLOG "PGHOST hardcoded" +
 # "E13 retirement", both 2026-07-09) — two defects fixed together because they share one root
 # cause: a connection/config value with no live per-project source, so it either had no override
 # at all, or an override vocabulary tied to one dead experiment's name.

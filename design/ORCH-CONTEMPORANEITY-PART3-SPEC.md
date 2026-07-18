@@ -1,5 +1,8 @@
 # Contemporaneity, Part 3 — the governance preamble's ordering obligations as one deontic/temporal ASP program (build spec)
 
+<!-- doc-attest-exempt: doc-tree relocation mechanical edit (work item doc-tree-reorg-user-guide, ledger row 1620, 2026-07-18) -- relative link path(s) repointed to a sibling file's new location after a git-mv relocation elsewhere in the tree; no prose rewrite, same disposition as the v1.1.2 release-cut's own markers (commit 543a389). Removal condition: strike this marker and run the real A:B:C loop next time this file is touched for content, not just link repair. -->
+
+
 Audience: orchestrator (this build spec calls that reader, below, "an executor" — the same role)
 
 This document is a build specification. It tells an executor (Sonnet, per the standing
@@ -12,7 +15,7 @@ the twelve numbered points every scaffolded [world](../GLOSSARY.md#world) receiv
 from prose a session is asked to follow into verdicts a program derives from the world's own
 event record. It answers one question: **which of the preamble's obligations can be checked
 mechanically from the records Parts 1 and 2 of
-[design/CONTEMPORANEITY-AUDIT.md](ORCH-CONTEMPORANEITY-AUDIT.md) already capture, under exactly
+[design/CONTEMPORANEITY-AUDIT.md](../vestigial_documentation/design/ORCH-CONTEMPORANEITY-AUDIT.md) already capture, under exactly
 what temporal semantics, and with what honest verdict when a check is not decidable?**
 
 It is written for two readers: the executor who builds from it, and the maintainer, who is
@@ -45,7 +48,7 @@ are silence rather than grounding warnings.
 The project's deontic position is settled and survived a dedicated adversarial refutation
 pass ([research/LOGIC-COVERAGE-STATUS.md](../research/LOGIC-COVERAGE-STATUS.md), item 5 of
 the covered set; the survey home is
-[research/obligations-formalisms-survey/00-synthesis.md](../research/obligations-formalisms-survey/00-synthesis.md)):
+[research/obligations-formalisms-survey/00-synthesis.md](../vestigial_documentation/research/obligations-formalisms-survey/00-synthesis.md)):
 **deontic reasoning via the Anderson reduction — an obligation is a recorded, other-assigned
 fact; a violation is a derived flag; there are deliberately NO modal O/P/F operators.** The
 kernel already instantiates it once (`countersign_obligation` rows → the `review_gap`
@@ -193,7 +196,7 @@ Named extensions — each with its concrete source:
 | E6 | `verify_commission_event(Verdict, T)` | **does not exist yet.** The `verify-commission` template verb ([bootstrap/templates/verify-commission.tmpl](../bootstrap/templates/verify-commission.tmpl)) currently journals nothing; the extension is one appended JSONL line (verdict + UTC-Z ts) to a world-local `.claude/logs/verify_commission.jsonl`, template-side only. Until a world carries it, F2 is UNDECIDABLE(`no_verify_journal`) — named in the manifest, never silently vacuous |
 | E7 | `row_actor(Id, ActorId)`, `countersign_obliged(ActorId)` | ledger `actor` column; `countersign_obligation` table. Needed only for F11's review-gap arm (and F7's refined form); the coarse forms of both run without it |
 | E8 | `preamble_obligation(F, PreamblePoint)` | a standing facts file, `engine/preamble_obligations.lp`, mirroring [contemp_thresholds.lp](../engine/contemp_thresholds.lp)'s role: the recorded obligation catalogue (§1), one fact per family F1–F12 naming the preamble point it formalizes. This is what guarantees §5's never-silence property on an empty world |
-| E9 | `stop_disposition_window_ms(N)` | new threshold fact in the thresholds file, with the same measured-derivation-comment obligation the existing three facts carry (measure from [design/RETROSPECTIVE-RUN10.md](ORCH-RETROSPECTIVE-RUN10.md) / [design/RETROSPECTIVE-RUN11.md](ORCH-RETROSPECTIVE-RUN11.md) and from the ledgers+journals of the first worlds born with s23 in their birth chain, i.e. runs 9 onward; a provisional value must be derived from those measurements in the fact's own comment, never guessed round) |
+| E9 | `stop_disposition_window_ms(N)` | new threshold fact in the thresholds file, with the same measured-derivation-comment obligation the existing three facts carry (measure from [design/RETROSPECTIVE-RUN10.md](../vestigial_documentation/design/ORCH-RETROSPECTIVE-RUN10.md) / [design/RETROSPECTIVE-RUN11.md](../vestigial_documentation/design/ORCH-RETROSPECTIVE-RUN11.md) and from the ledgers+journals of the first worlds born with s23 in their birth chain, i.e. runs 9 onward; a provisional value must be derived from those measurements in the fact's own comment, never guessed round) |
 
 **The one-anchor rule (binding).** These families are added to `contemp_edb.export()`
 itself — NOT a sibling module with its own export. Two exports would mean two anchors, and
@@ -480,7 +483,7 @@ Witnessed live: `./audit --preamble` against run11 → exit 5 (F3 VIOLATED, base
   coarse form is sound and shipped.
 
 **THE SYNCHRONOUS-B REVIEW LOOP ([ADR-0017](../law/adr/0017-the-zero-context-reader.md)/
-[design/ORCH-ABC-AUDIT-LOOP-RECIPE.md](ORCH-ABC-AUDIT-LOOP-RECIPE.md)) — WITNESSED, both this
+[design/ORCH-ABC-AUDIT-LOOP-RECIPE.md](../user-guide/ORCH-ABC-AUDIT-LOOP-RECIPE.md)) — WITNESSED, both this
 section and [ORCH-CAPABILITIES.md](../ORCH-CAPABILITIES.md) item 24c, 2026-07-12.** This
 Status section: B round 1 found six defects (fragments lacking a finite verb, an
 under-glossed opening, and one ungrammatical clause); C repaired all six; B round 2 returned
@@ -499,14 +502,14 @@ See BACKLOG.md's dated entry beside this one for the full disposition and commit
 
 ## Related
 
-- [design/CONTEMPORANEITY-AUDIT.md](ORCH-CONTEMPORANEITY-AUDIT.md) — Parts 1–2, the substrate
+- [design/CONTEMPORANEITY-AUDIT.md](../vestigial_documentation/design/ORCH-CONTEMPORANEITY-AUDIT.md) — Parts 1–2, the substrate
   and the Part 3 sketch this spec discharges.
 - [design/LATE-ENTRY-AND-INTAKE-SEMANTICS.md](MAINT-LATE-ENTRY-AND-INTAKE-SEMANTICS.md) — the
   s24 declared-event-time semantics §3 constrains.
 - [law/briefs/BRIEF-CONFORMANCE-MAP.md](../law/briefs/BRIEF-CONFORMANCE-MAP.md) — the M/J
   split that draws this spec's scope boundary.
 - [research/LOGIC-COVERAGE-STATUS.md](../research/LOGIC-COVERAGE-STATUS.md) and
-  [research/obligations-formalisms-survey/00-synthesis.md](../research/obligations-formalisms-survey/00-synthesis.md)
+  [research/obligations-formalisms-survey/00-synthesis.md](../vestigial_documentation/research/obligations-formalisms-survey/00-synthesis.md)
   — the settled deontic/temporal positions §1 stays inside.
 - [law/adr/0017-the-zero-context-reader.md](../law/adr/0017-the-zero-context-reader.md) —
   the legibility discipline this document was authored and attested under.

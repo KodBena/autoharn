@@ -1,5 +1,8 @@
 # CAPABILITIES — what the harness can already do, in plain words
 
+<!-- doc-attest-exempt: doc-tree relocation mechanical edit (work item doc-tree-reorg-user-guide, ledger row 1620, 2026-07-18) -- relative link path(s) repointed to a sibling file's new location after a git-mv relocation elsewhere in the tree; no prose rewrite, same disposition as the v1.1.2 release-cut's own markers (commit 543a389). Removal condition: strike this marker and run the real A:B:C loop next time this file is touched for content, not just link repair. -->
+
+
 Audience: orchestrator (the opening paragraph below calls this same reader "a maintainer or operator" — the practical reader deciding what the apparatus can be trusted to do)
 
 The harness is autoharn's governance apparatus: the append-only Postgres decision ledger,
@@ -983,7 +986,7 @@ the evidentiary basis; session internals are diagnostics (2026-07-11)").
 itself (tracker item `apparatus-flip-witnessing`, from the "Unwitnessed apparatus flips" finding
 of the NIST-lens re-litigation panel — one of five review lenses the maintainer commissioned
 2026-07-12 over the whole apparatus, recorded in
-[design/MAINT-RELITIGATION-SYNTHESIS.md](design/MAINT-RELITIGATION-SYNTHESIS.md)'s "New findings
+[design/MAINT-RELITIGATION-SYNTHESIS.md](vestigial_documentation/design/MAINT-RELITIGATION-SYNTHESIS.md)'s "New findings
 this panel produced" section).** That finding, verbatim: a governed agent could `Write .claude/apparatus.json`
 and flip a mechanism to `"off"` mid-session with NO witnessed event anywhere — no refusal (that
 file is not `*.py`, so `hooks/pretooluse_change_gate.py`'s default governed patterns never match
@@ -1126,7 +1129,7 @@ closes exactly the panel's named finding (a content flip with no witness), hones
 prefix, item 34 below's tiered task-shape vocabulary,
 [design/ORCH-SPEC-RESOURCE-ACCOUNTING.md](design/ORCH-SPEC-RESOURCE-ACCOUNTING.md)) and render under
 `./pickup`'s `### SECTION: TAXONOMIES`. Grammar and the omega licensing worked example:
-[design/USER-TAXONOMY-DECLARATION.md](design/USER-TAXONOMY-DECLARATION.md). *Witnessed live
+[design/USER-TAXONOMY-DECLARATION.md](user-guide/USER-TAXONOMY-DECLARATION.md). *Witnessed live
 2026-07-12 (`seen-red/taxonomy-intake-validation/red.txt`, re-run independently at the merge
 seam): 9 RED refused with row count unchanged + 8 GREEN accepted byte-exact, e.g.*
 ```
@@ -1165,7 +1168,7 @@ somewhere of its own to record that a review happened. `gates/doc_attestation_pr
 and never clobbered by `--force`; `distance-to-clean` gains a DOC-ATTESTATION section gated by a
 new `doc_attestation` apparatus mechanism (default `off` — an adoption switch, not a cost switch:
 the read is pure hashing). Adopter walkthrough:
-[design/USER-DOC-AUDIT-LOOP.md](design/USER-DOC-AUDIT-LOOP.md). *Witnessed live 2026-07-12 by the
+[design/USER-DOC-AUDIT-LOOP.md](user-guide/USER-DOC-AUDIT-LOOP.md). *Witnessed live 2026-07-12 by the
 building session on a throwaway `--new-world` scaffold, torn down after — no banked transcript;
 reproduce with `bootstrap/new-project.sh <scratch-dir> --new-world <name> ...` then `./attest-doc
 record`/`check` and a `doc_attestation: observe` flip in that world's `.claude/apparatus.json`:
@@ -1236,7 +1239,7 @@ differential AGREE.* TRIPWIRE-grade, named precisely per that literature's unani
 does not defend against a schema-owner adversary who rewrites the witness alongside the ledger —
 the prior-arted closing move remains the externally-held signed chain head
 (design/MAINT-GPG-TRUST-LAYER.md §4, "The signed head"; the ceremony numbering lives in
-[design/USER-GPG-TRUST-LAYER-FAQ.md](design/USER-GPG-TRUST-LAYER-FAQ.md) §6, "Ceremony 3 — the
+[design/USER-GPG-TRUST-LAYER-FAQ.md](user-guide/USER-GPG-TRUST-LAYER-FAQ.md) §6, "Ceremony 3 — the
 signed chain head").
 
 **38. Typed work-parent edge + rollup split-metric — `led work open --parent`,
@@ -1246,7 +1249,7 @@ signed chain head").
 child work item can now cite its parent as a typed, refused-if-dangling-or-cyclic ledger column
 (slug-denominated, matching `work_depends_on` and the join key of the `estimate:` grammar —
 the task-cost declaration prefix defined in
-[design/USER-RETROSPECTIVE-RECIPE.md](design/USER-RETROSPECTIVE-RECIPE.md) Section 6)
+[design/USER-RETROSPECTIVE-RECIPE.md](user-guide/USER-RETROSPECTIVE-RECIPE.md) Section 6)
 instead of free-text `--refs` prose. `pickup`'s new ROLLUP section joins that edge against
 `estimate:` rows to show a parent's own estimate beside the SUM of its direct children's — the
 free split-time decomposition-quality signal, retrospective-only, never a gate (the

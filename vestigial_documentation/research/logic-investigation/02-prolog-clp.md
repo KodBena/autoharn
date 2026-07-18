@@ -1,6 +1,6 @@
 # 02 — Prolog & Constraint Logic Programming (SWI-Prolog, CLP(FD))
 
-> Part of the autoharn **logics & automated-deduction investigation** — see the [index](../../../research/logic-investigation/README.md); coined terms (Pillar, *_violations gate, supersession, …) are defined in the root **[GLOSSARY.md](../../../GLOSSARY.md)**.
+> Part of the autoharn **logics & automated-deduction investigation** — see the [index](README.md); coined terms (Pillar, *_violations gate, supersession, …) are defined in the root **[GLOSSARY.md](../../../GLOSSARY.md)**.
 
 A logic-programming engine: you state facts and Horn-clause rules, and the engine answers queries by SLD-resolution + backtracking. `library(clpfd)` bolts a finite-domain constraint solver onto that, so unification is replaced by constraint propagation over integer ranges.
 

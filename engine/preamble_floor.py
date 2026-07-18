@@ -168,7 +168,7 @@ def floor_atoms(target_name: str, root: Path) -> tuple[set[str], str]:
     logs = root / ".claude" / "logs"
 
     # tool_use_id -> token: this floor's OWN independent derivation of the E5 identity join
-    # (CORRECTED 2026-07-14, design/ORCH-RCA-PAIRING-KEY-DIVERGENCE.md sec-4/6.1: completion
+    # (CORRECTED 2026-07-14, vestigial_documentation/design/ORCH-RCA-PAIRING-KEY-DIVERGENCE.md sec-4/6.1: completion
     # lines no longer store a `token` -- pairing is a read-time join on the harness-assigned
     # `tool_use_id` present on both journals' lines. Same JOIN CONTRACT as contemp_edb.py's
     # dispatch_token_by_tool_use_id/join_bash_completions, re-derived here with this module's

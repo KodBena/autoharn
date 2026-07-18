@@ -18,9 +18,9 @@ never in HOW a scratch keyring gets built from whatever directory that is (desig
 MAINT-GPG-TRUST-LAYER.md §7's key-residence split: two trust domains, one shared mechanism).
 
 `bootstrap/templates/verify-chain.tmpl` (Rung 3) is NOT a caller of this module today, despite
-earlier drafts of this docstring and design/USER-GPG-TRUST-LAYER-FAQ.md claiming otherwise -- its
+earlier drafts of this docstring and user-guide/USER-GPG-TRUST-LAYER-FAQ.md claiming otherwise -- its
 signed-head ceremony is an ad hoc `gpg --detach-sign` / `gpg --verify` pair run by the operator
-directly against their own ambient keyring (design/USER-GPG-TRUST-LAYER-FAQ.md §6), not a
+directly against their own ambient keyring (user-guide/USER-GPG-TRUST-LAYER-FAQ.md §6), not a
 committed-key lookup through this module. Corrected here rather than left to perpetuate the
 same conflation a maintainer finding already caught once in the FAQ (2026-07-11, "key-residence
 refactor").
@@ -69,7 +69,7 @@ def build_scratch_keyring(keys: list[Path]) -> Path:
     GpgUnavailable up front if gpg is not on PATH, before creating anything on disk."""
     if not gpg_available():
         raise GpgUnavailable("the 'gpg' binary is not on PATH -- GPG trust layer verbs need "
-                              "GnuPG installed (see design/USER-GPG-TRUST-LAYER-FAQ.md)")
+                              "GnuPG installed (see user-guide/USER-GPG-TRUST-LAYER-FAQ.md)")
     home = Path(tempfile.mkdtemp(prefix="gpg-trust-scratch-"))
     home.chmod(0o700)
     for key in keys:

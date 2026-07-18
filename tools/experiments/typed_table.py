@@ -6,7 +6,7 @@
 # <<< PROVENANCE-STAMP <<<
 
 """typed_table — EXPERIMENT, NO MANDATE (work item typed-table-constructor-experiment; see
-design/ORCH-TYPED-TABLE-EXPERIMENT.md for the write-up and its findings-shaped status). This
+vestigial_documentation/design/ORCH-TYPED-TABLE-EXPERIMENT.md for the write-up and its findings-shaped status). This
 tool is a sketch, not a proposal to adopt; no doc in this repository is required to use it.
 
 WHAT THIS IMPLEMENTS, precisely per the maintainer's 2026-07-13 clarification (ledger row
@@ -21,7 +21,7 @@ judgment to be written down, once per row, before the table can be built at all.
 
 WHY "FORCED ARTICULATION" IS THE HONEST MECHANICAL CORE, NOT NLP. Whether a label actually
 inhabits an author-chosen type is a SEMANTIC question — no static predicate over the label
-string decides it (the same wall design/ORCH-COMPOUND-NOMINAL-DETECTION-2.md's angle
+string decides it (the same wall vestigial_documentation/design/ORCH-COMPOUND-NOMINAL-DETECTION-2.md's angle
 E/D measure and disclose: form-typing catches SHAPE, never MEANING). This constructor does not
 pretend otherwise. Instead of judging, it makes judging IMPOSSIBLE TO SKIP: `Table.row()`
 takes a mandatory `inhabits=` argument — the author's own distributed reading, spelled out in
@@ -44,7 +44,7 @@ as compound_nominal_scan2.py — ADR-0011's measure-first rule applies to a hand
      defect class that IS mechanical — a label existing, being non-empty, and being counted —
      not the part that is semantic.
   2. EMPTY-HEADER REFUSAL (angle F, compound_nominal_scan2.py — "the one sound zero-judgment
-     lint" per design/ORCH-ABC-AUDIT-LOOP-RECIPE.md's Named Defect Catalogue, Entry 3). A label
+     lint" per user-guide/ORCH-ABC-AUDIT-LOOP-RECIPE.md's Named Defect Catalogue, Entry 3). A label
      column with no header declares no type former, so nothing can be checked against it.
      Refused outright at Table.__init__, zero judgment required.
   3. COLUMN-COUNT COHERENCE. Every row must supply exactly len(columns)-1 cells (the label plus
@@ -62,12 +62,12 @@ as compound_nominal_scan2.py — ADR-0011's measure-first rule applies to a hand
 PROVENANCE. `Table.render()` appends an HTML-comment line marking the table
 constructor-generated, with its declared type former, so a reviewer (human or B) can tell a
 constructed table from a hand-authored one at a glance — this is the two-home hazard's own
-mitigation (design/ORCH-TYPED-TABLE-EXPERIMENT.md, "Ergonomics assessment" section): if a
+mitigation (vestigial_documentation/design/ORCH-TYPED-TABLE-EXPERIMENT.md, "Ergonomics assessment" section): if a
 constructed table's rendered markdown is ever pasted into a doc without the call site that
 produced it, the comment is the only surviving evidence of which one is the SSOT.
 
 WHAT THIS IS NOT: not a gate, not wired into any doc's build, not a mandate. Nothing in this
-repository is required to use it; see design/ORCH-TYPED-TABLE-EXPERIMENT.md for the honest
+repository is required to use it; see vestigial_documentation/design/ORCH-TYPED-TABLE-EXPERIMENT.md for the honest
 ergonomics assessment and the source-of-truth question an adoption decision would have to
 answer first.
 """
@@ -133,7 +133,7 @@ class Table:
             raise TableConstructionError(
                 "EMPTY HEADER: the label column declares no type former — there is no genus "
                 "to check row labels against (angle F, compound_nominal_scan2.py; Named "
-                "Defect Catalogue Entry 3, design/ORCH-ABC-AUDIT-LOOP-RECIPE.md)"
+                "Defect Catalogue Entry 3, user-guide/ORCH-ABC-AUDIT-LOOP-RECIPE.md)"
             )
         if not self.type_former or not self.type_former.strip():
             raise TableConstructionError(
@@ -220,7 +220,7 @@ class Table:
             f"<!-- constructor-generated: tools/experiments/typed_table.py; "
             f"declared type former = {self.type_former!r}; {len(self.rows)} row(s) "
             f"type-checked at construction (forced articulation + empty-header refusal + "
-            f"column-count coherence); see design/ORCH-TYPED-TABLE-EXPERIMENT.md -->"
+            f"column-count coherence); see vestigial_documentation/design/ORCH-TYPED-TABLE-EXPERIMENT.md -->"
         )
         parts = [body, prov]
         if self.warnings:
@@ -230,20 +230,20 @@ class Table:
 
 # --------------------------------------------------------------------------------------------
 # Demonstration builders — three REAL corpus tables regenerated through the constructor, for
-# design/ORCH-TYPED-TABLE-EXPERIMENT.md. None of these functions is imported by, or wired into,
+# vestigial_documentation/design/ORCH-TYPED-TABLE-EXPERIMENT.md. None of these functions is imported by, or wired into,
 # any document's build; they exist to produce the frozen output files under
 # tools/experiments/results/, read by hand and cited in the design note. The source docs
 # themselves are untouched (see that note's header for why).
 # --------------------------------------------------------------------------------------------
 
 def demo_kr_2_2() -> str:
-    """design/ORCH-KR-TITRATION-EXPLORATION.md §2.2 — the four typed-intake grammars table.
+    """vestigial_documentation/design/ORCH-KR-TITRATION-EXPLORATION.md §2.2 — the four typed-intake grammars table.
     Type former: "typed-intake grammar" (a `kind:` statement prefix at the `./led` write
     boundary). Transcribed from the doc's on-disk table, 2026-07-13."""
     t = Table(
         type_former="typed-intake grammar (a `kind:` statement prefix)",
         columns=["kind", "fields", "write-side witness", "read-side witness"],
-        caption="Table: the four typed-intake grammars (design/ORCH-KR-TITRATION-EXPLORATION.md §2.2)",
+        caption="Table: the four typed-intake grammars (vestigial_documentation/design/ORCH-KR-TITRATION-EXPLORATION.md §2.2)",
     )
     t.row(
         "`resource:`",
@@ -283,7 +283,7 @@ def demo_kr_2_2() -> str:
 
 
 def demo_kr_5() -> str:
-    """design/ORCH-KR-TITRATION-EXPLORATION.md §5 — the Haiku-tier-consumer comparison table.
+    """vestigial_documentation/design/ORCH-KR-TITRATION-EXPLORATION.md §5 — the Haiku-tier-consumer comparison table.
     Type former: "question a Haiku-tier consumer might ask, answered per candidate substrate"
     (this table's label column happens to be phrased as literal questions — a case where the
     "question/answer" reading the maintainer's clarification demoted from mandatory schema to
@@ -293,7 +293,7 @@ def demo_kr_5() -> str:
         columns=["question, answered per candidate", "(a) OWL/RDF store", "(b) EDB/ASP tier",
                  "(c) typed grammars"],
         caption="Table: Haiku-tier-consumer comparison across three substrate candidates "
-                "(design/ORCH-KR-TITRATION-EXPLORATION.md §5)",
+                "(vestigial_documentation/design/ORCH-KR-TITRATION-EXPLORATION.md §5)",
     )
     t.row(
         "how does a Haiku-tier consumer look up one fact?",
@@ -343,7 +343,7 @@ def demo_kr_5() -> str:
 
 
 def demo_audit_au_family() -> str:
-    """design/ORCH-REGISTRY-COMPLETENESS-AUDIT-001.md — the AU-family walk table (2 columns,
+    """vestigial_documentation/design/ORCH-REGISTRY-COMPLETENESS-AUDIT-001.md — the AU-family walk table (2 columns,
     16 NIST SP 800-53 AU-controls). Type former: "NIST SP 800-53 AU-family control (ID and
     catalog title)". Transcribed from the doc's on-disk table, 2026-07-13; abbreviated here to
     5 representative rows (the full 16-row table is mechanically identical in shape — this
@@ -352,7 +352,7 @@ def demo_audit_au_family() -> str:
         type_former="NIST SP 800-53 AU-family control (ID and catalog title)",
         columns=["AU control (ID and catalog title)", "Posture in autoharn"],
         caption="Table: the AU-family walk, 5 representative rows of 16 "
-                "(design/ORCH-REGISTRY-COMPLETENESS-AUDIT-001.md)",
+                "(vestigial_documentation/design/ORCH-REGISTRY-COMPLETENESS-AUDIT-001.md)",
     )
     t.row(
         "AU-1 Policy and Procedures",

@@ -278,7 +278,7 @@ def main() -> int:
         _refuse(
             f"{dep.schema}.ledger has no decision_grade column -- this world predates "
             f"kernel/lineage/s36-decision-grade.sql (design/FABLE-GRADED-DECISIONS-SPEC.md). "
-            f"Apply s36 to this project's schema as a maintainer act (ORCH-OPERATING-CARD.md's "
+            f"Apply s36 to this project's schema as a maintainer act (user-guide/ORCH-OPERATING-CARD.md's "
             f"kernel-delta decision tree) before any decision row can carry a grade at all.")
 
     rows = fetch_ungraded_decisions(dep)
