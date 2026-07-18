@@ -167,6 +167,37 @@ views correct — that is `./judge`'s job, deliberately not duplicated here.
    loudly in your report (ADR-0013). No umbrella claims; per-witness-item verdicts.
 4. Do not touch: kernel/, law/, engine/, hooks/, any live world, the panel repo.
 
+## Amendments (dated; Fable-authored; each names its trigger)
+
+**A1 (2026-07-18) — the first build's four flagged spec defects, adjudicated.** Trigger: the
+Sonnet build (worktree commit `69e2647`) surfaced four choices this spec failed to fix, each
+flagged per §10.3 rather than silently resolved. Adjudication:
+
+1. **Transport — RATIFIED as built:** the house `psql`-subprocess convention, matching
+   `led.tmpl` and `filing/`; introducing `psycopg` would be a second transport with its own
+   failure modes, unjustified by any measured need.
+2. **Capability-absent envelope — RATIFIED as built:** HTTP 409 with
+   `{"disposition": "capability_absent", "capability": ..., "message": ...}` — deliberately
+   echoing `write_verdict`'s vocabulary without claiming to be one. (This corrects §4's
+   letter, which reserved non-200 for transport errors: capability absence is neither a
+   domain verdict — the kernel never saw the request — nor a malformed request; a third,
+   typed shape is honest.)
+3. **Bind guard — RATIFIED as built, a strengthening:** "any non-loopback host" behind the
+   explicit flag, not the literal `0.0.0.0`; the spec's letter was the weaker form of its
+   own intent.
+4. **Service-principal write attribution — the genuine gap, now fixed:** the kernel's
+   `set_actor` resolves default attribution by `session_user`'s standing declaration, so a
+   service sharing the CLI's login role cannot carry a distinct default identity. The
+   mechanism is: a **dedicated login role per deployment** (suggested name `<schema>_svc`),
+   granted the same rights as the CLI role, bound to the registered service principal by an
+   ordinary s40/s45 standing declaration (`led principal declare-standing <service-principal>
+   --db-role <schema>_svc`) — the existing ceremony, no new machinery. Provisioning that
+   role is a per-world operator act (documented in `serving/README.md`); until a world
+   provisions it, the AS-BUILT disclosed pass-through (writes attributed exactly as an
+   unset `LED_ACTOR`) stands as the honest interim. The service NEVER injects an `actor`
+   field on a caller's behalf — a boundary asserting someone else's identity is the
+   substitution class this project exists to make representable, not commit.
+
 ## License
 
 Public Domain (The Unlicense).
