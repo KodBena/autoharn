@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-11T16:14:47Z
-#   last-change: 2026-07-16T02:03:50Z
-#   contributors: e4410ef6/main, 3c50e030/main, a857c93d/main, 9a17b6b9/main
+#   last-change: 2026-07-18T20:38:26Z
+#   contributors: e4410ef6/main, 3c50e030/main, a857c93d/main, 9a17b6b9/main, ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
 """doc_attestation_presence — the commit-time enforcement floor for ADR-0017's A:B:C
@@ -358,6 +358,7 @@ DEPLOYMENT_SCAFFOLD_OWNED_MD = frozenset({
     ".claude/GOVERNED_FILES.md",
     "keys/README.md",
     "attestations/README.md",
+    "roles/README.md",
 })
 
 

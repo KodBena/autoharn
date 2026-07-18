@@ -1,0 +1,42 @@
+# roles/ — durable role charters for this deployment
+
+This directory holds per-role CHARTER files for THIS deployment (`__PROJECT_NAME__`,
+scaffolded __CREATED_AT__) -- the static half of
+design/FABLE-ROLE-CHARTERS-AND-BRIEFS-SPEC.md (in the autoharn checkout this deployment was
+scaffolded from): what a role IS -- responsibilities, scope, constraints -- in the register a
+fresh instance reads first.
+
+## Current state: EMPTY
+
+No role charter has been registered yet. This is the honest empty state, not an error --
+scaffolding this directory does NOT itself register anything (this is an additive,
+NO-LINEAGE-CONTACT scaffold step: it writes a directory and this README, nothing more; no
+kernel act, no ledger row).
+
+## The register-before-binding rule
+
+A file sitting in this directory is NOT a charter until it is REGISTERED: the ledger is the
+sole authority on which charter text is in force for a role, never a loose file's mere
+presence here. Register one with (from this deployment's own root):
+
+```
+python3 <autoharn>/tools/role_charter.py register <role> roles/<role>/CHARTER.md
+```
+
+(`<role>` must already be a registered `led` principal -- `./led register-principal <role>
+<class> --purpose "..."` first, if it is not.) `role_charter.py`'s own `show`/`amend`
+subcommands read/supersede that registration; see its module docstring (in the autoharn
+checkout: `tools/role_charter.py`) for the full convention, including the loud DRIFT warning
+`show` prints when a registered file's on-disk bytes no longer match the hash that was
+registered.
+
+The dynamic counterpart -- what a role FACES right now, derived fresh at every instantiation,
+never authored -- is `tools/role_brief.py brief <role>`, in the same checkout.
+
+## Related
+
+- design/FABLE-ROLE-CHARTERS-AND-BRIEFS-SPEC.md — the governing spec (in the autoharn checkout).
+- `tools/role_charter.py`, `tools/role_brief.py` — the two tools this directory's convention
+  feeds (in the autoharn checkout).
+- `../keys/README.md`, `../attestations/README.md` — this deployment's other two
+  scaffold-owned, per-deployment (never autoharn's own) directories.
