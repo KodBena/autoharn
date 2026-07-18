@@ -1,7 +1,7 @@
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-06T16:58:38Z
-#   last-change: 2026-07-14T01:24:49Z
-#   contributors: 37017f46/main, a857c93d/main
+#   last-change: 2026-07-18T10:54:24Z
+#   contributors: 37017f46/main, a857c93d/main, ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
 """test_ledger_acts -- the acts<->ledger consumers (ledger_acts.lp / acts_edb.py) against the
@@ -96,3 +96,23 @@ def test_manifest_declares_families_loudly():
     m = acts_edb.acts_manifest(las.SCHEMA)
     assert set(m) >= set(acts_edb.ACTS_PREDS)
     assert all(v.startswith(("PRODUCED", "DEFERRED")) for v in m.values())
+
+
+def test_manifest_key_set_exactly_matches_acts_preds_db_free(monkeypatch):
+    """F50 SSOT (ledger item acts-manifest-ssot-import-time): acts_manifest's key set literally
+    equals ACTS_PREDS -- checked DB-free (no psql call, no scratch fixture build via las.setup()),
+    unlike test_manifest_declares_families_loudly above which needs a live honest/dishonest
+    fixture and only asserts a superset. acts_manifest()'s own `assert set(m) == set(ACTS_PREDS)`
+    (acts_edb.py) is a call-time check, not an import-time one -- if a future consumer path stops
+    calling acts_manifest() every run, drift detection goes silent again until something does.
+    This pins the SAME invariant as a standalone, always-run unit test.
+
+    Every capability probe (Target.has_relation / has_col) is monkeypatched to report absent, so
+    every acts_manifest branch takes the DEFERRED path regardless of what schemas happen to exist
+    on whatever DB is reachable -- no live DB connection is made at all. The schema name passed is
+    ALSO one guaranteed never to exist (belt-and-suspenders with the mock, not a substitute for it)."""
+    monkeypatch.setattr(acts_edb.Target, "has_relation", lambda self, qualified: False)
+    monkeypatch.setattr(acts_edb.Target, "has_col", lambda self, col, table="ledger": False)
+    m = acts_edb.acts_manifest("zz_acts_manifest_ssot_absent_schema_probe__db_free_test")
+    assert set(m) == set(acts_edb.ACTS_PREDS)
+    assert all(v.startswith("DEFERRED") for v in m.values())
