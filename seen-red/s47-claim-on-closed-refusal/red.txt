@@ -1,0 +1,66 @@
+== scaffolding WORLD PRE (chain ends s46-credited-views.sql) ==
+=== detect-negative-pre-s47 ===
+  [ok] s47 .detect.sql reads f on the pre-s47 (s46-head) chain
+
+== scaffolding WORLD S47 (chain ends s47-claim-on-closed-refusal.sql) ==
+=== detect-positive-s47 ===
+  [ok] s47 .detect.sql reads t on the s47-applied chain
+
+=== red-open-accepted ===
+  [ok] {'row_id': 4, 'message': None, 'sqlstate': None, 'refusal_id': None, 'disposition': 'accepted'}
+
+=== red-close-accepted ===
+  [ok] {'row_id': 5, 'message': None, 'sqlstate': None, 'refusal_id': None, 'disposition': 'accepted'}
+
+=== red-claim-refused ===
+  [ok] {'row_id': None, 'message': 'Ledger policy: claim of work item \'red-item\' refused — it is already closed (ledger row 5, resolution dropped) and a closed item is not claimable (s47). If there is follow-on work, open a NEW item for it (./led work open <new-slug> ...) -- the closed slug itself stays burned, matching a work item\'s own permanent slug-burn posture; if the close itself is wrong, first retract it via the supersession recipe (design/USER-RECIPES-FAQ.md\'s "Correcting the record" section), then retry the claim.', 'sqlstate': 'P0001', 'refusal_id': 7, 'disposition': 'refused'}
+
+=== red-claim-teach-text-verbatim ===
+  [ok] message: 'Ledger policy: claim of work item \'red-item\' refused — it is already closed (ledger row 5, resolution dropped) and a closed item is not claimable (s47). If there is follow-on work, open a NEW item for it (./led work open <new-slug> ...) -- the closed slug itself stays burned, matching a work item\'s own permanent slug-burn posture; if the close itself is wrong, first retract it via the supersession recipe (design/USER-RECIPES-FAQ.md\'s "Correcting the record" section), then retry the claim.'
+
+=== red-zero-work-claimed-rows ===
+  [ok] work_claimed row count for red-item: '0'
+
+=== green1-open-accepted ===
+  [ok] {'row_id': 8, 'message': None, 'sqlstate': None, 'refusal_id': None, 'disposition': 'accepted'}
+
+=== green1-claim-admitted ===
+  [ok] {'row_id': 9, 'message': None, 'sqlstate': None, 'refusal_id': None, 'disposition': 'accepted'}
+
+=== green2-open-accepted ===
+  [ok] {'row_id': 10, 'message': None, 'sqlstate': None, 'refusal_id': None, 'disposition': 'accepted'}
+
+=== green2-close-accepted ===
+  [ok] {'row_id': 11, 'message': None, 'sqlstate': None, 'refusal_id': None, 'disposition': 'accepted'}
+
+=== green2-close-retracted-accepted ===
+  [ok] {'row_id': 12, 'message': None, 'sqlstate': None, 'refusal_id': None, 'disposition': 'accepted'}
+
+=== green2-item-reads-open-after-retraction ===
+  [ok] work_item_current.state for green-retract: 'open'
+
+=== green2-claim-admitted-after-retraction ===
+  [ok] {'row_id': 13, 'message': None, 'sqlstate': None, 'refusal_id': None, 'disposition': 'accepted'}
+
+=== green3-antecedent-open-accepted ===
+  [ok] {'row_id': 14, 'message': None, 'sqlstate': None, 'refusal_id': None, 'disposition': 'accepted'}
+
+=== green3-dependent-open-accepted ===
+  [ok] {'row_id': 15, 'message': None, 'sqlstate': None, 'refusal_id': None, 'disposition': 'accepted'}
+
+=== green3-edge-accepted ===
+  [ok] {'row_id': 16, 'message': None, 'sqlstate': None, 'refusal_id': None, 'disposition': 'accepted'}
+
+=== green3-claim-refused-blocks-start-unchanged ===
+  [ok] {'row_id': None, 'message': 'Ledger policy: claim of work item \'green-bs-dependent\' refused — its blocks-start antecedent(s) are not yet resolved: green-bs-antecedent (item is not yet closed). Claim and finish each named antecedent first (./led work claim <antecedent>, then ./led work close <antecedent> <resolution> ...), or -- if the dependency itself is wrong -- correct the record (see design/USER-RECIPES-FAQ.md\'s "Correcting the record" section for the supersession recipe: the mistaken work_depends_on row is superseded, then a fresh row is issued with the right edge_type) (s39: claim-time precondition foreclosure, direct antecedents only — see work_item_blocks_start_blockers\'s own LIMITS).', 'sqlstate': 'P0001', 'refusal_id': 18, 'disposition': 'refused'}
+
+=== green3-teach-text-is-s39-not-s47 ===
+  [ok] message: 'Ledger policy: claim of work item \'green-bs-dependent\' refused — its blocks-start antecedent(s) are not yet resolved: green-bs-antecedent (item is not yet closed). Claim and finish each named antecedent first (./led work claim <antecedent>, then ./led work close <antecedent> <resolution> ...), or -- if the dependency itself is wrong -- correct the record (see design/USER-RECIPES-FAQ.md\'s "Correcting the record" section for the supersession recipe: the mistaken work_depends_on row is superseded, then a fresh row is issued with the right edge_type) (s39: claim-time precondition foreclosure, direct antecedents only — see work_item_blocks_start_blockers\'s own LIMITS).'
+
+=== judge-work-AGREE-world-pre ===
+  [ok] judge output (s47fx_pre): ['AGREE', 'asp []', 'sql []']
+
+=== judge-work-AGREE-world-s47 ===
+  [ok] judge output (s47fx_s47): ['AGREE', 'asp [\'w_own_leaf_unresolved("red-item")\', \'w_tree_member("green-bs-antecedent","green-bs-antecedent")\', \'w_tree_member("green-bs-dependent","green-bs-antecedent")\', \'w_tree_member("green-bs-dependent","green-bs-dependent")\', \'w_tree_member("green-open","green-open")\', \'w_tree_member("green-retract","green-retract")\', \'w_tree_member("red-item","red-item")\', \'w_tree_unresolved("green-bs-dependent")\', \'w_tree_unresolved("red-item")\', \'work_dep_edge("green-bs-dependent","green-bs-antecedent")\', \'work_dep_edge("green-retract","green-retract")\', \'work_dep_star("green-bs-dependent","green-bs-antecedent")\', \'work_dep_star("green-retract","green-retract")\']', 'sql [\'w_own_leaf_unresolved("red-item")\', \'w_tree_member("green-bs-antecedent","green-bs-antecedent")\', \'w_tree_member("green-bs-dependent","green-bs-antecedent")\', \'w_tree_member("green-bs-dependent","green-bs-dependent")\', \'w_tree_member("green-open","green-open")\', \'w_tree_member("green-retract","green-retract")\', \'w_tree_member("red-item","red-item")\', \'w_tree_unresolved("green-bs-dependent")\', \'w_tree_unresolved("red-item")\', \'work_dep_edge("green-bs-dependent","green-bs-antecedent")\', \'work_dep_edge("green-retract","green-retract")\', \'work_dep_star("green-bs-dependent","green-bs-antecedent")\', \'work_dep_star("green-retract","green-retract")\']']
+
+all s47-claim-on-closed-refusal cases WITNESSED clean.
