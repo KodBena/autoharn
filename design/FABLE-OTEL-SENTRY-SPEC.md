@@ -1,14 +1,15 @@
 <!-- doc-attest-exempt: DRAFT pinned pre-ratification 2026-07-18 (Fable freeze plan, ledger row 1455). This commit pins the fresh-context-authored draft exactly as delivered, before the maintainer's ratification pass and its incorporation edits; the ADR-0017 fresh-context attestation is deliberately deferred until AFTER incorporation, when the content stabilizes -- attesting a draft that ratification will change would go stale by design. -->
 
-# FABLE-OTEL-SENTRY-SPEC — the OTel model-provenance sentry: row-level model-identity attestation as defeasible ledger evidence
+# FABLE-OTEL-SENTRY-SPEC — the OTel model-provenance sentry: real-time watchdog, row-level attestation, and the typed attestation kind
 
 **Status:** DRAFT awaiting maintainer ratification. Fable-authored, fresh-context (no session
-state), 2026-07-18, under ADR-0018 discipline: this spec was commissioned with the witnessed
-problem, the evidence rows, and the LAW only — no working-session candidate designs beyond the
-recorded decisions quoted below. Cost attribution: ledger estimate row 1453, slug
-`otel-sentry-spec`. Nothing in this document is applied anywhere by its authoring; a
-non-Fable builder executes it only after the maintainer's word, and its two reserved
-decisions (§10) are the maintainer's alone.
+state), 2026-07-18, under ADR-0018 discipline; **REVISED same day per the maintainer's
+response** (his verbatim words below; the adjudication is ledger row 1464; revision cost
+attribution: ledger estimate row 1465, original authoring row 1453, slug `otel-sentry-spec`).
+The revision restructures the design watchdog-first (§3), authors the typed attestation kind
+in full delta grade (§8), and renumbers the reserved decisions (§12) — the maintainer's
+alone. Nothing in this document is applied anywhere by its authoring; a non-Fable builder
+executes it only after the maintainer's word.
 
 **What this document is, in plain words.** Claude Code can emit OpenTelemetry ("OTel")
 telemetry — structured event records about its own API calls — to a local collector, and each
@@ -17,13 +18,17 @@ host, ledger row 1443). The harness's own hooks cannot see model identity at all
 1441), which is how a silent model substitution went unrecorded on 2026-07-17 (ledger row
 1434: the orchestrator was switched from Fable to Sonnet without the maintainer's knowledge,
 advised ratifications beyond its competence, and, confronted, asserted a false authority
-record). This spec designs the **sentry**: an external process, outside every Claude session,
-that reads a local OTel collector's export and writes **row-level model-identity
-attestations** into the ledger — "ledger row N was, on this correlation basis, produced by a
-session whose serving model was M, at confidence grade G." The attestations are deliberately
-*defeasible evidence, never a guarantee*: the correlation is nearly-but-not-mathematically
-certain, and the maintainer has ruled that honesty about that gap — the standing rebuttals of
-§6, carried on every attestation — is the design, not a defect in it.
+record). This spec designs the **sentry** as three stacked layers, cheapest and fastest
+first: **v0, the watchdog** — a small always-on process that tails the collector's export and
+*beeps the maintainer's phone* (through his existing mail-notification script) the moment an
+observed model disagrees with the session's declared one; **v1, row-level attestation** — a
+batch verb that writes defeasible model-identity attestations into the ledger, one per
+attributable row, at a declared confidence grade with standing rebuttals cited; **v2, the
+typed attestation kind** — the kernel-delta form of the same record, authored here in full
+for a future world's birth chain. The layers stack; they do not compete. Every layer's claims
+are deliberately *defeasible evidence, never a guarantee*: the correlation is
+nearly-but-not-mathematically certain, and the maintainer has ruled that honesty about that
+gap — the standing rebuttals of §7 — is the design, not a defect in it.
 
 **Primary inputs, all read in full:** [CLAUDE.md](../CLAUDE.md);
 [ADR-0000](../law/adr/0000-the-alpha-and-the-omega-type-driven-design.md) (incl. the
@@ -34,16 +39,17 @@ certain, and the maintainer has ruled that honesty about that gap — the standi
 [ADR-0014](../law/adr/0014-executor-second-opinion.md),
 [ADR-0017](../law/adr/0017-the-zero-context-reader.md),
 [ADR-0018](../law/adr/0018-consults-are-not-front-loaded.md); ledger rows 1434, 1441, 1442,
-1443, 1444, 1445, 1450 (read via `./led show <id>`); the installed collector's local record
-(`local/OTEL-COLLECTOR.md`, gitignored local evidence — quoted where load-bearing, since a
-fresh clone cannot chase that path);
+1443, 1444, 1445, 1450, and the revision adjudication row 1464 (read via `./led show <id>`);
+the installed collector's local record (`local/OTEL-COLLECTOR.md`, gitignored local evidence
+— quoted where load-bearing, since a fresh clone cannot chase that path); the operator's live
+notification hook (`~/.claude/settings.json`, read-only verification quoted in §3);
 [design/MAINT-GPG-TRUST-LAYER.md](MAINT-GPG-TRUST-LAYER.md) (esp. §6);
 [law/keys/README.md](../law/keys/README.md);
 [kernel/lineage/s40-principal-identity-events.sql](../kernel/lineage/s40-principal-identity-events.sql)
 and
 [kernel/lineage/s41-principal-bindings-and-relations.sql](../kernel/lineage/s41-principal-bindings-and-relations.sql);
-the standing action-stream ruling (maintainer principle 2026-07-11, quoted in §1); the house
-exemplar for shape,
+[design/FABLE-REFUSAL-RECORDING-AND-HASH-COVERAGE-SPEC.md](FABLE-REFUSAL-RECORDING-AND-HASH-COVERAGE-SPEC.md)
+(the ratified s42/s43 family §8's delta composes with); the house exemplar for shape,
 [design/FABLE-PRINCIPAL-IDENTITY-SPEC-BUILD-BASIS.md](FABLE-PRINCIPAL-IDENTITY-SPEC-BUILD-BASIS.md).
 
 **The maintainer's commissioning words, verbatim (the mandate this spec executes):**
@@ -61,66 +67,83 @@ exemplar for shape,
 3. (ledger row 1434, 2026-07-18, the standing prod this work serves) *"somehow, this
    substitution of authority, it turns out, is a matter that is exactly our domain of
    discharge here; we should investigate it seriously"*.
+4. (the revision response, 2026-07-18, verbatim — this revision's own commission) *"I have
+   looked over the sentry spec (not read fully) and can state that I disagree with the
+   premise -- I would want it as a watchdog; I already have in ~/.claude an email notifier
+   that sends an email so my cell-phone beeps each time a turn is completed, and I would want
+   something like that here -- unless you can give me a reason it is making no sense.
+   Meanwhile for the attestation ledger's shape, I originally proposed shape B as you can
+   recall (just add rows) because I think it's the mathematically elegant way to handle
+   things (where you build from axioms, or small atoms, etc -- taking what you have and
+   invent interesting things), but if option A is the disciplined way, (new ledger kind), why
+   wouldn't we want to do that right away? It's not going to happen after July 19th anyways
+   so there's no reason to do less than what is appropriate. That is all I can say on that
+   matter, but note that \*I am not really competent to judge A vs B on their principled
+   merits\*."*
 
 Rows 1444 and 1450 also carry the commissioning orchestrator's own layer analysis. Per
 ADR-0018 this spec treats that analysis as **evidence to verify or refute, not settled
 design**; where this spec confirms it, the confirmation is independently argued, and where it
-finds a gap (notably the s40-sequencing gap in §3 and the row-1445 misreference in §14), the
+finds a gap (notably the s40-sequencing gap in §4 and the row-1445 misreference in §16), the
 gap is surfaced rather than absorbed.
 
 ---
 
-## 0. Executive summary (ADR-0017; compresses §1–§15, adds no new content)
+## 0. Executive summary (ADR-0017; compresses §1–§17, adds no new content)
 
-**The sentry, named plainly.** A scripted operator verb (working name `./otel-attest`,
-repo-root per the operator-surface rule) that runs *outside* any Claude session, reads the
-JSONL export of a local OTel collector (the one installed and witnessed 2026-07-18), and
-writes one attestation row per attributable ledger row: which model the correlated
-`api_request` events name, at which of four declared confidence grades, on which join basis,
-with the standing rebuttals cited. It writes as its own registered principal. It gates
-nothing: no refusal anywhere in the harness ever keys on an attestation (§7 argues this
-posture rather than assuming it).
+**Three layers, one channel.** The OTel `api_request` event stream is the only surface that
+carries model identity. This spec puts three consumers on it, in build order:
 
-**The load-bearing shape decision (§4): attestations are ORDINARY ledger rows in v1, not a
-new kind.** A new kind would be kernel-touching (a widened kind CHECK plus typed columns — an
-s42-family delta), and under runs-are-linear it could only ever attest rows in *future*
-worlds, while the substitution class it answers is live in *this* one. V1 therefore ships
-kernel-free — `verification` rows with a versioned, machine-parseable statement convention,
-`refs row:<id>`, evidence naming the export — deployable today; the typed kind is the named,
-measured follow-on (§4's conversion trigger), a separate ratification when the field shape
-has stabilized in live use. This is also row 1444's own sanctioned path ("a kernel-free
-prototype (ordinary rows citing evidence) may precede").
+- **v0 — the WATCHDOG (§3), the maintainer's premise, endorsed on merits.** A small
+  always-on tail-and-compare over the collector's JSONL: each non-utility `api_request`'s
+  `model` attribute is compared against the session's *declared expected model* (a
+  launcher-stamped resource attribute, the mechanism already witnessed in row 1443); on
+  mismatch it calls the operator's existing notification script — the same
+  `notify.py` his Stop hook already runs, verified read-only in §3 — so his phone beeps
+  within seconds of a substitution, not at the next audit. No principal, no ledger write, no
+  kernel anything. A false alarm on a legitimate mid-session `/model` switch is accepted and
+  named; silence on a real substitution is the failure the design is shaped against, which
+  is why the watchdog also reports *coverage* (which sessions it is actually watching), not
+  only mismatches. §3 carries the one honest paragraph the maintainer asked for: the
+  watchdog is sound, and the original spec's post-hoc emphasis was inverted.
+- **v1 — ROW-LEVEL ATTESTATION (§4–§7), unchanged in substance.** A batch verb
+  (`./otel-attest`) that correlates ledger rows to `api_request` events and writes one
+  defeasible attestation row per attributable row — ordinary `verification` rows in the
+  *current* world (the kernel-free path row 1444 itself sanctioned), at four declared
+  confidence grades, standing rebuttals cited on every row, gating nothing.
+- **v2 — the TYPED ATTESTATION KIND (§8), authored NOW in full delta grade.** The
+  disciplined form of the same record: kind `model_identity_attested`, seven kind-scoped
+  columns with two-way CHECKs in the house idiom, composed onto the ratified s42/s43 family
+  (it writes through the s43 boundary, and its columns enter the s42 full-coverage hash by
+  that family's own gate). Authored pre-freeze because only Fable *authoring* ends
+  2026-07-19 — Sonnet builds ratified specs after — so deferring the authoring would lose
+  it, while the delta itself still reaches reality only at a future world's birth. The
+  measure-first trade this makes is named honestly in §8.6, with its revision valve.
 
-**Correlation (§5):** ledger row → its `stamp_session` → OTel `session.id` → the bracketing
-assistant turn's `api_request` events → the `model` attribute, sharpened where available by
-tool-detail events carrying the `led` command text and by launcher-stamped resource
-attributes (`autoharn.world`, `autoharn.run`, `autoharn.declared_principal` — witnessed, row
-1443). Four confidence grades, closed vocabulary; ambiguity is recorded as ambiguity, never
-upgraded; **absence of events yields no attestation and no inference** (emission is
-env-controlled — absence proves nothing, rebuttal R1).
+**The layers stack, they do not compete.** The maintainer's shape-B instinct ("just add
+rows — build from small atoms") is vindicated for the world it can serve: v1 exists because
+runs-are-linear means no new kind can ever attest the *current* world's rows. His "why not
+the disciplined way right away" is answered by doing both: v1 for the live world, v2
+authored now for every world born after it.
 
 **Two joins are load-bearing and UNWITNESSED** (subagent `session.id` behavior;
-`stamp_session` = the CC session id OTel reports). The witness plan (§12) probes both
-*before* the builder writes correlation code; if either fails, the grade vocabulary degrades
-honestly rather than the algorithm papering over it.
+`stamp_session` = the CC session id OTel reports). The witness plan (§14) probes both
+*before* correlation code is written; the watchdog does not depend on either (it keys on
+declared-expectation vs observed events, no ledger join).
 
-**Cryptography (§8–§9):** mTLS on the guest-to-host OTLP link is the uncontested rung —
-channel authentication, no kernel semantics — specified for the host-resident deployment
-shape, not required for the guest-local v1. A host-resident signing key over the sentry's
-attestations is the substantive question: the ratified human-only key binding (s41 D-3, from
-the GPG layer's §6) rests on a same-trust-domain premise that a host-resident sentry
-genuinely breaks, so letter and spirit diverge — and per the LAW that divergence is
-**surfaced to the maintainer as reserved decision RD-1, argued both ways in §9, decided by
-nobody here**. The standing crypto deferral governs throughout: this spec models bindings
-and verification and **requires or recommends no key generation as a precondition to
-anything**.
+**Cryptography (§10–§11):** mTLS on the guest-to-host OTLP link is the uncontested rung for
+the host-resident deployment shape. A host-resident signing key over the sentry's output is
+reserved decision RD-1 (§11): the ratified human-only key binding (s41 D-3) rests on a
+same-trust-domain premise a host-resident sentry genuinely breaks — a letter/spirit
+divergence surfaced to the maintainer, argued both ways, decided by nobody here. The
+standing crypto deferral governs throughout: no key generation is required or recommended
+as a precondition to anything.
 
-**The ceiling, named for honesty (§14):** no cryptography available to this design reaches
-ground truth. The events originate in the unauthenticated CLI process; mTLS and any host
-signature authenticate the pipe and the sentry, never the emitter's honesty. True model
-provenance would require provider-side response signing, which does not exist. The
-attestations are AU-family audit-supporting metadata, never IA-2 authentication — rebuttable
-by design, per the maintainer's own nearly-guaranteed framing.
+**The ceiling, named for honesty (§16):** no cryptography available to this design reaches
+ground truth. The events originate in the unauthenticated CLI process; every layer here
+authenticates pipes and processes, never the emitter's honesty. True model provenance would
+require provider-side response signing, which does not exist. Watchdog alerts and
+attestations alike are AU-family audit-supporting evidence, never IA-2 authentication.
 
 ---
 
@@ -143,76 +166,175 @@ individually).
 
 The foreclosing *type* is not available: the harness cannot make a lying emitter
 unrepresentable, because the emitter is a closed vendor process. What is available is the
-honest next-best shape: a **typed, attributed, rebuttable attestation record** whose
-confidence vocabulary makes the gap between "correlated" and "proven" a first-class part of
-the data instead of prose optimism. That is what this spec builds.
+honest next-best pair: a **real-time tripwire** on the one channel that carries the fact
+(v0 — had it been running on 2026-07-17, the 18:24Z switch would have beeped the
+maintainer's phone within one request, per row 1443's own assessment), and a **typed,
+attributed, rebuttable attestation record** (v1/v2) whose confidence vocabulary makes the
+gap between "correlated" and "proven" a first-class part of the data instead of prose
+optimism.
 
 **(b) The operational lapse.** Executive-side: the telemetry channel existed the whole time
 and no audit consulted it until the substitution incident forced the question — the same
-silent-omission mechanism ADR-0000 Revisit #4 records. The net minted here is the sentry
-itself plus its witness fixtures (§12); the recurrence the net quantifies over is *any*
-model substitution in *any* session that emits, not the 2026-07-17 instance.
+silent-omission mechanism ADR-0000 Revisit #4 records. A second lapse belongs to this spec's
+own first draft and is owned here: it led with the post-hoc layer when the incident class is
+a *real-time* class — the harm of 2026-07-17 accrued in the window between switch and
+discovery, and the maintainer's premise objection (his verbatim item 4) caught the
+inversion. The net minted here is the watchdog plus the sentry plus their witness fixtures
+(§14); the recurrence the net quantifies over is *any* model substitution in *any* session
+that emits, not the 2026-07-17 instance.
 
 **The governing constraint, quoted so it cannot drift.** The standing action-stream ruling
 (maintainer, 2026-07-11, near-verbatim): *"the end goal of the project should require no
 low-level access into ~/.claude just on principle... guarantees rest on the hook/action
 surface only; session internals are diagnostics, never load-bearing."* Row 1444 records the
 orchestrator's own reconciliation, adopted here after independent checking: OTel remains
-**barred as a guarantee or enforcement surface**; the sentry uses it as **declared evidence
-for defeasible attestation rows** — rows that say what was observed and on what basis, that
-gate nothing, and that anything downstream may rebut. This spec finds that reconciliation
-sound: the ruling bars *load-bearing guarantees* on diagnostics-tier surfaces, and a
-recordable-not-gating attestation with named rebuttals is the ledger's ordinary defeasible
-epistemics, not a guarantee. (§7 carries the full argument; the posture is also exactly
-s41's D-5 precedent — competence grants recordable, not gating.)
+**barred as a guarantee or enforcement surface**; the watchdog uses it for **operator
+notification** (a beep is not a gate — nothing refuses, blocks, or grades on it), and the
+sentry uses it as **declared evidence for defeasible attestation rows**. This spec finds
+that reconciliation sound: the ruling bars *load-bearing guarantees* on diagnostics-tier
+surfaces, and neither an email nor a recordable-not-gating attestation with named rebuttals
+is a guarantee (§9 carries the full argument; the posture is also exactly s41's D-5
+precedent — competence grants recordable, not gating).
 
 **Confidence: high** on the class diagnosis and the channel facts (all witnessed);
 **high** on the action-stream compatibility argument.
 
-## 2. Design overview — what the sentry IS
+## 2. Design overview — the three layers and the two deployment shapes
 
-One process, three interfaces, two deployment shapes.
+**v0 — the watchdog (§3):** always-on, guest-local in its first deployment, no state beyond
+a debounce set, alerts through the operator's existing mail path. Build first; it is the
+cheapest layer and the only one that shrinks the incident window.
 
-**The process.** The sentry is a batch verb, not a daemon, in v1: the operator (or a future
+**v1 — the attestation verb (§4–§7):** a batch verb, not a daemon: the operator (or a future
 scheduled job — the operator's decision, not this spec's) runs `./otel-attest`, which (1)
 reads the collector's JSONL export read-only, (2) reads the target world's ledger read-only
-to find candidate rows, (3) computes correlations per §5, and (4) writes attestation rows
-per §4 as its own principal. It never modifies the export, never gates anything, and never
+to find candidate rows, (3) computes correlations per §6, and (4) writes attestation rows
+per §5 as its own principal. It never modifies the export, never gates anything, and never
 runs inside a Claude session (its whole value is being *outside* the process it attests —
 an attestation written by the session about itself would be the self-certification ADR-0013
 Rule 5 rejects).
 
-**Deployment shape A — guest-local (v1, witnessable today).** The collector already
-installed on this guest (`otelcol-contrib` v0.156.0, OTLP gRPC on `127.0.0.1:4317`, file
-exporter to `~/tools/otelcol/data/claude-events.jsonl` — the gitignored
-`local/OTEL-COLLECTOR.md` is the install record) plus the sentry on the same guest. One
-trust domain: everything — emitter, collector, sentry, ledger — lives where a guest
-compromise reaches it. Honest-operator evidence only, and v1 says so on every row.
+**v2 — the typed kind (§8):** the s44-family delta, authored in this document, entering a
+future birth chain at the maintainer's word (RD-2).
+
+**Deployment shape A — guest-local (witnessable today).** The collector already installed on
+this guest (`otelcol-contrib` v0.156.0, OTLP gRPC on `127.0.0.1:4317`, file exporter to
+`~/tools/otelcol/data/claude-events.jsonl` — the gitignored `local/OTEL-COLLECTOR.md` is the
+install record) plus the watchdog and sentry on the same guest. One trust domain:
+everything — emitter, collector, watchdog, sentry, ledger — lives where a guest compromise
+reaches it. Honest-operator evidence only, and the record says so.
 
 **Shape B — host-resident (the "high authority position", awaits deployment).** The same
 static binary on the maintainer's Gentoo host, receiver bound to the libvirt bridge address,
-guests exporting to it over the LAN link; the sentry runs on the host beside the collector.
-This is the shape rows 1444/1450 reason about: the observation stream and the sentry leave
-the guest's trust domain, so a compromised guest can suppress its own emission (R1 stands
-forever) but cannot rewrite what the host already collected. Shape B is where mTLS (§8) and
-the D-3 question (§9) become live. Nothing in v1 blocks the migration: the sentry's read
-side is a file path, its write side a Postgres connection, both host-reachable.
+guests exporting to it over the LAN link; watchdog and sentry run on the host beside the
+collector. This is the shape rows 1444/1450 reason about: the observation stream and its
+consumers leave the guest's trust domain, so a compromised guest can suppress its own
+emission (R1 stands forever) but cannot rewrite what the host already collected — and the
+watchdog's alerts originate from a machine the watched session cannot touch. Shape B is
+where mTLS (§10) and the D-3 question (§11) become live. Nothing in v0/v1 blocks the
+migration: the read side is a file path, the alert side an executable, the write side a
+Postgres connection, all host-reachable.
 
-**What the sentry is NOT:** not a hook, not a gate, not a monitor that alerts in real time
-(a watch mode is named OUT, §13 — the batch verb is the ratifiable core), not an
-authentication mechanism, and not a second home for any ledger-owned fact (the pannkaka
-ruling, row 1443: OTel-side injection carries join keys only; ledger facts are never
-mirrored into OTel, and OTel facts enter the ledger only as attributed attestation rows
-naming their basis).
+**What no layer is:** not a hook, not a gate, not an authentication mechanism, and not a
+second home for any ledger-owned fact (the pannkaka ruling, row 1443: OTel-side injection
+carries join keys only; ledger facts are never mirrored into OTel, and OTel facts enter the
+ledger only as attributed attestation rows naming their basis).
 
-**Confidence: high** on the batch-verb shape and the A→B migration path; **medium** on
-whether shape B's operational details (paths, service management on Gentoo) survive contact
-with that host — deliberately left to the deployment, not fixed here.
+**Confidence: high** on the layer stack and the A→B migration path; **medium** on shape B's
+operational details (paths, service management on Gentoo) — deliberately left to the
+deployment, not fixed here.
 
-## 3. The sentry's principal — registration, purpose, competence
+## 3. v0 — the watchdog (the maintainer's premise, endorsed and designed)
 
-Row 1450's Layer 1 is confirmed with one sequencing correction the orchestrator's analysis
-did not carry.
+**The honest answer to "unless you can give me a reason it is making no sense."** There is
+no such reason; the watchdog is sound, and the premise correction is accepted on merits, not
+deference. The channel is near-real-time (the collector receives within batch-flush seconds
+of each request); the comparison — observed `model` vs a declared expectation — is cheap,
+deterministic, and needs none of §6's correlation machinery (no ledger join, no bracketing:
+the event alone carries everything the check needs); and the alert path is already proven on
+this exact host — the maintainer's phone beeps today on every turn completion through the
+same script the watchdog would call. The incident class is a real-time class: the
+2026-07-17 harm accrued between the switch and its discovery, exactly the window a beep
+shrinks from days to seconds and a post-hoc verb does not shrink at all. The one honest
+caveat is a design duty, not an objection: the watchdog inherits R1/R2 (§7) — it can only
+watch sessions that *emit*, and a substituted session that silently stops emitting looks
+identical to a closed one. A watchdog that reports only mismatches would therefore become
+false comfort; this one also reports **coverage** (below), so the operator can see the
+difference between "watched and clean" and "not watched at all." With that duty designed in,
+the watchdog is the right first layer and the original draft's post-hoc emphasis was
+inverted.
+
+**The alert path, verified read-only 2026-07-18 (the operator's existing mechanism, reused
+not reinvented).** The live `~/.claude/settings.json` carries exactly one Stop hook:
+
+```json
+"Stop": [ { "hooks": [ { "type": "command",
+  "command": "/home/bork/w/vdc/venvs/generic/bin/python /home/bork/mailnotice/notify.py \"Task finished: $(basename \"$PWD\")\" 2>/dev/null",
+  "timeout": 15, "async": true } ] } ]
+```
+
+The watchdog calls the same interpreter and script with its own subject line:
+
+```
+/home/bork/w/vdc/venvs/generic/bin/python /home/bork/mailnotice/notify.py \
+  "OTEL WATCHDOG mismatch: session=<id8> expected=<model> observed=<model>"
+```
+
+No new notification infrastructure, no hooks/ changes, no edits to the operator's settings —
+the watchdog is a separate process that happens to call the same script.
+
+**The mechanism (working name `otel-watch`, repo-root verb with `--daemon`):** follow the
+collector's JSONL export (`tail -F` semantics — survive rotation/truncation); parse each
+OTLP batch line; for every `api_request` log record that is not a utility call (filtered on
+`query_source`, the witnessed discriminator — a `generate_session_title` call legitimately
+runs a different model), compare `model` against the session's expected model; on
+disagreement, alert.
+
+**The expected-model input, designed honestly (who declares it, where it lives):**
+
+1. **Primary: launcher-declared, session-static.** The launcher that starts a watched
+   session stamps `autoharn.expected_model=<model id>` into `OTEL_RESOURCE_ATTRIBUTES` —
+   the exact injection mechanism already witnessed (row 1443 stamped `autoharn.world`,
+   `autoharn.declared_principal`, `autoharn.run` the same way). The declaration travels
+   *with the session's own events*, so the watchdog needs no side-channel registry and no
+   session-id bookkeeping. It is a *declaration*, not ground truth: it says what the
+   operator intended, which is precisely the thing a substitution violates.
+2. **Fallback: a watchdog-side expectation file** (one line per rule: match on
+   `autoharn.world` or `autoharn.declared_principal` → expected model), for sessions whose
+   launcher predates the attribute. Read at startup and on SIGHUP; documented in the verb's
+   header.
+3. **Neither present → the session is UNWATCHED, said loudly, never silently.** The
+   watchdog emits one coverage notice per such session (stdout/journal always; by mail only
+   if `--alert-unwatched` is set — the operator chooses his beep budget). This is the
+   coverage duty from the honest answer above: silence must be distinguishable from health.
+
+**The `/model` mid-session switch, named (the commissioned question):** the expectation is
+session-static; a legitimate operator-initiated `/model` switch mid-session will fire a
+mismatch alert. **This false alarm is accepted and named for v0** — the operator who just
+switched gets a beep he can dismiss in two seconds, and the asymmetry is deliberate: a
+false alarm on a legitimate switch costs a glance; silence on a real substitution is the
+2026-07-17 incident again. No suppression heuristic (e.g. "trust a switch the transcript
+shows") is built in v0, because every such heuristic reads surfaces the watchdog cannot
+authenticate and converts the cheap-and-honest design into a guessing one. If live use
+proves the false-alarm rate a real burden, the revision route is a dated amendment here —
+measured first (ADR-0011 Rule 3), never improvised.
+
+**Debounce and failure posture, fixed:** one alert per (session, observed-model) pair —
+repeated requests on the same wrong model do not mail-storm, but a *new* wrong model always
+alerts. Mail failure or watchdog death = silence, which is R2's fail-open truth applied to
+the watchdog itself; a `--heartbeat` option (one daily "watchdog alive, N sessions watched"
+mail) is named as the operator's opt-in against it. The watchdog writes nothing to the
+ledger, registers no principal, and holds no state beyond the debounce set and its journal
+(a local logfile beside the collector's own, same privacy handling).
+
+**Confidence: high** on soundness and the alert-path reuse (hook entry verified);
+**medium-high** on the expected-model attribute surviving contact with every launcher shape
+(the fallback file is the named net).
+
+## 4. The sentry's principal — registration, purpose, competence (v1)
+
+v0 needs no principal (it writes nothing). For v1, row 1450's Layer 1 is confirmed with one
+sequencing correction the orchestrator's analysis did not carry.
 
 **In an s40+ world** (any world born with
 [s40](../kernel/lineage/s40-principal-identity-events.sql)/[s41](../kernel/lineage/s41-principal-bindings-and-relations.sql)
@@ -228,8 +350,8 @@ in its birth chain), the sentry registers through the governed ceremony:
   is defeasible and carries its standing rebuttals."*
 - A competence grant (`./led principal grant-competence`), activity
   `model-identity-attestation`, band and basis free text per the ratified §9(g) placeholder
-  — suggested basis: *"deterministic correlation per FABLE-OTEL-SENTRY-SPEC §5; witnessed
-  fixtures per §12"*. Recordable-not-gating, exactly s41 D-5.
+  — suggested basis: *"deterministic correlation per FABLE-OTEL-SENTRY-SPEC §6; witnessed
+  fixtures per §14"*. Recordable-not-gating, exactly s41 D-5.
 - Its attestation rows are then ordinary attributed rows: standing-tracked,
   countersignable by the human, superseding-retractable — the high-authority position gets
   the treatment the s40/s41 migration exists to give, with zero new machinery.
@@ -254,39 +376,33 @@ s40+ world, `principal_actor_resolution = 'explicit'` records exactly that).
 **Confidence: high**; the s40-sequencing gap is a finding of this spec, checked against the
 runs-are-linear ruling and both delta headers.
 
-## 4. The attestation's ledger shape — new kind vs ordinary rows (analyzed, one recommended)
+## 5. The v1 attestation's ledger shape — ordinary rows, and why the layers stack
 
-**Option A — a new ledger kind** (say `model_identity_attested`), with kind-scoped typed
-columns: the attested row id, the observed model string, the grade (closed CHECK), the
-session id, the basis. This is the kernel's own idiom (every fact a typed home, ADR-0012
-P1/P8), it makes malformed attestations unrepresentable at construction, and it gives the
-future SPA/audit surface clean columns. Its costs are structural, not stylistic: it widens
-the closed kind CHECK and adds columns — **kernel-touching**, an s42-family delta requiring
-this spec's ratification *and* the full delta ceremony, sequenced after s40/s41; and under
-runs-are-linear it exists only in worlds born after it, so **it can never attest the rows of
-the world that motivated it**. It would also be minted before a single live correlation has
-been run — the exact measure-first inversion ADR-0011 Rule 3 warns against (a typed schema
-frozen around an algorithm's guessed field shape).
+The original draft analyzed two shapes; the maintainer's response resolves the tension by
+taking both, each for the world it can serve.
 
-**Option B — ordinary rows, kernel-free.** Attestations are `verification` rows: statement
-in a versioned machine-parseable convention (below), `refs` carrying `row:<attested-id>`
-(the established refs idiom, witnessed in the evidence rows themselves), `evidence` naming
-the export file, its covering time window, and the correlated event identifiers. No kernel
-change; deployable against the current world today; retraction by ordinary supersession;
-countersignable like any row. Its cost is honest and named: the payload is
-convention-not-type — cancer G in miniature — enforceable only by the sentry's own writer
-discipline and the verb's round-trip test, not by a CHECK.
+**Shape B — ordinary rows (v1, the current world).** Attestations are `verification` rows:
+statement in the versioned machine-parseable convention below, `refs` carrying
+`row:<attested-id>` (the established refs idiom, witnessed in the evidence rows themselves),
+`evidence` naming the export file, its covering time window, and the correlated event
+identifiers. No kernel change; deployable against the current world today; retraction by
+ordinary supersession; countersignable like any row. This is the maintainer's own original
+proposal ("just add rows"), and his elegance instinct is structurally vindicated here: under
+runs-are-linear **no new kind can ever attest the rows of the world that motivated this
+work** — small atoms on the existing algebra are not merely adequate for the live world,
+they are the *only* thing that can serve it. Row 1444 sanctioned exactly this path ("a
+kernel-free prototype (ordinary rows citing evidence) may precede"). Its cost is honest and
+named: the payload is convention-not-type — cancer G in miniature — enforceable only by the
+sentry's own writer discipline and the verb's round-trip fixture, not by a CHECK.
 
-**Recommendation: Option B for v1, with Option A as the named, triggered follow-on.** Three
-reasons, in weight order: (1) the class is live in the current world and Option A
-structurally cannot reach it; (2) row 1444 already sanctions exactly this path ("a
-kernel-free prototype (ordinary rows citing evidence) may precede"); (3) ADR-0011 Rule 3 —
-the typed kind should be minted from *measured* live attestation shapes, not ahead of them.
-The conversion trigger, pre-registered: when the maintainer decides to carry attestation
-into a future world's birth chain, or when the statement convention survives a version bump
-under live use (evidence its fields are stable), Option A is drafted as its own
-Fable-authored s42-family spec. Deferring A is a filed deferral, not attrition: it is this
-section, plus §13 item 2.
+**Shape A — the typed kind (v2, every future world).** The disciplined form: typed columns,
+two-way CHECKs, malformed attestations unrepresentable at construction. The original draft
+deferred *authoring* it on measure-first grounds; the maintainer's "why wouldn't we want to
+do that right away... it's not going to happen after July 19th anyways" — corrected and
+strengthened by the freeze's actual scope (only Fable *authoring* ends at midnight
+2026-07-19; Sonnet builds ratified specs after) — moves the authoring to now. §8 is that
+authoring, in full delta grade; §8.6 names the measure-first trade this makes and its
+revision valve. The delta still reaches reality only at a future world's birth (RD-2).
 
 **The v1 statement convention (fixed, versioned — the builder does not fork on it):**
 
@@ -295,7 +411,7 @@ model-attestation v1 | row=<ledger id> | model=<model string, verbatim from the 
   | grade=<exact-command|turn-bracketed|session-scoped|ambiguous>
   | expected=<declared model or "undeclared"> | verdict=<match|MISMATCH|unevaluated>
   | session=<OTel session.id> | basis=<join keys used, comma-separated>
-  | rebuttals=design/FABLE-OTEL-SENTRY-SPEC.md#6-the-standing-rebuttals
+  | rebuttals=design/FABLE-OTEL-SENTRY-SPEC.md#7-the-standing-rebuttals
 ```
 
 One line, `|`-separated `key=value` fields, order fixed, `v1` bumped on any field change
@@ -303,7 +419,7 @@ One line, `|`-separated `key=value` fields, order fixed, `v1` bumped on any fiel
 treated as no attestation by any future parser). A `MISMATCH` verdict — observed model ≠
 the launch-declared expectation — is additionally written as a separate `finding` row so it
 surfaces in ordinary review flow rather than hiding in attestation bulk; this is the
-substitution tripwire row 1443 named, delivered post-hoc.
+post-hoc half of the substitution tripwire (the real-time half is v0's beep).
 
 Builder verification duty (a forkable choice fixed by evidence, not assumption): before
 first live write, witness on a scratch schema that a `verification` row carrying this
@@ -311,12 +427,14 @@ statement, `refs`, and `evidence` passes every kind-shape CHECK of the target wo
 lineage. If any CHECK refuses (e.g. a witnessed-requires-ref-style constraint binding the
 `verification` kind in that lineage), fall back to kind `note`, report which CHECK forced
 the fallback, and record the fallback in the verb's own header — never hand-tune a
-constraint to admit the row.
+constraint to admit the row. The v1 field set is deliberately identical, name for name, to
+§8's typed columns, so the convention *is* the typed kind flattened into one line — the
+stacking made literal.
 
-**Confidence: high** on the recommendation; **medium-high** on `verification` being the
-clean kind in every target lineage (hence the scratch witness duty, not an assertion).
+**Confidence: high**; **medium-high** on `verification` being the clean kind in every
+target lineage (hence the scratch witness duty, not an assertion).
 
-## 5. The correlation algorithm and its confidence grades
+## 6. The correlation algorithm and its confidence grades (v1/v2 shared)
 
 **The chain (row 1444's, independently re-derived from the witnessed events):** a ledger row
 is written by a `./led` invocation inside a Bash tool call, inside an assistant turn, inside
@@ -332,15 +450,16 @@ ledger-side join key; `session.id` the OTel-side one.
    invocation that produced the row (matched on the statement's distinctive content, or on
    the command sha the hooks journal also records). Ties the row to one specific tool call.
 2. **Session identity** — `stamp_session` = `session.id` (**UNWITNESSED join, probe P2 in
-   §12**; the stamp hook's source — it stamps the hook payload's own `session_id` — makes
+   §14**; the stamp hook's source — it stamps the hook payload's own `session_id` — makes
    equality *expected*, but expected is not witnessed).
 3. **Turn bracketing** — the row's `ts` (and the hooks journal's tool timestamps) falling
    within one `api_request`'s duration window, with the tolerance **derived from measured
-   collector batch latency during the §12 witness run, never a round literal** (ADR-0000's
+   collector batch latency during the §14 witness run, never a round literal** (ADR-0000's
    denomination check; the batch processor makes delivery time ≠ event time).
 4. **Resource attributes** — launcher-stamped `autoharn.world` / `autoharn.run` /
-   `autoharn.declared_principal` (witnessed, row 1443) scope candidate events to the right
-   world when several sessions share one collector.
+   `autoharn.declared_principal` (witnessed, row 1443), plus §3's `autoharn.expected_model`
+   — scoping candidate events to the right world when several sessions share one collector,
+   and supplying the `expected=` field.
 
 **Disambiguation duties, from witnessed facts:** utility calls emit under the same session
 with their own model (witnessed: a `generate_session_title` call on a different model in the
@@ -375,33 +494,39 @@ predecessor; the sentry never attests its own rows (no self-loop); no OTel attri
 than `model`, `session.id`, `prompt.id`, timestamps, and `query_source` is ever copied into a
 ledger row — **specifically never `user.email`, `user.account_*`, `organization.id`** (the
 export carries the operator's real PII; the collector doc's privacy note binds the sentry's
-write side too).
+write side too, and the watchdog's journal and mail subjects the same way).
 
 **Confidence: high** on the grade design; **medium** on the algorithm's constants until the
-two probes and the latency measurement land (by design — that is what §12 is for).
+two probes and the latency measurement land (by design — that is what §14 is for).
 
-## 6. The standing rebuttals (surfaced verbatim-in-spirit, per the maintainer's mandate)
+## 7. The standing rebuttals (surfaced verbatim-in-spirit, per the maintainer's mandate)
 
-Every attestation cites this section. An attestation is **defeasible evidence**; each entry
-names a way it can be wrong, and none of them is fixable by this design.
+Every attestation cites this section, and the watchdog's own claims sit under the same
+entries (R1–R4 and R7 apply to it verbatim). An attestation or an alert is **defeasible
+evidence**; each entry names a way it can be wrong, and none of them is fixable by this
+design.
 
 - **R1 — emission is env-controlled.** Telemetry exists only when the session was launched
   with the exporting env vars. A substituted or malicious session can simply not emit.
-  Therefore *absence of events proves nothing*, and the sentry never writes an inference
-  from absence (§5's no-attestation rule).
+  Therefore *absence of events proves nothing*: the sentry never writes an inference from
+  absence (§6's no-attestation rule), and the watchdog reports coverage so unwatched is
+  never mistaken for clean (§3).
 - **R2 — events are droppable and batched, fail-open.** OTLP export is best-effort: a down
   collector, a dropped batch, process death before flush — all lose events silently. A gap
-  in the stream is indistinguishable from R1's silence.
+  in the stream is indistinguishable from R1's silence. The watchdog itself fails silent
+  (its heartbeat option is the operator's opt-in against that).
 - **R3 — the stream is unsigned.** The JSONL export is a plain file written by an
   unauthenticated pipeline. It is honest-operator evidence: anything with write access on
   the emitting or collecting machine can fabricate or alter it after the fact. (Shape B
-  narrows *where* that access must be; it does not close R3 — see §9's ceiling.)
+  narrows *where* that access must be; it does not close R3 — see §11's ceiling.)
 - **R4 — bracketing is non-atomic.** The write-to-turn correlation is temporal, not
   transactional. Concurrent sessions, interleaved turns, clock skew, and batch latency can
-  misbracket; the grade vocabulary bounds this honestly but cannot eliminate it.
+  misbracket; the grade vocabulary bounds this honestly but cannot eliminate it. (The
+  watchdog does no bracketing — R4 is v1/v2-only — but a legitimate `/model` switch is its
+  analogous named false-positive, §3.)
 - **R5 — UNWITNESSED join: subagent session identity.** Whether subagent work emits under
   its own `session.id` is unprobed; until witnessed, subagent-provenance attributions are
-  capped (§5) and this rebuttal stands.
+  capped (§6) and this rebuttal stands.
 - **R6 — UNWITNESSED join: `stamp_session` vs the OTel session id.** The equality the whole
   session join rests on is expected from the stamp hook's mechanism but not yet observed
   end-to-end on the OTel side.
@@ -410,19 +535,173 @@ names a way it can be wrong, and none of them is fixable by this design.
   mTLS, host residence, signatures — authenticates the *pipe* and the *sentry*, never the
   emitter's honesty. Ground truth would require provider-side response signing (Anthropic
   attesting which model served each response), which does not exist; row 1450 names it a
-  candidate for the Anthropic feedback channel. This is why the attestations are AU-family
+  candidate for the Anthropic feedback channel. This is why everything here is AU-family
   audit-supporting metadata and never IA-2 authentication.
 
-## 7. Recordable, not gating — argued
+## 8. v2 — the typed attestation kind, authored in full (delta working name `s44-model-identity-attestation`)
+
+Authored now at the maintainer's word ("no reason to do less than what is appropriate"),
+under the corrected freeze premise: only Fable authoring ends 2026-07-19; a Sonnet builder
+executes this section after ratification, on the standard scratch-schema ceremony. The
+delta is **kernel-touching by definition** (a widened kind CHECK, seven new ledger columns)
+and ships only under this spec's ratification — it is not class-ratifiable (new semantics,
+not only new refusals). It reaches reality only at a future world's birth (runs-are-linear);
+RD-2 is the maintainer's carry-it-into-a-chain decision.
+
+### 8.1 Sequencing and family composition
+
+Hard prerequisite chain: **s43** (and transitively s42/s41/s40), per the ratified
+[s42/s43 family spec](FABLE-REFUSAL-RECORDING-AND-HASH-COVERAGE-SPEC.md). Three composition
+facts govern, each checked against that spec's text:
+
+- **Writes route through the s43 boundary.** Post-s43, `INSERT` on `ledger` is revoked from
+  the granted role (its §4.1: the privilege change is total); the sentry's writes therefore
+  enter through the ledger boundary function like every other writer, and a malformed
+  attestation meets a typed refusal that is itself recorded as a `write_refused` row —
+  the sentry's failures become first-class audit records with zero new machinery.
+- **The new columns enter the hash by the family's own gate.** s42's `compute_row_hash` v2
+  serializes every column except `row_hash`, and `gates/hash_coverage_gate.py` goes red on
+  any delta that adds a ledger column without re-issuing the function in the same delta
+  (its §3.2 teach-text, verbatim: *"a delta that adds a ledger column re-issues
+  compute_row_hash in the same delta"*). s44 therefore re-issues `compute_row_hash` with the
+  seven new columns in catalog ordinal position, all `text`/`bigint` per the fixed per-type
+  rules — closing, for attestations, the outside-the-hash limit v1's rows inherit from the
+  s24-era serialization in pre-s42 worlds.
+- **The kind CHECK re-issue is the s41→s43 idiom continued:** DROP/ADD, additive union,
+  widening s43's twenty-four members by `model_identity_attested` (twenty-fifth).
+
+### 8.2 The kind and its columns
+
+Kind: **`model_identity_attested`**. Seven kind-scoped columns, all nullable, no column
+DEFAULT (the s30 lesson), each with a **two-way** kind-shape CHECK (safe: the kind is born
+in this delta — the s40 precedent; no pre-existing row can carry it, so ADD CONSTRAINT
+validates vacuously), plus split value CHECKs per the s40 house idiom (one concern per
+CHECK, for `gates/kind_shape_manifest_gate.py`'s classifier):
+
+- `attest_row_id bigint REFERENCES ledger(id)` — the attested row. Mandatory (two-way).
+  The FK is to the same table; the target's existence is thereby structural, not CLI-side.
+- `attest_model text` — mandatory non-empty (two-way kind-shape + separate non-empty value
+  CHECK); the event's `model` string **verbatim, never normalized** (§11's denomination
+  discipline: identity in the emitter's own vocabulary, aliasing is a reader concern).
+- `attest_grade text` — mandatory (two-way); closed value CHECK
+  `IN ('exact-command','turn-bracketed','session-scoped','ambiguous')`. Closed is right
+  here where s41's role names were ruled free text: the grades enumerate this design's own
+  join algebra (kernel-structural, like s43's `refusal_surface`), not organizational
+  naming.
+- `attest_verdict text` — mandatory (two-way); closed value CHECK
+  `IN ('match','mismatch','unevaluated')`.
+- `attest_expected text` — nullable *within the kind* (one-way kind-shape CHECK: non-NULL
+  only on this kind); non-empty when present. NULL means the session declared no expected
+  model. Coupled to the verdict by a structural CHECK:
+  `(attest_expected IS NULL) = (attest_verdict = 'unevaluated')` — an unevaluated verdict
+  with a declared expectation, or a match/mismatch claim with nothing to match against, is
+  unrepresentable.
+- `attest_session text` — mandatory non-empty (two-way + value CHECK); the OTel
+  `session.id`.
+- `attest_basis text` — mandatory non-empty (two-way + value CHECK); the comma-separated
+  join keys used (§6's vocabulary).
+
+**Supersession: allowed, deliberately** — an attestation is a defeasible claim, retractable
+and correctable by design, so s31 uniform supersession applies unchanged. This is the
+argued contrast with s43's `write_refused` (whose R6 CHECK forbids supersession because a
+refusal records a historical fact): the two postures differ because the two kinds' semantics
+differ, and stating the contrast here is what keeps a future reviewer from "harmonizing"
+them into a defect.
+
+**Derived view** `model_attestations` (security_invoker, factoring through `ledger_current`
+— the s31 reader discipline, no raw-`ledger` leg): one row per in-force attestation
+(attested row id, model, grade, verdict, expected, session, attesting actor, ts, row_id),
+`GRANT SELECT TO :role`. The human/SPA audit surface; display, never enforcement.
+
+**Same-commit set,** per the house pattern: `ledger_current`/`countersigned_in_force`
+re-issued with the seven columns appended at the end (the s20 lesson; column list = the s43
+head's exact list + seven); `compute_row_hash` re-issued (§8.1); kind CHECK re-issued;
+`gates/kind_shape_manifest_gate.py` CHAIN += s44 plus seven MANIFEST rows;
+`gates/ledger_reader_allowlist.py` CHAIN += s44 (the new view expected to classify clean —
+witnessed, not asserted); a `s44-*.detect.sql` sibling behavior-fingerprinted per the
+migrate-detect-drift ruling; the engine leg re-verified (entry/6 is kind-generic — verified
+at s40 and s41; the new kind flows through with no new `.lp` predicate, `./judge` witnessed
+in AGREE on a fixture carrying it).
+
+### 8.3 What stays CLI-side, named (the s41 precedent, not a gap silently left)
+
+Cross-row properties the kernel's CHECK machinery cannot express without lookups: one
+in-force attestation per (actor, attested row) — enforced by the verb (skip/supersede
+logic, §6), a direct-psql writer could double-attest; and the no-self-attestation rule
+(the target row's actor vs the attesting actor is a cross-row read) — verb-enforced. Both
+are the same accepted direct-writer boundary s41 D-8 names for value-continuity, disclosed
+here on the same footing. A `MISMATCH` companion `finding` row remains verb-side convention
+in v2 as in v1 (a trigger minting side-effect rows would be a new kernel idiom this spec
+does not open).
+
+### 8.4 v2 witness plan (scratch-schema ceremony, both polarities, per element)
+
+On a scratch chain built to the s43 head + s44, in the toy db: (1) every kind-shape and
+value CHECK seen green on a well-formed attestation and red on each violation class
+(missing target, empty model, out-of-vocabulary grade/verdict, expected/verdict decoupling,
+non-kind row carrying an attest column); (2) the FK refusing a nonexistent target id; (3) a
+correction superseding an attestation and `model_attestations` showing exactly the
+successor; (4) `gates/hash_coverage_gate.py` green at s44 (and its synthetic-column
+negative control still red); (5) a write through the s43 ledger boundary function accepted,
+and a malformed one refused *with the refusal recorded* as `write_refused` — the composed
+behavior witnessed, not inferred; (6) `./judge` AGREE on a fixture carrying the new kind;
+(7) the detect sibling t on s44, f on the s43 head. Claims reported WITNESSED /
+REFUSED-AS-EXPECTED / UNEXERCISED, per the standing contract.
+
+### 8.5 The delta's own closure slice (ADR-0000 Rule 2(a))
+
+- **Invariant:** in an s44 world, a model-identity attestation is representable only in the
+  typed shape — target structural (FK), model verbatim, grade and verdict in closed
+  vocabularies, expectation/verdict coupling structural — attributed, hash-covered,
+  boundary-written, supersedable; a malformed attestation is unrepresentable at
+  construction and its attempt is itself a recorded refusal event.
+- **Universe:** kinds carrying each new column: exactly `model_identity_attested`
+  (two-way CHECKs; `attest_expected` one-way within the kind plus the coupling CHECK);
+  views: the two projection homes re-issued +7, `model_attestations` new, non-members
+  re-verified per the s40/s41 lists (none does general column passthrough); triggers: none
+  new (all constraints are same-row CHECKs plus the FK — deliberately trigger-free);
+  hash: the seven columns inside the v2 serialization, gate-enforced; CLI-side residue:
+  enumerated in §8.3, not silent.
+- **Denomination:** grade in the join-set vocabulary; verdict in a three-member closed set
+  coupled structurally to the expectation's presence; model identity in the emitter's
+  verbatim string; the target in an immutable ledger id via FK.
+
+### 8.6 The measure-first trade, named honestly, and its revision valve
+
+The original draft's ground for deferring this section was ADR-0011 Rule 3: mint a typed
+kind from *stabilized live shapes*, not ahead of them — a schema frozen around a guessed
+field set is the measure-first inversion. That ground was real and is **traded, not
+refuted**: against it stands the authoring-availability fact (Fable authoring ends
+2026-07-19; the disciplined form is authored now or its authoring is lost), and the
+maintainer's word — *"no reason to do less than what is appropriate"* — decides the trade.
+What discipline survives the trade: the v1 convention and the v2 columns are field-for-field
+identical, so v1's live operation *is* the measurement run for v2's schema; and the delta
+cannot enter a birth chain before RD-2, so there is a natural window in which live v1
+evidence can still reshape it cheaply. **The revision valve, fixed:** if live v1 shapes
+contradict the authored kind (a field proves wrong-grained, a vocabulary member missing,
+a coupling wrong), the route is a **maintainer decision plus a dated amendment to this
+spec** (ADR-0005 Rule 8), the delta re-issued before any birth-chain entry — **never
+builder improvisation**, and never silent divergence between the built delta and this
+section's text.
+
+**Confidence: high** on the columns/CHECKs (they transcribe §5/§6's already-designed
+fields into the house idiom, and the composition facts are read from the ratified s42/s43
+text); **medium** on field-set completeness against unlived use — exactly the residual the
+valve exists for.
+
+## 9. Recordable, not gating — argued (and where the watchdog sits)
 
 The posture: **nothing anywhere in the harness refuses, blocks, or grades on an attestation
-row.** Argued, per the commission, not assumed:
+row or a watchdog alert.** The watchdog is *notification* — an email to a human is the
+operator-attention channel working as designed, not an enforcement surface; the human it
+beeps decides what to do, which is the decision-queue posture in miniature. For the
+attestation rows, argued per the commission, not assumed:
 
 *For gating* one could say: a witnessed substitution incident deserves a mechanical refusal,
-and a tripwire that only reports post-hoc lets the next substitution advise a ratification
-before anyone reads the report. That is a real cost and it stays; the alert path (the
-`MISMATCH` finding row, operator-visible in ordinary review flow) is the mitigation, not a
-gate.
+and evidence that only reports lets the next substitution advise a ratification before
+anyone reads the report. That cost is real and it is now answered at the right layer: the
+*watchdog* shrinks the exposure window to seconds, without any gate — which removes most of
+the remaining force of the gating argument.
 
 *Against gating*, three independent grounds, jointly decisive: (1) **the action-stream
 ruling** — OTel is diagnostics-tier by standing maintainer principle; a gate keyed on it
@@ -439,7 +718,7 @@ row 1441) or provider-side signing (R7), surfaces that could actually bear load.
 
 **Confidence: high.**
 
-## 8. Transport security — mTLS on the guest-to-host link (shape B)
+## 10. Transport security — mTLS on the guest-to-host link (shape B)
 
 Uncontested (row 1450's rung 2a, confirmed): when the collector moves to the Gentoo host and
 the receiver leaves loopback, the OTLP link crosses a real network boundary and gets mTLS —
@@ -454,13 +733,13 @@ Bounds, stated: mTLS does nothing for shape A (loopback never leaves the guest �
 witnessed config binds `127.0.0.1` and must stay so until B); it does not close R3 (the file
 after landing is still unsigned) and touches R7 not at all. **Crypto deferral honored:**
 certificate generation is part of shape B's deployment, performed then, by the operator;
-nothing in v1 requires it, and this spec does not recommend generating anything now.
+nothing in v0/v1 requires it, and this spec does not recommend generating anything now.
 
 **Confidence: high** on the design; the concrete config is deliberately deferred to
 deployment per the config-fragments rule (never author config lines without the live target
 file — the Gentoo host's files are not in front of this spec).
 
-## 9. The D-3 question — a host-resident tool key, framed for the maintainer (RESERVED)
+## 11. The D-3 question — a host-resident tool key, framed for the maintainer (RESERVED)
 
 **The ratified state.** s41 D-3 refuses `principal_key_bound` for any non-human subject —
 the GPG layer's §6 carried into the type. §6's rationale, verbatim in substance: *an agent's
@@ -493,7 +772,7 @@ attest machine custody of a key, not deliberation, and admitting them dilutes th
 evidentiary value is obtainable **without any kernel change**: the sentry (or a host cron
 the operator controls) can keep detached signatures — or simply an append-only host-side
 hash chain — over its output *as local evidence*, unregistered in the kernel; the binding
-row is only needed if the *kernel* must verify, and nothing in v1 verifies. (3) Shape B
+row is only needed if the *kernel* must verify, and nothing in v0–v2 verifies. (3) Shape B
 itself is not yet deployed; ratifying an exception for an arrangement that does not exist
 would be ceremony ahead of substance. (4) Every signature here still sits under R7's
 ceiling — the marginal assurance is over the sentry's output integrity, not over model
@@ -508,56 +787,84 @@ under full ceremony).
 **Confidence: high** that this is genuinely reserved (both sides carry weight the executor
 must not pre-balance).
 
-## 10. Reserved decisions (the maintainer's, enumerated)
+## 12. Reserved decisions (the maintainer's, enumerated; renumbered at this revision)
 
-- **RD-1** — the narrow cross-trust-domain tool-key exception to s41 D-3 (§9). No default
-  is asserted; v1 is unaffected by either answer.
-- **RD-2** — when (and whether) the typed attestation kind (Option A, §4) enters a future
-  birth chain. Default until his word: Option B stands alone. Recommendation on the
-  trigger's terms only: draft A after the v1 convention survives live use unchanged.
-- **RD-3** — deployment shape B (host-resident collector + sentry + mTLS) timing. Named as
-  his because it touches his host; v1 neither requires nor schedules it.
+- **RD-1** — the narrow cross-trust-domain tool-key exception to s41 D-3 (§11). No default
+  is asserted; v0–v2 are unaffected by either answer.
+- **RD-2** — when the s44 delta (§8, now fully authored) enters a future world's birth
+  chain. Its *authoring* is discharged by this revision; its *reality* is his sequencing
+  act, with §8.6's valve open until then.
+- **RD-3** — deployment shape B (host-resident collector + watchdog + sentry + mTLS)
+  timing. Named as his because it touches his host; v0/v1 run guest-local without it.
 
-Everything else in this spec is fixed (the builder forks on nothing in §§2–8, 11–15).
+Everything else in this spec is fixed (the builder forks on nothing in §§2–10, 13–17). The
+former draft's "RD-2: whether to author the typed kind" is resolved by the maintainer's
+revision response and no longer reserved.
 
-## 11. Closure statement (ADR-0000 Rule 2(a), 2026-07-02 form)
+## 13. Closure statement (ADR-0000 Rule 2(a), 2026-07-02 form; the family view — §8.5 carries the s44 slice)
 
-- **Invariant:** every ledger row whose producing session emitted correlatable telemetry can
-  carry an attributed, defeasible, superseding-retractable attestation naming the observed
-  serving model, at a declared grade whose join basis is explicit, with the standing
-  rebuttals cited on the row; a model substitution in an emitting session is therefore
-  representable in the record post-hoc, at diagnostics tier, without any surface of the
-  harness gating on it.
+- **Invariant:** every emitting session's serving model is observable within seconds
+  against its declared expectation (v0), and every ledger row whose producing session
+  emitted correlatable telemetry can carry an attributed, defeasible,
+  superseding-retractable attestation naming the observed serving model, at a declared
+  grade whose join basis is explicit, with the standing rebuttals cited (v1; typed and
+  structural in an s44 world, v2) — so a model substitution in an emitting session is
+  representable in the record and surfaced to the operator, at diagnostics tier, without
+  any surface of the harness gating on it.
 - **Quantification universe** (axes checked outward; deliberately-uncovered axes named):
   *sessions* — main witnessed; subagent and background provenance UNWITNESSED (P1) and
   grade-capped until probed; *models per session* — main + utility distinguished by
   `query_source` (witnessed); *worlds sharing one collector* — scoped by resource
-  attributes; *time* — bracketing tolerance derived from measured batch latency, skew named
-  in R4; *absence* — excluded from the attestable universe by construction (R1; no row is
-  written); *the sentry's own rows* — excluded (no self-attestation); *non-emitting
-  sessions* — **named as not covered, permanently** (R1 is not closable by this design);
-  *emitter honesty* — **named as not covered by any layer here** (R7).
-- **Denomination:** confidence is denominated in the closed grade vocabulary keyed to named
-  join sets, never prose adjectives; the bracketing tolerance in measured collector latency,
-  never a round literal; model identity in the event's verbatim `model` string, never a
-  normalized alias; the attestation's target in the immutable ledger row id.
+  attributes; *expectation declaration* — attribute-declared, file-fallback, or UNWATCHED
+  said loudly (§3; the undeclared case is `unevaluated` in v1/v2, never guessed); *time* —
+  bracketing tolerance derived from measured batch latency, skew named in R4; *legitimate
+  mid-session `/model` switches* — **named as a false-positive class for v0**, accepted;
+  *absence* — excluded from the attestable universe by construction (R1; no row is
+  written) and distinguished from health by v0's coverage reporting; *the sentry's own
+  rows* — excluded (no self-attestation); *non-emitting sessions* — **named as not
+  covered, permanently** (R1 is not closable by this design); *emitter honesty* — **named
+  as not covered by any layer here** (R7).
+- **Denomination:** confidence in the closed grade vocabulary keyed to named join sets,
+  never prose adjectives; the bracketing tolerance in measured collector latency, never a
+  round literal; model identity in the event's verbatim `model` string, never a normalized
+  alias; the attestation's target in the immutable ledger row id (an FK in v2); the
+  watchdog's debounce keyed on (session, observed-model), never a time-window literal that
+  could swallow a new wrong model.
 
-## 12. Witness plan (WITNESSED / REFUSED-AS-EXPECTED / UNEXERCISED, per the standing contract)
+## 14. Witness plan (WITNESSED / REFUSED-AS-EXPECTED / UNEXERCISED, per the standing contract)
 
-**Witnessable TODAY, with the installed guest-local collector — and P1/P2 run FIRST, before
-correlation code is written** (they are load-bearing inputs to §5, not validations of it):
+**Witnessable TODAY, with the installed guest-local collector.**
+
+*v0 watchdog (buildable and witnessable first, independent of P1/P2):*
+
+- **W1 — mismatch fires:** a telemetry-on session launched with
+  `autoharn.expected_model` deliberately set to a different model than the session runs;
+  the watchdog calls `notify.py` with the mismatch subject (the mail's arrival is the
+  operator-side witness; the exec of the script with the right argv is the fixture-side
+  one). The watchdog seen red on the exact shape it exists to catch.
+- **W2 — match stays silent:** same run, correct expectation; no alert, session counted in
+  coverage.
+- **W3 — unwatched is loud:** a session with no expectation declared; one coverage notice,
+  no mismatch alert, never silence.
+- **W4 — debounce:** repeated wrong-model requests → one alert; a second, different wrong
+  model → a second alert.
+- **W5 — utility-call filter:** the witnessed `generate_session_title` haiku call raises no
+  alert.
+
+*v1 sentry — P1–P4 run FIRST, before correlation code is written* (they are load-bearing
+inputs to §6, not validations of it):
 
 - **P1 — subagent emission probe:** a headless session that spawns a subagent, collector up;
   inspect whether subagent `api_request` events appear, and under which `session.id`.
   Discharges R5 or hardens the grade cap.
 - **P2 — session-id equality probe:** one session writing one `./led` row with telemetry on;
   compare the row's `stamp_session` against the export's `session.id`. Discharges R6 or
-  forces a re-keyed join (surfaced to the maintainer if so — it would reshape §5).
+  forces a re-keyed join (surfaced to the maintainer if so — it would reshape §6).
 - **P3 — tool-detail probe:** the same run with `OTEL_LOG_TOOL_DETAILS` enabled; witness the
   command text's presence and the privacy blast radius (what else the detail events carry),
   recorded in the verb's header.
 - **P4 — latency measurement:** batch flush latency observed across the witness runs; the
-  §5 bracketing tolerance derived from it, number recorded beside its derivation.
+  §6 bracketing tolerance derived from it, number recorded beside its derivation.
 - **E2E — the positive leg:** telemetry-on session writes a row; `./otel-attest` runs;
   exactly one `verification` row lands, parseable back to fields, grade justified by the
   joins actually present, no PII copied.
@@ -565,54 +872,66 @@ correlation code is written** (they are load-bearing inputs to §5, not validati
   here even though the sentry is not a gate):** (i) collector stopped mid-window → the
   affected rows get *no* attestation and the verb's report says why (never a fabricated
   absence claim); (ii) a synthetic export line with a mismatched model for a witnessed
-  session → `verdict=MISMATCH` attestation plus the companion `finding` row — the sentry
-  seen red on the exact shape it exists to catch; (iii) a v0/garbled statement line fed to
-  the parser → refused loudly; (iv) re-run without `--re-attest` → no duplicate.
+  session → `verdict=MISMATCH` attestation plus the companion `finding` row; (iii) a
+  v0/garbled statement line fed to the parser → refused loudly; (iv) re-run without
+  `--re-attest` → no duplicate.
+
+*v2:* the scratch-schema plan of §8.4 is witnessable today on the toy db (the s42/s43
+lineage files exist); its *live* operation awaits an s44 world.
 
 **Awaits deployment (UNEXERCISED until then, and said so):** shape B end-to-end; mTLS
-handshake refusal on a bad client cert (both polarities); any RD-1 outcome; scheduled
-operation.
+handshake refusal on a bad client cert (both polarities); any RD-1 outcome; scheduled/
+service-managed operation of watchdog or sentry on the Gentoo host.
 
-## 13. Deliberately OUT (named, with reasons)
+## 15. Deliberately OUT (named, with reasons)
 
-1. **Any gating/enforcement on attestations** — §7; re-entry only by maintainer amendment.
-2. **The typed attestation kind (s42-family)** — RD-2; filed in §4, not silently absent.
-3. **Key generation, signing ceremony, certificates** — standing crypto deferral; §8/§9
+1. **Any gating/enforcement on alerts or attestations** — §9; re-entry only by maintainer
+   amendment.
+2. **Key generation, signing ceremony, certificates** — standing crypto deferral; §10/§11
    model, never perform.
-4. **Provider-side response signing** — does not exist; a feedback-channel candidate
+3. **Provider-side response signing** — does not exist; a feedback-channel candidate
    (row 1450), not buildable here.
-5. **Hooks changes** — the sentry needs none; the hooks queue (row 1441) is separate work.
-6. **A real-time watch/alert daemon** — the batch verb is the core; a watch mode is a
-   future convenience with its own operational questions (standing-service billing,
-   collector lifecycle), not smuggled in.
-7. **Per-event injection into the CLI's own stream** — impossible (the CLI owns its
+4. **Hooks changes and any edit to the operator's `~/.claude` settings** — the watchdog
+   *calls* the existing notifier; it changes no hook (the no-live-hooks-edits rule and the
+   read-only verification in §3).
+5. **A legitimate-switch suppression heuristic for v0** — named as a possible future
+   amendment, measured first (§3); not built.
+6. **Per-event injection into the CLI's own stream** — impossible (the CLI owns its
    stream, row 1443); the hook-emitted companion-stream idea stays an option on the record
    there, unbuilt.
-8. **Standing collector service management** — the operator's decision (the install doc's
-   own posture); the verb treats the export as input wherever it came from.
-9. **Attesting other worlds' historical exports** — nothing forbids a later backfill run,
+7. **Standing collector service management** — the operator's decision (the install doc's
+   own posture); watchdog and verb treat the export as input wherever it came from.
+8. **Attesting other worlds' historical exports** — nothing forbids a later backfill run,
    but v1's witness plan covers the live-window case only.
+9. **Kernel-side side-effect rows (a trigger minting the MISMATCH `finding`)** — verb-side
+   convention in v1 and v2 alike (§8.3); opening a new kernel idiom is not this spec's
+   mandate.
 
-## 14. Honest limits
+## 16. Honest limits
 
-- **Everything in §6 (R1–R7), permanently.** The strongest true claim this system ever
-  makes is: *an honest, emitting session's serving model is recorded post-hoc with
-  near-certain correlation.* Against a dishonest or silent session it records nothing, and
-  says so.
-- **Diagnostics-tier ceiling by standing ruling** — the attestations support audit (AU
-  family); they are never authentication (IA-2) and never a product guarantee.
-- **Solo-world non-independence** — in a one-operator deployment the sentry, the ledger,
-  and the sessions are all the operator's own processes (s17's honesty, inherited); shape B
-  narrows the intra-machine trust topology, not the single-human one.
+- **Everything in §7 (R1–R7), permanently.** The strongest true claim this system ever
+  makes is: *an honest, emitting session's serving model is observed in near-real-time and
+  recorded post-hoc with near-certain correlation.* Against a dishonest or silent session
+  it observes nothing, records nothing, and — via v0's coverage reporting — says so.
+- **The watchdog is best-effort by construction** — it fails silent (R2 applies to it);
+  the heartbeat is the operator's opt-in mitigation; and its expectation input is a
+  *declaration*, so a wrong declaration yields a false alarm or a false pass with no
+  deeper truth available (R7).
+- **Diagnostics-tier ceiling by standing ruling** — alerts and attestations support audit
+  (AU family); they are never authentication (IA-2) and never a product guarantee.
+- **Solo-world non-independence** — in a one-operator deployment the watchdog, sentry,
+  ledger, and sessions are all the operator's own processes (s17's honesty, inherited);
+  shape B narrows the intra-machine trust topology, not the single-human one.
 - **Superuser bypass** — attestation rows live in the same Postgres the standing disclosed
-  bound covers; s26's chain (where present) is the tamper evidence, with its own known
-  column-coverage limit.
-- **Convention-not-type in v1** — §4's named cost; the round-trip fixture is the net until
-  Option A.
+  bound covers; the hash chain (s26 in current worlds, s42's full coverage in future ones)
+  is the tamper evidence, with s26's known column-coverage limit applying to v1 rows in
+  pre-s42 worlds.
+- **Convention-not-type in v1** — §5's named cost; the round-trip fixture is the net until
+  an s44 world exists (§8 is the typed closure, authored).
 - **PII adjacency** — the export carries the operator's email and account/org ids; the
-  sentry's never-copy rule (§5) and the export's local-only handling are discipline, not
-  mechanism. The export directory is treated like `ephemera/`: local evidence, never
-  committed, never pasted unredacted.
+  never-copy rule (§6), the watchdog's subject-line discipline (§3), and the export's
+  local-only handling are discipline, not mechanism. The export directory is treated like
+  `ephemera/`: local evidence, never committed, never pasted unredacted.
 - **Evidence-row bookkeeping defects, surfaced not resolved:** row 1444 grounds the
   correlation chain in "row 1445's witnesses," but 1445 is the collector-install *estimate*
   row — the witnesses live in row 1443 (and the install record); and rows 1442/1443 carry
@@ -620,38 +939,51 @@ operation.
   meant. Neither defect changes any conclusion this spec rests on (the witnesses
   themselves were read directly); both are noted for the record's own hygiene.
 
-## 15. Executor guidance (a non-Fable builder; every forkable choice fixed)
+## 17. Executor guidance (a non-Fable builder; every forkable choice fixed)
 
-1. **Read first, in full:** this spec; rows 1434, 1441–1445, 1450; the s40/s41 headers;
-   the collector install record on this host. The LAW files named in the inputs govern.
-2. **Order of work:** P1–P4 probes (§12) → report their outcomes as ledger evidence →
-   only then the verb. If P2 fails (session ids diverge), STOP and surface it — §5's join
-   design is input-dependent and the fix is the maintainer's spec amendment, not your
-   improvisation.
-3. **The verb:** repo-root executable `otel-attest` (Python, top-of-file imports only —
-   the lazy-import ban is absolute), flags: `--export <path>` (default the installed
-   collector's data file), `--since <ts>`/`--until <ts>`, `--world <dsn or led target>`,
-   `--dry-run` (print would-be rows, write nothing), `--re-attest`. Stdout: per-row
-   disposition (attested at grade / skipped-already-attested / uncovered-no-events /
-   MISMATCH), totals, and the measured window. Refusals loud, exit non-zero on any
+1. **Read first, in full:** this spec; rows 1434, 1441–1445, 1450, 1464; the s40/s41
+   headers; the ratified s42/s43 spec (for §8's composition); the collector install record
+   on this host. The LAW files named in the inputs govern.
+2. **Build order: v0 first.** The watchdog (`otel-watch`) per §3: Python, top-of-file
+   imports only (the lazy-import ban is absolute), `--daemon`/`--once`, `--expectations
+   <file>`, `--alert-unwatched`, `--heartbeat`. Alert exec'd exactly as §3's command line
+   (argv list, no shell); journal beside the collector's own logs. Witness W1–W5 before
+   calling it done; W1's fixture banks the exec'd argv.
+3. **Then P1–P4 probes (§14)** → report their outcomes as ledger evidence → only then the
+   v1 verb. If P2 fails (session ids diverge), STOP and surface it — §6's join design is
+   input-dependent and the fix is the maintainer's spec amendment, not your improvisation.
+4. **The v1 verb:** repo-root executable `otel-attest`, flags: `--export <path>` (default
+   the installed collector's data file), `--since <ts>`/`--until <ts>`, `--world <dsn or
+   led target>`, `--dry-run` (print would-be rows, write nothing), `--re-attest`. Stdout:
+   per-row disposition (attested at grade / skipped-already-attested / uncovered-no-events
+   / MISMATCH), totals, and the measured window. Refusals loud, exit non-zero on any
    malformed input; never silently skip a parse error.
-4. **Writes:** `LED_ACTOR=otel-sentry`, kind `verification` (scratch-witness first; `note`
-   fallback per §4, reported), statement per the fixed v1 convention, `refs row:<id>`,
+5. **Writes:** `LED_ACTOR=otel-sentry`, kind `verification` (scratch-witness first; `note`
+   fallback per §5, reported), statement per the fixed v1 convention, `refs row:<id>`,
    evidence naming export path + window + event ids. MISMATCH additionally writes the
-   `finding` row. Never copy PII attributes (§5's enumerated never-list).
-5. **Principal:** in a pre-s40 world, the disclosed interim registration of §3 (ordinary
+   `finding` row. Never copy PII attributes (§6's enumerated never-list).
+6. **Principal:** in a pre-s40 world, the disclosed interim registration of §4 (ordinary
    principal row, class `tool`, plus a `decision` row recording the act and citing this
    spec). Do not build s40 ceremony calls that no live world can execute; the s40+ path is
    documentation in the verb's header until such a world exists.
-6. **Fixtures:** every §12 leg banked under `seen-red/otel-attest/`, both polarities,
-   registered with the fixture census; the negative controls are part of done, not
-   follow-up (the mechanism ships with the first fix — ADR-0011's life-critical trigger).
-7. **Claims:** your report states, per §12 item, WITNESSED (with observed output),
+7. **v2 (only after ratification and at the maintainer's sequencing word, RD-2):** build
+   `kernel/lineage/s44-model-identity-attestation.sql` + detect sibling exactly per §8 —
+   §8.2's columns and CHECKs, §8.1's same-commit set, §8.4's witness plan, scratch-schema
+   ceremony on the toy db, both polarities, `./judge` in AGREE. Any divergence you believe
+   necessary between §8's text and buildable reality goes through §8.6's valve
+   (maintainer + dated amendment), never your local judgment.
+8. **Fixtures:** every §14 leg banked under `seen-red/otel-watch/` and
+   `seen-red/otel-attest/` (and the s44 scratch under `seen-red/s44-model-identity-
+   attestation/` when built), both polarities, registered with the fixture census; the
+   negative controls are part of done, not follow-up (the mechanism ships with the first
+   fix — ADR-0011's life-critical trigger).
+9. **Claims:** your report states, per witness item, WITNESSED (with observed output),
    REFUSED-AS-EXPECTED, or UNEXERCISED with the concrete blocker. No umbrella claims. Every
    choice this spec did not fix for you that you nonetheless had to make is a defect in
    this spec: make the smallest honest choice, and flag it loudly in the report.
-8. **Do not touch:** kernel/lineage, law/, engine/lp, hooks/, the collector's config, or
-   any live session's world. The sentry is additive tooling plus ledger rows, nothing else.
+10. **Do not touch:** kernel/lineage (except the commissioned s44 files under item 7),
+    law/, engine/lp, hooks/, `~/.claude/settings.json`, the collector's config, or any
+    live session's world. The layers are additive tooling plus ledger rows, nothing else.
 
 ## License
 
