@@ -923,6 +923,50 @@ corpus, and its relation to
 [ADR-0000's typed-fix discipline](../law/adr/0000-the-alpha-and-the-omega-type-driven-design.md):
 [ORCH-FINDING-ATOMIZATION-RECIPE.md](ORCH-FINDING-ATOMIZATION-RECIPE.md).
 
+## Capturing errors so they cannot quietly recur (ADR-0000 / ADR-0011)
+
+**Can I leverage autoharn to automate the process of capturing errors before they happen
+again, à la ADRs 0000 and 0011?** Yes — the discipline exists, it is mostly typing rather
+than tooling, and it ran end-to-end on a live specimen on 2026-07-18 (the SQL-injection
+class: captured as ledger row 1637, named as a class in the same day's
+[ADR-0000](../law/adr/0000-the-alpha-and-the-omega-type-driven-design.md) and
+[ADR-0012](../law/adr/0012-compositional-and-structural-hygiene.md) amendments, swept
+across every sibling script under row 1643, and banked as re-runnable red fixtures). The
+recipe, in the order the ADRs bind it:
+
+1. **Type the error as a CLASS, not an anecdote.** When a defect surfaces, write a ledger
+   row that names the class it instantiates — firmer vocabulary than a prose "snag". The
+   suggested shape is a sibling statement grammar to `estimate:`/`actual:`
+   ([USER-RETROSPECTIVE-RECIPE.md](USER-RETROSPECTIVE-RECIPE.md)'s convention family):
+   `defect: <CLASS-SLUG> | <SPECIMEN> | <FORECLOSING-FIX> | <REFS>` — one row per
+   class, the specimen quoted, the refs pointing at the incident, and the
+   foreclosing-fix field holding the fix once typed, or the literal word `open` while
+   it is still outstanding. This is a CONVENTION in
+   v1, deliberately unvalidated: per [ADR-0011](../law/adr/0011-mechanization-discipline.md),
+   an intake validator is minted when a malformed row is witnessed recurring, not before.
+2. **Ask ADR-0000's Rule 2 pair before authoring any fix**: (a) what type forecloses the
+   whole class, and (b) what operational lapse let it recur — the answers belong in the
+   same row's foreclosing-fix field or its follow-up.
+3. **Bank the red.** A closed defect gets a `seen-red/` fixture registered in the
+   fixture census ([gates/fixture_census.py](../gates/fixture_census.py)) — after that,
+   silent reintroduction is mechanically impossible: the fixture is a standing
+   re-executable witness, which is the reintroduction-blocking half, already built.
+4. **Cross-check on the next incident.** Before fixing anything new, query the ledger for
+   the class (`./led` search over `defect:` rows); a hit converts "fix this bug" into
+   "this class RECURRED", which is exactly ADR-0011's trigger to mint a mechanical check.
+   The A:B:C loop's named defect catalogue
+   ([ORCH-ABC-AUDIT-LOOP-RECIPE.md](ORCH-ABC-AUDIT-LOOP-RECIPE.md)) is this same pattern
+   already running for documentation defects.
+Named honestly, what is NOT built: the self-triggering half — a Claude Code hook that
+observes an error signal and itself runs the cross-check (or inserts an obligation
+binding someone to run it) — does not exist. It is filed on the ledger as a candidate detective-control
+mechanism (ledger row 1696), to be built when the manual cross-check step is witnessed
+lapsing — the same evidence bar the estimates discipline's own recording lapse met on
+2026-07-18 (ledger row 1695: four days of estimates written with no recorded outcomes,
+caught by a maintainer-commissioned calibration study) — never by anticipation.
+**UNWITNESSED beyond that filing:** no cross-check lapse has yet been observed to test
+the trigger.
+
 ## Documentation quality
 
 **Can my project use the fresh-context documentation review loop autoharn uses on itself?**
