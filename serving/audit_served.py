@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-18T07:45:52Z
-#   last-change: 2026-07-18T10:06:56Z
+#   last-change: 2026-07-18T15:57:41Z
 #   contributors: ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -28,9 +28,24 @@ difference is reported by row id, single home for the diff logic (ADR-0012 P1) s
 witness suite's negative control and a real operator invocation exercise the identical
 comparator.
 
+MULTIPLEXING (design/FABLE-BOUNDARY-MULTIPLEX-AND-CLI-REBASE-SPEC.md §4: "audit_served.py
+gains --deployment <name>"). The served side now answers only under a `/d/{deployment}`
+prefix (spec §2 -- no unprefixed routes survive), so this tool needs to know WHICH deployment
+segment to hit on the served side, in addition to the deployment.json it already reads for its
+own direct-psql leg. The spec's own words name a new `--deployment <name>` flag, but this
+tool's `--deployment` flag ALREADY means "path to deployment.json" (this file's original
+contract) -- silently repurposing an existing flag's meaning would be exactly the
+lying-signature class this project's own house style exists to forbid. The smallest honest
+resolution, flagged here rather than buried: this tool keeps `--deployment <path>` UNCHANGED
+(the direct-read connection facts) and gains a NEW, distinctly-named `--deployment-name <name>`
+for the served-side `/d/{name}` prefix -- both are required once the served side is
+multiplexed (`--deployment-name` defaults to None, which fails loudly at first use rather than
+silently hitting a since-retired unprefixed route).
+
 Usage:
     python3 serving/audit_served.py --base-url http://127.0.0.1:8420 \\
-        --deployment /path/to/deployment.json [--endpoint /rows/current] [--view ledger_current]
+        --deployment /path/to/deployment.json --deployment-name autoharn1 \\
+        [--endpoint /rows/current] [--view ledger_current]
 
 Exit 0 on agreement; 1 on any row-set difference; 2 on a transport/infrastructure failure
 (the served fetch or the psql read itself failed -- ADR-0002: an infrastructure failure is
@@ -129,9 +144,12 @@ def compare_row_sets(served: list[dict[str, Any]], kernel: list[dict[str, Any]])
     return diffs
 
 
-def run_audit(base_url: str, cfg: BoundaryConfig, endpoint: str, view: str,
+def run_audit(base_url: str, cfg: BoundaryConfig, deployment_name: str, endpoint: str, view: str,
               after_id: int = 0, limit: int = 1000) -> list[str]:
-    served = fetch_served(base_url, f"{endpoint}?after_id={after_id}&limit={limit}")
+    # Multiplex spec §2: the served side answers only under /d/{deployment_name}/... -- no
+    # unprefixed route survives, so this tool must prepend it exactly like every other client.
+    served_endpoint = f"/d/{deployment_name}{endpoint}"
+    served = fetch_served(base_url, f"{served_endpoint}?after_id={after_id}&limit={limit}")
     kernel = fetch_kernel(cfg, view, after_id, limit)
     return compare_row_sets(served, kernel)
 
@@ -139,7 +157,11 @@ def run_audit(base_url: str, cfg: BoundaryConfig, endpoint: str, view: str,
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     p.add_argument("--base-url", required=True, help="the running service's base URL, e.g. http://127.0.0.1:8420")
-    p.add_argument("--deployment", required=True, help="path to this project's deployment.json")
+    p.add_argument("--deployment", required=True, help="path to this project's deployment.json (the direct-read connection facts)")
+    p.add_argument("--deployment-name", required=True,
+                    help="the /d/{name} discriminator this deployment answers under on the "
+                         "SERVED side (multiplex spec §2/§4) -- distinct from --deployment "
+                         "above, which is a path, not a name (see this module's docstring)")
     p.add_argument("--endpoint", default="/rows/current")
     p.add_argument("--view", default="ledger_current")
     p.add_argument("--after-id", type=int, default=0)
@@ -149,7 +171,8 @@ def main(argv: list[str] | None = None) -> int:
     record = deployment_record.load_deployment(args.deployment)
     cfg = BoundaryConfig(record)
     try:
-        diffs = run_audit(args.base_url, cfg, args.endpoint, args.view, args.after_id, args.limit)
+        diffs = run_audit(args.base_url, cfg, args.deployment_name, args.endpoint, args.view,
+                           args.after_id, args.limit)
     except AuditTransportError as e:
         sys.stderr.write(f"audit_served: TRANSPORT FAILURE (not a disagreement verdict): {e}\n")
         return 2

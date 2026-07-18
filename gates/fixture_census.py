@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-09T13:36:11Z
-#   last-change: 2026-07-18T10:47:56Z
+#   last-change: 2026-07-18T16:03:51Z
 #   contributors: be693afb/main, e4410ef6/main, 3c50e030/main, 3c942a60/main, a857c93d/main, ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -155,6 +155,7 @@ REGISTRY: dict[str, str] = {
     "defeat-pipeline":                 "seen-red/defeat-pipeline/run_fixtures.py",
     "judge-all-capable-layers":       "seen-red/judge-all-capable-layers/run_fixtures.py",
     "boundary-service":                "seen-red/boundary-service/run_fixtures.py",
+    "boundary-multiplex":              "seen-red/boundary-multiplex/run_fixtures.py",
     "otel-attest":                     "seen-red/otel-attest/run_fixtures.py",
     "column-complete-gate":           "seen-red/column-complete-gate/run_fixtures.py",
     "freeze-at-stamp":                "seen-red/freeze-at-stamp/run_fixtures.py",

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-18T07:43:25Z
-#   last-change: 2026-07-18T12:14:12Z
+#   last-change: 2026-07-18T15:53:06Z
 #   contributors: ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -162,6 +162,33 @@ class ServerSaturated(BaseModel):
     disposition: str = "server_saturated"
     inflight_limit: int = Field(description="MAX_INFLIGHT_KERNEL_CALLS -- the named admission bound this call was refused against")
     message: str = Field(description="teach-text: names the bound, the cause (concurrent kernel calls at capacity), and that retry-with-backoff is the correct caller response")
+
+
+class UnknownDeployment(BaseModel):
+    """design/FABLE-BOUNDARY-MULTIPLEX-AND-CLI-REBASE-SPEC.md §2: the `{deployment}` path
+    segment on every route is valid iff it is a key of the loaded multiplex config -- a closed
+    enumeration fixed at startup (ledger decision row 1631: TOML config, mandatory `/d/{name}`
+    discriminator even for one deployment). Anything else refuses this ONE typed 404 shape,
+    naming the full known set so the caller can self-correct without a second round trip."""
+
+    disposition: str = "unknown_deployment"
+    known: list[str] = Field(description="every deployment name this service is configured to serve")
+    message: str = Field(description="teach-text naming the unknown segment and the known set")
+
+
+class DeploymentSaturated(BaseModel):
+    """spec §4: `MAX_INFLIGHT_KERNEL_CALLS` stays the GLOBAL admission bound (it protects the
+    shared threadpool, process-wide) and gains a per-deployment sub-bound,
+    `MAX_INFLIGHT_PER_DEPLOYMENT`, so one deployment's stalled kernel cannot occupy the whole
+    global bound and starve its siblings. This shape is DISTINCT from `ServerSaturated` above
+    (spec §4/A6/A8's label-honesty ruling: one condition, one label -- a caller refused because
+    ITS OWN deployment's sub-bound is exhausted must never see the same label a caller refused
+    because the WHOLE SERVER's global bound is exhausted would see, and vice versa)."""
+
+    disposition: str = "deployment_saturated"
+    deployment: str = Field(description="the deployment name this call was refused against")
+    inflight_limit: int = Field(description="MAX_INFLIGHT_PER_DEPLOYMENT -- this deployment's own sub-bound")
+    message: str = Field(description="teach-text: names the bound, the deployment, the cause, and that retry-with-backoff is the correct caller response")
 
 
 class LedgerWriteIntFields(BaseModel):

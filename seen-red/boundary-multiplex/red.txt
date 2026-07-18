@@ -1,0 +1,110 @@
+boundary-multiplex -- banked RED evidence (2026-07-18, toy db 192.168.122.1, scratch worlds
+muxa<pid>/muxb<pid> plus a deliberately-unreachable third deployment muxstall<pid>; runnable
+fixture: seen-red/boundary-multiplex/run_fixtures.py, registered in gates/fixture_census.py).
+Witnesses design/FABLE-BOUNDARY-MULTIPLEX-AND-CLI-REBASE-SPEC.md §7's WM1-WM4 (WM5/WM6 are the
+§5 CLI-rebase witnesses -- UNEXERCISED here; the CLI rebase is a separate, not-yet-built seam,
+named in the build report rather than faked).
+
+0. THE BUG THIS FIXTURE FOUND AND THE FIX IT PROVES (both polarities in one finding -- a
+   FIXTURE-HARNESS bug, not a `serving/` production bug; still a genuine red->green transition
+   captured live, not fabricated). The FIRST live run of this fixture was RED on all three WM3
+   legs:
+
+     === wm3-unknown-top-level-key-refuses-before-bind ===
+       [FAIL] port refused-to-connect=True, exit=-15, stderr tail='' (expected to name
+       'unknown top-level key')
+     === wm3-missing-required-key-refuses-before-bind ===
+       [FAIL] port refused-to-connect=True, exit=-15, stderr tail='' (expected to name
+       'missing required key')
+     === wm3-zero-deployments-refuses-before-bind ===
+       [FAIL] port refused-to-connect=True, exit=-15, stderr tail='' (expected to name
+       'ZERO deployments')
+
+   exit=-15 (SIGTERM) with EMPTY stderr is the tell: the fixture called
+   `bs_fixtures.stop_server(proc_wm3)` -- which unconditionally `terminate()`s -- IMMEDIATELY
+   after `Popen`, racing the child's own Python-interpreter-startup + module-import window. The
+   child was killed before it ever reached `boundary_multiplex_config.load_multiplex_config`'s
+   own refusal path, so the SIGTERM exit code merely LOOKED like a fast refusal while proving
+   nothing about `serving/boundary_service.py`'s actual construction-time behavior (confirmed
+   by hand: `python3 -m serving.boundary_service --config <same-bad-toml> ...` run directly,
+   unhurried, exits 2 with the correct named message every time -- see item 1 below). Fixed by
+   replacing the immediate `terminate()` with `proc.communicate(timeout=10)` -- waiting for the
+   process's OWN natural exit (a construction-time config refusal has no DB round trip and no
+   network I/O, so it is fast on its own) -- before ever checking the port or the exit code, and
+   tightening the exit-code assertion from `!= 0` to `== 2` (this service's own documented
+   config-refusal exit code, `_parse_args`'s sibling bind-guard refusal uses the same `return 2`
+   convention). The GREEN run below re-exercises exactly the path that was red (all three
+   malformed-config legs) and stays green.
+
+1. WM3 (construction-time config refusal, three legs, no world needed) -- each malformed TOML
+   refuses BEFORE the socket binds:
+
+     wm3-unknown-top-level-key-refuses-before-bind:
+       port refused-to-connect=True, exit=2, stderr="boundary_service: REFUSED at start-up
+       (config) -- boundary-multiplex config at .../bad-top.toml has unknown top-level key(s)
+       ['unexpected_top'] -- the only recognized top-level key is 'deployments' (spec §3).
+       Refused before the socket ever binds."
+     wm3-missing-required-key-refuses-before-bind:
+       exit=2, stderr="...  [deployments.a] is missing required key(s) ['pgkern'] (spec §3: 'a
+       missing required key refuses by name')."
+     wm3-zero-deployments-refuses-before-bind:
+       exit=2, stderr="... configures ZERO deployments -- refused (spec §3: 'zero deployments
+       refuses'). A single-deployment config is the degenerate, expected common case, but it
+       still needs exactly one [deployments.NAME] table."
+
+2. WM1 (cross-contamination probe, both directions) -- two full s43-birthed worlds
+   (muxa<pid>, muxb<pid>) served by ONE `serving.boundary_service --config` process from ONE
+   two-deployment TOML: a marker write to EACH deployment lands in ITS OWN world's ledger and
+   is absent from the sibling's, both directions:
+
+     wm1-both-writes-accepted: write to muxa<pid>: status=200 disposition=accepted; write to
+       muxb<pid>: status=200 disposition=accepted
+     wm1-cross-contamination-direction-a-to-b: marker written to muxa<pid> present in muxa<pid>'s
+       ledger: True; present in muxb<pid>'s ledger (must be False): False
+     wm1-cross-contamination-direction-b-to-a: marker written to muxb<pid> present in muxb<pid>'s
+       ledger: True; present in muxa<pid>'s ledger (must be False): False
+
+3. WM2 (unknown deployment, typed 404) -- `GET /d/does-not-exist-<pid>/health` against the same
+   two-deployment server:
+
+     status=404 body={'disposition': 'unknown_deployment', 'known': ['muxa<pid>', 'muxb<pid>'],
+     'message': "no deployment named 'does-not-exist-<pid>' is configured on this service
+     (spec §2: the {deployment} discriminator is a closed enumeration fixed at startup); known
+     deployments: ['muxa<pid>', 'muxb<pid>']"}
+
+4. WM4 (per-deployment admission bound, measured, A9's method extended to the new axis) -- a
+   THIRD deployment (muxstall<pid>) pointed at the same UNROUTABLE_HOST lever
+   seen-red/boundary-service/run_fixtures.py's own W14/W27 use, in a SEPARATE two-deployment
+   config alongside the live muxa<pid> world (n=2, so
+   MAX_INFLIGHT_PER_DEPLOYMENT = max(4, 24 // 2) = 12, and the untouched GLOBAL bound stays 24):
+   a burst of 24 concurrent writes against ONLY the stalled deployment --
+
+     wm4-per-deployment-saturation-distinct-label-and-prompt: burst_n=24
+       expected_per_dep_limit=12 deployment_saturated=12 (expected >= 12) server_saturated
+       LEAKED=0 (must be 0) prompt(<2.0s)=12/12 statuses=[503]
+     wm4-sibling-deployment-unstarved-during-burst: GET /d/muxa<pid>/health DURING the
+       muxstall<pid> burst: status=200 elapsed=0.10s (bound 5.0s)
+
+   -- the excess 12 calls beyond the stalled deployment's OWN sub-bound refuse typed
+   `deployment_saturated` (never `server_saturated` -- the global gate, sized 24, is never
+   touched by a 24-call burst against a deployment whose own sub-bound is 12), promptly (well
+   under 2s, never after a timeout), while the SIBLING deployment's `/health` -- a real,
+   reachable world, no stall lever on it at all -- answers in 0.10s DURING the burst, proving
+   one deployment's saturated sub-bound never touches a sibling's own admission.
+
+Full green run (2026-07-18, first build): 9 live checks OK (WM3 all three legs, WM1 setup +
+both directions, WM2, WM4 setup + saturation + sibling-unstarved). Scratch worlds
+(muxa<pid>/muxb<pid>) and their roles confirmed absent after teardown
+(`SELECT nspname FROM pg_namespace WHERE nspname ~ '^mux(a|b|stall)[0-9]+'` returns zero rows);
+muxstall<pid> never touches a real schema (UNROUTABLE_HOST, connection never reaches auth).
+`HARNESS_PGHOST=192.168.122.1 python3 seen-red/boundary-multiplex/run_fixtures.py` exit 0.
+
+NOT COVERED HERE (named, not faked): WM5 (a rebased shim's kernel-refused write, stderr/exit
+code byte-faithful) and WM6 (`./legacy/` verb green post-rebase) belong to spec §5's CLI
+rebase, which this build pass did not reach -- see the build report's seam note. The existing
+single-deployment `seen-red/boundary-service/run_fixtures.py` W1-W32 suite is NOT re-targeted
+at the new `/d/{deployment}` route shape by this fixture (confirmed broken as expected: a live
+run against the current worktree fails at its first HTTP call with `ConnectionRefusedError`,
+since `serving/boundary_service.py` no longer serves unprefixed routes at all) -- migrating
+that 32-witness suite to the new route shape is itself the build report's largest named seam,
+not attempted here to avoid shipping a silently-partial migration of a suite that size.
