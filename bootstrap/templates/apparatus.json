@@ -17,6 +17,10 @@
     "doc_shapes_gate": {"mode": "observe"},
     "read_observer": {"mode": "observe"},
     "bash_completion": {"mode": "observe"},
+    "error_recurrence": {
+      "mode": "observe",
+      "note": "design/FABLE-ERROR-RECURRENCE-HOOK-SPEC.md (ledger row 1697): the self-triggering half of the error-capture discipline (user-guide/USER-RECIPES-FAQ.md 'Capturing errors so they cannot quietly recur'). On a PostToolUse(Bash) result matching one of a small enumerated error signature (SQLSTATE line / REFUSED line / gate VIOLATIONS(n) line), read-only cross-checks this world's ledger for a matching `defect:` prior and surfaces it -- detective control ONLY, never blocks, never writes, never polices. Spends nothing (no LLM call, no network beyond this world's own ledger read) -- observe is the default for exactly that reason, the same 'costless observer defaults on' convention bash_completion/mutation_observer/read_observer already use. NOTE: this key ships 'observe' in THIS template's config, but that alone does not make the hook fire -- the autoharn checkout that produced this template does NOT itself carry this key in its own live apparatus.json (deliberately -- see hooks/posttooluse_error_recurrence.py module docstring, 'THE ONE HARD SAFETY RULE'), and the hook is not yet wired into bootstrap/templates/settings.json.tmpl's PostToolUse dispatch either, so even a fresh scaffold that copies this file verbatim never actually invokes the hook until an operator adds the dispatch line HOOKS.md documents by hand. 'enforce' is NAMED-IMPOSSIBLE (this mechanism is detective-only by the spec's own text) -- degrades to 'observe' with a warning, same shape as mutation_observer/bash_completion."
+    },
     "doc_legibility_critic": {
       "mode": "off",
       "cost_note": "Spends a real 'claude -p' classifier call per Write/Edit of a .md file when enabled -- billed to whoever pays for this world's Claude usage. OFF by default so no world silently bills its operator (maintainer mandate, 2026-07-10); flip to 'observe' only with that cost accepted. 'enforce' is not implemented (degrades to 'observe' with a warning) -- see hooks/doc_legibility_critic.py.",
