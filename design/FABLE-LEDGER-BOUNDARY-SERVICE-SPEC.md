@@ -498,6 +498,33 @@ findings:
 message family as `NaN`). §9's size axis now reads "raw body ≤ `MAX_WRITE_BODY_BYTES`
 (buffering), re-serialized payload ≤ `MAX_PSQL_ARG_BYTES` (transport)."
 
+**A9 (2026-07-18) — iteration-7 confirmation pass: the concurrency axis, adjudicated.**
+Trigger: single-reviewer confirmation on `939c243`. Everything A2–A8 held (full suite
+green; the reviewer additionally re-probed the A7 guard at the adjacent `json.dumps` site
+and the A6 float legs on list-shaped fields). One genuinely new finding, witnessed with
+measurements: N concurrent stalled requests exhaust the shared ASGI threadpool (anyio's
+default 40 tokens on this host), so wall-clock on EVERY route including `/health` grows
+unboundedly with N (80 → 5.3 s, 200 → 27.7 s, 600 → no answer in 180 s). Per-request
+time is bounded; *queueing* is not — the adjacent axis A3.1's single-stalled-call test
+never reached, and one ADR-0016 names explicitly ("no client input of any … timing, or
+concurrency can make it … hang"). **Adjudication — bounded admission, typed saturation
+refusal:** one named constant `MAX_INFLIGHT_KERNEL_CALLS = 24` (deliberately under the
+threadpool's 40 so non-kernel work and `/health`'s own thread are never starved by
+kernel-call occupancy): every psql-calling handler acquires a non-blocking semaphore
+slot; on saturation it answers immediately with typed 503
+`{"disposition": "server_saturated", "inflight_limit": 24, "message": <teach-text naming
+the bound, the cause (concurrent kernel calls at capacity), and that retry-after-backoff
+is the correct caller response>}` — never queues unboundedly. `/health` also takes a
+slot when it probes the kernel (its psql is already time-bounded); what it must never do
+is WAIT behind other requests' occupancy, which bounded admission guarantees. The
+implementation-detail threadpool size stops being load-bearing: the service's own named
+constant is the bound. Preserved: the A1 transport, the off-loop plain-`def` handler
+shape, every existing typed shape. **W27:** a burst of stalled writes beyond the bound →
+the excess answer typed 503 `server_saturated` promptly (not after a timeout), `/health`
+answers within its own psql bound + margin DURING the burst, and the server drains to
+normal service afterward. §9's time axis gains "…and concurrent kernel-call admission
+bounded by `MAX_INFLIGHT_KERNEL_CALLS` (typed 503 `server_saturated` beyond it)."
+
 ## License
 
 Public Domain (The Unlicense).
