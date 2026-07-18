@@ -525,6 +525,34 @@ answers within its own psql bound + margin DURING the burst, and the server drai
 normal service afterward. §9's time axis gains "…and concurrent kernel-call admission
 bounded by `MAX_INFLIGHT_KERNEL_CALLS` (typed 503 `server_saturated` beyond it)."
 
+**A10 (2026-07-18) — iteration-8 confirmation pass: the history route joins the
+pagination discipline.** Trigger: single-reviewer confirmation on `19f04d9`. Everything
+A2–A9 held (full suite green end to end on real scratch worlds; A9 re-driven at 5× and
+15× its witness's burst scale and against a harder accept-then-silent stall lever —
+`/health` unstarved at every measured point; the write-body value/id-domain closure
+independently confirmed uniform across all four write surfaces; the kernel's
+bigint-column list cross-read against `boundary_models.py` and found complete). One
+genuinely new finding, witnessed: `GET /rows/{id}/history` returns the ENTIRE
+supersession chain unconditionally — a supplied `limit=1&after_id=0` is silently
+ignored (400 rows, ~620 KB, identical response with and without parameters). A5.4's
+pagination pass enumerated "all four read routes" and the history route was never in
+that enumeration — an enumeration-completeness miss of exactly the kind ADR-0000 2(a)
+exists to catch, and a silent-parameter acceptance besides (a caller who paginates
+believes they got page one of one). **Adjudication — same discipline, fifth route:**
+`/rows/{id}/history` gains the identical `1 ≤ limit ≤ 1000` (default 1000) /
+`after_id ≥ 0` typed-422-or-honored contract as the four A5.4 routes — same constants,
+same message family, no route-local dialect. Pagination cursor is the history hop's own
+row id (`after_id` = last row id of the previous page), preserving the route's
+history-with-cause semantics (§3/W5): every hop remains reachable across pages, each
+still carrying its own `superseded_by` pointer; a short chain in one page is
+byte-identical to today's unpaginated answer. Out-of-domain `limit`/`after_id` refuse
+typed 422 with the A5.4 message shape. **W28:** three legs — (i) a long chain with
+`limit` honored: page sizes and cursor continuation witnessed, union of pages equals
+the unpaginated chain exactly; (ii) `limit=0`, `limit=1001`, negative `after_id` →
+typed 422 naming the domain; (iii) a short chain without parameters → byte-identical
+to the pre-A10 response (no regression for the common case). §9's route table names
+the history route under the pagination axis alongside the four A5.4 routes.
+
 ## License
 
 Public Domain (The Unlicense).
