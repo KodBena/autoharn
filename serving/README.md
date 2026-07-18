@@ -9,8 +9,10 @@
 
 **Build basis:** [design/FABLE-LEDGER-BOUNDARY-SERVICE-SPEC.md](../design/FABLE-LEDGER-BOUNDARY-SERVICE-SPEC.md)
 (RATIFIED — ledger rows 1471, 1481, 1518), **hardened per Amendment A2** (seven post-build
-independent-review findings, adjudicated). Read the spec in full, including A2, before
-touching this directory; this README is an operator's pointer into it, not a restatement.
+independent-review findings, adjudicated) **and Amendment A3** (the time axis and the parse
+closure — two more adjacent axes of the same write ingress A2's size closure did not reach).
+Read the spec in full, including A2 and A3, before touching this directory; this README is an
+operator's pointer into it, not a restatement.
 
 ## What this is, in one paragraph
 
@@ -77,7 +79,18 @@ table against `app.routes` **directly, in-process** (never a schema endpoint).
 literal — the same migrate-detect-drift discipline `bootstrap/templates/led.tmpl`'s own s43/s45
 probes use, so a world need not match this service's authoring commit exactly.
 
-## Bounds (A2.2, A2.6, A2.7 — one disclosed discipline, both ingresses)
+**The router-level 404/405 boundary (A3.3, named-not-mechanized).** A request to an unmapped
+`(method, path)` pair — a typo'd path, a `PUT` on a `GET`-only route, anything outside the
+table above — is rejected by FastAPI's/Starlette's own router, before this service's code ever
+runs, as an ordinary untyped `{"detail": "Not Found"}` (404) or `{"detail": "Method Not
+Allowed"}` (405). This is **outside §9's enumerated ingress universe by construction**: the
+closure statement's axes (size, time, parse, capability-absence) are properties of a REQUEST
+THIS SERVICE ACCEPTS FOR DISPATCH; a request the router itself never dispatches never reaches
+any of this service's own refusal machinery to hold to that discipline. Revisit only if a real
+consumer demonstrates harm from the untyped shape (spec A3.3's own carve-out) — not pre-emptively
+typed, per ADR-0004 (no work ahead of a demonstrated need).
+
+## Bounds (A2.2, A2.6, A2.7, A3.1 — one disclosed discipline, every ingress)
 
 - **Pagination** (`/rows/current`, `/credited`): `?after_id=&limit=`, **`1 ≤ limit ≤ 1000`**,
   **`after_id ≥ 0`** — both violations are a typed HTTP 422 naming the bound. Ratified spec
@@ -93,15 +106,26 @@ probes use, so a world need not match this service's authoring commit exactly.
   `{"disposition": "payload_too_large", "limit_bytes": 1048576, "observed_bytes": <n>, "message": "<teach-text>"}`.
   1 MiB is generous for any ledger payload and comfortably under the `psql`-argv wall
   (`ARG_MAX`) the pre-hardening build crashed into on a ~3 MB payload.
+- **The time axis** (A3.1, every `psql` call this service makes): `PSQL_CONNECT_TIMEOUT_S = 5`
+  (passed as `PGCONNECT_TIMEOUT` in the subprocess's own environment, so libpq itself refuses a
+  stalled TCP handshake/auth round trip) and `PSQL_EXEC_TIMEOUT_S = 60`
+  (`subprocess.run(timeout=...)`, catching a peer that accepts the connection and then goes
+  silent — a blackhole/accept-and-stall, the class no libpq connect-timeout option reaches). A
+  `subprocess.TimeoutExpired` on either bound is treated as infra failure (HTTP 503, below) — "a
+  stall IS infra." The write handlers are plain `def` (see "Write path shape" below), so a
+  stalled write cannot starve `/health` or any other route.
 
-## Infrastructure failure (A2.4)
+## Infrastructure failure (A2.4, extended per A3.1)
 
-A `psql` infrastructure failure (an unreachable world, a connection refusal, a nonzero exit
-that is not a kernel verdict) is typed, not a bare 500: HTTP 503,
-`{"disposition": "infra_failure", "message": "<generic — no SQL, role, schema, or stack>"}`.
-One `RuntimeError` exception handler on the FastAPI app is the single home for this
-translation (ADR-0012 P1) — every route inherits it, not a per-route try/except. The full
-`psql` stderr is logged server-side (stderr) for operator diagnosis; it never reaches the
+A `psql` infrastructure failure — an unreachable world, a connection refusal, a nonzero exit
+that is not a kernel verdict, OR a `PSQL_EXEC_TIMEOUT_S` stall — is typed, not a bare 500:
+HTTP 503, `{"disposition": "infra_failure", "message": "<generic — no SQL, role, schema, or
+stack>"}`. As of A3.2 this is raised ONLY by the service's own dedicated `PsqlInfraFailure`
+exception (never a bare `RuntimeError`, which a foreign failure such as `RecursionError` — a
+`RuntimeError` subclass — could also raise and thereby wear this shape by accident); one
+exception handler on the FastAPI app, registered on that dedicated class, is the single home
+for this translation (ADR-0012 P1) — every route inherits it, not a per-route try/except. The
+full `psql` stderr is logged server-side (stderr) for operator diagnosis; it never reaches the
 client.
 
 **Capability-absent responses** are HTTP 409 with body
@@ -119,6 +143,26 @@ first-class domain result carrying kernel-authored teach-text, never a transport
 Transport-level failures (malformed JSON, a non-object body) are a typed 422, loud — checked
 by the write route itself (it reads and bounds the raw body manually, per the size checkpoints
 above, rather than via an automatic pydantic body parameter).
+
+**The parse closure (A3.2).** The explicit `json.loads` call over the (already size-bounded)
+raw body is wrapped in `except (ValueError, RecursionError)` — the closure over every way that
+call can fail short of well-formed, in-bound JSON: invalid UTF-8 (`UnicodeDecodeError`, a
+`ValueError` subclass — the **encoding** axis), an integer literal past CPython's int-string
+conversion guard (`ValueError` — the **value magnitude** axis), malformed JSON
+(`json.JSONDecodeError`, also `ValueError`) or nesting too deep for the recursive-descent
+parser to complete (`RecursionError`, which subclasses `RuntimeError` — both the **structure**
+axis; the `RecursionError` case is exactly why the infra handler above is narrowed to
+`PsqlInfraFailure` rather than a bare `RuntimeError`, so it cannot be mistaken for one). Every
+leg is a typed HTTP 422 naming the failed axis, never echoing the raw body bytes back (the body
+is untrusted and, in the encoding-axis case, may not even be valid UTF-8 to echo).
+
+**Write path shape (A3.1).** The write handlers are plain `def`, matching the read routes —
+FastAPI/Starlette dispatches a plain `def` path operation function to its threadpool, off the
+event loop, so a write blocked on `PSQL_EXEC_TIMEOUT_S` cannot starve `/health` or any other
+route. The one piece of genuinely ASGI-bound I/O — reading the raw request body — is factored
+out to an `async def` FastAPI **dependency** (`_bounded_raw_body`), which the framework awaits
+on the event loop before dispatching the synchronous handler to the threadpool; this is
+FastAPI's own supported async-dependency/sync-handler split, not a hand-rolled bridge.
 
 ## The write path — attribution, honestly limited
 
@@ -189,16 +233,31 @@ mocks. Run:
 HARNESS_PGHOST=<toy-db-host> $HOME/w/vdc/venvs/generic/bin/python seen-red/boundary-service/run_fixtures.py
 ```
 
-Covers spec §8's W1–W7 plus A2's W9–W12 live; **W8 (the panel-side deprecation-mark
-emission) is UNEXERCISED by construction** — that legacy path lives in the separate
-autoharn-panel repository, which this build never touches, per the spec's own §10.4
+Covers spec §8's W1–W7 plus A2's W9–W12 plus A3's W13–W14, all live; **W8 (the panel-side
+deprecation-mark emission) is UNEXERCISED by construction** — that legacy path lives in the
+separate autoharn-panel repository, which this build never touches, per the spec's own §10.4
 ("panel-side is a separate session's item citing this spec"). A2's additions: **W9** an
 oversized write body at both A2.2 checkpoints (typed 413 both times, server stays alive,
 `/health` still answers afterward); **W10** `/health` on a pre-s40 chain (200, null
 `service_principal`, no 500); **W11** the s41/s22 capability gates' PRESENT leg (a chain
 carrying both views) and ABSENT leg (a chain carrying neither — `WORLD NOCAP`, truncated
 before s22); **W12** the route-table closure assertion, now against `app.routes` in-process
-(A2.1 disabled the OpenAPI self-report the pre-hardening witness relied on).
+(A2.1 disabled the OpenAPI self-report the pre-hardening witness relied on). A3's additions:
+**W13** the parse-closure legs — invalid UTF-8, a >4300-digit integer literal, a 60,000-level
+deeply-nested body — each a typed 422 naming its axis, `/health` still answering after all
+three; **W14** the hang leg — the service pointed at a deliberately non-routable address
+(`10.255.255.1`) returns a typed 503 within `PSQL_CONNECT_TIMEOUT_S` plus a generous margin
+(observed: ~5s against a 30s budget), nowhere near an ordinary OS TCP connect timeout (60–130s
+on Linux) — proving the bound is this service's own, not the kernel's. **The W9 streaming-abort
+leg is UNEXERCISED** (named per A3.4's own carve-out): driving it needs a client that half-closes
+a POST mid-body, which this fixture's `urllib`-only transport cannot do without introducing a
+second, parallel HTTP client layer.
+
+**Concurrent-runner safety (A3.5).** Every scratch world/schema name carries a per-run unique,
+pid-derived suffix (`RUN_SUFFIX`); teardown is scoped to the exact suffixed name a run created.
+Two independent suite runs against the same toy db no longer collide on an identical scratch
+name — witnessed live by running two full suite invocations concurrently against the same host
+(both exited 0, no leftover `svcfx%` schemas or roles after either).
 
 ## The deprecation duty (spec §6) — autoharn-side finding
 

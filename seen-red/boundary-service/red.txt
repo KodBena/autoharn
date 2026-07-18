@@ -176,3 +176,86 @@ UNEXERCISED (panel-side, out of this repo's reach). Scratch worlds: svcfxpre, sv
 svcfxnocap, svcfxw7ok (all torn down, confirmed via `SELECT nspname FROM pg_namespace WHERE
 nspname LIKE 'svcfx%'` returning zero rows after the run). `HARNESS_PGHOST=192.168.122.1
 python3 seen-red/boundary-service/run_fixtures.py` exit 0, reproduced twice.
+
+=========================================================================================
+A3 HARDENING PASS (2026-07-18) -- two adjacent axes of the same write ingress A2's size
+closure did not reach, adjudicated in design/FABLE-LEDGER-BOUNDARY-SERVICE-SPEC.md's
+Amendment A3: the TIME axis (A3.1, no bound at all on any psql subprocess -- a stalled peer
+left a request unbounded, and the pre-A3 write handlers were `async def` calling that
+blocking subprocess directly on the event loop, so one stalled write starved every other
+route including `/health`) and the PARSE CLOSURE (A3.2, the explicit-body-read path lost
+FastAPI's default exception coverage for invalid UTF-8, an oversized integer literal, and
+deep nesting). Fixed in serving/boundary_service.py + boundary_models.py, witnessed with
+W13-W14 added to seen-red/boundary-service/run_fixtures.py. Each red below was captured LIVE
+by temporarily swapping the pre-A3 `serving/boundary_service.py`/`boundary_models.py` (base
+commit `d2dd18d`) back in against a scratch s43 world / a standalone unroutable-host
+deployment, then restoring the A3-hardened files and re-running the full suite to confirm
+green -- both directions live, not asserted.
+
+13. A3.2 (parse closure) RED, three legs, against the pre-A3 server (base `d2dd18d`) on a live
+    scratch s43 world:
+
+    - Invalid UTF-8 body (`POST /write/ledger` with a raw byte sequence containing `\xff\xfe`
+      inside the JSON text): `500 Internal Server Error` (bare, untyped) -- `json.loads` raised
+      `UnicodeDecodeError` with no handler at all.
+    - A 4301-digit integer literal (`{"n": 999...9}`): `500 Internal Server Error` (bare,
+      untyped) -- CPython's int-string conversion guard raised `ValueError` with no handler.
+    - A 60,000-level deeply nested body (`[[[...]]]`): `503 {"disposition": "infra_failure",
+      "message": "the ledger's underlying database connection failed -- this is an
+      infrastructure problem, not a problem with your request; ..."}` -- WRONG, not merely
+      untyped: `RecursionError` (which subclasses `RuntimeError`) was caught by the pre-A3
+      app's bare-`RuntimeError` infra handler and mislabeled as a DATABASE failure, an actively
+      false cause statement (the server's own stderr confirmed: "boundary_service: INFRA
+      FAILURE (POST /write/ledger): maximum recursion depth exceeded while decoding a JSON
+      array from a unicode string" -- no database was ever touched).
+
+    GREEN (A3-hardened): the identical three requests against the A3.2-hardened server all
+    return `HTTP 422` naming the failed axis (`encoding` / `value magnitude` / `structure`
+    respectively; see w13-parse-closure-legs-typed-422-server-alive's captured bodies above),
+    and `/health` answers 200 after each -- server never crashed, never mislabeled the cause.
+    The pre-A3 vs A3-hardened contrast for the deep-nesting leg is the load-bearing proof of
+    A3.2's "narrow the infra handler to a dedicated exception class" fix: with the narrowing,
+    `RecursionError` structurally cannot reach the `infra_failure` handler at all (it is not a
+    `PsqlInfraFailure`), so it falls through to Starlette's own unhandled-exception path -- but
+    because the write route's own `except (ValueError, RecursionError)` catches it FIRST (the
+    handler-local catch, not the app-level one), it never reaches that path either; the fix is
+    two-layered (catch locally where possible, narrow the top-level net for what escapes).
+
+14. A3.1 (time axis) RED, against the pre-A3 server (base `d2dd18d`, no `PSQL_CONNECT_TIMEOUT_S`/
+    `PSQL_EXEC_TIMEOUT_S` of any kind), a deployment pointed at `10.255.255.1` (deliberately
+    non-routable -- neither refused nor ICMP-unreachable, simply never answered): `GET /health`
+    with a 35-second CLIENT-side timeout still produced no response at all --
+
+      other error after 35.09s: timed out
+
+    -- the request was still in flight past 35 seconds with zero bound of the service's own.
+    GREEN (A3-hardened): the identical deployment against the A3.1-hardened server returns
+
+      HTTP 503  {"disposition": "infra_failure", "message": "the ledger's underlying database
+                 connection failed -- this is an infrastructure problem, not a problem with
+                 your request; see the server's own log for full detail."}
+
+    in **5.0 seconds** (`PSQL_CONNECT_TIMEOUT_S = 5`, no margin needed -- the bound fired
+    exactly on schedule), against a `PSQL_CONNECT_TIMEOUT_S + 25s = 30s` witness budget and an
+    ordinary Linux TCP connect timeout on an unrouted host of 60-130s -- an order of magnitude
+    past both. See w14-hang-leg-typed-503-within-connect-timeout-plus-margin above.
+
+15. A3.5 (concurrent-runner safety) -- not a live-behavior regression captured as a red/green
+    pair (the transient collision that motivated this item was witnessed once, not
+    reproduced): two full `run_fixtures.py` invocations launched CONCURRENTLY against the same
+    toy-db host (`HARNESS_PGHOST=192.168.122.1`, both processes started within the same
+    second) both exited 0 -- `RUN1_EXIT=0` / `RUN2_EXIT=0` -- and a post-run scan
+    (`SELECT nspname FROM pg_namespace WHERE nspname LIKE 'svcfx%'`) returned zero rows,
+    confirming the pid-derived `RUN_SUFFIX` on every scratch world name (svcfxpre<pid>,
+    svcfxb<pid>, svcfxnocap<pid>, svcfxw7ok<pid>) kept the two runs' scratch schemas/roles from
+    ever colliding.
+
+Full green run (2026-07-18, A3 hardening in place): 14 live checks OK (W1, W2, W3, W4, W5, W6,
+W7 both legs, W9, W10, W11 both gates x both legs, W12, W13, W14), W8 and the W9
+streaming-abort leg correctly recorded UNEXERCISED (the former panel-side and out of this
+repo's reach per spec §6/§10.4; the latter because no urllib/http.client path in this fixture
+can half-close a POST body mid-stream without introducing a second, parallel HTTP transport --
+named per spec A3.4's own carve-out, not silently dropped). Scratch worlds torn down and
+confirmed empty after both the solo run and the concurrent-run pair.
+`HARNESS_PGHOST=192.168.122.1 python3 seen-red/boundary-service/run_fixtures.py` exit 0,
+reproduced three times (solo, solo again, and as one half of the concurrent pair).
