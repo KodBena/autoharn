@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-15T20:17:26Z
-#   last-change: 2026-07-18T04:05:48Z
+#   last-change: 2026-07-18T04:25:54Z
 #   contributors: a857c93d/main, 9a17b6b9/main, ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -73,7 +73,20 @@ CHAIN = [
     "s37-violation-disposition.sql", "s38-bookkeeping-close.sql", "s39-blocks-start.sql",
     "s40-principal-identity-events.sql", "s41-principal-bindings-and-relations.sql",
     "s42-row-hash-full-coverage.sql",
+    "s43-typed-verdict-write-boundary.sql",
 ]
+# s43 (kernel/lineage/s43-typed-verdict-write-boundary.sql) extends this SAME gate's scratch
+# CHAIN. It ships ONE new :schema-namespace raw reader (validate_supersession_target, the R6
+# substance -- ALLOWLIST entry below) and re-issues set_actor in place (session_user instead
+# of current_user in the standing lookup -- reads the kernel.principal_role VIEW and the two
+# SECURITY DEFINER standing functions exactly as the s40 body did; no raw ledger reference,
+# correctly ABSENT from the allowlist as before). HONEST SCOPE NOTE, extending s40's own:
+# the four boundary functions and the journaler live in the :kern namespace, OUTSIDE this
+# gate's declared :schema universe (its standing scope choice) -- each writes/reads raw
+# `ledger` by construction and by ratified design (INSERT INTO ledger is the boundary's whole
+# job; the journaler's predecessor context is the trigger chain's), so the s31 discipline is
+# honored there structurally, just not machine-swept by THIS gate; widening the universe to
+# :kern remains the standing candidate future increment s40's note already names.
 # s42 (kernel/lineage/s42-row-hash-full-coverage.sql) extends this SAME gate's scratch CHAIN.
 # It ships NO new ledger reader at all: its one act is a CREATE OR REPLACE of compute_row_hash
 # (a pure IMMUTABLE function of its row argument -- no FROM/JOIN/INTO/UPDATE ledger reference
@@ -231,6 +244,11 @@ ALLOWLIST: dict[str, str] = {
                                              "the pre-s35 monolith already performed inline.",
     "validate_independence": "reads (stamp_session, stamp_agent) off the two named rows — row-addressed "
                              "forensics, not a truth projection (s17/s21/s29).",
+    "validate_supersession_target": "write-boundary BEFORE INSERT trigger (s43, the ratified R6's "
+                                    "substance): a single row-addressed read of the supersession "
+                                    "TARGET's kind (is it write_refused?), superseded-or-not "
+                                    "immaterial -- same history-typed reasoning as validate_review, "
+                                    "one column over.",
     "work_parent_would_cycle": "trigger helper — cycle check against history (s28; slug-burned world: a "
                                "retracted open still occupies its slug's place in the one-open-per-slug order).",
     "work_depends_on_would_cycle": "trigger helper — cycle check over blocks-close history (s30).",

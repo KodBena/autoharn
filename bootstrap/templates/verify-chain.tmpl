@@ -66,7 +66,21 @@ MODES:
                                call it "nothing to verify here". Exit codes 1/3/4/5 are
                                deliberately DISTINCT so a caller can tell "interior tamper" from
                                "tail truncation" from "witness anomaly" from "could not even look"
-                               without parsing prose.
+                               without parsing prose. Exit 6 (added with kernel delta s43,
+                               kernel/lineage/s43-typed-verdict-write-boundary.sql Element 5)
+                               is the REFUSAL-ORACLE-FORGERY-SUSPECT verdict: committed
+                               write_refused rows exceed kernel.refusal_seq's count -- rows
+                               the write boundary's handler never counted (a forged or
+                               replayed refusal row; the reconciliation is printed beside
+                               s27's witness line whenever the row_hash chain itself reports
+                               INTACT/EMPTY). The opposite gap (sequence > rows) is
+                               EXPLAIN-grade, never a failure on its own -- its two
+                               legitimate causes (a journal-INSERT double failure; a raw
+                               caller's client-side rollback around the boundary function)
+                               are named in the printed line. A pre-s43 world degrades
+                               honestly to ORACLE-UNAVAILABLE (exit unaffected), and a
+                               reconciliation query that itself fails to execute is exit 5,
+                               the standing error-conflation posture.
   ./verify-chain --head      — print {world, max_id, head_hash, utc, apparatus_hash} as JSON on
                                stdout and NOTHING else — this is the input to the signed-head
                                ceremony (`./verify-chain --head > /tmp/head.json; gpg --detach-sign
@@ -409,6 +423,109 @@ def _witness_note(dep, status: str, detail: dict) -> tuple[str, str, dict]:
             f"{w_detail['reason']}{seq_note}", w_status, w_detail)
 
 
+def has_refusal_layer(dep) -> tuple[bool | None, str]:
+    """An EXPLICIT capability check for the s43 refusal-recording layer (kernel/lineage/
+    s43-typed-verdict-write-boundary.sql Element 5), mirroring has_high_water_layer()'s own
+    posture and (present, err) shape exactly: `present` is True/False when the query itself
+    SUCCEEDED (a genuine schema answer -- the honest pre-s43 case reads False, never an
+    error); None when it FAILED TO EXECUTE (`err` carries psql's stderr) -- never read as
+    "answer: no" (the verify-chain-error-conflation lesson, one layer over)."""
+    sql = (f"SELECT count(*) FROM information_schema.sequences WHERE sequence_schema = "
+           f"'{dep.kern}' AND sequence_name = 'refusal_seq'")
+    rows, err = _psql_json_rows(dep, f"SELECT ({sql}) > 0 AS present")
+    if rows is None:
+        return None, err
+    return (bool(rows) and rows[0].get("present") is True), ""
+
+
+def reconcile_refusal_oracle(dep) -> tuple[str, dict]:
+    """The s43 refusal-record completeness reconciliation (spec
+    design/FABLE-REFUSAL-RECORDING-AND-HASH-COVERAGE-SPEC.md §4.6; the flaw-1 second-witness
+    demand): compares count(*) of committed write_refused rows against kernel.refusal_seq --
+    the non-transactional counter the write boundary's journaler bumps immediately BEFORE
+    each journal INSERT, which no rollback erases and the subject role cannot advance
+    (SELECT-only grant). Returns (status, detail); status in:
+      ORACLE-CONFIRMED       count == sequence: every counted refusal is a committed row and
+                             every committed refusal row was counted.
+      ORACLE-FORGERY-SUSPECT count > sequence: FAIL-grade -- refusal rows exist the handler
+                             never counted (forged or replayed write_refused rows; the §4.2
+                             forgery-channel tripwire).
+      ORACLE-GAP-EXPLAINED   sequence > count: EXPLAIN-grade, never a failure on its own --
+                             the two legitimate causes are named in the detail (a
+                             journal-INSERT double failure, which also aborted loudly at the
+                             time; or a raw caller wrapping the boundary function in a
+                             transaction it then rolled back -- the CLI never wraps).
+      ORACLE-UNAVAILABLE     pre-s43 kernel: no refusal_seq (an honest capability answer).
+      ERROR                  a query itself failed to execute -- never conflated with any of
+                             the above (the standing error-conflation posture)."""
+    present, probe_err = has_refusal_layer(dep)
+    if present is None:
+        return "ERROR", {"reason": (
+            "could not determine whether kernel/lineage/s43-typed-verdict-write-boundary.sql "
+            f"is applied here -- the has_refusal_layer() capability-check query itself failed "
+            f"to execute (NOT a schema answer): {probe_err}")}
+    if not present:
+        return "ORACLE-UNAVAILABLE", {
+            "reason": ("pre-s43 kernel -- no refusal_seq oracle in "
+                       f"{dep.kern} (kernel/lineage/s43-typed-verdict-write-boundary.sql not "
+                       "applied here); refusal-record completeness cannot be claimed for this "
+                       "world")}
+    rows, err = _psql_json_rows(dep, (
+        f"SELECT (SELECT count(*) FROM {dep.schema}.ledger WHERE kind = 'write_refused') "
+        f"AS journaled, "
+        f"(SELECT CASE WHEN s.is_called THEN s.last_value ELSE 0 END "
+        f" FROM {dep.kern}.refusal_seq s) AS counted"))
+    if rows is None or not rows:
+        return "ERROR", {"reason": err or "empty reconciliation result"}
+    journaled, counted = rows[0]["journaled"], rows[0]["counted"]
+    if journaled == counted:
+        return "ORACLE-CONFIRMED", {"journaled_rows": journaled, "sequence_count": counted}
+    if journaled > counted:
+        return "ORACLE-FORGERY-SUSPECT", {
+            "journaled_rows": journaled, "sequence_count": counted,
+            "excess": journaled - counted,
+            "reason": ("MORE committed write_refused rows than the handler ever counted -- "
+                       "the boundary's journaler bumps the sequence before every journal "
+                       "INSERT, so an uncounted refusal row was written by something OTHER "
+                       "than the handler (a forged or replayed refusal row; the s43 §4.2 "
+                       "forgery-channel tripwire)")}
+    return "ORACLE-GAP-EXPLAINED", {
+        "journaled_rows": journaled, "sequence_count": counted,
+        "gap": counted - journaled,
+        "reason": ("the sequence counted refusals that have no committed row -- legitimate "
+                   "causes, named (spec §4.6/§8): (a) a journal-INSERT double failure (which "
+                   "also aborted loudly at the time; the server log holds the statement), or "
+                   "(b) a raw caller wrapping the boundary function in a transaction it then "
+                   "rolled back, discarding the refusal row after the non-transactional bump "
+                   "(the CLI never wraps). EXPLAIN-grade, not a failure on its own -- the "
+                   "one-directional honesty of a rollback-proof counter")}
+
+
+def _refusal_note(dep) -> tuple[str, str]:
+    """One printed line for the refusal-oracle reconciliation, mirroring _witness_note's own
+    shape one witness over. Runs unconditionally (unlike the tail witness it does not depend
+    on the walk's head id)."""
+    status, detail = reconcile_refusal_oracle(dep)
+    if status == "ORACLE-UNAVAILABLE":
+        return (f"verify-chain: refusal-record oracle UNAVAILABLE -- {detail['reason']}",
+                status)
+    if status == "ERROR":
+        return (f"verify-chain: refusal-record oracle ERROR -- {detail['reason']}", status)
+    if status == "ORACLE-CONFIRMED":
+        return (f"verify-chain: REFUSAL-ORACLE-CONFIRMED -- {detail['journaled_rows']} "
+                f"journaled write_refused row(s) == sequence count "
+                f"{detail['sequence_count']} (kernel.refusal_seq, the rollback-proof "
+                f"counter -- s43's completeness witness)", status)
+    if status == "ORACLE-FORGERY-SUSPECT":
+        return (f"verify-chain: REFUSAL-ORACLE-FORGERY-SUSPECT -- {detail['journaled_rows']} "
+                f"journaled write_refused row(s) but the sequence only counted "
+                f"{detail['sequence_count']} ({detail['excess']} uncounted row(s)): "
+                f"{detail['reason']}", status)
+    return (f"verify-chain: refusal-record oracle GAP, explained -- sequence counted "
+            f"{detail['sequence_count']}, committed rows {detail['journaled_rows']} "
+            f"({detail['gap']} discarded): {detail['reason']}", status)
+
+
 def main(argv: list[str]) -> int:
     head_mode = "--head" in argv
     dep = _load_deployment()
@@ -439,6 +556,20 @@ def main(argv: list[str]) -> int:
                   f"refused, not attempted -- never silently treated as if the witness agreed.",
                   file=sys.stderr)
             return 1
+        r_line, r_status = _refusal_note(dep)
+        if r_status == "ORACLE-FORGERY-SUSPECT":
+            print(f"verify-chain --head: REFUSED -- the s43 refusal-record oracle reports "
+                  f"FORGERY-SUSPECT ({r_line}); signing a head over a chain carrying "
+                  f"write_refused rows the handler never counted is refused, not attempted -- "
+                  f"the same posture as a BROKEN chain, applied to the completeness witness.",
+                  file=sys.stderr)
+            return 1
+        if r_status == "ERROR":
+            print(f"verify-chain --head: REFUSED -- the s43 refusal-record oracle check "
+                  f"FAILED TO RUN ({r_line}); signing a head when a witness could not be "
+                  f"consulted is refused, never silently treated as if it agreed.",
+                  file=sys.stderr)
+            return 1
         head = {"world": dep.name or dep.schema, "max_id": detail["head_id"],
                 "head_hash": detail["head_hash"],
                 "utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
@@ -456,10 +587,16 @@ def main(argv: list[str]) -> int:
         print(f"verify-chain: INTACT -- {detail['rows_walked']} row(s) walked, head id="
               f"{detail['head_id']} hash={detail['head_hash']}{exempt_note}")
         print(witness_line)
+        refusal_line, refusal_status = _refusal_note(dep)
+        print(refusal_line)
+        if refusal_status == "ORACLE-FORGERY-SUSPECT":
+            return 6
         if witness_status == "TAIL-DELETION-SUSPECT":
             return 3
         if witness_status == "WITNESS-BEHIND-LEDGER":
             return 4
+        if refusal_status == "ERROR":
+            return 5
         if witness_status == "ERROR":
             # Fixed alongside verify-chain-error-conflation (2026-07-13): before this fix, a
             # witness-level query failure (has_high_water_layer or read_high_water erroring, e.g.
@@ -473,10 +610,16 @@ def main(argv: list[str]) -> int:
         print(f"verify-chain: EMPTY -- {detail['reason']} (an empty chain is trivially intact; "
               f"nothing to walk)")
         print(witness_line)
+        refusal_line, refusal_status = _refusal_note(dep)
+        print(refusal_line)
+        if refusal_status == "ORACLE-FORGERY-SUSPECT":
+            return 6
         if witness_status == "TAIL-DELETION-SUSPECT":
             return 3
         if witness_status == "WITNESS-BEHIND-LEDGER":
             return 4
+        if refusal_status == "ERROR":
+            return 5
         if witness_status == "ERROR":
             return 5
         return 0

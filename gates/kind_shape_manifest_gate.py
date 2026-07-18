@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-15T20:19:45Z
-#   last-change: 2026-07-18T04:05:52Z
+#   last-change: 2026-07-18T04:25:39Z
 #   contributors: a857c93d/main, 9a17b6b9/main, ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -156,7 +156,25 @@ CHAIN = [
     "s40-principal-identity-events.sql",
     "s41-principal-bindings-and-relations.sql",
     "s42-row-hash-full-coverage.sql",
+    "s43-typed-verdict-write-boundary.sql",
 ]
+# s43 (kernel/lineage/s43-typed-verdict-write-boundary.sql, the ratified s42/s43 family's
+# second delta) extends this SAME gate's scratch CHAIN and ships SIX new kind-scoped columns
+# for the new write_refused kind (five two-way, one one-way -- refusal_attempted_actor is
+# legitimately NULL when the attempt was unattributable), each a new MANIFEST row below, plus
+# a NEW kind-shape IDIOM this codebase had none of before: FORBIDDEN-ON-KIND
+# (`(<core-col> IS NULL) OR (kind <> '<K>')` -- s43's write_refused_unretractable, the
+# ratified R6: a CORE column, supersedes, FORBIDDEN on exactly one kind, so a refusal row can
+# never carry a retraction pointer). That idiom gets its own classifier branch
+# (_FORBIDDEN_ON_KIND_RE, matched on shape, never constraint name -- checked BEFORE the
+# generic one-way regexes, whose _ONE_WAY_A_RE would otherwise half-match it and then land
+# UNPARSEABLE on the kind-negation) and its own manifest (FORBIDDEN_ON_KIND_MANIFEST, keyed
+# (column, kind) -- NOT folded into MANIFEST_BY_COLUMN, whose one-shape-per-column slot is for
+# PAYLOAD columns; supersedes stays a CORE column, additionally forbidden on one kind). s43's
+# five value CHECKs (sqlstate/digest shape regexes, message/role non-emptiness, the closed
+# surface vocabulary) carry no kind test and are correctly out of scope by the classifier's
+# first test. The R6 substance trigger (validate_supersession_target) is a trigger, not a
+# CHECK -- outside this gate's constraint universe, gated by ledger_reader_allowlist instead.
 # s42 (kernel/lineage/s42-row-hash-full-coverage.sql) extends this SAME gate's scratch CHAIN.
 # It ships NO new column, NO new kind, and NO new CHECK of any shape (its one act is the
 # compute_row_hash re-issue to full-row serialization coverage -- a function body, invisible to
@@ -422,6 +440,47 @@ MANIFEST = [
          arity="one-way", mechanism="CHECK", constraint="principal_competence_basis_kind_shape",
          defining_delta="s41-principal-bindings-and-relations.sql",
          reason="G13's basis: same VALUE-field shape as band, one column over."),
+    dict(column="refusal_sqlstate", kinds=("write_refused",),
+         arity="two-way", mechanism="CHECK", constraint="refusal_sqlstate_kind_shape",
+         defining_delta="s43-typed-verdict-write-boundary.sql",
+         reason="the refused attempt's SQLSTATE -- mandatory on every write_refused row "
+                "(the kind is born in the same delta; vacuous ADD CONSTRAINT validation), "
+                "forbidden elsewhere; its ^[0-9A-Z]{5}$ shape is the separate kind-free "
+                "refusal_sqlstate_shape value CHECK."),
+    dict(column="refusal_message", kinds=("write_refused",),
+         arity="two-way", mechanism="CHECK", constraint="refusal_message_kind_shape",
+         defining_delta="s43-typed-verdict-write-boundary.sql",
+         reason="the refusal's teach-text verbatim (kernel-authored prose; the refused "
+                "payload itself is digest-only, R4) -- mandatory on the kind, forbidden "
+                "elsewhere; non-emptiness is the separate refusal_message_nonempty value "
+                "CHECK."),
+    dict(column="refusal_surface", kinds=("write_refused",),
+         arity="two-way", mechanism="CHECK", constraint="refusal_surface_kind_shape",
+         defining_delta="s43-typed-verdict-write-boundary.sql",
+         reason="WHICH boundary function caught it -- mandatory; the closed "
+                "ledger/review/registration/obligation vocabulary is the separate kind-free "
+                "refusal_surface_check (kernel-structural: it enumerates the boundary "
+                "functions themselves)."),
+    dict(column="refusal_payload_digest", kinds=("write_refused",),
+         arity="two-way", mechanism="CHECK", constraint="refusal_payload_digest_kind_shape",
+         defining_delta="s43-typed-verdict-write-boundary.sql",
+         reason="SHA-256 of the refused payload's canonical text (digest, never verbatim -- "
+                "R4, ratified) -- mandatory; the 64-hex shape is the separate "
+                "refusal_payload_digest_shape value CHECK."),
+    dict(column="refusal_attempted_actor", kinds=("write_refused",),
+         arity="one-way", mechanism="CHECK", constraint="refusal_attempted_actor_kind_shape",
+         defining_delta="s43-typed-verdict-write-boundary.sql",
+         reason="the ATTEMPTED principal when it resolved to a registered id -- legitimately "
+                "NULL when the attempt was unattributable (an unknown/unresolvable identity "
+                "is exactly a case the record must still represent), so the correlation "
+                "cannot be an iff; one-way forecloses it appearing on a non-write_refused "
+                "row only. FK to kernel.principal."),
+    dict(column="refusal_attempted_role", kinds=("write_refused",),
+         arity="two-way", mechanism="CHECK", constraint="refusal_attempted_role_kind_shape",
+         defining_delta="s43-typed-verdict-write-boundary.sql",
+         reason="session_user at the attempt -- ALWAYS known (server-witnessed), so "
+                "mandatory even when the attempted principal is not resolvable; "
+                "non-emptiness is the separate refusal_attempted_role_nonempty value CHECK."),
     dict(column="work_review_disposition", kinds=("work_closed", "work_violation_disposition"),
          arity="two-way", mechanism="trigger", constraint=None,
          defining_delta="s29-obligation-item-key-and-typed-close.sql (sec-10 epoch amendment; "
@@ -465,6 +524,27 @@ VALUE_PARTITION_MANIFEST = [
 VALUE_PARTITION_BY_KEY = {(row["column"], row["value"]): row for row in VALUE_PARTITION_MANIFEST}
 assert len(VALUE_PARTITION_BY_KEY) == len(VALUE_PARTITION_MANIFEST), \
     "duplicate (column, value) in VALUE_PARTITION_MANIFEST -- SSOT violated"
+
+# ================================================================================================
+# FORBIDDEN_ON_KIND_MANIFEST -- a FOURTH manifest, for FORBIDDEN-ON-KIND CHECKs (see the
+# _FORBIDDEN_ON_KIND_RE comment above): a column forbidden on exactly one kind, legal
+# elsewhere. Keyed (column, kind). First instance: s43's ratified R6.
+# ================================================================================================
+FORBIDDEN_ON_KIND_MANIFEST = [
+    dict(column="supersedes", kind="write_refused",
+         mechanism="CHECK", constraint="write_refused_unretractable",
+         defining_delta="s43-typed-verdict-write-boundary.sql",
+         reason="R6, RATIFIED (ledger row 1460): a write_refused row is UNRETRACTABLE -- it "
+                "records a historical fact about a refused attempt and asserts nothing "
+                "retractable, so it may never CARRY a supersedes pointer (this CHECK) and no "
+                "later row may NAME it as a supersession target (the companion "
+                "validate_supersession_target trigger, which a same-row CHECK cannot express "
+                "-- the s43 delta's own surfaced letter/spirit note). A deliberate, ratified "
+                "divergence from s31's supersession uniformity."),
+]
+FORBIDDEN_BY_KEY = {(row["column"], row["kind"]): row for row in FORBIDDEN_ON_KIND_MANIFEST}
+assert len(FORBIDDEN_BY_KEY) == len(FORBIDDEN_ON_KIND_MANIFEST), \
+    "duplicate (column, kind) in FORBIDDEN_ON_KIND_MANIFEST -- SSOT violated"
 
 # CORE_COLUMNS: every OTHER live ledger column, confirmed NOT kind-scoped (see module docstring's
 # "MANIFEST SCOPE" paragraph for how amends/amends_scope/answers were checked). A column that is
@@ -568,6 +648,17 @@ _VOCAB_PARTITION_RE = re.compile(r"\(kind = '[^']+'[^()]*\)\s+AND\s+\(\w+ = ANY"
 # comment for why: a column may already hold a whole-column MANIFEST row at a DIFFERENT
 # granularity, exactly work_review_disposition's own case).
 _PARTIAL_VALUE_RE = re.compile(r"(\w+) IS DISTINCT FROM '([^']+)'(?:::\w+)?\)\s*OR\s*\(kind")
+# s43's write_refused_unretractable, witnessed live once the CHAIN was extended through s43:
+# the FORBIDDEN-ON-KIND idiom, `(<col> IS NULL) OR (kind <> '<K>')` -- a column (possibly a
+# CORE one: s43's instance is `supersedes`, the ratified R6) FORBIDDEN on exactly one kind,
+# legal everywhere else. Matched generically on shape, never by constraint name, and checked
+# BEFORE the generic one-way regexes below (whose _ONE_WAY_A_RE half-matches this text and
+# would then land it UNPARSEABLE on the kind-NEGATION _extract_kinds cannot read). Tracked in
+# its OWN manifest, FORBIDDEN_ON_KIND_MANIFEST, keyed (column, kind) -- never folded into
+# MANIFEST_BY_COLUMN (one-shape-per-PAYLOAD-column; a core column's forbidden-kind is an
+# additional, orthogonal correlation, exactly as VALUE_PARTITION_MANIFEST layers under a
+# whole-column row).
+_FORBIDDEN_ON_KIND_RE = re.compile(r"\((\w+) IS NULL\)\s*OR\s*\(kind <> '([^']+)'")
 
 
 def _extract_kinds(defn: str) -> tuple[str, ...]:
@@ -588,6 +679,17 @@ def classify_kind_shape(conname: str, defn: str):
     (column, kinds, arity)."""
     if "kind" not in defn:
         return None
+    m_fk = _FORBIDDEN_ON_KIND_RE.search(defn)
+    if m_fk:
+        # checked FIRST: this idiom carries "IS NULL" and a bare `(col IS NULL) OR (kind`
+        # prefix, so _ONE_WAY_A_RE would half-match it and _extract_kinds (which reads only
+        # `kind = '...'`, never `kind <> '...'`) would then return empty -- UNPARSEABLE. A
+        # dedicated branch, matched on the kind-NEGATION shape (s43's
+        # write_refused_unretractable, the first instance).
+        col, forbidden_kind = m_fk.group(1), m_fk.group(2)
+        if col == "kind":
+            return ("UNPARSEABLE", conname, defn)
+        return ("FORBIDDEN-ON-KIND", col, forbidden_kind, conname)
     m_pv = _PARTIAL_VALUE_RE.search(defn)
     if m_pv:
         # checked BEFORE the "IS NULL"/"IS NOT NULL" entry filter below: this idiom is phrased
@@ -643,9 +745,20 @@ def assert_manifest(schema: str) -> list[str]:
     # 1. classify every CHECK constraint that mentions `kind`
     catalog_shapes: dict[str, tuple] = {}   # column -> (kinds, arity, conname)
     partial_value_shapes: dict[tuple[str, str], tuple] = {}   # (column, value) -> (kinds, conname)
+    forbidden_shapes: dict[tuple[str, str], str] = {}   # (column, kind) -> conname
     for conname, defn in check_defs.items():
         parsed = classify_kind_shape(conname, defn)
         if parsed is None:
+            continue
+        if parsed[0] == "FORBIDDEN-ON-KIND":
+            _, col, fkind, _conname = parsed
+            key = (col, fkind)
+            if key in forbidden_shapes:
+                violations.append(
+                    f"(column, kind) {key!r} carries MULTIPLE FORBIDDEN-ON-KIND CHECKs "
+                    f"({forbidden_shapes[key]!r} and {conname!r}) -- one home only.")
+                continue
+            forbidden_shapes[key] = conname
             continue
         if parsed[0] == "UNPARSEABLE":
             violations.append(
@@ -750,6 +863,26 @@ def assert_manifest(schema: str) -> list[str]:
                 f"but no such CHECK exists in the live catalog -- stale manifest row or a dropped "
                 f"constraint.")
 
+    # 2c. every catalog FORBIDDEN-ON-KIND CHECK must match its FORBIDDEN_ON_KIND_MANIFEST row
+    for (col, fkind), conname in forbidden_shapes.items():
+        row = FORBIDDEN_BY_KEY.get((col, fkind))
+        if row is None:
+            violations.append(
+                f"UNLICENSED FORBIDDEN-ON-KIND CHECK {conname!r}: column {col!r} is forbidden "
+                f"on kind {fkind!r} by the catalog, but no FORBIDDEN_ON_KIND_MANIFEST row "
+                f"declares it. Add it to FORBIDDEN_ON_KIND_MANIFEST in "
+                f"gates/kind_shape_manifest_gate.py with its reason, or remove the constraint "
+                f"if it should not exist.")
+    # 3c. every FORBIDDEN_ON_KIND_MANIFEST row must exist in the catalog
+    for row in FORBIDDEN_ON_KIND_MANIFEST:
+        key = (row["column"], row["kind"])
+        if row["mechanism"] == "CHECK" and key not in forbidden_shapes:
+            violations.append(
+                f"FORBIDDEN_ON_KIND_MANIFEST row for column {row['column']!r} kind "
+                f"{row['kind']!r} declares mechanism=CHECK (constraint={row['constraint']!r}) "
+                f"but no such CHECK exists in the live catalog -- stale manifest row or a "
+                f"dropped constraint.")
+
     # 4. every payload-like (non-core) column must be licensed, whether or not it carries a
     #    catalog CHECK -- this is what catches a column with NO CHECK at all (the seen-red case:
     #    mechanism="CHECK"-shaped hazard that never got its CHECK written).
@@ -801,9 +934,10 @@ def main(argv: list[str] | None = None) -> int:
             print(f"  !! {v}")
         return 1
     print(f"kind-shape-manifest-gate: clean -- {len(MANIFEST)} MANIFEST row(s) + "
-          f"{len(VALUE_PARTITION_MANIFEST)} VALUE_PARTITION_MANIFEST row(s) match the live "
-          f"catalog exactly, {len(CORE_COLUMNS)} core column(s) accounted for, no unlicensed "
-          f"payload column. ✓")
+          f"{len(VALUE_PARTITION_MANIFEST)} VALUE_PARTITION_MANIFEST row(s) + "
+          f"{len(FORBIDDEN_ON_KIND_MANIFEST)} FORBIDDEN_ON_KIND_MANIFEST row(s) match the "
+          f"live catalog exactly, {len(CORE_COLUMNS)} core column(s) accounted for, no "
+          f"unlicensed payload column. ✓")
     return 0
 
 

@@ -709,20 +709,95 @@ fi
 # eighth as an exercise for the next reader.
 resolve_actor() {
   actor_name="${LED_ACTOR:-}"
+  # actor_id: the SAME resolution's numeric result, kept alongside the name (s43: the write
+  # boundary's payload keys are ledger COLUMN names, and `actor` is a bigint principal id --
+  # kernel/lineage/s43-typed-verdict-write-boundary.sql §4.2 -- so the boundary path binds the
+  # id this one lookup already fetched; the legacy pre-s43 paths keep binding the NAME through
+  # their existing subquery idiom, byte-identical). Empty when LED_ACTOR is unset -- the
+  # payload then simply omits the key and the kernel's set_actor default-resolution applies,
+  # exactly the NULLIF(:'actor_name','') semantics one representation over.
+  actor_id=""
   if [ -n "$actor_name" ]; then
-    local registered
-    registered=$(psql -h "$PGHOST" -d "$PGDB" -tAq -v actor_name="$actor_name" <<SQL
+    actor_id=$(psql -h "$PGHOST" -d "$PGDB" -tAq -v actor_name="$actor_name" <<SQL
       SET ROLE ${ROLE};
       SET search_path = ${SCHEMA}, ${KERNEL};
-      SELECT EXISTS (SELECT 1 FROM principal WHERE name = :'actor_name');
+      SELECT id FROM principal WHERE name = :'actor_name';
 SQL
     )
-    if [ "$registered" != "t" ]; then
+    if [ -z "$actor_id" ]; then
       echo "led: REFUSED -- LED_ACTOR='${actor_name}' is not a registered principal." >&2
       echo "  Register it first: ./led register-principal ${actor_name} <human|model|subagent|tool>" >&2
       exit 1
     fi
   fi
+}
+
+# --- the s43 kernel write boundary (kernel/lineage/s43-typed-verdict-write-boundary.sql;
+# ratified spec design/FABLE-REFUSAL-RECORDING-AND-HASH-COVERAGE-SPEC.md §4.8). On an s43+
+# kernel the granted role holds NO INSERT privilege anywhere -- the four SECURITY DEFINER
+# boundary functions (ledger_write/review_write/registration_write/obligation_write) are the
+# only write path, each returning a TYPED VERDICT: accepted (with the row id) or refused
+# (with the SQLSTATE, the teach-text, and the id of the COMMITTED write_refused row the
+# kernel journaled -- a refusal is a recorded event now, never a destroyed transaction).
+# LIVE-CHECKED, the standing convention (this file executes in place for EVERY world, the
+# live-verbs doctrine): a pre-s43 world takes its existing legacy INSERT branch,
+# byte-identical to before this delta -- zero behavior change where the boundary does not
+# exist. The three helpers below are the ONE home (ADR-0012 P1) of: the capability probe,
+# payload construction, and verdict parsing/teaching.
+_has_s43=""
+has_s43_boundary() {
+  if [ -z "$_has_s43" ]; then
+    _has_s43=$(psql -h "$PGHOST" -d "$PGDB" -tAc \
+      "SELECT EXISTS (SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace WHERE n.nspname = '${KERNEL}' AND p.proname = 'ledger_write' AND p.prosecdef);")
+  fi
+  [ "$_has_s43" = "t" ]
+}
+
+# _payload_json key value [key value ...] -- compact JSON on stdout; a key whose value is the
+# EMPTY STRING is omitted entirely (the boundary's absent-key semantics: the column falls to
+# its default / stays NULL -- the same outcome the legacy branches' NULLIF(:'v','') binds
+# produce, one representation over). Values are passed as shell args, never spliced into SQL
+# or JSON text by hand (the P2 boundary discipline this file already applies via psql -v).
+_payload_json() {
+  python3 - "$@" <<'PYEOF'
+import json, sys
+a = sys.argv[1:]
+d = {}
+for k, v in zip(a[::2], a[1::2]):
+    if v != "":
+        d[k] = v
+print(json.dumps(d))
+PYEOF
+}
+
+# kernel_write <boundary-function> <payload-json> -- invokes the boundary, parses the verdict.
+# accepted: sets KW_ROW_ID (empty for obligation_write, whose table has no bigint id),
+# returns 0. refused: prints the kernel's own teach-text to stderr, names the journaled
+# write_refused row (the refusal IS on the record -- s43's whole point), returns 1. A psql/
+# connection failure propagates as its own nonzero exit, never dressed as a verdict.
+KW_ROW_ID=""
+kernel_write() {
+  local fn="$1" payload="$2" vjson
+  vjson=$(psql -h "$PGHOST" -d "$PGDB" -tAq -v ON_ERROR_STOP=1 -v payload="$payload" <<SQL
+    SET ROLE ${ROLE};
+    SET search_path = ${SCHEMA}, ${KERNEL};
+    SELECT to_jsonb(v) FROM ${KERNEL}.${fn}(:'payload'::jsonb) v;
+SQL
+  ) || return $?
+  KW_ROW_ID=$(printf '%s' "$vjson" | python3 -c '
+import json, sys
+v = json.load(sys.stdin)
+if v.get("disposition") == "accepted":
+    rid = v.get("row_id")
+    print("" if rid is None else rid)
+    sys.exit(0)
+sys.stderr.write(
+    "led: REFUSED by the kernel write boundary (SQLSTATE %s; journaled as write_refused "
+    "row %s -- the refusal itself is now a committed, hash-chained ledger record, s43):\n"
+    "  %s\n" % (v.get("sqlstate"), v.get("refusal_id"), v.get("message")))
+sys.exit(1)
+') || return 1
+  return 0
 }
 
 # --- shared-channel disposal for the principal-identity verbs (s40/s41; the meta-consult Axis 1
@@ -1029,6 +1104,18 @@ SQL
       echo "usage: led register-principal <name> <human|model|subagent|tool> --purpose \"<why this identity exists>\"" >&2
       exit 1
     fi
+    # s43 BOUNDARY BRANCH: the registration CEREMONY (anchor + event, atomically, with the
+    # deferred anchor-coupling trigger forced immediate INSIDE the kernel's guarded block) is
+    # one registration_write call -- a duplicate name, or any other refusal, comes back as a
+    # typed verdict with the journaled write_refused row named. The CLI's own pre-flight
+    # duplicate check with its richer teach-text (above) still runs first -- ergonomics,
+    # backed by this journaled kernel refusal (spec §4.2 item 3).
+    if has_s43_boundary; then
+      payload=$(_payload_json name "$name" agent_class "$class" purpose "$purpose" \
+        actor "$actor_id" event_declared_ts "$event_time")
+      kernel_write registration_write "$payload"
+      exit $?
+    fi
     # One statement = one transaction: anchor INSERT + registration event via a data-modifying
     # CTE, so the kernel's deferred anchor-coupling trigger (a bare anchor cannot commit) is
     # satisfied atomically. Registrar = the event's actor (resolve_actor / the standing default).
@@ -1151,6 +1238,15 @@ SQL
 SQL
       )
       [ -n "$old_id" ] && echo "led principal declare-standing: rotating -- superseding standing declaration row ${old_id} for role '${db_role}'."
+      # s43 BOUNDARY BRANCH (see kernel_write's own comment near the top of this file).
+      if has_s43_boundary; then
+        payload=$(_payload_json kind principal_standing_declared \
+          statement "database role '${db_role}' speaks for principal '${name}' by default (standing declaration)" \
+          actor "$actor_id" principal_subject "$pid" principal_db_role "$db_role" \
+          supersedes "$old_id" event_declared_ts "$event_time")
+        kernel_write ledger_write "$payload"
+        exit $?
+      fi
       exec psql -h "$PGHOST" -d "$PGDB" -v ON_ERROR_STOP=1 \
         -v name="$name" -v db_role="$db_role" -v pid="$pid" -v old_id="$old_id" \
         -v actor_name="$actor_name" -v event_time="$event_time" <<SQL
@@ -1172,6 +1268,21 @@ SQL
       reason="$*"
       if [ -z "$name" ]; then _principal_usage; exit 1; fi
       case "$name" in --*) _principal_usage; exit 1 ;; esac
+      # THE RECORDER'S OWN STANDING (s43 Element 6, the C7-analog dead-end guard, CLI-grade
+      # only -- disclosed as such in the delta's LIMITS): the write-boundary tool principal
+      # AUTHORS every write_refused row; suspending or revoking it bricks refusal recording
+      # itself (every subsequent refusal becomes a loud abort instead of a committed record).
+      if [ "$name" = "write-boundary" ]; then
+        echo "led principal ${sub}: REFUSED -- 'write-boundary' is the kernel write boundary's" >&2
+        echo "  own recording identity (kernel/lineage/s43-typed-verdict-write-boundary.sql" >&2
+        echo "  Element 6): every write_refused row is authored by it, so ${sub}ing it bricks" >&2
+        echo "  refusal recording -- every later refusal would abort loudly instead of landing" >&2
+        echo "  as a committed record. This guard is CLI-grade (the kernel does not enforce it" >&2
+        echo "  -- the s40 C7 recovery posture: repair below this line is a schema-owner act);" >&2
+        echo "  if you genuinely mean to retire this world's refusal recorder, that is a" >&2
+        echo "  maintainer decision, not a verb." >&2
+        exit 1
+      fi
       refuse_shared_flags_for_principal_verb "principal ${sub}"
       resolve_actor
       pid=$(_principal_subject_id "$name")
@@ -1183,6 +1294,13 @@ SQL
       case "$sub" in suspend) kind_val="principal_suspended" ;; revoke) kind_val="principal_revoked" ;; esac
       stmt="principal '${name}' ${sub}d -- standing withdrawn"
       [ -n "$reason" ] && stmt="${stmt}: ${reason}"
+      # s43 BOUNDARY BRANCH (see kernel_write's own comment near the top of this file).
+      if has_s43_boundary; then
+        payload=$(_payload_json kind "$kind_val" statement "$stmt" actor "$actor_id" \
+          principal_subject "$pid" event_declared_ts "$event_time")
+        kernel_write ledger_write "$payload"
+        exit $?
+      fi
       exec psql -h "$PGHOST" -d "$PGDB" -v ON_ERROR_STOP=1 \
         -v kind_val="$kind_val" -v stmt="$stmt" -v pid="$pid" \
         -v actor_name="$actor_name" -v event_time="$event_time" <<SQL
@@ -1223,6 +1341,22 @@ SQL
       _principal_binding_insert() {
         # $1 kind, $2 statement, $3 subject-id, $4 active(t/f), $5 supersedes(or ''),
         # $6 object-id, $7 relation, $8 role-name, $9 fingerprint, $10 activity, $11 band, $12 basis
+        # s43 BOUNDARY BRANCH (see kernel_write's own comment near the top of this file):
+        # the SAME one-writer-eight-callers shape, routed through the boundary. t/f active
+        # normalizes to true/false for the jsonb->boolean cast.
+        if has_s43_boundary; then
+          local _active_word
+          case "$4" in t|true) _active_word="true" ;; *) _active_word="false" ;; esac
+          local _payload
+          _payload=$(_payload_json kind "$1" statement "$2" actor "$actor_id" \
+            principal_subject "$3" principal_binding_active "$_active_word" \
+            supersedes "$5" principal_object "$6" principal_relation "$7" \
+            principal_role_name "$8" principal_key_fingerprint "$9" \
+            principal_competence_activity "${10}" principal_competence_band "${11}" \
+            principal_competence_basis "${12}" event_declared_ts "$event_time")
+          kernel_write ledger_write "$_payload"
+          return $?
+        fi
         psql -h "$PGHOST" -d "$PGDB" -v ON_ERROR_STOP=1 \
           -v kind_val="$1" -v stmt="$2" -v pid="$3" -v active="$4" -v sup="$5" \
           -v obj="$6" -v rel="$7" -v role_name="$8" -v fp="$9" \
@@ -1592,6 +1726,29 @@ SQL
     echo "  then re-run this command." >&2
     exit 1
   fi
+  # s43 BOUNDARY BRANCH (see kernel_write's own comment near the top of this file): payload
+  # keys are countersign_obligation's own columns, so the two principal NAMES resolve to ids
+  # here (one lookup, the boundary's contract is ids -- names are a CLI ergonomic).
+  if has_s43_boundary; then
+    ob_ids=$(psql -h "$PGHOST" -d "$PGDB" -tAq -v ON_ERROR_STOP=1 \
+      -v a="$assigned_by_name" -v o="$obliges_actor_name" <<SQL
+      SET ROLE ${ROLE};
+      SET search_path = ${SCHEMA}, ${KERNEL};
+      SELECT coalesce((SELECT id::text FROM principal WHERE name = :'a'), '') || '|' ||
+             coalesce((SELECT id::text FROM principal WHERE name = :'o'), '');
+SQL
+    )
+    assigned_id="${ob_ids%%|*}"; obliges_id="${ob_ids##*|}"
+    if [ -z "$assigned_id" ] || [ -z "$obliges_id" ]; then
+      echo "led obligate: REFUSED -- both principals must be registered ('${assigned_by_name}'" >&2
+      echo "  -> id '${assigned_id:-none}', '${obliges_actor_name}' -> id '${obliges_id:-none}')." >&2
+      echo "  Register the missing one first: ./led register-principal <name> <class> --purpose \"...\"" >&2
+      exit 1
+    fi
+    payload=$(_payload_json scope "$scope" assigned_by "$assigned_id" obliges_actor "$obliges_id")
+    kernel_write obligation_write "$payload"
+    exit $?
+  fi
   exec psql -h "$PGHOST" -d "$PGDB" -v ON_ERROR_STOP=1 \
     -v scope="$scope" -v assigned_by_name="$assigned_by_name" -v obliges_actor_name="$obliges_actor_name" <<SQL
     SET ROLE ${ROLE};
@@ -1846,6 +2003,18 @@ if [ "${1:-}" = "review" ]; then
   # honest, intended outcome). resolve_actor (defined near the top of this file) is the ONE place
   # LED_ACTOR is read and validated, shared with `led work claim` and the generic
   # <kind> <statement> path.
+  # s43 BOUNDARY BRANCH: the review CEREMONY (ledger row + review_detail) is ONE guarded
+  # kernel call -- a refusal from EITHER insert (including validate_independence's D-6 and
+  # s34's grade refusal, which fire on review_detail) comes back as a typed verdict with the
+  # journaled write_refused row named, and the whole ceremony rolls. The legacy branch's
+  # BEGIN/COMMIT pairing is the kernel function's own body now.
+  if has_s43_boundary; then
+    payload=$(_payload_json regards "$regards" statement "$statement" verdict "$verdict" \
+      independence "$independence" basis "$statement" antecedent "$antecedent" \
+      actor "$actor_id")
+    kernel_write review_write "$payload"
+    exit $?
+  fi
   psql -h "$PGHOST" -d "$PGDB" -v ON_ERROR_STOP=1 \
     -v regards="$regards" -v verdict="$verdict" -v independence="$independence" \
     -v statement="$statement" -v actor_name="$actor_name" -v antecedent="$antecedent" <<SQL
@@ -2061,6 +2230,17 @@ SQL
       # surfaces here as psql's own ERROR output (RAISE EXCEPTION text is already fully framed
       # and legible; this file adds no second wrapper around it, matching every other `exec
       # psql` INSERT in this subcommand).
+      # s43 BOUNDARY BRANCH (see kernel_write's own comment near the top of this file): an
+      # s43 kernel carries s28/s33 by construction, so the four legacy column-list shapes
+      # collapse into one payload (empty value = omitted key).
+      if has_s43_boundary; then
+        payload=$(_payload_json kind work_opened work_slug "$slug" work_title "$title" \
+          work_parent "$parent" work_discharge "$discharge" refs "$refs" \
+          supersedes "$supersedes" statement "work_opened: ${slug} -- ${title}" \
+          actor "$actor_id")
+        kernel_write ledger_write "$payload"
+        exit $?
+      fi
       if [ "$has_parent_col" = "t" ] && [ "$has_discharge_col" = "t" ]; then
         exec psql -h "$PGHOST" -d "$PGDB" -v ON_ERROR_STOP=1 \
           -v slug="$slug" -v title="$title" -v parent="$parent" -v discharge="$discharge" \
@@ -2144,6 +2324,13 @@ SQL
       # is NULL when LED_ACTOR is unset, so the claim lands under the default connection principal.
       # resolve_actor (defined near the top of this file) is the ONE place LED_ACTOR is read/
       # validated, shared with `led review` and the generic <kind> <statement> path.
+      # s43 BOUNDARY BRANCH (see kernel_write's own comment near the top of this file).
+      if has_s43_boundary; then
+        payload=$(_payload_json kind work_claimed work_slug "$slug" \
+          statement "work_claimed: ${slug}" actor "$actor_id")
+        kernel_write ledger_write "$payload"
+        exit $?
+      fi
       exec psql -h "$PGHOST" -d "$PGDB" -v ON_ERROR_STOP=1 \
         -v slug="$slug" -v actor_name="$actor_name" -v statement="work_claimed: ${slug}" <<SQL
         SET ROLE ${ROLE};
@@ -2359,6 +2546,16 @@ SQL
       # under the default connection principal, byte-identical to before this wiring.
       # resolve_actor (defined near the top of this file) is the ONE place LED_ACTOR is read/
       # validated, shared across all seven ledger-writing paths.
+      # s43 BOUNDARY BRANCH (see kernel_write's own comment near the top of this file): an
+      # s43 kernel carries s30's edge_type column by construction; an omitted --type stays an
+      # omitted key (NULL edge_type -- the informs-by-omission semantics, unchanged).
+      if has_s43_boundary; then
+        payload=$(_payload_json kind work_depends_on work_slug "$slug" \
+          work_depends_on "$on" edge_type "$type" supersedes "$supersedes" \
+          statement "work_depends_on: ${slug} depends on ${on}" actor "$actor_id")
+        kernel_write ledger_write "$payload"
+        exit $?
+      fi
       if [ "$has_edge_type_col" = "t" ]; then
         exec psql -h "$PGHOST" -d "$PGDB" -v ON_ERROR_STOP=1 \
           -v slug="$slug" -v on="$on" -v type="$type" -v supersedes="$supersedes" \
@@ -2630,6 +2827,17 @@ SQL
       # to before this wiring (NULLIF(:'actor_name','') -> NULL -> set_actor's default fill). All
       # THREE constructors above (--review-witness/--review-deferred/--review-bookkeeping) share
       # this one INSERT, so LED_ACTOR attribution is identical across all three.
+      # s43 BOUNDARY BRANCH (see kernel_write's own comment near the top of this file). All
+      # THREE constructors share this one payload exactly as they shared the one INSERT.
+      if has_s43_boundary; then
+        payload=$(_payload_json kind work_closed work_slug "$slug" \
+          work_resolution "$resolution" work_witness "$witness" \
+          work_review_disposition "$disposition" work_review_ref "$review_ref" \
+          work_strict_close "$strict_bool" \
+          statement "work_closed: ${slug} (${resolution})" actor "$actor_id")
+        kernel_write ledger_write "$payload"
+        exit $?
+      fi
       exec psql -h "$PGHOST" -d "$PGDB" -v ON_ERROR_STOP=1 \
         -v slug="$slug" -v resolution="$resolution" -v witness="$witness" \
         -v disposition="$disposition" -v review_ref="$review_ref" -v strict_bool="$strict_bool" \
@@ -2822,6 +3030,18 @@ SQL
       # actor resolves via the SAME subquery-bind idiom as every other ledger-writing path
       # (resolve_actor defined near the top of this file) -- unset LED_ACTOR is byte-identical
       # to before this wiring (NULLIF(:'actor_name','') -> NULL -> set_actor's default fill).
+      # s43 BOUNDARY BRANCH (see kernel_write's own comment near the top of this file).
+      if has_s43_boundary; then
+        payload=$(_payload_json kind work_violation_disposition \
+          work_violation_class "$class" work_violation_target_id "$target_id" \
+          work_resolution "$resolution" work_violation_witness "$witness" \
+          rationale "$basis" work_review_disposition "$disposition" \
+          work_review_ref "$review_ref" supersedes "$supersedes" \
+          statement "work_violation_disposition: ${class} target ${target_id} (${resolution})" \
+          actor "$actor_id")
+        kernel_write ledger_write "$payload"
+        exit $?
+      fi
       exec psql -h "$PGHOST" -d "$PGDB" -v ON_ERROR_STOP=1 \
         -v class="$class" -v tid="$target_id" -v resolution="$resolution" -v basis="$basis" \
         -v witness="$witness" -v disposition="$disposition" -v review_ref="$review_ref" \
@@ -4159,6 +4379,27 @@ _led_kind_refusal_teach() {
 # behavior change. All four shapes get the SAME refusal-teaching treatment (factored into
 # _led_kind_refusal_teach above, called identically from each `else` below) rather than
 # duplicating that logic per shape.
+# s43 BOUNDARY BRANCH (kernel/lineage/s43-typed-verdict-write-boundary.sql; see the
+# kernel_write helper's own comment near the top of this file): on an s43+ kernel the four
+# INSERT shapes below collapse into ONE payload -- an empty value is an omitted key, so the
+# shape variance the legacy branches encode in their column lists is carried by the payload's
+# own key set. The kind-vocabulary teach (_led_kind_refusal_teach) runs after a refusal
+# exactly as on the legacy branches -- the boundary's verdict message is the kernel's own
+# CHECK text, and the teach adds the live vocabulary listing on top.
+if has_s43_boundary; then
+  payload=$(_payload_json kind "$kind" statement "$statement" rationale "$rationale" \
+    supersedes "$supersedes" amends "$amends" amends_scope "$amends_scope" \
+    answers "$answers" refs "$refs" concern "$concern" evidence "$evidence" \
+    confidence "$confidence" enacts "$enacts_lit" actor "$actor_id" \
+    event_declared_ts "$event_time" decision_grade "$grade")
+  if kernel_write ledger_write "$payload"; then
+    exit 0
+  else
+    status=$?
+    _led_kind_refusal_teach
+    exit "$status"
+  fi
+fi
 if [ -n "$grade" ]; then
   if [ -n "$event_time" ]; then
     if psql -h "$PGHOST" -d "$PGDB" -v ON_ERROR_STOP=1 \

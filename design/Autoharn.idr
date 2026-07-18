@@ -26,7 +26,20 @@
 ||| because the SUBSTRATE is -- see the "PRESERVED, ON PURPOSE" list in this header.
 ||| Beauty that would erase one of those facts is a regression, not a cleanup.
 |||
-||| AS-OF: kernel chain through s42 (s42, 2026-07-18, same-commit bump: s42-row-hash-full-
+||| AS-OF: kernel chain through s43 (s43, 2026-07-18, same-commit extension: the
+|||   typed-verdict write boundary. What s43 became here: PWriteRefused -- the journaled
+|||   refusal as an ordinary payload constructor with its six typed fields and the closed
+|||   RefusalSurface sum; VWriteRefused (no payload premise of its own -- the who-may-mint
+|||   guard is boundary-side authorship, named); and boundaryOk gains premise (d), the
+|||   ratified R6: an entry superseding a write_refused row is refused, the hiding
+|||   unrepresentable (fixtures b43a/b43b, both polarities). What s43 deliberately does NOT
+|||   get a rendering, named at PWriteRefused's own doc: the boundary functions' totality
+|||   invariant (refusal-implies-journal) and the refusal_seq oracle are operational
+|||   control-flow/reconciliation facts whose mechanical witnesses are the SQL, the gate,
+|||   and ./verify-chain -- this model's append already IS the typed-verdict idea
+|||   (proof-carrying acceptance), which is why s43 lands as one premise and one
+|||   constructor, not a parallel machinery. Below this line the s42 note, then the s41
+|||   parity note, stand verbatim. Prior head: s42 -- s42, 2026-07-18, same-commit bump: s42-row-hash-full-
 |||   coverage re-issues compute_row_hash so the tamper-evidence serialization covers the
 |||   full row -- a change ENTIRELY OUTSIDE this model's own universe, verified before
 |||   bumping rather than bumped on faith: the hash chain has never been modeled here
@@ -411,6 +424,12 @@ CompetenceValueF : Bool -> Type
 CompetenceValueF True  = (NonEmptyText, NonEmptyText)   -- (band, basis), G13's value fields
 CompetenceValueF False = ()
 
+||| s43: WHICH boundary function caught a refusal -- a closed sum because the
+||| SQL's refusal_surface_check is a closed CHECK (kernel-structural: it
+||| enumerates the four boundary functions themselves; contrast
+||| principal_role_name's ratified free text).
+data RefusalSurface = SurfLedger | SurfReview | SurfRegistration | SurfObligation
+
 data Payload : (st : Stage) -> (n : Nat) -> Type where
   PProse      : ProseKind -> Payload st n
   ||| s36: a decision row with its writer-supplied durability grade (nullable,
@@ -452,6 +471,23 @@ data Payload : (st : Stage) -> (n : Nat) -> Type where
                       -> (active : Bool) -> Payload st n
   PCompetenceGranted   : (subject : PrincipalId) -> (activity : NonEmptyText)
                       -> (active : Bool) -> CompetenceValueF active -> Payload st n
+  ||| s43: a refusal the write boundary caught, COMMITTED as an ordinary row
+  ||| (the one event class the pre-s43 kernel destroyed by the refusal's own
+  ||| abort). Six typed fields, the SQL's six refusal_* columns: sqlstate and
+  ||| digest are NonEmptyText here where the SQL refines further by regex
+  ||| (^[0-9A-Z]{5}$ / 64-hex -- shape refinements below this rendering's
+  ||| altitude, named); the attempted actor is legitimately Maybe (an
+  ||| unattributable attempt), the attempted ROLE always known. What this
+  ||| model does NOT render, named honestly: the boundary's own totality
+  ||| invariant ("a refusal verdict cannot be delivered unjournaled" -- the
+  ||| single code path of s43 §4.4) is an operational property of the SQL
+  ||| function's control flow, not of the row algebra this file transcribes;
+  ||| its mechanical witnesses are the refusal_seq oracle and ./verify-chain's
+  ||| reconciliation, not a constructor here.
+  PWriteRefused : (sqlstate : NonEmptyText) -> (message : NonEmptyText)
+               -> (surface : RefusalSurface) -> (digest : NonEmptyText)
+               -> (attemptedActor : Maybe PrincipalId)
+               -> (attemptedRole : NonEmptyText) -> Payload st n
   -- s15 review: regards is MANDATORY for kind=review and RESERVED to it --
   -- the two-way trigger check is exactly "this constructor and only this
   -- constructor carries the field".
@@ -976,6 +1012,13 @@ data ValidPayload : {n : Nat} -> Ledger n -> Payload Draft n -> Type where
   VViolationDisposition : ValidPayload l (PViolationDisposition c t r w)
   ||| regards earlier-row: already unrepresentable via Fin n (unchanged).
   VReview : ValidPayload l (PReview r d)
+  ||| s43: a write_refused row's payload judgment carries no premise of its
+  ||| own -- the SQL's guard on WHO may mint it (only the boundary's own
+  ||| journaler; a caller-supplied kind='write_refused' is the refused forgery
+  ||| channel) is boundary-side payload VALIDATION at the SECURITY DEFINER
+  ||| trust line, an authorship fact this row algebra cannot see (named, not
+  ||| hidden; the oracle's count>sequence FAIL is its mechanical tripwire).
+  VWriteRefused : ValidPayload l (PWriteRefused q m sf d aa ar)
   ||| s40: the four identity events. Registration freshness by NAME lives on
   ||| the SQL anchor's UNIQUE(name) + the CLI ceremony -- this model's
   ||| PrincipalId is the id, not the name, so name-duplicate refusal is out of
@@ -1075,6 +1118,7 @@ recordPayload l st (PViolationDisposition c t r w) = PViolationDisposition c t r
 recordPayload l st (PReview r (MkReviewDetail v i b a ())) =
   let tgt = case entryAt l r of (_ ** e) => e.stamp
   in PReview r (MkReviewDetail v i b a (gradeLadder (stampPair st) (stampPair tgt)))
+recordPayload l st (PWriteRefused q m sf d aa ar) = PWriteRefused q m sf d aa ar
 recordPayload l st (PPrincipalRegistered s c p) = PPrincipalRegistered s c p
 recordPayload l st (PPrincipalSuspended s)      = PPrincipalSuspended s
 recordPayload l st (PPrincipalRevoked s)        = PPrincipalRevoked s
@@ -1106,12 +1150,26 @@ recordPayload l st (PWorkClosed s r w d f b)    = PWorkClosed s r w d f b
 |||       actor (the ratified human-attested scoping; technical stays
 |||       stamp-witnessed, the s21 gate -- which this model already carries as
 |||       the distinctness question, out of this boolean's scope).
+|||   (d) s43 R6 (RATIFIED): a write_refused row is UNRETRACTABLE -- an entry
+|||       whose supersedes NAMES one is refused at the boundary (the SQL's
+|||       validate_supersession_target trigger; the companion same-row CHECK,
+|||       a refusal row never CARRYING a pointer, is unrepresentable here
+|||       anyway -- the journaler's own construction). The hiding made
+|||       unrepresentable, not merely traceable.
 boundaryOk : {n : Nat} -> Ledger n -> Entry Draft n -> Bool
 boundaryOk l e =
      writeAllowed (principalStanding l e.actor)
   && bindingSupersedesOk
   && reviewIndependenceOk
+  && unretractableOk
   where
+    unretractableOk : Bool
+    unretractableOk = case e.supersedes of
+      Nothing => True
+      Just t  => case entryAt l t of
+        (_ ** te) => case te.payload of
+          PWriteRefused _ _ _ _ _ _ => False
+          _                         => True
     bindingSupersedesOk : Bool
     bindingSupersedesOk = case e.payload of
       PRelationAsserted _ _ _ False  => isJust e.supersedes
@@ -1691,3 +1749,34 @@ b41d = Refl
 b41e : boundaryOk Autoharn.worldR
          (mkD 3 Nothing (PReview 0 (MkReviewDetail Attest Technical "b" Nothing ()))) = True
 b41e = Refl
+
+-- ---------------------------------------------------------------------------
+-- §7c  THE s43 FIXTURES (both polarities): a write_refused row exists as an
+--      ordinary committed row; R6 makes it unretractable at the boundary.
+-- ---------------------------------------------------------------------------
+
+||| a note (row 0) and a journaled refusal (row 1) -- the refusal row is
+||| ordinary ledger content now, the s43 point.
+worldWF : Ledger 2
+worldWF = Lin :< mkE 1 Nothing (PProse KNote)
+              :< mkE 1 Nothing (PWriteRefused (MkNonEmptyText "P0001" Oh)
+                                  (MkNonEmptyText "Ledger policy: refused" Oh)
+                                  SurfLedger
+                                  (MkNonEmptyText "deadbeef" Oh)
+                                  (Just 1) (MkNonEmptyText "bork" Oh))
+
+-- s43 GREEN: the refusal payload judgment carries no premise of its own.
+k43a : ValidPayload Autoharn.worldWF
+         (PWriteRefused (MkNonEmptyText "23505" Oh) (MkNonEmptyText "dup" Oh)
+            SurfRegistration (MkNonEmptyText "beef" Oh) Nothing
+            (MkNonEmptyText "bork" Oh))
+k43a = VWriteRefused
+
+-- s43 R6 RED: superseding the write_refused row (index 1) fails boundaryOk --
+-- the hiding is unrepresentable at the boundary, not merely traceable.
+b43a : boundaryOk Autoharn.worldWF (mkD 1 (Just 1) (PProse KNote)) = False
+b43a = Refl
+-- s43 R6 GREEN: superseding the ORDINARY row (index 0) stays legal -- R6
+-- confines unretractability to the one kind, s31 uniformity elsewhere.
+b43b : boundaryOk Autoharn.worldWF (mkD 1 (Just 0) (PProse KNote)) = True
+b43b = Refl

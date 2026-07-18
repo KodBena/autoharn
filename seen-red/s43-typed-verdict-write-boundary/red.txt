@@ -1,0 +1,57 @@
+s43-typed-verdict-write-boundary -- banked RED evidence (2026-07-18, toy db, scratch worlds
+s43fxa/s43fxb + one REAL --new-world run s43fxnw; runnable fixture:
+seen-red/s43-typed-verdict-write-boundary/run_fixtures.py, registered in
+gates/fixture_census.py). The reds, each captured from a live run:
+
+1. THE JOURNALED REFUSAL (the family's whole point, both polarities): a write under a
+   REVOKED principal through kernel.ledger_write returns
+
+     disposition=refused, sqlstate=P0001, refusal_id=<row id>
+     message: "Ledger policy: strict attribution (s40) — actor principal N is revoked ..."
+
+   and the ledger holds a COMMITTED write_refused row: refusal_sqlstate=P0001,
+   refusal_surface='ledger', refusal_attempted_actor=<the revoked principal's id>,
+   refusal_attempted_role='bork' (session_user, server-witnessed), actor=<the
+   write-boundary tool principal>, refusal_payload_digest 64-hex; the refused row itself
+   absent; ./verify-chain INTACT + REFUSAL-ORACLE-CONFIRMED through the refusal. The same
+   write, pre-revocation, is accepted with its row id. Review-ceremony (D-6
+   managerial-by-model: "no schema can witness ...", surface='review', BOTH ceremony rows
+   rolled), registration-ceremony (duplicate name 23505; purpose-less 23514, no bare anchor
+   survives), and malformed-payload (unknown key / server-owned key / 22P02 bad cast)
+   refusals all journal the same way.
+
+2. THE PRIVILEGE LAYER (REFUSED-AS-EXPECTED): a raw INSERT as the granted role:
+
+     ERROR:  permission denied for table ledger
+     (zero rows landed -- the bypass path does not exist; server log is the named residual)
+
+3. THE FORGERY TRIPWIRE: payload kind='write_refused' refused with the forgery-channel
+   teach-text; an OWNER-forged write_refused row then makes ./verify-chain report
+
+     verify-chain: REFUSAL-ORACLE-FORGERY-SUSPECT -- N journaled write_refused row(s) but
+     the sequence only counted N-1 ... (exit 6; --head REFUSES)
+
+4. THE ORACLE'S ONE-DIRECTIONAL HONESTY: a client-wrapped BEGIN/SELECT
+   ledger_write(refused)/ROLLBACK leaves sequence=count+1 and ./verify-chain EXPLAINs the
+   gap (exit 0, causes named); an induced journal double failure (a temporary NOT VALID
+   CHECK refusing write_refused rows) aborts LOUDLY (psql exit 3) with another counted gap.
+
+5. R6 UNRETRACTABILITY: a row superseding a write_refused row is refused
+   ("... is UNRETRACTABLE (s43, ratified R6) ...", itself journaled); superseding an
+   ordinary row stays accepted.
+
+6. INFRASTRUCTURE CLASS RE-RAISED: statement_timeout (57014) surfaces as a REAL error,
+   never a verdict -- refusal rows and sequence both untouched.
+
+7. §6(xv), s42's LAW EXERCISED: on an s42-serializer schema hand-carrying the six s43
+   columns, the coverage derivation reports exactly those six MISSING from the
+   serialization (the gate's red shape); gates/hash_coverage_gate.py green on the real
+   s43 head (58 columns).
+
+Also witnessed in the same run: detect t/f both polarities (s43 vs s42 heads); attribution
+output-equality (declared-default and explicit boundary writes carry byte-identical
+actor/resolution marks to the pre-s43 direct path, under the session_user re-issue); the
+REAL --new-world birth (write-boundary registered, dual role+login standing declarations,
+first ordinary ./led write with no LED_ACTOR, CLI refusal exits nonzero with the boundary's
+taught text and the kind-vocabulary teach); ./judge SQL/ASP differential AGREE on both
+layers with write_refused rows live; gates/idris_model_freshness.py green at AS-OF s43.

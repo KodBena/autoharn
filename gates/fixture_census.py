@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-09T13:36:11Z
-#   last-change: 2026-07-18T04:05:42Z
+#   last-change: 2026-07-18T04:33:25Z
 #   contributors: be693afb/main, e4410ef6/main, 3c50e030/main, 3c942a60/main, a857c93d/main, ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -125,6 +125,7 @@ REGISTRY: dict[str, str] = {
     "s40-principal-identity-events":  "seen-red/s40-principal-identity-events/run_fixtures.py",
     "s41-principal-bindings-and-relations": "seen-red/s41-principal-bindings-and-relations/run_fixtures.py",
     "s42-row-hash-full-coverage":     "seen-red/s42-row-hash-full-coverage/run_fixtures.py",
+    "s43-typed-verdict-write-boundary": "seen-red/s43-typed-verdict-write-boundary/run_fixtures.py",
     "column-complete-gate":           "seen-red/column-complete-gate/run_fixtures.py",
     "freeze-at-stamp":                "seen-red/freeze-at-stamp/run_fixtures.py",
     "verify-chain-error-conflation":  "seen-red/verify-chain-error-conflation/run_fixtures.py",
