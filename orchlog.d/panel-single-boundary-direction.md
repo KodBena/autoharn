@@ -10,7 +10,7 @@ upstream in autoharn's own ledger (rows 1471 and 1481), not a new proposal for p
 for UI-class consumers; the Vue app collapses to a pure consumer with zero database coupling.
 This is ratified maintainer direction (ledger row 1471, endorsed by the orchestrator as the
 concrete instantiation of the defeasibility envelope's serving-surface recommendation,
-[design/FABLE-DEFEASIBILITY-ENVELOPE-2026-07-18.md](../design/FABLE-DEFEASIBILITY-ENVELOPE-2026-07-18.md)
+[design/FABLE-DEFEASIBILITY-ENVELOPE-2026-07-18.md](../vestigial_documentation/design/FABLE-DEFEASIBILITY-ENVELOPE-2026-07-18.md)
 §9), batch-ratified with seven other items at row 1481. Read row 1471 in full
 (`./led show 1471` from an autoharn checkout) before building against this note — this is a
 compressed pointer, not a restatement of its full text.

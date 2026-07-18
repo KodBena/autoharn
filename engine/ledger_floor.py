@@ -252,7 +252,7 @@ def support_floor_atoms(name: str, now_epoch: int) -> set[str]:
 
 # ===========================================================================
 # Increment 3 (s22) -- the WORK-ITEM LEDGER floor: producer ONE of the work-item differential
-# (design/ORCH-S22-WORK-ITEM-LEDGER.md; engine/lp/work_items.lp is producer two, reconciled by
+# (vestigial_documentation/design/ORCH-S22-WORK-ITEM-LEDGER.md; engine/lp/work_items.lp is producer two, reconciled by
 # engine/work_item_scratch.py / kernel/fixtures/s22_work_item_fixture.py). Computes the SAME base
 # relations + four judgments engine/lp/work_items.lp #shows (work_dep_edge/2, work_dep_star/2,
 # work_duplicate_open/1, work_shipped_without_witness/2, work_depends_on_unknown/2,

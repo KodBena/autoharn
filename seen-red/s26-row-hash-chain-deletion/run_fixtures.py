@@ -12,7 +12,7 @@ cannot catch.
 
 Why a separate seen-red directory (added alongside, not folded into
 seen-red/s26-row-hash-chain/run_fixtures.py's own cases a-h): the financial-audit lens of the
-2026-07-12 re-litigation panel (design/MAINT-RELITIGATION-SYNTHESIS.md, "Untested deletion
+2026-07-12 re-litigation panel (vestigial_documentation/design/MAINT-RELITIGATION-SYNTHESIS.md, "Untested deletion
 scenario") named DELETION -- an id disappearing from the chain entirely -- as a class the
 existing fixtures never exercised; every existing case (d/e/h) tampers a row's CONTENT while the
 row itself stays present. This file is that missing seen-red case, kept in its own directory per

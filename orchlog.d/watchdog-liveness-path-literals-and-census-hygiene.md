@@ -21,7 +21,7 @@ build shipped in two acts: `4d679e0` implemented the checker and its fixtures, b
 independent review caught the Class-1 Bash-dispatch pairing joining on a field the completion
 journal never writes — every completed dispatch reported open forever, masked because both
 fixture polarities' completion journals were empty (the same regression class
-[design/ORCH-RCA-PAIRING-KEY-DIVERGENCE.md](../design/ORCH-RCA-PAIRING-KEY-DIVERGENCE.md)
+[design/ORCH-RCA-PAIRING-KEY-DIVERGENCE.md](../vestigial_documentation/design/ORCH-RCA-PAIRING-KEY-DIVERGENCE.md)
 documents); `a14e78a` fixed the join to key on `tool_use_id`, added the M2
 mechanism-dead tripwire (one typed finding when ≥20 eligible dispatches have zero paired
 completions, instead of flooding per-dispatch questions), and a second fresh review returned

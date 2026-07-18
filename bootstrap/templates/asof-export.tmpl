@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """asof-export — the ledger-wide AS-OF read plus the §11.10(b) inspection-copy export verb
 (ledger item `asof-export-inspection-copy`, maintainer sign-off 2026-07-18, overnight batch item
-1, converged from design/FABLE-21CFR11-STANDING-ASSESSMENT.md §11.10(b) and the regulator
+1, converged from vestigial_documentation/design/FABLE-21CFR11-STANDING-ASSESSMENT.md §11.10(b) and the regulator
 assessment's Tier-2 item 9: "export each settled world read-only, hash the export, sign the
 digest as an as-of attestation"). §11.10(b) reads: "PARTIAL... What is missing is a scripted
 export/inspection-copy verb: nothing produces a complete, portable, integrity-carrying copy of a
@@ -88,7 +88,7 @@ flag the choice"): the above is that flag, in full — a fresh reader of this fi
 with "new template, not a led subcommand" has the reasoning to contest, not just the conclusion.
 
 SIGNING IS DEFERRED, HONESTLY, NOT AN INERT FLAG (standing maintainer crypto ruling, memory
-`crypto-deferred-standing-ruling`; design/FABLE-21CFR11-STANDING-ASSESSMENT.md §11.50/§11.70:
+`crypto-deferred-standing-ruling`; vestigial_documentation/design/FABLE-21CFR11-STANDING-ASSESSMENT.md §11.50/§11.70:
 "the signature-shaped half... is deliberately not being armed yet. That is a ruling, not an
 oversight."). This verb offers NO `--sign` flag at all — not a flag that silently no-ops, which
 would be exactly the "lying signature" ADR-0002 Rule 4 forbids (a seam that looks configured but

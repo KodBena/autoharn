@@ -5,7 +5,7 @@
 #   contributors: e4410ef6/main
 # <<< PROVENANCE-STAMP <<<
 
-"""branch_attribution — the branch-attribution DERIVED VIEW design/ORCH-WORKTREE-LEDGERING.md 3b
+"""branch_attribution — the branch-attribution DERIVED VIEW vestigial_documentation/design/ORCH-WORKTREE-LEDGERING.md 3b
 calls for ("Branch attribution as derivation, not schema"). Read-only, observer-grade: joins a
 ledger row's `stamp_invocation` token (s23, kernel/lineage/s23-per-invocation-stamp-token.sql) to
 the matching line in `<world-root>/.claude/logs/invocations.jsonl` (hooks/stamp_intercept.py's own

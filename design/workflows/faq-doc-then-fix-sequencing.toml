@@ -4,7 +4,7 @@
 #   contributors: ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
-# Transcribed from design/USER-RECIPES-FAQ.md, "Workflow patterns" section, entry "How do I
+# Transcribed from user-guide/USER-RECIPES-FAQ.md, "Workflow patterns" section, entry "How do I
 # prove two phases ran in the right order, instead of trusting an agent's say-so?" -- a real
 # pattern this project's own record already carries (autoharn-panel ledger rows 401, 415, 1144,
 # named there only as history; carried upstream via decision row 1295, this project's own record
@@ -19,7 +19,7 @@
 # express. The one thing that does NOT belong in the TOML is the recipe's own honest epistemic
 # limit (order-proof is not content-proof) -- that caveat is not a control-flow constraint the
 # grammar was ever meant to carry, so it stays prose-only; see the contrast note in
-# design/USER-SHAPED-RECIPES-FAQ.md for where that limit is stated.
+# user-guide/USER-SHAPED-RECIPES-FAQ.md for where that limit is stated.
 
 [[phases]]
 name = "doc-authoring"

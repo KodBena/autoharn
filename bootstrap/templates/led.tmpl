@@ -152,7 +152,7 @@
 #                                              otherwise discovers only by tripping them (the ledger
 #                                              change-gate, the flag-order asymmetry, the same-
 #                                              session countersign refusal), then one pointer line to
-#                                              design/USER-RECIPES-FAQ.md. Extension point: reads
+#                                              user-guide/USER-RECIPES-FAQ.md. Extension point: reads
 #                                              <world-root>/.claude/apparatus.json's
 #                                              mechanisms.rules_briefing.extra_items (a JSON array of
 #                                              strings) -- world-root resolved EXACTLY as
@@ -483,7 +483,7 @@
 #                                              (these seven verbs require kernel/lineage/s22-work-item-
 #                                              ledger.sql applied to this project's schema — s22 is
 #                                              an additive delta on the s15/s17/s19/s20/s21 birth
-#                                              chain, part of it from s22 onward — see ORCH-OPERATING-CARD.md)
+#                                              chain, part of it from s22 onward — see user-guide/ORCH-OPERATING-CARD.md)
 #
 # Connection defaults are sourced LIVE from this project's deployment.json at RUN TIME (BACKLOG
 # maintainer ruling 2026-07-11, "runs are strictly linear" disposition 6, "live verbs"). This file
@@ -761,7 +761,7 @@ fi
 # the generic path never read LED_ACTOR at all, so every `led <kind> ...` write landed under the
 # default principal regardless of LED_ACTOR (BACKLOG run-7 forensics, ledger row 63:
 # LED_ACTOR=reviewer landed as actor='author'). `led work open` was a FOURTH, separately-
-# discovered instance of the same gap (this file's own B-pass over design/USER-RECIPES-FAQ.md,
+# discovered instance of the same gap (this file's own B-pass over user-guide/USER-RECIPES-FAQ.md,
 # 2026-07-16/17: a shipped FAQ recipe depends on LED_ACTOR working for work open, and it silently
 # didn't) -- now wired into resolve_actor() the same way. `led work depends` (both
 # has_edge_type_col branches), `led work close` (both its pre-s29 and s29+/s38 INSERT branches),
@@ -1332,7 +1332,7 @@ SQL
     echo "led standing: REFUSED -- this world's kernel predates s36 (decision_grade column not" >&2
     echo "  found on ${SCHEMA}.ledger, so standing_decisions does not exist either). Apply" >&2
     echo "  kernel/lineage/s36-decision-grade.sql to this schema as a maintainer act" >&2
-    echo "  (ORCH-OPERATING-CARD.md's kernel-delta decision tree), or -- if this world never" >&2
+    echo "  (user-guide/ORCH-OPERATING-CARD.md's kernel-delta decision tree), or -- if this world never" >&2
     echo "  needs graded standing decisions -- there is nothing more to do here." >&2
     exit 1
   fi
@@ -2479,7 +2479,7 @@ Fresh-agent rules briefing -- three rules a new agent otherwise discovers only b
    it disclosing `independence self-review` -- honest labeling of the countersign, not a
    substitute for the distinct-actor step.
 
-See design/USER-RECIPES-FAQ.md for the full recipe corpus these rules are drawn from.
+See user-guide/USER-RECIPES-FAQ.md for the full recipe corpus these rules are drawn from.
 BRIEFING
 
   # Extension point: <world-root>/.claude/apparatus.json's mechanisms.rules_briefing.extra_items.
@@ -2634,7 +2634,7 @@ if [ "${1:-}" = "work" ]; then
       # among the remaining args. LIVE column-existence check, not a hardcoded kernel-version
       # assumption (the SAME convention `led obligate revoke`'s has_table_privilege check above
       # already uses) -- this file executes IN PLACE out of the autoharn checkout for EVERY
-      # already-scaffolded world (the "live verbs" doctrine, ORCH-OPERATING-CARD.md), and s28 is
+      # already-scaffolded world (the "live verbs" doctrine, user-guide/ORCH-OPERATING-CARD.md), and s28 is
       # NOT wired into every world's birth chain (it ships authored+scratch-witnessed only, per
       # its own header's FAIL-SAFE CLASSIFICATION note) -- so an unconditional `work_parent` in
       # the INSERT column list below would break `led work open` for every world whose kernel
@@ -2753,7 +2753,7 @@ SQL
         echo "led work open: REFUSED -- --parent requires kernel/lineage/s28-work-parent-edge.sql" >&2
         echo "  applied to this project's schema (work_parent column not found on" >&2
         echo "  ${SCHEMA}.ledger -- this world's kernel predates s28). Omit --parent, or apply" >&2
-        echo "  s28 to this schema as a maintainer act (ORCH-OPERATING-CARD.md's kernel-delta" >&2
+        echo "  s28 to this schema as a maintainer act (user-guide/ORCH-OPERATING-CARD.md's kernel-delta" >&2
         echo "  decision tree)." >&2
         exit 1
       fi
@@ -2768,7 +2768,7 @@ SQL
         echo "  kernel/lineage/s33-composite-discharge.sql applied to this project's schema" >&2
         echo "  (work_discharge column not found on ${SCHEMA}.ledger -- this world's kernel" >&2
         echo "  predates s33). Omit --discharge, or apply s33 to this schema as a maintainer" >&2
-        echo "  act (ORCH-OPERATING-CARD.md's kernel-delta decision tree)." >&2
+        echo "  act (user-guide/ORCH-OPERATING-CARD.md's kernel-delta decision tree)." >&2
         exit 1
       fi
       # --supersedes ADVISORY (printed once, unconditionally on stderr, BEFORE the INSERT --
@@ -2896,7 +2896,7 @@ SQL
         echo "       antecedent named by --type blocks-start (kernel/lineage/s39-blocks-start.sql)" >&2
         echo "       whose own work item has not yet reached state=closed. The refusal names" >&2
         echo "       every unresolved antecedent by slug; claim/finish it first, or re-edge if" >&2
-        echo "       the dependency is wrong (see design/USER-RECIPES-FAQ.md). 'led work" >&2
+        echo "       the dependency is wrong (see user-guide/USER-RECIPES-FAQ.md). 'led work" >&2
         echo "       startable' lists items with no such refusal pending right now." >&2
         echo "       set LED_ACTOR=<principal-name> to claim as a registered principal other" >&2
         echo "       than the default connection principal" >&2
@@ -2998,7 +2998,7 @@ SQL
         echo "       work_depends_on row, or is already superseded (the row that superseded it" >&2
         echo "       is named). This is the recovery path s39's claim-time refusal and LIMITS" >&2
         echo "       section point to for a mistaken blocks-start/blocks-close edge -- see" >&2
-        echo "       design/USER-RECIPES-FAQ.md's \"Correcting the record\" section." >&2
+        echo "       user-guide/USER-RECIPES-FAQ.md's \"Correcting the record\" section." >&2
         exit 1
       fi
       slug="$1"; on="$2"
@@ -3018,7 +3018,7 @@ SQL
         echo "led work depends: REFUSED -- --type requires kernel/lineage/s30-typed-dependency-edges.sql" >&2
         echo "  applied to this project's schema (edge_type column not found on" >&2
         echo "  ${SCHEMA}.ledger -- this world's kernel predates s30). Omit --type, or apply" >&2
-        echo "  s30 to this schema as a maintainer act (ORCH-OPERATING-CARD.md's kernel-delta" >&2
+        echo "  s30 to this schema as a maintainer act (user-guide/ORCH-OPERATING-CARD.md's kernel-delta" >&2
         echo "  decision tree)." >&2
         exit 1
       fi
@@ -3042,7 +3042,7 @@ SQL
           echo "  applied to this project's schema (edge_type_check does not admit blocks-start on" >&2
           echo "  ${SCHEMA}.ledger -- this world's kernel predates s39). Omit --type, use --type" >&2
           echo "  blocks-close or informs, or apply s39 to this schema as a maintainer act" >&2
-          echo "  (ORCH-OPERATING-CARD.md's kernel-delta decision tree)." >&2
+          echo "  (user-guide/ORCH-OPERATING-CARD.md's kernel-delta decision tree)." >&2
           exit 1
         fi
       fi
@@ -3336,7 +3336,7 @@ SQL
           echo "  --strict require kernel/lineage/s29-obligation-item-key-and-typed-close.sql" >&2
           echo "  applied to this project's schema (work_review_disposition column not found on" >&2
           echo "  ${SCHEMA}.ledger -- this world's kernel predates s29). Omit these flags, or" >&2
-          echo "  apply s29 to this schema as a maintainer act (ORCH-OPERATING-CARD.md's" >&2
+          echo "  apply s29 to this schema as a maintainer act (user-guide/ORCH-OPERATING-CARD.md's" >&2
           echo "  kernel-delta decision tree)." >&2
           exit 1
         fi
@@ -3395,7 +3395,7 @@ SQL
           echo "  CHECK constraint on ${SCHEMA}.ledger admits the 'bookkeeping' disposition value" >&2
           echo "  -- this world's kernel predates s38). Use --review-witness <ref> or" >&2
           echo "  --review-deferred instead, or apply s38 to this schema as a maintainer act" >&2
-          echo "  (ORCH-OPERATING-CARD.md's kernel-delta decision tree)." >&2
+          echo "  (user-guide/ORCH-OPERATING-CARD.md's kernel-delta decision tree)." >&2
           exit 1
         fi
       fi
@@ -3564,7 +3564,7 @@ SQL
         echo "  kernel/lineage/s37-violation-disposition.sql applied to this project's schema" >&2
         echo "  (work_violation_class column not found on ${SCHEMA}.ledger -- this world's" >&2
         echo "  kernel predates s37). Apply s37 to this schema as a maintainer act" >&2
-        echo "  (ORCH-OPERATING-CARD.md's kernel-delta decision tree)." >&2
+        echo "  (user-guide/ORCH-OPERATING-CARD.md's kernel-delta decision tree)." >&2
         exit 1
       fi
       witness=""
@@ -4281,7 +4281,7 @@ statement="$*"
 
 # --- resource: intake validation (BACKLOG 2026-07-12, run12 witness) ------------------------
 # A statement beginning `resource:` (after stripping leading whitespace) declares one Pillar-1
-# Capability Registry entry (design/USER-BLESSED-TABLE-TEMPLATE.md) and MUST carry the doc's
+# Capability Registry entry (user-guide/USER-BLESSED-TABLE-TEMPLATE.md) and MUST carry the doc's
 # six-field grammar before ANY write is attempted -- refuse loudly here, at the boundary
 # (ADR-0002 rule 2: validate at boundaries, do not coerce), rather than let a malformed
 # declaration land silently and only be discovered later by pickup's own resources() parser.
@@ -4315,7 +4315,7 @@ import re
 import sys
 
 # The six fields, in order, and the closed CLASS/TIER vocabularies below are transcribed
-# VERBATIM from design/USER-BLESSED-TABLE-TEMPLATE.md's "The statement grammars" section -- the
+# VERBATIM from user-guide/USER-BLESSED-TABLE-TEMPLATE.md's "The statement grammars" section -- the
 # ONE documented home of this grammar (a transcription, not a second, driftable definition of
 # it -- ADR-0012 P1). bootstrap/templates/pickup.tmpl's own _RESOURCE_FIELDS tuple is the
 # sibling reader of the same six names on the display side.
@@ -4341,7 +4341,7 @@ parts = [p.strip() for p in body.split("|")]
 
 def refuse(msg: str) -> None:
     print(f"led: REFUSED -- malformed 'resource:' statement -- {msg}.", file=sys.stderr)
-    print("  grammar (design/USER-BLESSED-TABLE-TEMPLATE.md 'The statement grammars'):", file=sys.stderr)
+    print("  grammar (user-guide/USER-BLESSED-TABLE-TEMPLATE.md 'The statement grammars'):", file=sys.stderr)
     print("    resource: <NAME> | <CLASS> | <REACH> | <WHAT-IT-PROVES> | <GUIDANCE> | <TIER>", file=sys.stderr)
     print(f"  the six fields, in order: {', '.join(FIELDS)}", file=sys.stderr)
     print(f"  CLASS must be one of: {' | '.join(VALID_CLASSES)}", file=sys.stderr)
@@ -4376,7 +4376,7 @@ esac
 # --- estimate: intake validation (tracker item `cost-estimation-retro`, 2026-07-12) ----------
 # A statement beginning `estimate:` (after stripping leading whitespace) declares one predicted-
 # cost row for a task, ahead of the task's execution -- the decomposition-time sibling grammar to
-# `resource:` above, and MUST carry the six-field grammar design/USER-RETROSPECTIVE-RECIPE.md's
+# `resource:` above, and MUST carry the six-field grammar user-guide/USER-RETROSPECTIVE-RECIPE.md's
 # "Estimate statement grammar" section documents before ANY write is attempted -- refuse loudly
 # here, at the boundary (ADR-0002 rule 2: validate at boundaries, do not coerce), exactly the same
 # posture as the `resource:` block immediately above, cloned structurally (whitespace-normalized
@@ -4391,14 +4391,14 @@ esac
 # well-formed fields) -- it has no opinion on whether a prediction is a GOOD one, and there is no
 # companion gate anywhere in this tree that later checks a prediction against what actually
 # happened and fails a build over the gap. A missed estimate is retrospective data, never a
-# violation (see design/USER-RETROSPECTIVE-RECIPE.md's estimate-vs-actual section).
+# violation (see user-guide/USER-RETROSPECTIVE-RECIPE.md's estimate-vs-actual section).
 #
 # The grammar check below runs against a WHITESPACE-NORMALIZED COPY only (every run of \n/\r plus
 # its following indentation collapsed to one space), so a legitimate embedded newline (a paste
 # reflowed by a terminal) is ACCEPTED rather than refused -- identical convention to the
 # `resource:` block above. The row actually written on success is $statement, completely
 # untouched -- byte fidelity matters here for the same reason it matters for `resource:` (a later
-# GPG signing ceremony reads this exact row, design/USER-GPG-TRUST-LAYER-FAQ.md); the normalized
+# GPG signing ceremony reads this exact row, user-guide/USER-GPG-TRUST-LAYER-FAQ.md); the normalized
 # copy is validation-only scratch, never persisted. Nothing is written at all if validation fails
 # (atomicity by refusal-before-write).
 #
@@ -4416,7 +4416,7 @@ import re
 import sys
 
 # The six fields, in order, and the closed TOKEN-OOM vocabulary below are transcribed VERBATIM
-# from design/USER-RETROSPECTIVE-RECIPE.md's "Estimate statement grammar" section -- the ONE
+# from user-guide/USER-RETROSPECTIVE-RECIPE.md's "Estimate statement grammar" section -- the ONE
 # documented home of this grammar (a transcription, not a second, driftable definition of it --
 # ADR-0012 P1). bootstrap/templates/pickup.tmpl's own _ESTIMATE_FIELDS tuple is the sibling
 # reader of the same six names on the display side.
@@ -4434,7 +4434,7 @@ parts = [p.strip() for p in body.split("|")]
 
 def refuse(msg: str) -> None:
     print(f"led: REFUSED -- malformed 'estimate:' statement -- {msg}.", file=sys.stderr)
-    print("  grammar (design/USER-RETROSPECTIVE-RECIPE.md 'Estimate statement grammar'):", file=sys.stderr)
+    print("  grammar (user-guide/USER-RETROSPECTIVE-RECIPE.md 'Estimate statement grammar'):", file=sys.stderr)
     print("    estimate: <TASK-SLUG> | <TOOL-CALLS> | <SUBAGENT-SPAWNS> | <WALL-CLOCK> | <TOKEN-OOM> | <BASIS>", file=sys.stderr)
     print(f"  the six fields, in order: {', '.join(FIELDS)}", file=sys.stderr)
     print("  TASK-SLUG must match ^[a-z0-9][a-z0-9-]*$ (a bare slug, no spaces)", file=sys.stderr)
@@ -4479,7 +4479,7 @@ esac
 # --- actual: intake validation (tracker item `actual-intake-grammar`, 2026-07-13) -------------
 # A statement beginning `actual:` (after stripping leading whitespace) declares one MEASURED-
 # afterward cost row for a task -- the measured twin of `estimate:` immediately above, and MUST
-# carry the six-field grammar design/USER-RETROSPECTIVE-RECIPE.md's "The `actual:` statement
+# carry the six-field grammar user-guide/USER-RETROSPECTIVE-RECIPE.md's "The `actual:` statement
 # grammar" section documents before ANY write is attempted -- refuse loudly here, at the boundary
 # (ADR-0002 rule 2: validate at boundaries, do not coerce), cloned structurally from `estimate:`
 # (whitespace-normalized validation copy, byte-exact persisted statement, refuse-before-write
@@ -4525,7 +4525,7 @@ import re
 import sys
 
 # The six fields, in order, and the closed TOKEN-OOM vocabulary (shared with `estimate:`'s own
-# TOKEN-OOM) are transcribed VERBATIM from design/USER-RETROSPECTIVE-RECIPE.md's "The `actual:`
+# TOKEN-OOM) are transcribed VERBATIM from user-guide/USER-RETROSPECTIVE-RECIPE.md's "The `actual:`
 # statement grammar" section -- the ONE documented home of this grammar (a transcription, not a
 # second, driftable definition of it -- ADR-0012 P1). bootstrap/templates/pickup.tmpl's own
 # _ACTUAL_FIELDS tuple is the sibling reader of the same six names on the display side.
@@ -4545,7 +4545,7 @@ parts = [p.strip() for p in body.split("|")]
 
 def refuse(msg: str) -> None:
     print(f"led: REFUSED -- malformed 'actual:' statement -- {msg}.", file=sys.stderr)
-    print("  grammar (design/USER-RETROSPECTIVE-RECIPE.md \"The 'actual:' statement grammar\"):", file=sys.stderr)
+    print("  grammar (user-guide/USER-RETROSPECTIVE-RECIPE.md \"The 'actual:' statement grammar\"):", file=sys.stderr)
     print("    actual: <TASK-SLUG> | <TOOL-CALLS> | <SUBAGENT-SPAWNS> | <WALL-CLOCK> | <TOKENS> | <SOURCE>", file=sys.stderr)
     print(f"  the six fields, in order: {', '.join(FIELDS)}", file=sys.stderr)
     print("  TASK-SLUG must match ^[a-z0-9][a-z0-9-]*$ (a bare slug, no spaces -- may name a whole", file=sys.stderr)
@@ -4564,7 +4564,7 @@ def refuse(msg: str) -> None:
     print("  policing (the same never-police invariant estimate: states, stated twice at", file=sys.stderr)
     print("  commissioning, applies here verbatim) -- WALL-CLOCK/TOKENS are harness-sourced and", file=sys.stderr)
     print("  DIAGNOSTIC-GRADE, permanently, per the action-stream ruling (ledgered 2026-07-13);", file=sys.stderr)
-    print("  see design/USER-RETROSPECTIVE-RECIPE.md's actual: grammar section for the", file=sys.stderr)
+    print("  see user-guide/USER-RETROSPECTIVE-RECIPE.md's actual: grammar section for the", file=sys.stderr)
     print("  TOOL-CALLS/SUBAGENT-SPAWNS grade exception -- only the INTAKE SHAPE is refused", file=sys.stderr)
     print("  here, never the measurement's meaning.", file=sys.stderr)
     sys.exit(1)
@@ -4606,7 +4606,7 @@ esac
 # A statement beginning `taxon:` (after stripping leading whitespace) declares one row of a
 # declared taxonomy -- a boundary the maintainer's outset-settled decomposition discipline
 # generalizes: one row assigns a PATTERNS glob-set to a TAXON within a named TAXONOMY, and MUST
-# carry the four-field grammar design/USER-TAXONOMY-DECLARATION.md's "The statement grammars"
+# carry the four-field grammar user-guide/USER-TAXONOMY-DECLARATION.md's "The statement grammars"
 # section documents before ANY write is attempted -- refuse loudly here, at the boundary
 # (ADR-0002 rule 2: validate at boundaries, do not coerce), exactly the same posture as the
 # `resource:`/`estimate:` blocks above, cloned structurally (whitespace-normalized validation
@@ -4636,7 +4636,7 @@ case "$_taxon_trimmed" in
 import re
 import sys
 
-# The four fields, in order, are transcribed VERBATIM from design/USER-TAXONOMY-DECLARATION.md's
+# The four fields, in order, are transcribed VERBATIM from user-guide/USER-TAXONOMY-DECLARATION.md's
 # "The statement grammars" section -- the ONE documented home of this grammar (a transcription,
 # not a second, driftable definition of it -- ADR-0012 P1). bootstrap/templates/pickup.tmpl's own
 # _TAXON_FIELDS tuple is the sibling reader of the same four names on the display side. TAXONOMY
@@ -4655,7 +4655,7 @@ parts = [p.strip() for p in body.split("|")]
 
 def refuse(msg: str) -> None:
     print(f"led: REFUSED -- malformed 'taxon:' statement -- {msg}.", file=sys.stderr)
-    print("  grammar (design/USER-TAXONOMY-DECLARATION.md 'The statement grammars'):", file=sys.stderr)
+    print("  grammar (user-guide/USER-TAXONOMY-DECLARATION.md 'The statement grammars'):", file=sys.stderr)
     print("    taxon: <TAXONOMY> | <TAXON> | <PATTERNS> | <GLOSS>", file=sys.stderr)
     print(f"  the four fields, in order: {', '.join(FIELDS)}", file=sys.stderr)
     print("  TAXONOMY and TAXON must each match ^[a-z0-9][a-z0-9-]*$ (a bare slug, no spaces)", file=sys.stderr)
@@ -4692,7 +4692,7 @@ esac
 # A statement beginning `interface:` (after stripping leading whitespace) declares one sanctioned
 # crossing point (the ICD analog, spec §3) for a named TAXONOMY -- an artifact that MAY be
 # referenced from outside the taxon that contains it -- and MUST carry the three-field grammar
-# design/USER-TAXONOMY-DECLARATION.md's "The statement grammars" section documents before ANY
+# user-guide/USER-TAXONOMY-DECLARATION.md's "The statement grammars" section documents before ANY
 # write is attempted, cloned structurally from `resource:`/`estimate:`/`taxon:` above (whitespace-
 # normalized validation copy, byte-exact persisted statement, refuse-before-write atomicity,
 # teach-text naming the grammar and where it is documented).
@@ -4717,7 +4717,7 @@ case "$_interface_trimmed" in
 import re
 import sys
 
-# The three fields, in order, are transcribed VERBATIM from design/USER-TAXONOMY-DECLARATION.md's
+# The three fields, in order, are transcribed VERBATIM from user-guide/USER-TAXONOMY-DECLARATION.md's
 # "The statement grammars" section -- the ONE documented home of this grammar (a transcription,
 # not a second, driftable definition of it -- ADR-0012 P1). bootstrap/templates/pickup.tmpl's own
 # _INTERFACE_FIELDS tuple is the sibling reader of the same three names on the display side.
@@ -4732,7 +4732,7 @@ parts = [p.strip() for p in body.split("|")]
 
 def refuse(msg: str) -> None:
     print(f"led: REFUSED -- malformed 'interface:' statement -- {msg}.", file=sys.stderr)
-    print("  grammar (design/USER-TAXONOMY-DECLARATION.md 'The statement grammars'):", file=sys.stderr)
+    print("  grammar (user-guide/USER-TAXONOMY-DECLARATION.md 'The statement grammars'):", file=sys.stderr)
     print("    interface: <TAXONOMY> | <ARTIFACT-PATTERN> | <GLOSS>", file=sys.stderr)
     print(f"  the three fields, in order: {', '.join(FIELDS)}", file=sys.stderr)
     print("  TAXONOMY must match ^[a-z0-9][a-z0-9-]*$ (a bare slug, no spaces) -- the same taxonomy", file=sys.stderr)
@@ -4769,7 +4769,7 @@ esac
 # outcome row for a task -- which model executed it and what a seam review found -- written by
 # the ORCHESTRATOR at each seam close (never by the executing agent itself, the same posture
 # `review:`/`review-done:` below already keep for the maintainer's own queue), and MUST carry the
-# five-field grammar design/USER-RETROSPECTIVE-RECIPE.md's "The `outcome:` statement grammar"
+# five-field grammar user-guide/USER-RETROSPECTIVE-RECIPE.md's "The `outcome:` statement grammar"
 # section documents before ANY write is attempted -- refuse loudly here, at the boundary (ADR-0002
 # rule 2: validate at boundaries, do not coerce), cloned structurally from `estimate:`/`actual:`/
 # `taxon:` above (whitespace-normalized validation copy, byte-exact persisted statement, refuse-
@@ -4793,7 +4793,7 @@ esac
 # reflowed by a terminal) is ACCEPTED rather than refused -- identical convention to every block
 # above. The row actually written on success is $statement, completely untouched -- byte fidelity
 # matters here for the same reason it matters for `resource:`/`estimate:` (a later GPG signing
-# ceremony reads this exact row, design/USER-GPG-TRUST-LAYER-FAQ.md); the normalized copy is
+# ceremony reads this exact row, user-guide/USER-GPG-TRUST-LAYER-FAQ.md); the normalized copy is
 # validation-only scratch, never persisted. Nothing is written at all if validation fails
 # (atomicity by refusal-before-write).
 #
@@ -4808,7 +4808,7 @@ case "$_outcome_trimmed" in
 import re
 import sys
 
-# The five fields, in order, are transcribed VERBATIM from design/USER-RETROSPECTIVE-RECIPE.md's
+# The five fields, in order, are transcribed VERBATIM from user-guide/USER-RETROSPECTIVE-RECIPE.md's
 # "The `outcome:` statement grammar" section -- the ONE documented home of this grammar (a
 # transcription, not a second, driftable definition of it -- ADR-0012 P1).
 FIELDS = ("TASK-SLUG", "MODEL", "SEAM-VERDICT", "DEFECTS-FOUND-AT-SEAM", "NOTES")
@@ -4823,7 +4823,7 @@ parts = [p.strip() for p in body.split("|")]
 
 def refuse(msg: str) -> None:
     print(f"led: REFUSED -- malformed 'outcome:' statement -- {msg}.", file=sys.stderr)
-    print("  grammar (design/USER-RETROSPECTIVE-RECIPE.md \"The 'outcome:' statement grammar\"):", file=sys.stderr)
+    print("  grammar (user-guide/USER-RETROSPECTIVE-RECIPE.md \"The 'outcome:' statement grammar\"):", file=sys.stderr)
     print("    outcome: <TASK-SLUG> | <MODEL> | <SEAM-VERDICT> | <DEFECTS-FOUND-AT-SEAM> | <NOTES>", file=sys.stderr)
     print(f"  the five fields, in order: {', '.join(FIELDS)}", file=sys.stderr)
     print("  TASK-SLUG must match ^[a-z0-9][a-z0-9-]*$ (a bare slug, no spaces -- the same slug a", file=sys.stderr)
@@ -4871,14 +4871,14 @@ esac
 # --- review: intake validation (tracker item `maintainer-review-queue`, 2026-07-13) -----------
 # A statement beginning `review:` (after stripping leading whitespace) opens OR RE-RANKS one row
 # of the maintainer's executive review queue -- an item he wants to personally look at, ranked by
-# urgency -- and MUST carry the four-field grammar design/USER-RECIPES-FAQ.md's "Your review
+# urgency -- and MUST carry the four-field grammar user-guide/USER-RECIPES-FAQ.md's "Your review
 # queue" section documents before ANY write is attempted -- refuse loudly here, at the boundary
 # (ADR-0002 rule 2: validate at boundaries, do not coerce), cloned structurally from `taxon:`/
 # `interface:` above (whitespace-normalized validation copy, byte-exact persisted statement,
 # refuse-before-write atomicity, teach-text naming the grammar and where it is documented).
 #
 # WHAT THIS IS FOR, STATED SO IT CANNOT BE MISREAD: the queue lives in the LEDGER, never in a
-# prose file (the BACKLOG-retirement lesson design/USER-RECIPES-FAQ.md's own section cites -- a
+# prose file (the BACKLOG-retirement lesson user-guide/USER-RECIPES-FAQ.md's own section cites -- a
 # live task queue narrated in immutable prose rots in seconds, ADR-0005 Rule 6 corollary).
 # RE-RANKING an already-open SLUG is simply filing ANOTHER `review:` row for the same SLUG with a
 # different RANK -- no `--supersedes` flag needed; `bootstrap/templates/pickup.tmpl`'s
@@ -4894,7 +4894,7 @@ esac
 # reflowed by a terminal) is ACCEPTED rather than refused -- identical convention to the blocks
 # above. The row actually written on success is $statement, completely untouched -- byte fidelity
 # matters here for the same reason it matters for `resource:` (a later GPG signing ceremony reads
-# this exact row, design/USER-GPG-TRUST-LAYER-FAQ.md); the normalized copy is validation-only
+# this exact row, user-guide/USER-GPG-TRUST-LAYER-FAQ.md); the normalized copy is validation-only
 # scratch, never persisted. Nothing is written at all if validation fails (atomicity by
 # refusal-before-write).
 #
@@ -4913,7 +4913,7 @@ case "$_review_trimmed" in
 import re
 import sys
 
-# The four fields, in order, are transcribed VERBATIM from design/USER-RECIPES-FAQ.md's "Your
+# The four fields, in order, are transcribed VERBATIM from user-guide/USER-RECIPES-FAQ.md's "Your
 # review queue" section -- the ONE documented home of this grammar (a transcription, not a
 # second, driftable definition of it -- ADR-0012 P1). bootstrap/templates/pickup.tmpl's own
 # _REVIEW_FIELDS tuple is the sibling reader of the same four names on the display side. SLUG is
@@ -4930,7 +4930,7 @@ parts = [p.strip() for p in body.split("|")]
 
 def refuse(msg: str) -> None:
     print(f"led: REFUSED -- malformed 'review:' statement -- {msg}.", file=sys.stderr)
-    print("  grammar (design/USER-RECIPES-FAQ.md \"Your review queue\"):", file=sys.stderr)
+    print("  grammar (user-guide/USER-RECIPES-FAQ.md \"Your review queue\"):", file=sys.stderr)
     print("    review: <SLUG> | <RANK> | <WHAT> | <POINTER>", file=sys.stderr)
     print(f"  the four fields, in order: {', '.join(FIELDS)}", file=sys.stderr)
     print("  SLUG must match ^[a-z0-9][a-z0-9-]*$ (a bare slug, no spaces)", file=sys.stderr)
@@ -4968,7 +4968,7 @@ esac
 # the maintainer's review queue -- removing it from `./pickup`'s rendered `MAINTAINER-REVIEW-
 # QUEUE` section without deleting anything (append-only; see the `review:` block immediately
 # above for the full latest-row-per-SLUG semantics) -- and MUST carry the two-field grammar
-# design/USER-RECIPES-FAQ.md's "Your review queue" section documents before ANY write is
+# user-guide/USER-RECIPES-FAQ.md's "Your review queue" section documents before ANY write is
 # attempted, cloned structurally from the blocks above (whitespace-normalized validation copy,
 # byte-exact persisted statement, refuse-before-write atomicity, teach-text naming the grammar).
 #
@@ -4991,7 +4991,7 @@ case "$_review_done_trimmed" in
 import re
 import sys
 
-# The two fields, in order, are transcribed VERBATIM from design/USER-RECIPES-FAQ.md's "Your
+# The two fields, in order, are transcribed VERBATIM from user-guide/USER-RECIPES-FAQ.md's "Your
 # review queue" section -- the ONE documented home of this grammar (ADR-0012 P1). SLUG is held to
 # the SAME slug grammar the `review:` block above uses -- "SLUG must match grammar" per this
 # work item's own spec, so a `review-done:` can never target a slug shape `review:` could never
@@ -5007,7 +5007,7 @@ parts = [p.strip() for p in body.split("|")]
 
 def refuse(msg: str) -> None:
     print(f"led: REFUSED -- malformed 'review-done:' statement -- {msg}.", file=sys.stderr)
-    print("  grammar (design/USER-RECIPES-FAQ.md \"Your review queue\"):", file=sys.stderr)
+    print("  grammar (user-guide/USER-RECIPES-FAQ.md \"Your review queue\"):", file=sys.stderr)
     print("    review-done: <SLUG> | <DISPOSITION>", file=sys.stderr)
     print(f"  the two fields, in order: {', '.join(FIELDS)}", file=sys.stderr)
     print("  SLUG must match ^[a-z0-9][a-z0-9-]*$ (a bare slug, no spaces -- the same grammar", file=sys.stderr)
@@ -5093,7 +5093,7 @@ if [ -n "$grade" ]; then
     echo "led decision: REFUSED -- --grade was given, but this world's kernel predates s36 (no" >&2
     echo "  decision_grade column on ${SCHEMA}.ledger) -- the grade cannot be recorded in a typed" >&2
     echo "  column here. Omit --grade, or apply kernel/lineage/s36-decision-grade.sql to this" >&2
-    echo "  schema as a maintainer act (ORCH-OPERATING-CARD.md's kernel-delta decision tree)." >&2
+    echo "  schema as a maintainer act (user-guide/ORCH-OPERATING-CARD.md's kernel-delta decision tree)." >&2
     exit 1
   fi
 fi

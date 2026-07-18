@@ -4,7 +4,7 @@
 #   contributors: ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
-# Transcribed from design/USER-RECIPES-FAQ.md, "Workflow patterns" section, first entry
+# Transcribed from user-guide/USER-RECIPES-FAQ.md, "Workflow patterns" section, first entry
 # ("I want a workflow to iterate until clean -- can an agent spawn sub-agents and loop on its own
 # output until a defect list comes up empty?"), the FAQ's own generalized description of this
 # project's two-role fresh-context fix-point loop (A:B:C -- author, fresh-context reviewer,
@@ -59,7 +59,7 @@ done = "the round's fresh-context review reports either zero new findings (a 'dr
 escalation_event = "none typed for this phase alone -- convergence across rounds is judged by the adjudicate phase below, which is where the loop's own hard-cap escalation is declared; a single round's review output is never itself an escalation"
 
 [convergence.adjudicate]
-done = "K consecutive dry rounds are observed (loop-until-dry, the same criterion design/ORCH-AGENTIC-PATTERNS.md section 3 and this project's own A:B:C loop both use), reached strictly before the hard round-cap guard fires"
+done = "K consecutive dry rounds are observed (loop-until-dry, the same criterion vestigial_documentation/design/ORCH-AGENTIC-PATTERNS.md section 3 and this project's own A:B:C loop both use), reached strictly before the hard round-cap guard fires"
 escalation_event = "non-converging-review-loop -- the hard budget guard (a round cap, alongside the dry-count guard) is reached without K consecutive dry rounds; this is CLAUDE.md's own named escalation trigger ('gate-refusal streaks, DIVERGE_DEFECT/QUARANTINED... non-converging review loops, never on self-assessment'), routed to the orchestrator to adjudicate rather than looping further"
 
 [landing_zones.author-draft]

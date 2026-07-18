@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""pickup — the resume verb (design/ORCH-OPUS-READINESS.md move 3; the fourth verb alongside
+"""pickup — the resume verb (vestigial_documentation/design/ORCH-OPUS-READINESS.md move 3; the fourth verb alongside
 led/judge/the scaffold). The operator's cold-start problem: "with a complex project I never
 know how to restart." The rule this script exists to honor: the brief is DERIVED AT PICKUP
 TIME, never stored — a stored handoff decays from the moment of writing. Every section below
@@ -64,7 +64,7 @@ Sections emitted, each under a machine-parseable `### SECTION: <NAME>` header (g
                         own comment) — one query row is always one physical output line.
   ESTIMATES           — tracker item `cost-estimation-retro`, 2026-07-12: every unsuperseded
                         `kind=decision` row whose statement carries the `estimate:` prefix
-                        convention (design/USER-RETROSPECTIVE-RECIPE.md's "Estimate statement
+                        convention (user-guide/USER-RETROSPECTIVE-RECIPE.md's "Estimate statement
                         grammar" section — the decomposition-time sibling of `resource:` above),
                         read from the same `ledger_current` view via the identical newline-
                         normalization, coherence-partner, and MALFORMED-flagging conventions
@@ -78,7 +78,7 @@ Sections emitted, each under a machine-parseable `### SECTION: <NAME>` header (g
                         absent from any gate or audit family). Tracker item `actual-intake-
                         grammar`, 2026-07-13, added the measured-afterward twin: every
                         unsuperseded `kind=decision` row whose statement carries the `actual:`
-                        prefix (design/USER-RETROSPECTIVE-RECIPE.md's "The `actual:` statement
+                        prefix (user-guide/USER-RETROSPECTIVE-RECIPE.md's "The `actual:` statement
                         grammar" section) is paired directly beneath the `estimate:` block
                         sharing its TASK-SLUG, where both exist; an `actual:` row with no
                         matching TASK-SLUG on record is listed afterward under its own
@@ -105,7 +105,7 @@ Sections emitted, each under a machine-parseable `### SECTION: <NAME>` header (g
   MAINTAINER-REVIEW-QUEUE — tracker item `maintainer-review-queue`, 2026-07-13: the maintainer's
                         ranked "things I need to personally look at" queue, derived from every
                         unsuperseded `kind=decision` row carrying the `review:` or `review-done:`
-                        prefix convention (design/USER-RECIPES-FAQ.md's "Your review queue"
+                        prefix convention (user-guide/USER-RECIPES-FAQ.md's "Your review queue"
                         section — the ONE documented home of this grammar). Unlike RESOURCES/
                         ESTIMATES/TAXONOMIES above, this section's state is DERIVED, not merely
                         listed: the highest-ledger-row-id row per SLUG among BOTH prefixes decides
@@ -419,7 +419,7 @@ def review_debt(dep) -> None:
 
 
 # Field order §2 fixes for a `resource:`-prefixed decision statement (see this file's docstring
-# RESOURCES entry and design/USER-BLESSED-TABLE-TEMPLATE.md's "statement grammars" section, the
+# RESOURCES entry and user-guide/USER-BLESSED-TABLE-TEMPLATE.md's "statement grammars" section, the
 # ONE place both this parser and an authoring agent read the grammar from -- this list is that
 # grammar transcribed, not a second definition of it).
 _RESOURCE_FIELDS = ("NAME", "CLASS", "REACH", "WHAT-IT-PROVES", "GUIDANCE", "TIER")
@@ -519,13 +519,13 @@ def resources(dep) -> None:
 
 
 # Field order for an `estimate:`-prefixed decision statement (see this file's docstring
-# ESTIMATES entry and design/USER-RETROSPECTIVE-RECIPE.md's "Estimate statement grammar"
+# ESTIMATES entry and user-guide/USER-RETROSPECTIVE-RECIPE.md's "Estimate statement grammar"
 # section, the ONE place both this parser and led.tmpl's own intake validator read the grammar
 # from -- this list is that grammar transcribed, not a second definition of it, ADR-0012 P1).
 _ESTIMATE_FIELDS = ("TASK-SLUG", "TOOL-CALLS", "SUBAGENT-SPAWNS", "WALL-CLOCK", "TOKEN-OOM", "BASIS")
 
 # Field order for an `actual:`-prefixed decision statement -- the measured-afterward twin (see
-# this file's docstring ESTIMATES entry and design/USER-RETROSPECTIVE-RECIPE.md's "The `actual:`
+# this file's docstring ESTIMATES entry and user-guide/USER-RETROSPECTIVE-RECIPE.md's "The `actual:`
 # statement grammar" section, the ONE place both this parser and led.tmpl's own intake validator
 # read the grammar from -- this list is that grammar transcribed, not a second definition of it,
 # ADR-0012 P1).
@@ -538,7 +538,7 @@ def _read_actuals(dep) -> tuple[dict[str, list[str]], list[str]]:
     exactly (see that function's own comments for the run12 specimen this guards against).
     COHERENCE PARTNER: the WHERE filter below and led.tmpl's `actual:` validator trigger define
     "an actual declaration" IDENTICALLY, by construction -- change either side only in lockstep
-    with the other; the grammar's one documented home stays design/USER-RETROSPECTIVE-RECIPE.md's
+    with the other; the grammar's one documented home stays user-guide/USER-RETROSPECTIVE-RECIPE.md's
     "The `actual:` statement grammar" section. Returns (by_slug, malformed) where by_slug maps
     TASK-SLUG -> list of formatted detail blocks (ledger row id embedded), in ledger row-id
     order."""
@@ -582,7 +582,7 @@ def estimates(dep) -> None:
     # define "an estimate declaration" IDENTICALLY, by construction -- the same coherence
     # contract resources()/led.tmpl's `resource:` block already keep (see that pair's own
     # comments). Change either side only in lockstep with the other; the grammar's one documented
-    # home stays design/USER-RETROSPECTIVE-RECIPE.md's "Estimate statement grammar" section.
+    # home stays user-guide/USER-RETROSPECTIVE-RECIPE.md's "Estimate statement grammar" section.
     r = _psql_tuples(dep, "SELECT id, regexp_replace(statement, '[\\n\\r]+[ \\t]*', ' ', 'g') "
                            f"FROM {dep.schema}.ledger_current "
                            f"WHERE kind = 'decision' AND statement ~ '^[[:space:]]*estimate:' "
@@ -649,7 +649,7 @@ def estimates(dep) -> None:
 
 
 # Field order for a `taxon:`-prefixed decision statement (see this file's docstring TAXONOMIES
-# entry and design/USER-TAXONOMY-DECLARATION.md's "The statement grammars" section, the ONE place
+# entry and user-guide/USER-TAXONOMY-DECLARATION.md's "The statement grammars" section, the ONE place
 # both this parser and led.tmpl's own intake validator read the grammar from -- this list is that
 # grammar transcribed, not a second definition of it, ADR-0012 P1).
 _TAXON_FIELDS = ("TAXONOMY", "TAXON", "PATTERNS", "GLOSS")
@@ -712,7 +712,7 @@ def taxonomies(dep) -> None:
     # COHERENCE PARTNER (interface side): the WHERE filter below and led.tmpl's `interface:`
     # validator trigger define "an interface declaration" IDENTICALLY, by construction -- the same
     # coherence contract kept above for `taxon:`. Change either side only in lockstep with the
-    # other; the grammar's one documented home stays design/USER-TAXONOMY-DECLARATION.md's "The
+    # other; the grammar's one documented home stays user-guide/USER-TAXONOMY-DECLARATION.md's "The
     # statement grammars" section.
     r2 = _psql_tuples(dep, "SELECT id, regexp_replace(statement, '[\\n\\r]+[ \\t]*', ' ', 'g') "
                             f"FROM {dep.schema}.ledger_current "
@@ -750,7 +750,7 @@ def taxonomies(dep) -> None:
 
 
 # Field order for a `review:`-prefixed decision statement, and for a `review-done:`-prefixed one
-# (see this file's docstring MAINTAINER-REVIEW-QUEUE entry and design/USER-RECIPES-FAQ.md's "Your
+# (see this file's docstring MAINTAINER-REVIEW-QUEUE entry and user-guide/USER-RECIPES-FAQ.md's "Your
 # review queue" section, the ONE place both this parser and led.tmpl's own intake validator read
 # the grammar from -- these lists are that grammar transcribed, not a second definition of it,
 # ADR-0012 P1).
@@ -762,7 +762,7 @@ def review_queue(dep) -> None:
     """MAINTAINER-REVIEW-QUEUE -- tracker item `maintainer-review-queue`, 2026-07-13: the
     maintainer's ranked "things I need to personally look at" queue, derived live from every
     unsuperseded `kind=decision` row whose statement carries the `review:` or `review-done:`
-    prefix convention (design/USER-RECIPES-FAQ.md's "Your review queue" section -- the ONE
+    prefix convention (user-guide/USER-RECIPES-FAQ.md's "Your review queue" section -- the ONE
     documented home of this grammar). Unlike resources()/estimates()/taxonomies() above, this
     section's state is NOT "one block per row" -- it is DERIVED: the latest ledger row (by row
     id) for a given SLUG among BOTH prefixes decides that SLUG's current state (a `review:` row
@@ -775,7 +775,7 @@ def review_queue(dep) -> None:
     the statement after stripping leading POSIX [:space:] starting with EITHER `review:` or
     `review-done:` (two separate case blocks, one per prefix); the regex below
     (`^[[:space:]]*review(-done)?:`) names the SAME combined class. Change either side only in
-    lockstep with the other; the grammar's one documented home stays design/USER-RECIPES-FAQ.md's
+    lockstep with the other; the grammar's one documented home stays user-guide/USER-RECIPES-FAQ.md's
     "Your review queue" section.
 
     Mirrors resources()'s/estimates()'s/taxonomies()'s own newline-normalization exactly, for the
@@ -955,7 +955,7 @@ def in_flight(dep) -> None:
 # ==================================================================================================
 # ROLLUP (tracker slug `work-tree-rollup`, wave-3 dispatch decision, ledger row 192) -- see this
 # file's own module docstring ROLLUP entry for the full design rationale. Parsing helpers below are
-# a THIRD independent reader of the `estimate:` grammar (design/USER-RETROSPECTIVE-RECIPE.md's
+# a THIRD independent reader of the `estimate:` grammar (user-guide/USER-RETROSPECTIVE-RECIPE.md's
 # "Estimate statement grammar" section), alongside `led.tmpl`'s intake validator and this file's own
 # `estimates()` above -- the established precedent for this grammar (stated in that section's own
 # text) is MULTIPLE independent readers of ONE documented grammar, not one shared code module, so a
@@ -982,7 +982,7 @@ _DURATION_UNIT_MINUTES = {"m": 1, "h": 60, "d": 1440}
 
 def _parse_duration_minutes(s: str) -> int | None:
     """'20m' -> 20; '2h' -> 120; '1d' -> 1440; anything else (including a bare number with no
-    unit) -> None. The WALL-CLOCK grammar (design/USER-RETROSPECTIVE-RECIPE.md) always carries a
+    unit) -> None. The WALL-CLOCK grammar (user-guide/USER-RETROSPECTIVE-RECIPE.md) always carries a
     unit, so a value with none is malformed, not a default unit guessed on its behalf (ADR-0002:
     validate, do not coerce)."""
     m = re.fullmatch(r"(\d+)([mhd])", s.strip())
@@ -1051,7 +1051,7 @@ def _fetch_estimate_rows(dep) -> tuple[list[tuple[str, int, dict[str, str]]], li
 def rollup(dep) -> None:
     _section("ROLLUP")
     print("RETROSPECTIVE-ONLY, always (the maintainer's standing invariant, restated here exactly")
-    print("as design/USER-RETROSPECTIVE-RECIPE.md Section 6 states it for estimate:/actual figures")
+    print("as user-guide/USER-RETROSPECTIVE-RECIPE.md Section 6 states it for estimate:/actual figures")
     print("generally): this section never gates, never polices cost or scope, and is never a verdict")
     print("on a task that missed its number -- only a decomposition-quality signal a retrospective")
     print("may cite.")

@@ -1,5 +1,8 @@
 # Deployment pinning — decoupling a scaffolded deployment's operator verbs from autoharn's live working checkout
 
+<!-- doc-attest-exempt: doc-tree relocation mechanical edit (work item doc-tree-reorg-user-guide, ledger row 1620, 2026-07-18) -- relative link path(s) repointed to a sibling file's new location after a git-mv relocation elsewhere in the tree; no prose rewrite, same disposition as the v1.1.2 release-cut's own markers (commit 543a389). Removal condition: strike this marker and run the real A:B:C loop next time this file is touched for content, not just link repair. -->
+
+
 Audience: orchestrator and maintainer. This document answers one question: **how does a
 scaffolded autoharn deployment (an "adopter" — a project that consumes autoharn's `led`,
 `judge`, `pickup`, and the other operator verbs) stop having its behavior change the instant
@@ -45,7 +48,7 @@ a recent merge to autoharn's `next` branch had to be held up and carefully stage
 specifically because a live session was running there and an unstaged template change would
 have reached it instantly. As of this note ~/ent is a broken installation, and — per the
 maintainer's own 2026-07-14 framing (quoted in full in the companion note,
-[`ORCH-RECOVERY-MODE-SIGNED.md`](ORCH-RECOVERY-MODE-SIGNED.md)) — it is *still* broken. This
+[`ORCH-RECOVERY-MODE-SIGNED.md`](../vestigial_documentation/design/ORCH-RECOVERY-MODE-SIGNED.md)) — it is *still* broken. This
 design does not diagnose or fix ~/ent's brokenness (that is out of scope here, and ~/ent
 carries a live session this project treats as strictly read-only); it takes ~/ent's situation
 as the concrete evidence that the live-exec coupling is a real operational hazard for
@@ -201,12 +204,12 @@ worktree with its merge gated on the existing ent-session merge gate until built
 
 ## Related
 
-- [`design/ORCH-RECOVERY-MODE-SIGNED.md`](ORCH-RECOVERY-MODE-SIGNED.md) — the companion design
+- [`design/ORCH-RECOVERY-MODE-SIGNED.md`](../vestigial_documentation/design/ORCH-RECOVERY-MODE-SIGNED.md) — the companion design
   note this item composes with (ledger row 687 names the composition explicitly): recovery mode
   operates against a specific deployment's state, and a pinned deployment (this document) is what
   makes "which version of autoharn's own logic performed a recovery" an answerable, recorded
   question rather than "whatever the shared checkout happened to be running that day."
-- [`design/MAINT-MAINTAINER-DECISION-BRIEF-2026-07-14.md`](MAINT-MAINTAINER-DECISION-BRIEF-2026-07-14.md),
+- [`design/MAINT-MAINTAINER-DECISION-BRIEF-2026-07-14.md`](../vestigial_documentation/design/MAINT-MAINTAINER-DECISION-BRIEF-2026-07-14.md),
   §B5 — the source framing this design executes, including the maintainer's own "responsible
   adults" / submodule language quoted above.
 - [`GLOSSARY.md#the-scaffold`](../GLOSSARY.md#the-scaffold) and

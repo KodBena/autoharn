@@ -1,5 +1,8 @@
 # The GPG trust layer — signed ratifications, signed commissions, anchored ledgers
 
+<!-- doc-attest-exempt: doc-tree relocation mechanical edit (work item doc-tree-reorg-user-guide, ledger row 1620, 2026-07-18) -- relative link path(s) repointed to a sibling file's new location after a git-mv relocation elsewhere in the tree; no prose rewrite, same disposition as the v1.1.2 release-cut's own markers (commit 543a389). Removal condition: strike this marker and run the real A:B:C loop next time this file is touched for content, not just link repair. -->
+
+
 Audience: maintainer (the opening paragraph below also names the executor who builds from this spec)
 
 This document specifies how GPG (GNU Privacy Guard, the standard OpenPGP signing tool)
@@ -67,9 +70,9 @@ The commission ladder becomes LAZY < FULL < SIGNED:
   evidenced by actor + absent stamp — a rebuttable presumption, not proof (the
   absence of a stamp is consistent with a human typing it, no stronger; a CONTESTED
   commission must be SIGNED — the standing rule in
-  [USER-GPG-TRUST-LAYER-FAQ.md](USER-GPG-TRUST-LAYER-FAQ.md) §5, from the 2026-07-12
+  [USER-GPG-TRUST-LAYER-FAQ.md](../user-guide/USER-GPG-TRUST-LAYER-FAQ.md) §5, from the 2026-07-12
   re-litigation panel's ICJ-lens finding,
-  [MAINT-RELITIGATION-SYNTHESIS.md](MAINT-RELITIGATION-SYNTHESIS.md) "New findings
+  [MAINT-RELITIGATION-SYNTHESIS.md](../vestigial_documentation/design/MAINT-RELITIGATION-SYNTHESIS.md) "New findings
   this panel produced").
 - SIGNED — FULL, plus the file holding the ask (`~/aa` in the example below) carries a
   detached signature:

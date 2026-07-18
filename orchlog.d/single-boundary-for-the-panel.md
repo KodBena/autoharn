@@ -69,7 +69,7 @@ consult document. Concretely, per the commission's own compliance reference:
   unadorned label — a bare label without a removal condition is exactly the silent-fallback
   failure ADR-0002 forbids elsewhere in the same document.
 - **"a pointer to the Fable-commissioned context migration doc"** names
-  [design/FABLE-WORLD-CONTEXT-MIGRATION-CONSULT-2026-07-19.md](../design/FABLE-WORLD-CONTEXT-MIGRATION-CONSULT-2026-07-19.md)
+  [design/FABLE-WORLD-CONTEXT-MIGRATION-CONSULT-2026-07-19.md](../vestigial_documentation/design/FABLE-WORLD-CONTEXT-MIGRATION-CONSULT-2026-07-19.md)
   — each deprecation mark on a legacy path should link there. Read it before writing the
   pointer text: it is a **banked investigation, non-binding, awaiting a future commissioning
   act** (its own status line), not a spec — it answers what accumulated deployment context
@@ -105,5 +105,5 @@ this one follows up on, with the full architecture layering and the credited-vie
 discussion this note does not repeat);
 [law/adr/0002-fail-loudly.md](../law/adr/0002-fail-loudly.md) (the deprecation-marking
 discipline, "Bounded, scheduled-for-removal compat shims");
-[design/FABLE-WORLD-CONTEXT-MIGRATION-CONSULT-2026-07-19.md](../design/FABLE-WORLD-CONTEXT-MIGRATION-CONSULT-2026-07-19.md)
+[design/FABLE-WORLD-CONTEXT-MIGRATION-CONSULT-2026-07-19.md](../vestigial_documentation/design/FABLE-WORLD-CONTEXT-MIGRATION-CONSULT-2026-07-19.md)
 (the migration-consult document every deprecation mark should point at).

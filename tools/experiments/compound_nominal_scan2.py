@@ -6,8 +6,8 @@
 # <<< PROVENANCE-STAMP <<<
 
 """compound_nominal_scan2 — EXPERIMENT, NOT A WIRED GATE (second attempt; supersedes-or-
-confirms design/ORCH-COMPOUND-NOMINAL-DETECTION.md — the companion design note is
-design/ORCH-COMPOUND-NOMINAL-DETECTION-2.md).
+confirms vestigial_documentation/design/ORCH-COMPOUND-NOMINAL-DETECTION.md — the companion design note is
+vestigial_documentation/design/ORCH-COMPOUND-NOMINAL-DETECTION-2.md).
 
 Ranked, report-only static detectors for two defect classes in LLM-authored prose:
 
@@ -139,7 +139,7 @@ EXCLUDE_PREFIXES = (
 DEF_SURFACES = (
     "GLOSSARY.md",
     "gates/doc-legibility/terms.md",
-    "research/obligations-formalisms-survey/KEY.md",
+    "vestigial_documentation/research/obligations-formalisms-survey/KEY.md",
 )
 # Files carrying the in-repo evidence-record marker are banked quoted-specimen collections
 # (ADR-0017 Exceptions: quoted defects / point-in-time records), excluded and printed.
@@ -147,7 +147,7 @@ EXEMPT_MARKER = "doc-attest-exempt"
 
 # The pre-repair KR document (specimen source), by blob: parent of the repair commit a4ef32d.
 SPECIMEN_COMMIT = "b96a8c8"
-SPECIMEN_PATH = "design/ORCH-KR-TITRATION-EXPLORATION.md"
+SPECIMEN_PATH = "vestigial_documentation/design/ORCH-KR-TITRATION-EXPLORATION.md"
 
 # ---------------------------------------------------------------------------
 # Embedded lexicons — in-file data, deliberately NOT corpus-derived (see docstring).

@@ -5,12 +5,12 @@
 #   contributors: a857c93d/main
 # <<< PROVENANCE-STAMP <<<
 
-"""seen-red/hook-payload-contract/check_contract.py -- M3 (design/ORCH-RCA-PAIRING-KEY-DIVERGENCE.md
+"""seen-red/hook-payload-contract/check_contract.py -- M3 (vestigial_documentation/design/ORCH-RCA-PAIRING-KEY-DIVERGENCE.md
 sec-6.5): the "harness-contract facts live in a captured fixture, not prose" mechanism. The two
 sibling JSON files in this directory are a REAL, LIVE-CAPTURED PreToolUse+PostToolUse payload pair
 for one Bash tool call, captured 2026-07-14 during this fix's own build (a scratch project under
 /tmp with dump-to-file hooks on both events, driven by a headless `claude -p` run -- the same method
-design/ORCH-RCA-PAIRING-KEY-DIVERGENCE.md's own consult used, per its §3 witness 2). `transcript_path`
+vestigial_documentation/design/ORCH-RCA-PAIRING-KEY-DIVERGENCE.md's own consult used, per its §3 witness 2). `transcript_path`
 is scrubbed (`"<scrubbed>"`); every other field is the harness's own, unedited output.
 
 WHY THIS EXISTS: the defect this fix repairs (sec-2, lapse 2) was an environment fact --
@@ -69,7 +69,7 @@ def main() -> int:
         failures.append(
             f"tool_use_id diverges across legs: PreToolUse={pre.get('tool_use_id')!r} "
             f"PostToolUse={post.get('tool_use_id')!r} -- if this ever fires, the identity-elimination "
-            f"fix's own foundation (design/ORCH-RCA-PAIRING-KEY-DIVERGENCE.md sec-3) no longer holds")
+            f"fix's own foundation (vestigial_documentation/design/ORCH-RCA-PAIRING-KEY-DIVERGENCE.md sec-3) no longer holds")
 
     if failures:
         print(f"FAILURES ({len(failures)}):")

@@ -6,7 +6,7 @@
 # <<< PROVENANCE-STAMP <<<
 
 """run_fixtures.py -- both-polarity proof for hooks/posttooluse_bash_completion.py, REWRITTEN
-2026-07-14 (design/ORCH-RCA-PAIRING-KEY-DIVERGENCE.md sec-6.4, the M1 counterparty fix).
+2026-07-14 (vestigial_documentation/design/ORCH-RCA-PAIRING-KEY-DIVERGENCE.md sec-6.4, the M1 counterparty fix).
 
 WHY THIS WAS REWRITTEN, NOT JUST EXTENDED: the RCA that motivated this fix (design/
 ORCH-RCA-PAIRING-KEY-DIVERGENCE.md sec-5, lapse 1) found the PRIOR version of this fixture's

@@ -5,7 +5,7 @@
 #   contributors: e4410ef6/main, a857c93d/main
 # <<< PROVENANCE-STAMP <<<
 
-"""run_fixtures.py -- both-polarity proof for Part 2 of design/ORCH-CONTEMPORANEITY-AUDIT.md
+"""run_fixtures.py -- both-polarity proof for Part 2 of vestigial_documentation/design/ORCH-CONTEMPORANEITY-AUDIT.md
 (engine/contemp_edb.py + engine/lp/contemporaneity.lp + engine/contemp_audit.py; BACKLOG
 "Contemporaneity indictment", 2026-07-11) EXTENDED for design/LATE-ENTRY-AND-INTAKE-
 SEMANTICS.md's two ratified mechanisms (kernel/lineage/s24-declared-event-time.sql; the
@@ -33,7 +33,7 @@ pattern for BACKLOG "Run-10 closure audit (2026-07-11)" item 1 / change proposal
 ledger_kind_check refusal now teaches its own live valid-kind list rather than leaving the agent
 to self-diagnose via a hand-run pg_get_constraintdef query (run-10 row 67's own specimen).
 
-Cases (p)/(q) close the SQL-floor differential deferral design/ORCH-CONTEMPORANEITY-AUDIT.md's Status
+Cases (p)/(q) close the SQL-floor differential deferral vestigial_documentation/design/ORCH-CONTEMPORANEITY-AUDIT.md's Status
 section names ("this verb ships ONE producer today, not the marriage discipline's cross-validated
 pair"): engine/contemp_floor.py (the SQL floor) + engine/contemp_differential.py (the differential
 runner, matching engine/ledger_differential.py's own AGREE/DIVERGE_BY_DESIGN/DIVERGE_DEFECT/
@@ -718,7 +718,7 @@ def main() -> int:
                    f"verdict=BATCHED_DECLARED, token {tok_h} annotated intake-shape, as expected")
 
         # ---- CASE p: SQL-floor marriage differential -- AGREE on real-shaped data (GREEN) ------
-        # design/ORCH-CONTEMPORANEITY-AUDIT.md Status's own deferral, closed: engine/contemp_floor.py
+        # vestigial_documentation/design/ORCH-CONTEMPORANEITY-AUDIT.md Status's own deferral, closed: engine/contemp_floor.py
         # (the SQL floor) vs engine/lp/contemporaneity.lp (the ASP producer), via
         # engine/contemp_differential.py --retain -- the SAME subprocess `./audit --differential`
         # execs. Combines case (h)'s own run-10 intake-shape burst AND case (f)'s own manufactured

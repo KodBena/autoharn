@@ -6,8 +6,8 @@
 # <<< PROVENANCE-STAMP <<<
 
 """s22_work_item_fixture -- proves the s22 work-item-ledger delta (s22-work-item-ledger.sql;
-design/ORCH-S22-WORK-ITEM-LEDGER.md, Fable-authored spec, session be693afb, 2026-07-09) on a THROWAWAY
-schema pair in the TOY db (design/ORCH-S22-WORK-ITEM-LEDGER.md's own witness protocol, items 1-6, run
+vestigial_documentation/design/ORCH-S22-WORK-ITEM-LEDGER.md, Fable-authored spec, session be693afb, 2026-07-09) on a THROWAWAY
+schema pair in the TOY db (vestigial_documentation/design/ORCH-S22-WORK-ITEM-LEDGER.md's own witness protocol, items 1-6, run
 in order):
 
   1. open -> claim -> close(shipped, witness) round trip; work_item_current shows each state.

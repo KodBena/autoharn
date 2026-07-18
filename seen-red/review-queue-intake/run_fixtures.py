@@ -20,7 +20,7 @@ WHAT THIS PROVES: `bootstrap/templates/led.tmpl` validates a `review:`-prefixed 
 statement (four fields: SLUG | RANK | WHAT | POINTER) and a `review-done:`-prefixed decision
 statement (two fields: SLUG | DISPOSITION) -- both against a whitespace-normalized copy -- BEFORE
 the INSERT, refusing loudly (exit nonzero, nothing written, teach-text naming the grammar and
-design/USER-RECIPES-FAQ.md's "Your review queue" section) on any single-field defect, and
+user-guide/USER-RECIPES-FAQ.md's "Your review queue" section) on any single-field defect, and
 accepting a well-formed statement byte-exact. `bootstrap/templates/pickup.tmpl`'s review_queue()
 reader renders the MAINTAINER-REVIEW-QUEUE section by DERIVING each SLUG's current state from the
 highest-ledger-row-id row among BOTH prefixes -- proving, live, the three state-transition rules
@@ -104,19 +104,19 @@ SCRATCH_NAME = "rqfixture"
 SCHEMA, KERN, ROLE = SCRATCH_NAME, f"{SCRATCH_NAME}_kernel", f"{SCRATCH_NAME}_rw"
 
 REVIEW_FIELDCOUNT = "review: key-generation | 1 | decide the signing-key ceremony"
-REVIEW_BAD_SLUG = "review: Key Generation | 1 | decide the signing-key ceremony | design/MAINT-MAINTAINER-DECISION-BRIEF.md"
-REVIEW_NON_INTEGER_RANK = "review: key-generation | first | decide the signing-key ceremony | design/MAINT-MAINTAINER-DECISION-BRIEF.md"
-REVIEW_ZERO_RANK = "review: key-generation | 0 | decide the signing-key ceremony | design/MAINT-MAINTAINER-DECISION-BRIEF.md"
-REVIEW_EMPTY_WHAT = "review: key-generation | 1 |    | design/MAINT-MAINTAINER-DECISION-BRIEF.md"
+REVIEW_BAD_SLUG = "review: Key Generation | 1 | decide the signing-key ceremony | vestigial_documentation/design/MAINT-MAINTAINER-DECISION-BRIEF.md"
+REVIEW_NON_INTEGER_RANK = "review: key-generation | first | decide the signing-key ceremony | vestigial_documentation/design/MAINT-MAINTAINER-DECISION-BRIEF.md"
+REVIEW_ZERO_RANK = "review: key-generation | 0 | decide the signing-key ceremony | vestigial_documentation/design/MAINT-MAINTAINER-DECISION-BRIEF.md"
+REVIEW_EMPTY_WHAT = "review: key-generation | 1 |    | vestigial_documentation/design/MAINT-MAINTAINER-DECISION-BRIEF.md"
 REVIEW_EMPTY_POINTER = "review: key-generation | 1 | decide the signing-key ceremony |    "
 
 REVIEW_DONE_FIELDCOUNT = "review-done: key-generation"
 REVIEW_DONE_BAD_SLUG = "review-done: Key Generation | approved as written"
 
-REVIEW_OPEN = "review: key-generation | 1 | decide the signing-key generation ceremony | design/MAINT-MAINTAINER-DECISION-BRIEF.md"
-REVIEW_RERANK = "review: key-generation | 3 | re-ranked -- deprioritized behind the trust-domain decision | design/MAINT-MAINTAINER-DECISION-BRIEF.md"
+REVIEW_OPEN = "review: key-generation | 1 | decide the signing-key generation ceremony | vestigial_documentation/design/MAINT-MAINTAINER-DECISION-BRIEF.md"
+REVIEW_RERANK = "review: key-generation | 3 | re-ranked -- deprioritized behind the trust-domain decision | vestigial_documentation/design/MAINT-MAINTAINER-DECISION-BRIEF.md"
 REVIEW_TICK = "review-done: key-generation | approved the brief's proposed ceremony as written"
-REVIEW_REOPEN = "review: key-generation | 2 | reopened -- ceremony needs a second look after the signed-chain-head question | design/MAINT-MAINTAINER-DECISION-BRIEF.md"
+REVIEW_REOPEN = "review: key-generation | 2 | reopened -- ceremony needs a second look after the signed-chain-head question | vestigial_documentation/design/MAINT-MAINTAINER-DECISION-BRIEF.md"
 
 
 def _psql(*args: str) -> subprocess.CompletedProcess:
@@ -233,7 +233,7 @@ def main() -> int:
     section = _review_queue_section(dest)
     open_ok = ("[1] key-generation" in section
                and "decide the signing-key generation ceremony" in section
-               and "design/MAINT-MAINTAINER-DECISION-BRIEF.md" in section)
+               and "vestigial_documentation/design/MAINT-MAINTAINER-DECISION-BRIEF.md" in section)
     if not open_ok:
         failures.append(f"GREEN-OPEN: expected rank-1 key-generation entry, got:\n{section}")
     log(f"GREEN-OPEN: queue renders the open entry at rank 1 -- {'PASS' if open_ok else 'FAIL'}")

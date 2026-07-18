@@ -22,7 +22,7 @@ exists to protect):
                           that same doc then exits 0.
   WAIVER-NOT-PROSE    -- a doc that merely MENTIONS the waiver token in plain prose (not inside
                           an HTML comment) is NOT waived and still gets flagged RED -- the live
-                          bug this gate's own build hit (design/ORCH-ABC-AUDIT-LOOP-RECIPE.md's own
+                          bug this gate's own build hit (user-guide/ORCH-ABC-AUDIT-LOOP-RECIPE.md's own
                           worked-example prose false-triggered a raw substring check) and the
                           regression this case pins.
   V2-ADJUDICATION     -- doc-attestation/2 (design/ORCH-SPEC-DOC-ATTESTATION-2.md) binds the escalation

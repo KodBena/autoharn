@@ -6,7 +6,7 @@
 # <<< PROVENANCE-STAMP <<<
 
 """validation_leaf_manifest_gate -- the BYTE-IDENTITY mechanism F4's own real hazard names
-(design/ORCH-CATEGORICAL-REFACTOR-CONSULT-2026-07-15.md F4 / plan step 7; design/
+(vestigial_documentation/design/ORCH-CATEGORICAL-REFACTOR-CONSULT-2026-07-15.md F4 / plan step 7; design/
 ORCH-IDRIS-REFINEMENT-CONSULT-2026-07-15.md R8's "typed premise list is the natural manifest
 source" lowering row; ledger item validation-trigger-decomposition).
 

@@ -22,7 +22,7 @@ ambient GPG keyring, and never autoharn's own `law/keys/` (see filing/gpg_trust.
 now point that shared mechanism at TWO DIFFERENT directories, deliberately — autoharn's own
 `law/keys/` verifies only autoharn's own `ratified/*` tags, this deployment's `keys/` verifies
 only this deployment's own commissions; design/MAINT-GPG-TRUST-LAYER.md §7 and
-design/USER-GPG-TRUST-LAYER-FAQ.md §3 name the split. KEY-RESIDENCE REVISION, 2026-07-11 evening: an
+user-guide/USER-GPG-TRUST-LAYER-FAQ.md §3 name the split. KEY-RESIDENCE REVISION, 2026-07-11 evening: an
 earlier version of this file resolved `AUTOHARN / "law" / "keys"` here — a maintainer finding
 the same day ("THIS repository should not have anything to do with end user's keys") named this
 as a conflation of autoharn's own law-signing with every deployment's commission-signing; fixed
@@ -78,7 +78,7 @@ actually covers DIFFER — and a completely honest, non-forged commission would 
 FORGED-OR-CORRUPT. This is a real defect class (ADR-0000: the type that forecloses it is "sign
 exactly the bytes that will be compared", not a downstream tolerance/fuzzy-match patch), fixed
 here and in the ceremony this project's own scaffold prints
-(bootstrap/new-project.sh's SIGNED-mode block) and in design/USER-GPG-TRUST-LAYER-FAQ.md: sign
+(bootstrap/new-project.sh's SIGNED-mode block) and in user-guide/USER-GPG-TRUST-LAYER-FAQ.md: sign
 `printf '%s' "$STATEMENT"` (no trailing newline, byte-identical to what `$(...)` produces and
 what lands in the ledger), never the raw file.
 

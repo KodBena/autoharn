@@ -7,7 +7,7 @@
 # Specimen C -- transcribed from the autoharn-panel deployment's hand-built workflow template,
 # scripts/cycle-workflow-template.mjs (~/w/vdc/1/experience/autoharn-panel/scripts/), the
 # deployment's own answer to the gap this exploration names: "a deployment inventing, from
-# scratch, the primitive the harness lacks" (design/FABLE-PIPELINE-DSL-EXPLORATION.md, "The
+# scratch, the primitive the harness lacks" (vestigial_documentation/design/FABLE-PIPELINE-DSL-EXPLORATION.md, "The
 # problem"). This is NOT a live-run ledger specimen like A and B above -- it is a runnable
 # JavaScript template a caller invokes with args (repoRoot, adrPaths, a precomputed
 # makespan-scheduler schedule, and per-job specs).

@@ -9,7 +9,7 @@
 # stores/008_harness_failure_ledger.sql (the harness_failure schema: record/disposition + the
 # derived harness_failure.open_records view) to the STANDING `research` database — the SAME db
 # stores/001_research_ledger.sql already uses, as a second auxiliary schema
-# (design/ORCH-HARNESS-FAILURE-LEDGER.md, "Why research, not a new database").
+# (vestigial_documentation/design/ORCH-HARNESS-FAILURE-LEDGER.md, "Why research, not a new database").
 #
 # Usage:
 #   bootstrap/apply-harness-failure-ledger.sh
@@ -42,7 +42,7 @@
 #
 # This script touches NO file under stores/ (read-only) and applies to NO database unless the
 # operator types the resolved db name back at the confirmation prompt. It never inserts the
-# nine ready-to-INSERT backfill records design/ORCH-HARNESS-FAILURE-LEDGER.md's appendix lists —
+# nine ready-to-INSERT backfill records vestigial_documentation/design/ORCH-HARNESS-FAILURE-LEDGER.md's appendix lists —
 # those are data, applied separately, by hand, at the maintainer's own discretion, exactly as
 # this script only ever creates STRUCTURE.
 set -eu
@@ -141,7 +141,7 @@ echo "The DDL is transaction-wrapped (BEGIN...COMMIT): a mid-file failure rolls 
 echo "leaving NO partial schema — this apply is atomic, unlike a kernel lineage delta."
 echo ""
 echo "This does NOT insert the nine ready-to-INSERT backfill records"
-echo "design/ORCH-HARNESS-FAILURE-LEDGER.md's appendix lists — structure only, exactly as"
+echo "vestigial_documentation/design/ORCH-HARNESS-FAILURE-LEDGER.md's appendix lists — structure only, exactly as"
 echo "stores/001_research_ledger.sql's own apply never inserted a research.reading row."
 echo ""
 printf 'Type the database name (%s) to confirm, or anything else to abort: ' "$DB"

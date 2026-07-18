@@ -30,7 +30,7 @@ separate, PURELY ADDITIVE file: it changes no existing consumer's read of `invoc
 and needs no change to `contemp_edb.py` (ADR-0004's minimal-touch posture -- this is a small
 follow-up, not a redesign of the contemporaneity EDB's own capability manifest).
 
-PAIRING RULE, CORRECTED 2026-07-14 (design/ORCH-RCA-PAIRING-KEY-DIVERGENCE.md sec-4/6.1 -- an RCA
+PAIRING RULE, CORRECTED 2026-07-14 (vestigial_documentation/design/ORCH-RCA-PAIRING-KEY-DIVERGENCE.md sec-4/6.1 -- an RCA
 found the ORIGINAL content-hash FIFO design below was dead at birth: `stamp_intercept.py`
 REWRITES every Bash command -- injecting a fresh per-call uuid4 into PGOPTIONS -- AFTER hashing
 the pre-rewrite text but BEFORE the command actually runs, so this hook's own `command_sha256`

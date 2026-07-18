@@ -142,7 +142,7 @@ def main() -> int:
     # own module docstring). new-project.sh does not yet scaffold this directory itself (frozen
     # this pass -- a live session was running in the shared checkout when this commission landed,
     # see the commission's own report for the exact pending diff), so this fixture creates it by
-    # hand, exactly what an operator following design/USER-GPG-TRUST-LAYER-FAQ.md §3b would do on an
+    # hand, exactly what an operator following user-guide/USER-GPG-TRUST-LAYER-FAQ.md §3b would do on an
     # already-scaffolded world today.
     keys_dir = world_dir / "keys"
     saved_key_path = tmp / "test-key.asc.saved"  # case d's temporary move-out target

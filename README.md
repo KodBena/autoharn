@@ -1,12 +1,15 @@
 # Deploying autoharn to your project (git submodule)
 
+<!-- doc-attest-exempt: doc-tree relocation mechanical edit (work item doc-tree-reorg-user-guide, ledger row 1620, 2026-07-18) -- relative link path(s) repointed to a sibling file's new location after a git-mv relocation elsewhere in the tree; no prose rewrite, same disposition as the v1.1.2 release-cut's own markers (commit 543a389). Removal condition: strike this marker and run the real A:B:C loop next time this file is touched for content, not just link repair. -->
+
+
 This page is only about deployment: getting autoharn wired into a project of your own as a
 pinned git submodule, and keeping it that way. It assumes you have `psql` and `git` on your
 `PATH` and a Postgres database you can reach, and it tells you exactly what to type and what
 you should see.
 
 If you want to know what autoharn *is*, or how to collaborate/build inside the autoharn repo
-itself, that content now lives in [`docs/PROJECT-OVERVIEW.md`](docs/PROJECT-OVERVIEW.md) — not
+itself, that content now lives in [`docs/PROJECT-OVERVIEW.md`](user-guide/PROJECT-OVERVIEW.md) — not
 here. One exception, worth knowing before you deploy: the pointer immediately below.
 
 ### Architecture at a glance
@@ -45,7 +48,7 @@ this for you:
    gives your project) — that's a separate manual step, spelled out in step 1's "Two manual steps
    remain" note below. If you don't have a database/role yet, see USER-CONFIGURATION.md's
    ["FAQ: provisioning Postgres for
-   autoharn"](USER-CONFIGURATION.md#faq-provisioning-postgres-for-autoharn) for a copy-paste
+   autoharn"](user-guide/USER-CONFIGURATION.md#faq-provisioning-postgres-for-autoharn) for a copy-paste
    walkthrough. `psql` authentication (passwords, `.pgpass`, `PGPASSWORD`, `pg_hba.conf` rules)
    is your normal Postgres client setup, not something any command below configures — the same
    FAQ page covers it.
@@ -73,7 +76,7 @@ this repo, the one you're reading this file in) materializes two independent rep
   `PGDATABASE` / … fields, `LEDGER_SCHEMA`, `LEDGER_KERNEL_SCHEMA`, `LED_BIN` for write access,
   `PANEL_BIND` / `PANEL_PORT`, `PANEL_POLL_INTERVAL`); the full table of variables, precedence,
   and copy-paste commands lives in
-  [USER-CONFIGURATION.md → "The autoharn-panel extension (submodule)"](USER-CONFIGURATION.md#the-autoharn-panel-extension-submodule) —
+  [USER-CONFIGURATION.md → "The autoharn-panel extension (submodule)"](user-guide/USER-CONFIGURATION.md#the-autoharn-panel-extension-submodule) —
   read that section before starting the panel backend, not this one.
 
 ### Two words this page uses constantly
@@ -85,8 +88,8 @@ this repo, the one you're reading this file in) materializes two independent rep
   `distance-to-clean`, `verify-commission`, `verify-chain`, `attest-doc`) that a deployment gets
   scaffolded with, to read and write that ledger day to day. This page does not explain what
   each one does individually — once a deployment exists, run any of them with no arguments for
-  its own usage text, or see [`docs/PROJECT-OVERVIEW.md`](docs/PROJECT-OVERVIEW.md) and
-  [`USER-GUIDE.md`](USER-GUIDE.md) for the fuller tour.
+  its own usage text, or see [`docs/PROJECT-OVERVIEW.md`](user-guide/PROJECT-OVERVIEW.md) and
+  [`USER-GUIDE.md`](user-guide/USER-GUIDE.md) for the fuller tour.
 
 There are four things you can do. Pick the one that matches your situation:
 

@@ -5,10 +5,10 @@
 #   contributors: e4410ef6/main
 # <<< PROVENANCE-STAMP <<<
 
-"""merge_jsonl — a git MERGE DRIVER for append-only JSONL ledgers (design/ORCH-WORKTREE-LEDGERING.md
+"""merge_jsonl — a git MERGE DRIVER for append-only JSONL ledgers (vestigial_documentation/design/ORCH-WORKTREE-LEDGERING.md
 3a: "The jsonl merge driver (mechanize the ritual)"). Registered via `.gitattributes`
 (`attestations/*.jsonl merge=jsonl-union`) plus a one-time `git config` line (this file's own
-docstring below, and USER-CONFIGURATION.md / bootstrap/bootstrap.sh carry the same line -- .git/config
+docstring below, and user-guide/USER-CONFIGURATION.md / bootstrap/bootstrap.sh carry the same line -- .git/config
 is unversioned, so every clone installs it once, mirroring `hooks/pre-commit`'s own
 `git config core.hooksPath hooks` precedent).
 

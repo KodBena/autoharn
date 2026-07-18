@@ -5,7 +5,7 @@
 #   contributors: 3c50e030/main
 # <<< PROVENANCE-STAMP <<<
 
-"""compound_nominal_scan — EXPERIMENT, NOT A WIRED GATE (design/ORCH-COMPOUND-NOMINAL-DETECTION.md).
+"""compound_nominal_scan — EXPERIMENT, NOT A WIRED GATE (vestigial_documentation/design/ORCH-COMPOUND-NOMINAL-DETECTION.md).
 
 Crudest-honest feasibility probe for detecting the "trust story" defect class: a novel,
 lowercased noun-noun (or noun-noun-noun) compound whose inter-noun semantic relation is

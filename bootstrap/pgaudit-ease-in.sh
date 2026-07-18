@@ -289,7 +289,7 @@ SELECT r.rolname, s.setconfig FROM pg_db_role_setting s JOIN pg_roles r ON r.oid
 -- through any verb) and ROLE (grant/role changes -- who can do what -- made outside the verb
 -- layer). Those two classes are this deployment's scoped default. READ is deliberately NOT
 -- included -- audit-of-reads is a separate, larger decision with its own log-volume and evidence-
--- classification tradeoffs (parked, see design/ORCH-PGAUDIT-EXPLORATION.md, reason 1); add it
+-- classification tradeoffs (parked, see vestigial_documentation/design/ORCH-PGAUDIT-EXPLORATION.md, reason 1); add it
 -- explicitly (pgaudit.log = 'ddl,role,read') if and when that separate decision is made.
 
 -- SHARED-CLUSTER NOTE: the ALTER ROLE above is scoped to ONE role ($DEP_ROLE) on ONE database

@@ -1,5 +1,8 @@
 # doc-legibility gate
 
+<!-- doc-attest-exempt: doc-tree relocation mechanical edit (work item doc-tree-reorg-user-guide, ledger row 1620, 2026-07-18) -- relative link path(s) repointed to a sibling file's new location after a git-mv relocation elsewhere in the tree; no prose rewrite, same disposition as the v1.1.2 release-cut's own markers (commit 543a389). Removal condition: strike this marker and run the real A:B:C loop next time this file is touched for content, not just link repair. -->
+
+
 A mechanical gate that **fails the build if any acronym-like token in the scoped docs is neither
 defined nor explicitly allow-listed.** It exists because the maintainer twice hit an undefined
 acronym in the docs (first `SBC`, then `MC/DC`) and called the documentation opaque. Per
@@ -39,7 +42,7 @@ Three definition surfaces, all read by the gate (`DEF_FILES` in `check.py`):
 | surface | role |
 |---|---|
 | [`terms.md`](terms.md) | the persistent, hand-authored acronym glossary (this directory) — the home for stray jargon |
-| survey [`KEY.md`](../../research/obligations-formalisms-survey/KEY.md) | the survey's own legend (obligation codes, tiers, tool index) |
+| survey [`KEY.md`](../../vestigial_documentation/research/obligations-formalisms-survey/KEY.md) | the survey's own legend (obligation codes, tiers, tool index) |
 | root [`GLOSSARY.md`](../../GLOSSARY.md) | autoharn's coined vocabulary |
 
 A token is "defined" if it is bolded `**TOKEN**` on any of these. (`GLOSSARY.md` headings use `###`,

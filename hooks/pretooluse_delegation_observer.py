@@ -123,7 +123,7 @@ EVERY DISPATCH" section, byte-identical) -- the return leg is a strictly ADDITIV
 appended to the SAME journal file, never a rewrite of an existing line.
 
 CORRELATION FIELD -- IDENTITY, NOT DERIVATION (2026-07-14 rebuild; ledger row 582, the pairing-
-key review commissioned off design/ORCH-RCA-PAIRING-KEY-DIVERGENCE.md sec-3/sec-4/sec-6.6, the
+key review commissioned off vestigial_documentation/design/ORCH-RCA-PAIRING-KEY-DIVERGENCE.md sec-3/sec-4/sec-6.6, the
 sibling item to that RCA's Bash dispatch/completion fix). This file used to claim, verbatim, the
 SAME false premise `hooks/stamp_intercept.py`'s own module docstring stated for Bash --
 "Claude Code's hook-input contract has never been observed to carry a `tool_use_id` this project
@@ -165,7 +165,7 @@ label). NAMED GRADE, STATED HONESTLY: both fields are DECLARED-BY-DISPATCHER, no
 this hook journals whatever the calling agent's own tool_input said would be used; nothing in the
 action stream confirms which model actually served the call. Model attribution is therefore
 diagnostic-grade, exactly like duration/tokens, per the 2026-07-11 evidentiary-basis ruling
-(design/USER-RETROSPECTIVE-RECIPE.md's own "Actuals" section states the identical grade boundary
+(user-guide/USER-RETROSPECTIVE-RECIPE.md's own "Actuals" section states the identical grade boundary
 for token/duration figures) -- never evidentiary, never a policing input.
 
 Stdlib only, top-of-file imports (the lazy-import gate, gates/no_lazy_imports.py, applies).

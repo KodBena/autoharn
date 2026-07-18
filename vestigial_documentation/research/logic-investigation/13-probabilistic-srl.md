@@ -1,6 +1,6 @@
 # 13 — Probabilistic Logic & Statistical-relational AI (ProbLog / PSL / MLN)
 
-> Part of the autoharn **logics & automated-deduction investigation** — see the [index](../../../research/logic-investigation/README.md); coined terms (Pillar, *_violations gate, supersession, …) are defined in the root **[GLOSSARY.md](../../../GLOSSARY.md)**.
+> Part of the autoharn **logics & automated-deduction investigation** — see the [index](README.md); coined terms (Pillar, *_violations gate, supersession, …) are defined in the root **[GLOSSARY.md](../../../GLOSSARY.md)**.
 
 A family of logics that attach **degrees of belief** to logical rules/facts, so deduction returns a *probability* (or a soft truth in [0,1]) instead of a hard yes/no — the formal home for autoharn's "statistical hunch vs provable truth" axis.
 

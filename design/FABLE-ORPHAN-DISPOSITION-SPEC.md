@@ -1,5 +1,8 @@
 # FABLE-ORPHAN-DISPOSITION-SPEC — every violations-view member gets an answering act
 
+<!-- doc-attest-exempt: doc-tree relocation mechanical edit (work item doc-tree-reorg-user-guide, ledger row 1620, 2026-07-18) -- relative link path(s) repointed to a sibling file's new location after a git-mv relocation elsewhere in the tree; no prose rewrite, same disposition as the v1.1.2 release-cut's own markers (commit 543a389). Removal condition: strike this marker and run the real A:B:C loop next time this file is touched for content, not just link repair. -->
+
+
 This spec fixes a witnessed trap in the work-item layer: some members of the
 `work_item_violations` view (this project's registry of governance defects on work
 items, which the Stop hook (`hooks/stop_clean_exit.py`, the gate that blocks a
@@ -18,7 +21,7 @@ that this makes a violation on a superseded target row permanently unanswerable 
 eternal debt via the `led` CLI's own recommended repair. The fix semantics were
 consulted under [ADR-0018](../law/adr/0018-consults-are-not-front-loaded.md)
 (record banked verbatim:
-[ORCH-CONSULT-DEBT-SEMANTICS-2026-07-16.md](ORCH-CONSULT-DEBT-SEMANTICS-2026-07-16.md))
+[ORCH-CONSULT-DEBT-SEMANTICS-2026-07-16.md](../vestigial_documentation/design/ORCH-CONSULT-DEBT-SEMANTICS-2026-07-16.md))
 and ratified by the maintainer: THE DEBT PROJECTION QUANTIFIES OVER IN-FORCE ROWS
 ONLY; THE RECORD PROJECTION QUANTIFIES OVER EVERYTHING, FOREVER. Elements 1 and 3
 and the Closure below carry the amended text.
@@ -26,7 +29,7 @@ Prior status line: v2, RATIFIED 2026-07-16. v1 (same day) was reviewed under
 [ADR-0014](../law/adr/0014-executor-second-opinion.md) by a fresh-context [Fable](../GLOSSARY.md#post-fable-law) (the maintainer's
 primary AI-collaborator authoring model)
 instance — consultation record banked verbatim at
-[ORCH-ADR14-ORPHAN-DISPOSITION-CONSULT-2026-07-16.md](ORCH-ADR14-ORPHAN-DISPOSITION-CONSULT-2026-07-16.md)
+[ORCH-ADR14-ORPHAN-DISPOSITION-CONSULT-2026-07-16.md](../vestigial_documentation/design/ORCH-ADR14-ORPHAN-DISPOSITION-CONSULT-2026-07-16.md)
 — with verdict RATIFY-WITH-AMENDMENTS: the mechanism was upheld, v1's closure claim
 was refuted with a live witness (see Provenance), and six amendments (A1–A6) were
 enumerated. The consult's first amendment (its "A1") posed a fork — generalize the new act to

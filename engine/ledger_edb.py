@@ -21,7 +21,7 @@ each with its reason (a missing column, a text-actor model, an absent apparatus
 relation). A capability a caller REQUESTS that the target lacks is refused LOUDLY
 (ADR-0015 Rule 4), never a silent empty.
 
-TARGET RESOLUTION derives from the ONE home `engine/targets.py` (design/ORCH-USE-MODE-ENGINE-WIRING.md
+TARGET RESOLUTION derives from the ONE home `engine/targets.py` (vestigial_documentation/design/ORCH-USE-MODE-ENGINE-WIRING.md
 item 1; ADR-0012 P1) -- the same home `instruments/ledger_target.py` derives from, so the two are
 never hand-synced duplicate copies. The db/schema agreement with the operator SSOT is still PINNED
 BY A PARITY TEST (engine/tests/test_ledger_marriage.py :: test_target_parity_against_operator_ssot),
@@ -294,7 +294,7 @@ def export(name: str) -> EdbExport:
 
 
 # ===========================================================================
-# WORK-LAYER EDB (plan step 8(ii); design/ORCH-CATEGORICAL-REFACTOR-CONSULT-2026-07-15.md F7 --
+# WORK-LAYER EDB (plan step 8(ii); vestigial_documentation/design/ORCH-CATEGORICAL-REFACTOR-CONSULT-2026-07-15.md F7 --
 # "ledger_edb.py exports no work_* fact family" was one of the two named judge-wiring gaps this
 # closes). Exports the s22/s28/s29 work-item fact families engine/lp/work_items.lp and
 # engine/lp/work_review.lp consume, so engine/lp_registry.py's "work" LAYER can be grounded from a

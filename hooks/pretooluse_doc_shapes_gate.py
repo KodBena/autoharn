@@ -8,7 +8,7 @@
 """pretooluse_doc_shapes_gate — the world-side, live-write-time transport of
 gates/doc_shapes.py (ADR-0017's deterministic zero-context-reader core), commissioned so a
 scaffolded world can get the same measured-sound checks (standalone fragment paragraphs; bare
-positional references into ORCH-HANDOFF.md) DURING the session that writes its documentation, not
+positional references into user-guide/ORCH-HANDOFF.md) DURING the session that writes its documentation, not
 only when the world's own repo eventually runs a pre-commit gate (BACKLOG "ADR-0017 A:B:C
 attestation loop", orchestrator extension "leverage the mandatory documentation step for
 run11").

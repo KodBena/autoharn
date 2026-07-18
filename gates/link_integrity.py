@@ -28,7 +28,7 @@ SCOPE. Every tracked `*.md` (`git ls-files '*.md'`), same universe doc-legibilit
 human might read." Two EXCLUSIONS, both principled and both printed in every run's output
 (never silent, per the commission):
 
-  1. judgment/**  — ORCH-OPERATING-CARD.md's own words: "predecessor era — history unless a current
+  1. judgment/**  — user-guide/ORCH-OPERATING-CARD.md's own words: "predecessor era — history unless a current
      spec cites it." A declared-history archive is not held to a live-link bar; if a current
      spec ever cites into it, that citing document (not the archived one) carries the live link.
   2. vestigial_documentation/design/ORCH-ARCHITECTURE.md (renamed from design/ARCHITECTURE.md by
@@ -95,7 +95,7 @@ def _resolve_root(argv: list[str]) -> str:
 
 ROOT = _resolve_root(sys.argv[1:])
 
-# Exclusion 1: a whole directory, declared history (ORCH-OPERATING-CARD.md, "The deep history" section).
+# Exclusion 1: a whole directory, declared history (user-guide/ORCH-OPERATING-CARD.md, "The deep history" section).
 EXCLUDE_DIR_PREFIXES = ("judgment/",)
 # Exclusion 2: a single file, self-declared STALE with its rewrite filed separately (BACKLOG.md).
 # Renamed design/ARCHITECTURE.md -> design/ORCH-ARCHITECTURE.md by the doc-audience-taxonomy
@@ -224,7 +224,7 @@ def main() -> int:
     print(f"link-integrity: {len(scope)} docs in scope ({len(all_tracked)} tracked *.md, "
           f"{len(excluded)} excluded), {total_links} relative link(s) checked.")
     print(f"  excluded (principled, see gates/link_integrity.py docstring):")
-    print(f"    judgment/**            — declared history (ORCH-OPERATING-CARD.md)")
+    print(f"    judgment/**            — declared history (user-guide/ORCH-OPERATING-CARD.md)")
     print(f"    vestigial_documentation/design/ORCH-ARCHITECTURE.md — self-declared STALE; "
           f"rewrite filed in BACKLOG.md")
 

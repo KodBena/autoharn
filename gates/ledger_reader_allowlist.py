@@ -252,7 +252,7 @@ ALLOWLIST: dict[str, str] = {
     # -- declared history / forensic readers --
     "review_stamp_distinctness": "row-addressed stamp forensics across review rows (s17/s21) — history by type.",
     # s37 v3 amendment (kernel/lineage/s37-violation-disposition.sql; design/FABLE-ORPHAN-
-    # DISPOSITION-SPEC.md v3 / design/ORCH-CONSULT-DEBT-SEMANTICS-2026-07-16.md part 2F, last
+    # DISPOSITION-SPEC.md v3 / vestigial_documentation/design/ORCH-CONSULT-DEBT-SEMANTICS-2026-07-16.md part 2F, last
     # sentence): work_item_violations RETYPES from "mixed by declared design: seven history/
     # defense-in-depth members" (its v2/pre-v3 entry) to a NARROWLY mixed reader carrying exactly
     # TWO deliberate raw legs, down from seven — nine of the eleven arms are now plain

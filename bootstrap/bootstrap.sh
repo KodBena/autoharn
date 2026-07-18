@@ -55,7 +55,7 @@ git config core.hooksPath hooks && [ -x hooks/pre-commit ] \
     || no "could not install the git hook (staging_guard/no_lazy/census gates would not run)"
 
 echo "-- git merge driver (union merge for append-only jsonl ledgers) --"
-# design/ORCH-WORKTREE-LEDGERING.md 3a: .gitattributes (versioned) names WHICH files use this
+# vestigial_documentation/design/ORCH-WORKTREE-LEDGERING.md 3a: .gitattributes (versioned) names WHICH files use this
 # driver; the driver COMMAND itself must live in .git/config (unversioned), so every clone/worktree
 # installs it once here -- the same one-time-per-clone shape as core.hooksPath above.
 # (A sibling BACKLOG.md dated-section driver was retired with that file on 2026-07-12,
@@ -93,7 +93,7 @@ fi
 
 echo "-- result --"
 if [ "$rc" -eq 0 ]; then
-    echo "bootstrap GREEN. Next: read bootstrap/QUICKSTART.md and run the mini-collaboration."
+    echo "bootstrap GREEN. Next: read user-guide/QUICKSTART.md and run the mini-collaboration."
 else
     echo "bootstrap RED — resolve the [!!] lines above before collaborating (nothing soft-passed)."
 fi

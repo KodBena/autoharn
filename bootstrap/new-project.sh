@@ -8,7 +8,7 @@
 # new-project.sh — stamp a new instance directory: deployment.json, .claude/ wiring
 # (settings.json, governed_files.json, apparatus.json, HOOKS.md), and the three verbs (led, judge,
 # pickup) as thin shims exec'ing bootstrap/templates/*.tmpl LIVE out of this autoharn checkout
-# (design/ORCH-OPUS-READINESS.md move 2's template/instance split, then BACKLOG maintainer ruling
+# (vestigial_documentation/design/ORCH-OPUS-READINESS.md move 2's template/instance split, then BACKLOG maintainer ruling
 # 2026-07-11 "runs are strictly linear" disposition 6 "live verbs": the verbs stopped being
 # sed-substituted frozen copies — a template fix here now reaches every already-scaffolded world
 # instantly, matching how the two PreToolUse hooks already execute live per invocation). Only
@@ -230,7 +230,7 @@ AUTOHARN_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 # AUTOHARN_COMMIT -- the autoharn checkout's own commit hash at scaffold time, so a world's
 # evidence can be tied to the INSTRUMENT VERSION that produced it (prior regulator-panel
 # assessment's Tier-1 item 4: "no record ties a historical DENY to the hook bytes that produced
-# it" -- design/MAINT-RELITIGATION-SYNTHESIS.md, "No configuration index"). Read once, here,
+# it" -- vestigial_documentation/design/MAINT-RELITIGATION-SYNTHESIS.md, "No configuration index"). Read once, here,
 # never re-derived: this same value is written into the PROVENANCE header below (ADR-0012 P1).
 # Degrades honestly rather than silently blank -- a git failure or a dirty checkout are both
 # real facts about the instrument that produced this world, not to be hidden behind an empty
@@ -783,7 +783,7 @@ rm -f "$LAW_SECTION_FILE"
 # linear" disposition 6, "live verbs"; audit and distance-to-clean joined the same way later,
 # each a new template file rather than an edit to an existing live one -- see their own
 # commissions; verify-commission (design/MAINT-GPG-TRUST-LAYER.md Rung 2) and asof-export
-# (ledger item asof-export-inspection-copy, design/FABLE-21CFR11-STANDING-ASSESSMENT.md §11.10(b))
+# (ledger item asof-export-inspection-copy, vestigial_documentation/design/FABLE-21CFR11-STANDING-ASSESSMENT.md §11.10(b))
 # each follow the SAME distance-to-clean precedent -- a brand-new template file carries none of
 # led.tmpl's freeze risk, so it is safe to add regardless of any live wired session elsewhere).
 # Baking was the asymmetry: hooks already execute live from this autoharn checkout per invocation
@@ -922,7 +922,7 @@ if [ -n "$NEW_WORLD" ]; then
     echo "a real key is committed at THIS deployment's keys/ directory (never autoharn's"
     echo "law/keys/ -- that one is scoped to autoharn's own law); until then every signature refuses"
     echo "as NO-COMMITTED-KEY, exit 3 (there is nothing to check it against yet -- distinct from"
-    echo "FORGED-OR-CORRUPT, per design/USER-GPG-TRUST-LAYER-FAQ.md) -- exercise the ceremony with a"
+    echo "FORGED-OR-CORRUPT, per user-guide/USER-GPG-TRUST-LAYER-FAQ.md) -- exercise the ceremony with a"
     echo "throwaway test key first if you want to see VERIFIED before the real key exists."
     echo ""
     echo "The SIGNED HEAD (design/MAINT-GPG-TRUST-LAYER.md Rung 3 -- the run-close ritual, one line):"
@@ -938,7 +938,7 @@ if [ -n "$NEW_WORLD" ]; then
     echo "this world's ledger -- including by the database superuser -- breaks the chain against a"
     echo "head your key vouches for: \"append-only by trigger\" becomes \"append-only or provably"
     echo "broken\" (design/MAINT-GPG-TRUST-LAYER.md §4). Full walkthrough, including WHY --head verifies"
-    echo "before it will print anything: design/USER-GPG-TRUST-LAYER-FAQ.md."
+    echo "before it will print anything: user-guide/USER-GPG-TRUST-LAYER-FAQ.md."
 else
     echo "  1. Apply a kernel lineage to $DB/$SCHEMA/$KERN/$ROLE if not already applied (kernel/lineage/, autoharn)."
     echo "  2. Provision the stamp secret -- see $PROJECT_ROOT/.claude/HOOKS.md (marked UNWITNESSED until you run it)."

@@ -153,7 +153,7 @@ def export_precedence(dep: deployment_record.DeploymentRecord) -> dict:
         _refuse(
             f"{dep.schema}.ledger has no edge_type column -- this world predates typed "
             "dependency edges. Apply kernel/lineage/s30-typed-dependency-edges.sql to this "
-            "project's schema (a maintainer act, ORCH-OPERATING-CARD.md's kernel-delta decision "
+            "project's schema (a maintainer act, user-guide/ORCH-OPERATING-CARD.md's kernel-delta decision "
             "tree) before blocks-close precedence can be exported; every work_depends_on row on "
             "this world is untyped, so 'blocks-close' cannot be distinguished from 'informs' at all.")
     if not _has_relation(dep, f"{dep.schema}.work_edge_blocks_close"):

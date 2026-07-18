@@ -6,7 +6,7 @@
 # <<< PROVENANCE-STAMP <<<
 
 """targets -- the ONE home mapping a ledger-deployment NAME to (db, schema, kern) (ADR-0012 P1;
-design/ORCH-USE-MODE-ENGINE-WIRING.md item 1). Every consumer of a deployment's names -- engine/ledger_edb.py,
+vestigial_documentation/design/ORCH-USE-MODE-ENGINE-WIRING.md item 1). Every consumer of a deployment's names -- engine/ledger_edb.py,
 instruments/ledger_target.py -- derives (db, schema, kern) from here; neither hand-authors a second
 copy of the registry, and neither hardcodes a schema name as a literal.
 
@@ -28,7 +28,7 @@ their probe/mirror kin -- s13probe, s14probe -- any future kernel-lineage sessio
 + the `.*_scratch$` scratch pattern (the apparatus-authored throwaway schemas engine/*_scratch.py and
 engine/tests/*.py hand-author in `epistemic` -- marriage_acts_scratch, marriage_support_scratch,
 marriage_dto_scratch, marriage_diff_scratch, marriage_dto_exercise_scratch) + a deployment-record
-file (LEDGER_DEPLOYMENT=path, design/ORCH-OPUS-READINESS.md move 1 -- see "THIRD RESOLUTION SOURCE"
+file (LEDGER_DEPLOYMENT=path, vestigial_documentation/design/ORCH-OPUS-READINESS.md move 1 -- see "THIRD RESOLUTION SOURCE"
 below) + the LEDGER_DB/LEDGER_SCHEMA/LEDGER_KERN env override (a one-off target, e.g. a scratch
 mirror). Named as NOT covered here (filed, not silent): the apply/arm step AUTO-EMITTING a
 deployment record at kernel-apply time (future arm work, BACKLOG.md -- `bootstrap/new-project.sh`
@@ -43,7 +43,7 @@ exist on disk but are NOT resolved by name anywhere in the current engine/instru
 site in the tree) -- engine/acts_join.py's `_read_ledger` is the one live, untested exception
 (BACKLOG.md).
 
-THIRD RESOLUTION SOURCE (design/ORCH-OPUS-READINESS.md move 1): `LEDGER_DEPLOYMENT=/path/to/deployment.json`
+THIRD RESOLUTION SOURCE (vestigial_documentation/design/ORCH-OPUS-READINESS.md move 1): `LEDGER_DEPLOYMENT=/path/to/deployment.json`
 names a deployment record (shape owned by `filing/deployment_record.py`, the ONE home for that JSON
 shape -- this module imports it rather than growing a second parser, per ADR-0012 P1/P7 applied
 within one language). PRECEDENCE, stated once and justified: **explicit registry > deployment file >
@@ -134,7 +134,7 @@ _REGISTRY: dict[str, TargetInfo] = {
     "e17": TargetInfo(db="wmb", schema="public", kern="kernel"),
     # e18: the s18 subject kernel (s18 = s17 byte-identical, Addendum A), opaque db `qbx` (label jm7).
     "e18": TargetInfo(db="qbx", schema="public", kern="kernel"),
-    # toy: the toy-project pilot ledger (design/ORCH-USE-MODE-ENGINE-WIRING.md). Its own database, ledger
+    # toy: the toy-project pilot ledger (vestigial_documentation/design/ORCH-USE-MODE-ENGINE-WIRING.md). Its own database, ledger
     # schema `toycolors`, kernel schema `toycolors_kernel` -- the exact case the literal "kernel.
     # principal" check silently missed before this module existed.
     "toy": TargetInfo(db="toy", schema="toycolors", kern="toycolors_kernel"),

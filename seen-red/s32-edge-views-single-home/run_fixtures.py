@@ -6,7 +6,7 @@
 # <<< PROVENANCE-STAMP <<<
 
 """run_fixtures.py -- both-polarity proof for kernel/lineage/s32-edge-views-single-home.sql
-(design/ORCH-CATEGORICAL-REFACTOR-CONSULT-2026-07-15.md, F3/F6 + plan step 3; ledger item
+(vestigial_documentation/design/ORCH-CATEGORICAL-REFACTOR-CONSULT-2026-07-15.md, F3/F6 + plan step 3; ledger item
 edge-views-single-home). Real infra, no mocks: a CLASSIC-mode scaffold (explicit --schema/--kern/
 --role, no automatic kernel apply -- s30/s31's own scaffold_classic idiom) followed by a MANUAL
 s15..s31 apply, in the TOY db, torn down before AND after so re-running leaves no residue.

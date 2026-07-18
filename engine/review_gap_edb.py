@@ -43,7 +43,7 @@ itself. Its verdict vocabulary is FLAGGED, never VIOLATED, for exactly this reas
 statement is suspicious, not proven dishonest -- a legitimate terse review DOES exist: "Confirmed,
 matches row 4's stated criteria exactly." is 42 chars and genuine).
 
-MARRIAGE-GRADE, PER HOUSE DOCTRINE (design/ORCH-LEDGER-LOGIC-MARRIAGE.md; the same discipline
+MARRIAGE-GRADE, PER HOUSE DOCTRINE (vestigial_documentation/design/ORCH-LEDGER-LOGIC-MARRIAGE.md; the same discipline
 engine/ledger_floor.py / engine/contemp_floor.py / engine/preamble_floor.py already carry): TWO
 independent producers -- the ASP program (engine/lp/review_gap_audit.lp) consuming THIS module's
 EDB, and the SQL floor (engine/review_gap_floor.py) re-deriving the SAME judgment directly from

@@ -68,7 +68,7 @@ APPARATUS.JSON SWITCHBOARD mandate landed in `hooks/demurral_detect.py` the same
 fixture was first written (2026-07-10), and its shipped default for `demurral_detect` is
 `"off"` — a real, ratified, LAW-documented policy ("no world may silently bill its operator";
 stated identically in the hook's own module docstring, `bootstrap/templates/apparatus.json`,
-`bootstrap/templates/APPARATUS.md`, `ORCH-OPERATING-CARD.md`, `USER-CONFIGURATION.md`,
+`bootstrap/templates/APPARATUS.md`, `user-guide/ORCH-OPERATING-CARD.md`, `user-guide/USER-CONFIGURATION.md`,
 `ORCH-CAPABILITIES.md`, and `law/adr/0000` itself: "Its costed classifier defaults off per
 world"). Left unarmed, this fixture's temp `cwd` carries no `.claude/apparatus.json` at all, so
 every case resolved to `"off"` and went silent regardless of polarity — both the positive and
@@ -240,8 +240,8 @@ def _arm(cwd: Path, mode: str = "observe", *, classifier_command: list[str] | No
     with `mechanisms.demurral_detect.mode = <mode>`. Missing this file resolves to `"off"`
     by design (`hooks/demurral_detect.py::_resolve_mode`'s default) -- that default is itself
     the ratified, LAW-documented policy (law/adr/0000: "Its costed classifier defaults off per
-    world"; bootstrap/templates/apparatus.json; APPARATUS.md's table+notes; ORCH-OPERATING-CARD.md;
-    USER-CONFIGURATION.md; ORCH-CAPABILITIES.md all state the same "off unless a world opts in"
+    world"; bootstrap/templates/apparatus.json; APPARATUS.md's table+notes; user-guide/ORCH-OPERATING-CARD.md;
+    user-guide/USER-CONFIGURATION.md; ORCH-CAPABILITIES.md all state the same "off unless a world opts in"
     fact) and is NOT the defect this fixture exists to catch. This IS this acceptance fixture's
     own opt-in to the real per-call classifier cost -- it already accepts that cost via the
     DEMURRAL_TIMEOUT_S=60 override above ("this is the ACCEPTANCE fixture ... costs a few real

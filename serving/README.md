@@ -453,7 +453,7 @@ describing direct access" — lives entirely in the separate autoharn-panel repo
 per the maintainer's own standing rule and this spec's §10.4 is **never touched by this
 build**. The deprecation marks themselves (loud-at-invocation, naming the replacement
 endpoint, pointing at
-[design/FABLE-WORLD-CONTEXT-MIGRATION-CONSULT-2026-07-19.md](../design/FABLE-WORLD-CONTEXT-MIGRATION-CONSULT-2026-07-19.md))
+[design/FABLE-WORLD-CONTEXT-MIGRATION-CONSULT-2026-07-19.md](../vestigial_documentation/design/FABLE-WORLD-CONTEXT-MIGRATION-CONSULT-2026-07-19.md))
 are a separate panel-repo session's item, citing this spec — not a gap in this build.
 
 ## License

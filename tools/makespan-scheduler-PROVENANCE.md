@@ -1,5 +1,8 @@
 # PROVENANCE — `tools/makespan-scheduler/` is a git submodule, not autoharn-authored code
 
+<!-- doc-attest-exempt: doc-tree relocation mechanical edit (work item doc-tree-reorg-user-guide, ledger row 1620, 2026-07-18) -- relative link path(s) repointed to a sibling file's new location after a git-mv relocation elsewhere in the tree; no prose rewrite, same disposition as the v1.1.2 release-cut's own markers (commit 543a389). Removal condition: strike this marker and run the real A:B:C loop next time this file is touched for content, not just link repair. -->
+
+
 This file used to live at `tools/makespan-scheduler/PROVENANCE.md`. It moved here, one
 directory level up, because that path is now the working tree of an externally-owned git
 submodule — autoharn does not own that tree and does not add files to it as a side effect of
@@ -13,7 +16,7 @@ housekeeping here. This file is the sibling record of the same facts.
    `bd03c8d3c8e46c5281480992be30dcf9ff6668b5`, `master`, working tree clean at copy time) was
    copied byte-for-byte into `tools/makespan-scheduler/` as a plain vendored directory (not a
    submodule). See the standing recommendation in
-   [design/USER-RECIPES-FAQ.md](../design/USER-RECIPES-FAQ.md) ("Workflow patterns") and the
+   [design/USER-RECIPES-FAQ.md](../user-guide/USER-RECIPES-FAQ.md) ("Workflow patterns") and the
    guarantee-formalization design note,
    [design/ORCH-MAKESPAN-SCHEDULING-GUARANTEE.md](../design/ORCH-MAKESPAN-SCHEDULING-GUARANTEE.md).
    Verified at vendoring time: `~/w/vdc/venvs/generic/bin/python -m pytest tests/ -v` run from

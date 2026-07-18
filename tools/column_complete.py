@@ -6,7 +6,7 @@
 # <<< PROVENANCE-STAMP <<<
 
 """column_complete — the single home for the "column-complete view" catalog functor (work
-item column-complete-gate, per design/ORCH-CATEGORICAL-REFACTOR-CONSULT-2026-07-15.md F2 /
+item column-complete-gate, per vestigial_documentation/design/ORCH-CATEGORICAL-REFACTOR-CONSULT-2026-07-15.md F2 /
 plan step 5). Wraps the s20 lesson's own re-issue idiom — "ledger_current +
 countersigned_in_force GAIN the new column, APPENDED AT THE END" — as computed data instead
 of a hand re-typed column list per delta.

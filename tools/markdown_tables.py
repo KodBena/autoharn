@@ -10,7 +10,7 @@ and mechanical classifier for this project's doc corpus (work item doc-table-mec
 maintainer commission 2026-07-15).
 
 WHY THIS EXISTS, and why it is NOT `tools/experiments/typed_table.py`. That prior work
-(design/ORCH-TYPED-TABLE-EXPERIMENT.md) is a CONSTRUCTOR: it builds a table from Python calls
+(vestigial_documentation/design/ORCH-TYPED-TABLE-EXPERIMENT.md) is a CONSTRUCTOR: it builds a table from Python calls
 that carry a mandatory, hand-written `inhabits=` semantic judgment per row — it has no `parse()`
 and cannot ingest a table that already exists as markdown text, so it is not directly liftable
 as the corpus-fixing engine this work item needs. What DOES single-home cleanly (ADR-0012 P1 —
@@ -38,7 +38,7 @@ ADR-0011's measure-first discipline: state what a rule can and cannot conclude):
   2. SEPARATOR-WITHOUT-HEADER — the block's FIRST line is itself delimiter-row-shaped (matches
      the empty-cell dash/colon pattern). CAN conclude: there is no header text a reader could
      read as the label column's type former (ADR-0000's own reading of a table, per
-     design/ORCH-TYPED-TABLE-EXPERIMENT.md) sitting above the separator. CANNOT conclude why —
+     vestigial_documentation/design/ORCH-TYPED-TABLE-EXPERIMENT.md) sitting above the separator. CANNOT conclude why —
      a deleted header line, or a stray decorative rule, look identical to this rule.
   3. CELL-COUNT-MISMATCH — the delimiter row's cell count is well-formed but a data row's cell
      count (escape-aware, see `split_cells`) differs from the header's. CAN conclude: at least

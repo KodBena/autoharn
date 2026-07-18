@@ -1,5 +1,8 @@
 # ADR-0009: Performance Investigation Discipline
 
+<!-- doc-attest-exempt: doc-tree relocation mechanical edit (work item doc-tree-reorg-user-guide, ledger row 1620, 2026-07-18) -- relative link path(s) repointed to a sibling file's new location after a git-mv relocation elsewhere in the tree; no prose rewrite, same disposition as the v1.1.2 release-cut's own markers (commit 543a389). Removal condition: strike this marker and run the real A:B:C loop next time this file is touched for content, not just link repair. -->
+
+
 - **Status:** Accepted
 - **Genre:** Tenet (cross-cutting authoring discipline). Sibling of ADR-0008: same shape of
   unsubstantiated-claim failure, different domain — classification discipline forbids fuzzy
@@ -249,7 +252,7 @@ equivalence claim in the sense this ADR disciplines.
   prose — meaning a real bug or an unsafe input, either way never silently patched around
   (composes with `engine/contemp_differential.py`'s QUARANTINE guard and, per Calibration,
   never relaxed to a tolerance). Diagnosis walkthrough:
-  [`engine/docs/JUDGE-READING.md`](../../engine/docs/JUDGE-READING.md).
+  [`engine/docs/JUDGE-READING.md`](../../user-guide/JUDGE-READING.md).
 - **Investigation-capture tool — `filing/record_reading.py` writing to
   [`stores/001_research_ledger.sql`](../../stores/001_research_ledger.sql).** Autoharn's
   captured-investigation-DB: a measurement

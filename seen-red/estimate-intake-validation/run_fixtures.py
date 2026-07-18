@@ -15,7 +15,7 @@ uses).
 
 WHAT THIS PROVES: `bootstrap/templates/led.tmpl` validates an `estimate:`-prefixed decision
 statement (whitespace-normalized copy) against the six-field grammar
-design/USER-RETROSPECTIVE-RECIPE.md's "Estimate statement grammar" section specifies BEFORE the
+user-guide/USER-RETROSPECTIVE-RECIPE.md's "Estimate statement grammar" section specifies BEFORE the
 INSERT -- field count, TASK-SLUG shape, TOOL-CALLS/SUBAGENT-SPAWNS count-or-range shape,
 WALL-CLOCK duration-or-range shape, TOKEN-OOM closed vocabulary, non-empty BASIS -- refusing
 loudly (exit nonzero, nothing written, teach-text naming the grammar) on any single-field defect,

@@ -1,5 +1,8 @@
 # ORCH-SPEC-ABC-OFFERING — the fresh-context doc audit loop as a deployment offering
 
+<!-- doc-attest-exempt: doc-tree relocation mechanical edit (work item doc-tree-reorg-user-guide, ledger row 1620, 2026-07-18) -- relative link path(s) repointed to a sibling file's new location after a git-mv relocation elsewhere in the tree; no prose rewrite, same disposition as the v1.1.2 release-cut's own markers (commit 543a389). Removal condition: strike this marker and run the real A:B:C loop next time this file is touched for content, not just link repair. -->
+
+
 Audience: orchestrator (design spec; implementation stages are Sonnet-executable per §5).
 Status: Fable-authored 2026-07-12, from the maintainer's same-morning question ("is there
 a reason we can't use it for end users?" — on the record in this repository's tracker
@@ -9,7 +12,7 @@ the loop's fresh reviewer (role B) is an ordinary subagent invocation billed to 
 session that chooses to run it, never a `claude -p` side-channel — only residence.
 This spec decides the residence. The loop itself is defined by
 [law/adr/0017](../law/adr/0017-the-zero-context-reader.md) and operationalized by
-[ORCH-ABC-AUDIT-LOOP-RECIPE.md](ORCH-ABC-AUDIT-LOOP-RECIPE.md); nothing here changes
+[ORCH-ABC-AUDIT-LOOP-RECIPE.md](../user-guide/ORCH-ABC-AUDIT-LOOP-RECIPE.md); nothing here changes
 either — this document only says which pieces ship to an adopting deployment and which
 stay upstream.
 
@@ -49,7 +52,7 @@ autoharn is used like a library; everything a deployment owns lands in the deplo
   exec-the-template pattern as `led`/`pickup`), the deployment's own attestation ledger
   file (created empty by the scaffold, like `keys/README.md`'s AWAITING-KEY stub —
   an empty ledger is honest), and a USER- audience edition of the recipe ordered by
-  [USER-GUIDE.md](../USER-GUIDE.md)'s shelf.
+  [USER-GUIDE.md](../user-guide/USER-GUIDE.md)'s shelf.
 
 ## 3. The verb — `./attest-doc`
 

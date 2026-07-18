@@ -6,7 +6,7 @@
 # <<< PROVENANCE-STAMP <<<
 
 """lp_registry -- the declared provides/requires/stands_alone registry for engine/lp/*.lp
-(design/ORCH-CATEGORICAL-REFACTOR-CONSULT-2026-07-15.md F7 / plan step 8(i)).
+(vestigial_documentation/design/ORCH-CATEGORICAL-REFACTOR-CONSULT-2026-07-15.md F7 / plan step 8(i)).
 
 THE GAP THIS CLOSES (F7). Load order for engine/lp/*.lp has lived only in per-file comment
 prose ("loaded ON TOP OF ledger_tnow.lp", "stacks ON TOP of engine/lp/contemporaneity.lp") --

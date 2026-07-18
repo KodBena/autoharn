@@ -210,7 +210,7 @@ def main() -> int:
     # ---------------------------------------------------------------- GREEN-REVIEW-CLEAN
     # Fetch every outstanding row id straight from the DB (the known over-catch means this
     # includes the three resource declarations too, not only hp-enum's three work_* rows --
-    # documented in this file's own docstring and in design/USER-BLESSED-TABLE-TEMPLATE.md's
+    # documented in this file's own docstring and in user-guide/USER-BLESSED-TABLE-TEMPLATE.md's
     # "mandated-tier review convention" section, not hidden here).
     r_ids = _psql("-tAc", f"SET ROLE {ROLE}; SELECT id FROM {SCHEMA}.review_gap ORDER BY id;")
     # -t -A echoes one leading "SET" line for the preceding `SET ROLE` statement (the same

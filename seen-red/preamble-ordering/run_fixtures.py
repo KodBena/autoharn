@@ -330,7 +330,7 @@ def main() -> int:
         ck(ok, f"green id9 (decision, stop disposition) insert failed: {out}")
 
         green_records = {
-            # NEW-SCHEMA journals (2026-07-14, design/ORCH-RCA-PAIRING-KEY-DIVERGENCE.md sec-6.1):
+            # NEW-SCHEMA journals (2026-07-14, vestigial_documentation/design/ORCH-RCA-PAIRING-KEY-DIVERGENCE.md sec-6.1):
             # a completion line carries `tool_use_id`, never a stored `token` -- pairing is the
             # consumers' read-time join (dispatch tool_use_id -> token). The bare-`token`
             # completion shape this fixture previously synthesized was a shape production never

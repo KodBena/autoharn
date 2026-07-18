@@ -5,7 +5,7 @@
 **Status:** RATIFIED BUILD BASIS at birth — authorized by the maintainer's batch ruling,
 ledger row 1481 (2026-07-18), conversion (b) of that ruling's two authorized Fable passes.
 Fable-authored, a conversion of the note-grade constructions in
-[design/FABLE-DEFEASIBILITY-ENVELOPE-2026-07-18.md](FABLE-DEFEASIBILITY-ENVELOPE-2026-07-18.md)
+[design/FABLE-DEFEASIBILITY-ENVELOPE-2026-07-18.md](../vestigial_documentation/design/FABLE-DEFEASIBILITY-ENVELOPE-2026-07-18.md)
 (its §3 defeat rule with interaction-projection correction I1 applied, its §9 serving
 recommendation (c), its §5 stratification discipline as binding builder law, and the
 ratified cascade direction) to build grade. A **Sonnet builder** executes this document
