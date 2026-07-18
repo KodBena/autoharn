@@ -1,7 +1,7 @@
 #!/bin/sh
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-18T15:48:21Z
-#   last-change: 2026-07-18T15:49:31Z
+#   last-change: 2026-07-18T16:09:52Z
 #   contributors: ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -86,6 +86,9 @@
 # check, before catalog resolution, before anything else this script does.
 #
 # WHAT THIS DOES, in order:
+#   0. Refuse any derived/overridden schema, kernel, or role name containing a character outside
+#      [A-Za-z0-9_] -- defense-in-depth ahead of the psql -v bind-variable queries below (row
+#      1637: a crafted world name previously reached raw SQL-text interpolation here).
 #   1. Refuse `autoharn1` unconditionally.
 #   2. Refuse a non-scratch-safe name unless --force-non-scratch.
 #   3. RESOLVE what exists for <schema>/<kern>/<role> by querying pg_namespace/pg_roles (never
@@ -133,6 +136,27 @@ done
 [ -n "$KERN" ] || KERN="${WORLD}_kernel"
 [ -n "$ROLE" ] || ROLE="${WORLD}_rw"
 
+# --- 0. STRICT CHARACTER ALLOWLIST on every name that becomes SQL text -------------------------
+# Defense-in-depth alongside the psql -v bind-variable interpolation used below (see RESOLVE and
+# execute steps): SCHEMA/KERN/ROLE reach DROP SCHEMA/DROP ROLE as quoted *identifiers*, and an
+# identifier-quoted string is not injectable, but a name outside this allowlist is not a name any
+# real scaffold call produces either (--new-world derivation or a hand-picked --schema/--kern/
+# --role override) -- refusing early keeps this script's own catalog/DROP text boring and
+# reviewable, independent of how well psql's quoting holds up. Checked for all three, since
+# --schema/--kern/--role are operator-supplied overrides with no other check on them.
+for _name in "$SCHEMA" "$KERN" "$ROLE"; do
+    case "$_name" in
+        ''|*[!A-Za-z0-9_]*)
+            echo "teardown-world.sh: REFUSED -- '$_name' contains characters outside the" >&2
+            echo "                   allowlist for a schema/kernel/role name (letters, digits," >&2
+            echo "                   underscore only). This applies to derived names and to" >&2
+            echo "                   --schema/--kern/--role overrides alike. Nothing touched." >&2
+            exit 1
+            ;;
+    esac
+done
+unset _name
+
 # --- 1. THE UNCONDITIONAL autoharn1 REFUSAL -- checked first, no flag overrides it -------------
 if [ "$WORLD" = "autoharn1" ]; then
     echo "teardown-world.sh: REFUSED -- 'autoharn1' is this deployment's own live ledger, not a" >&2
@@ -164,10 +188,20 @@ fi
 # --- 3. RESOLVE what exists, by querying the catalogs, never assumed from the name alone --------
 PGPASSWORD="${PGPASSWORD:-}"
 _psql() { PGPASSWORD="$PGPASSWORD" psql -h "$HOST" -d "$DB" ${PGUSER:+-U "$PGUSER"} "$@"; }
+# SQL text is always fed on stdin, never via -c: psql's :'var' / :"var" bind-variable
+# interpolation (verified live against a real server, psql 18.3) is only performed for input it
+# parses as a script -- stdin or -f -- and is a silent no-op under -c (the string reaches the
+# server with the literal colon still in it and errors out). _psql_in wraps that stdin-piping
+# discipline once so every call site below gets the working form of the fix, not the broken one.
+_psql_in() { printf '%s\n' "$1"; }
 
-HAVE_SCHEMA=$(_psql -tAc "SELECT count(*) FROM pg_namespace WHERE nspname = '${SCHEMA}';")
-HAVE_KERN=$(_psql -tAc "SELECT count(*) FROM pg_namespace WHERE nspname = '${KERN}';")
-HAVE_ROLE=$(_psql -tAc "SELECT count(*) FROM pg_roles WHERE rolname = '${ROLE}';")
+# Bound as psql -v variables, never interpolated as raw shell text into the SQL string: :'var'
+# has psql itself substitute a properly-escaped SQL string literal client-side, before the query
+# ever reaches the server, so no crafted name can smuggle a second statement past the semicolon
+# in the query text below (the RESOLVE-stage injection this whole block was rewritten to close).
+HAVE_SCHEMA=$(_psql_in "SELECT count(*) FROM pg_namespace WHERE nspname = :'schema';" | _psql -v schema="$SCHEMA" -tA)
+HAVE_KERN=$(_psql_in "SELECT count(*) FROM pg_namespace WHERE nspname = :'kern';" | _psql -v kern="$KERN" -tA)
+HAVE_ROLE=$(_psql_in "SELECT count(*) FROM pg_roles WHERE rolname = :'role';" | _psql -v role="$ROLE" -tA)
 
 if [ "$HAVE_SCHEMA" = "0" ] && [ "$HAVE_KERN" = "0" ] && [ "$HAVE_ROLE" = "0" ]; then
     echo "teardown-world.sh: REFUSED -- '$WORLD' resolves to NOTHING in $DB@$HOST: no schema" >&2
@@ -208,30 +242,37 @@ if [ "$ans" != "$WORLD" ]; then
 fi
 
 # --- 6. execute EXACTLY the printed plan ---------------------------------------------------------
+# Same psql -v binding discipline as RESOLVE above, but with :"var" (double-quoted-identifier
+# substitution) rather than :'var' (string-literal substitution): SCHEMA/KERN/ROLE name objects
+# here, not string values, and psql escapes embedded double-quotes/backslashes in an identifier
+# bind the same safe way it escapes a literal bind -- no raw shell interpolation into the SQL text
+# either way. The allowlist check above already restricts these to [A-Za-z0-9_]+, so this is
+# belt-and-suspenders against the same class of hazard the RESOLVE-stage fix closes.
 echo "-- executing --"
 if [ "$HAVE_SCHEMA" != "0" ]; then
     # the ledger schema this entire script exists to tear down; blast radius (everything inside
     # $SCHEMA) is exactly what the printed plan above named and the typed confirmation covered.
     # declared-drop: SCHEMA
-    _psql -v ON_ERROR_STOP=1 -q -c "DROP SCHEMA ${SCHEMA} CASCADE;"
+    _psql_in 'DROP SCHEMA :"schema" CASCADE;' | _psql -v ON_ERROR_STOP=1 -v schema="$SCHEMA" -q
     echo "   dropped schema ${SCHEMA}"
 fi
 if [ "$HAVE_KERN" != "0" ]; then
     # the kernel schema paired with $SCHEMA above; same declared blast radius, printed in the
     # same plan, confirmed by the same typed world-name check.
     # declared-drop: KERN
-    _psql -v ON_ERROR_STOP=1 -q -c "DROP SCHEMA ${KERN} CASCADE;"
+    _psql_in 'DROP SCHEMA :"kern" CASCADE;' | _psql -v ON_ERROR_STOP=1 -v kern="$KERN" -q
     echo "   dropped schema ${KERN}"
 fi
 if [ "$HAVE_ROLE" != "0" ]; then
-    _psql -v ON_ERROR_STOP=1 -q -c "DROP ROLE ${ROLE};"
+    _psql_in 'DROP ROLE :"role";' | _psql -v ON_ERROR_STOP=1 -v role="$ROLE" -q
     echo "   dropped role ${ROLE}"
 fi
 
 # --- 7. VERIFY zero residue via a fresh catalog query --------------------------------------------
-RESIDUE_SCHEMA=$(_psql -tAc "SELECT count(*) FROM pg_namespace WHERE nspname = '${SCHEMA}';")
-RESIDUE_KERN=$(_psql -tAc "SELECT count(*) FROM pg_namespace WHERE nspname = '${KERN}';")
-RESIDUE_ROLE=$(_psql -tAc "SELECT count(*) FROM pg_roles WHERE rolname = '${ROLE}';")
+# Same -v bind-variable discipline as RESOLVE (step 3) -- no raw interpolation here either.
+RESIDUE_SCHEMA=$(_psql_in "SELECT count(*) FROM pg_namespace WHERE nspname = :'schema';" | _psql -v schema="$SCHEMA" -tA)
+RESIDUE_KERN=$(_psql_in "SELECT count(*) FROM pg_namespace WHERE nspname = :'kern';" | _psql -v kern="$KERN" -tA)
+RESIDUE_ROLE=$(_psql_in "SELECT count(*) FROM pg_roles WHERE rolname = :'role';" | _psql -v role="$ROLE" -tA)
 if [ "$RESIDUE_SCHEMA" != "0" ] || [ "$RESIDUE_KERN" != "0" ] || [ "$RESIDUE_ROLE" != "0" ]; then
     echo "teardown-world.sh: RESIDUE DETECTED after teardown -- schema='$RESIDUE_SCHEMA'" >&2
     echo "                   kern='$RESIDUE_KERN' role='$RESIDUE_ROLE' (counts, expect all 0)." >&2
