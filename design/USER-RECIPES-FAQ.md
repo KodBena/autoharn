@@ -1365,6 +1365,157 @@ Exit is red only when a layer that actually RAN [`judge`](../GLOSSARY.md#judge)s
 `DIVERGE_DEFECT`/`QUARANTINED`; a declared-incapable layer never contributes to the exit code
 (the same "absence is not a defect" rule the work-item-violations check already applied).
 
+## `led` help tokens, `--json` payload mode, and `work list`'s default filter (led.tmpl trio)
+
+Three small `led` changes landed together at commit `abba0dd` (build `a2c2a5f`, fixup `cf51542`,
+delivery record: ledger row 1562). None of them touch the kernel — all three live entirely in
+`bootstrap/templates/led.tmpl`, so (unlike the s40/s41/s42/s43 entries above) they are available
+to **any** world scaffolded from this commit or later, including this checkout's own `autoharn1`.
+
+**Can I ask `led` for usage without accidentally writing a row?**
+Yes. `'help'`, `'-h'`, or `'--help'` as the FIRST word of the statement prints usage to stderr and
+writes nothing on every writing subcommand — but the exit code is 0 only once each subcommand's
+own arg-count guard has already been satisfied; see the `led review --help` item just below for
+the one case where that guard fires first. This includes `led decision --help` specifically (the
+one case a prior pass had missed: `--help` used to fall into the
+generic unrecognized-flag refusal instead of the same usage-and-exit-0 teach every other
+subcommand's `--help` gets). WITNESSED, `autoharn1`, row count unchanged across all three forms
+(`--recent 1`'s leading id was `1567` before and after):
+```
+$ ./led decision --help
+usage: led [flags] <kind> <statement...>   (see top-of-file comment for the full flag list: ...)
+       led --recent [N] | led current [N] | led show <id> | led question-status | ...
+       ...
+       '--help'/'-h'/'help' as the FIRST word of <statement...> prints this usage and writes nothing
+$ echo $?
+0
+```
+(`led decision help` and `led decision -h` were run the same way — same zero-write result, same
+exit 0.)
+
+**Does the same closure cover `led review --help`?** Only once `review`'s three required
+positionals are already present ahead of the token. WITNESSED, `autoharn1`, row count unchanged
+(`1567` before and after):
+```
+$ ./led review --help
+usage: led review <entry-id> <verdict> <independence> [--antecedent id] <statement...>
+       verdict: attest|attest_with_reservations|refuse
+       independence: self-review|technical|managerial|financial
+       set LED_ACTOR=<principal-name> to countersign as a registered principal
+$ echo $?
+1
+```
+A bare `led review --help` (or `-h`/`help`) hits `review`'s pre-existing `$# -lt 4` arg-count
+guard (`bootstrap/templates/led.tmpl` ~line 2501) before `check_help_or_dash_first_word` (line
+2506) is ever reached — `--help` alone leaves only 1 positional, short of the 4 the guard wants
+(entry-id, verdict, independence, statement). It is zero-write either way (usage on stderr, row
+count unchanged), but the exit code is **1**, not 0. The exit-0 path only fires once the three
+positionals precede the token:
+```
+$ ./led review 1 attest self-review --help
+usage: led review <entry-id> <verdict> <independence> [--antecedent id] <statement...>
+       verdict: attest|attest_with_reservations|refuse
+       independence: self-review|technical|managerial|financial
+       set LED_ACTOR=<principal-name> to countersign as a registered principal
+$ echo $?
+0
+```
+So the help-token closure is complete for `decision` and the other pure-help-anywhere
+subcommands, but not yet for `review`'s bare `--help`/`-h`/`help` form — a genuine gap in
+`led.tmpl`, not a doc error to paper over.
+
+**What if the first word is dash-leading but not actually a help token?**
+It REFUSES, teaching, rather than silently committing the word as statement prose — the same
+closure this item's title names. WITNESSED, `autoharn1`, row count unchanged (`1567` before and
+after):
+```
+$ ./led note -weirdflag "rest of statement"
+led: REFUSED -- the statement's first word '-weirdflag' is dash-leading, which reads as
+  a misplaced or mistyped flag rather than intended statement prose (item
+  led-help-token-closure -- the same shape refuse_flag_in_statement forecloses for
+  KNOWN led flag tokens anywhere in the statement; this closes the gap for an
+  UNKNOWN dash-leading FIRST word, which used to sail through and commit a garbage
+  row). NOTHING was written. ...
+$ echo $?
+1
+```
+Only the FIRST word is checked (the same first-word/whole-word bound `refuse_flag_in_statement`
+already uses elsewhere) — a dash-leading word later in the statement is untouched; reword or
+quote it if it is genuinely intended prose.
+
+**Can I write ledger rows as JSON instead of a prose statement?**
+`led --json <ledger|review|registration|obligation> <file|->` routes a JSON object straight to
+the matching s43 [write boundary](../GLOSSARY.md#write-boundary) function
+(`ledger_write`/`review_write`/`registration_write`/`obligation_write`) — the exact same four
+functions "The ledger boundary service (`serving/`)" section below documents for its own HTTP
+endpoints, so the payload shape is the one documented there (payload keys are the target table's own
+column names, verbatim, no second vocabulary). Validation at this layer is well-formedness and
+top-level-shape only (parses as JSON, is an object) — everything else is the kernel's own
+judgment, and its refusal or acceptance comes back as a [typed verdict](../GLOSSARY.md#typed-verdict),
+surfaced verbatim, never paraphrased. The raw payload is size-bounded at 1 MiB
+(`MAX_WRITE_BODY_BYTES`, the same bound the HTTP boundary service enforces on its own body), 
+checked twice — once on the raw bytes before JSON parsing, once on the re-serialized (compacted)
+form before it reaches `psql` — so a payload that only grows past the bound on reserialization is
+still caught.
+
+**Prominent caveat, same shape as the s42/s43 entry above:** `--json` maps onto the s43 boundary
+functions with deliberately NO pre-s43 fallback — a world whose
+[birth chain](../GLOSSARY.md#birth-chain) predates commits `1fc4e8c` (s42) / `84729de` (s43)
+refuses `--json` outright, `capability_absent`, before ever reaching the size bound or the
+kernel. `autoharn1` (this checkout's own live world) is itself pre-s43, so everything below the
+line is what this world can actually show; the size-bound checkpoints and a live typed-verdict
+round trip are UNWITNESSED here for that reason and are covered instead by
+`seen-red/led-json-payload-mode/run_fixtures.py`'s banked evidence and
+[orchlog.d/s42-s43-typed-verdicts.md](../orchlog.d/s42-s43-typed-verdicts.md).
+
+WITNESSED, `autoharn1`, all zero-write (row count `1567` before and after every case below —
+argument validation and the capability check both run before `kernel_write` is ever called, so
+none of these reach a place that could write):
+```
+$ ./led --json bogus /tmp/whatever.json
+led --json: REFUSED -- usage: led --json <ledger|review|registration|obligation> <file|->
+  '<surface>' selects which s43 boundary function ... Got: 'bogus'.
+
+$ ./led --json ledger /tmp/does-not-exist.json
+led --json: REFUSED (capability_absent, naming s43) -- this world's kernel does not
+  carry kernel/lineage/s43-typed-verdict-write-boundary.sql, mirroring the FastAPI
+  boundary service's own pre-s43 refusal ... Use the ordinary prose CLI on this world instead.
+```
+The same `capability_absent` refusal fires regardless of what the file contains or how large it
+is (missing file, malformed JSON, a JSON array instead of an object, and a 1.2 MB oversized
+payload were all tried live and all produced the identical capability check, before file
+existence or size is ever inspected) — on this world, `--json`'s refusal surface reduces to two
+cases: bad `<surface>` word, or `capability_absent`. A world carrying s43 sees the fuller surface
+(size-bound refusals, kernel-level unknown-key refusals, and a real accepted write echoing its
+row id) — that is the surface `run_fixtures.py` and the boundary-service spec document.
+
+**Does `led work list` show me everything, or just what's live right now?**
+By default, just what is open or claimed — closed items are hidden, not deleted; nothing about
+the ledger itself changes. `--all` restores the full historical view. WITNESSED, `autoharn1`:
+```
+$ ./led work list | tail -1
+(56 rows)
+$ ./led work list | grep -c '| closed'
+0
+$ ./led work list --all | tail -1
+(242 rows)
+$ ./led work list --all | grep -c '| closed'
+186
+```
+56 + 186 = 242: `--all` adds exactly the closed rows back, nothing else changes. The choice is
+taught in the usage text itself (`led work list [--all]  (work_item_current; default open/claimed
+only, --all for the full history including closed)`), and this is a read-verb default only — `led
+work asof <timestamp>` and the raw ledger rows remain the complete, unfiltered record regardless
+of which view `work list` shows you. An unrecognized flag refuses rather than silently falling
+through:
+```
+$ ./led work list --bogus
+usage: led work list [--all]
+$ echo $?
+1
+```
+Delivery record for all three items: [orchlog.d/led-tmpl-trio.md](../orchlog.d/led-tmpl-trio.md).
+
 ## What this page is not
 
 This page is not an inventory (that is [ORCH-CAPABILITIES.md](../ORCH-CAPABILITIES.md), where every
