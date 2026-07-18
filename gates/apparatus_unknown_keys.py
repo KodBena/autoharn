@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-11T22:22:35Z
-#   last-change: 2026-07-12T14:08:07Z
-#   contributors: e4410ef6/main
+#   last-change: 2026-07-18T10:47:48Z
+#   contributors: e4410ef6/main, ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
 """apparatus_unknown_keys — the class-not-instance sweep for BACKLOG "Configuration-surface
@@ -14,9 +14,10 @@ named in the survey as "the shape this project distrusts most."
 
 WHAT THIS CHECKS. Every key under `apparatus["mechanisms"]` in a given `apparatus.json` (or a
 world directory carrying one at `<dir>/.claude/apparatus.json`) against
-`filing/apparatus_registry.py`'s `known_mechanisms()` — a set DERIVED from `hooks/*.py`'s AND
-`bootstrap/templates/*.tmpl`'s own source (widened 2026-07-12 to cover the first apparatus-reading
-file that is not a hook — see that module's own docstring, "WHERE IT SCANS"), never a hand-typed
+`filing/apparatus_registry.py`'s `known_mechanisms()` — a set DERIVED from `hooks/*.py`'s,
+`bootstrap/templates/*.tmpl`'s, AND `tools/*.py`'s own source (widened 2026-07-12 to cover the
+first apparatus-reading file that is not a hook, widened again 2026-07-18 for `tools/` — see that
+module's own docstring, "WHERE IT SCANS"), never a hand-typed
 second list (see that module's docstring for why: a hand list had ALREADY drifted once, silently,
 before this gate existed — `bash_completion` was a real, wired-in mechanism absent from both the
 shipped template and its own documentation). A key not in that derived set is reported, with
@@ -120,7 +121,7 @@ def check_target(target: str, known: frozenset[str]) -> tuple[list[str], bool]:
 def main(argv: list[str]) -> int:
     known = apparatus_registry.known_mechanisms()
     print(f"apparatus_unknown_keys: known mechanism set ({len(known)}, derived from "
-          f"hooks/*.py + bootstrap/templates/*.tmpl): {sorted(known)}")
+          f"hooks/*.py + bootstrap/templates/*.tmpl + tools/*.py): {sorted(known)}")
 
     gate_mode = bool(argv)
     targets = argv if gate_mode else [str(DEFAULT_REPORT_TARGET)]
