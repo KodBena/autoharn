@@ -71,8 +71,18 @@ CHAIN = [
     "s33-composite-discharge.sql", "s34-computed-grade-refusal.sql",
     "s35-validation-decomposition.sql", "s36-decision-grade.sql",
     "s37-violation-disposition.sql", "s38-bookkeeping-close.sql", "s39-blocks-start.sql",
-    "s40-principal-identity-events.sql",
+    "s40-principal-identity-events.sql", "s41-principal-bindings-and-relations.sql",
 ]
+# s41 (kernel/lineage/s41-principal-bindings-and-relations.sql) extends this SAME gate's scratch
+# CHAIN. It ships NO new raw-`ledger` reader, verified live: the four D-5 binding views
+# (principal_relations, principal_role_bindings, principal_keys, principal_competences) all
+# factor through ledger_current exclusively; validate_principal_binding (the new D-3 trigger)
+# reads only NEW + kernel.principal (no ledger reference at all, so it classifies clean with no
+# entry); the re-issued validate_independence keeps its standing ALLOWLIST entry -- its D-6 leg
+# adds one more ROW-ADDRESSED read of the same two named rows (the review row's own actor) plus
+# a kernel.principal agent_class lookup (not a ledger read), squarely inside that entry's
+# existing row-addressed-forensics reason. The re-issued projection homes (+8 columns) keep
+# their entries, anti-join text unchanged.
 # s40 (kernel/lineage/s40-principal-identity-events.sql) extends this SAME gate's scratch CHAIN.
 # It ships NO new raw-`ledger` reader in this gate's enumerated universe (:schema views and
 # functions), verified live: principal_standing_current (new view) reads ledger_current +

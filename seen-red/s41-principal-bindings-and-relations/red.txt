@@ -1,0 +1,52 @@
+== scaffolding classic world s41fxa (chain ends s40-principal-identity-events.sql) ==
+=== detect-f-on-s40 ===
+  [ok] s41 detect on an s40-head chain reads 'f' (expect f)
+
+=== s40-only-kernel-teach ===
+  [ok] exit=1; excerpt='ding/relation\n  events have no typed home here. These verbs work on a world whose birth chain\n  carries kernel/lineage/s41-principal-bindings-and-relations.sql.'
+
+== scaffolding classic world s41fxb (chain ends s41-principal-bindings-and-relations.sql) ==
+=== detect-t-on-s41 ===
+  [ok] s41 detect on the s41 chain reads 't' (expect t)
+
+=== relate-then-unrelate ===
+  [ok] assert exit=0, retract exit=0; view now holds 0 acts-for rows (expect 0), raw history holds 2 (expect 2 -- assertion + terminal retraction, never thinner)
+
+=== self-edges-refused ===
+  [ok] all four CLI self-edges refused=True; raw kernel-trigger self-edge exit=3 with the taught text
+
+=== snp-canonicalization ===
+  [ok] CLI stored 'hume>botty' (expect hume>botty, reversed from the typed order, notice printed); the OTHER ordering refused as duplicate (1); a raw non-canonical INSERT refused by the kernel CHECK (3)
+
+=== key-binding-polarity ===
+  [ok] model bind exit=3 (taught); human bind exit=0, view rows=1; malformed fingerprint exit=3 (kernel shape CHECK named)
+
+=== d6-human-attested-scoping ===
+  [ok] managerial-by-model exit=3 (taught: 'no schema can witness'); technical-by-model exit=0; managerial-by-human exit=0
+
+=== acts-for-retired ===
+  [ok] exit=3; the retirement CHECK named
+
+=== competence-lifecycle ===
+  [ok] grant OK (view: 'sql-review|B'); duplicate refused; empty band refused (1); re-band via --supersedes replaced (band now 'A'); stray --band on withdrawal refused; STALE supersession target refused; withdrawal OK (view 0 rows, raw 3 rows -- grant+re-band+terminal withdrawal); raw inactive-from-birth refused by the kernel CHECK
+
+=== release-revoke-value-continuity ===
+  [ok] bind-role OK; mismatched role name refused (1); release OK; release against the already-released id refused (1); mismatched fingerprint refused (1); revoke-key OK; both views empty, raw history retained
+
+=== c6iii-projection-carries-s41-columns ===
+  [ok] ledger_current returns 'same-natural-person' for the fixture row; view definition carries the s41 columns (t) -- the C3 net (a pre-C3 stale-view red cannot be built on a chain whose s41 file carries the re-issue; the definition inspection is the C6-licensed witness form)
+
+=== gates-green ===
+  [ok] ledger_reader_allowlist exit=0; kind_shape_manifest_gate exit=0
+
+=== differential-agree-both-layers ===
+  [ok] tnow=AGREE work=AGREE with 8 distinct principal_* kinds live (expect AGREE/AGREE/8)
+
+== REAL --new-world scaffold run (s41fxnw, chain s15..s41) ==
+=== new-world-s41-birth ===
+  [ok] scaffold exit=0; s41 detect on the born world reads 't'; first ordinary write exit=0
+
+=== idris-freshness-green ===
+  [ok] gates/idris_model_freshness.py exit=0 (AS-OF s41 vs mechanical head s41, elaboration clean -- the standing WARN cleared by the parity pass)
+
+ALL CASES OK -- s41 principal-bindings-and-relations both-polarity proof, zero residue.

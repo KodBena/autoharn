@@ -123,6 +123,7 @@ REGISTRY: dict[str, str] = {
     "s34-computed-grade-refusal":     "seen-red/s34-computed-grade-refusal/run_fixtures.py",
     "s35-validation-decomposition":   "seen-red/s35-validation-decomposition/run_fixtures.py",
     "s40-principal-identity-events":  "seen-red/s40-principal-identity-events/run_fixtures.py",
+    "s41-principal-bindings-and-relations": "seen-red/s41-principal-bindings-and-relations/run_fixtures.py",
     "column-complete-gate":           "seen-red/column-complete-gate/run_fixtures.py",
     "freeze-at-stamp":                "seen-red/freeze-at-stamp/run_fixtures.py",
     "verify-chain-error-conflation":  "seen-red/verify-chain-error-conflation/run_fixtures.py",

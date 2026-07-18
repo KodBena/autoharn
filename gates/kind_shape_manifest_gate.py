@@ -154,6 +154,7 @@ CHAIN = [
     "s38-bookkeeping-close.sql",
     "s39-blocks-start.sql",
     "s40-principal-identity-events.sql",
+    "s41-principal-bindings-and-relations.sql",
 ]
 # s40 (kernel/lineage/s40-principal-identity-events.sql, design/FABLE-PRINCIPAL-IDENTITY-SPEC-
 # BUILD-BASIS.md) extends this SAME gate's scratch CHAIN and ships THREE new whole-column
@@ -338,14 +339,16 @@ MANIFEST = [
                 "raises when kind<>'review' AND regards IS NOT NULL."),
     dict(column="principal_subject",
          kinds=("principal_registered", "principal_suspended", "principal_revoked",
-                "principal_standing_declared"),
+                "principal_standing_declared",
+                "principal_relation_asserted", "principal_role_bound", "principal_key_bound",
+                "principal_competence_granted"),
          arity="two-way", mechanism="CHECK", constraint="principal_subject_kind_shape",
          defining_delta="s40-principal-identity-events.sql",
-         reason="the principal an identity event is ABOUT (distinct from actor) -- mandatory on "
-                "every identity-event kind, forbidden elsewhere; two-way is safe because the "
-                "kinds are born in the same delta (vacuous ADD CONSTRAINT validation, basis "
-                "§3.2). s41 re-issues this SAME constraint widened to also license its four "
-                "binding/relation kinds -- this row's kinds tuple widens in that same commit."),
+         reason="the principal an identity/binding event is ABOUT (distinct from actor) -- "
+                "mandatory on every principal_* kind, forbidden elsewhere; two-way is safe "
+                "because every licensed kind is born in the same family (vacuous ADD CONSTRAINT "
+                "validation). ONE constraint, re-issued wider by s41 (never patched by a second "
+                "constraint) -- this row tracks the re-issued, eight-kind head shape."),
     dict(column="principal_purpose", kinds=("principal_registered",),
          arity="two-way", mechanism="CHECK", constraint="principal_purpose_kind_shape",
          defining_delta="s40-principal-identity-events.sql",
@@ -360,6 +363,58 @@ MANIFEST = [
          reason="the database role a standing declaration binds -- mandatory on exactly that "
                 "kind, forbidden elsewhere (two-way, same vacuous-validation ground as its two "
                 "sibling s40 columns)."),
+    dict(column="principal_binding_active",
+         kinds=("principal_relation_asserted", "principal_role_bound", "principal_key_bound",
+                "principal_competence_granted"),
+         arity="two-way", mechanism="CHECK", constraint="principal_binding_active_kind_shape",
+         defining_delta="s41-principal-bindings-and-relations.sql",
+         reason="the identity/value discriminator of the four binding kinds (true = assertion, "
+                "false = retraction restating identity fields only) -- mandatory via this CHECK "
+                "on exactly the four s41 kinds, never a column-level NOT NULL (basis C10); "
+                "vacuous validation, kinds born in the same delta. Its inactive-needs-supersedes "
+                "and mandatory-iff-active companions carry no kind test (value CHECKs, out of "
+                "scope by the classifier's first test)."),
+    dict(column="principal_object", kinds=("principal_relation_asserted",),
+         arity="two-way", mechanism="CHECK", constraint="principal_object_kind_shape",
+         defining_delta="s41-principal-bindings-and-relations.sql",
+         reason="a relation's far endpoint (identity field, mandatory active or not)."),
+    dict(column="principal_relation", kinds=("principal_relation_asserted",),
+         arity="two-way", mechanism="CHECK", constraint="principal_relation_kind_shape",
+         defining_delta="s41-principal-bindings-and-relations.sql",
+         reason="the typed relation (identity field); its closed four-value vocabulary and the "
+                "same-natural-person canonical-order closure are separate kind-free CHECKs "
+                "(principal_relation_check, principal_snp_canonical_order)."),
+    dict(column="principal_role_name", kinds=("principal_role_bound",),
+         arity="two-way", mechanism="CHECK", constraint="principal_role_name_kind_shape",
+         defining_delta="s41-principal-bindings-and-relations.sql",
+         reason="identity field, mandatory active or not. FREE non-empty text by RATIFIED "
+                "ruling (basis §9(c)/C13, witnessed rows 1432/1433): role naming is "
+                "organizational configuration -- deliberately NO value vocabulary CHECK exists "
+                "for this column, only non-emptiness."),
+    dict(column="principal_key_fingerprint", kinds=("principal_key_bound",),
+         arity="two-way", mechanism="CHECK", constraint="principal_key_fingerprint_kind_shape",
+         defining_delta="s41-principal-bindings-and-relations.sql",
+         reason="identity field; the OpenPGP v4 shape is a separate kind-free value CHECK "
+                "(principal_key_fingerprint_shape); the human-subject-only rule is D-3's "
+                "trigger, not a CHECK (cross-table lookup)."),
+    dict(column="principal_competence_activity", kinds=("principal_competence_granted",),
+         arity="two-way", mechanism="CHECK",
+         constraint="principal_competence_activity_kind_shape",
+         defining_delta="s41-principal-bindings-and-relations.sql",
+         reason="G13's activity: the grant's IDENTITY field, mandatory on every grant row "
+                "active or not (a withdrawal must say which activity)."),
+    dict(column="principal_competence_band", kinds=("principal_competence_granted",),
+         arity="one-way", mechanism="CHECK", constraint="principal_competence_band_kind_shape",
+         defining_delta="s41-principal-bindings-and-relations.sql",
+         reason="G13's band: a VALUE field, NULL on a withdrawal row of its own kind -- so the "
+                "kind correlation cannot be an iff; the mandatory-iff-active rule is the "
+                "kind-free principal_competence_band_iff_active CHECK (guarded via the activity "
+                "column, non-NULL exactly on this kind). Free text v1 by RATIFIED PLACEHOLDER "
+                "(basis §9(g) loud note)."),
+    dict(column="principal_competence_basis", kinds=("principal_competence_granted",),
+         arity="one-way", mechanism="CHECK", constraint="principal_competence_basis_kind_shape",
+         defining_delta="s41-principal-bindings-and-relations.sql",
+         reason="G13's basis: same VALUE-field shape as band, one column over."),
     dict(column="work_review_disposition", kinds=("work_closed", "work_violation_disposition"),
          arity="two-way", mechanism="trigger", constraint=None,
          defining_delta="s29-obligation-item-key-and-typed-close.sql (sec-10 epoch amendment; "

@@ -26,23 +26,29 @@
 ||| because the SUBSTRATE is -- see the "PRESERVED, ON PURPOSE" list in this header.
 ||| Beauty that would erase one of those facts is a regression, not a cleanup.
 |||
-||| AS-OF: kernel chain through s35 LAGGING: s39 (four untranscribed deltas: s36
-|||   decision-grade -- nullable writer-supplied grade + standing_decisions in-force view,
-|||   design/FABLE-GRADED-DECISIONS-SPEC.md; s37 violation-disposition -- typed answering
-|||   acts for violations, debt quantifying over in-force rows,
-|||   design/FABLE-ORPHAN-DISPOSITION-SPEC.md v3; s38 bookkeeping-close -- third close
-|||   constructor, commit-witnessed, kind-scoped to work_closed,
-|||   design/FABLE-BOOKKEEPING-CLOSE-SPEC.md; s39 blocks-start -- claim-time dependency
-|||   foreclosure, widened edge-type vocabulary, work_startable derived read). A parity
-|||   pass should model the grade at the write boundary, the standing view as a derived
-|||   read, the debt/record projection split as two derived reads, the close disposition
-|||   as a three-constructor sum with the bookkeeping arm's commit-shape refinement, and
-|||   the claim constructor's blocks-start antecedent precondition. (verified through s35, no semantic delta since s33:
-|||   s34 adds the kernel-side refusal of a writer-supplied discharge_grade -- an illegal
-|||   state this model's Draft-stage index already made UNREPRESENTABLE (GradeF Draft = ()),
-|||   so the substrate caught up to the model, not vice versa; s35 is a behavior-identical
-|||   dispatcher refactor of validate_work_item, every refusal text byte-identical by its
-|||   own leaf-manifest gate's witness. Same shapes, same derivations, same refusals.)
+||| AS-OF: kernel chain through s41 (the s36-s41 parity pass, 2026-07-18 -- the six-delta
+|||   gap the prior LAGGING note enumerated, closed in one pass, plus the s40/s41
+|||   principal-identity family the same pass transcribes fresh from
+|||   design/FABLE-PRINCIPAL-IDENTITY-SPEC-BUILD-BASIS.md's two landed deltas. What each
+|||   delta became here: s36 -- PDecision carries its writer-supplied Maybe grade and
+|||   standingDecisionIds is the in-force graded-decision read; s37 --
+|||   PViolationDisposition is the typed answering act, and the debt/record projection
+|||   split is modeled on the ONE violation class this model can even represent
+|||   (danglingDepDebt vs danglingDepHistory -- most violation classes are structurally
+|||   unrepresentable here BY the model's own types, which is the model agreeing with the
+|||   views' purpose, noted at the definitions); s38 -- ReviewDisposition gains
+|||   DBookkeeping with a proof-carrying CommitRef (the commit-shape regex as a boolean
+|||   refinement) and strictPremise refuses it under strict, the s38 ELSIF; s39 --
+|||   EdgeType gains BlocksStart, VDepBS mirrors VDepBC over the separate blocks-start
+|||   subgraph, and VClaim gains the claim-time startBlockers precondition; s40 --
+|||   principal identity events as four payload constructors, principalStanding as the
+|||   derived read (revoked dominates suspended), and the write boundary's entry-level
+|||   premise family (boundaryOk: actor standing checked at append); s41 -- the four
+|||   binding/relation constructors with the identity/value split as a type index
+|||   (CompetenceValueF: a withdrawal CANNOT carry band/basis, unrepresentable), the
+|||   human-only key premise, the same-natural-person canonical-order premise, and D-6's
+|||   human-attested managerial/financial scoping inside boundaryOk. s34's own note
+|||   stands: the Draft-stage GradeF index still models that refusal for free.)
 |||
 ||| PROVENANCE:
 |||   v1 (2026-07-15, night) -- an Opus transcription consultation, machine-checked,
@@ -200,6 +206,32 @@ Slug = String
 --     kind list already single-homes them; the GADT should too.
 -- ===========================================================================
 
+||| s40: the anchor's closed agent-class vocabulary. In SQL the class lives on the
+||| kernel.principal ANCHOR row (immutable by the s40 append-only triggers); this model
+||| carries it on the registration EVENT instead -- the model's rendering of the s40
+||| anchor-coupling (anchor + event commit atomically, so the event is a faithful witness
+||| of the anchor's birth facts). classOf below is the derived read.
+data AgentClass = ACHuman | ACModel | ACSubagent | ACTool
+
+Eq AgentClass where
+  ACHuman    == ACHuman    = True
+  ACModel    == ACModel    = True
+  ACSubagent == ACSubagent = True
+  ACTool     == ACTool     = True
+  _          == _          = False
+
+||| s41 D-2: the closed relation vocabulary (the kernel's OWN refusals key off these
+||| values -- contrast the ratified FREE role-name text, which is deliberately a plain
+||| String field below, per basis §9(c)/C13).
+data Relation = ActsFor | DispatchedBy | SameNaturalPerson | Succeeds
+
+Eq Relation where
+  ActsFor           == ActsFor           = True
+  DispatchedBy      == DispatchedBy      = True
+  SameNaturalPerson == SameNaturalPerson = True
+  Succeeds          == Succeeds          = True
+  _                 == _                 = False
+
 data ReviewVerdict = Attest | AttestWithReservations | Refuse
 
 isAttest : ReviewVerdict -> Bool
@@ -215,22 +247,33 @@ data DischargeGrade = SamePrincipal | SameSession | DistinctSession | DistinctDe
 ||| s22 closed resolution vocabulary.
 data Resolution = RShipped | RSuperseded | RDropped | RDeferred
 
-||| s29 Element B: the two close constructors. A review-silent close is
+||| s29 Element B + s38: the THREE close constructors. A review-silent close is
 ||| unrepresentable (post-epoch; see the epoch-gate fidelity note, header).
-data ReviewDisposition = DWitnessed | DDeferred
+||| DBookkeeping (s38): a close with NO judgment content, whose witness is a
+||| commit-shaped ref (CommitRef below) -- the category is CLOSED to that one
+||| form; strictPremise refuses it under strict (the s38 ELSIF).
+data ReviewDisposition = DWitnessed | DDeferred | DBookkeeping
 
-||| s30 typed dependency edges; closed vocabulary, 'supersedes' actively
+||| s30/s39 typed dependency edges; closed vocabulary, 'supersedes' actively
 ||| refused as a reserved word (a vocabulary refusal the closed data type
-||| renders by omission).
-data EdgeType = BlocksClose | Informs
+||| renders by omission). BlocksStart (s39): the antecedent must be CLOSED
+||| before the dependent may be CLAIMED -- a different lifecycle moment than
+||| BlocksClose, verified over its own SEPARATE subgraph (s39 Element 2's own
+||| two named grounds, preserved: merging the two graphs would false-positive
+||| a legal opposite-direction pair).
+data EdgeType = BlocksClose | BlocksStart | Informs
 
 Eq EdgeType where
   BlocksClose == BlocksClose = True
+  BlocksStart == BlocksStart = True
   Informs     == Informs     = True
   _           == _           = False
 
-||| R3: the eight s15 prose kinds, single-homed as one constructor's argument.
-data ProseKind = KAssumption | KDecision | KQuestion | KVerification
+||| R3: the s15 prose kinds, single-homed as one constructor's argument.
+||| s36 PARITY: KDecision LEAVES this sum -- a decision now has its own
+||| constructor (PDecision) because it alone carries a payload column
+||| (decision_grade, writer-supplied, kind-scoped by s36's one-way CHECK).
+data ProseKind = KAssumption | KQuestion | KVerification
                | KFinding | KSnag | KRevision | KNote
 
 ||| Non-empty text (SQL: btrim(x) <> ''). Proof-carrying string.
@@ -250,16 +293,61 @@ isShipped RShipped = True
 isShipped _        = False
 
 isWitnessed : ReviewDisposition -> Bool
-isWitnessed DWitnessed = True
-isWitnessed DDeferred  = False
+isWitnessed DWitnessed   = True
+isWitnessed DDeferred    = False
+isWitnessed DBookkeeping = False
 
 ||| s22 work_shipped_requires_witness, via Gated.
 witnessTy : Resolution -> Type
 witnessTy r = Gated (isShipped r) NonEmptyText
 
-||| s29 work_review_witnessed_requires_ref, same idiom one column over.
+||| s38: the commit-shape refinement (`^commit:[0-9a-f]{7,40}$`, s38's own regex
+||| rendered as a boolean the proof-carrying CommitRef demands). First-order
+||| character walk so a Refl witness on a concrete string reduces.
+isLowerHex : Char -> Bool
+isLowerHex c = elem c (unpack "0123456789abcdef")
+
+allChars : (Char -> Bool) -> List Char -> Bool
+allChars f []        = True
+allChars f (c :: cs) = f c && allChars f cs
+
+isCommitShaped : String -> Bool
+isCommitShaped s = case unpack s of
+  ('c' :: 'o' :: 'm' :: 'm' :: 'i' :: 't' :: ':' :: rest) =>
+    let n = length rest in
+    n >= 7 && n <= 40 && allChars isLowerHex rest
+  _ => False
+
+||| s38: a bookkeeping close's witness -- a git commit ref, SHAPE-checked at
+||| construction (the kernel half; commit EXISTENCE stays a CLI-side check, the
+||| honest trust boundary s38's own Element 3 names -- not representable here
+||| and not claimed).
+record CommitRef where
+  constructor MkCommitRef
+  ref : String
+  0 ok : So (isCommitShaped ref)
+
+||| s41 D-2: an OpenPGP v4 fingerprint (40 uppercase hex chars), shape-checked
+||| at construction -- the empty-until-ceremony slot's one regex.
+isUpperHex : Char -> Bool
+isUpperHex c = elem c (unpack "0123456789ABCDEF")
+
+isV4Fingerprint : String -> Bool
+isV4Fingerprint s = let cs = unpack s in
+  length cs == 40 && allChars isUpperHex cs
+
+record Fingerprint where
+  constructor MkFingerprint
+  fp : String
+  0 ok : So (isV4Fingerprint fp)
+
+||| s29/s38 work_review_*_requires_ref: witnessed demands a non-empty ref,
+||| deferred may omit one, bookkeeping demands a COMMIT-SHAPED one (the s38
+||| widening -- a fourth value is unrepresentable, the closed sum).
 reviewRefTy : ReviewDisposition -> Type
-reviewRefTy d = Gated (isWitnessed d) NonEmptyText
+reviewRefTy DWitnessed   = NonEmptyText
+reviewRefTy DDeferred    = Maybe NonEmptyText
+reviewRefTy DBookkeeping = CommitRef
 
 ||| R2: Draft = the writer-facing surface; Recorded = what the ledger holds
 ||| after the recording trigger runs. A writer literally cannot supply a
@@ -304,8 +392,56 @@ record ReviewDetail (st : Stage) (n : Nat) where
 ||| refuse a dangling antecedent. So that field is Slug, not Fin n: the model
 ||| preserves the kernel's own choice of a weakly-typed edge there, because the
 ||| violations view (depends_on_unknown_slug) exists precisely to read it.
+||| s41 D-1a: the competence identity/value split AS A TYPE INDEX. An active
+||| grant carries (band, basis) mandatorily; a withdrawal CANNOT carry them at
+||| all -- the mandatory-iff-active CHECK pair rendered as unrepresentability
+||| rather than a refusal (stronger than the SQL, noted honestly: the SQL
+||| refuses at construction, this type cannot even spell the illegal row).
+CompetenceValueF : Bool -> Type
+CompetenceValueF True  = (NonEmptyText, NonEmptyText)   -- (band, basis), G13's value fields
+CompetenceValueF False = ()
+
 data Payload : (st : Stage) -> (n : Nat) -> Type where
   PProse      : ProseKind -> Payload st n
+  ||| s36: a decision row with its writer-supplied durability grade (nullable,
+  ||| no vocabulary CHECK -- "the kernel stores a word; which words matter is
+  ||| deployment policy", s36's own header, so a plain Maybe String is the
+  ||| honest type, not an enum).
+  PDecision   : (grade : Maybe String) -> Payload st n
+  ||| s37: the typed answering act for a violations-view member. vclass is the
+  ||| violation-class word (free text here -- the SQL's own CHECK constrains it
+  ||| against work_violation_class's vocabulary via trigger machinery this
+  ||| model does not re-derive); target is the answered member's own row, Fin-
+  ||| typed so a dangling disposition is unrepresentable; witness (reissued
+  ||| successor) stays Maybe -- s37's "warns, never refused".
+  PViolationDisposition : (vclass : String) -> (target : Fin n)
+                       -> (retired : Bool) -> (witness : Maybe (Fin n))
+                       -> Payload st n
+  -- s40: the four identity-event kinds. The registration carries the class
+  -- (see AgentClass's own note: the model's rendering of the anchor coupling)
+  -- and the mandatory non-empty purpose (AC-2's stated-purpose field).
+  PPrincipalRegistered : (subject : PrincipalId) -> (cls : AgentClass)
+                      -> (purpose : NonEmptyText) -> Payload st n
+  PPrincipalSuspended  : (subject : PrincipalId) -> Payload st n
+  PPrincipalRevoked    : (subject : PrincipalId) -> Payload st n
+  ||| the declared-not-silent default: binds a db role (a plain String -- the
+  ||| role name is deployment infrastructure, not a modeled identity) to its
+  ||| standing principal.
+  PStandingDeclared    : (subject : PrincipalId) -> (dbRole : String) -> Payload st n
+  -- s41: the four binding/relation kinds, each indexed by its active flag
+  -- (true = assertion, false = retraction restating identity fields only --
+  -- the entry-level inactive-needs-supersedes half lives in boundaryOk, §3).
+  PRelationAsserted    : (subject : PrincipalId) -> (rel : Relation)
+                      -> (object : PrincipalId) -> (active : Bool) -> Payload st n
+  ||| roleName is FREE non-empty text BY RATIFIED RULING (basis §9(c)/C13) --
+  ||| deliberately NOT a closed sum, the one vocabulary in this family the
+  ||| kernel refuses to own.
+  PRoleBound           : (subject : PrincipalId) -> (roleName : NonEmptyText)
+                      -> (active : Bool) -> Payload st n
+  PKeyBound            : (subject : PrincipalId) -> (fingerprint : Fingerprint)
+                      -> (active : Bool) -> Payload st n
+  PCompetenceGranted   : (subject : PrincipalId) -> (activity : NonEmptyText)
+                      -> (active : Bool) -> CompetenceValueF active -> Payload st n
   -- s15 review: regards is MANDATORY for kind=review and RESERVED to it --
   -- the two-way trigger check is exactly "this constructor and only this
   -- constructor carries the field".
@@ -557,6 +693,164 @@ strictBlockers {n} l root =
   in  notClosed ++ reviewUn
 
 -- ===========================================================================
+-- §2c  THE s36-s41 DERIVED READS (the parity pass's new section; every read
+--      here is a CURRENT-TRUTH fold over the in-force projection, matching
+--      the SQL views' own ledger_current factoring -- except where a read is
+--      EXPLICITLY the record/history side, named at its definition).
+-- ===========================================================================
+
+||| s36 standing_decisions: the in-force graded decisions, as absolute row
+||| ids rendered to Nat (so a Refl fixture compares plain lists).
+standingDecisionIds : {n : Nat} -> Ledger n -> List Nat
+standingDecisionIds l = [ finToNat t | t <- allIds n, graded t ]
+  where
+    graded : Fin n -> Bool
+    graded t = inForce l t &&
+      (case entryAt l t of
+         (_ ** e) => case e.payload of
+                       PDecision (Just _) => True
+                       _                  => False)
+
+||| s37, the debt/record split -- modeled on the ONE violations-view member
+||| this model can even represent: depends_on_unknown_slug (a dangling
+||| work_depends_on antecedent; s22 deliberately leaves it unrefused, so the
+||| view is its only home). Most other members are UNREPRESENTABLE here by the
+||| model's own types (a shipped close without witness cannot construct; a
+||| Fin-typed regards cannot dangle) -- which is the model AGREEING with the
+||| views' purpose, not a transcription gap: the SQL views watch for states
+||| the SQL types permit, and this model forecloses most of them upstream.
+||| DEBT (work_item_violations' semantics): in-force dangling deps, MINUS
+||| those answered by an in-force disposition targeting them.
+danglingDepDebt : {n : Nat} -> Ledger n -> List Nat
+danglingDepDebt l = [ finToNat t | t <- allIds n, dangling t, not (disposed t) ]
+  where
+    dangling : Fin n -> Bool
+    dangling t = inForce l t &&
+      (case entryAt l t of
+         (_ ** e) => case e.payload of
+                       PWorkDepends _ ant _ => not (everOpenedAt ant)
+                       _                    => False)
+      where
+        everOpenedAt : Slug -> Bool
+        everOpenedAt s = anyB opens (allIds n)
+          where
+            opens : Fin n -> Bool
+            opens u = case entryAt l u of
+                        (_ ** e2) => case e2.payload of
+                                       PWorkOpened s' _ _ _ => s == s'
+                                       _                    => False
+    disposed : Fin n -> Bool
+    disposed t = anyB answers (allIds n)
+      where
+        answers : Fin n -> Bool
+        answers u = inForce l u &&
+          (case entryAt l u of
+             (_ ** e) => case e.payload of
+                           PViolationDisposition _ tgt _ _ => finToNat tgt == finToNat t
+                           _                               => False)
+
+||| RECORD (work_violation_history's semantics): every dangling dep EVER
+||| surfaced, disposition or not, retraction or not -- raw, never thinner
+||| than debt (s37's own invariant, here a structural consequence of the
+||| missing filters).
+danglingDepHistory : {n : Nat} -> Ledger n -> List Nat
+danglingDepHistory l = [ finToNat t | t <- allIds n, dangling t ]
+  where
+    dangling : Fin n -> Bool
+    dangling t = case entryAt l t of
+      (_ ** e) => case e.payload of
+        PWorkDepends _ ant _ => not (anyB (opens ant) (allIds n))
+        _                    => False
+      where
+        opens : Slug -> Fin n -> Bool
+        opens s u = case entryAt l u of
+                      (_ ** e2) => case e2.payload of
+                                     PWorkOpened s' _ _ _ => s == s'
+                                     _                    => False
+
+||| s40 principal standing -- the derived read (kernel.principal_standing).
+||| REVOKED DOMINATES SUSPENDED (checked first -- strict severity ordering,
+||| never event recency, s40 §3.4); PsUnregisteredLegacy (an actor with no
+||| in-force registration event) is treated as ACTIVE by the write boundary
+||| (a legacy 'author' is never bricked -- boundaryOk below).
+data Standing = PsActive | PsSuspended | PsRevoked | PsUnregisteredLegacy
+
+principalStanding : {n : Nat} -> Ledger n -> PrincipalId -> Standing
+principalStanding l p =
+  if      anyB revokedHere   (allIds n) then PsRevoked
+  else if anyB suspendedHere (allIds n) then PsSuspended
+  else if anyB registeredHere (allIds n) then PsActive
+  else PsUnregisteredLegacy
+  where
+    revokedHere : Fin n -> Bool
+    revokedHere t = inForce l t &&
+      (case entryAt l t of
+         (_ ** e) => case e.payload of
+                       PPrincipalRevoked s => s == p
+                       _                   => False)
+    suspendedHere : Fin n -> Bool
+    suspendedHere t = inForce l t &&
+      (case entryAt l t of
+         (_ ** e) => case e.payload of
+                       PPrincipalSuspended s => s == p
+                       _                     => False)
+    registeredHere : Fin n -> Bool
+    registeredHere t = inForce l t &&
+      (case entryAt l t of
+         (_ ** e) => case e.payload of
+                       PPrincipalRegistered s _ _ => s == p
+                       _                          => False)
+
+||| s40: the anchor class, read off the first in-force registration event
+||| (the model's home for the immutable-at-birth class -- see AgentClass).
+classOf : {n : Nat} -> Ledger n -> PrincipalId -> Maybe AgentClass
+classOf l p = go (allIds n)
+  where
+    go : List (Fin n) -> Maybe AgentClass
+    go [] = Nothing
+    go (t :: ts) =
+      if inForce l t
+        then case entryAt l t of
+               (_ ** e) => case e.payload of
+                             PPrincipalRegistered s c _ =>
+                               if s == p then Just c else go ts
+                             _ => go ts
+        else go ts
+
+||| s40 §3.6: which standings accept writes. unregistered-legacy is ACTIVE
+||| for write purposes (never bricked); suspended/revoked refuse.
+writeAllowed : Standing -> Bool
+writeAllowed PsActive             = True
+writeAllowed PsUnregisteredLegacy = True
+writeAllowed PsSuspended          = False
+writeAllowed PsRevoked            = False
+
+||| s39: root's own DIRECT, in-force blocks-start antecedents not yet closed
+||| (work_item_blocks_start_blockers -- direct only, not transitive, the SQL's
+||| own named LIMIT preserved).
+startBlockers : {n : Nat} -> Ledger n -> Slug -> List Slug
+startBlockers l root =
+  [ ant | (dep, ant) <- bsEdgesCur, dep == root, not (hasCloseCur l ant) ]
+  where
+    bsEdgesCur : List (Slug, Slug)
+    bsEdgesCur = concatMap edgeAt (allIds n)
+      where
+        edgeAt : Fin n -> List (Slug, Slug)
+        edgeAt t = if inForce l t
+                   then case entryAt l t of
+                          (_ ** e) => case e.payload of
+                            PWorkDepends dep ant BlocksStart => [(dep, ant)]
+                            _                                => []
+                   else []
+
+||| s39 work_startable's predicate half: no unresolved blocks-start
+||| antecedent (the open+unclaimed half of the SQL view lives in the
+||| projection-side ItemState fold this file deliberately leaves uncomputed --
+||| §4's own posture, unchanged).
+startable : {n : Nat} -> Ledger n -> Slug -> Bool
+startable l s = null (startBlockers l s)
+
+-- ===========================================================================
 -- §3  THE WORK-ITEM EVENT GRAMMAR AS A RELATIONAL WRITE BOUNDARY (R8).
 --     TRANSCRIPTION FINDING (kernel wins over the elegant rendering): the
 --     kernel's write-boundary grammar is NOT linear open->claim->close.
@@ -626,14 +920,33 @@ bcReach l from = reach n bcEdges [from] [from]
             _                                => []
     -- (entryAt defined in §2b, above the write boundary)
 
+||| Raw blocks-START reachability (s39; LWriteBoundary, same reasoning as
+||| bcReach one edge-type over -- the SEPARATE subgraph, never merged with
+||| blocks-close's, per s39 Element 2's own two grounds).
+bsReach : {n : Nat} -> Ledger n -> (from : Slug) -> List Slug
+bsReach l from = reach n bsEdges [from] [from]
+  where
+    bsEdges : List (Slug, Slug)
+    bsEdges = concatMap edgeAt (allIds n)
+      where
+        edgeAt : Fin n -> List (Slug, Slug)
+        edgeAt t = case entryAt l t of
+          (_ ** e) => case e.payload of
+            PWorkDepends dep ant BlocksStart => [(dep, ant)]
+            _                                => []
+
 ||| s29 Element C at the root: strict close needs a witnessed disposition and
 ||| an empty blocker set (IN-FORCE, via strictBlockers, §4); non-strict
-||| closes carry no premise.
+||| closes carry no premise. s38's ELSIF: a strict BOOKKEEPING close is a
+||| contradiction in terms (a judgment-free close cannot satisfy strict
+||| mode's obligation-tree requirement) -- refused exactly like strict +
+||| deferred.
 strictPremise : {n : Nat} -> Ledger n -> Slug -> (strict : Bool)
              -> ReviewDisposition -> Bool
-strictPremise l s False _          = True
-strictPremise l s True  DDeferred  = False
-strictPremise l s True  DWitnessed = null (strictBlockers l s)
+strictPremise l s False _            = True
+strictPremise l s True  DDeferred    = False
+strictPremise l s True  DBookkeeping = False
+strictPremise l s True  DWitnessed   = null (strictBlockers l s)
 
 ||| The write-boundary judgment: which appends the kernel accepts, one
 ||| constructor per licensed Payload shape. Raw-vs-derived domains kept per
@@ -643,19 +956,63 @@ strictPremise l s True  DWitnessed = null (strictBlockers l s)
 ||| quantification domains it must, rather than uniformizing them away.
 data ValidPayload : {n : Nat} -> Ledger n -> Payload Draft n -> Type where
   VProse  : ValidPayload l (PProse k)
+  ||| s36: a decision's grade is writer-supplied and unvalidated at the kernel
+  ||| (no vocabulary CHECK by ratified design) -- no premise.
+  VDecision : ValidPayload l (PDecision g)
+  ||| s37: the target is Fin-typed (a dangling disposition is unrepresentable,
+  ||| stronger than the SQL's FK); the class-word/target-class agreement is
+  ||| the SQL trigger's own deeper check, not re-derived here (noted, not
+  ||| hidden).
+  VViolationDisposition : ValidPayload l (PViolationDisposition c t r w)
   ||| regards earlier-row: already unrepresentable via Fin n (unchanged).
   VReview : ValidPayload l (PReview r d)
+  ||| s40: the four identity events. Registration freshness by NAME lives on
+  ||| the SQL anchor's UNIQUE(name) + the CLI ceremony -- this model's
+  ||| PrincipalId is the id, not the name, so name-duplicate refusal is out of
+  ||| its universe (named honestly; the SUBJECT-standing write refusals live in
+  ||| boundaryOk, entry-level, below).
+  VPrincipalRegistered : ValidPayload l (PPrincipalRegistered s c purpose)
+  VPrincipalSuspended  : ValidPayload l (PPrincipalSuspended s)
+  VPrincipalRevoked    : ValidPayload l (PPrincipalRevoked s)
+  VStandingDeclared    : ValidPayload l (PStandingDeclared s dbRole)
+  ||| s41 D-3: a self-relation is refused for every relation value; a
+  ||| same-natural-person row must be canonically ordered (subject id <
+  ||| object id -- immutable ids, so the verdict cannot flip; the kernel's
+  ||| plain CHECK, here a So premise).
+  VRelate : (0 notSelf : So (not (s == o)))
+         -> (0 canonical : So (not (rel == SameNaturalPerson) || (s < o)))
+         -> ValidPayload l (PRelationAsserted s rel o active)
+  VRoleBound : ValidPayload l (PRoleBound s roleName active)
+  ||| s41 D-3: agent keys stay refused -- a key binding demands a HUMAN
+  ||| subject (classOf reads the registration event).
+  VKeyBound : (0 human : So (classOf l s == Just ACHuman))
+           -> ValidPayload l (PKeyBound s fp active)
+  VCompetenceGranted : ValidPayload l (PCompetenceGranted s activity active v)
   ||| An opening act: the slug must be fresh in RAW history (slug burned --
   ||| no constructor exists that re-opens; a genuine redo is a NEW slug).
   VOpen   : (0 fresh : So (not (everOpened l s)))
          -> ValidPayload l (PWorkOpened s title parent comp)
-  ||| Claim: the slug must have an opening act (raw read).
+  ||| Claim: the slug must have an opening act (raw read) AND -- s39 -- no
+  ||| unresolved direct blocks-start antecedent (the claim-time precondition
+  ||| foreclosure; in-force edges, antecedent closed, via startBlockers).
   VClaim  : (0 opened : So (everOpened l s))
+         -> (0 startOk : So (null (startBlockers l s)))
          -> ValidPayload l (PWorkClaimed s)
+  ||| s39: a blocks-start edge refuses self-edge, dangling antecedent, and a
+  ||| cycle in its OWN raw subgraph (bsReach) -- mirroring VDepBC one
+  ||| edge-type over, the two subgraphs deliberately separate.
+  VDepBS  : (0 opened    : So (everOpened l s))
+         -> (0 notSelf   : So (not (ant == s)))
+         -> (0 antOpened : So (everOpened l ant))
+         -> (0 acyclic   : So (not (elem s (bsReach l ant))))
+         -> ValidPayload l (PWorkDepends s ant (Just BlocksStart))
   ||| informs / untyped keep s22's deliberately lax posture: dangling
   ||| antecedent NOT refused (the violations view reads it) -- no ant premise.
+  ||| (s39: the lax premise now excludes BOTH gating edge types -- a
+  ||| blocks-start edge routes through VDepBS below, exactly as blocks-close
+  ||| routes through VDepBC.)
   VDepLax : (0 opened : So (everOpened l s))
-         -> (0 lax : So (not (et == Just BlocksClose)))
+         -> (0 lax : So (not (et == Just BlocksClose || et == Just BlocksStart)))
          -> ValidPayload l (PWorkDepends s ant et)
   ||| s30: blocks-close refuses self-edge, dangling antecedent, and a cycle in
   ||| the RAW blocks-close subgraph, at construction.
@@ -703,21 +1060,74 @@ gradeLadder (Just (rs, ra)) (Just (ts, ta)) =
 
 recordPayload : {n : Nat} -> Ledger n -> Maybe Stamp -> Payload Draft n -> Payload Recorded n
 recordPayload l st (PProse k)            = PProse k
+recordPayload l st (PDecision g)         = PDecision g          -- s36: writer-supplied, no trigger
+recordPayload l st (PViolationDisposition c t r w) = PViolationDisposition c t r w
 recordPayload l st (PReview r (MkReviewDetail v i b a ())) =
   let tgt = case entryAt l r of (_ ** e) => e.stamp
   in PReview r (MkReviewDetail v i b a (gradeLadder (stampPair st) (stampPair tgt)))
+recordPayload l st (PPrincipalRegistered s c p) = PPrincipalRegistered s c p
+recordPayload l st (PPrincipalSuspended s)      = PPrincipalSuspended s
+recordPayload l st (PPrincipalRevoked s)        = PPrincipalRevoked s
+recordPayload l st (PStandingDeclared s r)      = PStandingDeclared s r
+recordPayload l st (PRelationAsserted s r o a)  = PRelationAsserted s r o a
+recordPayload l st (PRoleBound s r a)           = PRoleBound s r a
+recordPayload l st (PKeyBound s f a)            = PKeyBound s f a
+recordPayload l st (PCompetenceGranted s act a v) = PCompetenceGranted s act a v
 recordPayload l st (PWorkOpened s t p c) = PWorkOpened s t p c
 recordPayload l st (PWorkClaimed s)      = PWorkClaimed s
 recordPayload l st (PWorkDepends s a Nothing)   = PWorkDepends s a Informs  -- s30 default
 recordPayload l st (PWorkDepends s a (Just et)) = PWorkDepends s a et
 recordPayload l st (PWorkClosed s r w d f b)    = PWorkClosed s r w d f b
 
+||| s40/s41: the ENTRY-LEVEL premise family (facts that live on the row, not
+||| the payload alone -- exactly the checks the SQL's set_actor /
+||| validate_independence / inactive-needs-supersedes CHECK make against the
+||| whole row):
+|||   (a) s40 strict attribution: the actor's standing accepts writes
+|||       (suspended/revoked refuse; unregistered-legacy is never bricked).
+|||       The DECLARED-DEFAULT half (a NULL actor resolving via the standing
+|||       declaration) is not representable here -- Entry.actor is total, the
+|||       model's writer always names a principal; the resolution mark
+|||       (principal_actor_resolution) is likewise a recording detail below
+|||       this model's altitude. Named, not hidden.
+|||   (b) s41 D-1: an INACTIVE binding row must supersede something (a
+|||       retraction that retracts nothing is unrepresentable at commit).
+|||   (c) s41 D-6: a managerial/financial independence claim demands a HUMAN
+|||       actor (the ratified human-attested scoping; technical stays
+|||       stamp-witnessed, the s21 gate -- which this model already carries as
+|||       the distinctness question, out of this boolean's scope).
+boundaryOk : {n : Nat} -> Ledger n -> Entry Draft n -> Bool
+boundaryOk l e =
+     writeAllowed (principalStanding l e.actor)
+  && bindingSupersedesOk
+  && reviewIndependenceOk
+  where
+    bindingSupersedesOk : Bool
+    bindingSupersedesOk = case e.payload of
+      PRelationAsserted _ _ _ False  => isJust e.supersedes
+      PRoleBound _ _ False           => isJust e.supersedes
+      PKeyBound _ _ False            => isJust e.supersedes
+      PCompetenceGranted _ _ False _ => isJust e.supersedes
+      _                              => True
+    reviewIndependenceOk : Bool
+    reviewIndependenceOk = case e.payload of
+      PReview _ d => case d.independence of
+                       Managerial => classOf l e.actor == Just ACHuman
+                       Financial  => classOf l e.actor == Just ACHuman
+                       Technical  => True
+      _           => True
+
 ||| The sanctioned growth step: the write boundary as the ONLY exported
 ||| introduction form for a bigger ledger (in a multi-module rendering (:<)
 ||| would be hidden and `append` the API -- trigger-as-smart-constructor).
+||| s40/s41: appends now ALSO demand the entry-level premise family
+||| (boundaryOk) -- the payload judgment alone no longer exhausts the write
+||| boundary, exactly as the SQL's own chain (set_actor's standing refusals,
+||| the inactive-needs-supersedes CHECK, D-6) runs beside validate_*.
 append : {n : Nat} -> (l : Ledger n) -> (e : Entry Draft n)
-      -> (0 ok : ValidPayload l e.payload) -> Ledger (S n)
-append l e _ = l :< MkEntry e.session e.statement e.actor e.stamp e.supersedes
+      -> (0 ok : ValidPayload l e.payload)
+      -> (0 entryOk : So (boundaryOk l e)) -> Ledger (S n)
+append l e _ _ = l :< MkEntry e.session e.statement e.actor e.stamp e.supersedes
                           e.amends e.answers e.enacts (recordPayload l e.stamp e.payload)
 
 -- ===========================================================================
@@ -1077,3 +1487,197 @@ r33b : ValidPayload Autoharn.worldE
          (PWorkClosed "p" RDropped Nothing DWitnessed
             (MkNonEmptyText "row 1" Oh) False)
 r33b = VClose Oh Oh
+
+-- ===========================================================================
+-- §7b  THE s36-s41 PARITY FIXTURES (both polarities per new mechanism; a
+--      `failing` block is the refusal witnessed at elaboration time, a Refl
+--      is the derivation computed on a concrete world at compile time).
+-- ===========================================================================
+
+||| Draft-entry maker for the entry-level (boundaryOk) fixtures.
+mkD : PrincipalId -> Maybe (Fin n) -> Payload Draft n -> Entry Draft n
+mkD a sup p = MkEntry "" "" a Nothing sup Nothing Nothing [] p
+
+-- s36: standing decisions -- graded in-force decisions only, retraction drops.
+worldS36 : Ledger 2
+worldS36 = Lin :< mkE 1 Nothing (PDecision (Just "durable"))
+               :< mkE 1 Nothing (PDecision Nothing)
+
+s36a : standingDecisionIds Autoharn.worldS36 = [0]
+s36a = Refl
+
+worldS36b : Ledger 3
+worldS36b = worldS36 :< mkE 1 (Just 0) (PProse KNote)   -- retract the graded one
+
+s36b : standingDecisionIds Autoharn.worldS36b = []
+s36b = Refl
+
+-- s37: the debt/record split on the one representable member (dangling dep).
+worldVD : Ledger 2
+worldVD = Lin :< mkE 1 Nothing (PWorkOpened "d" "t" Nothing False)
+              :< mkE 1 Nothing (PWorkDepends "d" "ghost" Informs)
+
+s37a1 : danglingDepDebt Autoharn.worldVD = [1]      -- open debt
+s37a1 = Refl
+s37a2 : danglingDepHistory Autoharn.worldVD = [1]   -- record agrees while unanswered
+s37a2 = Refl
+
+worldVD2 : Ledger 3
+worldVD2 = worldVD :< mkE 2 Nothing
+             (PViolationDisposition "depends_on_unknown_slug" 1 True Nothing)
+
+s37b1 : danglingDepDebt Autoharn.worldVD2 = []      -- disposition answers the debt...
+s37b1 = Refl
+s37b2 : danglingDepHistory Autoharn.worldVD2 = [1]  -- ...the record never thins
+s37b2 = Refl
+
+-- s38 GREEN: a bookkeeping close carries a commit-shaped ref (the Pi demands it).
+bookkeepingClose : Payload Recorded 3
+bookkeepingClose = PWorkClosed "spike" RDropped Nothing DBookkeeping
+                     (MkCommitRef "commit:abc1234" Oh) False
+
+-- s38 RED: a non-commit-shaped ref does not elaborate (isCommitShaped = False,
+-- So is uninhabited).
+failing
+  badBookkeeping : Payload Recorded 3
+  badBookkeeping = PWorkClosed "spike" RDropped Nothing DBookkeeping
+                     (MkCommitRef "not-a-commit" Oh) False
+
+-- s38 RED: strict + bookkeeping is a contradiction in terms (the s38 ELSIF) --
+-- strictPremise evaluates False, So uninhabited.
+failing
+  r38 : ValidPayload Autoharn.worldA
+          (PWorkClosed "a" RDropped Nothing DBookkeeping
+             (MkCommitRef "commit:abc1234" Oh) True)
+  r38 = VClose Oh Oh
+
+-- s39: blocks-start claim-time foreclosure.
+worldBS : Ledger 3
+worldBS = Lin :< mkE 1 Nothing (PWorkOpened "p" "antecedent" Nothing False)
+              :< mkE 1 Nothing (PWorkOpened "q" "dependent" Nothing False)
+              :< mkE 1 Nothing (PWorkDepends "q" "p" BlocksStart)
+
+-- RED: claiming "q" while its blocks-start antecedent "p" is not closed.
+failing
+  r39a : ValidPayload Autoharn.worldBS (PWorkClaimed "q")
+  r39a = VClaim Oh Oh
+
+-- GREEN: "p" itself has no antecedents -- vacuously claimable (work_startable's
+-- own NOT EXISTS posture).
+r39b : ValidPayload Autoharn.worldBS (PWorkClaimed "p")
+r39b = VClaim Oh Oh
+
+worldBS2 : Ledger 4
+worldBS2 = worldBS :< mkE 1 Nothing
+             (PWorkClosed "p" RDropped Nothing DDeferred Nothing False)
+
+-- GREEN: the antecedent closed -- the same claim now constructs.
+r39c : ValidPayload Autoharn.worldBS2 (PWorkClaimed "q")
+r39c = VClaim Oh Oh
+
+-- RED: a blocks-start self-edge is refused (s39, mirroring s30's own).
+failing
+  r39d : ValidPayload Autoharn.worldBS (PWorkDepends "q" "q" (Just BlocksStart))
+  r39d = VDepBS Oh Oh Oh Oh
+
+-- s40: standing, both construction orders, revoked dominates; write refusals.
+-- worldP: principal 2 (human) and 3 (model) registered; 3 suspended THEN revoked.
+worldP : Ledger 4
+worldP = Lin :< mkE 1 Nothing (PPrincipalRegistered 2 ACHuman (MkNonEmptyText "human fixture" Oh))
+             :< mkE 1 Nothing (PPrincipalRegistered 3 ACModel (MkNonEmptyText "model fixture" Oh))
+             :< mkE 1 Nothing (PPrincipalSuspended 3)
+             :< mkE 1 Nothing (PPrincipalRevoked 3)
+
+-- worldQ: the SAME two events for 3 in the OPPOSITE order (revoke then suspend).
+worldQ : Ledger 4
+worldQ = Lin :< mkE 1 Nothing (PPrincipalRegistered 2 ACHuman (MkNonEmptyText "human fixture" Oh))
+             :< mkE 1 Nothing (PPrincipalRegistered 3 ACModel (MkNonEmptyText "model fixture" Oh))
+             :< mkE 1 Nothing (PPrincipalRevoked 3)
+             :< mkE 1 Nothing (PPrincipalSuspended 3)
+
+p40a : principalStanding Autoharn.worldP 3 = PsRevoked   -- suspend-then-revoke
+p40a = Refl
+p40b : principalStanding Autoharn.worldQ 3 = PsRevoked   -- revoke-then-suspend: same verdict
+p40b = Refl
+p40c : principalStanding Autoharn.worldP 2 = PsActive
+p40c = Refl
+p40d : principalStanding Autoharn.worldP 1 = PsUnregisteredLegacy  -- the legacy anchor
+p40d = Refl
+
+-- s40 write boundary: a revoked actor's entry fails boundaryOk; the legacy
+-- anchor (actor 1, no registration event) stays writable -- never bricked.
+b40a : boundaryOk Autoharn.worldP (mkD 3 Nothing (PProse KNote)) = False
+b40a = Refl
+b40b : boundaryOk Autoharn.worldP (mkD 1 Nothing (PProse KNote)) = True
+b40b = Refl
+
+-- worldR: both classes registered, nobody suspended -- the s41 fixtures' base.
+worldR : Ledger 2
+worldR = Lin :< mkE 1 Nothing (PPrincipalRegistered 2 ACHuman (MkNonEmptyText "human fixture" Oh))
+             :< mkE 1 Nothing (PPrincipalRegistered 3 ACModel (MkNonEmptyText "model fixture" Oh))
+
+-- s41 GREEN: a key binds to a HUMAN subject.
+k41a : ValidPayload Autoharn.worldR
+         (PKeyBound 2 (MkFingerprint "ABCDEF0123456789ABCDEF0123456789ABCDEF01" Oh) True)
+k41a = VKeyBound Oh
+
+-- s41 RED: an agent key is refused (classOf = Just ACModel, So uninhabited).
+failing
+  k41b : ValidPayload Autoharn.worldR
+           (PKeyBound 3 (MkFingerprint "ABCDEF0123456789ABCDEF0123456789ABCDEF01" Oh) True)
+  k41b = VKeyBound Oh
+
+-- s41 RED: a malformed fingerprint does not elaborate (shape refinement).
+failing
+  k41c : Fingerprint
+  k41c = MkFingerprint "abc" Oh
+
+-- s41 GREEN: canonical same-natural-person (subject 2 < object 3).
+r41a : ValidPayload Autoharn.worldR (PRelationAsserted 2 SameNaturalPerson 3 True)
+r41a = VRelate Oh Oh
+
+-- s41 RED: the non-canonical ordering is refused (the kernel's plain CHECK).
+failing
+  r41b : ValidPayload Autoharn.worldR (PRelationAsserted 3 SameNaturalPerson 2 True)
+  r41b = VRelate Oh Oh
+
+-- s41 RED: a self-relation is refused for every relation value.
+failing
+  r41c : ValidPayload Autoharn.worldR (PRelationAsserted 2 Succeeds 2 True)
+  r41c = VRelate Oh Oh
+
+-- s41 GREEN: an active competence grant carries (band, basis) mandatorily.
+c41a : ValidPayload Autoharn.worldR
+         (PCompetenceGranted 3 (MkNonEmptyText "sql-review" Oh) True
+            (MkNonEmptyText "B" Oh, MkNonEmptyText "track record" Oh))
+c41a = VCompetenceGranted
+
+-- s41 RED: a WITHDRAWAL carrying band/basis is unrepresentable BY TYPE
+-- (CompetenceValueF False = (); the pair does not even typecheck -- stronger
+-- than the SQL's construction-time refusal, noted at CompetenceValueF).
+failing
+  c41b : Payload Recorded 2
+  c41b = PCompetenceGranted 3 (MkNonEmptyText "sql-review" Oh) False
+           (MkNonEmptyText "B" Oh, MkNonEmptyText "track record" Oh)
+
+-- s41 entry-level: an INACTIVE binding row without a supersedes target fails
+-- boundaryOk (inactive-from-birth unrepresentable at commit); with one, it
+-- passes.
+b41a : boundaryOk Autoharn.worldR
+         (mkD 1 Nothing (PRoleBound 3 (MkNonEmptyText "scout" Oh) False)) = False
+b41a = Refl
+b41b : boundaryOk Autoharn.worldR
+         (mkD 1 (Just 0) (PRoleBound 3 (MkNonEmptyText "scout" Oh) False)) = True
+b41b = Refl
+
+-- s41 D-6 (human-attested scoping): a managerial claim by a MODEL actor fails
+-- boundaryOk; by the HUMAN actor it passes; technical stays class-blind.
+b41c : boundaryOk Autoharn.worldR
+         (mkD 3 Nothing (PReview 0 (MkReviewDetail Attest Managerial "b" Nothing ()))) = False
+b41c = Refl
+b41d : boundaryOk Autoharn.worldR
+         (mkD 2 Nothing (PReview 0 (MkReviewDetail Attest Managerial "b" Nothing ()))) = True
+b41d = Refl
+b41e : boundaryOk Autoharn.worldR
+         (mkD 3 Nothing (PReview 0 (MkReviewDetail Attest Technical "b" Nothing ()))) = True
+b41e = Refl

@@ -193,6 +193,29 @@
 #   led principal revoke <name> [reason...]    same, terminally (principal_revoked; revoked
 #                                              dominates suspended in the derived standing).
 #
+#   led principal relate <subj> <rel> <obj>    assert a typed principal<->principal relation
+#                                              (acts-for | dispatched-by | same-natural-person |
+#                                              succeeds -- s41 D-2's closed vocabulary; same-
+#                                              natural-person is canonicalized to lower-id
+#                                              subject, kernel-CHECKed). Duplicate active
+#                                              assertions refused.
+#   led principal unrelate <subj> <rel> <obj> --supersedes <id>
+#                                              retract it (a superseding active=false row
+#                                              restating the triple; mismatched targets refused).
+#   led principal bind-role <name> --role "<r>"          / release-role ... --supersedes <id>
+#                                              organizational role bindings (FREE non-empty role
+#                                              names -- ratified §9(c); recordable, NOT gating).
+#   led principal bind-key <name> --fingerprint "<fp>"   / revoke-key ... --supersedes <id>
+#                                              OpenPGP v4 key bindings (human subjects only --
+#                                              agent keys refused; the empty-until-ceremony slot,
+#                                              key GENERATION stays deferred by standing ruling).
+#   led principal grant-competence <name> --activity "<a>" --band "<b>" --basis "<c>" [--supersedes <id>]
+#   led principal withdraw-competence <name> --activity "<a>" --supersedes <id>
+#                                              G13 competence records (recordable, NOT gating in
+#                                              v1; band/basis free text -- a RATIFIED PLACEHOLDER,
+#                                              basis §9(g) loud note). All eight verbs honor
+#                                              --event-time and refuse the other shared flags.
+#
 #   led review <entry-id> <verdict> <independence> [--antecedent id] <statement...>
 #                                              countersign an earlier row. verdict:
 #                                              attest|attest_with_reservations|refuse. independence:
@@ -1174,8 +1197,16 @@ SQL
 SQL
       ;;
     relate|unrelate|bind-role|release-role|bind-key|revoke-key|grant-competence|withdraw-competence)
-      # s41 verbs -- live-checked so an s40-only kernel refuses with teach-text instead of a
-      # bare undefined-column error (the s41 commit of this same family implements them).
+      # s41 binding/relation verbs (kernel/lineage/s41-principal-bindings-and-relations.sql
+      # D-1a/D-2). Live-checked so an s40-only kernel refuses with teach-text instead of a bare
+      # undefined-column error. Shared discipline, every verb: resolve_actor; --event-time
+      # honored, every other shared channel refused (refuse_shared_flags_for_principal_verb);
+      # duplicate-ACTIVE guards and supersession-target checks run against the D-5 views (the
+      # definition of "active" -- a row's own principal_binding_active column read in isolation
+      # never changes once set, even after superseding); a retraction restates its identity
+      # fields and a mismatched restated value is REFUSED, never silently written as a new,
+      # unrelated fact wearing a supersession pointer (value-continuity, CLI-side by ratified
+      # design -- the kernel's own CHECK machinery cannot express a cross-row lookup; s41 §8).
       has_s41=$(psql -h "$PGHOST" -d "$PGDB" -tAc \
         "SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = '${SCHEMA}' AND table_name = 'ledger' AND column_name = 'principal_binding_active');")
       if [ "$has_s41" != "t" ]; then
@@ -1185,11 +1216,262 @@ SQL
         echo "  carries kernel/lineage/s41-principal-bindings-and-relations.sql." >&2
         exit 1
       fi
-      echo "led principal ${sub}: REFUSED -- not implemented by this template revision (the" >&2
-      echo "  s41 verb set lands with kernel/lineage/s41-principal-bindings-and-relations.sql's" >&2
-      echo "  own commit; if you see this on an s41 kernel, the checkout serving this template" >&2
-      echo "  is older than the kernel it is talking to -- update the autoharn checkout)." >&2
-      exit 1
+      refuse_shared_flags_for_principal_verb "principal ${sub}"
+      resolve_actor
+      # one shared INSERT point for all eight verbs (ADR-0012 P1: one writer, eight callers).
+      # Args via psql -v binds; empty string -> NULL via NULLIF, matching the generic path.
+      _principal_binding_insert() {
+        # $1 kind, $2 statement, $3 subject-id, $4 active(t/f), $5 supersedes(or ''),
+        # $6 object-id, $7 relation, $8 role-name, $9 fingerprint, $10 activity, $11 band, $12 basis
+        psql -h "$PGHOST" -d "$PGDB" -v ON_ERROR_STOP=1 \
+          -v kind_val="$1" -v stmt="$2" -v pid="$3" -v active="$4" -v sup="$5" \
+          -v obj="$6" -v rel="$7" -v role_name="$8" -v fp="$9" \
+          -v activity="${10}" -v band="${11}" -v basis="${12}" \
+          -v actor_name="$actor_name" -v event_time="$event_time" <<SQL
+          SET ROLE ${ROLE};
+          SET search_path = ${SCHEMA}, ${KERNEL};
+          INSERT INTO ${SCHEMA}.ledger
+              (kind, statement, actor, principal_subject, principal_binding_active, supersedes,
+               principal_object, principal_relation, principal_role_name,
+               principal_key_fingerprint, principal_competence_activity,
+               principal_competence_band, principal_competence_basis, event_declared_ts)
+          VALUES (:'kind_val', :'stmt',
+                  (SELECT id FROM principal WHERE name = NULLIF(:'actor_name', '')),
+                  :'pid'::bigint, :'active'::boolean,
+                  NULLIF(:'sup', '')::bigint,
+                  NULLIF(:'obj', '')::bigint,
+                  NULLIF(:'rel', ''),
+                  NULLIF(:'role_name', ''),
+                  NULLIF(:'fp', ''),
+                  NULLIF(:'activity', ''),
+                  NULLIF(:'band', ''),
+                  NULLIF(:'basis', ''),
+                  NULLIF(:'event_time', '')::timestamptz);
+SQL
+      }
+      case "$sub" in
+        relate|unrelate)
+          # led principal relate   <subject> <relation> <object>
+          # led principal unrelate <subject> <relation> <object> --supersedes <old-id>
+          subj_name="${1:-}"; rel="${2:-}"; obj_name="${3:-}"; shift 3 2>/dev/null || true
+          sup_id=""
+          while [ $# -gt 0 ]; do
+            case "$1" in
+              --supersedes) sup_id="${2:-}"; shift 2 ;;
+              *) echo "led principal ${sub}: REFUSED -- unrecognized argument '$1'." >&2; exit 1 ;;
+            esac
+          done
+          if [ -z "$subj_name" ] || [ -z "$rel" ] || [ -z "$obj_name" ]; then
+            echo "usage: led principal relate <subject> <acts-for|dispatched-by|same-natural-person|succeeds> <object>" >&2
+            echo "       led principal unrelate <subject> <relation> <object> --supersedes <old-row-id>" >&2
+            exit 1
+          fi
+          case "$rel" in
+            acts-for|dispatched-by|same-natural-person|succeeds) : ;;
+            *) echo "led principal ${sub}: REFUSED -- '${rel}' is not a relation (closed vocabulary: acts-for, dispatched-by, same-natural-person, succeeds -- s41 D-2)." >&2; exit 1 ;;
+          esac
+          subj_id=$(_principal_subject_id "$subj_name"); obj_id=$(_principal_subject_id "$obj_name")
+          if [ -z "$subj_id" ] || [ -z "$obj_id" ]; then
+            echo "led principal ${sub}: REFUSED -- both endpoints must be registered principals ('${subj_name}' -> id '${subj_id:-none}', '${obj_name}' -> id '${obj_id:-none}')." >&2
+            exit 1
+          fi
+          if [ "$subj_id" = "$obj_id" ]; then
+            echo "led principal ${sub}: REFUSED -- a principal cannot stand in relation '${rel}' to itself (s41 D-3's self-edge refusal; the kernel refuses this too)." >&2
+            exit 1
+          fi
+          # CANONICALIZATION (s41 D-2, kernel-backstopped by the principal_snp_canonical_order
+          # CHECK): same-natural-person is symmetric, so BOTH relate and unrelate normalize to
+          # lower-id-subject before writing or comparing -- a caller never needs to remember
+          # which order was originally used.
+          if [ "$rel" = "same-natural-person" ] && [ "$subj_id" -gt "$obj_id" ]; then
+            _t="$subj_id"; subj_id="$obj_id"; obj_id="$_t"
+            _t="$subj_name"; subj_name="$obj_name"; obj_name="$_t"
+            echo "led principal ${sub}: note -- same-natural-person is symmetric; canonicalizing to subject='${subj_name}' (lower id), object='${obj_name}'."
+          fi
+          cur_id=$(psql -h "$PGHOST" -d "$PGDB" -tAq -v s="$subj_id" -v r="$rel" -v o="$obj_id" <<SQL
+            SET ROLE ${ROLE};
+            SET search_path = ${SCHEMA}, ${KERNEL};
+            SELECT row_id FROM ${SCHEMA}.principal_relations
+            WHERE subject = :'s'::bigint AND relation = :'r' AND object = :'o'::bigint
+            ORDER BY row_id DESC LIMIT 1;
+SQL
+          )
+          if [ "$sub" = "relate" ]; then
+            if [ -n "$cur_id" ]; then
+              echo "led principal relate: REFUSED -- an active '${rel}' assertion already exists for this exact pair (row ${cur_id}); no duplicate active truth. To retract it: ./led principal unrelate ${subj_name} ${rel} ${obj_name} --supersedes ${cur_id}" >&2
+              exit 1
+            fi
+            _principal_binding_insert principal_relation_asserted \
+              "principal '${subj_name}' ${rel} principal '${obj_name}' (relation asserted)" \
+              "$subj_id" t "" "$obj_id" "$rel" "" "" "" "" ""
+          else
+            if [ -z "$sup_id" ]; then
+              echo "led principal unrelate: REFUSED -- --supersedes <old-row-id> is mandatory (a retraction supersedes the assertion it retracts; find the id in principal_relations.row_id)." >&2
+              exit 1
+            fi
+            if [ "$cur_id" != "$sup_id" ]; then
+              echo "led principal unrelate: REFUSED -- row '${sup_id}' is not the active '${rel}' assertion for '${subj_name}' -> '${obj_name}' (the view shows ${cur_id:-none}). A retraction must name the live assertion of the SAME triple -- a mismatched target is refused, never silently written (value-continuity, s41 D-2/D-3)." >&2
+              exit 1
+            fi
+            _principal_binding_insert principal_relation_asserted \
+              "relation retracted: principal '${subj_name}' no longer ${rel} principal '${obj_name}'" \
+              "$subj_id" f "$sup_id" "$obj_id" "$rel" "" "" "" "" ""
+          fi
+          ;;
+        bind-role|release-role)
+          name="${1:-}"; shift 1 2>/dev/null || true
+          role_name=""; sup_id=""
+          while [ $# -gt 0 ]; do
+            case "$1" in
+              --role) role_name="${2:-}"; shift 2 ;;
+              --supersedes) sup_id="${2:-}"; shift 2 ;;
+              *) echo "led principal ${sub}: REFUSED -- unrecognized argument '$1'." >&2; exit 1 ;;
+            esac
+          done
+          if [ -z "$name" ] || [ -z "$role_name" ]; then
+            echo "usage: led principal bind-role <name> --role \"<role-name>\"" >&2
+            echo "       led principal release-role <name> --role \"<role-name>\" --supersedes <old-row-id>" >&2
+            echo "  (role names are FREE non-empty text -- organizational configuration, ratified basis §9(c); nothing kernel-side enumerates them)" >&2
+            exit 1
+          fi
+          pid=$(_principal_subject_id "$name")
+          [ -z "$pid" ] && { echo "led principal ${sub}: REFUSED -- '${name}' is not a registered principal." >&2; exit 1; }
+          cur_id=$(psql -h "$PGHOST" -d "$PGDB" -tAq -v p="$pid" -v r="$role_name" <<SQL
+            SET ROLE ${ROLE};
+            SET search_path = ${SCHEMA}, ${KERNEL};
+            SELECT row_id FROM ${SCHEMA}.principal_role_bindings
+            WHERE subject = :'p'::bigint AND role_name = :'r'
+            ORDER BY row_id DESC LIMIT 1;
+SQL
+          )
+          if [ "$sub" = "bind-role" ]; then
+            [ -n "$sup_id" ] && { echo "led principal bind-role: REFUSED -- --supersedes belongs to release-role (release first to rebind the same role)." >&2; exit 1; }
+            if [ -n "$cur_id" ]; then
+              echo "led principal bind-role: REFUSED -- '${name}' already holds an active '${role_name}' binding (row ${cur_id}); no duplicate active truth. Bind a DIFFERENT role, or release first: ./led principal release-role ${name} --role \"${role_name}\" --supersedes ${cur_id}" >&2
+              exit 1
+            fi
+            _principal_binding_insert principal_role_bound \
+              "principal '${name}' bound to role '${role_name}'" \
+              "$pid" t "" "" "" "$role_name" "" "" "" ""
+          else
+            [ -z "$sup_id" ] && { echo "led principal release-role: REFUSED -- --supersedes <old-row-id> is mandatory (find it in principal_role_bindings.row_id)." >&2; exit 1; }
+            if [ "$cur_id" != "$sup_id" ]; then
+              echo "led principal release-role: REFUSED -- row '${sup_id}' is not the active '${role_name}' binding for '${name}' (the view shows ${cur_id:-none}). The release restates the SAME role name its target carried -- a mismatched value or an already-inactive target is refused (value-continuity, s41 D-2)." >&2
+              exit 1
+            fi
+            _principal_binding_insert principal_role_bound \
+              "role binding released: principal '${name}' no longer bound to role '${role_name}'" \
+              "$pid" f "$sup_id" "" "" "$role_name" "" "" "" ""
+          fi
+          ;;
+        bind-key|revoke-key)
+          name="${1:-}"; shift 1 2>/dev/null || true
+          fp=""; sup_id=""
+          while [ $# -gt 0 ]; do
+            case "$1" in
+              --fingerprint) fp="${2:-}"; shift 2 ;;
+              --supersedes) sup_id="${2:-}"; shift 2 ;;
+              *) echo "led principal ${sub}: REFUSED -- unrecognized argument '$1'." >&2; exit 1 ;;
+            esac
+          done
+          if [ -z "$name" ] || [ -z "$fp" ]; then
+            echo "usage: led principal bind-key <name> --fingerprint \"<40-uppercase-hex OpenPGP v4 fingerprint>\"" >&2
+            echo "       led principal revoke-key <name> --fingerprint \"<fp>\" --supersedes <old-row-id>" >&2
+            echo "  (human principals only -- agent keys stay refused, MAINT-GPG-TRUST-LAYER.md §6; the" >&2
+            echo "   binding is the empty-until-ceremony slot -- key GENERATION stays deferred by standing ruling)" >&2
+            exit 1
+          fi
+          pid=$(_principal_subject_id "$name")
+          [ -z "$pid" ] && { echo "led principal ${sub}: REFUSED -- '${name}' is not a registered principal." >&2; exit 1; }
+          cur_id=$(psql -h "$PGHOST" -d "$PGDB" -tAq -v p="$pid" -v f="$fp" <<SQL
+            SET ROLE ${ROLE};
+            SET search_path = ${SCHEMA}, ${KERNEL};
+            SELECT row_id FROM ${SCHEMA}.principal_keys
+            WHERE subject = :'p'::bigint AND fingerprint = :'f'
+            ORDER BY row_id DESC LIMIT 1;
+SQL
+          )
+          if [ "$sub" = "bind-key" ]; then
+            if [ -n "$cur_id" ]; then
+              echo "led principal bind-key: REFUSED -- this exact fingerprint is already actively bound to '${name}' (row ${cur_id}); no duplicate active truth." >&2
+              exit 1
+            fi
+            _principal_binding_insert principal_key_bound \
+              "OpenPGP key ${fp} bound to principal '${name}'" \
+              "$pid" t "" "" "" "" "$fp" "" "" ""
+          else
+            [ -z "$sup_id" ] && { echo "led principal revoke-key: REFUSED -- --supersedes <old-row-id> is mandatory (find it in principal_keys.row_id)." >&2; exit 1; }
+            if [ "$cur_id" != "$sup_id" ]; then
+              echo "led principal revoke-key: REFUSED -- row '${sup_id}' is not the active binding of this exact fingerprint for '${name}' (the view shows ${cur_id:-none}). The revocation restates the SAME fingerprint its target carried -- a mismatch or an already-inactive target is refused (value-continuity, s41 D-2)." >&2
+              exit 1
+            fi
+            _principal_binding_insert principal_key_bound \
+              "key binding revoked: OpenPGP key ${fp} no longer bound to principal '${name}'" \
+              "$pid" f "$sup_id" "" "" "" "$fp" "" "" ""
+          fi
+          ;;
+        grant-competence|withdraw-competence)
+          name="${1:-}"; shift 1 2>/dev/null || true
+          activity=""; band=""; basis=""; sup_id=""
+          while [ $# -gt 0 ]; do
+            case "$1" in
+              --activity) activity="${2:-}"; shift 2 ;;
+              --band) band="${2:-}"; shift 2 ;;
+              --basis) basis="${2:-}"; shift 2 ;;
+              --supersedes) sup_id="${2:-}"; shift 2 ;;
+              *) echo "led principal ${sub}: REFUSED -- unrecognized argument '$1'." >&2; exit 1 ;;
+            esac
+          done
+          if [ -z "$name" ] || [ -z "$activity" ]; then
+            echo "usage: led principal grant-competence <name> --activity \"<a>\" --band \"<b>\" --basis \"<c>\" [--supersedes <old-row-id>]" >&2
+            echo "       led principal withdraw-competence <name> --activity \"<a>\" --supersedes <old-row-id>" >&2
+            echo "  (G13's competence record -- recordable, NOT gating in v1; band/basis are free text v1," >&2
+            echo "   a RATIFIED PLACEHOLDER awaiting a real band system -- basis §9(g)'s loud note)" >&2
+            exit 1
+          fi
+          pid=$(_principal_subject_id "$name")
+          [ -z "$pid" ] && { echo "led principal ${sub}: REFUSED -- '${name}' is not a registered principal." >&2; exit 1; }
+          cur_id=$(psql -h "$PGHOST" -d "$PGDB" -tAq -v p="$pid" -v a="$activity" <<SQL
+            SET ROLE ${ROLE};
+            SET search_path = ${SCHEMA}, ${KERNEL};
+            SELECT row_id FROM ${SCHEMA}.principal_competences
+            WHERE subject = :'p'::bigint AND activity = :'a'
+            ORDER BY row_id DESC LIMIT 1;
+SQL
+          )
+          if [ "$sub" = "grant-competence" ]; then
+            if [ -z "$band" ] || [ -z "$basis" ]; then
+              echo "led principal grant-competence: REFUSED -- --band and --basis are mandatory on a grant (G13's value fields; forbidden only on a withdrawal)." >&2
+              exit 1
+            fi
+            if [ -n "$cur_id" ] && [ -z "$sup_id" ]; then
+              echo "led principal grant-competence: REFUSED -- an active grant already exists for '${name}' / activity '${activity}' (row ${cur_id}); no duplicate active truth. To correct its band/basis, re-grant WITH --supersedes ${cur_id} (the s39-depends-correction idiom); to withdraw it: ./led principal withdraw-competence ${name} --activity \"${activity}\" --supersedes ${cur_id}" >&2
+              exit 1
+            fi
+            if [ -n "$sup_id" ] && [ "$cur_id" != "$sup_id" ]; then
+              echo "led principal grant-competence: REFUSED -- --supersedes '${sup_id}' is not the active grant for '${name}' / activity '${activity}' (the view shows ${cur_id:-none})." >&2
+              exit 1
+            fi
+            _principal_binding_insert principal_competence_granted \
+              "competence granted: principal '${name}' held competent for '${activity}' at band '${band}'" \
+              "$pid" t "$sup_id" "" "" "" "" "$activity" "$band" "$basis"
+          else
+            if [ -n "$band" ] || [ -n "$basis" ]; then
+              echo "led principal withdraw-competence: REFUSED -- --band/--basis are VALUE fields, forbidden on a withdrawal (the identity/value split, s41 D-1a: a retraction restates only WHICH grant it retracts -- the activity)." >&2
+              exit 1
+            fi
+            [ -z "$sup_id" ] && { echo "led principal withdraw-competence: REFUSED -- --supersedes <old-row-id> is mandatory (find it in principal_competences.row_id)." >&2; exit 1; }
+            if [ "$cur_id" != "$sup_id" ]; then
+              echo "led principal withdraw-competence: REFUSED -- row '${sup_id}' is not the active grant for '${name}' / activity '${activity}' (the view shows ${cur_id:-none}). A mismatched activity or an already-inactive target is refused (value-continuity, s41 D-1a)." >&2
+              exit 1
+            fi
+            _principal_binding_insert principal_competence_granted \
+              "competence withdrawn: principal '${name}' no longer held competent for '${activity}'" \
+              "$pid" f "$sup_id" "" "" "" "" "$activity" "" ""
+          fi
+          ;;
+      esac
+      exit $?
       ;;
     *)
       _principal_usage; exit 1 ;;
