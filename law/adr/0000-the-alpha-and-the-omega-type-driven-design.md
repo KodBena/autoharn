@@ -55,6 +55,15 @@ spec's §7 C10 finding (the heading number collides with Revisit-when item 4,
 which it does not discharge — the section text itself stays verbatim per §4).
 Dated amendments below are preserved verbatim from the original.*
 
+*Reader's glosses, added 2026-07-18 in a fresh-context legibility pass (ADR-0017),
+as a dated append because the passages they clarify stand verbatim: **chocofarm**
+is the project this ADR originated in, before the portability refactor above — a
+reader in an adopting repository reads the Scope's `chocofarm/` package as that
+repository's own codebase. **"Ledger row N"** cites the maintaining project's
+append-only decision ledger, a record of maintainer rulings and work items kept
+outside this repository and read via its `./led` command-line tool. **Port/ACL**
+abbreviates Port/anti-corruption layer, the boundary construct ADR-0012 P2 defines.*
+
 A word on register, in ADR-0013's key and for the same reason. The rest of the
 corpus is neutral; the trio it parents earns an edge from dated failures, and this
 root inherits that edge because its own substrate is a dated failure too — the
@@ -531,6 +540,42 @@ exempt from documentation-decay processes and changes only by maintainer amendme
 CONFORMS to its entries — it claims the project has NAMED what it measures itself against.
 An entry may sit unoperationalized indefinitely; what it cannot be is silently absent from
 the next completeness audit.*
+
+## Amendment — 2026-07-18: Rule 2(a) worked at the oldest class on record — a value that becomes program
+
+*(Dated append per ADR-0005 Rule 8. Provenance: a defect witnessed 2026-07-18 in
+an operator verb (ledger row 1637): a caller-supplied name was spliced as text
+into statements handed to a command interpreter, so the name's characters could
+alter the statement's STRUCTURE rather than remain a value. Maintainer-instructed
+same day.)*
+
+The class is among the oldest and most exhaustively cataloged defect classes in
+the industry. That it appeared here at all is itself the Rule 2(b) finding: no
+constitutional text named it, because it was tacitly assumed too well-known to
+need stating — and an assumption of ambient knowledge is not an enforcement
+surface. This amendment closes that lapse at the root, once, in general terms.
+
+**The Rule 2(a) answer, stated over the whole class.** Wherever a value
+participates in constructing an utterance that a second evaluator will parse and
+execute — a command line, a query, a template, a path or glob expression,
+markup, a configuration fragment — the value/program distinction is a **type
+distinction**, and the type that forecloses the class is the value-carrier the
+evaluating interpreter itself provides: a bound placeholder, an argument vector,
+a builder API. **Data crosses an interpreter boundary as data.** Textual
+splicing of a value into program text is the class, whatever the interpreter and
+whatever the host language doing the splicing. Where the target interpreter
+genuinely offers no value carrier, the fallback is a strict validation to a
+closed alphabet at the boundary (ADR-0012 P2's translate-and-validate), named
+honestly as the weaker surface it is. Hand-escaping is the downstream guard Rule
+2 rejects: it leaves the class representable and bets on the completeness of an
+encoder the interpreter never promised.
+
+The shape lives in ADR-0012 (its 2026-07-18 amendment adds the anti-pattern row
+and the checkable rule); this record binds the **reflex**: a diff that assembles
+evaluator-bound text triggers the two questions on sight, and "the input is
+trusted here" is the same in-the-moment demurral Rule 2 already names — the
+closure statement's quantification universe, not the author's optimism, decides
+what reaches the construction site.
 
 ## License
 

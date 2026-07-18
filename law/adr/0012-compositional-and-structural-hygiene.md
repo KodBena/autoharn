@@ -1050,6 +1050,49 @@ is constructed FROM the gate constants, so gate/advert drift is
 unrepresentable — P1); test/CI gate for the client-planner round-trip;
 review-only for the judgment that a new ceiling is advertisable.*
 
+### Amendment — 2026-07-18: The interpreter boundary — a value never crosses as program text
+
+*(Provenance: witnessed 2026-07-18, ledger row 1637 — an operator verb spliced a
+caller-supplied name into statement text handed to a command interpreter, at a
+resolve stage and a teardown stage sharing one pattern. The instance was fixed
+under commission; this amendment is the constitutional half, paired with
+ADR-0000's same-day amendment: that record binds the reflex, this one owns the
+shape.)*
+
+New anti-pattern row (appended, per this section's convention):
+
+| Audit cancer / boundary | The shape to never author | Preventing rule |
+| --- | --- | --- |
+| **(new, interpreter boundary)** — a value spliced into program text | any construction where data reaches a second evaluator (a command line, a query, a template, markup, a path/glob expression, a config fragment) by concatenation or interpolation into the text that evaluator parses and executes, so a value can alter the utterance's STRUCTURE instead of remaining a value | **P2 + P8 at the interpreter boundary** — data crosses an interpreter boundary as DATA, via the typed value-carrier the evaluating interpreter itself provides (a bound placeholder, an argument vector, a builder API); where no carrier exists, a strict validation to a closed alphabet at the Port, which refuses what it cannot honor and never rewrites an input into plausibility |
+
+**The rule (checkable).** An **interpreter boundary** is any point where this
+codebase constructs text that a second evaluator will parse and execute. The
+checks: *(a) find every construction site whose result is handed to an
+evaluator (concatenation, interpolation, template substitution into
+evaluator-bound text); each such site is either a value-carrier call or a
+validated-to-closed-alphabet construction with the validator adjacent, total
+over its input type, and refusing on failure; (b) the validator REFUSES — it
+never escapes, rewrites, or coerces the input into an acceptable form.*
+Hand-escaping as the primary mechanism is banned — it is cancer **H**'s
+band-aid in this register, betting on an encoder's completeness against an
+open alphabet; at most it is defense-in-depth *behind* a carrier, never
+instead of one. "The input is trusted here" does not exempt a site: the
+carrier costs nothing, and the trust claim is exactly the in-the-moment
+optimism P7/P8 already reject as an argument shape.
+
+**Cancer prevented:** the composed form of **G** (load-bearing structure
+carried in unenforceable text), **P2**'s coercing boundary, and **P8**'s lying
+contract — a parameter received as type "name" that the construction site
+actually treats as type "program fragment" is a dishonest contract between the
+verb and its caller.
+
+*Enforcement surface (ADR-0011 Rule 1, honest): review-only at authoring
+today, with the corrective-diff clause above already binding every fix that
+touches such a site. The ADR-0011 Rule-2 trigger is a single recurrence: the
+mechanism to mint is a lint over verb/scaffold sources that flags expansion or
+concatenation inside evaluator-bound text absent an adjacent closed-alphabet
+validation or carrier call.*
+
 ## License
 
 Public Domain (The Unlicense).
