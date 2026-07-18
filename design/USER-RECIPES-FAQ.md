@@ -437,6 +437,140 @@ fingerprint belong to"), and answers it only once someone actually signs somethi
 verifier checks that signature — which nothing in this project does yet for a role or a
 principal binding. Signature-*verified* acts are a future rung, not this one.
 
+## Typed verdicts and refusal recording (s42/s43)
+
+Like the principal-identity entries above, these three entries deviate from this page's usual
+point-elsewhere convention (full witnessed output, not a one-liner plus a pointer) because the
+surface is new: kernel deltas s42/s43 turn a refused write from a transaction that leaves no
+trace into a committed, attributed ledger row, and widen the tamper-evidence hash chain to cover
+every column instead of thirty. Delivery record:
+[orchlog.d/s42-s43-typed-verdicts.md](../orchlog.d/s42-s43-typed-verdicts.md); full spec:
+[FABLE-REFUSAL-RECORDING-AND-HASH-COVERAGE-SPEC.md](FABLE-REFUSAL-RECORDING-AND-HASH-COVERAGE-SPEC.md).
+
+**Prominent caveat, read before typing anything below:** none of this exists in a world whose
+[birth chain](../GLOSSARY.md#birth-chain) predates commits `1fc4e8c` (s42) and `84729de` (s43) —
+runs are strictly linear, so an already-scaffolded world gains nothing here. Run `./migrate
+<deployment-dir> --dry-run` to see whether your world has s42/s43; if it names them as missing,
+everything below is unavailable until your next real world is born on a checkout that carries
+these commits.
+
+**What happens now when a write is refused?**
+Before s42/s43, a refused write was a `RAISE EXCEPTION` that aborted the transaction — the
+attempt itself left no trace anywhere but a server log. After s43, the granted database role
+holds NO `INSERT` privilege on any kernel-governed table at all; every write goes through one of
+four functions (`kernel.ledger_write`, `review_write`, `registration_write`,
+`obligation_write`), and a refusal caught inside one of them is committed as an ordinary
+`write_refused` ledger row and handed back to the caller as a typed verdict — never a silent
+abort. Witnessed (`seen-red/s43-typed-verdict-write-boundary/red.txt`, case 1): a write attempted
+under a revoked principal returns
+
+```
+disposition=refused, sqlstate=P0001, refusal_id=<row id>
+message: "Ledger policy: strict attribution (s40) — actor principal N is revoked ..."
+```
+
+and the ledger holds a COMMITTED `write_refused` row you can look at like any other row —
+`refusal_sqlstate=P0001`, `refusal_surface='ledger'`, `refusal_attempted_actor=<the revoked
+principal's id>`, `refusal_attempted_role='bork'` (the server-witnessed `session_user`, never
+something the client asserted), `actor=<the write-boundary tool principal>` (never the attempted
+actor itself — a refused principal cannot honestly author the record of its own refusal), and a
+64-hex `refusal_payload_digest` (a SHA-256 of the attempted payload — the payload's actual
+content is never stored, digest only, R4 ratified for poison/privacy reasons). The row that was
+attempted never lands; only the record that it was attempted, and refused, does.
+
+**To look at `write_refused` rows directly:** they are ordinary ledger rows like any other, so
+the same `psql`/`led show`/`./led` reading tools that work on any other row work here —
+`kind = 'write_refused'` is the row to filter on, and the six `refusal_*` columns above are
+where the detail lives. There is no dedicated `led` verb for this in v1 (a genuine gap, not a
+hidden feature), so reading them today means a direct query or `./led show <row-id>` once you
+have an id — e.g. from `./verify-chain`'s own reconciliation output (next entry) or from
+scanning recent rows.
+
+**The plain point worth internalizing: probing attempts leave traces now.** An agent (or a
+person) trying a write it is not permitted to make — writing under a revoked identity, attempting
+a malformed payload, retrying a refused registration — used to vanish into a rolled-back
+transaction with nothing durable behind it but a server log line. After s42/s43 it does not
+vanish: it becomes a permanent, attributed, hash-chained, countersignable row, exactly as durable
+as a row that succeeded. This is true of ceremony refusals too, not just plain ledger writes —
+review-ceremony refusals, registration-ceremony refusals (a duplicate name, a missing
+`--purpose`), and malformed-payload refusals (an unknown key, a server-owned key, a bad value
+cast) all journal the same way, as one `write_refused` row per refused attempt
+(`seen-red/s43-typed-verdict-write-boundary/red.txt`, case 1).
+
+**Two things this does NOT do, stated so the guarantee is not over-read.** A raw `INSERT`
+attempted directly against `ledger` by the granted role never reaches the boundary at all — it
+fails at the database privilege layer first (`permission denied for table ledger`, SQLSTATE
+42501, witnessed case 2) and is NOT journaled as a `write_refused` row; its only residual trace
+is the Postgres server log, which rotates. And a database superuser or schema owner can always
+bypass every trigger and privilege check here — that bound is unchanged by this delta, and the
+closing move against it remains a GPG-signed chain head (`verify-chain --head`), covered in
+"Trust ceremonies" below.
+
+**What does `verify-chain` check now?**
+Two things changed, and a third check is new.
+
+*Full coverage.* The one function the whole tamper-evidence chain rests on,
+`compute_row_hash`, used to serialize only thirty of the ledger's columns (the set as of
+2026-early kernel deltas) — every column added since then, twenty-two of them including all
+twelve principal-identity columns, sat OUTSIDE the hash chain: a schema-owner tamper of, say,
+which principal a revocation regards changed no hash, and `./verify-chain` reported the chain
+`INTACT` right over the rewrite. Witnessed live, this exact scenario
+(`seen-red/s42-row-hash-full-coverage/red.txt`, case 1):
+
+```
+verify-chain: INTACT -- 4 row(s) walked, head id=4 hash=<64-hex>
+(exit 0)
+```
+
+— reported clean, immediately after an owner tampered `work_parent` on a committed row with
+triggers disabled. After s42, `compute_row_hash` covers every ledger column except `row_hash`
+itself (52 at the s42 head, 58 once s43's own six new columns are included), and the same class
+of tamper is now caught (case 2, witnessed on all 52 columns individually, not sampled):
+
+```
+verify-chain: BROKEN -- first break at row id 19:
+    stored:   <64-hex, the pre-tamper hash>
+    expected: <64-hex, recomputed over the tampered content>
+  (1 of 20 row(s) mismatch total. ...)
+(exit 1)
+```
+
+*The completeness oracle — the `refusal_seq` reconciliation.* A non-transactional sequence
+(`kernel.refusal_seq`) is bumped immediately before every `write_refused` row is journaled;
+because a Postgres sequence's `nextval` is never rolled back, it counts every refusal attempt
+that reached the boundary regardless of what happened to the surrounding transaction.
+`./verify-chain` now compares the count of committed `write_refused` rows against this sequence.
+
+*What `BROKEN` vs `FORGERY-SUSPECT` mean, and what to do on each* — drawn from the delta's own
+guidance, stated plainly where the header gives no further operator action:
+
+- **`BROKEN`** (a row's stored hash disagrees with a fresh recomputation over its own content,
+  the ordinary chain-tamper report shown above): a row's content was altered after the fact.
+  The delta's own header gives no remediation beyond the standing chain-integrity posture — this
+  is a serious finding. **The disposition is: stop and consult, not improvise.** Do not attempt
+  to "fix" a broken chain by editing rows or regenerating hashes yourself; treat it as evidence
+  and escalate to whoever owns the world's integrity posture.
+- **`FORGERY-SUSPECT`** (`REFUSAL-ORACLE-FORGERY-SUSPECT`, when the count of `write_refused`
+  rows EXCEEDS what the sequence counted): only the boundary functions can mint a
+  `write_refused` row through the sanctioned path — a payload that tries to claim
+  `kind = 'write_refused'` directly is refused with a forgery-channel teach-text. This verdict
+  means a `write_refused` row exists that the counting mechanism never saw mint — i.e. it was
+  forged outside the sanctioned path (an owner-side direct INSERT bypassing the boundary
+  entirely). Witnessed (`seen-red/s43-typed-verdict-write-boundary/red.txt`, case 3):
+  ```
+  verify-chain: REFUSAL-ORACLE-FORGERY-SUSPECT -- N journaled write_refused row(s) but
+  the sequence only counted N-1 ... (exit 6; --head REFUSES)
+  ```
+  Same disposition as `BROKEN`: **stop and consult** — this is not a state to self-remediate,
+  and `--head` itself refuses to sign over it. The opposite inequality (sequence count HIGHER
+  than the row count) is NOT this failure — it is EXPLAIN-grade, with legitimate named causes
+  (a client-side transaction that wrapped the boundary call and rolled it back; a journal-insert
+  double failure) and does not, by itself, indicate tampering.
+- `write_refused` rows are also unretractable by rule: nothing may supersede one (R6, ratified).
+  If you see a row attempting to supersede a `write_refused` row, that attempt is itself refused
+  and journaled — it is not a state `verify-chain` needs a separate disposition for, because it
+  cannot succeed in the first place.
+
 ## Trust ceremonies
 
 **Can I prove a commission really came from me?** (a "commission" here is a ledgered
