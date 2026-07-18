@@ -290,6 +290,16 @@
 #                                              REVIEWER by mistake makes the reviewer's own countersigns
 #                                              show up as debt, forcing an author counter-countersign
 #                                              round (this already happened twice — see BACKLOG).
+#                                              THIRD WITNESSED OCCURRENCE (2026-07-18, autoharn-panel
+#                                              world, older lineage): the over-catch is RETROACTIVE —
+#                                              review_gap has no temporal bound, so obliging an actor
+#                                              flags every uncountersigned row that principal EVER
+#                                              wrote, including 1225 rows predating the obligation.
+#                                              And it SELF-AMPLIFIES: disposition rows written by the
+#                                              obliged actor to explain the debt are themselves new
+#                                              debt (1225→1228 witnessed). Escape: write dispositions
+#                                              under a non-obliged principal; revoke stays the
+#                                              maintainer's act (see `led obligate revoke`).
 #                                              Worked example: `led obligate decomposition-review
 #                                              orchestrator author` — after this, someone other than
 #                                              'author' must countersign every one of author's ledger
@@ -2208,6 +2218,11 @@ if [ "${1:-}" = "obligate" ]; then
       echo "         ./led finding \"obligate revoke blocked: role '${ROLE}' lacks DELETE on\" \\" >&2
       echo "           \"${SCHEMA}.countersign_obligation for scope '${scope}' -- needs a\" \\" >&2
       echo "           \"maintainer act to revoke, not a role-level workaround\"" >&2
+      echo "       WRITE THAT ROW UNDER A PRINCIPAL THE OBLIGATION DOES NOT COVER (not the" >&2
+      echo "       obliged actor): review_gap counts every uncountersigned row the obliged" >&2
+      echo "       principal writes, so a disposition row by that principal is itself new" >&2
+      echo "       debt -- each explanatory row grows the count it is explaining (witnessed" >&2
+      echo "       amplification loop, 2026-07-18, autoharn-panel world: 1225 -> 1228)." >&2
       echo "    2. STOP work on this scope. Do not attempt the DELETE via any other connection," >&2
       echo "       role, or credential this environment can reach." >&2
       echo "    3. ESCALATE for orchestrator/maintainer sign-off -- surface the ledgered finding" >&2
