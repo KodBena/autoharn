@@ -636,6 +636,39 @@ controls are part of done (ADR-0011's gate-proves-itself-by-failing amendment).
    only reads them), `law/`, hooks/, any live world, the sentry spec's own deliverables,
    or `in_force`/`ledger_current` semantics anywhere (§10 law 3).
 
+## Amendments (dated; Fable-authored; each names its trigger)
+
+**A1 (2026-07-19) — §4.2 admits `affirms/3` and `affirm_author/2`; the builder's surfaced
+renegotiation, ratified with the manifest discipline made binding.** Trigger: the Sonnet
+build (commit `fcc7744`) and the adversarial review's independent re-derivation
+(adjudication ledger row 1506). §4.2's family table omitted two families the composed
+derivation cannot stand without: §5.1's cascade-discharge rule grounds `not affirmed(F,D)`,
+and `ledger_support.lp`'s `affirmed/2` is meaningfully groundable only from `affirms/3` +
+`affirm_author/2` facts — while the SQL twin reads the `support_affirm` scratch stand-in
+directly and has no such gap. Leaving the table as written was a structural asymmetry
+between producers (witnessed live during the build: DIVERGE_DEFECT on
+`exposure_model_undischarged`, ASP-only). The builder's fix — emit both families from the
+same `support_affirm` source `ledger_support_scratch.py` already reads, DEFERRED where
+that relation is absent — is the smallest honest one and is hereby ratified into §4.2's
+table, on these binding terms the first build missed (review finding F2):
+
+- **Full family discipline, no exemption for lateness:** a `Capability` manifest entry
+  like every sibling family — capability gate: the `support_affirm` relation present;
+  where absent, a *declared* DEFERRED line with reason (mirroring `ledger_floor.py`'s
+  `support_manifest` posture), never silence. Silent non-emission is the I12/F49 class
+  this file's own header forbids.
+- **The actor join carries the same type guard as `row_actor`** (int-typed actor checked,
+  not assumed).
+- §5.1's `#defined affirmed/2` consumption note is unchanged; no rule text changes.
+
+**A1 clarification, not a change (review finding F1):** §4.2's `mismatch_attest` row and
+P-7 already require Grade to cross as the **parsed** grade atom. The first build's v1 arm
+emitted the literal `none` regardless — a code defect against the spec as written, not a
+spec gap; recorded here solely so a future reader of the family table knows the first
+build diverged and where the fix is tracked (work item `defeat-engine-review-fixes`,
+opened beside row 1506). The witness plan gains, by the same fix pass, an assertion on
+`mismatch_attest` fact *content* on both arms — the masking gap that let this ship.
+
 ## License
 
 Public Domain (The Unlicense).

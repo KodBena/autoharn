@@ -985,6 +985,48 @@ service-managed operation of watchdog or sentry on the Gentoo host.
     law/, engine/lp, hooks/, `~/.claude/settings.json`, the collector's config, or any
     live session's world. The layers are additive tooling plus ledger rows, nothing else.
 
+## Amendments (dated; Fable-authored; each names its trigger)
+
+**A1 (2026-07-19) — the `ambiguous` write's value domain, fixed (completing §5; the field
+set is unchanged, so `v1` stands — this is a value-domain completion, not a field change).**
+Trigger: adversarial review finding F1 (adjudication ledger row 1505). The first build
+silently folded every `ambiguous` session into the written-as-nothing path, contradicting
+§6's explicit "never silently upgraded, never silently dropped." The root cause was this
+spec's own underspecification: §5's statement shape shows a single `model=` value and never
+said what an `ambiguous` attestation writes there. Fixed as follows, binding on the fix
+pass and every later producer:
+
+- **`model=unresolved`** — a closed sentinel, never a fabricated single model and never an
+  invented multi-model packing of the field. The conflicting models are named in `basis=`
+  (as §6 already requires), comma-separated with the join keys.
+- **`verdict=` is decided by what the ambiguity still proves:** if *every* candidate
+  non-utility model in the window contradicts `expected=`, the ambiguity is only about
+  *which* wrong model served — that is `verdict=MISMATCH` (the substitution evidence is
+  definite even though the culprit is not). If at least one candidate matches `expected=`,
+  nothing is proven either way — `verdict=unevaluated`. Never `match`: ambiguity cannot
+  clear a row.
+- **An `ambiguous` attestation also writes the companion `finding` row**, exactly as a
+  MISMATCH does and for the same stated reason — §6 calls ambiguity "the
+  substitution-relevant case *par excellence*"; letting it hide in attestation bulk
+  contradicts that sentence. (A MISMATCH-verdict ambiguous row writes ONE finding, not two.)
+- Downstream note, checked against the pinned parse contract: `grade=ambiguous` is already
+  inside P-5's closed vocabulary; a MISMATCH-verdict ambiguous row therefore yields
+  `mismatch_attest(A,R,"ambiguous")` and participates in defeat. That is the intended,
+  fail-safe polarity — defeat withholds credit, it never asserts; grade-conditioned
+  *discounting* of weak grades stays reserved (pipeline spec §13).
+
+**A2 (2026-07-19) — write-time field hygiene (review finding F2, row 1505).** `model=` is
+verbatim text from an **unauthenticated** emitter; a `|` inside any field value produces a
+statement that parses loud-fail later (P-5), denying the whole idempotency scan — and, once
+the pipeline exists, the world's entire defeat derivation — until superseded. The writer
+therefore **refuses at write time**, with a diagnostic naming the offending field, any
+field value containing the `|` delimiter (and any embedded newline). This is a writer
+duty, not a parser relaxation: the parser's loud failure on such a row stays exactly as
+pinned. Same fix pass: the parser rejects empty `model=`/`session=`/`basis=` values and
+restricts `row=` to ASCII digits / segment trimming to ASCII whitespace, matching the SQL
+twin's documented behavior (findings F4/F5 — producer-divergence latency, closed on the
+Python side rather than waiting for the SQL side to disagree).
+
 ## License
 
 Public Domain (The Unlicense).
