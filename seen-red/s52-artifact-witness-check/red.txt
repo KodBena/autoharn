@@ -1,0 +1,75 @@
+== scaffolding WORLD PRE (chain ends s51-artifact-store.sql, s52 NOT yet applied) ==
+=== detect-negative-pre-s52 ===
+  [ok] s52 .detect.sql reads f on the pre-s52 (s51-head) chain
+
+== scaffolding WORLD S52 (chain ends s51-artifact-store.sql, then s52 applied) ==
+=== detect-positive-post-s52 ===
+  [ok] s52 .detect.sql reads t once s52 is applied on top of s51
+
+=== fixture-artifact-registered ===
+  [ok] {'row_id': None, 'message': 'artifact registered: dcbe695e561433bf677ecb4ecb0fa0e1bb189302ca0a2474dbb8c371c4d63c40', 'sqlstate': None, 'refusal_id': None, 'disposition': 'accepted'}
+
+=== fixture-artifact-hash-matches ===
+  [ok] message='artifact registered: dcbe695e561433bf677ecb4ecb0fa0e1bb189302ca0a2474dbb8c371c4d63c40' expected dcbe695e561433bf677ecb4ecb0fa0e1bb189302ca0a2474dbb8c371c4d63c40
+
+=== witness-row-decision-accepted ===
+  [ok] {'row_id': 4, 'message': None, 'sqlstate': None, 'refusal_id': None, 'disposition': 'accepted'}
+
+=== wx1-open-accepted ===
+  [ok] {'row_id': 5, 'message': None, 'sqlstate': None, 'refusal_id': None, 'disposition': 'accepted'}
+
+=== wx1-close-citing-stored-artifact-accepted ===
+  [ok] {'row_id': 6, 'message': None, 'sqlstate': None, 'refusal_id': None, 'disposition': 'accepted'}
+
+=== wx2-open-accepted ===
+  [ok] {'row_id': 7, 'message': None, 'sqlstate': None, 'refusal_id': None, 'disposition': 'accepted'}
+
+=== wx2-close-citing-absent-artifact-refused ===
+  [ok] {'row_id': None, 'message': "Ledger policy: artifact-witness citation 'artifact:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff' in work_review_ref is refused — no artifact with that hash exists in kernel.artifact (checked at INSERT time; review-witness position only, close-family kinds work_closed/work_violation_disposition -- s52). The artifact store (kernel/lineage/s51-artifact-store.sql) is content-addressed: a witness citation naming bytes the store never received is a claim with a dangling evidence pointer, in the one place evidence pointers are load-bearing. Register the bytes FIRST — './legacy/led artifact put <file>' — then cite the hash it prints (--review-witness artifact:<hash>).", 'sqlstate': 'P0001', 'refusal_id': 9, 'disposition': 'refused'}
+
+=== wx2-teach-text-names-hash-and-put-first ===
+  [ok] message: "Ledger policy: artifact-witness citation 'artifact:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff' in work_review_ref is refused — no artifact with that hash exists in kernel.artifact (checked at INSERT time; review-witness position only, close-family kinds work_closed/work_violation_disposition -- s52). The artifact store (kernel/lineage/s51-artifact-store.sql) is content-addressed: a witness citation naming bytes the store never received is a claim with a dangling evidence pointer, in the one place evidence pointers are load-bearing. Register the bytes FIRST — './legacy/led artifact put <file>' — then cite the hash it prints (--review-witness artifact:<hash>)."
+
+=== wx2-zero-work-closed-rows ===
+  [ok] work_closed row count for wx2-item: '0'
+
+=== wx2-refusal-journaled ===
+  [ok] write_refused count before=0 after=1
+
+=== wx3-open-accepted ===
+  [ok] {'row_id': 10, 'message': None, 'sqlstate': None, 'refusal_id': None, 'disposition': 'accepted'}
+
+=== wx3-close-citing-malformed-token-refused ===
+  [ok] {'row_id': None, 'message': "Ledger policy: artifact-witness citation 'artifact:zz00000000000000000000000000000000000000000000000000000000000000' in work_review_ref is refused — the token after the 'artifact:' prefix is not a well-formed 64-character lowercase-hex SHA-256 digest (checked at INSERT time; review-witness position only, close-family kinds work_closed/work_violation_disposition -- s52). A witness token that parses as neither a valid row: nor a valid artifact: form is refused, not silently treated as prose. Cite the EXACT hash printed by './legacy/led artifact put <file>' (kernel/lineage/s51-artifact-store.sql), or use --review-witness row:<id> / --review-deferred / --review-bookkeeping instead.", 'sqlstate': 'P0001', 'refusal_id': 12, 'disposition': 'refused'}
+
+=== wx3-teach-text-names-malformed-shape ===
+  [ok] message: "Ledger policy: artifact-witness citation 'artifact:zz00000000000000000000000000000000000000000000000000000000000000' in work_review_ref is refused — the token after the 'artifact:' prefix is not a well-formed 64-character lowercase-hex SHA-256 digest (checked at INSERT time; review-witness position only, close-family kinds work_closed/work_violation_disposition -- s52). A witness token that parses as neither a valid row: nor a valid artifact: form is refused, not silently treated as prose. Cite the EXACT hash printed by './legacy/led artifact put <file>' (kernel/lineage/s51-artifact-store.sql), or use --review-witness row:<id> / --review-deferred / --review-bookkeeping instead."
+
+=== wx3-zero-work-closed-rows ===
+  [ok] work_closed row count for wx3-item: '0'
+
+=== wx3b-open-accepted ===
+  [ok] {'row_id': 13, 'message': None, 'sqlstate': None, 'refusal_id': None, 'disposition': 'accepted'}
+
+=== wx3b-truncated-token-refused ===
+  [ok] {'row_id': None, 'message': "Ledger policy: artifact-witness citation 'artifact:deadbeef' in work_review_ref is refused — the token after the 'artifact:' prefix is not a well-formed 64-character lowercase-hex SHA-256 digest (checked at INSERT time; review-witness position only, close-family kinds work_closed/work_violation_disposition -- s52). A witness token that parses as neither a valid row: nor a valid artifact: form is refused, not silently treated as prose. Cite the EXACT hash printed by './legacy/led artifact put <file>' (kernel/lineage/s51-artifact-store.sql), or use --review-witness row:<id> / --review-deferred / --review-bookkeeping instead.", 'sqlstate': 'P0001', 'refusal_id': 15, 'disposition': 'refused'}
+
+=== wx3b-teach-text-names-malformed-shape ===
+  [ok] message: "Ledger policy: artifact-witness citation 'artifact:deadbeef' in work_review_ref is refused — the token after the 'artifact:' prefix is not a well-formed 64-character lowercase-hex SHA-256 digest (checked at INSERT time; review-witness position only, close-family kinds work_closed/work_violation_disposition -- s52). A witness token that parses as neither a valid row: nor a valid artifact: form is refused, not silently treated as prose. Cite the EXACT hash printed by './legacy/led artifact put <file>' (kernel/lineage/s51-artifact-store.sql), or use --review-witness row:<id> / --review-deferred / --review-bookkeeping instead."
+
+=== wx4a-decision-refs-absent-artifact-accepted ===
+  [ok] {'row_id': 16, 'message': None, 'sqlstate': None, 'refusal_id': None, 'disposition': 'accepted'}
+
+=== wx4b-open-accepted ===
+  [ok] {'row_id': 17, 'message': None, 'sqlstate': None, 'refusal_id': None, 'disposition': 'accepted'}
+
+=== wx4b-close-citing-row-and-commit-arms-accepted ===
+  [ok] {'row_id': 18, 'message': None, 'sqlstate': None, 'refusal_id': None, 'disposition': 'accepted'}
+
+=== judge-work-AGREE-world-pre ===
+  [ok] judge output (s52fx_pre): ['AGREE', 'asp []', 'sql []']
+
+=== judge-work-AGREE-world-s52 ===
+  [ok] judge output (s52fx_s52): ['AGREE', 'asp [\'w_tree_member("wx1-item","wx1-item")\', \'w_tree_member("wx2-item","wx2-item")\', \'w_tree_member("wx3-item","wx3-item")\', \'w_tree_member("wx3b-item","wx3b-item")\', \'w_tree_member("wx4b-item","wx4b-item")\']', 'sql [\'w_tree_member("wx1-item","wx1-item")\', \'w_tree_member("wx2-item","wx2-item")\', \'w_tree_member("wx3-item","wx3-item")\', \'w_tree_member("wx3b-item","wx3b-item")\', \'w_tree_member("wx4b-item","wx4b-item")\']']
+
+all s52-artifact-witness-check cases WITNESSED clean.
