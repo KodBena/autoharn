@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-14T22:13:11Z
-#   last-change: 2026-07-14T22:13:11Z
-#   contributors: a857c93d/main
+#   last-change: 2026-07-18T11:06:40Z
+#   contributors: a857c93d/main, ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
 """cite_check — resolve provenance pointers in an AI collaborator's prose against the
@@ -33,10 +33,29 @@ from pghost_resolve import resolve_pghost  # noqa: E402
 
 PGHOST = resolve_pghost("EPISTEMIC_PGHOST")
 PGDB = "epistemic"
+
+
+def _resolve_log_dir(*env_vars: str) -> str:
+    """Resolve the directory this instrument scans for date-stamped Postgres statement logs,
+    mirroring pghost_resolve.resolve_pghost's env-or-refuse pattern (ADR-0002): `env_vars`
+    checked first-to-last; nothing resolves -> refuse LOUDLY naming exactly what to set, never
+    a silent default to any one host's log path (the same class of hazard resolve_pghost
+    closes for the DB host, applied here to the log directory)."""
+    for var in env_vars:
+        val = os.environ.get(var)
+        if val:
+            return val
+    names = " or ".join(env_vars) if env_vars else "EPISTEMIC_LOG_DIR"
+    raise SystemExit(
+        f"REFUSED: no Postgres statement-log directory resolved -- set {names} to the "
+        f"directory holding this deployment's epistemic-*.log files (postgresql.conf's "
+        f"log_directory). Never defaulting to any host's log path.")
+
+
 # Date-generic: scan every date-stamped statement log, so a run on any date is covered (a
 # date-pinned path silently found zero reads on a later run — a false UNGROUNDED). Mirrors
 # derive_trail's globbing.
-LOG_DIR = "/home/bork/pg_log"
+LOG_DIR = _resolve_log_dir("EPISTEMIC_LOG_DIR")
 LOG_GLOB = "epistemic-*.log"
 
 # session label -> (ledger relation, connecting role). Session-generic (consult 11 §7.2/§8.3):

@@ -1,7 +1,7 @@
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-09T10:06:34Z
-#   last-change: 2026-07-14T22:12:54Z
-#   contributors: be693afb/main, a857c93d/main
+#   last-change: 2026-07-18T11:07:10Z
+#   contributors: be693afb/main, a857c93d/main, ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
 """SSOT for WHERE a ledger lives and HOW its actor model works — the single source every
@@ -178,8 +178,8 @@ _INSTRUMENT_EXTRAS: dict[str, _Extras] = {
                    # under + the e16 subject session transcript. A bare e16 close now reads THESE,
                    # not e15's — closing finding 36. (RCA close-substrate-rca-2026-07-07.md proved
                    # the delta line-by-line: with these, run A's readings reproduce.)
-                   fenced_dir="/home/bork/zc9-build",
-                   subject_session_dir="/home/bork/w/vdc/1/claude_harness/docs/claude-ephemera/"
+                   fenced_dir="~/zc9-build",
+                   subject_session_dir="~/w/vdc/1/claude_harness/docs/claude-ephemera/"
                    "session-5ffc3bed-e16-subject/-home-bork-zc9-build"),
     # e17: the s17 subject kernel (s15 + interception stamps + independence vocabulary; Inc8/9). One
     # lever: refuse-and-teach at the independence seam (F53, acts.ruling id 29). subject_session_dir
@@ -187,10 +187,10 @@ _INSTRUMENT_EXTRAS: dict[str, _Extras] = {
     # correctly REDs a bare e17 close until it is registered (consult 33 §5a).
     "e17": _Extras(subject_actor_sql="(SELECT id FROM kernel.principal WHERE name='author')",
                    subject_role="wmb_rw",
-                   fenced_dir="/home/bork/kt3-build",
+                   fenced_dir="~/kt3-build",
                    # the completed run's persisted subject session (Inc10 capture) — the project-slug
                    # dir carrying session-transcript/ + subagents/ (incl. the reviewer a8d15e15).
-                   subject_session_dir="/home/bork/w/vdc/1/claude_harness/docs/claude-ephemera/"
+                   subject_session_dir="~/w/vdc/1/claude_harness/docs/claude-ephemera/"
                    "session-38484b24-e17-subject/-home-bork-kt3-build"),
     # e18: the s18 subject kernel (s18 = s17 BYTE-IDENTICAL, Addendum A — no write-time change; the
     # finding-38 class is covered by the descriptive review_without_detail line, not a kernel delta).
@@ -198,10 +198,10 @@ _INSTRUMENT_EXTRAS: dict[str, _Extras] = {
     # consult 37).
     "e18": _Extras(subject_actor_sql="(SELECT id FROM kernel.principal WHERE name='author')",
                    subject_role="qbx_rw",
-                   fenced_dir="/home/bork/jm7-build",
+                   fenced_dir="~/jm7-build",
                    # the completed run's persisted subject session (session 9c467b69, run 2026-07-07):
                    # transcript + the reviewer subagent a98d8fc5b34db3036 (ledger entry 8's stamp).
-                   subject_session_dir="/home/bork/w/vdc/1/claude_harness/docs/claude-ephemera/"
+                   subject_session_dir="~/w/vdc/1/claude_harness/docs/claude-ephemera/"
                    "session-9c467b69-e18-subject/-home-bork-jm7-build"),
 }
 

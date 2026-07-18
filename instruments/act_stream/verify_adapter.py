@@ -1,7 +1,7 @@
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-14T22:13:55Z
-#   last-change: 2026-07-14T22:13:55Z
-#   contributors: a857c93d/main
+#   last-change: 2026-07-18T11:07:38Z
+#   contributors: a857c93d/main, ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
 """verify_adapter — run the two pre-registered adapter fixtures against the INDEPENDENT oracle
@@ -13,6 +13,7 @@ The expected tuple sequences below are TRANSCRIBED from the pre-registration doc
 they are not re-derived from the adapter. The point of the fixture is agreement with the oracle."""
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 from dataclasses import replace
@@ -22,9 +23,27 @@ from claude_code_adapter import SubagentSource, parse_completed_session
 from contract import PGHOST, Act, CapabilityError, persist
 
 HERE = Path(__file__).resolve().parent
-REAL_TRANSCRIPT = Path(
-    "/home/bork/w/vdc/1/claude_harness/docs/claude-ephemera/-home-bork-w-vdc-1-claude-harness"
-    "/session-transcript/37017f46-fa65-4981-b669-b4204a444de8.jsonl")
+
+
+def _resolve_real_transcript(*env_vars: str) -> Path:
+    """Resolve fixture 2's banked real transcript (session-37017f46), env-or-refuse (ADR-0002,
+    same pattern as pghost_resolve.resolve_pghost / instruments/close_manifest.py's ACTS_FENCED /
+    PERF_SESSION_DIR): this session's off-repo ephemera lives only on the machine that captured
+    it, so a fresh checkout gets a loud refusal naming exactly what to set, never a silent
+    default to any one maintainer's home directory."""
+    for var in env_vars:
+        val = os.environ.get(var)
+        if val:
+            return Path(val).expanduser()
+    names = " or ".join(env_vars) if env_vars else "VERIFY_ADAPTER_REAL_TRANSCRIPT"
+    raise SystemExit(
+        f"REFUSED: no path resolved for fixture 2's banked real transcript "
+        f"(session-37017f46) -- set {names} to the persisted session's "
+        f"session-transcript/37017f46-fa65-4981-b669-b4204a444de8.jsonl. Never defaulting to "
+        f"any one maintainer's home directory.")
+
+
+REAL_TRANSCRIPT = _resolve_real_transcript("VERIFY_ADAPTER_REAL_TRANSCRIPT")
 
 # ---- the pre-registered expectation (transcribed from PRE-REGISTERED-expectations.md Part 1) ----
 EXPECT_SYN = [
