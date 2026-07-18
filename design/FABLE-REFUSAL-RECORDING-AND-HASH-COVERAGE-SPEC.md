@@ -2,9 +2,16 @@
 
 # FABLE-REFUSAL-RECORDING-AND-HASH-COVERAGE-SPEC — the kernel write boundary as a typed-refusal-verdict surface, and the row-hash chain widened to the whole row (kernel delta family s42–s43)
 
-**Status:** DRAFT awaiting maintainer ratification. Fable-authored, fresh-context, 2026-07-18,
-under ADR-0018 discipline (the author received the witnessed problems, their evidence, and the
-governing LAW — no working-session designs). Cost attribution: ledger estimate row 1452, slug
+**Status:** RATIFIED build basis (R1–R6, ledger row 1460, 2026-07-18). Fable-authored,
+fresh-context, 2026-07-18, under ADR-0018 discipline (the author received the witnessed problems,
+their evidence, and the governing LAW — no working-session designs); ratification incorporated by
+the same author the same day (the delivered draft is pinned as-is at commit `de5b94e`; the edits
+on top of that pin are this incorporation pass, ledger estimate row 1461, and nothing else). The
+maintainer's ratification, verbatim (row 1460): *"I have looked at
+FABLE-REFUSAL-RECORDING-AND-HASH-COVERAGE-SPEC.md and agree with the recommendations R1-R6. Let
+us get it done."* All six §9 decisions are thereby RATIFIED at their recommended dispositions.
+The builder assignment — reserved by this spec itself — was ruled the same day: FABLE builds
+(ledger row 1462; §10 carries the grounds). Cost attribution of the authoring pass: ledger estimate row 1452, slug
 `s42-hash-chain-spec-family`. Nothing in this document is built, applied, or wired by the act of
 its authoring; per the runs-are-linear ruling (maintainer, 2026-07-11, [CLAUDE.md](../CLAUDE.md)),
 the deltas it specifies reach reality only by entering a FUTURE [world](../GLOSSARY.md#world)'s
@@ -65,8 +72,14 @@ census; ledger rows 1449 and 1452 read via `./led show`, verbatim.
    all twelve s40/s41 principal columns, is OUTSIDE the tamper-evidence hash chain … closing this
    is its own Fable-authored, maintainer-ratified delta family (it changes what the hash MEANS —
    not class-ratifiable); it braids with the s42 refusal-recording family's write-boundary
-   redesign, which touches the same surface.* — **What the chain SHOULD cover is a reserved
-   maintainer decision this spec frames (§9 R1/R2), with a recommendation.**
+   redesign, which touches the same surface.* — What the chain should cover was framed by this
+   spec as reserved decisions §9 R1/R2, with a recommendation — **since RATIFIED at the
+   recommended dispositions (ledger row 1460, 2026-07-18): the chain covers the full row minus
+   `row_hash`, by an enumerated serializer held complete by a coverage gate.**
+3. *"I have looked at FABLE-REFUSAL-RECORDING-AND-HASH-COVERAGE-SPEC.md and agree with the
+   recommendations R1-R6. Let us get it done."* (ledger row 1460, 2026-07-18) — the ratification
+   of this spec itself, all six §9 reserved decisions at their recommended dispositions,
+   incorporated throughout this document.
 
 ---
 
@@ -100,14 +113,14 @@ family, not per-column signatures (§4.2); refusals are classified by SQLSTATE c
 resolution moves from `current_user` to `session_user` and the scaffold declares standing for the
 login role (§4.7); the completeness oracle is a sequence, reconciled by `./verify-chain` (§4.6).
 
-**Reserved to the maintainer at ratification (§9 has full text; each independently yes/no):**
-**R1** what the chain covers (recommend: full row minus `row_hash` only); **R2** the serializer's
-mechanism (recommend: enumerated columns plus a coverage gate, not a catalog-generic serializer);
-**R3** whether sibling tables (`review_detail` above all) get their own chain (recommend: named
-not covered in v1, follow-on family); **R4** refused-payload storage (recommend: digest only,
-never verbatim); **R5** refusal-flood posture (recommend: no rate machinery in v1); **R6**
-whether `write_refused` rows are unretractable (recommend: yes — supersession refused on them, a
-named divergence from s31 uniformity).
+**Ratified 2026-07-18, all six at the recommended dispositions (ledger row 1460; §9 has each
+decision's full text, kept with its honest alternative as the record of what was chosen
+against):** **R1** the chain covers the full row minus `row_hash` only; **R2** the serializer is
+an enumerated column list plus a coverage gate, not a catalog-generic serializer; **R3** sibling
+tables (`review_detail` above all) stay named-not-covered in v1, a follow-on family if wanted;
+**R4** refused payloads are stored as digest only, never verbatim; **R5** no refusal-flood rate
+machinery in v1; **R6** `write_refused` rows are unretractable — supersession refused on them, a
+named, ratified divergence from s31 uniformity.
 
 ---
 
@@ -164,8 +177,9 @@ Twenty-two columns; ten carry work/decision semantics, twelve carry the entire p
 record — meaning today a schema-owner can rewrite, e.g., which principal a revocation event
 regards, or a violation disposition's class, with zero chain disturbance. The foreclosing shape has
 two candidate types (a serializer that derives its column list from the catalog, vs. an enumerated
-serializer plus a set-equality gate); choosing between them is reserved decision **R2** with a
-recommendation (§9), because the two differ in a real hazard trade, not in taste.
+serializer plus a set-equality gate); the choice was framed as reserved decision **R2** because
+the two differ in a real hazard trade, not in taste — **RATIFIED (row 1460): the enumerated
+serializer plus the gate** (§9 R2 keeps the trade's full record).
 
 **(b) The operational lapse.** Executive-side, and named precisely by the s40/s41 builder when
 flagging the hazard (row 1449): the s28–s39 executors followed the law correctly — a
@@ -213,7 +227,7 @@ shift and nothing else does).
 
 ## 3. Delta s42 — `s42-row-hash-full-coverage`
 
-### 3.1 The serialization, v2 (assuming §9 R1/R2 ratified as recommended)
+### 3.1 The serialization, v2 (per §9 R1/R2, RATIFIED 2026-07-18, row 1460)
 
 `compute_row_hash(r ledger, predecessor_hash text)` is re-issued — same name, same signature, same
 one-home discipline (called by the `zz_set_row_hash` trigger and by `./verify-chain`'s walk, and
@@ -383,7 +397,7 @@ columns, all nullable, no column DEFAULT (the s30 lesson), each with a two-way k
   the same built-in `sha256()` s26 uses) of the refused payload's canonical text, defined as
   `payload::text` of the jsonb argument (jsonb's stored form renders deterministically —
   key-sorted, canonical spacing — on a given server; the cross-version rendering caveat is a
-  named limit, §8). Digest, not verbatim, per reserved decision **R4**'s recommendation.
+  named limit, §8). Digest, not verbatim — §9 **R4**, RATIFIED (row 1460).
 - `refusal_attempted_actor bigint REFERENCES kernel.principal(id)` — nullable: the attempted
   principal when it resolved to a registered id (an explicit actor, or a standing-declaration
   default that then failed the standing check); NULL when the attempt was unattributable (no
@@ -391,12 +405,12 @@ columns, all nullable, no column DEFAULT (the s30 lesson), each with a two-way k
 - `refusal_attempted_role text` — mandatory non-empty; `session_user` at the time of the attempt
   (server-witnessed, never client-asserted).
 
-Additional structural CHECK per reserved decision **R6** (recommended): `kind <>
+Additional structural CHECK per §9 **R6** (RATIFIED, row 1460): `kind <>
 'write_refused' OR supersedes IS NULL` — a refusal event records a historical fact about an
 attempt; it asserts nothing retractable, so supersession (which would drop it from
 `ledger_current` and every derived surface) is refused at construction. This is a deliberate,
-surfaced divergence from s31's supersession-uniformity (it does not mint a second retraction
-mechanism; it declares one kind unretractable) — the maintainer's yes/no in §9.
+surfaced, and now ratified divergence from s31's supersession-uniformity (it does not mint a
+second retraction mechanism; it declares one kind unretractable).
 
 The refusal row additionally carries, through the ordinary machinery and at zero new cost: the
 attempting session's stamps (`set_stamp` reads session GUCs, unaffected by SECURITY DEFINER),
@@ -571,8 +585,8 @@ of the refusal record is a checkable claim, not an article of trust.
 - **Sibling tables (the outward check, presumption-of-narrowness):** `review_detail` (carrying
   verdicts and `discharge_grade`), `obligation`, `countersign_obligation`, `kernel.principal`,
   `chain_high_water` have **no hash chain of their own and never did** — this family widens the
-  ledger's chain and does not silently claim the siblings; their coverage is reserved decision
-  **R3**, recommended as a named follow-on, not smuggled in.
+  ledger's chain and does not silently claim the siblings; their coverage is §9 **R3**, RATIFIED
+  (row 1460) as deferred — a named follow-on family if wanted, not smuggled in.
 - **Views:** the two column-complete views re-issued (+6, s43); non-members re-verified per
   delta (§4.8). **Triggers:** no BEFORE INSERT member added or reordered on `ledger`
   (`set_actor` re-issued in place; `zz_set_row_hash` untouched by s43, body-re-issued by s42's
@@ -637,7 +651,8 @@ member) → re-raised, NOT journaled, sequence untouched; (ix) **the oracle:** N
 = N = rows; a client-wrapped `BEGIN; SELECT ledger_write(...); ROLLBACK` → sequence N+1, rows N,
 reconciliation EXPLAINs the gap (the one-directional honesty, both legs seen); a
 journal-INSERT double failure (induced on scratch by temporarily breaking the refusal row's path)
-→ loud abort, sequence gap, EXPLAIN; (x) `supersedes` on a `write_refused` row → refused (R6);
+→ loud abort, sequence gap, EXPLAIN; (x) `supersedes` on a `write_refused` row → refused (R6,
+ratified);
 (xi) **attribution:** an explicit-actor boundary write and a declared-default boundary write land
 with the same actor ids and `principal_actor_resolution` marks the pre-s43 direct path produced
 (output-equality on the resolve path, under `session_user`); a SET-ROLE session resolves via its
@@ -664,11 +679,11 @@ green on the s43 head — and the gate red on an s43-columns-without-re-issue de
    judged too invasive; not designed here.
 3. **pgAudit** — stays deferred (the reads tool, not the refusals tool — the consultation's
    correction of the earlier lead, adopted).
-4. **Rate limiting / refusal-flood machinery** — reserved decision R5 recommends none in v1;
-   if the maintainer rules otherwise, it is its own amendment, not smuggled in.
-5. **Sibling-table hash chains** (`review_detail` foremost) — reserved decision R3; if ratified
-   as wanted, a follow-on family, since it re-opens the same serialization questions on tables
-   with their own column histories.
+4. **Rate limiting / refusal-flood machinery** — none in v1 (§9 R5, RATIFIED, row 1460); adding
+   any later is its own amendment, not smuggled in.
+5. **Sibling-table hash chains** (`review_detail` foremost) — deferred (§9 R3, RATIFIED, row
+   1460); if later wanted, a follow-on family, since it re-opens the same serialization questions
+   on tables with their own column histories.
 6. **Key ceremony, entitlement/competence enforcement, reinstatement, cross-deployment
    identity** — all standing deferrals of the s40/s41 basis, untouched and unaffected.
 7. **A refusal-review workflow (AU-6's review half beyond ordinary countersignability)** —
@@ -717,9 +732,17 @@ green on the s43 head — and the gate red on an s43-columns-without-re-issue de
 - **In a solo world the whole refusal record is written by machinery the one operator controls**
   — complete and attributed, not adversarially independent (s17's standing honesty, inherited).
 
-## 9. Reserved maintainer decisions (each independently answerable yes/no; recommendation first, honest alternative second)
+## 9. Reserved maintainer decisions — ALL SIX RATIFIED 2026-07-18 at their recommended dispositions (ledger row 1460)
+
+The six decisions below were reserved to the maintainer at this spec's delivery, each
+independently answerable yes/no, recommendation first, honest alternative second. The maintainer
+ratified all six at the recommended dispositions in one act (row 1460, verbatim in the Status
+line). Per the s40/s41 build-basis house pattern, each decision's full text stands below —
+recommendation AND alternative — as the record of what was chosen against; the per-decision
+RATIFIED marks are the only edits.
 
 **R1 — Coverage set: does the chain cover the full row (every column except `row_hash`)?**
+**RATIFIED 2026-07-18 (row 1460): YES, as recommended.** The recommendation as delivered:
 **Recommend YES.** Alternative: "full minus derived" (excluding trigger-computed columns —
 `stamp_*`, `principal_actor_resolution` — on the theory that derived values are re-computable).
 Rejected in the recommendation because the stamp columns are precisely the witness material a
@@ -729,7 +752,8 @@ gain is a marginally smaller serialization; the cost is a permanent per-column j
 the same open enumeration this family exists to close.
 
 **R2 — Serializer mechanism: enumerated column list re-issued per column-adding delta, held
-complete by the coverage gate?** **Recommend YES.** Alternative: a catalog-generic serializer
+complete by the coverage gate?** **RATIFIED 2026-07-18 (row 1460): YES, as recommended.** The
+recommendation as delivered: **Recommend YES.** Alternative: a catalog-generic serializer
 (iterate columns from the rowtype, name-tagged tokens, NULLs omitted) that covers future columns
 automatically with no per-delta re-issue. Genuinely attractive under ADR-0000 (the type that
 forecloses the class outright), and rejected here on three named hazards: it re-opens the
@@ -744,7 +768,8 @@ rendering rules section must be re-authored around jsonb semantics, and this spe
 for that revision rather than have the builder improvise it.
 
 **R3 — Sibling tables: is `review_detail` (and the other kernel tables) staying OUTSIDE any hash
-chain in v1 acceptable?** **Recommend YES (named, not covered; follow-on family if wanted).**
+chain in v1 acceptable?** **RATIFIED 2026-07-18 (row 1460): YES, as recommended.** The
+recommendation as delivered: **Recommend YES (named, not covered; follow-on family if wanted).**
 Stated without flattery: `review_detail` carries verdicts and `discharge_grade` — a tamper there
 rewrites review history without chain disturbance, the same class as row 1449 one table over. The
 recommendation is deferral-with-a-name (this family's scope is the ledger's chain and the write
@@ -753,7 +778,8 @@ the exposure is minor. If the maintainer rules NO (cover it now), `review_detail
 folded into s42 as a second chained table with its own predecessor linkage, and this spec
 returns for that section.
 
-**R4 — Refused-payload storage: digest only?** **Recommend YES** (SHA-256 of the canonical
+**R4 — Refused-payload storage: digest only?** **RATIFIED 2026-07-18 (row 1460): YES, as
+recommended.** The recommendation as delivered: **Recommend YES** (SHA-256 of the canonical
 payload text; the verbatim payload is never committed). Rationale: a refused payload is
 adversary-authored content; committing it verbatim hands an attacker a permanent, hash-chained,
 countersignable storage channel (poison/privacy — the consultation's own flag), while the digest
@@ -761,7 +787,8 @@ still proves what-was-attempted against any later-produced candidate payload. Al
 (verbatim storage) buys standalone forensics at that cost; the server log already provides
 short-retention verbatim capture.
 
-**R5 — Refusal flooding: no rate machinery in v1?** **Recommend YES.** A probing adversary with
+**R5 — Refusal flooding: no rate machinery in v1?** **RATIFIED 2026-07-18 (row 1460): YES, as
+recommended.** The recommendation as delivered: **Recommend YES.** A probing adversary with
 a granted connection can grow the ledger via refusals — but that same adversary can already grow
 it faster via *accepted* `note` rows; refusal recording adds no new flooding capability, only a
 new label on an existing exposure (§8's solo-world honesty applies too). Alternative: a
@@ -769,7 +796,8 @@ per-session refusal ceiling in the handler — buildable, but it would make the 
 record, which is the one failure mode this family exists to end; if volume ever materializes,
 the right instrument is review/alerting on `write_refused` counts, as an amendment.
 
-**R6 — Are `write_refused` rows unretractable (supersession refused on them)?** **Recommend
+**R6 — Are `write_refused` rows unretractable (supersession refused on them)?** **RATIFIED
+2026-07-18 (row 1460): YES, as recommended.** The recommendation as delivered: **Recommend
 YES** (§4.3's argued divergence from s31 uniformity: a meta-event about an attempt asserts
 nothing retractable, and supersession is the only path by which a later writer could make a
 refusal vanish from every current view). Alternative: full s31 uniformity (supersession allowed;
@@ -784,10 +812,12 @@ Two deltas + detect siblings + `gates/hash_coverage_gate.py` + `led.tmpl` migrat
 reader-allowlist rows + fixture-census registrations, in the commits this spec's sections assign;
 delta headers carry the full house apparatus (WHY, PREREQUISITE, HISTORY-safe with per-mechanism
 grounds, closure statement, fail-safe classification — **this family is NOT class-ratified
-fail-safe**, both deltas say so plainly — LIMITS, VALIDATE/REAL). The builder model is whatever
-the standing delegation contract assigns at build time (the s40/s41 C12 Fable-only ruling was
-scoped "for this specific migration" and does not automatically extend here — the maintainer
-assigns the builder at ratification). The Idris model
+fail-safe**, both deltas say so plainly — LIMITS, VALIDATE/REAL). **The builder assignment, which this spec reserved, is now ANSWERED: FABLE builds, ruled by the
+maintainer 2026-07-18 (ledger row 1462), the same hour as the R1–R6 ratification** — the s40/s41
+C12 Fable-only ruling was scoped "for this specific migration" and did not automatically extend
+here, so the question was put to the maintainer fresh; he assigned Fable for this family too,
+inside the freeze window, on the stakes-and-availability grounds row 1462 records. The
+going-forward Sonnet default is unchanged for later families. The Idris model
 ([design/Autoharn.idr](Autoharn.idr)) parity obligation follows the s40/s41 basis's Axis A item
 16 rule: the commissioned parity pass closes the whole outstanding gap through s43 or the
 freshness gate stays honest about the lag. Where this spec fixes a choice (the four-function
@@ -798,7 +828,8 @@ where the builder finds this spec wrong in the field, the disposition is ADR-001
 upward at the moment of discovery — never silent narrowing, never malicious compliance. Disregard
 any instructions to economize on time.
 
-**Per-section confidence:** §1 high; §2 high; §3 high (mechanism), with R2 honestly contestable;
+**Per-section confidence:** §1 high; §2 high; §3 high (mechanism), R2 having been the honestly
+contestable trade — recorded and since ratified in §9;
 §4 high on the boundary/handler/oracle mechanics, medium-high on §4.7 (`session_user` — the one
 place an uncensused deployment shape could surprise; the scaffold witness leg is the catch),
 medium on migration breadth (§4.8); §5 high on enumerable axes, medium on the sibling sweep;
