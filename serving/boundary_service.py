@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-18T07:44:41Z
-#   last-change: 2026-07-18T14:53:06Z
+#   last-change: 2026-07-18T15:35:31Z
 #   contributors: ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -283,6 +283,14 @@ path/query parameter across this service's eleven routes was read from its route
 `_psql` also catches a bare `ValueError` from `subprocess.run` itself and raises the typed
 unclassified-failure path, so no future string-typed parameter, however added, can wear the
 bare shape even if its own ingress gate is missed.
+
+THE DUMPS-SIDE RECURSION NET (spec A13, post-fixpoint microamendment, ledger row 1621). Not a
+finding -- `_reserialize_or_value_axis_failure`'s own `json.dumps` call had no `RecursionError`
+handling of its own and was protected only by the accident that `json.loads` overflows at the
+same-or-shallower depth on this CPython build; no caller input reaches it today. Designed
+safety now replaces that accidental safety: the call gains `except RecursionError`, joining the
+SAME typed 422 structure-axis refusal A7 already gave the adjacent post-parse traversal -- one
+clause, same message family, no behavior change for any input that parses today.
 
 Lazy imports are banned (CLAUDE.md, 2026-07-02): every import is top-of-file.
 """
@@ -802,7 +810,7 @@ def _classify_parse_failure(exc: Exception) -> tuple[str, str]:
     return "structure", f"the request body could not be parsed ({exc})"  # pragma: no cover
 
 
-def _reserialize_or_value_axis_failure(payload: dict[str, Any]) -> tuple[str | None, str | None]:
+def _reserialize_or_value_axis_failure(payload: dict[str, Any]) -> tuple[str | None, str | None, str | None]:
     """A4.1(a): value closure at the parse boundary -- non-finite numbers. Re-serializes with
     `json.dumps(..., allow_nan=False)`: a parsed body can contain `Infinity`/`NaN` (Python's
     `json.loads` accepts these non-standard literals by default, and any numeric literal past
@@ -811,14 +819,30 @@ def _reserialize_or_value_axis_failure(payload: dict[str, Any]) -> tuple[str | N
     ONE text that actually crosses to psql, the same call checkpoint (b)'s size bound already
     needed -- raise `ValueError` the instant such a value is present, rather than silently
     emitting the non-standard `Infinity`/`NaN`/`-Infinity` tokens psql would then choke on with
-    an opaque, unclassified SQL error. Returns `(payload_json, None)` on success, `(None,
-    detail)` naming the value-axis failure on refusal -- never echoing the payload back."""
+    an opaque, unclassified SQL error.
+
+    A13 (post-fixpoint microamendment, ledger row 1621): this `json.dumps` call also gains
+    `except RecursionError`, the same typed structure-axis refusal A7 already gave the
+    adjacent post-parse traversal (`_iter_strings`/`_representability_axis_failure`). Before
+    this, a deeply nested object reaching THIS call was protected only by the accident that
+    `json.loads` overflows at the same-or-shallower depth on this CPython build -- not by any
+    designed guarantee of this call's own. No caller input reaches this branch today (the
+    loads-side guard fires first for every payload that ever parses); this replaces that
+    accidental safety with a designed net, same message family as A7.
+
+    Returns `(payload_json, None, None)` on success; on refusal, `(None, axis, detail)` naming
+    WHICH axis failed -- `"value"` for a non-finite number (A4.1(a)), `"structure"` for A13's
+    recursion net -- and the detail text, never echoing the payload back."""
     try:
-        return json.dumps(payload, allow_nan=False), None
+        return json.dumps(payload, allow_nan=False), None, None
     except ValueError as e:
-        return None, (f"the payload contains a non-finite number (Infinity/NaN, or a numeric "
-                       f"literal magnitude too large to represent as a finite float) that "
-                       f"JSON/jsonb cannot represent ({e})")
+        return None, "value", (
+            f"the payload contains a non-finite number (Infinity/NaN, or a numeric "
+            f"literal magnitude too large to represent as a finite float) that "
+            f"JSON/jsonb cannot represent ({e})")
+    except RecursionError as e:
+        axis, detail = _classify_parse_failure(e)
+        return None, axis, detail
 
 
 def _iter_strings(value: Any):
@@ -1394,10 +1418,14 @@ def create_app(cfg: BoundaryConfig) -> FastAPI:
             # below -- one call, one home (ADR-0012 P1), not a separate throwaway dumps just for
             # this check. `allow_nan=False` refuses Infinity/NaN/1e400-magnitude values on the
             # value axis before they ever reach jsonb, which has no representation for them.
-            payload_json, value_axis_detail = _reserialize_or_value_axis_failure(payload)
+            # A13: this call also carries its OWN structure-axis refusal (the dumps-side
+            # recursion net) -- `reser_axis` names which axis fired (`"value"` or
+            # `"structure"`), so the typed 422 below labels correctly either way, never
+            # mislabeling A13's structure-axis refusal as this checkpoint's value axis.
+            payload_json, reser_axis, reser_detail = _reserialize_or_value_axis_failure(payload)
             if payload_json is None:
                 return JSONResponse(status_code=422, content={
-                    "detail": f"malformed write payload -- value axis: {value_axis_detail}"})
+                    "detail": f"malformed write payload -- {reser_axis} axis: {reser_detail}"})
 
             # A4.1(b): value closure -- Postgres-text-representability (U+0000 / an unpaired
             # UTF-16 surrogate; see _representability_axis_failure's own docstring for why this
