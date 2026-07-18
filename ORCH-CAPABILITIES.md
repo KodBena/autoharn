@@ -43,6 +43,17 @@ real python-driven write, warned when no work item was open+claimed and fell sil
 — torn down after with the identical zero-residue verification. Items marked *(this pass, config
 layer)* carry this second probe's own captured output.
 
+A LATER sweep (2026-07-18, doc-only, no code/kernel touched) added items 39–42 covering what
+landed that day: the `otel-attest` sentry verb reaching service, the host-side model watchdog,
+`./judge`'s new `--layer work`/`--layer defeat` modes (folded into item 12), and the s42/s43/s45
+kernel deltas. Method: read every cited source file in full, then re-run the read-only commands
+myself against this repository's own live default target (`deployment.json`'s `autoharn1`,
+`./judge`/`./otel-attest --dry-run`) rather than trust the banked record alone; the two-delta
+family (s42/s43) and s45 are scratch-witnessed-only per the runs-are-linear ruling (kernel
+lineage deltas are never applied to an existing world), so those three items cite the banked
+`seen-red/` evidence and the adjudicating ledger rows instead of a live re-run — marked as such,
+not silently presented as freshly witnessed by this sweep.
+
 ## Witnessed
 
 **1. Decisions that cannot be quietly rewritten.**
@@ -196,6 +207,58 @@ family is `DIVERGE_DEFECT`/`QUARANTINED`. Deliberately observer-first: not wired
 ("DIFFERENTIAL GREEN — every target bit-identical to the SQL floor"). The derivation record this
 run banked was deliberately removed after the probe teardown (out of this pass's touch-only-
 CAPABILITIES.md scope, and specific to the torn-down `capsprobe` world).
+
+**`--layer` (2026-07-18, `engine/ledger_differential.py`'s own `--layer` flag, passed through
+`./judge`'s unmodified `"$@"`) — the same differential machinery run over a NAMED registry layer
+(`engine/lp_registry.py`'s `LAYERS`) instead of only the original `tnow` (record-time) stack.**
+Two layers ship a SQL floor today: `work` (the work-item ledger's own atoms) and `defeat` (the
+defeasibility pipeline's [`model_defeated`](GLOSSARY.md#model-defeated)/`credited` derivation,
+`design/FABLE-DEFEAT-PIPELINE-SPEC.md` §7). *Witnessed live, this pass, directly against this repository's own default target
+(`deployment.json`'s `autoharn1`, no probe world — a genuine re-run of the live commands, not a
+banked transcript):*
+
+```
+$ ./judge --layer tnow
+  [OK ] autoharn1 AGREE              asp=2925 sql=2925 atoms; Δasp=[] Δsql=[]
+# DIFFERENTIAL GREEN -- every target bit-identical to the SQL floor
+(exit 0)
+
+$ ./judge --layer work
+  [OK ] autoharn1 AGREE              asp=360 sql=360 atoms; Δasp=[] Δsql=[]
+# DIFFERENTIAL GREEN -- every target bit-identical to the SQL floor
+(exit 0)
+```
+
+(The absolute atom counts in the `tnow`/`work` transcripts above are live, growing figures —
+the ledger is append-only, so a re-run shows larger numbers; the checked invariant is
+`asp == sql` with empty deltas, never the absolute count. The `defeat` transcript's `0/0`
+with its fixed refusal string is stable and reproduces verbatim.)
+
+```
+
+$ ./judge --layer defeat
+  [!! ] autoharn1 QUARANTINED        asp=0 sql=0 atoms; Δasp=[] Δsql=[]
+          asp QUARANTINED: EDB export failed: CapabilityError: target 'autoharn1' did not emit
+          trust_grant/n (capability absent): no principal_binding_active/
+          principal_competence_activity columns on this schema (pre-s41 lineage) -- capability
+          absent, not record-empty. A silent empty here would be the F49 vacuous-pass; refusing
+          loudly.
+          sql QUARANTINED: [identical message, independently raised by the SQL-floor producer]
+# DIFFERENTIAL RED -- a target diverged/quarantined (NO RESULT)
+(exit 1)
+```
+
+The `defeat` layer's `QUARANTINED` is the honest capability statement, not a bug: this
+repository's own live tracker world (`autoharn1`) has never had the s40/s41 principal-identity
+kernel lineage applied to its schema (runs-are-linear — kernel deltas reach reality only via a
+future world's birth chain, never an existing one), so the `principal_binding_active`/
+`principal_competence_activity` columns the defeat pipeline's EDB export needs simply do not
+exist here — both the ASP and SQL producers refuse identically rather than one guessing an empty
+result the other would call absent. `work_item_violations: none` on all three runs (same schema,
+same check, item 8's own view). Named limit, disclosed in the layer's own producer code: `run_
+layer_differential` implements a SQL floor for `work` and `defeat` only; a third registry layer
+with no `_LAYER_FLOOR_PREDS` entry raises `NotImplementedError` naming the gap rather than
+silently comparing nothing.
 
 **13. `bootstrap/new-project.sh --new-world` — opening an isolated world is one scripted command.**
 Per the "one world per run" ruling (maintainer, 2026-07-09: a run's subject must not see a
@@ -1199,6 +1262,177 @@ dangling refusal with teach-text (exit 3), `work_item_descendants` correct, veri
 header: a first-draft self-parent CHECK (`work_parent IS DISTINCT FROM work_slug`) failed every
 ordinary all-NULL row — caught by the fixture run before shipping, corrected with the
 NULL-guarded form, named per the s26 injectivity-note precedent.
+
+**39. `otel-attest` — the v1 model-provenance sentry attestation verb, IN SERVICE
+(`otel-attest`, repo root; `design/FABLE-OTEL-SENTRY-SPEC.md` §5-§7; landed commit `e2ce003`,
+went out of service on adversarial review row 1505, RETURNED TO SERVICE ledger row 1515,
+2026-07-18).** An autoharn-side operator verb (mirrors `attest-tags`'s own framing — item 28: it
+lives at the repo root but operates on a TARGET world's ledger, given by `--world`, default this
+repo's own). It reads a local OTel collector's JSONL export
+([local/OTEL-COLLECTOR.md](local/OTEL-COLLECTOR.md)) and the target world's ledger (read-only,
+via that world's own `led`, never raw `psql`), joins `api_request` events to ledger rows on
+`stamp_session`/`stamp_invocation`, and writes one defeasible `verification` row per attributable
+row at a declared confidence grade — the closed vocabulary `exact-command | turn-bracketed |
+session-scoped | ambiguous`, computed as the HIGHEST grade whose join set holds, never guessed
+upward. A MISMATCH (or MISMATCH-graded ambiguous) verdict additionally writes a companion
+`finding` row. Writes go through the target world's `led` only; where the s43
+[write boundary](GLOSSARY.md#write-boundary) (item 41 below) is present, that is the only path
+in — `otel-attest` never touches Postgres
+directly (self-application law, CLAUDE.md). NEVER a guarantee, NEVER a gate: nothing here blocks
+or grades anything, and absence of correlated events writes NOTHING — never a fabricated claim
+about absence.
+
+**The `ambiguous` write, per the sentry spec's Amendment A1 (2026-07-18, ledger row 1505 F1,
+adjudicated FIT-WITH-FINDINGS)**: the first build silently folded every `ambiguous` session into
+the written-as-nothing path, contradicting §6's own "never silently upgraded, never silently
+dropped." A1 fixes the value domain: an ambiguous attestation writes `model=unresolved` (a closed
+sentinel, never a fabricated single model or an invented multi-model packing — the real
+candidates are named in `basis=`); its `verdict` is `MISMATCH` when EVERY candidate model
+contradicts `expected=` (the culprit is unknown but the substitution is certain), `unevaluated`
+when at least one candidate matches or the candidate set is empty (never a vacuous MISMATCH over
+nothing — the addendum this same amendment records), and it writes the companion `finding` row
+exactly as an ordinary MISMATCH does, never hiding in attestation bulk.
+
+*Witnessed live, this pass, directly against this repository's own default target
+(`autoharn1`, `--dry-run`, writes nothing):*
+
+```
+$ ./otel-attest --dry-run --recent 5
+otel-attest: no OTel events found in /home/bork/tools/otelcol/data/claude-events.jsonl
+(collector may be stopped, or export empty) -- every row this run considers gets NO attestation,
+never a fabricated absence claim.
+otel-attest: 0 attested, 0 already-attested skipped, 5 uncovered-no-events (reported, never
+fabricated), 0 refused (write-time field-hygiene, F2/A2), 0 companion finding-row write failures.
+```
+
+This is the honest, expected report for this world today: the collector's export was genuinely
+empty (0 bytes) at the moment of the run, and — separately, per ledger row 1498 — this tracker's
+own world has never had `stamp_intercept.py` wired into its live session config, so every row
+here carries `stamp_session` NULL and would be unattestable even with events present; a real
+attestation has never landed against this repository's own ledger, only against scratch worlds.
+Both facts are stated in the tool's own output/record, never silently absorbed into a false
+"nothing to attest, all clean." **Scratch-witnessed history (banked, not re-run this pass):**
+adversarial review found seven findings (ledger row 1505); the fix pass (commit `c3301e5`)
+closed F1/F2/F6 (F6: no `seen-red/otel-attest` fixtures, no census registration, no local
+witness doc) and the verb returned to service (row 1515, independently re-verified by the
+orchestrator: "seen-red/otel-attest fixture suite ALL OK (13 checks, both polarities)");
+[seen-red/otel-attest/red.txt](seen-red/otel-attest/red.txt) quotes the write-time delimiter
+refusal verbatim (`field 'model' contains the '|' delimiter and cannot be written`) and the F7
+partial-failure nonzero-exit case (`rc=1`, a companion finding-row write simulated-failed).
+**Named limit, unresolved as of this sweep:** v1 attestation needs non-NULL stamps in the target
+world; this repository's own world does not have them, so `otel-attest` against `autoharn1` is
+UNEXERCISED beyond the dry-run/no-events report above — WITNESSED that it degrades honestly, not
+witnessed producing a real attestation row here.
+
+**40. The model watchdog (`~/tools/otel-watchdog`) — real-time notification, writes nothing to
+the ledger (v0 of the three-layer sentry, `design/FABLE-OTEL-SENTRY-SPEC.md` §3;
+[local/OTEL-WATCHDOG.md](local/OTEL-WATCHDOG.md), installed 2026-07-18).** A small always-on
+daemon on this host (not an autoharn repo artifact — a personal-machine install under
+`~/tools/`, same directory-per-tool convention as `~/tools/otelcol/`) that tails the local OTel
+collector's export and beeps the maintainer's phone, via his existing mail-notification script,
+the moment a session's *served* model disagrees with its *declared* (`autoharn.expected_model`)
+model. Built after a real incident (2026-07-17, ledger row 1434: the orchestrator was silently
+substituted from Fable to Sonnet, and the substituted model asserted a false authority record
+when confronted) — the harness's own hooks cannot see model identity at all, so this is the one
+channel that does. **Notification-only by construction, not by configuration**: it is a separate
+process, not wired into any Claude Code hook, registers no principal, and writes NOTHING to any
+world's ledger — it gates nothing and attests nothing (that is v1/v2's job, items 39 above and
+41 below). *Witnessed live, this pass:*
+
+```
+$ ~/tools/otelcol/run.sh status
+running (pid 2546843)
+$ ~/tools/otel-watchdog/run.sh status
+running (pid 2546874)
+```
+
+Both processes are live on this host at the time of this sweep. The sanctioned test send
+(2026-07-18, quoted in [local/OTEL-WATCHDOG.md](local/OTEL-WATCHDOG.md), not re-sent this pass to
+avoid a spurious real alert to the maintainer's phone — UNWITNESSED THIS PASS, cited from the
+install doc's own banked transcript): a session launched with a deliberately wrong
+`autoharn.expected_model` produced a journaled `MISMATCH DETECTED` line and a real mail send
+(`rc=0`) with the subject `[WATCHDOG TEST] OTEL WATCHDOG mismatch: session=226629e6
+expected=claude-opus-4-not-really observed=claude-fable-5`. **Named honest limits, from the
+install doc itself:** a session that emits no telemetry at all is invisible to the coverage
+report (not counted, not flagged) — absence from the report proves nothing; a legitimate
+mid-session `/model` switch fires an alert exactly like a real substitution would, accepted as
+the cost of a tripwire that cannot authenticate intent; mail failure or watchdog death is silent
+failure, mitigated only by the opt-in `--heartbeat` flag.
+
+**41. `s42`/`s43` — row-hash full coverage + the [typed verdict](GLOSSARY.md#typed-verdict)
+[write boundary](GLOSSARY.md#write-boundary), the
+refusal-recording family (`kernel/lineage/s42-row-hash-full-coverage.sql`,
+`kernel/lineage/s43-typed-verdict-write-boundary.sql`,
+[design/FABLE-REFUSAL-RECORDING-AND-HASH-COVERAGE-SPEC.md](design/FABLE-REFUSAL-RECORDING-AND-HASH-COVERAGE-SPEC.md),
+ratified ledger row 1460; Fable-built per ledger row 1462; landed commits `1fc4e8c`/`84729de`,
+2026-07-18).** **AUTHORED AND SCRATCH-WITNESSED ONLY — not applied to any existing world**, per
+the runs-are-strictly-linear ruling: a kernel lineage delta reaches reality only via a FUTURE
+world's birth chain (confirmed live, this pass, in `bootstrap/new-project.sh`'s own
+`LINEAGE_CHAIN` string: s42/s43/s45 are wired in for the next `--new-world` scaffold; this
+repository's own live tracker world (`autoharn1`) is not one — item 12's `--layer defeat`
+`QUARANTINED` result above is the direct, live consequence). **s42** closes a witnessed hazard
+(ledger row 1449): `compute_row_hash` (s26, item 30) serialized only the s24-era column set, so
+every column added since s28 — twenty-two of them, including every s40/s41 principal column — sat
+outside the tamper-evidence chain, and a schema-owner tamper of any of them left `./verify-chain`
+reporting `INTACT` over the rewrite. The fix re-issues the serializer over the FULL row (52
+columns at its own head, everything except `row_hash` itself), held complete forever by a new
+repository gate, `gates/hash_coverage_gate.py`, which goes RED on any column-set/serializer-set
+disagreement. **s43** closes a sibling hazard (spec §1.1): every kernel policy refusal was a
+`RAISE EXCEPTION` that aborted its own transaction — the one event class the kernel systematically
+failed to record, because the refusal destroyed the only trace of the attempt. After s43 the
+granted role holds NO INSERT privilege on any kernel-governed table; four SECURITY DEFINER
+functions are the only write path, and a refusal caught inside them is committed as an ordinary
+`write_refused` ledger row (attributed actor, SQLSTATE, teach-text, a SHA-256 digest of the
+refused payload — digest, never verbatim, per ratified R4) and returned as a
+[typed verdict](GLOSSARY.md#typed-verdict), never an abort. `write_refused` rows are UNRETRACTABLE (ratified R6), enforced by two mechanisms (a
+same-row CHECK plus a supersession-target trigger, because a same-row CHECK alone cannot see a
+later row naming it as a supersession target). *Banked scratch-witness evidence, both polarities,
+cited rather than re-run this pass (kernel/, never touched by this sweep's own surface):*
+[seen-red/s42-row-hash-full-coverage/red.txt](seen-red/s42-row-hash-full-coverage/red.txt) — a
+pre-s42 tamper of `work_parent` verifies `INTACT` (the hazard itself, reproduced); every one of
+the 52 serialized columns tampered individually under the s42 head breaks the chain
+(`verify-chain: BROKEN -- first break at row id 19`); the coverage gate refuses an injected
+undeclared column (`REFUSED -- ... 'zz_seenred_probe' is OUTSIDE the hash chain`).
+[seen-red/s43-typed-verdict-write-boundary/red.txt](seen-red/s43-typed-verdict-write-boundary/red.txt)
+— a write under a revoked principal returns `disposition=refused, sqlstate=P0001` with a
+committed `write_refused` row quoted in full; a raw `INSERT` as the granted role is
+REFUSED-AS-EXPECTED (`ERROR: permission denied for table ledger`); an owner-forged
+`write_refused` row is caught by `./verify-chain`'s new `REFUSAL-ORACLE-FORGERY-SUSPECT` verdict;
+a row superseding a `write_refused` row is refused (R6 exercised); `./judge` SQL/ASP differential
+verdicts AGREE with `write_refused` rows live. **Not witnessed by this sweep directly** — the
+scratch worlds these fixtures ran against are gone by design (kernel/lineage/ is out of this
+item's own touch-list); the evidence above is the banked record, not a re-run.
+
+**42. `s45` — standing lifecycle: `db_role` unbind + suspension lift as one kernel delta
+(`kernel/lineage/s45-standing-lifecycle.sql`,
+[design/FABLE-STANDING-LIFECYCLE-SPEC.md](design/FABLE-STANDING-LIFECYCLE-SPEC.md), maintainer
+batch ratification ledger row 1481, 2026-07-18; landed commit `94f5b7a`).** **AUTHORED AND
+SCRATCH-WITNESSED ONLY — not applied to any existing world**, the identical runs-are-linear
+posture as item 41: `bootstrap/new-project.sh`'s `LINEAGE_CHAIN` carries s45 for the NEXT
+`--new-world` scaffold; a world already born gains nothing from this delta ever, by the ruling's
+own terms, not as an oversight. Closes a named class (spec §1): a governance state with a
+sanctioned way in and no sanctioned way out. Two witnessed instances before this delta: (1) a
+`db_role`'s standing declaration (s40) was repointable forever but never removable — every
+workaround either blocked that identity on every channel or re-minted the exact
+misattribution-window disease s40 existed to close; (2) suspension (s40 Element 4) was enterable
+and not exitable, degenerating into a soft revocation. s45 licenses `principal_binding_active`
+on a standing DECLARATION and a SUSPENSION (deliberately NOT a REVOCATION — that omission is
+itself ratified as terminal-by-type, not a gap), re-issues `kernel.principal_role` with
+resurrection-proof governing-row semantics, and re-issues the standing functions and
+`validate_supersession_target` for the three lifecycle kinds. *Banked scratch-witness evidence,
+cited rather than re-run this pass:*
+[seen-red/s45-standing-lifecycle/red.txt](seen-red/s45-standing-lifecycle/red.txt) — the
+resurrection trap reproduced both forms: a naive (never-shipped) bare-`EXISTS` query resurrects a
+prior governing role to `'3'` after its declaration is unbound, while the shipped, in-force-
+filtered view correctly reads `''` (undeclared); the suspension-lift trap reproduced the same way
+(a lifted suspension reads `suspended` FOREVER under the naive bare-conjunct form; the shipped
+form correctly reads `active`); revoked-then-suspended and suspended-then-revoked precedence both
+resolve to `revoked`; three cross-kind hide attempts (a `note` superseding a declaration, a
+suspension, a revocation) are each REFUSED-AS-EXPECTED, the hide attempt itself becoming a
+committed record; a real `--new-world` scaffold run confirms the birth-chain path — declarations
+carry `principal_binding_active=true` from birth, an `undeclare-standing` round trip lands clean,
+and the dual login/role declaration behavior is not bricked by unbinding only one of the two.
+**Not witnessed by this sweep directly**, same reason and same limit as item 41.
 
 ## Built, unexercised (exists; has not yet fired in anger)
 

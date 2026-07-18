@@ -458,3 +458,145 @@ under `seen-red/`). A gate never seen red is a claim, not a guarantee.
 ### ephemera
 Local session transcripts and snapshots (`ephemera/session-<id>/`, gitignored). Never
 committed — upstream is public, transcripts are private (maintainer ruling 2026-07-09).
+
+## Attestation, defeat, and lifecycle terms (added 2026-07-18)
+
+The terms below entered the vocabulary with three same-day Fable-authored kernel-delta
+specs — [FABLE-DEFEAT-PIPELINE-SPEC.md](design/FABLE-DEFEAT-PIPELINE-SPEC.md),
+[FABLE-OTEL-SENTRY-SPEC.md](design/FABLE-OTEL-SENTRY-SPEC.md) (its own header still reads
+DRAFT awaiting maintainer ratification — unlike its two siblings here, which carry
+RATIFIED build basis headers; ledger row 1481 ratified three of its reserved decisions,
+not the design's own status), and
+[FABLE-REFUSAL-RECORDING-AND-HASH-COVERAGE-SPEC.md](design/FABLE-REFUSAL-RECORDING-AND-HASH-COVERAGE-SPEC.md)
+(the latter's mechanism also underlies
+[FABLE-STANDING-LIFECYCLE-SPEC.md](design/FABLE-STANDING-LIFECYCLE-SPEC.md)) — none defined
+here before. Most of this vocabulary describes a **future** world's kernel: per the
+runs-are-strictly-linear ruling, a spec's deltas reach reality only by entering a later
+world's [birth chain](#birth-chain), never by editing the current one. Where a term names
+something not yet in any birth chain, the entry says so.
+
+<a id="write-boundary"></a>
+### write boundary
+The kernel delta `s43-typed-verdict-write-boundary`: four `SECURITY DEFINER` functions
+(`kernel.ledger_write`, `review_write`, `registration_write`, `obligation_write`) that
+become the **only** path a granted role can use to write the ledger — plain `INSERT`
+privilege is revoked from that role, so a bypass of the boundary is a privilege-layer
+refusal (SQLSTATE `42501`), not a semantics question. A refusal caught inside a boundary
+function is committed as an ordinary `write_refused` ledger row — the kind the
+[typed verdict](#typed-verdict)'s `refusal_id` field points at — instead of vanishing with
+an aborted transaction. Replaces the prior design, where a
+kernel refusal was an aborting SQL exception that destroyed the only evidence of the
+attempt it refused. See [typed verdict](#typed-verdict) for what the boundary returns, and
+[FABLE-REFUSAL-RECORDING-AND-HASH-COVERAGE-SPEC.md](design/FABLE-REFUSAL-RECORDING-AND-HASH-COVERAGE-SPEC.md)
+§4.2 for the four functions' exact shape. **Status:** already wired into the birth chain
+([`bootstrap/new-project.sh`](bootstrap/new-project.sh)'s `LINEAGE_CHAIN`), not yet
+exercised by any world's actual birth.
+
+<a id="typed-verdict"></a>
+### typed verdict
+The `kernel.write_verdict` composite type every [write boundary](#write-boundary) function
+returns: `disposition` (`'accepted'` or `'refused'`, a two-member closed vocabulary),
+`row_id` (the accepted row's id, else `NULL`), `refusal_id` (the committed
+[`write_refused`](#write-boundary) row's id, else `NULL`), `sqlstate`, and `message` (the
+refusal's teach-text). A refusal is delivered as ordinary return data, not an aborted
+transaction — the mechanism this whole delta family exists to ship ("Ledger grade, of
+course," ledger row 1419). Not to be confused with `attest_verdict`, the separate closed
+vocabulary (`match`/`mismatch`/`unevaluated`) an s44 attestation row carries (s44: the
+model-identity-attestation typed kernel delta authored in
+[FABLE-OTEL-SENTRY-SPEC.md](design/FABLE-OTEL-SENTRY-SPEC.md) §8 — a spec-authored draft,
+not yet filed under `kernel/lineage/`) (the same
+row the [attestation grade](#attestation-grade) entry describes, on its `attest_grade`
+column) — same word, two different typed columns in two different specs; this glossary
+entry is the write-boundary one, since that is what "write boundary" pairs it with here.
+
+<a id="credited-view"></a>
+### credited view
+The read surface that shows the ledger's current rows **minus** any row a
+[computed defeat](#model-defeated) has excluded. Designed as kernel views
+`credited_current` (column-identical to `ledger_current`) and `model_defeated_rows` (the
+with-cause surface: row id, attestation id, grant id, model, grade) in delta
+`s46-credited-views.sql`, view-only with zero new columns or kinds (a working name —
+renumbered from the spec's original `s45` by its dated A2 amendment after that number
+collided with the shipped standing-lifecycle delta; the builder takes the next free
+number at build time). The SPA display
+contract (any future consumer) requires defeated rows to stay reachable in an explicit
+history mode, with cause — a client that makes them unreachable implements a censored
+record. **Status: designed, prerequisite s44, NOT YET in any birth chain.** Until an s44+
+world exists, the interim credited computation is the engine floor
+(`engine/ledger_floor.py`'s `defeat_floor_atoms`), not a kernel view.
+
+<a id="model-defeated"></a>
+### computed defeat (`model_defeated`)
+The derived judgment that a ledger row is excluded from a [credited view](#credited-view):
+an unsuperseded mismatch attestation about the row, written by a principal holding an
+unsuperseded active [trust grant](#trust-grant) for `model-identity-attestation`, exists.
+Computed fresh on every derivation pass by two independent producers required to agree
+bit-identically (`./judge --layer defeat`) — nothing is stored, nothing is edited, no
+write is ever gated, and the underlying row is never touched. Dependents of a defeated row
+are transitively flagged (`exposure_model`), dischargeable only by an SoD-distinct
+affirmation (`exposure_model_undischarged`). Superseding the grant lapses every dependent
+defeat; superseding the attestation resurrects its target. By ratified rule (I5, ledger row
+1481), a principal's *standing* (suspension or revocation) never conditions defeat — only
+the grant or the attestation can move defeat force. **Honest limit:** the current live
+world predates s41 (no typed competence grants), so it cannot derive defeat at all — the
+derivation legs refuse loudly with a capability reason rather than reading a false
+"AGREE on empty." The pipeline is witnessable only on scratch chains until the first s41+
+world exists.
+
+<a id="trust-grant"></a>
+### trust grant
+A `principal_competence_granted` ledger row (s41) whose activity is
+`model-identity-attestation` and whose `principal_binding_active` flag is set — the
+empowerment that lets a principal's mismatch attestation
+[defeat](#model-defeated) a row. "In force" is a two-part test kept structurally apart: the
+active flag is a same-row attribute read at export time, while "not yet superseded" is
+tested separately in the derivation rules — conflating the two was a corrected defect
+(I1) in the envelope's original §3.2 text, fixed before the pipeline spec was authored.
+A grant is recordable, not
+gating, the same posture s41 ships competence grants under generally: withdrawing the
+grant (superseding it inactive) is the sanctioned way to stop a principal's attestations
+from defeating anything, and it does so retroactively for every row that grant had defeated.
+
+<a id="attestation-grade"></a>
+### attestation grade
+The closed-vocabulary confidence label a model-identity attestation carries, naming which
+join keys correlating the ledger row to an OTel `api_request` event actually held:
+`exact-command` (strongest — command text plus session plus turn-bracketing plus resource
+attributes) down through `turn-bracketed`, `session-scoped`, to `ambiguous` (more than one
+model in the session's window, or a load-bearing join failed — recorded, never silently
+dropped or upgraded). Carried on every attestation, in both the v1 statement convention's
+`grade=` field and the future typed kind's `attest_grade` column, but **deliberately unread
+by the defeat rule** — grade-conditioned defeat is a ratified direction-only decision (Q3),
+not yet built. A row with no correlated events gets no attestation at all: absence of
+telemetry is never treated as evidence of anything.
+
+<a id="watchdog-coverage"></a>
+### watchdog coverage
+The OTel sentry's v0 always-on watchdog's report of *which sessions it is actually
+watching* (declared-expectation present vs. session UNWATCHED), issued alongside its
+mismatch alerts so that "watched and clean" is never confused with "not watched at all."
+Exists because the watchdog can only compare an observed model against a declared
+expectation for sessions that both emit telemetry and carry that declaration — a
+substituted session that silently stops emitting looks identical to a closed one (the
+standing rebuttal R1: absence of events proves nothing). A watchdog that reported only
+mismatches would be false comfort; coverage reporting is the named design duty that closes
+that gap. **Status: designed (§3 of the OTel sentry spec), not yet built** — the watchdog
+verb (`otel-watch`) is unbuilt as of this entry.
+
+<a id="fixture-census"></a>
+### fixture census
+`gates/fixture_census.py`: the gate that keeps the [`seen-red`](#seen-red) corpus honest as
+a *checked* property rather than a claim. It holds a registry mapping every
+`seen-red/<dir>` to the runnable fixture that both-polarity-proves it, and goes red on (1)
+a `seen-red/<dir>` with no banked red-shaped evidence, (2) an orphaned `seen-red/<dir>` not
+in the registry, or (3) a registry entry whose fixture file does not exist. Scope, declared
+by the gate's own header: it checks red-evidence *presence* and fixture *existence*
+statically, cheap enough for every commit; actually re-executing each fixture to a live red
+is the separate acceptance-time re-verification, not run on every commit. **Honest limit
+(open work item, row 1503):** the census today verifies a registered fixture path exists
+on disk, not that it is **git-tracked** — an untracked file at that path satisfies the
+check, the witnessed false-green the row's s45-review finding named. The item also notes a
+mechanical root cause it will close: `seen-red/s45-standing-lifecycle/run_fixtures.py`
+lacks the fixture-census leg its own spec's gate enumeration listed but the harness never
+invoked. Filed, sequenced for "the next quiet window," not yet built — the current head is
+census-clean, so nothing is live-broken by the gap.

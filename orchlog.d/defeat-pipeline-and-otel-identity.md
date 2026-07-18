@@ -119,7 +119,7 @@ grant, keep defeating exactly as before (ledger row 1481's ratified rule, restat
   absence proves nothing, permanently.
 - **The watchdog fails silent** on its own death or a mail failure; a `--heartbeat` option is
   the operator's opt-in against that, not a default.
-- **The typed kernel form (s44) and its credited-read views (a future `s45-credited-views.sql`
+- **The typed kernel form (s44) and its credited-read views (a future `s46-credited-views.sql`
   in the defeat-pipeline sense — a different, later delta from the standing-lifecycle s45 named
   above) are authored but not yet in any birth chain**; until an s44+ world exists, the engine
   floor above is the only credited computation, and `./otel-attest`'s rows are ordinary

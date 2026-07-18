@@ -70,7 +70,7 @@ Five deliverables, in build order:
    and any undeclared divergence red. The differential doubles as the mechanization of the
    stratification law (§10).
 5. **The credited read surface** (§8): the envelope's serving option (c) — a kernel delta
-   (working name `s45-credited-views.sql`, **view-only, zero new columns**) defining
+   (working name `s46-credited-views.sql`, **view-only, zero new columns**) defining
    `credited_current` and `model_defeated_rows`, prerequisite s44, entering the same
    evidence-triggered birth chain RD-2 governs; until that world exists, the engine floor
    is the interim credited computation. The SPA display contract (§9) binds any consumer.
@@ -391,7 +391,7 @@ enforcement):
   commit per that gate's own procedure (run the engine test suite; the parity test is the
   witness that the registry and the real files agree).
 
-## 8. The credited read surface — kernel delta `s45-credited-views.sql` (authored for a future chain)
+## 8. The credited read surface — kernel delta `s46-credited-views.sql` (authored for a future chain)
 
 The envelope's serving option (c), ratified direction: an ordinary SQL view read the way
 `ledger_current` is. **View-only, zero new ledger columns, zero new kinds — therefore
@@ -620,7 +620,7 @@ controls are part of done (ADR-0011's gate-proves-itself-by-failing amendment).
 4. **Parsing:** both parsers implement §3's P-1..P-7 exactly; the Python and SQL parsers
    share no code (§6's independence posture). P-5's loud refusal must be witnessed on
    BOTH sides (W7) before the parsers are called done.
-5. **Kernel delta:** `kernel/lineage/s45-credited-views.sql` + `.detect.sql` per §8, in
+5. **Kernel delta:** `kernel/lineage/s46-credited-views.sql` + `.detect.sql` per §8, in
    the house header idiom (WHY, PREREQUISITE on s44, HISTORY: safe — view-only, no
    backfill, no column; closure-statement slice; LIMITS; VALIDATE block extending s44's
    chain). Scratch-witness only; never apply to a live world; chain entry is the
@@ -660,6 +660,18 @@ table, on these binding terms the first build missed (review finding F2):
 - **The actor join carries the same type guard as `row_actor`** (int-typed actor checked,
   not assumed).
 - §5.1's `#defined affirmed/2` consumption note is unchanged; no rule text changes.
+
+**A2 (2026-07-18) — the credited-views delta's working name renumbered `s46-credited-views.sql`
+→ `s46-credited-views.sql` (a number collision, caught by a fresh-context GLOSSARY reviewer).**
+This spec and the standing-lifecycle spec were authored the same night and independently
+claimed `s45`; the standing-lifecycle delta then BUILT as `kernel/lineage/s45-standing-lifecycle.sql`
+(commit `94f5b7a`, in the birth chain), so this spec's §8 delta cannot ship under that name.
+The working name in §0 item 5, §8's heading, and §15 item 5 now reads `s46-credited-views.sql`
+— still a working name: the builder takes the next free number at build time and says so in
+the commit. No content of §8 changes; the collision was purely nominal. (Process note for the
+record: two same-night Fable authoring passes with no shared delta-number registry is the
+root cause; the birth chain itself is collision-proof — a duplicate filename cannot enter it —
+so the hazard was reader confusion, not chain corruption.)
 
 **A1 clarification, not a change (review finding F1):** §4.2's `mismatch_attest` row and
 P-7 already require Grade to cross as the **parsed** grade atom. The first build's v1 arm

@@ -6,6 +6,23 @@
 
 # FABLE-WORLD-CONTEXT-MIGRATION-CONSULT-2026-07-19 — banked investigation: extracting context from a dust-bound world to bootstrap its successor
 
+> **Editorial note (this pass — A:B:C documentation review, 2026-07-18, this tracker's ledger row 1518):**
+> This document's own filename and body date themselves 2026-07-19; per the same-day
+> correction of record, ledger row 1517 (an orchestrator date drift, one day ahead of the
+> actual date, caught by an independent fresh-context reader the same morning), the actual
+> authoring date is **2026-07-18**. The filename is not renamed here — ADR-0005 Rule 8 treats
+> a committed handle as a frozen record, and renaming it would break every existing citation
+> into this document — and the frozen consult body below (§0–§7) is not retro-edited; this
+> note is the correction. (Row 1517 records the drift and its affected media as a class
+> without naming this file explicitly — the connection to this document is made here, by
+> this note, not by the row.) It follows the same inline-bracketed convention
+> [ADR-0017](../law/adr/0017-the-zero-context-reader.md)'s own dated corrections use. **§8 and
+> §9 below are this pass's addition**, commissioned separately (row 1518) to generalize the
+> consult's method beyond the one project it was checked against and to add a walkthrough for
+> a reader who has never seen that project; each is clearly bannered where it begins.
+> Everything from the next line down to the `---` immediately before §8 is the original
+> Fable-authored consult, unedited and unaffected by this note.
+
 **Status: BANKED INVESTIGATION, non-binding, Fable-authored fresh-context 2026-07-19, awaiting a future commissioning act.** This is not a spec. It recommends, it reserves questions, and it licenses nothing — no verb, no delta, no ceremony exists because this document exists. The standing constitutional rules ([CLAUDE.md](../CLAUDE.md) ORCHESTRATION: kernel/lineage and law/ move only under a Fable-authored, maintainer-ratified spec; runs are strictly linear, maintainer ruling 2026-07-11) are untouched and this document designs strictly inside them.
 
 **The commission, verbatim (maintainer, ledgered as this tracker's row 1494):** *"It struck me that autoharn-panel is going to need a migration path, at least to preserve context. One thing I'm thinking is that we should probably Fable-consult for an investigation into a disciplined way to extract context from **a** autoharn-managed project so that, even if the actual ledger for structural reasons can't be delivered (guarantees would be void), at least enough context can be extracted to bootstrap the new world. What do you think?"*
@@ -188,6 +205,245 @@ Each is independently answerable; none blocks another. Per the decision-queue ba
 - **Row coverage is sampled, not total**: the taxonomy is grounded in the panel's full kind census, complete standing-decision set, complete principal roster, complete closure-debt surface, and targeted deep reads (rows 176, 396, 405, 497, 1185, 1729, 1758, and the pickup-surfaced standing rows) — not a read of all 1,725 rows. A class present only in unread rows would be missing here; the kind census makes that unlikely but not impossible.
 - **The in-place s40+ migration feasibility question is explicitly not settled** (§0, honest boundary; Q6). The structural obstacles are stated; no migration was attempted or rehearsed.
 - **Kernel delta knowledge is header-level**: s40–s45 semantics were taken from the scaffold's LINEAGE_CHAIN characterization, the reserved-designs document's DDL-verified analysis, and the glossary — not from a line-by-line read of the delta SQL. Where §0 point 3 leans on specifics (write-boundary exclusivity, hash-law change), those are the deltas' own header claims, independently corroborated by the panel-side catalog probe (functions absent there, present in the current chain).
+
+## 8. Generalizing beyond autoharn-panel — this pass's addition (A:B:C doc review, 2026-07-18, this tracker's ledger row 1518)
+
+**What this section is, and what it is not.** Everything above this heading (§0–§7) is the
+original Fable-authored consult, banked verbatim and never retro-edited per
+[ADR-0005](../law/adr/0005-documentation-discipline.md) Rule 8 (see also the editorial note at
+the top of this document). This section is a later, separately-authored addition, commissioned
+specifically to generalize the consult's method beyond the one project it was witnessed
+against — the maintainer's own words, this tracker's ledger row 1518: *"[the migration doc]
+needs an A:B:C pass that additionally attempts to generalize it and add an FAQ/Walkthrough for
+people not familiar with the autoharn-panel project."* It states nothing the original consult's
+own words do not already ground; where it goes further than the source text, that is flagged
+explicitly as extrapolation for the maintainer to adjudicate (§8.3), never presented as the
+consult's own conclusion.
+
+### 8.1 The consult is already framed generically — the panel is its witness, not its scope
+
+Worth surfacing because it is easy to miss on a single read: the maintainer's original
+commission, quoted verbatim near the top of this document, already asks for a discipline
+general to *"**a** autoharn-managed project"* (emphasis in the source quotation) — not
+autoharn-panel specifically. The consult's own "Consultant posture and evidence base" paragraph
+makes the matching point about its evidence, calling the panel deployment *"the one real
+long-lived deployment"* it could check its reasoning against, not the boundary of what the
+reasoning describes. Generalizing this document, then, is less inventing new scope than making
+explicit a generality the consult already claimed for itself and grounded in the one concrete
+case that existed to check it against.
+
+The taxonomy in §1 is a case in point: every one of its twelve classes (§1.1–§1.12) is defined
+by a generic kernel row kind or generic project artifact that any current-lineage
+autoharn-managed project has by construction of being scaffolded from
+[`bootstrap/new-project.sh`](../bootstrap/new-project.sh) — principal rows, decision rows
+graded durable, work-item rows, question rows, a RESOURCES registry, commission rows,
+`apparatus.json`, the git tree — never by anything panel-specific. Panel's own numbers (1,725
+rows, 13 principals, 29 standing decisions, the row-1729 and row-1758 procedures) are cited
+throughout §1 as *specimens of the classes*, not as the classes' definitions; a different
+project would populate the same twelve slots with its own rows and, plausibly, find some slots
+empty — the consult itself already names this possibility for the class it is built on: *"where
+the panel had no specimen of a class, that is said"* (§0.1).
+
+### 8.2 The four load-bearing pieces the commission named, restated for any project
+
+The maintainer's commission named four things this generalization must abstract — the context
+classes, re-assertion at birth, the extract artifact, and the guarantees-void honesty surface.
+Each is already stated in generic terms in the original text; restated here without adding a
+claim the source does not make:
+
+- **The context classes (§1).** The twelve-class taxonomy and its four-way disposition
+  vocabulary (RE-ENACT / RE-ASSERT / CITE-ONLY / NEVER, defined in §1's own opening paragraph)
+  describe any world's accumulated context, not panel's specifically. What is project-specific
+  is only the *census* — which classes are populated, and how densely — never the classes or
+  the disposition logic that sorts them.
+- **Re-assertion at birth (§3).** The ingestion ceremony's shape — birth left unmodified,
+  ingestion running as the successor's own first commissioned work item, ordered
+  principals-then-resources-then-open-work-then-competence (§3.2) — rests only on the current
+  kernel lineage's machinery: the s40 registration ceremony, the s43 write boundary, and the
+  founding-commission convention every scaffolded world gets. Any project born on that lineage
+  gets the same ceremony shape; nothing in §3's argument depends on panel by name.
+- **The extract artifact (§2).** The provenance-block-plus-per-item-records design (§2.3) and
+  the mechanical-extraction / judgment-at-ingestion split (§2.2) are stated throughout over "the
+  predecessor" and "the successor" — generic roles, not panel and its eventual successor by
+  name. The verb itself (working name `extract-context`, §2.2) does not exist yet, for panel or
+  for any other project; see §9 below for what that means for a reader who wants to try this
+  today.
+- **The guarantees-void honesty surface (§4).** All four obligations there (in-band
+  re-assertion markers, one loud succession row, world-scoped verification language, two-way
+  provenance pointers) are stated against "the successor's ledger" and "the predecessor,"
+  never against panel by name, and bind identically wherever this discipline is exercised.
+
+### 8.3 Where the consult is narrower than "any project" — named, not smoothed over
+
+One place the original text is genuinely panel-specific, not merely panel-illustrated: §0's
+argument for *why* the ledger cannot cross rests in part on the panel's kernel being pre-s40
+(§0.1: *"born on s30, migrated in place… which means succession to a current-lineage world is
+precisely the s40+ wall of §0 point 3"*). Of §0's four sub-arguments, points 1–2 (the per-world
+hash-chain seed, the per-world stamp secret) and point 4 (the FABLE-RESERVED-DESIGNS §3.4
+precedent — a general design-pattern argument for re-asserting rather than transplanting,
+with no s40-timing dependency of its own) are stated as, or reduce to, structural or
+design-pattern properties that hold regardless of when the predecessor was born — genuinely
+general, already. Point 3 alone (the s40+ attribution regime) is argued specifically against
+a *pre-s40* predecessor crossing to a *post-s40* successor, which is the panel's exact, and so
+far only witnessed, situation.
+
+**Extrapolation, flagged for the maintainer to adjudicate — not a conclusion the consult itself
+draws:** neither the original text nor this addition knows whether the argument weakens for a
+*successor-to-successor* crossing where both worlds are already post-s40/s41/s43 (a project
+scaffolded after this lineage matured, later succeeding itself a second time). The hash-chain
+and stamp arguments (points 1–2) still forbid row transplant unconditionally in that case — they
+are cryptographic properties, not consequences of a regime mismatch. But point 3's specific
+claim — *"rows written in a pre-s40 world… were not written under any of those laws"* — describes
+a regime mismatch that would not exist between two already-post-s40 worlds, and whether that
+changes anything about the *recommended disposition* per §1 class, or only removes one of
+several independent reasons a NEVER disposition already held on other grounds, is not settled
+by the original text and is not settled here. Flagged, not guessed.
+
+---
+
+## 9. FAQ / Walkthrough for a reader who has never seen autoharn-panel — this pass's addition (A:B:C doc review, 2026-07-18, this tracker's ledger row 1518)
+
+**How to read this section.** Question-shaped entries, each answered from the material above
+with a citation to the section it is grounded in. Where a command or output is shown, it is
+marked either **WITNESSED** (it was actually run and produced the shown output) or
+**UNWITNESSED / design-only** (the described tooling does not exist yet; the "what you type"
+text is this document's own design proposal, never a transcript). Nothing in this section is
+WITNESSED, because no extraction or ingestion has ever been performed against any world,
+autoharn-panel included (§7: *"No extraction or ingestion has ever been performed"*) —
+every entry below that shows a command or output carries the UNWITNESSED label at the
+point of showing; entries that only restate the consult's own analysis carry no label,
+because they show no behavior to witness. The label is never omitted where a
+what-you-type/what-you-should-see format could imply a tool that does not yet exist.
+
+**What is a "world," and why does anything need to "cross" between them?**
+A world is one autoharn-managed project's isolated database habitat — its append-only decision
+ledger, plus its project directory — ([GLOSSARY.md](../GLOSSARY.md#world)). Worlds are never
+upgraded in place across a run boundary: when a project needs a new kernel lineage, a fresh
+world is born, and the old one becomes *dust* — read-only evidence from then on
+([CLAUDE.md](../CLAUDE.md), runs-are-linear ruling, quoted in this document's own opening
+paragraph, "What this document is, in plain words"). A long-lived world accumulates working context — rules,
+roster, procedures, open work — that the new world does not automatically have. This whole
+document is about what to do with that accumulated context (§0's opening paragraph).
+
+**Why can't the old ledger just be copied into the new world?**
+Because the guarantees a ledger row carries are per-world by construction, not per-project: the
+tamper-evidence hash chain is seeded fresh per world, the stamp binding a row to its writing
+session is signed with a per-world secret that is deliberately never shared, and — for any
+project on the current kernel lineage (s40 onward) — every write must trace to a principal
+registered *in that world*, through a write boundary an ordinary session cannot bypass. Copying
+rows in would either break the chain, display a stamp the new world cannot verify, or require
+laundering the rows through the write boundary as if the importing session had written them
+itself — a misattribution, not a migration. §0 points 1–4 work through each of these in detail,
+with citations to the specific kernel-lineage deltas involved.
+
+**So what actually gets carried over, and how?**
+Nothing is copied as a row. What crosses, crosses as a *fresh, attributed act in the new
+world* — a new principal registration, a new decision row, a freshly opened work item — whose
+content restates the old context and whose references cite the old world's rows as the *basis*
+for the new act, never as its authority. §1's twelve-class taxonomy sorts everything a world
+accumulates (roster, standing rules, invented procedures, open work, resources, track record,
+estimates, git tree, founding commission, configuration, failure record) into four dispositions:
+**RE-ENACT** (a fresh typed act — e.g. re-registering a principal), **RE-ASSERT** (a fresh
+decision row restating the content), **CITE-ONLY** (stays readable in the dust world, never
+becomes an operative new-world row), or **NEVER** (does not cross in any form) — defined in
+§1's opening paragraph, applied class-by-class in §1.1–§1.12, and grounded there in what
+autoharn-panel — the one project this discipline has been checked against so far — actually had
+of each class. §8 above explains why the classes themselves are not specific to that one
+project.
+
+**What definitely does NOT cross, no matter what?**
+§5 gives the closed list: ledger rows as rows; the hash chain and stamps (valid only about the
+world that made them); review discharges and closure debt, credit and debt alike (a new world's
+accountability bookkeeping starts at zero); refusal, violation, and snag history; the founding
+commission; secrets; principal database IDs and typed relations between them; and
+estimate/actual numbers as anything but retrospective color. The residual class, and the point
+of the whole document: **authority never crosses** — a rule from the old world binds nobody in
+the new world until someone accountable in the new world re-asserts it and thereby owns it
+themselves (§5's closing bullet).
+
+**Is there a command I can run today to pull context out of a dying world?**
+No. **UNWITNESSED — this tooling does not exist.** §2.2 names a working-name-only verb,
+`extract-context`, and specifies what it would need to do (read-only, mechanically complete per
+taxonomy class, zero judgment baked in), but it has not been built, has not been commissioned
+onto the operator surface, and no extraction has ever been run against any world, panel
+included. Building it is reserved question Q2 in §6, awaiting a maintainer decision on whether
+to commission it at all.
+
+**If it existed, what would running it look like? (Design walkthrough — UNWITNESSED throughout;
+nothing below has executed.)**
+Assembled from §2.2's mechanical-core description and §2.3's artifact fields — this is the
+document's own design proposal for the shape a first version would take, not a transcript of a
+real run, because none exists:
+
+1. *What you would type* (working name only, per §2.2): `./extract-context > extract.json`, run
+   from the predecessor world's own project directory while that world is still live — §2.1's
+   argument for running extraction as the predecessor's own last ledgered act, so the extraction
+   itself is attributed, stamped, and chain-covered, rather than an outside read of an
+   already-dead world.
+2. *What you should see* (per §2.3's stated fields — a description of intended structure, not an
+   example the tooling has ever produced): a single artifact with two parts — a **provenance
+   block** (predecessor world name and schema, ledger row span and count, the chain's head hash,
+   a verbatim `verify-chain` output, the extracting commit, timestamp, and the extracting
+   principal), and a list of **per-item records**, one per extracted row, each carrying the dust
+   row's id, its row kind, its *verbatim* statement (never paraphrased — §2.3 is explicit that a
+   paraphrase silently narrows scope), its own references, and which of §1's twelve taxonomy
+   classes it belongs to. No disposition beyond the class default is filled in at this stage —
+   that is ingestion's job, next.
+3. *What ingestion would look like*: per §3, a work item opened in the *new* world under its own
+   founding commission, its deliverable a re-assertion pass over the extract — principals first,
+   then resources and standing decisions, then open work and questions, then, optionally,
+   competence grants (§3.2's ordering). Each extracted item ends with one of four recorded
+   outcomes: RE-ENACTED, RE-ASSERTED, SUPERSEDED-BY-KERNEL (naming which kernel delta subsumed
+   it), or DROPPED (naming why) — filled in by an accountable principal in the new world, never
+   automatically.
+4. *What the new world's record would say about all this*: per §4, the succession is one loud,
+   early decision row in the new world naming the predecessor, the extract, and a fixed honesty
+   sentence the document spells out verbatim at §4 point 2 so no future author has to draft it
+   under pressure — stating plainly that nothing below it in the ledger is a guarantee inherited
+   from the old world, only a fresh claim made by a new-world actor.
+
+**Do I need to have used autoharn-panel to follow any of this?**
+No. Panel is cited throughout §0–§7 as the one deployment this discipline has actually been
+checked against — a witness, not a prerequisite. §8 above works through why the method itself
+does not depend on panel-specific facts; the panel numbers quoted in §0.1 and elsewhere (1,725
+rows, 13 principals, and so on) are that one project's own census, offered as a worked example,
+not anything your own project needs to match.
+
+**Does this apply to my project even if it was never migrated from an older, pre-s40 world?**
+Mostly, with one open point. The per-world hash-chain and stamp arguments (§0 points 1–2) apply
+to any world crossing to any other world, regardless of when either was born — cryptographic
+properties of the kernel, not consequences of panel's specific pre-s40 history. Whether the
+*attribution-regime* argument (§0 point 3, panel's specific "written under different laws"
+situation) still applies, in full or in a weaker form, to a crossing between two already-current-
+lineage worlds is not settled by the original consult and not settled here — see §8.3's flagged
+extrapolation.
+
+**My old world had a rule I don't think is true anymore — do I have to carry it forward?**
+No, and carrying it forward unexamined would be the wrong move. §1.2 calls this "re-assertion is
+re-judgment": each candidate is checked against whether it still holds and against whether the
+new kernel already provides natively what the old rule was manually emulating (the
+"kernel-subsumption check"). A rule that no longer holds, or that the new kernel now does for
+you, is deliberately dropped — and the drop itself is written down, with the reason, so it reads
+as a decision rather than an oversight (§1.2 point (a)).
+
+**Who is allowed to decide what crosses?**
+Whoever performs the ingestion writes each re-assertion under their own attribution, through the
+new world's ordinary write boundary — there is no special bypass actor (§3.2). The consult
+recommends, but does not mandate as built, a single independent review over the whole batch of
+disposition decisions at the end, rather than per-row ceremony (§3.3); whether even that single
+review is required is left to the maintainer as reserved question Q3 (§6).
+
+**Where do I raise a question this document doesn't answer, or ask for the missing tooling to be
+built?**
+§6 lists six reserved questions (Q1–Q6) the original consult explicitly leaves for the
+maintainer: extraction timing, whether to build the verb, ingestion ceremony weight, whether
+track record should ever cross as more than a citation, whether succession should get a typed
+kernel record instead of prose pointers, and how autoharn-panel's own eventual succession should
+be sequenced. Anything this generalization or FAQ raises beyond what the original text grounds
+is flagged inline (§8.3) rather than folded into those six — this pass is not the commissioned
+consult and does not add to its reserved-question list on its own authority.
+
+---
 
 ## License
 
