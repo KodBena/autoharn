@@ -1,6 +1,6 @@
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-18T21:32:16Z
-#   last-change: 2026-07-18T22:20:21Z
+#   last-change: 2026-07-18T22:46:31Z
 #   contributors: ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -13,6 +13,7 @@ repo's own scripts already require (bootstrap/new-project.sh, bootstrap/teardown
 HTTP probes use `urllib.request` (stdlib)."""
 from __future__ import annotations
 
+import ipaddress
 import json
 import re
 import shutil
@@ -34,6 +35,13 @@ _IDENT_RE = re.compile(r"^[A-Za-z0-9_]+$")
 # actually sees, e.g. "192.168.122.1"). Wider than _IDENT_RE by design, still closed: no
 # quote/space/shell-metacharacter/TOML-control-character can pass.
 _HOSTNAME_RE = re.compile(r"^[A-Za-z0-9._-]+$")
+# The pg_hba `subnets` field (screens.py's dedicated-db path) is a CIDR/host token spliced
+# unvalidated into the PREPARED pg_hba block until this fix -- digits, dots (IPv4), hex digits
+# and colons (IPv6), and exactly one slash + prefix length is the closed alphabet a real CIDR
+# ever needs. Character-class-closed FIRST (this regex), then parsed for real (`valid_subnet`
+# below, via the stdlib `ipaddress` module) -- neither check alone is the Port; both together are
+# (ADR-0012 P2: translate-and-validate, never a hand-rolled parse standing in for the real one).
+_SUBNET_CHARS_RE = re.compile(r"^[0-9A-Fa-f.:/]+$")
 
 
 def valid_identifier(name: str) -> bool:
@@ -50,6 +58,22 @@ def valid_hostname(name: str) -> bool:
     (a DNS name or dotted-quad, never a bare SQL/shell identifier) but still get spliced into
     program text (a TOML config file, a shell copy-paste line) with no bind-variable carrier."""
     return bool(name) and bool(_HOSTNAME_RE.fullmatch(name))
+
+
+def valid_subnet(token: str) -> bool:
+    """True iff `token` is a syntactically closed-alphabet CIDR (digits, dots, IPv6 hex/colons,
+    exactly one slash + prefix length) AND parses as a real network via the stdlib `ipaddress`
+    module -- never a hand-rolled parse standing in for the real one. Used at the pg_hba-block
+    splice site (screens.py's dedicated-db path, `pghba.generate_block`'s `subnets` argument),
+    the same interpreter-boundary discipline `valid_identifier`/`valid_hostname` already carry
+    for the other fields spliced into that same PREPARED block."""
+    if not token or not _SUBNET_CHARS_RE.fullmatch(token) or token.count("/") != 1:
+        return False
+    try:
+        ipaddress.ip_network(token, strict=False)
+    except ValueError:
+        return False
+    return True
 
 
 def which(name: str) -> str | None:

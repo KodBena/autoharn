@@ -1,6 +1,6 @@
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-18T21:34:05Z
-#   last-change: 2026-07-18T22:36:03Z
+#   last-change: 2026-07-18T22:46:49Z
 #   contributors: ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -152,6 +152,23 @@ def screen_substrate(ui, cl, state):
     subnets = ui.ask_text("Subnets to trust (comma-separated CIDR)",
                            default="192.168.122.68/32,192.168.122.1/32")
     subnet_list = [s.strip() for s in subnets.split(",") if s.strip()]
+
+    # Interpreter-boundary allowlist (law/adr/0012's 2026-07-18 amendment), same discipline as
+    # the db/role check just above: each subnet token is spliced as program TEXT into the
+    # pg_hba PREPARED block below (pghba.generate_block, one `host <db> <role> <subnet> trust`
+    # line per token) with no bind-variable carrier available, so each is validated -- closed
+    # alphabet AND a real parse via the stdlib `ipaddress` module, never a hand-rolled regex
+    # standing in for one -- before it ever reaches the block generator.
+    for _subnet in subnet_list:
+        if not probes.valid_subnet(_subnet):
+            ui.say(f"  REFUSED: subnet '{_subnet}' is not a valid CIDR/host token -- refusing "
+                   f"to splice it into the pg_hba block (law/adr/0012's interpreter-boundary "
+                   f"rule). Nothing generated.")
+            cl.add("substrate", "dedicated subnets validated", ck.REFUSED,
+                   f"'{_subnet}' not a valid CIDR (digits/dots/IPv6 hex+colons, one slash + "
+                   f"prefix length, parsed by ipaddress.ip_network)")
+            return state
+
     state["db"] = db
     state["dedicated_role"] = role
 
@@ -460,31 +477,31 @@ def screen_boundary(ui, cl, state):
     # Interpreter-boundary allowlist (law/adr/0012's 2026-07-18 amendment), same discipline as
     # the pg_hba site (screen_substrate) and probes.pg_connect: boundary-multiplex.toml is a
     # config file a SECOND evaluator (serving.boundary_multiplex_config's tomllib parser, then
-    # boundary_service's own psql calls) reads -- host/db/role/schema/kern all get f-string-
-    # spliced into it below with no bind-variable carrier available (this is TOML text, not a
-    # query), so each is validated to a closed alphabet first, refusing on failure rather than
-    # writing an unvalidated value into program text a second evaluator parses. `host` gets the
-    # wider hostname/IP-safe alphabet (valid_hostname) since a real Postgres host is a hostname
-    # or IP literal, never a bare identifier -- db/role/schema/kern stay on the strict
-    # [A-Za-z0-9_]+ identifier alphabet used everywhere else in this package.
+    # boundary_service's own psql calls) reads -- host/db/role/schema/kern/world all get
+    # f-string-spliced into it below with no bind-variable carrier available (this is TOML text,
+    # not a query), so each is validated to a closed alphabet first, refusing on failure rather
+    # than writing an unvalidated value into program text a second evaluator parses. `host` gets
+    # the wider hostname/IP-safe alphabet (valid_hostname) since a real Postgres host is a
+    # hostname or IP literal, never a bare identifier -- db/role/schema/kern/world stay on the
+    # strict [A-Za-z0-9_]+ identifier alphabet used everywhere else in this package.
     #
-    # `world` is validated alongside host/db/role/schema/kern below (gates/interpreter_boundary_
-    # lint.py's calibration pass, ledger row 1701, flagged this site as the ONE named-not-fixed
-    # gap the amendment's own prior pass left open: `world` reached the `[deployments.{world}]`
-    # table-key line unvalidated. In the ordinary flow this was safe by construction --
-    # state["world"] only reaches here after a successful birth, and bootstrap/new-project.sh's
-    # own --new-world derivation already runs SCHEMA/KERN/ROLE (derived from `world`) through an
-    # identical allowlist, refusing before this screen could ever see a bad value -- but the
-    # OVERRIDE path above (proceeding past a failed/skipped birth) or a hand-typed value via
-    # `--start-at boundary` could still hand this screen a `world` that never passed through
-    # that upstream check. Trivial fix: `world` joins the same validated tuple below.)
+    # `world` is spliced into the `[deployments.{world}]` TOML table-key line below -- the same
+    # site db/role/schema/kern are spliced into, and (2026-07-19 out-of-sequence-entry spec
+    # amendment: a screen entered via --start-at, or reached via the OVERRIDE path above past a
+    # failed/skipped birth, must independently validate every precondition the normal sequence
+    # would have established) previously the ONE field this loop left out. A hostile world name
+    # reachable that way (e.g. `evil"] [deployments.pwn`) produced structurally corrupt TOML,
+    # confirmed reproducible with tomllib, before this fix. In the ordinary flow `world` already
+    # passes an identical allowlist inside bootstrap/new-project.sh's own --new-world derivation
+    # before this screen could see it; this loop makes that guarantee THIS screen's own, not
+    # inherited from an upstream caller it cannot verify actually ran.
     for _label, _val, _checker in (
-        ("world", world, probes.valid_identifier),
         ("host", host, probes.valid_hostname),
         ("database", db, probes.valid_identifier),
         ("role", role, probes.valid_identifier),
         ("schema", schema, probes.valid_identifier),
         ("kern", kern, probes.valid_identifier),
+        ("world", world, probes.valid_identifier),
     ):
         if not _checker(_val):
             ui.say(f"  REFUSED: {_label} '{_val}' fails the interpreter-boundary allowlist -- "
