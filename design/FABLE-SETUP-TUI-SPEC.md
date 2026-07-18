@@ -80,6 +80,19 @@ checklist.
   a copy of the operator's real file — PREPARED-level witness (the cluster-host
   apply is the operator's act; do not fake it).
 
+## Amendment — 2026-07-19: out-of-sequence entry demands self-validated preconditions
+
+The findings-RCA on the fix-point rounds classified one finding as this spec's own
+gap: the flow section describes screens 1–9 in order, but the tool (correctly)
+supports entering a screen out of sequence (`--start-at`, or an explicit gate
+override), and nothing here said what that obligates. The rule, binding on every
+screen present and future: **a screen entered out of its normal sequence must
+independently validate every precondition the normal sequence would have
+established for it, and refuse legibly (a REFUSED checklist entry with teaching,
+never a traceback) when one is missing.** The boundary screen's
+nonexistent-destination crash was the witnessed specimen; its repair is this rule's
+first instance, not a one-off.
+
 ## Build conditions
 
 Lives under `tools/setup_tui/`; no lazy imports; gates apply; no edits to
