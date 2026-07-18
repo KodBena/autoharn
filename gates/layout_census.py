@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-09T07:54:37Z
-#   last-change: 2026-07-15T19:28:56Z
-#   contributors: 9bcc0113/main, be693afb/main, e4410ef6/main, 3c50e030/main, a857c93d/main
+#   last-change: 2026-07-18T10:38:50Z
+#   contributors: 9bcc0113/main, be693afb/main, e4410ef6/main, 3c50e030/main, a857c93d/main, ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
 """layout_census — LAYOUT.md's designed tree as a MECHANICAL registry (manifest [C21]).
@@ -108,6 +108,11 @@ ROOT_FILES = {
     # orchlog.d/README.md for why the directory could not be named "orchlog" too (a plain
     # filesystem cannot hold a file and a directory of the same name in one parent).
     "orchlog",
+    # asof-export — the ledger-wide as-of read + §11.10(b) inspection-copy export verb (ledger
+    # item asof-export-inspection-copy, 2026-07-18), the seventh member of the standing
+    # track-work.sh shim set (bootstrap/track-work.sh's own shim loop, extended by this same
+    # commission) -- registered on landing, not left an unregistered breach for the next run.
+    "asof-export",
 }
 ROOT_DIRS = {
     ".claude", "bootstrap", "law", "judgment", "kernel", "stores", "instruments", "engine",

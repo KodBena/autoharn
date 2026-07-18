@@ -1,7 +1,7 @@
 #!/bin/sh
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-09T11:15:53Z
-#   last-change: 2026-07-18T05:43:24Z
+#   last-change: 2026-07-18T10:36:19Z
 #   contributors: be693afb/main, e4410ef6/main, 3c50e030/main, a857c93d/main, 9a17b6b9/main, ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -777,12 +777,14 @@ if [ -n "$NEW_WORLD" ]; then
 fi
 rm -f "$LAW_SECTION_FILE"
 
-# the seven verbs (led, judge, pickup, audit, distance-to-clean, verify-commission, verify-chain): thin shims,
+# the eight verbs (led, judge, pickup, audit, distance-to-clean, verify-commission, verify-chain,
+# asof-export): thin shims,
 # not frozen sed-substituted copies (BACKLOG maintainer ruling 2026-07-11, "runs are strictly
 # linear" disposition 6, "live verbs"; audit and distance-to-clean joined the same way later,
 # each a new template file rather than an edit to an existing live one -- see their own
-# commissions; verify-commission (design/MAINT-GPG-TRUST-LAYER.md Rung 2) follows the SAME
-# distance-to-clean precedent one verb later -- a brand-new template file carries none of
+# commissions; verify-commission (design/MAINT-GPG-TRUST-LAYER.md Rung 2) and asof-export
+# (ledger item asof-export-inspection-copy, design/FABLE-21CFR11-STANDING-ASSESSMENT.md §11.10(b))
+# each follow the SAME distance-to-clean precedent -- a brand-new template file carries none of
 # led.tmpl's freeze risk, so it is safe to add regardless of any live wired session elsewhere).
 # Baking was the asymmetry: hooks already execute live from this autoharn checkout per invocation
 # (settings.json's __AUTOHARN_ROOT__ above), but led/judge/pickup were frozen copies -- a
@@ -827,8 +829,8 @@ else
 fi
 echo "wrote attestations/README.md"
 
-echo "-- the eight project-local shims (the operator verbs led, judge, pickup, audit, distance-to-clean, attest-doc, plus the two signing tools verify-commission and verify-chain): thin shims exec'ing autoharn's live templates --"
-for verb in led judge pickup audit distance-to-clean verify-commission verify-chain attest-doc; do
+echo "-- the nine project-local shims (the operator verbs led, judge, pickup, audit, distance-to-clean, attest-doc, asof-export, plus the two signing tools verify-commission and verify-chain): thin shims exec'ing autoharn's live templates --"
+for verb in led judge pickup audit distance-to-clean verify-commission verify-chain attest-doc asof-export; do
     cat > "$PROJECT_ROOT/$verb" <<SHIM
 #!/bin/sh
 HERE="\$(cd "\$(dirname "\$0")" && pwd)"
@@ -841,7 +843,7 @@ done
 if [ "$PIN" = "submodule" ]; then
     echo "-- --pin submodule: committing the pin + the verbs/hooks it points at --"
     (cd "$PROJECT_ROOT" && git add \
-        led judge pickup audit distance-to-clean verify-commission verify-chain attest-doc \
+        led judge pickup audit distance-to-clean verify-commission verify-chain attest-doc asof-export \
         .claude/settings.json .gitignore 2>/dev/null || true)
     if (cd "$PROJECT_ROOT" && git diff --cached --quiet) 2>/dev/null; then
         echo "   nothing new to commit (already committed by an earlier --force re-run)"
@@ -865,7 +867,7 @@ if [ -n "$NEW_WORLD" ]; then
     echo "           # already registered above); nothing to paste."
     echo ""
     echo "(./led, ./judge, ./pickup, ./audit, ./distance-to-clean, ./verify-commission,"
-    echo " ./verify-chain, ./attest-doc are ready to use from inside that session; read"
+    echo " ./verify-chain, ./attest-doc, ./asof-export are ready to use from inside that session; read"
     echo " $PROJECT_ROOT/.claude/HOOKS.md and replace its UNWITNESSED marks as you exercise each"
     echo " command.)"
     echo ""

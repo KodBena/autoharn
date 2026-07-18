@@ -1,8 +1,8 @@
 #!/bin/sh
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-11T20:34:46Z
-#   last-change: 2026-07-12T15:30:40Z
-#   contributors: e4410ef6/main
+#   last-change: 2026-07-18T10:38:00Z
+#   contributors: e4410ef6/main, ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
 # track-work.sh — give ANY directory a STANDING work-tracking deployment (the "omega
@@ -272,12 +272,12 @@ else
 fi
 echo "wrote attestations/README.md"
 
-echo "-- the eight project-local shims (the operator verbs led, judge, pickup, audit,"
-echo "   distance-to-clean, attest-doc, plus the signing tools verify-commission and"
+echo "-- the nine project-local shims (the operator verbs led, judge, pickup, audit,"
+echo "   distance-to-clean, attest-doc, asof-export, plus the signing tools verify-commission and"
 echo "   verify-chain): thin shims exec'ing autoharn's live templates, identical"
 echo "   mechanism to new-project.sh's own (a template fix in bootstrap/templates/ reaches this"
 echo "   deployment instantly, same as every governed world) --"
-for verb in led judge pickup audit distance-to-clean verify-commission verify-chain attest-doc; do
+for verb in led judge pickup audit distance-to-clean verify-commission verify-chain attest-doc asof-export; do
     cat > "$PROJECT_ROOT/$verb" <<SHIM
 #!/bin/sh
 HERE="\$(cd "\$(dirname "\$0")" && pwd)"
