@@ -26,7 +26,7 @@
 ||| because the SUBSTRATE is -- see the "PRESERVED, ON PURPOSE" list in this header.
 ||| Beauty that would erase one of those facts is a regression, not a cleanup.
 |||
-||| AS-OF: kernel chain through s51
+||| AS-OF: kernel chain through s52
 ||| (s50, 2026-07-18, landed WHILE the s44-s49 parity pass below was in flight and absorbed
 |||   by it before landing: the defeat-input exclusion fork this pass had rendered as an
 |||   unadjudicated PARAMETER was adjudicated by the maintainer (row 1647,
@@ -188,6 +188,14 @@
 |||     unreachable-from-payload-families note). The store's own semantics (content addressing,
 |||     size cap, append-only, corruption-refusing get) are out-of-model per the same boundary
 |||     carve-out that covers the refusal_seq oracle: storage control flow, not row algebra.
+|||   - s52 (artifact witness check, 2026-07-18, spec design/FABLE-ARTIFACT-WITNESS-CHECK-SPEC.md):
+|||     artifact: tokens in the review-witness position of the two close-family kinds are now
+|||     insert-time existence-checked against kernel.artifact, and malformed tokens refuse.
+|||     Model treatment: the WitnessRef sum's WRArtifact arm (s48 rendering) gains the semantics
+|||     but NOT a premise -- the artifact store is non-ledger state outside this model's index
+|||     universe (the s51 carve-out), so the check cannot be a Fin-style structural fact here
+|||     the way WRRow's is; it is named at WitnessRef's doc as an out-of-model insert-time
+|||     refusal, honest lag by design rather than a silent gap. Row algebra otherwise unchanged.
 |||
 ||| PROVENANCE:
 |||   v1 (2026-07-15, night) -- an Opus transcription consultation, machine-checked,
@@ -510,6 +518,10 @@ record Fingerprint where
 data WitnessRef : Nat -> Type where
   WRRow      : Fin n -> WitnessRef n
   WRCommit   : CommitRef -> WitnessRef n
+  -- s52: the artifact arm's hashes are insert-time existence-checked against
+  -- kernel.artifact (a NON-ledger store outside this model's index universe --
+  -- see the s52 entry in the header enumeration for why this is a named
+  -- out-of-model refusal rather than a Fin-style premise here).
   WRArtifact : NonEmptyText -> WitnessRef n
 
 ||| s29/s38/s48 work_review_*_requires_ref: witnessed demands a citation (the
