@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-18T07:43:25Z
-#   last-change: 2026-07-18T10:03:32Z
+#   last-change: 2026-07-18T10:37:51Z
 #   contributors: ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -127,3 +127,70 @@ class UnclassifiedFailure(BaseModel):
     message: str = Field(description="honest teach-text: the storage layer refused for a reason "
                                       "this boundary did not anticipate; full detail is logged "
                                       "server-side only; see the server's own log")
+
+
+class BodyReadTimeout(BaseModel):
+    """A5.3: the raw-body READ phase's own bound -- `BODY_READ_TIMEOUT_S = 30`, distinct from
+    A3.1's psql-phase bounds (`PSQL_CONNECT_TIMEOUT_S`/`PSQL_EXEC_TIMEOUT_S`). Before this
+    existed, a trickled body (a client sending a declared-length body a few bytes at a time)
+    held the request open indefinitely -- 48s witnessed in A5's own review, `/health` on other
+    connections unaffected (per-request only, not a server-wide wedge). Symmetric with A2.2's
+    two named size checkpoints: the time axis now names both legs (read phase, psql phase)."""
+
+    disposition: str = "body_read_timeout"
+    timeout_s: float = Field(description="BODY_READ_TIMEOUT_S -- the one named bound")
+    message: str = Field(description="teach-text: the body-read phase stalled past this bound")
+
+
+class LedgerWriteIntFields(BaseModel):
+    """A5.2's enumeration authority for `POST /write/ledger` (`kernel.ledger_write`): the
+    bigint-typed `ledger` columns a payload MAY name (kernel/lineage/s15-schema.sql's
+    `supersedes`/`actor`/`regards`/`amends`/`answers`/`enacts`, plus the bigint columns later
+    lineage deltas append -- s37's `work_violation_target_id`/`work_violation_witness`, s40's
+    `principal_subject`, s41's `principal_object`, s44's `attest_row_id`). NOT a second
+    validator of payload KEY MEMBERSHIP (`kernel.ledger_write` itself is the sole authority on
+    which keys a payload may carry, spec §4/§5) -- this model exists ONLY so
+    `serving/boundary_service.py` has one declared home to enumerate "every integer-typed
+    field the payload contract declares" and bound each one's VALUE, per field, if the caller
+    supplied it. `enacts` is `bigint[]` (multi-target), so it is bounded element-wise."""
+
+    supersedes: int | None = None
+    actor: int | None = None
+    regards: int | None = None
+    amends: int | None = None
+    answers: int | None = None
+    enacts: list[int] | None = None
+    principal_subject: int | None = None
+    principal_object: int | None = None
+    work_violation_target_id: int | None = None
+    work_violation_witness: int | None = None
+    attest_row_id: int | None = None
+
+
+class ReviewWriteIntFields(BaseModel):
+    """A5.2's enumeration authority for `POST /write/review` (`kernel.review_write`): its
+    closed contract's bigint-typed keys (kernel/lineage/s43-typed-verdict-write-boundary.sql
+    Element 3 -- `regards`, `actor`, `antecedent`; `statement`/`verdict`/`independence`/`basis`
+    are text, out of this model's scope)."""
+
+    regards: int | None = None
+    actor: int | None = None
+    antecedent: int | None = None
+
+
+class RegistrationWriteIntFields(BaseModel):
+    """A5.2's enumeration authority for `POST /write/registration`
+    (`kernel.registration_write`): its closed contract's one bigint-typed key (`actor`);
+    `name`/`agent_class`/`purpose`/`statement` are text, `event_declared_ts` is a timestamptz
+    literal (text on the wire), out of this model's scope."""
+
+    actor: int | None = None
+
+
+class ObligationWriteIntFields(BaseModel):
+    """A5.2's enumeration authority for `POST /write/obligation` (`kernel.obligation_write`):
+    its closed contract's two bigint-typed keys (`assigned_by`, `obliges_actor`); `scope` is
+    text, out of this model's scope."""
+
+    assigned_by: int | None = None
+    obliges_actor: int | None = None

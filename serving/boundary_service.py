@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-18T07:44:41Z
-#   last-change: 2026-07-18T10:06:38Z
+#   last-change: 2026-07-18T10:48:55Z
 #   contributors: ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -127,11 +127,57 @@ unreachable via an ordinary request, so its occurrence names a boundary or deplo
 and the message says so honestly rather than asserting a cause (infra vs request) this boundary
 did not witness.
 
+A5 HARDENING (iteration-3 independent re-review). Five more findings, closed here:
+
+1. **Representability-scan regression, fixed (A5.1).** A4.1(b)'s scan was denominated on the
+   *escaped* serialization (`json.dumps(payload)`'s output text), so a payload whose string
+   content is the literal six characters (a backslash followed by u0000 -- documenting an
+   escape, never a NUL codepoint) re-escapes its own backslash to `\\u0000`, which CONTAINS the
+   same six-character substring the old scan matched on -- a false positive wearing a
+   lying message ("contains a NUL") for a payload jsonb stores fine. `_representability_axis_failure`
+   now walks the ACTUAL codepoints of the PARSED value (every string and every object key,
+   recursively -- `_iter_strings`), refusing only a real U+0000 character or a real unpaired
+   UTF-16 surrogate CODE POINT (a lone `\\ud800`-class escape that `json.loads` decodes to an
+   actual surrogate character precisely because it could not pair it with a following low
+   surrogate -- a legitimate astral character always decodes to ONE composed non-surrogate
+   code point). No serialization-mode text scan remains in this function at all.
+2. **Write-payload integer-field domain (A5.2).** `boundary_models.py`'s per-surface
+   `*WriteIntFields` models are the enumeration authority for "every integer-typed field the
+   payload contract declares" -- `_bound_write_payload_ints` walks a surface's declared field
+   names, and for each one the CALLER actually supplied, bounds it (or, for `enacts`'
+   `bigint[]` shape, each element) to `0 <= v <= MAX_ID`, typed 422 naming the field and the
+   bound. This is the id-domain class (A4.2) completed from path/query onto the write body --
+   no other semantic validation is added; an absent field, or a present field holding a
+   non-integer JSON value, is left for the kernel's own rowtype cast to judge (that is a type
+   question, not a domain-bound question).
+3. **The body-read time leg (A5.3).** `BODY_READ_TIMEOUT_S = 30` bounds the RAW BODY READ
+   PHASE itself (`_bounded_raw_body`, via `asyncio.wait_for`) -- distinct from A3.1's
+   `PSQL_CONNECT_TIMEOUT_S`/`PSQL_EXEC_TIMEOUT_S`, which bound the psql phase AFTER the body is
+   already fully read. Before this bound existed a trickled body (a client sending a
+   declared-length body a few bytes at a time) held the request open indefinitely; expiry
+   raises `_BodyReadTimeout`, caught by its own exception handler, typed HTTP 408
+   `{"disposition": "body_read_timeout", "timeout_s": ..., "message": ...}`.
+4. **Pagination on all four read routes (A5.4).** `/standing/principals` and `/work/items`
+   previously accepted no `limit`/`after_id` at all (silently served the whole view) -- they
+   now carry the SAME `1 <= limit <= 1000`, `after_id >= 0` (and `<= MAX_ID`) discipline as
+   `/rows/current`/`/credited`. `principal_standing_current` carries `id` (the view's own
+   `p.id`), so it is bounded/ordered exactly like the other id-keyed views. `work_item_current`
+   carries NO id column at all (one row per `slug`, no bigint key) -- the fixer's honest
+   fallback, flagged per the spec's own "fixer flags if a view lacks one" clause: a
+   `row_number() OVER (ORDER BY slug)` ordinal, computed in THIS SERVICE'S OWN wrapper query
+   (never stored, never claimed to be a kernel id), is the cursor `after_id` compares against;
+   the synthetic ordinal is stripped back out of each row's JSON before it is returned (`-
+   'rn'`), so the served row shape is byte-identical to the view's own columns -- only the
+   PAGINATION mechanics, not the data, differ from the id-keyed routes.
+5. **Framework-owned coercion (A5.5) -- unchanged, named in the README**, per the A3.3
+   precedent: no code change.
+
 Lazy imports are banned (CLAUDE.md, 2026-07-02): every import is top-of-file.
 """
 from __future__ import annotations
 
 import argparse
+import asyncio
 import json
 import os
 import re
@@ -156,11 +202,16 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "filing"))
 import deployment_record  # filing/deployment_record.py -- the ONE home for the deployment.json shape  # noqa: E402
 
 from boundary_models import (  # noqa: E402
+    BodyReadTimeout,
     CapabilityAbsent,
     CapabilityManifest,
     HealthResponse,
     InfraFailure,
+    LedgerWriteIntFields,
+    ObligationWriteIntFields,
     PayloadTooLarge,
+    RegistrationWriteIntFields,
+    ReviewWriteIntFields,
     UnclassifiedFailure,
 )
 
@@ -171,6 +222,20 @@ WRITE_SURFACES: dict[str, str] = {
     "review": "review_write",
     "registration": "registration_write",
     "obligation": "obligation_write",
+}
+
+# A5.2: per-surface pydantic models are the ENUMERATION AUTHORITY for "every integer-typed
+# field the payload contract declares" (boundary_models.py's own docstrings name each
+# surface's kernel source of truth for its field list). `_bound_write_payload_ints` below
+# consults ONLY these models' declared field names -- never the payload's own keys -- so an
+# unknown/unexpected key is left entirely to the kernel's own key-membership check (spec §4);
+# this dict adds no new key-membership judgment, only a value-domain bound on keys the model
+# already declares.
+WRITE_SURFACE_INT_FIELDS: dict[str, type] = {
+    "ledger": LedgerWriteIntFields,
+    "review": ReviewWriteIntFields,
+    "registration": RegistrationWriteIntFields,
+    "obligation": ObligationWriteIntFields,
 }
 
 # A deployment.json identifier (schema/kern/role) must look like a plain SQL identifier --
@@ -195,11 +260,21 @@ MAX_WRITE_BODY_BYTES = 1_048_576
 PSQL_CONNECT_TIMEOUT_S = 5
 PSQL_EXEC_TIMEOUT_S = 60
 
+# A5.3: the body-READ phase's own time bound (ADR-0012 P1: one named constant), distinct from
+# the two psql-phase bounds directly above -- those start their clock only AFTER the body is
+# already fully in hand. Before this bound existed, a trickled body (a client sending a
+# declared-length body a few bytes at a time) held the request open indefinitely (48s
+# witnessed in A5's own review). Enforced in `_bounded_raw_body` via `asyncio.wait_for` around
+# the whole `_read_bounded_body` read loop.
+BODY_READ_TIMEOUT_S = 30
+
 # A4.2: the read-side id domain, symmetric with A2.6's `after_id >= 0` -- every id-typed
 # path/query parameter is bounded `0 <= id <= MAX_ID` (a Postgres `bigint`'s own upper bound,
 # 2**63 - 1). Named ONCE (ADR-0012 P1) rather than re-derived per route; before this bound
 # existed, an over-range id reached psql's bigint cast unchecked and wore a 503 it did not
 # earn (A4's own trigger: only a genuine connection-level failure should ever wear that shape).
+# A5.2 reuses this SAME constant to bound integer-typed WRITE-payload fields too (the id-domain
+# class, completed from path/query onto the write body).
 MAX_ID = 2**63 - 1
 
 
@@ -486,35 +561,85 @@ def _reserialize_or_value_axis_failure(payload: dict[str, Any]) -> tuple[str | N
                        f"JSON/jsonb cannot represent ({e})")
 
 
-def _representability_axis_failure(payload: dict[str, Any]) -> str | None:
-    """A4.1(b): value closure at the parse boundary -- Postgres-text-representability. jsonb
-    cannot store a literal U+0000 (NUL) or an unpaired UTF-16 surrogate; both are mechanically
-    checkable on the payload's own serialization, but the CHECK needs two different
-    serializations for two different reasons:
+def _iter_strings(value: Any):
+    """A5.1's traversal: yield every string the parsed payload actually carries -- both object
+    KEYS and VALUES, recursively through nested dicts/lists -- so `_representability_axis_failure`
+    below can inspect ACTUAL CODEPOINTS rather than any particular serialization's escaped text.
+    Numbers/booleans/None carry no string content and are skipped; they cannot carry a NUL or a
+    surrogate codepoint in JSON's own value grammar."""
+    if isinstance(value, str):
+        yield value
+    elif isinstance(value, dict):
+        for k, v in value.items():
+            yield from _iter_strings(k)
+            yield from _iter_strings(v)
+    elif isinstance(value, list):
+        for item in value:
+            yield from _iter_strings(item)
 
-    - **NUL**: Python's json encoder escapes every control character (`< 0x20`, which includes
-      NUL) as a literal `\\u0000` text sequence in EITHER `ensure_ascii` mode -- so a `\\u0000`
-      substring in the serialized text (the "NUL-escape scan" the spec names) reliably means
-      the original string contained a real U+0000 character, regardless of which mode produced
-      the text.
-    - **Unpaired surrogate**: with the DEFAULT `ensure_ascii=True` (checkpoint (b)'s own mode,
-      used for the size measurement and the psql payload), a lone surrogate codepoint is ALSO
-      escaped down to a plain ASCII `\\uXXXX` sequence -- exactly like every other non-ASCII
-      character -- so a strict UTF-8 encode of THAT text can never fail; the escaping itself
-      defeats the check. Only an `ensure_ascii=False` serialization leaves a lone surrogate as
-      an actual (unencodable) codepoint in the text, which `str.encode("utf-8", "strict")` then
-      refuses (`UnicodeEncodeError`) -- a legitimate supplementary-plane character always
-      serializes as a matched, encodable surrogate PAIR, so this only fires on a genuinely
-      unpaired one. Returns the failure detail, or None if the payload is representable."""
-    escaped_json = json.dumps(payload)  # ensure_ascii=True; NUL is escaped in both modes
-    if "\\u0000" in escaped_json:
-        return ("the payload contains a U+0000 (NUL) character, which Postgres jsonb text "
-                "storage cannot represent")
-    try:
-        json.dumps(payload, ensure_ascii=False).encode("utf-8", errors="strict")
-    except UnicodeEncodeError as e:
-        return (f"the payload contains an unpaired UTF-16 surrogate character, which is not "
-                f"valid Unicode text and Postgres jsonb cannot store ({e})")
+
+def _representability_axis_failure(payload: dict[str, Any]) -> str | None:
+    """A4.1(b), FIXED per A5.1 (a regression in A4.1(b)'s own fix -- the first fix-introduced
+    regression this spec's re-review loop found, per the spec's own framing). The PRE-A5 scan
+    was denominated on an *escaped* serialization's text: a payload whose string content is the
+    literal six characters "a backslash, then u0000" (documenting an escape in prose, a regex, a
+    code snippet -- carrying NO NUL codepoint at all) re-escapes its OWN backslash when
+    `json.dumps` runs, producing a longer escaped substring that happens to CONTAIN the same
+    six characters the old scan matched on -- a false positive, refusing a payload jsonb stores
+    fine, with a message asserting a NUL that was never there (the exact lying-signature class
+    A4 exists to close, reproduced by A4's own fix; see this module's docstring, "A5 HARDENING"
+    item 1).
+
+    THE FIX: inspect the ACTUAL CODEPOINTS of the PARSED value, never any escaped/serialized
+    text. jsonb cannot store a literal U+0000 (NUL) or an unpaired UTF-16 surrogate; both are
+    checkable directly on `str.__iter__` because Python's `json.loads` already resolved every
+    valid `\\uXXXX` escape (and every valid escaped surrogate PAIR combines into ONE composed,
+    non-surrogate code point during decode -- a legitimate supplementary-plane character never
+    leaves a lone surrogate character behind) -- so a lone surrogate CODE POINT appearing in a
+    decoded `str` is, by construction, genuinely unpaired; there is no serialization-mode
+    ambiguity left to resolve on this side of the parse. Walks every string AND every object key
+    (`_iter_strings`); returns the failure detail, or None if the payload is representable."""
+    for s in _iter_strings(payload):
+        if "\x00" in s:
+            return ("the payload contains a U+0000 (NUL) character, which Postgres jsonb text "
+                    "storage cannot represent")
+        for ch in s:
+            cp = ord(ch)
+            if 0xD800 <= cp <= 0xDFFF:
+                return (f"the payload contains an unpaired UTF-16 surrogate character "
+                        f"(U+{cp:04X}), which is not valid Unicode text and Postgres jsonb "
+                        f"cannot store")
+    return None
+
+
+def _bound_write_payload_ints(surface: str, payload: dict[str, Any]) -> JSONResponse | None:
+    """A5.2: every integer-typed field the write payload CONTRACT declares -- the pydantic
+    `*WriteIntFields` models in `boundary_models.py` are the enumeration authority, one per
+    surface (see `WRITE_SURFACE_INT_FIELDS` above) -- is bounded `0 <= v <= MAX_ID` at the parse
+    boundary, BEFORE psql's own bigint cast (which previously wore an honesty-losing 500
+    `unclassified_failure` for an ordinary caller value that was simply too large -- see A5's
+    §8 note on the sibling kernel defect this boundary fix stands beside, NOT fixes). Only a
+    field the CALLER actually supplied is checked (an absent field is not this check's
+    business); only a genuine Python `int` value (or, for the one `bigint[]`-shaped field
+    `enacts`, each element of a `list`) is bound-checked -- a non-integer JSON value under one
+    of these field names is left for the kernel's own rowtype cast to judge (a type question,
+    not a domain-bound question; this function adds no other semantic validation, per A5.2's
+    own words). Returns the typed 422 naming the field and the bound, or None."""
+    model = WRITE_SURFACE_INT_FIELDS.get(surface)
+    if model is None:
+        return None
+    for field_name in model.model_fields:
+        if field_name not in payload:
+            continue
+        value = payload[field_name]
+        candidates = value if isinstance(value, list) else [value]
+        for v in candidates:
+            if isinstance(v, bool) or not isinstance(v, int):
+                continue  # a type mismatch here is the kernel's rowtype cast to judge, not ours
+            if v < 0 or v > MAX_ID:
+                return JSONResponse(status_code=422, content={
+                    "detail": f"payload field '{field_name}' must satisfy 0 <= {field_name} <= "
+                              f"{MAX_ID} (a Postgres bigint's own domain, spec A5.2); got {v}"})
     return None
 
 
@@ -552,6 +677,23 @@ async def _read_bounded_body(request: Request) -> bytes:
     return b"".join(chunks)
 
 
+class _BodyReadTimeout(Exception):
+    """A5.3: raised when the WHOLE body-read phase (`_read_bounded_body`'s stream loop, wrapped
+    by `asyncio.wait_for` below) does not complete within `BODY_READ_TIMEOUT_S`. Distinct from
+    `_BodyTooLarge` above (a SIZE refusal) and from `PsqlInfraFailure`'s time axis (which bounds
+    the psql phase AFTER the body is already fully read) -- this is the body-READ phase's own
+    bound, closing A5.3's finding that a trickled body (a client sending a declared-length body
+    a few bytes at a time, never enough at once to trip the size bound) held the request open
+    indefinitely. Caught once, by the app-level exception handler (`create_app`), and turned
+    into the typed `body_read_timeout` 408 response -- same one-place-per-typed-shape discipline
+    as `_BodyTooLarge`."""
+
+    def __init__(self, timeout_s: float, message: str) -> None:
+        super().__init__(message)
+        self.timeout_s = timeout_s
+        self.message = message
+
+
 async def _bounded_raw_body(request: Request) -> bytes:
     """A3.1's plain-`def` write handlers, reconciled with the unavoidably-async ASGI body
     stream: FastAPI dependencies may be `async def` even when the path operation function they
@@ -563,8 +705,25 @@ async def _bounded_raw_body(request: Request) -> bytes:
     cannot starve `/health` (A3.1's amplifier finding). This is the smallest honest reading of
     "the write handlers become plain `def`": the handler -- the code that calls psql -- is
     plain `def`; the one line of genuinely-ASGI-bound I/O it depends on is factored out to where
-    FastAPI's own async/sync split already provides for it, not reimplemented by hand."""
-    return await _read_bounded_body(request)
+    FastAPI's own async/sync split already provides for it, not reimplemented by hand.
+
+    A5.3: the WHOLE read (`_read_bounded_body`, above -- Content-Length check plus the
+    incremental stream loop) is now wrapped in `asyncio.wait_for(..., timeout=
+    BODY_READ_TIMEOUT_S)`, bounding the body-read phase itself, independent of and prior to the
+    psql-phase bounds (`PSQL_CONNECT_TIMEOUT_S`/`PSQL_EXEC_TIMEOUT_S`) that only start once the
+    body is already fully in hand. A `_BodyTooLarge` raised INSIDE the wrapped call still
+    propagates through `wait_for` unchanged (it only intercepts `asyncio.TimeoutError`, never
+    swallows another exception) -- the size and time axes stay two independent gates, exactly
+    like A2.2's own two size checkpoints."""
+    try:
+        return await asyncio.wait_for(_read_bounded_body(request), timeout=BODY_READ_TIMEOUT_S)
+    except asyncio.TimeoutError as e:
+        raise _BodyReadTimeout(
+            BODY_READ_TIMEOUT_S,
+            f"the request body was not fully received within BODY_READ_TIMEOUT_S="
+            f"{BODY_READ_TIMEOUT_S}s (a stalled/trickled body-read phase, distinct from the "
+            f"psql-phase time axis, spec A5.3) -- refused."
+        ) from e
 
 
 def create_app(cfg: BoundaryConfig) -> FastAPI:
@@ -617,6 +776,14 @@ def create_app(cfg: BoundaryConfig) -> FastAPI:
         # handling before the handler is ever dispatched to the threadpool, so this is still
         # the ONE place checkpoint (a) becomes the typed 413 (ADR-0012 P1).
         return payload_too_large(exc.observed_bytes, exc.message)
+
+    @app.exception_handler(_BodyReadTimeout)
+    async def _body_read_timeout_handler(request: Request, exc: _BodyReadTimeout) -> JSONResponse:
+        # A5.3: the body-read phase's own time bound, symmetric with the body_too_large handler
+        # directly above -- a dependency's exception propagates to the app's own exception
+        # handling before the (now synchronous, off-the-event-loop) handler is ever dispatched.
+        body = BodyReadTimeout(timeout_s=exc.timeout_s, message=exc.message)
+        return JSONResponse(status_code=408, content=body.model_dump())
 
     @app.get("/health", response_model=HealthResponse)
     def health() -> HealthResponse:
@@ -719,7 +886,7 @@ def create_app(cfg: BoundaryConfig) -> FastAPI:
         return JSONResponse(content=rows)
 
     @app.get("/standing/principals")
-    def standing_principals() -> Response:
+    def standing_principals(after_id: int = 0, limit: int = 100) -> Response:
         if not _regclass_exists(cfg, f"{cfg.schema}.principal_relations"):
             return capability_absent(
                 "s41-identity",
@@ -727,25 +894,54 @@ def create_app(cfg: BoundaryConfig) -> FastAPI:
                 "(kernel/lineage/s41-principal-bindings-and-relations.sql) -- "
                 "GET /standing/principals is refused rather than served from a view this "
                 "world's kernel does not have.")
+        # A5.4: the SAME `limit`/`after_id` discipline as /rows/current -- `principal_standing_
+        # current` carries `id` (the view's own `p.id`), so this is a plain id-ordered page,
+        # identical in shape to /rows/current's own query.
+        if limit < 1 or limit > 1000:
+            return JSONResponse(status_code=422, content={
+                "detail": "limit must be between 1 and 1000 (transport-level bound, ADR-0002)"})
+        oor = _out_of_range_id("after_id", after_id)
+        if oor is not None:
+            return oor
         rows = _query_json(
             cfg,
-            f"SELECT coalesce(jsonb_agg(t), '[]'::jsonb) FROM "
-            f"(SELECT * FROM {cfg.schema}.principal_standing_current) t;",
+            f"SELECT coalesce(jsonb_agg(t ORDER BY t.id), '[]'::jsonb) FROM "
+            f"(SELECT * FROM {cfg.schema}.principal_standing_current WHERE id > {after_id} "
+            f"ORDER BY id LIMIT {limit}) t;",
         )
         return JSONResponse(content=rows)
 
     @app.get("/work/items")
-    def work_items() -> Response:
+    def work_items(after_id: int = 0, limit: int = 100) -> Response:
         if not _regclass_exists(cfg, f"{cfg.schema}.work_item_current"):
             return capability_absent(
                 "s22-work",
                 "This world carries no work-item views (kernel/lineage/s22-work-item-ledger"
                 ".sql) -- GET /work/items is refused rather than served from a view this "
                 "world's kernel does not have.")
+        # A5.4: the SAME `limit`/`after_id` DISCIPLINE as /rows/current, but `work_item_current`
+        # has NO id-shaped key at all (kernel/lineage/s22-work-item-ledger.sql: one row per
+        # `slug`, no bigint column) -- the fixer's documented, honest fallback: a
+        # `row_number() OVER (ORDER BY slug)` ordinal, computed ONLY in this wrapper query
+        # (never stored, never claimed to be a kernel id), stands in for `id` as the pagination
+        # cursor `after_id`/`limit` compare against -- `slug` is unique per invariant 4 (one row
+        # per slug), so the ordering is deterministic and stable across requests on an unchanged
+        # view. The synthetic `rn` column is stripped back out of each row's JSON (`- 'rn'`)
+        # before it is returned, so the served row shape stays byte-identical to the view's own
+        # columns -- only the cursoring mechanics differ from the id-keyed routes.
+        if limit < 1 or limit > 1000:
+            return JSONResponse(status_code=422, content={
+                "detail": "limit must be between 1 and 1000 (transport-level bound, ADR-0002)"})
+        oor = _out_of_range_id("after_id", after_id)
+        if oor is not None:
+            return oor
         rows = _query_json(
             cfg,
-            f"SELECT coalesce(jsonb_agg(t), '[]'::jsonb) FROM "
-            f"(SELECT * FROM {cfg.schema}.work_item_current) t;",
+            f"SELECT coalesce(jsonb_agg((to_jsonb(t) - 'rn') ORDER BY t.rn), '[]'::jsonb) FROM "
+            f"(SELECT * FROM "
+            f"   (SELECT *, row_number() OVER (ORDER BY slug) AS rn "
+            f"      FROM {cfg.schema}.work_item_current) numbered "
+            f" WHERE numbered.rn > {after_id} ORDER BY numbered.rn LIMIT {limit}) t;",
         )
         return JSONResponse(content=rows)
 
@@ -790,6 +986,13 @@ def create_app(cfg: BoundaryConfig) -> FastAPI:
             if not isinstance(payload, dict):
                 return JSONResponse(status_code=422, content={
                     "detail": "write payload must be a JSON object (transport-level shape check, spec §4)"})
+
+            # A5.2: the write-body id-domain closure -- every integer-typed field this
+            # surface's payload contract declares (boundary_models.py's *WriteIntFields models)
+            # is bounded 0 <= v <= MAX_ID, BEFORE psql's own bigint cast ever sees it.
+            int_field_oor = _bound_write_payload_ints(surface, payload)
+            if int_field_oor is not None:
+                return int_field_oor
 
             # A4.1(a): value closure -- non-finite numbers. This SAME re-serialization is also
             # A2.2 checkpoint (b)'s size measurement and the exact text that crosses to psql

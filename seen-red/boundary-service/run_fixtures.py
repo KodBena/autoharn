@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-18T07:49:10Z
-#   last-change: 2026-07-18T10:12:41Z
+#   last-change: 2026-07-18T10:47:19Z
 #   contributors: ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
 """run_fixtures.py -- both-polarity witness for design/FABLE-LEDGER-BOUNDARY-SERVICE-SPEC.md's
-§8 witness plan (W1-W12, A2's amendment; W13-W14, A3's amendment; W15-W19, A4's amendment).
-Real infra, no mocks:
+§8 witness plan (W1-W12, A2's amendment; W13-W14, A3's amendment; W15-W19, A4's amendment;
+W20-W23, A5's amendment). Real infra, no mocks:
 CLASSIC scaffolds + manual chain applies in the TOY db (the exact pattern seen-red/
 s43-typed-verdict-write-boundary/run_fixtures.py already banks, and this fixture imports
 nothing new for scaffolding -- same helpers, re-derived here because the two fixtures scaffold
@@ -39,9 +39,16 @@ WORLDS:
                 FRESH server instance against a closed local port -- genuine psql exit 2 -> 503
                 infra_failure), W19 (audit_served.py's exit-2 contract, using the same
                 closed-port lever against ITS OWN direct-read leg while the served-fetch leg
-                still targets world_b's live server), the §9/A2.1/W12 in-process route-table
-                closure assertion, and FINALLY (destructive, run last) W18b (ledger_current
-                dropped on world_b -- genuine psql exit 3 -> 500 unclassified_failure).
+                still targets world_b's live server), W20 (the representability-scan
+                regression fixed: literal escape TEXT accepted through to the kernel; a real
+                NUL and a real unpaired surrogate still refuse), W21 (an over-bigint write-
+                payload field, typed 422 naming the field and bound), W22 (a raw-socket
+                trickled body, typed 408 within BODY_READ_TIMEOUT_S plus margin), W23
+                (pagination on /standing/principals and /work/items, both polarities, including
+                /work/items' id-less synthetic-ordinal fallback), the §9/A2.1/W12 in-process
+                route-table closure assertion, and FINALLY (destructive, run last) W18b
+                (ledger_current dropped on world_b -- genuine psql exit 3 -> 500
+                unclassified_failure).
   WORLD NOCAP -- chain truncated BEFORE s22/s40/s41/s42/s43 (ends at s21): W10 (/health on a
                 pre-s40 chain -> 200, null service_principal, no 500) and the s22/s41 gate
                 ABSENT legs (W11) -- this world carries neither view, so both capability gates
@@ -67,6 +74,7 @@ import socket
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import urllib.error
 import urllib.request
@@ -366,6 +374,76 @@ def http_post(url: str, payload: dict) -> tuple[int, object]:
             return resp.status, json.loads(resp.read())
     except urllib.error.HTTPError as e:
         return e.code, json.loads(e.read())
+
+
+def _post_trickled(host: str, port: int, path: str, declared_len: int, total_wall_s: float,
+                    chunk_size: int = 1) -> tuple[int, dict | None, float]:
+    """W22 (A5.3): drives the body-read-phase time bound the same way W9's own module docstring
+    named as UNEXERCISED there -- a raw `socket` client, because `urllib`/`http.client` (every
+    other HTTP call this fixture makes) offer no supported way to hold a POST body open
+    mid-stream; this is a SEPARATE, minimal transport used ONLY for this one leg, not a general
+    replacement for `urllib` elsewhere in this file. Sends the HTTP/1.1 request line + headers
+    (a real `Content-Length: declared_len`) immediately, then trickles exactly ONE byte of body
+    every `total_wall_s / declared_len` seconds -- so the connection stays open, genuinely
+    sending real bytes throughout, and never completes the declared length within
+    `BODY_READ_TIMEOUT_S`. A background thread does the trickling so the main thread can block
+    on `recv` for the server's own response (which, on the read-timeout leg, arrives BEFORE the
+    trickle finishes -- the point of the witness). Returns (status, parsed-json-body-or-None,
+    wall-clock elapsed until a response was read or the socket closed)."""
+    start = time.time()
+    body = b"x" * declared_len
+    header = (
+        f"POST {path} HTTP/1.1\r\n"
+        f"Host: {host}\r\n"
+        f"Content-Type: application/json\r\n"
+        f"Content-Length: {declared_len}\r\n"
+        f"Connection: close\r\n\r\n"
+    ).encode()
+    per_chunk_delay = total_wall_s / max(1, declared_len // chunk_size)
+    sock = socket.create_connection((host, port), timeout=total_wall_s + 20)
+
+    def _trickle() -> None:
+        sent = 0
+        try:
+            while sent < len(body):
+                chunk = body[sent:sent + chunk_size]
+                sock.sendall(chunk)
+                sent += len(chunk)
+                time.sleep(per_chunk_delay)
+        except OSError:
+            pass  # the server closed its read side once it gave up -- expected on the timeout leg
+
+    sock.sendall(header)
+    t = threading.Thread(target=_trickle, daemon=True)
+    t.start()
+    # `Connection: close` above asks the server to close its side once it has written a
+    # response -- so reading until `recv` returns empty (peer closed) is the ordinary, robust
+    # way to collect a small response, no header-parsing heuristic needed. Bounded by the same
+    # generous settimeout as the connect above (never the OS default).
+    resp = b""
+    try:
+        sock.settimeout(total_wall_s + 20)
+        while True:
+            data = sock.recv(4096)
+            if not data:
+                break
+            resp += data
+    except OSError:
+        pass
+    elapsed = time.time() - start
+    sock.close()
+    t.join(timeout=5)
+    status = None
+    parsed: dict | None = None
+    if resp:
+        try:
+            status_line = resp.split(b"\r\n", 1)[0].decode()
+            status = int(status_line.split(" ", 2)[1])
+            body_text = resp.split(b"\r\n\r\n", 1)[1]
+            parsed = json.loads(body_text)
+        except (IndexError, ValueError, UnicodeDecodeError):
+            pass
+    return status, parsed, elapsed
 
 
 def stop_server(proc: subprocess.Popen) -> str:
@@ -721,6 +799,144 @@ def main() -> int:
               f"stderr={(audit19_cp.stderr.strip() if audit19_cp else '?')!r}",
               failures)
 
+        # -- W20 (A5.1): the representability-scan regression, both polarities. Leg (a): a
+        # payload whose STRING VALUE is the literal six characters "a backslash, then u0000"
+        # (documenting an escape in prose -- carrying NO real NUL codepoint) -- built via a
+        # DOUBLE-backslash JSON escape on the wire, which `json.loads` resolves to ONE literal
+        # backslash character followed by literal text "u0000" -- must now be ACCEPTED through
+        # to the kernel (the pre-A5.1 scan false-refused this exact shape). Legs (b)/(c): a real
+        # NUL and a real unpaired surrogate (the SAME true-positive bodies W16 already covers,
+        # re-witnessed here under W20's own name per the spec's numbering) must STILL refuse on
+        # the representability axis -- the fix closes the false positive without opening the
+        # true positives back up.
+        w20a_raw = (
+            '{"kind": "note", "actor": ' + str(author_id) + ', '
+            '"statement": "W20 leg a -- documents an escape sequence: before\\\\u0000after"}'
+        ).encode()
+        w20b_raw = (
+            '{"kind": "note", "actor": ' + str(author_id) + ', '
+            '"statement": "W20 leg b -- real NUL: before\\u0000after"}'
+        ).encode()
+        w20c_raw = (
+            '{"kind": "note", "actor": ' + str(author_id) + ', '
+            '"statement": "W20 leg c -- real unpaired surrogate: before\\ud800after"}'
+        ).encode()
+        st20a, body20a = _post_raw("/write/ledger", w20a_raw)
+        st20b, body20b = _post_raw("/write/ledger", w20b_raw)
+        st20c, body20c = _post_raw("/write/ledger", w20c_raw)
+        st20h, body20h = http_get(base + "/health") if up_b else (0, {})
+        check("w20-representability-scan-regression-fixed-both-polarities",
+              up_b
+              and st20a == 200 and body20a.get("disposition") == "accepted"
+              and st20b == 422 and "representability axis" in body20b.get("detail", "")
+              and st20c == 422 and "representability axis" in body20c.get("detail", "")
+              and st20h == 200 and body20h.get("world") == world_b,
+              f"leg (a) literal escape TEXT (double-backslash wire encoding, no real NUL): "
+              f"status={st20a} verdict={body20a}; "
+              f"leg (b) real NUL (single-backslash wire encoding): status={st20b} body={body20b}; "
+              f"leg (c) real unpaired surrogate: status={st20c} body={body20c}; "
+              f"/health after all three: status={st20h} world={body20h.get('world')} "
+              f"(server alive)",
+              failures)
+
+        # -- W21 (A5.2): a write-payload integer field above bigint range -> typed 422 naming
+        # the field and the bound, BEFORE it ever reaches psql's bigint cast (which previously
+        # wore a 500 unclassified_failure it did not earn, per A5's own §8 note on the sibling
+        # kernel defect this boundary fix stands beside without fixing).
+        over_bigint = 2**63
+        w21_raw = json.dumps({"kind": "note", "actor": over_bigint,
+                              "statement": "W21 over-bigint actor field"}).encode()
+        st21, body21 = _post_raw("/write/ledger", w21_raw)
+        st21h, body21h = http_get(base + "/health") if up_b else (0, {})
+        check("w21-write-payload-int-field-over-bigint-typed-422",
+              up_b and st21 == 422 and "actor" in body21.get("detail", "")
+              and str(boundary_service.MAX_ID) in body21.get("detail", "")
+              and st21h == 200 and body21h.get("world") == world_b,
+              f"POST /write/ledger with actor={over_bigint} (MAX_ID+1): status={st21} "
+              f"body={body21}; /health after: status={st21h} world={body21h.get('world')} "
+              f"(server alive)",
+              failures)
+
+        # -- W22 (A5.3): the body-READ-phase time bound. A raw-socket client (see
+        # `_post_trickled`'s own docstring for why urllib cannot drive this leg) sends real
+        # request headers with a genuine Content-Length, then trickles ONE byte at a time,
+        # slowly enough that the FULL declared body would take well over
+        # BODY_READ_TIMEOUT_S=30s to arrive -- the server must respond with a typed 408 WITHIN
+        # that bound plus a generous margin, never waiting for the trickle to finish (which it
+        # never does; the client stops as soon as a response arrives).
+        w22_declared_len = 40
+        w22_total_wall_s = 40.0  # 40 one-byte sends, ~1s apart -- exceeds BODY_READ_TIMEOUT_S=30
+        st22, body22, elapsed22 = _post_trickled(
+            "127.0.0.1", port_b, "/write/ledger", w22_declared_len, w22_total_wall_s
+        ) if up_b else (None, None, 0.0)
+        st22h, body22h = http_get(base + "/health") if up_b else (0, {})
+        margin22 = boundary_service.BODY_READ_TIMEOUT_S + 20
+        check("w22-body-read-timeout-trickled-body-typed-408-within-bound-plus-margin",
+              up_b and st22 == 408 and body22 is not None
+              and body22.get("disposition") == "body_read_timeout"
+              and body22.get("timeout_s") == boundary_service.BODY_READ_TIMEOUT_S
+              and elapsed22 < margin22
+              and st22h == 200 and body22h.get("world") == world_b,
+              f"trickled body (declared Content-Length={w22_declared_len}, 1 byte/~1s -- would "
+              f"take ~{w22_total_wall_s:.0f}s to complete, well past "
+              f"BODY_READ_TIMEOUT_S={boundary_service.BODY_READ_TIMEOUT_S}s): status={st22} "
+              f"body={body22} elapsed={elapsed22:.1f}s (bound: "
+              f"{boundary_service.BODY_READ_TIMEOUT_S}s, margin={margin22}s); /health after: "
+              f"status={st22h} world={body22h.get('world')} (server alive)",
+              failures)
+
+        # -- W23 (A5.4): pagination on /standing/principals and /work/items, both polarities.
+        # `/standing/principals`: WORLD B already carries >=3 principals (author, write-boundary,
+        # boundary-service) by this point, so `limit=1` genuinely tests enforcement (pre-A5 this
+        # route ignored the param and always returned the whole view). `/work/items` carries NO
+        # rows yet on WORLD B (no work_opened act in its birth sequence) -- two are opened here,
+        # through the boundary, so `limit=1` has something real to truncate; this also exercises
+        # the view's own id-less fallback ordering (ORDER BY slug via a synthetic row_number()
+        # cursor, spec A5.4's own "fixer flags a view lacking an id-shaped key" clause).
+        w23_slug_a, w23_slug_b = f"w23-item-a-{RUN_SUFFIX}", f"w23-item-b-{RUN_SUFFIX}"
+        for slug in (w23_slug_a, w23_slug_b):
+            v = http_post(base + "/write/ledger", {
+                "kind": "work_opened", "statement": f"W23 fixture item {slug}",
+                "actor": author_id, "work_slug": slug, "work_title": f"W23 fixture {slug}",
+            })[1] if up_b else {}
+            if v.get("disposition") != "accepted":
+                raise RuntimeError(f"W23 fixture work_opened write refused: {v}")
+
+        st23sp_honored, page23sp_honored = http_get(
+            f"{base}/standing/principals?after_id=0&limit=1") if up_b else (0, [])
+        st23sp_oor, body23sp_oor = http_get(
+            f"{base}/standing/principals?after_id=0&limit=0") if up_b else (0, {})
+        st23wi_honored, page23wi_honored = http_get(
+            f"{base}/work/items?after_id=0&limit=1") if up_b else (0, [])
+        st23wi_all, page23wi_all = http_get(
+            f"{base}/work/items?after_id=0&limit=1000") if up_b else (0, [])
+        st23wi_oor, body23wi_oor = http_get(
+            f"{base}/work/items?after_id=-1&limit=10") if up_b else (0, {})
+        check("w23-pagination-both-routes-both-polarities",
+              up_b
+              and st23sp_honored == 200 and isinstance(page23sp_honored, list)
+              and len(page23sp_honored) == 1
+              and st23sp_oor == 422
+              and st23wi_honored == 200 and isinstance(page23wi_honored, list)
+              and len(page23wi_honored) == 1
+              and st23wi_all == 200 and isinstance(page23wi_all, list)
+              and len(page23wi_all) >= 2
+              and {r["slug"] for r in page23wi_all} >= {w23_slug_a, w23_slug_b}
+              and st23wi_oor == 422,
+              f"/standing/principals?limit=1: status={st23sp_honored} "
+              f"n={len(page23sp_honored) if isinstance(page23sp_honored, list) else '?'} "
+              f"(honored leg); /standing/principals?limit=0: status={st23sp_oor} "
+              f"body={body23sp_oor} (out-of-range leg); "
+              f"/work/items?limit=1: status={st23wi_honored} "
+              f"n={len(page23wi_honored) if isinstance(page23wi_honored, list) else '?'} "
+              f"(honored leg, id-less fallback ordering); "
+              f"/work/items?limit=1000: status={st23wi_all} "
+              f"slugs={sorted(r.get('slug') for r in page23wi_all) if isinstance(page23wi_all, list) else '?'} "
+              f"(both fixture items present); "
+              f"/work/items?after_id=-1: status={st23wi_oor} body={body23wi_oor} "
+              f"(out-of-range leg)",
+              failures)
+
         # -- W9 streaming-abort leg: UNEXERCISED, named (spec A3.4's own carve-out, "exercised
         # if cheaply drivable, else UNEXERCISED with why"). Driving it needs a client that opens
         # the write connection, sends a Content-Length promise, then closes the socket mid-body
@@ -930,7 +1146,7 @@ def main() -> int:
     if failures:
         print("FAILURES:", failures)
         return 1
-    print("ALL CASES OK -- boundary-service both-polarity proof (W1-W7, W9-W19 live; "
+    print("ALL CASES OK -- boundary-service both-polarity proof (W1-W7, W9-W23 live; "
           "W8 and the W9 streaming-abort leg UNEXERCISED, named).")
     return 0
 

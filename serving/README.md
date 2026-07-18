@@ -14,9 +14,12 @@ closure — two more adjacent axes of the same write ingress A2's size closure d
 **and Amendment A4** (value closure on non-finite numbers and Postgres-text-representability,
 the read-side id domain, and exit-code fidelity in the psql layer — `PsqlInfraFailure` narrows
 to genuinely connection-level psql failures only, exit 3 and other residue now get their own
-typed `unclassified_failure`).
-Read the spec in full, including A2, A3, and A4, before touching this directory; this README is
-an operator's pointer into it, not a restatement.
+typed `unclassified_failure`), **and Amendment A5** (the representability scan re-denominated
+onto ACTUAL codepoints, fixing a regression A4's own fix introduced; write-payload integer
+fields bounded to the id domain; the body-read phase's own time bound; pagination propagated to
+`/standing/principals` and `/work/items`; the framework-owned coercion sub-axis named).
+Read the spec in full, including A2, A3, A4, and A5, before touching this directory; this
+README is an operator's pointer into it, not a restatement.
 
 ## What this is, in one paragraph
 
@@ -72,8 +75,8 @@ table against `app.routes` **directly, in-process** (never a schema endpoint).
 | GET | `/rows/{id}` | one row, any status | none |
 | GET | `/rows/{id}/history` | the row's full supersession chain (both directions), each hop carrying its own `superseded_by` | none |
 | GET | `/credited` | the credited view, when the world carries one | `s44-credited-view` — no world in this repository's kernel lineage carries this view yet (spec §7); always `capability_absent` today |
-| GET | `/standing/principals` | `principal_standing_current` | `s41-identity` |
-| GET | `/work/items` | `work_item_current` | `s22-work` |
+| GET | `/standing/principals` | `principal_standing_current`, id-paginated (`?after_id=&limit=`, bounds below, A5.4) | `s41-identity` |
+| GET | `/work/items` | `work_item_current`, ORDINAL-paginated (`?after_id=&limit=`, same bounds; the view has no id column, A5.4's fallback below) | `s22-work` |
 | POST | `/write/ledger` | `kernel.ledger_write` | `s43-boundary` |
 | POST | `/write/review` | `kernel.review_write` | `s43-boundary` |
 | POST | `/write/registration` | `kernel.registration_write` | `s43-boundary` |
@@ -94,17 +97,28 @@ any of this service's own refusal machinery to hold to that discipline. Revisit 
 consumer demonstrates harm from the untyped shape (spec A3.3's own carve-out) — not pre-emptively
 typed, per ADR-0004 (no work ahead of a demonstrated need).
 
-## Bounds (A2.2, A2.6, A2.7, A3.1, A4.1, A4.2 — one disclosed discipline, every ingress)
+## Bounds (A2.2, A2.6, A2.7, A3.1, A4.1, A4.2, A5.1–A5.4 — one disclosed discipline, every ingress)
 
-- **Pagination** (`/rows/current`, `/credited`): `?after_id=&limit=`, **`1 ≤ limit ≤ 1000`**,
-  **`after_id ≥ 0`** — both violations are a typed HTTP 422 naming the bound. Ratified spec
-  text as of A2.7; A2.6 added the `after_id ≥ 0` half (it previously accepted negatives while
-  `limit` was already range-checked — an asymmetry with no reason).
+- **Pagination — ALL FOUR read routes** (`/rows/current`, `/credited`, `/standing/principals`,
+  `/work/items` — A5.4 propagated this from two routes to all four): `?after_id=&limit=`,
+  **`1 ≤ limit ≤ 1000`**, **`after_id ≥ 0`** — both violations are a typed HTTP 422 naming the
+  bound. Ratified spec text as of A2.7; A2.6 added the `after_id ≥ 0` half (it previously
+  accepted negatives while `limit` was already range-checked — an asymmetry with no reason).
+  `/rows/current`, `/credited`, and `/standing/principals` page on the view's own `id` column
+  (`WHERE id > after_id ORDER BY id LIMIT limit`, identical shape on all three). `/work/items`
+  serves `work_item_current`, which carries **no id-shaped key at all** (one row per `slug`, no
+  bigint column) — its fallback, named per the spec's own "flag it if a view lacks one" clause:
+  a `row_number() OVER (ORDER BY slug)` ordinal, computed ONLY inside the service's own wrapper
+  query (never stored, never claimed to be a kernel id, since `slug` is unique per the view's
+  own invariant — one opening act per slug), stands in for `id` as the `after_id`/`limit`
+  cursor. The synthetic ordinal is stripped back out of each row's JSON before it is returned,
+  so the served row shape stays byte-identical to the view's own columns; only the cursoring
+  mechanics differ from the id-keyed routes.
 - **The read-side id domain** (A4.2, symmetric with A2.6): every id-typed path/query parameter
-  — `/rows/{id}`, `/rows/{id}/history`'s `id`, `/rows/current` and `/credited`'s `after_id` —
-  is bounded **`0 ≤ id ≤ 9223372036854775807`** (a Postgres `bigint`'s own ceiling, `MAX_ID`),
-  typed HTTP 422 outside it. Before this bound existed, an over-range id reached `psql`'s
-  bigint cast unchecked and wore a 503 it did not earn.
+  — `/rows/{id}`, `/rows/{id}/history`'s `id`, and every route's `after_id` — is bounded
+  **`0 ≤ id ≤ 9223372036854775807`** (a Postgres `bigint`'s own ceiling, `MAX_ID`), typed HTTP
+  422 outside it. Before this bound existed, an over-range id reached `psql`'s bigint cast
+  unchecked and wore a 503 it did not earn.
 - **The write-ingress value closure** (A4.1, at the parse boundary, after structure/encoding/
   magnitude, before `psql`): (a) **non-finite numbers** — the payload is re-serialized with
   `json.dumps(..., allow_nan=False)`, so `Infinity`, `NaN`, and any numeric literal that
@@ -112,7 +126,22 @@ typed, per ADR-0004 (no work ahead of a demonstrated need).
   representation for them; (b) **Postgres-text-representability** — the payload refuses if it
   carries a literal `U+0000` (NUL) or an unpaired UTF-16 surrogate character on the
   **representability axis**, neither of which jsonb text storage can store. Both are typed
-  HTTP 422 naming the axis, never echoing the payload back.
+  HTTP 422 naming the axis, never echoing the payload back. **A5.1 fixed a regression in (b):**
+  the pre-A5 scan inspected the *escaped serialization*'s text, so a payload whose string
+  content was the literal six characters "a backslash, then u0000" (documenting an escape in
+  prose — no real NUL codepoint present) re-escaped its own backslash and false-positived on
+  the same six-character substring the old scan matched. The fix walks the ACTUAL codepoints of
+  the PARSED value (every string and object key, recursively) — a real `U+0000` or a real
+  unpaired surrogate still refuses; the literal-escape-text case is now correctly accepted
+  through to the kernel.
+- **The write-ingress id-domain closure on the BODY (A5.2, new):** every integer-typed field
+  the payload contract declares — `serving/boundary_models.py`'s per-surface `*WriteIntFields`
+  models are the enumeration authority (e.g. `actor`/`supersedes`/`regards`/`enacts` on
+  `/write/ledger`; `assigned_by`/`obliges_actor` on `/write/obligation`) — is bounded
+  **`0 ≤ v ≤ MAX_ID`** if the caller supplied it, typed HTTP 422 naming the field and the
+  bound. This is A4.2's id-domain class completed from path/query onto the write body; no
+  other semantic validation is added (a non-integer value under one of these field names is
+  left for the kernel's own rowtype cast to judge — a type question, not a domain-bound one).
 - **Write body size** (`/write/*`): `MAX_WRITE_BODY_BYTES = 1_048_576` (1 MiB), the ONE named
   bound (ADR-0012 P1), enforced at BOTH checkpoints A2.2 names: (a) the **raw request body**,
   before any JSON parsing (Content-Length checked first when the client declared one — refused
@@ -123,14 +152,26 @@ typed, per ADR-0004 (no work ahead of a demonstrated need).
   `{"disposition": "payload_too_large", "limit_bytes": 1048576, "observed_bytes": <n>, "message": "<teach-text>"}`.
   1 MiB is generous for any ledger payload and comfortably under the `psql`-argv wall
   (`ARG_MAX`) the pre-hardening build crashed into on a ~3 MB payload.
-- **The time axis** (A3.1, every `psql` call this service makes): `PSQL_CONNECT_TIMEOUT_S = 5`
-  (passed as `PGCONNECT_TIMEOUT` in the subprocess's own environment, so libpq itself refuses a
-  stalled TCP handshake/auth round trip) and `PSQL_EXEC_TIMEOUT_S = 60`
-  (`subprocess.run(timeout=...)`, catching a peer that accepts the connection and then goes
-  silent — a blackhole/accept-and-stall, the class no libpq connect-timeout option reaches). A
-  `subprocess.TimeoutExpired` on either bound is treated as infra failure (HTTP 503, below) — "a
-  stall IS infra." The write handlers are plain `def` (see "Write path shape" below), so a
-  stalled write cannot starve `/health` or any other route.
+- **The time axis, BOTH legs (A3.1 psql phase; A5.3 body-read phase, new):** every `psql` call
+  this service makes is bounded twice — `PSQL_CONNECT_TIMEOUT_S = 5` (passed as
+  `PGCONNECT_TIMEOUT` in the subprocess's own environment, so libpq itself refuses a stalled TCP
+  handshake/auth round trip) and `PSQL_EXEC_TIMEOUT_S = 60` (`subprocess.run(timeout=...)`,
+  catching a peer that accepts the connection and then goes silent — a blackhole/accept-and-
+  stall, the class no libpq connect-timeout option reaches). A `subprocess.TimeoutExpired` on
+  either bound is treated as infra failure (HTTP 503, below) — "a stall IS infra." The write
+  handlers are plain `def` (see "Write path shape" below), so a stalled write cannot starve
+  `/health` or any other route. **Separately, `BODY_READ_TIMEOUT_S = 30`** bounds the RAW BODY
+  READ phase itself — before A5.3, a trickled body (a client sending a declared-length body a
+  few bytes at a time) held the request open indefinitely, since the psql-phase bounds above
+  only start their clock once the body is already fully in hand. Expiry returns a typed HTTP
+  408: `{"disposition": "body_read_timeout", "timeout_s": 30, "message": "<teach-text>"}`.
+- **Framework-owned parameter coercion (A5.5, ACCEPTED AS-IS, named — the A3.3 precedent):** a
+  non-integer value for an int-typed path/query parameter (e.g. a non-numeric `after_id`)
+  returns FastAPI's/pydantic's own untyped coercion-failure 422 shape, not one of this service's
+  typed shapes above. This sits at the framework's transport layer, predates every amendment,
+  and carries no false cause statement (it is not claiming to be a kernel or service verdict);
+  revisit only if a consumer demonstrates harm, per the same named-not-mechanized carve-out
+  A3.3 already applies to router-level 404/405s below.
 
 ## Infrastructure failure (A2.4, extended per A3.1, NARROWED per A4.3)
 
@@ -265,8 +306,8 @@ mocks. Run:
 HARNESS_PGHOST=<toy-db-host> $HOME/w/vdc/venvs/generic/bin/python seen-red/boundary-service/run_fixtures.py
 ```
 
-Covers spec §8's W1–W7 plus A2's W9–W12 plus A3's W13–W14 plus A4's W15–W19, all live; **W8
-(the panel-side deprecation-mark emission) is UNEXERCISED by construction** — that legacy path
+Covers spec §8's W1–W7 plus A2's W9–W12 plus A3's W13–W14 plus A4's W15–W19 plus A5's W20–W23,
+all live; **W8 (the panel-side deprecation-mark emission) is UNEXERCISED by construction** — that legacy path
 lives in the separate autoharn-panel repository, which this build never touches, per the spec's
 own §10.4 ("panel-side is a separate session's item citing this spec"). A2's additions: **W9**
 an oversized write body at both A2.2 checkpoints (typed 413 both times, server stays alive,
@@ -298,6 +339,21 @@ against the same closed-port lever applied to the audit tool's OWN direct-read l
 served-fetch leg still targets `WORLD B`'s live server) — proves A4.4's regression fix (catching
 the dedicated `PsqlInfraFailure`/`PsqlUnclassifiedFailure` exceptions instead of the stale bare
 `RuntimeError`) restores the contract rather than letting the failure escape uncaught.
+A5's additions: **W20** the representability-scan regression, both polarities — a payload
+carrying the literal escape TEXT (double-backslash wire encoding, no real NUL codepoint) is now
+ACCEPTED through to the kernel, while a real NUL and a real unpaired surrogate (single-backslash
+wire encoding) still refuse on the representability axis; **W21** a write-payload integer field
+above bigint range (e.g. `actor`) returns a typed 422 naming the field and the bound, never
+reaching `psql`'s bigint cast; **W22** the body-read-phase time bound — a raw-socket client (the
+same lever the W9 streaming-abort leg's own docstring names as needed and does not otherwise
+carry) trickles a declared-length body one byte at a time, slow enough that completing it would
+take well over `BODY_READ_TIMEOUT_S=30s`; the server returns a typed 408 within the bound plus a
+generous margin, never waiting for the trickle to finish; **W23** pagination on
+`/standing/principals` and `/work/items`, both polarities — `limit=1` genuinely truncates a
+multi-row result on both routes (proving the pre-A5 silent-no-op is closed), an out-of-range
+`limit`/`after_id` is a typed 422 on both, and `/work/items`' id-less synthetic-ordinal fallback
+(`row_number() OVER (ORDER BY slug)`) is exercised directly by opening two fixture work items
+through the boundary first.
 
 **Concurrent-runner safety (A3.5).** Every scratch world/schema name carries a per-run unique,
 pid-derived suffix (`RUN_SUFFIX`); teardown is scoped to the exact suffixed name a run created.
