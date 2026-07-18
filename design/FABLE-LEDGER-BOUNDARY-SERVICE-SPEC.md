@@ -553,6 +553,58 @@ typed 422 naming the domain; (iii) a short chain without parameters → byte-ide
 to the pre-A10 response (no regression for the common case). §9's route table names
 the history route under the pagination axis alongside the four A5.4 routes.
 
+**A11 (2026-07-18) — iteration-9 confirmation pass: cursor honesty on the slug-keyed
+route; the history route's not-found shape.** Trigger: single-reviewer confirmation on
+`35c58e7`. Everything A2–A10 held (full suite green unmodified; the reviewer
+additionally proved `/rows/current`'s id-keyed cursor genuinely stable under concurrent
+insertion — no duplicate, no gap — on an independently scaffolded scratch world). Two
+witnessed findings, both uniformity completions:
+
+1. **`/work/items` pagination is unstable under concurrent insertion.** Its cursor is
+   a `row_number() OVER (ORDER BY slug)` ordinal recomputed per request; an item
+   inserted mid-walk with a slug sorting before an already-served item shifts every
+   ordinal after it (witnessed: pages `[aa,cc]` then `[cc,ee]` — `cc` served twice,
+   `bb` never — against a view reading `[aa,bb,cc,ee,gg]`). Every response is
+   well-typed; the union is silently wrong. The route's code comment conceded
+   stability "on an unchanged view" without the spec or README ever naming that axis.
+   **Adjudication — keyset on the route's TRUE key, residual named:** the cursor
+   re-keys to the view's own key: `after_slug` (keyset `WHERE slug > :after_slug
+   ORDER BY slug`), same `limit` domain, same message family. The synthetic ordinal
+   is retired; a supplied `after_id` on THIS route refuses typed 422 teaching
+   `after_slug` (never silently ignored — A10's own lesson). Honesty bound, stated
+   rather than overclaimed: slug keyset structurally eliminates duplication (a served
+   slug can never be re-served — the cursor is a value, not a position), but a row
+   inserted BEHIND an in-flight cursor is not visible to that walk, and cannot be
+   under any snapshot-free scheme over a non-append-monotonic key (ledger ids are
+   append-monotonic, which is exactly why `/rows/current` carries the stronger
+   guarantee; slugs are not). That residual becomes the route's NAMED, disclosed
+   semantics per the A3.3/A5.5 precedent: no duplicates ever; the page union equals
+   the view restricted to slugs beyond the cursor's progression; an item inserted
+   behind the cursor appears on the next walk. `after_slug` domain: text, byte-length
+   bounded by the existing per-argument transport wall's per-field reasoning at 512
+   bytes (typed 422 beyond — a slug over 512 bytes names no real item in any world
+   this kernel scaffolds), any value in-domain is a valid cursor position (keyset
+   semantics require no existence check).
+2. **`/rows/{id}/history` answers `200 []` for a nonexistent row** where sibling
+   `GET /rows/{id}` typed-404s the identical input class — and the empty array is
+   only an inferred nonexistence signal (an existing row always contributes its own
+   hop; witnessed). **Adjudication:** a leading existence check; a nonexistent
+   in-domain id gets the sibling route's exact typed 404 shape (`"no row N"`). No
+   change for existing rows; the recursive CTE runs only after the check.
+
+§8 gains: **W29** three legs — (i) the reviewer's exact concurrent-insert drive
+replayed against the slug keyset: no duplicate across the walk, the behind-cursor
+item absent from the in-flight walk and present on a fresh walk (the named semantics
+witnessed, not just stated); (ii) `after_id` supplied to `/work/items` → typed 422
+teaching `after_slug`; over-512-byte `after_slug` → typed 422 naming the domain;
+(iii) an ordinary two-page walk: page union equals the unpaginated view when no
+concurrent write occurs. **W30** nonexistent in-domain id → `/rows/{id}/history`
+typed 404 byte-matching the sibling route's shape; an existing row's history
+unchanged. §9's pagination axis is restated as "keyset on each route's own natural
+key — append-monotonic id where the view has one (stability under concurrent
+insertion guaranteed), slug where it does not (no-duplication guaranteed;
+behind-cursor inserts join the next walk — disclosed, witnessed)".
+
 ## License
 
 Public Domain (The Unlicense).
