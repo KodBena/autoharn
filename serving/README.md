@@ -149,7 +149,13 @@ typed, per ADR-0004 (no work ahead of a demonstrated need).
   the same six-character substring the old scan matched. The fix walks the ACTUAL codepoints of
   the PARSED value (every string and object key, recursively) — a real `U+0000` or a real
   unpaired surrogate still refuses; the literal-escape-text case is now correctly accepted
-  through to the kernel.
+  through to the kernel. **A12 generalizes the representability axis off the write-payload body
+  onto every query-derived string that crosses to `psql` argv** — `after_slug` on
+  `GET /work/items` (the only string-typed query/path parameter this service's route table
+  declares, confirmed by enumeration, A12) gains the SAME actual-codepoint closure, typed HTTP
+  422, same message family, checked after its own 512-byte length bound (A11) and before the
+  value ever reaches `psql`'s `-v` argument; a literal NUL or an unpaired surrogate previously
+  passed the length bound and detonated in `subprocess.run` as a bare untyped 500.
 - **The write-ingress id-domain closure on the BODY (A5.2, new):** every integer-typed field
   the payload contract declares — `serving/boundary_models.py`'s per-surface `*WriteIntFields`
   models are the enumeration authority (e.g. `actor`/`supersedes`/`regards`/`enacts` on
