@@ -1,0 +1,126 @@
+=== L4-row-unicode-digit-rejected ===
+  [ok] row= is not ASCII digits: '１２'
+
+=== L4-row-ascii-digit-accepted ===
+  [ok] parsed={'row': '12', 'model': 'm', 'grade': 'exact-command', 'expected': 'e', 'verdict': 'match', 'session': 's', 'basis': 'b', 'rebuttals': 'r'}
+
+=== L4-nbsp-segment-not-silently-trimmed ===
+  [ok] segment 'row' missing prefix 'row=': 'model-attestation v1 |\xa0row=1 | model=m | grade=exact-command | expected=e | verdict=match | session=s | basis=b | rebuttals=r'
+
+=== L4-empty-model-rejected ===
+  [ok] model= is empty (F5)
+
+=== L4-empty-session-rejected ===
+  [ok] session= is empty (F5)
+
+=== L4-empty-basis-rejected ===
+  [ok] basis= is empty (F5)
+
+=== L4-empty-expected-still-accepted ===
+  [ok] parsed={'row': '1', 'model': 'm', 'grade': 'exact-command', 'expected': '', 'verdict': 'unevaluated', 'session': 's', 'basis': 'b', 'rebuttals': 'r'}
+
+== scaffolding classic world s41oa (chain ends s41-principal-bindings-and-relations.sql) ==
+=== L1-exact-command-single-candidate ===
+  [ok] rc=0
+attested row 8: grade=ambiguous verdict=unevaluated model='unresolved' -> ledger row 10
+  + companion finding row written for row 8
+attested row 7: grade=ambiguous verdict=MISMATCH model='unresolved' -> ledger row 12
+  + companion finding row written for row 7
+attested row 6: grade=session-scoped verdict=unevaluated model='claude-fable-5' -> ledger row 14
+attested row 5: grade=exact-command verdict=unevaluated model='claude-fable-5' -> ledger row 15
+otel-attest: 4 attested, 0 already-attested skipped, 4 uncovered-no-events (reported, never fabricated), 1 refused (write-time field-hygiene, F2/A2), 0 companion finding-row write failures.
+otel-attest: attestation write REFUSED for row 9: field 'model' contains the '|' delimiter and cannot be written: 'claude-x|evil-injection'
+
+
+=== L1-two-agreeing-candidates-NOT-exact-command ===
+  [ok] rc=0
+attested row 8: grade=ambiguous verdict=unevaluated model='unresolved' -> ledger row 10
+  + companion finding row written for row 8
+attested row 7: grade=ambiguous verdict=MISMATCH model='unresolved' -> ledger row 12
+  + companion finding row written for row 7
+attested row 6: grade=session-scoped verdict=unevaluated model='claude-fable-5' -> ledger row 14
+attested row 5: grade=exact-command verdict=unevaluated model='claude-fable-5' -> ledger row 15
+otel-attest: 4 attested, 0 already-attested skipped, 4 uncovered-no-events (reported, never fabricated), 1 refused (write-time field-hygiene, F2/A2), 0 companion finding-row write failures.
+otel-attest: attestation write REFUSED for row 9: field 'model' contains the '|' delimiter and cannot be written: 'claude-x|evil-injection'
+
+
+=== L2-ambiguous-mismatch-writes-attestation ===
+  [ok] rc=0
+attested row 8: grade=ambiguous verdict=unevaluated model='unresolved' -> ledger row 10
+  + companion finding row written for row 8
+attested row 7: grade=ambiguous verdict=MISMATCH model='unresolved' -> ledger row 12
+  + companion finding row written for row 7
+attested row 6: grade=session-scoped verdict=unevaluated model='claude-fable-5' -> ledger row 14
+attested row 5: grade=exact-command verdict=unevaluated model='claude-fable-5' -> ledger row 15
+otel-attest: 4 attested, 0 already-attested skipped, 4 uncovered-no-events (reported, never fabricated), 1 refused (write-time field-hygiene, F2/A2), 0 companion finding-row write failures.
+otel-attest: attestation write REFUSED for row 9: field 'model' contains the '|' delimiter and cannot be written: 'claude-x|evil-injection'
+
+
+=== L2-ambiguous-mismatch-companion-finding ===
+  [ok] rc=0
+attested row 8: grade=ambiguous verdict=unevaluated model='unresolved' -> ledger row 10
+  + companion finding row written for row 8
+attested row 7: grade=ambiguous verdict=MISMATCH model='unresolved' -> ledger row 12
+  + companion finding row written for row 7
+attested row 6: grade=session-scoped verdict=unevaluated model='claude-fable-5' -> ledger row 14
+attested row 5: grade=exact-command verdict=unevaluated model='claude-fable-5' -> ledger row 15
+otel-attest: 4 attested, 0 already-attested skipped, 4 uncovered-no-events (reported, never fabricated), 1 refused (write-time field-hygiene, F2/A2), 0 companion finding-row write failures.
+otel-attest: attestation write REFUSED for row 9: field 'model' contains the '|' delimiter and cannot be written: 'claude-x|evil-injection'
+
+
+=== L2-ambiguous-unevaluated-writes-attestation ===
+  [ok] rc=0
+attested row 8: grade=ambiguous verdict=unevaluated model='unresolved' -> ledger row 10
+  + companion finding row written for row 8
+attested row 7: grade=ambiguous verdict=MISMATCH model='unresolved' -> ledger row 12
+  + companion finding row written for row 7
+attested row 6: grade=session-scoped verdict=unevaluated model='claude-fable-5' -> ledger row 14
+attested row 5: grade=exact-command verdict=unevaluated model='claude-fable-5' -> ledger row 15
+otel-attest: 4 attested, 0 already-attested skipped, 4 uncovered-no-events (reported, never fabricated), 1 refused (write-time field-hygiene, F2/A2), 0 companion finding-row write failures.
+otel-attest: attestation write REFUSED for row 9: field 'model' contains the '|' delimiter and cannot be written: 'claude-x|evil-injection'
+
+
+=== L2-ambiguous-unevaluated-companion-finding ===
+  [ok] rc=0
+attested row 8: grade=ambiguous verdict=unevaluated model='unresolved' -> ledger row 10
+  + companion finding row written for row 8
+attested row 7: grade=ambiguous verdict=MISMATCH model='unresolved' -> ledger row 12
+  + companion finding row written for row 7
+attested row 6: grade=session-scoped verdict=unevaluated model='claude-fable-5' -> ledger row 14
+attested row 5: grade=exact-command verdict=unevaluated model='claude-fable-5' -> ledger row 15
+otel-attest: 4 attested, 0 already-attested skipped, 4 uncovered-no-events (reported, never fabricated), 1 refused (write-time field-hygiene, F2/A2), 0 companion finding-row write failures.
+otel-attest: attestation write REFUSED for row 9: field 'model' contains the '|' delimiter and cannot be written: 'claude-x|evil-injection'
+
+
+=== L3-delimiter-refused-at-write-time ===
+  [ok] rc=0
+attested row 8: grade=ambiguous verdict=unevaluated model='unresolved' -> ledger row 10
+  + companion finding row written for row 8
+attested row 7: grade=ambiguous verdict=MISMATCH model='unresolved' -> ledger row 12
+  + companion finding row written for row 7
+attested row 6: grade=session-scoped verdict=unevaluated model='claude-fable-5' -> ledger row 14
+attested row 5: grade=exact-command verdict=unevaluated model='claude-fable-5' -> ledger row 15
+otel-attest: 4 attested, 0 already-attested skipped, 4 uncovered-no-events (reported, never fabricated), 1 refused (write-time field-hygiene, F2/A2), 0 companion finding-row write failures.
+otel-attest: attestation write REFUSED for row 9: field 'model' contains the '|' delimiter and cannot be written: 'claude-x|evil-injection'
+
+
+=== L5-idempotency-skips-already-attested ===
+  [ok] rc=0
+row 8: skipped (already attested; pass --re-attest to redo)
+row 7: skipped (already attested; pass --re-attest to redo)
+row 6: skipped (already attested; pass --re-attest to redo)
+row 5: skipped (already attested; pass --re-attest to redo)
+otel-attest: 0 attested, 4 already-attested skipped, 4 uncovered-no-events (reported, never fabricated), 1 refused (write-time field-hygiene, F2/A2), 0 companion finding-row write failures.
+otel-attest: attestation write REFUSED for row 9: field 'model' contains the '|' delimiter and cannot be written: 'claude-x|evil-injection'
+
+
+== scaffolding classic world s41oaf7 (chain ends s41-principal-bindings-and-relations.sql) ==
+=== L6-verification-lands-finding-fails-nonzero-exit ===
+  [ok] rc=1
+attested row 5: grade=turn-bracketed verdict=MISMATCH model='claude-wrong-model' -> ledger row 6
+otel-attest: 1 attested, 0 already-attested skipped, 4 uncovered-no-events (reported, never fabricated), 0 refused (write-time field-hygiene, F2/A2), 1 companion finding-row write failures.
+otel-attest: MISMATCH finding-row write REFUSED for row 5: F7 FIXTURE: simulated finding-row write failure
+
+
+
+ALL OK

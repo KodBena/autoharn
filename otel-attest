@@ -34,7 +34,14 @@ USAGE:
                     already be registered in the target world (`led register-principal`).
 
 Exit code: 0 on a clean run (including "nothing to attest"); 1 on a malformed v1 statement
-encountered while scanning for already-attested rows (P-5: loud refusal, never a silent skip).
+encountered while scanning for already-attested rows (P-5: loud refusal, never a silent skip);
+1 if any MISMATCH/ambiguous attestation's companion `finding` row failed to write after its
+verification row landed (F7: a partial write is never a silent 0). A field value refused at
+write time for containing the `|` delimiter or an embedded newline (F2/Amendment A2) is
+reported per-row and counted, but does not by itself fail the run's exit code (that row is
+simply uncovered, the same posture as "no correlated events" -- a defect this build's fix pass
+resolved this way because the spec did not fix the exit-code question for that specific case;
+flagged in the fix-pass report).
 
 Every import is top-of-file (the lazy-import ban, CLAUDE.md)."""
 from __future__ import annotations
@@ -42,6 +49,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import subprocess
 import sys
 from datetime import datetime, timezone
@@ -53,6 +61,39 @@ DEFAULT_EXPORT = Path.home() / "tools" / "otelcol" / "data" / "claude-events.jso
 UTILITY_QUERY_SOURCES = {"generate_session_title"}
 GRADE_VOCAB = ("exact-command", "turn-bracketed", "session-scoped", "ambiguous")
 VERDICT_VOCAB = ("match", "MISMATCH", "unevaluated")
+UNRESOLVED_MODEL = "unresolved"  # Amendment A1's closed sentinel for an ambiguous write.
+
+# F4 (review row 1505 / spec Amendment A2): the parse contract is pinned to ASCII digits and
+# ASCII whitespace, matching the future SQL twin's `::bigint` cast and `btrim()` default --
+# both of which reject/ignore Unicode digits and Unicode whitespace (e.g. NBSP) respectively.
+# An explicit ASCII literal character class (not `\d`/`str.strip()`, both Unicode-aware) closes
+# that producer-divergence latency on the Python side now, per the amendment's own instruction.
+_ASCII_WS = " \t\n\r\x0b\x0c"
+_ASCII_ROW_RE = re.compile(r"[+-]?[0-9]+")
+
+
+def _ascii_strip(s: str) -> str:
+    """F4: strips ONLY ASCII whitespace. Python's str.strip() is Unicode-whitespace-aware (it
+    silently eats U+00A0 NBSP and friends); stripping against an explicit ASCII-only charset
+    matches the pinned SQL twin's `btrim()` default instead."""
+    return s.strip(_ASCII_WS)
+
+
+class FieldDelimiterViolation(Exception):
+    """F2 / spec Amendment A2: a field value about to be written contains the `|` delimiter
+    or an embedded newline. Raised at WRITE time, with a diagnostic naming the offending
+    field -- never silently embedded, and never deferred to a later read-time parse failure
+    that would deny the whole idempotency scan. This is a writer duty; the parser's own loud
+    failure on such a row (P-5, MalformedStatement) stays exactly as pinned."""
+
+
+def _check_field_writable(name: str, value: str) -> None:
+    if "|" in value:
+        raise FieldDelimiterViolation(
+            f"field {name!r} contains the '|' delimiter and cannot be written: {value!r}")
+    if "\n" in value or "\r" in value:
+        raise FieldDelimiterViolation(
+            f"field {name!r} contains an embedded newline and cannot be written: {value!r}")
 
 # ---------------------------------------------------------------------------------------------
 # The v1 statement convention, both directions. build_statement() is the WRITER side (this
@@ -69,6 +110,16 @@ def build_statement(*, row_id: int, model: str, grade: str, expected: str, verdi
                      session: str, basis: str) -> str:
     assert grade in GRADE_VOCAB, grade
     assert verdict in VERDICT_VOCAB, verdict
+    # F2 / Amendment A2: every free-text field is verbatim text from an UNAUTHENTICATED
+    # emitter (model) or a join key otherwise outside this verb's control (session, basis);
+    # a `|` or embedded newline in any of them would poison the statement's own delimiter,
+    # denying every later idempotency scan (and the future defeat pipeline) with a generic
+    # parse failure instead of a specific write-time diagnostic. Refuse HERE, loudly, naming
+    # the field -- this is the writer's duty; the parser's own loud failure on such a row
+    # (P-5) stays exactly as pinned, for any row this writer did not itself produce.
+    for _name, _value in (("model", model), ("expected", expected), ("session", session),
+                          ("basis", basis)):
+        _check_field_writable(_name, _value)
     return (
         f"model-attestation v1 | row={row_id} | model={model} | grade={grade} "
         f"| expected={expected} | verdict={verdict} | session={session} | basis={basis} "
@@ -86,10 +137,10 @@ def parse_v1_statement(statement: str) -> dict | None:
     None for a non-candidate (P-3: doesn't start with the literal prefix), or raises
     MalformedStatement (P-5) for a v1-versioned candidate that violates the pinned shape.
     Implements P-1..P-5 exactly (design/FABLE-DEFEAT-PIPELINE-SPEC.md §3)."""
-    trimmed = statement.strip()
+    trimmed = _ascii_strip(statement)  # F4: ASCII whitespace only, not Unicode-aware .strip()
     if not trimmed.startswith("model-attestation "):  # P-3, trailing space included
         return None
-    segments = [seg.strip() for seg in trimmed.split("|")]  # P-1
+    segments = [_ascii_strip(seg) for seg in trimmed.split("|")]  # P-1, F4
     if segments[0] != "model-attestation v1":
         # P-4: a non-v1 candidate is skipped-and-counted by the caller, not malformed here.
         return "VERSION_SKIP"  # sentinel; caller counts it
@@ -103,14 +154,20 @@ def parse_v1_statement(statement: str) -> dict | None:
         if not seg.startswith(prefix):
             raise MalformedStatement(f"segment {name!r} missing prefix {prefix!r}: {statement!r}")
         fields[name] = seg[len(prefix):]
-    try:
-        int(fields["row"])
-    except ValueError:
-        raise MalformedStatement(f"row= is not an integer: {fields['row']!r}") from None
+    # F4: row= is restricted to ASCII digits (optionally signed) -- Unicode digits (e.g.
+    # full-width numerals) satisfy Python's str.isdigit()/int() but would be refused by the
+    # future SQL twin's `::bigint` cast (P-1/P-2 producer-divergence latency, closed here).
+    if not _ASCII_ROW_RE.fullmatch(fields["row"]):
+        raise MalformedStatement(f"row= is not ASCII digits: {fields['row']!r}")
     if fields["grade"] not in GRADE_VOCAB:
         raise MalformedStatement(f"grade= outside vocabulary: {fields['grade']!r}")
     if fields["verdict"] not in VERDICT_VOCAB:
         raise MalformedStatement(f"verdict= outside vocabulary: {fields['verdict']!r}")
+    # F5: model=/session=/basis= empty is an unauditable attestation (the SPA display
+    # contract's minimum content) -- refused loudly rather than accepted as well-formed.
+    for _name in ("model", "session", "basis"):
+        if not fields[_name]:
+            raise MalformedStatement(f"{_name}= is empty (F5)")
     return fields
 
 
@@ -180,14 +237,18 @@ def is_agent_dispatch(rec: dict) -> bool:
 
 
 def grade_row(*, stamp_session: str, stamp_invocation: str | None, row_ts: datetime,
-              tolerance_seconds: float, export: list[dict]) -> tuple[str, str | None, str]:
-    """Returns (grade, model_or_None, basis_string). model is None only for grade='ambiguous'
-    with no attributable single model, or when no session events exist at all (caller treats
-    that as 'no attestation' and skips the row entirely — the events list passed in is already
-    scoped to this session)."""
+              tolerance_seconds: float, export: list[dict]
+              ) -> tuple[str, str | None, str, frozenset[str]]:
+    """Returns (grade, model_or_None, basis_string, candidate_models). model is a concrete
+    model string for exact-command/turn-bracketed/session-scoped; it is None for grade='none'
+    (no session events exist at all -- caller treats that as "no attestation" and writes
+    nothing, spec §6) and for grade='ambiguous' (the caller writes model=unresolved per
+    Amendment A1; candidate_models carries whatever non-utility models were in evidence --
+    possibly empty when no non-utility api_request fell in the session at all -- so the
+    caller can apply A1's verdict rule against `expected=`)."""
     session_events = [r for r in export if r["session_id"] == stamp_session]
     if not session_events:
-        return ("none", None, "")
+        return ("none", None, "", frozenset())
 
     # Key 1 (exact-command): a tool-detail event (tool_decision/tool_result) in this session
     # whose tool_parameters/tool_input string embeds this row's own stamp_invocation token
@@ -217,32 +278,44 @@ def grade_row(*, stamp_session: str, stamp_invocation: str | None, row_ts: datet
     def models_in(recs: list[dict]) -> set[str]:
         return {r["model"] for r in recs if r.get("model")}
 
+    # F3 (review row 1505 / spec §6): "key 1 available" means a tool-detail event actually
+    # matched this row's stamp_invocation. exact-command requires EXACTLY ONE candidate
+    # api_request bracketing that match -- not merely model agreement among several -- and
+    # turn-bracketed is reserved for when key 1 is UNAVAILABLE; it is never used as a
+    # fallback when key 1 was available but bracketing itself was ambiguous (that case falls
+    # straight through to session-scoped/ambiguous below, per §6's own definitions).
     if bracket_ts is not None:
         window = [r for r in non_utility
                   if r.get("ts") and abs((r["ts"] - bracket_ts).total_seconds()) <= tolerance_seconds]
+        if len(window) == 1 and window[0].get("model"):
+            model = window[0]["model"]
+            basis = f"key1-invocation,key2-session,key3-bracket(tol={tolerance_seconds}s),key4-resource"
+            return ("exact-command", model, basis, frozenset({model}))
+        # command identity held but bracketing did not yield exactly one candidate -- per F3,
+        # do NOT fall back to turn-bracketed (key 1 was available); fall through to
+        # session-scoped/ambiguous only.
+    else:
+        # Key 3 (turn-bracketed): bracket on row_ts directly -- only reached when key 1 (tool
+        # details) was unavailable for this row.
+        window = [r for r in non_utility
+                  if r.get("ts") and abs((r["ts"] - row_ts).total_seconds()) <= tolerance_seconds]
         models = models_in(window)
         if len(models) == 1:
-            basis = f"key1-invocation,key2-session,key3-bracket(tol={tolerance_seconds}s),key4-resource"
-            return ("exact-command", next(iter(models)), basis)
-        # command identity held but bracketing was ambiguous -- fall through to weaker grades
-
-    # Key 3 (turn-bracketed): bracket on row_ts directly (no command-identity leg available).
-    window = [r for r in non_utility
-              if r.get("ts") and abs((r["ts"] - row_ts).total_seconds()) <= tolerance_seconds]
-    models = models_in(window)
-    if len(models) == 1:
-        basis = f"key2-session,key3-bracket(tol={tolerance_seconds}s),key4-resource"
-        return ("turn-bracketed", next(iter(models)), basis)
+            basis = f"key2-session,key3-bracket(tol={tolerance_seconds}s),key4-resource"
+            model = next(iter(models))
+            return ("turn-bracketed", model, basis, frozenset({model}))
 
     # Key 2+4 (session-scoped): every non-utility api_request in the WHOLE session agrees.
     models = models_in(non_utility)
     if len(models) == 1:
         basis = "key2-session,key4-resource"
-        return ("session-scoped", next(iter(models)), basis)
+        model = next(iter(models))
+        return ("session-scoped", model, basis, frozenset({model}))
 
     if len(models) > 1:
-        return ("ambiguous", None, f"key2-session; conflicting models: {sorted(models)}")
-    return ("ambiguous", None, "key2-session; no non-utility api_request in window")
+        basis = f"key2-session,conflicting-models={','.join(sorted(models))}"
+        return ("ambiguous", None, basis, frozenset(models))
+    return ("ambiguous", None, "key2-session,no-non-utility-api-request-in-window", frozenset())
 
 
 # ---------------------------------------------------------------------------------------------
@@ -314,42 +387,68 @@ def already_attested_targets(world: Path, candidate_ids: list[int]) -> set[int]:
 
 def write_attestation(world: Path, actor: str, *, row_id: int, model: str, grade: str,
                        expected: str, verdict: str, session: str, basis: str,
-                       export_basename: str, window: str, dry_run: bool) -> int | None:
-    statement = build_statement(row_id=row_id, model=model, grade=grade, expected=expected,
-                                 verdict=verdict, session=session, basis=basis)
+                       export_basename: str, window: str, dry_run: bool
+                       ) -> tuple[int | None, bool, bool]:
+    """Returns (new_row_id_or_None, delimiter_refused, finding_failed).
+
+    delimiter_refused=True (F2 / Amendment A2): a field value contained '|' or an embedded
+    newline; build_statement refused loudly and NOTHING was written for this row.
+
+    finding_failed=True (F7): the verification row landed but its required companion
+    `finding` row (MISMATCH, or an ambiguous-grade attestation per Amendment A1) did not --
+    the caller must make this nonzero-exit, never a silent 0."""
+    try:
+        statement = build_statement(row_id=row_id, model=model, grade=grade, expected=expected,
+                                     verdict=verdict, session=session, basis=basis)
+    except FieldDelimiterViolation as e:
+        print(f"otel-attest: attestation write REFUSED for row {row_id}: {e}", file=sys.stderr)
+        return (None, True, False)
     evidence = f"{export_basename}, {window}"  # no path separators -- the --evidence
     # path-dereference guard (bootstrap/templates/led.tmpl) treats ANY '/' as path-shaped;
     # the export's basename plus a slash-free window description keeps this a free-text
     # citation, never a claimed dereferenceable path.
+    # Amendment A1: an ambiguous attestation writes its companion finding row exactly as a
+    # MISMATCH does, and for the same reason (§6: ambiguity is "the substitution-relevant
+    # case par excellence"). A single condition here is what keeps a MISMATCH-verdict
+    # ambiguous row at ONE finding row, not two.
+    write_finding = verdict == "MISMATCH" or grade == "ambiguous"
     if dry_run:
         print(f"[dry-run] verification --refs row:{row_id} --evidence {evidence!r}\n"
               f"          {statement}")
-        if verdict == "MISMATCH":
-            print(f"[dry-run] finding --refs row:{row_id}  MISMATCH companion row")
-        return None
+        if write_finding:
+            print(f"[dry-run] finding --refs row:{row_id}  "
+                  f"{'MISMATCH' if verdict == 'MISMATCH' else 'ambiguous'} companion row")
+        return (None, False, False)
     r = led(world, "--refs", f"row:{row_id}", "--evidence", evidence, "verification", statement,
              actor=actor)
     if r.returncode != 0:
         print(f"otel-attest: attestation write REFUSED for row {row_id}: {r.stderr}",
               file=sys.stderr)
-        return None
+        return (None, False, False)
     # led's generic write path does not print the new row id to stdout; recover it via a
     # fresh --recent lookup (the just-written row is newest).
     recent = recent_rows(world, 3)
     new_id = recent[0] if recent else None
     print(f"attested row {row_id}: grade={grade} verdict={verdict} model={model!r} "
           f"-> ledger row {new_id}")
-    if verdict == "MISMATCH":
-        f_statement = (f"MISMATCH: attestation row (see verification citing row:{row_id}) "
-                        f"observed model {model!r} against expected {expected!r} "
-                        f"(session={session}); rebuttals={REBUTTALS_ANCHOR}")
+    finding_failed = False
+    if write_finding:
+        if verdict == "MISMATCH":
+            f_statement = (f"MISMATCH: attestation row (see verification citing row:{row_id}) "
+                            f"observed model {model!r} against expected {expected!r} "
+                            f"(session={session}); rebuttals={REBUTTALS_ANCHOR}")
+        else:
+            f_statement = (f"AMBIGUOUS: attestation row (see verification citing row:{row_id}) "
+                            f"session {session} showed conflicting or inconclusive model "
+                            f"evidence (verdict={verdict}); rebuttals={REBUTTALS_ANCHOR}")
         fr = led(world, "--refs", f"row:{row_id}", "finding", f_statement, actor=actor)
         if fr.returncode != 0:
-            print(f"otel-attest: MISMATCH finding-row write REFUSED for row {row_id}: "
-                  f"{fr.stderr}", file=sys.stderr)
+            print(f"otel-attest: {verdict if verdict == 'MISMATCH' else 'ambiguous'} "
+                  f"finding-row write REFUSED for row {row_id}: {fr.stderr}", file=sys.stderr)
+            finding_failed = True
         else:
             print(f"  + companion finding row written for row {row_id}")
-    return new_id
+    return (new_id, False, finding_failed)
 
 
 # ---------------------------------------------------------------------------------------------
@@ -403,6 +502,8 @@ def main(argv: list[str] | None = None) -> int:
 
     written = 0
     uncovered = 0
+    delimiter_refused = 0
+    finding_failures = 0
     for row_id in candidate_ids:
         if row_id in skip_ids:
             print(f"row {row_id}: skipped (already attested; pass --re-attest to redo)")
@@ -422,10 +523,15 @@ def main(argv: list[str] | None = None) -> int:
             uncovered += 1
             continue
 
-        grade, model, basis = grade_row(stamp_session=stamp_session,
-                                         stamp_invocation=stamp_invocation, row_ts=row_ts,
-                                         tolerance_seconds=args.tolerance_seconds, export=export)
-        if grade == "none" or model is None:
+        grade, model, basis, candidates = grade_row(
+            stamp_session=stamp_session, stamp_invocation=stamp_invocation, row_ts=row_ts,
+            tolerance_seconds=args.tolerance_seconds, export=export)
+        # F1 (review row 1505, HIGH): the gate tests the GRADE, never `model is None` -- the
+        # first build folded every 'ambiguous' session into this "no attestation" path because
+        # grade_row also returns model=None for ambiguous, and the old gate could not tell the
+        # two apart. Only grade='none' (no session events at all -- spec §6's genuine "no
+        # correlated events" case) is written as nothing; 'ambiguous' always writes below.
+        if grade == "none":
             uncovered += 1
             print(f"row {row_id}: no attestation (grade={grade}, session={stamp_session[:8]})")
             continue
@@ -437,18 +543,56 @@ def main(argv: list[str] | None = None) -> int:
             if rec["session_id"] == stamp_session and rec.get("expected_model"):
                 expected = rec["expected_model"]
                 break
-        verdict = "unevaluated" if expected == "undeclared" else (
-            "match" if model == expected else "MISMATCH")
+
+        if grade == "ambiguous":
+            # Amendment A1's value-domain completion: model=unresolved (a closed sentinel,
+            # never a fabricated single model or an invented multi-model packing); the
+            # conflicting models are already named in `basis` by grade_row. Verdict is
+            # decided by what the ambiguity still proves against `expected`: every candidate
+            # contradicting it is definite substitution evidence (MISMATCH) even though the
+            # culprit is not; any candidate matching it proves nothing either way
+            # (unevaluated); ambiguity can never clear a row to 'match'.
+            model = UNRESOLVED_MODEL
+            if expected == "undeclared":
+                verdict = "unevaluated"
+            elif candidates and all(c != expected for c in candidates):
+                verdict = "MISMATCH"
+            elif candidates:
+                verdict = "unevaluated"
+            else:
+                # Zero candidate models (no non-utility api_request fell in the session at
+                # all) -- A1's text presumes at least one candidate model exists; this
+                # sub-case is not literally covered by its rule. Resolved conservatively:
+                # zero evidence is not proof of a mismatch (a vacuous "every candidate
+                # contradicts" over an empty set would assert MISMATCH from nothing, which
+                # R1 -- "absence of telemetry is not evidence of anything" -- forbids), so
+                # this writes unevaluated. Flagged in the fix-pass report as a spec gap this
+                # build resolved rather than one the spec fixed.
+                verdict = "unevaluated"
+        else:
+            verdict = "unevaluated" if expected == "undeclared" else (
+                "match" if model == expected else "MISMATCH")
 
         window = f"session={stamp_session}"
-        write_attestation(args.world, args.actor, row_id=row_id, model=model, grade=grade,
-                           expected=expected, verdict=verdict, session=stamp_session,
-                           basis=basis, export_basename=args.export.name, window=window,
-                           dry_run=args.dry_run)
-        written += 1
+        new_id, refused, finding_failed = write_attestation(
+            args.world, args.actor, row_id=row_id, model=model, grade=grade, expected=expected,
+            verdict=verdict, session=stamp_session, basis=basis,
+            export_basename=args.export.name, window=window, dry_run=args.dry_run)
+        if refused:
+            delimiter_refused += 1
+        else:
+            written += 1
+        if finding_failed:
+            finding_failures += 1
 
     print(f"otel-attest: {written} attested, {len(skip_ids)} already-attested skipped, "
-          f"{uncovered} uncovered-no-events (reported, never fabricated).")
+          f"{uncovered} uncovered-no-events (reported, never fabricated), "
+          f"{delimiter_refused} refused (write-time field-hygiene, F2/A2), "
+          f"{finding_failures} companion finding-row write failures.")
+    # F7: a verification row that landed without its required MISMATCH/ambiguous companion
+    # finding row is a partial write an automation consumer must not read as clean.
+    if finding_failures:
+        return 1
     return 0
 
 
