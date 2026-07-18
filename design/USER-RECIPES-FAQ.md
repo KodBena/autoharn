@@ -1516,6 +1516,135 @@ $ echo $?
 ```
 Delivery record for all three items: [orchlog.d/led-tmpl-trio.md](../orchlog.d/led-tmpl-trio.md).
 
+## Ledger-wide as-of read and inspection-copy export (`asof-export`)
+
+This section covers `./asof-export`, the verb that reconstructs the whole ledger's in-force
+reading at a past moment and can export that reading as a portable, hash-checkable copy; it
+is written as full transcripts because the surface is new and unfamiliar. Ledger item
+`asof-export-inspection-copy` (maintainer sign-off 2026-07-18, overnight batch item 1:
+"the as-of is basically necessary — I thought that was done by like s5 or something, if we
+don't have it then we need it"), merge `1449e0c`, delivery record: ledger row 1585.
+
+**Can I see the whole ledger's in-force reading at some point in the past, not just work
+items?** Yes — `./asof-export read --asof <ts>` prints every kind of row (decisions,
+reviews, work items, obligations, everything), filtered to what was
+[in force](../GLOSSARY.md#supersession) as of that timestamp, not just the three `work_*`
+kinds `led work asof <ts>` already covered. It generalizes `led work asof` by one query
+shape (every row, not three kinds) rather than replacing it — `led work asof` stays the
+right tool when you specifically want work-item state and its derived
+open/claimed/closed view. WITNESSED, this checkout's own world, a real supersession pair
+(row 1583 written 13:15:43, voided by row 1584 at 13:23:43) shown both-polarity — a moment
+before the supersession still shows the superseded row in force, a moment after shows the
+superseding row instead, same row count either side:
+```
+$ ./asof-export read --asof "2026-07-18 13:20:00" | grep -E "ledger id=158[34]|Row count"
+Row count    : 1501
+--- row 1501/1501 (ledger id=1583) ---
+$ ./asof-export read --asof "2026-07-18 13:25:00" | grep -E "ledger id=158[34]|Row count"
+Row count    : 1501
+--- row 1501/1501 (ledger id=1584) ---
+```
+The as-of filter is the row's own `ts` (system insert time, never writer-supplied) — never
+`event_declared_ts`, which is honest only as far as the declaring writer is honest. A bad
+`--asof` value REFUSES loudly rather than returning an empty read, WITNESSED (exit 2):
+```
+$ ./asof-export read --asof bogus-not-a-timestamp
+asof-export read: REFUSED -- as-of query failed: ERROR:  invalid input syntax for type timestamp with time zone: "bogus-not-a-timestamp"
+LINE 5:   WHERE l.ts <= 'bogus-not-a-timestamp'::timestamptz
+                        ^
+```
+
+**Can I get that same reading as a portable, checkable copy — for an inspector, an audit,
+or just to keep?** Yes — `./asof-export export --asof <ts> --out <dir>` writes
+`ledger-asof.txt` (human-readable, every column of every in-force row, in full),
+`ledger-asof.json` (the same rows, machine-readable), and `manifest.sha256`, a standard
+`sha256sum -c`-checkable manifest over the two. WITNESSED (scratch directory, not the
+ledger — `export` is read-only against the ledger itself, its only writes are the three
+named files under the `--out` directory you give it):
+```
+$ ./asof-export export --asof "2026-07-18 13:25:00" --out /tmp/asof-demo
+asof-export export: wrote /tmp/asof-demo/ledger-asof.txt, /tmp/asof-demo/ledger-asof.json, /tmp/asof-demo/manifest.sha256 (1501 row(s) as of 2026-07-18 13:25:00).
+  Verify with: (cd /tmp/asof-demo && sha256sum -c manifest.sha256)
+  Signing is DEFERRED (standing maintainer crypto ruling) -- this manifest is an UNSIGNED sha256 content hash only. It lets a copy be checked against the bytes it left as; it proves neither who exported it nor that a differently-regenerated copy wasn't substituted for it. No inert --sign flag is offered by this verb.
+$ (cd /tmp/asof-demo && sha256sum -c manifest.sha256)
+ledger-asof.txt: OK
+ledger-asof.json: OK
+```
+Re-running `export` at the same `--out` REFUSES rather than silently clobbering an existing
+inspection copy — an evidentiary export is not overwritten by accident. WITNESSED:
+```
+$ ./asof-export export --asof "2026-07-18 13:25:00" --out /tmp/asof-demo
+asof-export export: REFUSED -- 3 output file(s) already exist under /tmp/asof-demo: ['/tmp/asof-demo/ledger-asof.txt', '/tmp/asof-demo/ledger-asof.json', '/tmp/asof-demo/manifest.sha256']
+  An inspection copy is not silently overwritten (ADR-0002). Pass --force to replace it deliberately, or choose a different --out.
+$ echo $?
+1
+```
+`--force` replaces it deliberately. The whole loop above ran against this checkout's own
+live ledger and left `./led --recent 1` reporting the same leading row id (1592) before and
+after every command shown — zero writes to the ledger from either subcommand.
+
+**Is the manifest signed?** No, on purpose, and the verb says so out loud rather than
+offering a flag that quietly does nothing. `manifest.sha256` is an unsigned content hash: it
+proves a copy's bytes match what left this act; it proves neither who ran the export nor
+that a differently-regenerated copy wasn't substituted for it later. Signing stays deferred
+under the standing crypto ruling — no `--sign` flag exists at all (an inert flag that looked
+armed but wasn't would be its own lie), and both the `.txt` and the `.json` name this limit
+in their own header/`signing` field, so a reader of the inspection copy itself sees the same
+honest boundary the CLI output does.
+
+## Deployments can self-serve the harness changelog (`orchlog` wrapper at scaffold)
+
+This section is for operators of scaffolded deployments: new scaffolds now include an
+`./orchlog` shim beside `led`/`pickup`, so a deployment session can read the harness
+changelog without leaving its own directory. Ledger item `deployment-orchlog-surfacing`,
+half (b) (half (a) — `./migrate` printing
+`./orchlog since <pre-migration-head>` at the end of a run — belongs to the separate,
+not-yet-approved migrate-verb item and is untouched here). Merge `bd949af`, delivery
+record: ledger row 1585. This is a different thing from the `./orchlog` verb itself (that
+landed separately as `orchlog-changelog-verb` and already reads
+[orchlog.d/](../orchlog.d/README.md) notes in commit order) — this item is only about
+**getting the wrapper into a scaffolded deployment** so a session working there can run it
+without hand-relaying anything.
+
+**My deployment isn't the autoharn checkout — can a session working there still read
+autoharn's own changelog, to learn what changed since it was last paying attention?** Yes,
+if it was scaffolded from commit `bd949af` or later (or has picked the wrapper up by hand,
+see below): `bootstrap/new-project.sh` now writes an `./orchlog` shim beside `led`/`judge`/
+`pickup`/`audit` in every new [world](../GLOSSARY.md#world), pointed at the harness's own
+`orchlog` verb and repo root — no `deployment.json` or ledger connection involved, since the
+changelog it reads is autoharn's git history, not the deployment's own ledger. WITNESSED, a
+real scaffold run against this checkout, in full:
+```
+$ ./bootstrap/new-project.sh /tmp/orchlog-demo --db toy --host 192.168.122.1 \
+    --schema doctest_orchlog_demo --kern doctest_orchlog_demo_kern --role autoharn_rw \
+    --name doctest-orchlog-demo
+...
+-- orchlog wrapper (self-serve harness changelog, beside led/judge/pickup): exec's autoharn's own orchlog verb against /home/bork/w/vdc/1/autoharn, no deployment.json involved --
+wrote orchlog (wrapper -> /home/bork/w/vdc/1/autoharn/orchlog --repo /home/bork/w/vdc/1/autoharn)
+$ cat /tmp/orchlog-demo/orchlog
+#!/bin/sh
+exec /home/bork/w/vdc/1/autoharn/orchlog --repo /home/bork/w/vdc/1/autoharn "$@"
+$ /tmp/orchlog-demo/orchlog | head -1
+2bc47c539484  2026-07-18  orchlog.d/led-tmpl-trio.md -- docs: led.tmpl trio (help tokens, --json payload mode, work-list filter) — FAQ section + orchlog.d entry, A:B:C attested (B1 DEFECT x2 repaired, B2 CLEAN)
+$ /tmp/orchlog-demo/orchlog since abba0dd | head -1
+2bc47c539484  2026-07-18  orchlog.d/led-tmpl-trio.md -- docs: led.tmpl trio (help tokens, --json payload mode, work-list filter) — FAQ section + orchlog.d entry, A:B:C attested (B1 DEFECT x2 repaired, B2 CLEAN)
+```
+The scratch scaffold directory was torn down after this run (it exists only to demonstrate
+the shim; it is not a real deployment). No `deployment.json` was needed for the wrapper
+itself to work, and this checkout's own live ledger (`./led --recent 1`) was untouched by
+the whole exercise.
+
+**My deployment already exists, scaffolded before `bd949af` — do I lose out?** You don't get
+the wrapper automatically; there is no scripted refresh verb for it yet (the item's own text
+says "at next scaffold-refresh or by hand" — the "or by hand" branch is the honest current
+state, not a hedge). By hand, the wrapper is exactly the two lines shown above — the
+`#!/bin/sh` line and the `exec` line from the quoted `cat` output (NOT the `$ cat ...`
+command line itself), with `EXEC_ROOT` set to your harness checkout's own path — copy them
+into a file named `orchlog` beside your `led`/`judge`/`pickup` shims, then `chmod +x` it as
+a separate step. The memo-row channel (a plain
+ledger `decision` row) stays the way to relay a world-specific note that isn't a general
+harness-changelog entry.
+
 ## What this page is not
 
 This page is not an inventory (that is [ORCH-CAPABILITIES.md](../ORCH-CAPABILITIES.md), where every
