@@ -1,0 +1,54 @@
+s42-row-hash-full-coverage -- banked RED evidence (2026-07-18, toy db, scratch worlds
+s42fxh/s42fxv; runnable fixture: seen-red/s42-row-hash-full-coverage/run_fixtures.py,
+registered in gates/fixture_census.py). Three distinct reds, each captured from a live run:
+
+1. THE HAZARD ITSELF, RED (world s42fxh, chain head s41 -- the v1 serializer; ledger row
+   1449's class witnessed as such): an owner-side tamper of a committed row's work_parent
+   ('hz' item, UPDATE ... SET work_parent = 'tampered-parent' with user triggers disabled)
+   followed by ./verify-chain:
+
+     verify-chain: INTACT -- 4 row(s) walked, head id=4 hash=<64-hex>
+     (exit 0)
+
+   INTACT over a rewritten column -- the v1 chain covers only the s24-era column set, so
+   every s28..s41 column is invisible to it. This exact tamper is the s42 per-column loop's
+   red below.
+
+2. THE FIX'S RED, PER COLUMN (world s42fxv, chain head s42): the scripted loop tampers EVERY
+   serialized column (all 52, per-column, never sampled) on its designated committed fixture
+   row and asserts ./verify-chain reports BROKEN at that row. Representative capture (the
+   same shape observed 52 times, one per column; the id tamper's break lands at the moved
+   row's successor, verify-chain's own documented "no later than immediately after the true
+   alteration point"):
+
+     verify-chain: BROKEN -- first break at row id 19:
+         stored:   <64-hex, the pre-tamper hash>
+         expected: <64-hex, recomputed over the tampered content>
+       (1 of 20 row(s) mismatch total. ...)
+     (exit 1)
+
+   After each restore the chain re-verifies INTACT (exit 0). The NULL<->empty-string tamper
+   (rationale NULL -> '') breaks the chain the same way -- the s26 injectivity property
+   (hashfield's N: vs V0: tokens) re-witnessed under the v2 serialization.
+
+3. THE COVERAGE GATE'S RED (gates/hash_coverage_gate.py --inject-column zz_seenred_probe --
+   the synthesized shape of the s28..s41 silence: a column added with no serializer
+   re-issue):
+
+     hash-coverage-gate: RED
+
+     REFUSED -- compute_row_hash's serialized-column set disagrees with the ledger's live
+     column set (s42 law, design/FABLE-REFUSAL-RECORDING-AND-HASH-COVERAGE-SPEC.md §3.2): ...
+
+       !! MISSING from the serialization: ledger column 'zz_seenred_probe' is OUTSIDE the
+          hash chain -- a schema-owner tamper of it changes no hash
+     (exit 1)
+
+   Clean head: exit 0, "serializes all 52 ledger columns (everything except row_hash, the
+   one named exclusion)".
+
+Also witnessed in the same run: s42 detect t/f both polarities (s42 vs s41 scratch heads);
+timezone-independence (INTACT under PGTZ=UTC and PGTZ=Pacific/Kiritimati on rows carrying
+non-NULL stamp_ts and event_declared_ts -- and the catalog fact stamp_ts is BIGINT, the s42
+header's spec-divergence finding, witnessed live); ./judge SQL/ASP differential AGREE on both
+layers over the s42 fixture.

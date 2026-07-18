@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-15T20:17:26Z
-#   last-change: 2026-07-18T01:55:37Z
+#   last-change: 2026-07-18T04:05:48Z
 #   contributors: a857c93d/main, 9a17b6b9/main, ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -72,7 +72,15 @@ CHAIN = [
     "s35-validation-decomposition.sql", "s36-decision-grade.sql",
     "s37-violation-disposition.sql", "s38-bookkeeping-close.sql", "s39-blocks-start.sql",
     "s40-principal-identity-events.sql", "s41-principal-bindings-and-relations.sql",
+    "s42-row-hash-full-coverage.sql",
 ]
+# s42 (kernel/lineage/s42-row-hash-full-coverage.sql) extends this SAME gate's scratch CHAIN.
+# It ships NO new ledger reader at all: its one act is a CREATE OR REPLACE of compute_row_hash
+# (a pure IMMUTABLE function of its row argument -- no FROM/JOIN/INTO/UPDATE ledger reference
+# in its body, verified live by this gate classifying it clean), widening the serialized column
+# set to the full row (spec design/FABLE-REFUSAL-RECORDING-AND-HASH-COVERAGE-SPEC.md §3).
+# zz_set_row_hash (the caller, which DOES read raw ledger for its predecessor lookup) keeps its
+# standing ALLOWLIST entry, body untouched by s42.
 # s41 (kernel/lineage/s41-principal-bindings-and-relations.sql) extends this SAME gate's scratch
 # CHAIN. It ships NO new raw-`ledger` reader, verified live: the four D-5 binding views
 # (principal_relations, principal_role_bindings, principal_keys, principal_competences) all

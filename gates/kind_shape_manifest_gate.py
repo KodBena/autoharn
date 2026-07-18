@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-15T20:19:45Z
-#   last-change: 2026-07-18T01:55:12Z
+#   last-change: 2026-07-18T04:05:52Z
 #   contributors: a857c93d/main, 9a17b6b9/main, ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -155,7 +155,14 @@ CHAIN = [
     "s39-blocks-start.sql",
     "s40-principal-identity-events.sql",
     "s41-principal-bindings-and-relations.sql",
+    "s42-row-hash-full-coverage.sql",
 ]
+# s42 (kernel/lineage/s42-row-hash-full-coverage.sql) extends this SAME gate's scratch CHAIN.
+# It ships NO new column, NO new kind, and NO new CHECK of any shape (its one act is the
+# compute_row_hash re-issue to full-row serialization coverage -- a function body, invisible to
+# this gate's constraint classifier by construction), so no MANIFEST/VALUE_PARTITION_MANIFEST/
+# CORE_COLUMNS change -- verified live by running this gate against the extended chain and
+# reading it clean with the same row counts as at the s41 head.
 # s40 (kernel/lineage/s40-principal-identity-events.sql, design/FABLE-PRINCIPAL-IDENTITY-SPEC-
 # BUILD-BASIS.md) extends this SAME gate's scratch CHAIN and ships THREE new whole-column
 # kind-shape CHECKs, all two-way (the kinds are born in that same delta, so ADD CONSTRAINT

@@ -26,7 +26,17 @@
 ||| because the SUBSTRATE is -- see the "PRESERVED, ON PURPOSE" list in this header.
 ||| Beauty that would erase one of those facts is a regression, not a cleanup.
 |||
-||| AS-OF: kernel chain through s41 (the s36-s41 parity pass, 2026-07-18 -- the six-delta
+||| AS-OF: kernel chain through s42 (s42, 2026-07-18, same-commit bump: s42-row-hash-full-
+|||   coverage re-issues compute_row_hash so the tamper-evidence serialization covers the
+|||   full row -- a change ENTIRELY OUTSIDE this model's own universe, verified before
+|||   bumping rather than bumped on faith: the hash chain has never been modeled here
+|||   beyond LHashChain (the history-license vocabulary member naming zz_set_row_hash's
+|||   raw read), because a byte-serialization's injectivity is a cryptographic/encoding
+|||   fact with no categorical structure this transcription renders -- the coverage
+|||   invariant's mechanical home is gates/hash_coverage_gate.py, named here as the
+|||   deliberate out-of-model boundary, not silently absent. Below this line the s41
+|||   parity note stands verbatim. Prior head: s41 -- the s36-s41 parity pass,
+|||   2026-07-18 -- the six-delta
 |||   gap the prior LAGGING note enumerated, closed in one pass, plus the s40/s41
 |||   principal-identity family the same pass transcribes fresh from
 |||   design/FABLE-PRINCIPAL-IDENTITY-SPEC-BUILD-BASIS.md's two landed deltas. What each
