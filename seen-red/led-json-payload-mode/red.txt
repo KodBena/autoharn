@@ -1,0 +1,143 @@
+Banked RED evidence for ledger item `led-json-payload-mode`.
+
+Captured by running seen-red/led-json-payload-mode/run_fixtures.py against the PRE-FIX
+bootstrap/templates/led.tmpl (the shipped version this item's fix supersedes, obtained via
+`git stash push -- bootstrap/templates/led.tmpl` immediately before this fixture's own
+commit lands, then `git stash pop` to restore the fix): 8 of 10 cases FAIL, reproducing the
+reported gap exactly -- with no --json dispatch, 'led --json ledger <file>' falls through to
+the GENERIC <kind> <statement...> path with kind='--json', which the kernel's own
+ledger_kind_check refuses ('--json' is not a member of its kind vocabulary) -- every case
+gets the SAME undifferentiated kind-check refusal regardless of what actually went wrong
+(a well-formed payload, a malformed one, a missing file, a bad surface word all look
+identical pre-fix), and GREEN-SWALLOWED-FLAG-CAUGHT fails too (--json was not yet a member
+of LED_FLAG_VOCAB, so a trailing --json word was never caught by refuse_flag_in_statement
+either). ADOPT-FULL/ADOPT-PRE-S43 still PASS (scaffolding itself is unaffected).
+
+ADOPT-FULL: new-project.sh --new-world exit=0 deployment.json=True -- PASS
+ADOPT-PRE-S43: track-work.sh exit=0 deployment.json=True -- PASS
+GREEN-FILE: exit=1 accepted=False row-count before=6 after=7 (grew-by-one=True) stored_byte_exact=False -- FAIL
+GREEN-STDIN: exit=1 accepted=False row-count before=7 after=8 (grew-by-one=True) -- FAIL
+RED-UNKNOWN-KEY: exit=1 refused=True teaches_kernel_message=False -- FAIL
+RED-MALFORMED-JSON: exit=1 refused=True teaches=False row-count before=9 after=10 (unchanged=False) -- FAIL
+RED-MISSING-FILE: exit=1 refused=True teaches=False row-count before=10 after=11 (unchanged=False) -- FAIL
+RED-BAD-SURFACE: exit=1 refused=True teaches=False row-count before=11 after=12 (unchanged=False) -- FAIL
+RED-PRE-S43-REFUSAL: exit=3 refused=True teaches=False row-count before=0 after=0 (unchanged=True) -- FAIL
+GREEN-SWALLOWED-FLAG-CAUGHT: exit=0 refused=False teaches=False row-count before=12 after=13 (unchanged=False) -- FAIL
+
+led-json-payload-mode fixture: 8 FAILURE(S)
+
+!! GREEN-FILE: exit=1 accepted=False grew=True stored_ok=False before=6 after=7
+STDOUT:
+
+STDERR:
+led: REFUSED by the kernel write boundary (SQLSTATE 23514; journaled as write_refused row 8 -- the refusal itself is now a committed, hash-chained ledger record, s43):
+  new row for relation "ledger" violates check constraint "ledger_kind_check"
+
+led: '--json' is not a member of ledger_kind_check's vocabulary (the refusal above).
+  valid kinds (live, queried from the kernel's own constraint definition -- never
+  hardcoded here): assumption, decision, question, verification, finding, snag, revision, note, review, work_opened, work_claimed, work_depends_on, work_closed, commission, work_violation_disposition, principal_registered, principal_suspended, principal_revoked, principal_standing_declared, principal_relation_asserted, principal_role_bound, principal_key_bound, principal_competence_granted, write_refused
+
+
+!! GREEN-STDIN: exit=1 accepted=False grew=True before=7 after=8
+STDOUT:
+
+STDERR:
+led: REFUSED by the kernel write boundary (SQLSTATE 23514; journaled as write_refused row 10 -- the refusal itself is now a committed, hash-chained ledger record, s43):
+  new row for relation "ledger" violates check constraint "ledger_kind_check"
+
+led: '--json' is not a member of ledger_kind_check's vocabulary (the refusal above).
+  valid kinds (live, queried from the kernel's own constraint definition -- never
+  hardcoded here): assumption, decision, question, verification, finding, snag, revision, note, review, work_opened, work_claimed, work_depends_on, work_closed, commission, work_violation_disposition, principal_registered, principal_suspended, principal_revoked, principal_standing_declared, principal_relation_asserted, principal_role_bound, principal_key_bound, principal_competence_granted, write_refused
+
+
+!! RED-UNKNOWN-KEY: exit=1 refused=True teaches=False
+STDERR:
+led: REFUSED by the kernel write boundary (SQLSTATE 23514; journaled as write_refused row 12 -- the refusal itself is now a committed, hash-chained ledger record, s43):
+  new row for relation "ledger" violates check constraint "ledger_kind_check"
+
+led: '--json' is not a member of ledger_kind_check's vocabulary (the refusal above).
+  valid kinds (live, queried from the kernel's own constraint definition -- never
+  hardcoded here): assumption, decision, question, verification, finding, snag, revision, note, review, work_opened, work_claimed, work_depends_on, work_closed, commission, work_violation_disposition, principal_registered, principal_suspended, principal_revoked, principal_standing_declared, principal_relation_asserted, principal_role_bound, principal_key_bound, principal_competence_granted, write_refused
+
+
+!! RED-MALFORMED-JSON: exit=1 refused=True teaches=False before=9 after=10
+STDERR:
+led: REFUSED by the kernel write boundary (SQLSTATE 23514; journaled as write_refused row 14 -- the refusal itself is now a committed, hash-chained ledger record, s43):
+  new row for relation "ledger" violates check constraint "ledger_kind_check"
+
+led: '--json' is not a member of ledger_kind_check's vocabulary (the refusal above).
+  valid kinds (live, queried from the kernel's own constraint definition -- never
+  hardcoded here): assumption, decision, question, verification, finding, snag, revision, note, review, work_opened, work_claimed, work_depends_on, work_closed, commission, work_violation_disposition, principal_registered, principal_suspended, principal_revoked, principal_standing_declared, principal_relation_asserted, principal_role_bound, principal_key_bound, principal_competence_granted, write_refused
+
+
+!! RED-MISSING-FILE: exit=1 refused=True teaches=False before=10 after=11
+STDERR:
+led: WARNING -- the statement contains a path-shaped token '/tmp/ljpmfxfull-seenred-e4t93pci/does-not-exist.json' with nothing
+  at that path right now (artifact-claim-dereference-guard / night-build-defect-
+  repair: the original ledger rows 896-897 specimen was exactly this shape -- a
+  path embedded in STATEMENT PROSE, not passed via --evidence).
+  WARN-ONLY, not a refusal: a statement may legitimately narrate a path that is
+  about to be created, or one that lives on a different host/checkout. If this
+  statement is asserting the artifact exists NOW, re-check '/tmp/ljpmfxfull-seenred-e4t93pci/does-not-exist.json' before
+  trusting this row later.
+led: REFUSED by the kernel write boundary (SQLSTATE 23514; journaled as write_refused row 16 -- the refusal itself is now a committed, hash-chained ledger record, s43):
+  new row for relation "ledger" violates check constraint "ledger_kind_check"
+
+led: '--json' is not a member of ledger_kind_check's vocabulary (the refusal above).
+  valid kinds (live, queried from the kernel's own constraint definition -- never
+  hardcoded here): assumption, decision, question, verification, finding, snag, revision, note, review, work_opened, work_claimed, work_depends_on, work_closed, commission, work_violation_disposition, principal_registered, principal_suspended, principal_revoked, principal_standing_declared, principal_relation_asserted, principal_role_bound, principal_key_bound, principal_competence_granted, write_refused
+
+
+!! RED-BAD-SURFACE: exit=1 refused=True teaches=False before=11 after=12
+STDERR:
+led: REFUSED by the kernel write boundary (SQLSTATE 23514; journaled as write_refused row 18 -- the refusal itself is now a committed, hash-chained ledger record, s43):
+  new row for relation "ledger" violates check constraint "ledger_kind_check"
+
+led: '--json' is not a member of ledger_kind_check's vocabulary (the refusal above).
+  valid kinds (live, queried from the kernel's own constraint definition -- never
+  hardcoded here): assumption, decision, question, verification, finding, snag, revision, note, review, work_opened, work_claimed, work_depends_on, work_closed, commission, work_violation_disposition, principal_registered, principal_suspended, principal_revoked, principal_standing_declared, principal_relation_asserted, principal_role_bound, principal_key_bound, principal_competence_granted, write_refused
+
+
+!! RED-PRE-S43-REFUSAL: exit=3 refused=True teaches=False before=0 after=0
+STDERR:
+ERROR:  new row for relation "ledger" violates check constraint "ledger_kind_check"
+DETAIL:  Failing row contains (1, 2026-07-18 11:11:53.451069+02, main, --json, ledger /tmp/ljpmfxpre-seenred-j0ixbxmq/payload.json, null, open, null, null, null, null, null, null, 1, null, null, null, null, null, null, null, null, f, null, null, null, null, null, null, null).
+
+led: '--json' is not a member of ledger_kind_check's vocabulary (the refusal above).
+  valid kinds (live, queried from the kernel's own constraint definition -- never
+  hardcoded here): assumption, decision, question, verification, finding, snag, revision, note, review, work_opened, work_claimed, work_depends_on, work_closed, commission
+
+
+!! GREEN-SWALLOWED-FLAG-CAUGHT: exit=0 refused=False teaches=False before=12 after=13
+STDERR:
+
+
+--- FIXUP ADDENDUM (fixup finding 1, same-day reviewer pass on this item's own build) ---
+
+Captured by the same `git stash push -- bootstrap/templates/led.tmpl gates/fixture_census.py`
+/ `git stash pop` bracket, against the shipped (pre-fixup) led.tmpl -- i.e. the version that
+already carries this item's own --json dispatch above, but NOT the fixup's MAX_WRITE_BODY_BYTES
+size bound. Reproduces the reviewer's exact finding: a payload past the OS ARG_MAX wall crashes
+kernel_write()'s `psql -v payload=...` invocation with a bare, unrefused shell abort ("Argument
+list too long", exit 126) -- no typed disposition, no teach-text, leaking the internal file path
+and line number to the caller. Row count unaffected (the crash happens before psql ever runs, so
+nothing is journaled either way) -- the defect is the missing typed refusal, not a data-safety
+gap, exactly as fixup finding 1 states. Both the file path and the stdin ('-') path hit the
+identical crash.
+
+RED-OVERSIZED-FILE: exit=126 refused=True no_bash_crash=False teaches=False row-count before=9 after=9 (unchanged=True) -- FAIL
+RED-OVERSIZED-STDIN: exit=126 refused=True no_bash_crash=False teaches=False row-count before=9 after=9 (unchanged=True) -- FAIL
+
+!! RED-OVERSIZED-FILE: exit=126 refused=True no_bash_crash=False teaches=False before=9 after=9
+STDOUT:
+
+STDERR:
+bootstrap/templates/led.tmpl: line 841: /usr/bin/psql: Argument list too long
+
+
+!! RED-OVERSIZED-STDIN: exit=126 refused=True no_bash_crash=False teaches=False before=9 after=9
+STDOUT:
+
+STDERR:
+bootstrap/templates/led.tmpl: line 841: /usr/bin/psql: Argument list too long
+

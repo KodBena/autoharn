@@ -85,6 +85,23 @@
 #                            first: `led register-principal <name> <class>`) rather than silently
 #                            falling back to the default principal.
 #
+#   led --json <ledger|review|registration|obligation> <file|->
+#                            item led-json-payload-mode: an ADDITIONAL, agent/programmatic-facing
+#                            write mode alongside the prose CLI above -- the payload maps VERBATIM
+#                            onto the named s43 boundary function's own jsonb payload shape
+#                            (kernel/lineage/s43-typed-verdict-write-boundary.sql sec 4.2: payload
+#                            keys are the target table's own column names), the SAME payload the
+#                            FastAPI boundary service's POST /write/<surface> endpoints accept
+#                            (design/FABLE-LEDGER-BOUNDARY-SERVICE-SPEC.md section 4) -- one
+#                            schema, no second vocabulary. '-' reads the payload from stdin.
+#                            Validated for JSON well-formedness and top-level-object shape only;
+#                            unknown-key/server-owned-key refusal and its teach-text are the
+#                            KERNEL's OWN, passed through verbatim -- no second validator. s43-ONLY
+#                            (REFUSED, capability_absent, on a pre-s43 kernel -- no legacy
+#                            fallback, mirroring the service's own pre-s43 refusal). Does NOT read
+#                            LED_ACTOR -- the payload is verbatim; pass an already-resolved
+#                            principal id directly as the payload's own "actor" key if needed.
+#
 #   led --recent [N]                          last N ledger rows (default 10), newest first;
 #                                              marks a row SUPERSEDED when a later row's
 #                                              `supersedes` names it (never displays a
@@ -505,6 +522,20 @@ SCHEMA="${LED_SCHEMA:-$DEP_SCHEMA}"
 KERNEL="${LED_KERNEL:-$DEP_KERN}"
 ROLE="${LED_ROLE:-$DEP_ROLE}"
 
+# A2.2's one named write-ingress bound, carried over verbatim from the FastAPI boundary
+# service's own MAX_WRITE_BODY_BYTES (serving/boundary_service.py) for `led --json`, the CLI
+# twin of that exact payload shape (led-json-payload-mode's own commissioning text: "maps
+# VERBATIM onto the s43 boundary functions' own jsonb payload shape"). Enforced at the SAME
+# two checkpoints the HTTP twin uses -- (a) the raw bytes read from file/stdin, before any
+# JSON parsing; (b) the re-serialized (compacted) payload, before it reaches the psql
+# subprocess -- because a payload can pass (a) and still grow past the bound at (b) (e.g.
+# non-ASCII content that gets escaped wider on reserialization). Without this, a large
+# payload hits the OS ARG_MAX wall inside kernel_write()'s `psql -v payload=...` invocation as
+# a bare, unrefused shell abort ("Argument list too long") that never reaches a typed
+# disposition -- the identical hazard class A2.2 fixed for this payload's HTTP twin one
+# commit earlier in this same build stream (fixup finding 1).
+MAX_WRITE_BODY_BYTES=1048576
+
 # --- flags (any order, any subset), consumed up front so the verb dispatch below and the
 # generic <kind> <statement...> path both see a clean $@ -------------------------------------
 files=""
@@ -905,7 +936,68 @@ refuse_shared_flags_for_principal_verb() {
 # led's OWN flag vocabulary is spelled out once, here, so a future flag added to the top-of-file
 # parser (or to `led review`'s own --antecedent) is not silently invisible to this check (ADR-0012
 # P1: one list).
-LED_FLAG_VOCAB="-f -e --supersedes --amends --amends-scope --answers --refs --concern --evidence --confidence --event-time --antecedent"
+#
+# CLOSURE STATEMENT AMENDMENT (2026-07-18, item led-help-token-closure, ADR-0000's 2026-07-02
+# Rule 2(a) closure-statement discipline): this guard's own enumerated universe left one axis
+# uncovered -- HELP-SEEKING tokens (--help/-h/help) are not led flag TOKENS (they gate no
+# column), so they were never members of LED_FLAG_VOCAB, and a help-seeking statement word sailed
+# straight through this guard's whole-word match to commit a garbage row (panel live-ledger
+# specimens: rows whose entire statement is '--help'). The invariant this guard enforces --
+# "a token that is a known led flag never lands as statement prose" -- generalizes one step
+# further to "a token that IS a question, or READS as a misplaced flag, never lands as statement
+# prose either", checked on the FIRST statement word only (this guard's OWN whole-word/no-
+# re-splitting discipline, reused rather than re-derived). check_help_or_dash_first_word(),
+# immediately below, is that generalization's home -- called at BOTH of this guard's own two call
+# sites (the generic <kind> <statement...> path and `led review`), immediately before
+# refuse_flag_in_statement() itself runs, so no statement ever reaches this guard's known-flag
+# scan carrying a help token or a dash-leading first word this file failed to teach about first.
+LED_FLAG_VOCAB="-f -e --supersedes --amends --amends-scope --answers --refs --concern --evidence --confidence --event-time --antecedent --json"
+
+# --- help-seeking / dash-leading FIRST statement word (item led-help-token-closure): COMPLETES
+# this file's flag-in-statement closure with the help-seeking axis LED_FLAG_VOCAB left open --
+# --help/-h/help are not led flag TOKENS (they gate no column), so refuse_flag_in_statement below
+# never caught them, and 'led <kind> --help' / 'led review <id> <verdict> <indep> --help' sailed
+# through as ordinary statement prose and committed a garbage row (panel live-ledger specimens:
+# rows whose ENTIRE statement is '--help' -- a help-seeking agent answered with a committed write,
+# never a row's worth of teaching). TWO TIERS BY INTENT, both checked on the FIRST statement word
+# ONLY -- the SAME first-word/whole-word bound refuse_flag_in_statement's own boundary note above
+# already uses to keep legitimately dash-leading quoted prose unrefused elsewhere in a statement:
+#   (1) --help / -h / help as the FIRST word: this is a QUESTION, not a statement -- print the
+#       caller-supplied usage block (one per call site, the SAME text its own arg-count guard
+#       already prints, ADR-0012 P1: one home) and exit 0, WRITING NOTHING. A question deserves
+#       teaching, never a refusal and never a row.
+#   (2) any OTHER '-'-prefixed FIRST word: not a recognized help token, but still overwhelmingly
+#       more likely a misplaced/mistyped flag than intended prose -- REFUSE with usage, in
+#       refuse_flag_in_statement's own voice (nothing written), rather than silently commit a
+#       garbage row the way --help itself used to.
+# Genuinely dash-leading intended prose is a NAMED, not mechanized, boundary here (mirrors
+# refuse_flag_in_statement's own quoted-mid-sentence-token note): this check is FIRST-WORD-ONLY,
+# so a dash-leading word anywhere else in the statement is untouched, and the rare legitimate
+# dash-first statement is expected to be reworded (e.g. lead with a word, quote the dash-word
+# inline) rather than mechanized further -- the same bound the existing whole-word rule accepts.
+check_help_or_dash_first_word() {
+  local usage_printer="$1"; shift
+  local first="${1:-}"
+  case "$first" in
+    --help|-h|help)
+      "$usage_printer" >&2
+      exit 0
+      ;;
+    -*)
+      echo "led: REFUSED -- the statement's first word '${first}' is dash-leading, which reads as" >&2
+      echo "  a misplaced or mistyped flag rather than intended statement prose (item" >&2
+      echo "  led-help-token-closure -- the same shape refuse_flag_in_statement forecloses for" >&2
+      echo "  KNOWN led flag tokens anywhere in the statement; this closes the gap for an" >&2
+      echo "  UNKNOWN dash-leading FIRST word, which used to sail through and commit a garbage" >&2
+      echo "  row). NOTHING was written. If '${first}' is meant as a flag, move it before the" >&2
+      echo "  statement; if it is genuinely intended prose, reword so the statement does not" >&2
+      echo "  open with a dash." >&2
+      "$usage_printer" >&2
+      exit 1
+      ;;
+  esac
+}
+
 refuse_flag_in_statement() {
   local usage="$1"; shift
   local -a words=("$@")
@@ -987,6 +1079,130 @@ if [ "${1:-}" = "--recent" ] || [ "${1:-}" = "current" ]; then
                 THEN 'SUPERSEDED' ELSE 'current' END AS status_now
     FROM ${SCHEMA}.ledger l JOIN ${KERNEL}.principal p ON p.id = l.actor
     ORDER BY l.id DESC LIMIT ${n};"
+fi
+
+# --- led --json <ledger|review|registration|obligation> <file|-> (item led-json-payload-mode):
+# an ADDITIONAL, agent/programmatic-facing input mode alongside the prose CLI (DUAL-MODE
+# resolution of the maintainer's own hesitation -- his words: JSON "harms ledger readability
+# BUT ... shows that the ledger works to our benefit"). The payload maps VERBATIM onto the s43
+# boundary functions' OWN jsonb payload shape (kernel/lineage/s43-typed-verdict-write-boundary.sql
+# sec 4.2): payload keys are the TARGET TABLE's own column names, one schema, no second
+# vocabulary -- this is the SAME payload the FastAPI boundary service's POST /write/<surface>
+# endpoints accept (design/FABLE-LEDGER-BOUNDARY-SERVICE-SPEC.md section 4), led's own CLI twin
+# of it. <surface> selects which of the four boundary functions receives the payload, matching
+# the service's own four endpoints 1:1 -- no fifth vocabulary invented here either.
+#
+# VALIDATION IS WELL-FORMEDNESS-AND-SHAPE ONLY, exactly the discipline spec section 4 states for
+# the HTTP twin ("pydantic-validated for JSON well-formedness and top-level shape only -- the
+# KERNEL validates semantics; the service must not grow a second validator that could disagree
+# with the authority"): this mode checks only that the input parses as JSON and is a top-level
+# object, then hands it to kernel_write() UNCHANGED -- the SAME one call point (ADR-0012 P1)
+# every other write path in this file already routes through. Unknown-key / server-owned-key
+# refusal and its teach-text are the KERNEL's OWN (s43 sec 4.2), passed through VERBATIM by
+# kernel_write's existing verdict-parsing (no paraphrase, no second validator -- the identical P2
+# discipline the boundary service's own spec section 5 states for its HTTP twin).
+#
+# s43-ONLY, NO LEGACY FALLBACK (deliberate, unlike most of this file's other s43-probed paths):
+# a pre-s43 kernel's legacy INSERT branches predate the boundary functions this mode maps onto
+# verbatim -- there is no pre-s43 payload shape to fall back to, so this mode refuses outright on
+# such a kernel, mirroring the FastAPI service's own pre-s43 refusal (design/
+# FABLE-LEDGER-BOUNDARY-SERVICE-SPEC.md section 4: "On a pre-s43 world the write endpoints refuse
+# entirely (capability_absent, naming s43)").
+#
+# BUILDER-FLAGGED OPEN CHOICE (led-json-payload-mode's own text: "where the item leaves a choice
+# open, smallest honest choice, flagged in your report"): --json does NOT read LED_ACTOR and
+# inject it into the payload the way the flag-based CLI paths' resolve_actor() does. The payload
+# is taken VERBATIM (the item's own word) -- a caller wanting a specific actor passes the already-
+# resolved principal id directly as the payload's own "actor" key (a genuine, non-server-owned
+# ledger/review_detail/... column), rather than this mode silently layering a second,
+# name-to-id resolution convenience on top of a payload the commission describes as verbatim.
+if [ "${1:-}" = "--json" ]; then
+  shift
+  json_surface="${1:-}"
+  case "$json_surface" in
+    ledger|review|registration|obligation) shift ;;
+    *)
+      echo "led --json: REFUSED -- usage: led --json <ledger|review|registration|obligation> <file|->" >&2
+      echo "  '<surface>' selects which s43 boundary function (kernel/lineage/" >&2
+      echo "  s43-typed-verdict-write-boundary.sql sec 4.2) receives the payload -- ledger_write /" >&2
+      echo "  review_write / registration_write / obligation_write -- the SAME four functions the" >&2
+      echo "  FastAPI boundary service's own POST /write/<surface> endpoints call (design/" >&2
+      echo "  FABLE-LEDGER-BOUNDARY-SERVICE-SPEC.md section 4). Got: '${json_surface}'." >&2
+      exit 1
+      ;;
+  esac
+  json_file="${1:-}"
+  if [ -z "$json_file" ]; then
+    echo "led --json: REFUSED -- missing <file|->: led --json ${json_surface} <file|->" >&2
+    echo "  ('-' reads the JSON payload from stdin)" >&2
+    exit 1
+  fi
+  shift
+  if [ $# -gt 0 ]; then
+    echo "led --json: REFUSED -- unexpected trailing argument(s) after <file>: $*" >&2
+    echo "  usage: led --json <ledger|review|registration|obligation> <file|->" >&2
+    exit 1
+  fi
+  if ! has_s43_boundary; then
+    echo "led --json: REFUSED (capability_absent, naming s43) -- this world's kernel does not" >&2
+    echo "  carry kernel/lineage/s43-typed-verdict-write-boundary.sql, mirroring the FastAPI" >&2
+    echo "  boundary service's own pre-s43 refusal (design/FABLE-LEDGER-BOUNDARY-SERVICE-SPEC.md" >&2
+    echo "  section 4). --json maps VERBATIM onto the s43 boundary functions' own payload shape" >&2
+    echo "  and has deliberately no pre-s43 legacy fallback -- no second, pre-s43 JSON-input" >&2
+    echo "  vocabulary. Use the ordinary prose CLI on this world instead." >&2
+    exit 1
+  fi
+  if [ "$json_file" = "-" ]; then
+    json_raw="$(cat)"
+  else
+    if [ ! -e "$json_file" ]; then
+      echo "led --json: REFUSED -- '${json_file}' does not exist." >&2
+      exit 1
+    fi
+    json_raw="$(cat "$json_file")"
+  fi
+  # checkpoint (a): raw bytes, before any JSON parsing (mirrors the HTTP twin's
+  # _read_bounded_body checkpoint a) -- refuses a large payload with a typed disposition
+  # before it is ever handed to python3/psql.
+  json_raw_bytes=$(printf '%s' "$json_raw" | wc -c)
+  if [ "$json_raw_bytes" -gt "$MAX_WRITE_BODY_BYTES" ]; then
+    echo "led --json: REFUSED (payload_too_large) -- the JSON payload is ${json_raw_bytes}" >&2
+    echo "  bytes -- exceeds the ${MAX_WRITE_BODY_BYTES}-byte write bound (checkpoint a," >&2
+    echo "  before JSON parsing), the same MAX_WRITE_BODY_BYTES bound the FastAPI boundary" >&2
+    echo "  service enforces on this payload's HTTP twin (design/" >&2
+    echo "  FABLE-LEDGER-BOUNDARY-SERVICE-SPEC.md, spec A2.2)." >&2
+    exit 1
+  fi
+  json_compact=$(printf '%s' "$json_raw" | python3 -c '
+import json, sys
+try:
+    v = json.load(sys.stdin)
+except Exception as e:
+    sys.stderr.write("led --json: REFUSED -- not well-formed JSON: %s\n" % e)
+    sys.exit(1)
+if not isinstance(v, dict):
+    sys.stderr.write("led --json: REFUSED -- the JSON payload must be a top-level object (got %s).\n" % type(v).__name__)
+    sys.exit(1)
+print(json.dumps(v))
+') || exit 1
+  # checkpoint (b): the re-serialized (compacted) payload, before it reaches the psql
+  # subprocess -- mirrors the HTTP twin's own checkpoint b, catching a payload that grew
+  # past the bound on reserialization even though it passed checkpoint (a).
+  json_compact_bytes=$(printf '%s' "$json_compact" | wc -c)
+  if [ "$json_compact_bytes" -gt "$MAX_WRITE_BODY_BYTES" ]; then
+    echo "led --json: REFUSED (payload_too_large) -- the JSON payload, re-serialized, is" >&2
+    echo "  ${json_compact_bytes} bytes -- exceeds the ${MAX_WRITE_BODY_BYTES}-byte write" >&2
+    echo "  bound (checkpoint b, before the psql subprocess)." >&2
+    exit 1
+  fi
+  case "$json_surface" in
+    ledger) json_fn="ledger_write" ;;
+    review) json_fn="review_write" ;;
+    registration) json_fn="registration_write" ;;
+    obligation) json_fn="obligation_write" ;;
+  esac
+  kernel_write "$json_fn" "$json_compact"
+  exit $?
 fi
 
 if [ "${1:-}" = "show" ]; then
@@ -2272,14 +2488,22 @@ if [ "${1:-}" = "review" ]; then
     esac
   done
   set -- "${args[@]}"
+  # print_review_usage: ONE HOME (ADR-0012 P1) for `led review`'s usage block, called both by
+  # the arg-count guard below (still a refusal, exit 1) and by the help-token check further down
+  # (a question, exit 0) -- item led-help-token-closure, so the two paths never carry two
+  # independently-drifting copies of this text.
+  print_review_usage() {
+    echo "usage: led review <entry-id> <verdict> <independence> [--antecedent id] <statement...>"
+    echo "       verdict: attest|attest_with_reservations|refuse"
+    echo "       independence: self-review|technical|managerial|financial"
+    echo "       set LED_ACTOR=<principal-name> to countersign as a registered principal"
+  }
   if [ $# -lt 4 ]; then
-    echo "usage: led review <entry-id> <verdict> <independence> [--antecedent id] <statement...>" >&2
-    echo "       verdict: attest|attest_with_reservations|refuse" >&2
-    echo "       independence: self-review|technical|managerial|financial" >&2
-    echo "       set LED_ACTOR=<principal-name> to countersign as a registered principal" >&2
+    print_review_usage >&2
     exit 1
   fi
   regards="$1"; verdict="$2"; independence="$3"; shift 3
+  check_help_or_dash_first_word print_review_usage "$@"
   refuse_flag_in_statement "review ${regards} ${verdict} ${independence}" "$@"
   statement="$*"
   warn_content_free_review_statement "$statement"
@@ -3757,19 +3981,28 @@ SQL
   esac
 fi
 
+# print_generic_usage: ONE HOME (ADR-0012 P1) for the generic <kind> <statement...> path's usage
+# block, called both by the arg-count guard below (still a refusal, exit 1) and by the help-token
+# check further down (a question, exit 0) -- item led-help-token-closure, so the two paths never
+# carry two independently-drifting copies of this text.
+print_generic_usage() {
+  echo "usage: led [flags] <kind> <statement...>   (see top-of-file comment for the full flag list:"
+  echo "       -f -e --supersedes --amends --amends-scope --answers --refs --concern --evidence"
+  echo "       --confidence; cite an antecedent row from any kind via --refs row:<id>)"
+  echo "       led --recent [N] | led current [N] | led show <id> | led question-status | led review-gap | led stamp-distinctness | led standing"
+  echo "       led decomposition-review-status  (mode + countersign_obligation counts + verdict, read-only)"
+  echo "       led briefing  (fresh-agent rules briefing, read-only, no DB access)"
+  echo "       led decision [--grade <word>] <statement...>  (kernel/lineage/s36-decision-grade.sql)"
+  echo "       led register-principal <name> <class>"
+  echo "       led obligate <scope> <assigned-by-principal> <obliged-actor-principal>"
+  echo "       led obligate revoke <scope>"
+  echo "       led review <entry-id> <verdict> <independence> [--antecedent id] <statement...>"
+  echo "       led work open|claim|depends|close|list|violations|asof  (see top-of-file comment)"
+  echo "       led --json <ledger|review|registration|obligation> <file|->  (s43 payload mode, see top-of-file comment)"
+  echo "       '--help'/'-h'/'help' as the FIRST word of <statement...> prints this usage and writes nothing"
+}
 if [ $# -lt 2 ]; then
-  echo "usage: led [flags] <kind> <statement...>   (see top-of-file comment for the full flag list:" >&2
-  echo "       -f -e --supersedes --amends --amends-scope --answers --refs --concern --evidence" >&2
-  echo "       --confidence; cite an antecedent row from any kind via --refs row:<id>)" >&2
-  echo "       led --recent [N] | led current [N] | led show <id> | led question-status | led review-gap | led stamp-distinctness | led standing" >&2
-  echo "       led decomposition-review-status  (mode + countersign_obligation counts + verdict, read-only)" >&2
-  echo "       led briefing  (fresh-agent rules briefing, read-only, no DB access)" >&2
-  echo "       led decision [--grade <word>] <statement...>  (kernel/lineage/s36-decision-grade.sql)" >&2
-  echo "       led register-principal <name> <class>" >&2
-  echo "       led obligate <scope> <assigned-by-principal> <obliged-actor-principal>" >&2
-  echo "       led obligate revoke <scope>" >&2
-  echo "       led review <entry-id> <verdict> <independence> [--antecedent id] <statement...>" >&2
-  echo "       led work open|claim|depends|close|list|violations|asof  (see top-of-file comment)" >&2
+  print_generic_usage >&2
   exit 1
 fi
 
@@ -3794,6 +4027,16 @@ if [ "$kind" = "decision" ]; then
   while [ $# -gt 0 ]; do
     case "$1" in
       --grade) grade="${2:-}"; shift 2 ;;
+      --help)
+        # fixup finding 2: --help must fall through to check_help_or_dash_first_word below
+        # (the SAME help-seeking path -h/help already take), rather than being caught here as
+        # an "unrecognized flag" -- this loop runs BEFORE that check, and without this case
+        # 'led decision --help' hit the unrecognized-flag refusal (exit 1, no usage/teach)
+        # instead of the tier-1 usage-and-exit-0 teach every other subcommand's --help gets,
+        # which also falsified print_generic_usage's own unqualified "'--help'/'-h'/'help' as
+        # the FIRST word ... prints this usage" claim for this one subcommand.
+        args+=("$1"); shift
+        ;;
       --*)
         case " $LED_FLAG_VOCAB " in
           *" $1 "*) args+=("$1"); shift ;;
@@ -3819,6 +4062,7 @@ if [ "$kind" = "decision" ]; then
   set -- "${args[@]}"
 fi
 
+check_help_or_dash_first_word print_generic_usage "$@"
 refuse_flag_in_statement "[flags] ${kind}" "$@"
 statement="$*"
 
