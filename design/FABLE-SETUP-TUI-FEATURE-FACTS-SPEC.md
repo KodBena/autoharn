@@ -93,16 +93,29 @@ Each catalog entry is a struct with five fields, all mandatory:
   (decision rows; the statement embeds the rule text and its why-citation).
 - **`claude_md`** — the fragment compiled into the new world's CLAUDE.md.
 
-**Initial catalog (maintainer-named entries first; the builder may propose up to
-three more from the ledger's standing rules, each meeting the admission
-criterion, marked PROPOSED in the report for maintainer review — small-ish is a
-design property, not a growth target):**
+**Initial catalog — 7 to 15 entries, distilled from the prior art of BOTH
+projects (amendment per commission row 1716, superseding this spec's original
+three-plus-proposals shape):** the maintainer's directive is that the catalog
+recover and distill the durable decisions "we've had most success with in this
+project and autoharn-panel." The builder therefore MINES two evidence sources,
+read-only: this repo's ledger (standing-rule decision rows via `./led`) and the
+autoharn-panel submodule's record (`tools/autoharn-panel` — its CLAUDE.md,
+ledger exports, and docs; READ-ONLY, the never-touch-the-panel rule covers
+writes, not evidence reading). Every entry still meets the admission criterion
+(a witnessed painful-or-successful specimen, cited); the distillation picks the
+rules whose adoption demonstrably changed outcomes, not everything ever ruled.
+The maintainer-named anchors below come first; the report lists every mined
+entry with its specimen so the maintainer can prune — 15 is a hard ceiling,
+small-ish remains the design property.
 
 1. `makespan-scheduling-by-mandate` — logistics/makespan scheduling is used by
    mandate; the session orchestrator can see the overarching goal and ensures
    the right rules are hydrated on first session start (the maintainer's own
-   wording, row 1714; why-citation: the makespan-pointer hydration item this
-   catalog absorbs).
+   wording, row 1714). Per row 1716's clarification, the mandate's substance is
+   the autoharn-panel form: a robust-though-soft specification **requiring
+   cosigned decomposition of the task** — the builder reads the panel's actual
+   mandate text (read-only) and carries its cosigned-decomposition requirement
+   into this entry's `rule`/`claude_md` verbatim-in-substance, not from memory.
 2. `drift-backstops` — the orchestrator is softly obligated to follow the FAQ's
    drift-backstop method for anything that goes quietly stale (why: the FAQ
    section's own fourteen-instance evidence base).
