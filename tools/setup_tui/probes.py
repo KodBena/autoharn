@@ -1,6 +1,6 @@
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-18T21:32:16Z
-#   last-change: 2026-07-18T21:32:21Z
+#   last-change: 2026-07-18T22:04:38Z
 #   contributors: ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -14,11 +14,29 @@ HTTP probes use `urllib.request` (stdlib)."""
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import socket
 import subprocess
 import urllib.error
 import urllib.request
+
+# Interpreter-boundary allowlist (law/adr/0012's 2026-07-18 amendment, "The interpreter
+# boundary -- a value never crosses as program text": "where no carrier exists, a strict
+# validation to a closed alphabet at the Port, which refuses what it cannot honor" -- the same
+# check bootstrap/teardown-world.sh already carries for its schema/kern/role names). ONE home
+# for the regex (ADR-0012 P1): both this module's own `pg_connect` (schema spliced into SQL
+# text below) and `screens.py`'s dedicated-db path (db/role spliced into pg_hba/SQL text)
+# import and call this, rather than each carrying its own copy of the pattern.
+_IDENT_RE = re.compile(r"^[A-Za-z0-9_]+$")
+
+
+def valid_identifier(name: str) -> bool:
+    """True iff `name` is composed ONLY of letters, digits, underscore -- the only shape ever
+    safe to splice into SQL/shell/config text this module or its callers construct by
+    concatenation (no bind-variable carrier exists at those sites; this is the closed-alphabet
+    refusal ADR-0012's interpreter-boundary amendment requires in that case)."""
+    return bool(name) and bool(_IDENT_RE.fullmatch(name))
 
 
 def which(name: str) -> str | None:
@@ -67,6 +85,12 @@ def pg_connect(host: str, db: str, role: str | None = None, schema: str | None =
         return False, "psql not found on PATH -- cannot probe"
     sql = "SELECT current_user"
     if schema:
+        if not valid_identifier(schema):
+            return False, (
+                f"REFUSED: schema '{schema}' contains characters outside [A-Za-z0-9_] -- "
+                f"refusing to splice it into SQL text (law/adr/0012's interpreter-boundary "
+                f"rule). Nothing probed."
+            )
         sql += f", to_regnamespace('{schema}') IS NOT NULL AS schema_exists"
     argv = [psql, "-h", host, "-d", db]
     if role:

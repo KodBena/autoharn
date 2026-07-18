@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-18T21:34:30Z
-#   last-change: 2026-07-18T21:34:30Z
+#   last-change: 2026-07-18T22:05:00Z
 #   contributors: ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -25,6 +25,7 @@ time (still drives the same screen function, same Ui, same checklist).
 from __future__ import annotations
 
 import argparse
+import subprocess
 import sys
 
 from tools.setup_tui.checklist import Checklist
@@ -63,13 +64,33 @@ def main(argv: list[str] | None = None) -> int:
             state = fn(ui, cl, state)
     except ScriptExhausted as exc:
         print(f"\nsetup_tui: {exc}", file=sys.stderr)
+        _terminate_boundary_proc(state)
         return 3
     except KeyboardInterrupt:
         print("\nsetup_tui: interrupted -- nothing further run. See the streamed output above "
               "for what to finish by hand.", file=sys.stderr)
+        _terminate_boundary_proc(state)
         return 130
 
     return 0
+
+
+def _terminate_boundary_proc(state: dict) -> None:
+    """If screen_boundary started a live service (`state["boundary_proc"]`), an abnormal exit
+    from this process must not leave it running silently, orphaned, and unmentioned -- rule 1
+    ("no hidden state") applies to what THIS process itself started, not only to the cluster-
+    host acts it merely printed. Terminates it and says so; a process this function never
+    started (screen 6 not reached, or the PREPARED/systemd path taken) is left untouched."""
+    proc = state.get("boundary_proc")
+    if proc is None or proc.poll() is not None:
+        return
+    print(f"setup_tui: terminating the boundary service this process started (pid {proc.pid}) "
+          f"before exiting -- it will not be left running silently.", file=sys.stderr)
+    proc.terminate()
+    try:
+        proc.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        proc.kill()
 
 
 if __name__ == "__main__":

@@ -1,6 +1,6 @@
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-18T21:34:05Z
-#   last-change: 2026-07-18T21:39:16Z
+#   last-change: 2026-07-18T22:04:21Z
 #   contributors: ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -123,7 +123,7 @@ def screen_substrate(ui, cl, state):
         db = ui.ask_text("Existing database name", default="toy")
         state["db"] = db
         ok, detail = probes.pg_reachable(host)
-        status = ck.WITNESSED if ok else ck.WITNESSED
+        status = ck.WITNESSED if ok else ck.REFUSED
         ui.say(f"  reachability probe: {'GREEN' if ok else 'RED'} -- {detail}")
         cl.add("substrate", f"existing-db {db}@{host} reachable", status,
                f"{'GREEN' if ok else 'RED'}: {detail}")
@@ -132,6 +132,23 @@ def screen_substrate(ui, cl, state):
     # dedicated path
     db = ui.ask_text("New (dedicated) database name")
     role = ui.ask_text("New (dedicated) role name")
+    # Interpreter-boundary allowlist (law/adr/0012's 2026-07-18 amendment: "a value crosses an
+    # interpreter boundary as DATA... where no carrier exists, a strict validation to a closed
+    # alphabet at the Port, which refuses what it cannot honor" -- the same check
+    # bootstrap/teardown-world.sh already carries for schema/kern/role names). Both `db` and
+    # `role` get spliced as program TEXT below -- into the pg_hba block (pghba.generate_block)
+    # and into the createdb_cmd SQL string -- with no bind-variable carrier available for
+    # either (this is advisory text for the OPERATOR to paste, not a query this process itself
+    # runs), so the guard is the closed-alphabet refusal, checked once, adjacent to both splice
+    # sites below.
+    for _label, _val in (("database name", db), ("role name", role)):
+        if not probes.valid_identifier(_val):
+            ui.say(f"  REFUSED: {_label} '{_val}' contains characters outside [A-Za-z0-9_] -- "
+                   f"refusing to splice it into pg_hba/SQL text (law/adr/0012's interpreter-"
+                   f"boundary rule). Nothing generated.")
+            cl.add("substrate", "dedicated db/role name validated", ck.REFUSED,
+                   f"'{_val}' ({_label}) not in [A-Za-z0-9_]+")
+            return state
     subnets = ui.ask_text("Subnets to trust (comma-separated CIDR)",
                            default="192.168.122.68/32,192.168.122.1/32")
     subnet_list = [s.strip() for s in subnets.split(",") if s.strip()]
@@ -202,6 +219,18 @@ def screen_fork_target(ui, cl, state):
     ])
     if mode == "fresh":
         dest = ui.ask_text("Fresh destination directory (will be created)")
+        dest_path = Path(dest)
+        if dest_path.exists():
+            # Mirrors the fork branch's own existence check below: new-project.sh does not
+            # refuse an occupied directory itself -- it MERGES the scaffold into whatever is
+            # already there (silently overwriting scaffold-owned files it touches, per --force
+            # semantics elsewhere, and leaving alone what it doesn't) -- never this tool's call
+            # to make for a "fresh" directory the operator asked for by name.
+            ui.say(f"  REFUSED: destination '{dest}' already exists -- a 'fresh directory' "
+                   f"request against an occupied path would have new-project.sh merge into it "
+                   f"silently. Nothing done.")
+            cl.add("fork-target", "destination", ck.REFUSED, f"REFUSED: '{dest}' already exists")
+            return state
         state["dest"] = dest
         cl.add("fork-target", "destination", ck.WITNESSED, f"fresh dir: {dest}")
         return state
@@ -281,19 +310,25 @@ def screen_rehearsal(ui, cl, state):
     argv = _new_project_argv(scratch_dir, scratch_world, db, host, extra=["--force"])
     res = run_command(argv)
     birth_ok = res.ok
-    cl.add("rehearsal", "scratch birth", ck.WITNESSED if birth_ok else ck.WITNESSED,
+    cl.add("rehearsal", "scratch birth", ck.WITNESSED if birth_ok else ck.REFUSED,
            f"{'exit 0' if birth_ok else f'exit {res.returncode}'}")
 
-    argv = _teardown_argv(scratch_world, db, host)
+    # --dir has teardown-world.sh itself remove the scaffold directory as part of its own
+    # verified plan (rule 1: existing verbs, never a second implementation) -- this used to be
+    # a separate, unconditional `shutil.rmtree(..., ignore_errors=True)` below, which claimed
+    # WITNESSED regardless of whether the directory actually disappeared. Passing --dir here
+    # instead makes removal part of teardown-world.sh's own printed plan and its own residue
+    # check, and the claim below is checked against reality (os.path.isdir), not assumed.
+    argv = _teardown_argv(scratch_world, db, host, extra=["--dir", scratch_dir])
     res = run_command(argv, stdin_text=f"{scratch_world}\n")
     teardown_ok = res.ok
-    zero_residue = "residue" not in res.output.lower() or teardown_ok
-    cl.add("rehearsal", "scratch teardown", ck.WITNESSED,
+    cl.add("rehearsal", "scratch teardown", ck.WITNESSED if teardown_ok else ck.REFUSED,
            f"{'exit 0' if teardown_ok else f'exit {res.returncode}'}")
 
-    if os.path.isdir(scratch_dir):
-        shutil.rmtree(scratch_dir, ignore_errors=True)
-    cl.add("rehearsal", "scratch scaffold dir removed", ck.WITNESSED, scratch_dir)
+    dir_removed = not os.path.isdir(scratch_dir)
+    cl.add("rehearsal", "scratch scaffold dir removed",
+           ck.WITNESSED if dir_removed else ck.REFUSED,
+           scratch_dir if dir_removed else f"STILL PRESENT: {scratch_dir}")
 
     green = birth_ok and teardown_ok
     ui.say(f"  rehearsal: {'GREEN' if green else 'RED'}")
@@ -338,12 +373,24 @@ def screen_birth(ui, cl, state):
     state["birth_ok"] = ok
 
     # the maintainer copy-paste signing line new-project.sh prints at the end of a --new-world
-    # run -- surfaced prominently here, not buried in the streamed log above.
-    sign_lines = [ln for ln in res.output.splitlines() if "led decision" in ln or "sign" in ln.lower()]
-    if sign_lines:
+    # run -- surfaced prominently here, not buried in the streamed log above. Anchored on the
+    # LITERAL marker new-project.sh actually prints for the FULL-mode signing line
+    # ("LED_ACTOR=commissioner ./led commission ..."), not a bare "sign" substring -- the old
+    # substring match hit unrelated noise elsewhere in the same output (e.g. "self-assigned",
+    # "keys/README.md", any prose line containing "sign") and, being an unordered filter over
+    # ALL lines, could surface those matches instead of the real block hundreds of lines later.
+    out_lines = res.output.splitlines()
+    marker_idx = next((i for i, ln in enumerate(out_lines) if "LED_ACTOR=commissioner" in ln),
+                       None)
+    if marker_idx is not None:
+        # A couple of lines of leading context (the "type this in YOUR OWN terminal" framing
+        # new-project.sh prints immediately above the line) makes the copy-paste block legible
+        # on its own, without pulling in the whole SIGNED-mode/SIGNED-HEAD prose that follows.
+        start = max(0, marker_idx - 2)
+        sign_lines = out_lines[start:marker_idx + 1]
         ui.say("")
         ui.say("  --- maintainer copy-paste signing line (from the birth output above) ---")
-        for ln in sign_lines[:5]:
+        for ln in sign_lines:
             ui.say(f"  {ln.strip()}")
         ui.say("  --- end ---")
     return state
@@ -355,10 +402,26 @@ def screen_birth(ui, cl, state):
 
 def screen_boundary(ui, cl, state):
     ui.banner("6/9 Boundary")
+    # Gates on birth_ok EXACTLY as screen_birth gates on rehearsal_green above -- `not
+    # state.get(...)` catches both an explicit False (birth ran and failed) and a missing key
+    # (birth was never run/skipped) alike, so configuring a boundary for a world that may not
+    # exist always needs an explicit override, never a silent proceed.
+    if not state.get("birth_ok"):
+        ui.say("  REFUSED: birth did not report success (state['birth_ok'] is not truthy) -- "
+               "configuring the boundary service for a world that may not exist would be "
+               "building on nothing. Go back and get a successful birth first, or explicitly "
+               "override below.")
+        if not ui.confirm("Override and proceed WITHOUT a confirmed successful birth? "
+                           "(not recommended)", default=False):
+            cl.add("boundary", "boundary", ck.REFUSED, "refused: birth_ok not truthy")
+            return state
+        cl.add("boundary", "birth gate", ck.WITNESSED, "OVERRIDDEN by operator")
+
     if not ui.confirm("Configure the boundary service now?", default=True):
         cl.add("boundary", "boundary", ck.SKIPPED, "operator skipped screen 6")
         return state
     dest = state.get("dest") or ui.ask_text("Destination directory")
+    state["dest"] = dest
     world = state.get("world") or ui.ask_text("World/deployment name")
     host = state.get("pghost") or ui.ask_text("Postgres host", default="192.168.122.1")
     db = state.get("db") or ui.ask_text("Database", default="toy")
@@ -475,7 +538,8 @@ def screen_observability(ui, cl, state):
     if not ui.confirm("Show observability blocks?", default=True):
         cl.add("observability", "observability", ck.SKIPPED, "operator skipped screen 7")
         return state
-    dest = state.get("dest", "<project-dir>")
+    dest = state.get("dest") or ui.ask_text("Destination directory")
+    state["dest"] = dest
     otelcol_line = "otelcol-contrib --config otelcol-config.yaml"
     ui.say("  --- PREPARED: OTel collector start line (localhost-only, per standing config) ---")
     ui.say(f"  cd {dest} && {otelcol_line}")
@@ -502,6 +566,7 @@ def screen_hydration(ui, cl, state):
         cl.add("hydration", "hydration", ck.SKIPPED, "operator skipped screen 8")
         return state
     dest = state.get("dest") or ui.ask_text("Destination directory (with a led shim)")
+    state["dest"] = dest
     led = os.path.join(dest, "led")
     if not os.path.isfile(led):
         ui.say(f"  REFUSED: no ./led at {led} -- hydration writes only through led (v1 "
@@ -525,7 +590,7 @@ def screen_hydration(ui, cl, state):
             argv = ["python3", str(REPO_ROOT / "tools" / "role_charter.py"), "register",
                     role, path, "--led", led]
             res = run_command(argv)
-            cl.add("hydration", label, ck.WITNESSED if res.ok else ck.WITNESSED,
+            cl.add("hydration", label, ck.WITNESSED if res.ok else ck.REFUSED,
                    f"{'exit 0' if res.ok else f'exit {res.returncode}'}")
             continue
         statement = ui.ask_text(f"Statement for '{label}' decision row")
