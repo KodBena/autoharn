@@ -1,0 +1,453 @@
+#!/usr/bin/env python3
+"""otel-attest — v1 of the OTel model-provenance sentry (design/FABLE-OTEL-SENTRY-SPEC.md
+§4-§7). An autoharn-side operator verb, not a per-world verb (mirrors attest-tags's own
+framing: it lives at the repo root but operates on a TARGET world's ledger, given by --world).
+
+WHAT THIS DOES. Reads a local OTel collector's JSONL export (local/OTEL-COLLECTOR.md) and a
+target world's ledger (read-only, via that world's own `./led` verb — never raw psql), joins
+`api_request` events to ledger rows on the ledger's own stamp_session/stamp_invocation columns
+(kernel/lineage/s17-stamp-mechanism.sql, s23-per-invocation-stamp-token.sql), and writes one
+defeasible `verification` row per attributable ledger row at a declared confidence grade
+(spec §5's v1 statement convention, §6's grade vocabulary), citing the spec's standing
+rebuttals (§7). A MISMATCH verdict additionally writes a companion `finding` row (§5). Writes
+go through `<world>/led` — the s43 write boundary, where present, is the only path in; this
+script never touches Postgres directly (self-application law, CLAUDE.md).
+
+NEVER a guarantee, NEVER a gate: nothing here blocks or grades anything (spec §9). Absence of
+correlated events writes NOTHING (spec §6's "no attestation" rule) — never a fabricated claim
+about absence.
+
+USAGE:
+  ./otel-attest --world <dir> [--export <jsonl>] [--recent N] [--dry-run] [--re-attest]
+                 [--actor otel-sentry]
+
+  --world <dir>    a directory containing a `led` verb and deployment.json (default: this
+                    repo's own root — the "current" world). The scratch witness world used by
+                    this build's own harness is passed explicitly, e.g. --world /path/to/scratch.
+  --export <path>  the collector's JSONL export (default: ~/tools/otelcol/data/claude-events.jsonl)
+  --recent N       how many of the world's most recent ledger rows to consider as candidates
+                    (default 50) — a batch verb, not a daemon; the operator scopes the window.
+  --dry-run        print would-be attestation rows, write nothing.
+  --re-attest      re-attest rows that already carry a v1/v2 attestation (default: skip them —
+                    idempotency, spec §6).
+  --actor NAME     the registered principal writes land under (default: otel-sentry). Must
+                    already be registered in the target world (`led register-principal`).
+
+Exit code: 0 on a clean run (including "nothing to attest"); 1 on a malformed v1 statement
+encountered while scanning for already-attested rows (P-5: loud refusal, never a silent skip).
+
+Every import is top-of-file (the lazy-import ban, CLAUDE.md)."""
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import subprocess
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parent
+REBUTTALS_ANCHOR = "design/FABLE-OTEL-SENTRY-SPEC.md#7-the-standing-rebuttals"
+DEFAULT_EXPORT = Path.home() / "tools" / "otelcol" / "data" / "claude-events.jsonl"
+UTILITY_QUERY_SOURCES = {"generate_session_title"}
+GRADE_VOCAB = ("exact-command", "turn-bracketed", "session-scoped", "ambiguous")
+VERDICT_VOCAB = ("match", "MISMATCH", "unevaluated")
+
+# ---------------------------------------------------------------------------------------------
+# The v1 statement convention, both directions. build_statement() is the WRITER side (this
+# script's own emission); parse_v1_statement() is used only to detect already-attested rows
+# when scanning ledger candidates (the re-attest/idempotency check) — never to attest a SECOND
+# world's rows from a first world's text. Both sides implement the SAME pinned contract
+# (design/FABLE-DEFEAT-PIPELINE-SPEC.md §3, P-1..P-7) the defeat-pipeline builder will consume;
+# emitting or reading it wrong is the highest-severity failure available to this script, so the
+# two functions are the one place the convention's shape is decided (ADR-0012 P1).
+# ---------------------------------------------------------------------------------------------
+
+
+def build_statement(*, row_id: int, model: str, grade: str, expected: str, verdict: str,
+                     session: str, basis: str) -> str:
+    assert grade in GRADE_VOCAB, grade
+    assert verdict in VERDICT_VOCAB, verdict
+    return (
+        f"model-attestation v1 | row={row_id} | model={model} | grade={grade} "
+        f"| expected={expected} | verdict={verdict} | session={session} | basis={basis} "
+        f"| rebuttals={REBUTTALS_ANCHOR}"
+    )
+
+
+class MalformedStatement(Exception):
+    """P-5: a v1-versioned candidate whose shape violates the pinned contract. Raised, never
+    swallowed — the caller's job is to surface this loudly (refuse the scan), not skip it."""
+
+
+def parse_v1_statement(statement: str) -> dict | None:
+    """Returns a dict of the 8 keyed fields (version excluded) for a well-formed v1 candidate,
+    None for a non-candidate (P-3: doesn't start with the literal prefix), or raises
+    MalformedStatement (P-5) for a v1-versioned candidate that violates the pinned shape.
+    Implements P-1..P-5 exactly (design/FABLE-DEFEAT-PIPELINE-SPEC.md §3)."""
+    trimmed = statement.strip()
+    if not trimmed.startswith("model-attestation "):  # P-3, trailing space included
+        return None
+    segments = [seg.strip() for seg in trimmed.split("|")]  # P-1
+    if segments[0] != "model-attestation v1":
+        # P-4: a non-v1 candidate is skipped-and-counted by the caller, not malformed here.
+        return "VERSION_SKIP"  # sentinel; caller counts it
+    if len(segments) != 9:
+        raise MalformedStatement(f"expected 9 segments, got {len(segments)}: {statement!r}")
+    expected_prefixes = ("row=", "model=", "grade=", "expected=", "verdict=", "session=",
+                          "basis=", "rebuttals=")
+    fields: dict[str, str] = {}
+    names = ("row", "model", "grade", "expected", "verdict", "session", "basis", "rebuttals")
+    for seg, prefix, name in zip(segments[1:], expected_prefixes, names):
+        if not seg.startswith(prefix):
+            raise MalformedStatement(f"segment {name!r} missing prefix {prefix!r}: {statement!r}")
+        fields[name] = seg[len(prefix):]
+    try:
+        int(fields["row"])
+    except ValueError:
+        raise MalformedStatement(f"row= is not an integer: {fields['row']!r}") from None
+    if fields["grade"] not in GRADE_VOCAB:
+        raise MalformedStatement(f"grade= outside vocabulary: {fields['grade']!r}")
+    if fields["verdict"] not in VERDICT_VOCAB:
+        raise MalformedStatement(f"verdict= outside vocabulary: {fields['verdict']!r}")
+    return fields
+
+
+# ---------------------------------------------------------------------------------------------
+# The OTel export reader (read-only; never mutates the export).
+# ---------------------------------------------------------------------------------------------
+
+
+def load_export(path: Path) -> list[dict]:
+    """Flattens every OTLP ExportLogsServiceRequest batch line into one dict per logRecord:
+    {session_id, event_name, model, query_source, tool_source, ts (datetime, UTC),
+    tool_parameters (raw string, may be absent)}. Never copies user.email/user.account_*/
+    organization.id out of this function — the never-copy rule (spec §6) starts here."""
+    records: list[dict] = []
+    if not path.exists():
+        return records
+    with path.open() as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                batch = json.loads(line)
+            except json.JSONDecodeError:
+                continue  # a genuinely corrupt export line; not this verb's job to repair
+            for rl in batch.get("resourceLogs", []):
+                for sl in rl.get("scopeLogs", []):
+                    for lr in sl.get("logRecords", []):
+                        attrs = {a["key"]: a["value"] for a in lr.get("attributes", [])}
+
+                        def sval(key: str) -> str | None:
+                            v = attrs.get(key)
+                            if v is None:
+                                return None
+                            return v.get("stringValue")
+
+                        t_nano = lr.get("timeUnixNano") or lr.get("observedTimeUnixNano")
+                        ts = (datetime.fromtimestamp(int(t_nano) / 1e9, tz=timezone.utc)
+                              if t_nano else None)
+                        records.append({
+                            "session_id": sval("session.id"),
+                            "event_name": sval("event.name"),
+                            "model": sval("model"),
+                            "query_source": sval("query_source"),
+                            "tool_parameters": sval("tool_parameters") or sval("tool_input"),
+                            "expected_model": sval("autoharn.expected_model"),
+                            "ts": ts,
+                        })
+    return records
+
+
+def is_utility(rec: dict) -> bool:
+    return rec.get("query_source") in UTILITY_QUERY_SOURCES
+
+
+def is_agent_dispatch(rec: dict) -> bool:
+    """The P1 discriminator this build witnessed: a subagent's own api_request carries the
+    PARENT session's session.id, tagged query_source='agent:<source>:<name>' — distinct from
+    both the parent's own 'sdk' calls and the utility 'generate_session_title' call."""
+    qs = rec.get("query_source") or ""
+    return qs.startswith("agent:")
+
+
+# ---------------------------------------------------------------------------------------------
+# The correlation grader (spec §6). Grades the highest join set that holds for one ledger row.
+# ---------------------------------------------------------------------------------------------
+
+
+def grade_row(*, stamp_session: str, stamp_invocation: str | None, row_ts: datetime,
+              tolerance_seconds: float, export: list[dict]) -> tuple[str, str | None, str]:
+    """Returns (grade, model_or_None, basis_string). model is None only for grade='ambiguous'
+    with no attributable single model, or when no session events exist at all (caller treats
+    that as 'no attestation' and skips the row entirely — the events list passed in is already
+    scoped to this session)."""
+    session_events = [r for r in export if r["session_id"] == stamp_session]
+    if not session_events:
+        return ("none", None, "")
+
+    # Key 1 (exact-command): a tool-detail event (tool_decision/tool_result) in this session
+    # whose tool_parameters/tool_input string embeds this row's own stamp_invocation token
+    # (app.vendor_invocation=<token>) -- the tightest join this build witnessed (P3 bonus
+    # finding): more precise than matching raw command text, because the invocation token is
+    # minted fresh per Bash call and never repeats.
+    bracket_ts = None
+    if stamp_invocation:
+        needle = f"app.vendor_invocation={stamp_invocation}"
+        for rec in session_events:
+            tp = rec.get("tool_parameters")
+            if tp and needle in tp and rec.get("ts"):
+                bracket_ts = rec["ts"]
+                break
+
+    # Excludes utility calls (generate_session_title) AND subagent-dispatch calls: this build's
+    # P1 witness (see is_agent_dispatch's docstring) confirmed a subagent's api_request shares
+    # the PARENT's session.id, so an un-excluded subagent call could pollute a main-thread row's
+    # bracket with an unrelated model. A ledger row genuinely WRITTEN BY a subagent invocation
+    # is out of scope for this build (spec §6's own cap: "graded at most session-scoped" pending
+    # further design) -- this script does not read the hooks journal's tool_source field, so it
+    # cannot identify such a row at all; named here rather than silently mis-graded.
+    non_utility = [r for r in session_events
+                   if r["event_name"] == "api_request" and not is_utility(r)
+                   and not is_agent_dispatch(r)]
+
+    def models_in(recs: list[dict]) -> set[str]:
+        return {r["model"] for r in recs if r.get("model")}
+
+    if bracket_ts is not None:
+        window = [r for r in non_utility
+                  if r.get("ts") and abs((r["ts"] - bracket_ts).total_seconds()) <= tolerance_seconds]
+        models = models_in(window)
+        if len(models) == 1:
+            basis = f"key1-invocation,key2-session,key3-bracket(tol={tolerance_seconds}s),key4-resource"
+            return ("exact-command", next(iter(models)), basis)
+        # command identity held but bracketing was ambiguous -- fall through to weaker grades
+
+    # Key 3 (turn-bracketed): bracket on row_ts directly (no command-identity leg available).
+    window = [r for r in non_utility
+              if r.get("ts") and abs((r["ts"] - row_ts).total_seconds()) <= tolerance_seconds]
+    models = models_in(window)
+    if len(models) == 1:
+        basis = f"key2-session,key3-bracket(tol={tolerance_seconds}s),key4-resource"
+        return ("turn-bracketed", next(iter(models)), basis)
+
+    # Key 2+4 (session-scoped): every non-utility api_request in the WHOLE session agrees.
+    models = models_in(non_utility)
+    if len(models) == 1:
+        basis = "key2-session,key4-resource"
+        return ("session-scoped", next(iter(models)), basis)
+
+    if len(models) > 1:
+        return ("ambiguous", None, f"key2-session; conflicting models: {sorted(models)}")
+    return ("ambiguous", None, "key2-session; no non-utility api_request in window")
+
+
+# ---------------------------------------------------------------------------------------------
+# Ledger read/write via `<world>/led` (never raw psql).
+# ---------------------------------------------------------------------------------------------
+
+
+def led(world: Path, *args: str, actor: str | None = None) -> subprocess.CompletedProcess:
+    env = os.environ.copy()
+    if actor:
+        env["LED_ACTOR"] = actor
+    return subprocess.run([str(world / "led"), *args], cwd=str(world), env=env,
+                           capture_output=True, text=True)
+
+
+def recent_rows(world: Path, n: int, *, kinds: set[str] | None = None) -> list[int]:
+    """Ids from `led --recent N`, newest first, CURRENT rows only (a superseded row -- e.g. a
+    corrected/malformed attestation, spec §6's supersede-and-replace idiom -- is never a
+    candidate to attest, and never counts toward already-attested when kinds={'verification'})."""
+    r = led(world, "--recent", str(n))
+    if r.returncode != 0:
+        print(r.stderr, file=sys.stderr)
+        raise SystemExit(f"otel-attest: `led --recent {n}` failed in {world}")
+    ids = []
+    for line in r.stdout.splitlines():
+        parts = line.split("|")
+        if len(parts) < 7 or not parts[0].strip().isdigit():
+            continue
+        if parts[-1].strip() != "current":
+            continue
+        if kinds is not None and parts[1].strip() not in kinds:
+            continue
+        ids.append(int(parts[0].strip()))
+    return ids
+
+
+def show_row(world: Path, row_id: int) -> dict:
+    r = led(world, "show", str(row_id))
+    if r.returncode != 0:
+        raise SystemExit(f"otel-attest: `led show {row_id}` failed in {world}: {r.stderr}")
+    fields: dict[str, str] = {}
+    for line in r.stdout.splitlines():
+        if "|" not in line or line.startswith("-["):
+            continue
+        k, _, v = line.partition("|")
+        fields[k.strip()] = v.strip()
+    return fields
+
+
+def already_attested_targets(world: Path, candidate_ids: list[int]) -> set[int]:
+    """Scans the SAME --recent window for existing v1 attestation rows (kind=verification,
+    statement starting with the v1 prefix) and returns the set of already-attested target row
+    ids. Uses parse_v1_statement — a malformed v1 candidate here is refused loudly (P-5), never
+    silently skipped, because a wrong idempotency read is exactly the failure class this verb
+    must not have."""
+    attested: set[int] = set()
+    n = max(candidate_ids) - min(candidate_ids) + 50 if candidate_ids else 50
+    # CURRENT verification rows only (recent_rows' own filter) -- a superseded/corrected
+    # attestation (spec §6's supersede-and-replace idiom) never counts as already-attested.
+    for row_id in recent_rows(world, max(n, 50), kinds={"verification"}):
+        full = show_row(world, row_id)
+        stmt = full.get("statement", "")
+        parsed = parse_v1_statement(stmt)
+        if parsed is None or parsed == "VERSION_SKIP":
+            continue
+        attested.add(int(parsed["row"]))
+    return attested
+
+
+def write_attestation(world: Path, actor: str, *, row_id: int, model: str, grade: str,
+                       expected: str, verdict: str, session: str, basis: str,
+                       export_basename: str, window: str, dry_run: bool) -> int | None:
+    statement = build_statement(row_id=row_id, model=model, grade=grade, expected=expected,
+                                 verdict=verdict, session=session, basis=basis)
+    evidence = f"{export_basename}, {window}"  # no path separators -- the --evidence
+    # path-dereference guard (bootstrap/templates/led.tmpl) treats ANY '/' as path-shaped;
+    # the export's basename plus a slash-free window description keeps this a free-text
+    # citation, never a claimed dereferenceable path.
+    if dry_run:
+        print(f"[dry-run] verification --refs row:{row_id} --evidence {evidence!r}\n"
+              f"          {statement}")
+        if verdict == "MISMATCH":
+            print(f"[dry-run] finding --refs row:{row_id}  MISMATCH companion row")
+        return None
+    r = led(world, "--refs", f"row:{row_id}", "--evidence", evidence, "verification", statement,
+             actor=actor)
+    if r.returncode != 0:
+        print(f"otel-attest: attestation write REFUSED for row {row_id}: {r.stderr}",
+              file=sys.stderr)
+        return None
+    # led's generic write path does not print the new row id to stdout; recover it via a
+    # fresh --recent lookup (the just-written row is newest).
+    recent = recent_rows(world, 3)
+    new_id = recent[0] if recent else None
+    print(f"attested row {row_id}: grade={grade} verdict={verdict} model={model!r} "
+          f"-> ledger row {new_id}")
+    if verdict == "MISMATCH":
+        f_statement = (f"MISMATCH: attestation row (see verification citing row:{row_id}) "
+                        f"observed model {model!r} against expected {expected!r} "
+                        f"(session={session}); rebuttals={REBUTTALS_ANCHOR}")
+        fr = led(world, "--refs", f"row:{row_id}", "finding", f_statement, actor=actor)
+        if fr.returncode != 0:
+            print(f"otel-attest: MISMATCH finding-row write REFUSED for row {row_id}: "
+                  f"{fr.stderr}", file=sys.stderr)
+        else:
+            print(f"  + companion finding row written for row {row_id}")
+    return new_id
+
+
+# ---------------------------------------------------------------------------------------------
+# Driver
+# ---------------------------------------------------------------------------------------------
+
+
+def main(argv: list[str] | None = None) -> int:
+    ap = argparse.ArgumentParser(description=__doc__,
+                                  formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--world", type=Path, default=REPO_ROOT,
+                     help="directory with a `led` verb + deployment.json (default: this repo)")
+    ap.add_argument("--export", type=Path, default=DEFAULT_EXPORT)
+    ap.add_argument("--recent", type=int, default=50)
+    ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument("--re-attest", action="store_true")
+    ap.add_argument("--actor", default="otel-sentry")
+    ap.add_argument("--tolerance-seconds", type=float, default=3.0,
+                     help="turn-bracketing tolerance, measured from this build's own P4 "
+                          "witness runs (observed api_request-to-row-write gaps of ~0.25-2s "
+                          "under the guest-local collector's batch flush) -- a single-session "
+                          "measurement, not a hardened constant; widen only with a fresh "
+                          "measurement, per ADR-0011 Rule 3.")
+    args = ap.parse_args(argv)
+
+    if not (args.world / "led").exists():
+        raise SystemExit(f"otel-attest: {args.world} has no `led` verb -- not a world root")
+
+    export = load_export(args.export)
+    if not export:
+        print(f"otel-attest: no OTel events found in {args.export} "
+              f"(collector may be stopped, or export empty) -- every row this run considers "
+              f"gets NO attestation, never a fabricated absence claim.", file=sys.stderr)
+
+    candidate_ids = recent_rows(args.world, args.recent)
+    if not candidate_ids:
+        print("otel-attest: no candidate ledger rows found.")
+        return 0
+
+    skip_ids: set[int] = set()
+    if not args.re_attest:
+        try:
+            skip_ids = already_attested_targets(args.world, candidate_ids)
+        except MalformedStatement as e:
+            print(f"otel-attest: REFUSED -- malformed v1 attestation statement encountered "
+                  f"while scanning for already-attested rows: {e}", file=sys.stderr)
+            return 1
+
+    written = 0
+    uncovered = 0
+    for row_id in candidate_ids:
+        if row_id in skip_ids:
+            print(f"row {row_id}: skipped (already attested; pass --re-attest to redo)")
+            continue
+        full = show_row(args.world, row_id)
+        if full.get("kind") in ("verification", "finding") and full.get("actor_name") == args.actor:
+            continue  # never self-attest the sentry's own rows (spec §6 hygiene)
+        stamp_session = full.get("stamp_session", "")
+        if not stamp_session:
+            uncovered += 1
+            continue  # no session join possible -- NO attestation written (spec §6)
+        stamp_invocation = full.get("stamp_invocation") or None
+        ts_raw = full.get("ts", "")
+        try:
+            row_ts = datetime.fromisoformat(ts_raw.replace(" ", "T", 1))
+        except ValueError:
+            uncovered += 1
+            continue
+
+        grade, model, basis = grade_row(stamp_session=stamp_session,
+                                         stamp_invocation=stamp_invocation, row_ts=row_ts,
+                                         tolerance_seconds=args.tolerance_seconds, export=export)
+        if grade == "none" or model is None:
+            uncovered += 1
+            print(f"row {row_id}: no attestation (grade={grade}, session={stamp_session[:8]})")
+            continue
+
+        # Expected model: resource-attribute declared (autoharn.expected_model, session-static,
+        # spec §3), else "undeclared". Read from the first session event that carries it.
+        expected = "undeclared"
+        for rec in export:
+            if rec["session_id"] == stamp_session and rec.get("expected_model"):
+                expected = rec["expected_model"]
+                break
+        verdict = "unevaluated" if expected == "undeclared" else (
+            "match" if model == expected else "MISMATCH")
+
+        window = f"session={stamp_session}"
+        write_attestation(args.world, args.actor, row_id=row_id, model=model, grade=grade,
+                           expected=expected, verdict=verdict, session=stamp_session,
+                           basis=basis, export_basename=args.export.name, window=window,
+                           dry_run=args.dry_run)
+        written += 1
+
+    print(f"otel-attest: {written} attested, {len(skip_ids)} already-attested skipped, "
+          f"{uncovered} uncovered-no-events (reported, never fabricated).")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
