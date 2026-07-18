@@ -1004,7 +1004,12 @@ pass and every later producer:
   *which* wrong model served — that is `verdict=MISMATCH` (the substitution evidence is
   definite even though the culprit is not). If at least one candidate matches `expected=`,
   nothing is proven either way — `verdict=unevaluated`. Never `match`: ambiguity cannot
-  clear a row.
+  clear a row. *(Addendum, same day, from the fix pass's surfaced gap: with an **empty**
+  candidate set — grade `ambiguous` via join failure, no non-utility `api_request` in
+  evidence at all — the rule above would assert MISMATCH vacuously over nothing; R1 forbids
+  it. Empty candidates → `verdict=unevaluated`. Likewise `expected=undeclared` →
+  `unevaluated`, matching the unambiguous path's own treatment of an undeclared
+  expectation.)*
 - **An `ambiguous` attestation also writes the companion `finding` row**, exactly as a
   MISMATCH does and for the same stated reason — §6 calls ambiguity "the
   substitution-relevant case *par excellence*"; letting it hide in attestation bulk
