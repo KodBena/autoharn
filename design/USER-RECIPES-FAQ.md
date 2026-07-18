@@ -43,46 +43,9 @@ specs use for tracker items).
 
 **I want a workflow to iterate until clean — can an agent spawn sub-agents and loop on its
 own output until a defect list comes up empty?**
-Yes, natively, and both halves of that question have a plain answer. The looping half: a
-"fix-point" here means a script keeps calling an agent, feeding it the artifact or defect
-list as it currently stands, until a round finds nothing new to fix — and that loop lives in
-the workflow **script's own deterministic control flow** (an ordinary `while` loop wrapping
-repeated agent invocations — whether that is the `Agent` tool from an orchestrating session
-or a standalone driver script built on the Claude Agent SDK), never in any one agent's own
-sense that it is "done." Terminate on **loop-until-dry**: keep looping until K *consecutive*
-rounds each report zero new findings, not just one empty round — a defect population of
-unknown size can have a long tail a single-round counter misses. (This project uses the
-identical criterion in its own fix-point loops:
-[design/ORCH-AGENTIC-PATTERNS.md](ORCH-AGENTIC-PATTERNS.md) §3's "adversary files zero new
-rows for K consecutive rounds", and the two-role audit loop below.) The spawning half: yes,
-an agent your workflow dispatches can itself dispatch further sub-agents — nesting is not
-disabled — with a fuller, more capable agent type (e.g. `general-purpose`) available to use
-where the workflow's own default agent type is a leaner, narrower one.
-
-The load-bearing caveat, stated because it was caught failing in practice: **each round of
-the loop must spawn a genuinely fresh agent, never resume one long-lived agent across
-rounds.** An agent that carries its own prior round's context into the next round is not
-actually re-examining the current state with open eyes — it already committed to a verdict
-in an earlier turn, and tends to re-assert that verdict even when the bytes in front of it
-have since changed underneath it. This is not a hypothetical risk: on 2026-07-13, in this
-project's own two-role fix-point loop (the A:B:C fresh-context documentation-review loop,
-[ORCH-ABC-AUDIT-LOOP-RECIPE.md](ORCH-ABC-AUDIT-LOOP-RECIPE.md)'s round-2 discipline), a
-reviewer agent resumed via a follow-up message — rather than spawned fresh — repeated its
-first round's verdict *verbatim* against on-disk content that directly contradicted it. Spawn
-round N+1 as a brand-new agent invocation with no memory of round N, every round, no
-exceptions.
-
-Termination discipline is the other half worth naming up front, not discovering by billing
-surprise: a dry-count guard (K consecutive empty rounds) belongs alongside a hard budget
-guard (a round cap, a cost or token ceiling) — a workflow script is ordinary deterministic
-code, so a fix-point loop with a broken or too-loose termination condition runs to whatever
-cap you built in, burning real, billed tokens the whole way there; nothing backstops a
-runaway loop before that cap except the cap itself. No single page owns this pattern end to
-end yet; [design/ORCH-AGENTIC-PATTERNS.md](ORCH-AGENTIC-PATTERNS.md) works out the
-loop-until-dry criterion in more depth, and
-[ORCH-ABC-AUDIT-LOOP-RECIPE.md](ORCH-ABC-AUDIT-LOOP-RECIPE.md) is a complete worked example of
-exactly this shape — two agent roles, fresh-fork-per-round, a two-round cap, and a named
-escalation path for when the loop does not converge.
+This recipe now has a formal shape too — both live in
+[USER-SHAPED-RECIPES-FAQ.md](USER-SHAPED-RECIPES-FAQ.md#the-abc-fresh-context-fix-point-loop)
+(`design/workflows/faq-abc-fixpoint-loop.toml`, the first factored specimen).
 
 **My workflow script just crashed / hung / did something baffling — is this a known
 shape?** Maybe — check first. Five gotchas have each bitten this project's own
@@ -129,122 +92,15 @@ adopting this for anything you'd actually rely on. Tool docs and vendoring/split
 
 **How do I prove two phases ran in the right order, instead of trusting an agent's
 say-so?**
-Split the work into two separately-dispatched agents and let the ledger's append-only row ids
-do the proving, rather than trusting either agent's narrative about which one went first. The
-pattern: dispatch a document-only agent whose sole output is the docs describing what changed
-and why; the orchestrator itself then writes a ledger row citing those produced docs, once it
-has read them; only after that row lands, in a wholly separate dispatch, is a fix-only agent
-created — an agent that, by construction, did not exist yet at the moment the documentation
-row landed. Because ledger rows are append-only and numbered in issuance order, a reader who
-was never in the room can verify the same three facts a live witness saw: the docs landed, the
-orchestrator's row citing them landed next, and the fix agent's own row landed only after
-that — order as a structural fact about row ids, never a self-report from either agent
-claiming it went first.
-
-Honest limit: this proves the ORDER in which the ledgered acts happened, not that the fix
-agent actually read the documents it was dispatched after — a fix-only agent created after a
-documentation row could still ignore it. Pair the sequencing with an ordinary review step that
-checks the fix's content against the docs it was supposed to follow; sequencing alone answers
-"did this happen in the right order", not "was the later act actually informed by the earlier
-one".
-
-Invented downstream, not here: this shape was invented by the autoharn-panel deployment's own
-orchestrator, in its own ledger (rows 401, 415, and 1144 there, named here only as history),
-and is carried upstream into this project's record via decision row 1295 (2026-07-17 "two-spy
-synthesis" — this project's own name for a maintainer-dispatched pair of independent, read-only
-observer sessions ["spies"] reporting separately on the same downstream deployment, whose two
-reports the orchestrator then reconciled into one record; every later mention of "two-spy
-synthesis" or "the spy" on this page is this same act, cited by its row number) — the underlying
-panel session transcripts remain local evidence per this project's auditability ruling; the
-ledger row is the citable record.
+This recipe now has a formal shape too — both live in
+[USER-SHAPED-RECIPES-FAQ.md](USER-SHAPED-RECIPES-FAQ.md#the-doc-then-fix-ordering-proof)
+(`design/workflows/faq-doc-then-fix-sequencing.toml`).
 
 **How do I record, defeasibly, that a close's promised commit actually landed in the tree?**
-Pair the work item with a second one. Whenever closing a work item necessarily modifies the
-tracked source tree, open a companion item at the same time whose entire resolution IS the
-git commit that captures the promised tree state. The first item closes on its own merits,
-with one of the two review-bearing constructors (`--review-witness` or `--review-deferred`),
-because it carries judgment. The companion closes only after the commit exists, with the
-third constructor built for exactly this shape — s38, the kernel-lineage delta that added it
-(`kernel/lineage/s38-bookkeeping-close.sql`):
-
-    ./led work close <slug>-commit shipped --review-bookkeeping --witness commit:<sha>
-
-The CLI machine-checks the claim at construction: the witness must be commit-shaped, and the
-commit must actually exist in this world's repository (`git cat-file` is run for you — a
-nonexistent or non-commit object refuses with a teach-text). The pairing gives you a
-defeasible, queryable record that the promised commit landed, without manufacturing a review
-obligation that has nothing in it to review.
-
-**Show me it actually working, not just the shape.** WITNESSED, on a disposable scratch
-[world](../GLOSSARY.md#world) scaffolded specifically for this walkthrough and torn down after
-(`bootstrap/new-project.sh <dir> --new-world faqwit0718 --db toy --host 192.168.122.1` — the
-live project's own ledger was never touched; s38 is authored but not applied to any pre-existing
-world under the runs-are-strictly-linear ruling, so a fresh `--new-world` scaffold, which carries
-s38 in its own birth chain, is the sanctioned way to exercise it live). Two work items, opened
-and claimed, then closed as the pairing convention prescribes — the judgment item first, with an
-ordinary review-bearing constructor:
-```
-$ ./led work open faq-demo "demo work item for the pairing-convention FAQ transcript"
-led: row 7 written.
-$ ./led work open faq-demo-commit "companion bookkeeping item: resolution IS the landing commit for faq-demo" --refs work:faq-demo
-led: row 8 written.
-$ ./led work claim faq-demo && ./led work claim faq-demo-commit
-led: row 9 written.
-led: row 10 written.
-$ git init -q && git commit -q -m "faq-demo: the commit faq-demo-commit's bookkeeping close will witness" --allow-empty
-$ SHA=$(git rev-parse HEAD)   # 04de3a3589f0e7c65c7bd1346a28b794376cc5fb, this scratch world's own repo
-$ ./led work close faq-demo shipped --witness "note:DEMO.txt committed as $SHA" --review-witness "self:demo close for FAQ transcript"
-led: row 13 written.
-$ ./led work close faq-demo-commit shipped --review-bookkeeping --witness "commit:$SHA"
-led: row 14 written.
-```
-`./led show 14` confirms the row landed exactly as the spec describes — `work_review_disposition`
-is `bookkeeping`, and `work_review_ref` carries the commit witness verbatim, not a paraphrase:
-```
-work_slug                     | faq-demo-commit
-work_resolution               | shipped
-work_witness                  | commit:04de3a3589f0e7c65c7bd1346a28b794376cc5fb
-work_review_disposition       | bookkeeping
-work_review_ref               | commit:04de3a3589f0e7c65c7bd1346a28b794376cc5fb
-```
-Both named refusal shapes fire exactly as documented, also WITNESSED live on the same scratch
-world: a witness citing a commit that does not exist in the world's own repository —
-```
-$ ./led work close faq-demo2 shipped --review-bookkeeping --witness "commit:deadbeefdead"
-led work close: REFUSED -- --review-bookkeeping's --witness commit 'deadbeefdead'
-  failed the COMMIT-EXISTENCE check (s38 Element 3: 'git cat-file -e
-  deadbeefdead^{commit}' against <world-dir> did not resolve). Two honest
-  alternatives:
-    --review-witness <ref>   a review already exists; cite it
-    --review-deferred        this close act itself becomes the review obligation
-```
-— and stacking `--review-bookkeeping` on top of a second review-disposition flag in the same
-close act:
-```
-$ ./led work close faq-demo2 shipped --review-bookkeeping --review-witness "self:x" --witness "commit:$SHA"
-led work close: REFUSED -- --review-witness, --review-deferred, and
-  --review-bookkeeping are the THREE CONSTRUCTORS of a review disposition;
-  exactly ONE, never more than one, in one close act (s29 -- the earlier kernel-lineage
-  delta that first made a review disposition mandatory, `kernel/lineage/s29-obligation-item-
-  key-and-typed-close.sql` -- Element B, s38 Element 2).
-```
-Both refuse at construction (exit 1), cleanly, with the teach-text this section already
-paraphrases above — nothing here was reasoned about without being run.
-
-Honest limits, stated so the pattern is not over-trusted: a bookkeeping close claims ONLY
-"this commit exists" — nothing about its content, correctness, or completeness; the paired
-JUDGMENT item's own review is where content is vouched for. And the constructor is
-deliberately a closed category: if you find yourself reaching for `--review-bookkeeping` on
-a close that carries any judgment at all, that is category creep — the exact drift the
-`work_bookkeeping_closes` view exists to make visible (every bookkeeping close, forever, one
-query; a growing view full of judgment-bearing closes is a finding to report upstream, never
-a local norm to settle into).
-
-Invented downstream, not here: the pairing convention comes from the autoharn-panel
-deployment's own orchestrator (its ledger rows 407 and 408, named here only as history),
-carried upstream via decision row 1295 (2026-07-17 two-spy synthesis); the s38 constructor
-(`design/FABLE-BOOKKEEPING-CLOSE-SPEC.md`, maintainer-ratified) is what made the convention's
-closes representable honestly instead of forcing rubber-stamp countersigns.
+This recipe now has a formal shape too — both live in
+[USER-SHAPED-RECIPES-FAQ.md](USER-SHAPED-RECIPES-FAQ.md#the-bookkeeping-close-pairing-convention)
+(`design/workflows/faq-bookkeeping-close-pairing.toml`), including the WITNESSED live transcript
+that used to live here.
 
 ## Declaring things on the ledger
 

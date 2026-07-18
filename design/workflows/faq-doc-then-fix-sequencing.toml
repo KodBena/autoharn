@@ -1,0 +1,67 @@
+# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
+#   first-seen : 2026-07-18T15:27:43Z
+#   last-change: 2026-07-18T15:27:43Z
+#   contributors: ab5d5bab/main
+# <<< PROVENANCE-STAMP <<<
+
+# Transcribed from design/USER-RECIPES-FAQ.md, "Workflow patterns" section, entry "How do I
+# prove two phases ran in the right order, instead of trusting an agent's say-so?" -- a real
+# pattern this project's own record already carries (autoharn-panel ledger rows 401, 415, 1144,
+# named there only as history; carried upstream via decision row 1295, this project's own record
+# of the pattern). The pattern splits work into a document-only dispatch, an orchestrator-authored
+# ledger row citing what that dispatch produced, and a fix-only dispatch created only after that
+# citation row lands -- letting the ledger's append-only, monotonically-issued row ids do the
+# proving instead of either agent's own narrative about which one went first.
+#
+# NO MISFIT recorded for this specimen -- unlike Specimens C and the sibling faq-abc-fixpoint-loop
+# specimen, this pattern has no loop, no scheduling, and no field the v0 grammar lacks a home for;
+# it is a strict three-phase depends_on chain, which is exactly the shape v0's four fields already
+# express. The one thing that does NOT belong in the TOML is the recipe's own honest epistemic
+# limit (order-proof is not content-proof) -- that caveat is not a control-flow constraint the
+# grammar was ever meant to carry, so it stays prose-only; see the contrast note in
+# design/USER-SHAPED-RECIPES-FAQ.md for where that limit is stated.
+
+[[phases]]
+name = "doc-authoring"
+depends_on = []
+
+[[phases]]
+name = "ledger-citation"
+depends_on = ["doc-authoring"]
+
+[[phases]]
+name = "fix-authoring"
+depends_on = ["ledger-citation"]
+
+[roles.doc-authoring]
+authors = "the orchestrator, who dispatches a document-only agent whose sole output is the docs describing what changed and why"
+implements = "the document-only agent -- by construction, it produces documentation and nothing else in this phase"
+
+[roles.ledger-citation]
+authors = "the orchestrator -- and only the orchestrator, once it has itself read the produced docs"
+implements = "the orchestrator, writing an ordinary ledger row (e.g. a decision row) citing the docs produced in doc-authoring"
+
+[roles.fix-authoring]
+authors = "the orchestrator, who dispatches a fix-only agent in a wholly separate dispatch -- one that, by construction, did not exist yet at the moment the ledger-citation row landed"
+implements = "the fix-only agent"
+
+[convergence.doc-authoring]
+done = "the docs describing what changed and why have landed (committed or otherwise durably recorded)"
+escalation_event = "none typed for this phase alone -- a stalled or failed doc-authoring dispatch is an ordinary dispatch failure, not a sequencing-specific escalation"
+
+[convergence.ledger-citation]
+done = "the orchestrator's own ledger row citing the produced docs lands, written only once the orchestrator has actually read them"
+escalation_event = "none typed for this phase alone -- whether the orchestrator genuinely read the docs before citing them is not mechanically checkable (see this recipe's own honest limit, carried in prose, not in this field); no automated escalation exists for a premature or ungrounded citation"
+
+[convergence.fix-authoring]
+done = "the fix-only agent's own ledger row(s) land, and by construction the agent's own dispatch postdates the ledger-citation row's id"
+escalation_event = "none typed for this phase alone -- order is enforced structurally by the ledger's own append-only, monotonically-issued row ids, not by a runtime convergence check; a reader verifies the order after the fact by comparing row ids, which is the whole point of the pattern"
+
+[landing_zones.doc-authoring]
+zone = "the repository's tracked source tree (the docs themselves, committed)"
+
+[landing_zones.ledger-citation]
+zone = "the ledger -- an ordinary ledger row (this project's own worked instance used a decision row) citing the docs produced in doc-authoring"
+
+[landing_zones.fix-authoring]
+zone = "the repository's tracked source tree (the fix itself, committed) plus the ledger row(s) the fix-only agent's own dispatch and close produce"

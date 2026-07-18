@@ -1,0 +1,83 @@
+# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
+#   first-seen : 2026-07-18T15:28:00Z
+#   last-change: 2026-07-18T15:28:00Z
+#   contributors: ab5d5bab/main
+# <<< PROVENANCE-STAMP <<<
+
+# Transcribed from design/USER-RECIPES-FAQ.md, "Workflow patterns" section, entry "How do I
+# record, defeasibly, that a close's promised commit actually landed in the tree?" -- the
+# bookkeeping-close pairing convention (invented downstream by the autoharn-panel deployment's own
+# orchestrator, its ledger rows 407/408, carried upstream via decision row 1295; the s38
+# kernel-lineage delta, kernel/lineage/s38-bookkeeping-close.sql, is what made the convention's
+# closes representable honestly). The FAQ's own WITNESSED transcript (a real, disposable
+# --new-world scaffold run, torn down after) is the source this specimen transcribes: two work
+# items opened together, both claimed, the judgment item closed first with an ordinary
+# review-bearing constructor, then the companion closed with --review-bookkeeping and a
+# commit-shaped --witness the CLI machine-checks (git cat-file) at construction time.
+#
+# NO MISFIT recorded for this specimen -- a strict four-phase depends_on chain, exactly the shape
+# v0's four fields already express; the one thing the TOML does not, and should not, try to carry
+# is the convention's own governance caveat (--review-bookkeeping is a deliberately closed
+# category -- reaching for it on a close that carries any judgment at all is category creep, per
+# the FAQ's own text), a policy/judgment statement, not a control-flow constraint -- it stays
+# prose-only, named in the contrast note in design/USER-SHAPED-RECIPES-FAQ.md.
+
+[[phases]]
+name = "open-items"
+depends_on = []
+
+[[phases]]
+name = "claim-items"
+depends_on = ["open-items"]
+
+[[phases]]
+name = "close-judgment"
+depends_on = ["claim-items"]
+
+[[phases]]
+name = "close-companion"
+depends_on = ["close-judgment"]
+
+[roles.open-items]
+authors = "the operator/orchestrator opening both work items together: the judgment item, and a companion item citing it (--refs work:<slug>) whose entire resolution IS the promised commit"
+implements = "the operator/orchestrator, via ./led work open (judgment item) and ./led work open ... --refs work:<slug> (companion item)"
+
+[roles.claim-items]
+implements = "the operator/orchestrator, via ./led work claim on both items"
+
+[roles.close-judgment]
+authors = "whichever principal's judgment the first item's close actually carries -- the FAQ's own text: 'the first item closes on its own merits... because it carries judgment'"
+implements = "the operator/orchestrator, via ./led work close <slug> shipped with exactly one of the two ordinary review-disposition constructors, --review-witness or --review-deferred"
+reviews = "the review disposition itself IS the judgment content of this phase -- whichever of the two ordinary constructors is used, per the FAQ's own worked example (--review-witness self-review, in the scratch-world transcript)"
+
+[roles.close-companion]
+implements = "the operator/orchestrator, via ./led work close <slug>-commit shipped --review-bookkeeping --witness commit:<sha>"
+reviews = "explicitly none -- the FAQ's own text: '--review-bookkeeping claims ONLY this commit exists -- nothing about its content, correctness, or completeness'; the CLI machine-checks the claim structurally (COMMIT-EXISTENCE, s38 Element 3) rather than via a judgment review"
+
+[convergence.open-items]
+done = "both work_opened rows exist -- the judgment item and the companion item citing it"
+escalation_event = "none typed for this phase alone -- an open refused for an ordinary reason (e.g. a duplicate slug) is an ordinary CLI refusal, not a pairing-specific escalation"
+
+[convergence.claim-items]
+done = "both work_claimed rows exist"
+escalation_event = "none typed for this phase alone -- a claim refused because a slug is already claimed or closed is an ordinary CLI refusal, not a pairing-specific escalation"
+
+[convergence.close-judgment]
+done = "a work_closed row exists for the judgment item, resolution=shipped, carrying exactly one review-disposition constructor (--review-witness or --review-deferred)"
+escalation_event = "REFUSED at construction if a second review-disposition flag is stacked in the same close act (s29/s38 Element 2: exactly one of --review-witness, --review-deferred, --review-bookkeeping, never more than one)"
+
+[convergence.close-companion]
+done = "a work_closed row exists for the companion item, resolution=shipped, --review-bookkeeping, with a --witness commit:<sha> the CLI has confirmed exists in this world's own repository"
+escalation_event = "REFUSED at construction if the witness commit does not exist in this world's repository (the COMMIT-EXISTENCE check, s38 Element 3, git cat-file -e <sha>^{commit}), or if --review-bookkeeping is stacked with a second review-disposition flag (s38 Element 2, same rule close-judgment's escalation_event names)"
+
+[landing_zones.open-items]
+zone = "the ledger -- the two work_opened rows (judgment item, companion item)"
+
+[landing_zones.claim-items]
+zone = "the ledger -- the two work_claimed rows"
+
+[landing_zones.close-judgment]
+zone = "the ledger -- the judgment item's work_closed row, carrying its review disposition"
+
+[landing_zones.close-companion]
+zone = "the ledger -- the companion item's work_closed row, carrying work_review_disposition=bookkeeping and work_review_ref=commit:<sha>; the commit itself lands in the world's own git repository, which the close act's construction-time check confirms rather than merely asserts"
