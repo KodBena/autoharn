@@ -1,0 +1,66 @@
+== scaffolding WORLD PRE (chain ends s45-standing-lifecycle.sql) ==
+=== detect-negative-pre-s44 ===
+  [ok] s44 .detect.sql reads f on the pre-s44 (s45-head) chain
+
+== scaffolding WORLD S44 (chain ends s44-model-identity-attestation.sql) ==
+=== detect-positive-s44 ===
+  [ok] s44 .detect.sql reads t on the s44-applied chain
+
+=== target-row-accepted ===
+  [ok] target={'row_id': 4, 'message': None, 'sqlstate': None, 'refusal_id': None, 'disposition': 'accepted'}
+
+=== well-formed-accepted ===
+  [ok] good={'row_id': 5, 'message': None, 'sqlstate': None, 'refusal_id': None, 'disposition': 'accepted'}
+
+=== refused-missing-target ===
+  [ok] missing-target: 23514 'new row for relation "ledger" violates check constraint "attest_row_id_kind_shape"'
+
+=== refused-empty-model ===
+  [ok] empty-model: 23514 'new row for relation "ledger" violates check constraint "attest_model_nonempty"'
+
+=== refused-bad-grade-vocab ===
+  [ok] bad-grade-vocab: 23514 'new row for relation "ledger" violates check constraint "attest_grade_check"'
+
+=== refused-bad-verdict-vocab ===
+  [ok] bad-verdict-vocab: 23514 'new row for relation "ledger" violates check constraint "attest_expected_verdict_coupling"'
+
+=== refused-expected-verdict-decoupled ===
+  [ok] expected-verdict-decoupled: 23514 'new row for relation "ledger" violates check constraint "attest_expected_verdict_coupling"'
+
+=== refused-fk-nonexistent-target ===
+  [ok] fk-nonexistent-target: 23503 'insert or update on table "ledger" violates foreign key constraint "ledger_attest_row_id_fkey"'
+
+=== refused-non-kind-carries-attest-col ===
+  [ok] {'row_id': None, 'message': 'new row for relation "ledger" violates check constraint "attest_row_id_kind_shape"', 'sqlstate': '23514', 'refusal_id': 19, 'disposition': 'refused'}
+
+=== supersession-accepted ===
+  [ok] {'row_id': 20, 'message': None, 'sqlstate': None, 'refusal_id': None, 'disposition': 'accepted'}
+
+=== model_attestations-shows-successor-only ===
+  [ok] model_attestations rows: '20|m1-corrected'
+
+=== hash-coverage-gate-green ===
+  [ok] hash-coverage-gate: clean -- compute_row_hash serializes all 65 ledger columns (everything except row_hash, the one named exclusion); chain head s46-credited-views.sql. A future column-adding delta must re-issue the serializer in the same delta or this gate goes red.
+
+=== hash-coverage-gate-red-on-inject ===
+  [ok] s no hash (the ledger-row-1449
+hazard class this gate closes). Fix: re-issue compute_row_hash in the SAME delta that
+changes the column set, then re-run this gate.
+
+  !! MISSING from the serialization: ledger column 'zzz_s44fx' is OUTSIDE the hash chain -- a schema-owner tamper of it changes no hash
+
+=== kind-shape-manifest-gate-green ===
+  [ok] kind-shape-manifest-gate: clean -- 40 MANIFEST row(s) + 1 VALUE_PARTITION_MANIFEST row(s) + 1 FORBIDDEN_ON_KIND_MANIFEST row(s) + 1 CROSS_COLUMN_COUPLING_MANIFEST row(s) match the live catalog exactly, 26 core column(s) accounted for, no unlicensed payload column. ✓
+
+=== kind-shape-manifest-gate-red-on-inject ===
+  [ok]  'zzz_s44fx2': not in CORE_COLUMNS (structural/universal) and not in MANIFEST (kind-scoped payload) -- an unlicensed column. Discharge paths: (a) add a MANIFEST row naming its (kind(s), arity, mechanism, reason) if it is genuinely kind-scoped payload, or (b) remove the column if it should not exist.
+
+=== ledger-reader-allowlist-clean ===
+  [ok]  function zz_set_row_hash                  ALLOWLISTED: row-hash chain writer (s26) — every row must chain, superseded or not.
+
+ledger-reader-allowlist: clean -- every ledger reader is a declared type (current-truth factored through ledger_current, or named on the history allowlist with its reason).
+
+=== model-attestations-classifies-clean-no-entry ===
+  [ok] model_attestations appears in the classified output, with no ALLOWLIST reason
+
+all s44-model-identity-attestation cases WITNESSED clean.

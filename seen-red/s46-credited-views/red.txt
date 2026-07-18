@@ -1,0 +1,45 @@
+== scaffolding WORLD PRE (chain ends s44-model-identity-attestation.sql) ==
+=== detect-negative-pre-s46 ===
+  [ok] s46 .detect.sql reads f on the pre-s46 (s44-head) chain
+
+== scaffolding WORLD S46 (chain ends s46-credited-views.sql) ==
+=== detect-positive-s46 ===
+  [ok] s46 .detect.sql reads t on the s46-applied chain
+
+=== grant-accepted ===
+  [ok] {'row_id': 4, 'message': None, 'sqlstate': None, 'refusal_id': None, 'disposition': 'accepted'}
+
+=== W6-absence-never-defeats ===
+  [ok] pre-attestation credited_current still shows row 5: '5'
+
+=== attestation-accepted ===
+  [ok] {'row_id': 6, 'message': None, 'sqlstate': None, 'refusal_id': None, 'disposition': 'accepted'}
+
+=== W1-model-defeated-rows-with-cause ===
+  [ok] model_defeated_rows: '5|6|4|observed-model-x|exact-command'
+
+=== W1-credited-current-excludes-defeated-row ===
+  [ok] credited_current for 5: '' (expect empty)
+
+=== W1-ledger-current-still-shows-row ===
+  [ok] ledger_current for 5: '5'
+
+=== floor-model-defeated-matches ===
+  [ok] floor atoms: ['credited(1)', 'credited(2)', 'credited(3)', 'credited(4)', 'credited(6)', 'model_defeated(5,6,4)']
+
+=== floor-credited-excludes-target ===
+  [ok] floor atoms: ['credited(1)', 'credited(2)', 'credited(3)', 'credited(4)', 'credited(6)', 'model_defeated(5,6,4)']
+
+=== W2-withdrawal-accepted ===
+  [ok] {'row_id': 7, 'message': None, 'sqlstate': None, 'refusal_id': None, 'disposition': 'accepted'}
+
+=== W2-implicit-lapse-recredits ===
+  [ok] credited_current after grant withdrawal: '5'
+
+=== W2-model-defeated-rows-empty-after-withdraw ===
+  [ok] model_defeated_rows count after withdrawal: '0'
+
+=== judge-defeat-AGREE-after-withdrawal ===
+  [ok] judge output: ['AGREE', "asp ['credited(1)', 'credited(2)', 'credited(3)', 'credited(5)', 'credited(6)', 'credited(7)']", "sql ['credited(1)', 'credited(2)', 'credited(3)', 'credited(5)', 'credited(6)', 'credited(7)']"]
+
+all s46-credited-views cases WITNESSED clean.

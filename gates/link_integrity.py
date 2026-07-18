@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-11T14:37:38Z
-#   last-change: 2026-07-12T20:27:33Z
-#   contributors: e4410ef6/main, 3c50e030/main
+#   last-change: 2026-07-18T09:27:25Z
+#   contributors: e4410ef6/main, 3c50e030/main, ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
 """link_integrity — the class-not-instance fix for the maintainer's 2026-07-11 legibility
@@ -45,6 +45,20 @@ human might read." Two EXCLUSIONS, both principled and both printed in every run
 ANCHORS (`#fragment` after a resolving path): v1 does not verify the fragment resolves to a real
 heading/anchor in the target — flagged in a separate, NON-BLOCKING report section, never failing
 the gate on a bad anchor alone (declared residue, not a silent gap).
+
+GITIGNORED-LOCAL TARGETS (found authoring kernel/lineage/s44-model-identity-attestation.sql,
+2026-07-18): a link resolving under `/local/` (`.gitignore`'s own words: "operator-local notes
+... never tracked") is unverifiable from `os.path.exists` on ANY checkout that has not locally
+installed whatever `local/` records (e.g. `local/OTEL-COLLECTOR.md`, cited by
+ORCH-CAPABILITIES.md, exists only on a host that has actually installed the OTel collector) --
+this is NOT the class this gate exists to catch (a doc pointing somewhere that can never exist,
+the maintainer's 2026-07-11 indictment), it is a doc pointing at *evidence the operator's own
+convention deliberately keeps out of git*. Flagged in the SAME NON-BLOCKING report section as
+anchors (never counted toward `broken`, never silently dropped either) -- a target under
+`local/` that happens to ALSO be missing on a host that HAS installed the referenced tooling
+would still need a human's eyes (this gate cannot distinguish "not installed yet" from "typo'd
+the filename" for an untracked path), so the honest move is informational, not silent
+exclusion.
 
 Exit 0 clean (broken-path violations only); exit 1 listing every one. Default target is THIS
 checkout (autoharn) regardless of caller's cwd -- ROOT is derived from this file's own location,
@@ -183,6 +197,7 @@ def main() -> int:
 
     broken: list[tuple[str, int, str]] = []      # (rel, line, target)
     anchor_flags: list[tuple[str, int, str]] = []  # (rel, line, target) — informational only
+    local_flags: list[tuple[str, int, str]] = []   # (rel, line, target) — gitignored /local/, informational only
     total_links = 0
 
     for rel in scope:
@@ -198,7 +213,11 @@ def main() -> int:
                 path_part, anchor = classified
                 resolved = resolve(path, path_part)
                 if not os.path.exists(resolved):
-                    broken.append((rel, ln, m.group(1)))
+                    rel_to_root = os.path.relpath(resolved, ROOT)
+                    if rel_to_root == "local" or rel_to_root.startswith("local" + os.sep):
+                        local_flags.append((rel, ln, m.group(1)))
+                    else:
+                        broken.append((rel, ln, m.group(1)))
                 elif anchor and os.path.isfile(resolved) and resolved.endswith('.md'):
                     anchor_flags.append((rel, ln, m.group(1)))
 
@@ -216,6 +235,15 @@ def main() -> int:
             print(f"    {rel}:{ln}  {target}")
         if len(anchor_flags) > 10:
             print(f"    ... +{len(anchor_flags) - 10} more")
+
+    if local_flags:
+        print(f"\n  {len(local_flags)} link(s) into /local/ (gitignored operator evidence, "
+              f"never tracked -- NOT a failure; a host that has not locally installed the "
+              f"referenced tooling will not have the target, by the project's own convention):")
+        for rel, ln, target in local_flags[:10]:
+            print(f"    {rel}:{ln}  {target}")
+        if len(local_flags) > 10:
+            print(f"    ... +{len(local_flags) - 10} more")
 
     if broken:
         print(f"\nlink-integrity: {len(broken)} broken link(s) — target does not exist on disk:\n")

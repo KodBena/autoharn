@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-15T20:19:45Z
-#   last-change: 2026-07-18T05:43:54Z
+#   last-change: 2026-07-18T09:09:24Z
 #   contributors: a857c93d/main, 9a17b6b9/main, ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -158,7 +158,26 @@ CHAIN = [
     "s42-row-hash-full-coverage.sql",
     "s43-typed-verdict-write-boundary.sql",
     "s45-standing-lifecycle.sql",
+    "s44-model-identity-attestation.sql",
+    "s46-credited-views.sql",
 ]
+# s46 (kernel/lineage/s46-credited-views.sql, design/FABLE-DEFEAT-PIPELINE-SPEC.md §8) extends
+# this SAME gate's scratch CHAIN so its two views are exercised by the scratch apply. It ships
+# ZERO new columns and ZERO new kinds -- no MANIFEST/VALUE_PARTITION_MANIFEST/
+# FORBIDDEN_ON_KIND_MANIFEST edit, verified live by running this gate against the extended
+# chain and reading the SAME seven new MANIFEST rows (s44's) as the only change, no eighth.
+# s44 (kernel/lineage/s44-model-identity-attestation.sql, design/FABLE-OTEL-SENTRY-SPEC.md §8)
+# extends this SAME gate's scratch CHAIN and ships SEVEN new kind-scoped columns for the new
+# model_identity_attested kind (six two-way, one one-way -- attest_expected is legitimately
+# NULL when the session declared no expectation), each a new MANIFEST row below. The kind's
+# own re-issued ledger_kind_check and the compute_row_hash/ledger_current/
+# countersigned_in_force re-issues are invisible to THIS gate's constraint classifier by
+# construction (same posture as every prior widening delta). NOTE ON CHAIN ORDER: this
+# gate's CHAIN is a scratch-apply ORDER, not a claim about the real birth chain's eventual
+# numbering -- s44/s46 apply here immediately after s45 (the real lineage head at their
+# authoring time), matching bootstrap/new-project.sh's own LINEAGE_CHAIN order for the same
+# reason (kernel/lineage/s44-model-identity-attestation.sql's own header, "THE HEAD-BODY
+# RULE").
 # s45 (kernel/lineage/s45-standing-lifecycle.sql, ratified spec design/FABLE-STANDING-
 # LIFECYCLE-SPEC.md, maintainer batch ratification ledger row 1481) extends this SAME gate's
 # scratch CHAIN and ships NO new column and NO new kind -- its one MANIFEST-relevant act is a
@@ -515,6 +534,52 @@ MANIFEST = [
                 "'r.work_review_disposition IS NULL THEN RAISE...') -- kinds widened here to "
                 "record that, though (per this row's own mechanism=trigger) no catalog CHECK "
                 "verifies it; the trigger source is the actual enforcement, same as before."),
+    dict(column="attest_row_id", kinds=("model_identity_attested",),
+         arity="two-way", mechanism="CHECK", constraint="attest_row_id_kind_shape",
+         defining_delta="s44-model-identity-attestation.sql",
+         reason="the ATTESTED row -- mandatory on every model_identity_attested row (the kind "
+                "is born in the same delta; vacuous ADD CONSTRAINT validation), forbidden "
+                "elsewhere; self-referencing FK to ledger(id) makes the target's existence "
+                "structural."),
+    dict(column="attest_model", kinds=("model_identity_attested",),
+         arity="two-way", mechanism="CHECK", constraint="attest_model_kind_shape",
+         defining_delta="s44-model-identity-attestation.sql",
+         reason="the observed model string, verbatim from the OTel event -- mandatory; "
+                "non-emptiness is the separate attest_model_nonempty value CHECK."),
+    dict(column="attest_grade", kinds=("model_identity_attested",),
+         arity="two-way", mechanism="CHECK", constraint="attest_grade_kind_shape",
+         defining_delta="s44-model-identity-attestation.sql",
+         reason="the closed join-set confidence grade -- mandatory; its four-member vocabulary "
+                "(exact-command/turn-bracketed/session-scoped/ambiguous) is the separate "
+                "kind-free attest_grade_check value CHECK -- kernel-structural (it enumerates "
+                "this design's own join algebra, like s43's refusal_surface)."),
+    dict(column="attest_verdict", kinds=("model_identity_attested",),
+         arity="two-way", mechanism="CHECK", constraint="attest_verdict_kind_shape",
+         defining_delta="s44-model-identity-attestation.sql",
+         reason="the closed verdict (match/mismatch/unevaluated, lowercase) -- mandatory; its "
+                "vocabulary is the separate attest_verdict_check value CHECK; structurally "
+                "coupled to attest_expected by the separate kind-free "
+                "attest_expected_verdict_coupling CHECK."),
+    dict(column="attest_expected", kinds=("model_identity_attested",),
+         arity="one-way", mechanism="CHECK", constraint="attest_expected_kind_shape",
+         defining_delta="s44-model-identity-attestation.sql",
+         reason="the declared expected model -- legitimately NULL when the session declared "
+                "none, so the correlation cannot be an iff; one-way forecloses it appearing on "
+                "a non-model_identity_attested row only. Non-emptiness when present is the "
+                "separate attest_expected_nonempty value CHECK; the expected/verdict coupling "
+                "is the separate attest_expected_verdict_coupling CHECK, out of THIS "
+                "manifest's (kind,column,arity) scope by the classifier's own first test (it "
+                "carries no bare IS NULL/IS NOT NULL correlate to kind alone)."),
+    dict(column="attest_session", kinds=("model_identity_attested",),
+         arity="two-way", mechanism="CHECK", constraint="attest_session_kind_shape",
+         defining_delta="s44-model-identity-attestation.sql",
+         reason="the OTel session.id -- mandatory; non-emptiness is the separate "
+                "attest_session_nonempty value CHECK."),
+    dict(column="attest_basis", kinds=("model_identity_attested",),
+         arity="two-way", mechanism="CHECK", constraint="attest_basis_kind_shape",
+         defining_delta="s44-model-identity-attestation.sql",
+         reason="the comma-separated join keys used -- mandatory; non-emptiness is the "
+                "separate attest_basis_nonempty value CHECK."),
 ]
 MANIFEST_BY_COLUMN = {row["column"]: row for row in MANIFEST}
 assert len(MANIFEST_BY_COLUMN) == len(MANIFEST), "duplicate column in MANIFEST -- SSOT violated"
@@ -565,6 +630,27 @@ FORBIDDEN_ON_KIND_MANIFEST = [
 FORBIDDEN_BY_KEY = {(row["column"], row["kind"]): row for row in FORBIDDEN_ON_KIND_MANIFEST}
 assert len(FORBIDDEN_BY_KEY) == len(FORBIDDEN_ON_KIND_MANIFEST), \
     "duplicate (column, kind) in FORBIDDEN_ON_KIND_MANIFEST -- SSOT violated"
+
+# ================================================================================================
+# CROSS_COLUMN_COUPLING_MANIFEST -- a FIFTH manifest, for CROSS-COLUMN KIND-SCOPED COUPLING
+# CHECKs (see the _CROSS_COLUMN_COUPLING_RE comment above): two ALREADY kind-scoped payload
+# columns whose PRESENCE (not value) is structurally coupled to each other, gated by one kind.
+# Keyed by constraint name (not by either column alone -- both already hold their own
+# MANIFEST_BY_COLUMN row; this manifest tracks the ADDITIONAL relation between them). First
+# instance: s44's attest_expected_verdict_coupling.
+# ================================================================================================
+CROSS_COLUMN_COUPLING_MANIFEST = [
+    dict(constraint="attest_expected_verdict_coupling", kind="model_identity_attested",
+         col_a="attest_expected", col_b="attest_verdict", coupled_value="unevaluated",
+         defining_delta="s44-model-identity-attestation.sql",
+         reason="design/FABLE-OTEL-SENTRY-SPEC.md §8.2's fixed structural rule: "
+                "(attest_expected IS NULL) = (attest_verdict = 'unevaluated') -- an unevaluated "
+                "verdict with a declared expectation, or a match/mismatch claim with nothing to "
+                "match against, is unrepresentable."),
+]
+CROSS_COLUMN_BY_CONNAME = {row["constraint"]: row for row in CROSS_COLUMN_COUPLING_MANIFEST}
+assert len(CROSS_COLUMN_BY_CONNAME) == len(CROSS_COLUMN_COUPLING_MANIFEST), \
+    "duplicate constraint in CROSS_COLUMN_COUPLING_MANIFEST -- SSOT violated"
 
 # CORE_COLUMNS: every OTHER live ledger column, confirmed NOT kind-scoped (see module docstring's
 # "MANIFEST SCOPE" paragraph for how amends/amends_scope/answers were checked). A column that is
@@ -679,6 +765,22 @@ _PARTIAL_VALUE_RE = re.compile(r"(\w+) IS DISTINCT FROM '([^']+)'(?:::\w+)?\)\s*
 # additional, orthogonal correlation, exactly as VALUE_PARTITION_MANIFEST layers under a
 # whole-column row).
 _FORBIDDEN_ON_KIND_RE = re.compile(r"\((\w+) IS NULL\)\s*OR\s*\(kind <> '([^']+)'")
+# s44's attest_expected_verdict_coupling, the FIFTH idiom this codebase's kind-shape CHECKs use
+# (found authoring s44, kernel/lineage/s44-model-identity-attestation.sql): CROSS-COLUMN
+# KIND-SCOPED COUPLING, `kind <> '<K>' OR ((<colA> IS NULL) = (<colB> = '<literal>'))` -- a
+# same-kind structural coupling between TWO already-kind-scoped payload columns (contrast
+# FORBIDDEN-ON-KIND, which relates ONE column's nullability to a kind-NEGATION; contrast
+# PARTIAL-VALUE, which relates one column's ONE value to a kind; this idiom relates two
+# columns' presence to EACH OTHER, gated by kind). Matched generically on shape, never by
+# constraint name, and checked in the SAME early position as FORBIDDEN-ON-KIND (its own
+# "kind <> " prefix would otherwise be unreadable by `_extract_kinds`, which reads only
+# `kind = '...'`, landing it UNPARSEABLE). Tracked in its OWN manifest,
+# CROSS_COLUMN_COUPLING_MANIFEST, keyed by constraint name -- both columns it couples are
+# ALREADY licensed by their own individual MANIFEST_BY_COLUMN rows (attest_expected,
+# attest_verdict); this manifest tracks the ADDITIONAL cross-column invariant, not a
+# competing shape declaration for either column alone.
+_CROSS_COLUMN_COUPLING_RE = re.compile(
+    r"kind <> '([^']+)'(?:::\w+)?\)\s*OR\s*\(\((\w+) IS NULL\)\s*=\s*\((\w+) = '([^']+)'")
 
 
 def _extract_kinds(defn: str) -> tuple[str, ...]:
@@ -710,6 +812,15 @@ def classify_kind_shape(conname: str, defn: str):
         if col == "kind":
             return ("UNPARSEABLE", conname, defn)
         return ("FORBIDDEN-ON-KIND", col, forbidden_kind, conname)
+    m_cc = _CROSS_COLUMN_COUPLING_RE.search(defn)
+    if m_cc:
+        # checked in the same early position as FORBIDDEN-ON-KIND, for the same reason: its
+        # "kind <> '<K>'" prefix is unreadable by `_extract_kinds` (which reads only
+        # `kind = '...'`), so leaving it to the generic path would land it UNPARSEABLE.
+        kind, col_a, col_b, literal = m_cc.group(1), m_cc.group(2), m_cc.group(3), m_cc.group(4)
+        if "kind" in (col_a, col_b):
+            return ("UNPARSEABLE", conname, defn)
+        return ("CROSS-COLUMN-COUPLING", kind, col_a, col_b, literal, conname)
     m_pv = _PARTIAL_VALUE_RE.search(defn)
     if m_pv:
         # checked BEFORE the "IS NULL"/"IS NOT NULL" entry filter below: this idiom is phrased
@@ -766,6 +877,7 @@ def assert_manifest(schema: str) -> list[str]:
     catalog_shapes: dict[str, tuple] = {}   # column -> (kinds, arity, conname)
     partial_value_shapes: dict[tuple[str, str], tuple] = {}   # (column, value) -> (kinds, conname)
     forbidden_shapes: dict[tuple[str, str], str] = {}   # (column, kind) -> conname
+    cross_column_shapes: dict[str, tuple] = {}   # conname -> (kind, col_a, col_b, literal)
     for conname, defn in check_defs.items():
         parsed = classify_kind_shape(conname, defn)
         if parsed is None:
@@ -780,12 +892,18 @@ def assert_manifest(schema: str) -> list[str]:
                 continue
             forbidden_shapes[key] = conname
             continue
+        if parsed[0] == "CROSS-COLUMN-COUPLING":
+            _, kind, col_a, col_b, literal, _conname = parsed
+            cross_column_shapes[conname] = (kind, col_a, col_b, literal)
+            continue
         if parsed[0] == "UNPARSEABLE":
             violations.append(
                 f"UNPARSEABLE kind-mentioning CHECK {parsed[1]!r} ({parsed[2]!r}) -- this "
-                f"gate's classifier recognizes only the three shapes MANIFEST/"
-                f"VALUE_PARTITION_MANIFEST declare (two-way iff, one-way implication, "
-                f"PARTIAL-VALUE single-value implication). Either this is a NEW kind-shape idiom "
+                f"gate's classifier recognizes only the five shapes MANIFEST/"
+                f"VALUE_PARTITION_MANIFEST/FORBIDDEN_ON_KIND_MANIFEST/"
+                f"CROSS_COLUMN_COUPLING_MANIFEST declare (two-way iff, one-way implication, "
+                f"PARTIAL-VALUE single-value implication, FORBIDDEN-ON-KIND, "
+                f"CROSS-COLUMN-COUPLING). Either this is a NEW kind-shape idiom "
                 f"(extend classify_kind_shape and the relevant manifest together) or it is not "
                 f"truly kind-scoped (rename it off 'kind' to stop tripping this gate).")
             continue
@@ -903,6 +1021,33 @@ def assert_manifest(schema: str) -> list[str]:
                 f"but no such CHECK exists in the live catalog -- stale manifest row or a "
                 f"dropped constraint.")
 
+    # 2d. every catalog CROSS-COLUMN-COUPLING CHECK must match its
+    #     CROSS_COLUMN_COUPLING_MANIFEST row exactly
+    for conname, (kind, col_a, col_b, literal) in cross_column_shapes.items():
+        row = CROSS_COLUMN_BY_CONNAME.get(conname)
+        if row is None:
+            violations.append(
+                f"UNLICENSED CROSS-COLUMN-COUPLING CHECK {conname!r}: couples {col_a!r} and "
+                f"{col_b!r} (kind {kind!r}, literal {literal!r}) by the catalog, but no "
+                f"CROSS_COLUMN_COUPLING_MANIFEST row declares it. Add it to "
+                f"CROSS_COLUMN_COUPLING_MANIFEST in gates/kind_shape_manifest_gate.py with its "
+                f"reason, or remove the constraint if it should not exist.")
+            continue
+        if (row["kind"], row["col_a"], row["col_b"], row["coupled_value"]) != (kind, col_a, col_b, literal):
+            violations.append(
+                f"CROSS-COLUMN-COUPLING CHECK {conname!r}: catalog shape (kind={kind!r}, "
+                f"col_a={col_a!r}, col_b={col_b!r}, literal={literal!r}) disagrees with "
+                f"CROSS_COLUMN_COUPLING_MANIFEST's declared "
+                f"(kind={row['kind']!r}, col_a={row['col_a']!r}, col_b={row['col_b']!r}, "
+                f"coupled_value={row['coupled_value']!r}) -- shape drifted.")
+    # 3d. every CROSS_COLUMN_COUPLING_MANIFEST row must exist in the catalog
+    for row in CROSS_COLUMN_COUPLING_MANIFEST:
+        if row["constraint"] not in cross_column_shapes:
+            violations.append(
+                f"CROSS_COLUMN_COUPLING_MANIFEST row for constraint {row['constraint']!r} "
+                f"declares a CROSS-COLUMN-COUPLING CHECK but no such CHECK exists in the live "
+                f"catalog -- stale manifest row or a dropped constraint.")
+
     # 4. every payload-like (non-core) column must be licensed, whether or not it carries a
     #    catalog CHECK -- this is what catches a column with NO CHECK at all (the seen-red case:
     #    mechanism="CHECK"-shaped hazard that never got its CHECK written).
@@ -955,8 +1100,9 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     print(f"kind-shape-manifest-gate: clean -- {len(MANIFEST)} MANIFEST row(s) + "
           f"{len(VALUE_PARTITION_MANIFEST)} VALUE_PARTITION_MANIFEST row(s) + "
-          f"{len(FORBIDDEN_ON_KIND_MANIFEST)} FORBIDDEN_ON_KIND_MANIFEST row(s) match the "
-          f"live catalog exactly, {len(CORE_COLUMNS)} core column(s) accounted for, no "
+          f"{len(FORBIDDEN_ON_KIND_MANIFEST)} FORBIDDEN_ON_KIND_MANIFEST row(s) + "
+          f"{len(CROSS_COLUMN_COUPLING_MANIFEST)} CROSS_COLUMN_COUPLING_MANIFEST row(s) match "
+          f"the live catalog exactly, {len(CORE_COLUMNS)} core column(s) accounted for, no "
           f"unlicensed payload column. ✓")
     return 0
 
