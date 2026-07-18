@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-18T07:44:41Z
-#   last-change: 2026-07-18T08:37:24Z
+#   last-change: 2026-07-18T09:15:18Z
 #   contributors: ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -70,13 +70,45 @@ and still fail (b) -- e.g. non-ASCII content that `json.dumps`'s default `ensure
 escaping expands well past its raw UTF-8 byte count; the witness suite's W9 exercises exactly
 this). Both checkpoints return the same typed `payload_too_large` shape (413).
 
-INFRA FAILURE (spec A2.4): a psql infrastructure failure (unreachable world, connection
-refusal, a nonzero exit that is not a kernel verdict) is the ONE thing `_query_json` raises
-`RuntimeError` for (module docstring, `_query_json`) -- so a single `RuntimeError` exception
-handler on the FastAPI app, not a per-route try/except, is the ONE home (ADR-0012 P1) for the
-infra-failure -> HTTP 503 `infra_failure` translation. The full psql stderr stays server-side
-(`_log_infra_failure`, stderr -- this project's own house channel for a loud, non-silent,
-non-exposed diagnostic); the client sees a generic message only, never SQL/role/schema/stack.
+INFRA FAILURE (spec A2.4, narrowed per A3.2): a psql infrastructure failure (unreachable world,
+connection refusal, a nonzero exit that is not a kernel verdict, or a `PSQL_EXEC_TIMEOUT_S`
+stall) is the ONE thing `_query_json` raises. As of A3 that ONE thing is a DEDICATED exception
+class, `PsqlInfraFailure` (never a bare `RuntimeError`) -- so the FastAPI app's single exception
+handler catches ONLY `PsqlInfraFailure`, and no foreign exception (a `RecursionError` that
+happens to subclass `RuntimeError`, for instance -- exactly A3.2's finding) can ever wear the
+`infra_failure` signature by accident. That narrowing, not the catch list, is the load-bearing
+part of A3.2's fix. The full psql stderr stays server-side (`_log_infra_failure`, stderr --
+this project's own house channel for a loud, non-silent, non-exposed diagnostic); the client
+sees a generic message only, never SQL/role/schema/stack.
+
+TIME AXIS (spec A3.1): every psql subprocess this module runs is bounded twice --
+`PSQL_CONNECT_TIMEOUT_S = 5` (passed as the `PGCONNECT_TIMEOUT` envvar to the subprocess, so
+libpq itself refuses a stalled TCP handshake/auth round trip rather than this process waiting on
+the OS's own multi-minute default) and `PSQL_EXEC_TIMEOUT_S = 60` (`subprocess.run(timeout=...)`,
+which covers a peer that accepts the connection and then goes silent -- a blackhole/accept-and-
+stall server, the class no libpq connect-timeout option reaches). A `subprocess.TimeoutExpired`
+on either bound is caught in exactly one place (`_psql`) and re-raised as `PsqlInfraFailure` --
+a stall IS infra, the same typed 503 path as an ordinary connection refusal (A3.1, verbatim: "a
+stall IS infra"). The write handlers are plain `def`, not `async def` -- FastAPI/Starlette runs a
+plain `def` route in its threadpool, off the event loop, so one write blocked on
+`PSQL_EXEC_TIMEOUT_S` cannot starve `/health` or any other route the way an `async def` calling
+the blocking subprocess directly on the loop would (A3.1's amplifier finding). The read routes
+were already plain `def` (this module never had an `async def` read route); only the four write
+handlers changed shape.
+
+PARSE CLOSURE (spec A3.2): the write routes decode and `json.loads` the raw body themselves
+(A2.2's own choice, needed for the size checkpoints) -- which means they, not FastAPI's own
+automatic body-parsing, own that decode's exception surface too. Three ways it can fail that are
+NOT "malformed JSON" in the ordinary sense: invalid UTF-8 (`bytes.decode` raises
+`UnicodeDecodeError`, a `ValueError` subclass), a numerically enormous integer literal (CPython's
+int-string conversion raises `ValueError` past its digit-length guard), and deeply nested
+brackets (the recursive-descent JSON parser raises `RecursionError`, which subclasses
+`RuntimeError` -- exactly why the A2.4 handler had to narrow to `PsqlInfraFailure` rather than
+catching `RuntimeError`, or this class would silently wear the wrong typed shape again). All
+three are caught as `except (ValueError, RecursionError)` around the explicit decode+parse and
+turned into one typed 422 that names WHICH axis failed (encoding / value magnitude / structure)
+-- never echoing the raw body bytes back to the client (the body is untrusted and may not even
+be valid UTF-8).
 
 Lazy imports are banned (CLAUDE.md, 2026-07-02): every import is top-of-file.
 """
@@ -84,6 +116,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import subprocess
 import sys
@@ -91,7 +124,7 @@ from pathlib import Path
 from typing import Any
 
 import uvicorn
-from fastapi import FastAPI, Request, Response
+from fastapi import Depends, FastAPI, Request, Response
 from fastapi.responses import JSONResponse
 
 # Path setup, NOT lazy imports (both `sys.path.insert` calls execute at module import time,
@@ -135,6 +168,23 @@ _LOOPBACK_HOSTS = {"127.0.0.1", "localhost", "::1"}
 # (checkpoint a, raw body) and `make_write_route`'s handler (checkpoint b, re-serialized
 # payload) -- see this module's docstring, "SIZE AXIS".
 MAX_WRITE_BODY_BYTES = 1_048_576
+
+# A3.1's two named time-axis bounds (ADR-0012 P1: one home each, not a literal per call site).
+# PSQL_CONNECT_TIMEOUT_S bounds the TCP handshake/auth round trip (passed as PGCONNECT_TIMEOUT
+# so libpq itself enforces it); PSQL_EXEC_TIMEOUT_S bounds the whole subprocess (covers a peer
+# that accepts the connection and then goes silent -- a stall, the class no libpq connect-
+# timeout option reaches). See this module's docstring, "TIME AXIS".
+PSQL_CONNECT_TIMEOUT_S = 5
+PSQL_EXEC_TIMEOUT_S = 60
+
+
+class PsqlInfraFailure(Exception):
+    """A3.2's narrowing: the ONE exception class a psql infrastructure failure (unreachable
+    world, connection refusal, a nonzero exit that is not a kernel verdict, or a
+    PSQL_EXEC_TIMEOUT_S stall) is raised as. The app's single exception handler (`create_app`)
+    catches ONLY this class -- never a bare `RuntimeError`, so a foreign exception that happens
+    to subclass `RuntimeError` (`RecursionError`, for instance) can never wear the
+    `infra_failure` HTTP shape by accident."""
 
 
 class BoundaryConfig:
@@ -181,18 +231,38 @@ def _psql(cfg: BoundaryConfig, script: str, extra_v: dict[str, str] | None = Non
     """Run `script` against this deployment's postgres, as the granted role, with search_path
     set to (schema, kern) -- the ONE connection idiom every query/call in this module uses (the
     same pattern bootstrap/templates/led.tmpl's own kernel_write()/psql_tuples() helpers use).
-    `extra_v` values cross as psql `-v` bind vars (never string-spliced)."""
+    `extra_v` values cross as psql `-v` bind vars (never string-spliced).
+
+    A3.1's time axis, bounded twice: `PGCONNECT_TIMEOUT` in the subprocess's OWN environment
+    (never the parent's -- a fresh dict copy) bounds the TCP handshake/auth round trip at libpq
+    itself; `subprocess.run(timeout=PSQL_EXEC_TIMEOUT_S)` bounds the whole process, catching a
+    peer that accepts the connection and then stalls (the class no libpq connect-timeout option
+    reaches). `subprocess.TimeoutExpired` is caught in this ONE place and re-raised as
+    `PsqlInfraFailure` -- a stall IS infra (A3.1, verbatim)."""
     args = ["psql", "-h", cfg.pg_host, "-d", cfg.db, "-tAq", "-v", "ON_ERROR_STOP=1"]
     for k, v in (extra_v or {}).items():
         args += ["-v", f"{k}={v}"]
     args += ["-f", "/dev/stdin"]
     preamble = f"SET ROLE {cfg.role};\nSET search_path = {cfg.schema}, {cfg.kern};\n"
-    return subprocess.run(args, input=preamble + script, capture_output=True, text=True)
+    env = dict(os.environ)
+    env["PGCONNECT_TIMEOUT"] = str(PSQL_CONNECT_TIMEOUT_S)
+    try:
+        return subprocess.run(
+            args, input=preamble + script, capture_output=True, text=True,
+            env=env, timeout=PSQL_EXEC_TIMEOUT_S,
+        )
+    except subprocess.TimeoutExpired as e:
+        raise PsqlInfraFailure(
+            f"psql subprocess exceeded PSQL_EXEC_TIMEOUT_S={PSQL_EXEC_TIMEOUT_S}s without "
+            f"exiting -- a stalled peer (accept-then-silent), not an ordinary connection "
+            f"refusal (that would have exited well within the bound). Treated as infra "
+            f"failure (A3.1: a stall IS infra)."
+        ) from e
 
 
 def _query_json(cfg: BoundaryConfig, sql: str, extra_v: dict[str, str] | None = None) -> Any:
     """Run a SELECT of exactly one scalar column; parse and return it as a Python value.
-    Raises RuntimeError (never silently returns None/empty for a REAL failure) on a nonzero
+    Raises PsqlInfraFailure (never silently returns None/empty for a REAL failure) on a nonzero
     psql exit -- an infrastructure failure at the DB layer is not this service's to interpret,
     only to surface loudly (ADR-0002). A ZERO-ROW or SQL-NULL result is NOT that failure: `psql
     -tAq` prints the empty string for a NULL scalar (never the text "null"), and a single-row
@@ -204,7 +274,7 @@ def _query_json(cfg: BoundaryConfig, sql: str, extra_v: dict[str, str] | None = 
     NULL into a manufactured 500 on every one of this service's read routes."""
     cp = _psql(cfg, sql, extra_v)
     if cp.returncode != 0:
-        raise RuntimeError(f"psql query failed (exit {cp.returncode}): {cp.stderr.strip()[-2000:]}")
+        raise PsqlInfraFailure(f"psql query failed (exit {cp.returncode}): {cp.stderr.strip()[-2000:]}")
     lines = [ln for ln in cp.stdout.splitlines() if ln.strip()]
     if not lines:
         return None
@@ -274,13 +344,38 @@ def _log_infra_failure(context: str, exc: Exception) -> None:
 
 
 class _BodyTooLarge(Exception):
-    """Raised by `_read_bounded_body` (checkpoint a) -- caught once, at each write route, and
-    turned into the typed `payload_too_large` response."""
+    """Raised by `_read_bounded_body` (checkpoint a), via the `_bounded_raw_body` FastAPI
+    dependency -- caught once, by the app-level exception handler (`create_app`), and turned
+    into the typed `payload_too_large` response. Not caught inline in the write route itself
+    (A3.1's plain-`def` shape) because the dependency runs BEFORE the (now synchronous, off-
+    the-event-loop) handler is ever dispatched."""
 
     def __init__(self, observed_bytes: int, message: str) -> None:
         super().__init__(message)
         self.observed_bytes = observed_bytes
         self.message = message
+
+
+def _classify_parse_failure(exc: Exception) -> tuple[str, str]:
+    """A3.2's parse closure: classify a body decode/parse failure by the axis it violates --
+    encoding / value magnitude / structure -- WITHOUT ever echoing the raw body bytes back (the
+    body is untrusted and, in the encoding-axis case, may not even be valid UTF-8 to echo).
+    `json.loads` on `bytes` decodes internally, so `UnicodeDecodeError` (a `ValueError`
+    subclass), an oversized-integer-literal `ValueError` (CPython's int-string conversion
+    guard), a `json.JSONDecodeError` (also a `ValueError` subclass), and a `RecursionError`
+    (deep nesting overruns the recursive-descent parser's stack, and subclasses `RuntimeError`
+    -- exactly why the infra handler above is narrowed to `PsqlInfraFailure` rather than a bare
+    `RuntimeError`) are the four shapes this classifies."""
+    if isinstance(exc, UnicodeDecodeError):
+        return "encoding", f"the request body is not valid UTF-8 ({exc})"
+    if isinstance(exc, RecursionError):
+        return ("structure", "the request body nests too deeply for this service's JSON parser "
+                              "to descend (a structural bound, not a size bound)")
+    if isinstance(exc, json.JSONDecodeError):
+        return "structure", f"the request body is not well-formed JSON ({exc})"
+    if isinstance(exc, ValueError):
+        return "value magnitude", f"a numeric literal in the request body is too large to parse ({exc})"
+    return "structure", f"the request body could not be parsed ({exc})"  # pragma: no cover
 
 
 async def _read_bounded_body(request: Request) -> bytes:
@@ -317,6 +412,21 @@ async def _read_bounded_body(request: Request) -> bytes:
     return b"".join(chunks)
 
 
+async def _bounded_raw_body(request: Request) -> bytes:
+    """A3.1's plain-`def` write handlers, reconciled with the unavoidably-async ASGI body
+    stream: FastAPI dependencies may be `async def` even when the path operation function they
+    feed is a plain `def` -- the dependency runs on the event loop (where `await
+    request.stream()` structurally must run; a stalled-network read on it is bounded by uvicorn/
+    the client's own connection, not by this service's psql bounds), and the SYNCHRONOUS
+    handler it feeds is then dispatched to FastAPI's threadpool, off the event loop -- exactly
+    where the potentially-`PSQL_EXEC_TIMEOUT_S`-long psql call needs to run so a stalled write
+    cannot starve `/health` (A3.1's amplifier finding). This is the smallest honest reading of
+    "the write handlers become plain `def`": the handler -- the code that calls psql -- is
+    plain `def`; the one line of genuinely-ASGI-bound I/O it depends on is factored out to where
+    FastAPI's own async/sync split already provides for it, not reimplemented by hand."""
+    return await _read_bounded_body(request)
+
+
 def create_app(cfg: BoundaryConfig) -> FastAPI:
     app = FastAPI(
         title="autoharn ledger boundary service",
@@ -331,16 +441,27 @@ def create_app(cfg: BoundaryConfig) -> FastAPI:
         openapi_url=None,
     )
 
-    @app.exception_handler(RuntimeError)
-    async def _infra_failure_handler(request: Request, exc: RuntimeError) -> JSONResponse:
-        # A2.4: the ONE place a psql infrastructure failure (unreachable world, connection
-        # refusal, a nonzero exit that is not a kernel verdict -- the ONLY thing _query_json
-        # raises RuntimeError for) becomes a typed 503, for every route uniformly (ADR-0012
-        # P1: one handler, not a try/except duplicated per route).
+    @app.exception_handler(PsqlInfraFailure)
+    async def _infra_failure_handler(request: Request, exc: PsqlInfraFailure) -> JSONResponse:
+        # A2.4, narrowed per A3.2: the ONE place a psql infrastructure failure (unreachable
+        # world, connection refusal, a nonzero exit that is not a kernel verdict, or a
+        # PSQL_EXEC_TIMEOUT_S stall -- the ONLY things that raise PsqlInfraFailure) becomes a
+        # typed 503, for every route uniformly (ADR-0012 P1: one handler, not a try/except
+        # duplicated per route). Registered on the DEDICATED exception class, never the bare
+        # `RuntimeError` a foreign failure (RecursionError, for one) could also raise.
         _log_infra_failure(f"{request.method} {request.url.path}", exc)
         return infra_failure(
             "the ledger's underlying database connection failed -- this is an infrastructure "
             "problem, not a problem with your request; see the server's own log for full detail.")
+
+    @app.exception_handler(_BodyTooLarge)
+    async def _body_too_large_handler(request: Request, exc: _BodyTooLarge) -> JSONResponse:
+        # A2.2 checkpoint (a), re-homed here now that body-reading is a DEPENDENCY (async, so
+        # it can await the ASGI body stream) rather than inline in the (now plain `def`, A3.1)
+        # write handler -- a dependency's exception propagates to the app's own exception
+        # handling before the handler is ever dispatched to the threadpool, so this is still
+        # the ONE place checkpoint (a) becomes the typed 413 (ADR-0012 P1).
+        return payload_too_large(exc.observed_bytes, exc.message)
 
     @app.get("/health", response_model=HealthResponse)
     def health() -> HealthResponse:
@@ -461,7 +582,16 @@ def create_app(cfg: BoundaryConfig) -> FastAPI:
         return JSONResponse(content=rows)
 
     def make_write_route(surface: str, fn: str):
-        async def handler(request: Request) -> Response:
+        # A3.1: plain `def`, not `async def` -- FastAPI/Starlette dispatches a plain `def` path
+        # operation function to its threadpool, off the event loop, so this handler's psql
+        # calls (each now bounded by PSQL_CONNECT_TIMEOUT_S/PSQL_EXEC_TIMEOUT_S, but still a
+        # blocking subprocess.run for up to that long) never starve `/health` or any other
+        # route the way calling them directly from an `async def` handler on the event loop
+        # would (matching the read routes, which were already plain `def`). The one piece of
+        # genuinely-ASGI-bound I/O -- reading the raw request body -- is factored out to the
+        # `_bounded_raw_body` async dependency (see its own docstring), which FastAPI awaits on
+        # the event loop BEFORE dispatching this synchronous handler to the threadpool.
+        def handler(request: Request, raw_body: bytes = Depends(_bounded_raw_body)) -> Response:
             if not bool(_query_json(
                 cfg,
                 f"SELECT to_jsonb(EXISTS (SELECT 1 FROM pg_proc p JOIN pg_namespace n "
@@ -476,16 +606,19 @@ def create_app(cfg: BoundaryConfig) -> FastAPI:
                     f"service NEVER falls back to raw INSERT; there is no code path that "
                     f"writes SQL DML').")
 
-            # A2.2 checkpoint (a): the raw body, bounded BEFORE any JSON parsing.
-            try:
-                raw_body = await _read_bounded_body(request)
-            except _BodyTooLarge as e:
-                return payload_too_large(e.observed_bytes, e.message)
-
+            # A3.2 parse closure: `json.loads` on `bytes` decodes internally, so this ONE
+            # explicit call's `except` clause is where ALL three A3.2 axes are caught --
+            # encoding (UnicodeDecodeError, a ValueError subclass), value magnitude (an
+            # oversized integer literal, ValueError), and structure (JSONDecodeError, also
+            # ValueError; or RecursionError on deep nesting, which subclasses RuntimeError --
+            # exactly why the app's infra handler is narrowed to PsqlInfraFailure and cannot
+            # accidentally swallow this). Never echoes raw_body back to the client.
             try:
                 payload = json.loads(raw_body) if raw_body else None
-            except json.JSONDecodeError as e:
-                return JSONResponse(status_code=422, content={"detail": f"malformed JSON body: {e}"})
+            except (ValueError, RecursionError) as e:
+                axis, detail = _classify_parse_failure(e)
+                return JSONResponse(status_code=422, content={
+                    "detail": f"malformed write payload -- {axis} axis: {detail}"})
             if not isinstance(payload, dict):
                 return JSONResponse(status_code=422, content={
                     "detail": "write payload must be a JSON object (transport-level shape check, spec §4)"})

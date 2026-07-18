@@ -1,17 +1,25 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-18T07:49:10Z
-#   last-change: 2026-07-18T08:40:23Z
+#   last-change: 2026-07-18T09:19:25Z
 #   contributors: ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
 """run_fixtures.py -- both-polarity witness for design/FABLE-LEDGER-BOUNDARY-SERVICE-SPEC.md's
-§8 witness plan (W1-W12, A2's amendment). Real infra, no mocks: CLASSIC scaffolds + manual
-chain applies in the TOY db (the exact pattern seen-red/s43-typed-verdict-write-boundary/
-run_fixtures.py already banks, and this fixture imports nothing new for scaffolding -- same
-helpers, re-derived here because the two fixtures scaffold DIFFERENT chains for different
-reasons, not because the pattern needed a second home), plus a REAL `serving.boundary_service`
-uvicorn subprocess bound to loopback, torn down before AND after every world.
+§8 witness plan (W1-W12, A2's amendment; W13-W14, A3's amendment). Real infra, no mocks:
+CLASSIC scaffolds + manual chain applies in the TOY db (the exact pattern seen-red/
+s43-typed-verdict-write-boundary/run_fixtures.py already banks, and this fixture imports
+nothing new for scaffolding -- same helpers, re-derived here because the two fixtures scaffold
+DIFFERENT chains for different reasons, not because the pattern needed a second home), plus a
+REAL `serving.boundary_service` uvicorn subprocess bound to loopback, torn down before AND
+after every world.
+
+A3.5 (concurrent-runner safety): every scratch world/schema name below carries a PER-RUN
+UNIQUE suffix (`RUN_SUFFIX`, this process's own pid) -- two independent suite runs against the
+same toy db no longer collide on an identical scratch-world name (the root cause of a
+transient fixture collision witnessed once during A3's review). Teardown (`teardown()`) is
+scoped to the exact suffixed name it is called with, so a run only ever drops schemas/roles it
+itself created.
 
 WORLDS:
   WORLD PRE  -- chain ends at s42 (no s43): W3, every write endpoint capability_absent.
@@ -22,15 +30,21 @@ WORLDS:
                 /rows/current), W6 (audit_served.py AGREE leg + a tampered negative control
                 caught nonzero), the s22/s41 gate PRESENT legs (W11), W9 (oversized write body
                 at both A2.2 checkpoints, typed 413, server alive, /health still answering),
-                the §9/A2.1/W12 in-process route-table closure assertion.
+                W13 (parse-closure legs: invalid UTF-8, an oversized integer literal, deeply
+                nested body -- each a typed 422, server alive after each), the §9/A2.1/W12
+                in-process route-table closure assertion.
   WORLD NOCAP -- chain truncated BEFORE s22/s40/s41/s42/s43 (ends at s21): W10 (/health on a
                 pre-s40 chain -> 200, null service_principal, no 500) and the s22/s41 gate
                 ABSENT legs (W11) -- this world carries neither view, so both capability gates
                 refuse.
   (no DB)    -- W7 bind guard, both legs (refusal leg + explicit-flag-allowed leg), standalone
-                subprocess invocations of `python3 -m serving.boundary_service`.
+                subprocess invocations of `python3 -m serving.boundary_service`; W14 (the hang
+                leg -- a deployment pointed at a non-routable address, no toy-db world needed at
+                all, since the connection never reaches auth).
   (static)   -- W3's grep half (no DML string in serving/); W8 is UNEXERCISED BY CONSTRUCTION
                 (panel-side; this repo never touches the panel repo) and is NAMED, not faked.
+                W9's streaming-abort leg is likewise UNEXERCISED here -- see the W9 section
+                below for why.
 
 Usage: python3 seen-red/boundary-service/run_fixtures.py
 Exit 0 if every case matches; 1 otherwise. Lazy imports banned."""
@@ -56,12 +70,25 @@ LINEAGE = REPO / "kernel" / "lineage"
 SERVING = REPO / "serving"
 PYVENV = Path.home() / "w" / "vdc" / "venvs" / "generic" / "bin" / "python"
 
+# A3.5: a per-run unique suffix, pid-derived -- every scratch world name below is built from
+# this, so two concurrent suite runs against the same toy db never collide on an identical
+# scratch-world name (the root cause of a transient collision witnessed once during A3's
+# review; see this file's own module docstring).
+RUN_SUFFIX = str(os.getpid())
+
+# A3.4/W14: an address deliberately NOT routable from this host -- the connection attempt is
+# never refused (which would be fast and ordinary) and never routed (which would eventually
+# ICMP-unreachable); it is simply never answered, exactly the "blackhole, accept-then-stall"
+# class A3.1 names. No toy-db world is scaffolded for this leg: the connection never reaches
+# postgres auth, so no real schema/kern/role need exist.
+UNROUTABLE_HOST = "10.255.255.1"
+
 sys.path.insert(0, str(REPO / "filing"))
 sys.path.insert(0, str(SERVING))
 import deployment_record  # noqa: E402
 import pghost_resolve  # noqa: E402
 import audit_served  # noqa: E402  (compare_row_sets -- the negative-control comparator, reused not re-derived)
-import boundary_service  # noqa: E402  (W12 -- the in-process app.routes closure witness, and MAX_WRITE_BODY_BYTES -- W9 reuses the module's OWN bound, never a second literal)
+import boundary_service  # noqa: E402  (W12 -- the in-process app.routes closure witness, and MAX_WRITE_BODY_BYTES/PSQL_CONNECT_TIMEOUT_S -- W9/W14 reuse the module's OWN bounds, never a second literal)
 
 PGHOST, PGDB = pghost_resolve.resolve_pghost("HARNESS_PGHOST", "EPISTEMIC_PGHOST"), "toy"
 
@@ -325,7 +352,11 @@ def main() -> int:
     failures: list[str] = []
     tmps: list[Path] = []
     procs: list[subprocess.Popen] = []
-    world_pre, world_b, world_nocap = "svcfxpre", "svcfxb", "svcfxnocap"
+    # A3.5: every scratch world name carries RUN_SUFFIX (this process's pid) -- see the module
+    # docstring's "concurrent-runner safety" note.
+    world_pre = f"svcfxpre{RUN_SUFFIX}"
+    world_b = f"svcfxb{RUN_SUFFIX}"
+    world_nocap = f"svcfxnocap{RUN_SUFFIX}"
     for w in (world_pre, world_b, world_nocap):
         teardown(w)
     try:
@@ -504,6 +535,70 @@ def main() -> int:
               f"/health after both: status={st9h} world={body9h.get('world')} (server alive)",
               failures)
 
+        # -- W13 (A3.2): parse-closure legs -- invalid UTF-8, an oversized integer literal, a
+        # deeply nested body -- each a typed 422 naming the failed axis, server alive after
+        # each (never a bare 500, never the wrong axis via a foreign RecursionError wearing the
+        # infra shape -- see boundary_service.py's PsqlInfraFailure narrowing).
+        def _post_raw(path: str, raw: bytes) -> tuple[int, dict]:
+            req = urllib.request.Request(
+                base + path, data=raw, headers={"Content-Type": "application/json"}, method="POST")
+            try:
+                with urllib.request.urlopen(req, timeout=15) as resp:
+                    return resp.status, json.loads(resp.read())
+            except urllib.error.HTTPError as e:
+                return e.code, json.loads(e.read())
+
+        # Leg (a) encoding: invalid UTF-8 inside an otherwise JSON-shaped body.
+        invalid_utf8_body = b'{"kind": "note", "statement": "bad utf8 \xff\xfe here", "actor": 1}'
+        st13a, body13a = _post_raw("/write/ledger", invalid_utf8_body)
+
+        # Leg (b) value magnitude: an integer literal past CPython's int-string conversion
+        # guard (default 4300 digits) -- built as raw TEXT, never as a Python int object (
+        # constructing the int itself would hit the identical guard on THIS side of the wire,
+        # not exercise the server's).
+        huge_digits = 4301
+        huge_int_body = ('{"kind": "note", "actor": 1, "n": ' + ("9" * huge_digits) + '}').encode()
+        st13b, body13b = _post_raw("/write/ledger", huge_int_body)
+
+        # Leg (c) structure: deeply nested brackets -- overruns the recursive-descent JSON
+        # parser's own stack budget (RecursionError, confirmed above the default recursion
+        # limit of 1000 in the SAME venv this server runs under).
+        deep_nest = 60000
+        deep_nest_body = (b"[" * deep_nest) + (b"]" * deep_nest)
+        st13c, body13c = _post_raw("/write/ledger", deep_nest_body)
+
+        st13h, body13h = http_get(base + "/health") if up_b else (0, {})
+        check("w13-parse-closure-legs-typed-422-server-alive",
+              up_b
+              and st13a == 422 and "encoding" in body13a.get("detail", "")
+              and st13b == 422 and "value magnitude" in body13b.get("detail", "")
+              and st13c == 422 and "structure" in body13c.get("detail", "")
+              and st13h == 200 and body13h.get("world") == world_b,
+              f"leg (a) invalid UTF-8: status={st13a} body={body13a}; "
+              f"leg (b) oversized integer literal ({len(huge_int_body)}-byte body, "
+              f"{huge_digits}-digit n): status={st13b} body={body13b}; "
+              f"leg (c) deeply nested ({deep_nest} levels, {len(deep_nest_body)}-byte body): "
+              f"status={st13c} body={body13c}; /health after all three: status={st13h} "
+              f"world={body13h.get('world')} (server alive)",
+              failures)
+
+        # -- W9 streaming-abort leg: UNEXERCISED, named (spec A3.4's own carve-out, "exercised
+        # if cheaply drivable, else UNEXERCISED with why"). Driving it needs a client that opens
+        # the write connection, sends a Content-Length promise, then closes the socket mid-body
+        # BEFORE finishing the declared byte count -- `urllib`/`http.client` (this fixture's
+        # only HTTP client) offer no supported way to half-close a POST mid-stream (the library
+        # always either sends the buffer it was given in full or raises before sending
+        # anything); reaching for a raw `socket` client to hand-craft a truncated HTTP/1.1
+        # request is possible but is exactly the kind of second, parallel transport layer this
+        # fixture file otherwise avoids (it reuses `urllib` uniformly, W1-W13 above). Named here
+        # rather than silently absent from the witness plan or faked with a shortcut that
+        # doesn't actually abort mid-stream.
+        print("=== w9-streaming-abort-leg ===")
+        print("  [UNEXERCISED] no supported urllib/http.client path half-closes a POST body "
+              "mid-stream; driving this leg needs a raw-socket client, which this fixture does "
+              "not otherwise carry. Named per spec A3.4's own carve-out.")
+        print()
+
         # -- §9/A2.1 closure (W12): the route table IS the enumeration -- asserted against
         # app.routes DIRECTLY (in-process), never the (now-disabled) OpenAPI schema.
         actual_routes = actual_route_table(dep_b)
@@ -583,7 +678,7 @@ def main() -> int:
         # WORLD PRE (a throwaway, born just for W7's allowed leg -- torn down immediately after;
         # only /health needs to answer, so a pre-s43 world is deliberately reused rather than a
         # second full s43 scaffold).
-        w7world = "svcfxw7ok"
+        w7world = f"svcfxw7ok{RUN_SUFFIX}"
         teardown(w7world)
         w7dir = scaffold_classic(w7world, CHAIN_PRE)
         tmps2 = [w7dir.parent]
@@ -604,6 +699,62 @@ def main() -> int:
     finally:
         shutil.rmtree(tmp7, ignore_errors=True)
 
+    # ============================= W14: the hang leg (no DB) =============================
+    # A deployment pointed at UNROUTABLE_HOST -- the connection attempt is neither refused
+    # (fast, ordinary) nor eventually ICMP-unreachable; it is simply never answered. No toy-db
+    # world is scaffolded (or needed): the connection never reaches postgres auth.
+    tmp14 = Path(tempfile.mkdtemp(prefix="svcfxw14-"))
+    try:
+        dep14 = tmp14 / "w14-deployment.json"
+        deployment_record.write_deployment(
+            dep14, deployment_record.DeploymentRecord(
+                db="toy", host=UNROUTABLE_HOST, schema="doesnotmatterw14",
+                kern="doesnotmatterw14_kernel", role="doesnotmatterw14_rw"))
+        port14 = free_port()
+        proc14 = subprocess.Popen(
+            [str(PYVENV), "-m", "serving.boundary_service", "--deployment", str(dep14),
+             "--host", "127.0.0.1", "--port", str(port14)],
+            cwd=str(REPO), stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        # The ASGI server itself binds instantly (it never touches postgres to do so) -- wait
+        # for the bare TCP socket to accept, NOT for /health to answer (which is exactly the
+        # call under timing below, and would hang for as long as the bound allows).
+        asgi_up = False
+        deadline = time.time() + 10
+        while time.time() < deadline:
+            try:
+                with socket.create_connection(("127.0.0.1", port14), timeout=1):
+                    asgi_up = True
+                    break
+            except OSError:
+                time.sleep(0.2)
+        start14 = time.time()
+        try:
+            with urllib.request.urlopen(f"http://127.0.0.1:{port14}/health", timeout=40) as resp:
+                st14, body14 = resp.status, json.loads(resp.read())
+        except urllib.error.HTTPError as e:
+            st14, body14 = e.code, json.loads(e.read())
+        except (urllib.error.URLError, OSError) as e:
+            st14, body14 = 0, {"client_side_error": str(e)}
+        elapsed14 = time.time() - start14
+        out14 = stop_server(proc14)
+        # Margin over the bound: generous enough to absorb process/subprocess overhead, tight
+        # enough that it could never be mistaken for the OS's own TCP connect timeout (Linux's
+        # default SYN-retry schedule is roughly 60-130s on an unrouted destination -- an order
+        # of magnitude past this margin).
+        margin14 = boundary_service.PSQL_CONNECT_TIMEOUT_S + 25
+        check("w14-hang-leg-typed-503-within-connect-timeout-plus-margin",
+              asgi_up and st14 == 503 and body14.get("disposition") == "infra_failure"
+              and elapsed14 < margin14,
+              f"ASGI socket accepting={asgi_up}; GET /health against unroutable host "
+              f"{UNROUTABLE_HOST}: status={st14} body={body14} elapsed={elapsed14:.1f}s "
+              f"(bound: PSQL_CONNECT_TIMEOUT_S={boundary_service.PSQL_CONNECT_TIMEOUT_S}s, "
+              f"margin={margin14}s -- an ordinary OS TCP connect timeout on an unrouted host "
+              f"is 60-130s, well past this margin); server tail if not up: "
+              f"{out14[-300:] if not asgi_up else '(n/a, came up)'}",
+              failures)
+    finally:
+        shutil.rmtree(tmp14, ignore_errors=True)
+
     # ============================= W8: panel-side, UNEXERCISED BY CONSTRUCTION =============
     print("=== w8-deprecation-mark-panel-side ===")
     print("  [UNEXERCISED] the marked legacy path lives in the autoharn-panel repository, which "
@@ -615,8 +766,8 @@ def main() -> int:
     if failures:
         print("FAILURES:", failures)
         return 1
-    print("ALL CASES OK -- boundary-service both-polarity proof (W1-W7, W9-W12 live; "
-          "W8 UNEXERCISED, named).")
+    print("ALL CASES OK -- boundary-service both-polarity proof (W1-W7, W9-W14 live; "
+          "W8 and the W9 streaming-abort leg UNEXERCISED, named).")
     return 0
 
 

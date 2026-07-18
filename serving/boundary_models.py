@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-18T07:43:25Z
-#   last-change: 2026-07-18T08:35:59Z
+#   last-change: 2026-07-18T09:16:02Z
 #   contributors: ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -17,11 +17,15 @@ the authority" the spec's §4 forbids. So:
 
   - Write payloads (`WritePayload`) are `dict[str, Any]` -- a non-JSON or non-object body is
     refused as a transport-level 422 (ADR-0002 loud), and nothing past that is interpreted
-    here. As of A2.2 the write routes read and bound the raw body THEMSELVES (`Request`, not an
-    automatic pydantic body parameter) so the 1 MiB size checkpoint runs before the JSON decode
-    ever sees an oversized body -- `WritePayload` still names the post-decode shape every write
-    handler works with; it is just no longer wired in as a route parameter annotation (see
-    `serving/boundary_service.py`'s `_read_bounded_body`).
+    here. As of A2.2 the write routes read and bound the raw body THEMSELVES (via the
+    `_bounded_raw_body` FastAPI dependency, an async wrapper around `_read_bounded_body` -- not
+    an automatic pydantic body parameter) so the 1 MiB size checkpoint runs before the JSON
+    decode ever sees an oversized body; as of A3.2 the decode+parse itself is also explicit
+    (`json.loads`, wrapped in `except (ValueError, RecursionError)`) so invalid UTF-8, an
+    oversized integer literal, and deep nesting are each a typed 422 naming the failed axis,
+    never a bare 500 -- see `serving/boundary_service.py`'s `_classify_parse_failure`.
+    `WritePayload` still names the post-decode shape every write handler works with; it is just
+    no longer wired in as a route parameter annotation.
   - Read/verdict RESPONSES are mostly NOT modeled at all -- they are the kernel's own JSON
     (row records, `write_verdict`), returned via `fastapi.responses.JSONResponse` so no second
     encoding pass can silently reshape or drop a field the kernel actually returned. The models
@@ -38,10 +42,11 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 # A write payload is any JSON object -- the kernel boundary functions (kernel.ledger_write et
-# al.) are the ONLY validators of its keys/values (s43 §4.2). FastAPI's own body-decode already
-# refuses non-JSON and non-object bodies as a 422 before this type is even consulted; this
-# alias exists so every write route names its contract the same way (ADR-0012 P1), not so it
-# can grow a second check later without a very deliberate reason.
+# al.) are the ONLY validators of its keys/values (s43 §4.2). The write route's own explicit
+# decode+parse (serving/boundary_service.py's `_classify_parse_failure`, A3.2) refuses a
+# non-JSON or non-object body as a typed 422 before this type is even consulted; this alias
+# exists so every write route names its contract the same way (ADR-0012 P1), not so it can grow
+# a second check later without a very deliberate reason.
 WritePayload = dict[str, Any]
 
 
@@ -91,10 +96,15 @@ class PayloadTooLarge(BaseModel):
 
 
 class InfraFailure(BaseModel):
-    """A2.4: a psql infra failure (unreachable world, connection refusal, a nonzero exit that is
-    not a kernel verdict) is typed rather than a bare 500 -- but the message here is
-    DELIBERATELY generic (no SQL, role, schema, or stack); the full loud detail stays
-    server-side in the log (ADR-0002 rung 3 loudness retained, exposure posture unchanged)."""
+    """A2.4, extended per A3.1/A3.2: a psql infra failure -- unreachable world, connection
+    refusal, a nonzero exit that is not a kernel verdict, OR a `PSQL_EXEC_TIMEOUT_S` stall (a
+    peer that accepts the connection and then goes silent; A3.1's "a stall IS infra") -- is
+    typed rather than a bare 500. As of A3.2 this shape is raised ONLY by the service's
+    dedicated `PsqlInfraFailure` exception (never a bare `RuntimeError`, which a foreign failure
+    like `RecursionError` could also raise), so no unrelated exception can wear this signature
+    by accident. The message here is DELIBERATELY generic (no SQL, role, schema, or stack); the
+    full loud detail stays server-side in the log (ADR-0002 rung 3 loudness retained, exposure
+    posture unchanged)."""
 
     disposition: str = "infra_failure"
     message: str = Field(description="generic teach-text; see the server's own log for the full detail")
