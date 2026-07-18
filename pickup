@@ -1,3 +1,6 @@
 #!/bin/sh
+# This repo's own world is an EXISTING deployment: per the multiplex spec sec.6
+# (runs are linear, dust-and-settled), it keeps the direct-psql original
+# (legacy-*.tmpl). New worlds scaffold the served shims via new-project.sh.
 HERE="$(cd "$(dirname "$0")" && pwd)"
-exec env PICKUP_DEPLOYMENT="$HERE/deployment.json" "$HERE/bootstrap/templates/pickup.tmpl" "$@"
+exec env PICKUP_DEPLOYMENT="$HERE/deployment.json" "$HERE/bootstrap/templates/legacy-pickup.tmpl" "$@"
