@@ -1,8 +1,5 @@
 # USER GUIDE — from a project and a Postgres box to a working, audited record
 
-<!-- doc-attest-exempt: doc-tree relocation mechanical edit (work item doc-tree-reorg-user-guide, ledger row 1620, 2026-07-18) -- relative link path(s) repointed to a sibling file's new location after a git-mv relocation elsewhere in the tree; no prose rewrite, same disposition as the v1.1.2 release-cut's own markers (commit 543a389). Removal condition: strike this marker and run the real A:B:C loop next time this file is touched for content, not just link repair. -->
-
-
 This page is written for an adopter — someone with a project of their own and a Postgres
 database they can reach, who wants to know how autoharn fits in. It is the front door: not for someone already
 running it, and not for someone maintaining autoharn itself (see [§7](#7-where-everything-else-lives)
@@ -65,8 +62,8 @@ shown below; the full transcripts live in the pages each section links to.
 ### 3a. Just track your work: `bootstrap/track-work.sh`
 
 The lightest of the three is a standing, Postgres-backed replacement for a hand-edited TODO file.
-No hooks, no session governance, works in any directory — it doesn't need to be a git repository
-or a Claude Code project at all.
+It needs no hooks and no session governance, and it works in any directory — it doesn't need to
+be a git repository or a Claude Code project at all.
 
 ```sh
 cd /path/to/your/autoharn-checkout
@@ -85,24 +82,59 @@ wrote judge (shim -> .../bootstrap/templates/judge.tmpl)
 wrote pickup (shim -> .../bootstrap/templates/pickup.tmpl)
 wrote audit (shim -> .../bootstrap/templates/audit.tmpl)
 wrote distance-to-clean (shim -> .../bootstrap/templates/distance-to-clean.tmpl)
+wrote verify-commission (shim -> .../bootstrap/templates/verify-commission.tmpl)
+wrote verify-chain (shim -> .../bootstrap/templates/verify-chain.tmpl)
 wrote attest-doc (shim -> .../bootstrap/templates/attest-doc.tmpl)
+wrote asof-export (shim -> .../bootstrap/templates/asof-export.tmpl)
+-- ./legacy/ (the four rebased verbs' direct-psql originals, demoted by placement, spec §5;
+   THIS deployment has no boundary service of its own, so these are the working verbs) --
+wrote legacy/led (shim -> .../bootstrap/templates/legacy-led.tmpl)
+wrote legacy/pickup (shim -> .../bootstrap/templates/legacy-pickup.tmpl)
+wrote legacy/asof-export (shim -> .../bootstrap/templates/legacy-asof-export.tmpl)
+wrote legacy/distance-to-clean (shim -> .../bootstrap/templates/legacy-distance-to-clean.tmpl)
 == done ==
 ```
 
-**What landed where:** `deployment.json` (which database/schema this project points at) and six
-small command files (`led`, `pickup`, `distance-to-clean`, `judge`, `audit`, `attest-doc`) in
-your project directory — nothing written back into the autoharn checkout. Try it immediately:
+**What landed where:** `deployment.json` (which database/schema this project points at) and nine
+small command files (`led`, `judge`, `pickup`, `audit`, `distance-to-clean`, `verify-commission`,
+`verify-chain`, `attest-doc`, `asof-export`) in your project directory — nothing written back
+into the autoharn checkout.
+
+**UPDATED 2026-07-18 — `./led`/`./pickup`/`./asof-export`/`./distance-to-clean` now talk HTTP to
+a boundary service by default** — a "boundary service" is `serving/boundary_service.py`, a
+FastAPI server this repository ships that translates HTTP calls into the same reads and writes
+against the Postgres database (this guide's "record"/"ledger," §1 above) these verbs always made,
+so a project's ledger can be reached from more than one process without each one shelling out to
+`psql` directly
+([design/FABLE-BOUNDARY-MULTIPLEX-AND-CLI-REBASE-SPEC.md](../design/FABLE-BOUNDARY-MULTIPLEX-AND-CLI-REBASE-SPEC.md)
+§5, ratified row 1631; the full recipe is in
+[USER-RECIPES-FAQ.md's boundary-multiplex section](USER-RECIPES-FAQ.md#boundary-multiplex-cli-rebase-and-the-workflow-unit-compiler-2026-07-18),
+linked again below). **This scaffold runs no boundary service of its own** — a standing work
+tracker is a perpetual, hookless store for a project's whole lifetime, never a run-scoped,
+hook-wired session (`bootstrap/track-work.sh`'s own header comment states this contrast under the
+heading "STANDING vs WORLD" — see that file directly for the full text). WITNESSED live: those
+four shims refuse with exit 4 out of the box
+(`led: deployment record at .../deployment.json is missing required-for-the-served-shim
+field(s): boundary_url, boundary_deployment ... run the ./legacy/ original instead`). The
+scaffold writes `./legacy/led`/`./legacy/pickup`/`./legacy/asof-export`/`./legacy/distance-to-clean`
+for exactly this reason — the direct-`psql` originals, demoted by placement, not deleted — so
+"try it immediately" below uses those:
 
 ```sh
 cd /path/to/your-project
-./led work open first-item "Describe the first thing to track"
-./pickup
+./legacy/led work open first-item "Describe the first thing to track"
+./legacy/pickup
 ```
 
-`./pickup` prints your open work back to you — this was confirmed live during this page's own
-verification pass: the opened item showed up in `./pickup`'s first section on the very next
-command. For the full detail — the exact command shape, and how this option differs from
-§3b's below — read [design/USER-WORK-STATUS-OFFERING.md](USER-WORK-STATUS-OFFERING.md)
+`./legacy/pickup` prints your open work back to you — this was confirmed live during this page's
+own verification pass: the opened item showed up in `./legacy/pickup`'s first section on the very
+next command. (If you later stand up a boundary service for this deployment and add its
+`boundary_url`/`boundary_deployment` to `deployment.json` by hand, the un-prefixed `./led`/
+`./pickup` start working too — see
+[USER-RECIPES-FAQ.md's boundary-multiplex section](USER-RECIPES-FAQ.md#boundary-multiplex-cli-rebase-and-the-workflow-unit-compiler-2026-07-18)
+for what those two keys are and the exit-code split the served shims use.) For the full detail —
+the exact command shape, and how this option differs from §3b's below — read
+[design/USER-WORK-STATUS-OFFERING.md](USER-WORK-STATUS-OFFERING.md)
 and [USER-CONFIGURATION.md's own
 section](USER-CONFIGURATION.md#bootstraptrack-worksh--a-standing-work-tracker-not-a-governed-world).
 
@@ -144,9 +176,13 @@ what a disagreement would mean.
 
 **What landed where:** everything §3a describes above, plus `.claude/settings.json` (wires the
 hooks that check every edit), a stamp secret, and a `CLAUDE.md` at your project's root that
-Claude Code loads automatically at session start — nothing to paste into your first message. The
-full "what state lands where" table, every file this writes and whether you commit it, is
-[USER-CONFIGURATION.md's own reference
+Claude Code loads automatically at session start — nothing to paste into your first message.
+Unlike §3a, this scaffold accepts `--boundary-url`/`--boundary-deployment` flags to point the new
+world at an already-running boundary service; omit them (the ordinary case for a brand-new world)
+and `./led`/`./pickup` refuse with the same exit-4 message §3a's own boundary-multiplex note
+shows, teaching `./legacy/led`/`./legacy/pickup` as the working verbs until a boundary service
+exists for this world. The full "what state lands where" table, every file this writes and
+whether you commit it, is [USER-CONFIGURATION.md's own reference
 table](USER-CONFIGURATION.md#what-state-lands-where); a slower, narrated walkthrough of the same
 scaffold (including how to tear a throwaway one down) is
 [USER-WALKTHROUGH.md](USER-WALKTHROUGH.md).
@@ -229,10 +265,11 @@ from the autoharn checkout, to stand the other six up.
 shows to be the task you gave it — rather than an AI collaborator's own paraphrase of your chat
 message — [ORCH-OPERATING-CARD.md's "Start a run / resume a run"
 section](ORCH-OPERATING-CARD.md#start-a-run--resume-a-run)
-walks the **signed-commission start**: you write the ask to a file and put it on the record
-yourself, from your own terminal, before any session begins. Adding a cryptographic signature
-over that same ask — so the record can later prove a human, not just a piece of software,
-actually made the request — is a further, optional step; [design/USER-GPG-TRUST-LAYER-FAQ.md
+walks the **commission start**: you write the ask to a file and put it on the record yourself,
+from your own terminal, before any session begins. Adding a cryptographic signature over that
+same ask — turning it into what this project calls a **signed commission**, so the record can
+later prove a human, not just a piece of software, actually made the request — is a further,
+optional step; [design/USER-GPG-TRUST-LAYER-FAQ.md
 §5](USER-GPG-TRUST-LAYER-FAQ.md#5-ceremony-2--signed-commissions) is the copy-paste
 ceremony for it, and [§5 below](#5-audit-and-trust) says more about what signing buys you.
 

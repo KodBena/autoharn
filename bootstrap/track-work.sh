@@ -1,7 +1,7 @@
 #!/bin/sh
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-11T20:34:46Z
-#   last-change: 2026-07-18T16:50:49Z
+#   last-change: 2026-07-18T20:14:01Z
 #   contributors: e4410ef6/main, ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -306,6 +306,33 @@ exec env PICKUP_DEPLOYMENT="\$HERE/deployment.json" $AUTOHARN_ROOT/bootstrap/tem
 SHIM
     chmod +x "$PROJECT_ROOT/$verb"
     echo "wrote $verb (shim -> $AUTOHARN_ROOT/bootstrap/templates/$verb.tmpl)"
+done
+
+# ./legacy/ (design/FABLE-BOUNDARY-MULTIPLEX-AND-CLI-REBASE-SPEC.md §5, ratified ledger row
+# 1631) -- FIXED 2026-07-18, documentation pass: without this, the four shims above
+# (led/pickup/asof-export/distance-to-clean) point at the REBASED templates, which refuse
+# loudly (exit 4, teaching "boundary_url, boundary_deployment" missing) on EVERY call, because
+# this script writes no boundary_url/boundary_deployment into deployment.json (a standing work
+# tracker runs no boundary service by design -- see "STANDING vs WORLD" above) -- and, before
+# this fix, the refusal's own suggested recovery ("run the ./legacy/ original instead") named a
+# directory this script never wrote, so a freshly track-work.sh'd project had NO working
+# led/pickup/asof-export/distance-to-clean at all (witnessed: `HARNESS_PGHOST=192.168.122.1
+# ./led --recent 3` against a fresh faqwit0718doc scratch deployment exited 4 with exactly that
+# message, and `ls legacy` reported "No such file or directory"). Mirrors new-project.sh's own
+# ./legacy/ stanza exactly (same four verbs, same legacy-<verb>.tmpl siblings, same
+# demoted-by-placement posture -- spec §5's own words: "operator recovery when the boundary is
+# down").
+echo "-- ./legacy/ (the four rebased verbs' direct-psql originals, demoted by placement, spec §5;"
+echo "   THIS deployment has no boundary service of its own, so these are the working verbs) --"
+mkdir -p "$PROJECT_ROOT/legacy"
+for verb in led pickup asof-export distance-to-clean; do
+    cat > "$PROJECT_ROOT/legacy/$verb" <<SHIM
+#!/bin/sh
+HERE="\$(cd "\$(dirname "\$0")" && cd .. && pwd)"
+exec env PICKUP_DEPLOYMENT="\$HERE/deployment.json" $AUTOHARN_ROOT/bootstrap/templates/legacy-$verb.tmpl "\$@"
+SHIM
+    chmod +x "$PROJECT_ROOT/legacy/$verb"
+    echo "wrote legacy/$verb (shim -> $AUTOHARN_ROOT/bootstrap/templates/legacy-$verb.tmpl)"
 done
 
 echo ""

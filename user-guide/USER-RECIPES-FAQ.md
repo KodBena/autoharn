@@ -1,8 +1,5 @@
 # Can I do that? — recipes FAQ for operators
 
-<!-- doc-attest-exempt: doc-tree relocation mechanical edit (work item doc-tree-reorg-user-guide, ledger row 1620, 2026-07-18) -- relative link path(s) repointed to a sibling file's new location after a git-mv relocation elsewhere in the tree; no prose rewrite, same disposition as the v1.1.2 release-cut's own markers (commit 543a389). Removal condition: strike this marker and run the real A:B:C loop next time this file is touched for content, not just link repair. -->
-
-
 This page is written for an operator of a scaffolded project who wants to know whether the
 harness supports a thing they have in mind, and what to actually type if it does. Every
 entry below began life as a real operator question ("can we use X for end users?", "can I
@@ -345,9 +342,10 @@ regarding the binding event, using the same verb every other ledger row is count
 $ ./led review <bind-key-row-id> attest technical "fingerprint verified against a witnessed key-signing party"
 ```
 (`led review`'s independence argument requires a stamp-distinct invocation for anything above
-`self-review` — see the verb's own usage text in `bootstrap/templates/led.tmpl`.) This closes
-the loop the panel deployment's own invented proposal→countersign ceremony needed, with zero new
-review machinery — the binding event is just another countersignable ledger row.
+`self-review` — see the verb's own usage text in `bootstrap/templates/led.tmpl`.) A key-binding
+proposal followed by a countersign on that same binding row therefore needs zero new review
+machinery to close the loop — the binding event is just another countersignable ledger row, like
+any other.
 
 *(3) The honest limit.* Binding a fingerprint records custody of a key against an identity — it
 does not authenticate sessions, and it does not make `bind-key` a login mechanism. The HMAC
@@ -395,7 +393,10 @@ principal's id>`, `refusal_attempted_role='bork'` (the server-witnessed `session
 something the client asserted), `actor=<the write-boundary tool principal>` (never the attempted
 actor itself — a refused principal cannot honestly author the record of its own refusal), and a
 64-hex `refusal_payload_digest` (a SHA-256 of the attempted payload — the payload's actual
-content is never stored, digest only, R4 ratified for poison/privacy reasons). The row that was
+content is never stored, digest only —
+[FABLE-REFUSAL-RECORDING-AND-HASH-COVERAGE-SPEC.md](../design/FABLE-REFUSAL-RECORDING-AND-HASH-COVERAGE-SPEC.md)'s
+own rule R4, ratified for poison/privacy reasons: committing a refused payload verbatim would
+hand an adversary a permanent, hash-chained storage channel). The row that was
 attempted never lands; only the record that it was attempted, and refused, does.
 
 **To look at `write_refused` rows directly:** they are ordinary ledger rows like any other, so
@@ -486,7 +487,9 @@ guidance, stated plainly where the header gives no further operator action:
   than the row count) is NOT this failure — it is EXPLAIN-grade, with legitimate named causes
   (a client-side transaction that wrapped the boundary call and rolled it back; a journal-insert
   double failure) and does not, by itself, indicate tampering.
-- `write_refused` rows are also unretractable by rule: nothing may supersede one (R6, ratified).
+- `write_refused` rows are also unretractable by rule: nothing may supersede one
+  ([FABLE-REFUSAL-RECORDING-AND-HASH-COVERAGE-SPEC.md](../design/FABLE-REFUSAL-RECORDING-AND-HASH-COVERAGE-SPEC.md)'s
+  own rule R6, ratified).
   If you see a row attempting to supersede a `write_refused` row, that attempt is itself refused
   and journaled — it is not a state `verify-chain` needs a separate disposition for, because it
   cannot succeed in the first place.
@@ -804,7 +807,9 @@ should spring on a project mid-flight.
 **What is, and is not, witnessed for this mechanism specifically.** PreToolUse hooks demonstrably
 fire on a dispatched subagent's own tool calls — 24 specimens of `change_gate` (this same script,
 this same invocation path) denying a subagent's edit are recorded in the upstream autoharn ledger,
-decision row 1295 (2026-07-17 two-spy synthesis); the underlying session transcripts remain local
+decision row 1295 (2026-07-17 "two-spy synthesis" — one ledger row combining two independent
+observer sessions' findings, "Spy A" and "Spy B" in the row's own text, into a single record
+rather than filing each separately); the underlying session transcripts remain local
 evidence per the project's auditability ruling — the ledger row is the citable record. What had
 NOT been separately witnessed, because every previously-observed world carried zero
 `countersign_obligation` rows under the shipped `observe` default, is `decomposition_review` itself
@@ -1143,16 +1148,30 @@ Yes — `serving/boundary_service.py` is a FastAPI service that is the one decla
 ([ADR-0012](../law/adr/0012-compositional-and-structural-hygiene.md) P2) into an autoharn-managed ledger for UI-class and programmatic consumers, the
 autoharn-panel Vue SPA first. Full spec:
 [FABLE-LEDGER-BOUNDARY-SERVICE-SPEC.md](../design/FABLE-LEDGER-BOUNDARY-SERVICE-SPEC.md) (read it in full,
-including Amendments A1 and A2, before touching the directory); operator pointer:
+including its amendments, before touching the directory); operator pointer:
 [serving/README.md](../serving/README.md). The service adds **no truth of its own** — it
 translates and validates transport-level shape only, refuses what it cannot honor, and never
 coerces. The kernel's own **inner** boundary (the [write boundary](../GLOSSARY.md#write-boundary)
-s43's four `SECURITY DEFINER` functions, plus the derived views) stays the sole authority; the
-repo-root operator verbs (`led`, [`judge`](../GLOSSARY.md#judge), `pickup`, …) are explicitly NOT
-deprecated by this — they remain the sanctioned non-service surface, routing them through the
-service is a reserved v2 question.
+s43's four `SECURITY DEFINER` functions, plus the derived views) stays the sole authority.
 
-**How do I launch it, and what does it actually say?**
+**UPDATED 2026-07-18 — the repo-root operator verbs are no longer a separate, un-served
+surface.** The paragraph above once said `led`/`judge`/`pickup` were "explicitly NOT
+deprecated by this — routing them through the service is a reserved v2 question." That v2
+question is now answered and built: `led`, `pickup`, `asof-export`, and `distance-to-clean`
+became thin HTTP clients of this service (the "boundary multiplex and CLI rebase, and the
+workflow-unit compiler" section below has the full story, including the two new
+`deployment.json` keys this rebase needs and what happens when they're missing). `judge` and
+`audit` do **not** rebase — they drive `clingo` plus a differential against the world directly,
+"not a ledger client in the boundary's sense" (the rebase spec's own words) — and neither does
+the scaffolding itself.
+
+**How do I launch it, and what does it actually say?** The service used to take a single
+`--deployment deployment.json` file; **as of the 2026-07-18 multiplex build it takes
+`--config <path-to-boundary-multiplex.toml>` instead** and can serve more than one deployment
+from one process (see "How do I serve more than one project from one boundary?" below for the
+config shape and the `/d/{deployment}` routing this changes). The single-file `--deployment`
+launch form below is UNWITNESSED against the current build — retained here as history of what
+this section originally verified, not as a current invocation to copy:
 ```
 $HOME/w/vdc/venvs/generic/bin/python -m serving.boundary_service --deployment deployment.json --port 18421
 ```
@@ -1237,6 +1256,198 @@ functional (backwards compatibility is the commission's own carve-out; nothing i
 tolerated, nothing is silently broken). That marking is panel-repo work, out of scope for this
 autoharn checkout and UNEXERCISED from here — the spec is explicit that the panel-side session
 runs it, citing this spec, never a session running against a live panel checkout from here.
+
+## Boundary multiplex, CLI rebase, and the workflow-unit compiler (2026-07-18)
+
+The four recipes below cover the same day's landed work: the operator verbs `led`/`pickup`/
+`asof-export`/`distance-to-clean` became HTTP clients of the boundary service above rather than
+direct `psql` callers, the service itself learned to serve more than one deployment from one
+process, and a new compiler turns a fixed-shape workflow TOML into something the kernel actually
+drives. Specs: [FABLE-BOUNDARY-MULTIPLEX-AND-CLI-REBASE-SPEC.md](../design/FABLE-BOUNDARY-MULTIPLEX-AND-CLI-REBASE-SPEC.md)
+(ratified, ledger row 1631), [FABLE-BOUNDARY-READ-SURFACE-SPEC.md](../design/FABLE-BOUNDARY-READ-SURFACE-SPEC.md)
+(ratified, ledger row 1652 — the amendment that grew the route table from eleven to fourteen so
+the CLI rebase had a read surface to land on), and
+[FABLE-WORKFLOW-UNIT-COMPILER-SPEC.md](../design/FABLE-WORKFLOW-UNIT-COMPILER-SPEC.md) (commission
+ledger row 1658, ratified rows 1659/1660). Operator pointer for the served side:
+[serving/README.md](../serving/README.md).
+
+**My `./led` says the boundary is unreachable, or that `deployment.json` is missing keys — what
+do I do?**
+As of this rebase, `./led`/`./pickup`/`./asof-export`/`./distance-to-clean` are thin HTTP clients
+of the boundary service, not direct `psql` callers — and every rebased shim needs two new
+**optional** `deployment.json` keys to find that service: `boundary_url` (the served boundary's
+own base URL, no trailing slash, no `/d/{deployment}` segment) and `boundary_deployment` (the
+`/d/{name}` path segment this project answers under on the served side — deliberately a
+*different* field from `deployment.json`'s pre-existing `name`, so the two don't collide on one
+meaning). Read `serving/boundary_cli_client.py`'s own module docstring for the exact shape. Three
+distinct failure shapes, and they carry three distinct exit codes so you never mistake one for
+another:
+- **Exit 4 — boundary unreachable / `deployment.json` missing the two keys.** WITNESSED against a
+  fresh `bootstrap/track-work.sh` deployment (a standing work tracker, which runs no boundary
+  service of its own by design, so it never gets these keys):
+  ```
+  $ ./led --recent 3
+  led: deployment record at .../deployment.json is missing required-for-the-served-shim
+  field(s): boundary_url, boundary_deployment (... refused-if-absent, never guessed. Add both
+  keys to .../deployment.json, or run the ./legacy/ original instead.
+  ```
+  (exit 4). The same exit code covers a genuinely unreachable service (both keys present, but
+  nothing is listening at `boundary_url`) — `boundary_cli_client.py`'s own convention: "this shim
+  never had a response to classify."
+- **Exit 3 — the boundary itself refused** (a typed HTTP 4xx/408/413/422/429/503/409 shape FROM
+  the service — `payload_too_large`, `server_saturated`, `deployment_saturated`,
+  `unknown_deployment`, `unknown_view`, `capability_absent`, and the like). There was no kernel
+  `write_verdict` at all for this call — a boundary-level refusal is never dressed as a kernel
+  one.
+- **Exit 1 — the kernel itself refused** (a genuine s43 `write_verdict` with
+  `disposition: "refused"`) — byte-identical to what the direct-`psql` `led` always exited for
+  exactly this case. Exit 0 is the kernel-accepted case, likewise byte-identical to the legacy
+  exit.
+
+**`./legacy/` is the recovery path — always, not just when the boundary happens to be down.** The
+direct-`psql` originals of the four rebased verbs move to `./legacy/led`, `./legacy/pickup`,
+`./legacy/asof-export`, `./legacy/distance-to-clean` — demoted by placement, never deleted, still
+executable, unchanged in capability. On a `bootstrap/new-project.sh --new-world` scaffold this
+directory is written automatically; run `./legacy/led` exactly like `./led`. WITNESSED, the same
+scratch deployment as above, with `./legacy/led` instead of `./led`:
+```
+$ ./legacy/led --recent 3
+(prints the recent rows — exit 0, no boundary involved at all)
+```
+**A genuine hazard this recipe's own verification found and fixed, named so it isn't
+rediscovered:** before this pass, `bootstrap/track-work.sh` (the *other* scaffold — see
+[USER-GUIDE.md §3a](USER-GUIDE.md#3a-just-track-your-work-bootstracktrack-worksh)) wrote the four
+rebased shims but never wrote `./legacy/` at all — so a freshly `track-work.sh`'d project's
+`./led` refused with the exit-4 message above, pointed the operator at `./legacy/led` for
+recovery, and that path simply did not exist. Fixed in this same pass (`bootstrap/track-work.sh`
+now writes `./legacy/` identically to `new-project.sh`); re-verified live against a fresh
+`faqwit0718doc` scratch deployment on the toy database, torn down with zero residue afterward.
+
+**How do I serve more than one project from one boundary?**
+`serving/boundary_service.py` used to take `--deployment deployment.json` (one process per
+deployment); it now takes `--config <path-to-boundary-multiplex.toml>` and serves every
+deployment the TOML names from one process — "I don't want to have to start one FastAPI server
+for every deployment," the maintainer's own framing for the commission. Shape
+(`serving/boundary_multiplex_config.py`'s own module docstring has the authoritative version;
+note it needs two more `pg`-prefixed keys than the design spec's own illustrative example, named
+there as a flagged, smallest-honest-choice addition):
+```toml
+[deployments.autoharn1]
+pghost = "192.168.122.1"
+pgdatabase = "autoharn1"
+pguser = "led_writer"
+pgschema = "autoharn1"
+pgkern = "autoharn1_kernel"
+
+[deployments.omega]
+pghost = "192.168.122.1"
+pgdatabase = "omega"
+pguser = "led_writer"
+pgschema = "omega"
+pgkern = "omega_kernel"
+```
+The WHOLE file validates before the socket binds — an unknown key, a missing required key, or
+zero deployments all refuse startup by name; per-deployment reachability is *not* probed at
+startup (a deployment whose database is down is a per-request typed 503, exactly as before).
+Every route in the endpoint table gains a mandatory leading `/d/{deployment}` segment —
+`GET /rows/current` is actually `GET /d/{deployment}/rows/current` — and `{deployment}` is valid
+iff it's a key of the loaded config; anything else is a typed 404 `unknown_deployment` naming the
+known set. This holds even for a config with exactly one deployment (the mandatory discriminator
+is one route shape, not two dialects — [serving/README.md](../serving/README.md)'s own
+"Multiplexing" section has the admission-bound details: `MAX_INFLIGHT_KERNEL_CALLS` stays the
+global bound, and a new per-deployment sub-bound stops one stalled deployment from starving its
+siblings). UNWITNESSED in this pass — launching a live two-deployment multiplexed server was out
+of scope for a documentation-only session; `seen-red/boundary-multiplex/run_fixtures.py` — its own
+four numbered witness cases WM1 through WM4, covering cross-deployment write isolation, the
+unknown-deployment refusal, malformed-config refusal, and per-deployment admission saturation
+respectively (the multiplex spec's own §7 names each in full) — is the project's own live witness
+suite for this mechanism, cited rather than re-run here.
+
+**Which `led` subcommands go over the boundary, and which still need `./legacy/led`?** The honest
+coverage split, verbatim from `bootstrap/templates/led.tmpl`'s own module docstring (its "SCOPE,
+HONESTLY NAMED" section — read that file directly for the authoritative, self-updating version):
+- **Covered** (served, `./led` works): `led --recent [N]` / `led current [N]` / `led show <id>`;
+  `led question-status` / `review-gap` / `stamp-distinctness` / `standing`; `led --json
+  <ledger|review|registration|obligation> <file|->`; the generic write path (`led [flags] <kind>
+  <statement...>`, including `-f`/`-e`/`--supersedes`/`--amends`/`--amends-scope`/`--answers`/
+  `--refs`/`--concern`/`--evidence`/`--confidence`/`--event-time`, and `decision`'s own `--grade`);
+  `led register-principal <name> <class>`; `led obligate <scope> <assigned-by> <obliged-actor>`;
+  `led review <entry-id> <verdict> <independence> [--antecedent id] <statement...>`.
+- **NOT covered — `led work *` is over the boundary, at all, not yet.** `led obligate revoke`
+  (a raw, privilege-gated `DELETE`, structurally incompatible with the boundary's own "never falls
+  back to raw DML" charter — the same exclusion class §5 already names for `judge`, applied here
+  to one subcommand). `led decomposition-review-status`, `led briefing`, and **the entire `led
+  work *` family** (`work open`/`claim`/`close`/`depends`/`violations`/…) are UNEXERCISED by this
+  build — a real, disclosed scope boundary, not a structural incompatibility, and named rather
+  than silently dropped. The client-side statement-grammar pre-flight the legacy generic path runs
+  for `review:`/`review-done:`/`resource:`/`estimate:`/`taxon:`/`interface:` statements is also
+  omitted (a CLI-side convention check, not a kernel invariant — the kernel accepts any statement
+  text under those kinds regardless). **Practically: any `led work` command — which is most of what
+  a workflow-unit hydration/drive script below actually does — runs through `./legacy/led`, always,
+  today**; the workflow-unit compiler's own generated scripts default `--led ./legacy/led` for
+  exactly this reason, not as an oversight.
+
+**How do I turn a fixed-shape workflow TOML into something that actually runs?**
+`tools/workflow_compile.py` reads one `design/workflows/*.toml` (the pipeline-dsl-v0 grammar —
+`[[phases]]` with `name`/`depends_on`, `[roles.<phase>]` with `authors`/`implements`/`reviews`
+prose) and emits two artifacts: a **hydration script** (`hydrate.sh` — one `led work open` per
+phase, one `led work depends ... blocks-start` per `depends_on` edge, and an obligation act where
+a phase's `reviews` clause reads as an independent countersign) and a **driver script**
+(`drive.py` — claims each phase, prints its brief for the caller's own agent dispatch, then
+closes it). Usage: `python3 tools/workflow_compile.py <path-to.toml> [--out-dir DIR]`, then
+`bash <out-dir>/<stem>/hydrate.sh --instance <token> [--yes]` and
+`python3 <out-dir>/<stem>/drive.py --instance <token>` — the `--instance` token is **mandatory**
+on both (a TOML is a reusable shape; an instance is one engagement of it — slugs are
+`<stem>-<instance>-<phase>`, so two different tokens are two independently claimable waves of the
+same TOML, and re-hydrating the SAME instance is idempotent by refusal: an already-open slug
+refuses loudly and the script treats that as "already hydrated," never as an error).
+
+**The one design commitment that makes this safe to trust: the compiler adds no enforcement
+machinery of its own.** Every blocking mechanism the driver obeys is a kernel fact it discovers by
+*attempting the act and reading the kernel's own refusal* — never precomputed. A dependency
+blocker is the s39 `blocks-start` claim-time refusal; an obligation blocker is countersign debt
+visible in `review_gap`; a role constraint is whatever the claiming principal's own standing
+permits. WITNESSED, both polarities, compiled from `design/workflows/faq-abc-fixpoint-loop.toml`
+and hydrated/driven against a scratch `--new-world` scaffold (`faqwit0718wc` on the toy database,
+torn down with zero residue afterward) — claiming a dependent phase before its antecedent closed:
+```
+$ ./legacy/led work claim faq-abc-fixpoint-loop-demo2-fresh-context-review
+led: REFUSED by the kernel write boundary (SQLSTATE P0001; journaled as write_refused row 24 ...):
+  Ledger policy: claim of work item '...fresh-context-review' refused — its blocks-start
+  antecedent(s) are not yet resolved: ...author-draft (item is not yet closed). Claim and finish
+  each named antecedent first ...
+```
+and the identical claim accepted once the antecedent was genuinely closed:
+```
+$ ./legacy/led work claim faq-abc-fixpoint-loop-demo2-fresh-context-review
+led: row 31 written.
+```
+**Suspension halts a wave; lifting it resumes the wave — this is the same kernel-refusal-is-the-
+gate posture, not a special case the driver codes for.** Suspend the claiming principal (the s45
+standing act) mid-wave and the driver's next claim/write on that principal's behalf is refused by
+the kernel with its own teach-text, never simulated by the driver; lift the suspension and the
+same act is accepted. The compiler spec names a standing rule for this witness (its own "WC7,"
+the seventh named witness case in
+[FABLE-WORKFLOW-UNIT-COMPILER-SPEC.md](../design/FABLE-WORKFLOW-UNIT-COMPILER-SPEC.md)): if any
+kernel act the driver relies on turns out NOT to gate on the actor's standing, that must be
+reported loudly as a candidate kernel-lineage gap for the maintainer to rule on, never patched
+over by having the driver simulate the halt itself. This project's own build witness (ledger row
+1661) ran WC7 both polarities and reported **no such gap** — every write gates on the actor's
+standing universally, so there was nothing for the driver to route around even by accident.
+UNWITNESSED in *this* documentation pass (re-running WC7 was out of scope here) — cited from the
+build's own witness record rather than re-driven.
+
+**Named seams, honestly, if you're deciding whether to lean on this compiler for something load-
+bearing:** the driver's own phase-count tally undercounts cosmetically (a display bug, not a
+correctness one — the kernel's own claim/close verdicts are still what gates everything); the
+compiler's own **J2** heuristic (named for its position in `tools/workflow_compile.py`'s own
+"JUDGMENT CALLS THIS TOOL MAKES" list — J1 is the principal-identity default, J2 the one named
+here, J3/J4 cover obligation-act deduplication and close-disposition defaults) that decides "does
+this phase's `reviews` clause want an independent obligation act" is fit to the vocabulary of the
+four workflow specimens on file today, not a formal grammar — a future
+specimen it misjudges is a real gap to bring back to the compiler spec, not a silent miss; and (per
+the "which `led` subcommands" recipe just above) every `led work` call the driver makes runs
+through `./legacy/led`, because the served boundary doesn't cover `led work *` yet.
 
 ## CLI quality-of-life: row-id echo and `judge` auto-layer detection
 
@@ -1927,9 +2138,11 @@ rows 51/52 live in the panel deployment's own ledger, unreachable from this sess
 provenance per row 1364's own text, not independently re-derived.
 
 **A mechanical illustration of step 5** (the split-filing act itself — NOT a re-enactment of the
-real specimen, which this session cannot reach), WITNESSED on the same disposable scratch world
-used for the pairing-convention walkthrough above (`faqwit0718`, torn down after — see that
-section for the scaffold command):
+real specimen, which this session cannot reach), WITNESSED on a disposable scratch world of the
+same `faqwit0718` family this page's scratch demonstrations use (torn down after — see
+[USER-SHAPED-RECIPES-FAQ.md's bookkeeping-close-pairing-convention
+section](USER-SHAPED-RECIPES-FAQ.md#the-bookkeeping-close-pairing-convention) for the scaffold
+command this family of worlds is built with):
 ```
 $ ./led decision "FAQ-DEMO incident verdict: illustrative fact-finding-only record for the recusal-then-independent-RCA recipe transcript -- this specific scratch-world act, no systemic claim."
 led: row 18 written.

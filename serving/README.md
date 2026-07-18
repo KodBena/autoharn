@@ -87,6 +87,13 @@ deployment's kernel lineage head, and this service's own version — replacing t
 former direct `pg_proc`/`information_schema` probes). See `seen-red/boundary-read-surface/
 run_fixtures.py` (WR1-WR5) for the live witnesses.
 
+**Operator-facing recipes for all of the above** (what to type when `./led` refuses over the
+boundary, the multiplex TOML shape worked through end to end, and the honest split of which `led`
+subcommands are served vs. still `./legacy/led`-only) live in
+[user-guide/USER-RECIPES-FAQ.md](../user-guide/USER-RECIPES-FAQ.md)'s "Boundary multiplex, CLI
+rebase, and the workflow-unit compiler" section — this README is the mechanism reference, that
+page is the "what do I actually type" companion.
+
 ## Running it
 
 ```sh
