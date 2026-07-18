@@ -55,8 +55,9 @@
 |||   resurrection-proof governing read with the trap structural (g45a-f); maySupersede
 |||   carries s45 3.4's same-kind/identity-continuity discipline beside s43 R6 (b45d-j) --
 |||   ONE typed supersession relation, the upgrade the consult argued would have PREDICTED
-|||   3.4 had it existed at s43. A design-probe finding is filed at maySupersede (the
-|||   unblessed false->true flag-transition cell), named for the maintainer, not resolved.
+|||   3.4 had it existed at s43. A design-probe finding was filed at maySupersede (the
+|||   unblessed false->true flag-transition cell) and RULED intended by the maintainer
+|||   the same day (2026-07-18, ledger row 1650) -- see the dated note at maySupersede.
 |||   s46 -- the defeat calculus with the defeat-input exclusion fork rendered as a PARAMETER:
 |||   both horns defined (defeatInputRaw/defeatInputCur), NEITHER adjudicated (the
 |||   maintainer's call, per the delta's own spec-silent disclosure); the agree/diverge
@@ -1622,6 +1623,12 @@ maySupersede (PWriteRefused _ _ _ _ _ _) _ = False
 -- declaration", implying the fresh path is the sanctioned one, yet the
 -- supersession path also works. Whether that cell is intended (a correction
 -- of an erroneous retraction) or should be refused is the maintainer's call.
+-- RULED 2026-07-18 (maintainer, same day the finding was filed; ledger row
+-- 1650): the cell is INTENDED -- "as a matter of practice it makes sense
+-- ... that this should be possible." Re-assertion by superseding a
+-- retraction row is sanctioned alongside the fresh-row path; no kernel
+-- change follows (the SQL already permits it), and this rendering stands
+-- as the blessed semantics, no longer an open question.
 maySupersede (PStandingDeclared tSubj tRole _) new = case new of
   PStandingDeclared nSubj nRole nAct => nRole == tRole && (nAct || nSubj == tSubj)
   _                                  => False
