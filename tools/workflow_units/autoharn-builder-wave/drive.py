@@ -12,8 +12,12 @@ default, or --review-bookkeeping --witness commit:<sha> when the phase's reviews
 bookkeeping close -- see J4 in tools/workflow_compile.py's own docstring).
 
 Usage:
-    python3 autoharn-builder-wave/drive.py [--led <path>] [--actor <phase>=<principal> ...]
+    python3 autoharn-builder-wave/drive.py --instance <token> [--led <path>] [--actor <phase>=<principal> ...]
                               [--commit-witness <phase>=<sha> ...] [--dry-run] [--rounds N]
+
+--instance <token> is MANDATORY (spec Amendment, row 1660): it must be the SAME token given to
+hydrate.sh for this wave -- slugs are `autoharn-builder-wave-<instance>-<phase>`, so a different token drives a
+DIFFERENT (or not-yet-hydrated) instance of this same TOML shape.
 
 Exit 0 when the round budget completes (whether or not every phase closed -- BLOCKED units are
 an ordinary, reportable outcome, not a driver failure); exit 1 on an unexpected kernel refusal
@@ -23,6 +27,7 @@ unexpected here) or a local usage error (exit 2).
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 import sys
 
@@ -33,6 +38,7 @@ PHASES = ['claim', 'build-and-witness', 'close-deferred', 'orchestrator-merge']
 BRIEFS = {'claim': "authors: maintainer/orchestrator (ledger work item authored via ./led work open, prior to this wave)\nimplements: sonnet builder (./led work claim <slug> inside its own isolated worktree)\ndone: the ledger row `work_claimed: <slug>` exists for this builder's principal, per CLAUDE.md's standing delegation contract.\nlanding_zone: this project's append-only Postgres ledger (via ./led), read by ./pickup on the next hydration.", 'build-and-witness': "authors: sonnet builder\nimplements: sonnet builder\nreviews: sonnet builder, self-witnessed both polarities on scratch worlds (t/t and f/f, per the standing witness discipline) -- CLAUDE.md's 'Class-ratified fail-safe deltas' ruling names this as the bar for kernel-lineage work; this build item (non-kernel) applies the same witness discipline by analogy, not by that ruling's own scope.\ndone: the deliverable is witnessed on both polarities (or, for non-kernel work like this DSL build, the equivalent: every deliverable exercised and its refusal paths exercised too) before any close is attempted -- CLAUDE.md's standing witness discipline: 'A report states, per item: WITNESSED (with observed output), REFUSED-AS-EXPECTED, or UNEXERCISED with the concrete blocker.'\nlanding_zone: the builder's own isolated worktree under .claude/worktrees/, committed but not pushed; witness output recorded in the builder's final report to the orchestrator.", 'close-deferred': 'authors: sonnet builder\nimplements: sonnet builder (./led work close <slug> shipped --review-deferred --witness <short-sha>)\nreviews: deferred explicitly -- --review-deferred means the independent countersign has NOT yet happened at this phase; it is owed to the orchestrator at the next phase, not skipped.\ndone: `./led work close <slug> shipped --review-deferred --witness <short-sha>` is filed, naming the commit the witness evidence lives at.\nlanding_zone: the ledger row `work_closed: <slug> (shipped)` with `--review-deferred` and `--witness <short-sha>`, naming the worktree commit; the worktree branch itself, awaiting merge.', 'orchestrator-merge': "authors: orchestrator\nimplements: orchestrator (merges each builder's worktree branch, wires cross-item seams no single builder could see)\nreviews: orchestrator, discharging the review deferred at close-deferred, per CLAUDE.md's runs-are-linear ruling: a run's world is dust once merged, so this review happens at the seam, not by reopening the builder's own worktree.\ndone: the branch is merged, cross-item seams (files two builders both touched) are wired and re-verified, and the deferred review from close-deferred is discharged -- either confirmed or sent back.\nlanding_zone: the repository's main branch (post-merge), plus a `decision` ledger row per user-guide/ORCH-ABC-AUDIT-LOOP-RECIPE.md's merge convention (`merge: <branch> -> <commit> (work items: <slug>)`)."}
 BOOKKEEPING_PHASES = []
 DEFAULT_ACTOR = "author"
+INSTANCE_TOKEN_RE = re.compile(r"^[A-Za-z0-9_-]+$")
 
 
 def run_led(led: str, args: list[str], actor: str) -> tuple[int, str]:
@@ -54,6 +60,7 @@ def parse_kv(pairs: list[str]) -> dict[str, str]:
 
 def main(argv: list[str]) -> int:
     led = "./legacy/led"
+    instance: str | None = None
     actor_overrides: dict[str, str] = {}
     commit_witness: dict[str, str] = {}
     dry_run = False
@@ -64,6 +71,8 @@ def main(argv: list[str]) -> int:
         a = argv[i]
         if a == "--led":
             led = argv[i + 1]; i += 2
+        elif a == "--instance":
+            instance = argv[i + 1]; i += 2
         elif a == "--actor":
             actor_overrides.update(parse_kv([argv[i + 1]])); i += 2
         elif a == "--commit-witness":
@@ -76,6 +85,19 @@ def main(argv: list[str]) -> int:
             print(f"drive.py: unrecognized argument '{a}'", file=sys.stderr)
             return 2
 
+    # --instance is MANDATORY and allowlist-validated BEFORE anything else runs (same
+    # interpreter-boundary discipline as hydrate.sh's own check -- this token is concatenated
+    # into every slug this run claims/closes).
+    if not instance:
+        print("drive.py: REFUSED -- --instance <token> is mandatory (spec Amendment, row 1660).",
+              file=sys.stderr)
+        return 2
+    if not INSTANCE_TOKEN_RE.match(instance):
+        print(f"drive.py: REFUSED -- --instance '{instance}' is not [A-Za-z0-9_-]+ "
+              f"(interpreter-boundary discipline: this token is concatenated into every slug "
+              f"this run claims/closes).", file=sys.stderr)
+        return 2
+
     for phase in BOOKKEEPING_PHASES:
         if phase not in commit_witness:
             print(f"drive.py: REFUSED locally (not a kernel refusal) -- phase '{phase}' "
@@ -83,13 +105,13 @@ def main(argv: list[str]) -> int:
                   f"none given.", file=sys.stderr)
             return 2
 
-    print(f"-- driving workflow '{STEM}' (source {TOML_REL}) via {led} --")
+    print(f"-- driving workflow '{STEM}' instance '{instance}' (source {TOML_REL}) via {led} --")
 
     closed: set[str] = set()
     for round_no in range(1, rounds + 1):
         made_progress = False
         for phase in PHASES:
-            slug = f"{STEM}-{phase}"
+            slug = f"{STEM}-{instance}-{phase}"
             if slug in closed:
                 continue
             actor = actor_overrides.get(phase, DEFAULT_ACTOR)

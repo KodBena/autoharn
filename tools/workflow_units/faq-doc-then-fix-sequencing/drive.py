@@ -12,8 +12,12 @@ default, or --review-bookkeeping --witness commit:<sha> when the phase's reviews
 bookkeeping close -- see J4 in tools/workflow_compile.py's own docstring).
 
 Usage:
-    python3 faq-doc-then-fix-sequencing/drive.py [--led <path>] [--actor <phase>=<principal> ...]
+    python3 faq-doc-then-fix-sequencing/drive.py --instance <token> [--led <path>] [--actor <phase>=<principal> ...]
                               [--commit-witness <phase>=<sha> ...] [--dry-run] [--rounds N]
+
+--instance <token> is MANDATORY (spec Amendment, row 1660): it must be the SAME token given to
+hydrate.sh for this wave -- slugs are `faq-doc-then-fix-sequencing-<instance>-<phase>`, so a different token drives a
+DIFFERENT (or not-yet-hydrated) instance of this same TOML shape.
 
 Exit 0 when the round budget completes (whether or not every phase closed -- BLOCKED units are
 an ordinary, reportable outcome, not a driver failure); exit 1 on an unexpected kernel refusal
@@ -23,6 +27,7 @@ unexpected here) or a local usage error (exit 2).
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 import sys
 
@@ -33,6 +38,7 @@ PHASES = ['doc-authoring', 'ledger-citation', 'fix-authoring']
 BRIEFS = {'doc-authoring': "authors: the orchestrator, who dispatches a document-only agent whose sole output is the docs describing what changed and why\nimplements: the document-only agent -- by construction, it produces documentation and nothing else in this phase\ndone: the docs describing what changed and why have landed (committed or otherwise durably recorded)\nlanding_zone: the repository's tracked source tree (the docs themselves, committed)", 'ledger-citation': "authors: the orchestrator -- and only the orchestrator, once it has itself read the produced docs\nimplements: the orchestrator, writing an ordinary ledger row (e.g. a decision row) citing the docs produced in doc-authoring\ndone: the orchestrator's own ledger row citing the produced docs lands, written only once the orchestrator has actually read them\nlanding_zone: the ledger -- an ordinary ledger row (this project's own worked instance used a decision row) citing the docs produced in doc-authoring", 'fix-authoring': "authors: the orchestrator, who dispatches a fix-only agent in a wholly separate dispatch -- one that, by construction, did not exist yet at the moment the ledger-citation row landed\nimplements: the fix-only agent\ndone: the fix-only agent's own ledger row(s) land, and by construction the agent's own dispatch postdates the ledger-citation row's id\nlanding_zone: the repository's tracked source tree (the fix itself, committed) plus the ledger row(s) the fix-only agent's own dispatch and close produce"}
 BOOKKEEPING_PHASES = []
 DEFAULT_ACTOR = "author"
+INSTANCE_TOKEN_RE = re.compile(r"^[A-Za-z0-9_-]+$")
 
 
 def run_led(led: str, args: list[str], actor: str) -> tuple[int, str]:
@@ -54,6 +60,7 @@ def parse_kv(pairs: list[str]) -> dict[str, str]:
 
 def main(argv: list[str]) -> int:
     led = "./legacy/led"
+    instance: str | None = None
     actor_overrides: dict[str, str] = {}
     commit_witness: dict[str, str] = {}
     dry_run = False
@@ -64,6 +71,8 @@ def main(argv: list[str]) -> int:
         a = argv[i]
         if a == "--led":
             led = argv[i + 1]; i += 2
+        elif a == "--instance":
+            instance = argv[i + 1]; i += 2
         elif a == "--actor":
             actor_overrides.update(parse_kv([argv[i + 1]])); i += 2
         elif a == "--commit-witness":
@@ -76,6 +85,19 @@ def main(argv: list[str]) -> int:
             print(f"drive.py: unrecognized argument '{a}'", file=sys.stderr)
             return 2
 
+    # --instance is MANDATORY and allowlist-validated BEFORE anything else runs (same
+    # interpreter-boundary discipline as hydrate.sh's own check -- this token is concatenated
+    # into every slug this run claims/closes).
+    if not instance:
+        print("drive.py: REFUSED -- --instance <token> is mandatory (spec Amendment, row 1660).",
+              file=sys.stderr)
+        return 2
+    if not INSTANCE_TOKEN_RE.match(instance):
+        print(f"drive.py: REFUSED -- --instance '{instance}' is not [A-Za-z0-9_-]+ "
+              f"(interpreter-boundary discipline: this token is concatenated into every slug "
+              f"this run claims/closes).", file=sys.stderr)
+        return 2
+
     for phase in BOOKKEEPING_PHASES:
         if phase not in commit_witness:
             print(f"drive.py: REFUSED locally (not a kernel refusal) -- phase '{phase}' "
@@ -83,13 +105,13 @@ def main(argv: list[str]) -> int:
                   f"none given.", file=sys.stderr)
             return 2
 
-    print(f"-- driving workflow '{STEM}' (source {TOML_REL}) via {led} --")
+    print(f"-- driving workflow '{STEM}' instance '{instance}' (source {TOML_REL}) via {led} --")
 
     closed: set[str] = set()
     for round_no in range(1, rounds + 1):
         made_progress = False
         for phase in PHASES:
-            slug = f"{STEM}-{phase}"
+            slug = f"{STEM}-{instance}-{phase}"
             if slug in closed:
                 continue
             actor = actor_overrides.get(phase, DEFAULT_ACTOR)

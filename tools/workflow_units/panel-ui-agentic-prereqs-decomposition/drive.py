@@ -12,8 +12,12 @@ default, or --review-bookkeeping --witness commit:<sha> when the phase's reviews
 bookkeeping close -- see J4 in tools/workflow_compile.py's own docstring).
 
 Usage:
-    python3 panel-ui-agentic-prereqs-decomposition/drive.py [--led <path>] [--actor <phase>=<principal> ...]
+    python3 panel-ui-agentic-prereqs-decomposition/drive.py --instance <token> [--led <path>] [--actor <phase>=<principal> ...]
                               [--commit-witness <phase>=<sha> ...] [--dry-run] [--rounds N]
+
+--instance <token> is MANDATORY (spec Amendment, row 1660): it must be the SAME token given to
+hydrate.sh for this wave -- slugs are `panel-ui-agentic-prereqs-decomposition-<instance>-<phase>`, so a different token drives a
+DIFFERENT (or not-yet-hydrated) instance of this same TOML shape.
 
 Exit 0 when the round budget completes (whether or not every phase closed -- BLOCKED units are
 an ordinary, reportable outcome, not a driver failure); exit 1 on an unexpected kernel refusal
@@ -23,6 +27,7 @@ unexpected here) or a local usage error (exit 2).
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 import sys
 
@@ -33,6 +38,7 @@ PHASES = ['decompose', 'profile-storage', 'readonly-lock', 'profile-health-surfa
 BRIEFS = {'decompose': "authors: sonnet-main-session\nreviews: sonnet-independent-subagent\ndone: the parent work_opened (row 55) plus its four children (rows 56-59) and two depends_on edges (rows 61-62) are countersigned clean (row 60) -- the commission's own 'iterate until convergence' clause (row 48) required revising and re-submitting on any real defect, not just an unantecedented-but-reasonable inference (rows 63-64).\nlanding_zone: ledger rows 48-64: the parent work_opened (55), four children (56-59), two depends_on edges (61-62), and the countersign (60).", 'profile-storage': 'authors: sonnet-main-session\nimplements: sonnet-main-session\nreviews: sonnet-independent-subagent\ndone: the item is correctly scoped as its own resumable unit and its implementer assumptions (rows 65-66, 72-73) are antecedent-audited as reasonable though uncommissioned; countersigned in row 83.\nlanding_zone: backend/config.py (PanelConfig dataclass, load_config()) in the panel repo; ledger rows 56, 65-66, 72-73, 83.', 'readonly-lock': 'authors: sonnet-main-session\nimplements: sonnet-main-session\nreviews: sonnet-independent-subagent\ndone: the item is correctly scoped, its five implementer design facts (rows 67-70, 74-77) are antecedent-audited as reasonable, and the mount-gating mechanism is verified consistent with the existing cfg.read_only gate (app.py:141-144); countersigned in row 85.\nlanding_zone: backend/app.py (route-mount gate) and backend/extensions/autoharn/cosign.py in the panel repo; ledger rows 58, 67-70, 74-77, 85.', 'profile-health-surface': "authors: sonnet-main-session\nimplements: sonnet-main-session\nreviews: sonnet-independent-subagent\ndone: the item is correctly scoped, its names-only-never-credentials security boundary (rows 71, 78) is antecedent-audited as sound and consistent with project ethos, and its single depends_on edge (row 61, on profile-storage) is verified correct and sufficient; countersigned in row 84.\nlanding_zone: backend/app.py's api_health() and frontend/src/core/services/types.ts's HealthResponse type in the panel repo; ledger rows 57, 61, 71, 78, 84.", 'readonly-lock-indicator': "authors: sonnet-main-session\nimplements: sonnet-main-session\nreviews: sonnet-independent-subagent\ndone: the item's dependency on readonly-lock (row 62) is verified correct; same-file contention with profile-health-surface (row 81) is filed as a scheduling finding, not a defect in this item's own definition.\nlanding_zone: frontend/src/App.vue's header badge region in the panel repo; ledger rows 59, 62, 81."}
 BOOKKEEPING_PHASES = []
 DEFAULT_ACTOR = "author"
+INSTANCE_TOKEN_RE = re.compile(r"^[A-Za-z0-9_-]+$")
 
 
 def run_led(led: str, args: list[str], actor: str) -> tuple[int, str]:
@@ -54,6 +60,7 @@ def parse_kv(pairs: list[str]) -> dict[str, str]:
 
 def main(argv: list[str]) -> int:
     led = "./legacy/led"
+    instance: str | None = None
     actor_overrides: dict[str, str] = {}
     commit_witness: dict[str, str] = {}
     dry_run = False
@@ -64,6 +71,8 @@ def main(argv: list[str]) -> int:
         a = argv[i]
         if a == "--led":
             led = argv[i + 1]; i += 2
+        elif a == "--instance":
+            instance = argv[i + 1]; i += 2
         elif a == "--actor":
             actor_overrides.update(parse_kv([argv[i + 1]])); i += 2
         elif a == "--commit-witness":
@@ -76,6 +85,19 @@ def main(argv: list[str]) -> int:
             print(f"drive.py: unrecognized argument '{a}'", file=sys.stderr)
             return 2
 
+    # --instance is MANDATORY and allowlist-validated BEFORE anything else runs (same
+    # interpreter-boundary discipline as hydrate.sh's own check -- this token is concatenated
+    # into every slug this run claims/closes).
+    if not instance:
+        print("drive.py: REFUSED -- --instance <token> is mandatory (spec Amendment, row 1660).",
+              file=sys.stderr)
+        return 2
+    if not INSTANCE_TOKEN_RE.match(instance):
+        print(f"drive.py: REFUSED -- --instance '{instance}' is not [A-Za-z0-9_-]+ "
+              f"(interpreter-boundary discipline: this token is concatenated into every slug "
+              f"this run claims/closes).", file=sys.stderr)
+        return 2
+
     for phase in BOOKKEEPING_PHASES:
         if phase not in commit_witness:
             print(f"drive.py: REFUSED locally (not a kernel refusal) -- phase '{phase}' "
@@ -83,13 +105,13 @@ def main(argv: list[str]) -> int:
                   f"none given.", file=sys.stderr)
             return 2
 
-    print(f"-- driving workflow '{STEM}' (source {TOML_REL}) via {led} --")
+    print(f"-- driving workflow '{STEM}' instance '{instance}' (source {TOML_REL}) via {led} --")
 
     closed: set[str] = set()
     for round_no in range(1, rounds + 1):
         made_progress = False
         for phase in PHASES:
-            slug = f"{STEM}-{phase}"
+            slug = f"{STEM}-{instance}-{phase}"
             if slug in closed:
                 continue
             actor = actor_overrides.get(phase, DEFAULT_ACTOR)

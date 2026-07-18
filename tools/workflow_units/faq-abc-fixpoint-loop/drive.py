@@ -12,8 +12,12 @@ default, or --review-bookkeeping --witness commit:<sha> when the phase's reviews
 bookkeeping close -- see J4 in tools/workflow_compile.py's own docstring).
 
 Usage:
-    python3 faq-abc-fixpoint-loop/drive.py [--led <path>] [--actor <phase>=<principal> ...]
+    python3 faq-abc-fixpoint-loop/drive.py --instance <token> [--led <path>] [--actor <phase>=<principal> ...]
                               [--commit-witness <phase>=<sha> ...] [--dry-run] [--rounds N]
+
+--instance <token> is MANDATORY (spec Amendment, row 1660): it must be the SAME token given to
+hydrate.sh for this wave -- slugs are `faq-abc-fixpoint-loop-<instance>-<phase>`, so a different token drives a
+DIFFERENT (or not-yet-hydrated) instance of this same TOML shape.
 
 Exit 0 when the round budget completes (whether or not every phase closed -- BLOCKED units are
 an ordinary, reportable outcome, not a driver failure); exit 1 on an unexpected kernel refusal
@@ -23,6 +27,7 @@ unexpected here) or a local usage error (exit 2).
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 import sys
 
@@ -33,6 +38,7 @@ PHASES = ['author-draft', 'fresh-context-review', 'adjudicate']
 BRIEFS = {'author-draft': "authors: the author role for whatever artifact the loop is converging (a document, a diff, a defect list) -- model tier is not fixed by the FAQ's own generalized description, unlike the panel's Specimen C, which names sonnet for every role\nimplements: same as authors -- the author phase is a single dispatch producing or updating the artifact under iteration\ndone: the artifact is drafted or updated for this round, ready for fresh-context review\nlanding_zone: the artifact under iteration itself (a repo file, a worktree diff, a ledger row's own content) -- the FAQ names no single fixed location, since this loop shape is generalized across many concrete artifacts; the concrete workflow instantiating this shape must name its own landing zone per artifact", 'fresh-context-review': "implements: a genuinely fresh agent invocation every round, never one long-lived agent resumed across rounds -- the FAQ's own load-bearing caveat, caught failing in practice on 2026-07-13 in this project's own A:B:C loop (ORCH-ABC-AUDIT-LOOP-RECIPE.md's round-2 discipline): a resumed reviewer repeated its first round's verdict verbatim against on-disk content that had since changed underneath it\nreviews: same agent invocation examines the current artifact or defect-list state and reports what remains to fix, or that nothing new was found this round\ndone: the round's fresh-context review reports either zero new findings (a 'dry' round, per the FAQ's loop-until-dry criterion) or a concrete list of what still needs fixing\nlanding_zone: each round's findings, recorded in that round's own report/transcript to the driving script -- the FAQ's own worked instance of this shape, ORCH-ABC-AUDIT-LOOP-RECIPE.md's B-round reviews, lands these in attestations/doc-legibility-attestations.jsonl when the artifact under review is a document; other instantiations of this general shape may land findings elsewhere, which is why this field stays this general rather than naming one fixed path", 'adjudicate': "authors: the driving workflow script's own deterministic control flow (an ordinary while loop wrapping repeated agent invocations, per the FAQ's own words) -- explicitly NOT itself a DSL-declared phase's mechanics, only the fact that adjudication happens is declared here\nimplements: same -- the script decides, each round, whether to re-dispatch author-draft/fresh-context-review for another round or to stop\ndone: K consecutive dry rounds are observed (loop-until-dry, the same criterion vestigial_documentation/design/ORCH-AGENTIC-PATTERNS.md section 3 and this project's own A:B:C loop both use), reached strictly before the hard round-cap guard fires\nlanding_zone: the ledger -- the loop's final disposition (converged clean, or escalated to the orchestrator) is the kind of act this project records as an ordinary ledger row (a decision row, or a review row where the artifact is itself ledger-governed)"}
 BOOKKEEPING_PHASES = []
 DEFAULT_ACTOR = "author"
+INSTANCE_TOKEN_RE = re.compile(r"^[A-Za-z0-9_-]+$")
 
 
 def run_led(led: str, args: list[str], actor: str) -> tuple[int, str]:
@@ -54,6 +60,7 @@ def parse_kv(pairs: list[str]) -> dict[str, str]:
 
 def main(argv: list[str]) -> int:
     led = "./legacy/led"
+    instance: str | None = None
     actor_overrides: dict[str, str] = {}
     commit_witness: dict[str, str] = {}
     dry_run = False
@@ -64,6 +71,8 @@ def main(argv: list[str]) -> int:
         a = argv[i]
         if a == "--led":
             led = argv[i + 1]; i += 2
+        elif a == "--instance":
+            instance = argv[i + 1]; i += 2
         elif a == "--actor":
             actor_overrides.update(parse_kv([argv[i + 1]])); i += 2
         elif a == "--commit-witness":
@@ -76,6 +85,19 @@ def main(argv: list[str]) -> int:
             print(f"drive.py: unrecognized argument '{a}'", file=sys.stderr)
             return 2
 
+    # --instance is MANDATORY and allowlist-validated BEFORE anything else runs (same
+    # interpreter-boundary discipline as hydrate.sh's own check -- this token is concatenated
+    # into every slug this run claims/closes).
+    if not instance:
+        print("drive.py: REFUSED -- --instance <token> is mandatory (spec Amendment, row 1660).",
+              file=sys.stderr)
+        return 2
+    if not INSTANCE_TOKEN_RE.match(instance):
+        print(f"drive.py: REFUSED -- --instance '{instance}' is not [A-Za-z0-9_-]+ "
+              f"(interpreter-boundary discipline: this token is concatenated into every slug "
+              f"this run claims/closes).", file=sys.stderr)
+        return 2
+
     for phase in BOOKKEEPING_PHASES:
         if phase not in commit_witness:
             print(f"drive.py: REFUSED locally (not a kernel refusal) -- phase '{phase}' "
@@ -83,13 +105,13 @@ def main(argv: list[str]) -> int:
                   f"none given.", file=sys.stderr)
             return 2
 
-    print(f"-- driving workflow '{STEM}' (source {TOML_REL}) via {led} --")
+    print(f"-- driving workflow '{STEM}' instance '{instance}' (source {TOML_REL}) via {led} --")
 
     closed: set[str] = set()
     for round_no in range(1, rounds + 1):
         made_progress = False
         for phase in PHASES:
-            slug = f"{STEM}-{phase}"
+            slug = f"{STEM}-{instance}-{phase}"
             if slug in closed:
                 continue
             actor = actor_overrides.get(phase, DEFAULT_ACTOR)

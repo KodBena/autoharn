@@ -12,8 +12,12 @@ default, or --review-bookkeeping --witness commit:<sha> when the phase's reviews
 bookkeeping close -- see J4 in tools/workflow_compile.py's own docstring).
 
 Usage:
-    python3 panel-msched-resource-provisioning/drive.py [--led <path>] [--actor <phase>=<principal> ...]
+    python3 panel-msched-resource-provisioning/drive.py --instance <token> [--led <path>] [--actor <phase>=<principal> ...]
                               [--commit-witness <phase>=<sha> ...] [--dry-run] [--rounds N]
+
+--instance <token> is MANDATORY (spec Amendment, row 1660): it must be the SAME token given to
+hydrate.sh for this wave -- slugs are `panel-msched-resource-provisioning-<instance>-<phase>`, so a different token drives a
+DIFFERENT (or not-yet-hydrated) instance of this same TOML shape.
 
 Exit 0 when the round budget completes (whether or not every phase closed -- BLOCKED units are
 an ordinary, reportable outcome, not a driver failure); exit 1 on an unexpected kernel refusal
@@ -23,6 +27,7 @@ unexpected here) or a local usage error (exit 2).
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 import sys
 
@@ -33,6 +38,7 @@ PHASES = ['provision', 'declare-resource', 'witness-schedule']
 BRIEFS = {'provision': "authors: sonnet-main-session\nimplements: sonnet-main-session\nreviews: sonnet-independent-subagent\ndone: acceptance criteria (row:23) all PASS: sibling checkout present, no submodule/gitlink, editable-installed into the shared venv, import+call succeeds, this repo's own git status unaffected -- verified in row:32/34.\nlanding_zone: sibling checkout /home/bork/w/vdc/1/experience/makespan-scheduler (editable-installed into ~/w/vdc/venvs/generic); ledger rows 15/22/32/34/35.", 'declare-resource': "authors: sonnet-main-session\nimplements: sonnet-main-session\nreviews: sonnet-independent-subagent\ndone: acceptance criteria (row:37) all PASS: ledger resource: decision row with all six fields at blessed tier, honest GUIDANCE field, CLAUDE.md RESOURCES section mirrors it, ./pickup surfaces it -- verified in row:39.\nlanding_zone: ledger decision row 38 (resource: ... blessed tier) plus this repo's own CLAUDE.md RESOURCES section; ledger rows 16/36/37/39/40.", 'witness-schedule': 'authors: sonnet-main-session\nimplements: sonnet-main-session\nreviews: sonnet-independent-subagent\ndone: acceptance criteria (row:43) all PASS: jobs.json models the real decomposition against a genuine shared resource, the tool is actually invoked, the result is ledgered honestly noting agreement/disagreement with the real work_depends precedence, the schedule artifact is saved and cited -- verified in row:44.\nlanding_zone: scratch/msched-witness/schedule.json, committed to the panel repo as cited evidence; ledger rows 17/42/43/44/46.'}
 BOOKKEEPING_PHASES = []
 DEFAULT_ACTOR = "author"
+INSTANCE_TOKEN_RE = re.compile(r"^[A-Za-z0-9_-]+$")
 
 
 def run_led(led: str, args: list[str], actor: str) -> tuple[int, str]:
@@ -54,6 +60,7 @@ def parse_kv(pairs: list[str]) -> dict[str, str]:
 
 def main(argv: list[str]) -> int:
     led = "./legacy/led"
+    instance: str | None = None
     actor_overrides: dict[str, str] = {}
     commit_witness: dict[str, str] = {}
     dry_run = False
@@ -64,6 +71,8 @@ def main(argv: list[str]) -> int:
         a = argv[i]
         if a == "--led":
             led = argv[i + 1]; i += 2
+        elif a == "--instance":
+            instance = argv[i + 1]; i += 2
         elif a == "--actor":
             actor_overrides.update(parse_kv([argv[i + 1]])); i += 2
         elif a == "--commit-witness":
@@ -76,6 +85,19 @@ def main(argv: list[str]) -> int:
             print(f"drive.py: unrecognized argument '{a}'", file=sys.stderr)
             return 2
 
+    # --instance is MANDATORY and allowlist-validated BEFORE anything else runs (same
+    # interpreter-boundary discipline as hydrate.sh's own check -- this token is concatenated
+    # into every slug this run claims/closes).
+    if not instance:
+        print("drive.py: REFUSED -- --instance <token> is mandatory (spec Amendment, row 1660).",
+              file=sys.stderr)
+        return 2
+    if not INSTANCE_TOKEN_RE.match(instance):
+        print(f"drive.py: REFUSED -- --instance '{instance}' is not [A-Za-z0-9_-]+ "
+              f"(interpreter-boundary discipline: this token is concatenated into every slug "
+              f"this run claims/closes).", file=sys.stderr)
+        return 2
+
     for phase in BOOKKEEPING_PHASES:
         if phase not in commit_witness:
             print(f"drive.py: REFUSED locally (not a kernel refusal) -- phase '{phase}' "
@@ -83,13 +105,13 @@ def main(argv: list[str]) -> int:
                   f"none given.", file=sys.stderr)
             return 2
 
-    print(f"-- driving workflow '{STEM}' (source {TOML_REL}) via {led} --")
+    print(f"-- driving workflow '{STEM}' instance '{instance}' (source {TOML_REL}) via {led} --")
 
     closed: set[str] = set()
     for round_no in range(1, rounds + 1):
         made_progress = False
         for phase in PHASES:
-            slug = f"{STEM}-{phase}"
+            slug = f"{STEM}-{instance}-{phase}"
             if slug in closed:
                 continue
             actor = actor_overrides.get(phase, DEFAULT_ACTOR)
