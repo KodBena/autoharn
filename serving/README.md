@@ -183,6 +183,20 @@ typed, per ADR-0004 (no work ahead of a demonstrated need).
   few bytes at a time) held the request open indefinitely, since the psql-phase bounds above
   only start their clock once the body is already fully in hand. Expiry returns a typed HTTP
   408: `{"disposition": "body_read_timeout", "timeout_s": 30, "message": "<teach-text>"}`.
+- **The admission axis (A9, new): concurrent kernel-call admission is bounded, never queued.**
+  Per-request time was bounded (above); *how many requests can be inside a kernel call at once*
+  was not — witnessed with measurements, N concurrent stalled requests exhaust the shared ASGI
+  threadpool (anyio's default 40 tokens on the review host) and wall-clock on EVERY route,
+  `/health` included, grew unboundedly with N (80 → 5.3 s, 200 → 27.7 s, 600 → no answer in
+  180 s). Fix: `MAX_INFLIGHT_KERNEL_CALLS = 24` (deliberately under the threadpool's 40 tokens)
+  — every kernel call (reads, writes, and `/health`'s own kernel probes alike) acquires a
+  non-blocking slot from one shared semaphore immediately before the `psql` subprocess runs, and
+  releases it the instant that call returns. On saturation the caller is refused IMMEDIATELY,
+  never queued: HTTP 503,
+  `{"disposition": "server_saturated", "inflight_limit": 24, "message": "<teach-text naming the
+  bound, the cause, and that retry-after-backoff is the correct response>"}`. `/health` shares
+  this same gate — bounded admission is what guarantees it never waits behind other requests'
+  occupancy, even under a burst that would otherwise starve it.
 - **Framework-owned parameter coercion (A5.5, ACCEPTED AS-IS, named — the A3.3 precedent):** a
   non-integer value for an int-typed path/query parameter (e.g. a non-numeric `after_id`)
   returns FastAPI's/pydantic's own untyped coercion-failure 422 shape, not one of this service's

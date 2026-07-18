@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-18T07:43:25Z
-#   last-change: 2026-07-18T11:43:08Z
+#   last-change: 2026-07-18T12:14:12Z
 #   contributors: ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -145,6 +145,23 @@ class BodyReadTimeout(BaseModel):
     disposition: str = "body_read_timeout"
     timeout_s: float = Field(description="BODY_READ_TIMEOUT_S -- the one named bound")
     message: str = Field(description="teach-text: the body-read phase stalled past this bound")
+
+
+class ServerSaturated(BaseModel):
+    """A9: `MAX_INFLIGHT_KERNEL_CALLS` concurrent kernel calls are already in flight -- this
+    service's own named admission bound, deliberately under the ASGI threadpool's own default
+    concurrency so `/health` and every other route are never starved by kernel-call occupancy
+    alone (the concurrency axis A3.1's own single-stalled-call test never reached: N concurrent
+    stalled requests, unbounded, made wall-clock on EVERY route grow without limit). Every
+    kernel-call site -- reads, writes, and `/health`'s own kernel probes alike -- shares ONE
+    admission gate (`serving/boundary_service.py`'s `_KERNEL_CALL_SEMAPHORE`, tested inside
+    `_psql`, the one choke point every kernel call already passes through); saturation refuses
+    IMMEDIATELY, never queues -- this shape is the caller-visible result, distinct from
+    `InfraFailure` (this is ordinary load, not a connection-level anomaly)."""
+
+    disposition: str = "server_saturated"
+    inflight_limit: int = Field(description="MAX_INFLIGHT_KERNEL_CALLS -- the named admission bound this call was refused against")
+    message: str = Field(description="teach-text: names the bound, the cause (concurrent kernel calls at capacity), and that retry-with-backoff is the correct caller response")
 
 
 class LedgerWriteIntFields(BaseModel):

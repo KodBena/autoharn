@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-18T07:49:10Z
-#   last-change: 2026-07-18T11:44:57Z
+#   last-change: 2026-07-18T12:16:13Z
 #   contributors: ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
 """run_fixtures.py -- both-polarity witness for design/FABLE-LEDGER-BOUNDARY-SERVICE-SPEC.md's
 §8 witness plan (W1-W12, A2's amendment; W13-W14, A3's amendment; W15-W19, A4's amendment;
 W20-W23, A5's amendment; W21's float legs, A6's amendment; W24, A7's amendment; W25-W26,
-A8's amendment). Real infra, no mocks:
+A8's amendment; W27, A9's amendment). Real infra, no mocks:
 CLASSIC scaffolds + manual chain applies in the TOY db (the exact pattern seen-red/
 s43-typed-verdict-write-boundary/run_fixtures.py already banks, and this fixture imports
 nothing new for scaffolding -- same helpers, re-derived here because the two fixtures scaffold
@@ -72,7 +72,13 @@ WORLDS:
   (no DB)    -- W7 bind guard, both legs (refusal leg + explicit-flag-allowed leg), standalone
                 subprocess invocations of `python3 -m serving.boundary_service`; W14 (the hang
                 leg -- a deployment pointed at a non-routable address, no toy-db world needed at
-                all, since the connection never reaches auth).
+                all, since the connection never reaches auth); W27 (A9's admission bound -- the
+                SAME non-routable-address lever as W14, a burst of 40 concurrent writes against
+                it: the excess beyond MAX_INFLIGHT_KERNEL_CALLS=24 answers typed 503
+                server_saturated promptly, /health fired concurrently during the burst answers
+                within its own W14-proven margin -- never queued behind the burst's occupancy --
+                and a single fresh write after the burst completes drains back to the ordinary
+                W14 infra_failure shape, never server_saturated).
   (static)   -- W3's grep half (no DML string in serving/); W8 is UNEXERCISED BY CONSTRUCTION
                 (panel-side; this repo never touches the panel repo) and is NAMED, not faked.
                 W9's streaming-abort leg is likewise UNEXERCISED here -- see the W9 section
@@ -1304,6 +1310,151 @@ def main() -> int:
     finally:
         shutil.rmtree(tmp14, ignore_errors=True)
 
+    # ============================= W27: admission bound under a stalled burst (no DB) =========
+    # A9: MAX_INFLIGHT_KERNEL_CALLS=24 bounds concurrent in-flight kernel calls; a burst beyond
+    # it must answer typed 503 server_saturated PROMPTLY (never queue), /health must never wait
+    # behind other requests' occupancy, and the server must drain to normal service once the
+    # burst completes. Reuses W14's UNROUTABLE_HOST lever: every kernel call this burst makes
+    # stalls for up to PSQL_CONNECT_TIMEOUT_S before it could ever resolve, so an ADMITTED
+    # call's own latency is bounded exactly like W14's own -- the only new behavior under test
+    # here is what happens to the calls that never get admitted at all.
+    tmp27 = Path(tempfile.mkdtemp(prefix="svcfxw27-"))
+    try:
+        dep27 = tmp27 / "w27-deployment.json"
+        deployment_record.write_deployment(
+            dep27, deployment_record.DeploymentRecord(
+                db="toy", host=UNROUTABLE_HOST, schema="doesnotmatterw27",
+                kern="doesnotmatterw27_kernel", role="doesnotmatterw27_rw"))
+        port27 = free_port()
+        proc27 = subprocess.Popen(
+            [str(PYVENV), "-m", "serving.boundary_service", "--deployment", str(dep27),
+             "--host", "127.0.0.1", "--port", str(port27)],
+            cwd=str(REPO), stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        asgi_up27 = False
+        deadline27 = time.time() + 10
+        while time.time() < deadline27:
+            try:
+                with socket.create_connection(("127.0.0.1", port27), timeout=1):
+                    asgi_up27 = True
+                    break
+            except OSError:
+                time.sleep(0.2)
+        base27 = f"http://127.0.0.1:{port27}"
+
+        # > MAX_INFLIGHT_KERNEL_CALLS (24); matches anyio's own default threadpool size named in
+        # A9's own trigger measurements, so this burst is provably not bottlenecked by ANY OTHER
+        # concurrency limit before it ever reaches the semaphore under test.
+        BURST_N = 40
+        # "Promptly, not after a timeout" (A9's own W27 sentence): well under
+        # PSQL_CONNECT_TIMEOUT_S=5s -- a saturated call is refused before subprocess.run is ever
+        # invoked, so it should be near-instant; this margin is generous for scheduling jitter
+        # under 40-thread contention while remaining an order of magnitude under the connect
+        # bound admitted calls are subject to.
+        PROMPT_BOUND_S = 2.0
+        # /health's OWN bound: reuses W14's margin14 formula verbatim (PSQL_CONNECT_TIMEOUT_S +
+        # 25 = 30s) -- W14 already proved this margin covers /health's own multi-probe sequence
+        # (capability_manifest's several regclass checks plus service_principal_name) against
+        # this exact UNROUTABLE_HOST lever with NO contention at all. Bounded admission can only
+        # ever make an individual probe FASTER under contention (an immediate 503 reject instead
+        # of a full connect-timeout stall), never slower -- so the unburstened W14 margin is a
+        # valid, non-arbitrary bound to reuse here, and it is exactly what "never wait behind
+        # other requests' occupancy" (A9) means made checkable.
+        HEALTH_MARGIN_S = boundary_service.PSQL_CONNECT_TIMEOUT_S + 25
+
+        results: list[tuple[int, int | None, dict | None, float]] = []
+        results_lock = threading.Lock()
+
+        def _burst_one(idx: int) -> None:
+            t0 = time.time()
+            try:
+                req = urllib.request.Request(
+                    f"{base27}/write/ledger",
+                    data=json.dumps({"statement": f"w27-burst-{idx}"}).encode(),
+                    headers={"Content-Type": "application/json"}, method="POST")
+                try:
+                    with urllib.request.urlopen(req, timeout=40) as resp:
+                        status, body = resp.status, json.loads(resp.read())
+                except urllib.error.HTTPError as e:
+                    status, body = e.code, json.loads(e.read())
+            except (urllib.error.URLError, OSError, ValueError) as e:
+                status, body = None, {"client_side_error": str(e)}
+            elapsed = time.time() - t0
+            with results_lock:
+                results.append((idx, status, body, elapsed))
+
+        # /health fired from its OWN thread, concurrently with the burst, so its wall-clock is
+        # measured DURING contention, not before or after it.
+        health_result: list[tuple[int | None, dict | None, float]] = []
+
+        def _health_during_burst() -> None:
+            t0 = time.time()
+            try:
+                status, body = http_get(f"{base27}/health")
+            except (urllib.error.URLError, OSError, ValueError) as e:
+                status, body = None, {"client_side_error": str(e)}
+            health_result.append((status, body, time.time() - t0))
+
+        burst_threads = [threading.Thread(target=_burst_one, args=(i,)) for i in range(BURST_N)]
+        health_thread = threading.Thread(target=_health_during_burst)
+        for t in burst_threads:
+            t.start()
+        time.sleep(0.05)  # let the burst threads actually dispatch before /health races them
+        health_thread.start()
+        for t in burst_threads:
+            t.join(timeout=60)
+        health_thread.join(timeout=60)
+
+        saturated = [r for r in results if r[1] == 503 and isinstance(r[2], dict)
+                     and r[2].get("disposition") == "server_saturated"]
+        prompt_saturated = [r for r in saturated if r[3] < PROMPT_BOUND_S]
+        expected_excess = BURST_N - boundary_service.MAX_INFLIGHT_KERNEL_CALLS
+        check("w27-saturation-typed-503-prompt",
+              asgi_up27 and len(results) == BURST_N and len(saturated) >= expected_excess
+              and len(prompt_saturated) == len(saturated)
+              and all(r[2].get("inflight_limit") == boundary_service.MAX_INFLIGHT_KERNEL_CALLS for r in saturated)
+              and all("retry" in (r[2].get("message") or "").lower() for r in saturated),
+              f"asgi_up={asgi_up27}; burst_n={BURST_N}, responses={len(results)}, "
+              f"saturated={len(saturated)} (expected >= {expected_excess}), all prompt"
+              f"(<{PROMPT_BOUND_S}s)={len(prompt_saturated) == len(saturated)}; sample statuses="
+              f"{sorted({r[1] for r in results})}; elapsed range="
+              f"{min((r[3] for r in results), default=-1):.2f}s..{max((r[3] for r in results), default=-1):.2f}s",
+              failures)
+
+        health_status, health_body, health_elapsed = health_result[0] if health_result else (None, None, -1.0)
+        check("w27-health-unstarved-during-burst",
+              health_status is not None and health_elapsed < HEALTH_MARGIN_S,
+              f"/health DURING the burst: status={health_status} elapsed={health_elapsed:.1f}s "
+              f"(bound: {HEALTH_MARGIN_S}s -- must never wait behind other requests' occupancy, "
+              f"A9) body={health_body}",
+              failures)
+
+        # Drain check: once the burst has fully completed and every semaphore slot it held is
+        # released, a single FRESH write must behave exactly like an ordinary (non-saturated)
+        # request against this same unroutable host -- typed infra_failure once its own connect
+        # attempt exhausts PSQL_CONNECT_TIMEOUT_S, and specifically NOT server_saturated --
+        # proving no slot leaked or stayed stuck held.
+        t0drain = time.time()
+        try:
+            drain_status, drain_body = http_post(f"{base27}/write/ledger", {"statement": "w27-drain-check"})
+        except (urllib.error.URLError, OSError, ValueError) as e:
+            drain_status, drain_body = None, {"client_side_error": str(e)}
+        drain_elapsed = time.time() - t0drain
+        drain_margin = boundary_service.PSQL_CONNECT_TIMEOUT_S + 25
+        check("w27-drains-after-burst",
+              drain_status == 503 and isinstance(drain_body, dict)
+              and drain_body.get("disposition") == "infra_failure" and drain_elapsed < drain_margin,
+              f"post-burst POST /write/ledger: status={drain_status} body={drain_body} "
+              f"elapsed={drain_elapsed:.1f}s (bound {drain_margin}s) -- must be the ORDINARY "
+              f"infra_failure a single call against this unroutable host always wears (W14), "
+              f"never server_saturated (every semaphore slot the burst held must have been "
+              f"released)",
+              failures)
+        out27 = stop_server(proc27)
+        if not asgi_up27:
+            print(f"  (W27 server tail on failure-to-come-up: {out27[-1000:]})")
+    finally:
+        shutil.rmtree(tmp27, ignore_errors=True)
+
     # ============================= W8: panel-side, UNEXERCISED BY CONSTRUCTION =============
     print("=== w8-deprecation-mark-panel-side ===")
     print("  [UNEXERCISED] the marked legacy path lives in the autoharn-panel repository, which "
@@ -1315,7 +1466,7 @@ def main() -> int:
     if failures:
         print("FAILURES:", failures)
         return 1
-    print("ALL CASES OK -- boundary-service both-polarity proof (W1-W7, W9-W26 live; "
+    print("ALL CASES OK -- boundary-service both-polarity proof (W1-W7, W9-W27 live; "
           "W8 and the W9 streaming-abort leg UNEXERCISED, named).")
     return 0
 
