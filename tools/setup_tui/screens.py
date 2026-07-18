@@ -1,6 +1,6 @@
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-18T21:34:05Z
-#   last-change: 2026-07-18T22:20:08Z
+#   last-change: 2026-07-18T22:36:03Z
 #   contributors: ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -468,16 +468,18 @@ def screen_boundary(ui, cl, state):
     # or IP literal, never a bare identifier -- db/role/schema/kern stay on the strict
     # [A-Za-z0-9_]+ identifier alphabet used everywhere else in this package.
     #
-    # NAMED, NOT FIXED (out of this pass's adjudicated scope): `world` is spliced unvalidated
-    # into the `[deployments.{world}]` table-key line just below. In the ordinary flow this is
-    # safe by construction -- state["world"] only reaches here after a successful birth, and
-    # bootstrap/new-project.sh's own --new-world derivation already runs SCHEMA/KERN/ROLE
-    # (derived from `world`) through an identical allowlist, refusing before this screen could
-    # ever see a bad value -- but the OVERRIDE path above (proceeding past a failed/skipped
-    # birth) or a hand-typed value via `--start-at boundary` could still hand this screen a
-    # `world` that never passed through that upstream check. Flagged for the next pass rather
-    # than silently left unnoticed.
+    # `world` is validated alongside host/db/role/schema/kern below (gates/interpreter_boundary_
+    # lint.py's calibration pass, ledger row 1701, flagged this site as the ONE named-not-fixed
+    # gap the amendment's own prior pass left open: `world` reached the `[deployments.{world}]`
+    # table-key line unvalidated. In the ordinary flow this was safe by construction --
+    # state["world"] only reaches here after a successful birth, and bootstrap/new-project.sh's
+    # own --new-world derivation already runs SCHEMA/KERN/ROLE (derived from `world`) through an
+    # identical allowlist, refusing before this screen could ever see a bad value -- but the
+    # OVERRIDE path above (proceeding past a failed/skipped birth) or a hand-typed value via
+    # `--start-at boundary` could still hand this screen a `world` that never passed through
+    # that upstream check. Trivial fix: `world` joins the same validated tuple below.)
     for _label, _val, _checker in (
+        ("world", world, probes.valid_identifier),
         ("host", host, probes.valid_hostname),
         ("database", db, probes.valid_identifier),
         ("role", role, probes.valid_identifier),
