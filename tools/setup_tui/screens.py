@@ -1,6 +1,6 @@
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-18T21:34:05Z
-#   last-change: 2026-07-18T22:04:21Z
+#   last-change: 2026-07-18T22:20:08Z
 #   contributors: ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -241,11 +241,11 @@ def screen_fork_target(ui, cl, state):
     dest_path = Path(dest)
     if not src_path.is_dir():
         ui.say(f"  REFUSED: source '{src}' is not a directory -- nothing copied.")
-        cl.add("fork-target", "fork-copy", ck.WITNESSED, f"REFUSED: '{src}' not a directory")
+        cl.add("fork-target", "fork-copy", ck.REFUSED, f"REFUSED: '{src}' not a directory")
         return state
     if dest_path.exists():
         ui.say(f"  REFUSED: destination '{dest}' already exists -- nothing copied.")
-        cl.add("fork-target", "fork-copy", ck.WITNESSED, f"REFUSED: '{dest}' already exists")
+        cl.add("fork-target", "fork-copy", ck.REFUSED, f"REFUSED: '{dest}' already exists")
         return state
 
     ui.say(f"  $ cp -a {src} {dest}")
@@ -383,10 +383,16 @@ def screen_birth(ui, cl, state):
     marker_idx = next((i for i, ln in enumerate(out_lines) if "LED_ACTOR=commissioner" in ln),
                        None)
     if marker_idx is not None:
-        # A couple of lines of leading context (the "type this in YOUR OWN terminal" framing
-        # new-project.sh prints immediately above the line) makes the copy-paste block legible
-        # on its own, without pulling in the whole SIGNED-mode/SIGNED-HEAD prose that follows.
-        start = max(0, marker_idx - 2)
+        # Leading context: new-project.sh's own sentence introducing the signing line reads
+        # "To SIGN this run's commission yourself (FULL mode -- ...), type / this in YOUR OWN
+        # terminal, inside <dir> (...):" -- THREE lines (bootstrap/new-project.sh's own `echo`
+        # calls, verified against source), not two: a fixed 2-line lookback starts mid-sentence
+        # ("kind.sql; the ask carries..."). Prefer the real sentence-initial line ("To SIGN
+        # this run's commission") if it is found within a few lines back; fall back to a fixed
+        # 4-line lookback (still >= the 3 the real wrap needs) if that marker ever changes.
+        opening = next((i for i in range(marker_idx - 1, max(-1, marker_idx - 8), -1)
+                         if "To SIGN this run's commission" in out_lines[i]), None)
+        start = opening if opening is not None else max(0, marker_idx - 4)
         sign_lines = out_lines[start:marker_idx + 1]
         ui.say("")
         ui.say("  --- maintainer copy-paste signing line (from the birth output above) ---")
@@ -422,6 +428,16 @@ def screen_boundary(ui, cl, state):
         return state
     dest = state.get("dest") or ui.ask_text("Destination directory")
     state["dest"] = dest
+    # Same pattern screen_hydration's led-existence check uses (os.path.isfile(led) before
+    # ever touching it): a nonexistent dest is reachable here (--start-at boundary, or an
+    # overridden birth gate above) and, unchecked, crashed with a raw FileNotFoundError
+    # traceback at the `open(toml_path, "w")` write below instead of an explained refusal.
+    if not os.path.isdir(dest):
+        ui.say(f"  REFUSED: destination directory '{dest}' does not exist -- nothing to write "
+               f"the multiplex TOML or deployment.json keys into. Run a birth first (or check "
+               f"the path), then retry this screen.")
+        cl.add("boundary", "destination exists", ck.REFUSED, f"'{dest}' not a directory")
+        return state
     world = state.get("world") or ui.ask_text("World/deployment name")
     host = state.get("pghost") or ui.ask_text("Postgres host", default="192.168.122.1")
     db = state.get("db") or ui.ask_text("Database", default="toy")
@@ -440,6 +456,42 @@ def screen_boundary(ui, cl, state):
     schema = dep.get("schema", world)
     kern = dep.get("kern", f"{world}_kernel")
     role = dep.get("role", f"{world}_rw")
+
+    # Interpreter-boundary allowlist (law/adr/0012's 2026-07-18 amendment), same discipline as
+    # the pg_hba site (screen_substrate) and probes.pg_connect: boundary-multiplex.toml is a
+    # config file a SECOND evaluator (serving.boundary_multiplex_config's tomllib parser, then
+    # boundary_service's own psql calls) reads -- host/db/role/schema/kern all get f-string-
+    # spliced into it below with no bind-variable carrier available (this is TOML text, not a
+    # query), so each is validated to a closed alphabet first, refusing on failure rather than
+    # writing an unvalidated value into program text a second evaluator parses. `host` gets the
+    # wider hostname/IP-safe alphabet (valid_hostname) since a real Postgres host is a hostname
+    # or IP literal, never a bare identifier -- db/role/schema/kern stay on the strict
+    # [A-Za-z0-9_]+ identifier alphabet used everywhere else in this package.
+    #
+    # NAMED, NOT FIXED (out of this pass's adjudicated scope): `world` is spliced unvalidated
+    # into the `[deployments.{world}]` table-key line just below. In the ordinary flow this is
+    # safe by construction -- state["world"] only reaches here after a successful birth, and
+    # bootstrap/new-project.sh's own --new-world derivation already runs SCHEMA/KERN/ROLE
+    # (derived from `world`) through an identical allowlist, refusing before this screen could
+    # ever see a bad value -- but the OVERRIDE path above (proceeding past a failed/skipped
+    # birth) or a hand-typed value via `--start-at boundary` could still hand this screen a
+    # `world` that never passed through that upstream check. Flagged for the next pass rather
+    # than silently left unnoticed.
+    for _label, _val, _checker in (
+        ("host", host, probes.valid_hostname),
+        ("database", db, probes.valid_identifier),
+        ("role", role, probes.valid_identifier),
+        ("schema", schema, probes.valid_identifier),
+        ("kern", kern, probes.valid_identifier),
+    ):
+        if not _checker(_val):
+            ui.say(f"  REFUSED: {_label} '{_val}' fails the interpreter-boundary allowlist -- "
+                   f"refusing to splice it into boundary-multiplex.toml (law/adr/0012's "
+                   f"interpreter-boundary rule). Nothing written.")
+            cl.add("boundary", "multiplex TOML values validated", ck.REFUSED,
+                   f"'{_val}' ({_label}) failed {_checker.__name__}")
+            return state
+
     toml_text = (
         f"[deployments.{world}]\n"
         f'pghost = "{host}"\n'

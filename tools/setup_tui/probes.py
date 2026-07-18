@@ -1,6 +1,6 @@
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-18T21:32:16Z
-#   last-change: 2026-07-18T22:04:38Z
+#   last-change: 2026-07-18T22:20:21Z
 #   contributors: ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -29,6 +29,11 @@ import urllib.request
 # text below) and `screens.py`'s dedicated-db path (db/role spliced into pg_hba/SQL text)
 # import and call this, rather than each carrying its own copy of the pattern.
 _IDENT_RE = re.compile(r"^[A-Za-z0-9_]+$")
+# A real Postgres host is a hostname or IP literal -- never a bare [A-Za-z0-9_]+ identifier
+# (dots, hyphens are ordinary in both DNS names and dotted-quad/v6-ish forms this codebase
+# actually sees, e.g. "192.168.122.1"). Wider than _IDENT_RE by design, still closed: no
+# quote/space/shell-metacharacter/TOML-control-character can pass.
+_HOSTNAME_RE = re.compile(r"^[A-Za-z0-9._-]+$")
 
 
 def valid_identifier(name: str) -> bool:
@@ -37,6 +42,14 @@ def valid_identifier(name: str) -> bool:
     concatenation (no bind-variable carrier exists at those sites; this is the closed-alphabet
     refusal ADR-0012's interpreter-boundary amendment requires in that case)."""
     return bool(name) and bool(_IDENT_RE.fullmatch(name))
+
+
+def valid_hostname(name: str) -> bool:
+    """True iff `name` is composed ONLY of letters, digits, dot, hyphen, underscore -- the
+    hostname/IP-literal-safe variant of `valid_identifier` for values that are a Postgres HOST
+    (a DNS name or dotted-quad, never a bare SQL/shell identifier) but still get spliced into
+    program text (a TOML config file, a shell copy-paste line) with no bind-variable carrier."""
+    return bool(name) and bool(_HOSTNAME_RE.fullmatch(name))
 
 
 def which(name: str) -> str | None:
