@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-15T20:19:45Z
-#   last-change: 2026-07-18T10:29:35Z
+#   last-change: 2026-07-18T15:53:51Z
 #   contributors: a857c93d/main, 9a17b6b9/main, ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -161,7 +161,23 @@ CHAIN = [
     "s44-model-identity-attestation.sql",
     "s46-credited-views.sql",
     "s47-claim-on-closed-refusal.sql",
+    "s48-review-witness-existence.sql",
+    "s49-journaler-overflow-guard.sql",
 ]
+# s49 (kernel/lineage/s49-journaler-overflow-guard.sql, design/FABLE-KERNEL-INTAKE-PAIR-SPEC.md
+# Delta 2) extends this SAME gate's scratch CHAIN. It ships ZERO new columns and ZERO new kinds --
+# its one re-issued object (kernel.journal_write_refusal) adds a local exception handler around
+# one pre-existing cast, no column/kind/CHECK touched at all -- no MANIFEST/
+# VALUE_PARTITION_MANIFEST/FORBIDDEN_ON_KIND_MANIFEST edit, verified live by running this gate
+# against the extended chain and reading the SAME seven new MANIFEST rows (s44's) as the only
+# change, no eighth.
+# s48 (kernel/lineage/s48-review-witness-existence.sql, design/FABLE-KERNEL-INTAKE-PAIR-SPEC.md
+# Delta 1) extends this SAME gate's scratch CHAIN. It ships ZERO new columns and ZERO new kinds --
+# its one new object (validate_review_witness_existence) is a standalone BEFORE INSERT trigger
+# reading EXISTING columns (kind, work_review_ref) and the ledger's own id -- no MANIFEST/
+# VALUE_PARTITION_MANIFEST/FORBIDDEN_ON_KIND_MANIFEST edit, verified live by running this gate
+# against the extended chain and reading the SAME seven new MANIFEST rows (s44's) as the only
+# change, no eighth.
 # s47 (kernel/lineage/s47-claim-on-closed-refusal.sql, design/FABLE-CLAIM-ON-CLOSED-REFUSAL-SPEC.md,
 # RATIFIED BUILD BASIS 2026-07-18) extends this SAME gate's scratch CHAIN. It ships ZERO new
 # columns and ZERO new kinds -- its one re-issued object (validate_work_item_claim) adds a

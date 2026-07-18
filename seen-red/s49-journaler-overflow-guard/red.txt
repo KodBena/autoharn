@@ -1,0 +1,48 @@
+== scaffolding WORLD (chain ends s48-review-witness-existence.sql, s49 NOT yet applied) ==
+=== detect-negative-pre-s49 ===
+  [ok] s49 .detect.sql reads f before s49 is applied to this schema pair
+
+=== judge-work-AGREE-world-pre ===
+  [ok] judge output (s49fx): ['AGREE', 'asp []', 'sql []']
+
+=== wk2c-prefix-journaler-crashes ===
+  [ok] psql exit=3; stderr tail: 'ERROR:  value "100000000000000000000000000000" is out of range for type bigint\nCONTEXT:  SQL statement "SELECT id                  FROM principal WHERE id = (p_payload->>\'actor\')::bigint"\nPL/pgSQL function journal_write_refusal(text,jsonb,text,text) line 19 at SQL statement\nPL/pgSQL function ledger_write(jsonb) line 46 at assignment\n'
+
+=== wk2c-prefix-sqlstate-22003-surfaces ===
+  [ok] stderr tail: 'ERROR:  value "100000000000000000000000000000" is out of range for type bigint\nCONTEXT:  SQL statement "SELECT id                  FROM principal WHERE id = (p_payload->>\'actor\')::bigint"\nPL/pgSQL function journal_write_refusal(text,jsonb,text,text) line 19 at SQL statement\nPL/pgSQL function ledger_write(jsonb) line 46 at assignment\n'
+
+=== wk2c-prefix-zero-write-refused-rows ===
+  [ok] write_refused row count pre-fix: '0'
+
+=== wk2c-prefix-sequence-gap-recorded ===
+  [ok] refusal_seq (last_value:is_called) before='1:false' after-crash='1:true' (bumped non-transactionally even though the journal row never landed -- the s43 Element 5 oracle, doing exactly its job)
+
+== applying s49-journaler-overflow-guard.sql onto the SAME schema pair ==
+=== s49-patch-applies-clean ===
+  [ok] psql exit=0; stderr tail: ''
+
+=== detect-positive-post-s49 ===
+  [ok] s49 .detect.sql reads t after s49 is applied to this schema pair
+
+=== wk2a-postfix-refused-not-crashed ===
+  [ok] {'row_id': None, 'message': 'value "100000000000000000000000000000" is out of range for type bigint', 'sqlstate': '22003', 'refusal_id': 4, 'disposition': 'refused'}
+
+=== wk2a-postfix-sqlstate-is-22003 ===
+  [ok] sqlstate: '22003'
+
+=== wk2a-postfix-refusal-row-id-present ===
+  [ok] {'row_id': None, 'message': 'value "100000000000000000000000000000" is out of range for type bigint', 'sqlstate': '22003', 'refusal_id': 4, 'disposition': 'refused'}
+
+=== wk2a-postfix-write-refused-row-shape ===
+  [ok] write_refused row (attempted_actor IS NULL | attempted_role IS NOT NULL | sqlstate | message...): 't|t|22003|value "100000000000000000000000000000" is out of range for type bigint'
+
+=== wk2b-refused ===
+  [ok] {'row_id': None, 'message': "Ledger policy: work item slug 'wk2b-never-opened' has no opening act — every later event on an item must reference an item that has been opened (invariant 2, item identity).", 'sqlstate': 'P0001', 'refusal_id': 6, 'disposition': 'refused'}
+
+=== wk2b-attempted-actor-resolved ===
+  [ok] refusal_attempted_actor: '2' (expected the explicit, in-range, registered actor 2)
+
+=== judge-work-AGREE-world-post-s49 ===
+  [ok] judge output (s49fx): ['AGREE', 'asp []', 'sql []']
+
+all s49-journaler-overflow-guard cases WITNESSED clean.

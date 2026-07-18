@@ -1,0 +1,39 @@
+== scaffolding WORLD PRE (chain ends s47-claim-on-closed-refusal.sql) ==
+=== detect-negative-pre-s48 ===
+  [ok] s48 .detect.sql reads f on the pre-s48 (s47-head) chain
+
+== scaffolding WORLD S48 (chain ends s48-review-witness-existence.sql) ==
+=== detect-positive-s48 ===
+  [ok] s48 .detect.sql reads t on the s48-applied chain
+
+=== witness-row-decision-accepted ===
+  [ok] {'row_id': 4, 'message': None, 'sqlstate': None, 'refusal_id': None, 'disposition': 'accepted'}
+
+=== wk1a-open-accepted ===
+  [ok] {'row_id': 5, 'message': None, 'sqlstate': None, 'refusal_id': None, 'disposition': 'accepted'}
+
+=== wk1a-close-citing-existing-row-accepted ===
+  [ok] {'row_id': 6, 'message': None, 'sqlstate': None, 'refusal_id': None, 'disposition': 'accepted'}
+
+=== wk1b-open-accepted ===
+  [ok] {'row_id': 7, 'message': None, 'sqlstate': None, 'refusal_id': None, 'disposition': 'accepted'}
+
+=== wk1b-close-citing-absent-row-refused ===
+  [ok] {'row_id': None, 'message': "Ledger policy: review-witness citation 'row:999999999' in work_review_ref is refused — no ledger row 999999999 exists (checked at INSERT time; review-witness position only, close-family kinds work_closed/work_violation_disposition -- s48). A witness citation naming a nonexistent row is a claim with a dangling evidence pointer, in the one place evidence pointers are load-bearing. This id is AT OR BEYOND the ledger's current head — if you meant to cite THIS row's own id, that is impossible by construction: ledger `id` is server-assigned (s15) and is never visible to the row being inserted.  Cite an EXISTING row instead (e.g. --review-witness row:<id> naming an already-recorded review event), or use --review-deferred/--review-bookkeeping if no review exists yet.", 'sqlstate': 'P0001', 'refusal_id': 9, 'disposition': 'refused'}
+
+=== wk1b-teach-text-names-id ===
+  [ok] message: "Ledger policy: review-witness citation 'row:999999999' in work_review_ref is refused — no ledger row 999999999 exists (checked at INSERT time; review-witness position only, close-family kinds work_closed/work_violation_disposition -- s48). A witness citation naming a nonexistent row is a claim with a dangling evidence pointer, in the one place evidence pointers are load-bearing. This id is AT OR BEYOND the ledger's current head — if you meant to cite THIS row's own id, that is impossible by construction: ledger `id` is server-assigned (s15) and is never visible to the row being inserted.  Cite an EXISTING row instead (e.g. --review-witness row:<id> naming an already-recorded review event), or use --review-deferred/--review-bookkeeping if no review exists yet."
+
+=== wk1b-zero-work-closed-rows ===
+  [ok] work_closed row count for wk1b-item: '0'
+
+=== wk1c-decision-refs-absent-row-accepted ===
+  [ok] {'row_id': 10, 'message': None, 'sqlstate': None, 'refusal_id': None, 'disposition': 'accepted'}
+
+=== judge-work-AGREE-world-pre ===
+  [ok] judge output (s48fx_pre): ['AGREE', 'asp []', 'sql []']
+
+=== judge-work-AGREE-world-s48 ===
+  [ok] judge output (s48fx_s48): ['AGREE', 'asp [\'w_tree_member("wk1a-item","wk1a-item")\', \'w_tree_member("wk1b-item","wk1b-item")\']', 'sql [\'w_tree_member("wk1a-item","wk1a-item")\', \'w_tree_member("wk1b-item","wk1b-item")\']']
+
+all s48-review-witness-existence cases WITNESSED clean.
