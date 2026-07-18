@@ -36,10 +36,19 @@ a kernel view; every byte it writes passes through an s43 boundary function.
 
 - **Not a second validator.** Write payloads are checked for JSON well-formedness and
   top-level shape only; the kernel is the one authority on ledger semantics.
-- **Not a replacement for the operator verbs.** `led`, `judge`, `pickup`,
-  `distance-to-clean`, `attest-tags`, `audit` are **declared here, explicitly, as the
-  remaining sanctioned non-service surface** (spec §1) — v1 does not deprecate them; routing
-  them through this service is a reserved, maintainer-sequenced v2 question.
+- **Not a replacement for the operator verbs — UPDATED.** design/FABLE-BOUNDARY-MULTIPLEX-AND-
+  CLI-REBASE-SPEC.md §5 (ratified row 1631) rebased `led`/`pickup`/`asof-export`/
+  `distance-to-clean` onto this service as HTTP clients (`serving/boundary_cli_client.py`) —
+  the "v2 question" the line above once deferred is now built, for the load-bearing subset each
+  rebased template's own module docstring names (a `SCOPE, HONESTLY NAMED` section per file);
+  the direct-psql originals moved to `./legacy/` (an operator recovery path when this service is
+  down), still runnable, unchanged in capability. `judge`/`attest-doc`/`verify-commission`/
+  `verify-chain`/`attest-tags`/`audit` do NOT rebase (§5's own closed enumeration: `judge` and
+  `audit` both drive clingo + a differential against the world, "not a ledger client in the
+  boundary's sense"; the rest are signing/attestation tooling with no ledger-read/write surface
+  to route). Bootstrap scaffolding (`bootstrap/new-project.sh` and its own templates) does not
+  rebase either — see design/FABLE-BOUNDARY-READ-SURFACE-SPEC.md's own build for the fourteen-
+  route closure that made the CLI rebase possible at all.
 - **Not a cache.** Every request re-detects capabilities and re-reads/re-writes through the
   kernel fresh — no caching anywhere in this module (spec §5).
 
@@ -63,6 +72,21 @@ deployment; this README's endpoint table below is not yet rewritten route-by-rou
 `/d/{deployment}` prefix inline (named seam — see the build report banked alongside this
 change; `seen-red/boundary-multiplex/run_fixtures.py` witnesses the multiplexing axes live).
 
+**The read-surface amendment (design/FABLE-BOUNDARY-READ-SURFACE-SPEC.md, ratified — ledger
+decision row 1652)** grew the route table from eleven to **fourteen**, closing the gap the §5
+CLI-rebase builder found and stopped on: the original eleven routes could not serve most of the
+operator verbs' real read surface (`question_status`, `review_gap`, `review_stamp_distinctness`,
+`standing_decisions`, `countersign_obligation`, `work_item_violations`, `work_review_gap`,
+`model_attestations`, `model_defeated_rows`, `credited_current`, `work_item_current`; the as-of
+reconstruction; the capability probes the CLI verbs ran directly against the database). Three new
+route SHAPES, not ten bespoke ones: `GET /d/{deployment}/views/{view}` (a closed,
+spec-enumerated allowlist — `serving/boundary_service.py`'s own `VIEW_REGISTRY` is the
+enumeration authority), `GET /d/{deployment}/rows/asof/{ts}` (the as-of reconstruction, `{ts}` a
+typed ISO-8601 timestamp), and `GET /d/{deployment}/meta` (the served view allowlist, this
+deployment's kernel lineage head, and this service's own version — replacing the CLI shims'
+former direct `pg_proc`/`information_schema` probes). See `seen-red/boundary-read-surface/
+run_fixtures.py` (WR1-WR5) for the live witnesses.
+
 ## Running it
 
 ```sh
@@ -79,9 +103,10 @@ serving.boundary_service`, matching the spec's own launch command).
 service; a fresh host needs `$HOME/w/vdc/venvs/generic/bin/pip install fastapi uvicorn`
 once (pydantic already ships in that venv for other consumers).
 
-## Endpoint table (spec §3, §4 — fixed; the route table itself IS the enumeration, spec §9/A2.1)
+## Endpoint table (spec §3, §4, extended by the read-surface amendment's own mechanism section —
+fixed; the route table itself IS the enumeration, spec §9/A2.1, RE-RATIFIED at fourteen)
 
-This service carries **exactly eleven routes** — the seven GETs and four POSTs below — and
+This service carries **exactly fourteen routes** — the ten GETs and four POSTs below — and
 **nothing else**. FastAPI's own self-documentation surface is **disabled, not merely
 unenumerated**: `docs_url=None, redoc_url=None, openapi_url=None` (A2.1), so `/docs`, `/redoc`,
 `/openapi.json`, and `/docs/oauth2-redirect` do not exist on this service at all — there is no
@@ -97,6 +122,9 @@ table against `app.routes` **directly, in-process** (never a schema endpoint).
 | GET | `/credited` | the credited view, when the world carries one | `s44-credited-view` — no world in this repository's kernel lineage carries this view yet (spec §7); always `capability_absent` today |
 | GET | `/standing/principals` | `principal_standing_current`, id-paginated (`?after_id=&limit=`, bounds below, A5.4) | `s41-identity` |
 | GET | `/work/items` | `work_item_current`, SLUG-KEYSET-paginated (`?after_slug=&limit=`, bounds below; `after_id` is refused typed 422 on this route, A11) | `s22-work` |
+| GET | `/views/{view}` | one of `VIEW_REGISTRY`'s eleven allowlisted views/tables (`question_status`, `review_gap`, `review_stamp_distinctness`, `standing_decisions`, `countersign_obligation`, `work_item_violations`, `work_review_gap`, `model_attestations`, `model_defeated_rows`, `credited_current`, `work_item_current`), id- or slug-paginated per the view's own natural key (`serving/boundary_service.py`'s own registry comment names each); an unknown `{view}` is a typed 404 `unknown_view` naming the known set | `view:{view}` (object existence) + `view:{view}:{key_col}` (column-shape existence, for a view whose key column arrived at a LATER lineage delta than the view's own name — see `_column_exists`'s own docstring) |
+| GET | `/rows/asof/{ts}` | the whole-ledger AS-OF reconstruction (asof-export.tmpl's own "THE QUERY", `l.*` only — no `actor_name` join), id-paginated; `{ts}` is a typed ISO-8601 timestamp, refused typed 422 before any kernel call on malformed input | none |
+| GET | `/meta` | the served view allowlist, this deployment's kernel lineage head (walked via `bootstrap/migrate_core.py`'s own manifest, through THIS service's own admission-gated `_psql`, never migrate_core's bare unbounded runner — see `_lineage_head`'s own docstring), and this service's own version string | none |
 | POST | `/write/ledger` | `kernel.ledger_write` | `s43-boundary` |
 | POST | `/write/review` | `kernel.review_write` | `s43-boundary` |
 | POST | `/write/registration` | `kernel.registration_write` | `s43-boundary` |
@@ -378,6 +406,15 @@ infrastructure failure (the fetch or the direct read itself failed — not a dis
 verdict, and not conflated with one).
 
 ## Witness suite
+
+**The multiplex/CLI-rebase/read-surface suites, sibling to this one (also fixture-census
+registered, same real-infra/no-mocks discipline):**
+- `seen-red/boundary-multiplex/run_fixtures.py` — WM1-WM4 (cross-contamination, unknown
+  deployment, config defects, per-deployment admission).
+- `seen-red/boundary-read-surface/run_fixtures.py` — WR1-WR5 (per-view row-set equality, unknown
+  view, as-of equality vs the legacy tool, `/meta` accuracy, admission on a `/views/` route).
+- `seen-red/boundary-cli-rebase/run_fixtures.py` — WM5-WM6 (a kernel-refused write's exit code
+  vs. a boundary-refused write's, `./legacy/` running green with the boundary process killed).
 
 `seen-red/boundary-service/run_fixtures.py` (fixture-census registered) — both-polarity, real
 infra (scratch Postgres schemas on the TOY db, real uvicorn subprocesses on loopback), no

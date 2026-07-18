@@ -1,7 +1,7 @@
 #!/bin/sh
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-09T11:15:53Z
-#   last-change: 2026-07-18T16:44:27Z
+#   last-change: 2026-07-18T18:37:44Z
 #   contributors: be693afb/main, e4410ef6/main, 3c50e030/main, a857c93d/main, 9a17b6b9/main, ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -97,6 +97,11 @@ CREATED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 usage() {
     echo "usage: $0 <dest-dir> --db <db> --host <host> --schema <schema> --kern <kern> --role <role> [--name <name>] [--governed <patterns>] [--force]" >&2
     echo "       $0 <dest-dir> --new-world <world> --db <db> --host <host> [--name <name>] [--governed <patterns>] [--force]" >&2
+    echo "         (--boundary-url <url> --boundary-deployment <name> write deployment.json's two" >&2
+    echo "          new served-shim keys, design/FABLE-BOUNDARY-MULTIPLEX-AND-CLI-REBASE-SPEC.md" >&2
+    echo "          §5 -- both optional; the rebased led/pickup/asof-export/distance-to-clean" >&2
+    echo "          shims refuse loudly, teaching both names, when either is absent at RUN time" >&2
+    echo "          rather than this scaffold guessing a boundary URL or standing one up)" >&2
     echo "         (--new-world derives --schema/--kern/--role from <world> unless given explicitly;" >&2
     echo "          also applies high_watermark_1.sql + s20 through s43 + s45, seeds the stamp secret, and" >&2
     echo "          runs the s40 birth sequence (author registration event, standing declaration," >&2
@@ -125,6 +130,17 @@ FORCE=0
 NEW_WORLD=""
 GOVERNED=""
 DB=""; HOST=""; SCHEMA=""; KERN=""; ROLE=""
+# design/FABLE-BOUNDARY-MULTIPLEX-AND-CLI-REBASE-SPEC.md §5 (ledger decision row 1631):
+# deployment.json's two new OPTIONAL keys the REBASED shims (led/pickup/asof-export/
+# distance-to-clean, now served-HTTP clients by default) need -- refused-if-absent BY THE SHIMS
+# THEMSELVES, never by this scaffold (no search-path magic, no auto-launched boundary process:
+# standing one up is a separate operator act, spec §3's own "no defaults file" posture extended
+# here). Both default empty (unset in the written deployment.json, exactly like `name` above when
+# --name is omitted) -- a scaffolded world with neither flag gets the new shims in
+# REFUSAL-TEACHING mode until its operator supplies both, which is the correct default (a
+# just-scaffolded world has no boundary process running yet either).
+BOUNDARY_URL=""
+BOUNDARY_DEPLOYMENT=""
 # --pin submodule (tracker item deployment-live-exec-coupling, design/ORCH-DEPLOYMENT-PINNING.md,
 # maintainer commission 2026-07-14 late "submodule deployment must be IDIOT-PROOF"): an OPT-IN
 # scaffold-time flag, default UNSET so every existing caller (every --new-world run world, every
@@ -150,6 +166,8 @@ while [ $# -gt 0 ]; do
         --kern) KERN="$2"; shift 2 ;;
         --role) ROLE="$2"; shift 2 ;;
         --name) NAME="$2"; shift 2 ;;
+        --boundary-url) BOUNDARY_URL="$2"; shift 2 ;;
+        --boundary-deployment) BOUNDARY_DEPLOYMENT="$2"; shift 2 ;;
         --new-world) NEW_WORLD="$2"; shift 2 ;;
         --governed) GOVERNED="$2"; shift 2 ;;
         --pin) PIN="$2"; shift 2 ;;
@@ -573,14 +591,21 @@ SQL
 fi
 
 echo "-- deployment.json --"
-"$PY" - "$DEPLOYMENT" "$DB" "$HOST" "$SCHEMA" "$KERN" "$ROLE" "$NAME" <<PYEOF
+"$PY" - "$DEPLOYMENT" "$DB" "$HOST" "$SCHEMA" "$KERN" "$ROLE" "$NAME" "$BOUNDARY_URL" "$BOUNDARY_DEPLOYMENT" <<PYEOF
 import sys
 sys.path.insert(0, "$AUTOHARN_ROOT/filing")
 from deployment_record import DeploymentRecord, write_deployment
 
-path, db, host, schema, kern, role, name = sys.argv[1:8]
-write_deployment(path, DeploymentRecord(db=db, host=host, schema=schema, kern=kern, role=role, name=name))
+path, db, host, schema, kern, role, name, boundary_url, boundary_deployment = sys.argv[1:10]
+write_deployment(path, DeploymentRecord(
+    db=db, host=host, schema=schema, kern=kern, role=role, name=name or None,
+    boundary_url=boundary_url or None, boundary_deployment=boundary_deployment or None))
 print(f"wrote {path}")
+if not boundary_url or not boundary_deployment:
+    print("   (boundary_url/boundary_deployment not supplied -- the rebased led/pickup/"
+          "asof-export/distance-to-clean shims will refuse, teaching both names, until this "
+          "deployment.json gains them by hand or a future --boundary-url/--boundary-deployment "
+          "re-scaffold; ./legacy/ holds the direct-psql originals in the meantime)")
 PYEOF
 
 mkdir -p "$PROJECT_ROOT/.claude/logs" "$PROJECT_ROOT/.claude/secrets"
@@ -884,6 +909,28 @@ exec env PICKUP_DEPLOYMENT="\$HERE/deployment.json" $EXEC_ROOT/bootstrap/templat
 SHIM
     chmod +x "$PROJECT_ROOT/$verb"
     echo "wrote $verb (shim -> $EXEC_ROOT/bootstrap/templates/$verb.tmpl)"
+done
+
+# ./legacy/ (design/FABLE-BOUNDARY-MULTIPLEX-AND-CLI-REBASE-SPEC.md §5, ratified ledger row 1631):
+# the direct-psql originals of the FOUR rebased verbs, whole and executable, demoted by placement
+# never deleted -- "operator recovery when the boundary is down" (spec §5's own words). judge/
+# audit/attest-doc/verify-commission/verify-chain do NOT rebase (spec §5's own closed
+# enumeration: judge "drives clingo + differential against the world, not a ledger client in the
+# boundary's sense"; audit is the SAME class -- engine/contemp_audit.py + engine/
+# contemp_differential.py, clingo-driven -- so it stays in the single, unforked family above,
+# never duplicated here) -- so this loop covers ONLY led/pickup/asof-export/distance-to-clean,
+# each pointed at its OWN `legacy-<verb>.tmpl` sibling (bootstrap/templates/, the pre-rebase
+# content, byte-identical save the one-line recovery header each carries at its own top).
+echo "-- ./legacy/ (the four rebased verbs' direct-psql originals, demoted by placement, spec §5) --"
+mkdir -p "$PROJECT_ROOT/legacy"
+for verb in led pickup asof-export distance-to-clean; do
+    cat > "$PROJECT_ROOT/legacy/$verb" <<SHIM
+#!/bin/sh
+HERE="\$(cd "\$(dirname "\$0")" && cd .. && pwd)"
+exec env PICKUP_DEPLOYMENT="\$HERE/deployment.json" $EXEC_ROOT/bootstrap/templates/legacy-$verb.tmpl "\$@"
+SHIM
+    chmod +x "$PROJECT_ROOT/legacy/$verb"
+    echo "wrote legacy/$verb (shim -> $EXEC_ROOT/bootstrap/templates/legacy-$verb.tmpl)"
 done
 
 # orchlog wrapper (deployment-orchlog-surfacing item, half (b) -- half (a), migrate printing the

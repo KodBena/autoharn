@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-18T07:44:41Z
-#   last-change: 2026-07-18T15:56:48Z
+#   last-change: 2026-07-18T18:36:21Z
 #   contributors: ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -301,6 +301,19 @@ path/query parameter across this service's eleven routes was read from its route
 unclassified-failure path, so no future string-typed parameter, however added, can wear the
 bare shape even if its own ingress gate is missed.
 
+READ-SURFACE AMENDMENT (design/FABLE-BOUNDARY-READ-SURFACE-SPEC.md, ratified ledger decision row
+1652): the route table grows from eleven to FOURTEEN -- `GET /d/{deployment}/views/{view}` (the
+closed-allowlist derived-read carrier, `VIEW_REGISTRY`), `GET /d/{deployment}/rows/asof/{ts}` (the
+as-of reconstruction), `GET /d/{deployment}/meta` (the capability surface). A12's own string-typed-
+parameter enumeration above is re-run at this new count, not silently left stale: `views_view`
+gains a SECOND `after_slug` site (identical gate, `_query_string_representability_failure`, same
+call) for the view registry's own text-keyed entries; `rows_asof`'s `ts` path parameter is
+DELIBERATELY NOT run through the same gate -- a string that survives `datetime.fromisoformat`
+cannot carry a U+0000 or an unpaired surrogate (ISO-8601's character class structurally excludes
+both), so the gate would be dead code there, not a second layer of defense (see `rows_asof`'s own
+comment). The A8 `OSError`/A12 `ValueError` choke-point net in `_psql` still covers every site
+uniformly regardless of this reasoning being right.
+
 THE DUMPS-SIDE RECURSION NET (spec A13, post-fixpoint microamendment, ledger row 1621). Not a
 finding -- `_reserialize_or_value_axis_failure`'s own `json.dumps` call had no `RecursionError`
 handling of its own and was protected only by the accident that `json.loads` overflows at the
@@ -315,6 +328,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import datetime
 import json
 import math
 import os
@@ -338,9 +352,17 @@ from fastapi.responses import JSONResponse
 # filing/ consumer, not a package-relative one) needs its own directory added explicitly.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "filing"))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "bootstrap"))
 import deployment_record  # filing/deployment_record.py -- the ONE home for the deployment.json shape  # noqa: E402
 
 import boundary_multiplex_config  # noqa: E402  (design/FABLE-BOUNDARY-MULTIPLEX-AND-CLI-REBASE-SPEC.md §3)
+# design/FABLE-BOUNDARY-READ-SURFACE-SPEC.md's /meta route reuses bootstrap/migrate_core.py's OWN
+# manifest parser (`_manifest`, pure text parsing over new-project.sh, no DB call) as the ONE home
+# for "what is the ordered kernel/lineage/*.sql birth chain" (ADR-0012 P1) -- see `_lineage_head`
+# below for why the DB-touching half of migrate_core's own head-detection is deliberately NOT
+# reused (it would reopen an unbounded, non-admission-gated psql call inside this otherwise fully
+# disciplined service).
+import migrate_core  # noqa: E402  (bootstrap/migrate_core.py)
 from boundary_models import (  # noqa: E402
     BodyReadTimeout,
     CapabilityAbsent,
@@ -349,6 +371,7 @@ from boundary_models import (  # noqa: E402
     HealthResponse,
     InfraFailure,
     LedgerWriteIntFields,
+    MetaResponse,
     ObligationWriteIntFields,
     PayloadTooLarge,
     RegistrationWriteIntFields,
@@ -356,7 +379,68 @@ from boundary_models import (  # noqa: E402
     ServerSaturated,
     UnclassifiedFailure,
     UnknownDeployment,
+    UnknownView,
 )
+
+# design/FABLE-BOUNDARY-READ-SURFACE-SPEC.md, ratified ledger decision row 1652: this service's
+# own declared version -- bumped from the implied pre-amendment "1.0.0" (eleven routes) to name
+# the fourteen-route closure. A SERVICE-owned fact (never a kernel fact); reported verbatim by
+# GET /meta.
+BOUNDARY_SERVICE_VERSION = "1.1.0"
+
+# design/FABLE-BOUNDARY-READ-SURFACE-SPEC.md's mechanism item 1: the CLOSED, spec-enumerated
+# view allowlist `GET /d/{deployment}/views/{view}` serves -- the v1 membership named verbatim in
+# the amendment spec. Each entry names (a) the view/table's own natural ordering KEY COLUMN and
+# (b) that column's KIND -- "id" (a bigint, ledger-row-shaped column; paginated exactly like
+# `/rows/current`'s own `after_id`/`limit`) or "slug" (a text natural key; paginated exactly like
+# `/work/items`'s own `after_slug`/`limit` keyset, A11's discipline). No THIRD pagination shape is
+# invented here -- every entry reuses one of the two shapes this service already established
+# (ADR-0012 P1). Key-column choice, per entry, named once here rather than re-derived per
+# request:
+#   question_status.question_id           -- kernel/lineage/s31 (q.id, a ledger row id, aliased)
+#   review_gap.id                         -- kernel/lineage/s15+ (l.id, a ledger row id)
+#   review_stamp_distinctness.review_id   -- kernel/lineage/s17+ (r.id, a ledger row id, aliased)
+#   standing_decisions.id                 -- kernel/lineage/s36 (a ledger row id)
+#   countersign_obligation.scope          -- kernel/lineage/s15 (a TABLE, PRIMARY KEY scope, text)
+#   work_item_violations.slug              -- kernel/lineage/s22+ (work_slug, text). NOT
+#                                             target_id (added only at s37) -- live-witnessed
+#                                             against this repo's own pre-s37 `autoharn1` world
+#                                             (lineage head s30): a target_id-keyed route 500'd
+#                                             (`column "target_id" does not exist`) on a view
+#                                             that legacy `led work violations`'s own `SELECT
+#                                             slug FROM work_item_violations` reads fine, because
+#                                             that query never needed target_id at all. slug is
+#                                             the column present on every lineage shape this view
+#                                             has ever had; the SAME "cursor is a value, not a
+#                                             position" honesty A11 states for slug-keyed routes
+#                                             applies here too (not unique per row -- a slug can
+#                                             carry more than one violation class).
+#   work_review_gap.slug                  -- kernel/lineage/s29+ (work_slug, text)
+#   model_attestations.row_id             -- kernel/lineage/s44 (lc.id, a ledger row id, aliased)
+#   model_defeated_rows.attest_id         -- kernel/lineage/s46+/s50 (a.id, a ledger row id,
+#                                             aliased -- same disclosed non-uniqueness as
+#                                             work_item_violations above: one attestation can
+#                                             match more than one competence grant)
+#   credited_current.id                   -- kernel/lineage/s46 (a ledger row id, byte-identical
+#                                             column shape to ledger_current)
+#   work_item_current.slug                -- kernel/lineage/s22+ (work_slug, text -- the SAME view
+#                                             GET /work/items already serves; listed here too
+#                                             because the amendment spec's own v1 allowlist names
+#                                             it explicitly, a second reachable path to identical
+#                                             data, not a new one)
+VIEW_REGISTRY: dict[str, tuple[str, str]] = {
+    "question_status": ("question_id", "id"),
+    "review_gap": ("id", "id"),
+    "review_stamp_distinctness": ("review_id", "id"),
+    "standing_decisions": ("id", "id"),
+    "countersign_obligation": ("scope", "slug"),
+    "work_item_violations": ("slug", "slug"),
+    "work_review_gap": ("slug", "slug"),
+    "model_attestations": ("row_id", "id"),
+    "model_defeated_rows": ("attest_id", "id"),
+    "credited_current": ("id", "id"),
+    "work_item_current": ("slug", "slug"),
+}
 
 # The four s43 boundary functions, named ONCE (ADR-0012 P1) -- the write-route table (spec §4)
 # is built from this dict, never re-typed per route.
@@ -739,6 +823,22 @@ def _query_json(cfg: BoundaryConfig, sql: str, extra_v: dict[str, str] | None = 
     output-emptiness -- conflating them would turn a legitimate NULL into a manufactured
     500/503 on every one of this service's read routes."""
     cp = _psql(cfg, sql, extra_v)
+    _classify_psql_exit(cp)
+    lines = [ln for ln in cp.stdout.splitlines() if ln.strip()]
+    if not lines:
+        return None
+    return json.loads(lines[-1])
+
+
+def _classify_psql_exit(cp: subprocess.CompletedProcess[str]) -> None:
+    """A4.3's exit-code fidelity, factored out (ADR-0012 P1) so `_lineage_head` below -- the
+    design/FABLE-BOUNDARY-READ-SURFACE-SPEC.md /meta route's own detect-query runner, which needs
+    the SAME exit-2-vs-other classification `_query_json` already applies but does NOT want
+    `_query_json`'s `json.loads` (a `.detect.sql` file prints a bare `t`/`f`, not JSON) -- can
+    share the ONE classification rule rather than re-deriving it. Raises `PsqlInfraFailure` on
+    exit 2 (connection-level), `PsqlUnclassifiedFailure` on any other nonzero exit; returns None
+    (the caller proceeds) on exit 0. Behavior-preserving extraction from `_query_json`'s own
+    pre-existing inline checks -- no classification changes."""
     if cp.returncode == 2:
         raise PsqlInfraFailure(f"psql query failed (exit {cp.returncode}, connection-level): {cp.stderr.strip()[-2000:]}")
     if cp.returncode != 0:
@@ -747,14 +847,79 @@ def _query_json(cfg: BoundaryConfig, sql: str, extra_v: dict[str, str] | None = 
             f"level residue A4.1/A4.2's closures should have made unreachable via an ordinary "
             f"request; this is a boundary or deployment defect, not a request defect): "
             f"{cp.stderr.strip()[-2000:]}")
-    lines = [ln for ln in cp.stdout.splitlines() if ln.strip()]
-    if not lines:
+
+
+def _lineage_head(cfg: BoundaryConfig) -> str | None:
+    """design/FABLE-BOUNDARY-READ-SURFACE-SPEC.md's /meta route, mechanism item 3: "the
+    deployment's kernel lineage head". Walks `bootstrap/migrate_core.py`'s OWN ordered manifest
+    (`_manifest()`, parsed from `new-project.sh`'s birth-chain `psql -f` invocation -- reused, not
+    re-derived, ADR-0012 P1) and runs each entry's `kernel/lineage/<name>.detect.sql` sibling IN
+    ORDER, returning the LAST entry (basename minus `.sql`) whose detect confirmed `t`, stopping
+    at the first non-`t` result (or the first manifest entry with no `.detect.sql` sibling at
+    all -- a lineage-authoring defect this route has no business turning into a 500 for; it just
+    stops the walk there, same as an ordinary "not yet applied" entry).
+
+    DELIBERATE DEPARTURE from migrate_core.py's own per-entry runner (`_run_detect`,
+    `_current_head_and_missing`): each detect query here runs through THIS module's OWN `_psql`
+    -- the one disciplined transport every other call in this service already uses
+    (PSQL_CONNECT_TIMEOUT_S/PSQL_EXEC_TIMEOUT_S bounds, the global+per-deployment admission
+    semaphores) -- rather than migrate_core's own bare `subprocess.run` (untimed beyond its own
+    60s literal, and NOT admission-gated against this service's shared kernel-call bound).
+    Importing and calling migrate_core's own DB-touching runner here would silently reopen
+    exactly the kind of unbounded, ungated live-DB call path this service's whole design exists
+    to close (CLAUDE.md's hazard-in-reach rule) -- only the manifest (pure text parsing, no DB
+    call) is reused; the DB-touching half is reimplemented against `_psql` instead. Exit-code
+    fidelity matches `_query_json`'s own (`_classify_psql_exit`): a genuine connection failure
+    still raises the SAME typed `infra_failure`/`unclassified_failure` this whole service already
+    uses everywhere else, rather than being silently swallowed into "no lineage head detected".
+
+    FLAGGED CHOICE (ADR-0000 2(a)): for a fully up-to-date world this walks EVERY manifest entry
+    (currently ~50) sequentially, one psql subprocess each -- no caching (spec §5's own
+    no-caching discipline, applied here too), so a slow /meta is the honest, disclosed cost of a
+    live-detected fact rather than a stored version literal that could drift from reality."""
+    try:
+        manifest = migrate_core._manifest()
+    except migrate_core.MigrateRefusal:
         return None
-    return json.loads(lines[-1])
+    head: str | None = None
+    for name in manifest:
+        stem = name[:-4] if name.endswith(".sql") else name
+        detect_path = migrate_core.LINEAGE_DIR / f"{stem}.detect.sql"
+        if not detect_path.is_file():
+            break
+        script = detect_path.read_text(encoding="utf-8")
+        cp = _psql(cfg, script, extra_v={"schema": cfg.schema, "kern": cfg.kern, "role": cfg.role})
+        _classify_psql_exit(cp)
+        lines = [ln.strip() for ln in cp.stdout.splitlines() if ln.strip()]
+        if not lines or not all(ln == "t" for ln in lines):
+            break
+        head = stem
+    return head
 
 
 def _regclass_exists(cfg: BoundaryConfig, qualified_name: str) -> bool:
     out = _query_json(cfg, f"SELECT to_jsonb(to_regclass('{qualified_name}') IS NOT NULL);")
+    return bool(out)
+
+
+def _column_exists(cfg: BoundaryConfig, schema: str, table: str, column: str) -> bool:
+    """design/FABLE-BOUNDARY-READ-SURFACE-SPEC.md's `/views/{view}` route: object existence
+    alone (`_regclass_exists`) is NOT sufficient capability detection for a view whose NAME is
+    stable across lineage deltas but whose COLUMN SHAPE is not -- `work_item_violations` is the
+    live example (its `target_id` column arrived at s37; a pre-s37 world still carries a view
+    NAMED `work_item_violations`, just without that column, live-witnessed against this repo's
+    own `autoharn1` world, whose lineage head is s30: the pre-column-check code reached a bare
+    `column "target_id" does not exist` SQL error, typed only as far as `unclassified_failure`
+    -- accurate, but a worse signal than the SAME "object existence, never version literal"
+    discipline this file already applies one level up. This closes that gap at the SAME
+    granularity: does `{schema}.{table}` carry `{column}`, checked via
+    `information_schema.columns` (never a version literal, matching `_regclass_exists`'s own
+    discipline)."""
+    out = _query_json(
+        cfg,
+        f"SELECT to_jsonb(EXISTS (SELECT 1 FROM information_schema.columns "
+        f"WHERE table_schema = '{schema}' AND table_name = '{table}' "
+        f"AND column_name = '{column}'));")
     return bool(out)
 
 
@@ -848,6 +1013,21 @@ def unknown_deployment(known: list[str], deployment: str) -> JSONResponse:
         message=f"no deployment named {deployment!r} is configured on this service "
                 f"(spec §2: the {{deployment}} discriminator is a closed enumeration fixed at "
                 f"startup); known deployments: {sorted(known)}",
+    )
+    return JSONResponse(status_code=404, content=body.model_dump())
+
+
+def unknown_view(view: str) -> JSONResponse:
+    """design/FABLE-BOUNDARY-READ-SURFACE-SPEC.md: the ONE typed 404 shape
+    `GET /d/{deployment}/views/{view}` returns when `view` is not a key of `VIEW_REGISTRY` -- a
+    closed enumeration fixed at authoring time (mirrors `unknown_deployment` above, ADR-0012 P1:
+    the same shape, applied to a second discriminator). Names the full known set so a caller can
+    self-correct without a second round trip; nothing is queried first."""
+    body = UnknownView(
+        known=sorted(VIEW_REGISTRY),
+        message=f"no view named {view!r} is served by this boundary (design/"
+                f"FABLE-BOUNDARY-READ-SURFACE-SPEC.md: the {{view}} discriminator is a closed, "
+                f"spec-enumerated allowlist); known views: {sorted(VIEW_REGISTRY)}",
     )
     return JSONResponse(status_code=404, content=body.model_dump())
 
@@ -1540,6 +1720,153 @@ def create_app(configs: dict[str, BoundaryConfig]) -> FastAPI:
             extra_v={"after_slug": after_slug},
         )
         return JSONResponse(content=rows)
+
+    @app.get("/d/{deployment}/views/{view}")
+    def views_view(deployment: str, view: str, after_id: int = 0, after_slug: str = "",
+                    limit: int = 100) -> Response:
+        # design/FABLE-BOUNDARY-READ-SURFACE-SPEC.md mechanism item 1: the derived-read carrier.
+        # `{view}` is checked against the CLOSED, spec-enumerated VIEW_REGISTRY before this
+        # deployment's own kernel is ever touched -- an unknown view name is refused (404)
+        # without a single query, exactly like `unknown_deployment`'s own posture.
+        cfg, err = _resolve_deployment(configs, deployment)
+        if err is not None:
+            return err
+        entry = VIEW_REGISTRY.get(view)
+        if entry is None:
+            return unknown_view(view)
+        key_col, key_kind = entry
+        if not _regclass_exists(cfg, f"{cfg.schema}.{view}"):
+            return capability_absent(
+                f"view:{view}",
+                f"This world carries no {cfg.schema}.{view} object -- GET /views/{view} is "
+                f"refused rather than served from a relation this world's kernel does not "
+                f"have (object-existence detection, this service's own migrate-detect-drift "
+                f"discipline).")
+        # The COLUMN-shape check, one level finer than the object-existence check just above:
+        # `work_item_violations`/`work_review_gap`'s own key columns (target_id/slug) arrived at
+        # later lineage deltas (s37/s29) than the views' own NAMES did -- a pre-that-delta world
+        # carries a same-named view without the key column this route's pagination needs, which
+        # would otherwise reach the SELECT below as a bare `column ... does not exist` error (a
+        # genuinely typed, but needlessly coarse, `unclassified_failure` -- see `_column_exists`'s
+        # own docstring, live-witnessed against this repo's own pre-s37 `autoharn1` world).
+        if not _column_exists(cfg, cfg.schema, view, key_col):
+            return capability_absent(
+                f"view:{view}:{key_col}",
+                f"This world's {cfg.schema}.{view} object exists but carries no {key_col!r} "
+                f"column -- this world's applied kernel lineage predates the delta that added "
+                f"it (column-shape detection, one level finer than object existence).")
+        if limit < 1 or limit > 1000:
+            return JSONResponse(status_code=422, content={
+                "detail": "limit must be between 1 and 1000 (transport-level bound, ADR-0002)"})
+        if key_kind == "id":
+            # The id-keyed pagination shape (A2.6/A4.2/A5.4): the SAME shape /rows/current
+            # already uses, applied to this view's own key column. A supplied after_slug on an
+            # id-keyed view is never silently ignored (A10's own lesson, applied a third time).
+            if after_slug:
+                return JSONResponse(status_code=422, content={
+                    "detail": f"after_slug is not accepted on GET /views/{view} -- this view "
+                              f"pages on after_id (an id-shaped key, {view}.{key_col}); got "
+                              f"after_slug={after_slug!r}"})
+            oor = _out_of_range_id("after_id", after_id)
+            if oor is not None:
+                return oor
+            rows = _query_json(
+                cfg,
+                f"SELECT coalesce(jsonb_agg(t ORDER BY t.{key_col}), '[]'::jsonb) FROM "
+                f"(SELECT * FROM {cfg.schema}.{view} WHERE {key_col} > {after_id} "
+                f"ORDER BY {key_col} LIMIT {limit}) t;",
+            )
+            return JSONResponse(content=rows)
+        # key_kind == "slug": the A11 keyset shape /work/items already uses, applied to this
+        # view's own text key column. A supplied after_id on a slug-keyed view is never silently
+        # ignored either (A11 item 1's own precedent).
+        if after_id:
+            return JSONResponse(status_code=422, content={
+                "detail": f"after_id is not accepted on GET /views/{view} -- this view pages on "
+                          f"after_slug (a text-shaped key, {view}.{key_col}); got "
+                          f"after_id={after_id}, resupply as after_slug=<last-served-value> "
+                          f"instead"})
+        after_slug_bytes = len(after_slug.encode("utf-8"))
+        if after_slug_bytes > MAX_AFTER_SLUG_BYTES:
+            return JSONResponse(status_code=422, content={
+                "detail": f"after_slug must be at most {MAX_AFTER_SLUG_BYTES} bytes; got "
+                          f"{after_slug_bytes} bytes"})
+        repr_oor = _query_string_representability_failure("after_slug", after_slug)
+        if repr_oor is not None:
+            return repr_oor
+        rows = _query_json(
+            cfg,
+            f"SELECT coalesce(jsonb_agg(t ORDER BY t.{key_col}), '[]'::jsonb) FROM "
+            f"(SELECT * FROM {cfg.schema}.{view} WHERE {key_col} > :'after_slug' "
+            f"ORDER BY {key_col} LIMIT {limit}) t;",
+            extra_v={"after_slug": after_slug},
+        )
+        return JSONResponse(content=rows)
+
+    @app.get("/d/{deployment}/rows/asof/{ts}")
+    def rows_asof(deployment: str, ts: str, after_id: int = 0, limit: int = 100) -> Response:
+        # design/FABLE-BOUNDARY-READ-SURFACE-SPEC.md mechanism item 2: the as-of reconstruction,
+        # serving asof-export.tmpl's own "THE QUERY" (that file's module docstring) over HTTP.
+        # `{ts}` is a typed ISO-8601 timestamp, refused typed 422 BEFORE any kernel call on
+        # malformed input (the amendment spec's own words) -- `datetime.fromisoformat` is the
+        # standard-library ISO-8601 parser; Python 3.11+ accepts the full profile including a
+        # trailing 'Z'. This is DELIBERATELY STRICTER than asof-export.tmpl's own `--asof`
+        # (which accepts anything postgres's timestamptz cast honors, e.g. a bare
+        # '2026-07-18 10:23:00' with a space) -- the amendment spec's own choice, not softened
+        # here; a caller wanting the looser CLI grammar uses the ./legacy/ original.
+        cfg, err = _resolve_deployment(configs, deployment)
+        if err is not None:
+            return err
+        try:
+            parsed = datetime.datetime.fromisoformat(ts)
+        except ValueError:
+            return JSONResponse(status_code=422, content={
+                "detail": f"ts must be a valid ISO-8601 timestamp (Python's own "
+                          f"datetime.fromisoformat grammar); got {ts!r}"})
+        # A representability check is deliberately NOT repeated here (A12's own discipline,
+        # applied honestly rather than mechanically): a string that survives
+        # datetime.fromisoformat cannot carry a U+0000 or an unpaired UTF-16 surrogate -- ISO-8601
+        # is a closed character class ([0-9:+\-.TZ ]) neither of those failure modes can hide in,
+        # so the check would be dead code, not defense in depth.
+        if limit < 1 or limit > 1000:
+            return JSONResponse(status_code=422, content={
+                "detail": "limit must be between 1 and 1000 (transport-level bound, ADR-0002)"})
+        oor = _out_of_range_id("after_id", after_id)
+        if oor is not None:
+            return oor
+        # THE QUERY: asof-export.tmpl's own reconstruction, byte-identical in shape (one conjunct
+        # on each side of ledger_current's own NOT EXISTS), served over `l.*` ONLY -- matching
+        # every OTHER row-level route in this service (none of them join in `actor_name`; that
+        # enrichment is asof-export.tmpl's OWN CLI-side presentation concern, not a kernel-view
+        # fact this boundary adds truth of its own to serve -- spec §5, "no truth of its own").
+        # `ts` crosses as a BOUND -v argument (:'asof'::timestamptz), never spliced -- the same
+        # injection-safe substitution every other string-typed value in this service already uses.
+        rows = _query_json(
+            cfg,
+            f"SELECT coalesce(jsonb_agg(t ORDER BY t.id), '[]'::jsonb) FROM "
+            f"(SELECT l.* FROM {cfg.schema}.ledger l "
+            f"WHERE l.ts <= :'asof'::timestamptz AND l.id > {after_id} "
+            f"AND NOT EXISTS (SELECT 1 FROM {cfg.schema}.ledger s "
+            f"WHERE s.supersedes = l.id AND s.ts <= :'asof'::timestamptz) "
+            f"ORDER BY l.id LIMIT {limit}) t;",
+            extra_v={"asof": parsed.isoformat()},
+        )
+        return JSONResponse(content=rows)
+
+    @app.get("/d/{deployment}/meta", response_model=MetaResponse)
+    def meta(deployment: str) -> Response:
+        # design/FABLE-BOUNDARY-READ-SURFACE-SPEC.md mechanism item 3: the capability surface a
+        # rebased CLI shim decides its own behavior from -- see `_lineage_head`'s own docstring
+        # for why its DB-touching half is reimplemented against this module's own `_psql` rather
+        # than reusing migrate_core.py's bare, ungated runner.
+        cfg, err = _resolve_deployment(configs, deployment)
+        if err is not None:
+            return err
+        return MetaResponse(
+            known_views=sorted(VIEW_REGISTRY),
+            lineage_head=_lineage_head(cfg),
+            boundary_version=BOUNDARY_SERVICE_VERSION,
+        )
 
     def make_write_route(surface: str, fn: str):
         # A3.1: plain `def`, not `async def` -- FastAPI/Starlette dispatches a plain `def` path

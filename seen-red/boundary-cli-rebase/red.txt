@@ -1,0 +1,56 @@
+boundary-cli-rebase -- banked RED evidence (2026-07-18, toy db 192.168.122.1, scratch world
+cliwm<pid>; runnable fixture: seen-red/boundary-cli-rebase/run_fixtures.py, registered in
+gates/fixture_census.py). Witnesses design/FABLE-BOUNDARY-MULTIPLEX-AND-CLI-REBASE-SPEC.md §7's
+WM5/WM6.
+
+Two genuine RED->GREEN transitions this build's own live testing captured against real infra:
+
+1. WRONG INTERPRETER (a fixture-harness bug). `run_cli()`'s first draft always invoked every
+   template under `$HOME/w/vdc/venvs/generic/bin/python`, including `legacy-led.tmpl` --
+   which is a BASH script (`#!/usr/bin/env bash`), not Python:
+
+     File ".../bootstrap/templates/legacy-led.tmpl", line 514
+       _dep_vars="$(python3 - "$AUTOHARN_ROOT" "$DEPLOYMENT" <<'PYEOF'
+                                                            ^
+     SyntaxError: unterminated string literal (detected at line 514)
+
+   Fixed: `run_cli()` now reads the target script's own shebang line and chooses `bash` or the
+   venv's `python` accordingly, rather than hardcoding one interpreter for every template.
+
+2. MISSING/WRONG-KEY TEACH-TEXT (a real serving/boundary_cli_client.py bug, not a fixture bug).
+   WM5b's genuine boundary-typed-422 leg (an out-of-range `supersedes` value) printed the literal
+   word "None" where the boundary's own teach-text should have been:
+
+     led: REFUSED by the boundary SERVICE itself (HTTP 422) -- this is NOT a kernel verdict
+     (no ledger write was attempted/journaled for this call):
+       None
+
+   Cause: `report_boundary_exception` read only the `"message"` key off the boundary's typed
+   body, but many of `serving/boundary_service.py`'s own inline 422 refusals (the A4.2/A5.2
+   id-domain closures among them) use FastAPI's conventional `"detail"` key instead -- the two
+   shapes coexist in the same service, and the client only knew one of them. Fixed:
+   `report_boundary_exception` now reads `message`, falling back to `detail`. Re-run GREEN:
+
+     led: REFUSED by the boundary SERVICE itself (HTTP 422) -- this is NOT a kernel verdict
+     (no ledger write was attempted/journaled for this call):
+       payload field 'supersedes' must satisfy 0 <= supersedes <= 9223372036854775807 (a
+       Postgres bigint's own domain, spec A5.2/A6); got 9223372036854775808
+
+Full GREEN transcript (same commit, same live toy db, s43-headed scratch world cliwm<pid>):
+
+  == WM5a: kernel-refused write (segregation of duties) -> exit 1 ==
+  [ok] setup note write accepted (exit 0)
+  [ok] kernel refusal: exit=1, stderr names SQLSTATE P0001, the journaled write_refused row id,
+       and "segregation of duties" verbatim -- byte-faithful to the legacy tool's own exit 1 for
+       this case.
+  == WM5b: a GENUINE boundary-typed refusal (never reaches the kernel) -> exit 3, never exit 1 ==
+  [ok] out-of-range id-domain field (A5.2): exit=3, "REFUSED by the boundary SERVICE itself",
+       "NOT a kernel verdict", boundary's own teach-text verbatim.
+  [ok] client-side malformed local JSON: exit=4 (never 0 or 1).
+  [ok] missing deployment record: exit=4 (never 1).
+  == WM6: legacy-led.tmpl runs green against its world with the boundary process KILLED ==
+  [ok] exit=0, "led: row <id> written." -- direct psql, zero dependency on the (dead) boundary
+       process.
+  [ok] the write actually landed (verified by a direct SELECT count(*) against the world).
+
+  ALL WM5/WM6 CHECKS OK
