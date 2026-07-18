@@ -1,6 +1,6 @@
 # Logics & automated deduction — applicability to autoharn
 
-> ⚠️ **Superseded / corrected.** This pass optimized install-cost and used a dismissive "tourism" frame (an ADR-0013 violation). It is kept intact as the **Witness**; the **Correction** — the frontier-creed re-run, plus the cascade finding where the deflation-detector itself deflated — is in **[../2026-06-27-logic-fair-trials/](../../../research/logic-fair-trials)**. Read that first.
+> ⚠️ **Superseded / corrected.** This pass optimized install-cost and used a dismissive "tourism" frame (an ADR-0013 violation). It is kept intact as the **Witness**; the **Correction** — the frontier-creed re-run, plus the cascade finding where the deflation-detector itself deflated — is in **[../2026-06-27-logic-fair-trials/](../logic-fair-trials)**. Read that first.
 
 _Generated 2026-06-27 by a 13-family parallel investigation (13/13 families + a software
 catalog, an adversarial fit-critic, and a synthesis), run `wf_6be06f87-68d`._

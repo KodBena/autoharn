@@ -14,7 +14,7 @@ _2026-06-27. A 27-formal-system survey at **life-critical seriousness**, organiz
 - **[C-encoding-qualification.md](C-encoding-qualification.md)** · qualifying an LLM-authored encoding (the QUAL gates).
 - **[D-coverage-and-completeness.md](D-coverage-and-completeness.md)** · coverage matrix + what the roster missed.
 
-## The 27 formal systems  (in [formal-systems/](../../../research/obligations-formalisms-survey/formal-systems))
+## The 27 formal systems  (in [formal-systems/](formal-systems))
 
 - [Datalog & Deductive Databases](formal-systems/01-datalog.md)
 - [Prolog, CLP & Prolog-as-Encoding-Host](formal-systems/02-prolog-clp.md)
@@ -46,6 +46,6 @@ _2026-06-27. A 27-formal-system survey at **life-critical seriousness**, organiz
 
 ## Provenance, supersession & honest caveats
 
-- This survey is the **obligation-organized Correction** to two earlier bake-off-framed passes, kept intact as **Witnesses**: [logic-investigation](../../../research/logic-investigation) and [logic-fair-trials](../../../research/logic-fair-trials).
+- This survey is the **obligation-organized Correction** to two earlier bake-off-framed passes, kept intact as **Witnesses**: [logic-investigation](../logic-investigation) and [logic-fair-trials](../logic-fair-trials).
 - **Verdicts are agent-reasoned, not experimentally settled**; engine versions/licenses are agent-reported, web-checked where noted — confirm before install. Cross-cut **[C](C-encoding-qualification.md)** is the discipline that turns claims into qualified guarantees.
 - All 27 of 27 planned formal-system sections were produced, using 38 agents across the four-stage pipeline: taxonomy → survey → cross-cut → synthesis.

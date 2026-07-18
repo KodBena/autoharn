@@ -12,7 +12,7 @@ Audience: orchestrator
 ## The directive, in one line
 
 Make the breadth of the
-[`research/logic-fair-trials/`](../../research/logic-fair-trials)
+[`research/logic-fair-trials/`](../research/logic-fair-trials)
 14-logic survey **pluggable w.r.t. NLP**: every logic attaches to the SAME extracted-claim
 substrate through ONE identical seam, so the choice of engine is an adapter detail,
 not a pipeline rewrite. This is `experiments/impedance/`'s (a sibling chocofarm project,
