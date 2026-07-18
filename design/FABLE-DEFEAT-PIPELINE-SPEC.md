@@ -638,7 +638,7 @@ controls are part of done (ADR-0011's gate-proves-itself-by-failing amendment).
 
 ## Amendments (dated; Fable-authored; each names its trigger)
 
-**A1 (2026-07-19) — §4.2 admits `affirms/3` and `affirm_author/2`; the builder's surfaced
+**A1 (2026-07-18; the date first read 2026-07-19, an authoring date-drift corrected same day, see the correction ledger row) — §4.2 admits `affirms/3` and `affirm_author/2`; the builder's surfaced
 renegotiation, ratified with the manifest discipline made binding.** Trigger: the Sonnet
 build (commit `fcc7744`) and the adversarial review's independent re-derivation
 (adjudication ledger row 1506). §4.2's family table omitted two families the composed

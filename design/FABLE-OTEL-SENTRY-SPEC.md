@@ -987,7 +987,7 @@ service-managed operation of watchdog or sentry on the Gentoo host.
 
 ## Amendments (dated; Fable-authored; each names its trigger)
 
-**A1 (2026-07-19) — the `ambiguous` write's value domain, fixed (completing §5; the field
+**A1 (2026-07-18; the date first read 2026-07-19, an authoring date-drift corrected same day, see the correction ledger row) — the `ambiguous` write's value domain, fixed (completing §5; the field
 set is unchanged, so `v1` stands — this is a value-domain completion, not a field change).**
 Trigger: adversarial review finding F1 (adjudication ledger row 1505). The first build
 silently folded every `ambiguous` session into the written-as-nothing path, contradicting
@@ -1020,7 +1020,7 @@ pass and every later producer:
   fail-safe polarity — defeat withholds credit, it never asserts; grade-conditioned
   *discounting* of weak grades stays reserved (pipeline spec §13).
 
-**A2 (2026-07-19) — write-time field hygiene (review finding F2, row 1505).** `model=` is
+**A2 (2026-07-18, same correction as A1) — write-time field hygiene (review finding F2, row 1505).** `model=` is
 verbatim text from an **unauthenticated** emitter; a `|` inside any field value produces a
 statement that parses loud-fail later (P-5), denying the whole idempotency scan — and, once
 the pipeline exists, the world's entire defeat derivation — until superseded. The writer
