@@ -1,8 +1,8 @@
 #!/bin/sh
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-12T00:07:19Z
-#   last-change: 2026-07-12T00:10:52Z
-#   contributors: e4410ef6/main
+#   last-change: 2026-07-18T17:02:30Z
+#   contributors: e4410ef6/main, ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
 # track-experiments.sh — give ANY project a STANDING, deployment-local recording surface for
@@ -122,6 +122,29 @@ done
 [ -n "$NAME" ] || usage
 [ -n "$DB" ] && [ -n "$HOST" ] || usage
 
+# --- STRICT CHARACTER ALLOWLIST on every name that becomes SQL text ----------------------------
+# ADR-0012's 2026-07-18 amendment ("The interpreter boundary -- a value never crosses as program
+# text") + ADR-0000's same-day Rule 2(a) amendment (ledger row 1637, fixed first in
+# bootstrap/teardown-world.sh commit 0ce5055, then in four sibling scripts by commit 1e18722,
+# which flagged this script's own preflight query as the next sighting of the same pattern):
+# CORE_SCHEMA/RESEARCH_SCHEMA reach the preflight SQL text below (bound as psql -v values) --
+# checked before ANY SQL is built, covering both the defaults and a --core-schema/
+# --research-schema override alike. NAME/DB/HOST never reach SQL text (NAME is JSON-escaped by
+# json.dumps below; DB/HOST are psql's own -d/-h argv, never spliced into a query string) so
+# they are outside this allowlist's scope, the same reasoning the sibling fixes applied.
+for _name in "$CORE_SCHEMA" "$RESEARCH_SCHEMA"; do
+    case "$_name" in
+        ''|*[!A-Za-z0-9_]*)
+            echo "track-experiments.sh: REFUSED -- '$_name' contains characters outside the" >&2
+            echo "                      allowlist for a schema name (letters, digits, underscore" >&2
+            echo "                      only). This applies to the --core-schema/--research-schema" >&2
+            echo "                      overrides and their defaults alike. Nothing was touched." >&2
+            exit 1
+            ;;
+    esac
+done
+unset _name
+
 AUTOHARN_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
 mkdir -p "$DEST"
@@ -152,8 +175,17 @@ echo ""
 # now (the same posture record_reading.py itself takes: it never pre-checks reachability
 # either, letting the first real write attempt be the honest signal).
 set +e
-APPLIED="$(psql -h "$HOST" -d "$DB" -tA -c \
-    "SELECT to_regclass('${CORE_SCHEMA}.project') IS NOT NULL OR to_regclass('${RESEARCH_SCHEMA}.reading') IS NOT NULL;" 2>&1)"
+# SQL text fed on stdin, never via -c (psql's :'var'/:"var" substitution is a silent no-op under
+# -c, verified live -- same fix shape as bootstrap/teardown-world.sh commit 0ce5055 and the four
+# sibling scripts fixed by commit 1e18722). CORE_SCHEMA/RESEARCH_SCHEMA are bound as psql -v
+# string-literal values (:'core_schema'/:'research_schema'), concatenated with a literal
+# '.project'/'.reading' suffix inside SQL, then handed to to_regclass exactly as the original
+# raw-interpolated string was -- the value crosses the interpreter boundary as DATA, never as
+# spliced program text, so a crafted name can no longer alter the query's structure (the
+# allowlist above additionally refuses anything outside [A-Za-z0-9_]+ before this SQL is built).
+APPLIED="$(printf '%s\n' \
+    "SELECT to_regclass(:'core_schema' || '.project') IS NOT NULL OR to_regclass(:'research_schema' || '.reading') IS NOT NULL;" \
+    | psql -h "$HOST" -d "$DB" -v core_schema="$CORE_SCHEMA" -v research_schema="$RESEARCH_SCHEMA" -tA 2>&1)"
 PREFLIGHT_STATUS=$?
 set -e
 if [ "$PREFLIGHT_STATUS" -ne 0 ]; then
