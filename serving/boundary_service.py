@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-18T07:44:41Z
-#   last-change: 2026-07-18T15:35:31Z
+#   last-change: 2026-07-18T15:56:48Z
 #   contributors: ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -9,6 +9,23 @@
 (design/FABLE-LEDGER-BOUNDARY-SERVICE-SPEC.md, the RATIFIED build basis; ledger rows 1471,
 1481, 1518; orchlog.d/panel-single-boundary-direction.md; kernel/lineage/
 s43-typed-verdict-write-boundary.sql; law/adr/0002, 0012 P2, 0016).
+
+MULTIPLEXING (design/FABLE-BOUNDARY-MULTIPLEX-AND-CLI-REBASE-SPEC.md, maintainer-ratified
+2026-07-18, ledger decision row 1631): as of this build, ONE process serves N deployments,
+selected by a mandatory leading `/d/{deployment}` path segment -- no per-deployment server
+processes, no unprefixed-route mode (a single-deployment config is the degenerate, expected
+common case, and the discriminator is still mandatory for it). `--config <path>` names a TOML
+file (`serving/boundary_multiplex_config.py`, the one home for its shape); the WHOLE file
+validates -- unknown key, missing key, or zero deployments -- before the socket ever binds
+(spec §3). Every A1-A13 closure axis above holds identically per resolved deployment (spec
+§4); `MAX_INFLIGHT_KERNEL_CALLS` stays the GLOBAL admission bound (it protects the shared
+threadpool, process-wide), and gains a per-deployment sub-bound
+(`MAX_INFLIGHT_PER_DEPLOYMENT`, `compute_per_deployment_limit`, computed and printed at
+startup) so one deployment's stalled kernel cannot occupy the whole global bound and starve
+its siblings -- both saturation refusals are typed 503 under DISTINCT labels
+(`server_saturated` vs `deployment_saturated`, one condition per label, the A6/A8 label-honesty
+ruling extended to the new axis). An unrecognized `{deployment}` segment is a typed 404
+`unknown_deployment` naming the full known set.
 
 WHAT THIS SERVICE IS (spec §0). The kernel's OWN inner boundary -- s43's four SECURITY
 DEFINER write functions plus the derived views -- remains the sole authority. This service is
@@ -323,10 +340,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "filing"))
 import deployment_record  # filing/deployment_record.py -- the ONE home for the deployment.json shape  # noqa: E402
 
+import boundary_multiplex_config  # noqa: E402  (design/FABLE-BOUNDARY-MULTIPLEX-AND-CLI-REBASE-SPEC.md §3)
 from boundary_models import (  # noqa: E402
     BodyReadTimeout,
     CapabilityAbsent,
     CapabilityManifest,
+    DeploymentSaturated,
     HealthResponse,
     InfraFailure,
     LedgerWriteIntFields,
@@ -336,6 +355,7 @@ from boundary_models import (  # noqa: E402
     ReviewWriteIntFields,
     ServerSaturated,
     UnclassifiedFailure,
+    UnknownDeployment,
 )
 
 # The four s43 boundary functions, named ONCE (ADR-0012 P1) -- the write-route table (spec §4)
@@ -420,8 +440,24 @@ MAX_ID = 2**63 - 1
 # call passes through (see `_psql`'s own docstring, "ADMISSION AXIS"); `threading.BoundedSemaphore`
 # is thread-safe and matches the plain-`def`/threadpool handler shape A3.1 already established
 # (a real OS thread per in-flight handler, not a coroutine).
+#
+# MULTIPLEX SPEC §4: this constant stays the GLOBAL bound -- it protects the shared threadpool,
+# which is process-wide, not per-deployment -- and is UNCHANGED by multiplexing. The
+# per-deployment sub-bound (`MAX_INFLIGHT_PER_DEPLOYMENT`) is a SECOND, independent gate, sized
+# per process at startup by `compute_per_deployment_limit` below and held one-per-deployment on
+# each `BoundaryConfig` (never a second literal here -- ADR-0012 P1).
 MAX_INFLIGHT_KERNEL_CALLS = 24
 _KERNEL_CALL_SEMAPHORE = threading.BoundedSemaphore(MAX_INFLIGHT_KERNEL_CALLS)
+
+
+def compute_per_deployment_limit(n_deployments: int) -> int:
+    """Multiplex spec §4: `MAX_INFLIGHT_PER_DEPLOYMENT = max(4, MAX_INFLIGHT_KERNEL_CALLS //
+    len(deployments))`, computed once at startup (never re-derived per request) and PRINTED at
+    startup (spec §4, verbatim) so an operator can see the bound their own deployment count
+    produced. The floor of 4 keeps a many-deployment config from squeezing any single
+    deployment's own sub-bound down to a value so small ordinary concurrent use of THAT
+    deployment alone would trip it."""
+    return max(4, MAX_INFLIGHT_KERNEL_CALLS // n_deployments)
 
 # A10: GET /rows/{id}/history's OWN default `limit` -- deliberately 1000, not the 100 every
 # other paginated route defaults to (ADR-0012 P1 note: this is the one place the four A5.4
@@ -482,24 +518,62 @@ class KernelCallSaturated(Exception):
     caller response (spec A9, verbatim)."""
 
 
+class DeploymentCallSaturated(Exception):
+    """Multiplex spec §4: raised by `_psql` -- the SAME shared choke point `KernelCallSaturated`
+    is raised from -- when the CALLING deployment's OWN `dep_semaphore`
+    (`MAX_INFLIGHT_PER_DEPLOYMENT` slots) is exhausted, distinct from the GLOBAL bound
+    `KernelCallSaturated` guards. Checked FIRST (before the global gate): a deployment that has
+    already saturated its own sub-bound is refused on ITS OWN label without ever touching the
+    global gate's accounting, so the two conditions -- 'this deployment is at capacity' vs 'the
+    whole server is at capacity' -- can never be conflated under one label (spec §4/A6/A8's
+    label-honesty ruling, extended to the new axis). Raised BEFORE `subprocess.run` is ever
+    invoked, exactly like `KernelCallSaturated` -- an ordinary, expected, load-driven condition,
+    never logged server-side (nothing a log would explain the typed response does not already
+    say)."""
+
+
 class BoundaryConfig:
     """This deployment's resolved (db, host, schema, kern, role) plus the psql connection
     host -- kept distinct from the LEDGER's own `host` field on purpose: `deployment.json`'s
     `host` is the POSTGRES host (what `led`/`judge` already call `--host`), never this HTTP
-    service's own bind address (spec §2's separate `--host`/`--port` argv)."""
+    service's own bind address (spec §2's separate `--host`/`--port` argv).
 
-    def __init__(self, record: deployment_record.DeploymentRecord) -> None:
+    MULTIPLEX SPEC §4: as of the multiplex build, every `BoundaryConfig` also carries its OWN
+    `dep_semaphore` -- a `threading.BoundedSemaphore` sized to `dep_limit`
+    (`MAX_INFLIGHT_PER_DEPLOYMENT`, computed once at process startup by
+    `compute_per_deployment_limit`) -- so `_psql` can gate a kernel call on BOTH the global
+    bound (`_KERNEL_CALL_SEMAPHORE`) and this deployment's own sub-bound without a second
+    dict/lookup at the choke point. `record.name` is REQUIRED here (never `None`): every
+    multiplexed deployment is named, by construction (the TOML table key, spec §3)."""
+
+    def __init__(
+        self,
+        record: deployment_record.DeploymentRecord,
+        dep_semaphore: threading.BoundedSemaphore | None = None,
+        dep_limit: int | None = None,
+    ) -> None:
         for field_name in ("schema", "kern", "role"):
             value = getattr(record, field_name)
             if not _IDENT_RE.match(value):
                 raise SystemExit(
-                    f"boundary_service: REFUSED at start-up -- deployment.json field "
+                    f"boundary_service: REFUSED at start-up -- deployment config field "
                     f"'{field_name}'={value!r} is not a plain SQL identifier "
                     f"(pattern {_IDENT_RE.pattern}). A deployment record is operator-authored "
                     f"config, not HTTP input, but this service still refuses to interpolate an "
                     f"unvalidated identifier into SQL text (ADR-0002 rung 1, construction-time)."
                 )
         self.record = record
+        # Multiplex spec §4: a deployment with no explicit sub-bound wired (unused outside this
+        # module's own unit-shaped call sites, e.g. W12's in-process route-table witness, which
+        # builds a BoundaryConfig without ever calling _psql) gets a permissive default rather
+        # than a zero-capacity semaphore that would wedge on its very first acquire.
+        self.dep_limit = dep_limit if dep_limit is not None else MAX_INFLIGHT_KERNEL_CALLS
+        self.dep_semaphore = dep_semaphore if dep_semaphore is not None else threading.BoundedSemaphore(self.dep_limit)
+
+    @property
+    def name(self) -> str:
+        assert self.record.name is not None  # multiplex spec §3: every deployment is named by construction
+        return self.record.name
 
     @property
     def pg_host(self) -> str:
@@ -546,6 +620,17 @@ def _psql(cfg: BoundaryConfig, script: str, extra_v: dict[str, str] | None = Non
     slot is released in a `finally`, released as early as honesty allows (the instant
     `subprocess.run` itself returns or raises, not deferred to the caller).
 
+    MULTIPLEX SPEC §4's admission axis, a SECOND independent gate ahead of the global one: this
+    function first acquires a NON-BLOCKING slot from `cfg.dep_semaphore`
+    (`MAX_INFLIGHT_PER_DEPLOYMENT`, `cfg`'s own sub-bound). Checked BEFORE the global gate --
+    a deployment already at its own capacity is refused on its own label
+    (`DeploymentCallSaturated`) without ever touching the global gate's accounting, so a caller
+    can always tell "my deployment is busy" from "the whole server is busy" (spec §4's
+    distinct-label requirement). Only once BOTH gates admit the call does `subprocess.run` run;
+    both slots release together in the `finally` below (reached only when both were actually
+    acquired -- either saturation raise returns before this `try` is ever entered, so there is
+    no double-release to guard against on that path).
+
     A12's choke-point net, A8's `OSError` pattern repeated: `ValueError` from `subprocess.run`
     itself (concretely, "embedded null byte" -- Python's own argv-encoding layer raises this
     when ANY `args`/`extra_v` string reaching this call carries a literal NUL, regardless of
@@ -563,7 +648,18 @@ def _psql(cfg: BoundaryConfig, script: str, extra_v: dict[str, str] | None = Non
     preamble = f"SET ROLE {cfg.role};\nSET search_path = {cfg.schema}, {cfg.kern};\n"
     env = dict(os.environ)
     env["PGCONNECT_TIMEOUT"] = str(PSQL_CONNECT_TIMEOUT_S)
+    # Multiplex spec §4: the PER-DEPLOYMENT gate first -- a deployment already at its own
+    # capacity is refused on its own label, never touching the global gate's accounting.
+    if not cfg.dep_semaphore.acquire(blocking=False):
+        raise DeploymentCallSaturated(
+            f"deployment {cfg.name!r} already has MAX_INFLIGHT_PER_DEPLOYMENT={cfg.dep_limit} "
+            f"concurrent kernel calls in flight (multiplex spec §4) -- this call is refused "
+            f"immediately rather than queued. The cause is ordinary concurrent load on THIS "
+            f"deployment, not a defect in this request nor a whole-server condition; the "
+            f"correct response is to retry after a short backoff."
+        )
     if not _KERNEL_CALL_SEMAPHORE.acquire(blocking=False):
+        cfg.dep_semaphore.release()
         raise KernelCallSaturated(
             f"the service already has MAX_INFLIGHT_KERNEL_CALLS={MAX_INFLIGHT_KERNEL_CALLS} "
             f"concurrent kernel calls in flight (spec A9) -- this call is refused immediately "
@@ -608,11 +704,14 @@ def _psql(cfg: BoundaryConfig, script: str, extra_v: dict[str, str] | None = Non
             f"representability gates should have refused upstream): {e}"
         ) from e
     finally:
-        # A9: released as early as honesty allows -- the instant subprocess.run itself returns
-        # or raises, on EVERY exit path (success and both exception paths above alike). Only
-        # reached when the slot was actually acquired (the saturation raise above returns before
-        # entering this try/finally at all, so there is no double-release to guard against).
+        # A9 + multiplex spec §4: released as early as honesty allows -- the instant
+        # subprocess.run itself returns or raises, on EVERY exit path (success and both
+        # exception paths above alike). Only reached when BOTH slots were actually acquired
+        # (either saturation raise above returns before entering this try/finally at all, so
+        # there is no double-release to guard against). Release order (global then
+        # per-deployment) is the exact reverse of acquisition order.
         _KERNEL_CALL_SEMAPHORE.release()
+        cfg.dep_semaphore.release()
 
 
 def _query_json(cfg: BoundaryConfig, sql: str, extra_v: dict[str, str] | None = None) -> Any:
@@ -729,6 +828,41 @@ def server_saturated(message: str) -> JSONResponse:
     not an infrastructure anomaly -- the two are deliberately distinct typed shapes)."""
     body = ServerSaturated(inflight_limit=MAX_INFLIGHT_KERNEL_CALLS, message=message)
     return JSONResponse(status_code=503, content=body.model_dump())
+
+
+def deployment_saturated(deployment: str, inflight_limit: int, message: str) -> JSONResponse:
+    """Multiplex spec §4: the one typed shape a deployment's OWN `MAX_INFLIGHT_PER_DEPLOYMENT`
+    sub-bound, already exhausted, returns -- HTTP 503, distinct label from `server_saturated`
+    (A6/A8's label-honesty ruling, extended to the new axis): this deployment is busy, which is
+    NOT the same fact as the whole server being busy."""
+    body = DeploymentSaturated(deployment=deployment, inflight_limit=inflight_limit, message=message)
+    return JSONResponse(status_code=503, content=body.model_dump())
+
+
+def unknown_deployment(known: list[str], deployment: str) -> JSONResponse:
+    """Multiplex spec §2: the ONE typed 404 shape every `/d/{deployment}/...` route returns when
+    `deployment` is not a key of the loaded config -- a closed enumeration fixed at startup.
+    Names the full known set so a caller can self-correct without a second round trip."""
+    body = UnknownDeployment(
+        known=sorted(known),
+        message=f"no deployment named {deployment!r} is configured on this service "
+                f"(spec §2: the {{deployment}} discriminator is a closed enumeration fixed at "
+                f"startup); known deployments: {sorted(known)}",
+    )
+    return JSONResponse(status_code=404, content=body.model_dump())
+
+
+def _resolve_deployment(
+    configs: dict[str, BoundaryConfig], deployment: str
+) -> tuple[BoundaryConfig | None, JSONResponse | None]:
+    """Multiplex spec §2: the ONE place every route resolves its `{deployment}` path segment
+    against the loaded config (ADR-0012 P1 -- not re-derived per route). Returns
+    `(cfg, None)` on a known deployment, `(None, <typed 404>)` otherwise -- the caller returns
+    the second element immediately when it is not None."""
+    cfg = configs.get(deployment)
+    if cfg is None:
+        return None, unknown_deployment(list(configs.keys()), deployment)
+    return cfg, None
 
 
 def _out_of_range_id(name: str, value: int) -> JSONResponse | None:
@@ -1066,13 +1200,24 @@ async def _bounded_raw_body(request: Request) -> bytes:
         ) from e
 
 
-def create_app(cfg: BoundaryConfig) -> FastAPI:
+def create_app(configs: dict[str, BoundaryConfig]) -> FastAPI:
+    """Multiplex spec §2: ONE app serves every deployment in `configs`, discriminated by the
+    leading `/d/{deployment}` path segment on every route -- no unprefixed routes survive (the
+    route table stays closed and single-shaped, not dual-dialect; a single-deployment config is
+    the degenerate, expected common case, and the discriminator is still mandatory for it,
+    spec §2). Each handler below resolves its own `{deployment}` segment via
+    `_resolve_deployment` FIRST, returning the typed 404 `unknown_deployment` immediately when
+    it is not a key of `configs` -- everything past that point is byte-identical to the
+    single-deployment predecessor's own handler body (the resolved `cfg` local shadows the
+    parameter name every pre-multiplex query below already used, so no query text changes)."""
     app = FastAPI(
         title="autoharn ledger boundary service",
         description="The outer declared Port into an autoharn-managed ledger "
-                     "(design/FABLE-LEDGER-BOUNDARY-SERVICE-SPEC.md). Reads serve kernel "
+                     "(design/FABLE-LEDGER-BOUNDARY-SERVICE-SPEC.md; design/"
+                     "FABLE-BOUNDARY-MULTIPLEX-AND-CLI-REBASE-SPEC.md). Reads serve kernel "
                      "views verbatim; writes pass through the s43 boundary functions and "
-                     "return the kernel's own write_verdict verbatim.",
+                     "return the kernel's own write_verdict verbatim. Every route is "
+                     "discriminated by a leading /d/{deployment} segment (multiplex spec §2).",
         # A2.1: no self-documentation surface, disabled not merely unenumerated -- see this
         # module's docstring, "NO META-ROUTES". §9's route table is EXACTLY §3+§4's endpoints.
         docs_url=None,
@@ -1119,6 +1264,17 @@ def create_app(cfg: BoundaryConfig) -> FastAPI:
         # exception's own message already says everything the log would.
         return server_saturated(str(exc))
 
+    @app.exception_handler(DeploymentCallSaturated)
+    async def _deployment_call_saturated_handler(request: Request, exc: DeploymentCallSaturated) -> JSONResponse:
+        # Multiplex spec §4: the ONE place a DEPLOYMENT's own sub-bound saturation becomes a
+        # typed 503, distinct from the global server_saturated handler above -- deliberately NOT
+        # logged server-side, same rationale as KernelCallSaturated (ordinary, expected,
+        # caller-actionable load, not a server-side anomaly).
+        deployment = request.path_params.get("deployment", "?")
+        cfg = configs.get(deployment)
+        limit = cfg.dep_limit if cfg is not None else compute_per_deployment_limit(len(configs))
+        return deployment_saturated(deployment, limit, str(exc))
+
     @app.exception_handler(_BodyTooLarge)
     async def _body_too_large_handler(request: Request, exc: _BodyTooLarge) -> JSONResponse:
         # A2.2 checkpoint (a), re-homed here now that body-reading is a DEPENDENCY (async, so
@@ -1137,16 +1293,22 @@ def create_app(cfg: BoundaryConfig) -> FastAPI:
         body = BodyReadTimeout(timeout_s=exc.timeout_s, message=exc.message)
         return JSONResponse(status_code=408, content=body.model_dump())
 
-    @app.get("/health", response_model=HealthResponse)
-    def health() -> HealthResponse:
+    @app.get("/d/{deployment}/health", response_model=HealthResponse)
+    def health(deployment: str) -> Response:
+        cfg, err = _resolve_deployment(configs, deployment)
+        if err is not None:
+            return err
         return HealthResponse(
             world=cfg.schema,
             service_principal=service_principal_name(cfg),
             capabilities=capability_manifest(cfg),
         )
 
-    @app.get("/rows/current")
-    def rows_current(after_id: int = 0, limit: int = 100) -> Response:
+    @app.get("/d/{deployment}/rows/current")
+    def rows_current(deployment: str, after_id: int = 0, limit: int = 100) -> Response:
+        cfg, err = _resolve_deployment(configs, deployment)
+        if err is not None:
+            return err
         if limit < 1 or limit > 1000:
             return JSONResponse(status_code=422, content={
                 "detail": "limit must be between 1 and 1000 (transport-level bound, ADR-0002)"})
@@ -1163,8 +1325,11 @@ def create_app(cfg: BoundaryConfig) -> FastAPI:
         )
         return JSONResponse(content=rows)
 
-    @app.get("/rows/{row_id}")
-    def row_by_id(row_id: int) -> Response:
+    @app.get("/d/{deployment}/rows/{row_id}")
+    def row_by_id(deployment: str, row_id: int) -> Response:
+        cfg, err = _resolve_deployment(configs, deployment)
+        if err is not None:
+            return err
         # A4.2: the path-parameter id domain -- 0 <= row_id <= MAX_ID, typed 422 outside it,
         # BEFORE this value ever reaches psql's bigint cast (which previously wore a 503 it did
         # not earn on an over-range id).
@@ -1177,8 +1342,11 @@ def create_app(cfg: BoundaryConfig) -> FastAPI:
             return JSONResponse(status_code=404, content={"detail": f"no row {row_id}"})
         return JSONResponse(content=row)
 
-    @app.get("/rows/{row_id}/history")
-    def row_history(row_id: int, after_id: int = 0, limit: int = HISTORY_DEFAULT_LIMIT) -> Response:
+    @app.get("/d/{deployment}/rows/{row_id}/history")
+    def row_history(deployment: str, row_id: int, after_id: int = 0, limit: int = HISTORY_DEFAULT_LIMIT) -> Response:
+        cfg, err = _resolve_deployment(configs, deployment)
+        if err is not None:
+            return err
         # A4.2: same id-domain closure as row_by_id above (the path parameter).
         oor = _out_of_range_id("row_id", row_id)
         if oor is not None:
@@ -1249,8 +1417,11 @@ def create_app(cfg: BoundaryConfig) -> FastAPI:
         )
         return JSONResponse(content=rows)
 
-    @app.get("/credited")
-    def credited(after_id: int = 0, limit: int = 100) -> Response:
+    @app.get("/d/{deployment}/credited")
+    def credited(deployment: str, after_id: int = 0, limit: int = 100) -> Response:
+        cfg, err = _resolve_deployment(configs, deployment)
+        if err is not None:
+            return err
         if not _regclass_exists(cfg, f"{cfg.schema}.credited_current"):
             return capability_absent(
                 "s44-credited-view",
@@ -1274,8 +1445,11 @@ def create_app(cfg: BoundaryConfig) -> FastAPI:
         )
         return JSONResponse(content=rows)
 
-    @app.get("/standing/principals")
-    def standing_principals(after_id: int = 0, limit: int = 100) -> Response:
+    @app.get("/d/{deployment}/standing/principals")
+    def standing_principals(deployment: str, after_id: int = 0, limit: int = 100) -> Response:
+        cfg, err = _resolve_deployment(configs, deployment)
+        if err is not None:
+            return err
         if not _regclass_exists(cfg, f"{cfg.schema}.principal_relations"):
             return capability_absent(
                 "s41-identity",
@@ -1300,8 +1474,11 @@ def create_app(cfg: BoundaryConfig) -> FastAPI:
         )
         return JSONResponse(content=rows)
 
-    @app.get("/work/items")
-    def work_items(after_slug: str = "", limit: int = 100, after_id: int | None = None) -> Response:
+    @app.get("/d/{deployment}/work/items")
+    def work_items(deployment: str, after_slug: str = "", limit: int = 100, after_id: int | None = None) -> Response:
+        cfg, err = _resolve_deployment(configs, deployment)
+        if err is not None:
+            return err
         if not _regclass_exists(cfg, f"{cfg.schema}.work_item_current"):
             return capability_absent(
                 "s22-work",
@@ -1374,7 +1551,10 @@ def create_app(cfg: BoundaryConfig) -> FastAPI:
         # genuinely-ASGI-bound I/O -- reading the raw request body -- is factored out to the
         # `_bounded_raw_body` async dependency (see its own docstring), which FastAPI awaits on
         # the event loop BEFORE dispatching this synchronous handler to the threadpool.
-        def handler(request: Request, raw_body: bytes = Depends(_bounded_raw_body)) -> Response:
+        def handler(deployment: str, request: Request, raw_body: bytes = Depends(_bounded_raw_body)) -> Response:
+            cfg, err = _resolve_deployment(configs, deployment)
+            if err is not None:
+                return err
             if not bool(_query_json(
                 cfg,
                 f"SELECT to_jsonb(EXISTS (SELECT 1 FROM pg_proc p JOIN pg_namespace n "
@@ -1478,7 +1658,7 @@ def create_app(cfg: BoundaryConfig) -> FastAPI:
         return handler
 
     for surface, fn in WRITE_SURFACES.items():
-        app.add_api_route(f"/write/{surface}", make_write_route(surface, fn), methods=["POST"])
+        app.add_api_route(f"/d/{{deployment}}/write/{surface}", make_write_route(surface, fn), methods=["POST"])
 
     return app
 
@@ -1486,10 +1666,16 @@ def create_app(cfg: BoundaryConfig) -> FastAPI:
 def _parse_args(argv: list[str]) -> argparse.Namespace:
     p = argparse.ArgumentParser(
         prog="python3 -m serving.boundary_service",
-        description="The FastAPI outer boundary into an autoharn-managed ledger "
-                     "(design/FABLE-LEDGER-BOUNDARY-SERVICE-SPEC.md).")
-    p.add_argument("--deployment", required=True,
-                    help="path to this project's deployment.json (the SAME record led/judge read)")
+        description="The FastAPI outer boundary into an autoharn-managed ledger, multiplexing "
+                     "N deployments behind one process (design/"
+                     "FABLE-LEDGER-BOUNDARY-SERVICE-SPEC.md; design/"
+                     "FABLE-BOUNDARY-MULTIPLEX-AND-CLI-REBASE-SPEC.md §3).")
+    p.add_argument("--config", required=True,
+                    help="path to boundary-multiplex.toml (spec §3) -- one operator-authored "
+                         "file naming every deployment this process serves, each reachable at "
+                         "/d/{name}/... A single-deployment config is the degenerate, expected "
+                         "common case; it still requires exactly one [deployments.NAME] table "
+                         "(no unprefixed-route mode survives -- spec §2).")
     p.add_argument("--host", default="127.0.0.1",
                     help="bind address for THIS HTTP service (default 127.0.0.1, loopback-only)")
     p.add_argument("--port", type=int, default=8420)
@@ -1510,9 +1696,30 @@ def main(argv: list[str] | None = None) -> int:
             f"FABLE-LEDGER-BOUNDARY-SERVICE-SPEC.md §2; construction-time refusal, ADR-0002 "
             f"rung 1 -- the anomaly never reaches a bound socket).\n")
         return 2
-    record = deployment_record.load_deployment(args.deployment)
-    cfg = BoundaryConfig(record)
-    app = create_app(cfg)
+    # Multiplex spec §3: the WHOLE config validates before the socket ever binds -- unknown
+    # keys anywhere, a missing required key, or zero deployments each refuse loudly BY NAME,
+    # construction-time (ADR-0002 rung 1), never reaching uvicorn.run at all.
+    try:
+        records = boundary_multiplex_config.load_multiplex_config(args.config)
+    except boundary_multiplex_config.MultiplexConfigError as e:
+        sys.stderr.write(f"boundary_service: REFUSED at start-up (config) -- {e}\n")
+        return 2
+    # Multiplex spec §4: MAX_INFLIGHT_KERNEL_CALLS stays the GLOBAL bound; the per-deployment
+    # sub-bound is computed ONCE here (never re-derived per request) and PRINTED at startup
+    # (spec §4, verbatim) so an operator can see what their own deployment count produced.
+    per_dep_limit = compute_per_deployment_limit(len(records))
+    sys.stderr.write(
+        f"boundary_service: MAX_INFLIGHT_KERNEL_CALLS={MAX_INFLIGHT_KERNEL_CALLS} (global) "
+        f"MAX_INFLIGHT_PER_DEPLOYMENT={per_dep_limit} (per each of {len(records)} "
+        f"deployment(s): {sorted(records.keys())})\n")
+    configs: dict[str, BoundaryConfig] = {}
+    for name, record in records.items():
+        configs[name] = BoundaryConfig(
+            record,
+            dep_semaphore=threading.BoundedSemaphore(per_dep_limit),
+            dep_limit=per_dep_limit,
+        )
+    app = create_app(configs)
     uvicorn.run(app, host=args.host, port=args.port)
     return 0
 

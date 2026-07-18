@@ -43,10 +43,30 @@ a kernel view; every byte it writes passes through an s43 boundary function.
 - **Not a cache.** Every request re-detects capabilities and re-reads/re-writes through the
   kernel fresh — no caching anywhere in this module (spec §5).
 
+## Multiplexing (design/FABLE-BOUNDARY-MULTIPLEX-AND-CLI-REBASE-SPEC.md, ratified — ledger
+decision row 1631)
+
+**As of this build, ONE process serves N deployments** — the old `--deployment
+/path/to/deployment.json` single-file launch is retired; the service now takes `--config
+/path/to/boundary-multiplex.toml` (`serving/boundary_multiplex_config.py`), and **every route
+in the table below carries a mandatory leading `/d/{deployment}` segment** not shown in the
+table for brevity (e.g. `GET /rows/current` is actually `GET /d/{deployment}/rows/current`).
+A single-deployment config is the degenerate, expected common case; the discriminator is still
+mandatory even then (spec §2 — one route shape, not two dialects). `{deployment}` is valid iff
+it is a key of the loaded TOML config (`[a-z0-9-]{1,64}`); anything else is a typed 404
+`unknown_deployment` naming the known set. `MAX_INFLIGHT_KERNEL_CALLS` stays the GLOBAL
+admission bound; a new per-deployment sub-bound, `MAX_INFLIGHT_PER_DEPLOYMENT = max(4,
+MAX_INFLIGHT_KERNEL_CALLS // len(deployments))`, is computed and printed at startup, and its
+own saturation refuses typed 503 `deployment_saturated` (distinct label from the existing
+`server_saturated`). See the multiplex spec in full, §2-§4, before operating a multiplexed
+deployment; this README's endpoint table below is not yet rewritten route-by-route with the
+`/d/{deployment}` prefix inline (named seam — see the build report banked alongside this
+change; `seen-red/boundary-multiplex/run_fixtures.py` witnesses the multiplexing axes live).
+
 ## Running it
 
 ```sh
-$HOME/w/vdc/venvs/generic/bin/python -m serving.boundary_service --deployment /path/to/deployment.json
+$HOME/w/vdc/venvs/generic/bin/python -m serving.boundary_service --config /path/to/boundary-multiplex.toml
 ```
 
 Binds `127.0.0.1:8420` by default. Any other host requires an explicit
@@ -340,8 +360,15 @@ Ships WITH the service (spec §5, sentry-class treatment):
 ```sh
 $HOME/w/vdc/venvs/generic/bin/python serving/audit_served.py \
     --base-url http://127.0.0.1:8420 --deployment /path/to/deployment.json \
-    [--endpoint /rows/current] [--view ledger_current]
+    --deployment-name autoharn1 [--endpoint /rows/current] [--view ledger_current]
 ```
+
+**Multiplexing:** `--deployment` is UNCHANGED (still a path to `deployment.json`, this tool's
+direct-read connection facts). `--deployment-name` is NEW (multiplex spec §4) — the `/d/{name}`
+segment this deployment answers under on the SERVED side, now mandatory since the served side
+no longer answers any unprefixed route. Named distinctly from `--deployment` deliberately
+(reusing that flag's existing meaning for a second purpose would be exactly the lying-signature
+class this project's own house style forbids) — see `serving/audit_served.py`'s own docstring.
 
 Fetches a served page over HTTP, reads the same view directly via a read-only psql, and
 structurally compares the row sets by id (`compare_row_sets`, the one comparator both a live

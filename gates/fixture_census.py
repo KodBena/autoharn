@@ -158,6 +158,7 @@ REGISTRY: dict[str, str] = {
     "defeat-pipeline":                 "seen-red/defeat-pipeline/run_fixtures.py",
     "judge-all-capable-layers":       "seen-red/judge-all-capable-layers/run_fixtures.py",
     "boundary-service":                "seen-red/boundary-service/run_fixtures.py",
+    "boundary-multiplex":              "seen-red/boundary-multiplex/run_fixtures.py",
     "otel-attest":                     "seen-red/otel-attest/run_fixtures.py",
     "column-complete-gate":           "seen-red/column-complete-gate/run_fixtures.py",
     "freeze-at-stamp":                "seen-red/freeze-at-stamp/run_fixtures.py",
