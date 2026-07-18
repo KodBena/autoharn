@@ -27,6 +27,7 @@ question-and-recipe entries.
 - [Review discipline](#review-discipline)
 - [Classifying audit/diagnostic findings](#classifying-auditdiagnostic-findings)
 - [Capturing errors so they cannot quietly recur (ADR-0000 / ADR-0011)](#capturing-errors-so-they-cannot-quietly-recur-adr-0000--adr-0011)
+- [Drift backstops (one generic method for anything that goes quietly stale)](#drift-backstops-one-generic-method-for-anything-that-goes-quietly-stale)
 - [Documentation quality](#documentation-quality)
 - [Operating rhythm](#operating-rhythm)
 - [Your review queue](#your-review-queue)
@@ -997,6 +998,119 @@ lapsing — the same evidence bar the estimates discipline's own recording lapse
 caught by a maintainer-commissioned calibration study) — never by anticipation.
 **UNWITNESSED beyond that filing:** no cross-check lapse has yet been observed to test
 the trigger.
+
+## Drift backstops (one generic method for anything that goes quietly stale)
+
+**Half my project is artifacts that describe or derive from other artifacts — docs from code, a
+hash function from a table's columns, a config from the mechanisms it configures, a deployment
+from the kernel it was born with. Each pair rots in the same way: the authority moves and the
+copy silently doesn't. Is there one method for this, or do I invent a checker each time?**
+
+One method, and it was derived from this project's own built instances rather than invented for
+this page — fourteen independently-built mechanisms here turn out to share one shape, and the
+shape is worth having as a named reach. First the class, in the LAW's own words
+([ADR-0011](../law/adr/0011-mechanization-discipline.md)'s Context): *"a design document that
+quietly goes stale while the code it describes moves on, a duplicated fact whose two copies
+drift apart one edit at a time"* — the invisible-at-authoring, visible-only-in-aggregate defect.
+**Drift** is what happens to any DEPENDENT artifact that claims to reflect an AUTHORITY: the
+authority moves, the dependent stays, and nothing notices until a reader trusts the stale copy.
+A **drift backstop** is a mechanical comparator over one such declared pair, and every instance
+in this repository is the same five moves with different types plugged in:
+
+1. **Name the pair.** One side is the authority (the single source of truth —
+   [ADR-0012](../law/adr/0012-compositional-and-structural-hygiene.md)'s Principle 1, one owner
+   per fact); the other is the
+   dependent that claims to correspond to it. If you cannot say which side is authoritative,
+   that ambiguity is the defect to fix before any checker is worth building.
+2. **Derive both sides mechanically at check time** — from filenames, the live database catalog,
+   `git ls-files`, the file's own bytes — never from a hand-maintained second list. A hand list
+   is itself a dependent that drifts: [filing/apparatus_registry.py](../filing/apparatus_registry.py)'s
+   own docstring records that a hand-typed mechanism-name list HAD already drifted, silently
+   (a real, wired-in mechanism was absent from it), before the derived set replaced it.
+3. **Compare with a comparator that quantifies over the class**
+   ([ADR-0011](../law/adr/0011-mechanization-discipline.md) Rule 4): any future column, delta,
+   link, or key is in scope by construction. An enumeration of today's instances fails open at
+   the next instance — which is drift's own front door.
+4. **Refuse loud, teaching the honest discharge paths**: refresh the dependent, or DECLARE the
+   divergence explicitly (an honest lag note, a `--declare-change` naming what moved). Silence
+   never discharges; a declared lag is a recorded fact, not a pass.
+5. **Backstop the backstop.** The comparator gets its own both-polarity
+   [seen-red](../GLOSSARY.md#seen-red) proof and a
+   [fixture-census](../GLOSSARY.md#fixture-census) registration, ships WITH the fix that closes
+   the first witnessed drift (ADR-0011's 2026-07-02 amendment: the mechanism is minted with the
+   first fix, not after a recurrence), and runs on a declared rhythm — per-commit, at
+   acceptance, at cut time, or as an on-demand verb.
+
+When the authority side has no independent derivation (a function's canonical text has no
+second source to recompute it from), the fallback is a **banked manifest plus a declared-change
+ceremony**: bank the current truth's bytes or hash, and the drift check becomes "changed without
+declaring" — [gates/validation_leaf_manifest_gate.py](../gates/validation_leaf_manifest_gate.py)
+(banked function text, `--declare-change`) and [tools/role_charter.py](../tools/role_charter.py)
+(ledger-registered charter sha256, a loud `DRIFT` warning when on-disk bytes diverge) are the
+two built instances of that variant.
+
+**Which backstops already exist that I can crib from?** Each of these was verified in the corpus
+for this entry (file named; read its docstring for the full truth — the per-instance docstring
+is each one's owning page):
+
+- [gates/idris_model_freshness.py](../gates/idris_model_freshness.py) — the categorical kernel
+  model's declared `AS-OF` head vs the actual lineage head, both derived from
+  `kernel/lineage/*.sql` filenames; its teach-text names both discharge paths (refresh, or an
+  honest lag note).
+- [gates/hash_coverage_gate.py](../gates/hash_coverage_gate.py) — `compute_row_hash`'s
+  serialized-column enumeration vs the ledger's live column set on a scratch apply. The
+  witnessed drift it closes is this page's best cautionary specimen: thirteen deltas each added
+  columns, none re-issued the hash function, and twenty-two columns sat outside the
+  tamper-evidence chain (ledger row 1449) until caught by eye.
+- [gates/link_integrity.py](../gates/link_integrity.py) — every relative markdown link target
+  vs the file tree (files move; links dangle).
+- [gates/layout_census.py](../gates/layout_census.py) — [provenance/LAYOUT.md](../provenance/LAYOUT.md)'s
+  designed tree vs the tracked tree ("ls-legibility asserted once and never re-checked would
+  rot exactly as the old repos did" — its own motivating line).
+- [gates/fixture_census.py](../gates/fixture_census.py) — `seen-red/` evidence dirs vs the
+  fixture registry vs what git actually tracks, both directions.
+- [gates/apparatus_unknown_keys.py](../gates/apparatus_unknown_keys.py) — `apparatus.json` keys
+  vs the mechanism set derived from `hooks/`, `bootstrap/templates/`, and `tools/` source.
+- [gates/column_complete_gate.py](../gates/column_complete_gate.py) — each registered view's
+  live columns vs its source table's, minus declared exclusions.
+- [gates/kind_shape_manifest_gate.py](../gates/kind_shape_manifest_gate.py) — the
+  (kind, column, arity) manifest vs the live kernel catalog's actual constraints.
+- [gates/ledger_reader_allowlist.py](../gates/ledger_reader_allowlist.py) — every view/function
+  that reads the ledger vs the closed allowlist of declared reader types.
+- [gates/validation_leaf_manifest_gate.py](../gates/validation_leaf_manifest_gate.py) and
+  [tools/role_charter.py](../tools/role_charter.py) — the banked-manifest variant, described
+  above.
+- [gates/cut_probe_inventory.py](../gates/cut_probe_inventory.py) — a release-candidate tree vs
+  the registry of shipped fix classes: drift backwards (a silent revert) caught at cut time.
+- [gates/doc_attestation_presence.py](../gates/doc_attestation_presence.py) (and its
+  per-deployment sibling `attest-doc`, whose witnessed `STALE` verdict appears in
+  [the "Verifying tags, signed commissions, and documentation debt" section below](#verifying-tags-signed-commissions-and-documentation-debt-attest-tags-verify-commission-attest-doc-distance-to-clean))
+  — a doc's current bytes vs the content hash its last fresh-context read attested.
+- [./migrate](../migrate) `--dry-run` ([bootstrap/migrate_core.py](../bootstrap/migrate_core.py)) —
+  a deployment's live schema vs the kernel lineage chain, one `.detect.sql` probe per delta,
+  reporting exactly which deltas the world lacks.
+
+Marked honestly as **not built**: the setup surface's own backstop — a scripted TUI smoke
+fixture registered in the census, covering `tools/setup_tui` against the scaffold/boundary
+contracts it drives — is commissioned under the maintainer's 2026-07-19 standing rule ("the
+setup surface itself ... will drift unless maintained", ledger row 1700: `./led show 1700` at
+the repository root) and queued behind work in flight, not yet on disk.
+
+**Honest limits, so the method is not oversold.** A backstop checks the DECLARED correspondence
+dimension only — semantic fidelity beyond it stays review-only, and the honest instances say so
+themselves ([gates/layout_census.py](../gates/layout_census.py) checks the tree's registered
+shape mechanically but declares "does this new file actually belong in this directory" a human
+judgment, review-only, rather than pretending a regex can make it). Nothing sweeps for pairs
+nobody declared: naming the pair is judgment, and both witnessed drift hazards above (the
+22-column hash gap, the apparatus hand-list) were first caught by eye, with the class closed
+after — the method forecloses recurrence, not first occurrence. A backstop is only as current
+as its declared rhythm — an acceptance-time or on-demand check catches nothing between runs.
+And one boundary kept deliberately, per [ADR-0008](../law/adr/0008-classification-discipline.md)'s
+refuse-to-force-a-category discipline: the differential twins
+([`./judge`](../GLOSSARY.md#judge)'s SQL-vs-ASP marriage, `serving/audit_served.py`'s
+served-vs-kernel byte-compare) are a sibling shape — two independent LIVE derivations required
+to agree now — not a stale-copy-vs-authority check, so they are named here as relatives and
+excluded from the class rather than fuzzy-matched into it.
 
 ## Documentation quality
 
