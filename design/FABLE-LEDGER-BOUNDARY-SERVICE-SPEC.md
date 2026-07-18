@@ -605,6 +605,36 @@ key — append-monotonic id where the view has one (stability under concurrent
 insertion guaranteed), slug where it does not (no-duplication guaranteed;
 behind-cursor inserts join the next walk — disclosed, witnessed)".
 
+**A12 (2026-07-18) — iteration-10 confirmation pass: the query-derived string joins
+the representability closure.** Trigger: single-reviewer confirmation on `45db54b`.
+Everything A2–A11 held (full suite green unmodified; both A11 behaviors re-exercised
+live). One witnessed finding: `after_slug` containing a literal U+0000 — inside the
+512-byte domain, so A11's only check passes it — reaches `_psql`, where
+`subprocess.run` raises an uncaught `ValueError: embedded null byte`: bare untyped
+500, the exact shape §9 forbids. The write path closed this axis at A4.1(b)/A5.1;
+`after_slug` is the first query-derived string to cross the psql argv boundary and
+was born with the length bound but not the representability gate — a new surface
+missing a sibling closure at birth, the recurring shape of this loop's tail.
+**Adjudication — the rule, then the net:**
+1. **The rule, stated once and audited:** EVERY string that crosses to psql argv,
+   body-derived or query-derived, passes the same actual-codepoint representability
+   closure (literal NUL, unpaired surrogates → typed 422, representability axis,
+   A4.1(b)'s message family) before transport. `after_slug` gains the gate now; the
+   fix ENUMERATES the route table's string-typed query and path parameters and
+   states the enumeration's result in its report (the belief is "after_slug is
+   currently the only one" — the fixer confirms by enumeration, not assumption, and
+   any other found joins the gate in the same commit).
+2. **Choke-point defense in depth, A8's pattern:** `_psql` catches `ValueError`
+   from the subprocess layer and raises the typed unclassified-failure 500 — no
+   future parameter, however added, can wear the bare shape.
+§8 gains **W31**, three legs: (i) `after_slug` bearing a literal NUL → typed 422 on
+the representability axis (same message family as the write-path leg), server
+answers the next request normally; (ii) `after_slug` bearing an unpaired surrogate →
+same typed 422; (iii) the choke-point net witnessed directly — `_psql` invoked with
+a NUL-bearing argument raises the typed unclassified-failure path, never a bare
+`ValueError`. §9's value axis gains "…including every string crossing to psql argv,
+query-derived parameters not excepted."
+
 ## License
 
 Public Domain (The Unlicense).
