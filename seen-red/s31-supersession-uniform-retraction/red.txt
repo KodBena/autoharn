@@ -29,3 +29,41 @@
   [ok] verdict=AGREE asp=7 sql=7 atoms orphan_atom_in_set=True only_asp=[] only_sql=[] -- ledger_tnow.lp+work_items.lp+work_review.lp composed over ONE EDB vs the SQL floor, on a world containing every s31 shape (standing ./judge wiring: named separate seam, see docstring)
 
 ALL CASES OK -- s31 uniform retraction both-polarity proof (retracted close re-opens / claim unclaims / blocks-close edge stops gating / open burns slug + orphans surface + redo idiom taught / reinstatement-free / hash chain + led --recent history reads unchanged / allowlist gate green+red / composed SQL-ASP differential AGREE), zero residue. a2 (composite ancestor) UNEXERCISED with its named blocker.
+
+--- FIXUP ADDENDUM (item led-work-close-supersedes-swallowed, ledger row 1601, same build
+stream) ---
+
+Captured by `git stash push -- bootstrap/templates/led.tmpl` / `git stash pop`, against the
+shipped (pre-this-item) led.tmpl -- i.e. the version that already carries every case above
+(including case a's retract() helper, which uses the GENERIC <kind> <statement> path's own
+--supersedes wiring, not `work close`'s), but NOT this item's own wiring of --supersedes into
+`work close`. Reproduces the exact defect ledger row 1601 recorded (the orchestrator's own
+record correction, 2026-07-18): `led --supersedes <id> work close ...` (position before 'work',
+the shared top-of-file flag) is accepted (exit 0!) but the supersedes COLUMN NEVER LANDS
+(supersedes_col='' below) -- the flag was silently swallowed, not refused and not honored. The
+AFTER-'close' position (`led work close ... --supersedes <id>`) was worse: REFUSED outright as
+an unrecognized flag (exit=1), since `work close`'s own flag loop had no case arm for it at all
+-- no second work_closed row landed (second_close_id == first_close_id, i.e. the retry never
+happened).
+
+=== e2-close-supersedes-wired-not-swallowed ===
+  [FAIL] exit=0 first_close_id=22 second_close_id=23 supersedes_col='' (expect == first_close_id, i.e. the flag actually landed) state_before='closed|dropped' state_after='closed|shipped' advisory_present=False
+=== e3-close-supersedes-after-close-position ===
+  [FAIL] exit=1 first_close_id=26 second_close_id=26 supersedes_col=''
+
+FIXUP FIXED (this item's own fix): `work close`'s own flag-parsing loop no longer resets
+`supersedes=""` (so the shared top-of-file value survives unshadowed) AND gains its own
+`--supersedes` case arm (so the flag also works after 'close', mirroring `work open`/`work
+resolve-violation`'s own position) -- both positions write the ONE shared `supersedes`
+variable, which is now bound into both the s43 payload and the legacy INSERT's own column list,
+with an advisory printed before the write (mirroring `work open --supersedes`'s own advisory).
+DETERMINATION (kernel evidence, since this item asked "does a close-row supersession have
+defined kernel semantics"): YES -- kernel/lineage/s31-supersession-uniform-retraction.sql's own
+header states the write side gains NO kind-compatibility refusal on supersedes ("ratified fork
+1: UNIFORM RETRACTION... every target is meaningful") and Element 1 explicitly names the
+consequence for THIS exact kind: "a retracted close empties the `closed` CTE for that slug ->
+the item reads OPEN again". So the correct fix is WIRE IT THROUGH (not refuse), and this
+fixture's own e2/e3 above -- and the pre-existing case a (via the generic path's own
+--supersedes) -- both witness that consequence live: state_after='closed|shipped' is the
+SECOND close's own resolution, read because the first close (row 22/26) is now retracted. Both
+cases now PASS -- see the fixture's own green run above this addendum.

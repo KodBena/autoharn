@@ -41,3 +41,39 @@
   [ok] exit=0 stderr_tail='SET\nSET\nINSERT 0 1'
 
 ALL CASES OK -- s29 obligation item-key + typed close + obligation-tree guarantee both-polarity proof (review-silent close refused / both-constructors refused / witnessed-without-ref refused / witnessed-with-ref accepted / deferred creates and discharges the item-keyed obligation / strict+deferred refused / strict-over-unresolved-tree refused naming the leaf / strict succeeds once resolved / strict-over-unresolved-DEPENDENCY refused+succeeds (the audit-caught regression case) / SQL-ASP differential AGREE / pre-s29 led close unaffected), zero residue.
+
+--- FIXUP ADDENDUM (item led-work-close-resolution-teaching, ledger row 1613, same build stream)
+---
+
+Captured by `git stash push -- bootstrap/templates/led.tmpl` / `git stash pop`, against the
+shipped (pre-this-item) led.tmpl -- i.e. the version that already carries every case above, but
+NOT this item's two new client-side checks in `work close`. Reproduces the reported defect
+exactly (witnessed 2026-07-18 by the orchestrator): a non-enum resolution, or a shipped
+resolution with no witness, surfaces the RAW postgres CHECK-violation error (SQLSTATE 23514,
+"violates check constraint...") instead of a verb-level refusal naming the closed vocabulary or
+the witness requirement. n-close-shipped-with-witness-accepted (the legal case) already PASSes
+pre-fix -- this item adds two new REFUSALS, changing no existing accepted shape.
+
+=== l-close-bad-resolution-refused-client-side ===
+  [FAIL] exit=1 excerpt='led: REFUSED by the kernel write boundary (SQLSTATE 23514; journaled as write_refused row 40 -- the refusal itself is now a committed, hash-chained ledger record, s43):\n  new row for relation "ledger" violates check constraint "work_resolution_check"'
+=== m-close-shipped-no-witness-refused-client-side ===
+  [FAIL] exit=1 excerpt='led: REFUSED by the kernel write boundary (SQLSTATE 23514; journaled as write_refused row 42 -- the refusal itself is now a committed, hash-chained ledger record, s43):\n  new row for relation "ledger" violates check constraint "work_shipped_requires_witness"'
+=== n-close-shipped-with-witness-accepted ===
+  [ok] exit=0 work_item_current='closed|shipped' excerpt='led: row 43 written.'
+
+FIXUP FIXED (this item's own fix): two client-side checks in `work close`, transcriptions of the
+kernel's own work_resolution_check / work_shipped_requires_witness CHECK constraints, run BEFORE
+any DB round trip. Both l and m now REFUSE with teach-text naming the closed vocabulary / the
+witness requirement, never the raw postgres constraint text -- see the fixture's own green run
+above this addendum.
+
+NOTE, flagged rather than silently routed around (unrelated to this item): this fixture's
+PRE-EXISTING cases e-deferred-creates-item-keyed-obligation and
+k2-strict-over-dependency-succeeds-once-discharged now FAIL on BOTH the pre-fix and post-fix
+led.tmpl (verified identically on both) -- an environment-drift regression from when this file
+was last banked fully green (this red.txt's own earlier ALL-CASES-OK entry above used exit=3/
+CONTEXT: PL/pgSQL... error shapes that predate the s43 write-boundary landing; the live world
+now returns exit=1/SQLSTATE-verdict shapes instead). Out of scope for led-work-close-resolution-
+teaching (this item's own fix touches only the resolution/witness client-side checks, not
+review-gap discharge or strict-dependency machinery) -- filed here as a hazard noticed in
+passing, not fixed, per CLAUDE.md's engineering-responsibility corollary.

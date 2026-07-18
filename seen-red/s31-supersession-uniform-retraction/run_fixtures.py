@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-15T20:21:09Z
-#   last-change: 2026-07-15T20:23:15Z
-#   contributors: a857c93d/main
+#   last-change: 2026-07-18T16:13:01Z
+#   contributors: a857c93d/main, ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
 """run_fixtures.py -- both-polarity proof for kernel/lineage/s31-supersession-uniform-retraction.sql
@@ -36,6 +36,18 @@ Cases (the ratified spec's sec-5 acceptance list, every polarity):
                                        naming the new-slug-citing-old redo idiom.
   e-reinstatement-free              -- superseding the SUPERSEDER does NOT revive the victim
                                        (case a's item still reads open).
+  e2/e3-close-supersedes-wired      -- item led-work-close-supersedes-swallowed (row 1601):
+                                       `led work close --supersedes <id>` used to SILENTLY
+                                       SWALLOW the flag (case a's own retract() helper only ever
+                                       proved a SEPARATE unrelated-kind row could retract a
+                                       close, never that the correction itself could be a NEW
+                                       work_closed row). e2: the flag before 'work' (the shared
+                                       top-of-file position, the exact shape row 1601 used) --
+                                       the supersedes column actually lands, the first close
+                                       retracts, work_item_current reads the second close. e3:
+                                       the SAME flag after 'close' (this item's own added case
+                                       arm, mirroring `work open`/`work resolve-violation`'s own
+                                       --supersedes position).
   f-history-readers-unchanged       -- the s26 row-hash chain RECOMPUTES clean across every row
                                        including retracted ones + their retractors; led --recent
                                        still SHOWS retracted rows, MARKED 'SUPERSEDED', never
@@ -325,6 +337,73 @@ def main() -> int:
         check("e-reinstatement-free", ok_e,
               f"retract_retractor_exit={re_.returncode} item-a after={st2!r} "
               "(still open -- the defeated defeater does NOT revive the close)", failures)
+
+        # --- e2: item led-work-close-supersedes-swallowed (ledger row 1601, witnessed
+        # 2026-07-18): `led work close --supersedes <id>` used to SILENTLY SWALLOW the flag --
+        # the shared top-of-file parser sets $supersedes, but `work close`'s own code never read
+        # it, so no `supersedes` column ever landed on a work_closed row through the CLI (case
+        # a's own retract() above proves ONLY that a SEPARATE, unrelated-kind row -- a bare
+        # `revision` entry -- can retract a close; it was never able to prove the close's OWN
+        # CORRECTION is itself a NEW work_closed row, because the flag had no wiring). Now:
+        # closing item-e2 again, citing --supersedes <the first close's row id>, lands the
+        # `supersedes` column on the SECOND work_closed row directly, and s31's OWN uniform-
+        # retraction machinery (unchanged, this item touches no kernel semantics) does the rest
+        # -- the FIRST close is retracted, work_item_current re-reads the SECOND close's own
+        # resolution. Exercised in BOTH supported positions: before 'work' (the shared top-of-
+        # file flag, the exact shape row 1601 used) and after 'close' (this item's own added
+        # case arm).
+        led(world_dir, "work", "open", "item-e2", "ItemE2")
+        led(world_dir, "work", "claim", "item-e2")
+        led(world_dir, "work", "close", "item-e2", "dropped", "--review-witness", "ref-e2-first")
+        close_e2_first = psql_tuples(
+            f"SELECT id FROM {schema}.ledger WHERE kind='work_closed' AND work_slug='item-e2' "
+            f"ORDER BY id LIMIT 1;")
+        st_before_e2 = psql_tuples(
+            f"SELECT state, resolution FROM {schema}.work_item_current WHERE slug='item-e2';")
+        # position 1: before 'work' (led's own shared top-of-file flag parser).
+        re2_ = led(world_dir, "--supersedes", close_e2_first, "work", "close", "item-e2",
+                   "shipped", "--witness", "commit-e2fix", "--review-witness", "ref-e2-second")
+        out_e2 = re2_.stdout + re2_.stderr
+        close_e2_second = psql_tuples(
+            f"SELECT id FROM {schema}.ledger WHERE kind='work_closed' AND work_slug='item-e2' "
+            f"ORDER BY id DESC LIMIT 1;")
+        supersedes_col = psql_tuples(
+            f"SELECT supersedes FROM {schema}.ledger WHERE id = {close_e2_second};")
+        st_after_e2 = psql_tuples(
+            f"SELECT state, resolution FROM {schema}.work_item_current WHERE slug='item-e2';")
+        ok_e2 = (re2_.returncode == 0
+                 and supersedes_col == close_e2_first  # the column ACTUALLY LANDED -- not
+                                                         # silently swallowed
+                 and st_before_e2 == "closed|dropped"
+                 and st_after_e2 == "closed|shipped"  # the SECOND close is now what reads
+                 and "--supersedes" in out_e2)  # the advisory teaches what happened
+        check("e2-close-supersedes-wired-not-swallowed", ok_e2,
+              f"exit={re2_.returncode} first_close_id={close_e2_first} "
+              f"second_close_id={close_e2_second} supersedes_col={supersedes_col!r} "
+              f"(expect == first_close_id, i.e. the flag actually landed) "
+              f"state_before={st_before_e2!r} state_after={st_after_e2!r} "
+              f"advisory_present={'--supersedes' in out_e2}", failures)
+
+        # e3: the SAME flag, given AFTER 'close' instead of before 'work' -- the second position
+        # this item's own case arm adds, mirroring `work open`/`work resolve-violation`'s own
+        # --supersedes position.
+        led(world_dir, "work", "open", "item-e3", "ItemE3")
+        led(world_dir, "work", "claim", "item-e3")
+        led(world_dir, "work", "close", "item-e3", "dropped", "--review-witness", "ref-e3-first")
+        close_e3_first = psql_tuples(
+            f"SELECT id FROM {schema}.ledger WHERE kind='work_closed' AND work_slug='item-e3' "
+            f"ORDER BY id LIMIT 1;")
+        re3_ = led(world_dir, "work", "close", "item-e3", "shipped", "--witness", "commit-e3fix",
+                   "--review-witness", "ref-e3-second", "--supersedes", close_e3_first)
+        close_e3_second = psql_tuples(
+            f"SELECT id FROM {schema}.ledger WHERE kind='work_closed' AND work_slug='item-e3' "
+            f"ORDER BY id DESC LIMIT 1;")
+        supersedes_col_e3 = psql_tuples(
+            f"SELECT supersedes FROM {schema}.ledger WHERE id = {close_e3_second};")
+        ok_e3 = re3_.returncode == 0 and supersedes_col_e3 == close_e3_first
+        check("e3-close-supersedes-after-close-position", ok_e3,
+              f"exit={re3_.returncode} first_close_id={close_e3_first} "
+              f"second_close_id={close_e3_second} supersedes_col={supersedes_col_e3!r}", failures)
 
         # --- f: history readers unchanged -------------------------------------------------------
         chain_ok = psql_tuples(

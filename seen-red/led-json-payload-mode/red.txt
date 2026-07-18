@@ -141,3 +141,44 @@ STDOUT:
 STDERR:
 bootstrap/templates/led.tmpl: line 841: /usr/bin/psql: Argument list too long
 
+
+
+--- FIXUP ADDENDUM 2 (item led-json-payload-argstrlen-wall, same-build-stream reviewer pass) ---
+
+Captured by the same `git stash push -- bootstrap/templates/led.tmpl` / `git stash pop` bracket,
+against the shipped (pre-this-item) led.tmpl -- i.e. the version that already carries the FIRST
+fixup addendum's MAX_WRITE_BODY_BYTES bound above, but NOT this item's re-denomination of
+checkpoint (b) to MAX_PSQL_ARG_BYTES. Reproduces the reviewer's exact finding (led-json-payload-
+argstrlen-wall's own commissioning text): checkpoint (b) reused MAX_WRITE_BODY_BYTES (1 MiB) as
+its bound, but the re-serialized payload crosses to postgres as ONE `psql -v payload=...`
+argument, and Linux's per-argument wall is MAX_ARG_STRLEN (131072 bytes), not the ~2 MiB
+total-argv ARG_MAX the 1 MiB figure was (mis-)sized against -- so a payload strictly BETWEEN
+~131 KiB and 1 MiB (300000 bytes here, comfortably in that zone) passed BOTH checkpoints
+unrefused and died inside kernel_write()'s own psql invocation as the SAME bare, untyped E2BIG
+("Argument list too long", shell exit 126) the first fixup addendum closed for the >1 MiB case
+only. Row count unaffected (the crash happens before psql ever runs, so nothing is journaled
+either way) -- the defect is the missing typed refusal in the 131 KiB..1 MiB zone specifically,
+exactly as led-json-payload-argstrlen-wall's own commissioning text states. Both the file path
+and the stdin ('-') path hit the identical crash.
+
+RED-ARGSTRLEN-WALL-FILE: exit=126 refused=True no_bash_crash=False teaches=False cites_correct_bound=False row-count before=9 after=9 (unchanged=True) -- FAIL
+RED-ARGSTRLEN-WALL-STDIN: exit=126 refused=True no_bash_crash=False teaches=False cites_correct_bound=False row-count before=9 after=9 (unchanged=True) -- FAIL
+
+!! RED-ARGSTRLEN-WALL-FILE: exit=126 refused=True no_bash_crash=False teaches=False cites_correct_bound=False before=9 after=9
+STDOUT:
+
+STDERR:
+bootstrap/templates/led.tmpl: line 855: /usr/bin/psql: Argument list too long
+
+
+!! RED-ARGSTRLEN-WALL-STDIN: exit=126 refused=True no_bash_crash=False teaches=False cites_correct_bound=False before=9 after=9
+STDOUT:
+
+STDERR:
+bootstrap/templates/led.tmpl: line 855: /usr/bin/psql: Argument list too long
+
+FIXUP FIXED (this item's own fix): MAX_PSQL_ARG_BYTES=100000 re-denominates checkpoint (b);
+kernel_write() additionally catches shell exit 126 as defense in depth (mirroring
+boundary_service.py's own OSError catch at its one _psql() choke point, A8 item 1(ii)). Both
+cases now PASS -- see the fixture's own green run above this addendum (RED-ARGSTRLEN-WALL-FILE/
+STDIN, both PASS, typed payload_too_large refusal naming 100000, no bash crash).

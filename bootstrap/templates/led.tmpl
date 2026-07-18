@@ -525,16 +525,29 @@ ROLE="${LED_ROLE:-$DEP_ROLE}"
 # A2.2's one named write-ingress bound, carried over verbatim from the FastAPI boundary
 # service's own MAX_WRITE_BODY_BYTES (serving/boundary_service.py) for `led --json`, the CLI
 # twin of that exact payload shape (led-json-payload-mode's own commissioning text: "maps
-# VERBATIM onto the s43 boundary functions' own jsonb payload shape"). Enforced at the SAME
-# two checkpoints the HTTP twin uses -- (a) the raw bytes read from file/stdin, before any
-# JSON parsing; (b) the re-serialized (compacted) payload, before it reaches the psql
-# subprocess -- because a payload can pass (a) and still grow past the bound at (b) (e.g.
-# non-ASCII content that gets escaped wider on reserialization). Without this, a large
-# payload hits the OS ARG_MAX wall inside kernel_write()'s `psql -v payload=...` invocation as
-# a bare, unrefused shell abort ("Argument list too long") that never reaches a typed
-# disposition -- the identical hazard class A2.2 fixed for this payload's HTTP twin one
-# commit earlier in this same build stream (fixup finding 1).
+# VERBATIM onto the s43 boundary functions' own jsonb payload shape"). Enforced at checkpoint
+# (a) -- the raw bytes read from file/stdin, before any JSON parsing -- whose own rationale is
+# BUFFERING (never hold an unbounded payload in memory before it is even parsed), exactly
+# boundary_service.py's own post-A8 docstring for this same constant ("SIZE AXIS").
 MAX_WRITE_BODY_BYTES=1048576
+
+# item led-json-payload-argstrlen-wall: checkpoint (b)'s OWN bound, RE-DENOMINATED on the
+# transport's TRUE capacity, mirroring boundary_service.py's own A8 fix (serving commit
+# 939c243) for this payload's HTTP twin one commit earlier in this same build stream. Before
+# this item, checkpoint (b) below reused MAX_WRITE_BODY_BYTES (1 MiB) -- but the re-serialized
+# payload crosses to postgres as ONE `psql -v payload=...` argument, and Linux bounds EACH
+# individual exec argument at MAX_ARG_STRLEN (32 pages = 131072 bytes), not the ~2 MiB
+# total-argv ARG_MAX the 1 MiB figure was (mis-)sized against -- so any --json payload between
+# ~131 KiB and 1 MiB passed checkpoint (b) unrefused and then died inside kernel_write()'s own
+# psql invocation as a bare, untyped E2BIG ("Argument list too long", shell exit 126) -- the
+# 1 MiB checkpoint-(b) number was unreachable-honest (no payload over ~131 KiB could ever
+# actually succeed). 100000 sits under MAX_ARG_STRLEN with the same margin
+# boundary_service.py's own MAX_PSQL_ARG_BYTES claims ("a ledger payload is prose; this
+# remains generous"). Checkpoint (a) above is UNCHANGED (still 1 MiB, still the honest buffering
+# bound on the RAW pre-parse read) -- only checkpoint (b), the transport-facing bound, moves to
+# the transport's true capacity, exactly boundary_service.py's own "the bound moves to the
+# transport's true capacity, not the transport to the bound."
+MAX_PSQL_ARG_BYTES=100000
 
 # --- flags (any order, any subset), consumed up front so the verb dispatch below and the
 # generic <kind> <statement...> path both see a clean $@ -------------------------------------
@@ -846,13 +859,37 @@ PYEOF
 # never dressed as a verdict.
 KW_ROW_ID=""
 kernel_write() {
-  local fn="$1" payload="$2" vjson
+  local fn="$1" payload="$2" vjson rc
   vjson=$(psql -h "$PGHOST" -d "$PGDB" -tAq -v ON_ERROR_STOP=1 -v payload="$payload" <<SQL
     SET ROLE ${ROLE};
     SET search_path = ${SCHEMA}, ${KERNEL};
     SELECT to_jsonb(v) FROM ${KERNEL}.${fn}(:'payload'::jsonb) v;
 SQL
-  ) || return $?
+  )
+  rc=$?
+  if [ "$rc" -ne 0 ]; then
+    if [ "$rc" -eq 126 ]; then
+      # item led-json-payload-argstrlen-wall, DEFENSE IN DEPTH (NOT the primary mechanism --
+      # --json's own checkpoint (b), MAX_PSQL_ARG_BYTES above, is): shell exit 126 here means
+      # the psql subprocess itself could not be exec'd -- most likely E2BIG past the kernel's
+      # per-argument MAX_ARG_STRLEN wall (131072 bytes), because `payload` crosses to postgres
+      # as ONE psql -v argument -- mirroring boundary_service.py's own OSError catch at its one
+      # shared _psql() choke point (A8 item 1(ii): "defense in depth ... a boundary/deployment
+      # defect ... takes the typed ... path so no present or future transport wall can ever
+      # wear the bare untyped shape"). This is the net for every OTHER caller of kernel_write()
+      # in this file (register-principal/review/work open|claim|depends|close|resolve-
+      # violation/the generic path) whose own payload the transport wall could still reach,
+      # even though none of their typed-field payloads are expected to grow this large in
+      # practice.
+      echo "led: REFUSED (transport_wall) -- the psql subprocess for this write could not be" >&2
+      echo "  launched (shell exit 126, 'Argument list too long' above is bash's own message" >&2
+      echo "  for the failed exec) -- most likely E2BIG past the kernel's per-argument" >&2
+      echo "  MAX_ARG_STRLEN wall (131072 bytes): this write's payload crosses to postgres as" >&2
+      echo "  ONE psql -v argument. NOTHING was written -- no sequence id was burned, no row" >&2
+      echo "  was journaled (the failure is before psql ever connects). Shrink the payload." >&2
+    fi
+    return "$rc"
+  fi
   KW_ROW_ID=$(printf '%s' "$vjson" | python3 -c '
 import json, sys
 v = json.load(sys.stdin)
@@ -1187,12 +1224,19 @@ print(json.dumps(v))
 ') || exit 1
   # checkpoint (b): the re-serialized (compacted) payload, before it reaches the psql
   # subprocess -- mirrors the HTTP twin's own checkpoint b, catching a payload that grew
-  # past the bound on reserialization even though it passed checkpoint (a).
+  # past the bound on reserialization even though it passed checkpoint (a). item
+  # led-json-payload-argstrlen-wall: bound is MAX_PSQL_ARG_BYTES (the transport's true
+  # per-argument capacity), NOT MAX_WRITE_BODY_BYTES (checkpoint (a)'s raw-buffering bound) --
+  # see MAX_PSQL_ARG_BYTES's own comment above for why the two checkpoints now carry two
+  # DIFFERENT bounds.
   json_compact_bytes=$(printf '%s' "$json_compact" | wc -c)
-  if [ "$json_compact_bytes" -gt "$MAX_WRITE_BODY_BYTES" ]; then
+  if [ "$json_compact_bytes" -gt "$MAX_PSQL_ARG_BYTES" ]; then
     echo "led --json: REFUSED (payload_too_large) -- the JSON payload, re-serialized, is" >&2
-    echo "  ${json_compact_bytes} bytes -- exceeds the ${MAX_WRITE_BODY_BYTES}-byte write" >&2
-    echo "  bound (checkpoint b, before the psql subprocess)." >&2
+    echo "  ${json_compact_bytes} bytes -- exceeds the ${MAX_PSQL_ARG_BYTES}-byte transport" >&2
+    echo "  bound (checkpoint b, before the psql subprocess: the payload crosses as ONE psql" >&2
+    echo "  -v argument, and the kernel's per-argument transport wall, MAX_ARG_STRLEN, is" >&2
+    echo "  131072 bytes -- this bound sits under it with margin, item" >&2
+    echo "  led-json-payload-argstrlen-wall)." >&2
     exit 1
   fi
   case "$json_surface" in
@@ -2498,11 +2542,29 @@ if [ "${1:-}" = "review" ]; then
     echo "       independence: self-review|technical|managerial|financial"
     echo "       set LED_ACTOR=<principal-name> to countersign as a registered principal"
   }
+  # item led-review-bare-help-exit-code: a FIRST, EARLY help-token check on the entry-id
+  # POSITION -- BEFORE the arg-count guard below, not after. A bare `led review --help` (or
+  # `-h`/`help`, or any other dash-leading first word) is too FEW words to ever reach the
+  # SECOND check_help_or_dash_first_word call below (on the statement words, after `shift 3`
+  # consumes entry-id/verdict/independence) -- the old code had exactly ONE such call, sited
+  # AFTER the arg-count guard, so the guard's own `exit 1` always fired first on a bare
+  # `--help`, printing the SAME usage text but the WRONG exit code (1, a refusal) for what is a
+  # QUESTION, not a malformed invocation -- the tier-1 "prints usage, exits 0, writes nothing"
+  # contract item led-help-token-closure established for every other subcommand's --help. This
+  # early call checks ONLY the entry-id position (mirrors the generic <kind> <statement...>
+  # path's own ordering: its one check runs immediately after `kind` is consumed, before
+  # anything about the remaining word count is asked) and is a no-op for any ordinary numeric
+  # entry-id (falls through both of the guard's own case arms unmatched) -- zero-write holds
+  # either way; this is an exit-code-honesty fix only, not a data-safety one.
+  check_help_or_dash_first_word print_review_usage "$@"
   if [ $# -lt 4 ]; then
     print_review_usage >&2
     exit 1
   fi
   regards="$1"; verdict="$2"; independence="$3"; shift 3
+  # SECOND call, UNCHANGED from before this item: the statement's OWN first word, once
+  # entry-id/verdict/independence are consumed -- this is the pre-existing led-help-token-
+  # closure case (`led review <id> attest self-review --help`), untouched by this fix.
   check_help_or_dash_first_word print_review_usage "$@"
   refuse_flag_in_statement "review ${regards} ${verdict} ${independence}" "$@"
   statement="$*"
@@ -3116,6 +3178,19 @@ SQL
       review_bookkeeping=""
       strict=""
       args=()
+      # item led-work-close-supersedes-swallowed (ledger row 1601, witnessed 2026-07-18 by the
+      # orchestrator's own record correction): `--supersedes <id>` is a TOP-OF-FILE shared flag
+      # (line ~556 above), consumed BEFORE this verb's own dispatch when given before 'work'
+      # (e.g. 'led --supersedes 1596 work close ...', the exact shape row 1601 used) -- this
+      # block deliberately does NOT re-declare `supersedes=""` here (unlike, e.g., `work
+      # resolve-violation`'s own loop below, which DOES reset it): a reset would SHADOW the
+      # top-level value the instant dispatch reaches 'close', re-silencing exactly the flag
+      # this item exists to stop silencing. The case arm just below additionally accepts the
+      # SAME flag in the more common AFTER-the-subcommand position ('led work close <slug>
+      # <resolution> --supersedes <id> ...', mirroring --witness/--review-witness's own
+      # position here and `work open`/`work resolve-violation`'s own --supersedes position) --
+      # both positions write the ONE shared `supersedes` variable, last write wins if somehow
+      # both are given, never two separately-tracked values.
       while [ $# -gt 0 ]; do
         case "$1" in
           --witness) witness="${2:-}"; shift 2 ;;
@@ -3127,6 +3202,7 @@ SQL
           # machine checks pass.
           --review-bookkeeping) review_bookkeeping="1"; shift ;;
           --strict) strict="1"; shift ;;
+          --supersedes) supersedes="${2:-}"; shift 2 ;;
           --*)
             # Same hazard-in-reach fix as `work open`/`work depends` above (ledger item
             # led-work-open-refs-swallowed, point 4): an unrecognized flag used to fall into
@@ -3135,7 +3211,8 @@ SQL
             # all on a shipped close, with nothing to say so. Refused here instead.
             echo "led work close: REFUSED -- unrecognized flag '$1'." >&2
             echo "  led work close <slug> <resolution> accepts only: --witness <ref>," >&2
-            echo "  --review-witness <ref>, --review-deferred, --review-bookkeeping, --strict." >&2
+            echo "  --review-witness <ref>, --review-deferred, --review-bookkeeping, --strict," >&2
+            echo "  --supersedes <id>." >&2
             echo "  NOTHING was written." >&2
             exit 1
             ;;
@@ -3166,12 +3243,50 @@ SQL
         echo "                                 CLOSE-SPEC.md, \"the category is CLOSED\")." >&2
         echo "       --strict refuses this close unless --review-witness was used AND every leaf" >&2
         echo "       of the obligation tree is resolved, naming every unresolved leaf" >&2
+        echo "       --supersedes <id>  retracts ledger row <id> from current truth (s31, UNIFORM" >&2
+        echo "                          across every kind -- superseding a work_closed row" >&2
+        echo "                          re-opens the item, s31 Element 1); may be given either" >&2
+        echo "                          before 'work' (the shared top-of-file flag) or here," >&2
+        echo "                          after 'close'" >&2
       }
       if [ $# -lt 2 ]; then
         usage_close
         exit 1
       fi
       slug="$1"; resolution="$2"
+      # item led-work-close-resolution-teaching (ledger row 1613, witnessed 2026-07-18 by the
+      # orchestrator: a non-enum resolution surfaced a RAW postgres CHECK-violation error
+      # instead of a verb-level refusal): TWO client-side checks, transcriptions of the
+      # kernel's OWN two CHECK constraints (ADR-0012 P1 -- teaching the SAME vocabulary the
+      # kernel already enforces, not a second, driftable definition of it), run BEFORE any
+      # other work is done (cheap, no DB round trip needed for either) --
+      #   (i)  work_resolution_check (kernel/lineage/s22-work-item-ledger.sql, widened by
+      #        kernel/lineage/s37-violation-disposition.sql to partition by kind -- a
+      #        work_closed row's own four legal values are unchanged by that widening):
+      #        <resolution> must be exactly one of shipped/superseded/dropped/deferred.
+      #   (ii) work_shipped_requires_witness (kernel/lineage/s22-work-item-ledger.sql):
+      #        resolution=shipped REQUIRES a non-blank --witness -- unconstructable otherwise.
+      # The kernel CHECKs stay as the net (this is teaching, not a second authority) -- a
+      # future write path that bypasses this CLI still hits the same refusal at construction.
+      case "$resolution" in
+        shipped|superseded|dropped|deferred) ;;
+        *)
+          echo "led work close: REFUSED -- resolution must be exactly one of shipped, superseded," >&2
+          echo "  dropped, deferred (got '${resolution}'). This is a client-side teaching of the" >&2
+          echo "  kernel's own work_resolution_check CHECK constraint (kernel/lineage/" >&2
+          echo "  s22-work-item-ledger.sql), so the fix is caught here rather than surfacing as a" >&2
+          echo "  raw postgres constraint-violation error. NOTHING was written." >&2
+          exit 1
+          ;;
+      esac
+      if [ "$resolution" = "shipped" ] && { [ -z "$witness" ] || [ -z "$(printf '%s' "$witness" | tr -d '[:space:]')" ]; }; then
+        echo "led work close: REFUSED -- resolution=shipped REQUIRES a non-blank --witness <ref>" >&2
+        echo "  (kernel/lineage/s22-work-item-ledger.sql's work_shipped_requires_witness CHECK --" >&2
+        echo "  a shipped resolution with no witness is unconstructable, never a tolerated-but-" >&2
+        echo "  flagged row). Add --witness <ref> naming what was actually shipped, or use a" >&2
+        echo "  different resolution if nothing was shipped. NOTHING was written." >&2
+        exit 1
+      fi
       # claim-before-close gate (led-side; s22's own trigger checks only that <slug> was OPENED,
       # not that anyone claimed it) -- run-5 forensics: two work items were closed with no claim
       # ever landing, unflagged. Mirrors the existing duplicate-open/unopened refusal style: a
@@ -3210,18 +3325,31 @@ SQL
           echo "  kernel-delta decision tree)." >&2
           exit 1
         fi
+        # item led-work-close-supersedes-swallowed: --supersedes ADVISORY (printed once,
+        # unconditionally on stderr, BEFORE the INSERT -- mirrors `work open --supersedes`'s
+        # own advisory one kind over). The kernel (s31) enforces every consequence of a
+        # supersedes write; this text only TEACHES the operator what just happened.
+        if [ -n "$supersedes" ]; then
+          echo "led work close: --supersedes ${supersedes} -- this close retracts ledger row" >&2
+          echo "  ${supersedes} from current truth (kernel/lineage/s31-supersession-uniform-" >&2
+          echo "  retraction.sql: supersession is UNIFORM across every kind, reinstatement-free)." >&2
+          echo "  If row ${supersedes} was itself a work_closed row for '${slug}', the item now" >&2
+          echo "  READS OPEN AGAIN (s31 Element 1: work_item_current's closed CTE reads" >&2
+          echo "  ledger_current, which excludes a superseded row) -- this new close row is the" >&2
+          echo "  correction. The kernel enforces the retraction; this text only teaches it." >&2
+        fi
         resolve_actor
         # actor resolves via the SAME subquery-bind idiom as every other ledger-writing path
         # (resolve_actor defined near the top of this file) -- unset LED_ACTOR is byte-identical
         # to before this wiring (NULLIF(:'actor_name','') -> NULL -> set_actor's default fill).
         exec psql -h "$PGHOST" -d "$PGDB" -v ON_ERROR_STOP=1 \
           -v slug="$slug" -v resolution="$resolution" -v witness="$witness" \
-          -v actor_name="$actor_name" \
+          -v supersedes="$supersedes" -v actor_name="$actor_name" \
           -v statement="work_closed: ${slug} (${resolution})" <<SQL
         SET ROLE ${ROLE};
         SET search_path = ${SCHEMA}, ${KERNEL};
-        INSERT INTO ${SCHEMA}.ledger (kind, work_slug, work_resolution, work_witness, statement, actor)
-        VALUES ('work_closed', :'slug', :'resolution', NULLIF(:'witness', ''), :'statement',
+        INSERT INTO ${SCHEMA}.ledger (kind, work_slug, work_resolution, work_witness, supersedes, statement, actor)
+        VALUES ('work_closed', :'slug', :'resolution', NULLIF(:'witness', ''), NULLIF(:'supersedes', '')::bigint, :'statement',
                 (SELECT id FROM principal WHERE name = NULLIF(:'actor_name', '')))
         RETURNING id \gset new_
         \echo led work close: row :new_id written.
@@ -3351,6 +3479,19 @@ SQL
       fi
       strict_bool="false"
       [ -n "$strict" ] && strict_bool="true"
+      # item led-work-close-supersedes-swallowed: --supersedes ADVISORY (printed once,
+      # unconditionally on stderr, BEFORE the INSERT -- mirrors `work open --supersedes`'s own
+      # advisory one kind over). The kernel (s31) enforces every consequence of a supersedes
+      # write; this text only TEACHES the operator what just happened.
+      if [ -n "$supersedes" ]; then
+        echo "led work close: --supersedes ${supersedes} -- this close retracts ledger row" >&2
+        echo "  ${supersedes} from current truth (kernel/lineage/s31-supersession-uniform-" >&2
+        echo "  retraction.sql: supersession is UNIFORM across every kind, reinstatement-free)." >&2
+        echo "  If row ${supersedes} was itself a work_closed row for '${slug}', the item now" >&2
+        echo "  READS OPEN AGAIN (s31 Element 1: work_item_current's closed CTE reads" >&2
+        echo "  ledger_current, which excludes a superseded row) -- this new close row is the" >&2
+        echo "  correction. The kernel enforces the retraction; this text only teaches it." >&2
+      fi
       resolve_actor
       # actor resolves via the SAME subquery-bind idiom as every other ledger-writing path
       # (resolve_actor defined near the top of this file) -- unset LED_ACTOR is byte-identical
@@ -3363,7 +3504,7 @@ SQL
         payload=$(_payload_json kind work_closed work_slug "$slug" \
           work_resolution "$resolution" work_witness "$witness" \
           work_review_disposition "$disposition" work_review_ref "$review_ref" \
-          work_strict_close "$strict_bool" \
+          work_strict_close "$strict_bool" supersedes "$supersedes" \
           statement "work_closed: ${slug} (${resolution})" actor "$actor_id")
         kernel_write ledger_write "$payload"
         exit $?
@@ -3371,15 +3512,16 @@ SQL
       exec psql -h "$PGHOST" -d "$PGDB" -v ON_ERROR_STOP=1 \
         -v slug="$slug" -v resolution="$resolution" -v witness="$witness" \
         -v disposition="$disposition" -v review_ref="$review_ref" -v strict_bool="$strict_bool" \
-        -v actor_name="$actor_name" \
+        -v supersedes="$supersedes" -v actor_name="$actor_name" \
         -v statement="work_closed: ${slug} (${resolution})" <<SQL
         SET ROLE ${ROLE};
         SET search_path = ${SCHEMA}, ${KERNEL};
         INSERT INTO ${SCHEMA}.ledger
           (kind, work_slug, work_resolution, work_witness,
-           work_review_disposition, work_review_ref, work_strict_close, statement, actor)
+           work_review_disposition, work_review_ref, work_strict_close, supersedes, statement, actor)
         VALUES ('work_closed', :'slug', :'resolution', NULLIF(:'witness', ''),
-                :'disposition', NULLIF(:'review_ref', ''), :'strict_bool'::boolean, :'statement',
+                :'disposition', NULLIF(:'review_ref', ''), :'strict_bool'::boolean,
+                NULLIF(:'supersedes', '')::bigint, :'statement',
                 (SELECT id FROM principal WHERE name = NULLIF(:'actor_name', '')))
         RETURNING id \gset new_
         \echo led work close: row :new_id written.
@@ -3414,6 +3556,7 @@ SQL
       review_witness=""
       review_deferred=""
       supersedes=""
+      class_flag=""
       args=()
       while [ $# -gt 0 ]; do
         case "$1" in
@@ -3421,13 +3564,19 @@ SQL
           --review-witness) review_witness="${2:-}"; shift 2 ;;
           --review-deferred) review_deferred="1"; shift ;;
           --supersedes) supersedes="${2:-}"; shift 2 ;;
+          # item resolve-violation-class-ambiguity: --class <name> disambiguates a target that
+          # currently matches MORE THAN ONE work_item_violations class at once (e.g. a
+          # parent-edge orphan that is simultaneously dangling_parent AND
+          # orphaned_by_retraction) -- see the ambiguity branch below for how this is used.
+          --class) class_flag="${2:-}"; shift 2 ;;
           --*)
             # SAME refuse-unknown-flags idiom as `work open`/`work close` above -- an
             # unrecognized flag is refused, never silently absorbed into the basis text.
             echo "led work resolve-violation: REFUSED -- unrecognized flag '$1'." >&2
             echo "  led work resolve-violation <violating-act-id> <reissued|retired> \"<basis>\"" >&2
             echo "    accepts only: --witness <successor-ref>, --review-witness <ref>," >&2
-            echo "    --review-deferred, --supersedes <old-disposition-id>. NOTHING was written." >&2
+            echo "    --review-deferred, --supersedes <old-disposition-id>, --class <name>." >&2
+            echo "    NOTHING was written." >&2
             exit 1
             ;;
           *) args+=("$1"); shift ;;
@@ -3437,7 +3586,7 @@ SQL
       usage_resolve_violation() {
         echo "usage: led work resolve-violation <violating-act-id> <reissued|retired> \"<basis>\"" >&2
         echo "         (--review-witness <ref> | --review-deferred) [--witness <successor-ref>]" >&2
-        echo "         [--supersedes <old-disposition-id>]" >&2
+        echo "         [--supersedes <old-disposition-id>] [--class <name>]" >&2
         echo "       <violating-act-id> is a target_id from 'led work violations' -- the row is" >&2
         echo "       RE-DERIVED against work_item_violations at write time (never parsed from" >&2
         echo "       display text); refused if it is not currently an in-force member." >&2
@@ -3455,6 +3604,11 @@ SQL
         echo "       read via work_violation_history). A raw-history uniqueness read would re-mint" >&2
         echo "       the slug-burn trap this spec exists to remove -- this is the one, in-force-" >&2
         echo "       scoped exception, s37 consult A3." >&2
+        echo "       --class <name> disambiguates when <violating-act-id> currently matches MORE" >&2
+        echo "       THAN ONE work_item_violations class at once (e.g. a parent-edge orphan that" >&2
+        echo "       is simultaneously dangling_parent and orphaned_by_retraction) -- REFUSED" >&2
+        echo "       without it, naming the matched classes; each matched class is a SEPARATE" >&2
+        echo "       disposition, resolved one --class per invocation." >&2
       }
       if [ $# -lt 3 ]; then
         usage_resolve_violation
@@ -3462,6 +3616,19 @@ SQL
       fi
       target_id="$1"; resolution="$2"; shift 2
       basis="$*"
+      if [ -n "$supersedes" ] && [ -n "$class_flag" ]; then
+        # item resolve-violation-class-ambiguity: --class only disambiguates the ORDINARY
+        # construction path (no --supersedes) -- the CORRECTION path (--supersedes given)
+        # derives class deterministically from the disposition being corrected (see the
+        # --supersedes branch below), so a --class alongside it would be silently ignored --
+        # exactly the silent-drop-a-flag class this file's own house style refuses rather than
+        # tolerates (mirrors refuse_shared_flags_for_principal_verb's own reasoning).
+        echo "led work resolve-violation: REFUSED -- --class and --supersedes are not combined:" >&2
+        echo "  --class disambiguates the ordinary construction path; --supersedes (the" >&2
+        echo "  correction path) derives class from the disposition it corrects, so --class" >&2
+        echo "  would be silently ignored there. Omit --class when using --supersedes." >&2
+        exit 1
+      fi
       if [ "$resolution" != "reissued" ] && [ "$resolution" != "retired" ]; then
         echo "led work resolve-violation: REFUSED -- resolution must be exactly 'reissued' or" >&2
         echo "  'retired' (got '${resolution}')." >&2
@@ -3525,13 +3692,17 @@ SQL
           exit 1
         fi
       else
-        class_count=$(psql -h "$PGHOST" -d "$PGDB" -tAq -v tid="$target_id" <<SQL
+        # item resolve-violation-class-ambiguity: fetch the FULL list of matched classes (not
+        # just a count) so an ambiguous target's refusal can NAME them and a --class flag can
+        # be validated against them, in ONE query -- was previously TWO queries (a count, then
+        # a bare DISTINCT re-read once count=1 was confirmed), collapsed to one.
+        class_list=$(psql -h "$PGHOST" -d "$PGDB" -tAq -v tid="$target_id" <<SQL
         SET ROLE ${ROLE};
         SET search_path = ${SCHEMA}, ${KERNEL};
-        SELECT count(DISTINCT violation) FROM work_item_violations WHERE target_id = :'tid'::bigint;
+        SELECT string_agg(DISTINCT violation, ',' ORDER BY violation) FROM work_item_violations WHERE target_id = :'tid'::bigint;
 SQL
         )
-        if [ "$class_count" = "0" ]; then
+        if [ -z "$class_list" ]; then
           echo "led work resolve-violation: REFUSED -- target ${target_id} is not currently an" >&2
           echo "  in-force work_item_violations member (re-derived against the view itself). Run" >&2
           echo "  './led work violations' to see what is currently answerable. (If you are" >&2
@@ -3539,19 +3710,46 @@ SQL
           echo "  --supersedes <the wrong disposition's row id>.)" >&2
           exit 1
         fi
-        if [ "$class_count" != "1" ]; then
-          echo "led work resolve-violation: REFUSED -- target ${target_id} matches MORE THAN ONE" >&2
-          echo "  work_item_violations class at once (${class_count}) -- this CLI convenience" >&2
-          echo "  cannot disambiguate; write the work_violation_disposition row directly via SQL," >&2
-          echo "  naming the intended class explicitly." >&2
-          exit 1
+        class_match_count=$(printf '%s' "$class_list" | tr ',' '\n' | grep -c .)
+        if [ "$class_match_count" != "1" ]; then
+          # item resolve-violation-class-ambiguity (pre-existing CLI gap: a parent-edge orphan
+          # can simultaneously match dangling_parent and orphaned_by_retraction, and this verb
+          # used to refuse with no way forward -- "matches more than one class", full stop,
+          # naming SQL as the only escape). Now: name the matched classes, and -- if --class
+          # was given -- USE it, provided it is one of the classes actually matched (never a
+          # blind pass-through of an operator-typed string).
+          if [ -n "$class_flag" ]; then
+            case ",${class_list}," in
+              *",${class_flag},"*)
+                class="$class_flag"
+                ;;
+              *)
+                echo "led work resolve-violation: REFUSED -- --class '${class_flag}' is not one" >&2
+                echo "  of the classes target ${target_id} currently matches: ${class_list}." >&2
+                echo "  Pick one of the classes listed above." >&2
+                exit 1
+                ;;
+            esac
+          else
+            echo "led work resolve-violation: REFUSED -- target ${target_id} matches MORE THAN" >&2
+            echo "  ONE work_item_violations class at once: ${class_list}. Disambiguate with" >&2
+            echo "  --class <name>, e.g.:" >&2
+            echo "    ./led work resolve-violation ${target_id} ${resolution} \"...\" --class <one of: ${class_list}> ..." >&2
+            echo "  Each matched class is a SEPARATE disposition to write -- resolve them ONE AT" >&2
+            echo "  A TIME, one --class per invocation (this verb never writes more than one" >&2
+            echo "  disposition row per call)." >&2
+            exit 1
+          fi
+        else
+          class="$class_list"
+          if [ -n "$class_flag" ] && [ "$class_flag" != "$class" ]; then
+            echo "led work resolve-violation: REFUSED -- --class '${class_flag}' does not match" >&2
+            echo "  the one class target ${target_id} currently matches ('${class}') -- omit" >&2
+            echo "  --class (it is only needed to disambiguate a target matching MORE than one" >&2
+            echo "  class), or correct it to '${class}'." >&2
+            exit 1
+          fi
         fi
-        class=$(psql -h "$PGHOST" -d "$PGDB" -tAq -v tid="$target_id" <<SQL
-        SET ROLE ${ROLE};
-        SET search_path = ${SCHEMA}, ${KERNEL};
-        SELECT DISTINCT violation FROM work_item_violations WHERE target_id = :'tid'::bigint;
-SQL
-        )
       fi
       if [ -n "$review_witness" ]; then
         disposition="witnessed"; review_ref="$review_witness"
