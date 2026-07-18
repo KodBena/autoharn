@@ -130,6 +130,65 @@ Until then the interceptor passes psql calls through unstamped — writes still 
 `stamp_verified = false`. A *wrong* stamp is refused outright by the trigger, so a
 mis-provisioned secret fails loudly on the first ledger write, not silently.
 
+## Error-recurrence hook (observe-only, self-triggering cross-check)
+
+`hooks/posttooluse_error_recurrence.py` — the self-triggering half of the error-capture
+discipline (`design/FABLE-ERROR-RECURRENCE-HOOK-SPEC.md`, ledger row 1697; the MANUAL half —
+writing a `defect:` ledger row and cross-checking it by hand before fixing anything new — is
+autoharn's `user-guide/USER-RECIPES-FAQ.md` "Capturing errors so they cannot quietly recur"
+section, ADR-0000/ADR-0011). **DETECTIVE CONTROL ONLY**: it never blocks, never writes a ledger
+row, never polices — it can only surface a prior that is already on record.
+
+**What it does.** On a `PostToolUse(Bash)` result whose stdout/stderr text matches one of a
+small, ENUMERATED error signature, it read-only-queries `__PROJECT_ROOT__`'s own ledger for
+`defect:` rows (`defect: <CLASS-SLUG> | <SPECIMEN> | <FORECLOSING-FIX> | <REFS>`, a
+`decision`-kind row) whose CLASS-SLUG or SPECIMEN text looks like this error, and if any do,
+prints their id/slug/foreclosing-fix plus one ADR-0011 teach-line as a non-blocking
+`additionalContext` note. No hit is silent.
+
+**The three enumerated error signatures** (never a general regex zoo — see the hook's own module
+docstring for the exact patterns and their provenance):
+  1. a `SQLSTATE` kernel-refusal line (the shape `serving/boundary_cli_client.py`'s own kernel
+     write-refusal teach-text already carries);
+  2. a `REFUSED` line (the house-wide refusal-teach-text convention essentially every governed
+     verb and gate in autoharn prints on its own failure path);
+  3. a gate `VIOLATIONS (n)` line (the gate failure-count convention several `gates/*.py` files
+     share, e.g. `LAZY-IMPORT VIOLATIONS (3):`).
+
+**Fail-open, always**: an unreachable ledger (both the boundary and legacy read legs failing)
+prints exactly one stderr line saying the cross-check did not run, then exits 0 — never a hang,
+never a block. Malformed `defect:` rows are skipped individually, never crash the check.
+
+**Apparatus switch**: `mechanisms.error_recurrence.mode`, `"off"` (default when the key or file
+is absent) / `"observe"` / `"enforce"` (NAMED-IMPOSSIBLE — this mechanism is detective-only by
+its own spec; degrades to `"observe"` with a warning). This project's own shipped
+`apparatus.json` template (which THIS deployment's `.claude/apparatus.json` was copied from at
+scaffold time) carries `"error_recurrence": {"mode": "observe"}` — see `APPARATUS.md`'s own
+switchboard table for the full detail.
+
+**NOT wired into `.claude/settings.json` by this scaffold** (named honestly, not silently
+assumed): unlike every other hook this document describes, `posttooluse_error_recurrence.py` has
+no dispatch entry generated above — this build shipped only the hook file, its apparatus default,
+and this documentation (`design/FABLE-ERROR-RECURRENCE-HOOK-SPEC.md`'s own "Build conditions"),
+deliberately leaving the actual `PostToolUse` wiring as an operator's own act. To arm it in THIS
+deployment, add the following entry to `.claude/settings.json`'s `hooks.PostToolUse` array
+(mirrors `posttooluse_bash_completion.py`'s own dispatch line shape exactly) — **UNWITNESSED
+against this deployment's own live session; the hook itself was witnessed only by direct
+invocation with synthesized payloads, on scratch worlds, never by wiring it in here**:
+
+```json
+{
+  "matcher": "Bash",
+  "hooks": [
+    {
+      "type": "command",
+      "command": "env LEDGER_HOST=__HOST__ LEDGER_DB=__DB__ GATE_LEDGER=__SCHEMA__.ledger GATE_SUBJECT_ROOT=__PROJECT_ROOT__ python3 __AUTOHARN_ROOT__/hooks/posttooluse_error_recurrence.py",
+      "timeout": 10
+    }
+  ]
+}
+```
+
 ## `led` — one-liner ledger entries
 
 ```sh
