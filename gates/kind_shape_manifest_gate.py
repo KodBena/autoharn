@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-15T20:19:45Z
-#   last-change: 2026-07-16T10:14:30Z
-#   contributors: a857c93d/main, 9a17b6b9/main
+#   last-change: 2026-07-18T01:55:12Z
+#   contributors: a857c93d/main, 9a17b6b9/main, ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
 """kind_shape_manifest_gate -- MANIFEST + GATE for the kernel ledger's kind-scoped shape
@@ -153,7 +153,23 @@ CHAIN = [
     "s37-violation-disposition.sql",
     "s38-bookkeeping-close.sql",
     "s39-blocks-start.sql",
+    "s40-principal-identity-events.sql",
 ]
+# s40 (kernel/lineage/s40-principal-identity-events.sql, design/FABLE-PRINCIPAL-IDENTITY-SPEC-
+# BUILD-BASIS.md) extends this SAME gate's scratch CHAIN and ships THREE new whole-column
+# kind-shape CHECKs, all two-way (the kinds are born in that same delta, so ADD CONSTRAINT
+# validates vacuously -- no grandfathering reason for one-way, basis C5): principal_subject
+# (over the four s40 identity-event kinds; s41 re-issues the SAME constraint widened to its own
+# four binding/relation kinds -- one home, never a second patching constraint), principal_purpose
+# (principal_registered only), principal_db_role (principal_standing_declared only). Its FOURTH
+# column, principal_actor_resolution, is KIND-AGNOSTIC BY RATIFIED DESIGN (basis §9(f): every
+# row of any kind carries the actor-resolution mark from s40 onward, NULL only on pre-s40
+# history) -- a CORE column in this gate's vocabulary, added to CORE_COLUMNS below; its value
+# CHECK (principal_actor_resolution_check) and principal_purpose's non-emptiness CHECK
+# (principal_purpose_nonempty) mention no `kind` and are correctly out of this manifest's scope
+# by the classifier's own first test. s40 also converts kernel.principal_role from table to
+# VIEW -- the module docstring's sibling-surface sweep stands (still no `kind` column anywhere
+# outside `ledger`; a view has no CHECK constraints at all).
 # s39 (kernel/lineage/s39-blocks-start.sql) extends this SAME gate's scratch CHAIN so its re-issued
 # objects are exercised by the scratch apply below. It ships NO new (kind, column, arity) MANIFEST
 # row and NO new PARTIAL-VALUE VALUE_PARTITION_MANIFEST row: edge_type_check (the one CHECK it
@@ -320,6 +336,30 @@ MANIFEST = [
                 "express that. Logically two-way (kind='review' iff regards IS NOT NULL): the "
                 "trigger's first IF raises when kind='review' AND regards IS NULL, its ELSIF "
                 "raises when kind<>'review' AND regards IS NOT NULL."),
+    dict(column="principal_subject",
+         kinds=("principal_registered", "principal_suspended", "principal_revoked",
+                "principal_standing_declared"),
+         arity="two-way", mechanism="CHECK", constraint="principal_subject_kind_shape",
+         defining_delta="s40-principal-identity-events.sql",
+         reason="the principal an identity event is ABOUT (distinct from actor) -- mandatory on "
+                "every identity-event kind, forbidden elsewhere; two-way is safe because the "
+                "kinds are born in the same delta (vacuous ADD CONSTRAINT validation, basis "
+                "§3.2). s41 re-issues this SAME constraint widened to also license its four "
+                "binding/relation kinds -- this row's kinds tuple widens in that same commit."),
+    dict(column="principal_purpose", kinds=("principal_registered",),
+         arity="two-way", mechanism="CHECK", constraint="principal_purpose_kind_shape",
+         defining_delta="s40-principal-identity-events.sql",
+         reason="AC-2's stated-purpose registration field: mandatory (non-empty via the "
+                "separate, kind-free principal_purpose_nonempty value CHECK) on "
+                "principal_registered, NULL on every other kind -- two-way per the basis's C5 "
+                "(the kind is born in the same delta; there was never a grandfathering reason "
+                "for one-way)."),
+    dict(column="principal_db_role", kinds=("principal_standing_declared",),
+         arity="two-way", mechanism="CHECK", constraint="principal_db_role_kind_shape",
+         defining_delta="s40-principal-identity-events.sql",
+         reason="the database role a standing declaration binds -- mandatory on exactly that "
+                "kind, forbidden elsewhere (two-way, same vacuous-validation ground as its two "
+                "sibling s40 columns)."),
     dict(column="work_review_disposition", kinds=("work_closed", "work_violation_disposition"),
          arity="two-way", mechanism="trigger", constraint=None,
          defining_delta="s29-obligation-item-key-and-typed-close.sql (sec-10 epoch amendment; "
@@ -372,6 +412,10 @@ CORE_COLUMNS = frozenset({
     "supersedes", "refs", "concern", "enacts", "actor", "amends", "amends_scope", "answers",
     "stamp_session", "stamp_agent", "stamp_ts", "stamp_hmac", "stamp_verified",
     "stamp_invocation", "event_declared_ts", "row_hash",
+    # s40: the actor-resolution mark is kind-agnostic by ratified design (basis §9(f)) -- every
+    # row of any kind carries 'explicit'/'declared-default' from s40 onward (set_actor's own
+    # assignment), NULL only on pre-s40 history. Its value CHECK carries no kind test.
+    "principal_actor_resolution",
 })
 
 

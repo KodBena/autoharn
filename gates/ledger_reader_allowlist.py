@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-15T20:17:26Z
-#   last-change: 2026-07-16T09:51:28Z
-#   contributors: a857c93d/main, 9a17b6b9/main
+#   last-change: 2026-07-18T01:55:37Z
+#   contributors: a857c93d/main, 9a17b6b9/main, ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
 """ledger_reader_allowlist — the s31 standing mechanical detect: every ledger reader is a
@@ -71,7 +71,23 @@ CHAIN = [
     "s33-composite-discharge.sql", "s34-computed-grade-refusal.sql",
     "s35-validation-decomposition.sql", "s36-decision-grade.sql",
     "s37-violation-disposition.sql", "s38-bookkeeping-close.sql", "s39-blocks-start.sql",
+    "s40-principal-identity-events.sql",
 ]
+# s40 (kernel/lineage/s40-principal-identity-events.sql) extends this SAME gate's scratch CHAIN.
+# It ships NO new raw-`ledger` reader in this gate's enumerated universe (:schema views and
+# functions), verified live: principal_standing_current (new view) reads ledger_current +
+# kernel.principal only; the re-issued set_actor reads the kernel.principal_role VIEW (itself
+# ledger_current-factored) and calls the two SECURITY DEFINER standing functions -- no raw
+# `ledger` reference of its own, so it stays correctly ABSENT from the allowlist exactly as the
+# s19 body was. The re-issued ledger_current/countersigned_in_force keep their standing entries
+# (the projection homes, +4 appended columns, anti-join text unchanged). HONEST SCOPE NOTE: this
+# gate enumerates the :schema namespace only; s40's kernel-schema objects
+# (kernel.principal_role, kernel.principal_standing, kernel.principal_standing_basis,
+# kernel.principal_requires_registration_event) are OUTSIDE its universe by that standing scope
+# choice -- each factors through ledger_current by construction (read their definitions in the
+# delta; the two SECURITY DEFINER functions read the invoker-rights view as owner), so the s31
+# discipline is honored there too, just not machine-swept by THIS gate. Widening the gate's
+# universe to :kern is a candidate future increment, not silently claimed done.
 # s39 (kernel/lineage/s39-blocks-start.sql) extends this SAME gate's scratch CHAIN so its own new
 # objects are exercised by the scratch apply below. It ships ONE new RAW/history reader by design
 # (work_edge_blocks_start, added to ALLOWLIST below, mirroring work_edge_blocks_close one edge-type

@@ -157,10 +157,41 @@
 #                                              session-filtered) graded decision, no recency
 #                                              limit. REFUSED with teach-text on a pre-s36 world.
 #
-#   led register-principal <name> <class>     register a principal (class: human|model|subagent|tool)
+#   led register-principal <name> <class> --purpose "<why>"
+#                                              register a principal (class: human|model|subagent|tool)
 #                                              so a countersign can be attributed to it — the
 #                                              writer registers its own principals, the kernel
-#                                              pre-seeds none but the one connection principal
+#                                              pre-seeds none but the one connection principal.
+#                                              s40 CEREMONY (kernel/lineage/s40-principal-
+#                                              identity-events.sql §3.7): a duplicate name is
+#                                              REFUSED loudly (never a silent no-op — both class
+#                                              polarities, teach-text quoting the existing
+#                                              principal), --purpose is mandatory on an s40
+#                                              kernel, and the anchor row + its
+#                                              principal_registered event land atomically (the
+#                                              kernel's deferred anchor-coupling trigger makes a
+#                                              bare anchor INSERT unable to commit at all).
+#                                              Honors --event-time; pre-s40 worlds keep the
+#                                              legacy anchor-only INSERT (with the loud duplicate
+#                                              refusal, which needs no s40 machinery).
+#
+#   led principal declare-standing <name> [--db-role <role>]
+#                                              bind a database role's default attribution to a
+#                                              registered principal, as an explicit recorded act
+#                                              (a principal_standing_declared event — the
+#                                              declared-not-silent default strict attribution
+#                                              resolves through; s40 §3.6). Re-declaring for the
+#                                              same role auto-supersedes the prior declaration
+#                                              (rotation). NOTE: unrelated to `led standing`
+#                                              (s36 decision durability) — "standing" here is an
+#                                              identity's own status.
+#   led principal suspend <name> [reason...]   withdraw a principal's standing (a
+#                                              principal_suspended event). Writes under it are
+#                                              then refused at the kernel. NO v1 verb lifts a
+#                                              suspension — the only path back is a fresh
+#                                              successor principal (s40 §3.4, ratified).
+#   led principal revoke <name> [reason...]    same, terminally (principal_revoked; revoked
+#                                              dominates suspended in the derived standing).
 #
 #   led review <entry-id> <verdict> <independence> [--antecedent id] <statement...>
 #                                              countersign an earlier row. verdict:
@@ -602,19 +633,20 @@ warn_path_shaped_in_statement() {
 
 # --event-time COVERAGE GUARD -- --event-time is parsed by the SHARED top-of-file loop above
 # (same convention as every other flag here), but only the generic <kind> <statement...> path's
-# INSERT at the bottom of this file actually writes event_declared_ts (kernel/lineage/
-# s24-declared-event-time.sql). Every OTHER dispatched verb below (--recent/current/question-
-# status/review-gap/stamp-distinctness/register-principal/obligate/review/work/decomposition-
-# review-status/briefing) has its OWN
+# INSERT at the bottom of this file, `led register-principal`, and the `led principal ...`
+# identity verbs (s40+, kernel/lineage/s40-principal-identity-events.sql -- the s24 convention
+# honored per the basis's §3.7) actually write event_declared_ts. Every OTHER dispatched verb
+# below (--recent/current/question-status/review-gap/stamp-distinctness/obligate/review/work/
+# decomposition-review-status/briefing) has its OWN
 # INSERT INTO ledger that does not carry the column. REFUSE loudly here rather than silently
 # dropping a value the operator explicitly asked to be recorded (the class this file's own
 # `refuse_flag_in_statement`/missing-column-refusal idioms both exist to foreclose) -- the flag is
-# scoped to the generic path today (design/MAINT-LATE-ENTRY-AND-INTAKE-SEMANTICS.md Proposal 2's own
-# worked example is exactly that path); widening it to `review`/`work` is a future increment,
-# not a silent gap.
+# scoped to the generic path + the principal-identity verbs today (design/MAINT-LATE-ENTRY-AND-
+# INTAKE-SEMANTICS.md Proposal 2's own worked example is the generic path); widening it to
+# `review`/`work` is a future increment, not a silent gap.
 if [ -n "$event_time" ]; then
   case "${1:-}" in
-    --recent|current|question-status|review-gap|stamp-distinctness|standing|register-principal|obligate|review|work|decomposition-review-status|briefing)
+    --recent|current|question-status|review-gap|stamp-distinctness|standing|obligate|review|work|decomposition-review-status|briefing)
       echo "led: REFUSED -- --event-time is only supported on the generic <kind> <statement...>" >&2
       echo "  path today (e.g. './led --event-time <ts> finding \"...\"'); '${1:-}' has its own" >&2
       echo "  INSERT that does not carry event_declared_ts, so the value would otherwise be" >&2
@@ -667,6 +699,39 @@ SQL
       echo "  Register it first: ./led register-principal ${actor_name} <human|model|subagent|tool>" >&2
       exit 1
     fi
+  fi
+}
+
+# --- shared-channel disposal for the principal-identity verbs (s40/s41; the meta-consult Axis 1
+# discipline the basis's §3.7 names: every new verb either HONORS or LOUDLY REFUSES each channel
+# the shared top-of-file flag loop parses -- never a silent drop, the exact class that once
+# swallowed LED_ACTOR). The principal verbs HONOR --event-time (the s24 convention, written into
+# their own INSERTs) and REFUSE every other shared channel by name: their row content is built
+# from typed fields (name/class/purpose/role/fingerprint/...), and a supersession, where a verb
+# needs one, is that verb's OWN post-subcommand --supersedes flag, never the top-of-file one --
+# two parse points for one column would be exactly the silently-diverging duplicate this file's
+# resolve_actor consolidation exists to foreclose.
+refuse_shared_flags_for_principal_verb() {
+  local verb="$1" bad=""
+  [ -n "$files" ]        && bad="$bad -f"
+  [ -n "$enacts" ]       && bad="$bad -e"
+  [ -n "$supersedes" ]   && bad="$bad --supersedes"
+  [ -n "$amends" ]       && bad="$bad --amends"
+  [ -n "$amends_scope" ] && bad="$bad --amends-scope"
+  [ -n "$answers" ]      && bad="$bad --answers"
+  [ -n "$refs" ]         && bad="$bad --refs"
+  [ -n "$concern" ]      && bad="$bad --concern"
+  [ -n "$evidence" ]     && bad="$bad --evidence"
+  [ -n "$confidence" ]   && bad="$bad --confidence"
+  if [ -n "$bad" ]; then
+    echo "led ${verb}: REFUSED -- the shared flag(s)${bad} are not honored by this verb and" >&2
+    echo "  would otherwise be silently dropped (the meta-consult Axis 1 channel class --" >&2
+    echo "  the same silent-drop shape that once swallowed LED_ACTOR). This verb's row content" >&2
+    echo "  is built from its own typed arguments; only --event-time (the s24 late-entry" >&2
+    echo "  declaration) rides through. Where a supersession is needed (s41's release/revoke/" >&2
+    echo "  withdraw/unrelate verbs), it is that verb's OWN trailing --supersedes flag, placed" >&2
+    echo "  AFTER the subcommand words -- not the top-of-file one." >&2
+    exit 1
   fi
 }
 
@@ -868,17 +933,267 @@ SQL
 fi
 
 if [ "${1:-}" = "register-principal" ]; then
-  name="${2:-}"; class="${3:-}"
+  # s40 REGISTRATION CEREMONY (kernel/lineage/s40-principal-identity-events.sql §3.7). The
+  # historical `ON CONFLICT (name) DO NOTHING` is DELETED: a duplicate name is refused LOUDLY
+  # before the INSERT, with teach-text quoting the existing principal's id, class, and
+  # registration purpose -- closing the panel's ask #2 AND the meta-consult Axis 6 finding (this
+  # exact silent no-op was the one sibling an earlier fix left uncovered) in BOTH class
+  # polarities: same-class duplicate refused (re-registration is never a no-op), class-mismatch
+  # duplicate refused naming the mismatch (classes are immutable; a different class is a
+  # different principal). The duplicate refusal runs on EVERY world's kernel (it needs only the
+  # anchor table); the EVENT half is live-checked (an s40 kernel carries principal_subject) so
+  # this live template neither breaks a pre-s40 world nor silently skips the event on an s40 one.
+  shift
+  name=""; class=""; purpose=""
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --purpose) purpose="${2:-}"; shift 2 ;;
+      --*)
+        echo "led register-principal: REFUSED -- unrecognized flag '$1'." >&2
+        echo "usage: led register-principal <name> <human|model|subagent|tool> --purpose \"<why this identity exists>\"" >&2
+        exit 1 ;;
+      *)
+        if [ -z "$name" ]; then name="$1"
+        elif [ -z "$class" ]; then class="$1"
+        else
+          echo "led register-principal: REFUSED -- unexpected argument '$1' (name and class already given)." >&2
+          exit 1
+        fi
+        shift ;;
+    esac
+  done
   if [ -z "$name" ] || [ -z "$class" ]; then
-    echo "usage: led register-principal <name> <human|model|subagent|tool>" >&2
+    echo "usage: led register-principal <name> <human|model|subagent|tool> --purpose \"<why this identity exists>\"" >&2
+    exit 1
+  fi
+  refuse_shared_flags_for_principal_verb "register-principal"
+  resolve_actor
+  existing=$(psql -h "$PGHOST" -d "$PGDB" -tAq -v name="$name" <<SQL
+    SET ROLE ${ROLE};
+    SET search_path = ${SCHEMA}, ${KERNEL};
+    SELECT p.id || '|' || p.agent_class || '|' || coalesce(
+             (SELECT lc.principal_purpose FROM ${SCHEMA}.ledger_current lc
+              WHERE lc.kind = 'principal_registered' AND lc.principal_subject = p.id
+              ORDER BY lc.id LIMIT 1), '(no recorded purpose -- pre-s40 registration)')
+    FROM principal p WHERE p.name = :'name';
+SQL
+  )
+  if [ -n "$existing" ]; then
+    ex_id="${existing%%|*}"; rest="${existing#*|}"; ex_class="${rest%%|*}"; ex_purpose="${rest#*|}"
+    echo "led register-principal: REFUSED -- principal '${name}' is already registered" >&2
+    echo "  (id ${ex_id}, class ${ex_class}, purpose: ${ex_purpose})." >&2
+    if [ "$ex_class" = "$class" ]; then
+      echo "  Re-registration is never a silent no-op (s40 §3.7 -- the panel's silent" >&2
+      echo "  ON CONFLICT DO NOTHING class, closed): if you meant this existing principal," >&2
+      echo "  just use it (LED_ACTOR=${name}); if you meant a NEW identity, pick a new name." >&2
+    else
+      echo "  Registered as ${ex_class}; classes are IMMUTABLE -- a different class is a" >&2
+      echo "  DIFFERENT principal: pick a new name and, if this succeeds the old identity," >&2
+      echo "  record the succession -- ./led principal relate ${name}-2 succeeds ${name} once" >&2
+      echo "  this kernel carries s41 (kernel/lineage/s41-principal-bindings-and-relations.sql);" >&2
+      echo "  on an s40-only kernel, file a decision row naming the successor instead" >&2
+      echo "  (./led decision \"principal <new-name> succeeds ${name} (class change ${ex_class} -> ${class})\")." >&2
+    fi
+    exit 1
+  fi
+  has_s40=$(psql -h "$PGHOST" -d "$PGDB" -tAc \
+    "SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = '${SCHEMA}' AND table_name = 'ledger' AND column_name = 'principal_subject');")
+  if [ "$has_s40" = "t" ]; then
+    if [ -z "$purpose" ]; then
+      echo "led register-principal: REFUSED -- --purpose is mandatory on an s40 kernel: a" >&2
+      echo "  registration is a recorded, attributed event with a stated purpose (AC-2's" >&2
+      echo "  'account with a stated purpose'; kernel/lineage/s40-principal-identity-events.sql)." >&2
+      echo "usage: led register-principal <name> <human|model|subagent|tool> --purpose \"<why this identity exists>\"" >&2
+      exit 1
+    fi
+    # One statement = one transaction: anchor INSERT + registration event via a data-modifying
+    # CTE, so the kernel's deferred anchor-coupling trigger (a bare anchor cannot commit) is
+    # satisfied atomically. Registrar = the event's actor (resolve_actor / the standing default).
+    if [ -n "$event_time" ]; then
+      exec psql -h "$PGHOST" -d "$PGDB" -v ON_ERROR_STOP=1 \
+        -v name="$name" -v class="$class" -v purpose="$purpose" \
+        -v actor_name="$actor_name" -v event_time="$event_time" <<SQL
+        SET ROLE ${ROLE};
+        SET search_path = ${SCHEMA}, ${KERNEL};
+        WITH new_p AS (
+          INSERT INTO principal (name, agent_class) VALUES (:'name', :'class')
+          RETURNING id, name, agent_class
+        )
+        INSERT INTO ${SCHEMA}.ledger
+            (kind, statement, actor, principal_subject, principal_purpose, event_declared_ts)
+        SELECT 'principal_registered',
+               format('principal ''%s'' registered (class %s)', np.name, np.agent_class),
+               (SELECT id FROM principal WHERE name = NULLIF(:'actor_name', '')),
+               np.id, :'purpose', NULLIF(:'event_time', '')::timestamptz
+        FROM new_p np;
+SQL
+    else
+      exec psql -h "$PGHOST" -d "$PGDB" -v ON_ERROR_STOP=1 \
+        -v name="$name" -v class="$class" -v purpose="$purpose" -v actor_name="$actor_name" <<SQL
+        SET ROLE ${ROLE};
+        SET search_path = ${SCHEMA}, ${KERNEL};
+        WITH new_p AS (
+          INSERT INTO principal (name, agent_class) VALUES (:'name', :'class')
+          RETURNING id, name, agent_class
+        )
+        INSERT INTO ${SCHEMA}.ledger
+            (kind, statement, actor, principal_subject, principal_purpose)
+        SELECT 'principal_registered',
+               format('principal ''%s'' registered (class %s)', np.name, np.agent_class),
+               (SELECT id FROM principal WHERE name = NULLIF(:'actor_name', '')),
+               np.id, :'purpose'
+        FROM new_p np;
+SQL
+    fi
+  fi
+  # pre-s40 kernel: no event machinery exists. The duplicate refusal above already ran (the
+  # Axis 6 fix reaches every world); --purpose has no typed home here and is refused rather
+  # than silently dropped.
+  if [ -n "$purpose" ]; then
+    echo "led register-principal: REFUSED -- --purpose was given, but this world's kernel" >&2
+    echo "  predates s40 (no principal_subject column on ${SCHEMA}.ledger), so the registration" >&2
+    echo "  event that would carry it cannot be recorded. Omit --purpose on this world, or" >&2
+    echo "  scaffold a new world whose birth chain carries s40." >&2
     exit 1
   fi
   exec psql -h "$PGHOST" -d "$PGDB" -v ON_ERROR_STOP=1 -v name="$name" -v class="$class" <<SQL
     SET ROLE ${ROLE};
     SET search_path = ${SCHEMA}, ${KERNEL};
-    INSERT INTO principal (name, agent_class) VALUES (:'name', :'class')
-    ON CONFLICT (name) DO NOTHING;
+    INSERT INTO principal (name, agent_class) VALUES (:'name', :'class');
 SQL
+fi
+
+# --- `led principal ...` -- the s40 identity-lifecycle verbs (kernel/lineage/
+# s40-principal-identity-events.sql §3.7; s41 adds the binding/relation verbs to this same
+# namespace). Thin verbs writing the corresponding event kinds, each through resolve_actor,
+# each honoring --event-time (the s24 convention) and loudly refusing every other shared
+# channel (refuse_shared_flags_for_principal_verb -- meta-consult Axis 1). NAMESPACED
+# `led principal ...` deliberately: "standing" here is an IDENTITY's status (active/suspended/
+# revoked), unrelated to `led standing`'s s36 decision-durability vocabulary.
+if [ "${1:-}" = "principal" ]; then
+  shift
+  sub="${1:-}"; shift 2>/dev/null || true
+  _principal_usage() {
+    echo "usage: led principal declare-standing <name> [--db-role <role>]   # bind a db role's default attribution to <name> (rotation auto-supersedes)" >&2
+    echo "       led principal suspend <name> [reason...]                   # withdraw standing (no v1 verb lifts it -- see s40 §3.4)" >&2
+    echo "       led principal revoke <name> [reason...]                    # withdraw standing, terminally (revoked dominates suspended)" >&2
+    echo "  (s41 kernels add: relate/unrelate, bind-role/release-role, bind-key/revoke-key," >&2
+    echo "   grant-competence/withdraw-competence -- each refused with teach-text on an s40-only kernel)" >&2
+  }
+  has_s40=$(psql -h "$PGHOST" -d "$PGDB" -tAc \
+    "SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = '${SCHEMA}' AND table_name = 'ledger' AND column_name = 'principal_subject');")
+  if [ "$has_s40" != "t" ]; then
+    echo "led principal: REFUSED -- this world's kernel predates s40 (no principal_subject" >&2
+    echo "  column on ${SCHEMA}.ledger): identity lifecycle events have no typed home here." >&2
+    echo "  These verbs work on a world whose birth chain carries" >&2
+    echo "  kernel/lineage/s40-principal-identity-events.sql." >&2
+    exit 1
+  fi
+  # every subcommand's subject principal must exist; resolved once, here.
+  _principal_subject_id() {
+    psql -h "$PGHOST" -d "$PGDB" -tAq -v name="$1" <<SQL
+      SET ROLE ${ROLE};
+      SET search_path = ${SCHEMA}, ${KERNEL};
+      SELECT id FROM principal WHERE name = :'name';
+SQL
+  }
+  case "$sub" in
+    declare-standing)
+      name="${1:-}"; shift 2>/dev/null || true
+      db_role="$ROLE"
+      while [ $# -gt 0 ]; do
+        case "$1" in
+          --db-role) db_role="${2:-}"; shift 2 ;;
+          *) echo "led principal declare-standing: REFUSED -- unrecognized argument '$1'." >&2; _principal_usage; exit 1 ;;
+        esac
+      done
+      if [ -z "$name" ]; then _principal_usage; exit 1; fi
+      refuse_shared_flags_for_principal_verb "principal declare-standing"
+      resolve_actor
+      pid=$(_principal_subject_id "$name")
+      if [ -z "$pid" ]; then
+        echo "led principal declare-standing: REFUSED -- '${name}' is not a registered principal." >&2
+        echo "  Register it first: ./led register-principal ${name} <class> --purpose \"...\"" >&2
+        exit 1
+      fi
+      # rotation: a newer declaration for the same db_role supersedes the current one (the
+      # `principal_role` view's latest-unsuperseded read makes this belt-and-braces; the
+      # supersession keeps the event graph honest -- exactly one in-force declaration per role).
+      old_id=$(psql -h "$PGHOST" -d "$PGDB" -tAq -v db_role="$db_role" <<SQL
+        SET ROLE ${ROLE};
+        SET search_path = ${SCHEMA}, ${KERNEL};
+        SELECT lc.id FROM ${SCHEMA}.ledger_current lc
+        WHERE lc.kind = 'principal_standing_declared' AND lc.principal_db_role = :'db_role'
+        ORDER BY lc.id DESC LIMIT 1;
+SQL
+      )
+      [ -n "$old_id" ] && echo "led principal declare-standing: rotating -- superseding standing declaration row ${old_id} for role '${db_role}'."
+      exec psql -h "$PGHOST" -d "$PGDB" -v ON_ERROR_STOP=1 \
+        -v name="$name" -v db_role="$db_role" -v pid="$pid" -v old_id="$old_id" \
+        -v actor_name="$actor_name" -v event_time="$event_time" <<SQL
+        SET ROLE ${ROLE};
+        SET search_path = ${SCHEMA}, ${KERNEL};
+        INSERT INTO ${SCHEMA}.ledger
+            (kind, statement, actor, principal_subject, principal_db_role, supersedes,
+             event_declared_ts)
+        VALUES ('principal_standing_declared',
+                format('database role ''%s'' speaks for principal ''%s'' by default (standing declaration)', :'db_role', :'name'),
+                (SELECT id FROM principal WHERE name = NULLIF(:'actor_name', '')),
+                :'pid'::bigint, :'db_role',
+                NULLIF(:'old_id', '')::bigint,
+                NULLIF(:'event_time', '')::timestamptz);
+SQL
+      ;;
+    suspend|revoke)
+      name="${1:-}"; shift 2>/dev/null || true
+      reason="$*"
+      if [ -z "$name" ]; then _principal_usage; exit 1; fi
+      case "$name" in --*) _principal_usage; exit 1 ;; esac
+      refuse_shared_flags_for_principal_verb "principal ${sub}"
+      resolve_actor
+      pid=$(_principal_subject_id "$name")
+      if [ -z "$pid" ]; then
+        echo "led principal ${sub}: REFUSED -- '${name}' is not a registered principal." >&2
+        exit 1
+      fi
+      kind_val="principal_${sub}"
+      case "$sub" in suspend) kind_val="principal_suspended" ;; revoke) kind_val="principal_revoked" ;; esac
+      stmt="principal '${name}' ${sub}d -- standing withdrawn"
+      [ -n "$reason" ] && stmt="${stmt}: ${reason}"
+      exec psql -h "$PGHOST" -d "$PGDB" -v ON_ERROR_STOP=1 \
+        -v kind_val="$kind_val" -v stmt="$stmt" -v pid="$pid" \
+        -v actor_name="$actor_name" -v event_time="$event_time" <<SQL
+        SET ROLE ${ROLE};
+        SET search_path = ${SCHEMA}, ${KERNEL};
+        INSERT INTO ${SCHEMA}.ledger
+            (kind, statement, actor, principal_subject, event_declared_ts)
+        VALUES (:'kind_val', :'stmt',
+                (SELECT id FROM principal WHERE name = NULLIF(:'actor_name', '')),
+                :'pid'::bigint,
+                NULLIF(:'event_time', '')::timestamptz);
+SQL
+      ;;
+    relate|unrelate|bind-role|release-role|bind-key|revoke-key|grant-competence|withdraw-competence)
+      # s41 verbs -- live-checked so an s40-only kernel refuses with teach-text instead of a
+      # bare undefined-column error (the s41 commit of this same family implements them).
+      has_s41=$(psql -h "$PGHOST" -d "$PGDB" -tAc \
+        "SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = '${SCHEMA}' AND table_name = 'ledger' AND column_name = 'principal_binding_active');")
+      if [ "$has_s41" != "t" ]; then
+        echo "led principal ${sub}: REFUSED -- this world's kernel carries s40 but not s41" >&2
+        echo "  (no principal_binding_active column on ${SCHEMA}.ledger): binding/relation" >&2
+        echo "  events have no typed home here. These verbs work on a world whose birth chain" >&2
+        echo "  carries kernel/lineage/s41-principal-bindings-and-relations.sql." >&2
+        exit 1
+      fi
+      echo "led principal ${sub}: REFUSED -- not implemented by this template revision (the" >&2
+      echo "  s41 verb set lands with kernel/lineage/s41-principal-bindings-and-relations.sql's" >&2
+      echo "  own commit; if you see this on an s41 kernel, the checkout serving this template" >&2
+      echo "  is older than the kernel it is talking to -- update the autoharn checkout)." >&2
+      exit 1
+      ;;
+    *)
+      _principal_usage; exit 1 ;;
+  esac
 fi
 
 if [ "${1:-}" = "obligate" ]; then

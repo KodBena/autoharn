@@ -1,8 +1,8 @@
 #!/bin/sh
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-09T11:15:53Z
-#   last-change: 2026-07-16T02:40:50Z
-#   contributors: be693afb/main, e4410ef6/main, 3c50e030/main, a857c93d/main, 9a17b6b9/main
+#   last-change: 2026-07-18T01:54:35Z
+#   contributors: be693afb/main, e4410ef6/main, 3c50e030/main, a857c93d/main, 9a17b6b9/main, ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
 # new-project.sh — stamp a new instance directory: deployment.json, .claude/ wiring
@@ -98,8 +98,10 @@ usage() {
     echo "usage: $0 <dest-dir> --db <db> --host <host> --schema <schema> --kern <kern> --role <role> [--name <name>] [--governed <patterns>] [--force]" >&2
     echo "       $0 <dest-dir> --new-world <world> --db <db> --host <host> [--name <name>] [--governed <patterns>] [--force]" >&2
     echo "         (--new-world derives --schema/--kern/--role from <world> unless given explicitly;" >&2
-    echo "          also applies high_watermark_1.sql + s20 through s39 and seeds the stamp secret -- see" >&2
-    echo "          the --new-world block in this script's own header comment)" >&2
+    echo "          also applies high_watermark_1.sql + s20 through s40, seeds the stamp secret, and" >&2
+    echo "          runs the s40 birth sequence (author registration event, standing declaration," >&2
+    echo "          reviewer/commissioner ceremony) -- see the --new-world block in this script's" >&2
+    echo "          own header comment)" >&2
     echo "         (--governed <comma-separated-fnmatch-patterns> sets .claude/governed_files.json;" >&2
     echo "          omit it and the *.py-only default is used, with a loud post-scaffold notice)" >&2
     echo "         (--pin submodule adds autoharn as a git submodule at <dest-dir>/.autoharn, pinned" >&2
@@ -191,7 +193,7 @@ fi
 # below -- the honest record of which sNN deltas this world was born on, so a future reader never
 # has to reconstruct it from source the way run3's own history had to be reconstructed.
 if [ -n "$NEW_WORLD" ]; then
-    LINEAGE_CHAIN="s15 -> s17-stamp-mechanism -> s17-independence-vocabulary -> s19 -> s20 -> s21-session-aware-distinctness -> s22-work-item-ledger -> s23-per-invocation-stamp-token -> s24-declared-event-time -> s25-commission-kind -> s26-row-hash-chain -> s27-chain-high-water -> s28-work-parent-edge -> s29-obligation-item-key-and-typed-close -> s30-typed-dependency-edges -> s31-supersession-uniform-retraction -> s32-edge-views-single-home -> s33-composite-discharge -> s34-computed-grade-refusal -> s35-validation-decomposition -> s36-decision-grade -> s37-violation-disposition -> s38-bookkeeping-close -> s39-blocks-start (via kernel/lineage/high_watermark_1.sql + kernel/lineage/s20-obligation-grants-and-view-refresh.sql + kernel/lineage/s21-session-aware-distinctness.sql + kernel/lineage/s22-work-item-ledger.sql + kernel/lineage/s23-per-invocation-stamp-token.sql + kernel/lineage/s24-declared-event-time.sql + kernel/lineage/s25-commission-kind.sql + kernel/lineage/s26-row-hash-chain.sql + kernel/lineage/s27-chain-high-water.sql + kernel/lineage/s28-work-parent-edge.sql + kernel/lineage/s29-obligation-item-key-and-typed-close.sql + kernel/lineage/s30-typed-dependency-edges.sql + kernel/lineage/s31-supersession-uniform-retraction.sql + kernel/lineage/s32-edge-views-single-home.sql + kernel/lineage/s33-composite-discharge.sql + kernel/lineage/s34-computed-grade-refusal.sql + kernel/lineage/s35-validation-decomposition.sql + kernel/lineage/s36-decision-grade.sql + kernel/lineage/s37-violation-disposition.sql + kernel/lineage/s38-bookkeeping-close.sql + kernel/lineage/s39-blocks-start.sql), applied automatically by this --new-world run -- s29 wired in via its sec-10 migration-epoch amendment (ledger decision row 935's conditional ratification), which yields epoch=0 on this empty, freshly-scaffolded ledger (see that file's own AMENDMENT header for why); s30 (typed dependency edges, ledger decision row 1018) needs no epoch machinery of its own -- HISTORY: safe, see that file's own header; s31 (supersession uniform retraction, ratified spec design/FABLE-SUPERSESSION-UNIFORM-RETRACTION-SPEC.md) re-issues readers only, no epoch, HISTORY: safe per its own header; s32 (edge-views-single-home) is a pure refactor, output-equality witnessed, HISTORY: safe per its own header; s33 (composite-discharge, ratified spec design/FABLE-COMPOSITE-DISCHARGE-SPEC.md) adds an opt-in typed column + refusals, nothing relaxed, HISTORY: safe per its own header; s34 (computed-grade refusal) adds one refusal, class-ratified fail-safe, HISTORY: safe per its own header; s35 (validation decomposition) is a pure refactor -- every refusal text byte-identical, leaf byte-identity gate polices future re-issues -- HISTORY: safe per its own header; s36 (decision grade, ratified spec design/FABLE-GRADED-DECISIONS-SPEC.md) adds a nullable writer-supplied column + one derived view, nothing relaxed, HISTORY: safe per its own header; s37 (violation disposition, ratified spec design/FABLE-ORPHAN-DISPOSITION-SPEC.md v3) adds one kind + validator and re-issues the violations/history views, nothing relaxed, HISTORY: safe per its own header; s38 (bookkeeping close, ratified spec design/FABLE-BOOKKEEPING-CLOSE-SPEC.md) widens the review-disposition vocabulary to a third, machine-verified value (a git-commit witness, existence-checked CLI-side) plus one new narrowing CHECK and one new audit view, re-issue-only / additive-vocabulary, HISTORY: safe per its own header; s39 (blocks-start, the maintainer's claim-time precondition-foreclosure commission) widens the edge_type vocabulary to a third value (blocks-start), adds a claim-time refusal (a new validate_work_item_claim leaf) and two new derived views (work_edge_blocks_start, work_startable), nothing existing relaxed, HISTORY: safe per its own header"
+    LINEAGE_CHAIN="s15 -> s17-stamp-mechanism -> s17-independence-vocabulary -> s19 -> s20 -> s21-session-aware-distinctness -> s22-work-item-ledger -> s23-per-invocation-stamp-token -> s24-declared-event-time -> s25-commission-kind -> s26-row-hash-chain -> s27-chain-high-water -> s28-work-parent-edge -> s29-obligation-item-key-and-typed-close -> s30-typed-dependency-edges -> s31-supersession-uniform-retraction -> s32-edge-views-single-home -> s33-composite-discharge -> s34-computed-grade-refusal -> s35-validation-decomposition -> s36-decision-grade -> s37-violation-disposition -> s38-bookkeeping-close -> s39-blocks-start -> s40-principal-identity-events (via kernel/lineage/high_watermark_1.sql + kernel/lineage/s20-obligation-grants-and-view-refresh.sql + kernel/lineage/s21-session-aware-distinctness.sql + kernel/lineage/s22-work-item-ledger.sql + kernel/lineage/s23-per-invocation-stamp-token.sql + kernel/lineage/s24-declared-event-time.sql + kernel/lineage/s25-commission-kind.sql + kernel/lineage/s26-row-hash-chain.sql + kernel/lineage/s27-chain-high-water.sql + kernel/lineage/s28-work-parent-edge.sql + kernel/lineage/s29-obligation-item-key-and-typed-close.sql + kernel/lineage/s30-typed-dependency-edges.sql + kernel/lineage/s31-supersession-uniform-retraction.sql + kernel/lineage/s32-edge-views-single-home.sql + kernel/lineage/s33-composite-discharge.sql + kernel/lineage/s34-computed-grade-refusal.sql + kernel/lineage/s35-validation-decomposition.sql + kernel/lineage/s36-decision-grade.sql + kernel/lineage/s37-violation-disposition.sql + kernel/lineage/s38-bookkeeping-close.sql + kernel/lineage/s39-blocks-start.sql + kernel/lineage/s40-principal-identity-events.sql), applied automatically by this --new-world run -- s29 wired in via its sec-10 migration-epoch amendment (ledger decision row 935's conditional ratification), which yields epoch=0 on this empty, freshly-scaffolded ledger (see that file's own AMENDMENT header for why); s30 (typed dependency edges, ledger decision row 1018) needs no epoch machinery of its own -- HISTORY: safe, see that file's own header; s31 (supersession uniform retraction, ratified spec design/FABLE-SUPERSESSION-UNIFORM-RETRACTION-SPEC.md) re-issues readers only, no epoch, HISTORY: safe per its own header; s32 (edge-views-single-home) is a pure refactor, output-equality witnessed, HISTORY: safe per its own header; s33 (composite-discharge, ratified spec design/FABLE-COMPOSITE-DISCHARGE-SPEC.md) adds an opt-in typed column + refusals, nothing relaxed, HISTORY: safe per its own header; s34 (computed-grade refusal) adds one refusal, class-ratified fail-safe, HISTORY: safe per its own header; s35 (validation decomposition) is a pure refactor -- every refusal text byte-identical, leaf byte-identity gate polices future re-issues -- HISTORY: safe per its own header; s36 (decision grade, ratified spec design/FABLE-GRADED-DECISIONS-SPEC.md) adds a nullable writer-supplied column + one derived view, nothing relaxed, HISTORY: safe per its own header; s37 (violation disposition, ratified spec design/FABLE-ORPHAN-DISPOSITION-SPEC.md v3) adds one kind + validator and re-issues the violations/history views, nothing relaxed, HISTORY: safe per its own header; s38 (bookkeeping close, ratified spec design/FABLE-BOOKKEEPING-CLOSE-SPEC.md) widens the review-disposition vocabulary to a third, machine-verified value (a git-commit witness, existence-checked CLI-side) plus one new narrowing CHECK and one new audit view, re-issue-only / additive-vocabulary, HISTORY: safe per its own header; s39 (blocks-start, the maintainer's claim-time precondition-foreclosure commission) widens the edge_type vocabulary to a third value (blocks-start), adds a claim-time refusal (a new validate_work_item_claim leaf) and two new derived views (work_edge_blocks_start, work_startable), nothing existing relaxed, HISTORY: safe per its own header; s40 (principal identity events, ratified spec design/FABLE-PRINCIPAL-IDENTITY-SPEC-BUILD-BASIS.md, first of the s40/s41 family) makes identity facts append-only attributed ledger events (four new kinds), derives standing (kernel.principal_standing), converts kernel.principal_role from table to derived view, re-issues set_actor as strict-declared-default attribution, and couples the anchor to its registration event -- NOT class-ratified fail-safe (table->view + live trigger re-issue), ships under its own ratified spec; HISTORY: safe per its own header, and this scaffold's own birth sequence below discharges the three explicit s40 birth acts (author registration event, standing declaration, reviewer/commissioner ceremony)"
     # --new-world ALSO auto-seeds the stamp secret (below) -- HOOKS.md must say so, not repeat the
     # generic "one manual step remains" text verbatim: an operator who trusted that stale claim and
     # re-ran the seeding block would TRUNCATE + re-INSERT an already-provisioned secret, ROTATING it
@@ -207,14 +209,14 @@ if [ -n "$NEW_WORLD" ]; then
     # about ("a reviewer principal exists") is actually true yet (BACKLOG "Maintainer ruling:
     # self-application", 2026-07-09 -- "starting a run becomes a verb": the operator no longer
     # hand-registers this principal for a --new-world scaffold).
-    REVIEWER_STATUS="Registered automatically by this --new-world scaffold run (principal 'reviewer', class subagent; see the registration step in this same run, right after the stamp secret above) -- do NOT re-register; \`ON CONFLICT (name) DO NOTHING\` makes a repeat call harmless if you do anyway."
+    REVIEWER_STATUS="Registered automatically by this --new-world scaffold run through the s40 ceremony (principal 'reviewer', class subagent, purpose stated, a principal_registered event on the ledger; see the birth-sequence step in this same run, right after the stamp secret above) -- do NOT re-register; a repeat \`./led register-principal reviewer ...\` is REFUSED loudly with teach-text (s40 deleted the silent ON CONFLICT no-op), and the scaffold's own re-run existence check prints 'already registered' instead of attempting one."
     # COMMISSIONER_STATUS: mirrors REVIEWER_STATUS exactly -- the honest, mode-aware record of
     # whether the 'commissioner' principal (kernel/lineage/s25-commission-kind.sql's FULL signing
     # mode; BACKLOG "Five-item batch, maintainer-approved 2026-07-11 evening", item 2) exists yet.
     # Registering it here, alongside 'reviewer', means the maintainer's OWN signing act (see the
     # printed copy-paste line at the end of this script) never has to register its own principal
     # first -- the same "starting a run becomes a verb" closure REVIEWER_STATUS already documents.
-    COMMISSIONER_STATUS="Registered automatically by this --new-world scaffold run (principal 'commissioner', class human; see the registration step in this same run, right after 'reviewer' above) -- do NOT re-register; \`ON CONFLICT (name) DO NOTHING\` makes a repeat call harmless if you do anyway. FULL-mode signing (the maintainer signs the ask himself): \`LED_ACTOR=commissioner ./led commission \"<the ask verbatim>\"\` -- typed by the maintainer in his OWN terminal, inside this world. LAZY-mode (the implementer vicariously transcribes the ask on receiving it, first ledger act, no commissioner guarantee): see this world's CLAUDE.md preamble."
+    COMMISSIONER_STATUS="Registered automatically by this --new-world scaffold run through the s40 ceremony (principal 'commissioner', class human, purpose stated, a principal_registered event on the ledger; see the birth-sequence step in this same run, right after 'reviewer' above) -- do NOT re-register; a repeat is REFUSED loudly (s40 deleted the silent ON CONFLICT no-op), and the scaffold's own re-run existence check prints 'already registered' instead of attempting one. FULL-mode signing (the maintainer signs the ask himself): \`LED_ACTOR=commissioner ./led commission \"<the ask verbatim>\"\` -- typed by the maintainer in his OWN terminal, inside this world. LAZY-mode (the implementer vicariously transcribes the ask on receiving it, first ledger act, no commissioner guarantee): see this world's CLAUDE.md preamble."
 else
     LINEAGE_CHAIN="NOT applied by this scaffold run -- apply a kernel lineage to $SCHEMA/$KERN/$ROLE manually (kernel/lineage/, see kernel/lineage/README.md) before first use"
     STAMP_SECRET_STATUS="**One manual step remains: provision the stamp secret. UNWITNESSED — the block below has not been run in this instance.**"
@@ -332,7 +334,7 @@ if [ "$PIN" = "submodule" ]; then
 fi
 
 if [ -n "$NEW_WORLD" ]; then
-    echo "-- new-world '$NEW_WORLD': applying high_watermark_1.sql + s20 + s21 + s22 + s23 + s24 + s25 + s26 + s27 + s28 + s29 + s30 + s31 + s32 + s33 + s34 + s35 + s36 + s37 + s38 + s39 to $DB (schema=$SCHEMA kern=$KERN role=$ROLE) --"
+    echo "-- new-world '$NEW_WORLD': applying high_watermark_1.sql + s20 + s21 + s22 + s23 + s24 + s25 + s26 + s27 + s28 + s29 + s30 + s31 + s32 + s33 + s34 + s35 + s36 + s37 + s38 + s39 + s40 to $DB (schema=$SCHEMA kern=$KERN role=$ROLE) --"
     psql -h "$HOST" -d "$DB" -v ON_ERROR_STOP=1 \
         -v schema="$SCHEMA" -v kern="$KERN" -v role="$ROLE" \
         -f "$AUTOHARN_ROOT/kernel/lineage/high_watermark_1.sql" \
@@ -355,8 +357,9 @@ if [ -n "$NEW_WORLD" ]; then
         -f "$AUTOHARN_ROOT/kernel/lineage/s36-decision-grade.sql" \
         -f "$AUTOHARN_ROOT/kernel/lineage/s37-violation-disposition.sql" \
         -f "$AUTOHARN_ROOT/kernel/lineage/s38-bookkeeping-close.sql" \
-        -f "$AUTOHARN_ROOT/kernel/lineage/s39-blocks-start.sql"
-    echo "   kernel applied (schema $SCHEMA + kernel schema $KERN + role $ROLE, s20 + s21 + s22 + s23 + s24 + s25 + s26 + s27 + s28 + s29 + s30 + s31 + s32 + s33 + s34 + s35 + s36 + s37 + s38 + s39 included -- s29's migration_epoch naturally seeds 0 on this empty ledger, see that file's own AMENDMENT header; s30 needs no epoch machinery of its own, HISTORY: safe)"
+        -f "$AUTOHARN_ROOT/kernel/lineage/s39-blocks-start.sql" \
+        -f "$AUTOHARN_ROOT/kernel/lineage/s40-principal-identity-events.sql"
+    echo "   kernel applied (schema $SCHEMA + kernel schema $KERN + role $ROLE, s20 + s21 + s22 + s23 + s24 + s25 + s26 + s27 + s28 + s29 + s30 + s31 + s32 + s33 + s34 + s35 + s36 + s37 + s38 + s39 + s40 included -- s29's migration_epoch naturally seeds 0 on this empty ledger, see that file's own AMENDMENT header; s30 needs no epoch machinery of its own, HISTORY: safe; s40's own birth acts run below, after the seeds)"
 
     echo "-- new-world '$NEW_WORLD': seeding the stamp secret (idempotent, mirrors drive/arm.sh ruling 43) --"
     mkdir -p "$PROJECT_ROOT/.claude/secrets"
@@ -399,30 +402,87 @@ if [ -n "$NEW_WORLD" ]; then
         echo "   ${KERN}.chain_genesis does not exist -- this world's kernel predates s26-row-hash-chain.sql; skipping (not an error, an older lineage)"
     fi
 
-    # Register the standard principals this world is born with: `author` is already seeded by
-    # s15-schema.sql itself (mapped to the connecting role, ON CONFLICT DO NOTHING -- see this
-    # script's own header comment); `reviewer` is the one BACKLOG's "Maintainer ruling:
-    # self-application" (2026-07-09) names as still hand-registered today ("do 1. register a
-    # reviewer principal ... do 2. paste a six-point governance prompt"). Folding it in here
-    # closes exactly that gap: a new world is born with both principals a run needs, not just
-    # one. Same connection posture as the kernel apply above (SET ROLE, not a superuser bypass --
-    # ADR-0012 P1, one mechanism) and the same INSERT `led register-principal` itself would run
-    # (kept in lockstep with bootstrap/templates/led.tmpl's own SQL by inspection, not by sharing
-    # code across a shell/psql boundary that has none to share). `commissioner` (class human) is
-    # the THIRD standard principal (BACKLOG "Five-item batch, maintainer-approved 2026-07-11
-    # evening", item 2's FULL signing mode): the maintainer's own registered identity, so that
-    # `LED_ACTOR=commissioner ./led commission "<ask>"` (printed at the end of this script) never
-    # has to register a principal first, the same closure REVIEWER_STATUS already gives 'reviewer'.
-    echo "-- new-world '$NEW_WORLD': registering standard principals (reviewer, commissioner) --"
-    psql -h "$HOST" -d "$DB" -v ON_ERROR_STOP=1 <<SQL
+    # THE s40 BIRTH SEQUENCE (kernel/lineage/s40-principal-identity-events.sql §3.7; replaces
+    # the pre-s40 ON CONFLICT DO NOTHING block that stood here -- the silent-no-op idiom s40
+    # deleted from the verb is replaced at the scaffold by EXISTENCE CHECKS that print "already
+    # registered": idempotent at the scaffold, never silent at the verb). Three explicit acts,
+    # in this order, all as the granted role (SET ROLE, never a superuser bypass), all kept in
+    # lockstep with bootstrap/templates/led.tmpl's own SQL by inspection:
+    #   (1) `author`'s principal_registered EVENT -- the anchor row was seeded by s15 inside the
+    #       chain apply (pre-s40 position, so the anchor-coupling trigger did not exist yet);
+    #       the scaffold discharges its event explicitly. THE ONE GENESIS EXCEPTION: the event
+    #       is SELF-ATTRIBUTED (actor = author) -- a first identity event cannot be attributed
+    #       to any earlier-registered principal, mirroring the hash chain's genesis-seed
+    #       precedent for a first link that cannot reference a predecessor; the self-attribution
+    #       is named in the event's own statement text.
+    #   (2) a principal_standing_declared event binding this world's role to `author` (actor =
+    #       author, explicit) -- the DECLARED-not-silent default every strict-mode NULL-actor
+    #       write resolves through: strict-on costs the solo operator nothing, the ratified
+    #       reconciliation (basis row 1398).
+    #   (3) `reviewer` (subagent) and `commissioner` (human) registered through the FULL
+    #       ceremony (anchor + event atomically, actor = author, purposes stated) -- the same
+    #       two standard principals every world was already born with, now with recorded
+    #       registrations (BACKLOG "Maintainer ruling: self-application" 2026-07-09 closure,
+    #       carried forward under s40's ceremony).
+    echo "-- new-world '$NEW_WORLD': s40 birth sequence (author event, standing declaration, reviewer/commissioner ceremony) --"
+    HAVE_AUTHOR_EVENT=$(psql -h "$HOST" -d "$DB" -tAc "SELECT count(*) FROM ${SCHEMA}.ledger l JOIN ${KERN}.principal p ON p.id = l.principal_subject WHERE l.kind = 'principal_registered' AND p.name = 'author';")
+    if [ "$HAVE_AUTHOR_EVENT" != "0" ]; then
+        echo "   'author' already carries a registration event ($HAVE_AUTHOR_EVENT); not re-registering"
+    else
+        psql -h "$HOST" -d "$DB" -q -v ON_ERROR_STOP=1 <<SQL
         SET ROLE ${ROLE};
         SET search_path = ${SCHEMA}, ${KERN};
-        INSERT INTO principal (name, agent_class) VALUES ('reviewer', 'subagent')
-        ON CONFLICT (name) DO NOTHING;
-        INSERT INTO principal (name, agent_class) VALUES ('commissioner', 'human')
-        ON CONFLICT (name) DO NOTHING;
+        INSERT INTO ledger (kind, statement, actor, principal_subject, principal_purpose)
+        VALUES ('principal_registered',
+                'principal ''author'' registered (class model) -- genesis exception: self-attributed (actor = author), the first identity event of this world; no earlier-registered principal exists to attribute it to (s40 birth sequence step 1)',
+                (SELECT id FROM principal WHERE name = 'author'),
+                (SELECT id FROM principal WHERE name = 'author'),
+                'the scaffold connection principal: the identity this world''s granted role writes as by default');
 SQL
-    echo "   'reviewer' + 'commissioner' principals registered ('author' was already seeded by s15-schema.sql)"
+        echo "   (1) 'author' registration event recorded (genesis exception, self-attributed)"
+    fi
+    HAVE_DECL=$(psql -h "$HOST" -d "$DB" -tAc "SELECT count(*) FROM ${SCHEMA}.ledger_current lc WHERE lc.kind = 'principal_standing_declared' AND lc.principal_db_role = '${ROLE}';")
+    if [ "$HAVE_DECL" != "0" ]; then
+        echo "   role '${ROLE}' already carries a standing declaration; not re-declaring"
+    else
+        psql -h "$HOST" -d "$DB" -q -v ON_ERROR_STOP=1 <<SQL
+        SET ROLE ${ROLE};
+        SET search_path = ${SCHEMA}, ${KERN};
+        INSERT INTO ledger (kind, statement, actor, principal_subject, principal_db_role)
+        VALUES ('principal_standing_declared',
+                'database role ''${ROLE}'' speaks for principal ''author'' by default (standing declaration, s40 birth sequence step 2 -- the declared-not-silent default)',
+                (SELECT id FROM principal WHERE name = 'author'),
+                (SELECT id FROM principal WHERE name = 'author'),
+                '${ROLE}');
+SQL
+        echo "   (2) standing declaration recorded (role ${ROLE} -> author)"
+    fi
+    for _pname in reviewer commissioner; do
+        case "$_pname" in
+            reviewer)     _pclass="subagent"; _ppurpose="the standard second principal a run needs: countersigns the author principal's rows (BACKLOG self-application ruling 2026-07-09)" ;;
+            commissioner) _pclass="human";    _ppurpose="the maintainer's own registered identity for FULL-mode commission signing (s25; five-item batch 2026-07-11 item 2)" ;;
+        esac
+        HAVE_P=$(psql -h "$HOST" -d "$DB" -tAc "SELECT count(*) FROM ${KERN}.principal WHERE name = '${_pname}';")
+        if [ "$HAVE_P" != "0" ]; then
+            echo "   '${_pname}' already registered; skipping"
+        else
+            psql -h "$HOST" -d "$DB" -q -v ON_ERROR_STOP=1 -v pname="$_pname" -v pclass="$_pclass" -v ppurpose="$_ppurpose" <<SQL
+        SET ROLE ${ROLE};
+        SET search_path = ${SCHEMA}, ${KERN};
+        WITH new_p AS (
+          INSERT INTO principal (name, agent_class) VALUES (:'pname', :'pclass')
+          RETURNING id, name, agent_class
+        )
+        INSERT INTO ledger (kind, statement, actor, principal_subject, principal_purpose)
+        SELECT 'principal_registered',
+               format('principal ''%s'' registered (class %s) -- s40 birth sequence step 3, registrar: author', np.name, np.agent_class),
+               (SELECT id FROM principal WHERE name = 'author'),
+               np.id, :'ppurpose'
+        FROM new_p np;
+SQL
+            echo "   (3) '${_pname}' registered through the full ceremony (class ${_pclass}, registrar author)"
+        fi
+    done
 fi
 
 echo "-- deployment.json --"
