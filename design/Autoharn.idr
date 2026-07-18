@@ -26,7 +26,7 @@
 ||| because the SUBSTRATE is -- see the "PRESERVED, ON PURPOSE" list in this header.
 ||| Beauty that would erase one of those facts is a regression, not a cleanup.
 |||
-||| AS-OF: kernel chain through s50
+||| AS-OF: kernel chain through s51
 ||| (s50, 2026-07-18, landed WHILE the s44-s49 parity pass below was in flight and absorbed
 |||   by it before landing: the defeat-input exclusion fork this pass had rendered as an
 |||   unadjudicated PARAMETER was adjudicated by the maintainer (row 1647,
@@ -180,6 +180,14 @@
 |||     carve-out at PWriteRefused (boundary control flow, not row algebra) -- and note the
 |||     undisclosed idealization it exposes: PrincipalId = Nat is unbounded while the kernel's
 |||     is bigint; s49's defect lived precisely in that numeric-range gap.
+|||   - s51 (artifact store, 2026-07-18, spec design/FABLE-ARTIFACT-STORE-SPEC.md): adds a
+|||     NON-LEDGER content-addressed table (kernel.artifact) and the fifth boundary function
+|||     (artifact_write). Zero new ledger kinds/columns (hash-coverage gate witnessed), so the
+|||     row algebra this model transcribes is UNCHANGED; the one in-model fact -- the refusal
+|||     surface vocabulary gaining 'artifact' -- is rendered (SurfArtifact, with its
+|||     unreachable-from-payload-families note). The store's own semantics (content addressing,
+|||     size cap, append-only, corruption-refusing get) are out-of-model per the same boundary
+|||     carve-out that covers the refusal_seq oracle: storage control flow, not row algebra.
 |||
 ||| PROVENANCE:
 |||   v1 (2026-07-15, night) -- an Opus transcription consultation, machine-checked,
@@ -596,6 +604,11 @@ ExpectedF False = ()
 ||| enumerates the four boundary functions themselves; contrast
 ||| principal_role_name's ratified free text).
 data RefusalSurface = SurfLedger | SurfReview | SurfRegistration | SurfObligation
+                    | SurfArtifact  -- s51: the fifth boundary function (artifact_write);
+                    -- like SurfObligation it is unreachable from surfaceFor's payload
+                    -- families -- an artifact write mints NO ledger row on acceptance,
+                    -- only on refusal (digest-only journal), so the surface exists in
+                    -- the vocabulary without a payload constructor behind it.
 
 data Payload : (st : Stage) -> (n : Nat) -> Type where
   PProse      : ProseKind -> Payload st n
