@@ -571,6 +571,206 @@ guidance, stated plainly where the header gives no further operator action:
   and journaled — it is not a state `verify-chain` needs a separate disposition for, because it
   cannot succeed in the first place.
 
+## Standing lifecycle (s45)
+
+Like the two sections above, this one deviates from the page's usual point-elsewhere
+convention because the surface is new: kernel delta s45 gives two governance states — a
+db_role's standing declaration, and a principal's suspension — a sanctioned way OUT, where
+before s40/s41 there was only a way in. Delivery record:
+[orchlog.d/s45-standing-lifecycle.md](../orchlog.d/s45-standing-lifecycle.md); full spec:
+[design/FABLE-STANDING-LIFECYCLE-SPEC.md](FABLE-STANDING-LIFECYCLE-SPEC.md).
+
+**Prominent caveat, read before typing anything below:** none of this exists in a world whose
+[birth chain](../GLOSSARY.md#birth-chain) predates commit `94f5b7a` — runs are strictly linear,
+so an already-scaffolded world gains nothing here. Run `./migrate <deployment-dir> --dry-run`
+to see whether your world has s45; if it names it as missing, the two verbs below are
+unavailable until your next real world is born on a checkout that carries this commit.
+
+**What does "unbind" mean, and what do I type?** A db_role's standing declaration (the
+"anonymous writes on this connection count as principal X" default that
+`./led principal declare-standing` sets) can be repointed to a different principal any number
+of times, but before s45 it could never be turned OFF — the only escapes were suspending the
+bound principal (which blocks that identity on every channel, not just this role) or pointing
+the role at a fabricated tombstone principal (a real misattribution risk). s45 adds a
+sanctioned third way:
+
+```sh
+$ ./led principal undeclare-standing
+```
+
+(`--db-role <role>` is only needed if you are unbinding a role other than your own
+deployment's connection role — the common case needs no flag.) After this, an anonymous write
+on that role (no `LED_ACTOR` set) refuses again, exactly as it would on a role that was never
+declared for — a fresh `./led principal declare-standing <name>` re-binds it. **This is
+forward-only**: rows already written under the old declaration keep their old attribution
+forever. If the reason for unbinding is that past rows were misattributed, that is a job for
+the defeat pipeline below (a mismatch attestation, not a retroactive rewrite) — nothing in
+s45 touches history.
+
+**What does "suspension is liftable" mean, and what do I type?** Before s45, `./led principal
+suspend` had no reverse — suspension degenerated into a soft, permanent revocation in
+practice, even though the vocabulary implied it was temporary. s45 makes it genuinely
+reversible:
+
+```sh
+$ ./led principal suspend reviewer2 "on leave"
+$ ./led principal lift-suspension reviewer2
+```
+
+Once lifted, `reviewer2`'s writes are accepted again. **Revocation stays terminal by type —
+this is the other half of the same delta: it was always a disclosed design limit, and it is
+now enforced by the kernel itself, not merely unbuilt.** There is no verb, in this or any prior version, that reverses a
+revocation: a lift-shaped revocation row is structurally unrepresentable (the same
+`principal_binding_active` flag that suspension uses is refused outright on the revoked kind),
+and a kernel-level supersession rule refuses any attempt to hide a revocation behind an
+unrelated superseding row. `lift-suspension` on a principal that is both suspended and revoked
+still writes the lift (and warns that standing stays `revoked`, because revocation dominates
+suspension in the reported standing) — it changes nothing about the revocation. The only way
+back from a revocation remains what s40/s41 already gave you: register a fresh successor
+principal and record `./led principal relate <new> succeeds <old>`.
+
+**Does lifting a suspension restore credit for what the principal wrote while suspended?**
+No, and this is worth internalizing before it looks like a bug: standing (suspended, revoked,
+active) never conditions defeat. Suspending or revoking a principal gates its *future* writes
+only; it never withdraws or discounts anything that principal already wrote, and lifting a
+suspension changes nothing about which of its past rows are credited. The only sanctioned
+lever over whether a specific row is credited is a mismatch attestation under the defeat
+pipeline, covered in the next section. This was a maintainer ruling (ledger row 1481,
+2026-07-18), named here because a future reader who notices a suspended principal's old work
+still counting is looking at the design, not a defect.
+
+**EXISTING WORLDS GAIN NOTHING HERE, restated because it matters most.** Both mechanisms above
+are authored, scratch-witnessed, and wired into the scaffold's lineage chain only — they reach
+reality solely at a *future* world's birth. If your world predates `94f5b7a`, `undeclare-standing`
+and `lift-suspension` are not verbs your `led` script has; `./migrate --dry-run` will name
+`s45-standing-lifecycle` among the missing deltas.
+
+**Honest limits.** A schema owner/superuser can bypass every trigger this delta adds, the
+standing disclosed bound every kernel delta carries. The duplicate-active suspension guard is
+CLI-side, so a direct (non-CLI) writer can still stack multiple suspensions on one principal,
+each then needing its own lift. And in a solo world whose only active principal is suspended,
+lifting that suspension needs a *second* active principal to write it — s45 narrows this
+dead-end from "impossible" to "needs one more registered principal," but does not close it; a
+truly solo, fully-suspended world still needs a schema-owner act to recover.
+
+## Model identity: watchdog, attestation, defeat
+
+Three pieces landed together as one arc, answering "if a session's serving model gets silently
+substituted, how would I know, and what happens to what it already wrote?" Delivery record:
+[orchlog.d/defeat-pipeline-and-otel-identity.md](../orchlog.d/defeat-pipeline-and-otel-identity.md);
+full specs:
+[design/FABLE-OTEL-SENTRY-SPEC.md](FABLE-OTEL-SENTRY-SPEC.md) (including its dated A1/A2
+amendments) and
+[design/FABLE-DEFEAT-PIPELINE-SPEC.md](FABLE-DEFEAT-PIPELINE-SPEC.md) (including its dated A1
+amendment).
+
+**Read this once, before anything else on this topic: none of it is a guarantee.** Every layer
+below — the watchdog, the attestations, the defeat derivation — authenticates a *pipe* (a
+process, a channel, a database write path); nothing anywhere authenticates the emitter's
+honesty, because the model-identity string originates inside the unauthenticated CLI process
+itself. This is stated plainly in the sentry spec's own §7 standing rebuttals and carried
+forward here rather than oversold: everything on this page is audit-supporting
+evidence, never authentication (in NIST 800-53 terms, for readers who want the mapping: the
+AU control family, never IA-2). A dishonest or silent session is observed as nothing and
+defeats nothing — absence of telemetry proves nothing, permanently, in either direction.
+
+**How would I actually notice a model substitution as it happens?** The watchdog
+(`otel-watch`) is a small always-on process that tails the local OTel collector's export and
+compares each request's observed model against the session's declared expected model; on a
+mismatch it calls a mail-notification script (on this host, the maintainer's own
+`notify.py`, the one that already makes his phone beep on turn completion — if you are not
+him, wire your own notifier there; the watchdog just executes the configured script), so a
+substitution surfaces within seconds rather than at the next audit. It writes nothing to the ledger — it is notification, not evidence. A session with no
+declared expectation is reported as *unwatched*, loudly, so you can never mistake silence for
+"watched and clean." **UNWITNESSED for this page:** the watchdog's own witness legs were not
+re-run to produce this entry; treat its behavior as spec'd, not freshly observed here.
+
+**How do I get a post-hoc, ledger-recorded answer for rows already written?** `./otel-attest`
+is a batch verb (not a daemon) that correlates ledger rows against the collector's export and
+writes one defeasible attestation row per attributable row, at one of four closed confidence
+grades naming the strength of the join that earned it:
+
+- `exact-command` — the row's own command is tied to one specific, bracketing request.
+- `turn-bracketed` — command detail unavailable, but every request in the row's turn window
+  agrees on one model.
+- `session-scoped` — bracketing is ambiguous, but every request in the session's covering
+  window still names one model.
+- `ambiguous` — the window shows more than one model, or a load-bearing join failed. **As of a
+  2026-07-18 spec amendment, an ambiguous attestation always writes `model=unresolved`** — never
+  a fabricated single model, never an invented multi-model packing. The conflicting models are
+  named in the row's `basis=` field instead. If every candidate in the window contradicts the
+  declared expectation, the verdict is still `MISMATCH` (which model is unclear, but the
+  substitution is not); if at least one candidate matches, the verdict is `unevaluated`; an
+  ambiguous row is never written `match`. Two edge cases (the spec's A1 addendum): an
+  *empty* candidate window — ambiguity via join failure, nothing in evidence at all — is
+  `unevaluated`, never MISMATCH (zero evidence proves nothing); and a session with no
+  declared expected model is also `unevaluated` — there is nothing to contradict.
+
+No row is written at all when no correlated telemetry exists — absence of events is never
+treated as evidence.
+
+**A MISMATCH or ambiguous attestation is easy to miss if you only look at attestation rows —
+does it surface anywhere else?** Yes: any attestation whose verdict is `MISMATCH` (including an
+`ambiguous` row whose verdict resolves to `MISMATCH` per the rule above) additionally writes a
+companion `finding` ledger row, so it lands in ordinary review flow instead of sitting quietly
+in attestation bulk.
+
+**What happened to `./otel-attest`'s first build, and is it safe to use now?** It was
+adversarially reviewed (ledger row 1505) and found to silently fold every `ambiguous` case into
+the write-nothing path — the opposite of the spec's own rule. The verb was held out of service
+until the fix landed (commit `c3301e5`) and is back in service now, with the `model=unresolved`
+behavior above, plus a write-time refusal on any field value containing a `|` or newline (an
+unauthenticated model string could otherwise corrupt the row's later parse).
+
+**How do I see what a MISMATCH actually does to derived standing?** `./judge --layer defeat`
+derives it: a ledger row backed by an unsuperseded mismatch attestation, written by a principal
+holding an unsuperseded, active competence grant for `model-identity-attestation`, is excluded
+from the `credited` reading, computed fresh by two independent producers (a SQL twin and an ASP
+program) required to agree bit-for-bit. Nothing is edited or deleted — a defeated row stays
+fully visible in raw history, always shown together with its cause. **WITNESSED**, run
+read-only against this repository's own live world (2026-07-18):
+
+```sh
+$ ./judge --layer defeat
+```
+```
+# marriage differential -- layer='defeat'
+#   closed verdict vocabulary: ['AGREE', 'DIVERGE_BY_DESIGN', 'DIVERGE_DEFECT', 'QUARANTINED']; RED = ['DIVERGE_DEFECT', 'QUARANTINED']
+
+  [!! ] autoharn1 QUARANTINED        asp=0 sql=0 atoms; Δasp=[] Δsql=[]
+          asp QUARANTINED: EDB export failed: CapabilityError: target 'autoharn1' did not emit trust_grant/n (capability absent): no principal_binding_active/principal_competence_activity columns on this schema (pre-s41 lineage) -- capability absent, not record-empty. A silent empty here would be the F49 vacuous-pass; refusing loudly.
+          sql QUARANTINED: EDB export failed: CapabilityError: target 'autoharn1' did not emit trust_grant/n (capability absent): no principal_binding_active/principal_competence_activity columns on this schema (pre-s41 lineage) -- capability absent, not record-empty. A silent empty here would be the F49 vacuous-pass; refusing loudly.
+
+# DIFFERENTIAL RED -- a target diverged/quarantined (NO RESULT)
+```
+
+This is a QUARANTINE, not a bug: the defeat pipeline needs typed competence grants (s41) to
+derive anything, and this repository's own live world predates s41, so both producers refuse
+loudly with the same named reason rather than silently reading an empty derivation as "nothing
+is defeated" — the exact vacuous-pass mistake this design forecloses on purpose. A world whose
+birth chain carries s41 or later will derive real `credited`/`model_defeated` results here
+instead of this refusal.
+
+**Does suspending or revoking the attesting principal change what it already defeated?** No —
+see "Standing lifecycle (s45)" above: standing never conditions defeat, by ratified rule. A
+suspended or revoked principal's past mismatch attestations, under a still-in-force competence
+grant, keep defeating exactly as before; only superseding the grant or the attestation itself
+changes what is credited.
+
+**Honest limits, carried forward rather than oversold:**
+
+- The ceiling is permanent, not a v1 gap: nothing here can ever prove which model served a
+  request, only observe and record what the emitting process claimed. The sentry spec names the
+  one thing that would close this — provider-side response signing — and it does not exist.
+- The watchdog fails silent on its own death or a mail failure; a `--heartbeat` option is an
+  opt-in mitigation, not a default.
+- The typed kernel form of an attestation (kernel delta `s44`) and its dedicated credited-read
+  views are authored in the specs above but not yet in any birth chain; until an s44+ world
+  exists, `./otel-attest`'s rows are ordinary `verification` rows, and the engine-side
+  computation shown above is the only way to see `credited`/`model_defeated` at all.
+- A malformed attestation row halts derivation for its whole target until it is superseded —
+  deliberate (fail loud beats skip silent), but a real operational cost if it happens.
+
 ## Trust ceremonies
 
 **Can I prove a commission really came from me?** (a "commission" here is a ledgered
