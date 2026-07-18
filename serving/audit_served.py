@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-18T07:45:52Z
-#   last-change: 2026-07-18T15:57:41Z
+#   last-change: 2026-07-18T22:55:26Z
 #   contributors: ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -69,11 +69,35 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "filing"))
 import deployment_record  # noqa: E402
 from boundary_service import (  # noqa: E402  (the ONE query helper, reused -- not a second reader, P1)
+    VIEW_REGISTRY,
     BoundaryConfig,
     PsqlInfraFailure,
     PsqlUnclassifiedFailure,
     _query_json,
 )
+
+# The closed set of view names this tool may ever splice into fetch_kernel's SQL (ADR-0012's
+# 2026-07-18 interpreter-boundary amendment: --view reaches SQL text, so it is validated to a
+# closed alphabet at this Port, exactly like boundary_service.py's own /d/{deployment}/views/
+# {view} route checks membership in VIEW_REGISTRY before it, never coerced/escaped instead).
+# VIEW_REGISTRY (imported above, the single authority for the generic multiplexed /views/{view}
+# route) does NOT list the four views boundary_service.py's own FIXED-per-route endpoints serve
+# (rows_current -> ledger_current, credited -> credited_current, standing/principals ->
+# principal_standing_current, work/items -> work_item_current) -- those views are hardcoded
+# literals in that module's route bodies, not read from a dict, so there is no second registry
+# to import for them; they are named here, once, as this tool's own closed allowlist addendum
+# (never re-derived per call site -- ADR-0012 P1) so this tool's own default (`--view
+# ledger_current`, matching its default `--endpoint /rows/current`) keeps working under the
+# same closed-alphabet discipline as every VIEW_REGISTRY-listed view.
+_ENDPOINT_FIXED_VIEWS = frozenset(
+    {"ledger_current", "credited_current", "principal_standing_current", "work_item_current"})
+AUDIT_VIEW_ALLOWLIST = frozenset(VIEW_REGISTRY) | _ENDPOINT_FIXED_VIEWS
+
+
+class AuditViewRefused(Exception):
+    """--view named something outside AUDIT_VIEW_ALLOWLIST -- refused before any SQL is built
+    (ADR-0012's interpreter-boundary amendment: refuse, never coerce/escape a value the Port
+    cannot honor into a plausible one)."""
 
 
 class AuditTransportError(Exception):
@@ -97,6 +121,15 @@ def fetch_served(base_url: str, endpoint: str) -> list[dict[str, Any]]:
 
 
 def fetch_kernel(cfg: BoundaryConfig, view: str, after_id: int, limit: int) -> list[dict[str, Any]]:
+    # ADR-0012 interpreter-boundary amendment: `view` is a caller-supplied (--view) value that
+    # this function splices into SQL text below -- validated to the closed AUDIT_VIEW_ALLOWLIST
+    # HERE, at the Port, before any SQL is built. A refusal names the offending value and the
+    # full known set (never coerced/escaped into a plausible view name).
+    if view not in AUDIT_VIEW_ALLOWLIST:
+        raise AuditViewRefused(
+            f"--view {view!r} is not in the closed allowlist this tool may query "
+            f"(VIEW_REGISTRY plus the four endpoint-fixed views); known views: "
+            f"{sorted(AUDIT_VIEW_ALLOWLIST)}")
     # A4.4 regression fix: this `except` predates A3.2's dedicated `PsqlInfraFailure` (which is
     # NOT a `RuntimeError` -- that narrowing is A3.2's whole point) and A4.3's sibling
     # `PsqlUnclassifiedFailure` -- catching the bare `RuntimeError` this clause used to name let
@@ -173,6 +206,9 @@ def main(argv: list[str] | None = None) -> int:
     try:
         diffs = run_audit(args.base_url, cfg, args.deployment_name, args.endpoint, args.view,
                            args.after_id, args.limit)
+    except AuditViewRefused as e:
+        sys.stderr.write(f"audit_served: REFUSED -- {e}\n")
+        return 2
     except AuditTransportError as e:
         sys.stderr.write(f"audit_served: TRANSPORT FAILURE (not a disagreement verdict): {e}\n")
         return 2

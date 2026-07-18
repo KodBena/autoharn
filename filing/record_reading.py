@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-11T00:11:32Z
-#   last-change: 2026-07-14T23:19:10Z
-#   contributors: e4410ef6/main, a857c93d/main
+#   last-change: 2026-07-18T22:51:43Z
+#   contributors: e4410ef6/main, a857c93d/main, ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
 """record_reading -- the filing path for stores/001_research_ledger.sql (the PROJECT-AGNOSTIC
@@ -248,9 +248,10 @@ def ensure_project(project_id: str, name: Optional[str] = None, *,
     FIRST insert falls back to project_id itself (name is NOT NULL); an existing project is never
     renamed by this call (ON CONFLICT DO NOTHING -- the project row is not this module's to edit)."""
     _psql(
-        f'INSERT INTO "{core_schema}".project (project_id, name) VALUES (:\'pid\', :\'name\') '
-        f"ON CONFLICT (project_id) DO NOTHING;",
-        params={"pid": project_id, "name": name or project_id}, host=host, db=db)
+        'INSERT INTO :"core_schema".project (project_id, name) VALUES (:\'pid\', :\'name\') '
+        "ON CONFLICT (project_id) DO NOTHING;",
+        params={"core_schema": core_schema, "pid": project_id, "name": name or project_id},
+        host=host, db=db)
 
 
 def ensure_session(session_id: str, project_id: str, *, model: Optional[str] = None,
@@ -258,10 +259,11 @@ def ensure_session(session_id: str, project_id: str, *, model: Optional[str] = N
                     core_schema: str = CORE_SCHEMA) -> None:
     """Idempotently ensure `session_id` exists in core.session, attributed to `project_id`."""
     _psql(
-        f'INSERT INTO "{core_schema}".session (session_id, project_id, model, summary) '
-        f"VALUES (:'sid', :'pid', NULLIF(:'model',''), NULLIF(:'summary','')) "
-        f"ON CONFLICT (session_id) DO NOTHING;",
-        params={"sid": session_id, "pid": project_id, "model": model or "", "summary": summary or ""},
+        'INSERT INTO :"core_schema".session (session_id, project_id, model, summary) '
+        "VALUES (:'sid', :'pid', NULLIF(:'model',''), NULLIF(:'summary','')) "
+        "ON CONFLICT (session_id) DO NOTHING;",
+        params={"core_schema": core_schema, "sid": session_id, "pid": project_id,
+                "model": model or "", "summary": summary or ""},
         host=host, db=db)
 
 
@@ -274,22 +276,24 @@ def upsert_instrument(key: InstrumentKey, *, host: str = PGHOST, db: str = DB,
     # suppress the "INSERT 0 1" command-completion tag on a bare INSERT ... RETURNING (only a
     # SELECT's tag is suppressed under tuples-only) -- wrapping keeps stdout to exactly the id.
     out = _psql(
-        f'WITH ins AS (INSERT INTO "{research_schema}".instrument '
-        f"(project_id, name, kind, source_hash, build_recipe, git_commit, git_tree, session_id, qualification) "
-        f"VALUES (:'pid', :'name', :'kind', :'hash', :'recipe'::jsonb, :'commit', :'tree', "
-        f"        NULLIF(:'sid',''), :'qual') "
-        f"ON CONFLICT (project_id, source_hash) DO NOTHING RETURNING instrument_id) "
-        f"SELECT instrument_id FROM ins;",
-        params={"pid": key.project_id, "name": key.name, "kind": key.kind, "hash": key.source_hash,
+        'WITH ins AS (INSERT INTO :"research_schema".instrument '
+        "(project_id, name, kind, source_hash, build_recipe, git_commit, git_tree, session_id, qualification) "
+        "VALUES (:'pid', :'name', :'kind', :'hash', :'recipe'::jsonb, :'commit', :'tree', "
+        "        NULLIF(:'sid',''), :'qual') "
+        "ON CONFLICT (project_id, source_hash) DO NOTHING RETURNING instrument_id) "
+        "SELECT instrument_id FROM ins;",
+        params={"research_schema": research_schema, "pid": key.project_id, "name": key.name,
+                "kind": key.kind, "hash": key.source_hash,
                 "recipe": json.dumps(_canonical(key.build_recipe)), "commit": key.git_commit,
                 "tree": key.git_tree, "sid": key.session_id or "", "qual": key.qualification},
         host=host, db=db)
     if out:
         return int(out)
     out = _psql(
-        f'SELECT instrument_id FROM "{research_schema}".instrument '
-        f"WHERE project_id = :'pid' AND source_hash = :'hash';",
-        params={"pid": key.project_id, "hash": key.source_hash}, host=host, db=db)
+        'SELECT instrument_id FROM :"research_schema".instrument '
+        "WHERE project_id = :'pid' AND source_hash = :'hash';",
+        params={"research_schema": research_schema, "pid": key.project_id, "hash": key.source_hash},
+        host=host, db=db)
     if not out:
         raise RecordReadingError(
             f"upsert_instrument: instrument (project={key.project_id!r}, source_hash="
@@ -312,15 +316,15 @@ def record_reading(reading: Reading, *, instrument_id: Optional[int] = None,
     if instrument is not None:
         instrument_id = upsert_instrument(instrument, host=host, db=db, research_schema=research_schema)
     out = _psql(
-        f'WITH ins AS (INSERT INTO "{research_schema}".reading '
-        f"(project_id, instrument_id, subject_id, metric, value, value_text, unit, n, stderr, "
-        f" config, git_commit, git_tree, observed_at, session_id) "
-        f"VALUES (:'pid', :iid, NULLIF(:'subj',''), :'metric', NULLIF(:'val','')::double precision, "
-        f"        NULLIF(:'valtext',''), NULLIF(:'unit',''), NULLIF(:'n','')::integer, "
-        f"        NULLIF(:'stderr','')::double precision, :'config'::jsonb, :'commit', :'tree', "
-        f"        NULLIF(:'obsat','')::timestamptz, NULLIF(:'sid','')) "
-        f"RETURNING reading_id) SELECT reading_id FROM ins;",
-        params={"pid": reading.project_id, "iid": str(instrument_id),
+        'WITH ins AS (INSERT INTO :"research_schema".reading '
+        "(project_id, instrument_id, subject_id, metric, value, value_text, unit, n, stderr, "
+        " config, git_commit, git_tree, observed_at, session_id) "
+        "VALUES (:'pid', :iid, NULLIF(:'subj',''), :'metric', NULLIF(:'val','')::double precision, "
+        "        NULLIF(:'valtext',''), NULLIF(:'unit',''), NULLIF(:'n','')::integer, "
+        "        NULLIF(:'stderr','')::double precision, :'config'::jsonb, :'commit', :'tree', "
+        "        NULLIF(:'obsat','')::timestamptz, NULLIF(:'sid','')) "
+        "RETURNING reading_id) SELECT reading_id FROM ins;",
+        params={"research_schema": research_schema, "pid": reading.project_id, "iid": str(instrument_id),
                 "subj": reading.subject_id or "", "metric": reading.metric,
                 "val": "" if reading.value is None else repr(reading.value),
                 "valtext": reading.value_text or "", "unit": reading.unit or "",
@@ -353,13 +357,13 @@ def record_finding(project_id: str, reading_id: int, interpretation: str, *,
     if not interpretation or not interpretation.strip():
         raise RecordReadingError("record_finding: interpretation is the load-bearing field -- must be non-empty")
     out = _psql(
-        f'WITH ins AS (INSERT INTO "{research_schema}".finding '
-        f"(project_id, reading_id, motivation, interpretation, status, supersedes, session_id, git_commit) "
-        f"VALUES (:'pid', :rid, NULLIF(:'motiv',''), :'interp', :'status', NULLIF(:'sup','')::bigint, "
-        f"        NULLIF(:'sid',''), NULLIF(:'commit','')) "
-        f"RETURNING finding_id) SELECT finding_id FROM ins;",
-        params={"pid": project_id, "rid": str(reading_id), "motiv": motivation or "",
-                "interp": interpretation, "status": status,
+        'WITH ins AS (INSERT INTO :"research_schema".finding '
+        "(project_id, reading_id, motivation, interpretation, status, supersedes, session_id, git_commit) "
+        "VALUES (:'pid', :rid, NULLIF(:'motiv',''), :'interp', :'status', NULLIF(:'sup','')::bigint, "
+        "        NULLIF(:'sid',''), NULLIF(:'commit','')) "
+        "RETURNING finding_id) SELECT finding_id FROM ins;",
+        params={"research_schema": research_schema, "pid": project_id, "rid": str(reading_id),
+                "motiv": motivation or "", "interp": interpretation, "status": status,
                 "sup": "" if supersedes is None else str(supersedes),
                 "sid": session_id or "", "commit": git_commit or ""},
         host=host, db=db)

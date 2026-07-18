@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-13T17:13:41Z
-#   last-change: 2026-07-18T12:00:30Z
+#   last-change: 2026-07-18T22:59:44Z
 #   contributors: 3c50e030/main, ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -43,7 +43,19 @@ the doc and the code cannot silently drift apart on this point (ADR-0002 Rule 4:
 the receiver cannot honor must not be silently accepted as if it were) -- when a `warn` rung is
 built, this paragraph and its design-note counterpart are the two places to update together.
 
-Stdlib-only, top-of-file imports (the lazy-import gate, gates/no_lazy_imports.py, applies).
+Top-of-file imports (the lazy-import gate, gates/no_lazy_imports.py, applies); every import is
+stdlib EXCEPT `deployment_record` (filing/deployment_record.py, the ONE home for the
+deployment.json shape -- ADR-0012 P1/interpreter-boundary amendment: this file previously
+hand-rolled its OWN unvalidated dict reader for the same JSON shape, `_find_deployment`'s prior
+`json.loads` return; that was a second, unvalidated parser of a shape this module already owns
+one home for, and its `schema`/`role` fields are later spliced into SQL text by
+`work_item_watchdog` below -- reading through `deployment_record.load_deployment` instead gets
+this file the SAME construction-time closed-alphabet refusal on `schema`/`kern`/`role` every
+other `DeploymentRecord` consumer gets, guarded once at the one home rather than re-checked
+here).
+
+Stdlib import: `import deployment_record` (this file adds `filing/` to `sys.path` first, the
+same pattern tools/regrade_decisions.py and tools/export_precedence.py already use to reach it).
 """
 from __future__ import annotations
 
@@ -55,6 +67,11 @@ import sys
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
+
+_HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(_HERE.parent / "filing"))
+
+import deployment_record  # noqa: E402  (filing/deployment_record.py, the ONE home for the deployment.json shape)
 
 MECHANISM_KEY = "watchdog"  # apparatus_registry.py's pattern-1 extraction shape (module docstring).
 
@@ -395,22 +412,25 @@ def surface_recency(logs_dir: Path, now: datetime, cfg: WatchdogConfig) -> tuple
 # degrades to SKIPPED otherwise, never pretended clean.
 # ---------------------------------------------------------------------------------------------
 
-def _find_deployment(root: Path) -> dict | None:
+def _find_deployment(root: Path) -> deployment_record.DeploymentRecord | None:
+    """Resolve `root`'s deployment.json through filing/deployment_record.py's ONE home (never a
+    second hand-rolled dict reader of the same shape -- ADR-0012 P1). Degrades to None (this
+    module's own established "skip, never crash" posture) on EITHER a missing file or a
+    DeploymentError (unparseable JSON, a missing/malformed required field, or -- the
+    interpreter-boundary guard added at the one home -- a `schema`/`kern`/`role` value that is
+    not a plain SQL identifier): the caller's skip-reason message names which."""
     path = root / "deployment.json"
     if not path.is_file():
         return None
     try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-        return data if isinstance(data, dict) else None
-    except Exception:  # noqa: BLE001
+        return deployment_record.load_deployment(path)
+    except deployment_record.DeploymentError:
         return None
 
 
-def _psql_tuples(dep: dict, sql: str) -> subprocess.CompletedProcess:
-    host = dep.get("host", "")
-    db = dep.get("db", "")
+def _psql_tuples(dep: deployment_record.DeploymentRecord, sql: str) -> subprocess.CompletedProcess:
     return subprocess.run(
-        ["psql", "-h", host, "-d", db, "-tA", "-F", "\x1f", "-R", "\x1e", "-c", sql],
+        ["psql", "-h", dep.host, "-d", dep.db, "-tA", "-F", "\x1f", "-R", "\x1e", "-c", sql],
         capture_output=True, text=True, timeout=8,
     )
 
@@ -421,8 +441,10 @@ def work_item_watchdog(root: Path, now: datetime, cfg: WatchdogConfig) -> tuple[
     work-item-layer kernel) -- never silently treated as clean."""
     dep = _find_deployment(root)
     if dep is None:
-        return [], "no deployment.json under --root; ledger check not run"
-    schema = dep.get("schema", "public")
+        return [], ("no deployment.json under --root, or it failed filing/deployment_record.py's "
+                     "own validation (missing/malformed field, or a schema/kern/role value that "
+                     "is not a plain SQL identifier); ledger check not run")
+    schema = dep.schema
     threshold = cfg.for_class("bash")  # whole-item check reuses the same slack knobs, generically
     try:
         r = _psql_tuples(dep,

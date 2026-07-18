@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-15T20:15:54Z
-#   last-change: 2026-07-15T20:20:08Z
-#   contributors: a857c93d/main
+#   last-change: 2026-07-18T23:01:45Z
+#   contributors: a857c93d/main, ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
 """column_complete — the single home for the "column-complete view" catalog functor (work
@@ -227,6 +227,14 @@ def generate_ddl(host: str, db: str, schema: str, view_name: str, spec: ViewSpec
 
 def _resolve_schema(explicit: str) -> str:
     if explicit:
+        # ADR-0012 interpreter-boundary amendment: this value is spliced directly into SQL text
+        # by table_columns/view_columns/relation_exists below (an f-string, no bound carrier
+        # available for a schema-name literal), so it is validated to the SAME closed alphabet
+        # every DeploymentRecord.schema already is -- deployment_record.py's ONE home for the
+        # check, not a second regex grown here (ADR-0012 P1). An explicit --schema bypasses
+        # DeploymentRecord entirely (it never goes through load_deployment), so without this call
+        # this one path would stay unguarded even after the fix at the one home.
+        deployment_record.validate_sql_identifier("schema", explicit)
         return explicit
     dep_path = Path(os.environ.get("LEDGER_DEPLOYMENT",
                                     str(Path(__file__).resolve().parents[1] / "deployment.json")))
@@ -249,7 +257,11 @@ def main(argv=None) -> int:
                      help="emit only this registered view (default: every registered view)")
     a = ap.parse_args(argv)
     host = a.host or pghost_resolve.resolve_pghost("HARNESS_PGHOST", "EPISTEMIC_PGHOST")
-    schema = _resolve_schema(a.schema)
+    try:
+        schema = _resolve_schema(a.schema)
+    except deployment_record.DeploymentError as e:
+        print(f"REFUSED: {e}", file=sys.stderr)
+        return 2
     names = [a.view] if a.view else sorted(REGISTRY)
     if a.view and a.view not in REGISTRY:
         print(f"REFUSED: {a.view!r} is not a registered column-complete view "

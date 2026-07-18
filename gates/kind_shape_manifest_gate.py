@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-15T20:19:45Z
-#   last-change: 2026-07-18T15:53:51Z
+#   last-change: 2026-07-18T23:04:27Z
 #   contributors: a857c93d/main, 9a17b6b9/main, ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -123,6 +123,11 @@ import sys
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(REPO / "filing"))
+import deployment_record  # noqa: E402  (filing/deployment_record.py, the ONE home for the
+                           # closed-alphabet SQL-identifier check reused below -- ADR-0012 P1,
+                           # never a second regex grown here)
+
 LINEAGE = REPO / "kernel" / "lineage"
 
 PGHOST = "192.168.122.1"
@@ -1095,6 +1100,18 @@ def main(argv: list[str] | None = None) -> int:
                      help="seen-red negative control: after the real chain applies, add this "
                           "column (no CHECK) before asserting -- must be REFUSED")
     a = ap.parse_args(argv)
+
+    if a.inject_column is not None:
+        # ADR-0012 interpreter-boundary amendment: --inject-column is spliced directly into
+        # `ALTER TABLE ... ADD COLUMN` SQL text below (an f-string, no bound carrier for a
+        # column-name literal) -- validated to the same closed alphabet
+        # filing/deployment_record.py's schema/kern/role fields already are, refused here at the
+        # argparse boundary before any SQL is built, never coerced/escaped into a plausible name.
+        try:
+            deployment_record.validate_sql_identifier("--inject-column", a.inject_column)
+        except deployment_record.DeploymentError as e:
+            print(f"kind-shape-manifest-gate: REFUSED -- {e}")
+            return 2
 
     suffix = "kbmg"
     schema, kern, role = f"{suffix}_scratch", f"{suffix}_scratch_kernel", f"{suffix}_scratch_rw"
