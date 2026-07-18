@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-09T07:54:37Z
-#   last-change: 2026-07-18T10:38:50Z
+#   last-change: 2026-07-18T11:28:56Z
 #   contributors: 9bcc0113/main, be693afb/main, e4410ef6/main, 3c50e030/main, a857c93d/main, ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -113,11 +113,25 @@ ROOT_FILES = {
     # track-work.sh shim set (bootstrap/track-work.sh's own shim loop, extended by this same
     # commission) -- registered on landing, not left an unregistered breach for the next run.
     "asof-export",
+    # otel-attest — the OTel model-attestation verb (ledger item otel-model-attestation),
+    # landed without registration here; one of three pre-existing breaches flagged loudly by
+    # the asof-export builder (2026-07-18) and fixed at the merge seam rather than left for
+    # the next run (CLAUDE.md hazard-flagging duty).
+    "otel-attest",
+    # ANTHROPIC-FEEDBACK-2026-07-17-security-recommendation-incident.md — the publicly-filed
+    # model-behavior feedback report (commit 2f19f88), a root standing-document; same seam,
+    # same duty as otel-attest above.
+    "ANTHROPIC-FEEDBACK-2026-07-17-security-recommendation-incident.md",
 }
 ROOT_DIRS = {
     ".claude", "bootstrap", "law", "judgment", "kernel", "stores", "instruments", "engine",
     "gates", "filing", "hooks", "drive", "seen-red", "design", "research", "runs", "ephemera",
     "provenance",
+    # serving/ — the FastAPI ledger boundary service (design/FABLE-LEDGER-BOUNDARY-SERVICE-SPEC.md,
+    # first landed at merge 9942950), never registered here at landing; third of the three
+    # pre-existing breaches flagged by the asof-export builder (2026-07-18), fixed at the same
+    # merge seam (CLAUDE.md hazard-flagging duty).
+    "serving",
     # attestations/ — ADR-0017's A:B:C fresh-context audit-loop ledger
     # (attestations/doc-legibility-attestations.jsonl, gates/doc_attestation_presence.py),
     # landed 2026-07-11 but never added here; caught in passing while registering
