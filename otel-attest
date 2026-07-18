@@ -375,6 +375,9 @@ def main(argv: list[str] | None = None) -> int:
                           "measurement, per ADR-0011 Rule 3.")
     args = ap.parse_args(argv)
 
+    args.world = args.world.resolve()  # a relative --world (e.g. ".") must not become a bare
+    # "led" arg to subprocess.run -- POSIX exec of a slash-free relative path searches PATH,
+    # not cwd, which silently misses the world's own `led` shim entirely.
     if not (args.world / "led").exists():
         raise SystemExit(f"otel-attest: {args.world} has no `led` verb -- not a world root")
 
