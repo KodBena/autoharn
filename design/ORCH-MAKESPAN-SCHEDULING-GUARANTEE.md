@@ -1,19 +1,23 @@
 # Makespan-scheduled dispatch — what can honestly be guaranteed, and what cannot
 
-Audience: an orchestrator (human or LLM) deciding how to dispatch a batch of independent work
-units across parallel agent capacity, and anyone assessing whether "the schedule was computed by
-a formal planner" is a claim this project can stand behind. This note answers one question
+This note is written for an orchestrator (human or LLM) deciding how to dispatch a batch of
+independent work units across parallel agent capacity, and for anyone assessing whether "the
+schedule was computed by a formal planner" is a claim this project can stand behind. The
+**makespan** — the completion time of the whole batch, defined precisely in
+[§1](#1-what-makespan-means-here-in-plain-words) below — is what a scheduler like this one
+optimizes. This note answers one question
 precisely: given `tools/makespan-scheduler/` (vendored 2026-07-14, split into its own published
 repository and converted to a git submodule 2026-07-15; see
 [`tools/makespan-scheduler-PROVENANCE.md`](../tools/makespan-scheduler-PROVENANCE.md)) and this
-project's own ledger, what is actually guaranteed about a dispatch order the scheduler produces,
+project's own **ledger** (this project's append-only decision/work-item record, read via the
+`./led` command-line tool), what is actually guaranteed about a dispatch order the scheduler produces,
 and what depends on a human/agent judgment the scheduler cannot check?
 
 **Provenance.** Maintainer directive, 2026-07-14 (dictated pre-sleep, verbatim in substance;
 ledger work item `makespan-scheduler-vendoring`, `./led show` at the repository root reads it in
 full): the scheduler should be vendored and recommended as a standing practice for large-scale
 agentic workflows, "since Claude Code is essentially an infinite-server model of work — however
-the ADR-0013-violating default inclination of many models makes them default to sequential work
+the [ADR-0013](../law/adr/0013-execution-integrity.md)-violating default inclination of many models makes them default to sequential work
 scheduling." The maintainer separately asked, in an earlier session, whether this could be
 **formalized as a guarantee** by **typing work-splits** (his belief: partially already done) and
 **mandating** that dispatch follow a formal planner's output, with the work-split itself
@@ -177,6 +181,101 @@ against the kernel, unbuilt), and (2) refuses to treat a job list as schedulable
 table). Both are ordinary `gates/` scripts and a new `led obligate` scope — not a kernel lineage
 change, so CLAUDE.md's kernel/law/engine-authoring ceremony does not apply to building them —
 filed here as the concrete next step, not built in this pass.
+
+## 8. The exporter: `tools/export_precedence.py`
+
+This section documents [`tools/export_precedence.py`](../tools/export_precedence.py): what it
+exports, its precedence rule, its refusals, and a live run on this host.
+[§6](#6-the-counter-signature-requirement--why-the-schedulers-guarantee-needs-an-independent-human-step)
+above named a real dependency edge type — `led work depends <slug> <on-slug> --type blocks-close` —
+already kernel-typed by
+[`kernel/lineage/s30-typed-dependency-edges.sql`](../kernel/lineage/s30-typed-dependency-edges.sql).
+This exporter turns those edges into the scheduler's own input shape.
+
+**What it exports.** It exports one JSON object shaped
+`{"jobs": [{"id": <slug>, "depends_on": [<slug>, ...]}, ...]}`.
+Every slug that appears as either side of an in-force `blocks-close` edge becomes a job. The list is
+sorted by id, so the output diffs deterministically run to run.
+
+**What it omits, and why.** `resources` and `duration` are never emitted. The scheduler defaults them
+to `()` and `1`. This script has no honest opinion on either value — it reads precedence edges, not
+file-touch lists or time estimates — so it does not invent placeholders
+([ADR-0002](../law/adr/0002-fail-loudly.md): never a guessed
+default). A caller merges this output's `depends_on` lists into a job list that supplies
+`resources`/`duration` separately.
+
+**Precedence semantics: only `blocks-close` counts.** `led work depends` accepts two edge types.
+`blocks-close` means the antecedent must fully close before the dependent may close — a real,
+kernel-enforced "A before B." `informs` means an advisory context edge, never enforced at close
+([`bootstrap/templates/led.tmpl`](../bootstrap/templates/led.tmpl)'s own default-type note). The scheduler's `depends_on` field means "A must fully complete
+before B may start" — the same shape `blocks-close` carries. So only `blocks-close` edges are
+exported. `informs` edges are read and silently dropped — not an error, just a caller's choice to
+stay advisory rather than become a scheduling constraint.
+
+**Read path: `ledger_current`, never raw `ledger`.** This project's standing rule
+([`gates/ledger_reader_allowlist.py`](../gates/ledger_reader_allowlist.py)) is that every ledger reader is either a declared
+current-truth reader — factors through `ledger_current` — or a declared history/forensic reader on
+the gate's own allowlist. This script is a current-truth reader: it joins `work_edge_blocks_close`
+(the raw, single-homed edge relation,
+[`kernel/lineage/s32-edge-views-single-home.sql`](../kernel/lineage/s32-edge-views-single-home.sql)) to
+`ledger_current` on the edge's own carrying row, so a retracted edge is excluded. It does not use
+`work_edge_obligation`, which unions `blocks-close` with the parent/child edges
+[`kernel/lineage/s28-work-parent-edge.sql`](../kernel/lineage/s28-work-parent-edge.sql) adds — that
+would fold unrelated structure into a precedence export.
+
+**Refusals.** Two capability checks run before any edge query, in this order:
+
+1. No `edge_type` column on `<schema>.ledger` — the world predates `s30`, so `blocks-close` cannot be
+   distinguished from `informs` at all. Refuses, names `s30`.
+2. `s30` present but no `<schema>.work_edge_blocks_close` view — `s32` is not applied. Refuses, names
+   `s32`. It never re-derives `s30`'s `edge_type='blocks-close'` predicate over raw `ledger` as a
+   workaround — that would let raw `ledger` and the `s32` view answer "what counts as
+   blocks-close" independently and risk disagreeing, the exact two-writers drift `s32` exists
+   to collapse by giving the predicate one home.
+
+A third refusal precedes both: no resolvable `deployment.json`. Resolution follows
+[`filing/deployment_resolve.py`](../filing/deployment_resolve.py)'s fixed search order — two
+environment-variable overrides checked first (`PICKUP_DEPLOYMENT`, then `LEDGER_DEPLOYMENT`), then
+a cwd-first file search (`$PWD/deployment.json`, then this checkout's own root). Every refusal
+prints to stderr, prefixed `export_precedence: REFUSED --`, and exits 1. None is a raw traceback.
+
+**Witnessed transcript.** Both runs below are real, from this worktree, on 2026-07-18.
+
+Run 1 — no deployment record reachable (worktree has no `deployment.json` of its own):
+
+```
+$ python3 tools/export_precedence.py
+export_precedence: REFUSED -- no deployment record found -- searched
+/home/bork/w/vdc/1/autoharn/.claude/worktrees/agent-aa81ee1fb88475f2c/deployment.json (this
+directory, i.e. your current working directory) and
+/home/bork/w/vdc/1/autoharn/.claude/worktrees/agent-aa81ee1fb88475f2c/deployment.json (this tool's
+own checkout root). Run this tool from your OWN project's directory (the one holding your './led'
+and its 'deployment.json', the scaffold's own layout), or point it at the right file with
+PICKUP_DEPLOYMENT=/path/to/deployment.json or LEDGER_DEPLOYMENT=/path/to/deployment.json.
+$ echo $?
+1
+```
+
+Run 2 — pointed at the main checkout's own `deployment.json` (schema `autoharn1`, a real deployment
+with `s30` applied but not `s32`):
+
+```
+$ PICKUP_DEPLOYMENT=/home/bork/w/vdc/1/autoharn/deployment.json python3 tools/export_precedence.py
+export_precedence: REFUSED -- autoharn1.work_edge_blocks_close does not exist -- this world has
+kernel/lineage/s30-typed-dependency-edges.sql (edge_type present) but not
+kernel/lineage/s32-edge-views-single-home.sql, the single home this script reads the blocks-close
+edge relation from (module docstring's WHY). Apply s32 to this project's schema before exporting;
+this script deliberately does not re-derive s30's edge_type='blocks-close' predicate over raw ledger
+a second time.
+$ echo $?
+1
+```
+
+**UNWITNESSED: the success path (a real JSON job list on a `s32`-applied world).** No deployment
+reachable from this host had `s32` applied at the time of this run. The concrete blocker is Run 2's
+own refusal: `autoharn1`, the only deployment record on this host, is pre-`s32`. Both refusal paths
+above are witnessed with real output and a named exit code; the success-path JSON shape stated in
+"What it exports" above is documented from the source, not from an observed run.
 
 ## What this note does NOT claim
 
