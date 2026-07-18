@@ -224,6 +224,219 @@ derived from what mechanisms actually exist — a criterion never claims more en
 than is built. Design and criteria table:
 [ORCH-SPEC-DECOMPOSITION-POLICY.md](ORCH-SPEC-DECOMPOSITION-POLICY.md) §3.
 
+## Principal identity (s40/s41)
+
+These two entries deviate from this page's usual point-elsewhere convention (full command
+sequences with quoted witnessed output, not a one-liner plus a pointer) because the surface is
+new and unfamiliar: `principal` went from four flat columns with no history to an event-sourced
+identity model (registration, standing, role/key bindings, competence, relationships) in kernel
+deltas s40/s41. Delivery record: [orchlog.d/s40-s41-principal-identity.md](../orchlog.d/s40-s41-principal-identity.md);
+full spec: [design/FABLE-PRINCIPAL-IDENTITY-SPEC-BUILD-BASIS.md](FABLE-PRINCIPAL-IDENTITY-SPEC-BUILD-BASIS.md).
+
+**Prominent caveat, read before typing anything below:** these `led principal ...` verbs exist
+only in a world whose [birth chain](../GLOSSARY.md#birth-chain) carries commit `87f00b4` (s41)
+and, for the identity-events half alone, `39480ec` (s40) — runs are strictly linear, so an
+already-scaffolded world gains none of this. If you want to try these commands today without
+waiting for your next real world, scaffold a disposable one first —
+[USER-GUIDE.md](../USER-GUIDE.md) §3b has the `bootstrap/new-project.sh --new-world`
+walkthrough — and play there; tear it down when done.
+
+**Does MY world actually have s40/s41?** Run `./migrate <deployment-dir> --dry-run` from your
+autoharn checkout (`<deployment-dir>` is the path to your scaffolded world). Per its own
+documented behavior ([README.md §4](../README.md#4-bring-a-deployments-database-up-to-date-with-a-newer-kernel)):
+it prints the resolved db/host/schema, then reports which deltas — by name — your world's
+database is missing, by running each birth-chain entry's own `.detect.sql` check against your
+live schema and stopping at the first one that reads false; nothing is applied under
+`--dry-run`. Read straight from the verb's own source
+(`bootstrap/migrate_core.py`): the two shapes you will actually see are `migrate: current
+lineage head = <name>` followed by `migrate: '<deployment-name>' is already at the lineage
+head. Nothing to migrate.` if s41 (or later) is already applied, or `migrate: missing (<n>):
+s40-principal-identity-events, s41-principal-bindings-and-relations[, ...]` naming exactly
+what your world lacks. There is no lighter-weight check than this — `distance-to-clean` does
+not report lineage position — so this is the one command to run.
+
+**How do I set up the principals in a new world?**
+You mostly don't have to — a world born on this commit or later starts with a WORKING set of
+principals, not an empty registry. Here is exactly what the scaffold already did for you, and
+what to type for anything beyond that.
+
+*What birth already gave you.* The scaffold's birth sequence, run once at `--new-world` time,
+is three explicit, attributed acts, in order: (1) the connection principal `author` is
+registered through the full s40 ceremony (self-attributed — the one genesis exception, since
+nothing else exists yet to attribute it to) and its `principal_registered` event lands; (2) a
+`principal_standing_declared` event binds the world's database role to `author` — this is the
+"declared, not silent" default: it is why your very first `./led` write, with no
+[`LED_ACTOR`](../GLOSSARY.md#principal) (the environment variable that names which registered
+principal a `led` write is attributed to) set, just works; (3) `reviewer` and `commissioner`
+are registered the same way, each with a stated purpose. Witnessed on a real `--new-world` scaffold run
+(`seen-red/s40-principal-identity-events/red.txt`, case `new-world-birth-sequence`): *"scaffold
+exit=0; registration events=3 (author, reviewer, commissioner), standing declarations=1; first
+no-LED_ACTOR write exit=0, attributed 'author|declared-default'"*. If all you need is the
+baseline three principals a solo operator's world already assumes, you are done — no further
+setup required.
+
+*Registering an additional principal.* `--purpose` is mandatory on an s40+ kernel; omit it and
+you are refused, not silently ignored. The refusal below cites "AC-2," NIST 800-53's
+Account Management control (the standard the registration ceremony's mandatory-purpose
+requirement is grounded in — quoted verbatim below, not paraphrased). Witnessed
+(`seen-red/s40-principal-identity-events/red.txt`, case `purpose-mandatory`, and the exact
+refusal text from `bootstrap/templates/led.tmpl`'s own source):
+
+```sh
+$ ./led register-principal nopurpose model
+```
+```
+led register-principal: REFUSED -- --purpose is mandatory on an s40 kernel: a
+  registration is a recorded, attributed event with a stated purpose (AC-2's
+  'account with a stated purpose'; kernel/lineage/s40-principal-identity-events.sql).
+usage: led register-principal <name> <human|model|subagent|tool> --purpose "<why this identity exists>"
+```
+(exit 1). Supply `--purpose` and it constructs:
+```sh
+$ ./led register-principal reviewer2 model --purpose "second-tier model reviewer"
+```
+Re-registering the same name is never a silent no-op — both class polarities refuse loudly
+(`seen-red/s40-principal-identity-events/red.txt`, cases `register-duplicate-same-class` and
+`register-duplicate-class-mismatch`). Same class, same name again:
+```
+led register-principal: REFUSED -- principal 'reviewer2' is already registered
+  (id <id>, class model, purpose: <purpose>). Re-registration is never a silent no-op
+  (s40 §3.7 -- the panel's silent ON CONFLICT DO NOTHING class, closed): if you meant
+  this existing principal, just use it (LED_ACTOR=reviewer2); if you meant a NEW
+  identity, pick a new name.
+```
+A different class under the same name refuses too, naming the mismatch and pointing at
+`./led principal relate <new> succeeds <old>` (once s41 has landed) as the way to record a
+genuine identity succession rather than a rename — names are immutable by rule, and a class
+change is a new identity, never an edit to the old one.
+
+*Declaring standing* — binding a database role's default attribution to a registered principal,
+the same declared-not-silent act the scaffold performed for `author`. `--db-role` is optional
+and defaults to your own world's connection role (read directly from `bootstrap/templates/led.tmpl`'s
+source: `db_role="$ROLE"` unless overridden) — the same `role` value your deployment's own
+`deployment.json` already carries (README.md's configuration table names this field; run `cat
+<world-dir>/deployment.json` and look at `"role"` if you've forgotten it). For the common case
+— rotating which principal your world's OWN connection role speaks for — you never need to
+pass `--db-role` at all:
+```sh
+$ ./led principal declare-standing reviewer2
+```
+Only pass `--db-role <name>` explicitly when declaring standing for a DIFFERENT Postgres role
+than the one your `deployment.json` already names — e.g. a second writer role your world's
+kernel DDL granted separately (`\du` in `psql` lists every role that exists on the database if
+you need to find one by hand). Re-declaring for the same role auto-supersedes the prior
+declaration (this is how you rotate which principal a role speaks for).
+
+*Binding a role* — free non-empty organizational-role text, not a closed vocabulary (ratified
+§9(c) — role naming is organizational configuration, not the harness's to impose):
+```sh
+$ ./led principal bind-role reviewer2 --role "sql-review"
+```
+
+*Granting competence* — the [safety-critical-logging BRIEF](../law/briefs/safety-critical-logging/BRIEF.md)'s
+**G13 record** (that document's required-work-product entry for "who is believed competent for
+what safety activity, at what band, on what basis" — a competence assignment or its change),
+recordable but NOT gating (nothing in v1 refuses an act for lack of a matching grant):
+```sh
+$ ./led principal grant-competence reviewer2 --activity "sql-review" --band "B" --basis "track record on s37-s39"
+```
+Witnessed lifecycle (`seen-red/s41-principal-bindings-and-relations/red.txt`, case
+`competence-lifecycle`): *"grant OK (view: 'sql-review|B'); duplicate refused; empty band
+refused (1); re-band via --supersedes replaced (band now 'A'); stray --band on withdrawal
+refused; STALE supersession target refused; withdrawal OK (view 0 rows, raw 3 rows -- grant+
+re-band+terminal withdrawal); raw inactive-from-birth refused by the kernel CHECK"*. The band
+and basis fields are free text — the spec's own ratification (§9(g)) calls this a **placeholder
+architecture only, not a considered final design**; do not read the free-text shape as a
+settled judgment that a closed band vocabulary (ASIL/SIL/DAL-style) is never coming.
+
+*Relating two principals* — the closed vocabulary is `acts-for`, `dispatched-by`,
+`same-natural-person`, `succeeds`:
+```sh
+$ ./led principal relate reviewer2 acts-for reviewer3
+```
+Self-edges refuse at the kernel, both via the CLI and via a raw direct write
+(`seen-red/s41-principal-bindings-and-relations/red.txt`, case `self-edges-refused`: *"all
+four CLI self-edges refused=True; raw kernel-trigger self-edge exit=3 with the taught
+text"*). `same-natural-person` is symmetric and canonicalized (stored lower-`id`-first
+regardless of the order you type it), witnessed both orderings in case `snp-canonicalization`.
+
+*Looking at what exists.* No dedicated `led principal list`/`show` verb ships in v1 — this is a
+genuine gap, not a hidden feature (UNEXERCISED beyond the derived views themselves). The
+sanctioned way to look today is the same "query the view directly" pattern the CLI already uses
+internally for its own convenience reads (e.g. `led standing`'s own implementation is a plain
+`SELECT * FROM standing_decisions`, per `bootstrap/templates/led.tmpl`): the human-readable
+surface is the `principal_standing_current` view (name, class, standing, registered_at,
+registrar, purpose — one row per principal); the binding surfaces are `principal_relations`,
+`principal_role_bindings` (deliberately not `principal_roles` — that name is reserved for the
+unrelated db-role↔principal binding view, `principal_role`), `principal_keys`, and
+`principal_competences`. All four binding views show only currently-active, unsuperseded rows;
+every retraction stays visible in the raw ledger history regardless.
+
+*Suspending or revoking* — and the honest limit on getting back:
+```sh
+$ ./led principal suspend reviewer2 "on leave"
+$ ./led principal revoke reviewer2 "compromised"
+```
+Writes under a suspended-or-revoked principal then refuse at the kernel (witnessed,
+`seen-red/s40-principal-identity-events/red.txt`, case `revoke-refuses-writes /
+successor-passes`: revoked write exit=3, successor registration exit=0, successor write
+exit=0). **No v1 verb lifts a suspension or a revocation, for either kind, and if both are
+ever written for the same principal, `revoked` always wins the reported standing regardless of
+which order they landed in** (case `precedence-both-orders`: *"suspend-then-revoke reads
+'revoked', revoke-then-suspend reads 'revoked'"*). The only way back to an active identity is
+registering a fresh successor principal and recording the succession:
+```sh
+$ ./led register-principal reviewer2-successor model --purpose "reviewer2's replacement identity"
+$ ./led principal relate reviewer2-successor succeeds reviewer2
+```
+This is a new identity, not a reinstated old one — a real, if heavier, escape hatch, disclosed
+as a deliberate v1 limit rather than an oversight.
+
+**Can I use GPG to sign roles / authenticate myself as a principal?**
+Answering exactly what was asked, in three honest parts — this is not a recommendation to go
+generate a key; the standing deferral on key generation ("key generation/signing deferred until
+all else banked; never re-raise as recommendation") is the maintainer's own ruling to lift, not
+this page's to nudge him toward.
+
+*(1) What exists now.* `led principal bind-key <name> --fingerprint "<fp>"` records an OpenPGP
+v4 fingerprint against a HUMAN principal — a typed, dated, countersignable ledger row (a
+`principal_key_bound` event), refused outright on any non-human subject
+(`seen-red/s41-principal-bindings-and-relations/red.txt`, case `key-binding-polarity`: *"model
+bind exit=3 (taught); human bind exit=0, view rows=1; malformed fingerprint exit=3 (kernel shape
+CHECK named)"*). That is the whole of what's built: an empty-until-ceremony slot. **Nothing
+anywhere verifies a signature against it.** "Signing a role," as a cryptographically verified
+act, does not exist in v1 — a role binding (`led principal bind-role`) is an attributed,
+countersignable ledger row, exactly like every other kind this project records; it is never a
+signed object, and `bind-key` does not change that for any other kind.
+
+*(2) What actually exercising this for real would require.* No maintainer keypair exists
+anywhere in this project today —
+[law/keys/README.md](../law/keys/README.md) states its directory's state plainly:
+`AWAITING-KEY`, "no real maintainer keypair has been generated as of this writing." Rung 1 (the
+signed-tag mechanism this directory backs) is built; it has never been armed. Exercising
+`bind-key` for real, rather than against a throwaway test key, needs the one-time key generation
+the maintainer's own standing ruling has deferred. If he chooses to lift that deferral, the
+recipe is [design/MAINT-GPG-TRUST-LAYER.md](MAINT-GPG-TRUST-LAYER.md) §7 (`gpg
+--full-generate-key`, hardware-backed preferred so each signature costs a physical touch), then
+`led principal bind-key <name> --fingerprint "<the generated fingerprint>"`. The ceremony shape
+that DOES already exist today, on top of that binding, is an ordinary countersign — a review row
+regarding the binding event, using the same verb every other ledger row is countersigned with:
+```sh
+$ ./led review <bind-key-row-id> attest technical "fingerprint verified against a witnessed key-signing party"
+```
+(`led review`'s independence argument requires a stamp-distinct invocation for anything above
+`self-review` — see the verb's own usage text in `bootstrap/templates/led.tmpl`.) This closes
+the loop the panel deployment's own invented proposal→countersign ceremony needed, with zero new
+review machinery — the binding event is just another countersignable ledger row.
+
+*(3) The honest limit.* Binding a fingerprint records custody of a key against an identity — it
+does not authenticate sessions, and it does not make `bind-key` a login mechanism. The HMAC
+stamp (`kernel/lineage/s17-stamp-mechanism.sql`) remains the tripwire that answers "which live
+invocation wrote this row"; the key slot answers a different, narrower question ("who does this
+fingerprint belong to"), and answers it only once someone actually signs something and a
+verifier checks that signature — which nothing in this project does yet for a role or a
+principal binding. Signature-*verified* acts are a future rung, not this one.
+
 ## Trust ceremonies
 
 **Can I prove a commission really came from me?** (a "commission" here is a ledgered

@@ -12,6 +12,9 @@ venv/
 /scratchpad/
 *.local
 
+# operator-local notes (host-specific installs, witness logs) -- never tracked
+/local/
+
 # runtime outputs written by drive/ tooling (delivery_drill --check writes its own transcript)
 /drive/delivery-drill-transcript.txt
 
