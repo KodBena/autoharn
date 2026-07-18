@@ -151,6 +151,7 @@ REGISTRY: dict[str, str] = {
     "scan2-firing-telemetry":       "seen-red/scan2-firing-telemetry/run_fixtures.py",
     "deployment-pinning":           "seen-red/deployment-pinning/run_fixtures.py",
     "orchlog-since-filter":         "seen-red/orchlog-since-filter/run_fixtures.py",
+    "scaffold-orchlog-wrapper":     "seen-red/scaffold-orchlog-wrapper/run_fixtures.py",
     "kind-shape-manifest-gate":     "seen-red/kind-shape-manifest-gate/run_fixtures.py",
     "idris-model-freshness":        "seen-red/idris-model-freshness/run_fixtures.py",
     "asof-export":                  "seen-red/asof-export/run_fixtures.py",

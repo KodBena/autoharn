@@ -840,10 +840,29 @@ SHIM
     echo "wrote $verb (shim -> $EXEC_ROOT/bootstrap/templates/$verb.tmpl)"
 done
 
+# orchlog wrapper (deployment-orchlog-surfacing item, half (b) -- half (a), migrate printing the
+# span, belongs to ./migrate and is untouched here). A DIFFERENT shape from the eight shims just
+# above on purpose: orchlog is not a bootstrap/templates/*.tmpl instance-config resolver -- it is
+# a repo-root verb (like led/judge/pickup themselves) that reads ITS OWN repo's git history
+# (orchlog.d/*.md notes, keyed off each note's adding commit -- see orchlog's own module
+# docstring), never this deployment's ledger, so it needs no PICKUP_DEPLOYMENT and no
+# deployment.json at all. This wrapper only points it at the harness whose changelog a restarting
+# deployment session wants to read: `exec harness orchlog --repo <harness-root>`, literally, with
+# EXEC_ROOT (the live-exec harness tree every other verb/hook here already resolves against) as
+# <harness-root> -- so a fresh session in THIS deployment can self-serve "what changed in autoharn
+# since I was last here" without hand-relayed memo rows.
+echo "-- orchlog wrapper (self-serve harness changelog, beside led/judge/pickup): exec's autoharn's own orchlog verb against $EXEC_ROOT, no deployment.json involved --"
+cat > "$PROJECT_ROOT/orchlog" <<SHIM
+#!/bin/sh
+exec $EXEC_ROOT/orchlog --repo $EXEC_ROOT "\$@"
+SHIM
+chmod +x "$PROJECT_ROOT/orchlog"
+echo "wrote orchlog (wrapper -> $EXEC_ROOT/orchlog --repo $EXEC_ROOT)"
+
 if [ "$PIN" = "submodule" ]; then
     echo "-- --pin submodule: committing the pin + the verbs/hooks it points at --"
     (cd "$PROJECT_ROOT" && git add \
-        led judge pickup audit distance-to-clean verify-commission verify-chain attest-doc asof-export \
+        led judge pickup audit distance-to-clean verify-commission verify-chain attest-doc asof-export orchlog \
         .claude/settings.json .gitignore 2>/dev/null || true)
     if (cd "$PROJECT_ROOT" && git diff --cached --quiet) 2>/dev/null; then
         echo "   nothing new to commit (already committed by an earlier --force re-run)"
@@ -867,9 +886,10 @@ if [ -n "$NEW_WORLD" ]; then
     echo "           # already registered above); nothing to paste."
     echo ""
     echo "(./led, ./judge, ./pickup, ./audit, ./distance-to-clean, ./verify-commission,"
-    echo " ./verify-chain, ./attest-doc, ./asof-export are ready to use from inside that session; read"
+    echo " ./verify-chain, ./attest-doc, ./asof-export, ./orchlog are ready to use from inside that session; read"
     echo " $PROJECT_ROOT/.claude/HOOKS.md and replace its UNWITNESSED marks as you exercise each"
-    echo " command.)"
+    echo " command. (./orchlog lists the harness changelog -- notes on things a restarting session"
+    echo " would want to know about autoharn itself, e.g. \`./orchlog\` or \`./orchlog since <sha>\`.)"
     echo ""
     echo "To SIGN this run's commission yourself (FULL mode -- kernel/lineage/s25-commission-"
     echo "kind.sql; the ask carries the commissioner's own guarantee, not a vicarious one), type"
