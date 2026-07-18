@@ -111,3 +111,33 @@ led: '--json' is not a member of ledger_kind_check's vocabulary (the refusal abo
 !! GREEN-SWALLOWED-FLAG-CAUGHT: exit=0 refused=False teaches=False before=12 after=13
 STDERR:
 
+
+--- FIXUP ADDENDUM (fixup finding 1, same-day reviewer pass on this item's own build) ---
+
+Captured by the same `git stash push -- bootstrap/templates/led.tmpl gates/fixture_census.py`
+/ `git stash pop` bracket, against the shipped (pre-fixup) led.tmpl -- i.e. the version that
+already carries this item's own --json dispatch above, but NOT the fixup's MAX_WRITE_BODY_BYTES
+size bound. Reproduces the reviewer's exact finding: a payload past the OS ARG_MAX wall crashes
+kernel_write()'s `psql -v payload=...` invocation with a bare, unrefused shell abort ("Argument
+list too long", exit 126) -- no typed disposition, no teach-text, leaking the internal file path
+and line number to the caller. Row count unaffected (the crash happens before psql ever runs, so
+nothing is journaled either way) -- the defect is the missing typed refusal, not a data-safety
+gap, exactly as fixup finding 1 states. Both the file path and the stdin ('-') path hit the
+identical crash.
+
+RED-OVERSIZED-FILE: exit=126 refused=True no_bash_crash=False teaches=False row-count before=9 after=9 (unchanged=True) -- FAIL
+RED-OVERSIZED-STDIN: exit=126 refused=True no_bash_crash=False teaches=False row-count before=9 after=9 (unchanged=True) -- FAIL
+
+!! RED-OVERSIZED-FILE: exit=126 refused=True no_bash_crash=False teaches=False before=9 after=9
+STDOUT:
+
+STDERR:
+bootstrap/templates/led.tmpl: line 841: /usr/bin/psql: Argument list too long
+
+
+!! RED-OVERSIZED-STDIN: exit=126 refused=True no_bash_crash=False teaches=False before=9 after=9
+STDOUT:
+
+STDERR:
+bootstrap/templates/led.tmpl: line 841: /usr/bin/psql: Argument list too long
+

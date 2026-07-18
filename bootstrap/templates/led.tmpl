@@ -522,6 +522,20 @@ SCHEMA="${LED_SCHEMA:-$DEP_SCHEMA}"
 KERNEL="${LED_KERNEL:-$DEP_KERN}"
 ROLE="${LED_ROLE:-$DEP_ROLE}"
 
+# A2.2's one named write-ingress bound, carried over verbatim from the FastAPI boundary
+# service's own MAX_WRITE_BODY_BYTES (serving/boundary_service.py) for `led --json`, the CLI
+# twin of that exact payload shape (led-json-payload-mode's own commissioning text: "maps
+# VERBATIM onto the s43 boundary functions' own jsonb payload shape"). Enforced at the SAME
+# two checkpoints the HTTP twin uses -- (a) the raw bytes read from file/stdin, before any
+# JSON parsing; (b) the re-serialized (compacted) payload, before it reaches the psql
+# subprocess -- because a payload can pass (a) and still grow past the bound at (b) (e.g.
+# non-ASCII content that gets escaped wider on reserialization). Without this, a large
+# payload hits the OS ARG_MAX wall inside kernel_write()'s `psql -v payload=...` invocation as
+# a bare, unrefused shell abort ("Argument list too long") that never reaches a typed
+# disposition -- the identical hazard class A2.2 fixed for this payload's HTTP twin one
+# commit earlier in this same build stream (fixup finding 1).
+MAX_WRITE_BODY_BYTES=1048576
+
 # --- flags (any order, any subset), consumed up front so the verb dispatch below and the
 # generic <kind> <statement...> path both see a clean $@ -------------------------------------
 files=""
@@ -1147,6 +1161,18 @@ if [ "${1:-}" = "--json" ]; then
     fi
     json_raw="$(cat "$json_file")"
   fi
+  # checkpoint (a): raw bytes, before any JSON parsing (mirrors the HTTP twin's
+  # _read_bounded_body checkpoint a) -- refuses a large payload with a typed disposition
+  # before it is ever handed to python3/psql.
+  json_raw_bytes=$(printf '%s' "$json_raw" | wc -c)
+  if [ "$json_raw_bytes" -gt "$MAX_WRITE_BODY_BYTES" ]; then
+    echo "led --json: REFUSED (payload_too_large) -- the JSON payload is ${json_raw_bytes}" >&2
+    echo "  bytes -- exceeds the ${MAX_WRITE_BODY_BYTES}-byte write bound (checkpoint a," >&2
+    echo "  before JSON parsing), the same MAX_WRITE_BODY_BYTES bound the FastAPI boundary" >&2
+    echo "  service enforces on this payload's HTTP twin (design/" >&2
+    echo "  FABLE-LEDGER-BOUNDARY-SERVICE-SPEC.md, spec A2.2)." >&2
+    exit 1
+  fi
   json_compact=$(printf '%s' "$json_raw" | python3 -c '
 import json, sys
 try:
@@ -1159,6 +1185,16 @@ if not isinstance(v, dict):
     sys.exit(1)
 print(json.dumps(v))
 ') || exit 1
+  # checkpoint (b): the re-serialized (compacted) payload, before it reaches the psql
+  # subprocess -- mirrors the HTTP twin's own checkpoint b, catching a payload that grew
+  # past the bound on reserialization even though it passed checkpoint (a).
+  json_compact_bytes=$(printf '%s' "$json_compact" | wc -c)
+  if [ "$json_compact_bytes" -gt "$MAX_WRITE_BODY_BYTES" ]; then
+    echo "led --json: REFUSED (payload_too_large) -- the JSON payload, re-serialized, is" >&2
+    echo "  ${json_compact_bytes} bytes -- exceeds the ${MAX_WRITE_BODY_BYTES}-byte write" >&2
+    echo "  bound (checkpoint b, before the psql subprocess)." >&2
+    exit 1
+  fi
   case "$json_surface" in
     ledger) json_fn="ledger_write" ;;
     review) json_fn="review_write" ;;
@@ -3991,6 +4027,16 @@ if [ "$kind" = "decision" ]; then
   while [ $# -gt 0 ]; do
     case "$1" in
       --grade) grade="${2:-}"; shift 2 ;;
+      --help)
+        # fixup finding 2: --help must fall through to check_help_or_dash_first_word below
+        # (the SAME help-seeking path -h/help already take), rather than being caught here as
+        # an "unrecognized flag" -- this loop runs BEFORE that check, and without this case
+        # 'led decision --help' hit the unrecognized-flag refusal (exit 1, no usage/teach)
+        # instead of the tier-1 usage-and-exit-0 teach every other subcommand's --help gets,
+        # which also falsified print_generic_usage's own unqualified "'--help'/'-h'/'help' as
+        # the FIRST word ... prints this usage" claim for this one subcommand.
+        args+=("$1"); shift
+        ;;
       --*)
         case " $LED_FLAG_VOCAB " in
           *" $1 "*) args+=("$1"); shift ;;

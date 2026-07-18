@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-18T09:10:27Z
-#   last-change: 2026-07-18T09:11:32Z
+#   last-change: 2026-07-18T09:34:55Z
 #   contributors: ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -60,6 +60,16 @@ CASES (all live subprocess runs of the real `./led` against real scratch deploym
                               statement word, the led-refs-flag-order-parser-bug shape): REFUSED
                               by refuse_flag_in_statement (proves --json was added to
                               LED_FLAG_VOCAB, not left invisible to that guard).
+  RED-OVERSIZED-FILE       -- a >MAX_WRITE_BODY_BYTES (1_048_576) payload FILE: REFUSED with a
+                              typed `payload_too_large` disposition naming the byte bound,
+                              BEFORE the argument ever reaches the psql subprocess -- never a
+                              bare shell "Argument list too long" abort (fixup finding 1, the
+                              boundary-service hardening commit immediately preceding this
+                              item's own build fixed the identical hazard class for this
+                              payload's HTTP twin; this closes the CLI twin's own copy of the
+                              same gap). Row count unchanged.
+  RED-OVERSIZED-STDIN      -- same oversized payload piped via `led --json ledger -`: same
+                              typed refusal, same bound named, row count unchanged.
 
 Usage: python3 seen-red/led-json-payload-mode/run_fixtures.py
 Exit 0 if every case matches; 1 otherwise. Lazy imports banned.
@@ -289,6 +299,46 @@ def main() -> int:
         print(f"GREEN-SWALLOWED-FLAG-CAUGHT: exit={r.returncode} refused={refused} teaches={teaches} "
               f"row-count before={before} after={after} (unchanged={unchanged}) -- "
               f"{'PASS' if ok else 'FAIL'}")
+
+        # ------------------------------------------------------------------------ RED-OVERSIZED-FILE
+        MAX_WRITE_BODY_BYTES = 1_048_576
+        oversized_file = tmp_full / "oversized.json"
+        oversized_file.write_text(json.dumps(
+            {"kind": "finding", "statement": "x" * (MAX_WRITE_BODY_BYTES + 200)}))
+        before = _row_count(schema_full, role_full)
+        r = _run(dest_full, "led", "--json", "ledger", str(oversized_file))
+        after = _row_count(schema_full, role_full)
+        refused = r.returncode != 0
+        no_bash_crash = "Argument list too long" not in r.stderr and r.returncode != 126
+        teaches = "payload_too_large" in r.stderr and str(MAX_WRITE_BODY_BYTES) in r.stderr
+        unchanged = before == after
+        ok = refused and no_bash_crash and teaches and unchanged
+        if not ok:
+            failures.append(f"RED-OVERSIZED-FILE: exit={r.returncode} refused={refused} "
+                             f"no_bash_crash={no_bash_crash} teaches={teaches} before={before} "
+                             f"after={after}\nSTDOUT:\n{r.stdout}\nSTDERR:\n{r.stderr}")
+        print(f"RED-OVERSIZED-FILE: exit={r.returncode} refused={refused} "
+              f"no_bash_crash={no_bash_crash} teaches={teaches} row-count before={before} "
+              f"after={after} (unchanged={unchanged}) -- {'PASS' if ok else 'FAIL'}")
+
+        # ----------------------------------------------------------------------- RED-OVERSIZED-STDIN
+        before = _row_count(schema_full, role_full)
+        r = _run(dest_full, "led", "--json", "ledger", "-",
+                  stdin=json.dumps({"kind": "finding",
+                                     "statement": "y" * (MAX_WRITE_BODY_BYTES + 200)}))
+        after = _row_count(schema_full, role_full)
+        refused = r.returncode != 0
+        no_bash_crash = "Argument list too long" not in r.stderr and r.returncode != 126
+        teaches = "payload_too_large" in r.stderr and str(MAX_WRITE_BODY_BYTES) in r.stderr
+        unchanged = before == after
+        ok = refused and no_bash_crash and teaches and unchanged
+        if not ok:
+            failures.append(f"RED-OVERSIZED-STDIN: exit={r.returncode} refused={refused} "
+                             f"no_bash_crash={no_bash_crash} teaches={teaches} before={before} "
+                             f"after={after}\nSTDOUT:\n{r.stdout}\nSTDERR:\n{r.stderr}")
+        print(f"RED-OVERSIZED-STDIN: exit={r.returncode} refused={refused} "
+              f"no_bash_crash={no_bash_crash} teaches={teaches} row-count before={before} "
+              f"after={after} (unchanged={unchanged}) -- {'PASS' if ok else 'FAIL'}")
 
     finally:
         _drop(WORLD_FULL)

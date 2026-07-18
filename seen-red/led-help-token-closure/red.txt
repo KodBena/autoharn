@@ -83,3 +83,40 @@ STDERR:
 ERROR:  Ledger policy: a row's author may not countersign it (segregation of duties).
 CONTEXT:  PL/pgSQL function validate_review() line 13 at RAISE
 
+
+--- FIXUP ADDENDUM (fixup finding 2, same-day reviewer pass on this item's own build) ---
+
+Captured by the same `git stash push -- bootstrap/templates/led.tmpl gates/fixture_census.py`
+/ `git stash pop` bracket, against the shipped (pre-fixup) led.tmpl -- i.e. the version that
+already carries this item's own GREEN-HELP-GENERIC/GREEN-HELP-REVIEW cases above, but NOT the
+fixup's decision-loop --help fall-through. Reproduces the reviewer's exact finding: 'decision'
+has its OWN --grade flag loop, which runs BEFORE check_help_or_dash_first_word and used to
+catch --help as an "unrecognized flag" (exit 1, no usage) -- one subcommand for which
+print_generic_usage's own unqualified "'--help'/'-h'/'help' as the FIRST word ... prints this
+usage" claim was false. Row count unaffected either way (not a data-safety hazard, a
+usage-text-honesty one -- the reviewer's own framing).
+
+GREEN-HELP-DECISION-DASHDASH: exit=1 shows_usage=False before=2 after=2 -- FAIL
+
+!! GREEN-HELP-DECISION-DASHDASH: exit=1 shows_usage=False before=2 after=2
+STDOUT:
+
+STDERR:
+led decision: REFUSED -- unrecognized flag '--help'.
+  led decision [--grade <word>] <statement...> accepts --grade (kernel/lineage/
+  s36-decision-grade.sql) plus led's standing top-of-file flags (-f -e
+  --supersedes --amends --amends-scope --answers --refs --concern --evidence
+  --confidence --event-time, given BEFORE the 'decision' kind word -- see led's
+  own usage header). An unrecognized --flag here would otherwise be silently
+  concatenated into the decision statement text instead of erroring -- the exact
+  defect class ledger item led-work-open-refs-swallowed found and fixed for
+  'led work open'; this loop applies the same fix to 'led decision --grade'.
+  NOTHING was written. Fix the flag name, or drop it if it was meant as
+  ordinary statement text.
+
+RED-DECISION-BOGUS-FLAG-STILL-REFUSED was not separately captured pre-fix (it is a same-shape
+regression guard added alongside the fix, not itself part of the reported defect) -- it PASSes
+against both pre- and post-fixup led.tmpl, since decision's unrecognized-flag refusal for a
+genuinely unrecognized flag is unchanged by this fixup; verified directly post-fix (see the
+fixture's own green run banked in the build/fixup report, not reproduced here).
+

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-09T13:36:11Z
-#   last-change: 2026-07-18T09:09:36Z
+#   last-change: 2026-07-18T09:32:26Z
 #   contributors: be693afb/main, e4410ef6/main, 3c50e030/main, 3c942a60/main, a857c93d/main, ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -168,10 +168,20 @@ def _has_red_evidence(d: str) -> bool:
     return False
 
 
+# tool-generated dirs that can appear under seen-red/ without ever being a fixture in their own
+# right (fixup finding 3): __pycache__ is recreated by python3 the instant any run_fixtures.py
+# under seen-red/ imports the shared _fixture_env module, is .gitignore'd so it never reaches a
+# commit, but IS visible to a local os.listdir() scan -- without this exclusion, running the
+# fixtures (as this gate's own workflow instructs) before re-running the gate makes the gate
+# spuriously non-green on an unmodified corpus.
+_NON_FIXTURE_DIRS = {"__pycache__"}
+
+
 def main() -> int:
     breaches: list[str] = []
     present = sorted(e for e in os.listdir(SEEN_RED)
-                     if os.path.isdir(os.path.join(SEEN_RED, e)))
+                     if os.path.isdir(os.path.join(SEEN_RED, e))
+                     and e not in _NON_FIXTURE_DIRS)
 
     # (2) orphan check — every seen-red dir must be registered
     for d in present:

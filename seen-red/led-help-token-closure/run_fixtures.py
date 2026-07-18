@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-18T09:07:27Z
-#   last-change: 2026-07-18T09:08:45Z
+#   last-change: 2026-07-18T09:35:15Z
 #   contributors: ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -49,6 +49,17 @@ seen-red/led-refs-flag-order-parser-bug/run_fixtures.py's own scratch-and-drop p
                                     sentence") is ACCEPTED, unchanged from before this item --
                                     the false-positive case this item's first-word-only bound
                                     must not trip.
+  GREEN-HELP-DECISION-DASHDASH  -- `./led decision --help` (fixup finding 2): 'decision' has its
+                                    OWN pre-existing --grade flag loop, which runs BEFORE
+                                    check_help_or_dash_first_word and used to intercept
+                                    '--help' as an "unrecognized flag" (exit 1, no usage) --
+                                    the one subcommand print_generic_usage's own text
+                                    unconditionally claimed worked for every subcommand but
+                                    didn't. Now: exit 0, usage on stderr, row count unchanged.
+  RED-DECISION-BOGUS-FLAG-STILL-REFUSED -- `./led decision --bogus "text"`: still REFUSED by
+                                    decision's own unrecognized-flag loop (regression guard --
+                                    special-casing --help there must not open the loop to
+                                    every other unrecognized flag). Row count unchanged.
 
 Usage: python3 seen-red/led-help-token-closure/run_fixtures.py
 Exit 0 if every case matches; 1 otherwise. Lazy imports banned.
@@ -209,6 +220,38 @@ def main() -> int:
                          f"before={before} after={after}\nSTDERR:\n{r.stderr}")
     print(f"GREEN-MID-SENTENCE-DASH: exit={r.returncode} accepted={accepted} row-count "
           f"before={before} after={after} (grew-by-one={grew}) -- {'PASS' if ok else 'FAIL'}")
+
+    # ------------------------------------------------------------- GREEN-HELP-DECISION-DASHDASH
+    before = _ledger_row_count(dest)
+    r = _run(dest, "led", "decision", "--help")
+    after = _ledger_row_count(dest)
+    exit0 = r.returncode == 0
+    shows_usage = "usage: led [flags] <kind> <statement...>" in r.stderr
+    unchanged = before == after
+    ok = exit0 and shows_usage and unchanged
+    if not ok:
+        failures.append(f"GREEN-HELP-DECISION-DASHDASH: exit={r.returncode} "
+                         f"shows_usage={shows_usage} before={before} after={after}\n"
+                         f"STDOUT:\n{r.stdout}\nSTDERR:\n{r.stderr}")
+    print(f"GREEN-HELP-DECISION-DASHDASH: exit={r.returncode} shows_usage={shows_usage} "
+          f"row-count before={before} after={after} (unchanged={unchanged}) -- "
+          f"{'PASS' if ok else 'FAIL'}")
+
+    # ------------------------------------------------------- RED-DECISION-BOGUS-FLAG-STILL-REFUSED
+    before = _ledger_row_count(dest)
+    r = _run(dest, "led", "decision", "--bogus", f"{TAG}: decision bogus-flag regression probe")
+    after = _ledger_row_count(dest)
+    refused = r.returncode != 0
+    teaches = "unrecognized flag" in r.stderr and "--bogus" in r.stderr
+    unchanged = before == after
+    ok = refused and teaches and unchanged
+    if not ok:
+        failures.append(f"RED-DECISION-BOGUS-FLAG-STILL-REFUSED: exit={r.returncode} "
+                         f"refused={refused} teaches={teaches} before={before} after={after}\n"
+                         f"STDOUT:\n{r.stdout}\nSTDERR:\n{r.stderr}")
+    print(f"RED-DECISION-BOGUS-FLAG-STILL-REFUSED: exit={r.returncode} refused={refused} "
+          f"teaches={teaches} row-count before={before} after={after} "
+          f"(unchanged={unchanged}) -- {'PASS' if ok else 'FAIL'}")
 
     if failures:
         print(f"\nled-help-token-closure fixture: {len(failures)} FAILURE(S) -- scratch "
