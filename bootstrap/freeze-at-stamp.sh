@@ -1,8 +1,8 @@
 #!/bin/sh
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-12T18:06:58Z
-#   last-change: 2026-07-14T23:23:00Z
-#   contributors: 3c50e030/main, a857c93d/main
+#   last-change: 2026-07-18T16:55:50Z
+#   contributors: 3c50e030/main, a857c93d/main, ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
 # freeze-at-stamp.sh -- produce a "tree correlated with db frozen in time": a git tree pinned at
@@ -177,9 +177,31 @@ while [ $# -gt 0 ]; do
     esac
 done
 
+# --- STRICT CHARACTER ALLOWLIST on DB (and, by construction, DB_OWNER_ROLE/DB_RO_ROLE below) ---
+# ADR-0012's 2026-07-18 amendment ("The interpreter boundary -- a value never crosses as program
+# text") + ADR-0000's same-day Rule 2(a) amendment (ledger row 1637, fixed first in
+# bootstrap/teardown-world.sh commit 0ce5055): DB is operator-supplied (--db, default
+# "autoharn_test") and reaches SQL text below both directly (pg_database/pg_roles probes) and via
+# DB_OWNER_ROLE="${DB}_owner"/DB_RO_ROLE="${DB}_ro" (GRANT/SET statements) -- checked here, before
+# any SQL is built, so the derived role names inherit the same closed alphabet.
+case "$DB" in
+    ''|*[!A-Za-z0-9_]*)
+        echo "freeze-at-stamp.sh: REFUSED -- '$DB' contains characters outside the allowlist for" >&2
+        echo "  a database name (letters, digits, underscore only). Nothing was touched." >&2
+        exit 2
+        ;;
+esac
+
 AUTOHARN_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 PY="$HOME/w/vdc/venvs/generic/bin/python"
 [ -x "$PY" ] || PY="$(command -v python3)"
+
+# _psql_in: SQL text is always fed on stdin, never via -c -- psql's :'var'/:"var" bind-variable
+# interpolation (verified live against a real server, psql 18.3) is only performed for input it
+# parses as a script (stdin or -f), and is a silent no-op under -c (the literal colon reaches the
+# server and the statement errors out). Same fix shape/rationale as bootstrap/teardown-world.sh
+# commit 0ce5055 (ledger row 1637).
+_psql_in() { printf '%s\n' "$1"; }
 
 # HOST: --host flag, else this checkout's own deployment.json 'host' field, else a loud refusal
 # -- never a silent literal default (the maintainer's own LAN host is not every operator's fact).
@@ -223,6 +245,25 @@ PYEOF
 )" || exit 2
 eval "$_src_vars"
 
+# --- STRICT CHARACTER ALLOWLIST on SRC_SCHEMA/SRC_KERN -----------------------------------------
+# Loaded from THIS checkout's own deployment.json (config-supplied, not typed at invocation), but
+# the same interpreter-boundary rule applies regardless of trust level (ADR-0012's 2026-07-18
+# amendment: "the trust claim is exactly the in-the-moment optimism P7/P8 already reject as an
+# argument shape") -- these two reach a large amount of ALTER TABLE/GRANT/heredoc SQL text below
+# as identifiers. SRC_DB/SRC_HOST/SRC_ROLE never cross as SQL text (only as psql -h/-d argv, an
+# already-safe carrier), so they are not checked here.
+for _name in "$SRC_SCHEMA" "$SRC_KERN"; do
+    case "$_name" in
+        ''|*[!A-Za-z0-9_]*)
+            echo "freeze-at-stamp.sh: REFUSED -- '$_name' (from $SRC_DEPLOYMENT) contains characters" >&2
+            echo "  outside the allowlist for a schema/kernel name (letters, digits, underscore" >&2
+            echo "  only). Nothing was touched." >&2
+            exit 2
+            ;;
+    esac
+done
+unset _name
+
 echo "== freeze-at-stamp: source tracker = ${SRC_DB}/${SRC_SCHEMA}+${SRC_KERN} on ${SRC_HOST} (from $SRC_DEPLOYMENT) =="
 
 # --- dest-dir refusal -----------------------------------------------------------------------
@@ -260,7 +301,8 @@ case "$CUTOFF_INPUT" in
     *) CUTOFF_IS_ID=1 ;;
 esac
 
-SRC_MAX_ID="$(psql -h "$SRC_HOST" -d "$SRC_DB" -tAc "SELECT max(id) FROM ${SRC_SCHEMA}.ledger;")"
+SRC_MAX_ID="$(_psql_in "SELECT max(id) FROM :\"src_schema\".ledger;" \
+    | psql -h "$SRC_HOST" -d "$SRC_DB" -v src_schema="$SRC_SCHEMA" -tA)"
 if [ -z "$SRC_MAX_ID" ] || [ "$SRC_MAX_ID" = "" ]; then
     echo "freeze-at-stamp: REFUSED -- the source tracker ${SRC_SCHEMA} has no ledger rows at all;" >&2
     echo "  there is nothing to freeze a cutoff of." >&2
@@ -275,18 +317,27 @@ if [ "$CUTOFF_IS_ID" = "1" ]; then
         exit 1
     fi
     CUTOFF_ID="$CUTOFF_INPUT"
-    CUTOFF_TS="$(psql -h "$SRC_HOST" -d "$SRC_DB" -tAc "SELECT ts FROM ${SRC_SCHEMA}.ledger WHERE id = ${CUTOFF_ID};")"
+    # CUTOFF_ID is proven digits-only above (the CUTOFF_IS_ID=1 branch's own case-pattern gate) --
+    # bound as a psql -v anyway, no reason to special-case an already-safe value.
+    CUTOFF_TS="$(_psql_in "SELECT ts FROM :\"src_schema\".ledger WHERE id = :'cutoff_id';" \
+        | psql -h "$SRC_HOST" -d "$SRC_DB" -v src_schema="$SRC_SCHEMA" -v cutoff_id="$CUTOFF_ID" -tA)"
 else
-    NOW_TS="$(psql -h "$SRC_HOST" -d "$SRC_DB" -tAc "SELECT now();")"
-    FUTURE="$(psql -h "$SRC_HOST" -d "$SRC_DB" -tAc "SELECT ('${CUTOFF_INPUT}'::timestamptz > now());")"
+    NOW_TS="$(_psql_in "SELECT now();" | psql -h "$SRC_HOST" -d "$SRC_DB" -tA)"
+    # CUTOFF_INPUT here is genuinely untrusted, operator-supplied text (--as-of, or falls through
+    # to a git committer timestamp) that used to be spliced RAW into a single-quoted SQL string
+    # literal -- the actual injection site in this file (row 1637's class, not just an identifier
+    # splice): a crafted --as-of value like "2020-01-01'; DROP ...; --" broke out of the literal.
+    # Bound as :'cutoff_input' below, never spliced.
+    FUTURE="$(_psql_in "SELECT (:'cutoff_input'::timestamptz > now());" \
+        | psql -h "$SRC_HOST" -d "$SRC_DB" -v cutoff_input="$CUTOFF_INPUT" -tA)"
     if [ "$FUTURE" = "t" ]; then
         echo "freeze-at-stamp: REFUSED -- the cutoff timestamp '$CUTOFF_INPUT' is in the future" >&2
         echo "  (server now() = $NOW_TS). A frozen snapshot cannot include rows that have not" >&2
         echo "  happened yet." >&2
         exit 1
     fi
-    CUTOFF_ID="$(psql -h "$SRC_HOST" -d "$SRC_DB" -tAc \
-        "SELECT max(id) FROM ${SRC_SCHEMA}.ledger WHERE ts <= '${CUTOFF_INPUT}'::timestamptz;")"
+    CUTOFF_ID="$(_psql_in "SELECT max(id) FROM :\"src_schema\".ledger WHERE ts <= :'cutoff_input'::timestamptz;" \
+        | psql -h "$SRC_HOST" -d "$SRC_DB" -v src_schema="$SRC_SCHEMA" -v cutoff_input="$CUTOFF_INPUT" -tA)"
     if [ -z "$CUTOFF_ID" ]; then
         echo "freeze-at-stamp: REFUSED -- no ledger row exists at or before '$CUTOFF_INPUT' in the" >&2
         echo "  source tracker (its earliest row is later than this cutoff). Pick a later --as-of," >&2
@@ -307,9 +358,12 @@ echo "== cutoff resolved: ledger id <= $CUTOFF_ID (source max is $SRC_MAX_ID), t
 DB_OWNER_ROLE="${DB}_owner"
 DB_RO_ROLE="${DB}_ro"
 
-DB_EXISTS="$(psql -h "$SRC_HOST" -d "$SRC_DB" -tAc "SELECT count(*) FROM pg_database WHERE datname = '${DB}';")"
-OWNER_ROLE_EXISTS="$(psql -h "$SRC_HOST" -d "$SRC_DB" -tAc "SELECT count(*) FROM pg_roles WHERE rolname = '${DB_OWNER_ROLE}';")"
-RO_ROLE_EXISTS="$(psql -h "$SRC_HOST" -d "$SRC_DB" -tAc "SELECT count(*) FROM pg_roles WHERE rolname = '${DB_RO_ROLE}';")"
+DB_EXISTS="$(_psql_in "SELECT count(*) FROM pg_database WHERE datname = :'db';" \
+    | psql -h "$SRC_HOST" -d "$SRC_DB" -v db="$DB" -tA)"
+OWNER_ROLE_EXISTS="$(_psql_in "SELECT count(*) FROM pg_roles WHERE rolname = :'owner_role';" \
+    | psql -h "$SRC_HOST" -d "$SRC_DB" -v owner_role="$DB_OWNER_ROLE" -tA)"
+RO_ROLE_EXISTS="$(_psql_in "SELECT count(*) FROM pg_roles WHERE rolname = :'ro_role';" \
+    | psql -h "$SRC_HOST" -d "$SRC_DB" -v ro_role="$DB_RO_ROLE" -tA)"
 
 _refuse_unreachable() {
     echo "freeze-at-stamp: REFUSED -- the standing frozen-snapshot database is not reachable." >&2
@@ -394,14 +448,14 @@ echo "   content-preserving copy is the correct disposition, not a shortcut: not
 echo "   copy can introduce a graph the source did not already have. row_hash/chain_high_water" >&2
 echo "   triggers stay ENABLED throughout -- they are what this script relies on to self-verify" >&2
 echo "   the copy (see CHAIN CONTINUITY above)." >&2
-psql -h "$HOST" -d "$DB" -U "$DB_OWNER_ROLE" -v ON_ERROR_STOP=1 -c \
-    "ALTER TABLE ${SRC_SCHEMA}.ledger DISABLE TRIGGER set_stamp;
-     ALTER TABLE ${SRC_SCHEMA}.ledger DISABLE TRIGGER validate_enacts;
-     ALTER TABLE ${SRC_SCHEMA}.ledger DISABLE TRIGGER validate_review;
-     ALTER TABLE ${SRC_SCHEMA}.ledger DISABLE TRIGGER validate_amends;
-     ALTER TABLE ${SRC_SCHEMA}.ledger DISABLE TRIGGER validate_answers;
-     ALTER TABLE ${SRC_SCHEMA}.ledger DISABLE TRIGGER validate_work_item;
-     ALTER TABLE ${SRC_SCHEMA}.ledger DISABLE TRIGGER one_row_per_insert;"
+_psql_in "ALTER TABLE :\"src_schema\".ledger DISABLE TRIGGER set_stamp;
+     ALTER TABLE :\"src_schema\".ledger DISABLE TRIGGER validate_enacts;
+     ALTER TABLE :\"src_schema\".ledger DISABLE TRIGGER validate_review;
+     ALTER TABLE :\"src_schema\".ledger DISABLE TRIGGER validate_amends;
+     ALTER TABLE :\"src_schema\".ledger DISABLE TRIGGER validate_answers;
+     ALTER TABLE :\"src_schema\".ledger DISABLE TRIGGER validate_work_item;
+     ALTER TABLE :\"src_schema\".ledger DISABLE TRIGGER one_row_per_insert;" \
+    | psql -h "$HOST" -d "$DB" -U "$DB_OWNER_ROLE" -v ON_ERROR_STOP=1 -v src_schema="$SRC_SCHEMA"
 
 echo "== restoring data: pg_dump --data-only of ${SRC_SCHEMA}+${SRC_KERN} -> ${DB} (row_hash /" \
      "chain_high_water triggers stay ENABLED and self-verify on replay) =="
@@ -415,26 +469,26 @@ pg_dump -h "$SRC_HOST" -d "$SRC_DB" -n "$SRC_SCHEMA" -n "$SRC_KERN" --data-only 
     | psql -h "$HOST" -d "$DB" -U "$DB_OWNER_ROLE" -v ON_ERROR_STOP=1
 
 echo "== re-enabling set_stamp + the referential validate_* triggers =="
-psql -h "$HOST" -d "$DB" -U "$DB_OWNER_ROLE" -v ON_ERROR_STOP=1 -c \
-    "ALTER TABLE ${SRC_SCHEMA}.ledger ENABLE TRIGGER set_stamp;
-     ALTER TABLE ${SRC_SCHEMA}.ledger ENABLE TRIGGER validate_enacts;
-     ALTER TABLE ${SRC_SCHEMA}.ledger ENABLE TRIGGER validate_review;
-     ALTER TABLE ${SRC_SCHEMA}.ledger ENABLE TRIGGER validate_amends;
-     ALTER TABLE ${SRC_SCHEMA}.ledger ENABLE TRIGGER validate_answers;
-     ALTER TABLE ${SRC_SCHEMA}.ledger ENABLE TRIGGER validate_work_item;
-     ALTER TABLE ${SRC_SCHEMA}.ledger ENABLE TRIGGER one_row_per_insert;"
+_psql_in "ALTER TABLE :\"src_schema\".ledger ENABLE TRIGGER set_stamp;
+     ALTER TABLE :\"src_schema\".ledger ENABLE TRIGGER validate_enacts;
+     ALTER TABLE :\"src_schema\".ledger ENABLE TRIGGER validate_review;
+     ALTER TABLE :\"src_schema\".ledger ENABLE TRIGGER validate_amends;
+     ALTER TABLE :\"src_schema\".ledger ENABLE TRIGGER validate_answers;
+     ALTER TABLE :\"src_schema\".ledger ENABLE TRIGGER validate_work_item;
+     ALTER TABLE :\"src_schema\".ledger ENABLE TRIGGER one_row_per_insert;" \
+    | psql -h "$HOST" -d "$DB" -U "$DB_OWNER_ROLE" -v ON_ERROR_STOP=1 -v src_schema="$SRC_SCHEMA"
 
 # --- TRUNCATE at cutoff (ledger, then review_detail's now-dangling rows) -------------------------
 echo "== truncating ${DB}.${SRC_SCHEMA}.ledger to id <= ${CUTOFF_ID} (disabling append_only_row" \
      "around the DELETE, schema-owner-level act, mirrors seen-red/s27-chain-high-water/'s own" \
      "delete_row() idiom) =="
-psql -h "$HOST" -d "$DB" -U "$DB_OWNER_ROLE" -v ON_ERROR_STOP=1 <<SQL
-ALTER TABLE ${SRC_SCHEMA}.ledger DISABLE TRIGGER append_only_row;
-ALTER TABLE ${SRC_SCHEMA}.review_detail DISABLE TRIGGER review_detail_append_only;
-DELETE FROM ${SRC_SCHEMA}.review_detail WHERE ledger_id NOT IN (SELECT id FROM ${SRC_SCHEMA}.ledger WHERE id <= ${CUTOFF_ID});
-DELETE FROM ${SRC_SCHEMA}.ledger WHERE id > ${CUTOFF_ID};
-ALTER TABLE ${SRC_SCHEMA}.review_detail ENABLE TRIGGER review_detail_append_only;
-ALTER TABLE ${SRC_SCHEMA}.ledger ENABLE TRIGGER append_only_row;
+psql -h "$HOST" -d "$DB" -U "$DB_OWNER_ROLE" -v ON_ERROR_STOP=1 -v src_schema="$SRC_SCHEMA" -v cutoff_id="$CUTOFF_ID" <<'SQL'
+ALTER TABLE :"src_schema".ledger DISABLE TRIGGER append_only_row;
+ALTER TABLE :"src_schema".review_detail DISABLE TRIGGER review_detail_append_only;
+DELETE FROM :"src_schema".review_detail WHERE ledger_id NOT IN (SELECT id FROM :"src_schema".ledger WHERE id <= :'cutoff_id');
+DELETE FROM :"src_schema".ledger WHERE id > :'cutoff_id';
+ALTER TABLE :"src_schema".review_detail ENABLE TRIGGER review_detail_append_only;
+ALTER TABLE :"src_schema".ledger ENABLE TRIGGER append_only_row;
 SQL
 
 # chain_high_water is a POST-s27 relation (kernel/lineage/s27-chain-high-water.sql) -- LIVE-probed,
@@ -445,13 +499,13 @@ SQL
 # reseeded to the cutoff (never left at the live value, or the frozen dest would misreport
 # TAIL-DELETION-SUSPECT); a pre-s27 source has nothing to reseed, and the frozen copy inherits that
 # same honest pre-s27 shape, which ./verify-chain there reports as WITNESS-UNAVAILABLE, never a crash.
-HAS_HIGH_WATER="$(psql -h "$HOST" -d "$DB" -U "$DB_OWNER_ROLE" -tAc \
-    "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = '${SRC_KERN}' AND table_name = 'chain_high_water');")"
+HAS_HIGH_WATER="$(_psql_in "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = :'src_kern' AND table_name = 'chain_high_water');" \
+    | psql -h "$HOST" -d "$DB" -U "$DB_OWNER_ROLE" -v src_kern="$SRC_KERN" -tA)"
 if [ "$HAS_HIGH_WATER" = "t" ]; then
     echo "== resetting ${DB}.${SRC_KERN}.chain_high_water to the cutoff max id (${CUTOFF_ID}), never" \
          "left at the source's live value -- see header's per-table disposition =="
-    psql -h "$HOST" -d "$DB" -U "$DB_OWNER_ROLE" -v ON_ERROR_STOP=1 -c \
-        "UPDATE ${SRC_KERN}.chain_high_water SET max_id = ${CUTOFF_ID};"
+    _psql_in "UPDATE :\"src_kern\".chain_high_water SET max_id = :'cutoff_id';" \
+        | psql -h "$HOST" -d "$DB" -U "$DB_OWNER_ROLE" -v ON_ERROR_STOP=1 -v src_kern="$SRC_KERN" -v cutoff_id="$CUTOFF_ID"
 else
     echo "== ${SRC_KERN}.chain_high_water not present in the source -- this tracker's kernel" \
          "predates kernel/lineage/s27-chain-high-water.sql; nothing to reseed, and the frozen" \
@@ -460,17 +514,23 @@ else
 fi
 
 echo "== resyncing sequences to the truncated max ids (never left ahead of the surviving rows) =="
-psql -h "$HOST" -d "$DB" -U "$DB_OWNER_ROLE" -v ON_ERROR_STOP=1 <<SQL
-SELECT setval(pg_get_serial_sequence('${SRC_SCHEMA}.ledger', 'id'), ${CUTOFF_ID});
-SELECT setval(pg_get_serial_sequence('${SRC_KERN}.principal', 'id'),
-              (SELECT max(id) FROM ${SRC_KERN}.principal));
+# pg_get_serial_sequence() takes its relation argument as TEXT (regclass-parsed), not an
+# identifier position -- :'src_schema'/:'src_kern' (literal binds) concatenated with the fixed
+# table-name suffix, never :"var" here. SRC_SCHEMA/SRC_KERN are already allowlist-restricted to
+# [A-Za-z0-9_]+ (checked earlier in this script), so the concatenation needs no further quoting.
+psql -h "$HOST" -d "$DB" -U "$DB_OWNER_ROLE" -v ON_ERROR_STOP=1 \
+    -v src_schema="$SRC_SCHEMA" -v src_kern="$SRC_KERN" -v cutoff_id="$CUTOFF_ID" <<'SQL'
+SELECT setval(pg_get_serial_sequence(:'src_schema' || '.ledger', 'id'), :'cutoff_id');
+SELECT setval(pg_get_serial_sequence(:'src_kern' || '.principal', 'id'),
+              (SELECT max(id) FROM :"src_kern".principal));
 SQL
 
 # --- GRANTS: SELECT-only by default (--writable skips the revoke) --------------------------------
-psql -h "$HOST" -d "$DB" -U "$DB_OWNER_ROLE" -v ON_ERROR_STOP=1 <<SQL
-GRANT USAGE ON SCHEMA ${SRC_SCHEMA}, ${SRC_KERN} TO ${DB_RO_ROLE};
-GRANT SELECT ON ALL TABLES IN SCHEMA ${SRC_SCHEMA} TO ${DB_RO_ROLE};
-GRANT SELECT ON ALL TABLES IN SCHEMA ${SRC_KERN} TO ${DB_RO_ROLE};
+psql -h "$HOST" -d "$DB" -U "$DB_OWNER_ROLE" -v ON_ERROR_STOP=1 \
+    -v src_schema="$SRC_SCHEMA" -v src_kern="$SRC_KERN" -v ro_role="$DB_RO_ROLE" <<'SQL'
+GRANT USAGE ON SCHEMA :"src_schema", :"src_kern" TO :"ro_role";
+GRANT SELECT ON ALL TABLES IN SCHEMA :"src_schema" TO :"ro_role";
+GRANT SELECT ON ALL TABLES IN SCHEMA :"src_kern" TO :"ro_role";
 SQL
 if [ "$WRITABLE" != "1" ]; then
     echo "== SELECT-only grants (default): no INSERT/UPDATE/DELETE for ${DB_RO_ROLE} -- a write" \
@@ -478,10 +538,11 @@ if [ "$WRITABLE" != "1" ]; then
 else
     echo "== --writable: granting INSERT on ${SRC_SCHEMA}.ledger + related tables to ${DB_RO_ROLE}" \
          "(evidence-grade default overridden explicitly) =="
-    psql -h "$HOST" -d "$DB" -U "$DB_OWNER_ROLE" -v ON_ERROR_STOP=1 <<SQL
-GRANT INSERT ON ${SRC_SCHEMA}.ledger, ${SRC_SCHEMA}.review_detail, ${SRC_SCHEMA}.countersign_obligation TO ${DB_RO_ROLE};
-GRANT INSERT ON ${SRC_KERN}.principal TO ${DB_RO_ROLE};
-GRANT USAGE ON SEQUENCE ${SRC_SCHEMA}.ledger_id_seq, ${SRC_KERN}.principal_id_seq TO ${DB_RO_ROLE};
+    psql -h "$HOST" -d "$DB" -U "$DB_OWNER_ROLE" -v ON_ERROR_STOP=1 \
+        -v src_schema="$SRC_SCHEMA" -v src_kern="$SRC_KERN" -v ro_role="$DB_RO_ROLE" <<'SQL'
+GRANT INSERT ON :"src_schema".ledger, :"src_schema".review_detail, :"src_schema".countersign_obligation TO :"ro_role";
+GRANT INSERT ON :"src_kern".principal TO :"ro_role";
+GRANT USAGE ON SEQUENCE :"src_schema".ledger_id_seq, :"src_kern".principal_id_seq TO :"ro_role";
 SQL
 fi
 
