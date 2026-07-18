@@ -1,0 +1,272 @@
+== scaffolding WORLD (chain ends s50-defeat-input-raw-domain.sql, s51 NOT yet applied) ==
+=== detect-negative-pre-s51 ===
+  [ok] s51 .detect.sql reads f on the s50-headed (pre-s51) chain
+
+== applying s51 in place ==
+=== detect-positive-post-s51 ===
+  [ok] s51 .detect.sql reads t once s51 is applied on top of s50
+
+== WA1: put -> hash printed; get -> byte-identical; stat sane ==
+=== wa1-function-accepted ===
+  [ok] {'row_id': None, 'message': 'artifact registered: 3f81763f775b4615ce67c63532ef04c400bec0502cbab19c3deb7ad49d028ee2', 'sqlstate': None, 'refusal_id': None, 'disposition': 'accepted'}
+
+=== wa1-function-hash-in-message ===
+  [ok] message='artifact registered: 3f81763f775b4615ce67c63532ef04c400bec0502cbab19c3deb7ad49d028ee2' expected hash 3f81763f775b4615ce67c63532ef04c400bec0502cbab19c3deb7ad49d028ee2
+
+=== wa1-function-bytes-byte-identical ===
+  [ok] stored bytes decode to the exact submitted content
+
+=== wa1-cli-put-exit0 ===
+  [ok] exit=0 stdout='led artifact put: artifact registered: f369f2ac49731ad11e8a74291a9ac51de2cc8e36470e261ecd72c68e4a4d3257 (from /tmp/s51-artifact-store-az4jh841/tmpv0dr_nzr.md)\n' stderr=''
+
+=== wa1-cli-put-prints-hash ===
+  [ok] stdout='led artifact put: artifact registered: f369f2ac49731ad11e8a74291a9ac51de2cc8e36470e261ecd72c68e4a4d3257 (from /tmp/s51-artifact-store-az4jh841/tmpv0dr_nzr.md)\n' expected hash f369f2ac49731ad11e8a74291a9ac51de2cc8e36470e261ecd72c68e4a4d3257
+
+=== wa1-cli-get-exit0 ===
+  [ok] exit=0 stderr='led artifact get: wrote f369f2ac49731ad11e8a74291a9ac51de2cc8e36470e261ecd72c68e4a4d3257 -> /tmp/s51-artifact-store-az4jh841/wa1-get-out.md (hash verified).\n'
+
+=== wa1-cli-get-byte-identical ===
+  [ok] round-tripped bytes match the original file
+
+=== wa1-cli-stat-exit0-and-sane ===
+  [ok] exit=0 stdout='SET\nSET\n-[ RECORD 1 ]-+-----------------------------------------------------------------\nhash          | f369f2ac49731ad11e8a74291a9ac51de2cc8e36470e261ecd72c68e4a4d3257\nsize          | 68\nmedia_type    | text/markdown\nregistered_at | 2026-07-18 23:12:34.48432+02\nregistered_by | author-fixture\n\n'
+
+== WA2: idempotent re-put of identical bytes ==
+=== wa2-idempotent-accepted ===
+  [ok] {'row_id': None, 'message': 'artifact already present: 3f81763f775b4615ce67c63532ef04c400bec0502cbab19c3deb7ad49d028ee2', 'sqlstate': None, 'refusal_id': None, 'disposition': 'accepted'}
+
+=== wa2-idempotent-already-present-message ===
+  [ok] message='artifact already present: 3f81763f775b4615ce67c63532ef04c400bec0502cbab19c3deb7ad49d028ee2'
+
+=== wa2-idempotent-no-second-row ===
+  [ok] count before=1 after=1 -- expected 1/1
+
+== WA3: size cap -> artifact_too_large, journaled digest-only ==
+=== wa3-refused ===
+  [ok] {'row_id': None, 'message': 'write boundary: artifact_too_large -- 1048577 bytes exceeds the 1048576-byte (1 MiB) v1 cap (kernel/lineage/s51-artifact-store.sql: a deliberate constant -- charters/TOMLs/specs are KB-scale; raising the cap is an amendment with a stated need, never a silent bump). Nothing was stored.', 'sqlstate': 'P0001', 'refusal_id': 4, 'disposition': 'refused'}
+
+=== wa3-message-names-too-large ===
+  [ok] message='write boundary: artifact_too_large -- 1048577 bytes exceeds the 1048576-byte (1 MiB) v1 cap (kernel/lineage/s51-artifact-store.sql: a deliberate constant -- charters/TOMLs/specs are KB-scale; raising the cap is an amendment with a stated need, never a silent bump). Nothing was stored.'
+
+=== wa3-journaled-once-more ===
+  [ok] write_refused/artifact count before=0 after=1
+
+=== wa3-nothing-stored ===
+  [ok] count=0
+
+=== wa3-digest-only-no-raw-bytes-in-journal ===
+  [ok] journaled row (message|digest)='write boundary: artifact_too_large -- 1048577 bytes exceeds the 1048576-byte (1 MiB) v1 cap (kernel/lineage/s51-artifact-store.sql: a deliberate constant -- charters/TOMLs/specs are KB-scale; raising the cap is an amendment with a stated need, never a silent bump). Nothing was stored.|5cd29b939b302890a0b1ada4c53e64457aff25944219e66619e7a6079f94f527' -- must carry a 64-hex digest, never the oversize content itself
+
+== WA4: unknown media type -> typed refusal naming the closed vocabulary ==
+=== wa4-refused ===
+  [ok] {'row_id': None, 'message': "write boundary: artifact media_type 'image/png' is not a member of the v1 closed vocabulary (text/markdown, text/plain, application/toml, application/json -- design/FABLE-ARTIFACT-STORE-SPEC.md's essential-records amendment: governance registers, no binaries; widening this vocabulary is a future amendment that must argue the essential-records test).", 'sqlstate': 'P0001', 'refusal_id': 5, 'disposition': 'refused'}
+
+=== wa4-names-vocabulary ===
+  [ok] message="write boundary: artifact media_type 'image/png' is not a member of the v1 closed vocabulary (text/markdown, text/plain, application/toml, application/json -- design/FABLE-ARTIFACT-STORE-SPEC.md's essential-records amendment: governance registers, no binaries; widening this vocabulary is a future amendment that must argue the essential-records test)."
+
+== WA5: asserted-hash mismatch -> refusal ==
+=== wa5-refused ===
+  [ok] {'row_id': None, 'message': "write boundary: artifact hash mismatch -- asserted 0000000000000000000000000000000000000000000000000000000000000000 but the server computed 359b365773dbfb3e21cc1196062f477ad27f83bc04aa9dcd4178d924127a5f17 from the submitted bytes (kernel/lineage/s51-artifact-store.sql: assert-and-verify, the server's own computation governs; a caller may not name a hash it did not compute). Nothing was stored.", 'sqlstate': 'P0001', 'refusal_id': 6, 'disposition': 'refused'}
+
+=== wa5-mismatch-message ===
+  [ok] message="write boundary: artifact hash mismatch -- asserted 0000000000000000000000000000000000000000000000000000000000000000 but the server computed 359b365773dbfb3e21cc1196062f477ad27f83bc04aa9dcd4178d924127a5f17 from the submitted bytes (kernel/lineage/s51-artifact-store.sql: assert-and-verify, the server's own computation governs; a caller may not name a hash it did not compute). Nothing was stored."
+
+== WA6: corruption drill -- owner tampers stored bytes; get refuses loudly ==
+=== wa6-owner-tamper-succeeded ===
+  [ok] owner UPDATE (via session_replication_role=replica, bypassing the append-only trigger) exit=0 stderr=
+
+=== wa6-cli-get-refuses ===
+  [ok] exit=1 (expected nonzero)
+
+=== wa6-cli-get-names-corruption ===
+  [ok] stderr="led artifact get: REFUSED -- CORRUPT STORE -- the bytes returned for hash\n  '3f81763f775b4615ce67c63532ef04c400bec0502cbab19c3deb7ad49d028ee2' do NOT hash to '3f81763f775b4615ce67c63532ef04c400bec0502cbab19c3deb7ad49d028ee2' (computed '560a3165dbfe46665c4f40b52e0a51830efd2b2083169e309b5b878054790ef2' instead).\n  kernel/lineage/s51-artifact-store.sql: a corrupt store fails loud here, never\n  serves silently-wrong bytes under a claimed hash. Nothing was written.\n"
+
+=== wa6-cli-get-emitted-nothing-on-stdout ===
+  [ok] stdout='' -- must be empty, never the corrupted bytes
+
+== WA7: pg_dump of the scratch pair, restore to a SECOND scratch pair ==
+=== wa7-pg-dump-succeeded ===
+  [ok] exit=0 stderr=
+
+=== wa7-target-role-created ===
+  [ok] stderr=
+
+=== wa7-restore-succeeded ===
+  [ok] exit=0 stdout_tail=R VIEW
+COMMENT
+CREATE TABLE
+ALTER TABLE
+COMMENT
+COMMENT
+COMMENT
+COMMENT
+CREATE TABLE
+ALTER TABLE
+COMMENT
+CREATE TABLE
+ALTER TABLE
+COMMENT
+CREATE TABLE
+ALTER TABLE
+COMMENT
+CREATE SEQUENCE
+ALTER SEQUENCE
+ALTER SEQUENCE
+CREATE VIEW
+ALTER VIEW
+COMMENT
+CREATE SEQUENCE
+ALTER SEQUENCE
+COMMENT
+CREATE TABLE
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+COPY 0
+COPY 6
+COPY 0
+COPY 2
+COPY 1
+COPY 1
+COPY 1
+COPY 3
+COPY 1
+ setval 
+--------
+      6
+(1 row)
+
+ setval 
+--------
+      3
+(1 row)
+
+ setval 
+--------
+      3
+(1 row)
+
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+CREATE TRIGGER
+CREATE TRIGGER
+CREATE TRIGGER
+CREATE TRIGGER
+CREATE TRIGGER
+CREATE TRIGGER
+CREATE TRIGGER
+CREATE TRIGGER
+CREATE TRIGGER
+CREATE TRIGGER
+CREATE TRIGGER
+CREATE TRIGGER
+CREATE TRIGGER
+CREATE TRIGGER
+CREATE TRIGGER
+CREATE TRIGGER
+CREATE TRIGGER
+CREATE TRIGGER
+CREATE TRIGGER
+CREATE TRIGGER
+CREATE TRIGGER
+CREATE TRIGGER
+CREATE TRIGGER
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+GRANT
+GRANT
+GRANT
+REVOKE
+GRANT
+REVOKE
+REVOKE
+GRANT
+REVOKE
+GRANT
+REVOKE
+GRANT
+REVOKE
+GRANT
+REVOKE
+GRANT
+REVOKE
+GRANT
+REVOKE
+GRANT
+GRANT
+GRANT
+GRANT
+GRANT
+GRANT
+GRANT
+GRANT
+GRANT
+GRANT
+GRANT
+GRANT
+GRANT
+GRANT
+GRANT
+GRANT
+GRANT
+GRANT
+GRANT
+GRANT
+GRANT
+GRANT
+GRANT
+GRANT
+GRANT
+GRANT
+GRANT
+GRANT
+GRANT
+GRANT
+GRANT
+GRANT
+GRANT
+GRANT
+GRANT
+GRANT
+GRANT
+GRANT
+ stderr_tail=
+
+=== wa7-restored-byte-identical ===
+  [ok] the restored second schema pair's row decodes to the exact original bytes -- the backup-covers-referents claim witnessed, not asserted
+
+== WA8: charter registration whose bytes are also in the store ==
+=== wa8-artifact-put-ok ===
+  [ok] stderr=''
+
+=== wa8-charter-register ===
+  [ok] exit=0 stdout="role_charter: registered -- role 'author-fixture' -> charter row 7\n  path:   /tmp/s51-artifact-store-az4jh841/WA8-CHARTER.md\n  sha256: 52adc02dd081722d820a408b5ecf6466c91216b8745a8fb57c201d79ac32af39\nled: row 7 written.\n" stderr=''
+
+=== wa8-charter-show-resolves-ok ===
+  [ok] exit=0 stdout="role 'author-fixture': IN-FORCE charter registration, row 7 (written by 'author-fixture')\n  path:   /tmp/s51-artifact-store-az4jh841/WA8-CHARTER.md\n  sha256: 52adc02dd081722d820a408b5ecf6466c91216b8745a8fb57c201d79ac32af39\n-- full ledger row --\n-[ RECORD 1 ]-----------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------\nid                            | 7\nts                            | 2026-07-18 23:12:36.904107+02\nsession                       | main\nkind                          | decision\nstatement                     | role-charter registered: role=author-fixture path=/tmp/s51-artifact-store-az4jh841/WA8-CHARTER.md sha256=52adc02dd081722d820a408b5ecf6466c91216b8745a8fb57c201d79ac32af39\nrationale                     | \nstatus                        | open\nevidence                      | \nconfidence                    | \nsupersedes                    | \nrefs                          | \nconcern                       | \nenacts                        | \nactor                         | 2\nregards                       | \namends                        | \namends_scope                  | \nanswers                       | \nstamp_session                 | \nstamp_agent                   | \nstamp_ts                      | \nstamp_hmac                    | \nstamp_verified                | f\nwork_slug                     | \nwork_title                    | \nwork_depends_on               | \nwork_resolution               | \nwork_witness                  | \nstamp_invocation              | \nevent_declared_ts             | \nrow_hash                      | dd82c5499ef315136173b8e6145a24d7b26c95893fb20430d2e354f54ecc2e37\nwork_parent                   | \nwork_review_disposition       | \nwork_review_ref               | \nwork_strict_close             | \nedge_type                     | \nwork_discharge                | \ndecision_grade                | \nwork_violation_class          | \nwork_violation_target_id      | \nwork_violation_witness        | \nprincipal_subject             | \nprincipal_purpose             | \nprincipal_db_role             | \nprincipal_actor_resolution    | explicit\nprincipal_binding_active      | \nprincipal_object              | \nprincipal_relation            | \nprincipal_role_name           | \nprincipal_key_fingerprint     | \nprincipal_competence_activity | \nprincipal_competence_band     | \nprincipal_competence_basis    | \nrefusal_sqlstate              | \nrefusal_message               | \nrefusal_surface               | \nrefusal_payload_digest        | \nrefusal_attempted_actor       | \nrefusal_attempted_role        | \nattest_row_id                 | \nattest_model                  | \nattest_grade                  | \nattest_verdict                | \nattest_expected               | \nattest_session                | \nattest_basis                  | \nactor_name                    | author-fixture\nrole_charter: OK -- on-disk bytes match the registered hash (52adc02dd081722d820a408b5ecf6466c91216b8745a8fb57c201d79ac32af39).\n" stderr=''
+
+=== wa8-store-resolves-same-bytes-charter-cites ===
+  [ok] the artifact store's own copy (registered via `led artifact put`) decodes to the exact bytes role_charter.py's independent hash computation also matched
+
+all s51-artifact-store cases WITNESSED clean.

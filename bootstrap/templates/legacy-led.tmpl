@@ -266,6 +266,23 @@
 #                                              item `content-free-review-audit`; WITNESSED SPECIMEN: run12
 #                                              ledger row 20, statement="test").
 #
+#   led artifact put <path> [--media-type <type>]
+#   led artifact get <hash> [--out <path>]
+#   led artifact stat <hash>
+#                                              content-addressed artifact custody (kernel/lineage/
+#                                              s51-artifact-store.sql, design/FABLE-ARTIFACT-
+#                                              STORE-SPEC.md; s43+ kernel required, probed live).
+#                                              put registers a file's bytes (base64, server-side
+#                                              SHA-256, 1 MiB v1 cap, closed media-type vocabulary
+#                                              markdown/plain/toml/json) and prints the resulting
+#                                              hash; identical bytes re-put are an idempotent
+#                                              no-op. get verifies bytes-vs-hash on the way out and
+#                                              REFUSES to emit on mismatch (a corrupt store fails
+#                                              loud, never serves silently-wrong bytes) — writes to
+#                                              --out or stdout. stat shows size/media/registrant
+#                                              without bytes. LEGACY-ONLY (./led artifact refuses,
+#                                              teaching this file — not routed on the boundary).
+#
 #   led obligate <scope> <assigned-by-principal> <obliged-actor-principal>
 #                                              register a countersign_obligation. DIRECTION, spelled
 #                                              out because getting it backwards is the recurring
@@ -836,6 +853,21 @@ has_s45_standing_lifecycle() {
   [ "$_has_s45" = "t" ]
 }
 
+# --- the s51 artifact-store capability probe (kernel/lineage/s51-artifact-store.sql,
+# design/FABLE-ARTIFACT-STORE-SPEC.md) -- same shape as the s43/s45 probes above: a BEHAVIOR
+# FINGERPRINT (the artifact_write SECURITY DEFINER function exists in :kern), never a version
+# literal. Gates the whole `led artifact ...` verb family: an s43-but-pre-s51 world is refused
+# loudly, teaching that the artifact store is not yet part of this deployment's birth chain,
+# rather than failing deep inside a psql call against a table that does not exist.
+_has_s51=""
+has_s51_artifact_store() {
+  if [ -z "$_has_s51" ]; then
+    _has_s51=$(psql -h "$PGHOST" -d "$PGDB" -tAc \
+      "SELECT EXISTS (SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace WHERE n.nspname = '${KERNEL}' AND p.proname = 'artifact_write' AND p.prosecdef);")
+  fi
+  [ "$_has_s51" = "t" ]
+}
+
 # _payload_json key value [key value ...] -- compact JSON on stdout; a key whose value is the
 # EMPTY STRING is omitted entirely (the boundary's absent-key semantics: the column falls to
 # its default / stays NULL -- the same outcome the legacy branches' NULLIF(:'v','') binds
@@ -915,6 +947,64 @@ sys.stderr.write(
 sys.exit(1)
 ') || return 1
   [ -n "$KW_ROW_ID" ] && echo "led: row ${KW_ROW_ID} written."
+  return 0
+}
+
+# kernel_write_from_file <boundary-function> <payload-file> -- kernel_write()'s SIBLING for a
+# payload too large to cross as ONE psql -v argument (kernel/lineage/s51-artifact-store.sql;
+# ledger rows 1637/1643's own fix shape: "allowlist-validate then bind via psql -v through
+# stdin -- psql -c silently no-ops :var interpolation"). The value-carrier stays IDENTICAL to
+# kernel_write() -- psql's own `:'var'`-style literal-quoted substitution -- only the channel
+# that POPULATES the variable changes: `\set payload \`cat '<file>'\`` runs psql's documented
+# backtick-command-capture meta-command (the value is read via a pipe from the `cat` subprocess
+# psql itself launches, never handed to bash/psql as one execve argument), so a base64'd 1 MiB
+# artifact (~1.4 MiB of text) crosses with no MAX_ARG_STRLEN exposure at all -- the same
+# interpreter-boundary discipline as kernel_write(), just fed through the channel that has no
+# exec-arg ceiling (stdin/file content), exactly the fix shape those two rows established.
+# payload_file is ALWAYS a path this script itself created via mktemp (never an operator-typed
+# string), so the single-quoted embed in the \set line below carries no operator-controlled
+# content -- the SAME posture the rest of this file already takes toward its own ${SCHEMA}/
+# ${KERNEL}/${ROLE} deployment-config interpolation (established convention, not a new
+# exception cut for this helper).
+# A DEDICATED sibling, not a kernel_write() rewrite (ADR-0004 minimal-touch): kernel_write() is
+# the hot path for every OTHER write verb in this file; this helper exists for the one shape
+# (artifact bytes) that needs a different transport, so the well-exercised existing function is
+# left untouched.
+kernel_write_from_file() {
+  local fn="$1" payload_file="$2" vjson rc parsed
+  vjson=$(psql -h "$PGHOST" -d "$PGDB" -tAq -v ON_ERROR_STOP=1 <<SQL
+    \set payload \`cat '$payload_file'\`
+    SET ROLE ${ROLE};
+    SET search_path = ${SCHEMA}, ${KERNEL};
+    SELECT to_jsonb(v) FROM ${KERNEL}.${fn}(:'payload'::jsonb) v;
+SQL
+  )
+  rc=$?
+  if [ "$rc" -ne 0 ]; then
+    echo "led: REFUSED (transport) -- the psql invocation for '${fn}' (payload staged at" >&2
+    echo "  '${payload_file}') failed with exit ${rc} -- a genuine connection/psql failure," >&2
+    echo "  not the argstrlen wall (this transport reads the payload via psql's own backtick-" >&2
+    echo "  command value carrier, never an execve argument, so that wall does not apply here)." >&2
+    return "$rc"
+  fi
+  parsed=$(printf '%s' "$vjson" | python3 -c '
+import json, sys
+v = json.load(sys.stdin)
+print("\t".join([
+    v.get("disposition") or "",
+    (v.get("message") or "").replace("\t", " ").replace("\n", " "),
+    v.get("sqlstate") or "",
+    str(v.get("refusal_id") if v.get("refusal_id") is not None else ""),
+]))
+')
+  IFS=$'\t' read -r KW_DISPOSITION KW_MESSAGE KW_SQLSTATE KW_REFUSAL_ID <<<"$parsed"
+  if [ "$KW_DISPOSITION" != "accepted" ]; then
+    echo "led: REFUSED by the kernel write boundary (SQLSTATE ${KW_SQLSTATE}; journaled as" >&2
+    echo "  write_refused row ${KW_REFUSAL_ID} -- the refusal itself is now a committed," >&2
+    echo "  hash-chained ledger record, s43/s51):" >&2
+    echo "  ${KW_MESSAGE}" >&2
+    return 1
+  fi
   return 0
 }
 
@@ -2323,6 +2413,197 @@ SQL
             (SELECT id FROM principal WHERE name = :'assigned_by_name'),
             (SELECT id FROM principal WHERE name = :'obliges_actor_name'));
 SQL
+fi
+
+# --- led artifact put/get/stat (kernel/lineage/s51-artifact-store.sql, design/
+# FABLE-ARTIFACT-STORE-SPEC.md) -- content-addressed custody, THE LEGACY-ONLY SURFACE (not
+# routed on the boundary in v1; ./led artifact refuses, teaching this file, see led.tmpl).
+if [ "${1:-}" = "artifact" ]; then
+  shift
+  if ! has_s51_artifact_store; then
+    echo "led artifact: REFUSED -- this world's kernel does not carry kernel/lineage/" >&2
+    echo "  s51-artifact-store.sql (probed live: no SECURITY DEFINER kern.artifact_write" >&2
+    echo "  function found) -- the artifact store is not part of this deployment's birth" >&2
+    echo "  chain." >&2
+    exit 1
+  fi
+  artifact_sub="${1:-}"
+  case "$artifact_sub" in
+    put)
+      shift
+      media=""
+      path=""
+      while [ $# -gt 0 ]; do
+        case "$1" in
+          --media-type) media="${2:-}"; shift 2 ;;
+          --*)
+            echo "led artifact put: REFUSED -- unrecognized flag '$1'." >&2
+            echo "usage: led artifact put <path> [--media-type text/markdown|text/plain|application/toml|application/json]" >&2
+            exit 1 ;;
+          *)
+            if [ -n "$path" ]; then
+              echo "led artifact put: REFUSED -- unexpected extra argument '$1' (path already given)." >&2
+              exit 1
+            fi
+            path="$1"; shift ;;
+        esac
+      done
+      if [ -z "$path" ]; then
+        echo "usage: led artifact put <path> [--media-type text/markdown|text/plain|application/toml|application/json]" >&2
+        exit 1
+      fi
+      if [ ! -f "$path" ]; then
+        echo "led artifact put: REFUSED -- '${path}' does not exist or is not a regular file -- nothing to register." >&2
+        exit 1
+      fi
+      # CLIENT-SIDE size pre-check (item artifact-put-early-size-refusal): the kernel's own
+      # artifact_too_large refusal (kernel/lineage/s51-artifact-store.sql) is the AUTHORITATIVE
+      # 1 MiB bound -- this is a cheaper, earlier refusal for the identical bound, so an
+      # oversize file never pays a base64-encode + full transport round-trip just to be told
+      # no. Denominated in the SAME resource (bytes, wc -c on the raw file) as the kernel's own
+      # CHECK -- never a proxy count.
+      _sz=$(wc -c < "$path" | tr -d ' ')
+      if [ "$_sz" -gt 1048576 ]; then
+        echo "led artifact put: REFUSED -- '${path}' is ${_sz} bytes, over the 1048576-byte" >&2
+        echo "  (1 MiB) v1 cap (kernel/lineage/s51-artifact-store.sql) -- refused here, before" >&2
+        echo "  any transfer; the kernel itself refuses this too (artifact_too_large), this is" >&2
+        echo "  the cheaper, earlier refusal for the identical bound." >&2
+        exit 1
+      fi
+      resolve_actor || exit 1
+      _payload_file=$(mktemp "${TMPDIR:-/tmp}/led-artifact-put.XXXXXX.json")
+      # media_type INFERENCE (JC, disclosed per role_charter.py's own J-notes convention): no
+      # --media-type override means the file EXTENSION maps to the v1 vocabulary
+      # (.md/.markdown -> text/markdown, .toml -> application/toml, .json -> application/json,
+      # anything else -> text/plain) -- a CLI-side convenience judgment call ONLY; the kernel's
+      # own artifact_media_type_check/the function's explicit vocabulary refusal are what
+      # actually enforce the closed vocabulary, so a wrong guess here is caught server-side, not
+      # silently accepted.
+      if ! python3 - "$path" "$media" "$actor_id" "$_payload_file" <<'PYEOF'
+import base64, json, os, sys
+path, media, actor_id, out_path = sys.argv[1:5]
+with open(path, "rb") as f:
+    data = f.read()
+if not media:
+    ext = os.path.splitext(path)[1].lower()
+    media = {".md": "text/markdown", ".markdown": "text/markdown",
+              ".toml": "application/toml", ".json": "application/json"}.get(ext, "text/plain")
+d = {"bytes": base64.b64encode(data).decode("ascii"), "media_type": media}
+if actor_id:
+    d["actor"] = int(actor_id)
+with open(out_path, "w", encoding="utf-8") as f:
+    json.dump(d, f)
+PYEOF
+      then
+        rm -f "$_payload_file"
+        echo "led artifact put: REFUSED -- could not read/encode '${path}' locally (see the" >&2
+        echo "  python traceback above; nothing was sent to the kernel)." >&2
+        exit 1
+      fi
+      if ! kernel_write_from_file artifact_write "$_payload_file"; then
+        rm -f "$_payload_file"
+        exit 1
+      fi
+      rm -f "$_payload_file"
+      echo "led artifact put: ${KW_MESSAGE} (from ${path})"
+      exit 0
+      ;;
+    get)
+      shift
+      out=""
+      hash=""
+      while [ $# -gt 0 ]; do
+        case "$1" in
+          --out) out="${2:-}"; shift 2 ;;
+          --*)
+            echo "led artifact get: REFUSED -- unrecognized flag '$1'." >&2
+            exit 1 ;;
+          *)
+            if [ -n "$hash" ]; then
+              echo "led artifact get: REFUSED -- unexpected extra argument '$1' (hash already given)." >&2
+              exit 1
+            fi
+            hash="$1"; shift ;;
+        esac
+      done
+      if [ -z "$hash" ] || ! printf '%s' "$hash" | grep -qE '^[0-9a-f]{64}$'; then
+        echo "usage: led artifact get <64-hex-char-sha256-hash> [--out <path>]" >&2
+        exit 1
+      fi
+      b64=$(psql -h "$PGHOST" -d "$PGDB" -tAq -v ON_ERROR_STOP=1 -v hash="$hash" <<SQL
+        SET ROLE ${ROLE};
+        SET search_path = ${SCHEMA}, ${KERNEL};
+        SELECT encode(bytes, 'base64') FROM artifact WHERE hash = :'hash';
+SQL
+      )
+      if [ -z "$b64" ]; then
+        echo "led artifact get: REFUSED -- no artifact registered with hash '${hash}'." >&2
+        echo "  See 'led artifact stat <hash>' to check, or 'led artifact put <path>' to register one." >&2
+        exit 1
+      fi
+      # HASH VERIFICATION ON THE WAY OUT (spec WA6: "a corrupt store must fail loud, never serve
+      # silently wrong bytes"). Recomputed CLIENT-SIDE from the bytes actually received, against
+      # the hash the caller asked for -- never trusts the row's own stored hash column alone
+      # (that column could be exactly the thing a substrate fault corrupted alongside bytes,
+      # though in practice hash is the PK and bytes the payload -- this check is denominated on
+      # the RECEIVED bytes, the resource that actually matters to the caller).
+      computed=$(printf '%s' "$b64" | python3 -c '
+import base64, hashlib, sys
+raw = base64.b64decode(sys.stdin.read())
+print(hashlib.sha256(raw).hexdigest())
+')
+      if [ "$computed" != "$hash" ]; then
+        echo "led artifact get: REFUSED -- CORRUPT STORE -- the bytes returned for hash" >&2
+        echo "  '${hash}' do NOT hash to '${hash}' (computed '${computed}' instead)." >&2
+        echo "  kernel/lineage/s51-artifact-store.sql: a corrupt store fails loud here, never" >&2
+        echo "  serves silently-wrong bytes under a claimed hash. Nothing was written." >&2
+        exit 1
+      fi
+      if [ -n "$out" ]; then
+        printf '%s' "$b64" | python3 -c 'import base64, sys; sys.stdout.buffer.write(base64.b64decode(sys.stdin.buffer.read()))' > "$out"
+        echo "led artifact get: wrote ${hash} -> ${out} (hash verified)." >&2
+      else
+        printf '%s' "$b64" | python3 -c 'import base64, sys; sys.stdout.buffer.write(base64.b64decode(sys.stdin.buffer.read()))'
+      fi
+      exit 0
+      ;;
+    stat)
+      shift
+      hash="${1:-}"
+      if [ -n "${2:-}" ]; then
+        echo "led artifact stat: REFUSED -- unexpected extra argument '$2'." >&2
+        exit 1
+      fi
+      if [ -z "$hash" ] || ! printf '%s' "$hash" | grep -qE '^[0-9a-f]{64}$'; then
+        echo "usage: led artifact stat <64-hex-char-sha256-hash>" >&2
+        exit 1
+      fi
+      found=$(psql -h "$PGHOST" -d "$PGDB" -tAq -v ON_ERROR_STOP=1 -v hash="$hash" <<SQL
+        SET ROLE ${ROLE};
+        SET search_path = ${SCHEMA}, ${KERNEL};
+        SELECT 1 FROM artifact WHERE hash = :'hash';
+SQL
+      )
+      if [ -z "$found" ]; then
+        echo "led artifact stat: REFUSED -- no artifact registered with hash '${hash}'." >&2
+        exit 1
+      fi
+      psql -h "$PGHOST" -d "$PGDB" -x -v ON_ERROR_STOP=1 -v hash="$hash" <<SQL
+        SET ROLE ${ROLE};
+        SET search_path = ${SCHEMA}, ${KERNEL};
+        SELECT a.hash, a.size, a.media_type, a.registered_at, p.name AS registered_by
+        FROM artifact a LEFT JOIN principal p ON p.id = a.registered_by
+        WHERE a.hash = :'hash';
+SQL
+      exit 0
+      ;;
+    *)
+      echo "usage: led artifact put <path> [--media-type <type>]" >&2
+      echo "       led artifact get <hash> [--out <path>]" >&2
+      echo "       led artifact stat <hash>" >&2
+      exit 1
+      ;;
+  esac
 fi
 
 if [ "${1:-}" = "decomposition-review-status" ]; then
@@ -4213,6 +4494,7 @@ print_generic_usage() {
   echo "       led review <entry-id> <verdict> <independence> [--antecedent id] <statement...>"
   echo "       led work open|claim|depends|close|list|violations|asof  (see top-of-file comment)"
   echo "       led --json <ledger|review|registration|obligation> <file|->  (s43 payload mode, see top-of-file comment)"
+  echo "       led artifact put <path> [--media-type <type>] | led artifact get <hash> [--out <path>] | led artifact stat <hash>  (kernel/lineage/s51-artifact-store.sql, s43+ kernel required; legacy-only, see led.tmpl)"
   echo "       '--help'/'-h'/'help' as the FIRST word of <statement...> prints this usage and writes nothing"
 }
 if [ $# -lt 2 ]; then

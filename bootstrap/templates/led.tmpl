@@ -36,6 +36,12 @@ SCOPE, HONESTLY NAMED (what this rebase covers vs. what stays `./legacy/led`-onl
         not a structural incompatibility the way obligate-revoke is -- a future pass can extend
         `boundary_cli_client.py`'s coverage to them the same way this one did for the six
         surfaces above).
+    led artifact put|get|stat   -- design/FABLE-ARTIFACT-STORE-SPEC.md's OWN scope line ("NOT
+        routed in v1"): the artifact store is deliberately not exposed on the boundary at all in
+        this build -- adding /artifacts/{hash} routes is a route-table amendment under the
+        read-surface spec's own re-ratification discipline, named as future work. If the boundary
+        cannot carry it, the verb refuses teaching `./legacy/led` -- the served route table is not
+        extended for it here.
     the `review:`/`review-done:`/`resource:`/`estimate:`/`taxon:`/`interface:` statement-grammar
         PRE-FLIGHT validation the legacy generic path runs client-side before writing -- this is
         a CLI-side convention check, not a kernel invariant (the kernel accepts any statement
@@ -286,6 +292,13 @@ def main(argv: list[str]) -> int:
         print(f"led {argv[0]}: UNEXERCISED by the boundary rebase (design/"
               f"FABLE-BOUNDARY-MULTIPLEX-AND-CLI-REBASE-SPEC.md §5) -- named, not silently "
               f"dropped; use ./legacy/led {' '.join(argv)} instead.", file=sys.stderr)
+        return 4
+    if argv and argv[0] == "artifact":
+        print("led artifact: NOT SERVED -- design/FABLE-ARTIFACT-STORE-SPEC.md's own scope line "
+              "(\"NOT routed in v1\"): the artifact store is reachable via ./legacy/led (and any "
+              "direct-psql world verb) only. If the boundary cannot carry it, the verb refuses "
+              "teaching ./legacy/led -- the served route table is not extended for it. Use "
+              f"./legacy/led {' '.join(argv)} instead.", file=sys.stderr)
         return 4
 
     # The generic <kind> <statement...> write path, flags consumed before the positional kind.
