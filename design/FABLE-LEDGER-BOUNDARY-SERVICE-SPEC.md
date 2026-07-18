@@ -424,6 +424,21 @@ field and bound; **W22** trickled body → typed 408 within `BODY_READ_TIMEOUT_S
 `limit=1`; out-of-range → typed 422). §9 is amended in place per items 1–4; the refuse
 axis's typed-shape list gains `body_read_timeout`.
 
+**A6 (2026-07-18) — iteration-4 re-review: one residue inside A5.2's own class,
+adjudicated.** Trigger: fourth blind pair on `2a1f235`. One reviewer CLEAN across every
+amended axis (including its own adjacent-axis probes: element-wise `enacts` bounds,
+60-way concurrent writes, framework coercion). The other confirmed everything held and
+found A5.2's bound denominated on the *Python type* (`isinstance(v, int)`) rather than on
+the *value*: a JSON number in float/exponent form (`1e20` for `actor`) skips the check,
+reaches psql, and lands on the row-1581 kernel defect → 500 `unclassified_failure`
+instead of W21's typed 422. **Adjudication — A5.2's denomination corrected in place:**
+the bound applies to any *numeric* value of a declared integer field whose magnitude lies
+outside `0 ≤ v ≤ 2^63 − 1` (typed 422, same shape as W21). Preserved deliberately, per
+the finding's own terms: a genuine type mismatch (string/bool/object under an int field)
+stays the kernel's rowtype-cast business, and an in-range float-valued id (`5.0`) is not
+newly refused — it passes to the kernel exactly as before. **W21 gains the float legs**
+(`1e20` → 422; `5.0` → kernel verdict, not a 422). No other change.
+
 ## License
 
 Public Domain (The Unlicense).
