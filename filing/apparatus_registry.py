@@ -1,7 +1,7 @@
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-11T22:21:48Z
-#   last-change: 2026-07-12T13:58:34Z
-#   contributors: e4410ef6/main
+#   last-change: 2026-07-18T10:47:32Z
+#   contributors: e4410ef6/main, ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
 """apparatus_registry -- the ONE source of truth for "what mechanism names does this project's
@@ -58,6 +58,19 @@ case: `known_mechanisms()` now unions extraction across EVERY declared source di
 (`hooks/*.py` AND `bootstrap/templates/*.tmpl`), so the next apparatus-reading file that is not a
 hook is covered automatically, by construction, without a further registry edit.
 
+WIDENED AGAIN 2026-07-18 (tracker item `watchdog-liveness-harness`; a hazard met in passing per
+CLAUDE.md's engineering-responsibility clause, fixed here rather than left for the next reader to
+trip on): `tools/watchdog_liveness.py` is the second apparatus-reading file that is neither a hook
+nor a `bootstrap/templates/*.tmpl` -- it lives in `tools/` and reads `mechanisms.watchdog` via the
+SAME `MECHANISM_KEY = "name"` shape (extraction pattern 1). Scanning only the two prior source
+directories would repeat the identical staleness the 2026-07-12 widening above already named and
+fixed once for templates -- `gates/apparatus_unknown_keys.py` would flag a deployment's own
+`"watchdog": {...}` block as an unrecognized typo the moment that deployment opted in, the exact
+false-positive this module exists to end. The fix is, again, the general one: `known_mechanisms()`
+now unions extraction across THREE source directories (`hooks/*.py`, `bootstrap/templates/*.tmpl`,
+AND `tools/*.py`), so the next apparatus-reading file that is neither a hook nor a template is
+covered automatically too, without a further registry edit.
+
 Stdlib-only, top-of-file imports (the lazy-import gate, gates/no_lazy_imports.py, applies).
 """
 from __future__ import annotations
@@ -68,8 +81,10 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 HOOKS_DIR = REPO_ROOT / "hooks"
 TEMPLATES_DIR = REPO_ROOT / "bootstrap" / "templates"
+TOOLS_DIR = REPO_ROOT / "tools"
 HOOKS_GLOB = "*.py"
 TEMPLATES_GLOB = "*.tmpl"
+TOOLS_GLOB = "*.py"
 
 # The three extraction patterns -- see module docstring "HOW EXTRACTION WORKS" for what each one
 # is grounded in. All three name a lowercase-underscore mechanism key as their sole capture group.
@@ -79,21 +94,24 @@ _RESOLVE_MODE_LITERAL = re.compile(r'_resolve_mode\(\s*apparatus\s*,\s*"([a-z_]+
 
 
 def known_mechanisms(hooks_dir: Path | None = None,
-                      templates_dir: Path | None = None) -> frozenset[str]:
-    """Every mechanism name some file under `hooks_dir` (default: this repo's own `hooks/`) or
-    `templates_dir` (default: this repo's own `bootstrap/templates/`) actually reads from
-    `apparatus["mechanisms"]`, derived by static extraction (see module docstring) -- never a
-    hand-typed list. `hooks_dir`/`templates_dir` are independent overrides (either, both, or
-    neither) kept for callers that want to scan a single source in isolation (e.g. a test
-    pointing `hooks_dir` at a scratch directory while leaving `templates_dir` at this repo's
-    real default) -- passing one does not disable the other. Returns an empty frozenset (never
-    raises) if a source directory does not exist or holds no matching files -- a caller with a
-    genuinely empty registry gets an empty set to reason about, not a crash;
-    `unknown_mechanism_keys` below treats "nothing known" as "every key is unknown", which is
-    the fail-loud posture this module exists to serve, not a silent no-op."""
+                      templates_dir: Path | None = None,
+                      tools_dir: Path | None = None) -> frozenset[str]:
+    """Every mechanism name some file under `hooks_dir` (default: this repo's own `hooks/`),
+    `templates_dir` (default: this repo's own `bootstrap/templates/`), or `tools_dir` (default:
+    this repo's own `tools/`) actually reads from `apparatus["mechanisms"]`, derived by static
+    extraction (see module docstring) -- never a hand-typed list. `hooks_dir`/`templates_dir`/
+    `tools_dir` are independent overrides (any subset) kept for callers that want to scan a
+    single source in isolation (e.g. a test pointing `hooks_dir` at a scratch directory while
+    leaving the other two at this repo's real defaults) -- passing one does not disable the
+    others. Returns an empty frozenset (never raises) if a source directory does not exist or
+    holds no matching files -- a caller with a genuinely empty registry gets an empty set to
+    reason about, not a crash; `unknown_mechanism_keys` below treats "nothing known" as "every
+    key is unknown", which is the fail-loud posture this module exists to serve, not a silent
+    no-op."""
     sources = (
         (hooks_dir if hooks_dir is not None else HOOKS_DIR, HOOKS_GLOB),
         (templates_dir if templates_dir is not None else TEMPLATES_DIR, TEMPLATES_GLOB),
+        (tools_dir if tools_dir is not None else TOOLS_DIR, TOOLS_GLOB),
     )
     found: set[str] = set()
     for d, glob_pattern in sources:

@@ -1,0 +1,38 @@
+=== quiet ===
+  [ok] exit=0 has_question=False subagent_reported=True
+=== BASH DISPATCHES ===
+quiet: 1 open dispatch(es), 0 liveness question(s)
+  - a1b2c3d4: elapsed 1.5s vs expected 0.1s x10.0 +1.0s -- within slack, quiet
+=== SUBAGENT DISPATCHES ===
+quiet: 1 open dispatch(es), 0 liveness question(s)
+  - sess-qui: elapsed 5.0s vs expected 60.0s x3.0 +30.0s -- within slack, quiet
+=== SURFACE RECENCY (all journals) ===
+quiet: most recent event 1.5s ago (warn at 300s)
+=== WORK ITEMS (ledger, best-effort) ===
+SKIPPED (no deployment.json under --root; ledger check not run)
+--- verdict: 0 liveness question(s) raised ---
+
+=== stale ===
+  [ok] exit=1 has_question=True has_596s_bash_delta=True has_600s_subagent_delta=True has_subagent_own_slack=True paired_dispatch_absent=True
+=== BASH DISPATCHES ===
+LIVENESS QUESTIONS RAISED: 1 open dispatch(es), 1 liveness question(s)
+LIVENESS QUESTION: bash dispatch b2c3d4e5 has shown no observable activity for 596.0s against an expected 0.1s x10.0 +1.0s -- look here.
+=== SUBAGENT DISPATCHES ===
+LIVENESS QUESTIONS RAISED: 1 open dispatch(es), 1 liveness question(s)
+LIVENESS QUESTION: subagent dispatch sess-sta has shown no observable activity for 600.0s against an expected 60.0s x3.0 +30.0s -- look here.
+=== SURFACE RECENCY (all journals) ===
+LIVENESS QUESTION: no journal in this deployment has recorded an event for 570.0s (warn at 300s) -- look here.
+=== WORK ITEMS (ledger, best-effort) ===
+SKIPPED (no deployment.json under --root; ledger check not run)
+--- verdict: 3 liveness question(s) raised ---
+
+ALL CASES OK -- watchdog-liveness both-polarity proof clean (quiet fixture stays silent within slack on both the Bash and subagent surfaces, stale fixture raises a liveness question per surface naming the elapsed-vs-expected delta -- never a bare STALE/HUNG/DEAD verdict -- and the paired/unpairable subagent dispatches are correctly excluded from the finding).
+
+--- WHAT THIS RED.TXT PROVES (updated 2026-07-18, tracker items watchdog-liveness-harness +
+watchdog-mode-field-inert) ---
+Before tools/watchdog_liveness.py existed, nothing in this project would have flagged either
+fixture's staleness at all -- there was no watchdog surface to check. This capture is the AFTER:
+the checker's own live output on both fixtures, re-banked to also cover the subagent (Class 3)
+detector added in this pass and its regression proof (the "x3.0 +30.0s" subagent-owned threshold,
+not the generic "x10.0 +1.0s" a prior version of load_watchdog_config() would have silently
+substituted -- see run_fixtures.py's own docstring for the two hazards this coverage catches).
