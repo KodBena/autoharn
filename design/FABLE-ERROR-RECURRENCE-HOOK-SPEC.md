@@ -73,7 +73,22 @@ session)
   observe and its HOOKS.md documents it (template leg witnessed via a real
   --new-world run, torn down zero-residue).
 
-## Build conditions
+## Amendment — 2026-07-19: the "unreachable" exit-status leg is reachable via PostToolUseFailure
+
+The build witnessed (3×, harness 2.1.214) that PostToolUse never fires on a
+non-zero Bash exit and disclosed the governed-verb-nonzero signature leg as
+unreachable live. That disclosure was honest but incomplete: the harness's
+documented contract splits the cases — PostToolUse fires only on tool success,
+and a sibling event, **PostToolUseFailure**, fires on tool failure with the same
+matcher patterns (code.claude.com/docs hooks reference, verified 2026-07-19).
+The leg is therefore reachable; the miss was ours (only one event probed), not a
+harness restriction. Binding consequence: when the dispatch wiring is authored
+(the named open seam — an operator/maintainer act), the hook registers under
+BOTH events; the hook file itself already parses the payload and needs no
+signature-list change. The hook's in-file docstring currently carries the
+falsified "unreachable" claim — correcting it is queued for the next
+session-boundary hooks/ act (live-hooks rule; the file is unwired and inert, so
+the stale sentence misleads no live path meanwhile).
 
 New files only under hooks/ + the two template edits; NO edits to existing hooks/
 files, this repo's .claude/ or apparatus config, kernel, law, serving, or
