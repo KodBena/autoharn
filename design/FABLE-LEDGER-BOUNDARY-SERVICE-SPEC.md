@@ -635,6 +635,26 @@ a NUL-bearing argument raises the typed unclassified-failure path, never a bare
 `ValueError`. §9's value axis gains "…including every string crossing to psql argv,
 query-derived parameters not excepted."
 
+**A13 (2026-07-18) — post-fixpoint microamendment: the dumps-side recursion net
+(designed safety replacing accidental safety).** Trigger: NOT a finding — the
+iteration-11 CLEAN pass's own deepest probe (recorded in its report and filed as
+ledger row 1621) established that `_reserialize_or_value_axis_failure`'s
+`json.dumps` call has no `RecursionError` handling of its own and is currently
+protected only by the accident that `json.loads` overflows at the same-or-shallower
+depth on this CPython build. No caller input reaches it today (probed exhaustively
+across the transition band, depths 970–995, both structural shapes); the fixpoint
+stands. But safety that is an artifact of one interpreter build's C-stack behavior
+is not a designed guarantee, and A7 already established the designed shape for this
+exact family. **Adjudication:** the re-serialization call site gains the same
+`except RecursionError` → typed 422 structure-axis refusal A7 gave `_iter_strings`
+— one clause, same message family, no behavior change for any input that parses
+today. §8 gains **W32**, two legs: (i) unit-style — the function invoked directly
+with a programmatically-built object nested beyond the recursion limit (constructed
+in Python, NOT via JSON parse, so the loads-side guard cannot mask the site under
+test) refuses on the typed structure axis, never a bare `RecursionError`; (ii) the
+full suite stays green end to end (no regression at the HTTP layer, where behavior
+is unchanged by construction).
+
 ## License
 
 Public Domain (The Unlicense).

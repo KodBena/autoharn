@@ -1,5 +1,15 @@
 # LAYOUT — the designed directory tree of the consolidation home
 
+<!-- doc-attest-exempt: provenance record declared no-longer-actual by maintainer
+     ruling 2026-07-18 (ledger row 1625); frozen point-in-time artifact, not living
+     prose — the only permitted edit was the staleness note itself -->
+
+> **NO LONGER ACTUAL (maintainer ruling 2026-07-18):** this layout is the
+> consolidation-era design and has since drifted from the tree as it stands; the
+> doc-tree reorganization (ledger item `doc-tree-reorg-user-guide`, row 1620)
+> supersedes it further. Kept in place as provenance; deliberately NOT updated —
+> reconciling it was declined as not worth the time. Do not navigate by it.
+
 - **Served model (self-report):** claude-fable-5. Standing caveat: there is no
   introspective channel that could detect a silent substitution; this is the session's
   own system-context report.
