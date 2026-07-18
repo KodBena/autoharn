@@ -154,10 +154,14 @@ endpoint table of §3 + the four write endpoints of §4 — no other route exist
 default meta-routes (`/docs`, `/redoc`, `/openapi.json`, oauth2-redirect) explicitly
 disabled (A2.1); the witness asserts the ACTUAL route table (`app.routes`, meta-routes
 included), not the OpenAPI schema's self-report. Axes: read (views only, `limit`/`after_id`
-bounds per §3), write (functions only, `MAX_WRITE_BODY_BYTES = 1 MiB` enforced both before
-JSON parsing and before the subprocess — the size axis, A2.2), refuse (typed, verbatim;
-shapes: kernel `write_verdict`, `capability_absent`, `payload_too_large`, `infra_failure` —
-never a bare untyped error), capability-absence (typed refusal, never fallback).
+bounds per §3), write (functions only; `MAX_WRITE_BODY_BYTES` = 1 MiB at both enforcement
+points — the size axis, A2.2; parse closure over encoding/value/structure as typed 422 —
+A3.2; psql bounded by `PSQL_CONNECT_TIMEOUT_S`/`PSQL_EXEC_TIMEOUT_S` as typed 503 — the
+time axis, A3.1), refuse (typed, verbatim; shapes: kernel `write_verdict`,
+`capability_absent`, `payload_too_large`, `infra_failure` — never a bare untyped error;
+`infra_failure` issued solely by the dedicated psql-layer exception, A3.2), capability-
+absence (typed refusal, never fallback). Router-level rejections of unmapped (method, path)
+pairs are outside this universe, named per A3.3.
 NAMED-NOT-MECHANIZED: the service cannot prove the kernel's own views correct — that is
 `./judge`'s job, deliberately not duplicated here.
 
@@ -257,6 +261,59 @@ no 500. **W11** s41/s22 capability-refuse legs, both polarities. **W12** route-t
 against `app.routes` — count AND membership, meta-routes included (expected: exactly the
 §3/§4 routes plus nothing). §9's closure statement is amended in place per items 1, 2, 4
 (new typed shapes `payload_too_large`, `infra_failure` join the refuse axis).
+
+**A3 (2026-07-18) — iteration-1 independent re-review findings, adjudicated.** Trigger:
+independent fresh-context re-review of the hardened build (`cac001e`). Every A2 fix held under
+live attack (route closure true against the running service, both size checkpoints proven,
+/health guard, capability legs, bind guard, injection — all re-witnessed clean). The new
+findings are adjacent axes of the same write ingress that A2's size closure did not reach —
+the second consecutive demonstration of ADR-0000's "the class as first named is presumed too
+narrow." Adjudication:
+
+1. **The time axis (witnessed):** `_psql` runs with no timeout of any kind — a database that
+   HANGS rather than exits (blackhole, accept-then-stall) leaves the request unbounded, and
+   A2.4's own words ("unreachable world") promised a typed 503 for exactly this. Amplifier:
+   the write handlers are `async def` calling the blocking subprocess directly on the event
+   loop, so one stalled write starves every route including `/health` (the ADR-0016 wedge
+   class). **Fix:** two named constants — `PSQL_CONNECT_TIMEOUT_S = 5` (passed as
+   `PGCONNECT_TIMEOUT` in the subprocess environment) and `PSQL_EXEC_TIMEOUT_S = 60`
+   (`subprocess.run(timeout=...)`); `TimeoutExpired` maps to the typed 503 infra path (a
+   stall IS infra). The write handlers become plain `def` so FastAPI's threadpool runs them
+   off the event loop (the smallest honest offload, matching the read routes). §9's axes
+   gain time.
+2. **The parse closure (witnessed, three ways):** the A2.2 raw-body path lost FastAPI's
+   default exception coverage — `json.loads` raises `UnicodeDecodeError` on invalid UTF-8
+   (bare untyped 500), `ValueError` on a >4300-digit integer literal (bare 500), and
+   `RecursionError` on deep nesting, which subclasses `RuntimeError` and therefore lands in
+   the infra handler, telling the client "this is an infrastructure problem, not a problem
+   with your request" — an actively false cause statement (the lying-signature class).
+   **Fix:** the body is explicitly decoded and parsed under `except (ValueError,
+   RecursionError)` (`ValueError` covers `JSONDecodeError` and `UnicodeDecodeError`) → typed
+   422 transport refusal naming the failed axis (encoding / value magnitude / structure),
+   never echoing raw body bytes. **And the infra handler is narrowed to a dedicated
+   exception class** (`PsqlInfraFailure`, raised only by the psql layer) so no foreign
+   exception can ever wear the `infra_failure` signature by accident again — that narrowing
+   is the load-bearing part of this item, not the catch list.
+3. **Router-level 404/405 untyped shapes — ACCEPTED AS-IS, named:** rejections of an
+   unmapped (method, path) by the router sit outside §9's enumerated ingress universe; the
+   README names this boundary explicitly (named-not-mechanized). Revisit only if a consumer
+   demonstrates harm.
+4. **Witness gaps close:** **W13** parse-closure legs on an s43 world (invalid UTF-8,
+   oversized integer literal, deep nesting → typed 422 each, server alive after); **W14**
+   the hang leg (service pointed at a non-routable address → typed 503 within
+   `PSQL_CONNECT_TIMEOUT_S` + margin, not the OS TCP timeout); the W9 streaming-abort leg
+   is exercised if cheaply drivable, else carries an explicit UNEXERCISED mark naming why.
+5. **Transient fixture collision (witnessed once, not reproduced) — not a service defect:**
+   root-caused to concurrent suite runs on the shared toy DB using IDENTICAL scratch-world
+   names (two independent reviewers ran the suite simultaneously). **Fix:** scratch world
+   names gain a per-run unique suffix (pid-derived), teardown scoped to that run's suffix —
+   concurrent-runner safety, auditability unchanged.
+
+§9's closure statement is amended in place: the write axis now reads "functions only,
+`MAX_WRITE_BODY_BYTES` = 1 MiB both enforcement points, parse closure over encoding/value/
+structure (typed 422), psql bounded by `PSQL_CONNECT_TIMEOUT_S`/`PSQL_EXEC_TIMEOUT_S`
+(typed 503)"; the refuse axis's typed-shape list is unchanged, with `infra_failure` now
+issued solely by the dedicated psql-layer exception.
 
 ## License
 
