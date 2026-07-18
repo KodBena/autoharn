@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-09T13:36:11Z
-#   last-change: 2026-07-18T07:58:26Z
+#   last-change: 2026-07-18T09:09:36Z
 #   contributors: be693afb/main, e4410ef6/main, 3c50e030/main, 3c942a60/main, a857c93d/main, ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -103,6 +103,9 @@ REGISTRY: dict[str, str] = {
     "worktree-ledgering":             "seen-red/worktree-ledgering/run_fixtures.py",
     "led-refs-flag-order-parser-bug": "seen-red/led-refs-flag-order-parser-bug/run_fixtures.py",
     "led-work-depends-default-type-advisory": "seen-red/led-work-depends-default-type-advisory/run_fixtures.py",
+    "led-help-token-closure":         "seen-red/led-help-token-closure/run_fixtures.py",
+    "led-json-payload-mode":          "seen-red/led-json-payload-mode/run_fixtures.py",
+    "led-work-list-state-filter":     "seen-red/led-work-list-state-filter/run_fixtures.py",
     "preamble-ordering":              "seen-red/preamble-ordering/run_fixtures.py",
     "resource-intake-validation":     "seen-red/resource-intake-validation/run_fixtures.py",
     "content-free-review-audit":      "seen-red/content-free-review-audit/run_fixtures.py",

@@ -1,0 +1,85 @@
+Banked RED evidence for ledger item `led-help-token-closure`.
+
+Captured by running seen-red/led-help-token-closure/run_fixtures.py against the PRE-FIX
+bootstrap/templates/led.tmpl (the shipped version this item's fix supersedes, obtained via
+`git stash push -- bootstrap/templates/led.tmpl` immediately before this fixture's own
+commit lands, then `git stash pop` to restore the fix): 6 of 7 cases FAIL, reproducing the
+reported defect exactly -- --help / -h / help as the first statement word sails straight
+through as ordinary statement prose and COMMITS a row (rows 2/3/4 below, literal statement
+text '--help'/'-h'/'help'), and an unknown dash-leading first word (RED-DASH-FIRST-WORD-
+GENERIC) is likewise accepted unrefused. The two REVIEW-path FAILures also show no usage
+text on stderr (shows_usage=False, the true pre-fix behavior); their row count happens to
+read unchanged pre-fix for an UNRELATED reason (the seed row's own writer collides with the
+review's default actor, tripping the pre-existing self-review refusal) -- a coincidence of
+this specific scratch world's actor setup, not evidence the pre-fix code recognized --help
+at all; the FAIL verdict (shows_usage=False) is what actually witnesses the gap on that path.
+
+ADOPT: track-work.sh exit=0 deployment.json=True -- PASS
+GREEN-HELP-GENERIC[help-word]: exit=0 shows_usage=False row-count before=1 after=2 (unchanged=False) -- FAIL
+GREEN-HELP-GENERIC[dash-h]: exit=0 shows_usage=False row-count before=2 after=3 (unchanged=False) -- FAIL
+GREEN-HELP-GENERIC[dash-dash-help]: exit=0 shows_usage=False row-count before=3 after=4 (unchanged=False) -- FAIL
+GREEN-HELP-REVIEW: exit=3 shows_usage=False row-count before=4 after=4 (unchanged=True) -- FAIL
+RED-DASH-FIRST-WORD-GENERIC: exit=0 refused=False teaches=False row-count before=4 after=5 (unchanged=False) -- FAIL
+RED-DASH-FIRST-WORD-REVIEW: exit=3 refused=True teaches=False row-count before=5 after=5 (unchanged=True) -- FAIL
+GREEN-MID-SENTENCE-DASH: exit=0 accepted=True row-count before=5 after=6 (grew-by-one=True) -- PASS
+
+led-help-token-closure fixture: 6 FAILURE(S) -- scratch substrate left standing as evidence:
+  tempdir: /tmp/led-help-token-closure-fixture-lxz3an3b
+  schema:  lhtcfixture / lhtcfixture_kernel / lhtcfixture_rw (db toy@192.168.122.1)
+
+!! GREEN-HELP-GENERIC[help-word]: exit=0 shows_usage=False before=1 after=2
+STDOUT:
+SET
+SET
+INSERT 0 1
+led decision: row 2 written.
+
+STDERR:
+
+
+!! GREEN-HELP-GENERIC[dash-h]: exit=0 shows_usage=False before=2 after=3
+STDOUT:
+SET
+SET
+INSERT 0 1
+led finding: row 3 written.
+
+STDERR:
+
+
+!! GREEN-HELP-GENERIC[dash-dash-help]: exit=0 shows_usage=False before=3 after=4
+STDOUT:
+SET
+SET
+INSERT 0 1
+led finding: row 4 written.
+
+STDERR:
+
+
+!! GREEN-HELP-REVIEW: exit=3 shows_usage=False before=4 after=4
+STDOUT:
+SET
+SET
+BEGIN
+
+STDERR:
+led: WARNING -- this review's statement is very short (6 
+  whitespace-normalized chars). engine/review_gap_audit.py (./audit --review-gap,
+  tracker item 'content-free-review-audit') will FLAG this row if it discharges a
+  countersign obligation -- state what you actually checked, not just the verdict.
+  (warn-only tripwire, not a refusal -- a legitimate terse review exists; the write
+  proceeds either way)
+ERROR:  Ledger policy: a row's author may not countersign it (segregation of duties).
+CONTEXT:  PL/pgSQL function validate_review() line 13 at RAISE
+
+
+!! RED-DASH-FIRST-WORD-GENERIC: exit=0 refused=False teaches=False before=4 after=5
+STDERR:
+
+
+!! RED-DASH-FIRST-WORD-REVIEW: exit=3 refused=True teaches=False before=5 after=5
+STDERR:
+ERROR:  Ledger policy: a row's author may not countersign it (segregation of duties).
+CONTEXT:  PL/pgSQL function validate_review() line 13 at RAISE
+

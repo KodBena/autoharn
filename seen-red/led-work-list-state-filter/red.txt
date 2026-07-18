@@ -1,0 +1,44 @@
+Banked RED evidence for ledger item `led-work-list-state-filter`.
+
+This item's led.tmpl code landed in an EARLIER session (git log: commit 5084932, "merge
+led-work-list-state-filter (835778b)"), before this fixture existed -- so RED evidence
+here is captured two ways, both witnessed in this one run:
+
+(1) the OUTPUT BELOW was captured with bootstrap/templates/led.tmpl's 'list)' case body
+    TEMPORARILY reverted on disk (a targeted revert of just that block back to its pre-fix
+    unconditional SELECT, no --all support -- backed up first via 'cp led.tmpl
+    /tmp/led_tmpl_backup.tmpl', restored via 'cp /tmp/led_tmpl_backup.tmpl led.tmpl'
+    immediately after, diff-verified byte-identical to the pre-revert state): GREEN-DEFAULT-
+    EXCLUDES-CLOSED FAILS -- the closed item appears in the DEFAULT, unfiltered 'led work
+    list' output (state='closed' shown alongside the open item), reproducing the reported
+    defect exactly (the maintainer's own words: 'led work list dumps every item ever
+    opened -- closed items included, no way to filter').
+(2) the fixture's OWN internal RED-* cases (run_fixtures.py's _make_reverted_copy /
+    _run_reverted helpers) independently reproduce the SAME defect against a
+    standalone reverted COPY of led.tmpl (AUTOHARN=/PICKUP_DEPLOYMENT= override), run in
+    the SAME process as the GREEN cases against the real, fixed led.tmpl -- this is why
+    RED-DEFAULT-INCLUDES-CLOSED and RED-ALL-FLAG-UNSUPPORTED both show PASS below even in
+    this on-disk-reverted run: they were already exercising the reverted shape on their own
+    copy, independent of whatever bootstrap/templates/led.tmpl itself currently is.
+
+ADOPT: new-project.sh --new-world exit=0 deployment.json=True -- PASS
+GREEN-DEFAULT-EXCLUDES-CLOSED: exit=0 open_item_shown=True closed_item_shown=True -- FAIL
+GREEN-ALL-INCLUDES-CLOSED: exit=0 open_item_shown=True closed_item_shown=True -- PASS
+RED-DEFAULT-INCLUDES-CLOSED (reverted list) case): exit=0 open_item_shown=True closed_item_shown=True -- PASS (defect reproduced)
+RED-ALL-FLAG-UNSUPPORTED (reverted, --all passed but not recognized): exit=0 open_item_shown=True closed_item_shown=True identical_to_plain_list=True -- PASS
+
+led-work-list-state-filter fixture: 1 FAILURE(S) -- scratch substrate left standing as evidence:
+  tempdir: /tmp/led-work-list-state-filter-fixture-m9tejk0j
+  schema:  lwlsffixture / lwlsffixture_kernel / lwlsffixture_rw (db toy@192.168.122.1)
+
+!! GREEN-DEFAULT-EXCLUDES-CLOSED: exit=0 has_open=True has_closed=True
+STDOUT:
+                         slug                          |    title    | state  | resolution | witness | claimant 
+-------------------------------------------------------+-------------+--------+------------+---------+----------
+ seen-red-led-work-list-state-filter-1784366103-closed | Closed item | closed | dropped    |         | author
+ seen-red-led-work-list-state-filter-1784366103-open   | Open item   | open   |            |         | 
+(2 rows)
+
+
+STDERR:
+
