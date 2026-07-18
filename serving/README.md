@@ -73,10 +73,10 @@ table against `app.routes` **directly, in-process** (never a schema endpoint).
 | GET | `/health` | world name, capability manifest, this service's registered principal name | none |
 | GET | `/rows/current` | `ledger_current`, id-paginated (`?after_id=&limit=`, bounds below) | none |
 | GET | `/rows/{id}` | one row, any status | none |
-| GET | `/rows/{id}/history` | the row's full supersession chain (both directions), each hop carrying its own `superseded_by`, id-paginated (`?after_id=&limit=`, bounds below, default `limit=1000`, A10) | none |
+| GET | `/rows/{id}/history` | the row's full supersession chain (both directions), each hop carrying its own `superseded_by`, id-paginated (`?after_id=&limit=`, bounds below, default `limit=1000`, A10); a nonexistent `id` typed-404s identically to `GET /rows/{id}` (A11) | none |
 | GET | `/credited` | the credited view, when the world carries one | `s44-credited-view` — no world in this repository's kernel lineage carries this view yet (spec §7); always `capability_absent` today |
 | GET | `/standing/principals` | `principal_standing_current`, id-paginated (`?after_id=&limit=`, bounds below, A5.4) | `s41-identity` |
-| GET | `/work/items` | `work_item_current`, ORDINAL-paginated (`?after_id=&limit=`, same bounds; the view has no id column, A5.4's fallback below) | `s22-work` |
+| GET | `/work/items` | `work_item_current`, SLUG-KEYSET-paginated (`?after_slug=&limit=`, bounds below; `after_id` is refused typed 422 on this route, A11) | `s22-work` |
 | POST | `/write/ledger` | `kernel.ledger_write` | `s43-boundary` |
 | POST | `/write/review` | `kernel.review_write` | `s43-boundary` |
 | POST | `/write/registration` | `kernel.registration_write` | `s43-boundary` |
@@ -97,32 +97,41 @@ any of this service's own refusal machinery to hold to that discipline. Revisit 
 consumer demonstrates harm from the untyped shape (spec A3.3's own carve-out) — not pre-emptively
 typed, per ADR-0004 (no work ahead of a demonstrated need).
 
-## Bounds (A2.2, A2.6, A2.7, A3.1, A4.1, A4.2, A5.1–A5.4 — one disclosed discipline, every ingress)
+## Bounds (A2.2, A2.6, A2.7, A3.1, A4.1, A4.2, A5.1–A5.4, A11 — one disclosed discipline, every ingress)
 
-- **Pagination — ALL FIVE read routes** (`/rows/current`, `/credited`, `/standing/principals`,
-  `/work/items` — A5.4 propagated this from two routes to four — **and `/rows/{id}/history`,
-  A10's fifth**): `?after_id=&limit=`, **`1 ≤ limit ≤ 1000`**, **`after_id ≥ 0`** — both
-  violations are a typed HTTP 422 naming the bound. Ratified spec text as of A2.7; A2.6 added
-  the `after_id ≥ 0` half (it previously accepted negatives while `limit` was already
-  range-checked — an asymmetry with no reason). `/rows/current`, `/credited`,
-  `/standing/principals`, and `/rows/{id}/history` page on the row's own `id` column (`WHERE id
-  > after_id ORDER BY id LIMIT limit`, identical shape on all four — on the history route this
-  is the hop's own row id, so `after_id` walks the supersession chain forward one page at a
-  time, each hop still carrying its own `superseded_by` pointer). `/work/items` serves
-  `work_item_current`, which carries **no id-shaped key at all** (one row per `slug`, no
-  bigint column) — its fallback, named per the spec's own "flag it if a view lacks one" clause:
-  a `row_number() OVER (ORDER BY slug)` ordinal, computed ONLY inside the service's own wrapper
-  query (never stored, never claimed to be a kernel id, since `slug` is unique per the view's
-  own invariant — one opening act per slug), stands in for `id` as the `after_id`/`limit`
-  cursor. The synthetic ordinal is stripped back out of each row's JSON before it is returned,
-  so the served row shape stays byte-identical to the view's own columns; only the cursoring
-  mechanics differ from the id-keyed routes. **`/rows/{id}/history`'s own default `limit` is
-  `1000`, not the other four routes' `100`** (A10) — a short chain fetched with NO query
-  parameters at all must stay byte-identical to the pre-A10 unpaginated response, and a
-  100-row default would have silently started truncating any chain longer than that where the
-  old, unpaginated route never truncated.
+- **Pagination — ALL FIVE read routes, keyset on each route's OWN natural key (A11's
+  restatement).** `1 ≤ limit ≤ 1000` everywhere, typed HTTP 422 naming the bound on violation.
+  **`/rows/current`, `/credited`, `/standing/principals`, and `/rows/{id}/history`** page on the
+  row's own append-monotonic `id` column: `?after_id=&limit=`, `after_id ≥ 0` (typed 422 below
+  it), `WHERE id > after_id ORDER BY id LIMIT limit` (identical shape on all four — on the
+  history route this is the hop's own row id, so `after_id` walks the supersession chain forward
+  one page at a time, each hop still carrying its own `superseded_by` pointer). Because ledger
+  ids are append-monotonic, this cursor is STABLE under concurrent insertion: no duplicate, no
+  gap, proven live against an independently scaffolded scratch world (A11's own trigger finding).
+  `/rows/{id}/history`'s own default `limit` is `1000`, not the other three routes' `100` (A10)
+  — a short chain fetched with NO query parameters at all must stay byte-identical to the
+  pre-A10 unpaginated response. **`/work/items` pages on `?after_slug=&limit=` instead (A11,
+  replacing the pre-A11 `row_number() OVER (ORDER BY slug)` synthetic ordinal)** —
+  `work_item_current` carries no id-shaped key at all (one row per `slug`, no bigint column),
+  and that ordinal was recomputed PER REQUEST, so an item inserted mid-walk with a slug sorting
+  before an already-served item shifted every ordinal after it (witnessed: pages `[aa,cc]` then
+  `[cc,ee]` served against a view reading `[aa,bb,cc,ee,gg]` — `cc` served twice, `bb` never).
+  The keyset cursor (`WHERE slug > :after_slug ORDER BY slug`) guarantees NO-DUPLICATION instead
+  — a served slug can never be re-served, since the cursor is a value, not a position — but,
+  unlike the id-keyed routes, it cannot and does not claim stability: a row inserted BEHIND an
+  in-flight cursor is not visible to that walk (no snapshot-free scheme over a
+  non-append-monotonic key can promise otherwise); it simply joins the NEXT walk. This is the
+  route's disclosed, witnessed semantics, not a silent gap. `after_slug` domain: text,
+  byte-length `≤ 512` (`MAX_AFTER_SLUG_BYTES`), typed 422 beyond it; any in-domain value is a
+  valid cursor position (keyset semantics need no existence check). A supplied `after_id` on
+  `/work/items` is never silently ignored (A10's own lesson) — it refuses typed 422 teaching
+  `after_slug` instead. The slug crosses to `psql` as a bound `-v` argument, the same
+  injection-safe substitution the write routes already use for payload bodies — never spliced
+  as SQL text.
 - **The read-side id domain** (A4.2, symmetric with A2.6): every id-typed path/query parameter
-  — `/rows/{id}`, `/rows/{id}/history`'s `id`, and every route's `after_id` — is bounded
+  — `/rows/{id}`, `/rows/{id}/history`'s `id`, and the `after_id` of every route that accepts
+  one (as of A11, every route except `/work/items`, which pages on `after_slug` instead and
+  refuses a supplied `after_id` outright) — is bounded
   **`0 ≤ id ≤ 9223372036854775807`** (a Postgres `bigint`'s own ceiling, `MAX_ID`), typed HTTP
   422 outside it. Before this bound existed, an over-range id reached `psql`'s bigint cast
   unchecked and wore a 503 it did not earn.
