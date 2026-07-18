@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-09T07:54:37Z
-#   last-change: 2026-07-18T16:20:44Z
+#   last-change: 2026-07-18T23:20:30Z
 #   contributors: 9bcc0113/main, be693afb/main, e4410ef6/main, 3c50e030/main, a857c93d/main, ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -118,6 +118,10 @@ ROOT_FILES = {
     # the asof-export builder (2026-07-18) and fixed at the merge seam rather than left for
     # the next run (CLAUDE.md hazard-flagging duty).
     "otel-attest",
+    # otel-watch — the v0 OTel model-provenance sentry watchdog (design/FABLE-OTEL-SENTRY-SPEC.md
+    # §3, work item otel-watch-v0-build), registered on landing rather than left an unregistered
+    # breach for the next run.
+    "otel-watch",
     # vestigial_documentation/ANTHROPIC-FEEDBACK-2026-07-17-security-recommendation-incident.md moved into
     # vestigial_documentation/ by the doc-tree relocation (row 1620, 2026-07-18) as
     # IMPLEMENTED-LEGACY (a self-declared point-in-time correspondence record); deregistered

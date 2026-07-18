@@ -12,16 +12,25 @@ dated A1 amendment).
 
 ## The watchdog beeps in real time
 
-A small always-on process (`otel-watch`, per the sentry spec §3) tails the local OTel
+A small always-on process (`./otel-watch`, per the sentry spec §3) tails the local OTel
 collector's export and compares each request's observed `model` against the session's declared
 expected model; on a mismatch it fires the operator's existing mail-notification script — the
 same one that already makes the maintainer's phone beep on every turn completion — so a
 substitution surfaces within seconds, not at the next audit. It writes nothing to the ledger and
 registers no principal: this is notification, not evidence. A session with no declared
 expectation is reported as *unwatched*, loudly, so silence is never mistaken for "watched and
-clean." **This verb's build was not exercised for this note** — the delivered arc's witnessed
-legs are `./otel-attest` and the engine-side defeat pipeline; the watchdog's own witness plan
-(sentry spec §14, items W1–W5) is UNWITNESSED here.
+clean." **Built and witnessed**: the repo-root verb landed with its own both-polarity fixture
+(`seen-red/otel-watch/run_fixtures.py`, registered in `gates/fixture_census.py`), exercised
+against synthetic OTLP-shaped export lines — never this session's own stream, never any live
+ledger — with every alert send run `--dry-run` so the exec'd `notify.py` argv is the witness
+(the spec's own "fixture-side" leg of W1) rather than a real mail send. All five of the spec's
+§14 W1–W5 legs are WITNESSED: W1 (mismatch fires, exact argv observed), W2 (a matching session
+stays silent and shows `watched-and-clean`), W3 (an undeclared-expectation session is reported
+UNWATCHED loudly, never silently, and never as a mismatch), W4 (debounce — a repeated wrong
+model alerts once, journaled `debounced` on the repeat; a new wrong model in the same session
+alerts again), and W5 (a `generate_session_title` utility call is filtered, no alert, no
+coverage entry) — plus a bonus leg confirming the same filter for subagent-dispatch
+(`query_source=agent:...`) calls. Full captured run: `seen-red/otel-watch/red.txt`.
 
 ## `./otel-attest` writes post-hoc attestations, graded
 

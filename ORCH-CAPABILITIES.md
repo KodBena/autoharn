@@ -1362,6 +1362,21 @@ mid-session `/model` switch fires an alert exactly like a real substitution woul
 the cost of a tripwire that cannot authenticate intent; mail failure or watchdog death is silent
 failure, mitigated only by the opt-in `--heartbeat` flag.
 
+**The checked-in repo-root verb (`./otel-watch`, landed after this sweep entry, work item
+otel-watch-v0-build).** The paragraph above describes a personal-machine install
+(`~/tools/otel-watchdog/`) that predates a committed source; the repo now also carries the
+actual git-tracked v0 build at the repo root, same mechanism and same expected-model hierarchy,
+with configurable `--base-dir`/`--export` so a witness run never touches real host state. Its own
+both-polarity fixture (`seen-red/otel-watch/run_fixtures.py`, registered in
+`gates/fixture_census.py`) exercises all five of the spec's §14 W1–W5 legs against synthetic
+OTLP-shaped export lines — never this host's live collector output, never a real mail send (see
+`orchlog.d/defeat-pipeline-and-otel-identity.md` for the witness summary). The two artifacts are
+not required to be the same file: `~/tools/otel-watchdog/otel_watch.py` is host-operational
+state outside this repo's tracking (like `~/tools/otelcol/` itself), while `./otel-watch` is the
+auditable source a fresh clone can inspect and re-witness; keeping the host install pointed at
+the repo's copy (rather than a hand-maintained duplicate) is an operator deployment choice, not
+mechanized here.
+
 **41. `s42`/`s43` — row-hash full coverage + the [typed verdict](GLOSSARY.md#typed-verdict)
 [write boundary](GLOSSARY.md#write-boundary), the
 refusal-recording family (`kernel/lineage/s42-row-hash-full-coverage.sql`,
