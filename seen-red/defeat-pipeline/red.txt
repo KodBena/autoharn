@@ -48,4 +48,11 @@ W2 FULL QUOTE (the spine, verbatim):
 === W7-malformed-loud-BOTH-sides ===
   [ok] verdict=QUARANTINED; asp.quarantine="malformed v1 attestation (P-5): row 6: grade= value 'not-a-real-grade' outside frozenset({'turn-bracketed', 'ambiguous', 'session-scoped', 'exact-command'}) (P-5)"; sql.quarantine="malformed v1 attestation (P-5): row 6: grade= value 'not-a-real-grade' outside frozenset({'turn-bracketed', 'ambiguous', 'session-scoped', 'exact-command'}) (P-5)"
 
+== scaffolding classic world s41dfc (chain ends s41-principal-bindings-and-relations.sql) -- mismatch_attest CONTENT witness (F1) ==
+=== F1-mismatch-attest-content-v1-arm ===
+  [ok] expected 'mismatch_attest(6,5,"exact-command").' in facts (never the hardcoded 'mismatch_attest(6,5,none).'); got matching facts=['mismatch_attest(6,5,"exact-command").']
+
+=== F1-mismatch-attest-content-typed-arm ===
+  [ok] expected 'mismatch_attest(7,5,"turn-bracketed").' in facts; got matching facts=['mismatch_attest(7,5,"turn-bracketed").']
+
 ALL OK

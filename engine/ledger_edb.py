@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-06T05:33:12Z
-#   last-change: 2026-07-18T05:56:30Z
+#   last-change: 2026-07-18T06:28:51Z
 #   contributors: 37017f46/main, be693afb/main, a857c93d/main, 9a17b6b9/main, ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -486,9 +486,10 @@ def export_work(name: str) -> EdbExport:
 
 
 # ===========================================================================
-# THE DEFEAT-LAYER EDB (design/FABLE-DEFEAT-PIPELINE-SPEC.md §4). Exports row_actor/2,
-# attest_row/1, mismatch_attest/3, trust_grant/3, grant_row/1, agent_class/2 for
-# engine/lp/ledger_defeat.lp and its SQL twin (engine/ledger_floor.py::defeat_floor_atoms).
+# THE DEFEAT-LAYER EDB (design/FABLE-DEFEAT-PIPELINE-SPEC.md §4, amended §4.2 A1 2026-07-19).
+# Exports row_actor/2, attest_row/1, mismatch_attest/3, trust_grant/3, grant_row/1,
+# agent_class/2, affirms/3, affirm_author/2 for engine/lp/ledger_defeat.lp (composed with
+# ledger_support.lp's affirmed/2) and its SQL twin (engine/ledger_floor.py::defeat_floor_atoms).
 # Capability-gated exactly like export()/export_work() above (I12): a pre-s41 target
 # declares trust_grant/grant_row EXCLUDED with reason, never a silent empty (§4.3 -- the F49
 # class, foreclosed the same way run_sql_work already forecloses pre-s22 targets).
@@ -497,7 +498,8 @@ def export_work(name: str) -> EdbExport:
 # sentry verb's own builder; both parse identically by construction, not by convention alone).
 # No statement text, model string, session id, or basis crosses into the EDB (P-7); only the
 # grade atom (rendered via the existing _atom() helper) and integer ids do.
-DEFEAT_FAMILIES = ("row_actor", "attest_row", "mismatch_attest", "trust_grant", "grant_row", "agent_class")
+DEFEAT_FAMILIES = ("row_actor", "attest_row", "mismatch_attest", "trust_grant", "grant_row",
+                   "agent_class", "affirms", "affirm_author")
 
 _V1_HEADER = "model-attestation v1"
 _V1_PREFIX = "model-attestation "
@@ -511,11 +513,14 @@ class DefeatParseError(RuntimeError):
     WHOLE export, never a skip-and-continue (ADR-0002). The differential reads QUARANTINED."""
 
 
-def _parse_v1_statement(rid: int, stmt: str) -> tuple[int, str] | None:
+def _parse_v1_statement(rid: int, stmt: str) -> tuple[int, str, str] | None:
     """Parse ONE candidate row's statement per §3 P-1/P-2/P-4/P-5. Returns (attested_row_id,
-    verdict) for a well-formed v1 row, or None for a version-skipped (non-v1) row -- counted by
-    the caller, never silently dropped uncounted (P-4). Raises DefeatParseError on any P-5
-    malformedness of a v1 candidate."""
+    verdict, grade) for a well-formed v1 row, or None for a version-skipped (non-v1) row --
+    counted by the caller, never silently dropped uncounted (P-4). Raises DefeatParseError on
+    any P-5 malformedness of a v1 candidate. The grade rides alongside row/verdict (review
+    finding F1, ledger row 1506; spec §3 P-7 requires the PARSED grade cross into
+    mismatch_attest/3) -- the parser already validated it against _GRADE_VOCAB below, so the
+    caller carries it forward as an atom rather than discarding validated data."""
     segs = [s.strip() for s in stmt.split("|")]  # P-1: split on `|`, trim ASCII whitespace
     if segs[0] != _V1_HEADER:
         return None  # non-v1 header: version-skipped (P-4), not malformed
@@ -538,15 +543,16 @@ def _parse_v1_statement(rid: int, stmt: str) -> tuple[int, str] | None:
         raise DefeatParseError(
             f"row {rid}: verdict= value {values['verdict']!r} outside {_VERDICT_VOCAB} "
             f"(P-5, exact case -- 'MISMATCH' uppercase is deliberate)")
-    return attested_row, values["verdict"]
+    return attested_row, values["verdict"], values["grade"]
 
 
 def export_defeat(name: str) -> EdbExport:
     """Export the defeat-layer EDB (row_actor/2, attest_row/1, mismatch_attest/3, trust_grant/3,
-    grant_row/1, agent_class/2) for a target, read-only, capability-gated (§4). Both attestation
-    arms are harvested where present: v1 convention rows (any kind, statement-parsed under §3's
-    pinned contract) and, where the world carries s44, typed `model_identity_attested` rows.
-    A row is one arm's or the other's by its shape, never both (§3)."""
+    grant_row/1, agent_class/2, affirms/3, affirm_author/2 -- the last two per §4.2's A1
+    amendment) for a target, read-only, capability-gated (§4). Both attestation arms are
+    harvested where present: v1 convention rows (any kind, statement-parsed under §3's pinned
+    contract) and, where the world carries s44, typed `model_identity_attested` rows. A row is
+    one arm's or the other's by its shape, never both (§3)."""
     t = resolve(name)
     exp = EdbExport(target=t)
     rel = t.rel()
@@ -610,11 +616,13 @@ def export_defeat(name: str) -> EdbExport:
             if parsed is None:
                 n_skipped += 1
                 continue
-            attested_row, verdict = parsed
+            attested_row, verdict, grade = parsed
             n_parsed += 1
             exp.facts.append(f"attest_row({rid}).")
             if verdict == "MISMATCH":  # P-6: only exact-case MISMATCH yields mismatch_attest
-                exp.facts.append(f"mismatch_attest({rid},{attested_row},none).")
+                # F1 fix (ledger row 1506): the PARSED grade crosses as an atom via the existing
+                # _atom() helper (P-7) -- never the literal `none` regardless of what was parsed.
+                exp.facts.append(f"mismatch_attest({rid},{attested_row},{_atom(grade)}).")
                 n_mismatch += 1
     if has_typed:
         n_t = 0
@@ -670,7 +678,31 @@ def export_defeat(name: str) -> EdbExport:
     # that SAME scratch stand-in when present -- no new table, no new convention, the identical
     # source ledger_support_scratch.py's own support_edb() already reads. DEFERRED (not emitted)
     # where the scratch table is absent, exactly the DEFERRED posture support_manifest declares.
-    if t.has_relation(f"{t.schema}.support_affirm"):
+    #
+    # AMENDMENT A1 BINDING TERMS (review finding F2, ledger row 1506): full family discipline, no
+    # exemption for lateness -- a Capability manifest entry like every sibling family (gate: the
+    # support_affirm relation present; DEFERRED-with-reason where absent, mirroring
+    # ledger_floor.py's support_manifest posture exactly), PLUS the actor join carries the SAME
+    # int-typed guard as row_actor (has_actor, computed above) rather than assuming l.actor is a
+    # principal id -- a text-typed actor (e.g. `nla`'s database-role actor column) would
+    # int()-crash exactly the row_actor hazard this module's own header already names.
+    has_affirm = t.has_relation(f"{t.schema}.support_affirm")
+    affirm_produced = has_affirm and has_actor
+    if has_affirm and not has_actor:
+        affirm_reason = ("support_affirm relation present but `actor` is not integer-typed on this "
+                          "schema -- the affirm_author join would misrepresent a text database role "
+                          "as a principal id (the same hazard row_actor guards against); emission "
+                          "DEFERRED, mirroring ledger_floor.py's support_manifest posture")
+    elif has_affirm:
+        affirm_reason = ("support_affirm relation + integer-typed actor present -- emitted "
+                          "(scratch stand-in per ledger_support.lp §3 pending ruling)")
+    else:
+        affirm_reason = ("no support_affirm relation on this schema -- capability absent, mirroring "
+                          "ledger_floor.py's support_manifest DEFERRED posture, never a silent empty")
+    for fam in ("affirms", "affirm_author"):
+        exp.capabilities.append(Capability(fam, produced=affirm_produced, capable=has_affirm,
+                                           reason=affirm_reason))
+    if affirm_produced:
         n = 0
         for r, dep, ant, actor in t.rows(
                 f"SELECT sa.r, sa.dependent, sa.antecedent, l.actor FROM {t.schema}.support_affirm sa "

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-18T05:45:46Z
-#   last-change: 2026-07-18T06:01:00Z
+#   last-change: 2026-07-18T06:30:07Z
 #   contributors: ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -24,6 +24,11 @@ WORLDS:
                ledger_edb.py's candidate query, which reads every row regardless of
                supersession -- so it is isolated on its own throwaway world, never mixed into
                WORLD DF's other checks).
+  WORLD DFC -- chain ends at s41, used ONCE: review finding F1's mismatch_attest/3 CONTENT
+               witness (adjudication ledger row 1506) -- asserts the Grade ATOM crosses
+               correctly on BOTH attestation arms (v1 real; s44-shaped typed arm via a
+               scratch-only ALTER, since no s44 delta exists yet), isolated because it mutates
+               the world's ledger schema (see world_mismatch_content_check's own docstring).
 W10 (the MANDATED stratification negative control) and W11 (registry red) need NO database --
 pure clingo / pure Python, run directly against this repo's engine/ modules.
 
@@ -48,6 +53,7 @@ sys.path.insert(0, str(ENGINE))
 sys.path.insert(0, str(REPO / "filing"))
 
 import ledger_differential  # noqa: E402
+import ledger_edb  # noqa: E402
 import lp_registry  # noqa: E402
 import pghost_resolve  # noqa: E402
 
@@ -482,6 +488,99 @@ mismatch_attest(3,2,none).
         edb_path.unlink(missing_ok=True)
 
 
+def world_mismatch_content_check(failures: list[str], tmps: list[Path]) -> None:
+    """Review finding F1 (adjudication ledger row 1506; spec §Amendments A1 clarification):
+    the W1-W11 plan above never asserts on mismatch_attest/3 fact CONTENT -- every check reads
+    only the #show'n atoms (model_defeated/credited/exposure_model*), and mismatch_attest is an
+    EDB predicate the .lp program consumes anonymously (Grade unread there), so the first
+    build's v1-arm defect (Grade hardcoded to the literal `none`, discarding the parsed value)
+    shipped unseen. This fixture calls ledger_edb.export_defeat() directly and asserts on the
+    Grade ATOM TEXT of the emitted mismatch_attest fact, on BOTH attestation arms:
+
+      - the v1 convention arm: real, exercised through `led verification` exactly as W1 does.
+      - the s44 typed arm: no s44 kernel delta exists in this repository yet (RD-2's
+        evidence-trigger not reached, same disclosed limit as spec §12 W12's live leg) -- so
+        the typed arm's SHAPE (attest_row_id/attest_verdict/attest_grade columns + a
+        model_identity_attested-kind row) is exercised via a SCRATCH-ONLY ALTER on this
+        fixture's own throwaway world, mirroring how W5 above adds a scratch-only
+        `support_affirm` table: never a kernel/lineage file edit, never applied to any live or
+        banked world, torn down with the rest of the scratch schema by this function's own
+        teardown() call."""
+    world = "s41dfc"
+    teardown(world)
+    print(f"== scaffolding classic world {world} (chain ends {CHAIN_B[-1]}) -- "
+          f"mismatch_attest CONTENT witness (F1) ==")
+    wdir = scaffold_classic(world, CHAIN_B)
+    tmps.append(wdir.parent)
+    birth_acts(world)
+
+    r = led(wdir, "register-principal", "sentry", "tool", "--purpose", "F1 content-check sentry",
+            env={"LED_ACTOR": "author"})
+    assert r.returncode == 0, r.stdout + r.stderr
+    sentry_pid = principal_id(world, "sentry")
+
+    r = led(wdir, "principal", "grant-competence", "sentry", "--activity", "model-identity-attestation",
+            "--band", "n/a", "--basis", "F1 content-check grant", env={"LED_ACTOR": "author"})
+    assert r.returncode == 0, r.stdout + r.stderr
+
+    target_stmt = "target row for the F1 mismatch_attest content witness"
+    r = led(wdir, "decision", target_stmt, env={"LED_ACTOR": "author"})
+    assert r.returncode == 0, r.stdout + r.stderr
+    target = row_id_last(world, "decision", target_stmt)
+
+    # ---- v1 arm: the PARSED grade must cross, never the literal `none` (F1) ----
+    attest_v1 = attest_stmt(target, "MISMATCH", grade="exact-command", tag="f1content")
+    r = led(wdir, "verification", attest_v1, env={"LED_ACTOR": "sentry"})
+    assert r.returncode == 0, r.stdout + r.stderr
+    attest_v1_id = row_id_last(world, "verification", attest_v1)
+
+    set_target(world, world, f"{world}_kernel")
+    try:
+        exp = ledger_edb.export_defeat(world)
+    finally:
+        clear_target()
+    expected_v1 = f"mismatch_attest({attest_v1_id},{target},\"exact-command\")."
+    hardcoded_none = f"mismatch_attest({attest_v1_id},{target},none)."
+    matching = [f for f in exp.facts if f.startswith(f"mismatch_attest({attest_v1_id},")]
+    check("F1-mismatch-attest-content-v1-arm",
+          expected_v1 in exp.facts and hardcoded_none not in exp.facts,
+          f"expected {expected_v1!r} in facts (never the hardcoded {hardcoded_none!r}); "
+          f"got matching facts={matching}",
+          failures)
+
+    # ---- typed arm (s44 shape, scratch-only -- see docstring): the parsed grade must cross
+    # here too, exercising the SAME _atom() call site the typed arm has used since the first
+    # build (never hardcoded -- this leg proves the typed arm was never the defect, and stays a
+    # regression guard for it).
+    S = world
+    psql_raw(f"ALTER TABLE {S}.ledger DROP CONSTRAINT ledger_kind_check;\n"
+             f"ALTER TABLE {S}.ledger ADD COLUMN attest_row_id bigint, "
+             f"ADD COLUMN attest_verdict text, ADD COLUMN attest_grade text;\n")
+    typed_stmt = "F1 typed-arm mismatch_attest content witness (scratch s44 shape)"
+    typed_script = (
+        f"SET ROLE {S}_rw;\nSET search_path = {S}, {S}_kernel;\n"
+        f"INSERT INTO ledger (kind, statement, actor, attest_row_id, attest_verdict, attest_grade)\n"
+        f"VALUES ('model_identity_attested', $stmt${typed_stmt}$stmt$, {sentry_pid}, {target}, "
+        f"'mismatch', 'turn-bracketed');\n")
+    rt = psql_raw(typed_script)
+    assert rt.returncode == 0, rt.stdout + rt.stderr
+    typed_id = row_id_last(world, "model_identity_attested", typed_stmt)
+
+    set_target(world, world, f"{world}_kernel")
+    try:
+        exp2 = ledger_edb.export_defeat(world)
+    finally:
+        clear_target()
+    expected_typed = f"mismatch_attest({typed_id},{target},\"turn-bracketed\")."
+    matching2 = [f for f in exp2.facts if f.startswith(f"mismatch_attest({typed_id},")]
+    check("F1-mismatch-attest-content-typed-arm",
+          expected_typed in exp2.facts,
+          f"expected {expected_typed!r} in facts; got matching facts={matching2}",
+          failures)
+
+    teardown(world)
+
+
 def w11_registry_red(failures: list[str]) -> None:
     """W11: grounding the defeat layer with ledger_support.lp omitted from the program list ->
     RegistryError BEFORE any clingo run."""
@@ -504,6 +603,7 @@ def main() -> int:
         world_pre_check(failures, tmps)
         world_df_check(failures, tmps)
         world_malformed_check(failures, tmps)
+        world_mismatch_content_check(failures, tmps)
     finally:
         for t in tmps:
             shutil.rmtree(t, ignore_errors=True)
