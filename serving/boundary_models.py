@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-18T07:43:25Z
-#   last-change: 2026-07-18T10:37:51Z
+#   last-change: 2026-07-18T11:43:08Z
 #   contributors: ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -84,13 +84,18 @@ class CapabilityAbsent(BaseModel):
 
 
 class PayloadTooLarge(BaseModel):
-    """A2.2's one named write-ingress bound (`MAX_WRITE_BODY_BYTES = 1_048_576`), enforced at
-    BOTH checkpoints named in the spec: (a) the raw request body, before any JSON parsing; (b)
-    the re-serialized payload, before the psql subprocess. Either checkpoint returns this same
-    shape -- one bound, one refusal shape, not one per checkpoint (ADR-0012 P1)."""
+    """A2.2's write-ingress size refusal, RE-DENOMINATED per A8: TWO named bounds, one per
+    checkpoint, because the checkpoints guard two different walls -- (a) the raw request body,
+    before any JSON parsing, bounded by `MAX_WRITE_BODY_BYTES = 1_048_576` (rationale:
+    BUFFERING -- never hold an unbounded body in memory); (b) the re-serialized payload,
+    before the psql subprocess, bounded by `MAX_PSQL_ARG_BYTES = 100_000` (rationale:
+    TRANSPORT -- the payload crosses as ONE psql `-v` argument, and Linux's per-argument
+    wall is `MAX_ARG_STRLEN` = 131 072 bytes, not the total-argv `ARG_MAX` the pre-A8 bound
+    was sized against). Either checkpoint returns this SAME shape (one refusal shape, not one
+    per checkpoint -- ADR-0012 P1), with `limit_bytes` honest about which bound fired."""
 
     disposition: str = "payload_too_large"
-    limit_bytes: int = Field(description="MAX_WRITE_BODY_BYTES -- the one named bound")
+    limit_bytes: int = Field(description="the bound the refusing checkpoint enforces -- MAX_WRITE_BODY_BYTES (checkpoint a, raw body/buffering) or MAX_PSQL_ARG_BYTES (checkpoint b, re-serialized payload/transport), per A8")
     observed_bytes: int = Field(description="the size actually observed at the checkpoint that refused")
     message: str = Field(description="teach-text: which checkpoint refused, the bound, and why")
 

@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-18T07:49:10Z
-#   last-change: 2026-07-18T11:26:15Z
+#   last-change: 2026-07-18T11:44:57Z
 #   contributors: ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
 """run_fixtures.py -- both-polarity witness for design/FABLE-LEDGER-BOUNDARY-SERVICE-SPEC.md's
 §8 witness plan (W1-W12, A2's amendment; W13-W14, A3's amendment; W15-W19, A4's amendment;
-W20-W23, A5's amendment; W21's float legs, A6's amendment; W24, A7's amendment). Real infra,
-no mocks:
+W20-W23, A5's amendment; W21's float legs, A6's amendment; W24, A7's amendment; W25-W26,
+A8's amendment). Real infra, no mocks:
 CLASSIC scaffolds + manual chain applies in the TOY db (the exact pattern seen-red/
 s43-typed-verdict-write-boundary/run_fixtures.py already banks, and this fixture imports
 nothing new for scaffolding -- same helpers, re-derived here because the two fixtures scaffold
@@ -51,7 +51,16 @@ WORLDS:
                 /work/items' id-less synthetic-ordinal fallback), W24 (a ~3000-level-nested,
                 under-bound, otherwise-valid write body -- overflows the representability
                 scan's OWN post-parse traversal, typed 422 structure axis, server alive; W13's
-                deep-nesting leg, which overflows AT PARSE TIME instead, stays green), the
+                deep-nesting leg, which overflows AT PARSE TIME instead, stays green), W25
+                (A8's argv-wall legs: a ~200 KiB payload -- under checkpoint (a)'s 1 MiB
+                raw-body bound, over checkpoint (b)'s re-denominated MAX_PSQL_ARG_BYTES --
+                typed 413 naming the per-argument transport wall; a ~90 KiB payload passes
+                BOTH checkpoints through to the kernel and gets a verdict, not a 413 --
+                pre-A8, NO payload over ~131 KiB could ever have succeeded, the argv wall
+                E2BIG'd it into a bare 500), W26 (A8's label consistency: Infinity/-Infinity/
+                NaN under the int-declared `actor` field each refuse on the VALUE axis --
+                same message family, never the id-domain "got inf" label the pre-A8 code
+                gave Infinity by IEEE-754 comparison accident), the
                 §9/A2.1/W12 in-process route-table closure assertion, and FINALLY (destructive,
                 run last) W18b
                 (ledger_current dropped on world_b -- genuine psql exit 3 -> 500
@@ -618,11 +627,14 @@ def main() -> int:
                 st9a, body9a = resp.status, json.loads(resp.read())
         except urllib.error.HTTPError as e:
             st9a, body9a = e.code, json.loads(e.read())
-        # Checkpoint (b): a raw body UNDER the bound (non-ASCII, compact UTF-8) whose
-        # re-serialization (json.dumps's default ensure_ascii=True, \uXXXX-escaping every
-        # multi-byte character) pushes it OVER the bound -- proves checkpoint (b) is a REAL
-        # second gate, not a duplicate of (a): CJK char = 3 raw UTF-8 bytes, 6 escaped bytes.
-        cjk_count = (boundary_service.MAX_WRITE_BODY_BYTES // 3) - 20000  # raw ~<bound, escaped ~2x>bound
+        # Checkpoint (b): a raw body UNDER checkpoint (a)'s raw-body bound (non-ASCII, compact
+        # UTF-8) whose re-serialization (json.dumps's default ensure_ascii=True, \uXXXX-escaping
+        # every multi-byte character) lands OVER checkpoint (b)'s bound -- proves checkpoint (b)
+        # is a REAL second gate, not a duplicate of (a): CJK char = 3 raw UTF-8 bytes, 6 escaped
+        # bytes. A8 re-denominated (b) at MAX_PSQL_ARG_BYTES (the per-argument transport wall's
+        # margin), so the refusal's limit_bytes must now name THAT bound, not (a)'s -- the
+        # 413 shape's numbers stay honest about which bound fired.
+        cjk_count = (boundary_service.MAX_WRITE_BODY_BYTES // 3) - 20000  # raw ~<(a)'s bound, escaped ~2x>(a)'s bound, and far >(b)'s
         oversized_b_payload = {"kind": "note", "statement": "中" * cjk_count, "actor": author_id}
         oversized_b_raw = json.dumps(oversized_b_payload, ensure_ascii=False).encode("utf-8")
         raw_len_b = len(oversized_b_raw)
@@ -640,13 +652,17 @@ def main() -> int:
               up_b
               and st9a == 413 and body9a.get("disposition") == "payload_too_large"
               and body9a.get("limit_bytes") == boundary_service.MAX_WRITE_BODY_BYTES
-              and raw_len_b < boundary_service.MAX_WRITE_BODY_BYTES < reserialized_len_b
+              and raw_len_b < boundary_service.MAX_WRITE_BODY_BYTES
+              and reserialized_len_b > boundary_service.MAX_PSQL_ARG_BYTES
               and st9b == 413 and body9b.get("disposition") == "payload_too_large"
-              and body9b.get("limit_bytes") == boundary_service.MAX_WRITE_BODY_BYTES
+              and body9b.get("limit_bytes") == boundary_service.MAX_PSQL_ARG_BYTES
               and st9h == 200 and body9h.get("world") == world_b,
-              f"checkpoint (a, raw body over the bound): status={st9a} body={body9a}; "
-              f"checkpoint (b, raw={raw_len_b} bytes UNDER the bound, reserialized="
-              f"{reserialized_len_b} bytes OVER it): status={st9b} body={body9b}; "
+              f"checkpoint (a, raw body over MAX_WRITE_BODY_BYTES, limit_bytes must name it): "
+              f"status={st9a} body={body9a}; "
+              f"checkpoint (b, raw={raw_len_b} bytes UNDER (a)'s bound, reserialized="
+              f"{reserialized_len_b} bytes OVER (b)'s MAX_PSQL_ARG_BYTES="
+              f"{boundary_service.MAX_PSQL_ARG_BYTES}, limit_bytes must name THAT bound, A8): "
+              f"status={st9b} body={body9b}; "
               f"/health after both: status={st9h} world={body9h.get('world')} (server alive)",
               failures)
 
@@ -1011,6 +1027,85 @@ def main() -> int:
               f"deep-nesting leg (parse-time, {deep_nest} levels) stays green above",
               failures)
 
+        # -- W25 (A8 item 1): the argv-wall legs. Pre-A8, checkpoint (b) was denominated at
+        # 1 MiB against the TOTAL-argv ARG_MAX (2 MiB) -- but the re-serialized payload
+        # travels as ONE psql `-v` argument, and Linux's PER-ARGUMENT wall is MAX_ARG_STRLEN
+        # (32 pages = 131072 bytes). A payload between ~131 KiB and 1 MiB passed BOTH pre-A8
+        # checkpoints and detonated in subprocess.run as an uncaught E2BIG OSError -> bare
+        # text/plain 500 (the untyped shape the spec has banned since A2.4) -- so checkpoint
+        # (b)'s stated bound was unreachable-honest (no payload over ~131 KiB could ever have
+        # succeeded). Leg (a): a ~200 KiB payload -- under checkpoint (a)'s 1 MiB raw-body
+        # bound, over A8's re-denominated MAX_PSQL_ARG_BYTES=100000 -- must refuse as a typed
+        # 413 whose limit_bytes names the NEW bound and whose teach-text names the
+        # per-argument transport wall (MAX_ARG_STRLEN). Leg (b): a ~90 KiB payload -- under
+        # BOTH bounds -- must pass all the way through to the kernel and get a verdict, not a
+        # 413 (proving the re-denominated bound is real headroom, not a wall painted on).
+        w25_over_raw = json.dumps({
+            "kind": "note", "actor": author_id,
+            "statement": "W25 over-transport-bound leg " + ("x" * 200_000)}).encode()
+        st25a, body25a = _post_raw("/write/ledger", w25_over_raw)
+        w25_under_raw = json.dumps({
+            "kind": "note", "actor": author_id,
+            "statement": "W25 under-both-bounds leg " + ("x" * 90_000)}).encode()
+        st25b, body25b = _post_raw("/write/ledger", w25_under_raw)
+        st25h, body25h = http_get(base + "/health") if up_b else (0, {})
+        check("w25-argv-wall-legs-typed-413-naming-transport-wall-and-under-bound-verdict",
+              up_b
+              and len(w25_over_raw) < boundary_service.MAX_WRITE_BODY_BYTES
+              and len(w25_over_raw) > boundary_service.MAX_PSQL_ARG_BYTES
+              and st25a == 413 and body25a.get("disposition") == "payload_too_large"
+              and body25a.get("limit_bytes") == boundary_service.MAX_PSQL_ARG_BYTES
+              and "MAX_ARG_STRLEN" in body25a.get("message", "")
+              and len(w25_under_raw) < boundary_service.MAX_PSQL_ARG_BYTES
+              and st25b == 200 and body25b.get("disposition") in ("accepted", "refused")
+              and st25h == 200 and body25h.get("world") == world_b,
+              f"leg (a) ~200 KiB payload ({len(w25_over_raw)} raw bytes -- under checkpoint "
+              f"(a)'s {boundary_service.MAX_WRITE_BODY_BYTES}, over checkpoint (b)'s "
+              f"{boundary_service.MAX_PSQL_ARG_BYTES}): status={st25a} body={body25a}; "
+              f"leg (b) ~90 KiB payload ({len(w25_under_raw)} raw bytes, under both bounds -- "
+              f"pre-A8 this size could NEVER succeed, E2BIG'd at the argv wall): "
+              f"status={st25b} verdict disposition={body25b.get('disposition')} "
+              f"row_id={body25b.get('row_id')}; /health after both: status={st25h} "
+              f"world={body25h.get('world')} (server alive)",
+              failures)
+
+        # -- W26 (A8 item 2): non-finite label consistency. Pre-A8, `Infinity` under the
+        # int-declared `actor` field tripped the id-domain comparison (`inf > MAX_ID` is
+        # True) and wore the id-domain label ("must satisfy 0 <= actor <= ...; got inf"),
+        # while `NaN` in the SAME field compared False everywhere, fell through, and wore
+        # A4.1(a)'s value-axis label -- one condition, two labels, split by IEEE-754
+        # comparison accident. A8: the int-field domain check tests finiteness FIRST and
+        # routes every non-finite numeric to A4.1(a)'s value-axis message. All three
+        # non-finite spellings under `actor` must now refuse as typed 422 on the VALUE axis
+        # (same message family), and NONE may wear the id-domain shape (asserted by MAX_ID's
+        # digits being absent from the detail -- the id-domain message always prints the
+        # bound). W15 (non-finite under a NON-declared field) and W21 (finite out-of-range
+        # under `actor` keeps the id-domain shape; in-range 5.0 passes) stay green above.
+        w26_inf_raw = b'{"kind": "note", "actor": Infinity, "statement": "W26 Infinity under int-declared field"}'
+        w26_neginf_raw = b'{"kind": "note", "actor": -Infinity, "statement": "W26 -Infinity under int-declared field"}'
+        w26_nan_raw = b'{"kind": "note", "actor": NaN, "statement": "W26 NaN under int-declared field"}'
+        st26a, body26a = _post_raw("/write/ledger", w26_inf_raw)
+        st26b, body26b = _post_raw("/write/ledger", w26_neginf_raw)
+        st26c, body26c = _post_raw("/write/ledger", w26_nan_raw)
+        st26h, body26h = http_get(base + "/health") if up_b else (0, {})
+        max_id_digits = str(boundary_service.MAX_ID)
+        check("w26-non-finite-under-int-declared-field-value-axis-not-id-domain",
+              up_b
+              and st26a == 422 and "value axis" in body26a.get("detail", "")
+              and max_id_digits not in body26a.get("detail", "")
+              and st26b == 422 and "value axis" in body26b.get("detail", "")
+              and max_id_digits not in body26b.get("detail", "")
+              and st26c == 422 and "value axis" in body26c.get("detail", "")
+              and max_id_digits not in body26c.get("detail", "")
+              and st26h == 200 and body26h.get("world") == world_b,
+              f"Infinity under actor: status={st26a} body={body26a}; "
+              f"-Infinity under actor: status={st26b} body={body26b}; "
+              f"NaN under actor: status={st26c} body={body26c} "
+              f"(all three: value axis, id-domain bound {max_id_digits} absent from detail); "
+              f"/health after all three: status={st26h} world={body26h.get('world')} "
+              f"(server alive)",
+              failures)
+
         # -- W9 streaming-abort leg: UNEXERCISED, named (spec A3.4's own carve-out, "exercised
         # if cheaply drivable, else UNEXERCISED with why"). Driving it needs a client that opens
         # the write connection, sends a Content-Length promise, then closes the socket mid-body
@@ -1220,7 +1315,7 @@ def main() -> int:
     if failures:
         print("FAILURES:", failures)
         return 1
-    print("ALL CASES OK -- boundary-service both-polarity proof (W1-W7, W9-W24 live; "
+    print("ALL CASES OK -- boundary-service both-polarity proof (W1-W7, W9-W26 live; "
           "W8 and the W9 streaming-abort leg UNEXERCISED, named).")
     return 0
 

@@ -142,16 +142,34 @@ typed, per ADR-0004 (no work ahead of a demonstrated need).
   bound. This is A4.2's id-domain class completed from path/query onto the write body; no
   other semantic validation is added (a non-integer value under one of these field names is
   left for the kernel's own rowtype cast to judge — a type question, not a domain-bound one).
-- **Write body size** (`/write/*`): `MAX_WRITE_BODY_BYTES = 1_048_576` (1 MiB), the ONE named
-  bound (ADR-0012 P1), enforced at BOTH checkpoints A2.2 names: (a) the **raw request body**,
-  before any JSON parsing (Content-Length checked first when the client declared one — refused
-  without ever reading the body; the actual byte count otherwise, refused mid-stream, never
-  buffered whole); (b) the **re-serialized payload**, before the `psql` subprocess (a payload
-  can pass (a) and still fail (b) — e.g. non-ASCII content whose `json.dumps`-default
-  `\uXXXX` escaping expands past its raw UTF-8 size). Either checkpoint returns HTTP 413:
-  `{"disposition": "payload_too_large", "limit_bytes": 1048576, "observed_bytes": <n>, "message": "<teach-text>"}`.
-  1 MiB is generous for any ledger payload and comfortably under the `psql`-argv wall
-  (`ARG_MAX`) the pre-hardening build crashed into on a ~3 MB payload.
+  **A8 label consistency:** the check tests **finiteness first** — a non-finite numeric value
+  (`Infinity`/`-Infinity`/`NaN`, including `1e400`-parsed-to-`inf`) under a declared int field
+  is routed to the value-axis refusal above (A4.1(a)'s own message), never the id-domain
+  shape; pre-A8, `Infinity` in `actor` wore the id-domain label ("got inf") while `NaN` in
+  the same field wore the value axis — one condition, two labels, split by IEEE-754
+  comparison accident. Finite out-of-range values keep the id-domain shape; in-range values
+  (including in-range floats like `5.0`) pass to the kernel unchanged.
+- **Write body size** (`/write/*`, re-denominated per A8): **TWO named bounds, one per
+  checkpoint, because the two checkpoints guard two different walls.** (a) The **raw request
+  body**, before any JSON parsing, is bounded by `MAX_WRITE_BODY_BYTES = 1_048_576` (1 MiB) —
+  its rationale is **buffering**: never hold an unbounded body in memory (Content-Length
+  checked first when the client declared one — refused without ever reading the body; the
+  actual byte count otherwise, refused mid-stream, never buffered whole). (b) The
+  **re-serialized payload**, before the `psql` subprocess, is bounded by
+  `MAX_PSQL_ARG_BYTES = 100_000` — its rationale is **transport**: the payload crosses to
+  postgres as ONE `psql -v` argument, and Linux's *per-argument* limit is `MAX_ARG_STRLEN`
+  (32 pages = 131 072 bytes), not the 2 MiB total-argv `ARG_MAX` the pre-A8 bound was sized
+  against — a payload between ~131 KiB and 1 MiB passed both pre-A8 checkpoints and
+  detonated in the subprocess launch as an uncaught `E2BIG` (a bare untyped 500). 100 KB
+  remains generous for a ledger payload (prose), and the A1-ratified `psql` transport is not
+  reopened: the bound moved to the transport's true capacity, not the transport to the bound.
+  A payload can pass (a) and still fail (b) — any raw body between the two bounds, or
+  non-ASCII content whose `json.dumps`-default `\uXXXX` escaping expands past its raw UTF-8
+  size. Either checkpoint returns HTTP 413:
+  `{"disposition": "payload_too_large", "limit_bytes": <the bound that fired: 1048576 for (a), 100000 for (b)>, "observed_bytes": <n>, "message": "<teach-text>"}`
+  — `limit_bytes` is honest about which bound refused. Defense in depth behind (b): `_psql`
+  also catches `OSError` from the subprocess launch itself and routes it to the typed 500
+  `unclassified_failure` path, so no present or future transport wall can wear a bare shape.
 - **The time axis, BOTH legs (A3.1 psql phase; A5.3 body-read phase, new):** every `psql` call
   this service makes is bounded twice — `PSQL_CONNECT_TIMEOUT_S = 5` (passed as
   `PGCONNECT_TIMEOUT` in the subprocess's own environment, so libpq itself refuses a stalled TCP

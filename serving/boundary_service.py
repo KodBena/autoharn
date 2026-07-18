@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-18T07:44:41Z
-#   last-change: 2026-07-18T11:24:40Z
+#   last-change: 2026-07-18T11:42:57Z
 #   contributors: ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -61,14 +61,23 @@ documentation. The route witness (seen-red/boundary-service/run_fixtures.py's W1
 against `app.routes` directly, in-process, never the OpenAPI schema's self-report (which is
 now absent entirely and structurally could never have enumerated a meta-route anyway).
 
-SIZE AXIS (spec A2.2): `MAX_WRITE_BODY_BYTES = 1_048_576` (1 MiB) is enforced at BOTH named
-checkpoints on every `/write/*` route -- (a) the raw request body, before any JSON parsing
-(`_read_bounded_body`: Content-Length when the client declared one, refused without ever
-reading the body; the actual byte count otherwise, refused mid-stream, never buffered whole);
-(b) the re-serialized payload, before the psql subprocess (a payload can pass checkpoint (a)
-and still fail (b) -- e.g. non-ASCII content that `json.dumps`'s default `ensure_ascii=True`
-escaping expands well past its raw UTF-8 byte count; the witness suite's W9 exercises exactly
-this). Both checkpoints return the same typed `payload_too_large` shape (413).
+SIZE AXIS (spec A2.2, RE-DENOMINATED per A8 item 1): TWO named bounds, one per checkpoint,
+because the two checkpoints guard two DIFFERENT walls -- (a) `MAX_WRITE_BODY_BYTES =
+1_048_576` (1 MiB) on the raw request body, before any JSON parsing (`_read_bounded_body`:
+Content-Length when the client declared one, refused without ever reading the body; the
+actual byte count otherwise, refused mid-stream, never buffered whole) -- this bound's
+rationale is BUFFERING (never hold an unbounded body in memory); (b) `MAX_PSQL_ARG_BYTES =
+100_000` on the re-serialized payload, before the psql subprocess -- this bound's rationale
+is TRANSPORT: the payload travels as ONE psql `-v` argument, and Linux's per-argument limit
+is `MAX_ARG_STRLEN` (32 pages, 131 072 bytes), NOT the 2 MiB total-argv `ARG_MAX` A2.2
+originally sized against; a payload between ~131 KiB and 1 MiB passed both pre-A8
+checkpoints and detonated in `subprocess.run` as an uncaught E2BIG `OSError` (bare 500, the
+untyped shape §9 forbids). A payload can pass checkpoint (a) and still fail (b) -- any raw
+body between the two bounds, or non-ASCII content that `json.dumps`'s default
+`ensure_ascii=True` escaping expands past its raw UTF-8 byte count (W9/W25 exercise both).
+Both checkpoints return the same typed `payload_too_large` shape (413), whose `limit_bytes`
+field is HONEST about which bound fired (A8: never reporting one bound's number for the
+other's refusal).
 
 INFRA FAILURE (spec A2.4, narrowed per A3.2): a psql infrastructure failure (unreachable world,
 connection refusal, a nonzero exit that is not a kernel verdict, or a `PSQL_EXEC_TIMEOUT_S`
@@ -188,6 +197,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import math
 import os
 import re
 import subprocess
@@ -254,12 +264,24 @@ _IDENT_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 _LOOPBACK_HOSTS = {"127.0.0.1", "localhost", "::1"}
 
-# A2.2's one named write-ingress bound (ADR-0012 P1: one home, not one literal per checkpoint),
-# 1 MiB -- generous for any ledger payload, safely under the psql-argv wall (ARG_MAX) that the
-# pre-hardening build crashed into on a ~3 MB payload. Enforced at BOTH `_read_bounded_body`
-# (checkpoint a, raw body) and `make_write_route`'s handler (checkpoint b, re-serialized
-# payload) -- see this module's docstring, "SIZE AXIS".
+# A2.2's raw-body write-ingress bound (ADR-0012 P1: one home, not one literal per checkpoint),
+# 1 MiB -- generous for any ledger payload. Enforced at `_read_bounded_body` (checkpoint a,
+# raw body, BEFORE any JSON parsing); its rationale is BUFFERING -- never hold an unbounded
+# request body in memory. As of A8 this constant no longer denominates checkpoint (b): A2.2
+# justified 1 MiB as "safely under the argv wall (ARG_MAX = 2 MiB total)", but the payload
+# crosses as ONE psql `-v` argument and the PER-ARGUMENT wall is MAX_ARG_STRLEN (131 072
+# bytes) -- see MAX_PSQL_ARG_BYTES below. See this module's docstring, "SIZE AXIS".
 MAX_WRITE_BODY_BYTES = 1_048_576
+
+# A8 item 1: checkpoint (b)'s OWN bound, denominated on the transport's TRUE capacity -- the
+# re-serialized payload travels to postgres as ONE psql `-v payload=...` argument, and Linux
+# bounds each individual exec argument at MAX_ARG_STRLEN (32 pages = 131 072 bytes), NOT the
+# 2 MiB total-argv ARG_MAX the pre-A8 bound was sized against. 100 000 sits under
+# MAX_ARG_STRLEN with margin (a ledger payload is prose; this remains generous -- A2.2's own
+# "generous" claim, re-made honestly at the smaller number). The A1-ratified psql transport is
+# NOT reopened: the bound moves to the transport's true capacity, not the transport to the
+# bound. Enforced in `make_write_route`'s handler (checkpoint b), typed 413 naming this wall.
+MAX_PSQL_ARG_BYTES = 100_000
 
 # A3.1's two named time-axis bounds (ADR-0012 P1: one home each, not a literal per call site).
 # PSQL_CONNECT_TIMEOUT_S bounds the TCP handshake/auth round trip (passed as PGCONNECT_TIMEOUT
@@ -383,6 +405,19 @@ def _psql(cfg: BoundaryConfig, script: str, extra_v: dict[str, str] | None = Non
             f"refusal (that would have exited well within the bound). Treated as infra "
             f"failure (A3.1: a stall IS infra)."
         ) from e
+    except OSError as e:
+        # A8 item 1(ii), defense in depth (NOT the primary mechanism -- checkpoint (b)'s
+        # MAX_PSQL_ARG_BYTES bound is): an OSError from the subprocess launch itself (E2BIG
+        # when an argument exceeds the kernel's MAX_ARG_STRLEN transport wall, ENOENT if the
+        # psql binary is absent, or any sibling) is a boundary/deployment defect, not a
+        # connection-level infra fact -- it takes the typed unclassified-failure path (500)
+        # so no present or future transport wall can ever wear the bare untyped shape §9
+        # forbids. Full detail stays server-side, per the class's own logging discipline.
+        raise PsqlUnclassifiedFailure(
+            f"psql subprocess could not be launched (OSError before any connection was "
+            f"attempted -- e.g. E2BIG past the kernel's per-argument MAX_ARG_STRLEN wall, or "
+            f"a missing psql binary): {e}"
+        ) from e
 
 
 def _query_json(cfg: BoundaryConfig, sql: str, extra_v: dict[str, str] | None = None) -> Any:
@@ -467,9 +502,13 @@ def capability_absent(capability: str, message: str) -> JSONResponse:
     return JSONResponse(status_code=409, content=body.model_dump())
 
 
-def payload_too_large(observed_bytes: int, message: str) -> JSONResponse:
-    """A2.2: the one typed shape both write-ingress size checkpoints return (ADR-0012 P1)."""
-    body = PayloadTooLarge(limit_bytes=MAX_WRITE_BODY_BYTES, observed_bytes=observed_bytes, message=message)
+def payload_too_large(limit_bytes: int, observed_bytes: int, message: str) -> JSONResponse:
+    """A2.2: the one typed shape both write-ingress size checkpoints return (ADR-0012 P1).
+    As of A8 the two checkpoints carry two DIFFERENT bounds (MAX_WRITE_BODY_BYTES raw-body
+    buffering; MAX_PSQL_ARG_BYTES re-serialized transport), so `limit_bytes` is supplied by
+    the checkpoint that refused -- the shape stays one, and its numbers stay honest about
+    which bound actually fired."""
+    body = PayloadTooLarge(limit_bytes=limit_bytes, observed_bytes=observed_bytes, message=message)
     return JSONResponse(status_code=413, content=body.model_dump())
 
 
@@ -637,8 +676,13 @@ def _bound_write_payload_ints(surface: str, payload: dict[str, Any]) -> JSONResp
     bound-checked. A non-numeric JSON value under one of these field names is left for the
     kernel's own rowtype cast to judge (a type question, not a domain-bound question; this
     function adds no other semantic validation). An in-range float id (e.g. `5.0`) is NOT
-    newly refused -- it passes through exactly as before. Returns the typed 422 naming the
-    field and the bound, or None."""
+    newly refused -- it passes through exactly as before. A8 item 2: finiteness is tested
+    FIRST -- a NON-FINITE numeric value (Infinity/-Infinity/NaN) under a declared int field
+    is NOT this check's business either; it is routed (by skipping) to A4.1(a)'s value-axis
+    refusal downstream, so one condition wears one label (pre-A8, `Infinity` tripped the
+    id-domain comparison and wore "got inf" while `NaN` correctly fell through to the value
+    axis -- two labels split by IEEE-754 comparison accident). Returns the typed 422 naming
+    the field and the bound, or None."""
     model = WRITE_SURFACE_INT_FIELDS.get(surface)
     if model is None:
         return None
@@ -650,6 +694,17 @@ def _bound_write_payload_ints(surface: str, payload: dict[str, Any]) -> JSONResp
         for v in candidates:
             if isinstance(v, bool) or not isinstance(v, (int, float)):
                 continue  # a type mismatch here is the kernel's rowtype cast to judge, not ours
+            # A8 item 2: FINITENESS FIRST. A non-finite numeric value (Infinity/-Infinity/NaN,
+            # including a literal like 1e400 that json.loads silently parses to inf) is not an
+            # out-of-DOMAIN id -- it is A4.1(a)'s value-axis class (jsonb cannot represent it
+            # at all), and the pre-A8 code split one condition across two labels by IEEE-754
+            # comparison accident (inf > MAX_ID tripped the id-domain message "got inf"; NaN
+            # compared false everywhere and fell through to the value axis). Skipping here
+            # routes EVERY non-finite value to A4.1(a)'s own check just downstream
+            # (_reserialize_or_value_axis_failure, the message's ONE home per ADR-0012 P1) --
+            # same typed 422, value axis, the label NaN already correctly wore.
+            if isinstance(v, float) and not math.isfinite(v):
+                continue
             # Mixed int/float comparison is exact in Python (no rounding to a float's nearest
             # representable value first) -- MAX_ID itself is not exactly representable as a
             # float, but `v > MAX_ID` still correctly refuses any float magnitude >= 2**63.
@@ -791,8 +846,9 @@ def create_app(cfg: BoundaryConfig) -> FastAPI:
         # it can await the ASGI body stream) rather than inline in the (now plain `def`, A3.1)
         # write handler -- a dependency's exception propagates to the app's own exception
         # handling before the handler is ever dispatched to the threadpool, so this is still
-        # the ONE place checkpoint (a) becomes the typed 413 (ADR-0012 P1).
-        return payload_too_large(exc.observed_bytes, exc.message)
+        # the ONE place checkpoint (a) becomes the typed 413 (ADR-0012 P1). A8: checkpoint
+        # (a)'s bound is the raw-body/buffering one, and limit_bytes says so honestly.
+        return payload_too_large(MAX_WRITE_BODY_BYTES, exc.observed_bytes, exc.message)
 
     @app.exception_handler(_BodyReadTimeout)
     async def _body_read_timeout_handler(request: Request, exc: _BodyReadTimeout) -> JSONResponse:
@@ -1041,17 +1097,24 @@ def create_app(cfg: BoundaryConfig) -> FastAPI:
                 return JSONResponse(status_code=422, content={
                     "detail": f"malformed write payload -- representability axis: {repr_detail}"})
 
-            # A2.2 checkpoint (b): the re-serialized payload, bounded BEFORE the psql
-            # subprocess -- a payload can pass checkpoint (a) and still fail here (non-ASCII
-            # content that json.dumps's default ensure_ascii=True escaping expands past its
-            # raw UTF-8 byte count; W9 exercises exactly this).
+            # A2.2 checkpoint (b), RE-DENOMINATED per A8 item 1(i): the re-serialized payload,
+            # bounded BEFORE the psql subprocess against MAX_PSQL_ARG_BYTES -- the transport's
+            # TRUE per-argument capacity (the payload crosses as ONE psql `-v` argument;
+            # Linux's per-argument wall is MAX_ARG_STRLEN = 131 072 bytes, not the 2 MiB
+            # total-argv ARG_MAX the pre-A8 bound was sized against). A payload can pass
+            # checkpoint (a) and still fail here: any raw body between the two bounds (W25),
+            # or non-ASCII content that json.dumps's default ensure_ascii=True escaping
+            # expands past its raw UTF-8 byte count (W9).
             observed = len(payload_json.encode("utf-8"))
-            if observed > MAX_WRITE_BODY_BYTES:
+            if observed > MAX_PSQL_ARG_BYTES:
                 return payload_too_large(
+                    MAX_PSQL_ARG_BYTES,
                     observed,
                     f"the JSON payload, re-serialized, is {observed} bytes -- exceeds the "
-                    f"{MAX_WRITE_BODY_BYTES}-byte write bound (checkpoint b, before the psql "
-                    f"subprocess).")
+                    f"{MAX_PSQL_ARG_BYTES}-byte transport bound (checkpoint b, before the "
+                    f"psql subprocess: the payload crosses as ONE psql argument, and the "
+                    f"kernel's per-argument transport wall, MAX_ARG_STRLEN, is 131072 bytes "
+                    f"-- this bound sits under it with margin, spec A8).")
 
             verdict = _query_json(
                 cfg,
