@@ -611,6 +611,245 @@ construction and lapse, §5's discipline, §6's resurrection mechanics, §7's te
 §8's pairing duty, §9.1's wholesale-defeat confirmation) or an enumerated gap (§3.4) — none of it is buildable from this note
 alone, and all of it awaits the future commissioning act the status line names.
 
+## Interaction projection — 2026-07-18: the three reserved designs through this envelope
+
+*(Dated append per ADR-0005 Rule 8, same day as the body; the pin marker above stands. This
+section is a maintainer-commissioned consultation (cost attribution: ledger estimate row
+1479) on the interaction between this envelope and
+[design/FABLE-RESERVED-DESIGNS-2026-07-18.md](FABLE-RESERVED-DESIGNS-2026-07-18.md) — the
+banked design notes on three deferred principal-surface designs: §1 a sanctioned db_role
+unbind back to undeclared standing, §2 a lift for suspension with revocation terminal by
+type, §3 the deployment-declared competence-band lattice. His framing, verbatim in
+substance: project the reserved designs into the envelope and "shave off the residue to
+figure out what needs to be done, since the defeasibility layer is authoritative going
+forward regardless." The projection direction is therefore fixed: the reserved designs are
+read THROUGH this envelope's constructions, and on any conflict this envelope governs. The
+reserved-designs note itself is pinned and is NOT edited by this pass — every finding
+against it below is input to the maintainer's ruling on its three ratification questions
+(cited here as its Q1/Q2/Q3, the closing questions of its §1.5/§2.5/§3.6), never a change
+applied to it. Its text was re-read in full as it stands at sha256
+`9f6daa0d3b0967d550e6fbe003da0b6e1bb5908867f1c41467ddbe1ddb5e1d23`.)*
+
+Each residue item below states the interaction in one zero-context paragraph and classifies
+it: **(a)** already consistent — the two documents compose with no action; **(b)** a gap
+needing future design — an obligation on a named future spec; **(c)** a genuine conflict —
+with what the envelope-governs ruling implies for the reserved design. The projection found
+no (c)-class conflict that survives inspection; it found one place where the envelope's own
+§3.2 text is sharpened by the projection (I1 — recorded as an honest correction, not
+softened into a mere "gap"), several real gaps, and several coherent write-time/read-time
+disagreements that must stay *named* or they will someday be "fixed" into defects.
+
+### I1 — The active-flag idiom sharpens this envelope's in-force test: `not superseded` is no longer the whole of "in force" — **(b), and a correction to §3.2's letter**
+
+The reserved designs' shared mechanism (§1/§2 there) extends s41's identity/value-split
+retraction: a binding or standing is withdrawn by a superseding same-kind row with
+`principal_binding_active = false`, so a retraction chain's **terminal row is unsuperseded
+but inactive** — s41 D-5's own words: "unsuperseded alone is NO LONGER sufficient." This
+envelope's defeat rule (§3.2) tests the trust grant's force as `not superseded(G)` alone,
+which is correct for the row the withdrawal superseded but would mis-read the *withdrawal
+row itself* as an in-force grant if the grant EDB family were exported naively per-row from
+the kind. The projection therefore sharpens §3.4's grant-family gap into a precise
+obligation: the exported `trust_grant/…` family must carry (or the exporter must filter on)
+the active flag, and the ASP in-force test for any active-flag kind is the **two-conjunct**
+"governing and active" — mirroring exactly the reserved designs' own resurrection-proof
+view semantics (their §1.3 step 3) and s41 D-5's filter. §3.3's lapse confirmation is
+unchanged in substance (a withdrawal still lapses every dependent defeat on the next pass —
+via the supersession of G *plus* the inactive terminal row matching nothing); what is
+corrected is the letter of the rule body. Spirit intact, letter sharpened; recorded rather
+than silently absorbed.
+
+### I2 — The second in-force notion needs one ASP home and extends the judge pairing duty — **(b)**
+
+Generalizing I1: after any of the reserved designs ship, the record carries **two distinct
+in-force notions** — whole-row force (unsuperseded; one home per producer, s31's ratified
+invariant) and *binding/standing* force (governing row of its chain AND active; SQL home =
+the D-5 views and the reserved designs' re-issued `principal_role`/`principal_standing`
+filters). The ASP side has no home for the second notion at all today (the kernel-shape
+families are declared-DEFERRED in `ledger_edb.py`, never emitted). Before any defeat rule
+consumes grants — and before the judge differential ever covers principal machinery — the
+envelope's successor spec must mint the ASP twin of "governing and active" as ONE predicate
+(one home, ADR-0012 P1), and §8's pairing duty extends to it verbatim: a defeat stratum
+whose SQL side reads the D-5 filter while its ASP side reads bare unsuperseded rows goes
+DIVERGE_DEFECT on the first withdrawn grant. This is an obligation on the envelope's own
+successors, triggered by (not conditional on) any yes to the reserved designs' Q1/Q2.
+
+### I3 — §1's unbind and this envelope are the two halves of one incident response, forward and backward — **(a), with a naming duty**
+
+The unbind (their §1) is deliberately forward-only: after it commits, NULL-actor writes
+under the role refuse; rows written under the declaration *before* the unbind remain
+attributed to the outgoing principal forever (append-only law; their §1.3 step 5 even
+attributes the unbind row itself to the outgoing principal, correctly). So when the reason
+for unbinding is "this connection was speaking for the wrong identity," the unbind fixes
+the future and touches nothing about the past — and the backward half is exactly this
+envelope: a sentry-grade attestation defeating (discounting in derived views) the
+misattributed rows, at a declared grade, with the record intact (P1). Neither document
+currently says the two compose; they do, cleanly, with zero mechanism change. What needs
+doing is naming only: the future unbind spec's operational guidance should point at the
+defeat layer as the sanctioned backward-looking correction, so an operator does not reach
+for the one thing both documents forbid (retro-editing attribution).
+
+### I4 — The resurrection-proof view semantics and this envelope's §6 are the same discipline, independently derived — **(a)**
+
+Their §1.3 step 3 forecloses the resurrection trap structurally (governing row = latest
+unsuperseded regardless of flag; emit only if active — an unbind can never silently re-bind
+the role to a stale older declaration), and it composes correctly with s31's
+reinstatement-free supersession: superseding the unbind row does not un-name its victim, so
+the only path back to bound is a fresh, explicit, active declaration. That is this
+envelope's §6 discipline (retraction whose side effect silently promotes a state nobody
+affirmed is the trap; sanctioned correction is supersede-and-replace) arrived at from the
+other side, and where §6 must settle for *surfacing* implicit resurrection (a derived view,
+because attestation-lapse resurrection is sometimes the intended semantics), the binding
+views can and do foreclose it *structurally* (resurrection of a stale binding is never
+intended). Different strengths at the right places; no action.
+
+### I5 — Suspension does not touch defeat force: the grant, not the standing, is the lever — **(b), a rule the defeat spec must state; mild input to Q2**
+
+Suspending a principal (their §2) blocks its *writes*; it supersedes nothing and withdraws
+nothing. So a suspended attester's past attestations, and the still-in-force trust grant
+empowering them, continue to defeat rows — and lifting the suspension changes nothing in
+the defeat layer, because the defeat rule never consulted standing. This is the correct
+default and this projection recommends keeping it deliberate: the sanctioned levers over
+defeat force are the *grant* (withdraw it → every dependent defeat lapses, §3.3) and the
+*attestation* (supersede it → targeted resurrection, §6); making defeat additionally
+consult lifecycle standing would add a standing fact family to the rule body — stratified
+and therefore *permissible* (standing derives from lifecycle events + supersession + active
+flag, no defeat involvement — discipline rule 1 is satisfiable), but it multiplies the
+in-force notions inside one rule and buys nothing the grant lever does not already provide.
+The defeat spec must state this as a decided rule either way, or the first author who
+notices "suspended sentry still defeating" will patch it ad hoc. The Q2 input: see I7 for
+why the lift design *helps* the defeat layer regardless of how this rule lands.
+
+### I6 — Write-time standing and read-time credit can disagree observably, and the disagreement is coherent-and-named — **(a), with a naming duty**
+
+The commission's explicit boundary question, answered for the suspension case: after their
+§2 ships, an operator can observe simultaneously that principal P's new writes are refused
+(kernel, write time) while every past row P wrote reads as credited (derivation, read
+time). This is not incoherence; the two layers answer different questions — "may P act
+now?" versus "does row R stand?" — and P1 requires exactly this: standing changes are
+forward-only write gating, never a judgment on recorded rows, and past rows lose credit
+only by *positive* defeat (an in-force mismatch attestation) or supersession, never by
+their author's later standing. The mirror disagreement is equally coherent: a defeated
+row's author keeps writing freely (defeat never gates anyone's future writes — the
+recordable-not-gating posture). Incoherent disagreement would arise only from crossing the
+streams — a write-time mechanism storing a read-time verdict (the pairing-RCA invariant
+already forbids stored verdicts) or a defeat rule refusing writes (the envelope's own
+posture forbids gating). Both documents must keep this asymmetry *named*, because unnamed
+it reads as a bug: "why is the suspended principal's work still credited?" has a one-line
+answer only if the record carries it.
+
+### I7 — The lift design materially stabilizes the defeat layer; succession-only would churn it — **(a), and an argument FOR Q2's yes**
+
+Project the case where the *sentry's own* principal comes under investigation (its
+attestations look buggy): the sanctioned response chain under this envelope is suspend the
+sentry (stop new attestations — write time), then either supersede specific attestations
+(targeted resurrection) or supersede the grant (wholesale lapse). Under today's
+succession-only posture, clearing the sentry afterward requires a *successor principal* —
+new registration, new grant — which lapses every defeat the old grant carried (mass
+resurrection of every mismatched row, §6's surfacing view lighting up wholesale) and
+re-derives it only after re-attestation under the new identity. Under their §2's lift, the
+identity, the grant, and every standing defeat survive the investigation intact: suspension
+becomes exactly the reversible precaution their plain-words preamble wants, *and* the
+defeat layer sees zero churn. This is a concrete, envelope-side benefit of the lift design
+that the reserved-designs note could not have named (it predates the envelope's
+authoritativeness) — flagged as ruling input for Q2.
+
+### I8 — The band lattice is the envelope's named prerequisite, arriving in a consumable shape — with one missing piece: the grade↔band mapping — **(b), direct input to Q3**
+
+This envelope named the s41 free-text band a hard prerequisite gap for conditional defeat
+(§3.4, §10): "empowered at grade ≥ X" needs an ordered comparison free text cannot supply.
+Their §3.3 answers with the right architecture class — `competence_band_defined` events
+carrying an integer rank, deployment-owned membership, kernel-computable order — and the
+projection confirms the fit: an in-force band-definition family exports as a
+`band_rank(Band,Rank)` EDB fact (subject to I1/I2's two-conjunct in-force test — band
+definitions are themselves active-flag-retractable in the sketch), and the rank comparison
+is monotone, so both producers can carry it and §8's pairing holds. The missing piece
+neither document owns: the sidenote's conditional defeat joins **two different lattices** —
+the *attestation-confidence* grades (the sentry's closed `exact-command …ambiguous`
+vocabulary, kernel-structural per the s44 authoring) and the *competence* bands
+(deployment-declared). "Trust its competence to scrute the mismatch" means the defeat rule
+needs a declared mapping point: which band suffices to empower defeat at which attestation
+grade (plausibly itself an `activity_band_required`-shaped declared event, their §3.3 layer
+3, with activity = `model-identity-attestation` — the shape exists; the join is undesigned).
+Q3 input: the band ruling should be taken knowing this envelope is a concrete consumer
+needing the rank *and* this mapping point.
+
+### I9 — Band-definition withdrawal with extant grants: the lapse spine answers it, the surfacing duty binds it — **(b), input to Q3's eventual spec**
+
+Their §3.3 layer 2 validates grants against in-force band definitions at *write* time. A
+definition later withdrawn (active-flag supersession, per the sketch's own idiom) leaves
+already-written grants citing a band with no in-force definition — valid at write time,
+dangling at read time; the sketch does not say what a reader then concludes. The
+envelope-governs answer follows the §3.3/§6 spine: the grant's *rank* lapses with the
+definition (the derivation can no longer order it), so every grade-conditioned defeat
+resting on that grant's rank stops firing on the next pass — implicit lapse, fail-safe
+direction (defeat force shrinks, never silently grows) — and the dangling state is
+*surfaced, never silent* (a violations-view member in the `orphaned_by_retraction` /
+`resurrected_by_retraction` family: grants-citing-a-withdrawn-band, plus the defeats that
+lapsed with them). The future band spec must state this; the answer shape is already
+governed here.
+
+### I10 — Both documents' countersign questions converge on one deferred EDB prerequisite — **(b), consolidated bill-of-materials item**
+
+Their §1.4/§2.4 leave open whether unbind and lift want a countersign ceremony
+(governance-act attestation by a second principal); this envelope's P2 requires
+human-countersigned attestations before heavy-grade defeats fire. Different countersigns —
+one blesses a governance *act*, the other strengthens *evidence* — but one machinery
+(review rows, `review_detail`, the review-gap debt views) and one shared gap: the
+countersign/review fact families are in `ledger_edb.py`'s declared-DEFERRED set, never
+emitted, and `entry/6` carries no actor (§3.4). Whichever future spec arrives first — the
+reserved designs' or the envelope's successor — pays the same export bill; it should be
+paid once, as one enumerated family addition (actor emission, review/countersign facts,
+`agent_class`), not twice ad hoc. Consolidated here so neither spec rediscovers the other's
+half.
+
+### I11 — Dust-world boundaries: re-grants at birth, defeats per world — **(a)**
+
+Their §3.4 dissolves the band-migration question under runs-are-linear: a new world re-
+grants still-believed competences as fresh events citing the prior world's record. The
+envelope side composes identically and needs no more: attestations, grants, and therefore
+defeats are per-world facts (the EDB is exported per target; a prior world's defeats are
+read-only evidence like everything else in it), so a re-granted trust grant in a new world
+carries defeat force only over that world's attestations — no cross-world defeat exists to
+migrate, and none should. Consistent by construction; recorded so nobody invents
+cross-world defeat transport to "fix" it.
+
+### What needs to be done (the shave, summarized with owners)
+
+**Input to the maintainer's ruling on the reserved designs' three questions (no document
+edits; carried by this section):**
+- *Q1 (unbind):* I3 — the unbind is the forward half of an incident response whose backward
+  half is this envelope's defeat layer; the composition is clean and argues no change to
+  the design, only that its eventual spec name the pairing.
+- *Q2 (suspension lift):* I7 — the lift materially stabilizes the defeat layer (identity,
+  grant, and standing defeats survive an investigation; succession-only forces mass
+  defeat-lapse churn) — an envelope-side argument *for* yes; plus I5's note that lift/
+  suspend deliberately do not touch defeat force.
+- *Q3 (band lattice):* I8 and I9 — the architecture class fits the envelope's prerequisite
+  exactly; the eventual spec must add the attestation-grade↔band mapping point and the
+  definition-withdrawal semantics (lapse + surface), both answer-shapes already governed
+  here.
+
+**Obligations on this envelope's own successor spec (future-spec debt, not buildable from
+this note):**
+- I1 — the grant (and any active-flag) EDB family carries the active flag; the defeat
+  rule's in-force test on such kinds is two-conjunct (governing AND active), sharpening
+  §3.2's letter.
+- I2 — one ASP home for the second in-force notion, and §8's judge-pairing duty extended
+  to it before any defeat rule consumes grants.
+- I5 — a decided rule that lifecycle standing does not condition defeat force (the grant is
+  the lever), or a deliberate ruling otherwise.
+- I8 — the grade↔band mapping join, once Q3's spec exists.
+- I10 — the consolidated EDB export bill (actor on entries, review/countersign families,
+  `agent_class`), paid once.
+
+**Nothing to do (consistent, kept named so they are not "fixed" into defects):** I3's and
+I6's coherent write-time/read-time asymmetries; I4's independently-derived resurrection
+discipline; I7's composition; I11's dust-world boundary. No (c)-class conflict was found:
+nowhere does a reserved design's mechanism contradict an envelope construction — the one
+letter-level collision (I1) lands on this envelope's own text and is corrected here, which
+is what "the defeasibility layer is authoritative going forward" costs the layer itself
+when the projection runs both ways honestly.
+
 ## License
 
 Public Domain (The Unlicense).
