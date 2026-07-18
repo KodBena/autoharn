@@ -1,0 +1,54 @@
+== scaffolding WORLD DIVERGE (chain ends s46, s50 applied in place after) ==
+=== detect-negative-pre-s50 ===
+  [ok] s50 .detect.sql reads f on the s46-only (pre-s50) chain
+
+=== R-attestation-accepted ===
+  [ok] {'row_id': 6, 'message': None, 'sqlstate': None, 'refusal_id': None, 'disposition': 'accepted'}
+
+=== S-supersession-accepted ===
+  [ok] {'row_id': 7, 'message': None, 'sqlstate': None, 'refusal_id': None, 'disposition': 'accepted'}
+
+=== A2-attestation-accepted ===
+  [ok] {'row_id': 8, 'message': None, 'sqlstate': None, 'refusal_id': None, 'disposition': 'accepted'}
+
+=== WS46a-before-view-wrongly-defeats-R ===
+  [ok] model_defeated_rows (pre-fix) row_ids: ['6'] -- expected 6 present
+
+=== WS46a-before-floor-never-defeats-R ===
+  [ok] SQL floor (raw-history, always correct) row_ids: [] -- expected 6 absent
+
+=== WS46a-before-view-engine-DISAGREE ===
+  [ok] the pre-fix polarity: kernel view and SQL floor disagree on row 6
+
+=== WS46a-before-judge-defeat-AGREE-unaffected ===
+  [ok] judge --layer defeat (SQL-floor vs ASP, neither reads the kernel view -- unaffected by this delta either side of the fix): ['AGREE', "asp ['credited(1)', 'credited(2)', 'credited(3)', 'credited(4)', 'credited(5)', 'credited(7)', 'credited(8)']", "sql ['credited(1)', 'credited(2)', 'credited(3)', 'credited(4)', 'credited(5)', 'credited(7)', 'credited(8)']"]
+
+=== detect-positive-post-s50 ===
+  [ok] s50 .detect.sql reads t once s50 is applied on top of s46
+
+=== WS46a-after-view-excludes-R ===
+  [ok] model_defeated_rows (post-fix) row_ids: [] -- expected 6 absent
+
+=== WS46a-after-view-AGREES-with-floor ===
+  [ok] view row_ids [] vs SQL floor row_ids []
+
+=== WS46a-after-judge-defeat-AGREE ===
+  [ok] judge output: ['AGREE', "asp ['credited(1)', 'credited(2)', 'credited(3)', 'credited(4)', 'credited(5)', 'credited(7)', 'credited(8)']", "sql ['credited(1)', 'credited(2)', 'credited(3)', 'credited(4)', 'credited(5)', 'credited(7)', 'credited(8)']"]
+
+=== WS46c-fail-safe-shrink-only-empty-newly-defeatable ===
+  [ok] view_after \ view_before (the newly-defeatable direction) = [] -- must be empty; view_before \ view_after = ['6'] (the shrinkage, expected non-empty, containing 6)
+
+=== WS46c-shrinkage-contains-R ===
+  [ok] view_before \ view_after = ['6'] -- expected to contain 6
+
+== scaffolding WORLD PLAIN (chain ends s46, s50 applied in place after; no kind-changing supersession) ==
+=== plain-attestation-accepted ===
+  [ok] {'row_id': 6, 'message': None, 'sqlstate': None, 'refusal_id': None, 'disposition': 'accepted'}
+
+=== WS46b-model-defeated-rows-byte-identical ===
+  [ok] before=['5|6|4|observed-model-plain|exact-command'] after=['5|6|4|observed-model-plain|exact-command']
+
+=== WS46b-credited-current-byte-identical ===
+  [ok] before=['1', '2', '3', '4', '6'] after=['1', '2', '3', '4', '6']
+
+all s50-defeat-input-raw-domain cases WITNESSED clean.
