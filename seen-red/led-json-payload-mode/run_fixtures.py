@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-18T09:10:27Z
-#   last-change: 2026-07-18T09:34:55Z
+#   last-change: 2026-07-18T16:06:19Z
 #   contributors: ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -338,6 +338,61 @@ def main() -> int:
                              f"after={after}\nSTDOUT:\n{r.stdout}\nSTDERR:\n{r.stderr}")
         print(f"RED-OVERSIZED-STDIN: exit={r.returncode} refused={refused} "
               f"no_bash_crash={no_bash_crash} teaches={teaches} row-count before={before} "
+              f"after={after} (unchanged={unchanged}) -- {'PASS' if ok else 'FAIL'}")
+
+        # -------------------------------------------------------------- RED-ARGSTRLEN-WALL-FILE
+        # item led-json-payload-argstrlen-wall: RED-OVERSIZED-FILE/STDIN above only probe
+        # checkpoint (a) (>MAX_WRITE_BODY_BYTES, 1 MiB) -- before this item, checkpoint (b) ALSO
+        # used MAX_WRITE_BODY_BYTES, so a payload strictly BETWEEN MAX_PSQL_ARG_BYTES (100000)
+        # and MAX_WRITE_BODY_BYTES (1048576) passed BOTH checkpoints unrefused and then died
+        # inside kernel_write()'s own psql invocation as a bare, untyped E2BIG ("Argument list
+        # too long", shell exit 126) -- the exact wall this item closes. 300000 bytes sits
+        # squarely in that zone: over MAX_PSQL_ARG_BYTES, comfortably under MAX_WRITE_BODY_BYTES.
+        MAX_PSQL_ARG_BYTES = 100_000
+        wallzone_file = tmp_full / "wallzone.json"
+        wallzone_file.write_text(json.dumps({"kind": "finding", "statement": "z" * 300_000}))
+        before = _row_count(schema_full, role_full)
+        r = _run(dest_full, "led", "--json", "ledger", str(wallzone_file))
+        after = _row_count(schema_full, role_full)
+        refused = r.returncode != 0
+        no_bash_crash = "Argument list too long" not in r.stderr and r.returncode != 126
+        teaches = "payload_too_large" in r.stderr and str(MAX_PSQL_ARG_BYTES) in r.stderr
+        # the OLD (pre-fix) bound number must NOT appear as the cited bound here -- a payload
+        # this size is under MAX_WRITE_BODY_BYTES, so if the fix regressed to citing that number
+        # instead of MAX_PSQL_ARG_BYTES, this would catch it (the exact unreachable-honest defect
+        # this item's own commissioning text names).
+        cites_correct_bound = f"exceeds the {MAX_PSQL_ARG_BYTES}-byte transport" in r.stderr
+        unchanged = before == after
+        ok = refused and no_bash_crash and teaches and cites_correct_bound and unchanged
+        if not ok:
+            failures.append(f"RED-ARGSTRLEN-WALL-FILE: exit={r.returncode} refused={refused} "
+                             f"no_bash_crash={no_bash_crash} teaches={teaches} "
+                             f"cites_correct_bound={cites_correct_bound} before={before} "
+                             f"after={after}\nSTDOUT:\n{r.stdout}\nSTDERR:\n{r.stderr}")
+        print(f"RED-ARGSTRLEN-WALL-FILE: exit={r.returncode} refused={refused} "
+              f"no_bash_crash={no_bash_crash} teaches={teaches} "
+              f"cites_correct_bound={cites_correct_bound} row-count before={before} "
+              f"after={after} (unchanged={unchanged}) -- {'PASS' if ok else 'FAIL'}")
+
+        # ------------------------------------------------------------- RED-ARGSTRLEN-WALL-STDIN
+        before = _row_count(schema_full, role_full)
+        r = _run(dest_full, "led", "--json", "ledger", "-",
+                  stdin=json.dumps({"kind": "finding", "statement": "w" * 300_000}))
+        after = _row_count(schema_full, role_full)
+        refused = r.returncode != 0
+        no_bash_crash = "Argument list too long" not in r.stderr and r.returncode != 126
+        teaches = "payload_too_large" in r.stderr and str(MAX_PSQL_ARG_BYTES) in r.stderr
+        cites_correct_bound = f"exceeds the {MAX_PSQL_ARG_BYTES}-byte transport" in r.stderr
+        unchanged = before == after
+        ok = refused and no_bash_crash and teaches and cites_correct_bound and unchanged
+        if not ok:
+            failures.append(f"RED-ARGSTRLEN-WALL-STDIN: exit={r.returncode} refused={refused} "
+                             f"no_bash_crash={no_bash_crash} teaches={teaches} "
+                             f"cites_correct_bound={cites_correct_bound} before={before} "
+                             f"after={after}\nSTDOUT:\n{r.stdout}\nSTDERR:\n{r.stderr}")
+        print(f"RED-ARGSTRLEN-WALL-STDIN: exit={r.returncode} refused={refused} "
+              f"no_bash_crash={no_bash_crash} teaches={teaches} "
+              f"cites_correct_bound={cites_correct_bound} row-count before={before} "
               f"after={after} (unchanged={unchanged}) -- {'PASS' if ok else 'FAIL'}")
 
     finally:

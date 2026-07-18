@@ -1,0 +1,70 @@
+Banked RED evidence for ledger item `resolve-violation-class-ambiguity`.
+
+Captured by running seen-red/resolve-violation-class-ambiguity/run_fixtures.py against the
+PRE-FIX bootstrap/templates/led.tmpl (the shipped version this item's fix supersedes, obtained
+via `git stash push -- bootstrap/templates/led.tmpl` immediately before this fixture's own
+commit lands, then `git stash pop` to restore the fix): 4 of 8 cases FAIL, reproducing the
+reported defect exactly -- `led work resolve-violation` on a target matching more than one
+work_item_violations class at once refuses "matches more than one class... write the
+work_violation_disposition row directly via SQL, naming the intended class explicitly", naming
+NEITHER the matched classes NOR any --class flag (there was none), and every subsequent attempt
+to pass --class is refused outright as an unrecognized flag ("led work resolve-violation:
+REFUSED -- unrecognized flag '--class'") -- there was no way forward through the sanctioned CLI
+at all, exactly the commissioning brief's own words ("supersede-cascade's own internal call hits
+it, so the cascade cannot complete through the CLI on that shape"). SETUP-AMBIGUOUS-TARGET and
+RED-CLASS-PLUS-SUPERSEDES-REFUSED and GREEN-SINGLE-MATCH-UNCHANGED still PASS pre-fix (the
+ambiguous-target construction itself is unaffected by this item, the class+supersedes
+combination happens to also refuse pre-fix because --class is unrecognized regardless of
+--supersedes, and the ordinary single-match path is untouched by this item).
+
+ADOPT: new-project.sh --new-world exit=0 deployment.json=True -- PASS
+SETUP-AMBIGUOUS-TARGET: first_edge_exit=0 cycle_refused_at_construction=True seed_ok=True ambiguous_target=7 matched_classes='blocks_close_cycle,dependency_cycle' -- PASS
+GREEN-AMBIGUOUS-NO-CLASS-TEACHES: exit=1 refused=True names_both=False teaches_class_flag=False before=11 after=11 (unchanged=True) -- FAIL
+GREEN-CLASS-DISAMBIGUATES: exit=1 accepted=False grew=False chosen_class='blocks_close_cycle' written_class='' row-count before=11 after=11 (grew-by-one=False) -- FAIL
+RED-WRONG-CLASS-REFUSED: exit=1 refused=True names_actual=False row-count before=11 after=11 (unchanged=True) -- FAIL
+RED-CLASS-PLUS-SUPERSEDES-REFUSED: exit=1 refused=True teaches=True row-count before=11 after=11 (unchanged=True) -- PASS
+GREEN-SINGLE-MATCH-UNCHANGED: exit=0 accepted=True single_target=14 single_class=orphaned_by_retraction row-count before=14 after=15 (grew-by-one=True) -- PASS
+RED-SINGLE-MATCH-WRONG-CLASS: exit=1 refused=True names_actual2=False single_target2='18' single_class2='orphaned_by_retraction' before=18 after=18 -- FAIL
+
+resolve-violation-class-ambiguity fixture: 4 FAILURE(S)
+
+!! GREEN-AMBIGUOUS-NO-CLASS-TEACHES: exit=1 refused=True names_both=False teaches_class_flag=False before=11 after=11
+STDERR:
+led work resolve-violation: REFUSED -- target 7 matches MORE THAN ONE
+  work_item_violations class at once (2) -- this CLI convenience
+  cannot disambiguate; write the work_violation_disposition row directly via SQL,
+  naming the intended class explicitly.
+
+
+!! GREEN-CLASS-DISAMBIGUATES: exit=1 accepted=False grew=False chosen_class='blocks_close_cycle' written_class=''
+STDOUT:
+
+STDERR:
+led work resolve-violation: REFUSED -- unrecognized flag '--class'.
+  led work resolve-violation <violating-act-id> <reissued|retired> "<basis>"
+    accepts only: --witness <successor-ref>, --review-witness <ref>,
+    --review-deferred, --supersedes <old-disposition-id>. NOTHING was written.
+
+
+!! RED-WRONG-CLASS-REFUSED: exit=1 refused=True names_actual=False before=11 after=11
+STDERR:
+led work resolve-violation: REFUSED -- unrecognized flag '--class'.
+  led work resolve-violation <violating-act-id> <reissued|retired> "<basis>"
+    accepts only: --witness <successor-ref>, --review-witness <ref>,
+    --review-deferred, --supersedes <old-disposition-id>. NOTHING was written.
+
+
+!! RED-SINGLE-MATCH-WRONG-CLASS: exit=1 refused=True names_actual2=False single_target2='18' single_class2='orphaned_by_retraction' before=18 after=18
+STDERR:
+led work resolve-violation: REFUSED -- unrecognized flag '--class'.
+  led work resolve-violation <violating-act-id> <reissued|retired> "<basis>"
+    accepts only: --witness <successor-ref>, --review-witness <ref>,
+    --review-deferred, --supersedes <old-disposition-id>. NOTHING was written.
+
+FIXUP FIXED (this item's own fix): a new --class <name> flag in `work resolve-violation`'s own
+flag loop; the ambiguity refusal now names the matched classes and teaches --class as the way
+forward; a --class validated against the actual matched set (never blind pass-through); --class
+combined with --supersedes refused (the correction path derives class deterministically). All
+four cases now PASS -- see the fixture's own green run (run_fixtures.py's own stdout, captured
+separately, not reproduced here byte-for-byte since it is the live, re-runnable proof this
+fixture itself supplies going forward).

@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-14T19:09:31Z
-#   last-change: 2026-07-15T20:44:07Z
-#   contributors: a857c93d/main
+#   last-change: 2026-07-18T16:10:04Z
+#   contributors: a857c93d/main, ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
 """run_fixtures.py -- both-polarity proof for kernel/lineage/s29-obligation-item-key-and-typed-
@@ -80,6 +80,15 @@ Cases (spec sec-7's own negative controls, plus the positive path each is paired
                                         live-check's FALSE branch), still succeeds exactly as
                                         before this delta -- exercised on a SEPARATE, s28-only
                                         scaffold (no s29 applied), not just assumed.
+  l-close-bad-resolution-refused-client-side -- item led-work-close-resolution-teaching (row
+                                        1613): a non-enum resolution is refused CLIENT-SIDE,
+                                        naming the closed vocabulary, never surfacing the raw
+                                        postgres work_resolution_check constraint-violation text.
+  m-close-shipped-no-witness-refused-client-side -- resolution=shipped with no --witness is
+                                        refused CLIENT-SIDE, naming the requirement, never the
+                                        raw work_shipped_requires_witness constraint text.
+  n-close-shipped-with-witness-accepted -- the SAME shipped act WITH --witness succeeds --
+                                        the two new refusals above are teaching, not a new gate.
 
 Usage: python3 seen-red/s29-obligation-item-key-and-typed-close/run_fixtures.py
 Exit 0 if every case matches; 1 otherwise. Lazy imports banned."""
@@ -457,6 +466,54 @@ def main() -> int:
         ok_j = rj_.returncode == 0
         check("j-pre-s29-led-close-unaffected", ok_j,
               f"exit={rj_.returncode} stderr_tail={(rj_.stdout + rj_.stderr).strip()[-200:]!r}", failures)
+
+        # --- l/m/n: item led-work-close-resolution-teaching (ledger row 1613, witnessed
+        # 2026-07-18: a non-enum resolution / a shipped resolution with no witness used to
+        # surface a RAW postgres CHECK-violation error -- work_resolution_check / work_shipped_
+        # requires_witness, both kernel/lineage/s22-work-item-ledger.sql -- instead of a verb-
+        # level refusal naming the closed vocabulary). New client-side checks in `work close`,
+        # BEFORE any DB round trip: (l) a non-enum resolution is refused naming the vocabulary;
+        # (m) resolution=shipped with no --witness is refused naming the requirement; (n) the
+        # SAME shipped act with --witness succeeds -- the two refusals are teaching, not a new
+        # gate, so the legal case is unaffected. Exercised on the SAME s29 world, a fresh item
+        # so it does not interact with root-a's own state above.
+        led(world_dir, "work", "open", "resw-item", "Resolution-witness teaching probe")
+        led(world_dir, "work", "claim", "resw-item")
+
+        rl_ = led(world_dir, "work", "close", "resw-item", "bogus-resolution", "--review-deferred")
+        out_l = rl_.stdout + rl_.stderr
+        ok_l = (rl_.returncode != 0
+                and "shipped, superseded" in out_l
+                and "bogus-resolution" in out_l
+                # the RAW postgres error shape (a bare "ERROR: new row for relation ... violates
+                # check constraint" with no teach-text) must NOT be what the caller sees -- the
+                # CLI's own client-side refusal fires BEFORE any DB round trip, so this never
+                # reaches psql at all. The constraint's NAME legitimately appears in the CLI's own
+                # teach-text (cited as the authority this is a transcription of, ADR-0012 P1) --
+                # it is the RAW psql/postgres framing that must be absent, not the bare name.
+                and "violates check constraint" not in out_l
+                and "ERROR:" not in out_l)
+        check("l-close-bad-resolution-refused-client-side", ok_l,
+              f"exit={rl_.returncode} excerpt={out_l.strip()[-400:]!r}", failures)
+
+        rm_ = led(world_dir, "work", "close", "resw-item", "shipped", "--review-deferred")
+        out_m = rm_.stdout + rm_.stderr
+        ok_m = (rm_.returncode != 0
+                and "work_shipped_requires_witness" in out_m
+                and "--witness" in out_m
+                and "violates check constraint" not in out_m)
+        check("m-close-shipped-no-witness-refused-client-side", ok_m,
+              f"exit={rm_.returncode} excerpt={out_m.strip()[-400:]!r}", failures)
+
+        rn_ = led(world_dir, "work", "close", "resw-item", "shipped", "--witness", "commit-resw1",
+                  "--review-deferred")
+        wic_n = psql_tuples(
+            f"SET ROLE {role}; SET search_path = {schema}, {kern}; "
+            f"SELECT state, resolution FROM work_item_current WHERE slug='resw-item';")
+        ok_n = rn_.returncode == 0 and "closed|shipped" in wic_n.stdout
+        check("n-close-shipped-with-witness-accepted", ok_n,
+              f"exit={rn_.returncode} work_item_current={wic_n.stdout.strip()!r} "
+              f"excerpt={(rn_.stdout + rn_.stderr).strip()[-200:]!r}", failures)
 
     finally:
         teardown_all()

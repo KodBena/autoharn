@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-18T09:07:27Z
-#   last-change: 2026-07-18T09:35:15Z
+#   last-change: 2026-07-18T16:07:51Z
 #   contributors: ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -39,6 +39,11 @@ seen-red/led-refs-flag-order-parser-bug/run_fixtures.py's own scratch-and-drop p
                                     row count UNCHANGED (nothing written).
   GREEN-HELP-REVIEW             -- `./led review <id> attest self-review --help`: exit 0,
                                     review-specific usage on stderr, row count unchanged.
+  GREEN-HELP-REVIEW-BARE        -- item led-review-bare-help-exit-code (row 1568): a BARE
+                                    `./led review --help` (no entry-id/verdict/independence at
+                                    all): exit 0, review-specific usage on stderr, row count
+                                    unchanged -- previously exit 1 (the arg-count guard fired
+                                    before the help-token check ever saw the token).
   RED-DASH-FIRST-WORD-GENERIC   -- `./led finding --bogus-flag "text"`: REFUSED (nonzero exit),
                                     teach-text names the first word and usage, row count
                                     unchanged.
@@ -174,6 +179,28 @@ def main() -> int:
                              f"before={before} after={after}\nSTDOUT:\n{r.stdout}\nSTDERR:\n{r.stderr}")
         print(f"GREEN-HELP-REVIEW: exit={r.returncode} shows_usage={shows_usage} row-count "
               f"before={before} after={after} (unchanged={unchanged}) -- {'PASS' if ok else 'FAIL'}")
+
+    # -------------------------------------------------------------- GREEN-HELP-REVIEW-BARE
+    # item led-review-bare-help-exit-code (ledger row 1568): a BARE `led review --help` (no
+    # entry-id/verdict/independence given at all -- too FEW words to ever reach GREEN-HELP-
+    # REVIEW's own case above, which supplies all three positionals before --help) used to hit
+    # the review verb's OWN `$# -lt 4` arg-count guard BEFORE check_help_or_dash_first_word ever
+    # ran, printing the SAME usage text but exit 1 (a refusal) instead of the tier-1 exit-0
+    # "prints usage, writes nothing" contract item led-help-token-closure established for every
+    # other subcommand's --help. Zero-write held in BOTH the old and new ordering -- this is an
+    # exit-code-honesty fix only, distinct from (and in addition to) GREEN-HELP-REVIEW above.
+    before = _ledger_row_count(dest)
+    r = _run(dest, "led", "review", "--help")
+    after = _ledger_row_count(dest)
+    exit0 = r.returncode == 0
+    shows_usage = "usage: led review <entry-id> <verdict> <independence>" in r.stderr
+    unchanged = before == after
+    ok = exit0 and shows_usage and unchanged
+    if not ok:
+        failures.append(f"GREEN-HELP-REVIEW-BARE: exit={r.returncode} shows_usage={shows_usage} "
+                         f"before={before} after={after}\nSTDOUT:\n{r.stdout}\nSTDERR:\n{r.stderr}")
+    print(f"GREEN-HELP-REVIEW-BARE: exit={r.returncode} shows_usage={shows_usage} row-count "
+          f"before={before} after={after} (unchanged={unchanged}) -- {'PASS' if ok else 'FAIL'}")
 
     # ------------------------------------------------------------- RED-DASH-FIRST-WORD-GENERIC
     before = _ledger_row_count(dest)

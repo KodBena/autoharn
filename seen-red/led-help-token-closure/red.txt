@@ -120,3 +120,37 @@ against both pre- and post-fixup led.tmpl, since decision's unrecognized-flag re
 genuinely unrecognized flag is unchanged by this fixup; verified directly post-fix (see the
 fixture's own green run banked in the build/fixup report, not reproduced here).
 
+
+---
+
+--- FIXUP ADDENDUM 2 (item led-review-bare-help-exit-code, row 1568, same build stream) ---
+
+Captured by the same `git stash push -- bootstrap/templates/led.tmpl` / `git stash pop` bracket,
+against the shipped (pre-this-item) led.tmpl -- i.e. the version that already carries this
+file's own GREEN-HELP-REVIEW/GREEN-HELP-GENERIC cases above, but NOT this item's reordering of
+`led review`'s help-token check ahead of its arg-count guard. Reproduces the residual finding
+(doc pass's B1 reviewer, decision row 1562 / docs commit 2bc47c5): a BARE `led review --help`
+(no entry-id/verdict/independence at all) hits the review verb's OWN `$# -lt 4` arg-count guard
+BEFORE check_help_or_dash_first_word ever runs -- prints the SAME usage text, but exit 1 (a
+refusal) instead of the tier-1 exit-0 "prints usage, writes nothing" contract this file's own
+GREEN-HELP-REVIEW/GENERIC cases already prove for every OTHER shape (a help token AFTER the
+three positionals, or as a bare kind's own first word). Zero-write holds either way -- the gap is
+exit-code honesty only, exactly as row 1568's own commissioning text states.
+
+GREEN-HELP-REVIEW-BARE: exit=1 shows_usage=True row-count before=1 after=1 (unchanged=True) -- FAIL
+
+!! GREEN-HELP-REVIEW-BARE: exit=1 shows_usage=True before=1 after=1
+STDOUT:
+
+STDERR:
+usage: led review <entry-id> <verdict> <independence> [--antecedent id] <statement...>
+       verdict: attest|attest_with_reservations|refuse
+       independence: self-review|technical|managerial|financial
+       set LED_ACTOR=<principal-name> to countersign as a registered principal
+
+FIXUP FIXED (this item's own fix): `check_help_or_dash_first_word print_review_usage "$@"` now
+runs on the entry-id position, BEFORE the `$# -lt 4` arg-count guard -- a no-op for any ordinary
+numeric entry-id, but catches a bare --help/-h/help/dash-leading-first-word before the guard
+ever fires. The SECOND (pre-existing) call on the statement words, after the three positionals
+are consumed, is untouched. GREEN-HELP-REVIEW-BARE now PASSes (exit 0) -- see the fixture's own
+green run above this addendum.
