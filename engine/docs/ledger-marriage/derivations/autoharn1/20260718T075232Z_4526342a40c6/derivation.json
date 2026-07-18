@@ -1,0 +1,34 @@
+{
+  "target": "autoharn1",
+  "verdict": "AGREE",
+  "only_asp": [],
+  "only_sql": [],
+  "asp_record": {
+    "engine": "clingo",
+    "version": "clingo version 5.8.0",
+    "config": [
+      "ledger_tnow.lp"
+    ],
+    "input_basis": "edb-text (ledger_edb export, serialized)",
+    "input_hash": "4526342a40c6450b811c44b422db56abcbfc59e875bc89dd50f40843c1eaa366",
+    "program_hash": "3a0ab1ea1966f07131986b03fa4f39302c517a7b3d2524450731b5bb6890f9dd",
+    "output_hash": "900c263990473f8e9cf70d22a44168181073326bba88b83a3ad6431319ad4b8f",
+    "target": "autoharn1",
+    "ts": "2026-07-18T09:52:32"
+  },
+  "sql_record": {
+    "engine": "postgres",
+    "version": "PostgreSQL 18.4",
+    "config": [
+      "ledger_floor.py::floor_atoms"
+    ],
+    "input_basis": "live-db rows read directly (toy.autoharn1.ledger)",
+    "input_hash": "e0cbbeba3499b07fea647840200b4a6b07b6e081764fcabfc60bfd3d6691b560",
+    "program_hash": "1d5af1372388cf1ff7faf72c260c64a0a3f890975a94fd89ac8c06d35f378679",
+    "output_hash": "900c263990473f8e9cf70d22a44168181073326bba88b83a3ad6431319ad4b8f",
+    "target": "autoharn1",
+    "ts": "2026-07-18T09:52:32"
+  },
+  "asp_quarantine": null,
+  "sql_quarantine": null
+}

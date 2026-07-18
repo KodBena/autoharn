@@ -1,0 +1,66 @@
+== scaffolding classic world s41jacl (chain ends s41-principal-bindings-and-relations.sql) -- WORLD ALL ==
+# marriage differential -- layer=None (auto-detect capable layers: ['tnow', 'work', 'defeat'])
+#   closed verdict vocabulary: ['AGREE', 'DIVERGE_BY_DESIGN', 'DIVERGE_DEFECT', 'QUARANTINED']; RED = ['DIVERGE_DEFECT', 'QUARANTINED']
+
+## layer='tnow'
+  [OK ] s41jacl AGREE              asp=4 sql=4 atoms; Δasp=[] Δsql=[]
+
+## layer='work'
+  [OK ] s41jacl AGREE              asp=0 sql=0 atoms; Δasp=[] Δsql=[]
+
+## layer='defeat'
+  [OK ] s41jacl AGREE              asp=2 sql=2 atoms; Δasp=[] Δsql=[]
+
+
+# DIFFERENTIAL GREEN -- every target bit-identical to the SQL floor
+
+=== WORLD-ALL-every-layer-detected-and-run ===
+  [ok] exit=0; layers_run=['defeat', 'tnow', 'work']; incapable_lines=[]
+
+=== WORLD-ALL-tnow-AGREE ===
+  [ok] tnow section printed an AGREE ('OK') line before the work-layer header
+
+# marriage differential -- layer=None (auto-detect capable layers: ['tnow', 'work', 'defeat'])
+#   closed verdict vocabulary: ['AGREE', 'DIVERGE_BY_DESIGN', 'DIVERGE_DEFECT', 'QUARANTINED']; RED = ['DIVERGE_DEFECT', 'QUARANTINED']
+
+## layer='tnow'
+  [!! ] s41jacl QUARANTINED        asp=4 sql=4 atoms; Δasp=[] Δsql=[]
+
+## layer='work'
+  [!! ] s41jacl QUARANTINED        asp=0 sql=0 atoms; Δasp=[] Δsql=[]
+
+## layer='defeat'
+  [!! ] s41jacl QUARANTINED        asp=2 sql=2 atoms; Δasp=[] Δsql=[]
+
+
+# DIFFERENTIAL RED -- a target diverged/quarantined (NO RESULT)
+
+=== RED-DEMO-drop-record-turns-bare-run-red ===
+  [ok] exit=1; contains QUARANTINED=True; contains 'DIFFERENTIAL RED'=True
+
+== scaffolding classic world s40jacl (chain ends s40-principal-identity-events.sql) -- WORLD PRE ==
+# marriage differential -- layer=None (auto-detect capable layers: ['tnow', 'work', 'defeat'])
+#   closed verdict vocabulary: ['AGREE', 'DIVERGE_BY_DESIGN', 'DIVERGE_DEFECT', 'QUARANTINED']; RED = ['DIVERGE_DEFECT', 'QUARANTINED']
+
+## layer='tnow'
+  [OK ] s40jacl AGREE              asp=4 sql=4 atoms; Δasp=[] Δsql=[]
+
+## layer='work'
+  [OK ] s40jacl AGREE              asp=0 sql=0 atoms; Δasp=[] Δsql=[]
+
+## layer='defeat'
+  [--] s40jacl INCAPABLE          layer='defeat' declared: target has no principal_binding_active/principal_competence_activity columns (pre-s41 lineage) -- the 'defeat' layer has no grant substrate here, capability absent, not record-empty
+
+
+# DIFFERENTIAL GREEN -- every target bit-identical to the SQL floor
+
+=== WORLD-PRE-defeat-declared-incapable-not-run ===
+  [ok] incapable_line="  [--] s40jacl INCAPABLE          layer='defeat' declared: target has no principal_binding_active/principal_competence_activity columns (pre-s41 lineage) -- the 'defeat' layer has no grant substrate here, capability absent, not record-empty"
+
+=== WORLD-PRE-tnow-and-work-still-run-AGREE ===
+  [ok] AGREE count=3; quarantine_result_lines=[]
+
+=== WORLD-PRE-absence-of-layer-does-not-turn-run-red ===
+  [ok] exit=0 (a declared-incapable layer must NOT contribute to the exit code)
+
+ALL OK

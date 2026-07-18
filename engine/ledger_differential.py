@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-06T05:37:25Z
-#   last-change: 2026-07-18T05:41:51Z
+#   last-change: 2026-07-18T07:43:48Z
 #   contributors: 37017f46/main, be693afb/main, a857c93d/main, ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -20,6 +20,15 @@ forbidden). Every compared target gets ONE verdict from the closed set:
   QUARANTINED         -- a producer crashed / produced no result / its derivation record
                          is missing. NO RESULT (ADR-0015 Rule 3), never a pass.
 QUARANTINED or DIVERGE_DEFECT exits NON-ZERO (turns a run red).
+
+LAYER SELECTION (ledger row 1516, judge-all-capable-layers). `--layer <name>` differentials ONE
+named engine/lp_registry.py LAYER and keeps its historical single-layer meaning: an incapable
+target asked for BY NAME still QUARANTINES loudly (a REFUSAL), never silently skipped. Bare
+invocation (no `--layer`, the default `./judge` reaches) instead auto-DETECTS each known layer's
+capability on the target (`layer_capability`, never running an incapable layer -- a DETECTION,
+not a refusal) and RUNS every capable layer, one verdict line per layer; an incapable layer prints
+its declared one-line capability reason and does not count toward the exit code (the same
+"absence of a layer is not a defect" rule `judge` already applies to work_item_violations).
 
 PER-SOLVER SELF-PROVENANCE (B3 / AC5; F6/I8 + F16/I11 -- "an unqualified prover is an
 unverified verifier"). Every producer invocation banks a DerivationRecord
@@ -294,6 +303,40 @@ def run_sql_defeat(name: str, edb_text: str) -> ProducerRun:
 _LAYER_FLOOR_PREDS = {"work": WORK_LAYER_PREDS, "defeat": frozenset(DEFEAT_PREDS)}
 
 
+def layer_capability(name: str, layer: str) -> tuple[bool, str]:
+    """Capability DETECTION for the bare-`./judge` auto-run (ledger row 1516,
+    judge-all-capable-layers): answers whether `layer` has substrate on `name` WITHOUT running
+    it -- the DETECTION/REFUSAL distinction the item calls for. An explicit `--layer <x>`
+    invocation never calls this: it always RUNS the layer and lets run_sql_work's/
+    run_sql_defeat's/run_layer_differential's own has_col()/require() checks QUARANTINE loudly
+    if the substrate turns out to be missing (the correct, UNWEAKENED behavior for an explicit
+    request -- a target asked for BY NAME still reads QUARANTINED when incapable, never AGREE
+    and never silently skipped). This function reuses those SAME checks and the SAME reason
+    strings verbatim (never invents parallel wording), so bare judge and an explicit --layer
+    agree about WHY a layer is absent, whichever path a reader takes.
+
+    'tnow' is always capable: every ledger (even the pre-kernel/empty case) has the entry rows
+    both T_now and the SQL floor read; there is no schema precondition to detect, so it is never
+    auto-declared incapable."""
+    if layer == "tnow":
+        return True, ""
+    t = resolve(name)
+    if layer == "work":
+        if not t.has_col("work_slug"):
+            return False, ("target has no `work_slug` column (pre-s22 lineage) -- "
+                           "the 'work' layer has no substrate here, capability absent")
+        return True, ""
+    if layer == "defeat":
+        if not (t.has_col("principal_binding_active") and t.has_col("principal_competence_activity")):
+            return False, ("target has no principal_binding_active/"
+                           "principal_competence_activity columns (pre-s41 lineage) "
+                           "-- the 'defeat' layer has no grant substrate here, "
+                           "capability absent, not record-empty")
+        return True, ""
+    raise NotImplementedError(f"layer_capability has no detection rule for layer {layer!r} "
+                              f"(known layers: {sorted(lp_registry.LAYERS)})")
+
+
 def run_layer_differential(name: str, layer: str = "work", *,
                            program_names: list[str] | None = None) -> DifferentialResult:
     """Differential one target on a NAMED layer (engine/lp_registry.py's LAYERS). `program_names`
@@ -406,9 +449,16 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--drop-record", action="store_true",
                     help="negative control: drop the ASP derivation record and show the "
                          "consumer refuses (a verdict without its witness is NO RESULT)")
-    ap.add_argument("--layer", choices=sorted(lp_registry.LAYERS), default="tnow",
-                    help="which engine/lp_registry.py LAYER to differential (plan step 8(ii)): "
-                         "'tnow' (default, unchanged behavior -- ledger_tnow.lp vs "
+    ap.add_argument("--layer", choices=sorted(lp_registry.LAYERS), default=None,
+                    help="which engine/lp_registry.py LAYER to differential (plan step 8(ii)). "
+                         "Omitted (default, ledger row 1516 -- judge-all-capable-layers): "
+                         "auto-DETECT each known layer's capability on the target (never running "
+                         "an incapable one) and RUN every capable layer, one verdict line per "
+                         "layer; an incapable layer prints its declared one-line capability "
+                         "reason instead, never silently skipped. Given explicitly, keeps its "
+                         "exact single-layer meaning (byte-identical to prior behavior; an "
+                         "incapable target asked for BY NAME still QUARANTINES loudly, it is "
+                         "never auto-skipped): 'tnow' (ledger_tnow.lp vs "
                          "ledger_floor.py::floor_atoms) or 'work' (ledger_tnow.lp + "
                          "work_items.lp + work_review.lp vs the work-item/work-review SQL "
                          "floors, over ledger_edb.export_work's EDB), or 'defeat' "
@@ -419,30 +469,57 @@ def main(argv: list[str] | None = None) -> int:
     args = ap.parse_args(argv)
     targets = args.targets or ["s10", "s11", "s12", "s13", "nla"]
 
-    print(f"# marriage differential -- layer={args.layer!r}")
+    # explicit_layer is None for bare `./judge`/`ledger_differential.py` (no --layer): the
+    # judge-all-capable-layers auto-detect-and-run-every-capable-layer path below. Given
+    # explicitly, `layers` is the single requested layer and every line below this branch runs
+    # BYTE-IDENTICALLY to the pre-1516 single-layer behavior (same header, same per-name loop,
+    # same edb_text derivation, same run_differential/run_layer_differential call) -- the
+    # capability DETECTION added by this delta never runs on the explicit path, so an explicit
+    # --layer request against an incapable target still reaches run_sql_work's/run_sql_defeat's/
+    # run_layer_differential's own REFUSAL (QUARANTINED), exactly as before this delta.
+    explicit_layer = args.layer
+    layers = [explicit_layer] if explicit_layer is not None else list(lp_registry.LAYERS)
+
+    if explicit_layer is not None:
+        print(f"# marriage differential -- layer={explicit_layer!r}")
+    else:
+        print(f"# marriage differential -- layer=None (auto-detect capable layers: {layers})")
     print(f"#   closed verdict vocabulary: {sorted(VERDICTS)}; RED = {sorted(RED)}\n")
     red = 0
-    for name in targets:
-        edb_text = ""
-        if args.layer == "tnow":
-            edb_text = export(name).edb_text()
-            res = run_differential(name, edb_text=edb_text)
-        else:
-            try:
-                if args.layer == "work":
-                    edb_text = export(name).edb_text() + "\n" + export_work(name).edb_text()
-                elif args.layer == "defeat":
-                    edb_text = export(name).edb_text() + "\n" + export_defeat(name).edb_text()
-            except Exception as e:  # noqa: BLE001 -- e.g. DefeatParseError (P-5); run_layer_differential
-                pass                # re-derives and QUARANTINES properly; edb_text stays "" for --retain
-            res = run_layer_differential(name, args.layer)
-        if args.drop_record and res.asp.record is not None:
-            res.asp.record = None  # simulate a lost witness
-        print_result(res)
-        if args.retain:
-            retain(res, edb_text)
-        if res.verdict() in RED:
-            red = 1
+    for layer in layers:
+        if explicit_layer is None:
+            print(f"## layer={layer!r}")
+        for name in targets:
+            if explicit_layer is None:
+                capable, reason = layer_capability(name, layer)
+                if not capable:
+                    # DECLARED incapable -- the layer is NOT run (no clingo/SQL invocation), and
+                    # this line does NOT contribute to `red` (absence of a layer is not a defect,
+                    # the same rule judge.tmpl already applies to work_item_violations).
+                    print(f"  [--] {name:6} {'INCAPABLE':18} layer={layer!r} declared: {reason}")
+                    continue
+            edb_text = ""
+            if layer == "tnow":
+                edb_text = export(name).edb_text()
+                res = run_differential(name, edb_text=edb_text)
+            else:
+                try:
+                    if layer == "work":
+                        edb_text = export(name).edb_text() + "\n" + export_work(name).edb_text()
+                    elif layer == "defeat":
+                        edb_text = export(name).edb_text() + "\n" + export_defeat(name).edb_text()
+                except Exception as e:  # noqa: BLE001 -- e.g. DefeatParseError (P-5); run_layer_differential
+                    pass                # re-derives and QUARANTINES properly; edb_text stays "" for --retain
+                res = run_layer_differential(name, layer)
+            if args.drop_record and res.asp.record is not None:
+                res.asp.record = None  # simulate a lost witness
+            print_result(res)
+            if args.retain:
+                retain(res, edb_text)
+            if res.verdict() in RED:
+                red = 1
+        if explicit_layer is None:
+            print()
     print(f"\n# {'DIFFERENTIAL RED' if red else 'DIFFERENTIAL GREEN'} -- "
           f"{'a target diverged/quarantined (NO RESULT)' if red else 'every target bit-identical to the SQL floor'}")
     return red
