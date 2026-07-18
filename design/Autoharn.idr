@@ -26,7 +26,7 @@
 ||| because the SUBSTRATE is -- see the "PRESERVED, ON PURPOSE" list in this header.
 ||| Beauty that would erase one of those facts is a regression, not a cleanup.
 |||
-||| AS-OF: kernel chain through s43 (LAGGING: s45-standing-lifecycle not yet transcribed here -- see the dated note near this header's end for the honest reason and the filed debt.)
+||| AS-OF: kernel chain through s43 (LAGGING: s44-s49 not yet fully transcribed here -- see the dated note near this header's end for the honest per-delta enumeration and the filed debt.)
 ||| (s43, 2026-07-18, same-commit extension: the
 |||   typed-verdict write boundary. What s43 became here: PWriteRefused -- the journaled
 |||   refusal as an ordinary payload constructor with its six typed fields and the closed
@@ -93,6 +93,32 @@
 |||   HONESTY CONTRACT above. AS-OF stays s43 until a future pass pays this down; the freshness
 |||   gate (gates/idris_model_freshness.py) reads this line as a WARN, not a failure, exactly as
 |||   designed for this disclosure.
+|||
+||| 2026-07-18 correction (fresh-context consult): the paragraph above named ONE lagging delta
+|||   while the actual head had advanced to s49 -- the disclosure itself had gone stale, the
+|||   exact silent-under-enumeration this file's HONESTY CONTRACT forbids. The full per-delta
+|||   state as of this date:
+|||   - s44 (model-identity attestation): NOT TRANSCRIBED. Its mechanisms (self-table FK =
+|||     Fin n; closed grade/verdict sums; expectation/verdict coupling as an indexed family a la
+|||     CompetenceValueF) are all inside this file's demonstrated idiom -- cheapest to pay down.
+|||   - s45 (standing lifecycle): NOT TRANSCRIBED, as the paragraph above already names. Worse
+|||     than lag on two points: the model cannot represent a lift (a same-kind active=false
+|||     superseding row) and does not make revocation terminal (boundaryOk checks supersession
+|||     targets only for PWriteRefused), so on both it PERMITS what the kernel refuses.
+|||   - s46 (credited views / defeat calculus): NOT TRANSCRIBED. DualProducers does not know
+|||     the defeat layer; the delta's own named raw-vs-current quantification divergence in the
+|||     defeat-input exclusion is exactly this file's central subject, unmodeled.
+|||   - s47 (claim-on-closed refusal): TRANSCRIBED this date -- VClaim's notClosed premise and
+|||     red fixture r8e. Before this correction the model asserted a legality the kernel
+|||     refuses (ValidPayload worldA (PWorkClaimed "a") elaborated); that was a wrong claim,
+|||     not a lag.
+|||   - s48 (review-witness row existence): NOT TRANSCRIBED. reviewRefTy DWitnessed stays
+|||     NonEmptyText with no row-token semantics; the faithful form is a three-armed sum whose
+|||     row arm is Fin n (this file's own idiom, which s48's regex approximates CLI-side).
+|||   - s49 (journaler overflow guard): lands under the existing s43 out-of-model boundary
+|||     carve-out at PWriteRefused (boundary control flow, not row algebra) -- and note the
+|||     undisclosed idealization it exposes: PrincipalId = Nat is unbounded while the kernel's
+|||     is bigint; s49's defect lived precisely in that numeric-range gap.
 |||
 ||| PROVENANCE:
 |||   v1 (2026-07-15, night) -- an Opus transcription consultation, machine-checked,
@@ -1068,9 +1094,12 @@ data ValidPayload : {n : Nat} -> Ledger n -> Payload Draft n -> Type where
          -> ValidPayload l (PWorkOpened s title parent comp)
   ||| Claim: the slug must have an opening act (raw read) AND -- s39 -- no
   ||| unresolved direct blocks-start antecedent (the claim-time precondition
-  ||| foreclosure; in-force edges, antecedent closed, via startBlockers).
+  ||| foreclosure; in-force edges, antecedent closed, via startBlockers) AND
+  ||| -- s47 -- no in-force close (a closed item is not claimable; the same
+  ||| hasCloseCur read the close/depends legs already consume, one home).
   VClaim  : (0 opened : So (everOpened l s))
          -> (0 startOk : So (null (startBlockers l s)))
+         -> (0 notClosed : So (not (hasCloseCur l s)))
          -> ValidPayload l (PWorkClaimed s)
   ||| s39: a blocks-start edge refuses self-edge, dangling antecedent, and a
   ||| cycle in its OWN raw subgraph (bsReach) -- mirroring VDepBC one
@@ -1472,6 +1501,13 @@ failing
   r8c : ValidPayload Autoharn.worldA (PWorkDepends "a" "a" (Just BlocksClose))
   r8c = VDepBC Oh Oh Oh Oh
 
+-- R8e RED: claiming a slug with an in-force close is refused (s47) --
+-- notClosed demands So (not (hasCloseCur worldA "a")) = So False (r7a above
+-- is the green polarity of the same read).
+failing
+  r8e : ValidPayload Autoharn.worldA (PWorkClaimed "a")
+  r8e = VClaim Oh Oh Oh
+
 -- R8d RED: strict + deferred is a contradiction in terms (s29) -- the
 -- strictPremise evaluates to False, So is uninhabited.
 failing
@@ -1649,12 +1685,12 @@ worldBS = Lin :< mkE 1 Nothing (PWorkOpened "p" "antecedent" Nothing False)
 -- RED: claiming "q" while its blocks-start antecedent "p" is not closed.
 failing
   r39a : ValidPayload Autoharn.worldBS (PWorkClaimed "q")
-  r39a = VClaim Oh Oh
+  r39a = VClaim Oh Oh Oh
 
 -- GREEN: "p" itself has no antecedents -- vacuously claimable (work_startable's
 -- own NOT EXISTS posture).
 r39b : ValidPayload Autoharn.worldBS (PWorkClaimed "p")
-r39b = VClaim Oh Oh
+r39b = VClaim Oh Oh Oh
 
 worldBS2 : Ledger 4
 worldBS2 = worldBS :< mkE 1 Nothing
@@ -1662,7 +1698,7 @@ worldBS2 = worldBS :< mkE 1 Nothing
 
 -- GREEN: the antecedent closed -- the same claim now constructs.
 r39c : ValidPayload Autoharn.worldBS2 (PWorkClaimed "q")
-r39c = VClaim Oh Oh
+r39c = VClaim Oh Oh Oh
 
 -- RED: a blocks-start self-edge is refused (s39, mirroring s30's own).
 failing
