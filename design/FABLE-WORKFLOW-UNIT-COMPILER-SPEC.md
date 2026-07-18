@@ -90,6 +90,27 @@ not smuggle it in, and the compiler must not depend on it.
   shape only; the compiler's output contains no loop bookkeeping (inspect, and the
   README "Known misfits" entries stay accurate).
 
+## Amendment — 2026-07-18, same day (two maintainer questions, both load-bearing)
+
+**Instance discriminator (reusability).** The slug scheme above (`<toml-stem>-<phase>`)
+is wrong as written: slugs burn on open, so a TOML would be instantiable once per
+world, foreclosing exactly the reuse the commission wants (the A:B:C loop run many
+times). Corrected: hydration takes a mandatory `--instance <token>`
+(`[A-Za-z0-9_-]+`), slugs are `<toml-stem>-<instance>-<phase>`, and the
+idempotent-by-refusal semantics apply PER INSTANCE. The TOML is the reusable shape;
+an instance is one engagement of it.
+
+**WC7 — revocation halts the wave structurally (new witness, both polarities).**
+Mid-wave, suspend the implementing principal by the s45 ledger act; the driver's
+next claim/write on that principal's behalf must be REFUSED BY THE KERNEL and the
+driver must report the halt with the kernel's own teaching. Then lift the
+suspension (the s45 same-kind supersession — the false→true cell the maintainer
+ruled intended, ledger row 1650) and witness the same act accepted. HARD RULE: if
+any relevant kernel act turns out NOT to gate on the actor's standing, that is a
+FINDING to report loudly (a candidate lineage delta, maintainer's to ratify) — the
+driver must never simulate the halt itself; a driver-side halt is exactly the
+shadow bookkeeping this spec's one design commitment forbids.
+
 ## Build conditions
 
 Compiler + driver live under `tools/` (Python, top-of-file imports only, gates
