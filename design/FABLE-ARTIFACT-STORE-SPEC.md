@@ -79,6 +79,40 @@ delta touches surfaces the differential covers; per-claim, no umbrella)
   `role_charter.py show` resolves the referent in-db and reports drift against the
   working file exactly as before.
 
+## Amendment — 2026-07-18, same day: what belongs in the store (the
+essential-records criterion, post-hoc and saying so)
+
+The maintainer's own words, kept because honesty about provenance is house law:
+this delineation is "a *post-hoc rationalization* ... for why we do it this way and
+what it suggests should be stored in the blob storage area. ... I stand by it none
+the less, because I think it leans on something real." It is recorded as exactly
+that — a criterion recognized after the design was drawn, which nonetheless
+predicts the design and governs admission going forward.
+
+The industry frame: records management's **essential records** (ARMA's current
+term; historically "vital records") — the records the organization's EXECUTIVE
+FUNCTION relies on to operate and to reconstitute itself, as distinct from the
+products it produces. Beneath it sits ISO 15489's record/document cut: a record is
+fixed evidence of a decision or transaction, maintained as evidence; a document is
+mutable work product.
+
+The ADR-0008 delineation (one fundamentum divisionis, MECE over "artifacts a world
+touches"):
+
+- **Essential records → the store.** An artifact is admitted when a ledger row's
+  evidentiary force RELIES on retrieving these exact bytes: charters, commission
+  texts, ratified specs, attestation bodies, witness transcripts cited by hash.
+  Test: if the bytes vanished, would a ledger row's claim dangle? Yes → store.
+- **Product artifacts → NOT the store.** The governed project's own outputs — code,
+  builds, data, docs-as-deliverables — live in their own custody (git, build
+  systems). The ledger may cite them (commit hashes, paths), but the citation is
+  provenance, not reliance: the org's executive function survives their loss;
+  reconstituting the PRODUCT is the product custody's job.
+
+The v1 closed media vocabulary (markdown/plain/toml/json — governance registers,
+no binaries) is this criterion enforced mechanically at the type level; widening it
+is an amendment that must argue the essential-records test, not convenience.
+
 ## Build conditions
 
 New lineage file + `.detect.sql` sibling per convention (fingerprint the artifact
