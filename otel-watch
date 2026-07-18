@@ -1,0 +1,477 @@
+#!/usr/bin/env python3
+"""otel-watch — v0 of the OTel model-provenance sentry (design/FABLE-OTEL-SENTRY-SPEC.md §3).
+
+The always-on WATCHDOG: tails the local OTel collector's JSONL export, extracts every
+`claude_code.api_request` log event's `model` attribute (skipping utility calls identified by
+`query_source`, e.g. `generate_session_title`, and subagent-dispatch calls tagged
+`query_source=agent:...`), compares it against the session's declared EXPECTED model, and on
+disagreement invokes the operator's existing mail-notification script -- the same
+interpreter+script his Stop hook already runs (verified read-only, spec §3) -- so his phone
+beeps within seconds of a substitution, not at the next audit.
+
+Expected-model input hierarchy (fixed by the spec, §3):
+  1. Primary: the `autoharn.expected_model` OTel *resource* attribute, stamped by the launcher
+     into OTEL_RESOURCE_ATTRIBUTES for the session.
+  2. Fallback: an expectation file (one rule per line: `world:<value>=<model>` or
+     `principal:<value>=<model>`), matched against the session's `autoharn.world` /
+     `autoharn.declared_principal` resource attributes.
+  3. Neither present -> the session is UNWATCHED. Said loudly (journal always; mailed too iff
+     --alert-unwatched), never silently -- the coverage duty (spec §3): silence must be
+     distinguishable from "watched and clean".
+
+This process writes NO ledger rows, registers no principal, gates nothing (spec §9): it is
+notification, not enforcement. It holds no state beyond its own local files under --base-dir
+(offset, debounce set, per-session coverage, journal) -- same privacy handling as the
+collector's own local files (never committed, never pasted unredacted; the export carries the
+operator's real email/account ids, never copied here, spec §6's never-list applied to the
+watchdog too).
+
+A false alarm on a legitimate mid-session /model switch is ACCEPTED and named (the expectation
+is session-static by design, spec §3) -- no suppression heuristic is built here.
+
+Mirrors ./otel-attest's placement (repo-root verb, configurable paths, no hardcoded world) and
+its idiom (top-of-file imports only, loud refusals, never a fabricated absence claim). Unlike
+otel-attest this verb needs no ledger/world at all -- its whole input is the export file plus an
+optional expectation file, and its whole output is a journal plus mail.
+
+USAGE:
+  ./otel-watch --daemon [--export <path>] [--base-dir <dir>] [--expectations <file>]
+               [--alert-unwatched] [--heartbeat] [--poll-interval N] [--dry-run]
+  ./otel-watch --once   [same flags]  # process available new lines once and exit
+  ./otel-watch --status [--base-dir <dir>]  # print the coverage report and exit
+
+Every import is top-of-file (the lazy-import ban, CLAUDE.md)."""
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import signal
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parent
+
+# The alert path, verified read-only 2026-07-18 (spec §3): the operator's own live Stop hook
+# already runs exactly this interpreter+script. The watchdog is a separate process that calls
+# the same notifier -- no new notification infrastructure, no hooks/ changes.
+NOTIFY_INTERPRETER = "/home/bork/w/vdc/venvs/generic/bin/python"
+NOTIFY_SCRIPT = "/home/bork/mailnotice/notify.py"
+
+DEFAULT_BASE_DIR = Path.home() / "tools" / "otel-watchdog"
+DEFAULT_EXPORT = Path.home() / "tools" / "otelcol" / "data" / "claude-events.jsonl"
+
+# query_source values that are never attributable to the session's main-thread served model
+# (spec §3's utility-call filter; §6's subagent-dispatch discriminator, witnessed P1: a
+# subagent's api_request shares the PARENT session's session.id, tagged query_source=
+# "agent:<source>:<name>" -- distinct from both a main-thread 'sdk' call and the utility
+# 'generate_session_title' call. An un-excluded subagent call could fire a false mismatch
+# against the parent's declared expectation whenever a subagent legitimately runs a different
+# model; the watchdog treats that as out of scope for v0, same posture as otel-attest §6).
+UTILITY_QUERY_SOURCES = {"generate_session_title"}
+
+HEARTBEAT_INTERVAL_S = 24 * 60 * 60
+
+
+class Paths:
+    """All watchdog-local file locations, threaded from --base-dir so a fixture run never
+    touches the operator's real host state (~/tools/otel-watchdog/) unless explicitly pointed
+    there -- the default preserves that path for real deployment continuity."""
+
+    def __init__(self, base_dir: Path):
+        self.base_dir = base_dir
+        self.state_dir = base_dir / "state"
+        self.status_file = self.state_dir / "status.json"
+        self.tail_state_file = self.state_dir / "tail_state.json"
+        self.debounce_file = self.state_dir / "debounce.json"
+        self.heartbeat_file = self.state_dir / "heartbeat.json"
+        self.journal_file = base_dir / "otel-watch.log"
+
+
+def make_journal(paths: Paths):
+    def journal(msg: str) -> None:
+        paths.state_dir.mkdir(parents=True, exist_ok=True)
+        line = f"{time.strftime('%Y-%m-%dT%H:%M:%S%z')} {msg}\n"
+        with open(paths.journal_file, "a") as f:
+            f.write(line)
+        sys.stdout.write(line)
+        sys.stdout.flush()
+    return journal
+
+
+def load_json(path: Path, default):
+    if not path.exists():
+        return default
+    try:
+        with open(path) as f:
+            return json.load(f)
+    except (json.JSONDecodeError, OSError):
+        return default
+
+
+def save_json(state_dir: Path, path: Path, data) -> None:
+    state_dir.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    with open(tmp, "w") as f:
+        json.dump(data, f, indent=2, sort_keys=True)
+    tmp.replace(path)
+
+
+def attrs_dict(attr_list) -> dict:
+    out = {}
+    for a in attr_list or []:
+        v = a.get("value", {})
+        for k in ("stringValue", "intValue", "doubleValue", "boolValue"):
+            if k in v:
+                out[a["key"]] = v[k]
+                break
+    return out
+
+
+def extract_api_requests(line: str, journal):
+    """Yield (resource_attrs, event_attrs) for every claude_code.api_request log record in one
+    exported JSONL line (one OTLP ExportLogsServiceRequest, which may carry several
+    resourceLogs/logRecords). A genuinely corrupt export line is journaled and skipped, never
+    silently absorbed as zero events."""
+    try:
+        doc = json.loads(line)
+    except json.JSONDecodeError:
+        journal(f"WARN: refusing garbled export line ({len(line)} bytes), skipped")
+        return
+    for rl in doc.get("resourceLogs", []):
+        res_attrs = attrs_dict(rl.get("resource", {}).get("attributes", []))
+        for sl in rl.get("scopeLogs", []):
+            for lr in sl.get("logRecords", []):
+                body = lr.get("body", {}).get("stringValue", "")
+                if body != "claude_code.api_request":
+                    continue
+                yield res_attrs, attrs_dict(lr.get("attributes", []))
+
+
+def load_expectation_file(path: str | None, journal) -> dict:
+    """Parse the fallback expectation file: lines `world:<value>=<model>` or
+    `principal:<value>=<model>`. Blank lines and #-comments ignored; malformed lines are
+    journaled and skipped, never silently absorbed. Returns dict[(field, value)] -> model."""
+    rules: dict = {}
+    if not path:
+        return rules
+    p = Path(path)
+    if not p.exists():
+        journal(f"WARN: --expectations file {p} does not exist, ignoring")
+        return rules
+    for lineno, raw in enumerate(p.read_text().splitlines(), 1):
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        if "=" not in line or ":" not in line.split("=", 1)[0]:
+            journal(f"WARN: {p}:{lineno}: malformed expectation line, skipped: {line!r}")
+            continue
+        key_part, model = line.split("=", 1)
+        field, _, value = key_part.partition(":")
+        field = field.strip()
+        if field not in ("world", "principal"):
+            journal(f"WARN: {p}:{lineno}: unknown field {field!r}, skipped")
+            continue
+        rules[(field, value.strip())] = model.strip()
+    return rules
+
+
+def resolve_expected(res_attrs: dict, expectation_rules: dict):
+    """Expected-model input hierarchy, spec §3: resource attribute, then expectation-file
+    fallback (matched on world or declared_principal), then (None, None) -- UNWATCHED."""
+    primary = res_attrs.get("autoharn.expected_model")
+    if primary:
+        return primary, "resource-attribute"
+    world = res_attrs.get("autoharn.world")
+    if world and ("world", world) in expectation_rules:
+        return expectation_rules[("world", world)], "expectation-file:world"
+    principal = res_attrs.get("autoharn.declared_principal")
+    if principal and ("principal", principal) in expectation_rules:
+        return expectation_rules[("principal", principal)], "expectation-file:principal"
+    return None, None
+
+
+def is_utility(query_source: str | None) -> bool:
+    return query_source in UTILITY_QUERY_SOURCES
+
+
+def is_agent_dispatch(query_source: str | None) -> bool:
+    return (query_source or "").startswith("agent:")
+
+
+def send_alert(subject: str, dry_run: bool, journal, subject_prefix: str = "") -> None:
+    """Invoke the operator's existing notifier exactly as the Stop hook does (argv list, no
+    shell). --dry-run substitutes a journaled line for the real send; the substitution itself
+    is journaled so it is witnessable (this is the "fixture-side witness" the spec's W1 names:
+    exec'd argv, distinct from the mail's own arrival). subject_prefix is a test-harness
+    convenience only (e.g. "[WATCHDOG TEST] ") so a real sanctioned test send is
+    self-explaining; it is never set in normal operation. Mail failure or watchdog death is
+    silence -- R2's fail-open truth applied to the watchdog itself; --heartbeat is the
+    operator's named opt-in mitigation, not a default."""
+    subject = subject_prefix + subject
+    argv = [NOTIFY_INTERPRETER, NOTIFY_SCRIPT, subject]
+    if dry_run:
+        journal(f"DRY-RUN (no real send): would exec argv={argv!r}")
+        return
+    try:
+        result = subprocess.run(argv, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=15)
+        journal(f"ALERT SENT: argv={argv!r} rc={result.returncode} "
+                f"stdout={result.stdout.decode(errors='replace')!r} "
+                f"stderr={result.stderr.decode(errors='replace')!r}")
+    except Exception as e:  # noqa: BLE001 -- fail-silent by design (R2), journaled not raised
+        journal(f"ALERT SEND FAILED (fail-silent per R2, journaled not raised): {e!r}")
+
+
+class TailState:
+    """inode+offset tracking so the watchdog survives export rotation/truncation (`tail -F`
+    semantics), with a small buffer for a partial line straddling two polls."""
+
+    def __init__(self, path: Path, paths: Paths):
+        self.path = path
+        self.paths = paths
+        saved = load_json(paths.tail_state_file, {})
+        self.inode = saved.get("inode")
+        self.offset = saved.get("offset", 0)
+        self.buf = ""
+
+    def save(self) -> None:
+        save_json(self.paths.state_dir, self.paths.tail_state_file,
+                   {"inode": self.inode, "offset": self.offset})
+
+    def poll_lines(self, journal) -> list[str]:
+        """Return a list of complete new lines since last poll. Handles rotation (inode
+        change) and truncation (size shrank)."""
+        if not self.path.exists():
+            return []
+        st = self.path.stat()
+        if self.inode is not None and st.st_ino != self.inode:
+            journal(f"export rotated (inode {self.inode} -> {st.st_ino}), reopening from 0")
+            self.offset = 0
+            self.buf = ""
+        elif st.st_size < self.offset:
+            journal(f"export truncated ({self.offset} -> {st.st_size}), reopening from 0")
+            self.offset = 0
+            self.buf = ""
+        self.inode = st.st_ino
+        lines: list[str] = []
+        with open(self.path, "r") as f:
+            f.seek(self.offset)
+            chunk = f.read()
+            self.offset = f.tell()
+        if chunk:
+            data = self.buf + chunk
+            parts = data.split("\n")
+            self.buf = parts[-1]  # last part has no trailing \n yet (or is "")
+            lines = [p for p in parts[:-1] if p]
+        return lines
+
+
+class Watchdog:
+    def __init__(self, args, paths: Paths):
+        self.args = args
+        self.paths = paths
+        self.journal = make_journal(paths)
+        self.export_path = Path(args.export)
+        self.expectation_rules = load_expectation_file(args.expectations, self.journal)
+        self.status = load_json(paths.status_file, {})
+        self.debounce = load_json(paths.debounce_file, {})
+        self.tail = TailState(self.export_path, paths)
+
+    def note_unwatched(self, session_id: str, res_attrs: dict) -> None:
+        entry = self.status.setdefault(session_id, {})
+        already = entry.get("state") == "unwatched"
+        entry.update({
+            "state": "unwatched",
+            "world": res_attrs.get("autoharn.world"),
+            "declared_principal": res_attrs.get("autoharn.declared_principal"),
+            "last_seen": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+        })
+        if not already:
+            self.journal(
+                f"COVERAGE: session={session_id[:8]} UNWATCHED -- no autoharn.expected_model "
+                f"resource attribute and no expectation-file match "
+                f"(world={res_attrs.get('autoharn.world')!r}, "
+                f"principal={res_attrs.get('autoharn.declared_principal')!r})")
+            if self.args.alert_unwatched:
+                send_alert(f"OTEL WATCHDOG coverage: session={session_id[:8]} UNWATCHED "
+                           f"(no expected-model declared)", self.args.dry_run, self.journal,
+                           self.args.subject_prefix)
+
+    def note_evaluated(self, session_id: str, expected: str, expected_source: str,
+                        observed: str, res_attrs: dict) -> None:
+        entry = self.status.setdefault(session_id, {})
+        entry["expected"] = expected
+        entry["expected_source"] = expected_source
+        entry["world"] = res_attrs.get("autoharn.world")
+        entry["declared_principal"] = res_attrs.get("autoharn.declared_principal")
+        entry["last_seen"] = time.strftime("%Y-%m-%dT%H:%M:%S%z")
+        entry.setdefault("observed_models", [])
+        if observed not in entry["observed_models"]:
+            entry["observed_models"].append(observed)
+
+        if observed == expected:
+            if entry.get("state") != "mismatch":
+                entry["state"] = "watched-clean"
+            return
+
+        entry["state"] = "mismatch"
+        # Debounce keyed on (session, observed-model) -- spec §3: repeated requests on the same
+        # wrong model do not mail-storm, but a NEW wrong model always alerts.
+        key = f"{session_id}|{observed}"
+        if key in self.debounce:
+            self.journal(f"MISMATCH (debounced, already alerted): session={session_id[:8]} "
+                         f"expected={expected} observed={observed}")
+            return
+        subject = f"OTEL WATCHDOG mismatch: session={session_id[:8]} expected={expected} observed={observed}"
+        self.journal(f"MISMATCH DETECTED: session={session_id[:8]} expected={expected} "
+                     f"({expected_source}) observed={observed} -- alerting")
+        send_alert(subject, self.args.dry_run, self.journal, self.args.subject_prefix)
+        self.debounce[key] = {"session": session_id, "observed": observed, "expected": expected,
+                               "ts": time.strftime("%Y-%m-%dT%H:%M:%S%z")}
+
+    def process_line(self, line: str) -> None:
+        for res_attrs, ev_attrs in extract_api_requests(line, self.journal):
+            session_id = ev_attrs.get("session.id")
+            observed = ev_attrs.get("model")
+            query_source = ev_attrs.get("query_source")
+            if not session_id or not observed:
+                continue
+            if is_utility(query_source):
+                self.journal(f"UTILITY CALL skipped: session={session_id[:8]} "
+                             f"query_source={query_source} model={observed}")
+                continue
+            if is_agent_dispatch(query_source):
+                self.journal(f"SUBAGENT DISPATCH skipped: session={session_id[:8]} "
+                             f"query_source={query_source} model={observed}")
+                continue
+            expected, expected_source = resolve_expected(res_attrs, self.expectation_rules)
+            if expected is None:
+                self.note_unwatched(session_id, res_attrs)
+            else:
+                self.note_evaluated(session_id, expected, expected_source, observed, res_attrs)
+
+    def poll_once(self) -> int:
+        lines = self.tail.poll_lines(self.journal)
+        for line in lines:
+            self.process_line(line)
+        if lines:
+            self.tail.save()
+            save_json(self.paths.state_dir, self.paths.status_file, self.status)
+            save_json(self.paths.state_dir, self.paths.debounce_file, self.debounce)
+        return len(lines)
+
+    def maybe_heartbeat(self) -> None:
+        if not self.args.heartbeat:
+            return
+        hb = load_json(self.paths.heartbeat_file, {"last": 0})
+        now = time.time()
+        if now - hb.get("last", 0) < HEARTBEAT_INTERVAL_S:
+            return
+        watched = sum(1 for s in self.status.values() if s.get("state") in ("watched-clean", "mismatch"))
+        unwatched = sum(1 for s in self.status.values() if s.get("state") == "unwatched")
+        subject = f"OTEL WATCHDOG heartbeat: alive, {watched} watched, {unwatched} unwatched sessions seen"
+        send_alert(subject, self.args.dry_run, self.journal, self.args.subject_prefix)
+        save_json(self.paths.state_dir, self.paths.heartbeat_file, {"last": now})
+
+    def run_daemon(self) -> None:
+        self.journal(f"otel-watch daemon starting, tailing {self.export_path}, pid={os.getpid()}")
+        stop = {"flag": False}
+
+        def _stop(signum, frame):
+            self.journal(f"signal {signum} received, shutting down")
+            stop["flag"] = True
+
+        signal.signal(signal.SIGTERM, _stop)
+        signal.signal(signal.SIGINT, _stop)
+        while not stop["flag"]:
+            self.poll_once()
+            self.maybe_heartbeat()
+            time.sleep(self.args.poll_interval)
+        self.journal("otel-watch daemon stopped")
+
+
+def print_status(status: dict) -> None:
+    watched_clean = [s for s, v in status.items() if v.get("state") == "watched-clean"]
+    mismatch = [s for s, v in status.items() if v.get("state") == "mismatch"]
+    unwatched = [s for s, v in status.items() if v.get("state") == "unwatched"]
+    print(f"watched-and-clean: {len(watched_clean)}")
+    for s in watched_clean:
+        v = status[s]
+        print(f"  {s[:8]} expected={v.get('expected')} observed={v.get('observed_models')} "
+              f"source={v.get('expected_source')}")
+    print(f"mismatch: {len(mismatch)}")
+    for s in mismatch:
+        v = status[s]
+        print(f"  {s[:8]} expected={v.get('expected')} observed={v.get('observed_models')} "
+              f"source={v.get('expected_source')}")
+    print(f"not-watched-at-all (UNWATCHED, expectation absent): {len(unwatched)}")
+    for s in unwatched:
+        v = status[s]
+        print(f"  {s[:8]} world={v.get('world')} principal={v.get('declared_principal')}")
+    total = len(status)
+    print(f"total sessions with observed api_request events: {total}")
+    print("NOTE (R1, permanent): a session that emits no telemetry at all is invisible to this "
+          "report -- absence of a session here is not evidence of anything; coverage is "
+          "reported only for sessions that emitted at least one claude_code.api_request event.")
+
+
+def build_arg_parser() -> argparse.ArgumentParser:
+    ap = argparse.ArgumentParser(description=__doc__,
+                                  formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--export", default=str(DEFAULT_EXPORT),
+                     help="path to the collector's JSONL export")
+    ap.add_argument("--base-dir", default=str(DEFAULT_BASE_DIR),
+                     help="directory for this watchdog's own state/journal (default: "
+                          "~/tools/otel-watchdog, same layout as the collector's own "
+                          "~/tools/otelcol/ -- override for a scratch/synthetic witness run so "
+                          "real host state is never touched)")
+    ap.add_argument("--expectations", default=None, help="fallback expectation file path")
+    ap.add_argument("--daemon", action="store_true", help="run continuously, tailing the export")
+    ap.add_argument("--once", action="store_true", help="process available new lines once and exit")
+    ap.add_argument("--status", action="store_true", help="print the coverage/status report and exit")
+    ap.add_argument("--alert-unwatched", action="store_true",
+                     help="also mail on UNWATCHED coverage notices")
+    ap.add_argument("--heartbeat", action="store_true", help="send a daily 'watchdog alive' mail")
+    ap.add_argument("--poll-interval", type=float, default=1.0, help="daemon poll interval, seconds")
+    ap.add_argument("--dry-run", action="store_true",
+                     help="substitute a journaled line for the real notify.py send")
+    ap.add_argument("--subject-prefix", default="",
+                     help="prepend this to every alert subject (test-harness use only, e.g. "
+                          "'[WATCHDOG TEST] '; never set in normal operation)")
+    ap.add_argument("--from-start", action="store_true",
+                     help="ignore saved tail offset, reprocess whole export from 0")
+    return ap
+
+
+def main(argv: list[str] | None = None) -> int:
+    ap = build_arg_parser()
+    args = ap.parse_args(argv)
+    paths = Paths(Path(args.base_dir))
+
+    if args.status:
+        status = load_json(paths.status_file, {})
+        print_status(status)
+        return 0
+
+    if args.from_start:
+        paths.state_dir.mkdir(parents=True, exist_ok=True)
+        if paths.tail_state_file.exists():
+            paths.tail_state_file.unlink()
+
+    wd = Watchdog(args, paths)
+
+    if args.daemon:
+        wd.run_daemon()
+    elif args.once:
+        n = wd.poll_once()
+        wd.maybe_heartbeat()
+        wd.journal(f"--once: processed {n} new export line(s)")
+    else:
+        ap.error("one of --daemon, --once, or --status is required")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

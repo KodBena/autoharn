@@ -1,0 +1,202 @@
+=== W1-mismatch-detected ===
+  [ok] 2026-07-19T01:19:28+0200 MISMATCH DETECTED: session=11110000 expected=model-A (resource-attribute) observed=model-B -- alerting
+2026-07-19T01:19:28+0200 DRY-RUN (no real send): would exec argv=['/home/bork/w/vdc/venvs/generic/bin/python', '/home/bork/mailnotice/notify.py', 'OTEL WATCHDOG mismatch: session=11110000 expected=model-A observed=model-B']
+2026-07-19T01:19:28+0200 COVERAGE: session=33330000 UNWATCHED -- no autoharn.expected_model resource attribute and no expectation-file match (world=None, principal=None)
+2026-07-19T01:19:28+0200 DRY-RUN (no real send): would exec argv=['/home/bork/w/vdc/venvs/generic/bin/python', '/home/bork/mailnotice/notify.py', 'OTEL WATCHDOG coverage: session=33330000 UNWATCHED (no expected-model declared)']
+2026-07-19T01:19:28+0200 MISMATCH DETECTED: session=44440000 expected=model-A (resource-attribute) observed=model-B -- alerting
+2026-07-19T01:19:28+0200 DRY-RUN (no real send): would exec argv=['/home/bork/w/vdc/venvs/generic/bin/python', '/home/bork/mailnotice/notify.py', 'OTEL WATCHDOG mismatch: session=44440000 expected=model-A observed=model-B']
+2026-07-19T01:19:28+0200 MISMATCH (debounced, already alerted): session=44440000 expected=model-A observed=model-B
+2026-07-19T01:19:28+0200 UTILITY CALL skipped: session=55550000 query_source=generate_session_title model=model-Q
+2026-07-19T01:19:28+0200 SUBAGENT DISPATCH skipped: session=55550001 query_source=agent:sdk:sub model=model-Q
+2026-07-19T01:19:28+0200 --once: processed 1 new export line(s)
+
+
+=== W1-alert-exec-argv-witnessed ===
+  [ok] 2026-07-19T01:19:28+0200 MISMATCH DETECTED: session=11110000 expected=model-A (resource-attribute) observed=model-B -- alerting
+2026-07-19T01:19:28+0200 DRY-RUN (no real send): would exec argv=['/home/bork/w/vdc/venvs/generic/bin/python', '/home/bork/mailnotice/notify.py', 'OTEL WATCHDOG mismatch: session=11110000 expected=model-A observed=model-B']
+2026-07-19T01:19:28+0200 COVERAGE: session=33330000 UNWATCHED -- no autoharn.expected_model resource attribute and no expectation-file match (world=None, principal=None)
+2026-07-19T01:19:28+0200 DRY-RUN (no real send): would exec argv=['/home/bork/w/vdc/venvs/generic/bin/python', '/home/bork/mailnotice/notify.py', 'OTEL WATCHDOG coverage: session=33330000 UNWATCHED (no expected-model declared)']
+2026-07-19T01:19:28+0200 MISMATCH DETECTED: session=44440000 expected=model-A (resource-attribute) observed=model-B -- alerting
+2026-07-19T01:19:28+0200 DRY-RUN (no real send): would exec argv=['/home/bork/w/vdc/venvs/generic/bin/python', '/home/bork/mailnotice/notify.py', 'OTEL WATCHDOG mismatch: session=44440000 expected=model-A observed=model-B']
+2026-07-19T01:19:28+0200 MISMATCH (debounced, already alerted): session=44440000 expected=model-A observed=model-B
+2026-07-19T01:19:28+0200 UTILITY CALL skipped: session=55550000 query_source=generate_session_title model=model-Q
+2026-07-19T01:19:28+0200 SUBAGENT DISPATCH skipped: session=55550001 query_source=agent:sdk:sub model=model-Q
+2026-07-19T01:19:28+0200 --once: processed 1 new export line(s)
+
+
+=== W2-match-no-mismatch-line ===
+  [ok] checked no MISMATCH/ALERT line references the W2 session id
+
+=== W2-match-shows-watched-and-clean ===
+  [ok] watched-and-clean: 1
+  22220000 expected=model-C observed=['model-C'] source=resource-attribute
+mismatch: 2
+  11110000 expected=model-A observed=['model-B'] source=resource-attribute
+  44440000 expected=model-A observed=['model-B'] source=resource-attribute
+not-watched-at-all (UNWATCHED, expectation absent): 1
+  33330000 world=None principal=None
+total sessions with observed api_request events: 4
+NOTE (R1, permanent): a session that emits no telemetry at all is invisible to this report -- absence of a session here is not evidence of anything; coverage is reported only for sessions that emitted at least one claude_code.api_request event.
+
+
+=== W3-coverage-unwatched-journaled ===
+  [ok] 2026-07-19T01:19:28+0200 MISMATCH DETECTED: session=11110000 expected=model-A (resource-attribute) observed=model-B -- alerting
+2026-07-19T01:19:28+0200 DRY-RUN (no real send): would exec argv=['/home/bork/w/vdc/venvs/generic/bin/python', '/home/bork/mailnotice/notify.py', 'OTEL WATCHDOG mismatch: session=11110000 expected=model-A observed=model-B']
+2026-07-19T01:19:28+0200 COVERAGE: session=33330000 UNWATCHED -- no autoharn.expected_model resource attribute and no expectation-file match (world=None, principal=None)
+2026-07-19T01:19:28+0200 DRY-RUN (no real send): would exec argv=['/home/bork/w/vdc/venvs/generic/bin/python', '/home/bork/mailnotice/notify.py', 'OTEL WATCHDOG coverage: session=33330000 UNWATCHED (no expected-model declared)']
+2026-07-19T01:19:28+0200 MISMATCH DETECTED: session=44440000 expected=model-A (resource-attribute) observed=model-B -- alerting
+2026-07-19T01:19:28+0200 DRY-RUN (no real send): would exec argv=['/home/bork/w/vdc/venvs/generic/bin/python', '/home/bork/mailnotice/notify.py', 'OTEL WATCHDOG mismatch: session=44440000 expected=model-A observed=model-B']
+2026-07-19T01:19:28+0200 MISMATCH (debounced, already alerted): session=44440000 expected=model-A observed=model-B
+2026-07-19T01:19:28+0200 UTILITY CALL skipped: session=55550000 query_source=generate_session_title model=model-Q
+2026-07-19T01:19:28+0200 SUBAGENT DISPATCH skipped: session=55550001 query_source=agent:sdk:sub model=model-Q
+2026-07-19T01:19:28+0200 --once: processed 1 new export line(s)
+
+
+=== W3-unwatched-coverage-alert-dry-run ===
+  [ok] 2026-07-19T01:19:28+0200 MISMATCH DETECTED: session=11110000 expected=model-A (resource-attribute) observed=model-B -- alerting
+2026-07-19T01:19:28+0200 DRY-RUN (no real send): would exec argv=['/home/bork/w/vdc/venvs/generic/bin/python', '/home/bork/mailnotice/notify.py', 'OTEL WATCHDOG mismatch: session=11110000 expected=model-A observed=model-B']
+2026-07-19T01:19:28+0200 COVERAGE: session=33330000 UNWATCHED -- no autoharn.expected_model resource attribute and no expectation-file match (world=None, principal=None)
+2026-07-19T01:19:28+0200 DRY-RUN (no real send): would exec argv=['/home/bork/w/vdc/venvs/generic/bin/python', '/home/bork/mailnotice/notify.py', 'OTEL WATCHDOG coverage: session=33330000 UNWATCHED (no expected-model declared)']
+2026-07-19T01:19:28+0200 MISMATCH DETECTED: session=44440000 expected=model-A (resource-attribute) observed=model-B -- alerting
+2026-07-19T01:19:28+0200 DRY-RUN (no real send): would exec argv=['/home/bork/w/vdc/venvs/generic/bin/python', '/home/bork/mailnotice/notify.py', 'OTEL WATCHDOG mismatch: session=44440000 expected=model-A observed=model-B']
+2026-07-19T01:19:28+0200 MISMATCH (debounced, already alerted): session=44440000 expected=model-A observed=model-B
+2026-07-19T01:19:28+0200 UTILITY CALL skipped: session=55550000 query_source=generate_session_title model=model-Q
+2026-07-19T01:19:28+0200 SUBAGENT DISPATCH skipped: session=55550001 query_source=agent:sdk:sub model=model-Q
+2026-07-19T01:19:28+0200 --once: processed 1 new export line(s)
+
+
+=== W3-unwatched-never-a-mismatch ===
+  [ok] 2026-07-19T01:19:28+0200 MISMATCH DETECTED: session=11110000 expected=model-A (resource-attribute) observed=model-B -- alerting
+2026-07-19T01:19:28+0200 DRY-RUN (no real send): would exec argv=['/home/bork/w/vdc/venvs/generic/bin/python', '/home/bork/mailnotice/notify.py', 'OTEL WATCHDOG mismatch: session=11110000 expected=model-A observed=model-B']
+2026-07-19T01:19:28+0200 COVERAGE: session=33330000 UNWATCHED -- no autoharn.expected_model resource attribute and no expectation-file match (world=None, principal=None)
+2026-07-19T01:19:28+0200 DRY-RUN (no real send): would exec argv=['/home/bork/w/vdc/venvs/generic/bin/python', '/home/bork/mailnotice/notify.py', 'OTEL WATCHDOG coverage: session=33330000 UNWATCHED (no expected-model declared)']
+2026-07-19T01:19:28+0200 MISMATCH DETECTED: session=44440000 expected=model-A (resource-attribute) observed=model-B -- alerting
+2026-07-19T01:19:28+0200 DRY-RUN (no real send): would exec argv=['/home/bork/w/vdc/venvs/generic/bin/python', '/home/bork/mailnotice/notify.py', 'OTEL WATCHDOG mismatch: session=44440000 expected=model-A observed=model-B']
+2026-07-19T01:19:28+0200 MISMATCH (debounced, already alerted): session=44440000 expected=model-A observed=model-B
+2026-07-19T01:19:28+0200 UTILITY CALL skipped: session=55550000 query_source=generate_session_title model=model-Q
+2026-07-19T01:19:28+0200 SUBAGENT DISPATCH skipped: session=55550001 query_source=agent:sdk:sub model=model-Q
+2026-07-19T01:19:28+0200 --once: processed 1 new export line(s)
+
+
+=== W3-shows-not-watched-at-all-in-status ===
+  [ok] watched-and-clean: 1
+  22220000 expected=model-C observed=['model-C'] source=resource-attribute
+mismatch: 2
+  11110000 expected=model-A observed=['model-B'] source=resource-attribute
+  44440000 expected=model-A observed=['model-B'] source=resource-attribute
+not-watched-at-all (UNWATCHED, expectation absent): 1
+  33330000 world=None principal=None
+total sessions with observed api_request events: 4
+NOTE (R1, permanent): a session that emits no telemetry at all is invisible to this report -- absence of a session here is not evidence of anything; coverage is reported only for sessions that emitted at least one claude_code.api_request event.
+
+
+=== W4-first-wrong-model-alerts-once ===
+  [ok] mismatch_lines=1 debounced_lines=1
+2026-07-19T01:19:28+0200 MISMATCH DETECTED: session=11110000 expected=model-A (resource-attribute) observed=model-B -- alerting
+2026-07-19T01:19:28+0200 DRY-RUN (no real send): would exec argv=['/home/bork/w/vdc/venvs/generic/bin/python', '/home/bork/mailnotice/notify.py', 'OTEL WATCHDOG mismatch: session=11110000 expected=model-A observed=model-B']
+2026-07-19T01:19:28+0200 COVERAGE: session=33330000 UNWATCHED -- no autoharn.expected_model resource attribute and no expectation-file match (world=None, principal=None)
+2026-07-19T01:19:28+0200 DRY-RUN (no real send): would exec argv=['/home/bork/w/vdc/venvs/generic/bin/python', '/home/bork/mailnotice/notify.py', 'OTEL WATCHDOG coverage: session=33330000 UNWATCHED (no expected-model declared)']
+2026-07-19T01:19:28+0200 MISMATCH DETECTED: session=44440000 expected=model-A (resource-attribute) observed=model-B -- alerting
+2026-07-19T01:19:28+0200 DRY-RUN (no real send): would exec argv=['/home/bork/w/vdc/venvs/generic/bin/python', '/home/bork/mailnotice/notify.py', 'OTEL WATCHDOG mismatch: session=44440000 expected=model-A observed=model-B']
+2026-07-19T01:19:28+0200 MISMATCH (debounced, already alerted): session=44440000 expected=model-A observed=model-B
+2026-07-19T01:19:28+0200 UTILITY CALL skipped: session=55550000 query_source=generate_session_title model=model-Q
+2026-07-19T01:19:28+0200 SUBAGENT DISPATCH skipped: session=55550001 query_source=agent:sdk:sub model=model-Q
+2026-07-19T01:19:28+0200 --once: processed 1 new export line(s)
+
+
+=== W5-utility-call-skipped-journaled ===
+  [ok] 2026-07-19T01:19:28+0200 MISMATCH DETECTED: session=11110000 expected=model-A (resource-attribute) observed=model-B -- alerting
+2026-07-19T01:19:28+0200 DRY-RUN (no real send): would exec argv=['/home/bork/w/vdc/venvs/generic/bin/python', '/home/bork/mailnotice/notify.py', 'OTEL WATCHDOG mismatch: session=11110000 expected=model-A observed=model-B']
+2026-07-19T01:19:28+0200 COVERAGE: session=33330000 UNWATCHED -- no autoharn.expected_model resource attribute and no expectation-file match (world=None, principal=None)
+2026-07-19T01:19:28+0200 DRY-RUN (no real send): would exec argv=['/home/bork/w/vdc/venvs/generic/bin/python', '/home/bork/mailnotice/notify.py', 'OTEL WATCHDOG coverage: session=33330000 UNWATCHED (no expected-model declared)']
+2026-07-19T01:19:28+0200 MISMATCH DETECTED: session=44440000 expected=model-A (resource-attribute) observed=model-B -- alerting
+2026-07-19T01:19:28+0200 DRY-RUN (no real send): would exec argv=['/home/bork/w/vdc/venvs/generic/bin/python', '/home/bork/mailnotice/notify.py', 'OTEL WATCHDOG mismatch: session=44440000 expected=model-A observed=model-B']
+2026-07-19T01:19:28+0200 MISMATCH (debounced, already alerted): session=44440000 expected=model-A observed=model-B
+2026-07-19T01:19:28+0200 UTILITY CALL skipped: session=55550000 query_source=generate_session_title model=model-Q
+2026-07-19T01:19:28+0200 SUBAGENT DISPATCH skipped: session=55550001 query_source=agent:sdk:sub model=model-Q
+2026-07-19T01:19:28+0200 --once: processed 1 new export line(s)
+
+
+=== W5-utility-call-no-mismatch-no-coverage ===
+  [ok] checked no MISMATCH/COVERAGE line references the W5 (utility) session id
+
+=== W5-utility-call-absent-from-status ===
+  [ok] watched-and-clean: 1
+  22220000 expected=model-C observed=['model-C'] source=resource-attribute
+mismatch: 2
+  11110000 expected=model-A observed=['model-B'] source=resource-attribute
+  44440000 expected=model-A observed=['model-B'] source=resource-attribute
+not-watched-at-all (UNWATCHED, expectation absent): 1
+  33330000 world=None principal=None
+total sessions with observed api_request events: 4
+NOTE (R1, permanent): a session that emits no telemetry at all is invisible to this report -- absence of a session here is not evidence of anything; coverage is reported only for sessions that emitted at least one claude_code.api_request event.
+
+
+=== W5b-subagent-dispatch-skipped-journaled ===
+  [ok] 2026-07-19T01:19:28+0200 MISMATCH DETECTED: session=11110000 expected=model-A (resource-attribute) observed=model-B -- alerting
+2026-07-19T01:19:28+0200 DRY-RUN (no real send): would exec argv=['/home/bork/w/vdc/venvs/generic/bin/python', '/home/bork/mailnotice/notify.py', 'OTEL WATCHDOG mismatch: session=11110000 expected=model-A observed=model-B']
+2026-07-19T01:19:28+0200 COVERAGE: session=33330000 UNWATCHED -- no autoharn.expected_model resource attribute and no expectation-file match (world=None, principal=None)
+2026-07-19T01:19:28+0200 DRY-RUN (no real send): would exec argv=['/home/bork/w/vdc/venvs/generic/bin/python', '/home/bork/mailnotice/notify.py', 'OTEL WATCHDOG coverage: session=33330000 UNWATCHED (no expected-model declared)']
+2026-07-19T01:19:28+0200 MISMATCH DETECTED: session=44440000 expected=model-A (resource-attribute) observed=model-B -- alerting
+2026-07-19T01:19:28+0200 DRY-RUN (no real send): would exec argv=['/home/bork/w/vdc/venvs/generic/bin/python', '/home/bork/mailnotice/notify.py', 'OTEL WATCHDOG mismatch: session=44440000 expected=model-A observed=model-B']
+2026-07-19T01:19:28+0200 MISMATCH (debounced, already alerted): session=44440000 expected=model-A observed=model-B
+2026-07-19T01:19:28+0200 UTILITY CALL skipped: session=55550000 query_source=generate_session_title model=model-Q
+2026-07-19T01:19:28+0200 SUBAGENT DISPATCH skipped: session=55550001 query_source=agent:sdk:sub model=model-Q
+2026-07-19T01:19:28+0200 --once: processed 1 new export line(s)
+
+
+=== W5b-subagent-dispatch-absent-from-status ===
+  [ok] watched-and-clean: 1
+  22220000 expected=model-C observed=['model-C'] source=resource-attribute
+mismatch: 2
+  11110000 expected=model-A observed=['model-B'] source=resource-attribute
+  44440000 expected=model-A observed=['model-B'] source=resource-attribute
+not-watched-at-all (UNWATCHED, expectation absent): 1
+  33330000 world=None principal=None
+total sessions with observed api_request events: 4
+NOTE (R1, permanent): a session that emits no telemetry at all is invisible to this report -- absence of a session here is not evidence of anything; coverage is reported only for sessions that emitted at least one claude_code.api_request event.
+
+
+=== W4-new-wrong-model-alerts-again ===
+  [ok] 2026-07-19T01:19:28+0200 MISMATCH DETECTED: session=44440000 expected=model-A (resource-attribute) observed=model-Z -- alerting
+2026-07-19T01:19:28+0200 DRY-RUN (no real send): would exec argv=['/home/bork/w/vdc/venvs/generic/bin/python', '/home/bork/mailnotice/notify.py', 'OTEL WATCHDOG mismatch: session=44440000 expected=model-A observed=model-Z']
+2026-07-19T01:19:28+0200 --once: processed 1 new export line(s)
+
+
+=== W4-mismatch-state-in-status ===
+  [ok] watched-and-clean: 1
+  22220000 expected=model-C observed=['model-C'] source=resource-attribute
+mismatch: 2
+  11110000 expected=model-A observed=['model-B'] source=resource-attribute
+  44440000 expected=model-A observed=['model-B', 'model-Z'] source=resource-attribute
+not-watched-at-all (UNWATCHED, expectation absent): 1
+  33330000 world=None principal=None
+total sessions with observed api_request events: 4
+NOTE (R1, permanent): a session that emits no telemetry at all is invisible to this report -- absence of a session here is not evidence of anything; coverage is reported only for sessions that emitted at least one claude_code.api_request event.
+
+
+=== status-on-unrun-base-dir-is-empty ===
+  [ok] watched-and-clean: 0
+mismatch: 0
+not-watched-at-all (UNWATCHED, expectation absent): 0
+total sessions with observed api_request events: 0
+NOTE (R1, permanent): a session that emits no telemetry at all is invisible to this report -- absence of a session here is not evidence of anything; coverage is reported only for sessions that emitted at least one claude_code.api_request event.
+
+
+=== no-real-alert-sent-only-dry-run ===
+  [ok] 2026-07-19T01:19:28+0200 MISMATCH DETECTED: session=11110000 expected=model-A (resource-attribute) observed=model-B -- alerting
+2026-07-19T01:19:28+0200 DRY-RUN (no real send): would exec argv=['/home/bork/w/vdc/venvs/generic/bin/python', '/home/bork/mailnotice/notify.py', 'OTEL WATCHDOG mismatch: session=11110000 expected=model-A observed=model-B']
+2026-07-19T01:19:28+0200 COVERAGE: session=33330000 UNWATCHED -- no autoharn.expected_model resource attribute and no expectation-file match (world=None, principal=None)
+2026-07-19T01:19:28+0200 DRY-RUN (no real send): would exec argv=['/home/bork/w/vdc/venvs/generic/bin/python', '/home/bork/mailnotice/notify.py', 'OTEL WATCHDOG coverage: session=33330000 UNWATCHED (no expected-model declared)']
+2026-07-19T01:19:28+0200 MISMATCH DETECTED: session=44440000 expected=model-A (resource-attribute) observed=model-B -- alerting
+2026-07-19T01:19:28+0200 DRY-RUN (no real send): would exec argv=['/home/bork/w/vdc/venvs/generic/bin/python', '/home/bork/mailnotice/notify.py', 'OTEL WATCHDOG mismatch: session=44440000 expected=model-A observed=model-B']
+2026-07-19T01:19:28+0200 MISMATCH (debounced, already alerted): session=44440000 expected=model-A observed=model-B
+2026-07-19T01:19:28+0200 UTILITY CALL skipped: session=55550000 query_source=generate_session_title model=model-Q
+2026-07-19T01:19:28+0200 SUBAGENT DISPATCH skipped: session=55550001 query_source=agent:sdk:sub model=model-Q
+2026-07-19T01:19:28+0200 --once: processed 1 new export line(s)
+2026-07-19T01:19:28+0200 MISMATCH DETECTED: session=44440000 expected=model-A (resource-attribute) observed=model-Z -- alerting
+2026-07-19T01:19:28+0200 DRY-RUN (no real send): would exec argv=['/home/bork/w/vdc/venvs/generic/bin/python', '/home/bork/mailnotice/notify.py', 'OTEL WATCHDOG mismatch: session=44440000 expected=model-A observed=model-Z']
+2026-07-19T01:19:28+0200 --once: processed 1 new export line(s)
+
+
+ALL OK
