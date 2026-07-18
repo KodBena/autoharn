@@ -460,6 +460,44 @@ unchanged. **W24:** a ~3000-level-nested, under-bound, otherwise-valid write bod
 typed 422 structure axis, server alive; the existing W13 deep-nesting leg stays green.
 §9's structure axis now reads "at parse AND at every post-parse traversal."
 
+**A8 (2026-07-18) — iteration-6 confirmation pass: the size axis's real wall, and one
+label consistency, adjudicated.** Trigger: single-reviewer confirmation on `4976e0d`.
+Every A2–A7 behavior held under live re-exercise and independent adjacent probes. Two
+findings:
+
+1. **A2.2 sized its bound against the wrong limit (witnessed, latent since A2):** the
+   1 MiB bound was justified as "safely under the argv wall (`ARG_MAX` = 2 MiB)" — but
+   `ARG_MAX` bounds the *total* argv+env, while Linux's per-argument limit is
+   `MAX_ARG_STRLEN` (32 pages ≈ 131 072 bytes), and the re-serialized payload travels as
+   ONE psql `-v` argument. A payload between ~131 KiB and 1 MiB passes both A2.2
+   checkpoints and detonates in `subprocess.run` as an uncaught `OSError` (E2BIG) →
+   bare text/plain 500 — the untyped shape §9 forbids, and it makes checkpoint (b)'s
+   stated bound unreachable-honest (no payload over ~131 KiB could ever have succeeded).
+   **Fix, three parts:** (i) checkpoint (b)'s bound becomes a second named constant
+   `MAX_PSQL_ARG_BYTES = 100_000` (under `MAX_ARG_STRLEN` with margin), typed 413 whose
+   teach-text names the per-argument transport wall; checkpoint (a)'s raw-body 1 MiB
+   pre-parse bound STAYS as the cheap early reject (its rationale — bounded buffering —
+   is unchanged). (ii) `_psql` catches `OSError` and raises the unclassified-failure
+   path (typed 500) so no future transport wall can ever wear the bare shape — defense
+   in depth, not the primary mechanism. (iii) §9 and the README state both size bounds
+   and why they differ (buffering vs transport). The A1-ratified psql transport is NOT
+   reopened: the bound moves to the transport's true capacity rather than the transport
+   moving to the bound (a ledger payload is prose; 100 KB remains generous, and A2.2's
+   own "generous" claim is re-made honestly at the smaller number).
+2. **Non-finite values under an int-declared field wear the id-domain label (witnessed,
+   label consistency):** `Infinity` in `actor` refuses via the id-domain comparison
+   ("got inf") while `NaN` in the same field refuses on the value axis — one condition,
+   two labels, split by IEEE-754 comparison accidents. **Fix:** the int-field domain
+   check tests finiteness FIRST and routes non-finite values to A4.1's value-axis
+   message; finite out-of-range keeps the id-domain shape, `NaN` keeps its current
+   correct label. Both stay typed 422.
+
+§8 gains: **W25** the argv-wall legs — a ~200 KiB payload → typed 413 naming
+`MAX_PSQL_ARG_BYTES`; a ~90 KiB payload → passes to the kernel (verdict, not 413);
+**W26** `Infinity` under an int-declared field → typed 422 on the value axis (same
+message family as `NaN`). §9's size axis now reads "raw body ≤ `MAX_WRITE_BODY_BYTES`
+(buffering), re-serialized payload ≤ `MAX_PSQL_ARG_BYTES` (transport)."
+
 ## License
 
 Public Domain (The Unlicense).
