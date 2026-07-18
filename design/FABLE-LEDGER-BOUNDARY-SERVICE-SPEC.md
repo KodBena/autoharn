@@ -315,6 +315,57 @@ structure (typed 422), psql bounded by `PSQL_CONNECT_TIMEOUT_S`/`PSQL_EXEC_TIMEO
 (typed 503)"; the refuse axis's typed-shape list is unchanged, with `infra_failure` now
 issued solely by the dedicated psql-layer exception.
 
+**A4 (2026-07-18) — iteration-2 independent re-review findings, adjudicated.** Trigger:
+independent fresh-context re-review of the hardened build (`cb639b0`). Every A3 fix held
+under live exercise (both timeout bounds proven, parse closure over the three named axes,
+off-loop handlers, route/size/capability/injection legs all re-witnessed clean). Both
+reviewers independently converged on ONE new root class, the third consecutive instance of
+ADR-0000 2(a) on this ingress: **`PsqlInfraFailure` names a narrower class than the code
+assigns to it.** `_query_json` maps EVERY nonzero psql exit to it, but psql under
+`ON_ERROR_STOP=1` reliably distinguishes (witnessed live): **exit 2** = connection-level
+failure (genuinely infra) vs **exit 3** = script/data-level failure — which the write path
+reaches with caller-supplied values that are valid JSON yet not Postgres-representable. Those
+callers currently receive 503 `infra_failure` with a message asserting "not a problem with
+your request" — false for their case (the lying-signature class, ADR-0002 rung 3), and it
+lets a handful of cheap malformed payloads counterfeit outage signal in the logs. Adjudication:
+
+1. **Value closure at the parse boundary (writes) — the class closed as a class, not per
+   specimen.** After parse, before psql, two named checks, each a typed 422 naming its axis,
+   never echoing body bytes: (a) **non-finite numbers** — re-serialization uses
+   `json.dumps(..., allow_nan=False)`, so `Infinity`, `NaN`, and any literal parsing to an
+   infinite float (`1e400`) refuse on the value axis; (b) **Postgres-text-representability**
+   — the serialized payload refuses if it carries `\u0000` or an unpaired UTF-16 surrogate
+   (the two classes jsonb cannot store; checked mechanically, e.g. a strict UTF-8 encode of
+   the serialized text plus a NUL-escape scan). §9's parse-closure axis list grows to
+   encoding / value magnitude / structure / non-finite / representability.
+2. **Read-side id domain closes symmetrically:** every id-typed path/query parameter is
+   bounded to `0 ≤ id ≤ 2^63 − 1` → typed 422 above it (the A2.6 `after_id ≥ 0` precedent,
+   completed upward; today an over-range id reaches psql's bigint cast and wears 503).
+3. **Exit-code fidelity in `_psql`:** `PsqlInfraFailure` (→ typed 503, message unchanged —
+   now true) is raised ONLY for connection-level failure: exit 2 and `TimeoutExpired`.
+   Exit 3 and any other residue — unreachable via the request after items 1–2, so its
+   occurrence means a boundary or deployment defect — raises a second dedicated exception →
+   typed 500 `{"disposition": "unclassified_failure", "message": <honest: the storage layer
+   refused for a reason this boundary did not anticipate; logged server-side; may be the
+   deployment or the request — the boundary declines to guess>}`, logged loudly with full
+   detail server-side. No signature claims a cause it cannot witness.
+4. **`audit_served.py` regression (mandatory):** its `except RuntimeError` predates A3.2's
+   dedicated exception — `PsqlInfraFailure` is NOT a `RuntimeError`, so a direct-read infra
+   failure now escapes both handlers and breaks that tool's exit-2 contract. The handler
+   catches the dedicated exception(s); the exit-2 contract is re-witnessed. (A3 introduced
+   this by narrowing the exception without sweeping its second consumer — the narrowing was
+   right, the sweep was owed; noted as the lesson of this item.)
+5. **Witness gaps close:** **W15** non-finite legs (`Infinity`, `NaN`, `1e400` → typed 422,
+   value axis, server alive); **W16** representability legs (`\u0000`-bearing string,
+   unpaired surrogate → typed 422); **W17** over-range id on the read side → typed 422;
+   **W18** exit-code fidelity both polarities (connection refusal → 503 `infra_failure`;
+   a forced script-level failure on a scratch world → 500 `unclassified_failure`, message
+   honest); **W19** `audit_served.py` exit-2 contract on an unreachable world.
+
+§9 is amended in place per items 1–3: the write axis's parse closure gains the two new
+axes; the refuse axis's typed-shape list gains `unclassified_failure`; `infra_failure`'s
+issuing condition narrows to connection-level (exit 2 / timeout) only.
+
 ## License
 
 Public Domain (The Unlicense).
