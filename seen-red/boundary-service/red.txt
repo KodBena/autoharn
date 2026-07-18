@@ -1,0 +1,69 @@
+boundary-service -- banked RED evidence (2026-07-18, toy db, scratch worlds svcfxpre/svcfxb +
+one throwaway svcfxw7ok; runnable fixture: seen-red/boundary-service/run_fixtures.py,
+registered in gates/fixture_census.py). The reds, each captured from a live run BEFORE the
+fix below, plus the negative-control reds the green run still exercises on every pass:
+
+0. THE BUG THIS FIXTURE FOUND AND THE FIX IT PROVES (both polarities in one finding): the
+   FIRST live run of this fixture was RED for a real reason, not a fixture defect --
+   `serving/boundary_service.py`'s original `_query_json` raised
+
+     RuntimeError: psql query returned no output where exactly one JSON value was expected
+
+   on GET /health against WORLD PRE (a world with no `boundary-service` principal registered)
+   and on the W7 allowed-leg's throwaway world, because `psql -tAq` prints the EMPTY STRING
+   for a SQL NULL scalar (never the text "null"), and the original `_query_json` treated
+   "psql produced no output lines" as an infrastructure failure rather than a legitimate NULL
+   result. Fixed by making zero-output-lines map to Python `None` (the genuinely absent-value
+   case every caller already handled: `row_by_id`'s 404, `service_principal_name`'s "not yet
+   registered") rather than raising -- see the fix's own comment in `_query_json`. The GREEN
+   run below re-exercises exactly the code path that was red (both worlds' /health calls, and
+   the pre-s43 world's absent-principal case) and stays green.
+
+1. W3 (capability_absent, no fallback, no DML string) -- a pre-s43 scratch world (chain ends
+   s42-row-hash-full-coverage.sql, NO s43-typed-verdict-write-boundary.sql applied): every one
+   of the four write endpoints returns
+
+     HTTP 409  {"disposition": "capability_absent", "capability": "s43-boundary", "message": "..."}
+
+   and `grep -nE 'INSERT INTO ...\(|UPDATE ... SET|DELETE FROM ...'` over every serving/*.py
+   file finds ZERO matches (exit 1) -- the bypass path this service could have taken (a raw
+   INSERT when the boundary is absent) does not exist in the source, not merely "wasn't
+   exercised."
+
+2. W2 (refused write, journaled, verdict verbatim) -- POST /write/ledger with
+   `{"kind": "bogus_kind_not_in_vocabulary", ...}` on the s43-head world returns
+
+     HTTP 200  {"disposition": "refused", "sqlstate": "23514", "refusal_id": 8,
+                "message": "new row for relation \"ledger\" violates check constraint \"ledger_kind_check\""}
+
+   and GET /rows/8 shows the COMMITTED write_refused row (kind=write_refused,
+   refusal_sqlstate=23514, refusal_surface=ledger) -- the kernel's own teach-text crossed the
+   HTTP boundary byte-verbatim, and the refusal is a first-class HTTP 200 domain result, never
+   a 500.
+
+3. W4 (/credited never falls back) -- on every world this repository's kernel lineage can
+   currently build (no s44 delta exists anywhere in kernel/lineage/), GET /credited returns
+
+     HTTP 409  {"disposition": "capability_absent", "capability": "s44-credited-view", ...}
+
+   never a silent read of ledger_current under the credited-only contract's name (the F49
+   vacuous-pass class the spec names explicitly).
+
+4. W7 REFUSAL LEG (bind guard) -- `python3 -m serving.boundary_service --host 8.8.8.8 --port N`
+   (no flag) exits 2 with
+
+     boundary_service: REFUSED -- --host '8.8.8.8' is not a loopback address
+     (['127.0.0.1', '::1', 'localhost']). ... unless you pass
+     --i-understand-this-exposes-the-ledger explicitly ...
+
+   BEFORE uvicorn ever binds a socket (construction-time refusal, ADR-0002 rung 1).
+
+5. W6 NEGATIVE CONTROL (the audit's own red, live in every green run) -- a served row set with
+   one row's `statement` field hand-tampered to "TAMPERED-FOR-NEGATIVE-CONTROL" and fed
+   through `audit_served.compare_row_sets` against the real kernel read produces a NONZERO
+   diff list naming the row id and the mismatched field -- the comparator is proven to catch a
+   real disagreement, not merely proven to pass on agreement.
+
+Full green run (2026-07-18, this fix in place): 9/9 live checks OK (W1, W2, W4, W5, W6, W7
+both legs, W3, the §9 route-count closure), W8 correctly recorded UNEXERCISED (panel-side,
+out of this repo's reach). `python3 seen-red/boundary-service/run_fixtures.py` exit 0.
