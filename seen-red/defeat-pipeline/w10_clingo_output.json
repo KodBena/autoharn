@@ -1,0 +1,39 @@
+{
+  "Solver": "clingo version 5.8.0",
+  "Input": [
+    "/home/bork/w/vdc/1/autoharn/engine/lp/ledger_tnow.lp","/home/bork/w/vdc/1/autoharn/engine/lp/ledger_support.lp","/home/bork/w/vdc/1/autoharn/seen-red/defeat-pipeline/unstratified_negative_control.lp","/home/bork/w/vdc/1/autoharn/seen-red/defeat-pipeline/_w10_scratch_edb.lp"
+  ],
+  "Call": [
+    {
+      "Start": 0.000,
+      "Witnesses": [
+        {
+          "Time": 0.002,
+          "Value": [
+            "credited(1)", "in_force(1)", "in_force(2)", "in_force(3)", "head(1,1)", "head(2,2)", "head(3,3)", "model_defeated(3,2,50)", "credited(2)"
+          ]
+        },
+        {
+          "Time": 0.002,
+          "Value": [
+            "credited(1)", "in_force(1)", "in_force(2)", "in_force(3)", "head(1,1)", "head(2,2)", "head(3,3)", "model_defeated(2,3,50)", "credited(3)"
+          ]
+        }
+      ],
+      "Stop": 0.002
+    }
+  ],
+  "Result": "SATISFIABLE",
+  "Models": {
+    "Number": 2,
+    "More": "no"
+  },
+  "Calls": 1,
+  "Time": {
+    "Total": 0.002,
+    "Solve": 0.000,
+    "Model": 0.000,
+    "Unsat": 0.000,
+    "CPU": 0.002
+  }
+}

@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-06T05:37:25Z
-#   last-change: 2026-07-15T20:52:14Z
-#   contributors: 37017f46/main, be693afb/main, a857c93d/main
+#   last-change: 2026-07-18T05:41:51Z
+#   contributors: 37017f46/main, be693afb/main, a857c93d/main, ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
 """ledger_differential -- the marriage's load-bearing gate: the ASP `T_now` program
@@ -44,8 +44,9 @@ from pathlib import Path
 
 import lp_registry
 from clingo_run import run_clingo
-from ledger_edb import PGHOST, export, export_work, resolve
-from ledger_floor import WORK_ITEM_PREDS, WORK_REVIEW_PREDS, floor_atoms, work_item_floor_atoms, work_review_floor_atoms
+from ledger_edb import PGHOST, DefeatParseError, export, export_defeat, export_work, resolve
+from ledger_floor import (DEFEAT_PREDS, WORK_ITEM_PREDS, WORK_REVIEW_PREDS, defeat_floor_atoms,
+                          floor_atoms, work_item_floor_atoms, work_review_floor_atoms)
 
 HERE = Path(__file__).resolve().parent
 LP_DIR = HERE / "lp"
@@ -263,6 +264,36 @@ def run_sql_work(name: str, edb_text: str) -> ProducerRun:
     return ProducerRun("sql:floor(work)", atoms=atoms, record=rec)
 
 
+def run_sql_defeat(name: str, edb_text: str) -> ProducerRun:
+    """The SQL floor for the 'defeat' layer (design/FABLE-DEFEAT-PIPELINE-SPEC.md §7):
+    defeat_floor_atoms, restricted to DEFEAT_PREDS. QUARANTINES on a pre-s41 target with the
+    capability reason (mirroring run_sql_work's pre-s22 refusal, F49) and on a malformed v1
+    attestation statement (§3 P-5 -- the SQL-side raise, caught here, never a silent skip)."""
+    t = resolve(name)
+    if not (t.has_col("principal_binding_active") and t.has_col("principal_competence_activity")):
+        return ProducerRun("sql:floor(defeat)",
+                           quarantine="target has no principal_binding_active/"
+                                       "principal_competence_activity columns (pre-s41 lineage) "
+                                       "-- the 'defeat' layer has no grant substrate here, "
+                                       "capability absent, not record-empty")
+    try:
+        atoms = defeat_floor_atoms(name)
+        atoms = {a for a in atoms if a.split("(", 1)[0] in DEFEAT_PREDS}
+    except Exception as e:  # noqa: BLE001 -- a malformed v1 row (P-5) raises SQL-side; QUARANTINE, never a crash
+        return ProducerRun("sql:floor(defeat)", quarantine=f"SQL defeat floor failed: {type(e).__name__}: {e}")
+    rec = DerivationRecord(
+        engine="postgres", version=_pg_version(t.db),
+        config=["ledger_floor.py::defeat_floor_atoms"],
+        input_basis=f"live-db rows read directly ({t.db}.{t.schema}.ledger[/ledger_current])",
+        input_hash=_ledger_snapshot_hash(name),
+        program_hash=_sha((HERE / "ledger_floor.py").read_text(encoding="utf-8")),
+        output_hash=_sha("\n".join(sorted(atoms))), target=name, ts=_now())
+    return ProducerRun("sql:floor(defeat)", atoms=atoms, record=rec)
+
+
+_LAYER_FLOOR_PREDS = {"work": WORK_LAYER_PREDS, "defeat": frozenset(DEFEAT_PREDS)}
+
+
 def run_layer_differential(name: str, layer: str = "work", *,
                            program_names: list[str] | None = None) -> DifferentialResult:
     """Differential one target on a NAMED layer (engine/lp_registry.py's LAYERS). `program_names`
@@ -273,15 +304,50 @@ def run_layer_differential(name: str, layer: str = "work", *,
     names = program_names if program_names is not None else list(lp_registry.LAYERS[layer])
     lp_registry.require_layer_stack(layer, names)  # raises RegistryError on a mis-stacked list
     paths = [LP_DIR / n for n in names]
-    if layer != "work":
-        raise NotImplementedError(f"run_layer_differential only implements the 'work' floor "
-                                  f"comparison this delta shipped; layer {layer!r} has no SQL "
-                                  f"floor wired here yet (the 'tnow' layer's is run_differential).")
-    edb_text = export(name).edb_text() + "\n" + export_work(name).edb_text()
-    asp = run_asp(name, edb_text, programs=paths)
-    if asp.quarantine is None:
-        asp.atoms = {a for a in asp.atoms if a.split("(", 1)[0] in WORK_LAYER_PREDS}
-    sql = run_sql_work(name, edb_text)
+    if layer not in _LAYER_FLOOR_PREDS:
+        raise NotImplementedError(f"run_layer_differential only implements the "
+                                  f"{sorted(_LAYER_FLOOR_PREDS)} floor comparisons this build "
+                                  f"shipped; layer {layer!r} has no SQL floor wired here yet "
+                                  f"(the 'tnow' layer's is run_differential).")
+    preds = _LAYER_FLOOR_PREDS[layer]
+    if layer == "work":
+        try:
+            edb_text = export(name).edb_text() + "\n" + export_work(name).edb_text()
+        except Exception as e:  # noqa: BLE001
+            qr = f"EDB export failed: {type(e).__name__}: {e}"
+            asp, sql = ProducerRun("asp:clingo", quarantine=qr), ProducerRun("sql:floor(work)", quarantine=qr)
+            return DifferentialResult(target=name, asp=asp, sql=sql)
+        asp = run_asp(name, edb_text, programs=paths)
+        if asp.quarantine is None:
+            asp.atoms = {a for a in asp.atoms if a.split("(", 1)[0] in preds}
+        sql = run_sql_work(name, edb_text)
+    else:  # "defeat" -- §3 P-5: a malformed v1 attestation raises in EACH producer's OWN
+        # independent parse (export_defeat's Python parser for ASP; defeat_floor_atoms' SQL
+        # parser for the floor). Building the shared edb_text calls export_defeat() first, so a
+        # malformed row is caught THERE and both producers are QUARANTINED with the same reason
+        # -- "both producers fail identically" (P-5), never a one-sided failure.
+        try:
+            base = export(name)
+            defeat_exp = export_defeat(name)
+            # §4.3/§7: require() the four grounding families BEFORE use -- a pre-s41 target (no
+            # trust_grant/grant_row substrate) QUARANTINES here with the capability reason,
+            # rather than grounding a vacuously-empty derivation that would read AGREE (the F49
+            # vacuous-pass class, foreclosed exactly as run_sql_work forecloses pre-s22 targets).
+            for fam in ("trust_grant", "attest_row", "mismatch_attest", "row_actor"):
+                defeat_exp.require(fam)
+            edb_text = base.edb_text() + "\n" + defeat_exp.edb_text()
+        except DefeatParseError as e:
+            qr = f"malformed v1 attestation (P-5): {e}"
+            asp, sql = ProducerRun("asp:clingo", quarantine=qr), ProducerRun("sql:floor(defeat)", quarantine=qr)
+            return DifferentialResult(target=name, asp=asp, sql=sql)
+        except Exception as e:  # noqa: BLE001 -- e.g. a pre-s41 target's require() capability refusal
+            qr = f"EDB export failed: {type(e).__name__}: {e}"
+            asp, sql = ProducerRun("asp:clingo", quarantine=qr), ProducerRun("sql:floor(defeat)", quarantine=qr)
+            return DifferentialResult(target=name, asp=asp, sql=sql)
+        asp = run_asp(name, edb_text, programs=paths)
+        if asp.quarantine is None:
+            asp.atoms = {a for a in asp.atoms if a.split("(", 1)[0] in preds}
+        sql = run_sql_defeat(name, edb_text)
     res = DifferentialResult(target=name, asp=asp, sql=sql)
     if asp.quarantine is None and sql.quarantine is None:
         res.only_asp = asp.atoms - sql.atoms
@@ -345,8 +411,11 @@ def main(argv: list[str] | None = None) -> int:
                          "'tnow' (default, unchanged behavior -- ledger_tnow.lp vs "
                          "ledger_floor.py::floor_atoms) or 'work' (ledger_tnow.lp + "
                          "work_items.lp + work_review.lp vs the work-item/work-review SQL "
-                         "floors, over ledger_edb.export_work's EDB). `judge` forwards this flag "
-                         "through unchanged -- `./judge --layer work`.")
+                         "floors, over ledger_edb.export_work's EDB), or 'defeat' "
+                         "(ledger_tnow.lp + ledger_support.lp + ledger_defeat.lp vs "
+                         "ledger_floor.py::defeat_floor_atoms, over ledger_edb.export_defeat's "
+                         "EDB -- design/FABLE-DEFEAT-PIPELINE-SPEC.md §7). `judge` forwards this "
+                         "flag through unchanged -- `./judge --layer work`.")
     args = ap.parse_args(argv)
     targets = args.targets or ["s10", "s11", "s12", "s13", "nla"]
 
@@ -354,11 +423,18 @@ def main(argv: list[str] | None = None) -> int:
     print(f"#   closed verdict vocabulary: {sorted(VERDICTS)}; RED = {sorted(RED)}\n")
     red = 0
     for name in targets:
+        edb_text = ""
         if args.layer == "tnow":
             edb_text = export(name).edb_text()
             res = run_differential(name, edb_text=edb_text)
         else:
-            edb_text = export(name).edb_text() + "\n" + export_work(name).edb_text()
+            try:
+                if args.layer == "work":
+                    edb_text = export(name).edb_text() + "\n" + export_work(name).edb_text()
+                elif args.layer == "defeat":
+                    edb_text = export(name).edb_text() + "\n" + export_defeat(name).edb_text()
+            except Exception as e:  # noqa: BLE001 -- e.g. DefeatParseError (P-5); run_layer_differential
+                pass                # re-derives and QUARANTINES properly; edb_text stays "" for --retain
             res = run_layer_differential(name, args.layer)
         if args.drop_record and res.asp.record is not None:
             res.asp.record = None  # simulate a lost witness

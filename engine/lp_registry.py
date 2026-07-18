@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-15T20:48:39Z
-#   last-change: 2026-07-15T20:49:16Z
-#   contributors: a857c93d/main
+#   last-change: 2026-07-18T05:37:23Z
+#   contributors: a857c93d/main, ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
 """lp_registry -- the declared provides/requires/stands_alone registry for engine/lp/*.lp
@@ -173,6 +173,17 @@ MODULES: dict[str, ModuleSpec] = {
         note="single-hop superseded reading is DELIBERATE (mirrors s13.review_gap's own SQL "
              "semantics, not ledger_tnow.lp's transitive sup_star) -- composes with ledger_tnow.lp "
              "only in the loose sense of sharing the superseded/1 NAME, not its closure."),
+    "ledger_defeat.lp": ModuleSpec(
+        provides=("model_defeated/3", "credited/1", "exposure_model/2",
+                  "exposure_model_undischarged/2", "model_defeated_row/1", "defeat_input/1"),
+        requires=("ledger_tnow.lp", "ledger_support.lp"),
+        stands_alone=True,
+        note="design/FABLE-DEFEAT-PIPELINE-SPEC.md §7: model_defeated's in-force tests read "
+             "superseded/1 (ledger_tnow.lp) to be MEANINGFUL, same shape as work_items.lp's own "
+             "note; the CASCADE half additionally needs support_star/2 + affirmed/2 "
+             "(ledger_support.lp) to be MEANINGFUL -- absent, exposure_model/2 silently reads "
+             "'nothing supports anything' rather than refusing. Meaningfulness, not "
+             "groundability, is what the 'defeat' LAYER entry below protects."),
     "verification_stats.lp": ModuleSpec(
         provides=("count_workflow_verdict/3", "count_role_verdict/3", "count_round_verdict/3",
                   "count_verdict/2", "count_unparseable/1"),
@@ -192,6 +203,7 @@ MODULES: dict[str, ModuleSpec] = {
 LAYERS: dict[str, tuple[str, ...]] = {
     "tnow": ("ledger_tnow.lp",),
     "work": ("ledger_tnow.lp", "work_items.lp", "work_review.lp"),
+    "defeat": ("ledger_tnow.lp", "ledger_support.lp", "ledger_defeat.lp"),
 }
 
 

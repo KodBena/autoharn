@@ -21,6 +21,7 @@
  "kernel-write-validation-2": "76943bd09109aa6f9ae996fc7dc7b9021e1178fb9dd7dbae2b0e81ca8890d84f",
  "marriage-differential": "f052460229f14eed5ce4c6f9d45c0acebb6d1d2df67320e5571a9cb3e680a793",
  "meta-toolchain-negative-controls": "21ed687f6048db3200d1e88037d52a9c334fc3fd9a595848d6efed70eaf57fd0",
+ "model-defeat-pipeline": "b12a89d2188c7d304785003538f56dfce0c944e61f859a17183904637d2a56c0",
  "narration-cite-check": "f1130ec531be337c272be1c44ca6154fe49733d88fdf6140b7a09c6dd6ee62a0",
  "observed-currency": "7256401c7dcfea69b86ade9434b565fc8d5cd89a6148038684ca25b39ccce956",
  "review-fixpoint": "14bce7bca17b32b5865f84b0e3d283210f3e0fd98c90011fa9b7de929b921724",
@@ -33,5 +34,6 @@
  "stamp-independence-gate": "684b0a0d6d01c8edc9c59ad91395b10e0a50ee0c3ddc69c68b08ef6c32435a69",
  "support-exposure-closure": "27dedfc77812684a4988bdd29b39c20343dac6e1f15e403bfc5e064cde902c77",
  "tnow-derived-validity": "086855af8e106a634e65553557d9b5c7e978b674907b6a78e03f6f3894e5af8e",
- "why-orphan-flag": "6647cce86ba92810ef7fdf37c92322ac24c6192d22816aa45e252ebf215f3141"
+ "why-orphan-flag": "6647cce86ba92810ef7fdf37c92322ac24c6192d22816aa45e252ebf215f3141",
+ "work-item-violations": "20e9d826797ded253ff7ba9b65ba94b483216d9b6fc9a818824aadd91dfe4642"
 }

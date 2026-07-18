@@ -1,0 +1,51 @@
+=== W11-registry-red ===
+  [ok] RegistryError raised: REFUSED: layer 'defeat' requires ['ledger_tnow.lp', 'ledger_support.lp', 'ledger_defeat.lp'] but the invocation only loaded ['ledger_tnow.lp', 'ledger_defeat.lp'] -- missing ['ledger_support.lp']. Gro
+
+=== W10-unstratified-negative-control ===
+  [ok] the unstratified variant's clingo run diverged from the lawful single-stable-model reading, as required: Result='SATISFIABLE', n_models=2, Call=[{'Start': 0.0, 'Witnesses': [{'Time': 0.002, 'Value': ['credited(1)', 'in_force(1)', 'in_force(2)', 'in_force(3)', 'head(1,1)', 'head(2,2)', 'head(3,3)', 'model_defeated(3,2,50)', 'credited(2)']}, {'Time': 0.002, 'Value': ['credited(1)', 'in_force(1)', 'in_force(2)', 'in_force(3)', 'head(1,1)', 'head(2,2)', 'head(3,3)', 'model_defeated(2,3,50)', 'credited(3)']}], 'Stop': 0.002}] (full output banked at seen-red/defeat-pipeline/w10_clingo_output.json)
+
+== scaffolding classic world s40dfp (chain ends s40-principal-identity-events.sql) ==
+=== W9-pre-s41-refusal ===
+  [ok] verdict=QUARANTINED; asp.quarantine="EDB export failed: CapabilityError: target 's40dfp' did not emit trust_grant/n (capability absent): no principal_binding_active/principal_competence_activity columns on this schema (pre-s41 lineage) -- capability absent, not record-empty. A silent empty here would be the F49 vacuous-pass; refusing loudly."; sql.quarantine="EDB export failed: CapabilityError: target 's40dfp' did not emit trust_grant/n (capability absent): no principal_binding_active/principal_competence_activity columns on this schema (pre-s41 lineage) -- capability absent, not record-empty. A silent empty here would be the F49 vacuous-pass; refusing loudly."
+
+== scaffolding classic world s41dfw (chain ends s41-principal-bindings-and-relations.sql) ==
+=== W6-absence-never-defeats ===
+  [ok] verdict=AGREE; model_defeated atoms=[]; target credited=True
+
+=== W7-version-skip-harmless ===
+  [ok] verdict=AGREE; model_defeated atoms=[]
+
+=== W1-defeat-fires ===
+  [ok] verdict=AGREE; model_defeated=['model_defeated(5,9,4)']; target credited=False
+
+=== W4-cascade-depth-2 ===
+  [ok] exposure_model atoms=['exposure_model(6,5)', 'exposure_model(7,5)']
+
+=== W5-discharge-distinct-actor ===
+  [ok] verdict=AGREE; exposure_model_undischarged=['exposure_model_undischarged(7,5)']
+
+=== W5-self-affirm-does-not-discharge ===
+  [ok] exposure_model_undischarged=['exposure_model_undischarged(7,5)']
+
+=== W8-target-domain-guard ===
+  [ok] verdict=AGREE; model_defeated=['model_defeated(5,9,4)']
+
+=== W2-implicit-lapse-THE-SPINE ===
+  [ok] verdict=AGREE; model_defeated=[]; target credited=True; exposure_model=[]; asp_atom_count=13; sql_atom_count=13; only_asp=[]; only_sql=[] -- ZERO per-row cleanup performed: no row was written, deleted, or edited between W1's defeat and this re-run; only the grant's own withdrawal row exists.
+
+W2 FULL QUOTE (the spine, verbatim):
+  verdict=AGREE
+  asp.atoms (13) = ['credited(1)', 'credited(10)', 'credited(11)', 'credited(12)', 'credited(13)', 'credited(14)', 'credited(2)', 'credited(3)', 'credited(5)', 'credited(6)', 'credited(7)', 'credited(8)', 'credited(9)']
+  sql.atoms (13) = ['credited(1)', 'credited(10)', 'credited(11)', 'credited(12)', 'credited(13)', 'credited(14)', 'credited(2)', 'credited(3)', 'credited(5)', 'credited(6)', 'credited(7)', 'credited(8)', 'credited(9)']
+
+=== W3-pre-supersede-defeat-fires-again ===
+  [ok] verdict=AGREE; model_defeated=['model_defeated(5,17,16)']
+
+=== W3-resurrection-on-supersession ===
+  [ok] verdict=AGREE; model_defeated=[]
+
+== scaffolding classic world s41dfm (chain ends s41-principal-bindings-and-relations.sql) ==
+=== W7-malformed-loud-BOTH-sides ===
+  [ok] verdict=QUARANTINED; asp.quarantine="malformed v1 attestation (P-5): row 6: grade= value 'not-a-real-grade' outside frozenset({'turn-bracketed', 'ambiguous', 'session-scoped', 'exact-command'}) (P-5)"; sql.quarantine="malformed v1 attestation (P-5): row 6: grade= value 'not-a-real-grade' outside frozenset({'turn-bracketed', 'ambiguous', 'session-scoped', 'exact-command'}) (P-5)"
+
+ALL OK

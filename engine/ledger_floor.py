@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-06T05:35:36Z
-#   last-change: 2026-07-16T10:15:11Z
-#   contributors: 37017f46/main, be693afb/main, a857c93d/main, 9a17b6b9/main
+#   last-change: 2026-07-18T05:50:47Z
+#   contributors: 37017f46/main, be693afb/main, a857c93d/main, 9a17b6b9/main, ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
 """ledger_floor -- the SQL FLOOR of the T_now judgments: producer ONE of the
@@ -612,6 +612,189 @@ def work_review_floor_atoms(name: str) -> set[str]:
       FROM tree t
       WHERE t.member IN (SELECT slug FROM own_unresolved)
          OR (t.member <> t.root AND t.member IN (SELECT slug FROM not_closed))
+    ;"""
+    out = t.run(sql).stdout
+    return {line.strip() for line in out.splitlines() if line.strip()}
+
+
+# ===========================================================================
+# THE DEFEAT-LAYER floor (design/FABLE-DEFEAT-PIPELINE-SPEC.md §6): the SQL twin of
+# engine/lp/ledger_defeat.lp, independently derived (NO shared code path with clingo, and no
+# shared code path with engine/ledger_edb.py::export_defeat's own v1 parser either -- the
+# floor re-reads the database directly and re-derives everything, including its own v1
+# statement parse in SQL, matching work_item_floor_atoms' `_wi_quote` precedent). Bit-identity
+# between the two producers is the gate; a shared parser would launder it.
+DEFEAT_PREDS = ("model_defeated", "credited", "exposure_model", "exposure_model_undischarged")
+
+
+def defeat_manifest(name: str) -> dict[str, str]:
+    """The capability manifest for the defeat layer on `name` (§4.3/§14, F49). A pre-s41 target
+    (no principal_binding_active/principal_competence_activity columns) has NO grant substrate
+    -- the whole layer is capability-EXCLUDED, never a silent record-empty."""
+    t = resolve(name)
+    has_grant = t.has_col("principal_binding_active") and t.has_col("principal_competence_activity")
+    has_affirm = t.has_relation(f"{t.schema}.support_affirm")
+    m: dict[str, str] = {}
+    if not has_grant:
+        for fam in DEFEAT_PREDS:
+            m[fam] = ("EXCLUDED (no principal_binding_active/principal_competence_activity "
+                      "columns on this schema, pre-s41 lineage -- capability absent, not "
+                      "record-empty)")
+        return m
+    for fam in ("model_defeated", "credited"):
+        m[fam] = "PRODUCED (basis: mismatch attestation + in-force trust grant closure)"
+    m["exposure_model"] = "PRODUCED (basis: model_defeated + the existing support_star closure)"
+    m["exposure_model_undischarged"] = (
+        "PRODUCED (basis: exposure_model + support_affirm EDB, scratch-only per ledger_support.lp "
+        "§3 Ruling A)" if has_affirm else
+        "DEFERRED (no support_affirm source on this target -- exposure_model_undischarged equals "
+        "exposure_model, said here, never silently, per spec §14)")
+    return m
+
+
+def defeat_floor_atoms(name: str) -> set[str]:
+    """The set of defeat-layer atoms the SQL floor derives for `name` (read-only). Every shown
+    atom is all-integer (model_defeated(R,A,G), credited(R), exposure_model(F,D),
+    exposure_model_undischarged(F,D)) -- no text crosses, so no quoting branch exists to diverge
+    (the `_wi_quote` hazard class is structurally absent here). Raises (a SQL-side error,
+    propagated as a subprocess failure) on a malformed v1 attestation statement (§3 P-5) --
+    the caller (engine/ledger_differential.py's defeat-layer arm) catches this and QUARANTINES,
+    exactly as the ASP-side export_defeat()'s DefeatParseError is caught -- "both producers fail
+    identically" (§3 P-5), independently derived."""
+    t = resolve(name)
+    rel = t.rel()
+    has_grant = t.has_col("principal_binding_active") and t.has_col("principal_competence_activity")
+    if not has_grant:
+        return set()  # capability-absent; the caller's require()-equivalent refuses BEFORE this
+    has_amends = t.has_col("amends")
+    has_answers = t.has_col("answers")
+    has_statement = t.has_col("statement")
+    has_typed = t.has_col("attest_row_id")
+    has_affirm = t.has_relation(f"{t.schema}.support_affirm")
+    has_assumes = t.has_relation(f"{t.schema}.support_assumes")
+
+    amends_cte = (f"SELECT id AS a, amends AS t FROM {rel} WHERE amends IS NOT NULL"
+                  if has_amends else "SELECT NULL::bigint AS a, NULL::bigint AS t WHERE false")
+    answers_cte = (f"SELECT id AS a, answers AS q FROM {rel} WHERE answers IS NOT NULL"
+                   if has_answers else "SELECT NULL::bigint AS a, NULL::bigint AS q WHERE false")
+    affirm_cte = (f"SELECT r, dependent AS dep, antecedent AS ant FROM {t.schema}.support_affirm"
+                  if has_affirm else
+                  "SELECT NULL::bigint AS r, NULL::bigint AS dep, NULL::bigint AS ant WHERE false")
+    assumes_cte = (f"SELECT assumption AS ant, scope AS dep FROM {t.schema}.support_assumes"
+                   if has_assumes else "SELECT NULL::bigint AS ant, NULL::bigint AS dep WHERE false")
+
+    # v1 statement parse (§6 clause 3, the pins of §3 P-1/P-2/P-4/P-5). Candidates: btrim(statement)
+    # LIKE 'model-attestation %'; version gate: segment 1 = 'model-attestation v1'; a violated pin
+    # RAISES via the sanctioned division-guard (§6: "a strict ::bigint cast ... plus explicit CASE
+    # ... ELSE <raise via a division-guard>") -- CASE is short-circuit, so the guard fires ONLY on
+    # the malformed branch, never on a well-formed row.
+    v1_cte = (f"""
+      v1_cand AS (
+        SELECT id, btrim(statement) AS s FROM {rel} WHERE btrim(statement) LIKE 'model-attestation %'
+      ),
+      v1_seg AS (
+        SELECT id, s,
+          array_length(string_to_array(s, '|'), 1) AS nseg,
+          btrim(split_part(s,'|',1)) AS seg1, btrim(split_part(s,'|',2)) AS seg2,
+          btrim(split_part(s,'|',3)) AS seg3, btrim(split_part(s,'|',4)) AS seg4,
+          btrim(split_part(s,'|',5)) AS seg5, btrim(split_part(s,'|',6)) AS seg6,
+          btrim(split_part(s,'|',7)) AS seg7, btrim(split_part(s,'|',8)) AS seg8,
+          btrim(split_part(s,'|',9)) AS seg9
+        FROM v1_cand
+      ),
+      v1_rows AS (SELECT * FROM v1_seg WHERE seg1 = 'model-attestation v1'),
+      v1_checked AS (
+        SELECT id,
+          -- P-5's loud refusal, the sanctioned division-guard (§6 clause 3). The divisor is
+          -- data-dependent (a CASE over row columns), never a bare literal `1/0` -- Postgres'
+          -- planner constant-folds a LITERAL divisor at parse time regardless of which CASE
+          -- branch would run at execution time (a witnessed hazard, not a hypothetical one:
+          -- `1/0` in the ELSE arm raised on every row, including well-formed ones, because the
+          -- constant subexpression was folded before the CASE ever branched). Divisor 0 only
+          -- when the row is malformed; 1 when well-formed -- so `1 / <divisor>` raises division
+          -- by zero on exactly the malformed rows, never on a valid one.
+          (1 / (CASE WHEN nseg = 9
+                  AND seg2 LIKE 'row=%' AND seg3 LIKE 'model=%' AND seg4 LIKE 'grade=%'
+                  AND seg5 LIKE 'expected=%' AND seg6 LIKE 'verdict=%' AND seg7 LIKE 'session=%'
+                  AND seg8 LIKE 'basis=%' AND seg9 LIKE 'rebuttals=%'
+                  AND substring(seg2 from 5) ~ '^-?[0-9]+$'
+                  AND substring(seg4 from 7) IN ('exact-command','turn-bracketed','session-scoped','ambiguous')
+                  AND substring(seg6 from 9) IN ('match','MISMATCH','unevaluated')
+                THEN 1
+                ELSE 0
+           END)) AS ok,
+          substring(seg2 from 5)::bigint AS attested_row,
+          substring(seg6 from 9) AS verdict
+        FROM v1_rows
+      )"""
+               if has_statement else
+               "v1_checked AS (SELECT NULL::bigint AS id, NULL::int AS ok, "
+               "NULL::bigint AS attested_row, NULL::text AS verdict WHERE false)")
+    typed_any = (f"SELECT id FROM {rel} WHERE kind='model_identity_attested'"
+                 if has_typed else "SELECT NULL::bigint AS id WHERE false")
+    typed_mismatch = (f"SELECT id AS a_id, attest_row_id AS r_id FROM {rel} "
+                      f"WHERE kind='model_identity_attested' AND attest_verdict='mismatch'"
+                      if has_typed else "SELECT NULL::bigint AS a_id, NULL::bigint AS r_id WHERE false")
+
+    sql = f"""
+    WITH RECURSIVE{_base_ctes(rel, _enacts_cte(t), amends_cte, answers_cte)},
+      {v1_cte},
+      aff AS ({affirm_cte}),
+      asm AS ({assumes_cte}),
+      support_edge(dep, ant) AS (
+        SELECT e, d FROM en
+        UNION ALL SELECT a, q FROM ans
+        UNION ALL SELECT dep, ant FROM asm
+      ),
+      support_star(f, d) AS (
+        SELECT dep, ant FROM support_edge
+        UNION
+        SELECT ss.f, e.ant FROM support_star ss JOIN support_edge e ON e.dep = ss.d
+      ),
+      sod AS (SELECT DISTINCT a.r FROM aff a
+              JOIN {rel} lr ON lr.id = a.r JOIN {rel} lf ON lf.id = a.dep
+              WHERE lr.actor = lf.actor),
+      affirmed AS (SELECT DISTINCT dep, ant FROM aff
+                   WHERE r NOT IN (SELECT id FROM superseded) AND r NOT IN (SELECT r FROM sod)),
+      attest_any AS (
+        SELECT id AS a_id FROM v1_checked
+        UNION SELECT id FROM ({typed_any}) tt
+      ),
+      mismatch AS (
+        SELECT id AS a_id, attested_row AS r_id FROM v1_checked WHERE verdict = 'MISMATCH'
+        UNION ALL
+        SELECT a_id, r_id FROM ({typed_mismatch}) tm
+      ),
+      grants AS (
+        SELECT id AS g, principal_subject AS p FROM {rel}
+        WHERE kind = 'principal_competence_granted' AND principal_binding_active
+          AND principal_competence_activity = 'model-identity-attestation'
+      ),
+      grant_any AS (SELECT id AS g FROM {rel} WHERE kind = 'principal_competence_granted'),
+      -- note `ar.actor` is `row_actor` on the floor side (§6 clause 6).
+      defeated AS (
+        SELECT DISTINCT m.r_id, m.a_id, g.g
+        FROM mismatch m
+        JOIN {rel} ar ON ar.id = m.a_id
+        JOIN grants g ON g.p = ar.actor
+        WHERE m.a_id NOT IN (SELECT id FROM superseded)
+          AND g.g NOT IN (SELECT id FROM superseded)
+          AND m.r_id NOT IN (SELECT a_id FROM attest_any)
+          AND m.r_id NOT IN (SELECT g FROM grant_any)
+      ),
+      credited AS (SELECT id FROM in_force WHERE id NOT IN (SELECT r_id FROM defeated)),
+      exposure_model AS (
+        SELECT DISTINCT ss.f, d.r_id AS d FROM support_star ss
+        JOIN (SELECT DISTINCT r_id FROM defeated) d ON d.r_id = ss.d
+        WHERE ss.f IN (SELECT id FROM in_force)
+      ),
+      exposure_model_undischarged AS (
+        SELECT f, d FROM exposure_model EXCEPT SELECT dep, ant FROM affirmed
+      )
+    SELECT 'model_defeated('||r_id||','||a_id||','||g||')' FROM defeated
+    UNION ALL SELECT 'credited('||id||')' FROM credited
+    UNION ALL SELECT 'exposure_model('||f||','||d||')' FROM exposure_model
+    UNION ALL SELECT 'exposure_model_undischarged('||f||','||d||')' FROM exposure_model_undischarged
     ;"""
     out = t.run(sql).stdout
     return {line.strip() for line in out.splitlines() if line.strip()}

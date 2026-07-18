@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-06T05:33:12Z
-#   last-change: 2026-07-16T06:31:18Z
-#   contributors: 37017f46/main, be693afb/main, a857c93d/main, 9a17b6b9/main
+#   last-change: 2026-07-18T05:56:30Z
+#   contributors: 37017f46/main, be693afb/main, a857c93d/main, 9a17b6b9/main, ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
 """ledger_edb -- the single home for "what the ledger looks like to a logic engine"
@@ -481,6 +481,204 @@ def export_work(name: str) -> EdbExport:
             exp.facts.append(f"w_vdisp_witness_in_force({int(rid)}).")
             n += 1
         exp.counts["w_vdisp_witness_in_force"] = n
+
+    return exp
+
+
+# ===========================================================================
+# THE DEFEAT-LAYER EDB (design/FABLE-DEFEAT-PIPELINE-SPEC.md §4). Exports row_actor/2,
+# attest_row/1, mismatch_attest/3, trust_grant/3, grant_row/1, agent_class/2 for
+# engine/lp/ledger_defeat.lp and its SQL twin (engine/ledger_floor.py::defeat_floor_atoms).
+# Capability-gated exactly like export()/export_work() above (I12): a pre-s41 target
+# declares trust_grant/grant_row EXCLUDED with reason, never a silent empty (§4.3 -- the F49
+# class, foreclosed the same way run_sql_work already forecloses pre-s22 targets).
+#
+# THE V1 STATEMENT PARSE (spec §3, pins P-1..P-7 -- the parse contract shared verbatim with the
+# sentry verb's own builder; both parse identically by construction, not by convention alone).
+# No statement text, model string, session id, or basis crosses into the EDB (P-7); only the
+# grade atom (rendered via the existing _atom() helper) and integer ids do.
+DEFEAT_FAMILIES = ("row_actor", "attest_row", "mismatch_attest", "trust_grant", "grant_row", "agent_class")
+
+_V1_HEADER = "model-attestation v1"
+_V1_PREFIX = "model-attestation "
+_V1_KEYS = ("row=", "model=", "grade=", "expected=", "verdict=", "session=", "basis=", "rebuttals=")
+_GRADE_VOCAB = frozenset({"exact-command", "turn-bracketed", "session-scoped", "ambiguous"})
+_VERDICT_VOCAB = frozenset({"match", "MISMATCH", "unevaluated"})  # exact case (P-5)
+
+
+class DefeatParseError(RuntimeError):
+    """Raised on a malformed v1 attestation statement (spec §3 P-5) -- a loud refusal of the
+    WHOLE export, never a skip-and-continue (ADR-0002). The differential reads QUARANTINED."""
+
+
+def _parse_v1_statement(rid: int, stmt: str) -> tuple[int, str] | None:
+    """Parse ONE candidate row's statement per §3 P-1/P-2/P-4/P-5. Returns (attested_row_id,
+    verdict) for a well-formed v1 row, or None for a version-skipped (non-v1) row -- counted by
+    the caller, never silently dropped uncounted (P-4). Raises DefeatParseError on any P-5
+    malformedness of a v1 candidate."""
+    segs = [s.strip() for s in stmt.split("|")]  # P-1: split on `|`, trim ASCII whitespace
+    if segs[0] != _V1_HEADER:
+        return None  # non-v1 header: version-skipped (P-4), not malformed
+    if len(segs) != 9:
+        raise DefeatParseError(
+            f"row {rid}: v1 statement has {len(segs)} segments (expected 9, P-2): {stmt!r}")
+    for i, key in enumerate(_V1_KEYS):  # segments 2..9 (0-based segs[1..8])
+        if not segs[i + 1].startswith(key):
+            raise DefeatParseError(
+                f"row {rid}: segment {i + 2} does not start with {key!r} (P-2): {segs[i + 1]!r}")
+    values = {key[:-1]: segs[i + 1][len(key):] for i, key in enumerate(_V1_KEYS)}
+    try:
+        attested_row = int(values["row"])
+    except ValueError:
+        raise DefeatParseError(f"row {rid}: row= value {values['row']!r} is not an integer (P-5)")
+    if values["grade"] not in _GRADE_VOCAB:
+        raise DefeatParseError(
+            f"row {rid}: grade= value {values['grade']!r} outside {_GRADE_VOCAB} (P-5)")
+    if values["verdict"] not in _VERDICT_VOCAB:
+        raise DefeatParseError(
+            f"row {rid}: verdict= value {values['verdict']!r} outside {_VERDICT_VOCAB} "
+            f"(P-5, exact case -- 'MISMATCH' uppercase is deliberate)")
+    return attested_row, values["verdict"]
+
+
+def export_defeat(name: str) -> EdbExport:
+    """Export the defeat-layer EDB (row_actor/2, attest_row/1, mismatch_attest/3, trust_grant/3,
+    grant_row/1, agent_class/2) for a target, read-only, capability-gated (§4). Both attestation
+    arms are harvested where present: v1 convention rows (any kind, statement-parsed under §3's
+    pinned contract) and, where the world carries s44, typed `model_identity_attested` rows.
+    A row is one arm's or the other's by its shape, never both (§3)."""
+    t = resolve(name)
+    exp = EdbExport(target=t)
+    rel = t.rel()
+
+    # row_actor's P (principal id) must be an INTEGER principal id (the s41-lineage shape,
+    # `actor bigint NOT NULL REFERENCES kernel.principal(id)`) -- NOT merely "an actor column
+    # exists". Some pre-kernel-lineage targets (the real e14 record, `nla`) carry `actor` as a
+    # TEXT database ROLE NAME (e.g. 'nla_rw'), which int()-crashes rather than misrepresenting a
+    # role as a principal id -- a witnessed hazard, not a hypothetical one (found live grounding
+    # this layer against `nla`). Capability-gated on the column's data TYPE, not merely presence.
+    has_actor = t.has_col("actor") and t.scalar(
+        f"SELECT data_type FROM information_schema.columns WHERE table_schema='{t.schema}' "
+        f"AND table_name='ledger' AND column_name='actor';") in ("bigint", "integer", "smallint")
+    has_statement = t.has_col("statement")
+    has_typed = t.has_col("attest_row_id")
+    attest_capable = has_statement or has_typed  # either arm suffices (§3's "both arms may coexist")
+    has_active = t.has_col("principal_binding_active")
+    has_activity = t.has_col("principal_competence_activity")
+    grant_capable = has_active and has_activity
+    kernel_principal = t.has_relation(f"{t.kern}.principal")
+
+    exp.capabilities.append(Capability(
+        "row_actor", produced=has_actor, capable=has_actor,
+        reason="actor column present and integer-typed (a principal id) -- emitted" if has_actor
+        else "no `actor` column, or it is not integer-typed (e.g. a text database role name, "
+             "as on pre-kernel-lineage targets) -- capability absent, not a principal id"))
+    for fam in ("attest_row", "mismatch_attest"):
+        exp.capabilities.append(Capability(
+            fam, produced=attest_capable, capable=attest_capable,
+            reason="statement column (v1 arm) or attest_row_id column (s44 typed arm) present -- "
+                   "emitted" if attest_capable else
+                   "no `statement` column and no `attest_row_id` column on this schema -- "
+                   "neither attestation arm capable"))
+    for fam in ("trust_grant", "grant_row"):
+        exp.capabilities.append(Capability(
+            fam, produced=grant_capable, capable=grant_capable,
+            reason="principal_binding_active/principal_competence_activity columns present "
+                   "(s41) -- emitted" if grant_capable else
+                   "no principal_binding_active/principal_competence_activity columns on this "
+                   "schema (pre-s41 lineage) -- capability absent, not record-empty"))
+    exp.capabilities.append(Capability(
+        "agent_class", produced=kernel_principal, capable=kernel_principal,
+        reason="emitted for future countersign-conditioned consumers (reserved, "
+               "design/FABLE-DEFEAT-PIPELINE-SPEC.md §13); no rule reads it this increment"
+        if kernel_principal else f"no `{t.kern}.principal` relation on this schema -- capability absent"))
+
+    if has_actor:
+        n = 0
+        for i, p in t.rows(f"SELECT id, actor FROM {rel} WHERE actor IS NOT NULL ORDER BY id;"):
+            exp.facts.append(f"row_actor({int(i)},{int(p)}).")
+            n += 1
+        exp.counts["row_actor"] = n
+
+    n_candidates = n_skipped = n_parsed = n_mismatch = 0
+    if has_statement:
+        for rid_s, stmt in t.rows(
+                f"SELECT id, statement FROM {rel} WHERE btrim(statement) LIKE '{_V1_PREFIX}%' ORDER BY id;"):
+            rid = int(rid_s)
+            n_candidates += 1
+            parsed = _parse_v1_statement(rid, stmt)  # raises DefeatParseError on P-5 malformedness
+            if parsed is None:
+                n_skipped += 1
+                continue
+            attested_row, verdict = parsed
+            n_parsed += 1
+            exp.facts.append(f"attest_row({rid}).")
+            if verdict == "MISMATCH":  # P-6: only exact-case MISMATCH yields mismatch_attest
+                exp.facts.append(f"mismatch_attest({rid},{attested_row},none).")
+                n_mismatch += 1
+    if has_typed:
+        n_t = 0
+        for rid_s, target_s, verdict, grade in t.rows(
+                f"SELECT id, attest_row_id, attest_verdict, COALESCE(attest_grade,'') "
+                f"FROM {rel} WHERE kind='model_identity_attested' ORDER BY id;"):
+            rid, target = int(rid_s), int(target_s)
+            exp.facts.append(f"attest_row({rid}).")
+            n_t += 1
+            if verdict == "mismatch":  # s44's closed lowercase vocabulary (§3)
+                exp.facts.append(f"mismatch_attest({rid},{target},{_atom(grade)}).")
+                n_mismatch += 1
+        exp.counts["attest_row(typed-arm)"] = n_t
+    exp.counts["attest_row(v1-candidates)"] = n_candidates
+    exp.counts["attest_row(v1-version-skipped)"] = n_skipped
+    exp.counts["attest_row(v1-parsed)"] = n_parsed
+    exp.counts["mismatch_attest"] = n_mismatch
+
+    if grant_capable:
+        n = 0
+        for g, p, act in t.rows(
+                f"SELECT id, principal_subject, principal_competence_activity FROM {rel} "
+                f"WHERE kind='principal_competence_granted' AND principal_binding_active "
+                f"ORDER BY id;"):
+            exp.facts.append(f"trust_grant({int(g)},{int(p)},{_atom(act)}).")
+            n += 1
+        exp.counts["trust_grant"] = n
+        n = 0
+        for (g,) in t.rows(
+                f"SELECT id FROM {rel} WHERE kind='principal_competence_granted' ORDER BY id;"):
+            exp.facts.append(f"grant_row({int(g)}).")
+            n += 1
+        exp.counts["grant_row"] = n
+
+    if kernel_principal:
+        n = 0
+        for pid, cls in t.rows(f"SELECT id, agent_class FROM {t.kern}.principal ORDER BY id;"):
+            exp.facts.append(f"agent_class({int(pid)},{_atom(cls)}).")
+            n += 1
+        exp.counts["agent_class"] = n
+
+    # SPEC RENEGOTIATION, SURFACED (ADR-0000 Rule 2(a); design/FABLE-DEFEAT-PIPELINE-SPEC.md §4.2's
+    # family table does not name affirms/3 or affirm_author/2, yet §5.1's cascade discharge rule
+    # (exposure_model_undischarged) grounds `not affirmed(F,D)`, and ledger_support.lp's own
+    # affirmed/2 rule (`affirms(R,F,D), not superseded(R), not affirm_sod_violation(R)`) is
+    # UNGROUNDABLE-MEANINGFULLY without affirms/affirm_author facts in the composed EDB -- the
+    # SQL twin (defeat_floor_atoms) reads the support_affirm scratch table directly and has no
+    # such gap, so leaving this unaddressed would be a STRUCTURAL asymmetry between producers,
+    # never reaching AGREE on any world exercising discharge (witnessed live building this
+    # delta: DIVERGE_DEFECT on exposure_model_undischarged, ASP-only). The smallest honest fix,
+    # consistent with ledger_floor.py's own support_manifest capability posture (has_affirm =
+    # support_affirm relation present): export_defeat also emits affirms/3 + affirm_author/2 from
+    # that SAME scratch stand-in when present -- no new table, no new convention, the identical
+    # source ledger_support_scratch.py's own support_edb() already reads. DEFERRED (not emitted)
+    # where the scratch table is absent, exactly the DEFERRED posture support_manifest declares.
+    if t.has_relation(f"{t.schema}.support_affirm"):
+        n = 0
+        for r, dep, ant, actor in t.rows(
+                f"SELECT sa.r, sa.dependent, sa.antecedent, l.actor FROM {t.schema}.support_affirm sa "
+                f"JOIN {rel} l ON l.id = sa.r ORDER BY sa.r;"):
+            exp.facts.append(f"affirms({int(r)},{int(dep)},{int(ant)}).")
+            exp.facts.append(f"affirm_author({int(r)},{int(actor)}).")
+            n += 1
+        exp.counts["affirms"] = n
 
     return exp
 

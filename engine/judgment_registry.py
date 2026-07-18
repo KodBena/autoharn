@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-07T17:13:48Z
-#   last-change: 2026-07-09T14:32:28Z
-#   contributors: 37017f46/main, be693afb/main
+#   last-change: 2026-07-18T05:38:26Z
+#   contributors: 37017f46/main, be693afb/main, ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
 """judgment_registry — THE one authority module for engine judgments (engine INC 1; ruling 110 D1/D2).
@@ -286,6 +286,25 @@ SPECS: tuple[JudgmentSpec, ...] = (
         second_producer=None,
         second_producer_none_reason=_NO2ND_SINGLE,
         complexity_class="C",
+        promotion_stage="P1",
+    ),
+    JudgmentSpec(
+        judgment_id="model-defeat-pipeline",
+        family="D",
+        title="Model-identity-mismatch defeat: model_defeated/credited + cascade exposure/discharge",
+        verdict_enum=("CREDITED", "MODEL-DEFEATED(by)", "EXPOSURE-UNDISCHARGED"),
+        subject_ref_type="row",
+        law_citations=("RULING:1481", "ADR:0000"),
+        engine="ASP",
+        implementations=(
+            "lp:ledger_defeat.lp#model_defeated/3", "lp:ledger_defeat.lp#credited/1",
+            "lp:ledger_defeat.lp#exposure_model/2", "lp:ledger_defeat.lp#exposure_model_undischarged/2",
+        ),
+        second_producer="SQL floor (defeat_floor_atoms, engine/ledger_floor.py; reconciled by "
+                        "engine/lp_registry.py's 'defeat' LAYER, ./judge --layer defeat)",
+        complexity_class="C",
+        fixtures=("seen-red/defeat-pipeline/ (W1-W11, both polarities; W10 the mandated "
+                  "unstratified negative control, W12 s44/s45 legs)",),
         promotion_stage="P1",
     ),
     # ---- Family B — currency & contemporaneity ------------------------------------------------
