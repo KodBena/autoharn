@@ -150,9 +150,13 @@ one".
 
 Invented downstream, not here: this shape was invented by the autoharn-panel deployment's own
 orchestrator, in its own ledger (rows 401, 415, and 1144 there, named here only as history),
-and is carried upstream into this project's record via decision row 1295 (2026-07-17 two-spy
-synthesis) — the underlying panel session transcripts remain local evidence per this project's
-auditability ruling; the ledger row is the citable record.
+and is carried upstream into this project's record via decision row 1295 (2026-07-17 "two-spy
+synthesis" — this project's own name for a maintainer-dispatched pair of independent, read-only
+observer sessions ["spies"] reporting separately on the same downstream deployment, whose two
+reports the orchestrator then reconciled into one record; every later mention of "two-spy
+synthesis" or "the spy" on this page is this same act, cited by its row number) — the underlying
+panel session transcripts remain local evidence per this project's auditability ruling; the
+ledger row is the citable record.
 
 **How do I record, defeasibly, that a close's promised commit actually landed in the tree?**
 Pair the work item with a second one. Whenever closing a work item necessarily modifies the
@@ -160,7 +164,8 @@ tracked source tree, open a companion item at the same time whose entire resolut
 git commit that captures the promised tree state. The first item closes on its own merits,
 with one of the two review-bearing constructors (`--review-witness` or `--review-deferred`),
 because it carries judgment. The companion closes only after the commit exists, with the
-third constructor built for exactly this shape (s38):
+third constructor built for exactly this shape — s38, the kernel-lineage delta that added it
+(`kernel/lineage/s38-bookkeeping-close.sql`):
 
     ./led work close <slug>-commit shipped --review-bookkeeping --witness commit:<sha>
 
@@ -169,6 +174,62 @@ commit must actually exist in this world's repository (`git cat-file` is run for
 nonexistent or non-commit object refuses with a teach-text). The pairing gives you a
 defeasible, queryable record that the promised commit landed, without manufacturing a review
 obligation that has nothing in it to review.
+
+**Show me it actually working, not just the shape.** WITNESSED, on a disposable scratch
+[world](../GLOSSARY.md#world) scaffolded specifically for this walkthrough and torn down after
+(`bootstrap/new-project.sh <dir> --new-world faqwit0718 --db toy --host 192.168.122.1` — the
+live project's own ledger was never touched; s38 is authored but not applied to any pre-existing
+world under the runs-are-strictly-linear ruling, so a fresh `--new-world` scaffold, which carries
+s38 in its own birth chain, is the sanctioned way to exercise it live). Two work items, opened
+and claimed, then closed as the pairing convention prescribes — the judgment item first, with an
+ordinary review-bearing constructor:
+```
+$ ./led work open faq-demo "demo work item for the pairing-convention FAQ transcript"
+led: row 7 written.
+$ ./led work open faq-demo-commit "companion bookkeeping item: resolution IS the landing commit for faq-demo" --refs work:faq-demo
+led: row 8 written.
+$ ./led work claim faq-demo && ./led work claim faq-demo-commit
+led: row 9 written.
+led: row 10 written.
+$ git init -q && git commit -q -m "faq-demo: the commit faq-demo-commit's bookkeeping close will witness" --allow-empty
+$ SHA=$(git rev-parse HEAD)   # 04de3a3589f0e7c65c7bd1346a28b794376cc5fb, this scratch world's own repo
+$ ./led work close faq-demo shipped --witness "note:DEMO.txt committed as $SHA" --review-witness "self:demo close for FAQ transcript"
+led: row 13 written.
+$ ./led work close faq-demo-commit shipped --review-bookkeeping --witness "commit:$SHA"
+led: row 14 written.
+```
+`./led show 14` confirms the row landed exactly as the spec describes — `work_review_disposition`
+is `bookkeeping`, and `work_review_ref` carries the commit witness verbatim, not a paraphrase:
+```
+work_slug                     | faq-demo-commit
+work_resolution               | shipped
+work_witness                  | commit:04de3a3589f0e7c65c7bd1346a28b794376cc5fb
+work_review_disposition       | bookkeeping
+work_review_ref               | commit:04de3a3589f0e7c65c7bd1346a28b794376cc5fb
+```
+Both named refusal shapes fire exactly as documented, also WITNESSED live on the same scratch
+world: a witness citing a commit that does not exist in the world's own repository —
+```
+$ ./led work close faq-demo2 shipped --review-bookkeeping --witness "commit:deadbeefdead"
+led work close: REFUSED -- --review-bookkeeping's --witness commit 'deadbeefdead'
+  failed the COMMIT-EXISTENCE check (s38 Element 3: 'git cat-file -e
+  deadbeefdead^{commit}' against <world-dir> did not resolve). Two honest
+  alternatives:
+    --review-witness <ref>   a review already exists; cite it
+    --review-deferred        this close act itself becomes the review obligation
+```
+— and stacking `--review-bookkeeping` on top of a second review-disposition flag in the same
+close act:
+```
+$ ./led work close faq-demo2 shipped --review-bookkeeping --review-witness "self:x" --witness "commit:$SHA"
+led work close: REFUSED -- --review-witness, --review-deferred, and
+  --review-bookkeeping are the THREE CONSTRUCTORS of a review disposition;
+  exactly ONE, never more than one, in one close act (s29 -- the earlier kernel-lineage
+  delta that first made a review disposition mandatory, `kernel/lineage/s29-obligation-item-
+  key-and-typed-close.sql` -- Element B, s38 Element 2).
+```
+Both refuse at construction (exit 1), cleanly, with the teach-text this section already
+paraphrases above — nothing here was reasoned about without being run.
 
 Honest limits, stated so the pattern is not over-trusted: a bookkeeping close claims ONLY
 "this commit exists" — nothing about its content, correctness, or completeness; the paired
@@ -1298,8 +1359,11 @@ you pass --i-understand-this-exposes-the-ledger explicitly ...
 
 **Is there a way to check the service is actually telling the truth about what the kernel
 holds?** Yes — `serving/audit_served.py` fetches a served page over HTTP, reads the same view
-directly with a read-only `psql`, and byte-compares the row sets; it ships WITH the service
-(sentry-class treatment), not as an afterthought. WITNESSED:
+directly with a read-only `psql`, and byte-compares the row sets; it ships WITH the service —
+sentry-class treatment, this page's term for a built-in independent verifier shipped alongside
+the primary tool rather than bolted on afterward, the same posture the OTel watchdog/sentry
+mechanism in "Model identity: watchdog, attestation, defeat" above uses for a different
+surface — not as an afterthought. WITNESSED:
 ```
 $ python serving/audit_served.py --base-url http://127.0.0.1:18421 --deployment deployment.json
 audit_served: AGREE -- /rows/current matches autoharn1.ledger_current byte-for-byte over the
@@ -1934,6 +1998,107 @@ filled-in sibling among its output, but a session-start hook-firing trace was no
 re-captured for this entry) — the concrete blocker is that observing every one of the nine
 attachments actually fire would need a live Claude Code session inside a scaffolded deployment
 exercising every matched tool type in turn, which this documentation pass did not run.
+
+## Recusal and independent RCA (a conflict-of-interest method harvested downstream)
+
+This section covers a five-step method for what an orchestrator should do when the thing it
+would need to judge is a decision it made itself — recuse from the judgment, then dispatch an
+independent, evidence-only investigation rather than adjudicate its own work. It is a documented
+practice (a discipline to follow by hand), not a mechanism that refuses anything; nothing here
+gates a write. Provenance: harvested from the autoharn-panel deployment's own orchestrator
+behavior, reconstructed and generalized in this project's own ledger, `recusal-rca-recipe` (row
+1358, still open at the time of this writing — a ledger row, not a committed page: `./led show
+1358` at the repository root reads it in full).
+
+**What actually happened, the specimen this method generalizes.** WITNESSED — read directly from
+this repository's own live ledger this session (`./led show 1364`, kind `finding`, dated
+2026-07-17), quoting the maintainer's own framing of why it mattered: *"This is literally the
+first time I have ever seen a formal RCA taken up on their own. I feel like a child again."* The
+downstream (panel) orchestrator, unprompted, recognized that a security warning it was about to
+adjudicate targeted its **own** dispatch design — the same design decision it would have to judge
+if it kept going — recused itself, pulled raw evidence only (principal registrations, actor ids,
+stamps — no narrative, no leaning), dispatched an independent fact-finding-only RCA, and on
+return filed the incident's own verdict separately from the systemic policy question the incident
+raised, routing the systemic question to the maintainer rather than answering it itself. That
+downstream session's own ledger rows (its "row 1341" for the incident verdict, "row 1343" for the
+systemic question) are cited in row 1364's text as history; they live in the panel deployment's
+own database, which this session has no credentials or access path to from this worktree —
+**UNWITNESSED here, concrete blocker: no reachable connection to that separate deployment's
+ledger** — the autoharn-side row (1364) that reports them, by contrast, was read live, this
+session, and is WITNESSED.
+
+**The five steps**, reconstructed from the specimen above and from the same "two-spy synthesis"
+practice's own harvest of this method (WITNESSED, `./led show 1357`, kind `decision`, 2026-07-17
+evening, read this session):
+
+1. **Recognize the conflict of interest.** The question on the table is, in whole or in part,
+   about a decision the orchestrator itself made (its own dispatch design, its own prior
+   judgment) — not a third party's work.
+2. **Recuse.** State the conflict on the record and decline to adjudicate it directly, rather
+   than judging your own work under the belief that self-awareness of the conflict is enough
+   correction on its own.
+3. **Pull raw evidence only.** Gather the primary facts a judgment would need — registrations,
+   ids, stamps, timestamps, the ledger rows themselves — with no narrative gloss layered on top.
+4. **Dispatch an independent, fact-finding-only investigation.** Brief it under
+   [ADR-0018](../law/adr/0018-consults-are-not-front-loaded.md)'s discipline: the witnessed
+   problem, the raw evidence, and the governing LAW — never the recusing party's own candidate
+   diagnosis, suspect list, or leaning (a front-loaded brief collapses the independence the whole
+   method exists to buy). The dispatch itself is the same **out-of-frame second opinion**
+   [ADR-0014](../law/adr/0014-executor-second-opinion.md) licenses for a stalled line of
+   reasoning, applied here to a *structural* conflict of interest rather than a *stalled*
+   diagnosis — same remedy (a fresh, unled frame), different trigger.
+5. **File the incident and the systemic question separately.** The RCA's fact-finding answers
+   the immediate incident; if it also surfaces a broader policy question (should the underlying
+   design change, not just this one instance), that question is filed as its own record and
+   routed to the party who owns that decision — never folded into, or silently settled by, the
+   incident verdict.
+
+**Why this is a method to imitate, not a one-off** (the causal case, WITNESSED from row 1364's own
+text, read this session): four traceable harness mechanisms made it possible, not luck alone —
+the recusal rule existed beforehand as a ledgered standing decision the recusing session could
+cite ("per my own standing rule"); the raw-evidence-only briefing shape is ADR-0018 itself,
+already part of that downstream deployment's own law snapshot; the independent-dispatch habit had
+ledgered precedent in that same world — **the second witness this recipe's own ledger row names**:
+"their rows 51/52 via ADR-0014" (row 1358's own text) — i.e. a prior, independent instance of the
+same fetch-a-fresh-frame move, recorded in the panel deployment's own ledger under ADR-0014's
+second-opinion license, making this the *second* time the shape was used rather than a first,
+un-repeatable accident; and the cost asymmetry favors the disciplined path (one cheap dispatch
+plus ledger queries the system already answers). **UNWITNESSED here, same blocker as above:**
+rows 51/52 live in the panel deployment's own ledger, unreachable from this session — cited as
+provenance per row 1364's own text, not independently re-derived.
+
+**A mechanical illustration of step 5** (the split-filing act itself — NOT a re-enactment of the
+real specimen, which this session cannot reach), WITNESSED on the same disposable scratch world
+used for the pairing-convention walkthrough above (`faqwit0718`, torn down after — see that
+section for the scaffold command):
+```
+$ ./led decision "FAQ-DEMO incident verdict: illustrative fact-finding-only record for the recusal-then-independent-RCA recipe transcript -- this specific scratch-world act, no systemic claim."
+led: row 18 written.
+$ ./led decision "FAQ-DEMO systemic question: illustrative record showing the split -- a policy question this incident surfaces, filed as its own row rather than folded into the incident verdict above, and routed to the owning authority rather than self-adjudicated."
+led: row 19 written.
+```
+Two separate, independently-citable rows — nothing here forces the split; it is the discipline
+described above, exercised by hand as ordinary `led decision` writes, not a distinct verb or
+constructor.
+
+**Honest limits.** This is a documented practice, not a mechanized one: no gate checks that a
+conflicted orchestrator actually recused, that a dispatched RCA was actually briefed
+evidence-only, or that a systemic finding actually got filed separately rather than folded in —
+all four are review-only, exactly as [ADR-0014](../law/adr/0014-executor-second-opinion.md) and
+[ADR-0018](../law/adr/0018-consults-are-not-front-loaded.md) themselves disclose for their own
+enforcement surface. A maintainer ratification (WITNESSED, `./led show 1366`, read this session)
+fixed a v1 DESIGN for shipping one seeded standing decision row — the recusal-on-conflict-of-
+interest rule itself — at every new world's birth, default ON, declinable by an explicit scaffold
+flag: *"The shipping-at-birth is a cool idea of course, but needs to be configurable ... given the
+goal of the project, I cannot see why anybody would ever choose not to."* That seeding is a
+**ratified design, not yet built** — checked this session: `bootstrap/new-project.sh` carries no
+mention of "recusal" today (`grep -i recusal bootstrap/new-project.sh` returns nothing), so a
+freshly scaffolded world does not yet start with this rule pre-seeded; until it lands, adopting
+this method means citing it and following it by hand, the same way this section documents it.
+Residual honesty from the specimen itself, carried forward rather than oversold: n=2 specimens in
+one downstream world, and model disposition is a live confound — the falsifiable test named in
+row 1364 is whether the *next* fresh world, carrying only the harness and no accumulated
+panel-specific history, reproduces the shape on its own first conflict-of-interest event.
 
 ## What this page is not
 
