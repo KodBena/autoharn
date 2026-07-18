@@ -4,6 +4,17 @@ Audience: orchestrator (+secondary: maintainer)
 
 (2026-07-09, Fable-authored, session be693afb. Status: DESIGN, for maintainer curation.)
 
+*Editorial note, appended 2026-07-18 (maintainer catch, this file otherwise stands as
+declared history): every "today"/"Today" below is deictic to the authoring date above,
+2026-07-09 — the zero-context-reader defect ADR-0017 names, anchored here by dated
+append rather than retro-edit. Status drift since authoring, recorded not rewritten:
+§11's "kernel-anticipated" half has since been BUILT — s40/s41 (principal identity,
+bindings, role edges, competence grants) and s45 (standing lifecycle) landed the
+durable-role/ephemeral-instance substrate, witnessed to the point of a suspension
+structurally halting a workflow wave (ledger row 1661, WC7, 2026-07-18). §11's
+assembly wiring — charter, derived per-role brief, inbox view, percolation-by-query —
+remains unbuilt as of this note.*
+
 The organizing test for admission: a pattern is *algorithmic* when its termination or verdict
 is decided by a mechanism, not by an agent's (or the operator's) sense that it's done. The
 harness's role in every entry is the same move: take the part of the pattern that runs on
