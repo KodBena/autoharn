@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-18T07:44:41Z
-#   last-change: 2026-07-18T12:14:00Z
+#   last-change: 2026-07-18T14:13:07Z
 #   contributors: ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -218,6 +218,23 @@ this service's own named constant is the bound now). Preserved: the A1 transport
 plain-`def` handler shape, every existing typed shape -- this axis adds one new one beside them,
 never replacing or loosening any.
 
+PAGINATION ON THE HISTORY ROUTE (spec A10, iteration-8 confirmation pass): `GET
+/rows/{id}/history` was the one read route the A5.4 pagination pass never enumerated -- it
+returned the ENTIRE supersession chain unconditionally, silently discarding any `limit`/
+`after_id` a caller supplied (witnessed: `limit=1&after_id=0` returned the same ~620 KB, 400-row
+body as no parameters at all). Fix: the SAME `1 <= limit <= 1000` / `after_id >= 0` discipline as
+`/rows/current`/`/credited`/`/standing/principals`/`/work/items`, checked in the SAME order and
+returning the SAME typed-422 message family (`_out_of_range_id`, the shared bound). The
+pagination cursor is the history hop's OWN row id (`after_id` compares against each returned
+row's `id`, `ORDER BY id LIMIT limit`, the same id-keyed shape `/rows/current` already uses) --
+the chain-computing CTE is unchanged, only an outer paging query is added, so every hop remains
+reachable across pages and each row's `superseded_by` pointer is untouched. The one deliberate
+divergence from the other four routes: this route's OWN default `limit` is
+`HISTORY_DEFAULT_LIMIT = 1000`, not the others' 100 -- see that constant's own docstring for why
+(a short chain fetched with no parameters at all must stay byte-identical to the pre-A10
+response, and a 100-row default would have silently started truncating chains the old,
+unpaginated route never truncated).
+
 Lazy imports are banned (CLAUDE.md, 2026-07-02): every import is top-of-file.
 """
 from __future__ import annotations
@@ -348,6 +365,17 @@ MAX_ID = 2**63 - 1
 # (a real OS thread per in-flight handler, not a coroutine).
 MAX_INFLIGHT_KERNEL_CALLS = 24
 _KERNEL_CALL_SEMAPHORE = threading.BoundedSemaphore(MAX_INFLIGHT_KERNEL_CALLS)
+
+# A10: GET /rows/{id}/history's OWN default `limit` -- deliberately 1000, not the 100 every
+# other paginated route defaults to (ADR-0012 P1 note: this is the one place the four A5.4
+# routes' shared default is NOT reused, named here rather than silently diverging). A10's own
+# adjudication requires a short chain fetched WITH NO QUERY PARAMETERS to be byte-identical to
+# the pre-A10 unpaginated response; the pre-A10 route never truncated, so the post-A10 default
+# must not either for the overwhelmingly common short-chain case -- 1000 is the same ceiling
+# `limit` is bounded to everywhere else in this service, so "no parameters" and "the largest
+# honored page" coincide by construction, and only a chain longer than 1000 hops (unseen in
+# this project's own worlds) needs an explicit `after_id` hop to see the rest.
+HISTORY_DEFAULT_LIMIT = 1000
 
 
 class PsqlInfraFailure(Exception):
@@ -998,14 +1026,35 @@ def create_app(cfg: BoundaryConfig) -> FastAPI:
         return JSONResponse(content=row)
 
     @app.get("/rows/{row_id}/history")
-    def row_history(row_id: int) -> Response:
-        # A4.2: same id-domain closure as row_by_id above.
+    def row_history(row_id: int, after_id: int = 0, limit: int = HISTORY_DEFAULT_LIMIT) -> Response:
+        # A4.2: same id-domain closure as row_by_id above (the path parameter).
         oor = _out_of_range_id("row_id", row_id)
+        if oor is not None:
+            return oor
+        # A10: the SAME `1 <= limit <= 1000` / `after_id >= 0` discipline as the four A5.4
+        # routes -- same constants, same message family (checked in the SAME order
+        # /rows/current uses: limit first, then after_id's own id-domain closure). Default
+        # limit is HISTORY_DEFAULT_LIMIT (1000, not the other routes' 100) -- see that
+        # constant's own docstring for why: a short chain (the overwhelmingly common case)
+        # must come back byte-identical to the pre-A10 unpaginated response with NO query
+        # parameters supplied at all, and a 100-row default would silently truncate any
+        # chain longer than that where the pre-A10 behavior never did.
+        if limit < 1 or limit > 1000:
+            return JSONResponse(status_code=422, content={
+                "detail": "limit must be between 1 and 1000 (transport-level bound, ADR-0002)"})
+        oor = _out_of_range_id("after_id", after_id)
         if oor is not None:
             return oor
         # The full supersession chain both directions (predecessors this row's lineage
         # superseded, and any successor that superseded it), each hop annotated with its own
-        # superseding row id -- spec §3's "each hop WITH its superseding row id".
+        # superseding row id -- spec §3's "each hop WITH its superseding row id". A10: the
+        # chain is computed in full (the CTE below is unchanged from pre-A10), then PAGED in
+        # an outer query by the hop's OWN row id (`l.id > after_id ORDER BY l.id LIMIT limit`,
+        # the same id-keyed cursor shape /rows/current already uses) -- every hop remains
+        # reachable across pages by walking after_id forward, and each row's own
+        # 'superseded_by' expression is UNCHANGED from the pre-A10 query, so a page that
+        # happens to contain every hop of a short chain is byte-identical to the old
+        # unpaginated response (same envelope, same per-row field set and order).
         rows = _query_json(
             cfg,
             f"WITH RECURSIVE chain(id) AS ("
@@ -1025,10 +1074,14 @@ def create_app(cfg: BoundaryConfig) -> FastAPI:
             f"  SELECT l.id FROM {cfg.schema}.ledger l JOIN chain_full c "
             f"    ON l.supersedes = c.id"
             f")"
-            f"SELECT coalesce(jsonb_agg(to_jsonb(l) || jsonb_build_object("
-            f"  'superseded_by', (SELECT s.id FROM {cfg.schema}.ledger s "
-            f"                    WHERE s.supersedes = l.id)) ORDER BY l.id), '[]'::jsonb) "
-            f"FROM {cfg.schema}.ledger l WHERE l.id IN (SELECT id FROM chain_full);",
+            f"SELECT coalesce(jsonb_agg(t.row ORDER BY t.id), '[]'::jsonb) FROM ("
+            f"  SELECT l.id AS id, to_jsonb(l) || jsonb_build_object("
+            f"    'superseded_by', (SELECT s.id FROM {cfg.schema}.ledger s "
+            f"                      WHERE s.supersedes = l.id)) AS row "
+            f"  FROM {cfg.schema}.ledger l WHERE l.id IN (SELECT id FROM chain_full) "
+            f"    AND l.id > {after_id} "
+            f"  ORDER BY l.id LIMIT {limit}"
+            f") t;",
         )
         return JSONResponse(content=rows)
 
