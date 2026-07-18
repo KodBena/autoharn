@@ -834,3 +834,17 @@ contestable trade — recorded and since ratified in §9;
 place an uncensused deployment shape could surprise; the scaffold witness leg is the catch),
 medium on migration breadth (§4.8); §5 high on enumerable axes, medium on the sibling sweep;
 §6–§9 high.
+
+---
+
+## Amendment — 2026-07-18: build-time corrections from the s42/s43 construction (ADR-0005 Rule 8; appended post-ratification, body stands verbatim; where a correction conflicts with body text, the correction governs)
+
+*Provenance: the Fable builder (commits `1fc4e8c` s42, `84729de` s43), executing this ratified basis, surfaced four ADR-0013 renegotiations at the moment of discovery; the orchestrator verified the built artifacts by independently re-running both seen-red harnesses (ALL CASES OK), the hash-coverage gate (clean, 58 columns), and the Idris freshness gate (clean, AS-OF s43). The corrections:*
+
+**B1 — §3.1's stamp_ts timezone claim is REFUTED and withdrawn.** `stamp_ts` has been **bigint** (an epoch number, not a timestamptz) since s17 — witnessed from the live catalog — so s26's `::text` rendering of it was never timezone-sensitive and the "latent TZ hazard s26's own note missed" specimen was false. The authoring pass mistook the column's type. The ratified substance is untouched: the genuine timestamptz columns (`ts`, `event_declared_ts`) are epoch-rendered by s42's serializer and the timezone witness leg ran green under two extreme PGTZ settings. The record's own trail: the false specimen also reached the maintainer in the orchestrator's delivery summary (ledger row 1459) and is corrected in the completion row.
+
+**B2 — R6's letter/spirit gap, closed on the spirit.** The body's literal CHECK only stops a `write_refused` row from *carrying* a `supersedes` pointer; the ratified intent — supersession refused *onto* refusal rows — needs a cross-row test no same-row CHECK can express. Shipped as both: the literal CHECK plus a `validate_supersession_target` BEFORE INSERT trigger (allowlisted; the kind-shape gate gained the FORBIDDEN_ON_KIND idiom and manifest rows). This adds one trigger where §5 said "no member added" — surfaced, ordering-verified (fires before `zz_set_row_hash`), and governed by this amendment.
+
+**B3 — the oracle grant, reconciled to the s27 posture.** The body's "no grant on the sequence" letter contradicted its own subject-role reconciliation leg; resolved as SELECT-only on `refusal_seq` (read, never advance or reset), which both passages' intent shares, witnessed in the harness.
+
+**B4 — executor-documented shapes within granted latitude, recorded:** `obligation_write` returns `row_id` NULL (the obligation table carries no bigint id); the review/registration/obligation payload key contracts are fixed in the delta headers. The one honestly narrowed witness leg: the deferred anchor trigger cannot be made to fire red *through* the s43 handler, because the handler forecloses the bare-anchor state by construction — its raw-path red remains s40's fixture, named in the harness rather than silently dropped.
