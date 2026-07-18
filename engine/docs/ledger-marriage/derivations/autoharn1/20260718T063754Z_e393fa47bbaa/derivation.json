@@ -1,0 +1,10 @@
+{
+  "target": "autoharn1",
+  "verdict": "QUARANTINED",
+  "only_asp": [],
+  "only_sql": [],
+  "asp_record": null,
+  "sql_record": null,
+  "asp_quarantine": "EDB export failed: CapabilityError: target 'autoharn1' did not emit trust_grant/n (capability absent): no principal_binding_active/principal_competence_activity columns on this schema (pre-s41 lineage) -- capability absent, not record-empty. A silent empty here would be the F49 vacuous-pass; refusing loudly.",
+  "sql_quarantine": "EDB export failed: CapabilityError: target 'autoharn1' did not emit trust_grant/n (capability absent): no principal_binding_active/principal_competence_activity columns on this schema (pre-s41 lineage) -- capability absent, not record-empty. A silent empty here would be the F49 vacuous-pass; refusing loudly."
+}
