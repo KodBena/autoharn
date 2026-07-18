@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-18T07:44:41Z
-#   last-change: 2026-07-18T11:42:57Z
+#   last-change: 2026-07-18T12:14:00Z
 #   contributors: ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -190,6 +190,34 @@ same `_classify_parse_failure` classifier, so this joins the structure axis with
 identical typed-422 shape -- the caller sees no difference from A3.2's own deep-nesting
 refusal; only the overflowing frame differs.
 
+ADMISSION AXIS (spec A9, iteration-7 confirmation pass): A3.1 bounded PER-REQUEST psql time
+(`PSQL_CONNECT_TIMEOUT_S`/`PSQL_EXEC_TIMEOUT_S`) and made the write handlers plain `def` so one
+stalled write cannot starve `/health` on the SAME thread -- but A3.1's own adjacent axis, N
+CONCURRENT stalled requests, was never reached: witnessed with measurements, N stalled requests
+exhaust the shared ASGI threadpool (anyio's default 40 tokens on the review host) and wall-clock
+on every route, `/health` included, grows unboundedly with N (80 -> 5.3s, 200 -> 27.7s, 600 ->
+no answer in 180s) -- per-request time was bounded, *queueing* was not. **Fix: bounded admission
+at the ONE choke point every kernel call already passes through.** `_psql` -- not each handler
+individually -- acquires a slot from `_KERNEL_CALL_SEMAPHORE` (`threading.BoundedSemaphore`,
+thread-safe, matching the plain-`def`/threadpool handler shape) via a NON-BLOCKING `acquire`,
+as late as honesty allows (immediately before `subprocess.run`, never around this module's own
+cheap Python setup) and releases it in a `finally` on every exit path (success, timeout, OS
+error alike). `MAX_INFLIGHT_KERNEL_CALLS = 24` -- deliberately under the threadpool's 40 tokens,
+so non-kernel work and `/health`'s own thread dispatch are never starved by kernel-call
+occupancy alone. On saturation, `_psql` raises `KernelCallSaturated` WITHOUT ever calling
+`subprocess.run` -- the caller is refused before it would have waited on anything, never
+queued -- and the app's ONE dedicated exception handler for that class returns typed 503
+`{"disposition": "server_saturated", "inflight_limit": 24, "message": ...}` (ADR-0012 P1: one
+handler, not a try/except duplicated per route). Because gating lives in `_psql` rather than in
+each handler, EVERY kernel-call site shares the same bound automatically -- reads, writes
+(including a write's own two sequential kernel calls, the s43 capability probe and the boundary-
+function call itself, each independently gated), and `/health`'s own several kernel probes
+(`capability_manifest`, `service_principal_name`) alike -- with no second, handler-level
+literal to keep in sync (the implementation-detail threadpool size stops being load-bearing:
+this service's own named constant is the bound now). Preserved: the A1 transport, the A3.1
+plain-`def` handler shape, every existing typed shape -- this axis adds one new one beside them,
+never replacing or loosening any.
+
 Lazy imports are banned (CLAUDE.md, 2026-07-02): every import is top-of-file.
 """
 from __future__ import annotations
@@ -202,6 +230,7 @@ import os
 import re
 import subprocess
 import sys
+import threading
 from pathlib import Path
 from typing import Any
 
@@ -231,6 +260,7 @@ from boundary_models import (  # noqa: E402
     PayloadTooLarge,
     RegistrationWriteIntFields,
     ReviewWriteIntFields,
+    ServerSaturated,
     UnclassifiedFailure,
 )
 
@@ -308,6 +338,17 @@ BODY_READ_TIMEOUT_S = 30
 # class, completed from path/query onto the write body).
 MAX_ID = 2**63 - 1
 
+# A9: the concurrency admission bound (ADR-0012 P1: one named constant, not a per-handler
+# literal). Deliberately UNDER the ASGI threadpool's own default concurrency (anyio's 40 tokens
+# on the review host) so kernel-call occupancy alone can never starve non-kernel work or
+# /health's own thread dispatch -- the threadpool size stops being load-bearing; this service's
+# own named constant is the bound. `_KERNEL_CALL_SEMAPHORE` is the ONE shared gate every kernel
+# call passes through (see `_psql`'s own docstring, "ADMISSION AXIS"); `threading.BoundedSemaphore`
+# is thread-safe and matches the plain-`def`/threadpool handler shape A3.1 already established
+# (a real OS thread per in-flight handler, not a coroutine).
+MAX_INFLIGHT_KERNEL_CALLS = 24
+_KERNEL_CALL_SEMAPHORE = threading.BoundedSemaphore(MAX_INFLIGHT_KERNEL_CALLS)
+
 
 class PsqlInfraFailure(Exception):
     """A3.2's narrowing, NARROWED FURTHER per A4.3: the ONE exception class a genuinely
@@ -332,6 +373,20 @@ class PsqlUnclassifiedFailure(Exception):
     rung 3). The app's single exception handler for this class returns typed 500
     `unclassified_failure`, honest about not knowing the cause; full detail logged server-side
     only, exactly like `PsqlInfraFailure`'s own logging discipline."""
+
+
+class KernelCallSaturated(Exception):
+    """A9: raised by `_psql` -- and ONLY `_psql`, the one shared choke point every kernel call
+    passes through -- when `_KERNEL_CALL_SEMAPHORE`'s `MAX_INFLIGHT_KERNEL_CALLS` slots are all
+    held by other in-flight kernel calls and this call's own non-blocking `acquire` fails.
+    Raised BEFORE `subprocess.run` is ever invoked (never after a stall, never after a timeout --
+    the caller is refused before it would have waited on anything), so this is an ordinary,
+    expected, load-driven condition, not an infra anomaly: it deliberately does NOT share
+    `PsqlInfraFailure`'s or `PsqlUnclassifiedFailure`'s server-side logging discipline (there is
+    nothing here a server-side log would explain that the typed response itself does not already
+    say). The app's single exception handler for this class returns typed 503
+    `server_saturated`, naming the bound, the cause, and that retry-with-backoff is the correct
+    caller response (spec A9, verbatim)."""
 
 
 class BoundaryConfig:
@@ -385,7 +440,18 @@ def _psql(cfg: BoundaryConfig, script: str, extra_v: dict[str, str] | None = Non
     itself; `subprocess.run(timeout=PSQL_EXEC_TIMEOUT_S)` bounds the whole process, catching a
     peer that accepts the connection and then stalls (the class no libpq connect-timeout option
     reaches). `subprocess.TimeoutExpired` is caught in this ONE place and re-raised as
-    `PsqlInfraFailure` -- a stall IS infra (A3.1, verbatim)."""
+    `PsqlInfraFailure` -- a stall IS infra (A3.1, verbatim).
+
+    A9's admission axis, bounded once more: immediately before `subprocess.run` -- as late as
+    honesty allows, never around this function's own cheap Python setup above -- this function
+    acquires a NON-BLOCKING slot from `_KERNEL_CALL_SEMAPHORE` (`MAX_INFLIGHT_KERNEL_CALLS`
+    concurrent kernel calls, shared server-wide across every call site: reads, writes, and
+    `/health`'s own kernel probes alike). On saturation the acquire fails immediately and this
+    function raises `KernelCallSaturated` WITHOUT ever calling `subprocess.run` -- refused before
+    it would have waited on anything, never queued (A9, verbatim: "never queues unboundedly").
+    On every path past that point -- success, `TimeoutExpired`, or `OSError` -- the slot is
+    released in a `finally`, released as early as honesty allows (the instant `subprocess.run`
+    itself returns or raises, not deferred to the caller)."""
     args = ["psql", "-h", cfg.pg_host, "-d", cfg.db, "-tAq", "-v", "ON_ERROR_STOP=1"]
     for k, v in (extra_v or {}).items():
         args += ["-v", f"{k}={v}"]
@@ -393,6 +459,13 @@ def _psql(cfg: BoundaryConfig, script: str, extra_v: dict[str, str] | None = Non
     preamble = f"SET ROLE {cfg.role};\nSET search_path = {cfg.schema}, {cfg.kern};\n"
     env = dict(os.environ)
     env["PGCONNECT_TIMEOUT"] = str(PSQL_CONNECT_TIMEOUT_S)
+    if not _KERNEL_CALL_SEMAPHORE.acquire(blocking=False):
+        raise KernelCallSaturated(
+            f"the service already has MAX_INFLIGHT_KERNEL_CALLS={MAX_INFLIGHT_KERNEL_CALLS} "
+            f"concurrent kernel calls in flight (spec A9) -- this call is refused immediately "
+            f"rather than queued. The cause is ordinary concurrent load, not a defect in this "
+            f"request; the correct response is to retry after a short backoff."
+        )
     try:
         return subprocess.run(
             args, input=preamble + script, capture_output=True, text=True,
@@ -418,6 +491,12 @@ def _psql(cfg: BoundaryConfig, script: str, extra_v: dict[str, str] | None = Non
             f"attempted -- e.g. E2BIG past the kernel's per-argument MAX_ARG_STRLEN wall, or "
             f"a missing psql binary): {e}"
         ) from e
+    finally:
+        # A9: released as early as honesty allows -- the instant subprocess.run itself returns
+        # or raises, on EVERY exit path (success and both exception paths above alike). Only
+        # reached when the slot was actually acquired (the saturation raise above returns before
+        # entering this try/finally at all, so there is no double-release to guard against).
+        _KERNEL_CALL_SEMAPHORE.release()
 
 
 def _query_json(cfg: BoundaryConfig, sql: str, extra_v: dict[str, str] | None = None) -> Any:
@@ -525,6 +604,15 @@ def unclassified_failure(message: str) -> JSONResponse:
     connection-level `infra_failure` shape it did not earn."""
     body = UnclassifiedFailure(message=message)
     return JSONResponse(status_code=500, content=body.model_dump())
+
+
+def server_saturated(message: str) -> JSONResponse:
+    """A9: the one typed shape MAX_INFLIGHT_KERNEL_CALLS concurrent kernel calls already in
+    flight returns -- HTTP 503, `inflight_limit` naming the bound this call was refused
+    against, never claiming the connection-level `infra_failure` shape (this is ordinary load,
+    not an infrastructure anomaly -- the two are deliberately distinct typed shapes)."""
+    body = ServerSaturated(inflight_limit=MAX_INFLIGHT_KERNEL_CALLS, message=message)
+    return JSONResponse(status_code=503, content=body.model_dump())
 
 
 def _out_of_range_id(name: str, value: int) -> JSONResponse | None:
@@ -839,6 +927,17 @@ def create_app(cfg: BoundaryConfig) -> FastAPI:
             "the storage layer refused for a reason this boundary did not anticipate -- this "
             "may be the deployment or the request; the boundary declines to guess. Full detail "
             "is logged server-side only; see the server's own log.")
+
+    @app.exception_handler(KernelCallSaturated)
+    async def _kernel_call_saturated_handler(request: Request, exc: KernelCallSaturated) -> JSONResponse:
+        # A9: the ONE place saturation becomes a typed 503, for every route uniformly -- reads,
+        # writes, and /health's own kernel probes alike, since every one of them reaches this
+        # class only through `_psql`'s single shared admission gate (ADR-0012 P1: one handler,
+        # not a try/except duplicated per call site). Deliberately NOT logged server-side (unlike
+        # the infra/unclassified handlers above): saturation under load is an ordinary, expected,
+        # caller-actionable condition, not a server-side anomaly worth a diagnostic line -- the
+        # exception's own message already says everything the log would.
+        return server_saturated(str(exc))
 
     @app.exception_handler(_BodyTooLarge)
     async def _body_too_large_handler(request: Request, exc: _BodyTooLarge) -> JSONResponse:
