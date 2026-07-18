@@ -64,6 +64,19 @@ append-only decision ledger, a record of maintainer rulings and work items kept
 outside this repository and read via its `./led` command-line tool. **Port/ACL**
 abbreviates Port/anti-corruption layer, the boundary construct ADR-0012 P2 defines.*
 
+*Reader's glosses, second dated append 2026-07-18 — discharging the two findings the
+same day's fresh-context loop escalated to the maintainer, applied under his explicit
+constraint that they are pointers only and the interpreter-boundary amendment's own
+text stays untouched: **`FeatureLayout`** is the worked specimen type whose extracted
+proof and definition live in
+[ADR-0011's "Extracted record" section](0011-mechanization-discipline.md); it is
+cited in this file as an example, not defined here. **The five independent layers**
+named in the what-did-we-miss note ("the founding brief, the conformance map, the
+mechanical conformance checker, two multi-lens review panels, a deliberately blind
+completeness audit") are artifacts of the safety-critical-logging RCA: the brief and
+its conformance map live under [law/briefs/](../briefs/), and the full record is on
+the project tracker — the decision ledger the earlier gloss above defines.*
+
 A word on register, in ADR-0013's key and for the same reason. The rest of the
 corpus is neutral; the trio it parents earns an edge from dated failures, and this
 root inherits that edge because its own substrate is a dated failure too — the
