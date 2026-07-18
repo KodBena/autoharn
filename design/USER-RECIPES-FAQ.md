@@ -1216,6 +1216,155 @@ already delivers the core of this (superseding a close re-opens the item and re-
 its review debt, witnessed in the consult above); s37's validity-bounded dispositions
 extend the same discipline to violation answers themselves.
 
+## The ledger boundary service (`serving/`)
+
+**Can I get an HTTP API onto a ledger instead of shelling out to `led`?**
+Yes — `serving/boundary_service.py` is a FastAPI service that is the one declared **Port**
+([ADR-0012](../law/adr/0012-compositional-and-structural-hygiene.md) P2) into an autoharn-managed ledger for UI-class and programmatic consumers, the
+autoharn-panel Vue SPA first. Full spec:
+[FABLE-LEDGER-BOUNDARY-SERVICE-SPEC.md](FABLE-LEDGER-BOUNDARY-SERVICE-SPEC.md) (read it in full,
+including Amendments A1 and A2, before touching the directory); operator pointer:
+[serving/README.md](../serving/README.md). The service adds **no truth of its own** — it
+translates and validates transport-level shape only, refuses what it cannot honor, and never
+coerces. The kernel's own **inner** boundary (the [write boundary](../GLOSSARY.md#write-boundary)
+s43's four `SECURITY DEFINER` functions, plus the derived views) stays the sole authority; the
+repo-root operator verbs (`led`, [`judge`](../GLOSSARY.md#judge), `pickup`, …) are explicitly NOT
+deprecated by this — they remain the sanctioned non-service surface, routing them through the
+service is a reserved v2 question.
+
+**How do I launch it, and what does it actually say?**
+```
+$HOME/w/vdc/venvs/generic/bin/python -m serving.boundary_service --deployment deployment.json --port 18421
+```
+(the example above ran on port 18421 rather than the default 8420 because another project's dev
+server already held 8420 on this host — an ordinary `--port` override, not part of the feature).
+WITNESSED, `GET /health` against this repo's own `autoharn1` world:
+```
+{"world":"autoharn1","service_principal":null,"capabilities":{"s22_work":true,"s41_identity":false,"s43_boundary":false,"credited_view":false}}
+```
+That capability manifest is not a fixed feature list — it is DETECTED per request against the
+connected world's actual schema (object existence, never a version literal), which is why
+`autoharn1` — a world older than s40/s41/s43 — shows three of the four capabilities absent
+while still serving [`s22`](../kernel/lineage/s22-work-item-ledger.sql) (the kernel-lineage
+delta that adds the per-project work-item ledger) work items fine.
+
+**What do the read endpoints look like, and what happens when a world lacks a capability
+a read endpoint needs?**
+`GET /rows/current` serves `ledger_current` (id-paginated, `?after_id=&limit=`, `1 ≤ limit ≤
+1000`, `after_id ≥ 0`); `GET /rows/{id}` and `GET /rows/{id}/history` serve one row and its
+supersession chain. `GET /credited`, `GET /standing/principals`, and `GET /work/items` are
+**capability-gated** — on a world that lacks the underlying view, the endpoint refuses with a
+typed `capability_absent` response rather than silently falling back to a weaker read (that
+fallback is exactly the vacuous-pass class this project's [F49 finding](../FINDINGS.md) named:
+a close instrument that silently no-ops instead of visibly refusing when its assumed
+environment isn't met, so the missing check reads as a pass). WITNESSED, all
+three gates against `autoharn1` (which lacks s41 identity and the s44 credited view, but carries
+s22 work):
+```
+GET /credited            -> HTTP 409 {"disposition":"capability_absent","capability":"s44-credited-view", ...}
+GET /standing/principals -> HTTP 409 {"disposition":"capability_absent","capability":"s41-identity", ...}
+GET /work/items          -> 200, real work_item_current rows
+```
+
+**What does a write look like, and what happens to a refused one?**
+Four endpoints, one per s43 [write boundary](../GLOSSARY.md#write-boundary) function:
+`POST /write/ledger`, `/write/review`, `/write/registration`, `/write/obligation`. **A kernel
+refusal is HTTP 200** carrying the kernel's own [typed verdict](../GLOSSARY.md#typed-verdict)
+verbatim (`disposition: "refused"`, `refusal_id`, `sqlstate`, kernel-authored teach-text) — a
+refusal is a first-class domain result, not a transport error. Transport-level failures
+(malformed JSON, an oversized body) are typed and loud instead: a body over 1 MiB is HTTP 413
+with `{"disposition":"payload_too_large", ...}`, checked before JSON parsing and again before
+the value reaches the database. **On a world that predates s43, every write endpoint refuses
+entirely** rather than falling back to a raw `INSERT` — there is no code path in the service
+that writes SQL DML. WITNESSED against `autoharn1` (pre-s43):
+```
+POST /write/ledger -> HTTP 409 {"disposition":"capability_absent","capability":"s43-boundary",
+  "message":"This world carries no s43 write boundary ... refuses entirely rather than
+  falling back to a raw INSERT ..."}
+```
+The 413 oversized-body and malformed-JSON write-path checks are **UNWITNESSED here** — on
+`autoharn1` the s43 capability gate short-circuits before those checks run at all, since the
+world has no write boundary to reach; they would need an s43-carrying world to observe.
+
+**Does it bind to the network, or only to this machine?**
+Loopback only by default (`127.0.0.1:8420`); any other host is refused at startup unless you
+pass `--i-understand-this-exposes-the-ledger` — the ledger carries operator-real content.
+WITNESSED:
+```
+$ python -m serving.boundary_service --deployment deployment.json --host 0.0.0.0 --port 18422
+boundary_service: REFUSED -- --host '0.0.0.0' is not a loopback address ... refused unless
+you pass --i-understand-this-exposes-the-ledger explicitly ...
+```
+
+**Is there a way to check the service is actually telling the truth about what the kernel
+holds?** Yes — `serving/audit_served.py` fetches a served page over HTTP, reads the same view
+directly with a read-only `psql`, and byte-compares the row sets; it ships WITH the service
+(sentry-class treatment), not as an afterthought. WITNESSED:
+```
+$ python serving/audit_served.py --base-url http://127.0.0.1:18421 --deployment deployment.json
+audit_served: AGREE -- /rows/current matches autoharn1.ledger_current byte-for-byte over the
+compared page.
+```
+
+**What about the panel's existing direct-psql access — does this retire it?**
+That is the deprecation duty the spec's §6 names: every legacy direct-psql consumer path (the
+autoharn-panel's own FastAPI-side SQL, concretely) gets a mark that is loud at every invocation,
+names the replacement endpoint, and points at the world-context migration consult — but stays
+functional (backwards compatibility is the commission's own carve-out; nothing is silently
+tolerated, nothing is silently broken). That marking is panel-repo work, out of scope for this
+autoharn checkout and UNEXERCISED from here — the spec is explicit that the panel-side session
+runs it, citing this spec, never a session running against a live panel checkout from here.
+
+## CLI quality-of-life: row-id echo and `judge` auto-layer detection
+
+**Does `led` tell me the id of the row it just wrote?**
+Yes, as of `6677b2d` — every `led` write path prints `row <id> written.` on success (e.g. `led
+review: row 42 written.`, `led register-principal: row 7 written.`), instead of leaving you to
+go find the id with a follow-up query. WITNESSED, against `autoharn1`:
+```
+$ ./led decision "documentation witness probe (orchlog.d / FAQ authoring task): confirming the
+  row-id echo on a live write path; no operational effect intended"
+SET
+SET
+INSERT 0 1
+led decision: row 1553 written.
+```
+**The one disclosed exception:** `led obligate` writes into `countersign_obligation`, whose
+primary key is the scope text, not a bigint id — there is nothing to echo, so that one path
+stays silent by the same documented convention rather than printing something misleading.
+
+**Does `./judge` still need `--layer` spelled out, or can I just run it?**
+As of `f550e54`, bare `./judge` (no `--layer`) auto-detects which of `engine/lp_registry.py`'s
+layers the world's schema can actually support and runs every capable one — printing a plain
+`INCAPABLE` line (not a red failure) for a layer the world's lineage cannot support, rather than
+either crashing on it or silently skipping it. Passing `--layer <name>` explicitly is unchanged:
+an incapable target asked for BY NAME still refuses loudly (`QUARANTINED`). WITNESSED, both
+forms against `autoharn1` (a world with `s22` work but no `s41` identity, so the `defeat` layer
+has no grant substrate here):
+```
+$ ./judge
+# marriage differential -- layer=None (auto-detect capable layers: ['tnow', 'work', 'defeat'])
+## layer='tnow'
+  [OK ] autoharn1 AGREE              asp=2991 sql=2991 atoms; Δasp=[] Δsql=[]
+## layer='work'
+  [OK ] autoharn1 AGREE              asp=364 sql=364 atoms; Δasp=[] Δsql=[]
+## layer='defeat'
+  [--] autoharn1 INCAPABLE          layer='defeat' declared: target has no
+       principal_binding_active/principal_competence_activity columns (pre-s41 lineage) --
+       the 'defeat' layer has no grant substrate here, capability absent, not record-empty
+# DIFFERENTIAL GREEN -- every target bit-identical to the SQL floor
+
+$ ./judge --layer defeat
+  [!! ] autoharn1 QUARANTINED        asp=0 sql=0 atoms; Δasp=[] Δsql=[]
+          asp QUARANTINED: EDB export failed: CapabilityError: target 'autoharn1' did not
+          emit trust_grant/n (capability absent): no principal_binding_active/
+          principal_competence_activity columns on this schema (pre-s41 lineage) ...
+# DIFFERENTIAL RED -- a target diverged/quarantined (NO RESULT)
+```
+Exit is red only when a layer that actually RAN [`judge`](../GLOSSARY.md#judge)s
+`DIVERGE_DEFECT`/`QUARANTINED`; a declared-incapable layer never contributes to the exit code
+(the same "absence is not a defect" rule the work-item-violations check already applied).
+
 ## What this page is not
 
 This page is not an inventory (that is [ORCH-CAPABILITIES.md](../ORCH-CAPABILITIES.md), where every
