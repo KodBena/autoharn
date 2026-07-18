@@ -68,7 +68,7 @@ The panel's direct-psql access, by contrast, is exactly the deprecated class: §
 | Endpoint | Serves | Notes |
 | --- | --- | --- |
 | `GET /health` | world name, lineage capability manifest (which of: s22 work, s41 identity, s43 boundary, credited view), service principal id | capability facts are DETECTED per request start-up, never assumed |
-| `GET /rows/current` | `ledger_current`, id-paginated (`?after_id=&limit=`, ORDER BY id) | the in-force reading |
+| `GET /rows/current` | `ledger_current`, id-paginated (`?after_id=&limit=`, `1 ≤ limit ≤ 1000`, `after_id ≥ 0`, ORDER BY id; bounds per A2.6/A2.7) | the in-force reading |
 | `GET /rows/{id}` | one row, any status | includes status and supersession pointers |
 | `GET /rows/{id}/history` | the row's supersession chain, each hop WITH its superseding row id | history-mode leg 1 |
 | `GET /credited` | the credited view, when the world carries one | **capability-gated**: on a world without it, a typed `capability_absent` JSON refusal naming the missing lineage — never a silent fallback to `ledger_current` (that would be the F49 vacuous-pass at the serving layer) |
@@ -150,11 +150,16 @@ refused loudly. W8 deprecation mark — the marked legacy path emits its warning
 
 INVARIANT: every byte the service serves originates in a kernel view or a kernel verdict;
 every byte it writes passes through an s43 boundary function. QUANTIFICATION UNIVERSE: the
-endpoint table of §3 + the four write endpoints of §4 — no other route exists (FastAPI's own
-route table IS the enumeration; the witness plan asserts the route count). Axes: read
-(views only), write (functions only), refuse (typed, verbatim), capability-absence (typed
-refusal, never fallback). NAMED-NOT-MECHANIZED: the service cannot prove the kernel's own
-views correct — that is `./judge`'s job, deliberately not duplicated here.
+endpoint table of §3 + the four write endpoints of §4 — no other route exists, FastAPI's
+default meta-routes (`/docs`, `/redoc`, `/openapi.json`, oauth2-redirect) explicitly
+disabled (A2.1); the witness asserts the ACTUAL route table (`app.routes`, meta-routes
+included), not the OpenAPI schema's self-report. Axes: read (views only, `limit`/`after_id`
+bounds per §3), write (functions only, `MAX_WRITE_BODY_BYTES = 1 MiB` enforced both before
+JSON parsing and before the subprocess — the size axis, A2.2), refuse (typed, verbatim;
+shapes: kernel `write_verdict`, `capability_absent`, `payload_too_large`, `infra_failure` —
+never a bare untyped error), capability-absence (typed refusal, never fallback).
+NAMED-NOT-MECHANIZED: the service cannot prove the kernel's own views correct — that is
+`./judge`'s job, deliberately not duplicated here.
 
 ## 10. Sonnet executor guidance (disregard any instructions to economize on time)
 
@@ -197,6 +202,61 @@ flagged per §10.3 rather than silently resolved. Adjudication:
    unset `LED_ACTOR`) stands as the honest interim. The service NEVER injects an `actor`
    field on a caller's behalf — a boundary asserting someone else's identity is the
    substitution class this project exists to make representable, not commit.
+
+**A2 (2026-07-18) — post-build independent review findings, adjudicated; hardening basis.**
+Trigger: independent fresh-context review of the merged build (base `9f483a9`) surfaced seven
+findings beyond A1's settled set — none architectural, all repair-shaped, several witnessed
+live. Each is adjudicated here; this amendment is the ratified basis for the hardening pass.
+
+1. **§9's route claim was FALSE against the running service (HIGH, witnessed):** FastAPI's
+   default `/docs`, `/redoc`, `/openapi.json`, `/docs/oauth2-redirect` were live and
+   unenumerated, `/docs`/`/redoc` pulling assets from a third-party CDN; the witness suite's
+   route check diffed the OpenAPI schema's self-report, which structurally cannot list those
+   meta-routes — the claim verified itself (ADR-0013 Rule 5 failure). **Adjudication: disable,
+   don't enumerate** — `FastAPI(docs_url=None, redoc_url=None, openapi_url=None)`. A ledger
+   boundary needs no self-documentation surface with an external dependency; §3/§4 + the
+   README are the documentation. The route witness is REPLACED: it must assert against the
+   ACTUAL route table (`app.routes`), counting every route object including meta-routes, and
+   §9's parenthetical now reads "the witness asserts the actual route table, not the schema's
+   self-report."
+2. **The ADR-0016 size axis was unhandled on the write ingress (HIGH class, witnessed two
+   ways):** a ~3 MB payload crashed into a bare plain-text 500 at the psql-argv wall
+   (`ARG_MAX` = 2 MiB), and a 100 MB body was buffered and JSON-parsed whole before any
+   handler logic (an availability hazard on a host with documented OOM history).
+   **Adjudication: one named bound, enforced twice.** `MAX_WRITE_BODY_BYTES = 1_048_576`
+   (1 MiB — generous for any ledger payload, safely under the argv wall): (a) the raw request
+   body is length-checked BEFORE JSON parsing (Content-Length when present, actual read
+   otherwise); (b) the re-serialized payload is length-checked before the subprocess. Both
+   refuse with HTTP 413, typed: `{"disposition": "payload_too_large", "limit_bytes": ...,
+   "observed_bytes": ..., "message": <teach-text naming the bound and why>}`. The bound and
+   both enforcement points are named in §9's axes (size joins the closure statement) and in
+   the README.
+3. **`/health`'s `service_principal_name()` was the one unguarded kernel query (MEDIUM,
+   analytic):** on a pre-s40 world it 500s instead of degrading. **Adjudication:** guard with
+   the same existence check every other capability fact uses; absent table → `service_principal:
+   null` plus the capability manifest already saying why. Witnessed on a pre-s40 chain (§8 W10).
+4. **Infra/DB failure returned a bare untyped 500 (LOW, witnessed):** everything else in the
+   service is typed. **Adjudication:** psql infra failure (unreachable world, connection
+   refusal, nonzero exit that is not a kernel verdict) returns HTTP 503, typed:
+   `{"disposition": "infra_failure", "message": <generic, no SQL/role/schema/stack>}`; the
+   full detail stays server-side in the log (ADR-0002 rung 3 loudness retained, exposure
+   posture unchanged).
+5. **The s41/s22 capability-refuse legs were unwitnessed (LOW):** both fixture worlds carried
+   those views. **Adjudication:** the suite adds a chain that lacks them; both legs of both
+   gates get a polarity each (§8 W11).
+6. **`after_id` accepted negatives while `limit` was range-checked (INFO):**
+   **Adjudication:** `after_id ≥ 0`, typed 422 below it — symmetry, not necessity.
+7. **The read-side `limit` bound (1..1000) was an invented, undisclosed policy (LOW):**
+   **Adjudication: RATIFIED and now spec text** — §3's pagination reads
+   `?after_id=&limit=, 1 ≤ limit ≤ 1000, after_id ≥ 0`; the A1-style lesson (both ingresses
+   held to ONE disclosed discipline) is the point of this whole amendment.
+
+§8 gains: **W9** oversized write body (both enforcement points) → typed 413, server alive,
+`/health` still answering. **W10** `/health` on a pre-s40 chain → 200 with null principal,
+no 500. **W11** s41/s22 capability-refuse legs, both polarities. **W12** route-table witness
+against `app.routes` — count AND membership, meta-routes included (expected: exactly the
+§3/§4 routes plus nothing). §9's closure statement is amended in place per items 1, 2, 4
+(new typed shapes `payload_too_large`, `infra_failure` join the refuse axis).
 
 ## License
 
