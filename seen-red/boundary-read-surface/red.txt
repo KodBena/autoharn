@@ -1,0 +1,73 @@
+boundary-read-surface -- banked RED evidence (2026-07-18, toy db 192.168.122.1, scratch worlds
+wrfx<pid> plus this repo's own live autoharn1 world; runnable fixture:
+seen-red/boundary-read-surface/run_fixtures.py, registered in gates/fixture_census.py).
+Witnesses design/FABLE-BOUNDARY-READ-SURFACE-SPEC.md's WR1-WR5.
+
+Two genuine RED->GREEN transitions this build's own live testing captured, both against real
+infra, neither fabricated:
+
+1. THE COLUMN-SHAPE GAP (a real production bug in the /views/{view} route this spec's own build
+   introduced, found by testing against this repo's OWN live autoharn1 world -- lineage head
+   s30, well short of s37). `VIEW_REGISTRY["work_item_violations"]` was first authored keyed on
+   `target_id` (added only at kernel/lineage/s37-violation-disposition.sql). Object-existence
+   detection (`_regclass_exists`) alone passed -- the VIEW exists on a pre-s37 world, just
+   without that column -- so the route reached a bare SQL error:
+
+     boundary_service: UNCLASSIFIED FAILURE (GET /d/autoharn1/views/work_item_violations):
+     psql query failed (exit 3, ...): psql:/dev/stdin:3: ERROR:  column "target_id" does not
+     exist
+     LINE 1: ...ELECT * FROM autoharn1.work_item_violations WHERE target_id ...
+     INFO: "GET /d/autoharn1/views/work_item_violations?after_id=0&limit=1000 HTTP/1.1" 500
+     Internal Server Error
+
+   This was a TYPED failure (`unclassified_failure`, never a bare 500 body) but a needlessly
+   coarse one -- and it also diverged from the legacy tool: `legacy-led.tmpl`'s own `led work
+   violations` query (`SELECT slug FROM work_item_violations`) never references target_id at
+   all, so it read this SAME pre-s37 world cleanly (0 violations, a legitimate answer under that
+   view's OLDER shape) while the served route errored. Fixed two ways: (a) `VIEW_REGISTRY`'s key
+   column re-chosen to `slug` (present on every lineage shape this view has ever had, since s22
+   -- the SAME column `work_review_gap`/`work_item_current` already key on); (b) a NEW,
+   finer-grained capability check, `_column_exists` (serving/boundary_service.py), added
+   alongside `_regclass_exists` -- object existence is not sufficient capability detection for a
+   view whose COLUMN SET grew across lineage deltas while its NAME stayed stable. Re-verified
+   GREEN against the SAME live autoharn1 world: `work-violations : UNAVAILABLE (This world's
+   autoharn1.work_item_violations object exists but carries no 'target_id' column -- ...)` would
+   have been the honest answer for a genuinely-target_id-dependent view; with the slug re-key,
+   the route now serves this world's work_item_violations cleanly, matching the legacy tool's
+   own reading exactly (both 0 violations on this world, WR1 verified equal on a fully s50-headed
+   scratch world separately).
+
+2. THE STALE-MODULE-PATH BUG (a fixture-harness bug, not a serving/ bug). WR3's own equality
+   check imports `bootstrap/templates/asof-export.tmpl` by file path to call its
+   `ledger_asof_rows` directly -- after this build renamed the ORIGINAL file to
+   `legacy-asof-export.tmpl` and authored a NEW, served `asof-export.tmpl` under the old name,
+   the fixture (still pointed at the now-served file) tried to call the SERVED module's
+   `ledger_asof_rows(dep, ts)` with a legacy-shaped `dep` (a plain `DeploymentRecord`), which the
+   served function expects to be a `ServedConfig` (needs `.base`):
+
+     File ".../bootstrap/templates/asof-export.tmpl", line 108, in ledger_asof_rows
+       rows = bcc.get_all_rows(cfg.base, f"/rows/asof/{encoded_ts}", cursor="after_id")
+     AttributeError: 'DeploymentRecord' object has no attribute 'base'
+
+   Fixed by repointing `ASOF_EXPORT_TMPL` to `legacy-asof-export.tmpl` explicitly (WR3's whole
+   point is comparing the SERVED route against the LEGACY tool's own independent read -- it must
+   never resolve to the file this same suite is testing). Re-run GREEN
+   (`wr3-asof-equality-vs-legacy-nonvacuous`: legacy_n=16 served_n=16 row_sets_equal=True
+   post_mid_row_id excluded from both).
+
+Full GREEN transcript (same commit, same live toy db):
+
+  == WR1: per-view row-set equality, served vs direct ==
+  [11/11 views OK, row_sets_equal=True per view]
+  == WR2: unknown view name -> typed 404 ==
+  [ok] status=404 disposition=unknown_view, known=[11 views]
+  == WR3: as-of reconstruction equality vs the legacy asof-export.tmpl read ==
+  [ok] legacy_n=16 served_n=16 row_sets_equal=True post_mid_row_id excluded from both
+  [ok] malformed ts -> typed 422 pre-kernel
+  == WR4: GET /meta matches reality (view list + lineage head) ==
+  [ok] known_views equals VIEW_REGISTRY; [ok] lineage_head equals migrate_core's own independent
+  computation; [ok] boundary_version present
+  == WR5: per-deployment saturation still fires on a /views/ route (WM4 method) ==
+  [ok] burst_n=24 expected_per_dep_limit=12 deployment_saturated=12 statuses={503}
+
+  ALL WR CHECKS OK

@@ -1,212 +1,32 @@
 #!/usr/bin/env python3
-"""pickup — the resume verb (vestigial_documentation/design/ORCH-OPUS-READINESS.md move 3; the fourth verb alongside
-led/judge/the scaffold). The operator's cold-start problem: "with a complex project I never
-know how to restart." The rule this script exists to honor: the brief is DERIVED AT PICKUP
-TIME, never stored — a stored handoff decays from the moment of writing. Every section below
-reads a LIVE source and prints it; nothing here is cached or written back.
+"""pickup -- REBASED onto the boundary service (design/FABLE-BOUNDARY-MULTIPLEX-AND-CLI-REBASE-
+SPEC.md §5, ratified ledger row 1631; design/FABLE-BOUNDARY-READ-SURFACE-SPEC.md, ratified row
+1652). The direct-psql original is `legacy-pickup.tmpl` (`./legacy/pickup`) -- 1200+ lines and a
+dozen sections; see "SCOPE, HONESTLY NAMED" below for exactly what runs through the boundary here.
 
-Sections emitted, each under a machine-parseable `### SECTION: <NAME>` header (grep
-`^### SECTION: ` to split this script's own output programmatically):
+SCOPE, HONESTLY NAMED:
+  COVERED  STANDING-DECISIONS (design/FABLE-GRADED-DECISIONS-SPEC.md, /views/standing_decisions),
+           IN-FORCE-DECISIONS (/rows/current, id-descending, the SQL-floor reading),
+           OPEN-QUESTIONS (/views/question_status), REVIEW-DEBT (/views/review_gap) -- the FOUR
+           sections the read-surface amendment's own §5 seam stop named explicitly as blocked
+           without the /views/{view} route; now unblocked, rebased first.
+  NOT COVERED (UNEXERCISED by this build, named rather than silently dropped -- run
+           `./legacy/pickup` for these): RESOURCES/ESTIMATES/TAXONOMIES/MAINTAINER-REVIEW-QUEUE
+           (each its own statement-prefix-convention scan over the WHOLE ledger_current, with
+           substantial parsing logic this rebase did not have room to port faithfully),
+           RECENT-CHANGES (git log), GIT-STATE (git status), IN-FLIGHT (a session-journal join),
+           ROLLUP (a composed summary over several of the above). This is a real, bounded scope
+           decision for THIS commission, not a structural incompatibility the way `led obligate
+           revoke` is elsewhere in this rebase -- a future pass can extend
+           `boundary_cli_client.py`'s coverage to them the same way this one did for the four
+           sections above.
 
-  STANDING-DECISIONS  — design/FABLE-GRADED-DECISIONS-SPEC.md (RATIFIED 2026-07-16), printed
-                        BEFORE IN-FORCE-DECISIONS below, on purpose: this section closes the same
-                        spec's own witnessed gap in THIS verb -- IN-FORCE-DECISIONS is recency-
-                        windowed (`ORDER BY id DESC LIMIT N`), so a standing decision scrolls out
-                        of it exactly as it scrolls out of a compacted context, the root-cause
-                        finding that motivated the whole spec (see that doc's Provenance section).
-                        Reads `standing_decisions` (kernel/lineage/s36-decision-grade.sql) --
-                        every in-force (supersession-filtered, s31 semantics) `kind=decision` row
-                        carrying a `decision_grade` in this deployment's configured set
-                        (`apparatus.json` `mechanisms.standing_decisions.grades`, default
-                        `["durable"]`) -- with NO recency limit and no `-n`/`--since` interaction
-                        (every standing decision matters regardless of when it was written), byte-
-                        capped (`byte_cap`, default 4000) AND optionally item-capped (`max_items`,
-                        default null = no count limit), both independent guards, whichever bites
-                        first truncates, with the SAME loud-truncation convention (never silent,
-                        and now IMPERATIVE -- an instruction to run `./led standing`, not an
-                        aside) hooks/sessionstart_durable_decisions.py's own SessionStart hook
-                        uses, sharing the identical config resolution (filing/
-                        standing_decisions_config.py, ONE home, ADR-0012 P1). A pre-s36 world (no
-                        `standing_decisions` view) prints
-                        an honest "(this world's kernel predates s36...)" line, never a bare SQL
-                        error -- the same graceful-degradation posture REVIEW-DEBT's own
-                        pre-s20-grants BLOCKED line already establishes for a different gap.
-  IN-FORCE-DECISIONS  — the SQL floor `ledger_current` view (supersedes-filtered). v1 ships the
-                        SQL floor only; a future pass may also print the ASP T_now verdict via
-                        `judge`, once the engine wiring is the routine path here too.
-  OPEN-QUESTIONS      — the `question_status` view: every open/answered question.
-  REVIEW-DEBT         — the `review_gap` view: obliged-actor rows with no distinct-actor attest
-                        countersign yet. Queried under `SET ROLE <this project's granted role>`
-                        (not the operator identity `led`'s own display verbs use) because this
-                        section's honest job is "what can the OPERATING AGENT see" — and a known
-                        kernel grants gap (autoharn BACKLOG, 2026-07-09, "pre-s20") means this can
-                        legitimately come back `permission denied`; that is caught and reported as
-                        `BLOCKED: pre-s20 grants`, not papered over as an empty result.
-  RESOURCES           — design/ORCH-SPEC-RESOURCE-REGISTRY.md stage 1 (the Pillar-1 capability
-                        registry, GLOSSARY.md#pillar-1): every unsuperseded `kind=decision` row
-                        whose statement carries the `resource:` prefix convention (§2 — no kernel
-                        `resource` kind exists yet; that is stage 3), read from the same
-                        supersedes-filtered `ledger_current` view IN-FORCE-DECISIONS above already
-                        uses. Printed TIER-SORTED, `forbidden` first, then `mandated`, then
-                        `blessed` (design/ORCH-SPEC-RESOURCE-ACCOUNTING.md §3: "a prohibition
-                        outranks a mandate for a reader's attention" — tracker item
-                        `accounting-stage-a` added the `forbidden` tier and its top-of-list rank;
-                        `mandated` first was the prior spec §3's own convention), one block per
-                        resource. Malformed statements (not exactly the six `|`-separated fields
-                        §2 fixes: NAME/CLASS/REACH/WHAT-IT-PROVES/GUIDANCE/TIER) print flagged
-                        MALFORMED rather than being silently dropped — a bad declaration is a
-                        visible defect, not a swallowed one. An empty registry prints its own
-                        explicit "(no resource declarations on record)" line — never omitted
-                        silently, honesty over a section nobody has adopted yet. A statement's own
-                        embedded newlines (a paste reflowed by a terminal's line wrap) are
-                        collapsed to single spaces SERVER-SIDE before this section's own row-per-
-                        line reader ever sees them (run12 witness, 2026-07-12 — see resources()'s
-                        own comment) — one query row is always one physical output line.
-  ESTIMATES           — tracker item `cost-estimation-retro`, 2026-07-12: every unsuperseded
-                        `kind=decision` row whose statement carries the `estimate:` prefix
-                        convention (user-guide/USER-RETROSPECTIVE-RECIPE.md's "Estimate statement
-                        grammar" section — the decomposition-time sibling of `resource:` above),
-                        read from the same `ledger_current` view via the identical newline-
-                        normalization, coherence-partner, and MALFORMED-flagging conventions
-                        `resources()` established. Sorted by TASK-SLUG then ledger row id (no
-                        tier concept here — an estimate is a prediction, not a capability, so
-                        there is nothing to rank by urgency). FOR RETROSPECTIVES ONLY, never for
-                        cost policing (the maintainer's own invariant, stated twice at
-                        commissioning) — this section prints predictions on record; it does not
-                        compare them to what happened (that comparison is a retrospective's own
-                        job, per the recipe doc's estimate-vs-actual section, and is deliberately
-                        absent from any gate or audit family). Tracker item `actual-intake-
-                        grammar`, 2026-07-13, added the measured-afterward twin: every
-                        unsuperseded `kind=decision` row whose statement carries the `actual:`
-                        prefix (user-guide/USER-RETROSPECTIVE-RECIPE.md's "The `actual:` statement
-                        grammar" section) is paired directly beneath the `estimate:` block
-                        sharing its TASK-SLUG, where both exist; an `actual:` row with no
-                        matching TASK-SLUG on record is listed afterward under its own
-                        unmatched-actuals listing, same MALFORMED-flagging posture. `actual:`
-                        rows are harness-sourced and diagnostic-grade (the action-stream ruling,
-                        ledgered 2026-07-13) — never evidentiary, never for cost policing.
-  TAXONOMIES          — tracker item `taxonomy-stage-a`, design/ORCH-SPEC-TASK-TAXONOMY.md §3/§7
-                        Stage A: every unsuperseded `kind=decision` row whose statement carries
-                        the `taxon:` or `interface:` prefix convention (design/
-                        USER-TAXONOMY-DECLARATION.md's "The statement grammars" section), read
-                        from the same `ledger_current` view via the identical newline-
-                        normalization, coherence-partner, and MALFORMED-flagging conventions
-                        `resources()`/`estimates()` established. Taxa printed first (sorted by
-                        TAXONOMY then TAXON then ledger row id), then interfaces (sorted by
-                        TAXONOMY then ARTIFACT-PATTERN then ledger row id) — one `TAXONOMIES`
-                        section, two labeled sub-listings, mirroring how the spec's own §3
-                        declares both row shapes as one convention. An empty registry prints its
-                        own explicit "(no taxon declarations on record)" / "(no interface
-                        declarations on record)" line per sub-listing — never omitted silently.
-                        This section is a PULL surface only (display); the write-time gate
-                        (`no-cross-taxon-write`) and the audit family (`crossing-via-declared-
-                        interface`, the unassigned-artifact report) are later stages (spec §7
-                        Stage B/C), not built here.
-  MAINTAINER-REVIEW-QUEUE — tracker item `maintainer-review-queue`, 2026-07-13: the maintainer's
-                        ranked "things I need to personally look at" queue, derived from every
-                        unsuperseded `kind=decision` row carrying the `review:` or `review-done:`
-                        prefix convention (user-guide/USER-RECIPES-FAQ.md's "Your review queue"
-                        section — the ONE documented home of this grammar). Unlike RESOURCES/
-                        ESTIMATES/TAXONOMIES above, this section's state is DERIVED, not merely
-                        listed: the highest-ledger-row-id row per SLUG among BOTH prefixes decides
-                        that SLUG's current state — a `review:` row opens or RE-RANKS an item (no
-                        `--supersedes` flag needed), a `review-done:` row removes it from the
-                        rendered queue (nothing is deleted — it is simply no longer the latest
-                        state), and a later `review:` row RE-OPENS a ticked-off item. Open entries
-                        print rank-ascending (tie-broken by SLUG), each with the exact
-                        `./led decision "review-done: <slug> | <disposition>"` one-liner that
-                        ticks it — copy-paste, no grammar to recall. An empty queue prints its own
-                        explicit "(no open review-queue entries on record)" line — never silence.
-                        A malformed row (wrong field count, non-integer RANK) prints flagged
-                        MALFORMED rather than being silently dropped or corrupting another SLUG's
-                        state, the same never-silently-dropped posture every prefix-convention
-                        section above already keeps.
-  RECENT-CHANGES      — ledger rows since `--since <timestamptz>`, or the last `-n` rows (default
-                        10) if `--since` is omitted.
-  GIT-STATE           — this project's own git repo: uncommitted changes and (if it has an
-                        upstream) unpushed commits.
-  IN-FLIGHT           — derived live from the `work_item_current` view (open items: slug, title,
-                        claimant), then -- for each open item -- the FULL statement text of its
-                        `work_opened` ledger row, printed in full between `--- SPEC: <slug> ---`
-                        / `--- END SPEC: <slug> ---` markers (BACKLOG "Run-8 mid-run forensics",
-                        2026-07-11: slug/title/claimant alone left a resumed agent with no spec to
-                        rebuild the task from -- the statement IS the spec). Then a violations line
-                        from `work_item_violations` (count + kinds if non-empty; the explicit
-                        "violations: none" if empty -- a silent absence must be distinguishable
-                        from not-run, house rule). UNAVAILABLE, with the reason, if this world's
-                        kernel predates the work-item layer (kernel/lineage/s22-work-item-
-                        ledger.sql not applied here yet) -- the honest fallback, not a crash and
-                        not the old stale text.
-  ROLLUP              — tracker slug `work-tree-rollup`, wave-3 dispatch decision (ledger row 192):
-                        for every work item with at least one direct child under the TYPED parent
-                        edge (kernel/lineage/s28-work-parent-edge.sql's `work_parent` column, read
-                        here via `work_item_current.parent_slug` + the `work_item_descendants`
-                        closure view), prints the parent's OWN `estimate:` figures beside the SUM
-                        of its direct children's `estimate:` figures — the free SPLIT-TIME
-                        decomposition-quality signal (a parent whose own estimate undershoots its
-                        children's summed estimate decomposed more than it first predicted; no
-                        verdict is drawn from this, only the comparison is shown). TWO
-                        denominated column groups are kept apart, by construction, never folded
-                        into one number (the 2026-07-11 ruling): TOOL-CALLS/SUBAGENT-SPAWNS
-                        (witnessed-grade once the accounting spec's Stage B/D counting floor
-                        ships) versus WALL-CLOCK/TOKEN-OOM (diagnostic-grade, permanently — a
-                        TOKEN-OOM figure is an order of magnitude, not additive, and is listed
-                        per-child rather than summed). ACTUALS are honestly ABSENT today —
-                        printed as a named, NOT-BUILT line citing the accounting spec's own
-                        stage names, never fabricated. UNAVAILABLE, with the reason, if this
-                        world's kernel predates the typed parent edge (kernel/lineage/
-                        s28-work-parent-edge.sql not applied here yet — the same honest-fallback
-                        convention IN-FLIGHT already uses for a pre-s22 kernel). RETROSPECTIVE
-                        ONLY, always: this section never gates, never polices cost or scope (the
-                        maintainer's standing invariant, restated in this section's own printed
-                        header exactly as the recipe doc's estimate-vs-actual section states it).
-
-CONNECTIVITY (tracker item `pickup-connection-failure-silent-empty`, 2026-07-13): before any
-section below is queried, `check_connectivity()` runs ONE explicit `SELECT 1;` probe under
-`SET ROLE <dep.role>` -- the same conflation `bootstrap/templates/verify-chain.tmpl`'s
-`has_row_hash_layer()`/`has_high_water_layer()` already closed (tracker item
-`verify-chain-error-conflation`, 2026-07-13), one verb over: without this probe, every section
-function below independently prints its own "ERROR: <psql stderr>" line on a connection failure
-(unreachable host, refused connection, wrong credentials, an ungranted `role`) yet `main()`
-unconditionally `return`ed 0 regardless -- a fresh session hydrating via the resumption doctrine
-(CLAUDE.md) would see exit 0 and empty PROCESS stderr (the ERROR text lands on stdout, mixed in
-with each section's own honest "(no rows)"/"(no X on record)" empty-result convention), a
-hydration brief indistinguishable, at the process-exit-code level a caller actually checks, from
-"the tracker is genuinely empty" when the truth is "pickup could not look at it at all". The fix:
-`check_connectivity()` fires ONCE, up front; on failure `main()` prints a typed CANNOT-HYDRATE
-banner (to stderr, loud, per ADR-0002) naming the psql stderr verbatim and refuses to print ANY
-section (never ten stale-looking "ERROR:" lines masquerading as a brief), exiting 3 -- a code
-distinct from `_load_deployment()`'s existing 2 (a malformed/absent deployment.json, a
-config-level defect diagnosed BEFORE any network attempt) and from every section's own exit-0
-"ran fine, found nothing" convention. A GENUINE per-section absence (a pre-s22 kernel's
-`work_item_current` not existing yet, an ungranted `review_gap` under pre-s20 grants) is
-UNCHANGED by this fix -- those fire only AFTER `check_connectivity()` already proved the
-connection itself is good, so they remain honest section-level answers, never conflated with
-CANNOT-HYDRATE.
-
-Deployment resolution: reads `deployment.json` next to this script (override with
-`PICKUP_DEPLOYMENT=/path/to/deployment.json`), via autoharn's `filing/deployment_record.py` (the
-ONE home for that JSON shape — this script derives from it rather than growing a second parser).
-As of BACKLOG maintainer ruling 2026-07-11 ("live verbs"), this file executes IN PLACE out of the
-autoharn checkout — the scaffolded `./pickup` is a 3-line shim that `exec`s THIS file directly,
-never a copy — so `PICKUP_DEPLOYMENT` is ALWAYS set by that shim (to the shim's own directory,
-i.e. the world root, `/deployment.json`); the `HERE`-relative default below only fires on a direct
-invocation of this file with no shim (e.g. manual testing). GIT-STATE (below) reports on the
-directory the deployment record was found in — the world root, not wherever this file itself
-happens to live — for exactly this reason. autoharn's own location: two directories up from this
-file's own on-disk path (it lives at `bootstrap/templates/pickup.tmpl` inside the real checkout
-now), overridable with `AUTOHARN=/path/to/autoharn` (same convention as `judge`).
-
-Read-only throughout: every query here is a SELECT; this script issues no INSERT/UPDATE/DELETE.
-Lazy imports banned (top-of-file only, per this project's inherited convention).
-"""
+Lazy imports banned (CLAUDE.md, 2026-07-02): every import is top-of-file."""
 from __future__ import annotations
 
 import argparse
 import json
 import os
-import re
-import subprocess
 import sys
 from pathlib import Path
 
@@ -214,80 +34,28 @@ HERE = Path(__file__).resolve().parent
 AUTOHARN = Path(os.environ.get("AUTOHARN", str(HERE / ".." / ".."))).resolve()
 DEPLOYMENT_PATH = Path(os.environ.get("PICKUP_DEPLOYMENT", str(HERE / "deployment.json")))
 
-# eager, top-of-file (lazy imports banned): AUTOHARN is resolved above from env/the sibling-
-# checkout convention BEFORE this insert+import runs, exactly the pattern
-# instruments/ledger_target.py and engine/targets.py already use to reach a sibling module.
+sys.path.insert(0, str(AUTOHARN / "serving"))
 sys.path.insert(0, str(AUTOHARN / "filing"))
 try:
-    import deployment_record  # noqa: E402  (filing/deployment_record.py, the ONE home for the shape)
+    import boundary_cli_client as bcc  # noqa: E402
     import standing_decisions_config  # noqa: E402  (filing/standing_decisions_config.py, the ONE
                                        # home for the grades/byte_cap defaulting logic -- shared
-                                       # with hooks/sessionstart_durable_decisions.py, see that
-                                       # module's own docstring NAMED CHOICE)
+                                       # with hooks/sessionstart_durable_decisions.py AND the
+                                       # legacy pickup, ADR-0012 P1, no DB dependency of its own)
 except ImportError as _e:
-    print(f"pickup: cannot import autoharn's filing/deployment_record.py under "
-          f"AUTOHARN={AUTOHARN} ({_e.__class__.__name__}: {_e})", file=sys.stderr)
+    print(f"pickup: cannot import autoharn's serving/boundary_cli_client.py or "
+          f"filing/standing_decisions_config.py under AUTOHARN={AUTOHARN} "
+          f"({_e.__class__.__name__}: {_e})", file=sys.stderr)
     print("        set AUTOHARN=/path/to/autoharn, or place a sibling checkout at ../autoharn", file=sys.stderr)
-    sys.exit(2)
+    sys.exit(4)
 
 
-def _load_deployment():
+def _load_config() -> bcc.ServedConfig:
     try:
-        return deployment_record.load_deployment(DEPLOYMENT_PATH)
-    except deployment_record.DeploymentError as e:
+        return bcc.load_served_config(DEPLOYMENT_PATH)
+    except bcc.BoundaryClientError as e:
         print(f"pickup: {e}", file=sys.stderr)
-        sys.exit(2)
-
-
-def check_connectivity(dep) -> tuple[bool, str]:
-    """An EXPLICIT capability probe -- 'can we even connect and SET ROLE dep.role at all' -- run
-    ONCE, before any section is queried, mirroring bootstrap/templates/verify-chain.tmpl's
-    has_row_hash_layer()/has_high_water_layer() (present, err) pattern (tracker item
-    `verify-chain-error-conflation`, 2026-07-13) applied one verb over (tracker item
-    `pickup-connection-failure-silent-empty`, 2026-07-13, see module docstring's CONNECTIVITY
-    section): a query that FAILS TO EXECUTE (connection refused, host unreachable, auth failed,
-    SET ROLE refused because the role is missing or not granted, or a connection that never
-    completes within a bounded wait) is a DIFFERENT world-state from a query that ran and gave a
-    real SQL answer -- every section function below presumes THIS probe already succeeded, so a
-    genuine per-section "does not exist" (a pre-s22 kernel, an ungranted view) is never confused
-    with "could not even ask".
-
-    Returns (ok, err): ok is True only when `SELECT 1;` actually ran under `SET ROLE dep.role`
-    and returned success; err carries psql's own stderr (or a bounded-wait timeout's own message)
-    verbatim when ok is False, never fabricated, never summarized away."""
-    full = f"SET ROLE {dep.role};\nSELECT 1;"
-    try:
-        r = subprocess.run(
-            ["psql", "-h", dep.host, "-d", dep.db, "-v", "ON_ERROR_STOP=1", "-c", full],
-            capture_output=True, text=True, timeout=15)
-    except subprocess.TimeoutExpired:
-        return False, (f"psql did not complete within 15s connecting to host={dep.host!r} "
-                        f"db={dep.db!r} -- treated as a connection-level failure, never as a "
-                        f"bounded schema answer")
-    if r.returncode != 0:
-        return False, r.stderr.strip()
-    return True, ""
-
-
-def _psql(dep, sql: str) -> subprocess.CompletedProcess:
-    """Run `sql` as the project's granted subject role (SET ROLE dep.role) -- see module
-    docstring on why REVIEW-DEBT deliberately queries under the constrained role."""
-    full = f"SET ROLE {dep.role};\n{sql}"
-    return subprocess.run(
-        ["psql", "-h", dep.host, "-d", dep.db, "-v", "ON_ERROR_STOP=1", "-c", full],
-        capture_output=True, text=True, timeout=15)
-
-
-def _psql_tuples(dep, sql: str) -> subprocess.CompletedProcess:
-    """Like `_psql` but with `-t -A` (tuples-only, unaligned) -- for a query this script's own
-    logic branches on (the IN-FLIGHT violations line's count-vs-none house rule) or reproduces
-    close to verbatim (the IN-FLIGHT spec block, which needs the exact statement text with no
-    table borders/wrapping in the way) rather than a query merely displayed as psql's own
-    formatted table."""
-    full = f"SET ROLE {dep.role};\n{sql}"
-    return subprocess.run(
-        ["psql", "-h", dep.host, "-d", dep.db, "-t", "-A", "-v", "ON_ERROR_STOP=1", "-c", full],
-        capture_output=True, text=True, timeout=15)
+        sys.exit(4)
 
 
 def _section(name: str) -> None:
@@ -295,10 +63,6 @@ def _section(name: str) -> None:
 
 
 def _load_apparatus(dep_dir: Path) -> dict:
-    """Best-effort `<world-root>/.claude/apparatus.json` load -- mirrors hooks/
-    sessionstart_durable_decisions.py's own `_load_apparatus_quiet()` exactly (same shape, same
-    fail-quiet-to-{} posture): a missing/malformed apparatus.json degrades to the documented
-    defaults (filing/standing_decisions_config.py), never a crash."""
     path = dep_dir / ".claude" / "apparatus.json"
     try:
         with open(path, encoding="utf-8") as f:
@@ -308,931 +72,126 @@ def _load_apparatus(dep_dir: Path) -> dict:
         return {}
 
 
-def standing_decisions(dep) -> None:
+def standing_decisions(cfg: bcc.ServedConfig) -> None:
     _section("STANDING-DECISIONS")
-    # design/FABLE-GRADED-DECISIONS-SPEC.md element 5: printed BEFORE IN-FORCE-DECISIONS (module
-    # docstring's own STANDING-DECISIONS entry explains why), no recency limit, byte-capped with
-    # loud truncation -- the SAME config resolution (filing/standing_decisions_config.py) hooks/
-    # sessionstart_durable_decisions.py's own SessionStart hook shares (ADR-0012 P1: one home for
-    # the grades/byte_cap defaulting logic; the mechs.get("standing_decisions") EXTRACTION itself
-    # stays HERE, in this scanned .tmpl file -- see that module's own docstring NAMED CHOICE for
-    # why: filing/apparatus_registry.py's mechanical mechanism-name derivation never scans
-    # filing/*.py itself).
     apparatus = _load_apparatus(DEPLOYMENT_PATH.parent)
     mechs = apparatus.get("mechanisms")
     entry = mechs.get("standing_decisions") if isinstance(mechs, dict) else None
     grades, byte_cap, max_items = standing_decisions_config.resolve_standing_decisions_config(entry)
-
-    # LIVE column-existence check (the SAME convention in_flight()'s own effective_state probe
-    # above already uses) -- s36 is NOT wired into every world's birth chain (authored+scratch-
-    # witnessed only, per its own header), so an unconditional SELECT here would surface a bare
-    # SQL error instead of the graceful, honest degradation every other pre-sNN gap in this file
-    # already gets (REVIEW-DEBT's own pre-s20-grants BLOCKED line is the precedent).
-    has_grade_col = _psql_tuples(dep, "SELECT EXISTS (SELECT 1 FROM information_schema.columns "
-                                       f"WHERE table_schema = '{dep.schema}' AND table_name = 'ledger' "
-                                       "AND column_name = 'decision_grade');")
-    if not (has_grade_col.returncode == 0
-            and has_grade_col.stdout.strip().splitlines()[-1] == "t"):
-        print("(this world's kernel predates kernel/lineage/s36-decision-grade.sql -- no standing "
-              "decisions to show; apply s36 to this schema as a maintainer act to adopt graded "
-              "decisions, or there is nothing more to do here)")
+    try:
+        rows = bcc.get_all_rows(cfg.base, "/views/standing_decisions", cursor="after_id")
+    except bcc.BoundaryRefusal as e:
+        if e.status == 409:
+            print("(this world's kernel predates kernel/lineage/s36-decision-grade.sql -- no "
+                  "standing decisions to show; apply s36 to this schema as a maintainer act to "
+                  "adopt graded decisions, or there is nothing more to do here)")
+            return
+        detail = e.body.get("message") if isinstance(e.body, dict) else e.body
+        print(f"ERROR: boundary HTTP {e.status}: {detail}")
         return
-
-    grades_sql_list = ",".join("'" + g.replace("'", "''") + "'" for g in grades)
-    # regexp_replace collapses an embedded newline to a single space SERVER-SIDE before this
-    # section's own row-per-line reader ever sees it -- the SAME run12-witnessed fix resources()/
-    # estimates() above already apply, for the identical reason (this function reads via -t -A,
-    # one physical output line per newline found in the data, not per query row).
-    r = _psql_tuples(dep, "SELECT id, grade, regexp_replace(statement, '[\\n\\r]+[ \\t]*', ' ', 'g') "
-                           f"FROM {dep.schema}.standing_decisions "
-                           f"WHERE grade IN ({grades_sql_list}) ORDER BY id;")
-    if r.returncode != 0:
-        print(f"ERROR: {r.stderr.strip()}")
+    rows = [r for r in rows if r.get("grade") in grades]
+    if not rows:
+        print(f"(no standing decisions on record in this deployment's configured grade set: {grades})")
         return
-    # -t -A echoes one leading "SET\n" line for the preceding `SET ROLE` statement (_psql_tuples'
-    # own docstring) -- drop exactly that one line, the SAME convention resources()/estimates()
-    # above already use.
-    lines = [ln for ln in r.stdout.split("\n")[1:] if ln.strip()]
-    if not lines:
-        print("(no standing decisions on record in this deployment's configured grade set: "
-              f"{grades})")
-        return
-
     rendered: list[str] = []
     budget = byte_cap
     shown = 0
-    for ln in lines:
+    for r in sorted(rows, key=lambda r: r["id"]):
         if max_items is not None and shown >= max_items:
             break
-        row_id, _, rest = ln.partition("|")
-        grade, _, statement = rest.partition("|")
-        line = f"{row_id}\t{grade}\t{statement}"
+        statement = " ".join(str(r.get("statement", "")).splitlines())
+        line = f"{r['id']}\t{r['grade']}\t{statement}"
         cost = len(line.encode("utf-8")) + 1
         if cost > budget:
             break
         rendered.append(line)
         budget -= cost
         shown += 1
-    remaining = len(lines) - shown
+    remaining = len(rows) - shown
     if remaining > 0:
-        # Imperative teach-text (ledger item standing-injection-max-items), mirrored verbatim from
-        # hooks/sessionstart_durable_decisions.py's own _render(): a DIRECTIVE, not a footnote --
-        # the witnessed failure was an agent reader that saw an aside and did not act on it.
         rendered.append(f"ACTION REQUIRED: {remaining} more standing decision(s) omitted -- run "
                          f"`./led standing` NOW to read them before proceeding.")
     print("\n".join(rendered))
 
 
-def in_force_decisions(dep, n: int) -> None:
+def in_force_decisions(cfg: bcc.ServedConfig, n: int) -> None:
     _section("IN-FORCE-DECISIONS")
-    r = _psql(dep, f"SELECT id, kind, statement FROM {dep.schema}.ledger_current "
-                    f"ORDER BY id DESC LIMIT {int(n)};")
-    if r.returncode != 0:
-        print(f"ERROR: {r.stderr.strip()}")
-    else:
-        print(r.stdout.strip() or "(no rows)")
+    rows = bcc.get_all_rows(cfg.base, "/rows/current", cursor="after_id")
+    top = sorted(rows, key=lambda r: -r["id"])[:n]
+    if not top:
+        print("(no rows)")
+        return
+    for r in top:
+        print(f"{r['id']}\t{r['kind']}\t{r.get('statement', '')}")
 
 
-def open_questions(dep) -> None:
+def open_questions(cfg: bcc.ServedConfig) -> None:
     _section("OPEN-QUESTIONS")
-    r = _psql(dep, f"SELECT * FROM {dep.schema}.question_status ORDER BY question_id;")
-    if r.returncode != 0:
-        print(f"ERROR: {r.stderr.strip()}")
-    else:
-        print(r.stdout.strip() or "(no questions on record)")
+    try:
+        rows = bcc.get_all_rows(cfg.base, "/views/question_status", cursor="after_id")
+    except bcc.BoundaryRefusal as e:
+        detail = e.body.get("message") if isinstance(e.body, dict) else e.body
+        print(f"ERROR: boundary HTTP {e.status}: {detail}")
+        return
+    if not rows:
+        print("(no questions on record)")
+        return
+    for r in sorted(rows, key=lambda r: r["question_id"]):
+        print(json.dumps(r, sort_keys=True))
 
 
-def review_debt(dep) -> None:
+def review_debt(cfg: bcc.ServedConfig) -> None:
     _section("REVIEW-DEBT")
-    r = _psql(dep, f"SELECT * FROM {dep.schema}.review_gap ORDER BY id;")
-    if r.returncode != 0:
-        if "permission denied" in r.stderr:
-            print("BLOCKED: pre-s20 grants -- the granted role has no SELECT on "
-                  "countersign_obligation in the applied kernel lineage (autoharn BACKLOG.md, "
-                  "2026-07-09; a kernel/lineage/s20 delta exists to fix this, apply is a "
-                  "maintainer act). review_gap is security_invoker, so this is the constrained "
-                  "role's own honest view, not a bug in this script.")
-        else:
-            print(f"ERROR: {r.stderr.strip()}")
-    else:
-        print(r.stdout.strip() or "(no review debt outstanding)")
-
-
-# Field order §2 fixes for a `resource:`-prefixed decision statement (see this file's docstring
-# RESOURCES entry and user-guide/USER-BLESSED-TABLE-TEMPLATE.md's "statement grammars" section, the
-# ONE place both this parser and an authoring agent read the grammar from -- this list is that
-# grammar transcribed, not a second definition of it).
-_RESOURCE_FIELDS = ("NAME", "CLASS", "REACH", "WHAT-IT-PROVES", "GUIDANCE", "TIER")
-
-
-def _resource_tier_rank(tier: str) -> int:
-    """forbidden first (design/ORCH-SPEC-RESOURCE-ACCOUNTING.md §3: a prohibition outranks a
-    mandate for a reader's attention -- tracker item `accounting-stage-a`), then mandated, then
-    blessed, then everything else (available, or an unrecognized tier string -- both sort last
-    rather than erroring, since sorting is a display convenience, never a validation gate)."""
-    t = tier.strip().lower()
-    if t.startswith("forbidden"):
-        return 0
-    if t.startswith("mandated"):
-        return 1
-    if t.startswith("blessed"):
-        return 2
-    return 3
-
-
-def resources(dep) -> None:
-    _section("RESOURCES")
-    # regexp_replace collapses every run of \n/\r plus its following indentation to a single
-    # space SERVER-SIDE, before the row ever reaches -t -A tuples-only output -- run12 witness,
-    # 2026-07-12: a `resource:` statement pasted with an embedded newline (a terminal line-wrap
-    # mid-word) shredded into TWO spurious rows here, because -t -A prints one PHYSICAL line per
-    # newline found in the data, and this function's own leading-SET-ROLE-line-drop convention
-    # (below) then treats each physical line as if it were one ledger row (one of the two fake
-    # rows even printed `id=experiments`, the tail of the pasted statement text misread as a row
-    # id). Normalizing the newline INSIDE the SQL guarantees one row of THIS query's result set
-    # is exactly one physical output line, regardless of what the statement's own text contains
-    # -- the fix belongs at the SQL layer, not a smarter Python line-splitter, because the
-    # row-boundary ambiguity is a property of `-t -A`'s own output format; this function's
-    # IN-FLIGHT sibling (in_flight(), below) already works around the identical ambiguity with an
-    # in-band `--- SPEC ---` marker, for exactly this reason.
-    # bootstrap/templates/led.tmpl's own resource-intake validator is the write-side half of this
-    # fix -- a malformed statement (not exactly the six-field grammar) is refused loudly before it
-    # can ever reach this SELECT. This normalization is defense for what a legitimate, un-refused
-    # row may still contain (an embedded newline from a paste, exactly the run12 specimen), never
-    # a substitute for that write-time refusal -- the MALFORMED path below stays, for a legacy row
-    # written before the write-side fix, or any statement that is malformed for a reason
-    # normalization does not cure.
-    # COHERENCE PARTNER: the WHERE filter below and led.tmpl's validator trigger define "a
-    # resource declaration" IDENTICALLY, by construction. led triggers on the statement AFTER
-    # stripping leading POSIX [:space:] (its `${statement%%[![:space:]]*}` strip) starting with
-    # `resource:`; the regex below names the SAME POSIX class (`^[[:space:]]*resource:`), so the
-    # set of rows this section reads is precisely the set led validated -- no more, no fewer. A
-    # statement led accepts can never be invisible here (the incoherence a position-0 LIKE used
-    # to permit: validated on write, absent from this read). Change either side only in lockstep
-    # with the other; the grammar's one documented home stays design/USER-BLESSED-TABLE-
-    # TEMPLATE.md's "statement grammars" section.
-    r = _psql_tuples(dep, "SELECT id, regexp_replace(statement, '[\\n\\r]+[ \\t]*', ' ', 'g') "
-                           f"FROM {dep.schema}.ledger_current "
-                           f"WHERE kind = 'decision' AND statement ~ '^[[:space:]]*resource:' "
-                           f"ORDER BY id;")
-    if r.returncode != 0:
-        print(f"ERROR: {r.stderr.strip()}")
+    try:
+        rows = bcc.get_all_rows(cfg.base, "/views/review_gap", cursor="after_id")
+    except bcc.BoundaryRefusal as e:
+        if e.status == 409:
+            print("BLOCKED: pre-s20 grants, OR this world's kernel predates review_gap "
+                  "(autoharn BACKLOG.md, 2026-07-09) -- the boundary reports this as a typed "
+                  "capability_absent (see its own message below), not a bug in this script.")
+            detail = e.body.get("message") if isinstance(e.body, dict) else e.body
+            print(f"  {detail}")
+            return
+        detail = e.body.get("message") if isinstance(e.body, dict) else e.body
+        print(f"ERROR: boundary HTTP {e.status}: {detail}")
         return
-    # -t -A echoes one leading line for the preceding `SET ROLE` statement (see _psql_tuples
-    # docstring) -- drop exactly that one line, same convention as in_flight()'s spec block above.
-    # With the newline-normalization above, one row of the query result is now ALWAYS exactly one
-    # physical output line, so this split-and-drop is safe again (it was NOT, before this fix, for
-    # any statement containing an embedded newline -- see the comment above).
-    lines = [ln for ln in r.stdout.split("\n")[1:] if ln.strip()]
-    if not lines:
-        print("(no resource declarations on record)")
+    if not rows:
+        print("(no review debt outstanding)")
         return
-
-    parsed: list[tuple[int, str, str]] = []  # (tier_rank, name, formatted block)
-    malformed: list[str] = []
-    for ln in lines:
-        row_id, _, statement = ln.partition("|")
-        # lstrip BEFORE the prefix strip: the SQL filter above admits leading [:space:] (the
-        # coherence-partner contract with led.tmpl's own trigger), so the `resource:` prefix may
-        # arrive indented -- tolerate exactly what the filter admits, explicitly, rather than by
-        # the accident of split-on-first-colon skipping it.
-        statement = statement.lstrip()
-        body = statement.split(":", 1)[1] if ":" in statement else ""
-        fields = [f.strip() for f in body.split("|")]
-        if len(fields) != len(_RESOURCE_FIELDS):
-            malformed.append(f"id={row_id.strip()}: MALFORMED resource statement (expected "
-                              f"{len(_RESOURCE_FIELDS)} '|'-separated fields "
-                              f"{_RESOURCE_FIELDS}, got {len(fields)}) -- raw: {statement.strip()}")
-            continue
-        name, cls, reach, proves, guidance, tier = fields
-        block = (f"[{tier}] {name} ({cls})  (ledger row id={row_id.strip()})\n"
-                 f"  reach:      {reach}\n"
-                 f"  proves:     {proves}\n"
-                 f"  guidance:   {guidance}")
-        parsed.append((_resource_tier_rank(tier), name, block))
-
-    parsed.sort(key=lambda t: (t[0], t[1]))
-    for _, _, block in parsed:
-        print(block)
-    for m in malformed:
-        print(m)
-
-
-# Field order for an `estimate:`-prefixed decision statement (see this file's docstring
-# ESTIMATES entry and user-guide/USER-RETROSPECTIVE-RECIPE.md's "Estimate statement grammar"
-# section, the ONE place both this parser and led.tmpl's own intake validator read the grammar
-# from -- this list is that grammar transcribed, not a second definition of it, ADR-0012 P1).
-_ESTIMATE_FIELDS = ("TASK-SLUG", "TOOL-CALLS", "SUBAGENT-SPAWNS", "WALL-CLOCK", "TOKEN-OOM", "BASIS")
-
-# Field order for an `actual:`-prefixed decision statement -- the measured-afterward twin (see
-# this file's docstring ESTIMATES entry and user-guide/USER-RETROSPECTIVE-RECIPE.md's "The `actual:`
-# statement grammar" section, the ONE place both this parser and led.tmpl's own intake validator
-# read the grammar from -- this list is that grammar transcribed, not a second definition of it,
-# ADR-0012 P1).
-_ACTUAL_FIELDS = ("TASK-SLUG", "TOOL-CALLS", "SUBAGENT-SPAWNS", "WALL-CLOCK", "TOKENS", "SOURCE")
-
-
-def _read_actuals(dep) -> tuple[dict[str, list[str]], list[str]]:
-    """Read every on-record `actual:` row, grouped by TASK-SLUG -- estimates()'s own pairing
-    half. Mirrors estimates()'s newline-normalization/coherence-partner/MALFORMED conventions
-    exactly (see that function's own comments for the run12 specimen this guards against).
-    COHERENCE PARTNER: the WHERE filter below and led.tmpl's `actual:` validator trigger define
-    "an actual declaration" IDENTICALLY, by construction -- change either side only in lockstep
-    with the other; the grammar's one documented home stays user-guide/USER-RETROSPECTIVE-RECIPE.md's
-    "The `actual:` statement grammar" section. Returns (by_slug, malformed) where by_slug maps
-    TASK-SLUG -> list of formatted detail blocks (ledger row id embedded), in ledger row-id
-    order."""
-    r = _psql_tuples(dep, "SELECT id, regexp_replace(statement, '[\\n\\r]+[ \\t]*', ' ', 'g') "
-                           f"FROM {dep.schema}.ledger_current "
-                           f"WHERE kind = 'decision' AND statement ~ '^[[:space:]]*actual:' "
-                           f"ORDER BY id;")
-    by_slug: dict[str, list[str]] = {}
-    malformed: list[str] = []
-    if r.returncode != 0:
-        malformed.append(f"ERROR: {r.stderr.strip()}")
-        return by_slug, malformed
-    for ln in [ln for ln in r.stdout.split("\n")[1:] if ln.strip()]:
-        row_id, _, statement = ln.partition("|")
-        statement = statement.lstrip()
-        body = statement.split(":", 1)[1] if ":" in statement else ""
-        fields = [f.strip() for f in body.split("|")]
-        if len(fields) != len(_ACTUAL_FIELDS):
-            malformed.append(f"id={row_id.strip()}: MALFORMED actual statement (expected "
-                              f"{len(_ACTUAL_FIELDS)} '|'-separated fields "
-                              f"{_ACTUAL_FIELDS}, got {len(fields)}) -- raw: {statement.strip()}")
-            continue
-        slug, tool_calls, spawns, wall_clock, tokens, source = fields
-        block = (f"  ACTUAL (ledger row id={row_id.strip()}):\n"
-                 f"    measured tool calls:      {tool_calls}\n"
-                 f"    measured subagent spawns: {spawns}\n"
-                 f"    measured wall-clock:      {wall_clock}\n"
-                 f"    measured tokens:          {tokens}\n"
-                 f"    source:                   {source}")
-        by_slug.setdefault(slug, []).append(block)
-    return by_slug, malformed
-
-
-def estimates(dep) -> None:
-    _section("ESTIMATES")
-    # Mirrors resources()'s own newline-normalization exactly, for the identical reason (a paste
-    # reflowed by a terminal must not shred one row into several under -t -A's one-physical-line-
-    # per-newline output convention -- see resources()'s own comment for the run12 specimen this
-    # guards against here too).
-    # COHERENCE PARTNER: the WHERE filter below and led.tmpl's `estimate:` validator trigger
-    # define "an estimate declaration" IDENTICALLY, by construction -- the same coherence
-    # contract resources()/led.tmpl's `resource:` block already keep (see that pair's own
-    # comments). Change either side only in lockstep with the other; the grammar's one documented
-    # home stays user-guide/USER-RETROSPECTIVE-RECIPE.md's "Estimate statement grammar" section.
-    r = _psql_tuples(dep, "SELECT id, regexp_replace(statement, '[\\n\\r]+[ \\t]*', ' ', 'g') "
-                           f"FROM {dep.schema}.ledger_current "
-                           f"WHERE kind = 'decision' AND statement ~ '^[[:space:]]*estimate:' "
-                           f"ORDER BY id;")
-    if r.returncode != 0:
-        print(f"ERROR: {r.stderr.strip()}")
-        return
-    # -t -A echoes one leading line for the preceding `SET ROLE` statement (see resources()'s own
-    # identical drop) -- safe here too, now that the newline-normalization above guarantees one
-    # query row is always exactly one physical output line.
-    lines = [ln for ln in r.stdout.split("\n")[1:] if ln.strip()]
-
-    parsed: list[tuple[str, int, str]] = []  # (task-slug, row-id, formatted block)
-    malformed: list[str] = []
-    for ln in lines:
-        row_id, _, statement = ln.partition("|")
-        statement = statement.lstrip()
-        body = statement.split(":", 1)[1] if ":" in statement else ""
-        fields = [f.strip() for f in body.split("|")]
-        if len(fields) != len(_ESTIMATE_FIELDS):
-            malformed.append(f"id={row_id.strip()}: MALFORMED estimate statement (expected "
-                              f"{len(_ESTIMATE_FIELDS)} '|'-separated fields "
-                              f"{_ESTIMATE_FIELDS}, got {len(fields)}) -- raw: {statement.strip()}")
-            continue
-        slug, tool_calls, spawns, wall_clock, token_oom, basis = fields
-        block = (f"{slug}  (ledger row id={row_id.strip()})\n"
-                 f"  predicted tool calls:      {tool_calls}\n"
-                 f"  predicted subagent spawns: {spawns}\n"
-                 f"  predicted wall-clock:      {wall_clock}\n"
-                 f"  predicted token OOM:       {token_oom}\n"
-                 f"  basis:                     {basis}")
-        parsed.append((slug, int(row_id.strip()), block))
-    parsed.sort(key=lambda t: (t[0], t[1]))
-
-    # Tracker item `actual-intake-grammar`, 2026-07-13: pair each on-record `actual:` row beside
-    # the `estimate:` block sharing its TASK-SLUG (matched_slugs tracks which actuals get printed
-    # here so the leftover pass below never double-prints one). An `actual:` row with no matching
-    # estimate is genuinely common (a measured actual can exist with no prior prediction) and is
-    # listed afterward, never silently dropped -- the same MALFORMED-flagging honesty this
-    # section already keeps for a malformed `estimate:` row.
-    actuals_by_slug, actuals_malformed = _read_actuals(dep)
-    matched_slugs: set[str] = set()
-
-    if not parsed and not malformed:
-        print("(no estimate declarations on record)")
-    else:
-        for slug, _, block in parsed:
-            print(block)
-            for actual_block in actuals_by_slug.get(slug, []):
-                print(actual_block)
-                matched_slugs.add(slug)
-        for m in malformed:
-            print(m)
-
-    unmatched_slugs = sorted(s for s in actuals_by_slug if s not in matched_slugs)
-    if unmatched_slugs:
-        print("  -- unmatched actuals (no `estimate:` row on record for this TASK-SLUG) --")
-        for slug in unmatched_slugs:
-            print(f"{slug}:")
-            for actual_block in actuals_by_slug[slug]:
-                print(actual_block)
-    for m in actuals_malformed:
-        print(m)
-
-
-# Field order for a `taxon:`-prefixed decision statement (see this file's docstring TAXONOMIES
-# entry and user-guide/USER-TAXONOMY-DECLARATION.md's "The statement grammars" section, the ONE place
-# both this parser and led.tmpl's own intake validator read the grammar from -- this list is that
-# grammar transcribed, not a second definition of it, ADR-0012 P1).
-_TAXON_FIELDS = ("TAXONOMY", "TAXON", "PATTERNS", "GLOSS")
-
-# Field order for an `interface:`-prefixed decision statement -- same sourcing rule as
-# _TAXON_FIELDS above.
-_INTERFACE_FIELDS = ("TAXONOMY", "ARTIFACT-PATTERN", "GLOSS")
-
-
-def taxonomies(dep) -> None:
-    _section("TAXONOMIES")
-    # Mirrors resources()'s/estimates()'s own newline-normalization exactly, for the identical
-    # reason (a paste reflowed by a terminal must not shred one row into several under -t -A's
-    # one-physical-line-per-newline output convention -- see resources()'s own comment for the
-    # run12 specimen this guards against here too).
-    #
-    # COHERENCE PARTNER (taxon side): the WHERE filter below and led.tmpl's `taxon:` validator
-    # trigger define "a taxon declaration" IDENTICALLY, by construction -- the same coherence
-    # contract resources()/led.tmpl's `resource:` block already keep (see that pair's own
-    # comments for the run12 incident this pattern forecloses). Change either side only in
-    # lockstep with the other; the grammar's one documented home stays design/
-    # USER-TAXONOMY-DECLARATION.md's "The statement grammars" section.
-    r = _psql_tuples(dep, "SELECT id, regexp_replace(statement, '[\\n\\r]+[ \\t]*', ' ', 'g') "
-                           f"FROM {dep.schema}.ledger_current "
-                           f"WHERE kind = 'decision' AND statement ~ '^[[:space:]]*taxon:' "
-                           f"ORDER BY id;")
-    if r.returncode != 0:
-        print(f"ERROR: {r.stderr.strip()}")
-        return
-    # -t -A echoes one leading line for the preceding `SET ROLE` statement (see resources()'s own
-    # identical drop) -- safe here too, now that the newline-normalization above guarantees one
-    # query row is always exactly one physical output line.
-    lines = [ln for ln in r.stdout.split("\n")[1:] if ln.strip()]
-    if not lines:
-        print("(no taxon declarations on record)")
-    else:
-        parsed: list[tuple[str, str, int, str]] = []  # (taxonomy, taxon, row-id, formatted block)
-        malformed: list[str] = []
-        for ln in lines:
-            row_id, _, statement = ln.partition("|")
-            statement = statement.lstrip()
-            body = statement.split(":", 1)[1] if ":" in statement else ""
-            fields = [f.strip() for f in body.split("|")]
-            if len(fields) != len(_TAXON_FIELDS):
-                malformed.append(f"id={row_id.strip()}: MALFORMED taxon statement (expected "
-                                  f"{len(_TAXON_FIELDS)} '|'-separated fields "
-                                  f"{_TAXON_FIELDS}, got {len(fields)}) -- raw: {statement.strip()}")
-                continue
-            taxonomy, taxon, patterns, gloss = fields
-            block = (f"TAXON [{taxonomy}] {taxon}  (ledger row id={row_id.strip()})\n"
-                     f"  patterns: {patterns}\n"
-                     f"  gloss:    {gloss}")
-            parsed.append((taxonomy, taxon, int(row_id.strip()), block))
-        parsed.sort(key=lambda t: (t[0], t[1], t[2]))
-        for _, _, _, block in parsed:
-            print(block)
-        for m in malformed:
-            print(m)
-
-    # COHERENCE PARTNER (interface side): the WHERE filter below and led.tmpl's `interface:`
-    # validator trigger define "an interface declaration" IDENTICALLY, by construction -- the same
-    # coherence contract kept above for `taxon:`. Change either side only in lockstep with the
-    # other; the grammar's one documented home stays user-guide/USER-TAXONOMY-DECLARATION.md's "The
-    # statement grammars" section.
-    r2 = _psql_tuples(dep, "SELECT id, regexp_replace(statement, '[\\n\\r]+[ \\t]*', ' ', 'g') "
-                            f"FROM {dep.schema}.ledger_current "
-                            f"WHERE kind = 'decision' AND statement ~ '^[[:space:]]*interface:' "
-                            f"ORDER BY id;")
-    if r2.returncode != 0:
-        print(f"ERROR: {r2.stderr.strip()}")
-        return
-    lines2 = [ln for ln in r2.stdout.split("\n")[1:] if ln.strip()]
-    if not lines2:
-        print("(no interface declarations on record)")
-        return
-
-    parsed2: list[tuple[str, str, int, str]] = []  # (taxonomy, artifact-pattern, row-id, block)
-    malformed2: list[str] = []
-    for ln in lines2:
-        row_id, _, statement = ln.partition("|")
-        statement = statement.lstrip()
-        body = statement.split(":", 1)[1] if ":" in statement else ""
-        fields = [f.strip() for f in body.split("|")]
-        if len(fields) != len(_INTERFACE_FIELDS):
-            malformed2.append(f"id={row_id.strip()}: MALFORMED interface statement (expected "
-                               f"{len(_INTERFACE_FIELDS)} '|'-separated fields "
-                               f"{_INTERFACE_FIELDS}, got {len(fields)}) -- raw: {statement.strip()}")
-            continue
-        taxonomy, artifact_pattern, gloss = fields
-        block = (f"INTERFACE [{taxonomy}] {artifact_pattern}  (ledger row id={row_id.strip()})\n"
-                 f"  gloss:    {gloss}")
-        parsed2.append((taxonomy, artifact_pattern, int(row_id.strip()), block))
-    parsed2.sort(key=lambda t: (t[0], t[1], t[2]))
-    for _, _, _, block in parsed2:
-        print(block)
-    for m in malformed2:
-        print(m)
-
-
-# Field order for a `review:`-prefixed decision statement, and for a `review-done:`-prefixed one
-# (see this file's docstring MAINTAINER-REVIEW-QUEUE entry and user-guide/USER-RECIPES-FAQ.md's "Your
-# review queue" section, the ONE place both this parser and led.tmpl's own intake validator read
-# the grammar from -- these lists are that grammar transcribed, not a second definition of it,
-# ADR-0012 P1).
-_REVIEW_FIELDS = ("SLUG", "RANK", "WHAT", "POINTER")
-_REVIEW_DONE_FIELDS = ("SLUG", "DISPOSITION")
-
-
-def review_queue(dep) -> None:
-    """MAINTAINER-REVIEW-QUEUE -- tracker item `maintainer-review-queue`, 2026-07-13: the
-    maintainer's ranked "things I need to personally look at" queue, derived live from every
-    unsuperseded `kind=decision` row whose statement carries the `review:` or `review-done:`
-    prefix convention (user-guide/USER-RECIPES-FAQ.md's "Your review queue" section -- the ONE
-    documented home of this grammar). Unlike resources()/estimates()/taxonomies() above, this
-    section's state is NOT "one block per row" -- it is DERIVED: the latest ledger row (by row
-    id) for a given SLUG among BOTH prefixes decides that SLUG's current state (a `review:` row
-    open/re-ranks it, a `review-done:` row closes it, a later `review:` re-opens it) -- see the
-    grammar section's own "Semantics" paragraph for the full rule, transcribed here, not
-    restated a second time.
-
-    COHERENCE PARTNER: the WHERE filter below and led.tmpl's `review:`/`review-done:` validator
-    triggers define "a review-queue declaration" IDENTICALLY, by construction -- led triggers on
-    the statement after stripping leading POSIX [:space:] starting with EITHER `review:` or
-    `review-done:` (two separate case blocks, one per prefix); the regex below
-    (`^[[:space:]]*review(-done)?:`) names the SAME combined class. Change either side only in
-    lockstep with the other; the grammar's one documented home stays user-guide/USER-RECIPES-FAQ.md's
-    "Your review queue" section.
-
-    Mirrors resources()'s/estimates()'s/taxonomies()'s own newline-normalization exactly, for the
-    identical reason (a paste reflowed by a terminal must not shred one row into several under
-    -t -A's one-physical-line-per-newline output convention -- see resources()'s own comment for
-    the run12 specimen this guards against here too).
-    """
-    _section("MAINTAINER-REVIEW-QUEUE")
-    r = _psql_tuples(dep, "SELECT id, regexp_replace(statement, '[\\n\\r]+[ \\t]*', ' ', 'g') "
-                           f"FROM {dep.schema}.ledger_current "
-                           f"WHERE kind = 'decision' AND statement ~ '^[[:space:]]*review(-done)?:' "
-                           f"ORDER BY id;")
-    if r.returncode != 0:
-        print(f"ERROR: {r.stderr.strip()}")
-        return
-    # -t -A echoes one leading line for the preceding `SET ROLE` statement (see resources()'s own
-    # identical drop) -- safe here too, given the newline-normalization above.
-    lines = [ln for ln in r.stdout.split("\n")[1:] if ln.strip()]
-
-    # latest_by_slug: SLUG -> (row_id, "open"|"done", parsed-fields-dict). Iterating rows in
-    # ascending id order and overwriting on every hit leaves, at the end, exactly the highest-id
-    # row per SLUG -- the "latest row per SLUG wins" rule the grammar section states.
-    latest_by_slug: dict[str, tuple[int, str, dict[str, str]]] = {}
-    malformed: list[str] = []
-    for ln in lines:
-        row_id, _, statement = ln.partition("|")
-        row_id = row_id.strip()
-        statement = statement.lstrip()
-        if statement.startswith("review-done:"):
-            body = statement[len("review-done:"):]
-            fields = [f.strip() for f in body.split("|")]
-            if len(fields) != len(_REVIEW_DONE_FIELDS):
-                malformed.append(f"id={row_id}: MALFORMED review-done statement (expected "
-                                  f"{len(_REVIEW_DONE_FIELDS)} '|'-separated fields "
-                                  f"{_REVIEW_DONE_FIELDS}, got {len(fields)}) -- raw: {statement.strip()}")
-                continue
-            slug, disposition = fields
-            latest_by_slug[slug] = (int(row_id), "done", {"DISPOSITION": disposition})
-        elif statement.startswith("review:"):
-            body = statement[len("review:"):]
-            fields = [f.strip() for f in body.split("|")]
-            if len(fields) != len(_REVIEW_FIELDS):
-                malformed.append(f"id={row_id}: MALFORMED review statement (expected "
-                                  f"{len(_REVIEW_FIELDS)} '|'-separated fields "
-                                  f"{_REVIEW_FIELDS}, got {len(fields)}) -- raw: {statement.strip()}")
-                continue
-            slug, rank, what, pointer = fields
-            if not rank.isdigit() or int(rank) < 1:
-                malformed.append(f"id={row_id}: MALFORMED review statement (RANK {rank!r} is not "
-                                  f"a positive integer) -- raw: {statement.strip()}")
-                continue
-            latest_by_slug[slug] = (int(row_id), "open", {"RANK": rank, "WHAT": what, "POINTER": pointer})
-        else:
-            # Unreachable under the WHERE filter above (both prefixes are required there); kept
-            # as an explicit, never-silent branch rather than assuming the filter can never drift
-            # from this parser (the exact run12 coherence lesson every sibling parser states).
-            malformed.append(f"id={row_id}: MALFORMED review-queue statement (matched neither "
-                              f"'review:' nor 'review-done:' after normalization) -- raw: {statement.strip()}")
-
-    open_entries = [(int(v[2]["RANK"]), slug, v[0], v[2]) for slug, v in latest_by_slug.items() if v[1] == "open"]
-    open_entries.sort(key=lambda t: (t[0], t[1]))
-
-    if not open_entries:
-        print("(no open review-queue entries on record)")
-    else:
-        for rank, slug, row_id, fields in open_entries:
-            print(f"[{rank}] {slug}  (ledger row id={row_id})")
-            print(f"  what:    {fields['WHAT']}")
-            print(f"  pointer: {fields['POINTER']}")
-            print(f"  tick:    ./led decision \"review-done: {slug} | <disposition>\"")
-    for m in malformed:
-        print(m)
-
-
-def recent_changes(dep, since: str | None, n: int) -> None:
-    _section("RECENT-CHANGES")
-    if since:
-        sql = (f"SELECT id, ts, kind, statement FROM {dep.schema}.ledger "
-               f"WHERE ts > '{since}'::timestamptz ORDER BY id DESC;")
-    else:
-        sql = (f"SELECT id, ts, kind, statement FROM {dep.schema}.ledger "
-               f"ORDER BY id DESC LIMIT {int(n)};")
-    r = _psql(dep, sql)
-    if r.returncode != 0:
-        print(f"ERROR: {r.stderr.strip()}")
-    else:
-        print(r.stdout.strip() or "(no rows)")
-
-
-def git_state(repo_root: Path) -> None:
-    _section("GIT-STATE")
-    if not (repo_root / ".git").exists():
-        print(f"(no git repo found at {repo_root})")
-        return
-    status = subprocess.run(["git", "-C", str(repo_root), "status", "--porcelain"],
-                             capture_output=True, text=True)
-    dirty = [ln for ln in status.stdout.splitlines() if ln.strip()]
-    print(f"uncommitted: {len(dirty)} path(s)" + (f" -- {dirty[:10]}" if dirty else ""))
-    upstream = subprocess.run(
-        ["git", "-C", str(repo_root), "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"],
-        capture_output=True, text=True)
-    if upstream.returncode != 0:
-        print("unpushed: no upstream configured for the current branch")
-    else:
-        ahead = subprocess.run(["git", "-C", str(repo_root), "rev-list", "--count", "@{u}..HEAD"],
-                                capture_output=True, text=True)
-        n_ahead = ahead.stdout.strip() if ahead.returncode == 0 else "?"
-        print(f"unpushed: {n_ahead} commit(s) ahead of {upstream.stdout.strip()}")
-
-
-def in_flight(dep) -> None:
-    _section("IN-FLIGHT")
-    # EFFECTIVE_STATE (kernel/lineage/s33-composite-discharge.sql, ledger item
-    # composite-parent-autodischarge): a discharged-by-obligations composite must leave this
-    # queue with no act -- LIVE column-existence check (the SAME convention `rollup()`'s own
-    # parent_slug probe above already uses), never a hardcoded kernel-version assumption, since
-    # s33 is not wired into every world's birth chain. A pre-s33 kernel degrades to the raw
-    # `state` filter, byte-identical to this function's own pre-s33 behavior.
-    has_eff = _psql_tuples(dep, "SELECT EXISTS (SELECT 1 FROM information_schema.columns "
-                                 f"WHERE table_schema = '{dep.schema}' AND table_name = 'work_item_current' "
-                                 "AND column_name = 'effective_state');")
-    state_col = "effective_state" if (has_eff.returncode == 0
-                                       and has_eff.stdout.strip().splitlines()[-1] == "t") else "state"
-    r = _psql(dep, f"SELECT w.slug, w.title, p.name AS claimant "
-                    f"FROM {dep.schema}.work_item_current w "
-                    f"LEFT JOIN {dep.kern}.principal p ON p.id = w.claimant "
-                    f"WHERE w.{state_col} = 'open' ORDER BY w.slug;")
-    if r.returncode != 0:
-        if "does not exist" in r.stderr:
-            print("UNAVAILABLE (no work-item layer -- this world's applied kernel predates "
-                  "kernel/lineage/s22-work-item-ledger.sql, so work_item_current/"
-                  "work_item_violations do not exist here yet; apply is a maintainer act)")
-        else:
-            print(f"ERROR: {r.stderr.strip()}")
-        return
-    open_rows = r.stdout.strip()
-    print(open_rows or "(no open work items)")
-
-    if open_rows:
-        # The full statement text of each open item's OPENING act -- the actual spec a fresh
-        # session has to build the task from (BACKLOG "Run-8 mid-run forensics", 2026-07-11: run
-        # 8 proved slug/title/claimant alone is not enough to resume from). Live SELECT, printed
-        # in FULL -- never truncated, truncating the spec would recreate the defect this exists
-        # to fix. The `--- SPEC ---` / `--- END SPEC ---` markers are baked into the SQL result
-        # text itself, not reconstructed from row boundaries in Python: in `-t -A` output a
-        # multi-line statement's own embedded newlines are indistinguishable from a row
-        # separator, so only a marker INSIDE the printed text can delimit one item's spec from
-        # the next reliably. One opening act per slug is trigger-enforced (validate_work_item,
-        # s22), so a plain JOIN is safe -- no open item can lack one.
-        spec = _psql_tuples(dep,
-            f"SELECT '--- SPEC: ' || w.slug || E' ---\\n' || o.statement || "
-            f"E'\\n--- END SPEC: ' || w.slug || E' ---' "
-            f"FROM {dep.schema}.work_item_current w "
-            f"JOIN {dep.schema}.ledger o ON o.kind = 'work_opened' AND o.work_slug = w.slug "
-            f"WHERE w.{state_col} = 'open' ORDER BY w.slug;")
-        if spec.returncode != 0:
-            print(f"ERROR: {spec.stderr.strip()}")
-        else:
-            # -t -A still echoes one leading line for the preceding `SET ROLE` statement (see
-            # _psql_tuples docstring) -- drop exactly that one line, print the rest verbatim.
-            lines = spec.stdout.strip("\n").splitlines()
-            print("\n".join(lines[1:]))
-
-    v = _psql_tuples(dep, f"SELECT count(*), coalesce(string_agg(DISTINCT violation, ', '), '') "
-                           f"FROM {dep.schema}.work_item_violations;")
-    if v.returncode != 0:
-        print(f"ERROR: {v.stderr.strip()}")
-        return
-    # -t -A still echoes one output line per statement (the preceding `SET ROLE` included) --
-    # the query's own result is always the LAST line, never the first.
-    last_line = v.stdout.strip().splitlines()[-1]
-    count_str, _, kinds = last_line.partition("|")
-    count = int(count_str)
-    print("violations: none" if count == 0 else f"violations: {count} ({kinds})")
-
-
-# ==================================================================================================
-# ROLLUP (tracker slug `work-tree-rollup`, wave-3 dispatch decision, ledger row 192) -- see this
-# file's own module docstring ROLLUP entry for the full design rationale. Parsing helpers below are
-# a THIRD independent reader of the `estimate:` grammar (user-guide/USER-RETROSPECTIVE-RECIPE.md's
-# "Estimate statement grammar" section), alongside `led.tmpl`'s intake validator and this file's own
-# `estimates()` above -- the established precedent for this grammar (stated in that section's own
-# text) is MULTIPLE independent readers of ONE documented grammar, not one shared code module, so a
-# third reader here is in keeping with, not a departure from, house convention. `_fetch_estimate_
-# rows()` DOES share the row-fetch-and-split logic with `estimates()`'s own loop (a plain SQL SELECT
-# + field split is not "a definition of a fact" ADR-0012 P1 forbids duplicating -- the FIELD LIST
-# `_ESTIMATE_FIELDS` above is the one definition, referenced, not re-typed, by both).
-# ==================================================================================================
-
-def _parse_intrange(s: str) -> tuple[int, int] | None:
-    """'40' -> (40, 40); '40-60' -> (40, 60); anything else -> None (not a well-formed
-    TOOL-CALLS/SUBAGENT-SPAWNS value -- the caller treats None as "cannot be summed", never as 0,
-    so a malformed figure is silently excluded from a sum rather than silently corrupting it)."""
-    m = re.fullmatch(r"(\d+)(?:-(\d+))?", s.strip())
-    if not m:
-        return None
-    lo = int(m.group(1))
-    hi = int(m.group(2)) if m.group(2) else lo
-    return (lo, hi)
-
-
-_DURATION_UNIT_MINUTES = {"m": 1, "h": 60, "d": 1440}
-
-
-def _parse_duration_minutes(s: str) -> int | None:
-    """'20m' -> 20; '2h' -> 120; '1d' -> 1440; anything else (including a bare number with no
-    unit) -> None. The WALL-CLOCK grammar (user-guide/USER-RETROSPECTIVE-RECIPE.md) always carries a
-    unit, so a value with none is malformed, not a default unit guessed on its behalf (ADR-0002:
-    validate, do not coerce)."""
-    m = re.fullmatch(r"(\d+)([mhd])", s.strip())
-    if not m:
-        return None
-    return int(m.group(1)) * _DURATION_UNIT_MINUTES[m.group(2)]
-
-
-def _parse_duration_range(s: str) -> tuple[int, int] | None:
-    """'3h' -> (180, 180); '3h-5h' -> (180, 300). Each side of a range carries its OWN unit (no
-    unit is inherited across the '-'), so '10m-30m' parses each side independently -- exactly what
-    the grammar's own worked examples show."""
-    s = s.strip()
-    if "-" in s:
-        lo_s, _, hi_s = s.partition("-")
-        lo, hi = _parse_duration_minutes(lo_s), _parse_duration_minutes(hi_s)
-        return None if (lo is None or hi is None) else (lo, hi)
-    v = _parse_duration_minutes(s)
-    return None if v is None else (v, v)
-
-
-def _fmt_range(r: tuple[int, int] | None, suffix: str = "") -> str:
-    if r is None:
-        return "n/a"
-    lo, hi = r
-    body = str(lo) if lo == hi else f"{lo}-{hi}"
-    return f"{body}{suffix}"
-
-
-def _sum_ranges(ranges: list[tuple[int, int]]) -> tuple[int, int] | None:
-    if not ranges:
-        return None
-    return (sum(r[0] for r in ranges), sum(r[1] for r in ranges))
-
-
-def _fetch_estimate_rows(dep) -> tuple[list[tuple[str, int, dict[str, str]]], list[str]]:
-    """Shared fetch+parse for every well-formed `estimate:`-prefixed decision row: returns
-    (parsed, malformed) where parsed is a list of (TASK-SLUG, ledger row id, {field: value}) and
-    malformed is the same MALFORMED-line text `estimates()` above prints. Newline-normalization,
-    the WHERE filter, and the coherence-partner contract with led.tmpl's own validator are all
-    IDENTICAL to `estimates()`'s own query -- see that function's comments for the run12 rationale;
-    not restated a second time here."""
-    r = _psql_tuples(dep, "SELECT id, regexp_replace(statement, '[\\n\\r]+[ \\t]*', ' ', 'g') "
-                           f"FROM {dep.schema}.ledger_current "
-                           f"WHERE kind = 'decision' AND statement ~ '^[[:space:]]*estimate:' "
-                           f"ORDER BY id;")
-    if r.returncode != 0:
-        return [], [f"ERROR: {r.stderr.strip()}"]
-    lines = [ln for ln in r.stdout.split("\n")[1:] if ln.strip()]
-    parsed: list[tuple[str, int, dict[str, str]]] = []
-    malformed: list[str] = []
-    for ln in lines:
-        row_id, _, statement = ln.partition("|")
-        statement = statement.lstrip()
-        body = statement.split(":", 1)[1] if ":" in statement else ""
-        fields = [f.strip() for f in body.split("|")]
-        if len(fields) != len(_ESTIMATE_FIELDS):
-            malformed.append(f"id={row_id.strip()}: MALFORMED estimate statement (expected "
-                              f"{len(_ESTIMATE_FIELDS)} '|'-separated fields "
-                              f"{_ESTIMATE_FIELDS}, got {len(fields)}) -- raw: {statement.strip()}")
-            continue
-        parsed.append((fields[0], int(row_id.strip()), dict(zip(_ESTIMATE_FIELDS, fields))))
-    return parsed, malformed
-
-
-def rollup(dep) -> None:
-    _section("ROLLUP")
-    print("RETROSPECTIVE-ONLY, always (the maintainer's standing invariant, restated here exactly")
-    print("as user-guide/USER-RETROSPECTIVE-RECIPE.md Section 6 states it for estimate:/actual figures")
-    print("generally): this section never gates, never polices cost or scope, and is never a verdict")
-    print("on a task that missed its number -- only a decomposition-quality signal a retrospective")
-    print("may cite.")
-    print()
-
-    # LIVE check (never assumed, never hardcoded -- the SAME convention led.tmpl's own --parent
-    # gate and `in_flight()`'s own pre-s22 fallback above already use): does this world's kernel
-    # carry the typed parent edge (kernel/lineage/s28-work-parent-edge.sql)? This file executes IN
-    # PLACE for every already-scaffolded world, and s28 is not wired into every world's birth chain.
-    chk = _psql_tuples(dep, "SELECT EXISTS (SELECT 1 FROM information_schema.columns "
-                             f"WHERE table_schema = '{dep.schema}' AND table_name = 'work_item_current' "
-                             "AND column_name = 'parent_slug');")
-    if chk.returncode != 0:
-        print(f"ERROR: {chk.stderr.strip()}")
-        return
-    if chk.stdout.strip().splitlines()[-1] != "t":
-        print("UNAVAILABLE (no typed parent edge -- this world's kernel predates kernel/lineage/"
-              "s28-work-parent-edge.sql, so work_item_current carries no parent_slug column and "
-              "work_item_descendants does not exist here yet; apply is a maintainer act).")
-        return
-
-    tree = _psql_tuples(dep, f"SELECT slug, coalesce(parent_slug, '') FROM "
-                              f"{dep.schema}.work_item_current ORDER BY slug;")
-    if tree.returncode != 0:
-        print(f"ERROR: {tree.stderr.strip()}")
-        return
-    parent_of: dict[str, str] = {}
-    for ln in [x for x in tree.stdout.split("\n")[1:] if x.strip()]:
-        slug, _, parent = ln.partition("|")
-        parent_of[slug.strip()] = parent.strip()
-
-    children_of: dict[str, list[str]] = {}
-    for slug, parent in parent_of.items():
-        if parent:
-            children_of.setdefault(parent, []).append(slug)
-
-    if not children_of:
-        print("(no parent edges on record -- every open/closed work item is a root; nothing to "
-              "roll up)")
-        return
-
-    est_rows, malformed = _fetch_estimate_rows(dep)
-    # latest estimate per slug wins (highest ledger row id) -- a re-estimate supersedes an earlier
-    # one for THIS retrospective read; the kernel itself enforces no supersession here (an
-    # `estimate:` row is a plain decision row, not a typed kind), so this is a display convention,
-    # named as such, not a kernel guarantee.
-    est_by_slug: dict[str, dict[str, str]] = {}
-    for slug, row_id, fields in est_rows:
-        prior = est_by_slug.get(slug)
-        if prior is None or row_id > int(prior["_row_id"]):
-            merged = dict(fields)
-            merged["_row_id"] = str(row_id)
-            est_by_slug[slug] = merged
-
-    def fmt_own(slug: str) -> str:
-        f = est_by_slug.get(slug)
-        if f is None:
-            return "(no estimate: row on record)"
-        return (f"tool_calls={f['TOOL-CALLS']}  subagent_spawns={f['SUBAGENT-SPAWNS']}  "
-                f"wall_clock={f['WALL-CLOCK']}  token_oom={f['TOKEN-OOM']}  "
-                f"(ledger row id={f['_row_id']})")
-
-    for parent in sorted(children_of):
-        kids = sorted(children_of[parent])
-        print(f"{parent}  (direct children: {', '.join(kids)})")
-        print(f"  OWN ESTIMATE:   {fmt_own(parent)}")
-
-        kid_calls: list[tuple[int, int]] = []
-        kid_spawns: list[tuple[int, int]] = []
-        kid_wall: list[tuple[int, int]] = []
-        kid_oom: list[str] = []
-        no_estimate: list[str] = []
-        for k in kids:
-            f = est_by_slug.get(k)
-            if f is None:
-                no_estimate.append(k)
-                continue
-            r = _parse_intrange(f["TOOL-CALLS"])
-            if r is not None:
-                kid_calls.append(r)
-            r = _parse_intrange(f["SUBAGENT-SPAWNS"])
-            if r is not None:
-                kid_spawns.append(r)
-            r = _parse_duration_range(f["WALL-CLOCK"])
-            if r is not None:
-                kid_wall.append(r)
-            kid_oom.append(f["TOKEN-OOM"])
-
-        sum_calls = _sum_ranges(kid_calls)
-        sum_spawns = _sum_ranges(kid_spawns)
-        sum_wall = _sum_ranges(kid_wall)
-        n_with_estimate = len(kids) - len(no_estimate)
-        # WITNESSED-GRADE columns (once accounting spec Stage B/D ship) kept apart from
-        # DIAGNOSTIC-GRADE columns, by construction -- two separate printed lines, never one folded
-        # figure (the 2026-07-11 ruling, restated in this section's own printed ACTUALS note below).
-        print(f"  CHILDREN SUM ({n_with_estimate}/{len(kids)} have an estimate: row) -- "
-              f"witnessed-grade-once-built: tool_calls={_fmt_range(sum_calls)}  "
-              f"subagent_spawns={_fmt_range(sum_spawns)}")
-        print(f"  CHILDREN SUM -- diagnostic-grade, permanently: wall_clock="
-              f"{_fmt_range(sum_wall, 'm')}")
-        if kid_oom:
-            print(f"    token_oom per child (order-of-magnitude figures are NOT additive -- shown "
-                  f"as a list, never summed): {kid_oom}")
-        if no_estimate:
-            print(f"    children with no estimate: row on record: {no_estimate}")
-
-        # SPLIT-TIME SIGNAL (commission point 3: "parent's own estimate vs SUM(children's
-        # estimates)" -- the free decomposition-quality signal available before any actuals).
-        f_own = est_by_slug.get(parent)
-        if f_own is not None and sum_calls is not None:
-            own_calls = _parse_intrange(f_own["TOOL-CALLS"])
-            if own_calls is not None:
-                verdict = ("own >= children sum (the parent's top-down estimate covered the "
-                           "decomposition)" if own_calls[0] >= sum_calls[1] else
-                           "children sum EXCEEDS own (the decomposition grew beyond the parent's "
-                           "original estimate -- a decomposition-quality signal, not a verdict)")
-                print(f"  SPLIT-TIME SIGNAL (tool_calls): own={_fmt_range(own_calls)} vs "
-                      f"children_sum={_fmt_range(sum_calls)} -- {verdict}")
-        print()
-
-    if malformed:
-        print("MALFORMED estimate: rows encountered while building this rollup (excluded, listed "
-              "-- never silently dropped):")
-        for m in malformed:
-            print(f"  {m}")
-        print()
-
-    # ACTUALS (commission point 2's own instruction: "structure the rollup so actual columns are
-    # honestly absent/NULL-with-a-name today, not faked"). NOTHING below is a live query -- both
-    # lines are a standing, named absence, updated only when the cited spec stage actually ships.
-    print("ACTUALS (witnessed-grade: tool_calls, subagent_spawns): NOT BUILT -- accounting spec")
-    print("  Stage B (counting floor) / Stage D (subagent-spawn observer) are spec'd, not built")
-    print("  (design/ORCH-SPEC-RESOURCE-ACCOUNTING.md Sections 5 and 8). NULL, named, not faked.")
-    print("ACTUALS (diagnostic-grade, permanent: wall_clock, token figures): no dedicated witnessed")
-    print("  observer is named for either, even once Stage B/D ship (maintainer ruling 2026-07-11:")
-    print("  token/money figures never graduate past diagnostic-grade). An interior sum NEVER folds")
-    print("  a witnessed count and a diagnostic figure into one number -- the two column groups")
-    print("  above are kept apart by construction, not by convention.")
+    for r in sorted(rows, key=lambda r: r["id"]):
+        print(json.dumps(r, sort_keys=True))
 
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("--since", default=None, help="timestamptz: only ledger rows newer than this")
-    ap.add_argument("-n", "--limit", type=int, default=10, help="row limit where --since is not given (default 10)")
+    ap.add_argument("--since", default=None, help="UNEXERCISED by this rebase -- see module docstring")
+    ap.add_argument("-n", "--limit", type=int, default=10)
     args = ap.parse_args(argv)
 
-    dep = _load_deployment()
-    ok, err = check_connectivity(dep)
-    if not ok:
-        # Tracker item `pickup-connection-failure-silent-empty`, 2026-07-13 (see module docstring
-        # CONNECTIVITY section): refuse the WHOLE hydration brief rather than let every section
-        # below independently print its own "ERROR:" line while main() still exits 0 -- a brief
-        # built on a connection that never succeeded is worse than no brief, because it reads as
-        # ten stale empty sections rather than the one loud, typed refusal this is.
-        print(f"pickup: CANNOT-HYDRATE -- could not connect to host={dep.host!r} db={dep.db!r} "
-              f"schema={dep.schema!r} as role={dep.role!r}: {err}", file=sys.stderr)
-        print("pickup: refusing to print a hydration brief -- every section below reads from "
-              "this same connection, so a brief assembled after a failed connectivity probe "
-              "would be indistinguishable from an honest EMPTY tracker; nothing is printed "
-              "instead of everything being printed wrong.", file=sys.stderr)
+    cfg = _load_config()
+    try:
+        bcc.get_json(cfg.base, "/health")
+    except bcc.BoundaryRefusal as e:
+        print(f"pickup: CANNOT-HYDRATE -- the boundary refused /health (HTTP {e.status}): "
+              f"{e.body}", file=sys.stderr)
         return 3
-    standing_decisions(dep)
-    in_force_decisions(dep, args.limit)
-    open_questions(dep)
-    review_debt(dep)
-    recent_changes(dep, args.since, args.limit)
-    # World root == the directory deployment.json was actually found in, NOT this script's own
-    # on-disk location -- since this file now executes in place out of the autoharn checkout
-    # (BACKLOG maintainer ruling 2026-07-11, "live verbs"), `HERE` is autoharn's own
-    # bootstrap/templates/, and this project's git repo lives at the world root instead (where the
-    # scaffolded ./pickup shim -- and deployment.json itself -- actually sit).
-    git_state(DEPLOYMENT_PATH.parent)
-    resources(dep)
-    estimates(dep)
-    taxonomies(dep)
-    review_queue(dep)
-    in_flight(dep)
-    rollup(dep)
+
+    standing_decisions(cfg)
+    in_force_decisions(cfg, args.limit)
+    open_questions(cfg)
+    review_debt(cfg)
     print()
+    print("### SECTION: NOT-REBASED")
+    print()
+    print("RESOURCES / ESTIMATES / TAXONOMIES / MAINTAINER-REVIEW-QUEUE / RECENT-CHANGES / "
+          "GIT-STATE / IN-FLIGHT / ROLLUP are UNEXERCISED by this rebase -- run ./legacy/pickup "
+          "for the full brief (design/FABLE-BOUNDARY-MULTIPLEX-AND-CLI-REBASE-SPEC.md §5; see "
+          "this file's own module docstring SCOPE section).")
     return 0
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    try:
+        sys.exit(main())
+    except (bcc.BoundaryRefusal, bcc.BoundaryUnreachable, bcc.BoundaryClientError) as e:
+        sys.exit(bcc.report_boundary_exception("pickup", e))

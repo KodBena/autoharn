@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-18T07:43:25Z
-#   last-change: 2026-07-18T15:53:06Z
+#   last-change: 2026-07-18T18:07:21Z
 #   contributors: ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -189,6 +189,35 @@ class DeploymentSaturated(BaseModel):
     deployment: str = Field(description="the deployment name this call was refused against")
     inflight_limit: int = Field(description="MAX_INFLIGHT_PER_DEPLOYMENT -- this deployment's own sub-bound")
     message: str = Field(description="teach-text: names the bound, the deployment, the cause, and that retry-with-backoff is the correct caller response")
+
+
+class UnknownView(BaseModel):
+    """design/FABLE-BOUNDARY-READ-SURFACE-SPEC.md (amendment to the multiplex/CLI-rebase spec,
+    ratified ledger decision row 1652): `GET /d/{deployment}/views/{view}`'s `{view}` path
+    segment is valid iff it is a key of `boundary_service.py`'s closed, spec-enumerated
+    `VIEW_REGISTRY` -- a second closed enumeration, mirroring `UnknownDeployment` above exactly
+    (ADR-0012 P1: the SAME shape, applied to a second discriminator). Anything else refuses this
+    typed 404, naming the full known set so a caller can self-correct without a second round
+    trip; nothing is queried for an unknown view name."""
+
+    disposition: str = "unknown_view"
+    known: list[str] = Field(description="every view name this service's VIEW_REGISTRY serves")
+    message: str = Field(description="teach-text naming the unknown view and the known set")
+
+
+class MetaResponse(BaseModel):
+    """design/FABLE-BOUNDARY-READ-SURFACE-SPEC.md's third new route, `GET /d/{deployment}/meta`
+    -- the capability surface a rebased CLI shim decides its own behavior from, replacing the
+    shims' former direct `pg_proc`/`information_schema` probes (the amendment's own words: "a
+    verb decides behavior from the boundary's declared capabilities, not from database
+    introspection it no longer has credentials for"). Three facts, no more (v1 scope, per the
+    amendment's own three-item mechanism list) -- this is deliberately NOT a superset of
+    `HealthResponse`'s `CapabilityManifest` (that shape stays `/health`'s own; `/meta` answers a
+    different question, "what can a served-read verb ask for", not "is this world alive")."""
+
+    known_views: list[str] = Field(description="VIEW_REGISTRY's full key set, sorted -- identical to what a GET /views/{view} 404 would report")
+    lineage_head: str | None = Field(description="the highest kernel/lineage/*.sql manifest entry (basename, minus .sql) this deployment's own .detect.sql siblings confirm applied, walked in the SAME order bootstrap/migrate_core.py's own `_current_head_and_missing` uses -- null if even the first manifest entry's detect fails (a pre-birth-chain world, or a manifest/detect defect)")
+    boundary_version: str = Field(description="this boundary_service.py build's own declared version string -- a service-owned fact, never a kernel fact")
 
 
 class LedgerWriteIntFields(BaseModel):

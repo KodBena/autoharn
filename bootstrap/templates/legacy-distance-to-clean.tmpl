@@ -1,0 +1,404 @@
+#!/usr/bin/env python3
+# LEGACY RECOVERY VERB (design/FABLE-BOUNDARY-MULTIPLEX-AND-CLI-REBASE-SPEC.md §5, ratified row 1631): the direct-psql original of ./distance-to-clean, kept whole and executable for operator recovery when the boundary is down -- ./distance-to-clean itself is now the SERVICED path (a boundary_cli_client.py HTTP client); this file's own capability is unchanged, just demoted by placement, never deleted.
+"""distance-to-clean — the composed closure-debt verb (BACKLOG "Five-item batch,
+maintainer-approved 2026-07-11 evening", item 1; vestigial_documentation/design/ORCH-RETROSPECTIVE-RUN10.md Finding 1).
+
+WHAT THIS IS FOR, VERBATIM FROM THE MAINTAINER'S CONDITION: "we shouldn't aggregate
+something ... that may have valid use-cases disaggregated (indeed, it is my sense that the
+disaggregated view ... is the default). If that can work simultaneously, I'd concur." So:
+`led review-gap`, `led question-status`, and `led work violations` are UNTOUCHED by this file
+and remain the documented default, disaggregated way to read closure debt. This verb is
+strictly ADDITIVE — it reads the SAME EXISTING VIEWS those commands (and the stop-gate hook)
+already read (`review_gap`, `question_status`, `work_item_violations`, `work_item_current`,
+`work_review_gap`) and prints their counts and ids in ONE pass, computing nothing new: no new
+SQL logic, no new join, no derived predicate beyond what those views already compute. It
+exists to kill the run10 pattern the retrospective named: 47 of run10's 299 invocations (about
+16%) were bare polls of `./led review-gap` alone, because one call could not answer "how far am
+I from a clean stop" — this call can.
+
+PARITY WITH THE STOP-GATE (dtc-stopgate-parity, defect fix 2026-07-16): this tool's job is to
+answer, ahead of time, the same question `hooks/stop_clean_exit.py::_collect_debt()` (the
+actual stop-gate) answers at Stop-hook time. That function checks FIVE categories, not three
+— `review_gap`, `question_status`, `work_item_violations`, PLUS `work_item_current` (open work
+items claimed and undischarged) and `work_review_gap` (deferred-review obligations opened by
+`--review-deferred` closes). The first three were mirrored here from the start; the WORK-ITEMS
+and WORK-REVIEW-GAP sections below close the remaining gap — a world could previously read
+"TOTAL debt: 0" here and still have the stop-gate block on open claimed work or a deferred
+review. WORK-ITEMS carries one honest difference from the hook, not a shortcut: the hook
+narrows blocking work items to ones claimed by THIS session (`stamp_session` matching the
+Stop-hook's own `session_id`, read off the hook's stdin payload) unless a claim is bequeathed.
+This tool is invoked directly by the operator, off no such payload — it has no session identity
+to narrow with, ever. Rather than silently under-report, it reproduces exactly the DEGRADE
+branch `_collect_debt()` itself falls back to whenever session ownership can't be proven (its
+own "NAMED CHOICE -- STOP-GATE QUEUE SEMANTICS" docstring section): every open, claimed item
+counts as debt, regardless of claimant, and the printed line says so explicitly rather than
+leaving the gap silent.
+
+WHY A NEW VERB, NOT A `led` SUBCOMMAND: `bootstrap/templates/led.tmpl` is a live-executed
+template (the "live verbs" ruling, 2026-07-11 — every scaffolded world's `./led` shim `exec`s
+this file directly, every invocation) and is therefore freeze-bound: it may only be edited
+while no wired session is live anywhere. A brand-new template file carries no such constraint
+(a file nothing yet execs is safe to add at any time), and mirrors this project's own existing
+precedent for growing the verb surface without touching an existing live verb: `audit.tmpl`
+landed as a fifth verb alongside led/judge/pickup exactly this way (BACKLOG "Contemporaneity
+indictment"). `bootstrap/new-project.sh`'s shim-writing loop is extended by one name
+(`distance-to-clean`) to wire it in — that script is not itself live-executed by any running
+world (only the scaffold-time act reads it), so widening its verb list carries none of
+led.tmpl's freeze risk.
+
+Sections emitted, one call, one pass:
+  REVIEW-GAP        — `review_gap` (the SAME view `led review-gap` reads): every row (id) an
+                      obliged actor wrote with no distinct-actor attest countersign yet.
+  QUESTION-STATUS   — `question_status` (the SAME view `led question-status` reads): every
+                      open (unanswered) question, by id — the view's own pre-computed
+                      `answered` column is READ, not re-derived.
+  WORK-VIOLATIONS   — `work_item_violations` (the SAME view `led work violations` reads): every
+                      violation row, by slug — UNAVAILABLE (not zero) on a world whose kernel
+                      predates kernel/lineage/s22-work-item-ledger.sql, mirroring pickup.tmpl's
+                      own honest IN-FLIGHT fallback for the identical capability gap.
+  WORK-ITEMS        — added 2026-07-16 (dtc-stopgate-parity defect fix). `work_item_current`
+                      (the SAME view the stop-gate hook reads): every OPEN, CLAIMED work item,
+                      by slug — the stop-gate's own DEGRADE predicate (see module docstring
+                      PARITY section above), since this tool has no session identity to narrow
+                      claims to "claimed by THIS session" the way the hook can. The printed
+                      line names this explicitly so the caveat is never silent. UNAVAILABLE
+                      (not zero) on a pre-s22 world, same posture as WORK-VIOLATIONS above.
+  WORK-REVIEW-GAP   — added 2026-07-16 (dtc-stopgate-parity defect fix). `work_review_gap`
+                      (the SAME view the stop-gate hook reads): every work item closed with
+                      `--review-deferred` that has no distinct-actor attest yet, by slug —
+                      UNAVAILABLE (not zero) on a world whose kernel predates the s29
+                      work-review-gap view, same posture as WORK-VIOLATIONS above.
+  DOC-ATTESTATION   — added 2026-07-12 (tracker item `abc-loop-offering`; design/
+                      ORCH-SPEC-ABC-OFFERING.md Stage C). Counts every in-scope `*.md` under
+                      this deployment whose ADR-0017 A:B:C fresh-context attestation is STALE
+                      or NO-ATTESTATION (never ATTESTED — see `./attest-doc check`, this
+                      deployment's own verb, for the per-document classification this section
+                      reads via the SAME `gates/doc_attestation_presence.py` classify()
+                      autoharn's own checkout owns — ADR-0012 P1, one classifier, two callers).
+                      NOT counted by default: this section is gated OFF unless
+                      `mechanisms.doc_attestation.mode` is `"observe"` in this deployment's
+                      `.claude/apparatus.json` (missing file/key/mechanism resolves to `"off"`,
+                      never widens on a bad value — the SAME never-widens posture every other
+                      mechanism in this project's apparatus switchboard already has). OFF is
+                      not a cost decision (this section, like `./attest-doc check`, is pure
+                      hashing — no LLM call, no network) — it is an ADOPTION decision: a
+                      deployment that has not adopted the A:B:C loop as a workflow should not
+                      see debt for a discipline it never opted into (design/
+                      ORCH-SPEC-ABC-OFFERING.md §4).
+  TOTAL             — the sum of the counts above (REVIEW-GAP + QUESTION-STATUS +
+                      WORK-VIOLATIONS + WORK-ITEMS + WORK-REVIEW-GAP, plus DOC-ATTESTATION when
+                      its mode is not `"off"`; 0 iff every counted dimension is individually
+                      clean) plus the one-line verdict `led review-gap`/`question-status`/
+                      `work violations`/`attest-doc check` would each print separately today,
+                      now in one place.
+
+Deployment resolution, connection posture, and path resolution: byte-identical to
+pickup.tmpl's own module docstring section of the same name — this file executes IN PLACE out
+of the autoharn checkout (the "live verbs" ruling), `PICKUP_DEPLOYMENT` is set by the
+scaffolded shim to the world's own `deployment.json`, `AUTOHARN` resolves from this file's own
+on-disk path (overridable), and every query here queries under the project's OWN granted role
+(`SET ROLE <dep.role>`) — the same "what can the OPERATING AGENT see" posture pickup.tmpl's
+REVIEW-DEBT section already documents, reused rather than re-derived (ADR-0012 P1: one
+resolution mechanism, not a second copy).
+
+Read-only throughout: every query here is a SELECT; this script issues no INSERT/UPDATE/DELETE.
+Lazy imports banned (top-of-file only, per this project's inherited convention).
+"""
+from __future__ import annotations
+
+import json
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+AUTOHARN = Path(os.environ.get("AUTOHARN", str(HERE / ".." / ".."))).resolve()
+DEPLOYMENT_PATH = Path(os.environ.get("PICKUP_DEPLOYMENT", str(HERE / "deployment.json")))
+# The directory containing deployment.json IS this deployment's own root -- the same resolution
+# bootstrap/templates/attest-doc.tmpl uses (see that file's own module docstring). DOC-ATTESTATION
+# below needs only this path, never a Postgres connection -- it is pure filesystem + one JSONL
+# ledger, deliberately independent of the three DB-backed sections above it.
+PROJECT_ROOT = DEPLOYMENT_PATH.parent
+
+sys.path.insert(0, str(AUTOHARN / "filing"))
+try:
+    import deployment_record  # noqa: E402  (filing/deployment_record.py, the ONE home for the shape)
+except ImportError as _e:
+    print(f"distance-to-clean: cannot import autoharn's filing/deployment_record.py under "
+          f"AUTOHARN={AUTOHARN} ({_e.__class__.__name__}: {_e})", file=sys.stderr)
+    print("        set AUTOHARN=/path/to/autoharn, or place a sibling checkout at ../autoharn", file=sys.stderr)
+    sys.exit(2)
+
+sys.path.insert(0, str(AUTOHARN / "gates"))
+try:
+    import doc_attestation_presence as dap  # noqa: E402  (autoharn's own gate module, the ONE home of the classifier)
+except ImportError as _e:
+    print(f"distance-to-clean: cannot import autoharn's gates/doc_attestation_presence.py under "
+          f"AUTOHARN={AUTOHARN} ({_e.__class__.__name__}: {_e})", file=sys.stderr)
+    print("        set AUTOHARN=/path/to/autoharn, or place a sibling checkout at ../autoharn", file=sys.stderr)
+    sys.exit(2)
+dap.REPO_ROOT = PROJECT_ROOT
+dap.LEDGER_PATH = PROJECT_ROOT / "attestations" / "doc-legibility-attestations.jsonl"
+
+# apparatus.json switchboard for THIS section only (tracker item `abc-loop-offering` Stage C).
+# Same shape as every hooks/*.py mechanism reader (MECHANISM_KEY constant + mechs.get(...)) so
+# filing/apparatus_registry.py's known_mechanisms() recognizes this key without a special case
+# (see that module's own "WHERE IT SCANS" docstring section) -- the general fix for the general
+# class: any apparatus-reading file, not only a hook, is now covered.
+MECHANISM_KEY = "doc_attestation"
+_VALID_DOC_ATTESTATION_MODES = ("off", "observe")
+
+
+def _doc_attestation_mode(project_root: Path) -> str:
+    """Missing file/key/mechanism resolves to "off" (never an error) -- the SAME convention
+    every mechanism in this project's apparatus switchboard already follows. An unrecognized
+    mode value NEVER WIDENS: "enforce" degrades to "observe" with a warning (there is no deny
+    path here -- this section only ever REPORTS debt, the same "impossible enforce" shape
+    mutation_observer/bash_completion/read_observer already have, per bootstrap/templates/
+    APPARATUS.md); anything else falls back to "off" with a warning naming the bad value and
+    this file's own path, mirroring hooks/doc_legibility_critic.py's own _resolve_mode()."""
+    path = project_root / ".claude" / "apparatus.json"
+    try:
+        with open(path, encoding="utf-8") as f:
+            apparatus = json.load(f)
+    except Exception:
+        return "off"
+    if not isinstance(apparatus, dict):
+        return "off"
+    mechs = apparatus.get("mechanisms")
+    entry = mechs.get(MECHANISM_KEY) if isinstance(mechs, dict) else None
+    entry = entry if isinstance(entry, dict) else {}
+    raw = entry.get("mode")
+    if raw is None:
+        return "off"
+    if raw == "enforce":
+        print(f"[apparatus] WARNING: mechanisms.{MECHANISM_KEY}.mode='enforce' is not "
+              f"applicable ({MECHANISM_KEY} only ever REPORTS debt, it has no deny path) -- "
+              f"behaving as 'observe'. ({path})", file=sys.stderr)
+        return "observe"
+    if raw in _VALID_DOC_ATTESTATION_MODES:
+        return raw
+    print(f"[apparatus] WARNING: mechanisms.{MECHANISM_KEY}.mode={raw!r} in {path} is "
+          f"unrecognized (must be one of {_VALID_DOC_ATTESTATION_MODES}) -- never widening; "
+          f"falling back to 'off'.", file=sys.stderr)
+    return "off"
+
+
+def doc_attestation_debt(project_root: Path) -> tuple[int, dict[str, int], list[str]]:
+    """Returns (debt_count, {"ATTESTED":n,"STALE":n,"NO-ATTESTATION":n}, debt_doc_reprs). Reads
+    the SAME classify()/discover_md()/deployment_in_scope() this deployment's own
+    `./attest-doc check` reads (ADR-0012 P1, one classifier, two callers) -- never a second,
+    hand-rederived scan."""
+    targets = dap.discover_md(project_root)
+    scope = [t for t in targets if dap.deployment_in_scope(t)
+             and not dap._has_waiver(project_root / t)]
+    records = dap.load_ledger()
+    counts = {"ATTESTED": 0, "STALE": 0, "NO-ATTESTATION": 0}
+    debt_docs: list[str] = []
+    for rel in sorted(scope):
+        verdict = dap.classify(rel, records, project_root)
+        counts[verdict] += 1
+        if verdict != "ATTESTED":
+            debt_docs.append(f"{rel} ({verdict})")
+    return counts["STALE"] + counts["NO-ATTESTATION"], counts, debt_docs
+
+
+def _load_deployment():
+    try:
+        return deployment_record.load_deployment(DEPLOYMENT_PATH)
+    except deployment_record.DeploymentError as e:
+        print(f"distance-to-clean: {e}", file=sys.stderr)
+        sys.exit(2)
+
+
+def _psql_tuples(dep, sql: str) -> subprocess.CompletedProcess:
+    """SET ROLE <dep.role> first (pickup.tmpl's REVIEW-DEBT posture, reused here for every
+    section, not just one): this verb's honest job is "what can the OPERATING AGENT see", so a
+    pre-s20 grants gap surfaces as the same BLOCKED report pickup.tmpl already gives, never a
+    silently-empty debt count that would misreport a world as cleaner than it is."""
+    full = f"SET ROLE {dep.role};\n{sql}"
+    return subprocess.run(
+        ["psql", "-h", dep.host, "-d", dep.db, "-t", "-A", "-v", "ON_ERROR_STOP=1", "-c", full],
+        capture_output=True, text=True, timeout=15)
+
+
+def _last_stmt_rows(r: subprocess.CompletedProcess) -> list[str]:
+    """-t -A still echoes one line per statement executed (the preceding SET ROLE included, per
+    pickup.tmpl's own _psql_tuples docstring) -- drop exactly that leading line, keep the rest."""
+    lines = r.stdout.strip("\n").splitlines()
+    return lines[1:] if lines else []
+
+
+def review_gap_debt(dep) -> tuple[int, list[str], str | None]:
+    """Returns (count, ids, blocked_reason). blocked_reason is set, and count/ids are
+    meaningless, iff the pre-s20 grants gap denies this read (pickup.tmpl's own named case)."""
+    r = _psql_tuples(dep, f"SELECT id FROM {dep.schema}.review_gap ORDER BY id;")
+    if r.returncode != 0:
+        if "permission denied" in r.stderr:
+            return 0, [], ("BLOCKED: pre-s20 grants -- the granted role has no SELECT on "
+                            "countersign_obligation in the applied kernel lineage (see "
+                            "pickup's REVIEW-DEBT section for the identical, pre-existing gap)")
+        return 0, [], f"ERROR: {r.stderr.strip()}"
+    rows = _last_stmt_rows(r)
+    return len(rows), rows, None
+
+
+def question_status_debt(dep) -> tuple[int, int, list[str], str | None]:
+    """Returns (open_count, total_count, open_ids, error). `answered` is the view's OWN
+    pre-computed column (question_status, s15-schema.sql) -- read here, not re-derived."""
+    r = _psql_tuples(dep, f"SELECT question_id, answered FROM {dep.schema}.question_status "
+                          f"ORDER BY question_id;")
+    if r.returncode != 0:
+        return 0, 0, [], f"ERROR: {r.stderr.strip()}"
+    rows = _last_stmt_rows(r)
+    open_ids = []
+    for row in rows:
+        qid, _, answered = row.partition("|")
+        if answered.strip() == "f":
+            open_ids.append(qid.strip())
+    return len(open_ids), len(rows), open_ids, None
+
+
+def work_violations_debt(dep) -> tuple[int, list[str], str | None]:
+    """Returns (count, slugs, unavailable_reason). UNAVAILABLE (not zero) mirrors pickup.tmpl's
+    IN-FLIGHT section: a pre-s22 world has no work_item_violations at all -- absence of the
+    view is a capability gap, not evidence of zero debt."""
+    r = _psql_tuples(dep, f"SELECT slug FROM {dep.schema}.work_item_violations ORDER BY slug;")
+    if r.returncode != 0:
+        if "does not exist" in r.stderr:
+            return 0, [], ("UNAVAILABLE (no work-item layer -- this world's applied kernel "
+                            "predates kernel/lineage/s22-work-item-ledger.sql)")
+        return 0, [], f"ERROR: {r.stderr.strip()}"
+    rows = _last_stmt_rows(r)
+    return len(rows), rows, None
+
+
+def work_item_current_debt(dep) -> tuple[int, list[str], str | None]:
+    """Returns (count, slugs, unavailable_reason). Mirrors hooks/stop_clean_exit.py's
+    `_collect_debt()` `work_item_current` section, but ALWAYS under that function's own DEGRADE
+    branch (its "NAMED CHOICE -- STOP-GATE QUEUE SEMANTICS" docstring section): this tool is
+    invoked directly by the operator, never handed a Stop-hook stdin payload, so it has no
+    `session_id` to narrow claims with -- `narrow_ok` is unconditionally False here, same as it
+    is in the hook whenever session ownership can't be proven. So every OPEN, CLAIMED item
+    counts as debt, unconditionally, regardless of which session (if any) holds the claim --
+    the exact conservative predicate `_collect_debt()` itself falls back to, not a weaker one.
+    unclaimed items are never debt (mirrors the hook: they're the successor's queue, informational
+    only) so this query does not even select them. UNAVAILABLE (not zero) mirrors
+    `work_violations_debt()`'s own posture: a pre-s22 world has no `work_item_current` view."""
+    r = _psql_tuples(dep, f"SELECT slug FROM {dep.schema}.work_item_current "
+                          f"WHERE state = 'open' AND claimant IS NOT NULL ORDER BY slug;")
+    if r.returncode != 0:
+        if "does not exist" in r.stderr:
+            return 0, [], ("UNAVAILABLE (no work-item layer -- this world's applied kernel "
+                            "predates kernel/lineage/s22-work-item-ledger.sql)")
+        return 0, [], f"ERROR: {r.stderr.strip()}"
+    rows = _last_stmt_rows(r)
+    return len(rows), rows, None
+
+
+def work_review_gap_debt(dep) -> tuple[int, list[str], str | None]:
+    """Returns (count, slugs, unavailable_reason). Mirrors hooks/stop_clean_exit.py's
+    `_collect_debt()` `work_review_gap` section (s29-only: every work item closed with
+    `--review-deferred` that has no distinct-actor attest yet) -- no session-identity dependency
+    here, so no DEGRADE distinction applies; this one is a direct, complete mirror. UNAVAILABLE
+    (not zero) mirrors `work_violations_debt()`'s own posture: a pre-s29 world has no
+    `work_review_gap` view."""
+    r = _psql_tuples(dep, f"SELECT slug FROM {dep.schema}.work_review_gap ORDER BY slug;")
+    if r.returncode != 0:
+        if "does not exist" in r.stderr:
+            return 0, [], ("UNAVAILABLE (no deferred-review layer -- this world's applied "
+                            "kernel predates the s29 work_review_gap view)")
+        return 0, [], f"ERROR: {r.stderr.strip()}"
+    rows = _last_stmt_rows(r)
+    return len(rows), rows, None
+
+
+def main() -> int:
+    dep = _load_deployment()
+    print("### SECTION: DISTANCE-TO-CLEAN")
+    print()
+    print("(reads the SAME views `led review-gap` / `led question-status` / "
+          "`led work violations` already expose, PLUS the two categories the stop-gate hook "
+          "(hooks/stop_clean_exit.py) also checks that those three commands don't -- "
+          "computes nothing new; those three commands remain the disaggregated default, "
+          "unchanged by this verb)")
+    print()
+
+    total = 0
+    any_blocked = False
+
+    rg_count, rg_ids, rg_blocked = review_gap_debt(dep)
+    if rg_blocked:
+        print(f"review-gap        : {rg_blocked}")
+        any_blocked = True
+    else:
+        total += rg_count
+        print(f"review-gap        : {rg_count} row(s)" +
+              (f" -- ids: {rg_ids}" if rg_ids else ""))
+
+    qs_open, qs_total, qs_ids, qs_err = question_status_debt(dep)
+    if qs_err:
+        print(f"question-status   : {qs_err}")
+        any_blocked = True
+    else:
+        total += qs_open
+        print(f"question-status   : {qs_open} open of {qs_total} total" +
+              (f" -- open ids: {qs_ids}" if qs_ids else ""))
+
+    wv_count, wv_slugs, wv_reason = work_violations_debt(dep)
+    if wv_reason:
+        print(f"work-violations   : {wv_reason}")
+        if wv_reason.startswith("ERROR"):
+            any_blocked = True
+    else:
+        total += wv_count
+        print(f"work-violations   : {wv_count} violation(s)" +
+              (f" -- slugs: {wv_slugs}" if wv_slugs else ""))
+
+    wi_count, wi_slugs, wi_reason = work_item_current_debt(dep)
+    if wi_reason:
+        print(f"work-items        : {wi_reason}")
+        if wi_reason.startswith("ERROR"):
+            any_blocked = True
+    else:
+        total += wi_count
+        print(f"work-items        : {wi_count} open+claimed item(s) [CAVEAT: this tool has no "
+              f"session identity, unlike the stop-gate hook -- it cannot narrow to only THIS "
+              f"session's claims, so it counts every claimed-open item, matching the hook's own "
+              f"DEGRADE fallback for when session ownership can't be proven]" +
+              (f" -- slugs: {wi_slugs}" if wi_slugs else ""))
+
+    wrg_count, wrg_slugs, wrg_reason = work_review_gap_debt(dep)
+    if wrg_reason:
+        print(f"work-review-gap   : {wrg_reason}")
+        if wrg_reason.startswith("ERROR"):
+            any_blocked = True
+    else:
+        total += wrg_count
+        print(f"work-review-gap   : {wrg_count} deferred-review item(s)" +
+              (f" -- slugs: {wrg_slugs}" if wrg_slugs else ""))
+
+    da_mode = _doc_attestation_mode(PROJECT_ROOT)
+    if da_mode == "off":
+        print(f"doc-attestation   : off (opt-in -- set mechanisms.{MECHANISM_KEY}.mode to "
+              f"'observe' in .claude/apparatus.json once you're running the ADR-0017 A:B:C "
+              f"loop, so debt here reflects a discipline you actually adopted)")
+    else:
+        da_debt, da_counts, da_docs = doc_attestation_debt(PROJECT_ROOT)
+        total += da_debt
+        print(f"doc-attestation   : {da_debt} debt ({da_counts['NO-ATTESTATION']} "
+              f"NO-ATTESTATION, {da_counts['STALE']} STALE, {da_counts['ATTESTED']} ATTESTED)" +
+              (f" -- {da_docs}" if da_docs else ""))
+
+    print()
+    if any_blocked:
+        print(f"TOTAL debt: {total} counted (+ one or more dimensions blocked/errored above -- "
+              f"not a clean read; see the lines above for the reason)")
+        return 1
+    print(f"TOTAL debt: {total}" + ("  (0 = clean)" if total == 0 else ""))
+    return 0 if total == 0 else 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())
