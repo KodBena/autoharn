@@ -1,7 +1,7 @@
 #!/bin/sh
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-09T11:15:53Z
-#   last-change: 2026-07-18T10:36:19Z
+#   last-change: 2026-07-18T16:44:27Z
 #   contributors: be693afb/main, e4410ef6/main, 3c50e030/main, a857c93d/main, 9a17b6b9/main, ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -189,6 +189,31 @@ if [ -n "$NEW_WORLD" ]; then
 fi
 [ -n "$DB" ] && [ -n "$HOST" ] && [ -n "$SCHEMA" ] && [ -n "$KERN" ] && [ -n "$ROLE" ] || usage
 
+# --- STRICT CHARACTER ALLOWLIST on every name that becomes SQL text ----------------------------
+# ADR-0012's 2026-07-18 amendment ("The interpreter boundary -- a value never crosses as program
+# text") + ADR-0000's same-day Rule 2(a) amendment (ledger row 1637: this exact raw-interpolation-
+# into-psql shape, fixed first in bootstrap/teardown-world.sh, commit 0ce5055): SCHEMA/KERN/ROLE
+# reach SQL text below (as psql -v bind identifiers where a carrier exists, and directly spliced
+# into PL/pgSQL DO-block bodies where a carrier genuinely does not -- psql's :"var" substitution is
+# plain client-side text substitution and does NOT reach inside a dollar-quoted DO $bw$...$bw$ body,
+# verified live against 192.168.122.1 db toy before this fix was written) -- this scaffold had NO
+# validation on these names at all before this fix, unlike teardown-world.sh's sibling check. This
+# is the SAME allowlist, checked before ANY SQL is built, covering both --new-world's own derivation
+# and a hand-picked --schema/--kern/--role override alike (a caller can pass either, and both reach
+# the identical downstream SQL sites).
+for _name in "$SCHEMA" "$KERN" "$ROLE"; do
+    case "$_name" in
+        ''|*[!A-Za-z0-9_]*)
+            echo "new-project.sh: REFUSED -- '$_name' contains characters outside the allowlist" >&2
+            echo "                for a schema/kernel/role name (letters, digits, underscore only)." >&2
+            echo "                This applies to --new-world-derived names and to --schema/--kern/" >&2
+            echo "                --role overrides alike. Nothing was touched." >&2
+            exit 1
+            ;;
+    esac
+done
+unset _name
+
 # LINEAGE_CHAIN: what kernel DDL THIS scaffold run applied (or didn't), for the PROVENANCE header
 # below -- the honest record of which sNN deltas this world was born on, so a future reader never
 # has to reconstruct it from source the way run3's own history had to be reconstructed.
@@ -365,22 +390,32 @@ if [ -n "$NEW_WORLD" ]; then
         -f "$AUTOHARN_ROOT/kernel/lineage/s45-standing-lifecycle.sql"
     echo "   kernel applied (schema $SCHEMA + kernel schema $KERN + role $ROLE, s20 + s21 + s22 + s23 + s24 + s25 + s26 + s27 + s28 + s29 + s30 + s31 + s32 + s33 + s34 + s35 + s36 + s37 + s38 + s39 + s40 + s41 + s42 + s43 + s45 included -- s29's migration_epoch naturally seeds 0 on this empty ledger, see that file's own AMENDMENT header; s30 needs no epoch machinery of its own, HISTORY: safe; s40's own birth acts run below, after the seeds; s45 licenses principal_binding_active on the two standing-lifecycle kinds and is honored by the standing declarations below, which now carry the flag)"
 
+    # _psql_in: SQL text is always fed on stdin, never via -c -- psql's :'var'/:"var" bind-variable
+    # interpolation (verified live against a real server, psql 18.3) is only performed for input it
+    # parses as a script (stdin or -f), and is a silent no-op under -c (the literal colon reaches the
+    # server and the statement errors out). Same fix shape/rationale as bootstrap/teardown-world.sh
+    # commit 0ce5055 (ledger row 1637) and this file's own allowlist block above.
+    _psql_in() { printf '%s\n' "$1"; }
+
     echo "-- new-world '$NEW_WORLD': seeding the stamp secret (idempotent, mirrors drive/arm.sh ruling 43) --"
     mkdir -p "$PROJECT_ROOT/.claude/secrets"
     chmod 700 "$PROJECT_ROOT/.claude/secrets"
     SECRET_FILE="$PROJECT_ROOT/.claude/secrets/stamp_secret.hex"
-    HAVE=$(psql -h "$HOST" -d "$DB" -tAc "SELECT count(*) FROM ${KERN}.stamp_secret;")
+    HAVE=$(_psql_in "SELECT count(*) FROM :\"kern\".stamp_secret;" | psql -h "$HOST" -d "$DB" -v kern="$KERN" -tA)
     if [ "$HAVE" = "1" ]; then
         echo "   a secret is already provisioned for ${KERN}.stamp_secret (1 row); not rotating"
     else
         ( umask 077; openssl rand -hex 32 > "$SECRET_FILE" )
         chmod 600 "$SECRET_FILE"
         HEX=$(cat "$SECRET_FILE")
-        # psql -c does NOT interpolate -v vars; the hex is [0-9a-f] so it inlines safely (no
-        # injection surface) -- same posture as drive/arm.sh's identical seeding block.
-        psql -h "$HOST" -d "$DB" -q -v ON_ERROR_STOP=1 \
-            -c "TRUNCATE ${KERN}.stamp_secret;" \
-            -c "INSERT INTO ${KERN}.stamp_secret (secret) VALUES (decode('$HEX','hex'));"
+        # KERN reaches DROP/TRUNCATE-adjacent DDL text as an identifier bind (:"kern"), HEX as a
+        # literal bind (:'hex') -- both bound as psql -v variables via stdin, never spliced into the
+        # SQL string (the allowlist above already restricts KERN to [A-Za-z0-9_]+; this is the
+        # primary carrier per ADR-0012's 2026-07-18 amendment, not just defense-in-depth on KERN).
+        _psql_in 'TRUNCATE :"kern".stamp_secret;' \
+            | psql -h "$HOST" -d "$DB" -q -v ON_ERROR_STOP=1 -v kern="$KERN"
+        _psql_in "INSERT INTO :\"kern\".stamp_secret (secret) VALUES (decode(:'hex','hex'));" \
+            | psql -h "$HOST" -d "$DB" -q -v ON_ERROR_STOP=1 -v kern="$KERN" -v hex="$HEX"
         echo "   one fresh secret provisioned ($SECRET_FILE [chmod 600]; DB ${KERN}.stamp_secret)"
     fi
 
@@ -394,13 +429,14 @@ if [ -n "$NEW_WORLD" ]; then
     # confidentiality), so it is generated and inserted directly, with no on-disk file mirroring
     # the stamp-secret pattern's chmod-600 ceremony -- there is nothing here that needs hiding.
     echo "-- new-world '$NEW_WORLD': seeding the row_hash chain's genesis seed (idempotent) --"
-    HAVE_GENESIS=$(psql -h "$HOST" -d "$DB" -tAc "SELECT count(*) FROM ${KERN}.chain_genesis;" 2>/dev/null || echo "0")
+    HAVE_GENESIS=$(_psql_in "SELECT count(*) FROM :\"kern\".chain_genesis;" \
+        | psql -h "$HOST" -d "$DB" -v kern="$KERN" -tA 2>/dev/null || echo "0")
     if [ "$HAVE_GENESIS" = "1" ]; then
         echo "   a genesis seed is already provisioned for ${KERN}.chain_genesis (1 row); not rotating"
     elif [ "$HAVE_GENESIS" = "0" ]; then
         GENESIS_HEX=$(openssl rand -hex 32)
-        psql -h "$HOST" -d "$DB" -q -v ON_ERROR_STOP=1 \
-            -c "INSERT INTO ${KERN}.chain_genesis (seed) VALUES ('$GENESIS_HEX') ON CONFLICT (only_one) DO NOTHING;"
+        _psql_in "INSERT INTO :\"kern\".chain_genesis (seed) VALUES (:'genesis_hex') ON CONFLICT (only_one) DO NOTHING;" \
+            | psql -h "$HOST" -d "$DB" -q -v ON_ERROR_STOP=1 -v kern="$KERN" -v genesis_hex="$GENESIS_HEX"
         echo "   one fresh genesis seed provisioned (DB ${KERN}.chain_genesis)"
     else
         echo "   ${KERN}.chain_genesis does not exist -- this world's kernel predates s26-row-hash-chain.sql; skipping (not an error, an older lineage)"
@@ -441,13 +477,17 @@ if [ -n "$NEW_WORLD" ]; then
     # Element 6: the identity that authors every write_refused row).
     echo "-- new-world '$NEW_WORLD': s40/s43 birth sequence (author event, dual standing declarations, reviewer/commissioner/write-boundary ceremony) --"
     LOGIN_ROLE=$(psql -h "$HOST" -d "$DB" -tAc "SELECT session_user;")
-    HAVE_AUTHOR_EVENT=$(psql -h "$HOST" -d "$DB" -tAc "SELECT count(*) FROM ${SCHEMA}.ledger l JOIN ${KERN}.principal p ON p.id = l.principal_subject WHERE l.kind = 'principal_registered' AND p.name = 'author';")
+    HAVE_AUTHOR_EVENT=$(_psql_in "SELECT count(*) FROM :\"schema\".ledger l JOIN :\"kern\".principal p ON p.id = l.principal_subject WHERE l.kind = 'principal_registered' AND p.name = 'author';" \
+        | psql -h "$HOST" -d "$DB" -v schema="$SCHEMA" -v kern="$KERN" -tA)
     if [ "$HAVE_AUTHOR_EVENT" != "0" ]; then
         echo "   'author' already carries a registration event ($HAVE_AUTHOR_EVENT); not re-registering"
     else
-        psql -h "$HOST" -d "$DB" -q -v ON_ERROR_STOP=1 <<SQL
-        SET ROLE ${ROLE};
-        SET search_path = ${SCHEMA}, ${KERN};
+        psql -h "$HOST" -d "$DB" -q -v ON_ERROR_STOP=1 -v role="$ROLE" -v schema="$SCHEMA" -v kern="$KERN" <<SQL
+        SET ROLE :"role";
+        SET search_path = :"schema", :"kern";
+        -- KERN below (write_verdict's type qualifier) is inside a dollar-quoted DO body: psql's
+        -- :"var" substitution does not reach dollar-quoted text (verified live), so this one
+        -- reference is guarded by the allowlist check earlier in this script, not by a bind.
         DO \$bw\$
         DECLARE v ${KERN}.write_verdict;
         BEGIN
@@ -465,15 +505,18 @@ SQL
         echo "   (1) 'author' registration event recorded via the write boundary (genesis exception, self-attributed)"
     fi
     for _drole in "$ROLE" "$LOGIN_ROLE"; do
-        HAVE_DECL=$(psql -h "$HOST" -d "$DB" -tAc "SELECT count(*) FROM ${SCHEMA}.ledger_current lc WHERE lc.kind = 'principal_standing_declared' AND lc.principal_db_role = '${_drole}';")
+        HAVE_DECL=$(_psql_in "SELECT count(*) FROM :\"schema\".ledger_current lc WHERE lc.kind = 'principal_standing_declared' AND lc.principal_db_role = :'drole';" \
+            | psql -h "$HOST" -d "$DB" -v schema="$SCHEMA" -v drole="$_drole" -tA)
         if [ "$HAVE_DECL" != "0" ]; then
             echo "   role '${_drole}' already carries a standing declaration; not re-declaring"
             continue
         fi
-        psql -h "$HOST" -d "$DB" -q -v ON_ERROR_STOP=1 -v drole="$_drole" <<SQL
-        SET ROLE ${ROLE};
-        SET search_path = ${SCHEMA}, ${KERN};
+        psql -h "$HOST" -d "$DB" -q -v ON_ERROR_STOP=1 -v role="$ROLE" -v schema="$SCHEMA" -v kern="$KERN" -v drole="$_drole" <<SQL
+        SET ROLE :"role";
+        SET search_path = :"schema", :"kern";
         SELECT set_config('birth.drole', :'drole', false);
+        -- KERN below (write_verdict's type qualifier) is inside a dollar-quoted DO body: guarded
+        -- by the allowlist check earlier in this script, not by a bind (see the step-1 comment above).
         DO \$bw\$
         DECLARE v ${KERN}.write_verdict;
         BEGIN
@@ -497,16 +540,19 @@ SQL
             commissioner)   _pclass="human";    _ppurpose="the maintainer's own registered identity for FULL-mode commission signing (s25; five-item batch 2026-07-11 item 2)" ;;
             write-boundary) _pclass="tool";     _ppurpose="the kernel write boundary's own recording identity: every write_refused meta-event is authored by this principal; the attempted identity is carried in the event's refusal_attempted_* columns (s43)" ;;
         esac
-        HAVE_P=$(psql -h "$HOST" -d "$DB" -tAc "SELECT count(*) FROM ${KERN}.principal WHERE name = '${_pname}';")
+        HAVE_P=$(_psql_in "SELECT count(*) FROM :\"kern\".principal WHERE name = :'pname';" \
+            | psql -h "$HOST" -d "$DB" -v kern="$KERN" -v pname="$_pname" -tA)
         if [ "$HAVE_P" != "0" ]; then
             echo "   '${_pname}' already registered; skipping"
         else
-            psql -h "$HOST" -d "$DB" -q -v ON_ERROR_STOP=1 -v pname="$_pname" -v pclass="$_pclass" -v ppurpose="$_ppurpose" <<SQL
-        SET ROLE ${ROLE};
-        SET search_path = ${SCHEMA}, ${KERN};
+            psql -h "$HOST" -d "$DB" -q -v ON_ERROR_STOP=1 -v role="$ROLE" -v schema="$SCHEMA" -v kern="$KERN" -v pname="$_pname" -v pclass="$_pclass" -v ppurpose="$_ppurpose" <<SQL
+        SET ROLE :"role";
+        SET search_path = :"schema", :"kern";
         SELECT set_config('birth.pname', :'pname', false),
                set_config('birth.pclass', :'pclass', false),
                set_config('birth.ppurpose', :'ppurpose', false);
+        -- KERN below (write_verdict's type qualifier) is inside a dollar-quoted DO body: guarded
+        -- by the allowlist check earlier in this script, not by a bind (see the step-1 comment above).
         DO \$bw\$
         DECLARE v ${KERN}.write_verdict;
         BEGIN

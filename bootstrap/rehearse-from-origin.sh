@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-15T07:10:40Z
-#   last-change: 2026-07-15T12:55:32Z
-#   contributors: a857c93d/main
+#   last-change: 2026-07-18T16:50:00Z
+#   contributors: a857c93d/main, ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
 # rehearse-from-origin.sh -- the external-rehearsal-register-gate mechanization (RCA row 909's
@@ -135,6 +135,25 @@ SCHEMA="rehearse_${SUFFIX}_scratch"
 KERN="rehearse_${SUFFIX}_kernel_scratch"
 ROLE="rehearse_${SUFFIX}_rw"
 
+# --- STRICT CHARACTER ALLOWLIST on every name that becomes SQL text ----------------------------
+# ADR-0012's 2026-07-18 amendment ("The interpreter boundary -- a value never spliced into program
+# text") + ADR-0000's same-day Rule 2(a) amendment (ledger row 1637, fixed first in
+# bootstrap/teardown-world.sh commit 0ce5055): SUFFIX is operator-supplied (--schema-suffix), and
+# SCHEMA/KERN/ROLE below are built from it and spliced into psql SQL text (cleanup()'s DROP
+# statements). Checked on the DERIVED names, not just SUFFIX, since that is what actually reaches
+# SQL text and is the honest, checkable invariant (mirrors teardown-world.sh's own posture).
+for _name in "$SCHEMA" "$KERN" "$ROLE"; do
+    case "$_name" in
+        ''|*[!A-Za-z0-9_]*)
+            echo "rehearse-from-origin.sh: REFUSED -- '$_name' contains characters outside the" >&2
+            echo "  allowlist for a schema/kernel/role name (letters, digits, underscore only)." >&2
+            echo "  --schema-suffix '$SUFFIX' produced this. Nothing was touched." >&2
+            exit 2
+            ;;
+    esac
+done
+unset _name
+
 echo "== rehearse-from-origin: scratch dir $SCRATCH =="
 echo "   clone <- $REPO_URL"
 echo "   schema=$SCHEMA kern=$KERN role=$ROLE (db=$PGDATABASE host=$PGHOST)"
@@ -145,11 +164,16 @@ cleanup() {
         return
     fi
     echo "== rehearse-from-origin: tearing down =="
-    PGPASSWORD="${PGPASSWORD:-}" psql -h "$PGHOST" -d "$PGDATABASE" ${PGUSER:+-U "$PGUSER"} \
-        -v ON_ERROR_STOP=0 -q \
-        -c "DROP SCHEMA IF EXISTS ${SCHEMA} CASCADE;" \
-        -c "DROP SCHEMA IF EXISTS ${KERN} CASCADE;" \
-        -c "DROP ROLE IF EXISTS ${ROLE};" \
+    # SQL text fed on stdin, never via -c (psql's :"var" identifier-bind substitution is a silent
+    # no-op under -c, verified live -- same fix shape as bootstrap/teardown-world.sh commit 0ce5055).
+    # One psql invocation, all three statements piped in together, ON_ERROR_STOP=0 preserved --
+    # same best-effort semantics the original three -c flags on one invocation had.
+    printf '%s\n' \
+        'DROP SCHEMA IF EXISTS :"schema" CASCADE;' \
+        'DROP SCHEMA IF EXISTS :"kern" CASCADE;' \
+        'DROP ROLE IF EXISTS :"role";' \
+        | PGPASSWORD="${PGPASSWORD:-}" psql -h "$PGHOST" -d "$PGDATABASE" ${PGUSER:+-U "$PGUSER"} \
+            -v ON_ERROR_STOP=0 -q -v schema="$SCHEMA" -v kern="$KERN" -v role="$ROLE" \
         >/dev/null 2>&1 || echo "   (teardown SQL best-effort -- schema/kern/role may already be gone)"
     rm -rf "$SCRATCH"
     echo "   scratch dir removed."
@@ -204,6 +228,28 @@ run_jailed() {
         bash -x -c "$1" 2>>"$TRACE_LOG"
 }
 
+# run_jailed_file: same jail as run_jailed(), but executes a SCRIPT FILE rather than a -c string --
+# used exactly once, for step 4 below, so KERN (an allowlist-validated but still operator-derived
+# name) reaches its SQL text as a bound psql -v identifier rather than via nested shell-string
+# splicing through run_jailed's own "$1" (ADR-0012's 2026-07-18 amendment: the value crosses as
+# data, via KERN/DEST/HEX exported as plain jail env vars, never spliced into the -c argument
+# text). PGHOST/PGDATABASE are already in the base env -i list above.
+run_jailed_file() {
+    env -i \
+        PATH="$SYSTEM_PATH" \
+        HOME="$JAILHOME" \
+        GIT_CONFIG_GLOBAL=/dev/null \
+        GIT_CONFIG_SYSTEM=/dev/null \
+        PGHOST="$PGHOST" \
+        PGDATABASE="$PGDATABASE" \
+        ${PGUSER:+PGUSER="$PGUSER"} \
+        ${PGPASSWORD:+PGPASSWORD="$PGPASSWORD"} \
+        ${PGPORT:+PGPORT="$PGPORT"} \
+        KERN="$KERN" \
+        DEST="$DEST" \
+        bash -x "$1" 2>>"$TRACE_LOG"
+}
+
 # ------------------------------------------------------------------------------------------------
 # 3. FRESH CLONE OF THE PUBLIC URL, INSIDE THE JAIL (never a local path, never ambient config --
 #    the same-host-illusion killer, now closed at the clone step itself).
@@ -247,18 +293,27 @@ echo "-- step 3: ./migrate to lineage head (typed confirmation piped: MIGRATE $S
 run_jailed "cd '$CLONE' && printf 'MIGRATE %s\n' '$SCHEMA' | ./migrate '$DEST'"
 
 echo "-- step 4: provision the stamp secret (bootstrap/templates/HOOKS.md.tmpl's own commands) --"
-run_jailed "
-    set -e
-    mkdir -p '$DEST/.claude/secrets'
-    HEX=\$(openssl rand -hex 32)
-    psql -h '$PGHOST' -d '$PGDATABASE' -q -v ON_ERROR_STOP=1 \
-      -c \"TRUNCATE ${KERN}.stamp_secret;\" \
-      -c \"INSERT INTO ${KERN}.stamp_secret (secret) VALUES (decode('\$HEX','hex'));\"
-    psql -h '$PGHOST' -d '$PGDATABASE' -tAc \
-      \"SELECT encode(secret,'hex') FROM ${KERN}.stamp_secret\" \
-      > '$DEST/.claude/secrets/stamp_secret.hex'
-    chmod 600 '$DEST/.claude/secrets/stamp_secret.hex'
-"
+# Written to a FILE with a quoted heredoc (no expansion at write time) so KERN reaches psql as a
+# bound -v identifier (:"kern") rather than being spliced by THIS script's own shell into a -c/-x
+# string -- SQL text is fed on stdin, never -c (psql's :"var" substitution is a silent no-op under
+# -c, verified live -- same fix shape as bootstrap/teardown-world.sh commit 0ce5055). KERN/DEST
+# reach the jail as plain env vars (run_jailed_file's own env -i list above), never as text baked
+# into the script by this outer shell.
+STEP4_SCRIPT="$SCRATCH/step4-stamp-secret.sh"
+cat > "$STEP4_SCRIPT" <<'INNERSCRIPT'
+set -e
+mkdir -p "$DEST/.claude/secrets"
+HEX=$(openssl rand -hex 32)
+printf '%s\n' 'TRUNCATE :"kern".stamp_secret;' \
+    | psql -h "$PGHOST" -d "$PGDATABASE" -q -v ON_ERROR_STOP=1 -v kern="$KERN"
+printf '%s\n' "INSERT INTO :\"kern\".stamp_secret (secret) VALUES (decode(:'hex','hex'));" \
+    | psql -h "$PGHOST" -d "$PGDATABASE" -q -v ON_ERROR_STOP=1 -v kern="$KERN" -v hex="$HEX"
+printf '%s\n' "SELECT encode(secret,'hex') FROM :\"kern\".stamp_secret;" \
+    | psql -h "$PGHOST" -d "$PGDATABASE" -tA -v kern="$KERN" \
+    > "$DEST/.claude/secrets/stamp_secret.hex"
+chmod 600 "$DEST/.claude/secrets/stamp_secret.hex"
+INNERSCRIPT
+run_jailed_file "$STEP4_SCRIPT"
 
 echo "-- step 5: a REAL ledger write, then read it back --"
 STAMP_TS="$(date -u +%Y-%m-%dT%H:%M:%SZ)"

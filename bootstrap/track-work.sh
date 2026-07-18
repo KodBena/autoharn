@@ -1,7 +1,7 @@
 #!/bin/sh
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-11T20:34:46Z
-#   last-change: 2026-07-18T10:38:00Z
+#   last-change: 2026-07-18T16:50:49Z
 #   contributors: e4410ef6/main, ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -135,6 +135,25 @@ done
 [ -n "$ROLE" ] || ROLE="${NAME}_rw"
 [ -n "$DB" ] && [ -n "$HOST" ] || usage
 
+# --- STRICT CHARACTER ALLOWLIST on every name that becomes SQL text ----------------------------
+# ADR-0012's 2026-07-18 amendment ("The interpreter boundary -- a value never crosses as program
+# text") + ADR-0000's same-day Rule 2(a) amendment (ledger row 1637, fixed first in
+# bootstrap/teardown-world.sh commit 0ce5055): SCHEMA/KERN/ROLE reach SQL text below (as psql -v
+# bind identifiers) -- checked before ANY SQL is built, covering both --name's own derivation and
+# a hand-picked --schema/--kern/--role override alike.
+for _name in "$SCHEMA" "$KERN" "$ROLE"; do
+    case "$_name" in
+        ''|*[!A-Za-z0-9_]*)
+            echo "track-work.sh: REFUSED -- '$_name' contains characters outside the allowlist" >&2
+            echo "               for a schema/kernel/role name (letters, digits, underscore only)." >&2
+            echo "               This applies to --name-derived names and to --schema/--kern/--role" >&2
+            echo "               overrides alike. Nothing was touched." >&2
+            exit 1
+            ;;
+    esac
+done
+unset _name
+
 AUTOHARN_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 TEMPLATES="$AUTOHARN_ROOT/bootstrap/templates"
 PY="$HOME/w/vdc/venvs/generic/bin/python"
@@ -175,8 +194,10 @@ echo ""
 # session). The SOUND fix achievable here, in this script's own scope: never re-run the DDL
 # apply against a schema that already has it — --force's job is "let me re-point/rewrite
 # deployment.json and the verb shims", never "re-run kernel DDL a second time".
-KERNEL_ALREADY_APPLIED="$(psql -h "$HOST" -d "$DB" -tAc \
-    "SELECT EXISTS (SELECT 1 FROM information_schema.schemata WHERE schema_name = '${KERN}');")"
+# SQL text fed on stdin, never via -c (psql's :"var"/:'var' substitution is a silent no-op under
+# -c, verified live -- same fix shape as bootstrap/teardown-world.sh commit 0ce5055).
+KERNEL_ALREADY_APPLIED="$(printf '%s\n' "SELECT EXISTS (SELECT 1 FROM information_schema.schemata WHERE schema_name = :'kern');" \
+    | psql -h "$HOST" -d "$DB" -v kern="$KERN" -tA)"
 if [ "$KERNEL_ALREADY_APPLIED" = "t" ]; then
     echo "-- kernel schema '$KERN' already exists -- SKIPPING the DDL re-apply (see this script's"
     echo "   own comment above: re-running the full birth chain against an already-migrated schema"
@@ -205,9 +226,9 @@ fi
 
 echo "-- registering the three standard principals (reviewer, commissioner; 'author' is"
 echo "   already auto-seeded by s15-schema.sql, mapped to the connecting role) --"
-psql -h "$HOST" -d "$DB" -v ON_ERROR_STOP=1 <<SQL
-    SET ROLE ${ROLE};
-    SET search_path = ${SCHEMA}, ${KERN};
+psql -h "$HOST" -d "$DB" -v ON_ERROR_STOP=1 -v role="$ROLE" -v schema="$SCHEMA" -v kern="$KERN" <<SQL
+    SET ROLE :"role";
+    SET search_path = :"schema", :"kern";
     INSERT INTO principal (name, agent_class) VALUES ('reviewer', 'subagent')
     ON CONFLICT (name) DO NOTHING;
     INSERT INTO principal (name, agent_class) VALUES ('commissioner', 'human')
