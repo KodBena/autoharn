@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-11T20:37:15Z
-#   last-change: 2026-07-11T20:37:15Z
-#   contributors: e4410ef6/main
+#   last-change: 2026-07-18T07:46:42Z
+#   contributors: e4410ef6/main, ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
 """run_fixtures — both-polarity live proof for bootstrap/track-work.sh (the standing
@@ -16,7 +16,23 @@ CASES (both polarities, all live subprocess runs of the real script — never a 
   GREEN-ADOPT        -- a fresh `track-work.sh <dir> --name <name> --db toy --host <host>` on an
                         empty dir exits 0, writes deployment.json + the five verb shims, and the
                         shims actually work: `./led work open/claim`, `./pickup`'s IN-FLIGHT
-                        section, and `./distance-to-clean` (TOTAL debt: 0) all succeed live.
+                        section, and `./distance-to-clean` (TOTAL debt: 1, the `smoke` item this
+                        very case deliberately leaves open+claimed -- see the DRIFT NOTE below)
+                        all succeed live.
+
+  DRIFT NOTE (ledger row 1368, diagnosed 2026-07-18): this fixture originally asserted
+  `TOTAL debt: 0` here. Commit 0a3a204 ("distance-to-clean: mirror the stop-gate's five debt
+  categories, not three", 2026-07-16 -- AFTER this fixture's own 2026-07-11 authoring date)
+  deliberately widened `distance-to-clean` from three debt categories to the stop-gate hook's
+  own five, explicitly so it would stop printing "TOTAL debt: 0" on a world the stop-gate hook
+  would otherwise block on real, undischarged work-item debt (that commit's own message: "so it
+  could print 'TOTAL debt: 0' on a world the stop-gate then blocked on real, undischarged
+  work-item debt (witnessed live)"). GREEN-ADOPT below opens AND claims `smoke` but never closes
+  it (deliberately, to prove `./pickup`'s IN-FLIGHT section renders a live open+claimed item) --
+  so under the widened, INTENDED distance-to-clean behaviour that open+claimed item is exactly
+  one unit of real debt, and the fixture's stale `debt: 0` expectation is what changed, not
+  distance-to-clean. The assertion below is updated to `TOTAL debt: 1`, naming `smoke` as the
+  expected debt item.
   RED-EXISTING        -- re-running the SAME command against the SAME dir with no --force is
                         REFUSED (exit 1), naming deployment.json and never touching the DB again
                         (verified by the row count in `ledger` staying exactly 2 — the two rows
@@ -129,11 +145,22 @@ def main() -> int:
         failures.append(f"GREEN-ADOPT: pickup did not show the open work item\n{r_pickup.stdout}")
     print(f"GREEN-ADOPT: pickup shows IN-FLIGHT smoke item -- {'PASS' if pickup_ok else 'FAIL'}")
 
+    # TOTAL debt: 1, not 0 -- `smoke` is deliberately left open+claimed (r_claim above, never
+    # closed) to prove the IN-FLIGHT section renders it live, and distance-to-clean's five-
+    # category widening (commit 0a3a204, 2026-07-16) correctly counts exactly that as one unit
+    # of work-item debt. distance-to-clean itself is a gate-style verb (bootstrap/templates/
+    # distance-to-clean.tmpl's own main(): `return 0 if total == 0 else 1`), so exit 1 is the
+    # CORRECT, expected exit here, not a failure. See this file's own module-docstring DRIFT
+    # NOTE (ledger row 1368).
     r_d2c = subprocess.run([str(dest / "distance-to-clean")], capture_output=True, text=True, cwd=str(dest))
-    d2c_ok = r_d2c.returncode == 0 and "TOTAL debt: 0" in r_d2c.stdout
+    d2c_ok = (r_d2c.returncode == 1 and "TOTAL debt: 1" in r_d2c.stdout
+              and "work-items        : 1 open+claimed item(s)" in r_d2c.stdout
+              and "'smoke'" in r_d2c.stdout)
     if not d2c_ok:
-        failures.append(f"GREEN-ADOPT: distance-to-clean not clean\n{r_d2c.stdout}")
-    print(f"GREEN-ADOPT: distance-to-clean TOTAL debt: 0 -- {'PASS' if d2c_ok else 'FAIL'}")
+        failures.append(f"GREEN-ADOPT: distance-to-clean did not report the expected smoke "
+                        f"debt (TOTAL debt: 1, work-items: 1, slug 'smoke')\n{r_d2c.stdout}")
+    print(f"GREEN-ADOPT: distance-to-clean TOTAL debt: 1 (smoke, open+claimed) -- "
+          f"{'PASS' if d2c_ok else 'FAIL'}")
 
     baseline_rows = _ledger_row_count()
     if baseline_rows != 2:

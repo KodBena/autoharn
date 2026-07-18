@@ -1,18 +1,34 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-12T16:29:43Z
-#   last-change: 2026-07-12T16:29:43Z
-#   contributors: 3c50e030/main
+#   last-change: 2026-07-18T07:52:12Z
+#   contributors: 3c50e030/main, ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
 """run_fixtures.py -- both-polarity proof for kernel/lineage/s28-work-parent-edge.sql +
 bootstrap/templates/led.tmpl's `--parent` flag + bootstrap/templates/pickup.tmpl's ROLLUP section
 (tracker slug work-tree-rollup, design at ledger row 151, wave-3 dispatch decision at ledger row
-192). Real infra, no mocks: a throwaway `--new-world` scaffold in the toy db (which applies the
-s15..s26 birth chain automatically), with s28 applied EXPLICITLY on top via a direct psql -f (s28
-is not wired into `bootstrap/new-project.sh`'s own `LINEAGE_CHAIN` yet -- that wiring is the
-wave-3 orchestrator's seam-integration act, per s28's own header) -- torn down before AND after
-this file runs so re-running it never leaves residue.
+192). Real infra, no mocks: a throwaway `--new-world` scaffold in the toy db -- torn down before
+AND after this file runs so re-running it never leaves residue.
+
+DRIFT NOTE (ledger row 1367, diagnosed 2026-07-18): this fixture originally applied s28
+EXPLICITLY on top of the scaffold via a direct `psql -f kernel/lineage/s28-work-parent-edge.sql`,
+because at authoring time s28 was not yet wired into `bootstrap/new-project.sh`'s own
+`LINEAGE_CHAIN`. That wiring has since landed: `--new-world` now applies the FULL chain through
+s45 automatically, s28 included (`bootstrap/new-project.sh`'s `LINEAGE_CHAIN` variable lists s28
+between s27 and s29, and its own `-f` invocation sequence applies
+`kernel/lineage/s28-work-parent-edge.sql` directly). Re-applying s28's
+`CREATE OR REPLACE VIEW ledger_current` a SECOND time, after the chain has already carried
+`ledger_current` forward through a dozen later deltas that each append MORE columns (s29, s36,
+s37, s38, s42, s43, s45...), asks Postgres to replace a view with FEWER columns than it already
+has -- forbidden (`ERROR: cannot drop columns from view`, witnessed verbatim against a scratch
+`--new-world` world before this fix). This is a FIXTURE bug, not a birth-chain defect: a plain
+`--new-world` scaffold with no extra apply step already carries every s28 object end to end
+(`work_parent` column, `work_item_current`, `work_item_descendants`,
+`work_parent_would_cycle()` all present and queryable), witnessed directly against a second
+scratch world scaffolded with no s28 re-apply at all. The explicit re-apply step below is
+therefore removed; the scaffold alone is s28's proof substrate now, same as every later lineage
+delta's own fixture.
 
 Cases:
   a-valid-parent-accepted        -- `./led work open <child> ... --parent <root>` succeeds; the
@@ -21,8 +37,18 @@ Cases:
                                      pair.
   b-dangling-parent-refused      -- `./led work open <slug> ... --parent <unopened-slug>` is
                                      REFUSED (nonzero exit) with teach-text naming the dangling
-                                     parent -- construction-time refusal, no row written (verified
-                                     by ledger row count unchanged).
+                                     parent -- construction-time refusal, no `work_opened` row for
+                                     the refused slug ever lands (verified by absence of a
+                                     `work_opened` ledger row for it, before AND after). NOTE
+                                     (diagnosed alongside row 1367): under the full chain the s43
+                                     write boundary journals every refusal as its OWN committed
+                                     `write_refused` audit row (ratified behaviour, not a defect --
+                                     s43's own header, R6) -- so the ledger's TOTAL row count does
+                                     grow by one on a refusal now; what must never happen is the
+                                     refused work item's own opening row landing. Also asserts
+                                     EXACTLY ONE `write_refused` row lands (not merely that
+                                     `work_opened` is absent), so a hypothetical double-journaling
+                                     defect would not slip past unnoticed.
   c-self-parent-refused          -- `--parent` naming the item's OWN slug is REFUSED at
                                      CONSTRUCTION TIME (the `work_parent_not_self` CHECK), a
                                      stronger surface than the trigger's own cycle walk.
@@ -42,14 +68,12 @@ Cases:
                                      same input estimates (never re-deriving pickup's own logic --
                                      an independent arithmetic check).
   f-differential-agree           -- the EXISTING SQL/ASP marriage differential (`engine/
-                                     ledger_differential.py`) still verdicts AGREE against this s28
-                                     world (proving s28 does not perturb the existing T_now facts;
-                                     `./judge` is not run because this fixture scaffolds a world
-                                     with only the s15..s26 birth chain PLUS an explicitly-applied
-                                     s28 -- `engine/ledger_differential.py` is the direct producer
-                                     this project's own `./judge` wraps, run the identical way
-                                     s26's own fixture already runs it against a non-standard-birth-
-                                     chain world).
+                                     ledger_differential.py`) still verdicts AGREE against this
+                                     world (proving s28 does not perturb the existing T_now facts)
+                                     -- run directly rather than via the scaffolded world's own
+                                     `./judge` shim, the same way s26's own fixture already runs
+                                     it (`engine/ledger_differential.py` is the direct producer
+                                     `./judge` wraps).
   g-pre-s28-led-open-unaffected  -- `led work open` with NO `--parent` flag still succeeds on a
                                      kernel that DOES carry s28 (the column-presence branch is
                                      exercised, not just assumed) -- and a bare `led work open`
@@ -78,7 +102,6 @@ from _fixture_env import fixture_pghost  # noqa: E402 (filing/pghost_resolve.py 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
 NEW_PROJECT = REPO / "bootstrap" / "new-project.sh"
-S28_DELTA = REPO / "kernel" / "lineage" / "s28-work-parent-edge.sql"
 
 PGHOST, PGDB = fixture_pghost(), "toy"
 WORLD = "s28fxprobe"
@@ -118,8 +141,9 @@ def main() -> int:
     failures: list[str] = []
 
     try:
-        # --- scaffold the s15..s26 birth chain, then apply s28 explicitly on top -----------------
-        print(f"== scaffolding throwaway --new-world {WORLD} (s15..s26 birth chain) ==")
+        # --- scaffold the FULL --new-world birth chain (s28 is wired into it already; no ------
+        # --- explicit re-apply -- see the DRIFT NOTE in this file's own module docstring) -----
+        print(f"== scaffolding throwaway --new-world {WORLD} (full birth chain, s28 included) ==")
         r = sh(["bash", str(NEW_PROJECT), str(world_dir), "--new-world", WORLD,
                 "--db", PGDB, "--host", PGHOST])
         if r.returncode != 0:
@@ -132,16 +156,8 @@ def main() -> int:
 
         dep = json.loads((world_dir / "deployment.json").read_text(encoding="utf-8"))
         schema, kern, role = dep["schema"], dep["kern"], dep["role"]
-        print(f"  scaffold OK (schema={schema} kern={kern} role={role}).\n")
-
-        print(f"== applying s28-work-parent-edge.sql to {schema}/{kern}/{role} ==")
-        ra = sh(["psql", "-h", PGHOST, "-d", PGDB, "-v", "ON_ERROR_STOP=1",
-                 "-v", f"schema={schema}", "-v", f"kern={kern}", "-v", f"role={role}",
-                 "-f", str(S28_DELTA)])
-        if ra.returncode != 0:
-            print("s28 APPLY FAILED:", ra.stdout[-1500:], ra.stderr[-1500:])
-            return 1
-        print("  s28 applied.\n")
+        print(f"  scaffold OK (schema={schema} kern={kern} role={role}, s28 objects carried by "
+              f"the standard chain).\n")
 
         # --- a: valid parent accepted ------------------------------------------------------------
         r1 = led(world_dir, "work", "open", "root-a", "Root", "A")
@@ -161,15 +177,33 @@ def main() -> int:
               f"work_item_current={tree.stdout.strip()!r}; "
               f"work_item_descendants={desc.stdout.strip()!r}", failures)
 
-        # --- b: dangling parent refused, at construction (no row written) -----------------------
-        count_before = psql_tuples(f"SELECT count(*) FROM {schema}.ledger;").stdout.strip()
+        # --- b: dangling parent refused, at construction (no work_opened row for the refused ----
+        # --- slug ever lands -- the s43 write boundary journals the refusal ITSELF as its own ---
+        # --- write_refused audit row, ratified behaviour, so total ledger row count is NOT the --
+        # --- right absence-witness on the full chain; the refused item's own opening row is).---
+        # --- Strengthened per out-of-frame hack-rationalization audit (2026-07-18, rows -----------
+        # --- 1367/1368): also asserts EXACTLY ONE write_refused row lands (not merely that the ---
+        # --- work_opened row is absent), so a hypothetical double-journaling defect would not ----
+        # --- slip past this fixture unnoticed. ---------------------------------------------------
+        def kind_count(kind: str, slug: str | None = None) -> str:
+            clause = f"AND work_slug='{slug}' " if slug else ""
+            return psql_tuples(
+                f"SELECT count(*) FROM {schema}.ledger WHERE kind='{kind}' {clause};").stdout.strip()
+
+        opened_before = kind_count("work_opened", "orphan-y")
+        refused_before = kind_count("write_refused")
         rb = led(world_dir, "work", "open", "orphan-y", "Orphan", "--parent", "no-such-slug")
-        count_after = psql_tuples(f"SELECT count(*) FROM {schema}.ledger;").stdout.strip()
+        opened_after = kind_count("work_opened", "orphan-y")
+        refused_after = kind_count("write_refused")
         ok_b = (rb.returncode != 0
                 and "no opening act" in (rb.stdout + rb.stderr)
-                and count_before == count_after)
+                and opened_before == "0" and opened_after == "0"
+                and int(refused_after) == int(refused_before) + 1)
         check("b-dangling-parent-refused", ok_b,
-              f"exit={rb.returncode} row_count_unchanged={count_before == count_after} "
+              f"exit={rb.returncode} orphan-y work_opened rows before/after="
+              f"{opened_before}/{opened_after} (expect 0/0 -- no forbidden row landed); "
+              f"write_refused rows before/after={refused_before}/{refused_after} "
+              f"(expect exactly +1 -- the refusal itself IS the journaled audit row) "
               f"stderr_excerpt={(rb.stdout + rb.stderr).strip()[-220:]!r}", failures)
 
         # --- c: self-parent refused, at CONSTRUCTION TIME (CHECK constraint) --------------------
