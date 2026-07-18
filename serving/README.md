@@ -9,10 +9,14 @@
 
 **Build basis:** [design/FABLE-LEDGER-BOUNDARY-SERVICE-SPEC.md](../design/FABLE-LEDGER-BOUNDARY-SERVICE-SPEC.md)
 (RATIFIED — ledger rows 1471, 1481, 1518), **hardened per Amendment A2** (seven post-build
-independent-review findings, adjudicated) **and Amendment A3** (the time axis and the parse
-closure — two more adjacent axes of the same write ingress A2's size closure did not reach).
-Read the spec in full, including A2 and A3, before touching this directory; this README is an
-operator's pointer into it, not a restatement.
+independent-review findings, adjudicated), **Amendment A3** (the time axis and the parse
+closure — two more adjacent axes of the same write ingress A2's size closure did not reach),
+**and Amendment A4** (value closure on non-finite numbers and Postgres-text-representability,
+the read-side id domain, and exit-code fidelity in the psql layer — `PsqlInfraFailure` narrows
+to genuinely connection-level psql failures only, exit 3 and other residue now get their own
+typed `unclassified_failure`).
+Read the spec in full, including A2, A3, and A4, before touching this directory; this README is
+an operator's pointer into it, not a restatement.
 
 ## What this is, in one paragraph
 
@@ -90,12 +94,25 @@ any of this service's own refusal machinery to hold to that discipline. Revisit 
 consumer demonstrates harm from the untyped shape (spec A3.3's own carve-out) — not pre-emptively
 typed, per ADR-0004 (no work ahead of a demonstrated need).
 
-## Bounds (A2.2, A2.6, A2.7, A3.1 — one disclosed discipline, every ingress)
+## Bounds (A2.2, A2.6, A2.7, A3.1, A4.1, A4.2 — one disclosed discipline, every ingress)
 
 - **Pagination** (`/rows/current`, `/credited`): `?after_id=&limit=`, **`1 ≤ limit ≤ 1000`**,
   **`after_id ≥ 0`** — both violations are a typed HTTP 422 naming the bound. Ratified spec
   text as of A2.7; A2.6 added the `after_id ≥ 0` half (it previously accepted negatives while
   `limit` was already range-checked — an asymmetry with no reason).
+- **The read-side id domain** (A4.2, symmetric with A2.6): every id-typed path/query parameter
+  — `/rows/{id}`, `/rows/{id}/history`'s `id`, `/rows/current` and `/credited`'s `after_id` —
+  is bounded **`0 ≤ id ≤ 9223372036854775807`** (a Postgres `bigint`'s own ceiling, `MAX_ID`),
+  typed HTTP 422 outside it. Before this bound existed, an over-range id reached `psql`'s
+  bigint cast unchecked and wore a 503 it did not earn.
+- **The write-ingress value closure** (A4.1, at the parse boundary, after structure/encoding/
+  magnitude, before `psql`): (a) **non-finite numbers** — the payload is re-serialized with
+  `json.dumps(..., allow_nan=False)`, so `Infinity`, `NaN`, and any numeric literal that
+  overflows to one of them (e.g. `1e400`) refuse on the **value axis**, since jsonb has no
+  representation for them; (b) **Postgres-text-representability** — the payload refuses if it
+  carries a literal `U+0000` (NUL) or an unpaired UTF-16 surrogate character on the
+  **representability axis**, neither of which jsonb text storage can store. Both are typed
+  HTTP 422 naming the axis, never echoing the payload back.
 - **Write body size** (`/write/*`): `MAX_WRITE_BODY_BYTES = 1_048_576` (1 MiB), the ONE named
   bound (ADR-0012 P1), enforced at BOTH checkpoints A2.2 names: (a) the **raw request body**,
   before any JSON parsing (Content-Length checked first when the client declared one — refused
@@ -115,18 +132,33 @@ typed, per ADR-0004 (no work ahead of a demonstrated need).
   stall IS infra." The write handlers are plain `def` (see "Write path shape" below), so a
   stalled write cannot starve `/health` or any other route.
 
-## Infrastructure failure (A2.4, extended per A3.1)
+## Infrastructure failure (A2.4, extended per A3.1, NARROWED per A4.3)
 
-A `psql` infrastructure failure — an unreachable world, a connection refusal, a nonzero exit
-that is not a kernel verdict, OR a `PSQL_EXEC_TIMEOUT_S` stall — is typed, not a bare 500:
-HTTP 503, `{"disposition": "infra_failure", "message": "<generic — no SQL, role, schema, or
-stack>"}`. As of A3.2 this is raised ONLY by the service's own dedicated `PsqlInfraFailure`
-exception (never a bare `RuntimeError`, which a foreign failure such as `RecursionError` — a
-`RuntimeError` subclass — could also raise and thereby wear this shape by accident); one
-exception handler on the FastAPI app, registered on that dedicated class, is the single home
-for this translation (ADR-0012 P1) — every route inherits it, not a per-route try/except. The
-full `psql` stderr is logged server-side (stderr) for operator diagnosis; it never reaches the
-client.
+A `psql` failure that is genuinely **connection-level** — an unreachable world, a connection
+refusal (`psql` exit 2), OR a `PSQL_EXEC_TIMEOUT_S` stall — is typed, not a bare 500: HTTP 503,
+`{"disposition": "infra_failure", "message": "<generic — no SQL, role, schema, or stack>"}`. As
+of A3.2 this is raised ONLY by the service's own dedicated `PsqlInfraFailure` exception (never a
+bare `RuntimeError`, which a foreign failure such as `RecursionError` — a `RuntimeError`
+subclass — could also raise and thereby wear this shape by accident); one exception handler on
+the FastAPI app, registered on that dedicated class, is the single home for this translation
+(ADR-0012 P1) — every route inherits it, not a per-route try/except. The full `psql` stderr is
+logged server-side (stderr) for operator diagnosis; it never reaches the client.
+
+**Unclassified failure (A4.3, the sibling narrowing).** `psql` exit 3 (a script/data-level
+failure under `ON_ERROR_STOP=1`) or any other unrecognized nonzero residue is **NOT**
+connection-level and no longer wears `infra_failure` — before A4.1/A4.2 closed the
+value-closure and id-domain classes above, this path was reachable by a handful of cheap
+malformed-but-not-invalid-JSON payloads, which then counterfeited outage signal in the infra
+logs (an actively false "not a problem with your request" claim, the lying-signature class
+ADR-0002 rung 3 exists to forbid). It now returns a DEDICATED typed shape, HTTP 500:
+`{"disposition": "unclassified_failure", "message": "<honest: the storage layer refused for a
+reason this boundary did not anticipate — may be the deployment or the request; the boundary
+declines to guess>"}`. Raised ONLY by the service's own dedicated `PsqlUnclassifiedFailure`
+exception, on its own exception handler (ADR-0012 P1, matching `PsqlInfraFailure`'s own
+discipline) — never `infra_failure`, and never a bare 500. After A4.1/A4.2, this path is
+unreachable via an ordinary caller-supplied request; its occurrence names a boundary or
+deployment defect. Full `psql` stderr logged server-side only, exactly like `infra_failure`'s
+own logging discipline.
 
 **Capability-absent responses** are HTTP 409 with body
 `{"disposition": "capability_absent", "capability": "<name>", "message": "<teach-text>"}` — a
@@ -233,11 +265,11 @@ mocks. Run:
 HARNESS_PGHOST=<toy-db-host> $HOME/w/vdc/venvs/generic/bin/python seen-red/boundary-service/run_fixtures.py
 ```
 
-Covers spec §8's W1–W7 plus A2's W9–W12 plus A3's W13–W14, all live; **W8 (the panel-side
-deprecation-mark emission) is UNEXERCISED by construction** — that legacy path lives in the
-separate autoharn-panel repository, which this build never touches, per the spec's own §10.4
-("panel-side is a separate session's item citing this spec"). A2's additions: **W9** an
-oversized write body at both A2.2 checkpoints (typed 413 both times, server stays alive,
+Covers spec §8's W1–W7 plus A2's W9–W12 plus A3's W13–W14 plus A4's W15–W19, all live; **W8
+(the panel-side deprecation-mark emission) is UNEXERCISED by construction** — that legacy path
+lives in the separate autoharn-panel repository, which this build never touches, per the spec's
+own §10.4 ("panel-side is a separate session's item citing this spec"). A2's additions: **W9**
+an oversized write body at both A2.2 checkpoints (typed 413 both times, server stays alive,
 `/health` still answers afterward); **W10** `/health` on a pre-s40 chain (200, null
 `service_principal`, no 500); **W11** the s41/s22 capability gates' PRESENT leg (a chain
 carrying both views) and ABSENT leg (a chain carrying neither — `WORLD NOCAP`, truncated
@@ -251,7 +283,21 @@ three; **W14** the hang leg — the service pointed at a deliberately non-routab
 on Linux) — proving the bound is this service's own, not the kernel's. **The W9 streaming-abort
 leg is UNEXERCISED** (named per A3.4's own carve-out): driving it needs a client that half-closes
 a POST mid-body, which this fixture's `urllib`-only transport cannot do without introducing a
-second, parallel HTTP client layer.
+second, parallel HTTP client layer. A4's additions: **W15** the non-finite legs — `Infinity`,
+`NaN`, `1e400` — each a typed 422 on the value axis, `/health` still answering after all three;
+**W16** the representability legs — a U+0000-bearing string, an unpaired UTF-16 surrogate —
+each a typed 422 on the representability axis; **W17** an over-range id on the read side, both
+a path parameter (`/rows/{id}`) and a query parameter (`/rows/current?after_id=`), each a typed
+422; **W18** exit-code fidelity, both polarities — **(a)** a fresh server instance whose
+`PGPORT` points at a closed local port (a genuine `psql` exit 2, connection refusal, distinct
+from W14's blackhole/stall) returns typed 503 `infra_failure`; **(b)** `ledger_current` forced-
+dropped on `WORLD B` (a genuine `psql` exit 3, script/data-level, run LAST and destructively —
+after every other `WORLD B` check) returns typed 500 `unclassified_failure`, message honest;
+**W19** `audit_served.py`'s exit-2 "transport/infrastructure failure" contract, re-witnessed
+against the same closed-port lever applied to the audit tool's OWN direct-read leg (the
+served-fetch leg still targets `WORLD B`'s live server) — proves A4.4's regression fix (catching
+the dedicated `PsqlInfraFailure`/`PsqlUnclassifiedFailure` exceptions instead of the stale bare
+`RuntimeError`) restores the contract rather than letting the failure escape uncaught.
 
 **Concurrent-runner safety (A3.5).** Every scratch world/schema name carries a per-run unique,
 pid-derived suffix (`RUN_SUFFIX`); teardown is scoped to the exact suffixed name a run created.

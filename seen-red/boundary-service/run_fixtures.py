@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-18T07:49:10Z
-#   last-change: 2026-07-18T09:19:25Z
+#   last-change: 2026-07-18T10:12:41Z
 #   contributors: ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
 """run_fixtures.py -- both-polarity witness for design/FABLE-LEDGER-BOUNDARY-SERVICE-SPEC.md's
-§8 witness plan (W1-W12, A2's amendment; W13-W14, A3's amendment). Real infra, no mocks:
+§8 witness plan (W1-W12, A2's amendment; W13-W14, A3's amendment; W15-W19, A4's amendment).
+Real infra, no mocks:
 CLASSIC scaffolds + manual chain applies in the TOY db (the exact pattern seen-red/
 s43-typed-verdict-write-boundary/run_fixtures.py already banks, and this fixture imports
 nothing new for scaffolding -- same helpers, re-derived here because the two fixtures scaffold
@@ -31,8 +32,16 @@ WORLDS:
                 caught nonzero), the s22/s41 gate PRESENT legs (W11), W9 (oversized write body
                 at both A2.2 checkpoints, typed 413, server alive, /health still answering),
                 W13 (parse-closure legs: invalid UTF-8, an oversized integer literal, deeply
-                nested body -- each a typed 422, server alive after each), the §9/A2.1/W12
-                in-process route-table closure assertion.
+                nested body -- each a typed 422, server alive after each), W15 (non-finite
+                legs: Infinity/NaN/1e400, typed 422 value axis), W16 (representability legs: a
+                U+0000-bearing string, an unpaired UTF-16 surrogate, typed 422 representability
+                axis), W17 (an over-range read-side id, path and query, typed 422), W18a (a
+                FRESH server instance against a closed local port -- genuine psql exit 2 -> 503
+                infra_failure), W19 (audit_served.py's exit-2 contract, using the same
+                closed-port lever against ITS OWN direct-read leg while the served-fetch leg
+                still targets world_b's live server), the §9/A2.1/W12 in-process route-table
+                closure assertion, and FINALLY (destructive, run last) W18b (ledger_current
+                dropped on world_b -- genuine psql exit 3 -> 500 unclassified_failure).
   WORLD NOCAP -- chain truncated BEFORE s22/s40/s41/s42/s43 (ends at s21): W10 (/health on a
                 pre-s40 chain -> 200, null service_principal, no 500) and the s22/s41 gate
                 ABSENT legs (W11) -- this world carries neither view, so both capability gates
@@ -286,6 +295,17 @@ def free_port() -> int:
         return s.getsockname()[1]
 
 
+def free_closed_port() -> int:
+    """A4/W18a: identical mechanics to `free_port` above -- bind then immediately close -- but
+    named separately because the INTENT differs: `free_port` hands the port to a server this
+    fixture is about to bind; this one hands a port that stays closed, so a subsequent connect
+    attempt against it gets a fast ECONNREFUSED (genuine connection-level failure, psql exit 2)
+    rather than a stall (W14's already-covered blackhole/accept-then-silent class)."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind(("127.0.0.1", 0))
+        return s.getsockname()[1]
+
+
 def write_scratch_deployment(tmpdir: Path, world: str) -> Path:
     rec = deployment_record.DeploymentRecord(
         db=PGDB, host=PGHOST, schema=world, kern=f"{world}_kernel", role=f"{world}_rw", name=world)
@@ -295,15 +315,25 @@ def write_scratch_deployment(tmpdir: Path, world: str) -> Path:
 
 
 def start_server(deployment_path: Path, host: str = "127.0.0.1", port: int | None = None,
-                  extra_flag: bool = False) -> tuple[subprocess.Popen, int]:
+                  extra_flag: bool = False, env_overrides: dict[str, str] | None = None
+                  ) -> tuple[subprocess.Popen, int]:
+    """`env_overrides` (A4/W18a): merged over this process's own environment before launch --
+    used to force a genuine connection-refusal leg (PGPORT pointed at a closed local port) that
+    is distinct from W14's already-covered blackhole/stall leg, without needing a second
+    deployment-record shape (deployment.json carries no port field of its own; PGPORT is the
+    one lever psql itself already understands, the same lever _psql's own PGCONNECT_TIMEOUT
+    override in boundary_service.py uses for the time axis)."""
     if port is None:
         port = free_port()
     args = [str(PYVENV), "-m", "serving.boundary_service",
             "--deployment", str(deployment_path), "--host", host, "--port", str(port)]
     if extra_flag:
         args.append("--i-understand-this-exposes-the-ledger")
+    env = dict(os.environ)
+    if env_overrides:
+        env.update(env_overrides)
     proc = subprocess.Popen(args, cwd=str(REPO), stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                            text=True)
+                            text=True, env=env)
     return proc, port
 
 
@@ -582,6 +612,115 @@ def main() -> int:
               f"world={body13h.get('world')} (server alive)",
               failures)
 
+        # -- W15 (A4.1a): non-finite legs -- Infinity, NaN, 1e400 -- each a typed 422 on the
+        # value axis, server alive after. Hand-built raw bytes (never json.dumps, which would
+        # need a Python float('inf')/('nan') input and so would pre-filter client-side rather
+        # than driving the SERVER's own classification): `json.loads` accepts all three
+        # non-standard literals by default (confirmed above -- `1e400` silently parses to
+        # `inf`, exceeding float's exponent range), the same lenience A4.1(a)'s
+        # `allow_nan=False` re-serialization exists to close downstream of.
+        infinity_body = b'{"kind": "note", "actor": 1, "statement": "W15 Infinity leg", "n": Infinity}'
+        nan_body = b'{"kind": "note", "actor": 1, "statement": "W15 NaN leg", "n": NaN}'
+        huge_exp_body = b'{"kind": "note", "actor": 1, "statement": "W15 1e400 leg", "n": 1e400}'
+        st15a, body15a = _post_raw("/write/ledger", infinity_body)
+        st15b, body15b = _post_raw("/write/ledger", nan_body)
+        st15c, body15c = _post_raw("/write/ledger", huge_exp_body)
+        st15h, body15h = http_get(base + "/health") if up_b else (0, {})
+        check("w15-non-finite-legs-typed-422-value-axis-server-alive",
+              up_b
+              and st15a == 422 and "value axis" in body15a.get("detail", "")
+              and st15b == 422 and "value axis" in body15b.get("detail", "")
+              and st15c == 422 and "value axis" in body15c.get("detail", "")
+              and st15h == 200 and body15h.get("world") == world_b,
+              f"Infinity: status={st15a} body={body15a}; NaN: status={st15b} body={body15b}; "
+              f"1e400 (overflows to inf): status={st15c} body={body15c}; /health after all "
+              f"three: status={st15h} world={body15h.get('world')} (server alive)",
+              failures)
+
+        # -- W16 (A4.1b): representability legs -- a U+0000-bearing string, an unpaired UTF-16
+        # surrogate -- each a typed 422 on the representability axis, server alive after. Both
+        # crafted as raw JSON escape sequences in the request bytes (a NUL escape, a lone `\ud800` escape
+        # with no low surrogate pairing it) -- `json.loads` accepts both by default (confirmed
+        # above) and hands the server a real NUL character / a real lone-surrogate Python str
+        # character, exactly what A4.1(b) exists to catch before jsonb ever sees it.
+        nul_body = b'{"kind": "note", "actor": 1, "statement": "before\\u0000after"}'
+        surrogate_body = b'{"kind": "note", "actor": 1, "statement": "before\\ud800after"}'
+        st16a, body16a = _post_raw("/write/ledger", nul_body)
+        st16b, body16b = _post_raw("/write/ledger", surrogate_body)
+        st16h, body16h = http_get(base + "/health") if up_b else (0, {})
+        check("w16-representability-legs-typed-422-server-alive",
+              up_b
+              and st16a == 422 and "representability axis" in body16a.get("detail", "")
+              and st16b == 422 and "representability axis" in body16b.get("detail", "")
+              and st16h == 200 and body16h.get("world") == world_b,
+              f"NUL-bearing string: status={st16a} body={body16a}; unpaired surrogate: "
+              f"status={st16b} body={body16b}; /health after both: status={st16h} "
+              f"world={body16h.get('world')} (server alive)",
+              failures)
+
+        # -- W17 (A4.2): over-range id on the read side -- a path-param id past MAX_ID
+        # (2**63 - 1) and an over-range after_id query param -- each a typed 422, never
+        # reaching psql's bigint cast (which previously wore a 503 it did not earn).
+        over_range_id = 2**63  # one past MAX_ID
+        st17a, body17a = http_get(f"{base}/rows/{over_range_id}") if up_b else (0, {})
+        st17b, body17b = http_get(f"{base}/rows/current?after_id={over_range_id}&limit=10") if up_b else (0, {})
+        check("w17-over-range-id-read-side-typed-422",
+              up_b
+              and st17a == 422 and "row_id" in body17a.get("detail", "")
+              and st17b == 422 and "after_id" in body17b.get("detail", ""),
+              f"GET /rows/{{id}} with id={over_range_id} (MAX_ID+1): status={st17a} "
+              f"body={body17a}; GET /rows/current?after_id={over_range_id}: status={st17b} "
+              f"body={body17b}",
+              failures)
+
+        # -- W18a (A4.3), connection-refusal polarity: PsqlInfraFailure (typed 503
+        # infra_failure) for a genuine psql exit 2. A FRESH server instance, pointed at world_b's
+        # OWN deployment file but with PGPORT overridden to a closed local port (nothing
+        # listens there), so every psql call this instance makes gets a fast ECONNREFUSED
+        # (exit 2) -- distinct from W14's already-covered blackhole/stall leg (a TimeoutExpired,
+        # also infra per A3.1, but not this specific exit-2 path A4.3 draws the line at).
+        closed_port = free_closed_port()
+        proc18a, port18a = start_server(dep_b, env_overrides={"PGPORT": str(closed_port)})
+        asgi_up_18a = False
+        deadline18a = time.time() + 10
+        while time.time() < deadline18a:
+            try:
+                with socket.create_connection(("127.0.0.1", port18a), timeout=1):
+                    asgi_up_18a = True
+                    break
+            except OSError:
+                time.sleep(0.2)
+        st18a, body18a = http_get(f"http://127.0.0.1:{port18a}/health") if asgi_up_18a else (0, {})
+        out18a = stop_server(proc18a)
+        check("w18a-exit2-connection-refusal-503-infra-failure",
+              asgi_up_18a and st18a == 503 and body18a.get("disposition") == "infra_failure",
+              f"ASGI socket accepting={asgi_up_18a}; GET /health against a server whose PGPORT "
+              f"points at a closed local port ({closed_port}, nothing listening -- genuine "
+              f"ECONNREFUSED, psql exit 2): status={st18a} body={body18a}; "
+              f"server tail: {out18a[-300:] if not asgi_up_18a else '(n/a, came up)'}",
+              failures)
+
+        # -- W19 (A4.4): audit_served.py's exit-2 "transport/infrastructure failure" contract,
+        # restored -- against an unreachable world (the SAME closed-port lever W18a uses,
+        # applied to the audit tool's OWN direct-psql leg, not the service under audit). The
+        # served-page fetch (--base-url) still targets world_b's live, healthy server, so ONLY
+        # the audit's direct-read leg fails -- proving A4.4's fix (catching the dedicated
+        # PsqlInfraFailure/PsqlUnclassifiedFailure exceptions instead of the stale bare
+        # RuntimeError) restores the exit-2 contract rather than letting the failure escape as
+        # an uncaught exception (a crash) or silently miscount as exit 0/1.
+        env19 = dict(os.environ)
+        env19["PGPORT"] = str(closed_port)
+        audit19_cp = sh([str(PYVENV), str(SERVING / "audit_served.py"),
+                        "--base-url", base, "--deployment", str(dep_b)], env=env19) if up_b else None
+        check("w19-audit-served-exit2-contract-unreachable-world",
+              up_b and audit19_cp is not None and audit19_cp.returncode == 2
+              and "TRANSPORT FAILURE" in audit19_cp.stderr,
+              f"audit_served.py --deployment pointed at an unreachable world (PGPORT="
+              f"{closed_port}, closed -- direct-read leg only, served-fetch leg still targets "
+              f"the live world_b server): exit={audit19_cp.returncode if audit19_cp else '?'} "
+              f"stderr={(audit19_cp.stderr.strip() if audit19_cp else '?')!r}",
+              failures)
+
         # -- W9 streaming-abort leg: UNEXERCISED, named (spec A3.4's own carve-out, "exercised
         # if cheaply drivable, else UNEXERCISED with why"). Driving it needs a client that opens
         # the write connection, sends a Content-Length promise, then closes the socket mid-body
@@ -608,6 +747,31 @@ def main() -> int:
               f"actual={sorted(actual_routes)}; meta-routes (docs/redoc/openapi) present: "
               f"{bool({p for _, p in actual_routes if 'doc' in p or 'openapi' in p})}",
               failures)
+
+        # -- W18b (A4.3), script/data-level polarity: PsqlUnclassifiedFailure (typed 500
+        # unclassified_failure) for a genuine psql exit 3. DELIBERATELY corrupts world_b by
+        # dropping ledger_current (a forced boundary/deployment defect -- exactly what A4.3
+        # says this path means: after A4.1/A4.2 close the value-closure and id-domain classes,
+        # an ordinary caller-supplied request cannot reach exit 3 on its own). CASCADE is
+        # required and harmless here: s41's principal_relations/principal_role_bindings/
+        # principal_keys/principal_competences all depend on ledger_current, and this is the
+        # LAST check in WORLD B's block -- run after every other check that depends on any of
+        # them, immediately before this world is torn down entirely. Uses the same admin psql
+        # connection `teardown()` already uses on this world.
+        r18b = sh(["psql", "-h", PGHOST, "-d", PGDB, "-c", f"DROP VIEW {world_b}.ledger_current CASCADE;"])
+        if r18b.returncode != 0:
+            check("w18b-exit3-script-failure-500-unclassified-failure", False,
+                  f"could not force the fixture (DROP VIEW {world_b}.ledger_current CASCADE "
+                  f"failed): {r18b.stdout[-400:]} {r18b.stderr[-400:]}",
+                  failures)
+        else:
+            st18b, body18b = http_get(base + "/rows/current?after_id=0&limit=10") if up_b else (0, {})
+            check("w18b-exit3-script-failure-500-unclassified-failure",
+                  up_b and st18b == 500 and body18b.get("disposition") == "unclassified_failure",
+                  f"GET /rows/current against world_b with ledger_current DROPPED (forces a "
+                  f"genuine psql exit 3 -- relation does not exist, under ON_ERROR_STOP=1): "
+                  f"status={st18b} body={body18b}",
+                  failures)
 
         out_b = stop_server(proc_b)
         if not up_b:
@@ -766,7 +930,7 @@ def main() -> int:
     if failures:
         print("FAILURES:", failures)
         return 1
-    print("ALL CASES OK -- boundary-service both-polarity proof (W1-W7, W9-W14 live; "
+    print("ALL CASES OK -- boundary-service both-polarity proof (W1-W7, W9-W19 live; "
           "W8 and the W9 streaming-abort leg UNEXERCISED, named).")
     return 0
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-18T07:43:25Z
-#   last-change: 2026-07-18T09:16:02Z
+#   last-change: 2026-07-18T10:03:32Z
 #   contributors: ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -96,15 +96,34 @@ class PayloadTooLarge(BaseModel):
 
 
 class InfraFailure(BaseModel):
-    """A2.4, extended per A3.1/A3.2: a psql infra failure -- unreachable world, connection
-    refusal, a nonzero exit that is not a kernel verdict, OR a `PSQL_EXEC_TIMEOUT_S` stall (a
-    peer that accepts the connection and then goes silent; A3.1's "a stall IS infra") -- is
-    typed rather than a bare 500. As of A3.2 this shape is raised ONLY by the service's
-    dedicated `PsqlInfraFailure` exception (never a bare `RuntimeError`, which a foreign failure
-    like `RecursionError` could also raise), so no unrelated exception can wear this signature
-    by accident. The message here is DELIBERATELY generic (no SQL, role, schema, or stack); the
-    full loud detail stays server-side in the log (ADR-0002 rung 3 loudness retained, exposure
-    posture unchanged)."""
+    """A2.4, extended per A3.1/A3.2, NARROWED per A4.3: a psql infra failure -- unreachable
+    world, connection refusal (psql exit 2), OR a `PSQL_EXEC_TIMEOUT_S` stall (a peer that
+    accepts the connection and then goes silent; A3.1's "a stall IS infra") -- is typed rather
+    than a bare 500. As of A3.2 this shape is raised ONLY by the service's dedicated
+    `PsqlInfraFailure` exception (never a bare `RuntimeError`, which a foreign failure like
+    `RecursionError` could also raise), so no unrelated exception can wear this signature by
+    accident. As of A4.3, `PsqlInfraFailure` itself is narrowed further: a psql exit 3 (or any
+    other nonzero residue) is NOT connection-level and is no longer classified here -- see
+    `UnclassifiedFailure` below. The message here is DELIBERATELY generic (no SQL, role, schema,
+    or stack); the full loud detail stays server-side in the log (ADR-0002 rung 3 loudness
+    retained, exposure posture unchanged)."""
 
     disposition: str = "infra_failure"
     message: str = Field(description="generic teach-text; see the server's own log for the full detail")
+
+
+class UnclassifiedFailure(BaseModel):
+    """A4.3: a psql exit that is NEITHER exit 2 (connection-level, `InfraFailure` above) NOR a
+    kernel verdict -- concretely, psql exit 3 (a script/data-level failure under
+    `ON_ERROR_STOP=1`) or any other unrecognized nonzero residue. After A4.1/A4.2 close the
+    value-closure and id-domain classes, this path is unreachable via an ordinary caller-
+    supplied request; its occurrence names a boundary or deployment defect, not a request
+    defect -- so the message says exactly that, honestly, rather than asserting a cause (SQL/
+    role/schema/stack) this boundary did not witness. Raised ONLY by the service's dedicated
+    `PsqlUnclassifiedFailure` exception -- the A4.3 sibling of `PsqlInfraFailure`'s own
+    narrowing, so neither typed shape can claim a cause it cannot witness."""
+
+    disposition: str = "unclassified_failure"
+    message: str = Field(description="honest teach-text: the storage layer refused for a reason "
+                                      "this boundary did not anticipate; full detail is logged "
+                                      "server-side only; see the server's own log")
