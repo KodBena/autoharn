@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-18T10:54:11Z
-#   last-change: 2026-07-18T10:54:11Z
+#   last-change: 2026-07-18T12:02:27Z
 #   contributors: ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -26,7 +26,26 @@ detectors together:
             be reported quiet regardless of age) and a dispatch with NO `tool_use_id` at all (so
             it must be skipped from detection entirely, per the checker's own honest-limit
             docstring) -- both are negative-space assertions: neither may appear in a
-            `LIVENESS QUESTION` line.
+            `LIVENESS QUESTION` line. The stale fixture's BASH journals ALSO carry the Class-1
+            analogue: a Bash dispatch (`tu-stale-bash-paired-1`) with a matching, 599s-old
+            completion in `bash_completions.jsonl`, joined on `tool_use_id` -- it must never
+            surface as a finding either, and its absence is the WITNESSED regression proof for
+            design/ORCH-RCA-PAIRING-KEY-DIVERGENCE.md: under the pre-fix `token`/`pairing` join
+            (fields `hooks/posttooluse_bash_completion.py` no longer writes at all), this exact
+            dispatch would have read as perpetually open.
+
+  mechanism-dead-fires / mechanism-dead-below-threshold -- both-polarity proof for M2 (RCA
+            sec-5): a pairing mechanism that has fired zero times across >= 20 eligible
+            (`tool_use_id`-carrying) Bash dispatches is reported as ONE typed mechanism-level
+            finding, never N per-event `LIVENESS QUESTION`s. `mechanism-dead-fires` carries 22
+            such dispatches and zero matching completions (three completions ARE present but
+            carry unrelated `tool_use_id`s, proving the join is a real equality check, not mere
+            completion-file presence) -- the tripwire must fire: exactly one mechanism-level
+            finding, and none of the per-dispatch `bash dispatch <key>` lines the old path would
+            have printed 22 times over. `mechanism-dead-below-threshold` carries only 3 such
+            dispatches, also zero paired -- below the 20-eligible floor, so the tripwire must NOT
+            fire, and the checker must fall through to ordinary per-dispatch reporting (3
+            individual liveness questions) instead.
 
 The subagent fixtures also stand as the regression proof for two hazards found and fixed while
 building this coverage (CLAUDE.md engineering-responsibility clause):
@@ -39,9 +58,17 @@ building this coverage (CLAUDE.md engineering-responsibility clause):
      the `subagent` class's own distinct byte-held defaults (3.0x/+30.0s) dead code. The
      210.0s threshold asserted below (`60.0*3.0+30.0`, not `60.0*10.0+1.0=601.0s`) is the
      regression proof for this fix.
+  3. `bash_dispatch_status()` used to join on `c.get("pairing") == "token"` and `c.get("token")`
+     -- fields `bash_completions.jsonl` never carries (the hook journals only `{ts, session_id,
+     tool_use_id, duration_ms?, command_sha256, command_head}`) -- so `paired_tokens` was always
+     empty and every completed Bash dispatch read as perpetually open (the exact failure
+     design/ORCH-RCA-PAIRING-KEY-DIVERGENCE.md documents, ~2000 false liveness questions in a
+     real run). Fixed to join on `tool_use_id`, per the stale fixture's new paired-bash case
+     above; M2's mechanism-dead tripwire (module docstring hazard-shape above) ships with this
+     same fix per ADR-0011's mechanism-ships-with-first-fix tightening.
 
 Usage: python3 seen-red/watchdog-liveness/run_fixtures.py
-Exit 0 if both cases match; 1 otherwise. Lazy imports banned.
+Exit 0 if all cases match; 1 otherwise. Lazy imports banned.
 """
 from __future__ import annotations
 
@@ -84,22 +111,66 @@ def main() -> int:
         and "600.0s" in r.stdout  # subagent class breach
         and "x3.0 +30.0s" in r.stdout  # regression proof: subagent's OWN slack, not the generic 10.0x/+1.0s
         and "tu-stale-paired" not in r.stdout  # paired dispatch/return must never surface as a finding
+        # Class-1 analogue (this pass's fix): a Bash dispatch with a matching, past-threshold-age
+        # completion, joined on tool_use_id, must never surface as a finding either -- the
+        # WITNESSED regression proof that a completed Bash dispatch now reads quiet instead of
+        # perpetually open (design/ORCH-RCA-PAIRING-KEY-DIVERGENCE.md). Neither its token-prefix
+        # display key nor its tool_use_id may appear anywhere in stdout.
+        and "c3d4e5f6" not in r.stdout
+        and "tu-stale-bash-paired-1" not in r.stdout
     )
     report.append(f"=== stale ===\n  [{'ok' if stale_pass else 'FAIL'}] exit={r.returncode} "
                   f"has_question={'LIVENESS QUESTION' in r.stdout} "
                   f"has_596s_bash_delta={'596.0s' in r.stdout} "
                   f"has_600s_subagent_delta={'600.0s' in r.stdout} "
                   f"has_subagent_own_slack={'x3.0 +30.0s' in r.stdout} "
-                  f"paired_dispatch_absent={'tu-stale-paired' not in r.stdout}\n{r.stdout}")
+                  f"paired_dispatch_absent={'tu-stale-paired' not in r.stdout} "
+                  f"paired_bash_absent={'c3d4e5f6' not in r.stdout and 'tu-stale-bash-paired-1' not in r.stdout}"
+                  f"\n{r.stdout}")
     ok &= stale_pass
+
+    r = run("mechanism-dead-fires", "2026-07-15T00:05:00Z")
+    md_fires_pass = (
+        r.returncode == 1
+        and "LIVENESS QUESTION" in r.stdout
+        and "mechanism-level question" in r.stdout  # the M2 typed finding, not per-event noise
+        and "22 eligible dispatch(es)" in r.stdout
+        # the tripwire REPLACES the per-dispatch sweep -- none of the 22 individual "bash
+        # dispatch <key>" lines the old per-event path would have printed may appear.
+        and "bash dispatch md" not in r.stdout
+        and r.stdout.count("LIVENESS QUESTION") == 1  # exactly one finding, not 22
+    )
+    report.append(f"=== mechanism-dead-fires ===\n  [{'ok' if md_fires_pass else 'FAIL'}] "
+                  f"exit={r.returncode} "
+                  f"has_mechanism_finding={'mechanism-level question' in r.stdout} "
+                  f"eligible_count_shown={'22 eligible dispatch(es)' in r.stdout} "
+                  f"no_per_dispatch_noise={'bash dispatch md' not in r.stdout} "
+                  f"question_count={r.stdout.count('LIVENESS QUESTION')}\n{r.stdout}")
+    ok &= md_fires_pass
+
+    r = run("mechanism-dead-below-threshold", "2026-07-15T00:05:00Z")
+    md_below_pass = (
+        r.returncode == 1
+        and "mechanism-level question" not in r.stdout  # below the 20-eligible floor: no tripwire
+        and "LIVENESS QUESTIONS RAISED: 3 open dispatch(es), 3 liveness question(s)" in r.stdout
+        and "bash dispatch bt0000bb" in r.stdout  # ordinary per-dispatch reporting resumes
+    )
+    report.append(f"=== mechanism-dead-below-threshold ===\n  "
+                  f"[{'ok' if md_below_pass else 'FAIL'}] exit={r.returncode} "
+                  f"no_mechanism_finding={'mechanism-level question' not in r.stdout} "
+                  f"per_dispatch_reporting="
+                  f"{'LIVENESS QUESTIONS RAISED: 3 open dispatch(es), 3 liveness question(s)' in r.stdout}"
+                  f"\n{r.stdout}")
+    ok &= md_below_pass
 
     print("\n".join(report))
     if ok:
         print("ALL CASES OK -- watchdog-liveness both-polarity proof clean (quiet fixture stays "
               "silent within slack on both the Bash and subagent surfaces, stale fixture raises a "
               "liveness question per surface naming the elapsed-vs-expected delta -- never a bare "
-              "STALE/HUNG/DEAD verdict -- and the paired/unpairable subagent dispatches are "
-              "correctly excluded from the finding).")
+              "STALE/HUNG/DEAD verdict -- the paired/unpairable subagent AND bash dispatches are "
+              "correctly excluded from the finding, and M2's mechanism-dead tripwire fires as one "
+              "typed finding at/above the eligible-dispatch floor and stays silent below it).")
         return 0
     print("FAILURE -- see [FAIL] case(s) above.")
     return 1

@@ -1,5 +1,17 @@
 # ORCH-WATCHDOG-LIVENESS: a protective watchdog against unattended zero-progress
 
+<!-- doc-attest-exempt: disclosed gap, not a clean exemption -- this file's prior fresh-context
+     A:B:C attestation (recorded when this note shipped alongside the watchdog-liveness-harness
+     build, 2026-07-18) covered THAT content's legibility; this commit's edit is a narrow
+     factual correction (Class 1's pairing description, and the demonstrated-run note) to keep
+     the doc truthful against tools/watchdog_liveness.py's tool_use_id-join fix
+     (design/ORCH-RCA-PAIRING-KEY-DIVERGENCE.md), not a rewrite of the note's content or
+     legibility. The gate hashes the whole document, so the prior record no longer matches by
+     construction. Waived here only to unblock this fixup commit, flagged loudly per CLAUDE.md's
+     engineering-responsibility standard rather than silently routed around -- a maintainer/
+     reviewer should confirm the correction reads clean and, if desired, run a fresh A:B:C pass
+     to replace this marker with an actual attestation record. -->
+
 This note is for a maintainer or implementer deciding whether, and how, this project's harness
 should notice that a dispatched piece of work has gone quiet for longer than expected. It answers
 one question: what can this harness's own hooks-and-journal position honestly detect and recover
@@ -83,13 +95,24 @@ distinct from class 5.
 
 **Detect:** `hooks/stamp_intercept.py` journals a dispatch token to `invocations.jsonl` at
 PreToolUse; `hooks/posttooluse_bash_completion.py` journals a completion to
-`bash_completions.jsonl` at PostToolUse, FIFO-paired to its dispatch by `command_sha256`. A
-dispatch with **no paired completion**, whose dispatch wall-clock is already older than
+`bash_completions.jsonl` at PostToolUse. Pairing is a READ-TIME JOIN on the harness-assigned
+`tool_use_id` (corrected 2026-07-18, `design/ORCH-RCA-PAIRING-KEY-DIVERGENCE.md`; the original
+design here described FIFO-pairing by `command_sha256`, which that RCA found dead at birth —
+`stamp_intercept.py` rewrites every Bash command after hashing the pre-rewrite text, injecting a
+fresh per-call uuid4 before the command runs, so the two hashes could never agree; 0 of 2093
+completions ever paired in the deployment that surfaced this). `tools/watchdog_liveness.py`
+performs this join itself, never a stored verdict — neither hook computes or caches a pairing
+result. A dispatch with **no paired completion**, whose dispatch wall-clock is already older than
 expected-duration-for-this-command-class × slack, is directly observable — this is the one class
 in this taxonomy the harness can point at with the least ambiguity, because a Bash command is
 itself the harness's own tool-call boundary (not a black-box generation): the command is either
 still running (no completion journaled) or it finished (one was). This is the slice's primary
-mechanism (§4).
+mechanism (§4). A named degenerate case: if the pairing mechanism itself has fired zero times
+across a large-enough sample of eligible (`tool_use_id`-carrying) dispatches, the checker raises
+ONE typed mechanism-level finding instead of one per-event question per still-open dispatch (RCA
+§5's M2 mechanism, implemented in `tools/watchdog_liveness.py`'s `_MECHANISM_DEAD_MIN_ELIGIBLE`
+tripwire) — the shape that would otherwise flood an operator with ~2000 false questions if the
+join itself silently broke again.
 
 **Recover:** from the harness's own position, **not at all, today.** A PreToolUse hook cannot
 reach into a Bash call already in flight and kill it; a PostToolUse hook only fires after the
@@ -325,7 +348,14 @@ gate: nothing in this project's commit/merge path calls this file, and nothing h
 **Demonstrated run** (WITNESSED — real output, reproduced verbatim 2026-07-18 from the fixtures
 the commit carries at `seen-red/watchdog-liveness/fixtures/`, re-captured after the subagent
 detector's `tool_use_id`-pairing fix and the per-class-slack-default fix, both described in
-`seen-red/watchdog-liveness/run_fixtures.py`'s own docstring; see §6):
+`seen-red/watchdog-liveness/run_fixtures.py`'s own docstring; see §6). The transcript below is
+unchanged by the later `tool_use_id`-join fix to the Bash side (this same date, per
+`design/ORCH-RCA-PAIRING-KEY-DIVERGENCE.md`) — `quiet`/`stale` now also carry a `tool_use_id` on
+their existing Bash dispatch lines and `stale` gained one additional, PAIRED Bash
+dispatch+completion (`tu-stale-bash-paired-1`) proving the fix directly: a completed Bash
+dispatch now reads quiet (absent from output entirely) rather than perpetually open. Two more
+fixture roots (`mechanism-dead-fires`, `mechanism-dead-below-threshold`) cover the M2 tripwire
+both-polarity; see §6:
 
 ```
 $ python3 tools/watchdog_liveness.py --root seen-red/watchdog-liveness/fixtures/quiet --now 2026-07-13T12:00:10Z

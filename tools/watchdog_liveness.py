@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-13T17:13:41Z
-#   last-change: 2026-07-18T10:53:29Z
+#   last-change: 2026-07-18T12:00:30Z
 #   contributors: 3c50e030/main, ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -194,11 +194,44 @@ def _parse_ts(s: str) -> datetime | None:
 
 
 # ---------------------------------------------------------------------------------------------
-# Class 1 -- Bash dispatch/completion pairing (mirrors
-# hooks/posttooluse_bash_completion.py's own FIFO-by-command_sha256 pairing, READ-ONLY here --
-# this file never writes invocations.jsonl/bash_completions.jsonl, only reads what those two
-# hooks already wrote).
+# Class 1 -- Bash dispatch/completion pairing, joined on the harness-assigned `tool_use_id`
+# (design/ORCH-RCA-PAIRING-KEY-DIVERGENCE.md sec-4/6.1/6.3 -- the RCA that root-caused this
+# project's original content-hash FIFO pairing as DEAD AT BIRTH: `hooks/stamp_intercept.py`
+# hashes the pre-rewrite command text but then REWRITES the command -- injecting a fresh
+# per-call uuid4 into PGOPTIONS -- before it actually runs, so `hooks/posttooluse_bash_completion.py`'s
+# own `command_sha256` (hashed from the POST-rewrite text its PostToolUse payload carries) could
+# never equal the dispatch side's hash. Measured live: 0 of 2093 completions ever paired in the
+# deployment that surfaced this; every completed Bash dispatch read as "possibly still open"
+# forever. Both hooks now transport the harness's own `tool_use_id` instead (present on both
+# PreToolUse and PostToolUse payloads, minted once by the one party positioned to mint it -- RCA
+# sec-3), and `hooks/posttooluse_bash_completion.py`'s completion record no longer stores a
+# `token`/`pairing` verdict at all (its 2026-07-14 rewrite, RCA sec-6.1) -- this file performs the
+# READ-TIME JOIN the RCA's sec-4 mandates (never a stored verdict); reading `token`/`pairing` here
+# would silently match nothing forever, exactly the false-open failure the RCA diagnosed. This
+# file remains READ-ONLY: it never writes invocations.jsonl/bash_completions.jsonl.).
 # ---------------------------------------------------------------------------------------------
+
+_MECHANISM_DEAD_MIN_ELIGIBLE = 20  # M2 (RCA sec-5): a pairing mechanism that has fired ZERO times
+# across this many tool_use_id-carrying ("eligible") dispatches is reported ONCE, as a typed
+# mechanism-level finding, instead of raising one per-event LIVENESS QUESTION per still-open
+# dispatch -- the RCA's own witnessed failure (0 of 2093 completions ever paired) would have
+# raised ~2000 per-event questions under the old per-dispatch path alone. Computed against
+# ELIGIBLE dispatches specifically (RCA sec-7 hazard 3), not raw journal volume or dispatch count,
+# so a lightly-wired deployment with a handful of dispatches (none of them carrying a
+# `tool_use_id` yet, or simply few of them) does not false-alarm as "mechanism dead" -- it falls
+# through to ordinary per-dispatch reporting below threshold.
+
+
+@dataclass(frozen=True)
+class MechanismDeadFinding:
+    eligible: int
+
+    def line(self) -> str:
+        return (f"LIVENESS QUESTION: Bash dispatch/completion pairing (tool_use_id join) has not "
+                f"succeeded once across {self.eligible} eligible dispatch(es) -- possible "
+                f"pairing-key divergence between hooks/stamp_intercept.py and "
+                f"hooks/posttooluse_bash_completion.py -- mechanism-level question, look here.")
+
 
 @dataclass(frozen=True)
 class DispatchFinding:
@@ -218,30 +251,48 @@ class DispatchFinding:
                 f"within slack, quiet")
 
 
-def bash_dispatch_status(logs_dir: Path, now: datetime, cfg: WatchdogConfig) -> list[DispatchFinding]:
-    """Every Bash dispatch in `invocations.jsonl` with no paired completion in
-    `bash_completions.jsonl` (paired by `command_sha256`, FIFO -- same correlation
-    `hooks/posttooluse_bash_completion.py` itself performs at write time), reported against the
-    `bash` class threshold. Returns one finding per still-open dispatch; an empty list means
-    every dispatch has a matching completion (nothing open) OR no invocations were journaled at
-    all (an unwired/quiet deployment) -- both print as "quiet" by the caller, not distinguished
-    here (neither is a liveness question)."""
+@dataclass(frozen=True)
+class BashDispatchResult:
+    findings: list[DispatchFinding]
+    mechanism_dead: MechanismDeadFinding | None
+
+
+def bash_dispatch_status(logs_dir: Path, now: datetime, cfg: WatchdogConfig) -> BashDispatchResult:
+    """Every Bash dispatch in `invocations.jsonl` joined to `bash_completions.jsonl` on
+    `tool_use_id` (RCA sec-6.1/6.3 -- never `token`/`pairing`, fields the completion record no
+    longer carries at all post-fix). A dispatch with no `tool_use_id` cannot be joined either way
+    and is skipped from detection entirely -- no guessed pairing, ever (same honest-limit posture
+    `subagent_dispatch_status()` below already keeps for its own unpairable lines). If M2's
+    mechanism-dead tripwire fires (module-level docstring), a single `MechanismDeadFinding`
+    replaces the whole per-dispatch sweep for this surface; otherwise every still-open,
+    `tool_use_id`-carrying dispatch is reported individually against the `bash` class threshold,
+    exactly as before the RCA. Returns an empty findings list + no mechanism-dead finding when
+    every eligible dispatch has a matching completion (nothing open) OR no invocations were
+    journaled at all (an unwired/quiet deployment) -- both print as "quiet" by the caller, not
+    distinguished here (neither is a liveness question)."""
     dispatches = _read_jsonl(logs_dir / "invocations.jsonl")
     completions = _read_jsonl(logs_dir / "bash_completions.jsonl")
-    paired_tokens = {c.get("token") for c in completions if c.get("pairing") == "token" and c.get("token")}
+    completed_tool_use_ids = {c.get("tool_use_id") for c in completions if c.get("tool_use_id")}
     threshold = cfg.for_class("bash")
+
+    eligible = [d for d in dispatches if d.get("tool_use_id")]
+    paired = [d for d in eligible if d.get("tool_use_id") in completed_tool_use_ids]
+    if len(eligible) >= _MECHANISM_DEAD_MIN_ELIGIBLE and not paired:
+        return BashDispatchResult([], MechanismDeadFinding(len(eligible)))
+
     findings: list[DispatchFinding] = []
     for d in dispatches:
-        token = d.get("token")
-        if not token or token in paired_tokens:
-            continue
+        tool_use_id = d.get("tool_use_id")
+        if not tool_use_id or tool_use_id in completed_tool_use_ids:
+            continue  # paired (closed) or unjoinable (no tool_use_id) -- never guessed, RCA sec-6.1
         ts = _parse_ts(d.get("wall_clock") or d.get("ts") or "")
         if ts is None:
             continue
         elapsed = (now - ts).total_seconds()
         is_q = elapsed > threshold.threshold_s()
-        findings.append(DispatchFinding("bash", str(token)[:8], elapsed, threshold, is_q))
-    return findings
+        key = str(d.get("token") or tool_use_id)[:8]
+        findings.append(DispatchFinding("bash", key, elapsed, threshold, is_q))
+    return BashDispatchResult(findings, None)
 
 
 # ---------------------------------------------------------------------------------------------
@@ -437,16 +488,23 @@ def main(argv: list[str] | None = None) -> int:
     questions = 0
 
     print("=== BASH DISPATCHES ===")
-    bash_findings = bash_dispatch_status(logs_dir, now, cfg)
-    bash_questions = [f for f in bash_findings if f.is_question]
-    if not bash_findings:
-        print("quiet: 0 open dispatch(es)")
+    bash_result = bash_dispatch_status(logs_dir, now, cfg)
+    if bash_result.mechanism_dead is not None:
+        # M2 (RCA sec-5): the whole per-dispatch sweep is replaced by one typed finding -- never
+        # N per-event LIVENESS QUESTIONs for a mechanism that has never once paired.
+        print(bash_result.mechanism_dead.line())
+        questions += 1
     else:
-        print(f"{'LIVENESS QUESTIONS RAISED' if bash_questions else 'quiet'}: "
-              f"{len(bash_findings)} open dispatch(es), {len(bash_questions)} liveness question(s)")
-        for f in bash_findings:
-            print(f.line())
-    questions += len(bash_questions)
+        bash_findings = bash_result.findings
+        bash_questions = [f for f in bash_findings if f.is_question]
+        if not bash_findings:
+            print("quiet: 0 open dispatch(es)")
+        else:
+            print(f"{'LIVENESS QUESTIONS RAISED' if bash_questions else 'quiet'}: "
+                  f"{len(bash_findings)} open dispatch(es), {len(bash_questions)} liveness question(s)")
+            for f in bash_findings:
+                print(f.line())
+        questions += len(bash_questions)
 
     print("=== SUBAGENT DISPATCHES ===")
     sub_findings = subagent_dispatch_status(logs_dir, now, cfg)
