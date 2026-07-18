@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-18T07:45:52Z
-#   last-change: 2026-07-18T07:45:52Z
+#   last-change: 2026-07-18T10:06:56Z
 #   contributors: ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -53,7 +53,12 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "filing"))
 import deployment_record  # noqa: E402
-from boundary_service import BoundaryConfig, _query_json  # noqa: E402  (the ONE query helper, reused -- not a second reader, P1)
+from boundary_service import (  # noqa: E402  (the ONE query helper, reused -- not a second reader, P1)
+    BoundaryConfig,
+    PsqlInfraFailure,
+    PsqlUnclassifiedFailure,
+    _query_json,
+)
 
 
 class AuditTransportError(Exception):
@@ -77,6 +82,15 @@ def fetch_served(base_url: str, endpoint: str) -> list[dict[str, Any]]:
 
 
 def fetch_kernel(cfg: BoundaryConfig, view: str, after_id: int, limit: int) -> list[dict[str, Any]]:
+    # A4.4 regression fix: this `except` predates A3.2's dedicated `PsqlInfraFailure` (which is
+    # NOT a `RuntimeError` -- that narrowing is A3.2's whole point) and A4.3's sibling
+    # `PsqlUnclassifiedFailure` -- catching the bare `RuntimeError` this clause used to name let
+    # a direct-read infra/unclassified failure escape both handlers and break this tool's own
+    # exit-2 "transport/infrastructure failure" contract (main()'s docstring). Catch BOTH
+    # dedicated exceptions -- neither is a row-set disagreement, both are this tool's exit-2
+    # case -- restoring the contract A3.2's narrowing broke without re-widening back to a bare
+    # `RuntimeError` (which would swallow a foreign RuntimeError subclass again, A3.2's own
+    # original finding).
     try:
         rows = _query_json(
             cfg,
@@ -84,7 +98,7 @@ def fetch_kernel(cfg: BoundaryConfig, view: str, after_id: int, limit: int) -> l
             f"(SELECT * FROM {cfg.schema}.{view} WHERE id > {after_id} "
             f"ORDER BY id LIMIT {limit}) t;",
         )
-    except RuntimeError as e:
+    except (PsqlInfraFailure, PsqlUnclassifiedFailure) as e:
         raise AuditTransportError(f"reading {cfg.schema}.{view} directly failed: {e}") from e
     if not isinstance(rows, list):
         raise AuditTransportError(f"direct read of {cfg.schema}.{view} was not a JSON array")

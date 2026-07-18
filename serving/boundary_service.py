@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-18T07:44:41Z
-#   last-change: 2026-07-18T09:15:18Z
+#   last-change: 2026-07-18T10:06:38Z
 #   contributors: ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -110,6 +110,23 @@ turned into one typed 422 that names WHICH axis failed (encoding / value magnitu
 -- never echoing the raw body bytes back to the client (the body is untrusted and may not even
 be valid UTF-8).
 
+VALUE CLOSURE AND EXIT-CODE FIDELITY (spec A4). Two more axes close at the write parse boundary,
+after structure/encoding/magnitude above and before psql: non-finite numbers
+(`_reserialize_or_value_axis_failure`, `json.dumps(..., allow_nan=False)` -- Infinity/NaN/a
+too-large-to-be-finite literal like `1e400`) and Postgres-text-representability
+(`_representability_axis_failure` -- a literal U+0000 or an unpaired UTF-16 surrogate, neither
+of which jsonb can store). Both are typed 422, naming the axis, never echoing the payload. On
+the READ side, every id-typed path/query parameter is bounded `0 <= id <= MAX_ID`
+(`_out_of_range_id`, symmetric with A2.6's `after_id >= 0`) -- typed 422 outside that domain,
+before the value ever reaches psql's bigint cast. And `_query_json` now draws an exit-code line
+PsqlInfraFailure alone used to blur: psql exit 2 (connection-level) still raises
+`PsqlInfraFailure` (typed 503); exit 3 (a script/data-level SQL failure under `ON_ERROR_STOP=1`)
+or any other residue raises the DEDICATED `PsqlUnclassifiedFailure` (typed 500
+`unclassified_failure`) instead -- after A4.1/A4.2 close the value/id classes, this path is
+unreachable via an ordinary request, so its occurrence names a boundary or deployment defect,
+and the message says so honestly rather than asserting a cause (infra vs request) this boundary
+did not witness.
+
 Lazy imports are banned (CLAUDE.md, 2026-07-02): every import is top-of-file.
 """
 from __future__ import annotations
@@ -144,6 +161,7 @@ from boundary_models import (  # noqa: E402
     HealthResponse,
     InfraFailure,
     PayloadTooLarge,
+    UnclassifiedFailure,
 )
 
 # The four s43 boundary functions, named ONCE (ADR-0012 P1) -- the write-route table (spec §4)
@@ -177,14 +195,37 @@ MAX_WRITE_BODY_BYTES = 1_048_576
 PSQL_CONNECT_TIMEOUT_S = 5
 PSQL_EXEC_TIMEOUT_S = 60
 
+# A4.2: the read-side id domain, symmetric with A2.6's `after_id >= 0` -- every id-typed
+# path/query parameter is bounded `0 <= id <= MAX_ID` (a Postgres `bigint`'s own upper bound,
+# 2**63 - 1). Named ONCE (ADR-0012 P1) rather than re-derived per route; before this bound
+# existed, an over-range id reached psql's bigint cast unchecked and wore a 503 it did not
+# earn (A4's own trigger: only a genuine connection-level failure should ever wear that shape).
+MAX_ID = 2**63 - 1
+
 
 class PsqlInfraFailure(Exception):
-    """A3.2's narrowing: the ONE exception class a psql infrastructure failure (unreachable
-    world, connection refusal, a nonzero exit that is not a kernel verdict, or a
-    PSQL_EXEC_TIMEOUT_S stall) is raised as. The app's single exception handler (`create_app`)
+    """A3.2's narrowing, NARROWED FURTHER per A4.3: the ONE exception class a genuinely
+    connection-level psql failure -- psql exit 2 (unreachable world, connection refusal) or a
+    PSQL_EXEC_TIMEOUT_S stall -- is raised as. The app's single exception handler (`create_app`)
     catches ONLY this class -- never a bare `RuntimeError`, so a foreign exception that happens
     to subclass `RuntimeError` (`RecursionError`, for instance) can never wear the
-    `infra_failure` HTTP shape by accident."""
+    `infra_failure` HTTP shape by accident. As of A4.3 this class no longer covers psql exit 3
+    or any other nonzero residue -- see `PsqlUnclassifiedFailure` below; `_query_json` is the
+    ONE place that draws the exit-code line between the two."""
+
+
+class PsqlUnclassifiedFailure(Exception):
+    """A4.3: the sibling narrowing to `PsqlInfraFailure` above. A psql exit that is NEITHER
+    exit 2 (connection-level) NOR a kernel verdict -- concretely psql exit 3 (a script/data-
+    level failure under `ON_ERROR_STOP=1`) or any other unrecognized nonzero residue -- is
+    raised as THIS class, never `PsqlInfraFailure`: after A4.1/A4.2 close the value-closure and
+    id-domain classes at the parse/read boundary, this path is unreachable via an ordinary
+    caller-supplied request, so its occurrence means a boundary or deployment defect, not a
+    request defect -- a `PsqlInfraFailure` (typed 503, "not a problem with your request") would
+    be an actively false cause statement for this case (the lying-signature class, ADR-0002
+    rung 3). The app's single exception handler for this class returns typed 500
+    `unclassified_failure`, honest about not knowing the cause; full detail logged server-side
+    only, exactly like `PsqlInfraFailure`'s own logging discipline."""
 
 
 class BoundaryConfig:
@@ -262,19 +303,37 @@ def _psql(cfg: BoundaryConfig, script: str, extra_v: dict[str, str] | None = Non
 
 def _query_json(cfg: BoundaryConfig, sql: str, extra_v: dict[str, str] | None = None) -> Any:
     """Run a SELECT of exactly one scalar column; parse and return it as a Python value.
-    Raises PsqlInfraFailure (never silently returns None/empty for a REAL failure) on a nonzero
-    psql exit -- an infrastructure failure at the DB layer is not this service's to interpret,
-    only to surface loudly (ADR-0002). A ZERO-ROW or SQL-NULL result is NOT that failure: `psql
-    -tAq` prints the empty string for a NULL scalar (never the text "null"), and a single-row
-    subquery over a WHERE that matches nothing legitimately returns zero output rows -- both
-    are the honest "no value" case every caller here already handles (row_by_id's 404;
-    service_principal_name's absent-registration None), so both map to Python None rather than
-    an error. Distinguishing "no value" from "the query itself broke" is exactly the
-    returncode check above, not output-emptiness -- conflating them would turn a legitimate
-    NULL into a manufactured 500 on every one of this service's read routes."""
+    On a nonzero psql exit, raises EXACTLY ONE of two dedicated exceptions -- never silently
+    returning None/empty for a REAL failure -- per A4.3's exit-code fidelity: psql under
+    `ON_ERROR_STOP=1` reliably distinguishes exit 2 (connection-level failure -- unreachable
+    world, connection refusal: genuinely infra) from exit 3 or any other residue (a script/
+    data-level failure the write/read path reaches with values that are valid JSON yet not
+    Postgres-representable, or any other unrecognized nonzero exit). Exit 2 raises
+    `PsqlInfraFailure` (typed 503, "not a problem with your request" -- now TRUE, since A4.1/
+    A4.2 close the value-closure and id-domain classes that used to reach exit 3 through this
+    same path). Exit 3 and any other residue raise `PsqlUnclassifiedFailure` (typed 500,
+    honest that the boundary does not know the cause) -- conflating the two, as the
+    pre-A4 code did (every nonzero exit wearing `PsqlInfraFailure`), is exactly the
+    lying-signature class A4 exists to close: a handful of cheap malformed-but-not-invalid-
+    JSON payloads should never counterfeit outage signal in the infra logs.
+
+    A ZERO-ROW or SQL-NULL result is NOT either failure: `psql -tAq` prints the empty string
+    for a NULL scalar (never the text "null"), and a single-row subquery over a WHERE that
+    matches nothing legitimately returns zero output rows -- both are the honest "no value"
+    case every caller here already handles (row_by_id's 404; service_principal_name's absent-
+    registration None), so both map to Python None rather than an error. Distinguishing
+    "no value" from "the query itself broke" is exactly the returncode check below, not
+    output-emptiness -- conflating them would turn a legitimate NULL into a manufactured
+    500/503 on every one of this service's read routes."""
     cp = _psql(cfg, sql, extra_v)
+    if cp.returncode == 2:
+        raise PsqlInfraFailure(f"psql query failed (exit {cp.returncode}, connection-level): {cp.stderr.strip()[-2000:]}")
     if cp.returncode != 0:
-        raise PsqlInfraFailure(f"psql query failed (exit {cp.returncode}): {cp.stderr.strip()[-2000:]}")
+        raise PsqlUnclassifiedFailure(
+            f"psql query failed (exit {cp.returncode}, NOT connection-level -- a script/data-"
+            f"level residue A4.1/A4.2's closures should have made unreachable via an ordinary "
+            f"request; this is a boundary or deployment defect, not a request defect): "
+            f"{cp.stderr.strip()[-2000:]}")
     lines = [ln for ln in cp.stdout.splitlines() if ln.strip()]
     if not lines:
         return None
@@ -331,9 +390,32 @@ def payload_too_large(observed_bytes: int, message: str) -> JSONResponse:
 
 
 def infra_failure(message: str) -> JSONResponse:
-    """A2.4: the one typed shape a psql infrastructure failure returns."""
+    """A2.4, narrowed per A4.3: the one typed shape a genuinely connection-level psql failure
+    (exit 2 or a timeout) returns."""
     body = InfraFailure(message=message)
     return JSONResponse(status_code=503, content=body.model_dump())
+
+
+def unclassified_failure(message: str) -> JSONResponse:
+    """A4.3: the one typed shape a psql exit 3 (or other unrecognized nonzero residue) returns
+    -- HTTP 500, honest that this boundary does not know the cause, never claiming the
+    connection-level `infra_failure` shape it did not earn."""
+    body = UnclassifiedFailure(message=message)
+    return JSONResponse(status_code=500, content=body.model_dump())
+
+
+def _out_of_range_id(name: str, value: int) -> JSONResponse | None:
+    """A4.2: the read-side id domain, applied identically to every id-typed path/query
+    parameter (ADR-0012 P1 -- one check, named once, not re-derived per route) -- symmetric
+    with A2.6's `after_id >= 0` precedent, now completed upward to `MAX_ID` (a Postgres
+    `bigint`'s own ceiling). Returns the typed 422 when `value` is out of `[0, MAX_ID]`, else
+    None (the caller proceeds). Closing this class here is what makes an over-range id refuse
+    BEFORE it ever reaches psql's bigint cast -- previously it wore a 503 it did not earn."""
+    if value < 0 or value > MAX_ID:
+        return JSONResponse(status_code=422, content={
+            "detail": f"{name} must satisfy 0 <= {name} <= {MAX_ID} (a Postgres bigint's own "
+                      f"domain, spec §3/A2.6/A4.2); got {value}"})
+    return None
 
 
 def _log_infra_failure(context: str, exc: Exception) -> None:
@@ -341,6 +423,13 @@ def _log_infra_failure(context: str, exc: Exception) -> None:
     channel for a loud diagnostic every other construction-time refusal in this file already
     uses) -- never in the HTTP response (A2.4's exposure posture)."""
     sys.stderr.write(f"boundary_service: INFRA FAILURE ({context}): {exc}\n")
+
+
+def _log_unclassified_failure(context: str, exc: Exception) -> None:
+    """A4.3's sibling to `_log_infra_failure` -- the full detail (which, unlike an ordinary
+    infra failure, may include the actual psql stderr naming the offending SQL/data) stays
+    server-side only; the client sees `unclassified_failure`'s honest, cause-free message."""
+    sys.stderr.write(f"boundary_service: UNCLASSIFIED FAILURE ({context}): {exc}\n")
 
 
 class _BodyTooLarge(Exception):
@@ -376,6 +465,57 @@ def _classify_parse_failure(exc: Exception) -> tuple[str, str]:
     if isinstance(exc, ValueError):
         return "value magnitude", f"a numeric literal in the request body is too large to parse ({exc})"
     return "structure", f"the request body could not be parsed ({exc})"  # pragma: no cover
+
+
+def _reserialize_or_value_axis_failure(payload: dict[str, Any]) -> tuple[str | None, str | None]:
+    """A4.1(a): value closure at the parse boundary -- non-finite numbers. Re-serializes with
+    `json.dumps(..., allow_nan=False)`: a parsed body can contain `Infinity`/`NaN` (Python's
+    `json.loads` accepts these non-standard literals by default, and any numeric literal past
+    float's exponent range, e.g. `1e400`, silently parses TO one of them) even though jsonb has
+    no representation for them. `allow_nan=False` makes THIS re-serialization -- which is the
+    ONE text that actually crosses to psql, the same call checkpoint (b)'s size bound already
+    needed -- raise `ValueError` the instant such a value is present, rather than silently
+    emitting the non-standard `Infinity`/`NaN`/`-Infinity` tokens psql would then choke on with
+    an opaque, unclassified SQL error. Returns `(payload_json, None)` on success, `(None,
+    detail)` naming the value-axis failure on refusal -- never echoing the payload back."""
+    try:
+        return json.dumps(payload, allow_nan=False), None
+    except ValueError as e:
+        return None, (f"the payload contains a non-finite number (Infinity/NaN, or a numeric "
+                       f"literal magnitude too large to represent as a finite float) that "
+                       f"JSON/jsonb cannot represent ({e})")
+
+
+def _representability_axis_failure(payload: dict[str, Any]) -> str | None:
+    """A4.1(b): value closure at the parse boundary -- Postgres-text-representability. jsonb
+    cannot store a literal U+0000 (NUL) or an unpaired UTF-16 surrogate; both are mechanically
+    checkable on the payload's own serialization, but the CHECK needs two different
+    serializations for two different reasons:
+
+    - **NUL**: Python's json encoder escapes every control character (`< 0x20`, which includes
+      NUL) as a literal `\\u0000` text sequence in EITHER `ensure_ascii` mode -- so a `\\u0000`
+      substring in the serialized text (the "NUL-escape scan" the spec names) reliably means
+      the original string contained a real U+0000 character, regardless of which mode produced
+      the text.
+    - **Unpaired surrogate**: with the DEFAULT `ensure_ascii=True` (checkpoint (b)'s own mode,
+      used for the size measurement and the psql payload), a lone surrogate codepoint is ALSO
+      escaped down to a plain ASCII `\\uXXXX` sequence -- exactly like every other non-ASCII
+      character -- so a strict UTF-8 encode of THAT text can never fail; the escaping itself
+      defeats the check. Only an `ensure_ascii=False` serialization leaves a lone surrogate as
+      an actual (unencodable) codepoint in the text, which `str.encode("utf-8", "strict")` then
+      refuses (`UnicodeEncodeError`) -- a legitimate supplementary-plane character always
+      serializes as a matched, encodable surrogate PAIR, so this only fires on a genuinely
+      unpaired one. Returns the failure detail, or None if the payload is representable."""
+    escaped_json = json.dumps(payload)  # ensure_ascii=True; NUL is escaped in both modes
+    if "\\u0000" in escaped_json:
+        return ("the payload contains a U+0000 (NUL) character, which Postgres jsonb text "
+                "storage cannot represent")
+    try:
+        json.dumps(payload, ensure_ascii=False).encode("utf-8", errors="strict")
+    except UnicodeEncodeError as e:
+        return (f"the payload contains an unpaired UTF-16 surrogate character, which is not "
+                f"valid Unicode text and Postgres jsonb cannot store ({e})")
+    return None
 
 
 async def _read_bounded_body(request: Request) -> bytes:
@@ -443,16 +583,31 @@ def create_app(cfg: BoundaryConfig) -> FastAPI:
 
     @app.exception_handler(PsqlInfraFailure)
     async def _infra_failure_handler(request: Request, exc: PsqlInfraFailure) -> JSONResponse:
-        # A2.4, narrowed per A3.2: the ONE place a psql infrastructure failure (unreachable
-        # world, connection refusal, a nonzero exit that is not a kernel verdict, or a
-        # PSQL_EXEC_TIMEOUT_S stall -- the ONLY things that raise PsqlInfraFailure) becomes a
-        # typed 503, for every route uniformly (ADR-0012 P1: one handler, not a try/except
-        # duplicated per route). Registered on the DEDICATED exception class, never the bare
-        # `RuntimeError` a foreign failure (RecursionError, for one) could also raise.
+        # A2.4, narrowed per A3.2, narrowed FURTHER per A4.3: the ONE place a genuinely
+        # connection-level psql failure (exit 2 -- unreachable world, connection refusal -- or a
+        # PSQL_EXEC_TIMEOUT_S stall -- the ONLY things that raise PsqlInfraFailure as of A4.3)
+        # becomes a typed 503, for every route uniformly (ADR-0012 P1: one handler, not a
+        # try/except duplicated per route). Registered on the DEDICATED exception class, never
+        # the bare `RuntimeError` a foreign failure (RecursionError, for one) could also raise.
         _log_infra_failure(f"{request.method} {request.url.path}", exc)
         return infra_failure(
             "the ledger's underlying database connection failed -- this is an infrastructure "
             "problem, not a problem with your request; see the server's own log for full detail.")
+
+    @app.exception_handler(PsqlUnclassifiedFailure)
+    async def _unclassified_failure_handler(request: Request, exc: PsqlUnclassifiedFailure) -> JSONResponse:
+        # A4.3: the ONE place a psql exit that is NEITHER exit 2 (connection-level) NOR a kernel
+        # verdict -- exit 3 under ON_ERROR_STOP=1, or any other unrecognized nonzero residue --
+        # becomes a typed 500. This is unreachable via an ordinary caller-supplied request after
+        # A4.1's value closure and A4.2's id-domain closure, so its occurrence names a boundary
+        # or deployment defect; the message says exactly that, honestly, rather than claiming
+        # a cause (infra vs request) this boundary did not witness -- the lying-signature class
+        # ADR-0002 rung 3 exists to forbid. Full psql stderr logged server-side only.
+        _log_unclassified_failure(f"{request.method} {request.url.path}", exc)
+        return unclassified_failure(
+            "the storage layer refused for a reason this boundary did not anticipate -- this "
+            "may be the deployment or the request; the boundary declines to guess. Full detail "
+            "is logged server-side only; see the server's own log.")
 
     @app.exception_handler(_BodyTooLarge)
     async def _body_too_large_handler(request: Request, exc: _BodyTooLarge) -> JSONResponse:
@@ -476,9 +631,11 @@ def create_app(cfg: BoundaryConfig) -> FastAPI:
         if limit < 1 or limit > 1000:
             return JSONResponse(status_code=422, content={
                 "detail": "limit must be between 1 and 1000 (transport-level bound, ADR-0002)"})
-        if after_id < 0:
-            return JSONResponse(status_code=422, content={
-                "detail": "after_id must be >= 0 (transport-level bound, spec §3/A2.6)"})
+        # A4.2: after_id's domain closes symmetrically -- 0 <= after_id <= MAX_ID (the A2.6
+        # lower-bound precedent, completed upward).
+        oor = _out_of_range_id("after_id", after_id)
+        if oor is not None:
+            return oor
         rows = _query_json(
             cfg,
             f"SELECT coalesce(jsonb_agg(t ORDER BY t.id), '[]'::jsonb) FROM "
@@ -489,6 +646,12 @@ def create_app(cfg: BoundaryConfig) -> FastAPI:
 
     @app.get("/rows/{row_id}")
     def row_by_id(row_id: int) -> Response:
+        # A4.2: the path-parameter id domain -- 0 <= row_id <= MAX_ID, typed 422 outside it,
+        # BEFORE this value ever reaches psql's bigint cast (which previously wore a 503 it did
+        # not earn on an over-range id).
+        oor = _out_of_range_id("row_id", row_id)
+        if oor is not None:
+            return oor
         row = _query_json(
             cfg, f"SELECT to_jsonb(t) FROM (SELECT * FROM {cfg.schema}.ledger WHERE id = {row_id}) t;")
         if row is None:
@@ -497,6 +660,10 @@ def create_app(cfg: BoundaryConfig) -> FastAPI:
 
     @app.get("/rows/{row_id}/history")
     def row_history(row_id: int) -> Response:
+        # A4.2: same id-domain closure as row_by_id above.
+        oor = _out_of_range_id("row_id", row_id)
+        if oor is not None:
+            return oor
         # The full supersession chain both directions (predecessors this row's lineage
         # superseded, and any successor that superseded it), each hop annotated with its own
         # superseding row id -- spec §3's "each hop WITH its superseding row id".
@@ -539,9 +706,10 @@ def create_app(cfg: BoundaryConfig) -> FastAPI:
                 "until this world's kernel gains the view.")
         if limit < 1 or limit > 1000:
             return JSONResponse(status_code=422, content={"detail": "limit must be between 1 and 1000"})
-        if after_id < 0:
-            return JSONResponse(status_code=422, content={
-                "detail": "after_id must be >= 0 (transport-level bound, spec §3/A2.6)"})
+        # A4.2: same id-domain closure as /rows/current's after_id.
+        oor = _out_of_range_id("after_id", after_id)
+        if oor is not None:
+            return oor
         rows = _query_json(
             cfg,
             f"SELECT coalesce(jsonb_agg(t ORDER BY t.id), '[]'::jsonb) FROM "
@@ -623,11 +791,29 @@ def create_app(cfg: BoundaryConfig) -> FastAPI:
                 return JSONResponse(status_code=422, content={
                     "detail": "write payload must be a JSON object (transport-level shape check, spec §4)"})
 
+            # A4.1(a): value closure -- non-finite numbers. This SAME re-serialization is also
+            # A2.2 checkpoint (b)'s size measurement and the exact text that crosses to psql
+            # below -- one call, one home (ADR-0012 P1), not a separate throwaway dumps just for
+            # this check. `allow_nan=False` refuses Infinity/NaN/1e400-magnitude values on the
+            # value axis before they ever reach jsonb, which has no representation for them.
+            payload_json, value_axis_detail = _reserialize_or_value_axis_failure(payload)
+            if payload_json is None:
+                return JSONResponse(status_code=422, content={
+                    "detail": f"malformed write payload -- value axis: {value_axis_detail}"})
+
+            # A4.1(b): value closure -- Postgres-text-representability (U+0000 / an unpaired
+            # UTF-16 surrogate; see _representability_axis_failure's own docstring for why this
+            # needs its own, separately-moded serialization rather than reusing payload_json
+            # above).
+            repr_detail = _representability_axis_failure(payload)
+            if repr_detail is not None:
+                return JSONResponse(status_code=422, content={
+                    "detail": f"malformed write payload -- representability axis: {repr_detail}"})
+
             # A2.2 checkpoint (b): the re-serialized payload, bounded BEFORE the psql
             # subprocess -- a payload can pass checkpoint (a) and still fail here (non-ASCII
             # content that json.dumps's default ensure_ascii=True escaping expands past its
             # raw UTF-8 byte count; W9 exercises exactly this).
-            payload_json = json.dumps(payload)
             observed = len(payload_json.encode("utf-8"))
             if observed > MAX_WRITE_BODY_BYTES:
                 return payload_too_large(
