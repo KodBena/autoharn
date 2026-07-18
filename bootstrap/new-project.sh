@@ -1,7 +1,7 @@
 #!/bin/sh
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-09T11:15:53Z
-#   last-change: 2026-07-18T18:37:44Z
+#   last-change: 2026-07-18T20:38:48Z
 #   contributors: be693afb/main, e4410ef6/main, 3c50e030/main, a857c93d/main, 9a17b6b9/main, ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -905,6 +905,19 @@ else
     echo "wrote attestations/doc-legibility-attestations.jsonl (empty; the honest starting state)"
 fi
 echo "wrote attestations/README.md"
+
+# roles/ -- design/FABLE-ROLE-CHARTERS-AND-BRIEFS-SPEC.md deliverable 4 (commission ledger row
+# 1663): an EMPTY scaffold + README stating the register-before-binding rule -- ADDITIVE ONLY,
+# NO LINEAGE_CHAIN CONTACT (this block writes a directory and one templated README, nothing
+# else; no kernel act, no ledger row -- a charter binds only when a LATER, explicit
+# `tools/role_charter.py register` call writes the registration row, never at scaffold time).
+# COHERENCE PARTNER: roles/README.md is in gates/doc_attestation_presence.py's
+# DEPLOYMENT_SCAFFOLD_OWNED_MD (same set keys/README.md and attestations/README.md are already
+# in, immediately above) -- it is autoharn's own templated prose, not an adopter's to re-attest.
+echo "-- roles/ (this deployment's OWN role-charter directory; empty at birth, register-before-binding) --"
+mkdir -p "$PROJECT_ROOT/roles"
+sedsubst < "$TEMPLATES/roles-README.md.tmpl" > "$PROJECT_ROOT/roles/README.md"
+echo "wrote roles/README.md"
 
 echo "-- the nine project-local shims (the operator verbs led, judge, pickup, audit, distance-to-clean, attest-doc, asof-export, plus the two signing tools verify-commission and verify-chain): thin shims exec'ing autoharn's live templates --"
 for verb in led judge pickup audit distance-to-clean verify-commission verify-chain attest-doc asof-export; do
