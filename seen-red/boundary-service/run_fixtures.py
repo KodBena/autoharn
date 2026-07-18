@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-18T07:49:10Z
-#   last-change: 2026-07-18T11:12:17Z
+#   last-change: 2026-07-18T11:26:15Z
 #   contributors: ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
 """run_fixtures.py -- both-polarity witness for design/FABLE-LEDGER-BOUNDARY-SERVICE-SPEC.md's
 §8 witness plan (W1-W12, A2's amendment; W13-W14, A3's amendment; W15-W19, A4's amendment;
-W20-W23, A5's amendment; W21's float legs, A6's amendment). Real infra, no mocks:
+W20-W23, A5's amendment; W21's float legs, A6's amendment; W24, A7's amendment). Real infra,
+no mocks:
 CLASSIC scaffolds + manual chain applies in the TOY db (the exact pattern seen-red/
 s43-typed-verdict-write-boundary/run_fixtures.py already banks, and this fixture imports
 nothing new for scaffolding -- same helpers, re-derived here because the two fixtures scaffold
@@ -47,8 +48,12 @@ WORLDS:
                 `5.0` NOT newly refused by the boundary), W22 (a raw-socket
                 trickled body, typed 408 within BODY_READ_TIMEOUT_S plus margin), W23
                 (pagination on /standing/principals and /work/items, both polarities, including
-                /work/items' id-less synthetic-ordinal fallback), the §9/A2.1/W12 in-process
-                route-table closure assertion, and FINALLY (destructive, run last) W18b
+                /work/items' id-less synthetic-ordinal fallback), W24 (a ~3000-level-nested,
+                under-bound, otherwise-valid write body -- overflows the representability
+                scan's OWN post-parse traversal, typed 422 structure axis, server alive; W13's
+                deep-nesting leg, which overflows AT PARSE TIME instead, stays green), the
+                §9/A2.1/W12 in-process route-table closure assertion, and FINALLY (destructive,
+                run last) W18b
                 (ledger_current dropped on world_b -- genuine psql exit 3 -> 500
                 unclassified_failure).
   WORLD NOCAP -- chain truncated BEFORE s22/s40/s41/s42/s43 (ends at s21): W10 (/health on a
@@ -980,6 +985,32 @@ def main() -> int:
               f"(out-of-range leg)",
               failures)
 
+        # -- W24 (A7): the representability scan's OWN traversal (_iter_strings) is recursive
+        # and inherits none of A3.2's parse-time recursion-depth protection -- a well-formed
+        # body nested deeply enough overflows AFTER parse, inside the scan, rather than inside
+        # json.loads. Depth 3000 is chosen deliberately: confirmed above the pure-Python
+        # recursion limit (default 1000, so _iter_strings overflows well before 3000) and
+        # confirmed UNDER json.loads/json.dumps's own much higher C-accelerated threshold (both
+        # survive 6000+ levels), so this body parses fine, passes the id-domain and non-finite
+        # checks, and overflows ONLY the representability scan -- the exact adjacency A7 closes.
+        # Also under MAX_WRITE_BODY_BYTES (a few KB), so no size checkpoint fires first.
+        w24_depth = 3000
+        w24_nested = ("[" * w24_depth) + ("]" * w24_depth)
+        w24_body = (
+            '{"kind": "note", "actor": 1, "statement": "W24 deep nest", "n": ' + w24_nested + "}"
+        ).encode()
+        st24, body24 = _post_raw("/write/ledger", w24_body)
+        st24h, body24h = http_get(base + "/health") if up_b else (0, {})
+        check("w24-post-parse-recursion-guard-typed-422-structure-axis-server-alive",
+              up_b
+              and st24 == 422 and "structure" in body24.get("detail", "")
+              and st24h == 200 and body24h.get("world") == world_b,
+              f"~{w24_depth}-level-nested, under-bound, otherwise-valid write body "
+              f"({len(w24_body)} bytes): status={st24} body={body24}; /health after: "
+              f"status={st24h} world={body24h.get('world')} (server alive); W13's own "
+              f"deep-nesting leg (parse-time, {deep_nest} levels) stays green above",
+              failures)
+
         # -- W9 streaming-abort leg: UNEXERCISED, named (spec A3.4's own carve-out, "exercised
         # if cheaply drivable, else UNEXERCISED with why"). Driving it needs a client that opens
         # the write connection, sends a Content-Length promise, then closes the socket mid-body
@@ -1189,7 +1220,7 @@ def main() -> int:
     if failures:
         print("FAILURES:", failures)
         return 1
-    print("ALL CASES OK -- boundary-service both-polarity proof (W1-W7, W9-W23 live; "
+    print("ALL CASES OK -- boundary-service both-polarity proof (W1-W7, W9-W24 live; "
           "W8 and the W9 streaming-abort leg UNEXERCISED, named).")
     return 0
 

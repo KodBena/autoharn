@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-18T07:44:41Z
-#   last-change: 2026-07-18T11:09:14Z
+#   last-change: 2026-07-18T11:24:40Z
 #   contributors: ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -171,6 +171,15 @@ A5 HARDENING (iteration-3 independent re-review). Five more findings, closed her
    PAGINATION mechanics, not the data, differ from the id-keyed routes.
 5. **Framework-owned coercion (A5.5) -- unchanged, named in the README**, per the A3.3
    precedent: no code change.
+
+A7 FOLLOW-UP (iteration-5 confirmation pass): `_representability_axis_failure`'s own
+traversal (`_iter_strings`, A5.1) is recursive and inherited none of A3.2's parse-time
+recursion-depth protection -- a well-formed body nested deeply enough overflowed AFTER
+parse, inside this scan, escaping every registered handler as a bare 500. The call site
+now runs under the same `except RecursionError` A3.2's own parse catch uses, via the
+same `_classify_parse_failure` classifier, so this joins the structure axis with an
+identical typed-422 shape -- the caller sees no difference from A3.2's own deep-nesting
+refusal; only the overflowing frame differs.
 
 Lazy imports are banned (CLAUDE.md, 2026-07-02): every import is top-of-file.
 """
@@ -1015,8 +1024,19 @@ def create_app(cfg: BoundaryConfig) -> FastAPI:
             # A4.1(b): value closure -- Postgres-text-representability (U+0000 / an unpaired
             # UTF-16 surrogate; see _representability_axis_failure's own docstring for why this
             # needs its own, separately-moded serialization rather than reusing payload_json
-            # above).
-            repr_detail = _representability_axis_failure(payload)
+            # above). A7: this scan's own traversal (_iter_strings) is recursive and inherits
+            # none of A3.2's parse-time recursion-depth protection -- a well-formed body nested
+            # deeply enough (under every size/structure bound already checked above) overflows
+            # HERE, after parse, rather than inside json.loads. Caught the same way A3.2 catches
+            # it -- same classifier, same typed-422 shape, same structure axis -- because to the
+            # caller this is observably the same "body nests too deeply" class, just a different
+            # Python frame overflowing first.
+            try:
+                repr_detail = _representability_axis_failure(payload)
+            except RecursionError as e:
+                axis, detail = _classify_parse_failure(e)
+                return JSONResponse(status_code=422, content={
+                    "detail": f"malformed write payload -- {axis} axis: {detail}"})
             if repr_detail is not None:
                 return JSONResponse(status_code=422, content={
                     "detail": f"malformed write payload -- representability axis: {repr_detail}"})
