@@ -4,6 +4,16 @@
 # Usage:
 #   led [flags] <kind> <statement...>          e.g. led decision "perceptual distance = CIEDE2000"
 #
+#   EVERY WRITE PATH IN THIS FILE ECHOES THE INSERTED ROW'S id ON SUCCESS (item
+#   led-echo-inserted-row-id): "led: row <id> written." (the s43 boundary branch, one shared
+#   print point in kernel_write()) or "led <verb>: row <id> written." (a pre-s43 legacy INSERT
+#   branch, via RETURNING id \gset + \echo, one per branch). A caller cites the id straight off
+#   this output -- never a subsequent SELECT max(id), which a concurrent writer can race.
+#   Exception, disclosed rather than silently unequal: `led obligate`'s countersign_obligation
+#   table has no bigint id column at all (its PK is the scope text) -- kernel_write's own
+#   KW_ROW_ID is empty for obligation_write by the SAME documented convention, and no id is
+#   invented to fill the gap (ADR-0002: do not guess/coerce).
+#
 #   flags (any order, any subset, all optional, consumed before <kind>):
 #     -f a.py,b.py           declares files: a.py,b.py in the entry's rationale, so the
 #                            PreToolUse change gate (autoharn hooks/pretooluse_change_gate.py)
@@ -789,10 +799,20 @@ PYEOF
 }
 
 # kernel_write <boundary-function> <payload-json> -- invokes the boundary, parses the verdict.
-# accepted: sets KW_ROW_ID (empty for obligation_write, whose table has no bigint id),
-# returns 0. refused: prints the kernel's own teach-text to stderr, names the journaled
-# write_refused row (the refusal IS on the record -- s43's whole point), returns 1. A psql/
-# connection failure propagates as its own nonzero exit, never dressed as a verdict.
+# accepted: sets KW_ROW_ID (empty for obligation_write, whose table has no bigint id), PRINTS it
+# to stdout (item led-echo-inserted-row-id: every led write path echoes the inserted row's id on
+# success, so a caller can cite it without a separate read-back that concurrency makes
+# unreliable -- the id printed here is the id the s43 verdict itself carried, never a subsequent
+# SELECT max()), returns 0. ONE PRINT POINT (ADR-0012 P1) for every caller in this file that
+# routes through the boundary -- register-principal/declare-standing/undeclare-standing/suspend/
+# lift-suspension/revoke/the eight s41 binding verbs/obligate/review/work
+# open|claim|depends|close|resolve-violation/the generic <kind> <statement> path -- rather than a
+# separately-patchable echo at each call site. Silent when KW_ROW_ID is empty (obligation_write:
+# countersign_obligation's PK is the scope text, not a bigint id -- there is no id to echo, and
+# inventing one would violate ADR-0002's "do not guess/coerce"). refused: prints the kernel's own
+# teach-text to stderr, names the journaled write_refused row (the refusal IS on the record --
+# s43's whole point), returns 1. A psql/connection failure propagates as its own nonzero exit,
+# never dressed as a verdict.
 KW_ROW_ID=""
 kernel_write() {
   local fn="$1" payload="$2" vjson
@@ -815,6 +835,7 @@ sys.stderr.write(
     "  %s\n" % (v.get("sqlstate"), v.get("refusal_id"), v.get("message")))
 sys.exit(1)
 ') || return 1
+  [ -n "$KW_ROW_ID" ] && echo "led: row ${KW_ROW_ID} written."
   return 0
 }
 
@@ -1153,7 +1174,9 @@ SQL
                format('principal ''%s'' registered (class %s)', np.name, np.agent_class),
                (SELECT id FROM principal WHERE name = NULLIF(:'actor_name', '')),
                np.id, :'purpose', NULLIF(:'event_time', '')::timestamptz
-        FROM new_p np;
+        FROM new_p np
+        RETURNING id \gset new_
+        \echo led register-principal: row :new_id written.
 SQL
     else
       exec psql -h "$PGHOST" -d "$PGDB" -v ON_ERROR_STOP=1 \
@@ -1170,7 +1193,9 @@ SQL
                format('principal ''%s'' registered (class %s)', np.name, np.agent_class),
                (SELECT id FROM principal WHERE name = NULLIF(:'actor_name', '')),
                np.id, :'purpose'
-        FROM new_p np;
+        FROM new_p np
+        RETURNING id \gset new_
+        \echo led register-principal: row :new_id written.
 SQL
     fi
   fi
@@ -1187,7 +1212,9 @@ SQL
   exec psql -h "$PGHOST" -d "$PGDB" -v ON_ERROR_STOP=1 -v name="$name" -v class="$class" <<SQL
     SET ROLE ${ROLE};
     SET search_path = ${SCHEMA}, ${KERNEL};
-    INSERT INTO principal (name, agent_class) VALUES (:'name', :'class');
+    INSERT INTO principal (name, agent_class) VALUES (:'name', :'class')
+    RETURNING id \gset new_
+    \echo led register-principal: row :new_id written.
 SQL
 fi
 
@@ -1304,7 +1331,9 @@ SQL
                 (SELECT id FROM principal WHERE name = NULLIF(:'actor_name', '')),
                 :'pid'::bigint, :'db_role',
                 NULLIF(:'old_id', '')::bigint,
-                NULLIF(:'event_time', '')::timestamptz);
+                NULLIF(:'event_time', '')::timestamptz)
+        RETURNING id \gset new_
+        \echo led principal declare-standing: row :new_id written.
 SQL
       ;;
     undeclare-standing)
@@ -1459,7 +1488,9 @@ SQL
         VALUES ('principal_suspended', :'stmt',
                 (SELECT id FROM principal WHERE name = NULLIF(:'actor_name', '')),
                 :'pid'::bigint,
-                NULLIF(:'event_time', '')::timestamptz);
+                NULLIF(:'event_time', '')::timestamptz)
+        RETURNING id \gset new_
+        \echo led principal suspend: row :new_id written.
 SQL
       ;;
     lift-suspension)
@@ -1565,7 +1596,9 @@ SQL
         VALUES ('principal_revoked', :'stmt',
                 (SELECT id FROM principal WHERE name = NULLIF(:'actor_name', '')),
                 :'pid'::bigint,
-                NULLIF(:'event_time', '')::timestamptz);
+                NULLIF(:'event_time', '')::timestamptz)
+        RETURNING id \gset new_
+        \echo led principal revoke: row :new_id written.
 SQL
       ;;
     relate|unrelate|bind-role|release-role|bind-key|revoke-key|grant-competence|withdraw-competence)
@@ -1634,7 +1667,9 @@ SQL
                   NULLIF(:'activity', ''),
                   NULLIF(:'band', ''),
                   NULLIF(:'basis', ''),
-                  NULLIF(:'event_time', '')::timestamptz);
+                  NULLIF(:'event_time', '')::timestamptz)
+          RETURNING id \gset new_
+          \echo led principal :kind_val: row :new_id written.
 SQL
       }
       case "$sub" in
@@ -2282,6 +2317,7 @@ if [ "${1:-}" = "review" ]; then
     INSERT INTO ${SCHEMA}.review_detail (ledger_id, verdict, independence, basis, antecedent)
     VALUES (:r_id, :'verdict', :'independence', :'statement', NULLIF(:'antecedent', '')::bigint);
     COMMIT;
+    \echo led review: row :r_id written.
 SQL
   exit $?
 fi
@@ -2504,7 +2540,9 @@ SQL
         SET search_path = ${SCHEMA}, ${KERNEL};
         INSERT INTO ${SCHEMA}.ledger (kind, work_slug, work_title, work_parent, work_discharge, refs, supersedes, statement, actor)
         VALUES ('work_opened', :'slug', :'title', NULLIF(:'parent', ''), NULLIF(:'discharge', ''), NULLIF(:'refs', ''), NULLIF(:'supersedes', '')::bigint, :'statement',
-                (SELECT id FROM principal WHERE name = NULLIF(:'actor_name', '')));
+                (SELECT id FROM principal WHERE name = NULLIF(:'actor_name', '')))
+        RETURNING id \gset new_
+        \echo led work open: row :new_id written.
 SQL
       elif [ "$has_parent_col" = "t" ]; then
         exec psql -h "$PGHOST" -d "$PGDB" -v ON_ERROR_STOP=1 \
@@ -2515,7 +2553,9 @@ SQL
         SET search_path = ${SCHEMA}, ${KERNEL};
         INSERT INTO ${SCHEMA}.ledger (kind, work_slug, work_title, work_parent, refs, supersedes, statement, actor)
         VALUES ('work_opened', :'slug', :'title', NULLIF(:'parent', ''), NULLIF(:'refs', ''), NULLIF(:'supersedes', '')::bigint, :'statement',
-                (SELECT id FROM principal WHERE name = NULLIF(:'actor_name', '')));
+                (SELECT id FROM principal WHERE name = NULLIF(:'actor_name', '')))
+        RETURNING id \gset new_
+        \echo led work open: row :new_id written.
 SQL
       elif [ "$has_discharge_col" = "t" ]; then
         exec psql -h "$PGHOST" -d "$PGDB" -v ON_ERROR_STOP=1 \
@@ -2526,7 +2566,9 @@ SQL
         SET search_path = ${SCHEMA}, ${KERNEL};
         INSERT INTO ${SCHEMA}.ledger (kind, work_slug, work_title, work_discharge, refs, supersedes, statement, actor)
         VALUES ('work_opened', :'slug', :'title', NULLIF(:'discharge', ''), NULLIF(:'refs', ''), NULLIF(:'supersedes', '')::bigint, :'statement',
-                (SELECT id FROM principal WHERE name = NULLIF(:'actor_name', '')));
+                (SELECT id FROM principal WHERE name = NULLIF(:'actor_name', '')))
+        RETURNING id \gset new_
+        \echo led work open: row :new_id written.
 SQL
       else
         exec psql -h "$PGHOST" -d "$PGDB" -v ON_ERROR_STOP=1 \
@@ -2537,7 +2579,9 @@ SQL
         SET search_path = ${SCHEMA}, ${KERNEL};
         INSERT INTO ${SCHEMA}.ledger (kind, work_slug, work_title, refs, supersedes, statement, actor)
         VALUES ('work_opened', :'slug', :'title', NULLIF(:'refs', ''), NULLIF(:'supersedes', '')::bigint, :'statement',
-                (SELECT id FROM principal WHERE name = NULLIF(:'actor_name', '')));
+                (SELECT id FROM principal WHERE name = NULLIF(:'actor_name', '')))
+        RETURNING id \gset new_
+        \echo led work open: row :new_id written.
 SQL
       fi
       ;;
@@ -2591,7 +2635,9 @@ SQL
         SET search_path = ${SCHEMA}, ${KERNEL};
         INSERT INTO ${SCHEMA}.ledger (kind, work_slug, statement, actor)
         VALUES ('work_claimed', :'slug', :'statement',
-                (SELECT id FROM principal WHERE name = NULLIF(:'actor_name', '')));
+                (SELECT id FROM principal WHERE name = NULLIF(:'actor_name', '')))
+        RETURNING id \gset new_
+        \echo led work claim: row :new_id written.
 SQL
       ;;
     depends)
@@ -2819,7 +2865,9 @@ SQL
         SET search_path = ${SCHEMA}, ${KERNEL};
         INSERT INTO ${SCHEMA}.ledger (kind, work_slug, work_depends_on, edge_type, supersedes, statement, actor)
         VALUES ('work_depends_on', :'slug', :'on', NULLIF(:'type', ''), NULLIF(:'supersedes', '')::bigint, :'statement',
-                (SELECT id FROM principal WHERE name = NULLIF(:'actor_name', '')));
+                (SELECT id FROM principal WHERE name = NULLIF(:'actor_name', '')))
+        RETURNING id \gset new_
+        \echo led work depends: row :new_id written.
 SQL
       else
         exec psql -h "$PGHOST" -d "$PGDB" -v ON_ERROR_STOP=1 \
@@ -2830,7 +2878,9 @@ SQL
         SET search_path = ${SCHEMA}, ${KERNEL};
         INSERT INTO ${SCHEMA}.ledger (kind, work_slug, work_depends_on, supersedes, statement, actor)
         VALUES ('work_depends_on', :'slug', :'on', NULLIF(:'supersedes', '')::bigint, :'statement',
-                (SELECT id FROM principal WHERE name = NULLIF(:'actor_name', '')));
+                (SELECT id FROM principal WHERE name = NULLIF(:'actor_name', '')))
+        RETURNING id \gset new_
+        \echo led work depends: row :new_id written.
 SQL
       fi
       ;;
@@ -2948,7 +2998,9 @@ SQL
         SET search_path = ${SCHEMA}, ${KERNEL};
         INSERT INTO ${SCHEMA}.ledger (kind, work_slug, work_resolution, work_witness, statement, actor)
         VALUES ('work_closed', :'slug', :'resolution', NULLIF(:'witness', ''), :'statement',
-                (SELECT id FROM principal WHERE name = NULLIF(:'actor_name', '')));
+                (SELECT id FROM principal WHERE name = NULLIF(:'actor_name', '')))
+        RETURNING id \gset new_
+        \echo led work close: row :new_id written.
 SQL
         exit $?
       fi
@@ -3104,7 +3156,9 @@ SQL
            work_review_disposition, work_review_ref, work_strict_close, statement, actor)
         VALUES ('work_closed', :'slug', :'resolution', NULLIF(:'witness', ''),
                 :'disposition', NULLIF(:'review_ref', ''), :'strict_bool'::boolean, :'statement',
-                (SELECT id FROM principal WHERE name = NULLIF(:'actor_name', '')));
+                (SELECT id FROM principal WHERE name = NULLIF(:'actor_name', '')))
+        RETURNING id \gset new_
+        \echo led work close: row :new_id written.
 SQL
       ;;
     review-gap)
@@ -3310,7 +3364,9 @@ SQL
       VALUES ('work_violation_disposition', :'class', :'tid'::bigint, :'resolution',
               NULLIF(:'witness', '')::bigint, :'basis', :'disposition', NULLIF(:'review_ref', ''),
               NULLIF(:'supersedes', '')::bigint, :'statement',
-              (SELECT id FROM principal WHERE name = NULLIF(:'actor_name', '')));
+              (SELECT id FROM principal WHERE name = NULLIF(:'actor_name', '')))
+      RETURNING id \gset new_
+      \echo led work resolve-violation: row :new_id written.
 SQL
       ;;
     supersede-cascade)
@@ -4679,7 +4735,9 @@ if [ -n "$grade" ]; then
                 NULLIF(:'enacts', '')::bigint[],
                 (SELECT id FROM principal WHERE name = NULLIF(:'actor_name', '')),
                 NULLIF(:'event_time', '')::timestamptz,
-                NULLIF(:'grade', ''));
+                NULLIF(:'grade', ''))
+        RETURNING id \gset new_
+        \echo led :kind: row :new_id written.
 SQL
     then
       :
@@ -4711,7 +4769,9 @@ SQL
                 NULLIF(:'confidence', ''),
                 NULLIF(:'enacts', '')::bigint[],
                 (SELECT id FROM principal WHERE name = NULLIF(:'actor_name', '')),
-                NULLIF(:'grade', ''));
+                NULLIF(:'grade', ''))
+        RETURNING id \gset new_
+        \echo led :kind: row :new_id written.
 SQL
     then
       :
@@ -4744,7 +4804,9 @@ elif [ -n "$event_time" ]; then
               NULLIF(:'confidence', ''),
               NULLIF(:'enacts', '')::bigint[],
               (SELECT id FROM principal WHERE name = NULLIF(:'actor_name', '')),
-              NULLIF(:'event_time', '')::timestamptz);
+              NULLIF(:'event_time', '')::timestamptz)
+      RETURNING id \gset new_
+      \echo led :kind: row :new_id written.
 SQL
   then
     :
@@ -4775,7 +4837,9 @@ else
               NULLIF(:'evidence', ''),
               NULLIF(:'confidence', ''),
               NULLIF(:'enacts', '')::bigint[],
-              (SELECT id FROM principal WHERE name = NULLIF(:'actor_name', '')));
+              (SELECT id FROM principal WHERE name = NULLIF(:'actor_name', '')))
+      RETURNING id \gset new_
+      \echo led :kind: row :new_id written.
 SQL
   then
     :
