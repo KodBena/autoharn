@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-06T15:42:34Z
-#   last-change: 2026-07-14T23:18:48Z
-#   contributors: 37017f46/main, a857c93d/main
+#   last-change: 2026-07-18T22:50:46Z
+#   contributors: 37017f46/main, a857c93d/main, ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
 """file_rationalization -- the filing path for the RATIONALIZATION LEDGER (db/harness/002).
@@ -89,9 +89,9 @@ def file_finding(*, quoted: str, register: str, context: str, detector_version: 
     """Record one detector fire. Idempotent on (context, quoted, detector_version): a re-file returns
     the existing finding_id rather than duplicating. Returns the finding_id."""
     ensure_schema(schema)
-    sql = f"""
+    sql = """
     WITH ins AS (
-      INSERT INTO "{schema}".rationalization_finding
+      INSERT INTO :"schema".rationalization_finding
         (quoted_rationalization, register, named_better_fix, law_refs, context,
          session_id, git_commit, detector_version)
       VALUES (:'quoted', :'register', NULLIF(:'better_fix',''), :'law_refs', :'context',
@@ -100,7 +100,7 @@ def file_finding(*, quoted: str, register: str, context: str, detector_version: 
       RETURNING finding_id)
     SELECT finding_id FROM ins
     UNION ALL
-    SELECT finding_id FROM "{schema}".rationalization_finding
+    SELECT finding_id FROM :"schema".rationalization_finding
      WHERE context = :'context' AND quoted_rationalization = :'quoted'
        AND detector_version = :'detector_version'
     LIMIT 1;"""
@@ -121,8 +121,8 @@ def dispose(*, finding_id: int, act: str, actor: str, note: str = "", duplicate_
     if act != "duplicate-of" and duplicate_of is not None:
         raise LedgerError(f"act {act!r} must not carry --duplicate-of")
     dup = str(duplicate_of) if duplicate_of is not None else ""
-    sql = f"""
-    INSERT INTO "{schema}".rationalization_disposition (finding_id, act, duplicate_of, actor, note)
+    sql = """
+    INSERT INTO :"schema".rationalization_disposition (finding_id, act, duplicate_of, actor, note)
     VALUES (:finding, :'act', NULLIF(:'dup','')::bigint, :'actor', :'note')
     RETURNING disposition_id;"""
     out = _psql(sql, schema=schema, params={
@@ -262,13 +262,15 @@ _GEN_HEADER = (
 def _confirmed_rows(schema: str) -> list[dict[str, str]]:
     rs = "\x1e"  # record sep; keep field text intact
     fs = "\x1f"  # field sep
-    sql = ("SELECT finding_id, quoted_rationalization, register, "
+    sql = ('SELECT finding_id, quoted_rationalization, register, '
            "coalesce(named_better_fix,''), law_refs, context, "
            "coalesce(current_actor,''), coalesce(disposed_at::text,'') "
-           f'FROM "{schema}".rationalization_confirmed ORDER BY finding_id;')
+           'FROM :"schema".rationalization_confirmed ORDER BY finding_id;')
+    # SQL fed on STDIN, never `-c`: psql only performs `:"var"`/`:'var'` substitution for
+    # scripts/stdin, never for `-c` strings (file_finding.py's own idiom).
     out = subprocess.run(
         ["psql", "-h", PGHOST, "-d", DB, "-tA", "-F", fs, "-R", rs, "-v", "ON_ERROR_STOP=1",
-         "-v", f"schema={schema}", "-c", sql], capture_output=True, text=True)
+         "-v", f"schema={schema}"], input=sql, capture_output=True, text=True)
     if out.returncode != 0:
         raise LedgerError(f"confirmed-rows query failed: {out.stderr.strip()}")
     rows: list[dict[str, str]] = []

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-09T11:06:10Z
-#   last-change: 2026-07-18T18:21:51Z
+#   last-change: 2026-07-18T23:01:23Z
 #   contributors: be693afb/main, e4410ef6/main, ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -48,8 +48,27 @@ Stdlib-only, top-of-file imports (the lazy-import gate, gates/no_lazy_imports.py
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import asdict, dataclass
 from pathlib import Path
+
+# ADR-0012's 2026-07-18 interpreter-boundary amendment: `schema`/`kern`/`role` are the three
+# fields this record's own consumers splice directly into SQL text (a schema-qualified table
+# name, a `SET ROLE`) rather than carrying through a bound placeholder -- there is no bound-
+# identifier carrier for a schema/role name in psql's own `-v`/`:"var"` idiom the way there is
+# for a value (filing/file_finding.py's `:'var'` string-literal bind), and no ORM/query-builder
+# sits between these tools and psql. Per the amendment: "where no carrier exists, a strict
+# validation to a closed alphabet at the Port, which refuses what it cannot honor." This is that
+# Port, validated ONCE at construction (parse-don't-validate, ADR-0012 P1/P2) -- every consumer
+# that holds a `DeploymentRecord` is guarded by construction, not by a per-call-site regex
+# sprinkled at each of the N splice sites this fires from (tools/column_complete.py,
+# tools/export_precedence.py, tools/regrade_decisions.py, gates/kind_shape_manifest_gate.py).
+# `db`/`host` are NOT validated against this alphabet: both cross into `psql -h .../-d ...` as
+# argv ELEMENTS (the process's own typed value-carrier, never spliced into SQL/shell text), so
+# they are not interpreter-boundary sites in the amendment's sense -- and `host` legitimately
+# carries characters (`.`, an IPv4/hostname) this identifier alphabet would wrongly reject.
+_IDENT_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+_IDENT_FIELDS: tuple[str, ...] = ("schema", "kern", "role")
 
 # The five required fields, in the ONE place they are named (P1). `db`/`schema`/`kern` mirror
 # `engine/targets.py`'s `TargetInfo` exactly (same names, same meaning); `role` and `host` are the
@@ -93,6 +112,24 @@ class DeploymentError(Exception):
     stop loudly (ADR-0002), not fall back to a guess."""
 
 
+def validate_sql_identifier(field_name: str, value: str) -> None:
+    """The ONE check behind `DeploymentRecord.__post_init__`'s `schema`/`kern`/`role` guard,
+    exported so a caller that resolves one of these three facts OUTSIDE a `DeploymentRecord` --
+    e.g. tools/column_complete.py's `--schema` CLI flag, which may bypass this module's own
+    `load_deployment` entirely when the flag is given explicitly -- can hold itself to the SAME
+    closed-alphabet refusal rather than growing a second, drifting regex (ADR-0012 P1: one
+    definition of the check, not a per-consumer copy). Raises `DeploymentError` naming the field
+    and offending value; returns None on a valid identifier."""
+    if not _IDENT_RE.match(value):
+        raise DeploymentError(
+            f"deployment record field {field_name!r}={value!r} is not a plain SQL "
+            f"identifier (pattern {_IDENT_RE.pattern!r}) -- refused at construction "
+            f"(ADR-0012's interpreter-boundary amendment: this field is later spliced "
+            f"into SQL text by every consumer that holds this record, so it is "
+            f"validated to a closed alphabet exactly once, here, rather than re-checked "
+            f"per call site).")
+
+
 @dataclass(frozen=True)
 class DeploymentRecord:
     """Where a scaffolded project's ledger lives, end to end: database, host, ledger schema,
@@ -108,6 +145,17 @@ class DeploymentRecord:
                               # field exists and why it is not one of the five required ones.
     boundary_url: str | None = None          # OPTIONAL -- see the comment above _REQUIRED_FIELDS
     boundary_deployment: str | None = None   # OPTIONAL -- see the same comment
+
+    def __post_init__(self) -> None:
+        """ADR-0012 interpreter-boundary Port: `schema`/`kern`/`role` are refused here, at
+        construction, if they are not a plain SQL identifier (`_IDENT_RE`) -- unconditionally,
+        for EVERY construction path (`load_deployment` below, and any direct
+        `DeploymentRecord(...)` call a test or script makes), so no consumer that later splices
+        `record.schema`/`record.role` into SQL text can ever hold a record carrying a value that
+        could alter that text's structure. Refuses, never coerces/escapes -- the amendment's own
+        rule for a Port with no carrier available."""
+        for field_name in _IDENT_FIELDS:
+            validate_sql_identifier(field_name, getattr(self, field_name))
 
 
 def load_deployment(path: str | Path) -> DeploymentRecord:
