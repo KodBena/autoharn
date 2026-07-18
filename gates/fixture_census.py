@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-09T13:36:11Z
-#   last-change: 2026-07-18T09:32:26Z
+#   last-change: 2026-07-18T10:47:43Z
 #   contributors: be693afb/main, e4410ef6/main, 3c50e030/main, 3c942a60/main, a857c93d/main, ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -15,13 +15,22 @@ both-polarity-proves the gate/close-line). It goes RED on:
 
   1. a seen-red/<dir> with NO banked red evidence (no red-shaped .txt) — a gate not seen red;
   2. an ORPHANED seen-red/<dir> not in the registry — evidence with no owning gate;
-  3. a registry entry whose FIXTURE file does not exist — a claim whose proof cannot be run.
+  3. a registry entry whose FIXTURE file does not exist — a claim whose proof cannot be run;
+  4. a seen-red/<dir>, its red evidence, or its registry-target FIXTURE that is present ON DISK
+     but NOT GIT-TRACKED (`git ls-files`) — presence-on-disk is not the census, tracked-in-git
+     is (the s45 adversarial review's adjudicated finding, ledger row 1502: commit 94f5b7a
+     bundled a fixture_census registry row for defeat-pipeline before those files were
+     committed; a concurrent sibling builder's UNCOMMITTED hunk in the shared working tree made
+     the fixture read PRESENT-ON-DISK and the census read GREEN on a commit that, on a clean
+     checkout, was actually RED. Presence-on-disk and committed-to-git are two different facts;
+     this gate quantifies over the one that survives a clean checkout).
 
-SCOPE (declared, ADR-0011 Rule 1): this gate checks red-evidence PRESENCE + fixture EXISTENCE
-statically — cheap enough for every commit. Actually RE-EXECUTING each fixture to a live red is
-the ACCEPTANCE-time re-verification (mandate §6 / BUILD-BRIEF Step 10e), not run on every commit
-(many fixtures touch the DB; a 3s-per-fixture commit tax is its own hazard). The static census is
-the standing net; the live red-re-execution is the acceptance gate.
+SCOPE (declared, ADR-0011 Rule 1): this gate checks red-evidence PRESENCE-AND-TRACKED + fixture
+EXISTENCE-AND-TRACKED statically — cheap enough for every commit. Actually RE-EXECUTING each
+fixture to a live red is the ACCEPTANCE-time re-verification (mandate §6 / BUILD-BRIEF Step
+10e), not run on every commit (many fixtures touch the DB; a 3s-per-fixture commit tax is its
+own hazard). The static census is the standing net; the live red-re-execution is the acceptance
+gate.
 
 Exit 0 clean; exit 1 listing every breach. Run from repo root: python3 gates/fixture_census.py
 Lazy imports banned.
@@ -29,10 +38,20 @@ Lazy imports banned.
 from __future__ import annotations
 
 import os
+import subprocess
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SEEN_RED = os.path.join(ROOT, "seen-red")
+
+
+def tracked_files() -> set[str]:
+    """Every git-tracked path in the repo, relative to ROOT (the `git ls-files` precedent
+    gates/layout_census.py's `tracked()` already establishes for this same distinction).
+    Present-on-disk is not the census; tracked-in-git is — this is the one query that tells
+    the two apart."""
+    out = subprocess.run(["git", "-C", ROOT, "ls-files"], capture_output=True, text=True, check=True)
+    return {l for l in out.stdout.splitlines() if l.strip()}
 
 # The registry: seen-red dir -> the runnable fixture that both-polarity-proves it. The fixture is the
 # LIVE artifact (a verify_*.py / *_fixture.py / a gate / the arm script / the banked reproduction) — the
@@ -160,14 +179,15 @@ REGISTRY: dict[str, str] = {
 }
 
 
-def _has_red_evidence(d: str) -> bool:
+def _red_evidence_name(d: str) -> str | None:
     """A seen-red dir proves failure iff it banks a red-shaped artifact (red.txt, *-red.txt,
-    red-specimen.py) — the captured or reproducible red the gate produced."""
+    red-specimen.py) — the captured or reproducible red the gate produced. Returns the
+    artifact's basename (so the caller can check it against the tracked set), or None."""
     for name in os.listdir(d):
         low = name.lower()
         if low == "red.txt" or low.endswith("-red.txt") or low.startswith("red-specimen"):
-            return True
-    return False
+            return name
+    return None
 
 
 # tool-generated dirs that can appear under seen-red/ without ever being a fixture in their own
@@ -184,6 +204,7 @@ def main() -> int:
     present = sorted(e for e in os.listdir(SEEN_RED)
                      if os.path.isdir(os.path.join(SEEN_RED, e))
                      and e not in _NON_FIXTURE_DIRS)
+    tracked = tracked_files()
 
     # (2) orphan check — every seen-red dir must be registered
     for d in present:
@@ -197,15 +218,45 @@ def main() -> int:
 
     for d in present:
         path = os.path.join(SEEN_RED, d)
-        # (1) red evidence present
-        if not _has_red_evidence(path):
+        dir_prefix = f"seen-red/{d}/"
+        # (4) the whole seen-red/<dir> is git-tracked, not merely present on disk — a
+        # committed-nowhere directory (the s45 concurrent-checkout false-green class, row
+        # 1502) never survives a clean checkout no matter what os.listdir() sees locally.
+        if not any(t.startswith(dir_prefix) for t in tracked):
+            breaches.append(f"UNTRACKED seen-red dir: seen-red/{d}/ exists on disk but `git "
+                            f"ls-files` sees no tracked file under it (present-on-disk is not "
+                            f"the census — a concurrent sibling builder's uncommitted hunk in a "
+                            f"shared working tree reads exactly this way; see ledger row 1502)")
+        # (1) red evidence present AND git-tracked
+        red_name = _red_evidence_name(path)
+        if red_name is None:
             breaches.append(f"NO RED EVIDENCE: seen-red/{d}/ banks no red-shaped artifact "
                             f"(a gate never seen red is a claim, ADR-0011)")
-        # (3) fixture exists
+        elif (dir_prefix + red_name) not in tracked:
+            breaches.append(f"RED EVIDENCE UNTRACKED: seen-red/{d}/{red_name} exists on disk "
+                            f"but is not git-tracked (`git ls-files`) — an uncommitted proof is "
+                            f"not a proof (row 1502)")
+        # (3) fixture exists AND is git-tracked. A registry target is either a FILE (must
+        # appear verbatim in `git ls-files`) or a DIRECTORY (e.g. "engine/tests" — a test suite,
+        # not one file; `git ls-files` never lists a bare directory, so a dir target is tracked
+        # iff at least one file lives under it, same discriminator as the seen-red dir check
+        # above).
         fx = REGISTRY.get(d)
-        if fx and not os.path.exists(os.path.join(ROOT, fx)):
-            breaches.append(f"FIXTURE MISSING: seen-red/{d}/ -> {fx} does not exist "
-                            f"(a proof whose fixture cannot run)")
+        if fx:
+            fx_abs = os.path.join(ROOT, fx)
+            if not os.path.exists(fx_abs):
+                breaches.append(f"FIXTURE MISSING: seen-red/{d}/ -> {fx} does not exist "
+                                f"(a proof whose fixture cannot run)")
+            elif os.path.isdir(fx_abs):
+                if not any(t.startswith(fx + "/") for t in tracked):
+                    breaches.append(f"FIXTURE UNTRACKED: seen-red/{d}/ -> {fx}/ exists on disk "
+                                    f"but `git ls-files` sees no tracked file under it — the "
+                                    f"proof runs from an uncommitted directory, invisible on a "
+                                    f"clean checkout (row 1502)")
+            elif fx not in tracked:
+                breaches.append(f"FIXTURE UNTRACKED: seen-red/{d}/ -> {fx} exists on disk but "
+                                f"is not git-tracked (`git ls-files`) — the proof runs from an "
+                                f"uncommitted file, invisible on a clean checkout (row 1502)")
 
     if breaches:
         print(f"fixture-census: {len(breaches)} breach(es) — the seen-red corpus is not intact:\n")

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-18T05:48:54Z
-#   last-change: 2026-07-18T05:53:27Z
+#   last-change: 2026-07-18T10:49:52Z
 #   contributors: ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -697,6 +697,16 @@ def main() -> int:
         check("gate-hash-coverage-negative-control-still-red", gh_neg.returncode == 1,
               f"gates/hash_coverage_gate.py --inject-column exit={gh_neg.returncode} "
               f"(expect 1 -- the gate itself stays alive)", failures)
+        # fixture census -- the spec's §3.10 gate enumeration lists it ("fixture census (this
+        # delta's seen-red registered)") but the harness never actually invoked it (the s45
+        # adversarial review's adjudicated finding 2, ledger row 1502: the mechanical root
+        # cause of the false-green -- an enumerated gate the harness only claimed, never ran).
+        # Invoked here so the census leg is live, not a paper claim.
+        gc = sh([sys.executable, str(REPO / "gates" / "fixture_census.py")])
+        check("gate-fixture-census-green", gc.returncode == 0,
+              f"gates/fixture_census.py exit={gc.returncode} on the real repo head (this "
+              f"delta's seen-red/s45-standing-lifecycle/ registered, tracked, and its fixture "
+              f"present)", failures)
 
         os.environ["LEDGER_DB"], os.environ["LEDGER_SCHEMA"], os.environ["LEDGER_KERN"] = PGDB, S, K
         try:
