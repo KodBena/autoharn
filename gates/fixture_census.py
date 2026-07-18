@@ -132,6 +132,7 @@ REGISTRY: dict[str, str] = {
     "s45-standing-lifecycle":          "seen-red/s45-standing-lifecycle/run_fixtures.py",
     "s44-model-identity-attestation":  "seen-red/s44-model-identity-attestation/run_fixtures.py",
     "s46-credited-views":              "seen-red/s46-credited-views/run_fixtures.py",
+    "s47-claim-on-closed-refusal":     "seen-red/s47-claim-on-closed-refusal/run_fixtures.py",
     "defeat-pipeline":                 "seen-red/defeat-pipeline/run_fixtures.py",
     "judge-all-capable-layers":       "seen-red/judge-all-capable-layers/run_fixtures.py",
     "boundary-service":                "seen-red/boundary-service/run_fixtures.py",

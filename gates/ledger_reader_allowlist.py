@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-15T20:17:26Z
-#   last-change: 2026-07-18T09:10:01Z
+#   last-change: 2026-07-18T10:29:21Z
 #   contributors: a857c93d/main, 9a17b6b9/main, ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -77,7 +77,14 @@ CHAIN = [
     "s45-standing-lifecycle.sql",
     "s44-model-identity-attestation.sql",
     "s46-credited-views.sql",
+    "s47-claim-on-closed-refusal.sql",
 ]
+# s47 (kernel/lineage/s47-claim-on-closed-refusal.sql, design/FABLE-CLAIM-ON-CLOSED-REFUSAL-SPEC.md,
+# RATIFIED BUILD BASIS 2026-07-18) extends this SAME gate's scratch CHAIN. It ships ZERO new
+# readers: its one re-issued object (validate_work_item_claim) is a FUNCTION whose new check reads
+# `ledger_current` exclusively (the s31 reader discipline honored throughout -- no raw `ledger`
+# reference of its own, mirroring work_item_current's own `closed` CTE), verified live by running
+# this gate against the extended chain and reading it clean with NO new ALLOWLIST entry required.
 # s46 (kernel/lineage/s46-credited-views.sql, design/FABLE-DEFEAT-PIPELINE-SPEC.md §8) extends
 # this SAME gate's scratch CHAIN. It ships TWO new raw-`ledger` readers by DESIGN and DECLARED
 # as such (not a gap this gate is meant to catch, but exercised so the classifier's judgment
