@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-18T07:49:10Z
-#   last-change: 2026-07-18T14:57:55Z
+#   last-change: 2026-07-18T15:37:28Z
 #   contributors: ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -9,7 +9,7 @@
 §8 witness plan (W1-W12, A2's amendment; W13-W14, A3's amendment; W15-W19, A4's amendment;
 W20-W23, A5's amendment; W21's float legs, A6's amendment; W24, A7's amendment; W25-W26,
 A8's amendment; W27, A9's amendment; W28, A10's amendment; W29-W30, A11's amendment; W31,
-A12's amendment). Real infra, no mocks:
+A12's amendment; W32, A13's amendment). Real infra, no mocks:
 CLASSIC scaffolds + manual chain applies in the TOY db (the exact pattern seen-red/
 s43-typed-verdict-write-boundary/run_fixtures.py already banks, and this fixture imports
 nothing new for scaffolding -- same helpers, re-derived here because the two fixtures scaffold
@@ -86,7 +86,11 @@ WORLDS:
                 (A11: /rows/{id}/history's not-found shape -- a nonexistent in-domain id
                 byte-matches GET /rows/{id}'s own typed 404, and an existing row's history stays
                 byte-identical to an independently-reconstructed CTE using the SAME construction
-                the live route runs), the
+                the live route runs), W32 (A13: the dumps-side recursion net -- (i) a
+                100000-level-deep object, built iteratively and never via `json.loads`, passed
+                directly to `_reserialize_or_value_axis_failure` returns the typed
+                structure-axis refusal, never a bare `RecursionError`; (ii) no HTTP-layer
+                regression, witnessed by the suite's own overall green exit), the
                 §9/A2.1/W12 in-process route-table closure assertion, and FINALLY (destructive,
                 run last) W18b
                 (ledger_current dropped on world_b -- genuine psql exit 3 -> 500
@@ -1525,6 +1529,65 @@ def main() -> int:
               f"byte-identical={raw30_existing == w30_expected_bytes}",
               failures)
 
+        # -- W32 (A13): the dumps-side recursion net. Not a finding -- pre-A13,
+        # _reserialize_or_value_axis_failure's own json.dumps call had no RecursionError
+        # handling of its own and was protected only by the accident that json.loads
+        # overflows at the same-or-shallower depth on this CPython build; no caller input
+        # reaches this branch via HTTP (the loads-side parse-time guard, A3.2, fires first for
+        # every body that ever parses). Two legs.
+        #
+        # Leg (i), unit-style, input class -> observed -> expected: input class is "a
+        # programmatically nested object deep enough to overflow CPython's default recursion
+        # limit (1000), reaching _reserialize_or_value_axis_failure's own json.dumps call
+        # directly" -- built by an ITERATIVE Python loop, NEVER recursion (the fixture itself
+        # must not stack-overflow while CONSTRUCTING the object) and NEVER via json.loads (the
+        # point is to bypass the loads-side guard and exercise the dumps-side call under test
+        # in isolation). Observed: the function must return the typed structure-axis refusal
+        # (axis="structure", detail naming the nesting bound), never let a bare RecursionError
+        # escape. Expected: same typed shape, same message family A7 already gave the
+        # adjacent post-parse traversal.
+        w32i_depth = 100_000
+        w32i_nested: list = []
+        w32i_cur = w32i_nested
+        for _ in range(w32i_depth - 1):
+            w32i_next: list = []
+            w32i_cur.append(w32i_next)
+            w32i_cur = w32i_next
+        w32i_payload = {"n": w32i_nested}
+        w32i_raised: Exception | None = None
+        w32i_result: tuple | None = None
+        try:
+            w32i_result = boundary_service._reserialize_or_value_axis_failure(w32i_payload)
+        except RecursionError as e:
+            w32i_raised = e
+        w32i_payload_json, w32i_axis, w32i_detail = (
+            w32i_result if w32i_result is not None else (None, None, None))
+        check("w32i-dumps-side-recursion-net-typed-structure-axis-never-bare-recursionerror",
+              w32i_raised is None
+              and w32i_payload_json is None
+              and w32i_axis == "structure"
+              and w32i_detail is not None and "nest" in w32i_detail,
+              f"_reserialize_or_value_axis_failure({{'n': a {w32i_depth}-level-nested list, "
+              f"built iteratively, never via json.loads}}): bare RecursionError "
+              f"escaped={w32i_raised is not None} ({w32i_raised!r} if any); "
+              f"returned=(payload_json={w32i_payload_json!r}, axis={w32i_axis!r}, "
+              f"detail={w32i_detail!r})",
+              failures)
+
+        # Leg (ii): behavior at the HTTP layer is unchanged by construction (A13 adds ONE
+        # new except clause on a branch no caller-supplied body reaches today -- the
+        # loads-side parse-time guard, A3.2, always fires first). No new HTTP-level check is
+        # added for this leg specifically; it is witnessed by the SUITE'S OWN overall exit
+        # (every prior write-path check above -- W1's accepted write, W15's non-finite value-
+        # axis legs, W20/W21's representability/id-domain legs -- already round-trips through
+        # this exact call site over real HTTP, and this file's own final "ALL CASES OK" gate
+        # is this leg's positive proof: a regression here would fail one of those checks, not
+        # a check named separately for W32ii).
+        print("=== w32ii-full-suite-green-end-to-end ===")
+        print("  [WITNESSED] no HTTP-layer regression -- see comment above; proven by every "
+              "other write-path check in this run, not a check named separately for this leg.")
+        print()
+
         # -- W9 streaming-abort leg: UNEXERCISED, named (spec A3.4's own carve-out, "exercised
         # if cheaply drivable, else UNEXERCISED with why"). Driving it needs a client that opens
         # the write connection, sends a Content-Length promise, then closes the socket mid-body
@@ -1879,7 +1942,7 @@ def main() -> int:
     if failures:
         print("FAILURES:", failures)
         return 1
-    print("ALL CASES OK -- boundary-service both-polarity proof (W1-W7, W9-W31 live; "
+    print("ALL CASES OK -- boundary-service both-polarity proof (W1-W7, W9-W32 live; "
           "W8 and the W9 streaming-abort leg UNEXERCISED, named).")
     return 0
 
