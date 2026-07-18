@@ -11,6 +11,37 @@ a grammar documented twice drifts). The dense per-mechanism inventory this page 
 is [ORCH-CAPABILITIES.md](../ORCH-CAPABILITIES.md); the front door for first-time setup is
 [USER-GUIDE.md](USER-GUIDE.md).
 
+## Contents
+
+The sections below, in page order — each link jumps to that section's own
+question-and-recipe entries.
+
+- [Planning and retrospectives](#planning-and-retrospectives)
+- [Workflow patterns](#workflow-patterns)
+- [Declaring things on the ledger](#declaring-things-on-the-ledger)
+- [Principal identity (s40/s41)](#principal-identity-s40s41)
+- [Typed verdicts and refusal recording (s42/s43)](#typed-verdicts-and-refusal-recording-s42s43)
+- [Standing lifecycle (s45)](#standing-lifecycle-s45)
+- [Model identity: watchdog, attestation, defeat](#model-identity-watchdog-attestation-defeat)
+- [Trust ceremonies](#trust-ceremonies)
+- [Review discipline](#review-discipline)
+- [Classifying audit/diagnostic findings](#classifying-auditdiagnostic-findings)
+- [Capturing errors so they cannot quietly recur (ADR-0000 / ADR-0011)](#capturing-errors-so-they-cannot-quietly-recur-adr-0000--adr-0011)
+- [Documentation quality](#documentation-quality)
+- [Operating rhythm](#operating-rhythm)
+- [Your review queue](#your-review-queue)
+- [Correcting the record — supersession, and what to do about its fallout](#correcting-the-record--supersession-and-what-to-do-about-its-fallout)
+- [The ledger boundary service (`serving/`)](#the-ledger-boundary-service-serving)
+- [Boundary multiplex, CLI rebase, and the workflow-unit compiler (2026-07-18)](#boundary-multiplex-cli-rebase-and-the-workflow-unit-compiler-2026-07-18)
+- [CLI quality-of-life: row-id echo and `judge` auto-layer detection](#cli-quality-of-life-row-id-echo-and-judge-auto-layer-detection)
+- [`led` help tokens, `--json` payload mode, and `work list`'s default filter (led.tmpl trio)](#led-help-tokens---json-payload-mode-and-work-lists-default-filter-ledtmpl-trio)
+- [Ledger-wide as-of read and inspection-copy export (`asof-export`)](#ledger-wide-as-of-read-and-inspection-copy-export-asof-export)
+- [Deployments can self-serve the harness changelog (`orchlog` wrapper at scaffold)](#deployments-can-self-serve-the-harness-changelog-orchlog-wrapper-at-scaffold)
+- [Verifying tags, signed commissions, and documentation debt (`attest-tags`, `verify-commission`, `attest-doc`, `distance-to-clean`)](#verifying-tags-signed-commissions-and-documentation-debt-attest-tags-verify-commission-attest-doc-distance-to-clean)
+- [Recusal and independent RCA (a conflict-of-interest method harvested downstream)](#recusal-and-independent-rca-a-conflict-of-interest-method-harvested-downstream)
+- [What this page is not](#what-this-page-is-not)
+
+
 ## Planning and retrospectives
 
 **Can agents estimate a task's cost before doing it, and can I see how the estimates did?**
