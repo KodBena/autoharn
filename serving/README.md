@@ -8,8 +8,9 @@
 # serving/ — the FastAPI outer boundary into an autoharn-managed ledger
 
 **Build basis:** [design/FABLE-LEDGER-BOUNDARY-SERVICE-SPEC.md](../design/FABLE-LEDGER-BOUNDARY-SERVICE-SPEC.md)
-(RATIFIED — ledger rows 1471, 1481, 1518). Read it in full before touching this directory;
-this README is an operator's pointer into it, not a restatement.
+(RATIFIED — ledger rows 1471, 1481, 1518), **hardened per Amendment A2** (seven post-build
+independent-review findings, adjudicated). Read the spec in full, including A2, before
+touching this directory; this README is an operator's pointer into it, not a restatement.
 
 ## What this is, in one paragraph
 
@@ -49,12 +50,19 @@ serving.boundary_service`, matching the spec's own launch command).
 service; a fresh host needs `$HOME/w/vdc/venvs/generic/bin/pip install fastapi uvicorn`
 once (pydantic already ships in that venv for other consumers).
 
-## Endpoint table (spec §3, §4 — fixed; the route table itself IS the enumeration, spec §9)
+## Endpoint table (spec §3, §4 — fixed; the route table itself IS the enumeration, spec §9/A2.1)
+
+This service carries **exactly eleven routes** — the seven GETs and four POSTs below — and
+**nothing else**. FastAPI's own self-documentation surface is **disabled, not merely
+unenumerated**: `docs_url=None, redoc_url=None, openapi_url=None` (A2.1), so `/docs`, `/redoc`,
+`/openapi.json`, and `/docs/oauth2-redirect` do not exist on this service at all — there is no
+running-schema self-report to ask, honest or otherwise. The witness suite's W12 asserts this
+table against `app.routes` **directly, in-process** (never a schema endpoint).
 
 | Method | Path | Serves | Capability gate |
 | --- | --- | --- | --- |
 | GET | `/health` | world name, capability manifest, this service's registered principal name | none |
-| GET | `/rows/current` | `ledger_current`, id-paginated (`?after_id=&limit=`) | none |
+| GET | `/rows/current` | `ledger_current`, id-paginated (`?after_id=&limit=`, bounds below) | none |
 | GET | `/rows/{id}` | one row, any status | none |
 | GET | `/rows/{id}/history` | the row's full supersession chain (both directions), each hop carrying its own `superseded_by` | none |
 | GET | `/credited` | the credited view, when the world carries one | `s44-credited-view` — no world in this repository's kernel lineage carries this view yet (spec §7); always `capability_absent` today |
@@ -69,6 +77,33 @@ once (pydantic already ships in that venv for other consumers).
 literal — the same migrate-detect-drift discipline `bootstrap/templates/led.tmpl`'s own s43/s45
 probes use, so a world need not match this service's authoring commit exactly.
 
+## Bounds (A2.2, A2.6, A2.7 — one disclosed discipline, both ingresses)
+
+- **Pagination** (`/rows/current`, `/credited`): `?after_id=&limit=`, **`1 ≤ limit ≤ 1000`**,
+  **`after_id ≥ 0`** — both violations are a typed HTTP 422 naming the bound. Ratified spec
+  text as of A2.7; A2.6 added the `after_id ≥ 0` half (it previously accepted negatives while
+  `limit` was already range-checked — an asymmetry with no reason).
+- **Write body size** (`/write/*`): `MAX_WRITE_BODY_BYTES = 1_048_576` (1 MiB), the ONE named
+  bound (ADR-0012 P1), enforced at BOTH checkpoints A2.2 names: (a) the **raw request body**,
+  before any JSON parsing (Content-Length checked first when the client declared one — refused
+  without ever reading the body; the actual byte count otherwise, refused mid-stream, never
+  buffered whole); (b) the **re-serialized payload**, before the `psql` subprocess (a payload
+  can pass (a) and still fail (b) — e.g. non-ASCII content whose `json.dumps`-default
+  `\uXXXX` escaping expands past its raw UTF-8 size). Either checkpoint returns HTTP 413:
+  `{"disposition": "payload_too_large", "limit_bytes": 1048576, "observed_bytes": <n>, "message": "<teach-text>"}`.
+  1 MiB is generous for any ledger payload and comfortably under the `psql`-argv wall
+  (`ARG_MAX`) the pre-hardening build crashed into on a ~3 MB payload.
+
+## Infrastructure failure (A2.4)
+
+A `psql` infrastructure failure (an unreachable world, a connection refusal, a nonzero exit
+that is not a kernel verdict) is typed, not a bare 500: HTTP 503,
+`{"disposition": "infra_failure", "message": "<generic — no SQL, role, schema, or stack>"}`.
+One `RuntimeError` exception handler on the FastAPI app is the single home for this
+translation (ADR-0012 P1) — every route inherits it, not a per-route try/except. The full
+`psql` stderr is logged server-side (stderr) for operator diagnosis; it never reaches the
+client.
+
 **Capability-absent responses** are HTTP 409 with body
 `{"disposition": "capability_absent", "capability": "<name>", "message": "<teach-text>"}` — a
 third, service-level disposition, deliberately shaped to sit beside the kernel's own
@@ -81,7 +116,9 @@ Fable/maintainer orchestrator to confirm or override.
 **Write verdicts** (`/write/*`) cross **byte-verbatim** as the kernel's own
 `write_verdict` JSON, HTTP 200 whether `accepted` or `refused` — a kernel refusal is a
 first-class domain result carrying kernel-authored teach-text, never a transport error.
-Transport-level failures (malformed JSON, a non-object body) are FastAPI's own 422, loud.
+Transport-level failures (malformed JSON, a non-object body) are a typed 422, loud — checked
+by the write route itself (it reads and bounds the raw body manually, per the size checkpoints
+above, rather than via an automatic pydantic body parameter).
 
 ## The write path — attribution, honestly limited
 
@@ -152,10 +189,16 @@ mocks. Run:
 HARNESS_PGHOST=<toy-db-host> $HOME/w/vdc/venvs/generic/bin/python seen-red/boundary-service/run_fixtures.py
 ```
 
-Covers spec §8's W1–W7 live; **W8 (the panel-side deprecation-mark emission) is UNEXERCISED
-by construction** — that legacy path lives in the separate autoharn-panel repository, which
-this build never touches, per the spec's own §10.4 ("panel-side is a separate session's item
-citing this spec").
+Covers spec §8's W1–W7 plus A2's W9–W12 live; **W8 (the panel-side deprecation-mark
+emission) is UNEXERCISED by construction** — that legacy path lives in the separate
+autoharn-panel repository, which this build never touches, per the spec's own §10.4
+("panel-side is a separate session's item citing this spec"). A2's additions: **W9** an
+oversized write body at both A2.2 checkpoints (typed 413 both times, server stays alive,
+`/health` still answers afterward); **W10** `/health` on a pre-s40 chain (200, null
+`service_principal`, no 500); **W11** the s41/s22 capability gates' PRESENT leg (a chain
+carrying both views) and ABSENT leg (a chain carrying neither — `WORLD NOCAP`, truncated
+before s22); **W12** the route-table closure assertion, now against `app.routes` in-process
+(A2.1 disabled the OpenAPI self-report the pre-hardening witness relied on).
 
 ## The deprecation duty (spec §6) — autoharn-side finding
 

@@ -67,3 +67,112 @@ fix below, plus the negative-control reds the green run still exercises on every
 Full green run (2026-07-18, this fix in place): 9/9 live checks OK (W1, W2, W4, W5, W6, W7
 both legs, W3, the §9 route-count closure), W8 correctly recorded UNEXERCISED (panel-side,
 out of this repo's reach). `python3 seen-red/boundary-service/run_fixtures.py` exit 0.
+
+=========================================================================================
+A2 HARDENING PASS (2026-07-18) -- seven post-build review findings adjudicated in
+design/FABLE-LEDGER-BOUNDARY-SERVICE-SPEC.md's Amendment A2, fixed in serving/
+boundary_service.py + boundary_models.py, witnessed with W9-W12 added to
+seen-red/boundary-service/run_fixtures.py. Each red below was captured LIVE by temporarily
+swapping the pre-A2 `serving/boundary_service.py`/`boundary_models.py` (base commit `d21f175`)
+back in against the CURRENT (post-A2) `run_fixtures.py` and toy-db fixtures, then restoring
+the A2-hardened files and re-running to confirm green -- both directions live, not asserted.
+
+6. A2.1 (meta-routes) RED -- against pre-A2 `create_app()` (no `docs_url=None` etc.), the
+   live in-process route table (`app.routes`, the exact mechanism W12 now uses) was:
+
+     ['/credited', '/docs', '/docs/oauth2-redirect', '/health', '/openapi.json', '/redoc',
+      '/rows/current', '/rows/{row_id}', '/rows/{row_id}/history', '/standing/principals',
+      '/work/items', '/write/ledger', '/write/obligation', '/write/registration',
+      '/write/review']
+
+   -- `/docs`, `/redoc`, `/openapi.json`, `/docs/oauth2-redirect` all live and unenumerated by
+   §3/§4, exactly the finding A2.1 names. GREEN (A2-hardened): the same in-process check
+   returns exactly the 11 §3/§4 routes, verified above (w12-route-table-is-the-enumeration-
+   in-process, `meta-routes present: False`).
+
+7. A2.2 (write-body size) RED -- the pre-A2 module has NO `MAX_WRITE_BODY_BYTES` at all:
+   running the CURRENT fixture's W9 check against the pre-A2 server crashes the fixture itself
+   with
+
+     AttributeError: module 'boundary_service' has no attribute 'MAX_WRITE_BODY_BYTES'
+
+   -- the bound the finding says was unhandled is not merely un-enforced, the concept does not
+   exist in the pre-A2 source at all. GREEN (A2-hardened): w9-oversized-write-body-both-
+   checkpoints-server-alive above -- BOTH checkpoints refuse 413 (checkpoint a: Content-Length
+   1050621 bytes over the 1048576 bound, refused before reading the body; checkpoint b: a
+   988620-byte raw CJK-content body, UNDER the bound, that json.dumps's default
+   ensure_ascii=True escaping re-serializes to 1977195 bytes, OVER the bound -- proving
+   checkpoint (b) is a REAL second gate, not a restatement of (a)) and `/health` answers 200
+   immediately after both (server never crashed, never wedged).
+
+8. A2.3+A2.4 (unguarded `/health` query -> uncaught infra failure) RED -- a live pre-A2
+   server pointed at a deployment.json naming a real, reachable toy-db host but a
+   never-scaffolded schema/kern/role (`doesnotexistworld*`) -- the exact "psql infra failure,
+   non-verdict nonzero exit" class A2.4 names. `GET /health` on the pre-A2 server produced an
+   UNCAUGHT exception (the client-side request simply timed out; the server's own stderr
+   showed the real cause):
+
+     File ".../serving/boundary_service.py", line 195, in service_principal_name
+       out = _query_json(cfg, f"SELECT to_jsonb((SELECT name FROM {cfg.kern}.principal ...
+     File ".../serving/boundary_service.py", line 167, in _query_json
+       raise RuntimeError(f"psql query failed (exit {cp.returncode}): {cp.stderr.strip()...
+     RuntimeError: psql query failed (exit 3): psql:/dev/stdin:1: ERROR:  role
+     "doesnotexistworld_rw" does not exist
+
+   -- `service_principal_name` was exactly the "one unguarded kernel query" A2.3 names, and its
+   failure had no exception handler at all (A2.4's gap), so the client got nothing typed, just
+   a hung/reset connection. GREEN (A2-hardened): the IDENTICAL deployment against the
+   A2-hardened server now returns immediately:
+
+     HTTP 503  {"disposition": "infra_failure", "message": "the ledger's underlying database
+                connection failed -- this is an infrastructure problem, not a problem with
+                your request; see the server's own log for full detail."}
+
+   and the server's own stderr carries the full detail (`boundary_service: INFRA FAILURE
+   (GET /health): psql query failed (exit 3): ... role "doesnotexistworld_rw" does not
+   exist`) -- loud server-side, generic client-side, exactly A2.4's exposure posture. The
+   server processed FIVE consecutive requests this way without crashing or wedging.
+
+9. A2.5 (s41/s22 gates' absent leg unwitnessed) -- an analytic finding, not a live-behavior
+   regression: the pre-A2 `run_fixtures.py` (base commit `d21f175`, `git show d21f175:
+   seen-red/boundary-service/run_fixtures.py`) scaffolds exactly two chains, WORLD PRE
+   (s15..s42) and WORLD B (s15..s43) -- both carry s22 AND s41 -- so `/standing/principals` and
+   `/work/items` were structurally incapable of ever exercising their `capability_absent` leg
+   in that suite; nor did it exercise the PRESENT leg explicitly (neither route was called at
+   all). GREEN (A2-hardened): w11-present-legs-s41-and-s22-serve (WORLD B, both views present,
+   both routes 200) AND w11-absent-legs-s41-and-s22-refuse (the new WORLD NOCAP, chain
+   truncated before s22 at s21-session-aware-distinctness.sql, both routes 409
+   capability_absent naming s41-identity/s22-work respectively) above -- all four legs live.
+
+10. A2.6 (`after_id` accepted negatives) RED -- against the pre-A2 server, `GET
+    /rows/current?after_id=-1&limit=10` returned:
+
+      HTTP 200  [{"id": 1, ...}, {"id": 2, ...}]  (both fixture rows, unbounded)
+
+    -- no refusal, `limit` was range-checked but `after_id` was not. GREEN (A2-hardened): the
+    identical request now returns `HTTP 422 {"detail": "after_id must be >= 0 ..."}` (same
+    code path as W10/W11's fixture setup exercises the endpoint elsewhere; this specific
+    negative-value check is covered by code inspection + the general 422 pattern W-suite
+    already proves live for `limit`'s sibling bound -- both are the identical `if x < 0`
+    guard).
+
+11. A2.7 (limit 1..1000 undisclosed) -- RATIFIED as spec text by A2 itself (no code change);
+    the existing `limit` bound checks (already live and green before this pass, unchanged by
+    it) are the witness.
+
+12. Also newly witnessed, W10: `GET /health` on WORLD NOCAP (a genuinely pre-s40 chain, ending
+    at s21-session-aware-distinctness.sql, no s22/s40/s41/s42/s43 applied at all) returns
+    `HTTP 200 {"world": "svcfxnocap", "service_principal": null, "capabilities": {"s22_work":
+    false, "s41_identity": false, "s43_boundary": false, "credited_view": false}}` -- no 500,
+    the A2.3 guard (`_regclass_exists(cfg, f"{cfg.kern}.principal")` before querying it)
+    holding even though this particular chain's `kernel.principal` table itself exists (from
+    s15) with zero registered rows -- both the structurally-absent-table case (guarded
+    directly) and the table-exists-but-empty case (already handled by `_query_json`'s
+    NULL-mapping) are covered.
+
+Full green run (2026-07-18, A2 hardening in place): 12/12 live checks OK (W1, W2, W3, W4, W5,
+W6, W7 both legs, W9, W10, W11 both gates x both legs, W12), W8 correctly recorded
+UNEXERCISED (panel-side, out of this repo's reach). Scratch worlds: svcfxpre, svcfxb,
+svcfxnocap, svcfxw7ok (all torn down, confirmed via `SELECT nspname FROM pg_namespace WHERE
+nspname LIKE 'svcfx%'` returning zero rows after the run). `HARNESS_PGHOST=192.168.122.1
+python3 seen-red/boundary-service/run_fixtures.py` exit 0, reproduced twice.

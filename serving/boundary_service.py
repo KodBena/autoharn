@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-18T07:44:41Z
-#   last-change: 2026-07-18T07:50:50Z
+#   last-change: 2026-07-18T08:37:24Z
 #   contributors: ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -51,6 +51,33 @@ would leave that hazard in reach of the same work untouched (CLAUDE.md's enginee
 responsibility rule). FLAGGED as a deliberate broadening of the spec's literal text, in its
 spirit.
 
+NO META-ROUTES (spec A2.1): `docs_url`/`redoc_url`/`openapi_url` are all `None` below --
+FastAPI's default `/docs`, `/redoc`, `/openapi.json`, `/docs/oauth2-redirect` are DISABLED, not
+merely unenumerated. §9's closure statement's route claim was found false against the running
+service (A2.1's HIGH finding: those meta-routes were live, unenumerated, and `/docs`/`/redoc`
+pulled a third-party CDN asset) -- a ledger boundary needs no self-documentation surface with
+an external dependency; §3/§4 + this file's own docstring + serving/README.md are the
+documentation. The route witness (seen-red/boundary-service/run_fixtures.py's W12) asserts
+against `app.routes` directly, in-process, never the OpenAPI schema's self-report (which is
+now absent entirely and structurally could never have enumerated a meta-route anyway).
+
+SIZE AXIS (spec A2.2): `MAX_WRITE_BODY_BYTES = 1_048_576` (1 MiB) is enforced at BOTH named
+checkpoints on every `/write/*` route -- (a) the raw request body, before any JSON parsing
+(`_read_bounded_body`: Content-Length when the client declared one, refused without ever
+reading the body; the actual byte count otherwise, refused mid-stream, never buffered whole);
+(b) the re-serialized payload, before the psql subprocess (a payload can pass checkpoint (a)
+and still fail (b) -- e.g. non-ASCII content that `json.dumps`'s default `ensure_ascii=True`
+escaping expands well past its raw UTF-8 byte count; the witness suite's W9 exercises exactly
+this). Both checkpoints return the same typed `payload_too_large` shape (413).
+
+INFRA FAILURE (spec A2.4): a psql infrastructure failure (unreachable world, connection
+refusal, a nonzero exit that is not a kernel verdict) is the ONE thing `_query_json` raises
+`RuntimeError` for (module docstring, `_query_json`) -- so a single `RuntimeError` exception
+handler on the FastAPI app, not a per-route try/except, is the ONE home (ADR-0012 P1) for the
+infra-failure -> HTTP 503 `infra_failure` translation. The full psql stderr stays server-side
+(`_log_infra_failure`, stderr -- this project's own house channel for a loud, non-silent,
+non-exposed diagnostic); the client sees a generic message only, never SQL/role/schema/stack.
+
 Lazy imports are banned (CLAUDE.md, 2026-07-02): every import is top-of-file.
 """
 from __future__ import annotations
@@ -64,7 +91,7 @@ from pathlib import Path
 from typing import Any
 
 import uvicorn
-from fastapi import FastAPI, Response
+from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse
 
 # Path setup, NOT lazy imports (both `sys.path.insert` calls execute at module import time,
@@ -78,7 +105,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "filing"))
 import deployment_record  # filing/deployment_record.py -- the ONE home for the deployment.json shape  # noqa: E402
 
-from boundary_models import CapabilityAbsent, CapabilityManifest, HealthResponse, WritePayload  # noqa: E402
+from boundary_models import (  # noqa: E402
+    CapabilityAbsent,
+    CapabilityManifest,
+    HealthResponse,
+    InfraFailure,
+    PayloadTooLarge,
+)
 
 # The four s43 boundary functions, named ONCE (ADR-0012 P1) -- the write-route table (spec §4)
 # is built from this dict, never re-typed per route.
@@ -95,6 +128,13 @@ WRITE_SURFACES: dict[str, str] = {
 _IDENT_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 _LOOPBACK_HOSTS = {"127.0.0.1", "localhost", "::1"}
+
+# A2.2's one named write-ingress bound (ADR-0012 P1: one home, not one literal per checkpoint),
+# 1 MiB -- generous for any ledger payload, safely under the psql-argv wall (ARG_MAX) that the
+# pre-hardening build crashed into on a ~3 MB payload. Enforced at BOTH `_read_bounded_body`
+# (checkpoint a, raw body) and `make_write_route`'s handler (checkpoint b, re-serialized
+# payload) -- see this module's docstring, "SIZE AXIS".
+MAX_WRITE_BODY_BYTES = 1_048_576
 
 
 class BoundaryConfig:
@@ -192,6 +232,15 @@ def capability_manifest(cfg: BoundaryConfig) -> CapabilityManifest:
 
 
 def service_principal_name(cfg: BoundaryConfig) -> str | None:
+    """A2.3: guarded with the SAME existence check every other capability fact uses
+    (`_regclass_exists`, object existence never a version literal) -- on a world whose
+    `kernel.principal` table itself is absent, this degrades to `None` exactly like every
+    other capability-absent case, rather than reaching the query at all. `_query_json` already
+    maps a legitimate zero-row/NULL result to `None` (see its own docstring); this guard covers
+    the STRUCTURALLY absent case that same mapping cannot reach (a query against a table that
+    does not exist is a psql error, not a NULL scalar)."""
+    if not _regclass_exists(cfg, f"{cfg.kern}.principal"):
+        return None
     out = _query_json(
         cfg,
         f"SELECT to_jsonb((SELECT name FROM {cfg.kern}.principal "
@@ -205,6 +254,69 @@ def capability_absent(capability: str, message: str) -> JSONResponse:
     return JSONResponse(status_code=409, content=body.model_dump())
 
 
+def payload_too_large(observed_bytes: int, message: str) -> JSONResponse:
+    """A2.2: the one typed shape both write-ingress size checkpoints return (ADR-0012 P1)."""
+    body = PayloadTooLarge(limit_bytes=MAX_WRITE_BODY_BYTES, observed_bytes=observed_bytes, message=message)
+    return JSONResponse(status_code=413, content=body.model_dump())
+
+
+def infra_failure(message: str) -> JSONResponse:
+    """A2.4: the one typed shape a psql infrastructure failure returns."""
+    body = InfraFailure(message=message)
+    return JSONResponse(status_code=503, content=body.model_dump())
+
+
+def _log_infra_failure(context: str, exc: Exception) -> None:
+    """The full, loud, un-redacted detail stays server-side (stderr -- this project's own house
+    channel for a loud diagnostic every other construction-time refusal in this file already
+    uses) -- never in the HTTP response (A2.4's exposure posture)."""
+    sys.stderr.write(f"boundary_service: INFRA FAILURE ({context}): {exc}\n")
+
+
+class _BodyTooLarge(Exception):
+    """Raised by `_read_bounded_body` (checkpoint a) -- caught once, at each write route, and
+    turned into the typed `payload_too_large` response."""
+
+    def __init__(self, observed_bytes: int, message: str) -> None:
+        super().__init__(message)
+        self.observed_bytes = observed_bytes
+        self.message = message
+
+
+async def _read_bounded_body(request: Request) -> bytes:
+    """A2.2 checkpoint (a): MAX_WRITE_BODY_BYTES enforced on the RAW request body, BEFORE any
+    JSON parsing. Two sub-cases, both named in the spec: a Content-Length header, when the
+    client sent one, is checked FIRST and refuses without ever reading the body (the 100 MB
+    whole-body-buffered-then-parsed hazard A2.2 names, foreclosed before a single byte is
+    read); a body with no (or a lying) Content-Length is bounded by reading it incrementally
+    and aborting the instant the running total exceeds the bound -- never buffered whole first
+    and measured after."""
+    content_length = request.headers.get("content-length")
+    if content_length is not None:
+        try:
+            declared = int(content_length)
+        except ValueError:
+            declared = None
+        if declared is not None and declared > MAX_WRITE_BODY_BYTES:
+            raise _BodyTooLarge(
+                declared,
+                f"the request's Content-Length ({declared} bytes) exceeds the "
+                f"{MAX_WRITE_BODY_BYTES}-byte write bound (checkpoint a, before JSON parsing) "
+                f"-- refused before reading the body.")
+    chunks: list[bytes] = []
+    total = 0
+    async for chunk in request.stream():
+        total += len(chunk)
+        if total > MAX_WRITE_BODY_BYTES:
+            raise _BodyTooLarge(
+                total,
+                f"the request body exceeds the {MAX_WRITE_BODY_BYTES}-byte write bound "
+                f"(checkpoint a, before JSON parsing) -- refused mid-read, never buffered "
+                f"whole first.")
+        chunks.append(chunk)
+    return b"".join(chunks)
+
+
 def create_app(cfg: BoundaryConfig) -> FastAPI:
     app = FastAPI(
         title="autoharn ledger boundary service",
@@ -212,7 +324,23 @@ def create_app(cfg: BoundaryConfig) -> FastAPI:
                      "(design/FABLE-LEDGER-BOUNDARY-SERVICE-SPEC.md). Reads serve kernel "
                      "views verbatim; writes pass through the s43 boundary functions and "
                      "return the kernel's own write_verdict verbatim.",
+        # A2.1: no self-documentation surface, disabled not merely unenumerated -- see this
+        # module's docstring, "NO META-ROUTES". §9's route table is EXACTLY §3+§4's endpoints.
+        docs_url=None,
+        redoc_url=None,
+        openapi_url=None,
     )
+
+    @app.exception_handler(RuntimeError)
+    async def _infra_failure_handler(request: Request, exc: RuntimeError) -> JSONResponse:
+        # A2.4: the ONE place a psql infrastructure failure (unreachable world, connection
+        # refusal, a nonzero exit that is not a kernel verdict -- the ONLY thing _query_json
+        # raises RuntimeError for) becomes a typed 503, for every route uniformly (ADR-0012
+        # P1: one handler, not a try/except duplicated per route).
+        _log_infra_failure(f"{request.method} {request.url.path}", exc)
+        return infra_failure(
+            "the ledger's underlying database connection failed -- this is an infrastructure "
+            "problem, not a problem with your request; see the server's own log for full detail.")
 
     @app.get("/health", response_model=HealthResponse)
     def health() -> HealthResponse:
@@ -227,6 +355,9 @@ def create_app(cfg: BoundaryConfig) -> FastAPI:
         if limit < 1 or limit > 1000:
             return JSONResponse(status_code=422, content={
                 "detail": "limit must be between 1 and 1000 (transport-level bound, ADR-0002)"})
+        if after_id < 0:
+            return JSONResponse(status_code=422, content={
+                "detail": "after_id must be >= 0 (transport-level bound, spec §3/A2.6)"})
         rows = _query_json(
             cfg,
             f"SELECT coalesce(jsonb_agg(t ORDER BY t.id), '[]'::jsonb) FROM "
@@ -287,6 +418,9 @@ def create_app(cfg: BoundaryConfig) -> FastAPI:
                 "until this world's kernel gains the view.")
         if limit < 1 or limit > 1000:
             return JSONResponse(status_code=422, content={"detail": "limit must be between 1 and 1000"})
+        if after_id < 0:
+            return JSONResponse(status_code=422, content={
+                "detail": "after_id must be >= 0 (transport-level bound, spec §3/A2.6)"})
         rows = _query_json(
             cfg,
             f"SELECT coalesce(jsonb_agg(t ORDER BY t.id), '[]'::jsonb) FROM "
@@ -327,7 +461,7 @@ def create_app(cfg: BoundaryConfig) -> FastAPI:
         return JSONResponse(content=rows)
 
     def make_write_route(surface: str, fn: str):
-        def handler(payload: WritePayload) -> Response:
+        async def handler(request: Request) -> Response:
             if not bool(_query_json(
                 cfg,
                 f"SELECT to_jsonb(EXISTS (SELECT 1 FROM pg_proc p JOIN pg_namespace n "
@@ -341,7 +475,34 @@ def create_app(cfg: BoundaryConfig) -> FastAPI:
                     f"raw INSERT (design/FABLE-LEDGER-BOUNDARY-SERVICE-SPEC.md §4: 'the "
                     f"service NEVER falls back to raw INSERT; there is no code path that "
                     f"writes SQL DML').")
+
+            # A2.2 checkpoint (a): the raw body, bounded BEFORE any JSON parsing.
+            try:
+                raw_body = await _read_bounded_body(request)
+            except _BodyTooLarge as e:
+                return payload_too_large(e.observed_bytes, e.message)
+
+            try:
+                payload = json.loads(raw_body) if raw_body else None
+            except json.JSONDecodeError as e:
+                return JSONResponse(status_code=422, content={"detail": f"malformed JSON body: {e}"})
+            if not isinstance(payload, dict):
+                return JSONResponse(status_code=422, content={
+                    "detail": "write payload must be a JSON object (transport-level shape check, spec §4)"})
+
+            # A2.2 checkpoint (b): the re-serialized payload, bounded BEFORE the psql
+            # subprocess -- a payload can pass checkpoint (a) and still fail here (non-ASCII
+            # content that json.dumps's default ensure_ascii=True escaping expands past its
+            # raw UTF-8 byte count; W9 exercises exactly this).
             payload_json = json.dumps(payload)
+            observed = len(payload_json.encode("utf-8"))
+            if observed > MAX_WRITE_BODY_BYTES:
+                return payload_too_large(
+                    observed,
+                    f"the JSON payload, re-serialized, is {observed} bytes -- exceeds the "
+                    f"{MAX_WRITE_BODY_BYTES}-byte write bound (checkpoint b, before the psql "
+                    f"subprocess).")
+
             verdict = _query_json(
                 cfg,
                 f"SELECT to_jsonb(v) FROM {cfg.kern}.{fn}(:'payload'::jsonb) v;",
