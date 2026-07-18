@@ -1,0 +1,330 @@
+#!/usr/bin/env python3
+"""asof-export — the ledger-wide AS-OF read plus the §11.10(b) inspection-copy export verb
+(ledger item `asof-export-inspection-copy`, maintainer sign-off 2026-07-18, overnight batch item
+1, converged from design/FABLE-21CFR11-STANDING-ASSESSMENT.md §11.10(b) and the regulator
+assessment's Tier-2 item 9: "export each settled world read-only, hash the export, sign the
+digest as an as-of attestation"). §11.10(b) reads: "PARTIAL... What is missing is a scripted
+export/inspection-copy verb: nothing produces a complete, portable, integrity-carrying copy of a
+world's record in one witnessed act." This verb closes that PARTIAL, honestly, in two pieces:
+
+  ./asof-export read --asof <ts>
+      Prints the WHOLE ledger's in-force reading AS OF <ts> to stdout, human-readable. This is
+      deliverable (1): a ledger-wide as-of read, generalizing `led work asof <ts>` (which
+      reconstructs work-item STATE only, from the three work_* kinds) to EVERY row of every kind.
+      Read-only, derived, no new truth: it computes nothing the raw `ledger` table + its
+      `supersedes` self-reference did not already carry.
+
+  ./asof-export export --asof <ts> --out <dir> [--force]
+      Writes the SAME reconstruction as an inspection copy: <dir>/ledger-asof.txt (human-readable,
+      every column of every in-force row, in full — no truncation, matching `led show <id>`'s own
+      "prints every column of that one row, in full" bar, extended to the whole as-of set),
+      <dir>/ledger-asof.json (the same rows, machine-readable), and <dir>/manifest.sha256 (a
+      standard `sha256sum -c`-checkable manifest over both files — a copy can be verified against
+      the bytes it left as). This is deliverable (2).
+
+THE TWO TIME AXES (s24 + s31, per this item's own commissioning text: "s24 declared-event-time
+and s31 supersession give the axes"). kernel/lineage/s24-declared-event-time.sql added
+`event_declared_ts`, a plain writer-supplied, UNVERIFIED column distinct from `ts` (the row's own
+INSERT time) — s24's own header: "A writer can set it to anything, including a lie... not
+something a database CHECK can refute." kernel/lineage/s31-supersession-uniform-retraction.sql
+establishes the uniform-retraction semantics this verb's as-of read generalizes into TIME: a row
+is superseded, full stop, once some other row names it via `supersedes` — this verb adds exactly
+one filter, AT WHAT TIME, so "in force" becomes "in force as of T" rather than "in force now."
+DELIBERATE CHOICE: the as-of FILTER is `ts` (system insert time), never `event_declared_ts` —
+the SAME choice `led work asof` already made (bootstrap/templates/led.tmpl's own `asof` case:
+"derived purely by filtering the append-only work_* ledger rows to ts <= <timestamp>"), because
+`ts` is the one axis no writer can retroactively assert a false value for (it is `DEFAULT now()`
+at INSERT, never a writer-supplied literal), while `event_declared_ts` is honest exactly as far
+as the declarer is honest (s24's own words) — an as-of read used to answer "what did the record
+show at time T" must not let a writer's own unverified claim decide what was IN FORCE. Each row's
+`event_declared_ts`, where present, is still printed in full (never hidden) — it is informational
+context on a row, not the axis this read reconstructs against.
+
+THE QUERY (the whole mechanism, stated once): generalizes `ledger_current`'s own
+`NOT EXISTS (SELECT 1 FROM ledger s WHERE s.supersedes = l.id)` (kernel/lineage/s15-schema.sql)
+by adding ONE conjunct on EACH side — `l.ts <= :asof` (the row itself must have landed by T) and
+`s.ts <= :asof` (the SUPERSEDING row must ALSO have landed by T, or the original was not yet
+retracted as of T):
+
+    SELECT l.* FROM ledger l
+    WHERE l.ts <= :asof
+      AND NOT EXISTS (SELECT 1 FROM ledger s WHERE s.supersedes = l.id AND s.ts <= :asof)
+    ORDER BY l.id;
+
+This is why a moment BEFORE a supersession shows the superseded row in force (the superseding row
+exists in the table already only if it was ever written, but it fails `s.ts <= :asof` at that
+moment, so the NOT EXISTS still holds and the original stays visible) and a moment AFTER shows
+the superseding row instead (the original now fails its own NOT EXISTS, because its retractor's
+`s.ts <= :asof` now holds) — witnessed, not merely asserted, by this build's own seen-red fixture
+(seen-red/asof-export/). Selecting `l.*` (not an explicit column list) means this read is
+IMMUNE to the "column-complete" class s20/s22/s23/s24 each had to re-fight (every future
+`ALTER TABLE ledger ADD COLUMN` is carried automatically, with no second re-issue needed here —
+ADR-0012 P1, one query, no drift).
+
+WHY THIS LOGIC LIVES IN A NEW SCRIPT, NOT AS A `led` SUBCOMMAND OR A KERNEL VIEW/FUNCTION:
+  - Not a `led` subcommand: bootstrap/templates/led.tmpl is a LIVE-EXECUTED template (every
+    scaffolded world's `./led` shim `exec`s it directly, every invocation — the "live verbs"
+    ruling) and is therefore freeze-bound: it may only be edited while no wired session is live
+    ANYWHERE. This build cannot assert that. distance-to-clean.tmpl set the precedent this file
+    follows verbatim (see that file's own "WHY A NEW VERB, NOT A `led` SUBCOMMAND" section): "A
+    brand-new template file carries no such constraint... and mirrors this project's own existing
+    precedent for growing the verb surface without touching an existing live verb."
+  - Not a kernel/lineage delta: CLAUDE.md's standing orchestration rule requires a Fable-authored,
+    maintainer-ratified spec before any kernel/lineage edit — this commission carries neither, and
+    the class-ratified fail-safe-delta exception (additive-only, scratch-witnessed, SQL/ASP AGREE)
+    does not fit either: a parameterized as-of reconstruction cannot be a plain VIEW (views take
+    no argument), and minting a new SECURITY DEFINER function/catalog object to carry it is exactly
+    the kind of kernel-surface growth that ceremony gates, for good reason. `led work asof` itself
+    sets the precedent this verb follows: its own as-of logic is inlined SQL in the OPERATOR
+    SCRIPT, never a stored kernel object — this verb does the identical thing, one level more
+    general (every kind, not just the three work_* kinds).
+  - gates/ledger_reader_allowlist.py (the s31 standing mechanical detect for raw-`ledger`
+    KERNEL catalog readers — views/functions inside kernel/lineage) does not apply here for the
+    same reason it does not apply to `led work asof`'s or `led show`'s own raw-ledger queries:
+    this is an operator script issuing ad hoc SQL, not a kernel-schema catalog object.
+
+FLAGGED, PER THE COMMISSIONING BRIEF'S OWN INSTRUCTION ("Home the verb per house convention...
+flag the choice"): the above is that flag, in full — a fresh reader of this file who disagrees
+with "new template, not a led subcommand" has the reasoning to contest, not just the conclusion.
+
+SIGNING IS DEFERRED, HONESTLY, NOT AN INERT FLAG (standing maintainer crypto ruling, memory
+`crypto-deferred-standing-ruling`; design/FABLE-21CFR11-STANDING-ASSESSMENT.md §11.50/§11.70:
+"the signature-shaped half... is deliberately not being armed yet. That is a ruling, not an
+oversight."). This verb offers NO `--sign` flag at all — not a flag that silently no-ops, which
+would be exactly the "lying signature" ADR-0002 Rule 4 forbids (a seam that looks configured but
+is dead). `manifest.sha256` is an UNSIGNED content hash: it proves a copy's bytes match what left
+this act, and nothing about WHO ran the act or WHETHER a differently-regenerated copy was
+substituted for it. Both the .txt and the .json name this limit explicitly, so a reader of the
+inspection copy itself — not just this source file — sees the honest boundary.
+
+DEPLOYMENT RESOLUTION, CONNECTION POSTURE: byte-identical to distance-to-clean.tmpl's own module
+docstring section of the same name, reused rather than re-derived (ADR-0012 P1) — this file
+executes IN PLACE out of the autoharn checkout (the "live verbs" ruling), `PICKUP_DEPLOYMENT` is
+set by the scaffolded shim to the world's own `deployment.json`, `AUTOHARN` resolves from this
+file's own on-disk path (overridable), and every query here queries under the project's OWN
+granted role (`SET ROLE <dep.role>`).
+
+Read-only throughout (`read` and `export` both): every query is a SELECT; this script issues no
+INSERT/UPDATE/DELETE, and `export`'s only filesystem writes are the three named output files under
+the operator-given `--out` directory (never the ledger itself, never a location this script picks
+on its own — ADR-0002 Rule 2: a boundary validates, it does not guess. `--out` is REQUIRED on
+`export` for exactly this reason: a verb producing a regulatory inspection copy must not decide
+silently where the evidence lands).
+
+Lazy imports banned (top-of-file only, per this project's inherited convention;
+gates/no_lazy_imports.py applies).
+"""
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import os
+import subprocess
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+AUTOHARN = Path(os.environ.get("AUTOHARN", str(HERE / ".." / ".."))).resolve()
+DEPLOYMENT_PATH = Path(os.environ.get("PICKUP_DEPLOYMENT", str(HERE / "deployment.json")))
+
+sys.path.insert(0, str(AUTOHARN / "filing"))
+try:
+    import deployment_record  # noqa: E402  (filing/deployment_record.py, the ONE home for the shape)
+except ImportError as _e:
+    print(f"asof-export: cannot import autoharn's filing/deployment_record.py under "
+          f"AUTOHARN={AUTOHARN} ({_e.__class__.__name__}: {_e})", file=sys.stderr)
+    print("        set AUTOHARN=/path/to/autoharn, or place a sibling checkout at ../autoharn", file=sys.stderr)
+    sys.exit(2)
+
+SIGNING_NOTE = (
+    "Signing is DEFERRED (standing maintainer crypto ruling) -- this manifest is an UNSIGNED "
+    "sha256 content hash only. It lets a copy be checked against the bytes it left as; it proves "
+    "neither who exported it nor that a differently-regenerated copy wasn't substituted for it. "
+    "No inert --sign flag is offered by this verb."
+)
+READ_BASIS_NOTE = (
+    "ledger.ts (system insert time, DEFAULT now() at INSERT -- never writer-supplied) decides "
+    "what was in force as of this timestamp. event_declared_ts (kernel/lineage/"
+    "s24-declared-event-time.sql), where present on a row, is printed in full below but is NEVER "
+    "used to decide in-force-ness -- it is a plain writer-supplied, unverified column (s24's own "
+    "words: 'a writer can set it to anything, including a lie')."
+)
+
+
+def _load_deployment() -> deployment_record.DeploymentRecord:
+    try:
+        return deployment_record.load_deployment(DEPLOYMENT_PATH)
+    except deployment_record.DeploymentError as e:
+        print(f"asof-export: {e}", file=sys.stderr)
+        sys.exit(2)
+
+
+def ledger_asof_rows(dep: deployment_record.DeploymentRecord, asof: str) -> tuple[list[dict], str | None]:
+    """Runs the as-of reconstruction (module docstring's "THE QUERY" section) under the
+    deployment's own granted role, returns (rows, error). Each row is a dict of every ledger
+    column (via `row_to_json`, so a future `ALTER TABLE ledger ADD COLUMN` needs no edit here --
+    the same column-complete-by-construction property `l.*` gives the SQL) plus `actor_name`
+    (the writing principal's name, LEFT JOINed the same way `led show`/`led work asof` already
+    do). `error` is set (rows meaningless) iff psql itself failed -- a bad `--asof` value that
+    postgres's timestamptz cast rejects surfaces here as a named, non-empty error string, never
+    a silent empty result."""
+    sql = f"""SET ROLE {dep.role};
+SELECT row_to_json(t) FROM (
+  SELECT l.*, p.name AS actor_name
+  FROM {dep.schema}.ledger l
+  LEFT JOIN {dep.kern}.principal p ON p.id = l.actor
+  WHERE l.ts <= :'asof'::timestamptz
+    AND NOT EXISTS (
+      SELECT 1 FROM {dep.schema}.ledger s
+      WHERE s.supersedes = l.id AND s.ts <= :'asof'::timestamptz
+    )
+  ORDER BY l.id
+) t;
+"""
+    r = subprocess.run(
+        ["psql", "-h", dep.host, "-d", dep.db, "-t", "-A", "-q",
+         "-v", "ON_ERROR_STOP=1", "-v", f"asof={asof}"],
+        input=sql, capture_output=True, text=True, timeout=60)
+    if r.returncode != 0:
+        return [], r.stderr.strip() or f"psql exited {r.returncode} with no stderr"
+    rows: list[dict] = []
+    for line in r.stdout.splitlines():
+        line = line.strip()
+        if not line or line == "SET":
+            # -t suppresses tuple formatting but a leading `SET ROLE` command still emits its own
+            # one-line status ("SET") ahead of the SELECT's rows in some psql builds -- the same
+            # gotcha distance-to-clean.tmpl's own `_last_stmt_rows` names and strips; matched here
+            # by content rather than positionally, since a SET ROLE failure would otherwise shift
+            # a positional drop and silently eat a real row.
+            continue
+        rows.append(json.loads(line))
+    return rows, None
+
+
+def _fmt_row(row: dict, idx: int, total: int) -> str:
+    lines = [f"--- row {idx}/{total} (ledger id={row.get('id')}) ---"]
+    for k, v in row.items():
+        if v is None:
+            continue
+        lines.append(f"{k:28s}: {v}")
+    return "\n".join(lines)
+
+
+def render_human_readable(dep: deployment_record.DeploymentRecord, asof: str,
+                           generated_at: str, rows: list[dict]) -> str:
+    dep_label = f"{dep.name or dep.schema}@{dep.host}/{dep.db} (schema {dep.schema})"
+    header = [
+        "INSPECTION COPY -- ledger-wide AS-OF reconstruction",
+        "=" * 70,
+        f"Deployment   : {dep_label}",
+        f"As-of        : {asof}",
+        f"Generated at : {generated_at} (this export ACT's own wall-clock time -- distinct from",
+        "                --asof, which names the reconstructed CONTENT's point in time)",
+        f"Row count    : {len(rows)}",
+        f"Read basis   : {READ_BASIS_NOTE}",
+        f"Signing      : {SIGNING_NOTE}",
+        "=" * 70,
+        "",
+    ]
+    body = [_fmt_row(row, i + 1, len(rows)) for i, row in enumerate(rows)]
+    return "\n".join(header) + "\n\n".join(body) + ("\n" if body else "")
+
+
+def render_json(dep: deployment_record.DeploymentRecord, asof: str,
+                 generated_at: str, rows: list[dict]) -> str:
+    doc = {
+        "schema_version": 1,
+        "deployment": {"name": dep.name, "host": dep.host, "db": dep.db,
+                        "schema": dep.schema, "kern": dep.kern, "role": dep.role},
+        "asof": asof,
+        "generated_at": generated_at,
+        "read_basis": READ_BASIS_NOTE,
+        "signing": SIGNING_NOTE,
+        "row_count": len(rows),
+        "rows": rows,
+    }
+    return json.dumps(doc, indent=2, sort_keys=False) + "\n"
+
+
+def cmd_read(args: argparse.Namespace) -> int:
+    dep = _load_deployment()
+    rows, err = ledger_asof_rows(dep, args.asof)
+    if err is not None:
+        print(f"asof-export read: REFUSED -- as-of query failed: {err}", file=sys.stderr)
+        return 2
+    generated_at = datetime.now(timezone.utc).isoformat()
+    print(render_human_readable(dep, args.asof, generated_at, rows))
+    return 0
+
+
+def cmd_export(args: argparse.Namespace) -> int:
+    dep = _load_deployment()
+    rows, err = ledger_asof_rows(dep, args.asof)
+    if err is not None:
+        print(f"asof-export export: REFUSED -- as-of query failed: {err}", file=sys.stderr)
+        return 2
+
+    out_dir = Path(args.out)
+    txt_path = out_dir / "ledger-asof.txt"
+    json_path = out_dir / "ledger-asof.json"
+    manifest_path = out_dir / "manifest.sha256"
+
+    existing = [p for p in (txt_path, json_path, manifest_path) if p.exists()]
+    if existing and not args.force:
+        print(f"asof-export export: REFUSED -- {len(existing)} output file(s) already exist "
+              f"under {out_dir}: {[str(p) for p in existing]}", file=sys.stderr)
+        print("  An inspection copy is not silently overwritten (ADR-0002). Pass --force to "
+              "replace it deliberately, or choose a different --out.", file=sys.stderr)
+        return 1
+
+    out_dir.mkdir(parents=True, exist_ok=True)
+    generated_at = datetime.now(timezone.utc).isoformat()
+    txt_content = render_human_readable(dep, args.asof, generated_at, rows)
+    json_content = render_json(dep, args.asof, generated_at, rows)
+    txt_path.write_text(txt_content, encoding="utf-8")
+    json_path.write_text(json_content, encoding="utf-8")
+
+    manifest_lines = []
+    for p in (txt_path, json_path):
+        digest = hashlib.sha256(p.read_bytes()).hexdigest()
+        manifest_lines.append(f"{digest}  {p.name}")
+    manifest_path.write_text("\n".join(manifest_lines) + "\n", encoding="utf-8")
+
+    print(f"asof-export export: wrote {txt_path}, {json_path}, {manifest_path} "
+          f"({len(rows)} row(s) as of {args.asof}).")
+    print(f"  Verify with: (cd {out_dir} && sha256sum -c manifest.sha256)")
+    print(f"  {SIGNING_NOTE}")
+    return 0
+
+
+def main(argv: list[str]) -> int:
+    p = argparse.ArgumentParser(
+        prog="asof-export",
+        description="Ledger-wide AS-OF read (deliverable 1) plus §11.10(b) inspection-copy "
+                    "export (deliverable 2). Read-only throughout.")
+    sub = p.add_subparsers(dest="cmd", required=True)
+
+    p_read = sub.add_parser("read", help="print the whole-ledger as-of reconstruction to stdout")
+    p_read.add_argument("--asof", required=True,
+                         help="anything postgres's timestamptz cast accepts, e.g. "
+                              "'2026-07-18 10:23:00' or an ISO 8601 string; quote if it has a space")
+    p_read.set_defaults(func=cmd_read)
+
+    p_export = sub.add_parser("export", help="write the inspection copy (txt + json + sha256 manifest)")
+    p_export.add_argument("--asof", required=True, help="see 'read --help'")
+    p_export.add_argument("--out", required=True,
+                           help="directory to write ledger-asof.txt / ledger-asof.json / "
+                                "manifest.sha256 into (created if missing; REQUIRED -- this verb "
+                                "never picks a location on its own, ADR-0002)")
+    p_export.add_argument("--force", action="store_true",
+                           help="overwrite existing output files under --out")
+    p_export.set_defaults(func=cmd_export)
+
+    args = p.parse_args(argv)
+    return args.func(args)
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

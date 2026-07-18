@@ -1,0 +1,41 @@
+Banked RED evidence for ledger item `asof-export-inspection-copy` (bootstrap/templates/
+asof-export.tmpl, seen-red/asof-export/run_fixtures.py).
+
+This is a NEW verb, not a regression fix, so there is no pre-fix commit to revert to. The RED
+evidence below is captured the way asof-export.tmpl's own module docstring names as the query's
+one load-bearing detail: the correct as-of query adds a temporal guard to BOTH sides of the
+supersession check (`l.ts <= :asof` on the row itself, `s.ts <= :asof` on whatever superseded
+it). RED-NAIVE-QUERY below constructs the NAIVE query with that second guard REMOVED (i.e.
+`ledger_current`'s own filter, `NOT EXISTS (SELECT 1 FROM ledger s WHERE s.supersedes = l.id)`,
+reused unmodified at a PAST timestamp) and runs it, live, against the exact same two-row
+supersession fixture (row1 superseded by row2) at the exact same "before the supersession"
+instant GREEN-BEFORE uses. The naive query wrongly reports ZERO rows in force (it excludes row1
+because a superseding row EXISTS somewhere in the table, without checking whether that
+superseding row had landed yet as of the queried instant) where the correct query (GREEN-BEFORE,
+same run) reports exactly 1 (row1, correctly still in force at that instant). This is the defect
+class the second conjunct forecloses, reproduced directly rather than merely asserted.
+
+RED-BAD-ASOF and RED-USAGE below are the verb's own boundary refusals (ADR-0002): an
+unparseable --asof value and a missing required --out both fail loudly (exit 2, named on
+stderr), never a silent empty/guessed result.
+
+Full run captured live (python3 seen-red/asof-export/run_fixtures.py, HARNESS_PGHOST set to the
+toy db), scratch schema aeexfixture/aeexfixture_kernel/role aeexfixture_rw, torn down to zero
+residue on exit 0:
+
+ADOPT: track-work.sh exit=0 deployment.json=True asof-export shim=True -- PASS
+SETUP: row1 id=1 row2(supersedes 1) id=2 -- PASS
+GREEN-BEFORE (asof=2026-07-18T10:39:02.003577Z): row1_in_force=True row2_in_force=False -- PASS
+GREEN-AFTER (asof=2026-07-18T10:39:03.189142Z): row1_in_force=False row2_in_force=True -- PASS
+GREEN-EXPORT: exit=0 files_exist=True sha256sum_-c=OK row_count_ok=True -- PASS
+GREEN-EXPORT-NO-CLOBBER: no-force refused=True force succeeds=True -- PASS
+RED-NAIVE-QUERY (naive filter, no temporal guard on retraction side, asof=2026-07-18T10:39:02.003577Z): in-force count=0 (correct query gave 1 at this same instant) -- PASS (defect reproduced)
+RED-BAD-ASOF: exit=2 refused_loudly=True -- PASS
+RED-USAGE (export with no --out): exit=2 -- PASS
+
+asof-export fixture: all cases PASS, scratch substrate torn down to zero residue (tempdir removed, schema aeexfixture/aeexfixture_kernel/role aeexfixture_rw dropped).
+
+Note on overall exit 0: as with led-work-list-state-filter's own red.txt (same convention), this
+fixture's RED-* cases assert that a KNOWN-WRONG query/invocation reproduces the KNOWN defect --
+so the fixture as a WHOLE reports PASS (exit 0) when the wrong behavior is successfully
+reproduced under controlled conditions, exactly matching that precedent.
