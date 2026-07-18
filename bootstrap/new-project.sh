@@ -1,7 +1,7 @@
 #!/bin/sh
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-09T11:15:53Z
-#   last-change: 2026-07-18T20:38:48Z
+#   last-change: 2026-07-18T22:47:45Z
 #   contributors: be693afb/main, e4410ef6/main, 3c50e030/main, a857c93d/main, 9a17b6b9/main, ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -40,6 +40,13 @@
 #                LOUD post-scaffold notice naming that default and the one-line widening act, so
 #                the gap is never silent again.
 #   --force      overwrite an existing deployment.json/scaffold at <dest-dir> (default: refuse).
+#
+# CONTRACT, named explicitly (findings-RCA, DRIVEN-INTERFACE fix): <dest-dir> is created with
+# `mkdir -p`, so an OCCUPIED directory that does not already contain a deployment.json is
+# permitted and MERGED into silently -- the refusal above fires ONLY on an existing
+# deployment.json (or, under --pin submodule, an existing .autoharn), never on an occupied
+# directory in general. A caller that wants a guaranteed-fresh directory must check for that
+# itself before invoking this script; this script does not and will not make that check for you.
 #
 # --new-world <world> mode (BACKLOG "Ruling: one world per run", 2026-07-09; this session's
 # batch item 7): a run's subject must not see a sibling run's ledger history (the many-worlds
@@ -1005,6 +1012,7 @@ if [ -n "$NEW_WORLD" ]; then
     echo " command. (./orchlog lists the harness changelog -- notes on things a restarting session"
     echo " would want to know about autoharn itself, e.g. \`./orchlog\` or \`./orchlog since <sha>\`.)"
     echo ""
+    echo "----- BEGIN MAINTAINER SIGNING BLOCK -----"
     echo "To SIGN this run's commission yourself (FULL mode -- kernel/lineage/s25-commission-"
     echo "kind.sql; the ask carries the commissioner's own guarantee, not a vicarious one), type"
     echo "this in YOUR OWN terminal, inside $PROJECT_ROOT (not inside the agent's session):"
@@ -1053,6 +1061,7 @@ if [ -n "$NEW_WORLD" ]; then
     echo "head your key vouches for: \"append-only by trigger\" becomes \"append-only or provably"
     echo "broken\" (design/MAINT-GPG-TRUST-LAYER.md §4). Full walkthrough, including WHY --head verifies"
     echo "before it will print anything: user-guide/USER-GPG-TRUST-LAYER-FAQ.md."
+    echo "----- END MAINTAINER SIGNING BLOCK -----"
 else
     echo "  1. Apply a kernel lineage to $DB/$SCHEMA/$KERN/$ROLE if not already applied (kernel/lineage/, autoharn)."
     echo "  2. Provision the stamp secret -- see $PROJECT_ROOT/.claude/HOOKS.md (marked UNWITNESSED until you run it)."

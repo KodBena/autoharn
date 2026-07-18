@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-18T21:34:30Z
-#   last-change: 2026-07-18T22:05:00Z
+#   last-change: 2026-07-18T22:47:19Z
 #   contributors: ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -25,6 +25,7 @@ time (still drives the same screen function, same Ui, same checklist).
 from __future__ import annotations
 
 import argparse
+import signal
 import subprocess
 import sys
 
@@ -48,6 +49,29 @@ def main(argv: list[str] | None = None) -> int:
     ui = build_ui(args.scripted)
     cl = Checklist()
     state: dict = {}
+    # `state_holder` is the SIGTERM handler's only view of the live `state` dict -- registered
+    # once below, before the screen loop starts, and kept current every iteration (screens
+    # mutate `state` in place and also return it, so `state_holder[0] = state` after each call
+    # is cheap insurance against a screen that ever returns a fresh dict instead of mutating).
+    # A bare closure over the loop-local `state` name would see whatever `state` was bound to at
+    # REGISTRATION time, not at SIGNAL time -- the one-element list is the mutable indirection
+    # that keeps the handler honest across every reassignment.
+    state_holder: list[dict] = [state]
+
+    def _handle_sigterm(signum: int, frame: object) -> None:
+        # `kill <pid>` sends SIGTERM by default -- without this handler the interpreter's
+        # default disposition (terminate immediately, no cleanup) orphans a boundary_proc
+        # screen_boundary started (app.py's own docstring/rule 1: "no hidden state" applies to
+        # what THIS process started, not only to the acts it merely printed). This invokes the
+        # SAME termination path the normal-exit branches above already use, then exits nonzero
+        # (128 + SIGTERM, the standard shell convention for a signal-caused exit) rather than
+        # returning from main() the ordinary way.
+        print("\nsetup_tui: received SIGTERM -- terminating any boundary service this process "
+              "started before exiting (no orphaned residue).", file=sys.stderr)
+        _terminate_boundary_proc(state_holder[0])
+        sys.exit(128 + signal.SIGTERM)
+
+    signal.signal(signal.SIGTERM, _handle_sigterm)
 
     screens = SCREENS
     if args.start_at:
@@ -62,6 +86,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         for _, fn in screens:
             state = fn(ui, cl, state)
+            state_holder[0] = state
     except ScriptExhausted as exc:
         print(f"\nsetup_tui: {exc}", file=sys.stderr)
         _terminate_boundary_proc(state)
