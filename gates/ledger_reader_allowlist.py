@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-15T20:17:26Z
-#   last-change: 2026-07-18T05:44:28Z
+#   last-change: 2026-07-18T09:10:01Z
 #   contributors: a857c93d/main, 9a17b6b9/main, ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -75,7 +75,29 @@ CHAIN = [
     "s42-row-hash-full-coverage.sql",
     "s43-typed-verdict-write-boundary.sql",
     "s45-standing-lifecycle.sql",
+    "s44-model-identity-attestation.sql",
+    "s46-credited-views.sql",
 ]
+# s46 (kernel/lineage/s46-credited-views.sql, design/FABLE-DEFEAT-PIPELINE-SPEC.md §8) extends
+# this SAME gate's scratch CHAIN. It ships TWO new raw-`ledger` readers by DESIGN and DECLARED
+# as such (not a gap this gate is meant to catch, but exercised so the classifier's judgment
+# is witnessed, not merely asserted): `model_defeated_rows` and `credited_current` both factor
+# through `ledger_current` EXCLUSIVELY (the s31 reader discipline honored throughout -- neither
+# view references the raw `ledger` relation at all), verified live by running this gate against
+# the extended chain and reading it clean with NO new ALLOWLIST entry required for either
+# view -- exactly the outcome design/FABLE-DEFEAT-PIPELINE-SPEC.md §8 predicted ("both views
+# expected to classify clean").
+# s44 (kernel/lineage/s44-model-identity-attestation.sql, design/FABLE-OTEL-SENTRY-SPEC.md §8)
+# extends this SAME gate's scratch CHAIN. It ships ONE new object, `model_attestations`, which
+# ALSO factors through `ledger_current` exclusively (no raw `ledger` leg of its own -- verified
+# live, classifies clean with no ALLOWLIST entry, exactly as the spec's §8.1 "same-commit set"
+# predicted: "the new view is expected to classify clean"). Its re-issued `ledger_current`/
+# `countersigned_in_force` (+7 columns) and `compute_row_hash` keep their standing posture
+# (the two projection homes' existing ALLOWLIST entries, if any, are anti-join text unchanged;
+# compute_row_hash is a pure function of its row argument, no FROM/JOIN/ledger reference, same
+# as s42's own note above). NOTE ON CHAIN ORDER: s44/s46 apply here immediately after s45 (the
+# real lineage head at their authoring time, kernel/lineage/s44-model-identity-attestation.sql's
+# own "THE HEAD-BODY RULE"), matching bootstrap/new-project.sh's own LINEAGE_CHAIN order.
 # s45 (kernel/lineage/s45-standing-lifecycle.sql, ratified spec design/FABLE-STANDING-
 # LIFECYCLE-SPEC.md) extends this SAME gate's scratch CHAIN. It ships NO new raw-`ledger`
 # reader: kernel.principal_role (re-issued) still factors through ledger_current exclusively
