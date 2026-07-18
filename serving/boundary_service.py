@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-18T07:44:41Z
-#   last-change: 2026-07-18T10:48:55Z
+#   last-change: 2026-07-18T11:09:14Z
 #   contributors: ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -620,11 +620,16 @@ def _bound_write_payload_ints(surface: str, payload: dict[str, Any]) -> JSONResp
     `unclassified_failure` for an ordinary caller value that was simply too large -- see A5's
     §8 note on the sibling kernel defect this boundary fix stands beside, NOT fixes). Only a
     field the CALLER actually supplied is checked (an absent field is not this check's
-    business); only a genuine Python `int` value (or, for the one `bigint[]`-shaped field
-    `enacts`, each element of a `list`) is bound-checked -- a non-integer JSON value under one
-    of these field names is left for the kernel's own rowtype cast to judge (a type question,
-    not a domain-bound question; this function adds no other semantic validation, per A5.2's
-    own words). Returns the typed 422 naming the field and the bound, or None."""
+    business); the bound is denominated on the *value*, not the Python type (A6 correction of
+    A5.2's own residue: `isinstance(v, int)` let a JSON number in float/exponent form, e.g.
+    `1e20`, skip the check and reach psql) -- any NUMERIC JSON value (`int` or `float`,
+    `bool` excluded since it is `int`'s subclass but never an id) under one of these field
+    names (or, for the one `bigint[]`-shaped field `enacts`, each element of a `list`) is
+    bound-checked. A non-numeric JSON value under one of these field names is left for the
+    kernel's own rowtype cast to judge (a type question, not a domain-bound question; this
+    function adds no other semantic validation). An in-range float id (e.g. `5.0`) is NOT
+    newly refused -- it passes through exactly as before. Returns the typed 422 naming the
+    field and the bound, or None."""
     model = WRITE_SURFACE_INT_FIELDS.get(surface)
     if model is None:
         return None
@@ -634,12 +639,15 @@ def _bound_write_payload_ints(surface: str, payload: dict[str, Any]) -> JSONResp
         value = payload[field_name]
         candidates = value if isinstance(value, list) else [value]
         for v in candidates:
-            if isinstance(v, bool) or not isinstance(v, int):
+            if isinstance(v, bool) or not isinstance(v, (int, float)):
                 continue  # a type mismatch here is the kernel's rowtype cast to judge, not ours
+            # Mixed int/float comparison is exact in Python (no rounding to a float's nearest
+            # representable value first) -- MAX_ID itself is not exactly representable as a
+            # float, but `v > MAX_ID` still correctly refuses any float magnitude >= 2**63.
             if v < 0 or v > MAX_ID:
                 return JSONResponse(status_code=422, content={
                     "detail": f"payload field '{field_name}' must satisfy 0 <= {field_name} <= "
-                              f"{MAX_ID} (a Postgres bigint's own domain, spec A5.2); got {v}"})
+                              f"{MAX_ID} (a Postgres bigint's own domain, spec A5.2/A6); got {v}"})
     return None
 
 

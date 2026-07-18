@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-18T07:49:10Z
-#   last-change: 2026-07-18T10:47:19Z
+#   last-change: 2026-07-18T11:12:17Z
 #   contributors: ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
 """run_fixtures.py -- both-polarity witness for design/FABLE-LEDGER-BOUNDARY-SERVICE-SPEC.md's
 §8 witness plan (W1-W12, A2's amendment; W13-W14, A3's amendment; W15-W19, A4's amendment;
-W20-W23, A5's amendment). Real infra, no mocks:
+W20-W23, A5's amendment; W21's float legs, A6's amendment). Real infra, no mocks:
 CLASSIC scaffolds + manual chain applies in the TOY db (the exact pattern seen-red/
 s43-typed-verdict-write-boundary/run_fixtures.py already banks, and this fixture imports
 nothing new for scaffolding -- same helpers, re-derived here because the two fixtures scaffold
@@ -42,7 +42,9 @@ WORLDS:
                 still targets world_b's live server), W20 (the representability-scan
                 regression fixed: literal escape TEXT accepted through to the kernel; a real
                 NUL and a real unpaired surrogate still refuse), W21 (an over-bigint write-
-                payload field, typed 422 naming the field and bound), W22 (a raw-socket
+                payload field, typed 422 naming the field and bound -- plain-int form AND A6's
+                float/exponent-form legs, `1e20` over-bound refused the same way, in-range
+                `5.0` NOT newly refused by the boundary), W22 (a raw-socket
                 trickled body, typed 408 within BODY_READ_TIMEOUT_S plus margin), W23
                 (pagination on /standing/principals and /work/items, both polarities, including
                 /work/items' id-less synthetic-ordinal fallback), the §9/A2.1/W12 in-process
@@ -855,6 +857,47 @@ def main() -> int:
               f"POST /write/ledger with actor={over_bigint} (MAX_ID+1): status={st21} "
               f"body={body21}; /health after: status={st21h} world={body21h.get('world')} "
               f"(server alive)",
+              failures)
+
+        # -- W21 float legs (A6): A5.2's own residue -- the bound was denominated on the
+        # Python TYPE (`isinstance(v, int)`), so a JSON number in float/exponent form skipped
+        # the check entirely. Leg (a): an over-bound value spelled as a float/exponent literal
+        # (`1e20`, well past MAX_ID) must be refused with the SAME typed 422 shape as the plain-
+        # int leg above -- proving the fix is denominated on magnitude, not on `type(v) is int`.
+        over_bigint_float = 1e20
+        w21f_over_raw = json.dumps({"kind": "note", "actor": over_bigint_float,
+                                    "statement": "W21 float over-bigint actor field"}).encode()
+        st21fo, body21fo = _post_raw("/write/ledger", w21f_over_raw)
+        st21foh, body21foh = http_get(base + "/health") if up_b else (0, {})
+        check("w21-write-payload-int-field-over-bigint-float-form-typed-422",
+              up_b and st21fo == 422 and "actor" in body21fo.get("detail", "")
+              and str(boundary_service.MAX_ID) in body21fo.get("detail", "")
+              and st21foh == 200 and body21foh.get("world") == world_b,
+              f"POST /write/ledger with actor={over_bigint_float!r} (float form, well past "
+              f"MAX_ID): status={st21fo} body={body21fo}; /health after: status={st21foh} "
+              f"world={body21foh.get('world')} (server alive)",
+              failures)
+
+        # Leg (b): an IN-RANGE float-valued id (`5.0`) is deliberately NOT newly refused by
+        # this bound -- A6's own words, "it passes to the kernel exactly as before". The
+        # assertion is negative-and-precise: this is NOT the boundary's int-field-out-of-range
+        # 422 shape (the new check did not trip), and the server stays alive after -- whatever
+        # the kernel/psql layer itself does with a decimal-form bigint text cast is that layer's
+        # own pre-existing business, not this boundary fix's to adjudicate.
+        w21f_inrange_raw = json.dumps({"kind": "note", "actor": 5.0,
+                                       "statement": "W21 float in-range actor field"}).encode()
+        st21fi, body21fi = _post_raw("/write/ledger", w21f_inrange_raw)
+        st21fih, body21fih = http_get(base + "/health") if up_b else (0, {})
+        w21fi_is_boundary_oor_422 = (
+            st21fi == 422 and "actor" in body21fi.get("detail", "")
+            and str(boundary_service.MAX_ID) in body21fi.get("detail", ""))
+        check("w21-write-payload-int-field-in-range-float-not-boundary-422",
+              up_b and not w21fi_is_boundary_oor_422
+              and st21fih == 200 and body21fih.get("world") == world_b,
+              f"POST /write/ledger with actor=5.0 (in-range float, spec A6's own example): "
+              f"status={st21fi} body={body21fi} (must NOT be the boundary's int-field-oor 422 "
+              f"shape -- reaches the kernel/psql layer exactly as before); /health after: "
+              f"status={st21fih} world={body21fih.get('world')} (server alive)",
               failures)
 
         # -- W22 (A5.3): the body-READ-phase time bound. A raw-socket client (see
