@@ -259,3 +259,30 @@ named per spec A3.4's own carve-out, not silently dropped). Scratch worlds torn 
 confirmed empty after both the solo run and the concurrent-run pair.
 `HARNESS_PGHOST=192.168.122.1 python3 seen-red/boundary-service/run_fixtures.py` exit 0,
 reproduced three times (solo, solo again, and as one half of the concurrent pair).
+
+ADDENDUM (2026-07-18, route-shape migration, commit follows this file's own history): commit
+8de4320 (design/FABLE-BOUNDARY-MULTIPLEX-AND-CLI-REBASE-SPEC.md §2-4) retired every unprefixed
+route in favor of a mandatory /d/{deployment} discriminator and replaced `--deployment <json>`
+with `--config <toml>` on the launch line -- this suite's own first re-run against that commit
+was genuinely RED (ConnectionRefusedError, every URL construction site still unprefixed), named
+in that commit's own build report rather than silently left broken. This fixture was then
+migrated in full: every base URL (WORLD PRE/B/NOCAP, W7/W14/W18a/W22/W27's standalone servers)
+now carries its own deployment's /d/{name} prefix, `start_server`/`actual_route_table` take a
+TOML config path (`write_scratch_multiplex_config`, new) instead of a deployment.json path, and
+`audit_served.py`'s two call sites (W6, W19) gained `--deployment-name`. ONE genuine semantic
+consequence of the route-shape migration, not a fixture bug: W27's config is single-deployment
+(n=1), so its per-deployment sub-bound equals the global bound exactly and the per-deployment
+gate (checked first) always fires -- a single-deployment server can never itself emit
+`server_saturated` for its own traffic. W27's assertion now checks for `deployment_saturated`
+(the label a single-deployment server actually produces), with the reasoning recorded inline at
+the check's own setup comment; the bounded-admission SHAPE (prompt typed 503, never queued,
+`/health` unstarved, drains after) is otherwise byte-identical to its pre-migration form. A
+witness for `server_saturated` firing on a genuinely-shared multi-deployment global gate remains
+an open, named gap (not this fixture's original scope; see the migration commit's build report).
+Full green run (2026-07-18, post-migration): every case OK -- W1-W7, W9-W32 live (W3, closure-
+health-and-route-count, W1, W2, W4, W5, W6, W11, W9, W13, W15, W16, W17, W18a, W19, W20, W21
+x3, W22, W23, W24, W25, W26, W28 x3, W29 x3, W31 x3, W30, W32i, W32ii, W12, W18b, W10, W11, W7
+x2, W14, W27 x3); W8 and the W9 streaming-abort leg UNEXERCISED, named as always. Zero [FAIL]
+lines in the full run's own output. Scratch worlds (svcfxpre/svcfxb/svcfxnocap/svcfxw7ok,
+pid-suffixed) confirmed absent from `pg_namespace` after teardown.
+`HARNESS_PGHOST=192.168.122.1 python3 seen-red/boundary-service/run_fixtures.py` exit 0.

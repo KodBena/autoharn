@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-18T07:49:10Z
-#   last-change: 2026-07-18T15:37:28Z
+#   last-change: 2026-07-18T16:17:25Z
 #   contributors: ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -158,6 +158,7 @@ import deployment_record  # noqa: E402
 import pghost_resolve  # noqa: E402
 import audit_served  # noqa: E402  (compare_row_sets -- the negative-control comparator, reused not re-derived)
 import boundary_service  # noqa: E402  (W12 -- the in-process app.routes closure witness, and MAX_WRITE_BODY_BYTES/PSQL_CONNECT_TIMEOUT_S -- W9/W14 reuse the module's OWN bounds, never a second literal)
+import boundary_multiplex_config  # noqa: E402  (route-shape migration, design/FABLE-BOUNDARY-MULTIPLEX-AND-CLI-REBASE-SPEC.md §2/§3 -- the server now takes --config, not --deployment)
 
 PGHOST, PGDB = pghost_resolve.resolve_pghost("HARNESS_PGHOST", "EPISTEMIC_PGHOST"), "toy"
 
@@ -184,25 +185,33 @@ CHAIN_B = CHAIN_COMMON + ["s43-typed-verdict-write-boundary.sql"]  # s43 head (W
 # delta before s22.
 CHAIN_NOCAP = CHAIN_COMMON[: CHAIN_COMMON.index("s22-work-item-ledger.sql")]
 
+# Route-shape migration (design/FABLE-BOUNDARY-MULTIPLEX-AND-CLI-REBASE-SPEC.md §2): every
+# route now carries a leading /d/{deployment} segment -- a FastAPI route TEMPLATE, literal
+# regardless of which real deployment names a given config declares (the placeholder is never
+# substituted in app.routes' own path strings), so this set needs no per-world variant.
 EXPECTED_ROUTES = {
-    ("GET", "/health"), ("GET", "/rows/current"), ("GET", "/rows/{row_id}"),
-    ("GET", "/rows/{row_id}/history"), ("GET", "/credited"),
-    ("GET", "/standing/principals"), ("GET", "/work/items"),
-    ("POST", "/write/ledger"), ("POST", "/write/review"),
-    ("POST", "/write/registration"), ("POST", "/write/obligation"),
+    ("GET", "/d/{deployment}/health"), ("GET", "/d/{deployment}/rows/current"),
+    ("GET", "/d/{deployment}/rows/{row_id}"),
+    ("GET", "/d/{deployment}/rows/{row_id}/history"), ("GET", "/d/{deployment}/credited"),
+    ("GET", "/d/{deployment}/standing/principals"), ("GET", "/d/{deployment}/work/items"),
+    ("POST", "/d/{deployment}/write/ledger"), ("POST", "/d/{deployment}/write/review"),
+    ("POST", "/d/{deployment}/write/registration"), ("POST", "/d/{deployment}/write/obligation"),
 }
 
 
-def actual_route_table(deployment_path: Path) -> set[tuple[str, str]]:
+def actual_route_table(config_path: Path) -> set[tuple[str, str]]:
     """W12 (A2.1): asserts against `app.routes` DIRECTLY, in-process -- never the OpenAPI
     schema's self-report (§9's route claim was found false exactly because that self-report
     structurally cannot list a disabled/undeclared meta-route; A2.1 disabled them outright, so
     there is no schema endpoint left to ask). `create_app` only builds the ASGI route table; it
     opens no socket and issues no query, so calling it here needs no live server and no live DB
-    -- any syntactically valid deployment record does (the identifiers need never resolve)."""
-    rec = deployment_record.load_deployment(deployment_path)
-    cfg = boundary_service.BoundaryConfig(rec)
-    app = boundary_service.create_app(cfg)
+    -- any syntactically valid multiplex config does (the identifiers need never resolve).
+    Route-shape migration: `create_app` now takes the whole `configs` dict (multiplex spec §2),
+    not one `BoundaryConfig` -- built here from `config_path`'s own TOML, exactly the same
+    config a live `start_server` launch would load."""
+    records = boundary_multiplex_config.load_multiplex_config(config_path)
+    configs = {name: boundary_service.BoundaryConfig(rec) for name, rec in records.items()}
+    app = boundary_service.create_app(configs)
     routes: set[tuple[str, str]] = set()
     for route in app.routes:
         methods = getattr(route, "methods", None)
@@ -211,6 +220,24 @@ def actual_route_table(deployment_path: Path) -> set[tuple[str, str]]:
             for m in methods:
                 routes.add((m, path))
     return routes
+
+
+def write_scratch_multiplex_config(tmpdir: Path, world: str) -> Path:
+    """Route-shape migration: `serving/boundary_service.py` now takes `--config <toml>`
+    (multiplex spec §3), never `--deployment <json>` -- this is the TOML sibling of
+    `write_scratch_deployment` below, ONE deployment keyed by `world` (the same schema/kern/
+    role naming convention `write_scratch_deployment` and `scaffold_classic` already use for
+    this world), single-deployment configs still carrying the mandatory shape (spec §2)."""
+    path = tmpdir / f"{world}-boundary-multiplex.toml"
+    path.write_text(
+        f'[deployments.{world}]\n'
+        f'pghost = "{PGHOST}"\n'
+        f'pgdatabase = "{PGDB}"\n'
+        f'pguser = "{world}_rw"\n'
+        f'pgschema = "{world}"\n'
+        f'pgkern = "{world}_kernel"\n',
+        encoding="utf-8")
+    return path
 
 
 def sh(args: list[str], **kw) -> subprocess.CompletedProcess[str]:
@@ -374,19 +401,20 @@ def write_scratch_deployment(tmpdir: Path, world: str) -> Path:
     return path
 
 
-def start_server(deployment_path: Path, host: str = "127.0.0.1", port: int | None = None,
+def start_server(config_path: Path, host: str = "127.0.0.1", port: int | None = None,
                   extra_flag: bool = False, env_overrides: dict[str, str] | None = None
                   ) -> tuple[subprocess.Popen, int]:
-    """`env_overrides` (A4/W18a): merged over this process's own environment before launch --
-    used to force a genuine connection-refusal leg (PGPORT pointed at a closed local port) that
-    is distinct from W14's already-covered blackhole/stall leg, without needing a second
-    deployment-record shape (deployment.json carries no port field of its own; PGPORT is the
-    one lever psql itself already understands, the same lever _psql's own PGCONNECT_TIMEOUT
-    override in boundary_service.py uses for the time axis)."""
+    """Route-shape migration: launches with `--config <toml>` (multiplex spec §3), never the
+    retired `--deployment <json>`. `env_overrides` (A4/W18a): merged over this process's own
+    environment before launch -- used to force a genuine connection-refusal leg (PGPORT pointed
+    at a closed local port) that is distinct from W14's already-covered blackhole/stall leg,
+    without needing a second config shape (the TOML carries no port field of its own; PGPORT is
+    the one lever psql itself already understands, the same lever _psql's own
+    PGCONNECT_TIMEOUT override in boundary_service.py uses for the time axis)."""
     if port is None:
         port = free_port()
     args = [str(PYVENV), "-m", "serving.boundary_service",
-            "--deployment", str(deployment_path), "--host", host, "--port", str(port)]
+            "--config", str(config_path), "--host", host, "--port", str(port)]
     if extra_flag:
         args.append("--i-understand-this-exposes-the-ledger")
     env = dict(os.environ)
@@ -525,14 +553,15 @@ def main() -> int:
         wpre = scaffold_classic(world_pre, CHAIN_PRE)
         tmps.append(wpre.parent)
         birth_pre_s43(world_pre)
-        dep_pre = write_scratch_deployment(wpre.parent, world_pre)
-        proc_pre, port_pre = start_server(dep_pre)
+        cfg_pre = write_scratch_multiplex_config(wpre.parent, world_pre)
+        proc_pre, port_pre = start_server(cfg_pre)
         procs.append(proc_pre)
-        up = wait_health(f"http://127.0.0.1:{port_pre}")
+        base_pre = f"http://127.0.0.1:{port_pre}/d/{world_pre}"
+        up = wait_health(base_pre)
         results = {}
         if up:
             for surface in ("ledger", "review", "registration", "obligation"):
-                status, body = http_post(f"http://127.0.0.1:{port_pre}/write/{surface}", {"x": "y"})
+                status, body = http_post(f"{base_pre}/write/{surface}", {"x": "y"})
                 results[surface] = (status, body)
         out_pre = stop_server(proc_pre)
         grep_dml = subprocess.run(
@@ -557,10 +586,15 @@ def main() -> int:
         wb = scaffold_classic(world_b, CHAIN_B)
         tmps.append(wb.parent)
         author_id, svc_id = birth_via_boundary(world_b)
-        dep_b = write_scratch_deployment(wb.parent, world_b)
-        proc_b, port_b = start_server(dep_b)
+        dep_b = write_scratch_deployment(wb.parent, world_b)  # still needed: audit_served.py's own --deployment path flag (unchanged), and the direct-BoundaryConfig call sites below (W28/W31iii)
+        cfg_b = write_scratch_multiplex_config(wb.parent, world_b)
+        proc_b, port_b = start_server(cfg_b)
         procs.append(proc_b)
-        base = f"http://127.0.0.1:{port_b}"
+        # base_b_raw: the bare server root (no /d/{deployment} segment) -- audit_served.py's own
+        # --base-url takes the RAW root and prepends /d/{--deployment-name} itself (multiplex
+        # spec §4); `base` below is every OTHER call site's own already-prefixed convenience.
+        base_b_raw = f"http://127.0.0.1:{port_b}"
+        base = f"{base_b_raw}/d/{world_b}"
         up_b = wait_health(base)
 
         # -- /health: route count (§9 closure), capability manifest, service_principal named.
@@ -628,7 +662,8 @@ def main() -> int:
 
         # -- W6: audit_served.py AGREE leg + a tampered negative control caught nonzero.
         audit_cp = sh([str(PYVENV), str(SERVING / "audit_served.py"),
-                      "--base-url", base, "--deployment", str(dep_b)]) if up_b else None
+                      "--base-url", base_b_raw, "--deployment", str(dep_b),
+                      "--deployment-name", world_b]) if up_b else None
         served_ok, served_rows = http_get(f"{base}/rows/current?after_id=0&limit=1000") if up_b else (0, [])
         tampered = [dict(r, statement="TAMPERED-FOR-NEGATIVE-CONTROL") for r in served_rows[:1]] + served_rows[1:]
         neg_diffs = audit_served.compare_row_sets(tampered, served_rows) if served_rows else ["no rows to tamper"]
@@ -817,7 +852,7 @@ def main() -> int:
         # (exit 2) -- distinct from W14's already-covered blackhole/stall leg (a TimeoutExpired,
         # also infra per A3.1, but not this specific exit-2 path A4.3 draws the line at).
         closed_port = free_closed_port()
-        proc18a, port18a = start_server(dep_b, env_overrides={"PGPORT": str(closed_port)})
+        proc18a, port18a = start_server(cfg_b, env_overrides={"PGPORT": str(closed_port)})
         asgi_up_18a = False
         deadline18a = time.time() + 10
         while time.time() < deadline18a:
@@ -827,7 +862,9 @@ def main() -> int:
                     break
             except OSError:
                 time.sleep(0.2)
-        st18a, body18a = http_get(f"http://127.0.0.1:{port18a}/health") if asgi_up_18a else (0, {})
+        # cfg_b's own config still declares world_b (only PGPORT changed, via the environment,
+        # not the TOML) -- same /d/{deployment} segment as base's own.
+        st18a, body18a = http_get(f"http://127.0.0.1:{port18a}/d/{world_b}/health") if asgi_up_18a else (0, {})
         out18a = stop_server(proc18a)
         check("w18a-exit2-connection-refusal-503-infra-failure",
               asgi_up_18a and st18a == 503 and body18a.get("disposition") == "infra_failure",
@@ -848,7 +885,8 @@ def main() -> int:
         env19 = dict(os.environ)
         env19["PGPORT"] = str(closed_port)
         audit19_cp = sh([str(PYVENV), str(SERVING / "audit_served.py"),
-                        "--base-url", base, "--deployment", str(dep_b)], env=env19) if up_b else None
+                        "--base-url", base_b_raw, "--deployment", str(dep_b),
+                        "--deployment-name", world_b], env=env19) if up_b else None
         check("w19-audit-served-exit2-contract-unreachable-world",
               up_b and audit19_cp is not None and audit19_cp.returncode == 2
               and "TRANSPORT FAILURE" in audit19_cp.stderr,
@@ -967,7 +1005,7 @@ def main() -> int:
         w22_declared_len = 40
         w22_total_wall_s = 40.0  # 40 one-byte sends, ~1s apart -- exceeds BODY_READ_TIMEOUT_S=30
         st22, body22, elapsed22 = _post_trickled(
-            "127.0.0.1", port_b, "/write/ledger", w22_declared_len, w22_total_wall_s
+            "127.0.0.1", port_b, f"/d/{world_b}/write/ledger", w22_declared_len, w22_total_wall_s
         ) if up_b else (None, None, 0.0)
         st22h, body22h = http_get(base + "/health") if up_b else (0, {})
         margin22 = boundary_service.BODY_READ_TIMEOUT_S + 20
@@ -1607,7 +1645,7 @@ def main() -> int:
 
         # -- §9/A2.1 closure (W12): the route table IS the enumeration -- asserted against
         # app.routes DIRECTLY (in-process), never the (now-disabled) OpenAPI schema.
-        actual_routes = actual_route_table(dep_b)
+        actual_routes = actual_route_table(cfg_b)
         check("w12-route-table-is-the-enumeration-in-process",
               actual_routes == EXPECTED_ROUTES,
               f"app.routes == spec's fixed §3+§4 table: {actual_routes == EXPECTED_ROUTES}; "
@@ -1648,10 +1686,10 @@ def main() -> int:
         print(f"== scaffolding classic world {world_nocap} (chain ends {CHAIN_NOCAP[-1]}) ==")
         wnc = scaffold_classic(world_nocap, CHAIN_NOCAP)
         tmps.append(wnc.parent)
-        dep_nc = write_scratch_deployment(wnc.parent, world_nocap)
-        proc_nc, port_nc = start_server(dep_nc)
+        cfg_nc = write_scratch_multiplex_config(wnc.parent, world_nocap)
+        proc_nc, port_nc = start_server(cfg_nc)
         procs.append(proc_nc)
-        base_nc = f"http://127.0.0.1:{port_nc}"
+        base_nc = f"http://127.0.0.1:{port_nc}/d/{world_nocap}"
         up_nc = wait_health(base_nc)
 
         # -- W10: /health on a pre-s40 chain -> 200, null service_principal, no 500.
@@ -1691,13 +1729,22 @@ def main() -> int:
     # ============================= W7: bind guard, both legs (no DB) =============================
     tmp7 = Path(tempfile.mkdtemp(prefix="svcfxw7-"))
     try:
-        fake_dep = tmp7 / "fake-deployment.json"
-        deployment_record.write_deployment(
-            fake_dep, deployment_record.DeploymentRecord(
-                db="toy", host=PGHOST, schema="doesnotmatterw7", kern="doesnotmatterw7_kernel",
-                role="doesnotmatterw7_rw"))
+        # Route-shape migration: --config, never --deployment -- but the bind-guard REFUSAL leg
+        # fires before boundary_service.main() ever loads the config file at all (the loopback
+        # check runs first), so the TOML here need not even resolve to a real world; still
+        # written as a syntactically valid single-deployment config (spec §2's mandatory shape)
+        # rather than a bare placeholder, so this leg exercises the real --config argv surface.
+        fake_cfg = tmp7 / "fake-boundary-multiplex.toml"
+        fake_cfg.write_text(
+            '[deployments.doesnotmatterw7]\n'
+            f'pghost = "{PGHOST}"\n'
+            'pgdatabase = "toy"\n'
+            'pguser = "doesnotmatterw7_rw"\n'
+            'pgschema = "doesnotmatterw7"\n'
+            'pgkern = "doesnotmatterw7_kernel"\n',
+            encoding="utf-8")
         port7 = free_port()
-        r_refused = sh([str(PYVENV), "-m", "serving.boundary_service", "--deployment", str(fake_dep),
+        r_refused = sh([str(PYVENV), "-m", "serving.boundary_service", "--config", str(fake_cfg),
                        "--host", "8.8.8.8", "--port", str(port7)], cwd=str(REPO))
         check("w7-bind-guard-refusal-leg",
               r_refused.returncode == 2 and "REFUSED" in r_refused.stderr
@@ -1714,10 +1761,10 @@ def main() -> int:
         w7dir = scaffold_classic(w7world, CHAIN_PRE)
         tmps2 = [w7dir.parent]
         birth_pre_s43(w7world)
-        dep7ok = write_scratch_deployment(w7dir.parent, w7world)
+        cfg7ok = write_scratch_multiplex_config(w7dir.parent, w7world)
         port7b = free_port()
-        proc7, _ = start_server(dep7ok, host="0.0.0.0", port=port7b, extra_flag=True)
-        up7 = wait_health(f"http://127.0.0.1:{port7b}")
+        proc7, _ = start_server(cfg7ok, host="0.0.0.0", port=port7b, extra_flag=True)
+        up7 = wait_health(f"http://127.0.0.1:{port7b}/d/{w7world}")
         out7 = stop_server(proc7)
         teardown(w7world)
         for t in tmps2:
@@ -1736,14 +1783,18 @@ def main() -> int:
     # world is scaffolded (or needed): the connection never reaches postgres auth.
     tmp14 = Path(tempfile.mkdtemp(prefix="svcfxw14-"))
     try:
-        dep14 = tmp14 / "w14-deployment.json"
-        deployment_record.write_deployment(
-            dep14, deployment_record.DeploymentRecord(
-                db="toy", host=UNROUTABLE_HOST, schema="doesnotmatterw14",
-                kern="doesnotmatterw14_kernel", role="doesnotmatterw14_rw"))
+        cfg14 = tmp14 / "w14-boundary-multiplex.toml"
+        cfg14.write_text(
+            '[deployments.doesnotmatterw14]\n'
+            f'pghost = "{UNROUTABLE_HOST}"\n'
+            'pgdatabase = "toy"\n'
+            'pguser = "doesnotmatterw14_rw"\n'
+            'pgschema = "doesnotmatterw14"\n'
+            'pgkern = "doesnotmatterw14_kernel"\n',
+            encoding="utf-8")
         port14 = free_port()
         proc14 = subprocess.Popen(
-            [str(PYVENV), "-m", "serving.boundary_service", "--deployment", str(dep14),
+            [str(PYVENV), "-m", "serving.boundary_service", "--config", str(cfg14),
              "--host", "127.0.0.1", "--port", str(port14)],
             cwd=str(REPO), stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
         # The ASGI server itself binds instantly (it never touches postgres to do so) -- wait
@@ -1760,7 +1811,7 @@ def main() -> int:
                 time.sleep(0.2)
         start14 = time.time()
         try:
-            with urllib.request.urlopen(f"http://127.0.0.1:{port14}/health", timeout=40) as resp:
+            with urllib.request.urlopen(f"http://127.0.0.1:{port14}/d/doesnotmatterw14/health", timeout=40) as resp:
                 st14, body14 = resp.status, json.loads(resp.read())
         except urllib.error.HTTPError as e:
             st14, body14 = e.code, json.loads(e.read())
@@ -1788,22 +1839,43 @@ def main() -> int:
 
     # ============================= W27: admission bound under a stalled burst (no DB) =========
     # A9: MAX_INFLIGHT_KERNEL_CALLS=24 bounds concurrent in-flight kernel calls; a burst beyond
-    # it must answer typed 503 server_saturated PROMPTLY (never queue), /health must never wait
-    # behind other requests' occupancy, and the server must drain to normal service once the
-    # burst completes. Reuses W14's UNROUTABLE_HOST lever: every kernel call this burst makes
-    # stalls for up to PSQL_CONNECT_TIMEOUT_S before it could ever resolve, so an ADMITTED
-    # call's own latency is bounded exactly like W14's own -- the only new behavior under test
-    # here is what happens to the calls that never get admitted at all.
+    # it must answer typed 503 PROMPTLY (never queue), /health must never wait behind other
+    # requests' occupancy, and the server must drain to normal service once the burst completes.
+    # Reuses W14's UNROUTABLE_HOST lever: every kernel call this burst makes stalls for up to
+    # PSQL_CONNECT_TIMEOUT_S before it could ever resolve, so an ADMITTED call's own latency is
+    # bounded exactly like W14's own -- the only new behavior under test here is what happens to
+    # the calls that never get admitted at all.
+    #
+    # ROUTE-SHAPE MIGRATION, LABEL NOTE (design/FABLE-BOUNDARY-MULTIPLEX-AND-CLI-REBASE-SPEC.md
+    # §4): this config carries exactly ONE deployment (n=1), the shape W27 always tested --
+    # MAX_INFLIGHT_PER_DEPLOYMENT = max(4, MAX_INFLIGHT_KERNEL_CALLS // 1) =
+    # MAX_INFLIGHT_KERNEL_CALLS EXACTLY (both 24), and `_psql` checks the per-deployment gate
+    # BEFORE the global gate (spec §4: "checked FIRST"). With only one deployment in flight,
+    # "this deployment is saturated" and "the whole server is saturated" are the SAME fact, and
+    # the per-deployment gate -- numerically identical, checked first -- always fires: a
+    # single-deployment server can never actually EMIT `server_saturated` for its own traffic
+    # (the label exists for the genuinely-multi-deployment case, where sibling deployments
+    # jointly exhaust the shared 24 while none alone exceeds its own smaller sub-bound -- see
+    # seen-red/boundary-multiplex/run_fixtures.py's WM4 for that axis, driven with n=2). This
+    # witness therefore now asserts `deployment_saturated` (the label THIS config can actually
+    # produce), not `server_saturated` -- the bounded-admission SHAPE it proves (prompt typed
+    # 503, never queued, sibling /health unstarved, drains after) is otherwise unchanged from
+    # its pre-migration form. A witness for `server_saturated` firing on a genuinely-shared
+    # global gate is a named gap, not claimed here (see this file's build report).
     tmp27 = Path(tempfile.mkdtemp(prefix="svcfxw27-"))
     try:
-        dep27 = tmp27 / "w27-deployment.json"
-        deployment_record.write_deployment(
-            dep27, deployment_record.DeploymentRecord(
-                db="toy", host=UNROUTABLE_HOST, schema="doesnotmatterw27",
-                kern="doesnotmatterw27_kernel", role="doesnotmatterw27_rw"))
+        cfg27 = tmp27 / "w27-boundary-multiplex.toml"
+        cfg27.write_text(
+            '[deployments.doesnotmatterw27]\n'
+            f'pghost = "{UNROUTABLE_HOST}"\n'
+            'pgdatabase = "toy"\n'
+            'pguser = "doesnotmatterw27_rw"\n'
+            'pgschema = "doesnotmatterw27"\n'
+            'pgkern = "doesnotmatterw27_kernel"\n',
+            encoding="utf-8")
         port27 = free_port()
         proc27 = subprocess.Popen(
-            [str(PYVENV), "-m", "serving.boundary_service", "--deployment", str(dep27),
+            [str(PYVENV), "-m", "serving.boundary_service", "--config", str(cfg27),
              "--host", "127.0.0.1", "--port", str(port27)],
             cwd=str(REPO), stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
         asgi_up27 = False
@@ -1815,7 +1887,7 @@ def main() -> int:
                     break
             except OSError:
                 time.sleep(0.2)
-        base27 = f"http://127.0.0.1:{port27}"
+        base27 = f"http://127.0.0.1:{port27}/d/doesnotmatterw27"
 
         # > MAX_INFLIGHT_KERNEL_CALLS (24); matches anyio's own default threadpool size named in
         # A9's own trigger measurements, so this burst is provably not bottlenecked by ANY OTHER
@@ -1880,8 +1952,13 @@ def main() -> int:
             t.join(timeout=60)
         health_thread.join(timeout=60)
 
+        # See this block's own setup comment: a single-deployment (n=1) config's per-deployment
+        # sub-bound equals the global bound exactly, and the per-deployment gate is checked
+        # first -- so THIS config genuinely emits deployment_saturated, never server_saturated,
+        # for its own burst (the label this witness can actually observe from a single-
+        # deployment server).
         saturated = [r for r in results if r[1] == 503 and isinstance(r[2], dict)
-                     and r[2].get("disposition") == "server_saturated"]
+                     and r[2].get("disposition") == "deployment_saturated"]
         prompt_saturated = [r for r in saturated if r[3] < PROMPT_BOUND_S]
         expected_excess = BURST_N - boundary_service.MAX_INFLIGHT_KERNEL_CALLS
         check("w27-saturation-typed-503-prompt",
@@ -1907,7 +1984,7 @@ def main() -> int:
         # Drain check: once the burst has fully completed and every semaphore slot it held is
         # released, a single FRESH write must behave exactly like an ordinary (non-saturated)
         # request against this same unroutable host -- typed infra_failure once its own connect
-        # attempt exhausts PSQL_CONNECT_TIMEOUT_S, and specifically NOT server_saturated --
+        # attempt exhausts PSQL_CONNECT_TIMEOUT_S, and specifically NOT deployment_saturated --
         # proving no slot leaked or stayed stuck held.
         t0drain = time.time()
         try:
