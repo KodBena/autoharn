@@ -439,6 +439,27 @@ stays the kernel's rowtype-cast business, and an in-range float-valued id (`5.0`
 newly refused — it passes to the kernel exactly as before. **W21 gains the float legs**
 (`1e20` → 422; `5.0` → kernel verdict, not a 422). No other change.
 
+**A7 (2026-07-18) — iteration-5 confirmation pass: one new adjacency from A5.1's own
+mechanism, adjudicated.** Trigger: single-reviewer confirmation on `0866a11`. Every
+A2–A6 behavior held (re-driven live, including the id-field enumeration independently
+checked complete against the kernel's own column authority). The finding: A5.1's
+representability scan walks the parsed value with a *recursive* traversal that inherits
+none of A3.2's recursion-depth protection — a well-formed body nested ~1000–9999 levels
+(under the size bound, under `json.loads`'s own ~5000+ RecursionError threshold) raises
+an uncaught `RecursionError` *after* parse, inside the traversal, and escapes every
+registered handler → bare text/plain 500, the untyped shape this spec has banned since
+A2.4. Server survives; the class is caller-observable identical to A3.2's structure axis
+("a too-deeply-nested body"), split only by which Python frame overflows first.
+**Adjudication:** the post-parse traversal joins A3.2's own catch — the value-closure
+call sites (the representability scan, and any future post-parse walk of the payload)
+run under the same `except RecursionError` → typed 422 naming the structure axis that
+A3.2 already owns (or, equivalently, `_iter_strings` becomes an explicit-stack iterative
+walk — the fixer picks the smaller honest diff and says which). Preserved: A3.2's
+parse-time catch stays (load-bearing at its own depths); every A5.1 green/red leg
+unchanged. **W24:** a ~3000-level-nested, under-bound, otherwise-valid write body →
+typed 422 structure axis, server alive; the existing W13 deep-nesting leg stays green.
+§9's structure axis now reads "at parse AND at every post-parse traversal."
+
 ## License
 
 Public Domain (The Unlicense).
