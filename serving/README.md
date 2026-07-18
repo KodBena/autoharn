@@ -73,7 +73,7 @@ table against `app.routes` **directly, in-process** (never a schema endpoint).
 | GET | `/health` | world name, capability manifest, this service's registered principal name | none |
 | GET | `/rows/current` | `ledger_current`, id-paginated (`?after_id=&limit=`, bounds below) | none |
 | GET | `/rows/{id}` | one row, any status | none |
-| GET | `/rows/{id}/history` | the row's full supersession chain (both directions), each hop carrying its own `superseded_by` | none |
+| GET | `/rows/{id}/history` | the row's full supersession chain (both directions), each hop carrying its own `superseded_by`, id-paginated (`?after_id=&limit=`, bounds below, default `limit=1000`, A10) | none |
 | GET | `/credited` | the credited view, when the world carries one | `s44-credited-view` — no world in this repository's kernel lineage carries this view yet (spec §7); always `capability_absent` today |
 | GET | `/standing/principals` | `principal_standing_current`, id-paginated (`?after_id=&limit=`, bounds below, A5.4) | `s41-identity` |
 | GET | `/work/items` | `work_item_current`, ORDINAL-paginated (`?after_id=&limit=`, same bounds; the view has no id column, A5.4's fallback below) | `s22-work` |
@@ -99,21 +99,28 @@ typed, per ADR-0004 (no work ahead of a demonstrated need).
 
 ## Bounds (A2.2, A2.6, A2.7, A3.1, A4.1, A4.2, A5.1–A5.4 — one disclosed discipline, every ingress)
 
-- **Pagination — ALL FOUR read routes** (`/rows/current`, `/credited`, `/standing/principals`,
-  `/work/items` — A5.4 propagated this from two routes to all four): `?after_id=&limit=`,
-  **`1 ≤ limit ≤ 1000`**, **`after_id ≥ 0`** — both violations are a typed HTTP 422 naming the
-  bound. Ratified spec text as of A2.7; A2.6 added the `after_id ≥ 0` half (it previously
-  accepted negatives while `limit` was already range-checked — an asymmetry with no reason).
-  `/rows/current`, `/credited`, and `/standing/principals` page on the view's own `id` column
-  (`WHERE id > after_id ORDER BY id LIMIT limit`, identical shape on all three). `/work/items`
-  serves `work_item_current`, which carries **no id-shaped key at all** (one row per `slug`, no
+- **Pagination — ALL FIVE read routes** (`/rows/current`, `/credited`, `/standing/principals`,
+  `/work/items` — A5.4 propagated this from two routes to four — **and `/rows/{id}/history`,
+  A10's fifth**): `?after_id=&limit=`, **`1 ≤ limit ≤ 1000`**, **`after_id ≥ 0`** — both
+  violations are a typed HTTP 422 naming the bound. Ratified spec text as of A2.7; A2.6 added
+  the `after_id ≥ 0` half (it previously accepted negatives while `limit` was already
+  range-checked — an asymmetry with no reason). `/rows/current`, `/credited`,
+  `/standing/principals`, and `/rows/{id}/history` page on the row's own `id` column (`WHERE id
+  > after_id ORDER BY id LIMIT limit`, identical shape on all four — on the history route this
+  is the hop's own row id, so `after_id` walks the supersession chain forward one page at a
+  time, each hop still carrying its own `superseded_by` pointer). `/work/items` serves
+  `work_item_current`, which carries **no id-shaped key at all** (one row per `slug`, no
   bigint column) — its fallback, named per the spec's own "flag it if a view lacks one" clause:
   a `row_number() OVER (ORDER BY slug)` ordinal, computed ONLY inside the service's own wrapper
   query (never stored, never claimed to be a kernel id, since `slug` is unique per the view's
   own invariant — one opening act per slug), stands in for `id` as the `after_id`/`limit`
   cursor. The synthetic ordinal is stripped back out of each row's JSON before it is returned,
   so the served row shape stays byte-identical to the view's own columns; only the cursoring
-  mechanics differ from the id-keyed routes.
+  mechanics differ from the id-keyed routes. **`/rows/{id}/history`'s own default `limit` is
+  `1000`, not the other four routes' `100`** (A10) — a short chain fetched with NO query
+  parameters at all must stay byte-identical to the pre-A10 unpaginated response, and a
+  100-row default would have silently started truncating any chain longer than that where the
+  old, unpaginated route never truncated.
 - **The read-side id domain** (A4.2, symmetric with A2.6): every id-typed path/query parameter
   — `/rows/{id}`, `/rows/{id}/history`'s `id`, and every route's `after_id` — is bounded
   **`0 ≤ id ≤ 9223372036854775807`** (a Postgres `bigint`'s own ceiling, `MAX_ID`), typed HTTP

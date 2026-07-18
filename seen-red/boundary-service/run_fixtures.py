@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-18T07:49:10Z
-#   last-change: 2026-07-18T12:16:13Z
+#   last-change: 2026-07-18T14:15:14Z
 #   contributors: ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
 """run_fixtures.py -- both-polarity witness for design/FABLE-LEDGER-BOUNDARY-SERVICE-SPEC.md's
 §8 witness plan (W1-W12, A2's amendment; W13-W14, A3's amendment; W15-W19, A4's amendment;
 W20-W23, A5's amendment; W21's float legs, A6's amendment; W24, A7's amendment; W25-W26,
-A8's amendment; W27, A9's amendment). Real infra, no mocks:
+A8's amendment; W27, A9's amendment; W28, A10's amendment). Real infra, no mocks:
 CLASSIC scaffolds + manual chain applies in the TOY db (the exact pattern seen-red/
 s43-typed-verdict-write-boundary/run_fixtures.py already banks, and this fixture imports
 nothing new for scaffolding -- same helpers, re-derived here because the two fixtures scaffold
@@ -60,7 +60,13 @@ WORLDS:
                 E2BIG'd it into a bare 500), W26 (A8's label consistency: Infinity/-Infinity/
                 NaN under the int-declared `actor` field each refuse on the VALUE axis --
                 same message family, never the id-domain "got inf" label the pre-A8 code
-                gave Infinity by IEEE-754 comparison accident), the
+                gave Infinity by IEEE-754 comparison accident), W28 (A10: /rows/{id}/history
+                joins the pagination discipline -- (i) a 5-hop chain paged at limit=2, cursor
+                continuation via each page's own last row id, union of pages equals the
+                unpaginated chain exactly; (ii) limit=0/limit=1001/after_id=-1 each typed 422
+                naming the domain; (iii) a short chain with no parameters, byte-identical to an
+                independently-reconstructed pre-A10 unpaginated query rendered through the SAME
+                JSONResponse class), the
                 §9/A2.1/W12 in-process route-table closure assertion, and FINALLY (destructive,
                 run last) W18b
                 (ledger_current dropped on world_b -- genuine psql exit 3 -> 500
@@ -1112,6 +1118,125 @@ def main() -> int:
               f"(server alive)",
               failures)
 
+        # -- W28 (A10): the history route joins the pagination discipline, three legs.
+        # Leg (i): a long chain, `limit` honored -- build a 5-hop supersession chain, walk it
+        # page by page at `limit=2` (forcing 3 pages), and assert the union of pages equals the
+        # unpaginated chain (limit=1000, the route's own default) EXACTLY -- same id set, same
+        # per-row content.
+        w28_rows = []
+        w28_prev = None
+        for i in range(5):
+            payload = {"kind": "decision", "statement": f"W28 chain hop {i}", "actor": author_id}
+            if w28_prev is not None:
+                payload["supersedes"] = w28_prev
+            v = http_post(base + "/write/ledger", payload)[1] if up_b else {}
+            if v.get("disposition") != "accepted":
+                raise RuntimeError(f"W28 fixture chain write refused: {v}")
+            w28_rows.append(v["row_id"])
+            w28_prev = v["row_id"]
+        w28_head = w28_rows[-1]  # history of any hop returns the WHOLE chain both directions
+
+        def _history_page(after_id: int, limit: int) -> tuple[int, object]:
+            return http_get(f"{base}/rows/{w28_head}/history?after_id={after_id}&limit={limit}")
+
+        st28_full, w28_full = _history_page(0, 1000) if up_b else (0, [])
+        pages: list[list[dict]] = []
+        cursor = 0
+        page_statuses = []
+        for _ in range(10):  # generous cap -- 5 hops at limit=2 needs at most 3 pages
+            st_p, page = _history_page(cursor, 2)
+            page_statuses.append(st_p)
+            if not isinstance(page, list) or not page:
+                break
+            pages.append(page)
+            cursor = page[-1]["id"]
+            if len(page) < 2:
+                break
+        union_ids = {r["id"] for p in pages for r in p}
+        full_ids = {r["id"] for r in w28_full} if isinstance(w28_full, list) else set()
+        union_rows_by_id = {r["id"]: r for p in pages for r in p}
+        full_rows_by_id = {r["id"]: r for r in w28_full} if isinstance(w28_full, list) else {}
+        page_sizes = [len(p) for p in pages]
+        check("w28i-history-long-chain-limit-honored-union-equals-unpaginated",
+              up_b and st28_full == 200 and all(s == 200 for s in page_statuses)
+              and set(w28_rows) <= full_ids
+              and len(pages) >= 3
+              and all(sz <= 2 for sz in page_sizes)
+              and union_ids == full_ids
+              and union_rows_by_id == full_rows_by_id,
+              f"5-hop chain (row ids {w28_rows}); unpaginated (?after_id=0&limit=1000): "
+              f"status={st28_full} n={len(w28_full) if isinstance(w28_full, list) else '?'} "
+              f"ids={sorted(full_ids)}; paged at limit=2: page sizes={page_sizes} "
+              f"(cursor continuation via each page's own last row id), union of page ids="
+              f"{sorted(union_ids)}, union-vs-unpaginated row content equal="
+              f"{union_rows_by_id == full_rows_by_id}",
+              failures)
+
+        # Leg (ii): out-of-domain `limit`/`after_id`, each a typed 422 naming the domain --
+        # SAME message family as the four A5.4 routes' own out-of-range refusals.
+        st28_lim0, body28_lim0 = _history_page(0, 0) if up_b else (0, {})
+        st28_lim1001, body28_lim1001 = _history_page(0, 1001) if up_b else (0, {})
+        st28_negafter, body28_negafter = http_get(
+            f"{base}/rows/{w28_head}/history?after_id=-1&limit=10") if up_b else (0, {})
+        check("w28ii-history-out-of-domain-limit-after-id-typed-422",
+              up_b
+              and st28_lim0 == 422 and "limit" in body28_lim0.get("detail", "")
+              and st28_lim1001 == 422 and "limit" in body28_lim1001.get("detail", "")
+              and st28_negafter == 422 and "after_id" in body28_negafter.get("detail", ""),
+              f"limit=0: status={st28_lim0} body={body28_lim0}; "
+              f"limit=1001: status={st28_lim1001} body={body28_lim1001}; "
+              f"after_id=-1: status={st28_negafter} body={body28_negafter}",
+              failures)
+
+        # Leg (iii): a short chain with NO parameters -- byte-identical to the pre-A10
+        # unpaginated response. Reuses W5's own 2-row chain (`orig`/`sup`, already born above)
+        # and independently reconstructs the PRE-A10 query (the exact unpaginated SQL this
+        # route ran before A10 -- verbatim, no LIMIT/after_id filter) via a direct psql call
+        # through `boundary_service`'s own `_query_json`/`BoundaryConfig`, then renders it
+        # through the SAME `fastapi.responses.JSONResponse` class the live route uses -- so the
+        # comparison is real byte equality of the actual wire encoding, not a decoded-then-
+        # re-compared structural equality that could hide a field-order regression.
+        w28_cfg = boundary_service.BoundaryConfig(deployment_record.load_deployment(dep_b))
+        pre_a10_sql = (
+            f"WITH RECURSIVE chain(id) AS ("
+            f"  SELECT {sup['row_id']}::bigint"
+            f"  UNION"
+            f"  SELECT l.id FROM {world_b}.ledger l JOIN chain c ON l.id = c.id"
+            f"),"
+            f"chain_up AS ("
+            f"  SELECT id FROM chain"
+            f"  UNION"
+            f"  SELECT l.supersedes FROM {world_b}.ledger l JOIN chain_up c ON l.id = c.id "
+            f"    WHERE l.supersedes IS NOT NULL"
+            f"),"
+            f"chain_full(id) AS ("
+            f"  SELECT id FROM chain_up"
+            f"  UNION"
+            f"  SELECT l.id FROM {world_b}.ledger l JOIN chain_full c "
+            f"    ON l.supersedes = c.id"
+            f")"
+            f"SELECT coalesce(jsonb_agg(to_jsonb(l) || jsonb_build_object("
+            f"  'superseded_by', (SELECT s.id FROM {world_b}.ledger s "
+            f"                    WHERE s.supersedes = l.id)) ORDER BY l.id), '[]'::jsonb) "
+            f"FROM {world_b}.ledger l WHERE l.id IN (SELECT id FROM chain_full);"
+        )
+        pre_a10_rows = boundary_service._query_json(w28_cfg, pre_a10_sql)
+        # Lazy imports are banned (CLAUDE.md) -- reuse `boundary_service`'s OWN already-
+        # top-of-file-imported `JSONResponse` (the identical class object the live route
+        # renders through) rather than importing a second time here.
+        expected_bytes = bytes(boundary_service.JSONResponse(content=pre_a10_rows).body)
+        req28iii = urllib.request.Request(f"{base}/rows/{sup['row_id']}/history")
+        with urllib.request.urlopen(req28iii, timeout=10) as resp28iii:
+            st28iii = resp28iii.status
+            actual_bytes = resp28iii.read()
+        check("w28iii-history-short-chain-no-params-byte-identical-to-pre-a10-shape",
+              up_b and st28iii == 200 and actual_bytes == expected_bytes,
+              f"GET /rows/{sup['row_id']}/history (no query parameters): status={st28iii} "
+              f"len={len(actual_bytes)} bytes; independently-reconstructed pre-A10 unpaginated "
+              f"query, rendered through the SAME JSONResponse class: len={len(expected_bytes)} "
+              f"bytes; byte-identical={actual_bytes == expected_bytes}",
+              failures)
+
         # -- W9 streaming-abort leg: UNEXERCISED, named (spec A3.4's own carve-out, "exercised
         # if cheaply drivable, else UNEXERCISED with why"). Driving it needs a client that opens
         # the write connection, sends a Content-Length promise, then closes the socket mid-body
@@ -1466,7 +1591,7 @@ def main() -> int:
     if failures:
         print("FAILURES:", failures)
         return 1
-    print("ALL CASES OK -- boundary-service both-polarity proof (W1-W7, W9-W27 live; "
+    print("ALL CASES OK -- boundary-service both-polarity proof (W1-W7, W9-W28 live; "
           "W8 and the W9 streaming-abort leg UNEXERCISED, named).")
     return 0
 
