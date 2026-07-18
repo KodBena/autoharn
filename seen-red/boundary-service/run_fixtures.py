@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-18T07:49:10Z
-#   last-change: 2026-07-18T14:39:12Z
+#   last-change: 2026-07-18T14:57:55Z
 #   contributors: ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
 """run_fixtures.py -- both-polarity witness for design/FABLE-LEDGER-BOUNDARY-SERVICE-SPEC.md's
 §8 witness plan (W1-W12, A2's amendment; W13-W14, A3's amendment; W15-W19, A4's amendment;
 W20-W23, A5's amendment; W21's float legs, A6's amendment; W24, A7's amendment; W25-W26,
-A8's amendment; W27, A9's amendment; W28, A10's amendment; W29-W30, A11's amendment). Real
-infra, no mocks:
+A8's amendment; W27, A9's amendment; W28, A10's amendment; W29-W30, A11's amendment; W31,
+A12's amendment). Real infra, no mocks:
 CLASSIC scaffolds + manual chain applies in the TOY db (the exact pattern seen-red/
 s43-typed-verdict-write-boundary/run_fixtures.py already banks, and this fixture imports
 nothing new for scaffolding -- same helpers, re-derived here because the two fixtures scaffold
@@ -75,10 +75,18 @@ WORLDS:
                 the in-flight walk and present on a fresh one; (ii) after_id supplied ->
                 typed 422 teaching after_slug, an over-512-byte after_slug -> typed 422 naming
                 the domain; (iii) an ordinary two-page walk with no concurrent write, page union
-                equals the unpaginated view), W30 (A11: /rows/{id}/history's not-found shape --
-                a nonexistent in-domain id byte-matches GET /rows/{id}'s own typed 404, and an
-                existing row's history stays byte-identical to an independently-reconstructed
-                CTE using the SAME construction the live route runs), the
+                equals the unpaginated view), W31 (A12: after_slug's own representability
+                closure -- (i) a literal NUL, percent-encoded (%00) in the query string, typed
+                422 representability axis, same message family as the write-path leg, the NEXT
+                request answers normally; (ii) an unpaired UTF-16 surrogate, driven in-process
+                (structurally undrivable over real HTTP transport -- see this leg's own inline
+                comment for the live experiment proving it), same typed 422; (iii) the
+                choke-point net witnessed directly -- `_psql` called with a NUL-bearing argument
+                raises the typed `PsqlUnclassifiedFailure`, never a bare `ValueError`), W30
+                (A11: /rows/{id}/history's not-found shape -- a nonexistent in-domain id
+                byte-matches GET /rows/{id}'s own typed 404, and an existing row's history stays
+                byte-identical to an independently-reconstructed CTE using the SAME construction
+                the live route runs), the
                 §9/A2.1/W12 in-process route-table closure assertion, and FINALLY (destructive,
                 run last) W18b
                 (ledger_current dropped on world_b -- genuine psql exit 3 -> 500
@@ -1366,6 +1374,86 @@ def main() -> int:
               f"(equal to unpaginated: {union_slugs == full_slugs})",
               failures)
 
+        # -- W31 (A12): after_slug's own representability closure, three legs.
+        # Leg (i): a literal NUL, percent-encoded (%00) in the query string -> typed 422 on the
+        # representability axis, SAME message family as the write-path leg (W16), and the NEXT
+        # request answers normally (server alive, no wedge -- the choke-point net at _psql is
+        # never even reached, since the ingress gate refuses first).
+        st31i, body31i = http_get(f"{base}/work/items?after_slug=%00&limit=10") if up_b else (0, {})
+        st31i_next, body31i_next = http_get(base + "/health") if up_b else (0, {})
+        check("w31i-after-slug-nul-typed-422-representability-axis-server-alive",
+              up_b
+              and st31i == 422 and "representability axis" in body31i.get("detail", "")
+              and st31i_next == 200 and body31i_next.get("world") == world_b,
+              f"GET /work/items?after_slug=%00 (a literal NUL in the query string): "
+              f"status={st31i} body={body31i}; NEXT request (/health): status={st31i_next} "
+              f"world={body31i_next.get('world')} (server alive, answers normally)",
+              failures)
+
+        # Leg (ii): an unpaired UTF-16 surrogate. STRUCTURALLY UNDRIVABLE over real HTTP
+        # transport -- witnessed here, not assumed: Starlette's query-string decoding
+        # (`QueryParams.__init__` -> `urllib.parse.parse_qsl`, default `errors="replace"`) can
+        # NEVER produce an actual lone-surrogate Python `str` character from any byte sequence a
+        # client can put on the wire. A percent-encoded WTF-8 sequence for U+D800 (`%ED%A0%80`)
+        # decodes to THREE U+FFFD replacement characters, never one surrogate (confirmed live
+        # against this exact venv's Starlette: `QueryParams("after_slug=%ED%A0%80")["after_slug"]`
+        # == three U+FFFD, never `"\ud800"`); the raw, un-percent-encoded bytes instead decode
+        # `latin-1` first (Starlette's bytes-vs-str `QueryParams` branch), giving three ordinary
+        # Latin-1 codepoints -- again never a surrogate. This is the OPPOSITE of the write path,
+        # where `json.loads` decodes a `\ud800` JSON escape directly to a real surrogate CODE
+        # POINT regardless of UTF-8 validity (W16's own leg): JSON string escapes and URL
+        # percent-encoding are different mechanisms with different honesty properties here.
+        # Asserting a "surrogate" leg via a byte sequence Starlette actually turns into
+        # replacement characters would be a LYING witness -- U+FFFD is not in the
+        # 0xD800-0xDFFF range `_representability_failure_for_string` checks, so that leg would
+        # pass through to a 200, not exercise the surrogate branch at all, and calling that
+        # green a positive proof would be exactly the false-witness class this project's own LAW
+        # forbids. The HONEST disposition, matching this same W31's own leg (iii) below (spec
+        # A12's own instruction: "unit-style leg, no HTTP needed"): drive this leg in-process,
+        # calling the SAME shared function `work_items()`'s own representability check calls
+        # (`_query_string_representability_failure`) with a REAL Python `str` carrying a genuine
+        # unpaired surrogate character -- exercising the identical rule leg (i) above exercises
+        # via HTTP, minus only the transport hop no client can actually drive.
+        w31ii_resp = boundary_service._query_string_representability_failure(
+            "after_slug", "before\ud800after")
+        w31ii_body = json.loads(bytes(w31ii_resp.body)) if w31ii_resp is not None else {}
+        check("w31ii-after-slug-unpaired-surrogate-typed-422-representability-axis",
+              w31ii_resp is not None and w31ii_resp.status_code == 422
+              and "representability axis" in w31ii_body.get("detail", ""),
+              f"_query_string_representability_failure('after_slug', a str carrying a real "
+              f"U+D800 lone surrogate) -- the SAME function work_items() calls at this exact "
+              f"gate, driven in-process because Starlette's query-string decoding structurally "
+              f"cannot carry a real unpaired surrogate over the wire (see this check's own "
+              f"comment for the live experiment proving it): "
+              f"status={w31ii_resp.status_code if w31ii_resp else None} body={w31ii_body}",
+              failures)
+
+        # Leg (iii): the choke-point net witnessed directly (spec A12's own instruction:
+        # "unit-style leg, no HTTP needed") -- `_psql`, called with a NUL-bearing argument value
+        # (bypassing every ingress-level representability gate, exactly what a future,
+        # differently-gated caller would do), must raise the typed `PsqlUnclassifiedFailure`,
+        # never a bare `ValueError` -- A8's OSError pattern, repeated for A12's ValueError.
+        w31iii_cfg = boundary_service.BoundaryConfig(deployment_record.load_deployment(dep_b))
+        w31iii_raised: Exception | None = None
+        w31iii_is_bare_valueerror = False
+        try:
+            boundary_service._psql(
+                w31iii_cfg, "SELECT 1;", extra_v={"after_slug": "before\x00after"})
+        except boundary_service.PsqlUnclassifiedFailure as e:
+            w31iii_raised = e
+        except ValueError as e:
+            w31iii_is_bare_valueerror = True
+            w31iii_raised = e
+        check("w31iii-psql-choke-point-net-nul-argument-typed-unclassified-not-bare-valueerror",
+              w31iii_raised is not None
+              and isinstance(w31iii_raised, boundary_service.PsqlUnclassifiedFailure)
+              and not w31iii_is_bare_valueerror,
+              f"_psql(cfg, 'SELECT 1;', extra_v={{'after_slug': a NUL-bearing str}}) -- "
+              f"bypassing every ingress gate directly: "
+              f"raised={type(w31iii_raised).__name__ if w31iii_raised else None} (must be "
+              f"PsqlUnclassifiedFailure, never a bare ValueError): {w31iii_raised}",
+              failures)
+
         # -- W30 (A11 item 2): the history route's not-found shape matches its sibling; an
         # existing row's history is unchanged by the leading existence check.
         def _raw_get(url: str) -> tuple[int, bytes]:
@@ -1791,7 +1879,7 @@ def main() -> int:
     if failures:
         print("FAILURES:", failures)
         return 1
-    print("ALL CASES OK -- boundary-service both-polarity proof (W1-W7, W9-W30 live; "
+    print("ALL CASES OK -- boundary-service both-polarity proof (W1-W7, W9-W31 live; "
           "W8 and the W9 streaming-abort leg UNEXERCISED, named).")
     return 0
 

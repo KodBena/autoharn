@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-18T07:44:41Z
-#   last-change: 2026-07-18T14:34:11Z
+#   last-change: 2026-07-18T14:53:06Z
 #   contributors: ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -267,6 +267,23 @@ iteration-9 confirmation pass). Two uniformity completions:
    a nonexistent in-domain id gets the sibling route's EXACT typed 404 (`"no row N"`); existing
    rows are unaffected, and the recursive supersession CTE runs only after the check passes.
 
+THE QUERY-DERIVED STRING JOINS THE REPRESENTABILITY CLOSURE (spec A12, iteration-10 confirmation
+pass). A11's `after_slug` gained the 512-byte length bound but not A4.1(b)'s representability
+gate at birth -- a literal U+0000 or an unpaired UTF-16 surrogate, inside the 512-byte domain,
+reached `_psql` unchecked and detonated in `subprocess.run` as an uncaught `ValueError: embedded
+null byte` (a bare untyped 500). The rule (A4.1(b): a literal NUL or an unpaired surrogate is
+not Postgres-text-representable) is now stated ONCE (`_representability_failure_for_string`) and
+audited at BOTH ingresses: the write-payload scan (`_representability_axis_failure`) and the
+read-side query-parameter gate (`_query_string_representability_failure`, applied to
+`after_slug` in `work_items`, checked after the length bound and before the value crosses to
+psql's `-v` argument). ENUMERATION (A12's own mandate, not assumed): every string-typed
+path/query parameter across this service's eleven routes was read from its route signature --
+`after_slug` on `GET /work/items` is the ONLY one; every other path/query parameter (`row_id`,
+`after_id`, `limit`) is `int` or `int | None`. Choke-point net, A8's `OSError` pattern repeated:
+`_psql` also catches a bare `ValueError` from `subprocess.run` itself and raises the typed
+unclassified-failure path, so no future string-typed parameter, however added, can wear the
+bare shape even if its own ingress gate is missed.
+
 Lazy imports are banned (CLAUDE.md, 2026-07-02): every import is top-of-file.
 """
 from __future__ import annotations
@@ -517,9 +534,20 @@ def _psql(cfg: BoundaryConfig, script: str, extra_v: dict[str, str] | None = Non
     `/health`'s own kernel probes alike). On saturation the acquire fails immediately and this
     function raises `KernelCallSaturated` WITHOUT ever calling `subprocess.run` -- refused before
     it would have waited on anything, never queued (A9, verbatim: "never queues unboundedly").
-    On every path past that point -- success, `TimeoutExpired`, or `OSError` -- the slot is
-    released in a `finally`, released as early as honesty allows (the instant `subprocess.run`
-    itself returns or raises, not deferred to the caller)."""
+    On every path past that point -- success, `TimeoutExpired`, `OSError`, or `ValueError` -- the
+    slot is released in a `finally`, released as early as honesty allows (the instant
+    `subprocess.run` itself returns or raises, not deferred to the caller).
+
+    A12's choke-point net, A8's `OSError` pattern repeated: `ValueError` from `subprocess.run`
+    itself (concretely, "embedded null byte" -- Python's own argv-encoding layer raises this
+    when ANY `args`/`extra_v` string reaching this call carries a literal NUL, regardless of
+    which route or future parameter put it there) is caught HERE, at the one choke point every
+    kernel call already passes through, and re-raised as the typed unclassified-failure path.
+    This is defense in depth, not the primary mechanism -- the primary mechanism is the
+    representability gate at each ingress (A4.1(b) for write payloads, A12's
+    `_query_string_representability_failure` for `after_slug`) -- but it means no future
+    string-typed parameter, however added, can ever let a bare `ValueError` escape this
+    function's own callers."""
     args = ["psql", "-h", cfg.pg_host, "-d", cfg.db, "-tAq", "-v", "ON_ERROR_STOP=1"]
     for k, v in (extra_v or {}).items():
         args += ["-v", f"{k}={v}"]
@@ -558,6 +586,18 @@ def _psql(cfg: BoundaryConfig, script: str, extra_v: dict[str, str] | None = Non
             f"psql subprocess could not be launched (OSError before any connection was "
             f"attempted -- e.g. E2BIG past the kernel's per-argument MAX_ARG_STRLEN wall, or "
             f"a missing psql binary): {e}"
+        ) from e
+    except ValueError as e:
+        # A12: the choke-point net, A8's OSError pattern repeated -- a bare ValueError from
+        # `subprocess.run` itself (e.g. "embedded null byte" in an argv/-v string) is a
+        # boundary/deployment defect exactly like an OSError launch failure above, never a
+        # connection-level infra fact. Defense in depth: the primary mechanism is the
+        # representability gate at each ingress (A4.1(b), A12's own query-string gate); this
+        # is the net that catches whatever a future ingress fails to gate at its own boundary.
+        raise PsqlUnclassifiedFailure(
+            f"psql subprocess could not be launched (ValueError before any connection was "
+            f"attempted -- e.g. an embedded NUL byte in an argument this function's own "
+            f"representability gates should have refused upstream): {e}"
         ) from e
     finally:
         # A9: released as early as honesty allows -- the instant subprocess.run itself returns
@@ -798,6 +838,30 @@ def _iter_strings(value: Any):
             yield from _iter_strings(item)
 
 
+def _representability_failure_for_string(s: str) -> str | None:
+    """A12: the representability RULE itself, factored out to ONE home (ADR-0012 P1) so it can
+    be stated once and audited, rather than re-derived per call site. Postgres jsonb/text
+    storage cannot store a literal U+0000 (NUL) character or an unpaired UTF-16 surrogate code
+    point; both are checkable directly on `str.__iter__` because Python's `json.loads` already
+    resolved every valid `\\uXXXX` escape (and every valid escaped surrogate PAIR combines into
+    ONE composed, non-surrogate code point during decode -- a legitimate supplementary-plane
+    character never leaves a lone surrogate character behind), so a lone surrogate CODE POINT
+    appearing in a decoded `str` is, by construction, genuinely unpaired. Returns the failure
+    detail (naming which of the two), or None if `s` is representable. Shared by
+    `_representability_axis_failure` below (the write-payload scan, A4.1(b)/A5.1) and
+    `_query_string_representability_failure` (the read-side query-parameter gate, A12) -- the
+    SAME rule, never two."""
+    if "\x00" in s:
+        return ("contains a U+0000 (NUL) character, which Postgres jsonb text storage cannot "
+                "represent")
+    for ch in s:
+        cp = ord(ch)
+        if 0xD800 <= cp <= 0xDFFF:
+            return (f"contains an unpaired UTF-16 surrogate character (U+{cp:04X}), which is "
+                    f"not valid Unicode text and Postgres jsonb cannot store")
+    return None
+
+
 def _representability_axis_failure(payload: dict[str, Any]) -> str | None:
     """A4.1(b), FIXED per A5.1 (a regression in A4.1(b)'s own fix -- the first fix-introduced
     regression this spec's re-review loop found, per the spec's own framing). The PRE-A5 scan
@@ -811,25 +875,33 @@ def _representability_axis_failure(payload: dict[str, Any]) -> str | None:
     item 1).
 
     THE FIX: inspect the ACTUAL CODEPOINTS of the PARSED value, never any escaped/serialized
-    text. jsonb cannot store a literal U+0000 (NUL) or an unpaired UTF-16 surrogate; both are
-    checkable directly on `str.__iter__` because Python's `json.loads` already resolved every
-    valid `\\uXXXX` escape (and every valid escaped surrogate PAIR combines into ONE composed,
-    non-surrogate code point during decode -- a legitimate supplementary-plane character never
-    leaves a lone surrogate character behind) -- so a lone surrogate CODE POINT appearing in a
-    decoded `str` is, by construction, genuinely unpaired; there is no serialization-mode
-    ambiguity left to resolve on this side of the parse. Walks every string AND every object key
-    (`_iter_strings`); returns the failure detail, or None if the payload is representable."""
+    text -- via `_representability_failure_for_string` above, the ONE home for the rule itself
+    (A12 factored it out so a query-derived string could reuse it without re-deriving it).
+    Walks every string AND every object key (`_iter_strings`); returns the failure detail, or
+    None if the payload is representable."""
     for s in _iter_strings(payload):
-        if "\x00" in s:
-            return ("the payload contains a U+0000 (NUL) character, which Postgres jsonb text "
-                    "storage cannot represent")
-        for ch in s:
-            cp = ord(ch)
-            if 0xD800 <= cp <= 0xDFFF:
-                return (f"the payload contains an unpaired UTF-16 surrogate character "
-                        f"(U+{cp:04X}), which is not valid Unicode text and Postgres jsonb "
-                        f"cannot store")
+        detail = _representability_failure_for_string(s)
+        if detail is not None:
+            return f"the payload {detail}"
     return None
+
+
+def _query_string_representability_failure(name: str, value: str) -> JSONResponse | None:
+    """A12: the rule, stated once (`_representability_failure_for_string`), audited at a second
+    ingress -- EVERY string that crosses to psql argv, body-derived or query-derived, passes
+    the SAME actual-codepoint representability closure before transport. `after_slug` is the
+    only string-typed query/path parameter this service's route table declares (enumerated at
+    A12's authoring; see the module docstring and serving/README.md) -- it carried the 512-byte
+    length bound (A11) but not this representability gate at birth, so a literal NUL or an
+    unpaired surrogate inside the 512-byte domain passed straight to `_psql`, where
+    `subprocess.run` raised an uncaught `ValueError: embedded null byte` (a bare untyped 500,
+    the exact shape §9 forbids). Returns the typed 422 (representability axis, A4.1(b)'s message
+    family) naming `name` and the failure, or None when `value` is representable."""
+    detail = _representability_failure_for_string(value)
+    if detail is None:
+        return None
+    return JSONResponse(status_code=422, content={
+        "detail": f"{name} {detail} (representability axis, spec A4.1(b)/A12)"})
 
 
 def _bound_write_payload_ints(surface: str, payload: dict[str, Any]) -> JSONResponse | None:
@@ -1246,6 +1318,15 @@ def create_app(cfg: BoundaryConfig) -> FastAPI:
                 "detail": f"after_slug must be at most {MAX_AFTER_SLUG_BYTES} bytes (a slug "
                           f"over this bound names no real item any world this kernel scaffolds "
                           f"could ever open, spec A11); got {after_slug_bytes} bytes"})
+        # A12: the representability closure, generalized off the write-payload's dict shape onto
+        # THIS bare query-parameter string -- a literal U+0000 or an unpaired UTF-16 surrogate
+        # inside the 512-byte domain above still reached `_psql` unchecked pre-A12, where
+        # `subprocess.run` raised an uncaught `ValueError: embedded null byte` (a bare untyped
+        # 500). Checked after the length bound (the cheaper, purely-local check first) and
+        # before the value ever crosses to psql's `-v` argument below.
+        repr_oor = _query_string_representability_failure("after_slug", after_slug)
+        if repr_oor is not None:
+            return repr_oor
         # The slug crosses to psql as a BOUND `-v` argument (`:'after_slug'`), never spliced as
         # SQL text -- the same injection-safe substitution the write routes already use for
         # payload bodies (spec A11: "pass to psql as bound arguments through the existing
