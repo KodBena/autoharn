@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-18T07:44:41Z
-#   last-change: 2026-07-18T14:13:07Z
+#   last-change: 2026-07-18T14:34:11Z
 #   contributors: ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -235,6 +235,38 @@ divergence from the other four routes: this route's OWN default `limit` is
 response, and a 100-row default would have silently started truncating chains the old,
 unpaginated route never truncated).
 
+CURSOR HONESTY ON THE SLUG-KEYED ROUTE; THE HISTORY ROUTE'S NOT-FOUND SHAPE (spec A11,
+iteration-9 confirmation pass). Two uniformity completions:
+
+1. `GET /work/items`' pagination was unstable under concurrent insertion -- its pre-A11 cursor
+   was a `row_number() OVER (ORDER BY slug)` ordinal RECOMPUTED PER REQUEST, so an item inserted
+   mid-walk with a slug sorting before an already-served item shifted every ordinal after it
+   (witnessed: pages `[aa,cc]` then `[cc,ee]` served, against a view reading
+   `[aa,bb,cc,ee,gg]` -- `cc` served twice, `bb` never; every individual response was well-typed,
+   the UNION was silently wrong). Fix: the cursor re-keys to the view's own TRUE key,
+   `after_slug` (keyset `WHERE slug > :after_slug ORDER BY slug`, same `limit` domain, same
+   message family) -- the synthetic ordinal is retired outright, and a supplied `after_id` on
+   THIS route refuses typed 422 teaching `after_slug` (never silently ignored -- A10's own
+   lesson). Honesty bound, stated rather than overclaimed: a slug keyset structurally eliminates
+   duplication (a served slug can never be re-served -- the cursor is a VALUE, not a POSITION),
+   but a row inserted BEHIND an in-flight cursor is not visible to that walk, and cannot be under
+   any snapshot-free scheme over a non-append-monotonic key (ledger ids are append-monotonic,
+   exactly why `/rows/current` carries the STRONGER guarantee; slugs are not) -- that residual is
+   this route's NAMED, disclosed semantics: no duplicates ever; the page union equals the view
+   restricted to slugs beyond the cursor's progression; an item inserted behind the cursor
+   appears on the next walk. `after_slug` domain: text, byte-length bounded by
+   `MAX_AFTER_SLUG_BYTES = 512` (typed 422 beyond it -- a slug over 512 bytes names no real item
+   any world this kernel scaffolds), any in-domain value is a valid cursor position (keyset
+   semantics require no existence check). The slug crosses to psql as a BOUND `-v` argument
+   (`_query_json(..., extra_v={"after_slug": after_slug})`), the same injection-safe
+   substitution the write routes already use for payload bodies -- never spliced as SQL text.
+2. `GET /rows/{id}/history` answered `200 []` for a nonexistent row where sibling `GET
+   /rows/{id}` typed-404s the identical input class -- and the empty array was only an INFERRED
+   nonexistence signal (an existing row always contributes at least its own hop). Fix: a leading
+   existence check (`_row_not_found`, shared with `row_by_id`'s own 404 shape, ADR-0012 P1) --
+   a nonexistent in-domain id gets the sibling route's EXACT typed 404 (`"no row N"`); existing
+   rows are unaffected, and the recursive supersession CTE runs only after the check passes.
+
 Lazy imports are banned (CLAUDE.md, 2026-07-02): every import is top-of-file.
 """
 from __future__ import annotations
@@ -376,6 +408,14 @@ _KERNEL_CALL_SEMAPHORE = threading.BoundedSemaphore(MAX_INFLIGHT_KERNEL_CALLS)
 # honored page" coincide by construction, and only a chain longer than 1000 hops (unseen in
 # this project's own worlds) needs an explicit `after_id` hop to see the rest.
 HISTORY_DEFAULT_LIMIT = 1000
+
+# A11 item 1: `/work/items`' cursor domain bound -- the per-field reasoning A8's transport wall
+# already applied to a single argument's own margin, applied here to ONE field (never a general
+# string-length policy): a slug over 512 bytes names no real item any world this kernel
+# scaffolds could ever open (work_slug is operator-authored identifier text, not free prose), so
+# 512 is generous headroom, not a measured ceiling. Named ONCE (ADR-0012 P1) rather than an
+# inline literal at the one call site that checks it.
+MAX_AFTER_SLUG_BYTES = 512
 
 
 class PsqlInfraFailure(Exception):
@@ -654,6 +694,22 @@ def _out_of_range_id(name: str, value: int) -> JSONResponse | None:
         return JSONResponse(status_code=422, content={
             "detail": f"{name} must satisfy 0 <= {name} <= {MAX_ID} (a Postgres bigint's own "
                       f"domain, spec §3/A2.6/A4.2); got {value}"})
+    return None
+
+
+def _row_not_found(cfg: BoundaryConfig, row_id: int) -> JSONResponse | None:
+    """A11 item 2: the leading existence check `GET /rows/{id}/history` shares with its sibling
+    `GET /rows/{id}` -- named ONCE (ADR-0012 P1) so a nonexistent in-domain id gets the IDENTICAL
+    typed 404 shape (`{"detail": "no row N"}`) from both routes, never a route-local dialect.
+    `row_by_id` below does not call this helper (it already fetches the full row in one round
+    trip and 404s on a `None` result); this helper exists for a caller -- `row_history`, as of
+    A11 -- that must know existence BEFORE doing any further work (the recursive supersession
+    CTE, in `row_history`'s case), without first fetching the row's own content. Returns the
+    typed 404 `JSONResponse` when `row_id` does not exist, else `None` (the caller proceeds)."""
+    exists = bool(_query_json(
+        cfg, f"SELECT to_jsonb(EXISTS (SELECT 1 FROM {cfg.schema}.ledger WHERE id = {row_id}));"))
+    if not exists:
+        return JSONResponse(status_code=404, content={"detail": f"no row {row_id}"})
     return None
 
 
@@ -1031,6 +1087,18 @@ def create_app(cfg: BoundaryConfig) -> FastAPI:
         oor = _out_of_range_id("row_id", row_id)
         if oor is not None:
             return oor
+        # A11 item 2: the LEADING existence check -- before pagination is even validated, and
+        # before the recursive CTE below ever runs. Pre-A11 this route answered `200 []` for a
+        # nonexistent id, where the sibling GET /rows/{id} typed-404s the identical input class;
+        # the empty array was only an INFERRED nonexistence signal (an existing row always
+        # contributes at least its own hop, so "no hops" and "no such row" happened to coincide
+        # for a real row's history, but a caller had to trust that inference rather than being
+        # told). `_row_not_found` (ADR-0012 P1, named once, shared with row_by_id's own 404
+        # shape) settles existence FIRST; a nonexistent in-domain id gets the sibling route's
+        # EXACT typed 404, and the CTE below never runs for it.
+        not_found = _row_not_found(cfg, row_id)
+        if not_found is not None:
+            return not_found
         # A10: the SAME `1 <= limit <= 1000` / `after_id >= 0` discipline as the four A5.4
         # routes -- same constants, same message family (checked in the SAME order
         # /rows/current uses: limit first, then after_id's own id-domain closure). Default
@@ -1137,36 +1205,57 @@ def create_app(cfg: BoundaryConfig) -> FastAPI:
         return JSONResponse(content=rows)
 
     @app.get("/work/items")
-    def work_items(after_id: int = 0, limit: int = 100) -> Response:
+    def work_items(after_slug: str = "", limit: int = 100, after_id: int | None = None) -> Response:
         if not _regclass_exists(cfg, f"{cfg.schema}.work_item_current"):
             return capability_absent(
                 "s22-work",
                 "This world carries no work-item views (kernel/lineage/s22-work-item-ledger"
                 ".sql) -- GET /work/items is refused rather than served from a view this "
                 "world's kernel does not have.")
-        # A5.4: the SAME `limit`/`after_id` DISCIPLINE as /rows/current, but `work_item_current`
-        # has NO id-shaped key at all (kernel/lineage/s22-work-item-ledger.sql: one row per
-        # `slug`, no bigint column) -- the fixer's documented, honest fallback: a
-        # `row_number() OVER (ORDER BY slug)` ordinal, computed ONLY in this wrapper query
-        # (never stored, never claimed to be a kernel id), stands in for `id` as the pagination
-        # cursor `after_id`/`limit` compare against -- `slug` is unique per invariant 4 (one row
-        # per slug), so the ordering is deterministic and stable across requests on an unchanged
-        # view. The synthetic `rn` column is stripped back out of each row's JSON (`- 'rn'`)
-        # before it is returned, so the served row shape stays byte-identical to the view's own
-        # columns -- only the cursoring mechanics differ from the id-keyed routes.
+        # A11 item 1: `after_id` (the pre-A11 `row_number() OVER (ORDER BY slug)` synthetic
+        # ordinal cursor) is RETIRED on this route -- it was recomputed PER REQUEST, so an item
+        # inserted mid-walk with a slug sorting before an already-served item shifted every
+        # ordinal after it (witnessed: pages [aa,cc] then [cc,ee] served against a view reading
+        # [aa,bb,cc,ee,gg] -- cc served twice, bb never). The cursor re-keys to the view's OWN
+        # TRUE key: `after_slug` (keyset `WHERE slug > :after_slug ORDER BY slug`) -- a served
+        # slug can never be re-served (the cursor is a VALUE, not a POSITION), so this route's
+        # walk is duplicate-free by construction. Disclosed, named residual (spec A11, not a
+        # silent gap): a row inserted BEHIND an in-flight cursor is not visible to THAT walk --
+        # no snapshot-free scheme over a non-append-monotonic key (slugs, unlike ledger ids, are
+        # not append-monotonic) can promise otherwise -- it simply joins the NEXT walk. A
+        # supplied `after_id` on THIS route is never silently ignored (A10's own lesson, applied
+        # here too): it refuses, typed, teaching `after_slug` instead of guessing the caller's
+        # intent or quietly serving a different page shape than requested.
+        if after_id is not None:
+            return JSONResponse(status_code=422, content={
+                "detail": f"after_id is not accepted on GET /work/items -- this route pages on "
+                          f"after_slug (the view's own natural key, spec A11), never a "
+                          f"synthetic ordinal; got after_id={after_id}, resupply as "
+                          f"after_slug=<last-served-slug> instead"})
         if limit < 1 or limit > 1000:
             return JSONResponse(status_code=422, content={
                 "detail": "limit must be between 1 and 1000 (transport-level bound, ADR-0002)"})
-        oor = _out_of_range_id("after_id", after_id)
-        if oor is not None:
-            return oor
+        # A11: `after_slug`'s own domain -- byte-length <= MAX_AFTER_SLUG_BYTES, typed 422
+        # beyond it; ANY in-domain value is a valid cursor position (keyset semantics need no
+        # existence check -- unlike an id cursor, a slug that names no row simply starts the
+        # walk at the first slug greater than it, which is well-defined regardless of whether
+        # that exact slug was ever opened).
+        after_slug_bytes = len(after_slug.encode("utf-8"))
+        if after_slug_bytes > MAX_AFTER_SLUG_BYTES:
+            return JSONResponse(status_code=422, content={
+                "detail": f"after_slug must be at most {MAX_AFTER_SLUG_BYTES} bytes (a slug "
+                          f"over this bound names no real item any world this kernel scaffolds "
+                          f"could ever open, spec A11); got {after_slug_bytes} bytes"})
+        # The slug crosses to psql as a BOUND `-v` argument (`:'after_slug'`), never spliced as
+        # SQL text -- the same injection-safe substitution the write routes already use for
+        # payload bodies (spec A11: "pass to psql as bound arguments through the existing
+        # transport exactly like other string params -- no interpolation").
         rows = _query_json(
             cfg,
-            f"SELECT coalesce(jsonb_agg((to_jsonb(t) - 'rn') ORDER BY t.rn), '[]'::jsonb) FROM "
-            f"(SELECT * FROM "
-            f"   (SELECT *, row_number() OVER (ORDER BY slug) AS rn "
-            f"      FROM {cfg.schema}.work_item_current) numbered "
-            f" WHERE numbered.rn > {after_id} ORDER BY numbered.rn LIMIT {limit}) t;",
+            f"SELECT coalesce(jsonb_agg(t ORDER BY t.slug), '[]'::jsonb) FROM "
+            f"(SELECT * FROM {cfg.schema}.work_item_current WHERE slug > :'after_slug' "
+            f"ORDER BY slug LIMIT {limit}) t;",
+            extra_v={"after_slug": after_slug},
         )
         return JSONResponse(content=rows)
 

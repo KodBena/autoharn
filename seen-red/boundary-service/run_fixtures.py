@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-18T07:49:10Z
-#   last-change: 2026-07-18T14:15:14Z
+#   last-change: 2026-07-18T14:39:12Z
 #   contributors: ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
 """run_fixtures.py -- both-polarity witness for design/FABLE-LEDGER-BOUNDARY-SERVICE-SPEC.md's
 §8 witness plan (W1-W12, A2's amendment; W13-W14, A3's amendment; W15-W19, A4's amendment;
 W20-W23, A5's amendment; W21's float legs, A6's amendment; W24, A7's amendment; W25-W26,
-A8's amendment; W27, A9's amendment; W28, A10's amendment). Real infra, no mocks:
+A8's amendment; W27, A9's amendment; W28, A10's amendment; W29-W30, A11's amendment). Real
+infra, no mocks:
 CLASSIC scaffolds + manual chain applies in the TOY db (the exact pattern seen-red/
 s43-typed-verdict-write-boundary/run_fixtures.py already banks, and this fixture imports
 nothing new for scaffolding -- same helpers, re-derived here because the two fixtures scaffold
@@ -47,8 +48,9 @@ WORLDS:
                 float/exponent-form legs, `1e20` over-bound refused the same way, in-range
                 `5.0` NOT newly refused by the boundary), W22 (a raw-socket
                 trickled body, typed 408 within BODY_READ_TIMEOUT_S plus margin), W23
-                (pagination on /standing/principals and /work/items, both polarities, including
-                /work/items' id-less synthetic-ordinal fallback), W24 (a ~3000-level-nested,
+                (pagination on /standing/principals and /work/items, both polarities; the
+                /work/items leg pages on its A11 slug-keyset cursor, no concurrent write),
+                W24 (a ~3000-level-nested,
                 under-bound, otherwise-valid write body -- overflows the representability
                 scan's OWN post-parse traversal, typed 422 structure axis, server alive; W13's
                 deep-nesting leg, which overflows AT PARSE TIME instead, stays green), W25
@@ -66,7 +68,17 @@ WORLDS:
                 unpaginated chain exactly; (ii) limit=0/limit=1001/after_id=-1 each typed 422
                 naming the domain; (iii) a short chain with no parameters, byte-identical to an
                 independently-reconstructed pre-A10 unpaginated query rendered through the SAME
-                JSONResponse class), the
+                JSONResponse class), W29 (A11: /work/items' slug-keyset cursor honesty -- (i)
+                the reviewer's own concurrent-insert drive, replayed live: page 1 at limit=2
+                before a mid-walk insert, the insert, page 2 continuing from the walk's own
+                last-served cursor, no duplicate across the walk, the inserted item absent from
+                the in-flight walk and present on a fresh one; (ii) after_id supplied ->
+                typed 422 teaching after_slug, an over-512-byte after_slug -> typed 422 naming
+                the domain; (iii) an ordinary two-page walk with no concurrent write, page union
+                equals the unpaginated view), W30 (A11: /rows/{id}/history's not-found shape --
+                a nonexistent in-domain id byte-matches GET /rows/{id}'s own typed 404, and an
+                existing row's history stays byte-identical to an independently-reconstructed
+                CTE using the SAME construction the live route runs), the
                 §9/A2.1/W12 in-process route-table closure assertion, and FINALLY (destructive,
                 run last) W18b
                 (ledger_current dropped on world_b -- genuine psql exit 3 -> 500
@@ -961,14 +973,16 @@ def main() -> int:
               f"status={st22h} world={body22h.get('world')} (server alive)",
               failures)
 
-        # -- W23 (A5.4): pagination on /standing/principals and /work/items, both polarities.
-        # `/standing/principals`: WORLD B already carries >=3 principals (author, write-boundary,
-        # boundary-service) by this point, so `limit=1` genuinely tests enforcement (pre-A5 this
-        # route ignored the param and always returned the whole view). `/work/items` carries NO
-        # rows yet on WORLD B (no work_opened act in its birth sequence) -- two are opened here,
-        # through the boundary, so `limit=1` has something real to truncate; this also exercises
-        # the view's own id-less fallback ordering (ORDER BY slug via a synthetic row_number()
-        # cursor, spec A5.4's own "fixer flags a view lacking an id-shaped key" clause).
+        # -- W23 (A5.4, work/items leg RE-KEYED per A11): pagination on /standing/principals and
+        # /work/items, both polarities. `/standing/principals`: WORLD B already carries >=3
+        # principals (author, write-boundary, boundary-service) by this point, so `limit=1`
+        # genuinely tests enforcement (pre-A5 this route ignored the param and always returned
+        # the whole view). `/work/items` carries NO rows yet on WORLD B (no work_opened act in
+        # its birth sequence) -- two are opened here, through the boundary, so `limit=1` has
+        # something real to truncate; this also exercises the view's OWN natural key, `slug`, as
+        # the pagination cursor (A11 retired the pre-A11 synthetic row_number() ordinal this leg
+        # used to exercise -- the ordinal's own concurrent-insert instability is W29's, not
+        # this leg's, business; this leg stays the ordinary no-concurrent-write case).
         w23_slug_a, w23_slug_b = f"w23-item-a-{RUN_SUFFIX}", f"w23-item-b-{RUN_SUFFIX}"
         for slug in (w23_slug_a, w23_slug_b):
             v = http_post(base + "/write/ledger", {
@@ -983,11 +997,11 @@ def main() -> int:
         st23sp_oor, body23sp_oor = http_get(
             f"{base}/standing/principals?after_id=0&limit=0") if up_b else (0, {})
         st23wi_honored, page23wi_honored = http_get(
-            f"{base}/work/items?after_id=0&limit=1") if up_b else (0, [])
+            f"{base}/work/items?after_slug=&limit=1") if up_b else (0, [])
         st23wi_all, page23wi_all = http_get(
-            f"{base}/work/items?after_id=0&limit=1000") if up_b else (0, [])
+            f"{base}/work/items?after_slug=&limit=1000") if up_b else (0, [])
         st23wi_oor, body23wi_oor = http_get(
-            f"{base}/work/items?after_id=-1&limit=10") if up_b else (0, {})
+            f"{base}/work/items?after_slug=&limit=0") if up_b else (0, {})
         check("w23-pagination-both-routes-both-polarities",
               up_b
               and st23sp_honored == 200 and isinstance(page23sp_honored, list)
@@ -1003,14 +1017,14 @@ def main() -> int:
               f"n={len(page23sp_honored) if isinstance(page23sp_honored, list) else '?'} "
               f"(honored leg); /standing/principals?limit=0: status={st23sp_oor} "
               f"body={body23sp_oor} (out-of-range leg); "
-              f"/work/items?limit=1: status={st23wi_honored} "
+              f"/work/items?after_slug=&limit=1: status={st23wi_honored} "
               f"n={len(page23wi_honored) if isinstance(page23wi_honored, list) else '?'} "
-              f"(honored leg, id-less fallback ordering); "
-              f"/work/items?limit=1000: status={st23wi_all} "
+              f"(honored leg, slug-keyset ordering, A11); "
+              f"/work/items?after_slug=&limit=1000: status={st23wi_all} "
               f"slugs={sorted(r.get('slug') for r in page23wi_all) if isinstance(page23wi_all, list) else '?'} "
               f"(both fixture items present); "
-              f"/work/items?after_id=-1: status={st23wi_oor} body={body23wi_oor} "
-              f"(out-of-range leg)",
+              f"/work/items?after_slug=&limit=0: status={st23wi_oor} body={body23wi_oor} "
+              f"(out-of-range leg, limit domain)",
               failures)
 
         # -- W24 (A7): the representability scan's OWN traversal (_iter_strings) is recursive
@@ -1235,6 +1249,192 @@ def main() -> int:
               f"len={len(actual_bytes)} bytes; independently-reconstructed pre-A10 unpaginated "
               f"query, rendered through the SAME JSONResponse class: len={len(expected_bytes)} "
               f"bytes; byte-identical={actual_bytes == expected_bytes}",
+              failures)
+
+        # -- W29 (A11 item 1): the slug-keyed route's cursor honesty, three legs.
+        def _open_work_item_or_raise(slug: str) -> dict:
+            v = http_post(base + "/write/ledger", {
+                "kind": "work_opened", "statement": f"W29 fixture item {slug}",
+                "actor": author_id, "work_slug": slug, "work_title": f"W29 fixture {slug}",
+            })[1] if up_b else {}
+            if v.get("disposition") != "accepted":
+                raise RuntimeError(f"W29 fixture work_opened write refused ({slug}): {v}")
+            return v
+
+        def _work_items_page(after_slug: str, limit: int) -> tuple[int, object]:
+            return http_get(f"{base}/work/items?after_slug={after_slug}&limit={limit}")
+
+        # Leg (i): the reviewer's exact concurrent-insert drive, replayed against the slug
+        # keyset. A dedicated prefix (`w29_floor`) scopes this leg's own walk away from every
+        # OTHER slug this suite opens (W11's present-legs probe opens none; W23 opens
+        # "w23-item-*", which sorts BEFORE "w29-" -- ASCII '3' < '9' -- so it never lands inside
+        # this leg's own after_slug range). Items aa/cc/ee/gg are opened FIRST (bb deliberately
+        # withheld); page 1 at limit=2, starting just past the floor, must return exactly
+        # [aa, cc] -- bb does not exist yet. bb is then opened (the concurrent insert). The walk
+        # CONTINUES from cursor "cc" (the actual last slug page 1 returned, not a re-derived
+        # value) at limit=2, and must return exactly [ee, gg] -- bb sorts BEHIND the already-
+        # advanced cursor, so it is invisible to this in-flight walk (A11's own disclosed
+        # residual), never duplicating cc or silently appearing out of order. A FRESH walk from
+        # the same floor must include bb -- the named semantics ("an item inserted behind the
+        # cursor appears on the next walk") witnessed, not just stated.
+        w29_prefix = f"w29-{RUN_SUFFIX}-"
+        w29_floor = w29_prefix  # sorts before every w29-prefixed slug, after every other fixture's own prefix
+        w29_slugs = {k: f"{w29_prefix}{k}" for k in ("aa", "bb", "cc", "ee", "gg")}
+        for key in ("aa", "cc", "ee", "gg"):
+            _open_work_item_or_raise(w29_slugs[key])
+
+        st29i_p1, page29i_p1 = _work_items_page(w29_floor, 2) if up_b else (0, [])
+        p1_slugs = [r.get("slug") for r in page29i_p1] if isinstance(page29i_p1, list) else []
+
+        _open_work_item_or_raise(w29_slugs["bb"])  # the concurrent insert, mid-walk
+
+        cursor_after_p1 = p1_slugs[-1] if p1_slugs else w29_floor
+        st29i_p2, page29i_p2 = _work_items_page(cursor_after_p1, 2) if up_b else (0, [])
+        p2_slugs = [r.get("slug") for r in page29i_p2] if isinstance(page29i_p2, list) else []
+
+        st29i_fresh, page29i_fresh = _work_items_page(w29_floor, 10) if up_b else (0, [])
+        fresh_slugs = [r.get("slug") for r in page29i_fresh] if isinstance(page29i_fresh, list) else []
+
+        walk_slugs = p1_slugs + p2_slugs
+        check("w29i-work-items-concurrent-insert-no-duplicate-behind-cursor-joins-next-walk",
+              up_b
+              and st29i_p1 == 200 and p1_slugs == [w29_slugs["aa"], w29_slugs["cc"]]
+              and st29i_p2 == 200 and p2_slugs == [w29_slugs["ee"], w29_slugs["gg"]]
+              and len(walk_slugs) == len(set(walk_slugs))
+              and w29_slugs["bb"] not in walk_slugs
+              and st29i_fresh == 200 and w29_slugs["bb"] in fresh_slugs,
+              f"page 1 (after_slug={w29_floor!r}, limit=2, BEFORE bb opened): status={st29i_p1} "
+              f"slugs={p1_slugs}; bb opened (concurrent insert); page 2 continuing from cursor "
+              f"{cursor_after_p1!r} (the walk's own last-served slug), limit=2: status={st29i_p2} "
+              f"slugs={p2_slugs}; walk union={walk_slugs} (no duplicate: "
+              f"{len(walk_slugs) == len(set(walk_slugs))}; bb absent from this walk: "
+              f"{w29_slugs['bb'] not in walk_slugs}); FRESH walk from the same floor, limit=10: "
+              f"status={st29i_fresh} slugs={fresh_slugs} (bb now present: "
+              f"{w29_slugs['bb'] in fresh_slugs})",
+              failures)
+
+        # Leg (ii): after_id supplied to /work/items -> typed 422 teaching after_slug; an
+        # over-512-byte after_slug -> typed 422 naming the domain.
+        st29ii_afterid, body29ii_afterid = http_get(
+            f"{base}/work/items?after_id=0") if up_b else (0, {})
+        long_after_slug = "x" * (boundary_service.MAX_AFTER_SLUG_BYTES + 88)
+        st29ii_long, body29ii_long = http_get(
+            f"{base}/work/items?after_slug={long_after_slug}&limit=10") if up_b else (0, {})
+        check("w29ii-work-items-after-id-refused-and-over-domain-after-slug-refused",
+              up_b
+              and st29ii_afterid == 422 and "after_slug" in body29ii_afterid.get("detail", "")
+              and st29ii_long == 422
+              and str(boundary_service.MAX_AFTER_SLUG_BYTES) in body29ii_long.get("detail", ""),
+              f"after_id=0 supplied on /work/items: status={st29ii_afterid} "
+              f"body={body29ii_afterid} (must teach after_slug, never silently ignored); "
+              f"after_slug of {len(long_after_slug)} bytes (over "
+              f"{boundary_service.MAX_AFTER_SLUG_BYTES}): status={st29ii_long} "
+              f"body={body29ii_long}",
+              failures)
+
+        # Leg (iii): an ordinary two-page walk with NO concurrent write -- page union equals the
+        # unpaginated view exactly. A dedicated prefix, isolated from leg (i)'s own slugs and
+        # from every other fixture's own work items opened above.
+        w29iii_prefix = f"w29c-{RUN_SUFFIX}-"
+        w29iii_slugs = [f"{w29iii_prefix}{k}" for k in ("m1", "m2", "m3")]
+        for slug in w29iii_slugs:
+            _open_work_item_or_raise(slug)
+
+        st29iii_full, page29iii_full = _work_items_page(w29iii_prefix, 1000) if up_b else (0, [])
+        full_slugs = {r.get("slug") for r in page29iii_full} if isinstance(page29iii_full, list) else set()
+
+        union_slugs: set[str] = set()
+        cursor29iii = w29iii_prefix
+        page29iii_statuses = []
+        for _ in range(10):  # generous cap -- 3 items at limit=2 needs at most 2 pages
+            st_p, page = _work_items_page(cursor29iii, 2)
+            page29iii_statuses.append(st_p)
+            if not isinstance(page, list) or not page:
+                break
+            union_slugs |= {r.get("slug") for r in page}
+            cursor29iii = page[-1]["slug"]
+            if len(page) < 2:
+                break
+
+        check("w29iii-work-items-two-page-walk-union-equals-unpaginated-no-concurrent-write",
+              up_b and st29iii_full == 200 and all(s == 200 for s in page29iii_statuses)
+              and set(w29iii_slugs) <= full_slugs
+              and union_slugs == full_slugs,
+              f"3 fixture items {w29iii_slugs}; unpaginated (after_slug={w29iii_prefix!r}, "
+              f"limit=1000): status={st29iii_full} slugs={sorted(full_slugs)}; paged walk at "
+              f"limit=2: page statuses={page29iii_statuses}, union={sorted(union_slugs)} "
+              f"(equal to unpaginated: {union_slugs == full_slugs})",
+              failures)
+
+        # -- W30 (A11 item 2): the history route's not-found shape matches its sibling; an
+        # existing row's history is unchanged by the leading existence check.
+        def _raw_get(url: str) -> tuple[int, bytes]:
+            try:
+                with urllib.request.urlopen(url, timeout=10) as resp:
+                    return resp.status, resp.read()
+            except urllib.error.HTTPError as e:
+                return e.code, e.read()
+
+        # In-domain (well under MAX_ID) but essentially guaranteed absent from a freshly
+        # scaffolded scratch schema's own small, sequential ledger ids.
+        w30_missing_id = 999_999_999_999
+        st30_hist, raw30_hist = _raw_get(
+            f"{base}/rows/{w30_missing_id}/history") if up_b else (0, b"")
+        st30_row, raw30_row = _raw_get(f"{base}/rows/{w30_missing_id}") if up_b else (0, b"")
+
+        # An EXISTING row's history: reuse W28's own 5-hop chain head (`w28_head`) and its own
+        # `BoundaryConfig` (`w28_cfg`), independently reconstructing the SAME CTE construction
+        # `row_history`'s live code runs (unchanged by A11 -- only the LEADING existence check is
+        # new, and it falls through instantly, returning `None`, for a row that exists), and
+        # comparing the actual live no-query-parameters response against it byte-for-byte,
+        # rendered through the SAME JSONResponse class -- the identical technique W28iii already
+        # uses above, re-run here to prove A11 changed nothing for the existing-row case.
+        w30_sql = (
+            f"WITH RECURSIVE chain(id) AS ("
+            f"  SELECT {w28_head}::bigint"
+            f"  UNION"
+            f"  SELECT l.id FROM {world_b}.ledger l JOIN chain c ON l.id = c.id"
+            f"),"
+            f"chain_up AS ("
+            f"  SELECT id FROM chain"
+            f"  UNION"
+            f"  SELECT l.supersedes FROM {world_b}.ledger l JOIN chain_up c ON l.id = c.id "
+            f"    WHERE l.supersedes IS NOT NULL"
+            f"),"
+            f"chain_full(id) AS ("
+            f"  SELECT id FROM chain_up"
+            f"  UNION"
+            f"  SELECT l.id FROM {world_b}.ledger l JOIN chain_full c "
+            f"    ON l.supersedes = c.id"
+            f")"
+            f"SELECT coalesce(jsonb_agg(t.row ORDER BY t.id), '[]'::jsonb) FROM ("
+            f"  SELECT l.id AS id, to_jsonb(l) || jsonb_build_object("
+            f"    'superseded_by', (SELECT s.id FROM {world_b}.ledger s "
+            f"                      WHERE s.supersedes = l.id)) AS row "
+            f"  FROM {world_b}.ledger l WHERE l.id IN (SELECT id FROM chain_full) "
+            f"    AND l.id > 0 "
+            f"  ORDER BY l.id LIMIT 1000"
+            f") t;"
+        )
+        w30_expected_rows = boundary_service._query_json(w28_cfg, w30_sql)
+        w30_expected_bytes = bytes(boundary_service.JSONResponse(content=w30_expected_rows).body)
+        st30_existing, raw30_existing = _raw_get(
+            f"{base}/rows/{w28_head}/history") if up_b else (0, b"")
+
+        parsed30_hist = json.loads(raw30_hist) if raw30_hist else {}
+        check("w30-history-not-found-matches-sibling-and-existing-row-unchanged",
+              up_b
+              and st30_hist == 404 and st30_row == 404 and raw30_hist == raw30_row
+              and parsed30_hist.get("detail") == f"no row {w30_missing_id}"
+              and st30_existing == 200 and raw30_existing == w30_expected_bytes,
+              f"nonexistent id {w30_missing_id}: GET /rows/{{id}}/history status={st30_hist} "
+              f"raw={raw30_hist!r}; GET /rows/{{id}} (sibling) status={st30_row} "
+              f"raw={raw30_row!r}; byte-identical={raw30_hist == raw30_row}; "
+              f"existing row (W28's chain head {w28_head}) history, no query parameters: "
+              f"status={st30_existing} len={len(raw30_existing)} bytes vs an independently-"
+              f"reconstructed CTE (the SAME construction row_history's live code runs) "
+              f"len={len(w30_expected_bytes)} bytes, "
+              f"byte-identical={raw30_existing == w30_expected_bytes}",
               failures)
 
         # -- W9 streaming-abort leg: UNEXERCISED, named (spec A3.4's own carve-out, "exercised
@@ -1591,7 +1791,7 @@ def main() -> int:
     if failures:
         print("FAILURES:", failures)
         return 1
-    print("ALL CASES OK -- boundary-service both-polarity proof (W1-W7, W9-W28 live; "
+    print("ALL CASES OK -- boundary-service both-polarity proof (W1-W7, W9-W30 live; "
           "W8 and the W9 streaming-abort leg UNEXERCISED, named).")
     return 0
 
