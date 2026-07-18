@@ -366,6 +366,64 @@ lets a handful of cheap malformed payloads counterfeit outage signal in the logs
 axes; the refuse axis's typed-shape list gains `unclassified_failure`; `infra_failure`'s
 issuing condition narrows to connection-level (exit 2 / timeout) only.
 
+**A5 (2026-07-18) — iteration-3 independent re-review findings, adjudicated.** Trigger:
+independent fresh-context re-review of the hardened build (merge `7016a24`), two blind
+reviewers on distinct angles. Every A2/A3/A4 behavior held under live re-exercise (full
+suite green, all nineteen witnesses); no crash/wedge/leak class remains. Five findings —
+including the loop's first fix-introduced regression, which is why re-review exists.
+Adjudication:
+
+1. **A4.1's representability scan is denominated on the wrong text (REGRESSION, mandatory,
+   witnessed both ways):** the scan inspects the *escaped* serialization, so a payload
+   containing the literal six characters `\u0000` (a backslash, then `u0000` — documenting
+   an escape, a regex, a code snippet; NO NUL codepoint present) is falsely refused with a
+   message asserting a NUL that is not there — the exact lying-signature class A4 exists to
+   close, produced by A4's own fix. jsonb stores that payload fine. **Fix:** the scan runs
+   over the ACTUAL codepoints of the parsed value (walk the parsed object's strings and
+   keys, or equivalently scan a non-escaping `ensure_ascii=False` serialization), refusing
+   only a real U+0000 or a real unpaired surrogate. The false-positive input becomes a
+   GREEN witness leg; the true-positive legs stay red.
+2. **Write-payload integer fields lack the id-domain bound (witnessed):** a finite integer
+   above bigint range in an id-referencing payload field passes every A4 axis, reaches
+   psql, and dies at exit 3 → 500 `unclassified_failure` whose message is false for this
+   ordinary caller value. Worse, the witnessed failure point is *inside
+   `kernel.journal_write_refusal`* — a genuine s43 kernel defect (the refusal-journaling
+   path itself overflows; sibling field `supersedes` gets a clean typed `refused`), filed
+   as constitutional intake at work item `s43-refusal-journal-bigint-overflow` (row 1581),
+   NOT fixed by this service. **Boundary fix:** every integer-typed field the payload
+   contract declares (the pydantic models are the enumeration authority) is bounded to
+   `0 ≤ v ≤ 2^63 − 1` at the parse boundary → typed 422 naming the field and bound —
+   A4.2's discipline propagated from path/query to body, completing the id-domain class.
+   No semantic validation beyond the domain bound (the kernel stays the authority).
+3. **The time axis was half-closed (witnessed):** A3.1 bounded the psql phase; the raw-body
+   READ phase has no bound — a trickled body holds its request open indefinitely (48 s
+   witnessed; /health unaffected, so per-request only). **Fix:** one named constant
+   `BODY_READ_TIMEOUT_S = 30` enforced around the body stream read; expiry → typed 408
+   `{"disposition": "body_read_timeout", "timeout_s": ..., "message": <teach-text>}`.
+   §9's time axis now names both legs (read phase, psql phase), symmetric with A2.2's
+   two size checkpoints.
+4. **Pagination discipline applied to two of four read routes (both reviewers, witnessed):**
+   `/standing/principals` and `/work/items` silently accept-and-discard `limit`/`after_id`
+   and return the whole view — the ADR-0012 applied-once-not-propagated shape, and a
+   silently no-op'd parameter is the ADR-0002 rule-4 class. **Fix:** both routes gain the
+   SAME declared `limit`/`after_id` discipline as `/rows/current` and `/credited`
+   (1..1000, ≥ 0, typed 422 outside, honored in SQL with stable id-ordered pagination —
+   using each view's id-shaped key; the fixer flags if a view lacks one and falls back to
+   a documented deterministic ordering). §3's table now names the bounds on all four.
+5. **Framework-owned parameter-coercion 422 on matched read routes — ACCEPTED AS-IS,
+   named (the A3.3 precedent):** a non-integer value for an int-typed path/query param
+   returns FastAPI's own untyped-list 422 shape. This sits at the framework's transport
+   layer, predates every amendment, and carries no false cause statement; §9 names it as
+   the delegated-to-framework coercion sub-axis. Revisit only if a consumer demonstrates
+   harm.
+
+§8 gains: **W20** literal-`\u0000`-text accepted (green) while real-NUL and unpaired
+surrogate stay refused (red); **W21** over-bigint integer payload field → typed 422 naming
+field and bound; **W22** trickled body → typed 408 within `BODY_READ_TIMEOUT_S` + margin;
+**W23** pagination on `/standing/principals` and `/work/items`, both polarities (honored
+`limit=1`; out-of-range → typed 422). §9 is amended in place per items 1–4; the refuse
+axis's typed-shape list gains `body_read_timeout`.
+
 ## License
 
 Public Domain (The Unlicense).
