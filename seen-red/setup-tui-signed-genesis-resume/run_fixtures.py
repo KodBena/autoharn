@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-19T03:54:23Z
-#   last-change: 2026-07-19T03:55:12Z
+#   last-change: 2026-07-19T04:19:45Z
 #   contributors: ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -192,7 +192,7 @@ def real_headless_keygen_operator(name: str, email: str, gnupghome: str | None, 
     fprs = signed_genesis._secret_key_fingerprints(gnupghome)
     assert fprs, f"headless keygen produced no secret key in {gnupghome}"
     return signed_genesis.KeygenResult(gnupghome=gnupghome, fingerprint=fprs[-1], argv=argv,
-                                        scratch=False, ok=True)
+                                        scratch=False, returncode=r.returncode)
 
 
 # Captured at import time, BEFORE `main()` ever patches `signed_genesis.sign_statement` -- the

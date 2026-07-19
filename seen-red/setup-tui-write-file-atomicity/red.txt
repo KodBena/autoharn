@@ -1,0 +1,26 @@
+seen-red/setup-tui-write-file-atomicity -- banked RED evidence (both-polarity proof, fixture-census)
+
+Ledger row 1810 finding 1: tools/setup_tui/runner.py's write_file was truncate-then-write
+(open(path, "w") then f.write(content)) -- a kill anywhere between the open() call (which
+truncates the target to zero bytes AT OPEN TIME) and the write() call returning left the target
+in a THIRD state, neither its old content nor its new content. This sits directly beneath the
+marker-replace machinery (durable_decisions.compile_claude_md, signed_genesis.
+discharge_keys_readme) built to survive exactly this kind of death mid-flow. Case RED loads the
+OLD implementation straight from commit 7b893f0 (via `git show`, executed in an isolated
+namespace) and demonstrates the hazard is real: a mid-write kill leaves the target truncated to
+empty. Cases GREEN 1-4 prove the fixed implementation (temp-file write in the target's own
+directory + os.replace) is atomic under a simulated kill between the temp-write and the replace,
+that the normal-write and dry-run contracts are unchanged, and (GREEN 4, added after an
+independent out-of-frame hack-rationalization audit of this same fix caught it: NamedTemporaryFile
+defaults to mode 0600 regardless of umask, so the first version of this fix silently narrowed
+every write target's permissions on every write) that a target's existing file mode survives a
+write unchanged.
+
+Real captured stdout, 2026-07-19, a clean run against this commit's tree (zero residue, exit 0):
+
+case RED ok: the OLD write_file (7b893f0) left '/tmp/setup-tui-write-file-atomicity-v60quuvy/target.txt' truncated to EMPTY (neither pre- nor post-state) after a mid-write kill -- the hazard row 1810 finding 1 names is real, not hypothetical
+case GREEN 1 ok: a normal write_file call still performs a real write and returns True -- the pre-existing contract is unbroken
+case GREEN 2 ok: a simulated kill between the temp-file write and os.replace left '/tmp/setup-tui-write-file-atomicity-v60quuvy/target.txt' byte-identical to its pre-write state and orphaned exactly one predictably-named temp file ('.target.txt.2klgmxbw.tmp') rather than silently cleaning it up
+case GREEN 3 ok: dry_run=True still returns False and touches nothing -- the atomicity rewrite left the dry-run contract unchanged
+case GREEN 4 ok: a target chmod'd to 0644 before the write stays 0644 after it (NamedTemporaryFile's own 0600 default does not leak through)
+ALL CASES OK -- tools/setup_tui/runner.py write_file: pre-fix truncate-then-write hazard demonstrated red, then the fixed temp-write+os.replace implementation proven atomic under a simulated kill between temp-write and replace, plus normal, dry-run, and file-mode contracts unbroken

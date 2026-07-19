@@ -1,6 +1,6 @@
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-18T21:34:05Z
-#   last-change: 2026-07-19T03:44:55Z
+#   last-change: 2026-07-19T04:11:01Z
 #   contributors: ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -1006,10 +1006,13 @@ def screen_signed_genesis(ui, cl, state):
                                "instead of generating a NEW key?", default=True):
                     ui.say(f"  RESUMING with existing fingerprint {resume.fingerprint} -- no "
                            f"new key generated.")
+                    # returncode=None (KeygenResult's own docstring): no gpg subprocess ran here
+                    # at all -- this is a reuse of an already-verified existing key, the explicit
+                    # derivable input rather than a hand-set ok=True (ledger row 1810 finding 2).
                     keygen = signed_genesis.KeygenResult(
                         gnupghome=gnupghome, fingerprint=resume.fingerprint,
                         argv=["(resumed -- existing key reused, no keygen invoked)"],
-                        scratch=False, ok=True)
+                        scratch=False, returncode=None)
                 else:
                     ui.say("  REFUSED: declined to resume -- refusing to generate a SECOND key "
                            "over an existing partial ceremony (never a silent double-keygen). "
