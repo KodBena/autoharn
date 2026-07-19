@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-19T01:17:49Z
-#   last-change: 2026-07-19T01:52:21Z
+#   last-change: 2026-07-19T02:45:59Z
 #   contributors: ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -30,6 +30,20 @@ nonexistent-destination precondition), once `--dry-run` -- and diffs the two run
 `-prefixed argv-echo lines (runner.py's `run_command`/`start_background`, which echo
 unconditionally regardless of `dry_run`) for byte equality, order included.
 
+WGF -- the governed-files exposure's LIVE end-to-end witness (design/FABLE-SETUP-TUI-SPEC.md
+2026-07-19 amendment, commission ledger row 1730; tools/setup_tui/governed_files.py's own module
+docstring, the CORRECTED single-writer design): WDR1's own real birth now runs the fork/target
+screen for real (fresh mode, extending the pattern set) instead of skipping it, so this fixture
+gets this witness for free from infrastructure it already pays for. Asserts, against the SAME
+real destination, AFTER both `new-project.sh` invocations this flow makes (screen_birth's
+`--new-world` call AND screen_boundary's later classic-mode `--force` re-scaffold, which rewrites
+the SAME `.claude/` wiring): the FINAL `.claude/governed_files.json` on disk still carries the
+extended set, parsed by hooks/pretooluse_change_gate.py's OWN `_load_governed_patterns` (imported
+read-only, never edited) -- proving the operator's screen-3 choice survives BOTH writers rather
+than being silently clobbered back to the bare default by the second one (the exact hazard an
+out-of-frame review caught in this feature's first-pass design, which wrote the file directly at
+screen 3 and raced `new-project.sh`'s own later unconditional rewrite).
+
 Real infra, no mocks, zero residue (every scratch world torn down in a `finally`, every scratch
 dir removed). Needs HARNESS_PGHOST (or EPISTEMIC_PGHOST, or a deployment.json -- see
 filing/pghost_resolve.py) pointing at a reachable cluster with a `toy` database, AND
@@ -42,6 +56,7 @@ Exit 0 if every case matches (or infra is UNEXERCISED); 1 otherwise. Lazy import
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 import re
 import shutil
@@ -54,8 +69,11 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
 sys.path.insert(0, str(REPO / "filing"))
+sys.path.insert(0, str(REPO / "hooks"))
 
 from pghost_resolve import resolve_pghost  # noqa: E402
+import pretooluse_change_gate  # noqa: E402  -- the governed-files witness's REAL contract
+# (its own _load_governed_patterns), imported read-only, never edited: see WGF below.
 
 PGDB = "toy"
 VENV_PYTHON = os.path.expanduser("~/w/vdc/venvs/generic/bin/python")
@@ -149,13 +167,29 @@ def main() -> int:
         answers_a = "\n".join([
             "y",                                                  # preflight
             "y", "existing", PGDB,                        # substrate
-            "n",                                                  # fork-target skip
+            "y", "fresh", dest_a, "y", ".ts,.vue,.html",           # fork-target: destination
+                                                                    # (fresh mode -- WGF's own
+                                                                    # live half needs a REAL
+                                                                    # fork/target pass, not the
+                                                                    # skip this fixture used
+                                                                    # before) + governed-files
+                                                                    # extend (commission row
+                                                                    # 1730's own witnessed
+                                                                    # specimen extensions)
             "y", scratch_world_a, os.path.join(scratch, "reh_a"),  # rehearsal
-            "y", world_a, dest_a, world_a,                        # birth
+            "y", world_a, world_a,                                # birth: confirm, world, name
+                                                                    # (dest already set by
+                                                                    # fork-target above)
+            "n",                                                   # principals-authority skip
+                                                                    # (design/FABLE-SETUP-TUI-
+                                                                    # PRINCIPALS-AUTHORITY-
+                                                                    # SPEC.md, inserted between
+                                                                    # Birth and Signed genesis)
             "n",                                                   # signed-genesis skip (design/
                                                                     # FABLE-SETUP-TUI-SIGNED-
                                                                     # GENESIS-SPEC.md, inserted
-                                                                    # between Birth and Boundary)
+                                                                    # between Principals &
+                                                                    # authority and Boundary)
             "y", "y",                                             # boundary configure + start
             "n",                                                  # observability skip
             "y",                                                  # hydration run
@@ -168,6 +202,22 @@ def main() -> int:
         assert cp.returncode == 0, f"WDR1 setup (real birth) failed: {out_a[-2000:]}"
         assert "Traceback" not in out_a, out_a[-2000:]
         live_worlds.append((world_a, dest_a))
+
+        # WGF (module docstring): by this point BOTH new-project.sh invocations this flow makes
+        # have run against dest_a -- screen_birth's --new-world call, AND screen_boundary's
+        # later classic-mode --force re-scaffold (the "y", "y" boundary-configure answers above).
+        # The FINAL governed_files.json on disk must still carry the extended set, parsed by the
+        # REAL change-gate loader -- proving the second writer did not clobber the first.
+        gf_path = os.path.join(dest_a, ".claude", "governed_files.json")
+        gf_patterns = pretooluse_change_gate._load_governed_patterns(gf_path)
+        assert gf_patterns == ["*.py", "*.ts", "*.vue", "*.html"], (
+            f"WGF: expected the extended pattern set to survive both new-project.sh writers "
+            f"(birth + boundary's re-scaffold), got {gf_patterns!r} from {gf_path} -- "
+            f"{out_a[-2000:]}")
+        print(f"WGF ok: the extended governed-files pattern set survives BOTH new-project.sh "
+              f"writers (screen_birth's --new-world call and screen_boundary's later classic-"
+              f"mode re-scaffold) and parses correctly through hooks/pretooluse_change_gate.py's "
+              f"OWN _load_governed_patterns: {gf_patterns}")
 
         m = re.search(r"pid (\d+), http://127\.0\.0\.1:(\d+)", out_a)
         assert m, f"WDR1 setup: no 'service started pid ...' checklist row found: {out_a[-1500:]}"
@@ -236,8 +286,10 @@ def main() -> int:
             "n",
             "y", scratch_world_b, os.path.join(scratch, "reh_b"),
             "y", world_b, dest_b, world_b,
+            "n",               # principals-authority skip (design/FABLE-SETUP-TUI-PRINCIPALS-
+                                 # AUTHORITY-SPEC.md, inserted between Birth and Signed genesis)
             "n",               # signed-genesis skip (design/FABLE-SETUP-TUI-SIGNED-GENESIS-
-                                 # SPEC.md, inserted between Birth and Boundary)
+                                 # SPEC.md, inserted between Principals & authority and Boundary)
             "y", "y",         # boundary configure + in-process start
             "n",               # observability skip
             "n",               # hydration skip -- keeps this leg independent of a live led

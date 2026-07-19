@@ -1,14 +1,16 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-18T21:34:30Z
-#   last-change: 2026-07-19T01:43:42Z
+#   last-change: 2026-07-19T02:13:56Z
 #   contributors: ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
 """tools/setup_tui/app.py -- entry point for the guided setup wizard
-(design/FABLE-SETUP-TUI-SPEC.md). Runs `tools/setup_tui/screens.py`'s ten screens in order
-(design/FABLE-SETUP-TUI-SIGNED-GENESIS-SPEC.md's "Signed genesis" screen sits between Birth and
-Boundary, commission ledger rows 1724/1725),
+(design/FABLE-SETUP-TUI-SPEC.md). Runs `tools/setup_tui/screens.py`'s eleven screens in order
+(design/FABLE-SETUP-TUI-SIGNED-GENESIS-SPEC.md's "Signed genesis" screen sits between Principals
+& authority and Boundary, commission ledger rows 1724/1725; design/FABLE-SETUP-TUI-PRINCIPALS-
+AUTHORITY-SPEC.md's "Principals & authority" screen sits between Birth and Signed genesis,
+commission ledger row 1727),
 via the numbered-menu `Ui` backend (`tools/setup_tui/ui.py`) -- either interactive (a human at
 the keyboard) or `--scripted <answers-file>` (the SAME screen functions, the SAME `Ui` call
 sites, answers sourced from a file instead of stdin -- see `ui.py`'s own docstring for why this
@@ -21,10 +23,10 @@ Usage:
     python3 -m tools.setup_tui.app --dry-run --scripted /path/to/answers.txt
 
 `--start-at <screen>` skips straight to a named screen (preflight, substrate, fork-target,
-rehearsal, birth, signed-genesis, boundary, observability, hydration, checklist) -- useful for a
-witness run
-that only exercises one screen's flow rather than replaying the whole ten-screen sequence every
-time (still drives the same screen function, same Ui, same checklist).
+rehearsal, birth, principals-authority, signed-genesis, boundary, observability, hydration,
+checklist) -- useful for a witness run
+that only exercises one screen's flow rather than replaying the whole eleven-screen sequence
+every time (still drives the same screen function, same Ui, same checklist).
 
 `--dry-run` (design/FABLE-SETUP-TUI-SPEC.md 2026-07-19 amendment) runs the SAME ten screens,
 composes with `--scripted` and `--start-at` unchanged, but performs no destructive or externally
