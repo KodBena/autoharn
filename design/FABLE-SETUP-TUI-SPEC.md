@@ -93,6 +93,40 @@ never a traceback) when one is missing.** The boundary screen's
 nonexistent-destination crash was the witnessed specimen; its repair is this rule's
 first instance, not a one-off.
 
+## Amendment — 2026-07-19: `--dry-run`, the nondestructive rehearsal of the whole flow
+
+Commission: ledger row 1719 (maintainer, verbatim there; the ask in one line: a
+nondestructive option showing at the end what would have been done, "so I don't
+mess up any directory by mistake"). The rule, binding on every screen present and
+future:
+
+- Under `--dry-run`, the TUI performs NO destructive or externally visible act:
+  no file created or modified outside its own process-private temp space, no
+  database act of any kind, no `led` write, no process started, no port bound.
+  Read-only probes (preflight checks, connection probes, reading the operator's
+  pg_hba copy, globbing `law/adr/`) remain live — a dry run that fakes its reads
+  is a lie, not a rehearsal.
+- Every screen computes its would-be acts anyway and records them: the EXACT
+  command argv it would run (rule 1's show-the-command discipline, unchanged),
+  the exact file paths it would write with a one-line content summary each, and
+  the ledger rows it would write verbatim. The end screen renders these as a
+  **WOULD-DO table** — the dry-run counterpart of the witnessed checklist, same
+  per-item discipline, item status `WOULD-DO` instead of `WITNESSED`.
+- PREPARED blocks (cluster-host copy-paste acts) are displayed as normal — they
+  were already nondestructive — but their "press enter when done" verification
+  gates are skipped and recorded as `DRY-SKIPPED`, never silently passed.
+- `--dry-run` composes with `--scripted` and `--start-at`; the out-of-sequence
+  amendment binds unchanged (a dry run validates every precondition it can
+  check read-only and records honestly as `DRY-SKIPPED` any it cannot).
+- Witnesses for the build that delivers this: **WDR1** a full dry-run flow
+  against a real destination directory leaves the filesystem byte-identical
+  (before/after tree hash compared mechanically) and writes zero ledger rows;
+  **WDR2** parity — on the scripted happy path, the WOULD-DO table's argv list
+  equals the argv list a real scratch run actually executes (compared
+  mechanically, order included); **WDR3** a dry run that reaches a refusal
+  (hostile input) refuses identically to the live path — validation is never
+  weakened by dry-run.
+
 ## Build conditions
 
 Lives under `tools/setup_tui/`; no lazy imports; gates apply; no edits to
