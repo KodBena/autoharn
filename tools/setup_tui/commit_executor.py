@@ -179,7 +179,7 @@ class ExecutionResult:
 
 
 OnStep = Callable[[int, PlanEntry], None]
-OnResult = Callable[[int, PlanEntry, EntryResult], None]
+OnResult = Callable[[int, PlanEntry, EntryResult, "subprocess.Popen | None"], None]
 
 
 def execute(
@@ -203,7 +203,17 @@ def execute(
     per spec §2.3's "checklist per entry" and the lesson-line-at-execution-time rule. Neither
     callback may raise for a reason internal to this function's own control flow -- an exception
     from a callback propagates, which is the correct behavior (a UI callback that crashes should
-    stop the commit exactly like a genuine bug would, not be swallowed)."""
+    stop the commit exactly like a genuine bug would, not be swallowed).
+
+    PHASE-2 FIX (caught live against real Postgres + a real boundary_service, seen-red/setup-tui-
+    boundary-proc-cleanup): `on_result`'s FOURTH argument is the entry's own started `Popen`
+    (`None` for anything but a just-succeeded `BackgroundAct`) -- passed DIRECTLY, at the moment
+    of the callback, rather than only being recoverable from this function's own RETURN VALUE
+    (`ExecutionResult.background_procs`). A caller that needs the handle to survive a LATER
+    entry's crash (screens.py's own `state["boundary_proc"]`, read by app.py's abnormal-exit
+    cleanup) cannot wait for `execute()` to return -- if a later on_result callback itself raises,
+    `execute()` never returns at all, and the handle recorded only in its local scope is lost with
+    it. Passing the proc through the callback closes that gap."""
     os.makedirs(dest, exist_ok=True)
     journal = CommitJournal.open_or_create(journal_path(dest), len(plan.entries))
     bindings: dict[str, str] = {}
@@ -256,7 +266,7 @@ def execute(
                 bindings[entry.produces] = result.detail
             journal.mark_done(i)
         if on_result is not None:
-            on_result(i, entry, result)
+            on_result(i, entry, result, proc)
         if not result.ok:
             return ExecutionResult(bindings=bindings, entry_results=entry_results, completed=False,
                                     background_procs=background_procs)

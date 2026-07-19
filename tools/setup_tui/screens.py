@@ -603,6 +603,22 @@ def screen_principals_authority(ui, cl, state):
     queued_names: set[str] = state.setdefault("planned_principal_names", set())
 
     dest_exists = os.path.isdir(dest)
+    # Out-of-sequence-entry amendment (design/FABLE-SETUP-TUI-SPEC.md 2026-07-19): a nonexistent
+    # `dest` is legitimate ONLY when THIS session already queued a birth for it
+    # (`state["dest_would_exist"]`, set by screen_birth/screen_fork_target) -- a genuinely
+    # out-of-sequence entry (no birth in this run at all, e.g. `--start-at principals-authority`
+    # against a path nobody ever discussed) must refuse legibly here, the same precondition check
+    # every other screen in this module already carries. PRODUCT FIX (not a fixture issue): an
+    # earlier pass of this rewrite let ANY nonexistent `dest` fall through to the spec §2.7
+    # scaffold-base display below, silently treating a true out-of-sequence entry as "not yet
+    # born, normal sequence" -- caught live against real Postgres (seen-red/setup-tui-principals-
+    # authority WP6a).
+    if not dest_exists and not state.get("dest_would_exist"):
+        ui.say(f"  REFUSED: destination directory '{dest}' does not exist -- nothing to "
+               f"constitute against. Run a birth first (or check the path), then retry this "
+               f"screen.")
+        cl.add("principals-authority", "destination exists", ck.REFUSED, f"'{dest}' not a directory")
+        return state
     if dest_exists:
         legacy_led = os.path.join(dest, "legacy", "led")
         if not os.path.isfile(legacy_led):
@@ -1224,11 +1240,22 @@ def screen_hydration(ui, cl, state):
 # pre-commit table would show, since both are plan.render() on the same Plan).
 # ---------------------------------------------------------------------------------------------
 
-def _dispatch_result(ui, cl, state, index: int, entry: PlanEntry, result) -> None:
+def _dispatch_result(ui, cl, state, index: int, entry: PlanEntry, result, proc=None) -> None:
     """Per-entry checklist decision, run from commit_executor's on_result callback -- this is
     where the "inspect the real output" logic that used to live inline in each screen now lives,
     because the real output does not exist until this callback fires. Falls back to the ordinary
-    ok-based WITNESSED/REFUSED for every entry with no special case."""
+    ok-based WITNESSED/REFUSED for every entry with no special case.
+
+    `proc` is commit_executor's own 4th on_result argument (PHASE-2 fix, that module's own note):
+    the entry's just-started Popen for a succeeded BackgroundAct, None otherwise. Reading it HERE
+    (never via state["_last_execution_background_procs"], which is only populated from
+    CE.execute()'s eventual RETURN VALUE) is load-bearing, not cosmetic -- a defect caught live
+    against a real boundary_service (seen-red/setup-tui-boundary-proc-cleanup): if a LATER plan
+    entry's own on_result callback raises (an unanticipated defect after boundary already
+    started), CE.execute() never returns at all, so a handle recorded only in its return value
+    would be lost with it -- exactly the scenario app.py's abnormal-exit cleanup exists to guard
+    against. state["boundary_proc"] must be set THE MOMENT the process starts, from the
+    callback's own argument, not deferred to a return that may never come."""
     if entry.screen == "birth" and entry.item == "world birth":
         if not result.ok and _ALREADY_EXISTS_REFUSAL in result.detail:
             _render_partial_birth_teaching(
@@ -1268,7 +1295,6 @@ def _dispatch_result(ui, cl, state, index: int, entry: PlanEntry, result) -> Non
     if entry.screen == "boundary" and entry.item == "service started":
         cl.add(entry.screen, entry.item, ck.WITNESSED if result.ok else ck.REFUSED, result.detail)
         if result.ok:
-            proc = state.get("_last_execution_background_procs", {}).get(BOUNDARY_PROC_PRODUCES)
             if proc is not None:
                 state["boundary_proc"] = proc
             time.sleep(1.5)
@@ -1321,13 +1347,14 @@ def _execute_commit(ui, cl, state) -> None:
         ui.say(f"    {entry.lesson}")
         ui.say(f"    $ {entry.act.render()}")
 
-    def _on_result(i: int, entry: PlanEntry, result) -> None:
-        _dispatch_result(ui, cl, state, i, entry, result)
+    def _on_result(i: int, entry: PlanEntry, result, proc=None) -> None:
+        _dispatch_result(ui, cl, state, i, entry, result, proc)
 
+    # state["boundary_proc"] is set directly inside _dispatch_result, from on_result's own 4th
+    # (proc) argument, the MOMENT the boundary service actually starts -- not from this return
+    # value, which a later entry's own on_result raising would make unreachable (see
+    # _dispatch_result's own docstring for the defect this closed, caught live).
     result = CE.execute(plan, dest, on_step=_on_step, on_result=_on_result)
-    state["_last_execution_background_procs"] = result.background_procs
-    if result.background_procs.get(BOUNDARY_PROC_PRODUCES) is not None:
-        state["boundary_proc"] = result.background_procs[BOUNDARY_PROC_PRODUCES]
     if not result.completed:
         ui.say("")
         ui.say("  COMMIT HALTED -- the journal names the next PENDING step; re-run this tool "
@@ -1335,9 +1362,24 @@ def _execute_commit(ui, cl, state) -> None:
                "hand from the output above.")
 
 
+def _teardown_scratch_gnupghomes(state) -> None:
+    """PRODUCT FIX (caught live against a real gpg + real commit -- seen-red/setup-tui-signed-
+    genesis WG1): under Phase 2, a `--scripted` witnessing run's scratch GNUPGHOME
+    (`signed_genesis.prepare_scratch_gnupghome`, called at DECISION time by
+    `screen_signed_genesis` so the keygen act has a homedir to target) is no longer torn down
+    inline right after the ceremony -- the ceremony itself is now deferred to commit, and nothing
+    called `signed_genesis.teardown_scratch` afterward at all. Every scratch GNUPGHOME this run
+    created (`state["scratch_gnupghomes"]`, appended to by `screen_signed_genesis`) is removed
+    here, unconditionally, once the terminal commit boundary has run (or been declined, or been a
+    dry run) -- WG1's own "zero scratch-GNUPGHOME residue" bar, restored."""
+    for gnupghome in state.get("scratch_gnupghomes", []):
+        signed_genesis.teardown_scratch(gnupghome)
+
+
 def screen_checklist(ui, cl, state):
     ui.banner(screen_banner("checklist"))
     _execute_commit(ui, cl, state)
+    _teardown_scratch_gnupghomes(state)
     ui.say(cl.render())
     dry_run = state.get("dry_run", False)
     dest = state.get("dest")

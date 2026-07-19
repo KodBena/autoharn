@@ -182,7 +182,11 @@ def case_3_journal_resume() -> None:
                 act=P.WriteAct(path=path, content=f"content-{i}"),
             ))
 
-        def crash_after_zero(i: int, entry: object, result: object) -> None:
+        def crash_after_zero(i: int, entry: object, result: object,
+                              proc: object = None) -> None:
+            # PHASE-2 addition to on_result's signature (commit_executor.py's own note):
+            # a 4th positional arg, the entry's own started Popen (None for anything but a
+            # just-succeeded BackgroundAct) -- accepted and ignored here, this case has none.
             if i == 0:
                 raise RuntimeError("simulated UI-layer crash right after a real act ran")
 

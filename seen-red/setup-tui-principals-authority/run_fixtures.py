@@ -32,6 +32,27 @@ in-product way to birth an s41-absent world).
   WP6 out-of-sequence entry refusals: (a) a nonexistent destination, (b) a real directory with no
       legacy/led -- both legible REFUSED, no traceback.
 
+PHASE-2 CONTRACT CHANGE (design/FABLE-SETUP-TUI-PURE-CORE-SPEC.md, commission ledger rows 1823
+point 2 / 1825 / 1835 -- itemized per that build's own report table): `screen_principals_authority`'s
+OWN prompt sequence is UNCHANGED (verified: this is a fixture-lane repair, not a product defect --
+the screen asks in the same order the spec's own registry names, and continuing into
+screen 7 (Signed genesis) after principals-authority finishes is the SAME `--start-at`-continues-
+to-the-end behavior the pre-Phase-2 flow already had). What changed is WHEN an act's real output
+appears: every `led`/`role_charter.py` call this screen drives is now a QUEUED plan entry, executed
+only at the ONE commit boundary (the Checklist screen, screen 11) -- never inline within
+`screen_principals_authority`'s own pass any more. Cases that need to OBSERVE a real row id or a
+real kernel refusal (WP1, WP2, WP3's accept leg) must therefore navigate the four screens between
+principals-authority and Checklist (Signed genesis / Boundary / Observability / Hydration, each
+declined with one "n") and answer the Checklist screen's own "Commit this plan now?" confirm before
+the real `led`/`role_charter.py` output exists to assert against; WP5 (dry-run) similarly must reach
+Checklist to see the "Save this checklist into the new world?" prompt (dry-run skips the
+commit-confirm itself -- `_execute_commit` never asks it when `state["dry_run"]` is set) but the
+`[dry-run: not executed]` marker `runner.run_command`'s own print used to emit no longer exists for
+a QUEUED (never-executed-under-dry-run) act -- the WOULD-DO status the closing checklist table
+carries is the Phase-2 equivalent, asserted directly. Cases whose assertions only depend on text the
+screen prints BEFORE it would need a not-yet-given answer (WP3's decline leg, WP4, WP6a/WP6b) are
+unaffected and unchanged.
+
 Needs HARNESS_PGHOST (or EPISTEMIC_PGHOST, or a deployment.json -- see filing/pghost_resolve.py)
 pointing at a reachable cluster with a `toy` database -- absent it, this fixture prints
 UNEXERCISED and exits 0 rather than failing the build on missing optional local infra (the same
@@ -56,10 +77,33 @@ sys.path.insert(0, os.path.join(REPO, "filing"))
 
 from pghost_resolve import resolve_pghost  # noqa: E402
 
+sys.path.insert(0, REPO)
+from tools.setup_tui import commit_executor as _CE  # noqa: E402
+
+
+def _clear_journal(dest: str) -> None:
+    """PHASE 2: removes a leftover commit journal from a PRIOR case's commit against this SAME
+    scratch world, if one exists -- WP1-WP3b/WP5 all share one physical `dest`, and a case whose
+    commit legitimately halted partway (WP2's refused registration) leaves its own journal behind
+    by design (commit_executor.py's own resume contract); the NEXT independent case's differently-
+    shaped plan would otherwise collide with it (a correct, loud ValueError this fixture does not
+    want to trigger between unrelated cases)."""
+    path = _CE.journal_path(dest)
+    if os.path.isfile(path):
+        os.remove(path)
+
+
 PGDB = "toy"
 NEW_PROJECT = os.path.join(REPO, "bootstrap", "new-project.sh")
 TEARDOWN = os.path.join(REPO, "bootstrap", "teardown-world.sh")
 KERNEL_LINEAGE = os.path.join(REPO, "kernel", "lineage")
+
+# PHASE-2 answer tails (module docstring's own "PHASE-2 CONTRACT CHANGE" note): every case that
+# needs a real committed act, or the closing checklist's own WOULD-DO/save-checklist prompts, must
+# navigate the four screens between principals-authority and Checklist.
+COMMIT_TAIL = "n\nn\nn\nn\ny\nn\n"     # decline sg/boundary/observability/hydration, commit=yes, save=no
+NOCOMMIT_TAIL = "n\nn\nn\nn\n"           # same four declines; no commit-confirm for an EMPTY plan
+DRYRUN_TAIL = "n\nn\nn\nn\nn\n"          # same four declines; no commit-confirm under --dry-run; save=no
 
 _CHAIN_THROUGH_S40 = [
     "high_watermark_1.sql", "s20-obligation-grants-and-view-refresh.sql",
@@ -91,6 +135,19 @@ def run_scripted(answers: str, scratch: str, tag: str, dest_hint: str,
         argv.append("--dry-run")
     return subprocess.run(argv, cwd=REPO, capture_output=True, text=True, timeout=120)
 
+
+
+def _commit_phase_output(out: str) -> str:
+    """PHASE 2: the decision phase prints a "queued: <argv>" line for every plan entry BEFORE any
+    of them run -- searching the WHOLE transcript for "<argv text>...row N written" can anchor on
+    that decision-time line and then match the WRONG entry's row id (the nearest "row N written"
+    chronologically, which belongs to whichever entry actually executed nearest that point in the
+    commit sequence, not the one the decision-time line named). Scoping every row-id search to the
+    text AFTER "Commit this plan now?" (present only once, right before commit_executor.execute
+    actually runs) avoids that cross-phase mismatch -- the real fix for a real defect this
+    build's principals-authority-fixture repair caught, not a cosmetic change."""
+    idx = out.find("Commit this plan now?")
+    return out[idx:] if idx != -1 else out
 
 def led_show(dest: str, row_id: int) -> str:
     r = sh([os.path.join(dest, "legacy", "led"), "show", str(row_id)])
@@ -128,18 +185,21 @@ def main() -> int:
             "y\nwp1subagent\nwp1-activity\nband-1\nWP1 fixture basis\nn\n"
             "y\nwp1subagent\nsucceeds\nauthor\nn\n"
             "y\nwp1subagent\n" + os.path.join(dest, "roles", "README.md") + "\nn\n"
+            + COMMIT_TAIL  # PHASE 2: navigate to Checklist and commit for real -- see module docstring
         )
+        _clear_journal(dest)
         cp1 = run_scripted(ans1, scratch, "wp1", dest)
         out1 = cp1.stdout + cp1.stderr
         assert "Traceback" not in out1, out1[-1500:]
+        out1_commit = _commit_phase_output(out1)
         m_reg = re.search(r"register-principal wp1subagent subagent.*?\n.*?row (\d+) written",
-                           out1, re.DOTALL)
+                           out1_commit, re.DOTALL)
         m_comp = re.search(r"grant-competence wp1subagent.*?\n.*?row (\d+) written",
-                            out1, re.DOTALL)
+                            out1_commit, re.DOTALL)
         m_rel = re.search(r"principal relate wp1subagent succeeds author.*?\n.*?row (\d+) "
-                           r"written", out1, re.DOTALL)
+                           r"written", out1_commit, re.DOTALL)
         m_chart = re.search(r"role_charter\.py register wp1subagent.*?\n.*?row (\d+) written",
-                             out1, re.DOTALL)
+                             out1_commit, re.DOTALL)
         assert m_reg and m_comp and m_rel and m_chart, (
             f"WP1: not all four row ids found in output: {out1[-3000:]}")
         reg_id, comp_id, rel_id, chart_id = (int(m.group(1)) for m in
@@ -156,7 +216,9 @@ def main() -> int:
               f"charter={chart_id}, all four verified via `led show`")
 
         # ---- WP2: kernel refusal rendered as teaching (duplicate 'reviewer') --------------
-        ans2 = "y\n" + dest + "\ny\nreviewer\nsubagent\nWP2 duplicate attempt\nn\nn\nn\nn\n"
+        ans2 = ("y\n" + dest + "\ny\nreviewer\nsubagent\nWP2 duplicate attempt\nn\nn\nn\nn\n"
+                + COMMIT_TAIL)  # PHASE 2: the duplicate-registration REFUSAL only fires at commit
+        _clear_journal(dest)
         cp2 = run_scripted(ans2, scratch, "wp2", dest)
         out2 = cp2.stdout + cp2.stderr
         assert "Traceback" not in out2, out2[-1500:]
@@ -166,7 +228,8 @@ def main() -> int:
               "rendered verbatim, no traceback")
 
         # ---- WP3a: the trap, DECLINE leg ---------------------------------------------------
-        ans3a = "y\n" + dest + "\nn\nn\nn\ny\nneverregistered\n/tmp/x\nn\nn\n"
+        ans3a = ("y\n" + dest + "\nn\nn\nn\ny\nneverregistered\n/tmp/x\nn\nn\n"
+                 + NOCOMMIT_TAIL + "n\n")  # PHASE 2: reach Checklist (empty plan, real dest -- save-checklist IS asked)
         cp3a = run_scripted(ans3a, scratch, "wp3a", dest)
         out3a = cp3a.stdout + cp3a.stderr
         assert "Traceback" not in out3a, out3a[-1500:]
@@ -176,27 +239,40 @@ def main() -> int:
         # ---- WP3b: the trap, ACCEPT leg ----------------------------------------------------
         ans3b = ("y\n" + dest + "\nn\nn\nn\ny\nwp3accept\n" +
                  os.path.join(dest, "roles", "README.md") + "\ny\ntool\nWP3 accept-leg purpose\n"
-                 "n\n")
+                 "n\n" + COMMIT_TAIL)  # PHASE 2: both row ids only exist post-commit
+        _clear_journal(dest)
         cp3b = run_scripted(ans3b, scratch, "wp3b", dest)
         out3b = cp3b.stdout + cp3b.stderr
         assert "Traceback" not in out3b, out3b[-1500:]
+        out3b_commit = _commit_phase_output(out3b)
         m_reg3 = re.search(r"register-principal wp3accept tool.*?\n.*?row (\d+) written",
-                            out3b, re.DOTALL)
+                            out3b_commit, re.DOTALL)
         m_chart3 = re.search(r"role_charter\.py register wp3accept.*?\n.*?row (\d+) written",
-                              out3b, re.DOTALL)
+                              out3b_commit, re.DOTALL)
         assert m_reg3 and m_chart3, out3b[-3000:]
         print("WP3 ok: unregistered-role charter -- decline leaves a legible REFUSED with the "
               "manual command; accept completes charter with both row ids echoed "
               f"(register={m_reg3.group(1)}, charter={m_chart3.group(1)})")
 
         # ---- WP5: dry-run, lessons visible, zero acts --------------------------------------
-        ans5 = ("y\n" + dest + "\ny\nwp5dryname\nmodel\nWP5 dry-run purpose\nn\nn\nn\nn\n")
+        ans5 = ("y\n" + dest + "\ny\nwp5dryname\nmodel\nWP5 dry-run purpose\nn\nn\nn\nn\n"
+                + DRYRUN_TAIL)  # PHASE 2: reach Checklist to see the WOULD-DO status for real
+        _clear_journal(dest)
         cp5 = run_scripted(ans5, scratch, "wp5", dest, dry_run=True)
         out5 = cp5.stdout + cp5.stderr
         assert "Traceback" not in out5, out5[-1500:]
         assert "CONSTITUTES: a new identity anchor row" in out5, out5[-1500:]
-        assert "register-principal wp5dryname model" in out5, out5[-1500:]
-        assert "[dry-run: not executed]" in out5, out5[-1500:]
+        assert "queued: " in out5 and "register-principal wp5dryname model" in out5, out5[-1500:]
+        # PHASE 2: the act is never executed under --dry-run at all (queued, never run), so
+        # runner.run_command's own "[dry-run: not executed]" marker never fires for it -- the
+        # Phase-2 equivalent is the closing checklist's WOULD-DO status for this exact entry.
+        assert ("principals-authority register principal 'wp5dryname'" in out5
+                and "WOULD-DO" in out5), out5[-1500:]
+        would_do_line = next(
+            (ln for ln in out5.splitlines()
+             if "register principal 'wp5dryname'" in ln and "WOULD-DO" in ln), None)
+        assert would_do_line is not None and "register-principal wp5dryname model" in would_do_line, (
+            f"WP5: the WOULD-DO checklist row must carry the exact argv: {out5[-1500:]}")
         dep = {}
 
         with open(os.path.join(dest, "deployment.json")) as f:
@@ -205,8 +281,9 @@ def main() -> int:
                   f"SELECT count(*) FROM {dep['kern']}.principal WHERE name='wp5dryname';"])
         assert cnt.stdout.strip() == "0", (
             f"WP5: --dry-run must write zero rows, found {cnt.stdout.strip()!r}")
-        print("WP5 ok: lesson + exact argv shown, '[dry-run: not executed]', checklist "
-              "WOULD-DO, zero rows actually written (verified by direct psql count)")
+        print("WP5 ok: lesson + exact argv shown, closing checklist row status WOULD-DO "
+              "(the Phase-2 equivalent of the retired per-act '[dry-run: not executed]' marker), "
+              "zero rows actually written (verified by direct psql count)")
 
         # ---- WP6a: out-of-sequence, nonexistent destination --------------------------------
         missing = os.path.join(scratch, "nonexistent")
@@ -219,7 +296,7 @@ def main() -> int:
         # ---- WP6b: out-of-sequence, real dir with no legacy/led ----------------------------
         bare = os.path.join(scratch, "bare")
         os.makedirs(bare)
-        ans6b = "y\n" + bare + "\nn\nn\nn\nn\n"
+        ans6b = "y\n" + bare + "\nn\nn\nn\nn\nn\n"  # PHASE 2: bare exists -- save-checklist IS asked
         cp6b = run_scripted(ans6b, scratch, "wp6b", bare)
         out6b = cp6b.stdout + cp6b.stderr
         assert "Traceback" not in out6b, out6b[-1500:]
@@ -263,7 +340,7 @@ def main() -> int:
                 f.write(led_shim)
             os.chmod(led_path, 0o755)
 
-            ans4 = "y\n" + mid_dest + "\nn\nn\nn\nn\n"
+            ans4 = "y\n" + mid_dest + "\nn\nn\nn\nn\nn\nn\n"  # PHASE 2: reach Checklist cleanly (empty plan, real dest)
             cp4 = run_scripted(ans4, mid_dest, "wp4", mid_dest)
             out4 = cp4.stdout + cp4.stderr
             assert "Traceback" not in out4, out4[-1500:]

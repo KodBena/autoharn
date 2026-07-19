@@ -14,20 +14,39 @@ must terminate a boundary service THIS process started before the process actual
 METHOD (real infra, no mocks): births a real scratch world, then drives
 `python3 -m tools.setup_tui.app --scripted <answers> --start-at boundary` through a small,
 UNCOMMITTED driver script this fixture writes into its own scratch tempdir at run time (never
-committed as product behavior, per the commission's own instruction) -- the driver loads a named
-app.py file via `importlib.util.spec_from_file_location` and MONKEYPATCHES the "observability"
-entry of its `SCREENS` list (the screen immediately after "boundary" in screen order) to raise an
-ordinary `RuntimeError` -- simulating an unanticipated defect in a LATER screen, after the
-boundary service is already a live, running child process (`state["boundary_proc"]`).
+committed as product behavior, per the commission's own instruction).
+
+PHASE-2 CONTRACT CHANGE (design/FABLE-SETUP-TUI-PURE-CORE-SPEC.md, commission ledger rows 1823
+point 2 / 1825 / 1835): under the pre-Phase-2 progressive-execution model, screen_boundary started
+the real boundary_service DIRECTLY, at decision time, so a crash injected into the NEXT screen
+(observability) genuinely fired "after the boundary service is already a live, running child
+process." Under the pure-core rewrite NOTHING executes -- including the boundary service start --
+until the terminal Checklist screen's ONE commit boundary; a crash at observability now fires
+BEFORE boundary has done anything at all, proving nothing about cleanup. The driver's injection
+technique moves accordingly: it loads the named app.py via `importlib.util.spec_from_file_location`
+(unchanged) and MONKEYPATCHES `tools.setup_tui.screens._dispatch_result` (the per-entry checklist-
+decision function `commit_executor.execute`'s `on_result` callback calls) to call through to the
+REAL dispatch first (so the boundary entry's own real success handling -- setting
+`state["boundary_proc"]`, running the real post-start /health probe -- happens exactly as it would
+in product use) and THEN raise an ordinary `RuntimeError`, but ONLY once it observes the
+"boundary"/"service started" entry succeed -- simulating an unanticipated defect discovered right
+after the boundary service is confirmed live, mid-commit, the genuine Phase-2-shaped equivalent of
+the pre-Phase-2 scenario. Since `tools.setup_tui.screens` is imported ONCE (Python's own module
+cache) regardless of which app.py copy is driving it, this monkeypatch reaches the SAME module
+object either pre-fix or post-fix app.py loads -- only app.py's own cleanup-on-abnormal-exit
+differs between the two legs, exactly as the fixture's original design intended.
 
 Two driver runs prove the two polarities of the SAME fix, both against the CURRENT, live
 `tools/setup_tui/screens.py`/boundary-starting mechanics -- only `app.py` itself differs:
 
-  * RED (pre-fix): the driver loads `git show HEAD:tools/setup_tui/app.py` (this worktree's OWN
-    HEAD, the exact content this commission's fixes started from -- verified to lack a
-    try/finally around the screen loop) into a scratch file and runs it. The injected exception
-    propagates uncaught past `main()` with NO cleanup call -- the real boundary_service
-    subprocess is observed STILL RUNNING via `ps` after the driver process has exited.
+  * RED (pre-fix): the driver loads `git show 82e8a81:tools/setup_tui/app.py` (PRE_FIX_COMMIT
+    below -- an EXPLICIT, pinned commit, not "HEAD": a moving HEAD reference drifted stale the
+    moment a later, unrelated commit touched app.py again, caught live in this build's own repair
+    pass -- 82e8a81 is app.py's own direct parent immediately BEFORE 5349251 introduced the
+    try/finally this fixture proves, verified to carry zero "finally:" occurrences) into a scratch
+    file and runs it. The injected exception propagates uncaught past `main()` with NO cleanup
+    call -- the real boundary_service subprocess is observed STILL RUNNING via `ps` after the
+    driver process has exited.
   * GREEN (post-fix): the driver loads the CURRENT, on-disk `tools/setup_tui/app.py` (this
     fixture's own fix). The SAME injected exception propagates the SAME way, but
     `_terminate_boundary_proc` runs from the `finally` block first -- the boundary_service
@@ -58,7 +77,26 @@ sys.path.insert(0, str(REPO / "filing"))
 
 from pghost_resolve import resolve_pghost  # noqa: E402
 
+sys.path.insert(0, str(REPO))
+from tools.setup_tui import commit_executor as _CE  # noqa: E402
+
+
+def _clear_journal(dest: str) -> None:
+    """Removes a leftover commit journal from the RED leg's own (uncleaned, by design) crash
+    against this SAME scratch `dest`, before the GREEN leg's independent driver run reuses it --
+    see module docstring's own note on why RED/GREEN share one physical destination."""
+    path = _CE.journal_path(dest)
+    if os.path.isfile(path):
+        os.remove(path)
+
+
 PGDB = "toy"
+# app.py's own direct parent commit, immediately BEFORE 5349251 introduced the
+# try/finally this fixture proves (verified: git show 82e8a81:tools/setup_tui/app.py
+# contains zero "finally:" occurrences) -- an EXPLICIT, pinned reference, never "HEAD"
+# (a moving target that drifts stale the moment any later commit touches app.py again,
+# caught live in this build's own repair pass).
+PRE_FIX_COMMIT = "82e8a81"
 NEW_PROJECT = REPO / "bootstrap" / "new-project.sh"
 TEARDOWN = REPO / "bootstrap" / "teardown-world.sh"
 VENV_PYTHON = os.path.expanduser("~/w/vdc/venvs/generic/bin/python")
@@ -69,27 +107,31 @@ import sys
 
 sys.path.insert(0, {repo!r})
 
+import tools.setup_tui.screens as _screens_mod
 
-def _boom(ui, cl, state):
-    print("FIXTURE: injecting a simulated ordinary exception in the screen immediately after "
-          "boundary service start (seen-red/setup-tui-boundary-proc-cleanup)", file=sys.stderr)
-    raise RuntimeError(
-        "FIXTURE-INJECTED-CRASH: simulated defect in a later screen, boundary service already "
-        "live -- never a committed product behavior, this driver is scratch-only"
-    )
+_orig_dispatch_result = _screens_mod._dispatch_result
 
+
+def _boom_after_boundary_start(ui, cl, state, index, entry, result, proc=None):
+    # Real dispatch FIRST -- the boundary entry's own success handling (state["boundary_proc"],
+    # the real post-start /health probe) must actually happen, exactly as it would in product use;
+    # this is what proves the injected crash fires GENUINELY after the service is live, not before.
+    _orig_dispatch_result(ui, cl, state, index, entry, result, proc)
+    if entry.screen == "boundary" and entry.item == "service started" and result.ok:
+        print("FIXTURE: injecting a simulated ordinary exception right after the boundary "
+              "service is confirmed started, mid-commit (seen-red/setup-tui-boundary-proc-"
+              "cleanup)", file=sys.stderr)
+        raise RuntimeError(
+            "FIXTURE-INJECTED-CRASH: simulated defect right after boundary service start, "
+            "mid-commit -- never a committed product behavior, this driver is scratch-only"
+        )
+
+
+_screens_mod._dispatch_result = _boom_after_boundary_start
 
 spec = importlib.util.spec_from_file_location("setup_tui_app_under_test", {app_path!r})
 app_mod = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(app_mod)
-
-patched = False
-for _i, (_name, _fn) in enumerate(app_mod.SCREENS):
-    if _name == "observability":
-        app_mod.SCREENS[_i] = (_name, _boom)
-        patched = True
-        break
-assert patched, "could not find the observability screen entry to patch"
 
 sys.exit(app_mod.main())
 '''
@@ -151,6 +193,13 @@ def run_driver(app_path: str, scratch: str, tag: str, dest: str, world: str, hos
         host,        # Postgres host
         PGDB,        # database
         "y",         # start the boundary service now (this process)
+        # PHASE 2: --start-at boundary continues into observability/hydration/checklist (nothing
+        # executes until the terminal commit boundary) -- decline both, then confirm the commit so
+        # the queued boundary-start entry actually runs; the injected crash fires mid-commit, right
+        # after that entry succeeds, so no further scripted answer is ever consumed past "y" here.
+        "n",         # show observability blocks? no
+        "n",         # run hydration now? no
+        "y",         # commit this plan now? yes -- this is where the real boundary start happens
     ]) + "\n"
     ans_path = os.path.join(scratch, f"answers-{tag}.txt")
     with open(ans_path, "w", encoding="utf-8") as f:
@@ -198,14 +247,14 @@ def main() -> int:
 
         # ================================ RED: pre-fix app.py ================================
         prefix_app = os.path.join(scratch, "app_prefix.py")
-        r = sh(["git", "-C", str(REPO), "show", "HEAD:tools/setup_tui/app.py"])
+        r = sh(["git", "-C", str(REPO), "show", f"{PRE_FIX_COMMIT}:tools/setup_tui/app.py"])
         assert r.returncode == 0 and r.stdout.strip(), (
-            f"could not read HEAD:tools/setup_tui/app.py -- {r.stderr}"
+            f"could not read {PRE_FIX_COMMIT}:tools/setup_tui/app.py -- {r.stderr}"
         )
         assert "finally:" not in r.stdout, (
-            "fixture assumption stale: HEAD:tools/setup_tui/app.py ALREADY carries a "
-            "try/finally -- this fixture's own RED leg needs a genuinely pre-fix copy; update "
-            "the commit this fixture diffs against"
+            f"fixture assumption stale: {PRE_FIX_COMMIT}:tools/setup_tui/app.py ALREADY carries "
+            f"a try/finally -- PRE_FIX_COMMIT needs repinning to a genuinely earlier commit "
+            f"(one before whichever commit introduced it)"
         )
         with open(prefix_app, "w", encoding="utf-8") as f:
             f.write(r.stdout)
@@ -215,16 +264,19 @@ def main() -> int:
         assert pids_red, (
             f"RED leg: expected the boundary_service child process to still be alive (orphaned) "
             f"after the pre-fix driver's uncaught exception -- found none. Either the defect "
-            f"does not reproduce against HEAD, or ps matching is broken: {out_red[-2000:]}"
+            f"does not reproduce against {PRE_FIX_COMMIT}, or ps matching is broken: "
+            f"{out_red[-2000:]}"
         )
-        print(f"RED ok (pre-fix, HEAD:tools/setup_tui/app.py, no try/finally): boundary_service "
-              f"ORPHANED after the injected exception -- live pid(s) {pids_red} observed via ps")
+        print(f"RED ok (pre-fix, {PRE_FIX_COMMIT}:tools/setup_tui/app.py, no try/finally): "
+              f"boundary_service ORPHANED after the injected exception -- live pid(s) {pids_red} "
+              f"observed via ps")
         kill_pids(pids_red)
         stray_pids = []
         time.sleep(0.5)
         assert not boundary_pids(dest), "RED leg cleanup: orphan still alive after SIGKILL"
 
         # =============================== GREEN: post-fix app.py ==============================
+        _clear_journal(dest)
         current_app = str(REPO / "tools" / "setup_tui" / "app.py")
         current_text = Path(current_app).read_text(encoding="utf-8")
         assert "finally:" in current_text and "_terminate_boundary_proc(state_holder[0])" in \

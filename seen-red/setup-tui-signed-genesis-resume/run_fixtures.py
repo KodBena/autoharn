@@ -119,7 +119,11 @@ def case_keygen_never_repeats_on_resume() -> None:
                                  item="keys/README.md AWAITING-KEY discharged", lesson="l",
                                  act=SG.discharge_write_act(dest, filename, name, email)))
 
-        def _die_after_keygen(i: int, entry: object, result: object) -> None:
+        def _die_after_keygen(i: int, entry: object, result: object,
+                              proc: object = None) -> None:
+            # PHASE-2 addition to on_result's signature (commit_executor.py's own note):
+            # a 4th positional arg, the entry's own started Popen (None here -- no
+            # BackgroundAct in this plan).
             if i == 0:
                 raise RuntimeError("simulated mid-commit death, right after the real keygen")
 

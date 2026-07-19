@@ -150,7 +150,9 @@ def main() -> int:
             "y", dest_a,                                          # ceremony on, destination
             "WG1 founding commission: build this scratch world per the signed-genesis fixture.",
             "AUTOHARN SETUP-TUI FIXTURE KEY -- THROWAWAY", "setup-tui-fixture@example.invalid",
-            "n", "n", "n", "n",                                   # boundary/obs/hydration/checklist-save declines
+            "n", "n", "n",                                        # boundary/observability/hydration declines
+            "y",                                                   # PHASE 2: commit this plan now
+            "n",                                                   # decline checklist save
         ]) + "\n"
         cp = run_scripted(answers_wg1, scratch, "wg1", ["--start-at", "signed-genesis"])
         out1 = cp.stdout + cp.stderr
@@ -211,12 +213,19 @@ def main() -> int:
         out4 = cp4.stdout + cp4.stderr
         assert cp4.returncode == 0, f"WG4: expected exit 0, got {cp4.returncode}: {out4[-3000:]}"
         assert "Traceback" not in out4, out4[-2000:]
-        assert "[dry-run: not executed]" in out4, out4[-1500:]
-        assert "commission-<id>.asc" in out4, (
-            f"WG4: expected the placeholder '<id>' argv (spec: never fabricate a real id under "
+        # PHASE 2: every act is QUEUED, never executed-with-a-dry-run-flag -- runner.run_command's
+        # own "[dry-run: not executed]" marker (fired at the moment an act ran, live or dry) can
+        # never appear for a deferred act, since it is never even attempted under --dry-run at
+        # all. The Phase-2 equivalent is the closing checklist's WOULD-DO status, and the
+        # symbolic Hole rendering (plan.py's own Hole.symbol()) is the Phase-2 shape of "never
+        # fabricate a real id/fingerprint under --dry-run" -- <asc-path of step 'commission-row'>
+        # / <fingerprint of step 'fingerprint'> rather than the pre-Phase-2 literal placeholders.
+        assert "WOULD-DO" in out4, out4[-1500:]
+        assert "<asc-path of step 'commission-row'>" in out4, (
+            f"WG4: expected the symbolic asc-path hole (spec: never fabricate a real id under "
             f"--dry-run): {out4[-1500:]}")
-        assert "'<fingerprint>'" in out4, (
-            f"WG4: expected the placeholder '<fingerprint>' argv: {out4[-1500:]}")
+        assert "<fingerprint of step 'fingerprint'>" in out4, (
+            f"WG4: expected the symbolic fingerprint hole: {out4[-1500:]}")
         assert "verify-commission" not in out4.split("Signed genesis complete")[0].split(
             "$ gpg")[-1] or True  # (sanity no-op; the real assertion is the next line)
         assert "cannot verify a signature that was never made" in out4 or "DRY-SKIPPED" in out4, (
