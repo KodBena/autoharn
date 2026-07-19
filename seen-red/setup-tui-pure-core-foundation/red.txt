@@ -1,0 +1,73 @@
+seen-red/setup-tui-pure-core-foundation -- banked RED evidence (both-polarity proof, fixture-census)
+
+Commission ledger rows 1823 point 2 / 1825 (design/FABLE-SETUP-TUI-PURE-CORE-SPEC.md): screens
+become pure deciders that append to a reified Plan; every side effect is pushed to the ONE commit
+boundary. This is the PHASE-1 foundation (tools/setup_tui/plan.py + tools/setup_tui/
+commit_executor.py) -- the typed Plan/Hole/Act shape and the commit executor that resolves and
+executes it, landed standalone before tools/setup_tui/screens.py is rewired to build a Plan
+instead of acting directly (that rewire is the large remaining body of work, filed in the
+builder's report).
+
+RED case (embedded in run_fixtures.py's case 1, "negative self-check"): a synthetic BROKEN act
+class (`BrokenEagerAct`) whose own `.render()` resolves a Hole's `extract` callable EAGERLY --
+exactly the purity violation `Plan.render()`'s contract exists to forbid (a decision-phase
+rendering must never touch a hole's real-value extractor; that extractor may only run at commit,
+against a step's REAL output, per ADR-0000's ban on a fabricated/prematurely-materialized value
+standing in for a real one). Rendering a plan containing `BrokenEagerAct` DOES trip the poison
+`extract` (an `AssertionError`), proving the purity check this fixture applies to the REAL
+`CommandAct`/`WriteAct`/`BackgroundAct` types is not vacuous -- it can and does catch the shape of
+defect it exists to catch.
+
+A second, independent ordering hazard was caught and fixed DURING this module's own build, before
+this fixture was ever run against it (so no separate "old commit" RED replay exists for it, unlike
+setup-tui-write-file-atomicity's git-history replay -- there is no prior committed version of this
+module to diff against): `commit_executor.execute`'s original draft called the caller-supplied
+`on_result` UI callback BEFORE marking the journal entry DONE. A callback exception (a rendering
+bug, nothing to do with whether the act itself succeeded) occurring immediately after a REAL
+write/command already took effect would leave the journal still naming that entry PENDING -- a
+resumed run would then RE-RUN an act that had already, truly, happened (a double keygen, a double
+`led decision` write, a second `CREATE ROLE`). Fixed by marking the journal DONE immediately after
+the act succeeds, before the callback runs (commit_executor.py's own "ORDER IS LOAD-BEARING"
+comment names this explicitly). Case 3 below proves the FIXED ordering: a callback that raises
+right after entry 0's real write still leaves the journal correctly marking entry 0 DONE, and a
+resumed execute() does not re-run it (verified by an mtime marker that a re-write would disturb).
+
+Real captured stdout, 2026-07-19, a clean run against this commit's tree (zero residue, exit 0):
+
+case 1: decision-phase purity (render never resolves a hole)
+  OK   render() completes without touching extract
+  OK   render() shows the hole symbolically
+  OK   negative self-check: a broken eager-resolving act DOES trip the poison
+case 2: argv/write parity + late binding (WPC5-shaped)
+  OK   pre-commit rendering shows the hole symbolically, not a real value
+  OK   execution completed
+  OK   binding p1 recorded the real write content
+  OK   echo entry succeeded
+  OK   echo entry's REAL output used the resolved value 42 (not fabricated)
+  OK   scratch file really written with the real content
+case 3: durable commit journal / per-act atomicity / resume (WPC4-shaped)
+  OK   callback exception propagates (never silently swallowed)
+  OK   entry 0's real write happened despite the later crash
+  OK   entries 1/2 did NOT run yet (execution halted where the crash occurred)
+  OK   journal marked entry 0 DONE despite the callback crash (the ordering fix)
+  OK   journal correctly still names entries 1/2 PENDING
+  OK   resumed execution completed
+  OK   entry 0 was NOT re-executed on resume (mtime unchanged)
+  OK   entry 0's content correct after resume
+  OK   entry 1's content correct after resume
+  OK   entry 2's content correct after resume
+  OK   journal removed once every entry is DONE
+case 4: a failing entry halts the commit; journal stays honest
+  OK   a doomed act's failure to even start propagates (never silently marked done)
+  OK   journal still names the doomed entry PENDING, never falsely DONE
+
+all cases GREEN
+
+SCOPE HONESTLY STATED: this fixture proves properties of tools/setup_tui/plan.py +
+tools/setup_tui/commit_executor.py IN ISOLATION, against real (not mocked) tools.setup_tui.runner
+choke points and a scratch destination directory. It is NOT a claim that the eleven-screen flow
+(tools/setup_tui/screens.py) is pure yet -- screens.py is untouched by this pass, still calls the
+runner choke points directly at every live-effect site, and the flow-level witnesses WPC1-WPC7
+design/FABLE-SETUP-TUI-PURE-CORE-SPEC.md §4 names remain UNEXERCISED until screens.py is rewired
+to build a Plan instead of acting directly (see the builder's report for the itemized phase-2
+plan).
