@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-19T01:17:49Z
-#   last-change: 2026-07-19T01:19:52Z
+#   last-change: 2026-07-19T01:52:21Z
 #   contributors: ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -152,6 +152,10 @@ def main() -> int:
             "n",                                                  # fork-target skip
             "y", scratch_world_a, os.path.join(scratch, "reh_a"),  # rehearsal
             "y", world_a, dest_a, world_a,                        # birth
+            "n",                                                   # signed-genesis skip (design/
+                                                                    # FABLE-SETUP-TUI-SIGNED-
+                                                                    # GENESIS-SPEC.md, inserted
+                                                                    # between Birth and Boundary)
             "y", "y",                                             # boundary configure + start
             "n",                                                  # observability skip
             "y",                                                  # hydration run
@@ -232,6 +236,8 @@ def main() -> int:
             "n",
             "y", scratch_world_b, os.path.join(scratch, "reh_b"),
             "y", world_b, dest_b, world_b,
+            "n",               # signed-genesis skip (design/FABLE-SETUP-TUI-SIGNED-GENESIS-
+                                 # SPEC.md, inserted between Birth and Boundary)
             "y", "y",         # boundary configure + in-process start
             "n",               # observability skip
             "n",               # hydration skip -- keeps this leg independent of a live led

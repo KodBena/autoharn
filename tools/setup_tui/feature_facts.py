@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-18T23:35:54Z
-#   last-change: 2026-07-19T00:49:32Z
+#   last-change: 2026-07-19T01:43:11Z
 #   contributors: ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -130,6 +130,20 @@ REGISTRY: dict[str, FeatureFact] = {
                  "(tools/setup_tui/pghba.py, tools/setup_tui/screens.py screen_substrate's "
                  "PREPARED blocks); requires a live, network-reachable Postgres cluster the "
                  "operator administers.",
+    ),
+    "signed_genesis": FeatureFact(
+        key="signed_genesis", label="Signed genesis ceremony",
+        aspiration="the SIGNED commission mode, design/MAINT-GPG-TRUST-LAYER.md §3 -- the "
+                    "NIST-lineage authenticity aspiration that spec names for a GPG signature "
+                    "(non-repudiation, forgery resistance against the apparatus itself, "
+                    "outside-verifiability, §1); design/FABLE-SETUP-TUI-SIGNED-GENESIS-SPEC.md "
+                    "is this screen's own build basis (commission ledger rows 1724/1725).",
+        external="external binary: gpg (GnuPG), must be on PATH; a real, ONGOING key-custody "
+                 "burden for the operator (the private key and its revocation certificate, "
+                 "user-guide/USER-GPG-TRUST-LAYER-FAQ.md §1-§2) -- stated plainly, this is the "
+                 "one screen in this flow with a genuine standing operator responsibility "
+                 "attached, though the SIGNING act itself is one-time (spec §1 item 5: no "
+                 "ongoing signing burden, no signature gates added anywhere).",
     ),
     "boundary_service": FeatureFact(
         key="boundary_service", label="boundary service",
@@ -297,6 +311,7 @@ def derive_live_keys() -> set[str]:
     the backstop."""
     live: set[str] = {
         "ui_backend_textual", "ui_backend_urwid",
+        "signed_genesis",
         "boundary_service", "observability_otelcol", "observability_watchdog",
         "hydration_fork_provenance", "hydration_role_charters",
         "hydration_adr_adoption",

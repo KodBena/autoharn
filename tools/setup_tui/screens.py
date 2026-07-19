@@ -1,14 +1,15 @@
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-18T21:34:05Z
-#   last-change: 2026-07-19T01:07:02Z
+#   last-change: 2026-07-19T01:42:59Z
 #   contributors: ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
-"""tools/setup_tui/screens.py -- the nine screens (design/FABLE-SETUP-TUI-SPEC.md "The flow"),
-in order. Each screen function takes `(ui, cl, state)` (Ui backend, Checklist, mutable dict of
-flow state carried between screens) and returns the same `state` dict, mutated. Every screen is
-individually skippable -- the skip itself is recorded on the checklist (spec: "every screen
-skippable with the skip recorded").
+"""tools/setup_tui/screens.py -- the ten screens (design/FABLE-SETUP-TUI-SPEC.md "The flow" +
+design/FABLE-SETUP-TUI-SIGNED-GENESIS-SPEC.md's own "Signed genesis" screen, inserted between
+Birth and Boundary, commission ledger rows 1724/1725), in order. Each screen function takes
+`(ui, cl, state)` (Ui backend, Checklist, mutable dict of flow state carried between screens) and
+returns the same `state` dict, mutated. Every screen is individually skippable -- the skip itself
+is recorded on the checklist (spec: "every screen skippable with the skip recorded").
 
 Rule 1 in practice: every act on the cluster host or on the target directory goes through
 `runner.run_command`, never a bare `subprocess` call buried in a screen -- so the printed
@@ -46,8 +47,9 @@ import time
 from pathlib import Path
 
 from tools.setup_tui import checklist as ck
-from tools.setup_tui import durable_decisions, feature_facts, pghba, probes
+from tools.setup_tui import durable_decisions, feature_facts, pghba, probes, signed_genesis
 from tools.setup_tui.runner import run_command, start_background, summarize_content, write_file
+from tools.setup_tui.ui import ScriptedUi
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -89,7 +91,7 @@ def _dry_skip_or(ui, cl, state, screen: str, item: str, verify) -> None:
 # ---------------------------------------------------------------------------------------------
 
 def screen_preflight(ui, cl, state):
-    ui.banner("1/9 Preflight")
+    ui.banner("1/10 Preflight")
     if ui.confirm("Run preflight checks?", default=True) is False:
         cl.add("preflight", "all checks", ck.SKIPPED, "operator skipped screen 1")
         return state
@@ -183,7 +185,7 @@ def screen_preflight(ui, cl, state):
 # ---------------------------------------------------------------------------------------------
 
 def screen_substrate(ui, cl, state):
-    ui.banner("2/9 Substrate")
+    ui.banner("2/10 Substrate")
     if not ui.confirm("Configure substrate now?", default=True):
         cl.add("substrate", "path chosen", ck.SKIPPED, "operator skipped screen 2")
         return state
@@ -307,7 +309,7 @@ def screen_substrate(ui, cl, state):
 # ---------------------------------------------------------------------------------------------
 
 def screen_fork_target(ui, cl, state):
-    ui.banner("3/9 Fork/target")
+    ui.banner("3/10 Fork/target")
     if not ui.confirm("Choose destination now?", default=True):
         cl.add("fork-target", "destination", ck.SKIPPED, "operator skipped screen 3")
         return state
@@ -409,7 +411,7 @@ def _teardown_argv(world, db, host, extra=None):
 
 
 def screen_rehearsal(ui, cl, state):
-    ui.banner("4/9 Rehearsal")
+    ui.banner("4/10 Rehearsal")
     if not ui.confirm("Run rehearsal (scratch birth + teardown + zero-residue check)?",
                        default=True):
         cl.add("rehearsal", "rehearsal", ck.SKIPPED, "operator skipped screen 4")
@@ -470,7 +472,7 @@ def screen_rehearsal(ui, cl, state):
 # ---------------------------------------------------------------------------------------------
 
 def screen_birth(ui, cl, state):
-    ui.banner("5/9 Birth")
+    ui.banner("5/10 Birth")
     if not state.get("rehearsal_green"):
         ui.say("  REFUSED: rehearsal did not report GREEN (or was skipped) -- the real birth "
                "is gated on rehearsal green (spec screen 4: 'the real birth is gated on "
@@ -539,11 +541,223 @@ def screen_birth(ui, cl, state):
 
 
 # ---------------------------------------------------------------------------------------------
-# Screen 6: Boundary
+# Screen 6: Signed genesis (design/FABLE-SETUP-TUI-SIGNED-GENESIS-SPEC.md, commission ledger
+# rows 1724/1725) -- ON BY DEFAULT (confirm default=True), one recorded keypress to skip, never
+# nagged again this run. Driven from tools/setup_tui/signed_genesis.py (this module's own
+# pghba.py/probes.py split, applied to the new screen): every gpg/led act below goes through
+# that module's functions, which themselves go through runner.run_command/write_file -- rule 1
+# and the --dry-run choke point stay structural properties, not a per-screen promise.
+# ---------------------------------------------------------------------------------------------
+
+def screen_signed_genesis(ui, cl, state):
+    ui.banner("6/10 Signed genesis")
+    _show_facts(ui, "signed_genesis")
+    if not ui.confirm(
+        "Run the Signed genesis ceremony now? (generates a keypair, exports the public half "
+        "into this world's keys/, signs the genesis commission, and verifies it against your "
+        "own key -- one-time, no ongoing signing burden afterward)", default=True,
+    ):
+        cl.add("signed-genesis", "ceremony", ck.SKIPPED,
+               "operator skipped (declared-not-silent default=yes, ledger row 1725) -- "
+               "legitimate and legible, never nagged again this run")
+        return state
+
+    dry_run = state.get("dry_run", False)
+    dest = state.get("dest") or ui.ask_text("Destination directory (the born world)")
+    state["dest"] = dest
+
+    # Out-of-sequence-entry amendment (design/FABLE-SETUP-TUI-SPEC.md 2026-07-19): independently
+    # validate every precondition the normal sequence (right after a successful Birth) would
+    # have established, refusing legibly per precondition -- same `dest_would_exist` trust
+    # pattern screen_boundary/screen_hydration already carry for a NORMAL-sequence dry run where
+    # `dest` was never really created (birth's own write was simulated).
+    if not os.path.isdir(dest):
+        if dry_run and state.get("dest_would_exist"):
+            cl.add("signed-genesis", "destination exists", ck.DRY_SKIPPED,
+                   f"'{dest}' would exist (created earlier in this dry run) -- not "
+                   f"independently checkable read-only, recorded honestly rather than faked")
+            cl.add("signed-genesis", "world has keys/+verify-commission+legacy/led", ck.DRY_SKIPPED,
+                   "trusted along with the destination above -- always scaffolded by birth")
+        else:
+            ui.say(f"  REFUSED: destination directory '{dest}' does not exist -- nothing to "
+                   f"run the ceremony against. Run a birth first (or check the path), then "
+                   f"retry this screen.")
+            cl.add("signed-genesis", "destination exists", ck.REFUSED, f"'{dest}' not a directory")
+            return state
+    else:
+        keys_dir = os.path.join(dest, "keys")
+        verify_bin = os.path.join(dest, "verify-commission")
+        legacy_led = os.path.join(dest, "legacy", "led")
+        checks = (("keys/", os.path.isdir(keys_dir)), ("verify-commission", os.path.isfile(verify_bin)),
+                  ("legacy/led", os.path.isfile(legacy_led)))
+        missing = [name for name, ok in checks if not ok]
+        if missing:
+            ui.say(f"  REFUSED: {dest} is missing {', '.join(missing)} -- this does not look "
+                   f"like a world this project's own scaffold produced. Nothing done.")
+            cl.add("signed-genesis", "world has keys/+verify-commission+legacy/led", ck.REFUSED,
+                   f"missing: {missing}")
+            return state
+        cl.add("signed-genesis", "world has keys/+verify-commission+legacy/led", ck.WITNESSED, dest)
+
+    gpg_path = probes.which("gpg")
+    if not gpg_path:
+        ui.say("  REFUSED: 'gpg' is not on PATH -- the Signed genesis ceremony needs GnuPG "
+               "installed (user-guide/USER-GPG-TRUST-LAYER-FAQ.md). Nothing done.")
+        cl.add("signed-genesis", "gpg present", ck.REFUSED, "gpg not on PATH")
+        return state
+    cl.add("signed-genesis", "gpg present", ck.WITNESSED, gpg_path)
+
+    # --- designate the genesis commission (spec step 3: the world's own founding commission,
+    # or write one now through led, FULL mode first) ---------------------------------------
+    commission_id = None
+    statement = None
+    try:
+        existing = signed_genesis.list_commissions(dest)
+    except Exception as exc:  # noqa: BLE001 -- a read-only probe; report, never crash the flow
+        ui.say(f"  could not list existing commissions ({exc}) -- proceeding as if none exist")
+        existing = []
+
+    if existing:
+        latest = existing[-1]
+        preview = latest["statement"][:100] + ("..." if len(latest["statement"]) > 100 else "")
+        if ui.confirm(f"Use commission {latest['id']} (\"{preview}\") as the genesis "
+                      f"commission?", default=True):
+            commission_id = latest["id"]
+            statement = signed_genesis.fetch_commission_statement(dest, commission_id)
+            cl.add("signed-genesis", "genesis commission designated", ck.WITNESSED,
+                   f"row {commission_id} (existing)")
+
+    if commission_id is None:
+        ui.say("  no existing commission designated -- writing a new FOUNDING commission now "
+               "(FULL mode, via legacy/led, since the boundary is not configured yet).")
+        statement = ui.ask_text("Founding commission statement (the ask this world exists to "
+                                 "carry out)")
+        res, commission_id = signed_genesis.write_commission(dest, statement, dry_run=dry_run)
+        detail = (f"row {commission_id}" if commission_id is not None else
+                  ("would write (id known only once the write is real)" if dry_run
+                   else f"exit {res.returncode}"))
+        cl.add("signed-genesis", "genesis commission written", ck.status_for(res), detail)
+        if not dry_run and commission_id is None:
+            ui.say("  REFUSED: could not write the founding commission -- nothing to sign.")
+            return state
+
+    id_display = str(commission_id) if commission_id is not None else "<id>"
+
+    # --- keygen: ONE fixed shape, no quiz (spec step 1) -------------------------------------
+    is_scripted = isinstance(ui, ScriptedUi)
+    if is_scripted:
+        ui.say("  --scripted witnessing: a scratch GNUPGHOME + fixture passphrase is used "
+               "(never the operator's own ~/.gnupg) -- gpg_trust.py's scratch-keyring "
+               "mechanics, applied to a keygen rather than an import.")
+        name = ui.ask_text("Key Name-Real (scripted/fixture keygen)",
+                            default="AUTOHARN SETUP-TUI FIXTURE KEY -- THROWAWAY")
+        email = ui.ask_text("Key Name-Email (scripted/fixture keygen)",
+                             default="setup-tui-fixture@example.invalid")
+        keygen = signed_genesis.keygen_scripted(name, email, dry_run=dry_run)
+    else:
+        name = ui.ask_text("Key Name-Real (your name)")
+        email = ui.ask_text("Key Name-Email")
+        gnupghome_in = ui.ask_text("GNUPGHOME to use for this key (blank = your default "
+                                    "~/.gnupg)", default="")
+        gnupghome = gnupghome_in or None
+        ui.say("  gpg will now prompt YOU, interactively, for a passphrase (its own pinentry "
+               "prompt -- never captured or scripted by this tool).")
+        keygen = signed_genesis.keygen_operator(name, email, gnupghome, dry_run=dry_run)
+
+    if dry_run:
+        cl.add("signed-genesis", "keypair generated", ck.WOULD_DO,
+               f"argv: {' '.join(keygen.argv)}")
+    elif keygen.ok and keygen.fingerprint:
+        cl.add("signed-genesis", "keypair generated", ck.WITNESSED,
+               f"fingerprint {keygen.fingerprint}")
+    else:
+        ui.say("  REFUSED: keygen did not produce a usable secret key -- nothing to export or "
+               "sign with. See the gpg output above.")
+        cl.add("signed-genesis", "keypair generated", ck.REFUSED,
+               "gpg keygen failed or produced no fingerprint")
+        signed_genesis.teardown_scratch(keygen)
+        return state
+
+    gnupghome_display = keygen.gnupghome or "your default ~/.gnupg"
+    ui.say(f"  private key custody: {gnupghome_display} -- this tool never reads, copies, or "
+           f"moves it (user-guide/USER-GPG-TRUST-LAYER-FAQ.md §2: print the revocation "
+           f"certificate and store it offline).")
+    cl.add("signed-genesis", "private key custody (facts line, not a file)", ck.WITNESSED,
+           gnupghome_display)
+
+    # --- key lands where the record expects it (spec step 2) -------------------------------
+    fpr_display = keygen.fingerprint or "<fingerprint>"
+    filename = signed_genesis.key_filename(name)
+    keys_path = os.path.join(dest, "keys", filename)
+    _res, armored = signed_genesis.export_public_key(keygen.gnupghome, fpr_display, dry_run=dry_run)
+    if not dry_run and not armored.strip():
+        ui.say("  REFUSED: export produced no armored key text -- nothing written.")
+        cl.add("signed-genesis", "public key exported", ck.REFUSED, "empty export output")
+        signed_genesis.teardown_scratch(keygen)
+        return state
+    wrote = write_file(keys_path, armored, dry_run=dry_run)
+    if wrote:
+        ui.say(f"  wrote {keys_path}")
+        cl.add("signed-genesis", "public key exported", ck.WITNESSED, keys_path)
+    else:
+        cl.add("signed-genesis", "public key exported", ck.WOULD_DO,
+               f"{keys_path} :: {summarize_content(armored) if armored else '(dry-run placeholder)'}")
+
+    readme_path, readme_text, wrote_readme = signed_genesis.discharge_keys_readme(
+        dest, filename, fpr_display, name, email, dry_run=dry_run)
+    if wrote_readme:
+        cl.add("signed-genesis", "keys/README.md AWAITING-KEY discharged", ck.WITNESSED,
+               readme_path)
+    else:
+        cl.add("signed-genesis", "keys/README.md AWAITING-KEY discharged", ck.WOULD_DO,
+               f"{readme_path} :: {summarize_content(readme_text)}")
+
+    # --- sign the genesis act (spec step 3) -------------------------------------------------
+    asc_path = os.path.join(dest, ".claude", f"commission-{id_display}.asc")
+    sres = signed_genesis.sign_statement(keygen.gnupghome, statement or "", asc_path,
+                                          scripted=is_scripted, dry_run=dry_run)
+    cl.add("signed-genesis", "genesis commission signed", ck.status_for(sres), asc_path)
+
+    # --- the gate verifies, not the keypress (spec step 4) ----------------------------------
+    if dry_run:
+        cl.add("signed-genesis", "ceremony gate (verify-commission)", ck.DRY_SKIPPED,
+               "cannot verify a signature that was never made (spec §3) -- never a faked "
+               "VERIFIED")
+    elif commission_id is None:
+        cl.add("signed-genesis", "ceremony gate (verify-commission)", ck.REFUSED,
+               "no real commission id -- nothing to verify")
+    else:
+        vres, body = signed_genesis.run_verify_commission(dest, commission_id)
+        verdict = body.get("verdict") or body.get("refusal") or f"exit {vres.returncode}"
+        ui.say(f"  verify-commission verdict: {verdict}")
+        if body.get("verdict") == "VERIFIED":
+            cl.add("signed-genesis", "ceremony gate (verify-commission)", ck.WITNESSED,
+                   f"VERIFIED: {str(body.get('detail', ''))[:200]}")
+        else:
+            ui.say(f"  REFUSED to record the ceremony WITNESSED -- the gate's own verdict was "
+                   f"not VERIFIED ({verdict}); this renders the verb's own teaching honestly "
+                   f"rather than shortcutting the gate.")
+            cl.add("signed-genesis", "ceremony gate (verify-commission)", ck.REFUSED, verdict)
+
+    signed_genesis.teardown_scratch(keygen)
+
+    ui.say("  Signed genesis complete for this run: nothing further in this flow, or in the "
+           "world's ongoing operation, demands another signature (spec §1 item 5) -- "
+           "subsequent acts ride the ledger's own append-only record; SIGNED remains available "
+           "for later commissions as a deliberate act (user-guide/USER-GPG-TRUST-LAYER-FAQ.md "
+           "§5), never a nag.")
+    cl.add("signed-genesis", "no ongoing signing burden after this screen", ck.WITNESSED,
+           "spec §1 item 5 -- checklist-only note, no mechanism added")
+    state["genesis_commission_id"] = commission_id
+    return state
+
+
+# ---------------------------------------------------------------------------------------------
+# Screen 7: Boundary
 # ---------------------------------------------------------------------------------------------
 
 def screen_boundary(ui, cl, state):
-    ui.banner("6/9 Boundary")
+    ui.banner("7/10 Boundary")
     _show_facts(ui, "boundary_service")
     # Gates on birth_ok EXACTLY as screen_birth gates on rehearsal_green above -- `not
     # state.get(...)` catches both an explicit False (birth ran and failed) and a missing key
@@ -561,7 +775,7 @@ def screen_boundary(ui, cl, state):
         cl.add("boundary", "birth gate", ck.WITNESSED, "OVERRIDDEN by operator")
 
     if not ui.confirm("Configure the boundary service now?", default=True):
-        cl.add("boundary", "boundary", ck.SKIPPED, "operator skipped screen 6")
+        cl.add("boundary", "boundary", ck.SKIPPED, "operator skipped screen 7")
         return state
     dry_run = state.get("dry_run", False)
     dest = state.get("dest") or ui.ask_text("Destination directory")
@@ -753,14 +967,14 @@ def screen_boundary(ui, cl, state):
 
 
 # ---------------------------------------------------------------------------------------------
-# Screen 7: Observability
+# Screen 8: Observability
 # ---------------------------------------------------------------------------------------------
 
 def screen_observability(ui, cl, state):
-    ui.banner("7/9 Observability")
+    ui.banner("8/10 Observability")
     _show_facts(ui, "observability_otelcol", "observability_watchdog")
     if not ui.confirm("Show observability blocks?", default=True):
-        cl.add("observability", "observability", ck.SKIPPED, "operator skipped screen 7")
+        cl.add("observability", "observability", ck.SKIPPED, "operator skipped screen 8")
         return state
     dest = state.get("dest") or ui.ask_text("Destination directory")
     state["dest"] = dest
@@ -794,7 +1008,7 @@ def screen_observability(ui, cl, state):
 
 
 # ---------------------------------------------------------------------------------------------
-# Screen 8: Hydration
+# Screen 9: Hydration
 # ---------------------------------------------------------------------------------------------
 
 def _run_decision(led: str, statement: str, dry_run: bool = False) -> tuple[str, str]:
@@ -818,9 +1032,9 @@ def _run_decision(led: str, statement: str, dry_run: bool = False) -> tuple[str,
 
 
 def screen_hydration(ui, cl, state):
-    ui.banner("8/9 Hydration")
+    ui.banner("9/10 Hydration")
     if not ui.confirm("Run hydration now?", default=True):
-        cl.add("hydration", "hydration", ck.SKIPPED, "operator skipped screen 8")
+        cl.add("hydration", "hydration", ck.SKIPPED, "operator skipped screen 9")
         return state
     dry_run = state.get("dry_run", False)
     dest = state.get("dest") or ui.ask_text("Destination directory (with a led shim)")
@@ -853,6 +1067,13 @@ def screen_hydration(ui, cl, state):
     if not ui.confirm("Hydrate: fork provenance?", default=False):
         cl.add("hydration", "fork provenance", ck.SKIPPED, "operator declined")
     else:
+        # High-assurance pointer (design/FABLE-SETUP-TUI-SIGNED-GENESIS-SPEC.md §2): fork
+        # provenance is one of the authority-carrying hydration acts §2 names explicitly -- one
+        # added facts line, at the point of decision, pointing at the world's own copies of the
+        # charter/GPG-trust docs (world-relative paths the scaffold ships).
+        ui.say(f"  high-assurance act -- see {dest}/roles/README.md and, in the autoharn "
+               f"checkout this world was scaffolded from, user-guide/USER-GPG-TRUST-LAYER-FAQ.md "
+               f"/ design/MAINT-GPG-TRUST-LAYER.md.")
         statement = ui.ask_text("Statement for 'fork provenance' decision row")
         status, detail = _run_decision(led, statement, dry_run=dry_run)
         cl.add("hydration", "fork provenance", status, detail)
@@ -861,6 +1082,11 @@ def screen_hydration(ui, cl, state):
     if not ui.confirm("Hydrate: role charters to register?", default=False):
         cl.add("hydration", "role charters to register", ck.SKIPPED, "operator declined")
     else:
+        # High-assurance pointer (design/FABLE-SETUP-TUI-SIGNED-GENESIS-SPEC.md §2): role-charter
+        # registration binds authority -- named explicitly as the other §2 pointer site.
+        ui.say(f"  high-assurance act -- see {dest}/roles/README.md and, in the autoharn "
+               f"checkout this world was scaffolded from, user-guide/USER-GPG-TRUST-LAYER-FAQ.md "
+               f"/ design/MAINT-GPG-TRUST-LAYER.md.")
         role = ui.ask_text("Role to charter (must already be a registered led principal)")
         path = ui.ask_text("Charter file path")
         argv = ["python3", str(REPO_ROOT / "tools" / "role_charter.py"), "register",
@@ -921,11 +1147,11 @@ def screen_hydration(ui, cl, state):
 
 
 # ---------------------------------------------------------------------------------------------
-# Screen 9: Checklist
+# Screen 10: Checklist
 # ---------------------------------------------------------------------------------------------
 
 def screen_checklist(ui, cl, state):
-    ui.banner("9/9 Checklist")
+    ui.banner("10/10 Checklist")
     ui.say(cl.render())
     dry_run = state.get("dry_run", False)
     dest = state.get("dest")
@@ -955,6 +1181,7 @@ SCREENS = [
     ("fork-target", screen_fork_target),
     ("rehearsal", screen_rehearsal),
     ("birth", screen_birth),
+    ("signed-genesis", screen_signed_genesis),
     ("boundary", screen_boundary),
     ("observability", screen_observability),
     ("hydration", screen_hydration),

@@ -33,6 +33,19 @@ and WDR2 (argv parity against a real scratch run) need a live db birth and a liv
 service and are proven in seen-red/setup-tui-dry-run-parity instead, per this spec's build
 conditions.
 
+Case 10 was added for design/FABLE-SETUP-TUI-SIGNED-GENESIS-SPEC.md (commission ledger rows
+1724/1725): the new "Signed genesis" screen, inserted between Birth and Boundary, shifted every
+downstream screen's answer count by one (cases 1, 2, 3, 6 each gained one trailing "n" to
+decline the new screen where their own `--start-at` walk now passes through it) -- a mechanical
+re-alignment, not a behavior change, re-verified by this file's own re-run below. Case 10 itself
+is this build's own "at least a dry-run-ceremony case" bar (build conditions): the Signed genesis
+screen under `--dry-run`, out-of-sequence entry against a nonexistent destination and a
+real-but-unscaffolded directory, refuses identically to the live path (the WDR3 bar, applied to
+this screen) -- the fuller live-infra ceremony witnesses (a real keygen/export/sign/verify pass,
+the FORGED-OR-CORRUPT red leg, the UNSIGNED skip leg, and the full-flow `--dry-run` byte-identical
+proof) live in seen-red/setup-tui-signed-genesis (WG1-WG5) instead, since they need a real,
+reachable Postgres host and a real `gpg` -- this fixture's own no-live-birth scope stays intact.
+
 Real captured stdout, 2026-07-19, a clean run against this commit's tree (zero residue, exit 0):
 
 case 1 ok: fork-target refuses an occupied 'fresh' destination, nothing copied
@@ -44,4 +57,5 @@ case 6 ok: every PREFLIGHT_BINARIES + UI-backend facts line rendered (WF1)
 case 7 ok: both otelcol and otel-watch facts lines rendered at screen entry (WF1)
 case 8 ok: hydration refuses cleanly against a destination with no ./led shim (WD5's own bar, re-proven here)
 case 9 ok (WDR3): --dry-run refuses the SAME hostile world name with the byte-identical REFUSED text a live run produces, nothing written
+case 10 ok (dry-run-ceremony case): the Signed genesis screen refuses out-of-sequence entry identically under --dry-run -- a nonexistent destination and a real-but-unscaffolded directory, no traceback, nothing written
 ALL CASES OK -- setup_tui scripted preflight/validation refusal legs, zero residue

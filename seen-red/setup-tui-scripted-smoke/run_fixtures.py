@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-18T22:50:17Z
-#   last-change: 2026-07-19T01:14:31Z
+#   last-change: 2026-07-19T01:51:54Z
 #   contributors: ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -96,9 +96,12 @@ def main() -> int:
     scratch = tempfile.mkdtemp(prefix="setup-tui-scripted-smoke-")
     try:
         # --- case 1: fork-target, occupied fresh-dir target -> REFUSED ---
+        # (trailing "n"s decline every later screen this --start-at run still walks through --
+        # rehearsal/birth-override/signed-genesis/boundary-override/observability/hydration --
+        # signed-genesis (design/FABLE-SETUP-TUI-SIGNED-GENESIS-SPEC.md) added the 6th "n".)
         occupied = os.path.join(scratch, "occupied")
         os.makedirs(occupied)
-        cp = run_scripted("y\nfresh\n" + occupied + "\nn\nn\nn\nn\nn\n", "fork-target", scratch)
+        cp = run_scripted("y\nfresh\n" + occupied + "\nn\nn\nn\nn\nn\nn\n", "fork-target", scratch)
         out = cp.stdout + cp.stderr
         assert cp.returncode == 0, f"case 1: expected exit 0, got {cp.returncode}: {out[-800:]}"
         assert "REFUSED: destination" in out and occupied in out, out[-800:]
@@ -107,9 +110,10 @@ def main() -> int:
 
         # --- case 2: substrate, dedicated path, invalid db name -> REFUSED, no pg_hba read ---
         # (trailing "n"s decline every later screen this --start-at run still walks through --
-        # fork-target/rehearsal/birth-override/boundary-override/observability/hydration -- so
-        # the run reaches a clean exit-0 checklist instead of exhausting the answers file.)
-        cp = run_scripted("y\ndedicated\n-\nbad-name!\nvalidrole\n" + "n\n" * 6,
+        # fork-target/rehearsal/birth-override/signed-genesis/boundary-override/observability/
+        # hydration -- so the run reaches a clean exit-0 checklist instead of exhausting the
+        # answers file. signed-genesis added the 7th "n".)
+        cp = run_scripted("y\ndedicated\n-\nbad-name!\nvalidrole\n" + "n\n" * 7,
                            "substrate", scratch)
         out = cp.stdout + cp.stderr
         assert cp.returncode == 0, f"case 2: expected exit 0, got {cp.returncode}: {out[-800:]}"
@@ -126,7 +130,8 @@ def main() -> int:
               "read, and both substrate facts lines rendered first (WF1)")
 
         # --- case 3 (item B): substrate, dedicated path, malformed subnet -> REFUSED, no read ---
-        cp = run_scripted("y\ndedicated\n-\nvaliddb\nvalidrole\nnot-a-cidr\n" + "n\n" * 6,
+        # (same trailing-"n" count as case 2, signed-genesis included.)
+        cp = run_scripted("y\ndedicated\n-\nvaliddb\nvalidrole\nnot-a-cidr\n" + "n\n" * 7,
                            "substrate", scratch)
         out = cp.stdout + cp.stderr
         assert cp.returncode == 0, f"case 3: expected exit 0, got {cp.returncode}: {out[-800:]}"
@@ -173,10 +178,11 @@ def main() -> int:
         out_case5 = out  # case 9's live-comparand, before `out` gets reused by later cases
 
         # --- case 6: preflight -- every PREFLIGHT_BINARIES + UI-backend facts line renders ---
-        # (8 answers: run-preflight, then one "n" each for substrate/fork-target/rehearsal/
-        # birth-override/boundary-override/observability/hydration -- the full --start-at
-        # preflight walkthrough to a clean checklist.)
-        cp = run_scripted("y\n" + "n\n" * 7, "preflight", scratch)
+        # (9 answers: run-preflight, then one "n" each for substrate/fork-target/rehearsal/
+        # birth-override/signed-genesis/boundary-override/observability/hydration -- the full
+        # --start-at preflight walkthrough to a clean checklist. signed-genesis added the 8th
+        # "n".)
+        cp = run_scripted("y\n" + "n\n" * 8, "preflight", scratch)
         out = cp.stdout + cp.stderr
         assert cp.returncode == 0, f"case 6: expected exit 0, got {cp.returncode}: {out[-800:]}"
         for label in ("idris2 toolchain", "clingo (ASP solver)", "python3 interpreter",
@@ -241,6 +247,34 @@ def main() -> int:
             f"hostile input was refused before any write was even attempted")
         print("case 9 ok (WDR3): --dry-run refuses the SAME hostile world name with the "
               "byte-identical REFUSED text a live run produces, nothing written")
+
+        # --- case 10 (dry-run-ceremony case, design/FABLE-SETUP-TUI-SIGNED-GENESIS-SPEC.md §3):
+        # the Signed genesis screen under --dry-run, out-of-sequence entry against BOTH a
+        # nonexistent destination and (separately) a real directory this project's scaffold did
+        # not produce -- --dry-run must never weaken validation (the WDR3 bar, applied to this
+        # screen): both refuse exactly as they would live (proven directly above by
+        # seen-red/setup-tui-signed-genesis's own WG5, against a REAL scaffolded world; this case
+        # re-proves the SAME two refusal shapes with no live db needed, matching this fixture's
+        # own no-live-birth scope).
+        missing_dest_sg = os.path.join(scratch, "sg_missing_dest")
+        cp10a = run_scripted(f"y\n{missing_dest_sg}\n" + "n\n" * 3, "signed-genesis", scratch,
+                              dry_run=True)
+        out10a = cp10a.stdout + cp10a.stderr
+        assert cp10a.returncode == 0, f"case 10a: expected exit 0, got {cp10a.returncode}: {out10a[-800:]}"
+        assert "REFUSED: destination directory" in out10a and missing_dest_sg in out10a, out10a[-800:]
+        assert "Traceback" not in out10a, out10a[-800:]
+
+        bare_dest_sg = os.path.join(scratch, "sg_bare_dest")
+        os.makedirs(bare_dest_sg)
+        cp10b = run_scripted(f"y\n{bare_dest_sg}\n" + "n\n" * 4, "signed-genesis", scratch,
+                              dry_run=True)
+        out10b = cp10b.stdout + cp10b.stderr
+        assert cp10b.returncode == 0, f"case 10b: expected exit 0, got {cp10b.returncode}: {out10b[-800:]}"
+        assert "REFUSED:" in out10b and "missing" in out10b, out10b[-800:]
+        assert "Traceback" not in out10b, out10b[-800:]
+        print("case 10 ok (dry-run-ceremony case): the Signed genesis screen refuses "
+              "out-of-sequence entry identically under --dry-run -- a nonexistent destination "
+              "and a real-but-unscaffolded directory, no traceback, nothing written")
 
         print("ALL CASES OK -- setup_tui scripted preflight/validation refusal legs, zero residue")
         return 0
