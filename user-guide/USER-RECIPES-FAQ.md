@@ -150,43 +150,62 @@ mid-flow you can finish by hand from what was already printed. Full spec:
 ("so much to remember ... too much when you want to *just get started but still have a
 seriously robust experience*"). It needs no new dependency — plain Python with a
 zero-dependency numbered-menu fallback when `textual`/`urwid` aren't installed (both are
-optional, and this build found neither installed).
+optional, and this witness pass's own environment had neither installed — the real preflight
+checklist rows quoted further below, under `--dry-run`, record `textual available WITNESSED
+not installed` and `urwid available WITNESSED not installed`, live confirmation of exactly this).
 
-**The nine screens, in order** (every screen skippable, the skip recorded — never silent):
+**The eleven screens, in order** (every screen skippable, the skip recorded — never silent;
+`--start-at <slug>` below jumps straight to any one of them — the slug, never a hand-typed
+number, is the only stable pointer: screen numbering is derived from
+`tools/setup_tui/screens.py`'s own `SCREENS` list order, one home, precisely so a doc pointer
+never drifts the way a hardcoded ordinal would the moment a screen is inserted):
 
-1. **Preflight** — repo commit, submodules populated, `idris2`/`clingo`/`python3`/`psql`
-   found (clingo non-fatal, matching `bootstrap/bootstrap.sh`'s own posture), whether
-   `HARNESS_PGHOST`/`EPISTEMIC_PGHOST` resolves to a reachable host; each check green/red
-   with a fix command.
-2. **Substrate** — pick an existing database (zero manual steps) or a dedicated one
-   (generates the confined `pg_hba` block in your *actual* file's own idiom, plus the
-   createdb/copy/reload block, then probes until the connection genuinely works).
-3. **Fork/target** — destination directory: a fresh directory, or a fork-copy of an
-   existing project (with the `CLAUDE.md` → `CLAUDE.project.md` preservation move, so a
-   fork's own governance prose survives the scaffold's unconditional `CLAUDE.md` write).
-4. **Rehearsal** — a scratch-name birth + teardown + zero-residue check, streamed; the real
-   birth is gated on a green rehearsal (a ratified discipline, not a suggestion — screen 5
-   refuses without one unless you explicitly override).
-5. **Birth** — `new-project.sh --new-world`, streamed; the maintainer copy-paste signing
-   line is surfaced prominently at the end, delimited by `BEGIN`/`END` markers.
-6. **Boundary** — writes the multiplex TOML and the two `deployment.json` boundary keys,
-   picks a free port, starts the service (or emits the systemd-style unit text as a
-   copy-paste block when this process doesn't keep it alive itself), probes `/health` and
-   `/meta`.
-7. **Observability** — the `otelcol` start line (localhost-only), the OTel model-provenance
-   watchdog start line (`./otel-watch --daemon`), and the Claude launch line with the right
-   env vars, as copy-paste blocks with a what-you-should-see line each.
-8. **Hydration** — free-text prompts for fork provenance and role charters to register, plus
-   two curated catalogs described below (feature-facts, durable-decisions), and an
-   ADR-adoption submenu derived from `law/adr/*.md` at runtime (never a hand list).
-9. **Checklist** — a per-item WITNESSED/SKIPPED/REFUSED/PREPARED table of everything the
-   flow touched, offered for saving into the new world as a dated file.
+1. **Preflight** (`--start-at preflight`) — repo commit, submodules populated,
+   `idris2`/`clingo`/`python3`/`psql` found (clingo non-fatal, matching
+   `bootstrap/bootstrap.sh`'s own posture), whether `HARNESS_PGHOST`/`EPISTEMIC_PGHOST`
+   resolves to a reachable host; each check green/red with a fix command.
+2. **Substrate** (`--start-at substrate`) — pick an existing database (zero manual steps) or
+   a dedicated one (generates the confined `pg_hba` block in your *actual* file's own idiom,
+   plus the createdb/copy/reload block, then probes until the connection genuinely works).
+3. **Fork/target** (`--start-at fork-target`) — destination directory: a fresh directory, or
+   a fork-copy of an existing project (with the `CLAUDE.md` → `CLAUDE.project.md`
+   preservation move, so a fork's own governance prose survives the scaffold's unconditional
+   `CLAUDE.md` write) — plus the governed-files pattern prompt described below.
+4. **Rehearsal** (`--start-at rehearsal`) — a scratch-name birth + teardown + zero-residue
+   check, streamed; the real birth is gated on a green rehearsal (a ratified discipline, not
+   a suggestion — the Birth screen refuses without one unless you explicitly override).
+5. **Birth** (`--start-at birth`) — `new-project.sh --new-world`, streamed; the maintainer
+   copy-paste signing line is surfaced prominently at the end, delimited by `BEGIN`/`END`
+   markers.
+6. **Principals & authority** (`--start-at principals-authority`) — registers additional
+   principals, grants s41 competences, asserts typed relations, and registers role charters
+   in-flow, described below; skipping it is legitimate (the scaffold's own three principals
+   already make a complete world).
+7. **Signed genesis** (`--start-at signed-genesis`) — the GPG-signing ceremony for the
+   world's founding commission, on by default; full operator walkthrough (four visible
+   commands, the VERIFIED gate, the skip path, rotation) in
+   [USER-GPG-TRUST-LAYER-FAQ.md §5a](USER-GPG-TRUST-LAYER-FAQ.md#5a-the-setup-tuis-own-signed-genesis-screen--the-same-ceremony-automated).
+8. **Boundary** (`--start-at boundary`) — writes the multiplex TOML and the two
+   `deployment.json` boundary keys, picks a free port, starts the service (or emits the
+   systemd-style unit text as a copy-paste block when this process doesn't keep it alive
+   itself), probes `/health` and `/meta`.
+9. **Observability** (`--start-at observability`) — the `otelcol` start line
+   (localhost-only), the OTel model-provenance watchdog start line (`./otel-watch --daemon`),
+   and the Claude launch line with the right env vars, as copy-paste blocks with a
+   what-you-should-see line each.
+10. **Hydration** (`--start-at hydration`) — free-text prompts for fork provenance and role
+    charters to register, plus two curated catalogs described below (feature-facts,
+    durable-decisions), and an ADR-adoption submenu derived from `law/adr/*.md` at runtime
+    (never a hand list).
+11. **Checklist** (`--start-at checklist`) — a per-item WITNESSED/SKIPPED/REFUSED/PREPARED
+    table of everything the flow touched, offered for saving into the new world as a dated
+    file.
 
 **The feature-facts column (design/FABLE-SETUP-TUI-FEATURE-FACTS-SPEC.md, ledger row 1714,
 built 2026-07-19).** Every selectable act on every screen above now prints a facts line
 *before* you commit to it: the standards-conformance aspiration it serves (with a citation,
 or an honest "none named") and its external costs/dependencies (with an honest "none") —
-read from `tools/setup_tui/feature_facts.py`'s one-home registry (26 entries at this
+read from `tools/setup_tui/feature_facts.py`'s one-home registry (29 entries at this
 writing; the maintainer's own recollection at commissioning was 4, treated as a hypothesis
 the registry's enumeration checked, not a ceiling). WITNESSED live, this session, against
 the preflight screen (`python3 -m tools.setup_tui.app --dry-run --scripted <answers>
@@ -201,12 +220,12 @@ idris2: RED -- not found on PATH
 ```
 
 **The durable-decisions catalog (same spec §3, ledger rows 1714/1716/1718/1721/1722).**
-Hydration screen 8 offers a curated, 12-entry catalog of standing rules distilled from this
-project's own ledger and the autoharn-panel deployment's (a separate operator-dashboard product
-— a Vue front end over a FastAPI service — that consumes this project's ledger through the
-boundary service, vendored under `tools/autoharn-panel/`), each entry admitted only on a
-witnessed painful (or successful) specimen — not a generic best-practice list. It went
-through a dedicated genericity critique before merge
+The Hydration screen (`--start-at hydration`) offers a curated, 12-entry catalog of standing
+rules distilled from this project's own ledger and the autoharn-panel deployment's (a separate
+operator-dashboard product — a Vue front end over a FastAPI service — that consumes this
+project's ledger through the boundary service, vendored under `tools/autoharn-panel/`), each
+entry admitted only on a witnessed painful (or successful) specimen — not a generic
+best-practice list. It went through a dedicated genericity critique before merge
 ([SONNET-CATALOG-GENERICITY-CRITIQUE-2026-07-19.md](../design/SONNET-CATALOG-GENERICITY-CRITIQUE-2026-07-19.md)):
 one entry judged bespoke to this project's own contributors was cut, four were rewritten out
 of first-project voice, and three generic entries the mining pass had missed (including the
@@ -219,35 +238,70 @@ principal makes every row that principal later writes count as new review debt, 
 rows that existed at obligation time) as one of its own entries, rather than handing a fresh
 operator a loaded trigger at birth.
 
-**Governed-files exposure — specced, not yet built into the TUI.** A 2026-07-19 spec
-amendment (commission ledger row 1730: the maintainer's own painful specimen — the
+**Governed-files exposure — built and merged, live on the Fork/target screen.** A 2026-07-19
+spec amendment (commission ledger row 1730: the maintainer's own painful specimen — the
 autoharn-panel deployment started `.claude/governed_files.json` at `*.py`-only and needed
-`.ts`/`.vue`/`.html` added by hand) adds a governed-files prompt to screen 3, surfacing the
-default pattern set plus that teaching specimen and letting the operator confirm or extend it
-for their project's real languages. **This screen prompt is not merged** — `grep -rn
-governed_files tools/setup_tui/*.py` finds nothing in the TUI source at this writing (WITNESSED
-this session); the build was folded into the queued principals-authority dispatch (ledger row 1731) — the same
-dispatch as the principals-and-authority screen named two paragraphs below (ledger rows
-1727/1728): the two ride together as one build item on the queue, each separately witnessed, not
-two unrelated commissions — and has not landed. What IS already live and usable today, directly, without the TUI:
-`bootstrap/new-project.sh`'s own `--governed <comma-separated-fnmatch-patterns>` flag — omit
-it and you get the historical `*.py`-only default plus a loud, refusal-grade notice naming the
-exact one-line widening act (`.claude/governed_files.json`'s `patterns` array; fnmatch
-semantics, no restart needed — `.claude/GOVERNED_FILES.md` in any scaffolded world).
+`.ts`/`.vue`/`.html` added by hand) adds a governed-files prompt to the Fork/target screen,
+surfacing the default pattern set plus that teaching specimen and letting the operator confirm
+or extend it for their project's real languages. `tools/setup_tui/governed_files.py` carries
+the driver logic; `screens.py`'s `_governed_files_step` wires it into Fork/target. WITNESSED
+this session (`python3 -m tools.setup_tui.app --dry-run --scripted <answers>
+--start-at fork-target`, declining the extension):
+```
+facts [governed-files pattern exposure] -- aspiration: F33 (governance keyed to WHAT THE THING
+  IS, not an enumerated file list) -- house discipline, not an external standard
+  (hooks/pretooluse_change_gate.py's own _load_governed_patterns). | external: none -- writes
+  one JSON file inside the target directory (<dest>/.claude/governed_files.json), no new
+  binary or package. Commission row 1730: the autoharn-panel deployment started .py-only and
+  needed .ts/.vue/.html added by hand after the fact.
+  default pattern set: ['*.py']
+Extend the governed-files pattern set beyond the default (*.py) for the other languages this
+  project contains?: no   [scripted]
+  --- PREVIEW: <dest>/.claude/governed_files.json (written by new-project.sh --governed at
+  birth, and again at any later scaffold re-run this flow performs -- never by this screen
+  directly) ---
+  {
+    "patterns": [
+      "*.py"
+    ]
+  }
+```
+The screen never writes the file itself (ONE writer discipline) — it collects the pattern set
+and passes it through to `bootstrap/new-project.sh`'s own `--governed
+<comma-separated-fnmatch-patterns>` flag at birth, the same flag that was already live and
+usable directly (without the TUI) before this screen existed; omit it entirely (declining
+here, or scaffolding by hand) and you get the historical `*.py`-only default plus a loud,
+refusal-grade notice naming the exact one-line widening act
+(`.claude/governed_files.json`'s `patterns` array; fnmatch semantics, no restart needed —
+`.claude/GOVERNED_FILES.md` in any scaffolded world).
 
-**Two screens that are specced but not yet merged — named here so you don't go looking for
-them:** a **signed-genesis screen** (design/FABLE-SETUP-TUI-SIGNED-GENESIS-SPEC.md, ledger
-rows 1724–1726 — optional, on-by-default, no-quiz keygen riding the existing GPG-trust rungs,
-no new crypto stack) and a **principals-and-authority screen**
-(design/FABLE-SETUP-TUI-PRINCIPALS-AUTHORITY-SPEC.md, ledger rows 1727/1728 — registers
-principals and s41 competence grants/relations in-flow, and shows a short teaching line before
-each act explaining what it does and why, binding on every act, not merely offered as optional
-help text). Both are sequenced behind the current TUI build queue; check `./led show 1728` (or
-later rows) for current status before assuming either is live.
+**Principals & authority (design/FABLE-SETUP-TUI-PRINCIPALS-AUTHORITY-SPEC.md, ledger rows
+1727/1728) — built and merged**, sitting between Birth and Signed genesis
+(`--start-at principals-authority`). It registers additional principals, grants s41
+competences, asserts typed relations, and registers role charters in-flow, showing a short
+teaching line before each act explaining what it does and why, binding on every act, not
+merely offered as optional help text (`tools/setup_tui/principals_authority.py` carries the
+driver logic). Declining is legitimate and legible — every world already has
+`author`/`reviewer`/`commissioner` from the scaffold (see ["Principal identity
+(s40/s41)"](#principal-identity-s40s41) below), so skipping this screen leaves a complete
+world; the screen's own value is propaedeutic, walking the ceremony once rather than a
+prerequisite for a working world.
+
+**Signed genesis (design/FABLE-SETUP-TUI-SIGNED-GENESIS-SPEC.md, ledger rows 1724–1726) —
+built and merged**, sitting between Principals & authority and Boundary
+(`--start-at signed-genesis`): an optional, on-by-default, no-quiz keygen riding the existing
+GPG-trust rungs (no new crypto stack) that generates a keypair, exports the public half into
+the world's `keys/`, signs the world's founding commission, and verifies it against your own
+key — one-time, no ongoing signing burden afterward. `tools/setup_tui/signed_genesis.py`
+carries the driver logic. The full operator walkthrough — what you type, what you should see,
+the four visible commands, the VERIFIED gate, the skip path, and key rotation via re-run —
+lives in
+[USER-GPG-TRUST-LAYER-FAQ.md §5a](USER-GPG-TRUST-LAYER-FAQ.md#5a-the-setup-tuis-own-signed-genesis-screen--the-same-ceremony-automated),
+not duplicated here.
 
 **`--dry-run` — the nondestructive whole-flow rehearsal (2026-07-19 amendment, commission row
 1719: "so I don't mess up any directory by mistake").** Add `--dry-run` to run the identical
-nine screens with NO destructive or externally visible act: no file written outside the
+eleven screens with NO destructive or externally visible act: no file written outside the
 process's own temp space, no database act, no `led` write, no process started, no port bound.
 Read-only probes (preflight, connection checks, reading your real `pg_hba` copy, the ADR
 glob) stay live — a rehearsal that fakes its reads is a lie, not a rehearsal. Every screen
@@ -257,25 +311,36 @@ gate. Composes with `--scripted` and `--start-at` unchanged. WITNESSED both ways
 session:
 - `--dry-run --start-at preflight`, no answers beyond preflight itself, produces the facts
   line quoted above (a live, real preflight probe) with no ledger or filesystem effect.
-- A full skip-everything `--dry-run --scripted` run to the end reaches screen 9 and prints a
-  real checklist table:
+- A full skip-everything `--dry-run --scripted` run to the end reaches the Checklist screen
+  and prints a real checklist table:
   ```
   SCREEN         ITEM                                   STATUS     DETAIL
-  preflight      repo commit                            WITNESSED  4ca75f17...
-  preflight      HARNESS_PGHOST reachable                WITNESSED  RED: HARNESS_PGHOST/EPISTEMIC_PGHOST unset
+  preflight      repo commit                            WITNESSED  82e8a81ca10f57cad8b33b39e73dbe7d0db81470
+  preflight      submodules populated                   WITNESSED  no '-' prefixed entries
+  preflight      idris2 found                           WITNESSED  RED: not on PATH -- install idris2 (...)
+  preflight      clingo found                           WITNESSED  /usr/bin/clingo
+  preflight      python3 found                          WITNESSED  /usr/bin/python3
+  preflight      psql found                              WITNESSED  /usr/bin/psql
+  preflight      HARNESS_PGHOST reachable               WITNESSED  RED: HARNESS_PGHOST/EPISTEMIC_PGHOST unset
+  preflight      textual available                      WITNESSED  not installed
+  preflight      urwid available                        WITNESSED  not installed
   substrate      path chosen                            SKIPPED    operator skipped screen 2
   fork-target    destination                            SKIPPED    operator skipped screen 3
   rehearsal      rehearsal                              SKIPPED    operator skipped screen 4
   birth          world birth                            SKIPPED    refused: rehearsal not green
+  principals-authority screen                                 SKIPPED    operator skipped (declared-not-silent default=yes) -- legitimate and legible
+  signed-genesis ceremony                               SKIPPED    operator skipped (declared-not-silent default=yes, ledger row 1725) -- legitimate and legible, never nagged again this run
   boundary       boundary                               REFUSED    refused: birth_ok not truthy
-  observability  observability                          SKIPPED    operator skipped screen 7
-  hydration      hydration                               SKIPPED    operator skipped screen 8
+  observability  observability                          SKIPPED    operator skipped screen 9
+  hydration      hydration                              SKIPPED    operator skipped screen 10
   ----------------------------------------------------------------------------------------------------
-  totals: REFUSED=1, SKIPPED=6, WITNESSED=9
+  totals: REFUSED=1, SKIPPED=8, WITNESSED=9
   ```
-  (`REFUSED` here is the out-of-sequence-precondition discipline working as designed — screen
-  6 correctly refused to configure a boundary for a world that was never born, rather than
-  building on nothing.) Note preflight itself read `HARNESS_PGHOST` as genuinely unset in this
+  (`REFUSED` here is the out-of-sequence-precondition discipline working as designed — the
+  Boundary screen correctly refused to configure a boundary for a world that was never born,
+  rather than building on nothing. The uneven column alignment on the principals-authority/
+  signed-genesis rows above is quoted byte-for-byte from the real run, not a transcription
+  artifact.) Note preflight itself read `HARNESS_PGHOST` as genuinely unset in this
   environment — an honest RED, not a fabricated pass; the fixture-backed WDR1 (byte-identical
   tree/ledger before vs. after) and WDR2 (argv parity, dry-run vs. live) witnesses against real
   infra live in
@@ -287,21 +352,21 @@ session:
 
 | Step (what you do) | What you should see |
 |---|---|
-| Type `python3 -m tools.setup_tui.app --dry-run` | Banner, then `1/9 Preflight`; interactive numbered prompts (or a refusal naming `--scripted` if stdin isn't a terminal — WITNESSED this session: `setup_tui: stdin is not a terminal and --scripted was not given -- refusing to run an interactive flow`). |
+| Type `python3 -m tools.setup_tui.app --dry-run` | Banner, then `1/11 Preflight`; interactive numbered prompts (or a refusal naming `--scripted` if stdin isn't a terminal — WITNESSED this session: `setup_tui: stdin is not a terminal and --scripted was not given -- refusing to run an interactive flow`). |
 | Answer `yes` to preflight | Each prerequisite line green/red with a fix command; `HARNESS_PGHOST` red with `export HARNESS_PGHOST=<your postgres host>` if unset. |
-| Walk screens 2–8, answering as prompted (or skip any with `no`) | Each screen prints its exact command/argv before running it (or, under `--dry-run`, before *not* running it); a skipped screen records `SKIPPED`, not silence. |
-| Reach screen 9 | A per-item table, `WITNESSED`/`SKIPPED`/`REFUSED`/`PREPARED` (or the `--dry-run` counterparts), then an offer to save it into the new world. |
-| Drop `--dry-run` and repeat for real | The same nine screens perform the acts for real; a green rehearsal (screen 4) is required before birth (screen 5) proceeds. |
+| Walk screens 2–10, answering as prompted (or skip any with `no`) | Each screen prints its exact command/argv before running it (or, under `--dry-run`, before *not* running it); a skipped screen records `SKIPPED`, not silence. |
+| Reach screen 11 (Checklist) | A per-item table, `WITNESSED`/`SKIPPED`/`REFUSED`/`PREPARED` (or the `--dry-run` counterparts), then an offer to save it into the new world. |
+| Drop `--dry-run` and repeat for real | The same eleven screens perform the acts for real; a green Rehearsal (`--start-at rehearsal`) is required before Birth (`--start-at birth`) proceeds. |
 
 Full command-line usage (`--help`, WITNESSED this session, byte-for-byte):
 ```
 usage: setup_tui [-h] [--scripted ANSWERS_FILE] [--start-at SCREEN] [--dry-run]
 ```
-`--start-at <screen>` (preflight, substrate, fork-target, rehearsal, birth, boundary,
-observability, hydration, checklist) jumps straight to one screen — a screen entered out of
-its normal sequence independently validates every precondition the normal sequence would have
-established, refusing legibly (never a traceback) when one is missing (the 2026-07-19
-out-of-sequence amendment, same spec).
+`--start-at <screen>` (preflight, substrate, fork-target, rehearsal, birth,
+principals-authority, signed-genesis, boundary, observability, hydration, checklist) jumps
+straight to one screen — a screen entered out of its normal sequence independently validates
+every precondition the normal sequence would have established, refusing legibly (never a
+traceback) when one is missing (the 2026-07-19 out-of-sequence amendment, same spec).
 
 **One line each on the setup TUI's own drift backstops**, cross-referenced in full under
 ["Drift backstops" below](#drift-backstops-one-generic-method-for-anything-that-goes-quietly-stale):
@@ -1300,7 +1365,7 @@ SPEC.md, ledger rows 1714/1716):** every selectable act the guided wizard
 offers now shows a facts line — the standards-conformance aspiration it serves (with citation,
 or an honest "none named") and its external costs/dependencies (with an honest "none") — at the
 point of selection, from `tools/setup_tui/feature_facts.py`'s one-home registry. Separately, the
-hydration screen (screen 8) offers a small, curated catalog of durable decisions born of
+Hydration screen (`--start-at hydration`) offers a small, curated catalog of durable decisions born of
 witnessed painful (or successful) experience from this project's own ledger AND the
 autoharn-panel deployment's — `tools/setup_tui/durable_decisions.py` — each selection writing a
 real `led decision` row and compiling into the new world's CLAUDE.md between generated-section

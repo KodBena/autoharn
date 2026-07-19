@@ -64,28 +64,58 @@ per-screen below; see that spec for the registry and its drift backstop
    the real birth is gated on rehearsal green (the ratified discipline).
 5. **Birth** — `new-project.sh --new-world`, streamed; the maintainer copy-paste
    signing line surfaced prominently at the end.
-6. **Boundary** — writes the multiplex TOML and the two deployment.json keys,
+6. **Principals & authority** (design/FABLE-SETUP-TUI-PRINCIPALS-AUTHORITY-SPEC.md,
+   ledger rows 1727/1728 — merged 2026-07-19; the numbered list here folds the
+   amendment in rather than leaving it stated only there, per row 1699's doc-currency
+   rule) — registers additional principals, grants s41 competences, asserts typed
+   relations, and registers role charters in-flow (`tools/setup_tui/
+   principals_authority.py`), showing a short teaching line before each act
+   explaining what it does and why, binding on every act, not merely offered as
+   optional help text. Skippable and legitimate: the scaffold's own three
+   principals (`author`/`reviewer`/`commissioner`) already make a complete world;
+   this screen's value is propaedeutic, not a prerequisite.
+7. **Signed genesis** (design/FABLE-SETUP-TUI-SIGNED-GENESIS-SPEC.md, ledger rows
+   1724–1726 — merged 2026-07-19, same folding-in as above) — an optional,
+   on-by-default, no-quiz keygen (`tools/setup_tui/signed_genesis.py`) riding the
+   already-shipped GPG trust layer (design/MAINT-GPG-TRUST-LAYER.md; no second
+   crypto stack): generates a keypair, exports the public half into the world's
+   `keys/` (discharging the AWAITING-KEY stub), signs the world's designated
+   founding commission, and requires `verify-commission`'s own VERIFIED verdict —
+   not the keypress — before recording the ceremony WITNESSED. One-time; nothing
+   downstream in the flow, or in the world's ongoing operation, demands another
+   signature. Declining is legitimate and legible, never nagged again.
+8. **Boundary** — writes the multiplex TOML and the two deployment.json keys,
    picks a free port, starts the service (or emits the systemd-style unit text as
    a PREPARED block), probes `/health` and `/meta`.
-7. **Observability** — otelcol start line (localhost-only, per standing config), the
+9. **Observability** — otelcol start line (localhost-only, per standing config), the
    OTel model-provenance watchdog start line (`./otel-watch --daemon`,
    design/FABLE-OTEL-SENTRY-SPEC.md §3), and the Claude launch line with the right
    env vars, all as copy-paste blocks with what-you-should-see.
-8. **Hydration** — fork provenance and role charters to register (via
-   `role_charter.py`) stay as free-text prompts; a small, curated
-   **durable-decisions catalog** (`tools/setup_tui/durable_decisions.py`, design/
-   FABLE-SETUP-TUI-FEATURE-FACTS-SPEC.md §3, absorbing and retiring the old
-   free-text `adr_corpus`/`makespan_pointer` items) offers standing rules distilled
-   from this project's own ledger and the autoharn-panel deployment's, each writing
-   a real `led decision` row on selection; an **ADR-adoption submenu**, DERIVED from
-   `law/adr/*.md` at runtime (never a hand list), lets the operator adopt any subset
-   by number and title. Every selected entry's fragment compiles into the new
-   world's CLAUDE.md between generated-section markers (idempotent, fork-
-   destination-safe — never touches bytes outside the markers). Kernel `obligate`
-   rows are explicitly out of v1 (the catalog itself encodes the reason as one of
-   its own entries, ledger row 1640).
-9. **Checklist** — the witnessed/skipped/prepared table; offer to save it into the
-   new world as a dated file.
+10. **Hydration** — fork provenance and role charters to register (via
+    `role_charter.py`) stay as free-text prompts; a small, curated
+    **durable-decisions catalog** (`tools/setup_tui/durable_decisions.py`, design/
+    FABLE-SETUP-TUI-FEATURE-FACTS-SPEC.md §3, absorbing and retiring the old
+    free-text `adr_corpus`/`makespan_pointer` items) offers standing rules distilled
+    from this project's own ledger and the autoharn-panel deployment's, each writing
+    a real `led decision` row on selection; an **ADR-adoption submenu**, DERIVED from
+    `law/adr/*.md` at runtime (never a hand list), lets the operator adopt any subset
+    by number and title. Every selected entry's fragment compiles into the new
+    world's CLAUDE.md between generated-section markers (idempotent, fork-
+    destination-safe — never touches bytes outside the markers). Kernel `obligate`
+    rows are explicitly out of v1 (the catalog itself encodes the reason as one of
+    its own entries, ledger row 1640).
+11. **Checklist** — the witnessed/skipped/prepared table; offer to save it into the
+    new world as a dated file.
+
+**Screen numbering is derived, not hand-typed** (ledger row 1790, finding 3):
+`tools/setup_tui/screens.py`'s own `SCREENS` list order is the one place a screen's
+position is decided; the ordinal banner ("N/11 Title") and every checklist skip-detail
+string are computed from that list at runtime. The eleven-item numbering above follows
+that same live order and will drift the moment `SCREENS` changes unless this list is
+updated alongside it — `--start-at <slug>` (preflight, substrate, fork-target,
+rehearsal, birth, principals-authority, signed-genesis, boundary, observability,
+hydration, checklist) is the stable pointer for anything that needs to survive a future
+insertion without hand-renumbering.
 
 ## v1 boundaries, named
 
