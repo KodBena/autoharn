@@ -97,9 +97,10 @@ before writing a new workflow script, or when one fails in an unfamiliar way.
 **I have a large batch of independent work units to dispatch — is there a standing
 recommendation for how to parallelize them instead of just running them one after another?**
 Yes — **standing recommendation** (maintainer directive, 2026-07-14): use
-`tools/makespan-scheduler/` (vendored 2026-07-14, split into its own published repository and
-converted to a git submodule 2026-07-15) for any large-scale batch of jobs that conflict only
-over shared
+`tools/makespan-scheduler/` (makespan = the total time to finish an entire batch of jobs, the
+quantity the scheduler minimizes; vendored 2026-07-14, split into its own published repository
+and converted to a git submodule 2026-07-15) for any large-scale batch of jobs that conflict
+only over shared
 resources (e.g. two edits touching the same file), rather than defaulting to a hand-picked
 sequential order. Claude Code is, functionally, an infinite-server model of work — parallel
 agent capacity is cheap to spin up — but the default LLM inclination is still to serialize
@@ -259,8 +260,8 @@ A different class under the same name refuses too, naming the mismatch and point
 genuine identity succession rather than a rename — names are immutable by rule, and a class
 change is a new identity, never an edit to the old one.
 
-*Declaring standing* — binding a database role's default attribution to a registered principal,
-the same declared-not-silent act the scaffold performed for `author`. `--db-role` is optional
+*Declaring standing.* This binds a database role's default attribution to a registered
+principal — the same declared-not-silent act the scaffold performed for `author`. `--db-role` is optional
 and defaults to your own world's connection role (read directly from `bootstrap/templates/led.tmpl`'s
 source: `db_role="$ROLE"` unless overridden) — the same `role` value your deployment's own
 `deployment.json` already carries (README.md's configuration table names this field; run `cat
@@ -276,8 +277,8 @@ kernel DDL granted separately (`\du` in `psql` lists every role that exists on t
 you need to find one by hand). Re-declaring for the same role auto-supersedes the prior
 declaration (this is how you rotate which principal a role speaks for).
 
-*Binding a role* — free non-empty organizational-role text, not a closed vocabulary (ratified
-§9(c) — role naming is organizational configuration, not the harness's to impose):
+*Binding a role.* Role text is free, non-empty, organizational text, not a closed vocabulary
+(ratified §9(c) — role naming is organizational configuration, not the harness's to impose):
 ```sh
 $ ./led principal bind-role reviewer2 --role "sql-review"
 ```
@@ -321,7 +322,7 @@ unrelated db-role↔principal binding view, `principal_role`), `principal_keys`,
 `principal_competences`. All four binding views show only currently-active, unsuperseded rows;
 every retraction stays visible in the raw ledger history regardless.
 
-*Suspending or revoking* — and the honest limit on getting back:
+*Suspending or revoking a principal, and the honest limit on getting back.*
 ```sh
 $ ./led principal suspend reviewer2 "on leave"
 $ ./led principal revoke reviewer2 "compromised"
@@ -373,8 +374,10 @@ regarding the binding event, using the same verb every other ledger row is count
 ```sh
 $ ./led review <bind-key-row-id> attest technical "fingerprint verified against a witnessed key-signing party"
 ```
-(`led review`'s independence argument requires a stamp-distinct invocation for anything above
-`self-review` — see the verb's own usage text in `bootstrap/templates/led.tmpl`.) A key-binding
+(`led review`'s independence argument requires a stamp-distinct invocation — one whose HMAC
+stamp (the session-identifying tripwire described just below) differs from the row being
+reviewed's own — for anything above `self-review`; see the verb's own usage text in
+`bootstrap/templates/led.tmpl`.) A key-binding
 proposal followed by a countersign on that same binding row therefore needs zero new review
 machinery to close the loop — the binding event is just another countersignable ledger row, like
 any other.
@@ -1090,11 +1093,38 @@ is each one's owning page):
   a deployment's live schema vs the kernel lineage chain, one `.detect.sql` probe per delta,
   reporting exactly which deltas the world lacks.
 
-Marked honestly as **not built**: the setup surface's own backstop — a scripted TUI smoke
-fixture registered in the census, covering `tools/setup_tui` against the scaffold/boundary
-contracts it drives — is commissioned under the maintainer's 2026-07-19 standing rule ("the
-setup surface itself ... will drift unless maintained", ledger row 1700: `./led show 1700` at
-the repository root) and queued behind work in flight, not yet on disk.
+- [seen-red/setup-tui-scripted-smoke](../seen-red/setup-tui-scripted-smoke/run_fixtures.py) —
+  the setup surface's own backstop, commissioned under the maintainer's 2026-07-19 standing
+  rule ("the setup surface itself ... will drift unless maintained", ledger row 1700: `./led
+  show 1700` at the repository root): a scripted TUI smoke fixture, census-registered, driving
+  `python3 -m tools.setup_tui.app --scripted ... --start-at <screen>` against real hostile/
+  malformed inputs and asserting the same REFUSED-no-traceback outcome the mechanism itself is
+  supposed to produce, plus (added for the feature-facts column, ledger row 1714) asserting the
+  facts lines documented just below actually render at preflight/substrate/boundary/
+  observability/hydration screen entry.
+- [seen-red/setup-tui-feature-facts-drift](../seen-red/setup-tui-feature-facts-drift/run_fixtures.py)
+  — `tools/setup_tui/feature_facts.py`'s own registry vs. the live preflight-binary/substrate-
+  choice/hydration-catalog set `screens.py` and `durable_decisions.py` actually expose,
+  compared both directions (the class this whole section describes, applied to the feature-
+  facts column itself — this spec's own first deliberate consumer of the method,
+  design/FABLE-SETUP-TUI-FEATURE-FACTS-SPEC.md §1).
+
+**The setup TUI's own two durable-decisions features (design/FABLE-SETUP-TUI-FEATURE-FACTS-
+SPEC.md, ledger rows 1714/1716):** every selectable act the guided wizard
+(`python3 -m tools.setup_tui.app`, [FABLE-SETUP-TUI-SPEC.md](../design/FABLE-SETUP-TUI-SPEC.md))
+offers now shows a facts line — the standards-conformance aspiration it serves (with citation,
+or an honest "none named") and its external costs/dependencies (with an honest "none") — at the
+point of selection, from `tools/setup_tui/feature_facts.py`'s one-home registry. Separately, the
+hydration screen (screen 8) offers a small, curated catalog of durable decisions born of
+witnessed painful (or successful) experience from this project's own ledger AND the
+autoharn-panel deployment's — `tools/setup_tui/durable_decisions.py` — each selection writing a
+real `led decision` row and compiling into the new world's CLAUDE.md between generated-section
+markers (idempotent, never touching bytes outside them); an ADR-adoption submenu is DERIVED from
+`law/adr/*.md` at runtime, never a hand list. Kernel `obligate` rows are explicitly out of v1 —
+the catalog exists partly to encode the obligate-amplification footgun (obligating a principal
+makes every row that principal later writes count as new review debt too, not just the rows
+that existed at obligation time — ledger row 1640) as one of its own entries, not to hand a
+fresh operator a loaded trigger at birth.
 
 **Honest limits, so the method is not oversold.** A backstop checks the DECLARED correspondence
 dimension only — semantic fidelity beyond it stays review-only, and the honest instances say so

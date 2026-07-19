@@ -1,6 +1,6 @@
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-18T21:34:05Z
-#   last-change: 2026-07-18T22:46:49Z
+#   last-change: 2026-07-18T23:39:19Z
 #   contributors: ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -13,9 +13,20 @@ skippable with the skip recorded").
 Rule 1 in practice: every act on the cluster host or on the target directory goes through
 `runner.run_command`, never a bare `subprocess` call buried in a screen -- so the printed
 command is always the literal argv this module executes, not a paraphrase.
+
+Feature-facts rendering (design/FABLE-SETUP-TUI-FEATURE-FACTS-SPEC.md §2, commission ledger row
+1714): every screen below that offers a selectable act prints that act's facts line -- the
+standards-conformance aspiration and external costs/dependencies -- from
+`tools/setup_tui/feature_facts.py` BEFORE the operator commits to it, via `_show_facts` below.
+No screen carries a facts string of its own (ADR-0012 P1, one home). `PREFLIGHT_BINARIES` and
+`SUBSTRATE_CHOICES` just below are this module's own half of that spec's drift backstop: the
+LIVE authority `feature_facts.derive_live_keys()`/the drift fixture compares against, so a
+future binary or substrate choice added here without a matching registry key (or vice versa) is
+caught, not silently drifted.
 """
 from __future__ import annotations
 
+import importlib.util
 import json
 import os
 import re
@@ -25,10 +36,28 @@ import time
 from pathlib import Path
 
 from tools.setup_tui import checklist as ck
-from tools.setup_tui import pghba, probes
+from tools.setup_tui import durable_decisions, feature_facts, pghba, probes
 from tools.setup_tui.runner import run_command
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+
+# The live authority side of feature_facts.py's drift backstop (module docstring above). Every
+# name here MUST have a "preflight_<name>" entry in feature_facts.REGISTRY; the drift fixture
+# (seen-red/setup-tui-feature-facts-drift/run_fixtures.py) checks both directions.
+PREFLIGHT_BINARIES = ("idris2", "clingo", "python3", "psql")
+
+# Same discipline for screen 2's ask_choice options -- every key here MUST have a
+# "substrate_<key>" entry in feature_facts.REGISTRY.
+SUBSTRATE_CHOICES = [
+    ("existing", "existing-db path (zero manual steps, the omega-lab shape)"),
+    ("dedicated", "dedicated-db path (generates a confined pg_hba block)"),
+]
+
+
+def _show_facts(ui, *keys: str) -> None:
+    """Prints the facts line(s) for `keys` -- the ONE call site every screen below uses (spec
+    §2: 'shown at the point of selection ... before the operator commits the act')."""
+    ui.say(feature_facts.facts_block(list(keys)))
 
 
 # ---------------------------------------------------------------------------------------------
@@ -63,12 +92,23 @@ def screen_preflight(ui, cl, state):
         cl.add("preflight", "submodules populated", ck.WITNESSED,
                f"RED: {len(dash_lines)} uninitialized submodule(s)")
 
-    # binaries
-    for name in ("idris2", "python3", "psql"):
+    # binaries -- PREFLIGHT_BINARIES is this module's own half of feature_facts.py's drift
+    # backstop (module docstring above); every name here needs a "preflight_<name>" registry
+    # entry, checked by seen-red/setup-tui-feature-facts-drift/run_fixtures.py. `clingo` is
+    # NON-FATAL (never RED-labeled) to match bootstrap/bootstrap.sh's own posture -- "the engine
+    # differential proofs need it (not fatal to bootstrap)" -- everything else here is a hard
+    # RED on absence, unchanged from before this build.
+    for name in PREFLIGHT_BINARIES:
+        _show_facts(ui, f"preflight_{name}")
         path = probes.which(name)
         if path:
             ui.say(f"  {name}: GREEN ({path})")
             cl.add("preflight", f"{name} found", ck.WITNESSED, path)
+        elif name == "clingo":
+            ui.say(f"  {name}: not found on PATH (non-fatal -- the engine differential proofs "
+                   f"and ./judge need it, but this does not block setup)")
+            cl.add("preflight", f"{name} found", ck.WITNESSED,
+                   "not on PATH (non-fatal, matches bootstrap/bootstrap.sh's own posture)")
         else:
             ui.say(f"  {name}: RED -- not found on PATH")
             fix = {
@@ -98,6 +138,19 @@ def screen_preflight(ui, cl, state):
                    f"HARNESS_PGHOST to the correct host")
             cl.add("preflight", "HARNESS_PGHOST reachable", ck.WITNESSED, f"RED: {detail}")
         state["pghost"] = host
+
+    # UI backend -- informational only (app.py already picked InteractiveUi/ScriptedUi before
+    # this screen ever ran, per tools/setup_tui/__init__.py's own v1-boundary docstring); this
+    # re-checks LIVE via importlib.util.find_spec rather than trusting that docstring's
+    # build-time claim, so the report stays honest if either package is installed later.
+    for name in ("textual", "urwid"):
+        _show_facts(ui, f"ui_backend_{name}")
+        available = importlib.util.find_spec(name) is not None
+        ui.say(f"  {name}: {'available' if available else 'not installed'} "
+               f"(informational -- the numbered-menu fallback is used regardless of either "
+               f"result, per v1 boundaries)")
+        cl.add("preflight", f"{name} available", ck.WITNESSED,
+               "available" if available else "not installed")
     return state
 
 
@@ -111,10 +164,8 @@ def screen_substrate(ui, cl, state):
         cl.add("substrate", "path chosen", ck.SKIPPED, "operator skipped screen 2")
         return state
 
-    path = ui.ask_choice("Which substrate path?", [
-        ("existing", "existing-db path (zero manual steps, the omega-lab shape)"),
-        ("dedicated", "dedicated-db path (generates a confined pg_hba block)"),
-    ])
+    _show_facts(ui, "substrate_existing", "substrate_dedicated")
+    path = ui.ask_choice("Which substrate path?", SUBSTRATE_CHOICES)
     state["substrate_path"] = path
     host = state.get("pghost") or ui.ask_text("Postgres host", default="192.168.122.1")
     state["pghost"] = host
@@ -425,6 +476,7 @@ def screen_birth(ui, cl, state):
 
 def screen_boundary(ui, cl, state):
     ui.banner("6/9 Boundary")
+    _show_facts(ui, "boundary_service")
     # Gates on birth_ok EXACTLY as screen_birth gates on rehearsal_green above -- `not
     # state.get(...)` catches both an explicit False (birth ran and failed) and a missing key
     # (birth was never run/skipped) alike, so configuring a boundary for a world that may not
@@ -606,6 +658,7 @@ def screen_boundary(ui, cl, state):
 
 def screen_observability(ui, cl, state):
     ui.banner("7/9 Observability")
+    _show_facts(ui, "observability_otelcol", "observability_watchdog")
     if not ui.confirm("Show observability blocks?", default=True):
         cl.add("observability", "observability", ck.SKIPPED, "operator skipped screen 7")
         return state
@@ -617,6 +670,19 @@ def screen_observability(ui, cl, state):
     ui.say("  what you should see: 'Everything is ready. Begin running and processing data.'")
     ui.say("  --- end ---")
     cl.add("observability", "otelcol start line", ck.PREPARED, otelcol_line)
+
+    # The model-provenance watchdog (design/FABLE-OTEL-SENTRY-SPEC.md §3, repo-root verb
+    # `./otel-watch`) -- a second PREPARED block, same shape as otelcol's above (no daemon
+    # management beyond emitting the start line, per the parent spec's v1 boundary). It depends
+    # on the otelcol collector already running (feature_facts.py's "observability_watchdog"
+    # entry names this), so it is shown second, after otelcol's own block.
+    watchdog_line = f"{REPO_ROOT / 'otel-watch'} --daemon"
+    ui.say("  --- PREPARED: OTel model-provenance watchdog start line ---")
+    ui.say(f"  {watchdog_line}")
+    ui.say("  what you should see: a coverage notice per watched session (never silent) -- "
+           "design/FABLE-OTEL-SENTRY-SPEC.md §3")
+    ui.say("  --- end ---")
+    cl.add("observability", "otel-watch start line", ck.PREPARED, watchdog_line)
 
     claude_line = f"cd {dest} && claude"
     ui.say("  --- PREPARED: Claude launch line ---")
@@ -630,6 +696,21 @@ def screen_observability(ui, cl, state):
 # ---------------------------------------------------------------------------------------------
 # Screen 8: Hydration
 # ---------------------------------------------------------------------------------------------
+
+def _run_decision(led: str, statement: str) -> tuple[bool, str]:
+    """Runs `led decision <statement>`, returning (ok, detail) where detail is 'row <id>' when
+    the row id can be parsed from the real output, else an exit-code fallback -- never a
+    fabricated id. Same regex screen_hydration's pre-catalog code already used (led's own
+    `led: row <id> written.` convention, serving/boundary_cli_client.py `write_and_report`)."""
+    argv = [led, "decision", statement]
+    res = run_command(argv)
+    row_id = None
+    m = re.search(r"\brow[_ ]?(?:id)?[:=]?\s*(\d+)\b", res.output, re.IGNORECASE)
+    if m:
+        row_id = m.group(1)
+    detail = f"row {row_id}" if row_id else (f"exit {res.returncode}" if not res.ok else "written")
+    return res.ok, detail
+
 
 def screen_hydration(ui, cl, state):
     ui.banner("8/9 Hydration")
@@ -645,34 +726,71 @@ def screen_hydration(ui, cl, state):
         cl.add("hydration", "led present", ck.WITNESSED, f"RED: {led} not found")
         return state
 
-    items = [
-        ("adr_corpus", "ADR-corpus adoption"),
-        ("fork_provenance", "fork provenance"),
-        ("role_charters", "role charters to register"),
-        ("makespan_pointer", "makespan pointer"),
-    ]
-    for key, label in items:
-        if not ui.confirm(f"Hydrate: {label}?", default=False):
-            cl.add("hydration", label, ck.SKIPPED, "operator declined")
-            continue
-        if key == "role_charters":
-            role = ui.ask_text("Role to charter (must already be a registered led principal)")
-            path = ui.ask_text("Charter file path")
-            argv = ["python3", str(REPO_ROOT / "tools" / "role_charter.py"), "register",
-                    role, path, "--led", led]
-            res = run_command(argv)
-            cl.add("hydration", label, ck.WITNESSED if res.ok else ck.REFUSED,
-                   f"{'exit 0' if res.ok else f'exit {res.returncode}'}")
-            continue
-        statement = ui.ask_text(f"Statement for '{label}' decision row")
-        argv = [led, "decision", statement]
+    selected_fragments: list[str] = []
+
+    # fork_provenance / role_charters: unchanged, per-world facts (spec §3 "Relation to the
+    # existing screen-8 items" -- these stay outside the durable-decisions catalog, they are not
+    # durable decisions). adr_corpus and makespan_pointer's free-text prompts are RETIRED here,
+    # absorbed into the catalog + ADR submenu below.
+    _show_facts(ui, "hydration_fork_provenance")
+    if not ui.confirm("Hydrate: fork provenance?", default=False):
+        cl.add("hydration", "fork provenance", ck.SKIPPED, "operator declined")
+    else:
+        statement = ui.ask_text("Statement for 'fork provenance' decision row")
+        ok, detail = _run_decision(led, statement)
+        cl.add("hydration", "fork provenance", ck.WITNESSED if ok else ck.REFUSED, detail)
+
+    _show_facts(ui, "hydration_role_charters")
+    if not ui.confirm("Hydrate: role charters to register?", default=False):
+        cl.add("hydration", "role charters to register", ck.SKIPPED, "operator declined")
+    else:
+        role = ui.ask_text("Role to charter (must already be a registered led principal)")
+        path = ui.ask_text("Charter file path")
+        argv = ["python3", str(REPO_ROOT / "tools" / "role_charter.py"), "register",
+                role, path, "--led", led]
         res = run_command(argv)
-        row_id = None
-        m = re.search(r"\brow[_ ]?(?:id)?[:=]?\s*(\d+)\b", res.output, re.IGNORECASE)
-        if m:
-            row_id = m.group(1)
-        detail = f"row {row_id}" if row_id else (f"exit {res.returncode}" if not res.ok else "written")
-        cl.add("hydration", label, ck.WITNESSED, detail)
+        cl.add("hydration", "role charters to register", ck.WITNESSED if res.ok else ck.REFUSED,
+               f"{'exit 0' if res.ok else f'exit {res.returncode}'}")
+
+    # The durable-decisions catalog (design/FABLE-SETUP-TUI-FEATURE-FACTS-SPEC.md §3): each
+    # selection writes ONE `led decision` row and, if accepted, contributes its `claude_md`
+    # fragment to the compiled section below (declined entries contribute NOTHING -- WD2's own
+    # bar: "SKIPPED in the checklist, zero rows, zero fragments").
+    for decision in durable_decisions.CATALOG:
+        _show_facts(ui, f"hydration_{decision.slug.replace('-', '_')}")
+        if not ui.confirm(f"Hydrate durable decision: {decision.slug}?", default=False):
+            cl.add("hydration", decision.slug, ck.SKIPPED, "operator declined")
+            continue
+        ok, detail = _run_decision(led, decision.hydrates)
+        cl.add("hydration", decision.slug, ck.WITNESSED if ok else ck.REFUSED, detail)
+        if ok:
+            selected_fragments.append(decision.claude_md)
+
+    # The ADR-adoption submenu (spec §3 item 3): DERIVED from law/adr/*.md at runtime, never a
+    # hand list (WD3's own bar) -- absorbs and supersedes the old free-text `adr_corpus` item.
+    _show_facts(ui, "hydration_adr_adoption")
+    adrs = durable_decisions.list_adrs()
+    ui.say(f"  {len(adrs)} ADR(s) found under law/adr/ -- offering each individually:")
+    for number, title, relpath in adrs:
+        label = f"ADR-{number}: {title}"
+        if not ui.confirm(f"Adopt {label}?", default=False):
+            cl.add("hydration", f"adr adoption ({label})", ck.SKIPPED, "operator declined")
+            continue
+        statement = durable_decisions.adr_decision_statement(number, title, relpath)
+        ok, detail = _run_decision(led, statement)
+        cl.add("hydration", f"adr adoption ({label})", ck.WITNESSED if ok else ck.REFUSED, detail)
+        if ok:
+            selected_fragments.append(
+                durable_decisions.adr_claude_md_fragment(number, title, relpath))
+
+    # CLAUDE.md compilation (spec §4) -- always runs once, even with zero fragments (an explicit
+    # "(none selected at hydration time)" section is absence WITNESSED, not silently assumed by
+    # leaving CLAUDE.md untouched). Idempotent: re-running this screen with the same selections
+    # replaces only the marked section (WD4).
+    claude_path = durable_decisions.compile_claude_md(dest, selected_fragments)
+    ui.say(f"  CLAUDE.md compiled: {len(selected_fragments)} fragment(s) -> {claude_path}")
+    cl.add("hydration", "CLAUDE.md durable-decisions section compiled", ck.WITNESSED,
+           f"{len(selected_fragments)} fragment(s) -> {claude_path}")
     return state
 
 

@@ -2,14 +2,14 @@ seen-red/setup-tui-scripted-smoke -- banked RED evidence (both-polarity-adjacent
 
 Ledger row 1700's commission: register a scripted TUI smoke fixture exercising tools/setup_tui's
 preflight + validation refusal legs (the drift-sensitive surface) without a live db birth. This
-fixture is inherently REFUSAL-shaped -- every one of its five cases drives the real
+fixture is inherently REFUSAL-shaped -- most of its eight cases drive the real
 python3 -m tools.setup_tui.app --scripted <answers> --start-at <screen> entry point against a
-hostile or malformed input and asserts the SAME REFUSED outcome no-traceback the mechanism is
+hostile or malformed input and assert the SAME REFUSED outcome no-traceback the mechanism is
 supposed to produce; a fixture failure here (an assertion raised, or a REFUSED that silently
 stopped firing after some future edit) IS this gate's red case, exactly as no-conflict-markers/
 red.txt banks its GATE's real output rather than an isolated failing-half transcript.
 
-Two of the five cases are this build's own repairs, direct regression proof:
+Two of the original five cases are that build's own repairs, direct regression proof:
 
   case 3 (item B) -- tools/setup_tui/probes.py's new valid_subnet(): a malformed CIDR token fed
   to the dedicated-db substrate path is REFUSED before any live pg_hba read is attempted.
@@ -18,11 +18,19 @@ Two of the five cases are this build's own repairs, direct regression proof:
   world name ('evil"] [deployments.pwn') reachable via --start-at boundary is REFUSED before
   boundary-multiplex.toml is written; the fixture asserts the file does not exist afterward.
 
+Cases 6-8 were added for design/FABLE-SETUP-TUI-FEATURE-FACTS-SPEC.md's WF1 (commission ledger
+row 1714): they assert the feature-facts lines actually render at preflight, observability, and
+hydration's screen entry, with citations intact (substrate and boundary facts got the same
+assertion folded into cases 2 and 5 above, since those cases already drive those two screens).
+
 Real captured stdout, 2026-07-19, a clean run against this commit's tree (zero residue, exit 0):
 
 case 1 ok: fork-target refuses an occupied 'fresh' destination, nothing copied
-case 2 ok: substrate refuses an invalid dedicated-db name before any pg_hba read
+case 2 ok: substrate refuses an invalid dedicated-db name before any pg_hba read, and both substrate facts lines rendered first (WF1)
 case 3 ok: substrate refuses a malformed subnet token before any pg_hba read (the tools/setup_tui/probes.py valid_subnet repair)
 case 4 ok: boundary (--start-at) refuses a nonexistent destination directory, no traceback
-case 5 ok: boundary (--start-at) refuses a hostile world name before writing boundary-multiplex.toml (the tools/setup_tui/screens.py screen_boundary repair)
+case 5 ok: boundary (--start-at) refuses a hostile world name before writing boundary-multiplex.toml (the tools/setup_tui/screens.py screen_boundary repair), and the boundary_service facts line rendered at screen entry (WF1)
+case 6 ok: every PREFLIGHT_BINARIES + UI-backend facts line rendered (WF1)
+case 7 ok: both otelcol and otel-watch facts lines rendered at screen entry (WF1)
+case 8 ok: hydration refuses cleanly against a destination with no ./led shim (WD5's own bar, re-proven here)
 ALL CASES OK -- setup_tui scripted preflight/validation refusal legs, zero residue
