@@ -1,6 +1,6 @@
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-18T21:31:32Z
-#   last-change: 2026-07-19T00:59:37Z
+#   last-change: 2026-07-19T03:02:45Z
 #   contributors: ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -108,10 +108,11 @@ class BackgroundResult:
 def start_background(argv: list[str], *, cwd: str | None = None, echo: bool = True,
                       dry_run: bool = False) -> BackgroundResult:
     """The non-waited counterpart of `run_command`, for the one act this package starts and
-    leaves running rather than runs to completion (screen 6's boundary service) -- same argv-echo
-    discipline (`$ argv`, unconditional, same shape `run_command` uses) so a dry run's WOULD-DO
-    line and a live run's printed command line are the SAME text, which is what the dry-run
-    amendment's WDR2 parity witness relies on (diffing the two runs' `$ `-prefixed lines).
+    leaves running rather than runs to completion (the boundary screen's boundary service) --
+    same argv-echo discipline (`$ argv`, unconditional, same shape `run_command` uses) so a
+    dry run's WOULD-DO line and a live run's printed command line are the SAME text, which is
+    what the dry-run amendment's WDR2 parity witness relies on (diffing the two runs' `$ `-
+    prefixed lines).
     Under `dry_run=True`, argv is echoed but nothing is Popened -- `proc` is None, and the caller
     must not probe a service that was never started (record the post-start health/meta probes as
     DRY-SKIPPED, per the amendment's own rule for PREPARED-block verification gates)."""

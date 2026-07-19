@@ -1,10 +1,11 @@
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-18T21:32:47Z
-#   last-change: 2026-07-18T21:32:47Z
+#   last-change: 2026-07-19T03:04:09Z
 #   contributors: ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
-"""tools/setup_tui/pghba.py -- the dedicated-db path's pg_hba block generator (screen 2, spec:
+"""tools/setup_tui/pghba.py -- the dedicated-db path's pg_hba block generator (the substrate
+screen, spec:
 "generates the confined pg_hba block in the live file's own idiom -- reading the operator's real
 pg_hba copy first, per the standing config-fragments rule").
 

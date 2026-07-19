@@ -83,7 +83,7 @@ these needs a live Postgres host, unlike a would-be live-birth witness:
       no-flag fallback notice).
 
 The full LIVE end-to-end proof -- a REAL file on disk, parsed by
-hooks/pretooluse_change_gate.py's OWN loader, surviving screen 7 (Boundary)'s later re-scaffold
+hooks/pretooluse_change_gate.py's OWN loader, surviving the boundary screen's later re-scaffold
 without being clobbered back to the bare default -- lives in
 seen-red/setup-tui-dry-run-parity (WDR1 already performs a real birth through boundary; this
 build's own addition there is witness (a)'s live half).
@@ -238,7 +238,7 @@ def main() -> int:
         # existence check fires BEFORE any hydration-item facts line (a hard prerequisite gate,
         # not a point of selection), so this case's own bar is simply the legible refusal. ---
         # 3 answers: run hydration now, the destination, then decline saving the checklist (the
-        # destination IS a real dir, so screen 9 asks that third question).
+        # destination IS a real dir, so the hydration screen asks that third question).
         no_led_dest = os.path.join(scratch, "no_led_dest")
         os.makedirs(no_led_dest)
         cp = run_scripted(f"y\n{no_led_dest}\nn\n", "hydration", scratch)

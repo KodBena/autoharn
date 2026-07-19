@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-19T01:39:25Z
-#   last-change: 2026-07-19T01:55:54Z
+#   last-change: 2026-07-19T03:06:51Z
 #   contributors: ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -61,6 +61,17 @@ FIXTURE_PASSPHRASE = "setup-tui-fixture-passphrase-THROWAWAY-ONLY-never-a-real-k
 
 _ROW_ID_RE = re.compile(r"\brow[_ ]?(?:id)?[:=]?\s*(\d+)\b", re.IGNORECASE)
 AWAITING_HEADER = "## Current state: AWAITING-KEY"
+KEY_COMMITTED_HEADER = "## Current state: KEY COMMITTED"
+# Marker pair (ledger row 1790, finding 1): ports durable_decisions.compile_claude_md's own
+# BEGIN/END-marker idempotent-replace discipline to this file's "KEY COMMITTED" section --
+# explicit markers around the discharged section, replace-only-the-middle on every run, bytes
+# outside the markers never touched. Before this fix, a legitimate re-run (key rotation, or
+# resume after a death between the README write and verification) recognized only the
+# pre-discharge AWAITING-KEY shape and APPENDED a second "## Current state: KEY COMMITTED"
+# section on any later run, leaving the first section false about the on-disk key's actual
+# fingerprint.
+KEY_COMMITTED_BEGIN = "<!-- BEGIN KEY COMMITTED SECTION (setup_tui signed_genesis) -->"
+KEY_COMMITTED_END = "<!-- END KEY COMMITTED SECTION (setup_tui signed_genesis) -->"
 
 
 def gpg_present() -> bool:
@@ -245,26 +256,32 @@ def discharge_keys_readme(dest: str, key_filename_: str, fingerprint: str, name:
     `## Current state: KEY COMMITTED` -- the real key plus a one-line provenance note (spec §1
     item 2) -- never touching the rest of the templated file
     (`bootstrap/templates/keys-README.md.tmpl`'s own prose stays byte-identical outside this one
-    section, the same never-touch-outside-the-markers discipline
-    `durable_decisions.compile_claude_md` already carries for CLAUDE.md, applied here to a
-    section-header pair since the AWAITING-KEY stub carries no HTML-comment markers of its own
-    to key off). Under `dry_run`, the would-be new text is still computed (so the caller can
-    show a real content summary) but never written -- `runner.write_file`'s own choke point."""
+    section). Idempotent-replace (ledger row 1790, finding 1 -- ported from
+    `durable_decisions.compile_claude_md`'s own marker discipline): the KEY COMMITTED section is
+    wrapped in `KEY_COMMITTED_BEGIN`/`KEY_COMMITTED_END` markers, and every run after the FIRST
+    real discharge replaces only the marked middle -- a legitimate re-run (key rotation, or
+    resume after a death between the README write and verification) can no longer append a
+    second, stale-fingerprint section next to the first.
+
+    Three shapes recognized, in order:
+      1. Marker pair present (a world discharged by THIS fixed version already) -- replace
+         between the markers, the steady-state idempotent path.
+      2. `AWAITING-KEY` stub present (never discharged yet) -- replace that section, same
+         boundary logic (up to the next `\\n## ` header) this function has always used.
+      3. A marker-less `KEY COMMITTED` header present, no markers (migration: a world discharged
+         by the already-shipped, pre-fix version of this module) -- replace THAT section in
+         place, same boundary logic, rather than appending a second one after it.
+      4. None of the above (a stub shape this module does not recognize) -- append rather than
+         silently no-op; earlier bytes are still never touched (unchanged fallback).
+
+    Under `dry_run`, the would-be new text is still computed (so the caller can show a real
+    content summary) but never written -- `runner.write_file`'s own choke point."""
     path = os.path.join(dest, "keys", "README.md")
     with open(path, encoding="utf-8") as f:
         text = f.read()
-    start = text.find(AWAITING_HEADER)
-    if start == -1:
-        # Already discharged (a prior ceremony run), or a stub shape this module does not
-        # recognize -- append rather than silently no-op; earlier bytes are still never touched.
-        pre, post = text, ""
-    else:
-        next_hdr = text.find("\n## ", start + len(AWAITING_HEADER))
-        end = next_hdr if next_hdr != -1 else len(text)
-        pre, post = text[:start], text[end:]
     stamp = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-    section = (
-        f"## Current state: KEY COMMITTED\n\n"
+    body = (
+        f"{KEY_COMMITTED_HEADER}\n\n"
         f"- `{key_filename_}` -- public key for \"{name} <{email}>\", fingerprint "
         f"`{fingerprint}`, committed {stamp} by the Signed genesis ceremony "
         f"(design/FABLE-SETUP-TUI-SIGNED-GENESIS-SPEC.md, tools/setup_tui/signed_genesis.py).\n"
@@ -272,7 +289,37 @@ def discharge_keys_readme(dest: str, key_filename_: str, fingerprint: str, name:
         f"the operator's own (user-guide/USER-GPG-TRUST-LAYER-FAQ.md §2 -- print the revocation "
         f"certificate and store it offline).\n"
     )
-    new_text = pre + section + post
+    section = f"{KEY_COMMITTED_BEGIN}\n{body}{KEY_COMMITTED_END}\n"
+
+    if KEY_COMMITTED_BEGIN in text and KEY_COMMITTED_END in text:
+        # Shape 1: steady state -- replace only the marked middle, byte-identical everywhere
+        # else (durable_decisions.compile_claude_md's own pattern).
+        pre, rest = text.split(KEY_COMMITTED_BEGIN, 1)
+        _mid, post = rest.split(KEY_COMMITTED_END, 1)
+        new_text = pre + section + post
+    else:
+        start = text.find(AWAITING_HEADER)
+        if start != -1:
+            # Shape 2: pre-discharge AWAITING-KEY stub -- unchanged boundary logic from before
+            # this fix.
+            next_hdr = text.find("\n## ", start + len(AWAITING_HEADER))
+            end = next_hdr if next_hdr != -1 else len(text)
+            pre, post = text[:start], text[end:]
+            new_text = pre + section + post
+        else:
+            legacy_start = text.find(KEY_COMMITTED_HEADER)
+            if legacy_start != -1:
+                # Shape 3: migration -- a marker-less KEY COMMITTED section from the
+                # already-shipped, pre-fix version. Replace it in place (same boundary as shape
+                # 2) rather than appending a second, marker-wrapped section after it.
+                next_hdr = text.find("\n## ", legacy_start + len(KEY_COMMITTED_HEADER))
+                end = next_hdr if next_hdr != -1 else len(text)
+                pre, post = text[:legacy_start], text[end:]
+                new_text = pre + section + post
+            else:
+                # Shape 4: unrecognized -- append rather than silently no-op; earlier bytes are
+                # still never touched (unchanged fallback behavior).
+                new_text = text + section
     wrote = write_file(path, new_text, dry_run=dry_run, encoding="utf-8")
     return path, new_text, wrote
 
