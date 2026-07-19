@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-19T02:09:27Z
-#   last-change: 2026-07-19T02:18:15Z
+#   last-change: 2026-07-19T03:40:25Z
 #   contributors: ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -43,9 +43,20 @@ import re
 import subprocess
 from pathlib import Path
 
+from tools.setup_tui import probes, runner
 from tools.setup_tui.runner import CommandResult, run_command
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+# The kernel-lineage source files CLASS_CHOICES/RELATION_CHOICES below hand-mirror (ledger row
+# 1799 finding 3): `agent_class`'s CHECK is DEFINED in s15-schema.sql (the schema-authoring
+# lineage file the docstring below already cites) -- s40/s41 add EVENTS about principals that
+# already carry one of these four classes, but never re-issue/widen the CHECK itself, so s15 is
+# the true authoritative source, not s40/s41 (checked directly: no `agent_class IN (...)` CHECK
+# appears anywhere in s40 or s41). `principal_relation`'s CHECK genuinely IS defined in s41.
+KERNEL_CLASS_CHECK_PATH = REPO_ROOT / "kernel" / "lineage" / "s15-schema.sql"
+KERNEL_RELATION_CHECK_PATH = (
+    REPO_ROOT / "kernel" / "lineage" / "s41-principal-bindings-and-relations.sql"
+)
 
 # Mirrors kernel/lineage/s15-schema.sql:62's agent_class CHECK ("agent_class text NOT NULL CHECK
 # (agent_class IN ('human','model','subagent','tool'))") -- s40/s41 never widen this vocabulary,
@@ -74,7 +85,99 @@ RELATION_CHOICES = [
                 "from a suspended/revoked principal -- no reinstatement verb exists)"),
 ]
 
-_ROW_ID_RE = re.compile(r"\brow[_ ]?(?:id)?[:=]?\s*(\d+)\b", re.IGNORECASE)
+# ---------------------------------------------------------------------------------------------
+# The drift BACKSTOP the module docstring's own "RULE 1, NEVER A SECOND IMPLEMENTATION" mirror
+# discipline demands (ledger row 1799 finding 3): CLASS_CHOICES/RELATION_CHOICES above are hand-
+# mirrors of a kernel CHECK constraint's vocabulary; a hand-mirror with no check is a claim that
+# it stays in sync, not a fact. These functions parse the vocabulary straight out of the kernel
+# lineage SQL SOURCE TEXT (read-only, never edited or imported as a module -- kernel/lineage is
+# frozen-record per CLAUDE.md) and compare it against this module's own CHOICES lists,
+# injectable via parameters so a fixture can feed a SYNTHETIC disagreeing SQL text without
+# touching kernel/lineage on disk.
+# ---------------------------------------------------------------------------------------------
+
+_CLASS_CHECK_RE = re.compile(
+    r"agent_class\s+text\s+NOT\s+NULL\s+CHECK\s*\(\s*agent_class\s+IN\s*\(([^)]*)\)\s*\)"
+)
+_RELATION_CHECK_RE = re.compile(
+    r"principal_relation\s+IN\s*\(([^)]*)\)"
+)
+
+
+def _parse_sql_string_list(inner: str) -> list[str]:
+    """Parses a comma-separated `'a','b','c'` SQL string-literal list (the inside of an `IN
+    (...)` clause) into a Python list, in source order -- never re-sorted, since the vocabulary
+    might be display-ordered deliberately."""
+    return [tok.strip().strip("'") for tok in inner.split(",") if tok.strip()]
+
+
+def read_kernel_class_vocabulary(source_text: str | None = None) -> list[str]:
+    """Parses `agent_class`'s CHECK vocabulary out of kernel/lineage/s15-schema.sql's own SOURCE
+    TEXT -- the file that actually DEFINES the CHECK (module docstring's own provenance note:
+    s40/s41 add events, never re-issue this CHECK). `source_text`, if given, is a SYNTHETIC
+    stand-in (the fixture's red-leg injection point); default `None` reads the real file. Raises
+    ValueError if the CHECK cannot be found/parsed."""
+    if source_text is None:
+        source_text = KERNEL_CLASS_CHECK_PATH.read_text(encoding="utf-8")
+    m = _CLASS_CHECK_RE.search(source_text)
+    if not m:
+        raise ValueError(
+            f"could not find the 'agent_class ... CHECK (agent_class IN (...))' constraint in "
+            f"{KERNEL_CLASS_CHECK_PATH} -- drift check has nothing to compare against"
+        )
+    return _parse_sql_string_list(m.group(1))
+
+
+def read_kernel_relation_vocabulary(source_text: str | None = None) -> list[str]:
+    """Parses `principal_relation`'s CHECK vocabulary out of
+    kernel/lineage/s41-principal-bindings-and-relations.sql's own SOURCE TEXT. `source_text`, if
+    given, is a SYNTHETIC stand-in (the fixture's red-leg injection point); default `None` reads
+    the real file. Raises ValueError if the CHECK cannot be found/parsed."""
+    if source_text is None:
+        source_text = KERNEL_RELATION_CHECK_PATH.read_text(encoding="utf-8")
+    m = _RELATION_CHECK_RE.search(source_text)
+    if not m:
+        raise ValueError(
+            f"could not find a 'principal_relation IN (...)' clause in "
+            f"{KERNEL_RELATION_CHECK_PATH} -- drift check has nothing to compare against"
+        )
+    return _parse_sql_string_list(m.group(1))
+
+
+def check_vocabulary_drift(
+    class_choices: list[tuple[str, str]] | None = None,
+    relation_choices: list[tuple[str, str]] | None = None,
+    class_source_text: str | None = None,
+    relation_source_text: str | None = None,
+) -> list[str]:
+    """Compares `class_choices`/`relation_choices` (default: this module's own CLASS_CHOICES/
+    RELATION_CHOICES) against the live kernel CHECK vocabularies, read fresh from their own
+    source text. Returns a list of drift messages, empty iff both agree AS SETS (order is a
+    display choice this module owns, not part of the kernel's own contract). Every parameter is
+    injectable (default `None` reads the real, live kernel sources) so a fixture can feed a
+    SYNTHETIC disagreeing SQL text and observe the red leg without touching kernel/lineage on
+    disk -- that tree stays read-only (frozen-record, CLAUDE.md)."""
+    if class_choices is None:
+        class_choices = CLASS_CHOICES
+    if relation_choices is None:
+        relation_choices = RELATION_CHOICES
+    local_classes = {c for c, _ in class_choices}
+    local_relations = {r for r, _ in relation_choices}
+    kernel_classes = set(read_kernel_class_vocabulary(class_source_text))
+    kernel_relations = set(read_kernel_relation_vocabulary(relation_source_text))
+    drift: list[str] = []
+    if local_classes != kernel_classes:
+        drift.append(
+            f"DRIFT: principals_authority.CLASS_CHOICES={sorted(local_classes)!r} != "
+            f"kernel/lineage/s15-schema.sql agent_class CHECK={sorted(kernel_classes)!r}"
+        )
+    if local_relations != kernel_relations:
+        drift.append(
+            f"DRIFT: principals_authority.RELATION_CHOICES={sorted(local_relations)!r} != "
+            f"kernel/lineage/s41-principal-bindings-and-relations.sql principal_relation "
+            f"CHECK={sorted(kernel_relations)!r}"
+        )
+    return drift
 
 # ---------------------------------------------------------------------------------------------
 # The propaedeutic lesson lines (spec §2: "the one-line lesson (what this row constitutes, in
@@ -127,17 +230,35 @@ LESSON_WORKFLOW_POINTER = (
 
 # ---------------------------------------------------------------------------------------------
 # Reads -- BEFORE the boundary exists (module docstring): direct psql, `SET ROLE`, the SAME
-# shape signed_genesis.py's own `_dep_fields`/`_psql_json_rows` use, for the SAME reason (this
+# shape signed_genesis.py's own `_validated_dep_fields`/`_psql_json_rows` use, for the SAME reason (this
 # screen also sits before screen_boundary in the flow). Kept as this module's own small copy
-# rather than reaching into signed_genesis.py's underscore-prefixed internals -- the row-id-regex
-# duplication between screens.py and signed_genesis.py is this codebase's own established
-# precedent for a connector this thin.
+# rather than reaching into signed_genesis.py's underscore-prefixed internals -- `_validated_dep_fields`/
+# the psql-rows helper are a connector thin enough that a shared home is not worth the coupling
+# (unlike the row-id regex, which WAS a genuine three-way duplication of one fact and now has
+# its one home in `runner.parse_row_id`, ledger row 1799 finding 1).
 # ---------------------------------------------------------------------------------------------
 
-def _dep_fields(dest: str) -> dict:
+def _validated_dep_fields(dest: str) -> dict:
+    """Reads `<dest>/deployment.json` AND validates the fields this module later splices into
+    SQL text (`schema`/`role` -- ledger row 1799 finding 5) at THIS boundary, before any of them
+    reach a query string. Defense-in-depth, not paranoia: `deployment.json` is scaffold-written,
+    not operator-typed, but "trusted here because a trusted process wrote it" is exactly the
+    exemption law/adr/0012's 2026-07-18 interpreter-boundary amendment rejects ("the input is
+    trusted here does not exempt a site") -- every value is re-checked at the splice module's own
+    boundary regardless of provenance, the same discipline `probes.pg_connect`'s own schema check
+    already applies to an operator-typed value."""
     path = os.path.join(dest, "deployment.json")
     with open(path, encoding="utf-8") as f:
-        return json.load(f)
+        dep = json.load(f)
+    for _field in ("schema", "role"):
+        _val = dep.get(_field)
+        if not isinstance(_val, str) or not probes.valid_identifier(_val):
+            raise ValueError(
+                f"deployment.json field {_field!r} = {_val!r} is not a valid SQL identifier "
+                f"([A-Za-z0-9_]+) -- refusing to splice it into SQL text (law/adr/0012's "
+                f"interpreter-boundary rule)"
+            )
+    return dep
 
 
 def _psql_rows(dep: dict, sql: str, timeout: float = 15.0) -> list[str]:
@@ -157,7 +278,7 @@ def list_principals(dest: str) -> list[dict]:
     events.sql), oldest first -- id/name/class/standing/purpose. This is the world's OWN view,
     read raw, never re-derived (spec §1: "existing-principals display read from the world's own
     views"). Read-only; safe under `--dry-run` (a rehearsal that fakes its reads is a lie)."""
-    dep = _dep_fields(dest)
+    dep = _validated_dep_fields(dest)
     sql = (f"SET ROLE {dep['role']};\n"
            f"SELECT row_to_json(t) FROM (SELECT id, name, agent_class, standing, purpose "
            f"FROM {dep['schema']}.principal_standing_current ORDER BY id) t;")
@@ -168,7 +289,7 @@ def s41_status(dest: str) -> tuple[bool, str]:
     """(available, reason). `available` is True iff `principal_relations` (an s41-only view)
     resolves; `reason` names the live check performed either way. Never a traceback on a
     pre-s41 world -- `to_regclass` is NULL-safe, no missing-relation error possible."""
-    dep = _dep_fields(dest)
+    dep = _validated_dep_fields(dest)
     sql = (f"SET ROLE {dep['role']};\n"
            f"SELECT to_regclass('{dep['schema']}.principal_relations') IS NOT NULL;")
     rows = _psql_rows(dep, sql)
@@ -214,8 +335,7 @@ def _legacy_led(dest: str) -> str:
 def _parse_row_id(res: CommandResult) -> int | None:
     if res.dry_run or not res.ok:
         return None
-    m = _ROW_ID_RE.search(res.output)
-    return int(m.group(1)) if m else None
+    return runner.parse_row_id(res.output)
 
 
 def register_principal(dest: str, name: str, agent_class: str, purpose: str, *,

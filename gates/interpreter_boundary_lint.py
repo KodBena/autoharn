@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-18T22:35:17Z
-#   last-change: 2026-07-18T22:44:28Z
+#   last-change: 2026-07-19T03:37:44Z
 #   contributors: ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -45,6 +45,29 @@ witnessed guarded (bootstrap/teardown-world.sh's allowlist case-statement + `psq
 bootstrap/new-project.sh's parallel shape) and a *shell* parser is a different instrument than
 this AST-over-Python lint; a POSIX-sh-AST (or shellcheck-style) successor is named and deferred,
 not silently skipped.
+
+SCOPE AMENDMENT — 2026-07-19 (ledger row 1799 finding 4, docstring-only, no detector logic
+changed): a witnessed blind spot named honestly rather than left silently absent. SINK 3 above
+(evaluator-bound file writes) only matches a `.write(...)`/`.write_text(...)` call whose target
+path carries a .toml/.sql/.conf suffix — it does NOT match a config fragment that is *constructed*
+by splicing (an f-string over `db`/`role`/`subnets` building a pg_hba.conf-shaped block, e.g.
+tools/setup_tui/pghba.py's `generate_block`) and then only ever PRINTED to stdout for an operator
+to paste by hand, never passed to `.write(...)`/`.write_text(...)` inside this codebase itself.
+That shape is real config text a second evaluator (postgresql's own pg_hba.conf parser, once
+pasted) will later parse and execute against — the exact class this amendment's rule covers — but
+it matches none of the three v1 sink shapes, so this lint reports zero hits on it regardless of
+whether the splice site is guarded. The witnessed instance (pghba.py) was closed by moving its
+own validation inside the boundary function directly (`generate_block` now refuses via
+`PgHbaValidationError`, ledger row 1799 finding 4) rather than by this lint catching it — this
+lint did not catch it, and this amendment says so rather than implying coverage it does not have.
+A named successor (SINK 4, deferred, not built here): a print/`ui.say`-rendered evaluator-bound
+config fragment, recognized by a call to a print-shaped sink (`print`, a UI-`say`-named method)
+whose argument is dynamically built AND whose content is recognizable as evaluator-bound config
+text (a heuristic beyond this lint's current structural-suffix-on-a-write-target approach, since
+there is no target path to inspect a suffix on) — left unbuilt until a second witnessed instance
+of this exact shape justifies the broader recognizer (this docstring's own KNOWN LIMITATIONS
+section states the same discipline: a corpus convention is witnessed before it is generalized,
+never guessed at).
 
 AST-based (ast.parse + a tree walk), matching gates/no_lazy_imports.py's own instrument choice
 and CLI/reporting conventions — not a regex-over-lines, because "expansion or concatenation

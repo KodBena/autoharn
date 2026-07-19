@@ -1,0 +1,17 @@
+seen-red/setup-tui-governed-files-drift -- banked RED evidence (both-polarity proof, fixture-census)
+
+Ledger row 1799 finding 2: tools/setup_tui/governed_files.py's DEFAULT_PATTERNS is a third,
+un-checked mirror of hooks/pretooluse_change_gate.py's _DEFAULT_GOVERNED_PATTERNS and
+bootstrap/templates/governed_files.json's own default -- "kept in sync by inspection" per that
+module's own docstring, before this fixture made it a checked property. Cases 2 and 3 below feed
+governed_files.check_default_patterns_drift() a SYNTHETIC, deliberately-disagreeing hooks/
+or bootstrap/ source text and assert the drift message it must produce; a fixture failure here
+(a red leg that silently stopped firing) IS this backstop's red case.
+
+Real captured stdout, 2026-07-19, a clean run against this commit's tree (zero residue, exit 0):
+
+case 1 ok: DEFAULT_PATTERNS, hooks/pretooluse_change_gate.py, and bootstrap/templates/governed_files.json all agree (zero drift)
+case 2 ok: a synthetic hooks/pretooluse_change_gate.py default reads red when it disagrees with DEFAULT_PATTERNS
+case 3 ok: a synthetic bootstrap/templates/governed_files.json default reads red when it disagrees with DEFAULT_PATTERNS
+bonus case ok: both synthetic disagreements stack, reported separately
+ALL CASES OK -- governed_files.py three-mirror drift backstop, both polarities proven

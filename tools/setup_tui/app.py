@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-18T21:34:30Z
-#   last-change: 2026-07-19T03:02:21Z
+#   last-change: 2026-07-19T03:41:06Z
 #   contributors: ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -113,19 +113,36 @@ def main(argv: list[str] | None = None) -> int:
                "probes (preflight, connection checks, the pg_hba read) stay live. The closing "
                "checklist renders these as WOULD-DO. ***")
 
+    # try/finally (ledger row 1799 finding 6; the CHOICE stated here, not just made): every exit
+    # path from this loop -- the two typed exits below, AND an ordinary uncaught exception from a
+    # screen function, which is a normal Python program's default disposition and was NOT caught
+    # by anything before this fix -- must reach `_terminate_boundary_proc` before the process
+    # actually exits, per this function's own docstring/rule 1 ("no hidden state" applies to what
+    # THIS process started). `completed_normally` keeps the finally block from ALSO firing on the
+    # success path, where a boundary service `screen_boundary` started is the operator's live
+    # service and is meant to keep running after the wizard exits cleanly -- only an ABNORMAL
+    # exit (typed or not) must not leave it orphaned and unmentioned. An ordinary exception is
+    # deliberately NOT swallowed here (except Exception + re-raise would be an equally valid
+    # choice per the commission -- this one preserves the plainest possible traceback for an
+    # unanticipated defect, cleanup guaranteed either way): `finally` runs the cleanup, then
+    # Python's own propagation re-raises past this function unchanged.
+    completed_normally = False
     try:
-        for _, fn in screens:
-            state = fn(ui, cl, state)
-            state_holder[0] = state
-    except ScriptExhausted as exc:
-        print(f"\nsetup_tui: {exc}", file=sys.stderr)
-        _terminate_boundary_proc(state)
-        return 3
-    except KeyboardInterrupt:
-        print("\nsetup_tui: interrupted -- nothing further run. See the streamed output above "
-              "for what to finish by hand.", file=sys.stderr)
-        _terminate_boundary_proc(state)
-        return 130
+        try:
+            for _, fn in screens:
+                state = fn(ui, cl, state)
+                state_holder[0] = state
+            completed_normally = True
+        except ScriptExhausted as exc:
+            print(f"\nsetup_tui: {exc}", file=sys.stderr)
+            return 3
+        except KeyboardInterrupt:
+            print("\nsetup_tui: interrupted -- nothing further run. See the streamed output "
+                  "above for what to finish by hand.", file=sys.stderr)
+            return 130
+    finally:
+        if not completed_normally:
+            _terminate_boundary_proc(state_holder[0])
 
     return 0
 

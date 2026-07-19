@@ -1,6 +1,6 @@
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-18T21:34:05Z
-#   last-change: 2026-07-19T03:19:08Z
+#   last-change: 2026-07-19T03:44:55Z
 #   contributors: ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -44,7 +44,6 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
-import re
 import shutil
 import time
 from pathlib import Path
@@ -52,7 +51,9 @@ from pathlib import Path
 from tools.setup_tui import checklist as ck
 from tools.setup_tui import durable_decisions, feature_facts, governed_files, pghba, probes
 from tools.setup_tui import principals_authority, signed_genesis
-from tools.setup_tui.runner import run_command, start_background, summarize_content, write_file
+from tools.setup_tui.runner import (
+    parse_row_id, run_command, start_background, summarize_content, write_file,
+)
 from tools.setup_tui.ui import ScriptedUi
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -220,8 +221,11 @@ def screen_substrate(ui, cl, state):
     # `role` get spliced as program TEXT below -- into the pg_hba block (pghba.generate_block)
     # and into the createdb_cmd SQL string -- with no bind-variable carrier available for
     # either (this is advisory text for the OPERATOR to paste, not a query this process itself
-    # runs), so the guard is the closed-alphabet refusal, checked once, adjacent to both splice
-    # sites below.
+    # runs). `pghba.generate_block` now validates its own db/role/subnets arguments AT the
+    # boundary function itself (ledger row 1799 finding 4) -- this loop is belt-and-braces for
+    # THAT splice site (an earlier, screen-level refusal before any live pg_hba read is even
+    # attempted) and remains load-bearing for the createdb_cmd SQL splice below, which has no
+    # boundary function of its own.
     for _label, _val in (("database name", db), ("role name", role)):
         if not probes.valid_identifier(_val):
             ui.say(f"  REFUSED: {_label} '{_val}' contains characters outside [A-Za-z0-9_] -- "
@@ -265,6 +269,13 @@ def screen_substrate(ui, cl, state):
     except pghba.PgHbaReadError as exc:
         ui.say(f"  could not read the live pg_hba.conf: {exc}")
         cl.add("substrate", "pg_hba block (dedicated)", ck.WITNESSED, f"REFUSED-READ: {exc}")
+        return state
+    except pghba.PgHbaValidationError as exc:
+        # Belt-and-braces (the loop above already refused a hostile db/role/subnet before this
+        # point): the boundary function's OWN refusal (ledger row 1799 finding 4), reached only
+        # if a future caller bypasses this screen's pre-check.
+        ui.say(f"  REFUSED: {exc}")
+        cl.add("substrate", "pg_hba block (dedicated)", ck.REFUSED, f"REFUSED: {exc}")
         return state
 
     ui.say("  " + disclosure.replace("\n", "\n  "))
@@ -971,9 +982,53 @@ def screen_signed_genesis(ui, cl, state):
         gnupghome_in = ui.ask_text("GNUPGHOME to use for this key (blank = your default "
                                     "~/.gnupg)", default="")
         gnupghome = gnupghome_in or None
-        ui.say("  gpg will now prompt YOU, interactively, for a passphrase (its own pinentry "
-               "prompt -- never captured or scripted by this tool).")
-        keygen = signed_genesis.keygen_operator(name, email, gnupghome, dry_run=dry_run)
+
+        # Resume-after-death (ledger row 1799 finding 7): BEFORE any keygen call, check whether
+        # a prior run of THIS ceremony already left partial state for this name's key -- never
+        # under --dry-run (a rehearsal never keygens for real either way, so there is no live
+        # double-keygen hazard to guard against, and skipping this here keeps dry-run's own
+        # WOULD-DO argv line for keygen_operator unconditional, per that mode's own doctrine).
+        resume = None if dry_run else signed_genesis.detect_resumable(
+            dest, name, gnupghome, commission_id)
+        if resume is not None:
+            ui.say("  a PARTIAL Signed genesis ceremony already appears to exist for this "
+                   "key/world -- generating a fresh key now would strand the existing one "
+                   "unrecorded, instead of resuming:")
+            ui.say(f"    key exported ({resume.keys_path}): "
+                   f"{'yes' if resume.key_exported else 'no'}")
+            ui.say(f"    keys/README.md discharged: {'yes' if resume.readme_discharged else 'no'}"
+                   + (f" (fingerprint {resume.fingerprint})" if resume.fingerprint else ""))
+            if resume.asc_path:
+                ui.say(f"    commission signed ({resume.asc_path}): "
+                       f"{'yes' if resume.asc_signed else 'no'}")
+            if resume.fingerprint and resume.secret_key_present:
+                if ui.confirm("Reuse the existing key and continue from the unfinished steps, "
+                               "instead of generating a NEW key?", default=True):
+                    ui.say(f"  RESUMING with existing fingerprint {resume.fingerprint} -- no "
+                           f"new key generated.")
+                    keygen = signed_genesis.KeygenResult(
+                        gnupghome=gnupghome, fingerprint=resume.fingerprint,
+                        argv=["(resumed -- existing key reused, no keygen invoked)"],
+                        scratch=False, ok=True)
+                else:
+                    ui.say("  REFUSED: declined to resume -- refusing to generate a SECOND key "
+                           "over an existing partial ceremony (never a silent double-keygen). "
+                           "Clean up the partial state by hand, or re-run and choose reuse.")
+                    cl.add("signed-genesis", "keypair generated", ck.REFUSED,
+                           "declined resume; refused rather than double-keygen")
+                    return state
+            else:
+                ui.say("  REFUSED: partial ceremony state found, but no matching secret key is "
+                       "present in this GNUPGHOME to safely reuse -- refusing to auto-delete "
+                       "anything or silently generate a second key. Investigate by hand (the "
+                       "recorded fingerprint may point at a different keyring).")
+                cl.add("signed-genesis", "keypair generated", ck.REFUSED,
+                       "partial ceremony state found, no reusable secret key -- refused")
+                return state
+        else:
+            ui.say("  gpg will now prompt YOU, interactively, for a passphrase (its own pinentry "
+                   "prompt -- never captured or scripted by this tool).")
+            keygen = signed_genesis.keygen_operator(name, email, gnupghome, dry_run=dry_run)
 
     if dry_run:
         cl.add("signed-genesis", "keypair generated", ck.WOULD_DO,
@@ -1336,17 +1391,14 @@ def _run_decision(led: str, statement: str, dry_run: bool = False) -> tuple[str,
     nothing -- `runner.run_command`'s own choke point), returning (status, detail): status is a
     `checklist` status via `ck.status_for`, detail is 'row <id>' when the row id can be parsed
     from real output, the verbatim statement when dry-run (spec: 'the ledger rows it would
-    write verbatim'), else an exit-code fallback -- never a fabricated id. Same regex
-    screen_hydration's pre-catalog code already used (led's own `led: row <id> written.`
-    convention, serving/boundary_cli_client.py `write_and_report`)."""
+    write verbatim'), else an exit-code fallback -- never a fabricated id. `runner.parse_row_id`
+    is the one home for the parse (led's own `led: row <id> written.` convention,
+    serving/boundary_cli_client.py `write_and_report`) -- ledger row 1799 finding 1."""
     argv = [led, "decision", statement]
     res = run_command(argv, dry_run=dry_run)
     if dry_run:
         return ck.status_for(res), f"would write: led decision {statement!r}"
-    row_id = None
-    m = re.search(r"\brow[_ ]?(?:id)?[:=]?\s*(\d+)\b", res.output, re.IGNORECASE)
-    if m:
-        row_id = m.group(1)
+    row_id = parse_row_id(res.output)
     detail = f"row {row_id}" if row_id else (f"exit {res.returncode}" if not res.ok else "written")
     return ck.status_for(res), detail
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-19T01:39:25Z
-#   last-change: 2026-07-19T03:06:51Z
+#   last-change: 2026-07-19T03:44:06Z
 #   contributors: ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -52,6 +52,7 @@ import tempfile
 import time
 from dataclasses import dataclass
 
+from tools.setup_tui import probes, runner
 from tools.setup_tui.runner import CommandResult, run_command, write_file
 
 # A throwaway, clearly-marked-test-only passphrase used ONLY under `--scripted` witnessing
@@ -59,7 +60,6 @@ from tools.setup_tui.runner import CommandResult, run_command, write_file
 # operator's own path, which always gets gpg's own interactive pinentry prompt.
 FIXTURE_PASSPHRASE = "setup-tui-fixture-passphrase-THROWAWAY-ONLY-never-a-real-key"
 
-_ROW_ID_RE = re.compile(r"\brow[_ ]?(?:id)?[:=]?\s*(\d+)\b", re.IGNORECASE)
 AWAITING_HEADER = "## Current state: AWAITING-KEY"
 KEY_COMMITTED_HEADER = "## Current state: KEY COMMITTED"
 # Marker pair (ledger row 1790, finding 1): ports durable_decisions.compile_claude_md's own
@@ -92,10 +92,27 @@ def key_filename(name: str) -> str:
 # Reading/writing the genesis commission -- BEFORE the boundary exists (module docstring).
 # ---------------------------------------------------------------------------------------------
 
-def _dep_fields(dest: str) -> dict:
+def _validated_dep_fields(dest: str) -> dict:
+    """Reads `<dest>/deployment.json` AND validates the fields this module later splices into
+    SQL text (`schema`/`role`/`kern` -- ledger row 1799 finding 5) at THIS boundary, before any
+    of them reach a query string. Defense-in-depth, not paranoia: `deployment.json` is
+    scaffold-written, not operator-typed, but "trusted here because a trusted process wrote it"
+    is exactly the exemption law/adr/0012's 2026-07-18 interpreter-boundary amendment rejects
+    ("the input is trusted here does not exempt a site") -- every value is re-checked at the
+    splice module's own boundary regardless of provenance, the same discipline
+    `probes.pg_connect`'s own schema check already applies to an operator-typed value."""
     path = os.path.join(dest, "deployment.json")
     with open(path, encoding="utf-8") as f:
-        return json.load(f)
+        dep = json.load(f)
+    for _field in ("schema", "role", "kern"):
+        _val = dep.get(_field)
+        if not isinstance(_val, str) or not probes.valid_identifier(_val):
+            raise ValueError(
+                f"deployment.json field {_field!r} = {_val!r} is not a valid SQL identifier "
+                f"([A-Za-z0-9_]+) -- refusing to splice it into SQL text (law/adr/0012's "
+                f"interpreter-boundary rule)"
+            )
+    return dep
 
 
 def _psql_json_rows(dep: dict, sql: str, timeout: float = 15.0) -> list[str]:
@@ -114,7 +131,7 @@ def list_commissions(dest: str) -> list[dict]:
     """Every `commission`-kind row currently in force, oldest first -- id/statement/actor only,
     for the operator to designate a genesis row from. Read-only; live under `--dry-run` too (a
     rehearsal that fakes its reads is a lie, per the parent flow spec's own doctrine)."""
-    dep = _dep_fields(dest)
+    dep = _validated_dep_fields(dest)
     sql = (f"SET ROLE {dep['role']};\n"
            f"SELECT row_to_json(t) FROM (SELECT l.id, l.statement, p.name AS actor "
            f"FROM {dep['schema']}.ledger_current l "
@@ -129,7 +146,7 @@ def fetch_commission_statement(dest: str, commission_id: int) -> str | None:
     embedded newlines survive unambiguously) -- see this module's docstring for why this is a
     deliberate byte-fidelity mirror of a file this build may not change, not a re-derivation of
     a fact this module invents its own answer to. None if no such row exists."""
-    dep = _dep_fields(dest)
+    dep = _validated_dep_fields(dest)
     sql = (f"SET ROLE {dep['role']};\n"
            f"SELECT row_to_json(t) FROM (SELECT l.statement "
            f"FROM {dep['schema']}.ledger_current l "
@@ -154,8 +171,7 @@ def write_commission(dest: str, statement: str, *,
     res = run_command(argv, env=env, dry_run=dry_run)
     if dry_run or not res.ok:
         return res, None
-    m = _ROW_ID_RE.search(res.output)
-    return res, (int(m.group(1)) if m else None)
+    return res, runner.parse_row_id(res.output)
 
 
 # ---------------------------------------------------------------------------------------------
@@ -172,13 +188,88 @@ class KeygenResult:
                                # a real one otherwise) -- the caller's checklist-status source
 
 
-def _list_secret_fpr(gnupghome: str | None) -> str | None:
+@dataclass
+class ResumeCandidate:
+    """A detected partial-ceremony state (ledger row 1799 finding 7), returned by
+    `detect_resumable` -- SOME prior act of this ceremony already landed for `name`'s key, so
+    unconditionally generating a fresh key would strand the first one (in the operator's own
+    keyring, unrecorded and unmentioned) rather than resuming. Every field is a fact this module
+    actually observed on disk/in the keyring, never inferred beyond what is checkable."""
+    fingerprint: str | None
+    key_exported: bool
+    keys_path: str
+    readme_discharged: bool
+    asc_path: str | None
+    asc_signed: bool
+    secret_key_present: bool
+
+
+def detect_resumable(dest: str, name: str, gnupghome: str | None,
+                      commission_id: int | None = None) -> ResumeCandidate | None:
+    """Scans for a partial Signed genesis ceremony for `name`'s key BEFORE any keygen call is
+    made -- the resume-after-death check (ledger row 1799 finding 7; WITNESSED in
+    seen-red/setup-tui-signed-genesis-resume). Three independent signals, ANY of which means "do
+    not blindly generate a fresh key":
+      1. `keys/<slug>.asc` already exported for this name (`key_exported`).
+      2. `keys/README.md` already shows `KEY COMMITTED` -- discharged by a prior run
+         (`readme_discharged`; its recorded fingerprint is parsed out if present).
+      3. `commission_id` is known and `.claude/commission-<id>.asc` already exists
+         (`asc_signed`) -- signed, but the process may have died before the verify step
+         confirmed it.
+    Returns `None` if none of the three signals fire (the ordinary fresh-start path) -- never
+    fabricates a candidate where nothing partial exists. When a fingerprint IS recorded (from
+    the README), `secret_key_present` reports whether a secret key with that EXACT fingerprint
+    is actually present in `gnupghome` right now -- the caller uses this to distinguish "safe to
+    reuse" from "the recorded fingerprint isn't actually here; refuse rather than pretend.\""""
+    filename = key_filename(name)
+    keys_path = os.path.join(dest, "keys", filename)
+    key_exported = os.path.isfile(keys_path)
+
+    readme_path = os.path.join(dest, "keys", "README.md")
+    try:
+        with open(readme_path, encoding="utf-8") as f:
+            readme_text = f.read()
+    except OSError:
+        readme_text = ""
+    readme_discharged = KEY_COMMITTED_HEADER in readme_text
+    fingerprint = None
+    if readme_discharged:
+        m = re.search(r"fingerprint `([0-9A-Fa-f]+)`", readme_text)
+        if m:
+            fingerprint = m.group(1)
+
+    asc_path = None
+    asc_signed = False
+    if commission_id is not None:
+        asc_path = os.path.join(dest, ".claude", f"commission-{commission_id}.asc")
+        asc_signed = os.path.isfile(asc_path)
+
+    if not (key_exported or readme_discharged or asc_signed):
+        return None
+
+    secret_key_present = bool(fingerprint) and fingerprint in _secret_key_fingerprints(gnupghome)
+    return ResumeCandidate(
+        fingerprint=fingerprint, key_exported=key_exported, keys_path=keys_path,
+        readme_discharged=readme_discharged, asc_path=asc_path, asc_signed=asc_signed,
+        secret_key_present=secret_key_present,
+    )
+
+
+def _secret_key_fingerprints(gnupghome: str | None) -> list[str]:
+    """Every secret-key fingerprint currently in `gnupghome` (`None` == the ambient default
+    keyring), oldest-listed first -- the full set, not just the last one (`_list_secret_fpr`
+    below is the "just generated, take the newest" convenience; `detect_resumable` needs the
+    FULL set to check whether a SPECIFIC recorded fingerprint is actually present)."""
     argv = ["gpg"]
     if gnupghome:
         argv += ["--homedir", gnupghome]
     argv += ["--list-secret-keys", "--with-colons"]
     r = subprocess.run(argv, capture_output=True, text=True)
-    fprs = [ln.split(":")[9] for ln in r.stdout.splitlines() if ln.startswith("fpr")]
+    return [ln.split(":")[9] for ln in r.stdout.splitlines() if ln.startswith("fpr")]
+
+
+def _list_secret_fpr(gnupghome: str | None) -> str | None:
+    fprs = _secret_key_fingerprints(gnupghome)
     return fprs[-1] if fprs else None
 
 
