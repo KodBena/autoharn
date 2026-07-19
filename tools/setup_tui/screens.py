@@ -1,6 +1,6 @@
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-18T21:34:05Z
-#   last-change: 2026-07-18T23:39:19Z
+#   last-change: 2026-07-19T01:07:02Z
 #   contributors: ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -23,6 +23,17 @@ No screen carries a facts string of its own (ADR-0012 P1, one home). `PREFLIGHT_
 LIVE authority `feature_facts.derive_live_keys()`/the drift fixture compares against, so a
 future binary or substrate choice added here without a matching registry key (or vice versa) is
 caught, not silently drifted.
+
+`--dry-run` (design/FABLE-SETUP-TUI-SPEC.md 2026-07-19 amendment): `state["dry_run"]` (set once
+by `app.py`) is read at each destructive act's own call site and passed straight through to
+`runner.run_command`/`runner.start_background`/`runner.write_file` -- the ONE flag, the parent
+spec's own words, never re-derived per screen. Read-only probes (preflight, connection checks,
+the pg_hba read, `durable_decisions.list_adrs`) take NO `dry_run` argument at all -- they run
+identically in both modes, because a rehearsal that fakes its reads is a lie. A PREPARED block's
+"press enter when done" verification gate (the post-keypress probe) is the one shape that is
+neither a live act NOR a bare read: under dry-run it is not run at all (there is nothing to
+verify -- the prepared act was never taken) and the checklist records `ck.DRY_SKIPPED`, never a
+faked pass, via `_dry_skip_or` below.
 """
 from __future__ import annotations
 
@@ -31,13 +42,12 @@ import json
 import os
 import re
 import shutil
-import subprocess
 import time
 from pathlib import Path
 
 from tools.setup_tui import checklist as ck
 from tools.setup_tui import durable_decisions, feature_facts, pghba, probes
-from tools.setup_tui.runner import run_command
+from tools.setup_tui.runner import run_command, start_background, summarize_content, write_file
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -58,6 +68,20 @@ def _show_facts(ui, *keys: str) -> None:
     """Prints the facts line(s) for `keys` -- the ONE call site every screen below uses (spec
     §2: 'shown at the point of selection ... before the operator commits the act')."""
     ui.say(feature_facts.facts_block(list(keys)))
+
+
+def _dry_skip_or(ui, cl, state, screen: str, item: str, verify) -> None:
+    """A PREPARED block's post-keypress verification gate (honesty rule 2: "VERIFIES the effect
+    ... rather than trusting the keypress"), made `--dry-run`-aware in ONE place instead of at
+    every one of this module's PREPARED-block sites. Under `state["dry_run"]`, `verify` (a
+    zero-arg callable that would otherwise `ui.pause(...)` then run a live probe and `cl.add`
+    its own result) is never called at all -- there is no live act behind the prepared block to
+    verify -- and a single `ck.DRY_SKIPPED` row is recorded instead (spec: "recorded as
+    DRY-SKIPPED, never silently passed"). Live mode calls `verify` unchanged."""
+    if state.get("dry_run"):
+        cl.add(screen, item, ck.DRY_SKIPPED, "dry-run: prepared act not taken, not verified")
+        return
+    verify()
 
 
 # ---------------------------------------------------------------------------------------------
@@ -255,19 +279,26 @@ def screen_substrate(ui, cl, state):
            f"db={db} role={role} subnets={subnet_list}")
     cl.add("substrate", "createdb/reload block", ck.PREPARED, f"db={db} host={host}")
 
-    ui.pause(f"Apply the two blocks above on {host}, then press enter to verify: ")
-    ok, detail = probes.pg_connect(host, db, role=role)
-    if ok:
-        ui.say(f"  post-keypress verification probe: GREEN -- {detail}")
-        cl.add("substrate", "dedicated-db connection verified", ck.WITNESSED, detail)
-        state["dedicated_verified"] = True
-    else:
-        ui.say(f"  post-keypress verification probe: RED -- {detail}")
-        ui.say("  REFUSED to advance: the connection probe did not succeed. This is the "
-               "honesty-rule-2 gate -- pressing enter is not enough, the effect must be real.")
-        cl.add("substrate", "dedicated-db connection verified", ck.WITNESSED,
-               f"RED (refused to advance): {detail}")
-        state["dedicated_verified"] = False
+    def _verify_dedicated() -> None:
+        ui.pause(f"Apply the two blocks above on {host}, then press enter to verify: ")
+        ok, detail = probes.pg_connect(host, db, role=role)
+        if ok:
+            ui.say(f"  post-keypress verification probe: GREEN -- {detail}")
+            cl.add("substrate", "dedicated-db connection verified", ck.WITNESSED, detail)
+            state["dedicated_verified"] = True
+        else:
+            ui.say(f"  post-keypress verification probe: RED -- {detail}")
+            ui.say("  REFUSED to advance: the connection probe did not succeed. This is the "
+                   "honesty-rule-2 gate -- pressing enter is not enough, the effect must be "
+                   "real.")
+            cl.add("substrate", "dedicated-db connection verified", ck.WITNESSED,
+                   f"RED (refused to advance): {detail}")
+            state["dedicated_verified"] = False
+
+    # Under --dry-run there is no live act behind the prepared blocks above to verify (nothing
+    # was applied on the cluster host) -- _dry_skip_or records DRY_SKIPPED instead of pausing for
+    # a keypress that would verify nothing real.
+    _dry_skip_or(ui, cl, state, "substrate", "dedicated-db connection verified", _verify_dedicated)
     return state
 
 
@@ -316,21 +347,39 @@ def screen_fork_target(ui, cl, state):
         cl.add("fork-target", "fork-copy", ck.REFUSED, f"REFUSED: '{dest}' already exists")
         return state
 
+    dry_run = state.get("dry_run", False)
     ui.say(f"  $ cp -a {src} {dest}")
-    shutil.copytree(src_path, dest_path)
-    cl.add("fork-target", "fork-copy", ck.WITNESSED, f"{src} -> {dest}")
+    if dry_run:
+        cl.add("fork-target", "fork-copy", ck.WOULD_DO, f"{src} -> {dest} (directory tree copy)")
+    else:
+        shutil.copytree(src_path, dest_path)
+        cl.add("fork-target", "fork-copy", ck.WITNESSED, f"{src} -> {dest}")
+    # Either way `dest` would exist from here on (a real copy, or -- under --dry-run -- the
+    # would-be copy above): screen_boundary's out-of-sequence precondition check reads this same
+    # flag screen_birth sets on a (real or simulated) successful birth.
+    state["dest_would_exist"] = True
 
     # the CLAUDE.md-preservation move the omega-lab pass established: rename the fork's own
     # CLAUDE.md to CLAUDE.project.md BEFORE the scaffold writes a fresh governance preamble at
     # CLAUDE.md, so the fork's original content survives under a different name rather than
     # being clobbered by bootstrap/new-project.sh's unconditional CLAUDE.md write.
+    #
+    # Checked against SRC, not dest -- under --dry-run dest was never actually copied (above), so
+    # dest_path/"CLAUDE.md" would never exist regardless of whether the fork source has one; src
+    # is read-only here (a live read of a file that already exists, unaffected by --dry-run) and
+    # is the only way to answer "would this rename happen" honestly in either mode.
+    would_preserve = (src_path / "CLAUDE.md").is_file()
     dest_claude = dest_path / "CLAUDE.md"
-    if dest_claude.is_file():
-        dest_project_claude = dest_path / "CLAUDE.project.md"
+    dest_project_claude = dest_path / "CLAUDE.project.md"
+    if would_preserve:
         ui.say(f"  $ mv {dest_claude} {dest_project_claude}")
-        dest_claude.rename(dest_project_claude)
-        cl.add("fork-target", "CLAUDE.md preserved", ck.WITNESSED,
-               f"renamed to CLAUDE.project.md (the omega-lab pass's own move)")
+        if dry_run:
+            cl.add("fork-target", "CLAUDE.md preserved", ck.WOULD_DO,
+                   f"would rename to CLAUDE.project.md (the omega-lab pass's own move)")
+        else:
+            dest_claude.rename(dest_project_claude)
+            cl.add("fork-target", "CLAUDE.md preserved", ck.WITNESSED,
+                   f"renamed to CLAUDE.project.md (the omega-lab pass's own move)")
     else:
         cl.add("fork-target", "CLAUDE.md preserved", ck.SKIPPED,
                "fork source had no CLAUDE.md to preserve")
@@ -375,10 +424,12 @@ def screen_rehearsal(ui, cl, state):
     scratch_dir = ui.ask_text("Scratch scaffold directory (throwaway)",
                                default=f"/tmp/setup_tui_rehearsal_{scratch_world}")
 
+    dry_run = state.get("dry_run", False)
+
     argv = _new_project_argv(scratch_dir, scratch_world, db, host, extra=["--force"])
-    res = run_command(argv)
+    res = run_command(argv, dry_run=dry_run)
     birth_ok = res.ok
-    cl.add("rehearsal", "scratch birth", ck.WITNESSED if birth_ok else ck.REFUSED,
+    cl.add("rehearsal", "scratch birth", ck.status_for(res),
            f"{'exit 0' if birth_ok else f'exit {res.returncode}'}")
 
     # --dir has teardown-world.sh itself remove the scaffold directory as part of its own
@@ -388,19 +439,28 @@ def screen_rehearsal(ui, cl, state):
     # instead makes removal part of teardown-world.sh's own printed plan and its own residue
     # check, and the claim below is checked against reality (os.path.isdir), not assumed.
     argv = _teardown_argv(scratch_world, db, host, extra=["--dir", scratch_dir])
-    res = run_command(argv, stdin_text=f"{scratch_world}\n")
+    res = run_command(argv, stdin_text=f"{scratch_world}\n", dry_run=dry_run)
     teardown_ok = res.ok
-    cl.add("rehearsal", "scratch teardown", ck.WITNESSED if teardown_ok else ck.REFUSED,
+    cl.add("rehearsal", "scratch teardown", ck.status_for(res),
            f"{'exit 0' if teardown_ok else f'exit {res.returncode}'}")
 
-    dir_removed = not os.path.isdir(scratch_dir)
-    cl.add("rehearsal", "scratch scaffold dir removed",
-           ck.WITNESSED if dir_removed else ck.REFUSED,
-           scratch_dir if dir_removed else f"STILL PRESENT: {scratch_dir}")
+    # Under --dry-run, scratch_dir was never created (the birth above was never actually run),
+    # so `os.path.isdir(scratch_dir)` answers a question this rehearsal did not ask -- it would
+    # spuriously report WITNESSED "removed" for a directory that was never there to begin with.
+    # Recorded WOULD_DO instead: nothing to check read-only, nothing faked.
+    if dry_run:
+        cl.add("rehearsal", "scratch scaffold dir removed", ck.WOULD_DO,
+               f"{scratch_dir} (would be created by birth, then removed by teardown)")
+    else:
+        dir_removed = not os.path.isdir(scratch_dir)
+        cl.add("rehearsal", "scratch scaffold dir removed",
+               ck.WITNESSED if dir_removed else ck.REFUSED,
+               scratch_dir if dir_removed else f"STILL PRESENT: {scratch_dir}")
 
     green = birth_ok and teardown_ok
-    ui.say(f"  rehearsal: {'GREEN' if green else 'RED'}")
-    cl.add("rehearsal", "rehearsal overall", ck.WITNESSED, "GREEN" if green else "RED")
+    ui.say(f"  rehearsal: {'GREEN' if green else 'RED'}{' (simulated, --dry-run)' if dry_run else ''}")
+    cl.add("rehearsal", "rehearsal overall", ck.WOULD_DO if dry_run else ck.WITNESSED,
+           "GREEN" if green else "RED")
     state["rehearsal_green"] = green
     return state
 
@@ -433,12 +493,20 @@ def screen_birth(ui, cl, state):
     name = ui.ask_text("Project name (deployment.json 'name')", default=world)
 
     argv = _new_project_argv(dest, world, db, host, extra=["--name", name])
-    res = run_command(argv)
+    res = run_command(argv, dry_run=state.get("dry_run", False))
     ok = res.ok
-    cl.add("birth", "world birth", ck.WITNESSED, f"{'exit 0' if ok else f'exit {res.returncode}'}")
+    cl.add("birth", "world birth", ck.status_for(res),
+           f"{'exit 0' if ok else f'exit {res.returncode}'}")
     state["world"] = world
     state["dest"] = dest
     state["birth_ok"] = ok
+    # `dest_would_exist` (read by screen_boundary's out-of-sequence-entry precondition check,
+    # spec amendment 2026-07-19: "a dry run validates every precondition it can check read-only
+    # and records honestly as DRY-SKIPPED any it cannot") -- a real birth's success means `dest`
+    # really exists (os.path.isdir already tells the truth); a SIMULATED (`--dry-run`) success
+    # means it WOULD, which is the one fact `os.path.isdir` cannot see for itself.
+    if ok:
+        state["dest_would_exist"] = True
 
     # the maintainer copy-paste signing line new-project.sh prints at the end of a --new-world
     # run -- surfaced prominently here, not buried in the streamed log above. Anchored on the
@@ -495,18 +563,31 @@ def screen_boundary(ui, cl, state):
     if not ui.confirm("Configure the boundary service now?", default=True):
         cl.add("boundary", "boundary", ck.SKIPPED, "operator skipped screen 6")
         return state
+    dry_run = state.get("dry_run", False)
     dest = state.get("dest") or ui.ask_text("Destination directory")
     state["dest"] = dest
     # Same pattern screen_hydration's led-existence check uses (os.path.isfile(led) before
     # ever touching it): a nonexistent dest is reachable here (--start-at boundary, or an
     # overridden birth gate above) and, unchecked, crashed with a raw FileNotFoundError
     # traceback at the `open(toml_path, "w")` write below instead of an explained refusal.
+    #
+    # Under --dry-run in the NORMAL sequence, `dest` genuinely does not exist yet -- birth's own
+    # act was simulated, never taken (screen_birth sets `state["dest_would_exist"]` on a real OR
+    # simulated success, the one fact this on-disk check cannot see for itself). The out-of-
+    # sequence-entry amendment binds unchanged for the case that flag is ALSO absent (true
+    # out-of-sequence entry, e.g. `--start-at boundary` with no prior birth in this run at all):
+    # that still REFUSES, live or dry, because there is no precondition of any kind to trust.
     if not os.path.isdir(dest):
-        ui.say(f"  REFUSED: destination directory '{dest}' does not exist -- nothing to write "
-               f"the multiplex TOML or deployment.json keys into. Run a birth first (or check "
-               f"the path), then retry this screen.")
-        cl.add("boundary", "destination exists", ck.REFUSED, f"'{dest}' not a directory")
-        return state
+        if dry_run and state.get("dest_would_exist"):
+            cl.add("boundary", "destination exists", ck.DRY_SKIPPED,
+                   f"'{dest}' would exist (created earlier in this dry run) -- not "
+                   f"independently checkable read-only, recorded honestly rather than faked")
+        else:
+            ui.say(f"  REFUSED: destination directory '{dest}' does not exist -- nothing to "
+                   f"write the multiplex TOML or deployment.json keys into. Run a birth first "
+                   f"(or check the path), then retry this screen.")
+            cl.add("boundary", "destination exists", ck.REFUSED, f"'{dest}' not a directory")
+            return state
     world = state.get("world") or ui.ask_text("World/deployment name")
     host = state.get("pghost") or ui.ask_text("Postgres host", default="192.168.122.1")
     db = state.get("db") or ui.ask_text("Database", default="toy")
@@ -573,9 +654,12 @@ def screen_boundary(ui, cl, state):
     )
     ui.say(f"  --- writing {toml_path} ---")
     ui.say("  " + toml_text.replace("\n", "\n  "))
-    with open(toml_path, "w") as f:
-        f.write(toml_text)
-    cl.add("boundary", "multiplex TOML written", ck.WITNESSED, toml_path)
+    wrote = write_file(toml_path, toml_text, dry_run=dry_run)
+    if wrote:
+        cl.add("boundary", "multiplex TOML written", ck.WITNESSED, toml_path)
+    else:
+        cl.add("boundary", "multiplex TOML written", ck.WOULD_DO,
+               f"{toml_path} :: {summarize_content(toml_text)}")
 
     # the two deployment.json keys, via the SAME verb that wrote deployment.json in the first
     # place (rule 1: driver of existing verbs, never a second implementation writing JSON by
@@ -594,9 +678,9 @@ def screen_boundary(ui, cl, state):
             "--schema", schema, "--kern", kern, "--role", role,
             "--name", dep.get("name", world), "--force",
             "--boundary-url", boundary_url, "--boundary-deployment", world]
-    res = run_command(argv)
+    res = run_command(argv, dry_run=dry_run)
     ok = res.ok
-    cl.add("boundary", "deployment.json boundary keys written", ck.WITNESSED,
+    cl.add("boundary", "deployment.json boundary keys written", ck.status_for(res),
            f"{'exit 0' if ok else f'exit {res.returncode}'}")
 
     # start the service, or emit the unit text as PREPARED
@@ -610,26 +694,36 @@ def screen_boundary(ui, cl, state):
         # 'address already in use' if anything else already holds it.
         argv = [venv_python, "-m", "serving.boundary_service", "--config", toml_path,
                 "--port", str(port)]
-        ui.say(f"  $ {' '.join(argv)}   (background)")
-        proc = subprocess.Popen(argv, cwd=str(REPO_ROOT), stdout=subprocess.PIPE,
-                                 stderr=subprocess.STDOUT, text=True)
-        state["boundary_proc"] = proc
-        time.sleep(1.5)
-        if proc.poll() is not None:
-            leftover = proc.stdout.read() if proc.stdout else ""
-            ui.say(f"  service exited immediately (rc={proc.returncode}): {leftover.strip()}")
-            cl.add("boundary", "service started", ck.WITNESSED,
-                   f"RED: exited rc={proc.returncode}: {leftover.strip()[:300]}")
+        bg = start_background(argv, cwd=str(REPO_ROOT), dry_run=dry_run)
+        if dry_run:
+            cl.add("boundary", "service started", ck.WOULD_DO, f"{boundary_url}")
+            # No live service exists to probe under --dry-run -- the same "prepared act, no
+            # live verification" shape the PREPARED branch below already carries, so the two
+            # post-start probes are DRY-SKIPPED, not faked.
+            cl.add("boundary", "/health probe", ck.DRY_SKIPPED, "dry-run: service not started")
+            cl.add("boundary", "/meta probe", ck.DRY_SKIPPED, "dry-run: service not started")
         else:
-            cl.add("boundary", "service started", ck.WITNESSED, f"pid {proc.pid}, {boundary_url}")
+            proc = bg.proc
+            state["boundary_proc"] = proc
+            time.sleep(1.5)
+            if proc.poll() is not None:
+                leftover = proc.stdout.read() if proc.stdout else ""
+                ui.say(f"  service exited immediately (rc={proc.returncode}): {leftover.strip()}")
+                cl.add("boundary", "service started", ck.WITNESSED,
+                       f"RED: exited rc={proc.returncode}: {leftover.strip()[:300]}")
+            else:
+                cl.add("boundary", "service started", ck.WITNESSED,
+                       f"pid {proc.pid}, {boundary_url}")
 
-        ok_h, status_h, body_h = probes.http_get_json(f"{boundary_url}/d/{world}/health")
-        ui.say(f"  /health probe: {'GREEN' if ok_h else 'RED'} status={status_h} body={body_h}")
-        cl.add("boundary", "/health probe", ck.WITNESSED, f"status={status_h} ok={ok_h}")
+            ok_h, status_h, body_h = probes.http_get_json(f"{boundary_url}/d/{world}/health")
+            ui.say(f"  /health probe: {'GREEN' if ok_h else 'RED'} status={status_h} "
+                   f"body={body_h}")
+            cl.add("boundary", "/health probe", ck.WITNESSED, f"status={status_h} ok={ok_h}")
 
-        ok_m, status_m, body_m = probes.http_get_json(f"{boundary_url}/d/{world}/meta")
-        ui.say(f"  /meta probe: {'GREEN' if ok_m else 'RED'} status={status_m} body={body_m}")
-        cl.add("boundary", "/meta probe", ck.WITNESSED, f"status={status_m} ok={ok_m}")
+            ok_m, status_m, body_m = probes.http_get_json(f"{boundary_url}/d/{world}/meta")
+            ui.say(f"  /meta probe: {'GREEN' if ok_m else 'RED'} status={status_m} "
+                   f"body={body_m}")
+            cl.add("boundary", "/meta probe", ck.WITNESSED, f"status={status_m} ok={ok_m}")
     else:
         unit_text = (
             f"[Unit]\nDescription=autoharn boundary service ({world})\n\n"
@@ -641,11 +735,17 @@ def screen_boundary(ui, cl, state):
         ui.say("  " + unit_text.replace("\n", "\n  "))
         ui.say("  --- end ---")
         cl.add("boundary", "service unit text", ck.PREPARED, "systemd unit, not started")
-        ui.pause("Start the service by hand, then press enter to probe: ")
-        ok_h, status_h, body_h = probes.http_get_json(f"{boundary_url}/d/{world}/health")
-        ui.say(f"  /health probe: {'GREEN' if ok_h else 'RED'} status={status_h} body={body_h}")
-        cl.add("boundary", "/health probe (post-keypress)", ck.WITNESSED,
-               f"status={status_h} ok={ok_h}")
+
+        def _verify_boundary_started() -> None:
+            ui.pause("Start the service by hand, then press enter to probe: ")
+            ok_h, status_h, body_h = probes.http_get_json(f"{boundary_url}/d/{world}/health")
+            ui.say(f"  /health probe: {'GREEN' if ok_h else 'RED'} status={status_h} "
+                   f"body={body_h}")
+            cl.add("boundary", "/health probe (post-keypress)", ck.WITNESSED,
+                   f"status={status_h} ok={ok_h}")
+
+        _dry_skip_or(ui, cl, state, "boundary", "/health probe (post-keypress)",
+                     _verify_boundary_started)
 
     state["boundary_url"] = boundary_url
     state["boundary_port"] = port
@@ -697,19 +797,24 @@ def screen_observability(ui, cl, state):
 # Screen 8: Hydration
 # ---------------------------------------------------------------------------------------------
 
-def _run_decision(led: str, statement: str) -> tuple[bool, str]:
-    """Runs `led decision <statement>`, returning (ok, detail) where detail is 'row <id>' when
-    the row id can be parsed from the real output, else an exit-code fallback -- never a
-    fabricated id. Same regex screen_hydration's pre-catalog code already used (led's own
-    `led: row <id> written.` convention, serving/boundary_cli_client.py `write_and_report`)."""
+def _run_decision(led: str, statement: str, dry_run: bool = False) -> tuple[str, str]:
+    """Runs `led decision <statement>` (or, under `dry_run`, shows the exact argv and writes
+    nothing -- `runner.run_command`'s own choke point), returning (status, detail): status is a
+    `checklist` status via `ck.status_for`, detail is 'row <id>' when the row id can be parsed
+    from real output, the verbatim statement when dry-run (spec: 'the ledger rows it would
+    write verbatim'), else an exit-code fallback -- never a fabricated id. Same regex
+    screen_hydration's pre-catalog code already used (led's own `led: row <id> written.`
+    convention, serving/boundary_cli_client.py `write_and_report`)."""
     argv = [led, "decision", statement]
-    res = run_command(argv)
+    res = run_command(argv, dry_run=dry_run)
+    if dry_run:
+        return ck.status_for(res), f"would write: led decision {statement!r}"
     row_id = None
     m = re.search(r"\brow[_ ]?(?:id)?[:=]?\s*(\d+)\b", res.output, re.IGNORECASE)
     if m:
         row_id = m.group(1)
     detail = f"row {row_id}" if row_id else (f"exit {res.returncode}" if not res.ok else "written")
-    return res.ok, detail
+    return ck.status_for(res), detail
 
 
 def screen_hydration(ui, cl, state):
@@ -717,16 +822,28 @@ def screen_hydration(ui, cl, state):
     if not ui.confirm("Run hydration now?", default=True):
         cl.add("hydration", "hydration", ck.SKIPPED, "operator skipped screen 8")
         return state
+    dry_run = state.get("dry_run", False)
     dest = state.get("dest") or ui.ask_text("Destination directory (with a led shim)")
     state["dest"] = dest
     led = os.path.join(dest, "led")
     if not os.path.isfile(led):
-        ui.say(f"  REFUSED: no ./led at {led} -- hydration writes only through led (v1 "
-               f"boundary), and none was found.")
-        cl.add("hydration", "led present", ck.WITNESSED, f"RED: {led} not found")
-        return state
+        # Same dry-run precondition shape screen_boundary's destination-exists check uses: under
+        # a normal-sequence dry run, birth's own scaffold write (which is what actually creates
+        # the `led` shim) was simulated, never taken -- `led` genuinely does not exist on disk,
+        # and that is not independently checkable read-only. A TRUE out-of-sequence entry with
+        # no birth in this run at all (dest_would_exist absent) still REFUSES, live or dry.
+        if state.get("dry_run") and state.get("dest_would_exist"):
+            cl.add("hydration", "led present", ck.DRY_SKIPPED,
+                   f"'{led}' would exist (written by birth earlier in this dry run) -- not "
+                   f"independently checkable read-only, recorded honestly rather than faked")
+        else:
+            ui.say(f"  REFUSED: no ./led at {led} -- hydration writes only through led (v1 "
+                   f"boundary), and none was found.")
+            cl.add("hydration", "led present", ck.WITNESSED, f"RED: {led} not found")
+            return state
 
     selected_fragments: list[str] = []
+    _would_succeed = {ck.WITNESSED, ck.WOULD_DO}
 
     # fork_provenance / role_charters: unchanged, per-world facts (spec §3 "Relation to the
     # existing screen-8 items" -- these stay outside the durable-decisions catalog, they are not
@@ -737,8 +854,8 @@ def screen_hydration(ui, cl, state):
         cl.add("hydration", "fork provenance", ck.SKIPPED, "operator declined")
     else:
         statement = ui.ask_text("Statement for 'fork provenance' decision row")
-        ok, detail = _run_decision(led, statement)
-        cl.add("hydration", "fork provenance", ck.WITNESSED if ok else ck.REFUSED, detail)
+        status, detail = _run_decision(led, statement, dry_run=dry_run)
+        cl.add("hydration", "fork provenance", status, detail)
 
     _show_facts(ui, "hydration_role_charters")
     if not ui.confirm("Hydrate: role charters to register?", default=False):
@@ -748,22 +865,25 @@ def screen_hydration(ui, cl, state):
         path = ui.ask_text("Charter file path")
         argv = ["python3", str(REPO_ROOT / "tools" / "role_charter.py"), "register",
                 role, path, "--led", led]
-        res = run_command(argv)
-        cl.add("hydration", "role charters to register", ck.WITNESSED if res.ok else ck.REFUSED,
+        res = run_command(argv, dry_run=dry_run)
+        cl.add("hydration", "role charters to register", ck.status_for(res),
                f"{'exit 0' if res.ok else f'exit {res.returncode}'}")
 
     # The durable-decisions catalog (design/FABLE-SETUP-TUI-FEATURE-FACTS-SPEC.md §3): each
     # selection writes ONE `led decision` row and, if accepted, contributes its `claude_md`
     # fragment to the compiled section below (declined entries contribute NOTHING -- WD2's own
-    # bar: "SKIPPED in the checklist, zero rows, zero fragments").
+    # bar: "SKIPPED in the checklist, zero rows, zero fragments"). Under --dry-run, a selection
+    # still contributes its fragment (WOULD_DO counts as "accepted" for CLAUDE.md-preview
+    # purposes below) -- the whole point of a rehearsal is to show what the compiled file WOULD
+    # contain, not stop short of it.
     for decision in durable_decisions.CATALOG:
         _show_facts(ui, f"hydration_{decision.slug.replace('-', '_')}")
         if not ui.confirm(f"Hydrate durable decision: {decision.slug}?", default=False):
             cl.add("hydration", decision.slug, ck.SKIPPED, "operator declined")
             continue
-        ok, detail = _run_decision(led, decision.hydrates)
-        cl.add("hydration", decision.slug, ck.WITNESSED if ok else ck.REFUSED, detail)
-        if ok:
+        status, detail = _run_decision(led, decision.hydrates, dry_run=dry_run)
+        cl.add("hydration", decision.slug, status, detail)
+        if status in _would_succeed:
             selected_fragments.append(decision.claude_md)
 
     # The ADR-adoption submenu (spec §3 item 3): DERIVED from law/adr/*.md at runtime, never a
@@ -777,9 +897,9 @@ def screen_hydration(ui, cl, state):
             cl.add("hydration", f"adr adoption ({label})", ck.SKIPPED, "operator declined")
             continue
         statement = durable_decisions.adr_decision_statement(number, title, relpath)
-        ok, detail = _run_decision(led, statement)
-        cl.add("hydration", f"adr adoption ({label})", ck.WITNESSED if ok else ck.REFUSED, detail)
-        if ok:
+        status, detail = _run_decision(led, statement, dry_run=dry_run)
+        cl.add("hydration", f"adr adoption ({label})", status, detail)
+        if status in _would_succeed:
             selected_fragments.append(
                 durable_decisions.adr_claude_md_fragment(number, title, relpath))
 
@@ -787,10 +907,16 @@ def screen_hydration(ui, cl, state):
     # "(none selected at hydration time)" section is absence WITNESSED, not silently assumed by
     # leaving CLAUDE.md untouched). Idempotent: re-running this screen with the same selections
     # replaces only the marked section (WD4).
-    claude_path = durable_decisions.compile_claude_md(dest, selected_fragments)
-    ui.say(f"  CLAUDE.md compiled: {len(selected_fragments)} fragment(s) -> {claude_path}")
-    cl.add("hydration", "CLAUDE.md durable-decisions section compiled", ck.WITNESSED,
+    claude_path, claude_text, wrote = durable_decisions.compile_claude_md(
+        dest, selected_fragments, dry_run=dry_run)
+    ui.say(f"  CLAUDE.md {'compiled' if wrote else 'would be compiled'}: "
            f"{len(selected_fragments)} fragment(s) -> {claude_path}")
+    if wrote:
+        cl.add("hydration", "CLAUDE.md durable-decisions section compiled", ck.WITNESSED,
+               f"{len(selected_fragments)} fragment(s) -> {claude_path}")
+    else:
+        cl.add("hydration", "CLAUDE.md durable-decisions section compiled", ck.WOULD_DO,
+               f"{claude_path} :: {summarize_content(claude_text)}")
     return state
 
 
@@ -801,12 +927,22 @@ def screen_hydration(ui, cl, state):
 def screen_checklist(ui, cl, state):
     ui.banner("9/9 Checklist")
     ui.say(cl.render())
+    dry_run = state.get("dry_run", False)
     dest = state.get("dest")
-    if dest and os.path.isdir(dest) and ui.confirm("Save this checklist into the new world?",
-                                                     default=True):
-        path = cl.save(dest)
-        ui.say(f"  saved: {path}")
-        cl.add("checklist", "checklist saved", ck.WITNESSED, path)
+    # Same dry-run precondition shape screen_boundary's destination-exists check uses: a real
+    # directory (WDR1's own case) is checked for real; a directory that WOULD exist from an
+    # earlier act in THIS dry run (state["dest_would_exist"]) is trusted for the same reason
+    # os.path.isdir cannot see it -- nothing was actually created.
+    dest_reachable = bool(dest) and (
+        os.path.isdir(dest) or (dry_run and state.get("dest_would_exist")))
+    if dest_reachable and ui.confirm("Save this checklist into the new world?", default=True):
+        path = cl.save(dest, dry_run=dry_run)
+        if dry_run:
+            ui.say(f"  would save: {path}")
+            cl.add("checklist", "checklist saved", ck.WOULD_DO, path)
+        else:
+            ui.say(f"  saved: {path}")
+            cl.add("checklist", "checklist saved", ck.WITNESSED, path)
     else:
         cl.add("checklist", "checklist saved", ck.SKIPPED,
                "no destination directory, or operator declined")

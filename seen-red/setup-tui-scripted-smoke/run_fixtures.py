@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-18T22:50:17Z
-#   last-change: 2026-07-18T23:54:55Z
+#   last-change: 2026-07-19T01:14:31Z
 #   contributors: ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -52,6 +52,17 @@ costs/deps, each with its citation intact"):
      live scratch-world birth+boundary and is reported, not fixture-shaped, per this spec's
      build conditions (a live boundary-served ./led is out of scope for a no-db-birth fixture).
 
+Case 9 (added for design/FABLE-SETUP-TUI-SPEC.md's 2026-07-19 `--dry-run` amendment, commission
+ledger row 1719) is WDR3, its own witness: "a dry run that reaches a refusal (hostile input)
+refuses identically to the live path -- validation is never weakened by dry-run."
+
+  9. boundary, out-of-sequence entry, SAME hostile world name as case 5, run under `--dry-run` --
+     asserts the SAME `REFUSED: world ...` text case 5 got live, byte-for-byte, and that
+     boundary-multiplex.toml still does not exist. This is the direct byte-diff half of WDR3;
+     the WDR1 (byte-identical filesystem + zero ledger rows) and WDR2 (argv parity against a
+     real scratch run) witnesses need a live db birth and live boundary service and are reported
+     in seen-red/setup-tui-dry-run-parity, not shaped as a fixture here.
+
 Zero residue: every scratch destination lives under a fixture-owned tempdir, removed in a
 `finally` regardless of outcome. Real subprocess invocations of the actual CLI entry point (no
 mocks) -- Rule 1's own bar ("drive the same code paths") applied to this fixture's own proof of
@@ -69,15 +80,16 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(os.path.dirname(HERE))
 
 
-def run_scripted(answers: str, start_at: str, cwd: str) -> subprocess.CompletedProcess:
-    ans_path = os.path.join(cwd, f"answers-{start_at}.txt")
+def run_scripted(answers: str, start_at: str, cwd: str,
+                  dry_run: bool = False) -> subprocess.CompletedProcess:
+    ans_path = os.path.join(cwd, f"answers-{start_at}{'-dry' if dry_run else ''}.txt")
     with open(ans_path, "w") as f:
         f.write(answers)
-    return subprocess.run(
-        [sys.executable, "-m", "tools.setup_tui.app", "--scripted", ans_path,
-         "--start-at", start_at],
-        cwd=REPO, capture_output=True, text=True, timeout=60,
-    )
+    argv = [sys.executable, "-m", "tools.setup_tui.app", "--scripted", ans_path,
+            "--start-at", start_at]
+    if dry_run:
+        argv.append("--dry-run")
+    return subprocess.run(argv, cwd=REPO, capture_output=True, text=True, timeout=60)
 
 
 def main() -> int:
@@ -158,6 +170,7 @@ def main() -> int:
         print("case 5 ok: boundary (--start-at) refuses a hostile world name before writing "
               "boundary-multiplex.toml (the tools/setup_tui/screens.py screen_boundary repair), "
               "and the boundary_service facts line rendered at screen entry (WF1)")
+        out_case5 = out  # case 9's live-comparand, before `out` gets reused by later cases
 
         # --- case 6: preflight -- every PREFLIGHT_BINARIES + UI-backend facts line renders ---
         # (8 answers: run-preflight, then one "n" each for substrate/fork-target/rehearsal/
@@ -198,6 +211,36 @@ def main() -> int:
         assert "REFUSED: no ./led at" in out, out[-800:]
         print("case 8 ok: hydration refuses cleanly against a destination with no ./led shim "
               "(WD5's own bar, re-proven here)")
+
+        # --- case 9 (WDR3): the SAME hostile-world scenario as case 5, under --dry-run --
+        # design/FABLE-SETUP-TUI-SPEC.md's 2026-07-19 amendment, WDR3: "a dry run that reaches a
+        # refusal (hostile input) refuses identically to the live path -- validation is never
+        # weakened by dry-run." Reuses `valid_dest`/`hostile_world`/the exact REFUSED line from
+        # case 5 (never written to, per case 5's own assertion) as the live comparand, and adds
+        # its own byte-for-byte comparison (not just a substring match) of the REFUSED line.
+        refused_line_live = next(
+            ln for ln in out_case5.splitlines() if ln.startswith("  REFUSED: world "))
+        cp = run_scripted(
+            f"y\ny\n{valid_dest}\n{hostile_world}\n-\n-\nn\nn\nn\n", "boundary", scratch,
+            dry_run=True,
+        )
+        out9 = cp.stdout + cp.stderr
+        assert cp.returncode == 0, f"case 9: expected exit 0, got {cp.returncode}: {out9[-800:]}"
+        assert "Traceback" not in out9, out9[-800:]
+        refused_line_dry = next(
+            (ln for ln in out9.splitlines() if ln.startswith("  REFUSED: world ")), None)
+        assert refused_line_dry is not None, (
+            f"case 9: no 'REFUSED: world' line under --dry-run -- validation was weakened: "
+            + out9[-800:])
+        assert refused_line_dry == refused_line_live, (
+            f"case 9: --dry-run REFUSED text differs from the live path's (WDR3's own bar: "
+            f"'refuses identically'):\n  live: {refused_line_live!r}\n  dry:  "
+            f"{refused_line_dry!r}")
+        assert not os.path.exists(toml_path), (
+            f"case 9: {toml_path} must NOT exist -- --dry-run must never write, and this "
+            f"hostile input was refused before any write was even attempted")
+        print("case 9 ok (WDR3): --dry-run refuses the SAME hostile world name with the "
+              "byte-identical REFUSED text a live run produces, nothing written")
 
         print("ALL CASES OK -- setup_tui scripted preflight/validation refusal legs, zero residue")
         return 0

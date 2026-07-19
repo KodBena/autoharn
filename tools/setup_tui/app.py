@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-18T21:34:30Z
-#   last-change: 2026-07-18T22:47:19Z
+#   last-change: 2026-07-19T01:00:41Z
 #   contributors: ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -16,11 +16,23 @@ Usage:
     python3 -m tools.setup_tui.app
     python3 -m tools.setup_tui.app --scripted /path/to/answers.txt
     python3 -m tools.setup_tui.app --scripted /path/to/answers.txt --start-at boundary
+    python3 -m tools.setup_tui.app --dry-run --scripted /path/to/answers.txt
 
 `--start-at <screen>` skips straight to a named screen (preflight, substrate, fork-target,
 rehearsal, birth, boundary, observability, hydration, checklist) -- useful for a witness run
 that only exercises one screen's flow rather than replaying the whole nine-screen sequence every
 time (still drives the same screen function, same Ui, same checklist).
+
+`--dry-run` (design/FABLE-SETUP-TUI-SPEC.md 2026-07-19 amendment) runs the SAME nine screens,
+composes with `--scripted` and `--start-at` unchanged, but performs no destructive or externally
+visible act: `state["dry_run"]` is set once here and read by `tools/setup_tui/runner.py`'s three
+act-execution choke points (`run_command`, `start_background`, `write_file`) and by
+`checklist.status_for`/`Checklist.save` -- no screen carries its own dry-run conditional. Every
+screen still computes and shows its would-be acts (rule 1's exact-argv discipline is
+unconditional); the closing checklist renders WOULD-DO/DRY-SKIPPED rows instead of
+WITNESSED/PREPARED-verified ones. Read-only probes (preflight, connection checks, the pg_hba
+read, the ADR glob) are UNCHANGED by `--dry-run` -- they stay live, because a rehearsal that
+fakes its reads is a lie, not a rehearsal.
 """
 from __future__ import annotations
 
@@ -41,6 +53,11 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     p.add_argument("--start-at", metavar="SCREEN", default=None,
                     choices=[name for name, _ in SCREENS],
                     help="skip straight to this screen (still runs the same screen function)")
+    p.add_argument("--dry-run", action="store_true", default=False,
+                    help="perform no destructive or externally visible act; every screen "
+                         "computes and shows its would-be acts, the closing checklist renders "
+                         "them WOULD-DO instead of WITNESSED (design/FABLE-SETUP-TUI-SPEC.md "
+                         "2026-07-19 amendment)")
     return p.parse_args(argv)
 
 
@@ -48,7 +65,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parse_args(sys.argv[1:] if argv is None else argv)
     ui = build_ui(args.scripted)
     cl = Checklist()
-    state: dict = {}
+    state: dict = {"dry_run": args.dry_run}
     # `state_holder` is the SIGTERM handler's only view of the live `state` dict -- registered
     # once below, before the screen loop starts, and kept current every iteration (screens
     # mutate `state` in place and also return it, so `state_holder[0] = state` after each call
@@ -82,6 +99,14 @@ def main(argv: list[str] | None = None) -> int:
     ui.say("Driver of existing verbs only: every action below shows the exact command it runs "
            "and streams that command's real output. If this process dies mid-flow, you can "
            "finish by hand from what was printed.")
+    if args.dry_run:
+        ui.say("")
+        ui.say("*** --dry-run: NOTHING below is destructive or externally visible. Every act "
+               "is computed and shown (exact argv, exact file paths + a content summary, exact "
+               "led rows) but NOT performed -- no file written outside this process, no "
+               "database act, no led write, no process started, no port bound. Read-only "
+               "probes (preflight, connection checks, the pg_hba read) stay live. The closing "
+               "checklist renders these as WOULD-DO. ***")
 
     try:
         for _, fn in screens:

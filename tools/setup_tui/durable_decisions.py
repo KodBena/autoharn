@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-18T23:37:02Z
-#   last-change: 2026-07-19T00:51:47Z
+#   last-change: 2026-07-19T01:05:18Z
 #   contributors: ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -39,6 +39,8 @@ import os
 import re
 from dataclasses import dataclass
 from pathlib import Path
+
+from tools.setup_tui.runner import write_file
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 ADR_DIR = REPO_ROOT / "law" / "adr"
@@ -535,7 +537,8 @@ def adr_claude_md_fragment(number: str, title: str, relpath: str) -> str:
 # CLAUDE.md compilation (spec §4).
 # ---------------------------------------------------------------------------------------------
 
-def compile_claude_md(dest_dir: str, fragments: list[str]) -> str:
+def compile_claude_md(dest_dir: str, fragments: list[str],
+                       dry_run: bool = False) -> tuple[str, str, bool]:
     """Compiles `fragments` (durable-decision `claude_md` texts, and/or `adr_claude_md_fragment`
     lines, in selection order) into `<dest_dir>/CLAUDE.md` between BEGIN_MARKER/END_MARKER.
     Rules (spec §4), each load-bearing:
@@ -552,7 +555,13 @@ def compile_claude_md(dest_dir: str, fragments: list[str]) -> str:
       * If CLAUDE.md does not exist yet, one is created holding only the compiled section (never
         silently skipped) -- a defensive branch for --start-at hydration reached before birth.
 
-    Returns the path written."""
+    Under `dry_run=True` (design/FABLE-SETUP-TUI-SPEC.md 2026-07-19 amendment), the WOULD-BE new
+    text is still computed byte-for-byte (so the caller can show a real content summary) but
+    never written -- `runner.write_file`'s own choke point. The existing file, if any, is only
+    ever READ here (unaffected by `dry_run` -- a read is not the act being rehearsed).
+
+    Returns `(path, new_text, wrote)`: `path` is where CLAUDE.md is (or would be), `new_text` is
+    the full computed content, `wrote` is True iff a real write happened."""
     claude_path = os.path.join(dest_dir, "CLAUDE.md")
     existing = ""
     if os.path.isfile(claude_path):
@@ -586,6 +595,5 @@ def compile_claude_md(dest_dir: str, fragments: list[str]) -> str:
     else:
         new_text = section + "\n"
 
-    with open(claude_path, "w", encoding="utf-8") as f:
-        f.write(new_text)
-    return claude_path
+    wrote = write_file(claude_path, new_text, dry_run=dry_run, encoding="utf-8")
+    return claude_path, new_text, wrote

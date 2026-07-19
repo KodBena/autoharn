@@ -150,6 +150,24 @@ future:
   (hostile input) refuses identically to the live path — validation is never
   weakened by dry-run.
 
+**Built 2026-07-19 (this amendment's own build-state note, same convention as the feature-facts
+column above).** `--dry-run` is ONE flag (`state["dry_run"]`, set once in `app.py`, read by
+every screen from the same shared `state` dict every screen already carries) consulted at TWO
+choke points in `tools/setup_tui/runner.py` — `run_command`/`start_background` (never Popen,
+argv still echoed) and `write_file` (never opens the path) — plus `checklist.status_for`/
+`Checklist.save`, rather than a conditional scattered through each screen; `screens.py`'s own
+`_dry_skip_or` is the third, narrower choke point for a PREPARED block's post-keypress
+verification gate (DRY_SKIPPED, never faked). One precondition wrinkle the out-of-sequence
+amendment's own carve-out sentence anticipated: under a NORMAL-sequence dry run, `dest`
+genuinely does not exist on disk (birth's own write was simulated) — `screen_boundary`'s
+destination-exists check and `screen_hydration`'s led-existence check both trust
+`state["dest_would_exist"]` (set by a real-or-simulated successful birth/fork-copy) in that one
+case, and still REFUSE for a true out-of-sequence entry with no birth in the run at all.
+Witnessed: WDR1 and WDR2 against real infra (a live db, a real boundary_service) in
+[seen-red/setup-tui-dry-run-parity](../seen-red/setup-tui-dry-run-parity/run_fixtures.py); WDR3
+(no live infra needed) as case 9 of
+[seen-red/setup-tui-scripted-smoke](../seen-red/setup-tui-scripted-smoke/run_fixtures.py).
+
 ## Build conditions
 
 Lives under `tools/setup_tui/`; no lazy imports; gates apply; no edits to
