@@ -12,27 +12,77 @@ asserts, at the AST level over tools/setup_tui/, that calls to the three runner 
 rehearsal module's declared exception -- a screen that acquires a direct effect call fails the
 gate."
 
-WHAT COUNTS AS THE DECLARED EXCEPTION SITE (named precisely, not "screens.py wholesale"):
+CLASS FIX (fresh-context review of b565db1): the gate's field of view used to match ONLY the
+three named choke points -- narrower than the claim made for it, since a decision-phase module
+could still perform a real effect by reaching UNDER those choke points (a bare `open(path, "w")`,
+`os.mkdir`, `tempfile.mkdtemp`, a direct `subprocess.run`) without ever calling
+`run_command`/`write_file`/`start_background` by name, invisible to the original detector. Two
+independent real instances of exactly this were found live (FINDING 2: a scratch-GNUPGHOME
+`mkdtemp` + batch-file write at decision time; FINDING 3: `checklist.py`'s own bare
+`open(path, "w")`, both since fixed). `check_tree`/`check_extra_effects` below are two SEPARATE
+detectors over the SAME AST walk, because they answer two different questions with two different
+honest exemption sets (see each detector's own docstring).
+
+WHAT COUNTS AS THE DECLARED EXCEPTION SITE, detector 1 (the three choke points, unchanged):
 `tools/setup_tui/commit_executor.py` may call all three choke points anywhere (it IS the one
 commit boundary). `tools/setup_tui/screens.py`'s `screen_rehearsal` function -- and ONLY that
-function -- may call them too (the P9-rule-4-shaped Workspace exception, spec §2.5/§3: a live
-effect on a scratch target, mid-flow, with witnessed zero-residue teardown). Every OTHER function
-in EVERY OTHER module under `tools/setup_tui/` is checked and must be clean.
+function -- may call them too (the P9-rule-4-shaped Workspace exception, spec §2.5/§3). Every
+OTHER function in EVERY OTHER module under `tools/setup_tui/` is checked and must be clean.
+`checklist.py`'s `save` method is a THIRD, narrower, explicitly-documented exception (FINDING 3's
+own fix): it calls `write_file` directly because it is structurally POST-commit machinery (the
+checklist's own final content, including every entry's real commit-time status, is not known
+until the commit boundary has already finished -- it cannot itself be a plan entry executed
+DURING the commit) -- see `checklist.Checklist.save`'s own docstring.
 
-DETECTION (AST, not text-grep -- a grep would false-positive on the docstrings/comments this very
-module and screens.py itself carry, which mention "run_command" and "write_file" by name in prose):
-walks every `ast.Call` node, matching either a bare-name call (`run_command(...)`, the shape every
-converted call site now uses after `from tools.setup_tui.runner import run_command`) or an
-attribute call (`runner.run_command(...)`, the shape `commit_executor.py` and `screen_rehearsal`
-itself use) whose function name is one of the three. Each match is attributed to its ENCLOSING
-function (the innermost `ast.FunctionDef`/`ast.AsyncFunctionDef` containing it, found via a parent
-map built once per module) -- a call at module level (no enclosing function) is always a
-violation, never exempt.
+DETECTION 1 (AST, not text-grep -- a grep would false-positive on the docstrings/comments this
+very module and screens.py itself carry, which mention "run_command" and "write_file" by name in
+prose): walks every `ast.Call` node, matching either a bare-name call (`run_command(...)`) or an
+attribute call (`runner.run_command(...)`) whose function name is one of the three. Each match is
+attributed to its ENCLOSING function via a one-pass parent map -- a call at module level is always
+a violation, never exempt.
 
-Exit 0 clean; exit 1 listing every violation as `path:line: <call text> (inside <function or
-module-level>)`. The negative self-check (a synthetic violation must fail red) lives in
-seen-red/setup-tui-purity-gate/run_fixtures.py, which imports and calls this module's own
-`scan_file`/`check_tree` directly against synthetic source text -- never touching the real tree.
+DETECTION 2 (CLASS FIX): the SAME walk, matching a wider, still-precise set of direct-effect
+shapes: `open(...)` calls whose mode argument (positional 2nd arg, or `mode=` keyword) contains
+any of `w`/`a`/`x`/`+` (a WRITING mode -- the default, no mode arg at all, is `"r"`, read-only,
+never flagged); `os.<name>(...)` where `<name>` is one of a closed mutation-verb set (`mkdir`,
+`makedirs`, `chmod`, `replace`, `remove`, `rmdir`, `unlink`); `shutil.rmtree`/`shutil.copytree`/
+`shutil.move`; any `tempfile.<name>(...)` call (the whole module is scratch-file creation by
+definition); any `subprocess.<name>(...)` call (module-qualified only -- see LIMITATIONS). Each
+match is attributed to its enclosing function exactly as detection 1 does, checked against
+`EXTRA_EFFECT_EXEMPT` (a SEPARATE table from `EXEMPT`, since the legitimate exemption set differs:
+`runner.py`/`commit_executor.py` are exempt wholesale, being the mechanism layer itself;
+`probes.py`/`pghba.py` are exempt wholesale as the spec's own declared "read-only probes stay
+live" sites (every `subprocess.run` call in them is a read -- `pg_isready`, a `SELECT 1` probe, a
+`SELECT pg_read_file(...)`, `git rev-parse`/`submodule status` -- never a write); a small, named
+set of individual read-only helper functions in `signed_genesis.py`/`principals_authority.py`
+(their own `_psql_json_rows`/`_psql_rows` SELECT helpers); and `signed_genesis.py`'s three
+FINDING-2-created scratch-GNUPGHOME functions, which perform a real effect but ONLY via
+`plan.CallableAct`'s closure, i.e. only ever at commit time (see EXTRA_EFFECT_EXEMPT's own
+per-entry comments for the individual justification).
+
+LIMITATIONS, STATED HONESTLY (per the review's own instruction -- "keep the gate honest about
+what it still cannot see"):
+  - This is a SYNTACTIC check. It cannot verify that an exempted function is ACTUALLY only ever
+    invoked from the context its exemption claims (e.g. that `_prepare_scratch_gnupghome_raw` is
+    truly reachable only from a commit-time `CallableAct` closure, or that a `subprocess.run` call
+    in an exempted read-only-probe function truly never mutates anything) -- each exemption is a
+    REVIEWED CLAIM about the call site's actual usage, not a property this gate proves. Widening
+    an exempted function's own body, or calling it from a new site, does not re-trigger review.
+  - Method calls on an already-constructed object (`proc.terminate()`, `proc.wait()`,
+    `f.write(...)` on an already-open file handle) are NOT detected -- only calls where the
+    callee is syntactically `open`, `os.<verb>`, `shutil.<verb>`, `tempfile.<verb>`, or
+    `subprocess.<verb>`. A write reached through an intermediate variable or a re-imported alias
+    (`from os import mkdir as _m; _m(...)`, `sub = subprocess; sub.run(...)`) is invisible to this
+    detector.
+  - `open()` calls whose mode is a variable, not a literal string, cannot be classified and are
+    conservatively treated as NON-writing (an honest false-negative, not a false-positive) --
+    every actual call site in this package uses a literal mode string today.
+
+Exit 0 clean; exit 1 listing every violation (either detector) as `path:line: <call text>
+(inside <function or module-level>)`. The negative self-check (a synthetic violation of EACH
+detector must fail red) lives in seen-red/setup-tui-purity-gate/run_fixtures.py, which imports and
+calls this module's own `scan_file`/`check_tree`/`check_extra_effects` directly against synthetic
+source text -- never touching the real tree.
 
 Usage: python3 gates/setup_tui_purity_gate.py
 Lazy imports banned."""
@@ -48,17 +98,63 @@ PACKAGE_DIR = os.path.join(ROOT, "tools", "setup_tui")
 FORBIDDEN_NAMES = {"run_command", "start_background", "write_file"}
 
 # (relative filename under tools/setup_tui/) -> set of function qualnames permitted to call a
-# choke point directly, OR the sentinel "*" meaning "the whole module is exempt" (commit_executor
-# only -- it IS the boundary). A module/function NOT listed here gets NO exemption at all.
+# choke point directly, OR the sentinel "*" meaning "the whole module is exempt". A module/
+# function NOT listed here gets NO exemption at all.
 EXEMPT: dict[str, set[str]] = {
     "commit_executor.py": {"*"},
     "screens.py": {"screen_rehearsal"},
+    "checklist.py": {"save"},  # FINDING 3: write_file called here, the checklist-save's own
+                                # declared, narrower, post-commit exception (see module docstring
+                                # above and Checklist.save's own docstring for the full reasoning).
 }
+
+# DETECTION 2's own exemption table (CLASS FIX) -- deliberately SEPARATE from EXEMPT: the
+# legitimate exemption set for "a direct file-write/os-mutation/tempfile/subprocess call" is not
+# the same set as "a runner choke-point call" (read-only probe modules belong here but NOT in
+# EXEMPT, since they never call a choke point at all).
+EXTRA_EFFECT_EXEMPT: dict[str, set[str]] = {
+    "runner.py": {"*"},          # the choke points' OWN implementation -- this IS the mechanism
+                                  # layer every direct-effect call in this package is supposed to
+                                  # route through; it necessarily contains the real subprocess/
+                                  # tempfile/os calls.
+    "commit_executor.py": {"*"}, # the one commit boundary -- CommitJournal._persist's own
+                                  # atomic-write (tempfile.NamedTemporaryFile/os.fsync/os.chmod/
+                                  # os.replace) and CommitJournal.remove's os.remove.
+    "screens.py": {"screen_rehearsal"},  # the same declared Workspace exception as detection 1.
+    "probes.py": {"*"},          # the read-only-probes module BY DESIGN (module's own docstring:
+                                  # "Every probe here re-checks reality; none of them trust an
+                                  # operator's say-so") -- every subprocess.run call here is a
+                                  # read (pg_isready, a SELECT 1 probe, git rev-parse/submodule
+                                  # status), the spec's own declared "read-only probes stay live"
+                                  # exception, never a write.
+    "pghba.py": {"*"},           # reads the live pg_hba.conf via `SELECT pg_read_file(...)` --
+                                  # read-only; module's own docstring: "This module NEVER applies
+                                  # anything ... It only reads ... and prints."
+    "signed_genesis.py": {
+        "_psql_json_rows",                # read-only SELECT helper (list_commissions/
+                                           # fetch_commission_statement) -- the spec's declared
+                                           # read-only-probe exception, same as probes.py.
+        "_prepare_scratch_gnupghome_raw", # FINDING 2: a real effect (mkdtemp+chmod), but called
+        "_write_scratch_batch_file_raw",  # ONLY from prepare_scratch_gnupghome_act's own
+                                           # CallableAct.fn closure -- i.e. only ever at commit
+                                           # time, never at decision time. See LIMITATIONS: this
+                                           # gate cannot itself verify that claim; it is reviewed.
+        "teardown_scratch",               # zero-residue cleanup (shutil.rmtree) -- called from
+                                           # screen_checklist's own _teardown_scratch_gnupghomes,
+                                           # structurally POST-commit (after _execute_commit has
+                                           # already run, same reasoning as checklist.py's save).
+    },
+    "principals_authority.py": {"_psql_rows"},  # read-only SELECT helper (list_principals/
+                                                  # s41_status) -- same reasoning as probes.py.
+}
+
+_OS_MUTATION_VERBS = {"mkdir", "makedirs", "chmod", "replace", "remove", "rmdir", "unlink"}
+_SHUTIL_MUTATION_VERBS = {"rmtree", "copytree", "move"}
 
 
 class _ParentFinder(ast.NodeVisitor):
     """Builds `node -> nearest enclosing FunctionDef/AsyncFunctionDef (or None for module-level)`
-    for every node in a tree, in one pass -- the mechanism `check_tree` uses to attribute a call
+    for every node in a tree, in one pass -- the mechanism both detectors use to attribute a call
     to the function it lexically sits inside, regardless of nesting depth (a call inside a nested
     closure, a comprehension, a `with`/`try` block, etc. -- all of those still resolve to their
     nearest enclosing `def`, not a synthetic new scope this gate would have to special-case)."""
@@ -77,7 +173,7 @@ class _ParentFinder(ast.NodeVisitor):
 
 def _call_name(node: ast.Call) -> str | None:
     """The forbidden-set-comparable name of a call's function, or None if it does not match the
-    shape of either call style this gate checks (bare name, or `<anything>.name`)."""
+    shape of either call style detection 1 checks (bare name, or `<anything>.name`)."""
     fn = node.func
     if isinstance(fn, ast.Name):
         return fn.id
@@ -86,12 +182,50 @@ def _call_name(node: ast.Call) -> str | None:
     return None
 
 
+def _render(node: ast.Call) -> str:
+    try:
+        return ast.unparse(node)
+    except Exception:  # noqa: BLE001 -- unparse is best-effort for the message only
+        return _call_name(node) or "<call>"
+
+
+def _mode_arg(node: ast.Call) -> str | None:
+    """The literal string value of `open()`'s `mode` argument (positional 2nd arg, or `mode=`
+    keyword) -- `None` if there is none (the default, read-only, mode) OR if it is not a literal
+    string (a variable -- see module docstring's own LIMITATIONS note: conservatively treated as
+    non-writing, an honest false-negative)."""
+    if len(node.args) >= 2 and isinstance(node.args[1], ast.Constant) and isinstance(node.args[1].value, str):
+        return node.args[1].value
+    for kw in node.keywords:
+        if kw.arg == "mode" and isinstance(kw.value, ast.Constant) and isinstance(kw.value.value, str):
+            return kw.value.value
+    return None
+
+
+def _is_extra_effect_call(node: ast.Call) -> bool:
+    """DETECTION 2's own match predicate -- see module docstring for the exact shapes."""
+    fn = node.func
+    if isinstance(fn, ast.Name) and fn.id == "open":
+        mode = _mode_arg(node)
+        return bool(mode) and any(c in mode for c in "wax+")
+    if isinstance(fn, ast.Attribute) and isinstance(fn.value, ast.Name):
+        base = fn.value.id
+        if base == "os" and fn.attr in _OS_MUTATION_VERBS:
+            return True
+        if base == "shutil" and fn.attr in _SHUTIL_MUTATION_VERBS:
+            return True
+        if base == "tempfile":
+            return True
+        if base == "subprocess":
+            return True
+    return False
+
+
 def check_tree(tree: ast.AST, filename: str) -> list[str]:
-    """Returns a list of violation strings (`filename:line: <call source> (inside <qualname>)`)
-    for `tree`, applying `EXEMPT`'s per-file/per-function allowance. `filename` is the base name
-    used to look up `EXEMPT` (e.g. `"screens.py"`) -- callers pass whatever key they want checked
-    against, so a fixture can probe a SYNTHETIC tree under a chosen filename without touching the
-    real files."""
+    """DETECTION 1: returns violation strings for `tree`, applying `EXEMPT`'s per-file/per-
+    function allowance. `filename` is the base name used to look up `EXEMPT` -- callers pass
+    whatever key they want checked against, so a fixture can probe a SYNTHETIC tree under a
+    chosen filename without touching the real files."""
     exempt_functions = EXEMPT.get(filename, set())
     if "*" in exempt_functions:
         return []
@@ -111,18 +245,41 @@ def check_tree(tree: ast.AST, filename: str) -> list[str]:
         if qualname in exempt_functions:
             continue
         line = getattr(node, "lineno", "?")
-        try:
-            src = ast.unparse(node)
-        except Exception:  # noqa: BLE001 -- unparse is best-effort for the message only
-            src = name
-        violations.append(f"{filename}:{line}: {src}  (inside {qualname})")
+        violations.append(f"{filename}:{line}: {_render(node)}  (inside {qualname})")
+    return violations
+
+
+def check_extra_effects(tree: ast.AST, filename: str) -> list[str]:
+    """DETECTION 2 (CLASS FIX): returns violation strings for `tree`, applying
+    `EXTRA_EFFECT_EXEMPT`'s per-file/per-function allowance -- a direct file-write/os-mutation/
+    tempfile/subprocess call outside a reviewed exemption. Same per-file/per-function/`"*"`
+    lookup shape as `check_tree`, over a DIFFERENT match predicate (`_is_extra_effect_call`) and a
+    DIFFERENT exemption table (see module docstring for why the two tables differ)."""
+    exempt_functions = EXTRA_EFFECT_EXEMPT.get(filename, set())
+    if "*" in exempt_functions:
+        return []
+
+    finder = _ParentFinder()
+    finder.visit(tree)
+
+    violations: list[str] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call) or not _is_extra_effect_call(node):
+            continue
+        owner = finder.owner.get(node)
+        qualname = owner.name if owner is not None else "<module level>"
+        if qualname in exempt_functions:
+            continue
+        line = getattr(node, "lineno", "?")
+        violations.append(f"{filename}:{line}: {_render(node)}  (inside {qualname})")
     return violations
 
 
 def scan_file(path: str) -> list[str]:
-    """Reads and AST-parses the REAL file at `path`, checked against `EXEMPT` keyed by its base
-    filename. A syntax error in the file is itself reported as a violation line (never silently
-    skipped -- an unparseable module cannot be honestly certified clean)."""
+    """Reads and AST-parses the REAL file at `path`, running BOTH detectors, checked against
+    their own tables keyed by its base filename. A syntax error in the file is itself reported as
+    a violation line (never silently skipped -- an unparseable module cannot be honestly
+    certified clean)."""
     filename = os.path.basename(path)
     with open(path, encoding="utf-8") as f:
         source = f.read()
@@ -130,7 +287,7 @@ def scan_file(path: str) -> list[str]:
         tree = ast.parse(source, filename=filename)
     except SyntaxError as exc:
         return [f"{filename}: SyntaxError, cannot check purity: {exc}"]
-    return check_tree(tree, filename)
+    return check_tree(tree, filename) + check_extra_effects(tree, filename)
 
 
 def scan_package(package_dir: str = PACKAGE_DIR) -> list[str]:
@@ -146,14 +303,14 @@ def main() -> int:
     violations = scan_package()
     if violations:
         print(f"setup_tui_purity_gate: {len(violations)} violation(s) -- a runner choke point "
-              f"(run_command/start_background/write_file) was called outside "
-              f"commit_executor.py or screens.py's screen_rehearsal:")
+              f"(run_command/start_background/write_file) or a direct file-write/os-mutation/"
+              f"tempfile/subprocess call was found outside its declared exception site:")
         for v in violations:
             print(f"  {v}")
         return 1
-    print("setup_tui_purity_gate: clean ✓ -- every runner choke-point call under "
-          "tools/setup_tui/ is confined to commit_executor.py or screen_rehearsal "
-          "(design/FABLE-SETUP-TUI-PURE-CORE-SPEC.md §2.8)")
+    print("setup_tui_purity_gate: clean ✓ -- every runner choke-point call, and every direct "
+          "file-write/os-mutation/tempfile/subprocess call, under tools/setup_tui/ is confined "
+          "to a declared exception site (design/FABLE-SETUP-TUI-PURE-CORE-SPEC.md §2.8)")
     return 0
 
 

@@ -66,7 +66,7 @@ from dataclasses import dataclass, field
 from typing import Callable
 
 from tools.setup_tui import runner
-from tools.setup_tui.plan import BackgroundAct, CommandAct, Plan, PlanEntry, WriteAct
+from tools.setup_tui.plan import BackgroundAct, CallableAct, CommandAct, Plan, PlanEntry, WriteAct
 
 JOURNAL_FILENAME = ".setup-tui-commit-journal.json"
 
@@ -342,4 +342,10 @@ def _run_entry(entry: PlanEntry, bindings: dict[str, str],
         started = bg.proc is not None
         detail = f"pid {bg.proc.pid}" if started else "(background start failed: no process)"
         return EntryResult(entry=entry, ok=started, detail=detail), bg.proc
+    if isinstance(act, CallableAct):
+        # FINDING-2: a generic commit-time effect that is not one of the three runner choke
+        # points -- see CallableAct's own docstring (plan.py) for why this stays generic (no
+        # signed_genesis import here; the act only knows "call fn, record what it returns").
+        ok, detail = act.fn()
+        return EntryResult(entry=entry, ok=ok, detail=detail), None
     raise TypeError(f"unrecognized plan act type: {type(act)!r}")  # pragma: no cover -- exhaustive

@@ -86,7 +86,6 @@ def case_keygen_never_repeats_on_resume() -> None:
         print("  UNEXERCISED: 'gpg' not on PATH -- this fixture's own claim needs a real keygen")
         return
     tmp = tempfile.mkdtemp(prefix="setup-tui-signed-genesis-resume-")
-    gnupghome = None
     try:
         dest = os.path.join(tmp, "dest")
         os.makedirs(os.path.join(dest, "keys"))
@@ -97,16 +96,22 @@ def case_keygen_never_repeats_on_resume() -> None:
         with open(readme_path, "w", encoding="utf-8") as f:
             f.write("# keys/\n\n" + SG.AWAITING_HEADER + "\n\n(no key committed yet)\n")
 
-        gnupghome = SG.prepare_scratch_gnupghome()
         name, email = "Resume Fixture Key", "resume-fixture@example.invalid"
-        batch_path = SG.write_scratch_batch_file(gnupghome, name, email)
-
-        keygen_act, keygen_produces = SG.keygen_scripted_act(gnupghome, batch_path)
-        list_act, list_produces = SG.list_secret_key_act(gnupghome)
-        export_act, export_produces = SG.export_public_key_act(gnupghome)
+        # FINDING-2 FIX (fresh-context review of b565db1): the scratch GNUPGHOME setup is now
+        # ITSELF a plan entry (a CallableAct, entry 0) -- never a decision-time filesystem effect.
+        # keygen's own argv holds Holes on that entry's real return value (the actual gnupghome
+        # path, unknowable until this entry runs), matching production code (screen_signed_
+        # genesis) exactly rather than reaching into "private" setup functions directly.
+        setup_act, setup_produces = SG.prepare_scratch_gnupghome_act(name, email)
+        keygen_act, keygen_produces = SG.keygen_scripted_act(SG.gnupghome_hole(),
+                                                               SG.batch_path_hole())
+        list_act, list_produces = SG.list_secret_key_act(SG.gnupghome_hole())
+        export_act, export_produces = SG.export_public_key_act(SG.gnupghome_hole())
         filename = SG.key_filename(name)
 
         plan = P.Plan()
+        plan.append(P.PlanEntry(screen="signed-genesis", item="scratch GNUPGHOME prepared",
+                                 lesson="l", act=setup_act, produces=setup_produces))
         plan.append(P.PlanEntry(screen="signed-genesis", item="keypair generated",
                                  lesson="l", act=keygen_act, produces=keygen_produces))
         plan.append(P.PlanEntry(screen="signed-genesis", item="fingerprint listed",
@@ -123,8 +128,9 @@ def case_keygen_never_repeats_on_resume() -> None:
                               proc: object = None) -> None:
             # PHASE-2 addition to on_result's signature (commit_executor.py's own note):
             # a 4th positional arg, the entry's own started Popen (None here -- no
-            # BackgroundAct in this plan).
-            if i == 0:
+            # BackgroundAct in this plan). Entry 1 is now keygen (entry 0 is the scratch
+            # GNUPGHOME setup, FINDING-2's own reordering).
+            if i == 1:
                 raise RuntimeError("simulated mid-commit death, right after the real keygen")
 
         crashed = False
@@ -134,20 +140,35 @@ def case_keygen_never_repeats_on_resume() -> None:
             crashed = True
         check("the simulated death propagated (never silently swallowed)", crashed)
 
+        # The real gnupghome path is only known once entry 0 has actually run -- read it back
+        # from the journal itself (FINDING-1's own persisted-bindings mechanism), the same way a
+        # resumed execute() call will.
+        journal = CE.CommitJournal.open_or_create(CE.journal_path(dest), len(plan.entries))
+        gnupghome = journal.bindings().get(SG.SCRATCH_GNUPGHOME_PRODUCES)
+        check("the scratch GNUPGHOME path was really persisted after entry 0 succeeded",
+              bool(gnupghome) and os.path.isdir(gnupghome), gnupghome)
+
         count_after_crash = _secret_key_count(gnupghome)
         check("exactly ONE real secret key exists after the keygen act (before resume)",
               count_after_crash == 1, f"count={count_after_crash}")
 
-        journal = CE.CommitJournal.open_or_create(CE.journal_path(dest), len(plan.entries))
-        check("journal marked the keygen entry DONE despite the crash",
-              journal.statuses[0] == CE.DONE, journal.statuses)
-        check("journal still names entries 1-4 PENDING", all(
-            s == CE.PENDING for s in journal.statuses[1:]), journal.statuses)
+        check("journal marked setup+keygen entries DONE despite the crash",
+              journal.statuses[0] == CE.DONE and journal.statuses[1] == CE.DONE,
+              journal.statuses)
+        check("journal still names entries 2-5 PENDING", all(
+            s == CE.PENDING for s in journal.statuses[2:]), journal.statuses)
 
         # RESUME: a fresh execute() call against the SAME destination/plan must not re-run the
-        # keygen entry (no second key) and must complete the remaining chain for real.
+        # setup or keygen entries (no second scratch dir, no second key) and must complete the
+        # remaining chain for real -- including the export/discharge entries whose Holes depend
+        # on entry 0's (setup) and entry 1's (keygen->list) bindings, both loaded from the
+        # journal by FINDING-1's own fix, genuinely exercised here across a real resume.
         result = CE.execute(plan, dest)
         check("resumed execution completed", result.completed)
+        check("the resumed run's bindings still carry the SAME scratch gnupghome path "
+              "(loaded from the journal, not regenerated)",
+              result.bindings.get(SG.SCRATCH_GNUPGHOME_PRODUCES) == gnupghome,
+              result.bindings.get(SG.SCRATCH_GNUPGHOME_PRODUCES))
         count_after_resume = _secret_key_count(gnupghome)
         check("still exactly ONE secret key after resume -- keygen was NOT repeated",
               count_after_resume == 1, f"count={count_after_resume}")
@@ -167,9 +188,9 @@ def case_keygen_never_repeats_on_resume() -> None:
 
         check("journal removed once every entry is DONE",
               not os.path.isfile(CE.journal_path(dest)))
+        SG.teardown_scratch(gnupghome)
+        check("scratch GNUPGHOME removed, zero residue", not os.path.isdir(gnupghome))
     finally:
-        if gnupghome:
-            SG.teardown_scratch(gnupghome)
         shutil.rmtree(tmp, ignore_errors=True)
 
 

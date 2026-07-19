@@ -173,7 +173,36 @@ class BackgroundAct:
         return [resolve_arg(a, bindings) for a in self.argv]
 
 
-Act = Union[CommandAct, WriteAct, BackgroundAct]
+@dataclass(frozen=True)
+class CallableAct:
+    """FINDING-2 ADDITION (fresh-context review of b565db1): a generic commit-time effect for the
+    rare case that is NEITHER of the three runner choke points but must still happen only at
+    commit time, never at decision time -- the one instance today is signed_genesis.py's scratch
+    GNUPGHOME preparation for `--scripted` witnessing (a real `mkdtemp` + a cleartext-passphrase
+    batch-file write), which used to run at decision time, a real filesystem effect outside the
+    spec's two declared exceptions and invisible to the §2.8 purity gate.
+
+    `fn` runs with NO arguments at commit time (every decision-time input it needs -- e.g.
+    name/email for the scratch keygen -- is already captured in `fn`'s own closure at PLAN-BUILD
+    time; only the OUTPUT this act produces is unknown until commit, same as any other act) and
+    returns `(ok, detail)` -- `detail` becomes this entry's `produces` binding value (e.g. the
+    scratch GNUPGHOME path a later `Hole` depends on, exactly like a `CommandAct`'s real stdout)
+    and the `EntryResult`'s own detail. `fn` must never raise for an ordinary "this failed" case
+    (return `(False, detail)` instead); an exception propagates as an unanticipated defect, same
+    as any other act -- `commit_executor.execute` does not catch it.
+
+    Kept generic on PURPOSE (no signed_genesis import here, or in commit_executor.py): the act
+    only knows "call this function, record what it returns" -- the actual scratch-preparation
+    logic stays owned by signed_genesis.py, its one home (ADR-0012 P1), not duplicated or
+    special-cased into the generic executor."""
+    fn: Callable[[], "tuple[bool, str]"]
+    label: str
+
+    def render(self) -> str:
+        return self.label
+
+
+Act = Union[CommandAct, WriteAct, BackgroundAct, CallableAct]
 
 
 # --------------------------------------------------------------------------------------------

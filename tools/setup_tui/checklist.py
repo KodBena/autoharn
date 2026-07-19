@@ -22,6 +22,8 @@ import datetime as _dt
 import os
 from dataclasses import dataclass, field
 
+from tools.setup_tui.runner import write_file
+
 WITNESSED = "WITNESSED"
 SKIPPED = "SKIPPED"
 PREPARED = "PREPARED"
@@ -81,13 +83,27 @@ class Checklist:
         """Writes the rendered checklist into `target_dir` (v1 boundary: the one place besides
         the target dir itself this package writes) UNLESS `dry_run`, in which case the path is
         still computed and returned (so the caller can name it in the WOULD-DO row) but nothing
-        is written -- the same `runner.write_file` discipline, inlined here since this is the
-        one file-write site that is not driven by a caller-supplied content string."""
+        is written.
+
+        FINDING-3 FIX (fresh-context review of b565db1): this used to be a bare
+        `open(path, "w").write(...)` -- the EXACT truncate-then-write shape `runner.write_file`
+        exists to prevent (a kill mid-write leaves `path` neither pre- nor post-state), with a
+        comment claiming "the same discipline, inlined" that the code did not actually carry (no
+        temp-file-then-atomic-rename anywhere). Routed through the REAL choke point,
+        `runner.write_file`, now -- genuinely the same atomicity every other write in this
+        package gets, not a claim.
+
+        This IS a declared exception site, alongside `commit_executor.py` and
+        `screen_rehearsal` (gates/setup_tui_purity_gate.py's own EXEMPT table names it
+        explicitly) -- but a narrower one than either: the checklist save is structurally
+        POST-commit machinery, not a decision-phase effect. It cannot be a plan entry executed
+        DURING the commit (the checklist's own final content, including every entry's real
+        commit-time status, is not known until the commit has already finished), and it runs
+        only from the flow's own terminal step (`screen_checklist`), after `_execute_commit` has
+        already run (or been declined, or been a dry run) -- never before, never mid-flow."""
         stamp = _dt.datetime.now(_dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
         path = os.path.join(target_dir, f"setup-checklist-{stamp}.txt")
-        if dry_run:
-            return path
-        with open(path, "w") as f:
-            f.write(self.render())
-            f.write("\n")
+        content = self.render() + "\n"
+        wrote = write_file(path, content, dry_run=dry_run)
+        assert wrote or dry_run  # write_file's own contract: False only under dry_run
         return path

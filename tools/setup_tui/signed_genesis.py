@@ -52,7 +52,7 @@ import tempfile
 import time
 
 from tools.setup_tui import probes
-from tools.setup_tui.plan import Arg, CommandAct, Hole, WriteAct
+from tools.setup_tui.plan import Arg, CallableAct, CommandAct, Hole, WriteAct
 from tools.setup_tui.runner import parse_row_id
 
 # A throwaway, clearly-marked-test-only passphrase used ONLY under `--scripted` witnessing
@@ -241,22 +241,29 @@ def fingerprint_hole() -> Hole:
     return Hole(of=FINGERPRINT_PRODUCES, describe="fingerprint", extract=_parse_fpr_from_colons)
 
 
-def prepare_scratch_gnupghome() -> str:
+SCRATCH_GNUPGHOME_PRODUCES = "scratch-gnupghome"
+
+
+def _prepare_scratch_gnupghome_raw() -> str:
     """Creates a throwaway GNUPGHOME (tempdir, chmod 700 -- `filing/gpg_trust.py`'s own
-    `build_scratch_keyring` shape) for `--scripted` witnessing. DECISION-TIME, not gated by the
-    §2.8 purity gate: this is process-private scratch state under `/tmp`, never the destination,
-    the operator's keyring, or any ledger -- the guarantee envelope's "nothing touched before
-    commit" is about THOSE three, and this creates none of them. `teardown_scratch` removes it."""
+    `build_scratch_keyring` shape) for `--scripted` witnessing. NOT gated by the §2.8 purity gate
+    -- this is process-private scratch state under `/tmp`, never the destination, the operator's
+    keyring, or any ledger -- but it IS a real filesystem effect, so it is called ONLY from
+    `prepare_scratch_gnupghome_act`'s own `CallableAct.fn` closure, i.e. only ever at COMMIT time
+    (FINDING-2 fix, fresh-context review of b565db1: this used to run at DECISION time under
+    `--scripted`, outside the spec's two declared exceptions -- gates/setup_tui_purity_gate.py's
+    own EXTRA_EFFECT_EXEMPT names this function explicitly, since the gate cannot itself verify a
+    function is only ever invoked from a commit-time closure)."""
     gnupghome = tempfile.mkdtemp(prefix="setup-tui-signed-genesis-scratch-")
     os.chmod(gnupghome, 0o700)
     return gnupghome
 
 
-def write_scratch_batch_file(gnupghome: str, name: str, email: str) -> str:
+def _write_scratch_batch_file_raw(gnupghome: str, name: str, email: str) -> str:
     """Writes gpg's own `--batch --generate-key` batch file INTO the scratch GNUPGHOME
-    `prepare_scratch_gnupghome` just created -- same decision-time/not-gated reasoning (process-
-    private scratch, not `dest`). Returns the batch file's path, the argv value
-    `keygen_scripted_act` below needs."""
+    `_prepare_scratch_gnupghome_raw` just created. Same commit-time-only reasoning and same gate
+    exemption as that function -- called only from `prepare_scratch_gnupghome_act`'s closure.
+    Returns the batch file's path."""
     batch_text = (
         "Key-Type: eddsa\nKey-Curve: ed25519\nKey-Usage: sign\n"
         f"Name-Real: {name}\nName-Email: {email}\nExpire-Date: 0\n"
@@ -266,6 +273,37 @@ def write_scratch_batch_file(gnupghome: str, name: str, email: str) -> str:
     with open(batch_path, "w", encoding="utf-8") as f:
         f.write(batch_text)
     return batch_path
+
+
+def prepare_scratch_gnupghome_act(name: str, email: str) -> tuple[CallableAct, str]:
+    """The plan-act builder for the scratch-GNUPGHOME + batch-file setup (FINDING-2 fix): returns
+    a `CallableAct` whose `fn` (run only at commit time) creates the scratch GNUPGHOME, writes the
+    batch file into it, and returns `(True, gnupghome_path)` -- `gnupghome_path` becomes this
+    entry's `produces` binding (`SCRATCH_GNUPGHOME_PRODUCES`), the value every downstream
+    `--homedir` argument and the batch-file-path argument resolve against via `Hole`s (see
+    `gnupghome_hole`/`batch_path_hole` below) -- never a decision-time string, since the path does
+    not exist until this act actually runs."""
+    def _fn() -> tuple[bool, str]:
+        gnupghome = _prepare_scratch_gnupghome_raw()
+        _write_scratch_batch_file_raw(gnupghome, name, email)
+        return True, gnupghome
+    return CallableAct(fn=_fn, label=f"(scratch GNUPGHOME setup for {name!r})"), \
+        SCRATCH_GNUPGHOME_PRODUCES
+
+
+def gnupghome_hole() -> Hole:
+    """The `Hole` a downstream act's `--homedir` argument holds for the scratch GNUPGHOME path --
+    resolves against `SCRATCH_GNUPGHOME_PRODUCES`'s binding (`prepare_scratch_gnupghome_act`'s own
+    real return value)."""
+    return Hole(of=SCRATCH_GNUPGHOME_PRODUCES, describe="scratch gnupghome path",
+                extract=lambda gh: gh)
+
+
+def batch_path_hole() -> Hole:
+    """The `Hole` `keygen_scripted_act`'s own batch-file argument holds -- the scratch GNUPGHOME
+    path plus the fixed `keygen.batch` filename `_write_scratch_batch_file_raw` always uses."""
+    return Hole(of=SCRATCH_GNUPGHOME_PRODUCES, describe="scratch batch file path",
+                extract=lambda gh: os.path.join(gh, "keygen.batch"))
 
 
 def keygen_scripted_act(gnupghome: str, batch_path: str) -> tuple[CommandAct, str]:

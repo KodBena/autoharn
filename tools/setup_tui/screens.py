@@ -29,11 +29,11 @@ DECLARED EXCEPTIONS (spec §2.5, the honest envelope -- named at their sites, no
     witnessed zero-residue teardown. It is the ONE screen function (besides
     `tools/setup_tui/commit_executor.py`) the §2.8 AST purity gate permits to call
     `runner.run_command`/`start_background`/`write_file` directly.
-  - `prepare_scratch_gnupghome`/`write_scratch_batch_file` (signed_genesis.py) create process-
-    private `/tmp` scratch state for `--scripted` witnessing -- never `dest`, the operator's
-    keyring, or any ledger, so the guarantee envelope's "nothing touched before commit" is
-    unaffected; they call neither `run_command` nor `write_file` (a raw `open()`/`os.mkdir`), so
-    the gate does not need to carve them out.
+  - The scratch GNUPGHOME `--scripted` witnessing needs (`signed_genesis.
+    prepare_scratch_gnupghome_act`) is NOT a decision-time exception any more (FINDING-2 fix,
+    fresh-context review of b565db1): it is its own plan entry (a `plan.CallableAct`, the one act
+    type that is neither of the three runner choke points), executed only at commit time, exactly
+    like every other effect in this flow -- the decision phase stays genuinely effect-free.
 
 THE THREE RE-DERIVED DISPLAYS (spec §2.7): `screen_principals_authority` shows the scaffold's
 static contractual base (`principals_authority.SCAFFOLD_BASE_PRINCIPALS`) rather than a live
@@ -859,18 +859,25 @@ def screen_signed_genesis(ui, cl, state):
 
     # --- keygen: ONE fixed shape, no quiz (spec step 1) -------------------------------------
     is_scripted = isinstance(ui, ScriptedUi)
-    scratch_gnupghome = None
+    scratch_setup_produces = None
     if is_scripted:
         ui.say("  --scripted witnessing: a scratch GNUPGHOME + fixture passphrase is used "
-               "(never the operator's own ~/.gnupg) at commit time.")
+               "(never the operator's own ~/.gnupg) -- prepared as its own plan entry, at "
+               "commit time (FINDING-2 fix: this used to be a real filesystem effect at "
+               "decision time).")
         name = ui.ask_text("Key Name-Real (scripted/fixture keygen)",
                             default="AUTOHARN SETUP-TUI FIXTURE KEY -- THROWAWAY")
         email = ui.ask_text("Key Name-Email (scripted/fixture keygen)",
                              default="setup-tui-fixture@example.invalid")
-        scratch_gnupghome = signed_genesis.prepare_scratch_gnupghome()
-        batch_path = signed_genesis.write_scratch_batch_file(scratch_gnupghome, name, email)
-        act, produces = signed_genesis.keygen_scripted_act(scratch_gnupghome, batch_path)
-        gnupghome = scratch_gnupghome
+        setup_act, scratch_setup_produces = signed_genesis.prepare_scratch_gnupghome_act(name, email)
+        plan.append(PlanEntry(screen="signed-genesis", item="scratch GNUPGHOME prepared",
+                               lesson="a throwaway keyring + fixture passphrase for "
+                                      "--scripted witnessing, never the operator's own",
+                               act=setup_act, produces=scratch_setup_produces))
+        ui.say(f"  queued: {setup_act.render()}")
+        act, produces = signed_genesis.keygen_scripted_act(
+            signed_genesis.gnupghome_hole(), signed_genesis.batch_path_hole())
+        gnupghome = signed_genesis.gnupghome_hole()
     else:
         name = ui.ask_text("Key Name-Real (your name)")
         email = ui.ask_text("Key Name-Email")
@@ -886,7 +893,8 @@ def screen_signed_genesis(ui, cl, state):
                            act=act, produces=produces))
     ui.say(f"  queued: {act.render()}")
 
-    gnupghome_display = gnupghome or "your default ~/.gnupg"
+    gnupghome_display = ("<scratch GNUPGHOME -- path known only at commit>" if is_scripted
+                          else (gnupghome or "your default ~/.gnupg"))
     ui.say(f"  private key custody: {gnupghome_display} -- this tool never reads, copies, or "
            f"moves it (user-guide/USER-GPG-TRUST-LAYER-FAQ.md §2: print the revocation "
            f"certificate and store it offline).")
@@ -947,8 +955,12 @@ def screen_signed_genesis(ui, cl, state):
            "§5), never a nag.")
     cl.add("signed-genesis", "no ongoing signing burden after this screen", ck.WITNESSED,
            "spec §1 item 5 -- checklist-only note, no mechanism added")
-    if scratch_gnupghome:
-        state.setdefault("scratch_gnupghomes", []).append(scratch_gnupghome)
+    if scratch_setup_produces:
+        # FINDING-2: only the PRODUCES KEY is known at decision time -- the real scratch
+        # GNUPGHOME path does not exist until the plan entry above actually runs, at commit.
+        # _execute_commit resolves this key against the commit's own real bindings/journal
+        # AFTER execute() runs (or halts), then tears down whatever was actually created.
+        state.setdefault("scratch_gnupghome_produces_keys", []).append(scratch_setup_produces)
     return state
 
 
@@ -1355,6 +1367,10 @@ def _execute_commit(ui, cl, state) -> None:
     # value, which a later entry's own on_result raising would make unreachable (see
     # _dispatch_result's own docstring for the defect this closed, caught live).
     result = CE.execute(plan, dest, on_step=_on_step, on_result=_on_result)
+    # FINDING-2: the scratch GNUPGHOME's REAL path (if this commit created one) is only knowable
+    # from the commit's own real bindings -- never a decision-time variable, since the setup act
+    # itself runs here, at commit. Stashed for _teardown_scratch_gnupghomes below.
+    state["_last_commit_bindings"] = result.bindings
     if not result.completed:
         ui.say("")
         ui.say("  COMMIT HALTED -- the journal names the next PENDING step; re-run this tool "
@@ -1364,16 +1380,20 @@ def _execute_commit(ui, cl, state) -> None:
 
 def _teardown_scratch_gnupghomes(state) -> None:
     """PRODUCT FIX (caught live against a real gpg + real commit -- seen-red/setup-tui-signed-
-    genesis WG1): under Phase 2, a `--scripted` witnessing run's scratch GNUPGHOME
-    (`signed_genesis.prepare_scratch_gnupghome`, called at DECISION time by
-    `screen_signed_genesis` so the keygen act has a homedir to target) is no longer torn down
-    inline right after the ceremony -- the ceremony itself is now deferred to commit, and nothing
-    called `signed_genesis.teardown_scratch` afterward at all. Every scratch GNUPGHOME this run
-    created (`state["scratch_gnupghomes"]`, appended to by `screen_signed_genesis`) is removed
-    here, unconditionally, once the terminal commit boundary has run (or been declined, or been a
-    dry run) -- WG1's own "zero scratch-GNUPGHOME residue" bar, restored."""
-    for gnupghome in state.get("scratch_gnupghomes", []):
-        signed_genesis.teardown_scratch(gnupghome)
+    genesis WG1), FINDING-2-shaped (fresh-context review of b565db1): under Phase 2, a
+    `--scripted` witnessing run's scratch GNUPGHOME is created by its own plan entry
+    (`signed_genesis.prepare_scratch_gnupghome_act`), at COMMIT time -- never a decision-time
+    filesystem effect any more. `state["scratch_gnupghome_produces_keys"]` (appended to by
+    `screen_signed_genesis`) names the PRODUCES KEY, not a path -- the real path is resolved here
+    against `state["_last_commit_bindings"]` (`_execute_commit`'s own stash of the commit's real
+    bindings), which is empty/absent for every early-return path (dry-run, declined commit, empty
+    plan, no destination) that never actually ran the setup act -- correctly nothing to tear down
+    in those cases, rather than a decision-time path this function used to just assume existed."""
+    bindings = state.get("_last_commit_bindings", {})
+    for key in state.get("scratch_gnupghome_produces_keys", []):
+        gnupghome = bindings.get(key)
+        if gnupghome:
+            signed_genesis.teardown_scratch(gnupghome)
 
 
 def screen_checklist(ui, cl, state):
