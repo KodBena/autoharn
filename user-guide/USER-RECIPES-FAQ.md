@@ -141,18 +141,51 @@ that used to live here.
 
 **Is there a guided path from nothing to a running [world](../GLOSSARY.md#world) (this project's
 term for one scaffolded, database-backed deployment), instead of typing the scaffold commands by
-hand?** Yes — `python3 -m tools.setup_tui.app`, run from your autoharn checkout.
+hand?** Yes — `python3 -m tools.setup_tui.app`, run from your autoharn checkout (the bare
+`python3 -m tools.setup_tui` this section's own heading uses is equivalent — `tools/setup_tui/
+__main__.py` is a thin redirect to the same `app.py`'s `main`; this doc uses the explicit
+`.app` form throughout for clarity).
 It is a **driver of the existing verbs, never a second implementation**: every screen shows
 the exact command it is about to run (`bootstrap/new-project.sh`, `bootstrap/teardown-world.sh`,
 `boundary_service`, `led`) and streams that command's real output, so if the process dies
 mid-flow you can finish by hand from what was already printed. Full spec:
 [FABLE-SETUP-TUI-SPEC.md](../design/FABLE-SETUP-TUI-SPEC.md); commission ledger row 1656
 ("so much to remember ... too much when you want to *just get started but still have a
-seriously robust experience*"). It needs no new dependency — plain Python with a
-zero-dependency numbered-menu fallback when `textual`/`urwid` aren't installed (both are
-optional, and this witness pass's own environment had neither installed — the real preflight
-checklist rows quoted further below, under `--dry-run`, record `textual available WITNESSED
-not installed` and `urwid available WITNESSED not installed`, live confirmation of exactly this).
+seriously robust experience*").
+
+**The interactive face is a real Textual application**
+([design/FABLE-SETUP-TUI-TEXTUAL-SPEC.md](../design/FABLE-SETUP-TUI-TEXTUAL-SPEC.md),
+commission ledger row 1818), superseding [FABLE-SETUP-TUI-SPEC.md](../design/FABLE-SETUP-TUI-SPEC.md)'s
+original v1 "library ONLY if already installed" clause. The maintainer's own words commissioning this: "I tried to run the setup TUI
+after installing
+'textual' into a venv and I'm not really happy with how it looks -- in fact, textual is not
+used, at all, it is not a TUI, it is just a collection of prompts no matter how clean the code
+is... Could we make it into a real 'textual' app?" It now is: Header (with the derived "N/11
+Screen" ordinal), a sidebar of the eleven screens with pending/current/done state, a scrolling
+transcript pane carrying everything the flow says (banners, `$ argv` echoes, streamed real
+command output), a docked prompt area for the active question, and a Footer — the SAME eleven
+`screen_*` functions and the SAME `Ui` call sites (`tools/setup_tui/ui.py`) drive it, running
+unchanged in a Textual worker thread while `tools/setup_tui/ui_textual.py`'s `TextualUi`/
+`SetupWizardApp` render it. Selection is automatic: interactive runs get the real Textual face
+when `textual` is importable; otherwise ONE teaching line naming the exact venv/pip command,
+then the zero-dependency numbered-menu fallback proceeds ("degraded-but-possible beats
+frozen"). `--plain` forces the numbered-menu interface explicitly, even with `textual`
+installed. `--scripted` NEVER touches `textual` — headless witnessing stays dependency-free, as
+it always has. `textual` itself remains a declared external cost of THIS TOOL's interactive
+face only — never of the harness, a born world, or the witnessing path — install it into a venv
+if you don't already have it:
+```
+python3 -m venv .venv && .venv/bin/pip install textual
+.venv/bin/python -m tools.setup_tui.app
+```
+(or, inside an already-active venv, `pip install textual`). WITNESSED this build against a
+scratch venv (`textual` 8.2.8, since the build interpreter itself did not have it installed):
+the headless Textual journey (WX1), transcript parity with the plain backend for the same
+`$ `-prefixed lines (WX2), the fallback teaching line (WX3), the `Ui.suspend()` bridge that
+hands the real terminal to an interactive child process (gpg's own passphrase prompt during
+Signed genesis) reaching the real `App.suspend()` (WX4), abnormal-exit cleanup under a real
+SIGTERM (WX5), and `--dry-run` under the shell (WX6) — see
+[seen-red/setup-tui-textual-shell](../seen-red/setup-tui-textual-shell/run_fixtures.py).
 
 **The eleven screens, in order** (every screen skippable, the skip recorded — never silent;
 `--start-at <slug>` below jumps straight to any one of them — the slug, never a hand-typed
@@ -178,19 +211,25 @@ never drifts the way a hardcoded ordinal would the moment a screen is inserted):
    copy-paste signing line is surfaced prominently at the end, delimited by `BEGIN`/`END`
    markers.
 6. **Principals & authority** (`--start-at principals-authority`) — registers additional
-   principals, grants s41 competences, asserts typed relations, and registers role charters
-   in-flow, described below; skipping it is legitimate (the scaffold's own three principals
-   already make a complete world).
+   principals, grants [s41](#principal-identity-s40s41) competences (recorded beliefs about who
+   is trusted to do what, at what confidence band, on what basis) and typed relations (e.g.
+   acts-for, dispatched-by), and registers role charters (a written statement of what a role is
+   for and what it may do, filed against a registered principal via `tools/role_charter.py`)
+   in-flow; skipping it
+   is legitimate (the scaffold's own three principals already make a complete world).
 7. **Signed genesis** (`--start-at signed-genesis`) — the GPG-signing ceremony for the
    world's founding commission, on by default; full operator walkthrough (four visible
    commands, the VERIFIED gate, the skip path, rotation) in
    [USER-GPG-TRUST-LAYER-FAQ.md §5a](USER-GPG-TRUST-LAYER-FAQ.md#5a-the-setup-tuis-own-signed-genesis-screen--the-same-ceremony-automated).
-8. **Boundary** (`--start-at boundary`) — writes the multiplex TOML and the two
+8. **Boundary** (`--start-at boundary`) — writes the multiplex TOML (the config file letting
+   one boundary service process serve several deployments/worlds side by side) and the two
    `deployment.json` boundary keys, picks a free port, starts the service (or emits the
    systemd-style unit text as a copy-paste block when this process doesn't keep it alive
    itself), probes `/health` and `/meta`.
 9. **Observability** (`--start-at observability`) — the `otelcol` start line
-   (localhost-only), the OTel model-provenance watchdog start line (`./otel-watch --daemon`),
+   (localhost-only), the OTel model-provenance watchdog start line (`./otel-watch --daemon`,
+   a background process that checks the OTel telemetry stream for the model-identity/
+   provenance fields this project's OTel-attestation discipline requires and flags gaps loudly),
    and the Claude launch line with the right env vars, as copy-paste blocks with a
    what-you-should-see line each.
 10. **Hydration** (`--start-at hydration`) — free-text prompts for fork provenance and role
@@ -201,8 +240,8 @@ never drifts the way a hardcoded ordinal would the moment a screen is inserted):
     table of everything the flow touched, offered for saving into the new world as a dated
     file.
 
-**The feature-facts column (design/FABLE-SETUP-TUI-FEATURE-FACTS-SPEC.md, ledger row 1714,
-built 2026-07-19).** Every selectable act on every screen above now prints a facts line
+**The feature-facts column** ([design/FABLE-SETUP-TUI-FEATURE-FACTS-SPEC.md](../design/FABLE-SETUP-TUI-FEATURE-FACTS-SPEC.md), ledger row 1714)
+**was built 2026-07-19.** Every selectable act on every screen above now prints a facts line
 *before* you commit to it: the standards-conformance aspiration it serves (with a citation,
 or an honest "none named") and its external costs/dependencies (with an honest "none") —
 read from `tools/setup_tui/feature_facts.py`'s one-home registry (29 entries at this
@@ -219,7 +258,7 @@ idris2: RED -- not found on PATH
   fix: install idris2 (...) and ensure it is on PATH
 ```
 
-**The durable-decisions catalog (same spec §3, ledger rows 1714/1716/1718/1721/1722).**
+**This is the durable-decisions catalog** (same spec §3, ledger rows 1714/1716/1718/1721/1722).
 The Hydration screen (`--start-at hydration`) offers a curated, 12-entry catalog of standing
 rules distilled from this project's own ledger and the autoharn-panel deployment's (a separate
 operator-dashboard product — a Vue front end over a FastAPI service — that consumes this
@@ -227,8 +266,8 @@ project's ledger through the boundary service, vendored under `tools/autoharn-pa
 entry admitted only on a witnessed painful (or successful) specimen — not a generic
 best-practice list. It went through a dedicated genericity critique before merge
 ([SONNET-CATALOG-GENERICITY-CRITIQUE-2026-07-19.md](../design/SONNET-CATALOG-GENERICITY-CRITIQUE-2026-07-19.md)):
-one entry judged bespoke to this project's own contributors was cut, four were rewritten out
-of first-project voice, and three generic entries the mining pass had missed (including the
+one entry judged bespoke to this project's own contributors was cut, four were rewritten to
+remove autoharn-specific ("first-project") voice, and three generic entries the mining pass had missed (including the
 claims-carry-witnesses taxonomy — WITNESSED/REFUSED-AS-EXPECTED/UNEXERCISED) were added.
 Selecting an entry writes a real `led decision` row AND compiles a fragment into the new
 world's `CLAUDE.md` between generated-section markers (idempotent, fork-destination-safe —
@@ -238,7 +277,9 @@ principal makes every row that principal later writes count as new review debt, 
 rows that existed at obligation time) as one of its own entries, rather than handing a fresh
 operator a loaded trigger at birth.
 
-**Governed-files exposure — built and merged, live on the Fork/target screen.** A 2026-07-19
+**Governed-files exposure is built and merged, and is live on the Fork/target screen.** "Governed
+files" are the files whose edits `hooks/pretooluse_change_gate.py` gates by pattern, keyed to
+what a file *is* rather than an enumerated list (F33, cited in the facts line below). A 2026-07-19
 spec amendment (commission ledger row 1730: the maintainer's own painful specimen — the
 autoharn-panel deployment started `.claude/governed_files.json` at `*.py`-only and needed
 `.ts`/`.vue`/`.html` added by hand) adds a governed-files prompt to the Fork/target screen,
@@ -275,8 +316,8 @@ refusal-grade notice naming the exact one-line widening act
 (`.claude/governed_files.json`'s `patterns` array; fnmatch semantics, no restart needed —
 `.claude/GOVERNED_FILES.md` in any scaffolded world).
 
-**Principals & authority (design/FABLE-SETUP-TUI-PRINCIPALS-AUTHORITY-SPEC.md, ledger rows
-1727/1728) — built and merged**, sitting between Birth and Signed genesis
+**Principals & authority** ([design/FABLE-SETUP-TUI-PRINCIPALS-AUTHORITY-SPEC.md](../design/FABLE-SETUP-TUI-PRINCIPALS-AUTHORITY-SPEC.md), ledger rows
+1727/1728) **is built and merged**, sitting between Birth and Signed genesis
 (`--start-at principals-authority`). It registers additional principals, grants s41
 competences, asserts typed relations, and registers role charters in-flow, showing a short
 teaching line before each act explaining what it does and why, binding on every act, not
@@ -287,10 +328,11 @@ driver logic). Declining is legitimate and legible — every world already has
 world; the screen's own value is propaedeutic, walking the ceremony once rather than a
 prerequisite for a working world.
 
-**Signed genesis (design/FABLE-SETUP-TUI-SIGNED-GENESIS-SPEC.md, ledger rows 1724–1726) —
-built and merged**, sitting between Principals & authority and Boundary
-(`--start-at signed-genesis`): an optional, on-by-default, no-quiz keygen riding the existing
-GPG-trust rungs (no new crypto stack) that generates a keypair, exports the public half into
+**Signed genesis** ([design/FABLE-SETUP-TUI-SIGNED-GENESIS-SPEC.md](../design/FABLE-SETUP-TUI-SIGNED-GENESIS-SPEC.md), ledger rows 1724–1726)
+**is built and merged**, sitting between Principals & authority and Boundary
+(`--start-at signed-genesis`). It is an optional, on-by-default, no-quiz keygen riding the existing
+GPG web-of-trust machinery (no new crypto stack — the existing GPG trust layer this project
+already ships) that generates a keypair, exports the public half into
 the world's `keys/`, signs the world's founding commission, and verifies it against your own
 key — one-time, no ongoing signing burden afterward. `tools/setup_tui/signed_genesis.py`
 carries the driver logic. The full operator walkthrough — what you type, what you should see,
@@ -299,8 +341,8 @@ lives in
 [USER-GPG-TRUST-LAYER-FAQ.md §5a](USER-GPG-TRUST-LAYER-FAQ.md#5a-the-setup-tuis-own-signed-genesis-screen--the-same-ceremony-automated),
 not duplicated here.
 
-**`--dry-run` — the nondestructive whole-flow rehearsal (2026-07-19 amendment, commission row
-1719: "so I don't mess up any directory by mistake").** Add `--dry-run` to run the identical
+**`--dry-run` is the nondestructive whole-flow rehearsal** (2026-07-19 amendment, commission row
+1719: "so I don't mess up any directory by mistake"). Add `--dry-run` to run the identical
 eleven screens with NO destructive or externally visible act: no file written outside the
 process's own temp space, no database act, no `led` write, no process started, no port bound.
 Read-only probes (preflight, connection checks, reading your real `pg_hba` copy, the ADR
@@ -346,13 +388,20 @@ session:
   infra live in
   [seen-red/setup-tui-dry-run-parity](../seen-red/setup-tui-dry-run-parity/run_fixtures.py)
   (degrades to UNEXERCISED, exit 0, without a reachable Postgres host and the boundary
-  service's venv — same honest-degrade posture as this doc pass hit live).
+  service's venv — same honest-degrade posture as this doc pass hit live). This particular
+  table predates [design/FABLE-SETUP-TUI-TEXTUAL-SPEC.md](../design/FABLE-SETUP-TUI-TEXTUAL-SPEC.md)'s Textual-face build and was captured
+  against an interpreter without `textual` installed — kept verbatim as a historical witness,
+  per this doc's own no-retro-edit discipline. Where `textual` IS importable that row instead
+  reads `available`, and the interactive face above the table becomes the real Textual
+  application, not the numbered-menu fallback; see
+  [seen-red/setup-tui-textual-shell](../seen-red/setup-tui-textual-shell/run_fixtures.py) for
+  that build's own live witnesses.
 
 **A minimal operator walkthrough register — what you do at each step, and what you should see:**
 
 | Step (what you do) | What you should see |
 |---|---|
-| Type `python3 -m tools.setup_tui.app --dry-run` | Banner, then `1/11 Preflight`; interactive numbered prompts (or a refusal naming `--scripted` if stdin isn't a terminal — WITNESSED this session: `setup_tui: stdin is not a terminal and --scripted was not given -- refusing to run an interactive flow`). |
+| Type `python3 -m tools.setup_tui.app --dry-run` | The real Textual application if `textual` is importable (Header/sidebar/transcript/docked prompt, banner then `1/11 Preflight`) — or, absent it, one teaching line naming the venv/pip command then interactive numbered prompts (`--plain` chooses the numbered interface explicitly either way); or a refusal naming `--scripted` if stdin isn't a terminal at all — WITNESSED this session: `setup_tui: stdin is not a terminal and --scripted was not given -- refusing to run an interactive flow`. |
 | Answer `yes` to preflight | Each prerequisite line green/red with a fix command; `HARNESS_PGHOST` red with `export HARNESS_PGHOST=<your postgres host>` if unset. |
 | Walk screens 2–10, answering as prompted (or skip any with `no`) | Each screen prints its exact command/argv before running it (or, under `--dry-run`, before *not* running it); a skipped screen records `SKIPPED`, not silence. |
 | Reach screen 11 (Checklist) | A per-item table, `WITNESSED`/`SKIPPED`/`REFUSED`/`PREPARED` (or the `--dry-run` counterparts), then an offer to save it into the new world. |
@@ -360,7 +409,8 @@ session:
 
 Full command-line usage (`--help`, WITNESSED this session, byte-for-byte):
 ```
-usage: setup_tui [-h] [--scripted ANSWERS_FILE] [--start-at SCREEN] [--dry-run]
+usage: setup_tui [-h] [--scripted ANSWERS_FILE] [--start-at SCREEN]
+                 [--dry-run] [--plain]
 ```
 `--start-at <screen>` (preflight, substrate, fork-target, rehearsal, birth,
 principals-authority, signed-genesis, boundary, observability, hydration, checklist) jumps
@@ -368,7 +418,7 @@ straight to one screen — a screen entered out of its normal sequence independe
 every precondition the normal sequence would have established, refusing legibly (never a
 traceback) when one is missing (the 2026-07-19 out-of-sequence amendment, same spec).
 
-**One line each on the setup TUI's own drift backstops**, cross-referenced in full under
+**This closes with one line each on the setup TUI's own drift backstops**, cross-referenced in full under
 ["Drift backstops" below](#drift-backstops-one-generic-method-for-anything-that-goes-quietly-stale):
 [seen-red/setup-tui-scripted-smoke](../seen-red/setup-tui-scripted-smoke/run_fixtures.py) (the
 setup surface's own scripted smoke fixture, hostile/malformed inputs),
@@ -1358,6 +1408,17 @@ is each one's owning page):
   byte, order included); needs a reachable Postgres host and the boundary service's venv,
   degrading honestly to `UNEXERCISED` (exit 0) without either, rather than failing the build
   on missing optional local infra.
+- [seen-red/setup-tui-textual-shell](../seen-red/setup-tui-textual-shell/run_fixtures.py) —
+  the Textual-face build's own WX1-WX6 witnesses (design/FABLE-SETUP-TUI-TEXTUAL-SPEC.md §4,
+  commission ledger row 1818): a headless Textual journey through all eleven screens (WX1),
+  transcript parity with the plain backend's `$ `-prefixed lines (WX2), the textual-absent
+  fallback teaching line and `--plain`'s override (WX3), the `Ui.suspend()` bridge reaching the
+  real `App.suspend()` (WX4, wiring), abnormal-exit cleanup under a real SIGTERM delivered to a
+  real process (WX5), and `--dry-run` under the shell (WX6) — against the real
+  `tools/setup_tui/ui_textual.py` classes, no mocks. Runs under whichever interpreter this
+  fixture finds `textual` importable in (`SETUP_TUI_TEXTUAL_PYTHON`, or the ambient one),
+  degrading the textual-dependent cases honestly to `UNEXERCISED` with the exact pip/venv
+  pointer when none is found.
 
 **The setup TUI's own two durable-decisions features (design/FABLE-SETUP-TUI-FEATURE-FACTS-
 SPEC.md, ledger rows 1714/1716):** every selectable act the guided wizard

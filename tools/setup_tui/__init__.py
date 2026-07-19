@@ -1,6 +1,6 @@
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-18T21:30:53Z
-#   last-change: 2026-07-19T02:14:15Z
+#   last-change: 2026-07-19T18:34:45Z
 #   contributors: ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -34,16 +34,22 @@ would-be acts (rule 1's exact-argv discipline is unconditional). Read-only probe
 unaffected. See the amendment's own "Built" note in FABLE-SETUP-TUI-SPEC.md for the
 implementation seam in full.
 
-UI substrate: this build found neither `textual` nor `urwid` installed in the interpreter that
-runs it (`python3 -c "import textual"` / `"import urwid"` both raised `ModuleNotFoundError` at
-build time) -- so per the spec's v1 boundary ("Python + textual/urwid-class library ONLY if
-already installed -- otherwise plain curses/prompt-toolkit-free numbered-menu fallback"), this
-package uses the numbered-menu fallback (`tools/setup_tui/ui.py`): plain stdin/stdout, no
-curses, no prompt-toolkit, no new dependency of any kind. The same module also backs
-`--scripted <answers-file>` (an ordered list of newline-separated answers consumed in prompt
-order) for witnessing an otherwise-interactive flow without a human at the keyboard -- it drives
-the identical `Ui.ask_text`/`Ui.ask_choice`/`Ui.confirm`/`Ui.pause` call sites the interactive
-backend uses, swapping only where the next answer string comes from.
+UI substrate (design/FABLE-SETUP-TUI-TEXTUAL-SPEC.md, commission ledger row 1818 -- supersedes
+the v1 "library ONLY if already installed" clause this paragraph originally described): three
+backends behind the one-home `Ui` seam (`tools/setup_tui/ui.py`), selected once at startup by
+`tools/setup_tui/app.py`. Interactive runs get the real Textual application
+(`tools/setup_tui/ui_textual.py`'s `TextualUi`) when `textual` is importable -- a genuine TUI
+(Header/sidebar/scrolling transcript/docked prompt/Footer), not a collection of numbered prompts
+dressed up. Absent `textual`, ONE teaching line names the exact venv/pip command and the
+zero-dependency numbered-menu fallback (`InteractiveUi`: plain stdin/stdout, no curses, no
+prompt-toolkit) proceeds automatically -- `--plain` forces that fallback explicitly even when
+`textual` is installed. `--scripted <answers-file>` (`ScriptedUi`, an ordered list of
+newline-separated answers consumed in prompt order) NEVER touches `textual` -- headless
+witnessing stays dependency-free, as it always has; it drives the identical
+`Ui.ask_text`/`Ui.ask_choice`/`Ui.confirm`/`Ui.pause` call sites every other backend uses,
+swapping only where the next answer string comes from. `textual` remains a declared external
+cost of this package's interactive face only -- never of the harness, a born world, or the
+witnessing path.
 
 Lazy imports are banned (CLAUDE.md, 2026-07-02): every import in every module here is top of
 file.

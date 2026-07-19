@@ -1,29 +1,42 @@
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-18T21:31:20Z
-#   last-change: 2026-07-18T21:31:20Z
+#   last-change: 2026-07-19T17:37:34Z
 #   contributors: ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
 """tools/setup_tui/ui.py -- the ONE numbered-menu UI substrate (ADR-0012 P1: one home for the
 prompt/print shape, no screen module talks to stdin/stdout directly).
 
-Two backends behind the same `Ui` interface, selected once at startup by `tools/setup_tui/app.py`:
+THREE backends behind the same `Ui` interface, selected once at startup by
+`tools/setup_tui/app.py` (design/FABLE-SETUP-TUI-TEXTUAL-SPEC.md, commission ledger row 1818):
 
-  * `InteractiveUi` -- plain `input()`/`print()`, no curses, no prompt-toolkit (see this
-    package's own `__init__.py` docstring for why: neither `textual` nor `urwid` was found
-    installed at build time, so the spec's numbered-menu fallback applies).
+  * `TextualUi` (`tools/setup_tui/ui_textual.py`) -- a real Textual application: Header/sidebar/
+    transcript/docked-prompt/Footer, with the SAME imperative screen loop below run unchanged in
+    a Textual worker thread. Selected for interactive runs when `textual` is importable -- this
+    is the default face now that the v1 "library ONLY if already installed" clause is superseded
+    (see that spec, which also supersedes FABLE-SETUP-TUI-SPEC.md's original v1-boundaries text).
+  * `InteractiveUi` -- plain `input()`/`print()`, no curses, no prompt-toolkit. The `--plain`
+    flag forces this backend explicitly, and it is also the automatic fallback when `textual` is
+    not importable (one teaching line naming the exact venv/pip command, then this backend, per
+    the Textual spec's "degraded-but-possible beats frozen").
   * `ScriptedUi` -- reads answers, one per line, from a file given via `--scripted
     <answers-file>`, in the exact order the screens ask for them. It calls the SAME
     `ask_text`/`ask_choice`/`confirm`/`pause` methods a human would drive interactively; only
-    where the next answer comes from differs. This is how WT1/WT2/WT3/WT4/WT5 are witnessed
-    without a human at the keyboard.
+    where the next answer comes from differs. This is how WT1/WT2/WT3/WT4/WT5 (and the newer
+    WX-series Textual witnesses) are witnessed without a human at the keyboard. `--scripted`
+    NEVER selects `TextualUi` -- headless witnessing must not grow a dependency (the Textual
+    spec's own selection rule).
 
 Every method also ECHOES the question and the answer actually used to stdout, so a transcript of
-a scripted run reads exactly like a transcript of an interactive one.
+a scripted run reads exactly like a transcript of an interactive one -- `TextualUi` keeps this
+property too (design/FABLE-SETUP-TUI-TEXTUAL-SPEC.md §3: the transcript pane carries everything
+the flow says, and its `$ `-prefixed lines stay text-identical to the plain backend's).
 """
 from __future__ import annotations
 
+import contextlib
 import sys
+from collections.abc import Iterator
 from pathlib import Path
 
 
@@ -56,6 +69,24 @@ class Ui:
 
     def pause(self, prompt: str = "Press enter when done: ") -> None:
         raise NotImplementedError
+
+    @contextlib.contextmanager
+    def suspend(self) -> Iterator[None]:
+        """Yield control of the terminal to an interactive CHILD process for the duration of the
+        `with` block (design/FABLE-SETUP-TUI-TEXTUAL-SPEC.md §2 item 4) -- the known case is
+        gpg's own pinentry prompt during the Signed genesis ceremony (`screens.py`
+        `screen_signed_genesis`'s `keygen_operator`/`sign_statement` calls, wrapped in
+        `with ui.suspend():`). A no-op here (and in `InteractiveUi`/`ScriptedUi`, which never
+        override it): `InteractiveUi` already IS the raw terminal (nothing to yield), and
+        `ScriptedUi` never runs an act that could invoke a real pinentry (its own scratch-
+        GNUPGHOME/fixture-passphrase path is fully non-interactive, `signed_genesis.
+        keygen_scripted`/the `--batch`/`--pinentry-mode loopback` leg of `sign_statement`).
+        `TextualUi` (`tools/setup_tui/ui_textual.py`) is the one backend that overrides this --
+        it yields the App's own `App.suspend()` context manager so the operator's pinentry runs
+        against the real terminal, never scraped or scripted by this tool -- so screens.py can
+        wrap an interactive-child act in `with ui.suspend():` without ever knowing which backend
+        is live (screens stay backend-blind, this seam's own standing rule)."""
+        yield
 
 
 class InteractiveUi(Ui):
