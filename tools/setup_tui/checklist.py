@@ -1,14 +1,14 @@
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-18T21:31:50Z
-#   last-change: 2026-07-19T01:00:14Z
+#   last-change: 2026-07-19T03:02:58Z
 #   contributors: ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
 """tools/setup_tui/checklist.py -- honesty rule 3 ("checklist truth"): a per-item
 WITNESSED/SKIPPED/PREPARED record of everything the flow touched, kept as ONE list every screen
 appends to (ADR-0012 P1 -- no screen keeps its own private tally), rendered as the closing
-screen 9 table and, if the operator opts in, saved as a dated file inside the target directory
-(v1 boundary: nothing written outside the target dir + this saved checklist).
+checklist screen's table and, if the operator opts in, saved as a dated file inside the target
+directory (v1 boundary: nothing written outside the target dir + this saved checklist).
 
 `--dry-run` (design/FABLE-SETUP-TUI-SPEC.md 2026-07-19 amendment) adds two more statuses to the
 SAME table, deliberately -- the amendment's own words are "the checklist's own per-item

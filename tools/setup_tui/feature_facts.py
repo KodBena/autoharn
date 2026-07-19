@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-18T23:35:54Z
-#   last-change: 2026-07-19T02:14:35Z
+#   last-change: 2026-07-19T03:04:05Z
 #   contributors: ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -23,8 +23,8 @@ user-guide/USER-RECIPES-FAQ.md "Drift backstops" -- this spec is that section's 
 deliberate consumer, per design/FABLE-SETUP-TUI-FEATURE-FACTS-SPEC.md §1):
 
   1. Name the pair: REGISTRY (the dependent) vs. the live authorities anchored in screens.py's
-     module-level constants -- `PREFLIGHT_BINARIES` (screen 1's probed-binary tuple) and
-     `SUBSTRATE_CHOICES` (screen 2's `ask_choice` option keys) -- plus
+     module-level constants -- `PREFLIGHT_BINARIES` (the preflight screen's probed-binary
+     tuple) and `SUBSTRATE_CHOICES` (the substrate screen's `ask_choice` option keys) -- plus
      `durable_decisions.CATALOG`'s slugs (the hydration submenu's own registry).
   2. Both sides derived mechanically at check time (`derive_live_keys`), never a hand-typed
      second list -- the same filenames/live-catalog-derivation discipline the FAQ names.

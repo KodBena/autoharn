@@ -277,7 +277,7 @@ def main() -> int:
         # boundary's `can_start="y"` (in-process start) deliberately AVOIDS the PREPARED-block
         # path's `ui.pause(...)` -- that call is skipped entirely under `--dry-run`
         # (`_dry_skip_or`, DRY_SKIPPED, no prompt) but fires live, which would consume ONE MORE
-        # scripted answer live than dry and misalign every prompt after screen 6 between the two
+        # scripted answer live than dry and misalign every prompt after the boundary screen between the two
         # runs (a test-harness artifact, not a subject-under-test one). The in-process-start
         # branch has no such asymmetry: 0 extra prompts, live or dry.
         answers_b = "\n".join([

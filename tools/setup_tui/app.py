@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-18T21:34:30Z
-#   last-change: 2026-07-19T02:13:56Z
+#   last-change: 2026-07-19T03:02:21Z
 #   contributors: ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -135,7 +135,8 @@ def _terminate_boundary_proc(state: dict) -> None:
     from this process must not leave it running silently, orphaned, and unmentioned -- rule 1
     ("no hidden state") applies to what THIS process itself started, not only to the cluster-
     host acts it merely printed. Terminates it and says so; a process this function never
-    started (screen 6 not reached, or the PREPARED/systemd path taken) is left untouched."""
+    started (the boundary screen not reached, or the PREPARED/systemd path taken) is left
+    untouched."""
     proc = state.get("boundary_proc")
     if proc is None or proc.poll() is not None:
         return

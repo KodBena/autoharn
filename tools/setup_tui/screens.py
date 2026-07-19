@@ -1,6 +1,6 @@
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-18T21:34:05Z
-#   last-change: 2026-07-19T02:41:14Z
+#   last-change: 2026-07-19T03:19:08Z
 #   contributors: ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -62,7 +62,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 # (seen-red/setup-tui-feature-facts-drift/run_fixtures.py) checks both directions.
 PREFLIGHT_BINARIES = ("idris2", "clingo", "python3", "psql")
 
-# Same discipline for screen 2's ask_choice options -- every key here MUST have a
+# Same discipline for the substrate screen's ask_choice options -- every key here MUST have a
 # "substrate_<key>" entry in feature_facts.REGISTRY.
 SUBSTRATE_CHOICES = [
     ("existing", "existing-db path (zero manual steps, the omega-lab shape)"),
@@ -91,13 +91,13 @@ def _dry_skip_or(ui, cl, state, screen: str, item: str, verify) -> None:
 
 
 # ---------------------------------------------------------------------------------------------
-# Screen 1: Preflight
+# Preflight
 # ---------------------------------------------------------------------------------------------
 
 def screen_preflight(ui, cl, state):
-    ui.banner("1/11 Preflight")
+    ui.banner(screen_banner("preflight"))
     if ui.confirm("Run preflight checks?", default=True) is False:
-        cl.add("preflight", "all checks", ck.SKIPPED, "operator skipped screen 1")
+        cl.add("preflight", "all checks", ck.SKIPPED, skip_detail("preflight"))
         return state
 
     # repo commit
@@ -185,13 +185,13 @@ def screen_preflight(ui, cl, state):
 
 
 # ---------------------------------------------------------------------------------------------
-# Screen 2: Substrate
+# Substrate
 # ---------------------------------------------------------------------------------------------
 
 def screen_substrate(ui, cl, state):
-    ui.banner("2/11 Substrate")
+    ui.banner(screen_banner("substrate"))
     if not ui.confirm("Configure substrate now?", default=True):
-        cl.add("substrate", "path chosen", ck.SKIPPED, "operator skipped screen 2")
+        cl.add("substrate", "path chosen", ck.SKIPPED, skip_detail("substrate"))
         return state
 
     _show_facts(ui, "substrate_existing", "substrate_dedicated")
@@ -309,7 +309,7 @@ def screen_substrate(ui, cl, state):
 
 
 # ---------------------------------------------------------------------------------------------
-# Screen 3: Fork/target
+# Fork/target
 # ---------------------------------------------------------------------------------------------
 
 def _governed_files_step(ui, cl, state, dest: str) -> None:
@@ -363,9 +363,9 @@ def _governed_files_step(ui, cl, state, dest: str) -> None:
 
 
 def screen_fork_target(ui, cl, state):
-    ui.banner("3/11 Fork/target")
+    ui.banner(screen_banner("fork-target"))
     if not ui.confirm("Choose destination now?", default=True):
-        cl.add("fork-target", "destination", ck.SKIPPED, "operator skipped screen 3")
+        cl.add("fork-target", "destination", ck.SKIPPED, skip_detail("fork-target"))
         return state
 
     mode = ui.ask_choice("Destination kind?", [
@@ -447,7 +447,7 @@ def screen_fork_target(ui, cl, state):
 
 
 # ---------------------------------------------------------------------------------------------
-# Screen 4: Rehearsal
+# Rehearsal
 # ---------------------------------------------------------------------------------------------
 
 def _new_project_argv(dest, world, db, host, extra=None):
@@ -466,11 +466,75 @@ def _teardown_argv(world, db, host, extra=None):
     return argv
 
 
+# The exact refusal text bootstrap/new-project.sh prints when `deployment.json` already exists
+# and `--force` was not passed (line ~328 of that script, verified against source): "<path>/
+# deployment.json already exists -- refusing to overwrite (pass --force to replace it)." Matched
+# on the stable "deployment.json already exists -- refusing to overwrite" clause -- NOT the
+# bare "already exists -- refusing to overwrite" tail alone, which new-project.sh's OWN
+# `--pin submodule` leg also prints for an unrelated refusal ("<path>/.autoharn already exists
+# -- refusing to overwrite", line ~343) that this teaching block's diagnosis (partial birth,
+# teardown-world.sh) does not apply to at all -- `screen_birth` never passes `--pin submodule`
+# today, but the narrower anchor keeps this match correct even if that ever changes, rather than
+# silently misdiagnosing a stray `.autoharn` submodule as a partial kernel birth. A wording
+# tweak to the parenthetical alone still leaves this substring intact.
+_ALREADY_EXISTS_REFUSAL = "deployment.json already exists -- refusing to overwrite"
+
+
+def _render_partial_birth_teaching(ui, cl, world, host, db, dest) -> None:
+    """Ledger row 1790 finding 4 / finding 5 (NOT this build's kernel item -- ledger row 1792
+    routes THAT one to the maintainer/Fable-spec lane): when `screen_birth`'s call to
+    new-project.sh hits its OWN "already exists -- refusing to overwrite" refusal, teach the
+    operator what state they are likely in and what to do next, rather than leaving a bare
+    nonzero exit for them to puzzle out.
+
+    What this function does NOT do: attempt teardown, retry with --force, or otherwise act --
+    it only renders the teaching block and lets the checklist record REFUSED. The underlying
+    kernel gap (s15-schema.sql is non-idempotent under re-application -- `new-project.sh --force
+    --new-world` against a partially-born world hits 'no unique or exclusion constraint matching
+    the ON CONFLICT specification' partway through) is kernel/lineage, frozen-record, and out of
+    this build's scope; row 1792 is where that fix is tracked."""
+    ui.say("")
+    ui.say("  --- REFUSED: new-project.sh's own \"already exists\" gate ---")
+    ui.say(f"  deployment.json already exists at '{dest}' -- new-project.sh refused rather than")
+    ui.say(f"  silently overwrite it (pass --force to replace it, which this screen deliberately")
+    ui.say(f"  does NOT do on your behalf).")
+    ui.say("")
+    ui.say("  Likely state: a PARTIAL birth. The most common way to reach this refusal is a prior")
+    ui.say(f"  '{world}' birth that died mid-DDL (killed, crashed, network drop) after")
+    ui.say("  new-project.sh had already written deployment.json but before the kernel lineage")
+    ui.say("  chain finished applying -- the world is neither cleanly born nor cleanly absent.")
+    ui.say("")
+    ui.say("  Safe next step -- teardown, NOT a --force re-birth:")
+    teardown_argv = _teardown_argv(world, db, host, extra=["--dir", dest])
+    ui.say(f"    $ {' '.join(teardown_argv)}")
+    ui.say(f"    (teardown-world.sh will ask you to type '{world}' back to confirm -- it is")
+    ui.say("     destructive and irreversible: DROP SCHEMA ... CASCADE / DROP ROLE, no undo.)")
+    ui.say("  HONEST CAVEAT: teardown-world.sh was built and witnessed against CLEANLY-born")
+    ui.say("  worlds. Running it against a PARTIAL kernel chain (this situation) is UNEXERCISED")
+    ui.say("  -- it is very likely to work (the same DROP SCHEMA/ROLE statements apply regardless")
+    ui.say("  of how far the chain got), but it has not been witnessed doing so. If teardown")
+    ui.say("  itself errors, that is new information for the same row below, not a second dead")
+    ui.say("  end to solve alone.")
+    ui.say("")
+    ui.say("  KNOWN DEAD END, do not attempt: `new-project.sh --force --new-world` against this")
+    ui.say("  same destination. s15-schema.sql (kernel/lineage, frozen-record) is non-idempotent")
+    ui.say("  under re-application -- a --force re-birth over a partial chain hits 'no unique or")
+    ui.say("  exclusion constraint matching the ON CONFLICT specification' partway through DDL,")
+    ui.say("  a KERNEL gap this build does not own or patch (ledger row 1792: routed to the")
+    ui.say("  maintainer/Fable-spec lane, parked pending bandwidth -- NOT this build's to fix).")
+    ui.say("  --- end ---")
+    cl.add("birth", "world birth", ck.REFUSED,
+           f"REFUSED (new-project.sh's own gate): deployment.json exists at '{dest}' -- likely "
+           f"a partial prior birth. Taught: {' '.join(teardown_argv)} (destructive, "
+           f"UNEXERCISED against a partial chain -- ledger row 1792), --force re-birth is a "
+           f"known kernel-s15-non-idempotency dead end, NOT attempted.")
+
+
 def screen_rehearsal(ui, cl, state):
-    ui.banner("4/11 Rehearsal")
+    ui.banner(screen_banner("rehearsal"))
     if not ui.confirm("Run rehearsal (scratch birth + teardown + zero-residue check)?",
                        default=True):
-        cl.add("rehearsal", "rehearsal", ck.SKIPPED, "operator skipped screen 4")
+        cl.add("rehearsal", "rehearsal", ck.SKIPPED, skip_detail("rehearsal"))
         state["rehearsal_green"] = False
         return state
 
@@ -524,11 +588,11 @@ def screen_rehearsal(ui, cl, state):
 
 
 # ---------------------------------------------------------------------------------------------
-# Screen 5: Birth
+# Birth
 # ---------------------------------------------------------------------------------------------
 
 def screen_birth(ui, cl, state):
-    ui.banner("5/11 Birth")
+    ui.banner(screen_banner("birth"))
     if not state.get("rehearsal_green"):
         ui.say("  REFUSED: rehearsal did not report GREEN (or was skipped) -- the real birth "
                "is gated on rehearsal green (spec screen 4: 'the real birth is gated on "
@@ -541,7 +605,7 @@ def screen_birth(ui, cl, state):
         cl.add("birth", "rehearsal gate", ck.WITNESSED, "OVERRIDDEN by operator")
 
     if not ui.confirm("Run the real birth now?", default=True):
-        cl.add("birth", "world birth", ck.SKIPPED, "operator skipped screen 5")
+        cl.add("birth", "world birth", ck.SKIPPED, skip_detail("birth"))
         return state
 
     host = state.get("pghost") or ui.ask_text("Postgres host", default="192.168.122.1")
@@ -550,11 +614,12 @@ def screen_birth(ui, cl, state):
     dest = state.get("dest") or ui.ask_text("Destination directory")
     name = ui.ask_text("Project name (deployment.json 'name')", default=world)
 
-    # Threading the governed-files CHOICE screen 3 recorded (governed_files.py's own module
-    # docstring, the corrected single-writer design): `new-project.sh` is the one script that
-    # actually writes `.claude/governed_files.json`, on every invocation, unconditionally --
-    # `--governed` is ITS own sanctioned flag for steering that write. Omitted (no screen 3
-    # choice in this run, e.g. an out-of-sequence `--start-at birth`) means new-project.sh falls
+    # Threading the governed-files CHOICE the fork-target screen recorded (governed_files.py's
+    # own module docstring, the corrected single-writer design): `new-project.sh` is the one
+    # script that actually writes `.claude/governed_files.json`, on every invocation,
+    # unconditionally -- `--governed` is ITS own sanctioned flag for steering that write.
+    # Omitted (no fork-target-screen choice in this run, e.g. an out-of-sequence
+    # `--start-at birth`) means new-project.sh falls
     # back to its own bare *.py default with its own loud notice -- the same honest fallback
     # this flag already provides, never re-implemented here.
     extra = ["--name", name]
@@ -563,8 +628,17 @@ def screen_birth(ui, cl, state):
     argv = _new_project_argv(dest, world, db, host, extra=extra)
     res = run_command(argv, dry_run=state.get("dry_run", False))
     ok = res.ok
-    cl.add("birth", "world birth", ck.status_for(res),
-           f"{'exit 0' if ok else f'exit {res.returncode}'}")
+    dry_run = state.get("dry_run", False)
+    # Finding 5 (ledger row 1790; the kernel item it borders, row 1792, is NOT this build's to
+    # fix -- see _render_partial_birth_teaching's own docstring): new-project.sh's "already
+    # exists -- refusing to overwrite" refusal only ever fires live (a dry run always reports a
+    # SIMULATED ok=True, runner.run_command's own contract) -- render the teaching block instead
+    # of the bare exit-code checklist row this refusal used to get.
+    if not dry_run and not ok and _ALREADY_EXISTS_REFUSAL in res.output:
+        _render_partial_birth_teaching(ui, cl, world, host, db, dest)
+    else:
+        cl.add("birth", "world birth", ck.status_for(res),
+               f"{'exit 0' if ok else f'exit {res.returncode}'}")
     state["world"] = world
     state["dest"] = dest
     state["birth_ok"] = ok
@@ -607,7 +681,7 @@ def screen_birth(ui, cl, state):
 
 
 # ---------------------------------------------------------------------------------------------
-# Screen 6: Principals & authority (design/FABLE-SETUP-TUI-PRINCIPALS-AUTHORITY-SPEC.md,
+# Principals & authority (design/FABLE-SETUP-TUI-PRINCIPALS-AUTHORITY-SPEC.md,
 # commission ledger row 1727) -- sits BETWEEN Birth and Signed genesis (so the genesis bequeathal
 # can name authority just constituted here). ON BY DEFAULT (confirm default=True), one recorded
 # keypress to skip, never nagged again this run -- same benign-and-skippable test the genesis
@@ -621,7 +695,7 @@ def screen_birth(ui, cl, state):
 # ---------------------------------------------------------------------------------------------
 
 def screen_principals_authority(ui, cl, state):
-    ui.banner("6/11 Principals & authority")
+    ui.banner(screen_banner("principals-authority"))
     _show_facts(ui, "principals_authority")
     if not ui.confirm(
         "Constitute principals & authority now? (register identities, grant competences, "
@@ -778,7 +852,7 @@ def screen_principals_authority(ui, cl, state):
 
 
 # ---------------------------------------------------------------------------------------------
-# Screen 7: Signed genesis (design/FABLE-SETUP-TUI-SIGNED-GENESIS-SPEC.md, commission ledger
+# Signed genesis (design/FABLE-SETUP-TUI-SIGNED-GENESIS-SPEC.md, commission ledger
 # rows 1724/1725) -- ON BY DEFAULT (confirm default=True), one recorded keypress to skip, never
 # nagged again this run. Driven from tools/setup_tui/signed_genesis.py (this module's own
 # pghba.py/probes.py split, applied to the new screen): every gpg/led act below goes through
@@ -787,7 +861,7 @@ def screen_principals_authority(ui, cl, state):
 # ---------------------------------------------------------------------------------------------
 
 def screen_signed_genesis(ui, cl, state):
-    ui.banner("7/11 Signed genesis")
+    ui.banner(screen_banner("signed-genesis"))
     _show_facts(ui, "signed_genesis")
     if not ui.confirm(
         "Run the Signed genesis ceremony now? (generates a keypair, exports the public half "
@@ -990,11 +1064,11 @@ def screen_signed_genesis(ui, cl, state):
 
 
 # ---------------------------------------------------------------------------------------------
-# Screen 7: Boundary
+# Boundary
 # ---------------------------------------------------------------------------------------------
 
 def screen_boundary(ui, cl, state):
-    ui.banner("8/11 Boundary")
+    ui.banner(screen_banner("boundary"))
     _show_facts(ui, "boundary_service")
     # Gates on birth_ok EXACTLY as screen_birth gates on rehearsal_green above -- `not
     # state.get(...)` catches both an explicit False (birth ran and failed) and a missing key
@@ -1012,7 +1086,7 @@ def screen_boundary(ui, cl, state):
         cl.add("boundary", "birth gate", ck.WITNESSED, "OVERRIDDEN by operator")
 
     if not ui.confirm("Configure the boundary service now?", default=True):
-        cl.add("boundary", "boundary", ck.SKIPPED, "operator skipped screen 7")
+        cl.add("boundary", "boundary", ck.SKIPPED, skip_detail("boundary"))
         return state
     dry_run = state.get("dry_run", False)
     dest = state.get("dest") or ui.ask_text("Destination directory")
@@ -1132,10 +1206,10 @@ def screen_boundary(ui, cl, state):
     # This re-scaffold rewrites the SAME `.claude/` wiring `screen_birth` wrote, unconditionally
     # -- governed_files.json included (governed_files.py's own module docstring: EVERY
     # new-project.sh invocation this package makes owns that path). Re-threading the operator's
-    # screen-3 choice here is what keeps it from being silently clobbered back to the bare *.py
-    # default by this later call -- the exact hazard an out-of-frame review caught in this
-    # feature's first pass (a direct write at screen 3 that this same re-scaffold call raced and
-    # lost to).
+    # fork-target-screen choice here is what keeps it from being silently clobbered back to the
+    # bare *.py default by this later call -- the exact hazard an out-of-frame review caught in
+    # this feature's first pass (a direct write at the fork-target screen that this same
+    # re-scaffold call raced and lost to).
     if state.get("governed_patterns"):
         argv += ["--governed", governed_files.governed_flag_value(state["governed_patterns"])]
     res = run_command(argv, dry_run=dry_run)
@@ -1213,14 +1287,14 @@ def screen_boundary(ui, cl, state):
 
 
 # ---------------------------------------------------------------------------------------------
-# Screen 8: Observability
+# Observability
 # ---------------------------------------------------------------------------------------------
 
 def screen_observability(ui, cl, state):
-    ui.banner("9/11 Observability")
+    ui.banner(screen_banner("observability"))
     _show_facts(ui, "observability_otelcol", "observability_watchdog")
     if not ui.confirm("Show observability blocks?", default=True):
-        cl.add("observability", "observability", ck.SKIPPED, "operator skipped screen 8")
+        cl.add("observability", "observability", ck.SKIPPED, skip_detail("observability"))
         return state
     dest = state.get("dest") or ui.ask_text("Destination directory")
     state["dest"] = dest
@@ -1254,7 +1328,7 @@ def screen_observability(ui, cl, state):
 
 
 # ---------------------------------------------------------------------------------------------
-# Screen 9: Hydration
+# Hydration
 # ---------------------------------------------------------------------------------------------
 
 def _run_decision(led: str, statement: str, dry_run: bool = False) -> tuple[str, str]:
@@ -1278,9 +1352,9 @@ def _run_decision(led: str, statement: str, dry_run: bool = False) -> tuple[str,
 
 
 def screen_hydration(ui, cl, state):
-    ui.banner("10/11 Hydration")
+    ui.banner(screen_banner("hydration"))
     if not ui.confirm("Run hydration now?", default=True):
-        cl.add("hydration", "hydration", ck.SKIPPED, "operator skipped screen 9")
+        cl.add("hydration", "hydration", ck.SKIPPED, skip_detail("hydration"))
         return state
     dry_run = state.get("dry_run", False)
     dest = state.get("dest") or ui.ask_text("Destination directory (with a led shim)")
@@ -1393,11 +1467,11 @@ def screen_hydration(ui, cl, state):
 
 
 # ---------------------------------------------------------------------------------------------
-# Screen 10: Checklist
+# Checklist
 # ---------------------------------------------------------------------------------------------
 
 def screen_checklist(ui, cl, state):
-    ui.banner("11/11 Checklist")
+    ui.banner(screen_banner("checklist"))
     ui.say(cl.render())
     dry_run = state.get("dry_run", False)
     dest = state.get("dest")
@@ -1434,3 +1508,39 @@ SCREENS = [
     ("hydration", screen_hydration),
     ("checklist", screen_checklist),
 ]
+
+# Drift-proofing (ledger row 1790, finding 3): banner numbers ("N/11 Title") and checklist
+# skip-detail strings ("operator skipped screen N") were hand-typed in two separate places per
+# screen and drifted apart the moment principals-authority/signed-genesis were inserted between
+# Birth and Boundary -- boundary/observability/hydration's skip details kept the PRE-insertion
+# numbers while their banners correctly picked up the new ones. Both are now derived from THIS
+# list's own order, the one place a screen's position is decided -- an insertion here updates
+# every consumer at once; there is nothing left to hand-renumber.
+SCREEN_TITLES = {
+    "preflight": "Preflight",
+    "substrate": "Substrate",
+    "fork-target": "Fork/target",
+    "rehearsal": "Rehearsal",
+    "birth": "Birth",
+    "principals-authority": "Principals & authority",
+    "signed-genesis": "Signed genesis",
+    "boundary": "Boundary",
+    "observability": "Observability",
+    "hydration": "Hydration",
+    "checklist": "Checklist",
+}
+SCREEN_NUMBER = {slug: i + 1 for i, (slug, _) in enumerate(SCREENS)}
+SCREEN_TOTAL = len(SCREENS)
+
+
+def screen_banner(slug: str) -> str:
+    """`"N/TOTAL Title"` for `slug`, derived from SCREENS' own order + SCREEN_TITLES -- the one
+    call site every screen_*'s `ui.banner(...)` call uses (see the module-level comment above
+    SCREEN_TITLES)."""
+    return f"{SCREEN_NUMBER[slug]}/{SCREEN_TOTAL} {SCREEN_TITLES[slug]}"
+
+
+def skip_detail(slug: str, verb: str = "operator skipped") -> str:
+    """`"<verb> screen N"` for `slug`'s checklist skip-detail row, same derivation as
+    `screen_banner` above -- the two can no longer disagree."""
+    return f"{verb} screen {SCREEN_NUMBER[slug]}"
