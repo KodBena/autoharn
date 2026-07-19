@@ -1,6 +1,6 @@
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-19T19:33:56Z
-#   last-change: 2026-07-19T19:46:44Z
+#   last-change: 2026-07-19T19:48:25Z
 #   contributors: ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -271,7 +271,7 @@ def _run_entry(entry: PlanEntry, bindings: dict[str, str],
     act = entry.act
     if isinstance(act, CommandAct):
         argv, stdin_text = act.resolve(bindings)
-        res = runner.run_command(argv, cwd=act.cwd, stdin_text=stdin_text)
+        res = runner.run_command(argv, cwd=act.cwd, env=act.resolve_env(), stdin_text=stdin_text)
         return EntryResult(entry=entry, ok=res.ok, detail=res.output), None
     if isinstance(act, WriteAct):
         path, content = act.resolve(bindings)
