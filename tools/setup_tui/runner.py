@@ -1,6 +1,6 @@
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-18T21:31:32Z
-#   last-change: 2026-07-19T03:34:58Z
+#   last-change: 2026-07-19T04:21:44Z
 #   contributors: ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -32,10 +32,13 @@ needing the flag threaded a second time to every `cl.add` call site.
 """
 from __future__ import annotations
 
+import os
 import re
 import shlex
+import stat
 import subprocess
 import sys
+import tempfile
 from dataclasses import dataclass, field
 
 # The ONE home (ADR-0012 P1; ledger row 1799 finding 1) for the fact this pattern encodes: every
@@ -152,11 +155,62 @@ def write_file(path: str, content: str, *, dry_run: bool = False,
     UNLESS `dry_run`, in which case nothing is written -- the caller is responsible for recording
     the WOULD-DO row (path + a one-line content summary, `summarize_content` below), since the
     checklist item names differ per call site. Returns True iff a real write happened, so a
-    caller never has to duplicate the `if dry_run` test to decide its own checklist status."""
+    caller never has to duplicate the `if dry_run` test to decide its own checklist status.
+
+    ATOMIC by construction (ledger row 1810 finding 1): the naive `open(path, "w")` this used to
+    be is truncate-then-write -- a kill between the truncate and the write (or mid-write) leaves
+    `path` neither pre- nor post-state, which is exactly the hazard the marker-replace machinery
+    sitting on top of this choke point (`durable_decisions.compile_claude_md`,
+    `signed_genesis.discharge_keys_readme`) exists to survive. So instead this writes the full
+    content to a `NamedTemporaryFile` in `path`'s OWN directory (same filesystem -- `os.replace`
+    can raise `OSError` across a mount boundary, which is why `/tmp` or any other directory would
+    be wrong here) and only then `os.replace`s it onto `path`, which POSIX guarantees is atomic:
+    at every instant `path` is either its old content or its new content in full, never a partial
+    write, no matter when the process dies. A death between the temp-write and the replace (or a
+    `replace` itself failing) leaves `path` untouched and an orphaned temp file behind -- named
+    predictably (`.<basename>.<random>.tmp`, so it is recognizable as this function's own
+    wreckage) rather than silently cleaned up, which would erase the forensic trail of what
+    almost happened. This mirrors bootstrap/migrate_core.py's own
+    `tempfile.NamedTemporaryFile("w", ..., delete=False, encoding=...)` write-then-capture-name
+    idiom (`_restore_to_scratch`, `_prepare_apply_files`) -- the difference is that migrate_core
+    feeds its temp file to `psql` and unlinks it afterward, where this feeds `os.replace` and,
+    on success, there is nothing left to unlink (the rename consumed it).
+
+    KNOWN LIMITATION, stated rather than silently accepted (independent adversarial audit,
+    ledger row 1810 residual): if `path` is itself a symlink, `os.replace` retargets the symlink
+    NODE (this function's temp file replaces the link, not the file it points at) -- a real
+    semantics difference from the old `open(path, "w")`, which wrote THROUGH the link. No current
+    call site (`durable_decisions.compile_claude_md`, `signed_genesis.discharge_keys_readme`, the
+    two `screens.py` sites) ever writes a symlinked target, so this is not fixed here -- adding
+    symlink-resolution machinery no caller needs would be scope this function does not carry
+    today. A future caller writing through a symlink is the trigger to revisit this, not before.
+
+    PERMISSIONS (independent adversarial audit, ledger row 1810 residual): `tempfile.
+    NamedTemporaryFile` creates its file at mode 0600 regardless of umask (Python's own
+    `tempfile` module docstring -- deliberate, for the general case of a SECRET scratch file),
+    which is the WRONG default here -- silently narrowing every write target (CLAUDE.md, an
+    exported public key, a TOML config) from its previous 0644-ish mode to owner-only the moment
+    this rewrite landed would be a regression this fix introduced, not one it was asked to
+    permit. So before `os.replace`, this explicitly `os.chmod`s the temp file to: the EXISTING
+    target's current mode, if `path` already exists (the common case -- every real call site
+    writes into an already-templated file); otherwise the umask-adjusted default `open(path,
+    "w")` would have produced (`0o666 & ~umask`, read via the `os.umask` get/restore idiom since
+    there is no side-effect-free way to just read it)."""
     if dry_run:
         return False
-    with open(path, "w", encoding=encoding) as f:
-        f.write(content)
+    directory = os.path.dirname(path) or "."
+    try:
+        target_mode = stat.S_IMODE(os.stat(path).st_mode)
+    except FileNotFoundError:
+        umask = os.umask(0)
+        os.umask(umask)
+        target_mode = 0o666 & ~umask
+    with tempfile.NamedTemporaryFile("w", dir=directory, prefix=f".{os.path.basename(path)}.",
+                                      suffix=".tmp", delete=False, encoding=encoding) as tf:
+        tf.write(content)
+        tmp_path = tf.name
+    os.chmod(tmp_path, target_mode)
+    os.replace(tmp_path, path)
     return True
 
 

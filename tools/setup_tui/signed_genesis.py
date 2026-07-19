@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-19T01:39:25Z
-#   last-change: 2026-07-19T03:44:06Z
+#   last-change: 2026-07-19T04:10:54Z
 #   contributors: ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -50,7 +50,7 @@ import shutil
 import subprocess
 import tempfile
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from tools.setup_tui import probes, runner
 from tools.setup_tui.runner import CommandResult, run_command, write_file
@@ -184,8 +184,17 @@ class KeygenResult:
     fingerprint: str | None  # None under dry_run -- nothing was actually generated
     argv: list[str]
     scratch: bool            # True iff THIS module created a throwaway GNUPGHOME to tear down
-    ok: bool = True           # runner.run_command's own ok (a SIMULATED success under dry_run,
-                               # a real one otherwise) -- the caller's checklist-status source
+    # `returncode` is the explicit, derivable input `ok` is computed FROM (ledger row 1810 finding
+    # 2, mirroring `runner.CommandResult`'s own `returncode` -> `ok` discipline): the real gpg
+    # subprocess's exit code for the two keygen_* construction sites below, or `None` for the
+    # THIRD site (screens.py's resume-after-death path, which reuses an already-verified existing
+    # key and invokes no gpg subprocess at all) -- `None` means "no command ran to fail", not "a
+    # command ran and returned 0", and is treated as success for exactly that reason.
+    returncode: int | None = None
+    ok: bool = field(init=False)
+
+    def __post_init__(self) -> None:
+        self.ok = True if self.returncode is None else self.returncode == 0
 
 
 @dataclass
@@ -295,7 +304,8 @@ def keygen_scripted(name: str, email: str, *, dry_run: bool = False) -> KeygenRe
     argv = ["gpg", "--homedir", gnupghome, "--batch", "--generate-key", batch_path]
     res = run_command(argv, dry_run=dry_run)
     fpr = None if dry_run else _list_secret_fpr(gnupghome)
-    return KeygenResult(gnupghome=gnupghome, fingerprint=fpr, argv=argv, scratch=True, ok=res.ok)
+    return KeygenResult(gnupghome=gnupghome, fingerprint=fpr, argv=argv, scratch=True,
+                         returncode=res.returncode)
 
 
 def keygen_operator(name: str, email: str, gnupghome: str | None, *,
@@ -312,7 +322,7 @@ def keygen_operator(name: str, email: str, gnupghome: str | None, *,
     res = run_command(argv, dry_run=dry_run)
     fpr = None if dry_run else _list_secret_fpr(gnupghome)
     return KeygenResult(gnupghome=gnupghome, fingerprint=fpr, argv=argv, scratch=False,
-                         ok=res.ok)
+                         returncode=res.returncode)
 
 
 def teardown_scratch(keygen: KeygenResult) -> None:

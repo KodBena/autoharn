@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-18T21:34:30Z
-#   last-change: 2026-07-19T03:41:06Z
+#   last-change: 2026-07-19T04:11:12Z
 #   contributors: ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -38,6 +38,14 @@ unconditional); the closing checklist renders WOULD-DO/DRY-SKIPPED rows instead 
 WITNESSED/PREPARED-verified ones. Read-only probes (preflight, connection checks, the pg_hba
 read, the ADR glob) are UNCHANGED by `--dry-run` -- they stay live, because a rehearsal that
 fakes its reads is a lie, not a rehearsal.
+
+v1 THREAT MODEL (ledger row 1810 finding 3, stated plainly rather than left implicit): this tool
+is built for a SINGLE operator running it SEQUENTIALLY, one invocation at a time, against a given
+destination. Concurrent invocations racing the SAME destination (two operators, or one operator
+in two terminals) are OUT OF SCOPE BY DESIGN in v1 -- the isolation discipline this catalog
+hydrates for the WORLDS it births (concurrent builders need worktree/serial isolation, per the
+catalog items this wizard drives an operator through) governs those worlds, not this wizard's own
+process against its own destination directory while it runs.
 """
 from __future__ import annotations
 
