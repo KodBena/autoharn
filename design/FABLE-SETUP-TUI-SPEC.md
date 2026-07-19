@@ -49,6 +49,17 @@ per-screen below; see that spec for the registry and its drift backstop
    host, then probes until the connection actually works).
 3. **Fork/target** — destination directory (fresh dir, or fork-copy of an existing
    project with the CLAUDE.md-preservation move the omega-lab pass established).
+   **Governed-files exposure (amendment 2026-07-19, commission row 1730):** this
+   screen also surfaces the world's `.claude/governed_files.json` — the
+   class-keyed pattern set `pretooluse_change_gate.py` governs by (F33: patterns,
+   never enumerated file lists). The prompt shows the default set, a teaching
+   line carrying the witnessed specimen ("autoharn-panel started .py-only and
+   needed .ts/.vue/.html"), and asks the operator to confirm or extend for the
+   languages their project actually contains; extensions are validated to a
+   closed alphabet before entering the JSON; the write goes through the
+   package's choke point (dry-run compatible for free) and the checklist
+   records the final pattern set verbatim. Skipping keeps the default,
+   recorded — never silent.
 4. **Rehearsal** — scratch-name birth + teardown + zero-residue check, streamed;
    the real birth is gated on rehearsal green (the ratified discipline).
 5. **Birth** — `new-project.sh --new-world`, streamed; the maintainer copy-paste
