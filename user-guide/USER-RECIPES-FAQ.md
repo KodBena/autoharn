@@ -18,6 +18,7 @@ question-and-recipe entries.
 
 - [Planning and retrospectives](#planning-and-retrospectives)
 - [Workflow patterns](#workflow-patterns)
+- [Getting started: the guided setup TUI (`python3 -m tools.setup_tui`)](#getting-started-the-guided-setup-tui-python3--m-toolssetup_tui)
 - [Declaring things on the ledger](#declaring-things-on-the-ledger)
 - [Principal identity (s40/s41)](#principal-identity-s40s41)
 - [Typed verdicts and refusal recording (s42/s43)](#typed-verdicts-and-refusal-recording-s42s43)
@@ -34,6 +35,7 @@ question-and-recipe entries.
 - [Correcting the record — supersession, and what to do about its fallout](#correcting-the-record--supersession-and-what-to-do-about-its-fallout)
 - [The ledger boundary service (`serving/`)](#the-ledger-boundary-service-serving)
 - [Boundary multiplex, CLI rebase, and the workflow-unit compiler (2026-07-18)](#boundary-multiplex-cli-rebase-and-the-workflow-unit-compiler-2026-07-18)
+- [Role charters and briefs (`tools/role_charter.py`, `tools/role_brief.py`)](#role-charters-and-briefs-toolsrole_charterpy-toolsrole_briefpy)
 - [CLI quality-of-life: row-id echo and `judge` auto-layer detection](#cli-quality-of-life-row-id-echo-and-judge-auto-layer-detection)
 - [`led` help tokens, `--json` payload mode, and `work list`'s default filter (led.tmpl trio)](#led-help-tokens---json-payload-mode-and-work-lists-default-filter-ledtmpl-trio)
 - [Ledger-wide as-of read and inspection-copy export (`asof-export`)](#ledger-wide-as-of-read-and-inspection-copy-export-asof-export)
@@ -134,6 +136,181 @@ This recipe now has a formal shape too — both live in
 [USER-SHAPED-RECIPES-FAQ.md](USER-SHAPED-RECIPES-FAQ.md#the-bookkeeping-close-pairing-convention)
 (`design/workflows/faq-bookkeeping-close-pairing.toml`), including the WITNESSED live transcript
 that used to live here.
+
+## Getting started: the guided setup TUI (`python3 -m tools.setup_tui`)
+
+**Is there a guided path from nothing to a running [world](../GLOSSARY.md#world) (this project's
+term for one scaffolded, database-backed deployment), instead of typing the scaffold commands by
+hand?** Yes — `python3 -m tools.setup_tui.app`, run from your autoharn checkout.
+It is a **driver of the existing verbs, never a second implementation**: every screen shows
+the exact command it is about to run (`bootstrap/new-project.sh`, `bootstrap/teardown-world.sh`,
+`boundary_service`, `led`) and streams that command's real output, so if the process dies
+mid-flow you can finish by hand from what was already printed. Full spec:
+[FABLE-SETUP-TUI-SPEC.md](../design/FABLE-SETUP-TUI-SPEC.md); commission ledger row 1656
+("so much to remember ... too much when you want to *just get started but still have a
+seriously robust experience*"). It needs no new dependency — plain Python with a
+zero-dependency numbered-menu fallback when `textual`/`urwid` aren't installed (both are
+optional, and this build found neither installed).
+
+**The nine screens, in order** (every screen skippable, the skip recorded — never silent):
+
+1. **Preflight** — repo commit, submodules populated, `idris2`/`clingo`/`python3`/`psql`
+   found (clingo non-fatal, matching `bootstrap/bootstrap.sh`'s own posture), whether
+   `HARNESS_PGHOST`/`EPISTEMIC_PGHOST` resolves to a reachable host; each check green/red
+   with a fix command.
+2. **Substrate** — pick an existing database (zero manual steps) or a dedicated one
+   (generates the confined `pg_hba` block in your *actual* file's own idiom, plus the
+   createdb/copy/reload block, then probes until the connection genuinely works).
+3. **Fork/target** — destination directory: a fresh directory, or a fork-copy of an
+   existing project (with the `CLAUDE.md` → `CLAUDE.project.md` preservation move, so a
+   fork's own governance prose survives the scaffold's unconditional `CLAUDE.md` write).
+4. **Rehearsal** — a scratch-name birth + teardown + zero-residue check, streamed; the real
+   birth is gated on a green rehearsal (a ratified discipline, not a suggestion — screen 5
+   refuses without one unless you explicitly override).
+5. **Birth** — `new-project.sh --new-world`, streamed; the maintainer copy-paste signing
+   line is surfaced prominently at the end, delimited by `BEGIN`/`END` markers.
+6. **Boundary** — writes the multiplex TOML and the two `deployment.json` boundary keys,
+   picks a free port, starts the service (or emits the systemd-style unit text as a
+   copy-paste block when this process doesn't keep it alive itself), probes `/health` and
+   `/meta`.
+7. **Observability** — the `otelcol` start line (localhost-only), the OTel model-provenance
+   watchdog start line (`./otel-watch --daemon`), and the Claude launch line with the right
+   env vars, as copy-paste blocks with a what-you-should-see line each.
+8. **Hydration** — free-text prompts for fork provenance and role charters to register, plus
+   two curated catalogs described below (feature-facts, durable-decisions), and an
+   ADR-adoption submenu derived from `law/adr/*.md` at runtime (never a hand list).
+9. **Checklist** — a per-item WITNESSED/SKIPPED/REFUSED/PREPARED table of everything the
+   flow touched, offered for saving into the new world as a dated file.
+
+**The feature-facts column (design/FABLE-SETUP-TUI-FEATURE-FACTS-SPEC.md, ledger row 1714,
+built 2026-07-19).** Every selectable act on every screen above now prints a facts line
+*before* you commit to it: the standards-conformance aspiration it serves (with a citation,
+or an honest "none named") and its external costs/dependencies (with an honest "none") —
+read from `tools/setup_tui/feature_facts.py`'s one-home registry (26 entries at this
+writing; the maintainer's own recollection at commissioning was 4, treated as a hypothesis
+the registry's enumeration checked, not a ceiling). WITNESSED live, this session, against
+the preflight screen (`python3 -m tools.setup_tui.app --dry-run --scripted <answers>
+--start-at preflight`):
+```
+facts [idris2 toolchain] -- aspiration: none named; house discipline only -- backs the
+  categorical-kernel-model freshness cross-check (gates/idris_model_freshness.py), not a
+  named external standards-conformance aim. | external: external binary: idris2
+  (github.com/idris-lang/Idris2#installation); not on PATH reads RED with an install pointer.
+idris2: RED -- not found on PATH
+  fix: install idris2 (...) and ensure it is on PATH
+```
+
+**The durable-decisions catalog (same spec §3, ledger rows 1714/1716/1718/1721/1722).**
+Hydration screen 8 offers a curated, 12-entry catalog of standing rules distilled from this
+project's own ledger and the autoharn-panel deployment's (a separate operator-dashboard product
+— a Vue front end over a FastAPI service — that consumes this project's ledger through the
+boundary service, vendored under `tools/autoharn-panel/`), each entry admitted only on a
+witnessed painful (or successful) specimen — not a generic best-practice list. It went
+through a dedicated genericity critique before merge
+([SONNET-CATALOG-GENERICITY-CRITIQUE-2026-07-19.md](../design/SONNET-CATALOG-GENERICITY-CRITIQUE-2026-07-19.md)):
+one entry judged bespoke to this project's own contributors was cut, four were rewritten out
+of first-project voice, and three generic entries the mining pass had missed (including the
+claims-carry-witnesses taxonomy — WITNESSED/REFUSED-AS-EXPECTED/UNEXERCISED) were added.
+Selecting an entry writes a real `led decision` row AND compiles a fragment into the new
+world's `CLAUDE.md` between generated-section markers (idempotent, fork-destination-safe —
+never touches bytes outside the markers). Kernel `obligate` rows are deliberately out of v1:
+the catalog encodes the obligate-amplification footgun (ledger row 1640 — obligating a
+principal makes every row that principal later writes count as new review debt, not just the
+rows that existed at obligation time) as one of its own entries, rather than handing a fresh
+operator a loaded trigger at birth.
+
+**Governed-files exposure — specced, not yet built into the TUI.** A 2026-07-19 spec
+amendment (commission ledger row 1730: the maintainer's own painful specimen — the
+autoharn-panel deployment started `.claude/governed_files.json` at `*.py`-only and needed
+`.ts`/`.vue`/`.html` added by hand) adds a governed-files prompt to screen 3, surfacing the
+default pattern set plus that teaching specimen and letting the operator confirm or extend it
+for their project's real languages. **This screen prompt is not merged** — `grep -rn
+governed_files tools/setup_tui/*.py` finds nothing in the TUI source at this writing (WITNESSED
+this session); the build was folded into the queued principals-authority dispatch (ledger row 1731) — the same
+dispatch as the principals-and-authority screen named two paragraphs below (ledger rows
+1727/1728): the two ride together as one build item on the queue, each separately witnessed, not
+two unrelated commissions — and has not landed. What IS already live and usable today, directly, without the TUI:
+`bootstrap/new-project.sh`'s own `--governed <comma-separated-fnmatch-patterns>` flag — omit
+it and you get the historical `*.py`-only default plus a loud, refusal-grade notice naming the
+exact one-line widening act (`.claude/governed_files.json`'s `patterns` array; fnmatch
+semantics, no restart needed — `.claude/GOVERNED_FILES.md` in any scaffolded world).
+
+**Two screens that are specced but not yet merged — named here so you don't go looking for
+them:** a **signed-genesis screen** (design/FABLE-SETUP-TUI-SIGNED-GENESIS-SPEC.md, ledger
+rows 1724–1726 — optional, on-by-default, no-quiz keygen riding the existing GPG-trust rungs,
+no new crypto stack) and a **principals-and-authority screen**
+(design/FABLE-SETUP-TUI-PRINCIPALS-AUTHORITY-SPEC.md, ledger rows 1727/1728 — registers
+principals and s41 competence grants/relations in-flow, and shows a short teaching line before
+each act explaining what it does and why, binding on every act, not merely offered as optional
+help text). Both are sequenced behind the current TUI build queue; check `./led show 1728` (or
+later rows) for current status before assuming either is live.
+
+**`--dry-run` — the nondestructive whole-flow rehearsal (2026-07-19 amendment, commission row
+1719: "so I don't mess up any directory by mistake").** Add `--dry-run` to run the identical
+nine screens with NO destructive or externally visible act: no file written outside the
+process's own temp space, no database act, no `led` write, no process started, no port bound.
+Read-only probes (preflight, connection checks, reading your real `pg_hba` copy, the ADR
+glob) stay live — a rehearsal that fakes its reads is a lie, not a rehearsal. Every screen
+still computes and shows its would-be exact command/paths/ledger-rows; the closing checklist
+renders `WOULD-DO` instead of `WITNESSED` and `DRY-SKIPPED` instead of a verified `PREPARED`
+gate. Composes with `--scripted` and `--start-at` unchanged. WITNESSED both ways this
+session:
+- `--dry-run --start-at preflight`, no answers beyond preflight itself, produces the facts
+  line quoted above (a live, real preflight probe) with no ledger or filesystem effect.
+- A full skip-everything `--dry-run --scripted` run to the end reaches screen 9 and prints a
+  real checklist table:
+  ```
+  SCREEN         ITEM                                   STATUS     DETAIL
+  preflight      repo commit                            WITNESSED  4ca75f17...
+  preflight      HARNESS_PGHOST reachable                WITNESSED  RED: HARNESS_PGHOST/EPISTEMIC_PGHOST unset
+  substrate      path chosen                            SKIPPED    operator skipped screen 2
+  fork-target    destination                            SKIPPED    operator skipped screen 3
+  rehearsal      rehearsal                              SKIPPED    operator skipped screen 4
+  birth          world birth                            SKIPPED    refused: rehearsal not green
+  boundary       boundary                               REFUSED    refused: birth_ok not truthy
+  observability  observability                          SKIPPED    operator skipped screen 7
+  hydration      hydration                               SKIPPED    operator skipped screen 8
+  ----------------------------------------------------------------------------------------------------
+  totals: REFUSED=1, SKIPPED=6, WITNESSED=9
+  ```
+  (`REFUSED` here is the out-of-sequence-precondition discipline working as designed — screen
+  6 correctly refused to configure a boundary for a world that was never born, rather than
+  building on nothing.) Note preflight itself read `HARNESS_PGHOST` as genuinely unset in this
+  environment — an honest RED, not a fabricated pass; the fixture-backed WDR1 (byte-identical
+  tree/ledger before vs. after) and WDR2 (argv parity, dry-run vs. live) witnesses against real
+  infra live in
+  [seen-red/setup-tui-dry-run-parity](../seen-red/setup-tui-dry-run-parity/run_fixtures.py)
+  (degrades to UNEXERCISED, exit 0, without a reachable Postgres host and the boundary
+  service's venv — same honest-degrade posture as this doc pass hit live).
+
+**A minimal operator walkthrough register — what you do at each step, and what you should see:**
+
+| Step (what you do) | What you should see |
+|---|---|
+| Type `python3 -m tools.setup_tui.app --dry-run` | Banner, then `1/9 Preflight`; interactive numbered prompts (or a refusal naming `--scripted` if stdin isn't a terminal — WITNESSED this session: `setup_tui: stdin is not a terminal and --scripted was not given -- refusing to run an interactive flow`). |
+| Answer `yes` to preflight | Each prerequisite line green/red with a fix command; `HARNESS_PGHOST` red with `export HARNESS_PGHOST=<your postgres host>` if unset. |
+| Walk screens 2–8, answering as prompted (or skip any with `no`) | Each screen prints its exact command/argv before running it (or, under `--dry-run`, before *not* running it); a skipped screen records `SKIPPED`, not silence. |
+| Reach screen 9 | A per-item table, `WITNESSED`/`SKIPPED`/`REFUSED`/`PREPARED` (or the `--dry-run` counterparts), then an offer to save it into the new world. |
+| Drop `--dry-run` and repeat for real | The same nine screens perform the acts for real; a green rehearsal (screen 4) is required before birth (screen 5) proceeds. |
+
+Full command-line usage (`--help`, WITNESSED this session, byte-for-byte):
+```
+usage: setup_tui [-h] [--scripted ANSWERS_FILE] [--start-at SCREEN] [--dry-run]
+```
+`--start-at <screen>` (preflight, substrate, fork-target, rehearsal, birth, boundary,
+observability, hydration, checklist) jumps straight to one screen — a screen entered out of
+its normal sequence independently validates every precondition the normal sequence would have
+established, refusing legibly (never a traceback) when one is missing (the 2026-07-19
+out-of-sequence amendment, same spec).
+
+**One line each on the setup TUI's own drift backstops**, cross-referenced in full under
+["Drift backstops" below](#drift-backstops-one-generic-method-for-anything-that-goes-quietly-stale):
+[seen-red/setup-tui-scripted-smoke](../seen-red/setup-tui-scripted-smoke/run_fixtures.py) (the
+setup surface's own scripted smoke fixture, hostile/malformed inputs),
+[seen-red/setup-tui-feature-facts-drift](../seen-red/setup-tui-feature-facts-drift/run_fixtures.py)
+(the feature-facts registry vs. what the screens actually expose), and
+[seen-red/setup-tui-dry-run-parity](../seen-red/setup-tui-dry-run-parity/run_fixtures.py) (WDR1
+byte-identical tree/ledger, WDR2 argv parity dry-vs-live, both needing real infra).
 
 ## Declaring things on the ledger
 
@@ -1108,6 +1285,14 @@ is each one's owning page):
   compared both directions (the class this whole section describes, applied to the feature-
   facts column itself — this spec's own first deliberate consumer of the method,
   design/FABLE-SETUP-TUI-FEATURE-FACTS-SPEC.md §1).
+- [seen-red/setup-tui-dry-run-parity](../seen-red/setup-tui-dry-run-parity/run_fixtures.py) —
+  the `--dry-run` amendment's own two real-infra witnesses (design/FABLE-SETUP-TUI-SPEC.md
+  2026-07-19 amendment, ledger row 1719): WDR1 (a full dry-run flow against a real
+  destination leaves the filesystem byte-identical before/after and writes zero ledger rows)
+  and WDR2 (the WOULD-DO table's argv list equals a real scratch run's argv list, byte-for-
+  byte, order included); needs a reachable Postgres host and the boundary service's venv,
+  degrading honestly to `UNEXERCISED` (exit 0) without either, rather than failing the build
+  on missing optional local infra.
 
 **The setup TUI's own two durable-decisions features (design/FABLE-SETUP-TUI-FEATURE-FACTS-
 SPEC.md, ledger rows 1714/1716):** every selectable act the guided wizard
@@ -1667,6 +1852,90 @@ four workflow specimens on file today, not a formal grammar — a future
 specimen it misjudges is a real gap to bring back to the compiler spec, not a silent miss; and (per
 the "which `led` subcommands" recipe just above) every `led work` call the driver makes runs
 through `./legacy/led`, because the served boundary doesn't cover `led work *` yet.
+
+## Role charters and briefs (`tools/role_charter.py`, `tools/role_brief.py`)
+
+**What are a "charter" and a "brief," and when do I use them?** They are the assembly wiring
+for durable roles — the CLI-side half of the s40/s41 identity model above, commissioned to
+close the gap between "a principal is registered" and "an instance dispatched under that
+role actually knows what it is and what it faces." Full spec:
+[FABLE-ROLE-CHARTERS-AND-BRIEFS-SPEC.md](../design/FABLE-ROLE-CHARTERS-AND-BRIEFS-SPEC.md)
+(commission ledger row 1663; built commit `822c2cc`). Two halves, named once:
+- **Charter** — the static half: what a role IS. A per-role markdown file (typically
+  `roles/<role>/CHARTER.md` in a scaffolded world — `bootstrap/new-project.sh` ships an
+  empty `roles/` plus a README stating the register-before-binding rule). It binds only
+  when REGISTERED: a `decision` ledger row naming the role's principal, the file's
+  repo-relative path, and its sha256 (computed from the on-disk bytes by the tool itself,
+  never caller-supplied — ADR-0002's class of bug foreclosed by construction). A drifting
+  loose file with no registration row is UNREGISTERED, and the tooling says so rather than
+  guessing.
+- **Brief** — the derived half: what a role FACES right now. Never authored, always
+  computed at instantiation time, scoped to the role's principal: its in-force decisions,
+  its obligation debt (`review_gap`/`work_review_gap`), open questions in its concerns, its
+  claimable work, and its standing (an s45 suspension is surfaced LOUDLY at the top — an
+  instance must learn it is suspended from its own brief, not from its first refusal).
+
+**When would I actually reach for these, as opposed to just talking to an agent?** When you
+want a role's context to be a derived, auditable fact rather than whatever prose happened to
+be pasted into a prompt — most concretely, the workflow-unit compiler's dispatch step
+(["Boundary multiplex ... workflow-unit compiler" above](#boundary-multiplex-cli-rebase-and-the-workflow-unit-compiler-2026-07-18))
+hands a driven phase's agent `charter + brief` for its role via `--role-map <toml-role>=<
+principal>`, refusing (with teaching) a mapping to an uncharted principal unless
+`--allow-uncharted` is passed explicitly (a loud escape hatch, not a silent default). Outside
+the compiler, register a charter for any durable role the moment its responsibilities stop
+fitting in a sentence you're willing to retype every session.
+
+**Commands, no raw SQL anywhere — `led` is the only write surface.** WITNESSED this session
+(`--help`, byte-for-byte):
+```
+$ python3 tools/role_charter.py
+usage: python3 tools/role_charter.py register <role> <path> [--led PATH] [--scan-limit N]
+       python3 tools/role_charter.py show <role>           [--led PATH] [--scan-limit N]
+       python3 tools/role_charter.py amend <role> <path>   [--led PATH] [--scan-limit N]
+$ python3 tools/role_brief.py
+usage: python3 tools/role_brief.py brief <role> [--led PATH] [--scan-limit N]
+```
+`register` writes the fixed-shape row (`role-charter registered: role=<role>
+path=<repo-relative-path> sha256=<64-hex-digest>`) via `led decision`; `show` reports the
+in-force registration and whether the file's current bytes still match the registered
+hash — a mismatch is a loud `DRIFT` warning, not a silent pass-through; `amend` writes a new
+row with `--supersedes <old-row-id>` (the ledger's own s31 uniform-retraction mechanism —
+the old registration drops out of `ledger_current` exactly like any other superseded row).
+`role_brief.py brief <role>` prints one clearly-headed section per source, each section
+naming its own provenance (which view, which filter); work-family sections go via `--led`
+exactly as the compiler does, so the served-boundary gap on those views (named elsewhere on
+this page) stays visible rather than papered over.
+
+**Honest limits, and what an operator will actually see with no charter registered yet.**
+WITNESSED this session, against a real scaffolded world with no registered charter for
+`author`:
+```
+$ python3 tools/role_charter.py show author
+role_charter: REFUSED -- role 'author' has no registered charter (scanned the last 100000
+  ledger_current rows; see this tool's own JC1 note if the real registration is older than
+  that). Register one:
+  python3 tools/role_charter.py register author <path>
+```
+and `role_brief.py brief <role>` needs the work-family views' `work_startable` (kernel s39)
+present in the target world's schema; a pre-s39 world refuses legibly rather than printing a
+partial or wrong brief — WITNESSED against a world one delta short:
+```
+$ python3 tools/role_brief.py brief author --led ./led
+role_brief: REFUSED -- './led work startable' failed:
+led work startable: REFUSED -- requires kernel/lineage/s39-blocks-start.sql applied
+  to this project's schema (work_startable view not found ...)
+```
+A charter registration row is a convention over ordinary `decision` rows, not a minted
+kernel kind (the spec's own "Honest limits" section, by design — the ADR-0011 conversion to
+a typed kind is deferred until the convention is witnessed recurring); a malformed
+hand-written registration is caught by `show`'s hash check, not refused at write time. Role
+proliferation stays the operator's own judgment — the tool grants nothing; authority remains
+entirely the kernel's standing/binding facts. Full witness record (WB1–WB6, both polarities,
+scratch world, zero residue) is in the build commit (`822c2cc`)'s own message, covering
+register/show/DRIFT/amend, empty-vs-populated brief sections against their direct view
+queries, an obligation appearing then discharging in the next brief, percolation across two
+roles, compiler wiring with the uncharted-refusal and `--allow-uncharted` legs, and an s45
+suspension surfaced then lifted.
 
 ## CLI quality-of-life: row-id echo and `judge` auto-layer detection
 
