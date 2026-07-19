@@ -397,6 +397,36 @@ session:
   [seen-red/setup-tui-textual-shell](../seen-red/setup-tui-textual-shell/run_fixtures.py) for
   that build's own live witnesses.
 
+**What does the wizard actually guarantee if I kill it, or my machine dies, partway through?**
+([design/FABLE-SETUP-TUI-PURE-CORE-SPEC.md](../design/FABLE-SETUP-TUI-PURE-CORE-SPEC.md) §2.6,
+commission ledger rows 1823 point 2 / 1825 — Phase 2 of the pure-core restructure, built on top
+of everything above.) Every screen through Hydration is now a **pure decider**: it only
+computes, displays, and appends to an in-memory plan — it performs no world-effect. All ten
+screens' worth of decisions are executed at **one commit boundary**, the Checklist screen, which
+renders the full plan (the same WOULD-DO table `--dry-run` already showed you, now literally the
+SAME rendering) and asks ONE final confirm before touching anything. The guarantee, stated in
+capability terms, not aspiration:
+- **BEFORE that final confirm: nothing to clean up.** Kill the process at any point during the
+  ten decision screens and the destination directory, your keyring, and every ledger are
+  untouched — a structural property of the rewrite: no screen function may call `run_command`,
+  `start_background`, or `write_file` (`tools/setup_tui/runner.py`'s three functions that
+  actually touch the world) any more except the one commit step below, and
+  [gates/setup_tui_purity_gate.py](../gates/setup_tui_purity_gate.py) asserts this mechanically,
+  at the AST level, over every screen — not a discipline anyone has to remember.
+- **DURING commit: per-act atomicity plus a durable resume.** Each write/command/background-
+  start either fully happens or fully doesn't (the same atomic temp-file-then-rename write
+  `tools/setup_tui/runner.py`'s `write_file` already used before this restructure), and a
+  commit journal in the destination directory names exactly which step runs next — a mid-commit
+  death resumes cleanly on re-invocation (no double `led decision` write, no second keygen) or
+  finishes by hand from the streamed output above it.
+- **NOT claimed: whole-flow atomicity** across Postgres, the filesystem, GPG, and a background
+  process together. Decide-then-commit shrinks the exposure window from the whole session to the
+  commit phase; it does not make the commit phase itself a single indivisible transaction.
+
+Rehearsal (screen 4) is the one declared exception: it performs a real, scratch-target birth +
+teardown mid-flow (its evidence gates the real birth), with witnessed zero-residue teardown —
+named explicitly, not hidden.
+
 **A minimal operator walkthrough register — what you do at each step, and what you should see:**
 
 | Step (what you do) | What you should see |

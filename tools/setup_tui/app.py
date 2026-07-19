@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-18T21:34:30Z
-#   last-change: 2026-07-19T18:19:16Z
+#   last-change: 2026-07-19T20:12:31Z
 #   contributors: ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -137,6 +137,24 @@ def _intro(ui: Ui, args: argparse.Namespace) -> None:
     ui.say("Driver of existing verbs only: every action below shows the exact command it runs "
            "and streams that command's real output. If this process dies mid-flow, you can "
            "finish by hand from what was printed.")
+    # The guarantee envelope (design/FABLE-SETUP-TUI-PURE-CORE-SPEC.md §2.6, commission ledger
+    # rows 1823 point 2 / 1825): stated here in the SAME capability terms the spec itself uses --
+    # a structural property of the pure-core restructure, not an aspiration. Restated (not
+    # duplicated -- ADR-0012 P1) in user-guide/USER-GPG-TRUST-LAYER-FAQ.md's setup entry and in
+    # user-guide/USER-RECIPES-FAQ.md's setup entry, both citing this same spec section as the one
+    # home for the claim's substance.
+    ui.say("")
+    ui.say("Guarantee envelope (structural, per design/FABLE-SETUP-TUI-PURE-CORE-SPEC.md §2.6):")
+    ui.say("  BEFORE commit: nothing to clean up. Every screen only decides and queues -- kill "
+           "this process at any point before the final confirm and the destination, your "
+           "keyring, and every ledger are untouched (verified before/after, WPC1/WPC3).")
+    ui.say("  DURING commit: per-act atomicity (each write/command/background-start either "
+           "fully happens or fully doesn't) plus a durable commit journal in the destination "
+           "naming which step runs next -- a mid-commit death resumes cleanly on re-entry, or "
+           "finishes by hand from the journal and the streamed output above it (WPC4).")
+    ui.say("  NOT claimed: whole-flow atomicity across Postgres + filesystem + GPG + a "
+           "background process. Decide-then-commit shrinks the exposure window from the whole "
+           "session to the commit phase; it does not eliminate it.")
     if args.dry_run:
         ui.say("")
         ui.say("*** --dry-run: NOTHING below is destructive or externally visible. Every act "
