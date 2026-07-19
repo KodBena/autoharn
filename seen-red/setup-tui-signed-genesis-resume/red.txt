@@ -1,0 +1,17 @@
+seen-red/setup-tui-signed-genesis-resume -- banked RED evidence (both-polarity proof, fixture-census)
+
+Ledger row 1799 finding 7: tools/setup_tui/signed_genesis.py's operator-path ceremony
+unconditionally called keygen_operator, even when a prior run already left partial ceremony state
+(a key already exported, keys/README.md already discharged) for the SAME name/GNUPGHOME -- a
+silent double-keygen that strands the first key, unrecorded. This fixture seeds exactly that
+partial state ("kill after discharge_keys_readme pre-verify," the commission's own witness
+recipe) against a real scratch world and a real, dedicated scratch GNUPGHOME, then drives the REAL
+screen_signed_genesis function loaded from `git show HEAD:tools/setup_tui/screens.py` (pre-fix)
+and the current, fixed screens.py (post-fix) with the SAME name/email/GNUPGHOME/commission.
+
+Real captured stdout, 2026-07-19, a live run against this commit's tree and its own HEAD
+(zero residue after cleanup, exit 0):
+
+RED ok (pre-fix, HEAD:tools/setup_tui/screens.py, no resume check): a SECOND key was silently generated into gnupghome_red on top of the seeded partial ceremony -- 2 secret keys now present (the first stranded, unrecorded)
+GREEN ok (post-fix, current tools/setup_tui/screens.py, resume offered and accepted): ONE key throughout (the seeded fingerprint), no second keygen call, verify-commission VERIFIED
+ALL CASES OK -- signed_genesis.py resume-after-death, red before green, real gpg + real postgres, zero residue

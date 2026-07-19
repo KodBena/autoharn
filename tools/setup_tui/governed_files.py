@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-19T02:39:43Z
-#   last-change: 2026-07-19T02:39:43Z
+#   last-change: 2026-07-19T03:39:41Z
 #   contributors: ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -52,13 +52,102 @@ Lazy imports are banned (CLAUDE.md, 2026-07-02): every import here is top of fil
 """
 from __future__ import annotations
 
+import json
 import os
 import re
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+HOOKS_CHANGE_GATE_PATH = REPO_ROOT / "hooks" / "pretooluse_change_gate.py"
+BOOTSTRAP_TEMPLATE_PATH = REPO_ROOT / "bootstrap" / "templates" / "governed_files.json"
 
 # Mirrors hooks/pretooluse_change_gate.py's own `_DEFAULT_GOVERNED_PATTERNS` (the F33 invariant
 # default) AND bootstrap/new-project.sh's own no-`--governed` fallback -- see module docstring's
 # "THE CONTRACT" for why this is a third, inspected mirror rather than a shared import.
 DEFAULT_PATTERNS = ["*.py"]
+
+# ---------------------------------------------------------------------------------------------
+# The drift BACKSTOP the module docstring's own "kept in sync by inspection" method demands
+# (ledger row 1799 finding 2): three process boundaries (hooks/, bootstrap/, tools/setup_tui/)
+# with no shared importable home -- "kept in sync by inspection" alone is a claim, not a check.
+# These functions READ the other two sources (hooks/ and bootstrap/ stay read-only -- module
+# docstring's own scope discipline, never edited by this module) and compare their literal
+# default to `DEFAULT_PATTERNS`, injectable via parameters so a fixture can feed a SYNTHETIC
+# disagreeing text without touching the real files (the same injectable-comparator shape
+# feature_facts.check_registry already establishes for this package's other drift backstop).
+# ---------------------------------------------------------------------------------------------
+
+_HOOKS_DEFAULT_RE = re.compile(
+    r"_DEFAULT_GOVERNED_PATTERNS\s*=\s*(\[[^\]]*\])"
+)
+
+
+def read_hooks_default_patterns(source_text: str | None = None) -> list[str]:
+    """Parses `_DEFAULT_GOVERNED_PATTERNS = [...]` out of hooks/pretooluse_change_gate.py's own
+    SOURCE TEXT (never imported as a module -- hooks/ stays read-only source material this
+    package writes FOR, per this build's scope discipline, and importing a hook module for its
+    side effects is a hazard this function does not need to take). `source_text`, if given, is a
+    SYNTHETIC stand-in for the file's contents (the fixture's red-leg injection point) --
+    default `None` reads the real file. Raises ValueError if the literal cannot be found/parsed
+    (never a silent empty list standing in for "I could not find it")."""
+    if source_text is None:
+        source_text = HOOKS_CHANGE_GATE_PATH.read_text(encoding="utf-8")
+    m = _HOOKS_DEFAULT_RE.search(source_text)
+    if not m:
+        raise ValueError(
+            f"could not find '_DEFAULT_GOVERNED_PATTERNS = [...]' in "
+            f"{HOOKS_CHANGE_GATE_PATH} -- drift check has nothing to compare against"
+        )
+    parsed = json.loads(m.group(1).replace("'", '"'))
+    if not isinstance(parsed, list) or not all(isinstance(p, str) for p in parsed):
+        raise ValueError(f"parsed '_DEFAULT_GOVERNED_PATTERNS' is not a list of strings: {parsed!r}")
+    return parsed
+
+
+def read_bootstrap_template_default_patterns(source_text: str | None = None) -> list[str]:
+    """Parses `{"patterns": [...]}` out of bootstrap/templates/governed_files.json -- the actual
+    literal `bootstrap/new-project.sh` copies verbatim (`cp "$TEMPLATES/governed_files.json"`)
+    when no `--governed` flag is given (module docstring's own "THE CONTRACT"). `source_text`, if
+    given, is a SYNTHETIC stand-in for the file's contents (the fixture's red-leg injection
+    point) -- default `None` reads the real file."""
+    if source_text is None:
+        source_text = BOOTSTRAP_TEMPLATE_PATH.read_text(encoding="utf-8")
+    parsed = json.loads(source_text)
+    patterns = parsed.get("patterns") if isinstance(parsed, dict) else None
+    if not isinstance(patterns, list) or not all(isinstance(p, str) for p in patterns):
+        raise ValueError(
+            f"{BOOTSTRAP_TEMPLATE_PATH} does not carry a 'patterns' list of strings: {parsed!r}"
+        )
+    return patterns
+
+
+def check_default_patterns_drift(
+    local: list[str] | None = None,
+    hooks_source_text: str | None = None,
+    bootstrap_source_text: str | None = None,
+) -> list[str]:
+    """Compares `local` (default: this module's own `DEFAULT_PATTERNS`) against the two other
+    mirrors, read fresh from their own source text. Returns a list of drift messages, empty iff
+    all three agree. Every parameter is injectable (default `None` reads the real, live sources)
+    so a fixture can feed a SYNTHETIC disagreeing copy of either external source and observe the
+    red leg without touching hooks/ or bootstrap/ on disk -- those trees stay read-only, per this
+    module's own scope discipline."""
+    if local is None:
+        local = DEFAULT_PATTERNS
+    hooks_patterns = read_hooks_default_patterns(hooks_source_text)
+    bootstrap_patterns = read_bootstrap_template_default_patterns(bootstrap_source_text)
+    drift: list[str] = []
+    if local != hooks_patterns:
+        drift.append(
+            f"DRIFT: tools/setup_tui/governed_files.py DEFAULT_PATTERNS={local!r} != "
+            f"hooks/pretooluse_change_gate.py _DEFAULT_GOVERNED_PATTERNS={hooks_patterns!r}"
+        )
+    if local != bootstrap_patterns:
+        drift.append(
+            f"DRIFT: tools/setup_tui/governed_files.py DEFAULT_PATTERNS={local!r} != "
+            f"bootstrap/templates/governed_files.json patterns={bootstrap_patterns!r}"
+        )
+    return drift
 
 TEACHING_LINE = (
     "governed_files.json controls which changed files hooks/pretooluse_change_gate.py demands a "

@@ -1,6 +1,6 @@
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-18T21:32:47Z
-#   last-change: 2026-07-19T03:04:09Z
+#   last-change: 2026-07-19T03:36:42Z
 #   contributors: ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -24,14 +24,31 @@ against 192.168.122.1 db toy):
 
 This module NEVER applies anything (v1 boundary: "No editing of the operator's real pg_hba in
 place -- it generates the block and the diff, the operator applies"). It only reads (via a
-read-only `SELECT pg_read_file`, no DDL) and prints."""
+read-only `SELECT pg_read_file`, no DDL) and prints.
+
+INTERPRETER-BOUNDARY VALIDATION LIVES AT THE BOUNDARY FUNCTION (ledger row 1799 finding 4,
+law/adr/0012's 2026-07-18 amendment): `db`/`role`/`subnets` are spliced as program text into the
+pg_hba block this module generates -- a second evaluator's config text (postgresql's own
+pg_hba.conf parser) -- with no bind-variable carrier available. `generate_block` below is the
+actual splice site, so it is the boundary that refuses what it cannot honor (ADR-0012 P2), the
+SAME `probes.pg_connect` pattern: the guard travels with every call site by construction, rather
+than living only in one caller's loop (screens.py's own pre-check, kept as belt-and-braces --
+see that call site's comment) where a future direct call to `generate_block`/`build_prepared_block`
+bypassing screens.py would otherwise splice unvalidated text with no refusal at all."""
 from __future__ import annotations
 
 import subprocess
 
+from tools.setup_tui import probes
+
 
 class PgHbaReadError(RuntimeError):
     pass
+
+
+class PgHbaValidationError(ValueError):
+    """Raised by `generate_block` when `db`/`role`/`subnets` fail the closed-alphabet check
+    BEFORE anything is spliced into the pg_hba block text -- never a coerced/escaped value."""
 
 
 def read_live_pg_hba(host: str, probe_db: str = "postgres", timeout: float = 10.0) -> str:
@@ -85,7 +102,29 @@ def generate_block(db: str, role: str, subnets: list[str]) -> str:
     192.168.122.1 db toy (2026-07-18): a `trust` line per subnet, then a `reject` catch-all pair
     (`host all` + `local all`) scoping the role to ONLY this database from ONLY these subnets --
     matching the existing per-role confinement style already on this cluster (e.g. the
-    `toycolors_rw`/`ent_rw`/`qbx_rw` blocks in the same live file)."""
+    `toycolors_rw`/`ent_rw`/`qbx_rw` blocks in the same live file).
+
+    Validates `db`/`role` (closed identifier alphabet) and every `subnets` token (closed CIDR
+    alphabet, real-parsed) BEFORE splicing anything into the block text -- raises
+    `PgHbaValidationError` naming the offending value, never a coerced/escaped substitute
+    (module docstring: this is the actual splice site, so the guard lives here, travelling with
+    every call site by construction)."""
+    if not probes.valid_identifier(db):
+        raise PgHbaValidationError(
+            f"database name {db!r} contains characters outside [A-Za-z0-9_] -- refusing to "
+            f"splice it into pg_hba text"
+        )
+    if not probes.valid_identifier(role):
+        raise PgHbaValidationError(
+            f"role name {role!r} contains characters outside [A-Za-z0-9_] -- refusing to "
+            f"splice it into pg_hba text"
+        )
+    for subnet in subnets:
+        if not probes.valid_subnet(subnet):
+            raise PgHbaValidationError(
+                f"subnet {subnet!r} is not a valid CIDR/host token -- refusing to splice it "
+                f"into pg_hba text"
+            )
     lines = [f"# {db}/{role} -- confined by tools/setup_tui (dedicated-db path); PREPARED, not applied"]
     for subnet in subnets:
         lines.append(f"host  {db}  {role}  {subnet}  trust")

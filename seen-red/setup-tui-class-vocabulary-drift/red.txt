@@ -1,0 +1,17 @@
+seen-red/setup-tui-class-vocabulary-drift -- banked RED evidence (both-polarity proof, fixture-census)
+
+Ledger row 1799 finding 3: tools/setup_tui/principals_authority.py's CLASS_CHOICES/
+RELATION_CHOICES hand-mirror the kernel's own agent_class/principal_relation CHECK vocabularies
+(kernel/lineage/s15-schema.sql, kernel/lineage/s41-principal-bindings-and-relations.sql) with no
+check that they stay in sync. Cases 2 and 3 below feed
+principals_authority.check_vocabulary_drift() a SYNTHETIC, deliberately-narrower kernel CHECK
+clause and assert the drift message it must produce; a fixture failure here (a red leg that
+silently stopped firing) IS this backstop's red case.
+
+Real captured stdout, 2026-07-19, a clean run against this commit's tree (zero residue, exit 0):
+
+case 1 ok: CLASS_CHOICES/RELATION_CHOICES and the live kernel CHECK vocabularies (s15-schema.sql, s41-principal-bindings-and-relations.sql) all agree (zero drift)
+case 2 ok: a synthetic agent_class CHECK missing a real class reads red
+case 3 ok: a synthetic principal_relation CHECK missing a real relation reads red
+bonus case ok: both synthetic disagreements stack, reported separately
+ALL CASES OK -- principals_authority.py CLASS/RELATION vocabulary drift backstop, both polarities proven

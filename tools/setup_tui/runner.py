@@ -1,6 +1,6 @@
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-18T21:31:32Z
-#   last-change: 2026-07-19T03:02:45Z
+#   last-change: 2026-07-19T03:34:58Z
 #   contributors: ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -32,10 +32,30 @@ needing the flag threaded a second time to every `cl.add` call site.
 """
 from __future__ import annotations
 
+import re
 import shlex
 import subprocess
 import sys
 from dataclasses import dataclass, field
+
+# The ONE home (ADR-0012 P1; ledger row 1799 finding 1) for the fact this pattern encodes: every
+# write-verb this package drives (`led`, `legacy/led`, `role_charter.py` via `led decision`) ends
+# a successful write with a line of the shape `... row <id> written.` (or `row_id=<id>` /
+# `row: <id>`) -- the SAME `write_and_report`/`kernel_write` idiom `led.tmpl` and
+# `legacy-led.tmpl` both share. This regex, and `parse_row_id` below, are THAT fact's one home;
+# before this fix it was hand-copied three times (tools/setup_tui/principals_authority.py,
+# tools/setup_tui/signed_genesis.py, tools/setup_tui/screens.py) -- three independent literal
+# copies of one fact, the exact P1 violation the anti-pattern checklist's row B names.
+ROW_ID_RE = re.compile(r"\brow[_ ]?(?:id)?[:=]?\s*(\d+)\b", re.IGNORECASE)
+
+
+def parse_row_id(output: str) -> int | None:
+    """The row id `led`/`legacy/led` reports on a successful write, parsed from that verb's own
+    stdout convention (`ROW_ID_RE`'s docstring above) -- `None` if no such id appears (a caller
+    is responsible for deciding what "no id parsed" means for its own dry-run/failure cases; this
+    function only ever reports what the text actually says, never a fabricated id)."""
+    m = ROW_ID_RE.search(output)
+    return int(m.group(1)) if m else None
 
 
 def quote_argv(argv: list[str]) -> str:
