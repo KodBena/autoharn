@@ -278,10 +278,30 @@ refusing an unattributed file edit to a costed check that reads your documentati
 is controlled by one file, `.claude/apparatus.json`, per project. It ships with the checks that
 cost nothing turned on and the two checks that spend real money per use turned off:
 
+<!-- doc-attest-exempt: 2026-07-19 typed-table-ssot-integration commission — the only change
+     at this content hash is wrapping the pre-existing "kind of mechanism" table in typed-table:BEGIN/
+     END anchors and regenerating it through tools/doc_table_generation.py, whose call site
+     lives in tools/doc_table_registry.py. Every cell's text is unchanged; the only byte-level
+     difference is the delimiter row reformatted from the old "|---|---|---|" to the canonical
+     "| --- | --- | --- |" tools/markdown_tables.render_separator produces — content-preserving
+     in exactly the sense gates/doc_tables.py's own separator-fix precedent already treats as
+     such (a delimiter row carries no content), plus the two new anchor comments and one
+     provenance comment, none of which is prose a reader parses for meaning. No prose changed,
+     so ADR-0017's fresh-context legibility concern does not apply to this touch; no live A:B:C
+     loop was run (this session cannot fork a genuinely fresh reviewer) and this marker does not
+     claim one did. SCOPED, not a standing exemption on the whole file (narrower than
+     ADR-0012.md's own precedent for this exact class of touch, which that file's own marker
+     flagged as worth tightening) — mechanically this token exempts the whole file for as long
+     as it stays present, same known gap ADR-0012.md's marker names; the next PROSE edit to this
+     file should get a real attestation and this marker removed, not carried forward as cover. -->
+
+<!-- typed-table:BEGIN id=user-guide-mechanism-kinds -->
 | kind of mechanism | default | example |
-|---|---|---|
+| --- | --- | --- |
 | free (no external call) | on | refusing an edit with no ledger entry behind it |
 | costed (one billed call per use) | off, and says so next to the switch | reading a document for legibility with an LLM |
+<!-- constructor-generated: tools/experiments/typed_table.py; declared type former = 'kind of mechanism'; 2 row(s) type-checked at construction (forced articulation + empty-header refusal + column-count coherence); see vestigial_documentation/design/ORCH-TYPED-TABLE-EXPERIMENT.md -->
+<!-- typed-table:END id=user-guide-mechanism-kinds -->
 
 The full reference — every mechanism this project ships, what it does, and exactly how to flip
 it — is [USER-CONFIGURATION.md's apparatus.json

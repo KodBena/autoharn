@@ -10,10 +10,12 @@
 #
 # FINAL WIRING (BUILD-BRIEF Step 9, extended 2026-07-11 doc-legibility-indictment commission,
 # further extended 2026-07-11 run-10-closure-audit commission, further extended 2026-07-12
-# configuration-surface-survey commission):
-# staging_guard -> no_lazy_imports -> fixture_census -> link_integrity ->
+# configuration-surface-survey commission, further extended 2026-07-19 typed-table-ssot-
+# integration commission):
+# staging_guard -> no_conflict_markers -> no_lazy_imports -> fixture_census -> link_integrity ->
 # apparatus_unknown_keys (gated only when bootstrap/templates/apparatus.json is touched) ->
-# doc_shapes -> doc-attestation-presence -> layout_census -> doc-legibility. layout_census is DISABLED here
+# doc_shapes -> doc-attestation-presence -> typed-table-drift -> layout_census -> doc-legibility.
+# layout_census is DISABLED here
 # as of the maintainer ruling below (2026-07-09); it still appears in this history note as the
 # Step-9 design.
 # doc-legibility is wired REPORT-ONLY (runs and prints,
@@ -130,6 +132,19 @@ if [ -n "$TOUCHED_MD" ]; then
         exit 1
     }
 fi
+
+# typed-table-drift — every table id in tools/doc_table_registry.REGISTRY must match its
+# builder's current output byte-for-byte (work item typed-table-ssot-integration, follow-up to
+# the typed-table-constructor-experiment ADOPTION; ADR-0012 P1: the call site is the one home, a
+# hand-edited doc region is a second copy and must read RED). Runs every commit, not just when
+# a registered doc is touched (the registry is small by construction; see the gate's own
+# docstring for why file-staged scoping would be unsound here).
+"$PY" "$REPO_ROOT/gates/typed_table_drift.py" || {
+    echo "" >&2
+    echo "pre-commit: typed-table-drift FAILED — a registered doc's table region no longer" >&2
+    echo "matches its constructor call site (gates/typed_table_drift.py)." >&2
+    exit 1
+}
 
 # layout_census — DISABLED here (maintainer ruling, 2026-07-09): research repo, census is for
 # downstream instances; disabled until further notice. gates/layout_census.py is untouched and

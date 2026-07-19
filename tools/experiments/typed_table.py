@@ -1,13 +1,20 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-13T17:42:07Z
-#   last-change: 2026-07-15T14:11:13Z
-#   contributors: 3c50e030/main, a857c93d/main
+#   last-change: 2026-07-19T02:02:33Z
+#   contributors: 3c50e030/main, a857c93d/main, ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
-"""typed_table — EXPERIMENT, NO MANDATE (work item typed-table-constructor-experiment; see
-vestigial_documentation/design/ORCH-TYPED-TABLE-EXPERIMENT.md for the write-up and its findings-shaped status). This
-tool is a sketch, not a proposal to adopt; no doc in this repository is required to use it.
+"""typed_table — the constructor (work item typed-table-constructor-experiment; see
+vestigial_documentation/design/ORCH-TYPED-TABLE-EXPERIMENT.md for the original write-up and its
+findings-shaped status). ADOPTED, PARTIALLY, 2026-07-19 (work item
+`typed-table-ssot-integration`, follow-up to the maintainer's 2026-07-14 adoption of the
+experiment itself): `tools/doc_table_generation.py` + `tools/doc_table_registry.py` now wire
+this constructor into the authoring flow as the ONE home (ADR-0012 P1) for any doc table whose
+id is registered in `tools.doc_table_registry.REGISTRY` — as of this integration, exactly one
+(`user-guide/USER-GUIDE.md`'s "kind of mechanism" table). No OTHER doc in this repository is
+required to use it, and this class itself is opt-in per table, not a blanket mandate over the
+doc corpus — a hand-authored table stays legitimate until its author chooses to register it.
 
 WHAT THIS IMPLEMENTS, precisely per the maintainer's 2026-07-13 clarification (ledger row
 299, which supersedes the question/answer framing in the original work_opened row): a

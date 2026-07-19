@@ -1,0 +1,13 @@
+CASE 1 (in-sync scratch doc): findings=[]
+typed-table-drift: clean ✓ (1 registered table(s) match their builder's current output)
+CASE 1b (gate.main() on in-sync scratch registry): exit=0
+CASE 2 (hand-drifted scratch doc): findings=["scratch-fixture (scratch.md): DRIFT — the doc's region between the typed-table:BEGIN/END anchors no longer matches __main__._scratch_builder()'s current output. Run 'python3 tools/doc_table_generation.py --write --table scratch-fixture' to regenerate, or fix the builder if the DOC is right and the call site is stale (ADR-0012 P1: the call site is the one home — never hand-edit the doc region directly)."]
+typed-table-drift: 1 finding(s) over 1 registered table(s):
+
+  !! scratch-fixture (scratch.md): DRIFT — the doc's region between the typed-table:BEGIN/END anchors no longer matches __main__._scratch_builder()'s current output. Run 'python3 tools/doc_table_generation.py --write --table scratch-fixture' to regenerate, or fix the builder if the DOC is right and the call site is stale (ADR-0012 P1: the call site is the one home — never hand-edit the doc region directly).
+CASE 2b (gate.main() on drifted registry): exit=1
+CASE 3 (dtg.write() restores sync): touched=['scratch.md']
+CASE 4 (no anchor pair in doc): findings=["no_anchor.md: no BEGIN anchor for registered table 'scratch-fixture' (expected line '<!-- typed-table:BEGIN id=scratch-fixture -->') — register removed the anchor, or the table was never wired in; run --write once to create it, or fix the registry entry"]
+CASE 5 (real gate, real registry, subprocess): exit=0
+typed-table-drift: clean ✓ (1 registered table(s) match their builder's current output)
+typed-table-drift red-specimen: all five cases behaved as designed — red on a hand-drifted scratch doc naming DRIFT, green once dtg.write() resyncs it, red (not silently skipped) on a registered doc missing its anchor pair, and the real gate clean against the real, live, in-sync registry.
