@@ -49,6 +49,20 @@ Cases proved:
      PENDING (never falsely marked DONE for a failed act), and a second `execute()` call against
      the same unfixed plan/destination reproduces the same failure (no silent skip of a REFUSED
      step).
+  5. RED-BEFORE-GREEN (FINDING-1 fix, fresh-context review of b565db1) -- a Hole GENUINELY
+     SPANNING the resume boundary: a two-entry plan where entry 1 holds a real `Hole` on entry
+     0's own `produces` (NOT an independent act, unlike case 3's three unrelated WriteActs, and
+     unlike seen-red/setup-tui-signed-genesis-resume's own crash point at i==0 with no later Hole
+     referencing it -- both existing resume fixtures were noted, in the review, to avoid this
+     scenario BY CONSTRUCTION; this case does not). A callback crashes right after entry 0 (the
+     PRODUCER) succeeds, before entry 1 (the CONSUMER, holding the Hole) ever runs. RED, against
+     `PRE_FIX_COMMIT` (pinned, not "HEAD" -- see WPC_PIN_NOTE below): a genuinely fresh
+     `execute()` call, loaded from the commit immediately before the fix, raises an uncaught
+     `KeyError` from `Hole.resolve` -- `bindings` started empty on every call, including a
+     resumed one, so the journal-loaded value the consumer's Hole needs was never there. GREEN,
+     against the current module: the SAME fresh call completes, and the consumer's REAL output
+     (recovered from `entry_results[1]`) used the row id the journal persisted for entry 0, not a
+     fabricated value and not a crash.
 
 Zero residue: everything happens inside a fixture-owned tempdir, removed in `finally`. No mocks
 of the modules under test -- real `tools.setup_tui.plan`/`commit_executor`, real
@@ -59,9 +73,11 @@ Usage: python3 seen-red/setup-tui-pure-core-foundation/run_fixtures.py
 Exit 0 if every case matches; 1 otherwise."""
 from __future__ import annotations
 
+import importlib.util
 import json
 import os
 import shutil
+import subprocess
 import sys
 import tempfile
 from dataclasses import dataclass
@@ -203,7 +219,12 @@ def case_3_journal_resume() -> None:
 
         jpath = CE.journal_path(dest)
         with open(jpath) as f:
-            statuses = json.load(f)["entries"]
+            entries = json.load(f)["entries"]
+        # FINDING-1 FIX: the journal now persists a {"status", "produces", "value"} record per
+        # entry (durable bindings, not just status) -- this fixture's own module docstring's
+        # "PHASE-1 SCOPE" note covers the module contract, not the on-disk journal shape, so this
+        # is the same fixture proving the SAME property against the current, richer record shape.
+        statuses = [e["status"] for e in entries]
         check("journal marked entry 0 DONE despite the callback crash (the ordering fix)",
               statuses[0] == CE.DONE, statuses)
         check("journal correctly still names entries 1/2 PENDING",
@@ -251,11 +272,122 @@ def case_4_failure_halts_honestly() -> None:
         jpath = CE.journal_path(dest)
         if os.path.isfile(jpath):
             with open(jpath) as f:
-                statuses = json.load(f)["entries"]
+                entries = json.load(f)["entries"]
+            statuses = [e["status"] for e in entries]
             check("journal still names the doomed entry PENDING, never falsely DONE",
                   statuses[0] == CE.PENDING, statuses)
         else:
             check("journal exists after a failed first entry", False, "journal file missing")
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+PRE_FIX_COMMIT = "b565db1"  # commit_executor.py as it stood immediately before the FINDING-1
+# fix (the same commit a fresh-context review flagged) -- pinned EXPLICITLY, never "HEAD" (a
+# moving target this repo's own build history already caught making a fixture stale exactly once,
+# seen-red/setup-tui-boundary-proc-cleanup's own repair).
+
+
+def _load_pinned_commit_executor(commit: str, scratch: str):
+    r = subprocess.run(
+        ["git", "-C", REPO_ROOT, "show", f"{commit}:tools/setup_tui/commit_executor.py"],
+        capture_output=True, text=True)
+    assert r.returncode == 0 and r.stdout.strip(), (
+        f"could not read {commit}:tools/setup_tui/commit_executor.py -- {r.stderr}")
+    assert "def bindings(self)" not in r.stdout, (
+        f"fixture assumption stale: {commit}:tools/setup_tui/commit_executor.py ALREADY carries "
+        f"the FINDING-1 fix (a CommitJournal.bindings() method) -- PRE_FIX_COMMIT needs "
+        f"repinning to a genuinely earlier commit")
+    path = os.path.join(scratch, "commit_executor_prefix.py")
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(r.stdout)
+    spec = importlib.util.spec_from_file_location("commit_executor_prefix", path)
+    mod = importlib.util.module_from_spec(spec)
+    # Registered in sys.modules BEFORE exec_module -- dataclasses' own field-type resolution
+    # looks the module up via sys.modules[cls.__module__] (typing.get_type_hints's own mechanism)
+    # and raises AttributeError on a bare None otherwise; this is the standard fix for a
+    # dataclass-bearing module loaded via spec_from_file_location outside the normal import path.
+    sys.modules["commit_executor_prefix"] = mod
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def case_5_hole_spans_resume() -> None:
+    print("case 5: RED-BEFORE-GREEN -- a Hole GENUINELY spanning the resume boundary "
+          "(FINDING-1 fix, fresh-context review of b565db1)")
+    tmp = tempfile.mkdtemp(prefix="setup-tui-pure-core-fixture-")
+    try:
+        row_path = os.path.join(tmp, "row.txt")
+
+        def extract_row(content: str) -> str:
+            return content.strip().split()[-1]
+
+        def _build_plan():
+            producer = P.PlanEntry(
+                screen="s1", item="produce row", lesson="l1",
+                act=P.WriteAct(path=row_path, content="row 99"),
+                produces="p_resume",
+            )
+            hole = P.Hole(of="p_resume", describe="row-id", extract=extract_row)
+            consumer = P.PlanEntry(
+                screen="s2", item="consume row (holds a Hole on the producer)", lesson="l2",
+                act=P.CommandAct(argv=("echo", hole)),
+            )
+            plan = P.Plan()
+            plan.append(producer)
+            plan.append(consumer)
+            return plan
+
+        def crash_right_after_producer(i, entry, result, proc=None):
+            if i == 0:
+                raise RuntimeError(
+                    "simulated death immediately after the PRODUCING entry -- before the "
+                    "consumer (which holds a Hole on it) ever runs")
+
+        # --- RED: the pinned pre-fix module -- a genuinely fresh execute() call on resume must
+        # raise an uncaught KeyError (bindings started empty every call, including a resumed one).
+        dest_red = os.path.join(tmp, "dest_red")
+        prefix_mod = _load_pinned_commit_executor(PRE_FIX_COMMIT, tmp)
+        plan_red = _build_plan()
+        crashed_red = False
+        try:
+            prefix_mod.execute(plan_red, dest_red, on_result=crash_right_after_producer)
+        except RuntimeError:
+            crashed_red = True
+        check("RED setup: the simulated death propagated (pre-fix module)", crashed_red)
+        check("RED setup: the producer's real write happened (pre-fix module)",
+              os.path.isfile(row_path) and open(row_path).read() == "row 99")
+        raised_keyerror = False
+        try:
+            prefix_mod.execute(plan_red, dest_red)
+        except KeyError:
+            raised_keyerror = True
+        check("RED: pre-fix module's resumed execute() DOES raise KeyError from Hole.resolve "
+              "(bindings started empty -- the defect FINDING-1 caught, reproduced live)",
+              raised_keyerror)
+
+        # --- GREEN: the current module, same scenario, fresh dest.
+        os.remove(row_path)
+        dest_green = os.path.join(tmp, "dest_green")
+        plan_green = _build_plan()
+        crashed_green = False
+        try:
+            CE.execute(plan_green, dest_green, on_result=crash_right_after_producer)
+        except RuntimeError:
+            crashed_green = True
+        check("the simulated death propagated (current module)", crashed_green)
+        check("the producer's real write happened (current module)",
+              os.path.isfile(row_path) and open(row_path).read() == "row 99")
+
+        result = CE.execute(plan_green, dest_green)
+        check("GREEN: resumed execution completed (no KeyError from Hole.resolve)",
+              result.completed)
+        echo_result = result.entry_results[1]
+        check("GREEN: the consumer's REAL output used the JOURNAL-loaded row id (not "
+              "fabricated, not a crash)",
+              echo_result.ok and echo_result.detail.strip() == "99", echo_result.detail)
+        check("journal removed once every entry is DONE",
+              not os.path.isfile(CE.journal_path(dest_green)))
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 
@@ -265,6 +397,7 @@ def main() -> int:
     case_2_parity_and_binding()
     case_3_journal_resume()
     case_4_failure_halts_honestly()
+    case_5_hole_spans_resume()
     if FAILURES:
         print(f"\n{len(FAILURES)} FAILURE(S):")
         for f in FAILURES:

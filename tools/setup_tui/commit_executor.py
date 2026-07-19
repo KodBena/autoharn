@@ -34,11 +34,17 @@ WHAT THIS MODULE PROVIDES, THAT IS ALREADY LOAD-BEARING FOR THE PROPERTIES SPEC 
     this journal is what the envelope calls "resume, or finish by hand from the journal", never a
     claim of whole-flow atomicity across Postgres+filesystem+GPG+processes (spec §2.6 is explicit
     that whole-flow atomicity is NOT claimed).
-  * **Late binding (§2.2, WPC5).** After an entry with `produces=name` runs, its real
-    stdout/write-content is recorded in `bindings[name]`; a later entry's `Hole(of=name, ...)`
-    resolves against that dict, never before. `bindings` is returned from `execute()` so a caller
-    (a future `led show`-driven witness) can confirm a hole resolved to the value the world
-    actually recorded.
+  * **Late binding (§2.2, WPC5), durable across a resume (FINDING-1 fix).** After an entry with
+    `produces=name` runs, its real stdout/write-content is recorded in `bindings[name]` AND
+    persisted into the commit journal itself (`CommitJournal.mark_done`'s own `produces`/`value`
+    fields), atomically with the DONE marking; a later entry's `Hole(of=name, ...)` resolves
+    against that dict, never before. On a RESUMED `execute()` call, `bindings` starts pre-loaded
+    from `CommitJournal.bindings()` -- every already-DONE entry's binding LOADED from the journal,
+    not reconstructed or left empty -- so a still-PENDING entry's Hole on an already-DONE entry's
+    `produces` (the ordinary shape of the signed-genesis chain) resolves correctly across a kill-
+    and-resume, rather than raising an uncaught `KeyError`. `bindings` is returned from `execute()`
+    so a caller (a future `led show`-driven witness) can confirm a hole resolved to the value the
+    world actually recorded.
 
 WHAT THIS MODULE DELIBERATELY DOES NOT DO YET: drive the checklist/`Ui` calls a fully-wired
 commit boundary needs (rendering the lesson line, the exact argv, the streamed output, and the
@@ -79,39 +85,75 @@ class CommitJournal:
     weaker file-write implementation -- ADR-0012 P1) so the journal itself cannot be the thing a
     kill leaves half-written.
 
-    Shape on disk: `{"entries": ["DONE", "DONE", "PENDING", "PENDING", ...]}`, one status per
-    plan entry, same order as `Plan.entries`. `next_index()` is the first `PENDING` index, or
-    `None` once every entry is `DONE` (commit complete)."""
+    FINDING-1 FIX (fresh-context review of b565db1; the review's own diagnosis): a resumed
+    `execute()` used to start from an EMPTY `bindings` dict every time, and a comment here
+    described a "late-binding replay" reconstruction that did not exist anywhere -- a `Hole` on an
+    already-DONE entry's `produces` (the NORMAL shape of the signed-genesis chain: export holds a
+    Hole on the keygen/list-secret-keys step's fingerprint, discharge and the keys/ write likewise,
+    sign holds one on a just-written commission's row id) raised an uncaught `KeyError` out of
+    `Hole.resolve` on resume, crashing the process -- falsifying the spec's resume claim, WPC4, and
+    the guarantee-envelope banner (`app.py`). The fix: the journal itself is the durable, typed
+    record of every `produces`/value pair a DONE entry contributed, not just its status -- resuming
+    is then a matter of LOADING what the journal already recorded, never "reconstructing" anything
+    the journal doesn't actually carry.
+
+    Shape on disk: `{"entries": [{"status": "DONE"|"PENDING", "produces": <name-or-null>,
+    "value": <string-or-null>}, ...]}`, one record per plan entry, same order as `Plan.entries`.
+    `produces`/`value` are non-null only for a DONE entry whose `PlanEntry.produces` was set (the
+    exact condition `execute()`'s own bindings-population already used). `next_index()` is the
+    first `PENDING` index, or `None` once every entry is `DONE` (commit complete). `statuses` is a
+    read-only convenience view (`[r["status"] for r in records]`) kept for callers that only care
+    about status, not bindings."""
     path: str
-    statuses: list[str] = field(default_factory=list)
+    records: list[dict] = field(default_factory=list)
+
+    @property
+    def statuses(self) -> list[str]:
+        return [r["status"] for r in self.records]
 
     @classmethod
     def open_or_create(cls, path: str, plan_len: int) -> "CommitJournal":
         if os.path.isfile(path):
             with open(path, encoding="utf-8") as f:
                 data = json.load(f)
-            statuses = list(data["entries"])
-            if len(statuses) != plan_len:
+            raw = list(data["entries"])
+            if len(raw) != plan_len:
                 raise ValueError(
-                    f"commit journal at {path!r} has {len(statuses)} entries but this plan has "
+                    f"commit journal at {path!r} has {len(raw)} entries but this plan has "
                     f"{plan_len} -- refusing to resume against a MISMATCHED plan (the plan the "
                     f"journal was written for is not the plan being executed now; this is a "
                     f"caller error, never silently guessed at, ADR-0002)"
                 )
-            return cls(path=path, statuses=statuses)
-        j = cls(path=path, statuses=[PENDING] * plan_len)
+            records = [_normalize_journal_record(r) for r in raw]
+            return cls(path=path, records=records)
+        records = [{"status": PENDING, "produces": None, "value": None} for _ in range(plan_len)]
+        j = cls(path=path, records=records)
         j._persist()
         return j
 
     def next_index(self) -> int | None:
-        for i, s in enumerate(self.statuses):
-            if s == PENDING:
+        for i, r in enumerate(self.records):
+            if r["status"] == PENDING:
                 return i
         return None
 
-    def mark_done(self, index: int) -> None:
-        self.statuses[index] = DONE
+    def mark_done(self, index: int, produces: str | None, value: str | None) -> None:
+        """Marks entry `index` DONE and, if `produces` is set (the entry's own `PlanEntry.
+        produces`), persists `produces`/`value` alongside the status -- atomically, same write,
+        same fsync -- so a LATER resumed run can load this binding straight from the journal
+        rather than needing to re-derive or guess it."""
+        self.records[index]["status"] = DONE
+        self.records[index]["produces"] = produces
+        self.records[index]["value"] = value
         self._persist()
+
+    def bindings(self) -> dict[str, str]:
+        """Every `produces` -> `value` pair recorded for a DONE entry -- the durable record a
+        resumed `execute()` loads BEFORE continuing, so a still-PENDING entry's `Hole` on an
+        already-DONE entry's `produces` resolves against a REAL, persisted value, never an empty
+        dict a fresh invocation would otherwise start from."""
+        return {r["produces"]: r["value"] for r in self.records
+                if r["status"] == DONE and r["produces"] is not None}
 
     def remove(self) -> None:
         """Called once every entry is DONE -- a completed commit leaves no journal behind (the
@@ -133,7 +175,7 @@ class CommitJournal:
         # a file directly, besides the checklist save") stays true of THAT module; this journal
         # write is the commit executor's own, equally-atomic, mechanism.
         directory = os.path.dirname(self.path) or "."
-        content = json.dumps({"entries": self.statuses}, indent=2) + "\n"
+        content = json.dumps({"entries": self.records}, indent=2) + "\n"
         with tempfile.NamedTemporaryFile(
             "w", dir=directory, prefix=f".{os.path.basename(self.path)}.", suffix=".tmp",
             delete=False, encoding="utf-8",
@@ -144,6 +186,18 @@ class CommitJournal:
             tmp_path = tf.name
         os.chmod(tmp_path, stat.S_IRUSR | stat.S_IWUSR | stat.S_IRGRP | stat.S_IROTH)
         os.replace(tmp_path, self.path)
+
+
+def _normalize_journal_record(raw) -> dict:
+    """Accepts EITHER the current shape (`{"status": ..., "produces": ..., "value": ...}`) or the
+    pre-fix shape (a bare status string, `"DONE"`/`"PENDING"`) -- a journal file written by the
+    pre-fix code (an in-progress commit interrupted before this fix landed) still resumes,
+    honestly, as a record with no persisted binding (exactly the pre-fix behavior for that ONE
+    entry -- a hole depending on it still fails loud, per ADR-0002, rather than this function
+    fabricating a value it was never actually given)."""
+    if isinstance(raw, str):
+        return {"status": raw, "produces": None, "value": None}
+    return {"status": raw["status"], "produces": raw.get("produces"), "value": raw.get("value")}
 
 
 def journal_path(dest: str) -> str:
@@ -216,24 +270,18 @@ def execute(
     it. Passing the proc through the callback closes that gap."""
     os.makedirs(dest, exist_ok=True)
     journal = CommitJournal.open_or_create(journal_path(dest), len(plan.entries))
-    bindings: dict[str, str] = {}
+    # FINDING-1 FIX: bindings for every already-DONE entry are LOADED from the journal's own
+    # persisted record (CommitJournal.bindings()), never started empty -- see CommitJournal's own
+    # docstring for the defect this closes (a Hole on an already-DONE entry's produces used to
+    # raise an uncaught KeyError on resume, the normal shape of the signed-genesis chain).
+    bindings: dict[str, str] = dict(journal.bindings())
     background_procs: dict[str, subprocess.Popen] = {}
     entry_results: list[EntryResult] = [
-        EntryResult(entry=e, ok=(s == DONE), detail="(resumed: already DONE)" if s == DONE else "")
+        EntryResult(entry=e, ok=(s == DONE),
+                    detail=bindings.get(e.produces, "(resumed: already DONE)") if s == DONE else "")
         for e, s in zip(plan.entries, journal.statuses)
     ]
 
-    # Late-binding replay (spec §2.2/WPC5): on a RESUMED run, entries already marked DONE never
-    # re-execute (per-act atomicity already happened for them in a prior invocation), but any
-    # `produces` binding they contributed must still be populated before a later PENDING entry's
-    # hole can resolve against it. Since a completed act's real output is not re-derivable from
-    # the journal alone (the journal records status, not content -- content lives wherever the
-    # act itself wrote it, e.g. the destination's own ledger), a resumed run's bindings are
-    # reconstructed by RE-READING each DONE entry's real effect, the same way a fresh witness
-    # would (e.g. `led show` for a row id) -- this is the caller's job for entries the caller
-    # knows how to re-derive; entries this module cannot re-derive on its own are surfaced as a
-    # missing binding, which fails LOUD the moment a later hole actually needs it (never silently
-    # guessed), rather than this function inventing a value.
     start = journal.next_index()
     if start is None:
         journal.remove()
@@ -264,7 +312,8 @@ def execute(
         if result.ok:
             if entry.produces is not None:
                 bindings[entry.produces] = result.detail
-            journal.mark_done(i)
+            journal.mark_done(i, produces=entry.produces,
+                               value=result.detail if entry.produces is not None else None)
         if on_result is not None:
             on_result(i, entry, result, proc)
         if not result.ok:
