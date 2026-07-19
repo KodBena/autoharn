@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-18T23:35:54Z
-#   last-change: 2026-07-18T23:49:00Z
+#   last-change: 2026-07-19T00:49:32Z
 #   contributors: ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -215,13 +215,6 @@ REGISTRY: dict[str, FeatureFact] = {
                     "standard.",
         external="none.",
     ),
-    "hydration_setup_surface_is_maintained": FeatureFact(
-        key="hydration_setup_surface_is_maintained", label="setup-surface-is-maintained "
-        "(durable decision)",
-        aspiration="house maintenance discipline (ledger row 1700), not a named external "
-                    "standard.",
-        external="none.",
-    ),
     "hydration_doc_currency_at_the_seam": FeatureFact(
         key="hydration_doc_currency_at_the_seam", label="doc-currency-at-the-seam (durable "
         "decision)",
@@ -248,6 +241,27 @@ REGISTRY: dict[str, FeatureFact] = {
         label="decomposition-to-unit-of-independent-resumption (durable decision)",
         aspiration="house decomposition discipline, mined from the autoharn-panel live "
                     "deployment's own prior art, not a named external standard.",
+        external="none.",
+    ),
+    "hydration_claims_carry_witnesses": FeatureFact(
+        key="hydration_claims_carry_witnesses", label="claims-carry-witnesses (durable "
+        "decision)",
+        aspiration="an evidentiary-discipline house standard (this repo's own CLAUDE.md "
+                    "ORCHESTRATION section), not a named external standard.",
+        external="none.",
+    ),
+    "hydration_unanchored_review_briefs": FeatureFact(
+        key="hydration_unanchored_review_briefs", label="unanchored-review-briefs (durable "
+        "decision)",
+        aspiration="house anti-anchoring-bias review discipline (ledger row 1278), not a named "
+                    "external standard.",
+        external="none.",
+    ),
+    "hydration_fresh_context_review_for_delegated_work": FeatureFact(
+        key="hydration_fresh_context_review_for_delegated_work",
+        label="fresh-context-review-for-delegated-work (durable decision)",
+        aspiration="house independent-review discipline (ledger row 1492), not a named "
+                    "external standard.",
         external="none.",
     ),
 }

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-18T23:37:02Z
-#   last-change: 2026-07-18T23:48:41Z
+#   last-change: 2026-07-19T00:51:47Z
 #   contributors: ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -67,31 +67,45 @@ class DurableDecision:
 # so the maintainer can verify the distillation; the report accompanying this build lists the
 # additional candidates that were mined but NOT wired in, for pruning/addition.
 #
-# 11 entries total below (10 fixed DurableDecision structs + the ADR-adoption submenu just after
+# GENERICITY PASS (ledger row 1722, adopting design/SONNET-CATALOG-GENERICITY-CRITIQUE-2026-
+# 07-19.md wholesale): a fresh-context Sonnet critic reviewed this catalog against the spec's
+# own "small-ish curated catalog... born of witnessed painful experience" audience (a stranger
+# adopting this harness for their own project) and found the mining step had faithfully carried
+# CITATIONS but not always translated the RULE text out of first-person-project voice. Applied
+# here: `setup-surface-is-maintained` CUT outright (addressed to autoharn's own core
+# contributors, no purchase for an adopter -- stays an internal rule, ledger row 1700, not a
+# hydration option); `makespan-scheduling-by-mandate`, `obligate-amplification-caution`,
+# `doc-currency-at-the-seam`, `runs-are-strictly-linear` REWRITTEN into stranger-portable voice
+# (each entry below marks its own rewrite inline; `why` citations kept exactly as banked -- the
+# citations are the evidence, they stay local); three entries the critique flagged as more
+# portable than several that made the original cut WIRED (`claims-carry-witnesses`,
+# `unanchored-review-briefs`, `fresh-context-review-for-delegated-work`), each in generic voice
+# from the start.
+#
+# 13 entries total below (12 fixed DurableDecision structs + the ADR-adoption submenu just after
 # this list) -- inside the 7-15 range, 15 is a hard ceiling not approached.
 # ---------------------------------------------------------------------------------------------
 
 CATALOG: list[DurableDecision] = [
-    # 1. Maintainer-named anchor (row 1714). Substance corrected per row 1716: the makespan
-    # mandate's real form, read from the autoharn-panel deployment's OWN CLAUDE.md (points 2-3
-    # and its RESOURCES table row, ledger row id=1178 there), is a review obligation, not a bare
-    # scheduling preference -- a mandated-tier task's decomposition/close is COSIGNED by a
-    # distinct principal, and the panel's `hooks/pretooluse_change_gate.py` decomposition_review
-    # mechanism makes that a BLOCKER (a claimed work item's substantive edits are denied while
-    # its own opening row's countersign is undischarged), not backloggable debt.
+    # 1. Maintainer-named anchor (row 1714). Substance corrected per row 1716 (the panel's actual
+    # cosigned-decomposition mandate, read from its CLAUDE.md points 2-3 + RESOURCES row
+    # id=1178), then REWRITTEN into stranger-portable voice per the genericity critique (row
+    # 1722, design/SONNET-CATALOG-GENERICITY-CRITIQUE-2026-07-19.md, entry #1: BESPOKE/
+    # GENERALIZABLE -- the prior text cited a sibling deployment by name and a hook a fresh world
+    # does not necessarily contain). The critique's own suggested rewrite dropped the panel's
+    # "resource-conflict, or quota constraints" trigger breadth (RESOURCES row id=1178's mandated
+    # tier fires on dependency, precedence, resource-conflict, OR quota constraints -- not
+    # dependency alone); restored here in generic voice ("or resource conflicts") rather than
+    # silently narrowing the mandate's scope. `why` citations kept exactly as banked -- the
+    # citations are the evidence and stay local; only the rule/claude_md voice changed.
     DurableDecision(
         slug="makespan-scheduling-by-mandate",
-        rule="Logistics/makespan scheduling (tools/makespan-scheduler/, CP-SAT via OR-Tools) is "
-             "used BY MANDATE for driving execution of 3+ claimed/claimable work items under "
-             "dependency, precedence, resource-conflict, or quota constraints, rather than a "
-             "hand-picked sequential order -- the session orchestrator can see the overarching "
-             "goal and ensures the right rules hydrate at first session start. The mandate is a "
-             "REVIEW OBLIGATION, not a bare scheduling preference (autoharn-panel's own form of "
-             "the mandate, its CLAUDE.md points 2-3): a mandated-tier task's decomposition is "
-             "COSIGNED -- its work item's close is countersigned by a DISTINCT principal citing "
-             "the resource's declared evidence shape, because self-reports are not trusted -- "
-             "and the decomposition-review mechanism makes an undischarged countersign a "
-             "BLOCKER on further substantive edits to the claimed item, not backloggable debt.",
+        rule="For any commission spanning 3+ work items with dependencies, precedence "
+             "constraints, or resource conflicts, sequence them with a constraint-based "
+             "scheduler rather than ad hoc ordering. Require a high-stakes task's decomposition "
+             "and close to be cosigned by a principal distinct from the one who did the work -- "
+             "treat an undischarged cosign as a hard block on further edits, never backloggable "
+             "debt.",
         why="maintainer directive 2026-07-14 (user-guide/USER-RECIPES-FAQ.md 'Workflow "
             "patterns'); ledger row 1714 (this catalog's own commission) and row 1716 (the "
             "maintainer's correction: 'it's mandate is a robust specification (well, softly so) "
@@ -103,28 +117,28 @@ CATALOG: list[DurableDecision] = [
             "decomposition_review mechanism makes this a BLOCKER, not backloggable debt') and "
             "its RESOURCES table row for makespan-scheduler (ledger row id=1178 there, tier "
             "text: 'mandated: driving execution of three or more claimed/claimable work items "
-            "under dependency, precedence, resource-conflict, or quota constraints').",
+            "under dependency, precedence, resource-conflict, or quota constraints'); rule text "
+            "rewritten per row 1722's genericity critique, entry #1.",
         hydrates=(
             "Durable decision adopted at world birth (makespan-scheduling-by-mandate, catalog "
-            "tools/setup_tui/durable_decisions.py, why: ledger rows 1714/1716 + "
-            "autoharn-panel/CLAUDE.md points 2-3 and its RESOURCES table row id=1178): "
-            "logistics/makespan scheduling (tools/makespan-scheduler/) is used BY MANDATE for "
-            "driving execution of 3+ claimed/claimable work items under dependency, precedence, "
-            "resource-conflict, or quota constraints; the mandate is a review obligation -- a "
-            "mandated-tier task's decomposition/close is COSIGNED by a distinct principal, and "
-            "an undischarged countersign BLOCKS further substantive edits, never backloggable "
-            "debt."
+            "tools/setup_tui/durable_decisions.py, why: ledger rows 1714/1716/1722 + "
+            "autoharn-panel/CLAUDE.md points 2-3 and its RESOURCES table row id=1178): for any "
+            "commission spanning 3+ work items with dependencies, precedence constraints, or "
+            "resource conflicts, sequence them with a constraint-based scheduler rather than ad "
+            "hoc ordering; require a high-stakes task's decomposition and close to be cosigned "
+            "by a principal distinct from the one who did the work, treating an undischarged "
+            "cosign as a hard block on further edits, never backloggable debt."
         ),
         claude_md=(
-            "- **Makespan scheduling by mandate (cosigned decomposition)** -- use "
-            "`tools/makespan-scheduler/` (CP-SAT via OR-Tools) for driving execution of 3+ "
-            "claimed/claimable work items under dependency, precedence, resource-conflict, or "
-            "quota constraints. The mandate is a REVIEW OBLIGATION (autoharn-panel's own form, "
-            "its CLAUDE.md points 2-3): a mandated-tier task's decomposition/close is COSIGNED "
-            "by a distinct principal citing the resource's declared evidence shape; an "
-            "undischarged countersign is a BLOCKER on further substantive edits, not "
-            "backloggable debt. Full treatment: user-guide/USER-RECIPES-FAQ.md 'Workflow "
-            "patterns', design/ORCH-MAKESPAN-SCHEDULING-GUARANTEE.md."
+            "- **Constraint-scheduled, cosigned decomposition** -- for any commission spanning "
+            "3+ work items with dependencies, precedence constraints, or resource conflicts, "
+            "sequence them with a constraint-based scheduler (this harness ships one: "
+            "`tools/makespan-scheduler/`, CP-SAT via OR-Tools) rather than ad hoc ordering. "
+            "Require a high-stakes task's decomposition and close to be cosigned by a principal "
+            "distinct from the one who did the work -- treat an undischarged cosign as a hard "
+            "block on further edits, never backloggable debt. Full treatment: "
+            "user-guide/USER-RECIPES-FAQ.md 'Workflow patterns', "
+            "design/ORCH-MAKESPAN-SCHEDULING-GUARANTEE.md."
         ),
     ),
     # 2. Maintainer-named anchor (row 1714).
@@ -202,81 +216,74 @@ CATALOG: list[DurableDecision] = [
     ),
     # 5. Mined, this repo's ledger: the obligate-amplification footgun (already cited by this
     # spec's own §3 as the reason v1 writes no kernel obligate rows -- promoted from the prior
-    # PROPOSED shape into the real catalog now that the maintainer has widened its scope).
+    # PROPOSED shape into the real catalog once the maintainer widened its scope, then REWRITTEN
+    # into stranger-portable voice per the genericity critique (row 1722, entry #5:
+    # GENERALIZABLE -- the prior text outsourced its own substance to "led.tmpl's own... note"
+    # instead of stating the warning inline). `why` kept exactly as banked.
     DurableDecision(
         slug="obligate-amplification-caution",
-        rule="Never write a kernel `obligate` row without first reading led.tmpl's own "
-             "obligate-header note and revoke-refusal warning: `review_gap` over-catch is "
-             "retroactive (no temporal bound) and an obliged actor's OWN dispositions become "
-             "new debt (self-amplifying) -- discharge under a non-obliged principal, never the "
-             "obliged one.",
+        rule="Before writing any obligation row into the ledger, know that over-catch review "
+             "triggers are retroactive with no time bound, and that an obliged actor's own "
+             "later actions can count as new debt against themselves. Always discharge review "
+             "obligations under a different principal than the one who is obliged.",
         why="ledger row 1640 (this repo, 2026-07-18, autoharn-panel world/older lineage): the "
             "obligate footgun's third witnessed occurrence -- 1225 pre-existing rows flagged as "
             "debt, then 1225->1228 amplification when the obliged actor's own dispositions "
-            "counted as new debt.",
+            "counted as new debt; rule text rewritten per row 1722's genericity critique, "
+            "entry #5.",
         hydrates=(
             "Durable decision adopted at world birth (obligate-amplification-caution, catalog "
-            "tools/setup_tui/durable_decisions.py, why: ledger row 1640): never write a kernel "
-            "obligate row without reading led.tmpl's own obligate-header note and revoke-"
-            "refusal warning first; review_gap over-catch is retroactive and self-amplifying "
-            "against the obliged actor's own dispositions."
+            "tools/setup_tui/durable_decisions.py, why: ledger rows 1640/1722): before writing "
+            "any obligation row into the ledger, know that over-catch review triggers are "
+            "retroactive with no time bound, and that an obliged actor's own later actions can "
+            "count as new debt against themselves -- always discharge review obligations under "
+            "a different principal than the one who is obliged."
         ),
         claude_md=(
-            "- **Obligate-amplification caution** -- never write a kernel `obligate` row "
-            "without reading led.tmpl's own obligate-header note and revoke-refusal warning "
-            "first (ledger row 1640): `review_gap` over-catch is retroactive, and an obliged "
-            "actor's own dispositions become new debt -- discharge under a non-obliged "
-            "principal."
+            "- **Obligation-trigger caution** -- before writing any obligation row into the "
+            "ledger, know that over-catch review triggers are retroactive with no time bound, "
+            "and that an obliged actor's own later actions can count as new debt against "
+            "themselves. Always discharge review obligations under a different principal than "
+            "the one who is obliged (ledger row 1640)."
         ),
     ),
     # 6. Mined, this repo's ledger: the setup surface is a maintained surface.
-    DurableDecision(
-        slug="setup-surface-is-maintained",
-        rule="The setup surface (tools/setup_tui + the contracts it drives: new-project.sh, "
-             "teardown-world.sh, boundary config/ports, deployment.json's key contract, the led "
-             "verbs the screens call) is a MAINTAINED surface. Any change to a driven contract "
-             "triggers, in the SAME changing work item, a TUI conformance re-check and repair "
-             "if the contract moved -- the changer pays, not the next operator.",
-        why="ledger row 1700 (this repo, maintainer-directed 2026-07-19): 'the setup surface "
-            "itself ... will drift unless maintained' -- mechanization commissioned the same "
-            "date (seen-red/setup-tui-scripted-smoke, this build's own sibling fixture).",
-        hydrates=(
-            "Durable decision adopted at world birth (setup-surface-is-maintained, catalog "
-            "tools/setup_tui/durable_decisions.py, why: ledger row 1700): the setup surface is "
-            "a maintained surface -- any change to a contract it drives triggers a TUI "
-            "conformance re-check and repair in the SAME changing work item; the changer pays."
-        ),
-        claude_md=(
-            "- **The setup surface is a maintained surface** -- any change to a contract "
-            "`tools/setup_tui` drives (new-project.sh, teardown-world.sh, boundary config, "
-            "deployment.json, the led verbs) triggers a TUI conformance re-check and repair in "
-            "the SAME changing work item (ledger row 1700)."
-        ),
-    ),
-    # 7. Mined, this repo's ledger: doc currency at the seam.
+    #
+    # CUT per the genericity critique (row 1722, design/SONNET-CATALOG-GENERICITY-CRITIQUE-
+    # 2026-07-19.md, entry #6: BESPOKE): this rule is addressed to autoharn's own core
+    # contributors, not to an adopter deploying a world to govern an unrelated project -- a
+    # stranger never touches tools/setup_tui, new-project.sh, or teardown-world.sh, so hydrating
+    # it into their world's CLAUDE.md would be a memo with no purchase for its reader. It stays
+    # an internal contributor rule (ledger row 1700), not a hydration option; the catalog's
+    # admission criterion (a witnessed painful specimen) was met, but genericity was not, and the
+    # critique's verdict is adopted wholesale (ledger row 1722). See git history for the retired
+    # entry's full prior text if it is ever wanted back for an internal-only surface.
+    #
+    # 7. Mined, this repo's ledger: doc currency at the seam. REWRITTEN per the genericity
+    # critique (row 1722, entry #7: GENERALIZABLE -- the prior text's "orchlog.d note for a
+    # capability" clause named a project-specific artifact with no gloss). `why` kept as banked.
     DurableDecision(
         slug="doc-currency-at-the-seam",
-        rule="Every merge that adds or changes operator-facing behavior carries its "
-             "documentation pass (affected user-guide pages, an orchlog.d note for a "
-             "capability, README enumerations) in the SAME work item or a follow-up dispatched "
-             "BEFORE the merge row is written; the merge row names the doc commit or the named "
-             "deferral with reason. A merge row silent on docs for a behavior change is itself "
-             "a violation of this rule.",
+        rule="Every merge that changes user-facing behavior includes its documentation update "
+             "(or a named, tracked deferral with a reason) in the same unit of work. A merge "
+             "silent on docs for a behavior change is itself a defect.",
         why="ledger row 1699 (this repo, maintainer-directed 2026-07-19): 'we need durable "
             "decisions so to reduce the vigilance burden of remembering after new features have "
             "been added' -- precedent: the 2026-07-18 Block D merge landed undocumented and "
-            "needed a dedicated catch-up pass (rows 1652-1661 vs 1667).",
+            "needed a dedicated catch-up pass (rows 1652-1661 vs 1667); rule text rewritten per "
+            "row 1722's genericity critique, entry #7.",
         hydrates=(
             "Durable decision adopted at world birth (doc-currency-at-the-seam, catalog "
-            "tools/setup_tui/durable_decisions.py, why: ledger row 1699): every merge that "
-            "changes operator-facing behavior carries its documentation pass in the same work "
-            "item or a named-deferral follow-up before the merge row is written."
+            "tools/setup_tui/durable_decisions.py, why: ledger rows 1699/1722): every merge "
+            "that changes user-facing behavior includes its documentation update, or a named, "
+            "tracked deferral with a reason, in the same unit of work; a merge silent on docs "
+            "for a behavior change is itself a defect."
         ),
         claude_md=(
-            "- **Doc currency at the seam** -- every merge that adds or changes operator-facing "
-            "behavior carries its documentation pass (user-guide pages, orchlog.d note, README "
-            "enumerations) in the same work item, or a named deferral with reason (ledger row "
-            "1699)."
+            "- **Doc currency at the seam** -- every merge that changes user-facing behavior "
+            "includes its documentation update (or a named, tracked deferral with a reason) in "
+            "the same unit of work. A merge silent on docs for a behavior change is itself a "
+            "defect (ledger row 1699)."
         ),
     ),
     # 8. Mined, this repo's ledger: concurrent builders need isolation.
@@ -306,29 +313,32 @@ CATALOG: list[DurableDecision] = [
             "builder's commit, making a census gate falsely RED)."
         ),
     ),
-    # 9. Mined, this repo's ledger/CLAUDE.md: runs are strictly linear.
+    # 9. Mined, this repo's ledger/CLAUDE.md: runs are strictly linear. REWRITTEN per the
+    # genericity critique (row 1722, entry #9: GENERALIZABLE -- generic content, bespoke
+    # vocabulary: "run"/"world"/"birth chain" used with no inline gloss). `why` kept as banked.
     DurableDecision(
         slug="runs-are-strictly-linear",
-        rule="A run M > N means run N's world is dust and settled: read-only evidence, never "
-             "patched, never refreshed, never delta'd. Never propose delta-apply/refresh "
-             "against an existing world; a delta reaches reality only by entering the next "
-             "world's birth chain.",
+        rule="Once a deployment's evidence is recorded, treat it as immutable history -- never "
+             "patch, refresh, or apply deltas to it after the fact. A needed change is realized "
+             "only in the next deployment you create.",
         why="maintainer ruling 2026-07-11 (this repo's own CLAUDE.md, ORCHESTRATION section): "
             "the apply-to-existing-world clause and bootstrap/apply-delta.sh's typed-"
             "confirmation ceremony were retired after being witnessed producing cargo-cult "
             "sysadmin work; the run-2 world was itself broken at birth by an unscripted "
-            "scaffold-to-/tmp + hand-mv gap.",
+            "scaffold-to-/tmp + hand-mv gap; rule text rewritten per row 1722's genericity "
+            "critique, entry #9.",
         hydrates=(
             "Durable decision adopted at world birth (runs-are-strictly-linear, catalog "
-            "tools/setup_tui/durable_decisions.py, why: maintainer ruling 2026-07-11, this "
-            "repo's CLAUDE.md ORCHESTRATION section; the run-2 world-broken-at-birth incident): "
-            "runs are strictly linear -- an existing world's dust is never patched, refreshed, "
-            "or delta'd; a delta reaches reality only via the next world's birth chain."
+            "tools/setup_tui/durable_decisions.py, why: maintainer ruling 2026-07-11 + ledger "
+            "row 1722): once a deployment's evidence is recorded, treat it as immutable history "
+            "-- never patch, refresh, or apply deltas to it after the fact; a needed change is "
+            "realized only in the next deployment you create."
         ),
         claude_md=(
-            "- **Runs are strictly linear** -- a run M > N means run N's world is dust and "
-            "settled: read-only evidence, never patched, never refreshed, never delta'd. Never "
-            "propose applying a delta to an existing world (maintainer ruling 2026-07-11)."
+            "- **Deployments are immutable history once recorded** -- once a deployment's "
+            "evidence is recorded, treat it as immutable history: never patch, refresh, or "
+            "apply deltas to it after the fact. A needed change is realized only in the next "
+            "deployment you create (maintainer ruling 2026-07-11)."
         ),
     ),
     # 10. Mined, autoharn-panel LIVE deployment CLAUDE.md point 1: decomposition granularity.
@@ -361,6 +371,106 @@ CATALOG: list[DurableDecision] = [
             "alone and know what to build and how to tell it's done? (autoharn-panel prior art, "
             "CLAUDE.md point 1: too fine adds ledger ceremony with no resumability gain, run10; "
             "too coarse hides a seam a successor could have picked up separately, run-8.)"
+        ),
+    ),
+    # 11-13. WIRED per the genericity critique's own closing judgment (row 1722, design/
+    # SONNET-CATALOG-GENERICITY-CRITIQUE-2026-07-19.md): three candidates the critique flagged as
+    # more portable than several entries that DID make the original cut, written in generic
+    # voice from the start (never mined-then-translated).
+    #
+    # 11. The critique's own top pick ("conspicuously missing... the single most generic, most
+    # load-bearing durable decision the harness embodies"): the WITNESSED/REFUSED-AS-EXPECTED/
+    # UNEXERCISED claims taxonomy, already project-agnostic in this repo's own CLAUDE.md.
+    DurableDecision(
+        slug="claims-carry-witnesses",
+        rule="Every claim in a report states its evidentiary status per item: WITNESSED (with "
+             "the observed output), REFUSED-AS-EXPECTED (a refusal that was the correct "
+             "outcome), or UNEXERCISED (with the concrete blocker that stopped you). Docs follow "
+             "the same rule -- an example carries real output or an UNWITNESSED mark. No "
+             "umbrella claims covering multiple items at once.",
+        why="this repo's own CLAUDE.md ORCHESTRATION section (already written project-"
+            "agnostically, no translation needed): 'Claims carry witnesses. A report states, "
+            "per item: WITNESSED (with observed output), REFUSED-AS-EXPECTED, or UNEXERCISED "
+            "with the concrete blocker. Docs follow the same rule (an example carries real "
+            "output or an UNWITNESSED mark). No umbrella claims.' Wired per row 1722's "
+            "genericity critique, which named this taxonomy the catalog's most conspicuous gap.",
+        hydrates=(
+            "Durable decision adopted at world birth (claims-carry-witnesses, catalog "
+            "tools/setup_tui/durable_decisions.py, why: this repo's own CLAUDE.md ORCHESTRATION "
+            "section + ledger row 1722): every claim in a report states its evidentiary status "
+            "per item -- WITNESSED (observed output), REFUSED-AS-EXPECTED, or UNEXERCISED (the "
+            "concrete blocker); docs follow the same rule; no umbrella claims."
+        ),
+        claude_md=(
+            "- **Claims carry witnesses** -- every claim in a report states its evidentiary "
+            "status per item: WITNESSED (with the observed output), REFUSED-AS-EXPECTED (a "
+            "refusal that was the correct outcome), or UNEXERCISED (with the concrete blocker). "
+            "Docs follow the same rule -- an example carries real output or an UNWITNESSED "
+            "mark. No umbrella claims covering multiple items at once."
+        ),
+    ),
+    # 12. Anti-anchoring-bias principle for how a review prompt is written.
+    DurableDecision(
+        slug="unanchored-review-briefs",
+        rule="A review brief hands the reviewer the artifact, the spec, the law, and a refute "
+             "posture -- never a pre-identified list of suspected defects. A reviewer told "
+             "where to look is confirming a hypothesis, not discovering one; the finding is "
+             "only as independent as the brief that produced it.",
+        why="ledger row 1278 (this repo): 's37 verdict round dispatched UNANCHORED per row "
+            "1276's standing rule: a FRESH reviewer instance..., given the cumulative diff, the "
+            "spec, the LAW, and the refute posture; no suspect lists from anyone.' Flagged by "
+            "row 1722's genericity critique as more portable than several entries that made the "
+            "original cut.",
+        hydrates=(
+            "Durable decision adopted at world birth (unanchored-review-briefs, catalog "
+            "tools/setup_tui/durable_decisions.py, why: ledger row 1278): a review brief hands "
+            "the reviewer the artifact, the spec, the law, and a refute posture -- never a "
+            "pre-identified suspect list; a reviewer told where to look is confirming a "
+            "hypothesis, not discovering one."
+        ),
+        claude_md=(
+            "- **Unanchored review briefs** -- a review brief hands the reviewer the artifact, "
+            "the spec, the law, and a refute posture, never a pre-identified list of suspected "
+            "defects. A reviewer told where to look is confirming a hypothesis, not discovering "
+            "one; the finding is only as independent as the brief that produced it (ledger row "
+            "1278)."
+        ),
+    ),
+    # 13. Routine independent review for delegated work, mandatory for core/critical-path
+    # changes -- generalized from "kernel-touching" per the critique's own suggested
+    # substitution (a one-word swap from this project's specific tiering to a portable one).
+    DurableDecision(
+        slug="fresh-context-review-for-delegated-work",
+        rule="Delegated work gets a routine, fresh-context, independent review before "
+             "acceptance; a change touching the project's sensitive core or critical path makes "
+             "that review MANDATORY, not optional. The reviewer works from the ratified spec, "
+             "the diff, and the witness harness -- never the delegate's own self-report -- and "
+             "derives its own verdict from artifact-vs-spec, checking specifically for silent "
+             "narrowing, improvisation, or malicious compliance.",
+        why="ledger row 1492 (this repo, maintainer ruling 2026-07-19): 'all Sonnet builds "
+            "(especially those invading into the kernel) need... a review (also Sonnet)... "
+            "ADOPTED AS STANDING: every Sonnet build -- with kernel-touching builds mandatory, "
+            "others by default -- receives a FRESH-CONTEXT ADVERSARIAL REVIEW before acceptance "
+            "... the reviewer receives the ratified build basis, the commit diff, the banked "
+            "witness harness, and the LAW -- NEVER the builder's own report.' Generalized from "
+            "\"kernel-touching\" to \"the project's sensitive core or critical path\" per row "
+            "1722's genericity critique (a one-word-class substitution, not a content change).",
+        hydrates=(
+            "Durable decision adopted at world birth (fresh-context-review-for-delegated-work, "
+            "catalog tools/setup_tui/durable_decisions.py, why: ledger rows 1492/1722): "
+            "delegated work gets a routine, fresh-context, independent review before "
+            "acceptance; a change touching the project's sensitive core or critical path makes "
+            "that review MANDATORY; the reviewer works from the ratified spec, the diff, and "
+            "the witness harness, never the delegate's own self-report, checking for silent "
+            "narrowing, improvisation, or malicious compliance."
+        ),
+        claude_md=(
+            "- **Fresh-context review for delegated work** -- delegated work gets a routine, "
+            "fresh-context, independent review before acceptance; a change touching the "
+            "project's sensitive core or critical path makes that review MANDATORY, not "
+            "optional. The reviewer works from the ratified spec, the diff, and the witness "
+            "harness -- never the delegate's own self-report -- checking specifically for "
+            "silent narrowing, improvisation, or malicious compliance (ledger row 1492)."
         ),
     ),
 ]
