@@ -1,10 +1,11 @@
 # RED polarity: gates/link_integrity.py against a fixture doc with a dangling relative link.
-# Captured via seen-red/link-integrity/run_fixtures.py (RED case).
+# Captured via seen-red/link-integrity/run_fixtures.py (RED case), re-banked 2026-07-19
+# alongside the gitlink-awareness fix (work_opened worktree-submodule-link-integrity).
 
 link-integrity: 1 docs in scope (1 tracked *.md, 0 excluded), 1 relative link(s) checked.
   excluded (principled, see gates/link_integrity.py docstring):
-    judgment/**            — declared history (OPERATING-CARD.md)
-    design/ARCHITECTURE.md — self-declared STALE; rewrite filed in BACKLOG.md
+    judgment/**            — declared history (user-guide/ORCH-OPERATING-CARD.md)
+    vestigial_documentation/design/ORCH-ARCHITECTURE.md — self-declared STALE; rewrite filed in BACKLOG.md
 
 link-integrity: 1 broken link(s) — target does not exist on disk:
 

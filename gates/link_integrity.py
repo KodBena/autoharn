@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-11T14:37:38Z
-#   last-change: 2026-07-18T09:27:25Z
+#   last-change: 2026-07-19T01:58:01Z
 #   contributors: e4410ef6/main, 3c50e030/main, ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -60,7 +60,29 @@ would still need a human's eyes (this gate cannot distinguish "not installed yet
 the filename" for an untracked path), so the honest move is informational, not silent
 exclusion.
 
-Exit 0 clean (broken-path violations only); exit 1 listing every one. Default target is THIS
+UNINITIALIZED SUBMODULES (found reproducing work_opened `worktree-submodule-link-integrity`,
+2026-07-19): a fresh `git worktree add` does NOT populate this repo's gitlink submodules
+(`tools/makespan-scheduler`, `tools/autoharn-panel`) -- the directory exists (git creates the
+placeholder) but is empty, a VALID git state, not a defect in the branch. A link resolving to a
+path *inside* an unpopulated submodule (e.g. `tools/makespan-scheduler/README.md`) genuinely
+cannot be verified in that state -- this gate's contract (does the target resolve on disk) has
+no way to distinguish "not populated yet" from "typo'd the filename" for content the checkout
+does not have. Per law/adr/0012 P1 (derive a fact from its one authoritative source, never a
+disk-shape heuristic): submodule-populated-or-not is authoritatively `git submodule status`
+(a `-`-prefixed line names an uninitialized path), queried once via `uninitialized_submodules()`
+below -- NOT inferred from directory emptiness. Unlike `/local/` (permanently, deliberately
+untracked by convention -- informational forever), a submodule is SUPPOSED to be populated in a
+normal working checkout; this is a fixable, transient gap, so the honest move is to REFUSE with
+one teaching line (how to populate), not to silently downgrade to informational-only and let a
+real future typo inside the submodule slip past unverified. A link into an uninitialized
+submodule is therefore reported in its OWN section (never merged into the `broken` wall, never
+silently dropped) and, if any such link exists, the gate exits 1 with ONE teaching block --
+never a per-link wall of false errors. Once the submodule is populated, `git submodule status`
+drops the `-` prefix and a genuinely broken link inside it is caught by the normal `broken` path
+exactly as before.
+
+Exit 0 clean (broken-path violations only, none into an uninitialized submodule); exit 1 listing
+every broken link and/or the single uninitialized-submodule teaching block. Default target is THIS
 checkout (autoharn) regardless of caller's cwd -- ROOT is derived from this file's own location,
 not os.getcwd(), so running the script from inside a different repo does NOT check that repo's
 docs (a real, dated gap: an adopting project running this script unmodified got a false "clean"
@@ -120,6 +142,37 @@ def in_scope(rel: str) -> bool:
     if rel in EXCLUDE_FILES:
         return False
     return not any(rel.startswith(p) for p in EXCLUDE_DIR_PREFIXES)
+
+
+def uninitialized_submodules() -> set[str]:
+    """Repo-relative paths of every registered submodule not yet populated. `git submodule
+    status` is the ONE authoritative source for this fact (ADR-0012 P1: derive-don't-duplicate
+    — never infer "populated?" from directory emptiness, a disk-shape heuristic with no
+    connection to git's own bookkeeping): a `-`-prefixed status line names an uninitialized
+    submodule; ` `/`+` mean populated (clean/dirty). Returns an empty set (nothing to flag) for
+    a repo with no `.gitmodules` at all — `git submodule status` then exits nonzero or prints
+    nothing, either way there is no gitlink to reason about."""
+    r = subprocess.run(["git", "-C", ROOT, "submodule", "status"],
+                        capture_output=True, text=True)
+    if r.returncode != 0:
+        return set()
+    paths = set()
+    for line in r.stdout.splitlines():
+        if line.startswith('-'):
+            parts = line[1:].split()
+            if len(parts) >= 2:
+                paths.add(parts[1])
+    return paths
+
+
+def under_submodule(rel_to_root: str, submodule_paths: set[str]) -> str | None:
+    """Return the submodule path that `rel_to_root` resolves inside (itself or a descendant),
+    or None. `os.path.relpath`-normalized paths only (no trailing slash), so the containment
+    check is a prefix-plus-separator match."""
+    for sm in submodule_paths:
+        if rel_to_root == sm or rel_to_root.startswith(sm + os.sep):
+            return sm
+    return None
 
 
 def strip_fences(text: str) -> str:
@@ -194,10 +247,12 @@ def main() -> int:
     all_tracked = tracked_md()
     scope = [f for f in all_tracked if in_scope(f)]
     excluded = [f for f in all_tracked if not in_scope(f)]
+    uninit_submodules = uninitialized_submodules()
 
     broken: list[tuple[str, int, str]] = []      # (rel, line, target)
     anchor_flags: list[tuple[str, int, str]] = []  # (rel, line, target) — informational only
     local_flags: list[tuple[str, int, str]] = []   # (rel, line, target) — gitignored /local/, informational only
+    submodule_flags: list[tuple[str, int, str, str]] = []  # (rel, line, target, submodule_path) — refuses, teaches
     total_links = 0
 
     for rel in scope:
@@ -214,8 +269,11 @@ def main() -> int:
                 resolved = resolve(path, path_part)
                 if not os.path.exists(resolved):
                     rel_to_root = os.path.relpath(resolved, ROOT)
+                    sm = under_submodule(rel_to_root, uninit_submodules)
                     if rel_to_root == "local" or rel_to_root.startswith("local" + os.sep):
                         local_flags.append((rel, ln, m.group(1)))
+                    elif sm is not None:
+                        submodule_flags.append((rel, ln, m.group(1), sm))
                     else:
                         broken.append((rel, ln, m.group(1)))
                 elif anchor and os.path.isfile(resolved) and resolved.endswith('.md'):
@@ -245,10 +303,21 @@ def main() -> int:
         if len(local_flags) > 10:
             print(f"    ... +{len(local_flags) - 10} more")
 
+    if submodule_flags:
+        submods = sorted({sm for _, _, _, sm in submodule_flags})
+        print(f"\nlink-integrity: {len(submodule_flags)} link(s) point into uninitialized "
+              f"submodule(s) {', '.join(submods)} -- this checkout has the gitlink but not its "
+              f"content (a fresh `git worktree add` does not populate submodules), so these "
+              f"targets cannot be verified. Populate and re-run:\n"
+              f"    git submodule update --init --recursive")
+
     if broken:
         print(f"\nlink-integrity: {len(broken)} broken link(s) — target does not exist on disk:\n")
         for rel, ln, target in broken:
             print(f"  !! {rel}:{ln}  {target}")
+        return 1
+
+    if submodule_flags:
         return 1
 
     print(f"\nlink-integrity: clean ✓")

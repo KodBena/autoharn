@@ -1,0 +1,34 @@
+# RED polarity (gitlink-awareness fix): gates/link_integrity.py against a fixture doc with a
+# link into a path `uninitialized_submodules()` reports as an uninitialized submodule, target
+# absent. Must REFUSE with the ONE teaching block, never leak into the `broken` wall.
+# Captured via seen-red/link-integrity/run_fixtures.py (SUBMODULE-UNINIT case), 2026-07-19,
+# work_opened worktree-submodule-link-integrity.
+
+link-integrity: 1 docs in scope (1 tracked *.md, 0 excluded), 1 relative link(s) checked.
+  excluded (principled, see gates/link_integrity.py docstring):
+    judgment/**            — declared history (user-guide/ORCH-OPERATING-CARD.md)
+    vestigial_documentation/design/ORCH-ARCHITECTURE.md — self-declared STALE; rewrite filed in BACKLOG.md
+
+link-integrity: 1 link(s) point into uninitialized submodule(s) <submod> -- this checkout has the
+gitlink but not its content (a fresh `git worktree add` does not populate submodules), so these
+targets cannot be verified. Populate and re-run:
+    git submodule update --init --recursive
+# link-integrity SUBMODULE-UNINIT: exit=1 (expect 1, teaching block only)
+
+---
+
+# Corroborating REAL reproduction (not a fixture) -- fresh `git worktree add` against a scratch
+# branch off main, no submodule init, gate run against the real tracked corpus:
+#
+# link-integrity: 375 docs in scope (392 tracked *.md, 17 excluded), 3278 relative link(s) checked.
+#   [... anchor / /local/ sections unchanged ...]
+#
+# link-integrity: 2 link(s) point into uninitialized submodule(s) tools/makespan-scheduler --
+# this checkout has the gitlink but not its content (a fresh `git worktree add` does not
+# populate submodules), so these targets cannot be verified. Populate and re-run:
+#     git submodule update --init --recursive
+# EXIT: 1
+#
+# (design/ORCH-MAKESPAN-SCHEDULING-GUARANTEE.md:40 and user-guide/USER-RECIPES-FAQ.md:123, both
+# linking to ../tools/makespan-scheduler/README.md -- content that genuinely exists once the
+# submodule is populated, but is legitimately absent from an unpopulated fresh worktree.)
