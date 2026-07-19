@@ -33,10 +33,18 @@ and ~/w/vdc/venvs/generic/bin/python (the same venv tools/setup_tui/screens.py's
 screen_boundary hardcodes) -- absent either, the fixture prints UNEXERCISED and exits 0 rather
 than failing the build on missing optional local infra; this run had both.
 
+design/FABLE-SETUP-TUI-SIGNED-GENESIS-SPEC.md (commission ledger rows 1724/1725) inserted a new
+"Signed genesis" screen between Birth and Boundary; `answers_a`/`answers_b` each gained one
+trailing "n" (declining the ceremony) at exactly that point in the flow -- a mechanical
+re-alignment of both scripted answer sequences, re-verified by the re-run below, which reproduces
+the SAME file count (39), max ledger-row id (8), and argv-line count (7) the pre-signed-genesis
+capture already banked -- the new screen adds no filesystem/ledger act of its own when declined
+(SKIPPED, per its own checklist row), exactly as the "Signed genesis" spec's own §1 promises.
+
 Real captured stdout, 2026-07-19, a clean run against this commit's tree (zero residue verified
 by teardown-world.sh's own check AND by a direct pg_namespace/pg_roles/process-table sweep after
 the run, exit 0):
 
-WDR1 ok: --dry-run rehydration against a REAL destination with a REAL, connected led (/tmp/setup-tui-dry-run-parity-1dyf2zdr/dest_a) left the filesystem byte-identical (39 files checked) and the ledger row count unchanged (max id 8 before and after)
+WDR1 ok: --dry-run rehydration against a REAL destination with a REAL, connected led (/tmp/setup-tui-dry-run-parity-b6klugcw/dest_a) left the filesystem byte-identical (39 files checked) and the ledger row count unchanged (max id 8 before and after)
 WDR2 ok: the --dry-run WOULD-DO argv list (7 commands) is byte-identical, order included, to the real scratch run's own argv list (same pinned world/dest/host/db, live run torn down with zero residue before the dry rerun)
 ALL CASES OK -- setup_tui --dry-run WDR1 (byte-identical filesystem + zero new ledger rows against a real, led-connected destination) and WDR2 (argv parity vs a real scratch run), zero residue

@@ -26,7 +26,7 @@ applying it is always the operator's own act); no teardown flows beyond the rehe
 writes nothing to any ledger except through `led`; writes nothing anywhere except the target
 directory and its own saved checklist.
 
-`--dry-run` (2026-07-19 amendment, ledger row 1719): the SAME nine screens, but no destructive
+`--dry-run` (2026-07-19 amendment, ledger row 1719): the SAME ten screens, but no destructive
 or externally visible act -- `tools/setup_tui/runner.py`'s three act-execution choke points
 (`run_command`, `start_background`, `write_file`) and `checklist.status_for`/`Checklist.save`
 are the only places `state["dry_run"]` is consulted; every screen still computes and shows its
