@@ -1,12 +1,15 @@
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-18T21:34:05Z
-#   last-change: 2026-07-19T01:42:59Z
+#   last-change: 2026-07-19T02:41:14Z
 #   contributors: ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
-"""tools/setup_tui/screens.py -- the ten screens (design/FABLE-SETUP-TUI-SPEC.md "The flow" +
+"""tools/setup_tui/screens.py -- the eleven screens (design/FABLE-SETUP-TUI-SPEC.md "The flow" +
+design/FABLE-SETUP-TUI-PRINCIPALS-AUTHORITY-SPEC.md's own "Principals & authority" screen,
+inserted between Birth and Signed genesis, commission ledger row 1727 +
 design/FABLE-SETUP-TUI-SIGNED-GENESIS-SPEC.md's own "Signed genesis" screen, inserted between
-Birth and Boundary, commission ledger rows 1724/1725), in order. Each screen function takes
+Principals & authority and Boundary, commission ledger rows 1724/1725), in order. Each screen
+function takes
 `(ui, cl, state)` (Ui backend, Checklist, mutable dict of flow state carried between screens) and
 returns the same `state` dict, mutated. Every screen is individually skippable -- the skip itself
 is recorded on the checklist (spec: "every screen skippable with the skip recorded").
@@ -47,7 +50,8 @@ import time
 from pathlib import Path
 
 from tools.setup_tui import checklist as ck
-from tools.setup_tui import durable_decisions, feature_facts, pghba, probes, signed_genesis
+from tools.setup_tui import durable_decisions, feature_facts, governed_files, pghba, probes
+from tools.setup_tui import principals_authority, signed_genesis
 from tools.setup_tui.runner import run_command, start_background, summarize_content, write_file
 from tools.setup_tui.ui import ScriptedUi
 
@@ -91,7 +95,7 @@ def _dry_skip_or(ui, cl, state, screen: str, item: str, verify) -> None:
 # ---------------------------------------------------------------------------------------------
 
 def screen_preflight(ui, cl, state):
-    ui.banner("1/10 Preflight")
+    ui.banner("1/11 Preflight")
     if ui.confirm("Run preflight checks?", default=True) is False:
         cl.add("preflight", "all checks", ck.SKIPPED, "operator skipped screen 1")
         return state
@@ -185,7 +189,7 @@ def screen_preflight(ui, cl, state):
 # ---------------------------------------------------------------------------------------------
 
 def screen_substrate(ui, cl, state):
-    ui.banner("2/10 Substrate")
+    ui.banner("2/11 Substrate")
     if not ui.confirm("Configure substrate now?", default=True):
         cl.add("substrate", "path chosen", ck.SKIPPED, "operator skipped screen 2")
         return state
@@ -308,8 +312,58 @@ def screen_substrate(ui, cl, state):
 # Screen 3: Fork/target
 # ---------------------------------------------------------------------------------------------
 
+def _governed_files_step(ui, cl, state, dest: str) -> None:
+    """The governed-files exposure amendment (design/FABLE-SETUP-TUI-SPEC.md 2026-07-19,
+    commission ledger row 1730): surfaces the class-keyed pattern set
+    `hooks/pretooluse_change_gate.py` governs by (F33) -- shows the default, the teaching line
+    (the witnessed autoharn-panel .py-only specimen), and asks the operator to confirm or extend
+    for the languages their project actually contains. Extensions are validated to a closed
+    alphabet BEFORE the choice is recorded (witness (b): refused before any write anywhere).
+
+    ONE WRITER (governed_files.py's own module docstring, the corrected design): this function
+    records the CHOICE on `state["governed_patterns"]` and shows a PREVIEW of the eventual file
+    content -- it never opens `<dest>/.claude/governed_files.json` itself. `screen_birth` and
+    `screen_boundary` are the two `new-project.sh` call sites that actually own that path (every
+    invocation rewrites the full `.claude/` wiring unconditionally); both thread
+    `state["governed_patterns"]` into their own `--governed` flag, so the file is written once,
+    by the same script that owns every other byte of `.claude/`, never raced. Called from BOTH of
+    screen_fork_target's exit paths (fresh and fork-copy) -- unlike the file write, the CHOICE
+    itself needs no live destination, so this function no longer branches on whether `dest`
+    exists yet."""
+    _show_facts(ui, "fork_target_governed_files")
+    ui.say("  " + governed_files.TEACHING_LINE)
+    ui.say(f"  default pattern set: {governed_files.DEFAULT_PATTERNS}")
+    extend = ui.confirm("Extend the governed-files pattern set beyond the default (*.py) for "
+                         "the other languages this project contains?", default=False)
+    if not extend:
+        patterns, hostile = governed_files.DEFAULT_PATTERNS, []
+        cl.add("fork-target", "governed-files pattern set chosen", ck.WITNESSED,
+               f"kept default (operator declined to extend): {patterns}")
+    else:
+        raw = ui.ask_text("Extensions to add, comma-separated (e.g. .ts,.vue,.html)")
+        patterns, hostile = governed_files.build_pattern_set(raw)
+        if hostile:
+            ui.say(f"  REFUSED: extension token(s) {hostile} contain characters outside "
+                   f"'.' + [A-Za-z0-9] -- refusing to splice into the --governed argv (law/"
+                   f"adr/0012's interpreter-boundary rule). Falling back to the default set; "
+                   f"nothing recorded beyond it.")
+            cl.add("fork-target", "governed-files pattern set chosen", ck.REFUSED,
+                   f"hostile token(s) {hostile}; reverted to default {patterns}")
+        else:
+            cl.add("fork-target", "governed-files pattern set chosen", ck.WITNESSED,
+                   f"extended: {patterns}")
+    state["governed_patterns"] = patterns
+
+    path = governed_files.governed_files_path(dest)
+    preview = json.dumps({"patterns": patterns}, indent=2) + "\n"
+    ui.say(f"  --- PREVIEW: {path} (written by new-project.sh --governed at birth, and again "
+           f"at any later scaffold re-run this flow performs -- never by this screen directly) "
+           f"---")
+    ui.say("  " + preview.replace("\n", "\n  "))
+
+
 def screen_fork_target(ui, cl, state):
-    ui.banner("3/10 Fork/target")
+    ui.banner("3/11 Fork/target")
     if not ui.confirm("Choose destination now?", default=True):
         cl.add("fork-target", "destination", ck.SKIPPED, "operator skipped screen 3")
         return state
@@ -334,6 +388,7 @@ def screen_fork_target(ui, cl, state):
             return state
         state["dest"] = dest
         cl.add("fork-target", "destination", ck.WITNESSED, f"fresh dir: {dest}")
+        _governed_files_step(ui, cl, state, dest)
         return state
 
     src = ui.ask_text("Existing project directory to fork-copy")
@@ -387,6 +442,7 @@ def screen_fork_target(ui, cl, state):
                "fork source had no CLAUDE.md to preserve")
 
     state["dest"] = str(dest_path)
+    _governed_files_step(ui, cl, state, str(dest_path))
     return state
 
 
@@ -411,7 +467,7 @@ def _teardown_argv(world, db, host, extra=None):
 
 
 def screen_rehearsal(ui, cl, state):
-    ui.banner("4/10 Rehearsal")
+    ui.banner("4/11 Rehearsal")
     if not ui.confirm("Run rehearsal (scratch birth + teardown + zero-residue check)?",
                        default=True):
         cl.add("rehearsal", "rehearsal", ck.SKIPPED, "operator skipped screen 4")
@@ -472,7 +528,7 @@ def screen_rehearsal(ui, cl, state):
 # ---------------------------------------------------------------------------------------------
 
 def screen_birth(ui, cl, state):
-    ui.banner("5/10 Birth")
+    ui.banner("5/11 Birth")
     if not state.get("rehearsal_green"):
         ui.say("  REFUSED: rehearsal did not report GREEN (or was skipped) -- the real birth "
                "is gated on rehearsal green (spec screen 4: 'the real birth is gated on "
@@ -494,7 +550,17 @@ def screen_birth(ui, cl, state):
     dest = state.get("dest") or ui.ask_text("Destination directory")
     name = ui.ask_text("Project name (deployment.json 'name')", default=world)
 
-    argv = _new_project_argv(dest, world, db, host, extra=["--name", name])
+    # Threading the governed-files CHOICE screen 3 recorded (governed_files.py's own module
+    # docstring, the corrected single-writer design): `new-project.sh` is the one script that
+    # actually writes `.claude/governed_files.json`, on every invocation, unconditionally --
+    # `--governed` is ITS own sanctioned flag for steering that write. Omitted (no screen 3
+    # choice in this run, e.g. an out-of-sequence `--start-at birth`) means new-project.sh falls
+    # back to its own bare *.py default with its own loud notice -- the same honest fallback
+    # this flag already provides, never re-implemented here.
+    extra = ["--name", name]
+    if state.get("governed_patterns"):
+        extra += ["--governed", governed_files.governed_flag_value(state["governed_patterns"])]
+    argv = _new_project_argv(dest, world, db, host, extra=extra)
     res = run_command(argv, dry_run=state.get("dry_run", False))
     ok = res.ok
     cl.add("birth", "world birth", ck.status_for(res),
@@ -541,7 +607,178 @@ def screen_birth(ui, cl, state):
 
 
 # ---------------------------------------------------------------------------------------------
-# Screen 6: Signed genesis (design/FABLE-SETUP-TUI-SIGNED-GENESIS-SPEC.md, commission ledger
+# Screen 6: Principals & authority (design/FABLE-SETUP-TUI-PRINCIPALS-AUTHORITY-SPEC.md,
+# commission ledger row 1727) -- sits BETWEEN Birth and Signed genesis (so the genesis bequeathal
+# can name authority just constituted here). ON BY DEFAULT (confirm default=True), one recorded
+# keypress to skip, never nagged again this run -- same benign-and-skippable test the genesis
+# screen uses (every world already carries author/reviewer/commissioner). Driven from
+# tools/setup_tui/principals_authority.py (this module's own signed_genesis.py-style split):
+# every led act below goes through that module's functions, which themselves go through
+# runner.run_command -- rule 1 and the --dry-run choke point stay structural properties. The
+# propaedeutic discipline (spec §2) is BINDING: every act renders (a) the one-line lesson, (b)
+# the exact `led` command (run_command's own echo), (c) the real streamed output, (d) the
+# checklist entry -- lesson text lives in tools/setup_tui/principals_authority.py, ONE home.
+# ---------------------------------------------------------------------------------------------
+
+def screen_principals_authority(ui, cl, state):
+    ui.banner("6/11 Principals & authority")
+    _show_facts(ui, "principals_authority")
+    if not ui.confirm(
+        "Constitute principals & authority now? (register identities, grant competences, "
+        "assert typed relations, and register role charters -- every world already has "
+        "author/reviewer/commissioner from the scaffold, so skipping leaves a complete world; "
+        "propaedeutic value is the point of walking it once)", default=True,
+    ):
+        cl.add("principals-authority", "screen", ck.SKIPPED,
+               "operator skipped (declared-not-silent default=yes) -- legitimate and legible")
+        return state
+
+    dry_run = state.get("dry_run", False)
+    dest = state.get("dest") or ui.ask_text("Destination directory (the born world)")
+    state["dest"] = dest
+
+    # Out-of-sequence-entry amendment (design/FABLE-SETUP-TUI-SPEC.md 2026-07-19): validate
+    # destination, ./led presence (legacy/led -- module docstring: the boundary is not
+    # configured yet at this point in the flow), and lineage-head readability BEFORE offering
+    # anything (spec §3). Same dest_would_exist trust pattern screen_signed_genesis/
+    # screen_boundary already carry for a NORMAL-sequence dry run.
+    if not os.path.isdir(dest):
+        if dry_run and state.get("dest_would_exist"):
+            cl.add("principals-authority", "destination exists", ck.DRY_SKIPPED,
+                   f"'{dest}' would exist (created earlier in this dry run) -- not "
+                   f"independently checkable read-only, recorded honestly rather than faked")
+            cl.add("principals-authority", "legacy/led present", ck.DRY_SKIPPED,
+                   "trusted along with the destination above -- always scaffolded by birth")
+            cl.add("principals-authority", "world readable (lineage-head check)", ck.DRY_SKIPPED,
+                   "no live world to read under a simulated destination")
+            return state
+        ui.say(f"  REFUSED: destination directory '{dest}' does not exist -- nothing to "
+               f"constitute against. Run a birth first (or check the path), then retry this "
+               f"screen.")
+        cl.add("principals-authority", "destination exists", ck.REFUSED, f"'{dest}' not a directory")
+        return state
+
+    legacy_led = os.path.join(dest, "legacy", "led")
+    if not os.path.isfile(legacy_led):
+        ui.say(f"  REFUSED: no {legacy_led} -- this screen drives this world's own direct-psql "
+               f"recovery shim (the boundary is not configured yet at this point in the flow, "
+               f"the same reason the Signed genesis screen uses it). This does not look like a "
+               f"world this project's own scaffold produced. Nothing done.")
+        cl.add("principals-authority", "legacy/led present", ck.REFUSED, f"missing: {legacy_led}")
+        return state
+    cl.add("principals-authority", "legacy/led present", ck.WITNESSED, legacy_led)
+
+    try:
+        existing = principals_authority.list_principals(dest)
+    except Exception as exc:  # noqa: BLE001 -- a read-only probe; report, never crash the flow
+        ui.say(f"  REFUSED: could not read this world's own principal_standing_current view "
+               f"({exc}) -- lineage-head readability check failed. Nothing offered.")
+        cl.add("principals-authority", "world readable (lineage-head check)", ck.REFUSED, str(exc))
+        return state
+    cl.add("principals-authority", "world readable (lineage-head check)", ck.WITNESSED,
+           f"{len(existing)} principal(s) found")
+
+    # The scaffold's own base, shown first (spec §1 item 1: "the screen first SHOWS the three
+    # principals the scaffold already registered ... so the operator constitutes on top of a
+    # visible base, not a mystery"). Read from the world's OWN view -- never re-derived.
+    ui.say(f"  existing principals ({len(existing)}), from {dest}'s own principal_standing_"
+           f"current view:")
+    for p in existing:
+        ui.say(f"    id={p['id']:<4} name={p['name']:<14} class={p['agent_class']:<9} "
+               f"standing={p['standing']:<9} purpose={p.get('purpose') or '(none recorded)'}")
+    cl.add("principals-authority", "existing principals shown", ck.WITNESSED,
+           ", ".join(f"{p['name']}({p['agent_class']})" for p in existing) or "(none)")
+
+    # --- item 1: register principals ---------------------------------------------------------
+    while ui.confirm("Register a principal now?", default=False):
+        ui.say("  " + principals_authority.LESSON_REGISTER)
+        name = ui.ask_text("Principal name")
+        agent_class = ui.ask_choice("Class (kernel/lineage/s40-schema.sql agent_class CHECK)",
+                                     principals_authority.CLASS_CHOICES)
+        purpose = ui.ask_text("Stated purpose (mandatory -- AC-2's 'account with a stated "
+                               "purpose')")
+        res, row_id = principals_authority.register_principal(dest, name, agent_class, purpose,
+                                                                dry_run=dry_run)
+        detail = f"row {row_id}" if row_id is not None else (
+            "would write" if dry_run else res.output.strip()[-300:])
+        cl.add("principals-authority", f"register principal '{name}'", ck.status_for(res), detail)
+        if not res.ok and not dry_run:
+            ui.say(f"  {res.output.strip().splitlines()[-1] if res.output.strip() else '(no output)'}")
+
+    # --- item 2: authority bindings (s41 vocabulary, worlds at s41+) -------------------------
+    available, reason = principals_authority.s41_status(dest)
+    if not available:
+        ui.say(f"  authority bindings section UNAVAILABLE: {reason}")
+        cl.add("principals-authority", "authority bindings (s41)", ck.SKIPPED, reason)
+    else:
+        cl.add("principals-authority", "authority bindings (s41) available", ck.WITNESSED, reason)
+        while ui.confirm("Grant a competence now?", default=False):
+            ui.say("  " + principals_authority.LESSON_COMPETENCE)
+            name = ui.ask_text("Principal name (must already be registered)")
+            activity = ui.ask_text("Activity")
+            band = ui.ask_text("Band")
+            basis = ui.ask_text("Basis")
+            res, row_id = principals_authority.grant_competence(dest, name, activity, band,
+                                                                  basis, dry_run=dry_run)
+            detail = f"row {row_id}" if row_id is not None else (
+                "would write" if dry_run else res.output.strip()[-300:])
+            cl.add("principals-authority", f"grant competence '{activity}' to '{name}'",
+                   ck.status_for(res), detail)
+
+        while ui.confirm("Add a typed relation now?", default=False):
+            ui.say("  " + principals_authority.LESSON_RELATION)
+            subj = ui.ask_text("Subject principal name")
+            rel = ui.ask_choice("Relation (kernel/lineage/s41 principal_relation_check CHECK)",
+                                 principals_authority.RELATION_CHOICES)
+            obj = ui.ask_text("Object principal name")
+            res, row_id = principals_authority.relate(dest, subj, rel, obj, dry_run=dry_run)
+            detail = f"row {row_id}" if row_id is not None else (
+                "would write" if dry_run else res.output.strip()[-300:])
+            cl.add("principals-authority", f"relate '{subj}' {rel} '{obj}'",
+                   ck.status_for(res), detail)
+
+    # --- item 3: role charters, trap resolved -------------------------------------------------
+    while ui.confirm("Register a role charter now?", default=False):
+        ui.say("  " + principals_authority.LESSON_CHARTER)
+        role = ui.ask_text("Role name (must be a registered principal)")
+        path = ui.ask_text("Charter file path")
+        if not principals_authority.is_registered(dest, role):
+            ui.say(f"  '{role}' is not yet a registered principal -- the charter "
+                   f"pre-registration trap (spec WP3).")
+            if not ui.confirm(f"Register '{role}' now, in-flow, so the charter can proceed?",
+                               default=True):
+                manual = (f"{legacy_led} register-principal {role} <class> --purpose \"<why>\", "
+                          f"then retry this charter")
+                ui.say(f"  REFUSED: charter left unregistered -- manual command: {manual}")
+                cl.add("principals-authority", f"charter '{role}' (unregistered, declined)",
+                       ck.REFUSED, manual)
+                continue
+            agent_class = ui.ask_choice(f"Class for '{role}'",
+                                         principals_authority.CLASS_CHOICES)
+            purpose = ui.ask_text(f"Stated purpose for '{role}'")
+            reg_res, reg_row_id = principals_authority.register_principal(
+                dest, role, agent_class, purpose, dry_run=dry_run)
+            reg_detail = f"row {reg_row_id}" if reg_row_id is not None else (
+                "would write" if dry_run else reg_res.output.strip()[-300:])
+            cl.add("principals-authority", f"register principal '{role}' (in-flow, from charter)",
+                   ck.status_for(reg_res), reg_detail)
+            if not dry_run and not reg_res.ok:
+                cl.add("principals-authority", f"charter '{role}'", ck.REFUSED,
+                       "in-flow registration failed -- charter not attempted")
+                continue
+        res = principals_authority.charter_register(dest, role, path, dry_run=dry_run)
+        detail = ("would write" if dry_run else res.output.strip()[-300:])
+        cl.add("principals-authority", f"charter '{role}' <- {path}", ck.status_for(res), detail)
+
+    # --- item 4: the workflow on-ramp (pointer, not machinery) --------------------------------
+    ui.say("  " + principals_authority.LESSON_WORKFLOW_POINTER)
+    cl.add("principals-authority", "workflow on-ramp pointer", ck.WITNESSED,
+           "spec §1 item 4 -- checklist-only note, no mechanism added")
+    return state
+
+
+# ---------------------------------------------------------------------------------------------
+# Screen 7: Signed genesis (design/FABLE-SETUP-TUI-SIGNED-GENESIS-SPEC.md, commission ledger
 # rows 1724/1725) -- ON BY DEFAULT (confirm default=True), one recorded keypress to skip, never
 # nagged again this run. Driven from tools/setup_tui/signed_genesis.py (this module's own
 # pghba.py/probes.py split, applied to the new screen): every gpg/led act below goes through
@@ -550,7 +787,7 @@ def screen_birth(ui, cl, state):
 # ---------------------------------------------------------------------------------------------
 
 def screen_signed_genesis(ui, cl, state):
-    ui.banner("6/10 Signed genesis")
+    ui.banner("7/11 Signed genesis")
     _show_facts(ui, "signed_genesis")
     if not ui.confirm(
         "Run the Signed genesis ceremony now? (generates a keypair, exports the public half "
@@ -757,7 +994,7 @@ def screen_signed_genesis(ui, cl, state):
 # ---------------------------------------------------------------------------------------------
 
 def screen_boundary(ui, cl, state):
-    ui.banner("7/10 Boundary")
+    ui.banner("8/11 Boundary")
     _show_facts(ui, "boundary_service")
     # Gates on birth_ok EXACTLY as screen_birth gates on rehearsal_green above -- `not
     # state.get(...)` catches both an explicit False (birth ran and failed) and a missing key
@@ -892,6 +1129,15 @@ def screen_boundary(ui, cl, state):
             "--schema", schema, "--kern", kern, "--role", role,
             "--name", dep.get("name", world), "--force",
             "--boundary-url", boundary_url, "--boundary-deployment", world]
+    # This re-scaffold rewrites the SAME `.claude/` wiring `screen_birth` wrote, unconditionally
+    # -- governed_files.json included (governed_files.py's own module docstring: EVERY
+    # new-project.sh invocation this package makes owns that path). Re-threading the operator's
+    # screen-3 choice here is what keeps it from being silently clobbered back to the bare *.py
+    # default by this later call -- the exact hazard an out-of-frame review caught in this
+    # feature's first pass (a direct write at screen 3 that this same re-scaffold call raced and
+    # lost to).
+    if state.get("governed_patterns"):
+        argv += ["--governed", governed_files.governed_flag_value(state["governed_patterns"])]
     res = run_command(argv, dry_run=dry_run)
     ok = res.ok
     cl.add("boundary", "deployment.json boundary keys written", ck.status_for(res),
@@ -971,7 +1217,7 @@ def screen_boundary(ui, cl, state):
 # ---------------------------------------------------------------------------------------------
 
 def screen_observability(ui, cl, state):
-    ui.banner("8/10 Observability")
+    ui.banner("9/11 Observability")
     _show_facts(ui, "observability_otelcol", "observability_watchdog")
     if not ui.confirm("Show observability blocks?", default=True):
         cl.add("observability", "observability", ck.SKIPPED, "operator skipped screen 8")
@@ -1032,7 +1278,7 @@ def _run_decision(led: str, statement: str, dry_run: bool = False) -> tuple[str,
 
 
 def screen_hydration(ui, cl, state):
-    ui.banner("9/10 Hydration")
+    ui.banner("10/11 Hydration")
     if not ui.confirm("Run hydration now?", default=True):
         cl.add("hydration", "hydration", ck.SKIPPED, "operator skipped screen 9")
         return state
@@ -1151,7 +1397,7 @@ def screen_hydration(ui, cl, state):
 # ---------------------------------------------------------------------------------------------
 
 def screen_checklist(ui, cl, state):
-    ui.banner("10/10 Checklist")
+    ui.banner("11/11 Checklist")
     ui.say(cl.render())
     dry_run = state.get("dry_run", False)
     dest = state.get("dest")
@@ -1181,6 +1427,7 @@ SCREENS = [
     ("fork-target", screen_fork_target),
     ("rehearsal", screen_rehearsal),
     ("birth", screen_birth),
+    ("principals-authority", screen_principals_authority),
     ("signed-genesis", screen_signed_genesis),
     ("boundary", screen_boundary),
     ("observability", screen_observability),

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-18T23:35:54Z
-#   last-change: 2026-07-19T01:43:11Z
+#   last-change: 2026-07-19T02:14:35Z
 #   contributors: ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -130,6 +130,25 @@ REGISTRY: dict[str, FeatureFact] = {
                  "(tools/setup_tui/pghba.py, tools/setup_tui/screens.py screen_substrate's "
                  "PREPARED blocks); requires a live, network-reachable Postgres cluster the "
                  "operator administers.",
+    ),
+    "fork_target_governed_files": FeatureFact(
+        key="fork_target_governed_files", label="governed-files pattern exposure",
+        aspiration="F33 (governance keyed to WHAT THE THING IS, not an enumerated file list) -- "
+                    "house discipline, not an external standard "
+                    "(hooks/pretooluse_change_gate.py's own _load_governed_patterns).",
+        external="none -- writes one JSON file inside the target directory "
+                 "(<dest>/.claude/governed_files.json), no new binary or package. Commission "
+                 "row 1730: the autoharn-panel deployment started .py-only and needed "
+                 ".ts/.vue/.html added by hand after the fact.",
+    ),
+    "principals_authority": FeatureFact(
+        key="principals_authority", label="Principals & authority screen",
+        aspiration="NIST SP 800-63's identity/lifecycle/binding decomposition, via the s40/s41 "
+                    "family (kernel/lineage/s40-principal-identity-events.sql, kernel/lineage/"
+                    "s41-principal-bindings-and-relations.sql), cited to "
+                    "design/FABLE-PRINCIPAL-IDENTITY-SPEC-BUILD-BASIS.md.",
+        external="none -- drives this world's own <dest>/legacy/led and tools/role_charter.py, "
+                 "no new binary or package.",
     ),
     "signed_genesis": FeatureFact(
         key="signed_genesis", label="Signed genesis ceremony",
@@ -311,6 +330,8 @@ def derive_live_keys() -> set[str]:
     the backstop."""
     live: set[str] = {
         "ui_backend_textual", "ui_backend_urwid",
+        "fork_target_governed_files",
+        "principals_authority",
         "signed_genesis",
         "boundary_service", "observability_otelcol", "observability_watchdog",
         "hydration_fork_provenance", "hydration_role_charters",

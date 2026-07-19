@@ -1,6 +1,6 @@
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-18T21:30:53Z
-#   last-change: 2026-07-19T01:24:43Z
+#   last-change: 2026-07-19T02:14:15Z
 #   contributors: ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -26,7 +26,7 @@ applying it is always the operator's own act); no teardown flows beyond the rehe
 writes nothing to any ledger except through `led`; writes nothing anywhere except the target
 directory and its own saved checklist.
 
-`--dry-run` (2026-07-19 amendment, ledger row 1719): the SAME ten screens, but no destructive
+`--dry-run` (2026-07-19 amendment, ledger row 1719): the SAME eleven screens, but no destructive
 or externally visible act -- `tools/setup_tui/runner.py`'s three act-execution choke points
 (`run_command`, `start_background`, `write_file`) and `checklist.status_for`/`Checklist.save`
 are the only places `state["dry_run"]` is consulted; every screen still computes and shows its

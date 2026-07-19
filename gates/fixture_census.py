@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-09T13:36:11Z
-#   last-change: 2026-07-19T02:04:48Z
+#   last-change: 2026-07-19T02:26:10Z
 #   contributors: be693afb/main, e4410ef6/main, 3c50e030/main, 3c942a60/main, a857c93d/main, ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -190,6 +190,7 @@ REGISTRY: dict[str, str] = {
     "setup-tui-feature-facts-drift": "seen-red/setup-tui-feature-facts-drift/run_fixtures.py",
     "setup-tui-dry-run-parity":     "seen-red/setup-tui-dry-run-parity/run_fixtures.py",
     "setup-tui-signed-genesis":     "seen-red/setup-tui-signed-genesis/run_fixtures.py",
+    "setup-tui-principals-authority": "seen-red/setup-tui-principals-authority/run_fixtures.py",
     # panel-disposition / panel-cosign DEREGISTERED (2026-07-15, TASK C, commission item 3):
     # both suites ported to the standalone SPA repo's own tests/ (test_disposition.py,
     # test_cosign_live.py in KodBena/autoharn-panel) when the PoC moved out of panel/ into its

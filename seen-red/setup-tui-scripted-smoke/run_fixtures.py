@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-18T22:50:17Z
-#   last-change: 2026-07-19T01:51:54Z
+#   first-seen : 2026-07-19T02:44:09Z
+#   last-change: 2026-07-19T02:44:09Z
 #   contributors: ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -63,6 +63,31 @@ refuses identically to the live path -- validation is never weakened by dry-run.
      real scratch run) witnesses need a live db birth and live boundary service and are reported
      in seen-red/setup-tui-dry-run-parity, not shaped as a fixture here.
 
+Cases 11-13 (design/FABLE-SETUP-TUI-SPEC.md's 2026-07-19 governed-files amendment, commission
+ledger row 1730 -- the fork/target screen's governed-files exposure), CORRECTED single-writer
+design (tools/setup_tui/governed_files.py's own module docstring): screen 3 (fork/target)
+records the operator's CHOICE on `state["governed_patterns"]` and writes nothing itself --
+`bootstrap/new-project.sh` is the ONE writer of `.claude/governed_files.json`, on every
+invocation, steered by its own `--governed` flag. All three cases run FULLY UNDER `--dry-run`
+through screen 5 (Birth) -- `run_command`'s own dry-run choke point never Popens, so none of
+these needs a live Postgres host, unlike a would-be live-birth witness:
+
+  11. (witness a, argv-threading half) operator extends with valid extensions -> the choice is
+      threaded into `new-project.sh`'s OWN `--governed` flag at birth, asserted directly off the
+      printed argv line; screen 3 itself writes no file.
+  12. (witness b) a hostile extension token (containing `"] ;rm -rf /`) is refused BEFORE the
+      choice is even recorded -- the reverted-to-default set (never the hostile text) is what
+      reaches `--governed`.
+  13. (witness d) the operator declines to extend -- the default set is still explicitly
+      threaded into `--governed` (never a silent omission left to new-project.sh's own separate
+      no-flag fallback notice).
+
+The full LIVE end-to-end proof -- a REAL file on disk, parsed by
+hooks/pretooluse_change_gate.py's OWN loader, surviving screen 7 (Boundary)'s later re-scaffold
+without being clobbered back to the bare default -- lives in
+seen-red/setup-tui-dry-run-parity (WDR1 already performs a real birth through boundary; this
+build's own addition there is witness (a)'s live half).
+
 Zero residue: every scratch destination lives under a fixture-owned tempdir, removed in a
 `finally` regardless of outcome. Real subprocess invocations of the actual CLI entry point (no
 mocks) -- Rule 1's own bar ("drive the same code paths") applied to this fixture's own proof of
@@ -97,11 +122,15 @@ def main() -> int:
     try:
         # --- case 1: fork-target, occupied fresh-dir target -> REFUSED ---
         # (trailing "n"s decline every later screen this --start-at run still walks through --
-        # rehearsal/birth-override/signed-genesis/boundary-override/observability/hydration --
-        # signed-genesis (design/FABLE-SETUP-TUI-SIGNED-GENESIS-SPEC.md) added the 6th "n".)
+        # rehearsal/birth-override/principals-authority/signed-genesis/boundary-override/
+        # observability/hydration -- signed-genesis (design/FABLE-SETUP-TUI-SIGNED-GENESIS-
+        # SPEC.md) added the 6th "n"; principals-authority
+        # (design/FABLE-SETUP-TUI-PRINCIPALS-AUTHORITY-SPEC.md, inserted between Birth and
+        # Signed genesis) adds the 7th.)
         occupied = os.path.join(scratch, "occupied")
         os.makedirs(occupied)
-        cp = run_scripted("y\nfresh\n" + occupied + "\nn\nn\nn\nn\nn\nn\n", "fork-target", scratch)
+        cp = run_scripted("y\nfresh\n" + occupied + "\nn\nn\nn\nn\nn\nn\nn\n", "fork-target",
+                           scratch)
         out = cp.stdout + cp.stderr
         assert cp.returncode == 0, f"case 1: expected exit 0, got {cp.returncode}: {out[-800:]}"
         assert "REFUSED: destination" in out and occupied in out, out[-800:]
@@ -110,10 +139,11 @@ def main() -> int:
 
         # --- case 2: substrate, dedicated path, invalid db name -> REFUSED, no pg_hba read ---
         # (trailing "n"s decline every later screen this --start-at run still walks through --
-        # fork-target/rehearsal/birth-override/signed-genesis/boundary-override/observability/
-        # hydration -- so the run reaches a clean exit-0 checklist instead of exhausting the
-        # answers file. signed-genesis added the 7th "n".)
-        cp = run_scripted("y\ndedicated\n-\nbad-name!\nvalidrole\n" + "n\n" * 7,
+        # fork-target/rehearsal/birth-override/principals-authority/signed-genesis/boundary-
+        # override/observability/hydration -- so the run reaches a clean exit-0 checklist
+        # instead of exhausting the answers file. signed-genesis added the 7th "n";
+        # principals-authority adds the 8th.)
+        cp = run_scripted("y\ndedicated\n-\nbad-name!\nvalidrole\n" + "n\n" * 8,
                            "substrate", scratch)
         out = cp.stdout + cp.stderr
         assert cp.returncode == 0, f"case 2: expected exit 0, got {cp.returncode}: {out[-800:]}"
@@ -130,8 +160,8 @@ def main() -> int:
               "read, and both substrate facts lines rendered first (WF1)")
 
         # --- case 3 (item B): substrate, dedicated path, malformed subnet -> REFUSED, no read ---
-        # (same trailing-"n" count as case 2, signed-genesis included.)
-        cp = run_scripted("y\ndedicated\n-\nvaliddb\nvalidrole\nnot-a-cidr\n" + "n\n" * 7,
+        # (same trailing-"n" count as case 2, signed-genesis + principals-authority included.)
+        cp = run_scripted("y\ndedicated\n-\nvaliddb\nvalidrole\nnot-a-cidr\n" + "n\n" * 8,
                            "substrate", scratch)
         out = cp.stdout + cp.stderr
         assert cp.returncode == 0, f"case 3: expected exit 0, got {cp.returncode}: {out[-800:]}"
@@ -178,11 +208,11 @@ def main() -> int:
         out_case5 = out  # case 9's live-comparand, before `out` gets reused by later cases
 
         # --- case 6: preflight -- every PREFLIGHT_BINARIES + UI-backend facts line renders ---
-        # (9 answers: run-preflight, then one "n" each for substrate/fork-target/rehearsal/
-        # birth-override/signed-genesis/boundary-override/observability/hydration -- the full
-        # --start-at preflight walkthrough to a clean checklist. signed-genesis added the 8th
-        # "n".)
-        cp = run_scripted("y\n" + "n\n" * 8, "preflight", scratch)
+        # (10 answers: run-preflight, then one "n" each for substrate/fork-target/rehearsal/
+        # birth-override/principals-authority/signed-genesis/boundary-override/observability/
+        # hydration -- the full --start-at preflight walkthrough to a clean checklist.
+        # signed-genesis added the 8th "n"; principals-authority adds the 9th.)
+        cp = run_scripted("y\n" + "n\n" * 9, "preflight", scratch)
         out = cp.stdout + cp.stderr
         assert cp.returncode == 0, f"case 6: expected exit 0, got {cp.returncode}: {out[-800:]}"
         for label in ("idris2 toolchain", "clingo (ASP solver)", "python3 interpreter",
@@ -275,6 +305,92 @@ def main() -> int:
         print("case 10 ok (dry-run-ceremony case): the Signed genesis screen refuses "
               "out-of-sequence entry identically under --dry-run -- a nonexistent destination "
               "and a real-but-unscaffolded directory, no traceback, nothing written")
+
+        # --- cases 11-13: governed-files exposure (design/FABLE-SETUP-TUI-SPEC.md 2026-07-19
+        # amendment, commission ledger row 1730), CORRECTED single-writer design
+        # (tools/setup_tui/governed_files.py's own module docstring): screen 3 records the
+        # operator's CHOICE on state["governed_patterns"] and writes NOTHING itself --
+        # bootstrap/new-project.sh is the one writer, on every invocation, steered by its own
+        # --governed flag. All three run fully under --dry-run through screen 5 (Birth) --
+        # run_command's own dry-run choke point never Popens, so no live db is needed. Answer
+        # shape after the extension text: "n" (rehearsal decline) "y" (birth-override accept,
+        # rehearsal wasn't green) "y" (run birth) "-" "-" (host/db defaults) worldNN "-" "-"
+        # (dest/name defaults) then 5 "n"s for principals-authority/signed-genesis/boundary-
+        # override/observability/hydration.
+        gf_src = os.path.join(scratch, "gf_src")
+        os.makedirs(gf_src, exist_ok=True)
+        with open(os.path.join(gf_src, "a.txt"), "w") as f:
+            f.write("placeholder\n")
+
+        # case 11 (witness a, argv-threading half): valid extensions -> threaded into
+        # new-project.sh's OWN --governed flag at birth. No live db needed (--dry-run).
+        dest11 = os.path.join(scratch, "gf_dest11")
+        cp11 = run_scripted(
+            "y\nfork\n" + gf_src + "\n" + dest11 + "\ny\n.ts,.vue,.html\n"
+            "n\ny\ny\n-\n-\nworld11\n-\n-\n" + "n\n" * 5,
+            "fork-target", scratch, dry_run=True)
+        out11 = cp11.stdout + cp11.stderr
+        assert cp11.returncode == 0, f"case 11: expected exit 0, got {cp11.returncode}: {out11[-1500:]}"
+        assert "Traceback" not in out11, out11[-1500:]
+        assert "extended: ['*.py', '*.ts', '*.vue', '*.html']" in out11, out11[-1500:]
+        assert not os.path.exists(os.path.join(dest11, ".claude", "governed_files.json")), (
+            "case 11: screen 3 must never write governed_files.json itself under the "
+            "corrected single-writer design")
+        governed_argv_line11 = next(
+            (ln for ln in out11.splitlines() if ln.startswith("$ ") and "new-project.sh" in ln
+             and "--new-world" in ln), None)
+        assert governed_argv_line11 is not None, f"case 11: no birth argv line captured: {out11[-1500:]}"
+        assert "--governed" in governed_argv_line11 and \
+            "*.py,*.ts,*.vue,*.html" in governed_argv_line11, (
+            f"case 11: the extended pattern set was not threaded into new-project.sh's own "
+            f"--governed flag: {governed_argv_line11!r}")
+        print("case 11 ok (witness a, argv half): the extended pattern set is threaded into "
+              "new-project.sh's OWN --governed flag at birth -- screen 3 itself writes nothing")
+
+        # case 12 (witness b): a hostile extension token is refused BEFORE the choice is
+        # recorded at all -- the recorded choice reverts to the default, never the hostile text.
+        dest12 = os.path.join(scratch, "gf_dest12")
+        hostile_tok = '*.py"] ;rm -rf /'
+        cp12 = run_scripted(
+            "y\nfork\n" + gf_src + "\n" + dest12 + "\ny\n" + hostile_tok + ",.ts\n"
+            "n\ny\ny\n-\n-\nworld12\n-\n-\n" + "n\n" * 5,
+            "fork-target", scratch, dry_run=True)
+        out12 = cp12.stdout + cp12.stderr
+        assert cp12.returncode == 0, f"case 12: expected exit 0, got {cp12.returncode}: {out12[-1500:]}"
+        assert "REFUSED: extension token(s)" in out12, out12[-1500:]
+        argv_lines12 = [ln for ln in out12.splitlines() if ln.startswith("$ ")]
+        assert not any("rm -rf" in ln for ln in argv_lines12), (
+            "case 12: the hostile token must never reach any argv line, including birth's own "
+            "--governed flag: " + "\n".join(argv_lines12))
+        governed_argv_line12 = next(
+            (ln for ln in argv_lines12 if "new-project.sh" in ln and "--new-world" in ln), None)
+        assert governed_argv_line12 is not None, out12[-1500:]
+        assert "--governed" in governed_argv_line12 and "*.py" in governed_argv_line12, (
+            f"case 12: the reverted-to-default set must reach --governed: {governed_argv_line12!r}")
+        assert not os.path.exists(os.path.join(dest12, ".claude", "governed_files.json")), (
+            "case 12: screen 3 must never write governed_files.json itself")
+        print("case 12 ok (witness b): a hostile extension token is refused before the choice "
+              "is recorded; the reverted default (never the hostile text) reaches --governed")
+
+        # case 13 (witness d): decline extension -> the default is still explicitly recorded
+        # and threaded into --governed (never silently omitted).
+        dest13 = os.path.join(scratch, "gf_dest13")
+        cp13 = run_scripted(
+            "y\nfork\n" + gf_src + "\n" + dest13 + "\nn\n"
+            "n\ny\ny\n-\n-\nworld13\n-\n-\n" + "n\n" * 5,
+            "fork-target", scratch, dry_run=True)
+        out13 = cp13.stdout + cp13.stderr
+        assert cp13.returncode == 0, f"case 13: expected exit 0, got {cp13.returncode}: {out13[-1500:]}"
+        assert "kept default (operator declined to extend)" in out13, out13[-1500:]
+        governed_argv_line13 = next(
+            (ln for ln in out13.splitlines() if ln.startswith("$ ") and "new-project.sh" in ln
+             and "--new-world" in ln), None)
+        assert governed_argv_line13 is not None, out13[-1500:]
+        assert "--governed" in governed_argv_line13 and "*.py" in governed_argv_line13, (
+            f"case 13: the explicit default choice must still reach --governed, never a bare "
+            f"omission: {governed_argv_line13!r}")
+        print("case 13 ok (witness d): declining to extend still explicitly threads the "
+              "default set into --governed, never silently")
 
         print("ALL CASES OK -- setup_tui scripted preflight/validation refusal legs, zero residue")
         return 0
