@@ -1,6 +1,6 @@
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-18T21:32:16Z
-#   last-change: 2026-07-18T22:46:31Z
+#   last-change: 2026-07-19T19:57:27Z
 #   contributors: ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -173,3 +173,20 @@ def free_port(host: str = "127.0.0.1", start: int = 8420, span: int = 200) -> in
                 continue
             return port
     raise RuntimeError(f"no free port found in [{start}, {start + span}) on {host}")
+
+
+def git_head_commit(repo_root: str) -> tuple[bool, str]:
+    """`git -C <repo_root> rev-parse HEAD` -- a read-only preflight probe (PHASE-2 ADDITION: moved
+    off `runner.run_command` so `screen_preflight` carries no plan-boundary act at all, per
+    design/FABLE-SETUP-TUI-PURE-CORE-SPEC.md §2.8's purity gate -- this repo's own commit is a
+    read, not a world-effect, exactly like every other probe in this module)."""
+    cp = subprocess.run(["git", "-C", repo_root, "rev-parse", "HEAD"],
+                         capture_output=True, text=True)
+    return cp.returncode == 0, (cp.stdout + cp.stderr).strip()
+
+
+def git_submodule_status(repo_root: str) -> tuple[bool, str]:
+    """`git -C <repo_root> submodule status` -- same reasoning as `git_head_commit` above."""
+    cp = subprocess.run(["git", "-C", repo_root, "submodule", "status"],
+                         capture_output=True, text=True)
+    return cp.returncode == 0, (cp.stdout + cp.stderr).strip()

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-19T02:44:09Z
-#   last-change: 2026-07-19T02:44:09Z
+#   last-change: 2026-07-19T20:06:26Z
 #   contributors: ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -336,8 +336,13 @@ def main() -> int:
         assert not os.path.exists(os.path.join(dest11, ".claude", "governed_files.json")), (
             "case 11: screen 3 must never write governed_files.json itself under the "
             "corrected single-writer design")
+        # PHASE-2 CONTRACT CHANGE (design/FABLE-SETUP-TUI-PURE-CORE-SPEC.md): birth's
+        # new-project.sh call is now a QUEUED plan entry, not an executed runner.run_command call
+        # -- screen_birth prints its own "  $ argv" preview (2-space indented, this module's own
+        # house style for a decision-time echo) instead of runner.run_command's unindented
+        # "$ argv" print, so the match strips leading whitespace before comparing.
         governed_argv_line11 = next(
-            (ln for ln in out11.splitlines() if ln.startswith("$ ") and "new-project.sh" in ln
+            (ln for ln in out11.splitlines() if ln.strip().startswith("$ ") and "new-project.sh" in ln
              and "--new-world" in ln), None)
         assert governed_argv_line11 is not None, f"case 11: no birth argv line captured: {out11[-1500:]}"
         assert "--governed" in governed_argv_line11 and \
@@ -358,7 +363,8 @@ def main() -> int:
         out12 = cp12.stdout + cp12.stderr
         assert cp12.returncode == 0, f"case 12: expected exit 0, got {cp12.returncode}: {out12[-1500:]}"
         assert "REFUSED: extension token(s)" in out12, out12[-1500:]
-        argv_lines12 = [ln for ln in out12.splitlines() if ln.startswith("$ ")]
+        # PHASE-2: same leading-whitespace note as case 11 above.
+        argv_lines12 = [ln for ln in out12.splitlines() if ln.strip().startswith("$ ")]
         assert not any("rm -rf" in ln for ln in argv_lines12), (
             "case 12: the hostile token must never reach any argv line, including birth's own "
             "--governed flag: " + "\n".join(argv_lines12))
@@ -383,7 +389,7 @@ def main() -> int:
         assert cp13.returncode == 0, f"case 13: expected exit 0, got {cp13.returncode}: {out13[-1500:]}"
         assert "kept default (operator declined to extend)" in out13, out13[-1500:]
         governed_argv_line13 = next(
-            (ln for ln in out13.splitlines() if ln.startswith("$ ") and "new-project.sh" in ln
+            (ln for ln in out13.splitlines() if ln.strip().startswith("$ ") and "new-project.sh" in ln
              and "--new-world" in ln), None)
         assert governed_argv_line13 is not None, out13[-1500:]
         assert "--governed" in governed_argv_line13 and "*.py" in governed_argv_line13, (

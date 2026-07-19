@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-19T02:09:27Z
-#   last-change: 2026-07-19T19:49:45Z
+#   last-change: 2026-07-19T19:57:45Z
 #   contributors: ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -84,6 +84,28 @@ RELATION_CHOICES = [
                             "(canonicalized to lower-id subject, kernel-CHECKed; symmetric)"),
     ("succeeds", "succeeds -- subject is the sanctioned successor of object (the v1 path back "
                 "from a suspended/revoked principal -- no reinstatement verb exists)"),
+]
+
+# PHASE-2 ADDITION (design/FABLE-SETUP-TUI-PURE-CORE-SPEC.md §2.7: "the Principals screen shows
+# the scaffold's contractual base ... from the registry that the scaffold itself writes from, not
+# from a born world's views"): under the pure-core flow, birth has not actually run yet by the
+# time this screen makes its decisions in the NORMAL sequence, so `list_principals(dest)` (a live
+# SELECT against a world that may not exist on disk yet) cannot honestly back the "here is what
+# you start from" display any more. This is a STATIC mirror of `bootstrap/new-project.sh`'s own
+# s40 birth sequence (source lines verified: the REVIEWER_STATUS/COMMISSIONER_STATUS teaching text
+# and the s40 birth-sequence comment block naming "author (model)... reviewer (subagent)...
+# commissioner (human)") -- every world this package births carries exactly these three,
+# unconditionally, in `--new-world` mode. `screen_principals_authority` shows THIS table when
+# `dest` does not exist yet (the normal sequence); it still does the LIVE read via
+# `list_principals` when `dest` already exists (an out-of-sequence `--start-at` against an
+# already-born world -- a genuine read of a real world, the declared exception unchanged).
+SCAFFOLD_BASE_PRINCIPALS: list[tuple[str, str, str]] = [
+    ("author", "model", "the model identity that authored this world's first commit -- "
+                        "self-attributed genesis exception, s40 birth sequence step 1"),
+    ("reviewer", "subagent", "registered automatically through the s40 FULL ceremony at birth "
+                             "(bootstrap/new-project.sh); do not re-register"),
+    ("commissioner", "human", "registered automatically through the s40 FULL ceremony at birth; "
+                              "the maintainer's own FULL-mode signing act uses this principal"),
 ]
 
 # ---------------------------------------------------------------------------------------------
