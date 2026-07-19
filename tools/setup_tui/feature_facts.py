@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-18T23:35:54Z
-#   last-change: 2026-07-19T03:04:05Z
+#   last-change: 2026-07-19T18:29:43Z
 #   contributors: ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -103,10 +103,15 @@ REGISTRY: dict[str, FeatureFact] = {
     "ui_backend_textual": FeatureFact(
         key="ui_backend_textual", label="textual (optional TUI backend)",
         aspiration="none named.",
-        external="optional external Python package beyond stdlib -- this build found it NOT "
-                 "installed at build time (tools/setup_tui/__init__.py), so the zero-dependency "
-                 "numbered-menu fallback is used (design/FABLE-SETUP-TUI-SPEC.md 'v1 "
-                 "boundaries'). Adopting it later is in-boundary, not automatic.",
+        external="optional external Python package beyond stdlib -- IN USE as of "
+                 "design/FABLE-SETUP-TUI-TEXTUAL-SPEC.md (commission ledger row 1818): a real "
+                 "Textual application (tools/setup_tui/ui_textual.py's TextualUi/"
+                 "SetupWizardApp) is the interactive face when this library is importable; "
+                 "version 8.2.8 witnessed against this build (a scratch venv, since the build "
+                 "interpreter itself did not have it installed -- see the FAQ getting-started "
+                 "entry). Absent, the numbered-menu fallback is used automatically (one "
+                 "teaching line naming the exact venv/pip command) -- --plain forces that "
+                 "fallback explicitly, --scripted never touches textual at all.",
     ),
     "ui_backend_urwid": FeatureFact(
         key="ui_backend_urwid", label="urwid (optional TUI backend)",

@@ -1,6 +1,6 @@
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-18T21:34:05Z
-#   last-change: 2026-07-19T04:11:01Z
+#   last-change: 2026-07-19T18:35:41Z
 #   contributors: ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -170,16 +170,25 @@ def screen_preflight(ui, cl, state):
             cl.add("preflight", "HARNESS_PGHOST reachable", ck.WITNESSED, f"RED: {detail}")
         state["pghost"] = host
 
-    # UI backend -- informational only (app.py already picked InteractiveUi/ScriptedUi before
-    # this screen ever ran, per tools/setup_tui/__init__.py's own v1-boundary docstring); this
-    # re-checks LIVE via importlib.util.find_spec rather than trusting that docstring's
-    # build-time claim, so the report stays honest if either package is installed later.
+    # UI backend -- informational only in the sense that this check cannot change anything
+    # mid-flow (app.py's `_select_backend` already picked TextualUi/InteractiveUi/ScriptedUi
+    # before this screen ever ran, design/FABLE-SETUP-TUI-TEXTUAL-SPEC.md's own selection
+    # rule); it re-checks LIVE via importlib.util.find_spec rather than trusting a build-time
+    # claim, so the report stays honest across runs of the SAME installed interpreter. `textual`
+    # availability is NOT merely informational for the FACE this flow is running under, though
+    # -- when it is importable, TextualUi is the real interactive backend, not a numbered-menu
+    # fallback; `urwid` stays informational-only (this package never adopted it as a backend).
     for name in ("textual", "urwid"):
         _show_facts(ui, f"ui_backend_{name}")
         available = importlib.util.find_spec(name) is not None
-        ui.say(f"  {name}: {'available' if available else 'not installed'} "
-               f"(informational -- the numbered-menu fallback is used regardless of either "
-               f"result, per v1 boundaries)")
+        if name == "textual":
+            note = ("this run's interactive face" if available else
+                    "not this run's face -- the numbered-menu fallback is used, with the "
+                    "one-line teaching this build's own startup already gave (or --plain, if "
+                    "the operator chose it explicitly)")
+        else:
+            note = "informational only -- this package never adopted urwid as a backend"
+        ui.say(f"  {name}: {'available' if available else 'not installed'} ({note})")
         cl.add("preflight", f"{name} available", ck.WITNESSED,
                "available" if available else "not installed")
     return state
@@ -1031,7 +1040,12 @@ def screen_signed_genesis(ui, cl, state):
         else:
             ui.say("  gpg will now prompt YOU, interactively, for a passphrase (its own pinentry "
                    "prompt -- never captured or scripted by this tool).")
-            keygen = signed_genesis.keygen_operator(name, email, gnupghome, dry_run=dry_run)
+            # Interactive child (design/FABLE-SETUP-TUI-TEXTUAL-SPEC.md §2 item 4): gpg's own
+            # pinentry needs the real terminal, not the Textual alternate screen. `ui.suspend()`
+            # is a no-op under the plain/scripted backends (`Ui`'s own base-class contract,
+            # `tools/setup_tui/ui.py`) -- this screen stays backend-blind either way.
+            with ui.suspend():
+                keygen = signed_genesis.keygen_operator(name, email, gnupghome, dry_run=dry_run)
 
     if dry_run:
         cl.add("signed-genesis", "keypair generated", ck.WOULD_DO,
@@ -1082,9 +1096,21 @@ def screen_signed_genesis(ui, cl, state):
                f"{readme_path} :: {summarize_content(readme_text)}")
 
     # --- sign the genesis act (spec step 3) -------------------------------------------------
+    # Interactive child, operator path only (design/FABLE-SETUP-TUI-TEXTUAL-SPEC.md §2 item 4):
+    # gpg's detach-sign can prompt via pinentry again here too (the agent's passphrase cache from
+    # the keygen step above is not guaranteed still warm) -- suspend for the same reason as the
+    # keygen call. The `--scripted` leg passes `--pinentry-mode loopback` with the fixture
+    # passphrase (signed_genesis.sign_statement's own docstring) and is fully non-interactive, so
+    # it never needs the terminal and is deliberately NOT suspended (`ScriptedUi.suspend()` is
+    # already a no-op, but skipping the call entirely keeps the intent legible in the diff too).
     asc_path = os.path.join(dest, ".claude", f"commission-{id_display}.asc")
-    sres = signed_genesis.sign_statement(keygen.gnupghome, statement or "", asc_path,
-                                          scripted=is_scripted, dry_run=dry_run)
+    if is_scripted:
+        sres = signed_genesis.sign_statement(keygen.gnupghome, statement or "", asc_path,
+                                              scripted=is_scripted, dry_run=dry_run)
+    else:
+        with ui.suspend():
+            sres = signed_genesis.sign_statement(keygen.gnupghome, statement or "", asc_path,
+                                                  scripted=is_scripted, dry_run=dry_run)
     cl.add("signed-genesis", "genesis commission signed", ck.status_for(sres), asc_path)
 
     # --- the gate verifies, not the keypress (spec step 4) ----------------------------------
