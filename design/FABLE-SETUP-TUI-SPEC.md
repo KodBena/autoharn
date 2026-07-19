@@ -28,8 +28,20 @@ hit by hand is a screen here.**
 
 ## The flow (screens, in order; every screen skippable with the skip recorded)
 
-1. **Preflight** — repo commit, submodules populated, `idris2`/`python`/`psql`
-   found, reachable `HARNESS_PGHOST`; each check green/red with the fix command.
+**Feature-facts column (design/FABLE-SETUP-TUI-FEATURE-FACTS-SPEC.md, ledger row 1714,
+built 2026-07-19):** every selectable act named below (substrate paths, boundary
+service, observability's otelcol+watchdog, each hydration item, the preflight-probed
+toolchains) now prints a facts line — the standards-conformance aspiration it serves
+(with citation, or an honest "none named") and its external costs/dependencies (with
+an honest "none") — from `tools/setup_tui/feature_facts.py`'s one-home registry,
+shown at the point of selection, BEFORE the operator commits the act. Not repeated
+per-screen below; see that spec for the registry and its drift backstop
+(seen-red/setup-tui-feature-facts-drift).
+
+1. **Preflight** — repo commit, submodules populated, `idris2`/`clingo`/`python3`/
+   `psql` found (clingo non-fatal, matching `bootstrap/bootstrap.sh`'s own posture),
+   reachable `HARNESS_PGHOST`, and (informational) whether `textual`/`urwid` are
+   installed; each check green/red with the fix command.
 2. **Substrate** — pick: existing-db path (zero manual steps, the omega-lab shape)
    or dedicated-db path (generates the confined pg_hba block in the live file's own
    idiom — reading the operator's real pg_hba copy first, per the standing
@@ -44,12 +56,23 @@ hit by hand is a screen here.**
 6. **Boundary** — writes the multiplex TOML and the two deployment.json keys,
    picks a free port, starts the service (or emits the systemd-style unit text as
    a PREPARED block), probes `/health` and `/meta`.
-7. **Observability** — otelcol start line (localhost-only, per standing config)
-   and the Claude launch line with the right env vars, both as copy-paste blocks
-   with what-you-should-see.
-8. **Hydration** — checkbox list of primordial rows: ADR-corpus adoption, fork
-   provenance, role charters to register (via `role_charter.py`), makespan
-   pointer; each writes through `led` and echoes the row id.
+7. **Observability** — otelcol start line (localhost-only, per standing config), the
+   OTel model-provenance watchdog start line (`./otel-watch --daemon`,
+   design/FABLE-OTEL-SENTRY-SPEC.md §3), and the Claude launch line with the right
+   env vars, all as copy-paste blocks with what-you-should-see.
+8. **Hydration** — fork provenance and role charters to register (via
+   `role_charter.py`) stay as free-text prompts; a small, curated
+   **durable-decisions catalog** (`tools/setup_tui/durable_decisions.py`, design/
+   FABLE-SETUP-TUI-FEATURE-FACTS-SPEC.md §3, absorbing and retiring the old
+   free-text `adr_corpus`/`makespan_pointer` items) offers standing rules distilled
+   from this project's own ledger and the autoharn-panel deployment's, each writing
+   a real `led decision` row on selection; an **ADR-adoption submenu**, DERIVED from
+   `law/adr/*.md` at runtime (never a hand list), lets the operator adopt any subset
+   by number and title. Every selected entry's fragment compiles into the new
+   world's CLAUDE.md between generated-section markers (idempotent, fork-
+   destination-safe — never touches bytes outside the markers). Kernel `obligate`
+   rows are explicitly out of v1 (the catalog itself encodes the reason as one of
+   its own entries, ledger row 1640).
 9. **Checklist** — the witnessed/skipped/prepared table; offer to save it into the
    new world as a dated file.
 

@@ -1,0 +1,17 @@
+seen-red/setup-tui-feature-facts-drift -- banked RED evidence (both-polarity proof, fixture-census)
+
+design/FABLE-SETUP-TUI-FEATURE-FACTS-SPEC.md §5's WF2, commission ledger row 1714: "a synthetic
+registry with a key for a nonexistent feature (and, separately, a live feature stripped from a
+synthetic registry) reads red in the census fixture." This fixture is inherently RED-shaped in
+two of its four cases -- case 2 and case 3 each feed tools/setup_tui/feature_facts.py's own
+check_registry() comparator a SYNTHETIC, deliberately-broken registry and assert the drift
+messages it is supposed to produce; a fixture failure here (an assertion raised, or a red leg
+that silently stopped firing after some future edit) IS this backstop's red case.
+
+Real captured stdout, 2026-07-19, a clean run against this commit's tree (zero residue, exit 0):
+
+case 1 ok: the real REGISTRY and the real live-key derivation agree (zero drift)
+case 2 ok: a synthetic registry key with no live counterpart reads red (ORPHANED registry key)
+case 3 ok: a live feature stripped from a synthetic registry reads red (UNREGISTERED live feature)
+bonus case ok: a synthetic registry carrying BOTH defects at once reports both, not just one
+ALL CASES OK -- feature_facts.py drift backstop, both polarities proven
