@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-18T23:37:02Z
-#   last-change: 2026-07-19T03:04:38Z
+#   last-change: 2026-07-19T19:55:20Z
 #   contributors: ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -40,7 +40,7 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-from tools.setup_tui.runner import write_file
+from tools.setup_tui.plan import Hole, WriteAct
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 ADR_DIR = REPO_ROOT / "law" / "adr"
@@ -537,11 +537,12 @@ def adr_claude_md_fragment(number: str, title: str, relpath: str) -> str:
 # CLAUDE.md compilation (spec §4).
 # ---------------------------------------------------------------------------------------------
 
-def compile_claude_md(dest_dir: str, fragments: list[str],
-                       dry_run: bool = False) -> tuple[str, str, bool]:
-    """Compiles `fragments` (durable-decision `claude_md` texts, and/or `adr_claude_md_fragment`
-    lines, in selection order) into `<dest_dir>/CLAUDE.md` between BEGIN_MARKER/END_MARKER.
-    Rules (spec §4), each load-bearing:
+def compute_claude_md_text(dest_dir: str, fragments: list[str]) -> str:
+    """The pure text-computation half of `compile_claude_md`'s pre-Phase-2 body: reads
+    `<dest_dir>/CLAUDE.md`'s CURRENT bytes (a live read; see `hydration_claude_md_write_act`'s own
+    docstring for why this is only ever called at COMMIT time, after birth has actually written
+    the file) and returns the new full text. Never writes -- `hydration_claude_md_write_act`'s
+    `WriteAct` is where the write happens. Rules (spec §4), each load-bearing:
 
       * NEVER touches bytes outside the markers -- the file is read whole, split on the marker
         pair if present, and only the middle segment is replaced; everything before BEGIN and
@@ -555,13 +556,9 @@ def compile_claude_md(dest_dir: str, fragments: list[str],
       * If CLAUDE.md does not exist yet, one is created holding only the compiled section (never
         silently skipped) -- a defensive branch for --start-at hydration reached before birth.
 
-    Under `dry_run=True` (design/FABLE-SETUP-TUI-SPEC.md 2026-07-19 amendment), the WOULD-BE new
-    text is still computed byte-for-byte (so the caller can show a real content summary) but
-    never written -- `runner.write_file`'s own choke point. The existing file, if any, is only
-    ever READ here (unaffected by `dry_run` -- a read is not the act being rehearsed).
-
-    Returns `(path, new_text, wrote)`: `path` is where CLAUDE.md is (or would be), `new_text` is
-    the full computed content, `wrote` is True iff a real write happened.
+    This is called ONLY at commit time (never at decision time -- in the normal sequence,
+    `dest_dir`/CLAUDE.md does not exist yet until birth's own plan entry has actually run, and
+    reading it early would wrongly treat a not-yet-created file as "nothing to preserve").
 
     Numbering choice (ledger row 1790, finding 2): the compiled comment used to hard-code
     "screen 8" for hydration -- stale the moment principals-authority/signed-genesis were
@@ -598,12 +595,25 @@ def compile_claude_md(dest_dir: str, fragments: list[str],
     if BEGIN_MARKER in existing and END_MARKER in existing:
         pre, rest = existing.split(BEGIN_MARKER, 1)
         _mid, post = rest.split(END_MARKER, 1)
-        new_text = pre + section + post
-    elif existing:
+        return pre + section + post
+    if existing:
         sep = "" if existing.endswith("\n") else "\n"
-        new_text = existing + sep + "\n" + section + "\n"
-    else:
-        new_text = section + "\n"
+        return existing + sep + "\n" + section + "\n"
+    return section + "\n"
 
-    wrote = write_file(claude_path, new_text, dry_run=dry_run, encoding="utf-8")
-    return claude_path, new_text, wrote
+
+def hydration_claude_md_write_act(dest_dir: str, fragments: list[str], birth_produces: str) -> WriteAct:
+    """The CLAUDE.md-compilation plan act (spec §4), as a `WriteAct`. `content` is a `Hole` on
+    `birth_produces` (the birth screen's own plan entry, whatever it `produces`) -- its `extract`
+    IGNORES the bound value and instead calls `compute_claude_md_text` fresh, which is legitimate
+    for the SAME reason `signed_genesis.discharge_write_act` does the analogous thing: the value
+    this write needs to be correct (the world's CURRENT CLAUDE.md bytes) genuinely does not exist,
+    and cannot be read honestly, until birth's own act -- ordered earlier in the SAME plan -- has
+    actually run. `of=birth_produces` names that real ordering dependency; the extract's own
+    ignoring of the bound text is the same pattern `screens.py`'s own comment on this call site
+    documents, not a second, undeclared mechanism."""
+    return WriteAct(
+        path=os.path.join(dest_dir, "CLAUDE.md"),
+        content=Hole(of=birth_produces, describe="compiled CLAUDE.md content",
+                     extract=lambda _birth_output: compute_claude_md_text(dest_dir, fragments)),
+    )

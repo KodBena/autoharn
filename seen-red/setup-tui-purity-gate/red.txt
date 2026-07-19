@@ -1,0 +1,27 @@
+seen-red/setup-tui-purity-gate -- banked RED evidence (both-polarity proof, fixture-census)
+
+Commission ledger rows 1823 point 2 / 1825 / 1835 (design/FABLE-SETUP-TUI-PURE-CORE-SPEC.md §2.8):
+"a census-registered gate asserts, at the AST level over tools/setup_tui/, that calls to the
+three runner choke points (run_command, start_background, write_file) appear ONLY in the
+commit-executor module and the rehearsal module's declared exception -- a screen that acquires a
+direct effect call fails the gate."
+
+RED case (run_fixtures.py's case 2, "negative self-check"): gates/setup_tui_purity_gate.py's own
+check_tree function, applied to three synthetic ast.Module trees under the filename "screens.py":
+
+  1. a bare `run_command(["echo", "hi"])` call inside an ordinary function
+     (`screen_boundary`, a name chosen to look like a real screen) -- the gate reports it as a
+     violation (`check_tree` returns a non-empty list naming the enclosing function).
+  2. `runner.write_file("/tmp/x", "content")` called at MODULE LEVEL (no enclosing function) --
+     also reported as a violation, attributed to "<module level>" (the gate's own stated rule:
+     a module-level call is always a violation, never exempt by construction).
+  3. the control specimen: the identical `run_command(...)` call as case 1, but placed inside a
+     function literally named `screen_rehearsal` -- the gate reports ZERO violations for this
+     one, proving the declared-exception allowlist (EXEMPT["screens.py"] = {"screen_rehearsal"})
+     actually discriminates rather than either over- or under-catching.
+
+This proves the check is not vacuously green: a synthetic violation of each shape the spec names
+(an ordinary function acquiring a direct effect call; a bare module-level call) is caught, and the
+one sanctioned exception is not falsely caught alongside them. Case 1 of the same fixture proves
+the REAL tools/setup_tui/*.py tree is clean against this same check; case 3 proves
+commit_executor.py's own real (and necessary) choke-point calls are correctly exempted.

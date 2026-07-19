@@ -1,6 +1,6 @@
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-19T19:33:56Z
-#   last-change: 2026-07-19T19:34:39Z
+#   last-change: 2026-07-19T19:48:25Z
 #   contributors: ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -54,6 +54,7 @@ from __future__ import annotations
 import json
 import os
 import stat
+import subprocess
 import tempfile
 from dataclasses import dataclass, field
 from typing import Callable
@@ -165,6 +166,16 @@ class ExecutionResult:
     bindings: dict[str, str]
     entry_results: list[EntryResult]
     completed: bool  # True iff every entry reached DONE (no failure halted the run)
+    # PHASE-2 ADDITION (screens.py's boundary screen needs a live handle on a started background
+    # process -- for the SIGTERM/abnormal-exit cleanup app.py already provides via
+    # `state["boundary_proc"]`, and because a `BackgroundAct` is the one act type that leaves
+    # something RUNNING rather than completing, this module is the only place that ever sees the
+    # real `Popen` object. Keyed by the entry's own `produces` name (a `BackgroundAct` entry with
+    # no `produces` set is not retrievable this way -- a caller that needs the handle sets one,
+    # same as any other binding). Never populated for a RESUMED already-DONE entry -- a process
+    # from a prior invocation cannot be handed back across process boundaries, exactly like a
+    # binding this module "cannot re-derive" per `execute`'s own late-binding-replay comment.
+    background_procs: dict[str, "subprocess.Popen"] = field(default_factory=dict)
 
 
 OnStep = Callable[[int, PlanEntry], None]
@@ -196,6 +207,7 @@ def execute(
     os.makedirs(dest, exist_ok=True)
     journal = CommitJournal.open_or_create(journal_path(dest), len(plan.entries))
     bindings: dict[str, str] = {}
+    background_procs: dict[str, subprocess.Popen] = {}
     entry_results: list[EntryResult] = [
         EntryResult(entry=e, ok=(s == DONE), detail="(resumed: already DONE)" if s == DONE else "")
         for e, s in zip(plan.entries, journal.statuses)
@@ -215,14 +227,17 @@ def execute(
     start = journal.next_index()
     if start is None:
         journal.remove()
-        return ExecutionResult(bindings=bindings, entry_results=entry_results, completed=True)
+        return ExecutionResult(bindings=bindings, entry_results=entry_results, completed=True,
+                                background_procs=background_procs)
 
     for i in range(start, len(plan.entries)):
         entry = plan.entries[i]
         if on_step is not None:
             on_step(i, entry)
-        result = _run_entry(entry, bindings, dest)
+        result, proc = _run_entry(entry, bindings, dest)
         entry_results[i] = result
+        if proc is not None and entry.produces is not None:
+            background_procs[entry.produces] = proc
         # ORDER IS LOAD-BEARING (a real ordering hazard caught in this module's own build, not a
         # hypothetical): the journal is marked DONE for entry `i` IMMEDIATELY after its act
         # actually ran (and, if it succeeded, its binding recorded) -- BEFORE `on_result` is
@@ -243,26 +258,29 @@ def execute(
         if on_result is not None:
             on_result(i, entry, result)
         if not result.ok:
-            return ExecutionResult(bindings=bindings, entry_results=entry_results, completed=False)
+            return ExecutionResult(bindings=bindings, entry_results=entry_results, completed=False,
+                                    background_procs=background_procs)
 
     journal.remove()
-    return ExecutionResult(bindings=bindings, entry_results=entry_results, completed=True)
+    return ExecutionResult(bindings=bindings, entry_results=entry_results, completed=True,
+                            background_procs=background_procs)
 
 
-def _run_entry(entry: PlanEntry, bindings: dict[str, str], dest: str) -> EntryResult:
+def _run_entry(entry: PlanEntry, bindings: dict[str, str],
+                dest: str) -> tuple[EntryResult, "subprocess.Popen | None"]:
     act = entry.act
     if isinstance(act, CommandAct):
         argv, stdin_text = act.resolve(bindings)
-        res = runner.run_command(argv, cwd=act.cwd, stdin_text=stdin_text)
-        return EntryResult(entry=entry, ok=res.ok, detail=res.output)
+        res = runner.run_command(argv, cwd=act.cwd, env=act.resolve_env(), stdin_text=stdin_text)
+        return EntryResult(entry=entry, ok=res.ok, detail=res.output), None
     if isinstance(act, WriteAct):
         path, content = act.resolve(bindings)
         wrote = runner.write_file(path, content)
-        return EntryResult(entry=entry, ok=wrote, detail=content)
+        return EntryResult(entry=entry, ok=wrote, detail=content), None
     if isinstance(act, BackgroundAct):
         argv = act.resolve(bindings)
         bg = runner.start_background(argv, cwd=act.cwd)
         started = bg.proc is not None
         detail = f"pid {bg.proc.pid}" if started else "(background start failed: no process)"
-        return EntryResult(entry=entry, ok=started, detail=detail)
+        return EntryResult(entry=entry, ok=started, detail=detail), bg.proc
     raise TypeError(f"unrecognized plan act type: {type(act)!r}")  # pragma: no cover -- exhaustive

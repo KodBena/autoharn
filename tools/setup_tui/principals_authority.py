@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-19T02:09:27Z
-#   last-change: 2026-07-19T03:40:25Z
+#   last-change: 2026-07-19T19:57:45Z
 #   contributors: ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -43,8 +43,9 @@ import re
 import subprocess
 from pathlib import Path
 
-from tools.setup_tui import probes, runner
-from tools.setup_tui.runner import CommandResult, run_command
+from tools.setup_tui import probes
+from tools.setup_tui.plan import CommandAct
+from tools.setup_tui.runner import parse_row_id
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 # The kernel-lineage source files CLASS_CHOICES/RELATION_CHOICES below hand-mirror (ledger row
@@ -83,6 +84,28 @@ RELATION_CHOICES = [
                             "(canonicalized to lower-id subject, kernel-CHECKed; symmetric)"),
     ("succeeds", "succeeds -- subject is the sanctioned successor of object (the v1 path back "
                 "from a suspended/revoked principal -- no reinstatement verb exists)"),
+]
+
+# PHASE-2 ADDITION (design/FABLE-SETUP-TUI-PURE-CORE-SPEC.md §2.7: "the Principals screen shows
+# the scaffold's contractual base ... from the registry that the scaffold itself writes from, not
+# from a born world's views"): under the pure-core flow, birth has not actually run yet by the
+# time this screen makes its decisions in the NORMAL sequence, so `list_principals(dest)` (a live
+# SELECT against a world that may not exist on disk yet) cannot honestly back the "here is what
+# you start from" display any more. This is a STATIC mirror of `bootstrap/new-project.sh`'s own
+# s40 birth sequence (source lines verified: the REVIEWER_STATUS/COMMISSIONER_STATUS teaching text
+# and the s40 birth-sequence comment block naming "author (model)... reviewer (subagent)...
+# commissioner (human)") -- every world this package births carries exactly these three,
+# unconditionally, in `--new-world` mode. `screen_principals_authority` shows THIS table when
+# `dest` does not exist yet (the normal sequence); it still does the LIVE read via
+# `list_principals` when `dest` already exists (an out-of-sequence `--start-at` against an
+# already-born world -- a genuine read of a real world, the declared exception unchanged).
+SCAFFOLD_BASE_PRINCIPALS: list[tuple[str, str, str]] = [
+    ("author", "model", "the model identity that authored this world's first commit -- "
+                        "self-attributed genesis exception, s40 birth sequence step 1"),
+    ("reviewer", "subagent", "registered automatically through the s40 FULL ceremony at birth "
+                             "(bootstrap/new-project.sh); do not re-register"),
+    ("commissioner", "human", "registered automatically through the s40 FULL ceremony at birth; "
+                              "the maintainer's own FULL-mode signing act uses this principal"),
 ]
 
 # ---------------------------------------------------------------------------------------------
@@ -324,75 +347,81 @@ def lineage_chain_note(dest: str) -> str:
 
 
 # ---------------------------------------------------------------------------------------------
-# Writes -- every one of them `<dest>/legacy/led ...`, via `runner.run_command` (the --dry-run
-# choke point; rule 1's exact-argv discipline).
+# PHASE-2 (design/FABLE-SETUP-TUI-PURE-CORE-SPEC.md): plan-entry BUILDERS -- every one of these
+# used to call `runner.run_command` directly (executing at decision time); each now returns a
+# `(CommandAct, produces_key)` pair instead, appended into THE PLAN by screens.py and executed
+# only at the one commit boundary. `LED_ACTOR=commissioner` is now `extra_env` on the act (plan.py
+# Phase-2 addition), resolved fresh against the ambient environment at COMMIT time, never
+# captured at decision time. `produces_key` names the binding a later Hole can reference (the row
+# id these `led` verbs print on success, parsed via `runner.parse_row_id` at commit time --
+# `_extract_row_id` below is that extractor, the ONE home for it, mirroring `runner.parse_row_id`
+# itself); a caller that never needs the row id downstream simply never builds a `Hole` against it
+# -- an unused `produces` binding costs nothing (commit_executor.py records it regardless).
 # ---------------------------------------------------------------------------------------------
 
 def _legacy_led(dest: str) -> str:
     return os.path.join(dest, "legacy", "led")
 
 
-def _parse_row_id(res: CommandResult) -> int | None:
-    if res.dry_run or not res.ok:
-        return None
-    return runner.parse_row_id(res.output)
+def _extract_row_id(output: str) -> str:
+    """`Hole.extract` for a `led`/`legacy/led` write's real stdout (the ONE home for this parse,
+    `runner.parse_row_id`, applied at commit time) -- the row id as a string if parseable, else
+    the raw output verbatim (never a fabricated id; a later argv that actually needed a real id
+    and got the raw text instead will fail loudly downstream rather than silently)."""
+    row_id = parse_row_id(output)
+    return str(row_id) if row_id is not None else output.strip()
 
 
-def register_principal(dest: str, name: str, agent_class: str, purpose: str, *,
-                        dry_run: bool = False) -> tuple[CommandResult, int | None]:
+_COMMISSIONER_ENV: tuple[tuple[str, str], ...] = (("LED_ACTOR", "commissioner"),)
+
+
+def register_principal_act(dest: str, name: str, agent_class: str, purpose: str) -> tuple[CommandAct, str]:
     """`LED_ACTOR=commissioner <dest>/legacy/led register-principal <name> <class> --purpose
     "<purpose>"` -- the s40 registration ceremony (kernel/lineage/s40-principal-identity-
-    events.sql §3.7). `LED_ACTOR=commissioner` mirrors signed_genesis.py's own choice: at this
-    point in the flow the connection principal has no standing declaration of its own yet, and
-    `commissioner` is one of the three principals the scaffold's own birth sequence already
-    registers and declares standing for."""
-    led = _legacy_led(dest)
-    argv = [led, "register-principal", name, agent_class, "--purpose", purpose]
-    env = {**os.environ, "LED_ACTOR": "commissioner"}
-    res = run_command(argv, env=env, dry_run=dry_run)
-    return res, _parse_row_id(res)
+    events.sql §3.7), as a plan act. `LED_ACTOR=commissioner` mirrors signed_genesis.py's own
+    choice: at this point in the flow the connection principal has no standing declaration of its
+    own yet, and `commissioner` is one of the three principals the scaffold's own birth sequence
+    already registers and declares standing for."""
+    argv = (_legacy_led(dest), "register-principal", name, agent_class, "--purpose", purpose)
+    return CommandAct(argv=argv, extra_env=_COMMISSIONER_ENV), f"principal-row:{name}"
 
 
-def grant_competence(dest: str, name: str, activity: str, band: str, basis: str, *,
-                      dry_run: bool = False) -> tuple[CommandResult, int | None]:
+def grant_competence_act(dest: str, name: str, activity: str, band: str,
+                          basis: str) -> tuple[CommandAct, str]:
     """`<dest>/legacy/led principal grant-competence <name> --activity "<a>" --band "<b>"
-    --basis "<c>"` (kernel/lineage/s41-principal-bindings-and-relations.sql D-1a/G13)."""
-    led = _legacy_led(dest)
-    argv = [led, "principal", "grant-competence", name,
-            "--activity", activity, "--band", band, "--basis", basis]
-    env = {**os.environ, "LED_ACTOR": "commissioner"}
-    res = run_command(argv, env=env, dry_run=dry_run)
-    return res, _parse_row_id(res)
+    --basis "<c>"` (kernel/lineage/s41-principal-bindings-and-relations.sql D-1a/G13), as a plan
+    act."""
+    argv = (_legacy_led(dest), "principal", "grant-competence", name,
+            "--activity", activity, "--band", band, "--basis", basis)
+    return CommandAct(argv=argv, extra_env=_COMMISSIONER_ENV), f"competence-row:{name}:{activity}"
 
 
-def relate(dest: str, subject: str, relation: str, obj: str, *,
-           dry_run: bool = False) -> tuple[CommandResult, int | None]:
+def relate_act(dest: str, subject: str, relation: str, obj: str) -> tuple[CommandAct, str]:
     """`<dest>/legacy/led principal relate <subject> <relation> <object>`
-    (kernel/lineage/s41-principal-bindings-and-relations.sql D-2)."""
-    led = _legacy_led(dest)
-    argv = [led, "principal", "relate", subject, relation, obj]
-    env = {**os.environ, "LED_ACTOR": "commissioner"}
-    res = run_command(argv, env=env, dry_run=dry_run)
-    return res, _parse_row_id(res)
+    (kernel/lineage/s41-principal-bindings-and-relations.sql D-2), as a plan act."""
+    argv = (_legacy_led(dest), "principal", "relate", subject, relation, obj)
+    return CommandAct(argv=argv, extra_env=_COMMISSIONER_ENV), f"relation-row:{subject}:{relation}:{obj}"
 
 
-def charter_register(dest: str, role: str, path: str, *,
-                      dry_run: bool = False) -> CommandResult:
-    """`python3 tools/role_charter.py register <role> <path> --led <dest>/legacy/led` -- the
-    SAME verb `screen_hydration`'s own role-charter item drives, pointed at `legacy/led` instead
-    of the (not-yet-configured) served `led` (module docstring: this screen sits before
-    `screen_boundary`). Driven through `runner.run_command` so `--dry-run` never executes
-    role_charter.py at all (its own internal `led decision` subprocess calls never fire under a
-    rehearsal -- `run_command`'s own choke point, not a second dry-run-awareness this module or
-    role_charter.py would otherwise need)."""
-    argv = ["python3", str(REPO_ROOT / "tools" / "role_charter.py"), "register",
-            role, path, "--led", _legacy_led(dest)]
-    return run_command(argv, dry_run=dry_run)
+def charter_register_act(dest: str, role: str, path: str) -> tuple[CommandAct, str]:
+    """`python3 tools/role_charter.py register <role> <path> --led <dest>/legacy/led` -- the SAME
+    verb `screen_hydration`'s own role-charter item drives, pointed at `legacy/led` instead of the
+    (not-yet-configured) served `led` (module docstring: this screen sits before
+    `screen_boundary`), as a plan act."""
+    argv = ("python3", str(REPO_ROOT / "tools" / "role_charter.py"), "register",
+            role, path, "--led", _legacy_led(dest))
+    return CommandAct(argv=argv), f"charter-row:{role}"
 
 
 def is_registered(dest: str, name: str) -> bool:
-    """True iff `name` already appears in `principal_standing_current` -- the in-flow check the
-    charter trap's resolution (spec WP3) needs before offering registration."""
+    """True iff `name` already appears in `principal_standing_current` -- a LIVE read (spec §2.7's
+    declared exception: read-only probes stay live). Under the pure-core flow this answers "is
+    `name` registered as of the WORLD'S CURRENT state", not "will `name` be registered once this
+    session's still-uncommitted plan entries run" -- a principal this SAME session already queued
+    a registration for (not yet committed) will not show up here. `screen_principals_authority`
+    carries its own decision-phase-local set of names it has queued a registration act for this
+    run and consults BOTH before deciding whether the charter trap's in-flow-registration offer is
+    needed (spec WP3) -- this function's own contract (a live read, nothing more) is unchanged."""
     try:
         return any(p["name"] == name for p in list_principals(dest))
     except Exception:  # noqa: BLE001 -- a read-only probe; caller decides how to report a failure

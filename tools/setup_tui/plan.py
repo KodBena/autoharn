@@ -1,6 +1,6 @@
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-19T19:33:00Z
-#   last-change: 2026-07-19T19:33:00Z
+#   last-change: 2026-07-19T19:48:18Z
 #   contributors: ab5d5bab/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -48,6 +48,7 @@ before its binding exists, and only the commit executor ever calls `resolve`.
 """
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass, field
 from typing import Callable, Union
 
@@ -111,10 +112,20 @@ def resolve_arg(a: Arg, bindings: "dict[str, str]") -> str:
 
 @dataclass(frozen=True)
 class CommandAct:
-    """Mirrors `runner.run_command(argv, cwd=, stdin_text=, dry_run=)`."""
+    """Mirrors `runner.run_command(argv, cwd=, env=, stdin_text=, dry_run=)`.
+
+    PHASE-2 ADDITION -- `extra_env`: several driven verbs (`led register-principal`, `led
+    commission`, ...) need `LED_ACTOR=<name>` set alongside the ambient environment (the
+    principals_authority.py/signed_genesis.py call sites this act type now serves, moved to the
+    commit boundary). A tuple of (key, value) pairs, not a `dict`, so this dataclass stays frozen
+    AND hashable by construction (a `dict` field would make `hash()` raise the moment anything
+    ever hashed an `Act` -- nothing does today, but there is no reason to introduce the trap).
+    `None` (the default, and every Phase-1 call site) means "ambient environment only", matching
+    `runner.run_command`'s own `env=None` default exactly."""
     argv: tuple[Arg, ...]
     cwd: str | None = None
     stdin_text: Arg | None = None
+    extra_env: tuple[tuple[str, str], ...] | None = None
 
     def render(self) -> str:
         return " ".join(render_arg(a) for a in self.argv)
@@ -123,6 +134,17 @@ class CommandAct:
         argv = [resolve_arg(a, bindings) for a in self.argv]
         stdin = resolve_arg(self.stdin_text, bindings) if self.stdin_text is not None else None
         return argv, stdin
+
+    def resolve_env(self) -> "dict[str, str] | None":
+        """`None` if `extra_env` is unset (the commit executor then passes `env=None` straight
+        through to `runner.run_command`, i.e. ambient environment, byte-identical to every
+        Phase-1 act); otherwise the ambient environment merged with `extra_env` (later keys win),
+        computed fresh at commit time rather than captured at plan-build time -- the same
+        "resolved at commit, not at decision" discipline every other `resolve*` method here
+        follows."""
+        if self.extra_env is None:
+            return None
+        return {**os.environ, **dict(self.extra_env)}
 
 
 @dataclass(frozen=True)
