@@ -119,9 +119,16 @@ insertion without hand-renumbering.
 
 ## v1 boundaries, named
 
-Python + textual/urwid-class library ONLY if already installed — otherwise plain
+~~Python + textual/urwid-class library ONLY if already installed — otherwise plain
 curses/prompt-toolkit-free numbered-menu fallback so the tool has zero new
-dependencies (the builder states which was available and used). No daemon
+dependencies (the builder states which was available and used).~~ **SUPERSEDED
+2026-07-19 (commission ledger row 1818; the v1 build honored this clause's letter —
+the build interpreter had neither library, so only the fallback exists — and the
+maintainer, meeting the result, commissioned the real thing):** the interactive face
+is a Textual application per
+[FABLE-SETUP-TUI-TEXTUAL-SPEC.md](FABLE-SETUP-TUI-TEXTUAL-SPEC.md); the numbered-menu
+backend survives as the explicit `--plain` / textual-absent fallback and as the
+`--scripted` witnessing substrate, which stays dependency-free. No daemon
 management beyond emitting unit text (PREPARED). No editing of the operator's real
 pg_hba in place — it generates the block and the diff, the operator applies. No
 teardown flows in v1 beyond the rehearsal's own (destroying real worlds stays a
