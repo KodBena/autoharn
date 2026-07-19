@@ -1,8 +1,5 @@
 # The GPG trust layer — operator FAQ
 
-<!-- doc-attest-exempt: doc-tree relocation mechanical edit (work item doc-tree-reorg-user-guide, ledger row 1620, 2026-07-18) -- relative link path(s) repointed to a sibling file's new location after a git-mv relocation elsewhere in the tree; no prose rewrite, same disposition as the v1.1.2 release-cut's own markers (commit 543a389). Removal condition: strike this marker and run the real A:B:C loop next time this file is touched for content, not just link repair. -->
-
-
 This page is written for an adopter — this page's own prose calls that reader "an operator,"
 the same role. It answers the question an operator actually has: **I've read
 [design/MAINT-GPG-TRUST-LAYER.md](../design/MAINT-GPG-TRUST-LAYER.md) and I understand WHY this project signs things —
@@ -317,6 +314,125 @@ nothing to check the signature against, which is not the same fact as a forged o
 defect to route around. Exercise the ceremony with a throwaway test key first (§7 below) if you
 want to see `VERIFIED` before a real key exists.
 
+### 5a. The setup TUI's own "Signed genesis" screen — the same ceremony, automated
+
+If you scaffolded with `python3 -m tools.setup_tui.app` (the guided wizard —
+[USER-RECIPES-FAQ.md](USER-RECIPES-FAQ.md#getting-started-the-guided-setup-tui-python3--m-toolssetup_tui)),
+the "Signed genesis" screen drives exactly the Step 1–3 ceremony above for you, in order, showing
+every command before it runs (`design/FABLE-SETUP-TUI-SIGNED-GENESIS-SPEC.md`;
+`tools/setup_tui/signed_genesis.py`) — it is a driver of the same `led`/`gpg`/`verify-commission`
+verbs this FAQ already covers, not a second implementation. It sits between "Principals &
+authority" and "Boundary" in the eleven-screen flow (the full ordered list, with what each
+screen does, is
+[USER-RECIPES-FAQ.md](USER-RECIPES-FAQ.md#getting-started-the-guided-setup-tui-python3--m-toolssetup_tui)'s
+own — not repeated here), on by default (declining is one recorded keypress, never nagged
+again). Everything below was exercised for real, this witness pass, against a scratch world (a
+disposable `--new-world` scaffold on a scratch Postgres cluster) and a scratch `GNUPGHOME` (a
+throwaway keyring in `/tmp`, torn down after) — never against the operator's real keyring,
+never against a real deployment. ("This witness pass" is this page's own established term —
+see the intro above, which names the throwaway Ed25519 test key every quoted command on this
+page was run against.)
+
+**The four visible commands, in order** (the same shapes as §5's Steps 1–3, just run for you):
+
+```sh
+$ <dest>/legacy/led commission '<your founding-commission statement>'
+led: row 7 written.
+
+$ gpg --homedir <scratch-or-your-GNUPGHOME> --batch --generate-key <keygen-batch-file>
+gpg: revocation certificate stored as '<GNUPGHOME>/openpgp-revocs.d/<FINGERPRINT>.rev'
+
+$ gpg --homedir <GNUPGHOME> --armor --export <FINGERPRINT>
+-----BEGIN PGP PUBLIC KEY BLOCK-----
+...
+-----END PGP PUBLIC KEY BLOCK-----
+  wrote <dest>/keys/<slug>.asc
+
+$ gpg --homedir <GNUPGHOME> --detach-sign --armor -o <dest>/.claude/commission-<id>.asc -
+$ <dest>/verify-commission --id <id> --json
+```
+
+(The operator path skips `--batch`/`--pinentry-mode loopback` — those two `gpg` flags appear
+only when the TUI itself is run under ITS OWN `--scripted` flag (`python3 -m
+tools.setup_tui.app --scripted <answers-file>`, the non-interactive witnessing mode this whole
+page's examples were exercised under), so a fixture passphrase can drive `gpg` non-interactively
+without a human at the keyboard; run the TUI interactively instead, and `gpg` prompts YOU for a
+passphrase through its own pinentry, never captured or scripted by this tool.)
+
+**The VERIFIED gate.** Step 4 is the screen's own gate, not the keypress that triggered it: it
+runs `<dest>/verify-commission --id <id> --json` and only records the ceremony WITNESSED in the
+closing checklist if the verdict is exactly `VERIFIED` — any other outcome (the §5 table's other
+four rows) renders the verb's own teaching and records REFUSED/PREPARED honestly instead. Real,
+witnessed output from this witness pass (a throwaway fixture key, ed25519, generated fresh for
+this run):
+
+```json
+{
+  "id": 7,
+  "actor": "commissioner",
+  "signing_mode": "FULL",
+  "verdict": "VERIFIED",
+  "detail": "statement sha256=c39c2def88fd48704800e85acf23cb92d90a37aee46e5a24af7462d64362f69f. gpg: Signature made Sun Jul 19 05:28:03 2026 CEST\ngpg:                using EDDSA key 77D9ECBB58A5B051FBB7324087647A03F4E42A66\ngpg: Good signature from \"AUTOHARN SETUP-TUI FIXTURE KEY -- THROWAWAY <setup-tui-fixture@example.invalid>\" [unknown]\ngpg: WARNING: This key is not certified with a trusted signature!\ngpg:          There is no indication that the signature belongs to the owner.\n      77D9ECBB58A5B051FBB7324087647A03F4E42A66"
+}
+```
+
+Once VERIFIED lands, the screen also rewrites `<dest>/keys/README.md`'s `AWAITING-KEY` stub
+into a `KEY COMMITTED` section (name, fingerprint, timestamp, a one-line pointer to this FAQ's §2
+on the private key's custody) — never touching the rest of the templated file outside that one
+section.
+
+**The skip path — declining is legitimate, not a lesser world.** Answering no to "Run the Signed
+genesis ceremony now?" records `SKIPPED` in the checklist and leaves the world fully functional:
+`verify-commission` on that world's founding commission reads `UNSIGNED`, exit 0 — the same
+honest, non-defect verdict §5's table already names, never a failure. Witnessed this witness
+pass by writing a second commission with no `.asc` at all and asking the gate directly:
+
+```json
+{
+  "id": 8,
+  "actor": "commissioner",
+  "signing_mode": "FULL",
+  "verdict": "UNSIGNED",
+  "detail": "no .claude/commission-8.asc found — legitimate FULL-mode commission, not a defect (spec §3: UNSIGNED is a weaker claim, never a failure)"
+}
+```
+
+**Key rotation via re-run — now marker-idempotent.** Running the screen again against the same
+world (`--start-at signed-genesis`, or walking the whole flow again on a later scaffold) generates
+a FRESH key, re-exports it to the SAME `keys/<slug>.asc` path, re-signs the SAME designated
+commission, and re-verifies — the screen offers to reuse an already-designated commission as the
+genesis row rather than writing a new one every time. `keys/README.md`'s `KEY COMMITTED` section
+is wrapped in explicit `BEGIN`/`END` markers and a re-run replaces only the marked middle, never
+appending a second stale section — witnessed this witness pass: after a second, independent run
+against the same scratch world with a brand-new fixture key, the README still carries exactly
+one `KEY COMMITTED` section, now naming the new fingerprint:
+
+```
+$ grep -c "Current state: KEY COMMITTED" keys/README.md
+1
+- ... fingerprint `B7F87D7F0C8E895A0AED80874635E5C8221E946F`, committed 2026-07-19T03:28:22Z ...
+```
+
+(the first run's fingerprint, `77D9ECBB58A5B051FBB7324087647A03F4E42A66`, is gone — overwritten,
+not appended alongside — and `verify-commission` against the same commission id re-verified
+`VERIFIED` under the new key, same shape as the JSON block above.) This closes the exact hazard a
+naive re-run would otherwise create: a stale first section claiming a fingerprint that is no
+longer the one actually committed.
+
+**Custody, stated plainly.** The TUI never reads, copies, or moves the private key at any point —
+every act above touches only the PUBLIC half (`--armor --export`) or invokes `gpg` as a
+subprocess that reads the private key from its own `GNUPGHOME` directly. Where that key lives:
+your own `GNUPGHOME` (your ambient `~/.gnupg` by default, or wherever you told the ceremony's
+keygen prompt to use it) if you ran the ceremony interactively; a throwaway, torn-down-after
+scratch directory if you ran it under `--scripted` witnessing (never your own keyring — spec §1
+item 1). What its loss means: the same as losing any signing key covered by §2 above — without
+the private key OR its printed-and-stored-offline revocation certificate, you can neither sign a
+future commission with this identity nor revoke it; the already-committed public key and the
+signatures it already produced remain verifiable, but no NEW signature can ever again come from
+that identity. Print the revocation certificate now (§2), before you need it — the ceremony does
+not do this for you, by design (a one-time keygen with no further crypto rigamarole, per
+`design/FABLE-SETUP-TUI-SIGNED-GENESIS-SPEC.md`'s own frame).
+
 ## 6. Ceremony 3 — the signed chain head (the run-close ritual)
 
 At the end of a session (or whenever you want to anchor the ledger's current state against your
@@ -518,6 +634,9 @@ That is the whole procedure: four steps, each already exercised above, none of i
 - [`attest-tags`](../attest-tags), [`bootstrap/templates/verify-commission.tmpl`](../bootstrap/templates/verify-commission.tmpl),
   [`bootstrap/templates/verify-chain.tmpl`](../bootstrap/templates/verify-chain.tmpl),
   [`filing/gpg_trust.py`](../filing/gpg_trust.py) — the implementation each ceremony above drives.
+- [`design/FABLE-SETUP-TUI-SIGNED-GENESIS-SPEC.md`](../design/FABLE-SETUP-TUI-SIGNED-GENESIS-SPEC.md),
+  [`tools/setup_tui/signed_genesis.py`](../tools/setup_tui/signed_genesis.py) — §5a's automated
+  "Signed genesis" screen; a driver of §5's own ceremony, no second implementation.
 - [`bootstrap/templates/led.tmpl`](../bootstrap/templates/led.tmpl) — the ledger-writing verb
   (`./led` in a scaffolded world) that §5's `led commission` call and every other ledger act in
   this project go through; not part of the GPG trust layer itself, but the tool §5 assumes.
