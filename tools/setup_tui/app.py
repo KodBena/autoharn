@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-18T21:34:30Z
-#   last-change: 2026-07-19T20:12:31Z
-#   contributors: ab5d5bab/main
+#   last-change: 2026-07-21T23:46:56Z
+#   contributors: ab5d5bab/main, 43f77bff/main
 # <<< PROVENANCE-STAMP <<<
 
 """tools/setup_tui/app.py -- entry point for the guided setup wizard
@@ -100,6 +100,16 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
                          "'textual' is installed (design/FABLE-SETUP-TUI-TEXTUAL-SPEC.md "
                          "selection rule); implied automatically, with one teaching line, when "
                          "'textual' is not importable")
+    p.add_argument("--accept-unverified-genesis", action="store_true", default=False,
+                    help="GENESIS-GATE OVERRIDE (ledger row 1918): by default, if the Signed "
+                         "genesis ceremony's verify-commission gate does not confirm VERIFIED, "
+                         "the commit HALTS there (non-zero exit; AUTOHARN_BACKFLOW.md finding "
+                         "1's class -- a world must never complete birth on an unverifiable "
+                         "genesis signature silently). This flag proceeds anyway, eyes open: "
+                         "the world's audit chain will anchor to a signature that did not "
+                         "verify, recorded as its own explicit checklist row, never silent. "
+                         "Applies to every backend, including --scripted (the flag rides the "
+                         "process argv, not an answers-file line).")
     return p.parse_args(argv)
 
 
@@ -194,6 +204,16 @@ def _drive_screens(ui: Ui, cl: Checklist, state: dict, state_holder: list[dict],
         if not completed_normally:
             _terminate_boundary_proc(state_holder[0])
 
+    # GENESIS-GATE HARD-STOP (ledger row 1918): a halted commit -- `screens.py`'s `_execute_
+    # commit` sets `state["commit_halted"]` whenever `commit_executor.execute()` returns
+    # `completed=False` (the genesis-gate verify-commission stop is one instance of this; ANY
+    # commit-entry failure halts the same way) -- must exit NON-ZERO. Previously this function
+    # always returned 0 once the screen loop itself finished without an exception, even when the
+    # commit it drove never completed: indistinguishable from success to a caller checking only
+    # the process exit code. `2` is otherwise unused by this module (3/130/1/128+SIGTERM already
+    # taken).
+    if state_holder[0].get("commit_halted"):
+        return 2
     return 0
 
 
@@ -311,7 +331,8 @@ def _run_textual(cl: Checklist, state: dict, state_holder: list[dict], screens: 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(sys.argv[1:] if argv is None else argv)
     cl = Checklist()
-    state: dict = {"dry_run": args.dry_run}
+    state: dict = {"dry_run": args.dry_run,
+                   "accept_unverified_genesis": args.accept_unverified_genesis}
     state_holder: list[dict] = [state]
 
     screens = SCREENS

@@ -1,6 +1,6 @@
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-19T19:33:00Z
-#   last-change: 2026-07-21T22:28:21Z
+#   last-change: 2026-07-21T23:44:25Z
 #   contributors: ab5d5bab/main, 43f77bff/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -138,6 +138,18 @@ class CommandAct:
     # (ADR-0002) -- a typed, reviewed extension (ADR-0000 Rule 1), not a downstream guard around
     # one call site. Defaults to `False`: every existing `CommandAct` call site is unaffected.
     best_effort: bool = False
+    # GENESIS-GATE ADDITION (ledger row 1918, the verify-commission hard-stop): several driven
+    # verbs report success via EXIT CODE ALONE even when the real success signal is a parsed
+    # field of their own stdout (`verify-commission`'s own "TWO VERBS" contract -- it exits 0
+    # whether or not its JSON body's `verdict` is VERIFIED; see `signed_genesis.
+    # verify_commission_act`'s own docstring). `verdict_check`, if set, is the ONE place
+    # `commit_executor._run_entry` learns the REAL ok/detail for such an act, taking priority
+    # over the exit-code-based derivation below -- a generic hook (no signed_genesis import
+    # here, matching `CallableAct`'s own "kept generic on purpose" discipline), reusable by any
+    # future act whose exit code is not its truth. `None` (the default, every prior call site)
+    # means "exit code is the truth", byte-identical to every act built before this field
+    # existed (ADR-0004 minimal-touch).
+    verdict_check: "Callable[[str], tuple[bool, str]] | None" = None
 
     def render(self) -> str:
         return " ".join(render_arg(a) for a in self.argv)
