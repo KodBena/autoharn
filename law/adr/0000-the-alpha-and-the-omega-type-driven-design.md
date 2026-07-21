@@ -590,6 +590,31 @@ trusted here" is the same in-the-moment demurral Rule 2 already names — the
 closure statement's quantification universe, not the author's optimism, decides
 what reaches the construction site.
 
+## Anecdote — 2026-07-22: a Rule 2(b) answer for the cargo-cult class (the named-consumer question)
+
+*(Dated append per ADR-0005 Rule 8; recorded weakly, as an anecdote — the facts
+carry it. Project ledger rows 1905–1906.)*
+
+A recurring failure shape in this project's own operations — ceremony or
+record-keeping proposed without anyone who needs it (a typed-confirmation
+apply ceremony retired 2026-07-11 as "cargo-cult sysadmin work"; certification
+paperwork rejected on the same ground) — had condemnations on record but no
+Rule 2(b) answer: no test that catches the next instance at proposal time. One
+took shape on 2026-07-22. An orchestrator, retiring an audit-trail mechanism,
+required its data harvested first "so the audit trail isn't destroyed." The
+maintainer asked one question: *name the auditor for whom we are obliged to
+submit that record.* There was none — git history already held the data
+immutably, and the record was lossy anyway — and the requirement collapsed.
+The question generalizes as a proposal-time test: **every record kept,
+ceremony performed, or artifact preserved names its consumer — the specific
+reader, process, or investigation that will open it, and the decision it will
+inform when they do; a
+step whose consumer cannot be honestly named is ritual, and ritual is deleted,
+not documented.** "For the audit trail" and "for safety" are not consumers;
+they are the demurral shapes the question catches. Enforcement surface, honest:
+review-only — it is a question, cheap, binary, and asked first of one's own
+proposals.
+
 ## License
 
 Public Domain (The Unlicense).
