@@ -1093,6 +1093,79 @@ mechanism to mint is a lint over verb/scaffold sources that flags expansion or
 concatenation inside evaluator-bound text absent an adjacent closed-alphabet
 validation or carrier call.*
 
+### Amendment — 2026-07-22: P10 — data is not code (a tenth principle, deliberately not subsumed)
+
+*(Provenance: the 2026-07-19 setup-TUI field test and its 2026-07-21 four-class
+investigation (project ledger rows 1844–1850). Witnessed substrate: three modules of
+one operator-facing package — the setup wizard, `tools/setup_tui/` — carried 44–63%
+authored prose and configuration as Python literals, and a fourth interleaved
+user-facing copy sentence-by-sentence through control flow; four fresh-context
+ADR-compliance reviews of that same package surfaced SSOT and interpreter-boundary
+defects and never the co-location, because no principle named it.
+Maintainer-instructed: "data is not code; factor out the prompts." Drafted and
+twice fresh-context-reviewed as
+[design/FABLE-ADR-0012-DATA-IS-NOT-CODE-AMENDMENT.md](../../design/FABLE-ADR-0012-DATA-IS-NOT-CODE-AMENDMENT.md),
+which proposed it as a P1 extension; at ratification (maintainer, 2026-07-22) it was
+deliberately promoted to a standalone tenth principle instead, on the maintainer's
+own reasoning: the failure mode is nasty precisely because it survived active
+ADR-discipline — "one would think a brief glance at ADR-0012 would be enough that
+such code smells never rear their heads, but look what happened, despite our
+discipline" — so it earns a clause a reader cannot skim past, not a register-note
+inside P1. The Decision section's "nine principles" framing stands unedited per
+ADR-0005 Rule 8; this amendment adds the tenth by dated append.)*
+
+New anti-pattern row (appended, per this section's convention):
+
+| Audit cancer / boundary | The shape to never author | Preventing rule |
+| --- | --- | --- |
+| **(new, content boundary)** — authored content embedded as program text | operator-facing copy, teaching prose, prompt/screen text, feature catalogs, rules/config tables, or any other content whose edits are judged by reading it as *writing or configuration*, authored as literals inside a logic module — block-form (a hundred-line dict of prose) or interleaved (copy threaded through control flow) | **P10** — content has one home, and that home is a *data artifact* (a data-only module, a structured file, a keyed registry) the logic loads and renders; logic modules contain the strings that ARE logic (raised errors, log diagnostics, wire/protocol constants) and no others |
+
+#### P10 — data is not code
+
+**Rule (checkable).** A file answers to one editor identity. The check: *(a) for
+each sizable literal, ask whose act a change to it is — a writing/config edit, or a
+logic edit; a writing-edit literal inside a logic module is the violation; (b) a
+module that is majority content by volume is a data artifact wearing a logic file's
+name — split it so the data artifact is declared as such and the residual logic
+imports it; (c) content is addressed by key/identity from logic (the renderer
+receives typed content, it does not concatenate prose fragments inline).* The
+discriminator against over-reading: error messages, log lines, docstrings, SQL/wire
+constants, and format strings for internal state are the logic's own contract and
+stay. A one-line label does not trigger the rule; a paragraph does; between them the
+edit-identity question decides, calibrated at review like P3's one-clause test.
+
+**Why a principle of its own, and not P1's:** the relation to P1 is real — this is
+derive-don't-duplicate's sibling failure, not two homes for one fact but one home
+serving two masters — yet the witnessed substrate proves subsumption is how it
+hides: co-located content defeats both audiences at once (the prose reviewer cannot
+see the copy as a document; the code reviewer wades through pages carrying no
+decisions — ADR-0007's density red flag), every content edit lands as a logic diff
+(maximizing ADR-0004's partial-visibility hazard for zero-logic changes), and
+reviews aimed at P1/P2/P8 walked straight past it four times. It also composes with
+the 2026-07-18 interpreter-boundary amendment above: content rendered by
+interpolation into program-adjacent text is one refactor away from the splicing that
+amendment bans, whereas content addressed as typed data is not.
+
+**Cancer prevented:** the content-register form of **B** (a logic file becomes the
+second, unacknowledged home of what is really a document), of **G** (load-bearing
+operator guidance living where no writing review will ever read it), and the root
+cause of chronic ADR-0007 violation in operator-facing modules (the witnessed
+substrate: files at 1.2–3.6× the ceiling whose overage was majority content).
+
+*Enforcement surface (ADR-0011 Rule 1, honest): review-only at authoring — the
+edit-identity question is a judgment; `gates/max_lines.py` (ADR-0007's
+mechanization, minted from this same field test) is the blunt backstop that forces
+the question when a file grows past budget. The ADR-0011 Rule-2 trigger: if a
+majority-content logic module recurs after this record, mint the measured check (a
+literal-volume-fraction lint over the affected package) rather than re-stating the
+rule in prose. No retroactive sweep: the witnessed offenders are already queued
+under their own remediation track; existing files elsewhere retrofit on touch
+(ADR-0004). The Self-application section's P1–P9 enforcement catalog likewise
+stands unedited per ADR-0005 Rule 8: P10's enforcement-surface declaration lives
+in this paragraph, in the amendment that mints the principle — the same
+disposition the 2026-06-20 amendment used when it extended P7's declaration from
+its own text.*
+
 ## License
 
 Public Domain (The Unlicense).
