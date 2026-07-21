@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-19T20:05:03Z
-#   last-change: 2026-07-21T20:14:08Z
+#   last-change: 2026-07-21T20:39:33Z
 #   contributors: ab5d5bab/main, 43f77bff/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -1073,10 +1073,9 @@ def screen_boundary(ui, cl, state):
                            act=CommandAct(argv=tuple(argv))))
 
     can_start = ui.confirm("Start the boundary service now (this process)?", default=True)
-    venv_python = os.path.expanduser("~/w/vdc/venvs/generic/bin/python")
-    if can_start and os.path.isfile(venv_python):
-        argv2 = [venv_python, "-m", "serving.boundary_service", "--config", toml_path,
-                 "--port", str(port)]
+    preferred_python = os.path.expanduser("~/w/vdc/venvs/generic/bin/python"); venv_python, interp_reason = ((preferred_python, f"venv interpreter: {preferred_python}") if os.access(preferred_python, os.X_OK) else (w, f"venv absent -- using python3 on PATH: {w}") if (w := probes.which("python3")) else (None, f"NEITHER {preferred_python} NOR python3 is on PATH")); can_start and ui.say(f"  interpreter: {interp_reason}")  # ADR-0012 P1 fallback (new-project.sh:319-320); never silent (ADR-0002 1/4)
+    if can_start and venv_python:
+        argv2 = [venv_python, "-m", "serving.boundary_service", "--config", toml_path, "--port", str(port)]
         ui.say(f"  $ {' '.join(argv2)}   (background)")
         plan.append(PlanEntry(screen="boundary", item="service started",
                                lesson="starts the boundary service, this process's own child",
@@ -1085,9 +1084,10 @@ def screen_boundary(ui, cl, state):
         state["boundary_will_start"] = True
         state["boundary_world"] = world
     else:
+        if can_start and not venv_python: ui.say(f"  REFUSED auto-start: operator answered yes, but {interp_reason} -- falling back to the manual/systemd instructions below."); cl.add("boundary", "service auto-start", ck.REFUSED, interp_reason)  # ADR-0002 rung 4
         unit_text = (
             f"[Unit]\nDescription=autoharn boundary service ({world})\n\n"
-            f"[Service]\nExecStart={venv_python} -m serving.boundary_service "
+            f"[Service]\nExecStart={venv_python or preferred_python} -m serving.boundary_service "
             f"--config {toml_path}\nWorkingDirectory={REPO_ROOT}\nRestart=on-failure\n\n"
             f"[Install]\nWantedBy=multi-user.target\n"
         )
