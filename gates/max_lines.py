@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-21T20:16:51Z
-#   last-change: 2026-07-21T20:16:51Z
+#   last-change: 2026-07-21T20:20:58Z
 #   contributors: 43f77bff/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -121,7 +121,11 @@ EXCLUDE_PATH_PREFIXES = ("tools/makespan-scheduler/",)
 # ratchet. Sorted by count, descending (a data table -- ADR-0007's own contraction rule permits
 # packing a fixture/constant literal like this one row per line).
 BASELINE: dict[str, int] = {
-    "tools/setup_tui/screens.py":                    1458,
+    # 1458 at gate authoring (base dd31de3); reconciled +6 to 1464 at integration: the
+    # idris2-preflight fix (8580848) merged between the gate's baseline measurement and its
+    # own merge -- witnessed growth from a parallel worktree, not unnoticed growth. The
+    # ratchet points DOWN from here.
+    "tools/setup_tui/screens.py":                    1464,
     "gates/kind_shape_manifest_gate.py":              1152,
     "hooks/pretooluse_change_gate.py":                1138,
     "hooks/stop_clean_exit.py":                        992,
