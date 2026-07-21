@@ -713,6 +713,7 @@ fi
 # should not have to notice unaided -- so it surfaces as a WARNING, not a blocked write.
 warn_path_shaped_in_statement() {
   local text="$1" word
+  local -a flagged=()
   set -f  # no glob expansion while scanning statement words
   for word in $text; do
     case "$word" in
@@ -721,19 +722,28 @@ warn_path_shaped_in_statement() {
         ;;
       /*|./*|*/*)
         if [ ! -e "$word" ]; then
-          echo "led: WARNING -- the statement contains a path-shaped token '${word}' with nothing" >&2
-          echo "  at that path right now (artifact-claim-dereference-guard / night-build-defect-" >&2
-          echo "  repair: the original ledger rows 896-897 specimen was exactly this shape -- a" >&2
-          echo "  path embedded in STATEMENT PROSE, not passed via --evidence)." >&2
-          echo "  WARN-ONLY, not a refusal: a statement may legitimately narrate a path that is" >&2
-          echo "  about to be created, or one that lives on a different host/checkout. If this" >&2
-          echo "  statement is asserting the artifact exists NOW, re-check '${word}' before" >&2
-          echo "  trusting this row later." >&2
+          # Accumulate rather than print here: the explanation is printed ONCE below, after the
+          # loop, so a statement with N flagged tokens gets one preamble + an N-item list instead
+          # of the full paragraph repeated N times (AUTOHARN_BACKFLOW finding 5).
+          flagged+=("$word")
         fi
         ;;
     esac
   done
   set +f
+  if [ "${#flagged[@]}" -gt 0 ]; then
+    echo "led: WARNING -- the statement contains path-shaped token(s) with nothing at that path" >&2
+    echo "  right now (artifact-claim-dereference-guard / night-build-defect-repair: the original" >&2
+    echo "  ledger rows 896-897 specimen was exactly this shape -- a path embedded in STATEMENT" >&2
+    echo "  PROSE, not passed via --evidence)." >&2
+    echo "  WARN-ONLY, not a refusal: a statement may legitimately narrate a path that is about to" >&2
+    echo "  be created, or one that lives on a different host/checkout. If this statement is" >&2
+    echo "  asserting the artifact exists NOW, re-check the token(s) below before trusting this" >&2
+    echo "  row later." >&2
+    for word in "${flagged[@]}"; do
+      echo "    - ${word}" >&2
+    done
+  fi
 }
 
 # --event-time COVERAGE GUARD -- --event-time is parsed by the SHARED top-of-file loop above
