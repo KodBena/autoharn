@@ -1,0 +1,72 @@
+seen-red/setup-tui-genesis-gate-hard-stop -- banked RED evidence (both-polarity proof, fixture-census)
+
+GENESIS-GATE HARD-STOP (ledger row 1918, maintainer's verbatim "Yes, it should stop"):
+AUTOHARN_BACKFLOW.md finding 1's CLASS -- `verify-commission` exits 0 whether or not its JSON
+body's verdict is VERIFIED, and every `commit_executor.py` through commit b9f3612 judged an
+act's success by EXIT CODE ALONE, so a failed genesis-commission verification was treated as a
+success: the wizard recorded a REFUSED checklist row and COMPLETED the birth anyway, producing a
+world with a permanently-unverifiable genesis. (The WRONG-KEY instance of this class was already
+fixed at 238b4ea; this fixture proves the CLASS itself, and its fix, at the commit_executor
+layer that actually carries both the defect and the repair.)
+
+This fixture pins `tools/setup_tui/commit_executor.py` AS IT STOOD at commit b9f3612 (loaded via
+`importlib`, the same technique seen-red/setup-tui-signed-genesis-key-pinning/run_fixtures.py
+uses), builds a real two-entry Plan (a real `signed_genesis.verify_commission_act` against a
+scratch verify-commission stand-in carrying the REAL binary's exact I/O contract -- exit 0
+always, verdict in the JSON body -- followed by a canary write only a CONTINUED commit ever
+reaches), and runs the SAME plan through the pinned pre-fix module and the current, fixed
+module. It also drives the REAL `screens.py` `_dispatch_result` teaching-refusal/checklist-row
+logic and the REAL `app.py` `_drive_screens` exit-code control flow, never mocking this
+project's own code -- only the external verify-commission subprocess.
+
+Real captured stdout, 2026-07-21, a live run against this commit's working tree, zero residue
+after cleanup, exit 0:
+
+case 1 (RED): pre-fix commit_executor (b9f3612) COMPLETES past a NOT_VERIFIED verdict
+  OK   RED: pre-fix commit reports completed=True despite the NOT_VERIFIED verdict (the defect, reproduced for real)
+  OK   RED: pre-fix commit ran the canary entry AFTER the failed verify (nothing halted it)
+case 2 (GREEN): post-fix commit_executor STOPS on the same NOT_VERIFIED verdict
+  OK   GREEN: post-fix commit reports completed=False -- the commit HALTED
+  OK   GREEN: the canary entry never ran -- nothing after the failed gate executed
+  OK   GREEN: the verify entry's own EntryResult is ok=False (the real halt signal)
+  OK   GREEN: the commit journal still names the verify-commission entry PENDING (never marked DONE) -- a fixed-keyring re-run resumes exactly here
+  OK   GREEN: the refusal teaches -- transcript names 'GENESIS-GATE HARD STOP'
+  OK   GREEN: the refusal teaches -- transcript names 'WHAT FAILED'
+  OK   GREEN: the refusal teaches -- transcript names 'WHY IT MATTERS'
+  OK   GREEN: the refusal teaches -- transcript names 'WHAT TO CHECK'
+  OK   GREEN: the refusal teaches -- transcript names 'HOW TO RESUME'
+  OK   GREEN: the refusal teaches -- transcript names 'OVERRIDE:'
+  OK   GREEN: the refusal teaches -- transcript names '--accept-unverified-genesis'
+  OK   GREEN: the checklist records the stop with the existing, honest REFUSED status (no new vocabulary minted)
+case 3 (GREEN): --accept-unverified-genesis continues past the SAME verdict, eyes open, recorded
+  OK   GREEN: override -- commit reports completed=True (today's note-and-continue preserved)
+  OK   GREEN: override -- the canary entry ran (the commit was NOT halted)
+  OK   GREEN: override -- the verify entry's own EntryResult is ok=True (override honored)
+  OK   GREEN: override -- the REAL verdict (NOT_VERIFIED) is still carried in detail, never faked as VERIFIED
+  OK   GREEN: override -- transcript names the eyes-open continuation
+  OK   GREEN: override -- an EXPLICIT, separate checklist row records the override (the eyes-open record the commission asks for), status WITNESSED
+  OK   GREEN: override -- the gate's OWN row still honestly reads REFUSED (the override does not make the signature verify, only lets the commit continue past the fact)
+case 4 (GREEN): stop -> fix the scratch verify-commission -> resume completes (journal-level, real commit_executor.execute() re-entry)
+  OK   stop-fix-resume: first run halted
+  OK   stop-fix-resume: canary absent after the halted run
+  OK   stop-fix-resume: the RESUMED run (same destination, same journal) completed
+  OK   stop-fix-resume: the canary entry ran on resume
+  OK   stop-fix-resume: the commit journal is removed once every entry is DONE
+  NOTE (scope, honest): this proves the resume property at the commit_executor/journal layer, using the scratch verify-commission stand-in. A full live-birth resume through the REAL bootstrap/templates/verify-commission.tmpl (real gpg keygen, a real mismatched key, a real re-sign) needs a real new-project.sh birth against a live Postgres substrate -- UNEXERCISED here, out of this fixture's scoped claim, matching seen-red/setup-tui-signed-genesis-resume/run_fixtures.py's own identical scoping for its live-DB extended case.
+case 5 (GREEN): app.py's non-zero exit on a halted commit (control-flow unit check, no live TUI needed)
+  OK   app.py: a halted commit -> non-zero exit code (previously always 0)
+  OK   app.py: a NORMAL run (no commit_halted) -> exit 0, unaffected
+  OK   app.py: --accept-unverified-genesis parses and is threaded
+
+all cases GREEN (or honestly UNEXERCISED)
+
+SEPARATE GREEN LEGS (not part of this fixture, reported alongside it, per the commission's own
+witness plan):
+  - seen-red/setup-tui-scripted-smoke/run_fixtures.py: 13/13 cases OK, unaffected by this change.
+  - gates/max_lines.py: clean (screens.py ratchet reconciled 1665->1728, signed_genesis.py
+    503->525, both with rationale; commit_executor.py/plan.py/app.py stay under the 400 ceiling).
+  - gates/setup_tui_purity_gate.py: clean, no exemption-table change.
+  - dry-run-parity re-run against HARNESS_PGHOST/deployment.json: UNEXERCISED -- this worktree
+    has no deployment.json (confirmed absent by `ls`); the main checkout's own deployment.json
+    names a reachable host, but worktree isolation forbids this session from running against the
+    main checkout. The orchestrator re-witnesses post-merge, per the commission's own contingency.

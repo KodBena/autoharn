@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-19T20:05:03Z
-#   last-change: 2026-07-21T22:32:52Z
+#   last-change: 2026-07-21T23:46:24Z
 #   contributors: ab5d5bab/main, 43f77bff/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -1009,11 +1009,24 @@ def screen_signed_genesis(ui, cl, state):
                "cannot verify a signature that was never made (spec §3) -- never a faked "
                "VERIFIED; this entry is never even queued under --dry-run")
     else:
-        verify_act, verify_produces = signed_genesis.verify_commission_act(dest, commission_id_arg)
+        # GENESIS-GATE HARD-STOP (ledger row 1918): the override is decided HERE, before commit
+        # (this act is built at plan time -- there is no "ask after it fails" in a pure-decider
+        # flow) -- `state["accept_unverified_genesis"]` is set once, from `--accept-unverified-
+        # genesis`, by app.py's own argument parsing, applying uniformly to every backend
+        # (`--scripted` included: the flag rides the process argv, not an answers-file line, so
+        # a scripted/fixture invocation exercises it by passing the flag alongside `--scripted`).
+        accept_unverified = bool(state.get("accept_unverified_genesis", False))
+        verify_act, verify_produces = signed_genesis.verify_commission_act(
+            dest, commission_id_arg, accept_unverified=accept_unverified)
         plan.append(PlanEntry(screen="signed-genesis", item="ceremony gate (verify-commission)",
-                               lesson="requires the VERIFIED verdict before recording WITNESSED",
+                               lesson="requires the VERIFIED verdict before recording WITNESSED "
+                                      "(or an explicit --accept-unverified-genesis override)",
                                act=verify_act, produces=verify_produces))
         ui.say(f"  queued: {verify_act.render()}")
+        if accept_unverified:
+            ui.say("  --accept-unverified-genesis is set for this run: if the gate below does "
+                   "not confirm VERIFIED, the ceremony will continue anyway -- eyes open, "
+                   "recorded on its own checklist row, never silent.")
 
     ui.say("  Signed genesis complete for this run: nothing further in this flow, or in the "
            "world's ongoing operation, demands another signature (spec §1 item 5) -- "
@@ -1464,16 +1477,59 @@ def _dispatch_result(ui, cl, state, index: int, entry: PlanEntry, result, proc=N
         return
 
     if entry.screen == "signed-genesis" and entry.item == "ceremony gate (verify-commission)":
+        # GENESIS-GATE HARD-STOP (ledger row 1918, closing the AUTOHARN_BACKFLOW.md finding-1
+        # CLASS): this row's own status is always the honest gate verdict -- REFUSED when not
+        # VERIFIED, regardless of the override, because the override does not make the signature
+        # verify, it only decides whether the COMMIT halts on that fact (see the separate
+        # override-exercised row below, `_verify_commission_ok`'s own docstring, and
+        # signed_genesis.verify_commission_act's).
         body = signed_genesis.parse_verify_body(result.detail)
         verdict = body.get("verdict") or body.get("refusal") or "(no verdict parsed)"
         ui.say(f"  verify-commission verdict: {verdict}")
         if body.get("verdict") == "VERIFIED":
             cl.add(entry.screen, entry.item, ck.WITNESSED, f"VERIFIED: {str(body.get('detail', ''))[:200]}")
-        else:
-            ui.say(f"  REFUSED to record the ceremony WITNESSED -- the gate's own verdict was "
-                   f"not VERIFIED ({verdict}); this renders the verb's own teaching honestly "
-                   f"rather than shortcutting the gate.")
-            cl.add(entry.screen, entry.item, ck.REFUSED, verdict)
+            return
+        ui.say(f"  REFUSED to record the ceremony WITNESSED -- the gate's own verdict was not "
+               f"VERIFIED ({verdict}); this renders the verb's own teaching honestly rather than "
+               f"shortcutting the gate.")
+        cl.add(entry.screen, entry.item, ck.REFUSED,
+               f"NOT VERIFIED ({verdict}) -- override exercised, continuing (see the override "
+               f"row below)" if result.ok else
+               f"NOT VERIFIED ({verdict}) -- ceremony STOPPED here; see teaching below")
+        if result.ok:
+            # `verify_commission_act`'s own `verdict_check` only returns ok=True on a failed
+            # verdict when --accept-unverified-genesis was given (signed_genesis.py's own
+            # docstring) -- this branch IS the override path; record it as its own, separate,
+            # eyes-open row (the commission's own "PLUS an explicit checklist row").
+            ui.say("  --accept-unverified-genesis was given: continuing DESPITE this unverified "
+                   "genesis signature -- eyes open, on the record below. This world's audit "
+                   "chain will anchor to a signature that did not verify; that is a deliberate "
+                   "choice made for this run, not a bug.")
+            cl.add(entry.screen, "verify-commission override exercised", ck.WITNESSED,
+                   f"--accept-unverified-genesis: proceeded past verdict={verdict}")
+            return
+        # No override: this is the hard stop (result.ok is False, so commit_executor.execute()
+        # halts after this on_result call returns -- the plan entries after this one never run).
+        ui.say("")
+        ui.say("  GENESIS-GATE HARD STOP -- the ceremony did not verify, and the commit is "
+               "halting HERE (nothing after this step ran).")
+        ui.say("  WHAT FAILED: verify-commission could not confirm the genesis commission's gpg "
+               "signature against the keys this world trusts (this destination's keys/).")
+        ui.say("  WHY IT MATTERS: this signature is what every later record in this world's "
+               "ledger anchors its provenance to -- a world born on an unverifiable genesis has "
+               "a permanently unverifiable audit chain (AUTOHARN_BACKFLOW.md finding 1's class).")
+        ui.say("  WHAT TO CHECK: the fingerprint pinned in keys/ (see keys/README.md) matches "
+               "the key that actually signed; the GNUPGHOME/keyring used to sign is the same one "
+               "whose public half was exported; the .asc signature file was not corrupted or "
+               "hand-edited.")
+        ui.say("  HOW TO RESUME: fix the keyring/keys/ mismatch, then re-run this tool against "
+               "the SAME destination -- the commit journal resumes at this exact still-PENDING "
+               "step (WPC4). If the real defect is that the WRONG KEY signed (not a keyring-side "
+               "fix), resuming will not repair it: the sign step already ran and is journaled "
+               "DONE, so a resumed run never re-signs -- re-sign and re-verify by hand (gpg + "
+               "<dest>/verify-commission), or start a fresh birth.")
+        ui.say("  OVERRIDE: re-run with --accept-unverified-genesis to proceed anyway, eyes "
+               "open -- the override is recorded as its own checklist row, never silent.")
         return
 
     if entry.screen == "boundary" and entry.item == "service started":
@@ -1579,6 +1635,13 @@ def _execute_commit(ui, cl, state) -> None:
             cl.add(CE.DAEMON_SCREEN, f"{v.daemon.name} verified up", ck.NOT_UP, v.detail)
 
     if not result.completed:
+        # GENESIS-GATE HARD-STOP (ledger row 1918) and every other commit halt share this same
+        # fact: a halted commit is not a clean run, and this process's own exit code must say so
+        # (app.py's `_drive_screens` reads this flag once the screen loop finishes) -- previously
+        # ANY halted commit still exited 0, indistinguishable from success to a caller checking
+        # only the process exit code, a hazard this fix closes for the whole class, not only the
+        # genesis-gate instance that surfaced it.
+        state["commit_halted"] = True
         ui.say("")
         ui.say("  COMMIT HALTED -- the journal names the next PENDING step; re-run this tool "
                "(or --start-at checklist against the same destination) to resume, or finish by "

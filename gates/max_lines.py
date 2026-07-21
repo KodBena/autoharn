@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-21T20:16:51Z
-#   last-change: 2026-07-21T23:00:38Z
+#   last-change: 2026-07-21T23:47:25Z
 #   contributors: 43f77bff/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -152,7 +152,16 @@ BASELINE: dict[str, int] = {
     # synthesized start-daemons script and the end-of-run VERIFIED-UP/NOT-UP translation loop.
     # None of this is a probe consolidation with slack to absorb it, unlike the destination-state
     # bump above. Written plain, no golfing (same no-go clause); witnessed growth.
-    "tools/setup_tui/screens.py":                    1665,
+    # Reconciled +63 to 1728 (GENESIS-GATE HARD-STOP, ledger row 1918): genuinely new decision
+    # logic, not padding -- `screen_signed_genesis` now computes and announces the
+    # `--accept-unverified-genesis` override before queueing the verify-commission act;
+    # `_dispatch_result`'s verify-commission branch grew from a five-line REFUSED/WITNESSED
+    # split into the ADR-0002 strongest-rung teaching refusal the commission requires (what
+    # failed, why it matters, what to check, how to resume, that the override exists and its
+    # cost) plus the override-exercised checklist row; `_execute_commit` sets
+    # `state["commit_halted"]` so app.py can exit non-zero on any halted commit. Written plain,
+    # no golfing (same no-go clause); witnessed growth.
+    "tools/setup_tui/screens.py":                    1728,
     "gates/kind_shape_manifest_gate.py":              1152,
     "hooks/pretooluse_change_gate.py":                1138,
     "hooks/stop_clean_exit.py":                        992,
@@ -177,7 +186,11 @@ BASELINE: dict[str, int] = {
     "engine/ledger_differential.py":                    529,
     "hooks/pretooluse_delegation_observer.py":          525,
     "gates/ledger_reader_allowlist.py":                 513,
-    "tools/setup_tui/signed_genesis.py":                503,
+    # Reconciled +22 to 525 (GENESIS-GATE HARD-STOP, ledger row 1918): `verify_commission_act`
+    # gained the `accept_unverified` parameter and its own `_verify_commission_ok` verdict_check
+    # function (the real halt-vs-continue decision, previously nowhere -- exit code was silently
+    # trusted). Genuinely new decision logic, not padding. Written plain, no golfing.
+    "tools/setup_tui/signed_genesis.py":                525,
     "gates/interpreter_boundary_lint.py":               498,
     "hooks/stamp_intercept.py":                         482,
     "tools/experiments/typed_table.py":                 442,

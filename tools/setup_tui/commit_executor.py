@@ -1,21 +1,19 @@
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-19T19:33:56Z
-#   last-change: 2026-07-21T22:30:52Z
+#   last-change: 2026-07-21T23:44:53Z
 #   contributors: ab5d5bab/main, 43f77bff/main
 # <<< PROVENANCE-STAMP <<<
 
 """tools/setup_tui/commit_executor.py -- THE ONE COMMIT BOUNDARY (design/FABLE-SETUP-TUI-
 PURE-CORE-SPEC.md §2.3/§2.6, commission ledger rows 1823 point 2 / 1825).
 
-PHASE-1 FOUNDATION MODULE (builder's report): consumes a `tools.setup_tui.plan.Plan` built by a
-(future, not-yet-rewired) pure decision phase and executes its entries in order through the SAME
-runner choke points (`tools.setup_tui.runner.run_command` / `write_file` / `start_background`) --
-never a second implementation of what those choke points already do (ADR-0012 P1). This module,
-plus `tools.setup_tui.screens`'s declared rehearsal exception, is where §2.8's forthcoming AST
-purity gate will assert those three names are the ONLY call sites in `tools/setup_tui/` -- not
-added yet in this pass, because asserting it now would go red against the still-unconverted
-`screens.py` (see the builder's report: landing a gate that is red on `main` is a hazard in its
-own right, not a proof).
+WIRED (Phase 2 complete): `screens.py`'s eleven-screen decision phase builds this `Plan`;
+`screen_checklist`'s `_execute_commit` is the sole live caller of `execute()` below, and its
+`on_step`/`on_result` callbacks drive `ui.say`/`cl.add`. `gates/setup_tui_purity_gate.py`'s §2.8
+AST gate is live and asserts this module (plus `screens.py`'s declared rehearsal exception) is
+the ONLY call site for the three runner choke points (`run_command`/`write_file`/
+`start_background`) -- never a second implementation of what those choke points already do
+(ADR-0012 P1) -- under `tools/setup_tui/`.
 
 WHAT THIS MODULE PROVIDES, THAT IS ALREADY LOAD-BEARING FOR THE PROPERTIES SPEC §4 NAMES:
 
@@ -46,14 +44,10 @@ WHAT THIS MODULE PROVIDES, THAT IS ALREADY LOAD-BEARING FOR THE PROPERTIES SPEC 
     so a caller (a future `led show`-driven witness) can confirm a hole resolved to the value the
     world actually recorded.
 
-WHAT THIS MODULE DELIBERATELY DOES NOT DO YET: drive the checklist/`Ui` calls a fully-wired
-commit boundary needs (rendering the lesson line, the exact argv, the streamed output, and the
-checklist row per entry, per spec §2.3) -- those need the SAME `Ui`/`Checklist` objects the
-decision phase used, which only exist once `screens.py`/`app.py` are rewired to build a `Plan`
-instead of acting directly. `execute()` accepts optional `on_step` / `on_result` callbacks so that
-wiring is additive when it lands (a fully-wired caller passes callbacks that call `ui.say`/
-`cl.add`; this module's own unit-level proof, `seen-red/setup-tui-pure-core-foundation/
-run_fixtures.py`, passes a recording callback instead of a live `Ui`).
+`on_step`/`on_result` (see `execute()`'s own docstring) are the seam a caller drives `ui.say`/
+`cl.add` through -- `screens.py`'s `_execute_commit` is the live caller; `seen-red/setup-tui-
+pure-core-foundation/run_fixtures.py` drives the same seam with a recording callback instead of a
+live `Ui`, this module's own unit-level proof.
 """
 from __future__ import annotations
 
@@ -372,9 +366,12 @@ def _run_entry(entry: PlanEntry, bindings: dict[str, str],
     if isinstance(act, CommandAct):
         argv, stdin_text = act.resolve(bindings)
         res = runner.run_command(argv, cwd=act.cwd, env=act.resolve_env(), stdin_text=stdin_text)
-        # See CommandAct.best_effort's own docstring (plan.py): never halts the commit.
-        ok = True if act.best_effort else res.ok
-        detail = res.output if not act.best_effort else f"exit={res.returncode}\n{res.output}"
+        if act.verdict_check is not None:  # GENESIS-GATE (plan.py's own docstring): exit code
+            ok, detail = act.verdict_check(res.output)  # is not this act's truth; the check is.
+        elif act.best_effort:  # See CommandAct.best_effort's own docstring (plan.py).
+            ok, detail = True, f"exit={res.returncode}\n{res.output}"
+        else:
+            ok, detail = res.ok, res.output
         return EntryResult(entry=entry, ok=ok, detail=detail), None
     if isinstance(act, WriteAct):
         path, content = act.resolve(bindings)

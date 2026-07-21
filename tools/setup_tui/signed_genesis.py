@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-19T01:39:25Z
-#   last-change: 2026-07-21T19:37:45Z
+#   last-change: 2026-07-21T23:45:17Z
 #   contributors: ab5d5bab/main, 43f77bff/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -43,6 +43,7 @@ Lazy imports are banned (CLAUDE.md, 2026-07-02): every import here is top of fil
 """
 from __future__ import annotations
 
+import functools
 import json
 import os
 import re
@@ -478,19 +479,40 @@ def sign_statement_act(gnupghome: str | None, statement: str, asc_path: Arg, *,
     return CommandAct(argv=tuple(argv), stdin_text=statement), "signed-asc"
 
 
-def verify_commission_act(dest: str, commission_id_arg: Arg) -> tuple[CommandAct, str]:
+def verify_commission_act(dest: str, commission_id_arg: Arg, *,
+                           accept_unverified: bool = False) -> tuple[CommandAct, str]:
     """`<dest>/verify-commission --id <id> --json` -- THE gate (spec step 4), as a plan act
     ordered LAST in the ceremony (after signing) so it verifies the signature this SAME commit
     just made. Never appended to the plan under `--dry-run` at all (screens.py's own
     responsibility -- there is no signature to verify that was never made; the WOULD-DO table
-    shows a `DRY-SKIPPED` row instead, never a faked argv for an act that will never run). The
-    real verdict is parsed from this entry's own real stdout by the caller's `on_result` callback
-    (screens.py), not here -- `verify-commission` itself exits 0 whether or not the verdict is
-    VERIFIED (module docstring's own "TWO VERBS" note), so the commit executor's own `ok` (exit
-    code) is not the signal; the JSON body's `verdict` field is, and that parse is a decision the
-    CHECKLIST makes, which is screens.py's job."""
+    shows a `DRY-SKIPPED` row instead, never a faked argv for an act that will never run).
+
+    GENESIS-GATE HARD-STOP (ledger row 1918, AUTOHARN_BACKFLOW.md finding 1's class): the checklist
+    ROW's verdict is still parsed by the caller's `on_result` callback (screens.py's own job, per
+    the CHECKLIST's honesty rule), but whether this act HALTS THE COMMIT is now this act's own
+    `verdict_check` (plan.py), because `verify-commission` itself exits 0 whether or not the
+    verdict is VERIFIED (module docstring's own "TWO VERBS" note) -- the commit executor's
+    ordinary exit-code-based `ok` was never the right signal here, and treating it as one is
+    exactly how a prior build let a birth COMPLETE on an unverifiable genesis signature. `ok` is
+    now `(verdict == "VERIFIED") or accept_unverified` -- `accept_unverified` is the
+    `--accept-unverified-genesis` override (screens.py threads it through from `state`, decided
+    BEFORE commit since this act is built at plan time, never re-asked after the fact)."""
     verify = os.path.join(dest, "verify-commission")
-    return CommandAct(argv=(verify, "--id", commission_id_arg, "--json")), "verify-body"
+    check = functools.partial(_verify_commission_ok, accept_unverified=accept_unverified)
+    return CommandAct(argv=(verify, "--id", commission_id_arg, "--json"),
+                       verdict_check=check), "verify-body"
+
+
+def _verify_commission_ok(output: str, *, accept_unverified: bool) -> tuple[bool, str]:
+    """The `CommandAct.verdict_check` `verify_commission_act` installs -- the SAME `parse_verify_
+    body` parse `screens.py`'s `_dispatch_result` uses for the checklist row (ADR-0012 P1: one
+    parse, not two that could drift), reduced to the one bit `commit_executor._run_entry` needs:
+    does this commit continue past this entry? `output` is always returned unchanged as `detail`
+    so the checklist row built from it downstream is never fabricated -- only `ok` differs from
+    the plain exit-code default."""
+    body = parse_verify_body(output)
+    verified = body.get("verdict") == "VERIFIED"
+    return (verified or accept_unverified), output
 
 
 def parse_verify_body(output: str) -> dict:
