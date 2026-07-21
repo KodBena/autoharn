@@ -3899,7 +3899,12 @@ SQL
         echo "       display text); refused if it is not currently an in-force member." >&2
         echo "       reissued: a successor act exists -- cite it with --witness <ref> (WARNS if" >&2
         echo "       omitted, never refused -- the kernel cannot verify successor equivalence)." >&2
-        echo "       retired: the defect is moot -- the basis text says why." >&2
+        echo "       retired: the defect is moot -- the basis text says why. If the target is a" >&2
+        echo "       work_opened row, this disposition is ACCEPTED at write time but only TAKES" >&2
+        echo "       EFFECT once that slug's work_item_current.state reads 'closed' -- re-derived" >&2
+        echo "       on every read, never a stored verdict, so it is not a refusal: the row sits" >&2
+        echo "       inert until the slug closes, and a later-superseded close reopens the debt" >&2
+        echo "       in the same read." >&2
         echo "       EXACTLY ONE of --review-witness/--review-deferred is REQUIRED (consult A5:" >&2
         echo "       a disposition removes stop-gate debt, same discipline as work_closed)." >&2
         echo "       Refused if <violating-act-id> already has an IN-FORCE disposition (consult" >&2
