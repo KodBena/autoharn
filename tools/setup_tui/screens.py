@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-19T20:05:03Z
-#   last-change: 2026-07-19T20:05:03Z
-#   contributors: ab5d5bab/main
+#   last-change: 2026-07-21T20:14:08Z
+#   contributors: ab5d5bab/main, 43f77bff/main
 # <<< PROVENANCE-STAMP <<<
 
 """tools/setup_tui/screens.py -- the eleven screens, PHASE 2 (design/FABLE-SETUP-TUI-PURE-CORE-
@@ -142,11 +142,17 @@ def screen_preflight(ui, cl, state):
                    f"and ./judge need it, but this does not block setup)")
             cl.add("preflight", f"{name} found", ck.WITNESSED,
                    "not on PATH (non-fatal, matches bootstrap/bootstrap.sh's own posture)")
+        elif name == "idris2":
+            ui.say(f"  {name}: not found on PATH (non-fatal -- it backs autoharn's own "
+                   f"categorical-kernel-model freshness gate, gates/idris_model_freshness.py; "
+                   f"a downstream project built from this scaffold does not need it, and this "
+                   f"does not block setup)")
+            cl.add("preflight", f"{name} found", ck.WITNESSED,
+                   "not on PATH (non-fatal -- house discipline for autoharn's own repo only, "
+                   "not required by a scaffolded downstream project)")
         else:
             ui.say(f"  {name}: RED -- not found on PATH")
             fix = {
-                "idris2": "install idris2 (https://github.com/idris-lang/Idris2#installation) "
-                          "and ensure it is on PATH",
                 "python3": "install Python 3 and ensure it is on PATH",
                 "psql": "install the postgresql-client package and ensure `psql` is on PATH",
             }[name]
