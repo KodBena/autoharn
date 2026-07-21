@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-21T20:16:51Z
-#   last-change: 2026-07-21T20:43:45Z
+#   last-change: 2026-07-21T21:42:54Z
 #   contributors: 43f77bff/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -133,7 +133,15 @@ BASELINE: dict[str, int] = {
     # code golf in a decision path hides bugs"), which outranks the ratchet. Rewritten in
     # plain, clearly-formatted statements; this bump is that plain form's honest cost, sanctioned
     # growth per this same rule's own "witnessed growth ... not unnoticed growth" precedent.
-    "tools/setup_tui/screens.py":                    1487,
+    # Reconciled +56 to 1543 (design/FABLE-SETUP-TUI-DESTINATION-STATE-SPEC.md build): the five
+    # ad hoc destination probes this build replaces each shrank to one `classify_destination`
+    # call, but `screen_fork_target`'s new FOREIGN third mode (spec §3 -- evidence display +
+    # explicit typed acknowledgment, replacing a flat refusal) is genuinely NEW decision logic,
+    # not a probe consolidation; `screen_birth`'s new FOREIGN-without-acknowledgment gate is the
+    # same shape. Net across the module is a bump, not a shrink -- the five-consolidations
+    # savings did not outweigh the one new mode's honest cost. Written plain (no golfing, per
+    # this same rule's own no-go clause above); witnessed growth, not unnoticed growth.
+    "tools/setup_tui/screens.py":                    1543,
     "gates/kind_shape_manifest_gate.py":              1152,
     "hooks/pretooluse_change_gate.py":                1138,
     "hooks/stop_clean_exit.py":                        992,

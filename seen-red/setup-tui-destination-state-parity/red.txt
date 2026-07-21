@@ -1,0 +1,20 @@
+seen-red/setup-tui-destination-state-parity -- banked evidence (both-polarity proof, fixture-census)
+
+design/FABLE-SETUP-TUI-DESTINATION-STATE-SPEC.md §5's second witness-set item: "Parity fixture:
+shell vs Python classification agree on the five witnessed shapes (fresh / complete / partial /
+foreign / legacy-complete)." bootstrap/classify-destination.sh (real subprocess) vs
+tools/setup_tui/destination.py's classify_destination (in-process) over real filesystem shapes.
+
+Real captured stdout, 2026-07-21, a live run against this commit's working tree:
+
+$ python3 seen-red/setup-tui-destination-state-parity/run_fixtures.py
+case 'fresh' ok: python=fresh shell=fresh (agree)
+case 'complete' ok: python=autoharn-complete shell=autoharn-complete (agree)
+case 'partial' ok: python=autoharn-partial shell=autoharn-partial (agree)
+case 'foreign' ok: python=foreign shell=foreign (agree)
+case 'legacy-complete' ok: python=autoharn-complete shell=autoharn-complete (agree)
+case 'contradiction' ok: python=autoharn-partial shell=autoharn-partial (agree)
+ALL CASES OK -- shell/Python classification parity, five witnessed shapes + contradiction, real
+subprocess, zero mocks
+
+exit 0.

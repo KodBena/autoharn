@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-19T20:05:03Z
-#   last-change: 2026-07-21T20:43:25Z
+#   last-change: 2026-07-21T21:42:40Z
 #   contributors: ab5d5bab/main, 43f77bff/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -61,6 +61,7 @@ from pathlib import Path
 
 from tools.setup_tui import checklist as ck
 from tools.setup_tui import commit_executor as CE
+from tools.setup_tui import destination
 from tools.setup_tui import durable_decisions, feature_facts, governed_files, pghba, probes
 from tools.setup_tui import principals_authority, signed_genesis
 from tools.setup_tui.plan import BackgroundAct, CommandAct, Plan, PlanEntry, WriteAct
@@ -352,15 +353,41 @@ def screen_fork_target(ui, cl, state):
     ])
     if mode == "fresh":
         dest = ui.ask_text("Fresh destination directory (will be created)")
-        dest_path = Path(dest)
-        if dest_path.exists():
-            ui.say(f"  REFUSED: destination '{dest}' already exists -- a 'fresh directory' "
-                   f"request against an occupied path would have new-project.sh merge into it "
-                   f"silently. Nothing done.")
-            cl.add("fork-target", "destination", ck.REFUSED, f"REFUSED: '{dest}' already exists")
+        dest_state = destination.classify_destination(dest)
+        if dest_state.kind == destination.DestKind.FRESH:
+            state["dest"] = dest
+            cl.add("fork-target", "destination", ck.WITNESSED, f"fresh dir: {dest}")
+            _governed_files_step(ui, cl, state, dest)
+            return state
+        if dest_state.kind == destination.DestKind.AUTOHARN_COMPLETE:
+            ui.say(f"  REFUSED: '{dest}' is already a complete autoharn world "
+                   f"({'; '.join(dest_state.evidence)}) -- re-entry (`--start-at`) reaches an "
+                   f"existing world without touching it; a genuine re-birth needs teardown "
+                   f"first (bootstrap/teardown-world.sh). Nothing done.")
+            cl.add("fork-target", "destination", ck.REFUSED,
+                   f"REFUSED: '{dest}' is AUTOHARN_COMPLETE")
+            return state
+        if dest_state.kind == destination.DestKind.AUTOHARN_PARTIAL:
+            ui.say(f"  REFUSED: '{dest}' looks like an INTERRUPTED prior birth "
+                   f"({'; '.join(dest_state.evidence)}) -- see the birth screen's own "
+                   f"partial-birth teaching (teardown-world.sh, never a bare re-birth) once you "
+                   f"reach it. Nothing done here.")
+            cl.add("fork-target", "destination", ck.REFUSED,
+                   f"REFUSED: '{dest}' is AUTOHARN_PARTIAL")
+            return state
+        # FOREIGN -- the new third mode (spec §3): evidence + an explicit ack, never a flat
+        # refusal or a silent merge (the blank world proved the use case real).
+        ui.say(f"  '{dest}' is non-empty and carries no autoharn birth evidence "
+               f"({'; '.join(dest_state.evidence)}).")
+        if not ui.confirm("Scaffold into this existing content anyway? (new-project.sh will be "
+                           "told to accept it explicitly -- no silent merge)", default=False):
+            cl.add("fork-target", "destination", ck.REFUSED,
+                   f"REFUSED: '{dest}' is FOREIGN content, not acknowledged")
             return state
         state["dest"] = dest
-        cl.add("fork-target", "destination", ck.WITNESSED, f"fresh dir: {dest}")
+        state["dest_accept_foreign"] = True
+        cl.add("fork-target", "destination", ck.WITNESSED,
+               f"FOREIGN content acknowledged: {dest}")
         _governed_files_step(ui, cl, state, dest)
         return state
 
@@ -372,9 +399,13 @@ def screen_fork_target(ui, cl, state):
         ui.say(f"  REFUSED: source '{src}' is not a directory -- nothing copied.")
         cl.add("fork-target", "fork-copy", ck.REFUSED, f"REFUSED: '{src}' not a directory")
         return state
-    if dest_path.exists():
-        ui.say(f"  REFUSED: destination '{dest}' already exists -- nothing copied.")
-        cl.add("fork-target", "fork-copy", ck.REFUSED, f"REFUSED: '{dest}' already exists")
+    dest_state = destination.classify_destination(dest)
+    if dest_state.kind != destination.DestKind.FRESH:
+        ui.say(f"  REFUSED: destination '{dest}' already exists ({dest_state.kind.value}: "
+               f"{'; '.join(dest_state.evidence)}) -- `cp -a` into an occupied directory nests "
+               f"the copy rather than creating it, so this mode stays fresh-only. Nothing copied.")
+        cl.add("fork-target", "fork-copy", ck.REFUSED,
+               f"REFUSED: '{dest}' is {dest_state.kind.value}")
         return state
 
     ui.say(f"  $ cp -a {src} {dest}")
@@ -555,9 +586,25 @@ def screen_birth(ui, cl, state):
     dest = state.get("dest") or ui.ask_text("Destination directory")
     name = ui.ask_text("Project name (deployment.json 'name')", default=world)
 
+    # The previously-missing check (spec §3): `state["dest"]` used to be trusted unchecked here.
+    # FOREIGN is sanctioned only by fork-target's ack (`dest_accept_foreign`) or a same-session
+    # queue (`dest_would_exist`); AUTOHARN_COMPLETE/PARTIAL stay new-project.sh's own gate.
+    dest_state = destination.classify_destination(dest)
+    if (dest_state.kind == destination.DestKind.FOREIGN
+            and not state.get("dest_accept_foreign") and not state.get("dest_would_exist")):
+        ui.say(f"  REFUSED: '{dest}' classifies as FOREIGN content "
+               f"({'; '.join(dest_state.evidence)}) -- birth into non-autoharn content needs "
+               f"the explicit acknowledgment from fork-target's FOREIGN mode, never queued "
+               f"silently. Go back to fork-target, or pick a different destination.")
+        cl.add("birth", "destination classification", ck.REFUSED,
+               f"REFUSED: '{dest}' is FOREIGN, not acknowledged")
+        return state
+
     extra = ["--name", name]
     if state.get("governed_patterns"):
         extra += ["--governed", governed_files.governed_flag_value(state["governed_patterns"])]
+    if state.get("dest_accept_foreign"):
+        extra += ["--accept-existing-content"]
     argv = _new_project_argv(dest, world, db, host, extra=extra)
     ui.say(f"  $ {' '.join(argv)}")
     _plan(state).append(PlanEntry(
@@ -608,9 +655,9 @@ def screen_principals_authority(ui, cl, state):
     plan = _plan(state)
     queued_names: set[str] = state.setdefault("planned_principal_names", set())
 
-    dest_exists = os.path.isdir(dest)
-    # Out-of-sequence-entry amendment (design/FABLE-SETUP-TUI-SPEC.md 2026-07-19): a nonexistent
-    # `dest` is legitimate ONLY when THIS session already queued a birth for it
+    dest_state = destination.classify_destination(dest)
+    # Out-of-sequence-entry amendment (design/FABLE-SETUP-TUI-SPEC.md 2026-07-19): a not-yet-born
+    # `dest` (classifier FRESH) is legitimate ONLY when THIS session already queued a birth for it
     # (`state["dest_would_exist"]`, set by screen_birth/screen_fork_target) -- a genuinely
     # out-of-sequence entry (no birth in this run at all, e.g. `--start-at principals-authority`
     # against a path nobody ever discussed) must refuse legibly here, the same precondition check
@@ -619,20 +666,25 @@ def screen_principals_authority(ui, cl, state):
     # scaffold-base display below, silently treating a true out-of-sequence entry as "not yet
     # born, normal sequence" -- caught live against real Postgres (seen-red/setup-tui-principals-
     # authority WP6a).
-    if not dest_exists and not state.get("dest_would_exist"):
+    if dest_state.kind == destination.DestKind.FRESH and not state.get("dest_would_exist"):
         ui.say(f"  REFUSED: destination directory '{dest}' does not exist -- nothing to "
                f"constitute against. Run a birth first (or check the path), then retry this "
                f"screen.")
         cl.add("principals-authority", "destination exists", ck.REFUSED, f"'{dest}' not a directory")
         return state
+    dest_exists = dest_state.kind != destination.DestKind.FRESH
     if dest_exists:
-        legacy_led = os.path.join(dest, "legacy", "led")
-        if not os.path.isfile(legacy_led):
-            ui.say(f"  REFUSED: no {legacy_led} -- this does not look like a world this "
-                   f"project's own scaffold produced. Nothing done.")
-            cl.add("principals-authority", "legacy/led present", ck.REFUSED, f"missing: {legacy_led}")
+        if dest_state.kind != destination.DestKind.AUTOHARN_COMPLETE:
+            ui.say(f"  REFUSED: '{dest}' classifies as {dest_state.kind.value} "
+                   f"({'; '.join(dest_state.evidence)}) -- this does not look like a complete "
+                   f"world this project's own scaffold produced. Nothing done.")
+            cl.add("principals-authority", "legacy/led present", ck.REFUSED,
+                   f"{dest_state.kind.value}: {'; '.join(dest_state.evidence)}")
             return state
-        cl.add("principals-authority", "legacy/led present", ck.WITNESSED, legacy_led)
+        # AUTOHARN_COMPLETE guarantees legacy/led (classifier rule, spec §2) -- the private
+        # isfile probe folds into the classification rather than being re-derived (spec §3).
+        cl.add("principals-authority", "legacy/led present", ck.WITNESSED,
+               os.path.join(dest, "legacy", "led"))
         try:
             existing = principals_authority.list_principals(dest)
         except Exception as exc:  # noqa: BLE001 -- a read-only probe; report, never crash the flow
@@ -787,7 +839,9 @@ def screen_signed_genesis(ui, cl, state):
     state["dest"] = dest
     plan = _plan(state)
 
-    dest_exists = os.path.isdir(dest)
+    # spec §3: the private isdir probe replaced by the one Port -- FRESH (absent or empty) reads
+    # as "not there yet", exactly what the bare isdir check meant here.
+    dest_exists = destination.classify_destination(dest).kind != destination.DestKind.FRESH
     if not dest_exists:
         if state.get("dest_would_exist"):
             cl.add("signed-genesis", "destination exists", ck.DRY_SKIPPED,
@@ -1000,7 +1054,9 @@ def screen_boundary(ui, cl, state):
         return state
     dest = state.get("dest") or ui.ask_text("Destination directory")
     state["dest"] = dest
-    if not os.path.isdir(dest):
+    # spec §3: the private isdir probe replaced by the one Port (same FRESH-means-"not there
+    # yet" reading as signed-genesis's own site above).
+    if destination.classify_destination(dest).kind == destination.DestKind.FRESH:
         if state.get("dest_would_exist"):
             cl.add("boundary", "destination exists", ck.DRY_SKIPPED,
                    f"'{dest}' queued earlier in this run -- not independently checkable "

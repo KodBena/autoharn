@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-19T02:44:09Z
-#   last-change: 2026-07-19T20:06:26Z
-#   contributors: ab5d5bab/main
+#   last-change: 2026-07-21T21:55:15Z
+#   contributors: ab5d5bab/main, 43f77bff/main
 # <<< PROVENANCE-STAMP <<<
 
 """Both-polarity-adjacent smoke fixture for tools/setup_tui (ledger row 1700's commission):
@@ -121,21 +121,29 @@ def main() -> int:
     scratch = tempfile.mkdtemp(prefix="setup-tui-scripted-smoke-")
     try:
         # --- case 1: fork-target, occupied fresh-dir target -> REFUSED ---
-        # (trailing "n"s decline every later screen this --start-at run still walks through --
-        # rehearsal/birth-override/principals-authority/signed-genesis/boundary-override/
-        # observability/hydration -- signed-genesis (design/FABLE-SETUP-TUI-SIGNED-GENESIS-
-        # SPEC.md) added the 6th "n"; principals-authority
-        # (design/FABLE-SETUP-TUI-PRINCIPALS-AUTHORITY-SPEC.md, inserted between Birth and
-        # Signed genesis) adds the 7th.)
+        # FIXTURE-CONTRACT CHANGE (design/FABLE-SETUP-TUI-DESTINATION-STATE-SPEC.md §2, this
+        # build): the old bare `Path.exists()` refused ANY pre-existing path, empty or not; the
+        # new classifier reads an EMPTY directory as FRESH (spec §2's own worked example: "no
+        # path, or an empty directory -> FRESH") -- an empty placeholder dir is now legitimately
+        # ACCEPTED, not refused. This case is repointed to a genuinely NON-EMPTY (FOREIGN)
+        # directory to keep testing "you cannot pick an already-occupied path as your 'fresh'
+        # target" -- the property the case's own name states. The new FOREIGN mode adds ONE more
+        # scripted answer (the "scaffold into this existing content anyway?" confirm, declined
+        # here with "n" to keep the refusal leg) -- trailing "n"s unchanged in count/meaning
+        # otherwise (rehearsal/birth-override/principals-authority/signed-genesis/boundary-
+        # override/observability/hydration).
         occupied = os.path.join(scratch, "occupied")
         os.makedirs(occupied)
-        cp = run_scripted("y\nfresh\n" + occupied + "\nn\nn\nn\nn\nn\nn\nn\n", "fork-target",
+        with open(os.path.join(occupied, "pre-existing.txt"), "w") as f:
+            f.write("not autoharn's\n")
+        cp = run_scripted("y\nfresh\n" + occupied + "\nn\nn\nn\nn\nn\nn\nn\nn\n", "fork-target",
                            scratch)
         out = cp.stdout + cp.stderr
         assert cp.returncode == 0, f"case 1: expected exit 0, got {cp.returncode}: {out[-800:]}"
-        assert "REFUSED: destination" in out and occupied in out, out[-800:]
+        assert "FOREIGN content, not acknowledged" in out and occupied in out, out[-800:]
         assert "REFUSED=1" in out or "REFUSED=2" in out, out[-800:]
-        print("case 1 ok: fork-target refuses an occupied 'fresh' destination, nothing copied")
+        print("case 1 ok: fork-target refuses an occupied (FOREIGN) 'fresh' destination unless "
+              "explicitly acknowledged, nothing copied")
 
         # --- case 2: substrate, dedicated path, invalid db name -> REFUSED, no pg_hba read ---
         # (trailing "n"s decline every later screen this --start-at run still walks through --
@@ -294,8 +302,15 @@ def main() -> int:
         assert "REFUSED: destination directory" in out10a and missing_dest_sg in out10a, out10a[-800:]
         assert "Traceback" not in out10a, out10a[-800:]
 
+        # FIXTURE-CONTRACT NOTE (design/FABLE-SETUP-TUI-DESTINATION-STATE-SPEC.md §2, this
+        # build): an EMPTY directory now classifies FRESH (same as nonexistent), so this case's
+        # "real-but-unscaffolded directory" needs a placeholder FILE to stay FOREIGN and exercise
+        # the keys/verify-commission/legacy-led-missing REFUSED leg it originally tested (an
+        # empty dir here would now hit the SAME "does not exist yet" refusal as case 10a).
         bare_dest_sg = os.path.join(scratch, "sg_bare_dest")
         os.makedirs(bare_dest_sg)
+        with open(os.path.join(bare_dest_sg, "pre-existing.txt"), "w") as f:
+            f.write("not autoharn's\n")
         cp10b = run_scripted(f"y\n{bare_dest_sg}\n" + "n\n" * 4, "signed-genesis", scratch,
                               dry_run=True)
         out10b = cp10b.stdout + cp10b.stderr

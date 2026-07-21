@@ -1,7 +1,7 @@
 #!/bin/sh
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-09T11:15:53Z
-#   last-change: 2026-07-21T19:38:57Z
+#   last-change: 2026-07-21T21:46:09Z
 #   contributors: be693afb/main, e4410ef6/main, 3c50e030/main, a857c93d/main, 9a17b6b9/main, ab5d5bab/main, 43f77bff/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -127,6 +127,12 @@ usage() {
     echo "          --new-world mode) by default -- tracker item portable-adr-delivery, maintainer" >&2
     echo "          instruction 2026-07-15: deployments must at least optionally receive the" >&2
     echo "          portable ADRs; default is ON)" >&2
+    echo "         (--accept-existing-content: <dest-dir> classifies FOREIGN -- non-empty, no" >&2
+    echo "          autoharn birth evidence (design/FABLE-SETUP-TUI-DESTINATION-STATE-SPEC.md) --" >&2
+    echo "          is REFUSED unless this flag is given explicitly; the setup TUI passes it" >&2
+    echo "          exactly when its own fork-target screen recorded the operator's typed" >&2
+    echo "          acknowledgment. Has no effect on AUTOHARN_COMPLETE/AUTOHARN_PARTIAL, which" >&2
+    echo "          keep the existing deployment.json-exists / --force gate above)" >&2
     exit 2
 }
 
@@ -165,6 +171,11 @@ PIN_URL=""
 # scaffold defaulting to silence (mirrors this script's own --governed default-notice posture:
 # the safe default is loud, not absent).
 LAW_SECTION=1
+# design/FABLE-SETUP-TUI-DESTINATION-STATE-SPEC.md §3: opt-in, default UNSET so every existing
+# caller keeps today's shape -- a FOREIGN <dest-dir> (non-empty, no autoharn birth evidence) is
+# now REFUSED (see the classify_destination gate below, right before mkdir -p) unless this flag
+# says so explicitly.
+ACCEPT_EXISTING_CONTENT=0
 while [ $# -gt 0 ]; do
     case "$1" in
         --db) DB="$2"; shift 2 ;;
@@ -181,6 +192,7 @@ while [ $# -gt 0 ]; do
         --pin-url) PIN_URL="$2"; shift 2 ;;
         --no-law) LAW_SECTION=0; shift ;;
         --force) FORCE=1; shift ;;
+        --accept-existing-content) ACCEPT_EXISTING_CONTENT=1; shift ;;
         *) echo "unrecognized argument: $1" >&2; usage ;;
     esac
 done
@@ -318,6 +330,25 @@ fi
 TEMPLATES="$AUTOHARN_ROOT/bootstrap/templates"
 PY="$HOME/w/vdc/venvs/generic/bin/python"
 [ -x "$PY" ] || PY="$(command -v python3)"
+
+# design/FABLE-SETUP-TUI-DESTINATION-STATE-SPEC.md §3: the FOREIGN-content refusal, BEFORE
+# `mkdir -p` (this used to `mkdir -p` and merge into ANY occupied directory lacking
+# deployment.json, silently -- the defect the spec's commission names). AUTOHARN_COMPLETE/
+# AUTOHARN_PARTIAL are untouched here -- they keep the deployment.json-exists/--force gate below,
+# unchanged. `classify_destination` is bootstrap/classify-destination.sh's own shell
+# re-derivation of tools/setup_tui/destination.py's Python classifier (that module is the
+# authority; see this sourced file's own header for why the two are kept in sync by a parity
+# fixture, not codegen).
+. "$AUTOHARN_ROOT/bootstrap/classify-destination.sh"
+DEST_KIND="$(classify_destination "$DEST")"
+if [ "$DEST_KIND" = "foreign" ] && [ "$ACCEPT_EXISTING_CONTENT" -ne 1 ]; then
+    echo "new-project.sh: REFUSED -- '$DEST' is non-empty and carries no autoharn birth" >&2
+    echo "                evidence (FOREIGN, design/FABLE-SETUP-TUI-DESTINATION-STATE-SPEC.md)." >&2
+    echo "                Pass --accept-existing-content to scaffold into it anyway (the setup" >&2
+    echo "                TUI passes this exactly when its fork-target screen recorded the" >&2
+    echo "                operator's typed acknowledgment). Nothing touched." >&2
+    exit 1
+fi
 
 mkdir -p "$DEST"
 PROJECT_ROOT="$(cd "$DEST" && pwd)"
@@ -621,6 +652,32 @@ if not boundary_url or not boundary_deployment:
           "asof-export/distance-to-clean shims will refuse, teaching both names, until this "
           "deployment.json gains them by hand or a future --boundary-url/--boundary-deployment "
           "re-scaffold; ./legacy/ holds the direct-psql originals in the meantime)")
+PYEOF
+
+# .autoharn-world.json sentinel (design/FABLE-SETUP-TUI-DESTINATION-STATE-SPEC.md §2), written
+# at the SAME point as deployment.json above -- the DECLARED birth marker; deployment.json +
+# legacy/led remain the BEHAVIORAL evidence. `world` is written as the SAME value as
+# deployment.json's own `name` field just written above (tools/setup_tui/destination.py's module
+# docstring names this resolution explicitly: the two denote the same fact at birth time, and can
+# only drift apart from a LATER hand-edit or a --force re-scaffold under a different --name --
+# exactly the drift classify_destination's contradiction check exists to catch). `run` is
+# `--new-world`'s own value, empty for a classic --schema/--kern/--role scaffold (no world/run
+# concept at all). SENTINEL_SCHEMA is imported from destination.py, not re-typed (ADR-0012 P1).
+echo "-- .autoharn-world.json sentinel --"
+"$PY" - "$PROJECT_ROOT/.autoharn-world.json" "$NAME" "$NEW_WORLD" "$CREATED_AT" "$AUTOHARN_COMMIT_SHA" <<PYEOF
+import json
+import sys
+sys.path.insert(0, "$AUTOHARN_ROOT")
+from tools.setup_tui import destination
+
+path, world, run, born, commit = sys.argv[1:6]
+with open(path, "w", encoding="utf-8") as f:
+    json.dump({
+        "world": world, "run": run or None, "born": born,
+        "autoharn_commit": commit or None, "schema": destination.SENTINEL_SCHEMA,
+    }, f, indent=2)
+    f.write("\n")
+print(f"wrote {path}")
 PYEOF
 
 mkdir -p "$PROJECT_ROOT/.claude/logs" "$PROJECT_ROOT/.claude/secrets"

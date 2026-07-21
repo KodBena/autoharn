@@ -1,0 +1,27 @@
+seen-red/setup-tui-destination-state -- banked evidence (both-polarity proof, fixture-census)
+
+design/FABLE-SETUP-TUI-DESTINATION-STATE-SPEC.md §5's first witness-set item: "Unit fixtures:
+one per kind, plus the contradiction case and the pre-sentinel legacy-world case." Each case is
+a real filesystem directory under a scratch tmpdir, classified by
+tools/setup_tui/destination.py's classify_destination -- zero mocks. The implicit red/green
+pairing: a mutated sibling shape (one marker added/removed, or a contradicting field) must
+classify DIFFERENTLY from its neighbor, catching a classifier that collapsed two distinct kinds
+to the same answer.
+
+Real captured stdout, 2026-07-21, a live run against this commit's working tree:
+
+$ python3 seen-red/setup-tui-destination-state/run_fixtures.py
+case 1 ok: absent path -> FRESH
+case 2 ok: empty directory -> FRESH
+case 3 ok: sentinel + deployment.json + legacy/led, consistent -> AUTOHARN_COMPLETE
+case 4 ok: deployment.json + legacy/led, NO sentinel -> AUTOHARN_COMPLETE (behavioral evidence
+  alone, no retro-stamping)
+case 5 ok: sentinel world != deployment.json name -> AUTOHARN_PARTIAL, contradiction named --
+  NEVER coerced to either reading
+case 6 ok: deployment.json only -> AUTOHARN_PARTIAL, missing markers named
+case 7 ok: corrupt sentinel -> AUTOHARN_PARTIAL (a write that started, did not finish cleanly)
+case 8 ok: non-empty, no autoharn markers -> FOREIGN, evidence samples entries
+ALL CASES OK -- classify_destination, one per kind + contradiction + pre-sentinel-legacy, all
+real filesystem, zero mocks
+
+exit 0.

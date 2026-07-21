@@ -1,0 +1,25 @@
+seen-red/setup-tui-destination-foreign-refusal -- banked RED evidence (both-polarity proof, fixture-census)
+
+design/FABLE-SETUP-TUI-DESTINATION-STATE-SPEC.md §5's third witness-set item, second closed
+defect: "new-project.sh merging into FOREIGN content (red leg in a scratch dir)". Pins
+bootstrap/new-project.sh as it stood at commit a9d779f (this build's own base commit), runs it
+against a real, on-disk, non-empty scratch directory carrying no autoharn birth evidence.
+CLASSIC (--schema/--kern/--role) mode -- no live Postgres touched (every psql call in the
+script is gated on --new-world, which this fixture deliberately does not pass).
+
+Real captured stdout, 2026-07-21, a live run against this commit's working tree:
+
+$ python3 seen-red/setup-tui-destination-foreign-refusal/run_fixtures.py
+case RED ok: pre-fix new-project.sh merges into FOREIGN content silently (exit 0,
+  deployment.json written into pre-existing, unrelated content) -- reproducing the closed defect
+case GREEN leg 1 ok: current new-project.sh refuses FOREIGN content (nonzero exit, nothing
+  written, refusal names --accept-existing-content)
+case GREEN leg 2 ok: --accept-existing-content scaffolds explicitly -- deployment.json +
+  sentinel written, pre-existing content survives
+ALL CASES OK -- new-project.sh's FOREIGN-content refusal, red before green, pinned pre-fix
+script vs current, classic mode (no live Postgres needed), zero mocks
+
+exit 0. Zero residue verified: the pinned pre-fix script is written transiently into
+bootstrap/.new-project-prefix-scratch.sh (its own AUTOHARN_ROOT self-location math needs it
+inside bootstrap/) and removed in the fixture's own `finally` block --
+`git status --short` after this run shows no such file.
