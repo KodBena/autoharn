@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-15T12:52:43Z
-#   last-change: 2026-07-15T12:52:43Z
-#   contributors: a857c93d/main
+#   last-change: 2026-07-21T20:15:21Z
+#   contributors: a857c93d/main, 43f77bff/main
 # <<< PROVENANCE-STAMP <<<
 
 """Seen-red specimen for night-build-defect-repair DEFECT 2 (bootstrap/templates/led.tmpl's
@@ -32,6 +32,12 @@ GREEN (must ACCEPT, a real row lands, round-trip verified):
   - an --evidence directory explicitly cited via a trailing "/"
   - a statement containing a dead path-shaped token -- WARNS (stderr) but still writes (the
     declared asymmetry: --evidence asserts existence NOW, a statement may narrate the future)
+  - a statement containing THREE dead path-shaped tokens -- WARNS ONCE (one preamble paragraph),
+    followed by a 3-item list of the flagged tokens, still writes (AUTOHARN_BACKFLOW finding 5:
+    pre-fix, warn_path_shaped_in_statement() printed the whole six-line explanation paragraph
+    once PER flagged token -- three tokens meant the paragraph three times over in one command's
+    stderr; post-fix it hoists the boilerplate out of the loop, so the paragraph prints once
+    regardless of token count and the tokens themselves become a trailing list)
   - a statement containing a row:<id> citation -- untouched, no warning, writes clean
   - a statement containing a URL -- untouched, no warning, writes clean
 """
@@ -125,6 +131,27 @@ def green_statement_path_warns_but_writes() -> None:
     _check("round-trip verified", rc2 == 0 and TAG in out2)
 
 
+def green_statement_multiple_path_tokens_single_preamble() -> None:
+    print("# GREEN — THREE dead path-shaped tokens in one STATEMENT: ONE preamble, one list, "
+          "still writes (AUTOHARN_BACKFLOW finding 5)")
+    tok_a = "/tmp/does-not-exist-nbdr-multi-a"
+    tok_b = "/tmp/does-not-exist-nbdr-multi-b"
+    tok_c = "./tmp/does-not-exist-nbdr-multi-c"
+    rc, out, err = _run_led(
+        "decision",
+        f"{TAG}: about to write {tok_a} and {tok_b} then {tok_c} across three separate files",
+    )
+    _check("write still succeeds (exit 0, warn-only, not a refusal)", rc == 0)
+    preamble_count = err.count("led: WARNING -- the statement contains")
+    _check("the explanation preamble prints EXACTLY ONCE, not once per token",
+           preamble_count == 1)
+    _check("all three flagged tokens are listed", tok_a in err and tok_b in err and tok_c in err)
+    _check("warning states the warn-only/refuse asymmetry (once)", err.count("WARN-ONLY") == 1)
+    new_id = _current_max_id()
+    rc2, out2, _ = _run_led("show", str(new_id))
+    _check("round-trip verified", rc2 == 0 and TAG in out2)
+
+
 def green_row_citation_untouched() -> None:
     print("# GREEN — row:<id> citation in statement: untouched, no warning, writes clean")
     rc, out, err = _run_led("decision", f"{TAG}: row:1 citation untouched probe")
@@ -150,6 +177,7 @@ def main() -> int:
     green_live_file_evidence()
     green_explicit_directory_evidence()
     green_statement_path_warns_but_writes()
+    green_statement_multiple_path_tokens_single_preamble()
     green_row_citation_untouched()
     green_url_untouched()
     if FAILURES:

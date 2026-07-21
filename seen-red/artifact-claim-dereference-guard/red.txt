@@ -40,3 +40,29 @@ SPECIMEN INERT — 6 check(s) failed: ['guard REFUSES the bare directory (nonzer
 After the fix, the same run_fixtures.py goes fully green (all 7 cases, real led round-trips
 verified) -- see this session's commit message / ledger rows for the green capture and the
 written row ids.
+
+---
+
+Second banked RED capture, AUTOHARN_BACKFLOW finding 5 (bootstrap/templates/legacy-led.tmpl's
+warn_path_shaped_in_statement(): the 6-line WARN-ONLY explanation block sat INSIDE the
+`for word in $text` loop, so a statement flagging N path-shaped tokens printed the entire
+paragraph N times instead of once). Captured by running run_fixtures.py's new
+green_statement_multiple_path_tokens_single_preamble() case against the PRE-FIX function (`git
+stash` of the fix commit's legacy-led.tmpl hunk, fixture re-run, then unstashed): a statement
+with three flagged tokens fires the "led: WARNING -- the statement contains" preamble line three
+times and the "WARN-ONLY" sentence three times, reproducing the finding exactly.
+
+# GREEN — THREE dead path-shaped tokens in one STATEMENT: ONE preamble, one list, still writes (AUTOHARN_BACKFLOW finding 5)
+  [ok] write still succeeds (exit 0, warn-only, not a refusal)
+  [FAIL] the explanation preamble prints EXACTLY ONCE, not once per token
+  [ok] all three flagged tokens are listed
+  [FAIL] warning states the warn-only/refuse asymmetry (once)
+  [ok] round-trip verified
+
+SPECIMEN INERT — 2 check(s) failed: ['the explanation preamble prints EXACTLY ONCE, not once per
+token', 'warning states the warn-only/refuse asymmetry (once)']
+
+After the fix (boilerplate hoisted out of the loop: tokens accumulated into a `flagged` array,
+the six-line preamble + a trailing per-token list printed once after the loop), the same case
+goes green: one preamble, "WARN-ONLY" once, all three tokens listed -- see this commission's
+commit for the green capture.
