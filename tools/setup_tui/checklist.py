@@ -1,14 +1,44 @@
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-18T21:31:50Z
-#   last-change: 2026-07-19T03:02:58Z
-#   contributors: ab5d5bab/main
+#   last-change: 2026-07-21T22:15:42Z
+#   contributors: ab5d5bab/main, 43f77bff/main
 # <<< PROVENANCE-STAMP <<<
 
-"""tools/setup_tui/checklist.py -- honesty rule 3 ("checklist truth"): a per-item
-WITNESSED/SKIPPED/PREPARED record of everything the flow touched, kept as ONE list every screen
-appends to (ADR-0012 P1 -- no screen keeps its own private tally), rendered as the closing
-checklist screen's table and, if the operator opts in, saved as a dated file inside the target
-directory (v1 boundary: nothing written outside the target dir + this saved checklist).
+"""tools/setup_tui/checklist.py -- honesty rule 3 ("checklist truth"): a per-item status record
+of everything the flow touched, kept as ONE list every screen appends to (ADR-0012 P1 -- no
+screen keeps its own private tally), rendered as the closing checklist screen's table and, if
+the operator opts in, saved as a dated file inside the target directory (v1 boundary: nothing
+written outside the target dir + this saved checklist).
+
+STATUS-VOCABULARY SPLIT (design/FABLE-SETUP-TUI-CHECKLIST-SPLIT-SPEC.md \xa72, backflow finding
+3): the original single `PREPARED` status blurred two different claims -- "the operator was
+told what to run" and "the thing this line depends on exists / is running" -- into one word.
+The witnessed consequence: an opted-in monitoring feature's PREPARED rows read as assurance
+while the printed start line referenced a config file the scaffold never wrote, so a real
+coverage gap was invisible. `PREPARED` splits into three closed members, names final per the
+spec:
+
+  * `INSTRUCTED` -- the operator was shown a command/unit text; nothing about the world's state
+    is claimed. (The old PREPARED's honest reading -- always legal, never lies.)
+  * `PREPARED` -- NARROWED: every prerequisite artifact the printed instruction references was
+    confirmed present AT PRINT TIME (a config file exists, a resolved interpreter exists). A
+    PREPARED row names its confirmed prerequisites in its own `detail` -- enforced below,
+    construction-time (ADR-0002 rung 1): a screen may not emit PREPARED with an empty detail.
+  * `VERIFIED_UP` -- a live probe, taken AFTER the thing it verifies actually ran, confirmed the
+    named service running/healthy (the substrate/boundary screens' existing post-keypress-probe
+    pattern, promoted to vocabulary for the new daemon-selection sweep, spec \xa73 point 3).
+
+  and one closed, NAMED absence-rendering the spec's \xa75 note asks this module to resolve
+  (rather than leaving "selected but never came up" as an ad hoc REFUSED/WITNESSED-with-a-sad-
+  detail): `NOT_UP` -- the end-of-run daemon-verification sweep probed a SELECTED daemon and it
+  was not there. Chosen as a NAMED closed-vocabulary member (not an ad hoc `REFUSED` reuse or a
+  bare absent-row convention) because it is neither "an operator declined" (SKIPPED) nor "a
+  validation gate said no before anything ran" (REFUSED) nor "the effect happened but reported
+  failure" (WITNESSED with a red detail, the pattern boundary's own /health probe already uses)
+  -- it is its own honest claim, "selected, attempted, and STILL not observably up", and giving
+  it its own word is what makes it impossible to confuse with a REFUSED validation gate in a
+  report or a fixture assertion (ADR-0008: a fuzzy reuse of an existing status is exactly the
+  vocabulary drift this closed-enum discipline exists to foreclose).
 
 `--dry-run` (design/FABLE-SETUP-TUI-SPEC.md 2026-07-19 amendment) adds two more statuses to the
 SAME table, deliberately -- the amendment's own words are "the checklist's own per-item
@@ -26,12 +56,16 @@ from tools.setup_tui.runner import write_file
 
 WITNESSED = "WITNESSED"
 SKIPPED = "SKIPPED"
+INSTRUCTED = "INSTRUCTED"
 PREPARED = "PREPARED"
+VERIFIED_UP = "VERIFIED-UP"
+NOT_UP = "NOT-UP"
 REFUSED = "REFUSED"
 WOULD_DO = "WOULD-DO"
 DRY_SKIPPED = "DRY-SKIPPED"
 
-_VALID = {WITNESSED, SKIPPED, PREPARED, REFUSED, WOULD_DO, DRY_SKIPPED}
+_VALID = {WITNESSED, SKIPPED, INSTRUCTED, PREPARED, VERIFIED_UP, NOT_UP, REFUSED, WOULD_DO,
+          DRY_SKIPPED}
 
 
 def status_for(res) -> str:
@@ -56,6 +90,14 @@ class ChecklistItem:
     def __post_init__(self) -> None:
         if self.status not in _VALID:
             raise ValueError(f"checklist status '{self.status}' not one of {_VALID}")
+        if self.status == PREPARED and not self.detail.strip():
+            raise ValueError(
+                "checklist status PREPARED requires a non-empty detail NAMING the "
+                "prerequisite(s) confirmed present at print time (design/FABLE-SETUP-TUI-"
+                "CHECKLIST-SPLIT-SPEC.md \xa72: 'a screen may not emit PREPARED without "
+                "listing what it checked') -- use INSTRUCTED if nothing about the world's "
+                "state was confirmed, only a command/unit text shown"
+            )
 
 
 @dataclass

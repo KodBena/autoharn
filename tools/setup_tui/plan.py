@@ -1,7 +1,7 @@
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-19T19:33:00Z
-#   last-change: 2026-07-19T19:48:18Z
-#   contributors: ab5d5bab/main
+#   last-change: 2026-07-21T22:28:21Z
+#   contributors: ab5d5bab/main, 43f77bff/main
 # <<< PROVENANCE-STAMP <<<
 
 """tools/setup_tui/plan.py -- THE PLAN: the reified program a pure decision phase builds
@@ -126,6 +126,18 @@ class CommandAct:
     cwd: str | None = None
     stdin_text: Arg | None = None
     extra_env: tuple[tuple[str, str], ...] | None = None
+    # CHECKLIST-SPLIT-SPEC ADDITION (design/FABLE-SETUP-TUI-CHECKLIST-SPLIT-SPEC.md §3):
+    # `best_effort` -- the ONE call site is `commit_executor._daemon_script_entry`'s companion
+    # run of `<dest>/start-daemons`, whose OWN documented contract is "one daemon's refusal never
+    # blocks a sibling's start" -- a nonzero exit there means "at least one daemon refused",
+    # never "this act is a defect the commit should halt on" (the per-daemon refusal is already
+    # loud in the script's own captured output; blocking every LATER plan entry -- including the
+    # verification sweep itself -- on it would be the opposite of the spec's own "never silence"
+    # goal). `_run_entry` reports `ok=True` unconditionally for a `best_effort` `CommandAct`
+    # while still carrying the REAL exit code/output in `EntryResult.detail`, never hidden
+    # (ADR-0002) -- a typed, reviewed extension (ADR-0000 Rule 1), not a downstream guard around
+    # one call site. Defaults to `False`: every existing `CommandAct` call site is unaffected.
+    best_effort: bool = False
 
     def render(self) -> str:
         return " ".join(render_arg(a) for a in self.argv)
@@ -149,9 +161,24 @@ class CommandAct:
 
 @dataclass(frozen=True)
 class WriteAct:
-    """Mirrors `runner.write_file(path, content, dry_run=)`."""
+    """Mirrors `runner.write_file(path, content, dry_run=)`.
+
+    CHECKLIST-SPLIT-SPEC ADDITION (design/FABLE-SETUP-TUI-CHECKLIST-SPLIT-SPEC.md §3) --
+    `executable`: `runner.write_file` preserves an EXISTING target's mode, or falls back to the
+    umask-adjusted `open(path, "w")` default (module docstring) -- neither path ever sets the
+    executable bit for a file that does not already exist, which is correct for every prior
+    call site (a TOML config, CLAUDE.md, an exported key -- none of those are meant to be run)
+    but wrong for the one new call site that IS meant to be run directly by the operator
+    (`<dest>/start-daemons`, commit_executor.py's own `_daemon_script_entry`). Kept as a typed
+    field on the Act itself, not a special case in `commit_executor._run_entry`'s dispatch,
+    per ADR-0000 Rule 2(a): "executable-or-not" is a property of the WRITE, the same register
+    `write_file`'s own mode-preservation logic already reasons in, not a one-off carve-out for
+    a single path string. Defaults to `False` -- every existing call site (TOML/CLAUDE.md/keys/
+    checklist saves) is unaffected, byte-for-byte the same behavior as before this field existed
+    (ADR-0004 minimal-touch)."""
     path: Arg
     content: Arg
+    executable: bool = False
 
     def render(self) -> str:
         return f"write {render_arg(self.path)}"
@@ -206,6 +233,54 @@ Act = Union[CommandAct, WriteAct, BackgroundAct, CallableAct]
 
 
 # --------------------------------------------------------------------------------------------
+# DaemonSelection (design/FABLE-SETUP-TUI-CHECKLIST-SPLIT-SPEC.md §3): "selected daemons become
+# one fact with one home" -- NOT an Act (constructing one performs no effect; it is pure
+# accumulated data, legal in the decision phase exactly like a PlanEntry append) and not
+# consumed by `commit_executor._run_entry`'s per-Act dispatch. It is read exactly twice, both
+# times by `commit_executor.execute` itself: once to derive the generated `<dest>/start-daemons`
+# script (a synthesized `WriteAct` entry, §3 point 1), and once, after every ordinary entry has
+# committed, to derive the end-of-run verification sweep (§3 point 3).
+# --------------------------------------------------------------------------------------------
+
+@dataclass(frozen=True)
+class DaemonSelection:
+    """One standing service THIS run selected to start (the maintainer's g.1 commission,
+    verbatim: "a daemon collection script depending on selected options that start all relevant
+    daemons"). Appended to `Plan.daemons` by any screen that selects a standing service --
+    today `screen_boundary` (the boundary service) and `screen_observability` (otelcol,
+    otel-watch); "anything future" per the spec is a plain append, no new plumbing needed.
+
+    `argv`/`cwd` are plain strings, never `Hole`s: unlike an ordinary `PlanEntry`, a
+    `DaemonSelection`'s argv is never resolved against another entry's commit-time output --
+    every daemon this build supports is startable from facts already known in the decision
+    phase (a chosen port, a resolved interpreter, a destination path), so a `Hole` carrier
+    would be machinery with no instance that needs it (ADR-0000: no type without a class it
+    forecloses).
+
+    `health_probe` is a closed two-scheme string, never program text spliced anywhere -- the
+    ONE vocabulary `commit_executor._probe_daemon` and this module's own `daemon_scaffold`
+    module both read: `"http:<url>"` (a GET expected to return an HTTP-level 2xx/3xx; the
+    boundary service's `/health`, otelcol's `health_check` extension) or `"pidof:<pattern>"`
+    (a `pgrep -f <pattern>` liveness check; otel-watch, which exposes no HTTP endpoint of its
+    own). An empty string means "no live-verifiable signal for this daemon" -- honestly
+    unrepresentable as either scheme, so the end-of-run sweep records the named absence
+    (`checklist.NOT_UP`) rather than fabricating a probe that isn't there (ADR-0002).
+
+    `prerequisite`, if set, is an absolute path the GENERATED SCRIPT checks for (at script RUN
+    time, on the operator's own machine, possibly long after this plan was built) before
+    starting this one daemon -- e.g. the otelcol binary's resolved path, or `None` if that
+    lookup itself failed at selection time (the missing-binary case IS a legitimate
+    prerequisite name: "otelcol-contrib (not found on PATH at selection time)", so the refusal
+    the script prints on a machine that still lacks it is not a placeholder, it is the fact)."""
+    name: str
+    argv: tuple[str, ...]
+    cwd: str | None
+    env_notes: str
+    health_probe: str
+    prerequisite: str | None = None
+
+
+# --------------------------------------------------------------------------------------------
 # PlanEntry / Plan
 # --------------------------------------------------------------------------------------------
 
@@ -226,11 +301,17 @@ class PlanEntry:
 class Plan:
     """THE PLAN: append-only (spec §2.1 -- "the only inter-screen state is the append-only
     plan"), built entirely by the pure decision phase, consumed exactly once by
-    `commit_executor.execute`."""
+    `commit_executor.execute`. `daemons` is the sibling accumulation CHECKLIST-SPLIT-SPEC §3
+    adds: append-only exactly like `entries`, read by `commit_executor.execute` (never by a
+    screen) to derive the generated script and the end-of-run verification sweep."""
     entries: list[PlanEntry] = field(default_factory=list)
+    daemons: list[DaemonSelection] = field(default_factory=list)
 
     def append(self, entry: PlanEntry) -> None:
         self.entries.append(entry)
+
+    def add_daemon(self, selection: DaemonSelection) -> None:
+        self.daemons.append(selection)
 
     def render(self) -> str:
         """The WOULD-DO table (spec §2.3 -- "the dry-run WOULD-DO table promoted from rehearsal

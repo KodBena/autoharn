@@ -1,0 +1,26 @@
+seen-red/setup-tui-daemon-selection -- banked RED evidence (both-polarity proof, fixture-census)
+
+design/FABLE-SETUP-TUI-CHECKLIST-SPLIT-SPEC.md's commission (backflow finding 3): "an opted-in
+monitoring feature produced zero coverage, silently, its PREPARED rows reading as assurance --
+while the printed start line referenced a config file the scaffold never wrote."
+
+case 2's RED leg reproduces this live against the pinned pre-fix tools/setup_tui/screens.py (this
+worktree's own base commit 93050a9, loaded via `git show`, never touched on disk): driving
+screen_observability's "select otelcol" path there emits
+
+    cl.add("observability", "otelcol start line", ck.PREPARED, otelcol_line)
+
+-- a PREPARED row -- while zero bytes of otelcol-config.yaml were ever written and the flow never
+verifies anything came up. Captured run_fixtures.py output (2026-07-21, this build):
+
+    Show observability blocks?: yes   [scripted]
+    case 2 RED ok: pinned pre-fix screens.py emits PREPARED for the otelcol start line with zero
+    config ever written -- the silent-assurance defect, reproduced live
+
+The post-fix module (case 2 GREEN, same run) never emits ck.PREPARED for otelcol at all -- the
+new status-vocabulary split (design/FABLE-SETUP-TUI-CHECKLIST-SPLIT-SPEC.md §2) makes the
+false-assurance status unrepresentable at this call site by construction, not merely guarded.
+Case 3 closes the loop live: a real missing otelcol-contrib binary (genuinely absent from this
+build host, checked at case-start, not assumed) produces a real per-daemon refusal from the
+generated start-daemons script, and the end-of-run verification sweep reports the closed-
+vocabulary NOT-UP row -- never silence, never a REFUSED/WITNESSED conflation.

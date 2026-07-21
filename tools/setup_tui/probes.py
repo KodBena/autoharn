@@ -1,7 +1,7 @@
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-18T21:32:16Z
-#   last-change: 2026-07-19T19:57:27Z
-#   contributors: ab5d5bab/main
+#   last-change: 2026-07-21T22:15:55Z
+#   contributors: ab5d5bab/main, 43f77bff/main
 # <<< PROVENANCE-STAMP <<<
 
 """tools/setup_tui/probes.py -- the live-connection/liveness probes honesty rule 2 requires
@@ -159,6 +159,27 @@ def http_get_json(url: str, timeout: float = 5.0) -> tuple[bool, int, object]:
     except (json.JSONDecodeError, ValueError):
         parsed = body
     return (200 <= status < 300), status, parsed
+
+
+def process_running(pattern: str) -> tuple[bool, str]:
+    """Whether a process matching `pattern` (an argv substring, `pgrep -f`'s own semantics) is
+    currently alive -- the liveness half of `checklist.py`'s new daemon-verification vocabulary
+    (design/FABLE-SETUP-TUI-CHECKLIST-SPLIT-SPEC.md \xa73 point 3), used for a daemon that
+    exposes no HTTP health endpoint of its own (otel-watch). `pattern` reaches `pgrep` as ONE
+    argv element (`subprocess.run([..., "-f", pattern], ...)`, never shell text) -- the
+    interpreter-boundary rule (ADR-0000's 2026-07-18 amendment) applies even to a read-only
+    probe: a value never crosses as program text, regardless of whether the call it feeds is a
+    write or a read. Never raises: `pgrep` absent from PATH, or any other OSError, reports
+    `(False, "<reason>")` rather than crashing the probe (ADR-0002: fail loud in the RETURN
+    value, since a probe's whole contract is 'report, never explode the caller')."""
+    try:
+        r = subprocess.run(["pgrep", "-f", pattern], capture_output=True, text=True, timeout=5)
+    except OSError as exc:
+        return False, f"pgrep unavailable: {exc}"
+    if r.returncode == 0 and r.stdout.strip():
+        pids = r.stdout.strip().splitlines()
+        return True, f"pgrep -f {pattern!r}: pid(s) {', '.join(pids)}"
+    return False, f"pgrep -f {pattern!r}: no matching process"
 
 
 def free_port(host: str = "127.0.0.1", start: int = 8420, span: int = 200) -> int:
