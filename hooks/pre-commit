@@ -10,8 +10,12 @@
 #
 # FINAL WIRING (BUILD-BRIEF Step 9, extended 2026-07-11 doc-legibility-indictment commission,
 # further extended 2026-07-11 run-10-closure-audit commission, further extended 2026-07-12
-# configuration-surface-survey commission):
-# staging_guard -> no_lazy_imports -> fixture_census -> link_integrity ->
+# configuration-surface-survey commission, further extended 2026-07-21 setup-TUI field-strategy
+# commission Track 1 item 2 — max_lines added, blocking, mechanically alongside fixture_census
+# since its own idiom (a same-shaped pipe-and-echo-and-exit-1 block) made the addition mechanical;
+# the sibling setup_tui purity-gate wiring queued at ledger row 1847 remains DEFERRED to the
+# session-boundary batch, unrelated to whether THIS gate's wiring was mechanical):
+# staging_guard -> no_lazy_imports -> fixture_census -> max_lines -> link_integrity ->
 # apparatus_unknown_keys (gated only when bootstrap/templates/apparatus.json is touched) ->
 # doc_shapes -> doc-attestation-presence -> layout_census -> doc-legibility. layout_census is DISABLED here
 # as of the maintainer ruling below (2026-07-09); it still appears in this history note as the
@@ -69,6 +73,18 @@ PY="$HOME/w/vdc/venvs/generic/bin/python"
 "$PY" "$REPO_ROOT/gates/fixture_census.py" || {
     echo "" >&2
     echo "pre-commit: fixture census FAILED — commit refused (a gate/seen-red is not intact, ADR-0011/C20)." >&2
+    exit 1
+}
+
+# max_lines — ADR-0007's soft file-size threshold, mechanized (design/FABLE-SETUP-TUI-FIELD-
+# STRATEGY.md Track 1 item 2): a NEW file over 400 lines in tools/, gates/, hooks/, or engine/ is
+# refused outright; a pre-existing offender may only shrink or hold its ratcheted baseline, never
+# grow past it. See gates/max_lines.py's own module docstring for the full scope table and
+# ratcheting-baseline rationale.
+"$PY" "$REPO_ROOT/gates/max_lines.py" || {
+    echo "" >&2
+    echo "pre-commit: max-lines gate FAILED — commit refused (ADR-0007's 400-line ceiling; see" >&2
+    echo "gates/max_lines.py's own docstring for the ratcheting baseline and how to read the reason)." >&2
     exit 1
 }
 

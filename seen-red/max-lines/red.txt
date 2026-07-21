@@ -1,0 +1,14 @@
+Banked RED evidence for gates/max_lines.py (ADR-0007 mechanization).
+
+Reproduction: a synthetic new file, `tools/setup_tui/_scratch_over_ceiling_probe.py` (405 lines,
+never in BASELINE), was `git add`-ed into the index (so `git ls-files` -- the gate's own scope
+query -- would see it), the gate run against the real repo root, then the scratch file was
+`git reset` and removed. No baseline entry, no source file, and no other repo state change
+survives this capture -- see seen-red/max-lines/run_fixtures.py for the corresponding
+non-filesystem-touching, both-polarity proof this same shape is checked by (`evaluate()` case 1).
+
+Captured output (exit code 1):
+
+max-lines: 1 breach(es) -- ADR-0007's 400-line ceiling, mechanized (design/FABLE-SETUP-TUI-FIELD-STRATEGY.md Track 1 item 2):
+  !! tools/setup_tui/_scratch_over_ceiling_probe.py: 405 lines -- NEW file over the 400-line ceiling (ADR-0007); not in the ratcheting baseline, refused outright
+exit=1
