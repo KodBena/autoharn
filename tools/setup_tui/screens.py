@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-19T20:05:03Z
-#   last-change: 2026-07-21T20:14:08Z
+#   last-change: 2026-07-21T20:43:25Z
 #   contributors: ab5d5bab/main, 43f77bff/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -1073,8 +1073,25 @@ def screen_boundary(ui, cl, state):
                            act=CommandAct(argv=tuple(argv))))
 
     can_start = ui.confirm("Start the boundary service now (this process)?", default=True)
-    venv_python = os.path.expanduser("~/w/vdc/venvs/generic/bin/python")
-    if can_start and os.path.isfile(venv_python):
+    # Interpreter RESOLUTION is a read-only probe (decision-phase legal); the START itself stays
+    # a BackgroundAct below. Mirrors bootstrap/new-project.sh:319-320's own fallback (ADR-0012
+    # P1: one pattern, not a second hand-rolled rule) -- preferred venv if executable, else
+    # python3 on PATH -- and NEVER silently: which interpreter was picked, and why, is one
+    # honest line to the operator either way (ADR-0002 rules 1/4).
+    preferred_python = os.path.expanduser("~/w/vdc/venvs/generic/bin/python")
+    fallback_python = probes.which("python3")
+    if os.access(preferred_python, os.X_OK):
+        venv_python = preferred_python
+        interp_reason = f"venv interpreter: {preferred_python}"
+    elif fallback_python:
+        venv_python = fallback_python
+        interp_reason = f"venv absent -- using python3 on PATH: {fallback_python}"
+    else:
+        venv_python = None
+        interp_reason = f"NEITHER {preferred_python} NOR python3 is on PATH"
+    if can_start:
+        ui.say(f"  interpreter: {interp_reason}")
+    if can_start and venv_python:
         argv2 = [venv_python, "-m", "serving.boundary_service", "--config", toml_path,
                  "--port", str(port)]
         ui.say(f"  $ {' '.join(argv2)}   (background)")
@@ -1085,9 +1102,15 @@ def screen_boundary(ui, cl, state):
         state["boundary_will_start"] = True
         state["boundary_world"] = world
     else:
+        if can_start and not venv_python:
+            # ADR-0002 rung 4: the operator answered yes, the auto-start could not proceed, and
+            # here is the concrete, named reason -- never a silent downgrade to the block below.
+            ui.say(f"  REFUSED auto-start: operator answered yes, but {interp_reason} -- "
+                   f"falling back to the manual/systemd instructions below.")
+            cl.add("boundary", "service auto-start", ck.REFUSED, interp_reason)
         unit_text = (
             f"[Unit]\nDescription=autoharn boundary service ({world})\n\n"
-            f"[Service]\nExecStart={venv_python} -m serving.boundary_service "
+            f"[Service]\nExecStart={venv_python or preferred_python} -m serving.boundary_service "
             f"--config {toml_path}\nWorkingDirectory={REPO_ROOT}\nRestart=on-failure\n\n"
             f"[Install]\nWantedBy=multi-user.target\n"
         )

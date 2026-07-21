@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-21T20:16:51Z
-#   last-change: 2026-07-21T20:20:58Z
+#   last-change: 2026-07-21T20:43:45Z
 #   contributors: 43f77bff/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -125,7 +125,15 @@ BASELINE: dict[str, int] = {
     # idris2-preflight fix (8580848) merged between the gate's baseline measurement and its
     # own merge -- witnessed growth from a parallel worktree, not unnoticed growth. The
     # ratchet points DOWN from here.
-    "tools/setup_tui/screens.py":                    1464,
+    # Reconciled +23 to 1487 (commit 12d5d1b's follow-up, boundary-interpreter-fallback
+    # commission): screen_boundary's interpreter-fallback fix (ADR-0002 rules 1/4, field
+    # observation g) was first landed contracted (walrus-in-conditional, semicolon-joined
+    # statements) to fit this same ratchet without a bump -- an orchestrator error, corrected
+    # per ADR-0007's own no-go clause ("never contract decision logic to fit a size budget;
+    # code golf in a decision path hides bugs"), which outranks the ratchet. Rewritten in
+    # plain, clearly-formatted statements; this bump is that plain form's honest cost, sanctioned
+    # growth per this same rule's own "witnessed growth ... not unnoticed growth" precedent.
+    "tools/setup_tui/screens.py":                    1487,
     "gates/kind_shape_manifest_gate.py":              1152,
     "hooks/pretooluse_change_gate.py":                1138,
     "hooks/stop_clean_exit.py":                        992,

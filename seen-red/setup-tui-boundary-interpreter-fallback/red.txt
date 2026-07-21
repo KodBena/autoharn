@@ -1,0 +1,22 @@
+seen-red/setup-tui-boundary-interpreter-fallback -- banked RED evidence (both-polarity proof, fixture-census)
+
+Commission field observation g (first half, verbatim): "had to manually start boundary-
+multiplex". tools/setup_tui/screens.py's screen_boundary gated the auto-start (after an
+explicit operator "yes" to "Start the boundary service now?") on a HARDCODED interpreter path
+(~/w/vdc/venvs/generic/bin/python) with no fallback and no message -- absent that one exact
+path, the code silently fell to the manual/systemd-unit-text block, never saying an auto-start
+was even attempted. ADR-0002 rule 1 (no silent override of an explicit operator answer) and
+rule 4 (a surfaced diagnostic, not silence) both apply; the fix mirrors
+bootstrap/new-project.sh:319-320's own fallback (preferred venv if executable, else python3 on
+PATH), states the chosen interpreter and why in one line, and -- if neither exists -- names the
+reason loudly (a REFUSED checklist row) before falling back to the manual block.
+
+Real captured stdout, 2026-07-21, a live run against this commit's tree, in-process (no real
+infra needed -- screen_boundary is Phase 2's pure decider; PRE_FIX_COMMIT = 7e29101, this
+worktree's own pre-fix commit), zero residue after cleanup, exit 0:
+
+RED ok (pre-fix/python3-present): silently fell to the manual block, zero 'interpreter:' line, zero REFUSED row -- the operator's 'yes' vanished without a trace
+RED ok (pre-fix/python3-absent): silently fell to the manual block, zero 'interpreter:' line, zero REFUSED row -- the operator's 'yes' vanished without a trace
+GREEN ok (post-fix/python3-present): names the resolved fallback interpreter and its reason, queues the real BackgroundAct against it
+GREEN ok (post-fix/python3-absent): names the concrete reason, records a REFUSED checklist row naming it, THEN falls back to the manual block
+ALL CASES OK -- screen_boundary's interpreter fallback names its choice, and its refusal, loudly; red before green
