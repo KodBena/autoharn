@@ -1,0 +1,48 @@
+seen-red/setup-tui-signed-genesis-key-pinning -- banked RED evidence (both-polarity proof, fixture-census)
+
+AUTOHARN_BACKFLOW.md finding 1: a real downstream world's field test found `bootstrap/
+new-project.sh`'s signed-genesis stage generated a fresh keypair and exported it to `keys/` as the
+one the deployment trusts, but the genesis commission ended up signed with a DIFFERENT,
+pre-existing key already in the operator's keyring -- `tools/setup_tui/signed_genesis.py`'s
+`sign_statement_act` passed no `-u`/`--local-user` to gpg, so gpg's own AMBIENT DEFAULT key signed
+instead of the key `export_public_key_act` had just pinned via the fingerprint hole. Same finding's
+second half: `discharge_write_act` spliced the raw `--list-secret-keys --with-colons` dump (not the
+parsed fingerprint) into `keys/README.md`'s committed section.
+
+This fixture builds a scratch GNUPGHOME with TWO real secret keys -- key A (the "pre-existing"
+key, generated first, gpg's own ambient default absent -u) and key B (the ceremony's own
+freshly-generated key, generated second) -- pins `tools/setup_tui/signed_genesis.py` AS IT STOOD at
+commit 1de2553 (the last commit to touch the file before this fix, loaded via `importlib`, the same
+technique seen-red/setup-tui-pure-core-foundation/run_fixtures.py's `_load_pinned_commit_executor`
+uses), resolves both the pinned pre-fix `sign_statement_act`/`discharge_write_act` and the current
+post-fix versions against the SAME real bindings dict, runs the REAL `gpg` commands each produces,
+and reads back which key actually signed via `gpg --list-packets`' own `issuer fpr v4 <fingerprint>`
+line.
+
+Real captured stdout, 2026-07-21, a live run against this commit's working tree, real gpg, zero
+residue after cleanup, exit 0:
+
+case: sign_statement_act -- ambient-default (RED) vs the key just generated (GREEN)
+  OK   two real secret keys present in the scratch keyring
+  OK   key B (just-generated) is the LAST fpr line -- the same convention _parse_fpr_from_colons relies on
+  OK   pre-fix argv carries no -u/--local-user (the defect's own shape)
+  OK   pre-fix sign command itself succeeded (exit 0)
+  OK   RED: pre-fix signed with the WRONG key (gpg's ambient default, the pre-existing key A) -- reproducing AUTOHARN_BACKFLOW.md finding 1 for real
+  OK   RED: pre-fix did NOT sign with the just-generated key B
+  OK   post-fix argv carries -u <fingerprint>
+  OK   post-fix sign command itself succeeded (exit 0)
+  OK   GREEN: post-fix signed with the JUST-GENERATED key B (matches the exported one)
+  OK   GREEN: post-fix did NOT sign with the ambient-default pre-existing key A
+  OK   RED: pre-fix discharge spliced the RAW multi-key colons dump into README.md (gpg's own field-separator shape -- 'sec:'/'uid:' lines -- leaking key A's presence too, exactly the finding's own second half)
+  OK   RED: pre-fix discharge text does NOT carry a clean, standalone parsed fingerprint
+  OK   GREEN: post-fix discharge carries the PARSED fingerprint (the same extractor fingerprint_hole() uses), never the raw dump
+  OK   scratch GNUPGHOME removed, zero residue
+
+all cases GREEN -- signed_genesis.py -u/fingerprint-pinning fix, red before green, real gpg, zero residue
+
+Regression check the same day: seen-red/setup-tui-signed-genesis-resume/run_fixtures.py and
+seen-red/setup-tui-signed-genesis/run_fixtures.py (WG1-WG5, real Postgres + real gpg) both re-run
+GREEN against the fixed tools/setup_tui/signed_genesis.py. The resume fixture's own README-
+fingerprint assertion was updated in the same commit (it previously substring-matched the RAW
+colons dump against keys/README.md, which the discharge_write_act fix now correctly no longer
+writes -- the check now parses the same way discharge_write_act itself does before asserting).

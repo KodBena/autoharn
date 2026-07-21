@@ -1,0 +1,40 @@
+seen-red/setup-tui-background-proc-hygiene -- banked RED evidence (both-polarity proof)
+
+Commission: maintainer field observation f, "after finally answering all questions, seems that
+PTY control is not released to the user." Fresh-context investigator's mechanism finding:
+tools/setup_tui/runner.py's `start_background` (the boundary screen's background daemon choke
+point) did not set `stdin` at all -- so the long-lived boundary_service daemon it starts
+inherited fd 0 verbatim from the wizard process, normally the operator's controlling PTY, which
+Textual had put in raw mode -- and Popen'd `stdout=subprocess.PIPE` with nothing anywhere
+draining it (verified against every real consumer of the returned Popen: commit_executor.py's
+_run_entry/on_result, screens.py's health/meta probes -- none reads proc.stdout), so a chatty
+daemon eventually blocks forever on its own next write once the 64KiB OS pipe buffer fills.
+
+Real captured stdout, 2026-07-21, a live run against runner.py's pre-fix commit
+1de2553699c908489f7f6981e9fd690a51adaadc (pinned by SHA) for the RED legs and the current, fixed
+tools/setup_tui/runner.py for the GREEN legs (zero residue after cleanup, exit 0, re-run twice
+to confirm):
+
+case RED-1 ok: the OLD start_background (1de2553699c9) let its child inherit this process's own fd 0 ('/tmp/setup-tui-background-proc-hygiene-8s7rimb5/stdin_marker.txt') -- the PTY-leak hazard the commission names is real, not hypothetical
+case RED-2 ok: the OLD start_background (1de2553699c9)'s child, writing 300000 bytes to an undrained stdout PIPE, is still alive and blocked after 5s -- the silent-hang hazard the commission names is real
+case GREEN-1 ok: the FIXED start_background's child sees /dev/null on fd 0 even though this fixture process's own fd 0 pointed at a real file -- the PTY-leak hazard is closed unconditionally
+case GREEN-2 ok: the FIXED start_background's child wrote all 300000 bytes and exited cleanly within 15s (never blocked); the full output landed in the named log file '/tmp/.setup-tui-background.7d6j1d05.log' in the system temp directory, never beside `cwd`
+case GREEN-3a ok: dry_run=True still starts nothing and names no log_path -- the pre-existing dry-run contract is unbroken
+case GREEN-3b ok: an explicit log_path is honored verbatim and appended to, never truncated
+ALL CASES OK -- tools/setup_tui/runner.py start_background: pre-fix stdin-leak and stdout-pipe-deadlock hazards both demonstrated red, then the fixed stdin=DEVNULL + log-file-redirected implementation proven to close both, plus dry-run and explicit-log-path contracts unbroken
+
+Design note captured live during this same build: a FIRST draft of the fix defaulted the log
+location to sit beside the child's own `cwd` ("the natural place an operator would look").
+Re-running this repo's own seen-red/setup-tui-boundary-proc-cleanup fixture against a real
+Postgres + a real boundary_service (that fixture's driver launches the boundary screen with
+cwd=REPO_ROOT, the exact shape screens.py's current sole caller passes) showed that choice drops
+an untracked dotfile straight into the git checkout root on every real background start. The
+default was changed to the system temp directory unconditionally (never `cwd`); case GREEN-2
+above asserts the log directory is NOT `cwd` and IS `tempfile.gettempdir()`.
+
+NOT registered in gates/fixture_census.py: this builder's exclusive file scope is
+tools/setup_tui/runner.py plus this fixture's own directory -- gates/ belongs to a concurrently
+scheduled builder's scope under this repo's file-path serialization. Filed as residue in the
+commit message and the task report; the registry row this fixture needs is the same shape every
+sibling setup-tui-* row already uses:
+  "setup-tui-background-proc-hygiene": "seen-red/setup-tui-background-proc-hygiene/run_fixtures.py",

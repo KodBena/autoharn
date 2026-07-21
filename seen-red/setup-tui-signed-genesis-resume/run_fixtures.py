@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-19T20:08:43Z
-#   last-change: 2026-07-19T20:08:43Z
-#   contributors: ab5d5bab/main
+#   last-change: 2026-07-21T19:41:50Z
+#   contributors: ab5d5bab/main, 43f77bff/main
 # <<< PROVENANCE-STAMP <<<
 
 """seen-red/setup-tui-signed-genesis-resume/run_fixtures.py -- PHASE-2 REPLACEMENT (design/
@@ -182,9 +182,19 @@ def case_keygen_never_repeats_on_resume() -> None:
         check("keys/README.md discharged to KEY COMMITTED, exactly once (no duplicate section)",
               readme_text.count(SG.KEY_COMMITTED_HEADER) == 1 and
               SG.AWAITING_HEADER not in readme_text, readme_text)
-        fpr = result.bindings.get(SG.FINGERPRINT_PRODUCES, "")
-        check("the discharged README names the REAL fingerprint (not a placeholder)",
-              bool(fpr) and fpr in readme_text, (fpr, readme_text[:200]))
+        # `bindings[FINGERPRINT_PRODUCES]` is `list_secret_key_act`'s RAW real stdout (the
+        # `--list-secret-keys --with-colons` dump), not a parsed fingerprint -- `discharge_write_
+        # act` now runs it through `_parse_fpr_from_colons` before splicing (AUTOHARN_BACKFLOW.md
+        # finding 1's second half, closed in signed_genesis.py: the raw dump used to land in the
+        # README verbatim, which this substring check happened to pass against by accident; now
+        # the README carries only the clean parsed fingerprint, so this check parses the SAME way
+        # discharge_write_act itself does before asserting).
+        raw_fpr_dump = result.bindings.get(SG.FINGERPRINT_PRODUCES, "")
+        fpr = SG._parse_fpr_from_colons(raw_fpr_dump) if raw_fpr_dump else ""
+        check("the discharged README names the REAL, PARSED fingerprint (not a placeholder, "
+              "and not the raw multi-key colons dump)",
+              bool(fpr) and fpr in readme_text and "sec:" not in readme_text,
+              (fpr, readme_text[:200]))
 
         check("journal removed once every entry is DONE",
               not os.path.isfile(CE.journal_path(dest)))

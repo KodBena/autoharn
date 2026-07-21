@@ -1,0 +1,50 @@
+seen-red/setup-tui-ctrlc-quit-shadow -- banked RED-then-GREEN evidence (fixture-census)
+
+Commission (maintainer's verbatim field observation d): "quit doesn't work (spurious?)".
+
+A fresh-context investigator diagnosed the mechanism before this build (see this build's own
+report): `SetupWizardApp.BINDINGS` (tools/setup_tui/ui_textual.py) bound `ctrl+q` ->
+`request_quit`, `priority=True`, and that path worked -- confirmed again below. `ctrl+c`, the
+reflexive universal interrupt keystroke, had no binding of its own; Textual's `Screen` base class
+carries its own DEFAULT_BINDINGS entry `Binding("ctrl+c,super+c", "screen.copy_text", ...)`
+(non-priority), which shadows `App`'s built-in `ctrl+c` -> `help_quit` in the per-key binding
+merge -- and even un-shadowed, `App.action_help_quit`'s hint only fires for a binding whose action
+is literally "quit"/"app.quit", which this app's renamed `request_quit` action could never match.
+Net effect: ctrl+c did nothing at all. ADR-0002 (fail loudly) names a silent swallow of the
+universal interrupt keystroke a rung-5 failure -- the one forbidden outcome this fixture guards.
+
+REAL RED, witnessed live during this build (2026-07-21), against the real installed textual 8.2.8
+package's own Screen/App binding-merge machinery, no mocks:
+
+  RED ok (pre-fix, 1de2553:tools/setup_tui/ui_textual.py -- the exact commit immediately before
+  this fix): ctrl+q quits (shutdown_event set, app stopped) but ctrl+c does NOTHING
+  (shutdown_event stays unset, app keeps running) -- the exact silent-swallow defect reproduced
+  live.
+
+THE FIX: `SetupWizardApp.BINDINGS` gains `Binding("ctrl+c", "request_quit", "Quit",
+priority=True)` -- the same `request_quit` action ctrl+q already uses, also `priority=True`,
+which `App._check_bindings(key, priority=True)` (checked before any Screen-level binding) now
+catches explicitly, defeating the copy_text shadow by construction rather than by accident of
+merge order. Design choice, stated in the source comment and restated here: ctrl+c reaches the
+SAME unconditional `request_shutdown` path ctrl+q already reaches at ANY point in the wizard
+(commit phase included) -- not a "press again to confirm" hint -- because that unconditional
+behavior for ctrl+q is already the accepted, shipped design, and giving the two conventional
+"quit" keystrokes different behavior would be a new, confusing asymmetry, not a safety
+improvement. `request_shutdown` was already, and remains, not an abrupt kill of in-flight work: a
+worker thread mid-subprocess-call finishes that call before the next blocking wait observes the
+shutdown signal.
+
+REAL GREEN, witnessed live the same run, same harness, same real machinery, post-fix:
+
+  GREEN ok (post-fix, current tools/setup_tui/ui_textual.py): both ctrl+q AND ctrl+c quit --
+  shutdown_event set, app no longer running, for both keys.
+
+ALL CASES OK -- see this fixture's own run_fixtures.py output for the live, per-case
+WITNESSED/UNEXERCISED disposition. Both legs ran against a textual-capable interpreter
+(~/w/vdc/venvs/generic/bin/python, textual 8.2.8) discovered automatically by this fixture's
+`_find_textual_python`, the same discovery seen-red/setup-tui-textual-shell already uses; absent
+one, both legs report UNEXERCISED with the concrete remediation, never simulated. The live,
+real-terminal leg (an operator physically pressing ctrl+c at a real controlling terminal) is the
+maintainer's own check, per the report's own witness/UNEXERCISED discipline -- this fixture's
+`run_test`/Pilot harness proves the real binding-resolution machinery's decision, which is the
+part that was actually broken; it does not claim to simulate a physical terminal.

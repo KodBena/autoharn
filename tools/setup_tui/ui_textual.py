@@ -311,6 +311,37 @@ class SetupWizardApp(App):
 
     BINDINGS = [
         Binding("ctrl+q", "request_quit", "Quit", priority=True),
+        # ctrl+c is the reflexive, universal interrupt keystroke -- ADR-0002 (fail loudly) rules
+        # a silent swallow of it is a rung-5 failure. Textual's `Screen` base class itself binds
+        # bare "ctrl+c" to `screen.copy_text` (textual/screen.py; DEFAULT_BINDINGS there, not
+        # `priority`), which -- left unaddressed -- shadows `App`'s own built-in `ctrl+c` ->
+        # `help_quit` in the per-key bindings merge (`Screen.active_bindings`, "Replace priority
+        # bindings": a non-priority Screen binding beats a same-key App binding UNLESS the App's
+        # is itself `priority=True`, which the base `help_quit` binding is not). Two problems,
+        # one fix: (1) even un-shadowed, `App.action_help_quit`'s hint only fires when the bound
+        # action is literally "quit"/"app.quit" -- this app renamed its quit action to
+        # `request_quit`, so that built-in hint could never have fired here regardless. (2) the
+        # copy-text shadow means, today, ctrl+c does NOTHING VISIBLE at all -- confirmed via a
+        # headless `App.run_test()` probe (no state change, no rendered feedback) -- exactly the
+        # forbidden silent no-op.
+        #
+        # Design choice: bind ctrl+c to the SAME `request_quit` -> `request_shutdown` path as
+        # ctrl+q, not a "press again to confirm" hint. Considered and rejected: gating ctrl+c
+        # behind an extra confirm because a commit phase might be in flight. That protection
+        # does not actually exist today for ctrl+q -- ctrl+q already triggers this exact
+        # unconditional path at ANY point in the wizard, commit included, and that is the
+        # already-accepted, already-shipped behavior this fix does not touch. Making ctrl+c
+        # behave differently from ctrl+q would invent a NEW asymmetry between two keystrokes an
+        # operator reasonably expects to be synonyms for "quit," which is its own footgun
+        # (reflexive ctrl+c would look like it worked less well than ctrl+q, when the two are
+        # supposed to mean the same thing). `request_shutdown` is also not an abrupt kill of
+        # in-flight work: it sets `_shutdown_event` and resolves any prompt currently being
+        # waited on, but a worker thread mid-subprocess-call (e.g. mid-commit) keeps running
+        # that call to completion -- only the NEXT blocking wait or bridge call observes the
+        # shutdown and unwinds via `WizardShutdown` (module docstring, architecture point 4).
+        # Symmetry with the existing, working ctrl+q reflex is the right call here, not a new
+        # bespoke confirm gate for one of the two keystrokes.
+        Binding("ctrl+c", "request_quit", "Quit", priority=True),
     ]
 
     def __init__(self, *, dry_run: bool, checklist: ck.Checklist) -> None:

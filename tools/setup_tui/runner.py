@@ -1,7 +1,7 @@
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-18T21:31:32Z
-#   last-change: 2026-07-19T04:21:44Z
-#   contributors: ab5d5bab/main
+#   last-change: 2026-07-21T19:44:50Z
+#   contributors: ab5d5bab/main, 43f77bff/main
 # <<< PROVENANCE-STAMP <<<
 
 """tools/setup_tui/runner.py -- the ONE place this package shells out (ADR-0012 P1), AND (as of
@@ -126,10 +126,17 @@ class BackgroundResult:
     argv: list[str]
     proc: subprocess.Popen | None
     dry_run: bool = False
+    # ADDITIVE (fd-inheritance-by-design-outliving-children fix, this dated fix's own closure
+    # statement below): the real file `proc`'s stdout+stderr were redirected to, or `None` under
+    # `dry_run=True` (nothing started, nothing to name) -- carried back so a caller that wants to
+    # tail it, print it in the UI, or clean it up later can, without this function guessing what
+    # the caller wants done with that fact. Defaulted so no existing construction call site (there
+    # is exactly one today, this module's own) needs to change.
+    log_path: str | None = None
 
 
 def start_background(argv: list[str], *, cwd: str | None = None, echo: bool = True,
-                      dry_run: bool = False) -> BackgroundResult:
+                      dry_run: bool = False, log_path: str | None = None) -> BackgroundResult:
     """The non-waited counterpart of `run_command`, for the one act this package starts and
     leaves running rather than runs to completion (the boundary screen's boundary service) --
     same argv-echo discipline (`$ argv`, unconditional, same shape `run_command` uses) so a
@@ -138,15 +145,95 @@ def start_background(argv: list[str], *, cwd: str | None = None, echo: bool = Tr
     prefixed lines).
     Under `dry_run=True`, argv is echoed but nothing is Popened -- `proc` is None, and the caller
     must not probe a service that was never started (record the post-start health/meta probes as
-    DRY-SKIPPED, per the amendment's own rule for PREPARED-block verification gates)."""
+    DRY-SKIPPED, per the amendment's own rule for PREPARED-block verification gates).
+
+    STDIN/STDOUT HYGIENE (maintainer field observation f, "after finally answering all
+    questions, seems that PTY control is not released to the user"; fresh-context investigator's
+    mechanism finding). This function's whole point is a child that OUTLIVES this call -- unlike
+    `run_command`, which `.wait()`s before returning, so a daemon-hygiene defect here is a defect
+    `run_command` structurally cannot have. Two consequences of that difference, both fixed here,
+    named as one class (ADR-0000 Rule 2(a)'s closure statement):
+
+      THE INVARIANT: a child this function starts and does not wait for must never hold, and
+      must never be able to fill, a file descriptor this process's own controlling terminal or
+      an unread pipe depends on.
+
+      THE QUANTIFICATION UNIVERSE (checked outward, ADR-0000's 2026-07-02 amendment): the two
+      axes are stdin (which fd the child inherits) and stdout/stderr (where the child's output
+      goes and whether anything drains it). Sibling surface check -- `run_command` (same module,
+      the other Popen site) already gets stdin right (`PIPE if stdin_text is not None else
+      DEVNULL`) and its stdout is safe from the blocking hazard because it drains `proc.stdout`
+      in a loop before `.wait()`; `write_file` never Popens at all. Every other `subprocess.*`
+      call site in this package (`probes.py`, `principals_authority.py`, `pghba.py`,
+      `signed_genesis.py`, `screens.py`'s `app.py`-level `subprocess.TimeoutExpired` handling)
+      uses `subprocess.run(...)`, which always waits for the child before returning -- none of
+      them leaves a design-outliving process, so none of them can reproduce either half of this
+      hazard. `start_background` is the ONLY choke point in `tools/setup_tui/` that starts a
+      process meant to outlive the call (verified by grep over `Popen` and `subprocess.` calls
+      across the package, 2026-07-21) -- the class is foreclosed here in full, not partially.
+
+      (1) STDIN: not setting `stdin` at all defaults to fd 0 inherited verbatim from THIS
+      process -- normally the operator's controlling PTY, which Textual has put in raw mode for
+      the wizard's own UI. A long-lived daemon holding that fd is why the terminal was never
+      given back to the operator after a clean wizard exit (the commission's own field
+      observation) -- the terminal stays claimed by a process the operator cannot see or
+      interact with. Fixed unconditionally: `stdin=subprocess.DEVNULL`. A background daemon has
+      no conversational stdin, ever, so there is no `stdin_text` parameter to conditionally
+      honor here the way `run_command` does.
+
+      (2) STDOUT/STDERR: `stdout=subprocess.PIPE` with nothing ever draining it -- verified by
+      reading every consumer of the `Popen` this function returns (`commit_executor.py`'s
+      `_run_entry`/`on_result`, `screens.py`'s health/meta probes) and confirming none of them
+      reads `proc.stdout`; they only ever touch `proc.pid`/`proc.poll()`/`proc.returncode` --
+      fills the OS pipe buffer (64KiB on Linux) the moment a chatty daemon writes that much, at
+      which point the daemon's own next `write()` blocks forever: a silent hang with no
+      exception anywhere, exactly the failure ADR-0002 forbids. A real file can never impose that
+      backpressure (a filesystem write can block only briefly, never on an unread reader), so
+      output is redirected to a log file instead of a pipe.
+
+      LOCATION (deliberate, not incidental -- and revised once against live evidence, see
+      below): `log_path`, if the caller supplies it, is used verbatim -- a caller inside this
+      package that already knows the operator-facing right place (e.g. `commit_executor.
+      execute`'s own `dest`, the destination world directory a commit is landing in) can hand it
+      in without this function guessing. `commit_executor.py` is a sibling module outside this
+      fix's file scope, so wiring that specific call site to pass a `dest`-based path is NOT
+      done here -- filed residue, reported rather than silently left (ADR-0013 Rule 4). Absent
+      an explicit `log_path`, the default is the system temp directory (`tempfile.
+      gettempdir()`), NEVER beside the child's own `cwd`: a first draft of this fix defaulted to
+      `cwd`, reasoning "the natural place to look, symmetric with how a real daemon logs beside
+      itself" -- live-witnessed against this fix's own real-Postgres regression run
+      (seen-red/setup-tui-boundary-proc-cleanup, whose driver launches the boundary screen with
+      `cwd=REPO_ROOT`, the exact shape `screens.py`'s current sole caller passes today) that
+      choice drops an untracked dotfile straight into the git checkout root on every real
+      background start -- the opposite of "somewhere the operator can find it," and a fresh
+      litter hazard this fix would otherwise have introduced into the very checkout it lives in.
+      `cwd` is the CHILD's working directory, chosen for what the child needs to run, not a
+      location this function has any warrant to assume is safe or appropriate to write into
+      (it could just as easily be read-only). The system temp directory carries no such
+      assumption and is never silently dropped either (ADR-0002): a background start with no
+      `log_path` still gets a real, locatable, named log file, never `/dev/null`. The name is
+      predictable (`.setup-tui-background.<random>.log`, mirroring `write_file`'s own
+      recognizable-wreckage naming idiom) so a directory listing identifies it as this
+      function's own output at a glance; existing content at an explicitly-supplied `log_path`
+      is appended to, never truncated, since a caller-named path may be reused across a
+      session's multiple background starts."""
     if echo:
         print(f"$ {quote_argv(argv)}   (background)")
     if dry_run:
         print("  [dry-run: not started]")
         return BackgroundResult(argv=list(argv), proc=None, dry_run=True)
-    proc = subprocess.Popen(argv, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                             text=True)
-    return BackgroundResult(argv=list(argv), proc=proc, dry_run=False)
+    if log_path is None:
+        fd, log_path = tempfile.mkstemp(dir=tempfile.gettempdir(),
+                                         prefix=".setup-tui-background.", suffix=".log")
+        log_file = os.fdopen(fd, "w")
+    else:
+        log_file = open(log_path, "a", encoding="utf-8")
+    try:
+        proc = subprocess.Popen(argv, cwd=cwd, stdin=subprocess.DEVNULL,
+                                 stdout=log_file, stderr=subprocess.STDOUT, text=True)
+    finally:
+        log_file.close()
+    return BackgroundResult(argv=list(argv), proc=proc, dry_run=False, log_path=log_path)
 
 
 def write_file(path: str, content: str, *, dry_run: bool = False,

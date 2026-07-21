@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-19T01:39:25Z
-#   last-change: 2026-07-19T19:54:08Z
-#   contributors: ab5d5bab/main
+#   last-change: 2026-07-21T19:37:45Z
+#   contributors: ab5d5bab/main, 43f77bff/main
 # <<< PROVENANCE-STAMP <<<
 
 """tools/setup_tui/signed_genesis.py -- the "Signed genesis" ceremony driver
@@ -410,12 +410,22 @@ def discharge_write_act(dest: str, key_filename_: str, name: str, email: str) ->
     write of that file, by plan order). This is the same "resolved at commit, not at decision"
     discipline every Hole here follows; it is legitimate BECAUSE `of` genuinely names the real
     entry (`list_secret_key_act`) this act depends on -- the fingerprint really is what makes this
-    write correct to perform."""
+    write correct to perform.
+
+    The bound `FINGERPRINT_PRODUCES` value a `Hole.resolve` hands to `extract` is `list_secret_
+    key_act`'s RAW real stdout -- the multi-key `--list-secret-keys --with-colons` dump, not a
+    parsed fingerprint (AUTOHARN_BACKFLOW.md finding 1's second half). `extract` below runs it
+    through `_parse_fpr_from_colons` -- the SAME parser `fingerprint_hole()` uses -- before handing
+    the real fingerprint to `_compute_discharge_text`, so this write and every other fingerprint
+    consumer in this module share one parsed value from one extractor, never a raw dump spliced
+    into a committed file (which is both illegible and how a second, unrelated key's presence
+    leaked into `keys/README.md` in the finding)."""
     return WriteAct(
         path=os.path.join(dest, "keys", "README.md"),
         content=Hole(
             of=FINGERPRINT_PRODUCES, describe="keys/README.md new content (KEY COMMITTED)",
-            extract=lambda fpr: _compute_discharge_text(dest, key_filename_, fpr, name, email),
+            extract=lambda colons: _compute_discharge_text(
+                dest, key_filename_, _parse_fpr_from_colons(colons), name, email),
         ),
     )
 
@@ -440,16 +450,27 @@ def asc_path_arg(dest: str, commission_id_arg: Arg) -> Arg:
 
 def sign_statement_act(gnupghome: str | None, statement: str, asc_path: Arg, *,
                         scripted: bool) -> tuple[CommandAct, str]:
-    """`printf '%s' "$STATEMENT" | gpg --detach-sign --armor -o <asc_path> -` -- the
+    """`printf '%s' "$STATEMENT" | gpg -u <fpr> --detach-sign --armor -o <asc_path> -` -- the
     byte-fidelity-fixed ceremony (user-guide/USER-GPG-TRUST-LAYER-FAQ.md §5 Step 2), as a plan
     act. `statement` is a plain string known at decision time either way (an existing commission's
     text, read live, or the operator's own freshly-typed text) -- it is what gets SIGNED, piped via
     `stdin_text`, never a second re-typed/re-read copy. `scripted` selects the non-interactive
     `--pinentry-mode loopback --passphrase` leg vs. the operator's live pinentry prompt at commit
-    time."""
+    time.
+
+    `-u <fpr>` (AUTOHARN_BACKFLOW.md finding 1): without an explicit `--local-user`, gpg signs
+    with whatever it considers its AMBIENT default key -- which, in a keyring holding more than
+    one secret key (the exact shape a genesis ceremony can meet: an operator's pre-existing key
+    plus the one this ceremony just generated), need not be the key `export_public_key_act` just
+    pinned into `keys/`. `<fpr>` is `fingerprint_hole()` -- the SAME single source
+    `export_public_key_act` reads its own `--export <fpr>` from -- so signing and exporting are
+    now derived from one fact, not two independently-resolved ones (ADR-0012 P1: a fact has one
+    home). This forecloses the whole "sign-with-ambient-default vs sign-with-the-key-just-
+    generated" class, not just the one instance the backflow finding observed."""
     argv: list[Arg] = ["gpg"]
     if gnupghome:
         argv += ["--homedir", gnupghome]
+    argv += ["-u", fingerprint_hole()]
     if scripted:
         argv += ["--batch", "--yes", "--pinentry-mode", "loopback", "--passphrase",
                  FIXTURE_PASSPHRASE]
