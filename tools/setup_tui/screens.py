@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-19T20:05:03Z
-#   last-change: 2026-07-21T21:42:40Z
+#   last-change: 2026-07-21T22:32:52Z
 #   contributors: ab5d5bab/main, 43f77bff/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -61,10 +61,12 @@ from pathlib import Path
 
 from tools.setup_tui import checklist as ck
 from tools.setup_tui import commit_executor as CE
+from tools.setup_tui import daemon_scaffold
 from tools.setup_tui import destination
 from tools.setup_tui import durable_decisions, feature_facts, governed_files, pghba, probes
 from tools.setup_tui import principals_authority, signed_genesis
-from tools.setup_tui.plan import BackgroundAct, CommandAct, Plan, PlanEntry, WriteAct
+from tools.setup_tui.plan import (BackgroundAct, CommandAct, DaemonSelection, Plan, PlanEntry,
+                                   WriteAct)
 from tools.setup_tui.runner import run_command
 from tools.setup_tui.ui import ScriptedUi
 
@@ -275,9 +277,14 @@ def screen_substrate(ui, cl, state):
     ui.say(f"  psql -h {host} -c \"SELECT pg_reload_conf();\"")
     ui.say("  what you should see: CREATE ROLE / CREATE DATABASE / one-row 't' from reload")
     ui.say("  --- end block ---")
-    cl.add("substrate", "pg_hba block generated", ck.PREPARED,
+    # STATUS-SPLIT (design/FABLE-SETUP-TUI-CHECKLIST-SPLIT-SPEC.md §2): ck.INSTRUCTED, not
+    # ck.PREPARED -- these two blocks are generated TEXT the operator is shown to run by hand on
+    # the cluster host; nothing about the WORLD's state (a file present, a role/db already
+    # existing) is confirmed here, so the narrowed PREPARED (which requires exactly that, named
+    # in its own detail) does not apply. This is the ORIGINAL PREPARED's honest meaning.
+    cl.add("substrate", "pg_hba block generated", ck.INSTRUCTED,
            f"db={db} role={role} subnets={subnet_list}")
-    cl.add("substrate", "createdb/reload block", ck.PREPARED, f"db={db} host={host}")
+    cl.add("substrate", "createdb/reload block", ck.INSTRUCTED, f"db={db} host={host}")
 
     def _verify_dedicated() -> None:
         ui.pause(f"Apply the two blocks above on {host}, then press enter to verify: ")
@@ -1128,12 +1135,14 @@ def screen_boundary(ui, cl, state):
                            lesson="classic-mode re-scaffold: rewrites deployment.json + .claude/",
                            act=CommandAct(argv=tuple(argv))))
 
-    can_start = ui.confirm("Start the boundary service now (this process)?", default=True)
     # Interpreter RESOLUTION is a read-only probe (decision-phase legal); the START itself stays
     # a BackgroundAct below. Mirrors bootstrap/new-project.sh:319-320's own fallback (ADR-0012
     # P1: one pattern, not a second hand-rolled rule) -- preferred venv if executable, else
     # python3 on PATH -- and NEVER silently: which interpreter was picked, and why, is one
-    # honest line to the operator either way (ADR-0002 rules 1/4).
+    # honest line to the operator either way (ADR-0002 rules 1/4). Resolved BEFORE the
+    # can_start question (moved up from its original position) because the CHECKLIST-SPLIT-SPEC
+    # `DaemonSelection` below needs the SAME resolved-interpreter fact, resolved once (spec §4:
+    # "start-daemons uses the same resolved-interpreter fact, resolved once").
     preferred_python = os.path.expanduser("~/w/vdc/venvs/generic/bin/python")
     fallback_python = probes.which("python3")
     if os.access(preferred_python, os.X_OK):
@@ -1145,6 +1154,8 @@ def screen_boundary(ui, cl, state):
     else:
         venv_python = None
         interp_reason = f"NEITHER {preferred_python} NOR python3 is on PATH"
+
+    can_start = ui.confirm("Start the boundary service now (this process)?", default=True)
     if can_start:
         ui.say(f"  interpreter: {interp_reason}")
     if can_start and venv_python:
@@ -1173,7 +1184,34 @@ def screen_boundary(ui, cl, state):
         ui.say("  --- PREPARED: systemd unit text (operator installs/starts) ---")
         ui.say("  " + unit_text.replace("\n", "\n  "))
         ui.say("  --- end ---")
-        cl.add("boundary", "service unit text", ck.PREPARED, "systemd unit, not started")
+        # CHECKLIST-SPLIT-SPEC ADDITION (§3): the boundary service becomes a `DaemonSelection`
+        # ONLY on this (non-auto-start) leg -- the maintainer's g.1 commission and the field
+        # observation ("had to manually start boundary-multiplex") that motivated the daemon
+        # collection script, applied as a genuine FALLBACK, never a second concurrent start.
+        # PRODUCT FIX, found live while building this feature (WDR1's own byte-identical-
+        # filesystem witness, seen-red/setup-tui-dry-run-parity): an earlier draft added this
+        # DaemonSelection unconditionally, reasoning the generated script's OWN idempotence
+        # (a pidfile check) would make re-running it after a successful in-process auto-start a
+        # safe no-op -- but the script's pidfile has no way to know a process the DIRECT
+        # BackgroundAct already started IS that same daemon; running start-daemons anyway spawned
+        # a SECOND real boundary_service bound to the SAME port, which failed to bind and
+        # produced live, changing log content -- caught as a genuine WDR1 red (a live filesystem
+        # diff under what should have been a no-op --dry-run rehydration), not a fixture artifact.
+        plan.add_daemon(DaemonSelection(
+            name="boundary",
+            argv=(venv_python or preferred_python, "-m", "serving.boundary_service",
+                  "--config", toml_path, "--port", str(port)),
+            cwd=str(REPO_ROOT), env_notes="boundary-multiplex.toml's own deployment section",
+            health_probe=f"http:{boundary_url}/d/{world}/health",
+            prerequisite=(venv_python or preferred_python),
+        ))
+        ui.say(f"  ({os.path.join(dest, 'start-daemons')} also starts this daemon once "
+               f"committed, and refuses loudly, naming it, if the interpreter above turns out "
+               f"not to exist on whatever machine runs it)")
+        # STATUS-SPLIT (design/FABLE-SETUP-TUI-CHECKLIST-SPLIT-SPEC.md §2): ck.INSTRUCTED, not
+        # ck.PREPARED -- unit TEXT is shown; nothing about the world's state (the unit
+        # installed, the service running) is confirmed. The narrowed PREPARED does not apply.
+        cl.add("boundary", "service unit text", ck.INSTRUCTED, "systemd unit, not started")
 
         def _verify_boundary_started() -> None:
             ui.pause("Start the service by hand, then press enter to probe: ")
@@ -1192,39 +1230,88 @@ def screen_boundary(ui, cl, state):
 
 
 # ---------------------------------------------------------------------------------------------
-# Observability -- entirely PREPARED-block display (no effect at all, before OR after this
-# build). Builds no plan entries. Unchanged.
+# Observability -- CHECKLIST-SPLIT-SPEC REWRITE (design/FABLE-SETUP-TUI-CHECKLIST-SPLIT-SPEC.md
+# §1/§3, backflow finding 3): this screen used to be entirely PREPARED-block display -- text
+# shown, nothing queued, nothing ever verified. That is the exact defect the spec names: "an
+# opted-in monitoring feature produced zero coverage, silently, its PREPARED rows reading as
+# assurance -- while the printed start line referenced a config file the scaffold never wrote."
+#
+# Now: selecting otelcol queues its own prerequisite (`otelcol-config.yaml`, an ordinary
+# WriteAct -- content composed from `daemon_scaffold`'s DATA, never embedded prose here) AND a
+# `DaemonSelection` fact; selecting otel-watch queues a `DaemonSelection` with no config
+# prerequisite of its own. Both daemons are then started by the SAME generated
+# `<dest>/start-daemons` script every other selected daemon shares (commit_executor.py's
+# `_daemon_script_entry`), and both get a real end-of-run health/liveness verification row
+# (VERIFIED_UP or the named NOT_UP absence -- never silence). The Claude-launch line has no
+# daemon behind it (it is a one-shot foreground command, not a standing service) and stays a
+# plain INSTRUCTED display row, per the vocabulary split (§2): shown, nothing about the world's
+# state claimed.
 # ---------------------------------------------------------------------------------------------
 
 def screen_observability(ui, cl, state):
     ui.banner(screen_banner("observability"))
     _show_facts(ui, "observability_otelcol", "observability_watchdog")
-    if not ui.confirm("Show observability blocks?", default=True):
+    if not ui.confirm("Configure observability now?", default=True):
         cl.add("observability", "observability", ck.SKIPPED, skip_detail("observability"))
         return state
     dest = state.get("dest") or ui.ask_text("Destination directory")
     state["dest"] = dest
-    otelcol_line = "otelcol-contrib --config otelcol-config.yaml"
-    ui.say("  --- PREPARED: OTel collector start line (localhost-only, per standing config) ---")
-    ui.say(f"  cd {dest} && {otelcol_line}")
-    ui.say("  what you should see: 'Everything is ready. Begin running and processing data.'")
-    ui.say("  --- end ---")
-    cl.add("observability", "otelcol start line", ck.PREPARED, otelcol_line)
+    plan = _plan(state)
 
-    watchdog_line = f"{REPO_ROOT / 'otel-watch'} --daemon"
-    ui.say("  --- PREPARED: OTel model-provenance watchdog start line ---")
-    ui.say(f"  {watchdog_line}")
-    ui.say("  what you should see: a coverage notice per watched session (never silent) -- "
-           "design/FABLE-OTEL-SENTRY-SPEC.md §3")
-    ui.say("  --- end ---")
-    cl.add("observability", "otel-watch start line", ck.PREPARED, watchdog_line)
+    if ui.confirm("Select the OTel collector (otelcol-contrib) to start with this world?",
+                   default=False):
+        export_path = os.path.join(dest, "otel-data", "claude-events.jsonl")
+        config_path = os.path.join(dest, "otelcol-config.yaml")
+        config_content = daemon_scaffold.otelcol_config_content(export_path)
+        ui.say(f"  --- queuing write: {config_path} ---")
+        ui.say("  " + config_content.replace("\n", "\n  "))
+        plan.append(PlanEntry(
+            screen="observability", item="otelcol-config.yaml written",
+            lesson="otelcol's own config file -- the prerequisite the start line references "
+                   "(backflow finding 3's own root cause: a printed start line pointing at a "
+                   "config the scaffold never wrote)",
+            act=WriteAct(path=config_path, content=config_content)))
+        otelcol_bin = probes.which("otelcol-contrib")
+        argv = (otelcol_bin or "otelcol-contrib", "--config", config_path)
+        plan.add_daemon(DaemonSelection(
+            name="otelcol", argv=argv, cwd=dest,
+            env_notes="OTLP gRPC receiver on 127.0.0.1:4317, file exporter, health_check "
+                       "extension on 127.0.0.1:13133 (design/FABLE-OTEL-SENTRY-SPEC.md's own "
+                       "deployment-shape-A record)",
+            health_probe=f"http:{daemon_scaffold.OTELCOL_HEALTH_URL}",
+            prerequisite=(otelcol_bin or
+                          "otelcol-contrib (not found on PATH at selection time)"),
+        ))
+        ui.say(f"  queued daemon: {' '.join(argv)}   (started via <dest>/start-daemons at "
+               f"commit; verified at end-of-run)")
+        cl.add("observability", "otelcol selected", ck.INSTRUCTED,
+               f"argv={' '.join(argv)}; config queued: {config_path}")
+    else:
+        cl.add("observability", "otelcol selected", ck.SKIPPED, "operator declined")
+
+    if ui.confirm("Select the OTel model-provenance watchdog (otel-watch) to start with this "
+                   "world?", default=False):
+        watch_bin = str(REPO_ROOT / "otel-watch")
+        argv = (watch_bin, "--daemon")
+        plan.add_daemon(DaemonSelection(
+            name="otel-watch", argv=argv, cwd=str(REPO_ROOT),
+            env_notes="tails the collector's own JSONL export; exposes no HTTP endpoint of "
+                       "its own, verified by process liveness instead",
+            health_probe=f"pidof:{watch_bin}",
+            prerequisite=(watch_bin if os.path.isfile(watch_bin) else None),
+        ))
+        ui.say(f"  queued daemon: {' '.join(argv)}   (started via <dest>/start-daemons at "
+               f"commit; verified at end-of-run)")
+        cl.add("observability", "otel-watch selected", ck.INSTRUCTED, f"argv={' '.join(argv)}")
+    else:
+        cl.add("observability", "otel-watch selected", ck.SKIPPED, "operator declined")
 
     claude_line = f"cd {dest} && claude"
-    ui.say("  --- PREPARED: Claude launch line ---")
+    ui.say("  --- INSTRUCTED: Claude launch line ---")
     ui.say(f"  {claude_line}")
     ui.say("  what you should see: CLAUDE.md's governance preamble auto-loads (no paste needed)")
     ui.say("  --- end ---")
-    cl.add("observability", "claude launch line", ck.PREPARED, claude_line)
+    cl.add("observability", "claude launch line", ck.INSTRUCTED, claude_line)
     return state
 
 
@@ -1419,16 +1506,35 @@ def _execute_commit(ui, cl, state) -> None:
     if dry_run:
         for entry in plan.entries:
             cl.add(entry.screen, entry.item, ck.WOULD_DO, entry.act.render())
+        if plan.daemons:
+            # CHECKLIST-SPLIT-SPEC (§5: "dry-run must show the script/config as WOULD_DO rows
+            # and write nothing"). The prerequisite config write(s), if any, are already ordinary
+            # `plan.entries` and got their own WOULD_DO row in the loop above; this is the ONE
+            # row `_daemon_script_entry` would add at commit -- summarized the same way
+            # `WriteAct.render()` summarizes every other write ("write <path>"), never the full
+            # generated script text (a WOULD-DO row is a summary, not a dump, runner.py's own
+            # `summarize_content` convention).
+            dry_dest = state.get("dest") or "<destination>"
+            script_path = CE.daemon_script_path(dry_dest)
+            cl.add(CE.DAEMON_SCREEN, CE.DAEMON_SCRIPT_ITEM, ck.WOULD_DO,
+                   f"write {script_path} ({len(plan.daemons)} daemon(s): "
+                   f"{', '.join(d.name for d in plan.daemons)})")
         return
 
-    if not plan.entries:
+    if not plan.entries and not plan.daemons:
         ui.say("  nothing queued -- no commit needed.")
         return
 
-    if not ui.confirm(f"Commit this plan now? ({len(plan.entries)} entr"
-                       f"{'y' if len(plan.entries) == 1 else 'ies'})", default=True):
+    # commit_executor.execute() synthesizes TWO entries when plan.daemons is non-empty (the
+    # start-daemons script write, then its best-effort run) -- see _daemon_script_entries there.
+    total_entries = len(plan.entries) + (2 if plan.daemons else 0)
+    if not ui.confirm(f"Commit this plan now? ({total_entries} entr"
+                       f"{'y' if total_entries == 1 else 'ies'})", default=True):
         for entry in plan.entries:
             cl.add(entry.screen, entry.item, ck.SKIPPED, "operator declined the commit")
+        if plan.daemons:
+            cl.add(CE.DAEMON_SCREEN, CE.DAEMON_SCRIPT_ITEM, ck.SKIPPED,
+                   "operator declined the commit")
         return
 
     dest = state.get("dest")
@@ -1437,10 +1543,12 @@ def _execute_commit(ui, cl, state) -> None:
                "lives in the destination).")
         for entry in plan.entries:
             cl.add(entry.screen, entry.item, ck.REFUSED, "no destination directory")
+        if plan.daemons:
+            cl.add(CE.DAEMON_SCREEN, CE.DAEMON_SCRIPT_ITEM, ck.REFUSED, "no destination directory")
         return
 
     def _on_step(i: int, entry: PlanEntry) -> None:
-        ui.say(f"  [{i + 1}/{len(plan.entries)}] {entry.screen}: {entry.item}")
+        ui.say(f"  [{i + 1}/{total_entries}] {entry.screen}: {entry.item}")
         ui.say(f"    {entry.lesson}")
         ui.say(f"    $ {entry.act.render()}")
 
@@ -1456,6 +1564,20 @@ def _execute_commit(ui, cl, state) -> None:
     # from the commit's own real bindings -- never a decision-time variable, since the setup act
     # itself runs here, at commit. Stashed for _teardown_scratch_gnupghomes below.
     state["_last_commit_bindings"] = result.bindings
+
+    # CHECKLIST-SPLIT-SPEC §3 point 3: the end-of-run verification sweep's own checklist rows --
+    # `CE.execute` already ran the sweep (only when the commit fully completed) and handed back
+    # its verdicts; THIS module (which owns `cl`) is where they become rows, same division of
+    # labor as every other `_dispatch_result` translation above.
+    for v in result.daemon_verifications:
+        if v.up:
+            ui.say(f"  {v.daemon.name}: VERIFIED-UP -- {v.detail}")
+            cl.add(CE.DAEMON_SCREEN, f"{v.daemon.name} verified up", ck.VERIFIED_UP, v.detail)
+        else:
+            ui.say(f"  {v.daemon.name}: NOT-UP -- {v.detail} (selected, attempted, not "
+                   f"observably up -- never silence)")
+            cl.add(CE.DAEMON_SCREEN, f"{v.daemon.name} verified up", ck.NOT_UP, v.detail)
+
     if not result.completed:
         ui.say("")
         ui.say("  COMMIT HALTED -- the journal names the next PENDING step; re-run this tool "

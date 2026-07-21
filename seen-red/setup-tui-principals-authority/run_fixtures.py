@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-19T02:23:18Z
-#   last-change: 2026-07-19T02:25:11Z
-#   contributors: ab5d5bab/main
+#   last-change: 2026-07-21T22:42:17Z
+#   contributors: ab5d5bab/main, 43f77bff/main
 # <<< PROVENANCE-STAMP <<<
 
 """run_fixtures.py -- WP1-WP6, the six witnesses design/FABLE-SETUP-TUI-PRINCIPALS-AUTHORITY-
@@ -294,13 +294,31 @@ def main() -> int:
         assert "REFUSED: destination directory" in out6a and missing in out6a, out6a[-1500:]
 
         # ---- WP6b: out-of-sequence, real dir with no legacy/led ----------------------------
+        # HAZARD FIX + FIXTURE-CONTRACT CHANGE (found live while sweeping this fixture during an
+        # UNRELATED build -- design/FABLE-SETUP-TUI-CHECKLIST-SPLIT-SPEC.md -- pulled per
+        # CLAUDE.md's engineering-responsibility rule): design/FABLE-SETUP-TUI-DESTINATION-STATE-
+        # SPEC.md (this worktree's own base commit 93050a9) did TWO things this case's old
+        # assertion never caught up to. (1) An EMPTY existing directory now classifies FRESH,
+        # same as nonexistent -- a bare `os.makedirs(bare)` hit the "does not exist yet" REFUSED
+        # leg before reaching this case's own target leg at all (proven: reproduces against the
+        # unmodified worktree base, `git stash` verified) -- fixed with the same non-empty-
+        # placeholder shape scripted-smoke's own case 5 and two sibling setup-tui fixtures
+        # already use. (2) `screen_principals_authority`'s dest-exists branch was ALSO rewired,
+        # in that same spec, from a bare `os.path.isfile(.../legacy/led)` probe (whose refusal
+        # text this assertion still expected, "REFUSED: no <path>/legacy/led") to
+        # `destination.classify_destination` (whose refusal text is "REFUSED: '<dest>' classifies
+        # as foreign ..." -- see tools/setup_tui/screens.py's own `dest_state.kind !=
+        # AUTOHARN_COMPLETE` branch) -- the assertion below is updated to match the CURRENT,
+        # correct refusal text, not the pre-destination-state one.
         bare = os.path.join(scratch, "bare")
         os.makedirs(bare)
+        with open(os.path.join(bare, "placeholder.txt"), "w", encoding="utf-8") as f:
+            f.write("not autoharn's -- this fixture only needs a non-empty (non-FRESH) directory\n")
         ans6b = "y\n" + bare + "\nn\nn\nn\nn\nn\n"  # PHASE 2: bare exists -- save-checklist IS asked
         cp6b = run_scripted(ans6b, scratch, "wp6b", bare)
         out6b = cp6b.stdout + cp6b.stderr
         assert "Traceback" not in out6b, out6b[-1500:]
-        assert f"REFUSED: no {os.path.join(bare, 'legacy', 'led')}" in out6b, out6b[-1500:]
+        assert f"REFUSED: '{bare}' classifies as foreign" in out6b, out6b[-1500:]
         print("WP6 ok: out-of-sequence entry refuses legibly against (a) a nonexistent "
               "destination and (b) a real directory with no legacy/led, no traceback")
 

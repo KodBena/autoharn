@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-21T00:00:00Z
-#   last-change: 2026-07-21T20:40:13Z
+#   last-change: 2026-07-21T22:22:32Z
 #   contributors: 43f77bff/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -157,6 +157,20 @@ def run_scenario(mod, tag: str, python3_present: bool) -> tuple[list[str], ck.Ch
     top = _mkscratch(f"boundary-fallback-{tag}-")
     dest = os.path.join(top, "dest")
     os.makedirs(dest)
+    # HAZARD FIX (found live while touching this exact fixture for the CHECKLIST-SPLIT-SPEC
+    # build, not this build's own commission -- pulled per CLAUDE.md's engineering-responsibility
+    # rule, "a hazard within reach of the work you are touching, you fix or you flag loudly"):
+    # design/FABLE-SETUP-TUI-DESTINATION-STATE-SPEC.md (commit 93050a9, this worktree's own base)
+    # reclassified an EMPTY existing directory as FRESH, same as nonexistent -- this fixture's
+    # bare `os.makedirs(dest)` used to be enough to make `screens.py`'s destination-exists check
+    # pass; after that spec landed it instead hits screen_boundary's OWN "destination directory
+    # does not exist" REFUSED leg before ever reaching the interpreter-fallback logic this
+    # fixture exists to test, silently invalidating BOTH the RED and the GREEN legs (proven: this
+    # same mismatch reproduces against the unmodified worktree base, `git stash` verified). A
+    # placeholder file keeps `dest` non-empty (FOREIGN, not FRESH) -- the same shape scripted-
+    # smoke's own case 5 already uses for exactly this reason.
+    with open(os.path.join(dest, "placeholder.txt"), "w", encoding="utf-8") as f:
+        f.write("not autoharn's -- this fixture only needs a non-empty (non-FRESH) directory\n")
     answers_path = os.path.join(top, "answers.txt")
     with open(answers_path, "w", encoding="utf-8") as f:
         f.write("y\ny\n")  # "Configure the boundary service now?" / "Start the boundary
@@ -272,9 +286,16 @@ def _main_inner() -> int:
     check(not started, f"GREEN fallback-unavailable: no BackgroundAct should have been queued "
           f"(no interpreter to exec): {[e.item for e in plan.entries]!r}")
     unit_rows = [it for it in cl.items if it.item == "service unit text"]
-    check(len(unit_rows) == 1 and unit_rows[0].status == ck.PREPARED,
-          f"GREEN fallback-unavailable: expected the manual/systemd block to still be prepared "
-          f"AFTER the loud refusal: {cl.items!r}")
+    # FIXTURE-CONTRACT CHANGE (design/FABLE-SETUP-TUI-CHECKLIST-SPLIT-SPEC.md §2, this build):
+    # ck.INSTRUCTED, not ck.PREPARED -- the narrowed PREPARED now requires a confirmed-present
+    # prerequisite named in its own detail; unit TEXT shown with nothing about the world's state
+    # checked is the vocabulary's INSTRUCTED case (the OLD PREPARED's honest reading). Only the
+    # POST-fix leg changes here -- the RED (pre-fix) leg above still asserts ck.PREPARED, and
+    # correctly so: it loads the PINNED pre-fix screens.py via `git show`, unaffected by this
+    # commit's edits to the on-disk module.
+    check(len(unit_rows) == 1 and unit_rows[0].status == ck.INSTRUCTED,
+          f"GREEN fallback-unavailable: expected the manual/systemd block to still be shown "
+          f"(INSTRUCTED) AFTER the loud refusal: {cl.items!r}")
     results.append("GREEN ok (post-fix/python3-absent): names the concrete reason, records a "
                     "REFUSED checklist row naming it, THEN falls back to the manual block")
 

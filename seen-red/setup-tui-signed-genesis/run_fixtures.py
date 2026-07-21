@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-19T01:48:15Z
-#   last-change: 2026-07-19T01:48:36Z
-#   contributors: ab5d5bab/main
+#   last-change: 2026-07-21T22:40:10Z
+#   contributors: ab5d5bab/main, 43f77bff/main
 # <<< PROVENANCE-STAMP <<<
 
 """run_fixtures.py -- WG1-WG5, the five witnesses design/FABLE-SETUP-TUI-SIGNED-GENESIS-SPEC.md
@@ -297,8 +297,20 @@ def main() -> int:
         assert "Traceback" not in out5a, out5a[-1000:]
 
         # (b) a real directory this scaffold did not produce
+        # HAZARD FIX (found live while sweeping this fixture during an UNRELATED build --
+        # design/FABLE-SETUP-TUI-CHECKLIST-SPLIT-SPEC.md -- pulled per CLAUDE.md's engineering-
+        # responsibility rule): design/FABLE-SETUP-TUI-DESTINATION-STATE-SPEC.md (this worktree's
+        # own base commit 93050a9) reclassified an EMPTY existing directory as FRESH, same as
+        # nonexistent -- a bare `os.makedirs(bare_dest)` now hits screen_signed_genesis's "does
+        # not exist yet" REFUSED leg before ever reaching the "missing keys/verify-commission/
+        # legacy-led" REFUSED leg this case exists to test (proven: this same mismatch
+        # reproduces against the unmodified worktree base, `git stash` verified). A placeholder
+        # file keeps `bare_dest` non-empty (FOREIGN, not FRESH) -- the same shape scripted-
+        # smoke's own case 5 and setup-tui-boundary-interpreter-fallback's fixture already use.
         bare_dest = os.path.join(scratch, "wg5_bare")
         os.makedirs(bare_dest)
+        with open(os.path.join(bare_dest, "placeholder.txt"), "w", encoding="utf-8") as f:
+            f.write("not autoharn's -- this fixture only needs a non-empty (non-FRESH) directory\n")
         cp5b = run_scripted(f"y\n{bare_dest}\n" + "n\n" * 4, scratch, "wg5b", ["--start-at", "signed-genesis"])
         out5b = cp5b.stdout + cp5b.stderr
         assert cp5b.returncode == 0, f"WG5b: expected exit 0, got {cp5b.returncode}: {out5b[-1000:]}"

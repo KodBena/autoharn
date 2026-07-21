@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-21T20:16:51Z
-#   last-change: 2026-07-21T21:42:54Z
+#   last-change: 2026-07-21T22:34:04Z
 #   contributors: 43f77bff/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -141,7 +141,18 @@ BASELINE: dict[str, int] = {
     # same shape. Net across the module is a bump, not a shrink -- the five-consolidations
     # savings did not outweigh the one new mode's honest cost. Written plain (no golfing, per
     # this same rule's own no-go clause above); witnessed growth, not unnoticed growth.
-    "tools/setup_tui/screens.py":                    1543,
+    # Reconciled +122 to 1665 (design/FABLE-SETUP-TUI-CHECKLIST-SPLIT-SPEC.md build, this
+    # commit): sanctioned explicitly by the commission ("a visible ratchet bump with rationale is
+    # sanctioned if screens.py must grow, dense code is not"). Genuinely new decision logic, not
+    # padding: `screen_boundary` now ALSO accumulates a `DaemonSelection` fact for the boundary
+    # service (resolved-interpreter-once, per spec §4); `screen_observability` is rewritten from
+    # a pure PREPARED-block display into two real selection branches (otelcol -- queues its own
+    # config WriteAct plus a DaemonSelection; otel-watch -- queues a DaemonSelection) each with
+    # its own INSTRUCTED checklist row; `_execute_commit` gained the dry-run WOULD-DO row for the
+    # synthesized start-daemons script and the end-of-run VERIFIED-UP/NOT-UP translation loop.
+    # None of this is a probe consolidation with slack to absorb it, unlike the destination-state
+    # bump above. Written plain, no golfing (same no-go clause); witnessed growth.
+    "tools/setup_tui/screens.py":                    1665,
     "gates/kind_shape_manifest_gate.py":              1152,
     "hooks/pretooluse_change_gate.py":                1138,
     "hooks/stop_clean_exit.py":                        992,

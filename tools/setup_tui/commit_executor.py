@@ -1,7 +1,7 @@
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-19T19:33:56Z
-#   last-change: 2026-07-19T19:48:25Z
-#   contributors: ab5d5bab/main
+#   last-change: 2026-07-21T22:30:52Z
+#   contributors: ab5d5bab/main, 43f77bff/main
 # <<< PROVENANCE-STAMP <<<
 
 """tools/setup_tui/commit_executor.py -- THE ONE COMMIT BOUNDARY (design/FABLE-SETUP-TUI-
@@ -65,10 +65,14 @@ import tempfile
 from dataclasses import dataclass, field
 from typing import Callable
 
-from tools.setup_tui import runner
-from tools.setup_tui.plan import BackgroundAct, CallableAct, CommandAct, Plan, PlanEntry, WriteAct
+from tools.setup_tui import daemon_scaffold, daemon_verify, runner
+from tools.setup_tui.plan import (BackgroundAct, CallableAct, CommandAct, DaemonSelection, Plan,
+                                   PlanEntry, WriteAct)
 
 JOURNAL_FILENAME = ".setup-tui-commit-journal.json"
+
+DAEMON_SCREEN = "daemons"
+DAEMON_SCRIPT_ITEM = "start-daemons script written"
 
 PENDING = "PENDING"
 DONE = "DONE"
@@ -204,6 +208,30 @@ def journal_path(dest: str) -> str:
     return os.path.join(dest, JOURNAL_FILENAME)
 
 
+def daemon_script_path(dest: str) -> str:
+    return os.path.join(dest, "start-daemons")
+
+def _daemon_script_entries(daemons: "list[DaemonSelection]", dest: str) -> "list[PlanEntry]":
+    """The synthesized entries for daemon selection (spec \xa73 points 1/3) -- appended by
+    `execute()`, never queued by a screen (content depends on the FULL `Plan.daemons`, which no
+    single screen sees). TWO entries: write the script, then RUN it (`best_effort=True` -- a
+    nonzero exit is real, captured information, never a reason to halt the commit)."""
+    path = daemon_script_path(dest)
+    content = daemon_scaffold.render_start_daemons_script(daemons, dest)
+    write_entry = PlanEntry(
+        screen=DAEMON_SCREEN, item=DAEMON_SCRIPT_ITEM,
+        lesson="one generated, executable script starting every daemon this run selected -- "
+               "the maintainer's g.1 commission, verbatim scope",
+        act=WriteAct(path=path, content=content, executable=True),
+    )
+    run_entry = PlanEntry(
+        screen=DAEMON_SCREEN, item="start-daemons script run",
+        lesson="runs the just-written script once, at commit (best-effort)",
+        act=CommandAct(argv=("bash", path), best_effort=True),
+    )
+    return [write_entry, run_entry]
+
+
 # --------------------------------------------------------------------------------------------
 # Execution result
 # --------------------------------------------------------------------------------------------
@@ -220,6 +248,8 @@ class ExecutionResult:
     bindings: dict[str, str]
     entry_results: list[EntryResult]
     completed: bool  # True iff every entry reached DONE (no failure halted the run)
+    # CHECKLIST-SPLIT-SPEC \xa73 pt 3: populated only when completed -- never on a halted commit.
+    daemon_verifications: "list[daemon_verify.DaemonVerification]" = field(default_factory=list)
     # PHASE-2 ADDITION (screens.py's boundary screen needs a live handle on a started background
     # process -- for the SIGTERM/abnormal-exit cleanup app.py already provides via
     # `state["boundary_proc"]`, and because a `BackgroundAct` is the one act type that leaves
@@ -267,9 +297,17 @@ def execute(
     entry's crash (screens.py's own `state["boundary_proc"]`, read by app.py's abnormal-exit
     cleanup) cannot wait for `execute()` to return -- if a later on_result callback itself raises,
     `execute()` never returns at all, and the handle recorded only in its local scope is lost with
-    it. Passing the proc through the callback closes that gap."""
+    it. Passing the proc through the callback closes that gap.
+
+    CHECKLIST-SPLIT-SPEC (§3): a non-empty `plan.daemons` appends two more journaled/resumable
+    entries (write + best-effort run of `<dest>/start-daemons`, `_daemon_script_entries`) before
+    this function's own loop, then runs the verification sweep ONCE every entry reaches DONE
+    (never on a halted commit -- nothing honest to verify yet)."""
     os.makedirs(dest, exist_ok=True)
-    journal = CommitJournal.open_or_create(journal_path(dest), len(plan.entries))
+    effective_entries: list[PlanEntry] = list(plan.entries)
+    if plan.daemons:
+        effective_entries.extend(_daemon_script_entries(plan.daemons, dest))
+    journal = CommitJournal.open_or_create(journal_path(dest), len(effective_entries))
     # FINDING-1 FIX: bindings for every already-DONE entry are LOADED from the journal's own
     # persisted record (CommitJournal.bindings()), never started empty -- see CommitJournal's own
     # docstring for the defect this closes (a Hole on an already-DONE entry's produces used to
@@ -279,17 +317,19 @@ def execute(
     entry_results: list[EntryResult] = [
         EntryResult(entry=e, ok=(s == DONE),
                     detail=bindings.get(e.produces, "(resumed: already DONE)") if s == DONE else "")
-        for e, s in zip(plan.entries, journal.statuses)
+        for e, s in zip(effective_entries, journal.statuses)
     ]
 
     start = journal.next_index()
     if start is None:
         journal.remove()
+        verifications = daemon_verify.verify_daemons(plan.daemons) if plan.daemons else []
         return ExecutionResult(bindings=bindings, entry_results=entry_results, completed=True,
-                                background_procs=background_procs)
+                                background_procs=background_procs,
+                                daemon_verifications=verifications)
 
-    for i in range(start, len(plan.entries)):
-        entry = plan.entries[i]
+    for i in range(start, len(effective_entries)):
+        entry = effective_entries[i]
         if on_step is not None:
             on_step(i, entry)
         result, proc = _run_entry(entry, bindings, dest)
@@ -321,8 +361,9 @@ def execute(
                                     background_procs=background_procs)
 
     journal.remove()
+    verifications = daemon_verify.verify_daemons(plan.daemons) if plan.daemons else []
     return ExecutionResult(bindings=bindings, entry_results=entry_results, completed=True,
-                            background_procs=background_procs)
+                            background_procs=background_procs, daemon_verifications=verifications)
 
 
 def _run_entry(entry: PlanEntry, bindings: dict[str, str],
@@ -331,10 +372,18 @@ def _run_entry(entry: PlanEntry, bindings: dict[str, str],
     if isinstance(act, CommandAct):
         argv, stdin_text = act.resolve(bindings)
         res = runner.run_command(argv, cwd=act.cwd, env=act.resolve_env(), stdin_text=stdin_text)
-        return EntryResult(entry=entry, ok=res.ok, detail=res.output), None
+        # See CommandAct.best_effort's own docstring (plan.py): never halts the commit.
+        ok = True if act.best_effort else res.ok
+        detail = res.output if not act.best_effort else f"exit={res.returncode}\n{res.output}"
+        return EntryResult(entry=entry, ok=ok, detail=detail), None
     if isinstance(act, WriteAct):
         path, content = act.resolve(bindings)
         wrote = runner.write_file(path, content)
+        if wrote and act.executable:
+            # `write_file` never sets the executable bit (its own docstring) -- see
+            # WriteAct.executable. Within this module's own declared "*" exemption already.
+            mode = os.stat(path).st_mode
+            os.chmod(path, mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
         return EntryResult(entry=entry, ok=wrote, detail=content), None
     if isinstance(act, BackgroundAct):
         argv = act.resolve(bindings)
