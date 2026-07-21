@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-21T20:16:51Z
-#   last-change: 2026-07-21T22:34:04Z
+#   last-change: 2026-07-21T23:00:38Z
 #   contributors: 43f77bff/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -166,7 +166,11 @@ BASELINE: dict[str, int] = {
     "engine/ledger_edb.py":                             729,
     "tools/setup_tui/ui_textual.py":                    674,
     "tools/workflow_compile.py":                        672,
-    "tools/setup_tui/durable_decisions.py":             619,
+    # tools/setup_tui/durable_decisions.py -- REMOVED from BASELINE 2026-07-22 (P10 content
+    # split, law/adr/0012's 2026-07-22 Amendment): 619 -> 249 lines, the CATALOG literal moved
+    # to tools/setup_tui/durable_decisions_data.py. The ratchet is the working: a file that
+    # shrinks under CEILING exits the table (ADR-0011 Rule 4, module docstring's own "may shrink
+    # ... and leave this table on its next touch").
     "tools/watchdog_liveness.py":                       570,
     "engine/tests/test_ledger_marriage.py":             533,
     "hooks/posttooluse_error_recurrence.py":            530,
@@ -178,7 +182,12 @@ BASELINE: dict[str, int] = {
     "hooks/stamp_intercept.py":                         482,
     "tools/experiments/typed_table.py":                 442,
     "engine/contemp_audit.py":                          441,
-    "tools/setup_tui/principals_authority.py":          428,
+    # tools/setup_tui/principals_authority.py -- REMOVED from BASELINE 2026-07-22 (P10 content
+    # split, law/adr/0012's 2026-07-22 Amendment): 428 -> 359 lines, CLASS_CHOICES/
+    # RELATION_CHOICES/SCAFFOLD_BASE_PRINCIPALS/LESSON_* moved to
+    # tools/setup_tui/principals_authority_data.py. 359 sits in the 300-400 review band (never
+    # flagged), not grandfathered debt -- the ratchet working, same shape as durable_decisions.py
+    # above.
     "hooks/pretooluse_sql_block.py":                    420,
     "tools/regrade_decisions.py":                       415,
     "tools/markdown_tables.py":                         412,

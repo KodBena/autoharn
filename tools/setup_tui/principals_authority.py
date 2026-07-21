@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-19T02:09:27Z
-#   last-change: 2026-07-19T19:57:45Z
-#   contributors: ab5d5bab/main
+#   last-change: 2026-07-21T22:59:01Z
+#   contributors: ab5d5bab/main, 43f77bff/main
 # <<< PROVENANCE-STAMP <<<
 
 """tools/setup_tui/principals_authority.py -- the "Principals & authority" screen's own driver
@@ -33,6 +33,17 @@ drift between this mirror and the live kernel CHECK is not silently possible to 
 value THIS module fails to offer, or wrongly offers, still meets the kernel's own refusal at
 write time, never a false accept.
 
+CONTENT SPLIT (law/adr/0012's 2026-07-22 Amendment, P10 -- "data is not code", design/
+FABLE-SETUP-TUI-FIELD-STRATEGY.md Track 2.2, phase 1): `CLASS_CHOICES`, `RELATION_CHOICES`,
+`SCAFFOLD_BASE_PRINCIPALS`, and the five `LESSON_*` propaedeutic teaching strings -- 44% of this
+file by volume, a writing edit (rewording a teaching line, adding a class) indistinguishable in
+the diff from a logic edit to `check_vocabulary_drift`/the plan-act builders below -- now live in
+tools/setup_tui/principals_authority_data.py (a data-only module: typed literals, zero functions,
+zero logic), imported directly below. None of this content is dataclass-shaped, so there is no
+reconstruction step -- a plain import IS the assembly. Every consumer's import path
+(`principals_authority.CLASS_CHOICES`, `.RELATION_CHOICES`, `.SCAFFOLD_BASE_PRINCIPALS`, each
+`.LESSON_*` name) is UNCHANGED.
+
 Lazy imports are banned (CLAUDE.md, 2026-07-02): every import here is top of file.
 """
 from __future__ import annotations
@@ -45,6 +56,16 @@ from pathlib import Path
 
 from tools.setup_tui import probes
 from tools.setup_tui.plan import CommandAct
+from tools.setup_tui.principals_authority_data import (
+    CLASS_CHOICES,
+    LESSON_CHARTER,
+    LESSON_COMPETENCE,
+    LESSON_REGISTER,
+    LESSON_RELATION,
+    LESSON_WORKFLOW_POINTER,
+    RELATION_CHOICES,
+    SCAFFOLD_BASE_PRINCIPALS,
+)
 from tools.setup_tui.runner import parse_row_id
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -59,54 +80,9 @@ KERNEL_RELATION_CHECK_PATH = (
     REPO_ROOT / "kernel" / "lineage" / "s41-principal-bindings-and-relations.sql"
 )
 
-# Mirrors kernel/lineage/s15-schema.sql:62's agent_class CHECK ("agent_class text NOT NULL CHECK
-# (agent_class IN ('human','model','subagent','tool'))") -- s40/s41 never widen this vocabulary,
-# they only add EVENTS about principals that already carry one of these four classes.
-CLASS_CHOICES = [
-    ("human", "human -- a person; the only class a key binding (led principal bind-key) or a "
-              "managerial/financial-independence review claim (s41 D-6) may attach to"),
-    ("model", "model -- a named model identity (e.g. a specific Claude model)"),
-    ("subagent", "subagent -- a dispatched sub-invocation acting under a model principal"),
-    ("tool", "tool -- a non-agentic script/process principal"),
-]
-
-# Mirrors kernel/lineage/s41-principal-bindings-and-relations.sql's principal_relation_check
-# CHECK ("principal_relation IN ('acts-for','dispatched-by','same-natural-person','succeeds')") --
-# the CLOSED vocabulary D-2 states is kernel-structural (unlike principal_role_name's ratified
-# free text): the kernel's own refusals (self-edge, same-natural-person canonical ordering) key
-# off these exact four values.
-RELATION_CHOICES = [
-    ("acts-for", "acts-for -- subject is REPRESENTABLE delegation for object (a recorded "
-                 "declaration, not enforcement -- s41 D-2)"),
-    ("dispatched-by", "dispatched-by -- subject was dispatched by object (the declaration; the "
-                      "WITNESS of the fact remains the stamp pair, denominated separately)"),
-    ("same-natural-person", "same-natural-person -- subject and object are the same human "
-                            "(canonicalized to lower-id subject, kernel-CHECKed; symmetric)"),
-    ("succeeds", "succeeds -- subject is the sanctioned successor of object (the v1 path back "
-                "from a suspended/revoked principal -- no reinstatement verb exists)"),
-]
-
-# PHASE-2 ADDITION (design/FABLE-SETUP-TUI-PURE-CORE-SPEC.md §2.7: "the Principals screen shows
-# the scaffold's contractual base ... from the registry that the scaffold itself writes from, not
-# from a born world's views"): under the pure-core flow, birth has not actually run yet by the
-# time this screen makes its decisions in the NORMAL sequence, so `list_principals(dest)` (a live
-# SELECT against a world that may not exist on disk yet) cannot honestly back the "here is what
-# you start from" display any more. This is a STATIC mirror of `bootstrap/new-project.sh`'s own
-# s40 birth sequence (source lines verified: the REVIEWER_STATUS/COMMISSIONER_STATUS teaching text
-# and the s40 birth-sequence comment block naming "author (model)... reviewer (subagent)...
-# commissioner (human)") -- every world this package births carries exactly these three,
-# unconditionally, in `--new-world` mode. `screen_principals_authority` shows THIS table when
-# `dest` does not exist yet (the normal sequence); it still does the LIVE read via
-# `list_principals` when `dest` already exists (an out-of-sequence `--start-at` against an
-# already-born world -- a genuine read of a real world, the declared exception unchanged).
-SCAFFOLD_BASE_PRINCIPALS: list[tuple[str, str, str]] = [
-    ("author", "model", "the model identity that authored this world's first commit -- "
-                        "self-attributed genesis exception, s40 birth sequence step 1"),
-    ("reviewer", "subagent", "registered automatically through the s40 FULL ceremony at birth "
-                             "(bootstrap/new-project.sh); do not re-register"),
-    ("commissioner", "human", "registered automatically through the s40 FULL ceremony at birth; "
-                              "the maintainer's own FULL-mode signing act uses this principal"),
-]
+# CLASS_CHOICES, RELATION_CHOICES, and SCAFFOLD_BASE_PRINCIPALS -- imported above from
+# tools/setup_tui/principals_authority_data.py (P10 data split, see module docstring's "CONTENT
+# SPLIT" note); their provenance comments (which kernel source each mirrors) live with them there.
 
 # ---------------------------------------------------------------------------------------------
 # The drift BACKSTOP the module docstring's own "RULE 1, NEVER A SECOND IMPLEMENTATION" mirror
@@ -202,54 +178,9 @@ def check_vocabulary_drift(
         )
     return drift
 
-# ---------------------------------------------------------------------------------------------
-# The propaedeutic lesson lines (spec §2: "the one-line lesson (what this row constitutes, in
-# record terms)"), ONE home -- screens.py never carries its own copy. Each states what the row
-# CONSTITUTES and what it does NOT (spec §1 item 2's own per-form requirement).
-# ---------------------------------------------------------------------------------------------
-LESSON_REGISTER = (
-    "CONSTITUTES: a new identity anchor row plus its principal_registered event -- append-only, "
-    "attributed, dated, with a stated purpose (kernel/lineage/s40-principal-identity-events.sql "
-    "Element 3: a bare anchor cannot commit without this event, atomically). "
-    "DOES NOT: grant the principal any capability, role, or standing to write under -- "
-    "registration is EXISTENCE, not authority. A registered principal cannot write under its own "
-    "name until a standing declaration binds a db role to it (led principal declare-standing), "
-    "and this screen's charter/competence/relation acts are separate ceremonies again."
-)
-LESSON_COMPETENCE = (
-    "CONSTITUTES: a recorded BELIEF that this principal is competent for a named activity, at a "
-    "stated band, on a stated basis -- attributed, dated, retractable only by a superseding "
-    "withdrawal (kernel/lineage/s41-principal-bindings-and-relations.sql D-5/G13). "
-    "DOES NOT: constitute a permission bit or gate anything -- RECORDABLE, NOT YET GATING in v1 "
-    "(no review path consults competence before accepting an act; enforcement is a named "
-    "follow-on amendment, s41 D-5). Band/basis are free text in v1, a RATIFIED PLACEHOLDER "
-    "(s41 §9(g)), not a settled judgment that no closed vocabulary is ever warranted."
-)
-LESSON_RELATION = (
-    "CONSTITUTES: a typed, attributed, dated declaration of a relationship between two "
-    "registered principals, in the kernel's own closed vocabulary (acts-for | dispatched-by | "
-    "same-natural-person | succeeds -- kernel/lineage/s41-principal-bindings-and-relations.sql "
-    "D-2), retractable only by a superseding retraction restating the same triple. "
-    "DOES NOT: enforce anything -- a relation is REPRESENTABLE delegation/supervision/succession, "
-    "not an enforced permission; 'acts-for' in particular records a declared fact, it does not "
-    "make the object's writes flow through the subject at the kernel level."
-)
-LESSON_CHARTER = (
-    "CONSTITUTES: binding a role's governing charter TEXT (hash-verified against the file on "
-    "disk at registration time) to an ALREADY-REGISTERED principal, via an ordinary kind=decision "
-    "ledger row in a fixed, parseable statement shape "
-    "(design/FABLE-ROLE-CHARTERS-AND-BRIEFS-SPEC.md; tools/role_charter.py). "
-    "DOES NOT: itself register the principal -- charter and identity are two separate ceremonies "
-    "(this is exactly the trap spec WP3 closes: chartering an unregistered role used to dead-end "
-    "at a refusal; this screen offers the missing registration in-flow instead)."
-)
-LESSON_WORKFLOW_POINTER = (
-    "Roles defined here become the principals your workflow units and briefs bind to -- see "
-    "roles/README.md and design/FABLE-ROLE-CHARTERS-AND-BRIEFS-SPEC.md (charters and briefs) and "
-    "tools/workflow_compile.py (the workflow-unit compiler) in the world you just born. No "
-    "workflow authoring happens in this screen (spec §1 item 4: pointer, not machinery)."
-)
-
+# The five LESSON_* propaedeutic teaching strings -- imported above from
+# tools/setup_tui/principals_authority_data.py (P10 data split, see module docstring's "CONTENT
+# SPLIT" note); the spec §2 provenance note ("one home, not inline in screen code") lives there.
 
 # ---------------------------------------------------------------------------------------------
 # Reads -- BEFORE the boundary exists (module docstring): direct psql, `SET ROLE`, the SAME
