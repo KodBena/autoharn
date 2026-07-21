@@ -1,8 +1,8 @@
 #!/bin/sh
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-09T11:15:53Z
-#   last-change: 2026-07-18T22:47:45Z
-#   contributors: be693afb/main, e4410ef6/main, 3c50e030/main, a857c93d/main, 9a17b6b9/main, ab5d5bab/main
+#   last-change: 2026-07-21T19:38:57Z
+#   contributors: be693afb/main, e4410ef6/main, 3c50e030/main, a857c93d/main, 9a17b6b9/main, ab5d5bab/main, 43f77bff/main
 # <<< PROVENANCE-STAMP <<<
 
 # new-project.sh — stamp a new instance directory: deployment.json, .claude/ wiring
@@ -664,6 +664,11 @@ else
     echo "   NOTE: $PROJECT_ROOT is not (yet) a git repo -- the .gitignore above was still written;"
     echo "   it is inert until this directory becomes one (e.g. \`git init\`), at which point it"
     echo "   takes effect immediately with no further action."
+    echo "   Consequence while this window is open: \`led work close --review-bookkeeping"
+    echo "   --witness commit:<sha>\` (the ceremony-free close for note-class work) needs a"
+    echo "   commit to witness and is unusable without a repo here -- every close must go"
+    echo "   --review-deferred instead, and each one accrues review-gap debt until this"
+    echo "   directory is \`git init\`'d. Weigh initializing sooner against absorbing that debt."
 fi
 
 # sed substitution table, shared by every template below. `|` delimiter (paths contain `/`).
