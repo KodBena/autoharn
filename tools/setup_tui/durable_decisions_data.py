@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-21T22:56:29Z
-#   last-change: 2026-07-21T22:56:29Z
+#   last-change: 2026-07-21T23:26:38Z
 #   contributors: 43f77bff/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -384,5 +384,17 @@ RAW_CATALOG: list[dict[str, str]] = [
             "optional. The reviewer works from the ratified spec, the diff, and the witness "
             "harness -- never the delegate's own self-report -- checking specifically for "
             "silent narrowing, improvisation, or malicious compliance (ledger row 1492).",
+    },
+    # 14. Maintainer-named anchor (row 1915), SHOULD-grade -- house specimen rows 1909/1914.
+    {
+        "slug": "polychotomy-option-space-justification",
+        "rule": "SHOULD, not MUST: a polychotomy for the maintainer or another executive should justify the "
+             "option SPACE itself (why these, why this many, why honest), not just the tradeoffs.",
+        "why": "ledger row 1915; external specimen github.com/anthropics/claude-code/issues/78658 "
+            "(worst-to-date); house specimen rows 1909/1914 -- a challenged dichotomy re-derived to six shapes.",
+        "hydrates": "Durable decision adopted at world birth (polychotomy-option-space-justification, why: "
+            "ledger rows 1915/1909/1914): SHOULD, not mandatory -- justify the option SPACE, not the tradeoffs.",
+        "claude_md": "- **Justify the option space (SHOULD, not mandatory)** -- justify the SPACE, not just "
+            "tradeoffs (ledger row 1915; github.com/anthropics/claude-code/issues/78658; rows 1909/1914).",
     },
 ]

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-21T22:52:32Z
-#   last-change: 2026-07-21T22:52:32Z
+#   last-change: 2026-07-21T23:19:47Z
 #   contributors: 43f77bff/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -302,6 +302,13 @@ RAW_ENTRIES: dict[str, dict[str, str]] = {
         "label": "fresh-context-review-for-delegated-work (durable decision)",
         "aspiration": "house independent-review discipline (ledger row 1492), not a named "
                     "external standard.",
+        "external": "none.",
+    },
+    "hydration_polychotomy_option_space_justification": {
+        "key": "hydration_polychotomy_option_space_justification",
+        "label": "polychotomy-option-space-justification (durable decision, SHOULD-grade)",
+        "aspiration": "house anti-false-polychotomy discipline (ledger row 1915), not a named "
+                    "external standard -- universal suggestion, not a mandatory rule.",
         "external": "none.",
     },
 }

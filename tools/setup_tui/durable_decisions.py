@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-18T23:37:02Z
-#   last-change: 2026-07-21T23:02:05Z
+#   last-change: 2026-07-21T23:19:54Z
 #   contributors: ab5d5bab/main, 43f77bff/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -102,8 +102,9 @@ class DurableDecision:
 # (`claims-carry-witnesses`, `unanchored-review-briefs`, `fresh-context-review-for-delegated-
 # work`), each in generic voice from the start.
 #
-# 13 entries total (12 fixed DurableDecision structs in RAW_CATALOG + the ADR-adoption submenu
-# just after this construction) -- inside the 7-15 range, 15 is a hard ceiling not approached.
+# 14 entries total (13 fixed DurableDecision structs in RAW_CATALOG -- the 14th, row 1915's
+# polychotomy-option-space-justification, added 2026-07-22 -- + the ADR-adoption submenu just
+# after this construction) -- inside the 7-15 range, 15 is a hard ceiling not approached.
 # ---------------------------------------------------------------------------------------------
 
 CATALOG: list[DurableDecision] = [DurableDecision(**entry) for entry in RAW_CATALOG]
