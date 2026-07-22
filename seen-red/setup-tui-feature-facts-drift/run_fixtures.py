@@ -52,7 +52,6 @@ def main() -> int:
     synthetic_registry_extra = dict(feature_facts.REGISTRY)
     synthetic_registry_extra["preflight_nonexistent_binary"] = feature_facts.FeatureFact(
         key="preflight_nonexistent_binary", label="a feature that does not exist",
-        aspiration="none named.", external="none.",
     )
     drift_a = feature_facts.check_registry(registry=synthetic_registry_extra)
     assert any("preflight_nonexistent_binary" in m and "ORPHANED" in m for m in drift_a), (
@@ -82,7 +81,6 @@ def main() -> int:
     synthetic_both = dict(synthetic_registry_missing)
     synthetic_both["preflight_nonexistent_binary"] = feature_facts.FeatureFact(
         key="preflight_nonexistent_binary", label="a feature that does not exist",
-        aspiration="none named.", external="none.",
     )
     drift_both = feature_facts.check_registry(registry=synthetic_both)
     assert len(drift_both) == 2, (

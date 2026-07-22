@@ -4,15 +4,15 @@ pre-rebuild screens.py's `screen_substrate`. The dedicated-db path only ever DIS
 block for the operator to apply by hand on the cluster host -- it queues no Plan entry."""
 from __future__ import annotations
 
-from tools.configtree import (ChoiceField, ConfirmField, SectionResult, SectionSpec, TextField,
-                               is_field_touched)
+from tools.configtree import (ChoiceField, ConfirmField, ElucidationHeading, SectionResult,
+                               SectionSpec, TextField, is_field_touched)
 from tools.setup_tui import checklist as ck
 from tools.setup_tui import feature_facts, pghba, probes
 
 _SLUG = "substrate"
 
 SUBSTRATE_CHOICES = (
-    ("existing", "existing-db path (zero manual steps, the omega-lab shape)"),
+    ("existing", "existing-db path (zero manual steps)"),
     ("dedicated", "dedicated-db path (generates a confined pg_hba block)"),
 )
 
@@ -100,7 +100,24 @@ def submit(state: dict, answers: dict) -> SectionResult:
     return SectionResult(ok=True, state_updates=state, info_lines=tuple(lines))
 
 
+def _headed_facts(*pairs: "tuple[str, str]") -> tuple:
+    """`(heading, feature_facts key)` pairs -> ONE elucidation tuple with a REAL sub-heading
+    before each fact's own elements (round 7, ledger row 1119, defect D9: "Existing-db path --"/
+    "Dedicated-db path --" repeated as a line PREFIX on every row was a flat key-value dump
+    faking a hierarchy the reader had to reconstruct by diffing prefixes; a real
+    `ElucidationHeading` names each group instead, with the group's own content -- unprefixed --
+    following it)."""
+    out: list = []
+    for heading, key in pairs:
+        out.append(ElucidationHeading(heading))
+        elements = feature_facts.fact(key).elements()
+        if elements is None:
+            continue
+        out.extend((elements,) if isinstance(elements, str) else elements)
+    return tuple(out)
+
+
 STEP = SectionSpec(
     slug="substrate", title="Substrate", group="Substrate & target", fields=fields, submit=submit,
-    description=(feature_facts.fact("substrate_existing").elements(prefix="Existing-db path --") +
-                 feature_facts.fact("substrate_dedicated").elements(prefix="Dedicated-db path --")))
+    description=_headed_facts(("Existing-db path", "substrate_existing"),
+                               ("Dedicated-db path", "substrate_dedicated")))

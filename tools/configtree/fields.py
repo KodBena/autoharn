@@ -19,7 +19,16 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Callable, Union
 
+from tools.configtree.elucidation import (DescriptionElement, ElucidationHeading,
+                                           ElucidationItem, ElucidationValue, PROVENANCE_LABEL,
+                                           _check_elucidation_text, _check_no_bare_pipe)
 from tools.configtree.ids import FieldName, Label, NodeId, ScopedFieldKey
+
+# Re-exported here so every EXISTING call site in this file (and every consumer importing them
+# FROM fields.py, the historical home) keeps working unchanged -- `elucidation.py` is where these
+# now live (ADR-0007: no file over 400 lines), `fields.py` stays their public re-export point.
+__all_elucidation__ = ("DescriptionElement", "ElucidationHeading", "ElucidationItem",
+                        "ElucidationValue", "PROVENANCE_LABEL")
 
 # A validator returns an error message string on failure, or None when the value is acceptable.
 # Applied to the RAW widget value (a str for TextField, the chosen key for ChoiceField) -- never
@@ -34,60 +43,6 @@ def _coerce_name(raw: "str | FieldName") -> FieldName:
 
 def _coerce_label(raw: "str | Label") -> Label:
     return raw if isinstance(raw, Label) else Label(raw)
-
-
-@dataclass(frozen=True)
-class DescriptionElement:
-    """ONE typed elucidation line -- a short `label` (e.g. "Aspiration", "Standards",
-    "Mechanism", "External") plus its own `text` (companion rule C13, law/adr/0019 appendix:
-    "content is typed semantic elements; no layout carried inside a string" -- ledger row 1117,
-    the round-6 conviction that the round-5 elucidation fix answered the WIDTH axis, C12, but not
-    the STRUCTURE axis, C13: `feature_facts.toml` stored aspiration/citations/external as ONE
-    string joined with a homemade ' | ' delimiter, rendered as prose, wrapping into a wall of
-    text with the separator visible mid-paragraph). Construction IS validation: a bare ' | ' (or
-    any other homemade multi-fact delimiter this type exists to make unrepresentable) inside a
-    label or text raises immediately, naming the offending value -- the data's OWN schema must
-    carry the structure (named keys/lists per component), never a flattened string relying on a
-    renderer to re-split it. A `mechanism`/path citation gets its OWN element (one per path) so a
-    file path is never comma-joined into a paragraph and never wrapped mid-directory by the
-    widget layer -- the RENDERER (`tools.configtree.widgets.elucidation_widgets`) puts each
-    element on its own capped line, never concatenated."""
-    label: str
-    text: str
-
-    def __post_init__(self) -> None:
-        if not self.label.strip():
-            raise ValueError("DescriptionElement.label must be non-empty")
-        if not self.text.strip():
-            raise ValueError("DescriptionElement.text must be non-empty")
-        for name, val in (("label", self.label), ("text", self.text)):
-            if " | " in val:
-                raise ValueError(
-                    f"DescriptionElement {self.label!r} {name} contains a bare ' | ' separator "
-                    f"-- structure belongs in separate DescriptionElement instances, never a "
-                    f"homemade delimiter inside one string (companion rule C13, ledger row 1117): "
-                    f"{val!r}")
-
-
-# The type every elucidation-carrying slot in this library accepts: a plain string (the simple,
-# single-paragraph case -- still capped at MEASURE, still refused if it smuggles a bare ' | ')
-# or a tuple of `DescriptionElement`s (the typed, multi-component case -- one label:text line
-# each, never joined into one string). `tools.configtree.widgets.elucidation_widgets` is the ONE
-# renderer for this type, shared by every consumer (`panes.SectionPane`, `panes.CommitPane`,
-# `actions.ActionPane`, `widgets.MultiChoiceFieldWidget`) so a str vs a tuple never needs two
-# rendering paths per call site.
-ElucidationValue = Union[str, "tuple[DescriptionElement, ...]"]
-
-
-def _check_no_bare_pipe(value: "str | None", *, owner: str) -> None:
-    """A plain-string elucidation value (the simple case `DescriptionElement` does not cover)
-    still gets the SAME construction-time refusal -- a bare ' | ' inside a lone string is exactly
-    as much a homemade multi-fact delimiter as one inside a `DescriptionElement`'s own text."""
-    if value and " | " in value:
-        raise ValueError(f"{owner}: a bare ' | ' separator in a plain-string elucidation value "
-                          f"is a homemade multi-fact delimiter (companion rule C13, ledger row "
-                          f"1117) -- split it into separate DescriptionElement instances "
-                          f"instead: {value!r}")
 
 
 # SHARED-FIELD DOCTRINE (maintainer-diagnosed live defect, 2026-07-22: toggling a checkbox in one

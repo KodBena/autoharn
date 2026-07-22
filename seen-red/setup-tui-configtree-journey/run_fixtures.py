@@ -95,6 +95,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import re
 import shutil
 import sys
 import tempfile
@@ -107,8 +108,9 @@ from textual.widgets import Button, Checkbox, ContentSwitcher, Input, RadioSet, 
 
 from tools.configtree import CommitSpec, DuplicatedSharedFieldError, SectionResult, SectionSpec  # noqa: E402
 from tools.configtree.app import ConfigTreeApp  # noqa: E402
-from tools.configtree.fields import (ChoiceField, ListField, TextField, get_field_value,  # noqa: E402
-                                      is_field_touched, set_field_value)
+from tools.configtree.fields import (ChoiceField, DescriptionElement, ElucidationHeading,  # noqa: E402
+                                      ListField, TextField, get_field_value, is_field_touched,
+                                      set_field_value)
 from tools.configtree.ids import NodeId  # noqa: E402
 from tools.configtree.measure import MEASURE  # noqa: E402
 from tools.configtree.spec import COMPLETE, INVALID, owner_of, section_status  # noqa: E402
@@ -724,14 +726,22 @@ async def case_9() -> None:
         await pilot.pause()
         desc_widgets = list(app.query_one("#pane-signed-genesis").query(".ct-section-description"))
         desc = [str(w.render()) for w in desc_widgets]
-        assert desc and any(d.startswith("Aspiration:") for d in desc), \
-            f"expected a typed 'Aspiration:' element, got {desc}"
+        # Round 7 (ledger row 1119): the LEAD is unlabeled connective prose (D7/D8), never a
+        # "Aspiration:" telegraphy line -- the first element must NOT be a labeled slot at all.
+        assert desc and not desc[0].startswith(("Aspiration:", "Standards:", "Mechanism:", "External:")), \
+            f"expected the LEAD to be unlabeled connective prose, not slot:value telegraphy, got {desc[0]!r}"
+        assert any(d.startswith("Requires:") for d in desc), \
+            f"expected a typed 'Requires:' element for the standing gpg key-custody obligation, got {desc}"
+        assert any(d.startswith("Full basis:") for d in desc), \
+            f"expected a demoted 'Full basis:' provenance element (the real user-guide FAQ), got {desc}"
         assert len(desc_widgets) >= 2, \
-            f"expected the section description to render as SEPARATE typed elements (Aspiration/Standards/Mechanism/External), not one blob -- got {len(desc_widgets)} widget(s)"
+            f"expected the section description to render as SEPARATE typed elements, not one blob -- got {len(desc_widgets)} widget(s)"
         offenders = [(w.id, w.size.width) for w in desc_widgets if w.size.width > MEASURE]
         assert not offenders, f"section description RENDERED width exceeds MEASURE={MEASURE}: {offenders}"
-        print(f"case 9a ok: signed-genesis's OWN section description renders under its title, "
-              f"within MEASURE (rendered width {desc_widgets[0].size.width}): {desc[0][:90]!r}...")
+        print(f"case 9a ok: signed-genesis's OWN section description leads with UNLABELED "
+              f"connective prose (round 7, ledger row 1119), a 'Requires:' obligation, and a "
+              f"demoted 'Full basis:' pointer, within MEASURE (rendered width "
+              f"{desc_widgets[0].size.width}): {desc[0][:90]!r}...")
 
         # --- MultiChoiceField option-level elucidation (hydration: each durable-decision's own
         # 'why' citation, juxtaposed under its own checkbox -- the tooltip-equivalent this
@@ -1176,6 +1186,148 @@ async def case_16() -> None:
               f"borders even with a durable-decisions catalog this size")
 
 
+_ALL_ELUCIDATION_SELECTOR = (".ct-section-description, .ct-field-help, .ct-choice-help, "
+                             ".ct-elucidation-heading")
+
+_INTERNAL_MEMORY_RE = re.compile(r"\bs\d\d(?:/s\d\d)*-family\b", re.IGNORECASE)
+
+
+async def _sweep_all_elucidation_text(app, pilot) -> "list[str]":
+    """Visits every section (unblocking dest-gated ones first) and returns every rendered
+    elucidation-class Static's own text, across the whole app -- the shared sweep round 7's own
+    cases 17-19 all build on."""
+    tree = app.query_one("#ct-tree", Tree)
+    tree.select_node(_find_node(tree, "fork-target"))
+    await pilot.pause()
+    app.query_one("#pane-fork-target #ct-field-dest", Input).value = "/tmp/ctj-case17-dest"
+    await pilot.pause()
+    for slug in app._panes:
+        await app._panes[slug].refresh_blocked()
+    await pilot.pause()
+    texts: list[str] = []
+    for slug in app._panes:
+        tree.select_node(_find_node(tree, slug))
+        await pilot.pause()
+        pane = app.query_one(f"#pane-{slug}")
+        texts.extend(str(w.render()) for w in pane.query(_ALL_ELUCIDATION_SELECTOR))
+    return texts
+
+
+async def case_17() -> None:
+    """PLACEHOLDER TOKENS (round 7, ledger row 1119, defect D3: "<dest>/legacy/led" reached the
+    screen literally -- a raw, unexpanded template variable). RED-FIRST: construction of a
+    DescriptionElement/ElucidationHeading/plain-string elucidation value carrying a raw
+    `<placeholder>` token is refused, naming the token. GREEN: the REAL, currently-authored
+    feature_facts.toml carries none (the two literal `<dest>/...` occurrences the round-6
+    content had are fixed, generic phrasing now)."""
+    # --- (a) RED-FIRST: a bare string ---
+    try:
+        SectionSpec(slug="synth-ph", title="Synthetic", group="Synthetic",
+                    fields=lambda state: (), submit=lambda state, answers: SectionResult(ok=True),
+                    description="drives this world's own <dest>/legacy/led")
+        raise AssertionError("expected construction to refuse a raw <placeholder> token")
+    except ValueError as exc:
+        assert "<dest>" in str(exc) and "placeholder" in str(exc), \
+            f"expected the refusal to NAME the offending token, got: {exc}"
+        print(f"case 17a ok (RED-FIRST): a bare-string SectionSpec.description carrying "
+              f"'<dest>' is refused at construction, naming the token: {exc}")
+
+    # --- (b) RED-FIRST: inside a DescriptionElement ---
+    try:
+        DescriptionElement("Requires", "run <dest>/verify-commission by hand")
+        raise AssertionError("expected DescriptionElement to refuse a raw <placeholder> token")
+    except ValueError as exc:
+        assert "<dest>" in str(exc)
+        print(f"case 17b ok (RED-FIRST): a DescriptionElement carrying '<dest>' is refused at "
+              f"construction: {exc}")
+
+    # --- (c) RED-FIRST: inside an ElucidationHeading ---
+    try:
+        ElucidationHeading("<dest> path")
+        raise AssertionError("expected ElucidationHeading to refuse a raw <placeholder> token")
+    except ValueError as exc:
+        assert "<dest>" in str(exc)
+        print(f"case 17c ok (RED-FIRST): an ElucidationHeading carrying '<dest>' is refused at "
+              f"construction: {exc}")
+
+    # --- (d) GREEN: the REAL app's own rendered elucidation carries no raw placeholder anywhere
+    # (the two literal <dest>/... occurrences round 6's own feature_facts.toml had -- the
+    # principals_authority and hydration_role_charters "external" lines -- are fixed) ---
+    app = tui_app.build_app(_fresh_state(), dry_run=True)
+    async with app.run_test(size=(150, 55)) as pilot:
+        await pilot.pause()
+        texts = await _sweep_all_elucidation_text(app, pilot)
+        offenders = [t for t in texts if re.search(r"<[A-Za-z_][A-Za-z0-9_-]*>", t)]
+        assert not offenders, f"a raw <placeholder> token reached the REAL rendered elucidation: {offenders}"
+        print(f"case 17d ok (GREEN, live): swept {len(texts)} rendered elucidation line(s) "
+              f"across every section -- zero raw <placeholder> tokens anywhere")
+
+
+async def case_18() -> None:
+    """NULL-SLOT SUPPRESSION (round 7, ledger row 1119, defect D6: "Aspiration: none named."
+    rendered a null as if it were content -- "either suppress the slot or say something the
+    reader can use"). Proves NO rendered elucidation line anywhere is a bare null-shaped
+    statement ("none named", "none.", "(no operator-facing content)") -- an empty component is
+    simply ABSENT, never printed as prose."""
+    app = tui_app.build_app(_fresh_state(), dry_run=True)
+    async with app.run_test(size=(150, 55)) as pilot:
+        await pilot.pause()
+        texts = await _sweep_all_elucidation_text(app, pilot)
+        null_shaped = [t for t in texts if re.search(r"\bnone\b", t, re.IGNORECASE) and len(t) < 40]
+        assert not null_shaped, f"a null-shaped line reached the REAL rendered elucidation (D6): {null_shaped}"
+        print(f"case 18 ok: swept {len(texts)} rendered elucidation line(s) across every "
+              f"section -- zero bare null-shaped statements ('none named.', 'none.') anywhere; "
+              f"an empty component is simply absent")
+
+
+async def case_19() -> None:
+    """AUDIENCE BOUNDARY (round 7, ledger row 1119, defect D2: an AI-collaborator's own internal
+    memory note, an insider codename ("the omega-lab shape"), and internal delta/session
+    numbering ("the s40/s41 family") all reached the operator-facing screen verbatim). Proves
+    NONE of these three specific strings -- named explicitly by the coordinator's own brief --
+    appear anywhere in the REAL app's rendered elucidation."""
+    app = tui_app.build_app(_fresh_state(), dry_run=True)
+    async with app.run_test(size=(150, 55)) as pilot:
+        await pilot.pause()
+        texts = await _sweep_all_elucidation_text(app, pilot)
+        joined = "\n".join(texts)
+        assert "memory:" not in joined.lower(), \
+            f"an AI-collaborator internal-memory note reached rendered elucidation: {[t for t in texts if 'memory:' in t.lower()]}"
+        assert "omega-lab" not in joined.lower(), \
+            f"the insider 'omega-lab' referent reached rendered elucidation: {[t for t in texts if 'omega-lab' in t.lower()]}"
+        assert not _INTERNAL_MEMORY_RE.search(joined), \
+            f"internal delta/session-numbering jargon (sNN-family) reached rendered elucidation: {[t for t in texts if _INTERNAL_MEMORY_RE.search(t)]}"
+        print(f"case 19 ok: swept {len(texts)} rendered elucidation line(s) -- zero "
+              f"'memory:' AI-collaborator notes, zero 'omega-lab' insider referents, zero "
+              f"'sNN-family' internal numbering anywhere in the operator-facing surface")
+
+
+async def case_20() -> None:
+    """REAL SUB-HEADINGS (round 7, ledger row 1119, defect D9: "Existing-db path --"/
+    "Dedicated-db path --" repeated as a line PREFIX on every row was a flat key-value dump
+    faking a hierarchy -- a real heading, once per group, is the fix). Proves the substrate
+    pane renders exactly two `.ct-elucidation-heading` elements, "Existing-db path" and
+    "Dedicated-db path", each unprefixed and each followed by that group's own content before
+    the next heading."""
+    app = tui_app.build_app(_fresh_state(), dry_run=True)
+    async with app.run_test(size=(150, 55)) as pilot:
+        await pilot.pause()
+        tree = app.query_one("#ct-tree", Tree)
+        tree.select_node(_find_node(tree, "substrate"))
+        await pilot.pause()
+        pane = app.query_one("#pane-substrate")
+        headings = [str(w.render()) for w in pane.query(".ct-elucidation-heading")]
+        assert headings == ["Existing-db path", "Dedicated-db path"], \
+            f"expected exactly two real, unprefixed sub-headings in order, got {headings}"
+        # No description line anywhere still carries the OLD repeated-prefix hack.
+        desc_lines = [str(w.render()) for w in pane.query(".ct-section-description")]
+        prefixed = [ln for ln in desc_lines if ln.startswith(("Existing-db path --", "Dedicated-db path --"))]
+        assert not prefixed, f"expected the OLD repeated-line-prefix hack gone, still found: {prefixed}"
+        print(f"case 20 ok: the substrate pane renders TWO real HEADED groups "
+              f"({headings!r}), never a repeated line-prefix -- {len(desc_lines)} content "
+              f"line(s) total across both groups")
+
+
 async def _main() -> None:
     await case_0()
     await case_1()
@@ -1194,6 +1346,10 @@ async def _main() -> None:
     await case_14()
     await case_15()
     await case_16()
+    await case_17()
+    await case_18()
+    await case_19()
+    await case_20()
     print("ALL CASES OK -- tools.configtree.app.ConfigTreeApp driven end-to-end through the "
           "REAL tools.setup_tui.steps.SECTIONS registry via Pilot, LIVE-MODEL semantics "
           "throughout (no per-section save exists): a state-aliasing reproduction and structural "

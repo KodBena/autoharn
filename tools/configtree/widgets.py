@@ -13,7 +13,8 @@ from textual.containers import Horizontal, Vertical
 from textual.screen import ModalScreen
 from textual.widgets import Button, Checkbox, Input, Label, ListItem, ListView, RadioButton, RadioSet, Static
 
-from tools.configtree.fields import (ChoiceField, ConfirmField, ElucidationValue, ListField,
+from tools.configtree.fields import (ChoiceField, ConfirmField, DescriptionElement,
+                                      ElucidationHeading, ElucidationValue, ListField,
                                       MultiChoiceField, TextField)
 
 FIELD_ID_PREFIX = "ct-field-"
@@ -21,27 +22,36 @@ FIELD_ID_PREFIX = "ct-field-"
 
 def elucidation_widgets(value: "ElucidationValue | None", css_class: str, *,
                          prefix: "str | None" = None):
-    """The ONE renderer for `fields.ElucidationValue` (companion rule C13, law/adr/0019 appendix
-    -- "content is typed semantic elements; no layout carried inside a string", ledger row 1117):
-    a plain string renders as ONE capped `Static`; a tuple of `DescriptionElement`s renders each
-    as its OWN capped `Static`, one label:text line per element, NEVER concatenated into one
-    paragraph -- a `mechanism` file-path citation gets its own line this way, never comma-joined
-    and never wrapped mid-directory. `prefix`, if given (a `ChoiceField`'s own option VALUE --
-    its `option_help` entries render together, disambiguated by option, under one `RadioSet`
-    rather than next to individual buttons the way `MultiChoiceFieldWidget` can), is prepended to
-    every rendered line so the operator can tell which option a line belongs to. Every call site
-    that used to build its own ad hoc `Static(text, classes=...)` for a help/description/
-    option_help slot goes through this function instead, so a str vs a typed-elements value never
-    needs two rendering paths."""
+    """The ONE renderer for `fields.ElucidationValue` (round 7, ledger row 1119, following the
+    Fable RCA consult, design/CONSULT-FABLE-ELUCIDATION-RCA-2026-07-22.md): a plain string renders
+    as ONE capped, UNLABELED `Static` -- ordinary connective prose (D7/D8). A tuple's own items
+    render per kind, each its own capped `Static`, never concatenated into one paragraph:
+      - a bare `str` item -- unlabeled connective prose, exactly like the plain-string case (the
+        LEAD content of a multi-item value: what choosing this costs/requires/changes, D7);
+      - a `DescriptionElement` -- a short, closed-vocabulary LABELED line ("Label: text"), never
+        a per-component telegraphy vocabulary (D9's own "serialization masquerading as layout");
+      - an `ElucidationHeading` -- a real, unprefixed sub-heading (`.ct-elucidation-heading`)
+        breaking a multi-group value into named parts (D9: never a repeated line-prefix hack).
+    `prefix`, if given (a `ChoiceField`'s own option VALUE -- its `option_help` entries render
+    together, disambiguated by option, under one `RadioSet` rather than next to individual
+    buttons the way `MultiChoiceFieldWidget` can), is prepended to a bare-str/DescriptionElement
+    line so the operator can tell which option it belongs to; a heading is never prefixed (a
+    heading names ITS OWN group, prefixing it with an unrelated option value would misname it)."""
     if value is None:
         return
     if isinstance(value, str):
         text = f"{prefix}: {value}" if prefix else value
         yield Static(text, classes=css_class, markup=False)
         return
-    for element in value:
-        label = f"{prefix} -- {element.label}" if prefix else element.label
-        yield Static(f"{label}: {element.text}", classes=css_class, markup=False)
+    for item in value:
+        if isinstance(item, ElucidationHeading):
+            yield Static(item.text, classes="ct-elucidation-heading")
+        elif isinstance(item, DescriptionElement):
+            label = f"{prefix} -- {item.label}" if prefix else item.label
+            yield Static(f"{label}: {item.text}", classes=css_class, markup=False)
+        else:  # bare str -- unlabeled connective prose, its own line
+            text = f"{prefix}: {item}" if prefix else item
+            yield Static(text, classes=css_class, markup=False)
 
 
 def field_widget_id(name: object) -> str:

@@ -16,7 +16,8 @@ the live App imports it explicitly: `from tools.configtree.app import ConfigTree
 from __future__ import annotations
 
 from tools.configtree.fields import (ChoiceField, ConfirmField, DescriptionElement,
-                                      ElucidationValue, Field, ListField, MultiChoiceField,
+                                      ElucidationHeading, ElucidationItem, ElucidationValue,
+                                      Field, ListField, MultiChoiceField, PROVENANCE_LABEL,
                                       TextField, default_of, get_field_value, is_field_touched,
                                       set_field_value, validate_value)
 from tools.configtree.ids import ExitCode, FieldName, Label, NodeId, ScopedFieldKey
@@ -27,9 +28,9 @@ from tools.configtree.spec import (BLOCKED, COMPLETE, INCOMPLETE, INVALID, Actio
                                     validate_shared_ownership)
 
 __all__ = [
-    "ChoiceField", "ConfirmField", "DescriptionElement", "ElucidationValue", "Field", "ListField",
-    "MultiChoiceField", "TextField", "default_of", "get_field_value", "is_field_touched",
-    "set_field_value", "validate_value",
+    "ChoiceField", "ConfirmField", "DescriptionElement", "ElucidationHeading", "ElucidationItem",
+    "ElucidationValue", "Field", "ListField", "MultiChoiceField", "PROVENANCE_LABEL", "TextField",
+    "default_of", "get_field_value", "is_field_touched", "set_field_value", "validate_value",
     "ExitCode", "FieldName", "Label", "NodeId", "ScopedFieldKey",
     "BLOCKED", "COMPLETE", "INCOMPLETE", "INVALID",
     "ActionSpec", "CommitSpec", "DuplicatedSharedFieldError", "SectionResult", "SectionSpec",

@@ -78,12 +78,58 @@ to history) with no live rule content to summarize. Case 16 proves the per-check
 Textual's own `ToggleButton` default CSS draws (a wall of borders once a catalog runs long) is
 slimmed to none, the Qt-idiom checklist look.
 
+ROUND 7 (same day, ledger row 1119 -- following an INDEPENDENT Fable RCA consult of round 6's
+own elucidation rendering, design/CONSULT-FABLE-ELUCIDATION-RCA-2026-07-22.md, run in two
+phases specifically so post-hoc rationalization from the implementer could not shape the
+diagnosis). The consult found ten defects in round 6's own output, ranked D1 (CRITICAL) through
+D10 (LOW). D1: fielding "aspiration: NIST SP 800-63's own identity/lifecycle/binding
+decomposition" into a dedicated `Standards: NIST SP 800-63` line silently PROMOTED an aspiration
+into an unqualified conformance claim -- a truth-value change, not a formatting one, that no
+mechanical check (bare-pipe-free, N-labeled-elements) could ever catch, because every token
+survived and only the qualifying edge between them was lost. D2: internal-only provenance (an
+AI-collaborator's own "(memory: ...)" authoring note, the insider referent "the omega-lab
+shape", the internal delta-numbering "the s40/s41 family", spec filenames carrying internal
+process branding) reached the operator-facing screen verbatim -- text that elucidates the
+BUILDERS' history, not the OPERATOR's choice. D3: a raw, unexpanded `<dest>/legacy/led`
+template placeholder reached the screen literally. D4: design docs filed under `Mechanism:` (a
+category error -- a spec is provenance/rationale, not a mechanism) and an `Aspiration:` slot
+that asserted emptiness ("none named") while simultaneously carrying content. D5: `External:`
+meant three different things across the two screens shown to the consult. D6: "Aspiration: none
+named." rendered a NULL as if it were information. D7: the single most decision-relevant fact on
+either screen (the dedicated-db path's own cluster-admin requirement) arrived LAST, buried
+inside a slot, while file-path inventory (meaningful only to a maintainer with the repo open)
+came first. D8: telegraphic slot:value lines with no connective explanation -- the project's own
+internal evidentiary register, shipped as user-facing prose. D9: two sections used two different
+visual grammars for the same record type, one faking a hierarchy via a repeated line-prefix
+("Existing-db path --"), the other flat. D10: ASCII `--` doing duty as em-dash, list-item
+leader, AND field separator interchangeably on the SAME screen.
+
+Fixed: `tools.configtree.elucidation` (new module, split from `fields.py` on ADR-0007 line-count
+grounds) replaces the four-slot `Aspiration`/`Standards`/`Mechanism`/`External` telegraphy with
+`ElucidationValue = str | tuple[str | DescriptionElement | ElucidationHeading, ...]` -- a bare
+`str` item is UNLABELED connective prose (the decision-guidance LEAD, D7/D8), a
+`DescriptionElement` is a short, closed-vocabulary LABELED line (never per-component slot
+vocabulary, D1/D4/D9), an `ElucidationHeading` is a REAL sub-heading for grouped sub-paths (D9).
+Construction-time refusal now covers BOTH a bare ' | ' (round 6) AND a raw `<placeholder>` token
+(round 7, D3). `feature_facts.toml` (all 30 entries) and `durable_decisions.toml` (all 13
+catalog entries' own citations) were re-authored: a standard is now named INSIDE its own
+qualifying sentence ("aspires to ... decomposition"), never in a bare `Standards:` slot (D1/
+D1a); internal-only citations (ledger rows, internal design docs, prior-project pointers) moved
+to a NEVER-rendered `maintainer_refs` list, leaving only genuinely operator-openable citations
+(this repo's own `user-guide/*`, `law/adr/*`, or a public external link) as a demoted, LAST
+"Full basis:" line (D2); `external` now means ONE thing only -- a concrete prerequisite/standing
+obligation the operator must supply (D5); an empty component renders NOTHING, never "none
+named" (D6); the substrate pane's own two paths render under REAL `ElucidationHeading`s instead
+of a repeated line-prefix (D9). Every re-authored entry is listed, per-field, in this round's own
+commit report for the maintainer's faithfulness review pass -- exactly like the round-6 ADR
+synopses.
+
 This is the actual stdout of `.venv/bin/python seen-red/setup-tui-configtree-journey/
 run_fixtures.py` (a venv with `textual` installed -- `python3 -m venv .venv && .venv/bin/pip
 install textual`), against the REAL tools.setup_tui.steps.SECTIONS registry and the REAL
 tools.configtree.app.ConfigTreeApp, witnessed 2026-07-22 (round 1) and re-witnessed 2026-07-22
-(round 5, cases 9-13 added; round 6, cases 14-16 added; every prior case re-run green against
-the round-6 code):
+(round 5, cases 9-13 added; round 6, cases 14-16 added; round 7, cases 17-20 added; every prior
+case re-run green against the round-7 code):
 
 case 0a ok (the maintainer's exact reproduction, FIXED): toggling preflight's 'run' checkbox to False leaves substrate's OWN 'run' checkbox at True -- no cross-section aliasing
 case 0b ok: typing into substrate's 'host' field ('aliasing-probe-host') leaves rehearsal's OWN 'host' field unchanged ('192.168.122.1')
@@ -98,25 +144,25 @@ case 2b ok (GREEN, live, no save): correcting the SAME field clears the inline e
 case 3a ok: every real section reads complete from LIVE TYPING ALONE, no save anywhere -- status line: '10/10 sections complete -- ready to commit.'
 case 3b ok (RED-then-GREEN): commit button was disabled mid-journey, before every section was complete
 case 3c ok: commit button now enabled -- 'enabled exactly when the record is complete'
-$ <repo>/bootstrap/new-project.sh /tmp/setup_tui_rehearsal_probeworldNNNN --new-world probeworldNNNN --db toy --host 192.168.122.1 --force
+$ /home/bork/w/vdc/1/autoharn/.claude/worktrees/agent-a9f8c021455f4512d/bootstrap/new-project.sh /tmp/setup_tui_rehearsal_probeworld1784746776 --new-world probeworld1784746776 --db toy --host 192.168.122.1 --force
   [dry-run: not executed]
-$ <repo>/bootstrap/teardown-world.sh probeworldNNNN --db toy --host 192.168.122.1 --dir /tmp/setup_tui_rehearsal_probeworldNNNN
+$ /home/bork/w/vdc/1/autoharn/.claude/worktrees/agent-a9f8c021455f4512d/bootstrap/teardown-world.sh probeworld1784746776 --db toy --host 192.168.122.1 --dir /tmp/setup_tui_rehearsal_probeworld1784746776
   [dry-run: not executed]
 case 3d ok: ONE commit press ran the full submit sweep (every section's real business logic, in order) then rendered 3 real checklist line(s), e.g. 'would save: /tmp/ctj-case3-dest/world-config.toml'
 case 3e ok: App.exit return_code == 0 (clean-completion exit-code contract)
 case 3f ok: zero residue -- /tmp/ctj-case3-dest was never created (dry-run decide-only)
-$ <repo>/bootstrap/new-project.sh /tmp/setup_tui_rehearsal_probeworldNNNN --new-world probeworldNNNN --db toy --host 192.168.122.1 --force
+$ /home/bork/w/vdc/1/autoharn/.claude/worktrees/agent-a9f8c021455f4512d/bootstrap/new-project.sh /tmp/setup_tui_rehearsal_probeworld1784746779 --new-world probeworld1784746779 --db toy --host 192.168.122.1 --force
   [dry-run: not executed]
-$ <repo>/bootstrap/teardown-world.sh probeworldNNNN --db toy --host 192.168.122.1 --dir /tmp/setup_tui_rehearsal_probeworldNNNN
+$ /home/bork/w/vdc/1/autoharn/.claude/worktrees/agent-a9f8c021455f4512d/bootstrap/teardown-world.sh probeworld1784746779 --db toy --host 192.168.122.1 --dir /tmp/setup_tui_rehearsal_probeworld1784746779
   [dry-run: not executed]
 case 4a ok (RED): commit-sweep business rule ('statement' required inside submit, not a field validator) halts the commit, marks signed-genesis invalid, recorded: {'signed-genesis': {'statement': 'required'}}
 case 4b ok: revisiting signed-genesis shows the real refusal inline on 'statement': 'required'
-$ <repo>/bootstrap/new-project.sh /tmp/setup_tui_rehearsal_probeworldNNNN --new-world probeworldNNNN --db toy --host 192.168.122.1 --force
+$ /home/bork/w/vdc/1/autoharn/.claude/worktrees/agent-a9f8c021455f4512d/bootstrap/new-project.sh /tmp/setup_tui_rehearsal_probeworld1784746779 --new-world probeworld1784746779 --db toy --host 192.168.122.1 --force
   [dry-run: not executed]
-$ <repo>/bootstrap/teardown-world.sh probeworldNNNN --db toy --host 192.168.122.1 --dir /tmp/setup_tui_rehearsal_probeworldNNNN
+$ /home/bork/w/vdc/1/autoharn/.claude/worktrees/agent-a9f8c021455f4512d/bootstrap/teardown-world.sh probeworld1784746779 --db toy --host 192.168.122.1 --dir /tmp/setup_tui_rehearsal_probeworld1784746779
   [dry-run: not executed]
 case 4c ok (GREEN): fixing the one field and pressing Commit again succeeds
-case 5a ok: arrow-key Tree navigation (3x down) + Enter selects the real 'pane-substrate' pane, no mouse and no programmatic select_node involved
+case 5a ok: arrow-key Tree navigation (5x down, past the new 'Setup' group) + Enter selects the real 'pane-substrate' pane, no mouse and no programmatic select_node involved
 case 5b ok: Tab moves focus Tree(id='ct-tree') -> VerticalScroll(classes='ct-section-body')
 case 5c ok: the section pane's own VerticalScroll body scrolls (Offset(x=0, y=0) -> Offset(x=0, y=1))
 case 6 ok: ctrl+q -> App.return_code == 130 (interrupt exit-code convention)
@@ -129,8 +175,8 @@ case 8a ok (RED-FIRST, synthetic): an UNCAPPED Static holding a 400-character st
 case 8b ok (GREEN): every REAL section's own prose widgets, at a 400-column terminal, stay within MEASURE=78 (widest seen: 78 columns) -- swept ALL 10 sections, not just principal registration
 case 8c ok (GREEN, the original emitting site): the 'Add a principal' modal's 'Class' field label -- the exact site that measured 394 characters before this fix -- stays within MEASURE=78 at a 400-column terminal
 case 8d ok: 'agent_class' is now a real ChoiceField (label 'Class', 5 chars) -- the content-level half of the fix, not merely wrapped
-case 9a ok: signed-genesis's OWN section description renders under its title, within MEASURE (rendered width 76): '  facts [Signed genesis ceremony] -- aspiration: the SIGNED commission mode, design/MAINT-'...
-case 9b ok: hydration's durable-decision/ADR checkboxes each carry their own elucidation line, within MEASURE -- 33 line(s), e.g. "maintainer directive 2026-07-14 (user-guide/USER-RECIPES-FAQ.md 'Workflow patterns'); ledg"...
+case 9a ok: signed-genesis's OWN section description leads with UNLABELED connective prose (round 7, ledger row 1119), a 'Requires:' obligation, and a demoted 'Full basis:' pointer, within MEASURE (rendered width 76): "Signs this world's founding commission with a GPG key you control -- gives the commission "...
+case 9b ok: hydration's durable-decision/ADR checkboxes each carry their own elucidation line, within MEASURE -- 59 line(s), e.g. 'maintainer directive 2026-07-14, softly mandating cosigned decomposition for multi-item co'...
 case 9c ok: principals-authority's 'Principal'/'Competence'/'Relation'/'Role charter' lists each carry their own CONSTITUTES/DOES NOT elucidation (principals_authority.toml's own [lessons] table), within MEASURE
 case 10a ok: every 'Add ...' button reads as ordinary English, no doubled verb (the maintainer's exact quote, 'Add Grant a competence', is gone): ['Add Principal', 'Add Competence', 'Add Relation', 'Add Role charter']
 case 10b ok: before any principal is registered, the competence picker offers the honest 'no principals known yet' sentinel, never free text
@@ -144,12 +190,19 @@ case 12c ok: the run=False path ALSO yields exactly ONE disposition row ('ceremo
 case 13 ok: ctrl+z is bound and invokes App.action_suspend_process (headless-safe -- a non-suspend-capable driver is Textual's own documented no-op, never a crash). UNEXERCISED: the live-terminal leg -- an operator should run 'python3 -m tools.setup_tui' in a REAL terminal, press ctrl+z, and confirm the shell job actually suspends (fg to resume).
 case 14a ok (RED-FIRST, loader refusal): a synthetic piped string is refused at load, naming the file and key: tools/setup_tui/content.py: synthetic.toml.fact[0].aspiration contains a bare ' | ' separator -- a homemade multi-fact delimiter is refused at load; schema the structure into named keys/lists instead (companion rule C13, ledger row 1117): 'a | b'
 case 14b ok: the REAL feature_facts.toml/durable_decisions.toml carry zero bare ' | ' delimiters -- the loader's own refusal is exercised on every real load, not just a synthetic probe
-case 14c ok (GREEN, live): swept EVERY section's own rendered elucidation widgets (.ct-section-description, .ct-field-help, .ct-choice-help) across all 10 sections -- zero bare ' | ' separators anywhere; per-section element counts: {'preflight': 0, 'substrate': 7, 'fork-target': 4, 'rehearsal': 0, 'birth': 0, 'principals-authority': 14, 'signed-genesis': 7, 'boundary': 7, 'observability': 11, 'hydration': 93}
+case 14c ok (GREEN, live): swept EVERY section's own rendered elucidation widgets (.ct-section-description, .ct-field-help, .ct-choice-help) across all 10 sections -- zero bare ' | ' separators anywhere; per-section element counts: {'preflight': 0, 'substrate': 3, 'fork-target': 1, 'rehearsal': 0, 'birth': 0, 'principals-authority': 9, 'signed-genesis': 3, 'boundary': 2, 'observability': 5, 'hydration': 65}
 case 15a ok: 19 ADR entries render a real, authored synopsis (distinct from the pointer line); 1 named as pending maintainer review (never fabricated) -- e.g. 'Synopsis: Binds every contributor: when a defect is found, ask first what TYPE would make the whole '...
 case 15b ok: synopsis renders BEFORE its own file-path pointer for every matched ADR entry checked (20 pair(s)) -- the pointer follows the synopsis, never replaces it
 case 15c ok: 20 adoptable ADR(s) known; 0 have no authored synopsis entry at all (render as the honest pending marker): []
 case 16 ok: all 33 checkbox options in hydration's MultiChoiceField groups render with NO per-option border ('.ct-checkbox-compact') -- no wall of borders even with a durable-decisions catalog this size
-ALL CASES OK -- tools.configtree.app.ConfigTreeApp driven end-to-end through the REAL tools.setup_tui.steps.SECTIONS registry via Pilot, LIVE-MODEL semantics throughout (no per-section save exists): a state-aliasing reproduction and structural fix across every field kind, arbitrary-order navigation with a blocked-to-unblocked flip on a SINGLE keystroke, live inline validation both polarities with focus never leaving the field, a full ten-section journey typed live to a clean dry-run commit via the ONE commit button, a commit-time business-rule refusal (red) and its retry (green), keyboard/Tab/scroll navigation primitives, ctrl+q's exit-code contract, single-editable-home for both shared facts (dest owned by Fork/target, world by Birth) with a RED-first load-time refusal for a synthetic double-owner declaration, a readable-measure width cap (MEASURE=78) swept across every section plus the original emitting site (the 'Add a principal' modal), RED-first against a synthetic uncapped Static at a 400-column terminal, elucidation (section/field/option descriptions restored within measure), principal-reference ChoiceFields fed live from the register list, a real in-UI config-loading action node usable at start with DECLINED-vs-DEFAULTED record wording, a single-disposition, dest_would_exist-first ordering fix for signed-genesis's own destination-scaffolded check with the 'screen 7' ghost text gone, a loader-level refusal of any homemade ' | ' multi-fact delimiter (RED-first against a synthetic string, GREEN against every real data file and every LIVE rendered elucidation widget), ADR-adoption entries rendering a real synopsis distinct from and preceding their own file-path pointer, and a slimmed no-border checkbox chrome for stacked MultiChoiceField catalogs.
+case 17a ok (RED-FIRST): a bare-string SectionSpec.description carrying '<dest>' is refused at construction, naming the token: SectionSpec synth-ph description: an unexpanded template placeholder '<dest>' reached elucidation text (ledger row 1119, defect D3) -- interpolate a real value or fall back to an honest generic phrase before construction, never let a raw <placeholder> token reach the screen: "drives this world's own <dest>/legacy/led"
+case 17b ok (RED-FIRST): a DescriptionElement carrying '<dest>' is refused at construction: DescriptionElement 'Requires' text: an unexpanded template placeholder '<dest>' reached elucidation text (ledger row 1119, defect D3) -- interpolate a real value or fall back to an honest generic phrase before construction, never let a raw <placeholder> token reach the screen: 'run <dest>/verify-commission by hand'
+case 17c ok (RED-FIRST): an ElucidationHeading carrying '<dest>' is refused at construction: ElucidationHeading: an unexpanded template placeholder '<dest>' reached elucidation text (ledger row 1119, defect D3) -- interpolate a real value or fall back to an honest generic phrase before construction, never let a raw <placeholder> token reach the screen: '<dest> path'
+case 17d ok (GREEN, live): swept 90 rendered elucidation line(s) across every section -- zero raw <placeholder> tokens anywhere
+case 18 ok: swept 90 rendered elucidation line(s) across every section -- zero bare null-shaped statements ('none named.', 'none.') anywhere; an empty component is simply absent
+case 19 ok: swept 90 rendered elucidation line(s) -- zero 'memory:' AI-collaborator notes, zero 'omega-lab' insider referents, zero 'sNN-family' internal numbering anywhere in the operator-facing surface
+case 20 ok: the substrate pane renders TWO real HEADED groups (['Existing-db path', 'Dedicated-db path']), never a repeated line-prefix -- 3 content line(s) total across both groups
+ALL CASES OK -- tools.configtree.app.ConfigTreeApp driven end-to-end through the REAL tools.setup_tui.steps.SECTIONS registry via Pilot, LIVE-MODEL semantics throughout (no per-section save exists): a state-aliasing reproduction and structural fix across every field kind, arbitrary-order navigation with a blocked-to-unblocked flip on a SINGLE keystroke, live inline validation both polarities with focus never leaving the field, a full ten-section journey typed live to a clean dry-run commit via the ONE commit button, a commit-time business-rule refusal (red) and its retry (green), keyboard/Tab/scroll navigation primitives, ctrl+q's exit-code contract, single-editable-home for both shared facts (dest owned by Fork/target, world by Birth) with a RED-first load-time refusal for a synthetic double-owner declaration, and a readable-measure width cap (MEASURE=78) swept across every section plus the original emitting site (the 'Add a principal' modal), RED-first against a synthetic uncapped Static at a 400-column terminal, elucidation re-authored per the D1-D10 diagnosis (unlabeled connective prose leading, a demoted 'Full basis:' provenance line, real sub-headings for grouped sub-paths, no null-shaped lines, no internal-only provenance or AI-memory notes anywhere in the operator-facing surface), and a construction-time refusal of any raw <placeholder> template token reaching elucidation text (RED-first against three synthetic constructions, GREEN against the whole live app).
 
 (the three repeated "$ .../new-project.sh"/"$ .../teardown-world.sh" pairs are the REHEARSAL
 section's own live-choke-point echo under --dry-run -- "[dry-run: not executed]" per
@@ -160,10 +213,11 @@ that digit string varies.)
 RED legs (0a/0b/0c reproducing the maintainer's exact live defect; 2a; 3b; 4a; 7e the synthetic
 double-owner load-time refusal; 8a the synthetic uncapped-Static reproduction; 12a the OLD
 check-physical-state-first ordering misfiring on a real transitional directory; 14a the loader's
-own synthetic-pipe refusal) prove the shapes this fixture claims to forbid/gate are actually
-caught -- a regression of any of them would fail this fixture red. GREEN legs (0d/0e/0f
-structural proof; 1b; 2b; 3a/c/d/e/f; 4b/c; 5; 6; 7a/b/c/d; 8b/c/d; 9/10/11/12b/c/13/14b/c/15/16)
-prove the corresponding correct-path/fixed behavior once the prerequisite is met.
+own synthetic-pipe refusal; 17a/17b/17c three synthetic <placeholder>-token constructions)
+prove the shapes this fixture claims to forbid/gate are actually caught -- a regression of any
+of them would fail this fixture red. GREEN legs (0d/0e/0f structural proof; 1b; 2b; 3a/c/d/e/f;
+4b/c; 5; 6; 7a/b/c/d; 8b/c/d; 9/10/11/12b/c/13/14b/c/15/16/17d/18/19/20) prove the corresponding
+correct-path/fixed behavior once the prerequisite is met.
 
 DEPENDENCY: this fixture requires `textual` (the Textual UI layer's own real widgets/Pilot
 harness) -- it is NOT covered by --from-config's textual-free guarantee (that headless path has

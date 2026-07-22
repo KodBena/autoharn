@@ -85,6 +85,11 @@ class ConfigTreeApp(App):
     .ct-section-description {{ color: $text-muted; padding: 0 1; max-width: {MEASURE}; }}
     .ct-field-help {{ color: $text-muted; padding: 0 0 1 0; max-width: {MEASURE}; }}
     .ct-choice-help {{ color: $text-muted; padding: 0 0 0 2; max-width: {MEASURE}; }}
+    /* Round 7 (ledger row 1119, defect D9): a REAL sub-heading for a multi-group elucidation
+    value (e.g. substrate's Existing-db/Dedicated-db paths) -- bold, unprefixed, distinct from
+    both the section title (larger/bolder) and an ordinary labeled line (never a "Label: text"
+    shape) -- so a grouped record's hierarchy is legible without diffing repeated line-prefixes. */
+    .ct-elucidation-heading {{ text-style: bold; padding-top: 1; max-width: {MEASURE}; }}
     /* A `ListField`/`MultiChoiceField`'s own repeatable-row/checkbox-group widget must size to
     ITS OWN CONTENT, never `Vertical`'s own DEFAULT_CSS `height: 1fr` (an equal fractional share
     of the section body regardless of content) -- several such widgets stacked in the SAME

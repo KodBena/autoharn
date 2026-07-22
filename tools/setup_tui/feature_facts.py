@@ -53,49 +53,84 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from tools.configtree import DescriptionElement
+from tools.configtree import DescriptionElement, PROVENANCE_LABEL
 from tools.setup_tui import content, durable_decisions
 
 
 @dataclass(frozen=True)
 class FeatureFact:
-    """SCHEMA (round-6 restructure, ledger row 1117 -- companion rule C13): `aspiration`/
-    `external` are each ONE short, citation-free prose sentence (or the honest "none named"
-    statement); `standards` names any external standard/framework the aspiration cites;
-    `mechanism` lists the file-path/ledger-row citations that GROUND the claim, each its own
-    entry (never comma-joined prose). `line()` stays the tabular/log-line renderer
-    (`facts_block`'s own checklist/info-line use, an EXEMPT class this codebase already
-    established -- `.ct-info-line`/`.ct-precheck-line` are deliberately never capped/wrapped);
-    `elements()` is the NEW typed accessor for the interactive elucidation area -- the two are
-    deliberately different shapes for deliberately different rendering contexts, never one
-    reused where the other belongs (the round-5 mistake this round answers)."""
+    """SCHEMA (round 7, ledger row 1119 -- following the Fable RCA consult,
+    design/CONSULT-FABLE-ELUCIDATION-RCA-2026-07-22.md; supersedes round 6's aspiration/
+    standards/mechanism/external four-slot vocabulary, which the consult diagnosed as: D1
+    CRITICAL, a `standards` slot silently PROMOTED an aspiration -- "aspires to this standard's
+    decomposition" -- into an unqualified conformance claim, a truth-value change no mechanical
+    check could catch (every token survived; the qualifying edge between them did not); D4, a
+    `mechanism` slot held design docs and citations, never actual mechanism; D5, `external` meant
+    three different things across sections; D9, four labeled lines per fact read as
+    "serialization masquerading as layout.").
+
+    `lead` -- REQUIRED-if-anything-is-said, decision-guidance prose (D7: what choosing/having
+    this costs, requires, or changes for the operator -- written as a sentence, D8, never
+    slot:value telegraphy). A standard this feature ASPIRES to (never CONFORMS to, D1) is named
+    INSIDE this sentence, with its qualifying hedge kept intact ("aspires to X's decomposition",
+    never "Standards: X") -- there is no separate standards slot to promote it into. Empty string
+    = nothing to say (D6: an empty slot is not rendered at all, never "none named").
+    `external` -- ONE meaning only (D5): a concrete EXTERNAL PREREQUISITE OR STANDING
+    OBLIGATION the operator must supply or keep -- a binary on PATH, a live cluster, a recurring
+    process to keep alive. Never a description of what the feature does internally. Empty = none.
+    `provenance` -- OPTIONAL list of citations a FOUNDING OPERATOR could actually open and read
+    (this repo's own `user-guide/*` docs, or `law/adr/` itself) -- rendered demoted, LAST, one
+    `PROVENANCE_LABEL` element per path (D2: "where a citation is genuinely operator-relevant it
+    renders as provenance, demoted and last").
+    `maintainer_refs` -- OPTIONAL list of internal-only citations (ledger rows, `design/FABLE-*`/
+    `design/MAINT-*` build-basis docs, kernel lineage SQL files, AI-memory notes) -- NEVER
+    rendered by any widget (D2: "most are maintainer-relevant only: move those OUT of the
+    operator surface entirely"). Kept here only so the maintainer's own audit trail names where
+    each fact's claim comes from; `elements()`/`line()` never read this field.
+
+    `line()` stays the tabular/log-line renderer (`facts_block`'s own checklist/info-line use, an
+    EXEMPT class this codebase already established -- `.ct-info-line`/`.ct-precheck-line` are
+    deliberately never capped/wrapped, and this project's own "claims carry witnesses" register
+    is at home there); `elements()` is the typed accessor for the INTERACTIVE elucidation area --
+    the two are deliberately different shapes for deliberately different registers (D7/D8), never
+    one reused where the other belongs (the round-5 mistake round 6 answered on the WIDTH axis
+    only; round 7 answers it on the TRUTH/AUDIENCE/ALTITUDE axes)."""
     key: str
     label: str
-    aspiration: str
-    external: str
-    standards: tuple[str, ...] = ()
-    mechanism: tuple[str, ...] = ()
+    lead: str = ""
+    external: str = ""
+    provenance: tuple[str, ...] = ()
+    maintainer_refs: tuple[str, ...] = ()
 
     def line(self) -> str:
-        return f"  facts [{self.label}] -- aspiration: {self.aspiration} | external: {self.external}"
+        parts = [p for p in (self.lead, f"external: {self.external}" if self.external else "") if p]
+        body = "; ".join(parts) if parts else "(no operator-facing content)"
+        return f"  facts [{self.label}] -- {body}"
 
-    def elements(self, *, prefix: "str | None" = None) -> "tuple[DescriptionElement, ...]":
-        """The section-description/elucidation rendering of this fact: one `DescriptionElement`
-        per component, blank components simply absent (round-6 coordinator instruction) -- a
-        `mechanism` path gets its OWN element (never joined with the others), so a file path is
-        never wrapped mid-directory by the widget layer. `prefix`, if given (a section combining
-        MORE THAN ONE fact under one description, e.g. substrate's existing/dedicated paths),
-        is prepended to every element's own label so the operator can tell which fact a line
-        belongs to."""
-        def _label(name: str) -> str:
-            return f"{prefix} {name}" if prefix else name
-
-        out: list[DescriptionElement] = [DescriptionElement(_label("Aspiration"), self.aspiration)]
-        for std in self.standards:
-            out.append(DescriptionElement(_label("Standards"), std))
-        for path in self.mechanism:
-            out.append(DescriptionElement(_label("Mechanism"), path))
-        out.append(DescriptionElement(_label("External"), self.external))
+    def elements(self, *, prefix: "str | None" = None) -> "ElucidationValue | None":
+        """The section-description/elucidation rendering of this fact (round 7): `lead` renders
+        FIRST as unlabeled connective prose (D7/D8); `external`, if present, follows as a SHORT
+        labeled "Requires" line (a genuinely separate, standing prerequisite -- never folded into
+        `lead` when it is a distinct, ongoing fact rather than the sentence's own main point);
+        `provenance`, if any, renders LAST, demoted, one `PROVENANCE_LABEL` element per path.
+        Blank components are simply absent (D6) -- a fact with nothing to say renders NOTHING.
+        `prefix`, if given (a section combining MORE THAN ONE fact under one description, e.g.
+        substrate's existing/dedicated paths), disambiguates the External/Full-basis lines only
+        -- `lead`'s own prose does not need it (a real `ElucidationHeading`, built by the caller,
+        names the group instead, D9)."""
+        out: list = []
+        if self.lead:
+            out.append(self.lead)
+        if self.external:
+            label = f"{prefix} Requires" if prefix else "Requires"
+            out.append(DescriptionElement(label, self.external))
+        for path in self.provenance:
+            label = f"{prefix} {PROVENANCE_LABEL}" if prefix else PROVENANCE_LABEL
+            out.append(DescriptionElement(label, path))
+        if not out:
+            return None
+        if len(out) == 1 and isinstance(out[0], str):
+            return out[0]
         return tuple(out)
 
 
@@ -108,10 +143,10 @@ class FeatureFact:
 # ---------------------------------------------------------------------------------------------
 
 REGISTRY: dict[str, FeatureFact] = {
-    row["key"]: FeatureFact(key=row["key"], label=row["label"], aspiration=row["aspiration"],
-                             external=row["external"],
-                             standards=tuple(row.get("standards", ())),
-                             mechanism=tuple(row.get("mechanism", ())))
+    row["key"]: FeatureFact(key=row["key"], label=row["label"], lead=row.get("lead", ""),
+                             external=row.get("external", ""),
+                             provenance=tuple(row.get("provenance", ())),
+                             maintainer_refs=tuple(row.get("maintainer_refs", ())))
     for row in content.FEATURE_FACTS
 }
 

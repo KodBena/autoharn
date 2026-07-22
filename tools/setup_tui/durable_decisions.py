@@ -50,7 +50,7 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-from tools.configtree import DescriptionElement
+from tools.configtree import DescriptionElement, PROVENANCE_LABEL
 from tools.setup_tui import content
 from tools.setup_tui.plan import Hole, WriteAct
 
@@ -63,24 +63,30 @@ END_MARKER = "<!-- END COMPILED DURABLE DECISIONS (setup_tui) -->"
 
 @dataclass(frozen=True)
 class DurableDecision:
-    """`why`/`citations` SCHEMA (round-6 restructure, ledger row 1117 -- companion rule C13):
-    `why` is ONE short, citation-free sentence; `citations` lists the ledger-row/file pointers
-    that ground it, each rendered as its OWN element by `elements()` below -- never re-joined
-    into `why`'s own prose. `rule`/`hydrates`/`claude_md` are unchanged: literal artifact TEXT
-    (a ledger-decision statement, a CLAUDE.md fragment), not interactive elucidation."""
+    """`why`/`provenance`/`maintainer_refs` SCHEMA (round 6, ledger row 1117 -- companion rule
+    C13; round 7 audience-boundary split, ledger row 1119, defect D2): `why` is ONE short,
+    citation-free sentence; `provenance` lists citations a FOUNDING OPERATOR could actually open
+    and read (this repo's own user-guide/*, law/adr/*, or a public external link), rendered
+    demoted, LAST, one `PROVENANCE_LABEL` element per path; `maintainer_refs` lists
+    INTERNAL-ONLY citations (bare ledger-row numbers, autoharn-panel prior art) -- NEVER rendered
+    by any widget, kept only for the maintainer's own audit trail. `rule`/`hydrates`/`claude_md`
+    are unchanged: literal artifact TEXT (a ledger-decision statement, a CLAUDE.md fragment), not
+    interactive elucidation."""
     slug: str
     rule: str
     why: str
     hydrates: str      # the exact `led decision` statement this selection writes
     claude_md: str      # the fragment compiled into the new world's CLAUDE.md
-    citations: tuple[str, ...] = ()
+    provenance: tuple[str, ...] = ()
+    maintainer_refs: tuple[str, ...] = ()
 
     def elements(self) -> "tuple[DescriptionElement, ...]":
-        """The interactive elucidation rendering: `why` first, then each citation its own line --
-        `steps_hydration.py`'s own MultiChoiceField `option_help` uses this instead of a bare
-        `decision.why` string."""
-        out = [DescriptionElement("Why", self.why)]
-        out.extend(DescriptionElement("Citation", c) for c in self.citations)
+        """The interactive elucidation rendering: `why` first (unlabeled connective prose, D7/
+        D8), then each OPERATOR-relevant `provenance` path, demoted, LAST -- `maintainer_refs`
+        is never read here at all. `steps_hydration.py`'s own MultiChoiceField `option_help`
+        uses this instead of a bare `decision.why` string."""
+        out = [self.why]
+        out.extend(DescriptionElement(PROVENANCE_LABEL, p) for p in self.provenance)
         return tuple(out)
 
 
@@ -117,7 +123,8 @@ class DurableDecision:
 # ---------------------------------------------------------------------------------------------
 
 CATALOG: list[DurableDecision] = [
-    DurableDecision(**{**entry, "citations": tuple(entry.get("citations", ()))})
+    DurableDecision(**{**entry, "provenance": tuple(entry.get("provenance", ())),
+                       "maintainer_refs": tuple(entry.get("maintainer_refs", ()))})
     for entry in content.DURABLE_DECISIONS
 ]
 

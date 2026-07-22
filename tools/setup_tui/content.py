@@ -117,16 +117,18 @@ def _require_row_keys(rows: list[dict], keys: "set[str]", filename: str, table: 
 
 # --------------------------------------------------------------------------------------------
 # feature_facts.toml -- round-6 restructure (ledger row 1117): `standards`/`mechanism` are
-# OPTIONAL lists (a row may name neither); every row still requires `aspiration`/`external` as
-# its own short, citation-free prose (see the file's own header comment for the full schema).
+# round-7 restructure (ledger row 1119): `lead`/`external` are each OPTIONAL (D6 -- an empty
+# slot is not rendered at all, so a fact with nothing operator-relevant to say may omit both);
+# `provenance` (operator-relevant citations, demoted) and `maintainer_refs` (internal-only
+# citations, NEVER rendered) are OPTIONAL lists. Only `key`/`label` are truly required.
 # --------------------------------------------------------------------------------------------
 _ff = _load("feature_facts")
 _require(_ff, {"fact"}, "feature_facts")
-_require_row_keys(_ff["fact"], {"key", "label", "aspiration", "external"}, "feature_facts", "fact")
+_require_row_keys(_ff["fact"], {"key", "label"}, "feature_facts", "fact")
 _seen: set = set()
 for _row in _ff["fact"]:
     DataKey.parse(_row["key"], table="feature_facts.fact", seen=_seen)
-    for _list_key in ("standards", "mechanism"):
+    for _list_key in ("provenance", "maintainer_refs"):
         if _list_key in _row and not isinstance(_row[_list_key], list):
             raise ContentError(
                 f"tools/setup_tui/content.py: feature_facts.toml fact {_row['key']!r}.{_list_key} "
@@ -143,14 +145,17 @@ _require_row_keys(_dd["decision"], {"slug", "rule", "why", "hydrates", "claude_m
 _seen = set()
 for _row in _dd["decision"]:
     DataKey.parse(_row["slug"], table="durable_decisions.decision", seen=_seen)
-    # `citations` is OPTIONAL (round-6 restructure, ledger row 1117): `why` is now a short,
-    # citation-free sentence; citations backing it live in this list instead, never re-flattened
-    # into `why`'s own prose.
-    if "citations" in _row and not isinstance(_row["citations"], list):
-        raise ContentError(
-            f"tools/setup_tui/content.py: durable_decisions.toml decision "
-            f"{_row['slug']!r}.citations must be a list of strings, got "
-            f"{type(_row['citations']).__name__}")
+    # `provenance`/`maintainer_refs` are OPTIONAL (round-6 restructure, ledger row 1117; round-7
+    # audience-boundary split, ledger row 1119, defect D2): `why` is a short, citation-free
+    # sentence; `provenance` names citations an OPERATOR could open and read (rendered, demoted);
+    # `maintainer_refs` names internal-only citations (ledger rows, prior-project pointers) --
+    # NEVER rendered.
+    for _list_key in ("provenance", "maintainer_refs"):
+        if _list_key in _row and not isinstance(_row[_list_key], list):
+            raise ContentError(
+                f"tools/setup_tui/content.py: durable_decisions.toml decision "
+                f"{_row['slug']!r}.{_list_key} must be a list of strings, got "
+                f"{type(_row[_list_key]).__name__}")
 DURABLE_DECISIONS: list[dict] = _dd["decision"]
 
 # --------------------------------------------------------------------------------------------
