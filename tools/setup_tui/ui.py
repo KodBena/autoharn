@@ -84,7 +84,15 @@ BACK = _BackSentinel()
 # a `--scripted` answers file spells it "<BACK>" (an answers file is read by a human too -- the
 # module docstring's own "commented for a human reader" clause -- so its trigger line is spelled
 # out rather than a bare punctuation mark that reads as a typo in a column of answers).
-_BACK_TRIGGER_PLAIN = "<"
+#
+# `BACK_TRIGGER_PLAIN` is deliberately PUBLIC (no leading underscore), not just an `InteractiveUi`
+# implementation detail: `tools/setup_tui/ui_textual.py`'s `TextualUi` -- the module docstring
+# above already names this pair of files as the one place typed-UI output is ever printed
+# directly -- imports it verbatim rather than defining its own "<" spelling, so the ONE place the
+# plain-input trigger spelling is written down stays this line, per every backend that recognizes
+# it (ADR-0012 P1). `_BACK_TRIGGER_SCRIPTED` stays private: only `ScriptedUi`, in this same file,
+# ever reads a `--scripted` answers file.
+BACK_TRIGGER_PLAIN = "<"
 _BACK_TRIGGER_SCRIPTED = "<BACK>"
 
 
@@ -133,7 +141,7 @@ class Ui:
 
 class InteractiveUi(Ui):
     # NAVIGATION (design/FABLE-SETUP-TUI-NAVIGATION-SPEC.md §3): each ask-method below checks the
-    # RAW keystroke against `_BACK_TRIGGER_PLAIN` BEFORE any of its own validation/default/
+    # RAW keystroke against `BACK_TRIGGER_PLAIN` BEFORE any of its own validation/default/
     # coercion logic runs, and returns the shared `BACK` sentinel instead of a real answer when it
     # matches -- never `NotImplementedError`'d, never coerced into "y"/"n"/an index the way an
     # ordinary stray character would be. The four return-type annotations below (`str`/`bool`/
@@ -146,7 +154,7 @@ class InteractiveUi(Ui):
         suffix = f" [{default}]" if default is not None else ""
         while True:
             raw = input(f"{prompt}{suffix}: ").strip()
-            if raw == _BACK_TRIGGER_PLAIN:
+            if raw == BACK_TRIGGER_PLAIN:
                 return BACK  # type: ignore[return-value]
             if raw:
                 return raw
@@ -161,7 +169,7 @@ class InteractiveUi(Ui):
         keys = [k for k, _ in options]
         while True:
             raw = input(f"choose 1-{len(options)}: ").strip()
-            if raw == _BACK_TRIGGER_PLAIN:
+            if raw == BACK_TRIGGER_PLAIN:
                 return BACK  # type: ignore[return-value]
             if raw in keys:
                 return raw
@@ -173,7 +181,7 @@ class InteractiveUi(Ui):
     def confirm(self, prompt: str, default: bool = False) -> bool:
         hint = "Y/n" if default else "y/N"
         raw = input(f"{prompt} [{hint}]: ").strip()
-        if raw == _BACK_TRIGGER_PLAIN:
+        if raw == BACK_TRIGGER_PLAIN:
             return BACK  # type: ignore[return-value]
         raw = raw.lower()
         if not raw:
@@ -182,7 +190,7 @@ class InteractiveUi(Ui):
 
     def pause(self, prompt: str = "Press enter when done: ") -> None:
         raw = input(prompt).strip()
-        if raw == _BACK_TRIGGER_PLAIN:
+        if raw == BACK_TRIGGER_PLAIN:
             return BACK  # type: ignore[return-value]
 
 

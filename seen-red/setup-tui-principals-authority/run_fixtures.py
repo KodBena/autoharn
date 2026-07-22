@@ -268,11 +268,61 @@ def main() -> int:
         # Phase-2 equivalent is the closing checklist's WOULD-DO status for this exact entry.
         assert ("principals-authority register principal 'wp5dryname'" in out5
                 and "WOULD-DO" in out5), out5[-1500:]
-        would_do_line = next(
-            (ln for ln in out5.splitlines()
-             if "register principal 'wp5dryname'" in ln and "WOULD-DO" in ln), None)
-        assert would_do_line is not None and "register-principal wp5dryname model" in would_do_line, (
-            f"WP5: the WOULD-DO checklist row must carry the exact argv: {out5[-1500:]}")
+        # WRAP-TOLERANT (ledger row 1949, confirmed RED on this build's own base commit before
+        # this fix): the closing checklist's `Table` element (tools/setup_tui/elements.py
+        # `_render_table`) wraps any non-last column wider than the shared per-column cap onto
+        # CONTINUATION physical lines -- both the SCREEN column ("principals-authority", 21
+        # chars) and the ITEM column ("register principal 'wp5dryname'", 31 chars) exceed the
+        # 4-column cap (18 chars) here, so the row this case cares about is split across TWO
+        # physical `print()` lines (verified directly against `elements.render_text` while
+        # diagnosing this: 'principals-...WOULD-DO  /tmp/.../led register-principal wp5dryname
+        # model...' then "authority           'wp5dryname'"). A naive line-join loses the
+        # ORIGINAL column adjacency (the ITEM continuation physically follows the STATUS/DETAIL
+        # text of the row above it, not the ITEM text it continues) -- this reconstructs each
+        # COLUMN instead, using the table's own header line to find each column's start offset
+        # (`_render_table` ljust-pads every column to a fixed width and joins with a 2-space
+        # gutter, so the header's own column-name positions are the same positions every data
+        # row uses), then concatenates that one column's fragment across every physical line of
+        # the row -- the honest inverse of `_render_table`'s own wrap.
+        lines5 = out5.splitlines()
+        status_markers = ("WITNESSED", "SKIPPED", "REFUSED", "WOULD-DO")
+        col_names = ("SCREEN", "ITEM", "STATUS", "DETAIL")
+        header_idx = next(
+            (i for i, ln in enumerate(lines5) if ln.startswith("SCREEN") and "ITEM" in ln
+             and "STATUS" in ln and "DETAIL" in ln), None)
+        assert header_idx is not None, f"WP5: no checklist table header found: {out5[-1500:]}"
+        header_line = lines5[header_idx]
+        offsets = [header_line.index(name) for name in col_names]
+
+        def _col(line: str, i: int) -> str:
+            start, end = offsets[i], (offsets[i + 1] if i + 1 < len(offsets) else len(line))
+            return line[start:end].rstrip() if start < len(line) else ""
+
+        anchor_idx = next(
+            (i for i, ln in enumerate(lines5)
+             if "register-principal wp5dryname model" in _col(ln, 3) and _col(ln, 2) == "WOULD-DO"),
+            None)
+        assert anchor_idx is not None, (
+            f"WP5: no checklist-table row's DETAIL column carries the exact argv for "
+            f"register-principal wp5dryname with STATUS WOULD-DO: {out5[-1500:]}")
+        row_lines = [lines5[anchor_idx]]
+        j = anchor_idx + 1
+        while j < len(lines5):
+            nxt = lines5[j]
+            if not nxt.strip() or nxt.strip().startswith("totals:") or \
+                    any(marker in nxt for marker in status_markers):
+                break
+            row_lines.append(nxt)
+            j += 1
+        item_text = " ".join(part for ln in row_lines if (part := _col(ln, 1).strip()))
+        detail_text = " ".join(part for ln in row_lines if (part := _col(ln, 3).strip()))
+        assert item_text == "register principal 'wp5dryname'", (
+            f"WP5: the WOULD-DO checklist row's ITEM column (reconstructed across its wrapped "
+            f"continuation line(s)) must read \"register principal 'wp5dryname'\", got "
+            f"{item_text!r}: {row_lines!r}")
+        assert "register-principal wp5dryname model" in detail_text, (
+            f"WP5: the WOULD-DO checklist row's DETAIL column must carry the exact argv, got "
+            f"{detail_text!r}: {row_lines!r}")
         dep = {}
 
         with open(os.path.join(dest, "deployment.json")) as f:
@@ -318,7 +368,17 @@ def main() -> int:
         cp6b = run_scripted(ans6b, scratch, "wp6b", bare)
         out6b = cp6b.stdout + cp6b.stderr
         assert "Traceback" not in out6b, out6b[-1500:]
-        assert f"REFUSED: '{bare}' classifies as foreign" in out6b, out6b[-1500:]
+        # WRAP-TOLERANT (found live while wrap-tolerizing WP5 above, same fixture, in reach --
+        # CLAUDE.md engineering-responsibility rule): this decision-phase refusal is a `Note`
+        # (`tools/setup_tui/elements.py` `_wrap_lines`, MEASURE=78), and `bare`'s own path lives
+        # under THIS fixture's `scratch` tempdir, whose "setup-tui-principals-authority-" prefix
+        # is long enough that the rendered line wraps mid-phrase ("...classifies as" / "foreign
+        # (foreign: non-empty...")) -- a plain-`in-out6b` substring check is therefore prefix-
+        # length-fragile (confirmed: passes against a SHORT scratch prefix, fails against this
+        # fixture's own real one). Unlike the Table-column wrap WP5 hits, prose wrap here is
+        # strictly sequential (no column transposition), so collapsing all whitespace runs
+        # (including the wrap's own newline) to single spaces is the honest, order-preserving fix.
+        assert f"REFUSED: '{bare}' classifies as foreign" in " ".join(out6b.split()), out6b[-1500:]
         print("WP6 ok: out-of-sequence entry refuses legibly against (a) a nonexistent "
               "destination and (b) a real directory with no legacy/led, no traceback")
 

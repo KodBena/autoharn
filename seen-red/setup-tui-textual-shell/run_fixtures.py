@@ -100,6 +100,7 @@ DRIVER_SOURCE = textwrap.dedent('''\
     sys.path.insert(0, %(repo)r)
 
     from tools.setup_tui import checklist as ck
+    from tools.setup_tui.elements import Heading
     from tools.setup_tui.screens import SCREENS, screen_banner
     from tools.setup_tui.ui_textual import SetupWizardApp, TextualUi
 
@@ -227,6 +228,106 @@ DRIVER_SOURCE = textwrap.dedent('''\
             }
 
 
+    # ---------------------------------------------------------------------------------------
+    # WX7 (design/FABLE-SETUP-TUI-NAVIGATION-SPEC.md, this build): the Textual backend's own
+    # backward-navigation affordances -- typed "<" AND the ctrl+b binding -- against a REAL
+    # SetupWizardApp/TextualUi/tools.setup_tui.app._drive_screens, no mocks. Uses a small,
+    # synthetic THREE-screen list (never the real eleven) deliberately: the real journey's own
+    # Preflight screen runs LIVE subprocess/network probes whose wall-clock time this build found
+    # to make the shared WX1 driver's fixed poll timing flaky in some environments (see this
+    # build's report) -- orthogonal to what WX7 itself needs to prove, so sidestepped rather than
+    # inherited. The middle screen ("two") is deliberately NOT the last screen in the list, so
+    # `tools.setup_tui.flow_position.run_screen`'s own commit-screen exemption (never wraps the
+    # LAST screen in `NavigableUi`) does not apply to it -- back-navigation must work from it.
+    from tools.setup_tui.app import _drive_screens
+
+    def nav_screen_one(ui, cl, state):
+        ui.emit(Heading("1/3 One"))
+        state["a"] = ui.ask_text("Name A")
+        cl.add("one", "name", "WITNESSED", state["a"])
+        return state
+
+    def nav_screen_two(ui, cl, state):
+        ui.emit(Heading("2/3 Two"))
+        state["b"] = ui.ask_text("Name B")
+        cl.add("two", "name", "WITNESSED", state["b"])
+        return state
+
+    def nav_screen_three(ui, cl, state):
+        ui.emit(Heading("3/3 Three"))
+        cl.add("three", "final", "WITNESSED", "reached")
+        return state
+
+    NAV_SCREENS = [("one", nav_screen_one), ("two", nav_screen_two), ("three", nav_screen_three)]
+
+
+    async def _answer_text(pilot, app, text):
+        """Types `text` into the docked `#prompt-input` and submits it -- the SAME path an
+        operator's own keystrokes take (never `App.call_from_thread`/`_resolve` directly)."""
+        ok = await _wait_pending(app)
+        if not ok or app._pending_kind != "text":
+            raise AssertionError(
+                f"expected a text prompt, got pending_kind={app._pending_kind!r} "
+                f"(pending={app._pending!r})")
+        await pilot.click("#prompt-input")
+        if text:
+            await pilot.press(*text)
+        await pilot.press("enter")
+
+
+    async def _press_ctrl_b(pilot, app):
+        """The `ctrl+b` binding (module docstring architecture point 6, ui_textual.py) -- waits
+        for a prompt to be pending, THEN drives the REAL keypress through `Pilot.press` (Textual's
+        own binding dispatch, not a direct `action_go_back()` call), exactly like `_answer_text`
+        waits before typing (never fired blind, mid-transition)."""
+        ok = await _wait_pending(app)
+        if not ok:
+            raise AssertionError("expected a pending prompt before ctrl+b, got none")
+        await pilot.press("ctrl+b")
+
+
+    async def run_wx7() -> dict:
+        cl = ck.Checklist()
+        app = SetupWizardApp(dry_run=False, checklist=cl)
+
+        def body():
+            ui = TextualUi(app)
+            code = _drive_screens(ui, cl, {}, [{}], NAV_SCREENS)
+            app.call_from_thread(app.exit, return_code=code)
+
+        app.wizard_body = body
+        async with app.run_test(size=(120, 45)) as pilot:
+            # 1: screen one, answer "Alpha" (a normal forward answer).
+            await _answer_text(pilot, app, "Alpha")
+            # 2: screen two, type the LITERAL "<" trigger and submit it (module docstring
+            # architecture point 6(a): the SAME `Input`-submits-text path a normal answer takes,
+            # recognized by `TextualUi.ask_text` before any of its own coercion) -- pops back to
+            # screen one.
+            await _answer_text(pilot, app, "<")
+            # 3: screen one AGAIN -- a DIFFERENT answer than the first visit (spec: revisit
+            # REPLACES the popped visit, never appends alongside it).
+            await _answer_text(pilot, app, "AlphaTwo")
+            # 4: screen two AGAIN -- this time via the ctrl+b BINDING, never typed text (module
+            # docstring architecture point 6(c)) -- pops back to screen one a second time.
+            await _press_ctrl_b(pilot, app)
+            # 5: screen one a THIRD time -- confirms the back-and-forth is not a one-shot fluke.
+            await _answer_text(pilot, app, "AlphaThree")
+            # 6: screen two, answered normally this time -- proceeds to screen three (the commit
+            # screen, `NavigableUi`-exempt, asks nothing) and the flow completes.
+            await _answer_text(pilot, app, "Beta")
+            waited = 0.0
+            while app.return_code is None and waited < 15.0:
+                await pilot.pause()
+                await asyncio.sleep(0.05)
+                waited += 0.05
+            await pilot.pause()
+            transcript_lines = list(app.transcript_log)
+            return {
+                "return_code": app.return_code,
+                "transcript": transcript_lines,
+            }
+
+
     def main():
         case = sys.argv[1]
         if case == "wx1":
@@ -235,6 +336,8 @@ DRIVER_SOURCE = textwrap.dedent('''\
             result = asyncio.run(run_journey(dry_run=True))
         elif case == "wx4":
             result = asyncio.run(run_wx4())
+        elif case == "wx7":
+            result = asyncio.run(run_wx7())
         else:
             raise SystemExit(f"unknown case {case!r}")
         print("RESULT: " + json.dumps(result))
@@ -465,7 +568,7 @@ def main() -> int:
 
         # --- WX1 / WX4 / WX6: need a textual-capable interpreter -----------------------------
         if textual_python is None:
-            for wx in ("WX1", "WX2", "WX4", "WX5", "WX6"):
+            for wx in ("WX1", "WX2", "WX4", "WX5", "WX6", "WX7"):
                 print(f"{wx} UNEXERCISED: no textual-capable interpreter found. "
                       f"{INSTALL_POINTER}")
             print("ALL EXERCISABLE CASES OK (WX3 only -- textual unavailable in every "
@@ -540,7 +643,56 @@ def main() -> int:
               f"no non-preflight row claimed WITNESSED, {len(wx6['checklist_rows'])} checklist "
               f"row(s) recorded honestly")
 
-        print("ALL CASES OK -- WX1-WX6 (textual " +
+        # --- WX7: backward navigation under the Textual shell (design/FABLE-SETUP-TUI-
+        # NAVIGATION-SPEC.md) -- the DEFECT this build fixes: BEFORE this build, typing "<" (or
+        # any keybinding) at a Textual prompt did nothing/landed as a literal answer -- the
+        # maintainer's own live report. This case backs up one screen via TYPED "<", changes the
+        # answer, backs up AGAIN via the NEW ctrl+b binding, changes it again, then proceeds --
+        # against the real SetupWizardApp/TextualUi/tools.setup_tui.app._drive_screens, no mocks.
+        wx7 = _run_driver(textual_python, "wx7", scratch)
+        transcript_wx7 = "\n".join(wx7["transcript"])
+        assert wx7["return_code"] == 0, f"WX7: expected return_code 0, got {wx7}"
+        assert "Traceback" not in transcript_wx7, transcript_wx7[-2000:]
+        # Screen "one" must have been (re-)entered three times (Alpha, AlphaTwo, AlphaThree) and
+        # screen "two" armed three times too (the two aborted attempts + the one that stuck) --
+        # the FINAL answer, "AlphaThree", must be the one that survives to the end (revisit
+        # REPLACES the popped visit, spec §1(a)) -- "Alpha"/"AlphaTwo" must each appear (proving
+        # they really were typed/submitted and the back-navigation really fired, not a no-op that
+        # skipped straight to the last answer) but the flow must never have carried BOTH "Alpha"
+        # and "AlphaTwo" forward into a final state alongside "AlphaThree" (that would mean a
+        # stale, un-discarded visit).
+        # NOTE: a REVISIT's own prompt echoes with the prior answer offered as a default
+        # ("Name A [Alpha]: AlphaTwo" -- `NavigableUi._note_prior`/`ask_text`'s own `suffix`), so
+        # the second/third checks below only require the ANSWER text itself to land, not a fixed
+        # "Name A: <value>" prefix shape (the first visit has no prior yet, so its own echo is
+        # the plain "Name A: Alpha" shape and is checked exactly).
+        assert "Name A: Alpha" in transcript_wx7, transcript_wx7[-3000:]
+        for expect in ("AlphaTwo", "AlphaThree", "Name B: Beta"):
+            assert expect in transcript_wx7, (
+                f"WX7: expected {expect!r} in the transcript -- {transcript_wx7[-3000:]}")
+        # The typed "<" and the ctrl+b binding must EACH have produced exactly one recorded
+        # "<BACK>" -- "Name A: <BACK>" (typed, at screen one's SECOND arming... no: the "<" was
+        # typed answering screen TWO's own "Name B" prompt, so it is "Name B: <BACK>" that
+        # records the typed leg) and screen two's ctrl+b leg leaves NO transcript answer line at
+        # all (a keybinding is not a submitted `Input` value) -- proven instead by screen one
+        # being armed a THIRD time ("AlphaThree" reached), which is only reachable if the ctrl+b
+        # press really did pop the cursor back a second time.
+        assert "Name B: <BACK>" in transcript_wx7, (
+            f"WX7: the TYPED '<' leg must be recognized at screen two's own prompt: "
+            f"{transcript_wx7[-3000:]}")
+        assert transcript_wx7.count("2/3 Two") == 3, (
+            f"WX7: screen two must be (re-)entered exactly three times (aborted via typed '<', "
+            f"aborted via ctrl+b, then completed) -- got "
+            f"{transcript_wx7.count('2/3 Two')}: {transcript_wx7[-3000:]}")
+        assert transcript_wx7.count("1/3 One") == 3, (
+            f"WX7: screen one must be (re-)entered exactly three times (Alpha, AlphaTwo, "
+            f"AlphaThree) -- got {transcript_wx7.count('1/3 One')}: {transcript_wx7[-3000:]}")
+        print("WX7 ok: backward navigation under the Textual shell -- typed '<' at a docked "
+              "Input AND the new ctrl+b binding each popped the cursor back one screen, offered "
+              "the prior answer again, and the changed answer (not the discarded one) reached "
+              "the end of the run, against the real SetupWizardApp/TextualUi, no mocks")
+
+        print("ALL CASES OK -- WX1-WX7 (textual " +
               subprocess.run([textual_python, "-c",
                                "import importlib.metadata as m; print(m.version('textual'))"],
                               capture_output=True, text=True).stdout.strip() + ")")
