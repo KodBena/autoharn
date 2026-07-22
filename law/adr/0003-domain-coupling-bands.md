@@ -107,21 +107,6 @@ The principle, stated plainly:
 This is a design discipline at authoring time, not an extraction mandate.
 Existing code stays put; new code is written with the seam in mind.
 
-### When to extract — struck to silence (maintainer-ratified 2026-07-22)
-
-*(Dated amendment per ADR-0005 Rule 8. This section's predecessor — first a binding
-"do not extract preemptively" rule, then, per the 2026-07-13 amendment, a named
-two-horn tradeoff — is STRUCK from the living corpus entirely; its text survives in
-git history only. The maintainer's ratified ground, quoted from the ruling of the
-same day, ledger row 1125: the spelled-out injunction "is occasionally true, but
-that is a matter of judgement, and it should never be spelled out because it is so
-easy for AI collaborators to latch on to that specific injunction; instead, one
-needs to be silent on the matter and let results speak for themselves." The corpus
-is accordingly SILENT on when to extract an abstraction: judgment governs, results
-speak. What this ADR enforces is unchanged and stated above — the two-question
-principle: whether an abstraction is extracted now or deferred, the seam is designed
-deliberately, not accidentally discovered later.)*
-
 ## Bands — a template for adopters
 
 A deployment applying this ADR derives its **own** band map by applying the
@@ -219,13 +204,6 @@ different-instance port and a different-domain port would each require.
 - **[ADR-0011 (mechanization discipline)](0011-mechanization-discipline.md).**
   A band-conformance check would be this ADR's mechanization; its absence is
   a declared review-only enforcement surface, not an oversight.
-- **[`history/0003-band-map-and-instance-context.md`](history/0003-band-map-and-instance-context.md).**
-  This ADR's own worked-instance evidence — the env/Policy seam praise, the
-  FEATURE_LAYOUT seam finding, and the Metz-horn audit evidence — is the
-  point-in-time substrate this ADR's template abstracts.
-
-## Not goals (explicit)
-
 - **Not a refactoring mandate.** Existing code stays put.
 - **Not an abstraction-extraction roadmap.** No ports are being declared or
   planned by this document itself. A deployment designs its own seams; this
