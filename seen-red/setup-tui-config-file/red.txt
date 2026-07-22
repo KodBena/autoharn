@@ -1,0 +1,61 @@
+seen-red/setup-tui-config-file -- banked evidence (both-polarity proof, fixture-census)
+
+design/FABLE-SETUP-TUI-CONFIG-FILE-SPEC.md §6's six-case witness plan (ledger row 1944).
+Red-then-green is carried INSIDE each case as a negative-control/positive-control pair (cases
+ii/iii/iv each assert a REFUSED-and-named red BEFORE the doc's own green control) -- this is a
+brand-new feature with no prior fixed behavior to regress against, so the "red" half is the
+refusal PATH proven to fire on a genuine defect (a missing key, an unknown key, an already-
+occupied world/schema/sentinel), not a pinned pre-fix commit.
+
+GENUINE RED, hit live while building this fixture (kept here as the honest record, not smoothed
+over): the first `--from-config` full-flow synthesis (case i) exhausted its own answers file
+with `ScriptExhausted` at the "Postgres host"/"Database"/"Commit this plan now?" prompts, twice,
+for two independent reasons the fixture's own final form now closes:
+
+  1. `screen_preflight` pre-seeds `state["pghost"]` from HARNESS_PGHOST/EPISTEMIC_PGHOST when
+     either is set in the environment -- `config_seam.synthesize_scripted_lines` did not check
+     for this at synthesis time, so a `--from-config` run against a machine with the env var set
+     misaligned its whole answer stream by one line the instant `screen_substrate` skipped its
+     own "Postgres host" ask_text (fixed: `synthesize_scripted_lines` now checks the SAME two
+     env vars, in the SAME process, before deciding whether that line is needed).
+  2. `_execute_commit`'s own "Commit this plan now? (N entries)" confirm ONLY fires on a LIVE
+     (non-`--dry-run`) run -- the synthesizer's first draft, tested only under `--dry-run`,
+     never emitted an answer for it; a live run against the shipped exemplar exhausted the
+     answers file one line short at exactly that prompt (fixed: one more `"y"` line, harmlessly
+     unused under `--dry-run`, required live).
+
+A THIRD, unrelated pre-existing defect was found and fixed in the same build (not a config-file
+regression -- reproduced identically on this build's own base commit, c759b4f, via `git stash`):
+`tools.setup_tui.ui.NavigableUi._note_prior` called `self._inner.say(...)`, a method the typed-UI
+migration (design/FABLE-SETUP-TUI-TYPED-UI-SPEC.md) removed without a shim -- ANY revisit (or,
+now, any `--initial-config` default) with a real prior value raised `AttributeError` the moment
+it tried to render the "you answered this X last time" hint. seen-red/setup-tui-navigation's own
+case 3 was RED on the base commit before this fix (confirmed via `git stash`), GREEN after.
+
+Real captured stdout, 2026-07-22, a live run against this commit's working tree (HARNESS_PGHOST
+set; cases i/iv-schema-leg/v/vi need it and are UNEXERCISED, not failed, without it):
+
+$ HARNESS_PGHOST=192.168.122.1 python3 seen-red/setup-tui-config-file/run_fixtures.py
+case ii ok: missing-key refusal names every missing key (per-key red controls, an
+  all-missing-at-once control naming every gate+header field in ONE refusal), green control
+  passes
+case iii ok: unknown-key refusal (including the two named-excluded CLI parameters,
+  'world'/'dest', which are never legal config content), green control passes
+case iv ok (schema leg): world name REFUSED when its schema already exists on the target
+  Postgres, named in the refusal; a genuinely-fresh name is not refused (green control)
+case iv ok (sentinel leg): world name REFUSED when the destination's own sentinel names a
+  DIFFERENT world, that world named in the refusal
+case v ok: --initial-config threads a config value as the prompt's own default (kept via '-',
+  the SAME navigation prior-answers seam a real revisit uses) and an individual answer still
+  overrides it
+case i ok: --from-config drives a full eleven-screen dry-run birth from the shipped exemplar to
+  a clean exit 0, zero prompts left to a human, every queued act visible
+case vi ok: a live birth's own saved world-config.toml, re-applied via --from-config to a SECOND
+  world, saves the SAME resolved decision set again (a fixed point, checked mechanically)
+ALL CASES OK (or honestly UNEXERCISED) -- setup_tui config-file feature
+  (design/FABLE-SETUP-TUI-CONFIG-FILE-SPEC.md), zero residue
+
+exit 0. Live cases (i/vi) each real-birth into /tmp scratch destinations and real Postgres
+schemas, torn down (bootstrap/teardown-world.sh --force-non-scratch) and boundary-service
+processes killed in a `finally`, verified zero residue after the run above (no cfgfx*/sentinel*
+schema, no boundary_service process, no /tmp/setup-tui-config-file-* directory left).

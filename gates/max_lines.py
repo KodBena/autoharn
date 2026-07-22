@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-21T20:16:51Z
-#   last-change: 2026-07-22T00:38:35Z
+#   last-change: 2026-07-22T02:19:18Z
 #   contributors: 43f77bff/main, 1fa3ab69/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -174,7 +174,14 @@ BASELINE: dict[str, int] = {
     # discriminator -- "error messages... are the logic's own contract and stay"), not the
     # authored "walls of text" prose class the commission named. Written plain, no golfing (same
     # no-go clause); witnessed shrink, the ratchet lowers with it (ADR-0011 Rule 4).
-    "tools/setup_tui/screens.py":                    1684,
+    # Reconciled +33 to 1717 (design/FABLE-SETUP-TUI-CONFIG-FILE-SPEC.md build, ledger row 1944):
+    # `_maybe_self_save_config` (spec §4's self-application -- "every birth saves its config",
+    # called from every `_execute_commit` exit path) plus two one-line `*_engaged` flags
+    # (`screen_observability`/`screen_hydration`) the self-save capture needs to distinguish
+    # "screen entered, nothing selected" from "screen skipped outright" -- a fact `state`/the
+    # plan cannot otherwise recover. Genuinely new decision/effect-boundary logic, not padding.
+    # Written plain, no golfing (ADR-0007's no-go clause); witnessed growth.
+    "tools/setup_tui/screens.py":                    1717,
     "gates/kind_shape_manifest_gate.py":              1152,
     "hooks/pretooluse_change_gate.py":                1138,
     "hooks/stop_clean_exit.py":                        992,
@@ -218,6 +225,29 @@ BASELINE: dict[str, int] = {
     "tools/setup_tui/signed_genesis.py":                525,
     "gates/interpreter_boundary_lint.py":               498,
     "hooks/stamp_intercept.py":                         482,
+    # NEW to BASELINE, 461 (design/FABLE-SETUP-TUI-CONFIG-FILE-SPEC.md build, ledger row 1944):
+    # was 375 lines, under ceiling, before this build. The CLI surface gains three new flags
+    # (`--from-config`/`--world`/`--initial-config`, spec §2), a mode-discipline refusal function
+    # (`_check_config_flags`), the `--from-config` orchestrator (`_run_from_config` -- validate,
+    # world/dest preflight, synthesize, drive the existing `ScriptedUi` path), and the
+    # `--initial-config` load+seed in `main`. The BULK of the actual config<->flow wiring lives
+    # in the new `tools/setup_tui/config_seam.py` module (kept separate, ADR-0012 P1) -- what
+    # remains here is the CLI-parsing/dispatch surface app.py already owns, not a copy of that
+    # logic. Genuinely new decision surface, not padding. Written plain, no golfing (ADR-0007's
+    # no-go clause).
+    "tools/setup_tui/app.py":                           461,
+    # NEW to BASELINE, 414 (design/FABLE-SETUP-TUI-CONFIG-FILE-SPEC.md build, ledger row 1944):
+    # the SCREEN-SEAM half of the config-file feature -- four cohesive jobs (`synthesize_
+    # scripted_lines` for --from-config, `build_initial_prior_answers` for --initial-config,
+    # `check_world_and_dest` for spec §3's rejection, `capture_resolved_config`/
+    # `save_world_config` for spec §4's self-application), each with its own real complexity
+    # (mirroring `screens.py`'s own conditional prompt sequence, screen by screen, is inherently
+    # not compressible without losing the property it exists to guarantee: the synthesized
+    # answer stream matches the real flow exactly). Splitting further would separate these four
+    # genuinely-coupled jobs (ADR-0007's own "a single coherent unit ... where splitting would
+    # fragment cross-line invariants" exception) across files for no reader benefit. Written
+    # plain, no golfing (ADR-0007's no-go clause).
+    "tools/setup_tui/config_seam.py":                   414,
     "tools/experiments/typed_table.py":                 442,
     "engine/contemp_audit.py":                          441,
     # NEW to BASELINE, 428 (design/FABLE-SETUP-TUI-TYPED-UI-SPEC.md build, spec §1's purity-gate
@@ -230,7 +260,15 @@ BASELINE: dict[str, int] = {
     # exemption entry with its own one-line justification, or the reasoning that entry needs to
     # be reviewable. Written plain, no golfing (ADR-0007's no-go clause); witnessed growth of a
     # previously-under-ceiling file, grandfathered honestly rather than silently golfed to fit.
-    "gates/setup_tui_purity_gate.py":                   428,
+    # Reconciled +15 to 443 (design/FABLE-SETUP-TUI-CONFIG-FILE-SPEC.md build, ledger row 1944):
+    # two new EXEMPT/EXTRA_EFFECT_EXEMPT entries for `config_seam.py`'s two declared exception
+    # functions (`save_world_config`, mirroring `checklist.Checklist.save`'s own precedent;
+    # `scripted_answers_file`, an orchestration-level tempfile write before any screen/Ui/Plan
+    # exists) and two PRINT_EXEMPT entries for `app.py`'s `_run_from_config`/`main` (the
+    # refuse-before-any-act diagnostics, same register as `_select_backend`'s existing entry) --
+    # each with its own one-line justification, this file's own established idiom. Not padding.
+    # Written plain, no golfing; witnessed growth of a previously-under-ceiling file.
+    "gates/setup_tui_purity_gate.py":                   443,
     # tools/setup_tui/principals_authority.py -- REMOVED from BASELINE 2026-07-22 (P10 content
     # split, law/adr/0012's 2026-07-22 Amendment): 428 -> 359 lines, CLASS_CHOICES/
     # RELATION_CHOICES/SCAFFOLD_BASE_PRINCIPALS/LESSON_* moved to

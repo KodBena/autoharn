@@ -1,6 +1,6 @@
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-18T21:31:20Z
-#   last-change: 2026-07-22T00:10:30Z
+#   last-change: 2026-07-22T02:04:09Z
 #   contributors: ab5d5bab/main, 1fa3ab69/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -48,7 +48,7 @@ import sys
 from collections.abc import Iterator
 from pathlib import Path
 
-from tools.setup_tui.elements import render_text
+from tools.setup_tui.elements import Note, render_text
 
 
 class ScriptExhausted(RuntimeError):
@@ -284,9 +284,8 @@ class NavigableUi(Ui):
     screen can offer them back as defaults/hints -- `design/FABLE-SETUP-TUI-NAVIGATION-SPEC.md`
     §1(a)'s "re-enter the screen with its previous answers offered as defaults".
 
-    `banner`/`say`/`suspend` pass straight through -- this wrapper touches no screen COPY, only
-    the answer-collection seam (the sibling build reworking `Ui.say` content is untouched by this
-    class)."""
+    `emit`/`suspend` pass straight through -- this wrapper touches no screen COPY, only the
+    answer-collection seam."""
 
     def __init__(self, inner: Ui, *, prior_answers: dict[str, object] | None = None) -> None:
         self._inner = inner
@@ -296,20 +295,28 @@ class NavigableUi(Ui):
         # the NEXT time this screen is (re-)entered its own `_prior` above is seeded from here.
         self.answers: dict[str, object] = {}
 
-    def banner(self, text: str) -> None:
-        self._inner.banner(text)
-
-    def say(self, text: str = "") -> None:
-        self._inner.say(text)
+    def emit(self, element: object) -> None:
+        self._inner.emit(element)
 
     def suspend(self):
         return self._inner.suspend()
 
     def _note_prior(self, prompt: str) -> None:
+        # BUG FIX (found live while building design/FABLE-SETUP-TUI-CONFIG-FILE-SPEC.md's
+        # --initial-config seam, which is the first caller to reliably populate `_prior` for a
+        # `ScriptedUi`-backed run): this used to call `self._inner.say(...)`, a method the typed-
+        # UI migration REMOVED without a shim (`Ui`'s own module docstring: "not shimmed") --
+        # `ScriptedUi`/`InteractiveUi` have no `say`, so ANY revisit (or, now, any
+        # `--initial-config` default) with a real prior value raised `AttributeError` the moment
+        # it fired (seen-red/setup-tui-navigation's own case 3, pre-existing and RED on this
+        # build's base commit before this fix -- confirmed via `git stash`). Routed through the
+        # SAME typed `emit`/`Note` vocabulary every other operator-facing line in this package
+        # uses now, tone="info" (the same tone `app.py`'s own NAV_HINT line uses).
         prior = self._prior.get(prompt)
         if prior is not None:
-            self._inner.say(f"  (you answered this {prior!r} last time -- press enter to keep "
-                             f"it, or answer again)")
+            self._inner.emit(Note(
+                f"  (you answered this {prior!r} last time -- press enter to keep it, or "
+                f"answer again)", tone="info"))
 
     def ask_text(self, prompt: str, default: str | None = None) -> str:
         self._note_prior(prompt)

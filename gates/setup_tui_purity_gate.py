@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-19T20:10:34Z
-#   last-change: 2026-07-22T00:24:35Z
+#   last-change: 2026-07-22T02:00:42Z
 #   contributors: ab5d5bab/main, 1fa3ab69/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -131,6 +131,11 @@ EXEMPT: dict[str, set[str]] = {
     "checklist.py": {"save"},  # FINDING 3: write_file called here, the checklist-save's own
                                 # declared, narrower, post-commit exception (see module docstring
                                 # above and Checklist.save's own docstring for the full reasoning).
+    "config_seam.py": {"save_world_config"},  # design/FABLE-SETUP-TUI-CONFIG-FILE-SPEC.md §4's
+                                # self-save -- the SAME declared, post-commit exception shape as
+                                # checklist.py's save (see config_seam.save_world_config's own
+                                # docstring): the resolved decision set is not complete until the
+                                # commit itself has run (or been rendered, under --dry-run).
 }
 
 # DETECTION 2's own exemption table (CLASS FIX) -- deliberately SEPARATE from EXEMPT: the
@@ -171,6 +176,11 @@ EXTRA_EFFECT_EXEMPT: dict[str, set[str]] = {
     },
     "principals_authority.py": {"_psql_rows"},  # read-only SELECT helper (list_principals/
                                                   # s41_status) -- same reasoning as probes.py.
+    "config_seam.py": {"scripted_answers_file"},  # design/FABLE-SETUP-TUI-CONFIG-FILE-SPEC.md
+                                                  # §2's --from-config: a real tempfile write,
+                                                  # but ORCHESTRATION-level (runs before any
+                                                  # screen/Ui/Plan exists) -- see the function's
+                                                  # own docstring for the full reasoning.
 }
 
 # DETECTION 3's own exemption table (design/FABLE-SETUP-TUI-TYPED-UI-SPEC.md §1) -- a THIRD,
@@ -200,6 +210,11 @@ PRINT_EXEMPT: dict[str, set[str]] = {
                                     # printed AFTER the App has already exited).
         "_terminate_boundary_proc", # abnormal-exit cleanup notice -- may run from the SIGTERM
                                     # path above, same constraint.
+        "_run_from_config",        # design/FABLE-SETUP-TUI-CONFIG-FILE-SPEC.md §2/§3's own
+                                    # refuse-before-any-act diagnostics -- fire BEFORE any `Ui`
+                                    # is selected, same shape as `_select_backend` above.
+        "main",                    # the --initial-config load-refusal print -- same "before any
+                                    # Ui exists" reasoning, one call site.
     },
     "feature_facts.py": {"<module level>"},  # the `if __name__ == "__main__":` standalone
                                               # drift-check entry point (`python3 -m tools.

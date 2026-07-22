@@ -214,6 +214,7 @@ REGISTRY: dict[str, str] = {
     "setup-tui-genesis-gate-hard-stop": "seen-red/setup-tui-genesis-gate-hard-stop/run_fixtures.py",
     "setup-tui-navigation":             "seen-red/setup-tui-navigation/run_fixtures.py",
     "setup-tui-typed-elements":         "seen-red/setup-tui-typed-elements/run_fixtures.py",
+    "setup-tui-config-file":            "seen-red/setup-tui-config-file/run_fixtures.py",
     # panel-disposition / panel-cosign DEREGISTERED (2026-07-15, TASK C, commission item 3):
     # both suites ported to the standalone SPA repo's own tests/ (test_disposition.py,
     # test_cosign_live.py in KodBena/autoharn-panel) when the PoC moved out of panel/ into its

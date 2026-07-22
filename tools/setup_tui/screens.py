@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-19T20:05:03Z
-#   last-change: 2026-07-22T00:46:51Z
+#   last-change: 2026-07-22T01:57:56Z
 #   contributors: ab5d5bab/main, 43f77bff/main, 1fa3ab69/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -61,6 +61,7 @@ from pathlib import Path
 
 from tools.setup_tui import checklist as ck
 from tools.setup_tui import commit_executor as CE
+from tools.setup_tui import config_seam
 from tools.setup_tui import daemon_scaffold
 from tools.setup_tui import destination
 from tools.setup_tui import durable_decisions, feature_facts, governed_files, pghba, probes
@@ -1238,6 +1239,10 @@ def screen_observability(ui, cl, state):
     if not ui.confirm("Configure observability now?", default=True):
         cl.add("observability", "observability", ck.SKIPPED, skip_detail("observability"))
         return state
+    # CONFIG-FILE SELF-SAVE (design/FABLE-SETUP-TUI-CONFIG-FILE-SPEC.md §4): the one bit
+    # `config_seam.capture_resolved_config` cannot re-derive from `state`/the plan alone -- "was
+    # this SCREEN even engaged" is otherwise indistinguishable from "both daemons declined".
+    state["observability_engaged"] = True
     dest = state.get("dest") or ui.ask_text("Destination directory")
     state["dest"] = dest
     plan = _plan(state)
@@ -1315,6 +1320,7 @@ def screen_hydration(ui, cl, state):
     if not ui.confirm("Run hydration now?", default=True):
         cl.add("hydration", "hydration", ck.SKIPPED, skip_detail("hydration"))
         return state
+    state["hydration_engaged"] = True  # config-file self-save's own "was this screen engaged"
     dest = state.get("dest") or ui.ask_text("Destination directory (with a led shim)")
     state["dest"] = dest
     led = os.path.join(dest, "led")
@@ -1506,6 +1512,31 @@ def _dispatch_result(ui, cl, state, index: int, entry: PlanEntry, result, proc=N
            result.detail[:300] if isinstance(result.detail, str) else str(result.detail))
 
 
+def _maybe_self_save_config(ui, cl, state, *, dry_run: bool) -> None:
+    """CONFIG-FILE SELF-SAVE (design/FABLE-SETUP-TUI-CONFIG-FILE-SPEC.md §4): "every birth saves
+    its config" -- called from every `_execute_commit` exit path below, so a run reaches this
+    exactly once regardless of which path it took. Same reachability test `screen_checklist`'s
+    own "Save this checklist" gate already uses (`os.path.isdir` live, or `dest_would_exist`
+    under `--dry-run`) -- a destination that was never queued this session has nothing to save
+    into, silently skipped rather than refused (this is bookkeeping, not a decision the operator
+    made). `config_seam.save_world_config` is the ONE declared exception this module hands off
+    to (mirrors `checklist.Checklist.save`'s own precedent -- gates/setup_tui_purity_gate.py's
+    EXEMPT table names both), because the resolved decision set is not complete until the commit
+    itself has run (or been rendered, under `--dry-run`)."""
+    dest = state.get("dest")
+    reachable = bool(dest) and (os.path.isdir(dest) or (dry_run and state.get("dest_would_exist")))
+    if not reachable:
+        return
+    path, wrote = config_seam.save_world_config(dest, state, dry_run=dry_run)
+    if dry_run:
+        ui.emit(Paragraph(f"  would save: {path} (self-application, spec §4)"))
+        cl.add("checklist", "world-config.toml self-saved", ck.WOULD_DO, path)
+    else:
+        ui.emit(Paragraph(f"  saved: {path} (self-application, spec §4)"))
+        cl.add("checklist", "world-config.toml self-saved",
+               ck.WITNESSED if wrote else ck.REFUSED, path)
+
+
 def _execute_commit(ui, cl, state) -> None:
     plan = _plan(state)
     dry_run = state.get("dry_run", False)
@@ -1529,6 +1560,7 @@ def _execute_commit(ui, cl, state) -> None:
             cl.add(CE.DAEMON_SCREEN, CE.DAEMON_SCRIPT_ITEM, ck.WOULD_DO,
                    f"write {script_path} ({len(plan.daemons)} daemon(s): "
                    f"{', '.join(d.name for d in plan.daemons)})")
+        _maybe_self_save_config(ui, cl, state, dry_run=True)
         return
 
     if not plan.entries and not plan.daemons:
@@ -1600,6 +1632,7 @@ def _execute_commit(ui, cl, state) -> None:
         ui.emit(Paragraph("  COMMIT HALTED -- the journal names the next PENDING step; re-run this tool "
                "(or --start-at checklist against the same destination) to resume, or finish by "
                "hand from the output above."))
+    _maybe_self_save_config(ui, cl, state, dry_run=False)
 
 
 def _teardown_scratch_gnupghomes(state) -> None:
