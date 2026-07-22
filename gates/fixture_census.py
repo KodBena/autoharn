@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-09T13:36:11Z
-#   last-change: 2026-07-22T01:35:05Z
+#   last-change: 2026-07-22T02:38:39Z
 #   contributors: be693afb/main, e4410ef6/main, 3c50e030/main, 3c942a60/main, a857c93d/main, ab5d5bab/main, 43f77bff/main, 1fa3ab69/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -101,6 +101,7 @@ REGISTRY: dict[str, str] = {
     "model-sql-block":                "seen-red/model-sql-block/run_fixtures.py",
     "s25-commission-kind":            "seen-red/s25-commission-kind/run_fixtures.py",
     "track-work":                     "seen-red/track-work/run_fixtures.py",
+    "extract-context":                "seen-red/extract-context/run_fixtures.py",
     "resource-registry":              "seen-red/resource-registry/run_fixtures.py",
     "track-experiments":              "seen-red/track-experiments/run_fixtures.py",
     "attest-tags":                    "seen-red/attest-tags/run_fixtures.py",

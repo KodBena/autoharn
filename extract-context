@@ -1,0 +1,12 @@
+#!/bin/sh
+# extract-context — repo-root shim for bootstrap/extract_context.py (the mechanized world-context
+# extraction the world-context consult designed; vestigial_documentation/design/
+# FABLE-WORLD-CONTEXT-MIGRATION-CONSULT-2026-07-19.md; autoharn ledger row 1942 step 1). Unlike
+# led/judge/pickup/audit/distance-to-clean this is NOT bound to "this deployment's own
+# deployment.json" -- both its `extract` and `ingest` subcommands take an explicit --deployment
+# path, because the whole point is reading a SOURCE world that is not necessarily this checkout's
+# own wired world and writing (ingest only, and only through the target's own `led`) into a
+# TARGET world that need not be this one either. See `./extract-context extract --help` /
+# `./extract-context ingest --help`, or bootstrap/extract_context.py's own module docstring.
+HERE="$(cd "$(dirname "$0")" && pwd)"
+exec env AUTOHARN="$HERE" python3 "$HERE/bootstrap/extract_context.py" "$@"

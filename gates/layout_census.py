@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-09T07:54:37Z
-#   last-change: 2026-07-18T23:20:30Z
-#   contributors: 9bcc0113/main, be693afb/main, e4410ef6/main, 3c50e030/main, a857c93d/main, ab5d5bab/main
+#   last-change: 2026-07-22T02:44:57Z
+#   contributors: 9bcc0113/main, be693afb/main, e4410ef6/main, 3c50e030/main, a857c93d/main, ab5d5bab/main, 1fa3ab69/main
 # <<< PROVENANCE-STAMP <<<
 
 """layout_census — LAYOUT.md's designed tree as a MECHANICAL registry (manifest [C21]).
@@ -89,6 +89,13 @@ ROOT_FILES = {
     # hazard-flagging duty, 2026-07-12). USER-GUIDE.md itself moved off root into user-guide/
     # 2026-07-18 (see above).
     "attest-tags",
+    # extract-context — the mechanized world-context extraction verb (FABLE-WORLD-CONTEXT-
+    # MIGRATION-CONSULT-2026-07-19.md; autoharn ledger row 1942 step 1). Repo-root style shim
+    # like led/judge/pickup/audit/distance-to-clean/attest-tags above, but not scaffolded into
+    # every world by new-project.sh -- both its `extract` and `ingest` subcommands take an
+    # explicit --deployment path, so it lives once, here, and is pointed at whichever source/
+    # target world the operator names.
+    "extract-context",
     # LICENSE (the Unlicense, added fca1100, maintainer's choice 2026-07-12) -- a root
     # standing-document like the others above, never registered when it landed; caught by
     # this gate's own next run (tracker item layout-census-license-unregistered, CLAUDE.md
