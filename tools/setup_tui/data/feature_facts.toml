@@ -1,0 +1,212 @@
+# tools/setup_tui/data/feature_facts.toml -- feature-facts registry (ADR-0012 P10 data file).
+# Loaded by tools/setup_tui/feature_facts.py; validated at import time.
+#
+# SCHEMA (round 7, ledger row 1119 -- following an independent Fable RCA consult,
+# design/CONSULT-FABLE-ELUCIDATION-RCA-2026-07-22.md; supersedes round 6's aspiration/standards/
+# mechanism/external four-slot vocabulary, which the consult diagnosed as CRITICAL: fielding a
+# standard's name into a dedicated `standards` slot silently PROMOTED an aspiration ("aspires to
+# this standard's decomposition") into an unqualified conformance claim -- a truth-value change,
+# not a formatting one, on the exact screen that teaches new adopters what the system is):
+#
+#   lead            -- decision-guidance prose (what choosing/having this costs, requires, or
+#                       changes for the operator), written as a sentence. A standard this feature
+#                       ASPIRES to (never CONFORMS to) is named INSIDE this sentence with its
+#                       qualifying hedge intact ("aspires to X's own decomposition") -- there is
+#                       NO separate standards slot to strip that hedge into. Empty = nothing to
+#                       say (an empty slot renders NO line at all, never "none named").
+#   external        -- ONE meaning only: a concrete external PREREQUISITE or STANDING OBLIGATION
+#                       the operator must supply or keep (a binary on PATH, a live cluster, a
+#                       recurring process) -- never what the feature does internally. Empty = none.
+#   provenance      -- OPTIONAL list of citations a FOUNDING OPERATOR could actually open and read
+#                       (this repo's own user-guide/*, or law/adr/ itself) -- rendered demoted,
+#                       LAST, as "Full basis: <path>".
+#   maintainer_refs -- OPTIONAL list of INTERNAL-ONLY citations (ledger rows, design/FABLE-*/
+#                       design/MAINT-* build-basis docs, kernel lineage SQL files) -- NEVER
+#                       rendered by any widget; kept only for the maintainer's own audit trail
+#                       (this round's own build report names every fact's own sourcing).
+
+[[fact]]
+key = "preflight_idris2"
+label = "idris2 toolchain"
+lead = "Backs a freshness cross-check between the categorical kernel model and its own generated code -- house discipline, not a certification aim."
+external = "External binary, must be on PATH; if missing this check reads RED with an install pointer (github.com/idris-lang/Idris2)."
+maintainer_refs = ["gates/idris_model_freshness.py", "tools/setup_tui/steps_preflight.py"]
+
+[[fact]]
+key = "preflight_clingo"
+label = "clingo (ASP solver)"
+lead = "The deductive engine (clingo/ASP) driving this project's own differential proofs and ./judge -- its own raison d'etre, not a named external standard."
+external = "External binary; non-fatal if absent (only the engine differential proofs and ./judge need it)."
+maintainer_refs = ["engine/lp/*", "bootstrap/bootstrap.sh"]
+
+[[fact]]
+key = "preflight_psql"
+label = "psql client"
+external = "External binary (the postgresql-client package's psql); if missing this check reads RED."
+maintainer_refs = ["tools/setup_tui/steps_preflight.py"]
+
+[[fact]]
+key = "preflight_python3"
+label = "python3 interpreter"
+lead = "Checked for presence/PATH correctness only -- not an added dependency; it is the same interpreter already running this tool."
+
+[[fact]]
+key = "ui_backend_textual"
+label = "textual (optional TUI backend)"
+lead = "Required for the interactive editor: if this package is not importable, the wizard refuses with the install command -- there is no fallback UI."
+external = "Optional Python package beyond stdlib (pip install textual); version 8.2.8 witnessed against this build."
+maintainer_refs = ["tools/configtree/app.py", "ledger row 1818"]
+
+[[fact]]
+key = "ui_backend_urwid"
+label = "urwid (optional TUI backend)"
+lead = "Probed for informational purposes only -- no code path in the current wizard uses it as a backend."
+
+[[fact]]
+key = "substrate_existing"
+label = "existing-db substrate path"
+lead = "Reuses a database you already run and administer -- zero manual steps here; you supply host and database name, this world neither creates nor owns the cluster."
+maintainer_refs = ["design/FABLE-SETUP-TUI-SPEC.md"]
+
+[[fact]]
+key = "substrate_dedicated"
+label = "dedicated-db substrate path"
+lead = "Generates a confined pg_hba block scoped to this world's own role and database."
+external = "A live, network-reachable Postgres cluster you administer, plus cluster-host operator actions this tool does NOT perform for you: installing the generated pg_hba block, reloading Postgres, and creating the database. You apply those by hand on that host."
+maintainer_refs = ["tools/setup_tui/pghba.py", "tools/setup_tui/steps_substrate.py"]
+
+[[fact]]
+key = "fork_target_governed_files"
+label = "governed-files pattern exposure"
+lead = "Chooses which changed-file patterns this world's own review gate demands a ledger authorization for -- the default covers *.py only; extend it now for other languages this project actually contains, or add them later by hand."
+maintainer_refs = ["hooks/pretooluse_change_gate.py", "ledger row 1730"]
+
+[[fact]]
+key = "principals_authority"
+label = "Principals & authority screen"
+lead = "Registers principal identities and their competences/relations for this world -- this world aspires to NIST SP 800-63's own identity/lifecycle/binding decomposition (an aim, not a conformance claim); every world already has author/reviewer/commissioner from the scaffold, so skipping this leaves a complete, working world."
+maintainer_refs = ["kernel/lineage/s40-principal-identity-events.sql", "kernel/lineage/s41-principal-bindings-and-relations.sql", "design/FABLE-PRINCIPAL-IDENTITY-SPEC-BUILD-BASIS.md"]
+
+[[fact]]
+key = "signed_genesis"
+label = "Signed genesis ceremony"
+lead = "Signs this world's founding commission with a GPG key you control -- gives the commission non-repudiation, forgery resistance, and outside-verifiability (the properties a NIST-lineage authenticity aim would also want, though this is a house ceremony, not a certification). The signing act itself is one-time; no ongoing signing burden or signature gate is added afterward."
+external = "gpg (GnuPG) on PATH, and an ONGOING key-custody responsibility: keep the private key and its revocation certificate safe -- this is the one section in this flow with a genuine standing operator responsibility attached."
+provenance = ["user-guide/USER-GPG-TRUST-LAYER-FAQ.md"]
+maintainer_refs = ["design/MAINT-GPG-TRUST-LAYER.md §3", "design/FABLE-SETUP-TUI-SIGNED-GENESIS-SPEC.md", "ledger rows 1724/1725"]
+
+[[fact]]
+key = "boundary_service"
+label = "boundary service"
+lead = "Starts a small HTTP service other tools/clients can call against this world -- governed by this project's own service-contract discipline, not built to an external certification. Its request stream feeds the same OTel channel the observability screen (below) can watch."
+external = "A free local network port (picked automatically), and, unless this process starts the service itself, a recurring operator process kept alive afterward (a systemd-unit text is offered to install by hand)."
+maintainer_refs = ["law/adr/0016-the-service-contract-is-an-enforcement-surface.md", "design/FABLE-OTEL-SENTRY-SPEC.md §0", "serving/boundary_service.py", "tools/setup_tui/probes.py"]
+
+[[fact]]
+key = "observability_otelcol"
+label = "OTel collector (otelcol)"
+lead = "Starts an OpenTelemetry collector recording model-provenance events as diagnostics-tier evidence -- aspires to the audit-supporting posture NIST's AU family names, not a conformance claim."
+external = "External binary (otelcol-contrib), and a recurring operator process kept alive afterward."
+maintainer_refs = ["design/FABLE-OTEL-SENTRY-SPEC.md §0"]
+
+[[fact]]
+key = "observability_watchdog"
+label = "OTel model-provenance watchdog (otel-watch)"
+lead = "Watches the collector's own event stream for model-provenance anomalies -- same diagnostics-tier aim as the collector above; deliberately minimal (no principal, no ledger write, no kernel access of any kind)."
+external = "Depends on the collector above already running, plus its own recurring operator daemon process."
+maintainer_refs = ["design/FABLE-OTEL-SENTRY-SPEC.md §0/§3"]
+
+[[fact]]
+key = "hydration_fork_provenance"
+label = "fork provenance"
+lead = "Records where this world was forked from, as a one-time fact about this particular world -- not a standards-conformance aim."
+
+[[fact]]
+key = "hydration_role_charters"
+label = "role charters"
+lead = "Registers a role's governing charter text against an already-registered principal -- a simpler, older mechanism than the identity/lifecycle events named above, and not itself that aspiration."
+maintainer_refs = ["design/FABLE-PRINCIPAL-IDENTITY-SPEC-BUILD-BASIS.md", "tools/role_charter.py"]
+
+[[fact]]
+key = "hydration_makespan_scheduling_by_mandate"
+label = "makespan-scheduling-by-mandate (durable decision)"
+lead = "Operating-rhythm house mandate, not an external standard: sequence multi-item commissions with a constraint-based scheduler instead of ad hoc ordering."
+external = "Vendors an external Python package (ortools>=9.0) as a git submodule."
+provenance = ["user-guide/USER-RECIPES-FAQ.md 'Workflow patterns'"]
+maintainer_refs = ["maintainer directive 2026-07-14", "ledger rows 1714/1716"]
+
+[[fact]]
+key = "hydration_drift_backstops"
+label = "drift-backstops (durable decision)"
+lead = "House product-quality posture, not a named external standard: follow the FAQ's own drift-backstop method for anything that goes quietly stale."
+provenance = ["user-guide/USER-RECIPES-FAQ.md 'Drift backstops'"]
+
+[[fact]]
+key = "hydration_adr_adoption"
+label = "ADR adoption (submenu)"
+lead = "The ADRs under law/adr/ ARE this project's own standards-conformance law -- adopting one is adopting a named house standard, not an external one."
+provenance = ["law/adr/"]
+
+[[fact]]
+key = "hydration_single_branch_authoring"
+label = "single-branch-authoring (durable decision)"
+lead = "House version-control discipline, not a named external standard: author content on the single working branch only."
+maintainer_refs = ["ledger row 1033"]
+
+[[fact]]
+key = "hydration_tags_are_serious_business"
+label = "tags-are-serious-business (durable decision)"
+lead = "House release discipline, not a named external standard: keep public main continuously up to date via untagged cuts; tag only as a deliberate release act."
+maintainer_refs = ["ledger row 1027"]
+
+[[fact]]
+key = "hydration_obligate_amplification_caution"
+label = "obligate-amplification-caution (durable decision)"
+lead = "House kernel-write discipline, not a named external standard: review-obligation triggers are retroactive with no time bound, so discharge them under a different principal than the one obliged."
+maintainer_refs = ["ledger row 1640"]
+
+[[fact]]
+key = "hydration_doc_currency_at_the_seam"
+label = "doc-currency-at-the-seam (durable decision)"
+lead = "House documentation-currency discipline, not a named external standard: every merge that changes operator-facing behavior carries its own doc update, or a named, tracked deferral."
+maintainer_refs = ["ledger row 1699"]
+
+[[fact]]
+key = "hydration_concurrent_builders_need_isolation"
+label = "concurrent-builders-need-isolation (durable decision)"
+lead = "House concurrency discipline, not a named external standard: overlapping work gets its own isolated workspace, never a shared checkout."
+maintainer_refs = ["ledger row 1502"]
+
+[[fact]]
+key = "hydration_runs_are_strictly_linear"
+label = "runs-are-strictly-linear (durable decision)"
+lead = "House world-lifecycle discipline, not a named external standard: once a deployment's evidence is recorded, treat it as immutable history."
+maintainer_refs = ["maintainer ruling 2026-07-11"]
+
+[[fact]]
+key = "hydration_decomposition_to_unit_of_independent_resumption"
+label = "decomposition-to-unit-of-independent-resumption (durable decision)"
+lead = "House decomposition discipline, not a named external standard: break work into units a fresh session could pick up alone."
+
+[[fact]]
+key = "hydration_claims_carry_witnesses"
+label = "claims-carry-witnesses (durable decision)"
+lead = "House evidentiary discipline, not a named external standard: every claim in a report states whether it was witnessed, refused as expected, or left unexercised."
+
+[[fact]]
+key = "hydration_unanchored_review_briefs"
+label = "unanchored-review-briefs (durable decision)"
+lead = "House anti-anchoring-bias review discipline, not a named external standard: a review brief hands the reviewer the artifact and the law, never a pre-identified suspect list."
+maintainer_refs = ["ledger row 1278"]
+
+[[fact]]
+key = "hydration_fresh_context_review_for_delegated_work"
+label = "fresh-context-review-for-delegated-work (durable decision)"
+lead = "House independent-review discipline, not a named external standard: delegated work gets a routine, fresh-context review before acceptance."
+maintainer_refs = ["ledger row 1492"]
+
+[[fact]]
+key = "hydration_polychotomy_option_space_justification"
+label = "polychotomy-option-space-justification (durable decision, SHOULD-grade)"
+lead = "House anti-false-polychotomy discipline (SHOULD, not mandatory), not a named external standard: justify the option SPACE itself, not just the tradeoffs."
+maintainer_refs = ["ledger row 1915"]

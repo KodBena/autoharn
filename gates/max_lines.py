@@ -168,14 +168,10 @@ BASELINE: dict[str, int] = {
     # discriminator -- "error messages... are the logic's own contract and stay"), not the
     # authored "walls of text" prose class the commission named. Written plain, no golfing (same
     # no-go clause); witnessed shrink, the ratchet lowers with it (ADR-0011 Rule 4).
-    # Reconciled +33 to 1717 (design/FABLE-SETUP-TUI-CONFIG-FILE-SPEC.md build, ledger row 1944):
-    # `_maybe_self_save_config` (spec §4's self-application -- "every birth saves its config",
-    # called from every `_execute_commit` exit path) plus two one-line `*_engaged` flags
-    # (`screen_observability`/`screen_hydration`) the self-save capture needs to distinguish
-    # "screen entered, nothing selected" from "screen skipped outright" -- a fact `state`/the
-    # plan cannot otherwise recover. Genuinely new decision/effect-boundary logic, not padding.
-    # Written plain, no golfing (ADR-0007's no-go clause); witnessed growth.
-    "tools/setup_tui/screens.py":                    1717,
+    # tools/setup_tui/screens.py -- REMOVED from BASELINE 2026-07-22
+    # (design/FABLE-SETUP-TUI-REBUILD-SPEC.md §2, wholesale rebuild): `git rm`'d whole -- the
+    # teletype-driving screen functions have no successor file, the decision/action logic they
+    # carried lives on split across tools/setup_tui/steps_*.py (each well under ceiling).
     "gates/kind_shape_manifest_gate.py":              1152,
     "hooks/pretooluse_change_gate.py":                1138,
     "hooks/stop_clean_exit.py":                        992,
@@ -192,33 +188,13 @@ BASELINE: dict[str, int] = {
     # no golfing.
     "engine/ledger_floor.py":                           820,
     "engine/preamble_floor.py":                         801,
-    # Reconciled +31 to 705 (design/FABLE-SETUP-TUI-TYPED-UI-SPEC.md build), then +82 to 787
-    # (design/FABLE-SETUP-TUI-NAVIGATION-SPEC.md, the Textual leg -- maintainer-witnessed live
-    # defect: '<' typed at a Textual prompt did nothing, the intro's own promise was false under
-    # this backend). The 705 leg: `TextualUi.emit` replaces the old `banner`/`say` pair with the
-    # single typed-element seam (spec §2), plus the new `SetupWizardApp.write_transcript_styled`
-    # method (the one styling seam beyond plain print-capture, for a refusal `Note`) and one new
-    # import line (`elements`/`rich.text.Text`); also carries the F4 diagnostic leg's fix (spec
-    # §4, ledger rows 1844-F4/1917): `emit` prints a multi-line element as ONE
-    # `print("\n".join(lines))` call, not one `print()` per line -- reproduced live
-    # (seen-red/setup-tui-typed-elements/, this build's own headless WX1 rerun during
-    # construction) that N separate print() calls per element floods the print-capture pipeline's
-    # `events.Print` queue badly enough, under sustained emission, to stall the App's asyncio loop
-    # past every bridge call's own budget -- not a false "misread as shutdown" but a genuine
-    # indefinite hang, worse than F4's own hypothesis. The 787 leg: `TextualUi`'s four `ask_*`
-    # methods each gained the SAME BACK-trigger recognition `InteractiveUi` already carries
-    # (imported from `tools/setup_tui/ui.py`'s now-public `BACK_TRIGGER_PLAIN`, never redefined
-    # here); a new `ctrl+b` `Binding` plus `SetupWizardApp.action_go_back`/`on_key`'s choice/pause
-    # leg give the affordance a visible Footer surface even for prompt kinds with no free-text
-    # `Input` widget to type "<" into. Genuinely new decision/interaction logic both legs, not
-    # padding -- the module docstring's own new "architecture point 6" section (~24 of the 82
-    # lines) is the load-bearing explanation of why recognition stays per-backend rather than
-    # hoisted into `NavigableUi` (`NavigableUi` only ever sees each backend's ALREADY-coerced
-    # return value, never the pre-coercion raw keystroke a full hoist would need) -- P10
-    # prose-vs-logic judgment: this is the ADR-0000 "surface every judgment on the record" duty,
-    # not decorative writing. Written plain, no golfing (ADR-0007's no-go clause); witnessed
-    # growth both legs.
-    "tools/setup_tui/ui_textual.py":                    787,
+    # tools/setup_tui/ui_textual.py -- REMOVED from BASELINE 2026-07-22
+    # (design/FABLE-SETUP-TUI-REBUILD-SPEC.md §2, wholesale rebuild): `git rm`'d whole, along
+    # with ui.py/flow_position.py/elements.py -- the teletype-emulated-inside-Textual shell the
+    # commission indicted by name ("Delete it whole-sale so that nobody mistakenly implements
+    # something that is this cursed"). Its successor is tools/configtree/ (a generic library,
+    # zero autoharn knowledge) plus tools/setup_tui/tui_app.py (a thin consumer), neither of
+    # which carries this file's own teletype/back-stack vocabulary.
     # Reconciled +5 to 734 (design/FABLE-RESERVATION-RESIDUE-SPEC.md §7 amendment,
     # kernel/lineage/s56-reservation-residue.sql): export_work's w_discharged/1 extraction widens
     # to verdict IN ('attest','attest_with_reservations') -- the EDB-side twin of the same

@@ -50,7 +50,8 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-from tools.setup_tui.content.durable_decisions_data import RAW_CATALOG
+from tools.configtree import DescriptionElement, PROVENANCE_LABEL
+from tools.setup_tui import content
 from tools.setup_tui.plan import Hole, WriteAct
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -62,11 +63,31 @@ END_MARKER = "<!-- END COMPILED DURABLE DECISIONS (setup_tui) -->"
 
 @dataclass(frozen=True)
 class DurableDecision:
+    """`why`/`provenance`/`maintainer_refs` SCHEMA (round 6, ledger row 1117 -- companion rule
+    C13; round 7 audience-boundary split, ledger row 1119, defect D2): `why` is ONE short,
+    citation-free sentence; `provenance` lists citations a FOUNDING OPERATOR could actually open
+    and read (this repo's own user-guide/*, law/adr/*, or a public external link), rendered
+    demoted, LAST, one `PROVENANCE_LABEL` element per path; `maintainer_refs` lists
+    INTERNAL-ONLY citations (bare ledger-row numbers, autoharn-panel prior art) -- NEVER rendered
+    by any widget, kept only for the maintainer's own audit trail. `rule`/`hydrates`/`claude_md`
+    are unchanged: literal artifact TEXT (a ledger-decision statement, a CLAUDE.md fragment), not
+    interactive elucidation."""
     slug: str
     rule: str
     why: str
     hydrates: str      # the exact `led decision` statement this selection writes
     claude_md: str      # the fragment compiled into the new world's CLAUDE.md
+    provenance: tuple[str, ...] = ()
+    maintainer_refs: tuple[str, ...] = ()
+
+    def elements(self) -> "tuple[DescriptionElement, ...]":
+        """The interactive elucidation rendering: `why` first (unlabeled connective prose, D7/
+        D8), then each OPERATOR-relevant `provenance` path, demoted, LAST -- `maintainer_refs`
+        is never read here at all. `steps_hydration.py`'s own MultiChoiceField `option_help`
+        uses this instead of a bare `decision.why` string."""
+        out = [self.why]
+        out.extend(DescriptionElement(PROVENANCE_LABEL, p) for p in self.provenance)
+        return tuple(out)
 
 
 # ---------------------------------------------------------------------------------------------
@@ -101,7 +122,11 @@ class DurableDecision:
 # after this construction) -- inside the 7-15 range, 15 is a hard ceiling not approached.
 # ---------------------------------------------------------------------------------------------
 
-CATALOG: list[DurableDecision] = [DurableDecision(**entry) for entry in RAW_CATALOG]
+CATALOG: list[DurableDecision] = [
+    DurableDecision(**{**entry, "provenance": tuple(entry.get("provenance", ())),
+                       "maintainer_refs": tuple(entry.get("maintainer_refs", ()))})
+    for entry in content.DURABLE_DECISIONS
+]
 
 # The non-catalog hydration items that remain as-is (spec §3, "Relation to the existing screen-8
 # items"): per-world facts, not durable decisions -- named here only so feature_facts.py and the
@@ -127,6 +152,15 @@ def list_adrs() -> list[tuple[str, str, str]]:
     first, so that comment never gets mistaken for the title)."""
     out: list[tuple[str, str, str]] = []
     for path in sorted(ADR_DIR.glob("*.md")):
+        if "-appendix-" in path.stem:
+            # A provisional appendix (e.g. 0019-appendix-provisional-ui-proscriptions.md) is NOT
+            # itself an adoptable ADR -- it shares its parent ADR's own number in its title line
+            # (both start "# ADR-0019 ..."), which would otherwise mint a SECOND catalog entry
+            # under the SAME ADR number (a live crash: two options claiming one identity --
+            # `tools.configtree.fields.MultiChoiceField`'s own construction-time duplicate-value
+            # refusal is what caught this). The maintainer adopts an appendix by adopting its
+            # parent ADR; excluding it here is a named, reviewable choice, not a silent drop.
+            continue
         title = None
         number = None
         for line in path.read_text(encoding="utf-8").splitlines():
@@ -145,6 +179,22 @@ def list_adrs() -> list[tuple[str, str, str]]:
         out.append((number, title, str(path.relative_to(REPO_ROOT))))
     out.sort(key=lambda t: t[0])
     return out
+
+
+_ADR_SYNOPSIS_PENDING = "(synopsis pending maintainer review)"
+
+
+def adr_synopsis_elements(number: str, relpath: str) -> "tuple[DescriptionElement, ...]":
+    """The ADR-adoption submenu's own per-entry elucidation (maintainer round-6 addendum: "a
+    pointer is not an elucidation ... helpful only to someone who already knows every ADR").
+    ORIENTATION, NOT THE LAW (content.py's own `adr_synopses.toml` header note): a 1-3 sentence
+    digest of what the ADR binds you to if adopted, authored by lifting/lightly trimming the
+    ADR's own words -- `content.ADR_SYNOPSES` is the one home for that text (data, never
+    hardcoded here). A number with no authored synopsis reads the honest pending-review marker,
+    never a fabricated one. The file-path pointer is a SEPARATE, final element -- it follows the
+    synopsis, it does not replace it."""
+    synopsis = content.ADR_SYNOPSES.get(number, _ADR_SYNOPSIS_PENDING)
+    return (DescriptionElement("Synopsis", synopsis), DescriptionElement("File", relpath))
 
 
 def adr_decision_statement(number: str, title: str, relpath: str) -> str:

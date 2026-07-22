@@ -12,8 +12,8 @@ directly).
 Cases:
   1. RED (negative self-check) -- a brand-new path, never in BASELINE, at 401 lines (one over
      CEILING): `evaluate()` must return a violation naming it a NEW offender.
-  2. GREEN -- a real baselined path (`tools/setup_tui/screens.py`) evaluated at EXACTLY its
-     ratchet count: `evaluate()` must return None (grandfathered, holding steady).
+  2. GREEN -- a real baselined path (`gates/kind_shape_manifest_gate.py`) evaluated at EXACTLY
+     its ratchet count: `evaluate()` must return None (grandfathered, holding steady).
   3. RED -- the SAME baselined path, evaluated ONE LINE OVER its ratchet: `evaluate()` must
      return a violation naming the grow-past-ratchet reason (ADR-0011 Rule 4: shrink or hold,
      never grow).
@@ -59,7 +59,7 @@ def main() -> int:
                  f"evaluate(...) = {v1!r}")
 
     # Case 2: GREEN -- real baselined path at exactly its ratchet.
-    real_path = "tools/setup_tui/screens.py"
+    real_path = "gates/kind_shape_manifest_gate.py"
     ratchet = max_lines.BASELINE[real_path]
     v2 = max_lines.evaluate(real_path, ratchet)
     ok &= _check("case 2 (baselined path at its ratchet)", v2 is None,
@@ -82,7 +82,7 @@ def main() -> int:
     # Case 6: RED -- stale baseline row, reproducing main()'s own orphan predicate directly
     # (the check lives in main()'s loop, not in evaluate()).
     synthetic_baseline = {"tools/setup_tui/long_gone.py": 999}
-    synthetic_present = {"tools/setup_tui/screens.py", "gates/max_lines.py"}
+    synthetic_present = {"gates/kind_shape_manifest_gate.py", "gates/max_lines.py"}
     stale = [p for p in synthetic_baseline if p not in synthetic_present]
     ok &= _check("case 6 (stale baseline row detected)",
                  stale == ["tools/setup_tui/long_gone.py"], f"stale rows = {stale!r}")

@@ -39,7 +39,24 @@ SAME table, deliberately -- the amendment's own words are "the checklist's own p
 discipline", not a second table shape: WOULD_DO (an act that would have run, live, but did not --
 `runner.run_command`/`start_background`/`write_file`'s `dry_run=True` path) and DRY_SKIPPED (a
 PREPARED-block verification gate -- a post-keypress probe or a live re-check -- that a dry run
-skips rather than fakes, 'never silently passed' per the amendment)."""
+skips rather than fakes, 'never silently passed' per the amendment).
+
+CHOICE-ATTRIBUTION SPLIT (maintainer round 5, ledger row 1115: "the checklist then recorded
+operator-declined for defaults the operator never touched -- false attribution of choice"). A
+single generic `SKIPPED` used to carry THREE different claims about an item the flow never
+finalized: "the operator interacted and said no", "the widget's own compile-time default was
+never touched at all", and "a PARENT gate being off made this item's own state moot, never
+evaluated". Collapsing all three into one word made a report reader see "the operator declined
+X" for an X nobody ever looked at. Split into three closed, honest members (a report reader can
+now tell "he said no" from "he never got here" from "nothing upstream of this ever ran"):
+
+  * `DECLINED` -- the operator TOUCHED this decision (visited/toggled it,
+    `tools.configtree.fields.is_field_touched` reads True) and its final value says no/skip.
+  * `DEFAULTED` -- the value is exactly its own compile-time default AND was never touched
+    (`is_field_touched` reads False) -- an absence of interaction, never an operator's word.
+  * `SKIPPED` -- NARROWED to its one remaining honest meaning: a PARENT gate/section being off
+    (or blocked) made this item's own state moot before it was ever individually evaluated --
+    never reused for "the operator said no" (that is `DECLINED` now)."""
 from __future__ import annotations
 
 import datetime as _dt
@@ -50,6 +67,8 @@ from tools.setup_tui.runner import write_file
 
 WITNESSED = "WITNESSED"
 SKIPPED = "SKIPPED"
+DECLINED = "DECLINED"
+DEFAULTED = "DEFAULTED"
 INSTRUCTED = "INSTRUCTED"
 PREPARED = "PREPARED"
 VERIFIED_UP = "VERIFIED-UP"
@@ -58,8 +77,17 @@ REFUSED = "REFUSED"
 WOULD_DO = "WOULD-DO"
 DRY_SKIPPED = "DRY-SKIPPED"
 
-_VALID = {WITNESSED, SKIPPED, INSTRUCTED, PREPARED, VERIFIED_UP, NOT_UP, REFUSED, WOULD_DO,
-          DRY_SKIPPED}
+_VALID = {WITNESSED, SKIPPED, DECLINED, DEFAULTED, INSTRUCTED, PREPARED, VERIFIED_UP, NOT_UP,
+          REFUSED, WOULD_DO, DRY_SKIPPED}
+
+
+def choice_status(touched: bool) -> str:
+    """The ONE place a NOT-chosen decision's own checklist status is computed from
+    (`tools.configtree.is_field_touched`'s own answer) -- never inlined ad hoc per call site, so
+    `DECLINED` vs `DEFAULTED` is never a judgment call two screens make differently. Only for the
+    "why is this NOT happening" question -- a chosen/affirmed item gets its own WITNESSED/queued
+    row elsewhere, never this function."""
+    return DECLINED if touched else DEFAULTED
 
 
 def status_for(res) -> str:
