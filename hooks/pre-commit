@@ -13,7 +13,7 @@
 # configuration-surface-survey commission, further extended 2026-07-21 setup-TUI field-strategy
 # commission Track 1 item 2 — max_lines added, blocking, mechanically alongside fixture_census
 # since its own idiom (a same-shaped pipe-and-echo-and-exit-1 block) made the addition mechanical;
-# the sibling setup_tui purity-gate wiring queued at ledger row 1847 remains DEFERRED to the
+# the sibling setup_tui purity-gate wiring queued at ledger row 1847: DISCHARGED 2026-07-22 in the
 # session-boundary batch, unrelated to whether THIS gate's wiring was mechanical):
 # staging_guard -> no_lazy_imports -> fixture_census -> max_lines -> link_integrity ->
 # apparatus_unknown_keys (gated only when bootstrap/templates/apparatus.json is touched) ->
@@ -85,6 +85,17 @@ PY="$HOME/w/vdc/venvs/generic/bin/python"
     echo "" >&2
     echo "pre-commit: max-lines gate FAILED — commit refused (ADR-0007's 400-line ceiling; see" >&2
     echo "gates/max_lines.py's own docstring for the ratcheting baseline and how to read the reason)." >&2
+    exit 1
+}
+
+# setup_tui_purity_gate — the setup wizard's structural discipline (pure-core spec + typed
+# elements: no direct stdin/stdout outside the two renderer files, exemption tables in the
+# gate itself). Wired 2026-07-22, the session-boundary batch discharging the wiring queued at
+# ledger row 1847 (autoharn1 era) — the gate itself had run green manually on every merge
+# since; this makes it mechanical rather than remembered.
+"$PY" "$REPO_ROOT/gates/setup_tui_purity_gate.py" || {
+    echo "" >&2
+    echo "pre-commit: setup-tui purity gate FAILED — commit refused (a wizard module bypasses the typed Ui seam; see gates/setup_tui_purity_gate.py)." >&2
     exit 1
 }
 
