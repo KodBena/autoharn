@@ -21,6 +21,7 @@ from tools.configtree.fields import (ChoiceField, ConfirmField, DescriptionEleme
                                       TextField, default_of, get_field_value, is_field_touched,
                                       set_field_value, validate_value)
 from tools.configtree.ids import ExitCode, FieldName, Label, NodeId, ScopedFieldKey
+from tools.configtree.master_detail import AnyField, DetailListField, MasterDetailField, flatten_fields
 from tools.configtree.spec import (BLOCKED, COMPLETE, INCOMPLETE, INVALID, ActionSpec, CommitSpec,
                                     DuplicatedSharedFieldError, SectionResult, SectionSpec,
                                     all_sections_complete, owner_of, ready_for_commit,
@@ -32,6 +33,7 @@ __all__ = [
     "ElucidationValue", "Field", "ListField", "MultiChoiceField", "PROVENANCE_LABEL", "TextField",
     "default_of", "get_field_value", "is_field_touched", "set_field_value", "validate_value",
     "ExitCode", "FieldName", "Label", "NodeId", "ScopedFieldKey",
+    "AnyField", "DetailListField", "MasterDetailField", "flatten_fields",
     "BLOCKED", "COMPLETE", "INCOMPLETE", "INVALID",
     "ActionSpec", "CommitSpec", "DuplicatedSharedFieldError", "SectionResult", "SectionSpec",
     "all_sections_complete", "owner_of", "ready_for_commit", "section_answers",

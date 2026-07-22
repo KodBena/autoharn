@@ -50,10 +50,12 @@ from textual.widgets import Checkbox, Input, RadioSet, Static
 
 from tools.configtree.fields import (ChoiceField, ListField, MultiChoiceField, default_of,
                                       get_field_value, set_field_value, validate_value)
+from tools.configtree.master_detail import MasterDetailField, flatten_fields
 from tools.configtree.spec import SectionSpec, section_answers, section_field_errors
 from tools.configtree.widgets import (FieldError, ListFieldWidget, MultiChoiceFieldWidget,
-                                       build_field_widget, elucidation_widgets, field_widget_id,
-                                       read_field_value)
+                                       elucidation_widgets, field_widget_id, read_field_value)
+from tools.configtree.widgets_choice_filter import build_choice_or_plain_widget
+from tools.configtree.widgets_master_detail import MasterDetailFieldWidget
 
 
 class SectionPane(Vertical):
@@ -92,7 +94,7 @@ class SectionPane(Vertical):
                 # already carries a non-default (seeded, or previously touched) value, so a
                 # seeded default is visible EVEN WHILE the section stays correctly blocked from
                 # editing.
-                seeded = [str(f.name) for f in self.spec.fields(self.state)
+                seeded = [str(f.name) for f in flatten_fields(self.spec.fields(self.state))
                           if get_field_value(self.state, self.spec.slug, f) != default_of(f)]
                 if seeded:
                     yield Static(
@@ -113,15 +115,29 @@ class SectionPane(Vertical):
             answers = section_answers(self.spec, self.state)
             for f in self._field_specs:
                 name = str(f.name)
-                is_group_field = isinstance(f, (ListField, MultiChoiceField))
+                is_group_field = isinstance(f, (ListField, MultiChoiceField, MasterDetailField))
                 yield Static(str(f.label) if not is_group_field else "", classes="ct-field-label")
-                if isinstance(f, ListField):
+                if isinstance(f, MasterDetailField):
+                    # ADR-0019 Rule 4 (master-detail, not a sibling flat list): a MasterDetailField
+                    # renders as ONE widget managing its own master rows AND every nested detail
+                    # list -- `answers` already carries the master's own name PLUS each detail's
+                    # own name (`spec.section_answers` flattens via `master_detail.flatten_fields`
+                    # before this pane ever sees it), so the initial values below are the SAME
+                    # per-name live state every other field reads, just handed to one composite
+                    # widget instead of several separate ones.
+                    initial_details = {str(d.list_field.name): answers[str(d.list_field.name)]
+                                       for d in f.details}
+                    yield MasterDetailFieldWidget(
+                        f, initial_master=answers[name], initial_details=initial_details,
+                        on_master_change=self._make_md_master_change(f),
+                        on_detail_change=self._make_md_detail_change(f))
+                elif isinstance(f, ListField):
                     yield ListFieldWidget(f, initial=answers[name], on_change=self._make_list_change(f))
                 elif isinstance(f, MultiChoiceField):
                     yield MultiChoiceFieldWidget(f, initial=answers[name],
                                                   on_change=self._make_multi_change(f))
                 else:
-                    yield build_field_widget(f, answers[name])
+                    yield build_choice_or_plain_widget(f, answers[name])
                     # ELUCIDATION (ledger row 1115): a plain field's own `help` renders as its
                     # own capped element(s) right under it -- `ListField`/`MultiChoiceField`
                     # render their own `help` INSIDE their dedicated widget instead (its own
@@ -200,6 +216,27 @@ class SectionPane(Vertical):
         def _on_change() -> None:
             widget = self.query_one(f"#{widget_id}", MultiChoiceFieldWidget)
             self._write_through(f, list(widget.selected))
+
+        return _on_change
+
+    def _make_md_master_change(self, f: MasterDetailField):
+        """`MasterDetailFieldWidget`'s own master-row callback -- writes through `f.master` (the
+        underlying `ListField` this composite wraps, `master_detail.py`'s own "STORAGE IS
+        UNCHANGED" doctrine) and ALWAYS recomposes this whole `SectionPane` (unlike an ordinary
+        `ListField`'s own opt-in `refresh_siblings`): a master-detail's sibling detail lists
+        almost always derive their OWN `item_fields` choices from the master's current rows (e.g.
+        a relation's 'object' picker), so a newly registered master row must be pickable
+        elsewhere on THIS SAME visit, not only the next time this section is re-selected."""
+        def _on_change(rows: list) -> None:
+            self._write_through(f.master, rows)
+            self.call_later(self.recompose)
+        return _on_change
+
+    def _make_md_detail_change(self, f: MasterDetailField):
+        by_name = {str(d.list_field.name): d.list_field for d in f.details}
+
+        def _on_change(dname: str, rows: list) -> None:
+            self._write_through(by_name[dname], rows)
 
         return _on_change
 

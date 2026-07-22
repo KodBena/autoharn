@@ -17,6 +17,7 @@ from typing import Callable
 from tools.configtree.fields import (ElucidationValue, Field, _check_no_bare_pipe,
                                       get_field_value, validate_value)
 from tools.configtree.ids import Label, NodeId
+from tools.configtree.master_detail import AnyField, flatten_fields
 
 # The closed vocabulary of a tree node's rendered status (spec §3 v2: "each node marked complete
 # / incomplete / invalid / blocked-with-reason").
@@ -60,7 +61,10 @@ class SectionSpec:
     slug: "str | NodeId"
     title: "str | Label"
     group: "str | Label"
-    fields: Callable[[dict], "tuple[Field, ...]"]
+    # `AnyField` (`master_detail.py`): `fields` may return a `MasterDetailField` alongside the
+    # four primitive kinds -- `flatten_fields` is the ONE place that composite gets expanded back
+    # to the flat per-name list this module's own answers/error/status functions operate over.
+    fields: Callable[[dict], "tuple[AnyField, ...]"]
     submit: Callable[[dict, dict], SectionResult]
     precheck: "Callable[[dict], tuple[str, ...]] | None" = None
     blocked: "Callable[[dict], 'str | None'] | None" = None
@@ -139,7 +143,8 @@ def section_answers(spec: SectionSpec, state: dict) -> dict:
     this projection is computed -- shared by `section_status`'s live validity check and by the
     commit node's own submit sweep (`commit_pane.CommitPane`), so both always agree on what a section's
     "current values" means."""
-    return {str(f.name): get_field_value(state, spec.slug, f) for f in spec.fields(state)}
+    return {str(f.name): get_field_value(state, spec.slug, f)
+            for f in flatten_fields(spec.fields(state))}
 
 
 def section_field_errors(spec: SectionSpec, state: dict) -> dict[str, str]:
@@ -149,7 +154,7 @@ def section_field_errors(spec: SectionSpec, state: dict) -> dict[str, str]:
     separately (see `section_status`'s own `_commit_errors` check)."""
     answers = section_answers(spec, state)
     errors: dict[str, str] = {}
-    for f in spec.fields(state):
+    for f in flatten_fields(spec.fields(state)):
         name = str(f.name)
         msg = validate_value(f, answers[name])
         if msg:
@@ -205,7 +210,7 @@ def validate_shared_ownership(sections: "tuple[SectionSpec, ...]") -> None:
     is built, never discovered live."""
     owners: dict[str, list[str]] = {}
     for spec in sections:
-        for f in spec.fields({}):
+        for f in flatten_fields(spec.fields({})):
             if getattr(f, "shared", False):
                 owners.setdefault(str(f.name), []).append(str(spec.slug))
     for name, declaring in owners.items():
@@ -225,7 +230,7 @@ def owner_of(sections: "tuple[SectionSpec, ...]", field_name: str) -> "SectionSp
     library itself never renders a cross-reference to it (struck entirely -- see
     `DuplicatedSharedFieldError`'s own docstring)."""
     for spec in sections:
-        for f in spec.fields({}):
+        for f in flatten_fields(spec.fields({})):
             if getattr(f, "shared", False) and str(f.name) == field_name:
                 return spec
     return None

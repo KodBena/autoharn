@@ -116,6 +116,24 @@ class ConfigTreeApp(App):
     measure like every other data-entry control this library caps, margined off from the
     catalog below it. */
     .ct-multichoice-filter {{ max-width: {MEASURE}; margin-bottom: 1; }}
+    /* MINOR cycle-2 fix #3: the SAME filter idiom, extended to a large ChoiceField's own
+    RadioSet (`widgets_choice_filter.ChoiceFieldWidget`) -- identical treatment to its
+    MultiChoiceField sibling above. */
+    .ct-choice-filter {{ max-width: {MEASURE}; margin-bottom: 1; }}
+    /* MINOR cycle-2 fix #4: a filter's own "no option matches" message gets ITS OWN class,
+    distinct from `.ct-blocked-reason` (a genuinely BLOCKED section's banner) -- same warning
+    styling, never the same selector, so the two signals are never confusable in a stylesheet
+    or DOM query. */
+    .ct-filter-no-match {{ color: $warning; padding: 1; max-width: {MEASURE}; }}
+    /* MAJOR cycle-2 fix #1 (ADR-0019 Rule 4, master-detail): one visually distinct block per
+    master row (Django-admin-inline idiom) -- a left rule marks it as NESTED content, distinct
+    from an ordinary section-body Static. */
+    .ct-md-block {{ border-left: solid $primary; padding: 0 0 1 1; margin: 1 0 0 0; height: auto; }}
+    .ct-md-row-summary {{ text-style: bold; max-width: {MEASURE}; }}
+    .ct-md-detail-label {{ text-style: italic; color: $text-muted; padding-top: 1; max-width: {MEASURE}; }}
+    .ct-md-detail-sub-label {{ color: $text-muted; max-width: {MEASURE}; }}
+    .ct-md-empty {{ color: $text-muted; max-width: {MEASURE}; }}
+    .ct-md-remove {{ min-width: 3; }}
     """
     BINDINGS = [Binding("ctrl+q", "quit_app", "Quit", show=True, priority=True),
                 Binding("ctrl+c", "quit_app", "Quit", show=False, priority=True),

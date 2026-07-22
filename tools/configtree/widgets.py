@@ -16,6 +16,7 @@ from textual.widgets import Button, Checkbox, Input, Label, ListItem, ListView, 
 from tools.configtree.fields import (ChoiceField, ConfirmField, DescriptionElement,
                                       ElucidationHeading, ElucidationValue, ListField,
                                       MultiChoiceField, TextField)
+from tools.configtree.filter_threshold import FILTER_THRESHOLD
 
 FIELD_ID_PREFIX = "ct-field-"
 
@@ -237,14 +238,12 @@ class ListFieldWidget(Vertical):
 
 
 # FILTER THRESHOLD (MEDIUM audit finding, ledger row 1130's own sibling audit: "hydration's
-# 36-checkbox catalog renders as one unbroken scroll"). Named, not inlined, so the rationale
-# lives in exactly one place: Miller (1968)/Nielsen's own working-set heuristic puts a single
-# glanceable list at roughly 7 (+-2) items (the SAME pedigree ADR-0019's C7/C28 already cite) --
-# past that, a catalog stops being a single glance and becomes a search task, the point at which
-# a filter earns its own keep (VS Code settings search / Group Policy editor idiom: the filter
-# Input appears only once the list is long enough to need one, never above a short list where it
-# would be one more control for nothing).
-MULTICHOICE_FILTER_THRESHOLD = 9
+# 36-checkbox catalog renders as one unbroken scroll"). The actual numeric bar now lives in
+# `filter_threshold.py` (cycle-2 fix round: `ChoiceFieldWidget`, in `widgets_choice_filter.py`,
+# reuses the SAME constant for its own RadioSet filter -- one home for the number, not two
+# hand-kept copies) -- this name is kept as the historical alias every existing caller/fixture
+# already imports (`from tools.configtree.widgets import MULTICHOICE_FILTER_THRESHOLD`).
+MULTICHOICE_FILTER_THRESHOLD = FILTER_THRESHOLD
 
 
 class MultiChoiceFieldWidget(Vertical):
@@ -338,7 +337,13 @@ class MultiChoiceFieldWidget(Vertical):
                 yield w
                 widgets_for_value.append(w)
             self._option_widgets[value] = widgets_for_value
-        self._no_match_static = Static("", id=f"{self.id}-no-match", classes="ct-blocked-reason")
+        # DISTINCT CLASS FROM `ct-blocked-reason` (MINOR audit finding #4, cycle-2 AUDIT.md: "the
+        # CSS class ct-blocked-reason doubles as the MultiChoiceFieldWidget's own 'no filter
+        # match' message class" -- two semantically distinct signals, section-blocked vs.
+        # filter-no-match, sharing one selector name). `ct-filter-no-match` is its own class,
+        # styled identically (`app.py`'s own CSS) but never confusable in a stylesheet/DOM query
+        # with a genuinely BLOCKED section's banner.
+        self._no_match_static = Static("", id=f"{self.id}-no-match", classes="ct-filter-no-match")
         self._no_match_static.display = False
         yield self._no_match_static
 

@@ -21,8 +21,8 @@ from tools.configtree.fields import (ChoiceField, ListField, MultiChoiceField, g
                                       set_field_value, validate_value)
 from tools.configtree.spec import ActionSpec
 from tools.configtree.widgets import (FieldError, ListFieldWidget, MultiChoiceFieldWidget,
-                                       build_field_widget, elucidation_widgets, field_widget_id,
-                                       read_field_value)
+                                       elucidation_widgets, field_widget_id, read_field_value)
+from tools.configtree.widgets_choice_filter import build_choice_or_plain_widget
 
 
 class ActionPane(Vertical):
@@ -53,7 +53,7 @@ class ActionPane(Vertical):
                     yield MultiChoiceFieldWidget(f, initial=answers[name],
                                                   on_change=self._make_multi_change(f))
                 else:
-                    yield build_field_widget(f, answers[name])
+                    yield build_choice_or_plain_widget(f, answers[name])
                     yield from elucidation_widgets(getattr(f, "help", None), "ct-field-help")
                     if isinstance(f, ChoiceField) and f.option_help:
                         for value, _ in f.options:
