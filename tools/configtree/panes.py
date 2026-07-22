@@ -70,11 +70,14 @@ class SectionPane(Vertical):
         with Horizontal(classes="ct-section-buttons"):
             yield Button("Save section", id="ct-save", variant="primary")
 
-    def refresh_blocked(self) -> None:
+    async def refresh_blocked(self) -> None:
         """Re-renders this pane (blocked reason may have changed -- another section's edit can
-        unblock or re-block this one). Called by `app.py` after ANY section's successful save."""
-        self.remove_children()
-        self.mount_all(list(self.compose()))
+        unblock or re-block this one). Called by `app.py` after ANY section's successful save.
+        `Widget.recompose()` (not a manual `remove_children`+`compose()` call -- `compose()`'s
+        own `with Vertical(...):` context-manager form only works inside Textual's own mount
+        machinery, which `recompose()` re-enters correctly) is the library's own idiom for
+        exactly this "re-render this widget's children from its `compose()` again" need."""
+        await self.recompose()
 
     def _collect_answers(self) -> tuple[dict, dict[str, str]]:
         answers: dict[str, object] = {}
@@ -99,14 +102,14 @@ class SectionPane(Vertical):
             answers[name] = val
         return answers, errors
 
-    def on_button_pressed(self, event: Button.Pressed) -> None:
+    async def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id != "ct-save" or self._blocked_reason:
             return
         answers, errors = self._collect_answers()
         for name, err_widget in self._errors.items():
             err_widget.set_text(errors.get(name, ""))
         if errors:
-            self._on_saved(self.spec, ok=False)
+            await self._on_saved(self.spec, ok=False)
             return
         result = self.spec.submit(self.state, answers)
         if not result.ok:
@@ -115,7 +118,7 @@ class SectionPane(Vertical):
                     self._errors[name].set_text(msg)
                 else:
                     self._errors[""].set_text(msg)
-            self._on_saved(self.spec, ok=False)
+            await self._on_saved(self.spec, ok=False)
             return
         if result.state_updates:
             self.state.update(result.state_updates)
@@ -127,7 +130,7 @@ class SectionPane(Vertical):
         body = self.query_one(".ct-section-body", VerticalScroll)
         for line in result.info_lines:
             body.mount(Static(line, classes="ct-info-line"))
-        self._on_saved(self.spec, ok=True)
+        await self._on_saved(self.spec, ok=True)
 
 
 class CommitPane(Vertical):
@@ -153,11 +156,14 @@ class CommitPane(Vertical):
                 f"{self.commit_spec.confirm_label} (blocked -- sections incomplete)"
             yield Button(label, id="ct-commit", variant="primary", disabled=not ready)
 
-    def refresh_readiness(self) -> None:
-        self.remove_children()
-        self.mount_all(list(self.compose()))
+    @property
+    def is_committed(self) -> bool:
+        return self._committed
 
-    def on_button_pressed(self, event: Button.Pressed) -> None:
+    async def refresh_readiness(self) -> None:
+        await self.recompose()
+
+    async def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id != "ct-commit" or self._committed:
             return
         if not all_sections_complete(self.sections, self.state):
@@ -170,4 +176,4 @@ class CommitPane(Vertical):
             body.mount(Static(line, classes="ct-info-line"))
         body.mount(Button("Finish", id="ct-finish", variant="success"))
         self.state["_commit_ok"] = result.ok
-        self._on_committed(result.ok)
+        await self._on_committed(result.ok)

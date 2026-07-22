@@ -99,15 +99,25 @@ class ConfigTreeApp(App):
         self._tree_nodes["commit"] = commit_node
         self._refresh_status()
 
-    def on_tree_node_selected(self, event: Tree.NodeSelected) -> None:
+    async def on_tree_node_selected(self, event: Tree.NodeSelected) -> None:
         data = event.node.data or {}
         switcher = self.query_one("#ct-switcher", ContentSwitcher)
         if data.get("kind") == "section":
-            switcher.current = f"pane-{data['slug']}"
+            slug = data["slug"]
+            # Re-render on EVERY visit (never cached) -- spec §3 v2's own words for both a
+            # section's field defaults ("all fields at once") and its blocked-reason ("re-
+            # checked... rendered in place"): a sibling section's save may have changed either
+            # since this pane was last shown. An unsaved, still-being-typed edit in THIS pane is
+            # the one thing this loses on navigating away before "Save section" -- the same
+            # explicit-apply tradeoff an ordinary settings dialog makes, not accidental.
+            await self._panes[slug].refresh_blocked()
+            switcher.current = f"pane-{slug}"
         elif data.get("kind") == "commit":
+            if self._commit_pane is not None and not self._commit_pane.is_committed:
+                await self._commit_pane.refresh_readiness()
             switcher.current = "pane-commit"
 
-    def _on_section_saved(self, spec: SectionSpec, *, ok: bool) -> None:
+    async def _on_section_saved(self, spec: SectionSpec, *, ok: bool) -> None:
         slug = str(spec.slug)
         done = self.state.setdefault("_section_done", set())
         errors = self.state.setdefault("_section_errors", {})
@@ -121,12 +131,12 @@ class ConfigTreeApp(App):
         # tree node's status is re-derived here, not only this one's.
         for other_slug, pane in self._panes.items():
             if other_slug != slug:
-                pane.refresh_blocked()
+                await pane.refresh_blocked()
         if self._commit_pane is not None:
-            self._commit_pane.refresh_readiness()
+            await self._commit_pane.refresh_readiness()
         self._refresh_status()
 
-    def _on_committed(self, ok: bool) -> None:
+    async def _on_committed(self, ok: bool) -> None:
         self._refresh_status()
 
     def _refresh_status(self) -> None:

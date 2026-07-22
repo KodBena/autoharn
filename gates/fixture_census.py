@@ -208,6 +208,7 @@ REGISTRY: dict[str, str] = {
     "setup-tui-destination-state-parity": "seen-red/setup-tui-destination-state-parity/run_fixtures.py",
     "setup-tui-destination-foreign-refusal": "seen-red/setup-tui-destination-foreign-refusal/run_fixtures.py",
     "setup-tui-config-file":            "seen-red/setup-tui-config-file/run_fixtures.py",
+    "setup-tui-configtree-journey":     "seen-red/setup-tui-configtree-journey/run_fixtures.py",
     "strip-provenance-banners":         "seen-red/strip-provenance-banners/run_fixtures.py",
     # panel-disposition / panel-cosign DEREGISTERED (2026-07-15, TASK C, commission item 3):
     # both suites ported to the standalone SPA repo's own tests/ (test_disposition.py,

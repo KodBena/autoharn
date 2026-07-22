@@ -1,0 +1,44 @@
+seen-red/setup-tui-configtree-journey -- banked RED evidence (both-polarity proof, fixture-census)
+
+design/FABLE-SETUP-TUI-REBUILD-SPEC.md §3 v2/§4 (2026-07-22 commission, hierarchical
+configuration editor): "one fixture drives the REAL screen list end-to-end ... focus movement,
+scrolling, arrow selection, and back/forward across screens all WITNESSED in the Pilot
+transcript -- no synthetic screen lists." This is the actual stdout of
+`.venv/bin/python seen-red/setup-tui-configtree-journey/run_fixtures.py` (a venv with
+`textual` installed -- `python3 -m venv .venv && .venv/bin/pip install textual`), against the
+REAL tools.setup_tui.steps.SECTIONS registry and the REAL tools.configtree.app.ConfigTreeApp,
+witnessed 2026-07-22:
+
+case 1a ok: late-first select of 'hydration' reads BLOCKED, reason named: 'BLOCKED -- requires: Fork/target or Birth (a destination directory) to be set first'
+case 1b ok: revisiting 'hydration' after the prerequisite is met reads UNBLOCKED
+case 2a ok (RED): invalid dedicated-db identifier 'bad name' -- section status = invalid
+case 2b ok (GREEN): the same section, corrected, now reads status = complete
+$ <repo>/bootstrap/new-project.sh /tmp/setup_tui_rehearsal_probeworldNNNN --new-world probeworldNNNN --db toy --host 192.168.122.1 --force
+  [dry-run: not executed]
+$ <repo>/bootstrap/teardown-world.sh probeworldNNNN --db toy --host 192.168.122.1 --dir /tmp/setup_tui_rehearsal_probeworldNNNN
+  [dry-run: not executed]
+case 3a ok: every real section saved clean -- status line: '10/10 sections complete -- ready to commit.'
+case 3b ok (RED-then-GREEN): commit button was disabled mid-journey, before every section was complete
+case 3c ok: commit button now enabled -- 'enabled exactly when the record is complete'
+case 3d ok: dry-run commit rendered 3 real checklist line(s), e.g. 'would save: /tmp/ctj-case3-dest/world-config.toml'
+case 3e ok: App.exit return_code == 0 (clean-completion exit-code contract)
+case 3f ok: zero residue -- /tmp/ctj-case3-dest was never created (dry-run decide-only)
+case 4a ok: arrow-key Tree navigation (3x down) + Enter selects the real 'pane-substrate' pane, no mouse and no programmatic select_node involved
+case 4b ok: Tab moves focus Tree(id='ct-tree') -> VerticalScroll(classes='ct-section-body')
+case 4c ok: the section pane's own VerticalScroll body scrolls (Offset(x=0, y=0) -> Offset(x=0, y=1))
+case 5 ok: ctrl+q -> App.return_code == 130 (interrupt exit-code convention)
+ALL CASES OK -- tools.configtree.app.ConfigTreeApp driven end-to-end through the REAL tools.setup_tui.steps.SECTIONS registry via Pilot: arbitrary-order navigation, dependency-blocked-with-reason + unblocking, per-field inline validation (both polarities), a full ten-section journey to a clean dry-run commit, keyboard/Tab/scroll navigation primitives, and ctrl+q's exit-code contract.
+
+(the two "$ .../new-project.sh"/"$ .../teardown-world.sh" lines are the REHEARSAL section's own
+live-choke-point echo under --dry-run -- "[dry-run: not executed]" per runner.run_command's own
+contract; the world name embeds a wall-clock timestamp, hence "NNNN" above -- the substance is
+identical every run, only that digit string varies.)
+
+RED legs (1a, 2a, 3b) prove the shapes this fixture claims to forbid/gate are actually caught --
+a synthetic escape of any of the three would fail this fixture red. GREEN legs (1b, 2b, 3a/c/d/e/
+f, 4, 5) prove the corresponding correct-path behavior once the prerequisite is met.
+
+DEPENDENCY: this fixture requires `textual` (the Textual UI layer's own real widgets/Pilot
+harness) -- it is NOT covered by --from-config's textual-free guarantee (that headless path has
+its own witness, seen-red/setup-tui-config-file/). Run it with a `textual`-installed
+interpreter; the venv teaching line is in this fixture's own docstring.
