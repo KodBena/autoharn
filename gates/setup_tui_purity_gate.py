@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-19T20:10:34Z
-#   last-change: 2026-07-19T20:10:34Z
-#   contributors: ab5d5bab/main
+#   last-change: 2026-07-22T00:24:35Z
+#   contributors: ab5d5bab/main, 1fa3ab69/main
 # <<< PROVENANCE-STAMP <<<
 
 """gates/setup_tui_purity_gate.py -- the §2.8 AST purity gate (design/FABLE-SETUP-TUI-PURE-CORE-
@@ -60,8 +60,33 @@ FINDING-2-created scratch-GNUPGHOME functions, which perform a real effect but O
 `plan.CallableAct`'s closure, i.e. only ever at commit time (see EXTRA_EFFECT_EXEMPT's own
 per-entry comments for the individual justification).
 
+DETECTION 3 (design/FABLE-SETUP-TUI-TYPED-UI-SPEC.md §1's closure statement): "no module in
+tools/setup_tui except ui.py/ui_textual.py may call print( or .say(" -- the typed-UI content
+vocabulary's own enforcement surface (`elements.py`'s six closed element types, `Ui.emit`). Walks
+the SAME AST for a bare `print(...)` call, OR an attribute call whose method name is `say`
+(the old, now-removed `Ui.say`/`ScriptedUi`/`InteractiveUi` shape -- kept as a detected shape so a
+reintroduced compatibility shim would still be caught, not only a literal `print`). Checked
+against `PRINT_EXEMPT`, a THIRD exemption table (module docstring's own "two different honest
+exemption sets" pattern, extended to three): `ui.py` and `ui_textual.py` are exempt wholesale
+(they ARE the rendering seam `render_text`/`emit` are defined in -- the spec's own two named
+exceptions); `runner.py` is exempt wholesale (the spec's own closure statement: "excluding ...
+runner.py subprocess passthrough of child output" -- the `$ argv`/dry-run-notice prints there are
+the choke points' own child-process-output passthrough, never operator content routed through
+`Ui`); `app.py` gets a NARROW, function-named exemption for diagnostics that fire OUTSIDE the
+normal `Ui`-mediated screen flow -- before any `Ui` exists (`_select_backend`'s "textual not
+installed" notice, printed before backend selection has even happened), or from a signal handler
+/exception path where crossing back into a `Ui` call (especially `TextualUi`'s worker-thread
+bridge) would be unsafe or could itself hang (`_drive_screens`'s `ScriptExhausted`/
+`KeyboardInterrupt` stderr lines, both `_handle_sigterm` closures, `_run_textual`'s uncaught-error
+report, `_terminate_boundary_proc`'s cleanup notice) -- these are the logic's own error/log
+diagnostics (ADR-0002 rung 3/4), P10's own discriminator for what legitimately stays a literal.
+
 LIMITATIONS, STATED HONESTLY (per the review's own instruction -- "keep the gate honest about
 what it still cannot see"):
+  - DETECTION 3 shares detection 1/2's method-call blind spot: `self.say(...)`/`obj.say(...)` IS
+    caught (any attribute call named `say`), but a `print` reached through a rebound name
+    (`p = print; p(...)`) is not -- an honest false-negative, matching this gate's existing
+    posture elsewhere.
   - This is a SYNTACTIC check. It cannot verify that an exempted function is ACTUALLY only ever
     invoked from the context its exemption claims (e.g. that `_prepare_scratch_gnupghome_raw` is
     truly reachable only from a commit-time `CallableAct` closure, or that a `subprocess.run` call
@@ -146,6 +171,43 @@ EXTRA_EFFECT_EXEMPT: dict[str, set[str]] = {
     },
     "principals_authority.py": {"_psql_rows"},  # read-only SELECT helper (list_principals/
                                                   # s41_status) -- same reasoning as probes.py.
+}
+
+# DETECTION 3's own exemption table (design/FABLE-SETUP-TUI-TYPED-UI-SPEC.md §1) -- a THIRD,
+# separate table (module docstring's DETECTION 3 section explains why each entry is here).
+PRINT_EXEMPT: dict[str, set[str]] = {
+    "ui.py": {"*"},          # the rendering seam ITSELF -- `Ui.emit` calls `print` on
+                              # `elements.render_text`'s lines; `InteractiveUi`/`ScriptedUi`'s
+                              # own prompt/answer echoes are the spec's two named exceptions.
+    "ui_textual.py": {"*"},  # `TextualUi.emit`'s print (captured into the transcript,
+                              # module docstring architecture point 2) and its one styled-write
+                              # bypass (`write_transcript_styled`) -- the spec's other named
+                              # exception.
+    "runner.py": {"*"},      # the spec's own closure statement: "excluding ... runner.py
+                              # subprocess passthrough of child output" -- the `$ argv`/
+                              # dry-run-notice prints are the choke points' own mechanism, never
+                              # operator content routed through `Ui`.
+    "app.py": {
+        "_select_backend",         # fires BEFORE any `Ui` exists (backend selection itself).
+        "_drive_screens",          # `ScriptExhausted`/`KeyboardInterrupt` stderr diagnostics --
+                                    # an abnormal-exit report, not operator content.
+        "_handle_sigterm",         # both `_run_plain`/`_run_textual`'s nested SIGTERM handlers
+                                    # share this name (`_ParentFinder` attributes each to itself);
+                                    # a signal handler must not risk a `Ui`/worker-thread bridge
+                                    # call (module docstring: "freezes the App's own asyncio
+                                    # loop" -- ui_textual.py's own SIGTERM-ordering comment).
+        "_run_textual",            # the uncaught-Textual-error report (a crash diagnostic,
+                                    # printed AFTER the App has already exited).
+        "_terminate_boundary_proc", # abnormal-exit cleanup notice -- may run from the SIGTERM
+                                    # path above, same constraint.
+    },
+    "feature_facts.py": {"<module level>"},  # the `if __name__ == "__main__":` standalone
+                                              # drift-check entry point (`python3 -m tools.
+                                              # setup_tui.feature_facts`) -- a CLI self-check in
+                                              # the shape of a gate, never reached by the wizard's
+                                              # own Ui-mediated screen flow; the SAME class of
+                                              # diagnostic gates/ itself prints outside this
+                                              # package's own scope.
 }
 
 _OS_MUTATION_VERBS = {"mkdir", "makedirs", "chmod", "replace", "remove", "rmdir", "unlink"}
@@ -275,8 +337,45 @@ def check_extra_effects(tree: ast.AST, filename: str) -> list[str]:
     return violations
 
 
+def _is_print_or_say_call(node: ast.Call) -> bool:
+    """DETECTION 3's own match predicate (module docstring): a bare `print(...)` call, or an
+    attribute call whose method name is `say` (the old, removed `Ui.say` shape -- see module
+    docstring for why this shape stays detected even though nothing currently defines it)."""
+    fn = node.func
+    if isinstance(fn, ast.Name) and fn.id == "print":
+        return True
+    if isinstance(fn, ast.Attribute) and fn.attr == "say":
+        return True
+    return False
+
+
+def check_print_say(tree: ast.AST, filename: str) -> list[str]:
+    """DETECTION 3 (design/FABLE-SETUP-TUI-TYPED-UI-SPEC.md §1's closure statement): returns
+    violation strings for `tree`, applying `PRINT_EXEMPT`'s per-file/per-function allowance. Same
+    per-file/per-function/`"*"` lookup shape as the other two detectors, over `_is_print_or_say_
+    call` and its own exemption table."""
+    exempt_functions = PRINT_EXEMPT.get(filename, set())
+    if "*" in exempt_functions:
+        return []
+
+    finder = _ParentFinder()
+    finder.visit(tree)
+
+    violations: list[str] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call) or not _is_print_or_say_call(node):
+            continue
+        owner = finder.owner.get(node)
+        qualname = owner.name if owner is not None else "<module level>"
+        if qualname in exempt_functions:
+            continue
+        line = getattr(node, "lineno", "?")
+        violations.append(f"{filename}:{line}: {_render(node)}  (inside {qualname})")
+    return violations
+
+
 def scan_file(path: str) -> list[str]:
-    """Reads and AST-parses the REAL file at `path`, running BOTH detectors, checked against
+    """Reads and AST-parses the REAL file at `path`, running ALL THREE detectors, checked against
     their own tables keyed by its base filename. A syntax error in the file is itself reported as
     a violation line (never silently skipped -- an unparseable module cannot be honestly
     certified clean)."""
@@ -287,15 +386,24 @@ def scan_file(path: str) -> list[str]:
         tree = ast.parse(source, filename=filename)
     except SyntaxError as exc:
         return [f"{filename}: SyntaxError, cannot check purity: {exc}"]
-    return check_tree(tree, filename) + check_extra_effects(tree, filename)
+    return (check_tree(tree, filename) + check_extra_effects(tree, filename)
+            + check_print_say(tree, filename))
 
 
 def scan_package(package_dir: str = PACKAGE_DIR) -> list[str]:
+    """Walks `package_dir` RECURSIVELY (design/FABLE-SETUP-TUI-TYPED-UI-SPEC.md §1's closure
+    statement covers every module under `tools/setup_tui/`, not only its top level -- the new
+    `content/` sub-package included) -- `__pycache__` is the one directory skipped, same as every
+    other tree-walking gate in this project. Each file is still checked against the exemption
+    tables by its BASE filename (unchanged), which stays unambiguous: every filename under this
+    package, top-level or in `content/`, is unique today."""
     violations: list[str] = []
-    for name in sorted(os.listdir(package_dir)):
-        if not name.endswith(".py"):
-            continue
-        violations.extend(scan_file(os.path.join(package_dir, name)))
+    for dirpath, dirnames, filenames in os.walk(package_dir):
+        dirnames[:] = sorted(d for d in dirnames if d != "__pycache__")
+        for name in sorted(filenames):
+            if not name.endswith(".py"):
+                continue
+            violations.extend(scan_file(os.path.join(dirpath, name)))
     return violations
 
 
@@ -303,14 +411,16 @@ def main() -> int:
     violations = scan_package()
     if violations:
         print(f"setup_tui_purity_gate: {len(violations)} violation(s) -- a runner choke point "
-              f"(run_command/start_background/write_file) or a direct file-write/os-mutation/"
-              f"tempfile/subprocess call was found outside its declared exception site:")
+              f"(run_command/start_background/write_file), a direct file-write/os-mutation/"
+              f"tempfile/subprocess call, or a bare print(/.say( call was found outside its "
+              f"declared exception site:")
         for v in violations:
             print(f"  {v}")
         return 1
-    print("setup_tui_purity_gate: clean ✓ -- every runner choke-point call, and every direct "
-          "file-write/os-mutation/tempfile/subprocess call, under tools/setup_tui/ is confined "
-          "to a declared exception site (design/FABLE-SETUP-TUI-PURE-CORE-SPEC.md §2.8)")
+    print("setup_tui_purity_gate: clean ✓ -- every runner choke-point call, every direct "
+          "file-write/os-mutation/tempfile/subprocess call, and every print(/.say( call, under "
+          "tools/setup_tui/ is confined to a declared exception site (design/FABLE-SETUP-TUI-"
+          "PURE-CORE-SPEC.md §2.8, design/FABLE-SETUP-TUI-TYPED-UI-SPEC.md §1)")
     return 0
 
 

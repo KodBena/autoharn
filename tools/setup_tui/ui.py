@@ -1,7 +1,7 @@
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-18T21:31:20Z
-#   last-change: 2026-07-19T17:37:34Z
-#   contributors: ab5d5bab/main
+#   last-change: 2026-07-22T00:09:02Z
+#   contributors: ab5d5bab/main, 1fa3ab69/main
 # <<< PROVENANCE-STAMP <<<
 
 """tools/setup_tui/ui.py -- the ONE numbered-menu UI substrate (ADR-0012 P1: one home for the
@@ -31,6 +31,15 @@ Every method also ECHOES the question and the answer actually used to stdout, so
 a scripted run reads exactly like a transcript of an interactive one -- `TextualUi` keeps this
 property too (design/FABLE-SETUP-TUI-TEXTUAL-SPEC.md §3: the transcript pane carries everything
 the flow says, and its `$ `-prefixed lines stay text-identical to the plain backend's).
+
+`Ui.emit(element)` (design/FABLE-SETUP-TUI-TYPED-UI-SPEC.md, the typed-UI content vocabulary) is
+the ONE place a screen shows content to the operator -- `element` is one of the six closed types
+in `tools/setup_tui/elements.py` (`Heading`/`Paragraph`/`Table`/`StatusLine`/`Note`/`Rule`). The
+old free-text `Ui.say(str)`/`Ui.banner(str)` are REMOVED, not shimmed: a shim would let the old
+`str` register persist indefinitely, the same silent-fallback class the spec's field strategy
+condemns. Every call site across `tools/setup_tui/` converts to `emit` in the same commission
+that adds it (spec §1's closure statement) -- `gates/setup_tui_purity_gate.py`'s new check
+enforces no module but this one and `ui_textual.py` may call `print(`/`.say(` directly.
 """
 from __future__ import annotations
 
@@ -38,6 +47,8 @@ import contextlib
 import sys
 from collections.abc import Iterator
 from pathlib import Path
+
+from tools.setup_tui.elements import render_text
 
 
 class ScriptExhausted(RuntimeError):
@@ -48,14 +59,13 @@ class ScriptExhausted(RuntimeError):
 class Ui:
     """Shared surface both backends implement. Never instantiated directly."""
 
-    def banner(self, text: str) -> None:
-        print()
-        print("=" * 78)
-        print(text)
-        print("=" * 78)
-
-    def say(self, text: str = "") -> None:
-        print(text)
+    def emit(self, element: object) -> None:
+        """Prints `render_text(element)`'s lines verbatim -- the canonical rendering every
+        backend but `TextualUi` (which overrides this to also drive the sidebar/header ordinal
+        off a `Heading` and to style a refusal `Note`, `tools/setup_tui/ui_textual.py`) uses
+        unchanged."""
+        for line in render_text(element):
+            print(line)
 
     def ask_text(self, prompt: str, default: str | None = None) -> str:
         raise NotImplementedError

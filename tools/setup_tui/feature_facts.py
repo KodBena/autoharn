@@ -60,7 +60,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from tools.setup_tui import durable_decisions
-from tools.setup_tui.feature_facts_data import RAW_ENTRIES
+from tools.setup_tui.content.feature_facts_data import RAW_ENTRIES
 
 
 @dataclass(frozen=True)

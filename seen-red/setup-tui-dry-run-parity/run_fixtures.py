@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-19T01:17:49Z
-#   last-change: 2026-07-19T02:45:59Z
-#   contributors: ab5d5bab/main
+#   last-change: 2026-07-22T00:17:47Z
+#   contributors: ab5d5bab/main, 1fa3ab69/main
 # <<< PROVENANCE-STAMP <<<
 
 """run_fixtures.py -- WDR1 and WDR2, the two `--dry-run` witnesses (design/FABLE-SETUP-TUI-SPEC.md
@@ -39,7 +39,8 @@ committed, live run; a `--dry-run` run never reaches that call at all, so it nev
 line for a queued act. Comparing raw `$ ` lines between live and dry therefore compares "every
 act's real, shell-quoted commit-time echo" against "nothing" -- not the claim WDR2 exists to
 prove. The Phase-2-shaped equivalent of the SAME claim is `Plan.render()`'s own PRE-commit table
-(the "SCREEN ITEM ACT" block `_execute_commit` prints via `ui.say(plan.render())` UNCONDITIONALLY,
+(the "SCREEN ITEM ACT" block `_execute_commit` prints via `ui.emit(Paragraph(plan.render()))`
+UNCONDITIONALLY,
 before it branches on `dry_run` at all) -- both a live run (before it commits) and a dry run
 (which stops there) print this EXACT table for the same decisions, by construction (this is
 `plan.py`'s own WPC7 property: "a dry run's plan rendering is byte-identical to a committed run's

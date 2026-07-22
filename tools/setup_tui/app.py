@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-18T21:34:30Z
-#   last-change: 2026-07-21T23:46:56Z
-#   contributors: ab5d5bab/main, 43f77bff/main
+#   last-change: 2026-07-22T00:17:30Z
+#   contributors: ab5d5bab/main, 43f77bff/main, 1fa3ab69/main
 # <<< PROVENANCE-STAMP <<<
 
 """tools/setup_tui/app.py -- entry point for the guided setup wizard
@@ -74,6 +74,8 @@ import subprocess
 import sys
 
 from tools.setup_tui.checklist import Checklist
+from tools.setup_tui.content import app_data as AD
+from tools.setup_tui.elements import Heading, Note, Paragraph, Rule
 from tools.setup_tui.screens import SCREENS
 from tools.setup_tui.ui import ScriptExhausted, Ui, build_ui
 
@@ -143,36 +145,15 @@ def _intro(ui: Ui, args: argparse.Namespace) -> None:
     """The banner + dry-run notice every backend shows, identically, before the screen loop
     starts -- factored out so `_run_plain` and `_run_textual` (via the Textual worker body) call
     the exact same sequence of `Ui` calls rather than two copies that could drift."""
-    ui.banner("autoharn setup — guided wizard (tools/setup_tui)")
-    ui.say("Driver of existing verbs only: every action below shows the exact command it runs "
-           "and streams that command's real output. If this process dies mid-flow, you can "
-           "finish by hand from what was printed.")
-    # The guarantee envelope (design/FABLE-SETUP-TUI-PURE-CORE-SPEC.md §2.6, commission ledger
-    # rows 1823 point 2 / 1825): stated here in the SAME capability terms the spec itself uses --
-    # a structural property of the pure-core restructure, not an aspiration. Restated (not
-    # duplicated -- ADR-0012 P1) in user-guide/USER-GPG-TRUST-LAYER-FAQ.md's setup entry and in
-    # user-guide/USER-RECIPES-FAQ.md's setup entry, both citing this same spec section as the one
-    # home for the claim's substance.
-    ui.say("")
-    ui.say("Guarantee envelope (structural, per design/FABLE-SETUP-TUI-PURE-CORE-SPEC.md §2.6):")
-    ui.say("  BEFORE commit: nothing to clean up. Every screen only decides and queues -- kill "
-           "this process at any point before the final confirm and the destination, your "
-           "keyring, and every ledger are untouched (verified before/after, WPC1/WPC3).")
-    ui.say("  DURING commit: per-act atomicity (each write/command/background-start either "
-           "fully happens or fully doesn't) plus a durable commit journal in the destination "
-           "naming which step runs next -- a mid-commit death resumes cleanly on re-entry, or "
-           "finishes by hand from the journal and the streamed output above it (WPC4).")
-    ui.say("  NOT claimed: whole-flow atomicity across Postgres + filesystem + GPG + a "
-           "background process. Decide-then-commit shrinks the exposure window from the whole "
-           "session to the commit phase; it does not eliminate it.")
+    ui.emit(Heading(AD.INTRO_HEADING))
+    ui.emit(Paragraph(AD.INTRO_DRIVER_LINE))
+    ui.emit(Rule())
+    ui.emit(Paragraph(AD.GUARANTEE_ENVELOPE_HEADING))
+    for text in AD.GUARANTEE_ENVELOPE_PARAGRAPHS:
+        ui.emit(Paragraph(text))
     if args.dry_run:
-        ui.say("")
-        ui.say("*** --dry-run: NOTHING below is destructive or externally visible. Every act "
-               "is computed and shown (exact argv, exact file paths + a content summary, exact "
-               "led rows) but NOT performed -- no file written outside this process, no "
-               "database act, no led write, no process started, no port bound. Read-only "
-               "probes (preflight, connection checks, the pg_hba read) stay live. The closing "
-               "checklist renders these as WOULD-DO. ***")
+        ui.emit(Rule())
+        ui.emit(Note(AD.DRY_RUN_NOTICE, tone="warn"))
 
 
 def _drive_screens(ui: Ui, cl: Checklist, state: dict, state_holder: list[dict],

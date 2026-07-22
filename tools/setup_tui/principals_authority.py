@@ -56,7 +56,7 @@ from pathlib import Path
 
 from tools.setup_tui import probes
 from tools.setup_tui.plan import CommandAct
-from tools.setup_tui.principals_authority_data import (
+from tools.setup_tui.content.principals_authority_data import (
     CLASS_CHOICES,
     LESSON_CHARTER,
     LESSON_COMPETENCE,

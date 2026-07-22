@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-21T21:49:51Z
-#   last-change: 2026-07-21T21:53:08Z
-#   contributors: 43f77bff/main
+#   last-change: 2026-07-22T00:45:35Z
+#   contributors: 43f77bff/main, 1fa3ab69/main
 # <<< PROVENANCE-STAMP <<<
 
 """seen-red/setup-tui-destination-birth-guard/run_fixtures.py -- spec §5's third witness-set
@@ -66,6 +66,22 @@ def _load_pinned_screens(commit: str, scratch: str):
     return mod
 
 
+class _CompatScriptedUi(ScriptedUi):
+    """The RED leg drives a PINNED, pre-`emit` `screens.py` (`PRE_FIX_COMMIT`), which still calls
+    the OLD `ui.banner`/`ui.say` shape -- current `ScriptedUi` no longer defines either
+    (design/FABLE-SETUP-TUI-TYPED-UI-SPEC.md §1: `Ui.say`/`Ui.banner` are REMOVED, not shimmed).
+    This subclass is that shim, but scoped to THIS fixture's own historical-replay need, never
+    the production `Ui` class -- the spec's "no compatibility shim" is about the live seam every
+    CURRENT screen calls through, not a fixture intentionally re-running old code for a red/green
+    comparison."""
+
+    def banner(self, text: str) -> None:
+        print(text)
+
+    def say(self, text: str = "") -> None:
+        print(text)
+
+
 def _answers_path(scratch: str, lines: list[str]) -> str:
     path = os.path.join(scratch, "answers.txt")
     with open(path, "w", encoding="utf-8") as f:
@@ -92,7 +108,7 @@ def main() -> int:
         # --- RED: the pinned pre-fix module queues the birth into FOREIGN content anyway ---
         prefix_mod = _load_pinned_screens(PRE_FIX_COMMIT, tmp)
         cl_red = Checklist()
-        ui_red = ScriptedUi(_answers_path(tmp, ["yes", "scratchworld-red", "-"]))
+        ui_red = _CompatScriptedUi(_answers_path(tmp, ["yes", "scratchworld-red", "-"]))
         result_state = prefix_mod.screen_birth(ui_red, cl_red, dict(base_state))
         plan_red = result_state.get("plan")
         queued_red = bool(plan_red and any(
