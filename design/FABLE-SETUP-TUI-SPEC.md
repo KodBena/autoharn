@@ -211,10 +211,12 @@ genuinely does not exist on disk (birth's own write was simulated) — `screen_b
 destination-exists check and `screen_hydration`'s led-existence check both trust
 `state["dest_would_exist"]` (set by a real-or-simulated successful birth/fork-copy) in that one
 case, and still REFUSE for a true out-of-sequence entry with no birth in the run at all.
-Witnessed: WDR1 and WDR2 against real infra (a live db, a real boundary_service) in
-[seen-red/setup-tui-dry-run-parity](../seen-red/setup-tui-dry-run-parity/run_fixtures.py); WDR3
-(no live infra needed) as case 9 of
-[seen-red/setup-tui-scripted-smoke](../seen-red/setup-tui-scripted-smoke/run_fixtures.py).
+Witnessed (at the time, against the pre-rebuild teletype architecture): WDR1 and WDR2 against
+real infra (a live db, a real boundary_service) in `seen-red/setup-tui-dry-run-parity` (WDR3, no
+live infra needed, as case 9 of `seen-red/setup-tui-scripted-smoke`) -- BOTH FIXTURES DELETED,
+2026-07-22, by design/FABLE-SETUP-TUI-REBUILD-SPEC.md's wholesale rebuild (their own subject
+matter, the `--scripted`/teletype flow, no longer exists; not re-linked here since this whole
+section describes superseded architecture, kept for history only).
 
 ## Build conditions
 

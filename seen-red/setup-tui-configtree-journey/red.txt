@@ -1,0 +1,90 @@
+seen-red/setup-tui-configtree-journey -- banked RED evidence (both-polarity proof, fixture-census)
+
+design/FABLE-SETUP-TUI-REBUILD-SPEC.md §3 v2/§4 (2026-07-22 commission, hierarchical
+configuration editor): "one fixture drives the REAL screen list end-to-end ... focus movement,
+scrolling, arrow selection, and back/forward across screens all WITNESSED in the Pilot
+transcript -- no synthetic screen lists." Four same-day maintainer reviews shaped this fixture:
+(1) LIVE-MODEL REBUILD: the maintainer rejected the per-section Save button ("the form IS a live
+view of the model") -- NO CASE presses a save button (there is none); every field write is a live
+widget `.value =` assignment. (2) STATE ALIASING: a live defect caught from the running UI alone
+("toggling a checkbox in one section toggled a corresponding-ish checkbox in a different one") --
+case 0 reproduces that EXACT observation across every field kind and proves the structural fix
+(`ids.ScopedFieldKey`). (3) SINGLE-EDITABLE-HOME (ADR-0019 + the maintainer's own ADR-0002
+citation, "a duplicated mirror/projection of a value is a type error and refused on TUI start"):
+NO read-only reference anywhere either -- "dest" is owned by Fork/target, "world" by Birth; every
+other section that used to declare either had the field DROPPED entirely -- case 7 proves the
+single editable home for both facts, live propagation to a dependent section's `blocked()` check,
+and a RED-first load-time refusal for a synthetic double-owner declaration. (4) READABLE MEASURE:
+"the principal-registration flow greeted him with ONE line of ~348 characters spanning his full
+tmux width -- unbounded text measure" -- case 8 reproduces the class RED-first (a synthetic
+uncapped Static at 400 columns), then sweeps every real section AND the original emitting site
+(the "Add a principal" modal) at a 400-column terminal, proving nothing exceeds
+`tools.configtree.measure.MEASURE` (78).
+
+This is the actual stdout of `.venv/bin/python seen-red/setup-tui-configtree-journey/
+run_fixtures.py` (a venv with `textual` installed -- `python3 -m venv .venv && .venv/bin/pip
+install textual`), against the REAL tools.setup_tui.steps.SECTIONS registry and the REAL
+tools.configtree.app.ConfigTreeApp, witnessed 2026-07-22:
+
+case 0a ok (the maintainer's exact reproduction, FIXED): toggling preflight's 'run' checkbox to False leaves substrate's OWN 'run' checkbox at True -- no cross-section aliasing
+case 0b ok: typing into substrate's 'host' field ('aliasing-probe-host') leaves rehearsal's OWN 'host' field unchanged ('192.168.122.1')
+case 0c ok: typing into birth's 'name' field leaves signed-genesis's OWN unrelated 'name' field (a GPG key Name-Real) untouched
+case 0d ok: the underlying model itself holds two DIFFERENT values for the same field spec under two different section keys -- not just a widget-level accident
+case 0e ok: a synthetic ChoiceField sharing one name across two sections resolves to two INDEPENDENT model slots (get_field_value/set_field_value, the library's own primitives) -- the fix is structural (ids.ScopedFieldKey), not an instance patch
+case 0f ok: a synthetic ListField sharing one name across two sections resolves to two INDEPENDENT model slots too -- all four field kinds proven alias-proof
+case 1a ok: late-first select of 'hydration' reads BLOCKED, reason named: 'BLOCKED -- requires: Fork/target or Birth (a destination directory) to be set first' (tree icon: '⧖ Hydration')
+case 1b ok: hydration's tree icon flips the INSTANT fork-target's dest is typed -- '⧖ Hydration' -> '✓ Hydration' -- no save, no re-visit to hydration at all
+case 2a ok (RED, live, no save): typing 'bad name' shows inline error 'database name must match [A-Za-z0-9_]+' and section status = invalid, focus never left the field
+case 2b ok (GREEN, live, no save): correcting the SAME field clears the inline error and the section reads complete, still no save press anywhere
+case 3a ok: every real section reads complete from LIVE TYPING ALONE, no save anywhere -- status line: '10/10 sections complete -- ready to commit.'
+case 3b ok (RED-then-GREEN): commit button was disabled mid-journey, before every section was complete
+case 3c ok: commit button now enabled -- 'enabled exactly when the record is complete'
+$ <repo>/bootstrap/new-project.sh /tmp/setup_tui_rehearsal_probeworldNNNN --new-world probeworldNNNN --db toy --host 192.168.122.1 --force
+  [dry-run: not executed]
+$ <repo>/bootstrap/teardown-world.sh probeworldNNNN --db toy --host 192.168.122.1 --dir /tmp/setup_tui_rehearsal_probeworldNNNN
+  [dry-run: not executed]
+case 3d ok: ONE commit press ran the full submit sweep (every section's real business logic, in order) then rendered 3 real checklist line(s), e.g. 'would save: /tmp/ctj-case3-dest/world-config.toml'
+case 3e ok: App.exit return_code == 0 (clean-completion exit-code contract)
+case 3f ok: zero residue -- /tmp/ctj-case3-dest was never created (dry-run decide-only)
+$ <repo>/bootstrap/new-project.sh /tmp/setup_tui_rehearsal_probeworldNNNN --new-world probeworldNNNN --db toy --host 192.168.122.1 --force
+  [dry-run: not executed]
+$ <repo>/bootstrap/teardown-world.sh probeworldNNNN --db toy --host 192.168.122.1 --dir /tmp/setup_tui_rehearsal_probeworldNNNN
+  [dry-run: not executed]
+case 4a ok (RED): commit-sweep business rule ('statement' required inside submit, not a field validator) halts the commit, marks signed-genesis invalid, recorded: {'signed-genesis': {'statement': 'required'}}
+case 4b ok: revisiting signed-genesis shows the real refusal inline on 'statement': 'required'
+$ <repo>/bootstrap/new-project.sh /tmp/setup_tui_rehearsal_probeworldNNNN --new-world probeworldNNNN --db toy --host 192.168.122.1 --force
+  [dry-run: not executed]
+$ <repo>/bootstrap/teardown-world.sh probeworldNNNN --db toy --host 192.168.122.1 --dir /tmp/setup_tui_rehearsal_probeworldNNNN
+  [dry-run: not executed]
+case 4c ok (GREEN): fixing the one field and pressing Commit again succeeds
+case 5a ok: arrow-key Tree navigation (3x down) + Enter selects the real 'pane-substrate' pane, no mouse and no programmatic select_node involved
+case 5b ok: Tab moves focus Tree(id='ct-tree') -> VerticalScroll(classes='ct-section-body')
+case 5c ok: the section pane's own VerticalScroll body scrolls (Offset(x=0, y=0) -> Offset(x=0, y=1))
+case 6 ok: ctrl+q -> App.return_code == 130 (interrupt exit-code convention)
+case 7a ok: owner_of(sections, 'dest') == NodeId(value='fork-target'), owner_of(sections, 'world') == NodeId(value='birth') -- matches the chosen owners
+case 7b ok: 'dest' renders editable in Fork/target ONLY -- every other section that needs it (birth/principals-authority/signed-genesis/observability/hydration), now UNBLOCKED and showing its real fields, has NO 'dest' widget at all
+case 7c ok: editing dest in its OWNER (Fork/target) then world in ITS owner (Birth) propagates live to boundary's own blocked() check -- '⧖ Boundary' -> '⧖ Boundary' -> '✓ Boundary' -- boundary itself never selected during either edit
+case 7d ok: 'world' renders editable in Birth ONLY -- boundary, now UNBLOCKED and showing its real fields, has NO 'world' widget at all -- single editable home for both shared facts, no mirrors, confirmed live
+case 7e ok (RED-FIRST, load-time refusal): a synthetic double-owner declaration of 'dest' across two sections is refused BEFORE any Textual machinery starts (construction-time raise, ADR-0002's own highest rung): tools.configtree: shared field 'dest' is declared editable by MORE THAN ONE section (synth-a, synth-b) -- a shared fact renders in exactly one owning section (ADR-0019 single-editable-home; the maintainer's own ADR-0002 citation: a duplicated projection of a value is a type error). Pick ONE owner and drop the field declaration from every other section listed above (they read the value from shared state directly, never via a second field).
+case 8a ok (RED-FIRST, synthetic): an UNCAPPED Static holding a 400-character string at a 400-column terminal renders 400 columns wide, one line -- reproduces the maintainer's own observed class before any fix is applied
+case 8b ok (GREEN): every REAL section's own prose widgets, at a 400-column terminal, stay within MEASURE=78 (widest seen: 78 columns) -- swept ALL 10 sections, not just principal registration
+case 8c ok (GREEN, the original emitting site): the 'Add a principal' modal's 'Class' field label -- the exact site that measured 394 characters before this fix -- stays within MEASURE=78 at a 400-column terminal
+case 8d ok: 'agent_class' is now a real ChoiceField (label 'Class', 5 chars) -- the content-level half of the fix, not merely wrapped
+ALL CASES OK -- tools.configtree.app.ConfigTreeApp driven end-to-end through the REAL tools.setup_tui.steps.SECTIONS registry via Pilot, LIVE-MODEL semantics throughout (no per-section save exists): a state-aliasing reproduction and structural fix across every field kind, arbitrary-order navigation with a blocked-to-unblocked flip on a SINGLE keystroke, live inline validation both polarities with focus never leaving the field, a full ten-section journey typed live to a clean dry-run commit via the ONE commit button, a commit-time business-rule refusal (red) and its retry (green), keyboard/Tab/scroll navigation primitives, ctrl+q's exit-code contract, single-editable-home for both shared facts (dest owned by Fork/target, world by Birth) with a RED-first load-time refusal for a synthetic double-owner declaration, and a readable-measure width cap (MEASURE=78) swept across every section plus the original emitting site (the 'Add a principal' modal), RED-first against a synthetic uncapped Static at a 400-column terminal.
+
+(the three repeated "$ .../new-project.sh"/"$ .../teardown-world.sh" pairs are the REHEARSAL
+section's own live-choke-point echo under --dry-run -- "[dry-run: not executed]" per
+runner.run_command's own contract, one per commit-sweep attempt across cases 3/4; the world name
+embeds a wall-clock timestamp, hence "NNNN" above -- the substance is identical every run, only
+that digit string varies.)
+
+RED legs (0a/0b/0c reproducing the maintainer's exact live defect; 2a; 3b; 4a; 7e the synthetic
+double-owner load-time refusal; 8a the synthetic uncapped-Static reproduction) prove the shapes
+this fixture claims to forbid/gate are actually caught -- a regression of any of them would fail
+this fixture red. GREEN legs (0d/0e/0f structural proof; 1b; 2b; 3a/c/d/e/f; 4b/c; 5; 6; 7a/b/c/d;
+8b/c/d) prove the corresponding correct-path/fixed behavior once the prerequisite is met.
+
+DEPENDENCY: this fixture requires `textual` (the Textual UI layer's own real widgets/Pilot
+harness) -- it is NOT covered by --from-config's textual-free guarantee (that headless path has
+its own witness, seen-red/setup-tui-config-file/). Run it with a `textual`-installed
+interpreter; the venv teaching line is in this fixture's own docstring.

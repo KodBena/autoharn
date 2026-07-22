@@ -50,7 +50,7 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-from tools.setup_tui.content.durable_decisions_data import RAW_CATALOG
+from tools.setup_tui import content
 from tools.setup_tui.plan import Hole, WriteAct
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -101,7 +101,7 @@ class DurableDecision:
 # after this construction) -- inside the 7-15 range, 15 is a hard ceiling not approached.
 # ---------------------------------------------------------------------------------------------
 
-CATALOG: list[DurableDecision] = [DurableDecision(**entry) for entry in RAW_CATALOG]
+CATALOG: list[DurableDecision] = [DurableDecision(**entry) for entry in content.DURABLE_DECISIONS]
 
 # The non-catalog hydration items that remain as-is (spec §3, "Relation to the existing screen-8
 # items"): per-world facts, not durable decisions -- named here only so feature_facts.py and the

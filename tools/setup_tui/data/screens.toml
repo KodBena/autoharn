@@ -1,0 +1,62 @@
+# tools/setup_tui/data/screens.toml -- confirm-prompt questions and teaching blocks
+# (ADR-0012 P10). Loaded by tools/setup_tui/steps.py.
+
+genesis_gate_hard_stop_teaching = ["  GENESIS-GATE HARD STOP -- the ceremony did not verify, and the commit is halting HERE (nothing after this step ran).", "  WHAT FAILED: verify-commission could not confirm the genesis commission's gpg signature against the keys this world trusts (this destination's keys/).", "  WHY IT MATTERS: this signature is what every later record in this world's ledger anchors its provenance to -- a world born on an unverifiable genesis has a permanently unverifiable audit chain (AUTOHARN_BACKFLOW.md finding 1's class).", "  WHAT TO CHECK: the fingerprint pinned in keys/ (see keys/README.md) matches the key that actually signed; the GNUPGHOME/keyring used to sign is the same one whose public half was exported; the .asc signature file was not corrupted or hand-edited.", "  HOW TO RESUME: fix the keyring/keys/ mismatch, then re-run this tool against the SAME destination -- the commit journal resumes at this exact still-PENDING step (WPC4). If the real defect is that the WRONG KEY signed (not a keyring-side fix), resuming will not repair it: the sign step already ran and is journaled DONE, so a resumed run never re-signs -- re-sign and re-verify by hand (gpg + <dest>/verify-commission), or start a fresh birth.", "  OVERRIDE: re-run with --accept-unverified-genesis to proceed anyway, eyes open -- the override is recorded as its own checklist row, never silent."]
+
+[prompts]
+governed_files_extend = "Extend the governed-files pattern set beyond the default (*.py) for the other languages this project contains?"
+foreign_scaffold = "Scaffold into this existing content anyway? (new-project.sh will be told to accept it explicitly -- no silent merge)"
+principals_authority = "Constitute principals & authority now? (register identities, grant competences, assert typed relations, and register role charters -- every world already has author/reviewer/commissioner from the scaffold, so skipping leaves a complete world; propaedeutic value is the point of walking it once)"
+signed_genesis_ceremony = "Run the Signed genesis ceremony now? (generates a keypair, exports the public half into this world's keys/, signs the genesis commission, and verifies it against your own key -- one-time, no ongoing signing burden afterward)"
+
+[[partial_birth_teaching]]
+kind = "rule"
+text = ""
+
+[[partial_birth_teaching]]
+kind = "refusal"
+text = "  --- REFUSED: new-project.sh's own \"already exists\" gate ---"
+
+[[partial_birth_teaching]]
+kind = "paragraph"
+text = "  deployment.json already exists at '{dest}' -- new-project.sh refused rather than silently overwrite it (pass --force to replace it, which this screen deliberately does NOT do on your behalf)."
+
+[[partial_birth_teaching]]
+kind = "rule"
+text = ""
+
+[[partial_birth_teaching]]
+kind = "paragraph"
+text = "  Likely state: a PARTIAL birth. The most common way to reach this refusal is a prior '{world}' birth that died mid-DDL (killed, crashed, network drop) after new-project.sh had already written deployment.json but before the kernel lineage chain finished applying -- the world is neither cleanly born nor cleanly absent."
+
+[[partial_birth_teaching]]
+kind = "rule"
+text = ""
+
+[[partial_birth_teaching]]
+kind = "paragraph"
+text = "  Safe next step -- teardown, NOT a --force re-birth:"
+
+[[partial_birth_teaching]]
+kind = "paragraph"
+text = "    $ {teardown_argv}"
+
+[[partial_birth_teaching]]
+kind = "paragraph"
+text = "    (teardown-world.sh will ask you to type '{world}' back to confirm -- it is destructive and irreversible: DROP SCHEMA ... CASCADE / DROP ROLE, no undo.)"
+
+[[partial_birth_teaching]]
+kind = "paragraph"
+text = "  HONEST CAVEAT: teardown-world.sh was built and witnessed against CLEANLY-born worlds. Running it against a PARTIAL kernel chain (this situation) is UNEXERCISED -- it is very likely to work (the same DROP SCHEMA/ROLE statements apply regardless of how far the chain got), but it has not been witnessed doing so. If teardown itself errors, that is new information for the same row below, not a second dead end to solve alone."
+
+[[partial_birth_teaching]]
+kind = "rule"
+text = ""
+
+[[partial_birth_teaching]]
+kind = "paragraph"
+text = "  KNOWN DEAD END, do not attempt: `new-project.sh --force --new-world` against this same destination. s15-schema.sql (kernel/lineage, frozen-record) is non-idempotent under re-application -- a --force re-birth over a partial chain hits 'no unique or exclusion constraint matching the ON CONFLICT specification' partway through DDL, a KERNEL gap this build does not own or patch (ledger row 1792: routed to the maintainer/Fable-spec lane, parked pending bandwidth -- NOT this build's to fix)."
+
+[[partial_birth_teaching]]
+kind = "paragraph"
+text = "  --- end ---"

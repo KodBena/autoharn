@@ -1,0 +1,56 @@
+# tools/setup_tui/data/principals_authority.toml -- Principals & authority screen data
+# (ADR-0012 P10). Loaded by tools/setup_tui/principals_authority.py.
+
+[[class_choice]]
+value = "human"
+label = "human -- a person; the only class a key binding (led principal bind-key) or a managerial/financial-independence review claim (s41 D-6) may attach to"
+
+[[class_choice]]
+value = "model"
+label = "model -- a named model identity (e.g. a specific Claude model)"
+
+[[class_choice]]
+value = "subagent"
+label = "subagent -- a dispatched sub-invocation acting under a model principal"
+
+[[class_choice]]
+value = "tool"
+label = "tool -- a non-agentic script/process principal"
+
+[[relation_choice]]
+value = "acts-for"
+label = "acts-for -- subject is REPRESENTABLE delegation for object (a recorded declaration, not enforcement -- s41 D-2)"
+
+[[relation_choice]]
+value = "dispatched-by"
+label = "dispatched-by -- subject was dispatched by object (the declaration; the WITNESS of the fact remains the stamp pair, denominated separately)"
+
+[[relation_choice]]
+value = "same-natural-person"
+label = "same-natural-person -- subject and object are the same human (canonicalized to lower-id subject, kernel-CHECKed; symmetric)"
+
+[[relation_choice]]
+value = "succeeds"
+label = "succeeds -- subject is the sanctioned successor of object (the v1 path back from a suspended/revoked principal -- no reinstatement verb exists)"
+
+[[scaffold_principal]]
+name = "author"
+agent_class = "model"
+purpose = "the model identity that authored this world's first commit -- self-attributed genesis exception, s40 birth sequence step 1"
+
+[[scaffold_principal]]
+name = "reviewer"
+agent_class = "subagent"
+purpose = "registered automatically through the s40 FULL ceremony at birth (bootstrap/new-project.sh); do not re-register"
+
+[[scaffold_principal]]
+name = "commissioner"
+agent_class = "human"
+purpose = "registered automatically through the s40 FULL ceremony at birth; the maintainer's own FULL-mode signing act uses this principal"
+
+[lessons]
+register = "CONSTITUTES: a new identity anchor row plus its principal_registered event -- append-only, attributed, dated, with a stated purpose (kernel/lineage/s40-principal-identity-events.sql Element 3: a bare anchor cannot commit without this event, atomically). DOES NOT: grant the principal any capability, role, or standing to write under -- registration is EXISTENCE, not authority. A registered principal cannot write under its own name until a standing declaration binds a db role to it (led principal declare-standing), and this screen's charter/competence/relation acts are separate ceremonies again."
+competence = "CONSTITUTES: a recorded BELIEF that this principal is competent for a named activity, at a stated band, on a stated basis -- attributed, dated, retractable only by a superseding withdrawal (kernel/lineage/s41-principal-bindings-and-relations.sql D-5/G13). DOES NOT: constitute a permission bit or gate anything -- RECORDABLE, NOT YET GATING in v1 (no review path consults competence before accepting an act; enforcement is a named follow-on amendment, s41 D-5). Band/basis are free text in v1, a RATIFIED PLACEHOLDER (s41 §9(g)), not a settled judgment that no closed vocabulary is ever warranted."
+relation = "CONSTITUTES: a typed, attributed, dated declaration of a relationship between two registered principals, in the kernel's own closed vocabulary (acts-for | dispatched-by | same-natural-person | succeeds -- kernel/lineage/s41-principal-bindings-and-relations.sql D-2), retractable only by a superseding retraction restating the same triple. DOES NOT: enforce anything -- a relation is REPRESENTABLE delegation/supervision/succession, not an enforced permission; 'acts-for' in particular records a declared fact, it does not make the object's writes flow through the subject at the kernel level."
+charter = "CONSTITUTES: binding a role's governing charter TEXT (hash-verified against the file on disk at registration time) to an ALREADY-REGISTERED principal, via an ordinary kind=decision ledger row in a fixed, parseable statement shape (design/FABLE-ROLE-CHARTERS-AND-BRIEFS-SPEC.md; tools/role_charter.py). DOES NOT: itself register the principal -- charter and identity are two separate ceremonies (this is exactly the trap spec WP3 closes: chartering an unregistered role used to dead-end at a refusal; this screen offers the missing registration in-flow instead)."
+workflow_pointer = "Roles defined here become the principals your workflow units and briefs bind to -- see roles/README.md and design/FABLE-ROLE-CHARTERS-AND-BRIEFS-SPEC.md (charters and briefs) and tools/workflow_compile.py (the workflow-unit compiler) in the world you just born. No workflow authoring happens in this screen (spec §1 item 4: pointer, not machinery)."
