@@ -1,5 +1,7 @@
 # ADR-0003: Domain-Coupling Bands
 
+<!-- doc-attest-exempt: 2026-07-22 strike-to-silence amendment (maintainer-ratified, ledger row 1125) invalidated the prior attestation; fresh A:B:C re-attestation queued with the standing attestation backlog. Removal condition: the recorded re-attestation. -->
+
 - **Status:** Accepted
 - **Genre:** Bounded Context Map (structural-descriptive with prescriptive
   elements) — a third genre after the *decision* of ADR-0001 and the *tenet*
@@ -105,41 +107,20 @@ The principle, stated plainly:
 This is a design discipline at authoring time, not an extraction mandate.
 Existing code stays put; new code is written with the seam in mind.
 
-### When to extract: a tradeoff, not a rule
+### When to extract — struck to silence (maintainer-ratified 2026-07-22)
 
-*(This section replaces the ADR's original "Why not extract abstractions
-preemptively" rule, per the maintainer's ratified position statement,
-2026-07-13 —
-[`design/MAINT-ADR-PORTABILITY-SPEC.md`](../../design/MAINT-ADR-PORTABILITY-SPEC.md)
-§7a. The two-question principle above is unaffected by this demotion; only
-the once-binding rule below is demoted to a named, non-binding tradeoff.)*
-
-Two honest positions exist on when to extract an abstraction, and this
-corpus's maintainer holds one of them as his own stated default lean — this
-section is not a rule either horn can cite as settled law.
-
-- **The caution horn (Sandi Metz):** *duplication is cheaper than the wrong
-  abstraction.* An abstraction extracted before a second concrete instance
-  exists is shaped by speculation and is almost always wrong-shaped — the
-  cost-benefit tilts toward extracting only once a second use case exists.
-  This ADR's own worked instance produced live evidence for this horn (see
-  [the extracted evidence](history/0003-band-map-and-instance-context.md)): an
-  abstraction fully built, documented, and left dead beside a live
-  hand-inlined copy — worse, by that lesson, than never having built it.
-- **The maintainer's horn (Jacobi/Van Vleck):** *"Man muss immer
-  generalisieren"* — one must always generalize. His stated position: the
-  Metz caution is over-cautious and usually forward-incompatible, and in his
-  experience leaves technical debt more often than it prevents it. **This is
-  this ADR corpus's maintainer's stated default lean**, recorded here rather
-  than papered over, because a rule the maintainer disagrees with in
-  principle cannot bind adopters in his name — meeting the letter of a rule
-  while violating its author's actual intent is a failure, not a pass, and a
-  demoted rule that quietly kept binding force would be exactly that.
-
-Neither horn is imposed as a rule. What this ADR actually enforces, regardless
-of which way a contributor leans on the tradeoff above, is the two-question
-principle above: whether an abstraction is extracted now or deferred, the
-seam is designed deliberately, not accidentally discovered later.
+*(Dated amendment per ADR-0005 Rule 8. This section's predecessor — first a binding
+"do not extract preemptively" rule, then, per the 2026-07-13 amendment, a named
+two-horn tradeoff — is STRUCK from the living corpus entirely; its text survives in
+git history only. The maintainer's ratified ground, quoted from the ruling of the
+same day, ledger row 1125: the spelled-out injunction "is occasionally true, but
+that is a matter of judgement, and it should never be spelled out because it is so
+easy for AI collaborators to latch on to that specific injunction; instead, one
+needs to be silent on the matter and let results speak for themselves." The corpus
+is accordingly SILENT on when to extract an abstraction: judgment governs, results
+speak. What this ADR enforces is unchanged and stated above — the two-question
+principle: whether an abstraction is extracted now or deferred, the seam is designed
+deliberately, not accidentally discovered later.)*
 
 ## Bands — a template for adopters
 
