@@ -1,17 +1,24 @@
 #!/usr/bin/env python3
 """tools/setup_tui/steps_hydration.py -- the Hydration step's UI-free core, ported from
-`screen_hydration`. The per-ADR/per-durable-decision individual confirms become a `ListField` of
-free-text slugs the operator names, checked against the live catalog at submit -- a small,
-honest departure from the original's one-Checkbox-per-catalog-entry shape (which would make this
-step's field COUNT open-ended and grow with the catalog; ADR-0007 discourages exactly that
-un-bounded a form)."""
+`screen_hydration`. The durable-decisions catalog and the ADR-adoption submenu are BOTH closed,
+finite vocabularies -- rendered as `MultiChoiceField` checkbox groups (one checkbox per catalog
+entry, its own elucidation juxtaposed under it), never a free-text comma-separated list of slugs
+the operator has to already know by heart (maintainer round 5, ledger row 1115, defect F: "I had
+to hand-edit a comma-separated list instead of ticking checkboxes with tooltips ... for both ADR
+and the durable decisions"). The model value is the SAME typed `list[str]` everywhere -- the
+comma-joined string dies here and in `config_seam.answers_for_from_config`; `world-config.toml`
+already emitted a TOML array for both keys (`config_file.render_toml`'s own list handling), so no
+change was needed on that side."""
 from __future__ import annotations
 
-from tools.configtree import ConfirmField, ListField, SectionResult, SectionSpec, TextField
+from tools.configtree import (ConfirmField, MultiChoiceField, SectionResult, SectionSpec,
+                               TextField, is_field_touched)
 from tools.setup_tui import checklist as ck
 from tools.setup_tui import durable_decisions, feature_facts
 from tools.setup_tui.plan import CommandAct, PlanEntry
 from tools.setup_tui.runner import legacy_led_path, resolve_led
+
+_SLUG = "hydration"
 
 
 def _decision_act(led: str, statement: str):
@@ -23,28 +30,41 @@ def fields(state: dict) -> tuple:
     # destination directory is owned by Fork/target -- hydration reads the shared fact straight
     # out of state in `submit` below, never via a second field declaration (a duplicated
     # projection is refused at App construction, `tools.configtree.spec.validate_shared_ownership`).
-    catalog_help = ", ".join(d.slug for d in durable_decisions.CATALOG)
+    decision_opts = tuple((d.slug, d.slug) for d in durable_decisions.CATALOG)
+    decision_help = {d.slug: d.why for d in durable_decisions.CATALOG}
     adrs = durable_decisions.list_adrs()
-    adr_help = ", ".join(number for number, _, _ in adrs)
+    adr_opts = tuple((number, f"ADR-{number}: {title}") for number, title, _ in adrs)
+    adr_help = {number: f"see {relpath} for the full text" for number, title, relpath in adrs}
     return (
-        ConfirmField(name="run", label="Run hydration now?", default=True),
-        ConfirmField(name="fork_provenance", label="Hydrate: fork provenance?"),
+        ConfirmField(name="run", label="Run hydration now?", default=True,
+                     help="Compiles CLAUDE.md durable-decision fragments and files real 'led "
+                     "decision' rows for whatever is selected below -- turning this off skips "
+                     "the whole step, nothing selected below is applied."),
+        ConfirmField(name="fork_provenance", label="Hydrate: fork provenance?",
+                     help=feature_facts.fact("hydration_fork_provenance").line()),
         TextField(name="fork_provenance_statement", label="Statement for 'fork provenance' "
                   "decision row", required=False),
         ConfirmField(name="role_charters", label="Hydrate: role charters to register? (see "
-                     "the Principals & authority step for the actual charter form)"),
-        TextField(name="durable_decisions", label=f"Durable decisions to adopt, comma-separated "
-                  f"slugs (available: {catalog_help})", required=False),
-        TextField(name="adopt_adrs", label=f"ADR numbers to adopt, comma-separated "
-                  f"(available: {adr_help})", required=False),
+                     "the Principals & authority step for the actual charter form)",
+                     help=feature_facts.fact("hydration_role_charters").line()),
+        MultiChoiceField(name="durable_decisions", label="Durable decisions to adopt",
+                          options=decision_opts, option_help=decision_help,
+                          help="Each selected entry writes one real 'led decision' row and "
+                          "compiles a CLAUDE.md fragment for the new world -- the why/citation "
+                          "for each is shown under its own checkbox."),
+        MultiChoiceField(name="adopt_adrs", label="ADR numbers to adopt", options=adr_opts,
+                          option_help=adr_help,
+                          help="Each selected ADR gets one real 'led decision' row and a "
+                          "CLAUDE.md pointer line naming it."),
     )
 
 
 def submit(state: dict, answers: dict) -> SectionResult:
     cl = state["_checklist"]
-    lines = []
     if not answers["run"]:
-        cl.add("hydration", "hydration", ck.SKIPPED, "operator skipped screen 10")
+        touched = is_field_touched(state, _SLUG, "run")
+        cl.add("hydration", "hydration", ck.choice_status(touched),
+               "operator declined" if touched else "default (never visited/toggled)")
         return SectionResult(ok=True, info_lines=("hydration skipped by operator.",))
 
     # "dest" is Fork/target's own owned field -- read the shared fact directly (already
@@ -66,7 +86,7 @@ def submit(state: dict, answers: dict) -> SectionResult:
     plan = state["_plan"]
     selected_fragments: list[str] = []
 
-    lines.append(feature_facts.facts_block(["hydration_fork_provenance"]))
+    lines = [feature_facts.facts_block(["hydration_fork_provenance"])]
     if answers["fork_provenance"]:
         stmt = answers["fork_provenance_statement"].strip()
         if not stmt:
@@ -77,24 +97,31 @@ def submit(state: dict, answers: dict) -> SectionResult:
                                "decision row", act=act, produces=produces))
         lines.append(f"queued: {act.render()}")
     else:
-        cl.add("hydration", "fork provenance", ck.SKIPPED, "operator declined")
+        touched = is_field_touched(state, _SLUG, "fork_provenance")
+        cl.add("hydration", "fork provenance", ck.choice_status(touched),
+               "operator declined" if touched else "default (never visited/toggled)")
 
     lines.append(feature_facts.facts_block(["hydration_role_charters"]))
     if answers["role_charters"]:
         cl.add("hydration", "role charters to register", ck.WITNESSED,
                "see the Principals & authority step's 'Register a role charter' rows")
     else:
-        cl.add("hydration", "role charters to register", ck.SKIPPED, "operator declined")
+        touched = is_field_touched(state, _SLUG, "role_charters")
+        cl.add("hydration", "role charters to register", ck.choice_status(touched),
+               "operator declined" if touched else "default (never visited/toggled)")
 
-    wanted = {s.strip() for s in answers["durable_decisions"].split(",") if s.strip()}
+    wanted = set(answers["durable_decisions"])
     catalog_by_slug = {d.slug: d for d in durable_decisions.CATALOG}
     unknown = wanted - set(catalog_by_slug)
     if unknown:
         return SectionResult(ok=False, errors={"durable_decisions": f"unknown slug(s): {sorted(unknown)}"})
     lines.append(feature_facts.facts_block(["hydration_adr_adoption"]))
+    decisions_touched = is_field_touched(state, _SLUG, "durable_decisions")
     for decision in durable_decisions.CATALOG:
         if decision.slug not in wanted:
-            cl.add("hydration", decision.slug, ck.SKIPPED, "operator declined")
+            cl.add("hydration", decision.slug, ck.choice_status(decisions_touched),
+                   "operator did not select this entry" if decisions_touched else
+                   "default (list never visited/toggled)")
             continue
         act, produces = _decision_act(led, decision.hydrates)
         plan.append(PlanEntry(screen="hydration", item=decision.slug, lesson="a curated "
@@ -103,15 +130,18 @@ def submit(state: dict, answers: dict) -> SectionResult:
         selected_fragments.append(decision.claude_md)
 
     adrs = durable_decisions.list_adrs()
-    wanted_adrs = {s.strip() for s in answers["adopt_adrs"].split(",") if s.strip()}
+    wanted_adrs = set(answers["adopt_adrs"])
     known_adr_numbers = {number for number, _, _ in adrs}
     unknown_adrs = wanted_adrs - known_adr_numbers
     if unknown_adrs:
         return SectionResult(ok=False, errors={"adopt_adrs": f"unknown ADR number(s): {sorted(unknown_adrs)}"})
+    adrs_touched = is_field_touched(state, _SLUG, "adopt_adrs")
     for number, title, relpath in adrs:
         label = f"ADR-{number}: {title}"
         if number not in wanted_adrs:
-            cl.add("hydration", f"adr adoption ({label})", ck.SKIPPED, "operator declined")
+            cl.add("hydration", f"adr adoption ({label})", ck.choice_status(adrs_touched),
+                   "operator did not select this entry" if adrs_touched else
+                   "default (list never visited/toggled)")
             continue
         statement = durable_decisions.adr_decision_statement(number, title, relpath)
         act, produces = _decision_act(led, statement)
@@ -140,5 +170,10 @@ def _blocked_needs_dest(state: dict) -> "str | None":
     return "requires: Fork/target or Birth (a destination directory) to be set first"
 
 
-STEP = SectionSpec(slug="hydration", title="Hydration", group="Runtime", fields=fields,
-                    submit=submit, blocked=_blocked_needs_dest)
+STEP = SectionSpec(
+    slug="hydration", title="Hydration", group="Runtime", fields=fields, submit=submit,
+    blocked=_blocked_needs_dest,
+    description="Compiles this new world's own CLAUDE.md durable-decisions section and files "
+                "real 'led decision' rows -- a curated catalog of standing rules 'borne out of "
+                "our painful experience' (see each entry's own why/citation below), plus any "
+                "ADRs from this repo's own law/adr/ this world should adopt at birth.")

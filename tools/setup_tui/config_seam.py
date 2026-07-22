@@ -109,8 +109,14 @@ def answers_for_from_config(doc: config_file.ConfigDoc, *, world: str, dest: str
             "fork_provenance": bool(g("hydration.fork_provenance", False)),
             "fork_provenance_statement": str(g("hydration.fork_provenance_statement", "")),
             "role_charters": False,
-            "durable_decisions": ",".join(g("hydration.durable_decisions", []) or []),
-            "adopt_adrs": ",".join(g("hydration.adopt_adrs", []) or []),
+            # TYPED LIST, NEVER A JOINED STRING (maintainer round 5, ledger row 1115, defect F):
+            # `hydration.durable_decisions`/`.adopt_adrs` are TOML arrays in the config file
+            # (`config_file.render_toml`'s own list handling already emits them that way) and a
+            # `MultiChoiceField`'s own model value is a `list[str]` -- the comma-join here used
+            # to exist only because the field it fed was a free-text `TextField` the operator
+            # had to hand-edit; that field is gone, so is the join.
+            "durable_decisions": list(g("hydration.durable_decisions", []) or []),
+            "adopt_adrs": list(g("hydration.adopt_adrs", []) or []),
         },
     }
     return out

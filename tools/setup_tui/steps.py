@@ -17,11 +17,14 @@ from tools.setup_tui import checklist as ck
 from tools.setup_tui import commit_executor as CE
 from tools.setup_tui import config_seam, content, signed_genesis
 from tools.setup_tui import steps_boundary, steps_fork_target, steps_hydration
-from tools.setup_tui import steps_observability, steps_preflight, steps_principals_authority
+from tools.setup_tui import steps_load_config, steps_observability, steps_preflight
+from tools.setup_tui import steps_principals_authority
 from tools.setup_tui import steps_rehearsal_birth, steps_signed_genesis, steps_substrate
 from tools.setup_tui.plan import Plan
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+
+ACTIONS = (steps_load_config.STEP,)
 
 SECTIONS = (
     steps_preflight.STEP,

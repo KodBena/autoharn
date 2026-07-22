@@ -5,10 +5,12 @@ from __future__ import annotations
 
 import os
 
-from tools.configtree import ConfirmField, SectionResult, SectionSpec, TextField
+from tools.configtree import ConfirmField, SectionResult, SectionSpec, TextField, is_field_touched
 from tools.setup_tui import checklist as ck
 from tools.setup_tui import daemon_scaffold, feature_facts, probes
 from tools.setup_tui.plan import DaemonSelection, PlanEntry, WriteAct
+
+_SLUG = "observability"
 
 
 def fields(state: dict) -> tuple:
@@ -20,9 +22,10 @@ def fields(state: dict) -> tuple:
     return (
         ConfirmField(name="run", label="Configure observability now?", default=True),
         ConfirmField(name="otelcol", label="Select the OTel collector (otelcol-contrib) to start "
-                     "with this world?"),
+                     "with this world?", help=feature_facts.fact("observability_otelcol").line()),
         ConfirmField(name="otel_watch", label="Select the OTel model-provenance watchdog "
-                     "(otel-watch) to start with this world?"),
+                     "(otel-watch) to start with this world?",
+                     help=feature_facts.fact("observability_watchdog").line()),
     )
 
 
@@ -30,7 +33,9 @@ def submit(state: dict, answers: dict) -> SectionResult:
     cl = state["_checklist"]
     lines = [feature_facts.facts_block(["observability_otelcol", "observability_watchdog"])]
     if not answers["run"]:
-        cl.add("observability", "observability", ck.SKIPPED, "operator skipped screen 9")
+        touched = is_field_touched(state, _SLUG, "run")
+        cl.add("observability", "observability", ck.choice_status(touched),
+               "operator declined" if touched else "default (never visited/toggled)")
         return SectionResult(ok=True, info_lines=("observability configuration skipped.",))
 
     # "dest" is Fork/target's own owned field -- read the shared fact directly (already
@@ -58,7 +63,9 @@ def submit(state: dict, answers: dict) -> SectionResult:
         lines.append(f"queued daemon: {' '.join(argv)}")
         cl.add("observability", "otelcol selected", ck.INSTRUCTED, f"argv={' '.join(argv)}")
     else:
-        cl.add("observability", "otelcol selected", ck.SKIPPED, "operator declined")
+        touched = is_field_touched(state, _SLUG, "otelcol")
+        cl.add("observability", "otelcol selected", ck.choice_status(touched),
+               "operator declined" if touched else "default (never visited/toggled)")
 
     if answers["otel_watch"]:
         watch_bin = str(state["_repo_root"] / "otel-watch")
@@ -71,7 +78,9 @@ def submit(state: dict, answers: dict) -> SectionResult:
         lines.append(f"queued daemon: {' '.join(argv)}")
         cl.add("observability", "otel-watch selected", ck.INSTRUCTED, f"argv={' '.join(argv)}")
     else:
-        cl.add("observability", "otel-watch selected", ck.SKIPPED, "operator declined")
+        touched = is_field_touched(state, _SLUG, "otel_watch")
+        cl.add("observability", "otel-watch selected", ck.choice_status(touched),
+               "operator declined" if touched else "default (never visited/toggled)")
 
     claude_line = f"cd {dest} && claude"
     lines.append(f"--- INSTRUCTED: Claude launch line ---\n{claude_line}")
@@ -92,4 +101,7 @@ def _blocked_needs_dest(state: dict) -> "str | None":
 
 
 STEP = SectionSpec(slug="observability", title="Observability", group="Runtime", fields=fields,
-                    submit=submit, blocked=_blocked_needs_dest)
+                    submit=submit, blocked=_blocked_needs_dest,
+                    description="Optional recurring daemons this world can start at commit -- "
+                    "see each checkbox's own aspiration/external-cost note below before "
+                    "selecting it.")

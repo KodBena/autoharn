@@ -4,9 +4,12 @@ pre-rebuild screens.py's `screen_substrate`. The dedicated-db path only ever DIS
 block for the operator to apply by hand on the cluster host -- it queues no Plan entry."""
 from __future__ import annotations
 
-from tools.configtree import ChoiceField, ConfirmField, SectionResult, SectionSpec, TextField
+from tools.configtree import (ChoiceField, ConfirmField, SectionResult, SectionSpec, TextField,
+                               is_field_touched)
 from tools.setup_tui import checklist as ck
 from tools.setup_tui import feature_facts, pghba, probes
+
+_SLUG = "substrate"
 
 SUBSTRATE_CHOICES = (
     ("existing", "existing-db path (zero manual steps, the omega-lab shape)"),
@@ -44,7 +47,9 @@ def submit(state: dict, answers: dict) -> SectionResult:
     cl = state["_checklist"]
     lines = [feature_facts.facts_block(["substrate_existing", "substrate_dedicated"])]
     if not answers["run"]:
-        cl.add("substrate", "path chosen", ck.SKIPPED, "operator skipped screen 2")
+        touched = is_field_touched(state, _SLUG, "run")
+        cl.add("substrate", "path chosen", ck.choice_status(touched),
+               "operator declined" if touched else "default (never visited/toggled)")
         return SectionResult(ok=True, info_lines=("substrate configuration skipped.",))
 
     host = answers["host"].strip() or state.get("pghost", "192.168.122.1")
@@ -95,5 +100,7 @@ def submit(state: dict, answers: dict) -> SectionResult:
     return SectionResult(ok=True, state_updates=state, info_lines=tuple(lines))
 
 
-STEP = SectionSpec(slug="substrate", title="Substrate", group="Substrate & target",
-                    fields=fields, submit=submit)
+STEP = SectionSpec(
+    slug="substrate", title="Substrate", group="Substrate & target", fields=fields, submit=submit,
+    description=(feature_facts.fact("substrate_existing").line() + "\n" +
+                 feature_facts.fact("substrate_dedicated").line()))

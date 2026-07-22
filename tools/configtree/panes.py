@@ -46,11 +46,11 @@ from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.widgets import Button, Checkbox, Input, RadioSet, Static
 
-from tools.configtree.fields import ListField, set_field_value, validate_value
+from tools.configtree.fields import ChoiceField, ListField, MultiChoiceField, set_field_value, validate_value
 from tools.configtree.spec import (CommitSpec, SectionSpec, ready_for_commit, section_answers,
                                     section_field_errors)
-from tools.configtree.widgets import (FieldError, ListFieldWidget, build_field_widget,
-                                       field_widget_id, read_field_value)
+from tools.configtree.widgets import (FieldError, ListFieldWidget, MultiChoiceFieldWidget,
+                                       build_field_widget, field_widget_id, read_field_value)
 
 
 class SectionPane(Vertical):
@@ -69,6 +69,8 @@ class SectionPane(Vertical):
 
     def compose(self) -> ComposeResult:
         yield Static(f"{self.spec.title}", classes="ct-section-title")
+        if self.spec.description:
+            yield Static(self.spec.description, classes="ct-section-description", markup=False)
         self._blocked_reason = self.spec.blocked(self.state) if self.spec.blocked else None
         self._errors = {}
         with VerticalScroll(classes="ct-section-body"):
@@ -89,11 +91,27 @@ class SectionPane(Vertical):
             answers = section_answers(self.spec, self.state)
             for f in self._field_specs:
                 name = str(f.name)
-                yield Static(str(f.label) if not isinstance(f, ListField) else "", classes="ct-field-label")
+                is_group_field = isinstance(f, (ListField, MultiChoiceField))
+                yield Static(str(f.label) if not is_group_field else "", classes="ct-field-label")
                 if isinstance(f, ListField):
                     yield ListFieldWidget(f, initial=answers[name], on_change=self._make_list_change(f))
+                elif isinstance(f, MultiChoiceField):
+                    yield MultiChoiceFieldWidget(f, initial=answers[name],
+                                                  on_change=self._make_multi_change(f))
                 else:
                     yield build_field_widget(f, answers[name])
+                    # ELUCIDATION (ledger row 1115): a plain field's own `help` renders as one
+                    # capped line right under it -- `ListField`/`MultiChoiceField` render their
+                    # own `help` INSIDE their dedicated widget instead (its own Label sits above
+                    # the rows/checkboxes, not a bare section-loop Static).
+                    if getattr(f, "help", None):
+                        yield Static(f.help, classes="ct-field-help", markup=False)
+                    if isinstance(f, ChoiceField) and f.option_help:
+                        for value, _ in f.options:
+                            help_text = f.option_help.get(value)
+                            if help_text:
+                                yield Static(f"{value}: {help_text}", classes="ct-choice-help",
+                                             markup=False)
                 err = FieldError()
                 err.set_text(commit_errors.get(name) or live_errors.get(name, ""))
                 self._errors[name] = err
@@ -146,6 +164,23 @@ class SectionPane(Vertical):
         def _on_change() -> None:
             widget = self.query_one(f"#{widget_id}", ListFieldWidget)
             self._write_through(f, list(widget.rows))
+            if getattr(f, "refresh_siblings", False):
+                # `ListField.refresh_siblings`'s own docstring: another field in THIS section's
+                # `fields(state)` derives its own choices from this list's CURRENT rows -- a full
+                # recompose (scheduled, not awaited, from this sync callback -- `call_later` is
+                # this library's own sanctioned "run this coroutine soon" idiom for exactly that,
+                # verified empirically against the installed Textual version) makes the sibling
+                # field's derived options current on the SAME visit, not only the next one.
+                self.call_later(self.recompose)
+
+        return _on_change
+
+    def _make_multi_change(self, f):
+        widget_id = field_widget_id(f.name)
+
+        def _on_change() -> None:
+            widget = self.query_one(f"#{widget_id}", MultiChoiceFieldWidget)
+            self._write_through(f, list(widget.selected))
 
         return _on_change
 

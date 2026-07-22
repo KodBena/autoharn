@@ -6,13 +6,14 @@ from __future__ import annotations
 import json
 import os
 
-from tools.configtree import ConfirmField, SectionResult, SectionSpec, TextField
+from tools.configtree import ConfirmField, SectionResult, SectionSpec, TextField, is_field_touched
 from tools.setup_tui import checklist as ck
 from tools.setup_tui import destination, feature_facts, governed_files, probes
 from tools.setup_tui.idtypes import DestPath, DestPathError, WorldName, WorldNameError
 from tools.setup_tui.plan import BackgroundAct, CommandAct, DaemonSelection, PlanEntry, WriteAct
 
 BOUNDARY_PROC_PRODUCES = "boundary-proc"
+_SLUG = "boundary"
 
 
 def fields(state: dict) -> tuple:
@@ -42,7 +43,9 @@ def submit(state: dict, answers: dict) -> SectionResult:
     if not state.get("birth_ok") and answers["override"]:
         cl.add("boundary", "birth gate", ck.WITNESSED, "OVERRIDDEN by operator")
     if not answers["run"]:
-        cl.add("boundary", "boundary", ck.SKIPPED, "operator skipped screen 8")
+        touched = is_field_touched(state, _SLUG, "run")
+        cl.add("boundary", "boundary", ck.choice_status(touched),
+               "operator declined" if touched else "default (never visited/toggled)")
         return SectionResult(ok=True, info_lines=("boundary configuration skipped.",))
 
     # "dest"/"world" are Fork/target's and Birth's own owned fields respectively -- read the
@@ -162,4 +165,5 @@ def _blocked_needs_dest(state: dict) -> "str | None":
 
 
 STEP = SectionSpec(slug="boundary", title="Boundary", group="Runtime", fields=fields,
-                    submit=submit, blocked=_blocked_needs_dest)
+                    submit=submit, blocked=_blocked_needs_dest,
+                    description=feature_facts.fact("boundary_service").line())

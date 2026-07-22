@@ -127,6 +127,15 @@ def list_adrs() -> list[tuple[str, str, str]]:
     first, so that comment never gets mistaken for the title)."""
     out: list[tuple[str, str, str]] = []
     for path in sorted(ADR_DIR.glob("*.md")):
+        if "-appendix-" in path.stem:
+            # A provisional appendix (e.g. 0019-appendix-provisional-ui-proscriptions.md) is NOT
+            # itself an adoptable ADR -- it shares its parent ADR's own number in its title line
+            # (both start "# ADR-0019 ..."), which would otherwise mint a SECOND catalog entry
+            # under the SAME ADR number (a live crash: two options claiming one identity --
+            # `tools.configtree.fields.MultiChoiceField`'s own construction-time duplicate-value
+            # refusal is what caught this). The maintainer adopts an appendix by adopting its
+            # parent ADR; excluding it here is a named, reviewable choice, not a silent drop.
+            continue
         title = None
         number = None
         for line in path.read_text(encoding="utf-8").splitlines():

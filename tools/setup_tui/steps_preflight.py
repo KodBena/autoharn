@@ -8,11 +8,12 @@ from __future__ import annotations
 import importlib.util
 import os
 
-from tools.configtree import ConfirmField, SectionResult, SectionSpec
+from tools.configtree import ConfirmField, SectionResult, SectionSpec, is_field_touched
 from tools.setup_tui import checklist as ck
 from tools.setup_tui import feature_facts, probes
 
 PREFLIGHT_BINARIES = ("idris2", "clingo", "python3", "psql")
+_SLUG = "preflight"
 
 
 def _preflight_lines(state: dict) -> list[str]:
@@ -76,7 +77,10 @@ def fields(state: dict) -> tuple:
 
 def submit(state: dict, answers: dict) -> SectionResult:
     if not answers["run"]:
-        state["_checklist"].add("preflight", "all checks", ck.SKIPPED, "operator skipped screen 1")
+        touched = is_field_touched(state, _SLUG, "run")
+        state["_checklist"].add("preflight", "all checks", ck.choice_status(touched),
+                                 "operator declined" if touched else
+                                 "default (never visited/toggled)")
         return SectionResult(ok=True, info_lines=("preflight skipped by operator.",))
     lines = _preflight_lines(state)
     return SectionResult(ok=True, info_lines=tuple(lines))

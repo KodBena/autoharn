@@ -8,10 +8,12 @@ from __future__ import annotations
 
 import os
 
-from tools.configtree import ConfirmField, SectionResult, SectionSpec, TextField
+from tools.configtree import ConfirmField, SectionResult, SectionSpec, TextField, is_field_touched
 from tools.setup_tui import checklist as ck
 from tools.setup_tui import content, feature_facts, probes, signed_genesis as sg
 from tools.setup_tui.plan import PlanEntry
+
+_SLUG = "signed-genesis"
 
 
 def fields(state: dict) -> tuple:
@@ -36,7 +38,9 @@ def fields(state: dict) -> tuple:
 def submit(state: dict, answers: dict) -> SectionResult:
     cl = state["_checklist"]
     if not answers["run"]:
-        cl.add("signed-genesis", "ceremony", ck.SKIPPED, "operator skipped screen 7")
+        touched = is_field_touched(state, _SLUG, "run")
+        cl.add("signed-genesis", "ceremony", ck.choice_status(touched),
+               "operator declined" if touched else "default (never visited/toggled)")
         return SectionResult(ok=True, info_lines=("signed genesis skipped by operator.",))
     # "dest" is Fork/target's own owned field -- read the shared fact directly (already
     # guaranteed non-empty by `_blocked_needs_dest` below; this section is unreachable otherwise).
@@ -46,13 +50,27 @@ def submit(state: dict, answers: dict) -> SectionResult:
     if not dest:
         return SectionResult(ok=False, errors={"": "destination (set in Fork/target) required"})
 
-    if not os.path.isdir(dest):
-        if state.get("dest_would_exist"):
-            cl.add("signed-genesis", "destination exists", ck.DRY_SKIPPED, f"'{dest}' queued earlier")
-        else:
-            cl.add("signed-genesis", "destination exists", ck.REFUSED, f"'{dest}' not a directory")
-            return SectionResult(ok=False, errors={"": "destination (set in Fork/target) does not "
-                                                 "exist -- run a birth first"})
+    # ONE disposition, ONE ordering rule (maintainer round 5, ledger row 1115, defect D: a run
+    # witnessed BOTH "SKIPPED ... screen 7" and "REFUSED ... not a scaffolded world" for the SAME
+    # ceremony item -- two disagreeing records of one fact, plus a sequential-era "screen 7"
+    # ghost in a tree UI). Root cause named in the commission: this decision-phase check ran
+    # against a PRE-birth destination state even when THIS SAME COMMIT's own plan already
+    # contains a birth act that will make it true -- `dest_would_exist` (set by Birth's own
+    # `submit`, EARLIER in registry order, the SAME sweep) is therefore consulted FIRST and
+    # TRUSTED outright when present, never re-probed against a transitional/pre-act disk state;
+    # only when THIS commit does NOT include a same-session birth (an existing, previously-born
+    # world is the target) does this fall back to a REAL, live check of what is on disk right
+    # now. Exactly one of the two branches below ever runs, exactly one row is ever added under
+    # THIS item name for this call.
+    if state.get("dest_would_exist"):
+        cl.add("signed-genesis", "world has keys/+verify-commission+legacy/led", ck.DRY_SKIPPED,
+               f"'{dest}' queued earlier this SAME commit (birth act not yet run) -- trusted, "
+               "not re-probed against a pre-birth disk state")
+    elif not os.path.isdir(dest):
+        cl.add("signed-genesis", "world has keys/+verify-commission+legacy/led", ck.REFUSED,
+               f"'{dest}' not a directory")
+        return SectionResult(ok=False, errors={"": "destination (set in Fork/target) does not "
+                                             "exist -- run a birth first"})
     else:
         missing = [n for n, ok in (
             ("keys/", os.path.isdir(os.path.join(dest, "keys"))),
@@ -60,7 +78,7 @@ def submit(state: dict, answers: dict) -> SectionResult:
             ("legacy/led", os.path.isfile(os.path.join(dest, "legacy", "led")))) if not ok]
         if missing:
             cl.add("signed-genesis", "world has keys/+verify-commission+legacy/led", ck.REFUSED,
-                   f"missing: {missing}")
+                   f"missing: {missing} -- not a scaffolded world")
             return SectionResult(ok=False, errors={"": f"missing {missing} -- not a scaffolded world"})
         cl.add("signed-genesis", "world has keys/+verify-commission+legacy/led", ck.WITNESSED, dest)
 
@@ -159,4 +177,5 @@ def _blocked_needs_dest(state: dict) -> "str | None":
 
 
 STEP = SectionSpec(slug="signed-genesis", title="Signed genesis", group="Authority & trust",
-                    fields=fields, submit=submit, blocked=_blocked_needs_dest)
+                    fields=fields, submit=submit, blocked=_blocked_needs_dest,
+                    description=feature_facts.fact("signed_genesis").line())

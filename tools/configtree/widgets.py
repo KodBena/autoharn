@@ -13,7 +13,7 @@ from textual.containers import Horizontal, Vertical
 from textual.screen import ModalScreen
 from textual.widgets import Button, Checkbox, Input, Label, ListItem, ListView, RadioButton, RadioSet, Static
 
-from tools.configtree.fields import ChoiceField, ConfirmField, ListField, TextField
+from tools.configtree.fields import ChoiceField, ConfirmField, ListField, MultiChoiceField, TextField
 
 FIELD_ID_PREFIX = "ct-field-"
 
@@ -144,13 +144,15 @@ class ListFieldWidget(Vertical):
 
     def __init__(self, spec: ListField, initial: list[dict] | None = None,
                  on_change: "Callable[[], None] | None" = None) -> None:
-        super().__init__(id=field_widget_id(spec.name))
+        super().__init__(id=field_widget_id(spec.name), classes="ct-field-group")
         self.spec = spec
         self.rows: list[dict] = list(initial or [])
         self._on_change = on_change
 
     def compose(self) -> ComposeResult:
         yield Label(str(self.spec.label), classes="ct-field-label")
+        if self.spec.help:
+            yield Static(self.spec.help, classes="ct-field-help", markup=False)
         yield ListView(id=f"{self.id}-list")
         with Horizontal():
             yield Button(f"Add {self.spec.label}", id=f"{self.id}-add")
@@ -197,3 +199,46 @@ class ListFieldWidget(Vertical):
         elif event.button.id == f"{self.id}-remove":
             event.stop()
             self.remove_selected()
+
+
+class MultiChoiceFieldWidget(Vertical):
+    """The `MultiChoiceField` renderer -- a checkbox GROUP, one `Checkbox` per catalog option,
+    each option's own `option_help` (if any) rendered as its own capped `.ct-choice-help` line
+    directly under it (the "juxtaposed text" tooltip-equivalent this terminal offers, maintainer
+    round 5, ledger row 1115) -- never a free-text delimited string over a closed vocabulary.
+    Mirrors `ListFieldWidget`'s own self-contained shape (composes itself, fires `on_change`) so
+    the enclosing `SectionPane` wires it the SAME way; `self.selected` is always `list[str]`, in
+    catalog order, the model value `panes.py`'s write-through stores verbatim."""
+
+    def __init__(self, spec: MultiChoiceField, initial: "list[str] | None" = None,
+                 on_change: "Callable[[], None] | None" = None) -> None:
+        super().__init__(id=field_widget_id(spec.name), classes="ct-field-group")
+        self.spec = spec
+        self.selected: list[str] = list(initial or [])
+        self._on_change = on_change
+        self._boxes: dict[str, Checkbox] = {}
+
+    def compose(self) -> ComposeResult:
+        yield Label(str(self.spec.label), classes="ct-field-label")
+        if self.spec.help:
+            yield Static(self.spec.help, classes="ct-field-help", markup=False)
+        for value, option_label in self.spec.options:
+            cb = Checkbox(option_label, value=(value in self.selected),
+                          id=f"{self.id}-opt-{value}")
+            self._boxes[value] = cb
+            yield cb
+            help_text = (self.spec.option_help or {}).get(value)
+            if help_text:
+                yield Static(help_text, classes="ct-choice-help", markup=False)
+
+    def on_checkbox_changed(self, event: Checkbox.Changed) -> None:
+        for value, cb in self._boxes.items():
+            if cb is event.checkbox:
+                event.stop()
+                if event.value and value not in self.selected:
+                    self.selected.append(value)
+                elif not event.value and value in self.selected:
+                    self.selected.remove(value)
+                if self._on_change is not None:
+                    self._on_change()
+                return

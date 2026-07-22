@@ -21,10 +21,43 @@ uncapped Static at 400 columns), then sweeps every real section AND the original
 (the "Add a principal" modal) at a 400-column terminal, proving nothing exceeds
 `tools.configtree.measure.MEASURE` (78).
 
+ROUND 5 (2026-07-22, ledger row 1115, a fresh Sonnet session dispatched after the maintainer's
+censure of the round-4 builder's malicious compliance -- the measure fix above DELETED the
+elucidating option descriptions instead of rendering them within measure): cases 9-13 answer
+five further defects plus one added mid-dispatch. (A) ELUCIDATION -- case 9: `SectionSpec.
+description`/`Field.help`/`ChoiceField.option_help` restore the "what our aspirations were,
+relative to existing standards" explanations (recovered from `feature_facts.toml`/
+`principals_authority.toml`'s own `[lessons]` table), rendered as capped Static lines under the
+section title/field/option -- never spliced into an unwrapping RadioButton/Checkbox caption.
+(B) PRINCIPAL REFERENCES ARE SELECTIONS -- case 10: the competence/relation/charter ChoiceFields
+are fed LIVE from the register list's own current rows (`ListField.refresh_siblings`) plus any
+pre-existing registered principals; the garbled "Add Grant a competence" label class (every
+ListField label a full VERB PHRASE, doubling the library's own "Add " prefix) is gone -- every
+label here is a noun phrase. (C) CONFIG LOADING + RECORDS STOP LYING -- case 11: a new
+`tools.configtree.ActionSpec`/`ActionPane` mechanism (an immediate, non-deferred tree node) backs
+a real "Load a configuration" node offering `bootstrap/templates/*.toml` and a custom path,
+usable from app start; DECLINED (touched, said no) vs DEFAULTED (never touched) replace a single
+overloaded SKIPPED that used to record an untouched default as "operator declined" -- the
+maintainer's own quoted false-attribution bug, now structurally impossible
+(`tools.configtree.is_field_touched`). (D) ONE FACT, ONE RECORD AT COMMIT -- case 12: signed-
+genesis's own destination-scaffolded check now consults `dest_would_exist` (a same-commit birth,
+queued earlier in registry order) FIRST and trusts it outright, never re-probing a transitional
+pre-birth disk state; RED-first reproduces the OLD check-physical-state-first ordering
+misfiring on a realistic transitional directory, GREEN shows the CURRENT ordering right, and the
+"screen 7" sequential-era ghost text (present in EVERY section's own run=False wording, not just
+signed-genesis) is gone throughout. (F, added mid-dispatch) CHECKBOXES OVER FREE TEXT -- case 9b/
+the hydration section itself: `durable_decisions`/`adopt_adrs` are now `MultiChoiceField` checkbox
+groups (one checkbox per catalog entry, its own elucidation juxtaposed under it), never a
+hand-edited comma-separated string of slugs; the model value is a typed `list[str]` throughout
+(`config_seam.answers_for_from_config`, `world-config.toml`'s own TOML array). (E) BIND SUSPEND --
+case 13: ctrl+z is bound to Textual's own `App.action_suspend_process` (verified empirically
+against the installed Textual version 8.2.8), shown in the Footer.
+
 This is the actual stdout of `.venv/bin/python seen-red/setup-tui-configtree-journey/
 run_fixtures.py` (a venv with `textual` installed -- `python3 -m venv .venv && .venv/bin/pip
 install textual`), against the REAL tools.setup_tui.steps.SECTIONS registry and the REAL
-tools.configtree.app.ConfigTreeApp, witnessed 2026-07-22:
+tools.configtree.app.ConfigTreeApp, witnessed 2026-07-22 (round 1) and re-witnessed 2026-07-22
+(round 5, cases 9-13 added, cases 0-8 re-run green against the round-5 code):
 
 case 0a ok (the maintainer's exact reproduction, FIXED): toggling preflight's 'run' checkbox to False leaves substrate's OWN 'run' checkbox at True -- no cross-section aliasing
 case 0b ok: typing into substrate's 'host' field ('aliasing-probe-host') leaves rehearsal's OWN 'host' field unchanged ('192.168.122.1')
@@ -70,7 +103,20 @@ case 8a ok (RED-FIRST, synthetic): an UNCAPPED Static holding a 400-character st
 case 8b ok (GREEN): every REAL section's own prose widgets, at a 400-column terminal, stay within MEASURE=78 (widest seen: 78 columns) -- swept ALL 10 sections, not just principal registration
 case 8c ok (GREEN, the original emitting site): the 'Add a principal' modal's 'Class' field label -- the exact site that measured 394 characters before this fix -- stays within MEASURE=78 at a 400-column terminal
 case 8d ok: 'agent_class' is now a real ChoiceField (label 'Class', 5 chars) -- the content-level half of the fix, not merely wrapped
-ALL CASES OK -- tools.configtree.app.ConfigTreeApp driven end-to-end through the REAL tools.setup_tui.steps.SECTIONS registry via Pilot, LIVE-MODEL semantics throughout (no per-section save exists): a state-aliasing reproduction and structural fix across every field kind, arbitrary-order navigation with a blocked-to-unblocked flip on a SINGLE keystroke, live inline validation both polarities with focus never leaving the field, a full ten-section journey typed live to a clean dry-run commit via the ONE commit button, a commit-time business-rule refusal (red) and its retry (green), keyboard/Tab/scroll navigation primitives, ctrl+q's exit-code contract, single-editable-home for both shared facts (dest owned by Fork/target, world by Birth) with a RED-first load-time refusal for a synthetic double-owner declaration, and a readable-measure width cap (MEASURE=78) swept across every section plus the original emitting site (the 'Add a principal' modal), RED-first against a synthetic uncapped Static at a 400-column terminal.
+case 9a ok: signed-genesis's OWN section description renders under its title, within MEASURE (rendered width 76): '  facts [Signed genesis ceremony] -- aspiration: the SIGNED commission mode, design/MAINT-'...
+case 9b ok: hydration's durable-decision/ADR checkboxes each carry their own elucidation line, within MEASURE -- 33 line(s), e.g. "maintainer directive 2026-07-14 (user-guide/USER-RECIPES-FAQ.md 'Workflow patterns'); ledg"...
+case 9c ok: principals-authority's 'Principal'/'Competence'/'Relation'/'Role charter' lists each carry their own CONSTITUTES/DOES NOT elucidation (principals_authority.toml's own [lessons] table), within MEASURE
+case 10a ok: every 'Add ...' button reads as ordinary English, no doubled verb (the maintainer's exact quote, 'Add Grant a competence', is gone): ['Add Principal', 'Add Competence', 'Add Relation', 'Add Role charter']
+case 10b ok: before any principal is registered, the competence picker offers the honest 'no principals known yet' sentinel, never free text
+case 10c ok: the SAME visit's own 'register' row ('ctj-case10-principal') is immediately offered as the competence grant's own principal picker option -- ['ctj-case10-principal'] -- no free text, no re-visit required
+case 11a ok: 'Load a configuration' is a real tree node, reachable and usable at app start -- loading bootstrap/templates/known-good-blank.toml seeds substrate's own 'run' checkbox to True immediately, no re-launch, no --initial-config flag
+case 11b ok (RED-class distinguished): a TOUCHED-but-false otelcol selection records DECLINED -- 'operator declined', an honest attribution of an actual choice
+case 11c ok (the false-attribution bug itself, now impossible): the IDENTICAL false value, NEVER touched, records DEFAULTED -- never 'operator declined' for a default nobody looked at
+case 12a ok (RED, reproduced): the OLD check-physical-state-first ordering refuses a real transitional directory even though this SAME commit's own birth act (dest_would_exist=True) has not run yet: "REFUSED: missing ['keys/', 'verify-commission', 'legacy/led'] -- not a scaffolded world"
+case 12b ok (GREEN, single disposition): the CURRENT ordering trusts dest_would_exist FIRST -- exactly ONE row for this item (DRY-SKIPPED), no 'screen 7' ghost text anywhere in the checklist
+case 12c ok: the run=False path ALSO yields exactly ONE disposition row ('ceremony', DEFAULTED), never a second contradicting one
+case 13 ok: ctrl+z is bound and invokes App.action_suspend_process (headless-safe -- a non-suspend-capable driver is Textual's own documented no-op, never a crash). UNEXERCISED: the live-terminal leg -- an operator should run 'python3 -m tools.setup_tui' in a REAL terminal, press ctrl+z, and confirm the shell job actually suspends (fg to resume).
+ALL CASES OK -- tools.configtree.app.ConfigTreeApp driven end-to-end through the REAL tools.setup_tui.steps.SECTIONS registry via Pilot, LIVE-MODEL semantics throughout (no per-section save exists): a state-aliasing reproduction and structural fix across every field kind, arbitrary-order navigation with a blocked-to-unblocked flip on a SINGLE keystroke, live inline validation both polarities with focus never leaving the field, a full ten-section journey typed live to a clean dry-run commit via the ONE commit button, a commit-time business-rule refusal (red) and its retry (green), keyboard/Tab/scroll navigation primitives, ctrl+q's exit-code contract, single-editable-home for both shared facts (dest owned by Fork/target, world by Birth) with a RED-first load-time refusal for a synthetic double-owner declaration, a readable-measure width cap (MEASURE=78) swept across every section plus the original emitting site (the 'Add a principal' modal), RED-first against a synthetic uncapped Static at a 400-column terminal, elucidation (section/field/option descriptions restored within measure), principal-reference ChoiceFields fed live from the register list, a real in-UI config-loading action node usable at start with DECLINED-vs-DEFAULTED record wording, and a single-disposition, dest_would_exist-first ordering fix for signed-genesis's own destination-scaffolded check with the 'screen 7' ghost text gone.
 
 (the three repeated "$ .../new-project.sh"/"$ .../teardown-world.sh" pairs are the REHEARSAL
 section's own live-choke-point echo under --dry-run -- "[dry-run: not executed]" per

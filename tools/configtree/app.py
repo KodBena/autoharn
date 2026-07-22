@@ -30,10 +30,11 @@ from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
 from textual.widgets import ContentSwitcher, Footer, Header, Static, Tree
 
+from tools.configtree.actions import ActionPane
 from tools.configtree.measure import MEASURE
 from tools.configtree.panes import CommitPane, SectionPane
-from tools.configtree.spec import (BLOCKED, COMPLETE, INVALID, CommitSpec, SectionSpec,
-                                    section_status, validate_shared_ownership)
+from tools.configtree.spec import (BLOCKED, COMPLETE, INVALID, ActionSpec, CommitSpec,
+                                    SectionSpec, section_status, validate_shared_ownership)
 
 _STATUS_ICON = {COMPLETE: "[green]✓[/]", INVALID: "[red]✗[/]", BLOCKED: "[yellow]⧖[/]",
                 "incomplete": "[dim]○[/]"}
@@ -81,13 +82,34 @@ class ConfigTreeApp(App):
     .ct-blocked-reason {{ color: $warning; padding: 1; max-width: {MEASURE}; }}
     .ct-precheck-line, .ct-info-line {{ color: $text-muted; }}
     .ct-choice-field {{ max-width: {MEASURE}; }}
+    .ct-section-description {{ color: $text-muted; padding: 0 1; max-width: {MEASURE}; }}
+    .ct-field-help {{ color: $text-muted; padding: 0 0 1 0; max-width: {MEASURE}; }}
+    .ct-choice-help {{ color: $text-muted; padding: 0 0 0 2; max-width: {MEASURE}; }}
+    /* A `ListField`/`MultiChoiceField`'s own repeatable-row/checkbox-group widget must size to
+    ITS OWN CONTENT, never `Vertical`'s own DEFAULT_CSS `height: 1fr` (an equal fractional share
+    of the section body regardless of content) -- several such widgets stacked in the SAME
+    `VerticalScroll` under `1fr` fight over one shared height and visually OVERLAP the instant
+    any one of them (e.g. a long elucidation line, this round's own defect A fix) needs more room
+    than its equal share; `height: auto` + the enclosing `VerticalScroll` is what makes "taller
+    than the viewport" a SCROLL, not an overlap (verified empirically: this exact overlap, and
+    its fix, both reproduced against the real principals-authority section). */
+    .ct-field-group {{ height: auto; }}
     """
     BINDINGS = [Binding("ctrl+q", "quit_app", "Quit", show=True, priority=True),
-                Binding("ctrl+c", "quit_app", "Quit", show=False, priority=True)]
+                Binding("ctrl+c", "quit_app", "Quit", show=False, priority=True),
+                # ctrl+z SUSPEND (maintainer round 5, ledger row 1115: "ctrl-z suspend never
+                # bound though Textual supports action_suspend_process" -- verified empirically
+                # against the installed Textual version, `App.action_suspend_process` sends
+                # SIGTSTP on a suspend-capable driver; a non-suspend-capable environment (this
+                # harness's own headless/Pilot runs included) is a documented no-op on Textual's
+                # own side, never a crash). `show=True` puts it on the Footer -- ADR-0019
+                # appendix P20's own "the footer binding display is the natural, required
+                # indicator surface" for a binding that changes what a keypress does.
+                Binding("ctrl+z", "suspend_process", "Suspend", show=True)]
 
     def __init__(self, sections: "tuple[SectionSpec, ...]", commit: CommitSpec, *,
-                 initial_state: dict | None = None, banner: str | None = None,
-                 title: str = "Configuration") -> None:
+                 actions: "tuple[ActionSpec, ...]" = (), initial_state: dict | None = None,
+                 banner: str | None = None, title: str = "Configuration") -> None:
         # TYPED REFUSAL AT LOAD (maintainer ruling, ADR-0019 + the maintainer's own ADR-0002
         # citation: "a duplicated mirror/projection of a value is a type error and refused on
         # TUI start"): checked BEFORE `super().__init__()` -- no Textual machinery starts at all
@@ -96,13 +118,16 @@ class ConfigTreeApp(App):
         validate_shared_ownership(sections)
         super().__init__()
         self.sections = sections
+        self.actions = actions
         self.commit_spec = commit
         self.state: dict = dict(initial_state or {})
         self.banner = banner
         self.title = title
         self._panes: dict[str, SectionPane] = {}
+        self._action_panes: dict[str, ActionPane] = {}
         self._commit_pane: "CommitPane | None" = None
         self._tree_nodes: dict[str, object] = {}
+        self._action_slugs: set[str] = {str(a.slug) for a in actions}
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=False)
@@ -115,6 +140,10 @@ class ConfigTreeApp(App):
             yield tree
             with ContentSwitcher(id="ct-switcher"):
                 yield Static("Select a section on the left to begin.", id="pane-welcome")
+                for action in self.actions:
+                    apane = ActionPane(action, self.state)
+                    self._action_panes[str(action.slug)] = apane
+                    yield apane
                 for spec in self.sections:
                     pane = SectionPane(spec, self.state)
                     self._panes[str(spec.slug)] = pane
@@ -126,6 +155,18 @@ class ConfigTreeApp(App):
     def on_mount(self) -> None:
         tree = self.query_one("#ct-tree", Tree)
         groups: dict[str, object] = {}
+        # Action nodes (e.g. "load a configuration") mount FIRST -- the genre's own preset/
+        # profile-picker convention sits above the ordinary configuration tree, reachable before
+        # any section is ever visited (maintainer round 5, ledger row 1115, defect C: "usable at
+        # start").
+        for action in self.actions:
+            group_name = str(action.group)
+            branch = groups.get(group_name)
+            if branch is None:
+                branch = tree.root.add(group_name, expand=True)
+                groups[group_name] = branch
+            node = branch.add_leaf(str(action.title), data={"kind": "action", "slug": str(action.slug)})
+            self._tree_nodes[str(action.slug)] = node
         for spec in self.sections:
             group_name = str(spec.group)
             branch = groups.get(group_name)
@@ -148,6 +189,8 @@ class ConfigTreeApp(App):
             # commit-sweep business-rule refusal, may have changed what THIS pane should show.
             await self._panes[slug].refresh_blocked()
             switcher.current = f"pane-{slug}"
+        elif data.get("kind") == "action":
+            switcher.current = f"pane-action-{data['slug']}"
         elif data.get("kind") == "commit":
             if self._commit_pane is not None and not self._commit_pane.is_committed:
                 await self._commit_pane.refresh_readiness()
@@ -158,10 +201,12 @@ class ConfigTreeApp(App):
         cheap, app-wide: every tree node's status ICON and the persistent status line are
         recomputed from the CURRENT shared state, pure text updates, no widget rebuild. This is
         what makes a dependency unblock the instant its prerequisite value lands, even in a
-        section pane that is not currently on screen (spec §3 v2's own acceptance bar)."""
+        section pane that is not currently on screen (spec §3 v2's own acceptance bar). Action
+        nodes carry no complete/incomplete concept (an immediate one-shot act, not a decision
+        record) and are skipped here entirely."""
         statuses = {str(s.slug): section_status(s, self.state) for s in self.sections}
         for slug, node in self._tree_nodes.items():
-            if slug == "commit":
+            if slug == "commit" or slug in self._action_slugs:
                 continue
             spec = next(s for s in self.sections if str(s.slug) == slug)
             icon = _STATUS_ICON.get(statuses[slug], "?")
@@ -173,6 +218,15 @@ class ConfigTreeApp(App):
             line.update(f"{n_complete}/{len(statuses)} sections complete -- remaining: {', '.join(remaining)}")
         else:
             line.update(f"{n_complete}/{len(statuses)} sections complete -- ready to commit.")
+
+    async def reload_all_panes(self) -> None:
+        """`ActionPane`'s own post-apply hook (its module docstring's "usable at start" contract):
+        recomposes every ALREADY-MOUNTED `SectionPane` so a value the action just seeded into the
+        shared `state` (e.g. a loaded template's per-section defaults) renders as that section's
+        own CURRENT live value immediately -- on the SAME visit an operator applies a preset,
+        never merely the next time each section happens to be (re-)selected."""
+        for pane in self._panes.values():
+            await pane.refresh_blocked()
 
     def action_quit_app(self) -> None:
         self.exit(return_code=130)

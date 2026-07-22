@@ -11,6 +11,6 @@ from tools.setup_tui import content, steps
 
 def build_app(state: dict, *, dry_run: bool) -> ConfigTreeApp:
     banner = str(content.APP_INTRO["dry_run_notice"]) if dry_run else None
-    app = ConfigTreeApp(steps.SECTIONS, steps.COMMIT, initial_state=state, banner=banner,
-                         title=str(content.APP_INTRO["heading"]))
+    app = ConfigTreeApp(steps.SECTIONS, steps.COMMIT, actions=steps.ACTIONS, initial_state=state,
+                         banner=banner, title=str(content.APP_INTRO["heading"]))
     return app

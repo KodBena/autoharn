@@ -6,10 +6,13 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from tools.configtree import ChoiceField, ConfirmField, SectionResult, SectionSpec, TextField
+from tools.configtree import (ChoiceField, ConfirmField, SectionResult, SectionSpec, TextField,
+                               is_field_touched)
 from tools.setup_tui import checklist as ck
 from tools.setup_tui import content, destination, feature_facts, governed_files
 from tools.setup_tui.plan import CommandAct, PlanEntry
+
+_SLUG = "fork-target"
 
 
 def _governed_step(state: dict, dest: str, extend: bool, extensions_raw: str) -> tuple[list, list]:
@@ -55,7 +58,9 @@ def fields(state: dict) -> tuple:
 def submit(state: dict, answers: dict) -> SectionResult:
     cl = state["_checklist"]
     if not answers["run"]:
-        cl.add("fork-target", "destination", ck.SKIPPED, "operator skipped screen 3")
+        touched = is_field_touched(state, _SLUG, "run")
+        cl.add("fork-target", "destination", ck.choice_status(touched),
+               "operator declined" if touched else "default (never visited/toggled)")
         return SectionResult(ok=True, info_lines=("fork/target skipped by operator.",))
 
     dest = answers["dest"].strip()
@@ -117,4 +122,5 @@ def submit(state: dict, answers: dict) -> SectionResult:
 
 
 STEP = SectionSpec(slug="fork-target", title="Fork/target", group="Substrate & target",
-                    fields=fields, submit=submit)
+                    fields=fields, submit=submit,
+                    description=feature_facts.fact("fork_target_governed_files").line())

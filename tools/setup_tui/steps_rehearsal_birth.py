@@ -9,7 +9,7 @@ import os
 import time
 from pathlib import Path
 
-from tools.configtree import ConfirmField, SectionResult, SectionSpec, TextField
+from tools.configtree import ConfirmField, SectionResult, SectionSpec, TextField, is_field_touched
 from tools.setup_tui import checklist as ck
 from tools.setup_tui import destination, governed_files
 from tools.setup_tui.idtypes import DestPath, DestPathError, WorldName, WorldNameError
@@ -46,7 +46,9 @@ def rehearsal_fields(state: dict) -> tuple:
 def rehearsal_submit(state: dict, answers: dict) -> SectionResult:
     cl = state["_checklist"]
     if not answers["run"]:
-        cl.add("rehearsal", "rehearsal", ck.SKIPPED, "operator skipped screen 4")
+        touched = is_field_touched(state, "rehearsal", "run")
+        cl.add("rehearsal", "rehearsal", ck.choice_status(touched),
+               "operator declined" if touched else "default (never visited/toggled)")
         return SectionResult(ok=True, state_updates={"rehearsal_green": False},
                            info_lines=("rehearsal skipped by operator.",))
 
@@ -122,7 +124,9 @@ def birth_submit(state: dict, answers: dict) -> SectionResult:
     if not state.get("rehearsal_green") and answers["override"]:
         cl.add("birth", "rehearsal gate", ck.WITNESSED, "OVERRIDDEN by operator")
     if not answers["run"]:
-        cl.add("birth", "world birth", ck.SKIPPED, "operator skipped screen 5")
+        touched = is_field_touched(state, "birth", "run")
+        cl.add("birth", "world birth", ck.choice_status(touched),
+               "operator declined" if touched else "default (never visited/toggled)")
         return SectionResult(ok=True, info_lines=("birth skipped by operator.",))
 
     host = answers["host"].strip() or state.get("pghost", "192.168.122.1")

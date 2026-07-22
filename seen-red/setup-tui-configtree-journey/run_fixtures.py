@@ -95,21 +95,24 @@ from __future__ import annotations
 
 import asyncio
 import os
+import shutil
 import sys
+import tempfile
 
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, REPO)
 
 from textual.app import App, ComposeResult  # noqa: E402
-from textual.widgets import Button, Checkbox, ContentSwitcher, Input, Static, Tree  # noqa: E402
+from textual.widgets import Button, Checkbox, ContentSwitcher, Input, RadioSet, Static, Tree  # noqa: E402
 
 from tools.configtree import CommitSpec, DuplicatedSharedFieldError, SectionResult, SectionSpec  # noqa: E402
 from tools.configtree.app import ConfigTreeApp  # noqa: E402
 from tools.configtree.fields import (ChoiceField, ListField, TextField, get_field_value,  # noqa: E402
-                                      set_field_value)
+                                      is_field_touched, set_field_value)
 from tools.configtree.ids import NodeId  # noqa: E402
 from tools.configtree.measure import MEASURE  # noqa: E402
 from tools.configtree.spec import COMPLETE, INVALID, owner_of, section_status  # noqa: E402
+from tools.setup_tui import checklist as ck  # noqa: E402
 from tools.setup_tui import steps, tui_app  # noqa: E402
 from tools.setup_tui.checklist import Checklist  # noqa: E402
 from tools.setup_tui.plan import Plan  # noqa: E402
@@ -441,17 +444,23 @@ async def case_5() -> None:
 
         tree.focus()
         await pilot.pause()
-        for _ in range(3):
+        # 5x down, not 3x (maintainer round 5, ledger row 1115, defect C(i)): the tree now has a
+        # "Setup" group + "Load a configuration" node ABOVE "Substrate & target" (root, Setup,
+        # Load a configuration, Substrate & target, Preflight, Substrate == cursor line 5) --
+        # the offset shift is the direct, correct consequence of a real, reachable tree node
+        # being added, not a fixture artifact to paper over.
+        for _ in range(5):
             await pilot.press("down")
         await pilot.pause()
         cursor_before = tree.cursor_line
-        assert cursor_before == 3, f"expected the tree cursor at line 3 after 3x down, got {cursor_before}"
+        assert cursor_before == 5, f"expected the tree cursor at line 5 after 5x down, got {cursor_before}"
         await pilot.press("enter")
         await pilot.pause()
         assert switcher.current == "pane-substrate", \
             f"expected Enter on the keyboard-moved cursor to select 'Substrate', got {switcher.current}"
-        print(f"case 5a ok: arrow-key Tree navigation (3x down) + Enter selects the real "
-              f"'{switcher.current}' pane, no mouse and no programmatic select_node involved")
+        print(f"case 5a ok: arrow-key Tree navigation (5x down, past the new 'Setup' group) + "
+              f"Enter selects the real '{switcher.current}' pane, no mouse and no programmatic "
+              f"select_node involved")
 
         focus_before = app.focused
         await pilot.press("tab")
@@ -587,7 +596,8 @@ async def case_7() -> None:
 
 
 _MEASURE_CAPPED_SELECTOR = (".ct-field-label, .ct-field-error, .ct-blocked-reason, "
-                            ".ct-section-title, #ct-status-line, #ct-banner, .ct-choice-field")
+                            ".ct-section-title, #ct-status-line, #ct-banner, .ct-choice-field, "
+                            ".ct-section-description, .ct-field-help, .ct-choice-help")
 
 
 class _UncappedProbe(App):
@@ -693,6 +703,323 @@ async def case_8() -> None:
               f"not merely wrapped")
 
 
+async def case_9() -> None:
+    """ELUCIDATION (maintainer round 5, ledger row 1115 -- the round-4 fix DELETED the
+    elucidating option descriptions instead of rendering them within measure, malicious
+    compliance; the censure this fresh session was dispatched to answer). Proves: a section's
+    OWN description renders under its title (`SectionSpec.description`), a `MultiChoiceField`
+    option's own elucidation renders juxtaposed under its checkbox (`option_help`), and a
+    `ListField`'s own elucidation (the CONSTITUTES/DOES NOT text recovered from
+    `principals_authority.toml`'s `[lessons]` table) renders under its own Label -- every one of
+    them within MEASURE."""
+    app = tui_app.build_app(_fresh_state(), dry_run=True)
+    async with app.run_test(size=(150, 55)) as pilot:
+        await pilot.pause()
+        tree = app.query_one("#ct-tree", Tree)
+
+        # --- section-level description (signed-genesis: feature_facts' own aspiration/external
+        # line, the exact "what our aspirations with it were, relative to existing standards"
+        # class the maintainer named) ---
+        tree.select_node(_find_node(tree, "signed-genesis"))
+        await pilot.pause()
+        desc_widgets = list(app.query_one("#pane-signed-genesis").query(".ct-section-description"))
+        desc = [str(w.render()) for w in desc_widgets]
+        assert desc and "aspiration" in desc[0], f"expected an aspiration/external description, got {desc}"
+        offenders = [(w.id, w.size.width) for w in desc_widgets if w.size.width > MEASURE]
+        assert not offenders, f"section description RENDERED width exceeds MEASURE={MEASURE}: {offenders}"
+        print(f"case 9a ok: signed-genesis's OWN section description renders under its title, "
+              f"within MEASURE (rendered width {desc_widgets[0].size.width}): {desc[0][:90]!r}...")
+
+        # --- MultiChoiceField option-level elucidation (hydration: each durable-decision's own
+        # 'why' citation, juxtaposed under its own checkbox -- the tooltip-equivalent this
+        # terminal offers). Hydration is BLOCKED until a destination exists -- set one first via
+        # its OWNER (Fork/target) so its real fields render instead of a blocked banner.
+        for grp in tree.root.children:
+            for leaf in grp.children:
+                if leaf.data and leaf.data.get("slug") == "fork-target":
+                    tree.select_node(leaf)
+        await pilot.pause()
+        app.query_one("#pane-fork-target #ct-field-dest", Input).value = "/tmp/ctj-case9b-dest"
+        await pilot.pause()
+        await app._panes["hydration"].refresh_blocked()
+        tree.select_node(_find_node(tree, "hydration"))
+        await pilot.pause()
+        pane = app.query_one("#pane-hydration")
+        choice_help_widgets = list(pane.query(".ct-choice-help"))
+        choice_help_lines = [str(w.render()) for w in choice_help_widgets]
+        assert choice_help_lines, "expected at least one per-option elucidation line under the durable-decisions/ADR checkbox groups"
+        offenders = [(w.id, w.size.width) for w in choice_help_widgets if w.size.width > MEASURE]
+        assert not offenders, f"a per-option elucidation line exceeds MEASURE={MEASURE}: {offenders}"
+        print(f"case 9b ok: hydration's durable-decision/ADR checkboxes each carry their own "
+              f"elucidation line, within MEASURE -- {len(choice_help_lines)} line(s), e.g. "
+              f"{choice_help_lines[0][:90]!r}...")
+
+        # --- ListField-level elucidation, recovered from principals_authority.toml's [lessons]
+        # table (CONSTITUTES/DOES NOT text) -- was in the data all along, never previously
+        # surfaced in the UI ---
+        for grp in tree.root.children:
+            for leaf in grp.children:
+                if leaf.data and leaf.data.get("slug") == "fork-target":
+                    tree.select_node(leaf)
+        await pilot.pause()
+        app.query_one("#pane-fork-target #ct-field-dest", Input).value = "/tmp/ctj-case9-dest"
+        await pilot.pause()
+        await app._panes["principals-authority"].refresh_blocked()
+        tree.select_node(_find_node(tree, "principals-authority"))
+        await pilot.pause()
+        pa_pane = app.query_one("#pane-principals-authority")
+        help_widgets = list(pa_pane.query(".ct-field-help"))
+        help_lines = [str(w.render()) for w in help_widgets]
+        assert any("CONSTITUTES" in ln for ln in help_lines), \
+            f"expected the register ListField's own CONSTITUTES/DOES NOT lesson text, got {help_lines}"
+        offenders = [(w.id, w.size.width) for w in help_widgets if w.size.width > MEASURE]
+        assert not offenders, f"a ListField's own help line exceeds MEASURE={MEASURE}: {offenders}"
+        print(f"case 9c ok: principals-authority's 'Principal'/'Competence'/'Relation'/'Role "
+              f"charter' lists each carry their own CONSTITUTES/DOES NOT elucidation "
+              f"(principals_authority.toml's own [lessons] table), within MEASURE")
+
+
+async def case_10() -> None:
+    """PRINCIPAL REFERENCES ARE SELECTIONS (maintainer round 5, ledger row 1115, defect B): the
+    competence/relation/charter ChoiceFields are fed LIVE from the register list's own current
+    rows -- a name typed into 'register' in THIS SAME visit shows up as a pickable option in a
+    SIBLING list without leaving the pane (`ListField.refresh_siblings`). Also proves the garbled
+    'Add Grant a competence' label class is gone: every ListField label here is a noun phrase, so
+    the library's own 'Add {label}' button reads as ordinary English."""
+    app = tui_app.build_app(_fresh_state(), dry_run=True)
+    async with app.run_test(size=(150, 55)) as pilot:
+        await pilot.pause()
+        tree = app.query_one("#ct-tree", Tree)
+        for grp in tree.root.children:
+            for leaf in grp.children:
+                if leaf.data and leaf.data.get("slug") == "fork-target":
+                    tree.select_node(leaf)
+        await pilot.pause()
+        app.query_one("#pane-fork-target #ct-field-dest", Input).value = "/tmp/ctj-case10-dest"
+        await pilot.pause()
+        await app._panes["principals-authority"].refresh_blocked()
+        tree.select_node(_find_node(tree, "principals-authority"))
+        await pilot.pause()
+        pane = app.query_one("#pane-principals-authority")
+
+        # --- label sanity: no ListField label here duplicates a verb the "Add " prefix already
+        # supplies ---
+        add_buttons = [str(b.label) for b in pane.query(Button) if str(b.id or "").endswith("-add")]
+        assert add_buttons, "expected at least one 'Add ...' button in this section"
+        for label in add_buttons:
+            assert label.count("Add") == 1, f"garbled Add-button label (maintainer's exact quote class): {label!r}"
+        print(f"case 10a ok: every 'Add ...' button reads as ordinary English, no doubled verb "
+              f"(the maintainer's exact quote, 'Add Grant a competence', is gone): {add_buttons}")
+
+        # --- before registering anyone, the competence picker offers only the honest sentinel ---
+        comp_before = pane.query_one("#ct-field-competences-add", Button)
+        comp_before.scroll_visible()
+        await pilot.pause()
+        await pilot.click(comp_before)
+        await pilot.pause()
+        modal_rs = app.screen.query_one(RadioSet)
+        sentinel_labels = [str(b.label) for b in modal_rs.children]
+        assert any("no principals known yet" in lbl for lbl in sentinel_labels), \
+            f"expected the honest empty-catalog sentinel before any principal is known, got {sentinel_labels}"
+        await pilot.press("escape")
+        await pilot.pause()
+        print("case 10b ok: before any principal is registered, the competence picker offers the "
+              "honest 'no principals known yet' sentinel, never free text")
+
+        # --- register a principal, THEN open the competence Add modal in the SAME visit ---
+        reg_add = pane.query_one("#ct-field-register-add", Button)
+        reg_add.scroll_visible()
+        await pilot.pause()
+        await pilot.click(reg_add)
+        await pilot.pause()
+        modal = app.screen
+        modal.query_one("#ct-field-name", Input).value = "ctj-case10-principal"
+        await pilot.pause()
+        modal.query_one(RadioSet).children[0].value = True  # "human" -- the first class option
+        await pilot.pause()
+        modal.query_one("#ct-field-purpose", Input).value = "witnessing case 10"
+        await pilot.pause()
+        await pilot.click(modal.query_one("#ct-modal-save", Button))
+        await pilot.pause()
+
+        comp_add = pane.query_one("#ct-field-competences-add", Button)
+        comp_add.scroll_visible()
+        await pilot.pause()
+        await pilot.click(comp_add)
+        await pilot.pause()
+        modal2_rs = app.screen.query_one(RadioSet)
+        names_offered = [str(b.label) for b in modal2_rs.children]
+        assert names_offered == ["ctj-case10-principal"], \
+            (f"expected the competence picker to offer EXACTLY the registered name, no more no "
+             f"less, got {names_offered}")
+        await pilot.press("escape")
+        await pilot.pause()
+        print(f"case 10c ok: the SAME visit's own 'register' row ('ctj-case10-principal') is "
+              f"immediately offered as the competence grant's own principal picker option -- "
+              f"{names_offered} -- no free text, no re-visit required")
+
+
+async def case_11() -> None:
+    """CONFIG LOADING IS DISCOVERABLE + RECORDS STOP LYING (maintainer round 5, ledger row 1115,
+    defect C). (i) 'Load a configuration' is a real, reachable tree node from app start, offering
+    the known-good template and a custom path -- applying it seeds every OTHER section's own live
+    default immediately. (ii) an untouched default is NEVER recorded as 'operator declined' --
+    DECLINED (touched, said no) vs DEFAULTED (never touched) are two distinct, honest checklist
+    statuses."""
+    app = tui_app.build_app(_fresh_state(), dry_run=True)
+    async with app.run_test(size=(150, 55)) as pilot:
+        await pilot.pause()
+        tree = app.query_one("#ct-tree", Tree)
+        tree.select_node(_find_node(tree, "load-config"))
+        await pilot.pause()
+        rs = app.query_one("#pane-action-load-config #ct-field-template", RadioSet)
+        idx = next(i for i, b in enumerate(rs.children) if "known-good-blank" in str(b.label))
+        await pilot.click(rs.children[idx])
+        await pilot.pause()
+        await pilot.click(app.query_one("#pane-action-load-config #ct-action-apply", Button))
+        await pilot.pause()
+
+        tree.select_node(_find_node(tree, "substrate"))
+        await pilot.pause()
+        substrate_run = app.query_one("#pane-substrate #ct-field-run", Checkbox)
+        assert substrate_run.value is True, \
+            f"expected the loaded template's own substrate.run=true to seed the live checkbox, got {substrate_run.value}"
+        print("case 11a ok: 'Load a configuration' is a real tree node, reachable and usable at "
+              "app start -- loading bootstrap/templates/known-good-blank.toml seeds substrate's "
+              "own 'run' checkbox to True immediately, no re-launch, no --initial-config flag")
+
+        # --- record-wording: DECLINED (touched) vs DEFAULTED (never touched), same field kind,
+        # same section, same false value -- only the touch history differs.
+        state_touched: dict = _fresh_state()
+        state_touched["dest"] = "/tmp/ctj-case11-dest"
+        state_touched["dest_would_exist"] = True
+        cb_field = next(f for f in steps.steps_observability.fields(state_touched) if str(f.name) == "otelcol")
+        set_field_value(state_touched, NodeId("observability"), cb_field, False)  # a real, deliberate touch
+        result_touched = steps.steps_observability.submit(state_touched, {"run": True, "otelcol": False, "otel_watch": False})
+        rows_touched = {(it.screen, it.item): it.status for it in state_touched["_checklist"].items}
+        assert rows_touched[("observability", "otelcol selected")] == ck.DECLINED, \
+            f"expected DECLINED for a TOUCHED false value, got {rows_touched}"
+        print("case 11b ok (RED-class distinguished): a TOUCHED-but-false otelcol selection "
+              "records DECLINED -- 'operator declined', an honest attribution of an actual choice")
+
+        state_default: dict = _fresh_state()
+        state_default["dest"] = "/tmp/ctj-case11-dest"
+        state_default["dest_would_exist"] = True
+        result_default = steps.steps_observability.submit(state_default, {"run": True, "otelcol": False, "otel_watch": False})
+        rows_default = {(it.screen, it.item): it.status for it in state_default["_checklist"].items}
+        assert rows_default[("observability", "otelcol selected")] == ck.DEFAULTED, \
+            (f"FALSE-ATTRIBUTION BUG (maintainer round 5, ledger row 1115): an UNTOUCHED "
+             f"checkbox recorded as {rows_default[('observability', 'otelcol selected')]!r}, "
+             f"expected DEFAULTED -- 'the operator never touched this', not a claimed decision")
+        print("case 11c ok (the false-attribution bug itself, now impossible): the IDENTICAL "
+              "false value, NEVER touched, records DEFAULTED -- never 'operator declined' for a "
+              "default nobody looked at")
+        assert result_touched.ok and result_default.ok
+
+
+async def case_12() -> None:
+    """ONE FACT, ONE RECORD AT COMMIT (maintainer round 5, ledger row 1115, defect D): a
+    commit-sweep validation must never re-probe a TRANSITIONAL, pre-act disk state for a fact
+    THIS SAME commit's own earlier act (birth) will make true -- `dest_would_exist` is now
+    consulted FIRST and trusted outright, never re-checked against physical disk state that a
+    same-session birth has simply not written yet. RED-FIRST: the OLD ordering (physical
+    `os.path.isdir` checked BEFORE `dest_would_exist`) is replicated verbatim below and shown to
+    misfire on a REAL, realistic transitional state (a destination directory that already exists
+    -- e.g. fork-copy's own `cp -a` already ran -- but whose scaffold-written keys/+verify-
+    commission+legacy/led do not exist YET, because birth's own scaffold act has not run this
+    commit). GREEN: the CURRENT `steps_signed_genesis.submit` gets the SAME state right, and
+    records EXACTLY ONE disposition for the 'world has keys/+...' item, never two.
+    Also proves the 'screen 7' sequential-era ghost wording is gone."""
+    dest = tempfile.mkdtemp(prefix="ctj-case12-dest-")
+    try:
+        state = _fresh_state()
+        state["dest"] = dest
+        state["dest_would_exist"] = True  # birth is queued THIS SAME commit, earlier in registry order
+
+        # --- RED: the OLD branch order (verbatim replica of the pre-fix shape) ---
+        def _old_would_refuse(dest: str, dest_would_exist: bool) -> "str | None":
+            if not os.path.isdir(dest):
+                return None if dest_would_exist else "REFUSED: not a directory"
+            missing = [n for n, ok in (
+                ("keys/", os.path.isdir(os.path.join(dest, "keys"))),
+                ("verify-commission", os.path.isfile(os.path.join(dest, "verify-commission"))),
+                ("legacy/led", os.path.isfile(os.path.join(dest, "legacy", "led")))) if not ok]
+            return f"REFUSED: missing {missing} -- not a scaffolded world" if missing else None
+
+        old_verdict = _old_would_refuse(dest, True)
+        assert old_verdict is not None, \
+            "expected the OLD ordering to WRONGLY refuse a real, transitional pre-birth directory"
+        print(f"case 12a ok (RED, reproduced): the OLD check-physical-state-first ordering "
+              f"refuses a real transitional directory even though this SAME commit's own birth "
+              f"act (dest_would_exist=True) has not run yet: {old_verdict!r}")
+
+        # --- GREEN: the CURRENT code, same transitional state, same dest_would_exist=True ---
+        answers = {"run": True, "statement": "case 12 witness", "use_scratch_identity": True,
+                   "name": "", "email": "", "gnupghome": ""}
+        result = steps.steps_signed_genesis.submit(state, answers)
+        cl = state["_checklist"]
+        matching = [it for it in cl.items if it.item == "world has keys/+verify-commission+legacy/led"]
+        assert len(matching) == 1, \
+            f"expected EXACTLY ONE disposition row for this item, got {len(matching)}: {matching}"
+        assert matching[0].status == ck.DRY_SKIPPED, \
+            f"expected the CURRENT ordering to TRUST dest_would_exist and skip the stale probe, got {matching[0].status}"
+        assert "screen 7" not in " ".join(str(v) for it in cl.items for v in (it.item, it.detail)), \
+            "the sequential-era 'screen 7' ghost text must be gone from a tree UI"
+        print(f"case 12b ok (GREEN, single disposition): the CURRENT ordering trusts "
+              f"dest_would_exist FIRST -- exactly ONE row for this item "
+              f"({matching[0].status}), no 'screen 7' ghost text anywhere in the checklist")
+
+        # --- run=False path: ALSO exactly one disposition, and the SAME item-name discipline.
+        # Called directly (no widget write-through, matching a --from-config-style invocation --
+        # `is_field_touched` therefore reads False, so the honest record is DEFAULTED here, not
+        # DECLINED; case 11b/11c already prove the widget-driven, TOUCHED case reads DECLINED).
+        state2 = _fresh_state()
+        result2 = steps.steps_signed_genesis.submit(state2, {"run": False, "statement": "", "use_scratch_identity": False, "name": "", "email": "", "gnupghome": ""})
+        cl2 = state2["_checklist"]
+        ceremony_rows = [it for it in cl2.items if it.item == "ceremony"]
+        assert len(ceremony_rows) == 1, f"expected exactly one 'ceremony' row, got {ceremony_rows}"
+        assert ceremony_rows[0].status == ck.DEFAULTED, \
+            f"expected DEFAULTED (no widget write-through in this call -- untouched), got {ceremony_rows[0].status}"
+        assert result2.ok
+        print(f"case 12c ok: the run=False path ALSO yields exactly ONE disposition row "
+              f"('ceremony', {ceremony_rows[0].status}), never a second contradicting one")
+    finally:
+        shutil.rmtree(dest, ignore_errors=True)
+
+
+async def case_13() -> None:
+    """BIND SUSPEND (maintainer round 5, ledger row 1115): ctrl+z is bound to Textual's own
+    `action_suspend_process` (verified empirically against the installed Textual version --
+    `App.action_suspend_process` exists and sends SIGTSTP on a suspend-capable driver), shown in
+    the Footer. Witnesses what a headless harness honestly can: the binding is present and
+    invocable. The live-terminal leg (does the terminal ACTUALLY suspend/resume) is UNEXERCISED
+    here -- named in the report, with the exact command for the maintainer to try."""
+    calls = []
+    orig = App.action_suspend_process
+
+    def _patched(self):
+        calls.append(True)
+        return orig(self)
+
+    App.action_suspend_process = _patched
+    try:
+        app = tui_app.build_app(_fresh_state(), dry_run=True)
+        async with app.run_test(size=(150, 55)) as pilot:
+            await pilot.pause()
+            bound = any(str(getattr(b, "key", "")) == "ctrl+z" for b in ConfigTreeApp.BINDINGS)
+            assert bound, "expected an explicit ctrl+z binding on ConfigTreeApp.BINDINGS"
+            await pilot.press("ctrl+z")
+            await pilot.pause()
+            assert calls, "expected ctrl+z to invoke action_suspend_process"
+            print("case 13 ok: ctrl+z is bound and invokes App.action_suspend_process "
+                  "(headless-safe -- a non-suspend-capable driver is Textual's own documented "
+                  "no-op, never a crash). UNEXERCISED: the live-terminal leg -- an operator "
+                  "should run 'python3 -m tools.setup_tui' in a REAL terminal, press ctrl+z, and "
+                  "confirm the shell job actually suspends (fg to resume).")
+    finally:
+        App.action_suspend_process = orig
+
+
 async def _main() -> None:
     await case_0()
     await case_1()
@@ -703,6 +1030,11 @@ async def _main() -> None:
     await case_6()
     await case_7()
     await case_8()
+    await case_9()
+    await case_10()
+    await case_11()
+    await case_12()
+    await case_13()
     print("ALL CASES OK -- tools.configtree.app.ConfigTreeApp driven end-to-end through the "
           "REAL tools.setup_tui.steps.SECTIONS registry via Pilot, LIVE-MODEL semantics "
           "throughout (no per-section save exists): a state-aliasing reproduction and structural "

@@ -51,7 +51,11 @@ class SectionSpec:
 
     `group` places this section under a named branch in the sidebar tree (spec §3 v2: "every
     section and subsection visible at once") -- purely a display grouping, never a dependency;
-    the REAL dependency mechanism is `blocked`."""
+    the REAL dependency mechanism is `blocked`. `description` -- this library's own section-level
+    ELUCIDATION slot (maintainer round 5, ledger row 1115: "we were supposed to have an
+    explanation for each feature, what our aspirations with it were, relative to existing
+    standards"): optional prose rendered under the section title, before its fields, capped at
+    measure like every other prose class this library renders."""
     slug: "str | NodeId"
     title: "str | Label"
     group: "str | Label"
@@ -59,6 +63,7 @@ class SectionSpec:
     submit: Callable[[dict, dict], SectionResult]
     precheck: "Callable[[dict], tuple[str, ...]] | None" = None
     blocked: "Callable[[dict], 'str | None'] | None" = None
+    description: "str | None" = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "slug", self.slug if isinstance(self.slug, NodeId) else NodeId(self.slug))
@@ -88,6 +93,35 @@ class CommitSpec:
     commit: Callable[[dict], SectionResult]
     confirm_label: str = "Commit"
     reset: "Callable[[dict], None] | None" = None
+
+
+@dataclass(frozen=True)
+class ActionSpec:
+    """An IMMEDIATE-action tree node -- the genre's own "load defaults" / "import a profile"
+    picker (Qt/SAP settings dialogs' own preset affordance, ADR-0019 Rule 1), distinct from an
+    ordinary `SectionSpec`: its `apply` runs THE INSTANT the operator presses this node's own
+    button, never deferred to the commit sweep (maintainer round 5, ledger row 1115, defect C:
+    "an in-UI affordance to load a configuration file ... usable at start" -- a config-loading
+    action is useless if it only takes effect after every OTHER section has already been visited
+    and committed). `apply(state, answers)` may merge facts straight into the shared `state`
+    (`SectionResult.state_updates`, read the SAME way a section's own commit-time `submit` return
+    is read) -- `tools.configtree.panes.ActionPane` does that merge AND asks `ConfigTreeApp` to
+    recompose every ALREADY-MOUNTED `SectionPane` afterward, so a value this action seeded shows
+    up as every other section's OWN live default immediately, not merely on next visit. Fields
+    work exactly like a section's own (live write-through, inline validation) -- an action can
+    still ask for input (e.g. "which template?") before its one button fires."""
+    slug: "str | NodeId"
+    title: "str | Label"
+    group: "str | Label"
+    fields: Callable[[dict], "tuple[Field, ...]"]
+    apply: Callable[[dict, dict], SectionResult]
+    apply_label: str = "Apply"
+    description: "str | None" = None
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "slug", self.slug if isinstance(self.slug, NodeId) else NodeId(self.slug))
+        object.__setattr__(self, "title", self.title if isinstance(self.title, Label) else Label(self.title))
+        object.__setattr__(self, "group", self.group if isinstance(self.group, Label) else Label(self.group))
 
 
 def section_answers(spec: SectionSpec, state: dict) -> dict:

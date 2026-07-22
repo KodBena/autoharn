@@ -55,6 +55,36 @@ def _coerce_label(raw: "str | Label") -> Label:
 # reviewed exception, never an accident.
 
 
+# ELUCIDATION DOCTRINE (maintainer round 5, ledger row 1115 -- the censure this note answers: "we
+# were supposed to have an explanation for each feature, what our aspirations with it were,
+# relative to existing standards" -- and a prior round's fix for readable-measure DELETED the
+# elucidating option descriptions instead of rendering them within measure, malicious compliance).
+# Every field kind below carries an OPTIONAL `help` string -- prose shown UNDER the field (Qt-
+# style: description under the control, the "juxtaposed text" the maintainer named as this
+# terminal's tooltip-equivalent), rendered by `tools.configtree.widgets`/`panes` at the SAME
+# MEASURE cap every other prose class in this library uses (`tools.configtree.measure.MEASURE`).
+# `ChoiceField`/`MultiChoiceField` ALSO carry a PER-OPTION help string (`option_help`, keyed by
+# option value) -- the closed-vocabulary case: a `RadioButton`/`Checkbox` caption does not wrap
+# (`widgets.build_field_widget`'s own docstring), so a long descriptive sentence about ONE option
+# is never spliced into that option's own caption; it renders as its own capped line in a details
+# region under the control instead, restoring exactly the content the deleted mirror used to
+# carry, properly measured this time -- deletion was never the fix for a measure violation, only
+# WRAPPING was.
+
+
+# TOUCHED-FIELD TRACKING (maintainer round 5, ledger row 1115: "the checklist then recorded
+# operator-declined for defaults the operator never touched -- false attribution of choice").
+# `set_field_value` (this module's ONE write-through choke point, called ONLY from a real
+# Textual Changed-message handler -- see `tools.configtree.panes.SectionPane._write_through`'s own
+# docstring) ALSO marks the field TOUCHED, in a set keyed the same way its own live value is keyed
+# (`ids.ScopedFieldKey` for a scoped field, the bare name for a `shared=True` one). A field whose
+# CURRENT value merely equals its own compile-time default because the operator never interacted
+# with the widget at all is thereby distinguishable, structurally, from a field the operator
+# visited and left/set at that same value on purpose -- `is_field_touched` below is the ONE place
+# a consumer's own `submit` asks the question, so a decision-record's wording (operator DECLINED
+# vs the value is merely DEFAULTED, never touched) is never guessed from the bare value alone.
+
+
 @dataclass(frozen=True)
 class TextField:
     """One free-text input. `default` seeds the widget's initial value. `name`/`label` are
@@ -63,7 +93,9 @@ class TextField:
     dataclasses use `object.__setattr__` for this, the standard idiom), so every call site keeps
     writing `TextField(name="dest", ...)` while the STORED value is always the checked type,
     never a bare string past construction. `shared` -- see this module's own "SHARED-FIELD
-    DOCTRINE" note above; defaults to `False` (scoped, alias-proof)."""
+    DOCTRINE" note above; defaults to `False` (scoped, alias-proof). `help` -- see this module's
+    own "ELUCIDATION DOCTRINE" note below; optional prose rendered under the field, capped at
+    measure, never the field's only source of meaning (the label always stands alone)."""
     name: "str | FieldName"
     label: "str | Label"
     default: str = ""
@@ -71,6 +103,7 @@ class TextField:
     password: bool = False
     required: bool = True
     shared: bool = False
+    help: "str | None" = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "name", _coerce_name(self.name))
@@ -81,12 +114,18 @@ class TextField:
 class ChoiceField:
     """A closed set of mutually-exclusive options -- `options` is `((value, display-label), ...)`;
     `default`, if set, must be one of the option values. `shared` -- see this module's own
-    "SHARED-FIELD DOCTRINE" note above."""
+    "SHARED-FIELD DOCTRINE" note above. `help`/`option_help` -- see this module's own
+    "ELUCIDATION DOCTRINE" note above: `help` is whole-field prose, `option_help` is an optional
+    `{option_value: prose}` map -- every key must be one of `options`' own values (checked below),
+    rendered as its own capped line under the control (a `RadioButton` caption does not wrap, so
+    a long per-option sentence is never spliced into the caption itself)."""
     name: "str | FieldName"
     label: "str | Label"
     options: tuple[tuple[str, str], ...]
     default: str | None = None
     shared: bool = False
+    help: "str | None" = None
+    option_help: "dict[str, str] | None" = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "name", _coerce_name(self.name))
@@ -96,6 +135,11 @@ class ChoiceField:
         values = [v for v, _ in self.options]
         if self.default is not None and self.default not in values:
             raise ValueError(f"ChoiceField {self.name} default {self.default!r} not in {values}")
+        if self.option_help is not None:
+            unknown = set(self.option_help) - set(values)
+            if unknown:
+                raise ValueError(f"ChoiceField {self.name} option_help names unknown option(s): "
+                                  f"{sorted(unknown)}")
 
 
 @dataclass(frozen=True)
@@ -103,11 +147,13 @@ class ConfirmField:
     """A yes/no toggle. `shared` -- see this module's own "SHARED-FIELD DOCTRINE" note above
     (the exact field kind the maintainer's own live defect report named -- every
     `ConfirmField(name="run", ...)` across every section defaults `shared=False`, precisely so
-    two sections' own "run" toggles can never again collide)."""
+    two sections' own "run" toggles can never again collide). `help` -- see this module's own
+    "ELUCIDATION DOCTRINE" note above."""
     name: "str | FieldName"
     label: "str | Label"
     default: bool = False
     shared: bool = False
+    help: "str | None" = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "name", _coerce_name(self.name))
@@ -125,12 +171,20 @@ class ListField:
     (`list[dict[str, str]]`, insertion order preserved) exactly like any other field's value.
     `shared` -- see this module's own "SHARED-FIELD DOCTRINE" note above; a `ListField`'s own rows
     are already scoped to its OWN `ListFieldWidget` instance, so `shared=True` here is a narrower
-    case (no consumer currently needs it) kept only for uniformity across the four field kinds."""
+    case (no consumer currently needs it) kept only for uniformity across the four field kinds.
+    `help` -- see this module's own "ELUCIDATION DOCTRINE" note above. `refresh_siblings` -- set
+    True when THIS list's own rows are read (via `get_field_value`) by another field's `options`
+    computation in the SAME section's `fields(state)` callback (e.g. a `ChoiceField` picker whose
+    choices are "principals registered so far, this visit") -- forces the whole `SectionPane` to
+    recompose right after an Add/Remove of THIS list, so a sibling field's derived choices reflect
+    the change on the SAME visit, not only the next time the section is (re-)selected."""
     name: "str | FieldName"
     label: "str | Label"
     item_fields: tuple[Union[TextField, ChoiceField], ...]
     summarize: Callable[[dict], str]
     shared: bool = False
+    help: "str | None" = None
+    refresh_siblings: bool = False
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "name", _coerce_name(self.name))
@@ -139,9 +193,54 @@ class ListField:
             raise ValueError(f"ListField {self.name} must have at least one item_field")
 
 
-Field = Union[TextField, ChoiceField, ConfirmField, ListField]
+@dataclass(frozen=True)
+class MultiChoiceField:
+    """A CLOSED, finite catalog rendered as a checkbox GROUP -- one checkbox per option, each
+    option's own elucidation juxtaposed under it (this module's own "ELUCIDATION DOCTRINE" note),
+    never a free-text delimited string over a finite vocabulary (maintainer round 5, ledger row
+    1115: "I had to hand-edit a comma-separated list instead of ticking checkboxes with tooltips
+    ... for both ADR and the durable decisions" -- the same class as a closed-vocabulary value
+    entered as free text, one rung worse since it also demands the operator know the exact
+    slugs). The model VALUE is a `list[str]` (option values currently checked, catalog order,
+    never a joined string) -- `submit`/config round-trips read/write this SAME typed list; only a
+    TOML file's own array-of-strings representation is an honest re-encoding of it, never a
+    comma-joined scalar. `shared` -- see this module's own "SHARED-FIELD DOCTRINE" note above."""
+    name: "str | FieldName"
+    label: "str | Label"
+    options: tuple[tuple[str, str], ...]
+    default: tuple[str, ...] = ()
+    shared: bool = False
+    help: "str | None" = None
+    option_help: "dict[str, str] | None" = None
 
-FIELD_TYPES = (TextField, ChoiceField, ConfirmField, ListField)
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "name", _coerce_name(self.name))
+        object.__setattr__(self, "label", _coerce_label(self.label))
+        if not self.options:
+            raise ValueError(f"MultiChoiceField {self.name} must have at least one option")
+        values = [v for v, _ in self.options]
+        dupes = {v for v in values if values.count(v) > 1}
+        if dupes:
+            # Construction-time refusal, not a widget crash discovered live: two options sharing
+            # one VALUE would mint two checkboxes claiming the same identity (and, concretely,
+            # the same widget id -- this is exactly how a catalog-derivation bug upstream, e.g.
+            # two files parsing to the SAME ADR number, was first caught here).
+            raise ValueError(f"MultiChoiceField {self.name} has duplicate option value(s): "
+                              f"{sorted(dupes)} -- every option value must be unique")
+        unknown_default = set(self.default) - set(values)
+        if unknown_default:
+            raise ValueError(f"MultiChoiceField {self.name} default names unknown option(s): "
+                              f"{sorted(unknown_default)}")
+        if self.option_help is not None:
+            unknown = set(self.option_help) - set(values)
+            if unknown:
+                raise ValueError(f"MultiChoiceField {self.name} option_help names unknown "
+                                  f"option(s): {sorted(unknown)}")
+
+
+Field = Union[TextField, ChoiceField, ConfirmField, ListField, MultiChoiceField]
+
+FIELD_TYPES = (TextField, ChoiceField, ConfirmField, ListField, MultiChoiceField)
 
 
 def get_field_value(state: dict, section: NodeId, f: Field) -> object:
@@ -159,12 +258,34 @@ def get_field_value(state: dict, section: NodeId, f: Field) -> object:
 
 
 def set_field_value(state: dict, section: NodeId, f: Field, value: object) -> None:
-    """`get_field_value`'s write-side twin -- see its own docstring."""
+    """`get_field_value`'s write-side twin -- see its own docstring. ALSO marks the field TOUCHED
+    (this module's own "TOUCHED-FIELD TRACKING" note above) -- this function is called ONLY from
+    a real Changed-message handler (`tools.configtree.panes.SectionPane._write_through`/its
+    `ListField`-change and `MultiChoiceField`-change callbacks), never at compose time for a
+    field's mere default, so every call here IS a genuine operator interaction."""
     if f.shared:
         state[str(f.name)] = value
+        state.setdefault("_touched_shared", set()).add(str(f.name))
     else:
         key = ScopedFieldKey(section=section, field=f.name)
         state.setdefault("_live_fields", {})[key] = value
+        state.setdefault("_touched_scoped", set()).add(key)
+
+
+def is_field_touched(state: dict, section: "str | NodeId", field_name: "str | FieldName") -> bool:
+    """Has the operator EVER written through this field's own slot this run (`set_field_value`
+    having been called for it at least once), as opposed to the value merely reading its
+    compile-time default because nothing ever touched the widget? Takes bare strings (not a
+    `Field` instance) so a consumer's own `submit(state, answers)` -- which has `state` but not
+    the `Field` objects `fields(state)` built -- can ask this question without reconstructing
+    them. `section`/`field_name` are coerced through the SAME checked constructors every other
+    entry point uses, so a typo here fails loudly rather than silently reading "never touched"."""
+    section_id = section if isinstance(section, NodeId) else NodeId(section)
+    name = field_name if isinstance(field_name, FieldName) else FieldName(field_name)
+    key = ScopedFieldKey(section=section_id, field=name)
+    if key in state.get("_touched_scoped", set()):
+        return True
+    return str(name) in state.get("_touched_shared", set())
 
 
 def default_of(f: Field) -> object:
@@ -177,6 +298,8 @@ def default_of(f: Field) -> object:
         return f.default
     if isinstance(f, ListField):
         return []
+    if isinstance(f, MultiChoiceField):
+        return list(f.default)
     return getattr(f, "default", "")
 
 
@@ -198,4 +321,4 @@ def validate_value(f: Field, value: object) -> "str | None":
         return None
     if isinstance(f, ChoiceField):
         return None if value is not None else "choose one"
-    return None  # ConfirmField/ListField: no field-level invalid state at this layer
+    return None  # ConfirmField/ListField/MultiChoiceField: no field-level invalid state here
