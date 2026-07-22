@@ -90,7 +90,7 @@ maintainer_refs = ["kernel/lineage/s40-principal-identity-events.sql", "kernel/l
 [[fact]]
 key = "signed_genesis"
 label = "Signed genesis ceremony"
-lead = "Signs this world's founding commission with a GPG key you control -- gives the commission non-repudiation, forgery resistance, and outside-verifiability (the properties a NIST-lineage authenticity aim would also want, though this is a house ceremony, not a certification). The signing act itself is one-time; no ongoing signing burden or signature gate is added afterward."
+lead = "Signs this world's founding commission with a GPG key you control -- gives the commission non-repudiation, forgery resistance, and outside-verifiability, aspiring to NIST-lineage authenticity properties (an aim, not a certification or conformance claim). The signing act itself is one-time; no ongoing signing burden or signature gate is added afterward."
 external = "gpg (GnuPG) on PATH, and an ONGOING key-custody responsibility: keep the private key and its revocation certificate safe -- this is the one section in this flow with a genuine standing operator responsibility attached."
 provenance = ["user-guide/USER-GPG-TRUST-LAYER-FAQ.md"]
 maintainer_refs = ["design/MAINT-GPG-TRUST-LAYER.md §3", "design/FABLE-SETUP-TUI-SIGNED-GENESIS-SPEC.md", "ledger rows 1724/1725"]
@@ -112,7 +112,7 @@ maintainer_refs = ["design/FABLE-OTEL-SENTRY-SPEC.md §0"]
 [[fact]]
 key = "observability_watchdog"
 label = "OTel model-provenance watchdog (otel-watch)"
-lead = "Watches the collector's own event stream for model-provenance anomalies -- same diagnostics-tier aim as the collector above; deliberately minimal (no principal, no ledger write, no kernel access of any kind)."
+lead = "Watches the collector's own event stream for model-provenance anomalies -- aspires to the same NIST AU-family audit-supporting posture as the collector above, not a conformance claim; deliberately minimal (no principal, no ledger write, no kernel access of any kind)."
 external = "Depends on the collector above already running, plus its own recurring operator daemon process."
 maintainer_refs = ["design/FABLE-OTEL-SENTRY-SPEC.md §0/§3"]
 
@@ -124,7 +124,7 @@ lead = "Records where this world was forked from, as a one-time fact about this 
 [[fact]]
 key = "hydration_role_charters"
 label = "role charters"
-lead = "Registers a role's governing charter text against an already-registered principal -- a simpler, older mechanism than the identity/lifecycle events named above, and not itself that aspiration."
+lead = "Registers a role's governing charter text against an already-registered principal -- adjacent to the NIST SP 800-63 identity/lifecycle/binding decomposition the principals-authority screen above aspires to, but a simpler, older mechanism, and not itself that aspiration."
 maintainer_refs = ["design/FABLE-PRINCIPAL-IDENTITY-SPEC-BUILD-BASIS.md", "tools/role_charter.py"]
 
 [[fact]]

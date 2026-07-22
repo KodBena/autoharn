@@ -97,6 +97,7 @@ import asyncio
 import os
 import re
 import shutil
+import subprocess
 import sys
 import tempfile
 
@@ -115,7 +116,7 @@ from tools.configtree.ids import NodeId  # noqa: E402
 from tools.configtree.measure import MEASURE  # noqa: E402
 from tools.configtree.spec import COMPLETE, INVALID, owner_of, section_status  # noqa: E402
 from tools.setup_tui import checklist as ck  # noqa: E402
-from tools.setup_tui import content, durable_decisions, steps, tui_app  # noqa: E402
+from tools.setup_tui import content, durable_decisions, feature_facts, steps, tui_app  # noqa: E402
 from tools.setup_tui.checklist import Checklist  # noqa: E402
 from tools.setup_tui.plan import Plan  # noqa: E402
 
@@ -1328,6 +1329,69 @@ async def case_20() -> None:
               f"line(s) total across both groups")
 
 
+async def case_21() -> None:
+    """STANDARDS-ASPIRATION RESTORATION (maintainer round-8 verdict, ledger row 1123-family:
+    round 7's schema fix, in the SAME pass that killed the truth-inflating `standards` slot
+    (case 9's own D1 fix), deleted several entries' STANDARD NAME wholesale instead of keeping it
+    as an explicitly aspiration-marked mention -- "the standards-aspirations were removed
+    wholesale instead of indicating that they were aspirations -- better than lying, to be sure,
+    but still." Every `feature_facts.REGISTRY` entry whose pre-round-7 text named an external
+    standard (via the deleted `standards` field) must still name that standard in its live
+    `lead`, phrased as an explicit aspiration ("aspires to <standard>...") -- never a bare
+    `Standards: <name>`-shaped resurrection, never silent deletion.
+
+    RED-FIRST is against the round-7 (pre-restoration) state of two of these five entries: with
+    the fix reverted, `observability_watchdog` and `hydration_role_charters` name NO standard at
+    all in their `lead` (verified directly against feature_facts.toml's own round-7 text, git blob
+    1308bd5). GREEN: the current, restored `lead` for every one of the five names its standard AND
+    marks it as an aspiration, never bare conformance telegraphy."""
+    # --- RED-FIRST: the round-7 (pre-restoration) blob names no standard for two of the five ---
+    pre_restoration_toml = subprocess.run(
+        ["git", "show", "1308bd5:tools/setup_tui/data/feature_facts.toml"],
+        cwd=REPO, capture_output=True, text=True, check=True,
+    ).stdout
+    pre_leads = {}
+    for block in pre_restoration_toml.split("[[fact]]")[1:]:
+        km = re.search(r'key\s*=\s*"([^"]+)"', block)
+        lm = re.search(r'lead\s*=\s*"((?:[^"\\]|\\.)*)"', block)
+        if km and lm:
+            pre_leads[km.group(1)] = lm.group(1)
+    for key in ("observability_watchdog", "hydration_role_charters"):
+        assert "nist" not in pre_leads[key].lower(), (
+            f"fixture assumption stale: round-7's own '{key}' lead already names a standard -- "
+            f"{pre_leads[key]!r}"
+        )
+    print("case 21a ok (RED-FIRST): round-7's own committed feature_facts.toml (blob 1308bd5) "
+          "names NO standard at all in 'observability_watchdog'/'hydration_role_charters' -- "
+          "the wholesale-deletion defect, reproduced straight from git history")
+
+    # --- GREEN: the REAL, current REGISTRY restores every one of the five, aspiration-marked ---
+    expect_standard_terms = {
+        "principals_authority": "NIST SP 800-63",
+        "signed_genesis": "NIST-lineage authenticity",
+        "observability_otelcol": "NIST",
+        "observability_watchdog": "NIST",
+        "hydration_role_charters": "NIST SP 800-63",
+    }
+    for key, term in expect_standard_terms.items():
+        fact = feature_facts.fact(key)
+        assert term.lower() in fact.lead.lower(), (
+            f"'{key}' lost its standards mention -- expected {term!r} inside its lead, "
+            f"got: {fact.lead!r}"
+        )
+        assert re.search(r"aspir", fact.lead, re.IGNORECASE), (
+            f"'{key}' names a standard without aspiration marking -- got: {fact.lead!r}"
+        )
+        assert not re.match(r"^\s*Standards?\s*:", fact.lead, re.IGNORECASE), (
+            f"'{key}' resurrected a bare 'Standards:'-shaped conformance line -- got: {fact.lead!r}"
+        )
+        print(f"case 21b ok: '{key}' names {term!r} inside an aspiration-marked lead "
+              f"(never a bare Standards: line): {fact.lead[:100]!r}...")
+
+    print("case 21 ok: every feature-fact entry that named an external standard before round 7 "
+          "still names it live, explicitly aspiration-marked, never a bare conformance line")
+
+
 async def _main() -> None:
     await case_0()
     await case_1()
@@ -1350,6 +1414,7 @@ async def _main() -> None:
     await case_18()
     await case_19()
     await case_20()
+    await case_21()
     print("ALL CASES OK -- tools.configtree.app.ConfigTreeApp driven end-to-end through the "
           "REAL tools.setup_tui.steps.SECTIONS registry via Pilot, LIVE-MODEL semantics "
           "throughout (no per-section save exists): a state-aliasing reproduction and structural "
