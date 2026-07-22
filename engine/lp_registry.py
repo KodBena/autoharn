@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-15T20:48:39Z
-#   last-change: 2026-07-18T05:37:23Z
-#   contributors: a857c93d/main, ab5d5bab/main
+#   last-change: 2026-07-22T00:00:32Z
+#   contributors: a857c93d/main, ab5d5bab/main, 1fa3ab69/main
 # <<< PROVENANCE-STAMP <<<
 
 """lp_registry -- the declared provides/requires/stands_alone registry for engine/lp/*.lp
@@ -184,6 +184,18 @@ MODULES: dict[str, ModuleSpec] = {
              "(ledger_support.lp) to be MEANINGFUL -- absent, exposure_model/2 silently reads "
              "'nothing supports anything' rather than refusing. Meaningfulness, not "
              "groundability, is what the 'defeat' LAYER entry below protects."),
+    "ledger_belief.lp": ModuleSpec(
+        provides=("contested_belief/2", "contest_resolved/2", "credited_belief/1",
+                  "corroboration_grade/2", "shared_ancestor/3", "belief_doubt/1",
+                  "belief_wellfounded/1", "belief_grounded/1"),
+        requires=("ledger_tnow.lp", "ledger_support.lp", "ledger_defeat.lp"),
+        stands_alone=True,
+        note="design/FABLE-BELIEF-SUBSTRATE-SPEC.md §2.2/§3.4 (ratified ledger rows 1914/1919): "
+             "credited_belief's well-foundedness composes model_defeated_row/1 (ledger_defeat.lp) "
+             "to un-found a belief resting on a defeated premise/source -- the SAME 'meaningful, "
+             "not merely groundable' shape ledger_defeat.lp's own note describes for "
+             "support_star/affirmed; the 'belief' LAYER entry below is what a differential "
+             "runner actually enforces."),
     "verification_stats.lp": ModuleSpec(
         provides=("count_workflow_verdict/3", "count_role_verdict/3", "count_round_verdict/3",
                   "count_verdict/2", "count_unparseable/1"),
@@ -204,6 +216,7 @@ LAYERS: dict[str, tuple[str, ...]] = {
     "tnow": ("ledger_tnow.lp",),
     "work": ("ledger_tnow.lp", "work_items.lp", "work_review.lp"),
     "defeat": ("ledger_tnow.lp", "ledger_support.lp", "ledger_defeat.lp"),
+    "belief": ("ledger_tnow.lp", "ledger_support.lp", "ledger_defeat.lp", "ledger_belief.lp"),
 }
 
 

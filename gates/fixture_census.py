@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-09T13:36:11Z
-#   last-change: 2026-07-21T22:36:39Z
-#   contributors: be693afb/main, e4410ef6/main, 3c50e030/main, 3c942a60/main, a857c93d/main, ab5d5bab/main, 43f77bff/main
+#   last-change: 2026-07-22T00:10:15Z
+#   contributors: be693afb/main, e4410ef6/main, 3c50e030/main, 3c942a60/main, a857c93d/main, ab5d5bab/main, 43f77bff/main, 1fa3ab69/main
 # <<< PROVENANCE-STAMP <<<
 
 """fixture_census — mechanizes mandate §6's "every migrated gate's seen-red still proves it
@@ -159,6 +159,7 @@ REGISTRY: dict[str, str] = {
     "s51-artifact-store":               "seen-red/s51-artifact-store/run_fixtures.py",
     "s52-artifact-witness-check":       "seen-red/s52-artifact-witness-check/run_fixtures.py",
     "defeat-pipeline":                 "seen-red/defeat-pipeline/run_fixtures.py",
+    "belief-substrate-v1":             "seen-red/belief-substrate-v1/run_fixtures.py",
     "judge-all-capable-layers":       "seen-red/judge-all-capable-layers/run_fixtures.py",
     "boundary-service":                "seen-red/boundary-service/run_fixtures.py",
     "boundary-multiplex":              "seen-red/boundary-multiplex/run_fixtures.py",

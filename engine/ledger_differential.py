@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-06T05:37:25Z
-#   last-change: 2026-07-18T07:43:48Z
-#   contributors: 37017f46/main, be693afb/main, a857c93d/main, ab5d5bab/main
+#   last-change: 2026-07-22T00:25:00Z
+#   contributors: 37017f46/main, be693afb/main, a857c93d/main, ab5d5bab/main, 1fa3ab69/main
 # <<< PROVENANCE-STAMP <<<
 
 """ledger_differential -- the marriage's load-bearing gate: the ASP `T_now` program
@@ -52,6 +52,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 import lp_registry
+from belief_floor import BELIEF_PREDS
 from clingo_run import run_clingo
 from ledger_edb import PGHOST, DefeatParseError, export, export_defeat, export_work, resolve
 from ledger_floor import (DEFEAT_PREDS, WORK_ITEM_PREDS, WORK_REVIEW_PREDS, defeat_floor_atoms,
@@ -300,7 +301,8 @@ def run_sql_defeat(name: str, edb_text: str) -> ProducerRun:
     return ProducerRun("sql:floor(defeat)", atoms=atoms, record=rec)
 
 
-_LAYER_FLOOR_PREDS = {"work": WORK_LAYER_PREDS, "defeat": frozenset(DEFEAT_PREDS)}
+import belief_differential  # noqa: E402 -- 'belief' glue module (max_lines headroom, its own docstring); placed HERE (module scope) since it imports ProducerRun/etc back
+_LAYER_FLOOR_PREDS = {"work": WORK_LAYER_PREDS, "defeat": frozenset(DEFEAT_PREDS), "belief": frozenset(BELIEF_PREDS)}
 
 
 def layer_capability(name: str, layer: str) -> tuple[bool, str]:
@@ -333,6 +335,7 @@ def layer_capability(name: str, layer: str) -> tuple[bool, str]:
                            "-- the 'defeat' layer has no grant substrate here, "
                            "capability absent, not record-empty")
         return True, ""
+    if layer == "belief": return belief_differential.belief_layer_capability(t)  # noqa: E701
     raise NotImplementedError(f"layer_capability has no detection rule for layer {layer!r} "
                               f"(known layers: {sorted(lp_registry.LAYERS)})")
 
@@ -364,6 +367,7 @@ def run_layer_differential(name: str, layer: str = "work", *,
         if asp.quarantine is None:
             asp.atoms = {a for a in asp.atoms if a.split("(", 1)[0] in preds}
         sql = run_sql_work(name, edb_text)
+    elif layer == "belief": asp, sql = belief_differential.run_belief_layer(name, paths, preds)  # noqa: E701 spec §2.2 item 3
     else:  # "defeat" -- §3 P-5: a malformed v1 attestation raises in EACH producer's OWN
         # independent parse (export_defeat's Python parser for ASP; defeat_floor_atoms' SQL
         # parser for the floor). Building the shared edb_text calls export_defeat() first, so a
@@ -451,21 +455,16 @@ def main(argv: list[str] | None = None) -> int:
                          "consumer refuses (a verdict without its witness is NO RESULT)")
     ap.add_argument("--layer", choices=sorted(lp_registry.LAYERS), default=None,
                     help="which engine/lp_registry.py LAYER to differential (plan step 8(ii)). "
-                         "Omitted (default, ledger row 1516 -- judge-all-capable-layers): "
-                         "auto-DETECT each known layer's capability on the target (never running "
-                         "an incapable one) and RUN every capable layer, one verdict line per "
-                         "layer; an incapable layer prints its declared one-line capability "
-                         "reason instead, never silently skipped. Given explicitly, keeps its "
-                         "exact single-layer meaning (byte-identical to prior behavior; an "
-                         "incapable target asked for BY NAME still QUARANTINES loudly, it is "
-                         "never auto-skipped): 'tnow' (ledger_tnow.lp vs "
-                         "ledger_floor.py::floor_atoms) or 'work' (ledger_tnow.lp + "
-                         "work_items.lp + work_review.lp vs the work-item/work-review SQL "
-                         "floors, over ledger_edb.export_work's EDB), or 'defeat' "
-                         "(ledger_tnow.lp + ledger_support.lp + ledger_defeat.lp vs "
-                         "ledger_floor.py::defeat_floor_atoms, over ledger_edb.export_defeat's "
-                         "EDB -- design/FABLE-DEFEAT-PIPELINE-SPEC.md §7). `judge` forwards this "
-                         "flag through unchanged -- `./judge --layer work`.")
+                         "Omitted (default, row 1516 -- judge-all-capable-layers): auto-DETECT "
+                         "each layer's capability (never running an incapable one) and RUN "
+                         "every capable layer, one verdict line per layer; an incapable layer "
+                         "prints its capability reason, never silently skipped. Given "
+                         "explicitly, keeps its exact single-layer meaning (an incapable target "
+                         "asked for BY NAME still QUARANTINES loudly): 'tnow' (ledger_tnow.lp vs "
+                         "floor_atoms), 'work' (+ work_items.lp/work_review.lp vs the work-item "
+                         "SQL floors, over export_work's EDB), 'defeat' (+ ledger_support.lp/"
+                         "ledger_defeat.lp vs defeat_floor_atoms, over export_defeat's EDB -- FABLE-DEFEAT-PIPELINE-SPEC.md §7), "
+                         "or 'belief' (+ ledger_belief.lp vs belief_floor_atoms, over export_belief's EDB -- FABLE-BELIEF-SUBSTRATE-SPEC.md §2). `judge` forwards this flag unchanged.")
     args = ap.parse_args(argv)
     targets = args.targets or ["s10", "s11", "s12", "s13", "nla"]
 
@@ -508,7 +507,8 @@ def main(argv: list[str] | None = None) -> int:
                         edb_text = export(name).edb_text() + "\n" + export_work(name).edb_text()
                     elif layer == "defeat":
                         edb_text = export(name).edb_text() + "\n" + export_defeat(name).edb_text()
-                except Exception as e:  # noqa: BLE001 -- e.g. DefeatParseError (P-5); run_layer_differential
+                    elif layer == "belief": edb_text = belief_differential.belief_edb_text(name)  # noqa: E701
+                except Exception as e:  # noqa: BLE001 -- e.g. a parse error; run_layer_differential
                     pass                # re-derives and QUARANTINES properly; edb_text stays "" for --retain
                 res = run_layer_differential(name, layer)
             if args.drop_record and res.asp.record is not None:
