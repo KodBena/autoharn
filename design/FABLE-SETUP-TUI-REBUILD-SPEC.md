@@ -114,3 +114,31 @@ REFUSES with the install command — there is no fallback UI to maintain
 - Cost: this rebuild DELETES more than it adds. No speculative features, no theming,
   no animation work, no abstraction for hypothetical third backends — the commission
   is a competent ordinary TUI, delivered once.
+
+## 6. Amendment, 2026-07-22 (same day, commission extended mid-dispatch)
+
+The maintainer's verbatim words:
+
+```
+And the entire UI should be a library. The fact that we still store configuration in
+.py is worse than a fucking disgrace, I haven't said anything until now because I
+wanted to save tokens, but it looks like fucking kindergarten level infantilism
+```
+
+Two binding consequences, overriding anything above that conflicts:
+
+- **The UI is a library.** The Textual wizard machinery (form screens, navigation,
+  step sequencing, review/commit screen shape, inline-validation rendering) is a
+  generic, reusable package with ZERO autoharn knowledge — working name
+  `tools/formwizard/`, importable on its own. autoharn's setup wizard is a thin
+  consumer: its step definitions + core action functions handed to the library. The
+  library never imports from the consumer (one-way, enforced by the rewritten purity
+  gate alongside its other invariants).
+- **Configuration and content are data files, not .py.** The `content/` package's
+  Python-constant modules are part of the deletion, not part of what survives (§1 is
+  amended accordingly): all prose, tables, step definitions, defaults, and choice
+  vocabularies move to declarative data files (TOML, the tree's idiom) loaded and
+  validated at startup — a malformed or incomplete data file REFUSES loudly at load,
+  naming the key. Python holds behavior only (validators, apply functions, the
+  library). P10's spirit was always this; storing data as importable Python constants
+  met its letter and missed its point.
