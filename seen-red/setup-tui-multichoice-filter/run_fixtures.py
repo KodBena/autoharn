@@ -168,7 +168,11 @@ async def case_4_clear_restores() -> None:
             await pilot.press({"-": "minus"}.get(ch, ch))
         await pilot.pause()
         assert len(_visible(widget.query(Checkbox))) == 0, "expected a non-matching filter to hide every checkbox"
-        no_match = [w for w in widget.query(".ct-blocked-reason") if w.display]
+        # `.ct-filter-no-match`, not `.ct-blocked-reason` (cycle-2 fix round, AUDIT.md MINOR #4:
+        # the two were previously one shared class -- section-blocked vs. filter-no-match are
+        # distinct signals, now distinct CSS classes; `widgets.py`'s own docstring has the
+        # account).
+        no_match = [w for w in widget.query(".ct-filter-no-match") if w.display]
         assert no_match, "expected an honest 'no option matches' line, not a silent blank"
         filter_input.value = ""
         await pilot.pause()

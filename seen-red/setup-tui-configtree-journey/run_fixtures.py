@@ -100,6 +100,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from pathlib import Path
 
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, REPO)
@@ -116,7 +117,7 @@ from tools.configtree.ids import NodeId  # noqa: E402
 from tools.configtree.measure import MEASURE  # noqa: E402
 from tools.configtree.spec import COMPLETE, INVALID, owner_of, section_status  # noqa: E402
 from tools.setup_tui import checklist as ck  # noqa: E402
-from tools.setup_tui import content, durable_decisions, feature_facts, steps, tui_app  # noqa: E402
+from tools.setup_tui import config_file, content, durable_decisions, feature_facts, steps, tui_app  # noqa: E402
 from tools.setup_tui.checklist import Checklist  # noqa: E402
 from tools.setup_tui.plan import Plan  # noqa: E402
 
@@ -700,9 +701,13 @@ async def case_8() -> None:
               f"swept ALL {len(app._panes)} sections, not just principal registration")
 
         # --- 8c. The ORIGINAL emitting site specifically: the "Add a principal" modal ---------
+        # MASTER-DETAIL RESTRUCTURE (cycle-2 fix round, ADR-0019 Rule 4): "register" is now the
+        # MASTER row of a `MasterDetailField` -- its own Add button carries the "-master-add"
+        # suffix `widgets_master_detail.MasterDetailFieldWidget` mints (`master_detail.py`'s own
+        # module docstring), not the bare "-add" a top-level `ListField` gets.
         tree.select_node(_find_node(tree, "principals-authority"))
         await pilot.pause()
-        add_btn = app.query_one("#pane-principals-authority #ct-field-register-add")
+        add_btn = app.query_one("#pane-principals-authority #ct-field-register-master-add")
         await pilot.click(add_btn)
         await pilot.pause()
         modal_offenders = [(str(w.id), w.size.width) for w in
@@ -711,11 +716,13 @@ async def case_8() -> None:
         print(f"case 8c ok (GREEN, the original emitting site): the 'Add a principal' modal's "
               f"'Class' field label -- the exact site that measured 394 characters before this "
               f"fix -- stays within MEASURE={MEASURE} at a 400-column terminal")
+        await pilot.press("escape")
+        await pilot.pause()
 
         # --- 8d. Content-level confirmation: the labels themselves are short now --------------
         pa_fields = steps.steps_principals_authority.fields(app.state)
         register_field = next(f for f in pa_fields if str(f.name) == "register")
-        agent_class_field = next(f for f in register_field.item_fields if str(f.name) == "agent_class")
+        agent_class_field = next(f for f in register_field.master.item_fields if str(f.name) == "agent_class")
         assert len(str(agent_class_field.label)) <= MEASURE, \
             f"expected a short label, got {len(str(agent_class_field.label))} chars"
         assert isinstance(agent_class_field, ChoiceField), \
@@ -814,21 +821,48 @@ async def case_9() -> None:
               f"(principals_authority.toml's own [lessons] table), within MEASURE")
 
 
+async def _pa_add_row(pilot, app, pane, add_id: str, values: dict, *,
+                       radio_index_by_field: "dict | None" = None) -> None:
+    """Presses a master-detail Add button (`.press()`, not `pilot.click` -- these buttons can sit
+    deep inside a nested, scrolled block; `Button.press()` posts the identical `Pressed` message
+    a real click does, without needing screen coordinates to be in view, the same idiom this
+    fixture already uses for `finish_btn.press()`), fills the opened modal's fields, and saves.
+    `radio_index_by_field` -- `{field_name: option_index}` for any `ChoiceField` in the modal
+    (defaults to index 0, i.e. the first option, for every ChoiceField not named)."""
+    pane.query_one(f"#{add_id}", Button).press()
+    await pilot.pause()
+    modal = app.screen
+    for name, val in values.items():
+        modal.query_one(f"#ct-field-{name}", Input).value = val
+        await pilot.pause()
+    for rs in modal.query(RadioSet):
+        fname = str(rs.id or "").removeprefix("ct-field-")
+        idx = (radio_index_by_field or {}).get(fname, 0)
+        rs.children[idx].value = True
+        await pilot.pause()
+    modal.query_one("#ct-modal-save", Button).press()
+    await pilot.pause()
+
+
 async def case_10() -> None:
-    """PRINCIPAL REFERENCES ARE SELECTIONS (maintainer round 5, ledger row 1115, defect B): the
-    competence/relation/charter ChoiceFields are fed LIVE from the register list's own current
-    rows -- a name typed into 'register' in THIS SAME visit shows up as a pickable option in a
-    SIBLING list without leaving the pane (`ListField.refresh_siblings`). Also proves the garbled
-    'Add Grant a competence' label class is gone: every ListField label here is a noun phrase, so
-    the library's own 'Add {label}' button reads as ordinary English."""
+    """PRINCIPAL REFERENCES ARE SELECTIONS + MASTER-DETAIL NESTING (ADR-0019 Rule 4, cycle-2 fix
+    round; supersedes maintainer round 5's ledger row 1115 defect B, still true under the new
+    shape). Proves, against the REAL registry:
+      (a) the four-parallel-flat-lists shape is GONE -- no top-level Competence/Relation/Charter
+          Add button exists anywhere in this section (the audit's own named assertion);
+      (b) a competence added inside principal A's own block renders under A and NEVER under B --
+          the master-detail isolation the whole restructure exists for;
+      (c) a relation's own 'object' picker is still fed LIVE from the register list's current
+          rows (the ORIGINAL defect-B fix, preserved) -- and the relation itself, once added
+          under A (the subject), renders under A's own block, never mirrored under B's (Rule 3);
+      (d) removing a master row (a principal) cascades: its own dependent rows are dropped with
+          it, never left behind as a commit-time-only surprise.
+    """
     app = tui_app.build_app(_fresh_state(), dry_run=True)
-    async with app.run_test(size=(150, 55)) as pilot:
+    async with app.run_test(size=(150, 400)) as pilot:
         await pilot.pause()
         tree = app.query_one("#ct-tree", Tree)
-        for grp in tree.root.children:
-            for leaf in grp.children:
-                if leaf.data and leaf.data.get("slug") == "fork-target":
-                    tree.select_node(leaf)
+        tree.select_node(_find_node(tree, "fork-target"))
         await pilot.pause()
         app.query_one("#pane-fork-target #ct-field-dest", Input).value = "/tmp/ctj-case10-dest"
         await pilot.pause()
@@ -837,61 +871,89 @@ async def case_10() -> None:
         await pilot.pause()
         pane = app.query_one("#pane-principals-authority")
 
-        # --- label sanity: no ListField label here duplicates a verb the "Add " prefix already
-        # supplies ---
-        add_buttons = [str(b.label) for b in pane.query(Button) if str(b.id or "").endswith("-add")]
-        assert add_buttons, "expected at least one 'Add ...' button in this section"
-        for label in add_buttons:
-            assert label.count("Add") == 1, f"garbled Add-button label (maintainer's exact quote class): {label!r}"
-        print(f"case 10a ok: every 'Add ...' button reads as ordinary English, no doubled verb "
-              f"(the maintainer's exact quote, 'Add Grant a competence', is gone): {add_buttons}")
+        # --- (a) no top-level Competence/Relation/Charter Add button anywhere -----------------
+        stale_flat_ids = [str(b.id) for b in pane.query(Button)
+                          if str(b.id or "") in ("ct-field-competences-add",
+                                                  "ct-field-relations-add", "ct-field-charters-add")]
+        assert not stale_flat_ids, \
+            f"the four-parallel-flat-lists shape is back: {stale_flat_ids}"
+        add_ids = [str(b.id) for b in pane.query(Button) if "-add" in str(b.id or "")]
+        assert add_ids == ["ct-field-register-master-add"], \
+            (f"expected EXACTLY ONE top-level Add button (the master's own, 'Principal') before "
+             f"any principal is registered -- every dependent's own Add button only exists "
+             f"nested inside a registered principal's own block -- got {add_ids}")
+        print(f"case 10a ok (ADR-0019 Rule 4): the four-parallel-flat-lists shape is gone -- the "
+              f"ONLY top-level Add button in this section is {add_ids[0]!r} (the master, "
+              f"'Principal'); no top-level Competence/Relation/Charter Add button exists")
 
-        # --- before registering anyone, the competence picker offers only the honest sentinel ---
-        comp_before = pane.query_one("#ct-field-competences-add", Button)
-        comp_before.scroll_visible(animate=False)
+        # --- register TWO principals: A ('ctj-a') and B ('ctj-b') ------------------------------
+        await _pa_add_row(pilot, app, pane, "ct-field-register-master-add",
+                    {"name": "ctj-a", "purpose": "witnessing case 10, principal A"})
         await pilot.pause()
-        await pilot.click(comp_before)
-        await pilot.pause()
-        modal_rs = app.screen.query_one(RadioSet)
-        sentinel_labels = [str(b.label) for b in modal_rs.children]
-        assert any("no principals known yet" in lbl for lbl in sentinel_labels), \
-            f"expected the honest empty-catalog sentinel before any principal is known, got {sentinel_labels}"
-        await pilot.press("escape")
-        await pilot.pause()
-        print("case 10b ok: before any principal is registered, the competence picker offers the "
-              "honest 'no principals known yet' sentinel, never free text")
-
-        # --- register a principal, THEN open the competence Add modal in the SAME visit ---
-        reg_add = pane.query_one("#ct-field-register-add", Button)
-        reg_add.scroll_visible(animate=False)
-        await pilot.pause()
-        await pilot.click(reg_add)
-        await pilot.pause()
-        modal = app.screen
-        modal.query_one("#ct-field-name", Input).value = "ctj-case10-principal"
-        await pilot.pause()
-        modal.query_one(RadioSet).children[0].value = True  # "human" -- the first class option
-        await pilot.pause()
-        modal.query_one("#ct-field-purpose", Input).value = "witnessing case 10"
-        await pilot.pause()
-        await pilot.click(modal.query_one("#ct-modal-save", Button))
+        await _pa_add_row(pilot, app, pane, "ct-field-register-master-add",
+                    {"name": "ctj-b", "purpose": "witnessing case 10, principal B"})
         await pilot.pause()
 
-        comp_add = pane.query_one("#ct-field-competences-add", Button)
-        comp_add.scroll_visible(animate=False)
+        # A is block-0, B is block-1 (registration order, `master_key=lambda r: r["name"]`).
+        detail_add_ids = sorted(str(b.id) for b in pane.query(Button) if "-detail-add-" in str(b.id or ""))
+        assert detail_add_ids == [
+            "ct-field-register-detail-add-0-charters", "ct-field-register-detail-add-0-competences",
+            "ct-field-register-detail-add-0-relations", "ct-field-register-detail-add-1-charters",
+            "ct-field-register-detail-add-1-competences", "ct-field-register-detail-add-1-relations",
+        ], f"expected exactly 2 principals x 3 dependents' own nested Add buttons, got {detail_add_ids}"
+        print(f"case 10b ok: registering two principals (A, B) mints EACH its own nested "
+              f"Competence/Relation/Role-charter Add buttons ({len(detail_add_ids)} total) -- "
+              f"still zero top-level ones")
+
+        # --- (b) a competence added under A renders under A, NEVER under B --------------------
+        await _pa_add_row(pilot, app, pane, "ct-field-register-detail-add-0-competences",
+                    {"activity": "witness-activity", "band": "witness-band", "basis": "witness-basis"})
         await pilot.pause()
-        await pilot.click(comp_add)
+        block_a = pane.query_one("#ct-field-register-block-0")
+        block_b = pane.query_one("#ct-field-register-block-1")
+        lines_a = [str(w.render()) for w in block_a.query(".ct-info-line")]
+        lines_b = [str(w.render()) for w in block_b.query(".ct-info-line")]
+        assert any("witness-activity" in ln for ln in lines_a), \
+            f"expected the competence added under A's own Add button to render in A's own block, got {lines_a}"
+        assert not any("witness-activity" in ln for ln in lines_b), \
+            (f"MASTER-DETAIL ISOLATION BUG: a competence added inside PRINCIPAL A's own block "
+             f"leaked into PRINCIPAL B's own block: {lines_b}")
+        print(f"case 10c ok (master-detail isolation, the restructure's own point): a competence "
+              f"added via A's OWN nested Add button ({lines_a}) never appears under B's own "
+              f"block ({lines_b})")
+
+        # --- (c) 'object' picker still fed live from register; relation renders under SUBJECT
+        # only (Rule 3) ---
+        await _pa_add_row(pilot, app, pane, "ct-field-register-detail-add-0-relations",
+                    {}, radio_index_by_field={"relation": 0, "object": 1})  # object index 1 == "ctj-b"
         await pilot.pause()
-        modal2_rs = app.screen.query_one(RadioSet)
-        names_offered = [str(b.label) for b in modal2_rs.children]
-        assert names_offered == ["ctj-case10-principal"], \
-            (f"expected the competence picker to offer EXACTLY the registered name, no more no "
-             f"less, got {names_offered}")
-        await pilot.press("escape")
+        lines_a2 = [str(w.render()) for w in pane.query_one("#ct-field-register-block-0").query(".ct-info-line")]
+        lines_b2 = [str(w.render()) for w in pane.query_one("#ct-field-register-block-1").query(".ct-info-line")]
+        assert any("ctj-b" in ln for ln in lines_a2), \
+            f"expected the relation ('ctj-a acts-for ctj-b') under SUBJECT ctj-a's own block, got {lines_a2}"
+        assert not any(ln for ln in lines_b2 if any(rel in ln for rel in
+                       ("acts-for", "dispatched-by", "same-natural-person", "succeeds"))), \
+            (f"RULE 3 VIOLATION: the SAME relation also rendered under its OBJECT principal's "
+             f"own block (a duplicated projection of one fact) -- {lines_b2}")
+        print(f"case 10d ok (ADR-0019 Rule 3, 'one home per fact extends to the screen'): the "
+              f"relation renders under its SUBJECT (ctj-a) ONLY -- {lines_a2} -- never mirrored "
+              f"under its OBJECT (ctj-b): {lines_b2}")
+
+        # --- (d) removing principal A cascades: its own competence/relation rows are dropped --
+        pane.query_one("#ct-field-register-master-remove-0", Button).press()
         await pilot.pause()
-        print(f"case 10c ok: the SAME visit's own 'register' row ('ctj-case10-principal') is "
-              f"immediately offered as the competence grant's own principal picker option -- "
-              f"{names_offered} -- no free text, no re-visit required")
+        remaining_blocks = list(pane.query(".ct-md-block"))
+        assert len(remaining_blocks) == 1, \
+            f"expected exactly 1 principal block after removing A, got {len(remaining_blocks)}"
+        remaining_lines = [str(w.render()) for w in pane.query(".ct-info-line")]
+        assert not any("witness-activity" in ln for ln in remaining_lines), \
+            f"CASCADE BUG: A's own competence survived A's own removal: {remaining_lines}"
+        assert not any("ctj-b" in ln and "acts-for" in ln for ln in remaining_lines), \
+            f"CASCADE BUG: A's own relation survived A's own removal: {remaining_lines}"
+        print(f"case 10e ok (cascade on master removal): removing principal A drops A's OWN "
+              f"competence and relation with it -- never left as an orphan for commit time to "
+              f"discover as a confusing failure; remaining block: "
+              f"{[str(w.render()) for w in remaining_blocks[0].query('.ct-md-row-summary')]}")
 
 
 async def case_11() -> None:
@@ -1411,6 +1473,114 @@ async def case_21() -> None:
           "still names it live, explicitly aspiration-marked, never a bare conformance line")
 
 
+async def case_22() -> None:
+    """CONFIG-LOAD COMPLETENESS (cycle-2 fix round, AUDIT.md MAJOR #2): loading a file whose
+    `[[principals_authority.register]]`/`.competences`/`.relations` rows are populated used to
+    drop them SILENTLY while the section's own text claimed --initial-config equivalence.
+    RED-FIRST against e1b99da (the audited commit) proves the drop; GREEN drives the REAL,
+    CURRENT app end-to-end with `bootstrap/templates/known-good-blank.toml` and confirms the
+    principals-authority section ACTUALLY shows 'maintainer'/'orchestrator' with their own
+    competences and the 'acts-for' relation, matching the file -- and that the one genuinely
+    unseedable fact (a role charter's own host-specific file path) is DISCLOSED by name in the
+    same info-line block, never silently omitted."""
+    # --- RED-FIRST: e1b99da's own steps_load_config.py never named principals_authority at all --
+    old_source = subprocess.run(
+        ["git", "show", "e1b99da:tools/setup_tui/steps_load_config.py"],
+        cwd=REPO, capture_output=True, text=True, check=True,
+    ).stdout
+    assert "principals_authority" not in old_source, \
+        ("fixture assumption stale: e1b99da's own steps_load_config.py already names "
+         "principals_authority -- the RED reproduction below no longer demonstrates the drop")
+    print("case 22a ok (RED-FIRST, reproduced against e1b99da): the audited commit's own "
+          "steps_load_config.py contains the string 'principals_authority' NOWHERE -- the "
+          "repeatable rows had no seeding code path to drop into at all")
+
+    blank_toml = Path(REPO) / "bootstrap" / "templates" / "known-good-blank.toml"
+    doc = config_file.load_config_file(str(blank_toml))
+    config_file.validate(doc, require_complete=False)
+    old_scoped_keys = {
+        "substrate.run": ("substrate", "run"), "substrate.path": ("substrate", "path"),
+        "substrate.host": ("substrate", "host"),
+        "fork_target.governed_extend": ("fork-target", "governed_extend"),
+        "fork_target.governed_extensions": ("fork-target", "governed_extensions"),
+        "rehearsal.run": ("rehearsal", "run"), "birth.run": ("birth", "run"),
+        "signed_genesis.run": ("signed-genesis", "run"),
+        "signed_genesis.commission_statement": ("signed-genesis", "statement"),
+        "boundary.configure": ("boundary", "run"), "boundary.start_now": ("boundary", "start_now"),
+        "observability.run": ("observability", "run"),
+        "observability.otelcol": ("observability", "otelcol"),
+        "observability.otel_watch": ("observability", "otel_watch"),
+        "hydration.run": ("hydration", "run"),
+        "hydration.fork_provenance": ("hydration", "fork_provenance"),
+        "hydration.fork_provenance_statement": ("hydration", "fork_provenance_statement"),
+        "hydration.role_charters": ("hydration", "role_charters"),
+        "hydration.durable_decisions": ("hydration", "durable_decisions"),
+        "hydration.adopt_adrs": ("hydration", "adopt_adrs"),
+    }
+    old_seeded = [d for d in old_scoped_keys if config_file.get(doc, d) is not None]
+    assert "principals_authority.register" not in old_seeded
+    assert not any(d.startswith("principals_authority") for d in old_seeded), \
+        "the OLD scoped-keys table (verbatim replica) must name zero principals_authority keys"
+    print(f"case 22b ok (RED, reproduced against the real known-good-blank.toml): the OLD "
+          f"scoped-override table seeds {len(old_seeded)} field(s), NONE of them "
+          f"'principals_authority.*', even though the file defines "
+          f"{len(config_file.get(doc, 'principals_authority.register'))} register row(s), "
+          f"{len(config_file.get(doc, 'principals_authority.competences'))} competence row(s), "
+          f"and {len(config_file.get(doc, 'principals_authority.relations'))} relation row(s)")
+
+    # --- GREEN: the REAL, CURRENT app, end to end -----------------------------------------------
+    app = tui_app.build_app(_fresh_state(), dry_run=True)
+    async with app.run_test(size=(150, 400)) as pilot:
+        await pilot.pause()
+        tree = app.query_one("#ct-tree", Tree)
+        tree.select_node(_find_node(tree, "load-config"))
+        await pilot.pause()
+        rs = app.query_one("#pane-action-load-config #ct-field-template", RadioSet)
+        idx = next(i for i, b in enumerate(rs.children) if "known-good-blank" in str(b.label))
+        await pilot.click(rs.children[idx])
+        await pilot.pause()
+        await pilot.click(app.query_one("#pane-action-load-config #ct-action-apply", Button))
+        await pilot.pause()
+
+        info_lines = [str(w.render()) for w in
+                      app.query_one("#pane-action-load-config").query(".ct-info-line")]
+        seeded_line = next((ln for ln in info_lines if ln.startswith("seeded ")), "")
+        assert "principals_authority.register" in seeded_line, \
+            f"expected the seeded-fields line to NAME principals_authority.register, got: {seeded_line!r}"
+        assert "principals_authority.competences" in seeded_line
+        assert "principals_authority.relations" in seeded_line
+        not_seeded_line = next((ln for ln in info_lines if ln.startswith("not seeded")), "")
+        assert "charters" in not_seeded_line and "host-specific" in not_seeded_line, \
+            f"expected the unseedable charter fact DISCLOSED BY NAME, got: {not_seeded_line!r}"
+        print(f"case 22c ok (GREEN): the REAL 'Load a configuration' action's own info-lines now "
+              f"name principals_authority.register/.competences/.relations as seeded, AND "
+              f"disclose the charter gap by name: {seeded_line!r} / {not_seeded_line!r}")
+
+        tree.select_node(_find_node(tree, "fork-target"))
+        await pilot.pause()
+        app.query_one("#pane-fork-target #ct-field-dest", Input).value = "/tmp/ctj-case22-dest"
+        await pilot.pause()
+        await app._panes["principals-authority"].refresh_blocked()
+        tree.select_node(_find_node(tree, "principals-authority"))
+        await pilot.pause()
+        pane = app.query_one("#pane-principals-authority")
+
+        summaries = [str(w.render()) for w in pane.query(".ct-md-row-summary")]
+        assert any("maintainer" in s for s in summaries), \
+            f"expected 'maintainer' (from the loaded file's own register rows) to actually SHOW as a principal block, got {summaries}"
+        assert any("orchestrator" in s for s in summaries), \
+            f"expected 'orchestrator' to actually SHOW as a principal block, got {summaries}"
+        all_lines = [str(w.render()) for w in pane.query(".ct-info-line")]
+        assert any("governance and agent orchestration" in ln for ln in all_lines), \
+            f"expected maintainer's own loaded competence to render nested under its block, got {all_lines}"
+        assert any("acts-for" in ln and "maintainer" in ln for ln in all_lines), \
+            f"expected the loaded 'orchestrator acts-for maintainer' relation to render, got {all_lines}"
+        print(f"case 22d ok (GREEN, end to end): after loading known-good-blank.toml and setting "
+              f"a destination, the principals-authority section's own blocks actually show "
+              f"{summaries!r} with their loaded competences/relations nested underneath -- "
+              f"matching the file, not merely claimed equivalent to it")
+
+
 async def _main() -> None:
     await case_0()
     await case_1()
@@ -1434,6 +1604,7 @@ async def _main() -> None:
     await case_19()
     await case_20()
     await case_21()
+    await case_22()
     print("ALL CASES OK -- tools.configtree.app.ConfigTreeApp driven end-to-end through the "
           "REAL tools.setup_tui.steps.SECTIONS registry via Pilot, LIVE-MODEL semantics "
           "throughout (no per-section save exists): a state-aliasing reproduction and structural "
