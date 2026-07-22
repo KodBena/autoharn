@@ -66,6 +66,41 @@ teletype's deletion.
 
 ## 3. What is built: an idiomatic Textual application
 
+**AMENDED 2026-07-22 (v2, supersedes every sequential-wizard sentence below in this
+section): the UI is a hierarchical configuration editor, not a wizard.** The first
+build implemented this section's original "one Screen per step, Back/Next" text
+faithfully and produced a sequential wizard — the maintainer rejected it outright
+("You're supposed to be able to see everything at a glance with hierarchical menus"),
+with reference images (Qt qbs settings GUI; SAP IMG/SPRO configuration trees; the
+tree-plus-form idiom common to effectively every mature configuration UI). The typeful
+ground, on the record: a configuration is a PRODUCT type — a record of sections with a
+PARTIAL order of genuine dependencies — and a sequential wizard projects it onto an
+arbitrary TOTAL order (a record rendered as a linked list). No consumer of
+"sequential" exists anywhere in the requirements; the sequence was the teletype's
+temporal accident inherited as essence. Binding shape:
+
+- **One main screen: a sidebar `Tree` of the ENTIRE configuration** — every section
+  and subsection visible at once, each node marked complete / incomplete / invalid /
+  blocked-with-reason. Arrow keys and mouse move anywhere, any order.
+- **Right pane: the selected section as an ordinary form** — all of that section's
+  fields at once, inline validation on the field.
+- **True dependencies render in place**: a field (or section) whose prerequisites are
+  unmet shows disabled with the prerequisite NAMED — a typed edge, never a global
+  ordering. The genuine dependency edges (e.g. daemon selection on chosen features,
+  genesis gate on rehearsal state) are declared as data in the step/section
+  definitions, not implied by position.
+- **A persistent status line** states what remains before commit; the commit node
+  lives in the tree and enables exactly when the record is complete. Dry-run banner
+  and genesis hard-stop semantics unchanged.
+- Back/Next buttons DO NOT EXIST. Navigation is the tree.
+- Everything else in this section's original text that is orthogonal to sequencing
+  (real form widgets, Textual-native focus/scrolling, no ctrl+b, refusal when textual
+  is missing, `--initial-config` pre-fill, review-before-commit reachable at any time
+  as the commit node's own pane) still binds.
+
+<details of the superseded v1 text follow for provenance; where they conflict with the
+amendment above, the amendment governs>
+
 Interactive mode = Textual, full stop. If `textual` is not importable, the wizard
 REFUSES with the install command — there is no fallback UI to maintain
 (`--from-config` is the no-TUI path). Design by normal Textual idiom, not invention:
