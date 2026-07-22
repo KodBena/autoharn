@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-15T20:19:45Z
-#   last-change: 2026-07-18T23:04:27Z
-#   contributors: a857c93d/main, 9a17b6b9/main, ab5d5bab/main
+#   last-change: 2026-07-22T01:45:52Z
+#   contributors: a857c93d/main, 9a17b6b9/main, ab5d5bab/main, 1fa3ab69/main
 # <<< PROVENANCE-STAMP <<<
 
 """kind_shape_manifest_gate -- MANIFEST + GATE for the kernel ledger's kind-scoped shape
@@ -168,45 +168,29 @@ CHAIN = [
     "s47-claim-on-closed-refusal.sql",
     "s48-review-witness-existence.sql",
     "s49-journaler-overflow-guard.sql",
+    "s50-defeat-input-raw-domain.sql",
+    "s51-artifact-store.sql",
+    "s52-artifact-witness-check.sql",
+    "s53-belief-substrate.sql",
+    "s54-belief-views.sql",
+    "s55-dispatch-grain-independence.sql",
 ]
-# s49 (kernel/lineage/s49-journaler-overflow-guard.sql, design/FABLE-KERNEL-INTAKE-PAIR-SPEC.md
-# Delta 2) extends this SAME gate's scratch CHAIN. It ships ZERO new columns and ZERO new kinds --
-# its one re-issued object (kernel.journal_write_refusal) adds a local exception handler around
-# one pre-existing cast, no column/kind/CHECK touched at all -- no MANIFEST/
-# VALUE_PARTITION_MANIFEST/FORBIDDEN_ON_KIND_MANIFEST edit, verified live by running this gate
-# against the extended chain and reading the SAME seven new MANIFEST rows (s44's) as the only
-# change, no eighth.
-# s48 (kernel/lineage/s48-review-witness-existence.sql, design/FABLE-KERNEL-INTAKE-PAIR-SPEC.md
-# Delta 1) extends this SAME gate's scratch CHAIN. It ships ZERO new columns and ZERO new kinds --
-# its one new object (validate_review_witness_existence) is a standalone BEFORE INSERT trigger
-# reading EXISTING columns (kind, work_review_ref) and the ledger's own id -- no MANIFEST/
-# VALUE_PARTITION_MANIFEST/FORBIDDEN_ON_KIND_MANIFEST edit, verified live by running this gate
-# against the extended chain and reading the SAME seven new MANIFEST rows (s44's) as the only
-# change, no eighth.
-# s47 (kernel/lineage/s47-claim-on-closed-refusal.sql, design/FABLE-CLAIM-ON-CLOSED-REFUSAL-SPEC.md,
-# RATIFIED BUILD BASIS 2026-07-18) extends this SAME gate's scratch CHAIN. It ships ZERO new
-# columns and ZERO new kinds -- its one re-issued object (validate_work_item_claim) adds a
-# construction-time check over EXISTING columns (kind, work_slug, work_resolution via
-# ledger_current) only -- no MANIFEST/VALUE_PARTITION_MANIFEST/FORBIDDEN_ON_KIND_MANIFEST edit,
-# verified live by running this gate against the extended chain and reading the SAME seven new
-# MANIFEST rows (s44's) as the only change, no eighth.
-# s46 (kernel/lineage/s46-credited-views.sql, design/FABLE-DEFEAT-PIPELINE-SPEC.md §8) extends
-# this SAME gate's scratch CHAIN so its two views are exercised by the scratch apply. It ships
-# ZERO new columns and ZERO new kinds -- no MANIFEST/VALUE_PARTITION_MANIFEST/
-# FORBIDDEN_ON_KIND_MANIFEST edit, verified live by running this gate against the extended
-# chain and reading the SAME seven new MANIFEST rows (s44's) as the only change, no eighth.
-# s44 (kernel/lineage/s44-model-identity-attestation.sql, design/FABLE-OTEL-SENTRY-SPEC.md §8)
-# extends this SAME gate's scratch CHAIN and ships SEVEN new kind-scoped columns for the new
-# model_identity_attested kind (six two-way, one one-way -- attest_expected is legitimately
-# NULL when the session declared no expectation), each a new MANIFEST row below. The kind's
-# own re-issued ledger_kind_check and the compute_row_hash/ledger_current/
-# countersigned_in_force re-issues are invisible to THIS gate's constraint classifier by
-# construction (same posture as every prior widening delta). NOTE ON CHAIN ORDER: this
-# gate's CHAIN is a scratch-apply ORDER, not a claim about the real birth chain's eventual
-# numbering -- s44/s46 apply here immediately after s45 (the real lineage head at their
-# authoring time), matching bootstrap/new-project.sh's own LINEAGE_CHAIN order for the same
-# reason (kernel/lineage/s44-model-identity-attestation.sql's own header, "THE HEAD-BODY
-# RULE").
+# s50-52: no MANIFEST change. s53 (v2 B1): nine `belief` columns below; five coupling CHECKs are
+# off belief_polarity/basis VALUES not `kind`, no coupling-manifest entry owed. s54/s55: no change.
+# s46/s47/s48/s49 each extend this SAME gate's scratch CHAIN and each ship ZERO new columns/kinds
+# -- s46's two views, s47's re-issued validate_work_item_claim, s48's new validate_review_witness_
+# existence trigger, and s49's local-exception-handler edit to kernel.journal_write_refusal all
+# read/touch only EXISTING columns via ledger_current or row-addressed lookups -- no MANIFEST/
+# VALUE_PARTITION_MANIFEST/FORBIDDEN_ON_KIND_MANIFEST edit for any of the four, verified live by
+# running this gate against each extended chain and reading the SAME seven MANIFEST rows (s44's)
+# as the only change, never an eighth.
+# s44 (design/FABLE-OTEL-SENTRY-SPEC.md §8) extends this SAME gate's scratch CHAIN and ships
+# SEVEN new kind-scoped columns for model_identity_attested (six two-way, one one-way --
+# attest_expected legitimately NULL when no expectation declared), each a new MANIFEST row
+# below. Re-issued ledger_kind_check/compute_row_hash/ledger_current/countersigned_in_force are
+# invisible to this gate's classifier by construction. NOTE ON CHAIN ORDER: this gate's CHAIN is
+# a scratch-apply order, not the real birth chain's numbering -- s44/s46 apply immediately after
+# s45 (the real lineage head at their authoring time, "THE HEAD-BODY RULE").
 # s45 (kernel/lineage/s45-standing-lifecycle.sql, ratified spec design/FABLE-STANDING-
 # LIFECYCLE-SPEC.md, maintainer batch ratification ledger row 1481) extends this SAME gate's
 # scratch CHAIN and ships NO new column and NO new kind -- its one MANIFEST-relevant act is a
@@ -610,6 +594,21 @@ MANIFEST = [
          reason="the comma-separated join keys used -- mandatory; non-emptiness is the "
                 "separate attest_basis_nonempty value CHECK."),
 ]
+# s53 v2 B1: nine `belief`-only columns, GENERATED (not hand-repeated dicts, ADR-0012 P1 SSOT).
+_BELIEF_COLS = (
+    ("belief_polarity", "two-way", "universal|existential; vocabulary is belief_polarity_check."),
+    ("belief_basis", "two-way", "observed|derived|testimony|assumed; vocabulary is belief_basis_check."),
+    ("belief_universe", "one-way", "presence governed by belief_universe_coupling (off polarity's VALUE)."),
+    ("belief_witness", "one-way", "presence governed by belief_witness_universal_forbidden/observed_mandatory."),
+    ("belief_source", "one-way", "presence governed by belief_source_coupling. Self-FK to ledger(id)."),
+    ("belief_premises", "one-way", "presence/cardinality via belief_premises_coupling. bigint[], no FK."),
+    ("belief_subject", "one-way", "optional, the regards/attest_row_id idiom. Self-FK to ledger(id)."),
+    ("belief_contests", "one-way", "optional. Self-FK for existence; rest enforced by validate_belief_edges."),
+    ("belief_concurs", "one-way", "optional. Same shape as belief_contests one column over."),
+)
+for _col, _arity, _reason in _BELIEF_COLS:
+    MANIFEST.append(dict(column=_col, kinds=("belief",), arity=_arity, mechanism="CHECK",
+                         constraint=f"{_col}_kind_shape", defining_delta="s53-belief-substrate.sql", reason=_reason))
 MANIFEST_BY_COLUMN = {row["column"]: row for row in MANIFEST}
 assert len(MANIFEST_BY_COLUMN) == len(MANIFEST), "duplicate column in MANIFEST -- SSOT violated"
 

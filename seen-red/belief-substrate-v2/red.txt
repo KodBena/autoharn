@@ -1,0 +1,111 @@
+== scaffolding classic world bv2w (new-project.sh --new-world, today's full head incl. s53/s54/s55) ==
+=== BV-scaffold-carries-s53-typed-columns ===
+  [ok] belief_polarity column present on bv2w.ledger: True
+
+=== BV-cell-matrix-all-eight-parse-AGREE ===
+  [ok] verdict=AGREE; only_asp=[]; only_sql=[]
+
+=== BV-A-credited=True ===
+  [ok] row 12: credited_belief present=True, expected=True
+
+=== BV-B-credited=True ===
+  [ok] row 13: credited_belief present=True, expected=True
+
+=== BV-C-credited=True ===
+  [ok] row 14: credited_belief present=True, expected=True
+
+=== BV-D-credited=False ===
+  [ok] row 15: credited_belief present=False, expected=False
+
+=== BV-E-credited=True ===
+  [ok] row 16: credited_belief present=True, expected=True
+
+=== BV-F-credited=True ===
+  [ok] row 17: credited_belief present=True, expected=True
+
+=== BV-G-credited=True ===
+  [ok] row 18: credited_belief present=True, expected=True
+
+=== BV-H-credited=False ===
+  [ok] row 19: credited_belief present=False, expected=False
+
+=== BV-kernel-view-credited-beliefs-matches-engine ===
+  [ok] kernel view=[12, 13, 14, 16, 17, 18]; engine typed-arm=[12, 13, 14, 16, 17, 18]
+
+=== BV-contest-resolved-observed-beats-testimony ===
+  [ok] verdict=AGREE; contested=['contested_belief(21,20)']; resolved=['contest_resolved(20,21)']
+
+=== BV-kernel-view-contested-beliefs-names-survivor ===
+  [ok] contested_beliefs.resolved_survivor for (J,I) = '20', expected 20
+
+=== BV-corroboration-cross-class ===
+  [ok] verdict=AGREE; grade atoms for N=['corroboration_grade(22,"corroborated-cross-class")']
+
+=== BV-kernel-view-corroboration-matches-engine ===
+  [ok] corroboration.grade for N = 'corroborated-cross-class'
+
+=== BV-corroboration-same-class-never-higher ===
+  [ok] grade atoms for Q=['corroboration_grade(25,"corroborated-same-class")']
+
+=== BV-shared-ancestor-non-empty ===
+  [ok] shared_ancestor atoms=['shared_ancestor(28,30,11)']
+
+=== BV-kernel-view-shared-premise-matches-engine ===
+  [ok] shared_premise row for (28,30,11) = '11'
+
+=== BV-defeat-composition-uncredits-dependent-belief ===
+  [ok] verdict=AGREE; KB credited=False
+
+=== BV-kernel-view-defeat-composition-matches-engine ===
+  [ok] credited_beliefs row for KB present='', expected absent
+
+=== BV-full-differential-AGREE ===
+  [ok] verdict=AGREE; asp=35 sql=35 atoms; only_asp=[]; only_sql=[]
+
+== scaffolding classic world bv2n15a5b for negative-control class 'universal-missing-universe' ==
+=== NEG-universal-missing-universe ===
+  [ok] verdict={'row_id': None, 'message': 'new row for relation "ledger" violates check constraint "belief_universe_coupling"', 'sqlstate': '23514', 'refusal_id': 9, 'disposition': 'refused'}
+
+== scaffolding classic world bv2n0521f for negative-control class 'existential-observed-missing-witness' ==
+=== NEG-existential-observed-missing-witness ===
+  [ok] verdict={'row_id': None, 'message': 'new row for relation "ledger" violates check constraint "belief_witness_observed_mandatory"', 'sqlstate': '23514', 'refusal_id': 9, 'disposition': 'refused'}
+
+== scaffolding classic world bv2n0c329 for negative-control class 'testimony-missing-source' ==
+=== NEG-testimony-missing-source ===
+  [ok] verdict={'row_id': None, 'message': 'new row for relation "ledger" violates check constraint "belief_source_coupling"', 'sqlstate': '23514', 'refusal_id': 9, 'disposition': 'refused'}
+
+== scaffolding classic world bv2n3c7b4 for negative-control class 'derived-missing-premises' ==
+=== NEG-derived-missing-premises ===
+  [ok] verdict={'row_id': None, 'message': 'new row for relation "ledger" violates check constraint "belief_premises_coupling"', 'sqlstate': '23514', 'refusal_id': 9, 'disposition': 'refused'}
+
+== scaffolding classic world bv2nc3efc for negative-control class 'dangling-witness-token' ==
+=== NEG-dangling-witness-token ===
+  [ok] verdict={'row_id': None, 'message': "belief policy: witness token 'row:999999999' resolves to nothing — a finding without its witness is treated exactly as ADR-0005 Rule 9 treats a verdict without its artifact: as nothing. Record the evidence first (led artifact put / the witnessed row), then the belief (s53).", 'sqlstate': 'P0001', 'refusal_id': 9, 'disposition': 'refused'}
+
+== scaffolding classic world bv2ncde6c for negative-control class 'dangling-premises-token' ==
+=== NEG-dangling-premises-token ===
+  [ok] verdict={'row_id': None, 'message': "belief policy: premises token 'row:999999999' names no existing row — a derived belief's premises must already be on the record (s53).", 'sqlstate': 'P0001', 'refusal_id': 9, 'disposition': 'refused'}
+
+== scaffolding classic world bv2na9549 for negative-control class 'self-contest' ==
+=== NEG-self-contest ===
+  [ok] verdict={'row_id': None, 'message': "belief policy: contest is the cross-principal doubt act — you cannot contest your own belief (revise it instead: supersede it with your new position, s31). A contest against row 8 by its own holder is a revision wearing a challenge's clothes (s53).", 'sqlstate': 'P0001', 'refusal_id': 10, 'disposition': 'refused'}
+
+== scaffolding classic world bv2n5bcb2 for negative-control class 'contest-of-superseded' ==
+=== NEG-contest-of-superseded ===
+  [ok] verdict={'row_id': None, 'message': 'belief policy: row 8 is no longer in force; contesting settled history defeats nothing (the record beats memory — contest the current belief, or write your own) (s53).', 'sqlstate': 'P0001', 'refusal_id': 11, 'disposition': 'refused'}
+
+== scaffolding classic world bv2nd9880 for negative-control class 'cross-principal-supersession' ==
+=== NEG-cross-principal-supersession-refused ===
+  [ok] verdict={'row_id': None, 'message': "belief policy: a belief is superseded only by its own holder (supersession = self-revision, s31) — row 8 is held by a different principal than this write's actor (s53, design/FABLE-BELIEF-SUBSTRATE-SPEC.md §3.3). Another principal's contrary position is a CONTEST — write your own belief with contests=row:8 and both enter visible doubt until resolved by evidence class or withdrawal (Q3, paraconsistent; recency never decides between principals).", 'sqlstate': 'P0001', 'refusal_id': 10, 'disposition': 'refused'}
+
+=== NEG-same-holder-supersession-accepted ===
+  [ok] verdict={'row_id': 11, 'message': None, 'sqlstate': None, 'refusal_id': None, 'disposition': 'accepted'}
+
+== scaffolding classic world bv2n8efec for negative-control class 'dispatch-grain-independence' ==
+=== NEG-b3-disclosed-isolated-dispatch-accepted ===
+  [ok] verdict={'row_id': 9, 'message': None, 'sqlstate': None, 'refusal_id': None, 'disposition': 'accepted'}
+
+=== NEG-b3-sixth-value-refused ===
+  [ok] verdict={'row_id': None, 'message': 'new row for relation "review_detail" violates check constraint "review_detail_independence_check"', 'sqlstate': '23514', 'refusal_id': 11, 'disposition': 'refused'}
+
+ALL OK

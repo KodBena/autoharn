@@ -1,27 +1,32 @@
 #!/usr/bin/env python3
-"""belief_edb -- the v1 belief-substrate EDB producer (design/FABLE-BELIEF-SUBSTRATE-SPEC.md §2,
-ratified ledger rows 1914/1919). A SEPARATE sibling module rather than folded into
-engine/ledger_edb.py (where the spec's §2.1 text names it) -- the ADR-0007 max_lines gate's
-ratchet baseline on ledger_edb.py (729 lines) has no headroom for this producer's ~370 lines,
-and every OTHER EDB producer this engine tree has grown since ledger_edb.py's own defeat-arm
-precedent (contemp_edb.py, ordering_edb.py, review_gap_edb.py, preamble_audit.py) already lives
-in its own sibling file, imported directly by its consumers rather than re-exported through
-ledger_edb.py -- this module follows THAT idiom. Reported as a spec-conformance deviation
-(ADR-0013 renegotiation-upward), never a silent choice: see the build report.
+# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
+#   first-seen : 2026-07-22T01:24:53Z
+#   last-change: 2026-07-22T01:39:21Z
+#   contributors: 1fa3ab69/main
+# <<< PROVENANCE-STAMP <<<
+
+"""belief_edb -- the belief-substrate EDB producer (design/FABLE-BELIEF-SUBSTRATE-SPEC.md §2/§3,
+ratified ledger rows 1914/1919; v2 typed arm split into engine/belief_edb_typed.py, same reason
+below). A SEPARATE sibling module rather than folded into engine/ledger_edb.py -- the ADR-0007
+max_lines gate's ratchet baseline on ledger_edb.py (729 lines) has no headroom for this
+producer, and every other EDB producer this tree has grown since ledger_edb.py's own defeat-arm
+precedent already lives in its own sibling file. Reported (ADR-0013 renegotiation-upward), never
+silent: see the build report.
 
 Exports export_belief() -- belief/1, belief_polarity/2, belief_basis/2, belief_has_universe/1,
 belief_has_witness/1, belief_edge/3 (premise|source|contests|concurs), belief_subject/2 -- for
 engine/lp/ledger_belief.lp and its SQL twin (engine/belief_floor.py). row_actor/2 and
-agent_class/2 are DELIBERATELY NOT re-emitted here (spec §2.2's own fact-family table marks them
-"reused from export_defeat") -- every belief row is an ordinary actor-bearing ledger row, so
-ledger_edb.export_defeat()'s existing row_actor/2 loop already covers it; LAYERS["belief"]
-stacks the defeat layer underneath for exactly this reason (§2.2 item 3).
+agent_class/2 are DELIBERATELY NOT re-emitted here (reused from export_defeat, spec §2.2) --
+every belief row is an ordinary actor-bearing ledger row, so
+ledger_edb.export_defeat()'s row_actor/2 loop already covers it; LAYERS["belief"] stacks the
+defeat layer underneath for this reason.
 
 Lazy imports are banned (CLAUDE.md)."""
 from __future__ import annotations
 
 import re
 
+from belief_edb_typed import typed_belief_facts
 from ledger_edb import Capability, EdbExport, Target, _atom, resolve
 
 # ===========================================================================
@@ -258,12 +263,12 @@ def _belief_universe_tokens_check(rid: int, raw: str, existing_ids: set[int],
 
 
 def export_belief(name: str) -> EdbExport:
-    """Export the v1 belief-substrate EDB (design/FABLE-BELIEF-SUBSTRATE-SPEC.md §2, ledger
-    rows 1914/1919) for a target, read-only, capability-gated (I12). Gated on the SAME
-    integer-typed-actor capability export_defeat() gates row_actor on (has_actor) -- the
-    contests/concurs cross-principal checks need a real principal id to compare, the same
-    hazard row_actor's own header names (a text database-role actor, e.g. `nla`, would
-    int()-crash rather than misrepresent a role as a principal)."""
+    """Export the belief-substrate EDB (design/FABLE-BELIEF-SUBSTRATE-SPEC.md §2/§3, ledger rows
+    1914/1919), capability-gated (I12). BOTH arms harvested where present (export_defeat()'s
+    v1/s44 has_typed dual-arm precedent): v1 statement-prefix rows and, where the world carries
+    s53, typed kind='belief' rows (engine/belief_edb_typed.py) -- both feed the SAME fact
+    families, so ledger_belief.lp needs no edit for an s53 world. Actor-typed same as
+    row_actor (contests/concurs need a real principal id)."""
     t = resolve(name)
     exp = EdbExport(target=t)
     rel = t.rel()
@@ -272,16 +277,17 @@ def export_belief(name: str) -> EdbExport:
     has_actor = t.has_col("actor") and t.scalar(
         f"SELECT data_type FROM information_schema.columns WHERE table_schema='{t.schema}' "
         f"AND table_name='ledger' AND column_name='actor';") in ("bigint", "integer", "smallint")
-    belief_capable = has_statement and has_actor
-    exp.capabilities.append(Capability(
-        "belief", produced=belief_capable, capable=belief_capable,
-        reason="statement column + integer-typed actor present -- emitted" if belief_capable
-        else "no `statement` column, or `actor` is not integer-typed (e.g. a text database role "
-             "name) -- the belief substrate's contests/concurs cross-principal check needs a "
-             "real principal id, the same hazard row_actor guards against; capability absent"))
+    has_typed = t.has_col("belief_polarity")
+    belief_capable = (has_statement or has_typed) and has_actor
+    reason = ("statement/belief_polarity + integer-typed actor -- emitted" if belief_capable else
+             "no statement/belief_polarity column, or actor not integer-typed -- capability absent")
+    exp.capabilities.append(Capability("belief", produced=belief_capable, capable=belief_capable, reason=reason))
     if not belief_capable:
         return exp
-
+    if has_typed:
+        typed_facts, n_typed = typed_belief_facts(t, rel)
+        exp.facts.extend(typed_facts)
+        exp.counts["belief(typed-arm)"] = n_typed
     has_artifact = t.has_relation(f"{t.kern}.artifact")
     artifact_hashes: set[str] = set()
     if has_artifact:

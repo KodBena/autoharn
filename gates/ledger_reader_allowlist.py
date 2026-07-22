@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-15T20:17:26Z
-#   last-change: 2026-07-18T15:53:32Z
-#   contributors: a857c93d/main, 9a17b6b9/main, ab5d5bab/main
+#   last-change: 2026-07-22T01:47:23Z
+#   contributors: a857c93d/main, 9a17b6b9/main, ab5d5bab/main, 1fa3ab69/main
 # <<< PROVENANCE-STAMP <<<
 
 """ledger_reader_allowlist — the s31 standing mechanical detect: every ledger reader is a
@@ -80,7 +80,24 @@ CHAIN = [
     "s47-claim-on-closed-refusal.sql",
     "s48-review-witness-existence.sql",
     "s49-journaler-overflow-guard.sql",
+    "s50-defeat-input-raw-domain.sql",
+    "s51-artifact-store.sql",
+    "s52-artifact-witness-check.sql",
+    "s53-belief-substrate.sql",
+    "s54-belief-views.sql",
+    "s55-dispatch-grain-independence.sql",
 ]
+# s50 (design/FABLE-S46-DEFEAT-INPUT-DOMAIN-SPEC.md, ledger row 1647) RE-ISSUES model_defeated_
+# rows to read raw `ledger` (matching both engine producers' full-history exclusion domain) --
+# a REAL, previously-unlicensed leg (s50/s51/s52 were never wired into this gate's CHAIN before
+# this build) -- classified UNLICENSED until the ALLOWLIST entry below fixed it (CLAUDE.md's
+# hazard-in-reach duty). s51 ships no new :schema raw reader (kernel.artifact lives in :kern).
+# s52's validate_artifact_witness_existence reads only kernel.artifact -- no entry needed. s53
+# (design/FABLE-BELIEF-SUBSTRATE-SPEC.md v2 B1) ships TWO new raw readers by design
+# (validate_belief_evidence/_edges, entries below) and re-issues validate_supersession_target
+# with one more belief branch (existing entry updated in place, the s45 precedent). s54's five
+# views factor through belief_current/ledger_current/model_defeated_rows only -- no entry. s55
+# touches only review_detail (no `kind` column) -- outside this gate's universe entirely.
 # s49 (kernel/lineage/s49-journaler-overflow-guard.sql, design/FABLE-KERNEL-INTAKE-PAIR-SPEC.md
 # Delta 2) extends this SAME gate's scratch CHAIN. It ships ZERO new readers of any kind: its one
 # re-issued object (kernel.journal_write_refusal) lives in :"kern", OUTSIDE this gate's declared
@@ -137,50 +154,19 @@ CHAIN = [
 # (re-issued, teach-text only) keeps reading the kernel.principal_role VIEW and the two
 # SECURITY DEFINER standing functions exactly as its s43 body did -- no raw `ledger`
 # reference of its own, correctly ABSENT from the allowlist as before.
-# s43 (kernel/lineage/s43-typed-verdict-write-boundary.sql) extends this SAME gate's scratch
-# CHAIN. It ships ONE new :schema-namespace raw reader (validate_supersession_target, the R6
-# substance -- ALLOWLIST entry below) and re-issues set_actor in place (session_user instead
-# of current_user in the standing lookup -- reads the kernel.principal_role VIEW and the two
-# SECURITY DEFINER standing functions exactly as the s40 body did; no raw ledger reference,
-# correctly ABSENT from the allowlist as before). HONEST SCOPE NOTE, extending s40's own:
-# the four boundary functions and the journaler live in the :kern namespace, OUTSIDE this
-# gate's declared :schema universe (its standing scope choice) -- each writes/reads raw
-# `ledger` by construction and by ratified design (INSERT INTO ledger is the boundary's whole
-# job; the journaler's predecessor context is the trigger chain's), so the s31 discipline is
-# honored there structurally, just not machine-swept by THIS gate; widening the universe to
-# :kern remains the standing candidate future increment s40's note already names.
-# s42 (kernel/lineage/s42-row-hash-full-coverage.sql) extends this SAME gate's scratch CHAIN.
-# It ships NO new ledger reader at all: its one act is a CREATE OR REPLACE of compute_row_hash
-# (a pure IMMUTABLE function of its row argument -- no FROM/JOIN/INTO/UPDATE ledger reference
-# in its body, verified live by this gate classifying it clean), widening the serialized column
-# set to the full row (spec design/FABLE-REFUSAL-RECORDING-AND-HASH-COVERAGE-SPEC.md §3).
-# zz_set_row_hash (the caller, which DOES read raw ledger for its predecessor lookup) keeps its
-# standing ALLOWLIST entry, body untouched by s42.
-# s41 (kernel/lineage/s41-principal-bindings-and-relations.sql) extends this SAME gate's scratch
-# CHAIN. It ships NO new raw-`ledger` reader, verified live: the four D-5 binding views
-# (principal_relations, principal_role_bindings, principal_keys, principal_competences) all
-# factor through ledger_current exclusively; validate_principal_binding (the new D-3 trigger)
-# reads only NEW + kernel.principal (no ledger reference at all, so it classifies clean with no
-# entry); the re-issued validate_independence keeps its standing ALLOWLIST entry -- its D-6 leg
-# adds one more ROW-ADDRESSED read of the same two named rows (the review row's own actor) plus
-# a kernel.principal agent_class lookup (not a ledger read), squarely inside that entry's
-# existing row-addressed-forensics reason. The re-issued projection homes (+8 columns) keep
-# their entries, anti-join text unchanged.
-# s40 (kernel/lineage/s40-principal-identity-events.sql) extends this SAME gate's scratch CHAIN.
-# It ships NO new raw-`ledger` reader in this gate's enumerated universe (:schema views and
-# functions), verified live: principal_standing_current (new view) reads ledger_current +
-# kernel.principal only; the re-issued set_actor reads the kernel.principal_role VIEW (itself
-# ledger_current-factored) and calls the two SECURITY DEFINER standing functions -- no raw
-# `ledger` reference of its own, so it stays correctly ABSENT from the allowlist exactly as the
-# s19 body was. The re-issued ledger_current/countersigned_in_force keep their standing entries
-# (the projection homes, +4 appended columns, anti-join text unchanged). HONEST SCOPE NOTE: this
-# gate enumerates the :schema namespace only; s40's kernel-schema objects
-# (kernel.principal_role, kernel.principal_standing, kernel.principal_standing_basis,
-# kernel.principal_requires_registration_event) are OUTSIDE its universe by that standing scope
-# choice -- each factors through ledger_current by construction (read their definitions in the
-# delta; the two SECURITY DEFINER functions read the invoker-rights view as owner), so the s31
-# discipline is honored there too, just not machine-swept by THIS gate. Widening the gate's
-# universe to :kern is a candidate future increment, not silently claimed done.
+# s40-s43 each extend this SAME gate's scratch CHAIN. s43 ships ONE new raw reader
+# (validate_supersession_target, R6, entry below) and re-issues set_actor with no raw ledger
+# reference (correctly absent). s42 ships no new reader (compute_row_hash is a pure function of
+# its row argument). s41 ships no new raw reader: the four D-5 binding views factor through
+# ledger_current, validate_principal_binding reads NEW + kernel.principal only, and the
+# re-issued validate_independence keeps its standing entry (its D-6 leg is one more row-
+# addressed read, same reasoning). s40 ships no new raw reader: principal_standing_current reads
+# ledger_current + kernel.principal only, set_actor reads kernel.principal_role (itself
+# ledger_current-factored). HONEST SCOPE NOTE (s40-s43 alike): the boundary functions/journaler
+# and s40's kernel-schema objects live in :kern, outside this gate's :schema universe (its
+# standing scope choice) -- each factors through/writes ledger_current or raw ledger by
+# ratified design, s31 discipline honored there structurally, not machine-swept by THIS gate;
+# widening the universe to :kern is a named future increment, not silently claimed done.
 # s39 (kernel/lineage/s39-blocks-start.sql) extends this SAME gate's scratch CHAIN so its own new
 # objects are exercised by the scratch apply below. It ships ONE new RAW/history reader by design
 # (work_edge_blocks_start, added to ALLOWLIST below, mirroring work_edge_blocks_close one edge-type
@@ -306,14 +292,13 @@ ALLOWLIST: dict[str, str] = {
                                              "the pre-s35 monolith already performed inline.",
     "validate_independence": "reads (stamp_session, stamp_agent) off the two named rows — row-addressed "
                              "forensics, not a truth projection (s17/s21/s29).",
-    "validate_supersession_target": "write-boundary BEFORE INSERT trigger (s43, the ratified R6's "
-                                    "substance; widened s45 §3.4): a single row-addressed read of "
-                                    "the supersession TARGET's (kind, principal_db_role, "
-                                    "principal_subject) -- is it write_refused? is it a standing-"
-                                    "lifecycle kind, and if so does the superseding row restate "
-                                    "its identity fields? -- superseded-or-not immaterial, same "
-                                    "history-typed reasoning as validate_review, three columns "
-                                    "over now instead of one.",
+    "validate_supersession_target": "write-boundary BEFORE INSERT trigger (s43 R6, widened s45 "
+                                    "§3.4, widened s53 §3.2 item 4): a single row-addressed read "
+                                    "of the supersession TARGET's (kind, principal_db_role, "
+                                    "principal_subject, actor) -- write_refused? standing-"
+                                    "lifecycle identity restated? belief kind/actor restated? -- "
+                                    "same history-typed reasoning as validate_review, four "
+                                    "columns now instead of one.",
     "validate_review_witness_existence": "write-boundary BEFORE INSERT trigger (s48, Delta 1 of "
                                          "design/FABLE-KERNEL-INTAKE-PAIR-SPEC.md): a single "
                                          "existence check per cited row:<id> token in the "
@@ -321,6 +306,19 @@ ALLOWLIST: dict[str, str] = {
                                          "work_closed/work_violation_disposition row -- "
                                          "row-addressed forensics (does this id exist at all), "
                                          "same history-typed reasoning as validate_review.",
+    "validate_belief_evidence": "write-boundary BEFORE INSERT trigger (s53 §3.2): existence "
+                                "check per row:<id> token in belief_universe/belief_witness -- "
+                                "the s48 idiom, reused verbatim one field over.",
+    "validate_belief_edges": "write-boundary BEFORE INSERT trigger (s53 §3.2): existence of "
+                             "belief_premises elements plus kind/supersession/actor reads of "
+                             "belief_contests/belief_concurs -- same reasoning as "
+                             "validate_supersession_target one field over.",
+    "model_defeated_rows": "TYPED (s44+) defeat-display view (s46), RE-ISSUED by s50 (row 1647) "
+                           "so its defeat-input exclusion quantifies over RAW `ledger` (matching "
+                           "both engine producers' full-history domain) rather than "
+                           "ledger_current -- protective-only (the defeated set can only "
+                           "shrink). Previously unlicensed (s50 never wired into this gate's "
+                           "CHAIN before this build); fixed on the same pass that extends it.",
     "work_parent_would_cycle": "trigger helper — cycle check against history (s28; slug-burned world: a "
                                "retracted open still occupies its slug's place in the one-open-per-slug order).",
     "work_depends_on_would_cycle": "trigger helper — cycle check over blocks-close history (s30).",
