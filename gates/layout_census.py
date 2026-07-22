@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-09T07:54:37Z
-#   last-change: 2026-07-22T02:44:57Z
-#   contributors: 9bcc0113/main, be693afb/main, e4410ef6/main, 3c50e030/main, a857c93d/main, ab5d5bab/main, 1fa3ab69/main
+#   last-change: 2026-07-22T03:11:22Z
+#   contributors: 9bcc0113/main, be693afb/main, e4410ef6/main, 3c50e030/main, a857c93d/main, ab5d5bab/main, 1fa3ab69/main, 431cddfa/main
 # <<< PROVENANCE-STAMP <<<
 
 """layout_census — LAYOUT.md's designed tree as a MECHANICAL registry (manifest [C21]).
@@ -96,6 +96,14 @@ ROOT_FILES = {
     # explicit --deployment path, so it lives once, here, and is pointed at whichever source/
     # target world the operator names.
     "extract-context",
+    # verify-chain — the seventh repo-root operator verb shim, wired 2026-07-22 during the
+    # autoharn1 succession (ledger row 1942): extract-context's provenance block quotes
+    # ./verify-chain output verbatim (consult §2.3) and reported it UNAVAILABLE because this
+    # legacy deployment had every sibling shim (led/judge/pickup/audit/distance-to-clean/
+    # migrate) but never this one. Same PICKUP_DEPLOYMENT wrapper pattern; the template
+    # itself (bootstrap/templates/verify-chain.tmpl) is the direct-psql original, so no
+    # legacy- variant exists to point at.
+    "verify-chain",
     # LICENSE (the Unlicense, added fca1100, maintainer's choice 2026-07-12) -- a root
     # standing-document like the others above, never registered when it landed; caught by
     # this gate's own next run (tracker item layout-census-license-unregistered, CLAUDE.md
