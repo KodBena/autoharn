@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-21T23:59:52Z
-#   last-change: 2026-07-22T00:26:42Z
+#   last-change: 2026-07-22T01:41:03Z
 #   contributors: 1fa3ab69/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -32,18 +32,17 @@ shape ledger_edb.py's own supersession-transitive-closure already uses for the i
 Still "the SQL floor": every fact and validity check is SQL-derived; only the fixpoint driver
 is Python, exactly as for the EDB producer's own supersession math.
 
-Read-only. Reuses `ledger_floor._base_ctes`/`_enacts_cte` for the supersession/in-force closure
-ONLY (SQL-to-SQL reuse of the one authoritative encoding, the established floor_atoms/
-support_floor_atoms/defeat_floor_atoms precedent -- no clingo path, I6 unaffected), and calls
-`ledger_floor.defeat_floor_atoms` for the model-identity defeat set (parallel SQL-side
-composition with the defeat layer, mirroring `ledger_belief.lp`'s own composition with
-`ledger_defeat.lp` on the ASP side -- neither calculus's internals shared, only the input).
+Read-only. Reuses `ledger_floor._base_ctes`/`_enacts_cte` (supersession/in-force, SQL-to-SQL, I6
+unaffected) and `ledger_floor.defeat_floor_atoms` (model-identity defeat, parallel composition
+with `ledger_belief.lp`'s own `ledger_defeat.lp` composition). v2 typed arm (s53) split into
+engine/belief_floor_typed.py (ADR-0007 headroom, reported not silent).
 
 Lazy imports are banned (CLAUDE.md)."""
 from __future__ import annotations
 
 import sys
 
+from belief_floor_typed import typed_arm_rows
 from ledger_edb import Target, resolve
 from ledger_floor import _base_ctes, _enacts_cte, defeat_floor_atoms
 from ledger_floor import floor_atoms as _tnow_floor_atoms
@@ -201,33 +200,36 @@ def _parse_and_validate(t: Target) -> list[tuple]:
 def _ids(raw: str) -> list[int]:
     return [int(tok.strip()[4:]) for tok in raw.split(",") if tok.strip()]
 
-
 def belief_capable(t: Target) -> bool:
-    """The ONE home of the belief layer's capability test (I12) -- statement + integer-typed
-    actor -- shared across this module and belief_differential.py (never re-derived)."""
+    """The ONE home of the belief layer's capability test (I12) -- (statement, v1 arm, OR
+    belief_polarity, s53 typed arm) + integer-typed actor. Mirrors belief_edb.py's gate."""
     has_actor = t.has_col("actor") and t.scalar(
         f"SELECT data_type FROM information_schema.columns WHERE table_schema='{t.schema}' "
         f"AND table_name='ledger' AND column_name='actor';") in ("bigint", "integer", "smallint")
-    return t.has_col("statement") and has_actor
+    return (t.has_col("statement") or t.has_col("belief_polarity")) and has_actor
 
 
 def belief_manifest(name: str) -> dict[str, str]:
     """The capability manifest for the belief layer on `name` (I12)."""
     capable = belief_capable(resolve(name))
-    reason = ("PRODUCED (basis: statement + integer-typed actor present)" if capable else
-             "EXCLUDED (no `statement` column, or `actor` is not integer-typed -- capability absent)")
+    reason = ("PRODUCED (statement/belief_polarity + integer-typed actor)" if capable else
+             "EXCLUDED (no statement/belief_polarity column, or actor not integer-typed)")
     return {fam: reason for fam in BELIEF_PREDS}
 
 
 def belief_floor_atoms(name: str) -> set[str]:
-    """The set of belief-layer atoms the SQL floor derives for `name` (read-only). Raises (a
-    SQL-side division-by-zero) on a malformed v1 belief statement -- caught by the caller and
-    QUARANTINED, exactly as export_belief()'s BeliefParseError is on the ASP-EDB side."""
+    """The set of belief-layer atoms the SQL floor derives for `name` (read-only), BOTH arms
+    combined (v1 + s53 typed, the s44 dual-arm precedent). Raises on a malformed v1 belief
+    statement (caught by the caller, QUARANTINED); the typed arm never raises -- s53's kernel
+    CHECKs/triggers already refused malformed rows at write time."""
     t = resolve(name)
     if not belief_capable(t):
         return set()  # capability-absent; the caller's require()-equivalent refuses BEFORE this
-
-    rows = _parse_and_validate(t)  # raises on the first malformed candidate (SQL-side guard)
+    rows: list[tuple] = []
+    if t.has_col("statement"):
+        rows += _parse_and_validate(t)  # raises on the first malformed candidate (SQL-side guard)
+    if t.has_col("belief_polarity"):
+        rows += typed_arm_rows(t)  # s53 typed arm -- write-time validated, no re-parse here
 
     # ---- in_force / superseded (SQL-derived, via the SAME base closure ledger_floor.py's other
     # floors share -- SQL-to-SQL reuse, not a clingo code path) ------------------------------
@@ -246,10 +248,8 @@ def belief_floor_atoms(name: str) -> set[str]:
 
     # ---- assemble typed per-belief records + edges ------------------------------------------
     belief_ids = {r[0] for r in rows}
-    basis_of: dict[int, str] = {}
-    polarity_of: dict[int, str] = {}
-    has_universe: dict[int, bool] = {}
-    has_witness: dict[int, bool] = {}
+    basis_of: dict[int, str] = {}; polarity_of: dict[int, str] = {}  # noqa: E702
+    has_universe: dict[int, bool] = {}; has_witness: dict[int, bool] = {}  # noqa: E702
     premise_edges: dict[int, list[int]] = {}
     source_edge: dict[int, int] = {}
     contests_edge: dict[int, int] = {}
@@ -391,8 +391,7 @@ def main(argv: list[str] | None = None) -> int:
     for name in (argv if argv is not None else sys.argv[1:]) or ["s10"]:
         atoms = belief_floor_atoms(name)
         print(f"# belief_floor(SQL) -- {name}: {len(atoms)} atoms")
-        for a in sorted(atoms):
-            print(f"  {a}")
+        for a in sorted(atoms): print(f"  {a}")  # noqa: E701
     return 0
 
 
