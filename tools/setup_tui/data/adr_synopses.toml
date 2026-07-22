@@ -28,7 +28,7 @@ text = "When code hits a bad config, an unexpected shape, a timeout, or any othe
 
 [[synopsis]]
 number = "0003"
-text = "Domain-specific instance facts and domain-general problem-class machinery get named, separated coupling bands; a forward-looking 'what would a different instance require?' question forces honest separation, and abstractions are never extracted before a second concrete consumer exists."
+text = "Domain-specific instance facts and domain-general problem-class machinery get named, separated coupling bands. Two questions govern every new module: what would change if the domain instance were different but the problem class the same, and what would change if the problem class were different but the machinery the same -- the answers locate the seam, and the seam is designed deliberately either way. Adopters derive their own band map from their own codebase; the ADR hands none down."
 
 [[synopsis]]
 number = "0004"
