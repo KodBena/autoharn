@@ -1,7 +1,7 @@
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-18T21:32:16Z
-#   last-change: 2026-07-21T22:15:55Z
-#   contributors: ab5d5bab/main, 43f77bff/main
+#   last-change: 2026-07-22T01:56:46Z
+#   contributors: ab5d5bab/main, 43f77bff/main, 1fa3ab69/main
 # <<< PROVENANCE-STAMP <<<
 
 """tools/setup_tui/probes.py -- the live-connection/liveness probes honesty rule 2 requires
@@ -139,6 +139,28 @@ def pg_connect(host: str, db: str, role: str | None = None, schema: str | None =
         return False, f"psql connect probe failed to run: {exc}"
     ok = cp.returncode == 0 and bool(cp.stdout.strip())
     return ok, (cp.stdout + cp.stderr).strip()
+
+
+def pg_schema_exists(host: str, db: str, schema: str, timeout: float = 5.0) -> tuple[bool, str]:
+    """`SELECT to_regnamespace('<schema>') IS NOT NULL` -- a read-only existence probe
+    (design/FABLE-SETUP-TUI-CONFIG-FILE-SPEC.md §3's world-exists rejection leg: "REFUSED if the
+    schema (or `<name>_kernel`) already exists on the target Postgres"). Never raises; an
+    unreachable host or a validation refusal both report `(False, detail)` -- a probe that
+    cannot reach the server has not PROVEN the schema exists, and must never be misread as
+    "safe to proceed" (ADR-0002: a probe that cannot answer says so, it does not guess)."""
+    if not valid_identifier(schema):
+        return False, f"REFUSED: schema '{schema}' contains characters outside [A-Za-z0-9_]"
+    psql = which("psql")
+    if not psql:
+        return False, "psql not found on PATH -- cannot probe"
+    sql = f"SELECT to_regnamespace('{schema}') IS NOT NULL"
+    argv = [psql, "-h", host, "-d", db, "-tA", "-c", sql]
+    try:
+        cp = subprocess.run(argv, capture_output=True, text=True, timeout=timeout)
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return False, f"psql schema-exists probe failed to run: {exc}"
+    out = cp.stdout.strip()
+    return (cp.returncode == 0 and out == "t"), (out or (cp.stdout + cp.stderr).strip())
 
 
 def http_get_json(url: str, timeout: float = 5.0) -> tuple[bool, int, object]:

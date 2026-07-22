@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-18T21:34:30Z
-#   last-change: 2026-07-22T00:14:31Z
+#   last-change: 2026-07-22T02:01:05Z
 #   contributors: ab5d5bab/main, 43f77bff/main, 1fa3ab69/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -74,12 +74,13 @@ import signal
 import subprocess
 import sys
 
+from tools.setup_tui import config_file, config_seam
 from tools.setup_tui.checklist import Checklist
 from tools.setup_tui.content import app_data as AD
 from tools.setup_tui.elements import Heading, Note, Paragraph, Rule
 from tools.setup_tui.flow_position import FlowPosition, run_screen
 from tools.setup_tui.screens import SCREENS
-from tools.setup_tui.ui import ScriptExhausted, Ui, build_ui
+from tools.setup_tui.ui import ScriptedUi, ScriptExhausted, Ui, build_ui
 
 try:
     from tools.setup_tui import ui_textual
@@ -114,7 +115,73 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
                          "verify, recorded as its own explicit checklist row, never silent. "
                          "Applies to every backend, including --scripted (the flag rides the "
                          "process argv, not an answers-file line).")
+    # CONFIG-FILE (design/FABLE-SETUP-TUI-CONFIG-FILE-SPEC.md, ledger row 1944) -- the two
+    # consumption modes, plus the two CLI parameters --from-config pairs a config with.
+    p.add_argument("dest_dir", nargs="?", default=None, metavar="DEST_DIR",
+                    help="destination directory -- REQUIRED with --from-config (spec §2: "
+                         "--world/DEST_DIR are the only per-project variables a config needs)")
+    p.add_argument("--from-config", metavar="CONFIG_FILE", default=None,
+                    help="non-interactive application of a config file -- requires --world and "
+                         "DEST_DIR; REFUSES up front on a missing/unknown key or an "
+                         "already-existing world, never a mid-flow interactive fallback")
+    p.add_argument("--world", metavar="NAME", default=None,
+                    help="the world name --from-config births -- REFUSED if a schema/kernel "
+                         "schema of this name already exists on the target Postgres, or if "
+                         "DEST_DIR's own sentinel names a different world")
+    p.add_argument("--initial-config", metavar="CONFIG_FILE", default=None,
+                    help="interactive run, config values pre-loaded as each prompt's default "
+                         "(the 'known good configuration' the operator edits individually) -- "
+                         "partial configs are fine, missing keys keep normal defaults")
     return p.parse_args(argv)
+
+
+def _check_config_flags(args: argparse.Namespace) -> None:
+    """Spec §2's mode discipline, refused up front rather than discovered mid-flow."""
+    if args.from_config and not (args.world and args.dest_dir):
+        raise SystemExit("setup_tui: --from-config requires both --world NAME and a "
+                          "destination directory (positional argument).")
+    if (args.world or args.dest_dir) and not args.from_config:
+        raise SystemExit("setup_tui: --world/DEST_DIR are only meaningful together with "
+                          "--from-config.")
+    if args.from_config and args.initial_config:
+        raise SystemExit("setup_tui: --from-config and --initial-config are mutually exclusive "
+                          "-- pick one consumption mode (design/FABLE-SETUP-TUI-CONFIG-FILE-"
+                          "SPEC.md §2).")
+    if args.from_config and args.scripted:
+        raise SystemExit("setup_tui: --scripted and --from-config are mutually exclusive -- "
+                          "--from-config already drives a non-interactive run.")
+    if args.from_config and args.start_at:
+        raise SystemExit("setup_tui: --from-config does not compose with --start-at -- the "
+                          "synthesized answer sequence assumes the full eleven-screen flow "
+                          "(out of scope for this build; run the two modes separately).")
+
+
+def _run_from_config(args: argparse.Namespace) -> int:
+    """`--from-config`: validate, refuse-before-any-act (spec §3), compile to the EXISTING
+    `--scripted` answers-file shape, then drive it through the exact same `ScriptedUi` path a
+    real `--scripted` run takes (`config_seam`'s own module docstring explains why that is the
+    correct, not merely convenient, choice for the Signed genesis leg)."""
+    try:
+        doc = config_file.load_config_file(args.from_config)
+        config_file.validate(doc, require_complete=True)
+    except config_file.ConfigError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+    host = str(config_file.get(doc, "substrate.host", "192.168.122.1"))
+    db = str(config_file.get(doc, "substrate.db", "toy"))
+    refusal = config_seam.check_world_and_dest(world=args.world, dest=args.dest_dir, host=host,
+                                                db=db)
+    if refusal:
+        print(f"setup_tui: {refusal}", file=sys.stderr)
+        return 1
+    lines = config_seam.synthesize_scripted_lines(doc, world=args.world, dest=args.dest_dir)
+    with config_seam.scripted_answers_file(lines) as answers_path:
+        ui = ScriptedUi(answers_path)
+        cl = Checklist()
+        state: dict = {"dry_run": args.dry_run,
+                       "accept_unverified_genesis": args.accept_unverified_genesis}
+        state_holder: list[dict] = [state]
+        return _run_plain(ui, cl, state, state_holder, SCREENS, args)
 
 
 def _select_backend(args: argparse.Namespace) -> tuple[str, Ui | None]:
@@ -180,7 +247,13 @@ def _drive_screens(ui: Ui, cl: Checklist, state: dict, state_holder: list[dict],
     catching `NavigateBack`, and popping/restoring the cursor -- see its own docstring for the
     exact contract and for why the final screen (the commit boundary) is never wrapped."""
     completed_normally = False
-    flow = FlowPosition(base_state=copy.deepcopy(state))
+    # --initial-config (design/FABLE-SETUP-TUI-CONFIG-FILE-SPEC.md §2): `main()` stashes the
+    # {screen: {prompt: value}} seed under this transient state key -- popped here (never left
+    # in `state`, which every screen also reads) and handed to `FlowPosition` as `last_answers`,
+    # the SAME slot backward-navigation already re-offers a revisited screen's own prior answers
+    # from (config_seam.build_initial_prior_answers's own docstring: "works with navigation").
+    initial_prior = state.pop("_initial_config_prior_answers", {})
+    flow = FlowPosition(base_state=copy.deepcopy(state), last_answers=initial_prior)
     idx = 0
     try:
         try:
@@ -335,9 +408,22 @@ def _run_textual(cl: Checklist, state: dict, state_holder: list[dict], screens: 
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(sys.argv[1:] if argv is None else argv)
+    _check_config_flags(args)
+    if args.from_config:
+        return _run_from_config(args)
+
     cl = Checklist()
     state: dict = {"dry_run": args.dry_run,
                    "accept_unverified_genesis": args.accept_unverified_genesis}
+    if args.initial_config:
+        try:
+            initial_doc = config_file.load_config_file(args.initial_config)
+            config_file.validate(initial_doc, require_complete=False)
+        except config_file.ConfigError as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
+        state["_initial_config_prior_answers"] = config_seam.build_initial_prior_answers(
+            initial_doc)
     state_holder: list[dict] = [state]
 
     screens = SCREENS

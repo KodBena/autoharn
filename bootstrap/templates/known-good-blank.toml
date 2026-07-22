@@ -1,0 +1,102 @@
+# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
+#   first-seen : 2026-07-22T02:07:39Z
+#   last-change: 2026-07-22T02:07:39Z
+#   contributors: 1fa3ab69/main
+# <<< PROVENANCE-STAMP <<<
+
+# bootstrap/templates/known-good-blank.toml -- the maintainer's "blank" world configuration,
+# reconstructed by archaeology (design/FABLE-SETUP-TUI-CONFIG-FILE-SPEC.md §5, ledger row 1944).
+#
+# SOURCE: /home/bork/w/vdc/1/test/blank (world "omega", scaffolded 2026-07-19T22:43:44Z), read-
+# only, outside this repo -- deployment.json, setup-checklist-20260719T224417Z.txt,
+# .setup-tui-commit-journal.json, keys/README.md, roles/README.md, .claude/settings.json,
+# AUTOHARN_BACKFLOW.md, and the omega/omega1 schemas on 192.168.122.1 db "toy" (`omega.ledger`,
+# `omega.principal_standing_current`, `omega.principal_competences`). Every key below traces to
+# one of those, named in its own trailing comment.
+#
+# EXCLUDED PER SPEC §5 -- "nothing that borked is canonized": AUTOHARN_BACKFLOW.md finding 1
+# recorded that this world's genesis-commission signing picked up the WRONG local GPG key
+# (checklist row: "ceremony gate (verify-commission) REFUSED FORGED-OR-CORRUPT") -- fixed
+# upstream since (commit 238b4ea, `-u <fingerprint>` pinning), so today's flow does not
+# reproduce it; this config carries no unverified-genesis override and a CLEAN commission
+# statement (the original's own statement text carried an unrelated warning about a dangling
+# path-shaped token, `~/w/omega` -- also not reproduced, since it was itself the noise, not the
+# intent). No daemon was ever manually started to work around a gap here either -- the
+# maintainer's own boundary auto-start (evidenced below) is what this config expresses.
+
+config_format = 1
+produced_by = "setup_tui config-file archaeology (design/FABLE-SETUP-TUI-CONFIG-FILE-SPEC.md §5)"
+source = "/home/bork/w/vdc/1/test/blank (world 'omega', born 2026-07-19T22:43:44Z) -- read-only archaeology, 2026-07-22"
+
+[substrate]
+run = true    # setup-checklist row: "substrate  existing-db toy@192.168.122.1 reachable  WITNESSED"
+path = "existing"    # same row -- the existing-db path, not dedicated
+host = "192.168.122.1"    # deployment.json "host"; checklist row above
+db = "toy"    # deployment.json "db"; checklist row above
+
+[fork_target]
+governed_extend = false    # checklist: "governed-files pattern set chosen  WITNESSED  kept default (operator declined to extend): ['*.py']"
+governed_extensions = ""   # same row -- nothing extended
+
+[rehearsal]
+run = true    # checklist: "rehearsal  rehearsal overall  WITNESSED  GREEN" (scratch birth + teardown both WITNESSED exit 0)
+
+[birth]
+run = true    # checklist: "birth  world birth  WITNESSED  exit 0"
+
+[principals_authority]
+run = true    # checklist: full principals-authority section engaged (existing principals shown, authority bindings available, register/grant/relate rows all WITNESSED below)
+
+[[principals_authority.register]]
+name = "maintainer"    # omega.ledger row 7: "principal 'maintainer' registered (class human)"
+agent_class = "human"    # same row
+purpose = "project maintainer and final authority"    # omega.principal_standing_current.purpose, id=5
+
+[[principals_authority.register]]
+name = "orchestrator"    # omega.ledger row 8: "principal 'orchestrator' registered (class model)"
+agent_class = "model"    # same row
+purpose = "orchestrates agents on project maintainer's behalf"    # omega.principal_standing_current.purpose, id=6
+
+[[principals_authority.competences]]
+name = "maintainer"    # omega.ledger row 9 / omega.principal_competences subject=5
+activity = "overall project governance and agent orchestration direction"    # omega.principal_competences.activity
+band = "governing"    # omega.principal_competences.band
+basis = "Registered principal and project maintainer with final authority; responsible for project governance and strategic direction of the orchestrator"    # omega.principal_competences.basis
+
+[[principals_authority.competences]]
+name = "orchestrator"    # omega.ledger row 10 / omega.principal_competences subject=6
+activity = "project orchestration and agent coordination"    # omega.principal_competences.activity
+band = "executive"    # omega.principal_competences.band
+basis = "Registered model principal acting as executive orchestrator and advisor on behalf of the project maintainer, who holds final authority"    # omega.principal_competences.basis
+
+[[principals_authority.relations]]
+subject = "orchestrator"    # omega.ledger row 11
+relation = "acts-for"    # same row: "principal 'orchestrator' acts-for principal 'maintainer' (relation asserted)"
+object = "maintainer"    # same row
+# NOTE (capture gap, named per the commission's own instruction): the blank world ALSO
+# registered two role charters (omega.ledger rows 12/13, "maintainer"/"orchestrator") -- not
+# reproducible here. A charter registration needs a charter FILE PATH, which is host-specific
+# and excluded-by-type (spec §1); there is no config key for it, by construction, and
+# --from-config always declines this item (config_seam.py's own synthesizer comment). This is a
+# genuine, permanent capture gap for this section, not an oversight.
+
+[signed_genesis]
+run = true    # checklist: full signed-genesis section engaged (gpg present, keygen, export, sign all WITNESSED)
+commission_statement = "Found and operate the 'omega' deployment as the maintainer's day-to-day working world."    # ARCHAEOLOGY CALL: the ORIGINAL statement (setup-checklist row "genesis commission written") carried a dangling path-shaped token warning (~/w/omega) -- excluded per spec §5 as noise, not intent; this restates the same INTENT (a founding commission for this world) in clean prose.
+
+[boundary]
+configure = true    # deployment.json carries boundary_url/boundary_deployment; boundary-multiplex.toml present on disk with omega's own pghost/pgdatabase/pguser/pgschema/pgkern
+start_now = true    # deployment.json boundary_url = "http://127.0.0.1:8421" matches the auto-start BackgroundAct's own port-picked shape (no start-daemons script/systemd unit present in the tree -- the DIRECT in-process auto-start path, not the DaemonSelection fallback, which postdates this world's birth)
+
+[observability]
+run = true    # setup-checklist carries explicit observability rows (otelcol/otel-watch/claude-launch-line all shown) -- screen was engaged
+otelcol = false    # no otelcol-config.yaml or otel-data/ present anywhere in the tree -- never selected
+otel_watch = false    # no positive evidence of selection (no artifact this daemon would leave); declined by the same operator pattern as otelcol
+
+[hydration]
+run = true    # checklist: "hydration  led present  DRY-SKIPPED" + four declined items below -- screen was engaged
+fork_provenance = false    # checklist: "hydration  fork provenance  SKIPPED  operator declined"
+fork_provenance_statement = ""    # not applicable -- declined
+role_charters = false    # NAMED CAPTURE GAP: this checklist predates the hydration screen's own role-charter item (role_charter.py-driven, separate from principals-authority's charter loop above); no row for it exists in this record either way -- false is the safe default, not positive evidence
+durable_decisions = []    # checklist: "tags-are-serious-business SKIPPED", "runs-are-strictly-linear SKIPPED" -- the only two durable decisions that existed in the catalog at this world's birth time, both declined
+adopt_adrs = []    # checklist: "adr adoption (ADR-0001: Immutability...) SKIPPED  operator declined" -- the only ADR line this checklist shows, declined
