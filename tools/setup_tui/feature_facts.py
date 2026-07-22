@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-18T23:35:54Z
-#   last-change: 2026-07-21T22:53:29Z
-#   contributors: ab5d5bab/main, 43f77bff/main
-# <<< PROVENANCE-STAMP <<<
-
 """tools/setup_tui/feature_facts.py -- the feature-facts registry
 (design/FABLE-SETUP-TUI-FEATURE-FACTS-SPEC.md §2, commission ledger row 1714). ONE home
 (ADR-0012 P1) for the standards-conformance aspiration and external-cost/dependency facts the

@@ -1,10 +1,4 @@
 #!/bin/sh
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-11T20:34:46Z
-#   last-change: 2026-07-18T20:14:01Z
-#   contributors: e4410ef6/main, ab5d5bab/main
-# <<< PROVENANCE-STAMP <<<
-
 # track-work.sh — give ANY directory a STANDING work-tracking deployment (the "omega
 # work-status" litigation closed as a product: research/foundational-map/06-omega-work-status-
 # sql-anti-corruption-layer.md is the precedent this offering generalizes; design/

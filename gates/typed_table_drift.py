@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-19T02:00:34Z
-#   last-change: 2026-07-19T02:00:34Z
-#   contributors: ab5d5bab/main
-# <<< PROVENANCE-STAMP <<<
-
 """typed_table_drift — the mechanical GATE half of `tools/doc_table_generation.py` (work item
 `typed-table-ssot-integration`, follow-up to the typed-table-constructor-experiment ADOPTION).
 Wraps that module's `check()` as a gate, following `gates/doc_tables.py`'s own precedent (a

@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-18T10:34:23Z
-#   last-change: 2026-07-18T10:38:43Z
-#   contributors: ab5d5bab/main
-# <<< PROVENANCE-STAMP <<<
-
 """run_fixtures — both-polarity live proof for ../../asof-export (bootstrap/templates/
 asof-export.tmpl; gates/fixture_census.py REGISTRY entry "asof-export"). Ledger item
 `asof-export-inspection-copy`. Real infra, no mocks: bootstrap/track-work.sh stands up a

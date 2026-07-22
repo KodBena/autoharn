@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-12T00:09:48Z
-#   last-change: 2026-07-12T00:10:17Z
-#   contributors: e4410ef6/main
-# <<< PROVENANCE-STAMP <<<
-
 """run_fixtures — both-polarity live proof for bootstrap/track-experiments.sh (the standing
 research-ledger recording-surface offering; BACKLOG "research-ledger-offering"; gates/
 fixture_census.py REGISTRY entry "track-experiments"). Mirrors seen-red/track-work/

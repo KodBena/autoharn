@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-12T07:53:51Z
-#   last-change: 2026-07-12T07:58:51Z
-#   contributors: e4410ef6/main
-# <<< PROVENANCE-STAMP <<<
-
 """ordering_floor -- the SQL FLOOR of the ordering-violations verdicts (design/
 ORCH-SPEC-RESOURCE-REGISTRY.md §6/§5 stage 2): producer ONE of the marriage differential
 (engine/ordering_differential.py), computing the SAME judgment predicates as

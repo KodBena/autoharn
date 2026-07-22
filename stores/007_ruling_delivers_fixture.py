@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-07T03:59:22Z
-#   last-change: 2026-07-07T03:59:22Z
-#   contributors: 37017f46/main
-# <<< PROVENANCE-STAMP <<<
-
 """007_ruling_delivers_fixture — proves the delivers-FK (finding 35 stage 2) on a THROWAWAY schema, both
 ways. Applies 004 (rulings ledger), seeds a binding freight + a convention 'delivered' delivery sharing
 its bytes, applies 007, and asserts:

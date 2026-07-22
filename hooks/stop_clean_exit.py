@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-10T19:38:38Z
-#   last-change: 2026-07-16T06:39:26Z
-#   contributors: be693afb/main, e4410ef6/main, a857c93d/main, 9a17b6b9/main
-# <<< PROVENANCE-STAMP <<<
-
 """stop_clean_exit — the clean-exit gate (Claude Code Stop hook).
 
 MOTIVATION (BACKLOG "Run-5 forensics" family, 2026-07-10): run 5 handed off with two open

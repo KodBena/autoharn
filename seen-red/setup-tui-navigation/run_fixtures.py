@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-22T00:17:07Z
-#   last-change: 2026-07-22T00:17:34Z
-#   contributors: 1fa3ab69/main
-# <<< PROVENANCE-STAMP <<<
-
 """seen-red/setup-tui-navigation/run_fixtures.py -- both-polarity proof of
 design/FABLE-SETUP-TUI-NAVIGATION-SPEC.md (commission the maintainer's verbatim observation (e):
 "no way to navigate back and forth in the TUI, so if you change your mind you have to start

@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-15T20:53:30Z
-#   last-change: 2026-07-15T20:56:11Z
-#   contributors: a857c93d/main
-# <<< PROVENANCE-STAMP <<<
-
 """run_fixtures.py -- both-polarity proof for kernel/lineage/s32-edge-views-single-home.sql
 (vestigial_documentation/design/ORCH-CATEGORICAL-REFACTOR-CONSULT-2026-07-15.md, F3/F6 + plan step 3; ledger item
 edge-views-single-home). Real infra, no mocks: a CLASSIC-mode scaffold (explicit --schema/--kern/

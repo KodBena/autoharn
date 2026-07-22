@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-21T20:16:51Z
-#   last-change: 2026-07-22T02:19:18Z
-#   contributors: 43f77bff/main, 1fa3ab69/main
-# <<< PROVENANCE-STAMP <<<
-
 """gates/max_lines.py -- ADR-0007 mechanization: soft-threshold file-size discipline made
 mechanical over one honestly-scoped surface, with a RATCHETING BASELINE for current offenders
 per ADR-0011 Rule 4 (no retroactive sweep).

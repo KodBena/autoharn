@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-06T05:35:36Z
-#   last-change: 2026-07-18T05:50:47Z
-#   contributors: 37017f46/main, be693afb/main, a857c93d/main, 9a17b6b9/main, ab5d5bab/main
-# <<< PROVENANCE-STAMP <<<
-
 """ledger_floor -- the SQL FLOOR of the T_now judgments: producer ONE of the
 marriage differential (design ORCH-LEDGER-LOGIC-MARRIAGE.md §4; "SQL (recursive views)
 -- this IS SQL's home turf" for monotone closure). Computes the SAME judgment

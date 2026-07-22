@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-15T12:44:42Z
-#   last-change: 2026-07-15T12:49:06Z
-#   contributors: a857c93d/main
-# <<< PROVENANCE-STAMP <<<
-
 """Seen-red specimen for night-build-defect-repair DEFECT 1 (gates/staging_guard.py merge bypass).
 
 RCA: `_merge_in_progress()` used to return True on bare MERGE_HEAD *presence* and the guard

@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-09T11:08:11Z
-#   last-change: 2026-07-09T11:08:11Z
-#   contributors: be693afb/main
-# <<< PROVENANCE-STAMP <<<
-
 """test_targets_deployment -- qualification gate for engine/targets.py's THIRD resolution source
 (vestigial_documentation/design/ORCH-OPUS-READINESS.md move 1): a deployment.json read via LEDGER_DEPLOYMENT, and the
 precedence rule (explicit registry > deployment file > LEDGER_DB/LEDGER_SCHEMA/LEDGER_KERN env

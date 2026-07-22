@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-19T02:04:05Z
-#   last-change: 2026-07-19T02:05:22Z
-#   contributors: ab5d5bab/main
-# <<< PROVENANCE-STAMP <<<
-
 """Seen-red fixture for gates/typed_table_drift.py (work item typed-table-ssot-integration,
 gates/fixture_census.py REGISTRY entry "typed-table-drift"). Proves, both polarities, against a
 fully SCRATCH registry+doc (never the live corpus — this fixture must be safe to run any number

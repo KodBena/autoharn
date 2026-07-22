@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-14T22:13:14Z
-#   last-change: 2026-07-14T22:13:14Z
-#   contributors: a857c93d/main
-# <<< PROVENANCE-STAMP <<<
-
 """enacts_chain — walk the design→enactment edge the e9/e10 vocabulary adds (consult 9 §4/§5.4.2,
 consult 11 §7.4.2). Reads BOTH edge shapes: e9's scalar `enacts bigint` and e10's multi-target
 `enacts bigint[]` (consult 11 §7.1.1 — historical comparability), auto-detected per session.

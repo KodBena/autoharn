@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-15T19:30:37Z
-#   last-change: 2026-07-15T19:30:37Z
-#   contributors: a857c93d/main
-# <<< PROVENANCE-STAMP <<<
-
 """run_fixtures.py -- both-polarity proof for ../../orchlog (ledger item
 orchlog-changelog-verb). Real infra, no mocks: a throwaway scratch git repository under this
 process's own temp dir, torn down before AND after this file runs so re-running it never

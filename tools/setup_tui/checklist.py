@@ -1,9 +1,3 @@
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-18T21:31:50Z
-#   last-change: 2026-07-22T00:16:32Z
-#   contributors: ab5d5bab/main, 43f77bff/main, 1fa3ab69/main
-# <<< PROVENANCE-STAMP <<<
-
 """tools/setup_tui/checklist.py -- honesty rule 3 ("checklist truth"): a per-item status record
 of everything the flow touched, kept as ONE list every screen appends to (ADR-0012 P1 -- no
 screen keeps its own private tally), rendered as the closing checklist screen's table and, if

@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-21T23:52:35Z
-#   last-change: 2026-07-22T00:26:12Z
-#   contributors: 1fa3ab69/main
-# <<< PROVENANCE-STAMP <<<
-
 """seen-red/setup-tui-genesis-gate-hard-stop/run_fixtures.py -- RED-then-GREEN witness for the
 GENESIS-GATE HARD-STOP (ledger row 1918; maintainer's verbatim "Yes, it should stop"; the row
 also names the class this closes: AUTOHARN_BACKFLOW.md finding 1, "the wrong-key instance was

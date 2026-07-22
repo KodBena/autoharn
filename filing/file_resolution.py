@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-06T23:23:39Z
-#   last-change: 2026-07-14T23:18:53Z
-#   contributors: 37017f46/main, a857c93d/main
-# <<< PROVENANCE-STAMP <<<
-
 """file_resolution -- file a LIVE operator resolution (an AskUserQuestion answer) into acts.ruling AT
 DELIVERY TIME. Increment-7 item 5; consult 27's one operator-side wall, closed for e16.
 

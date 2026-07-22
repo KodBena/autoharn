@@ -1,9 +1,3 @@
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-06T15:59:19Z
-#   last-change: 2026-07-06T15:59:19Z
-#   contributors: 37017f46/main
-# <<< PROVENANCE-STAMP <<<
-
 """test_rationalization_ledger -- the qualification gates for the rationalization ledger (Increment 3
 item 5; db/harness/002_rationalization_ledger.sql + tools/file_rationalization.py). Every load-bearing
 claim of the store is a mechanized check here, driven through the SAME filing CLI a detector fire uses

@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-18T07:44:41Z
-#   last-change: 2026-07-18T18:36:21Z
-#   contributors: ab5d5bab/main
-# <<< PROVENANCE-STAMP <<<
-
 """boundary_service -- the FastAPI outer boundary Port into an autoharn-managed ledger
 (design/FABLE-LEDGER-BOUNDARY-SERVICE-SPEC.md, the RATIFIED build basis; ledger rows 1471,
 1481, 1518; orchlog.d/panel-single-boundary-direction.md; kernel/lineage/

@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-15T20:48:39Z
-#   last-change: 2026-07-22T00:00:32Z
-#   contributors: a857c93d/main, ab5d5bab/main, 1fa3ab69/main
-# <<< PROVENANCE-STAMP <<<
-
 """lp_registry -- the declared provides/requires/stands_alone registry for engine/lp/*.lp
 (vestigial_documentation/design/ORCH-CATEGORICAL-REFACTOR-CONSULT-2026-07-15.md F7 / plan step 8(i)).
 

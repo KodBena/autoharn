@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-19T01:48:15Z
-#   last-change: 2026-07-21T22:40:10Z
-#   contributors: ab5d5bab/main, 43f77bff/main
-# <<< PROVENANCE-STAMP <<<
-
 """run_fixtures.py -- WG1-WG5, the five witnesses design/FABLE-SETUP-TUI-SIGNED-GENESIS-SPEC.md
 §4 names for the "Signed genesis" screen (tools/setup_tui/screens.py `screen_signed_genesis`,
 commission ledger rows 1724/1725). Real infra, no mocks: a throwaway `--new-world` scaffold in

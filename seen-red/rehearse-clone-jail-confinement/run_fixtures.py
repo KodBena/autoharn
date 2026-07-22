@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-15T12:58:21Z
-#   last-change: 2026-07-15T12:58:53Z
-#   contributors: a857c93d/main
-# <<< PROVENANCE-STAMP <<<
-
 """Seen-red specimen for night-build-defect-repair DEFECT 3 (bootstrap/rehearse-from-origin.sh's
 initial clone running outside the env jail and outside the trace, letting a `~/.gitconfig`
 url.insteadOf rewrite substitute a local decoy for the public repo -- the same-host illusion

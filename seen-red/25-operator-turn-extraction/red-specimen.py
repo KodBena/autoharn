@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-07T01:59:14Z
-#   last-change: 2026-07-07T01:59:30Z
-#   contributors: 37017f46/main
-# <<< PROVENANCE-STAMP <<<
-
 """Seen-red specimen for the operator-turn-extraction gate (forecloses finding 25). Reproduces the
 pre-fix _operator_turns: it scanned ALL user-role turns, including harness-injected
 `<task-notification>` envelopes. A background-agent completion carries an

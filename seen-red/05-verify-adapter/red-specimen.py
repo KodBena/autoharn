@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-07T01:52:33Z
-#   last-change: 2026-07-07T01:52:33Z
-#   contributors: 37017f46/main
-# <<< PROVENANCE-STAMP <<<
-
 """Seen-red specimen for the verify-adapter gate (forecloses findings 5, 17, 23 — the act-stream
 adapter's oracle-agreement class: a manifest family that is loud-in-prose but unchecked; a delegation
 tool the adapter fails to recognize; a mis-attribution of subagent acts). verify_adapter.py asserts the

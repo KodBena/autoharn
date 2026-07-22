@@ -1,10 +1,4 @@
 #!/bin/sh
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-13T16:51:19Z
-#   last-change: 2026-07-14T23:22:08Z
-#   contributors: 3c50e030/main, a857c93d/main
-# <<< PROVENANCE-STAMP <<<
-
 # apply-harness-failure-ledger.sh — the operator's/maintainer's ONE scripted step for applying
 # stores/008_harness_failure_ledger.sql (the harness_failure schema: record/disposition + the
 # derived harness_failure.open_records view) to the STANDING `research` database — the SAME db

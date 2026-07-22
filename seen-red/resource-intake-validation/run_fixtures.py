@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-12T06:33:13Z
-#   last-change: 2026-07-12T06:40:56Z
-#   contributors: e4410ef6/main
-# <<< PROVENANCE-STAMP <<<
-
 """run_fixtures — both-polarity live proof for the `resource:` intake-validation fix
 (BACKLOG 2026-07-12, work item `resource-intake-validation`; gates/fixture_census.py REGISTRY
 entry "resource-intake-validation"). Mirrors seen-red/resource-registry/run_fixtures.py's

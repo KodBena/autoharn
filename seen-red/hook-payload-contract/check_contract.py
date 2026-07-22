@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-14T01:12:19Z
-#   last-change: 2026-07-14T01:12:19Z
-#   contributors: a857c93d/main
-# <<< PROVENANCE-STAMP <<<
-
 """seen-red/hook-payload-contract/check_contract.py -- M3 (vestigial_documentation/design/ORCH-RCA-PAIRING-KEY-DIVERGENCE.md
 sec-6.5): the "harness-contract facts live in a captured fixture, not prose" mechanism. The two
 sibling JSON files in this directory are a REAL, LIVE-CAPTURED PreToolUse+PostToolUse payload pair

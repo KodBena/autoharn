@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-12T07:55:10Z
-#   last-change: 2026-07-12T08:42:52Z
-#   contributors: e4410ef6/main
-# <<< PROVENANCE-STAMP <<<
-
 """ordering_audit -- the OBSERVER-GRADE report half of design/ORCH-SPEC-RESOURCE-REGISTRY.md §5
 stage 2 ("a report surface ... mirror the existing choice architecture" -- this file mirrors
 engine/preamble_audit.py's own `--preamble` addendum shape exactly, as `./audit --ordering`).

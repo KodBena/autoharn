@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-12T13:14:02Z
-#   last-change: 2026-07-12T13:14:02Z
-#   contributors: e4410ef6/main
-# <<< PROVENANCE-STAMP <<<
-
 """run_fixtures.py -- both-polarity proof for hooks/posttooluse_apparatus_flip.py (tracker item
 `apparatus-flip-witnessing`, from the "Unwitnessed apparatus flips" finding of the NIST-lens
 re-litigation panel, 2026-07-12: a governed agent could Write .claude/apparatus.json and flip a

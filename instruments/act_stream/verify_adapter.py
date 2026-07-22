@@ -1,9 +1,3 @@
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-14T22:13:55Z
-#   last-change: 2026-07-18T11:07:38Z
-#   contributors: a857c93d/main, ab5d5bab/main
-# <<< PROVENANCE-STAMP <<<
-
 """verify_adapter — run the two pre-registered adapter fixtures against the INDEPENDENT oracle
 (harness/e15-build/PRE-REGISTERED-expectations.md, committed BEFORE this adapter existed), prove
 each mutation flips RED, round-trip the DB persist (id-is-order), and prove the manifest's F49

@@ -1,9 +1,3 @@
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-06T18:26:29Z
-#   last-change: 2026-07-06T18:26:29Z
-#   contributors: 37017f46/main
-# <<< PROVENANCE-STAMP <<<
-
 """test_acts_join -- the acts.act<->s15 matching DERIVER (acts_join.py) against the Increment-5
 pre-registered oracle (epistemic-operator/harness/e15-build/rehearsal/INCREMENT-5-PRE-REGISTERED-
 expectations.md Parts 1/3). The PURE derive() is checked DB-free against the hand-computed edges;

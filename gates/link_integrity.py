@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-11T14:37:38Z
-#   last-change: 2026-07-19T01:58:01Z
-#   contributors: e4410ef6/main, 3c50e030/main, ab5d5bab/main
-# <<< PROVENANCE-STAMP <<<
-
 """link_integrity — the class-not-instance fix for the maintainer's 2026-07-11 legibility
 indictment ("you shouldn't have to navigate the doc graph like a squirrel"). Three dangling/
 mis-cited paths were found and hand-fixed the same morning (commit 48dce0c); this gate is the

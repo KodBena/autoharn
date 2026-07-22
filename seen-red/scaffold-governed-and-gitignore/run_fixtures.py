@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-13T17:42:09Z
-#   last-change: 2026-07-13T17:42:09Z
-#   contributors: 3c50e030/main
-# <<< PROVENANCE-STAMP <<<
-
 """run_fixtures -- both-polarity live proof for bootstrap/new-project.sh's two fixes landed
 under tracker items `scaffold-governed-set-language-default` (ent testbed finding 4, 2026-07-13)
 and `scaffold-log-churn-in-subject-repo` (ent-observatory cycle-001, NEW lesson 1):

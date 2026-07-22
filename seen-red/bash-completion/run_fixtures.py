@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-11T21:36:35Z
-#   last-change: 2026-07-14T01:15:49Z
-#   contributors: e4410ef6/main, a857c93d/main
-# <<< PROVENANCE-STAMP <<<
-
 """run_fixtures.py -- both-polarity proof for hooks/posttooluse_bash_completion.py, REWRITTEN
 2026-07-14 (vestigial_documentation/design/ORCH-RCA-PAIRING-KEY-DIVERGENCE.md sec-6.4, the M1 counterparty fix).
 

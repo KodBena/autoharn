@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-09T12:46:47Z
-#   last-change: 2026-07-09T12:46:47Z
-#   contributors: be693afb/main
-# <<< PROVENANCE-STAMP <<<
-
 """s21_session_aware_fixture — proves the (stamp_session, stamp_agent) PAIR distinctness fix
 (s21-session-aware-distinctness.sql) AND the s19 residue fold-in, on a THROWAWAY schema pair in the
 TOY db (vestigial_documentation/design/ORCH-S21-SESSION-AWARE-DISTINCTNESS.md's witness protocol, items 1-5, run exactly):

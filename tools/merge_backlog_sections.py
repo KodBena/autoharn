@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-12T02:02:46Z
-#   last-change: 2026-07-12T02:02:46Z
-#   contributors: e4410ef6/main
-# <<< PROVENANCE-STAMP <<<
-
 """merge_backlog_sections — a git MERGE DRIVER for BACKLOG.md's dated `## ` sections (design/
 ORCH-WORKTREE-LEDGERING.md 3a: "`BACKLOG.md` ... gets the same treatment one level up: a
 section-union driver keyed on the dated heading line -- sections are append-only point-in-time

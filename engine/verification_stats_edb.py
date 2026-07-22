@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-13T20:19:57Z
-#   last-change: 2026-07-13T20:19:57Z
-#   contributors: 3c942a60/main
-# <<< PROVENANCE-STAMP <<<
-
 """verification_stats_edb -- the EDB builder for work item `verification-stats-asp-harvester`
 (maintainer directive 2026-07-13, relayed from a downstream `ent` transcript): their orchestrator
 now logs review verdicts as `kind=verification` ledger rows under a `verdict=/role=/workflow=/

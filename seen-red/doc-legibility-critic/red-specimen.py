@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-11T15:31:16Z
-#   last-change: 2026-07-11T15:31:16Z
-#   contributors: e4410ef6/main
-# <<< PROVENANCE-STAMP <<<
-
 """Seen-red specimen for hooks/doc_legibility_critic.py (the zero-context-reader critic,
 design/ADR-DRAFT-documentation-discipline.md instance bindings; gates/fixture_census.py
 REGISTRY entry "doc-legibility-critic"). Proves, on live subprocess runs of the real hook:

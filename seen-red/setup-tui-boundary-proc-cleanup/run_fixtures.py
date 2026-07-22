@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-19T03:50:06Z
-#   last-change: 2026-07-19T03:50:30Z
-#   contributors: ab5d5bab/main
-# <<< PROVENANCE-STAMP <<<
-
 """seen-red/setup-tui-boundary-proc-cleanup/run_fixtures.py -- live, red-before-green proof of
 tools/setup_tui/app.py's `_terminate_boundary_proc` cleanup guarantee (ledger row 1799 finding
 6): every exit path from the screen-driving loop -- including an ORDINARY uncaught exception

@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-11T22:24:13Z
-#   last-change: 2026-07-11T23:57:58Z
-#   contributors: e4410ef6/main
-# <<< PROVENANCE-STAMP <<<
-
 """contemp_differential -- the contemporaneity marriage's load-bearing gate: the ASP verdict
 program (engine/lp/contemporaneity.lp, producer two) differentialed BIT-IDENTICALLY against the
 SQL floor (engine/contemp_floor.py, producer one) over one world's real inputs -- the deferred

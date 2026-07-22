@@ -1,10 +1,4 @@
 #!/bin/sh
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-18T15:48:21Z
-#   last-change: 2026-07-18T16:09:52Z
-#   contributors: ab5d5bab/main
-# <<< PROVENANCE-STAMP <<<
-
 # teardown-world.sh -- the scripted, witnessed teardown verb for a --new-world scratch scaffold
 # (ledger work item scratch-world-teardown-verb, row 1624). Filed because the recipes author
 # correctly REFUSED to hand-author DROP SCHEMA/ROLE prose-SQL on the shared toy host (written

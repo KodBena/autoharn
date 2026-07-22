@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-14T22:13:36Z
-#   last-change: 2026-07-14T22:13:43Z
-#   contributors: a857c93d/main
-# <<< PROVENANCE-STAMP <<<
-
 """close_manifest — the loud, complete run-close verification runner.
 
 ADR-0015 Rule 3/4 + ADR-0016, made concrete. Before this manifest the close-sweep was a bare

@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-11T18:14:09Z
-#   last-change: 2026-07-11T18:14:09Z
-#   contributors: e4410ef6/main
-# <<< PROVENANCE-STAMP <<<
-
 """run_fixtures.py -- both-polarity proof for kernel/lineage/s25-commission-kind.sql (BACKLOG
 "Five-item batch, maintainer-approved 2026-07-11 evening", item 2), plus the two signing-mode
 mechanics (FULL -- commissioner principal; LAZY -- implementer vicarious transcription) and the

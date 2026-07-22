@@ -1,9 +1,3 @@
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-13T20:20:52Z
-#   last-change: 2026-07-13T20:21:56Z
-#   contributors: 3c942a60/main
-# <<< PROVENANCE-STAMP <<<
-
 """test_verification_stats -- work item `verification-stats-asp-harvester`: proves the parser
 (engine/verification_evidence.py), the EDB grounding (engine/verification_stats_edb.py's
 facts_from_rows()), and the ASP program (engine/lp/verification_stats.lp) against a SYNTHESIZED

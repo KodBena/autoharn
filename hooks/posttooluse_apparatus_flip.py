@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-12T12:45:30Z
-#   last-change: 2026-07-12T13:18:06Z
-#   contributors: e4410ef6/main
-# <<< PROVENANCE-STAMP <<<
-
 """hooks/posttooluse_apparatus_flip.py -- a typed journal event for every mutation of
 `<SUBJECT_ROOT>/.claude/apparatus.json` (tracker item "apparatus-flip-witnessing", from the
 "Unwitnessed apparatus flips" finding of the NIST-lens re-litigation panel, 2026-07-12 --

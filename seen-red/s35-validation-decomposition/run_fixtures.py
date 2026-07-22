@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-15T21:47:30Z
-#   last-change: 2026-07-15T21:48:53Z
-#   contributors: a857c93d/main
-# <<< PROVENANCE-STAMP <<<
-
 """run_fixtures.py -- both-polarity proof for kernel/lineage/s35-validation-decomposition.sql
 (ledger item validation-trigger-decomposition, claimed by the orchestrator, NOT closed by this
 delta) + gates/validation_leaf_manifest_gate.py (Element 2).

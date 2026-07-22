@@ -1,9 +1,3 @@
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-18T21:30:53Z
-#   last-change: 2026-07-19T18:34:45Z
-#   contributors: ab5d5bab/main
-# <<< PROVENANCE-STAMP <<<
-
 """tools/setup_tui -- the guided setup wizard (design/FABLE-SETUP-TUI-SPEC.md, commission
 ledger row 1656, spec row 1671).
 

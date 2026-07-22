@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-18T18:23:13Z
-#   last-change: 2026-07-18T18:45:14Z
-#   contributors: ab5d5bab/main
-# <<< PROVENANCE-STAMP <<<
-
 """boundary_cli_client -- the ONE home for "how a rebased operator-verb shim talks to the
 boundary service" (design/FABLE-BOUNDARY-MULTIPLEX-AND-CLI-REBASE-SPEC.md §5; design/
 FABLE-BOUNDARY-READ-SURFACE-SPEC.md, ledger decision rows 1631/1652). Every rebased shim

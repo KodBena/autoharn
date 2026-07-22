@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-18T22:35:17Z
-#   last-change: 2026-07-19T03:37:44Z
-#   contributors: ab5d5bab/main
-# <<< PROVENANCE-STAMP <<<
-
 """interpreter_boundary_lint.py — mechanical lint for law/adr/0012's 2026-07-18 amendment,
 "The interpreter boundary — a value never crosses as program text" (ADR-0011 Rule-2 trigger
 declared met at ledger row 1701: four independent authoring events rediscovered the missing

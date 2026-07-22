@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-12T22:56:28Z
-#   last-change: 2026-07-12T23:02:22Z
-#   contributors: 3c50e030/main
-# <<< PROVENANCE-STAMP <<<
-
 """compound_nominal_scan — EXPERIMENT, NOT A WIRED GATE (vestigial_documentation/design/ORCH-COMPOUND-NOMINAL-DETECTION.md).
 
 Crudest-honest feasibility probe for detecting the "trust story" defect class: a novel,

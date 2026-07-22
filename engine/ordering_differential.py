@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-12T07:54:26Z
-#   last-change: 2026-07-12T07:54:41Z
-#   contributors: e4410ef6/main
-# <<< PROVENANCE-STAMP <<<
-
 """ordering_differential -- the ordering-violations marriage's load-bearing gate: the ASP
 verdict program (engine/lp/ordering_violations.lp + engine/ordering_obligations.lp, producer
 two) differentialed BIT-IDENTICALLY against the SQL floor (engine/ordering_floor.py, producer

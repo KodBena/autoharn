@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-22T00:10:59Z
-#   last-change: 2026-07-22T00:14:07Z
-#   contributors: 1fa3ab69/main
-# <<< PROVENANCE-STAMP <<<
-
 """tools/setup_tui/flow_position.py -- the operator's position over the decision-phase screen
 sequence, and the ability to move it backward (design/FABLE-SETUP-TUI-NAVIGATION-SPEC.md,
 commission the maintainer's verbatim observation (e): "no way to navigate back and forth in the

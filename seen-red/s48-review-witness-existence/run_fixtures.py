@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-18T15:54:43Z
-#   last-change: 2026-07-18T15:54:43Z
-#   contributors: ab5d5bab/main
-# <<< PROVENANCE-STAMP <<<
-
 """run_fixtures.py -- both-polarity witness for kernel/lineage/s48-review-witness-existence.sql
 (design/FABLE-KERNEL-INTAKE-PAIR-SPEC.md Delta 1). Real infra, no mocks: scratch schema pairs in
 the toy db, torn down before and after. Never touches kernel/, bootstrap/, or any live world.

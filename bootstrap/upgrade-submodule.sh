@@ -1,10 +1,4 @@
 #!/bin/sh
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-14T21:20:21Z
-#   last-change: 2026-07-15T15:14:33Z
-#   contributors: a857c93d/main
-# <<< PROVENANCE-STAMP <<<
-
 # upgrade-submodule.sh -- the UPGRADE verb for a PINNED deployment (tracker item
 # deployment-live-exec-coupling, design/ORCH-DEPLOYMENT-PINNING.md: "Upgrading an adopter to a
 # newer autoharn becomes the explicit, recorded act the maintainer asked for"). A pinned

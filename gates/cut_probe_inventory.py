@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-15T07:07:55Z
-#   last-change: 2026-07-15T07:07:55Z
-#   contributors: a857c93d/main
-# <<< PROVENANCE-STAMP <<<
-
 """cut_probe_inventory — the regression-probe list for a cut candidate.
 
 Item `external-rehearsal-register-gate`, RCA row 909 (same-host-illusion / c4923ae-class

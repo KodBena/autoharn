@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-06T05:46:54Z
-#   last-change: 2026-07-06T15:30:01Z
-#   contributors: 37017f46/main
-# <<< PROVENANCE-STAMP <<<
-
 """ledger_dto_scratch -- the apparatus-authored FIRST EXERCISE of the full §1.5
 decompose-then-overrule (DTO) shape, on a SCRATCH lineage, with the ASP closures
 (ledger_dto.lp) as the CONSUMER that ends the "no consumer" deferral.

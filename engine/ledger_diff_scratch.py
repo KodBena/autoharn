@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-06T06:03:19Z
-#   last-change: 2026-07-06T06:48:43Z
-#   contributors: 37017f46/main
-# <<< PROVENANCE-STAMP <<<
-
 """ledger_diff_scratch -- a purpose-built scratch lineage that makes EVERY T_now predicate
 FIRE on non-empty input, so the marriage differential (ledger_floor.py SQL vs ledger_tnow.lp
 ASP) is exercised on firing input for ALL 12 predicates -- not empty-vs-empty agreement.

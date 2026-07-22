@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-12T07:52:53Z
-#   last-change: 2026-07-12T08:07:34Z
-#   contributors: e4410ef6/main
-# <<< PROVENANCE-STAMP <<<
-
 """run_fixtures.py -- both-polarity proof for hooks/pretooluse_change_gate.py's
 `decomposition_review` mechanism (BACKLOG "decomposition-review-blocker", maintainer ruling
 2026-07-12: "the decomposition's second-pair-of-eyes review must be a BLOCKER for execution, not

@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-13T20:01:24Z
-#   last-change: 2026-07-14T17:58:07Z
-#   contributors: 3c942a60/main, a857c93d/main
-# <<< PROVENANCE-STAMP <<<
-
 """adr_portability_terms -- the §5 A1 acceptance gate for the ADR portability refactor
 (design/MAINT-ADR-PORTABILITY-SPEC.md §5, §8 WP-0; law/adr/history/README.md is this gate's
 own "Related" cross-reference). Mechanizes the spec's own grep, verbatim:

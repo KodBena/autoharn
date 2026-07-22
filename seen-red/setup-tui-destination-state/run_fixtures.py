@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-21T21:48:32Z
-#   last-change: 2026-07-21T21:48:32Z
-#   contributors: 43f77bff/main
-# <<< PROVENANCE-STAMP <<<
-
 """seen-red/setup-tui-destination-state/run_fixtures.py -- per-kind unit fixtures for
 tools/setup_tui/destination.py's `classify_destination`
 (design/FABLE-SETUP-TUI-DESTINATION-STATE-SPEC.md §5's first witness-set item: "one per kind,

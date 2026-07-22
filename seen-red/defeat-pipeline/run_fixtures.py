@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-18T05:45:46Z
-#   last-change: 2026-07-18T06:30:07Z
-#   contributors: ab5d5bab/main
-# <<< PROVENANCE-STAMP <<<
-
 """run_fixtures.py -- both-polarity witness for design/FABLE-DEFEAT-PIPELINE-SPEC.md's minimal
 model-defeat pipeline (the spec's §12 witness plan W1-W11; W12's live leg is UNEXERCISED by
 construction -- no s44 delta exists in this repository, RD-2's evidence-trigger not yet

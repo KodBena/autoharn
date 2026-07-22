@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-15T21:38:58Z
-#   last-change: 2026-07-15T21:38:58Z
-#   contributors: a857c93d/main
-# <<< PROVENANCE-STAMP <<<
-
 """idris_model_freshness — currency gate for design/Autoharn.idr (ledger item
 `idris-model-freshness-gate`). design/Autoharn.idr is CATEGORICAL DOCUMENTATION of the kernel
 (its own header: "never the source of truth -- the kernel ... governs, always"). Documentation

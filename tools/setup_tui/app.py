@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-18T21:34:30Z
-#   last-change: 2026-07-22T02:01:05Z
-#   contributors: ab5d5bab/main, 43f77bff/main, 1fa3ab69/main
-# <<< PROVENANCE-STAMP <<<
-
 """tools/setup_tui/app.py -- entry point for the guided setup wizard
 (design/FABLE-SETUP-TUI-SPEC.md). Runs `tools/setup_tui/screens.py`'s eleven screens in order
 (design/FABLE-SETUP-TUI-SIGNED-GENESIS-SPEC.md's "Signed genesis" screen sits between Principals

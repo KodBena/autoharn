@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-21T00:00:00Z
-#   last-change: 2026-07-22T00:27:03Z
-#   contributors: 43f77bff/main, 1fa3ab69/main
-# <<< PROVENANCE-STAMP <<<
-
 """seen-red/setup-tui-boundary-interpreter-fallback/run_fixtures.py -- both-polarity proof for
 the commission's field observation g (first half, verbatim): "had to manually start boundary-
 multiplex". A fresh-context investigation traced this to `tools/setup_tui/screens.py`'s

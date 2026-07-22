@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-07T01:58:16Z
-#   last-change: 2026-07-07T01:58:16Z
-#   contributors: 37017f46/main
-# <<< PROVENANCE-STAMP <<<
-
 """Seen-red specimen for the relevant-act-classification gate (forecloses finding 9). Reproduces the
 defect the fix names: RELEVANT_KINDS silently re-including `message_in`, so a change-order receipt
 becomes auto-relevant — an edge the act stream cannot mechanically ground. Patches RELEVANT_KINDS to

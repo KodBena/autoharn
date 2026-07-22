@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-06T18:56:34Z
-#   last-change: 2026-07-06T18:58:47Z
-#   contributors: 37017f46/main
-# <<< PROVENANCE-STAMP <<<
-
 """findings_gate_fixture -- the acceptance fixtures for the general findings ledger (db/harness/005,
 tools/file_finding.py, tools/findings_gate.py; WORK-UNIT-findings-disposition §4). Runs in a THROWAWAY
 schema (never the real `harness` store) so it is idempotent and never pollutes the standing findings.

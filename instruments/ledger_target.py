@@ -1,9 +1,3 @@
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-09T10:06:34Z
-#   last-change: 2026-07-18T11:07:10Z
-#   contributors: be693afb/main, a857c93d/main, ab5d5bab/main
-# <<< PROVENANCE-STAMP <<<
-
 """SSOT for WHERE a ledger lives and HOW its actor model works — the single source every
 instrument resolves its (host, database, schema, subject-actor predicate) from.
 

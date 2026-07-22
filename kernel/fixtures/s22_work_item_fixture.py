@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-09T14:31:47Z
-#   last-change: 2026-07-09T14:31:47Z
-#   contributors: be693afb/main
-# <<< PROVENANCE-STAMP <<<
-
 """s22_work_item_fixture -- proves the s22 work-item-ledger delta (s22-work-item-ledger.sql;
 vestigial_documentation/design/ORCH-S22-WORK-ITEM-LEDGER.md, Fable-authored spec, session be693afb, 2026-07-09) on a THROWAWAY
 schema pair in the TOY db (vestigial_documentation/design/ORCH-S22-WORK-ITEM-LEDGER.md's own witness protocol, items 1-6, run

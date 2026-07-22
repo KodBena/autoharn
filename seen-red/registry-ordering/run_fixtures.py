@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-12T08:01:37Z
-#   last-change: 2026-07-14T22:25:05Z
-#   contributors: e4410ef6/main, a857c93d/main
-# <<< PROVENANCE-STAMP <<<
-
 """run_fixtures.py -- both-polarity witness for design/ORCH-SPEC-RESOURCE-REGISTRY.md §5 stage 2
 (engine/lp/ordering_violations.lp + engine/ordering_obligations.lp + engine/ordering_edb.py +
 engine/ordering_floor.py + engine/ordering_differential.py + engine/ordering_audit.py). Follows

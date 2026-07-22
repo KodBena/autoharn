@@ -1,10 +1,4 @@
 #!/usr/bin/env bash
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-10T19:33:01Z
-#   last-change: 2026-07-10T19:33:01Z
-#   contributors: be693afb/main
-# <<< PROVENANCE-STAMP <<<
-
 # Scratch schema for the permit-to-work "no open+claimed item" case (1a, BACKLOG "Run-5
 # forensics" 2026-07-10): applies the s22 lineage delta to a throwaway schema in the toy db, then
 # opens (but never claims) one work item -- has_work_item_layer() must see the view, and

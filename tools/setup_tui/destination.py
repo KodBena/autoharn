@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-21T21:39:57Z
-#   last-change: 2026-07-21T22:00:07Z
-#   contributors: 43f77bff/main
-# <<< PROVENANCE-STAMP <<<
-
 """tools/setup_tui/destination.py -- design/FABLE-SETUP-TUI-DESTINATION-STATE-SPEC.md: the ONE
 Port that answers "what is this directory's relationship to autoharn" (ADR-0012 P2). Before this
 module the question was answered five different, disagreeing ways across screens.py and

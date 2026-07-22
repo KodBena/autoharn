@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-19T02:09:27Z
-#   last-change: 2026-07-22T03:37:03Z
-#   contributors: ab5d5bab/main, 43f77bff/main, 431cddfa/main
-# <<< PROVENANCE-STAMP <<<
-
 """tools/setup_tui/principals_authority.py -- the "Principals & authority" screen's own driver
 module (design/FABLE-SETUP-TUI-PRINCIPALS-AUTHORITY-SPEC.md, commission ledger row 1727). ONE
 home (ADR-0012 P1) for every `led`/`role_charter.py` act `screens.py`'s

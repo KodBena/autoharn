@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-15T20:53:36Z
-#   last-change: 2026-07-15T20:54:15Z
-#   contributors: a857c93d/main
-# <<< PROVENANCE-STAMP <<<
-
 """run_fixtures.py -- both-polarity proof for engine/lp_registry.py + the generalized "work"-layer
 differential (vestigial_documentation/design/ORCH-CATEGORICAL-REFACTOR-CONSULT-2026-07-15.md F7 / plan step 8; ledger item
 `lp-module-registry`). Closes the two named judge-wiring gaps: ledger_edb.py exported no work_*

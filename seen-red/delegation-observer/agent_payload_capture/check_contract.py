@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-14T01:05:56Z
-#   last-change: 2026-07-14T01:05:56Z
-#   contributors: a857c93d/main
-# <<< PROVENANCE-STAMP <<<
-
 """check_contract.py -- the M3-shaped fixture for the delegation-observer pairing-key review
 (ledger row 582, vestigial_documentation/design/ORCH-RCA-PAIRING-KEY-DIVERGENCE.md sec-3/sec-6.6). This directory holds a
 REAL captured PreToolUse+PostToolUse payload pair for the `Agent` tool (Task's current name),

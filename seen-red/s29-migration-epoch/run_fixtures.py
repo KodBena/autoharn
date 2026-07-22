@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-15T07:01:00Z
-#   last-change: 2026-07-15T07:01:28Z
-#   contributors: a857c93d/main
-# <<< PROVENANCE-STAMP <<<
-
 """run_fixtures.py -- both-polarity proof for the sec-10 amendment of
 kernel/lineage/s29-obligation-item-key-and-typed-close.sql (design/MAINT-COUNTERSIGN-CLOSE-
 SEMANTICS-SPEC.md sec-10, "the pre-migration epoch"; ratified conditionally, ledger decision row

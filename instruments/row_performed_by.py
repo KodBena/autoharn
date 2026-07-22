@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-06T23:05:25Z
-#   last-change: 2026-07-14T22:13:25Z
-#   contributors: 37017f46/main, a857c93d/main
-# <<< PROVENANCE-STAMP <<<
-
 """row_performed_by -- the CLAIMED-vs-PERFORMED deriver (finding 28; consult 27 rubric (a) residual).
 
 THE GAP THIS CLOSES. The s15 ledger's `actor` column is the CLAIMED principal (who the row is

@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-13T20:19:07Z
-#   last-change: 2026-07-13T20:19:07Z
-#   contributors: 3c942a60/main
-# <<< PROVENANCE-STAMP <<<
-
 """verification_evidence -- the SHARED parser for the downstream `ent` orchestrator's `kind=
 verification` evidence convention (work item `verification-stats-asp-harvester`; maintainer
 directive 2026-07-13, relayed from a downstream `ent` transcript).

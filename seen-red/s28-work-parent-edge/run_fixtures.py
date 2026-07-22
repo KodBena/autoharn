@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-12T16:29:43Z
-#   last-change: 2026-07-18T07:52:12Z
-#   contributors: 3c50e030/main, ab5d5bab/main
-# <<< PROVENANCE-STAMP <<<
-
 """run_fixtures.py -- both-polarity proof for kernel/lineage/s28-work-parent-edge.sql +
 bootstrap/templates/led.tmpl's `--parent` flag + bootstrap/templates/pickup.tmpl's ROLLUP section
 (tracker slug work-tree-rollup, design at ledger row 151, wave-3 dispatch decision at ledger row

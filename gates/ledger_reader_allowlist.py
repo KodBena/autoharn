@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-15T20:17:26Z
-#   last-change: 2026-07-22T01:47:23Z
-#   contributors: a857c93d/main, 9a17b6b9/main, ab5d5bab/main, 1fa3ab69/main
-# <<< PROVENANCE-STAMP <<<
-
 """ledger_reader_allowlist — the s31 standing mechanical detect: every ledger reader is a
 DECLARED type (design/FABLE-SUPERSESSION-UNIFORM-RETRACTION-SPEC.md §2/§4.3, RATIFIED 2026-07-15;
 kernel/lineage/s31-supersession-uniform-retraction.sql, ledger item supersession-semantics-closure).

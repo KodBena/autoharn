@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-22T02:38:13Z
-#   last-change: 2026-07-22T03:13:36Z
-#   contributors: 1fa3ab69/main, 431cddfa/main
-# <<< PROVENANCE-STAMP <<<
-
 """run_fixtures — both-polarity live proof for extract-context (bootstrap/extract_context.py +
 the repo-root `./extract-context` shim; gates/fixture_census.py REGISTRY entry
 "extract-context"). Mirrors seen-red/track-work/run_fixtures.py's own scratch-and-drop pattern: a

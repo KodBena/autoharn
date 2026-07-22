@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-07T01:38:49Z
-#   last-change: 2026-07-07T01:38:49Z
-#   contributors: 37017f46/main
-# <<< PROVENANCE-STAMP <<<
-
 """006_foreclosure_debt_fixture — mutation-flipped BOTH ways for the foreclosure-debt mechanism
 (db/harness/006; WORK-UNIT-foreclosure-debt §Scope 5). Applies 005+006 to a THROWAWAY scratch schema
 (never the live harness), seeds, and asserts each enforcement flips:

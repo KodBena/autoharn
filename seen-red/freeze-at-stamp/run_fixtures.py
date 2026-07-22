@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-12T18:08:05Z
-#   last-change: 2026-07-14T22:23:15Z
-#   contributors: 3c50e030/main, a857c93d/main
-# <<< PROVENANCE-STAMP <<<
-
 """run_fixtures.py -- both-polarity proof for bootstrap/freeze-at-stamp.sh (tracker slug
 `freeze-at-stamp`; `./led show 225` for the commission, 228/229 for the two ratified spec
 amendments this build implements: the frozen tracker copy is a standing, single-tenant database

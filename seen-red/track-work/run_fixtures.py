@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-11T20:37:15Z
-#   last-change: 2026-07-18T07:46:42Z
-#   contributors: e4410ef6/main, ab5d5bab/main
-# <<< PROVENANCE-STAMP <<<
-
 """run_fixtures — both-polarity live proof for bootstrap/track-work.sh (the standing
 work-tracking offering; user-guide/USER-WORK-STATUS-OFFERING.md; gates/fixture_census.py REGISTRY entry
 "track-work"). Mirrors kernel/fixtures/s22_work_item_fixture.py's scratch-and-drop pattern: a

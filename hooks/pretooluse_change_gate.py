@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-09T08:07:02Z
-#   last-change: 2026-07-12T08:06:33Z
-#   contributors: 9bcc0113/main, be693afb/main, e4410ef6/main
-# <<< PROVENANCE-STAMP <<<
-
 """PreToolUse change-policy gate (e13 / s13) — the act-gate, fully label-indifferent.
 
 DELTA FROM THE e11/e12 GATE (F45, consult 17 §6 item 5 — the event-61 repair): ticket matching is

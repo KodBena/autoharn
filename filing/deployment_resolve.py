@@ -1,9 +1,3 @@
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-16T04:02:41Z
-#   last-change: 2026-07-16T04:02:48Z
-#   contributors: 9a17b6b9/main
-# <<< PROVENANCE-STAMP <<<
-
 """deployment_resolve -- the ONE home for CWD-FIRST `deployment.json` resolution, shared by every
 `tools/` script an adopting-project operator is expected to invoke DIRECTLY, e.g.
 `python3 /path/to/autoharn/tools/regrade_decisions.py` run FROM the operator's own project

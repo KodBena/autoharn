@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-12T22:27:59Z
-#   last-change: 2026-07-12T22:28:14Z
-#   contributors: 3c50e030/main
-# <<< PROVENANCE-STAMP <<<
-
 """run_fixtures.py -- both-polarity proof that bootstrap/templates/verify-chain.tmpl no longer
 conflates "cannot connect to the database at all" with "connected fine, this world predates s26/
 s27" (tracker item `verify-chain-error-conflation`, 2026-07-13).

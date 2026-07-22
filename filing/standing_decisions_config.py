@@ -1,9 +1,3 @@
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-16T02:33:06Z
-#   last-change: 2026-07-16T04:23:35Z
-#   contributors: 9a17b6b9/main
-# <<< PROVENANCE-STAMP <<<
-
 """standing_decisions_config -- the ONE home for reading `apparatus.json`'s
 `mechanisms.standing_decisions` shape (design/FABLE-GRADED-DECISIONS-SPEC.md element 4: "the hook
 and pickup both read this; the kernel knows nothing of it"). ADR-0012 P1 (one home per mechanism):

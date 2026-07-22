@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-14T01:43:21Z
-#   last-change: 2026-07-14T01:43:21Z
-#   contributors: a857c93d/main
-# <<< PROVENANCE-STAMP <<<
-
 """run_fixtures.py -- both-polarity proof that bootstrap/templates/pickup.tmpl no longer
 conflates "cannot connect to the database at all" with "connected fine, this section has nothing
 to report" (tracker item `pickup-connection-failure-silent-empty`, 2026-07-13).

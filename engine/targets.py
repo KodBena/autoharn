@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-09T09:53:09Z
-#   last-change: 2026-07-09T11:07:26Z
-#   contributors: be693afb/main
-# <<< PROVENANCE-STAMP <<<
-
 """targets -- the ONE home mapping a ledger-deployment NAME to (db, schema, kern) (ADR-0012 P1;
 vestigial_documentation/design/ORCH-USE-MODE-ENGINE-WIRING.md item 1). Every consumer of a deployment's names -- engine/ledger_edb.py,
 instruments/ledger_target.py -- derives (db, schema, kern) from here; neither hand-authors a second

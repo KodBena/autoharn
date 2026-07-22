@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-18T09:13:54Z
-#   last-change: 2026-07-18T09:17:16Z
-#   contributors: ab5d5bab/main
-# <<< PROVENANCE-STAMP <<<
-
 """run_fixtures -- both-polarity live proof for ledger item `led-work-list-state-filter`
 (gates/fixture_census.py REGISTRY entry "led-work-list-state-filter").
 

@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-12T23:33:13Z
-#   last-change: 2026-07-12T23:33:39Z
-#   contributors: 3c50e030/main
-# <<< PROVENANCE-STAMP <<<
-
 """run_fixtures — both-polarity live proof for the `actual:` intake-validation feature
 (tracker item `actual-intake-grammar`, 2026-07-13; gates/fixture_census.py REGISTRY entry
 "actual-intake-validation"). Mirrors seen-red/estimate-intake-validation/run_fixtures.py's

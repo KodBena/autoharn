@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-18T20:34:11Z
-#   last-change: 2026-07-18T20:40:23Z
-#   contributors: ab5d5bab/main
-# <<< PROVENANCE-STAMP <<<
-
 """role_charter.py -- register/show/amend a role's CHARTER (the static half of
 design/FABLE-ROLE-CHARTERS-AND-BRIEFS-SPEC.md's "two halves"). Commission: ledger row 1663.
 

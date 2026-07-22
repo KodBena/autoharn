@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-14T22:12:47Z
-#   last-change: 2026-07-14T22:12:47Z
-#   contributors: a857c93d/main
-# <<< PROVENANCE-STAMP <<<
-
 """pghost_resolve — the ONE place instruments/ resolves which Postgres host to connect to.
 
 Before this module, roughly a dozen instruments each carried their own

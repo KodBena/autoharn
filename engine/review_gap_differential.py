@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-12T07:49:29Z
-#   last-change: 2026-07-12T07:49:29Z
-#   contributors: e4410ef6/main
-# <<< PROVENANCE-STAMP <<<
-
 """review_gap_differential -- the content-free-review-discharge audit's marriage gate: the ASP
 program (engine/lp/review_gap_audit.lp, producer two) differentialed BIT-IDENTICALLY against the
 SQL floor (engine/review_gap_floor.py, producer one) over one target's real ledger. MATCHES

@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-21T00:00:00Z
-#   last-change: 2026-07-21T19:42:28Z
-#   contributors: ab5d5bab/main, 43f77bff/main
-# <<< PROVENANCE-STAMP <<<
-
 """seen-red/setup-tui-ctrlc-quit-shadow/run_fixtures.py -- red-then-green proof of the ctrl+c
 quit-key fix in tools/setup_tui/ui_textual.py (maintainer field observation d, verbatim:
 "quit doesn't work (spurious?)").

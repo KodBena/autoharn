@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-12T07:47:55Z
-#   last-change: 2026-07-12T07:48:02Z
-#   contributors: e4410ef6/main
-# <<< PROVENANCE-STAMP <<<
-
 """review_gap_edb -- the EDB builder for the content-free-review-discharge audit (tracker item
 `content-free-review-audit`). WITNESSED SPECIMEN driving this whole file: run12 ledger row 20 --
 a `review` row whose entire statement is `"test"` (4 chars), verdict=attest, independence=

@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-09T13:33:34Z
-#   last-change: 2026-07-09T13:33:34Z
-#   contributors: be693afb/main
-# <<< PROVENANCE-STAMP <<<
-
 """conformance_check.py — the commission/conformance instrument's mechanical differ.
 
 Mechanizes design/ORCH-CONFORMANCE-INSTRUMENT.md (Fable-authored schema, ratified

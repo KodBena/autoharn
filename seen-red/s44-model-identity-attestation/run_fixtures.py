@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-18T09:17:17Z
-#   last-change: 2026-07-18T09:20:15Z
-#   contributors: ab5d5bab/main
-# <<< PROVENANCE-STAMP <<<
-
 """run_fixtures.py -- both-polarity witness for kernel/lineage/s44-model-identity-attestation.sql
 (design/FABLE-OTEL-SENTRY-SPEC.md §8's scratch-schema ceremony, §8.4's witness plan). Real infra,
 no mocks: scratch schema pairs in the toy db, torn down before and after. Never touches

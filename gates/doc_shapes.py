@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-11T15:09:26Z
-#   last-change: 2026-07-12T01:25:24Z
-#   contributors: e4410ef6/main
-# <<< PROVENANCE-STAMP <<<
-
 """doc_shapes — the deterministic core of the zero-context-reader documentation discipline
 (design/ADR-DRAFT-documentation-discipline.md, Rule 3; BACKLOG "Documentation legibility
 indictment (maintainer, 2026-07-11 morning)"). It catches, mechanically, the two — and only

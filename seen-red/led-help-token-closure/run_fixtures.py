@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-18T09:07:27Z
-#   last-change: 2026-07-18T16:07:51Z
-#   contributors: ab5d5bab/main
-# <<< PROVENANCE-STAMP <<<
-
 """run_fixtures -- both-polarity live proof for ledger item `led-help-token-closure`
 (gates/fixture_census.py REGISTRY entry "led-help-token-closure").
 

@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-22T01:27:43Z
-#   last-change: 2026-07-22T01:32:48Z
-#   contributors: 1fa3ab69/main
-# <<< PROVENANCE-STAMP <<<
-
 """run_fixtures.py -- both-polarity witness for design/FABLE-BELIEF-SUBSTRATE-SPEC.md's v2
 belief substrate (kernel deltas B1/B2/B3 = kernel/lineage/s53-belief-substrate.sql,
 s54-belief-views.sql, s55-dispatch-grain-independence.sql; ratified ledger rows 1914/1919).

@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-19T01:59:45Z
-#   last-change: 2026-07-19T01:59:45Z
-#   contributors: ab5d5bab/main
-# <<< PROVENANCE-STAMP <<<
-
 """doc_table_registry — the CONTENT half of `tools/doc_table_generation.py`'s registry (that
 module owns the mechanism: anchor location, drift check, write; this file owns the one thing
 that actually varies per table — which builder produces which doc's region, per ADR-0012 P1's

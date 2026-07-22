@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-16T02:28:43Z
-#   last-change: 2026-07-16T04:24:20Z
-#   contributors: 9a17b6b9/main
-# <<< PROVENANCE-STAMP <<<
-
 """sessionstart_durable_decisions -- the SessionStart mechanical half of design/
 FABLE-GRADED-DECISIONS-SPEC.md (RATIFIED 2026-07-16, ledger item `graded-decisions-build`).
 

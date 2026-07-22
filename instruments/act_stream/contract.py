@@ -1,9 +1,3 @@
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-14T22:13:49Z
-#   last-change: 2026-07-14T22:13:49Z
-#   contributors: a857c93d/main
-# <<< PROVENANCE-STAMP <<<
-
 """act_stream.contract — the VENDOR-NEUTRAL act-stream contract (consult 25 §2.1).
 
 This module is the Python side of the vendor-neutral contract whose DDL is

@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-22T01:24:53Z
-#   last-change: 2026-07-22T01:39:21Z
-#   contributors: 1fa3ab69/main
-# <<< PROVENANCE-STAMP <<<
-
 """belief_edb -- the belief-substrate EDB producer (design/FABLE-BELIEF-SUBSTRATE-SPEC.md §2/§3,
 ratified ledger rows 1914/1919; v2 typed arm split into engine/belief_edb_typed.py, same reason
 below). A SEPARATE sibling module rather than folded into engine/ledger_edb.py -- the ADR-0007

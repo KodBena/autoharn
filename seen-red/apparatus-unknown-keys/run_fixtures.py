@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-11T22:23:51Z
-#   last-change: 2026-07-12T14:19:58Z
-#   contributors: e4410ef6/main
-# <<< PROVENANCE-STAMP <<<
-
 """run_fixtures.py -- both-polarity proof for gates/apparatus_unknown_keys.py (BACKLOG
 "Configuration-surface survey, adopter's eyes", 2026-07-11, gap 1). Pure filesystem, no
 database -- the gate's only inputs are JSON files on disk and its own derived registry

@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-07T03:04:20Z
-#   last-change: 2026-07-07T03:04:20Z
-#   contributors: 7be3443d/main
-# <<< PROVENANCE-STAMP <<<
-
 """Seen-red specimen for the delivery_freight_integrity close line (forecloses finding 35 stage 1). Shows
 the line turn RED on a byte-mismatched delivery filing — a delivery whose delivered verbatim DIFFERS from
 its frozen freight (the forged-ruling / stale-authority hazard finding 35 names: 'nothing fires if a filed

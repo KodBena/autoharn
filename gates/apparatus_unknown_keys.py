@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-11T22:22:35Z
-#   last-change: 2026-07-18T10:47:48Z
-#   contributors: e4410ef6/main, ab5d5bab/main
-# <<< PROVENANCE-STAMP <<<
-
 """apparatus_unknown_keys — the class-not-instance sweep for BACKLOG "Configuration-surface
 survey, adopter's eyes" (2026-07-11) gap 1: a typo'd mechanism NAME in an `apparatus.json` is
 silently ignored today — every hook validates its OWN mechanism's `mode` value loudly (unknown

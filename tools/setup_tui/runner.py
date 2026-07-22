@@ -1,9 +1,3 @@
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-18T21:31:32Z
-#   last-change: 2026-07-22T03:36:26Z
-#   contributors: ab5d5bab/main, 43f77bff/main, 431cddfa/main
-# <<< PROVENANCE-STAMP <<<
-
 """tools/setup_tui/runner.py -- the ONE place this package shells out (ADR-0012 P1), AND (as of
 the `--dry-run` amendment, design/FABLE-SETUP-TUI-SPEC.md 2026-07-19) the ONE place it decides
 whether an act it is about to perform is real or a nondestructive rehearsal of itself. Every

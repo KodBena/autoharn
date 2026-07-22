@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-14T19:11:59Z
-#   last-change: 2026-07-14T19:11:59Z
-#   contributors: a857c93d/main
-# <<< PROVENANCE-STAMP <<<
-
 """run_fixtures_breaker.py -- both-polarity proof for hooks/stop_clean_exit.py's s29 DEBT-TYPE
 CONVERSION extension (`_debt_identity()` / the identity-subset branch in `_breaker_transition()`),
 sibling to run_fixtures.py in this same directory (which proves the kernel/led side of s29;

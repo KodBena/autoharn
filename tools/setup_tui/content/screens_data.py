@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-22T00:00:00Z
-#   last-change: 2026-07-22T00:15:20Z
-#   contributors: 1fa3ab69/main
-# <<< PROVENANCE-STAMP <<<
-
 """tools/setup_tui/content/screens_data.py -- the DATA half of `tools/setup_tui/screens.py`'s
 authored copy (design/FABLE-SETUP-TUI-TYPED-UI-SPEC.md §3, closing the maintainer's observation
 b: "file size violation; factor out the configuration content from code" / law/adr/0012's P10

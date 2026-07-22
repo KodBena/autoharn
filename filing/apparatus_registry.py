@@ -1,9 +1,3 @@
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-11T22:21:48Z
-#   last-change: 2026-07-18T10:47:32Z
-#   contributors: e4410ef6/main, ab5d5bab/main
-# <<< PROVENANCE-STAMP <<<
-
 """apparatus_registry -- the ONE source of truth for "what mechanism names does this project's
 apparatus.json switchboard actually recognize" (BACKLOG "Configuration-surface survey, adopter's
 eyes", 2026-07-11, gap 1: "A typo'd mechanism NAME in apparatus.json is silently ignored. Mode

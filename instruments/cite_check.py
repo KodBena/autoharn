@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-14T22:13:11Z
-#   last-change: 2026-07-18T11:06:40Z
-#   contributors: a857c93d/main, ab5d5bab/main
-# <<< PROVENANCE-STAMP <<<
-
 """cite_check — resolve provenance pointers in an AI collaborator's prose against the
 record and the read-log (FINDINGS F22, and its link-7 refinement).
 

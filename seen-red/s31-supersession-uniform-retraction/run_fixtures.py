@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-15T20:21:09Z
-#   last-change: 2026-07-18T16:13:01Z
-#   contributors: a857c93d/main, ab5d5bab/main
-# <<< PROVENANCE-STAMP <<<
-
 """run_fixtures.py -- both-polarity proof for kernel/lineage/s31-supersession-uniform-retraction.sql
 (design/FABLE-SUPERSESSION-UNIFORM-RETRACTION-SPEC.md, Fable-authored, RATIFIED 2026-07-15;
 ledger item supersession-semantics-closure) + gates/ledger_reader_allowlist.py (the standing

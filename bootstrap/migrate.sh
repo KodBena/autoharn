@@ -1,10 +1,4 @@
 #!/bin/sh
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-14T21:20:52Z
-#   last-change: 2026-07-14T21:20:52Z
-#   contributors: a857c93d/main
-# <<< PROVENANCE-STAMP <<<
-
 # migrate.sh -- thin sh entry point for the STABLE user surface (tracker item
 # migration-script-stable-interface):
 #

@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-09T11:06:10Z
-#   last-change: 2026-07-18T23:01:23Z
-#   contributors: be693afb/main, e4410ef6/main, ab5d5bab/main
-# <<< PROVENANCE-STAMP <<<
-
 """deployment_record -- the ONE home for a project instance's `deployment.json` SHAPE
 (vestigial_documentation/design/ORCH-OPUS-READINESS.md move 1; ADR-0012 P1). A deployment record is the machine-readable
 answer to "where does THIS project's ledger live": db, host, schema, kern, role -- the same

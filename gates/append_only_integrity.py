@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-07T01:47:28Z
-#   last-change: 2026-07-14T23:19:42Z
-#   contributors: 37017f46/main, a857c93d/main
-# <<< PROVENANCE-STAMP <<<
-
 """append_only_integrity — the append-only-trigger guard (forecloses the finding-6/15 class: an
 attestation/ledger table that lacks its append-only UPDATE+DELETE trigger, so rows can be silently
 rewritten and the ledger's tamper-evidence quietly dies). ADR-0000 never-again for the "append-only

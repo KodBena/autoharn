@@ -1,9 +1,3 @@
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-19T00:00:00Z
-#   last-change : 2026-07-19T00:00:00Z
-#   contributors: ab5d5bab/main
-# <<< PROVENANCE-STAMP <<<
-
 """tools/setup_tui/ui_textual.py -- TextualUi, the real Textual application backend behind the
 one-home `Ui` seam (design/FABLE-SETUP-TUI-TEXTUAL-SPEC.md, commission ledger row 1818: "textual
 is not used, at all, it is not a TUI, it is just a collection of prompts... Could we make it into

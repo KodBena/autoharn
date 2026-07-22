@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-11T14:38:59Z
-#   last-change: 2026-07-19T01:59:42Z
-#   contributors: e4410ef6/main, ab5d5bab/main
-# <<< PROVENANCE-STAMP <<<
-
 """run_fixtures.py -- both-polarity proof for gates/link_integrity.py (the class-not-instance
 fix for the maintainer's 2026-07-11 doc-legibility indictment), plus the gitlink-awareness fix
 for work_opened `worktree-submodule-link-integrity` (2026-07-19).

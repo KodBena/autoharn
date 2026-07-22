@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-19T04:13:53Z
-#   last-change: 2026-07-19T04:21:03Z
-#   contributors: ab5d5bab/main
-# <<< PROVENANCE-STAMP <<<
-
 """seen-red/setup-tui-write-file-atomicity/run_fixtures.py -- both-polarity proof of
 tools/setup_tui/runner.py's `write_file` atomicity fix (ledger row 1810 finding 1),
 census-registered in gates/fixture_census.py.

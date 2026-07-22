@@ -1,9 +1,3 @@
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-18T15:27:25Z
-#   last-change: 2026-07-18T15:54:24Z
-#   contributors: ab5d5bab/main
-# <<< PROVENANCE-STAMP <<<
-
 # Transcribed from user-guide/USER-RECIPES-FAQ.md, "Workflow patterns" section, first entry
 # ("I want a workflow to iterate until clean -- can an agent spawn sub-agents and loop on its own
 # output until a defect list comes up empty?"), the FAQ's own generalized description of this

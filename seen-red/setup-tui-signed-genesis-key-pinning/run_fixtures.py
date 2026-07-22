@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-21T19:40:57Z
-#   last-change: 2026-07-21T19:40:57Z
-#   contributors: 43f77bff/main
-# <<< PROVENANCE-STAMP <<<
-
 """seen-red/setup-tui-signed-genesis-key-pinning/run_fixtures.py -- RED-then-GREEN witness for
 AUTOHARN_BACKFLOW.md finding 1 (a real-world birth's own finding, verbatim in the commission that
 drove this fix): `bootstrap/new-project.sh`'s signed-genesis stage generated a fresh keypair and

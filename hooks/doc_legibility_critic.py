@@ -1,9 +1,3 @@
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-11T15:14:37Z
-#   last-change: 2026-07-11T15:24:09Z
-#   contributors: e4410ef6/main
-# <<< PROVENANCE-STAMP <<<
-
 """doc_legibility_critic — the zero-context-reader editorial critic
 (design/ADR-DRAFT-documentation-discipline.md, Rule 1's out-of-frame instrument; BACKLOG
 "Documentation legibility indictment (maintainer, 2026-07-11 morning)").

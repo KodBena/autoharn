@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-15T20:15:54Z
-#   last-change: 2026-07-18T23:01:45Z
-#   contributors: a857c93d/main, ab5d5bab/main
-# <<< PROVENANCE-STAMP <<<
-
 """column_complete — the single home for the "column-complete view" catalog functor (work
 item column-complete-gate, per vestigial_documentation/design/ORCH-CATEGORICAL-REFACTOR-CONSULT-2026-07-15.md F2 /
 plan step 5). Wraps the s20 lesson's own re-issue idiom — "ledger_current +

@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-22T01:49:01Z
-#   last-change: 2026-07-22T01:49:01Z
-#   contributors: 1fa3ab69/main
-# <<< PROVENANCE-STAMP <<<
-
 """tools/setup_tui/content/config_file_data.py -- the DATA half of the config-file feature
 (design/FABLE-SETUP-TUI-CONFIG-FILE-SPEC.md, ledger row 1944; law/adr/0012 P10 "data is not
 code"). This module holds ONLY the closed schema table `tools/setup_tui/config_file.py` loads

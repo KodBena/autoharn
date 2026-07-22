@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-21T21:48:55Z
-#   last-change: 2026-07-21T21:48:55Z
-#   contributors: 43f77bff/main
-# <<< PROVENANCE-STAMP <<<
-
 """seen-red/setup-tui-destination-state-parity/run_fixtures.py -- spec §5's second witness-set
 item: "shell vs Python classification agree on the five witnessed shapes (fresh / complete /
 partial / foreign / legacy-complete)." Census-registered in gates/fixture_census.py.

@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-15T20:20:42Z
-#   last-change: 2026-07-15T20:20:42Z
-#   contributors: a857c93d/main
-# <<< PROVENANCE-STAMP <<<
-
 """Both-polarity proof for gates/kind_shape_manifest_gate.py (ledger item
 `kind-shape-manifest-gate`, gates/fixture_census.py REGISTRY entry "kind-shape-manifest-gate").
 Real infra, no mocks: a throwaway scratch schema in the toy db, on a live full-chain apply

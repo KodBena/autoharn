@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-12T02:17:36Z
-#   last-change: 2026-07-14T22:24:42Z
-#   contributors: e4410ef6/main, a857c93d/main
-# <<< PROVENANCE-STAMP <<<
-
 """run_fixtures.py -- both-polarity witness for Part 3 of design/ORCH-CONTEMPORANEITY-PART3-SPEC.md
 (engine/lp/preamble_ordering.lp + engine/preamble_obligations.lp + the E1-E9 extensions to
 engine/contemp_edb.py + engine/preamble_floor.py + engine/preamble_differential.py). Follows the

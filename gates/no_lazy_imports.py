@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-02T01:30:29Z
-#   last-change: 2026-07-14T22:26:50Z
-#   contributors: 306d4c8f/main, a857c93d/main
-# <<< PROVENANCE-STAMP <<<
-
 """no_lazy_imports.py — mechanical gate for the project law: LAZY IMPORTS ARE BANNED.
 
 Law (CLAUDE.md, maintainer edict 2026-07-02): every `import` executes at module import

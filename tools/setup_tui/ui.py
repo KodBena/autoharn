@@ -1,9 +1,3 @@
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-18T21:31:20Z
-#   last-change: 2026-07-22T02:04:09Z
-#   contributors: ab5d5bab/main, 1fa3ab69/main
-# <<< PROVENANCE-STAMP <<<
-
 """tools/setup_tui/ui.py -- the ONE numbered-menu UI substrate (ADR-0012 P1: one home for the
 prompt/print shape, no screen module talks to stdin/stdout directly).
 

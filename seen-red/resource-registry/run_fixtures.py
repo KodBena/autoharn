@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-12T02:12:54Z
-#   last-change: 2026-07-12T02:14:54Z
-#   contributors: e4410ef6/main
-# <<< PROVENANCE-STAMP <<<
-
 """run_fixtures — both-polarity live proof for ORCH-SPEC-RESOURCE-REGISTRY.md stage 1
 (design/ORCH-SPEC-RESOURCE-REGISTRY.md §8's own witness plan; gates/fixture_census.py REGISTRY
 entry "resource-registry"). Mirrors seen-red/track-work/run_fixtures.py's scratch-and-drop

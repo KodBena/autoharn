@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-12T00:38:52Z
-#   last-change: 2026-07-12T00:39:24Z
-#   contributors: e4410ef6/main
-# <<< PROVENANCE-STAMP <<<
-
 """Seen-red specimen for tools/rename_doc.py (gates/fixture_census.py REGISTRY entry
 "rename-doc"). Proves, both polarities, on live subprocess runs against a throwaway temp git
 repo (never against the real tracked corpus — a fixture must not write a fake attestation or a

@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-10T20:50:18Z
-#   last-change: 2026-07-12T12:45:40Z
-#   contributors: be693afb/main, e4410ef6/main
-# <<< PROVENANCE-STAMP <<<
-
 """hooks/posttooluse_mutation_observer.py -- the bash-mutation OBSERVER (Part 2, maintainer
 mandate 2026-07-10; closes the epistemic half of a gap the hooks agent flagged:
 hooks/pretooluse_change_gate.py's `bash_mutates_governed()` is a command-SHAPE enumeration --

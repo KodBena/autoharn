@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-10T23:38:38Z
-#   last-change: 2026-07-16T02:07:47Z
-#   contributors: e4410ef6/main, a857c93d/main, 9a17b6b9/main
-# <<< PROVENANCE-STAMP <<<
-
 """hooks/pretooluse_delegation_observer.py -- the delegation OBSERVER (Part 2, BACKLOG "Run-8
 mid-run forensics", 2026-07-11 finding 3: "investigation is ungoverned" -- 5m12s and 13 tool
 calls, including a 100-second subagent dispatch, landed ZERO ledger rows before the first

@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-15T21:42:37Z
-#   last-change: 2026-07-15T21:42:37Z
-#   contributors: a857c93d/main
-# <<< PROVENANCE-STAMP <<<
-
 """run_fixtures.py -- both-polarity proof for kernel/lineage/s34-computed-grade-refusal.sql
 (ledger item discharge-grade-refuse-if-supplied, claimed by the orchestrator; refinement-consult
 finding, ledger row 1157). Real infra, no mocks: CLASSIC-mode scaffolds (explicit

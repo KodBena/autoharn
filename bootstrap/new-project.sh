@@ -1,10 +1,4 @@
 #!/bin/sh
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-09T11:15:53Z
-#   last-change: 2026-07-22T01:29:30Z
-#   contributors: be693afb/main, e4410ef6/main, 3c50e030/main, a857c93d/main, 9a17b6b9/main, ab5d5bab/main, 43f77bff/main, 1fa3ab69/main
-# <<< PROVENANCE-STAMP <<<
-
 # new-project.sh — stamp a new instance directory: deployment.json, .claude/ wiring
 # (settings.json, governed_files.json, apparatus.json, HOOKS.md), and the three verbs (led, judge,
 # pickup) as thin shims exec'ing bootstrap/templates/*.tmpl LIVE out of this autoharn checkout

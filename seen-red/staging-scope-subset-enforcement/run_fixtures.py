@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-15T07:00:05Z
-#   last-change: 2026-07-15T07:02:28Z
-#   contributors: a857c93d/main
-# <<< PROVENANCE-STAMP <<<
-
 """Seen-red specimen for staging-scope-subset-enforcement (ledger item, motivating class c4923ae).
 
 RED: reproduces c4923ae's shape — a commit declares a narrow scope (a manifest-only change) but its

@@ -1,9 +1,3 @@
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-10T19:58:40Z
-#   last-change: 2026-07-10T20:28:06Z
-#   contributors: be693afb/main
-# <<< PROVENANCE-STAMP <<<
-
 """Seen-red specimen for hooks/demurral_detect.py (BACKLOG "Proposed: mechanize the ADR-0013 Rule
 3 demurral-detector as a Claude hook", 2026-07-09; gates/fixture_census.py REGISTRY entry
 "demurral-detector"). Proves the detector actually FIRES on Specimen 2's canonical artifact (ADR-

@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-21T21:50:25Z
-#   last-change: 2026-07-21T21:51:16Z
-#   contributors: 43f77bff/main
-# <<< PROVENANCE-STAMP <<<
-
 """seen-red/setup-tui-destination-foreign-refusal/run_fixtures.py -- spec §5's third witness-set
 item, second closed defect: "new-project.sh merging into FOREIGN content (red leg in a scratch
 dir)". Census-registered in gates/fixture_census.py.

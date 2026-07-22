@@ -1,9 +1,3 @@
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-19T19:33:56Z
-#   last-change: 2026-07-21T23:44:53Z
-#   contributors: ab5d5bab/main, 43f77bff/main
-# <<< PROVENANCE-STAMP <<<
-
 """tools/setup_tui/commit_executor.py -- THE ONE COMMIT BOUNDARY (design/FABLE-SETUP-TUI-
 PURE-CORE-SPEC.md §2.3/§2.6, commission ledger rows 1823 point 2 / 1825).
 

@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-09T13:52:33Z
-#   last-change: 2026-07-10T19:31:39Z
-#   contributors: be693afb/main
-# <<< PROVENANCE-STAMP <<<
-
 """run_fixtures.py — both-polarity proof for hooks/pretooluse_change_gate.py's SUBJECT_ROOT
 fail-closed fix (BACKLOG "Run-2 integrity finding", 2026-07-09) AND the permit-to-work fix
 (BACKLOG "Run-5 forensics", 2026-07-10).

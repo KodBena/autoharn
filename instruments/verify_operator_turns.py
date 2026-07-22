@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-07T01:58:44Z
-#   last-change: 2026-07-07T01:58:44Z
-#   contributors: 37017f46/main
-# <<< PROVENANCE-STAMP <<<
-
 """verify_operator_turns — the standing fixture for delivery_drill's operator-turn extraction
 (forecloses finding 25: `_operator_turns` must SKIP harness-injected `<task-notification>` envelopes.
 A background-agent completion notification carries an `<output-file>/tmp/…/<id>.output` tag whose

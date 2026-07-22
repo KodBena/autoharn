@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-18T23:51:46Z
-#   last-change: 2026-07-18T23:52:13Z
-#   contributors: ab5d5bab/main
-# <<< PROVENANCE-STAMP <<<
-
 """seen-red/setup-tui-feature-facts-drift/run_fixtures.py -- both-polarity proof of
 tools/setup_tui/feature_facts.py's own drift backstop (design/FABLE-SETUP-TUI-FEATURE-FACTS-
 SPEC.md §1/§2/§5's WF2), census-registered in gates/fixture_census.py.

@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-19T01:39:25Z
-#   last-change: 2026-07-22T03:37:10Z
-#   contributors: ab5d5bab/main, 43f77bff/main, 431cddfa/main
-# <<< PROVENANCE-STAMP <<<
-
 """tools/setup_tui/signed_genesis.py -- the "Signed genesis" ceremony driver
 (design/FABLE-SETUP-TUI-SIGNED-GENESIS-SPEC.md, commission ledger rows 1724/1725). ONE home
 (ADR-0012 P1) for every gpg/led act `screens.py`'s `screen_signed_genesis` orchestrates -- the

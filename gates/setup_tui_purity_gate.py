@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-19T20:10:34Z
-#   last-change: 2026-07-22T02:00:42Z
-#   contributors: ab5d5bab/main, 1fa3ab69/main
-# <<< PROVENANCE-STAMP <<<
-
 """gates/setup_tui_purity_gate.py -- the §2.8 AST purity gate (design/FABLE-SETUP-TUI-PURE-CORE-
 SPEC.md §2.8, commission ledger rows 1823 point 2 / 1825 / 1835): "a census-registered gate
 asserts, at the AST level over tools/setup_tui/, that calls to the three runner choke points

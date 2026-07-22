@@ -1,9 +1,3 @@
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-06T05:40:08Z
-#   last-change: 2026-07-06T15:47:33Z
-#   contributors: 37017f46/main
-# <<< PROVENANCE-STAMP <<<
-
 """test_ledger_marriage -- the qualification gates for the ledger-logic marriage
 increment 1 (link 24). Every load-bearing claim is a mechanized check here:
 

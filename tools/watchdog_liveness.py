@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-13T17:13:41Z
-#   last-change: 2026-07-18T22:59:44Z
-#   contributors: 3c50e030/main, ab5d5bab/main
-# <<< PROVENANCE-STAMP <<<
-
 """tools/watchdog_liveness.py -- the watchdog-liveness-harness slice (tracker item
 `watchdog-liveness-harness`; design/ORCH-WATCHDOG-LIVENESS.md is the ONE design home this file's
 every claim traces back to -- read that note first, this docstring restates only what a reader

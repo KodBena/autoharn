@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-12T12:46:08Z
-#   last-change: 2026-07-12T12:46:41Z
-#   contributors: e4410ef6/main
-# <<< PROVENANCE-STAMP <<<
-
 """run_fixtures — both-polarity live proof for the `estimate:` intake-validation feature
 (tracker item `cost-estimation-retro`, 2026-07-12; gates/fixture_census.py REGISTRY entry
 "estimate-intake-validation"). Mirrors seen-red/resource-intake-validation/run_fixtures.py's

@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-07T01:58:01Z
-#   last-change: 2026-07-07T01:58:01Z
-#   contributors: 37017f46/main
-# <<< PROVENANCE-STAMP <<<
-
 """verify_relevant_act — the standing fixture for the deriver's ledger-relevance classification
 (forecloses finding 9: `ledger_relevant_act` is oracle §4 MINUS the change-order-receipt `message_in`
 clause — a deliberate, NAMED omission, not silent; the risk is that a later edit silently re-includes

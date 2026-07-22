@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-18T10:40:19Z
-#   last-change: 2026-07-18T10:40:30Z
-#   contributors: ab5d5bab/main
-# <<< PROVENANCE-STAMP <<<
-
 """run_fixtures.py -- proof for ledger item deployment-orchlog-surfacing, half (b): the
 scaffold-served orchlog wrapper (bootstrap/new-project.sh writes <dest>/orchlog beside
 <dest>/led and <dest>/pickup, execing autoharn's own ../../orchlog verb with `--repo

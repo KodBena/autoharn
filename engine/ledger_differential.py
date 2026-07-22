@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-06T05:37:25Z
-#   last-change: 2026-07-22T00:25:00Z
-#   contributors: 37017f46/main, be693afb/main, a857c93d/main, ab5d5bab/main, 1fa3ab69/main
-# <<< PROVENANCE-STAMP <<<
-
 """ledger_differential -- the marriage's load-bearing gate: the ASP `T_now` program
 (ledger_tnow.lp, second producer) differentialed BIT-IDENTICALLY against the SQL
 floor (ledger_floor.py, producer one) over the banked, closed evidence. This is the

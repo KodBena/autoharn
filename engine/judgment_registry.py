@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-07T17:13:48Z
-#   last-change: 2026-07-18T05:38:26Z
-#   contributors: 37017f46/main, be693afb/main, ab5d5bab/main
-# <<< PROVENANCE-STAMP <<<
-
 """judgment_registry — THE one authority module for engine judgments (engine INC 1; ruling 110 D1/D2).
 
 One home (ADR-0012 P1) for the JudgmentSpec record kind: one row per judgment CLASS the apparatus

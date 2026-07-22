@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-11T14:40:08Z
-#   last-change: 2026-07-14T01:09:47Z
-#   contributors: e4410ef6/main, a857c93d/main
-# <<< PROVENANCE-STAMP <<<
-
 """contemp_edb -- the EDB builder for Part 2 of vestigial_documentation/design/ORCH-CONTEMPORANEITY-AUDIT.md (the
 correlation verb; BACKLOG "Contemporaneity indictment", 2026-07-11). Exports the typed EDB
 `engine/lp/contemporaneity.lp` reasons over, from a WORLD (a project directory carrying the

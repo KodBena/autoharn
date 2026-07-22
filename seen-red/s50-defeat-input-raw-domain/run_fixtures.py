@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-18T17:33:19Z
-#   last-change: 2026-07-18T17:33:46Z
-#   contributors: ab5d5bab/main
-# <<< PROVENANCE-STAMP <<<
-
 """run_fixtures.py -- both-polarity witness for kernel/lineage/s50-defeat-input-raw-domain.sql
 (design/FABLE-S46-DEFEAT-INPUT-DOMAIN-SPEC.md, ledger row 1647). Real infra, no mocks: scratch
 schema pairs in the toy db, torn down before and after. Never touches kernel/, bootstrap/, or any

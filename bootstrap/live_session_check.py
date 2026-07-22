@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-14T21:18:37Z
-#   last-change: 2026-07-15T15:13:57Z
-#   contributors: a857c93d/main
-# <<< PROVENANCE-STAMP <<<
-
 """live_session_check -- the ONE shared "is anything running against this deployment right now"
 check (ADR-0012 P1) used by bootstrap/convert-to-submodule.sh and bootstrap/upgrade-submodule.sh
 before either touches a deployment's pin. CLAUDE.md's standing rule ("Never modify hooks/ or a

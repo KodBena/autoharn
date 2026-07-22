@@ -1,9 +1,3 @@
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-19T19:33:00Z
-#   last-change: 2026-07-21T23:44:25Z
-#   contributors: ab5d5bab/main, 43f77bff/main
-# <<< PROVENANCE-STAMP <<<
-
 """tools/setup_tui/plan.py -- THE PLAN: the reified program a pure decision phase builds
 (design/FABLE-SETUP-TUI-PURE-CORE-SPEC.md §2.2, commission ledger rows 1823 point 2 / 1825).
 

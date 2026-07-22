@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-11T21:35:25Z
-#   last-change: 2026-07-14T01:07:14Z
-#   contributors: e4410ef6/main, a857c93d/main
-# <<< PROVENANCE-STAMP <<<
-
 """hooks/posttooluse_bash_completion.py -- the Bash TOOL-COMPLETION timestamp (small-follow-ups
 commission item 4; BACKLOG "Maintainer principle: the action stream is the evidentiary basis;
 session internals are diagnostics", 2026-07-11, and "Follow-ups commission scope extended"

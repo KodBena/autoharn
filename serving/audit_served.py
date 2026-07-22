@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-18T07:45:52Z
-#   last-change: 2026-07-18T22:55:26Z
-#   contributors: ab5d5bab/main
-# <<< PROVENANCE-STAMP <<<
-
 """audit_served -- the served-vs-kernel spot differential (design/
 FABLE-LEDGER-BOUNDARY-SERVICE-SPEC.md §5: "the service's audit is a scripted spot
 differential ... fetch a served page, read the same view directly (read-only psql), byte-

@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-12T02:22:11Z
-#   last-change: 2026-07-12T02:22:43Z
-#   contributors: e4410ef6/main
-# <<< PROVENANCE-STAMP <<<
-
 """preamble_audit -- the OBSERVER-GRADE report half of Part 3 (design/
 ORCH-CONTEMPORANEITY-PART3-SPEC.md §8: "a `--preamble` mode of the existing `./audit` verb ...
 exit 0/1 by family verdict, typed refusal on capability absence, the

@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-13T20:20:21Z
-#   last-change: 2026-07-13T20:20:21Z
-#   contributors: 3c942a60/main
-# <<< PROVENANCE-STAMP <<<
-
 """verification_stats_audit -- the OBSERVER-GRADE report half of work item
 `verification-stats-asp-harvester`. Mirrors engine/review_gap_audit.py's own build_report()/
 print_report() shape (that module's own docstring names the pattern this one clones).

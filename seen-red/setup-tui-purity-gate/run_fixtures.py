@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-19T20:11:03Z
-#   last-change: 2026-07-22T00:25:06Z
-#   contributors: ab5d5bab/main, 1fa3ab69/main
-# <<< PROVENANCE-STAMP <<<
-
 """seen-red/setup-tui-purity-gate/run_fixtures.py -- both-polarity proof of
 gates/setup_tui_purity_gate.py (design/FABLE-SETUP-TUI-PURE-CORE-SPEC.md §2.8, commission ledger
 rows 1823 point 2 / 1825 / 1835), census-registered in gates/fixture_census.py.

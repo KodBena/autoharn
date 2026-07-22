@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-21T19:41:45Z
-#   last-change: 2026-07-21T19:46:40Z
-#   contributors: 43f77bff/main
-# <<< PROVENANCE-STAMP <<<
-
 """seen-red/setup-tui-background-proc-hygiene/run_fixtures.py -- both-polarity proof of
 tools/setup_tui/runner.py's `start_background` stdin/stdout hygiene fix (commission: maintainer
 field observation f, "after finally answering all questions, seems that PTY control is not

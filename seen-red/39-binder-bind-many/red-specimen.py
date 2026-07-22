@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-07T12:25:59Z
-#   last-change: 2026-07-07T12:25:59Z
-#   contributors: 37017f46/main
-# <<< PROVENANCE-STAMP <<<
-
 """Seen-red specimen for the binder-bind-many gate (forecloses finding 39). Reproduces the pre-fix
 binder — the earliest-UNUSED-act rule that marked an act 'used' after ONE binding — over the fixture's
 batch case (one act inserting three rows). The old rule binds only the first row and leaves the other

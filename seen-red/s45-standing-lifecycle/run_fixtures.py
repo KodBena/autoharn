@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-18T05:48:54Z
-#   last-change: 2026-07-18T10:49:52Z
-#   contributors: ab5d5bab/main
-# <<< PROVENANCE-STAMP <<<
-
 """run_fixtures.py -- both-polarity proof for kernel/lineage/s45-standing-lifecycle.sql
 (design/FABLE-STANDING-LIFECYCLE-SPEC.md §6's s45 witness plan). Real infra, no mocks: CLASSIC
 scaffolds + manual chain applies in the TOY db, one REAL new-project.sh --new-world run against

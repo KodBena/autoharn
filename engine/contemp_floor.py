@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-11T22:20:51Z
-#   last-change: 2026-07-11T22:20:51Z
-#   contributors: e4410ef6/main
-# <<< PROVENANCE-STAMP <<<
-
 """contemp_floor -- the SQL FLOOR of the contemporaneity verdicts: producer ONE of the
 contemporaneity marriage differential (engine/contemp_differential.py), the deferred half of
 vestigial_documentation/design/ORCH-CONTEMPORANEITY-AUDIT.md's Part 2 ("the SQL-floor differential ... is FILED, not built,

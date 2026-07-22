@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-15T14:08:12Z
-#   last-change: 2026-07-15T14:14:11Z
-#   contributors: a857c93d/main
-# <<< PROVENANCE-STAMP <<<
-
 r"""markdown_tables — the single-home GitHub-flavored-markdown (GFM) table parser, renderer,
 and mechanical classifier for this project's doc corpus (work item doc-table-mechanization,
 maintainer commission 2026-07-15).

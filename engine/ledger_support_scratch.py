@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-06T14:39:03Z
-#   last-change: 2026-07-06T14:59:15Z
-#   contributors: 37017f46/main
-# <<< PROVENANCE-STAMP <<<
-
 """ledger_support_scratch -- the apparatus-authored exercise of the Increment-2 support-exposure
 closure + discharge vocabulary (WORK-UNIT-exposure-discharge.md), on MY OWN scratch lineage, with
 BOTH producers (ledger_support.lp ASP and the ledger_floor.support_floor_atoms CTE mirror)

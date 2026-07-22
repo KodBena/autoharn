@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-07T17:15:49Z
-#   last-change: 2026-07-07T17:16:44Z
-#   contributors: 37017f46/main
-# <<< PROVENANCE-STAMP <<<
-
 """verify_registry_parity — two-way parity between judgment_registry.SPECS and the LIVE surface
 (engine INC 1; ruling 110 §5 INC 1 + D2). Both directions, loud (F49/ADR-0002):
 

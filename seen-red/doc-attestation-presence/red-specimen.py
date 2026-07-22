@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-11T16:35:50Z
-#   last-change: 2026-07-12T14:40:01Z
-#   contributors: e4410ef6/main
-# <<< PROVENANCE-STAMP <<<
-
 """Seen-red specimen for gates/doc_attestation_presence.py (the ADR-0017 A:B:C fresh-context
 audit loop's commit-time enforcement floor; gates/fixture_census.py REGISTRY entry
 "doc-attestation-presence"). Proves, both polarities, on live subprocess runs of the real gate

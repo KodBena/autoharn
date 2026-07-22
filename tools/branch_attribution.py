@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-12T01:58:48Z
-#   last-change: 2026-07-12T01:58:48Z
-#   contributors: e4410ef6/main
-# <<< PROVENANCE-STAMP <<<
-
 """branch_attribution — the branch-attribution DERIVED VIEW vestigial_documentation/design/ORCH-WORKTREE-LEDGERING.md 3b
 calls for ("Branch attribution as derivation, not schema"). Read-only, observer-grade: joins a
 ledger row's `stamp_invocation` token (s23, kernel/lineage/s23-per-invocation-stamp-token.sql) to

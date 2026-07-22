@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-19T02:39:43Z
-#   last-change: 2026-07-19T03:39:41Z
-#   contributors: ab5d5bab/main
-# <<< PROVENANCE-STAMP <<<
-
 """tools/setup_tui/governed_files.py -- the governed-files exposure CHOICE driver
 (design/FABLE-SETUP-TUI-SPEC.md's 2026-07-19 governed-files amendment, commission ledger row
 1730). ONE home (ADR-0012 P1) for the operator-facing pattern-set decision -- validation, the

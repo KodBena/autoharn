@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-21T21:49:51Z
-#   last-change: 2026-07-22T00:45:35Z
-#   contributors: 43f77bff/main, 1fa3ab69/main
-# <<< PROVENANCE-STAMP <<<
-
 """seen-red/setup-tui-destination-birth-guard/run_fixtures.py -- spec §5's third witness-set
 item, first closed defect: "screen_birth accepting an unchecked dest (red against pinned pre-fix
 module)". Census-registered in gates/fixture_census.py.

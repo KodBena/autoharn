@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-18T16:01:50Z
-#   last-change: 2026-07-18T16:03:13Z
-#   contributors: ab5d5bab/main
-# <<< PROVENANCE-STAMP <<<
-
 """run_fixtures.py -- both-polarity witness for design/
 FABLE-BOUNDARY-MULTIPLEX-AND-CLI-REBASE-SPEC.md's §7 witness sketch (WM1-WM4; WM5/WM6 are the
 CLI-rebase §5 witnesses and are UNEXERCISED here -- the §5 CLI rebase is a separate, not-yet-

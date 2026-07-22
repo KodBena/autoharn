@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-14T21:20:36Z
-#   last-change: 2026-07-15T15:14:20Z
-#   contributors: a857c93d/main
-# <<< PROVENANCE-STAMP <<<
-
 """migrate_core -- the engine behind `bootstrap/migrate.sh` / the root `./migrate` shim
 (tracker item migration-script-stable-interface, 2026-07-14 late commission directive 2:
 "~/ent WILL be migrated, BY THE MAINTAINER HIMSELF, using an idiot-proof FORWARD-COMPATIBLE

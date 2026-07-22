@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-12T07:53:01Z
-#   last-change: 2026-07-12T07:53:01Z
-#   contributors: e4410ef6/main
-# <<< PROVENANCE-STAMP <<<
-
 """ordering_edb -- the ASP-producer EDB exporter for engine/lp/ordering_violations.lp
 (design/ORCH-SPEC-RESOURCE-REGISTRY.md §5 stage 2). A SEPARATE, ledger-only EDB from
 engine/contemp_edb.py's (Part 3's): this checker reasons over pure id-order plus the

@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-07T03:28:16Z
-#   last-change: 2026-07-15T12:48:20Z
-#   contributors: 37017f46/main, a857c93d/main
-# <<< PROVENANCE-STAMP <<<
-
 """staging_guard — the explicit-paths commit guard (forecloses finding 33, the commit-scope-sweep /
 git-add-sweep class: `git commit` commits the whole INDEX, not just the paths the committer added this
 turn, so a path staged earlier, concurrently, or by a broad `git add` rides along — attribution muddling

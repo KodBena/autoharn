@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-21T22:58:08Z
-#   last-change: 2026-07-21T22:58:08Z
-#   contributors: 43f77bff/main
-# <<< PROVENANCE-STAMP <<<
-
 """tools/setup_tui/principals_authority_data.py -- the DATA half of the "Principals & authority"
 screen driver, split out of tools/setup_tui/principals_authority.py under law/adr/0012's
 2026-07-22 Amendment (P10 -- "data is not code"), phase 1 of design/FABLE-SETUP-TUI-FIELD-

@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-16T02:43:35Z
-#   last-change: 2026-07-16T02:43:35Z
-#   contributors: 9a17b6b9/main
-# <<< PROVENANCE-STAMP <<<
-
 """workflow_check — the v0 validator for declared pipeline workflows under design/workflows/*.toml
 (ledger work item pipeline-dsl-v0; governing exploration doc
 vestigial_documentation/design/FABLE-PIPELINE-DSL-EXPLORATION.md, uncommitted in the maintainer's main checkout, read

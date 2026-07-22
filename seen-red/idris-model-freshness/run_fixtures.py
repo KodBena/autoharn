@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-15T21:39:39Z
-#   last-change: 2026-07-15T21:39:39Z
-#   contributors: a857c93d/main
-# <<< PROVENANCE-STAMP <<<
-
 """Both-polarity proof for gates/idris_model_freshness.py (ledger item
 `idris-model-freshness-gate`, gates/fixture_census.py REGISTRY entry "idris-model-freshness").
 No mocks of the gate's own logic: every case runs the REAL gate module against synthetic scratch

@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-15T14:12:11Z
-#   last-change: 2026-07-15T14:12:11Z
-#   contributors: a857c93d/main
-# <<< PROVENANCE-STAMP <<<
-
 """Seen-red specimen for gates/doc_tables.py (work item doc-table-mechanization,
 gates/fixture_census.py REGISTRY entry "doc-tables"). Proves, both polarities, on live
 subprocess runs of the real gate:

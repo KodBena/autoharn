@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-07T01:32:54Z
-#   last-change: 2026-07-07T02:05:02Z
-#   contributors: 37017f46/main
-# <<< PROVENANCE-STAMP <<<
-
 """no_destructive_ddl — the destructive-DDL guard (foreclosure specimen 5; forecloses findings 24 + 30,
 the acts-schema-reset class: an ad-hoc `DROP SCHEMA acts CASCADE` that took out acts.ruling/act/stream
 as UNDECLARED collateral). ADR-0000 never-again for the "blast radius wider than declared" class.

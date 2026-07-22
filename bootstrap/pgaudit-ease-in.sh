@@ -1,10 +1,4 @@
 #!/bin/sh
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-15T17:00:20Z
-#   last-change: 2026-07-15T17:00:20Z
-#   contributors: a857c93d/main
-# <<< PROVENANCE-STAMP <<<
-
 # pgaudit-ease-in.sh -- pave the path for pgAudit adoption WITHOUT touching any server (ledger
 # item `pgaudit-ease-in`, maintainer 2026-07-15: TESTING parked, path paved for whenever he or an
 # adopter wants to try). Reads a deployment's live Postgres target read-only and reports pgAudit's

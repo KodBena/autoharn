@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-11T18:02:52Z
-#   last-change: 2026-07-11T18:02:52Z
-#   contributors: e4410ef6/main
-# <<< PROVENANCE-STAMP <<<
-
 """hooks/pretooluse_read_observer.py -- the READ observer (BACKLOG "Five-item batch,
 maintainer-approved 2026-07-11 evening", item 3). Purpose, on the record: makes "did the
 reviewer consult the artifact independently" answerable (the run10 retrospective's

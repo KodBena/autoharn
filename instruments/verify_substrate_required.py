@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-09T10:05:47Z
-#   last-change: 2026-07-09T10:05:47Z
-#   contributors: be693afb/main
-# <<< PROVENANCE-STAMP <<<
-
 """verify_substrate_required — the standing fixture for the consumer-substrate-required guard (forecloses
 finding 36: close_manifest.py hardcoded e15-pinned module-global defaults for the acts `--fenced` dir and
 the row_performed_by `--session-dir`, so a bare `close_manifest.py e16 --mode close` measured e15's fence +

@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-18T01:58:07Z
-#   last-change: 2026-07-18T01:58:07Z
-#   contributors: ab5d5bab/main
-# <<< PROVENANCE-STAMP <<<
-
 """run_fixtures.py -- both-polarity proof for kernel/lineage/s40-principal-identity-events.sql
 (design/FABLE-PRINCIPAL-IDENTITY-SPEC-BUILD-BASIS.md §6 witness plan, as amended by C6 -- the
 s40 slice; the s41 slice lives in seen-red/s41-principal-bindings-and-relations/). Real infra,

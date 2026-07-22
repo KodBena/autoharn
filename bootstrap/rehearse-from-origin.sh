@@ -1,10 +1,4 @@
 #!/usr/bin/env bash
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-15T07:10:40Z
-#   last-change: 2026-07-18T16:50:00Z
-#   contributors: a857c93d/main, ab5d5bab/main
-# <<< PROVENANCE-STAMP <<<
-
 # rehearse-from-origin.sh -- the external-rehearsal-register-gate mechanization (RCA row 909's
 # rule; ledger item `external-rehearsal-register-gate`; row 928's repair this rehearsal exists to
 # keep proven). Answers ONE question a same-host rehearsal structurally cannot: "does a REAL

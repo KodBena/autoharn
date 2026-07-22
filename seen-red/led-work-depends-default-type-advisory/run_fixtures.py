@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-15T18:57:55Z
-#   last-change: 2026-07-15T18:57:55Z
-#   contributors: a857c93d/main
-# <<< PROVENANCE-STAMP <<<
-
 """run_fixtures.py -- both-polarity live proof for ledger item
 `led-work-depends-default-type-advisory` (gates/fixture_census.py REGISTRY entry
 "led-work-depends-default-type-advisory").

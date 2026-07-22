@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-18T03:59:12Z
-#   last-change: 2026-07-18T03:59:12Z
-#   contributors: ab5d5bab/main
-# <<< PROVENANCE-STAMP <<<
-
 """hash_coverage_gate -- the s42 standing mechanical net: compute_row_hash's serialized-column
 set equals the ledger's live column set, minus row_hash, forever
 (design/FABLE-REFUSAL-RECORDING-AND-HASH-COVERAGE-SPEC.md §3.2, RATIFIED R1/R2 ledger row 1460;

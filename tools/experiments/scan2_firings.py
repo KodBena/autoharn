@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-14T09:24:56Z
-#   last-change: 2026-07-14T09:41:21Z
-#   contributors: a857c93d/main
-# <<< PROVENANCE-STAMP <<<
-
 """scan2_firings — the append-only firing ledger for tools/experiments/compound_nominal_scan2.py
 (ledger row 337, "detector-firing-telemetry"; unblocked by the maintainer's 2026-07-14 detector
 adoption, ledger row 658).

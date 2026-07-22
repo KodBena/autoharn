@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-18T23:19:12Z
-#   last-change: 2026-07-18T23:19:12Z
-#   contributors: ab5d5bab/main
-# <<< PROVENANCE-STAMP <<<
-
 """run_fixtures.py -- both-polarity witness for ../../otel-watch (design/FABLE-OTEL-SENTRY-SPEC.md
 §3, §14's W1-W5). Synthetic OTLP-shaped JSONL only (otel-watch's own extract_api_requests only
 cares about the JSON shape, no real collector needed); every run points --base-dir at a fresh

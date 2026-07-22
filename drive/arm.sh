@@ -1,10 +1,4 @@
 #!/bin/sh
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-10T20:56:17Z
-#   last-change: 2026-07-10T20:56:29Z
-#   contributors: be693afb/main
-# <<< PROVENANCE-STAMP <<<
-
 # arm.sh — the run arming checklist (consult 37 §4), RENDERED CHECKABLE, PARAMETERIZED FOR REUSE
 # [manifest C13 / BUILD-BRIEF Step 8]. This is the generic instrument: it was a verbatim copy of
 # arm_e18.sh (the one-off e18 script, hardcoded to db qbx / role qbx_rw / label jm7 / harness/e18-build)

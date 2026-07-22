@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-11T00:11:32Z
-#   last-change: 2026-07-18T22:51:43Z
-#   contributors: e4410ef6/main, a857c93d/main, ab5d5bab/main
-# <<< PROVENANCE-STAMP <<<
-
 """record_reading -- the filing path for stores/001_research_ledger.sql (the PROJECT-AGNOSTIC
 measurement-provenance ledger: core.project/core.session + research.instrument/research.reading/
 research.finding + the derived research.finding_confirmed view). Sibling of filing/file_finding.py:

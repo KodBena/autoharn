@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-18T19:48:12Z
-#   last-change: 2026-07-18T20:37:23Z
-#   contributors: ab5d5bab/main
-# <<< PROVENANCE-STAMP <<<
-
 """workflow_compile — the fixed-shape-TOML-to-kernel-coupled-units compiler
 (design/FABLE-WORKFLOW-UNIT-COMPILER-SPEC.md, commission ledger row 1658, compile target
 ratified row 1659: KERNEL-COUPLED UNITS -- the kernel is the truth, the workflow obeys it).

@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-19T01:17:49Z
-#   last-change: 2026-07-22T00:17:47Z
-#   contributors: ab5d5bab/main, 1fa3ab69/main
-# <<< PROVENANCE-STAMP <<<
-
 """run_fixtures.py -- WDR1 and WDR2, the two `--dry-run` witnesses (design/FABLE-SETUP-TUI-SPEC.md
 2026-07-19 amendment, commission ledger row 1719) that need REAL infra: a live, reachable
 Postgres host and a real boundary_service process. (WDR3 -- a dry run refuses a hostile input

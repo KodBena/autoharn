@@ -1,10 +1,4 @@
 #!/bin/sh
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-14T21:19:44Z
-#   last-change: 2026-07-15T15:14:25Z
-#   contributors: a857c93d/main
-# <<< PROVENANCE-STAMP <<<
-
 # convert-to-submodule.sh -- the CONVERSION path for an EXISTING live-exec-coupled deployment
 # (tracker item deployment-live-exec-coupling, design/ORCH-DEPLOYMENT-PINNING.md's "Migration path
 # for EXISTING deployments"; maintainer commission 2026-07-14 late: "git submodule DEPLOYMENT must

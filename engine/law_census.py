@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-07T17:28:25Z
-#   last-change: 2026-07-14T23:13:19Z
-#   contributors: 37017f46/main, a857c93d/main
-# <<< PROVENANCE-STAMP <<<
-
 """law_census — the machine-readable law census with ratification-depth marking (engine INC 1;
 ruling 110 §5 INC 1, D15/D16/D20).
 

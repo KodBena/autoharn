@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-21T22:35:44Z
-#   last-change: 2026-07-22T00:26:44Z
-#   contributors: 43f77bff/main, 1fa3ab69/main
-# <<< PROVENANCE-STAMP <<<
-
 """seen-red/setup-tui-daemon-selection/run_fixtures.py -- both-polarity witness set for
 design/FABLE-SETUP-TUI-CHECKLIST-SPLIT-SPEC.md: the status-vocabulary split (§2) and
 DaemonSelection/start-daemons (§3), commissioned against the maintainer's field observation g.1

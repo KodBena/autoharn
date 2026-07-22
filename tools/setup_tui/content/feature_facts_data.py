@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-21T22:52:32Z
-#   last-change: 2026-07-21T23:19:47Z
-#   contributors: 43f77bff/main
-# <<< PROVENANCE-STAMP <<<
-
 """tools/setup_tui/feature_facts_data.py -- the DATA half of the feature-facts registry, split
 out of tools/setup_tui/feature_facts.py under law/adr/0012's 2026-07-22 Amendment (P10 -- "data
 is not code"), phase 1 of design/FABLE-SETUP-TUI-FIELD-STRATEGY.md Track 2.2. This module is the

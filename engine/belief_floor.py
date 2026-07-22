@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-21T23:59:52Z
-#   last-change: 2026-07-22T01:41:03Z
-#   contributors: 1fa3ab69/main
-# <<< PROVENANCE-STAMP <<<
-
 """belief_floor -- the SQL FLOOR of the v1 belief-substrate judgments (design/
 FABLE-BELIEF-SUBSTRATE-SPEC.md §2-§3.4, ratified ledger rows 1914/1919): producer ONE of the
 belief-layer differential, a SEPARATE sibling of engine/ledger_floor.py per spec §2.2 item 2.

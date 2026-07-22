@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-07T12:25:31Z
-#   last-change: 2026-07-07T12:25:31Z
-#   contributors: 37017f46/main
-# <<< PROVENANCE-STAMP <<<
-
 """verify_binder — pins row_performed_by's ONE-ACT-MAY-BIND-MANY binding (forecloses finding 39, the
 binder batch-insert artifact; consult 35 (b)). A single act may INSERT several rows (a heredoc), so its
 command carries each batched row's statement; the binder must bind ALL of them, while still binding two

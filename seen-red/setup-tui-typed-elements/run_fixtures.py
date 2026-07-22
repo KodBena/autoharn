@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-22T00:00:00Z
-#   last-change: 2026-07-22T00:43:30Z
-#   contributors: 1fa3ab69/main
-# <<< PROVENANCE-STAMP <<<
-
 """seen-red/setup-tui-typed-elements/run_fixtures.py -- both-polarity proof of the typed UI
 content vocabulary (design/FABLE-SETUP-TUI-TYPED-UI-SPEC.md §5, closing the maintainer's
 observations a/b), census-registered in gates/fixture_census.py.

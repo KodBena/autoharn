@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-18T15:52:40Z
-#   last-change: 2026-07-18T15:52:40Z
-#   contributors: ab5d5bab/main
-# <<< PROVENANCE-STAMP <<<
-
 """boundary_multiplex_config -- the ONE home for the boundary-multiplex TOML config's SHAPE
 (design/FABLE-BOUNDARY-MULTIPLEX-AND-CLI-REBASE-SPEC.md §3; ledger decision row 1631, ratifying
 the spec WITH its §8 defaults: TOML, mandatory `/d/{name}` discriminator even for one

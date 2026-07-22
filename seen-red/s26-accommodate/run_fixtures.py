@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-15T13:41:57Z
-#   last-change: 2026-07-15T13:47:10Z
-#   contributors: a857c93d/main
-# <<< PROVENANCE-STAMP <<<
-
 """run_fixtures.py -- both-polarity proof for kernel/lineage/s26-row-hash-chain.accommodate.sql
 (design/MAINT-MIGRATION-ACCOMMODATIONS-SPEC.md, Fable-authored spec, maintainer-ratified
 2026-07-15; ledger work item s26-accommodation-build). Companion to seen-red/s26-row-hash-chain/

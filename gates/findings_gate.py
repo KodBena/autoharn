@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-06T18:52:55Z
-#   last-change: 2026-07-14T23:19:51Z
-#   contributors: 37017f46/main, a857c93d/main
-# <<< PROVENANCE-STAMP <<<
-
 """findings_gate -- the CLOSE-GATE for the general findings ledger (db/harness/005; WORK-UNIT-
 findings-disposition §2). A close_manifest-registered line (and a pre-commit hook where the increment
 tag is known) that queries OPEN findings and goes RED if any exist: an increment cannot report complete

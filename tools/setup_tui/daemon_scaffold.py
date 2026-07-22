@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-21T22:14:17Z
-#   last-change: 2026-07-21T22:14:17Z
-#   contributors: 43f77bff/main
-# <<< PROVENANCE-STAMP <<<
-
 """tools/setup_tui/daemon_scaffold.py -- feature-scaffold DATA for the daemons a wizard run
 selects (design/FABLE-SETUP-TUI-CHECKLIST-SPLIT-SPEC.md §3): the otelcol-config.yaml content and
 the generated `<dest>/start-daemons` script body. Kept as its OWN module, separate from

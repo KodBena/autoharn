@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-06T15:42:34Z
-#   last-change: 2026-07-18T22:50:46Z
-#   contributors: 37017f46/main, a857c93d/main, ab5d5bab/main
-# <<< PROVENANCE-STAMP <<<
-
 """file_rationalization -- the filing path for the RATIONALIZATION LEDGER (db/harness/002).
 
 This is the APPEND PATH the hack-rationalization-detector skill was missing: the skill directs every

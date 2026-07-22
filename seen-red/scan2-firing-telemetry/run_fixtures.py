@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-14T09:32:19Z
-#   last-change: 2026-07-14T09:32:45Z
-#   contributors: a857c93d/main
-# <<< PROVENANCE-STAMP <<<
-
 """Both-polarity proof for the detector-firing-telemetry build (ledger row 337): the recorder
 (tools/experiments/scan2_firings.py) and the schema gate (gates/scan2_firing_schema.py).
 

@@ -1,10 +1,4 @@
 #!/bin/sh
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-11T00:14:59Z
-#   last-change: 2026-07-14T23:21:43Z
-#   contributors: e4410ef6/main, 3c50e030/main, a857c93d/main
-# <<< PROVENANCE-STAMP <<<
-
 # apply-research-ledger.sh — the operator's/maintainer's ONE scripted step for applying
 # stores/001_research_ledger.sql (the PROJECT-AGNOSTIC measurement-provenance ledger:
 # core.project/core.session + research.instrument/research.reading/research.finding + the

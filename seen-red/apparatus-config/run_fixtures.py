@@ -1,9 +1,3 @@
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-10T21:01:50Z
-#   last-change: 2026-07-10T21:02:10Z
-#   contributors: be693afb/main
-# <<< PROVENANCE-STAMP <<<
-
 """run_fixtures.py -- both-polarity proof for the apparatus.json MECHANISM SWITCHBOARD (Part 1,
 maintainer mandate 2026-07-10): every hook in this project now reads its own mode
 (`mechanisms.<name>.mode`) from `<world>/.claude/apparatus.json` at invocation time -- `"off"`

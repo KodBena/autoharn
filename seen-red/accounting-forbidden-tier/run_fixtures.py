@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-12T13:56:12Z
-#   last-change: 2026-07-12T13:56:12Z
-#   contributors: e4410ef6/main
-# <<< PROVENANCE-STAMP <<<
-
 """run_fixtures — both-polarity live proof for the `forbidden` TIER addition to the `resource:`
 intake validator (tracker item `accounting-stage-a`, design/ORCH-SPEC-RESOURCE-ACCOUNTING.md §3/
 §8 stage A; gates/fixture_census.py REGISTRY entry "accounting-forbidden-tier"). Mirrors

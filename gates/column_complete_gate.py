@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-15T20:16:55Z
-#   last-change: 2026-07-15T20:16:55Z
-#   contributors: a857c93d/main
-# <<< PROVENANCE-STAMP <<<
-
 """column_complete_gate — the mechanical GATE half of the column-complete-view mechanism (work
 item column-complete-gate, vestigial_documentation/design/ORCH-CATEGORICAL-REFACTOR-CONSULT-2026-07-15.md F2 / plan
 step 5). Wraps tools/column_complete.py's catalog functor as a gate, following

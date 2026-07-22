@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-22T02:32:51Z
-#   last-change: 2026-07-22T03:13:10Z
-#   contributors: 1fa3ab69/main, 431cddfa/main
-# <<< PROVENANCE-STAMP <<<
-
 """extract_context — the mechanized world-context extraction the world-context consult designed
 (vestigial_documentation/design/FABLE-WORLD-CONTEXT-MIGRATION-CONSULT-2026-07-19.md, hereafter
 "the consult"; ratifying commission autoharn ledger row 1942, sequencing step 1; lessons banked

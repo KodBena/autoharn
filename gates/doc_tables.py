@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-15T14:11:41Z
-#   last-change: 2026-07-15T14:12:34Z
-#   contributors: a857c93d/main
-# <<< PROVENANCE-STAMP <<<
-
 """doc_tables — the mechanical GFM-table-shape checker (work item doc-table-mechanization,
 maintainer commission 2026-07-15). Wraps `tools/markdown_tables.py` (the single-home GFM table
 parser/renderer/classifier) as a gate, following `gates/link_integrity.py`'s own precedent:

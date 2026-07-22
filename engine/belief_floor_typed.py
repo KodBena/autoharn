@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-22T01:37:10Z
-#   last-change: 2026-07-22T01:37:10Z
-#   contributors: 1fa3ab69/main
-# <<< PROVENANCE-STAMP <<<
-
 """belief_floor_typed -- the s53 TYPED-ARM SQL-floor reader for the belief substrate (design/
 FABLE-BELIEF-SUBSTRATE-SPEC.md v2 Delta B1, ledger rows 1914/1919). Split out of
 engine/belief_floor.py into its own sibling module for the SAME ADR-0007 max_lines headroom

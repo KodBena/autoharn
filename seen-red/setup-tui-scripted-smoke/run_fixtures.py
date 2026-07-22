@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-19T02:44:09Z
-#   last-change: 2026-07-22T03:40:48Z
-#   contributors: ab5d5bab/main, 43f77bff/main, 431cddfa/main
-# <<< PROVENANCE-STAMP <<<
-
 """Both-polarity-adjacent smoke fixture for tools/setup_tui (ledger row 1700's commission):
 drives the setup wizard in `--scripted` mode against scratch destinations under /tmp, exercising
 the PREFLIGHT + VALIDATION REFUSAL legs -- the drift-sensitive surface -- without a live db

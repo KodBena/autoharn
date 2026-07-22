@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-18T04:03:04Z
-#   last-change: 2026-07-18T04:04:46Z
-#   contributors: ab5d5bab/main
-# <<< PROVENANCE-STAMP <<<
-
 """run_fixtures.py -- both-polarity proof for kernel/lineage/s42-row-hash-full-coverage.sql
 (design/FABLE-REFUSAL-RECORDING-AND-HASH-COVERAGE-SPEC.md §6's s42 witness plan, items
 (i)-(vii)). Real infra, no mocks: CLASSIC scaffolds + manual chain applies in the TOY db, torn

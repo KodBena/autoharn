@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-19T01:59:23Z
-#   last-change: 2026-07-19T01:59:23Z
-#   contributors: ab5d5bab/main
-# <<< PROVENANCE-STAMP <<<
-
 """doc_table_generation — wires `tools/experiments/typed_table.py`'s constructor into the
 authoring flow as the ONE home for a constructed table's content (ADR-0012 P1: "every fact has
 exactly one home ... never hand-copied as a literal or re-encoded in a second place"; work item

@@ -1,9 +1,3 @@
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-10T19:37:18Z
-#   last-change: 2026-07-10T20:49:17Z
-#   contributors: be693afb/main
-# <<< PROVENANCE-STAMP <<<
-
 """demurral_detect — the ADR-0013 Rule 3 demurral detector (BACKLOG "Proposed: mechanize the
 ADR-0013 Rule 3 demurral-detector as a Claude hook", 2026-07-09; anticipated by ADR-0000
 Revisit #3 / ADR-0013 Rule 3's own text: "the hack-rationalization detector ... is the

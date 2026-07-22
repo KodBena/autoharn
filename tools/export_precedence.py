@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-16T02:44:15Z
-#   last-change: 2026-07-16T04:03:49Z
-#   contributors: 9a17b6b9/main
-# <<< PROVENANCE-STAMP <<<
-
 """export_precedence -- emit the ledger's IN-FORCE blocks-close precedence edges
 (kernel/lineage/s30-typed-dependency-edges.sql's `edge_type='blocks-close'` work_depends_on rows)
 in `tools/makespan-scheduler/`'s landed `depends_on` input format (scheduler commit 196030d,

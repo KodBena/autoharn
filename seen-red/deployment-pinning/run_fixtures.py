@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-14T21:26:05Z
-#   last-change: 2026-07-15T15:19:56Z
-#   contributors: a857c93d/main
-# <<< PROVENANCE-STAMP <<<
-
 """run_fixtures -- both-polarity live proof for tracker item `deployment-live-exec-coupling`
 (design/ORCH-DEPLOYMENT-PINNING.md; maintainer commission 2026-07-14 late, "git submodule
 DEPLOYMENT must be IDIOT-PROOF"): the three scripts that convert a deployment's operator verbs

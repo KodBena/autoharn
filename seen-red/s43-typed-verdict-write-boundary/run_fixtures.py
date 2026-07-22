@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-18T04:31:13Z
-#   last-change: 2026-07-18T04:32:23Z
-#   contributors: ab5d5bab/main
-# <<< PROVENANCE-STAMP <<<
-
 """run_fixtures.py -- both-polarity proof for kernel/lineage/s43-typed-verdict-write-boundary
 .sql (design/FABLE-REFUSAL-RECORDING-AND-HASH-COVERAGE-SPEC.md §6's s43 witness plan). Real
 infra, no mocks: CLASSIC scaffolds + manual chain applies in the TOY db, one REAL

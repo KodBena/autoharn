@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-12T13:58:46Z
-#   last-change: 2026-07-12T13:58:46Z
-#   contributors: e4410ef6/main
-# <<< PROVENANCE-STAMP <<<
-
 """run_fixtures — both-polarity live proof for the `taxon:`/`interface:` intake-validation
 feature (tracker item `taxonomy-stage-a`, design/ORCH-SPEC-TASK-TAXONOMY.md §3/§7 Stage A;
 gates/fixture_census.py REGISTRY entry "taxonomy-intake-validation"). Mirrors

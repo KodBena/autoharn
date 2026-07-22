@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-15T21:21:54Z
-#   last-change: 2026-07-15T21:21:54Z
-#   contributors: a857c93d/main
-# <<< PROVENANCE-STAMP <<<
-
 """run_fixtures.py -- both-polarity proof for kernel/lineage/s33-composite-discharge.sql
 (design/FABLE-COMPOSITE-DISCHARGE-SPEC.md, Fable-authored spec, RATIFIED 2026-07-15; ledger item
 composite-parent-autodischarge, claimed by the orchestrator) + bootstrap/templates/led.tmpl's

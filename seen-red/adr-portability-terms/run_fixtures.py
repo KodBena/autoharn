@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-13T20:02:31Z
-#   last-change: 2026-07-14T18:00:50Z
-#   contributors: 3c942a60/main, a857c93d/main
-# <<< PROVENANCE-STAMP <<<
-
 """run_fixtures.py -- both-polarity proof for gates/adr_portability_terms.py (the ADR
 portability refactor's §5 A1 acceptance gate; design/MAINT-ADR-PORTABILITY-SPEC.md §8 WP-0;
 gates/fixture_census.py REGISTRY entry "adr-portability-terms").

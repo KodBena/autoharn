@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-18T10:32:17Z
-#   last-change: 2026-07-18T10:34:01Z
-#   contributors: ab5d5bab/main
-# <<< PROVENANCE-STAMP <<<
-
 """run_fixtures.py -- both-polarity witness for kernel/lineage/s47-claim-on-closed-refusal.sql
 (design/FABLE-CLAIM-ON-CLOSED-REFUSAL-SPEC.md §3). Real infra, no mocks: scratch schema pairs in
 the toy db, torn down before and after. Never touches kernel/, bootstrap/, or any live world.

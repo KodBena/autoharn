@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-11T14:41:23Z
-#   last-change: 2026-07-12T08:42:24Z
-#   contributors: e4410ef6/main
-# <<< PROVENANCE-STAMP <<<
-
 """contemp_audit -- Part 2 of vestigial_documentation/design/ORCH-CONTEMPORANEITY-AUDIT.md: the first-class correlation VERB
 the maintainer commissioned ("we want a tool that can automatically run this correlation, in a
 first-class way ... time deltas between actual events and recorded events", BACKLOG

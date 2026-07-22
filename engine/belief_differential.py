@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-22T00:17:35Z
-#   last-change: 2026-07-22T00:21:10Z
-#   contributors: 1fa3ab69/main
-# <<< PROVENANCE-STAMP <<<
-
 """belief_differential -- the 'belief' layer's differential glue (design/
 FABLE-BELIEF-SUBSTRATE-SPEC.md §2.2/§3.4, ratified ledger rows 1914/1919), split out of
 engine/ledger_differential.py into its own sibling module SOLELY because that file's

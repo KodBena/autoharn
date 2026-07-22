@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-19T00:00:00Z
-#   last-change : 2026-07-19T00:00:00Z
-#   contributors: ab5d5bab/main
-# <<< PROVENANCE-STAMP <<<
-
 """seen-red/setup-tui-textual-shell/run_fixtures.py -- WX1-WX6, the Textual-shell build's own
 witnesses (design/FABLE-SETUP-TUI-TEXTUAL-SPEC.md §4, commission ledger row 1818).
 

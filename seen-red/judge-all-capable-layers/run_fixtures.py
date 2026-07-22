@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-18T07:46:50Z
-#   last-change: 2026-07-18T07:47:16Z
-#   contributors: ab5d5bab/main
-# <<< PROVENANCE-STAMP <<<
-
 """run_fixtures.py -- both-polarity witness for ledger row 1516 (judge-all-capable-layers):
 bare `./judge`/`ledger_differential.py` (no --layer) auto-detects each known layer's capability
 on the target and runs EVERY capable layer, one verdict line per layer; an incapable layer

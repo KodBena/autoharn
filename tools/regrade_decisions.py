@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-16T03:29:13Z
-#   last-change: 2026-07-16T04:25:05Z
-#   contributors: 9a17b6b9/main
-# <<< PROVENANCE-STAMP <<<
-
 """regrade_decisions -- interactive, one-row-at-a-time retro-grading of every IN-FORCE ledger
 decision row that has no `decision_grade` yet (kernel/lineage/s36-decision-grade.sql, design/
 FABLE-GRADED-DECISIONS-SPEC.md). Maintainer-commissioned 2026-07-16 (ledger item

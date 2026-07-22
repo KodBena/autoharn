@@ -1,10 +1,4 @@
 #!/bin/sh
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-15T05:31:18Z
-#   last-change: 2026-07-15T05:33:23Z
-#   contributors: a857c93d/main
-# <<< PROVENANCE-STAMP <<<
-
 # provision-db.sh — generate (never execute) the pg_hba fragment + provisioning SQL an operator
 # needs to stand up ONE new world's Postgres role/database, matching bootstrap/new-project.sh
 # --new-world's naming template EXACTLY (schema=<NAME>, kern=<NAME>_kernel, role=<NAME>_rw — see

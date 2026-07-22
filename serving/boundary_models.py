@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-18T07:43:25Z
-#   last-change: 2026-07-18T18:07:21Z
-#   contributors: ab5d5bab/main
-# <<< PROVENANCE-STAMP <<<
-
 """boundary_models -- pydantic request/response shapes for serving/boundary_service.py
 (design/FABLE-LEDGER-BOUNDARY-SERVICE-SPEC.md §2, §4).
 

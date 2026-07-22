@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-07T01:47:54Z
-#   last-change: 2026-07-07T01:48:15Z
-#   contributors: 37017f46/main
-# <<< PROVENANCE-STAMP <<<
-
 """Seen-red specimen for the append-only-integrity gate (forecloses findings 6 + 15, the append-only
 trigger class). Builds a THROWAWAY scratch schema with an audit-spine-shaped table that is MISSING its
 append-only guard — exactly the finding-6/15 shape — and runs the gate's own check against it. The gate

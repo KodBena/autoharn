@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-18T18:43:30Z
-#   last-change: 2026-07-18T18:44:56Z
-#   contributors: ab5d5bab/main
-# <<< PROVENANCE-STAMP <<<
-
 """seen-red/boundary-cli-rebase/run_fixtures.py -- WM5/WM6, design/
 FABLE-BOUNDARY-MULTIPLEX-AND-CLI-REBASE-SPEC.md §7 (ratified ledger row 1631; the read-surface
 amendment, row 1652, is what makes §5's build possible at all -- see design/

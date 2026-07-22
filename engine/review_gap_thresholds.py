@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-12T07:47:03Z
-#   last-change: 2026-07-12T07:51:18Z
-#   contributors: e4410ef6/main
-# <<< PROVENANCE-STAMP <<<
-
 """review_gap_thresholds -- the ONE home (ADR-0012 P1) of the content-free-review-statement
 threshold shared, single-homedly, by every consumer that needs to answer "is this review
 statement content-free?":

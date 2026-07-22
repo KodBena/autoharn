@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-12T00:37:40Z
-#   last-change: 2026-07-12T00:43:20Z
-#   contributors: e4410ef6/main
-# <<< PROVENANCE-STAMP <<<
-
 """rename_doc — the per-document, ADR-0012-composable rename primitive for the
 doc-audience-taxonomy work item (tracker slug `doc-audience-taxonomy`; maintainer mechanism
 2026-07-12, orchestrator's three strengthenings — see BACKLOG.md and CLAUDE.md's

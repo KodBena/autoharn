@@ -1,9 +1,3 @@
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-10T19:47:21Z
-#   last-change: 2026-07-10T19:47:21Z
-#   contributors: be693afb/main
-# <<< PROVENANCE-STAMP <<<
-
 """demurral_eval — the ADR-0013 Rule 3 demurral-detector's regression harness (BACKLOG "Proposed:
 mechanize the ADR-0013 Rule 3 demurral-detector as a Claude hook", 2026-07-09, Part 2/3).
 

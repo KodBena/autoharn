@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-11T15:10:56Z
-#   last-change: 2026-07-11T15:10:56Z
-#   contributors: e4410ef6/main
-# <<< PROVENANCE-STAMP <<<
-
 """Seen-red specimen for gates/doc_shapes.py (the zero-context-reader discipline's
 deterministic core, design/ADR-DRAFT-documentation-discipline.md Rule 3;
 gates/fixture_census.py REGISTRY entry "doc-shapes"). Proves, both polarities, on live

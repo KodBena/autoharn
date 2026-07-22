@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-15T20:19:45Z
-#   last-change: 2026-07-22T01:45:52Z
-#   contributors: a857c93d/main, 9a17b6b9/main, ab5d5bab/main, 1fa3ab69/main
-# <<< PROVENANCE-STAMP <<<
-
 """kind_shape_manifest_gate -- MANIFEST + GATE for the kernel ledger's kind-scoped shape
 invariants (ledger item `kind-shape-manifest-gate`, per
 vestigial_documentation/design/ORCH-CATEGORICAL-REFACTOR-CONSULT-2026-07-15.md finding F5 / plan step 6).

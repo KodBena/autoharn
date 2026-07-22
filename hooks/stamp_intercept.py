@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-09T12:38:35Z
-#   last-change: 2026-07-14T01:07:32Z
-#   contributors: be693afb/main, e4410ef6/main, a857c93d/main
-# <<< PROVENANCE-STAMP <<<
-
 """stamp_intercept — the WRITE-TIME interception hook (BACKLOG ffafa59). A PreToolUse hook on Bash:
 when this hook is WIRED (a deployment record is located, OR STAMP_SECRET is explicitly set — see
 SAFETY below) it computes the interception stamp HMAC(secret, session_id||agent_id||ts) and REWRITES

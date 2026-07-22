@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-06T14:29:22Z
-#   last-change: 2026-07-06T15:31:46Z
-#   contributors: 37017f46/main
-# <<< PROVENANCE-STAMP <<<
-
 """dto_authentic_verify — DERIVE-ONLY re-run of the DTO scratch standing derivation.
 
 Reads the CURRENT `marriage_dto_scratch` state and runs the T_now/DTO/assumes closures WITHOUT

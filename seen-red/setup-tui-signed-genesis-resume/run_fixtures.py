@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-19T20:08:43Z
-#   last-change: 2026-07-21T19:41:50Z
-#   contributors: ab5d5bab/main, 43f77bff/main
-# <<< PROVENANCE-STAMP <<<
-
 """seen-red/setup-tui-signed-genesis-resume/run_fixtures.py -- PHASE-2 REPLACEMENT (design/
 FABLE-SETUP-TUI-PURE-CORE-SPEC.md, commission ledger rows 1823 point 2 / 1825 / 1835) of this
 census slot's prior content.

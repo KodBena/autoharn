@@ -1,9 +1,3 @@
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-06T14:41:46Z
-#   last-change: 2026-07-06T15:57:25Z
-#   contributors: 37017f46/main
-# <<< PROVENANCE-STAMP <<<
-
 """test_ledger_support -- the qualification gates for Increment 2 (the transitive support-exposure
 closure + flag-discharge vocabulary; WORK-UNIT-exposure-discharge.md). Every load-bearing claim is
 a mechanized check:

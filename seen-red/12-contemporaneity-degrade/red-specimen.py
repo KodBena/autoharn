@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-07T02:01:17Z
-#   last-change: 2026-07-07T02:01:17Z
-#   contributors: 37017f46/main
-# <<< PROVENANCE-STAMP <<<
-
 """Seen-red specimen for the contemporaneity-degrade gate (forecloses finding 12). The fix distinguishes
 could-not-test (exit 3) from tested-clean (exit 0). This reproduces the pre-fix exit rule — `exit(0)` on
 a degrade — and shows it renders an UNREGISTERED (N/A) target with the SAME code as a clean run, so a

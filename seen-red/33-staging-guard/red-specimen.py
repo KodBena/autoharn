@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-07T03:29:13Z
-#   last-change: 2026-07-14T22:20:21Z
-#   contributors: 37017f46/main, a857c93d/main
-# <<< PROVENANCE-STAMP <<<
-
 """Seen-red specimen for the staging-guard gate (forecloses finding 33, commit-scope-sweep). Reproduces
 the 420e5bf defect: the committer declares the paths THIS commit owns, but the staged index also holds a
 concurrently-authored BACKLOG.md that was staged earlier and never unstaged — a bare `git commit` would

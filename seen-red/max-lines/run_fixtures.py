@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-21T20:17:19Z
-#   last-change: 2026-07-21T20:17:19Z
-#   contributors: 43f77bff/main
-# <<< PROVENANCE-STAMP <<<
-
 """seen-red/max-lines/run_fixtures.py -- both-polarity proof of gates/max_lines.py (ADR-0007
 mechanization; design/FABLE-SETUP-TUI-FIELD-STRATEGY.md Track 1 item 2), census-registered in
 gates/fixture_census.py under "max-lines".

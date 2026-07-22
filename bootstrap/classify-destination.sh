@@ -1,10 +1,4 @@
 #!/bin/sh
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-21T21:44:24Z
-#   last-change: 2026-07-21T22:00:25Z
-#   contributors: 43f77bff/main
-# <<< PROVENANCE-STAMP <<<
-
 # bootstrap/classify-destination.sh -- shell reproduction of tools/setup_tui/destination.py's
 # classify_destination (design/FABLE-SETUP-TUI-DESTINATION-STATE-SPEC.md §3's cross-language
 # floor, ADR-0012 P7: "generate-or-compile-from-one-source > build-time lint > runtime parity",

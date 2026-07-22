@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-18T09:21:45Z
-#   last-change: 2026-07-18T09:22:04Z
-#   contributors: ab5d5bab/main
-# <<< PROVENANCE-STAMP <<<
-
 """run_fixtures.py -- both-polarity witness for kernel/lineage/s46-credited-views.sql
 (design/FABLE-DEFEAT-PIPELINE-SPEC.md §8, and its §12 W12 live leg -- UNEXERCISED at that
 spec's own authoring, discharged here on scratch). Real infra, no mocks: scratch schema pairs

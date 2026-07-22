@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-09T13:53:12Z
-#   last-change: 2026-07-09T13:57:16Z
-#   contributors: be693afb/main
-# <<< PROVENANCE-STAMP <<<
-
 """run_fixtures.py — both-polarity proof for hooks/stamp_intercept.py's STAMP_SECRET fail-closed
 fix (BACKLOG "Run-2 integrity finding", 2026-07-09).
 

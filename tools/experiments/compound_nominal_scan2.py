@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-12T23:51:18Z
-#   last-change: 2026-07-14T09:40:55Z
-#   contributors: 3c50e030/main, a857c93d/main
-# <<< PROVENANCE-STAMP <<<
-
 """compound_nominal_scan2 — EXPERIMENT, NOT A WIRED GATE (second attempt; supersedes-or-
 confirms vestigial_documentation/design/ORCH-COMPOUND-NOMINAL-DETECTION.md — the companion design note is
 vestigial_documentation/design/ORCH-COMPOUND-NOMINAL-DETECTION-2.md).

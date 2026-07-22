@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-13T17:42:07Z
-#   last-change: 2026-07-19T02:02:33Z
-#   contributors: 3c50e030/main, a857c93d/main, ab5d5bab/main
-# <<< PROVENANCE-STAMP <<<
-
 """typed_table — the constructor (work item typed-table-constructor-experiment; see
 vestigial_documentation/design/ORCH-TYPED-TABLE-EXPERIMENT.md for the original write-up and its
 findings-shaped status). ADOPTED, PARTIALLY, 2026-07-19 (work item

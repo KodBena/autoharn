@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-06T16:54:20Z
-#   last-change: 2026-07-14T01:24:26Z
-#   contributors: 37017f46/main, be693afb/main, a857c93d/main
-# <<< PROVENANCE-STAMP <<<
-
 """acts_edb -- the ACTS EDB + SQL floor for the ledger_acts.lp consumers (consult 25 §2.3).
 
 Producer ONE (SQL floor) and the EDB feed for producer TWO (ASP ledger_acts.lp) of the acts<->ledger

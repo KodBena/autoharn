@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-22T00:00:00Z
-#   last-change: 2026-07-22T00:20:33Z
-#   contributors: 1fa3ab69/main
-# <<< PROVENANCE-STAMP <<<
-
 """tools/setup_tui/elements.py -- the closed six-element UI content vocabulary
 (design/FABLE-SETUP-TUI-TYPED-UI-SPEC.md §1/§2, closing the maintainer's observation a: "walls
 of text make reading super-hard; should have a limit on sub-element text width and clearly

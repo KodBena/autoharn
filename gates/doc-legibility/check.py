@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-11T14:35:32Z
-#   last-change: 2026-07-11T14:49:43Z
-#   contributors: e4410ef6/main
-# <<< PROVENANCE-STAMP <<<
-
 """doc-legibility gate — the incident-born `*_violations` check for stranded acronyms.
 
 Class, not instance (ADR-0011 Rule 4): instead of defining acronyms one at a time, this FAILS the

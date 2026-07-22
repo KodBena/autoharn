@@ -1,9 +1,3 @@
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-18T21:32:16Z
-#   last-change: 2026-07-22T01:56:46Z
-#   contributors: ab5d5bab/main, 43f77bff/main, 1fa3ab69/main
-# <<< PROVENANCE-STAMP <<<
-
 """tools/setup_tui/probes.py -- the live-connection/liveness probes honesty rule 2 requires
 ("a 'press enter when done' gate that VERIFIES the effect... rather than trusting the
 keypress"). Every probe here re-checks reality; none of them trust an operator's say-so.

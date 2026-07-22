@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-11T20:02:33Z
-#   last-change: 2026-07-11T22:01:12Z
-#   contributors: e4410ef6/main
-# <<< PROVENANCE-STAMP <<<
-
 """run_fixtures.py -- both-polarity proof for bootstrap/templates/verify-commission.tmpl
 (design/MAINT-GPG-TRUST-LAYER.md §3, Rung 2). Real infra, no mocks: a throwaway `--new-world` scaffold
 in the toy db, a throwaway GNUPGHOME (Ed25519 test key, generated fresh per run, clearly marked

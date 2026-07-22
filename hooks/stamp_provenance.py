@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-01T19:09:04Z
-#   last-change: 2026-07-14T01:13:17Z
-#   contributors: 3d7629dd/main, a737a042/main, a737a042/wf_40350274-0a4, 306d4c8f/main, a857c93d/main
-# <<< PROVENANCE-STAMP <<<
-
 """stamp_provenance.py — PostToolUse hook: sign every changed source file in its header.
 
 MANDATE (prime-directive, auditability). Every time Claude Code changes a file, that file's

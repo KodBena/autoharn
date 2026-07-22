@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-06T18:14:54Z
-#   last-change: 2026-07-14T23:13:30Z
-#   contributors: 37017f46/main, a857c93d/main
-# <<< PROVENANCE-STAMP <<<
-
 """acts_join -- the REAL acts.act <-> s15 MATCHING DERIVER (consult 25 §7, Increment-5; finding-4's
 load-bearing work).
 

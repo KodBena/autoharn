@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-11T17:02:12Z
-#   last-change: 2026-07-11T21:33:23Z
-#   contributors: e4410ef6/main
-# <<< PROVENANCE-STAMP <<<
-
 """pretooluse_doc_shapes_gate — the world-side, live-write-time transport of
 gates/doc_shapes.py (ADR-0017's deterministic zero-context-reader core), commissioned so a
 scaffolded world can get the same measured-sound checks (standalone fragment paragraphs; bare

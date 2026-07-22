@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-11T19:50:13Z
-#   last-change: 2026-07-11T21:07:31Z
-#   contributors: e4410ef6/main
-# <<< PROVENANCE-STAMP <<<
-
 """run_fixtures.py -- both-polarity proof for ../../attest-tags (design/MAINT-GPG-TRUST-LAYER.md §2,
 Rung 1). Real infra, no mocks: a throwaway GNUPGHOME (Ed25519 test key, generated fresh per run,
 clearly marked test-only) plus a throwaway scratch git repository, both under this process's own

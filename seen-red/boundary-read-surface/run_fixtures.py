@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-18T18:13:30Z
-#   last-change: 2026-07-18T18:51:22Z
-#   contributors: ab5d5bab/main
-# <<< PROVENANCE-STAMP <<<
-
 """seen-red/boundary-read-surface/run_fixtures.py -- WR1-WR5, design/
 FABLE-BOUNDARY-READ-SURFACE-SPEC.md §"Witnesses" (ratified ledger decision row 1652, amending
 design/FABLE-BOUNDARY-MULTIPLEX-AND-CLI-REBASE-SPEC.md, ledger row 1631). Real infra, no mocks:

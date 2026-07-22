@@ -1,10 +1,4 @@
 #!/bin/sh
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-12T18:06:58Z
-#   last-change: 2026-07-18T16:55:50Z
-#   contributors: 3c50e030/main, a857c93d/main, ab5d5bab/main
-# <<< PROVENANCE-STAMP <<<
-
 # freeze-at-stamp.sh -- produce a "tree correlated with db frozen in time": a git tree pinned at
 # one commit PLUS this repo's own tracker (the autoharn root ledger) truncated to the same
 # instant, wired together so the frozen dest's own ./pickup/./led/./judge/etc. read ONLY the

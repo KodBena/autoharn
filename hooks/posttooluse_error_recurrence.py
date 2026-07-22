@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-18T22:24:49Z
-#   last-change: 2026-07-18T22:24:49Z
-#   contributors: ab5d5bab/main
-# <<< PROVENANCE-STAMP <<<
-
 """hooks/posttooluse_error_recurrence.py -- the SELF-TRIGGERING half of the error-capture
 discipline (design/FABLE-ERROR-RECURRENCE-HOOK-SPEC.md, ledger row 1697; the manual half --
 "cross-check the ledger for a `defect:` prior before fixing anything new" -- is

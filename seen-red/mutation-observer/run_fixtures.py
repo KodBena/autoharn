@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-10T21:00:12Z
-#   last-change: 2026-07-10T21:00:25Z
-#   contributors: be693afb/main
-# <<< PROVENANCE-STAMP <<<
-
 """run_fixtures.py -- both-polarity proof for hooks/posttooluse_mutation_observer.py (Part 2,
 maintainer mandate 2026-07-10: the bash-mutation OBSERVER that closes the epistemic half of the
 gap hooks/pretooluse_change_gate.py's `bash_mutates_governed()` command-shape enumeration cannot

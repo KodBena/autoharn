@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-22T00:05:22Z
-#   last-change: 2026-07-22T00:08:45Z
-#   contributors: 1fa3ab69/main
-# <<< PROVENANCE-STAMP <<<
-
 """run_fixtures.py -- both-polarity witness for design/FABLE-BELIEF-SUBSTRATE-SPEC.md's v1
 belief substrate (§2, §7.1's witness plan; ratified ledger rows 1914/1919). Real infra, no
 mocks: CLASSIC scaffolds + `led decision`-written v1 belief rows in the TOY db (the exact

@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-12T16:26:27Z
-#   last-change: 2026-07-12T16:26:47Z
-#   contributors: 3c50e030/main
-# <<< PROVENANCE-STAMP <<<
-
 """run_fixtures.py -- both-polarity proof for kernel/lineage/s27-chain-high-water.sql +
 bootstrap/templates/verify-chain.tmpl's tail-deletion-witness comparison (tracker item
 `s26-tail-deletion-witness`, decision row 192). Real infra, no mocks.

@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-19T19:35:25Z
-#   last-change: 2026-07-19T19:35:25Z
-#   contributors: ab5d5bab/main
-# <<< PROVENANCE-STAMP <<<
-
 """seen-red/setup-tui-pure-core-foundation/run_fixtures.py -- both-polarity proof of
 tools/setup_tui/plan.py + tools/setup_tui/commit_executor.py (design/FABLE-SETUP-TUI-PURE-CORE-
 SPEC.md, commission ledger rows 1823 point 2 / 1825), census-registered in gates/fixture_census.py.

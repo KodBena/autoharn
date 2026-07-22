@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-14T09:31:45Z
-#   last-change: 2026-07-14T09:31:45Z
-#   contributors: a857c93d/main
-# <<< PROVENANCE-STAMP <<<
-
 """scan2_firing_schema — mechanizes the shape claim of tools/experiments/scan2_firings.py
 (ledger row 337, "detector-firing-telemetry"): a firing/disposition record is a CHECKED
 property, not just an asserted convention (ADR-0012 cancer G — load-bearing knowledge left in

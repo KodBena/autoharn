@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-18T16:15:17Z
-#   last-change: 2026-07-18T16:15:17Z
-#   contributors: ab5d5bab/main
-# <<< PROVENANCE-STAMP <<<
-
 """run_fixtures -- both-polarity live proof for ledger item `resolve-violation-class-ambiguity`
 (gates/fixture_census.py REGISTRY entry "resolve-violation-class-ambiguity").
 

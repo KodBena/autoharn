@@ -1,0 +1,9 @@
+Captured 2026-07-22, running seen-red/strip-provenance-banners/run_fixtures.py against
+tools/strip_provenance_banners.py (the retirement tool for ledger row 1903/1904's banner
+strip). Exit code: 0 -- both RED cases below exercise the tool's refusal paths (a naive
+bare-substring stripper would have corrupted both; the structural recognizer does not).
+
+RED  ok: a-content-mention-preserved -- prose mention left byte-identical
+RED  ok: b-malformed-banner-flagged -- hand-damaged banner refused untouched
+GREEN ok: c-idempotent-second-run -- strip then no-op, zero further churn
+ALL CASES OK -- strip-provenance-banners both polarities + idempotency, zero residue

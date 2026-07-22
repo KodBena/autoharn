@@ -1,9 +1,3 @@
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-06T16:58:38Z
-#   last-change: 2026-07-18T10:54:24Z
-#   contributors: 37017f46/main, a857c93d/main, ab5d5bab/main
-# <<< PROVENANCE-STAMP <<<
-
 """test_ledger_acts -- the acts<->ledger consumers (ledger_acts.lp / acts_edb.py) against the
 pre-registered oracle (harness/e15-build/PRE-REGISTERED-expectations.md Part 2), and the byte-identity
 non-foreclosure proof (§1.6). The scratch runner ledger_acts_scratch.py is the executable oracle; this

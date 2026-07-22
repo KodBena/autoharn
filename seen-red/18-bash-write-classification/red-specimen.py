@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-07T01:55:15Z
-#   last-change: 2026-07-07T01:55:15Z
-#   contributors: 37017f46/main
-# <<< PROVENANCE-STAMP <<<
-
 """Seen-red specimen for the bash-write-classification gate (forecloses finding 18). Reproduces the
 pre-fix classifier — the deriver recognized a fenced WRITE only when it was a Write tool, so a Bash
 redirection/tee wrote a file with NO write act. The naive classifier below returns None for every Bash

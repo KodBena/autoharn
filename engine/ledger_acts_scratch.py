@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-06T16:55:41Z
-#   last-change: 2026-07-06T23:15:54Z
-#   contributors: 37017f46/main
-# <<< PROVENANCE-STAMP <<<
-
 """ledger_acts_scratch -- the apparatus-authored exercise of the acts<->ledger audit consumers
 (consult 25 §2.3; ledger_acts.lp), on MY OWN scratch lineage, with BOTH producers (ledger_acts.lp
 ASP and acts_edb.acts_floor_atoms CTE mirror) differentialed bit-identically over an HONEST and a

@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-12T12:42:33Z
-#   last-change: 2026-07-12T22:35:34Z
-#   contributors: e4410ef6/main, 3c50e030/main
-# <<< PROVENANCE-STAMP <<<
-
 """run_fixtures.py -- both-polarity proof that a FULL-ROW DELETION (not a content alteration --
 seen-red/s26-row-hash-chain/run_fixtures.py already covers that) is caught by kernel/lineage/
 s26-row-hash-chain.sql's row_hash chain, and an honest statement of the ONE case it structurally

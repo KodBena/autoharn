@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-09T13:36:11Z
-#   last-change: 2026-07-22T02:38:39Z
-#   contributors: be693afb/main, e4410ef6/main, 3c50e030/main, 3c942a60/main, a857c93d/main, ab5d5bab/main, 43f77bff/main, 1fa3ab69/main
-# <<< PROVENANCE-STAMP <<<
-
 """fixture_census — mechanizes mandate §6's "every migrated gate's seen-red still proves it
 can fail" (manifest [C20]). A gate never seen red is a claim (ADR-0011); this gate makes the
 SEEN-RED corpus a checked property so a gate cannot be added, or a seen-red silently orphaned,
@@ -216,6 +210,7 @@ REGISTRY: dict[str, str] = {
     "setup-tui-navigation":             "seen-red/setup-tui-navigation/run_fixtures.py",
     "setup-tui-typed-elements":         "seen-red/setup-tui-typed-elements/run_fixtures.py",
     "setup-tui-config-file":            "seen-red/setup-tui-config-file/run_fixtures.py",
+    "strip-provenance-banners":         "seen-red/strip-provenance-banners/run_fixtures.py",
     # panel-disposition / panel-cosign DEREGISTERED (2026-07-15, TASK C, commission item 3):
     # both suites ported to the standalone SPA repo's own tests/ (test_disposition.py,
     # test_cosign_live.py in KodBena/autoharn-panel) when the PoC moved out of panel/ into its

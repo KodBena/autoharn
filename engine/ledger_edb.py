@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-06T05:33:12Z
-#   last-change: 2026-07-21T23:58:28Z
-#   contributors: 37017f46/main, be693afb/main, a857c93d/main, 9a17b6b9/main, ab5d5bab/main, 1fa3ab69/main
-# <<< PROVENANCE-STAMP <<<
-
 """ledger_edb -- the single home for "what the ledger looks like to a logic engine"
 (design ORCH-LEDGER-LOGIC-MARRIAGE.md §3; ADR-0012 P1). The fact-mining-side analog of
 `contra_asp.edb_from_claims`, exporting a typed EDB from any ledger target for the

@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-14T00:00:00Z
-#   last-change: 2026-07-14T18:08:54Z
-#   contributors: a857c93d/main
-# <<< PROVENANCE-STAMP <<<
-
 """run_fixtures.py -- both-polarity proof for gates/adr_bare_p_label.py (the mechanical
 bare-P-label detector; work item adr-bare-p-label-detector, this project's tracker, ledger
 row 573; gates/fixture_census.py REGISTRY entry "adr-bare-p-label").

@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
-#   first-seen : 2026-07-18T06:36:43Z
-#   last-change: 2026-07-18T06:37:21Z
-#   contributors: ab5d5bab/main
-# <<< PROVENANCE-STAMP <<<
-
 """run_fixtures.py -- both-polarity witness for ../../otel-attest (design/FABLE-OTEL-SENTRY-SPEC.md
 §4-§7, Amendments A1/A2), covering the review-adjudicated fix pass (ledger row 1505, work item
 otel-attest-review-fixes). Real infra, no mocks: CLASSIC scaffolds through s41 in the TOY db
