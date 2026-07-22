@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-19T20:05:03Z
-#   last-change: 2026-07-22T01:57:56Z
-#   contributors: ab5d5bab/main, 43f77bff/main, 1fa3ab69/main
+#   last-change: 2026-07-22T03:46:54Z
+#   contributors: ab5d5bab/main, 43f77bff/main, 1fa3ab69/main, 431cddfa/main
 # <<< PROVENANCE-STAMP <<<
 
 """tools/setup_tui/screens.py -- the eleven screens, PHASE 2 (design/FABLE-SETUP-TUI-PURE-CORE-
@@ -70,7 +70,7 @@ from tools.setup_tui.content import screens_data as SD
 from tools.setup_tui.elements import Heading, Note, Paragraph, Rule, Table
 from tools.setup_tui.plan import (BackgroundAct, CommandAct, DaemonSelection, Plan, PlanEntry,
                                    WriteAct)
-from tools.setup_tui.runner import run_command
+from tools.setup_tui.runner import legacy_led_path, resolve_led, run_command
 from tools.setup_tui.ui import ScriptedUi
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -667,7 +667,7 @@ def screen_principals_authority(ui, cl, state):
         # AUTOHARN_COMPLETE guarantees legacy/led (classifier rule, spec §2) -- the private
         # isfile probe folds into the classification rather than being re-derived (spec §3).
         cl.add("principals-authority", "legacy/led present", ck.WITNESSED,
-               os.path.join(dest, "legacy", "led"))
+               legacy_led_path(dest))
         try:
             existing = principals_authority.list_principals(dest)
         except Exception as exc:  # noqa: BLE001 -- a read-only probe; report, never crash the flow
@@ -767,7 +767,7 @@ def screen_principals_authority(ui, cl, state):
                    f"pre-registration trap (spec WP3)."))
             if not ui.confirm(f"Register '{role}' now, in-flow, so the charter can proceed?",
                                default=True):
-                manual = (f"{os.path.join(dest, 'legacy', 'led')} register-principal {role} "
+                manual = (f"{legacy_led_path(dest)} register-principal {role} "
                           f"<class> --purpose \"<why>\", then retry this charter")
                 ui.emit(Note(f"  REFUSED: charter left unregistered -- manual command: {manual}", tone="refusal"))
                 cl.add("principals-authority", f"charter '{role}' (unregistered, declined)",
@@ -837,7 +837,7 @@ def screen_signed_genesis(ui, cl, state):
     else:
         keys_dir = os.path.join(dest, "keys")
         verify_bin = os.path.join(dest, "verify-commission")
-        legacy_led = os.path.join(dest, "legacy", "led")
+        legacy_led = legacy_led_path(dest)
         checks = (("keys/", os.path.isdir(keys_dir)), ("verify-commission", os.path.isfile(verify_bin)),
                   ("legacy/led", os.path.isfile(legacy_led)))
         missing = [name for name, ok in checks if not ok]
@@ -1323,17 +1323,17 @@ def screen_hydration(ui, cl, state):
     state["hydration_engaged"] = True  # config-file self-save's own "was this screen engaged"
     dest = state.get("dest") or ui.ask_text("Destination directory (with a led shim)")
     state["dest"] = dest
-    led = os.path.join(dest, "led")
-    if not os.path.isfile(led):
-        if state.get("dest_would_exist"):
-            cl.add("hydration", "led present", ck.DRY_SKIPPED,
-                   f"'{led}' queued earlier in this run (written by birth) -- not "
-                   f"independently checkable read-only, recorded honestly rather than faked")
-        else:
-            ui.emit(Note(f"  REFUSED: no ./led at {led} -- hydration writes only through led (v1 "
-                   f"boundary), and none was found.", tone="refusal"))
-            cl.add("hydration", "led present", ck.WITNESSED, f"RED: {led} not found")
+    if state.get("dest_would_exist"):
+        led = legacy_led_path(dest)  # birth still QUEUED -- scaffold's own guarantee (legacy_led_path docstring)
+        cl.add("hydration", "led present", ck.DRY_SKIPPED,
+               f"'{led}' queued earlier in this run (written by birth) -- not independently checkable read-only, recorded honestly rather than faked")
+    else:
+        led = resolve_led(dest)  # resolve_led docstring (cites _find_led): was always served ./led, halting wherever boundary was declined (row 1942)
+        if led is None:
+            ui.emit(Note(f"  REFUSED: no led/legacy-led found under {dest} -- neither was found.", tone="refusal"))
+            cl.add("hydration", "led present", ck.WITNESSED, f"RED: no led under {dest}")
             return state
+        cl.add("hydration", "led present", ck.WITNESSED, led)
 
     plan = _plan(state)
     selected_fragments: list[str] = []
