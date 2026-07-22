@@ -3,18 +3,22 @@
 (ADR-0007 / `gates/max_lines.py`: `widgets.py` was already at 385 lines, no baseline headroom to
 grow past 400 -- a new, composed file rather than a ratchet).
 
-Extends `widgets.build_field_widget`'s bare `RadioSet` rendering with the SAME filter-above-
-threshold idiom `MultiChoiceFieldWidget` already has for checkbox catalogs (`filter_threshold.
-FILTER_THRESHOLD`) -- cycle-2 AUDIT.md MINOR finding #3: "the competence/relation/charter
-principal pickers are ChoiceFields with no equivalent of MULTICHOICE_FILTER_THRESHOLD ... a
-growing principal roster renders as an ever-longer unfiltered RadioSet."
+Extends `widget_primitives.build_field_widget`'s bare `RadioSet` rendering with the SAME
+filter-above-threshold idiom `MultiChoiceFieldWidget` already has for checkbox catalogs
+(`filter_threshold.FILTER_THRESHOLD`) -- cycle-2 AUDIT.md MINOR finding #3: "the
+competence/relation/charter principal pickers are ChoiceFields with no equivalent of
+MULTICHOICE_FILTER_THRESHOLD ... a growing principal roster renders as an ever-longer unfiltered
+RadioSet."
 
 SAME widget id contract as the bare `RadioSet` this replaces (`field_widget_id(f.name)`) -- so
 `panes.SectionPane`/`actions.ActionPane`'s own `_find_field`/`on_radio_set_changed`, and
-`widgets.AddItemModal`'s own `query_one(f"#{field_widget_id(f.name)}")` Save-time read, need NO
+`item_modal.AddItemModal`'s own `query_one(f"#{field_widget_id(f.name)}")` Save-time read, need NO
 change: a Textual CSS id selector matches anywhere in the queried subtree regardless of nesting
 depth, so wrapping the SAME RadioSet inside this new container changes nothing any existing caller
-depends on."""
+depends on. `build_choice_or_plain_widget` (this module's own ONE call site every non-group field
+now routes through, cycle-3 fix round, `item_modal.render_item_field`) is what makes the modal's
+own ChoiceField -- the audit's exact named scenario, an 11-principal Relation object picker --
+get this filter for the first time."""
 from __future__ import annotations
 
 from textual.app import ComposeResult
@@ -23,7 +27,7 @@ from textual.widgets import Input, RadioButton, RadioSet, Static
 
 from tools.configtree.fields import ChoiceField
 from tools.configtree.filter_threshold import FILTER_THRESHOLD
-from tools.configtree.widgets import build_field_widget, field_widget_id
+from tools.configtree.widget_primitives import build_field_widget, field_widget_id
 
 
 class ChoiceFieldWidget(Vertical):

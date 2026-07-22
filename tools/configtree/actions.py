@@ -17,12 +17,11 @@ from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.widgets import Button, Checkbox, Input, RadioSet, Static
 
-from tools.configtree.fields import (ChoiceField, ListField, MultiChoiceField, get_field_value,
-                                      set_field_value, validate_value)
+from tools.configtree.fields import ListField, MultiChoiceField, get_field_value, set_field_value, validate_value
+from tools.configtree.item_modal import render_item_field
 from tools.configtree.spec import ActionSpec
-from tools.configtree.widgets import (FieldError, ListFieldWidget, MultiChoiceFieldWidget,
-                                       elucidation_widgets, field_widget_id, read_field_value)
-from tools.configtree.widgets_choice_filter import build_choice_or_plain_widget
+from tools.configtree.widget_primitives import FieldError, elucidation_widgets, field_widget_id, read_field_value
+from tools.configtree.widgets import ListFieldWidget, MultiChoiceFieldWidget
 
 
 class ActionPane(Vertical):
@@ -36,29 +35,32 @@ class ActionPane(Vertical):
         self._errors: dict[str, FieldError] = {}
 
     def compose(self) -> ComposeResult:
-        yield Static(f"{self.spec.title}", classes="ct-section-title")
-        yield from elucidation_widgets(self.spec.description, "ct-section-description")
         self._errors = {}
+        # Same squeeze-hazard fix as `panes.SectionPane.compose` (cycle-3 fix round, ledger row
+        # 1136) -- title/description render INSIDE the scroll region, never as fixed-size
+        # siblings that could starve its `1fr` share down to an unreachable sliver.
         with VerticalScroll(id=f"{self.id}-body", classes="ct-section-body"):
+            yield Static(f"{self.spec.title}", classes="ct-section-title")
+            yield from elucidation_widgets(self.spec.description, "ct-section-description")
             self._field_specs = tuple(self.spec.fields(self.state))
             answers = {str(f.name): get_field_value(self.state, self.spec.slug, f)
                        for f in self._field_specs}
             for f in self._field_specs:
                 name = str(f.name)
                 is_group_field = isinstance(f, (ListField, MultiChoiceField))
-                yield Static(str(f.label) if not is_group_field else "", classes="ct-field-label")
+                if is_group_field:
+                    yield Static("", classes="ct-field-label")
                 if isinstance(f, ListField):
                     yield ListFieldWidget(f, initial=answers[name], on_change=self._make_list_change(f))
                 elif isinstance(f, MultiChoiceField):
                     yield MultiChoiceFieldWidget(f, initial=answers[name],
                                                   on_change=self._make_multi_change(f))
                 else:
-                    yield build_choice_or_plain_widget(f, answers[name])
-                    yield from elucidation_widgets(getattr(f, "help", None), "ct-field-help")
-                    if isinstance(f, ChoiceField) and f.option_help:
-                        for value, _ in f.options:
-                            yield from elucidation_widgets(f.option_help.get(value),
-                                                             "ct-choice-help", prefix=value)
+                    # Cycle-3 fix round (ledger row 1136, MAJOR #1/#2): the SAME shared
+                    # `item_modal.render_item_field` `panes.SectionPane`/`AddItemModal` now both
+                    # use -- this pane had the IDENTICAL hand-copied loop and would have drifted
+                    # the same way.
+                    yield from render_item_field(f, answers[name])
                 err = FieldError()
                 self._errors[name] = err
                 yield err

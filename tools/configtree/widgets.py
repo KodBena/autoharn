@@ -1,174 +1,36 @@
 #!/usr/bin/env python3
 """tools/configtree/widgets.py -- the real Textual widgets a `SectionSpec`'s fields render as
-(design/FABLE-SETUP-TUI-REBUILD-SPEC.md §3 v2): `Input` for text, `RadioSet` for a closed
-choice, `Checkbox` for a boolean, and a scrollable row list + modal sub-form for a `ListField`.
-No autoharn vocabulary here -- this module only knows the four field shapes `fields.py`
-declares."""
+(design/FABLE-SETUP-TUI-REBUILD-SPEC.md §3 v2): a scrollable row list + modal sub-form for a
+`ListField`, and a checkbox GROUP for a `MultiChoiceField`. No autoharn vocabulary here -- this
+module only knows the four field shapes `fields.py` declares.
+
+The bare per-field-kind primitives (`Input`/`RadioSet`/`Checkbox` builders, `elucidation_widgets`,
+`FieldError`) moved to `widget_primitives.py`, and `AddItemModal` moved to `item_modal.py` (cycle-3
+fix round, ledger row 1136 -- see `item_modal.py`'s own docstring for the full account of why:
+`AddItemModal` needs `widgets_choice_filter.build_choice_or_plain_widget`, which itself needs the
+primitives, so `AddItemModal` could not stay in the SAME file as the primitives without those two
+new modules importing each other)."""
 from __future__ import annotations
 
 from typing import Callable
 
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
-from textual.screen import ModalScreen
-from textual.widgets import Button, Checkbox, Input, Label, ListItem, ListView, RadioButton, RadioSet, Static
+from textual.widgets import Button, Checkbox, Input, Label, ListItem, ListView, Static
 
-from tools.configtree.fields import (ChoiceField, ConfirmField, DescriptionElement,
-                                      ElucidationHeading, ElucidationValue, ListField,
-                                      MultiChoiceField, TextField)
+from tools.configtree.fields import ListField, MultiChoiceField
 from tools.configtree.filter_threshold import FILTER_THRESHOLD
-
-FIELD_ID_PREFIX = "ct-field-"
-
-
-def elucidation_widgets(value: "ElucidationValue | None", css_class: str, *,
-                         prefix: "str | None" = None):
-    """The ONE renderer for `fields.ElucidationValue` (round 7, ledger row 1119, following the
-    Fable RCA consult, design/CONSULT-FABLE-ELUCIDATION-RCA-2026-07-22.md): a plain string renders
-    as ONE capped, UNLABELED `Static` -- ordinary connective prose (D7/D8). A tuple's own items
-    render per kind, each its own capped `Static`, never concatenated into one paragraph:
-      - a bare `str` item -- unlabeled connective prose, exactly like the plain-string case (the
-        LEAD content of a multi-item value: what choosing this costs/requires/changes, D7);
-      - a `DescriptionElement` -- a short, closed-vocabulary LABELED line ("Label: text"), never
-        a per-component telegraphy vocabulary (D9's own "serialization masquerading as layout");
-      - an `ElucidationHeading` -- a real, unprefixed sub-heading (`.ct-elucidation-heading`)
-        breaking a multi-group value into named parts (D9: never a repeated line-prefix hack).
-    `prefix`, if given (a `ChoiceField`'s own option VALUE -- its `option_help` entries render
-    together, disambiguated by option, under one `RadioSet` rather than next to individual
-    buttons the way `MultiChoiceFieldWidget` can), is prepended to a bare-str/DescriptionElement
-    line so the operator can tell which option it belongs to; a heading is never prefixed (a
-    heading names ITS OWN group, prefixing it with an unrelated option value would misname it)."""
-    if value is None:
-        return
-    if isinstance(value, str):
-        text = f"{prefix}: {value}" if prefix else value
-        yield Static(text, classes=css_class, markup=False)
-        return
-    for item in value:
-        if isinstance(item, ElucidationHeading):
-            yield Static(item.text, classes="ct-elucidation-heading")
-        elif isinstance(item, DescriptionElement):
-            label = f"{prefix} -- {item.label}" if prefix else item.label
-            yield Static(f"{label}: {item.text}", classes=css_class, markup=False)
-        else:  # bare str -- unlabeled connective prose, its own line
-            text = f"{prefix}: {item}" if prefix else item
-            yield Static(text, classes=css_class, markup=False)
-
-
-def field_widget_id(name: object) -> str:
-    """`name` is a `fields.FieldName` (or a plain str at a caller that has not gone through a
-    field spec yet) -- `str(name)` is the SAME text either way (`FieldName.__str__` returns its
-    checked `.value`), so this is the ONE place a field name becomes a widget-id string."""
-    return f"{FIELD_ID_PREFIX}{name}"
-
-
-def build_field_widget(f, value: object):
-    """One field spec + its current value -> the live widget instance.
-
-    MEASURE (maintainer round 4, `measure.py`'s own docstring has the full account): a
-    `Checkbox`/`RadioButton` (both `ToggleButton` subclasses) do NOT wrap their own caption text
-    at all, verified empirically -- given a long string they render it as one line, sized to full
-    content width, straight past any container cap. `ConfirmField`'s label is therefore NEVER
-    passed to `Checkbox` as its own caption (an empty string instead) -- the section's own
-    preceding `Static(str(f.label), classes="ct-field-label")` (panes.py's own per-field loop) is
-    the ONE place that label renders, and IT wraps correctly under the CSS measure cap. `RadioSet`
-    gets `classes="ct-choice-field"` so its own container -- and by inheritance its RadioButton
-    children -- is bounded by the same cap even though a bounded-but-unwrapped RadioButton label
-    is a lesser, defense-in-depth case (no current option string is long; kept honest for the
-    next one)."""
-    wid = field_widget_id(f.name)
-    if isinstance(f, TextField):
-        return Input(value=str(value), placeholder=str(f.label), password=f.password, id=wid)
-    if isinstance(f, ChoiceField):
-        buttons = [RadioButton(label, value=(val == value)) for val, label in f.options]
-        return RadioSet(*buttons, id=wid, classes="ct-choice-field")
-    if isinstance(f, ConfirmField):
-        return Checkbox("", value=bool(value), id=wid)
-    raise TypeError(f"build_field_widget: unsupported field type {type(f).__name__}")
-
-
-def read_field_value(f, widget) -> object:
-    if isinstance(f, TextField):
-        return widget.value
-    if isinstance(f, ChoiceField):
-        idx = widget.pressed_index
-        if idx is None or idx < 0:
-            return None
-        return f.options[idx][0]
-    if isinstance(f, ConfirmField):
-        return widget.value
-    raise TypeError(f"read_field_value: unsupported field type {type(f).__name__}")
-
-
-class FieldError(Static):
-    """One inline validation-error line, rendered directly under its field -- never a scrollback
-    line (design/FABLE-SETUP-TUI-REBUILD-SPEC.md §3: 'a refusal renders inline on the form').
-    `markup=False`: a validator's own message is free-form text that may legitimately contain
-    Rich-markup-shaped substrings (e.g. a regex character class like `[A-Za-z0-9_]+` in a
-    "must match ..." message) -- interpreting it as markup would silently eat the brackets
-    instead of showing the operator the real message."""
-
-    def __init__(self, text: str = "") -> None:
-        super().__init__(text, classes="ct-field-error", markup=False)
-
-    def set_text(self, text: str) -> None:
-        self.update(text)
-        self.display = bool(text)
-
-
-class AddItemModal(ModalScreen[dict | None]):
-    """The sub-form a `ListField`'s "Add" button opens -- built from `item_fields`, exactly the
-    same widget vocabulary as a top-level section. Dismisses with the collected `{name: value}`
-    dict on Save, or `None` on Cancel/Escape (never reads back a partial row)."""
-
-    BINDINGS = [("escape", "cancel", "Cancel")]
-
-    def __init__(self, title: str, item_fields: tuple) -> None:
-        super().__init__()
-        self._title = title
-        self._item_fields = item_fields
-        self._errors: dict[str, FieldError] = {}
-
-    def compose(self) -> ComposeResult:
-        with Vertical(id="ct-modal-body"):
-            yield Label(self._title, id="ct-modal-title", classes="ct-section-title")
-            for f in self._item_fields:
-                yield Label(str(f.label), classes="ct-field-label")
-                yield build_field_widget(f, f.default if hasattr(f, "default") else "")
-                err = FieldError()
-                self._errors[str(f.name)] = err
-                yield err
-            with Horizontal(id="ct-modal-buttons"):
-                yield Button("Save", id="ct-modal-save", variant="primary")
-                yield Button("Cancel", id="ct-modal-cancel")
-
-    def on_button_pressed(self, event: Button.Pressed) -> None:
-        if event.button.id == "ct-modal-cancel":
-            self.dismiss(None)
-            return
-        if event.button.id == "ct-modal-save":
-            row: dict[str, object] = {}
-            valid = True
-            for f in self._item_fields:
-                widget = self.query_one(f"#{field_widget_id(f.name)}")
-                val = read_field_value(f, widget)
-                err_msg = None
-                if isinstance(f, TextField):
-                    if f.required and not str(val).strip():
-                        err_msg = "required"
-                    elif f.validator is not None:
-                        err_msg = f.validator(str(val))
-                elif isinstance(f, ChoiceField) and val is None:
-                    err_msg = "choose one"
-                self._errors[str(f.name)].set_text(err_msg or "")
-                if err_msg:
-                    valid = False
-                row[str(f.name)] = val
-            if valid:
-                self.dismiss(row)
-
-    def action_cancel(self) -> None:
-        self.dismiss(None)
+from tools.configtree.item_modal import AddItemModal
+# `FieldError`/`build_field_widget`/`read_field_value` are RE-EXPORTED here (not used by this
+# file's own two widget classes) -- same "historical alias" discipline as `MULTICHOICE_FILTER_
+# THRESHOLD` below: `tools.configtree.widgets` was these primitives' home before the cycle-3 fix
+# round split them into `widget_primitives.py`, and at least one existing fixture (`seen-red/
+# setup-tui-seeded-value-visibility`) `exec`s a HISTORICAL `panes.py` source straight from git
+# history against the live `tools.configtree.widgets` module (its own RED leg) -- that historical
+# source's own `from tools.configtree.widgets import FieldError, ...` must keep resolving.
+from tools.configtree.widget_primitives import (FieldError, build_field_widget,
+                                                 elucidation_widgets, field_widget_id,
+                                                 read_field_value)
 
 
 class ListFieldWidget(Vertical):

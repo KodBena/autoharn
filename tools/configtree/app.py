@@ -131,9 +131,18 @@ class ConfigTreeApp(App):
     .ct-md-block {{ border-left: solid $primary; padding: 0 0 1 1; margin: 1 0 0 0; height: auto; }}
     .ct-md-row-summary {{ text-style: bold; max-width: {MEASURE}; }}
     .ct-md-detail-label {{ text-style: italic; color: $text-muted; padding-top: 1; max-width: {MEASURE}; }}
-    .ct-md-detail-sub-label {{ color: $text-muted; max-width: {MEASURE}; }}
     .ct-md-empty {{ color: $text-muted; max-width: {MEASURE}; }}
     .ct-md-remove {{ min-width: 3; }}
+    /* SELECTION (cycle-3 fix round, ledger row 1136 -- this module's own `widgets_master_detail.
+    py` docstring, "SELECTION"): the compact master-row list is a real, focusable `Button` per
+    row, never a bare `Static` -- `.ct-md-row-select` is styled to read as a plain list row (no
+    button chrome/border), `-selected` gives the CURRENTLY selected row a visible, non-color-only
+    marker (the `>`/`  ` prefix already IN its own caption text is the primary signal, ADR-0019's
+    own "no color-only status signaling" -- this background/bold is reinforcement, never the only
+    cue). */
+    .ct-md-row {{ height: auto; }}
+    .ct-md-row-select {{ border: none; text-align: left; width: 1fr; max-width: {MEASURE}; }}
+    .ct-md-row-select.-selected {{ text-style: bold; background: $primary-darken-1; }}
     """
     BINDINGS = [Binding("ctrl+q", "quit_app", "Quit", show=True, priority=True),
                 Binding("ctrl+c", "quit_app", "Quit", show=False, priority=True),

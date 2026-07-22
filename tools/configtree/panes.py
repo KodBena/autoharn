@@ -48,13 +48,12 @@ from textual.app import ComposeResult
 from textual.containers import Vertical, VerticalScroll
 from textual.widgets import Checkbox, Input, RadioSet, Static
 
-from tools.configtree.fields import (ChoiceField, ListField, MultiChoiceField, default_of,
-                                      get_field_value, set_field_value, validate_value)
+from tools.configtree.fields import ListField, MultiChoiceField, default_of, get_field_value, set_field_value, validate_value
+from tools.configtree.item_modal import render_item_field
 from tools.configtree.master_detail import MasterDetailField, flatten_fields
 from tools.configtree.spec import SectionSpec, section_answers, section_field_errors
-from tools.configtree.widgets import (FieldError, ListFieldWidget, MultiChoiceFieldWidget,
-                                       elucidation_widgets, field_widget_id, read_field_value)
-from tools.configtree.widgets_choice_filter import build_choice_or_plain_widget
+from tools.configtree.widget_primitives import FieldError, elucidation_widgets, field_widget_id, read_field_value
+from tools.configtree.widgets import ListFieldWidget, MultiChoiceFieldWidget
 from tools.configtree.widgets_master_detail import MasterDetailFieldWidget
 
 
@@ -71,13 +70,39 @@ class SectionPane(Vertical):
         self._field_specs: tuple = ()
         self._errors: dict[str, FieldError] = {}
         self._blocked_reason: "str | None" = None
+        # SELECTION SURVIVES A WHOLE-SECTION RECOMPOSE (cycle-3 fix round, ledger row 1136):
+        # `_make_md_master_change` ALWAYS recomposes this whole pane (its own docstring explains
+        # why -- a sibling detail's own choices derive from the master's current rows), which
+        # destroys and rebuilds a fresh `MasterDetailFieldWidget` instance on every master Add/
+        # Remove -- a selection held only INSIDE that widget's own transient state would be lost
+        # on the very same add that is supposed to auto-select the just-added row. THIS pane, by
+        # contrast, is mounted ONCE and never destroyed (`app.py`'s own "EVERY SECTION PANE IS
+        # MOUNTED ONCE" contract) -- keyed by `MasterDetailField` name (plural in principle, one
+        # instance today), it is the one place selection can genuinely survive.
+        self._md_selected: dict[str, str] = {}
 
     def compose(self) -> ComposeResult:
-        yield Static(f"{self.spec.title}", classes="ct-section-title")
-        yield from elucidation_widgets(self.spec.description, "ct-section-description")
         self._blocked_reason = self.spec.blocked(self.state) if self.spec.blocked else None
         self._errors = {}
+        # HAZARD FIX (cycle-3 fix round, found in reach of TASK 1's own reproduction matrix,
+        # ledger row 1136): the title/description used to render OUTSIDE this VerticalScroll, as
+        # fixed-size siblings of it inside the enclosing `Vertical` -- Textual's `1fr` sizing gives
+        # a flex child only what is LEFT after its fixed-size siblings take their own natural
+        # height, so a long section description (principals-authority's own multi-line
+        # Requires/Full-basis elucidation, wrapped narrow at a real terminal's actual content-pane
+        # width) could squeeze this scroll region down to a sliver only a couple of rows tall --
+        # reproduced live at 80x24: the section's own "Add a principal" master-detail widget
+        # rendered at `y=46` while the visible screen was only 24 rows tall, and even
+        # `scroll_end()` overshot it (the scroll viewport was so starved the button's own true
+        # position never became reachable by a real Pilot mouse click, `OutOfBounds`). Title and
+        # description now render INSIDE the same scroll region as the fields themselves: the
+        # scroll always gets the FULL available height (no fixed-size sibling above it inside the
+        # SAME parent to starve it), and if the combined content still exceeds the viewport, the
+        # OPERATOR CAN SCROLL TO IT -- a starved sliver is unrepresentable, a normal scroll is not
+        # a hazard.
         with VerticalScroll(classes="ct-section-body"):
+            yield Static(f"{self.spec.title}", classes="ct-section-title")
+            yield from elucidation_widgets(self.spec.description, "ct-section-description")
             if self._blocked_reason:
                 yield Static(f"BLOCKED -- {self._blocked_reason}", classes="ct-blocked-reason")
                 # SEEDED-VALUE VISIBILITY (maintainer-witnessed, ledger row 1130: an in-UI
@@ -116,7 +141,8 @@ class SectionPane(Vertical):
             for f in self._field_specs:
                 name = str(f.name)
                 is_group_field = isinstance(f, (ListField, MultiChoiceField, MasterDetailField))
-                yield Static(str(f.label) if not is_group_field else "", classes="ct-field-label")
+                if is_group_field:
+                    yield Static("", classes="ct-field-label")
                 if isinstance(f, MasterDetailField):
                     # ADR-0019 Rule 4 (master-detail, not a sibling flat list): a MasterDetailField
                     # renders as ONE widget managing its own master rows AND every nested detail
@@ -129,24 +155,22 @@ class SectionPane(Vertical):
                                        for d in f.details}
                     yield MasterDetailFieldWidget(
                         f, initial_master=answers[name], initial_details=initial_details,
+                        initial_selected_key=self._md_selected.get(name),
                         on_master_change=self._make_md_master_change(f),
-                        on_detail_change=self._make_md_detail_change(f))
+                        on_detail_change=self._make_md_detail_change(f),
+                        on_select_change=self._make_md_select_change(f))
                 elif isinstance(f, ListField):
                     yield ListFieldWidget(f, initial=answers[name], on_change=self._make_list_change(f))
                 elif isinstance(f, MultiChoiceField):
                     yield MultiChoiceFieldWidget(f, initial=answers[name],
                                                   on_change=self._make_multi_change(f))
                 else:
-                    yield build_choice_or_plain_widget(f, answers[name])
-                    # ELUCIDATION (ledger row 1115): a plain field's own `help` renders as its
-                    # own capped element(s) right under it -- `ListField`/`MultiChoiceField`
-                    # render their own `help` INSIDE their dedicated widget instead (its own
-                    # Label sits above the rows/checkboxes, not a bare section-loop Static).
-                    yield from elucidation_widgets(getattr(f, "help", None), "ct-field-help")
-                    if isinstance(f, ChoiceField) and f.option_help:
-                        for value, _ in f.options:
-                            yield from elucidation_widgets(f.option_help.get(value),
-                                                             "ct-choice-help", prefix=value)
+                    # CYCLE-3 FIX (ledger row 1136's own MAJOR findings #1/#2): the label, the
+                    # filter-routed widget, and the field's own `help`/`option_help` elucidation
+                    # are now rendered by the ONE shared `item_modal.render_item_field` --
+                    # `AddItemModal.compose` calls the exact same function for its own item
+                    # fields, so this pane and a modal can never drift again (ADR-0012 P1).
+                    yield from render_item_field(f, answers[name])
                 err = FieldError()
                 err.set_text(commit_errors.get(name) or live_errors.get(name, ""))
                 self._errors[name] = err
@@ -237,6 +261,22 @@ class SectionPane(Vertical):
 
         def _on_change(dname: str, rows: list) -> None:
             self._write_through(by_name[dname], rows)
+
+        return _on_change
+
+    def _make_md_select_change(self, f: MasterDetailField):
+        """`MasterDetailFieldWidget`'s own selection callback -- stores the CURRENTLY selected
+        master row's own key on THIS pane (never inside the widget, which does not survive a
+        master Add/Remove's own full-pane recompose -- see `__init__`'s own note), so the next
+        `MasterDetailFieldWidget` instance built for this SAME field starts already selecting the
+        SAME row the operator was just looking at (or the just-added row, on an Add)."""
+        name = str(f.name)
+
+        def _on_change(key: "str | None") -> None:
+            if key is None:
+                self._md_selected.pop(name, None)
+            else:
+                self._md_selected[name] = key
 
         return _on_change
 

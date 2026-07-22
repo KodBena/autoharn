@@ -106,6 +106,7 @@ REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 sys.path.insert(0, REPO)
 
 from textual.app import App, ComposeResult  # noqa: E402
+from textual.containers import VerticalScroll  # noqa: E402
 from textual.widgets import Button, Checkbox, ContentSwitcher, Input, RadioSet, Static, Tree  # noqa: E402
 
 from tools.configtree import CommitSpec, DuplicatedSharedFieldError, SectionResult, SectionSpec  # noqa: E402
@@ -114,8 +115,10 @@ from tools.configtree.fields import (ChoiceField, DescriptionElement, Elucidatio
                                       ListField, TextField, get_field_value, is_field_touched,
                                       set_field_value)
 from tools.configtree.ids import NodeId  # noqa: E402
+from tools.configtree.item_modal import AddItemModal as CurrentAddItemModal  # noqa: E402
 from tools.configtree.measure import MEASURE  # noqa: E402
 from tools.configtree.spec import COMPLETE, INVALID, owner_of, section_status  # noqa: E402
+from tools.configtree.widgets_master_detail import MasterDetailFieldWidget  # noqa: E402
 from tools.setup_tui import checklist as ck  # noqa: E402
 from tools.setup_tui import config_file, content, durable_decisions, feature_facts, steps, tui_app  # noqa: E402
 from tools.setup_tui.checklist import Checklist  # noqa: E402
@@ -816,9 +819,30 @@ async def case_9() -> None:
             f"expected the register ListField's own typed 'Does not:' element, got {help_lines}"
         offenders = [(w.id, w.size.width) for w in help_widgets if w.size.width > MEASURE]
         assert not offenders, f"a ListField's own help line exceeds MEASURE={MEASURE}: {offenders}"
-        print(f"case 9c ok: principals-authority's 'Principal'/'Competence'/'Relation'/'Role "
-              f"charter' lists each carry their own CONSTITUTES/DOES NOT elucidation "
-              f"(principals_authority.toml's own [lessons] table), within MEASURE")
+        print(f"case 9c ok: principals-authority's 'Principal' master list carries its own "
+              f"CONSTITUTES/DOES NOT elucidation (principals_authority.toml's own [lessons] "
+              f"table), within MEASURE, with zero principals registered yet")
+
+        # SELECTION (cycle-3 fix round, ledger row 1136): a dependent list's OWN elucidation
+        # (competence/relation/charter) only renders for the currently SELECTED master row (this
+        # fix round's own "the master list is buried under repeated preamble" remediation) --
+        # register one, select it, and confirm all THREE dependents' own Constitutes/Does not
+        # elements are now ALSO present, not merely the master's.
+        await _pa_add_row(pilot, app, pa_pane, "ct-field-register-master-add",
+                    {"name": "ctj-case9c", "purpose": "case 9c own selection probe"})
+        await pilot.pause()
+        selected_help_lines = [str(w.render()) for w in pa_pane.query(".ct-field-help")]
+        constitutes_count = sum(1 for ln in selected_help_lines if ln.startswith("Constitutes:"))
+        does_not_count = sum(1 for ln in selected_help_lines if ln.startswith("Does not:"))
+        assert constitutes_count >= 4, \
+            (f"expected 4 'Constitutes:' elements (register + its 3 auto-selected dependents) "
+             f"once a principal is registered (auto-selected on add), got {constitutes_count}: {selected_help_lines}")
+        assert does_not_count >= 4, \
+            f"expected 4 'Does not:' elements the same way, got {does_not_count}: {selected_help_lines}"
+        print(f"case 9c-selected ok: registering (and auto-selecting) a principal reveals all "
+              f"THREE dependents' own CONSTITUTES/DOES NOT elucidation too ({constitutes_count} "
+              f"'Constitutes:'/{does_not_count} 'Does not:' elements total) -- 'Principal'/"
+              f"'Competence'/'Relation'/'Role charter' each carry their own")
 
 
 async def _pa_add_row(pilot, app, pane, add_id: str, values: dict, *,
@@ -844,19 +868,40 @@ async def _pa_add_row(pilot, app, pane, add_id: str, values: dict, *,
     await pilot.pause()
 
 
+async def _pa_select_row(pilot, pane, idx: int) -> None:
+    """Selects master row `idx` (cycle-3 fix round, ledger row 1136's own selection fix,
+    `widgets_master_detail.MasterDetailFieldWidget`'s own docstring, "SELECTION") -- `.press()`,
+    matching `_pa_add_row`'s own idiom (a real click's identical `Pressed` message, no screen-
+    coordinate dependency)."""
+    pane.query_one(f"#ct-field-register-master-select-{idx}", Button).press()
+    await pilot.pause()
+
+
 async def case_10() -> None:
     """PRINCIPAL REFERENCES ARE SELECTIONS + MASTER-DETAIL NESTING (ADR-0019 Rule 4, cycle-2 fix
     round; supersedes maintainer round 5's ledger row 1115 defect B, still true under the new
-    shape). Proves, against the REAL registry:
+    shape). SELECTION (cycle-3 fix round, ledger row 1136): the maintainer's own live bench
+    sighting -- "add a principal -> can't select it" -- was reproduced (the pre-fix master row
+    was a bare, unfocusable `Static`, genuinely unclickable) and fixed: each master row is now a
+    real, focusable `Button`; clicking one selects it, and ONLY the selected row's own dependent
+    lists (competence/relation/charter) render -- never all rows' own simultaneously, which was
+    the OTHER half of the same live complaint ("the master list is buried... looks ugly that you
+    have to scroll," relayed by the coordinator: every unselected row used to cost a full
+    label+help+Add-button block per dependent, always, whether or not the operator cared).
+    Proves, against the REAL registry:
       (a) the four-parallel-flat-lists shape is GONE -- no top-level Competence/Relation/Charter
           Add button exists anywhere in this section (the audit's own named assertion);
-      (b) a competence added inside principal A's own block renders under A and NEVER under B --
-          the master-detail isolation the whole restructure exists for;
+      (b) adding a master row auto-selects it, and a competence added while A is selected renders
+          in the (one, shared) detail area -- but SWITCHING selection to B shows a CLEAN detail
+          area, never A's own competence leaking through -- the master-detail isolation the whole
+          restructure exists for, now expressed through selection rather than simultaneous blocks;
       (c) a relation's own 'object' picker is still fed LIVE from the register list's current
-          rows (the ORIGINAL defect-B fix, preserved) -- and the relation itself, once added
-          under A (the subject), renders under A's own block, never mirrored under B's (Rule 3);
-      (d) removing a master row (a principal) cascades: its own dependent rows are dropped with
-          it, never left behind as a commit-time-only surprise.
+          rows (the ORIGINAL defect-B fix, preserved) -- and the relation itself, added while A
+          (the subject) is selected, is visible under A's own selection and genuinely ABSENT once
+          B (the object) is selected instead (Rule 3, now via selection-switch);
+      (d) removing the CURRENTLY SELECTED master row (a principal) clears the selection AND
+          cascades: its own dependent rows are dropped with it, never left behind as a
+          commit-time-only surprise, and never resurface under the remaining row either.
     """
     app = tui_app.build_app(_fresh_state(), dry_run=True)
     async with app.run_test(size=(150, 400)) as pilot:
@@ -881,7 +926,7 @@ async def case_10() -> None:
         assert add_ids == ["ct-field-register-master-add"], \
             (f"expected EXACTLY ONE top-level Add button (the master's own, 'Principal') before "
              f"any principal is registered -- every dependent's own Add button only exists "
-             f"nested inside a registered principal's own block -- got {add_ids}")
+             f"nested inside a SELECTED registered principal's own detail area -- got {add_ids}")
         print(f"case 10a ok (ADR-0019 Rule 4): the four-parallel-flat-lists shape is gone -- the "
               f"ONLY top-level Add button in this section is {add_ids[0]!r} (the master, "
               f"'Principal'); no top-level Competence/Relation/Charter Add button exists")
@@ -894,66 +939,80 @@ async def case_10() -> None:
                     {"name": "ctj-b", "purpose": "witnessing case 10, principal B"})
         await pilot.pause()
 
-        # A is block-0, B is block-1 (registration order, `master_key=lambda r: r["name"]`).
+        # Adding B auto-selected it (this fix round's own "SELECTION" note) -- exactly B's own 3
+        # dependent Add buttons exist right now, never A's and B's simultaneously.
         detail_add_ids = sorted(str(b.id) for b in pane.query(Button) if "-detail-add-" in str(b.id or ""))
         assert detail_add_ids == [
-            "ct-field-register-detail-add-0-charters", "ct-field-register-detail-add-0-competences",
-            "ct-field-register-detail-add-0-relations", "ct-field-register-detail-add-1-charters",
-            "ct-field-register-detail-add-1-competences", "ct-field-register-detail-add-1-relations",
-        ], f"expected exactly 2 principals x 3 dependents' own nested Add buttons, got {detail_add_ids}"
-        print(f"case 10b ok: registering two principals (A, B) mints EACH its own nested "
-              f"Competence/Relation/Role-charter Add buttons ({len(detail_add_ids)} total) -- "
-              f"still zero top-level ones")
+            "ct-field-register-detail-add-charters", "ct-field-register-detail-add-competences",
+            "ct-field-register-detail-add-relations",
+        ], f"expected exactly the SELECTED row's own 3 dependent Add buttons, got {detail_add_ids}"
+        select_labels = {str(b.label): "-selected" in (b.classes or ())
+                         for b in pane.query(".ct-md-row-select")}
+        assert select_labels.get("> ctj-b (human): witnessing case 10, principal B") is True, \
+            f"expected B (just added) to be auto-selected, got {select_labels}"
+        print(f"case 10b ok (SELECTION, cycle-3 fix round): registering two principals (A, B) "
+              f"auto-selects B; its own nested Competence/Relation/Role-charter Add buttons "
+              f"({len(detail_add_ids)} total) are the ONLY ones visible -- A's own are not "
+              f"simultaneously rendered, closing the 'buried under repeated preamble' complaint")
 
-        # --- (b) a competence added under A renders under A, NEVER under B --------------------
-        await _pa_add_row(pilot, app, pane, "ct-field-register-detail-add-0-competences",
+        # --- (b) switch selection to A, add a competence -- it must NOT leak once B is reselected
+        await _pa_select_row(pilot, pane, 0)
+        await _pa_add_row(pilot, app, pane, "ct-field-register-detail-add-competences",
                     {"activity": "witness-activity", "band": "witness-band", "basis": "witness-basis"})
         await pilot.pause()
-        block_a = pane.query_one("#ct-field-register-block-0")
-        block_b = pane.query_one("#ct-field-register-block-1")
-        lines_a = [str(w.render()) for w in block_a.query(".ct-info-line")]
-        lines_b = [str(w.render()) for w in block_b.query(".ct-info-line")]
-        assert any("witness-activity" in ln for ln in lines_a), \
-            f"expected the competence added under A's own Add button to render in A's own block, got {lines_a}"
-        assert not any("witness-activity" in ln for ln in lines_b), \
-            (f"MASTER-DETAIL ISOLATION BUG: a competence added inside PRINCIPAL A's own block "
-             f"leaked into PRINCIPAL B's own block: {lines_b}")
-        print(f"case 10c ok (master-detail isolation, the restructure's own point): a competence "
-              f"added via A's OWN nested Add button ({lines_a}) never appears under B's own "
-              f"block ({lines_b})")
+        lines_while_a = [str(w.render()) for w in pane.query(".ct-info-line")]
+        assert any("witness-activity" in ln for ln in lines_while_a), \
+            f"expected the competence added while A was selected to render in the (one) detail area, got {lines_while_a}"
+        await _pa_select_row(pilot, pane, 1)
+        lines_while_b = [str(w.render()) for w in pane.query(".ct-info-line")]
+        assert not any("witness-activity" in ln for ln in lines_while_b), \
+            (f"MASTER-DETAIL ISOLATION BUG: a competence added while PRINCIPAL A was selected "
+             f"leaked into PRINCIPAL B's own detail area once B was selected: {lines_while_b}")
+        print(f"case 10c ok (master-detail isolation, the restructure's own point, now expressed "
+              f"through selection): a competence added while A was selected ({lines_while_a}) "
+              f"never appears once B is selected instead ({lines_while_b})")
 
-        # --- (c) 'object' picker still fed live from register; relation renders under SUBJECT
-        # only (Rule 3) ---
-        await _pa_add_row(pilot, app, pane, "ct-field-register-detail-add-0-relations",
+        # --- (c) 'object' picker still fed live from register; relation visible under SUBJECT's
+        # own selection only (Rule 3) ---
+        await _pa_select_row(pilot, pane, 0)  # back to A (the intended subject)
+        await _pa_add_row(pilot, app, pane, "ct-field-register-detail-add-relations",
                     {}, radio_index_by_field={"relation": 0, "object": 1})  # object index 1 == "ctj-b"
         await pilot.pause()
-        lines_a2 = [str(w.render()) for w in pane.query_one("#ct-field-register-block-0").query(".ct-info-line")]
-        lines_b2 = [str(w.render()) for w in pane.query_one("#ct-field-register-block-1").query(".ct-info-line")]
+        lines_a2 = [str(w.render()) for w in pane.query(".ct-info-line")]
         assert any("ctj-b" in ln for ln in lines_a2), \
-            f"expected the relation ('ctj-a acts-for ctj-b') under SUBJECT ctj-a's own block, got {lines_a2}"
+            f"expected the relation ('ctj-a acts-for ctj-b') visible while SUBJECT ctj-a is selected, got {lines_a2}"
+        await _pa_select_row(pilot, pane, 1)  # switch to B (the object)
+        lines_b2 = [str(w.render()) for w in pane.query(".ct-info-line")]
         assert not any(ln for ln in lines_b2 if any(rel in ln for rel in
                        ("acts-for", "dispatched-by", "same-natural-person", "succeeds"))), \
             (f"RULE 3 VIOLATION: the SAME relation also rendered under its OBJECT principal's "
-             f"own block (a duplicated projection of one fact) -- {lines_b2}")
-        print(f"case 10d ok (ADR-0019 Rule 3, 'one home per fact extends to the screen'): the "
-              f"relation renders under its SUBJECT (ctj-a) ONLY -- {lines_a2} -- never mirrored "
-              f"under its OBJECT (ctj-b): {lines_b2}")
+             f"own selection (a duplicated projection of one fact) -- {lines_b2}")
+        print(f"case 10d ok (ADR-0019 Rule 3, 'one home per fact extends to the screen', now via "
+              f"selection-switch): the relation is visible under its SUBJECT (ctj-a)'s own "
+              f"selection -- {lines_a2} -- and genuinely absent once its OBJECT (ctj-b) is "
+              f"selected instead: {lines_b2}")
 
-        # --- (d) removing principal A cascades: its own competence/relation rows are dropped --
+        # --- (d) removing the CURRENTLY SELECTED master row (A) clears selection AND cascades --
+        await _pa_select_row(pilot, pane, 0)
         pane.query_one("#ct-field-register-master-remove-0", Button).press()
         await pilot.pause()
-        remaining_blocks = list(pane.query(".ct-md-block"))
-        assert len(remaining_blocks) == 1, \
-            f"expected exactly 1 principal block after removing A, got {len(remaining_blocks)}"
+        remaining_selects = list(pane.query(".ct-md-row-select"))
+        assert len(remaining_selects) == 1, \
+            f"expected exactly 1 principal row after removing A, got {len(remaining_selects)}"
+        placeholder = [str(w.render()) for w in pane.query(".ct-md-empty")]
+        assert any("select a principal" in p for p in placeholder), \
+            f"expected removing the SELECTED row to clear selection (a 'select a principal above' hint), got {placeholder}"
+        await _pa_select_row(pilot, pane, 0)  # select the sole remaining row (B)
         remaining_lines = [str(w.render()) for w in pane.query(".ct-info-line")]
         assert not any("witness-activity" in ln for ln in remaining_lines), \
-            f"CASCADE BUG: A's own competence survived A's own removal: {remaining_lines}"
+            f"CASCADE BUG: A's own competence survived A's own removal (visible under B): {remaining_lines}"
         assert not any("ctj-b" in ln and "acts-for" in ln for ln in remaining_lines), \
-            f"CASCADE BUG: A's own relation survived A's own removal: {remaining_lines}"
-        print(f"case 10e ok (cascade on master removal): removing principal A drops A's OWN "
-              f"competence and relation with it -- never left as an orphan for commit time to "
-              f"discover as a confusing failure; remaining block: "
-              f"{[str(w.render()) for w in remaining_blocks[0].query('.ct-md-row-summary')]}")
+            f"CASCADE BUG: A's own relation survived A's own removal (visible under B): {remaining_lines}"
+        print(f"case 10e ok (cascade on master removal + selection clears with it): removing the "
+              f"SELECTED principal A drops A's OWN competence and relation with it -- never left "
+              f"as an orphan for commit time to discover as a confusing failure, and never "
+              f"resurfaces once the remaining principal (B) is selected; remaining row: "
+              f"{[str(w.render()) for w in remaining_selects]}")
 
 
 async def case_11() -> None:
@@ -1565,20 +1624,328 @@ async def case_22() -> None:
         await pilot.pause()
         pane = app.query_one("#pane-principals-authority")
 
-        summaries = [str(w.render()) for w in pane.query(".ct-md-row-summary")]
-        assert any("maintainer" in s for s in summaries), \
-            f"expected 'maintainer' (from the loaded file's own register rows) to actually SHOW as a principal block, got {summaries}"
-        assert any("orchestrator" in s for s in summaries), \
-            f"expected 'orchestrator' to actually SHOW as a principal block, got {summaries}"
-        all_lines = [str(w.render()) for w in pane.query(".ct-info-line")]
-        assert any("governance and agent orchestration" in ln for ln in all_lines), \
-            f"expected maintainer's own loaded competence to render nested under its block, got {all_lines}"
-        assert any("acts-for" in ln and "maintainer" in ln for ln in all_lines), \
-            f"expected the loaded 'orchestrator acts-for maintainer' relation to render, got {all_lines}"
+        # SELECTION (cycle-3 fix round, ledger row 1136): the compact master-row list shows every
+        # loaded principal's own one-line summary (via its SELECT button caption) regardless of
+        # selection; a loaded row's own nested competences/relations only render once THAT row is
+        # selected (this fix round's own remediation for "buried under repeated preamble").
+        select_labels = [str(b.label) for b in pane.query(".ct-md-row-select")]
+        assert any("maintainer" in s for s in select_labels), \
+            f"expected 'maintainer' (from the loaded file's own register rows) to actually SHOW as a selectable principal row, got {select_labels}"
+        assert any("orchestrator" in s for s in select_labels), \
+            f"expected 'orchestrator' to actually SHOW as a selectable principal row, got {select_labels}"
+
+        maintainer_idx = next(i for i, s in enumerate(select_labels) if "maintainer" in s)
+        pane.query_one(f"#ct-field-register-master-select-{maintainer_idx}").press()
+        await pilot.pause()
+        maintainer_lines = [str(w.render()) for w in pane.query(".ct-info-line")]
+        assert any("governance and agent orchestration" in ln for ln in maintainer_lines), \
+            f"expected maintainer's own loaded competence to render once maintainer is selected, got {maintainer_lines}"
+
+        orchestrator_idx = next(i for i, s in enumerate(select_labels) if "orchestrator" in s)
+        pane.query_one(f"#ct-field-register-master-select-{orchestrator_idx}").press()
+        await pilot.pause()
+        orchestrator_lines = [str(w.render()) for w in pane.query(".ct-info-line")]
+        assert any("acts-for" in ln and "maintainer" in ln for ln in orchestrator_lines), \
+            (f"expected the loaded 'orchestrator acts-for maintainer' relation to render once "
+             f"orchestrator (its own SUBJECT) is selected, got {orchestrator_lines}")
         print(f"case 22d ok (GREEN, end to end): after loading known-good-blank.toml and setting "
-              f"a destination, the principals-authority section's own blocks actually show "
-              f"{summaries!r} with their loaded competences/relations nested underneath -- "
-              f"matching the file, not merely claimed equivalent to it")
+              f"a destination, the principals-authority section's own compact list actually shows "
+              f"{select_labels!r}; selecting maintainer reveals its own loaded competence "
+              f"({maintainer_lines}), and selecting orchestrator reveals its own loaded 'acts-for "
+              f"maintainer' relation ({orchestrator_lines}) -- matching the file, not merely "
+              f"claimed equivalent to it")
+
+
+def _load_old_add_item_modal_class():
+    """Fetches `AddItemModal` exactly as it stood at `9fe6b64` (this cycle-3 fix round's own
+    starting commit) -- the version whose `compose()` called `build_field_widget` directly
+    (never `build_choice_or_plain_widget`) and rendered NO elucidation at all -- via `git show`,
+    executed in an ISOLATED namespace (never imported as a module, same idiom `seen-red/setup-
+    tui-seeded-value-visibility`'s own `load_old_section_pane_class` established)."""
+    src = subprocess.run(
+        ["git", "show", "9fe6b64:tools/configtree/widgets.py"],
+        cwd=REPO, capture_output=True, text=True, check=True,
+    ).stdout
+    ns: dict = {"__name__": "tools.configtree._old_widgets_for_case23"}
+    exec(compile(src, "<git show 9fe6b64:tools/configtree/widgets.py>", "exec"), ns)
+    return ns["AddItemModal"]
+
+
+async def case_23() -> None:
+    """CYCLE-3 FIX (ledger row 1136's own two MAJOR findings): `AddItemModal.compose` used to
+    call `build_field_widget` directly (bypassing the over-threshold ChoiceField filter entirely)
+    and never rendered `help`/`option_help` elucidation at all. RED-FIRST against the OLD
+    `AddItemModal` (`9fe6b64`, this round's own starting commit) reproduces BOTH exactly; GREEN
+    against the CURRENT `item_modal.AddItemModal` (now built on the SAME shared
+    `render_item_field` `panes.SectionPane` uses) proves both fixed, via the audit's own named
+    scenario: an 11-option ChoiceField (a growing principal roster's own object picker) and a
+    4-option ChoiceField carrying real `option_help` sentences (agent_class)."""
+    synth_options = tuple((f"opt-{i}", f"Option {i}") for i in range(11))
+    synth_help = {v: f"elucidation for {v}" for v, _ in synth_options}
+    synth_fields = (
+        TextField(name="label", label="Label"),
+        ChoiceField(name="pick", label="Pick", options=synth_options, option_help=synth_help),
+    )
+
+    OldAddItemModal = _load_old_add_item_modal_class()
+
+    class _HarnessApp(App):
+        def compose(self) -> ComposeResult:
+            yield Static("harness")
+
+    # --- RED: the OLD AddItemModal, driven live -------------------------------------------------
+    app = _HarnessApp()
+    async with app.run_test(size=(150, 60)) as pilot:
+        await pilot.pause()
+        await app.push_screen(OldAddItemModal("Add synthetic", synth_fields))
+        await pilot.pause()
+        modal = app.screen
+        old_filters = list(modal.query(".ct-choice-filter"))
+        old_help = list(modal.query(".ct-choice-help"))
+        assert not old_filters, \
+            f"fixture assumption stale: the OLD AddItemModal already renders a filter Input, got {len(old_filters)}"
+        assert not old_help, \
+            f"fixture assumption stale: the OLD AddItemModal already renders option_help, got {len(old_help)}"
+        print(f"case 23a ok (RED, reproduced against 9fe6b64): the OLD AddItemModal renders a "
+              f"BARE 11-option RadioSet (0 filter Input) and ZERO option_help lines for a field "
+              f"that carries real option_help -- both of ledger row 1136's own MAJOR findings, "
+              f"reproduced live, not merely asserted from reading the diff")
+        await pilot.press("escape")
+        await pilot.pause()
+
+    # --- GREEN: the CURRENT AddItemModal (`CurrentAddItemModal`, imported at module top), the
+    # SAME synthetic fields ----------------------------------------------------------------------
+    app2 = _HarnessApp()
+    async with app2.run_test(size=(150, 60)) as pilot:
+        await pilot.pause()
+        await app2.push_screen(CurrentAddItemModal("Add synthetic", synth_fields))
+        await pilot.pause()
+        modal = app2.screen
+        new_filters = list(modal.query(".ct-choice-filter"))
+        new_help = [str(w.render()) for w in modal.query(".ct-choice-help")]
+        assert new_filters, "expected the CURRENT AddItemModal to route an 11-option ChoiceField through the SAME filter panes.py's own fields get"
+        assert len(new_help) >= len(synth_options), \
+            f"expected one option_help line per option ({len(synth_options)}), got {len(new_help)}: {new_help}"
+        print(f"case 23b ok (GREEN): the CURRENT AddItemModal renders the filter Input "
+              f"({len(new_filters)}) AND all {len(new_help)} option_help line(s) for the SAME "
+              f"synthetic 11-option ChoiceField -- the shared `item_modal.render_item_field` is "
+              f"what `panes.SectionPane` ALSO calls, so the two can never drift again")
+
+    # --- the audit's own EXACT scenario, against the REAL registry ------------------------------
+    app3 = tui_app.build_app(_fresh_state(), dry_run=True)
+    async with app3.run_test(size=(150, 400)) as pilot:
+        await pilot.pause()
+        tree = app3.query_one("#ct-tree", Tree)
+        tree.select_node(_find_node(tree, "fork-target"))
+        await pilot.pause()
+        app3.query_one("#pane-fork-target #ct-field-dest", Input).value = "/tmp/ctj-case23-dest"
+        await pilot.pause()
+        await app3._panes["principals-authority"].refresh_blocked()
+        tree.select_node(_find_node(tree, "principals-authority"))
+        await pilot.pause()
+        pane = app3.query_one("#pane-principals-authority")
+        for i in range(11):
+            await _pa_add_row(pilot, app3, pane, "ct-field-register-master-add",
+                        {"name": f"ctj23-{i}", "purpose": "case 23 witness"})
+            await pilot.pause()
+        pane = app3.query_one("#pane-principals-authority")
+        rel_add = pane.query_one("#ct-field-register-detail-add-relations", Button)
+        rel_add.press()
+        await pilot.pause()
+        modal = app3.screen
+        real_filters = list(modal.query(".ct-choice-filter"))
+        assert real_filters, \
+            "expected the REAL Relation add-modal's 11-principal object picker to get the filter Input"
+        real_help = [str(w.render()) for w in modal.query(".ct-choice-help")]
+        assert len(real_help) >= 4, \
+            f"expected the Relation field's own 4-entry option_help (acts-for/dispatched-by/same-natural-person/succeeds), got {real_help}"
+        print(f"case 23c ok (GREEN, the audit's own exact named scenario): registering 11 "
+              f"principals then opening the REAL Relation add-modal's 'object' picker shows the "
+              f"filter Input ({len(real_filters)}) AND the Relation field's own {len(real_help)} "
+              f"option_help line(s), live against the real registry")
+        await pilot.press("escape")
+        await pilot.pause()
+
+
+async def case_24() -> None:
+    """ledger row 1136's own TASK 1: the maintainer's live "adding a principal is a no-op" bench
+    report, driven via the REAL operator paths this file's every OTHER case deliberately avoids
+    (this file's own module docstring: "NO CASE BELOW PRESSES A SAVE BUTTON... every field write
+    is a widget-level .value= assignment" -- true for every case ABOVE, none of which walks a
+    real mouse click, real character-by-character typing, or a real RadioSet click). Reproduces
+    the maintainer's OWN exact sequence (relayed live by the coordinator): terminal 251x61,
+    `dry_run=False`, `dest=/tmp` (an existing, occupied, non-fresh directory), mouse-click Add,
+    TYPE into the modal's Inputs, mouse-click a RadioButton, mouse-click Save -- twice, with an
+    explicit selection attempt in between.
+
+    ROOT CAUSES FOUND (both real, neither a literal "the add silently drops the row" defect --
+    the model and a full end-to-end mouse+typing add both provably worked in every cell this
+    fixture drove): (A) a master row was a bare, unfocusable `Static` -- an operator's instinct to
+    click a rendered row (the natural next step, and what a `ListView` row elsewhere in this same
+    app rewards) was a genuine, reproducible no-op: nothing highlighted, nothing changed, no
+    feedback of any kind (`widgets_master_detail.py`'s own docstring, "SELECTION", has the full
+    account). (B) the master-detail widget's own preamble (repeated per-row detail labels/help,
+    rendered for EVERY row, always) crowded the compact roster far enough down the pane that a
+    real terminal at reasonable height needed scrolling just to see the first added row at all
+    (the coordinator's own relayed complaint: "looks ugly that you have to do that") -- BOTH are
+    now fixed: a master row is a real clickable/focusable `Button` that visibly selects (a `>`
+    marker + `-selected` styling), and only the SELECTED row's own dependent lists render, so an
+    11-row roster costs 11 LINES, not 11 repeated detail-preamble blocks."""
+    app = tui_app.build_app(_fresh_state(), dry_run=False)
+    async with app.run_test(size=(251, 61)) as pilot:
+        await pilot.pause()
+        tree = app.query_one("#ct-tree", Tree)
+        tree.select_node(_find_node(tree, "fork-target"))
+        await pilot.pause()
+        # dest = /tmp verbatim (the maintainer's own real bench value -- an EXISTING, occupied,
+        # non-autoharn directory, never a fresh scratch path every OTHER case in this file uses).
+        app.query_one("#pane-fork-target #ct-field-dest", Input).value = "/tmp"
+        await pilot.pause()
+        await app._panes["principals-authority"].refresh_blocked()
+        tree.select_node(_find_node(tree, "principals-authority"))
+        await pilot.pause()
+        pane = app.query_one("#pane-principals-authority")
+
+        scroller = pane.query_one(".ct-section-body", VerticalScroll)
+        assert scroller.virtual_size.height <= scroller.size.height, \
+            (f"expected the section's own content to fit the {scroller.size.height}-row viewport "
+             f"with ZERO principals registered yet (virtual height "
+             f"{scroller.virtual_size.height}) -- the layout fix (title/description/master-list "
+             f"inside ONE scroll region, detail preamble gated by selection) should make this the "
+             f"common case at a real terminal's real height")
+        print(f"case 24a ok (layout fix): at 251x61 (the maintainer's own real terminal), the "
+              f"principals-authority pane's own content fits the viewport with ZERO scrolling "
+              f"needed before any principal exists (virtual {scroller.virtual_size.height} <= "
+              f"viewport {scroller.size.height})")
+
+        async def _mouse_add(name: str) -> None:
+            add_btn = pane.query_one("#ct-field-register-master-add", Button)
+            await pilot.click(add_btn)
+            await pilot.pause()
+            modal = app.screen
+            name_input = modal.query_one("#ct-field-name", Input)
+            await pilot.click(name_input)
+            await pilot.pause()
+            for ch in name:
+                await pilot.press(ch)
+            await pilot.pause()
+            rs = modal.query_one("#ct-field-agent_class", RadioSet)
+            await pilot.click(rs.children[1])
+            await pilot.pause()
+            purpose_input = modal.query_one("#ct-field-purpose", Input)
+            await pilot.click(purpose_input)
+            await pilot.pause()
+            for ch in "case24-witness":
+                await pilot.press(ch)
+            await pilot.pause()
+            save_btn = modal.query_one("#ct-modal-save", Button)
+            await pilot.click(save_btn)
+            await pilot.pause()
+
+        await _mouse_add("alice")
+        pane = app.query_one("#pane-principals-authority")
+        md = pane.query_one(MasterDetailFieldWidget)
+        assert md.master_rows == [{"name": "alice", "agent_class": "model", "purpose": "case24-witness"}], \
+            f"expected the mouse+typed add to actually land in the model, got {md.master_rows}"
+        print(f"case 24b ok (real mouse click + real character-by-character typing + real "
+              f"RadioSet click + real mouse-click Save): the row genuinely lands, {md.master_rows}")
+
+        # --- (A) SELECTION -- the maintainer's own "can't select it" -- now genuinely works -----
+        select_btns = list(pane.query(".ct-md-row-select"))
+        assert len(select_btns) == 1 and select_btns[0].can_focus, \
+            f"expected a real, focusable select control per row, got {select_btns}"
+        await pilot.click(select_btns[0])
+        await pilot.pause()
+        select_btns = list(pane.query(".ct-md-row-select"))
+        assert "-selected" in (select_btns[0].classes or ()), \
+            f"expected clicking the row to actually select it (a visible marker), got classes={select_btns[0].classes}"
+        print(f"case 24c ok (DEFECT A FIXED -- 'can't select it'): a real mouse click on the "
+              f"rendered principal row NOW selects it (was a bare, unfocusable Static before this "
+              f"fix -- a genuine no-op the maintainer's own instinct correctly caught)")
+
+        # --- (B) a SECOND mouse+typed add, with no manual scroll required in between -----------
+        await _mouse_add("bob")
+        pane = app.query_one("#pane-principals-authority")
+        md = pane.query_one(MasterDetailFieldWidget)
+        names = sorted(r["name"] for r in md.master_rows)
+        assert names == ["alice", "bob"], \
+            f"expected BOTH principals to survive a second mouse+typed add, got {names}"
+        select_labels = sorted(str(b.label) for b in pane.query(".ct-md-row-select"))
+        assert any("alice" in s for s in select_labels) and any("bob" in s for s in select_labels), \
+            f"expected BOTH rows to actually render in the compact list, got {select_labels}"
+        print(f"case 24d ok (DEFECT B -- second add): both {names} survive two consecutive real "
+              f"mouse+typed adds at the maintainer's own terminal size/dest/dry-run combination, "
+              f"and both render in the compact list ({select_labels})")
+
+
+async def case_25() -> None:
+    """TASK 1's own reproduction-matrix small-terminal cell (80x24) -- the ONE cell that DID
+    fail, distinct from the maintainer's own 251x61: a real mouse click on the master Add button
+    (and, once the modal itself grew content-rich from TASK 2's own elucidation fix, a real click
+    inside the modal's own body too) raised `Pilot.OutOfBounds` when the target sat below the
+    viewport -- reproduced RED against the OLD (pre this round) layout, where even
+    `VerticalScroll.scroll_end()` OVERSHOT the true button position (the section body's own `1fr`
+    share was squeezed to a couple of rows by fixed-size title/description siblings above it,
+    `panes.py`'s own compose() docstring has the measured account). GREEN: at the SAME 80x24, a
+    real click that starts off-viewport, then scrolls its own container to the end and retries
+    (matching the maintainer's own "scroll down" step, never a positional-coordinate hack), reaches
+    the master Add button, every modal field (now including agent_class's own option_help), and
+    the Save button -- and the row genuinely lands."""
+    app = tui_app.build_app(_fresh_state(), dry_run=True)
+    async with app.run_test(size=(80, 24)) as pilot:
+        await pilot.pause()
+        tree = app.query_one("#ct-tree", Tree)
+        tree.select_node(_find_node(tree, "fork-target"))
+        await pilot.pause()
+        app.query_one("#pane-fork-target #ct-field-dest", Input).value = "/tmp/ctj-case25-dest"
+        await pilot.pause()
+        await app._panes["principals-authority"].refresh_blocked()
+        tree.select_node(_find_node(tree, "principals-authority"))
+        await pilot.pause()
+        pane = app.query_one("#pane-principals-authority")
+
+        async def _click_scrolling_if_needed(widget, container: VerticalScroll) -> None:
+            try:
+                await pilot.click(widget)
+            except Exception:
+                container.scroll_end(animate=False)
+                await pilot.pause()
+                await pilot.click(widget)
+
+        section_body = pane.query_one(".ct-section-body", VerticalScroll)
+        add_btn = pane.query_one("#ct-field-register-master-add", Button)
+        await _click_scrolling_if_needed(add_btn, section_body)
+        await pilot.pause()
+
+        modal = app.screen
+        modal_body = modal.query_one("#ct-modal-body", VerticalScroll)
+        name_input = modal.query_one("#ct-field-name", Input)
+        await _click_scrolling_if_needed(name_input, modal_body)
+        await pilot.pause()
+        for ch in "smallterm":
+            await pilot.press(ch)
+        await pilot.pause()
+        rs = modal.query_one("#ct-field-agent_class", RadioSet)
+        await _click_scrolling_if_needed(rs.children[1], modal_body)
+        await pilot.pause()
+        purpose_input = modal.query_one("#ct-field-purpose", Input)
+        await _click_scrolling_if_needed(purpose_input, modal_body)
+        await pilot.pause()
+        for ch in "case25":
+            await pilot.press(ch)
+        await pilot.pause()
+        save_btn = modal.query_one("#ct-modal-save", Button)
+        await _click_scrolling_if_needed(save_btn, modal_body)
+        await pilot.pause()
+
+        pane = app.query_one("#pane-principals-authority")
+        md = pane.query_one(MasterDetailFieldWidget)
+        assert md.master_rows == [{"name": "smallterm", "agent_class": "model", "purpose": "case25"}], \
+            f"expected a real mouse-driven add (scroll-and-retry, never a coordinate hack) to land at 80x24, got {md.master_rows}"
+        print(f"case 25 ok (small-terminal, 80x24): a real mouse click that starts off-viewport, "
+              f"scrolls its own container, and retries reaches the master Add button AND every "
+              f"modal field (now content-rich with elucidation) AND the Save button -- the row "
+              f"genuinely lands: {md.master_rows}")
 
 
 async def _main() -> None:
@@ -1605,6 +1972,9 @@ async def _main() -> None:
     await case_20()
     await case_21()
     await case_22()
+    await case_23()
+    await case_24()
+    await case_25()
     print("ALL CASES OK -- tools.configtree.app.ConfigTreeApp driven end-to-end through the "
           "REAL tools.setup_tui.steps.SECTIONS registry via Pilot, LIVE-MODEL semantics "
           "throughout (no per-section save exists): a state-aliasing reproduction and structural "
