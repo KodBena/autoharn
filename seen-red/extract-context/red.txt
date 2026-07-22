@@ -1,0 +1,65 @@
+seen-red/extract-context — banked RED evidence (both-polarity proof, fixture-census)
+
+extract-context (bootstrap/extract_context.py + the repo-root `./extract-context` shim) is the
+mechanized world-context extraction the world-context consult designed
+(vestigial_documentation/design/FABLE-WORLD-CONTEXT-MIGRATION-CONSULT-2026-07-19.md; autoharn
+ledger row 1942 step 1). This file banks two pieces of RED evidence: (A) an EXPECTED-red case
+that stays part of the green suite (RED-INGEST-UNREVIEWED, a refusal the tool is SUPPOSED to
+produce), and (B) a genuine DEFECT this fixture caught during this build, before it landed, with
+the fix that turned it green -- both from LIVE runs against the real toy@192.168.122.1 db, using
+throwaway scratch schemas (ecfxsrcfixture_scratch / ecfxtgtfixture_scratch), torn down after.
+
+--------------------------------------------------------------------------------------------------
+(A) CASE RED-INGEST-UNREVIEWED -- expected refusal, still exercised every green run
+
+`./extract-context ingest` against a manifest with no `{"record":"review","reviewed":true,...}`
+line is REFUSED WHOLESALE, exit 1, zero rows written to the target world:
+
+  extract-context ingest: REFUSED WHOLESALE -- /tmp/ecfx/manifest.jsonl carries no reviewed
+  marker ({"record":"review","reviewed":true,...}). This is the maintainer's veto surface
+  (autoharn ledger row 1942) -- no item, carried or dropped, is written until a distinct
+  reviewer appends that line. No write was attempted.
+  EXIT=1
+
+Verified live: target ledger row count before and after the refused attempt was identical (6),
+queried directly via `SELECT count(*) FROM ecfxtgt_scratch.ledger` -- not inferred from the
+tool's own exit code alone.
+
+--------------------------------------------------------------------------------------------------
+(B) A genuine defect found by this fixture during the build, fixed, banked as evidence the RED
+    path is real (not a fixture that only ever passes)
+
+First live `ingest` attempt against a reviewed manifest (before the fix below) refused EVERY
+carry-verbatim/carry-reopened item whose ingestion path used the generic `led <kind>
+<statement...>` form with `--refs` placed AFTER the statement -- the kernel's own CLI parser
+requires standing flags like `--refs` BEFORE the kind word (`led [flags] <kind> <statement...>`),
+not after the statement, and refuses loudly (never silently swallowing the flag into statement
+prose) when given in the wrong position:
+
+  {"class": "1.2_standing_decisions", "disposition": "carry-verbatim", "outcome": "DROPPED",
+   "reason": "led refused: led: REFUSED -- the statement contains '--refs' as a TRAILING (or
+   embedded) shell argument, which is a known led flag token. Flags are consumed by the
+   top-of-file parser BEFORE the variadic <statement...> capture begins -- a flag placed after
+   the statement is silently swallowed into statement prose instead of being parsed, and the
+   typed column it names lands NULL with no error (ledger item
+   led-refs-flag-order-parser-bug; BACKLOG autoharn1 rows 1053/1054, experience-world rows
+   65/66/71/87 -- each occurrence cost a superseding rewrite).
+   NOTHING was written. Flags go BEFORE the statement -- re-issue as:
+     ./led [flags] decision --refs re-asserted from ecfx-src: ecfx-src:row:7 \"<statement...>\""}
+
+  {"class": "1.5_open_questions", "disposition": "carry-reopened", "outcome": "DROPPED",
+   "reason": "led refused: led: REFUSED -- the statement contains '--refs' as a TRAILING (or
+   embedded) shell argument ... Flags go BEFORE the statement -- re-issue as:
+     ./led [flags] question --refs re-asserted from ecfx-src: ecfx-src:row:10 \"<statement...>\""}
+
+FIX (bootstrap/extract_context.py, `cmd_ingest`): the two call sites for classes
+`1.2_standing_decisions` and `1.5_open_questions` were reordered from
+`["decision", *grade_args, statement, "--refs", refs]` to
+`["--refs", refs, "decision", *grade_args, statement]` (and identically for `question`) --
+`--refs` now precedes the kind word, matching `led`'s own documented flag-ordering contract. Note
+that `led work open`'s OWN `--refs` (a work-open-specific flag, not the generic top-of-file one)
+is unaffected -- it is parsed inside `work open`'s own subcommand loop and was already correctly
+positioned; only the two generic-path call sites needed the fix. Re-run after the fix: both
+classes RE-ASSERTED/RE-ENACTED cleanly (see GREEN-INGEST-ATTRIBUTED in the current green suite,
+seen-red/extract-context/run_fixtures.py) -- NOTHING here is a residual known-broken path; this
+is banked so the fixture's own red-catching capability is provably real, not merely claimed.
