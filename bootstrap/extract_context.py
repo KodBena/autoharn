@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-22T02:32:51Z
-#   last-change: 2026-07-22T02:42:43Z
-#   contributors: 1fa3ab69/main
+#   last-change: 2026-07-22T03:13:10Z
+#   contributors: 1fa3ab69/main, 431cddfa/main
 # <<< PROVENANCE-STAMP <<<
 
 """extract_context — the mechanized world-context extraction the world-context consult designed
@@ -65,7 +65,14 @@ at all as of this kernel lineage; all of this is stated in the provenance block'
                                                      procedures — this tool does not invent a
                                                      heuristic to split "ordinary rule" from
                                                      "invented procedure"; that judgment, if
-                                                     wanted, is ingestion-side re-reading)
+                                                     wanted, is ingestion-side re-reading). PRE-S36
+                                                     FALLBACK (row 1950): if standing_decisions
+                                                     does not exist, every unsuperseded kind=
+                                                     decision row in <schema>.ledger_current (s31
+                                                     semantics) is carried the same way, grade
+                                                     honestly null (no grade concept pre-s36), a
+                                                     class-summary naming the widening -- see
+                                                     extract_standing_decisions()'s own docstring
   1.4  open work items             carry-reopened   <schema>.ledger_current (work_opened) JOIN
                                                      <schema>.work_item_current WHERE state='open'
        + open work DEBT           drop-with-reason  work_review_gap / work_item_violations —
@@ -245,21 +252,68 @@ def extract_principals(dep) -> list[dict]:
 
 
 def extract_standing_decisions(dep) -> list[dict]:
-    """1.2/1.3 Standing decisions and procedures — carry-verbatim (RE-ASSERT)."""
-    if not _relation_exists(dep, dep.schema, "standing_decisions"):
+    """1.2/1.3 Standing decisions and procedures — carry-verbatim (RE-ASSERT).
+
+    PRE-S36 FALLBACK (row 1950 lesson: this world's own kernel, autoharn1, predates s36 --
+    `standing_decisions` (s36) does not exist, but the consult's own trust condition (row 1942:
+    "carry verbatim-with-citation, nothing silently dropped") does not relax just because a
+    younger world lacks the grading view. Pre-s36, the in-force decision vocabulary IS the
+    supersedes-filtered `ledger_current` view (s31 semantics) -- the exact source pickup's own
+    IN-FORCE-DECISIONS/RESOURCES/ESTIMATES sections already read (bootstrap/templates/
+    legacy-pickup.tmpl's header). So every unsuperseded kind=decision row there crosses as a
+    1.2_standing_decisions carry-verbatim item, with NO grade (the concept does not exist on this
+    kernel -- `grade` is honestly `None`, never invented). This is a genuine WIDENING relative to
+    the s36 path (which reads only the GRADED subset via `standing_decisions` = ledger_current
+    WHERE decision_grade IS NOT NULL, kernel/lineage/s36-decision-grade.sql) -- named here, not
+    silently matched to it, via the class-summary line appended alongside the items. 1.3
+    (procedures) still has no distinct kernel representation on any kernel lineage and stays
+    subsumed under 1.2 (CLASSES_OUT_OF_SCOPE) whichever branch runs. The s36-present branch above
+    is untouched -- same query, same item shape, byte-identical."""
+    if _relation_exists(dep, dep.schema, "standing_decisions"):
+        r = _psql_tuples(dep, f"SELECT id, grade, statement FROM {dep.schema}.standing_decisions "
+                              f"ORDER BY id;")
+        items = []
+        for rid, grade, statement in _rows(r):
+            items.append({
+                "record": "item", "class": "1.2_standing_decisions", "disposition": "carry-verbatim",
+                "dust_row_ids": [int(rid)], "row_kind": "decision", "grade": grade,
+                "statement": statement, "refs": f"{dep.name}:row:{rid}", "reason": None,
+            })
+        return items
+
+    if not _relation_exists(dep, dep.schema, "ledger_current"):
         return [{"record": "class-summary", "class": "1.2_standing_decisions",
                   "disposition": "drop-with-reason", "count": 0,
-                  "reason": "UNAVAILABLE: this world's kernel predates s36 "
-                            "(standing_decisions does not exist)"}]
-    r = _psql_tuples(dep, f"SELECT id, grade, statement FROM {dep.schema}.standing_decisions "
-                          f"ORDER BY id;")
+                  "reason": "UNAVAILABLE: this world's kernel predates both s36 (no "
+                            "standing_decisions) and s15 (no ledger_current) -- no in-force "
+                            "decision vocabulary of any kind exists to extract from."}]
+
+    r = _psql_tuples(dep, f"SELECT id, statement FROM {dep.schema}.ledger_current "
+                          f"WHERE kind = 'decision' ORDER BY id;")
+    rows = _rows(r)
     items = []
-    for rid, grade, statement in _rows(r):
+    for rid, statement in rows:
         items.append({
             "record": "item", "class": "1.2_standing_decisions", "disposition": "carry-verbatim",
-            "dust_row_ids": [int(rid)], "row_kind": "decision", "grade": grade,
+            "dust_row_ids": [int(rid)], "row_kind": "decision", "grade": None,
             "statement": statement, "refs": f"{dep.name}:row:{rid}", "reason": None,
         })
+    items.append({
+        "record": "class-summary", "class": "1.2_standing_decisions",
+        "disposition": "carry-verbatim", "count": len(rows),
+        "reason": "PRE-S36 FALLBACK: this world's kernel predates s36 (standing_decisions does "
+                  "not exist). Every unsuperseded kind=decision row in ledger_current (s31 "
+                  "supersedes-filtered semantics -- the same source pickup's own IN-FORCE-"
+                  "DECISIONS/RESOURCES/ESTIMATES sections read, per bootstrap/templates/"
+                  "legacy-pickup.tmpl) is carried verbatim as this class's item, since no grade "
+                  "concept exists pre-s36 to filter on. This carries ALL unsuperseded decision "
+                  "rows, not only a graded subset -- a genuine widening relative to the s36 path "
+                  "(which reads only decision_grade IS NOT NULL rows), named here rather than "
+                  "silently matched to it. No grade is represented on any item above (field is "
+                  "null) since none exists on this kernel; inventing one would misrepresent the "
+                  "source. 1.3 (procedures) has no distinct kernel representation on this kernel "
+                  "either and stays subsumed under these same items (CLASSES_OUT_OF_SCOPE).",
+    })
     return items
 
 

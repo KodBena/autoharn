@@ -63,3 +63,47 @@ positioned; only the two generic-path call sites needed the fix. Re-run after th
 classes RE-ASSERTED/RE-ENACTED cleanly (see GREEN-INGEST-ATTRIBUTED in the current green suite,
 seen-red/extract-context/run_fixtures.py) -- NOTHING here is a residual known-broken path; this
 is banked so the fixture's own red-catching capability is provably real, not merely claimed.
+
+--------------------------------------------------------------------------------------------------
+(C) 2026-07-22 -- PRE-S36 FALLBACK, RED-then-GREEN (this repo's own autoharn1 world, ledger row
+    1950's live commission)
+
+extract-context, run live against this repo's own world (autoharn1, deployment.json at repo root),
+came back for class 1.2_standing_decisions as a single class-summary: "UNAVAILABLE: this world's
+kernel predates s36 (standing_decisions does not exist)" -- honest, but insufficient for a
+succession whose trust condition is verbatim-with-citation carry, nothing silently dropped
+(row 1942). PRE-S36-FALLBACK was added to run_fixtures.py (simulating a pre-s36 kernel by dropping
+the `standing_decisions` VIEW on the scratch source world -- not birthing a whole second lineage
+chain, since the production code branches solely on `_relation_exists(standing_decisions)`) and
+run BEFORE `extract_standing_decisions()` gained its fallback branch:
+
+  PRE-S36-FALLBACK: standing_decisions absent -> 0 kind=decision row(s) from ledger_current
+  carried verbatim with grade=None, 1 class-summary naming the widening -- FAIL
+
+  !! PRE-S36-FALLBACK: fallback extraction did not produce the expected carry-verbatim/no-grade
+     items + class-summary (exit=0)
+  decisions=[]
+  summary=[{'class': '1.2_standing_decisions', 'count': 0, 'disposition': 'drop-with-reason',
+  'reason': "UNAVAILABLE: this world's kernel predates s36 (standing_decisions does not exist)",
+  'record': 'class-summary'}]
+
+(the two decision rows seeded earlier in the same fixture run -- "Standing rule ALPHA" (durable)
+and "ordinary undurable decision, not standing" -- were both silently absent from the manifest,
+exactly the row-1942 trust-condition violation this addition exists to close.)
+
+FIX: `extract_standing_decisions()` gained an ELSE branch -- when `standing_decisions` does not
+exist but `ledger_current` does, every unsuperseded kind=decision row is read from
+`ledger_current` (s31 supersedes-filtered semantics, the same source `./pickup`'s own
+IN-FORCE-DECISIONS/RESOURCES/ESTIMATES sections read) and carried as a 1.2_standing_decisions
+carry-verbatim item with `grade: null` (no grade concept exists pre-s36 -- never invented), plus
+one class-summary line naming the fallback and its widening relative to the s36 path (it carries
+ALL unsuperseded decision rows, not only the graded subset `standing_decisions` itself would
+select). Re-run after the fix, same scratch world:
+
+  PRE-S36-FALLBACK: standing_decisions absent -> 2 kind=decision row(s) from ledger_current
+  carried verbatim with grade=None, 1 class-summary naming the widening -- PASS
+
+The s36-present branch (exercised by every other case in this suite, GREEN-EXTRACT-DETERMINISTIC
+through GREEN-INGEST-ATTRIBUTED) is untouched code -- same query, same item shape -- and all five
+of those cases stayed green across both the RED and GREEN runs of this addition, confirming the
+fix is additive-only.
