@@ -1,7 +1,7 @@
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-18T21:31:20Z
-#   last-change: 2026-07-19T17:37:34Z
-#   contributors: ab5d5bab/main
+#   last-change: 2026-07-22T00:10:30Z
+#   contributors: ab5d5bab/main, 1fa3ab69/main
 # <<< PROVENANCE-STAMP <<<
 
 """tools/setup_tui/ui.py -- the ONE numbered-menu UI substrate (ADR-0012 P1: one home for the
@@ -43,6 +43,38 @@ from pathlib import Path
 class ScriptExhausted(RuntimeError):
     """A ScriptedUi ran out of answers -- the answers file did not supply enough lines for the
     flow it drove. Never silently defaults; the caller sees exactly which prompt starved."""
+
+
+class NavigateBack(Exception):
+    """design/FABLE-SETUP-TUI-NAVIGATION-SPEC.md §3: raised by `NavigableUi` (below) when the
+    operator's answer at ANY prompt is the BACK sentinel, instead of that sentinel ever being
+    returned to a screen function as if it were a real answer. Caught in exactly one place --
+    `tools.setup_tui.app._drive_screens`'s screen loop -- which pops the cursor back to the
+    previous completed screen and re-enters it. Never expected to reach a screen module."""
+
+
+class _BackSentinel:
+    """A private, unique value every backend's ask-method returns instead of a real answer when
+    the operator asks to go back -- recognized by identity (`is BACK`, never string equality) so
+    a legitimate typed answer that happens to collide with one of the trigger spellings below is
+    never confused with an actual request to navigate (each backend converts its own trigger
+    spelling to this ONE object before returning, so nothing downstream ever sees the trigger
+    text itself)."""
+
+    def __repr__(self) -> str:
+        return "<BACK>"
+
+
+BACK = _BackSentinel()
+
+# The two trigger spellings design/FABLE-SETUP-TUI-NAVIGATION-SPEC.md §3 names: plain interactive
+# input takes a bare "<" (fast to type at any prompt, and distinct from any legitimate answer this
+# package's screens ever ask for -- world names/paths/hostnames never consist of nothing but "<");
+# a `--scripted` answers file spells it "<BACK>" (an answers file is read by a human too -- the
+# module docstring's own "commented for a human reader" clause -- so its trigger line is spelled
+# out rather than a bare punctuation mark that reads as a typo in a column of answers).
+_BACK_TRIGGER_PLAIN = "<"
+_BACK_TRIGGER_SCRIPTED = "<BACK>"
 
 
 class Ui:
@@ -90,10 +122,22 @@ class Ui:
 
 
 class InteractiveUi(Ui):
+    # NAVIGATION (design/FABLE-SETUP-TUI-NAVIGATION-SPEC.md §3): each ask-method below checks the
+    # RAW keystroke against `_BACK_TRIGGER_PLAIN` BEFORE any of its own validation/default/
+    # coercion logic runs, and returns the shared `BACK` sentinel instead of a real answer when it
+    # matches -- never `NotImplementedError`'d, never coerced into "y"/"n"/an index the way an
+    # ordinary stray character would be. The four return-type annotations below (`str`/`bool`/
+    # `None`) are honest for every answer that is NOT `BACK`; the sentinel escape is the one typed
+    # exception every caller of this class already goes through `NavigableUi` for (below), which
+    # is the ONE place `is BACK` is ever checked -- a screen calling these methods directly would
+    # never route a bare "<" specially, which is exactly why `app.py` never hands a screen a raw
+    # backend, only a `NavigableUi` wrapping one.
     def ask_text(self, prompt: str, default: str | None = None) -> str:
         suffix = f" [{default}]" if default is not None else ""
         while True:
             raw = input(f"{prompt}{suffix}: ").strip()
+            if raw == _BACK_TRIGGER_PLAIN:
+                return BACK  # type: ignore[return-value]
             if raw:
                 return raw
             if default is not None:
@@ -107,21 +151,29 @@ class InteractiveUi(Ui):
         keys = [k for k, _ in options]
         while True:
             raw = input(f"choose 1-{len(options)}: ").strip()
+            if raw == _BACK_TRIGGER_PLAIN:
+                return BACK  # type: ignore[return-value]
             if raw in keys:
                 return raw
             if raw.isdigit() and 1 <= int(raw) <= len(options):
                 return keys[int(raw) - 1]
-            print(f"  (enter a number 1-{len(options)}, or one of: {', '.join(keys)})")
+            print(f"  (enter a number 1-{len(options)}, or one of: {', '.join(keys)}, or '<' to "
+                  f"go back)")
 
     def confirm(self, prompt: str, default: bool = False) -> bool:
         hint = "Y/n" if default else "y/N"
-        raw = input(f"{prompt} [{hint}]: ").strip().lower()
+        raw = input(f"{prompt} [{hint}]: ").strip()
+        if raw == _BACK_TRIGGER_PLAIN:
+            return BACK  # type: ignore[return-value]
+        raw = raw.lower()
         if not raw:
             return default
         return raw in ("y", "yes")
 
     def pause(self, prompt: str = "Press enter when done: ") -> None:
-        input(prompt)
+        raw = input(prompt).strip()
+        if raw == _BACK_TRIGGER_PLAIN:
+            return BACK  # type: ignore[return-value]
 
 
 class ScriptedUi(Ui):
@@ -154,8 +206,17 @@ class ScriptedUi(Ui):
         self._i += 1
         return val
 
+    # NAVIGATION (design/FABLE-SETUP-TUI-NAVIGATION-SPEC.md §3): each ask-method below checks the
+    # RAW answer line against `_BACK_TRIGGER_SCRIPTED` BEFORE any of its own "-"-default/index/
+    # yes-no coercion -- `confirm`'s own `val in ("y", "yes", ...)` coercion would otherwise
+    # silently read "<BACK>" as "no", and `ask_choice`'s own key/index validation would otherwise
+    # raise `SystemExit` on it as an invalid answer. See `InteractiveUi`'s matching comment for
+    # why the sentinel never reaches a screen directly.
     def ask_text(self, prompt: str, default: str | None = None) -> str:
         val = self._next(prompt)
+        if val == _BACK_TRIGGER_SCRIPTED:
+            print(f"{prompt}: <BACK>   [scripted]")
+            return BACK  # type: ignore[return-value]
         if val == "-" and default is not None:
             val = default
         print(f"{prompt}: {val}   [scripted]")
@@ -167,6 +228,9 @@ class ScriptedUi(Ui):
             print(f"  {i}. {label}")
         keys = [k for k, _ in options]
         val = self._next(prompt)
+        if val == _BACK_TRIGGER_SCRIPTED:
+            print(f"choice: <BACK>   [scripted]")
+            return BACK  # type: ignore[return-value]
         if val.isdigit() and 1 <= int(val) <= len(options):
             val = keys[int(val) - 1]
         if val not in keys:
@@ -178,7 +242,11 @@ class ScriptedUi(Ui):
         return val
 
     def confirm(self, prompt: str, default: bool = False) -> bool:
-        val = self._next(prompt).lower()
+        raw = self._next(prompt)
+        if raw == _BACK_TRIGGER_SCRIPTED:
+            print(f"{prompt}: <BACK>   [scripted]")
+            return BACK  # type: ignore[return-value]
+        val = raw.lower()
         result = val in ("y", "yes", "true", "1")
         print(f"{prompt}: {'yes' if result else 'no'}   [scripted]")
         return result
@@ -189,7 +257,83 @@ class ScriptedUi(Ui):
         # what the operator claims ("done") vs. what they actually did (nothing), and the
         # post-keypress probe downstream is what catches the gap, not this method itself.
         val = self._next(prompt)
+        if val == _BACK_TRIGGER_SCRIPTED:
+            print(f"{prompt}<BACK>   [scripted]")
+            return BACK  # type: ignore[return-value]
         print(f"{prompt}{val}   [scripted]")
+
+
+class NavigableUi(Ui):
+    """design/FABLE-SETUP-TUI-NAVIGATION-SPEC.md §3: wraps ANY other `Ui` backend and gives every
+    one of its ask-methods the BACK affordance WITHOUT any screen module knowing about it --
+    screens.py calls `ui.ask_text`/`ask_choice`/`confirm`/`pause` exactly as it always has; THIS
+    seam is the one place "does the answer mean navigate back" is decided (ADR-0012 P1), so no
+    screen function needed to change. `tools.setup_tui.app._drive_screens` constructs one of
+    these per screen visited, wrapping whatever real backend `_select_backend` chose, seeded with
+    that SAME screen's own answers from its last visit (if this is a revisit) so a re-entered
+    screen can offer them back as defaults/hints -- `design/FABLE-SETUP-TUI-NAVIGATION-SPEC.md`
+    §1(a)'s "re-enter the screen with its previous answers offered as defaults".
+
+    `banner`/`say`/`suspend` pass straight through -- this wrapper touches no screen COPY, only
+    the answer-collection seam (the sibling build reworking `Ui.say` content is untouched by this
+    class)."""
+
+    def __init__(self, inner: Ui, *, prior_answers: dict[str, object] | None = None) -> None:
+        self._inner = inner
+        self._prior = dict(prior_answers or {})
+        # Every answer THIS visit actually gave, keyed by the exact prompt string -- read back by
+        # `tools.setup_tui.flow_position.FlowPosition.record` once the screen returns normally, so
+        # the NEXT time this screen is (re-)entered its own `_prior` above is seeded from here.
+        self.answers: dict[str, object] = {}
+
+    def banner(self, text: str) -> None:
+        self._inner.banner(text)
+
+    def say(self, text: str = "") -> None:
+        self._inner.say(text)
+
+    def suspend(self):
+        return self._inner.suspend()
+
+    def _note_prior(self, prompt: str) -> None:
+        prior = self._prior.get(prompt)
+        if prior is not None:
+            self._inner.say(f"  (you answered this {prior!r} last time -- press enter to keep "
+                             f"it, or answer again)")
+
+    def ask_text(self, prompt: str, default: str | None = None) -> str:
+        self._note_prior(prompt)
+        prior = self._prior.get(prompt)
+        eff_default = prior if isinstance(prior, str) else default
+        val = self._inner.ask_text(prompt, eff_default)
+        if val is BACK:
+            raise NavigateBack()
+        self.answers[prompt] = val
+        return val
+
+    def ask_choice(self, prompt: str, options: list[tuple[str, str]]) -> str:
+        self._note_prior(prompt)
+        val = self._inner.ask_choice(prompt, options)
+        if val is BACK:
+            raise NavigateBack()
+        self.answers[prompt] = val
+        return val
+
+    def confirm(self, prompt: str, default: bool = False) -> bool:
+        self._note_prior(prompt)
+        prior = self._prior.get(prompt)
+        eff_default = prior if isinstance(prior, bool) else default
+        val = self._inner.confirm(prompt, eff_default)
+        if val is BACK:
+            raise NavigateBack()
+        self.answers[prompt] = val
+        return val
+
+    def pause(self, prompt: str = "Press enter when done: ") -> None:
+        val = self._inner.pause(prompt)
+        if val is BACK:
+            raise NavigateBack()
+        return None
 
 
 def build_ui(scripted_path: str | None) -> Ui:
