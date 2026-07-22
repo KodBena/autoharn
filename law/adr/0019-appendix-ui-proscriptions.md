@@ -1,4 +1,7 @@
-<!-- doc-attest-exempt: consult deliverable, verbatim record of the 2026-07-22 two-phase Opus consult (phase 2: critique + consolidation). Removal condition: superseded by ADR-0019 ratification. -->
+<!-- doc-attest-exempt: consult-authored companion adopted by maintainer decision 2026-07-22
+("We'll take the consolidated... stand it next to the ADR"). Verbatim consult text below the
+install header; removal condition: superseded by a later ratified edition. -->
+
 # UI Failure Proscriptions — Consolidated (blind + sighted consults merged)
 
 *Phase 2. This document critiques the prior sighted consult
@@ -7,6 +10,127 @@ consult ("BPn" below), then merges both into one deduplicated proscription set o
 enforcement strength. Provenance is tagged per rule: **[sighted]** = originated only in the
 codebase-aware consult; **[blind]** = originated only in the codebase-blind consult;
 **[convergent]** = both instances produced it independently.*
+
+**Standing of this document (maintainer framing).** The Synopsis below is required reading for UI
+implementers; the full rules (Part 2) and the critique (Part 1) are consulted per good judgment.
+An implementer who reads only the Synopsis should never build something a full rule would refuse —
+where a rule's nuance cannot survive compression, its synopsis entry ends with "(full rule has
+load-bearing detail)" so judgment knows to open it.
+
+---
+
+## Synopsis — one entry per rule (C1–C29)
+
+*Rule id · short name · what is refused and when · enforcement, in a word or two. Tiers match Part
+2. This is the required-reading layer; open the full rule when its entry flags load-bearing detail
+or when your case sits near its edge.*
+
+### Tier A — Construction-time typed refusal
+
+- **C1 — One fact, one control.** Two controls bound to one model slot (aliasing), or one slot
+  surfaced as two editable/mirrored controls, is refused at UI start. *Enforcement: construction-time
+  typed (bijection check over the binding registry).*
+- **C2 — No editable derived value.** Binding an editable control to a value the system derives
+  (status, count, computed summary) is refused; derived values render read-only. *Enforcement:
+  construction-time typed (field-kind `source|derived`).*
+- **C3 — Live projection, no shadow store.** A per-widget or per-section form store reconciled by a
+  "Save"/"Apply" is refused; the on-screen value is the live model. A single transactional commit of
+  the whole model is permitted. *Enforcement: construction-time typed; review backstop. (full rule
+  has load-bearing detail — the whole-model commit boundary is the permitted exception.)*
+- **C4 — Config commits validated + atomic.** Committing operator input to the live target without
+  validating the whole document first, or with a non-atomic (partial-on-failure) write, is refused.
+  *Enforcement: construction-time typed (parse-don't-validate brand) + atomic write.*
+- **C5 — Success only from durable ack.** Entering a success/committed state before the backend
+  acknowledges durability is refused; optimistic rendering is allowed only as a distinct labelled
+  provisional state with a rollback. *Enforcement: construction-time typed (async state machine).*
+- **C6 — State-tagged async data.** Rendering a value such that loading, error, empty, genuine zero,
+  and no-data-yet are indistinguishable is refused. *Enforcement: construction-time typed
+  (discriminated union + exhaustiveness).*
+- **C7 — As-of time + stale state.** Rendering an aging operational datum without a viewer-legible
+  as-of time and a visibly distinct stale/disconnected state (past a declared threshold) is refused.
+  *Enforcement: construction-time typed (required `asOf` + staleness policy).*
+- **C8 — Errors located, remediable, no dead end.** An error/failure presentation that fails to
+  locate the cause, state the remedy, and offer a reachable next action is refused. *Enforcement:
+  construction-time typed (required error fields) + review for dead-end reachability.*
+- **C9 — Cancellable long operations.** Offering an operation past ~10 s, or any side-effecting one
+  running longer than instantaneously, without a cancel/abort wired to actually stop it, is refused.
+  *Enforcement: construction-time typed (cancellation token in the runner signature).*
+- **C10 — Irreversible actions guarded.** A destructive/irreversible action (delete, overwrite,
+  reset, discard) that commits without either a confirm step or a registered undo is refused.
+  *Enforcement: construction-time typed (action reversibility kind).*
+- **C11 — No in-band control sentinel.** Carrying navigation/command/mode meaning as a sentinel
+  parsed out of the data-entry stream (e.g. a typed `<` meaning "back") is refused; control uses the
+  platform's out-of-band input layer. *Enforcement: construction-time (absence of a sentinel parser)
+  + review.*
+
+### Tier B — Construction-time via a witnessed in-repo gate
+
+- **C12 — Bounded text measure.** Emitting a text line whose width is a function of the
+  viewport/terminal, rather than a fixed measure (~66 ch; setup-TUI uses 78), is refused at the
+  renderer. *Enforcement: construction-time gate (witnessed; renderer wraps to a constant).*
+- **C13 — Typed semantic elements.** Operator-facing content as a raw string doing its own layout
+  (embedded newlines, hand-spaced pseudo-columns, ASCII-art tables) rather than a typed element
+  (heading/paragraph/table/status/note/rule) is refused. *Enforcement: construction-time typed
+  (witnessed; closed vocabulary + purity gate).*
+- **C14 — No substrate emulation.** A print-stream/teletype as the primary surface, or a hand-rolled
+  scroll/selection where the toolkit provides one, is refused; if nothing is focusable/scrollable/
+  addressable it does not start. *Enforcement: construction-time gate (witnessed; the print-ban is
+  the real bite — see full rule).*
+
+### Tier C — Load/startup-time validation, and CI gate / lint
+
+- **C15 — No host-chord collision.** Binding a chord the host reserves (tmux prefix `ctrl+b`,
+  terminal flow-control/signals; browser/AT chords `ctrl+w/t/l`) is refused against the known-reserved
+  set. *Enforcement: load-time gate vs. known set; review for the open tail.*
+- **C16 — Input survives error/navigation.** Discarding operator-entered data on validation failure,
+  transient error, or navigation-away without preserving it or an explicit unsaved-changes guard is
+  refused. *Enforcement: typed (errors returned with input) + CI gate (leave-guard on editor routes).*
+- **C17 — Keyboard/focus integrity.** A control not reachable/operable by standard keyboard traversal,
+  a focus trap with no keyboard exit, a pointer-only or undiscoverable action, or a missing focus
+  indicator, is refused. *Enforcement: CI gate (axe/a11y-lint on Vue; focus-chain test on Textual).*
+- **C18 — No color-only meaning.** Encoding a state distinction (status/validity/severity/selection)
+  by hue alone, with no redundant label/glyph/shape/position, is refused. *Enforcement:
+  construction-time (status component) + CI gate (axe); Textual must also respect `NO_COLOR`.*
+- **C19 — Contrast thresholds.** Rendering text/essential glyphs below WCAG contrast (4.5:1 normal,
+  3:1 large/non-text) against the actual background is refused. *Enforcement: CI gate (Vue); review +
+  no absolute-background assumption (Textual — honest ceiling drops).*
+- **C20 — Real labels, not placeholders.** An input whose only label is disappearing placeholder
+  text, or whose label is not programmatically associated, is refused. *Enforcement: CI gate (axe /
+  a11y-lint).*
+- **C21 — Minimum target size.** A pointer target below the minimum (24×24 CSS px baseline; 44×44
+  AAA) with no larger equivalent hit area is refused. *Enforcement: CI gate (Vue); low-severity
+  review (Textual cell grid).*
+- **C22 — Sanctioned tokens only.** A color/spacing/control instantiated with raw literals (hex,
+  magic spacing, hand-rolled buttons) outside the sanctioned design-token/component set is refused.
+  *Enforcement: CI lint (stylelint / TCSS `$`-variables only).*
+- **C23 — No swallowed errors.** An error path that returns the UI to an apparently-nominal state
+  without surfacing a diagnosable message (empty catch, catch-and-only-log) is refused in UI code.
+  *Enforcement: CI lint (ban `catch {}`/`except: pass`) + typed `Result` floor.*
+- **C24 — No UI-thread blocking.** Running a potentially-slow operation (network, disk, heavy compute)
+  synchronously on the render/event thread such that input freezes is refused. *Enforcement: CI lint
+  (ban blocking calls in handlers) + worker/async routing; Textual: `@work`.*
+
+### Tier D — Spec-time + review, hardening where declared (review is the honest ceiling)
+
+- **C25 — Navigation matches data topology.** Presenting a product-type/partial-order configuration
+  as a forced linear Back/Next wizard, or dissolving a genuine dependency chain into free navigation
+  that skips a real prerequisite, is refused; a wizard is licensed only by a declared total order.
+  *Enforcement: spec-time + review, hardening to load-time where the order is encoded. (full rule has
+  load-bearing detail — both directions are refused.)*
+- **C26 — Feedback / busy state.** An action with no perceptible feedback within its threshold, or an
+  operation past ~1 s with no busy indicator (past ~10 s, no determinate progress), is refused; the
+  UI does not block silently. *Enforcement: review for sufficiency (honest ceiling); lint at async
+  seams. Distinct from C24 (freeze) and C5 (truth of a success claim).*
+- **C27 — Auto-refresh yields to interaction.** An auto-updating view that mutates content under the
+  operator's active focus/selection/scroll, or resets in-progress input on refresh, is refused.
+  *Enforcement: CI lint (guard present) + review (guard adequate).*
+- **C28 — Prioritized, capped alarms.** An operational dashboard presenting alarms/notifications
+  without a required severity and without ordering/rate-cap (so a critical signal is buried) is
+  refused. *Enforcement: construction-time (required severity) + load-time policy assertion; review
+  for threshold tuning.*
+- **C29 — Modes show an indicator.** A mode that changes what the same input does, with no
+  persistent always-visible indication of which mode is active, is refused (removing the mode
+  outranks indicating it). *Enforcement: construction-time (binding present) + review (legibility).*
 
 ---
 
