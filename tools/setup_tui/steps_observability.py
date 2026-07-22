@@ -12,10 +12,13 @@ from tools.setup_tui.plan import DaemonSelection, PlanEntry, WriteAct
 
 
 def fields(state: dict) -> tuple:
+    # NO "dest" field here (maintainer ruling 2026-07-22, ADR-0019 single-editable-home): the
+    # destination directory is owned by Fork/target -- observability reads the shared fact
+    # straight out of state in `submit` below, never via a second field declaration (a
+    # duplicated projection is refused at App construction,
+    # `tools.configtree.spec.validate_shared_ownership`).
     return (
         ConfirmField(name="run", label="Configure observability now?", default=True),
-        TextField(name="dest", label="Destination directory", default=state.get("dest", ""),
-                  shared=True),
         ConfirmField(name="otelcol", label="Select the OTel collector (otelcol-contrib) to start "
                      "with this world?"),
         ConfirmField(name="otel_watch", label="Select the OTel model-provenance watchdog "
@@ -30,9 +33,11 @@ def submit(state: dict, answers: dict) -> SectionResult:
         cl.add("observability", "observability", ck.SKIPPED, "operator skipped screen 9")
         return SectionResult(ok=True, info_lines=("observability configuration skipped.",))
 
-    dest = answers["dest"].strip()
+    # "dest" is Fork/target's own owned field -- read the shared fact directly (already
+    # guaranteed non-empty by `_blocked_needs_dest` below; this section is unreachable otherwise).
+    dest = state.get("dest", "").strip()
     if not dest:
-        return SectionResult(ok=False, errors={"dest": "required"})
+        return SectionResult(ok=False, errors={"": "destination (set in Fork/target) required"})
     plan = state["_plan"]
 
     if answers["otelcol"]:
@@ -71,7 +76,9 @@ def submit(state: dict, answers: dict) -> SectionResult:
     claude_line = f"cd {dest} && claude"
     lines.append(f"--- INSTRUCTED: Claude launch line ---\n{claude_line}")
     cl.add("observability", "claude launch line", ck.INSTRUCTED, claude_line)
-    return SectionResult(ok=True, state_updates={"dest": dest, "observability_engaged": True},
+    # NOTE: no "dest" in state_updates -- it is Fork/target's own owned fact already, never
+    # re-written here (ADR-0012 P1: one writer of one truth).
+    return SectionResult(ok=True, state_updates={"observability_engaged": True},
                        info_lines=tuple(lines))
 
 

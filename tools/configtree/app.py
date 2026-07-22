@@ -31,7 +31,8 @@ from textual.containers import Horizontal, Vertical
 from textual.widgets import ContentSwitcher, Footer, Header, Static, Tree
 
 from tools.configtree.panes import CommitPane, SectionPane
-from tools.configtree.spec import BLOCKED, COMPLETE, INVALID, CommitSpec, SectionSpec, section_status
+from tools.configtree.spec import (BLOCKED, COMPLETE, INVALID, CommitSpec, SectionSpec,
+                                    section_status, validate_shared_ownership)
 
 _STATUS_ICON = {COMPLETE: "[green]✓[/]", INVALID: "[red]✗[/]", BLOCKED: "[yellow]⧖[/]",
                 "incomplete": "[dim]○[/]"}
@@ -64,6 +65,12 @@ class ConfigTreeApp(App):
     def __init__(self, sections: "tuple[SectionSpec, ...]", commit: CommitSpec, *,
                  initial_state: dict | None = None, banner: str | None = None,
                  title: str = "Configuration") -> None:
+        # TYPED REFUSAL AT LOAD (maintainer ruling, ADR-0019 + the maintainer's own ADR-0002
+        # citation: "a duplicated mirror/projection of a value is a type error and refused on
+        # TUI start"): checked BEFORE `super().__init__()` -- no Textual machinery starts at all
+        # if two sections declare the same shared field, construction-time raise, the highest
+        # rung of ADR-0002's loudness hierarchy.
+        validate_shared_ownership(sections)
         super().__init__()
         self.sections = sections
         self.commit_spec = commit

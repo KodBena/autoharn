@@ -62,6 +62,17 @@ Cases (both polarities):
      programmatic `select_node` call), Tab moving focus onto the form, and a real
      `VerticalScroll.scroll_down()` changing `scroll_offset`.
   6. CTRL+Q QUITS -- `App.return_code` reads 130, unconditionally bound with `priority=True`.
+  7. SINGLE-EDITABLE-HOME (maintainer round 3, ADR-0019 + the maintainer's own ADR-0002
+     citation, "a duplicated mirror/projection of a value is a type error and refused on TUI
+     start"): "dest" is owned by Fork/target, "world" by Birth; every OTHER section that used to
+     declare either had the field DROPPED entirely -- no read-only reference anywhere either
+     (struck, same ruling). Proves: `owner_of` agrees with the chosen owners; "dest"/"world"
+     each render an editable widget in EXACTLY their owner and NOWHERE else, checked once each
+     dependent section is genuinely UNBLOCKED (not merely hidden behind a blocked banner);
+     editing dest in Fork/target then world in Birth propagates LIVE to boundary's own
+     `blocked()` check (boundary itself never selected during either edit); and a synthetic
+     double-owner declaration is refused BEFORE any Textual machinery starts (RED-first,
+     construction-time raise).
 
 Zero residue: every `state["dest"]` used here is a `--dry-run` decision-phase string, never
 actually created on disk -- confirmed in case 3's own cleanup assertion.
@@ -81,10 +92,12 @@ sys.path.insert(0, REPO)
 
 from textual.widgets import Button, Checkbox, ContentSwitcher, Input, Tree  # noqa: E402
 
+from tools.configtree import CommitSpec, DuplicatedSharedFieldError, SectionResult, SectionSpec  # noqa: E402
+from tools.configtree.app import ConfigTreeApp  # noqa: E402
 from tools.configtree.fields import (ChoiceField, ListField, TextField, get_field_value,  # noqa: E402
                                       set_field_value)
 from tools.configtree.ids import NodeId  # noqa: E402
-from tools.configtree.spec import COMPLETE, INVALID, section_status  # noqa: E402
+from tools.configtree.spec import COMPLETE, INVALID, owner_of, section_status  # noqa: E402
 from tools.setup_tui import steps, tui_app  # noqa: E402
 from tools.setup_tui.checklist import Checklist  # noqa: E402
 from tools.setup_tui.plan import Plan  # noqa: E402
@@ -166,9 +179,9 @@ async def case_0() -> None:
               f"leaves rehearsal's OWN 'host' field unchanged ({rehearsal_host.value!r})")
 
         # --- TextField "name": birth ("project name") vs signed-genesis ("Key Name-Real") ----
-        # signed-genesis is BLOCKED until a destination exists -- select fork-target and type a
-        # dest first (its own field, "shared=True" by design -- see fields.py's own doctrine)
-        # so signed-genesis's pane actually mounts its fields to query against.
+        # birth AND signed-genesis are both BLOCKED until a destination exists -- select
+        # fork-target and type a dest first (its own OWNED field) so both panes actually mount
+        # their fields to query against.
         tree = app.query_one("#ct-tree", Tree)
         for grp in tree.root.children:
             for leaf in grp.children:
@@ -177,10 +190,8 @@ async def case_0() -> None:
         await pilot.pause()
         app.query_one("#pane-fork-target #ct-field-dest", Input).value = "/tmp/ctj-case0-dest"
         await pilot.pause()
-        for grp in tree.root.children:
-            for leaf in grp.children:
-                if leaf.data and leaf.data.get("slug") == "signed-genesis":
-                    await app._panes["signed-genesis"].refresh_blocked()
+        for slug in ("birth", "signed-genesis"):
+            await app._panes[slug].refresh_blocked()
         await pilot.pause()
 
         birth_name = app.query_one("#pane-birth #ct-field-name", Input)
@@ -306,7 +317,7 @@ async def case_3() -> None:
             ("birth", {"world": "ctjcase3"}, None),
             ("principals-authority", None, None),
             ("signed-genesis", {"statement": "a witnessed probe world"}, {"use_scratch_identity": True}),
-            ("boundary", {"world": "ctjcase3"}, None),
+            ("boundary", None, None),
             ("observability", None, None),
             ("hydration", None, None),
         ]:
@@ -366,7 +377,7 @@ async def case_4() -> None:
             # passes live/field validation (the commit button will enable) but `submit`'s own
             # business rule refuses it: "statement" is required THERE, not at the field layer.
             ("signed-genesis", None, {"use_scratch_identity": True}),
-            ("boundary", {"world": "ctjcase4"}, None),
+            ("boundary", None, None),
             ("observability", None, None),
             ("hydration", None, None),
         ]:
@@ -456,6 +467,113 @@ async def case_6() -> None:
         print(f"case 6 ok: ctrl+q -> App.return_code == {app.return_code} (interrupt exit-code convention)")
 
 
+def _synth_fields_a(state: dict) -> tuple:
+    return (TextField(name="dest", label="Destination", shared=True),)
+
+
+def _synth_fields_b(state: dict) -> tuple:
+    return (TextField(name="dest", label="Destination (again)", shared=True),)
+
+
+def _synthetic_submit(state: dict, answers: dict) -> SectionResult:
+    return SectionResult(ok=True)
+
+
+async def case_7() -> None:
+    """SINGLE-EDITABLE-HOME (maintainer round 3, ADR-0019 + the maintainer's own ADR-0002
+    citation, "a duplicated mirror/projection of a value is a type error and refused on TUI
+    start"): a shared fact renders in EXACTLY ONE owning section -- no read-only reference
+    anywhere either (struck entirely, same ruling). 'dest' is owned by Fork/target (the section
+    whose whole purpose is choosing it); 'world' is owned by Birth (the section whose whole
+    purpose is naming the world being born). Every other declaring section from the prior
+    (rejected) draft had its field DROPPED outright -- reads the shared state directly instead."""
+    app = tui_app.build_app(_fresh_state(), dry_run=True)
+    async with app.run_test(size=(150, 55)) as pilot:
+        await pilot.pause()
+        tree = app.query_one("#ct-tree", Tree)
+
+        # --- (i.5) the library's own owner_of() agrees, checked FIRST (state-independent) ---
+        dest_owner = owner_of(app.sections, "dest")
+        world_owner = owner_of(app.sections, "world")
+        assert dest_owner is not None and str(dest_owner.slug) == "fork-target", \
+            f"expected 'dest' owner == fork-target, got {dest_owner}"
+        assert world_owner is not None and str(world_owner.slug) == "birth", \
+            f"expected 'world' owner == birth, got {world_owner}"
+        print(f"case 7a ok: owner_of(sections, 'dest') == {dest_owner.slug!r}, "
+              f"owner_of(sections, 'world') == {world_owner.slug!r} -- matches the chosen owners")
+
+        # --- (ii) editing the OWNER propagates to dependent sections' blocked() checks, AND
+        # every other declaring section's field is genuinely GONE (checked once each is
+        # actually UNBLOCKED and showing its real fields, not merely hidden behind a blocked
+        # banner -- a stronger proof than checking while still blocked).
+        boundary_icon_before = _tree_icon(app, "boundary")
+        assert "⧖" in boundary_icon_before, f"expected boundary BLOCKED before dest/world are set, got {boundary_icon_before!r}"
+
+        tree.select_node(_find_node(tree, "fork-target"))
+        await pilot.pause()
+        app.query_one("#pane-fork-target #ct-field-dest", Input).value = "/tmp/ctj-case7-dest"
+        await pilot.pause()
+        boundary_icon_dest_only = _tree_icon(app, "boundary")
+        assert "⧖" in boundary_icon_dest_only, \
+            "boundary needs BOTH dest and world -- must still read BLOCKED with only dest set"
+
+        for slug in ("birth", "principals-authority", "signed-genesis", "boundary",
+                     "observability", "hydration"):
+            await app._panes[slug].refresh_blocked()
+        await pilot.pause()
+
+        # Every dest-only-gated section is now genuinely UNBLOCKED, real fields mounted --
+        # NOW "dest" has no widget anywhere except Fork/target is a meaningful check.
+        for slug in ("birth", "principals-authority", "signed-genesis", "observability", "hydration"):
+            assert not app.query(f"#pane-{slug} #ct-field-dest"), \
+                f"'dest' must have NO widget in {slug!r} (now UNBLOCKED) -- it is Fork/target's own owned field"
+        assert app.query("#pane-fork-target #ct-field-dest"), \
+            "'dest' must have its ONE editable widget in Fork/target (the owner)"
+        print("case 7b ok: 'dest' renders editable in Fork/target ONLY -- every other section "
+              "that needs it (birth/principals-authority/signed-genesis/observability/"
+              "hydration), now UNBLOCKED and showing its real fields, has NO 'dest' widget at all")
+
+        tree.select_node(_find_node(tree, "birth"))
+        await pilot.pause()
+        app.query_one("#pane-birth #ct-field-world", Input).value = "ctjcase7"
+        await pilot.pause()
+        await app._panes["boundary"].refresh_blocked()
+        await pilot.pause()
+        boundary_icon_after = _tree_icon(app, "boundary")
+        assert "⧖" not in boundary_icon_after, \
+            (f"expected boundary to UNBLOCK once Birth's OWN 'world' field is set (no navigation "
+             f"to boundary at all), got {boundary_icon_after!r}")
+        print(f"case 7c ok: editing dest in its OWNER (Fork/target) then world in ITS owner "
+              f"(Birth) propagates live to boundary's own blocked() check -- "
+              f"{boundary_icon_before!r} -> {boundary_icon_dest_only!r} -> {boundary_icon_after!r} "
+              f"-- boundary itself never selected during either edit")
+
+        # boundary is now genuinely UNBLOCKED too -- confirm its OWN "world" widget is gone.
+        assert not app.query("#pane-boundary #ct-field-world"), \
+            "'world' must have NO widget in boundary (now UNBLOCKED) -- it is Birth's own owned field"
+        assert app.query("#pane-birth #ct-field-world"), \
+            "'world' must have its ONE editable widget in Birth (the owner)"
+        print("case 7d ok: 'world' renders editable in Birth ONLY -- boundary, now UNBLOCKED and "
+              "showing its real fields, has NO 'world' widget at all -- single editable home "
+              "for both shared facts, no mirrors, confirmed live")
+
+    # --- (iii) load-time refusal, RED-FIRST: a synthetic double-owner declaration ------------
+    synth_a = SectionSpec(slug="synth-a", title="Synth A", group="G", fields=_synth_fields_a,
+                           submit=_synthetic_submit)
+    synth_b = SectionSpec(slug="synth-b", title="Synth B", group="G", fields=_synth_fields_b,
+                           submit=_synthetic_submit)
+    synth_commit = CommitSpec(render_summary=lambda s: "", commit=_synthetic_submit)
+    try:
+        ConfigTreeApp((synth_a, synth_b), synth_commit)
+        raise AssertionError("expected DuplicatedSharedFieldError, no exception was raised")
+    except DuplicatedSharedFieldError as exc:
+        assert "dest" in str(exc) and "synth-a" in str(exc) and "synth-b" in str(exc), \
+            f"expected the refusal to name the field and both sections, got: {exc}"
+        print(f"case 7e ok (RED-FIRST, load-time refusal): a synthetic double-owner declaration "
+              f"of 'dest' across two sections is refused BEFORE any Textual machinery starts "
+              f"(construction-time raise, ADR-0002's own highest rung): {exc}")
+
+
 async def _main() -> None:
     await case_0()
     await case_1()
@@ -464,6 +582,7 @@ async def _main() -> None:
     await case_4()
     await case_5()
     await case_6()
+    await case_7()
     print("ALL CASES OK -- tools.configtree.app.ConfigTreeApp driven end-to-end through the "
           "REAL tools.setup_tui.steps.SECTIONS registry via Pilot, LIVE-MODEL semantics "
           "throughout (no per-section save exists): a state-aliasing reproduction and structural "
@@ -471,8 +590,10 @@ async def _main() -> None:
           "blocked-to-unblocked flip on a SINGLE keystroke, live inline validation both "
           "polarities with focus never leaving the field, a full ten-section journey typed live "
           "to a clean dry-run commit via the ONE commit button, a commit-time business-rule "
-          "refusal (red) and its retry (green), keyboard/Tab/scroll navigation primitives, and "
-          "ctrl+q's exit-code contract.")
+          "refusal (red) and its retry (green), keyboard/Tab/scroll navigation primitives, "
+          "ctrl+q's exit-code contract, and single-editable-home for both shared facts (dest "
+          "owned by Fork/target, world by Birth) with a RED-first load-time refusal for a "
+          "synthetic double-owner declaration.")
 
 
 if __name__ == "__main__":

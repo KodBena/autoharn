@@ -88,6 +88,11 @@ REHEARSAL_STEP = SectionSpec(slug="rehearsal", title="Rehearsal", group="World l
 
 
 def birth_fields(state: dict) -> tuple:
+    # NO "dest" field here (maintainer ruling 2026-07-22, ADR-0019 single-editable-home): the
+    # destination directory is owned by Fork/target (the section whose whole purpose is choosing
+    # it) -- birth reads the shared fact straight out of state in `birth_submit` below, never via
+    # a second field declaration (a duplicated projection is refused at App construction,
+    # `tools.configtree.spec.validate_shared_ownership`).
     return (
         ConfirmField(name="override", label="Override and proceed WITHOUT a green rehearsal? "
                      "(only used if rehearsal was not green)"),
@@ -96,10 +101,16 @@ def birth_fields(state: dict) -> tuple:
                   required=False),
         TextField(name="db", label="Database", default=state.get("db", "toy"), required=False),
         TextField(name="world", label="World name", default=state.get("world", ""), shared=True),
-        TextField(name="dest", label="Destination directory", default=state.get("dest", ""),
-                  shared=True),
         TextField(name="name", label="Project name (deployment.json 'name')", required=False),
     )
+
+
+def _birth_blocked(state: dict) -> "str | None":
+    """The real dependency (spec §3 v2's own named example class): birth writes INTO the
+    destination Fork/target owns -- nothing to write into until Fork/target has recorded one."""
+    if state.get("dest"):
+        return None
+    return "requires: Fork/target (a destination directory) to be set first"
 
 
 def birth_submit(state: dict, answers: dict) -> SectionResult:
@@ -122,17 +133,20 @@ def birth_submit(state: dict, answers: dict) -> SectionResult:
     except WorldNameError as exc:
         return SectionResult(ok=False, errors={"world": str(exc)})
     try:
-        dest_path = DestPath.parse(answers["dest"])
+        # "dest" is Fork/target's own owned field -- read the shared fact directly, never via a
+        # field of birth's own (dropped, see `birth_fields`'s own docstring above).
+        dest_path = DestPath.parse(state.get("dest", ""))
     except DestPathError as exc:
-        return SectionResult(ok=False, errors={"dest": str(exc)})
+        return SectionResult(ok=False, errors={"": f"destination (set in Fork/target): {exc}"})
     world, dest = str(world_name), str(dest_path)
 
     dest_state = destination.classify_destination(dest)
     if (dest_state.kind == destination.DestKind.FOREIGN
             and not state.get("dest_accept_foreign") and not state.get("dest_would_exist")):
         cl.add("birth", "destination classification", ck.REFUSED, f"REFUSED: '{dest}' is FOREIGN")
-        return SectionResult(ok=False, errors={"dest": "FOREIGN content -- acknowledge it at the "
-                                             "fork/target step first"})
+        return SectionResult(ok=False, errors={"": f"destination '{dest}' (set in Fork/target) is "
+                                             "FOREIGN content -- acknowledge it at the fork/target "
+                                             "step first"})
 
     extra = ["--name", name]
     if state.get("governed_patterns"):
@@ -153,4 +167,4 @@ def birth_submit(state: dict, answers: dict) -> SectionResult:
 
 
 BIRTH_STEP = SectionSpec(slug="birth", title="Birth", group="World lifecycle",
-                          fields=birth_fields, submit=birth_submit)
+                          fields=birth_fields, submit=birth_submit, blocked=_birth_blocked)

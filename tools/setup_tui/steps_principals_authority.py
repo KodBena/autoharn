@@ -14,11 +14,14 @@ from tools.setup_tui.runner import legacy_led_path
 
 
 def fields(state: dict) -> tuple:
+    # NO "dest" field here (maintainer ruling 2026-07-22, ADR-0019 single-editable-home): the
+    # destination directory is owned by Fork/target -- principals-authority reads the shared
+    # fact straight out of state in `submit` below, never via a second field declaration (a
+    # duplicated projection is refused at App construction,
+    # `tools.configtree.spec.validate_shared_ownership`).
     class_opts = tuple(content.PA_CLASS_CHOICES)
     rel_opts = tuple(content.PA_RELATION_CHOICES)
     return (
-        TextField(name="dest", label="Destination directory (the born world)",
-                  default=state.get("dest", ""), shared=True),
         ListField(name="register", label="Register a principal",
                   item_fields=(TextField(name="name", label="Principal name"),
                                TextField(name="agent_class", label=f"Class {class_opts}"),
@@ -44,15 +47,18 @@ def fields(state: dict) -> tuple:
 
 def submit(state: dict, answers: dict) -> SectionResult:
     cl = state["_checklist"]
-    dest = answers["dest"].strip()
+    # "dest" is Fork/target's own owned field -- read the shared fact directly (already
+    # guaranteed non-empty by `_blocked_needs_dest` below; this section is unreachable otherwise).
+    dest = state.get("dest", "").strip()
     lines = [feature_facts.facts_block(["principals_authority"])]
     if not dest:
-        return SectionResult(ok=False, errors={"dest": "required"})
+        return SectionResult(ok=False, errors={"": "destination (set in Fork/target) required"})
 
     dest_state = destination.classify_destination(dest)
     if dest_state.kind == destination.DestKind.FRESH and not state.get("dest_would_exist"):
         cl.add("principals-authority", "destination exists", ck.REFUSED, f"'{dest}' not a directory")
-        return SectionResult(ok=False, errors={"dest": "does not exist -- run a birth first"})
+        return SectionResult(ok=False, errors={"": "destination (set in Fork/target) does not "
+                                             "exist -- run a birth first"})
 
     plan = state["_plan"]
     queued_names: set = set(state.get("planned_principal_names", set()))
@@ -91,7 +97,9 @@ def submit(state: dict, answers: dict) -> SectionResult:
 
     lines.append(pa.LESSON_WORKFLOW_POINTER)
     cl.add("principals-authority", "workflow on-ramp pointer", ck.WITNESSED, "pointer only, no mechanism")
-    return SectionResult(ok=True, state_updates={"dest": dest, "planned_principal_names": queued_names},
+    # NOTE: no "dest" in state_updates -- it is Fork/target's own owned fact already (ADR-0012
+    # P1: one writer of one truth).
+    return SectionResult(ok=True, state_updates={"planned_principal_names": queued_names},
                        info_lines=tuple(lines))
 
 

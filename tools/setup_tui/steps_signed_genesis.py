@@ -15,10 +15,13 @@ from tools.setup_tui.plan import PlanEntry
 
 
 def fields(state: dict) -> tuple:
+    # NO "dest" field here (maintainer ruling 2026-07-22, ADR-0019 single-editable-home): the
+    # destination directory is owned by Fork/target -- signed-genesis reads the shared fact
+    # straight out of state in `submit` below, never via a second field declaration (a
+    # duplicated projection is refused at App construction,
+    # `tools.configtree.spec.validate_shared_ownership`).
     return (
         ConfirmField(name="run", label=content.SCREEN_PROMPTS["signed_genesis_ceremony"], default=True),
-        TextField(name="dest", label="Destination directory (the born world)",
-                  default=state.get("dest", ""), shared=True),
         TextField(name="statement", label="Founding commission statement (the ask this world "
                   "exists to carry out)", required=False),
         ConfirmField(name="use_scratch_identity", label="Use a throwaway/fixture GPG identity "
@@ -35,18 +38,21 @@ def submit(state: dict, answers: dict) -> SectionResult:
     if not answers["run"]:
         cl.add("signed-genesis", "ceremony", ck.SKIPPED, "operator skipped screen 7")
         return SectionResult(ok=True, info_lines=("signed genesis skipped by operator.",))
-    dest = answers["dest"].strip()
+    # "dest" is Fork/target's own owned field -- read the shared fact directly (already
+    # guaranteed non-empty by `_blocked_needs_dest` below; this section is unreachable otherwise).
+    dest = state.get("dest", "").strip()
     dry_run = state.get("dry_run", False)
     lines = [feature_facts.facts_block(["signed_genesis"])]
     if not dest:
-        return SectionResult(ok=False, errors={"dest": "required"})
+        return SectionResult(ok=False, errors={"": "destination (set in Fork/target) required"})
 
     if not os.path.isdir(dest):
         if state.get("dest_would_exist"):
             cl.add("signed-genesis", "destination exists", ck.DRY_SKIPPED, f"'{dest}' queued earlier")
         else:
             cl.add("signed-genesis", "destination exists", ck.REFUSED, f"'{dest}' not a directory")
-            return SectionResult(ok=False, errors={"dest": "does not exist -- run a birth first"})
+            return SectionResult(ok=False, errors={"": "destination (set in Fork/target) does not "
+                                                 "exist -- run a birth first"})
     else:
         missing = [n for n, ok in (
             ("keys/", os.path.isdir(os.path.join(dest, "keys"))),
@@ -55,7 +61,7 @@ def submit(state: dict, answers: dict) -> SectionResult:
         if missing:
             cl.add("signed-genesis", "world has keys/+verify-commission+legacy/led", ck.REFUSED,
                    f"missing: {missing}")
-            return SectionResult(ok=False, errors={"dest": f"missing {missing} -- not a scaffolded world"})
+            return SectionResult(ok=False, errors={"": f"missing {missing} -- not a scaffolded world"})
         cl.add("signed-genesis", "world has keys/+verify-commission+legacy/led", ck.WITNESSED, dest)
 
     gpg_path = probes.which("gpg")
@@ -134,7 +140,9 @@ def submit(state: dict, answers: dict) -> SectionResult:
                                act=verify_act, produces=verify_produces))
         lines.append(f"queued: {verify_act.render()}")
 
-    updates = {"dest": dest}
+    # NOTE: no "dest" here -- it is Fork/target's own owned fact already (ADR-0012 P1: one
+    # writer of one truth).
+    updates: dict = {}
     if scratch_produces:
         updates["scratch_gnupghome_produces_keys"] = list(
             state.get("scratch_gnupghome_produces_keys", [])) + [scratch_produces]

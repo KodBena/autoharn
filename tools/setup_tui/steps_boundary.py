@@ -16,14 +16,15 @@ BOUNDARY_PROC_PRODUCES = "boundary-proc"
 
 
 def fields(state: dict) -> tuple:
+    # NO "dest"/"world" fields here (maintainer ruling 2026-07-22, ADR-0019 single-editable-
+    # home): the destination directory is owned by Fork/target, the world name by Birth --
+    # boundary reads both shared facts straight out of state in `submit` below, never via a
+    # second field declaration (a duplicated projection is refused at App construction,
+    # `tools.configtree.spec.validate_shared_ownership`).
     return (
         ConfirmField(name="run", label="Configure the boundary service now?", default=True),
         ConfirmField(name="override", label="Override and proceed WITHOUT a confirmed successful "
                      "birth? (only used if birth was not confirmed)"),
-        TextField(name="dest", label="Destination directory", default=state.get("dest", ""),
-                  shared=True),
-        TextField(name="world", label="World/deployment name", default=state.get("world", ""),
-                  shared=True),
         TextField(name="host", label="Postgres host", default=state.get("pghost", "192.168.122.1"),
                   required=False),
         TextField(name="db", label="Database", default=state.get("db", "toy"), required=False),
@@ -44,21 +45,25 @@ def submit(state: dict, answers: dict) -> SectionResult:
         cl.add("boundary", "boundary", ck.SKIPPED, "operator skipped screen 8")
         return SectionResult(ok=True, info_lines=("boundary configuration skipped.",))
 
+    # "dest"/"world" are Fork/target's and Birth's own owned fields respectively -- read the
+    # shared facts directly, never via a field of boundary's own (dropped, see `fields`'s own
+    # docstring above).
     try:
-        dest_path = DestPath.parse(answers["dest"])
+        dest_path = DestPath.parse(state.get("dest", ""))
     except DestPathError as exc:
-        return SectionResult(ok=False, errors={"dest": str(exc)})
+        return SectionResult(ok=False, errors={"": f"destination (set in Fork/target): {exc}"})
     dest = str(dest_path)
     if destination.classify_destination(dest).kind == destination.DestKind.FRESH:
         if not state.get("dest_would_exist"):
             cl.add("boundary", "destination exists", ck.REFUSED, f"'{dest}' not a directory")
-            return SectionResult(ok=False, errors={"dest": "does not exist -- run a birth first"})
+            return SectionResult(ok=False, errors={"": "destination (set in Fork/target) does not "
+                                                 "exist -- run a birth first"})
         cl.add("boundary", "destination exists", ck.DRY_SKIPPED, f"'{dest}' queued earlier")
 
     try:
-        world_name = WorldName.parse(answers["world"].strip() or state.get("world", ""))
+        world_name = WorldName.parse(state.get("world", ""))
     except WorldNameError as exc:
-        return SectionResult(ok=False, errors={"world": str(exc)})
+        return SectionResult(ok=False, errors={"": f"world name (set in Birth): {exc}"})
     world = str(world_name)
     host = answers["host"].strip() or state.get("pghost", "192.168.122.1")
     db = answers["db"].strip() or state.get("db", "toy")
@@ -135,16 +140,25 @@ def submit(state: dict, answers: dict) -> SectionResult:
             health_probe=f"http:{boundary_url}/d/{world}/health", prerequisite=(venv_python or preferred_python)))
         cl.add("boundary", "service unit text", ck.INSTRUCTED, "systemd unit, not started")
 
-    updates["dest"] = dest
+    # NOTE: no `updates["dest"] = dest` here -- "dest" is Fork/target's own owned fact, already
+    # in state; re-writing the same value here would be a second writer of one truth (ADR-0012
+    # P1), even though harmless today (same value) -- removed on principle.
     return SectionResult(ok=True, state_updates=updates, info_lines=tuple(lines))
 
 
 def _blocked_needs_dest(state: dict) -> "str | None":
-    """The boundary service is started FROM the born world's own destination -- nothing to start
-    until Fork/target or Birth has recorded one."""
-    if state.get("dest"):
+    """The boundary service is started FROM the born world's own destination, under its own
+    world name -- nothing to start until Fork/target has recorded a destination AND Birth has
+    recorded a world name (both are now read directly from shared state, boundary's own "dest"/
+    "world" fields having been dropped in favor of their single owning section)."""
+    missing = []
+    if not state.get("dest"):
+        missing.append("Fork/target (a destination directory)")
+    if not state.get("world"):
+        missing.append("Birth (a world name)")
+    if not missing:
         return None
-    return "requires: Fork/target or Birth (a destination directory) to be set first"
+    return f"requires: {' and '.join(missing)} to be set first"
 
 
 STEP = SectionSpec(slug="boundary", title="Boundary", group="Runtime", fields=fields,

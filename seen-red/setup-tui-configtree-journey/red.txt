@@ -3,13 +3,18 @@ seen-red/setup-tui-configtree-journey -- banked RED evidence (both-polarity proo
 design/FABLE-SETUP-TUI-REBUILD-SPEC.md §3 v2/§4 (2026-07-22 commission, hierarchical
 configuration editor): "one fixture drives the REAL screen list end-to-end ... focus movement,
 scrolling, arrow selection, and back/forward across screens all WITNESSED in the Pilot
-transcript -- no synthetic screen lists." LIVE-MODEL REBUILD, same day: the maintainer rejected
-the per-section Save button ("the form IS a live view of the model"); this fixture was rewritten
-so NO CASE presses a save button (there is none) -- every field write is a live widget `.value =`
-assignment. A SEPARATE same-day maintainer report then caught a live state-aliasing defect
-(toggling a checkbox in one section toggled a "corresponding-ish" checkbox in a different one);
+transcript -- no synthetic screen lists." Three same-day maintainer reviews shaped this fixture:
+(1) LIVE-MODEL REBUILD: the maintainer rejected the per-section Save button ("the form IS a live
+view of the model") -- NO CASE presses a save button (there is none); every field write is a live
+widget `.value =` assignment. (2) STATE ALIASING: a live defect caught from the running UI alone
+("toggling a checkbox in one section toggled a corresponding-ish checkbox in a different one") --
 case 0 reproduces that EXACT observation across every field kind and proves the structural fix
-(`ids.ScopedFieldKey`).
+(`ids.ScopedFieldKey`). (3) SINGLE-EDITABLE-HOME (ADR-0019 + the maintainer's own ADR-0002
+citation, "a duplicated mirror/projection of a value is a type error and refused on TUI start"):
+NO read-only reference anywhere either -- "dest" is owned by Fork/target, "world" by Birth; every
+other section that used to declare either had the field DROPPED entirely -- case 7 proves the
+single editable home for both facts, live propagation to a dependent section's `blocked()` check,
+and a RED-first load-time refusal for a synthetic double-owner declaration.
 
 This is the actual stdout of `.venv/bin/python seen-red/setup-tui-configtree-journey/
 run_fixtures.py` (a venv with `textual` installed -- `python3 -m venv .venv && .venv/bin/pip
@@ -51,7 +56,12 @@ case 5a ok: arrow-key Tree navigation (3x down) + Enter selects the real 'pane-s
 case 5b ok: Tab moves focus Tree(id='ct-tree') -> VerticalScroll(classes='ct-section-body')
 case 5c ok: the section pane's own VerticalScroll body scrolls (Offset(x=0, y=0) -> Offset(x=0, y=1))
 case 6 ok: ctrl+q -> App.return_code == 130 (interrupt exit-code convention)
-ALL CASES OK -- tools.configtree.app.ConfigTreeApp driven end-to-end through the REAL tools.setup_tui.steps.SECTIONS registry via Pilot, LIVE-MODEL semantics throughout (no per-section save exists): a state-aliasing reproduction and structural fix across every field kind, arbitrary-order navigation with a blocked-to-unblocked flip on a SINGLE keystroke, live inline validation both polarities with focus never leaving the field, a full ten-section journey typed live to a clean dry-run commit via the ONE commit button, a commit-time business-rule refusal (red) and its retry (green), keyboard/Tab/scroll navigation primitives, and ctrl+q's exit-code contract.
+case 7a ok: owner_of(sections, 'dest') == NodeId(value='fork-target'), owner_of(sections, 'world') == NodeId(value='birth') -- matches the chosen owners
+case 7b ok: 'dest' renders editable in Fork/target ONLY -- every other section that needs it (birth/principals-authority/signed-genesis/observability/hydration), now UNBLOCKED and showing its real fields, has NO 'dest' widget at all
+case 7c ok: editing dest in its OWNER (Fork/target) then world in ITS owner (Birth) propagates live to boundary's own blocked() check -- '⧖ Boundary' -> '⧖ Boundary' -> '✓ Boundary' -- boundary itself never selected during either edit
+case 7d ok: 'world' renders editable in Birth ONLY -- boundary, now UNBLOCKED and showing its real fields, has NO 'world' widget at all -- single editable home for both shared facts, no mirrors, confirmed live
+case 7e ok (RED-FIRST, load-time refusal): a synthetic double-owner declaration of 'dest' across two sections is refused BEFORE any Textual machinery starts (construction-time raise, ADR-0002's own highest rung): tools.configtree: shared field 'dest' is declared editable by MORE THAN ONE section (synth-a, synth-b) -- a shared fact renders in exactly one owning section (ADR-0019 single-editable-home; the maintainer's own ADR-0002 citation: a duplicated projection of a value is a type error). Pick ONE owner and drop the field declaration from every other section listed above (they read the value from shared state directly, never via a second field).
+ALL CASES OK -- tools.configtree.app.ConfigTreeApp driven end-to-end through the REAL tools.setup_tui.steps.SECTIONS registry via Pilot, LIVE-MODEL semantics throughout (no per-section save exists): a state-aliasing reproduction and structural fix across every field kind, arbitrary-order navigation with a blocked-to-unblocked flip on a SINGLE keystroke, live inline validation both polarities with focus never leaving the field, a full ten-section journey typed live to a clean dry-run commit via the ONE commit button, a commit-time business-rule refusal (red) and its retry (green), keyboard/Tab/scroll navigation primitives, ctrl+q's exit-code contract, and single-editable-home for both shared facts (dest owned by Fork/target, world by Birth) with a RED-first load-time refusal for a synthetic double-owner declaration.
 
 (the three repeated "$ .../new-project.sh"/"$ .../teardown-world.sh" pairs are the REHEARSAL
 section's own live-choke-point echo under --dry-run -- "[dry-run: not executed]" per
@@ -59,10 +69,11 @@ runner.run_command's own contract, one per commit-sweep attempt across cases 3/4
 embeds a wall-clock timestamp, hence "NNNN" above -- the substance is identical every run, only
 that digit string varies.)
 
-RED legs (0a/0b/0c reproducing the maintainer's exact live defect; 2a; 3b; 4a) prove the shapes
-this fixture claims to forbid/gate are actually caught -- a regression of any of them would fail
-this fixture red. GREEN legs (0d/0e structural proof; 1b; 2b; 3a/c/d/e/f; 4b/c; 5; 6) prove the
-corresponding correct-path/fixed behavior once the prerequisite is met.
+RED legs (0a/0b/0c reproducing the maintainer's exact live defect; 2a; 3b; 4a; 7e the synthetic
+double-owner load-time refusal) prove the shapes this fixture claims to forbid/gate are actually
+caught -- a regression of any of them would fail this fixture red. GREEN legs (0d/0e/0f structural
+proof; 1b; 2b; 3a/c/d/e/f; 4b/c; 5; 6; 7a/b/c/d) prove the corresponding correct-path/fixed
+behavior once the prerequisite is met.
 
 DEPENDENCY: this fixture requires `textual` (the Textual UI layer's own real widgets/Pilot
 harness) -- it is NOT covered by --from-config's textual-free guarantee (that headless path has

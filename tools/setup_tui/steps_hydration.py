@@ -19,13 +19,15 @@ def _decision_act(led: str, statement: str):
 
 
 def fields(state: dict) -> tuple:
+    # NO "dest" field here (maintainer ruling 2026-07-22, ADR-0019 single-editable-home): the
+    # destination directory is owned by Fork/target -- hydration reads the shared fact straight
+    # out of state in `submit` below, never via a second field declaration (a duplicated
+    # projection is refused at App construction, `tools.configtree.spec.validate_shared_ownership`).
     catalog_help = ", ".join(d.slug for d in durable_decisions.CATALOG)
     adrs = durable_decisions.list_adrs()
     adr_help = ", ".join(number for number, _, _ in adrs)
     return (
         ConfirmField(name="run", label="Run hydration now?", default=True),
-        TextField(name="dest", label="Destination directory (with a led shim)",
-                  default=state.get("dest", ""), shared=True),
         ConfirmField(name="fork_provenance", label="Hydrate: fork provenance?"),
         TextField(name="fork_provenance_statement", label="Statement for 'fork provenance' "
                   "decision row", required=False),
@@ -45,9 +47,11 @@ def submit(state: dict, answers: dict) -> SectionResult:
         cl.add("hydration", "hydration", ck.SKIPPED, "operator skipped screen 10")
         return SectionResult(ok=True, info_lines=("hydration skipped by operator.",))
 
-    dest = answers["dest"].strip()
+    # "dest" is Fork/target's own owned field -- read the shared fact directly (already
+    # guaranteed non-empty by `_blocked_needs_dest` below; this section is unreachable otherwise).
+    dest = state.get("dest", "").strip()
     if not dest:
-        return SectionResult(ok=False, errors={"dest": "required"})
+        return SectionResult(ok=False, errors={"": "destination (set in Fork/target) required"})
     if state.get("dest_would_exist"):
         led = legacy_led_path(dest)
         cl.add("hydration", "led present", ck.DRY_SKIPPED, f"'{led}' queued earlier")
@@ -55,7 +59,8 @@ def submit(state: dict, answers: dict) -> SectionResult:
         led = resolve_led(dest)
         if led is None:
             cl.add("hydration", "led present", ck.WITNESSED, f"RED: no led under {dest}")
-            return SectionResult(ok=False, errors={"dest": f"no led/legacy-led found under {dest}"})
+            return SectionResult(ok=False, errors={"": f"no led/legacy-led found under {dest} "
+                                                 "(destination set in Fork/target)"})
         cl.add("hydration", "led present", ck.WITNESSED, led)
 
     plan = state["_plan"]
@@ -121,7 +126,9 @@ def submit(state: dict, answers: dict) -> SectionResult:
                            lesson=f"{len(selected_fragments)} fragment(s) compiled between markers",
                            act=claude_write))
     lines.append(f"queued: write CLAUDE.md ({len(selected_fragments)} fragment(s))")
-    return SectionResult(ok=True, state_updates={"dest": dest, "hydration_engaged": True},
+    # NOTE: no "dest" in state_updates -- it is Fork/target's own owned fact already (ADR-0012
+    # P1: one writer of one truth).
+    return SectionResult(ok=True, state_updates={"hydration_engaged": True},
                        info_lines=tuple(lines))
 
 

@@ -20,15 +20,17 @@ from tools.configtree.fields import (ChoiceField, ConfirmField, Field, ListField
                                       validate_value)
 from tools.configtree.ids import ExitCode, FieldName, Label, NodeId, ScopedFieldKey
 from tools.configtree.spec import (BLOCKED, COMPLETE, INCOMPLETE, INVALID, CommitSpec,
-                                    SectionResult, SectionSpec, all_sections_complete,
-                                    ready_for_commit, section_answers, section_field_errors,
-                                    section_status)
+                                    DuplicatedSharedFieldError, SectionResult, SectionSpec,
+                                    all_sections_complete, owner_of, ready_for_commit,
+                                    section_answers, section_field_errors, section_status,
+                                    validate_shared_ownership)
 
 __all__ = [
     "ChoiceField", "ConfirmField", "Field", "ListField", "TextField", "default_of",
     "get_field_value", "set_field_value", "validate_value",
     "ExitCode", "FieldName", "Label", "NodeId", "ScopedFieldKey",
     "BLOCKED", "COMPLETE", "INCOMPLETE", "INVALID",
-    "CommitSpec", "SectionResult", "SectionSpec", "all_sections_complete", "ready_for_commit",
-    "section_answers", "section_field_errors", "section_status",
+    "CommitSpec", "DuplicatedSharedFieldError", "SectionResult", "SectionSpec",
+    "all_sections_complete", "owner_of", "ready_for_commit", "section_answers",
+    "section_field_errors", "section_status", "validate_shared_ownership",
 ]

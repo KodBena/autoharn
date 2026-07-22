@@ -144,6 +144,54 @@ def section_status(spec: SectionSpec, state: dict) -> str:
     return COMPLETE
 
 
+class DuplicatedSharedFieldError(ValueError):
+    """A shared fact (`shared=True`) is declared by MORE THAN ONE section -- a typed refusal at
+    load, never a runtime surprise (maintainer ruling, ADR-0019 + the maintainer's own verbatim
+    ADR-0002 citation: "a duplicated mirror/projection of a value is a type error and refused on
+    TUI start"). ANY second declaration of a shared field's name is refused -- editable or not;
+    this library carries no read-only-reference rendering at all (struck entirely, same
+    ruling) -- a shared fact renders in EXACTLY ONE owning section and nowhere else; every other
+    section that needs the value reads it from the shared state directly in its own `submit`/
+    `blocked`, never via a second field declaration."""
+
+
+def validate_shared_ownership(sections: "tuple[SectionSpec, ...]") -> None:
+    """The registry-wide check `ConfigTreeApp.__init__` runs automatically, at construction (spec
+    §3 v2 + ADR-0019: single-editable-home for a shared fact is STRUCTURAL, not a review-time
+    convention). Calls every section's own `fields({})` once (a structural pass -- ADR-0012 P1:
+    a field's NAME/`shared` flag is part of its fixed declaration, never conditional on state
+    content, so an empty dict is a legitimate probe) and groups every `shared=True` field by name;
+    more than one declaring section for the SAME name raises `DuplicatedSharedFieldError`, naming
+    the field and every section that declares it -- so a regression is caught the moment the App
+    is built, never discovered live."""
+    owners: dict[str, list[str]] = {}
+    for spec in sections:
+        for f in spec.fields({}):
+            if getattr(f, "shared", False):
+                owners.setdefault(str(f.name), []).append(str(spec.slug))
+    for name, declaring in owners.items():
+        if len(declaring) > 1:
+            raise DuplicatedSharedFieldError(
+                f"tools.configtree: shared field {name!r} is declared editable by MORE THAN ONE "
+                f"section ({', '.join(declaring)}) -- a shared fact renders in exactly one "
+                f"owning section (ADR-0019 single-editable-home; the maintainer's own ADR-0002 "
+                f"citation: a duplicated projection of a value is a type error). Pick ONE owner "
+                f"and drop the field declaration from every other section listed above (they "
+                f"read the value from shared state directly, never via a second field).")
+
+
+def owner_of(sections: "tuple[SectionSpec, ...]", field_name: str) -> "SectionSpec | None":
+    """The section that owns (declares) the shared field named `field_name`, or `None` if no
+    section declares it. Used by consumers/tests that want to name the owner in a message; the
+    library itself never renders a cross-reference to it (struck entirely -- see
+    `DuplicatedSharedFieldError`'s own docstring)."""
+    for spec in sections:
+        for f in spec.fields({}):
+            if getattr(f, "shared", False) and str(f.name) == field_name:
+                return spec
+    return None
+
+
 def all_sections_complete(sections: "tuple[SectionSpec, ...]", state: dict) -> bool:
     """The tree's own "how many sections read COMPLETE" reporting predicate (the status line,
     `spec §3 v2`'s "every section marked complete/incomplete/invalid/blocked"). Unlike
