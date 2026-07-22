@@ -37,6 +37,7 @@ import tempfile
 from collections.abc import Iterator
 from pathlib import Path
 
+from tools.configtree import FieldName, NodeId, ScopedFieldKey
 from tools.setup_tui import config_file, content, destination, durable_decisions, governed_files, probes
 from tools.setup_tui import runner
 from tools.setup_tui.plan import CommandAct
@@ -142,16 +143,119 @@ _STATE_OVERRIDE_KEYS: dict[str, str] = {
 def build_initial_state_overrides(doc: config_file.ConfigDoc) -> dict[str, object]:
     """`{state_key: value}` merged into `tools.setup_tui.steps.initial_state`'s own dict --
     partial configs are fine (spec §2); a key not present in `doc` is simply omitted, never
-    guessed. Fields with no shared-state home (the register/competence/relation/charter lists,
-    a per-screen scalar like the signed-genesis commission statement) are NOT seeded this way --
-    a named, honest limitation (mirrors the pre-rebuild PROMPT_MAP's own documented gap for the
-    same fields)."""
+    guessed. This is the small set of BARE shared-state facts (`dest`/`pghost`-shaped) a config
+    can seed; every SCOPED per-section field (including the principals-authority repeatable
+    rows) is `build_live_field_overrides`'s own job below -- see that function's docstring for
+    why the two are split."""
     out: dict[str, object] = {}
     for dotted, state_key in _STATE_OVERRIDE_KEYS.items():
         val = config_file.get(doc, dotted)
         if val is not None:
             out[state_key] = val
     return out
+
+
+# --------------------------------------------------------------------------------------------
+# 2.5. CONFIG-LOAD COMPLETENESS (cycle-2 fix round, AUDIT.md MAJOR finding #2): the ONE seeding
+# implementation both `tools.setup_tui.steps_load_config.apply` (the in-UI "Load a configuration"
+# action) and `tools.setup_tui.app`'s own `--initial-config` CLI handling call (P1: never a
+# second implementation of the same seeding logic) -- a completeness fix here reaches both paths
+# at once, instead of the two independently drifting.
+#
+# PRIOR GAP (the audit's own reproduction): loading a file whose `[[principals_authority.
+# register]]`/`.competences`/`.relations` rows are populated reported "seeded N field default(s)"
+# naming only SCALAR/simple-list fields (`_SCOPED_OVERRIDE_KEYS` below) -- the repeatable rows
+# were silently dropped, with no operator-facing disclosure anywhere, while the section's own
+# text claimed --initial-config equivalence. FIXED AT THE CLASS, not with a disclosure line
+# alone: a repeatable row seeds the MASTER-DETAIL model directly (`ScopedFieldKey("principals-
+# authority", "register"/"competences"/"relations")`, the SAME `_live_fields` slot the widget
+# itself writes through -- `master_detail.py`'s own "STORAGE IS UNCHANGED" doctrine means this
+# needs no master-detail-specific code at all, just the ordinary per-name live-field seeding
+# every OTHER scoped key already gets). Anything genuinely UNSEEDABLE is named, not silently
+# dropped: a role charter's own file path is host-specific and excluded BY TYPE from the config
+# schema entirely (config_file.SCHEMA carries no `principals_authority.charters` key -- there is
+# no config-file representation for a charter path, by design, not by omission) -- disclosed by
+# name whenever this section was engaged in the loaded file.
+# --------------------------------------------------------------------------------------------
+
+_SCOPED_OVERRIDE_KEYS: dict[str, tuple[str, str]] = {
+    "substrate.run": ("substrate", "run"),
+    "substrate.path": ("substrate", "path"),
+    "substrate.host": ("substrate", "host"),
+    "fork_target.governed_extend": ("fork-target", "governed_extend"),
+    "fork_target.governed_extensions": ("fork-target", "governed_extensions"),
+    "rehearsal.run": ("rehearsal", "run"),
+    "birth.run": ("birth", "run"),
+    "signed_genesis.run": ("signed-genesis", "run"),
+    "signed_genesis.commission_statement": ("signed-genesis", "statement"),
+    "boundary.configure": ("boundary", "run"),
+    "boundary.start_now": ("boundary", "start_now"),
+    "observability.run": ("observability", "run"),
+    "observability.otelcol": ("observability", "otelcol"),
+    "observability.otel_watch": ("observability", "otel_watch"),
+    "hydration.run": ("hydration", "run"),
+    "hydration.fork_provenance": ("hydration", "fork_provenance"),
+    "hydration.fork_provenance_statement": ("hydration", "fork_provenance_statement"),
+    "hydration.role_charters": ("hydration", "role_charters"),
+    "hydration.durable_decisions": ("hydration", "durable_decisions"),
+    "hydration.adopt_adrs": ("hydration", "adopt_adrs"),
+}
+
+# principals_authority's own repeatable rows -- each seeds the master-detail section's OWN
+# scoped list-field slot directly (dotted config key -> that section's own field name).
+_PRINCIPALS_REPEATABLE_KEYS: dict[str, str] = {
+    "principals_authority.register": "register",
+    "principals_authority.competences": "competences",
+    "principals_authority.relations": "relations",
+}
+
+_PRINCIPALS_ENGAGED_KEYS = (
+    "principals_authority.run", "principals_authority.register",
+    "principals_authority.competences", "principals_authority.relations",
+)
+
+_CHARTER_UNSEEDABLE_NOTE = (
+    "principals_authority.charters (role-charter file paths are host-specific -- excluded BY "
+    "TYPE from the config schema entirely, config_file spec §1; register any role charters "
+    "yourself in this section)"
+)
+
+
+def build_live_field_overrides(
+    doc: config_file.ConfigDoc,
+) -> "tuple[dict[ScopedFieldKey, object], list[str], list[str]]":
+    """Returns `(live_overrides, seeded_names, unseedable_notes)` -- see this section's own
+    module-level docstring above ("CONFIG-LOAD COMPLETENESS") for the fix this answers.
+    `live_overrides` is ready to merge straight into `state["_live_fields"]` (the SAME slot
+    `fields.get_field_value`/`set_field_value` read/write for every scoped field, ordinary
+    scalars and the principals-authority master-detail rows alike)."""
+    live: dict[ScopedFieldKey, object] = {}
+    seeded: list[str] = []
+    for dotted, (section, field_name) in _SCOPED_OVERRIDE_KEYS.items():
+        val = config_file.get(doc, dotted)
+        if val is None:
+            continue
+        live[ScopedFieldKey(section=NodeId(section), field=FieldName(field_name))] = val
+        seeded.append(dotted)
+
+    db_val = config_file.get(doc, "substrate.db")
+    if db_val is not None:
+        target = "db_dedicated" if config_file.get(doc, "substrate.path") == "dedicated" else "db_existing"
+        live[ScopedFieldKey(section=NodeId("substrate"), field=FieldName(target))] = db_val
+        seeded.append(f"substrate.db -> substrate.{target}")
+
+    for dotted, field_name in _PRINCIPALS_REPEATABLE_KEYS.items():
+        rows = config_file.get(doc, dotted)
+        if rows is None:
+            continue
+        live[ScopedFieldKey(section=NodeId("principals-authority"), field=FieldName(field_name))] = list(rows)
+        seeded.append(dotted)
+
+    unseedable: list[str] = []
+    if any(config_file.get(doc, k) is not None for k in _PRINCIPALS_ENGAGED_KEYS):
+        unseedable.append(_CHARTER_UNSEEDABLE_NOTE)
+
+    return live, seeded, unseedable
 
 
 # --------------------------------------------------------------------------------------------

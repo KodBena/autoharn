@@ -13,49 +13,25 @@ defaults straight into the shared model -- reachable and usable the INSTANT the 
 before any other section is ever visited, unlike a value that would only take effect after the
 whole tree was already filled in and committed.
 
-Named, honest limitation (mirrors `config_seam.build_initial_state_overrides`'s own documented
-gap): only the scalar/list fields named in `_SCOPED_OVERRIDE_KEYS` below are seeded this way --
-the principals-authority repeatable rows (register/competences/relations/charters) and a role
-charter's own file path have no single scalar field to seed and are NOT seeded here, exactly the
-same gap `--initial-config` already carries and names."""
+COMPLETENESS (cycle-2 fix round, AUDIT.md MAJOR #2): seeding runs through `config_seam.
+build_live_field_overrides` -- the ONE implementation this action and `tools.setup_tui.app`'s own
+`--initial-config` CLI handling BOTH call (P1), so a completeness fix reaches both paths at once.
+That function's own docstring has the full account: every scalar/list field AND the
+principals-authority repeatable rows (register/competences/relations) are seeded; the one
+genuinely unseedable fact (a role charter's own file path -- host-specific, excluded BY TYPE
+from the config schema) is DISCLOSED BY NAME in this action's own info line, never silently
+dropped."""
 from __future__ import annotations
 
 from pathlib import Path
 
-from tools.configtree import (ActionSpec, ChoiceField, FieldName, NodeId, ScopedFieldKey,
-                               SectionResult, TextField)
+from tools.configtree import ActionSpec, ChoiceField, SectionResult, TextField
 from tools.setup_tui import config_file, config_seam
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 TEMPLATES_DIR = REPO_ROOT / "bootstrap" / "templates"
 
 _NO_TEMPLATE = ""
-
-# dotted config key -> (owning section slug, that section's OWN field name) -- every entry here
-# is a SCALAR or LIST value with exactly one live-field home (never `substrate.db`, handled
-# specially in `apply` below since its OWN target field name depends on `substrate.path`).
-_SCOPED_OVERRIDE_KEYS: dict[str, tuple[str, str]] = {
-    "substrate.run": ("substrate", "run"),
-    "substrate.path": ("substrate", "path"),
-    "substrate.host": ("substrate", "host"),
-    "fork_target.governed_extend": ("fork-target", "governed_extend"),
-    "fork_target.governed_extensions": ("fork-target", "governed_extensions"),
-    "rehearsal.run": ("rehearsal", "run"),
-    "birth.run": ("birth", "run"),
-    "signed_genesis.run": ("signed-genesis", "run"),
-    "signed_genesis.commission_statement": ("signed-genesis", "statement"),
-    "boundary.configure": ("boundary", "run"),
-    "boundary.start_now": ("boundary", "start_now"),
-    "observability.run": ("observability", "run"),
-    "observability.otelcol": ("observability", "otelcol"),
-    "observability.otel_watch": ("observability", "otel_watch"),
-    "hydration.run": ("hydration", "run"),
-    "hydration.fork_provenance": ("hydration", "fork_provenance"),
-    "hydration.fork_provenance_statement": ("hydration", "fork_provenance_statement"),
-    "hydration.role_charters": ("hydration", "role_charters"),
-    "hydration.durable_decisions": ("hydration", "durable_decisions"),
-    "hydration.adopt_adrs": ("hydration", "adopt_adrs"),
-}
 
 
 def _discover_templates() -> tuple[tuple[str, str], ...]:
@@ -97,20 +73,8 @@ def apply(state: dict, answers: dict) -> SectionResult:
         return SectionResult(ok=False, errors={"": str(exc)})
 
     live = state.setdefault("_live_fields", {})
-    seeded: list[str] = []
-    for dotted, (section, field_name) in _SCOPED_OVERRIDE_KEYS.items():
-        val = config_file.get(doc, dotted)
-        if val is None:
-            continue
-        key = ScopedFieldKey(section=NodeId(section), field=FieldName(field_name))
-        live[key] = val
-        seeded.append(dotted)
-
-    db_val = config_file.get(doc, "substrate.db")
-    if db_val is not None:
-        target = "db_dedicated" if config_file.get(doc, "substrate.path") == "dedicated" else "db_existing"
-        live[ScopedFieldKey(section=NodeId("substrate"), field=FieldName(target))] = db_val
-        seeded.append(f"substrate.db -> substrate.{target}")
+    overrides, seeded, unseedable = config_seam.build_live_field_overrides(doc)
+    live.update(overrides)
 
     bare_updates = config_seam.build_initial_state_overrides(doc)
     state.update(bare_updates)
@@ -123,6 +87,8 @@ def apply(state: dict, answers: dict) -> SectionResult:
                       "every section keeps its own ordinary default")
     if bare_updates:
         lines.append(f"seeded shared default(s): {', '.join(sorted(bare_updates))}")
+    if unseedable:
+        lines.append("not seeded (by design, not an omission): " + "; ".join(unseedable))
     lines.append("visit any section to see its now-updated default -- nothing here is queued "
                   "or committed; every section's own submit still runs at commit time as usual.")
     return SectionResult(ok=True, info_lines=tuple(lines))

@@ -201,6 +201,16 @@ def _run_textual(args: argparse.Namespace) -> int:
         except config_file.ConfigError as exc:
             print(_wrap(str(exc)), file=sys.stderr)
             return 1
+        # P1 (never a second implementation): `build_live_field_overrides` is the SAME seeding
+        # function `steps_load_config.apply`'s in-UI "Load a configuration" action calls -- a
+        # --initial-config run gets the identical scoped-field (and principals-authority
+        # repeatable-row) seeding as loading the same file live, never a second, independently
+        # drifting behavior (cycle-2 fix round, AUDIT.md MAJOR #2). The disclosed-unseedable
+        # notes have no CLI-output home today (this path is headless at process launch, before
+        # any info-line surface exists) -- they are still available, honestly, the first time the
+        # operator visits Principals & authority in the running app.
+        overrides, _seeded, _unseedable = config_seam.build_live_field_overrides(initial_doc)
+        state.setdefault("_live_fields", {}).update(overrides)
         state.update(config_seam.build_initial_state_overrides(initial_doc))
 
     state_holder: list[dict] = [state]
