@@ -1,0 +1,81 @@
+=== W-REG-registry-red ===
+  [ok] RegistryError raised: REFUSED: layer 'belief' requires ['ledger_tnow.lp', 'ledger_support.lp', 'ledger_defeat.lp', 'ledger_belief.lp'] but the invocation only loaded ['ledger_tnow.lp', 'ledger_support.lp', 'ledger_belief.l
+
+=== W-NEG-broken-twin-diverges ===
+  [ok] broken twin's atoms=['corroboration_grade(2,"uncorroborated")', 'credited_belief(2)'] (expected to WRONGLY include credited_belief(2)); correct reading=[] -- the differential this proves would read DIVERGE_DEFECT on a real target
+
+== scaffolding classic world bsv1w (new-project.sh --new-world, today's full head) ==
+=== BS-cell-matrix-all-eight-parse-AGREE ===
+  [ok] verdict=AGREE; only_asp=[]; only_sql=[]
+
+=== BS-A-universal-observed-credited=True ===
+  [ok] row 12: credited_belief present=True, expected=True
+
+=== BS-B-universal-derived-credited=True ===
+  [ok] row 13: credited_belief present=True, expected=True
+
+=== BS-C-universal-testimony-credited=True ===
+  [ok] row 14: credited_belief present=True, expected=True
+
+=== BS-D-universal-assumed-credited=False ===
+  [ok] row 15: credited_belief present=False, expected=False
+
+=== BS-E-existential-observed-credited=True ===
+  [ok] row 16: credited_belief present=True, expected=True
+
+=== BS-F-existential-derived-credited=True ===
+  [ok] row 17: credited_belief present=True, expected=True
+
+=== BS-G-existential-testimony-credited=True ===
+  [ok] row 18: credited_belief present=True, expected=True
+
+=== BS-H-existential-assumed-credited=False ===
+  [ok] row 19: credited_belief present=False, expected=False
+
+=== BS-contest-resolved-observed-beats-testimony ===
+  [ok] verdict=AGREE; contested=['contested_belief(21,20)']; resolved=['contest_resolved(20,21)']; I credited=True; J credited=False
+
+=== BS-contest-tie-both-demoted ===
+  [ok] verdict=AGREE; resolved=['contest_resolved(20,21)']; L credited=False; M credited=False
+
+=== BS-corroboration-cross-class ===
+  [ok] verdict=AGREE; grade atoms for N=['corroboration_grade(24,"corroborated-cross-class")']
+
+=== BS-corroboration-same-class-never-higher ===
+  [ok] verdict=AGREE; grade atoms for Q=['corroboration_grade(27,"corroborated-same-class")']
+
+=== BS-five-belief-shared-ancestor-non-empty ===
+  [ok] verdict=AGREE; shared_ancestor atoms=['shared_ancestor(31,33,11)']
+
+=== BS-full-differential-AGREE ===
+  [ok] verdict=AGREE; asp=38 sql=38 atoms; only_asp=[]; only_sql=[]
+
+== scaffolding classic world bsm15a5b for malformation class 'universal-missing-universe' ==
+=== MAL-universal-missing-universe ===
+  [ok] verdict=QUARANTINED; asp.q="malformed v1 belief/attestation statement: row 8: belief policy: belief[universal] requires a non-empty universe={...} (the enumerated quantification universe is the claim's own evidence, ledger row 1887 rule 1) -- missing"; sql.q="malformed v1 belief/attestation statement: row 8: belief policy: belief[universal] requires a non-empty universe={...} (the enumerated quantification universe is the claim's own evidence, ledger row 1887 rule 1) -- missing"
+
+== scaffolding classic world bsm0521f for malformation class 'existential-observed-missing-witness' ==
+=== MAL-existential-observed-missing-witness ===
+  [ok] verdict=QUARANTINED; asp.q='malformed v1 belief/attestation statement: row 8: belief policy: witness token resolves to nothing -- a finding without its witness is treated exactly as ADR-0005 Rule 9 treats a verdict without its artifact: as nothing. belief[existential] basis=observed requires a non-empty witness=... -- missing'; sql.q='malformed v1 belief/attestation statement: row 8: belief policy: witness token resolves to nothing -- a finding without its witness is treated exactly as ADR-0005 Rule 9 treats a verdict without its artifact: as nothing. belief[existential] basis=observed requires a non-empty witness=... -- missing'
+
+== scaffolding classic world bsm0c329 for malformation class 'testimony-missing-source' ==
+=== MAL-testimony-missing-source ===
+  [ok] verdict=QUARANTINED; asp.q='malformed v1 belief/attestation statement: row 8: belief policy: basis=testimony requires source=row:<id> (the source record the testimony relays) -- missing'; sql.q='malformed v1 belief/attestation statement: row 8: belief policy: basis=testimony requires source=row:<id> (the source record the testimony relays) -- missing'
+
+== scaffolding classic world bsm3c7b4 for malformation class 'derived-missing-premises' ==
+=== MAL-derived-missing-premises ===
+  [ok] verdict=QUARANTINED; asp.q='malformed v1 belief/attestation statement: row 8: belief policy: basis=derived requires a non-empty premises=row:<id>[,row:<id>...] -- missing'; sql.q='malformed v1 belief/attestation statement: row 8: belief policy: basis=derived requires a non-empty premises=row:<id>[,row:<id>...] -- missing'
+
+== scaffolding classic world bsmde5b3 for malformation class 'dangling-row-token' ==
+=== MAL-dangling-row-token ===
+  [ok] verdict=QUARANTINED; asp.q="malformed v1 belief/attestation statement: row 8: belief policy: witness token 'row:999999999' names no existing ledger row -- a finding without its witness is treated exactly as ADR-0005 Rule 9 treats a verdict without its artifact: as nothing. Record the evidence first, then the belief."; sql.q="malformed v1 belief/attestation statement: row 8: belief policy: witness token 'row:999999999' names no existing ledger row -- a finding without its witness is treated exactly as ADR-0005 Rule 9 treats a verdict without its artifact: as nothing. Record the evidence first, then the belief."
+
+== scaffolding classic world bsma9549 for malformation class 'self-contest' ==
+=== MAL-self-contest ===
+  [ok] verdict=QUARANTINED; asp.q="malformed v1 belief/attestation statement: row 10: belief policy: contest is the cross-principal doubt act -- you cannot contest your own belief (revise it instead: supersede it with your new position, s31). A contest against its own holder is a revision wearing a challenge's clothes."; sql.q="malformed v1 belief/attestation statement: row 10: belief policy: contest is the cross-principal doubt act -- you cannot contest your own belief (revise it instead: supersede it with your new position, s31). A contest against its own holder is a revision wearing a challenge's clothes."
+
+== scaffolding classic world bsm5bcb2 for malformation class 'contest-of-superseded' ==
+=== MAL-contest-of-superseded ===
+  [ok] verdict=QUARANTINED; asp.q='malformed v1 belief/attestation statement: row 11: belief policy: row 9 is no longer in force; contesting settled history defeats nothing (the record beats memory -- contest the current belief, or write your own).'; sql.q='malformed v1 belief/attestation statement: row 11: belief policy: row 9 is no longer in force; contesting settled history defeats nothing (the record beats memory -- contest the current belief, or write your own).'
+
+ALL OK
