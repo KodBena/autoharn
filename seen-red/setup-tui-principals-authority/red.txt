@@ -37,3 +37,18 @@ witnesses require -- the GREEN leg is WP1/WP5 (the constitutive pass and the dry
 actually succeed and actually write/compute what they claim).
 
 Re-run: HARNESS_PGHOST=192.168.122.1 python3 seen-red/setup-tui-principals-authority/run_fixtures.py
+
+=== Fixture-lane repair (ledger row 1949, found in reach of an unrelated Textual-navigation
+build, CLAUDE.md engineering-responsibility rule) ===
+
+WP5's own `would_do_line` assertion was RED on this build's base commit, confirmed BEFORE the
+fix: the closing checklist's `Table` element (tools/setup_tui/elements.py `_render_table`) wraps
+any non-last column wider than the shared per-column cap onto continuation physical lines --
+`register principal 'wp5dryname'` (the ITEM column, 31 chars) exceeds the cap (18 chars) and
+splits across two `print()` lines, so a single-physical-line substring check never saw the whole
+ITEM text. Same class of defect also found, in reach, in WP6b's own assertion (a `Note`/prose
+wrap, not a Table -- `bare`'s own scratch-tempdir path is long enough that "...classifies as
+foreign" wraps mid-phrase). Both repaired to reconstruct the wrapped content (column-position-
+aware for the Table case, whitespace-collapse for the prose case) rather than assuming an
+unwrapped single line -- a fixture-lane repair, not a product defect (screen_principals_
+authority's own decision logic is unchanged and untouched by this repair).

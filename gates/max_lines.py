@@ -186,20 +186,34 @@ BASELINE: dict[str, int] = {
     "gates/doc_attestation_presence.py":                837,
     "engine/ledger_floor.py":                           813,
     "engine/preamble_floor.py":                         801,
+    # Reconciled +31 to 705 (design/FABLE-SETUP-TUI-TYPED-UI-SPEC.md build), then +82 to 787
+    # (design/FABLE-SETUP-TUI-NAVIGATION-SPEC.md, the Textual leg -- maintainer-witnessed live
+    # defect: '<' typed at a Textual prompt did nothing, the intro's own promise was false under
+    # this backend). The 705 leg: `TextualUi.emit` replaces the old `banner`/`say` pair with the
+    # single typed-element seam (spec §2), plus the new `SetupWizardApp.write_transcript_styled`
+    # method (the one styling seam beyond plain print-capture, for a refusal `Note`) and one new
+    # import line (`elements`/`rich.text.Text`); also carries the F4 diagnostic leg's fix (spec
+    # §4, ledger rows 1844-F4/1917): `emit` prints a multi-line element as ONE
+    # `print("\n".join(lines))` call, not one `print()` per line -- reproduced live
+    # (seen-red/setup-tui-typed-elements/, this build's own headless WX1 rerun during
+    # construction) that N separate print() calls per element floods the print-capture pipeline's
+    # `events.Print` queue badly enough, under sustained emission, to stall the App's asyncio loop
+    # past every bridge call's own budget -- not a false "misread as shutdown" but a genuine
+    # indefinite hang, worse than F4's own hypothesis. The 787 leg: `TextualUi`'s four `ask_*`
+    # methods each gained the SAME BACK-trigger recognition `InteractiveUi` already carries
+    # (imported from `tools/setup_tui/ui.py`'s now-public `BACK_TRIGGER_PLAIN`, never redefined
+    # here); a new `ctrl+b` `Binding` plus `SetupWizardApp.action_go_back`/`on_key`'s choice/pause
+    # leg give the affordance a visible Footer surface even for prompt kinds with no free-text
+    # `Input` widget to type "<" into. Genuinely new decision/interaction logic both legs, not
+    # padding -- the module docstring's own new "architecture point 6" section (~24 of the 82
+    # lines) is the load-bearing explanation of why recognition stays per-backend rather than
+    # hoisted into `NavigableUi` (`NavigableUi` only ever sees each backend's ALREADY-coerced
+    # return value, never the pre-coercion raw keystroke a full hoist would need) -- P10
+    # prose-vs-logic judgment: this is the ADR-0000 "surface every judgment on the record" duty,
+    # not decorative writing. Written plain, no golfing (ADR-0007's no-go clause); witnessed
+    # growth both legs.
+    "tools/setup_tui/ui_textual.py":                    787,
     "engine/ledger_edb.py":                             729,
-    # Reconciled +31 to 705 (design/FABLE-SETUP-TUI-TYPED-UI-SPEC.md build): `TextualUi.emit`
-    # replaces the old `banner`/`say` pair with the single typed-element seam (spec §2), plus the
-    # new `SetupWizardApp.write_transcript_styled` method (the one styling seam beyond plain
-    # print-capture, for a refusal `Note`) and one new import line (`elements`/`rich.text.Text`).
-    # Also carries the F4 diagnostic leg's fix (spec §4, ledger rows 1844-F4/1917): `emit` prints
-    # a multi-line element as ONE `print("\n".join(lines))` call, not one `print()` per line --
-    # reproduced live (seen-red/setup-tui-typed-elements/, this build's own headless WX1 rerun
-    # during construction) that N separate print() calls per element floods the print-capture
-    # pipeline's `events.Print` queue badly enough, under sustained emission, to stall the App's
-    # asyncio loop past every bridge call's own budget -- not a false "misread as shutdown" but a
-    # genuine indefinite hang, worse than F4's own hypothesis. Genuinely new decision/rendering
-    # logic, not padding. Written plain, no golfing (ADR-0007's no-go clause); witnessed growth.
-    "tools/setup_tui/ui_textual.py":                    705,
     "tools/workflow_compile.py":                        672,
     # tools/setup_tui/durable_decisions.py -- REMOVED from BASELINE 2026-07-22 (P10 content
     # split, law/adr/0012's 2026-07-22 Amendment): 619 -> 249 lines, the CATALOG literal moved
