@@ -402,6 +402,34 @@ already describe; their source is `kernel/lineage/s22-work-item-ledger.sql` (vio
 current) and `kernel/lineage/s29-obligation-item-key-and-typed-close.sql` (review-gap) for the
 work-item pair, and `kernel/lineage/s15-schema.sql` for `question_status`.
 
+<a id="reservations_outstanding"></a>
+### `reservations_outstanding`
+The tracked-residue surface for a `attest_with_reservations` countersign (kernel/lineage/
+s56-reservation-residue.sql, design/FABLE-RESERVATION-RESIDUE-SPEC.md, maintainer-ratified
+2026-07-22). A reservation-carrying review discharges [`review_gap`](#review_gap)/
+`work_review_gap`/`work_item_strict_blockers` exactly as a plain `attest` does — the reviewer's
+verdict is final the moment it is written — but the concern itself does not vanish: it appears
+here (`review_id`, `regards`, `reviewer`, `basis`) until it is itself dispositioned, either by
+superseding the reservation-carrying review row or by a plain `attest` review regarding the
+reservation review's own row id. Before this delta the two attesting verdicts were
+indistinguishable in effect only by *staying stuck open*, which rewarded fabricating a clean
+`attest` to satisfy the gate rather than recording an honest concern — the specimen was the
+experience2 backflow finding (`AUTOHARN_BACKFLOW.md` 2026-07-22). See
+[`review_verdicts`](#review-verdicts) for the general "what did this review actually say" read
+path, and [USER-RECIPES-FAQ.md](user-guide/USER-RECIPES-FAQ.md) for the worked recipe.
+
+<a id="review-verdicts"></a>
+### `review_verdicts`
+The general review-legibility view (same delta as `reservations_outstanding` above): every
+`review` row, superseded or not, joined with its `review_detail` (`review_id`, `regards`,
+`reviewer`, `verdict`, `independence`, `basis`, `antecedent`, `superseded`). A declared
+raw/history reader by design (`gates/ledger_reader_allowlist.py`) — a superseded review must
+stay visible here, with its `superseded` flag named explicitly, never silently dropped by the
+in-force projection. This is the read path whose absence forced the experience2 finding to
+inspect the wrong column (`attest_verdict`, the s44 model-identity field) and mis-diagnose a
+storage bug — verdict storage was already sound; the defect was semantic (a narrow discharge
+filter), not a storage failure.
+
 ### obligation
 A `countersign_obligation` row: the obliged [principal](#principal)'s EVERY row (any kind)
 shows in [`review_gap`](#review_gap) until a distinct actor attests it. The row's `scope` column

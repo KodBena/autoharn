@@ -211,7 +211,12 @@ BASELINE: dict[str, int] = {
     "hooks/posttooluse_error_recurrence.py":            530,
     "engine/ledger_differential.py":                    529,
     "hooks/pretooluse_delegation_observer.py":          525,
-    "gates/ledger_reader_allowlist.py":                 513,
+    # Reconciled +12 to 525 (design/FABLE-RESERVATION-RESIDUE-SPEC.md build, kernel/lineage/
+    # s56-reservation-residue.sql): CHAIN += s56, and one new ALLOWLIST entry (review_verdicts,
+    # a DECLARED raw/history reader by design -- the general review-legibility surface must show
+    # a superseded review too). Genuinely new classification content, not padding. Written plain,
+    # no golfing.
+    "gates/ledger_reader_allowlist.py":                 525,
     # Reconciled +22 to 525 (GENESIS-GATE HARD-STOP, ledger row 1918): `verify_commission_act`
     # gained the `accept_unverified` parameter and its own `_verify_commission_ok` verdict_check
     # function (the real halt-vs-continue decision, previously nowhere -- exit code was silently

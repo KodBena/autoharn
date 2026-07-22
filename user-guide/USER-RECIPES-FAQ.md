@@ -1098,6 +1098,39 @@ This exit code (6) is reachable only through `--review-gap`, and only when nothi
 already raised the exit and at least one review is flagged. Witnessed both polarities:
 [seen-red/content-free-review-audit/](../seen-red/content-free-review-audit).
 
+<!-- doc-attest-exempt: this single Q&A entry (kernel/lineage/s56-reservation-residue.sql,
+design/FABLE-RESERVATION-RESIDUE-SPEC.md) is new prose added by a single-session Sonnet builder;
+no live A:B:C loop was run (this session cannot fork a genuinely fresh reviewer, the same limit
+named at ADR-0012's own doc-attest-exempt marker) and this marker does not claim one did. Content
+is witnessed against a live fixture (seen-red/reservation-residue/), not merely asserted. Flagged
+to the maintainer as a standing exemption on this entry rather than a wholesale one -- a genuine
+A:B:C pass over this page should still happen, and this marker's scope is exactly the one
+paragraph immediately below, not the rest of the file (which the gate's per-file-not-per-
+paragraph mechanics cannot express more narrowly than this). Removal condition: strike when a
+real A:B:C attestation covers this page. -->
+
+**I countersigned with a concern instead of a clean pass — does that discharge the review
+obligation, or does it leave the gate stuck open?** It discharges (kernel/lineage/
+s56-reservation-residue.sql, design/FABLE-RESERVATION-RESIDUE-SPEC.md, maintainer-ratified
+2026-07-22): `./led review <close-row-id> attest_with_reservations <independence> <your
+concern...>` clears `review_gap`/`work_review_gap`/`work_item_strict_blockers` exactly as a plain
+`attest` does — the verdict is final the moment it is recorded. The reservation itself does not
+vanish: it lands on [`reservations_outstanding`](../GLOSSARY.md#reservations_outstanding) and
+stays there until it is itself dispositioned — either supersede the reservation-carrying review
+row, or have a DIFFERENT actor write a plain `attest` review *regarding the reservation review's
+own row id*. (The original reviewer withdrawing their own concern is a real path too, but it
+goes through the supersession leg, not this one: writing a fresh review *regarding their own
+prior review* is refused as self-review — the standing segregation-of-duties check,
+`kernel/lineage/s21-session-aware-distinctness.sql`, untouched by this delta — applies to a
+review of a review exactly as it does to a review of anything else. Witnessed live,
+[seen-red/reservation-residue/](../seen-red/reservation-residue).) Before this delta a
+reservation-carrying countersign left the item indistinguishable from one nobody reviewed at
+all, which rewarded fabricating a clean `attest` to satisfy the gate rather than recording the
+honest concern — this closes that incentive while keeping the concern visible.
+[`review_verdicts`](../GLOSSARY.md#review-verdicts) is the general read path for "what did this
+review actually say" (verdict, independence, basis, antecedent, and whether it was later
+superseded) when `review_gap`'s own pass/fail view isn't enough.
+
 **How do I make an implementation step mechanically wait on a review step, instead of relying on
 remembered discipline?** Arm `decomposition_review` — a third, independent PreToolUse mechanism in
 [hooks/pretooluse_change_gate.py](../hooks/pretooluse_change_gate.py), alongside `change_gate`

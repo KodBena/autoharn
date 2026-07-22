@@ -80,7 +80,19 @@ CHAIN = [
     "s53-belief-substrate.sql",
     "s54-belief-views.sql",
     "s55-dispatch-grain-independence.sql",
+    "s56-reservation-residue.sql",
 ]
+# s56 (kernel/lineage/s56-reservation-residue.sql, design/FABLE-RESERVATION-RESIDUE-SPEC.md,
+# maintainer-ratified 2026-07-22) extends this SAME gate's scratch CHAIN. discharging_attest
+# (RE-ISSUED, s32's own object, WHERE clause widened only) keeps its standing posture -- no raw
+# `ledger` reference of its own (reads ledger_current + review_detail exclusively, before and
+# after this delta), correctly ABSENT from the allowlist, unchanged. reservations_outstanding
+# (new) factors through ledger_current + review_detail exclusively -- verified live, classifies
+# clean with NO allowlist entry. review_verdicts (new) is a DECLARED raw/history reader by
+# design (spec section 3: "every review row" -- the general legibility surface must show a
+# SUPERSEDED review too, with its own superseded flag named explicitly, exactly the
+# work_violation_history/work_bookkeeping_closes posture one object family over) -- ALLOWLIST
+# entry below.
 # s50 (design/FABLE-S46-DEFEAT-INPUT-DOMAIN-SPEC.md, ledger row 1647) RE-ISSUES model_defeated_
 # rows to read raw `ledger` (matching both engine producers' full-history exclusion domain) --
 # a REAL, previously-unlicensed leg (s50/s51/s52 were never wired into this gate's CHAIN before
@@ -376,6 +388,14 @@ ALLOWLIST: dict[str, str] = {
                                "over (s37): reads raw ledger directly, never ledger_current, so a "
                                "later-superseded bookkeeping close row remains enumerable here "
                                "forever, never silently dropped by a current-truth projection.",
+    # -- s56 (kernel/lineage/s56-reservation-residue.sql) --
+    "review_verdicts": "DECLARED raw/history reader by design (design/FABLE-RESERVATION-RESIDUE-"
+                       "SPEC.md section 3: the general review-legibility surface must show a "
+                       "superseded review too, with `superseded` named as an explicit column, "
+                       "not silently dropped by a current-truth projection) -- reads raw ledger "
+                       "directly for both the review-row set and the supersession anti-join it "
+                       "reports as a column, mirroring work_violation_history/work_bookkeeping_"
+                       "closes one object family over (s37/s38).",
 }
 
 # A raw-`ledger` TABLE ACCESS: FROM/JOIN/INTO/UPDATE followed by an optionally schema-qualified

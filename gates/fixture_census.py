@@ -156,6 +156,7 @@ REGISTRY: dict[str, str] = {
     "defeat-pipeline":                 "seen-red/defeat-pipeline/run_fixtures.py",
     "belief-substrate-v1":             "seen-red/belief-substrate-v1/run_fixtures.py",
     "belief-substrate-v2":             "seen-red/belief-substrate-v2/run_fixtures.py",
+    "reservation-residue":             "seen-red/reservation-residue/run_fixtures.py",
     "judge-all-capable-layers":       "seen-red/judge-all-capable-layers/run_fixtures.py",
     "boundary-service":                "seen-red/boundary-service/run_fixtures.py",
     "boundary-multiplex":              "seen-red/boundary-multiplex/run_fixtures.py",

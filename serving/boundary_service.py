@@ -422,6 +422,15 @@ BOUNDARY_SERVICE_VERSION = "1.1.0"
 #                                             because the amendment spec's own v1 allowlist names
 #                                             it explicitly, a second reachable path to identical
 #                                             data, not a new one)
+# The two entries below are a LATER, additive registry growth under a SEPARATE spec (design/
+# FABLE-RESERVATION-RESIDUE-SPEC.md section 3, maintainer-ratified 2026-07-22, kernel/lineage/
+# s56-reservation-residue.sql) -- no new ROUTE, no new pagination shape, the same closed-registry
+# mechanism the v1 amendment above established, extended the same way model_attestations/
+# model_defeated_rows/credited_current already were (later kernel deltas, same registry, no
+# BOUNDARY_SERVICE_VERSION bump -- the version names the ROUTE-TABLE closure, unaffected by a
+# registry-membership growth):
+#   reservations_outstanding.review_id    -- kernel/lineage/s56 (r.id, a ledger row id, aliased)
+#   review_verdicts.review_id             -- kernel/lineage/s56 (r.id, a ledger row id, aliased)
 VIEW_REGISTRY: dict[str, tuple[str, str]] = {
     "question_status": ("question_id", "id"),
     "review_gap": ("id", "id"),
@@ -434,6 +443,11 @@ VIEW_REGISTRY: dict[str, tuple[str, str]] = {
     "model_defeated_rows": ("attest_id", "id"),
     "credited_current": ("id", "id"),
     "work_item_current": ("slug", "slug"),
+    # design/FABLE-RESERVATION-RESIDUE-SPEC.md section 3 (kernel/lineage/s56-reservation-
+    # residue.sql): both new views key on review_id (bigint) -- id-shaped pagination, the same
+    # shape review_stamp_distinctness already uses one row over.
+    "reservations_outstanding": ("review_id", "id"),
+    "review_verdicts": ("review_id", "id"),
 }
 
 # The four s43 boundary functions, named ONCE (ADR-0012 P1) -- the write-route table (spec §4)

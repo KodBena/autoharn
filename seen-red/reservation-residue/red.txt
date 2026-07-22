@@ -1,0 +1,33 @@
+== scaffolding WORLD PRE (chain ends s55-dispatch-grain-independence.sql, s56 NOT applied) ==
+=== detect-negative-pre-s56 ===
+  [ok] detect.sql on WORLD PRE: 'f' (expected f)
+
+=== red-first-defect-reproduced ===
+  [ok] pre-s56: review write exit=0, work_review_gap still lists 'pre-resv': True (expected True -- the defect this delta forecloses, witnessed live BEFORE s56 exists, spec section 6's own 'red first' instruction)
+
+== scaffolding WORLD S56 (chain ends s56-reservation-residue.sql) ==
+=== detect-positive-s56 ===
+  [ok] detect.sql on WORLD S56: 't' (expected t)
+
+=== ii-plain-attest-discharges ===
+  [ok] review exit=0, work_review_gap('s56-plain')=False (expected False), review_verdicts row=('attest', False) (expected ('attest', False))
+
+=== iii-reservation-discharges-and-tracked ===
+  [ok] review exit=0, work_review_gap('s56-resv')=False (expected False -- discharged), reservations_outstanding has review_id=14: True (expected True), review_verdicts row=('attest_with_reservations', False) (expected ('attest_with_reservations', False)) -- the SAME act WORLD PRE just proved leaves the gap open
+
+=== iv-refuse-stays-open-and-untracked ===
+  [ok] review exit=0, work_review_gap('s56-refuse')=True (expected True -- refuse never discharges), reservations_outstanding has review_id=18: False (expected False), review_verdicts row=('refuse', False) (expected ('refuse', False))
+
+=== v-disposition-by-different-actor-clears ===
+  [ok] disposition review exit=0, reservations_outstanding still has review_id=14 after disposition: False (expected False)
+
+=== v2-self-disposition-refused-by-standing-self-review-check ===
+  [ok] reviewer self-dispositioning a row they themselves authored: exit=1 (expected 1, REFUSED by validate_review's s21 self-review check -- named tension with the spec's own 'including the original reviewer' prose, not a bug in this delta)
+
+=== vi-supersession-clears-reservation ===
+  [ok] reservation review exit=0, in reservations_outstanding before supersession: True (expected True), supersession write verdict={'row_id': 26, 'message': None, 'sqlstate': None, 'refusal_id': None, 'disposition': 'accepted'}, in reservations_outstanding after: False (expected False), review_verdicts row after=('attest_with_reservations', True) (expected ('attest_with_reservations', True) -- superseded flag correct)
+
+=== vii-judge-work-layer-agree ===
+  [ok] judge output (s56fx_s56): ['AGREE']
+
+ALL CASES PASSED

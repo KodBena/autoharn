@@ -437,7 +437,11 @@
 #                                                  ledger id) — discharge it later with
 #                                                  `./led review <close-row-id> attest ... `, written
 #                                                  by a DIFFERENT actor (surfaced meanwhile by
-#                                                  `led work review-gap`).
+#                                                  `led work review-gap`). `attest_with_reservations`
+#                                                  discharges identically to a plain `attest` — the
+#                                                  reservation itself lands on `reservations_outstanding`
+#                                                  and stays there until dispositioned (supersede that
+#                                                  review row, or attest-review it directly; s56).
 #                                              --strict (opt-in, Element C, "a declared posture, not
 #                                                a universal mandate") REFUSES this close unless
 #                                                --review-witness was used AND every leaf of this
