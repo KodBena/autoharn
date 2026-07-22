@@ -6,7 +6,7 @@ principal / grant a competence / add a relation / register a charter) are `ListF
 queues the exact same `principals_authority.*_act` Plan entry."""
 from __future__ import annotations
 
-from tools.configtree import ListField, SectionResult, SectionSpec, TextField
+from tools.configtree import ChoiceField, ListField, SectionResult, SectionSpec, TextField
 from tools.setup_tui import checklist as ck
 from tools.setup_tui import content, destination, feature_facts, principals_authority as pa
 from tools.setup_tui.plan import PlanEntry
@@ -19,12 +19,19 @@ def fields(state: dict) -> tuple:
     # fact straight out of state in `submit` below, never via a second field declaration (a
     # duplicated projection is refused at App construction,
     # `tools.configtree.spec.validate_shared_ownership`).
-    class_opts = tuple(content.PA_CLASS_CHOICES)
-    rel_opts = tuple(content.PA_RELATION_CHOICES)
+    # EMITTING SITE this fixed (maintainer round 4): `label=f"Class {class_opts}"` used to
+    # splice the WHOLE options tuple -- value AND its full descriptive sentence, for all four
+    # classes -- into a single field label (measured 394 chars; "relation" measured 613). A
+    # closed-vocabulary value belongs in a `ChoiceField` (a real picker), not free text with the
+    # entire vocabulary dumped into its label as a "hint" -- the content-level half of the fix.
+    # The structural half (a container/CSS measure cap so no future prose site can repeat this
+    # regardless of terminal width) lives in tools/configtree/measure.py + widgets.py/panes.py.
+    class_opts = tuple((v, v) for v, _ in content.PA_CLASS_CHOICES)
+    rel_opts = tuple((v, v) for v, _ in content.PA_RELATION_CHOICES)
     return (
         ListField(name="register", label="Register a principal",
                   item_fields=(TextField(name="name", label="Principal name"),
-                               TextField(name="agent_class", label=f"Class {class_opts}"),
+                               ChoiceField(name="agent_class", label="Class", options=class_opts),
                                TextField(name="purpose", label="Stated purpose")),
                   summarize=lambda r: f"{r['name']} ({r['agent_class']}): {r['purpose']}"),
         ListField(name="competences", label="Grant a competence",
@@ -35,7 +42,7 @@ def fields(state: dict) -> tuple:
                   summarize=lambda r: f"{r['name']}: {r['activity']} ({r['band']}/{r['basis']})"),
         ListField(name="relations", label="Add a typed relation",
                   item_fields=(TextField(name="subject", label="Subject principal"),
-                               TextField(name="relation", label=f"Relation {rel_opts}"),
+                               ChoiceField(name="relation", label="Relation", options=rel_opts),
                                TextField(name="object", label="Object principal")),
                   summarize=lambda r: f"{r['subject']} {r['relation']} {r['object']}"),
         ListField(name="charters", label="Register a role charter",

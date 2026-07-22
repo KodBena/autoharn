@@ -26,16 +26,27 @@ def field_widget_id(name: object) -> str:
 
 
 def build_field_widget(f, value: object):
-    """One field spec + its current value -> the live widget instance."""
+    """One field spec + its current value -> the live widget instance.
+
+    MEASURE (maintainer round 4, `measure.py`'s own docstring has the full account): a
+    `Checkbox`/`RadioButton` (both `ToggleButton` subclasses) do NOT wrap their own caption text
+    at all, verified empirically -- given a long string they render it as one line, sized to full
+    content width, straight past any container cap. `ConfirmField`'s label is therefore NEVER
+    passed to `Checkbox` as its own caption (an empty string instead) -- the section's own
+    preceding `Static(str(f.label), classes="ct-field-label")` (panes.py's own per-field loop) is
+    the ONE place that label renders, and IT wraps correctly under the CSS measure cap. `RadioSet`
+    gets `classes="ct-choice-field"` so its own container -- and by inheritance its RadioButton
+    children -- is bounded by the same cap even though a bounded-but-unwrapped RadioButton label
+    is a lesser, defense-in-depth case (no current option string is long; kept honest for the
+    next one)."""
     wid = field_widget_id(f.name)
     if isinstance(f, TextField):
         return Input(value=str(value), placeholder=str(f.label), password=f.password, id=wid)
     if isinstance(f, ChoiceField):
         buttons = [RadioButton(label, value=(val == value)) for val, label in f.options]
-        radio = RadioSet(*buttons, id=wid)
-        return radio
+        return RadioSet(*buttons, id=wid, classes="ct-choice-field")
     if isinstance(f, ConfirmField):
-        return Checkbox(str(f.label), value=bool(value), id=wid)
+        return Checkbox("", value=bool(value), id=wid)
     raise TypeError(f"build_field_widget: unsupported field type {type(f).__name__}")
 
 
@@ -83,9 +94,9 @@ class AddItemModal(ModalScreen[dict | None]):
 
     def compose(self) -> ComposeResult:
         with Vertical(id="ct-modal-body"):
-            yield Label(self._title, id="ct-modal-title")
+            yield Label(self._title, id="ct-modal-title", classes="ct-section-title")
             for f in self._item_fields:
-                yield Label(str(f.label))
+                yield Label(str(f.label), classes="ct-field-label")
                 yield build_field_widget(f, f.default if hasattr(f, "default") else "")
                 err = FieldError()
                 self._errors[str(f.name)] = err
@@ -139,7 +150,7 @@ class ListFieldWidget(Vertical):
         self._on_change = on_change
 
     def compose(self) -> ComposeResult:
-        yield Label(str(self.spec.label))
+        yield Label(str(self.spec.label), classes="ct-field-label")
         yield ListView(id=f"{self.id}-list")
         with Horizontal():
             yield Button(f"Add {self.spec.label}", id=f"{self.id}-add")
@@ -152,7 +163,7 @@ class ListFieldWidget(Vertical):
         lv = self.query_one(f"#{self.id}-list", ListView)
         lv.clear()
         for row in self.rows:
-            lv.append(ListItem(Label(self.spec.summarize(row))))
+            lv.append(ListItem(Label(self.spec.summarize(row), classes="ct-info-line")))
 
     def add_row(self, row: dict) -> None:
         self.rows.append(row)

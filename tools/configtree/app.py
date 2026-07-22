@@ -30,6 +30,7 @@ from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
 from textual.widgets import ContentSwitcher, Footer, Header, Static, Tree
 
+from tools.configtree.measure import MEASURE
 from tools.configtree.panes import CommitPane, SectionPane
 from tools.configtree.spec import (BLOCKED, COMPLETE, INVALID, CommitSpec, SectionSpec,
                                     section_status, validate_shared_ownership)
@@ -46,18 +47,40 @@ class ConfigTreeApp(App):
     bookkeeping set `panes.py`/this module write (`_commit_errors`, `_commit_sweep_error`,
     `_commit_ok`). `banner`, if given, is shown on every screen (e.g. a --dry-run notice)."""
 
-    CSS = """
-    Tree { width: 40; border-right: solid $primary; }
-    ContentSwitcher { width: 1fr; }
-    #ct-status-line { background: $panel; padding: 0 1; height: 1; }
-    #ct-banner { background: $warning-darken-2; color: $text; padding: 0 1; }
-    .ct-section-title { text-style: bold; padding: 1 1 0 1; }
-    .ct-section-body { padding: 0 1; height: 1fr; }
-    .ct-section-buttons { padding: 1; height: auto; }
-    .ct-field-label { padding-top: 1; }
-    .ct-field-error { color: $error; }
-    .ct-blocked-reason { color: $warning; padding: 1; }
-    .ct-precheck-line, .ct-info-line { color: $text-muted; }
+    # MEASURE (maintainer round 4, `measure.py`'s own docstring has the full account): every
+    # TRUE-PROSE class below -- a field label, a field/business error, a blocked-reason banner, a
+    # section/modal title, the persistent status line, the dry-run banner -- caps its own
+    # `max-width` at the ONE named constant, so a `Static`/`Label` mounted in ANY of these roles
+    # wraps at a readable measure regardless of how wide the actual terminal is (verified
+    # empirically: an uncapped `Static` in a 400-column harness renders 400 columns wide, one
+    # line; capped at `MEASURE`, it wraps into `ceil(len/MEASURE)` lines of <=`MEASURE` columns
+    # each).
+    #
+    # DELIBERATELY NOT capped: `.ct-precheck-line`/`.ct-info-line` -- these carry the commit
+    # boundary's own TABULAR/pre-formatted driver output (checklist rows, `$ <argv>` echoes,
+    # `feature_facts.facts_block`'s own aligned blocks), the SAME genre the deleted
+    # `tools/setup_tui/elements.py` explicitly exempted ("the LAST column is deliberately never
+    # capped/wrapped ... wrapping it would silently split that text"); the coordinator's own
+    # scope names "labels, help text, error messages, notes, refusal text" -- prose -- not driver
+    # output, and wrapping a table row mid-column would be a NEW hazard, not a fix. `Input`/
+    # `Checkbox`/`RadioSet` -- data-ENTRY controls, not prose -- are likewise not capped (a text
+    # box legitimately wants to span available width); `ct-choice-field` (a `RadioSet`) IS capped
+    # as defense-in-depth even though no current option string is long enough to need it
+    # (`build_field_widget`'s own docstring: a `RadioButton`'s own caption does not wrap at all,
+    # so a bounded-but-unwrapped box is the best available fallback for that widget class).
+    CSS = f"""
+    Tree {{ width: 40; border-right: solid $primary; }}
+    ContentSwitcher {{ width: 1fr; }}
+    #ct-status-line {{ background: $panel; padding: 0 1; height: auto; max-width: {MEASURE}; }}
+    #ct-banner {{ background: $warning-darken-2; color: $text; padding: 0 1; max-width: {MEASURE}; }}
+    .ct-section-title {{ text-style: bold; padding: 1 1 0 1; max-width: {MEASURE}; }}
+    .ct-section-body {{ padding: 0 1; height: 1fr; }}
+    .ct-section-buttons {{ padding: 1; height: auto; }}
+    .ct-field-label {{ padding-top: 1; max-width: {MEASURE}; }}
+    .ct-field-error {{ color: $error; max-width: {MEASURE}; }}
+    .ct-blocked-reason {{ color: $warning; padding: 1; max-width: {MEASURE}; }}
+    .ct-precheck-line, .ct-info-line {{ color: $text-muted; }}
+    .ct-choice-field {{ max-width: {MEASURE}; }}
     """
     BINDINGS = [Binding("ctrl+q", "quit_app", "Quit", show=True, priority=True),
                 Binding("ctrl+c", "quit_app", "Quit", show=False, priority=True)]

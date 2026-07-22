@@ -73,6 +73,16 @@ Cases (both polarities):
      `blocked()` check (boundary itself never selected during either edit); and a synthetic
      double-owner declaration is refused BEFORE any Textual machinery starts (RED-first,
      construction-time raise).
+  8. READABLE-MEASURE WIDTH CAP (maintainer round 4: a field label measured 394/613 characters,
+     rendered as one unwrapped-feeling line spanning a wide terminal's full width -- "unbounded
+     text measure ... bound to terminal width instead of a readable measure"). RED-first: a
+     synthetic, uncapped `Static` at a 400-column terminal reproduces the class before any fix is
+     shown. GREEN: the REAL app, at the SAME 400-column width, swept across EVERY section (not
+     just principal registration) -- no capped-class widget anywhere exceeds
+     `tools.configtree.measure.MEASURE` (78, matching the deleted `elements.py`'s own historical
+     convention) -- including the ORIGINAL emitting site itself, the "Add a principal" modal's
+     `agent_class`/`relation` fields, now real `ChoiceField` pickers with short labels instead of
+     free text with the whole closed vocabulary dumped into its label.
 
 Zero residue: every `state["dest"]` used here is a `--dry-run` decision-phase string, never
 actually created on disk -- confirmed in case 3's own cleanup assertion.
@@ -90,13 +100,15 @@ import sys
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, REPO)
 
-from textual.widgets import Button, Checkbox, ContentSwitcher, Input, Tree  # noqa: E402
+from textual.app import App, ComposeResult  # noqa: E402
+from textual.widgets import Button, Checkbox, ContentSwitcher, Input, Static, Tree  # noqa: E402
 
 from tools.configtree import CommitSpec, DuplicatedSharedFieldError, SectionResult, SectionSpec  # noqa: E402
 from tools.configtree.app import ConfigTreeApp  # noqa: E402
 from tools.configtree.fields import (ChoiceField, ListField, TextField, get_field_value,  # noqa: E402
                                       set_field_value)
 from tools.configtree.ids import NodeId  # noqa: E402
+from tools.configtree.measure import MEASURE  # noqa: E402
 from tools.configtree.spec import COMPLETE, INVALID, owner_of, section_status  # noqa: E402
 from tools.setup_tui import steps, tui_app  # noqa: E402
 from tools.setup_tui.checklist import Checklist  # noqa: E402
@@ -574,6 +586,113 @@ async def case_7() -> None:
               f"(construction-time raise, ADR-0002's own highest rung): {exc}")
 
 
+_MEASURE_CAPPED_SELECTOR = (".ct-field-label, .ct-field-error, .ct-blocked-reason, "
+                            ".ct-section-title, #ct-status-line, #ct-banner, .ct-choice-field")
+
+
+class _UncappedProbe(App):
+    """Case 8a's own synthetic RED proof: an ORDINARY `Static`, no cap class at all, holding a
+    400-character string -- the exact shape the maintainer's own bug had before this fix, minus
+    the autoharn-specific content. Proves the class is real (an uncapped Static DOES render
+    unreadably wide on a wide terminal) before case 8b/8c prove the real, capped app does not."""
+
+    def compose(self) -> ComposeResult:
+        yield Static("x" * 400, id="uncapped")
+
+
+async def case_8() -> None:
+    """READABLE-MEASURE WIDTH CAP (maintainer round 4: "the principal-registration flow greeted
+    him with ONE line of ~348 characters spanning his full tmux width -- unbounded text measure").
+    The EMITTING SITE: `steps_principals_authority.py`'s `agent_class`/`relation` fields used to
+    splice the WHOLE closed-vocabulary options tuple (value + full descriptive sentence, all four
+    entries) into a single field label -- measured 394 and 613 characters respectively (fixed at
+    the content layer: converted to real `ChoiceField` pickers with short, value-only option
+    labels). The CLASS: any `Static`/`Label` mounted in a container that stretches to its
+    parent's width wraps at THAT width, not a readable one -- verified empirically against a
+    bare, uncapped `Static` in a 400-column harness (case 8a's own synthetic RED proof below).
+    Fixed structurally: `tools.configtree.measure.MEASURE = 78` (matching the deleted
+    `tools/setup_tui/elements.py`'s own historical convention) capped via CSS on every TRUE-PROSE
+    class (`app.py`'s own CSS docstring has the deliberate exemption list: tabular/pre-formatted
+    driver output -- checklist rows, `$ argv` echoes -- is NOT capped, matching the SAME house
+    precedent). This fixture drives the REAL app at a 400-column terminal (10x the ceiling) and
+    asserts NO capped-class widget anywhere -- across every real section AND the "Add a
+    principal" modal specifically -- ever exceeds the measure."""
+    # --- 8a. RED-FIRST, synthetic: an UNCAPPED Static at 400 columns reproduces the class ------
+    probe = _UncappedProbe()
+    async with probe.run_test(size=(400, 20)) as pilot:
+        await pilot.pause()
+        uncapped = probe.query_one("#uncapped", Static)
+        assert uncapped.size.width > MEASURE, \
+            (f"expected the RED proof itself to exceed MEASURE ({MEASURE}) when uncapped, got "
+             f"width={uncapped.size.width} -- the proof is supposed to demonstrate the class is "
+             f"real before showing the fix catches it")
+        print(f"case 8a ok (RED-FIRST, synthetic): an UNCAPPED Static holding a 400-character "
+              f"string at a 400-column terminal renders {uncapped.size.width} columns wide, one "
+              f"line -- reproduces the maintainer's own observed class before any fix is applied")
+
+    # --- 8b. GREEN: the REAL app, at the SAME 400-column width, capped everywhere -------------
+    state = _fresh_state()
+    app = tui_app.build_app(state, dry_run=True)
+    async with app.run_test(size=(400, 60)) as pilot:
+        await pilot.pause()
+        tree = app.query_one("#ct-tree", Tree)
+
+        # Unblock every dest-/world-gated section so its REAL fields (not a blocked banner) are
+        # what gets measured below.
+        tree.select_node(_find_node(tree, "fork-target"))
+        await pilot.pause()
+        app.query_one("#pane-fork-target #ct-field-dest", Input).value = "/tmp/measure-case8-dest"
+        await pilot.pause()
+        tree.select_node(_find_node(tree, "birth"))
+        await pilot.pause()
+        app.query_one("#pane-birth #ct-field-world", Input).value = "measurecase8"
+        await pilot.pause()
+        for slug in app._panes:
+            await app._panes[slug].refresh_blocked()
+        await pilot.pause()
+
+        offenders: list[tuple[str, int]] = []
+        max_seen = 0
+        for slug in app._panes:
+            tree.select_node(_find_node(tree, slug))
+            await pilot.pause()
+            pane = app.query_one(f"#pane-{slug}")
+            for w in pane.query(_MEASURE_CAPPED_SELECTOR):
+                width = w.size.width
+                max_seen = max(max_seen, width)
+                if width > MEASURE:
+                    offenders.append((f"{slug}#{w.id}", width))
+        assert not offenders, f"MEASURE ({MEASURE}) exceeded by: {offenders}"
+        print(f"case 8b ok (GREEN): every REAL section's own prose widgets, at a 400-column "
+              f"terminal, stay within MEASURE={MEASURE} (widest seen: {max_seen} columns) -- "
+              f"swept ALL {len(app._panes)} sections, not just principal registration")
+
+        # --- 8c. The ORIGINAL emitting site specifically: the "Add a principal" modal ---------
+        tree.select_node(_find_node(tree, "principals-authority"))
+        await pilot.pause()
+        add_btn = app.query_one("#pane-principals-authority #ct-field-register-add")
+        await pilot.click(add_btn)
+        await pilot.pause()
+        modal_offenders = [(str(w.id), w.size.width) for w in
+                            app.screen.query(_MEASURE_CAPPED_SELECTOR) if w.size.width > MEASURE]
+        assert not modal_offenders, f"MEASURE exceeded in the Add-a-principal modal: {modal_offenders}"
+        print(f"case 8c ok (GREEN, the original emitting site): the 'Add a principal' modal's "
+              f"'Class' field label -- the exact site that measured 394 characters before this "
+              f"fix -- stays within MEASURE={MEASURE} at a 400-column terminal")
+
+        # --- 8d. Content-level confirmation: the labels themselves are short now --------------
+        pa_fields = steps.steps_principals_authority.fields(app.state)
+        register_field = next(f for f in pa_fields if str(f.name) == "register")
+        agent_class_field = next(f for f in register_field.item_fields if str(f.name) == "agent_class")
+        assert len(str(agent_class_field.label)) <= MEASURE, \
+            f"expected a short label, got {len(str(agent_class_field.label))} chars"
+        assert isinstance(agent_class_field, ChoiceField), \
+            "expected agent_class to be a real ChoiceField picker, not free text with the vocabulary dumped into its label"
+        print(f"case 8d ok: 'agent_class' is now a real ChoiceField (label {str(agent_class_field.label)!r}, "
+              f"{len(str(agent_class_field.label))} chars) -- the content-level half of the fix, "
+              f"not merely wrapped")
+
+
 async def _main() -> None:
     await case_0()
     await case_1()
@@ -583,6 +702,7 @@ async def _main() -> None:
     await case_5()
     await case_6()
     await case_7()
+    await case_8()
     print("ALL CASES OK -- tools.configtree.app.ConfigTreeApp driven end-to-end through the "
           "REAL tools.setup_tui.steps.SECTIONS registry via Pilot, LIVE-MODEL semantics "
           "throughout (no per-section save exists): a state-aliasing reproduction and structural "
@@ -591,9 +711,11 @@ async def _main() -> None:
           "polarities with focus never leaving the field, a full ten-section journey typed live "
           "to a clean dry-run commit via the ONE commit button, a commit-time business-rule "
           "refusal (red) and its retry (green), keyboard/Tab/scroll navigation primitives, "
-          "ctrl+q's exit-code contract, and single-editable-home for both shared facts (dest "
+          "ctrl+q's exit-code contract, single-editable-home for both shared facts (dest "
           "owned by Fork/target, world by Birth) with a RED-first load-time refusal for a "
-          "synthetic double-owner declaration.")
+          "synthetic double-owner declaration, and a readable-measure width cap (MEASURE=78) "
+          "swept across every section plus the original emitting site (the 'Add a principal' "
+          "modal), RED-first against a synthetic uncapped Static at a 400-column terminal.")
 
 
 if __name__ == "__main__":
