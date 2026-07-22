@@ -19,6 +19,7 @@ from textual.widgets import Button, Checkbox, Input, RadioSet, Static
 
 from tools.configtree.fields import ListField, MultiChoiceField, get_field_value, set_field_value, validate_value
 from tools.configtree.item_modal import render_item_field
+from tools.configtree.layout_split import yield_help_items
 from tools.configtree.spec import ActionSpec
 from tools.configtree.widget_primitives import FieldError, elucidation_widgets, field_widget_id, read_field_value
 from tools.configtree.widgets import ListFieldWidget, MultiChoiceFieldWidget
@@ -36,12 +37,26 @@ class ActionPane(Vertical):
 
     def compose(self) -> ComposeResult:
         self._errors = {}
-        # Same squeeze-hazard fix as `panes.SectionPane.compose` (cycle-3 fix round, ledger row
-        # 1136) -- title/description render INSIDE the scroll region, never as fixed-size
-        # siblings that could starve its `1fr` share down to an unreachable sliver.
-        with VerticalScroll(id=f"{self.id}-body", classes="ct-section-body"):
+        # CONTROL/HELP SPLIT (ledger row 1138) -- the SAME three-mode split
+        # `panes.SectionPane.compose`'s own note explains in full (WIDE: two columns, controls
+        # left/help right; NARROW_EXPANDED: one column, help inline, the F1 opt-in; NARROW_
+        # COLLAPSED: one column, help suppressed, the new default at narrow widths). This pane
+        # carries no `MasterDetailField` (no `ActionSpec` ever declares one), so it needs none of
+        # that branch -- otherwise identical shape to its `SectionPane` sibling.
+        wide = getattr(self.app, "layout_is_wide", True)
+        narrow_expanded = (not wide) and getattr(self.app, "help_visible", False)
+        divert_help = wide
+        suppress_help = not wide and not narrow_expanded
+        help_items: list[tuple] = []
+
+        def _controls() -> ComposeResult:
             yield Static(f"{self.spec.title}", classes="ct-section-title")
-            yield from elucidation_widgets(self.spec.description, "ct-section-description")
+            if divert_help:
+                help_items.append((self.spec.description, "ct-section-description", None))
+            elif not suppress_help:
+                yield from elucidation_widgets(self.spec.description, "ct-section-description")
+            elif self.spec.description:
+                yield Static("(help hidden -- press F1 to show)", classes="ct-md-empty")
             self._field_specs = tuple(self.spec.fields(self.state))
             answers = {str(f.name): get_field_value(self.state, self.spec.slug, f)
                        for f in self._field_specs}
@@ -60,13 +75,33 @@ class ActionPane(Vertical):
                     # `item_modal.render_item_field` `panes.SectionPane`/`AddItemModal` now both
                     # use -- this pane had the IDENTICAL hand-copied loop and would have drifted
                     # the same way.
-                    yield from render_item_field(f, answers[name])
+                    yield from render_item_field(
+                        f, answers[name],
+                        help_sink=help_items if divert_help else None,
+                        suppress_help=suppress_help)
                 err = FieldError()
                 self._errors[name] = err
                 yield err
             whole_err = FieldError()
             self._errors[""] = whole_err
             yield whole_err
+
+        if wide:
+            with Horizontal(classes="ct-split"):
+                with VerticalScroll(id=f"{self.id}-body", classes="ct-controls-col"):
+                    yield from _controls()
+                with VerticalScroll(classes="ct-help-col"):
+                    if help_items:
+                        yield from yield_help_items(help_items)
+                    else:
+                        yield Static("(no additional help for this section)",
+                                     classes="ct-md-empty")
+        else:
+            # Same squeeze-hazard fix as `panes.SectionPane.compose` (cycle-3 fix round, ledger
+            # row 1136) -- title/description render INSIDE the scroll region, never as fixed-size
+            # siblings that could starve its `1fr` share down to an unreachable sliver.
+            with VerticalScroll(id=f"{self.id}-body", classes="ct-section-body"):
+                yield from _controls()
         with Horizontal(classes="ct-section-buttons"):
             yield Button(self.spec.apply_label, id="ct-action-apply", variant="primary")
 

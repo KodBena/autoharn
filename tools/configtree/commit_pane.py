@@ -49,7 +49,40 @@ class CommitPane(Vertical):
     hang waiting for an act that does not check any token, or abandon a partially-applied commit
     with no journal entry, which is worse than not offering cancel at all. The existing halted-
     commit recovery path (`steps.commit`'s own docstring: "re-run this tool against the same
-    destination to resume") is the honest answer for that window, unchanged by this fix."""
+    destination to resume") is the honest answer for that window, unchanged by this fix.
+
+    MID-SECTION CANCELLATION TOKEN (cycle-4 audit finding 1, ledger rows 1124/1133 -- the ONE
+    MINOR the converged audit/fix loop left): the paragraph above ("Cancel is honored between
+    sections") was true but incomplete -- ONE section's own `submit` (autoharn's
+    `rehearsal_submit`, the one declared exception besides commit itself that shells out live,
+    mid-flow) can itself run tens of seconds (witnessed: ~61s for one real, non-dry-run
+    rehearsal), and for that whole window Cancel was enabled and clickable but structurally
+    inert -- the flag it set had no effect until that already-running child exited on its own.
+    FIXED at the real layer, not by narrowing the disclaimer: this class, right before starting
+    the worker (`on_button_pressed`), stashes two callables into the SAME shared `state` dict
+    the sweep already touches -- `state["_cancel_check"]` (`() -> bool`, reads THIS worker's own
+    `is_cancelled`) and `state["_cancel_note"]` (`(str) -> None`, updates the busy text via
+    `call_from_thread`, so a section that keeps running past a cancel press -- teardown, below
+    -- can say so live rather than leaving the indicator looking frozen). `rehearsal_submit`
+    threads `_cancel_check` into `runner.run_command`'s new `cancel_check` parameter for its
+    scratch-birth subprocess call ONLY (never its own teardown call -- residue safety: a birth
+    cancelled mid-run may already have created a live scratch world/db, and teardown must still
+    run to completion to clean that up, exactly the self-cleaning contract this whole section
+    exists to prove holds); `run_command` polls that callable while the child is running and, on
+    a positive poll, SIGTERMs the child, waits up to 5s, then SIGKILLs it -- a REAL stop of the
+    in-flight process, not a flag nobody reads until the process was going to exit anyway.
+    `_run_submit_sweep` (below) now also checks `worker.is_cancelled` right AFTER each section's
+    `submit` returns (previously only BEFORE) -- a section that detected and honored a mid-run
+    cancel already recorded its own honest `checklist.CANCELLED` rows (a new, dedicated status,
+    never a `REFUSED` reuse -- the same closed-vocabulary discipline `checklist.NOT_UP` was
+    added under); the sweep itself then treats that exactly like the pre-existing between-
+    sections cancel path (`_finish_cancelled`), not a refusal-to-retry, so this class did not
+    need a new SectionResult shape to tell the two apart. No other section's `submit` reaches a
+    long-running subprocess mid-flow today (grepped: `birth_submit` only QUEUES a `PlanEntry`
+    for the real, honestly-non-cancellable commit act; every other section's own subprocess use
+    is a `subprocess.run` bounded by a short probe timeout, already well under C9's ~10s
+    threshold) -- this fix reaches exactly the one place the audit found the gap, not a
+    speculative general mechanism nothing yet needs."""
 
     def __init__(self, commit: CommitSpec, sections: tuple, state: dict) -> None:
         super().__init__(id="pane-commit")
@@ -120,7 +153,9 @@ class CommitPane(Vertical):
             indicator.display = busy
             if busy:
                 indicator.update(text or "working -- this can take a while (network probes, "
-                                  "subprocesses); Cancel is honored between sections, never "
+                                  "subprocesses); Cancel is honored between sections AND, for "
+                                  "the one section that shells out live mid-flow, DURING it "
+                                  "too (the in-flight child is actually terminated) -- never "
                                   "mid-commit-act (see this pane's own docstring)")
         except Exception:  # noqa: BLE001 -- the pane may already be gone (app exiting mid-run)
             pass
@@ -142,6 +177,19 @@ class CommitPane(Vertical):
                 return None
             answers = section_answers(spec, self.state)
             result = spec.submit(self.state, answers)
+            # MID-SECTION CANCEL (cycle-4 audit finding 1, ledger rows 1124/1133): checked HERE
+            # too, not only before the call above -- a section whose own `submit` reached a real
+            # subprocess mid-flow (`state["_cancel_check"]`, threaded to exactly one section
+            # today: rehearsal) may have honored a cancel pressed WHILE it was running and
+            # already recorded its own honest `checklist.CANCELLED` rows for what it did (see
+            # `steps_rehearsal_birth.rehearsal_submit`); this class does not need a new
+            # `SectionResult` shape to tell that apart from an ordinary refusal -- the SAME
+            # `worker.is_cancelled` flag the section itself read is still readable here, right
+            # after it returns. Treated exactly like the between-sections cancel path above
+            # (return `None`, not the refusal string), so a mid-run cancel never gets rendered
+            # as "fix it there and commit again".
+            if worker is not None and worker.is_cancelled:
+                return None
             if not result.ok:
                 errors = result.errors or {"": "refused (no field named)"}
                 self.state["_commit_errors"] = {str(spec.slug): errors}
@@ -169,7 +217,8 @@ class CommitPane(Vertical):
         if not ready_for_commit(self.sections, self.state):
             return
         self._set_busy(True, text="running the submit sweep (every section's own submit, "
-                        "once) -- Cancel is honored between sections")
+                        "once) -- Cancel is honored between sections and, for rehearsal's own "
+                        "subprocess work, during it too")
         self._worker = self._run_commit_and_sweep()
 
     @work(thread=True, exclusive=True, group="ct-commit-sweep")
@@ -177,13 +226,33 @@ class CommitPane(Vertical):
         """The ENTIRE two-phase sequence, off the UI thread (this method's docstring lives on
         the class -- see the "OFF THE UI THREAD" note above). Runs in a worker thread; touches
         ONLY `self.state` directly (the pure business logic's own contract), and reaches back to
-        the widget tree exclusively through `self.app.call_from_thread`."""
+        the widget tree exclusively through `self.app.call_from_thread`.
+
+        Also the one place THIS worker's own cancellation token is published into `state`
+        (`_cancel_check`/`_cancel_note`, see the class docstring's "MID-SECTION CANCELLATION
+        TOKEN" paragraph) for the one section that reaches a real subprocess mid-flow to read --
+        stashed here (not in `on_button_pressed`) because only here does `get_current_worker()`
+        resolve to THIS sweep's own worker; popped in `finally` so a stale token never lingers
+        into a later, unrelated sweep attempt or a direct (non-Textual) call to a section's own
+        `submit` (e.g. a unit test), which must see `state.get("_cancel_check")` as `None`, the
+        same "absent means behave exactly as before this fix" contract `rehearsal_submit`'s own
+        docstring names."""
         worker = get_current_worker()
-        sweep_error = self._run_submit_sweep(worker)
+        self.state["_cancel_check"] = lambda: worker.is_cancelled
+        self.state["_cancel_note"] = lambda text: self.app.call_from_thread(
+            self._set_busy, True, text=text)
+        try:
+            sweep_error = self._run_submit_sweep(worker)
+        finally:
+            self.state.pop("_cancel_check", None)
+            self.state.pop("_cancel_note", None)
         if worker.is_cancelled:
             self.app.call_from_thread(self._finish_cancelled,
-                                       "cancelled between sections -- the submit sweep did not "
-                                       "finish, the commit act never started, nothing changed.")
+                                       "cancelled -- the submit sweep did not finish, the "
+                                       "commit act never started, nothing changed (if the "
+                                       "cancel landed mid-section, that section's own subprocess "
+                                       "was terminated and any required cleanup already ran to "
+                                       "completion -- see its checklist rows).")
             return
         if sweep_error:
             self.app.call_from_thread(self._finish_sweep_refusal, sweep_error)

@@ -59,10 +59,41 @@ def rehearsal_submit(state: dict, answers: dict) -> SectionResult:
     repo_root, dry_run = state["_repo_root"], state.get("dry_run", False)
     lines: list[str] = []
 
+    # CANCELLATION TOKEN (cycle-4 audit finding 1, ledger rows 1124/1133): `commit_pane.
+    # CommitPane` stashes these two callables into shared `state` for the duration of a commit
+    # sweep -- `_cancel_check` (`() -> bool`, reads the sweep worker's own `is_cancelled`) and
+    # `_cancel_note` (`(str) -> None`, updates the busy indicator's own text) -- so this section
+    # can reach a real running child without importing Textual/Worker itself (this module's own
+    # docstring already flags rehearsal as the one declared exception that calls a runner choke
+    # point directly, live, mid-flow; threading the token the SAME way -- through `state`, not a
+    # new parameter on `submit` -- keeps that the only exception, not two). Absent from `state`
+    # outside a real commit sweep (e.g. a unit test calling `rehearsal_submit` directly), in
+    # which case both read as `None` and this section behaves exactly as it did before this fix.
+    cancel_check = state.get("_cancel_check")
+    cancel_note = state.get("_cancel_note")
+
+    # Only the SCRATCH BIRTH call is cancel-aware. The scratch TEARDOWN call below deliberately
+    # is NOT (no `cancel_check` passed to it) -- this is the residue-safety contract the audit's
+    # remediation names explicitly: a scratch birth cancelled mid-run may already have created a
+    # live scratch world/db, and the ONLY thing that cleans that up is teardown actually running
+    # to completion. Honoring a second cancel press during teardown would risk leaving exactly
+    # the residue this rehearsal exists to prove is impossible -- so teardown, once started,
+    # always runs out, same as it always has.
     argv = _new_project_argv(repo_root, scratch_dir, scratch_world, db, host, extra=["--force"])
-    res = run_command(argv, dry_run=dry_run)
+    res = run_command(argv, dry_run=dry_run, cancel_check=cancel_check)
     lines.append(res.output.strip()[:2000])
-    cl.add("rehearsal", "scratch birth", ck.status_for(res), "exit 0" if res.ok else f"exit {res.returncode}")
+    if res.cancelled:
+        cl.add("rehearsal", "scratch birth", ck.CANCELLED,
+               "cancel pressed mid-run -- child process terminated (SIGTERM, then SIGKILL "
+               "if it did not exit within 5s)")
+        if cancel_note is not None:
+            cancel_note("cancel received during rehearsal's scratch birth -- the child process "
+                         "was terminated; running scratch teardown to completion now (residue "
+                         "safety: a half-started scratch world must still be cleaned up) -- "
+                         "Cancel has no further effect on THIS section")
+    else:
+        cl.add("rehearsal", "scratch birth", ck.status_for(res),
+               "exit 0" if res.ok else f"exit {res.returncode}")
 
     argv = _teardown_argv(repo_root, scratch_world, db, host, extra=["--dir", scratch_dir])
     res2 = run_command(argv, stdin_text=f"{scratch_world}\n", dry_run=dry_run)
@@ -76,6 +107,23 @@ def rehearsal_submit(state: dict, answers: dict) -> SectionResult:
         removed = not os.path.isdir(scratch_dir)
         cl.add("rehearsal", "scratch scaffold dir removed", ck.WITNESSED if removed else ck.REFUSED,
                scratch_dir if removed else f"STILL PRESENT: {scratch_dir}")
+
+    if res.cancelled:
+        lines.append("rehearsal: CANCELLED -- scratch birth was terminated mid-run on operator "
+                      "request; scratch teardown still ran to completion (see the residue-check "
+                      "row above) so the cancel leaves no scratch world/db/dir behind.")
+        cl.add("rehearsal", "rehearsal overall", ck.CANCELLED,
+               "birth terminated on cancel; teardown completed")
+        # `rehearsal_green=False`, same shape as an ordinary RED rehearsal -- a cancelled
+        # rehearsal is honestly not a green witness, and `birth_submit`'s own gate already
+        # requires an explicit override to proceed without one; `ok=True` (not a field refusal)
+        # because nothing about THIS section's own answers was invalid -- the operator asked to
+        # stop, which the outer sweep (`commit_pane._run_submit_sweep`) reads off the SAME
+        # cancellation flag this section read, not off this result, to decide whether to treat
+        # the whole commit attempt as cancelled rather than as a refusal-to-retry.
+        return SectionResult(ok=True, state_updates={"rehearsal_green": False, "pghost": host,
+                                                      "db": db},
+                           info_lines=tuple(lines))
 
     green = res.ok and res2.ok
     lines.append(f"rehearsal: {'GREEN' if green else 'RED'}{' (simulated, --dry-run)' if dry_run else ''}")

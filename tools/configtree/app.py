@@ -33,6 +33,7 @@ from textual.widgets import ContentSwitcher, Footer, Header, Static, Tree
 from tools.configtree.actions import ActionPane
 from tools.configtree.measure import MEASURE
 from tools.configtree.commit_pane import CommitPane
+from tools.configtree.layout_split import WIDE_LAYOUT_MIN_WIDTH, is_wide
 from tools.configtree.panes import SectionPane
 from tools.configtree.spec import (BLOCKED, COMPLETE, INVALID, ActionSpec, CommitSpec,
                                     SectionSpec, section_status, validate_shared_ownership)
@@ -143,6 +144,25 @@ class ConfigTreeApp(App):
     .ct-md-row {{ height: auto; }}
     .ct-md-row-select {{ border: none; text-align: left; width: 1fr; max-width: {MEASURE}; }}
     .ct-md-row-select.-selected {{ text-style: bold; background: $primary-darken-1; }}
+    /* CONTROL/HELP SPLIT (ledger row 1138, layout_split.py's own module docstring has the full
+    account): at wide widths, a section/action pane renders as two independently-scrollable
+    columns instead of one -- `.ct-controls-col` (labels/widgets/Add-Remove-commit buttons, a
+    stable, compact region) beside `.ct-help-col` (the section's own deep elucidation prose,
+    scrollable on its own so a long Constitutes/Does-not block never pushes a control below the
+    fold). `1fr` gives each an equal share of the pane's own width by default; the help column is
+    capped at a comfortable multiple of MEASURE (never wider than it needs to read well, so extra
+    width goes to the control column instead of an ever-wider text column nobody reads faster
+    for). */
+    .ct-split {{ height: 1fr; }}
+    .ct-controls-col {{ width: 1fr; padding: 0 1; height: 1fr; }}
+    .ct-help-col {{ width: 1fr; max-width: {MEASURE + 8}; padding: 0 1; height: 1fr;
+                    border-left: solid $primary; }}
+    /* NARROW-WIDTH ON-DEMAND DISCLOSURE (ledger row 1138): below `layout_split.
+    WIDE_LAYOUT_MIN_WIDTH` the split collapses to one column and deep elucidation prose is
+    suppressed by default (toggled back inline via the "Help" footer binding, `action_toggle_
+    help` below) -- this note marks the CSS's own acknowledgment that `.ct-help-col`/`.ct-split`
+    simply do not render in that mode (the pane's own `compose()` chooses a plain `VerticalScroll`
+    instead), not a size-zero collapse of the same DOM. */
     """
     BINDINGS = [Binding("ctrl+q", "quit_app", "Quit", show=True, priority=True),
                 Binding("ctrl+c", "quit_app", "Quit", show=False, priority=True),
@@ -154,7 +174,15 @@ class ConfigTreeApp(App):
                 # own side, never a crash). `show=True` puts it on the Footer -- ADR-0019
                 # appendix P20's own "the footer binding display is the natural, required
                 # indicator surface" for a binding that changes what a keypress does.
-                Binding("ctrl+z", "suspend_process", "Suspend", show=True)]
+                Binding("ctrl+z", "suspend_process", "Suspend", show=True),
+                # HELP TOGGLE (ledger row 1138): the narrow-width half of the control/help split
+                # -- `layout_split.py`'s own module docstring, "GENRE" paragraph. Meaningless at
+                # a wide width (the help column is already, always visible there) but bound
+                # unconditionally rather than only-when-narrow: a binding whose meaning depends
+                # on a resize an operator did not just cause would be a confusing moving target,
+                # and pressing it at a wide width is a harmless, honestly-labeled no-op (the
+                # Footer's own label, `_help_label()` below, says so).
+                Binding("f1", "toggle_help", "Help", show=True)]
 
     def __init__(self, sections: "tuple[SectionSpec, ...]", commit: CommitSpec, *,
                  actions: "tuple[ActionSpec, ...]" = (), initial_state: dict | None = None,
@@ -177,6 +205,31 @@ class ConfigTreeApp(App):
         self._commit_pane: "CommitPane | None" = None
         self._tree_nodes: dict[str, object] = {}
         self._action_slugs: set[str] = {str(a.slug) for a in actions}
+        # CONTROL/HELP SPLIT (ledger row 1138): `layout_is_wide` is recomputed from the app's own
+        # current terminal width -- seeded from `self.size` here (already known at construction,
+        # a Textual `App`'s own `size` reads the DRIVER's size before the first frame, unlike a
+        # bare `Widget`'s, which is 0x0 until laid out) so the FIRST `compose()` of every pane
+        # already renders the right layout, never a wide-by-default flash corrected only on the
+        # first resize event. `_help_visible` is the narrow-width on-demand-disclosure toggle
+        # (`action_toggle_help` below) -- meaningless while wide (help is always shown there),
+        # starts False (collapsed) so a narrow start does not silently reproduce the pre-fix
+        # fully-expanded interleave by default.
+        self._wide_layout: bool = is_wide(self.size.width)
+        self._help_visible: bool = False
+
+    @property
+    def layout_is_wide(self) -> bool:
+        """Read by every `SectionPane`/`ActionPane` `compose()` to choose its own two-column
+        split vs. single-column-with-toggle layout (`layout_split.WIDE_LAYOUT_MIN_WIDTH`'s own
+        docstring has the full rationale for the threshold itself)."""
+        return self._wide_layout
+
+    @property
+    def help_visible(self) -> bool:
+        """Narrow-width-only: whether on-demand elucidation disclosure is currently expanded
+        (`action_toggle_help` below). Ignored by a pane rendering the WIDE layout, whose help
+        column is unconditionally visible regardless of this flag."""
+        return self._help_visible
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=False)
@@ -267,6 +320,39 @@ class ConfigTreeApp(App):
             line.update(f"{n_complete}/{len(statuses)} sections complete -- remaining: {', '.join(remaining)}")
         else:
             line.update(f"{n_complete}/{len(statuses)} sections complete -- ready to commit.")
+
+    async def on_resize(self, event) -> None:
+        """The ONE place a terminal resize becomes a layout-mode decision (ledger row 1138) --
+        recomputes `layout_is_wide` from the NEW width and, only if it actually CROSSED the
+        `layout_split.WIDE_LAYOUT_MIN_WIDTH` threshold (never on every pixel of an in-between
+        resize, which would recompose every mounted pane many times over one drag), recomposes
+        every section/action pane so its control/help split (or lack of one) matches the new
+        width on the SAME resize, not only the next time each pane happens to be re-selected."""
+        new_wide = is_wide(event.size.width)
+        if new_wide == self._wide_layout:
+            return
+        self._wide_layout = new_wide
+        await self._relayout_all_panes()
+
+    def action_toggle_help(self) -> None:
+        """Narrow-width on-demand disclosure toggle (`f1`, shown on the Footer) -- flips
+        `help_visible` and recomposes every mounted pane so the change is visible immediately.
+        A harmless no-op at a wide width (nothing reads `help_visible` there -- the help column
+        is already, always shown)."""
+        self._help_visible = not self._help_visible
+        self.call_later(self._relayout_all_panes)
+
+    async def _relayout_all_panes(self) -> None:
+        """Shared by `on_resize` (a layout-mode crossing) and `action_toggle_help` (an explicit
+        operator ask): every mounted `SectionPane`/`ActionPane` re-renders from the CURRENT
+        `layout_is_wide`/`help_visible` -- `Widget.recompose()`, the same idiom `refresh_blocked`/
+        `reload_all_panes` already use for "re-render this pane's children from `compose()`
+        again." The commit pane carries no elucidation prose of its own and is deliberately left
+        alone here."""
+        for pane in self._panes.values():
+            await pane.recompose()
+        for apane in self._action_panes.values():
+            await apane.recompose()
 
     async def reload_all_panes(self) -> None:
         """`ActionPane`'s own post-apply hook (its module docstring's "usable at start" contract):

@@ -45,11 +45,12 @@ ONLY that reason -- no fields -- re-checked every time the pane is (re)shown, ne
 from __future__ import annotations
 
 from textual.app import ComposeResult
-from textual.containers import Vertical, VerticalScroll
+from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.widgets import Checkbox, Input, RadioSet, Static
 
 from tools.configtree.fields import ListField, MultiChoiceField, default_of, get_field_value, set_field_value, validate_value
 from tools.configtree.item_modal import render_item_field
+from tools.configtree.layout_split import yield_help_items
 from tools.configtree.master_detail import MasterDetailField, flatten_fields
 from tools.configtree.spec import SectionSpec, section_answers, section_field_errors
 from tools.configtree.widget_primitives import FieldError, elucidation_widgets, field_widget_id, read_field_value
@@ -84,6 +85,23 @@ class SectionPane(Vertical):
     def compose(self) -> ComposeResult:
         self._blocked_reason = self.spec.blocked(self.state) if self.spec.blocked else None
         self._errors = {}
+        # CONTROL/HELP SPLIT (ledger row 1138, `layout_split.py`'s own module docstring has the
+        # full account): three layout modes, read off the app (never re-derived per pane):
+        #   WIDE            -- `app.layout_is_wide` True: two independently-scrollable columns,
+        #                      controls left, elucidation prose diverted into `help_items` (below)
+        #                      and rendered on the right.
+        #   NARROW_EXPANDED -- narrow, but the operator toggled `F1` (`app.help_visible` True):
+        #                      one column, elucidation rendered INLINE -- byte-for-byte this
+        #                      pane's own pre-fix behavior, an explicit opt-in, never a default.
+        #   NARROW_COLLAPSED -- narrow, help not toggled on: one column, elucidation SUPPRESSED
+        #                      entirely (not shown anywhere) -- the fix's own acceptance bar:
+        #                      "never the old fully-expanded inline interleaving" by default.
+        wide = getattr(self.app, "layout_is_wide", True)
+        narrow_expanded = (not wide) and getattr(self.app, "help_visible", False)
+        divert_help = wide            # elucidation collected into help_items, not yielded here
+        suppress_help = not wide and not narrow_expanded   # elucidation shown nowhere at all
+        help_items: list[tuple] = []
+
         # HAZARD FIX (cycle-3 fix round, found in reach of TASK 1's own reproduction matrix,
         # ledger row 1136): the title/description used to render OUTSIDE this VerticalScroll, as
         # fixed-size siblings of it inside the enclosing `Vertical` -- Textual's `1fr` sizing gives
@@ -99,10 +117,17 @@ class SectionPane(Vertical):
         # scroll always gets the FULL available height (no fixed-size sibling above it inside the
         # SAME parent to starve it), and if the combined content still exceeds the viewport, the
         # OPERATOR CAN SCROLL TO IT -- a starved sliver is unrepresentable, a normal scroll is not
-        # a hazard.
-        with VerticalScroll(classes="ct-section-body"):
+        # a hazard. (The CONTROL/HELP SPLIT above is the SAME discipline taken one step further --
+        # a wide layout does not merely make the starved sliver scrollable, it stops the prose
+        # from being able to starve the control column's own height share at all.)
+        def _controls() -> ComposeResult:
             yield Static(f"{self.spec.title}", classes="ct-section-title")
-            yield from elucidation_widgets(self.spec.description, "ct-section-description")
+            if divert_help:
+                help_items.append((self.spec.description, "ct-section-description", None))
+            elif not suppress_help:
+                yield from elucidation_widgets(self.spec.description, "ct-section-description")
+            elif self.spec.description:
+                yield Static("(help hidden -- press F1 to show)", classes="ct-md-empty")
             if self._blocked_reason:
                 yield Static(f"BLOCKED -- {self._blocked_reason}", classes="ct-blocked-reason")
                 # SEEDED-VALUE VISIBILITY (maintainer-witnessed, ledger row 1130: an in-UI
@@ -153,12 +178,18 @@ class SectionPane(Vertical):
                     # widget instead of several separate ones.
                     initial_details = {str(d.list_field.name): answers[str(d.list_field.name)]
                                        for d in f.details}
+                    if divert_help:
+                        help_items.append((f.master.help, "ct-field-help", None))
+                        help_items.append((f.help, "ct-field-help", None))
+                        for d in f.details:
+                            help_items.append((d.list_field.help, "ct-field-help", None))
                     yield MasterDetailFieldWidget(
                         f, initial_master=answers[name], initial_details=initial_details,
                         initial_selected_key=self._md_selected.get(name),
                         on_master_change=self._make_md_master_change(f),
                         on_detail_change=self._make_md_detail_change(f),
-                        on_select_change=self._make_md_select_change(f))
+                        on_select_change=self._make_md_select_change(f),
+                        show_help_inline=narrow_expanded)
                 elif isinstance(f, ListField):
                     yield ListFieldWidget(f, initial=answers[name], on_change=self._make_list_change(f))
                 elif isinstance(f, MultiChoiceField):
@@ -170,7 +201,10 @@ class SectionPane(Vertical):
                     # are now rendered by the ONE shared `item_modal.render_item_field` --
                     # `AddItemModal.compose` calls the exact same function for its own item
                     # fields, so this pane and a modal can never drift again (ADR-0012 P1).
-                    yield from render_item_field(f, answers[name])
+                    yield from render_item_field(
+                        f, answers[name],
+                        help_sink=help_items if divert_help else None,
+                        suppress_help=suppress_help)
                 err = FieldError()
                 err.set_text(commit_errors.get(name) or live_errors.get(name, ""))
                 self._errors[name] = err
@@ -179,6 +213,20 @@ class SectionPane(Vertical):
             whole_err.set_text(commit_errors.get("", ""))
             self._errors[""] = whole_err
             yield whole_err
+
+        if wide:
+            with Horizontal(classes="ct-split"):
+                with VerticalScroll(classes="ct-controls-col"):
+                    yield from _controls()
+                with VerticalScroll(classes="ct-help-col"):
+                    if help_items:
+                        yield from yield_help_items(help_items)
+                    else:
+                        yield Static("(no additional help for this section)",
+                                     classes="ct-md-empty")
+        else:
+            with VerticalScroll(classes="ct-section-body"):
+                yield from _controls()
 
     async def refresh_blocked(self) -> None:
         """Re-renders this pane (blocked reason, or a commit-sweep business error, may have

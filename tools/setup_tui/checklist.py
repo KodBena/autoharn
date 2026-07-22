@@ -76,9 +76,19 @@ NOT_UP = "NOT-UP"
 REFUSED = "REFUSED"
 WOULD_DO = "WOULD-DO"
 DRY_SKIPPED = "DRY-SKIPPED"
+# ADDITIVE (cycle-4 audit finding 1, ledger rows 1124/1133; mid-section cancellation-token fix):
+# its own closed word for "the operator pressed Cancel WHILE this exact item's own subprocess
+# was in flight, and the child was actually terminated because of it" -- deliberately NOT a
+# REFUSED reuse, for the same reason `NOT_UP` above got its own word rather than reusing
+# REFUSED: "a validation gate said no before anything ran" and "an in-flight child was killed
+# because the operator asked to stop" are different honest claims, and collapsing them back
+# into one word is the exact vocabulary-drift ADR-0008 forecloses. `REFUSED` still means "ran
+# and failed on its own" (or "a gate refused before anything ran"); `CANCELLED` means "was
+# stopped, on request, mid-run".
+CANCELLED = "CANCELLED"
 
 _VALID = {WITNESSED, SKIPPED, DECLINED, DEFAULTED, INSTRUCTED, PREPARED, VERIFIED_UP, NOT_UP,
-          REFUSED, WOULD_DO, DRY_SKIPPED}
+          REFUSED, WOULD_DO, DRY_SKIPPED, CANCELLED}
 
 
 def choice_status(touched: bool) -> str:

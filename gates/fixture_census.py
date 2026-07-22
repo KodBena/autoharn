@@ -214,6 +214,11 @@ REGISTRY: dict[str, str] = {
     "setup-tui-seeded-value-visibility": "seen-red/setup-tui-seeded-value-visibility/run_fixtures.py",
     "setup-tui-adr-synopsis-drift":     "seen-red/setup-tui-adr-synopsis-drift/run_fixtures.py",
     "strip-provenance-banners":         "seen-red/strip-provenance-banners/run_fixtures.py",
+    # cycle-4 audit finding 1 fix round (ledger rows 1124/1133/1138): the mid-section
+    # cancellation-token fix (rehearsal's own subprocess layer) and the control/help split
+    # layout fix (ledger row 1138's reopened-loop major).
+    "setup-tui-rehearsal-mid-cancel":  "seen-red/setup-tui-rehearsal-mid-cancel/run_fixtures.py",
+    "setup-tui-control-help-split":    "seen-red/setup-tui-control-help-split/run_fixtures.py",
     # panel-disposition / panel-cosign DEREGISTERED (2026-07-15, TASK C, commission item 3):
     # both suites ported to the standalone SPA repo's own tests/ (test_disposition.py,
     # test_cosign_live.py in KodBena/autoharn-panel) when the PoC moved out of panel/ into its

@@ -125,7 +125,20 @@ async def _load_config(pilot, app, path: str) -> None:
     tree.select_node(action_node)
     tree.action_select_cursor()
     await pilot.pause()
-    path_input = app.query_one("#ct-field-path", Input)
+    # SCOPED, not a bare `#ct-field-path` (ledger row 1138 finding, control/help split): the
+    # load-config action's own `path` TextField and substrate's own `path` ChoiceField share the
+    # SAME bare field id (`ct-field-path` -- `field_widget_id` scopes by FIELD name only, not by
+    # owning section/action) -- an existing, pre-fix latent ambiguity `query_one`'s own ID lookup
+    # (a BREADTH-FIRST first-match, not a type-filtered search across every match) happened to
+    # resolve correctly before this fix purely because of incidental DOM DEPTH: the action pane's
+    # Input sat no deeper than substrate's RadioSet. The control/help split adds one nesting level
+    # to the action pane's own DOM (the wide layout's `Horizontal` wrapper), making the Input
+    # STRICTLY deeper than the RadioSet and flipping which one breadth-first search meets first --
+    # not a defect in the split itself, but a genuinely pre-existing ambiguity the split exposed.
+    # Scoped to the owning ActionPane's own id, this query is correct regardless of DOM depth,
+    # section-registry order, or any future layout change -- the actually robust fix, not a
+    # depth-coincidence someone else could just as easily re-break.
+    path_input = app.query_one("#pane-action-load-config #ct-field-path", Input)
     path_input.value = path
     await pilot.pause()
     apply_btn = app.query_one("#ct-action-apply")

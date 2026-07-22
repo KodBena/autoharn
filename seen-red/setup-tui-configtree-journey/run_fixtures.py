@@ -495,7 +495,12 @@ async def case_5() -> None:
         assert focus_before is not focus_after, "Tab must move focus off the Tree onto the form"
         print(f"case 5b ok: Tab moves focus {focus_before} -> {focus_after}")
 
-        body = app.query_one(f"#{switcher.current} .ct-section-body")
+        # CONTROL/HELP SPLIT (ledger row 1138): at this fixture's own 150-column width (WIDE,
+        # `layout_split.WIDE_LAYOUT_MIN_WIDTH`), the section's own scrollable body is
+        # `.ct-controls-col`, not the narrow-layout-only `.ct-section-body` -- the combined
+        # selector matches whichever this pane actually rendered, so this case still proves the
+        # SAME thing (a real scroll, not a no-op) regardless of which layout mode is current.
+        body = app.query_one(f"#{switcher.current} .ct-controls-col, #{switcher.current} .ct-section-body")
         before = body.scroll_offset
         body.scroll_down(animate=False)
         await pilot.pause()
@@ -1806,17 +1811,23 @@ async def case_24() -> None:
         await pilot.pause()
         pane = app.query_one("#pane-principals-authority")
 
-        scroller = pane.query_one(".ct-section-body", VerticalScroll)
+        # CONTROL/HELP SPLIT (ledger row 1138): 251 columns is WIDE
+        # (`layout_split.WIDE_LAYOUT_MIN_WIDTH`), so the section's own scrollable body is the
+        # CONTROL column (`.ct-controls-col`) -- title/description/master-list no longer share
+        # ONE scroll region (the description/help now render in the separate `.ct-help-col`
+        # instead), which makes this claim (zero scrolling needed to reach the master-list/Add
+        # button) hold even more comfortably than the cycle-3 fix this case originally proved.
+        scroller = pane.query_one(".ct-controls-col, .ct-section-body", VerticalScroll)
         assert scroller.virtual_size.height <= scroller.size.height, \
-            (f"expected the section's own content to fit the {scroller.size.height}-row viewport "
-             f"with ZERO principals registered yet (virtual height "
-             f"{scroller.virtual_size.height}) -- the layout fix (title/description/master-list "
-             f"inside ONE scroll region, detail preamble gated by selection) should make this the "
-             f"common case at a real terminal's real height")
-        print(f"case 24a ok (layout fix): at 251x61 (the maintainer's own real terminal), the "
-              f"principals-authority pane's own content fits the viewport with ZERO scrolling "
-              f"needed before any principal exists (virtual {scroller.virtual_size.height} <= "
-              f"viewport {scroller.size.height})")
+            (f"expected the section's own CONTROL content to fit the {scroller.size.height}-row "
+             f"viewport with ZERO principals registered yet (virtual height "
+             f"{scroller.virtual_size.height}) -- the control/help split (ledger row 1138) moves "
+             f"description/help prose out of this column entirely at this width, so this should "
+             f"be the common case at a real terminal's real height, more comfortably than before")
+        print(f"case 24a ok (layout fix + control/help split): at 251x61 (the maintainer's own "
+              f"real terminal), the principals-authority pane's own CONTROL column fits the "
+              f"viewport with ZERO scrolling needed before any principal exists (virtual "
+              f"{scroller.virtual_size.height} <= viewport {scroller.size.height})")
 
         async def _mouse_add(name: str) -> None:
             add_btn = pane.query_one("#ct-field-register-master-add", Button)

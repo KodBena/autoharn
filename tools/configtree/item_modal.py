@@ -47,17 +47,37 @@ from tools.configtree.widget_primitives import FieldError, elucidation_widgets, 
 from tools.configtree.widgets_choice_filter import build_choice_or_plain_widget
 
 
-def render_item_field(f, value: object):
+def render_item_field(f, value: object, *, help_sink: "list | None" = None,
+                       suppress_help: bool = False):
     """The ONE per-field renderer for a NON-group field (`TextField`/`ChoiceField` -- the only two
     kinds `ListField.item_fields`/a top-level section's own non-group fields ever carry): its
     label, its live widget (routed through `build_choice_or_plain_widget`, so a `ChoiceField`
     above `filter_threshold.FILTER_THRESHOLD` gets the SAME filter Input a top-level section's
     ChoiceField would), its own `help` elucidation, and -- for a `ChoiceField` -- each option's own
     `option_help` elucidation. Used by BOTH `AddItemModal.compose` (below) and
-    `panes.SectionPane.compose` for their non-group fields -- the drift this fix answers becomes
-    unrepresentable because there is only one function to call."""
+    `panes.SectionPane.compose`/`actions.ActionPane.compose` for their non-group fields -- the
+    drift this fix answers becomes unrepresentable because there is only one function to call.
+
+    CONTROL/HELP SPLIT (ledger row 1138): `AddItemModal` never passes either new keyword (a modal
+    is always its own single, self-contained column, no side help region to divert into), so its
+    own behavior is byte-for-byte unchanged. A `SectionPane`/`ActionPane` rendering the WIDE
+    layout passes `help_sink` (a list this function APPENDS `(value, css_class, prefix)` triples
+    to, `layout_split.yield_help_items`'s own shape, instead of yielding widgets here) so the
+    label+widget stay in the compact control column while the prose renders in the separate help
+    column. One rendering the NARROW, on-demand-disclosure-collapsed layout passes
+    `suppress_help=True` instead -- the prose is not shown ANYWHERE in that state (an operator
+    toggles it back with the `F1`/"Help" footer binding, `app.action_toggle_help`), never
+    silently reproduced inline the old way."""
     yield Static(str(f.label), classes="ct-field-label")
     yield build_choice_or_plain_widget(f, value)
+    if suppress_help:
+        return
+    if help_sink is not None:
+        help_sink.append((getattr(f, "help", None), "ct-field-help", None))
+        if isinstance(f, ChoiceField) and f.option_help:
+            for opt_value, _ in f.options:
+                help_sink.append((f.option_help.get(opt_value), "ct-choice-help", opt_value))
+        return
     yield from elucidation_widgets(getattr(f, "help", None), "ct-field-help")
     if isinstance(f, ChoiceField) and f.option_help:
         for opt_value, _ in f.options:

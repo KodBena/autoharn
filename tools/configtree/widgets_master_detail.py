@@ -66,9 +66,18 @@ class MasterDetailFieldWidget(Vertical):
                  initial_selected_key: "str | None" = None,
                  on_master_change: "Callable[[list[dict]], None] | None" = None,
                  on_detail_change: "Callable[[str, list[dict]], None] | None" = None,
-                 on_select_change: "Callable[[str | None], None] | None" = None) -> None:
+                 on_select_change: "Callable[[str | None], None] | None" = None,
+                 show_help_inline: bool = True) -> None:
         super().__init__(id=field_widget_id(spec.name), classes="ct-field-group")
         self.spec = spec
+        # CONTROL/HELP SPLIT (ledger row 1138): False when the ENCLOSING `panes.SectionPane` is
+        # rendering the wide two-column layout (it collects this widget's own `master.help`/
+        # `spec.help`/per-detail `list_field.help` into its OWN help column instead, exactly the
+        # same content, just in a different place -- see `SectionPane.compose`'s own note) or the
+        # narrow, on-demand-disclosure-COLLAPSED layout (suppressed entirely, toggled back via
+        # `F1`). True (the default, and the ONLY value any pre-existing caller passes) reproduces
+        # this widget's original, always-inline behavior exactly.
+        self._show_help_inline = show_help_inline
         self.master_rows: list[dict] = list(initial_master or [])
         self.detail_rows: dict[str, list[dict]] = {
             str(d.list_field.name): list((initial_details or {}).get(str(d.list_field.name), []))
@@ -85,8 +94,9 @@ class MasterDetailFieldWidget(Vertical):
 
     def compose(self) -> ComposeResult:
         yield Static(str(self.spec.master.label), classes="ct-field-label")
-        yield from elucidation_widgets(self.spec.master.help, "ct-field-help")
-        yield from elucidation_widgets(self.spec.help, "ct-field-help")
+        if self._show_help_inline:
+            yield from elucidation_widgets(self.spec.master.help, "ct-field-help")
+            yield from elucidation_widgets(self.spec.help, "ct-field-help")
         yield Button(f"Add {self.spec.master.label}", id=f"{self.id}-master-add")
         if not self.master_rows:
             yield Static("(none registered yet -- add one above)", classes="ct-md-empty")
@@ -123,7 +133,8 @@ class MasterDetailFieldWidget(Vertical):
                 link = str(d.link_field)
                 rows = [r for r in self.detail_rows[dname] if str(r.get(link)) == key]
                 yield Static(str(d.list_field.label), classes="ct-md-detail-label")
-                yield from elucidation_widgets(d.list_field.help, "ct-field-help")
+                if self._show_help_inline:
+                    yield from elucidation_widgets(d.list_field.help, "ct-field-help")
                 if not rows:
                     yield Static("(none yet)", classes="ct-md-empty")
                 for ridx, r in enumerate(rows):
