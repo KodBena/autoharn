@@ -56,7 +56,7 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-from tools.setup_tui.durable_decisions_data import RAW_CATALOG
+from tools.setup_tui.content.durable_decisions_data import RAW_CATALOG
 from tools.setup_tui.plan import Hole, WriteAct
 
 REPO_ROOT = Path(__file__).resolve().parents[2]

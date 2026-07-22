@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-21T20:16:51Z
-#   last-change: 2026-07-21T23:47:25Z
-#   contributors: 43f77bff/main
+#   last-change: 2026-07-22T00:38:35Z
+#   contributors: 43f77bff/main, 1fa3ab69/main
 # <<< PROVENANCE-STAMP <<<
 
 """gates/max_lines.py -- ADR-0007 mechanization: soft-threshold file-size discipline made
@@ -161,7 +161,20 @@ BASELINE: dict[str, int] = {
     # cost) plus the override-exercised checklist row; `_execute_commit` sets
     # `state["commit_halted"]` so app.py can exit non-zero on any halted commit. Written plain,
     # no golfing (same no-go clause); witnessed growth.
-    "tools/setup_tui/screens.py":                    1728,
+    # Reconciled -44 to 1684 (design/FABLE-SETUP-TUI-TYPED-UI-SPEC.md build, obs a/b, P10): the
+    # typed-element conversion (`Ui.say`/`Ui.banner` -> `Ui.emit`) is roughly a wash on line count
+    # by itself (each call site gains a wrapper type name); the net shrink comes from the content
+    # extraction (spec §3) -- the partial-birth-refusal teaching (eleven `ui.say` calls collapsed
+    # to a five-line format-and-loop over `content/screens_data.py`'s
+    # `PARTIAL_BIRTH_TEACHING`), the six-paragraph GENESIS-GATE HARD STOP teaching (collapsed to a
+    # two-line loop over `GENESIS_GATE_HARD_STOP_TEACHING`), and four multi-line `ui.confirm`
+    # prompt questions long enough to be judged as writing under P10 (moved to named
+    # `CONFIRM_*` constants). This is a partial pass, not exhaustive: the remaining bulk is
+    # genuinely computed decision logic and runtime-interpolated status/probe lines (P10's own
+    # discriminator -- "error messages... are the logic's own contract and stay"), not the
+    # authored "walls of text" prose class the commission named. Written plain, no golfing (same
+    # no-go clause); witnessed shrink, the ratchet lowers with it (ADR-0011 Rule 4).
+    "tools/setup_tui/screens.py":                    1684,
     "gates/kind_shape_manifest_gate.py":              1152,
     "hooks/pretooluse_change_gate.py":                1138,
     "hooks/stop_clean_exit.py":                        992,
@@ -173,7 +186,19 @@ BASELINE: dict[str, int] = {
     "engine/ledger_floor.py":                           813,
     "engine/preamble_floor.py":                         801,
     "engine/ledger_edb.py":                             729,
-    "tools/setup_tui/ui_textual.py":                    674,
+    # Reconciled +31 to 705 (design/FABLE-SETUP-TUI-TYPED-UI-SPEC.md build): `TextualUi.emit`
+    # replaces the old `banner`/`say` pair with the single typed-element seam (spec §2), plus the
+    # new `SetupWizardApp.write_transcript_styled` method (the one styling seam beyond plain
+    # print-capture, for a refusal `Note`) and one new import line (`elements`/`rich.text.Text`).
+    # Also carries the F4 diagnostic leg's fix (spec §4, ledger rows 1844-F4/1917): `emit` prints
+    # a multi-line element as ONE `print("\n".join(lines))` call, not one `print()` per line --
+    # reproduced live (seen-red/setup-tui-typed-elements/, this build's own headless WX1 rerun
+    # during construction) that N separate print() calls per element floods the print-capture
+    # pipeline's `events.Print` queue badly enough, under sustained emission, to stall the App's
+    # asyncio loop past every bridge call's own budget -- not a false "misread as shutdown" but a
+    # genuine indefinite hang, worse than F4's own hypothesis. Genuinely new decision/rendering
+    # logic, not padding. Written plain, no golfing (ADR-0007's no-go clause); witnessed growth.
+    "tools/setup_tui/ui_textual.py":                    705,
     "tools/workflow_compile.py":                        672,
     # tools/setup_tui/durable_decisions.py -- REMOVED from BASELINE 2026-07-22 (P10 content
     # split, law/adr/0012's 2026-07-22 Amendment): 619 -> 249 lines, the CATALOG literal moved
@@ -195,6 +220,17 @@ BASELINE: dict[str, int] = {
     "hooks/stamp_intercept.py":                         482,
     "tools/experiments/typed_table.py":                 442,
     "engine/contemp_audit.py":                          441,
+    # NEW to BASELINE, 428 (design/FABLE-SETUP-TUI-TYPED-UI-SPEC.md build, spec §1's purity-gate
+    # extension): DETECTION 3 (the print(/.say( check) is a genuinely new detector -- its own
+    # match predicate, its own `PRINT_EXEMPT` table (a THIRD exemption table, same shape as
+    # `EXEMPT`/`EXTRA_EFFECT_EXEMPT`, individually justified per entry per this file's own
+    # established idiom), its own negative-self-check wiring -- plus the module docstring's own
+    # DETECTION 3 section explaining each exemption's reasoning (the file's own "decisions-about-
+    # the-file header" docstring rule, ADR-0007). Not padding: every added line is either a new
+    # exemption entry with its own one-line justification, or the reasoning that entry needs to
+    # be reviewable. Written plain, no golfing (ADR-0007's no-go clause); witnessed growth of a
+    # previously-under-ceiling file, grandfathered honestly rather than silently golfed to fit.
+    "gates/setup_tui_purity_gate.py":                   428,
     # tools/setup_tui/principals_authority.py -- REMOVED from BASELINE 2026-07-22 (P10 content
     # split, law/adr/0012's 2026-07-22 Amendment): 428 -> 359 lines, CLASS_CHOICES/
     # RELATION_CHOICES/SCAFFOLD_BASE_PRINCIPALS/LESSON_* moved to

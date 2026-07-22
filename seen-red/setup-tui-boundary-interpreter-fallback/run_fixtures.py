@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-21T00:00:00Z
-#   last-change: 2026-07-21T22:22:32Z
-#   contributors: 43f77bff/main
+#   last-change: 2026-07-22T00:27:03Z
+#   contributors: 43f77bff/main, 1fa3ab69/main
 # <<< PROVENANCE-STAMP <<<
 
 """seen-red/setup-tui-boundary-interpreter-fallback/run_fixtures.py -- both-polarity proof for
@@ -70,6 +70,7 @@ sys.path.insert(0, str(REPO))
 
 from tools.setup_tui import checklist as ck  # noqa: E402
 from tools.setup_tui import probes as probes_mod  # noqa: E402
+from tools.setup_tui.elements import render_text  # noqa: E402
 from tools.setup_tui.ui import ScriptedUi  # noqa: E402
 
 # This worktree's own pre-fix commit (immediately before this fixture's own fix landed) --
@@ -92,8 +93,13 @@ def _mkscratch(prefix: str) -> str:
 
 class RecordingScriptedUi(ScriptedUi):
     """Same driving contract as `ScriptedUi` (answers file, in order) -- adds a plain-text
-    transcript of every `say`/`banner` call so the fixture can assert on exactly what the
-    operator would have seen, without scraping stdout."""
+    transcript of every `emit` call (rendered via `elements.render_text`) so the fixture can
+    assert on exactly what the operator would have seen, without scraping stdout. This fixture
+    also drives a PINNED pre-fix `screens.py` (still calling the OLD `say`/`banner` shape) for
+    its RED leg, alongside the current `emit`-based one for GREEN -- `say`/`banner` stay here as
+    a compatibility RECORDING shim for the pinned historical module only (never reintroduced into
+    the live `Ui` class -- design/FABLE-SETUP-TUI-TYPED-UI-SPEC.md §1's "no compatibility shim"
+    is about the production seam, not a fixture replaying old code on purpose)."""
 
     def __init__(self, answers_path: str) -> None:
         super().__init__(answers_path)
@@ -104,6 +110,9 @@ class RecordingScriptedUi(ScriptedUi):
 
     def banner(self, text: str) -> None:
         self.transcript.append(text)
+
+    def emit(self, element) -> None:
+        self.transcript.extend(render_text(element))
 
 
 def load_screens_module(source: str, tag: str) -> object:

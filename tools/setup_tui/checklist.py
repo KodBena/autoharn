@@ -1,7 +1,7 @@
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-18T21:31:50Z
-#   last-change: 2026-07-21T22:15:42Z
-#   contributors: ab5d5bab/main, 43f77bff/main
+#   last-change: 2026-07-22T00:16:32Z
+#   contributors: ab5d5bab/main, 43f77bff/main, 1fa3ab69/main
 # <<< PROVENANCE-STAMP <<<
 
 """tools/setup_tui/checklist.py -- honesty rule 3 ("checklist truth"): a per-item status record
@@ -107,18 +107,26 @@ class Checklist:
     def add(self, screen: str, item: str, status: str, detail: str = "") -> None:
         self.items.append(ChecklistItem(screen=screen, item=item, status=status, detail=detail))
 
+    def counts(self) -> dict[str, int]:
+        """Per-status tally -- the one home (ADR-0012 P1) both `render()` (the saved-file form)
+        and `tools/setup_tui/screens.py`'s on-screen `Table` display (design/FABLE-SETUP-TUI-
+        TYPED-UI-SPEC.md) read, so the two never drift into two counting implementations."""
+        out: dict[str, int] = {}
+        for it in self.items:
+            out[it.status] = out.get(it.status, 0) + 1
+        return out
+
+    def summary_line(self) -> str:
+        return ", ".join(f"{k}={v}" for k, v in sorted(self.counts().items())) or "(none)"
+
     def render(self) -> str:
         lines = []
         lines.append(f"{'SCREEN':<14} {'ITEM':<38} {'STATUS':<10} DETAIL")
         lines.append("-" * 100)
         for it in self.items:
             lines.append(f"{it.screen:<14} {it.item:<38} {it.status:<10} {it.detail}")
-        counts: dict[str, int] = {}
-        for it in self.items:
-            counts[it.status] = counts.get(it.status, 0) + 1
-        summary = ", ".join(f"{k}={v}" for k, v in sorted(counts.items()))
         lines.append("-" * 100)
-        lines.append(f"totals: {summary or '(none)'}")
+        lines.append(f"totals: {self.summary_line()}")
         return "\n".join(lines)
 
     def save(self, target_dir: str, *, dry_run: bool = False) -> str:

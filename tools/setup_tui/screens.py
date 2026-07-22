@@ -65,6 +65,8 @@ from tools.setup_tui import daemon_scaffold
 from tools.setup_tui import destination
 from tools.setup_tui import durable_decisions, feature_facts, governed_files, pghba, probes
 from tools.setup_tui import principals_authority, signed_genesis
+from tools.setup_tui.content import screens_data as SD
+from tools.setup_tui.elements import Heading, Note, Paragraph, Rule, Table
 from tools.setup_tui.plan import (BackgroundAct, CommandAct, DaemonSelection, Plan, PlanEntry,
                                    WriteAct)
 from tools.setup_tui.runner import run_command
@@ -87,7 +89,7 @@ def _plan(state: dict) -> Plan:
 
 
 def _show_facts(ui, *keys: str) -> None:
-    ui.say(feature_facts.facts_block(list(keys)))
+    ui.emit(Paragraph(feature_facts.facts_block(list(keys))))
 
 
 def _dry_skip_or(ui, cl, state, screen: str, item: str, verify) -> None:
@@ -106,31 +108,31 @@ def _dry_skip_or(ui, cl, state, screen: str, item: str, verify) -> None:
 # ---------------------------------------------------------------------------------------------
 
 def screen_preflight(ui, cl, state):
-    ui.banner(screen_banner("preflight"))
+    ui.emit(Heading(screen_banner("preflight")))
     if ui.confirm("Run preflight checks?", default=True) is False:
         cl.add("preflight", "all checks", ck.SKIPPED, skip_detail("preflight"))
         return state
 
     # repo commit / submodules populated -- read-only (probes.py, PHASE-2: moved off
     # runner.run_command so this screen holds no direct choke-point call at all).
-    ui.say(f"$ git -C {REPO_ROOT} rev-parse HEAD")
+    ui.emit(Paragraph(f"$ git -C {REPO_ROOT} rev-parse HEAD"))
     ok, out = probes.git_head_commit(str(REPO_ROOT))
     if ok:
-        ui.say(f"  repo commit: GREEN ({out})")
+        ui.emit(Paragraph(f"  repo commit: GREEN ({out})"))
         cl.add("preflight", "repo commit", ck.WITNESSED, out)
     else:
-        ui.say("  repo commit: RED -- not a git checkout?")
+        ui.emit(Paragraph("  repo commit: RED -- not a git checkout?"))
         cl.add("preflight", "repo commit", ck.WITNESSED, "RED: git rev-parse HEAD failed")
 
-    ui.say(f"$ git -C {REPO_ROOT} submodule status")
+    ui.emit(Paragraph(f"$ git -C {REPO_ROOT} submodule status"))
     sub_ok, sub_out = probes.git_submodule_status(str(REPO_ROOT))
     dash_lines = [ln for ln in sub_out.splitlines() if ln.strip().startswith("-")]
     if sub_ok and not dash_lines:
-        ui.say("  submodules populated: GREEN")
+        ui.emit(Paragraph("  submodules populated: GREEN"))
         cl.add("preflight", "submodules populated", ck.WITNESSED, "no '-' prefixed entries")
     else:
-        ui.say("  submodules populated: RED")
-        ui.say("    fix: git -C <repo> submodule update --init --recursive")
+        ui.emit(Paragraph("  submodules populated: RED"))
+        ui.emit(Paragraph("    fix: git -C <repo> submodule update --init --recursive"))
         cl.add("preflight", "submodules populated", ck.WITNESSED,
                f"RED: {len(dash_lines)} uninitialized submodule(s)")
 
@@ -138,45 +140,45 @@ def screen_preflight(ui, cl, state):
         _show_facts(ui, f"preflight_{name}")
         path = probes.which(name)
         if path:
-            ui.say(f"  {name}: GREEN ({path})")
+            ui.emit(Paragraph(f"  {name}: GREEN ({path})"))
             cl.add("preflight", f"{name} found", ck.WITNESSED, path)
         elif name == "clingo":
-            ui.say(f"  {name}: not found on PATH (non-fatal -- the engine differential proofs "
-                   f"and ./judge need it, but this does not block setup)")
+            ui.emit(Paragraph(f"  {name}: not found on PATH (non-fatal -- the engine differential proofs "
+                   f"and ./judge need it, but this does not block setup)"))
             cl.add("preflight", f"{name} found", ck.WITNESSED,
                    "not on PATH (non-fatal, matches bootstrap/bootstrap.sh's own posture)")
         elif name == "idris2":
-            ui.say(f"  {name}: not found on PATH (non-fatal -- it backs autoharn's own "
+            ui.emit(Paragraph(f"  {name}: not found on PATH (non-fatal -- it backs autoharn's own "
                    f"categorical-kernel-model freshness gate, gates/idris_model_freshness.py; "
                    f"a downstream project built from this scaffold does not need it, and this "
-                   f"does not block setup)")
+                   f"does not block setup)"))
             cl.add("preflight", f"{name} found", ck.WITNESSED,
                    "not on PATH (non-fatal -- house discipline for autoharn's own repo only, "
                    "not required by a scaffolded downstream project)")
         else:
-            ui.say(f"  {name}: RED -- not found on PATH")
+            ui.emit(Paragraph(f"  {name}: RED -- not found on PATH"))
             fix = {
                 "python3": "install Python 3 and ensure it is on PATH",
                 "psql": "install the postgresql-client package and ensure `psql` is on PATH",
             }[name]
-            ui.say(f"    fix: {fix}")
+            ui.emit(Paragraph(f"    fix: {fix}"))
             cl.add("preflight", f"{name} found", ck.WITNESSED, f"RED: not on PATH -- {fix}")
 
     host = os.environ.get("HARNESS_PGHOST") or os.environ.get("EPISTEMIC_PGHOST")
     if not host:
-        ui.say("  HARNESS_PGHOST: RED -- not set")
-        ui.say("    fix: export HARNESS_PGHOST=<your postgres host> (or EPISTEMIC_PGHOST)")
+        ui.emit(Paragraph("  HARNESS_PGHOST: RED -- not set"))
+        ui.emit(Paragraph("    fix: export HARNESS_PGHOST=<your postgres host> (or EPISTEMIC_PGHOST)"))
         cl.add("preflight", "HARNESS_PGHOST reachable", ck.WITNESSED,
                "RED: HARNESS_PGHOST/EPISTEMIC_PGHOST unset")
     else:
         ok2, detail = probes.pg_reachable(host)
         if ok2:
-            ui.say(f"  HARNESS_PGHOST ({host}): GREEN -- {detail or 'reachable'}")
+            ui.emit(Paragraph(f"  HARNESS_PGHOST ({host}): GREEN -- {detail or 'reachable'}"))
             cl.add("preflight", "HARNESS_PGHOST reachable", ck.WITNESSED, f"{host}: {detail}")
         else:
-            ui.say(f"  HARNESS_PGHOST ({host}): RED -- {detail}")
-            ui.say(f"    fix: confirm postgres is running and reachable at {host}, or set "
-                   f"HARNESS_PGHOST to the correct host")
+            ui.emit(Paragraph(f"  HARNESS_PGHOST ({host}): RED -- {detail}"))
+            ui.emit(Paragraph(f"    fix: confirm postgres is running and reachable at {host}, or set "
+                   f"HARNESS_PGHOST to the correct host"))
             cl.add("preflight", "HARNESS_PGHOST reachable", ck.WITNESSED, f"RED: {detail}")
         state["pghost"] = host
 
@@ -190,7 +192,7 @@ def screen_preflight(ui, cl, state):
                     "the operator chose it explicitly)")
         else:
             note = "informational only -- this package never adopted urwid as a backend"
-        ui.say(f"  {name}: {'available' if available else 'not installed'} ({note})")
+        ui.emit(Paragraph(f"  {name}: {'available' if available else 'not installed'} ({note})"))
         cl.add("preflight", f"{name} available", ck.WITNESSED,
                "available" if available else "not installed")
     return state
@@ -203,7 +205,7 @@ def screen_preflight(ui, cl, state):
 # ---------------------------------------------------------------------------------------------
 
 def screen_substrate(ui, cl, state):
-    ui.banner(screen_banner("substrate"))
+    ui.emit(Heading(screen_banner("substrate")))
     if not ui.confirm("Configure substrate now?", default=True):
         cl.add("substrate", "path chosen", ck.SKIPPED, skip_detail("substrate"))
         return state
@@ -219,7 +221,7 @@ def screen_substrate(ui, cl, state):
         state["db"] = db
         ok, detail = probes.pg_reachable(host)
         status = ck.WITNESSED if ok else ck.REFUSED
-        ui.say(f"  reachability probe: {'GREEN' if ok else 'RED'} -- {detail}")
+        ui.emit(Paragraph(f"  reachability probe: {'GREEN' if ok else 'RED'} -- {detail}"))
         cl.add("substrate", f"existing-db {db}@{host} reachable", status,
                f"{'GREEN' if ok else 'RED'}: {detail}")
         return state
@@ -228,9 +230,9 @@ def screen_substrate(ui, cl, state):
     role = ui.ask_text("New (dedicated) role name")
     for _label, _val in (("database name", db), ("role name", role)):
         if not probes.valid_identifier(_val):
-            ui.say(f"  REFUSED: {_label} '{_val}' contains characters outside [A-Za-z0-9_] -- "
+            ui.emit(Note(f"  REFUSED: {_label} '{_val}' contains characters outside [A-Za-z0-9_] -- "
                    f"refusing to splice it into pg_hba/SQL text (law/adr/0012's interpreter-"
-                   f"boundary rule). Nothing generated.")
+                   f"boundary rule). Nothing generated.", tone="refusal"))
             cl.add("substrate", "dedicated db/role name validated", ck.REFUSED,
                    f"'{_val}' ({_label}) not in [A-Za-z0-9_]+")
             return state
@@ -240,9 +242,9 @@ def screen_substrate(ui, cl, state):
 
     for _subnet in subnet_list:
         if not probes.valid_subnet(_subnet):
-            ui.say(f"  REFUSED: subnet '{_subnet}' is not a valid CIDR/host token -- refusing "
+            ui.emit(Note(f"  REFUSED: subnet '{_subnet}' is not a valid CIDR/host token -- refusing "
                    f"to splice it into the pg_hba block (law/adr/0012's interpreter-boundary "
-                   f"rule). Nothing generated.")
+                   f"rule). Nothing generated.", tone="refusal"))
             cl.add("substrate", "dedicated subnets validated", ck.REFUSED,
                    f"'{_subnet}' not a valid CIDR (digits/dots/IPv6 hex+colons, one slash + "
                    f"prefix length, parsed by ipaddress.ip_network)")
@@ -255,28 +257,28 @@ def screen_substrate(ui, cl, state):
         block, disclosure = pghba.build_prepared_block(host, db, role, subnet_list,
                                                          probe_db="toy")
     except pghba.PgHbaReadError as exc:
-        ui.say(f"  could not read the live pg_hba.conf: {exc}")
+        ui.emit(Paragraph(f"  could not read the live pg_hba.conf: {exc}"))
         cl.add("substrate", "pg_hba block (dedicated)", ck.WITNESSED, f"REFUSED-READ: {exc}")
         return state
     except pghba.PgHbaValidationError as exc:
-        ui.say(f"  REFUSED: {exc}")
+        ui.emit(Note(f"  REFUSED: {exc}", tone="refusal"))
         cl.add("substrate", "pg_hba block (dedicated)", ck.REFUSED, f"REFUSED: {exc}")
         return state
 
-    ui.say("  " + disclosure.replace("\n", "\n  "))
-    ui.say("")
-    ui.say("  --- PREPARED: pg_hba.conf block (operator applies, on the cluster host) ---")
+    ui.emit(Paragraph("  " + disclosure.replace("\n", "\n  ")))
+    ui.emit(Rule())
+    ui.emit(Paragraph("  --- PREPARED: pg_hba.conf block (operator applies, on the cluster host) ---"))
     for line in block.splitlines():
-        ui.say(f"  {line}")
-    ui.say("  --- end block ---")
-    ui.say("")
+        ui.emit(Paragraph(f"  {line}"))
+    ui.emit(Paragraph("  --- end block ---"))
+    ui.emit(Rule())
     createdb_cmd = f"CREATE ROLE {role} LOGIN; CREATE DATABASE {db} OWNER {role};"
-    ui.say("  --- PREPARED: createdb/reload block (operator applies, on the cluster host) ---")
-    ui.say(f"  psql -h {host} -c \"{createdb_cmd}\"")
-    ui.say(f"  # insert the pg_hba block above into pg_hba.conf, then:")
-    ui.say(f"  psql -h {host} -c \"SELECT pg_reload_conf();\"")
-    ui.say("  what you should see: CREATE ROLE / CREATE DATABASE / one-row 't' from reload")
-    ui.say("  --- end block ---")
+    ui.emit(Paragraph("  --- PREPARED: createdb/reload block (operator applies, on the cluster host) ---"))
+    ui.emit(Paragraph(f"  psql -h {host} -c \"{createdb_cmd}\""))
+    ui.emit(Paragraph(f"  # insert the pg_hba block above into pg_hba.conf, then:"))
+    ui.emit(Paragraph(f"  psql -h {host} -c \"SELECT pg_reload_conf();\""))
+    ui.emit(Paragraph("  what you should see: CREATE ROLE / CREATE DATABASE / one-row 't' from reload"))
+    ui.emit(Paragraph("  --- end block ---"))
     # STATUS-SPLIT (design/FABLE-SETUP-TUI-CHECKLIST-SPLIT-SPEC.md §2): ck.INSTRUCTED, not
     # ck.PREPARED -- these two blocks are generated TEXT the operator is shown to run by hand on
     # the cluster host; nothing about the WORLD's state (a file present, a role/db already
@@ -290,14 +292,14 @@ def screen_substrate(ui, cl, state):
         ui.pause(f"Apply the two blocks above on {host}, then press enter to verify: ")
         ok, detail = probes.pg_connect(host, db, role=role)
         if ok:
-            ui.say(f"  post-keypress verification probe: GREEN -- {detail}")
+            ui.emit(Paragraph(f"  post-keypress verification probe: GREEN -- {detail}"))
             cl.add("substrate", "dedicated-db connection verified", ck.WITNESSED, detail)
             state["dedicated_verified"] = True
         else:
-            ui.say(f"  post-keypress verification probe: RED -- {detail}")
-            ui.say("  REFUSED to advance: the connection probe did not succeed. This is the "
+            ui.emit(Paragraph(f"  post-keypress verification probe: RED -- {detail}"))
+            ui.emit(Note("  REFUSED to advance: the connection probe did not succeed. This is the "
                    "honesty-rule-2 gate -- pressing enter is not enough, the effect must be "
-                   "real.")
+                   "real.", tone="refusal"))
             cl.add("substrate", "dedicated-db connection verified", ck.WITNESSED,
                    f"RED (refused to advance): {detail}")
             state["dedicated_verified"] = False
@@ -317,10 +319,9 @@ def screen_substrate(ui, cl, state):
 
 def _governed_files_step(ui, cl, state, dest: str) -> None:
     _show_facts(ui, "fork_target_governed_files")
-    ui.say("  " + governed_files.TEACHING_LINE)
-    ui.say(f"  default pattern set: {governed_files.DEFAULT_PATTERNS}")
-    extend = ui.confirm("Extend the governed-files pattern set beyond the default (*.py) for "
-                         "the other languages this project contains?", default=False)
+    ui.emit(Paragraph("  " + governed_files.TEACHING_LINE))
+    ui.emit(Paragraph(f"  default pattern set: {governed_files.DEFAULT_PATTERNS}"))
+    extend = ui.confirm(SD.CONFIRM_GOVERNED_FILES_EXTEND, default=False)
     if not extend:
         patterns, hostile = governed_files.DEFAULT_PATTERNS, []
         cl.add("fork-target", "governed-files pattern set chosen", ck.WITNESSED,
@@ -329,10 +330,10 @@ def _governed_files_step(ui, cl, state, dest: str) -> None:
         raw = ui.ask_text("Extensions to add, comma-separated (e.g. .ts,.vue,.html)")
         patterns, hostile = governed_files.build_pattern_set(raw)
         if hostile:
-            ui.say(f"  REFUSED: extension token(s) {hostile} contain characters outside "
+            ui.emit(Note(f"  REFUSED: extension token(s) {hostile} contain characters outside "
                    f"'.' + [A-Za-z0-9] -- refusing to splice into the --governed argv (law/"
                    f"adr/0012's interpreter-boundary rule). Falling back to the default set; "
-                   f"nothing recorded beyond it.")
+                   f"nothing recorded beyond it.", tone="refusal"))
             cl.add("fork-target", "governed-files pattern set chosen", ck.REFUSED,
                    f"hostile token(s) {hostile}; reverted to default {patterns}")
         else:
@@ -342,14 +343,14 @@ def _governed_files_step(ui, cl, state, dest: str) -> None:
 
     path = governed_files.governed_files_path(dest)
     preview = json.dumps({"patterns": patterns}, indent=2) + "\n"
-    ui.say(f"  --- PREVIEW: {path} (written by new-project.sh --governed at birth, and again "
+    ui.emit(Paragraph(f"  --- PREVIEW: {path} (written by new-project.sh --governed at birth, and again "
            f"at any later scaffold re-run this flow performs -- never by this screen directly) "
-           f"---")
-    ui.say("  " + preview.replace("\n", "\n  "))
+           f"---"))
+    ui.emit(Paragraph("  " + preview.replace("\n", "\n  ")))
 
 
 def screen_fork_target(ui, cl, state):
-    ui.banner(screen_banner("fork-target"))
+    ui.emit(Heading(screen_banner("fork-target")))
     if not ui.confirm("Choose destination now?", default=True):
         cl.add("fork-target", "destination", ck.SKIPPED, skip_detail("fork-target"))
         return state
@@ -367,27 +368,26 @@ def screen_fork_target(ui, cl, state):
             _governed_files_step(ui, cl, state, dest)
             return state
         if dest_state.kind == destination.DestKind.AUTOHARN_COMPLETE:
-            ui.say(f"  REFUSED: '{dest}' is already a complete autoharn world "
+            ui.emit(Note(f"  REFUSED: '{dest}' is already a complete autoharn world "
                    f"({'; '.join(dest_state.evidence)}) -- re-entry (`--start-at`) reaches an "
                    f"existing world without touching it; a genuine re-birth needs teardown "
-                   f"first (bootstrap/teardown-world.sh). Nothing done.")
+                   f"first (bootstrap/teardown-world.sh). Nothing done.", tone="refusal"))
             cl.add("fork-target", "destination", ck.REFUSED,
                    f"REFUSED: '{dest}' is AUTOHARN_COMPLETE")
             return state
         if dest_state.kind == destination.DestKind.AUTOHARN_PARTIAL:
-            ui.say(f"  REFUSED: '{dest}' looks like an INTERRUPTED prior birth "
+            ui.emit(Note(f"  REFUSED: '{dest}' looks like an INTERRUPTED prior birth "
                    f"({'; '.join(dest_state.evidence)}) -- see the birth screen's own "
                    f"partial-birth teaching (teardown-world.sh, never a bare re-birth) once you "
-                   f"reach it. Nothing done here.")
+                   f"reach it. Nothing done here.", tone="refusal"))
             cl.add("fork-target", "destination", ck.REFUSED,
                    f"REFUSED: '{dest}' is AUTOHARN_PARTIAL")
             return state
         # FOREIGN -- the new third mode (spec §3): evidence + an explicit ack, never a flat
         # refusal or a silent merge (the blank world proved the use case real).
-        ui.say(f"  '{dest}' is non-empty and carries no autoharn birth evidence "
-               f"({'; '.join(dest_state.evidence)}).")
-        if not ui.confirm("Scaffold into this existing content anyway? (new-project.sh will be "
-                           "told to accept it explicitly -- no silent merge)", default=False):
+        ui.emit(Paragraph(f"  '{dest}' is non-empty and carries no autoharn birth evidence "
+               f"({'; '.join(dest_state.evidence)})."))
+        if not ui.confirm(SD.CONFIRM_FOREIGN_SCAFFOLD, default=False):
             cl.add("fork-target", "destination", ck.REFUSED,
                    f"REFUSED: '{dest}' is FOREIGN content, not acknowledged")
             return state
@@ -403,19 +403,19 @@ def screen_fork_target(ui, cl, state):
     src_path = Path(src)
     dest_path = Path(dest)
     if not src_path.is_dir():
-        ui.say(f"  REFUSED: source '{src}' is not a directory -- nothing copied.")
+        ui.emit(Note(f"  REFUSED: source '{src}' is not a directory -- nothing copied.", tone="refusal"))
         cl.add("fork-target", "fork-copy", ck.REFUSED, f"REFUSED: '{src}' not a directory")
         return state
     dest_state = destination.classify_destination(dest)
     if dest_state.kind != destination.DestKind.FRESH:
-        ui.say(f"  REFUSED: destination '{dest}' already exists ({dest_state.kind.value}: "
+        ui.emit(Note(f"  REFUSED: destination '{dest}' already exists ({dest_state.kind.value}: "
                f"{'; '.join(dest_state.evidence)}) -- `cp -a` into an occupied directory nests "
-               f"the copy rather than creating it, so this mode stays fresh-only. Nothing copied.")
+               f"the copy rather than creating it, so this mode stays fresh-only. Nothing copied.", tone="refusal"))
         cl.add("fork-target", "fork-copy", ck.REFUSED,
                f"REFUSED: '{dest}' is {dest_state.kind.value}")
         return state
 
-    ui.say(f"  $ cp -a {src} {dest}")
+    ui.emit(Paragraph(f"  $ cp -a {src} {dest}"))
     _plan(state).append(PlanEntry(
         screen="fork-target", item="fork-copy", lesson="directory tree copy (cp -a)",
         act=CommandAct(argv=("cp", "-a", src, dest)),
@@ -430,7 +430,7 @@ def screen_fork_target(ui, cl, state):
     dest_claude = dest_path / "CLAUDE.md"
     dest_project_claude = dest_path / "CLAUDE.project.md"
     if would_preserve:
-        ui.say(f"  $ mv {dest_claude} {dest_project_claude}")
+        ui.emit(Paragraph(f"  $ mv {dest_claude} {dest_project_claude}"))
         _plan(state).append(PlanEntry(
             screen="fork-target", item="CLAUDE.md preserved",
             lesson="rename to CLAUDE.project.md before the scaffold write (the omega-lab move)",
@@ -475,36 +475,16 @@ def _render_partial_birth_teaching(ui, cl, world, host, db, dest) -> None:
     plan entry, so this teaching block can only fire once that entry has actually run -- called
     from `_execute_commit`'s on_result dispatch (below), never from `screen_birth` itself, which
     no longer sees a real result to inspect at decision time."""
-    ui.say("")
-    ui.say("  --- REFUSED: new-project.sh's own \"already exists\" gate ---")
-    ui.say(f"  deployment.json already exists at '{dest}' -- new-project.sh refused rather than")
-    ui.say(f"  silently overwrite it (pass --force to replace it, which this screen deliberately")
-    ui.say(f"  does NOT do on your behalf).")
-    ui.say("")
-    ui.say("  Likely state: a PARTIAL birth. The most common way to reach this refusal is a prior")
-    ui.say(f"  '{world}' birth that died mid-DDL (killed, crashed, network drop) after")
-    ui.say("  new-project.sh had already written deployment.json but before the kernel lineage")
-    ui.say("  chain finished applying -- the world is neither cleanly born nor cleanly absent.")
-    ui.say("")
-    ui.say("  Safe next step -- teardown, NOT a --force re-birth:")
     teardown_argv = _teardown_argv(world, db, host, extra=["--dir", dest])
-    ui.say(f"    $ {' '.join(teardown_argv)}")
-    ui.say(f"    (teardown-world.sh will ask you to type '{world}' back to confirm -- it is")
-    ui.say("     destructive and irreversible: DROP SCHEMA ... CASCADE / DROP ROLE, no undo.)")
-    ui.say("  HONEST CAVEAT: teardown-world.sh was built and witnessed against CLEANLY-born")
-    ui.say("  worlds. Running it against a PARTIAL kernel chain (this situation) is UNEXERCISED")
-    ui.say("  -- it is very likely to work (the same DROP SCHEMA/ROLE statements apply regardless")
-    ui.say("  of how far the chain got), but it has not been witnessed doing so. If teardown")
-    ui.say("  itself errors, that is new information for the same row below, not a second dead")
-    ui.say("  end to solve alone.")
-    ui.say("")
-    ui.say("  KNOWN DEAD END, do not attempt: `new-project.sh --force --new-world` against this")
-    ui.say("  same destination. s15-schema.sql (kernel/lineage, frozen-record) is non-idempotent")
-    ui.say("  under re-application -- a --force re-birth over a partial chain hits 'no unique or")
-    ui.say("  exclusion constraint matching the ON CONFLICT specification' partway through DDL,")
-    ui.say("  a KERNEL gap this build does not own or patch (ledger row 1792: routed to the")
-    ui.say("  maintainer/Fable-spec lane, parked pending bandwidth -- NOT this build's to fix).")
-    ui.say("  --- end ---")
+    fmt = {"dest": dest, "world": world, "teardown_argv": " ".join(teardown_argv)}
+    for kind, template in SD.PARTIAL_BIRTH_TEACHING:
+        text = template.format(**fmt)
+        if kind == "rule":
+            ui.emit(Rule())
+        elif kind == "refusal":
+            ui.emit(Note(text, tone="refusal"))
+        else:
+            ui.emit(Paragraph(text))
     cl.add("birth", "world birth", ck.REFUSED,
            f"REFUSED (new-project.sh's own gate): deployment.json exists at '{dest}' -- likely "
            f"a partial prior birth. Taught: {' '.join(teardown_argv)} (destructive, "
@@ -513,7 +493,7 @@ def _render_partial_birth_teaching(ui, cl, world, host, db, dest) -> None:
 
 
 def screen_rehearsal(ui, cl, state):
-    ui.banner(screen_banner("rehearsal"))
+    ui.emit(Heading(screen_banner("rehearsal")))
     if not ui.confirm("Run rehearsal (scratch birth + teardown + zero-residue check)?",
                        default=True):
         cl.add("rehearsal", "rehearsal", ck.SKIPPED, skip_detail("rehearsal"))
@@ -552,7 +532,7 @@ def screen_rehearsal(ui, cl, state):
                scratch_dir if dir_removed else f"STILL PRESENT: {scratch_dir}")
 
     green = birth_ok and teardown_ok
-    ui.say(f"  rehearsal: {'GREEN' if green else 'RED'}{' (simulated, --dry-run)' if dry_run else ''}")
+    ui.emit(Paragraph(f"  rehearsal: {'GREEN' if green else 'RED'}{' (simulated, --dry-run)' if dry_run else ''}"))
     cl.add("rehearsal", "rehearsal overall", ck.WOULD_DO if dry_run else ck.WITNESSED,
            "GREEN" if green else "RED")
     state["rehearsal_green"] = green
@@ -571,12 +551,12 @@ BIRTH_PRODUCES = "birth-ran"
 
 
 def screen_birth(ui, cl, state):
-    ui.banner(screen_banner("birth"))
+    ui.emit(Heading(screen_banner("birth")))
     if not state.get("rehearsal_green"):
-        ui.say("  REFUSED: rehearsal did not report GREEN (or was skipped) -- the real birth "
+        ui.emit(Note("  REFUSED: rehearsal did not report GREEN (or was skipped) -- the real birth "
                "is gated on rehearsal green (spec screen 4: 'the real birth is gated on "
                "rehearsal green, the ratified discipline'). Go back and run a green rehearsal "
-               "first, or explicitly override below.")
+               "first, or explicitly override below.", tone="refusal"))
         if not ui.confirm("Override and proceed WITHOUT a green rehearsal? (not recommended)",
                            default=False):
             cl.add("birth", "world birth", ck.SKIPPED, "refused: rehearsal not green")
@@ -599,10 +579,10 @@ def screen_birth(ui, cl, state):
     dest_state = destination.classify_destination(dest)
     if (dest_state.kind == destination.DestKind.FOREIGN
             and not state.get("dest_accept_foreign") and not state.get("dest_would_exist")):
-        ui.say(f"  REFUSED: '{dest}' classifies as FOREIGN content "
+        ui.emit(Note(f"  REFUSED: '{dest}' classifies as FOREIGN content "
                f"({'; '.join(dest_state.evidence)}) -- birth into non-autoharn content needs "
                f"the explicit acknowledgment from fork-target's FOREIGN mode, never queued "
-               f"silently. Go back to fork-target, or pick a different destination.")
+               f"silently. Go back to fork-target, or pick a different destination.", tone="refusal"))
         cl.add("birth", "destination classification", ck.REFUSED,
                f"REFUSED: '{dest}' is FOREIGN, not acknowledged")
         return state
@@ -613,7 +593,7 @@ def screen_birth(ui, cl, state):
     if state.get("dest_accept_foreign"):
         extra += ["--accept-existing-content"]
     argv = _new_project_argv(dest, world, db, host, extra=extra)
-    ui.say(f"  $ {' '.join(argv)}")
+    ui.emit(Paragraph(f"  $ {' '.join(argv)}"))
     _plan(state).append(PlanEntry(
         screen="birth", item="world birth",
         lesson="the world's founding scaffold + kernel lineage chain",
@@ -627,8 +607,8 @@ def screen_birth(ui, cl, state):
     state["birth_world"] = world
     state["birth_host"] = host
     state["birth_db"] = db
-    ui.say("  (the real birth output, and the maintainer's own copy-paste signing line, stream "
-           "at commit time -- this screen only queues the act.)")
+    ui.emit(Paragraph("  (the real birth output, and the maintainer's own copy-paste signing line, stream "
+           "at commit time -- this screen only queues the act.)"))
     return state
 
 
@@ -645,14 +625,9 @@ def screen_birth(ui, cl, state):
 # ---------------------------------------------------------------------------------------------
 
 def screen_principals_authority(ui, cl, state):
-    ui.banner(screen_banner("principals-authority"))
+    ui.emit(Heading(screen_banner("principals-authority")))
     _show_facts(ui, "principals_authority")
-    if not ui.confirm(
-        "Constitute principals & authority now? (register identities, grant competences, "
-        "assert typed relations, and register role charters -- every world already has "
-        "author/reviewer/commissioner from the scaffold, so skipping leaves a complete world; "
-        "propaedeutic value is the point of walking it once)", default=True,
-    ):
+    if not ui.confirm(SD.CONFIRM_PRINCIPALS_AUTHORITY, default=True):
         cl.add("principals-authority", "screen", ck.SKIPPED,
                "operator skipped (declared-not-silent default=yes) -- legitimate and legible")
         return state
@@ -674,17 +649,17 @@ def screen_principals_authority(ui, cl, state):
     # born, normal sequence" -- caught live against real Postgres (seen-red/setup-tui-principals-
     # authority WP6a).
     if dest_state.kind == destination.DestKind.FRESH and not state.get("dest_would_exist"):
-        ui.say(f"  REFUSED: destination directory '{dest}' does not exist -- nothing to "
+        ui.emit(Note(f"  REFUSED: destination directory '{dest}' does not exist -- nothing to "
                f"constitute against. Run a birth first (or check the path), then retry this "
-               f"screen.")
+               f"screen.", tone="refusal"))
         cl.add("principals-authority", "destination exists", ck.REFUSED, f"'{dest}' not a directory")
         return state
     dest_exists = dest_state.kind != destination.DestKind.FRESH
     if dest_exists:
         if dest_state.kind != destination.DestKind.AUTOHARN_COMPLETE:
-            ui.say(f"  REFUSED: '{dest}' classifies as {dest_state.kind.value} "
+            ui.emit(Note(f"  REFUSED: '{dest}' classifies as {dest_state.kind.value} "
                    f"({'; '.join(dest_state.evidence)}) -- this does not look like a complete "
-                   f"world this project's own scaffold produced. Nothing done.")
+                   f"world this project's own scaffold produced. Nothing done.", tone="refusal"))
             cl.add("principals-authority", "legacy/led present", ck.REFUSED,
                    f"{dest_state.kind.value}: {'; '.join(dest_state.evidence)}")
             return state
@@ -695,17 +670,17 @@ def screen_principals_authority(ui, cl, state):
         try:
             existing = principals_authority.list_principals(dest)
         except Exception as exc:  # noqa: BLE001 -- a read-only probe; report, never crash the flow
-            ui.say(f"  REFUSED: could not read this world's own principal_standing_current view "
-                   f"({exc}) -- lineage-head readability check failed. Nothing offered.")
+            ui.emit(Note(f"  REFUSED: could not read this world's own principal_standing_current view "
+                   f"({exc}) -- lineage-head readability check failed. Nothing offered.", tone="refusal"))
             cl.add("principals-authority", "world readable (lineage-head check)", ck.REFUSED, str(exc))
             return state
         cl.add("principals-authority", "world readable (lineage-head check)", ck.WITNESSED,
                f"{len(existing)} principal(s) found")
-        ui.say(f"  existing principals ({len(existing)}), from {dest}'s own principal_standing_"
-               f"current view:")
+        ui.emit(Paragraph(f"  existing principals ({len(existing)}), from {dest}'s own principal_standing_"
+               f"current view:"))
         for p in existing:
-            ui.say(f"    id={p['id']:<4} name={p['name']:<14} class={p['agent_class']:<9} "
-                   f"standing={p['standing']:<9} purpose={p.get('purpose') or '(none recorded)'}")
+            ui.emit(Paragraph(f"    id={p['id']:<4} name={p['name']:<14} class={p['agent_class']:<9} "
+                   f"standing={p['standing']:<9} purpose={p.get('purpose') or '(none recorded)'}"))
         cl.add("principals-authority", "existing principals shown", ck.WITNESSED,
                ", ".join(f"{p['name']}({p['agent_class']})" for p in existing) or "(none)")
         existing_names = {p["name"] for p in existing}
@@ -715,10 +690,10 @@ def screen_principals_authority(ui, cl, state):
         # not exist yet -- birth is a still-PENDING plan entry in the normal sequence).
         cl.add("principals-authority", "destination exists", ck.DRY_SKIPPED if state.get("dry_run")
                else ck.WITNESSED, f"'{dest}' does not exist yet -- queued for this commit")
-        ui.say(f"  {dest} does not exist yet -- showing the SCAFFOLD's contractual base (every "
-               f"world this package births carries exactly these three, unconditionally):")
+        ui.emit(Paragraph(f"  {dest} does not exist yet -- showing the SCAFFOLD's contractual base (every "
+               f"world this package births carries exactly these three, unconditionally):"))
         for slug, agent_class, purpose in principals_authority.SCAFFOLD_BASE_PRINCIPALS:
-            ui.say(f"    name={slug:<14} class={agent_class:<9} purpose={purpose}")
+            ui.emit(Paragraph(f"    name={slug:<14} class={agent_class:<9} purpose={purpose}"))
         cl.add("principals-authority", "existing principals shown (scaffold base)", ck.WITNESSED,
                ", ".join(f"{n}({c})" for n, c, _ in principals_authority.SCAFFOLD_BASE_PRINCIPALS))
         existing_names = {n for n, _, _ in principals_authority.SCAFFOLD_BASE_PRINCIPALS}
@@ -737,7 +712,7 @@ def screen_principals_authority(ui, cl, state):
 
     # --- item 1: register principals ---------------------------------------------------------
     while ui.confirm("Register a principal now?", default=False):
-        ui.say("  " + principals_authority.LESSON_REGISTER)
+        ui.emit(Paragraph("  " + principals_authority.LESSON_REGISTER))
         name = ui.ask_text("Principal name")
         agent_class = ui.ask_choice("Class (kernel/lineage/s40-schema.sql agent_class CHECK)",
                                      principals_authority.CLASS_CHOICES)
@@ -748,16 +723,16 @@ def screen_principals_authority(ui, cl, state):
                                lesson=principals_authority.LESSON_REGISTER, act=act,
                                produces=produces))
         queued_names.add(name)
-        ui.say(f"  queued: {act.render()}")
+        ui.emit(Paragraph(f"  queued: {act.render()}"))
 
     # --- item 2: authority bindings (s41 vocabulary, worlds at s41+) -------------------------
     if not s41_available:
-        ui.say(f"  authority bindings section UNAVAILABLE: {s41_reason}")
+        ui.emit(Paragraph(f"  authority bindings section UNAVAILABLE: {s41_reason}"))
         cl.add("principals-authority", "authority bindings (s41)", ck.SKIPPED, s41_reason)
     else:
         cl.add("principals-authority", "authority bindings (s41) available", ck.WITNESSED, s41_reason)
         while ui.confirm("Grant a competence now?", default=False):
-            ui.say("  " + principals_authority.LESSON_COMPETENCE)
+            ui.emit(Paragraph("  " + principals_authority.LESSON_COMPETENCE))
             name = ui.ask_text("Principal name (must already be registered)")
             activity = ui.ask_text("Activity")
             band = ui.ask_text("Band")
@@ -767,10 +742,10 @@ def screen_principals_authority(ui, cl, state):
                                    item=f"grant competence '{activity}' to '{name}'",
                                    lesson=principals_authority.LESSON_COMPETENCE, act=act,
                                    produces=produces))
-            ui.say(f"  queued: {act.render()}")
+            ui.emit(Paragraph(f"  queued: {act.render()}"))
 
         while ui.confirm("Add a typed relation now?", default=False):
-            ui.say("  " + principals_authority.LESSON_RELATION)
+            ui.emit(Paragraph("  " + principals_authority.LESSON_RELATION))
             subj = ui.ask_text("Subject principal name")
             rel = ui.ask_choice("Relation (kernel/lineage/s41 principal_relation_check CHECK)",
                                  principals_authority.RELATION_CHOICES)
@@ -779,21 +754,21 @@ def screen_principals_authority(ui, cl, state):
             plan.append(PlanEntry(screen="principals-authority", item=f"relate '{subj}' {rel} '{obj}'",
                                    lesson=principals_authority.LESSON_RELATION, act=act,
                                    produces=produces))
-            ui.say(f"  queued: {act.render()}")
+            ui.emit(Paragraph(f"  queued: {act.render()}"))
 
     # --- item 3: role charters, trap resolved -------------------------------------------------
     while ui.confirm("Register a role charter now?", default=False):
-        ui.say("  " + principals_authority.LESSON_CHARTER)
+        ui.emit(Paragraph("  " + principals_authority.LESSON_CHARTER))
         role = ui.ask_text("Role name (must be a registered principal)")
         path = ui.ask_text("Charter file path")
         if not _is_known(role):
-            ui.say(f"  '{role}' is not yet a registered principal -- the charter "
-                   f"pre-registration trap (spec WP3).")
+            ui.emit(Paragraph(f"  '{role}' is not yet a registered principal -- the charter "
+                   f"pre-registration trap (spec WP3)."))
             if not ui.confirm(f"Register '{role}' now, in-flow, so the charter can proceed?",
                                default=True):
                 manual = (f"{os.path.join(dest, 'legacy', 'led')} register-principal {role} "
                           f"<class> --purpose \"<why>\", then retry this charter")
-                ui.say(f"  REFUSED: charter left unregistered -- manual command: {manual}")
+                ui.emit(Note(f"  REFUSED: charter left unregistered -- manual command: {manual}", tone="refusal"))
                 cl.add("principals-authority", f"charter '{role}' (unregistered, declined)",
                        ck.REFUSED, manual)
                 continue
@@ -807,15 +782,15 @@ def screen_principals_authority(ui, cl, state):
                                    lesson=principals_authority.LESSON_REGISTER, act=reg_act,
                                    produces=reg_produces))
             queued_names.add(role)
-            ui.say(f"  queued: {reg_act.render()}")
+            ui.emit(Paragraph(f"  queued: {reg_act.render()}"))
         act, produces = principals_authority.charter_register_act(dest, role, path)
         plan.append(PlanEntry(screen="principals-authority", item=f"charter '{role}' <- {path}",
                                lesson=principals_authority.LESSON_CHARTER, act=act,
                                produces=produces))
-        ui.say(f"  queued: {act.render()}")
+        ui.emit(Paragraph(f"  queued: {act.render()}"))
 
     # --- item 4: the workflow on-ramp (pointer, not machinery) --------------------------------
-    ui.say("  " + principals_authority.LESSON_WORKFLOW_POINTER)
+    ui.emit(Paragraph("  " + principals_authority.LESSON_WORKFLOW_POINTER))
     cl.add("principals-authority", "workflow on-ramp pointer", ck.WITNESSED,
            "spec §1 item 4 -- checklist-only note, no mechanism added")
     return state
@@ -829,13 +804,9 @@ def screen_principals_authority(ui, cl, state):
 # ---------------------------------------------------------------------------------------------
 
 def screen_signed_genesis(ui, cl, state):
-    ui.banner(screen_banner("signed-genesis"))
+    ui.emit(Heading(screen_banner("signed-genesis")))
     _show_facts(ui, "signed_genesis")
-    if not ui.confirm(
-        "Run the Signed genesis ceremony now? (generates a keypair, exports the public half "
-        "into this world's keys/, signs the genesis commission, and verifies it against your "
-        "own key -- one-time, no ongoing signing burden afterward)", default=True,
-    ):
+    if not ui.confirm(SD.CONFIRM_SIGNED_GENESIS_CEREMONY, default=True):
         cl.add("signed-genesis", "ceremony", ck.SKIPPED,
                "operator skipped (declared-not-silent default=yes, ledger row 1725) -- "
                "legitimate and legible, never nagged again this run")
@@ -857,9 +828,9 @@ def screen_signed_genesis(ui, cl, state):
             cl.add("signed-genesis", "world has keys/+verify-commission+legacy/led", ck.DRY_SKIPPED,
                    "trusted along with the destination above -- always scaffolded by birth")
         else:
-            ui.say(f"  REFUSED: destination directory '{dest}' does not exist -- nothing to "
+            ui.emit(Note(f"  REFUSED: destination directory '{dest}' does not exist -- nothing to "
                    f"run the ceremony against. Run a birth first (or check the path), then "
-                   f"retry this screen.")
+                   f"retry this screen.", tone="refusal"))
             cl.add("signed-genesis", "destination exists", ck.REFUSED, f"'{dest}' not a directory")
             return state
     else:
@@ -870,8 +841,8 @@ def screen_signed_genesis(ui, cl, state):
                   ("legacy/led", os.path.isfile(legacy_led)))
         missing = [name for name, ok in checks if not ok]
         if missing:
-            ui.say(f"  REFUSED: {dest} is missing {', '.join(missing)} -- this does not look "
-                   f"like a world this project's own scaffold produced. Nothing done.")
+            ui.emit(Note(f"  REFUSED: {dest} is missing {', '.join(missing)} -- this does not look "
+                   f"like a world this project's own scaffold produced. Nothing done.", tone="refusal"))
             cl.add("signed-genesis", "world has keys/+verify-commission+legacy/led", ck.REFUSED,
                    f"missing: {missing}")
             return state
@@ -879,8 +850,8 @@ def screen_signed_genesis(ui, cl, state):
 
     gpg_path = probes.which("gpg")
     if not gpg_path:
-        ui.say("  REFUSED: 'gpg' is not on PATH -- the Signed genesis ceremony needs GnuPG "
-               "installed (user-guide/USER-GPG-TRUST-LAYER-FAQ.md). Nothing done.")
+        ui.emit(Note("  REFUSED: 'gpg' is not on PATH -- the Signed genesis ceremony needs GnuPG "
+               "installed (user-guide/USER-GPG-TRUST-LAYER-FAQ.md). Nothing done.", tone="refusal"))
         cl.add("signed-genesis", "gpg present", ck.REFUSED, "gpg not on PATH")
         return state
     cl.add("signed-genesis", "gpg present", ck.WITNESSED, gpg_path)
@@ -896,7 +867,7 @@ def screen_signed_genesis(ui, cl, state):
         try:
             existing = signed_genesis.list_commissions(dest)
         except Exception as exc:  # noqa: BLE001 -- a read-only probe; report, never crash the flow
-            ui.say(f"  could not list existing commissions ({exc}) -- proceeding as if none exist")
+            ui.emit(Paragraph(f"  could not list existing commissions ({exc}) -- proceeding as if none exist"))
             existing = []
 
     if existing:
@@ -910,9 +881,9 @@ def screen_signed_genesis(ui, cl, state):
                    f"row {latest['id']} (existing)")
 
     if commission_id_arg is None:
-        ui.say("  no existing commission designated -- a NEW founding commission will be "
+        ui.emit(Paragraph("  no existing commission designated -- a NEW founding commission will be "
                "written at commit time (FULL mode, via legacy/led) -- its row id is a symbolic "
-               "hole until then.")
+               "hole until then."))
         statement = ui.ask_text("Founding commission statement (the ask this world exists to "
                                  "carry out)")
         act, produces = signed_genesis.write_commission_act(dest, statement)
@@ -920,7 +891,7 @@ def screen_signed_genesis(ui, cl, state):
                                lesson="the world's founding commission row", act=act,
                                produces=produces))
         commission_id_arg = signed_genesis.commission_id_hole()
-        ui.say(f"  queued: {act.render()}")
+        ui.emit(Paragraph(f"  queued: {act.render()}"))
         cl.add("signed-genesis", "genesis commission designated", ck.WITNESSED,
                f"<row-id of the just-queued write> (symbolic until commit)")
 
@@ -928,10 +899,10 @@ def screen_signed_genesis(ui, cl, state):
     is_scripted = isinstance(getattr(ui, "_inner", ui), ScriptedUi)
     scratch_setup_produces = None
     if is_scripted:
-        ui.say("  --scripted witnessing: a scratch GNUPGHOME + fixture passphrase is used "
+        ui.emit(Paragraph("  --scripted witnessing: a scratch GNUPGHOME + fixture passphrase is used "
                "(never the operator's own ~/.gnupg) -- prepared as its own plan entry, at "
                "commit time (FINDING-2 fix: this used to be a real filesystem effect at "
-               "decision time).")
+               "decision time)."))
         name = ui.ask_text("Key Name-Real (scripted/fixture keygen)",
                             default="AUTOHARN SETUP-TUI FIXTURE KEY -- THROWAWAY")
         email = ui.ask_text("Key Name-Email (scripted/fixture keygen)",
@@ -941,7 +912,7 @@ def screen_signed_genesis(ui, cl, state):
                                lesson="a throwaway keyring + fixture passphrase for "
                                       "--scripted witnessing, never the operator's own",
                                act=setup_act, produces=scratch_setup_produces))
-        ui.say(f"  queued: {setup_act.render()}")
+        ui.emit(Paragraph(f"  queued: {setup_act.render()}"))
         act, produces = signed_genesis.keygen_scripted_act(
             signed_genesis.gnupghome_hole(), signed_genesis.batch_path_hole())
         gnupghome = signed_genesis.gnupghome_hole()
@@ -951,20 +922,20 @@ def screen_signed_genesis(ui, cl, state):
         gnupghome_in = ui.ask_text("GNUPGHOME to use for this key (blank = your default "
                                     "~/.gnupg)", default="")
         gnupghome = gnupghome_in or None
-        ui.say("  gpg will now prompt YOU, interactively, for a passphrase (its own pinentry "
-               "prompt -- never captured or scripted by this tool) -- AT COMMIT TIME.")
+        ui.emit(Paragraph("  gpg will now prompt YOU, interactively, for a passphrase (its own pinentry "
+               "prompt -- never captured or scripted by this tool) -- AT COMMIT TIME."))
         act, produces = signed_genesis.keygen_operator_act(name, email, gnupghome)
 
     plan.append(PlanEntry(screen="signed-genesis", item="keypair generated",
                            lesson="ONE fixed shape (ed25519, sign-only, no expiry), no quiz",
                            act=act, produces=produces))
-    ui.say(f"  queued: {act.render()}")
+    ui.emit(Paragraph(f"  queued: {act.render()}"))
 
     gnupghome_display = ("<scratch GNUPGHOME -- path known only at commit>" if is_scripted
                           else (gnupghome or "your default ~/.gnupg"))
-    ui.say(f"  private key custody: {gnupghome_display} -- this tool never reads, copies, or "
+    ui.emit(Paragraph(f"  private key custody: {gnupghome_display} -- this tool never reads, copies, or "
            f"moves it (user-guide/USER-GPG-TRUST-LAYER-FAQ.md §2: print the revocation "
-           f"certificate and store it offline).")
+           f"certificate and store it offline)."))
     cl.add("signed-genesis", "private key custody (facts line, not a file)", ck.WITNESSED,
            gnupghome_display)
 
@@ -973,7 +944,7 @@ def screen_signed_genesis(ui, cl, state):
     plan.append(PlanEntry(screen="signed-genesis", item="fingerprint listed",
                            lesson="the real fingerprint keygen just produced", act=list_act,
                            produces=list_produces))
-    ui.say(f"  queued: {list_act.render()}")
+    ui.emit(Paragraph(f"  queued: {list_act.render()}"))
 
     # --- key lands where the record expects it (spec step 2) -------------------------------
     filename = signed_genesis.key_filename(name)
@@ -982,17 +953,17 @@ def screen_signed_genesis(ui, cl, state):
     plan.append(PlanEntry(screen="signed-genesis", item="public key exported",
                            lesson="exports the real key to armored text", act=export_act,
                            produces=export_produces))
-    ui.say(f"  queued: {export_act.render()}")
+    ui.emit(Paragraph(f"  queued: {export_act.render()}"))
 
     keys_write = signed_genesis.keys_write_act(dest, filename)
     plan.append(PlanEntry(screen="signed-genesis", item="public key written to keys/",
                            lesson=f"discharges keys/{filename}", act=keys_write))
-    ui.say(f"  queued: write {keys_path}")
+    ui.emit(Paragraph(f"  queued: write {keys_path}"))
 
     discharge = signed_genesis.discharge_write_act(dest, filename, name, email)
     plan.append(PlanEntry(screen="signed-genesis", item="keys/README.md AWAITING-KEY discharged",
                            lesson="rewrites keys/README.md's AWAITING-KEY section", act=discharge))
-    ui.say(f"  queued: write {os.path.join(dest, 'keys', 'README.md')}")
+    ui.emit(Paragraph(f"  queued: write {os.path.join(dest, 'keys', 'README.md')}"))
 
     # --- sign the genesis act (spec step 3) -------------------------------------------------
     asc_path = signed_genesis.asc_path_arg(dest, commission_id_arg)
@@ -1001,7 +972,7 @@ def screen_signed_genesis(ui, cl, state):
     plan.append(PlanEntry(screen="signed-genesis", item="genesis commission signed",
                            lesson="detached signature over the designated commission's statement",
                            act=sign_act, produces=sign_produces))
-    ui.say(f"  queued: {sign_act.render()}")
+    ui.emit(Paragraph(f"  queued: {sign_act.render()}"))
 
     # --- the gate verifies, not the keypress (spec step 4) ----------------------------------
     if dry_run:
@@ -1022,17 +993,17 @@ def screen_signed_genesis(ui, cl, state):
                                lesson="requires the VERIFIED verdict before recording WITNESSED "
                                       "(or an explicit --accept-unverified-genesis override)",
                                act=verify_act, produces=verify_produces))
-        ui.say(f"  queued: {verify_act.render()}")
+        ui.emit(Paragraph(f"  queued: {verify_act.render()}"))
         if accept_unverified:
-            ui.say("  --accept-unverified-genesis is set for this run: if the gate below does "
+            ui.emit(Paragraph("  --accept-unverified-genesis is set for this run: if the gate below does "
                    "not confirm VERIFIED, the ceremony will continue anyway -- eyes open, "
-                   "recorded on its own checklist row, never silent.")
+                   "recorded on its own checklist row, never silent."))
 
-    ui.say("  Signed genesis complete for this run: nothing further in this flow, or in the "
+    ui.emit(Paragraph("  Signed genesis complete for this run: nothing further in this flow, or in the "
            "world's ongoing operation, demands another signature (spec §1 item 5) -- "
            "subsequent acts ride the ledger's own append-only record; SIGNED remains available "
            "for later commissions as a deliberate act (user-guide/USER-GPG-TRUST-LAYER-FAQ.md "
-           "§5), never a nag.")
+           "§5), never a nag."))
     cl.add("signed-genesis", "no ongoing signing burden after this screen", ck.WITNESSED,
            "spec §1 item 5 -- checklist-only note, no mechanism added")
     if scratch_setup_produces:
@@ -1056,13 +1027,13 @@ BOUNDARY_PROC_PRODUCES = "boundary-proc"
 
 
 def screen_boundary(ui, cl, state):
-    ui.banner(screen_banner("boundary"))
+    ui.emit(Heading(screen_banner("boundary")))
     _show_facts(ui, "boundary_service")
     if not state.get("birth_ok"):
-        ui.say("  REFUSED: birth did not report success (state['birth_ok'] is not truthy) -- "
+        ui.emit(Note("  REFUSED: birth did not report success (state['birth_ok'] is not truthy) -- "
                "configuring the boundary service for a world that may not exist would be "
                "building on nothing. Go back and get a successful birth first, or explicitly "
-               "override below.")
+               "override below.", tone="refusal"))
         if not ui.confirm("Override and proceed WITHOUT a confirmed successful birth? "
                            "(not recommended)", default=False):
             cl.add("boundary", "boundary", ck.REFUSED, "refused: birth_ok not truthy")
@@ -1082,9 +1053,9 @@ def screen_boundary(ui, cl, state):
                    f"'{dest}' queued earlier in this run -- not independently checkable "
                    f"read-only, recorded honestly rather than faked")
         else:
-            ui.say(f"  REFUSED: destination directory '{dest}' does not exist -- nothing to "
+            ui.emit(Note(f"  REFUSED: destination directory '{dest}' does not exist -- nothing to "
                    f"write the multiplex TOML or deployment.json keys into. Run a birth first "
-                   f"(or check the path), then retry this screen.")
+                   f"(or check the path), then retry this screen.", tone="refusal"))
             cl.add("boundary", "destination exists", ck.REFUSED, f"'{dest}' not a directory")
             return state
     world = state.get("world") or ui.ask_text("World/deployment name")
@@ -1093,7 +1064,7 @@ def screen_boundary(ui, cl, state):
 
     port = probes.free_port()
     boundary_url = f"http://127.0.0.1:{port}"
-    ui.say(f"  picked free port: {port} ({boundary_url})")
+    ui.emit(Paragraph(f"  picked free port: {port} ({boundary_url})"))
 
     toml_path = os.path.join(dest, "boundary-multiplex.toml")
     dep_json_path = os.path.join(dest, "deployment.json")
@@ -1114,9 +1085,9 @@ def screen_boundary(ui, cl, state):
         ("world", world, probes.valid_identifier),
     ):
         if not _checker(_val):
-            ui.say(f"  REFUSED: {_label} '{_val}' fails the interpreter-boundary allowlist -- "
+            ui.emit(Note(f"  REFUSED: {_label} '{_val}' fails the interpreter-boundary allowlist -- "
                    f"refusing to splice it into boundary-multiplex.toml (law/adr/0012's "
-                   f"interpreter-boundary rule). Nothing written.")
+                   f"interpreter-boundary rule). Nothing written.", tone="refusal"))
             cl.add("boundary", "multiplex TOML values validated", ck.REFUSED,
                    f"'{_val}' ({_label}) failed {_checker.__name__}")
             return state
@@ -1129,8 +1100,8 @@ def screen_boundary(ui, cl, state):
         f'pgschema = "{schema}"\n'
         f'pgkern = "{kern}"\n'
     )
-    ui.say(f"  --- queuing write: {toml_path} ---")
-    ui.say("  " + toml_text.replace("\n", "\n  "))
+    ui.emit(Paragraph(f"  --- queuing write: {toml_path} ---"))
+    ui.emit(Paragraph("  " + toml_text.replace("\n", "\n  ")))
     plan = _plan(state)
     plan.append(PlanEntry(screen="boundary", item="multiplex TOML written",
                            lesson="the boundary service's own config file",
@@ -1143,7 +1114,7 @@ def screen_boundary(ui, cl, state):
             "--boundary-url", boundary_url, "--boundary-deployment", world]
     if state.get("governed_patterns"):
         argv += ["--governed", governed_files.governed_flag_value(state["governed_patterns"])]
-    ui.say(f"  $ {' '.join(argv)}")
+    ui.emit(Paragraph(f"  $ {' '.join(argv)}"))
     plan.append(PlanEntry(screen="boundary", item="deployment.json boundary keys written",
                            lesson="classic-mode re-scaffold: rewrites deployment.json + .claude/",
                            act=CommandAct(argv=tuple(argv))))
@@ -1170,11 +1141,11 @@ def screen_boundary(ui, cl, state):
 
     can_start = ui.confirm("Start the boundary service now (this process)?", default=True)
     if can_start:
-        ui.say(f"  interpreter: {interp_reason}")
+        ui.emit(Paragraph(f"  interpreter: {interp_reason}"))
     if can_start and venv_python:
         argv2 = [venv_python, "-m", "serving.boundary_service", "--config", toml_path,
                  "--port", str(port)]
-        ui.say(f"  $ {' '.join(argv2)}   (background)")
+        ui.emit(Paragraph(f"  $ {' '.join(argv2)}   (background)"))
         plan.append(PlanEntry(screen="boundary", item="service started",
                                lesson="starts the boundary service, this process's own child",
                                act=BackgroundAct(argv=tuple(argv2), cwd=str(REPO_ROOT)),
@@ -1185,8 +1156,8 @@ def screen_boundary(ui, cl, state):
         if can_start and not venv_python:
             # ADR-0002 rung 4: the operator answered yes, the auto-start could not proceed, and
             # here is the concrete, named reason -- never a silent downgrade to the block below.
-            ui.say(f"  REFUSED auto-start: operator answered yes, but {interp_reason} -- "
-                   f"falling back to the manual/systemd instructions below.")
+            ui.emit(Note(f"  REFUSED auto-start: operator answered yes, but {interp_reason} -- "
+                   f"falling back to the manual/systemd instructions below.", tone="refusal"))
             cl.add("boundary", "service auto-start", ck.REFUSED, interp_reason)
         unit_text = (
             f"[Unit]\nDescription=autoharn boundary service ({world})\n\n"
@@ -1194,9 +1165,9 @@ def screen_boundary(ui, cl, state):
             f"--config {toml_path}\nWorkingDirectory={REPO_ROOT}\nRestart=on-failure\n\n"
             f"[Install]\nWantedBy=multi-user.target\n"
         )
-        ui.say("  --- PREPARED: systemd unit text (operator installs/starts) ---")
-        ui.say("  " + unit_text.replace("\n", "\n  "))
-        ui.say("  --- end ---")
+        ui.emit(Paragraph("  --- PREPARED: systemd unit text (operator installs/starts) ---"))
+        ui.emit(Paragraph("  " + unit_text.replace("\n", "\n  ")))
+        ui.emit(Paragraph("  --- end ---"))
         # CHECKLIST-SPLIT-SPEC ADDITION (§3): the boundary service becomes a `DaemonSelection`
         # ONLY on this (non-auto-start) leg -- the maintainer's g.1 commission and the field
         # observation ("had to manually start boundary-multiplex") that motivated the daemon
@@ -1218,9 +1189,9 @@ def screen_boundary(ui, cl, state):
             health_probe=f"http:{boundary_url}/d/{world}/health",
             prerequisite=(venv_python or preferred_python),
         ))
-        ui.say(f"  ({os.path.join(dest, 'start-daemons')} also starts this daemon once "
+        ui.emit(Paragraph(f"  ({os.path.join(dest, 'start-daemons')} also starts this daemon once "
                f"committed, and refuses loudly, naming it, if the interpreter above turns out "
-               f"not to exist on whatever machine runs it)")
+               f"not to exist on whatever machine runs it)"))
         # STATUS-SPLIT (design/FABLE-SETUP-TUI-CHECKLIST-SPLIT-SPEC.md §2): ck.INSTRUCTED, not
         # ck.PREPARED -- unit TEXT is shown; nothing about the world's state (the unit
         # installed, the service running) is confirmed. The narrowed PREPARED does not apply.
@@ -1229,8 +1200,8 @@ def screen_boundary(ui, cl, state):
         def _verify_boundary_started() -> None:
             ui.pause("Start the service by hand, then press enter to probe: ")
             ok_h, status_h, body_h = probes.http_get_json(f"{boundary_url}/d/{world}/health")
-            ui.say(f"  /health probe: {'GREEN' if ok_h else 'RED'} status={status_h} "
-                   f"body={body_h}")
+            ui.emit(Paragraph(f"  /health probe: {'GREEN' if ok_h else 'RED'} status={status_h} "
+                   f"body={body_h}"))
             cl.add("boundary", "/health probe (post-keypress)", ck.WITNESSED,
                    f"status={status_h} ok={ok_h}")
 
@@ -1262,7 +1233,7 @@ def screen_boundary(ui, cl, state):
 # ---------------------------------------------------------------------------------------------
 
 def screen_observability(ui, cl, state):
-    ui.banner(screen_banner("observability"))
+    ui.emit(Heading(screen_banner("observability")))
     _show_facts(ui, "observability_otelcol", "observability_watchdog")
     if not ui.confirm("Configure observability now?", default=True):
         cl.add("observability", "observability", ck.SKIPPED, skip_detail("observability"))
@@ -1276,8 +1247,8 @@ def screen_observability(ui, cl, state):
         export_path = os.path.join(dest, "otel-data", "claude-events.jsonl")
         config_path = os.path.join(dest, "otelcol-config.yaml")
         config_content = daemon_scaffold.otelcol_config_content(export_path)
-        ui.say(f"  --- queuing write: {config_path} ---")
-        ui.say("  " + config_content.replace("\n", "\n  "))
+        ui.emit(Paragraph(f"  --- queuing write: {config_path} ---"))
+        ui.emit(Paragraph("  " + config_content.replace("\n", "\n  ")))
         plan.append(PlanEntry(
             screen="observability", item="otelcol-config.yaml written",
             lesson="otelcol's own config file -- the prerequisite the start line references "
@@ -1295,8 +1266,8 @@ def screen_observability(ui, cl, state):
             prerequisite=(otelcol_bin or
                           "otelcol-contrib (not found on PATH at selection time)"),
         ))
-        ui.say(f"  queued daemon: {' '.join(argv)}   (started via <dest>/start-daemons at "
-               f"commit; verified at end-of-run)")
+        ui.emit(Paragraph(f"  queued daemon: {' '.join(argv)}   (started via <dest>/start-daemons at "
+               f"commit; verified at end-of-run)"))
         cl.add("observability", "otelcol selected", ck.INSTRUCTED,
                f"argv={' '.join(argv)}; config queued: {config_path}")
     else:
@@ -1313,17 +1284,17 @@ def screen_observability(ui, cl, state):
             health_probe=f"pidof:{watch_bin}",
             prerequisite=(watch_bin if os.path.isfile(watch_bin) else None),
         ))
-        ui.say(f"  queued daemon: {' '.join(argv)}   (started via <dest>/start-daemons at "
-               f"commit; verified at end-of-run)")
+        ui.emit(Paragraph(f"  queued daemon: {' '.join(argv)}   (started via <dest>/start-daemons at "
+               f"commit; verified at end-of-run)"))
         cl.add("observability", "otel-watch selected", ck.INSTRUCTED, f"argv={' '.join(argv)}")
     else:
         cl.add("observability", "otel-watch selected", ck.SKIPPED, "operator declined")
 
     claude_line = f"cd {dest} && claude"
-    ui.say("  --- INSTRUCTED: Claude launch line ---")
-    ui.say(f"  {claude_line}")
-    ui.say("  what you should see: CLAUDE.md's governance preamble auto-loads (no paste needed)")
-    ui.say("  --- end ---")
+    ui.emit(Paragraph("  --- INSTRUCTED: Claude launch line ---"))
+    ui.emit(Paragraph(f"  {claude_line}"))
+    ui.emit(Paragraph("  what you should see: CLAUDE.md's governance preamble auto-loads (no paste needed)"))
+    ui.emit(Paragraph("  --- end ---"))
     cl.add("observability", "claude launch line", ck.INSTRUCTED, claude_line)
     return state
 
@@ -1340,7 +1311,7 @@ def _decision_act(led: str, statement: str) -> tuple[CommandAct, str]:
 
 
 def screen_hydration(ui, cl, state):
-    ui.banner(screen_banner("hydration"))
+    ui.emit(Heading(screen_banner("hydration")))
     if not ui.confirm("Run hydration now?", default=True):
         cl.add("hydration", "hydration", ck.SKIPPED, skip_detail("hydration"))
         return state
@@ -1353,8 +1324,8 @@ def screen_hydration(ui, cl, state):
                    f"'{led}' queued earlier in this run (written by birth) -- not "
                    f"independently checkable read-only, recorded honestly rather than faked")
         else:
-            ui.say(f"  REFUSED: no ./led at {led} -- hydration writes only through led (v1 "
-                   f"boundary), and none was found.")
+            ui.emit(Note(f"  REFUSED: no ./led at {led} -- hydration writes only through led (v1 "
+                   f"boundary), and none was found.", tone="refusal"))
             cl.add("hydration", "led present", ck.WITNESSED, f"RED: {led} not found")
             return state
 
@@ -1365,27 +1336,27 @@ def screen_hydration(ui, cl, state):
     if not ui.confirm("Hydrate: fork provenance?", default=False):
         cl.add("hydration", "fork provenance", ck.SKIPPED, "operator declined")
     else:
-        ui.say(f"  high-assurance act -- see {dest}/roles/README.md and, in the autoharn "
+        ui.emit(Paragraph(f"  high-assurance act -- see {dest}/roles/README.md and, in the autoharn "
                f"checkout this world was scaffolded from, user-guide/USER-GPG-TRUST-LAYER-FAQ.md "
-               f"/ design/MAINT-GPG-TRUST-LAYER.md.")
+               f"/ design/MAINT-GPG-TRUST-LAYER.md."))
         statement = ui.ask_text("Statement for 'fork provenance' decision row")
         act, produces = _decision_act(led, statement)
         plan.append(PlanEntry(screen="hydration", item="fork provenance",
                                lesson="a real led decision row", act=act, produces=produces))
-        ui.say(f"  queued: {act.render()}")
+        ui.emit(Paragraph(f"  queued: {act.render()}"))
 
     _show_facts(ui, "hydration_role_charters")
     if not ui.confirm("Hydrate: role charters to register?", default=False):
         cl.add("hydration", "role charters to register", ck.SKIPPED, "operator declined")
     else:
-        ui.say(f"  high-assurance act -- see {dest}/roles/README.md and, in the autoharn "
+        ui.emit(Paragraph(f"  high-assurance act -- see {dest}/roles/README.md and, in the autoharn "
                f"checkout this world was scaffolded from, user-guide/USER-GPG-TRUST-LAYER-FAQ.md "
-               f"/ design/MAINT-GPG-TRUST-LAYER.md.")
+               f"/ design/MAINT-GPG-TRUST-LAYER.md."))
         role = ui.ask_text("Role to charter (must already be a registered led principal)")
         path = ui.ask_text("Charter file path")
         argv = ("python3", str(REPO_ROOT / "tools" / "role_charter.py"), "register",
                 role, path, "--led", led)
-        ui.say(f"  $ {' '.join(argv)}")
+        ui.emit(Paragraph(f"  $ {' '.join(argv)}"))
         plan.append(PlanEntry(screen="hydration", item="role charters to register",
                                lesson="binds a role's charter text via role_charter.py",
                                act=CommandAct(argv=argv)))
@@ -1399,12 +1370,12 @@ def screen_hydration(ui, cl, state):
         plan.append(PlanEntry(screen="hydration", item=decision.slug,
                                lesson="a curated durable-decision row + CLAUDE.md fragment",
                                act=act, produces=produces))
-        ui.say(f"  queued: {act.render()}")
+        ui.emit(Paragraph(f"  queued: {act.render()}"))
         selected_fragments.append(decision.claude_md)
 
     _show_facts(ui, "hydration_adr_adoption")
     adrs = durable_decisions.list_adrs()
-    ui.say(f"  {len(adrs)} ADR(s) found under law/adr/ -- offering each individually:")
+    ui.emit(Paragraph(f"  {len(adrs)} ADR(s) found under law/adr/ -- offering each individually:"))
     for number, title, relpath in adrs:
         label = f"ADR-{number}: {title}"
         if not ui.confirm(f"Adopt {label}?", default=False):
@@ -1415,7 +1386,7 @@ def screen_hydration(ui, cl, state):
         plan.append(PlanEntry(screen="hydration", item=f"adr adoption ({label})",
                                lesson="a real led decision row adopting this ADR", act=act,
                                produces=produces))
-        ui.say(f"  queued: {act.render()}")
+        ui.emit(Paragraph(f"  queued: {act.render()}"))
         selected_fragments.append(durable_decisions.adr_claude_md_fragment(number, title, relpath))
 
     claude_write = durable_decisions.hydration_claude_md_write_act(
@@ -1423,8 +1394,8 @@ def screen_hydration(ui, cl, state):
     plan.append(PlanEntry(screen="hydration", item="CLAUDE.md durable-decisions section compiled",
                            lesson=f"{len(selected_fragments)} fragment(s) compiled between markers",
                            act=claude_write))
-    ui.say(f"  queued: write {os.path.join(dest, 'CLAUDE.md')} "
-           f"({len(selected_fragments)} fragment(s))")
+    ui.emit(Paragraph(f"  queued: write {os.path.join(dest, 'CLAUDE.md')} "
+           f"({len(selected_fragments)} fragment(s))"))
     return state
 
 
@@ -1469,11 +1440,11 @@ def _dispatch_result(ui, cl, state, index: int, entry: PlanEntry, result, proc=N
                 opening = next((i for i in range(marker_idx - 1, max(-1, marker_idx - 8), -1)
                                  if "To SIGN this run's commission" in out_lines[i]), None)
                 start = opening if opening is not None else max(0, marker_idx - 4)
-                ui.say("")
-                ui.say("  --- maintainer copy-paste signing line (from the birth output above) ---")
+                ui.emit(Rule())
+                ui.emit(Paragraph("  --- maintainer copy-paste signing line (from the birth output above) ---"))
                 for ln in out_lines[start:marker_idx + 1]:
-                    ui.say(f"  {ln.strip()}")
-                ui.say("  --- end ---")
+                    ui.emit(Paragraph(f"  {ln.strip()}"))
+                ui.emit(Paragraph("  --- end ---"))
         return
 
     if entry.screen == "signed-genesis" and entry.item == "ceremony gate (verify-commission)":
@@ -1485,13 +1456,13 @@ def _dispatch_result(ui, cl, state, index: int, entry: PlanEntry, result, proc=N
         # signed_genesis.verify_commission_act's).
         body = signed_genesis.parse_verify_body(result.detail)
         verdict = body.get("verdict") or body.get("refusal") or "(no verdict parsed)"
-        ui.say(f"  verify-commission verdict: {verdict}")
+        ui.emit(Paragraph(f"  verify-commission verdict: {verdict}"))
         if body.get("verdict") == "VERIFIED":
             cl.add(entry.screen, entry.item, ck.WITNESSED, f"VERIFIED: {str(body.get('detail', ''))[:200]}")
             return
-        ui.say(f"  REFUSED to record the ceremony WITNESSED -- the gate's own verdict was not "
+        ui.emit(Note(f"  REFUSED to record the ceremony WITNESSED -- the gate's own verdict was not "
                f"VERIFIED ({verdict}); this renders the verb's own teaching honestly rather than "
-               f"shortcutting the gate.")
+               f"shortcutting the gate.", tone="refusal"))
         cl.add(entry.screen, entry.item, ck.REFUSED,
                f"NOT VERIFIED ({verdict}) -- override exercised, continuing (see the override "
                f"row below)" if result.ok else
@@ -1501,35 +1472,18 @@ def _dispatch_result(ui, cl, state, index: int, entry: PlanEntry, result, proc=N
             # verdict when --accept-unverified-genesis was given (signed_genesis.py's own
             # docstring) -- this branch IS the override path; record it as its own, separate,
             # eyes-open row (the commission's own "PLUS an explicit checklist row").
-            ui.say("  --accept-unverified-genesis was given: continuing DESPITE this unverified "
+            ui.emit(Paragraph("  --accept-unverified-genesis was given: continuing DESPITE this unverified "
                    "genesis signature -- eyes open, on the record below. This world's audit "
                    "chain will anchor to a signature that did not verify; that is a deliberate "
-                   "choice made for this run, not a bug.")
+                   "choice made for this run, not a bug."))
             cl.add(entry.screen, "verify-commission override exercised", ck.WITNESSED,
                    f"--accept-unverified-genesis: proceeded past verdict={verdict}")
             return
         # No override: this is the hard stop (result.ok is False, so commit_executor.execute()
         # halts after this on_result call returns -- the plan entries after this one never run).
-        ui.say("")
-        ui.say("  GENESIS-GATE HARD STOP -- the ceremony did not verify, and the commit is "
-               "halting HERE (nothing after this step ran).")
-        ui.say("  WHAT FAILED: verify-commission could not confirm the genesis commission's gpg "
-               "signature against the keys this world trusts (this destination's keys/).")
-        ui.say("  WHY IT MATTERS: this signature is what every later record in this world's "
-               "ledger anchors its provenance to -- a world born on an unverifiable genesis has "
-               "a permanently unverifiable audit chain (AUTOHARN_BACKFLOW.md finding 1's class).")
-        ui.say("  WHAT TO CHECK: the fingerprint pinned in keys/ (see keys/README.md) matches "
-               "the key that actually signed; the GNUPGHOME/keyring used to sign is the same one "
-               "whose public half was exported; the .asc signature file was not corrupted or "
-               "hand-edited.")
-        ui.say("  HOW TO RESUME: fix the keyring/keys/ mismatch, then re-run this tool against "
-               "the SAME destination -- the commit journal resumes at this exact still-PENDING "
-               "step (WPC4). If the real defect is that the WRONG KEY signed (not a keyring-side "
-               "fix), resuming will not repair it: the sign step already ran and is journaled "
-               "DONE, so a resumed run never re-signs -- re-sign and re-verify by hand (gpg + "
-               "<dest>/verify-commission), or start a fresh birth.")
-        ui.say("  OVERRIDE: re-run with --accept-unverified-genesis to proceed anyway, eyes "
-               "open -- the override is recorded as its own checklist row, never silent.")
+        ui.emit(Rule())
+        for text in SD.GENESIS_GATE_HARD_STOP_TEACHING:
+            ui.emit(Paragraph(text))
         return
 
     if entry.screen == "boundary" and entry.item == "service started":
@@ -1541,10 +1495,10 @@ def _dispatch_result(ui, cl, state, index: int, entry: PlanEntry, result, proc=N
             world = state.get("boundary_world", "?")
             boundary_url = state.get("boundary_url", "")
             ok_h, status_h, body_h = probes.http_get_json(f"{boundary_url}/d/{world}/health")
-            ui.say(f"  /health probe: {'GREEN' if ok_h else 'RED'} status={status_h} body={body_h}")
+            ui.emit(Paragraph(f"  /health probe: {'GREEN' if ok_h else 'RED'} status={status_h} body={body_h}"))
             cl.add("boundary", "/health probe", ck.WITNESSED, f"status={status_h} ok={ok_h}")
             ok_m, status_m, body_m = probes.http_get_json(f"{boundary_url}/d/{world}/meta")
-            ui.say(f"  /meta probe: {'GREEN' if ok_m else 'RED'} status={status_m} body={body_m}")
+            ui.emit(Paragraph(f"  /meta probe: {'GREEN' if ok_m else 'RED'} status={status_m} body={body_m}"))
             cl.add("boundary", "/meta probe", ck.WITNESSED, f"status={status_m} ok={ok_m}")
         return
 
@@ -1555,9 +1509,9 @@ def _dispatch_result(ui, cl, state, index: int, entry: PlanEntry, result, proc=N
 def _execute_commit(ui, cl, state) -> None:
     plan = _plan(state)
     dry_run = state.get("dry_run", False)
-    ui.say("")
-    ui.say(plan.render())
-    ui.say("")
+    ui.emit(Rule())
+    ui.emit(Paragraph(plan.render()))
+    ui.emit(Rule())
 
     if dry_run:
         for entry in plan.entries:
@@ -1578,7 +1532,7 @@ def _execute_commit(ui, cl, state) -> None:
         return
 
     if not plan.entries and not plan.daemons:
-        ui.say("  nothing queued -- no commit needed.")
+        ui.emit(Paragraph("  nothing queued -- no commit needed."))
         return
 
     # commit_executor.execute() synthesizes TWO entries when plan.daemons is non-empty (the
@@ -1595,8 +1549,8 @@ def _execute_commit(ui, cl, state) -> None:
 
     dest = state.get("dest")
     if not dest:
-        ui.say("  REFUSED: no destination directory known -- cannot commit (the commit journal "
-               "lives in the destination).")
+        ui.emit(Note("  REFUSED: no destination directory known -- cannot commit (the commit journal "
+               "lives in the destination).", tone="refusal"))
         for entry in plan.entries:
             cl.add(entry.screen, entry.item, ck.REFUSED, "no destination directory")
         if plan.daemons:
@@ -1604,9 +1558,9 @@ def _execute_commit(ui, cl, state) -> None:
         return
 
     def _on_step(i: int, entry: PlanEntry) -> None:
-        ui.say(f"  [{i + 1}/{total_entries}] {entry.screen}: {entry.item}")
-        ui.say(f"    {entry.lesson}")
-        ui.say(f"    $ {entry.act.render()}")
+        ui.emit(Paragraph(f"  [{i + 1}/{total_entries}] {entry.screen}: {entry.item}"))
+        ui.emit(Paragraph(f"    {entry.lesson}"))
+        ui.emit(Paragraph(f"    $ {entry.act.render()}"))
 
     def _on_result(i: int, entry: PlanEntry, result, proc=None) -> None:
         _dispatch_result(ui, cl, state, i, entry, result, proc)
@@ -1627,11 +1581,11 @@ def _execute_commit(ui, cl, state) -> None:
     # labor as every other `_dispatch_result` translation above.
     for v in result.daemon_verifications:
         if v.up:
-            ui.say(f"  {v.daemon.name}: VERIFIED-UP -- {v.detail}")
+            ui.emit(Paragraph(f"  {v.daemon.name}: VERIFIED-UP -- {v.detail}"))
             cl.add(CE.DAEMON_SCREEN, f"{v.daemon.name} verified up", ck.VERIFIED_UP, v.detail)
         else:
-            ui.say(f"  {v.daemon.name}: NOT-UP -- {v.detail} (selected, attempted, not "
-                   f"observably up -- never silence)")
+            ui.emit(Paragraph(f"  {v.daemon.name}: NOT-UP -- {v.detail} (selected, attempted, not "
+                   f"observably up -- never silence)"))
             cl.add(CE.DAEMON_SCREEN, f"{v.daemon.name} verified up", ck.NOT_UP, v.detail)
 
     if not result.completed:
@@ -1642,10 +1596,10 @@ def _execute_commit(ui, cl, state) -> None:
         # only the process exit code, a hazard this fix closes for the whole class, not only the
         # genesis-gate instance that surfaced it.
         state["commit_halted"] = True
-        ui.say("")
-        ui.say("  COMMIT HALTED -- the journal names the next PENDING step; re-run this tool "
+        ui.emit(Rule())
+        ui.emit(Paragraph("  COMMIT HALTED -- the journal names the next PENDING step; re-run this tool "
                "(or --start-at checklist against the same destination) to resume, or finish by "
-               "hand from the output above.")
+               "hand from the output above."))
 
 
 def _teardown_scratch_gnupghomes(state) -> None:
@@ -1667,10 +1621,12 @@ def _teardown_scratch_gnupghomes(state) -> None:
 
 
 def screen_checklist(ui, cl, state):
-    ui.banner(screen_banner("checklist"))
+    ui.emit(Heading(screen_banner("checklist")))
     _execute_commit(ui, cl, state)
     _teardown_scratch_gnupghomes(state)
-    ui.say(cl.render())
+    ui.emit(Table(headers=("SCREEN", "ITEM", "STATUS", "DETAIL"),
+                  rows=tuple((it.screen, it.item, it.status, it.detail) for it in cl.items)))
+    ui.emit(Paragraph(f"totals: {cl.summary_line()}"))
     dry_run = state.get("dry_run", False)
     dest = state.get("dest")
     dest_reachable = bool(dest) and (
@@ -1678,10 +1634,10 @@ def screen_checklist(ui, cl, state):
     if dest_reachable and ui.confirm("Save this checklist into the new world?", default=True):
         path = cl.save(dest, dry_run=dry_run)
         if dry_run:
-            ui.say(f"  would save: {path}")
+            ui.emit(Paragraph(f"  would save: {path}"))
             cl.add("checklist", "checklist saved", ck.WOULD_DO, path)
         else:
-            ui.say(f"  saved: {path}")
+            ui.emit(Paragraph(f"  saved: {path}"))
             cl.add("checklist", "checklist saved", ck.WITNESSED, path)
     else:
         cl.add("checklist", "checklist saved", ck.SKIPPED,

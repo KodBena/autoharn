@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-21T22:35:44Z
-#   last-change: 2026-07-21T22:37:28Z
-#   contributors: 43f77bff/main
+#   last-change: 2026-07-22T00:26:44Z
+#   contributors: 43f77bff/main, 1fa3ab69/main
 # <<< PROVENANCE-STAMP <<<
 
 """seen-red/setup-tui-daemon-selection/run_fixtures.py -- both-polarity witness set for
@@ -65,6 +65,7 @@ sys.path.insert(0, REPO)
 from tools.setup_tui import checklist as ck  # noqa: E402
 from tools.setup_tui import commit_executor as CE  # noqa: E402
 from tools.setup_tui import screens  # noqa: E402
+from tools.setup_tui.elements import render_text  # noqa: E402
 from tools.setup_tui.plan import DaemonSelection, Plan  # noqa: E402
 from tools.setup_tui.ui import ScriptedUi  # noqa: E402
 
@@ -86,6 +87,14 @@ def check(cond: bool, msg: str) -> None:
 
 
 class RecordingScriptedUi(ScriptedUi):
+    """Drives BOTH a pinned pre-fix `screens.py` (`PRE_FIX_COMMIT`, still calling the OLD
+    `say`/`banner` shape) AND the current, `emit`-based one -- this fixture's own pre/post
+    comparison needs a single driver both eras of the module can call, so `say`/`banner` stay
+    here as a compatibility RECORDING shim for the pinned historical module (never reintroduced
+    into the live `Ui` class itself -- design/FABLE-SETUP-TUI-TYPED-UI-SPEC.md §1's own "no
+    compatibility shim" is about the PRODUCTION seam, not a fixture replaying old code on
+    purpose)."""
+
     def __init__(self, answers_path: str) -> None:
         super().__init__(answers_path)
         self.transcript: list[str] = []
@@ -95,6 +104,9 @@ class RecordingScriptedUi(ScriptedUi):
 
     def banner(self, text: str) -> None:
         self.transcript.append(text)
+
+    def emit(self, element) -> None:
+        self.transcript.extend(render_text(element))
 
 
 def _seed_dest() -> str:

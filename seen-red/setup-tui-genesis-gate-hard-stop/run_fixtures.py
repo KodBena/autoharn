@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-21T23:52:35Z
-#   last-change: 2026-07-21T23:52:35Z
+#   last-change: 2026-07-22T00:26:12Z
 #   contributors: 1fa3ab69/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -61,6 +61,7 @@ from tools.setup_tui import app as APP  # noqa: E402 -- the CURRENT, fixed app.p
 from tools.setup_tui import checklist as CK  # noqa: E402
 from tools.setup_tui import commit_executor as CE  # noqa: E402 -- the CURRENT, fixed module
 from tools.setup_tui import plan as P  # noqa: E402
+from tools.setup_tui.elements import render_text  # noqa: E402
 from tools.setup_tui import screens as SCREENS  # noqa: E402 -- the CURRENT, fixed module
 from tools.setup_tui import signed_genesis as SG  # noqa: E402
 
@@ -170,8 +171,8 @@ def case_green_post_fix_stops(scratch: str) -> None:
         def __init__(self) -> None:
             self.lines: list[str] = []
 
-        def say(self, text: str = "") -> None:
-            self.lines.append(text)
+        def emit(self, element) -> None:
+            self.lines.extend(render_text(element))
 
     ui = _RecordingUi()
     cl = CK.Checklist()
@@ -211,16 +212,22 @@ def case_green_override_continues_and_records(scratch: str) -> None:
         def __init__(self) -> None:
             self.lines: list[str] = []
 
-        def say(self, text: str = "") -> None:
-            self.lines.append(text)
+        def emit(self, element) -> None:
+            self.lines.extend(render_text(element))
 
     ui = _RecordingUi()
     cl = CK.Checklist()
     entry = plan.entries[0]
     SCREENS._dispatch_result(ui, cl, {"accept_unverified_genesis": True}, 0, entry, verify_result)
     transcript = "\n".join(ui.lines)
+    # Space-joined, not newline-joined: this phrase is long enough that `elements.render_text`
+    # (design/FABLE-SETUP-TUI-TYPED-UI-SPEC.md §2's 78-column measure) wraps it across two
+    # printed lines -- the CONTENT is unchanged, only its line breaks, so this check reads the
+    # same words with wrap boundaries collapsed back to spaces rather than asserting on exactly
+    # where the renderer chose to break the line.
+    flat = " ".join(" ".join(ui.lines).split())
     check("GREEN: override -- transcript names the eyes-open continuation",
-          "DESPITE this unverified genesis signature" in transcript, transcript[:400])
+          "DESPITE this unverified genesis signature" in flat, flat[:400])
     override_rows = [it for it in cl.items if it.item == "verify-commission override exercised"]
     check("GREEN: override -- an EXPLICIT, separate checklist row records the override "
           "(the eyes-open record the commission asks for), status WITNESSED",

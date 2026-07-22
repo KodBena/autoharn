@@ -14,7 +14,7 @@ ARCHITECTURE (spec §2, this module's implementation of it).
   1. The imperative screen loop survives unchanged. `app.py` still calls
      `screens.SCREENS`' eleven `screen_*(ui, cl, state)` functions in order, in exactly the same
      shape `InteractiveUi`/`ScriptedUi` already drive -- screens never learn textual exists, they
-     keep calling `banner`/`say`/`ask_text`/`ask_choice`/`confirm`/`pause`/`suspend`. The only
+     keep calling `emit`/`ask_text`/`ask_choice`/`confirm`/`pause`/`suspend`. The only
      difference under this backend: that loop runs inside a Textual WORKER THREAD
      (`App.run_worker(..., thread=True)`) while `SetupWizardApp` itself renders on the main
      thread's asyncio loop. Every `Ui` method below blocks the CALLING (worker) thread until the
@@ -70,10 +70,12 @@ ARCHITECTURE (spec §2, this module's implementation of it).
   5. Transcript parity (spec §3, WX2): the `$ `-prefixed argv lines `runner.py`'s `run_command`/
      `start_background` print are completely untouched by this module -- they still call the bare
      `print()` builtin, which the capture pipeline above relays byte-for-byte into the transcript
-     `RichLog`. `TextualUi`'s own `say`/`banner` methods also just call `print(...)` (the exact
-     same text `InteractiveUi.say`/`Ui.banner` would produce, since `TextualUi` does not override
-     them) so the transcript's non-prompt content is text-identical to the plain backend's for the
-     same journey; only the `ask_*`/`confirm`/`pause` methods differ, and each of those still
+     `RichLog`. `TextualUi.emit` (design/FABLE-SETUP-TUI-TYPED-UI-SPEC.md) prints the SAME
+     `elements.render_text(element)` lines the plain backend's `Ui.emit` would produce for the
+     identical element (the one exception, a refusal `Note`, still carries the identical lines,
+     styled directly rather than printed -- see `emit`'s own docstring) so the transcript's
+     non-prompt content is text-identical to the plain backend's for the same journey; only the
+     `ask_*`/`confirm`/`pause` methods differ, and each of those still
      prints its own one-line "prompt: answer" record into the transcript (the same paper-trail
      discipline `ScriptedUi` already keeps) so nothing the operator was asked, or answered, is
      lost once the docked prompt widget moves on to the next question.
@@ -100,6 +102,7 @@ from typing import Any
 
 import textual
 import textual.events
+from rich.text import Text
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
@@ -116,6 +119,7 @@ from textual.widgets import (
 from textual.widgets.option_list import Option
 
 from tools.setup_tui import checklist as ck
+from tools.setup_tui.elements import Heading, Note, render_text
 from tools.setup_tui.screens import SCREEN_NUMBER, SCREEN_TITLES, SCREEN_TOTAL, SCREENS, screen_banner
 from tools.setup_tui.ui import Ui
 
@@ -427,6 +431,22 @@ class SetupWizardApp(App):
                 log.write(line)
                 self.transcript_log.append(line)
 
+    def write_transcript_styled(self, lines: list[str], style: str) -> None:
+        """The one styling seam beyond plain print-capture (design/FABLE-SETUP-TUI-TYPED-UI-SPEC.md
+        §2: "the Textual renderer may style beyond the canonical text form but never add or drop
+        content relative to it") -- called ONLY for `Note(tone="refusal")` (`TextualUi.emit`
+        below), never for anything the plain backend would also print, so the CONTENT (the exact
+        `lines` `elements.render_text` produced) is identical either way; only the RichLog's own
+        rendering of it differs (a styled `rich.text.Text` object here vs. a captured, unstyled
+        `print()` line elsewhere). Runs on the App's own thread (`_call_from_thread_safe`, same as
+        every other widget mutation in this module) -- writes bypass `begin_capture_print`
+        entirely, so `transcript_log` (the plain-text record every parity check reads) is appended
+        to directly here, exactly as `on_print` does for a captured line."""
+        log = self.query_one("#transcript", RichLog)
+        for line in lines:
+            log.write(Text(line, style=style))
+            self.transcript_log.append(line)
+
     def on_unmount(self) -> None:
         # A final, newline-less fragment (a print with no trailing "\n" that nothing after it
         # ever completed) would otherwise never reach the transcript at all -- flush it once,
@@ -611,17 +631,28 @@ class TextualUi(Ui):
     def __init__(self, app: SetupWizardApp) -> None:
         self._app = app
 
-    def banner(self, text: str) -> None:
-        # Same visible text a plain-backend transcript would show (parity, module docstring
-        # point 5) -- the App also uses this exact string to drive the sidebar/header ordinal.
-        print()
-        print("=" * 78)
-        print(text)
-        print("=" * 78)
-        _call_from_thread_safe(self._app, self._app.note_banner, text)
-
-    def say(self, text: str = "") -> None:
-        print(text)
+    def emit(self, element: object) -> None:
+        """Text parity by construction (design/FABLE-SETUP-TUI-TYPED-UI-SPEC.md §2): every
+        element's `render_text` lines print exactly as the plain backend's `Ui.emit` would (the
+        capture pipeline relays them into the transcript byte-for-byte, module docstring
+        architecture point 2) -- this override ADDS two backend-only behaviors, never changes
+        the text: a `Heading` also drives the sidebar/header ordinal (`note_banner`, same string
+        the old `banner()` used to), and a refusal `Note` renders with loud style DIRECTLY in the
+        transcript (`write_transcript_styled`) instead of a plain print -- still the identical
+        `lines`, so `transcript_log`'s content is the same either way, only the RichLog's visual
+        rendering of a refusal differs from every other line."""
+        lines = render_text(element)
+        if isinstance(element, Note) and element.tone == "refusal":
+            _call_from_thread_safe(self._app, self._app.write_transcript_styled, lines, "bold red")
+        elif lines:
+            # ONE print() call for the whole element, not one per line (module docstring
+            # architecture point 2's own print-capture pipeline posts one `events.Print` message
+            # PER CALL, marshaled onto the App's asyncio loop -- a multi-line element split into
+            # N separate print() calls is N queued messages instead of one; see this build's F4
+            # diagnostic leg report for the reproduction this fixes).
+            print("\n".join(lines))
+        if isinstance(element, Heading):
+            _call_from_thread_safe(self._app, self._app.note_banner, element.text)
 
     def ask_text(self, prompt: str, default: str | None = None) -> str:
         answer = _Answer()

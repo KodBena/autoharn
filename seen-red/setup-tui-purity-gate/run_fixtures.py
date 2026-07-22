@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-19T20:11:03Z
-#   last-change: 2026-07-19T20:11:03Z
-#   contributors: ab5d5bab/main
+#   last-change: 2026-07-22T00:25:06Z
+#   contributors: ab5d5bab/main, 1fa3ab69/main
 # <<< PROVENANCE-STAMP <<<
 
 """seen-red/setup-tui-purity-gate/run_fixtures.py -- both-polarity proof of
@@ -231,12 +231,65 @@ def case_5_extra_effects_exemption_table_driven() -> None:
           len(v_screens) == 1, v_screens)
 
 
+# DETECTION 3 (design/FABLE-SETUP-TUI-TYPED-UI-SPEC.md §1's closure statement): the planted-
+# violation negative control the spec's own build requires -- "an unknown element type passed to
+# emit raises a typed error (negative control: the fixture proves it)... the purity-gate print/say
+# check goes red on a planted violation".
+SYNTH_BARE_PRINT_IN_FUNCTION = """
+def screen_boundary(ui, cl, state):
+    print("this should have been ui.emit(...)")
+    return state
+"""
+
+SYNTH_DOT_SAY_IN_FUNCTION = """
+def screen_boundary(ui, cl, state):
+    ui.say("a reintroduced compatibility shim call, still caught")
+    return state
+"""
+
+SYNTH_PRINT_IN_UI_MODULE = """
+def emit(self, element):
+    print("this is the rendering seam itself -- exempt")
+"""
+
+
+def case_6_print_say_negative_self_check() -> None:
+    print("case 6: RED -- DETECTION 3's negative self-check (the print(/.say( planted violation)")
+
+    tree_a = ast.parse(SYNTH_BARE_PRINT_IN_FUNCTION, filename="screens.py")
+    v_a = G.check_print_say(tree_a, "screens.py")
+    check("6a: a bare print(...) inside an ordinary function of a synthetic 'screens.py' IS "
+          "caught (the planted violation)", len(v_a) == 1 and "screen_boundary" in v_a[0], v_a)
+
+    tree_b = ast.parse(SYNTH_DOT_SAY_IN_FUNCTION, filename="screens.py")
+    v_b = G.check_print_say(tree_b, "screens.py")
+    check("6b: a reintroduced ui.say(...) shape IS caught (the old, removed Ui.say -- still "
+          "detected, spec §1: no compatibility shim)",
+          len(v_b) == 1 and "screen_boundary" in v_b[0], v_b)
+
+    tree_c = ast.parse(SYNTH_PRINT_IN_UI_MODULE, filename="ui.py")
+    v_c = G.check_print_say(tree_c, "ui.py")
+    check("6c: the IDENTICAL bare print(...) shape in a synthetic 'ui.py' (the declared "
+          "rendering-seam exemption) is NOT caught", v_c == [], v_c)
+
+    tree_d = ast.parse(SYNTH_PRINT_IN_UI_MODULE.replace("def emit", "def _run"), filename="runner.py")
+    v_d = G.check_print_say(tree_d, "runner.py")
+    check("6d: the IDENTICAL bare print(...) shape in a synthetic 'runner.py' (the spec's own "
+          "'subprocess passthrough of child output' exemption) is NOT caught", v_d == [], v_d)
+
+    real_v = G.scan_package()
+    check("6e: GREEN -- the real tree still has zero DETECTION-3 violations after the negative "
+          "controls above (the exemption tables above are additive, not accidentally widened)",
+          real_v == [], real_v)
+
+
 def main() -> int:
     case_1_real_tree_clean()
     case_2_negative_self_check()
     case_3_commit_executor_exempt()
     case_4_extra_effects_negative_self_check()
     case_5_extra_effects_exemption_table_driven()
+    case_6_print_say_negative_self_check()
     if FAILURES:
         print(f"\n{len(FAILURES)} FAILURE(S):")
         for f in FAILURES:
