@@ -10,6 +10,27 @@ screens end to end, routes bare stdout/stderr into the transcript pane, bridges 
 child (gpg pinentry) through App.suspend(), and survives an abnormal exit -- against the REAL
 production classes (SetupWizardApp/TextualUi/_call_from_thread_safe), no mocks.
 
+WX7 (added this build, design/FABLE-SETUP-TUI-NAVIGATION-SPEC.md): REAL RED, maintainer-witnessed
+LIVE (not a fixture artifact) -- backward navigation worked in InteractiveUi/ScriptedUi (the
+original navigation build, commit f514203) but the Textual leg was shipped UNEXERCISED and, run
+for real, typing '<' at a Textual prompt did nothing (or landed as a literal answer) -- the
+intro banner's own "Type '<' at any prompt ... to go back" promise was false under the default
+interactive backend. Root cause, confirmed by reading `TextualUi`'s pre-fix `ask_*` methods
+directly: `InteractiveUi`/`ScriptedUi` each check the raw answer against their own BACK-trigger
+spelling BEFORE any default/coercion logic runs; `TextualUi` had NO such check anywhere, so a
+raw "<" landed exactly like `InteractiveUi`'s docstring warns a caller bypassing the check would:
+coerced as an ordinary (usually empty-string-triggers-default) answer. Fixed by importing the
+SAME `tools.setup_tui.ui.BACK`/`BACK_TRIGGER_PLAIN` `InteractiveUi` already uses (one home,
+ADR-0012 P1) into each of `TextualUi`'s four `ask_*` methods, plus a new `ctrl+b` `Binding` +
+`SetupWizardApp.on_key`'s choice/pause leg for prompt kinds with no free-text `Input` widget to
+type "<" into. WX7 drives a synthetic three-screen journey through the real
+`SetupWizardApp`/`TextualUi`/`tools.setup_tui.app._drive_screens` (never the real eleven-screen
+`SCREENS` list -- Preflight's own live subprocess/network probes made the shared WX1 driver's
+fixed poll timing intermittently flaky in this build's own sandboxed test environment,
+orthogonal to what WX7 needs to prove, so sidestepped rather than inherited) and asserts BOTH the
+typed-"<" leg and the ctrl+b-binding leg each pop the cursor back one screen, offer the prior
+answer again, and let a CHANGED answer (not the discarded one) reach the end of the run.
+
 This fixture is inherently mixed-shape: most cases (WX1, WX2, WX6) drive the real Textual
 application through Textual's own headless test harness (run_test/Pilot) to a real, complete
 outcome and assert on it -- a failure here (an exception, a hang, a wrong checklist row, a

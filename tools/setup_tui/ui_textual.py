@@ -74,6 +74,32 @@ ARCHITECTURE (spec §2, this module's implementation of it).
      discipline `ScriptedUi` already keeps) so nothing the operator was asked, or answered, is
      lost once the docked prompt widget moves on to the next question.
 
+  6. Backward navigation (design/FABLE-SETUP-TUI-NAVIGATION-SPEC.md §3), fixed live against the
+     maintainer's own report that it silently did nothing under this backend: `TextualUi`'s four
+     `ask_*` methods below recognize `tools.setup_tui.ui.BACK_TRIGGER_PLAIN` ("<") at the SAME
+     point in their own flow `InteractiveUi`'s matching methods do (before any default/coercion
+     logic runs) and return `tools.setup_tui.ui.BACK` -- imported from `ui.py`, never redefined
+     here, so the trigger spelling has ONE home regardless of which backend recognizes it
+     (ADR-0012 P1). A full hoist of the recognition itself into `NavigableUi`
+     (`tools/setup_tui/ui.py`) was considered and rejected: `NavigableUi` only ever sees each
+     backend's ALREADY-coerced return value (a `str`/`bool`/`None`), never the pre-coercion raw
+     keystroke -- by the time `confirm`'s own y/n coercion (say) has run, a raw "<" is already
+     gone, turned into `False`. Recognizing the trigger BEFORE that coercion is therefore each
+     backend's own job structurally, not a duplication this build introduced; TextualUi simply
+     joins `InteractiveUi`/`ScriptedUi` in doing it, reusing their shared vocabulary rather than
+     inventing a second one. Two affordances, not one, because a Textual prompt is not always a
+     text field: (a) typing "<" and pressing enter in a text/confirm prompt's `Input` widget
+     reaches `ask_text`/`confirm` exactly as any other typed answer would (no widget change
+     needed -- the check is in `TextualUi`, not the widget); (b) `SetupWizardApp`'s own `on_key`
+     additionally recognizes a bare "<" keypress while a choice/pause prompt is pending (an
+     `OptionList`/the Continue button take no free text at all, so there is no `Input` for "<" to
+     reach); and (c) a dedicated `ctrl+b` binding, shown in the `Footer` next to `ctrl+q`/
+     `ctrl+c` (the existing binding idiom this module already follows), resolves whichever prompt
+     is pending with the SAME trigger value regardless of its kind -- the one surface an operator
+     glancing at the running app actually sees, so the intro banner's "Type '<' ... to go back"
+     promise (`tools/setup_tui/content/app_data.py` `NAV_HINT`) is genuinely true under this
+     backend, not merely under the two it was originally built against.
+
 Lazy imports are banned (CLAUDE.md, 2026-07-02) -- and this module's own obligation under
 design/FABLE-SETUP-TUI-TEXTUAL-SPEC.md §3 is stronger than the general rule: `textual` is
 imported unconditionally, at module top, with no `try`/`except` anywhere in this file. The
@@ -115,7 +141,7 @@ from textual.widgets.option_list import Option
 from tools.setup_tui import checklist as ck
 from tools.setup_tui.elements import Heading, Note, render_text
 from tools.setup_tui.screens import SCREEN_NUMBER, SCREEN_TITLES, SCREEN_TOTAL, SCREENS, screen_banner
-from tools.setup_tui.ui import Ui
+from tools.setup_tui.ui import BACK, BACK_TRIGGER_PLAIN, Ui
 
 # textual's own reported version, recorded here once (not re-derived per call) so
 # `feature_facts.py`'s `ui_backend_textual` entry and this build's report can cite the SAME
@@ -340,6 +366,15 @@ class SetupWizardApp(App):
         # Symmetry with the existing, working ctrl+q reflex is the right call here, not a new
         # bespoke confirm gate for one of the two keystrokes.
         Binding("ctrl+c", "request_quit", "Quit", priority=True),
+        # design/FABLE-SETUP-TUI-NAVIGATION-SPEC.md §3 / module docstring architecture point 6:
+        # typing "<" already works at a text/confirm prompt (its `Input` widget submits the
+        # literal text, and `TextualUi.ask_text`/`confirm` recognize it same as `InteractiveUi`
+        # does) and at a choice/pause prompt via `on_key` below -- this binding is the SAME
+        # affordance made visible in the `Footer` (next to Quit) and usable regardless of which
+        # kind of prompt is up or which widget currently has focus, never priority (an `Input`
+        # or `OptionList` widget's own bindings, if any, still win first; none of them claim
+        # ctrl+b today).
+        Binding("ctrl+b", "go_back", "◀ Back"),
     ]
 
     def __init__(self, *, dry_run: bool, checklist: ck.Checklist) -> None:
@@ -559,6 +594,21 @@ class SetupWizardApp(App):
             self._resolve(None)
 
     def on_key(self, event: textual.events.Key) -> None:
+        # design/FABLE-SETUP-TUI-NAVIGATION-SPEC.md §3 / module docstring architecture point 6:
+        # a choice/pause prompt has no `Input` widget for a typed "<" to reach (`OptionList`
+        # takes arrow+enter/digit selection only; the Continue button takes a click) -- this is
+        # the ONE place that affordance exists for those two kinds. Scoped to choice/pause only:
+        # a text/confirm prompt's own `Input` already delivers a typed "<" to
+        # `TextualUi.ask_text`/`confirm` via `on_input_submitted` above once the operator presses
+        # enter, and intercepting every "<" keypress globally (rather than the whole submitted
+        # value) would fire mid-keystroke, before the operator finished typing, for those two
+        # kinds -- a materially different (and wrong) UX than "<" as a WHOLE bare answer, which
+        # is what `InteractiveUi`/`ScriptedUi` (and this class's own ask_text/confirm) mean by it.
+        if self._pending is not None and self._pending_kind in ("choice", "pause") and \
+                event.character == BACK_TRIGGER_PLAIN:
+            event.stop()
+            self._resolve(BACK_TRIGGER_PLAIN)
+            return
         # spec: "an option list for choices, number keys still accepted" -- OptionList already
         # handles arrow+enter on its own; this adds the numbered-menu muscle memory the plain
         # backend trained operators on.
@@ -567,6 +617,15 @@ class SetupWizardApp(App):
             if 0 <= idx < len(self._pending_options):
                 event.stop()
                 self._resolve(self._pending_options[idx][0])
+
+    def action_go_back(self) -> None:
+        """The `ctrl+b` binding (module docstring architecture point 6) -- the ONE keybinding
+        that works at ANY prompt kind, since it never depends on which widget is focused or
+        whether that widget accepts free text at all. A no-op (not an error) when nothing is
+        pending -- e.g. the binding fires while the App is still starting up, or between two
+        prompts -- exactly as `InteractiveUi`'s own "<" is only ever read at a live prompt."""
+        if self._pending is not None:
+            self._resolve(BACK_TRIGGER_PLAIN)
 
     # -- shutdown (architecture point 4) -----------------------------------------------------
 
@@ -648,11 +707,24 @@ class TextualUi(Ui):
         if isinstance(element, Heading):
             _call_from_thread_safe(self._app, self._app.note_banner, element.text)
 
+    # NAVIGATION (design/FABLE-SETUP-TUI-NAVIGATION-SPEC.md §3, module docstring architecture
+    # point 6): each method below checks the RAW answer against `BACK_TRIGGER_PLAIN` BEFORE any
+    # of its own default/coercion logic runs -- the SAME shape and the SAME shared trigger
+    # constant `InteractiveUi`'s matching methods (`tools/setup_tui/ui.py`) already use, never a
+    # second, TextualUi-local spelling of "<". The raw value reaching `_wait_answer` here comes
+    # from either the operator's own typed/submitted answer (`on_input_submitted`/
+    # `on_option_list_option_selected`) or `SetupWizardApp.on_key`/`action_go_back` resolving the
+    # SAME `BACK_TRIGGER_PLAIN` string directly -- both paths are indistinguishable to the code
+    # below, which is exactly the point (one recognition, however the operator triggered it).
+
     def ask_text(self, prompt: str, default: str | None = None) -> str:
         answer = _Answer()
         _call_from_thread_safe(self._app, self._app.arm_text_prompt, prompt, default, answer)
         while True:
             raw = (_wait_answer(self._app, answer) or "").strip()
+            if raw == BACK_TRIGGER_PLAIN:
+                print(f"{prompt}: <BACK>")
+                return BACK  # type: ignore[return-value]
             if raw:
                 value = raw
                 break
@@ -674,6 +746,9 @@ class TextualUi(Ui):
         answer = _Answer()
         _call_from_thread_safe(self._app, self._app.arm_choice_prompt, prompt, options, answer)
         value = _wait_answer(self._app, answer)
+        if value == BACK_TRIGGER_PLAIN:
+            print("  -> <BACK>")
+            return BACK  # type: ignore[return-value]
         label = next((lbl for k, lbl in options if k == value), value)
         print(f"  -> {label}")
         return value
@@ -681,8 +756,12 @@ class TextualUi(Ui):
     def confirm(self, prompt: str, default: bool = False) -> bool:
         answer = _Answer()
         _call_from_thread_safe(self._app, self._app.arm_confirm_prompt, prompt, default, answer)
-        raw = (_wait_answer(self._app, answer) or "").strip().lower()
-        result = default if not raw else raw in ("y", "yes")
+        raw = (_wait_answer(self._app, answer) or "").strip()
+        if raw == BACK_TRIGGER_PLAIN:
+            print(f"{prompt}: <BACK>")
+            return BACK  # type: ignore[return-value]
+        raw_l = raw.lower()
+        result = default if not raw_l else raw_l in ("y", "yes")
         hint = "Y/n" if default else "y/N"
         print(f"{prompt} [{hint}]: {'yes' if result else 'no'}")
         return result
@@ -690,7 +769,10 @@ class TextualUi(Ui):
     def pause(self, prompt: str = "Press enter when done: ") -> None:
         answer = _Answer()
         _call_from_thread_safe(self._app, self._app.arm_pause_prompt, prompt, answer)
-        _wait_answer(self._app, answer)
+        raw = _wait_answer(self._app, answer)
+        if raw == BACK_TRIGGER_PLAIN:
+            print(f"{prompt}<BACK>")
+            return BACK  # type: ignore[return-value]
         print(prompt)
 
     @contextlib.contextmanager
