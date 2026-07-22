@@ -111,3 +111,39 @@ twenty points) is retired in the companion's favor — every one of its rules su
 inside the consolidated set with provenance tags, so this retirement removes a
 duplicate home, not content. The never-enforced-entries-get-culled condition carries
 forward to the companion.
+
+## 2026-07-22 — Rule 4 appended: the data topology is the UI's default information architecture
+
+*(Dated append per ADR-0005 Rule 8, maintainer-commissioned the same day. Provenance: a
+UI rendered the kernel's principal/competence/relation/charter hierarchy — dependent
+entities, foreign-keyed to their parent — as four parallel flat lists; an ADR-0019 audit
+holding companion rule C25 passed the structure because it applied C25 only at the
+width of C25's minting specimen (a wizard). The class is one: navigation topology not
+isomorphic to data topology.)*
+
+**Rule 4 — For any UI over relationally-structured data, the data's conceptual
+topology is a mandatory design input and the presentation's default shape.** Scope:
+configuration, administration, and data-maintenance surfaces (this ADR's home genre) —
+a task-oriented flow may deviate, and its deviation is a named decision under Rule 1,
+not an exemption from asking. The correspondence, stated as questions the spec and the
+review must both answer per surface: *what are this surface's entities, dependents,
+associations, and derived projections — and does the navigation render that shape?*
+The default bindings are the genre's own convergents (Naked Objects and its
+scaffolding descendants — Rails admin, Django admin — are the worked prior art):
+an entity gets one home surface; a dependent (foreign-keyed) entity is created and
+edited within its parent's context, master-detail, never as a sibling flat list; an
+association renders as a selection over the entities it joins, never as free text; a
+derived projection gets a read surface and no editor; storage artifacts (junction
+mechanics, hash chains, lineage columns) are owed no surface at all. The
+entity/dependent/association/artifact roles are DECLARED per relation — a topology
+charter, the write-side twin of the audit question — because the declaration is what
+turns "is the UI isomorphic to the data?" from permanent judgment into a mechanical
+check. Audits of such surfaces receive the data model (or the topology charter) as
+mandatory input and answer the correspondence question per surface in writing —
+applying the CLASS, not the specimen that minted it: a wizard over a product type and
+a flat list over a dependency hierarchy are the same defect.
+
+*Enforcement surface: spec-time (the topology-charter/correspondence answers are a
+required part of a UI build basis in scope) and review with the charter in hand;
+mechanizable per-binding where the section definitions and schema are both data —
+each such gate a deliberate act, not presumed.*
