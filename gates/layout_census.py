@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-09T07:54:37Z
-#   last-change: 2026-07-22T03:11:22Z
+#   last-change: 2026-07-22T03:43:25Z
 #   contributors: 9bcc0113/main, be693afb/main, e4410ef6/main, 3c50e030/main, a857c93d/main, ab5d5bab/main, 1fa3ab69/main, 431cddfa/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -146,6 +146,12 @@ ROOT_DIRS = {
     ".claude", "bootstrap", "law", "judgment", "kernel", "stores", "instruments", "engine",
     "gates", "filing", "hooks", "drive", "seen-red", "design", "research", "runs", "ephemera",
     "provenance",
+    # succession/ — world-succession records (autoharn1 -> autoharn2, commission autoharn1
+    # row 1942): per-succession subdirs holding the maintainer-vetoed context manifest (with
+    # its distinct-reviewer record appended), the archaeological config draft + resolved birth
+    # config, and the dust world's preserved deployment pointer. Committed evidence per the
+    # world-context consult §2.3 (the extract file is vouched by git once committed).
+    "succession",
     # serving/ — the FastAPI ledger boundary service (design/FABLE-LEDGER-BOUNDARY-SERVICE-SPEC.md,
     # first landed at merge 9942950), never registered here at landing; third of the three
     # pre-existing breaches flagged by the asof-export builder (2026-07-18), fixed at the same
