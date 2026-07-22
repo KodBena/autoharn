@@ -62,7 +62,7 @@ def initial_state(*, dry_run: bool = False, accept_unverified_genesis: bool = Fa
 
 def reset_accumulators(state: dict) -> None:
     """`CommitSpec.reset` (design/FABLE-SETUP-TUI-REBUILD-SPEC.md §3 v2's live-model rebuild,
-    2026-07-22 maintainer review): `tools.configtree.panes.CommitPane`'s own submit sweep calls
+    2026-07-22 maintainer review): `tools.configtree.commit_pane.CommitPane`'s own submit sweep calls
     every section's `submit` FRESH on every commit attempt (a retry after fixing one section's
     business-rule refusal must re-derive the Plan from CURRENT field values, never append onto a
     stale prior attempt) -- this is the hook that resets THIS consumer's own accumulators

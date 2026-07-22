@@ -84,7 +84,7 @@ class CommitSpec:
     concept of its own beyond the banner text `ConfigTreeApp` accepts).
 
     `reset`, OPTIONAL: called once at the START of every commit attempt, before any `submit` --
-    the live-model rebuild's own submit sweep (`panes.CommitPane`) calls every section's
+    the live-model rebuild's own submit sweep (`commit_pane.CommitPane`) calls every section's
     `submit` FRESH each time Commit is pressed (a retry after fixing a business-rule refusal must
     re-derive the Plan from CURRENT field values, never append onto a stale one), so a consumer
     whose `submit` functions accumulate into a shared, consumer-owned structure under `state`
@@ -137,7 +137,7 @@ def section_answers(spec: SectionSpec, state: dict) -> dict:
     name)`) -- never a bare top-level key another section's same-named field could alias (the
     maintainer-diagnosed live defect this scoping exists to make unrepresentable). The ONE place
     this projection is computed -- shared by `section_status`'s live validity check and by the
-    commit node's own submit sweep (`panes.CommitPane`), so both always agree on what a section's
+    commit node's own submit sweep (`commit_pane.CommitPane`), so both always agree on what a section's
     "current values" means."""
     return {str(f.name): get_field_value(state, spec.slug, f) for f in spec.fields(state)}
 
@@ -163,7 +163,7 @@ def section_status(spec: SectionSpec, state: dict) -> str:
     "done"/"visited" flag anywhere -- the tree reflects reality as the operator types, spec §3
     v2's own words). `blocked` outranks everything else: a section can be otherwise COMPLETE and
     still render BLOCKED if a later edit elsewhere broke its prerequisite. A recorded commit-time
-    business-rule failure (`state["_commit_errors"][slug]`, written only by `panes.CommitPane`'s
+    business-rule failure (`state["_commit_errors"][slug]`, written only by `commit_pane.CommitPane`'s
     own submit sweep, the ONE place `SectionSpec.submit` is still called) reads INVALID until the
     operator edits that section again (which recomputes fresh here and naturally supersedes it).
     Otherwise: any required-but-empty or no-choice-made field reads INCOMPLETE; any field whose
@@ -248,8 +248,8 @@ def ready_for_commit(sections: "tuple[SectionSpec, ...]", state: dict) -> bool:
     would deadlock itself: a failed sweep records `_commit_errors[slug]`, which
     `section_status`/`all_sections_complete` correctly reads as INVALID for DISPLAY, but if that
     same INVALID also gated the button, fixing the one field would never re-enable it -- the
-    button's own press is the ONLY thing that clears `_commit_errors` (`panes.CommitPane._run_
-    submit_sweep`'s first line), so gating on it would make the retry unreachable. A section
+    button's own press is the ONLY thing that clears `_commit_errors` (`commit_pane.CommitPane.
+    _run_submit_sweep`'s first line), so gating on it would make the retry unreachable. A section
     whose FIELDS are all locally valid is ready to be swept again, full stop; the sweep itself is
     what re-validates the business rule."""
     for s in sections:

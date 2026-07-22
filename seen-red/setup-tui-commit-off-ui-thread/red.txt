@@ -1,0 +1,30 @@
+seen-red/setup-tui-commit-off-ui-thread -- banked RED evidence (both-polarity proof, fixture-census)
+
+Audit finding (ledger row 1130's own sibling audit; ADR-0019 C24/C26/C9): `tools/configtree/
+panes.py`'s `CommitPane.on_button_pressed` ran the FULL submit sweep (every section's own
+`submit` -- real subprocesses, a real 5s-timeout network probe) and, once it cleared, the real
+commit act, ALL synchronously inside the Button's own `Pressed` handler -- a coroutine on
+Textual's ONE asyncio event loop. A blocking call anywhere inside that handler stalls the whole
+loop: no other coroutine, including Textual's own input-dispatch machinery, gets a turn until
+the blocking call returns. Case RED loads the OLD `CommitPane` straight from commit 3cc769d (the
+last commit before this fix, via `git show`, executed in an isolated namespace) and drives it
+against a synthetic section whose own `submit` sleeps 0.5s, demonstrating the hazard is real: a
+concurrently-scheduled keypress on the always-visible sidebar Tree does not even begin
+dispatching until the blocking sleep ends. Cases GREEN 2-5 prove the fixed, `@work(thread=True)`
+-based `CommitPane`: the same keypress now resolves in a small fraction of the slow submit's own
+duration (processed DURING the sweep, not after it), a visible busy chrome (disabled button +
+non-empty busy indicator, C26) while the sweep runs, a clean between-section cancel (C9) that
+stops a two-section sweep before the second section ever runs (and a clean retry afterward with
+no residue), and ctrl+q's exit-code contract (130) honored promptly even while a sweep is in
+flight.
+
+Real captured stdout, a clean run against this commit's tree (zero residue, exit 0):
+
+case 1 ok (RED, reproduced against 3cc769d): a concurrent Tree keypress took 0.613s to process against a 0.5s synthetic slow submit -- the OLD synchronous sweep froze the whole event loop, the keypress was processed only AFTER the freeze, never during it
+case 2 ok (GREEN): the SAME concurrent Tree keypress now takes only 0.083s (< 0.250s) against the SAME 0.5s synthetic slow submit -- processed DURING the sweep, not after it
+case 3 ok (GREEN): WHILE the sweep runs -- commit button disabled, Cancel enabled, busy indicator shown with text "running the submit sweep (every section's own submit, once) "
+case 3 ok (GREEN, completion): busy chrome clears, is_committed=True, matching the pre-existing post-commit disabled-button contract
+case 4a ok (GREEN, clean between-section cancel): Cancel pressed during the first of two slow sections stopped the sweep before the second one ran -- app.state['_ran'] == ['slow-0'], nothing committed, button re-enabled for a retry
+case 4b ok (GREEN, retry after cancel): both synthetic sections ran and the commit act completed -- the cancelled attempt left no residue behind
+case 5 ok (GREEN): ctrl+q during an in-flight sweep still exits with return_code=130 in 0.043s (< the 0.5s sweep itself) -- the priority binding is honored on the never-blocked event loop
+ALL CASES OK -- tools.configtree.commit_pane.CommitPane's submit sweep + commit act run off the UI thread (@work(thread=True)): RED-first against the OLD synchronous code (a concurrent keypress froze behind the sweep), GREEN against the CURRENT worker-based code (the same keypress, and ctrl+q's own exit-code contract, both processed DURING the sweep), a visible busy chrome (C26) while running, and a clean between-section cancel (C9) honored up to -- but honestly not into -- the non-cancellable commit act itself.

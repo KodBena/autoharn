@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
-"""tools/configtree/panes.py -- the right-pane widgets `app.py`'s `ContentSwitcher` holds: one
-`SectionPane` per `SectionSpec` (all fields at once, inline validation) plus the one `CommitPane`
-(design/FABLE-SETUP-TUI-REBUILD-SPEC.md §3 v2). Split out of `app.py` on ADR-0007 grounds (no
-file over 400 lines) -- these are still App-adjacent (they import `textual`), just not the
-App/Tree wiring itself.
+"""tools/configtree/panes.py -- `SectionPane`, the right-pane widget `app.py`'s `ContentSwitcher`
+holds one of per `SectionSpec` (all fields at once, inline validation) (design/FABLE-SETUP-TUI-
+REBUILD-SPEC.md §3 v2). Split out of `app.py` on ADR-0007 grounds (no file over 400 lines) --
+still App-adjacent (imports `textual`), just not the App/Tree wiring itself. `CommitPane` (the
+one generic commit node) lives in the sibling `commit_pane.py`, split out of THIS file for the
+same ADR-0007 reason once the off-UI-thread worker fix (ledger row 1130's own sibling audit)
+pushed it over 400 lines.
 
 LIVE-MODEL REBUILD (maintainer review, 2026-07-22, same day as the tree+form rejection this
 package answers): the maintainer's reference idiom (Qt settings GUI, SAP IMG) has NO per-section
@@ -43,12 +45,12 @@ ONLY that reason -- no fields -- re-checked every time the pane is (re)shown, ne
 from __future__ import annotations
 
 from textual.app import ComposeResult
-from textual.containers import Horizontal, Vertical, VerticalScroll
-from textual.widgets import Button, Checkbox, Input, RadioSet, Static
+from textual.containers import Vertical, VerticalScroll
+from textual.widgets import Checkbox, Input, RadioSet, Static
 
-from tools.configtree.fields import ChoiceField, ListField, MultiChoiceField, set_field_value, validate_value
-from tools.configtree.spec import (CommitSpec, SectionSpec, ready_for_commit, section_answers,
-                                    section_field_errors)
+from tools.configtree.fields import (ChoiceField, ListField, MultiChoiceField, default_of,
+                                      get_field_value, set_field_value, validate_value)
+from tools.configtree.spec import SectionSpec, section_answers, section_field_errors
 from tools.configtree.widgets import (FieldError, ListFieldWidget, MultiChoiceFieldWidget,
                                        build_field_widget, elucidation_widgets, field_widget_id,
                                        read_field_value)
@@ -76,13 +78,33 @@ class SectionPane(Vertical):
         with VerticalScroll(classes="ct-section-body"):
             if self._blocked_reason:
                 yield Static(f"BLOCKED -- {self._blocked_reason}", classes="ct-blocked-reason")
+                # SEEDED-VALUE VISIBILITY (maintainer-witnessed, ledger row 1130: an in-UI
+                # config load reported "seeded N field default(s)" but a BLOCKED section (e.g.
+                # Hydration/Boundary/Observability/Birth/Principals-authority/Signed-genesis,
+                # every one gated on a destination directory) rendered NOTHING under it -- the
+                # blocked banner swallowed the seeded values whole, with no cue they were even
+                # there. Root cause was never field-KIND-specific (`get_field_value`/every
+                # widget builder in this module were verified correct for all four field kinds,
+                # empirically, once a section is unblocked) -- it was this early `return`, which
+                # never even LOOKS at the section's own fields while blocked. FIXED: still
+                # compute this section's fields against the CURRENT state (read-only -- no
+                # widget is built, nothing here can write through) and name every one that
+                # already carries a non-default (seeded, or previously touched) value, so a
+                # seeded default is visible EVEN WHILE the section stays correctly blocked from
+                # editing.
+                seeded = [str(f.name) for f in self.spec.fields(self.state)
+                          if get_field_value(self.state, self.spec.slug, f) != default_of(f)]
+                if seeded:
+                    yield Static(
+                        f"({len(seeded)} field(s) already hold a seeded/set value, hidden "
+                        f"until unblocked: {', '.join(seeded)})", classes="ct-blocked-reason")
                 return
             if self.spec.precheck is not None:
                 for line in self.spec.precheck(self.state):
                     yield Static(line, classes="ct-precheck-line")
             self._field_specs = tuple(self.spec.fields(self.state))
             live_errors = section_field_errors(self.spec, self.state)
-            # A prior commit-sweep business-rule refusal (`panes.CommitPane`'s own submit sweep
+            # A prior commit-sweep business-rule refusal (`commit_pane.CommitPane`'s own submit sweep
             # -- a cross-field check no per-field validator could see) OUTRANKS the live
             # per-field check for the SAME field, exactly like the deleted Save-button flow's own
             # `result.errors` used to render (this is that same dict, just surfaced on visit
@@ -197,91 +219,6 @@ class SectionPane(Vertical):
             self._write_through(f, event.value)
 
 
-class CommitPane(Vertical):
-    """The library's own generic commit node (spec §3 v2): the resolved decision set, ONE commit
-    confirmation -- the ONLY action button in the app besides quit. Pressing it runs the FULL
-    two-phase sequence: every section's `submit` exactly once, in registry order (the live-model
-    rebuild's own deferred business-logic pass -- see this module's docstring), THEN, only if
-    every section accepted, the actual commit boundary (`CommitSpec.commit`). A section that
-    REFUSES at this point (a business-rule check no field-level validator could see) halts the
-    sweep before any commit act runs, records the refusal into `state["_commit_errors"]` (so the
-    tree reads that section INVALID with the reason), and re-enables this button for a retry."""
-
-    def __init__(self, commit: CommitSpec, sections: tuple, state: dict) -> None:
-        super().__init__(id="pane-commit")
-        self.commit_spec = commit
-        self.sections = sections
-        self.state = state
-        self._committed = False
-
-    def compose(self) -> ComposeResult:
-        yield Static("Review & commit", classes="ct-section-title")
-        with VerticalScroll(id="ct-commit-body", classes="ct-section-body"):
-            yield Static(self.commit_spec.render_summary(self.state), id="ct-commit-summary")
-            sweep_error = self.state.get("_commit_sweep_error")
-            if sweep_error:
-                yield Static(sweep_error, classes="ct-blocked-reason")
-        ready = ready_for_commit(self.sections, self.state)
-        with Horizontal(classes="ct-section-buttons"):
-            label = self.commit_spec.confirm_label if ready else \
-                f"{self.commit_spec.confirm_label} (blocked -- sections incomplete)"
-            yield Button(label, id="ct-commit", variant="primary", disabled=not ready)
-
-    @property
-    def is_committed(self) -> bool:
-        return self._committed
-
-    async def refresh_readiness(self) -> None:
-        await self.recompose()
-
-    def _run_submit_sweep(self) -> "str | None":
-        """Every section's `submit`, exactly once, in registry order, REPLAYED FRESH on every
-        commit attempt (a retry after fixing one section must not append onto a stale prior
-        attempt's queued effects -- `CommitSpec.reset`, if given, clears the consumer's own
-        accumulator first). Returns `None` on full success (every section accepted its own
-        current live answers); otherwise the human-readable refusal to show, having already
-        recorded which section failed into `state["_commit_errors"]`."""
-        self.state.pop("_commit_errors", None)
-        if self.commit_spec.reset is not None:
-            self.commit_spec.reset(self.state)
-        for spec in self.sections:
-            answers = section_answers(spec, self.state)
-            result = spec.submit(self.state, answers)
-            if not result.ok:
-                errors = result.errors or {"": "refused (no field named)"}
-                self.state["_commit_errors"] = {str(spec.slug): errors}
-                return (f"REFUSED at section '{spec.slug}' ({spec.title}): {errors} -- fix it "
-                        f"there (the tree node now reads INVALID) and commit again.")
-            if result.state_updates:
-                self.state.update(result.state_updates)
-            # NOTE: no blind `self.state.update(answers)` here (removed 2026-07-22, the same
-            # fix as `_write_through`'s own docstring) -- a section's OWN field values already
-            # live in their scoped slots (or the bare key, for an explicitly `shared=True`
-            # field); re-copying every field's raw value onto a bare top-level key here was the
-            # SAME aliasing hazard `set_field_value` exists to prevent, just at commit time
-            # instead of per-keystroke. `submit`'s own `state_updates` is the sole, deliberate,
-            # named channel by which a section exports a fact to the rest of the model.
-        return None
-
-    async def on_button_pressed(self, event: Button.Pressed) -> None:
-        if event.button.id != "ct-commit" or self._committed:
-            return
-        if not ready_for_commit(self.sections, self.state):
-            return
-        sweep_error = self._run_submit_sweep()
-        if sweep_error:
-            self.state["_commit_sweep_error"] = sweep_error
-            app = getattr(self, "app", None)
-            if app is not None and hasattr(app, "on_model_changed"):
-                app.on_model_changed()
-            await self.recompose()
-            return
-        self.state.pop("_commit_sweep_error", None)
-        self._committed = True
-        event.button.disabled = True
-        result = self.commit_spec.commit(self.state)
-        body = self.query_one("#ct-commit-body", VerticalScroll)
-        for line in result.info_lines:
-            body.mount(Static(line, classes="ct-info-line"))
-        body.mount(Button("Finish", id="ct-finish", variant="success"))
-        self.state["_commit_ok"] = result.ok
+# `CommitPane` moved to `tools/configtree/commit_pane.py` (ADR-0007: this fix's own worker/
+# cancellation logic pushed this file from 288 to 432 lines) -- imported back into `__init__.py`
+# and `app.py` from its new home; `panes.py` keeps `SectionPane` only.

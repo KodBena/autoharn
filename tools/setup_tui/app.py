@@ -38,7 +38,7 @@ import sys
 import textwrap
 
 from tools.configtree.measure import MEASURE
-from tools.setup_tui import config_file, config_seam, steps
+from tools.setup_tui import config_file, config_seam, durable_decisions, steps
 from tools.setup_tui.checklist import Checklist
 from tools.setup_tui.plan import Plan
 
@@ -225,9 +225,36 @@ def _run_textual(args: argparse.Namespace) -> int:
     return app.return_code or 0
 
 
+def _check_adr_synopsis_freshness() -> "int | None":
+    """Wired at TUI start (DRIFTABILITY, maintainer question 2026-07-22): `adr_synopses.toml`'s
+    per-entry `source_sha256` is checked against the ADR file's CURRENT bytes before either run
+    mode starts. A MISSING synopsis (a cataloged ADR with no entry at all) is a construction-time
+    refusal -- exit 1, naming every missing number, the same disposition every other data-file
+    completeness gap in this package already gets. A STALE synopsis (declared hash != current
+    hash) is a loud WARNING only, naming both hashes -- it must not brick setup while awaiting a
+    human re-derivation pass (the maintainer's own ruling): printed to stderr, `None` returned so
+    the caller proceeds."""
+    try:
+        stale = durable_decisions.validate_adr_synopsis_freshness()
+    except durable_decisions.AdrSynopsisMissingError as exc:
+        print(_wrap(str(exc)), file=sys.stderr)
+        return 1
+    for drift in stale:
+        print(_wrap(
+            f"setup_tui: WARNING -- adr_synopses.toml's synopsis for ADR-{drift.number} is "
+            f"STALE (declared source_sha256 {drift.declared_sha256[:12]}... no longer matches "
+            f"the ADR file's current bytes, {drift.actual_sha256[:12]}...) -- the synopsis text "
+            f"may no longer reflect that ADR's current rules. Setup proceeds; re-derive the "
+            f"synopsis and re-stamp its hash when convenient."), file=sys.stderr)
+    return None
+
+
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(sys.argv[1:] if argv is None else argv)
     _check_config_flags(args)
+    refusal = _check_adr_synopsis_freshness()
+    if refusal is not None:
+        return refusal
     if args.from_config:
         return _run_from_config(args)
     return _run_textual(args)

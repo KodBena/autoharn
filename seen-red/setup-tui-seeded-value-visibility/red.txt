@@ -1,0 +1,31 @@
+seen-red/setup-tui-seeded-value-visibility -- banked RED evidence (both-polarity proof, fixture-census)
+
+Maintainer-witnessed finding (ledger row 1130): a live in-UI load of known-good-blank.toml
+reported "seeded 21 field default(s)" including hydration.durable_decisions/adopt_adrs
+(MultiChoiceField checkbox groups) and several ConfirmFields, but the sections did not show the
+values as set. Root cause, established empirically before writing this fixture: it is NOT
+field-kind-dependent -- get_field_value/set_field_value/every widget builder were verified
+correct for all four field kinds once a section is genuinely unblocked. The real defect is that
+hydration (like boundary/observability/birth/principals-authority/signed-genesis) stays BLOCKED
+until a destination directory is set elsewhere (Fork/target), and the OLD SectionPane.compose
+returned immediately on a blocked reason, rendering ONLY the "BLOCKED -- ..." banner -- nothing
+about the section's own fields, seeded or not. An operator who loads a config and immediately
+checks a gated section (without first visiting Fork/target) saw a blocked banner with zero cue
+that seeded values were sitting underneath, for every field kind that section carries.
+
+Case RED loads the OLD SectionPane straight from commit 3cc769d (the last commit before this
+fix, via git show, executed in an isolated namespace) into the REAL running app, reproduces the
+maintainer's own path exactly (in-UI Load, then visit hydration without ever visiting
+Fork/target first), using a known-good-blank.toml variant seeded with NON-EMPTY
+durable_decisions/adopt_adrs (the shipped template seeds both as [], which cannot distinguish
+"seeded correctly to nothing" from "seeding is broken"). Cases GREEN 2-3 prove the fixed
+SectionPane: the same blocked visit now names every field whose value differs from its own
+default (both MultiChoiceFields), and once dest is set (unblocking hydration), the ConfirmField
+and both MultiChoiceFields all render their real seeded values.
+
+Real captured stdout, a clean run against this commit's tree (zero residue, exit 0):
+
+case 1 ok (RED, reproduced against 3cc769d): after loading a config that seeded hydration's own ConfirmField + two MultiChoiceFields, visiting the (still-blocked, dest never set) hydration section shows ONLY the blocked banner -- zero indication any field holds a seeded value, exactly the maintainer's own bench report
+case 2 ok (GREEN): the SAME blocked visit now shows '(2 field(s) already hold a seeded/set value, hidden until unblocked: durable_decisions, adopt_adrs)' -- naming every seeded field whose value actually DIFFERS from its own default (both MultiChoiceFields), still correctly blocked from editing. 'run' is deliberately NOT named -- it was seeded to its own default value (True), so there was never a gap between what a blocked banner already implied and what the operator would see once unblocked (a named, honest limitation of the value!=default detector, not a regression).
+case 3 ok (GREEN): once unblocked, hydration's seeded ConfirmField AND both seeded MultiChoiceFields render their real, correct values -- run=True, durable_decisions=['single-branch-authoring', 'tags-are-serious-business'], adopt_adrs=['0000', '0002']
+ALL CASES OK -- config-load seeding visibility fix (ledger row 1130): RED-first against the OLD SectionPane (a blocked section's seeded fields were completely invisible, of any kind), GREEN against the CURRENT SectionPane (a blocked section now names every field already holding a seeded value; once unblocked, the ConfirmField and both MultiChoiceFields all render their real seeded selections).

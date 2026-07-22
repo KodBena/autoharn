@@ -48,9 +48,13 @@ PRINT_EXEMPT: dict[str, set[str]] = {
     "runner.py": {"*"},       # child-process-output passthrough choke point
     "app.py": {"_run_from_config", "main", "_check_config_flags", "_terminate_boundary_proc",
                "_handle_sigterm", "_install_sigterm_handler", "_run_textual",
+               "_check_adr_synopsis_freshness",
                "<module level>"},  # the --from-config headless reporter + the pre-UI refusal
                                     # diagnostics (bad flags, textual-missing, SIGTERM cleanup
-                                    # notices) -- fire before/outside any Textual screen.
+                                    # notices, the ADR-synopsis freshness refusal/warning --
+                                    # ledger row 1130's own driftability commission, checked at
+                                    # TUI start before either run mode begins) -- fire before/
+                                    # outside any Textual screen.
     "feature_facts.py": {"<module level>"},  # `python3 -m tools.setup_tui.feature_facts`'s own
                                     # standalone drift-check CLI entry point.
 }

@@ -137,6 +137,22 @@ def _fresh_state() -> dict:
             "dry_run": True, "accept_unverified_genesis": False}
 
 
+async def _wait_commit_settled(app, timeout: float = 10.0) -> None:
+    """The commit sweep+commit act now runs off the UI thread (`CommitPane`'s own `@work
+    (thread=True)` worker, ledger row 1130's own sibling audit, ADR-0019 C24) -- a fixture
+    pressing the commit button must POLL for the worker's own completion (`is_commit_running`
+    flips False from the worker's `call_from_thread` completion callback) instead of assuming one
+    `pilot.pause()` is enough, the way every OTHER (synchronous) write-through in this app still
+    is."""
+    pane = app._commit_pane
+    loop = asyncio.get_event_loop()
+    deadline = loop.time() + timeout
+    while pane.is_commit_running:
+        if loop.time() > deadline:
+            raise AssertionError(f"commit worker did not settle within {timeout}s")
+        await asyncio.sleep(0.02)
+
+
 async def _visit_and_fill(pilot, app, tree, slug, *, fill=None, check=None):
     """Select a section (so its fields exist to type into) and LIVE-EDIT them -- no save press.
     Each `.value =` assignment below is a real widget write that posts a real Changed message
@@ -358,6 +374,7 @@ async def case_3() -> None:
 
         await pilot.click(commit_btn)
         await pilot.pause()
+        await _wait_commit_settled(app)
         info_lines = [str(w.render()) for w in app.query_one("#ct-commit-body").query(".ct-info-line")]
         assert any("WOULD-DO" in ln or "checklist" in ln for ln in info_lines), \
             f"expected a real dry-run checklist rendering, got {info_lines}"
@@ -407,6 +424,7 @@ async def case_4() -> None:
         assert not commit_btn.disabled, "every FIELD is locally valid -- the commit button must enable"
         await pilot.click(commit_btn)
         await pilot.pause()
+        await _wait_commit_settled(app)
 
         sg_spec = next(s for s in steps.SECTIONS if str(s.slug) == "signed-genesis")
         status = section_status(sg_spec, app.state)
@@ -431,6 +449,7 @@ async def case_4() -> None:
         commit_btn2 = app.query_one("#pane-commit #ct-commit", Button)
         await pilot.click(commit_btn2)
         await pilot.pause()
+        await _wait_commit_settled(app)
         assert app.state.get("_commit_ok") is True, \
             f"expected the retried commit to succeed, state={app.state.get('_commit_ok')}"
         print("case 4c ok (GREEN): fixing the one field and pressing Commit again succeeds")

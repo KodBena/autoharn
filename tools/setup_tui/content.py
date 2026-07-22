@@ -217,10 +217,22 @@ GENESIS_GATE_HARD_STOP_TEACHING: list[str] = _sc["genesis_gate_hard_stop_teachin
 # the law (the file's own header comment). A number with no synopsis entry here is a NAMED gap
 # (`durable_decisions.adr_synopsis` returns an honest "no synopsis authored yet" marker), never a
 # silent blank.
+#
+# DRIFTABILITY (maintainer question, 2026-07-22: "the ADR-adoption catalog derives live from
+# law/adr/*.md, but adr_synopses.toml is static and already stale twice today"). Each row ALSO
+# carries `source_sha256` -- the sha256 hex digest of its own ADR file's content, taken AT
+# SYNOPSIS-AUTHORING TIME (a typed field per the maintainer's standing "no bare types" rule,
+# ledger row 1105: this loader refuses a row whose hash is not a genuine 64-hex-char sha256
+# digest, never a bare unchecked string). `durable_decisions.validate_adr_synopsis_freshness`
+# (the cross-file half -- comparing this STORED hash against the ADR file's CURRENT bytes --
+# lives there, not here, since it needs `list_adrs`'s own file enumeration, and content.py stays
+# the single-file TOML-loading layer) is the load-bearing check; this file only enforces the
+# HASH'S OWN SHAPE.
 # --------------------------------------------------------------------------------------------
+_SHA256_HEX_RE = re.compile(r"^[0-9a-f]{64}$")
 _adr = _load("adr_synopses")
 _require(_adr, {"synopsis"}, "adr_synopses")
-_require_row_keys(_adr["synopsis"], {"number", "text"}, "adr_synopses", "synopsis")
+_require_row_keys(_adr["synopsis"], {"number", "text", "source_sha256"}, "adr_synopses", "synopsis")
 _seen = set()
 for _row in _adr["synopsis"]:
     # NOT `DataKey.parse` -- an ADR number is `[0-9]{4}`, not an `[a-z]...` identifier (it is
@@ -233,7 +245,12 @@ for _row in _adr["synopsis"]:
         raise ContentError(f"tools/setup_tui/content.py: adr_synopses.toml number "
                             f"{_row['number']!r} is duplicated")
     _seen.add(_row["number"])
+    if not _SHA256_HEX_RE.match(_row["source_sha256"]):
+        raise ContentError(f"tools/setup_tui/content.py: adr_synopses.toml number "
+                            f"{_row['number']!r} source_sha256 {_row['source_sha256']!r} must "
+                            f"be a 64-character lowercase hex sha256 digest")
 ADR_SYNOPSES: dict[str, str] = {r["number"]: r["text"] for r in _adr["synopsis"]}
+ADR_SYNOPSIS_HASHES: dict[str, str] = {r["number"]: r["source_sha256"] for r in _adr["synopsis"]}
 
 # --------------------------------------------------------------------------------------------
 # app.toml

@@ -229,11 +229,22 @@ class ListFieldWidget(Vertical):
                 if row is not None:
                     self.add_row(row)
 
-            self.app.push_screen(AddItemModal(f"Add: {self.spec.label}", self.spec.item_fields),
+            self.app.push_screen(AddItemModal(f"Add {self.spec.label}", self.spec.item_fields),
                                   _on_result)
         elif event.button.id == f"{self.id}-remove":
             event.stop()
             self.remove_selected()
+
+
+# FILTER THRESHOLD (MEDIUM audit finding, ledger row 1130's own sibling audit: "hydration's
+# 36-checkbox catalog renders as one unbroken scroll"). Named, not inlined, so the rationale
+# lives in exactly one place: Miller (1968)/Nielsen's own working-set heuristic puts a single
+# glanceable list at roughly 7 (+-2) items (the SAME pedigree ADR-0019's C7/C28 already cite) --
+# past that, a catalog stops being a single glance and becomes a search task, the point at which
+# a filter earns its own keep (VS Code settings search / Group Policy editor idiom: the filter
+# Input appears only once the list is long enough to need one, never above a short list where it
+# would be one more control for nothing).
+MULTICHOICE_FILTER_THRESHOLD = 9
 
 
 class MultiChoiceFieldWidget(Vertical):
@@ -243,7 +254,26 @@ class MultiChoiceFieldWidget(Vertical):
     round 5, ledger row 1115) -- never a free-text delimited string over a closed vocabulary.
     Mirrors `ListFieldWidget`'s own self-contained shape (composes itself, fires `on_change`) so
     the enclosing `SectionPane` wires it the SAME way; `self.selected` is always `list[str]`, in
-    catalog order, the model value `panes.py`'s write-through stores verbatim."""
+    catalog order, the model value `panes.py`'s write-through stores verbatim.
+
+    GROUPING + FILTER (MEDIUM audit finding, ledger row 1130's own sibling audit: "hydration's
+    36-checkbox catalog renders as one ~218-row unbroken scroll"). `spec.groups`, if given,
+    renders a real `ElucidationHeading` (the SAME sub-heading machinery `substrate`'s
+    Existing-db/Dedicated-db groups already use) before each contiguous run of options sharing
+    one heading. Past `MULTICHOICE_FILTER_THRESHOLD` options, a live filter `Input` appears above
+    the catalog -- typing narrows the VISIBLE rows to those whose label or value contains the
+    typed text (case-insensitive); clearing it restores every option.
+
+    IMPLEMENTATION NOTE (verified empirically, the hard way): filtering toggles each row's own
+    `.display` -- it does NOT `recompose()`. An earlier draft rebuilt the whole widget (Checkbox
+    + Input included) via `recompose()` on every keystroke; Textual's own `Input.Changed` firing
+    during that VERY recompose (the freshly-built Input re-validates itself on mount) fed back
+    into this same handler, and re-focusing the brand-new Input instance after each rebuild could
+    not reliably outrun the operator's own next keystroke -- rapid typing lost every character
+    after the first. Every Checkbox/heading/help widget is instead built ONCE, in `compose`, and
+    kept alive for the field's whole lifetime; a checked box that the filter hides stays checked
+    (its own `Checkbox.value` never changes, only `.display`), and a heading shows/hides based on
+    whether ANY option under it is currently visible."""
 
     def __init__(self, spec: MultiChoiceField, initial: "list[str] | None" = None,
                  on_change: "Callable[[], None] | None" = None) -> None:
@@ -252,11 +282,47 @@ class MultiChoiceFieldWidget(Vertical):
         self.selected: list[str] = list(initial or [])
         self._on_change = on_change
         self._boxes: dict[str, Checkbox] = {}
+        self._labels: dict[str, str] = {}
+        # Every widget belonging to ONE option (its checkbox + its own option_help lines),
+        # keyed by option value -- toggled together as one unit when the filter narrows.
+        self._option_widgets: dict[str, list] = {}
+        # heading Static -> the option values it covers, so a heading shows iff at least one of
+        # ITS OWN options is currently visible.
+        self._heading_members: dict[object, list[str]] = {}
+        self._heading_for_value: dict[str, object] = {}
+        self._no_match_static: "Static | None" = None
+        self._filter_text: str = ""
+
+    @property
+    def _filter_id(self) -> str:
+        return f"{self.id}-filter"
 
     def compose(self) -> ComposeResult:
         yield Label(str(self.spec.label), classes="ct-field-label")
         yield from elucidation_widgets(self.spec.help, "ct-field-help")
+        if len(self.spec.options) > MULTICHOICE_FILTER_THRESHOLD:
+            yield Input(placeholder=f"Filter {self.spec.label}...", id=self._filter_id,
+                        classes="ct-multichoice-filter")
+        self._boxes = {}
+        self._labels = {}
+        self._option_widgets = {}
+        self._heading_members = {}
+        self._heading_for_value = {}
+        groups = self.spec.groups or {}
+        current_heading_widget = None
+        current_heading_text = None
         for value, option_label in self.spec.options:
+            self._labels[value] = option_label
+            heading_text = groups.get(value)
+            if heading_text is not None and heading_text != current_heading_text:
+                heading_widget = Static(heading_text, classes="ct-elucidation-heading")
+                yield heading_widget
+                current_heading_widget = heading_widget
+                current_heading_text = heading_text
+                self._heading_members[heading_widget] = []
+            if heading_text is not None and heading_text == current_heading_text:
+                self._heading_members[current_heading_widget].append(value)
+                self._heading_for_value[value] = current_heading_widget
             # `classes="ct-checkbox-compact"` (round 6, coordinator addendum): a bare `Checkbox`
             # defaults to `border: tall` (Textual's own `ToggleButton.DEFAULT_CSS`) -- a full
             # top+bottom rule around EVERY option; stacked across a catalog of a dozen-plus
@@ -267,7 +333,14 @@ class MultiChoiceFieldWidget(Vertical):
                           id=f"{self.id}-opt-{value}", classes="ct-checkbox-compact")
             self._boxes[value] = cb
             yield cb
-            yield from elucidation_widgets((self.spec.option_help or {}).get(value), "ct-choice-help")
+            widgets_for_value = [cb]
+            for w in elucidation_widgets((self.spec.option_help or {}).get(value), "ct-choice-help"):
+                yield w
+                widgets_for_value.append(w)
+            self._option_widgets[value] = widgets_for_value
+        self._no_match_static = Static("", id=f"{self.id}-no-match", classes="ct-blocked-reason")
+        self._no_match_static.display = False
+        yield self._no_match_static
 
     def on_checkbox_changed(self, event: Checkbox.Changed) -> None:
         for value, cb in self._boxes.items():
@@ -280,3 +353,33 @@ class MultiChoiceFieldWidget(Vertical):
                 if self._on_change is not None:
                     self._on_change()
                 return
+
+    def on_input_changed(self, event: Input.Changed) -> None:
+        if event.input.id != self._filter_id:
+            return
+        event.stop()  # this Input is the filter box, never a section field -- never bubble it
+        self._filter_text = event.value
+        self._apply_filter()
+
+    def _apply_filter(self) -> None:
+        """Toggles `.display` on every already-built row -- see this class's own docstring for
+        why this is a toggle, never a `recompose()`. Fully synchronous: no keystroke can ever
+        outrun it, because there is nothing here to await."""
+        needle = self._filter_text.strip().lower()
+        visible_headings: set = set()
+        shown = 0
+        for value, widgets in self._option_widgets.items():
+            label = self._labels[value]
+            matches = not needle or needle in label.lower() or needle in value.lower()
+            for w in widgets:
+                w.display = matches
+            if matches:
+                shown += 1
+                heading = self._heading_for_value.get(value)
+                if heading is not None:
+                    visible_headings.add(heading)
+        for heading_widget in self._heading_members:
+            heading_widget.display = heading_widget in visible_headings
+        if self._no_match_static is not None:
+            self._no_match_static.update(f"no option matches {self._filter_text!r}" if needle else "")
+            self._no_match_static.display = bool(needle) and shown == 0

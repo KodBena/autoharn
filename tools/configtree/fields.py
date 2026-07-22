@@ -225,7 +225,18 @@ class MultiChoiceField:
     slugs). The model VALUE is a `list[str]` (option values currently checked, catalog order,
     never a joined string) -- `submit`/config round-trips read/write this SAME typed list; only a
     TOML file's own array-of-strings representation is an honest re-encoding of it, never a
-    comma-joined scalar. `shared` -- see this module's own "SHARED-FIELD DOCTRINE" note above."""
+    comma-joined scalar. `shared` -- see this module's own "SHARED-FIELD DOCTRINE" note above.
+
+    `groups` (MEDIUM audit finding, ledger row 1130's own sibling audit -- "hydration's
+    36-checkbox catalog renders as one unbroken scroll"): OPTIONAL `{option_value: heading_text}`
+    -- an option whose value is a key here gets a REAL sub-heading (`widgets.py`'s own
+    `ElucidationHeading` rendering, the SAME machinery `substrate`'s Existing-db/Dedicated-db
+    groups already use) rendered immediately before it, IF that heading text differs from the
+    heading already showing (so a contiguous run of options sharing one heading gets it ONCE, at
+    the top of the run, not repeated per option). Every option named here must be one of
+    `options`' own values (checked below, same discipline as `option_help`); an option NOT named
+    here renders with no heading above it (legal -- grouping is optional, not every catalog needs
+    one)."""
     name: "str | FieldName"
     label: "str | Label"
     options: tuple[tuple[str, str], ...]
@@ -233,6 +244,7 @@ class MultiChoiceField:
     shared: bool = False
     help: "ElucidationValue | None" = None
     option_help: "dict[str, ElucidationValue] | None" = None
+    groups: "dict[str, str] | None" = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "name", _coerce_name(self.name))
@@ -263,6 +275,13 @@ class MultiChoiceField:
                 if isinstance(opt_help, str):
                     _check_no_bare_pipe(opt_help,
                                          owner=f"MultiChoiceField {self.name} option_help[{opt_val!r}]")
+        if self.groups is not None:
+            unknown_g = set(self.groups) - set(values)
+            if unknown_g:
+                raise ValueError(f"MultiChoiceField {self.name} groups names unknown "
+                                  f"option(s): {sorted(unknown_g)}")
+            for heading in self.groups.values():
+                _check_no_bare_pipe(heading, owner=f"MultiChoiceField {self.name} groups heading")
 
 
 Field = Union[TextField, ChoiceField, ConfirmField, ListField, MultiChoiceField]

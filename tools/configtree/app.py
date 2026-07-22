@@ -32,7 +32,8 @@ from textual.widgets import ContentSwitcher, Footer, Header, Static, Tree
 
 from tools.configtree.actions import ActionPane
 from tools.configtree.measure import MEASURE
-from tools.configtree.panes import CommitPane, SectionPane
+from tools.configtree.commit_pane import CommitPane
+from tools.configtree.panes import SectionPane
 from tools.configtree.spec import (BLOCKED, COMPLETE, INVALID, ActionSpec, CommitSpec,
                                     SectionSpec, section_status, validate_shared_ownership)
 
@@ -106,6 +107,15 @@ class ConfigTreeApp(App):
     (the Qt-idiom checklist look: a thin/no rule between entries, not a boxed control per row) --
     the option's own label and juxtaposed elucidation line underneath are separation enough. */
     .ct-checkbox-compact {{ border: none; padding: 0 1; }}
+    /* C24/C26 (ledger row 1130's own sibling audit): the commit sweep+commit act now runs off
+    the UI thread in a worker -- this is its ONLY visible chrome while running (the button's own
+    label stays fixed; a disabled button alone is not a busy INDICATOR, C26's own distinction). */
+    .ct-commit-busy {{ color: $warning; padding: 0 1; max-width: {MEASURE}; }}
+    /* MEDIUM audit finding (ledger row 1130's own sibling audit): the live filter Input a
+    large MultiChoiceField grows above `widgets.MULTICHOICE_FILTER_THRESHOLD` -- bounded at
+    measure like every other data-entry control this library caps, margined off from the
+    catalog below it. */
+    .ct-multichoice-filter {{ max-width: {MEASURE}; margin-bottom: 1; }}
     """
     BINDINGS = [Binding("ctrl+q", "quit_app", "Quit", show=True, priority=True),
                 Binding("ctrl+c", "quit_app", "Quit", show=False, priority=True),

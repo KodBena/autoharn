@@ -1,0 +1,38 @@
+seen-red/setup-tui-adr-synopsis-drift -- banked RED evidence (both-polarity proof, fixture-census)
+
+Maintainer question, 2026-07-22: "the ADR-adoption catalog derives live from law/adr/*.md
+(drift-proof), but tools/setup_tui/data/adr_synopses.toml is static and already stale twice
+today: its 0019 entry predates that ADR's Rules 3 and 4, and the 0003 entry's staleness after
+this morning's law amendment was caught by human eyes only." Fix: each synopsis entry gains a
+source_sha256 of its ADR file's content at synopsis-authoring time (a typed field, ledger row
+1105 -- the field's charter is AdrSynopsisDrift, a real dataclass, never a bare tuple); a check
+wired both into content.py's loader validation (source_sha256 must be a genuine 64-hex-char
+sha256 digest, structural shape only) and into durable_decisions.py's cross-file freshness check
+(check_adr_synopsis_freshness/validate_adr_synopsis_freshness), called at TUI start
+(tools/setup_tui/app.py's main()): a MISSING synopsis for a cataloged ADR is a construction-time
+REFUSAL naming the ADR; a STALE hash (declared != the ADR file's current bytes) is a loud
+WARNING naming both hashes, never a refusal, since a stale synopsis must not brick setup while
+awaiting a human re-derivation pass.
+
+Same house idiom as seen-red/setup-tui-feature-facts-drift (feature_facts.check_registry's own
+injectable comparator, WF2): check_adr_synopsis_freshness accepts a synthetic adrs/hashes/
+read_bytes so this fixture observes both red legs without mutating durable_decisions.py's real
+globals or writing any real file.
+
+As part of this fix, the 0019 synopsis was re-derived from the ADR's current four-rule text
+(Rule 1 genre convention, Rule 2 novelty-is-anti-pattern, Rule 3 unique placement typed, Rule 4
+data topology as the UI's default information architecture -- master-detail, never a flat
+sibling list for a dependent entity), the 0003 entry was confirmed to already match the current
+post-strike text (no change needed), and all 20 ADRs' source_sha256 hashes were freshly stamped
+this session -- including 0001, which stays "(synopsis pending maintainer review)" but is now
+hash-stamped and stale-checked exactly like every other entry.
+
+Real captured stdout, a clean run against this commit's tree (zero residue, exit 0):
+
+case 1 ok (GREEN): the real 20-ADR catalog agrees with the real recorded hashes -- zero missing, zero stale
+case 2 ok (RED leg A, MISSING): a synthetic ADR number with no synopsis entry at all is reported MISSING: ['9999']
+case 2b ok (RED, real entry point): validate_adr_synopsis_freshness() REFUSES (AdrSynopsisMissingError) when ADR-0000's own hash is absent, naming it: tools/setup_tui/durable_decisions.py: 1 cataloged ADR(s) have NO synopsis entry in adr_synopses.toml at all: ['0000'] --...
+case 3 ok (RED leg B, STALE): 20 synopsis entries report STALE against fabricated ADR bytes -- e.g. ADR-0000: declared 5e2de2dd4e0c... != actual 6f0174ada0c9...
+case 3b ok (GREEN, real entry point does NOT refuse on stale): validate_adr_synopsis_freshness() RETURNS 20 stale entries instead of raising -- a stale synopsis warns, it does not brick setup
+case 4 ok (GREEN, the maintainer's own commission): validate_adr_synopsis_freshness() -- the real, wired, no-substitution call -- returns zero stale entries: all 20 ADR synopses (0019's re-derived four-rule text, 0003 confirmed current, every hash stamped this session, 0001 pending-review but hash-stamped like the rest) are fresh
+ALL CASES OK -- durable_decisions.check_adr_synopsis_freshness/validate_adr_synopsis_freshness: GREEN against the real, freshly-stamped catalog, RED-first for a MISSING synopsis (construction-time refusal, naming the ADR) and a STALE synopsis (loud warning naming both hashes, never a refusal), both via the SAME injectable-comparator house idiom seen-red/setup-tui-feature-facts-drift established.

@@ -45,6 +45,7 @@ Lazy imports are banned (CLAUDE.md, 2026-07-02): every import here is top of fil
 """
 from __future__ import annotations
 
+import hashlib
 import os
 import re
 from dataclasses import dataclass
@@ -179,6 +180,75 @@ def list_adrs() -> list[tuple[str, str, str]]:
         out.append((number, title, str(path.relative_to(REPO_ROOT))))
     out.sort(key=lambda t: t[0])
     return out
+
+
+@dataclass(frozen=True)
+class AdrSynopsisDrift:
+    """One STALE synopsis -- its own `source_sha256` (recorded at authoring time) no longer
+    matches the ADR file's CURRENT bytes. Named, not a bare tuple (the maintainer's standing "no
+    bare types" rule, ledger row 1105) -- a stale synopsis is one distinct, checkable fact, not
+    three loose strings a caller has to remember the order of."""
+    number: str
+    declared_sha256: str
+    actual_sha256: str
+
+
+class AdrSynopsisMissingError(RuntimeError):
+    """A cataloged ADR (one `list_adrs()` names) has NO synopsis entry in `adr_synopses.toml` at
+    all -- a construction-time refusal (ADR-0002 rule 1), never a silent gap an operator
+    discovers only by noticing an unusually-terse hydration checkbox."""
+
+
+def check_adr_synopsis_freshness(
+    *, adrs: "list[tuple[str, str, str]] | None" = None,
+    hashes: "dict[str, str] | None" = None,
+    read_bytes: "object | None" = None,
+) -> "tuple[list[str], list[AdrSynopsisDrift]]":
+    """DRIFTABILITY (maintainer question, 2026-07-22: "the ADR-adoption catalog derives live
+    from law/adr/*.md ... but adr_synopses.toml is static and already stale twice today").
+    Returns `(missing, stale)`: `missing` -- ADR numbers `list_adrs()` (or an injected
+    equivalent) names that have NO synopsis hash recorded at all; `stale` -- one
+    `AdrSynopsisDrift` per synopsis whose OWN declared `source_sha256` no longer matches the ADR
+    file's CURRENT bytes. INJECTABLE (the SAME house idiom `feature_facts.check_registry` already
+    uses, seen-red/setup-tui-feature-facts-drift's own fixture: a fixture feeds a SYNTHETIC
+    `adrs`/`hashes`/`read_bytes` without mutating this module's real globals, so a red leg never
+    corrupts the real catalog) -- called with no arguments, it checks the REAL catalog against
+    the REAL recorded hashes. NEVER RAISES itself -- the caller decides what MISSING vs STALE
+    means for its own run (see `validate_adr_synopsis_freshness`, the real wired case: a
+    construction-time refusal for MISSING, a loud but non-fatal warning for STALE)."""
+    adrs = adrs if adrs is not None else list_adrs()
+    hashes = hashes if hashes is not None else content.ADR_SYNOPSIS_HASHES
+    read_bytes = read_bytes or (lambda relpath: (REPO_ROOT / relpath).read_bytes())
+    missing: list[str] = []
+    stale: list[AdrSynopsisDrift] = []
+    for number, _title, relpath in adrs:
+        declared = hashes.get(number)
+        if declared is None:
+            missing.append(number)
+            continue
+        actual = hashlib.sha256(read_bytes(relpath)).hexdigest()
+        if actual != declared:
+            stale.append(AdrSynopsisDrift(number=number, declared_sha256=declared,
+                                           actual_sha256=actual))
+    return missing, stale
+
+
+def validate_adr_synopsis_freshness() -> "tuple[AdrSynopsisDrift, ...]":
+    """The REAL, wired check (called once at TUI start, `tools.setup_tui.app.main`): REFUSES
+    loudly (`AdrSynopsisMissingError`, naming every missing number at once, never a first-one-
+    wins early exit) if any cataloged ADR has no synopsis hash recorded at all; otherwise
+    returns every STALE entry for the caller to render as a loud, NON-FATAL warning naming both
+    hashes -- a stale synopsis awaits a human re-derivation pass, it must not brick setup while
+    that pass is pending (the maintainer's own ruling, this fix's commission)."""
+    missing, stale = check_adr_synopsis_freshness()
+    if missing:
+        raise AdrSynopsisMissingError(
+            f"tools/setup_tui/durable_decisions.py: {len(missing)} cataloged ADR(s) have NO "
+            f"synopsis entry in adr_synopses.toml at all: {sorted(missing)} -- every adoptable "
+            f"ADR needs an authored synopsis row (even a '(synopsis pending maintainer review)' "
+            f"placeholder, stamped with its own source_sha256) before the hydration screen can "
+            f"start.")
+    return tuple(stale)
 
 
 _ADR_SYNOPSIS_PENDING = "(synopsis pending maintainer review)"

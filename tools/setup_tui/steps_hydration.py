@@ -20,9 +20,39 @@ from tools.setup_tui.runner import legacy_led_path, resolve_led
 
 _SLUG = "hydration"
 
+# GROUPING (MEDIUM audit finding, ledger row 1130's own sibling audit: "hydration's 36-checkbox
+# catalog renders as one ~218-row unbroken scroll"). Both catalogs get MECHANICAL sub-headings
+# (derived from existing data, never a hand-authored taxonomy that could misclassify a rule's own
+# content -- ADR-0012 P10's own "data is not code" boundary read the safe direction: inventing a
+# thematic category per entry is a CONTENT judgment call this module has no business making
+# unreviewed): ADRs group by their own decade (0000s/0010s/...), a grouping that already exists
+# in the numbering itself; durable decisions, which carry no numeric or thematic axis in their
+# own data, group by fixed-size chunks in catalog (registration) order -- a real visual break
+# every `DURABLE_DECISION_GROUP_SIZE` entries, same rationale as `widgets.
+# MULTICHOICE_FILTER_THRESHOLD` (Miller 1968's glanceable-span heuristic), not a claim that
+# entries N..N+4 share a theme.
+DURABLE_DECISION_GROUP_SIZE = 5
+
 
 def _decision_act(led: str, statement: str):
     return CommandAct(argv=(led, "decision", statement)), f"decision:{hash(statement) & 0xffffffff}"
+
+
+def _durable_decision_groups(catalog: list) -> dict[str, str]:
+    groups: dict[str, str] = {}
+    for i, d in enumerate(catalog):
+        lo = (i // DURABLE_DECISION_GROUP_SIZE) * DURABLE_DECISION_GROUP_SIZE + 1
+        hi = min(lo + DURABLE_DECISION_GROUP_SIZE - 1, len(catalog))
+        groups[d.slug] = f"Durable decisions {lo}-{hi} of {len(catalog)}"
+    return groups
+
+
+def _adr_decade_groups(adrs: list) -> dict[str, str]:
+    groups: dict[str, str] = {}
+    for number, _, _ in adrs:
+        decade = (int(number) // 10) * 10
+        groups[number] = f"ADR {decade:04d}s"
+    return groups
 
 
 def fields(state: dict) -> tuple:
@@ -32,8 +62,10 @@ def fields(state: dict) -> tuple:
     # projection is refused at App construction, `tools.configtree.spec.validate_shared_ownership`).
     decision_opts = tuple((d.slug, d.slug) for d in durable_decisions.CATALOG)
     decision_help = {d.slug: d.elements() for d in durable_decisions.CATALOG}
+    decision_groups = _durable_decision_groups(durable_decisions.CATALOG)
     adrs = durable_decisions.list_adrs()
     adr_opts = tuple((number, f"ADR-{number}: {title}") for number, title, _ in adrs)
+    adr_groups = _adr_decade_groups(adrs)
     # ORIENTATION, NOT THE LAW (maintainer round-6 addendum: "a pointer is not an elucidation"):
     # a real 1-3 sentence synopsis of what the ADR binds you to, THEN the file-path pointer --
     # `durable_decisions.adr_synopsis_elements` is the one place this is built, from
@@ -54,11 +86,12 @@ def fields(state: dict) -> tuple:
                      help=feature_facts.fact("hydration_role_charters").elements()),
         MultiChoiceField(name="durable_decisions", label="Durable decisions to adopt",
                           options=decision_opts, option_help=decision_help,
+                          groups=decision_groups,
                           help="Each selected entry writes one real 'led decision' row and "
                           "compiles a CLAUDE.md fragment for the new world -- the why/citation "
                           "for each is shown under its own checkbox."),
         MultiChoiceField(name="adopt_adrs", label="ADR numbers to adopt", options=adr_opts,
-                          option_help=adr_help,
+                          option_help=adr_help, groups=adr_groups,
                           help="Each selected ADR gets one real 'led decision' row and a "
                           "CLAUDE.md pointer line naming it."),
     )
