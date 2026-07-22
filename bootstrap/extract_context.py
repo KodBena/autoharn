@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-22T02:32:51Z
-#   last-change: 2026-07-22T02:36:53Z
+#   last-change: 2026-07-22T02:42:43Z
 #   contributors: 1fa3ab69/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -84,6 +84,8 @@ never a second hand-rolled one). Lazy imports banned (top-of-file only).
 from __future__ import annotations
 
 import argparse
+import csv
+import io
 import json
 import os
 import subprocess
@@ -139,20 +141,27 @@ def _load_deployment(path: Path):
 def _psql_tuples(dep, sql: str) -> subprocess.CompletedProcess:
     """SET ROLE <dep.role> first — this verb's honest job is "what can the OPERATING AGENT see",
     the SAME posture distance-to-clean.tmpl's own `_psql_tuples` already documents (ADR-0012 P1:
-    reused convention, not re-derived)."""
+    reused convention, not re-derived). `--csv`, not `-t -A -F<delim>`: a real ledger statement
+    routinely carries embedded newlines (found live against the `experience` world's own row
+    397's multi-line resource declaration) that `-t -A`'s one-line-per-row assumption silently
+    mis-splits into extra phantom rows -- `--csv`'s RFC-4180 quoting survives embedded newlines,
+    commas, and the delimiter alike, parsed back out with the stdlib `csv` module below rather
+    than a hand-rolled splitter that would need to reinvent the same quoting rules."""
     full = f"SET ROLE {dep.role};\n{sql}"
     return subprocess.run(
-        ["psql", "-h", dep.host, "-d", dep.db, "-t", "-A", "-F", "\x1f", "-v", "ON_ERROR_STOP=1", "-c", full],
-        capture_output=True, text=True, timeout=30)
+        ["psql", "-h", dep.host, "-d", dep.db, "--csv", "-v", "ON_ERROR_STOP=1", "-c", full],
+        capture_output=True, text=True, timeout=60)
 
 
 def _rows(r: subprocess.CompletedProcess) -> list[list[str]]:
-    """Drop the echoed leading SET ROLE statement line (same convention as distance-to-clean.tmpl's
-    `_last_stmt_rows`); split each remaining line on the unit-separator field delimiter (-F above)
-    so a field itself containing '|' cannot be mis-split."""
-    lines = r.stdout.strip("\n").splitlines()
-    body = lines[1:] if lines else []
-    return [ln.split("\x1f") for ln in body if ln != ""]
+    """Drop the echoed leading `SET` line (the SET ROLE statement's own one-word confirmation,
+    psql's normal non-csv echo for a non-SELECT statement -- it precedes the CSV block, is never
+    part of it) and the CSV block's own header row (column names), leaving just data rows."""
+    text = r.stdout
+    if text.startswith("SET\n"):
+        text = text[len("SET\n"):]
+    rows = list(csv.reader(io.StringIO(text)))
+    return rows[1:] if rows else []
 
 
 def _column_exists(dep, table: str, column: str) -> bool:
