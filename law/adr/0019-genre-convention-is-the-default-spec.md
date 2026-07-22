@@ -91,8 +91,23 @@ both layers, not policed by eyes.
 ## 2026-07-22 — Provisional appendix attached (twenty proscriptions, blind-consult edition)
 
 *(Dated append per ADR-0005 Rule 8.)* A codebase-blind consult's twenty UI proscriptions
-are installed as [a PROVISIONAL appendix](0019-appendix-provisional-ui-proscriptions.md)
+are installed as a PROVISIONAL appendix (`0019-appendix-provisional-ui-proscriptions.md`,
+retired the same day by the later append below — see git history for its text)
 — binding defaults for new UI work, not ratified law; the appendix's own header carries
 the maintainer's verbatim terms, the surface-conflicts-never-silent rule, and the
 never-enforced-entries-get-culled condition. Ratification, amendment, or striking is a
 future maintainer act informed by the phase-2 consolidation consult.
+
+## 2026-07-22 — Companion adopted: the consolidated proscription set (C1–C29)
+
+*(Dated append per ADR-0005 Rule 8; supersedes this file's earlier provisional-appendix
+append of the same day.)* The two-phase consult's consolidated set of twenty-nine UI
+proscriptions is adopted as this ADR's standing companion:
+[0019-appendix-ui-proscriptions.md](0019-appendix-ui-proscriptions.md). The maintainer's
+terms, restated as this ADR's own reading rule: **the companion's Synopsis section is
+REQUIRED READING for anyone implementing UI work; the full rules and the critique are
+consulted per good judgement.** The earlier provisional appendix (the blind consult's
+twenty points) is retired in the companion's favor — every one of its rules survives
+inside the consolidated set with provenance tags, so this retirement removes a
+duplicate home, not content. The never-enforced-entries-get-culled condition carries
+forward to the companion.
