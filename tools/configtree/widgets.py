@@ -6,6 +6,8 @@ No autoharn vocabulary here -- this module only knows the four field shapes `fie
 declares."""
 from __future__ import annotations
 
+from typing import Callable
+
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
 from textual.screen import ModalScreen
@@ -52,10 +54,14 @@ def read_field_value(f, widget) -> object:
 
 class FieldError(Static):
     """One inline validation-error line, rendered directly under its field -- never a scrollback
-    line (design/FABLE-SETUP-TUI-REBUILD-SPEC.md §3: 'a refusal renders inline on the form')."""
+    line (design/FABLE-SETUP-TUI-REBUILD-SPEC.md §3: 'a refusal renders inline on the form').
+    `markup=False`: a validator's own message is free-form text that may legitimately contain
+    Rich-markup-shaped substrings (e.g. a regex character class like `[A-Za-z0-9_]+` in a
+    "must match ..." message) -- interpreting it as markup would silently eat the brackets
+    instead of showing the operator the real message."""
 
     def __init__(self, text: str = "") -> None:
-        super().__init__(text, classes="ct-field-error")
+        super().__init__(text, classes="ct-field-error", markup=False)
 
     def set_text(self, text: str) -> None:
         self.update(text)
@@ -118,14 +124,19 @@ class AddItemModal(ModalScreen[dict | None]):
 
 
 class ListFieldWidget(Vertical):
-    """The `ListField` renderer: an already-added-rows `ListView` plus Add/Remove buttons. Rows
-    live in `self.rows` (`list[dict]`, insertion order) -- the section pane reads this back at
-    submit time via `.rows`, exactly like `read_field_value` reads any other widget's value."""
+    """The `ListField` renderer: an already-added-rows `ListView` plus Add/Remove buttons -- the
+    repeatable-row equivalent of a Qt list-editor's own +/- controls, not a save/apply ceremony
+    (there is nothing to "save": each Add/Remove writes `self.rows` immediately, live, and
+    `on_change` -- if given -- fires right after so the owning `SectionPane` can mirror the same
+    list into the shared state on the spot, matching every other field's live-write contract).
+    Rows live in `self.rows` (`list[dict]`, insertion order)."""
 
-    def __init__(self, spec: ListField, initial: list[dict] | None = None) -> None:
+    def __init__(self, spec: ListField, initial: list[dict] | None = None,
+                 on_change: "Callable[[], None] | None" = None) -> None:
         super().__init__(id=field_widget_id(spec.name))
         self.spec = spec
         self.rows: list[dict] = list(initial or [])
+        self._on_change = on_change
 
     def compose(self) -> ComposeResult:
         yield Label(str(self.spec.label))
@@ -146,6 +157,8 @@ class ListFieldWidget(Vertical):
     def add_row(self, row: dict) -> None:
         self.rows.append(row)
         self._refresh()
+        if self._on_change is not None:
+            self._on_change()
 
     def remove_selected(self) -> None:
         lv = self.query_one(f"#{self.id}-list", ListView)
@@ -153,6 +166,8 @@ class ListFieldWidget(Vertical):
         if idx is not None and 0 <= idx < len(self.rows):
             del self.rows[idx]
             self._refresh()
+            if self._on_change is not None:
+                self._on_change()
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         """Handled here, not by the enclosing `SectionPane` -- `event.stop()` keeps it from also

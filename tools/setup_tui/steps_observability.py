@@ -14,7 +14,8 @@ from tools.setup_tui.plan import DaemonSelection, PlanEntry, WriteAct
 def fields(state: dict) -> tuple:
     return (
         ConfirmField(name="run", label="Configure observability now?", default=True),
-        TextField(name="dest", label="Destination directory", default=state.get("dest", "")),
+        TextField(name="dest", label="Destination directory", default=state.get("dest", ""),
+                  shared=True),
         ConfirmField(name="otelcol", label="Select the OTel collector (otelcol-contrib) to start "
                      "with this world?"),
         ConfirmField(name="otel_watch", label="Select the OTel model-provenance watchdog "

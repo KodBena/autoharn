@@ -18,7 +18,7 @@ def fields(state: dict) -> tuple:
     rel_opts = tuple(content.PA_RELATION_CHOICES)
     return (
         TextField(name="dest", label="Destination directory (the born world)",
-                  default=state.get("dest", "")),
+                  default=state.get("dest", ""), shared=True),
         ListField(name="register", label="Register a principal",
                   item_fields=(TextField(name="name", label="Principal name"),
                                TextField(name="agent_class", label=f"Class {class_opts}"),

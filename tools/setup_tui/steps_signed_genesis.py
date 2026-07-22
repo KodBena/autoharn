@@ -18,7 +18,7 @@ def fields(state: dict) -> tuple:
     return (
         ConfirmField(name="run", label=content.SCREEN_PROMPTS["signed_genesis_ceremony"], default=True),
         TextField(name="dest", label="Destination directory (the born world)",
-                  default=state.get("dest", "")),
+                  default=state.get("dest", ""), shared=True),
         TextField(name="statement", label="Founding commission statement (the ask this world "
                   "exists to carry out)", required=False),
         ConfirmField(name="use_scratch_identity", label="Use a throwaway/fixture GPG identity "

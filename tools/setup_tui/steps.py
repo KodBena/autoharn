@@ -57,6 +57,18 @@ def initial_state(*, dry_run: bool = False, accept_unverified_genesis: bool = Fa
     return state
 
 
+def reset_accumulators(state: dict) -> None:
+    """`CommitSpec.reset` (design/FABLE-SETUP-TUI-REBUILD-SPEC.md §3 v2's live-model rebuild,
+    2026-07-22 maintainer review): `tools.configtree.panes.CommitPane`'s own submit sweep calls
+    every section's `submit` FRESH on every commit attempt (a retry after fixing one section's
+    business-rule refusal must re-derive the Plan from CURRENT field values, never append onto a
+    stale prior attempt) -- this is the hook that resets THIS consumer's own accumulators
+    (`_plan`/`_checklist`) before that replay, leaving every OTHER state key (every decided
+    field's own value, `_repo_root`, `dry_run`, `accept_unverified_genesis`) untouched."""
+    state["_plan"] = Plan()
+    state["_checklist"] = ck.Checklist()
+
+
 def _teardown_scratch_gnupghomes(state: dict) -> None:
     bindings = state.get("_last_commit_bindings", {})
     for key in state.get("scratch_gnupghome_produces_keys", []):
@@ -179,4 +191,5 @@ def _dispatch_result(state: dict, entry, result, proc, lines: list) -> None:
     lines.append(f"  -> {'WITNESSED' if result.ok else 'REFUSED'}")
 
 
-COMMIT = CommitSpec(render_summary=render_summary, commit=commit, confirm_label="Commit this plan")
+COMMIT = CommitSpec(render_summary=render_summary, commit=commit, confirm_label="Commit this plan",
+                     reset=reset_accumulators)

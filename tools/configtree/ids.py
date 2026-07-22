@@ -89,6 +89,28 @@ class ExitCode:
         return self.value
 
 
+@dataclass(frozen=True)
+class ScopedFieldKey:
+    """The typed model key for one section's own live field value: `(section, field)`, NEVER a
+    bare field name (maintainer ruling 2026-07-22, ledger row 1105's "no bare types" -- a live
+    defect: toggling a checkbox in one tree section toggled a "corresponding-ish" checkbox in a
+    DIFFERENT section, because both sections' `ConfirmField(name="run", ...)` wrote through the
+    SAME bare `state["run"]` slot -- two independent facts sharing one home, ADR-0012 principle
+    C/P1/P2's own "hidden state keyed by an insufficiently distinguishing key" shape). A frozen
+    dataclass of two already-checked types is hashable for free (both `NodeId`/`FieldName` wrap
+    an immutable `str`), so this is a legal, ordinary dict key -- `tools.configtree.panes.
+    SectionPane`'s own live write-through choke point is the ONE place a field's raw Changed
+    value is stored, and it is ALWAYS keyed by `ScopedFieldKey`, never by `field.name` alone,
+    making the aliasing this type exists to forbid unconstructable, not merely avoided by
+    convention. The one narrow, EXPLICIT exception (a field a consumer deliberately declares
+    `shared=True`, e.g. "the destination directory" genuinely meaning the same fact everywhere
+    it appears) bypasses this type on purpose and writes the bare top-level state key instead --
+    see `fields.Field`'s own `shared` flag for that opt-in, reviewed case by case, never a
+    default."""
+    section: NodeId
+    field: FieldName
+
+
 def unique_node_ids(slugs: "list[str]") -> "tuple[NodeId, ...]":
     """The ONE place a list of raw section slugs becomes a checked, DEDUPLICATED tuple of
     `NodeId` -- each slug's own shape is checked by `NodeId.__post_init__`; this function adds

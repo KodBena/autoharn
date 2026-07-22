@@ -95,8 +95,9 @@ def birth_fields(state: dict) -> tuple:
         TextField(name="host", label="Postgres host", default=state.get("pghost", "192.168.122.1"),
                   required=False),
         TextField(name="db", label="Database", default=state.get("db", "toy"), required=False),
-        TextField(name="world", label="World name", default=state.get("world", "")),
-        TextField(name="dest", label="Destination directory", default=state.get("dest", "")),
+        TextField(name="world", label="World name", default=state.get("world", ""), shared=True),
+        TextField(name="dest", label="Destination directory", default=state.get("dest", ""),
+                  shared=True),
         TextField(name="name", label="Project name (deployment.json 'name')", required=False),
     )
 

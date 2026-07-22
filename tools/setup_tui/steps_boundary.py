@@ -20,8 +20,10 @@ def fields(state: dict) -> tuple:
         ConfirmField(name="run", label="Configure the boundary service now?", default=True),
         ConfirmField(name="override", label="Override and proceed WITHOUT a confirmed successful "
                      "birth? (only used if birth was not confirmed)"),
-        TextField(name="dest", label="Destination directory", default=state.get("dest", "")),
-        TextField(name="world", label="World/deployment name", default=state.get("world", "")),
+        TextField(name="dest", label="Destination directory", default=state.get("dest", ""),
+                  shared=True),
+        TextField(name="world", label="World/deployment name", default=state.get("world", ""),
+                  shared=True),
         TextField(name="host", label="Postgres host", default=state.get("pghost", "192.168.122.1"),
                   required=False),
         TextField(name="db", label="Database", default=state.get("db", "toy"), required=False),

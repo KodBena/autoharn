@@ -15,15 +15,20 @@ what `--from-config`'s "zero Textual involved" headless path depends on. A consu
 the live App imports it explicitly: `from tools.configtree.app import ConfigTreeApp`."""
 from __future__ import annotations
 
-from tools.configtree.fields import ChoiceField, ConfirmField, Field, ListField, TextField
-from tools.configtree.ids import ExitCode, FieldName, Label, NodeId
+from tools.configtree.fields import (ChoiceField, ConfirmField, Field, ListField, TextField,
+                                      default_of, get_field_value, set_field_value,
+                                      validate_value)
+from tools.configtree.ids import ExitCode, FieldName, Label, NodeId, ScopedFieldKey
 from tools.configtree.spec import (BLOCKED, COMPLETE, INCOMPLETE, INVALID, CommitSpec,
                                     SectionResult, SectionSpec, all_sections_complete,
+                                    ready_for_commit, section_answers, section_field_errors,
                                     section_status)
 
 __all__ = [
-    "ChoiceField", "ConfirmField", "Field", "ListField", "TextField",
-    "ExitCode", "FieldName", "Label", "NodeId",
+    "ChoiceField", "ConfirmField", "Field", "ListField", "TextField", "default_of",
+    "get_field_value", "set_field_value", "validate_value",
+    "ExitCode", "FieldName", "Label", "NodeId", "ScopedFieldKey",
     "BLOCKED", "COMPLETE", "INCOMPLETE", "INVALID",
-    "CommitSpec", "SectionResult", "SectionSpec", "all_sections_complete", "section_status",
+    "CommitSpec", "SectionResult", "SectionSpec", "all_sections_complete", "ready_for_commit",
+    "section_answers", "section_field_errors", "section_status",
 ]

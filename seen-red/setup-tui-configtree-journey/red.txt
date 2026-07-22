@@ -3,40 +3,66 @@ seen-red/setup-tui-configtree-journey -- banked RED evidence (both-polarity proo
 design/FABLE-SETUP-TUI-REBUILD-SPEC.md §3 v2/§4 (2026-07-22 commission, hierarchical
 configuration editor): "one fixture drives the REAL screen list end-to-end ... focus movement,
 scrolling, arrow selection, and back/forward across screens all WITNESSED in the Pilot
-transcript -- no synthetic screen lists." This is the actual stdout of
-`.venv/bin/python seen-red/setup-tui-configtree-journey/run_fixtures.py` (a venv with
-`textual` installed -- `python3 -m venv .venv && .venv/bin/pip install textual`), against the
-REAL tools.setup_tui.steps.SECTIONS registry and the REAL tools.configtree.app.ConfigTreeApp,
-witnessed 2026-07-22:
+transcript -- no synthetic screen lists." LIVE-MODEL REBUILD, same day: the maintainer rejected
+the per-section Save button ("the form IS a live view of the model"); this fixture was rewritten
+so NO CASE presses a save button (there is none) -- every field write is a live widget `.value =`
+assignment. A SEPARATE same-day maintainer report then caught a live state-aliasing defect
+(toggling a checkbox in one section toggled a "corresponding-ish" checkbox in a different one);
+case 0 reproduces that EXACT observation across every field kind and proves the structural fix
+(`ids.ScopedFieldKey`).
 
-case 1a ok: late-first select of 'hydration' reads BLOCKED, reason named: 'BLOCKED -- requires: Fork/target or Birth (a destination directory) to be set first'
-case 1b ok: revisiting 'hydration' after the prerequisite is met reads UNBLOCKED
-case 2a ok (RED): invalid dedicated-db identifier 'bad name' -- section status = invalid
-case 2b ok (GREEN): the same section, corrected, now reads status = complete
+This is the actual stdout of `.venv/bin/python seen-red/setup-tui-configtree-journey/
+run_fixtures.py` (a venv with `textual` installed -- `python3 -m venv .venv && .venv/bin/pip
+install textual`), against the REAL tools.setup_tui.steps.SECTIONS registry and the REAL
+tools.configtree.app.ConfigTreeApp, witnessed 2026-07-22:
+
+case 0a ok (the maintainer's exact reproduction, FIXED): toggling preflight's 'run' checkbox to False leaves substrate's OWN 'run' checkbox at True -- no cross-section aliasing
+case 0b ok: typing into substrate's 'host' field ('aliasing-probe-host') leaves rehearsal's OWN 'host' field unchanged ('192.168.122.1')
+case 0c ok: typing into birth's 'name' field leaves signed-genesis's OWN unrelated 'name' field (a GPG key Name-Real) untouched
+case 0d ok: the underlying model itself holds two DIFFERENT values for the same field spec under two different section keys -- not just a widget-level accident
+case 0e ok: a synthetic ChoiceField sharing one name across two sections resolves to two INDEPENDENT model slots (get_field_value/set_field_value, the library's own primitives) -- the fix is structural (ids.ScopedFieldKey), not an instance patch
+case 0f ok: a synthetic ListField sharing one name across two sections resolves to two INDEPENDENT model slots too -- all four field kinds proven alias-proof
+case 1a ok: late-first select of 'hydration' reads BLOCKED, reason named: 'BLOCKED -- requires: Fork/target or Birth (a destination directory) to be set first' (tree icon: '⧖ Hydration')
+case 1b ok: hydration's tree icon flips the INSTANT fork-target's dest is typed -- '⧖ Hydration' -> '✓ Hydration' -- no save, no re-visit to hydration at all
+case 2a ok (RED, live, no save): typing 'bad name' shows inline error 'database name must match [A-Za-z0-9_]+' and section status = invalid, focus never left the field
+case 2b ok (GREEN, live, no save): correcting the SAME field clears the inline error and the section reads complete, still no save press anywhere
+case 3a ok: every real section reads complete from LIVE TYPING ALONE, no save anywhere -- status line: '10/10 sections complete -- ready to commit.'
+case 3b ok (RED-then-GREEN): commit button was disabled mid-journey, before every section was complete
+case 3c ok: commit button now enabled -- 'enabled exactly when the record is complete'
 $ <repo>/bootstrap/new-project.sh /tmp/setup_tui_rehearsal_probeworldNNNN --new-world probeworldNNNN --db toy --host 192.168.122.1 --force
   [dry-run: not executed]
 $ <repo>/bootstrap/teardown-world.sh probeworldNNNN --db toy --host 192.168.122.1 --dir /tmp/setup_tui_rehearsal_probeworldNNNN
   [dry-run: not executed]
-case 3a ok: every real section saved clean -- status line: '10/10 sections complete -- ready to commit.'
-case 3b ok (RED-then-GREEN): commit button was disabled mid-journey, before every section was complete
-case 3c ok: commit button now enabled -- 'enabled exactly when the record is complete'
-case 3d ok: dry-run commit rendered 3 real checklist line(s), e.g. 'would save: /tmp/ctj-case3-dest/world-config.toml'
+case 3d ok: ONE commit press ran the full submit sweep (every section's real business logic, in order) then rendered 3 real checklist line(s), e.g. 'would save: /tmp/ctj-case3-dest/world-config.toml'
 case 3e ok: App.exit return_code == 0 (clean-completion exit-code contract)
 case 3f ok: zero residue -- /tmp/ctj-case3-dest was never created (dry-run decide-only)
-case 4a ok: arrow-key Tree navigation (3x down) + Enter selects the real 'pane-substrate' pane, no mouse and no programmatic select_node involved
-case 4b ok: Tab moves focus Tree(id='ct-tree') -> VerticalScroll(classes='ct-section-body')
-case 4c ok: the section pane's own VerticalScroll body scrolls (Offset(x=0, y=0) -> Offset(x=0, y=1))
-case 5 ok: ctrl+q -> App.return_code == 130 (interrupt exit-code convention)
-ALL CASES OK -- tools.configtree.app.ConfigTreeApp driven end-to-end through the REAL tools.setup_tui.steps.SECTIONS registry via Pilot: arbitrary-order navigation, dependency-blocked-with-reason + unblocking, per-field inline validation (both polarities), a full ten-section journey to a clean dry-run commit, keyboard/Tab/scroll navigation primitives, and ctrl+q's exit-code contract.
+$ <repo>/bootstrap/new-project.sh /tmp/setup_tui_rehearsal_probeworldNNNN --new-world probeworldNNNN --db toy --host 192.168.122.1 --force
+  [dry-run: not executed]
+$ <repo>/bootstrap/teardown-world.sh probeworldNNNN --db toy --host 192.168.122.1 --dir /tmp/setup_tui_rehearsal_probeworldNNNN
+  [dry-run: not executed]
+case 4a ok (RED): commit-sweep business rule ('statement' required inside submit, not a field validator) halts the commit, marks signed-genesis invalid, recorded: {'signed-genesis': {'statement': 'required'}}
+case 4b ok: revisiting signed-genesis shows the real refusal inline on 'statement': 'required'
+$ <repo>/bootstrap/new-project.sh /tmp/setup_tui_rehearsal_probeworldNNNN --new-world probeworldNNNN --db toy --host 192.168.122.1 --force
+  [dry-run: not executed]
+$ <repo>/bootstrap/teardown-world.sh probeworldNNNN --db toy --host 192.168.122.1 --dir /tmp/setup_tui_rehearsal_probeworldNNNN
+  [dry-run: not executed]
+case 4c ok (GREEN): fixing the one field and pressing Commit again succeeds
+case 5a ok: arrow-key Tree navigation (3x down) + Enter selects the real 'pane-substrate' pane, no mouse and no programmatic select_node involved
+case 5b ok: Tab moves focus Tree(id='ct-tree') -> VerticalScroll(classes='ct-section-body')
+case 5c ok: the section pane's own VerticalScroll body scrolls (Offset(x=0, y=0) -> Offset(x=0, y=1))
+case 6 ok: ctrl+q -> App.return_code == 130 (interrupt exit-code convention)
+ALL CASES OK -- tools.configtree.app.ConfigTreeApp driven end-to-end through the REAL tools.setup_tui.steps.SECTIONS registry via Pilot, LIVE-MODEL semantics throughout (no per-section save exists): a state-aliasing reproduction and structural fix across every field kind, arbitrary-order navigation with a blocked-to-unblocked flip on a SINGLE keystroke, live inline validation both polarities with focus never leaving the field, a full ten-section journey typed live to a clean dry-run commit via the ONE commit button, a commit-time business-rule refusal (red) and its retry (green), keyboard/Tab/scroll navigation primitives, and ctrl+q's exit-code contract.
 
-(the two "$ .../new-project.sh"/"$ .../teardown-world.sh" lines are the REHEARSAL section's own
-live-choke-point echo under --dry-run -- "[dry-run: not executed]" per runner.run_command's own
-contract; the world name embeds a wall-clock timestamp, hence "NNNN" above -- the substance is
-identical every run, only that digit string varies.)
+(the three repeated "$ .../new-project.sh"/"$ .../teardown-world.sh" pairs are the REHEARSAL
+section's own live-choke-point echo under --dry-run -- "[dry-run: not executed]" per
+runner.run_command's own contract, one per commit-sweep attempt across cases 3/4; the world name
+embeds a wall-clock timestamp, hence "NNNN" above -- the substance is identical every run, only
+that digit string varies.)
 
-RED legs (1a, 2a, 3b) prove the shapes this fixture claims to forbid/gate are actually caught --
-a synthetic escape of any of the three would fail this fixture red. GREEN legs (1b, 2b, 3a/c/d/e/
-f, 4, 5) prove the corresponding correct-path behavior once the prerequisite is met.
+RED legs (0a/0b/0c reproducing the maintainer's exact live defect; 2a; 3b; 4a) prove the shapes
+this fixture claims to forbid/gate are actually caught -- a regression of any of them would fail
+this fixture red. GREEN legs (0d/0e structural proof; 1b; 2b; 3a/c/d/e/f; 4b/c; 5; 6) prove the
+corresponding correct-path/fixed behavior once the prerequisite is met.
 
 DEPENDENCY: this fixture requires `textual` (the Textual UI layer's own real widgets/Pilot
 harness) -- it is NOT covered by --from-config's textual-free guarantee (that headless path has

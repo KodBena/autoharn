@@ -42,7 +42,7 @@ def fields(state: dict) -> tuple:
         ChoiceField(name="mode", label="Destination kind?",
                     options=(("fresh", "fresh directory"), ("fork", "fork-copy of an existing project")),
                     default="fresh"),
-        TextField(name="dest", label="Destination directory", required=False),
+        TextField(name="dest", label="Destination directory", required=False, shared=True),
         TextField(name="src", label="Source directory to fork-copy (fork mode only)", required=False),
         ConfirmField(name="accept_foreign", label="Accept scaffolding into existing (non-empty, "
                      "non-autoharn) content, if the destination turns out to be FOREIGN?"),

@@ -25,7 +25,7 @@ def fields(state: dict) -> tuple:
     return (
         ConfirmField(name="run", label="Run hydration now?", default=True),
         TextField(name="dest", label="Destination directory (with a led shim)",
-                  default=state.get("dest", "")),
+                  default=state.get("dest", ""), shared=True),
         ConfirmField(name="fork_provenance", label="Hydrate: fork provenance?"),
         TextField(name="fork_provenance_statement", label="Statement for 'fork provenance' "
                   "decision row", required=False),

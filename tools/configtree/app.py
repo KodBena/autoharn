@@ -10,9 +10,19 @@ NAVIGATION (the spec's own acceptance bar): Tab/shift-Tab and arrow keys move fo
 the tree cursor; Enter/click selects a tree node (`Tree.NodeSelected`), switching the right
 pane's `ContentSwitcher.current` to that node's pane -- NO Back/Next buttons, no screen stack, no
 positional ordering of any kind. EVERY SECTION PANE IS MOUNTED ONCE, at startup, into the
-`ContentSwitcher` (never rebuilt on selection) -- switching away and back preserves whatever the
-operator typed, Textual's own screen-stack trick generalized to a set of always-mounted panes
-instead of a linear stack of pushed ones (`panes.SectionPane`'s own docstring)."""
+`ContentSwitcher`.
+
+LIVE MODEL (maintainer review, 2026-07-22): the ONLY action buttons in the whole app are the
+commit node's own commit confirmation and quit (`panes.py`'s own module docstring has the full
+account of the per-section-Save-button deletion this answers). Every field write reaches the
+shared `state` immediately via `panes.SectionPane`'s own Changed-message handlers; this class's
+own job is cheap, app-wide bookkeeping on every such change: `on_model_changed` (called by any
+pane after ANY field write) recomputes every tree node's status label and the status line --
+never a widget rebuild, just text -- so a dependency unblocks, or a field's own inline error
+clears, the INSTANT its prerequisite value lands, not on some later save/select event. A pane's
+own FORM CONTENT (its blocked-reason banner, its business-rule error) still only re-renders when
+that pane is actually selected (`on_tree_node_selected`'s own `refresh_blocked` call) -- cheap
+status recomputation is app-wide and constant; a full pane recompose stays lazy, on visit."""
 from __future__ import annotations
 
 from textual.app import App, ComposeResult
@@ -30,10 +40,10 @@ _STATUS_ICON = {COMPLETE: "[green]✓[/]", INVALID: "[red]✗[/]", BLOCKED: "[ye
 class ConfigTreeApp(App):
     """The generic hierarchical-configuration-editor shell. `sections` is a flat tuple grouped
     by `SectionSpec.group` into sidebar branches; `commit` is the terminal node. `state` is the
-    shared dict every section's `fields`/`submit`/`precheck`/`blocked` reads and writes --
-    entirely the consumer's vocabulary, this class never inspects its keys besides the two
-    bookkeeping keys it itself writes (`_section_done`, `_section_errors`) and reads
-    (`_commit_ok`). `banner`, if given, is shown on every screen (e.g. a --dry-run notice)."""
+    shared dict every section's `fields`/`submit`/`precheck`/`blocked` reads and writes directly
+    -- entirely the consumer's vocabulary, this class never inspects its keys besides the small
+    bookkeeping set `panes.py`/this module write (`_commit_errors`, `_commit_sweep_error`,
+    `_commit_ok`). `banner`, if given, is shown on every screen (e.g. a --dry-run notice)."""
 
     CSS = """
     Tree { width: 40; border-right: solid $primary; }
@@ -76,11 +86,10 @@ class ConfigTreeApp(App):
             with ContentSwitcher(id="ct-switcher"):
                 yield Static("Select a section on the left to begin.", id="pane-welcome")
                 for spec in self.sections:
-                    pane = SectionPane(spec, self.state, self._on_section_saved)
+                    pane = SectionPane(spec, self.state)
                     self._panes[str(spec.slug)] = pane
                     yield pane
-                self._commit_pane = CommitPane(self.commit_spec, self.sections, self.state,
-                                                self._on_committed)
+                self._commit_pane = CommitPane(self.commit_spec, self.sections, self.state)
                 yield self._commit_pane
         yield Footer()
 
@@ -97,19 +106,16 @@ class ConfigTreeApp(App):
             self._tree_nodes[str(spec.slug)] = node
         commit_node = tree.root.add_leaf("Commit", data={"kind": "commit"})
         self._tree_nodes["commit"] = commit_node
-        self._refresh_status()
+        self.on_model_changed()
 
     async def on_tree_node_selected(self, event: Tree.NodeSelected) -> None:
         data = event.node.data or {}
         switcher = self.query_one("#ct-switcher", ContentSwitcher)
         if data.get("kind") == "section":
             slug = data["slug"]
-            # Re-render on EVERY visit (never cached) -- spec §3 v2's own words for both a
-            # section's field defaults ("all fields at once") and its blocked-reason ("re-
-            # checked... rendered in place"): a sibling section's save may have changed either
-            # since this pane was last shown. An unsaved, still-being-typed edit in THIS pane is
-            # the one thing this loses on navigating away before "Save section" -- the same
-            # explicit-apply tradeoff an ordinary settings dialog makes, not accidental.
+            # Re-render on EVERY visit (never cached) -- spec §3 v2's own words for the blocked-
+            # reason ("re-checked... rendered in place"): a sibling section's edit, or a prior
+            # commit-sweep business-rule refusal, may have changed what THIS pane should show.
             await self._panes[slug].refresh_blocked()
             switcher.current = f"pane-{slug}"
         elif data.get("kind") == "commit":
@@ -117,29 +123,12 @@ class ConfigTreeApp(App):
                 await self._commit_pane.refresh_readiness()
             switcher.current = "pane-commit"
 
-    async def _on_section_saved(self, spec: SectionSpec, *, ok: bool) -> None:
-        slug = str(spec.slug)
-        done = self.state.setdefault("_section_done", set())
-        errors = self.state.setdefault("_section_errors", {})
-        if ok:
-            done.add(slug)
-            errors.pop(slug, None)
-        else:
-            errors[slug] = True
-        # A save can unblock (or re-block) ANY other section (spec §3 v2: dependency edges are
-        # data, checked against the CURRENT state) -- every other pane's blocked-reason and every
-        # tree node's status is re-derived here, not only this one's.
-        for other_slug, pane in self._panes.items():
-            if other_slug != slug:
-                await pane.refresh_blocked()
-        if self._commit_pane is not None:
-            await self._commit_pane.refresh_readiness()
-        self._refresh_status()
-
-    async def _on_committed(self, ok: bool) -> None:
-        self._refresh_status()
-
-    def _refresh_status(self) -> None:
+    def on_model_changed(self) -> None:
+        """Called by ANY pane after ANY field write (live, on every keystroke/toggle/choice) --
+        cheap, app-wide: every tree node's status ICON and the persistent status line are
+        recomputed from the CURRENT shared state, pure text updates, no widget rebuild. This is
+        what makes a dependency unblock the instant its prerequisite value lands, even in a
+        section pane that is not currently on screen (spec §3 v2's own acceptance bar)."""
         statuses = {str(s.slug): section_status(s, self.state) for s in self.sections}
         for slug, node in self._tree_nodes.items():
             if slug == "commit":

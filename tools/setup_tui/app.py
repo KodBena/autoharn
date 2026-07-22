@@ -121,7 +121,15 @@ def _run_from_config(args: argparse.Namespace) -> int:
             return 3
         if result.state_updates:
             state.update(result.state_updates)
-        state.update(answers)
+        # NOTE: no blind `state.update(answers)` here (removed 2026-07-22 -- the SAME
+        # bare-field-name aliasing hazard class the maintainer caught live in the interactive
+        # Tree+Form UI, ADR-0012 cancer C/P1/P2: a per-section-local answer like "host"/"run"
+        # written to a bare top-level key could silently be read back by an UNRELATED later
+        # section's own same-named field. No `submit()` in this package actually reads such a
+        # bare per-field key (verified: every `state.get(...)` read inside a `submit` is either
+        # an infrastructure key or an explicitly-named cross-section fact written via THIS
+        # section's own `state_updates`), so the copy was dead weight as well as a hazard --
+        # removing it changes no observable behavior, only deletes the risk).
         for line in result.info_lines:
             print(line)
     commit_result = steps.commit(state)
